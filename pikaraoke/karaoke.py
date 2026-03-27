@@ -484,6 +484,17 @@ class Karaoke:
         self.volume_change(new_vol)
         logging.debug(f"Decreasing volume by 10%: {self.volume}")
 
+    def set_subtitle_delay(self, delay: float) -> None:
+        """Set subtitle delay for current song only (temporary override).
+
+        Args:
+            delay: Subtitle delay in seconds (negative = earlier, positive = later).
+        """
+        self.subtitle_delay = delay
+        # MSG: Message shown after subtitle delay is changed
+        self.log_and_send(_("Subtitle delay: %s seconds") % (delay))
+        self.update_now_playing_socket()
+
     def restart(self) -> bool:
         """Restart the current song from the beginning.
 
@@ -516,6 +527,8 @@ class Karaoke:
         """Reset all now playing state to defaults."""
         self.playback_controller.reset_now_playing()
         self.volume = self.preferences.get_or_default("volume")
+        # Reset subtitle delay to config default for next song
+        self.subtitle_delay = self.preferences.get_or_default("subtitle_delay")
         self.update_now_playing_socket()
 
     def get_now_playing(self) -> dict[str, Any]:
@@ -535,6 +548,7 @@ class Karaoke:
             "up_next": next_song["title"] if next_song else None,
             "next_user": next_song["user"] if next_song else None,
             "volume": self.volume,
+            "subtitle_delay": self.subtitle_delay,
         }
 
     def update_now_playing_socket(self) -> None:
