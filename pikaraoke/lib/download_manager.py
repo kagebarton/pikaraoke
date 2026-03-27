@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
+import os
 import re
 import subprocess
 import uuid
+from pathlib import Path
 from queue import Queue
 from threading import Thread
 
@@ -313,6 +316,8 @@ class DownloadManager:
 
             if song_path:
                 self._events.emit("song_downloaded", song_path)
+                # Rename subtitle file to remove language code
+                self._rename_subtitle_file(song_path)
             else:
                 logging.warning(
                     f"Could not find downloaded song in {self._download_path} matching ID: {video_id}"
@@ -328,3 +333,33 @@ class DownloadManager:
                     )
 
         return rc
+
+    def _rename_subtitle_file(self, video_path: str) -> None:
+        video = Path(video_path)
+        target = video.with_suffix(".ass")
+
+        # All subtitle candidates: Song---abc123.en.ass, .vtt, .srv3, etc.
+        candidates = {
+            f for ext in (".ass", ".vtt", ".srv3", ".ttml")
+            for f in video.parent.glob(f"{video.stem}*{ext}")
+        }
+
+        ass_files = {f for f in candidates if f.suffix == ".ass"}
+        if not ass_files:
+            logging.debug(f"No subtitle found for video: {video_path}")
+            return
+
+        source = next(iter(ass_files))
+        if source != target:
+            try:
+                source.rename(target)
+                logging.debug(f"Renamed subtitle: {source.name} -> {target.name}")
+            except OSError as e:
+                logging.warning(f"Failed to rename subtitle: {e}")
+                return
+
+        # Delete everything else (other langs, intermediate formats)
+        for f in candidates - {source, target}:
+            with contextlib.suppress(OSError):
+                f.unlink()
+                logging.debug(f"Removed extra subtitle: {f.name}")

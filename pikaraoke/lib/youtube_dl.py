@@ -129,7 +129,9 @@ def build_ytdl_download_command(
     Returns:
         List of command-line arguments for subprocess execution.
     """
+    # Video output template
     dl_path = os.path.join(download_path, "%(title)s---%(id)s.%(ext)s")
+    
     file_quality = (
         "bestvideo[ext!=webm][height<=1080]+bestaudio[ext!=webm]/best[ext!=webm]"
         if high_quality
@@ -144,6 +146,13 @@ def build_ytdl_download_command(
         "vcodec:h264",
         "--compat-options",
         "filename-sanitization",
+        "--write-subs",
+        "--sub-langs",
+        "en.*",
+        #'--sub-format',
+        #'best',
+        "--convert-subs",
+        "ass",
     ]
     cmd = yt_dlp_cmd + args + _js_runtime_args()
     if youtubedl_proxy:
