@@ -300,7 +300,9 @@ const handleNowPlayingUpdate = (np) => {
       subUrl: subtitleUrl,
       fonts: ["/static/fonts/Arial.ttf", "/static/fonts/DroidSansFallback.ttf"],
       debug: true,
-      workerUrl: "/static/js/subtitles-octopus-worker.js"
+      workerUrl: "/static/js/subtitles-octopus-worker.js",
+      // Invert the sign: user expects negative = earlier, but timeOffset works opposite
+      timeOffset: PikaraokeConfig.subtitleDelay ? -PikaraokeConfig.subtitleDelay : 0
     };
     try {
       octopusInstance = new SubtitlesOctopus(options);
@@ -530,6 +532,26 @@ const PREFERENCE_EFFECTS = {
   screensaver_timeout: (v) => {
     screensaverTimeoutSeconds = v;
     PikaraokeConfig.screensaverTimeout = v;
+  },
+  subtitle_delay:      (v) => {
+    PikaraokeConfig.subtitleDelay = v;
+    // Re-initialize subtitles with new offset if currently playing
+    if (octopusInstance && nowPlaying.now_playing_subtitle_url) {
+      octopusInstance.dispose();
+      octopusInstance = null;
+      const video = getVideoPlayer();
+      const options = {
+        video: video,
+        subUrl: nowPlaying.now_playing_subtitle_url,
+        fonts: ["/static/fonts/Arial.ttf", "/static/fonts/DroidSansFallback.ttf"],
+        debug: true,
+        workerUrl: "/static/js/subtitles-octopus-worker.js",
+        timeOffset: PikaraokeConfig.subtitleDelay ? -PikaraokeConfig.subtitleDelay : 0
+      };
+      try {
+        octopusInstance = new SubtitlesOctopus(options);
+      } catch (e) { console.error(e); }
+    }
   },
 };
 

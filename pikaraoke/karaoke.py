@@ -119,6 +119,7 @@ class Karaoke:
         screensaver_timeout: int | None = None,
         show_splash_clock: bool | None = None,
         splash_delay: int | None = None,
+        subtitle_delay: float | None = None,
         volume: float | None = None,
     ) -> None:
         """Initialize the Karaoke instance.
@@ -150,6 +151,7 @@ class Karaoke:
             disable_score: Disable score screen.
             limit_user_songs_by: Max songs per user in queue (0 = unlimited).
             avsync: Audio/video sync adjustment in seconds.
+            subtitle_delay: Subtitle timing delay in seconds (negative = earlier).
             config_file_path: Path to config.ini file.
             cdg_pixel_scaling: Enable CDG pixel scaling.
             streaming_format: Video streaming format ('hls' or 'mp4').

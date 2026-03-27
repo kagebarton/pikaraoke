@@ -439,6 +439,13 @@
 					</div>
 
 					<div class="user-preference-container is-align-items-center">
+					<input id="pref-subtitle-delay" class="user-preference-input input" type="number" step="0.1" min="-10" max="10" data-pref="subtitle_delay" data-start-value="{{ subtitle_delay }}" value="{{ subtitle_delay }}" />
+					<label class="label" for="pref-subtitle-delay">
+							{# MSG: Numberbox label for subtitle delay #} {% trans %}Subtitle delay in seconds (negative = earlier | positive = later){% endtrans %}
+					</label>
+					</div>
+
+					<div class="user-preference-container is-align-items-center">
 					<input id="pref-limit-user-songs-by" class="user-preference-input input" type="number" min="0" max="99" data-pref="limit_user_songs_by" data-start-value="{{ limit_user_songs_by }}" value="{{ limit_user_songs_by }}" />
 					<label class="label" for="pref-limit-user-songs-by">
 							{# MSG: Numberbox label for limitting the number of songs for each player #} {% trans %}Limit of songs an individual user can add to the queue (0 = unlimited){% endtrans %}
