@@ -61,20 +61,45 @@ Only support these two patterns.
 - Skip trivial getters/setters
 - Use real `EventSystem` and `PreferenceManager` instances (they're lightweight)
 
+## Environment
+
+This project runs in a **conda environment** named `avtest` (not uv). Use `/home/ken/miniconda3/envs/avtest/bin/python -m pytest` to run tests and `pre-commit` directly (not via `uv run`).
+
 ## Code Quality
 
 ```bash
 # Run pre-commit checks
-uv run pre-commit run --config code_quality/.pre-commit-config.yaml --all-files
+pre-commit run --config code_quality/.pre-commit-config.yaml --all-files
 ```
 
 Tools: Black (100 char), isort, pycln, pylint, mdformat.
 
 Never commit to `master` directly.
 
+## Plans
+
+Name plan files with a short, descriptive kebab-case filename that reflects the task
+(e.g., `subtitle-delay-cleanup.md`, `auth-refactor.md`), not the auto-generated random
+name Claude Code assigns by default.
+
+Include a line at the top of each plan specifying which Claude model created it:
+```
+Model: Claude Sonnet 4.6
+```
+or `Claude Opus 4.6` / `Claude Haiku 4.5` as appropriate.
+
 ## Pull Requests
 
 PRs must include a test plan: a minimal checklist targeting only the changes made, enabling quick manual verification.
+
+## Fork Maintenance
+
+This is a fork of upstream PiKaraoke. Minimize merge conflicts when pulling upstream changes:
+
+- **New functionality goes in new files** — avoid modifying upstream source files when the feature can live in a separate module that upstream files import or call into
+- **When upstream files must be modified**, make the smallest possible change: a single hook call, import, or flag rather than inline logic
+- **Match upstream architecture** — new code should look like it belongs; follow the same patterns, naming, and file organization already in place
+- **Never restructure upstream files** for style or preference alone — only refactor what you're functionally changing
 
 ## What NOT to Do
 
