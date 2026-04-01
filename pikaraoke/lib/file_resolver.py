@@ -152,27 +152,31 @@ class FileResolver:
         )
 
     def handle_aegissub_subtile(self, file_path: str) -> bool:
-        """Find and set the ASS subtitle file path for an media file.
+        """Find and set subtitle file paths for a media file.
 
-        Searches for an ASS file with the same base name as the media.
+        Checks the 'subtitles' subfolder for an ASS file (karaoke subtitle).
+        Sets ass_file_path if found.
 
         Args:
             file_path: Path to the media file.
 
         Returns:
-            True if ASS file found, False otherwise.
+            True if a subtitle file was found, False otherwise.
         """
-        base_name = os.path.splitext(file_path)[0]
+        base_name = os.path.splitext(os.path.basename(file_path))[0]
+        subtitles_dir = os.path.join(os.path.dirname(file_path), "subtitles")
+        found = False
 
-        # Check common case variations without listing directory
         for ext in (".ass", ".ASS", ".Ass"):
-            ass_path = base_name + ext
+            ass_path = os.path.join(subtitles_dir, base_name + ext)
             if os.path.exists(ass_path):
                 self.file_path = file_path
                 self.ass_file_path = ass_path
-                logging.debug(f"Subtitle file found: {ass_path}")
-                return True
-        return False
+                logging.debug(f"ASS subtitle file found: {ass_path}")
+                found = True
+                break
+
+        return found
 
     def handle_zipped_cdg(self, file_path: str) -> None:
         """Extract zipped CDG + MP3 files into a temporary directory.

@@ -336,9 +336,11 @@ class DownloadManager:
 
     def _rename_subtitle_file(self, video_path: str) -> None:
         video = Path(video_path)
-        target = video.with_suffix(".ass")
+        subtitles_dir = video.parent / "subtitles"
+        subtitles_dir.mkdir(exist_ok=True)
+        target = subtitles_dir / f"{video.stem}.ass"
 
-        # All subtitle candidates: Song---abc123.en.ass, .vtt, .srv3, etc.
+        # All subtitle candidates in the song folder: Song---abc123.en.ass, .vtt, .srv3, etc.
         candidates = {
             f for ext in (".ass", ".vtt", ".srv3", ".ttml")
             for f in video.parent.glob(f"{video.stem}*{ext}")
@@ -350,16 +352,15 @@ class DownloadManager:
             return
 
         source = next(iter(ass_files))
-        if source != target:
-            try:
-                source.rename(target)
-                logging.debug(f"Renamed subtitle: {source.name} -> {target.name}")
-            except OSError as e:
-                logging.warning(f"Failed to rename subtitle: {e}")
-                return
+        try:
+            source.rename(target)
+            logging.debug(f"Moved subtitle: {source.name} -> {target}")
+        except OSError as e:
+            logging.warning(f"Failed to move subtitle: {e}")
+            return
 
         # Delete everything else (other langs, intermediate formats)
-        for f in candidates - {source, target}:
+        for f in candidates - {source}:
             with contextlib.suppress(OSError):
                 f.unlink()
                 logging.debug(f"Removed extra subtitle: {f.name}")

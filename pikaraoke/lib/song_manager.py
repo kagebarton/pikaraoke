@@ -59,19 +59,33 @@ class SongManager:
         return name
 
     def _get_companion_files(self, song_path: str) -> list[str]:
-        """Return paths to companion files (.cdg, .ass) that exist alongside a song."""
+        """Return paths to companion files (.cdg, .ass) that exist alongside a song.
+
+        CDG files are expected next to the song file.
+        ASS subtitle files are expected in a 'subtitles' subfolder.
+        """
         dirpath = os.path.dirname(song_path)
         base = os.path.splitext(os.path.basename(song_path))[0]
-        try:
-            files = os.listdir(dirpath)
-        except OSError:
-            return []
-        base_lower = base.lower()
         companions = []
-        for f in files:
-            f_base, f_ext = os.path.splitext(f)
-            if f_base.lower() == base_lower and f_ext.lower() in (".cdg", ".ass"):
-                companions.append(os.path.join(dirpath, f))
+
+        # CDG files live alongside the song
+        try:
+            base_lower = base.lower()
+            for f in os.listdir(dirpath):
+                f_base, f_ext = os.path.splitext(f)
+                if f_base.lower() == base_lower and f_ext.lower() == ".cdg":
+                    companions.append(os.path.join(dirpath, f))
+        except OSError:
+            pass
+
+        # ASS subtitles live in the subtitles/ subfolder
+        subtitles_dir = os.path.join(dirpath, "subtitles")
+        for ext in (".ass", ".ASS", ".Ass"):
+            ass_path = os.path.join(subtitles_dir, base + ext)
+            if os.path.exists(ass_path):
+                companions.append(ass_path)
+                break
+
         return companions
 
     def delete(self, song_path: str) -> None:
@@ -101,7 +115,13 @@ class SongManager:
         os.rename(song_path, new_path)
         for companion in companions:
             companion_ext = os.path.splitext(companion)[1]
-            os.rename(companion, os.path.join(self.download_path, new_name + companion_ext))
+            if companion_ext.lower() == ".ass":
+                # Subtitles stay in the subtitles/ subfolder
+                subtitles_dir = os.path.join(self.download_path, "subtitles")
+                os.rename(companion, os.path.join(subtitles_dir, new_name + companion_ext))
+            else:
+                # CDG and other companions live alongside the song
+                os.rename(companion, os.path.join(self.download_path, new_name + companion_ext))
         self.songs.rename(song_path, new_path)
         self._db.update_path(song_path, new_path)
         return new_path
