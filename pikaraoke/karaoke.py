@@ -437,7 +437,7 @@ class Karaoke:
             logging.warning(message)
             self.send_notification(message, "warning")
         elif category == "danger":
-            logging.error(message)
+            logging.warning(message)
             self.send_notification(message, "danger")
         else:
             logging.info(message)
@@ -519,6 +519,7 @@ class Karaoke:
     def stop(self) -> None:
         """Stop the karaoke run loop."""
         self.running = False
+        self.processing_manager.stop()
 
     def handle_run_loop(self) -> None:
         """Handle one iteration of the main run loop with a sleep interval."""

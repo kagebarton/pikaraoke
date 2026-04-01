@@ -1,14 +1,12 @@
 """Processing queue for splitting songs into vocal and instrumental stems."""
 
-from __future__ import annotations
-
 import logging
 import multiprocessing
 import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from multiprocessing import Process, Queue
+from multiprocessing import Process, Queue, SimpleQueue
 
 from pikaraoke.lib.events import EventSystem
 
@@ -57,7 +55,8 @@ class ProcessingManager:
 
     def __init__(self, events: EventSystem) -> None:
         self._events = events
-        self._queue: Queue[str] = Queue()
+        self._queue: Queue = Queue()
+        self._result_queue: SimpleQueue = SimpleQueue()
         self._worker_process: Process | None = None
         self.pending_jobs: list[str] = []
 
@@ -80,22 +79,51 @@ class ProcessingManager:
         from audio_separator.separator import Separator  # noqa: F401
 
         self._events.on("song_downloaded", self.enqueue)
-        self._worker_process = Process(target=_run_worker_process, args=(self._queue,), daemon=True)
+        self._worker_process = self._make_worker_process()
         self._worker_process.start()
         logging.debug("Stem processing queue worker started")
 
+    def stop(self) -> None:
+        """Shut down the worker process gracefully."""
+        if self._worker_process is None or not self._worker_process.is_alive():
+            return
+        self._queue.put(None)
+        self._worker_process.join(timeout=10)
+        if self._worker_process.is_alive():
+            self._worker_process.terminate()
+
     def enqueue(self, song_path: str) -> None:
         """Add a song to the stem processing queue."""
+        self._drain_results()
+        if self._worker_process is not None and not self._worker_process.is_alive():
+            logging.warning("Stem worker process died unexpectedly, restarting")
+            self._worker_process = self._make_worker_process()
+            self._worker_process.start()
         self._queue.put(song_path)
         self.pending_jobs.append(song_path)
         logging.info(f"Queued for stem separation: {Path(song_path).name}")
 
+    def _make_worker_process(self) -> Process:
+        return Process(
+            target=_run_worker_process,
+            args=(self._queue, self._result_queue),
+            daemon=False,
+        )
 
-def _run_worker_process(queue: Queue[str]) -> None:
+    def _drain_results(self) -> None:
+        """Remove completed jobs from pending_jobs."""
+        while not self._result_queue.empty():
+            try:
+                self.pending_jobs.remove(self._result_queue.get())
+            except ValueError:
+                pass
+
+
+def _run_worker_process(queue: Queue, result_queue: Queue) -> None:
     """Entry point for the stem processing worker process.
 
     This runs in a separate process to avoid blocking the main application
-    during CPU-intensive stem separation.
+    during CPU-intensive stem separation. Exits cleanly when None is received.
     """
     # Configure logging in the worker process
     handler = _get_log_handler()
@@ -109,21 +137,40 @@ def _run_worker_process(queue: Queue[str]) -> None:
 
     logging.info("Stem worker process started")
 
-    while True:
-        song_path = queue.get()
-        logging.info(f"Processing: {song_path}")
+    from audio_separator.separator import Separator
 
+    separator = Separator(
+        model_file_dir=MODEL_DIR,
+        output_format=SEPARATION_FORMAT,
+    )
+    separator.load_model(model_filename=MODEL_NAME)
+    logging.info("Audio separator model loaded")
+
+    try:
+        while True:
+            song_path = queue.get()
+            if song_path is None:
+                break
+            logging.info(f"Processing: {song_path}")
+
+            try:
+                _process_song_in_worker(song_path, separator)
+            except Exception as e:
+                logging.error(f"Stem separation failed for {song_path}: {e}")
+            finally:
+                result_queue.put(song_path)
+    finally:
+        del separator
         try:
-            _process_song_in_worker(song_path)
-        except Exception as e:
-            logging.error(f"Stem separation failed for {song_path}: {e}")
+            import torch
+            torch.cuda.empty_cache()
+        except ImportError:
+            pass
+        logging.info("Audio separator model unloaded")
 
 
-def _process_song_in_worker(song_path: str) -> None:
-    """Run the full stem separation pipeline for a single song.
-
-    This is the worker function that runs in the separate process.
-    """
+def _process_song_in_worker(song_path: str, separator) -> None:
+    """Run the full stem separation pipeline for a single song."""
     video = Path(song_path)
     if not video.exists():
         raise FileNotFoundError(f"Song file not found: {song_path}")
@@ -150,7 +197,7 @@ def _process_song_in_worker(song_path: str) -> None:
 
         # Step 2: Separate into vocal + instrumental WAV stems
         logging.info("Separating stems")
-        vocals_wav, instrumental_wav = _separate_stems(audio_wav, tmp_dir)
+        vocals_wav, instrumental_wav = _separate_stems(audio_wav, tmp_dir, separator)
 
         # Step 3: Transcode both stems to M4A
         logging.info("Transcoding stems")
@@ -160,6 +207,7 @@ def _process_song_in_worker(song_path: str) -> None:
         logging.info(f"Stem separation complete: {video.name}")
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
+
 
 def _extract_audio(video_path: Path, tmp_dir: str) -> Path:
     """Extract audio from video file to a temporary WAV."""
@@ -178,16 +226,11 @@ def _extract_audio(video_path: Path, tmp_dir: str) -> Path:
         raise RuntimeError(f"ffmpeg audio extraction failed: {result.stderr}")
     return wav_path
 
-def _separate_stems(audio_path: Path, tmp_dir: str) -> tuple[Path, Path]:
+def _separate_stems(audio_path: Path, tmp_dir: str, separator) -> tuple[Path, Path]:
     """Run audio-separator and return (vocals_wav, instrumental_wav)."""
-    from audio_separator.separator import Separator
-
-    separator = Separator(
-        output_dir=tmp_dir,
-        model_file_dir=MODEL_DIR,
-        output_format=SEPARATION_FORMAT,
-    )
-    separator.load_model(model_filename=MODEL_NAME)
+    separator.output_dir = tmp_dir
+    if separator.model_instance:
+        separator.model_instance.output_dir = tmp_dir
     output_paths = separator.separate(str(audio_path))
 
     vocals_wav = None
@@ -205,6 +248,7 @@ def _separate_stems(audio_path: Path, tmp_dir: str) -> tuple[Path, Path]:
             f"Could not identify vocal/instrumental stems in output: {output_paths}"
         )
     return vocals_wav, instrumental_wav
+
 
 def _wav_to_m4a(wav_path: Path, output_path: Path) -> None:
     """Transcode a WAV stem to AAC-in-M4A."""
