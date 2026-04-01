@@ -59,10 +59,11 @@ class SongManager:
         return name
 
     def _get_companion_files(self, song_path: str) -> list[str]:
-        """Return paths to companion files (.cdg, .ass) that exist alongside a song.
+        """Return paths to companion files (.cdg, .ass, vocal/nonvocal) that exist alongside a song.
 
         CDG files are expected next to the song file.
         ASS subtitle files are expected in a 'subtitles' subfolder.
+        Audio separator files are expected in 'vocal/' and 'nonvocal/' subfolders.
         """
         dirpath = os.path.dirname(song_path)
         base = os.path.splitext(os.path.basename(song_path))[0]
@@ -85,6 +86,15 @@ class SongManager:
             if os.path.exists(ass_path):
                 companions.append(ass_path)
                 break
+
+        # Audio separator files live in vocal/ and nonvocal/ subfolders
+        for subdir, suffix in (("vocal", "---vocal"), ("nonvocal", "---nonvocal")):
+            sep_dir = os.path.join(dirpath, subdir)
+            for ext in (".m4a", ".M4A"):
+                sep_path = os.path.join(sep_dir, base + suffix + ext)
+                if os.path.exists(sep_path):
+                    companions.append(sep_path)
+                    break
 
         return companions
 
@@ -110,18 +120,13 @@ class SongManager:
         new_name = sanitize_filename(new_name)
         logging.info(f"Renaming song: '{song_path}' to: {new_name}")
         companions = self._get_companion_files(song_path)
-        _, ext = os.path.splitext(song_path)
+        base, ext = os.path.splitext(os.path.basename(song_path))
         new_path = os.path.join(self.download_path, new_name + ext)
         os.rename(song_path, new_path)
         for companion in companions:
-            companion_ext = os.path.splitext(companion)[1]
-            if companion_ext.lower() == ".ass":
-                # Subtitles stay in the subtitles/ subfolder
-                subtitles_dir = os.path.join(self.download_path, "subtitles")
-                os.rename(companion, os.path.join(subtitles_dir, new_name + companion_ext))
-            else:
-                # CDG and other companions live alongside the song
-                os.rename(companion, os.path.join(self.download_path, new_name + companion_ext))
+            companion_dir = os.path.dirname(companion)
+            tail = os.path.basename(companion)[len(base):]  # e.g. ".cdg", ".ass", "---vocal.m4a"
+            os.rename(companion, os.path.join(companion_dir, new_name + tail))
         self.songs.rename(song_path, new_path)
         self._db.update_path(song_path, new_path)
         return new_path
