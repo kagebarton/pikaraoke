@@ -27,24 +27,24 @@ AAC_QUALITY = "2"
 
 FFMPEG_THREADS = "4"
 
-STEM_LOG_FILE = "stem_manager.log"
+PROCESSING_LOG_FILE = "processing_manager.log"
 
-_stem_log_handler: logging.FileHandler | None = None
+_processing_log_handler: logging.FileHandler | None = None
 
 
 def _get_log_handler() -> logging.FileHandler:
-    """Return the shared FileHandler for stem processing logs (created once)."""
-    global _stem_log_handler
-    if _stem_log_handler is None:
-        _stem_log_handler = logging.FileHandler(STEM_LOG_FILE)
-        _stem_log_handler.setFormatter(
+    """Return the shared FileHandler for processing logs (created once)."""
+    global _processing_log_handler
+    if _processing_log_handler is None:
+        _processing_log_handler = logging.FileHandler(PROCESSING_LOG_FILE)
+        _processing_log_handler.setFormatter(
             logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s",
                               datefmt="%Y-%m-%d %H:%M:%S")
         )
-    return _stem_log_handler
+    return _processing_log_handler
 
 
-class StemManager:
+class ProcessingManager:
     """Processes downloaded songs into vocal and instrumental stems.
 
     Subscribes to song_downloaded events and queues each song for background
@@ -63,9 +63,9 @@ class StemManager:
 
         handler = _get_log_handler()
 
-        stem_logger = logging.getLogger(__name__)
-        stem_logger.addHandler(handler)
-        stem_logger.propagate = False
+        processing_logger = logging.getLogger(__name__)
+        processing_logger.addHandler(handler)
+        processing_logger.propagate = False
 
         sep_logger = logging.getLogger("audio_separator")
         sep_logger.addHandler(handler)
@@ -99,9 +99,9 @@ def _run_worker_process(queue: Queue[str]) -> None:
     """
     # Configure logging in the worker process
     handler = _get_log_handler()
-    stem_logger = logging.getLogger(__name__)
-    stem_logger.addHandler(handler)
-    stem_logger.setLevel(logging.DEBUG)
+    processing_logger = logging.getLogger(__name__)
+    processing_logger.addHandler(handler)
+    processing_logger.setLevel(logging.DEBUG)
 
     sep_logger = logging.getLogger("audio_separator")
     sep_logger.addHandler(handler)

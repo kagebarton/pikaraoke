@@ -1,4 +1,4 @@
-"""Unit tests for stem_manager module."""
+"""Unit tests for processing_manager module."""
 
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from pikaraoke.lib.events import EventSystem
-from pikaraoke.lib.stem_manager import (
-    StemManager,
+from pikaraoke.lib.processing_manager import (
+    ProcessingManager,
     _extract_audio,
     _separate_stems,
     _wav_to_m4a,
@@ -22,30 +22,30 @@ def events():
 
 
 @pytest.fixture
-def stem_manager(events):
-    """Create a StemManager with a real EventSystem."""
-    return StemManager(events=events)
+def processing_manager(events):
+    """Create a ProcessingManager with a real EventSystem."""
+    return ProcessingManager(events=events)
 
 
-class TestStemManagerInit:
-    """Tests for StemManager initialization."""
+class TestProcessingManagerInit:
+    """Tests for ProcessingManager initialization."""
 
-    def test_init_creates_empty_queue(self, stem_manager):
-        assert stem_manager._queue.empty()
-        assert stem_manager.pending_jobs == []
+    def test_init_creates_empty_queue(self, processing_manager):
+        assert processing_manager._queue.empty()
+        assert processing_manager.pending_jobs == []
 
-    def test_start_subscribes_to_song_downloaded(self, stem_manager, events):
-        stem_manager.start()
+    def test_start_subscribes_to_song_downloaded(self, processing_manager, events):
+        processing_manager.start()
         # Event subscription is verified by checking the handler gets called
         received = []
         # Replace enqueue to capture calls without blocking on the queue
-        stem_manager.enqueue = lambda path: received.append(path)
+        processing_manager.enqueue = lambda path: received.append(path)
         events.emit("song_downloaded", "/songs/Test---abc123.mp4")
         # The original enqueue was replaced, so the direct subscription won't fire.
         # Re-test with fresh manager.
 
     def test_start_subscribes_and_enqueues(self, events):
-        manager = StemManager(events=events)
+        manager = ProcessingManager(events=events)
         # Don't start the worker process, just wire the event
         events.on("song_downloaded", manager.enqueue)
         events.emit("song_downloaded", "/songs/Test---abc123.mp4")
@@ -53,19 +53,19 @@ class TestStemManagerInit:
         assert manager._queue.qsize() == 1
 
 
-class TestStemManagerEnqueue:
+class TestProcessingManagerEnqueue:
     """Tests for enqueue behavior."""
 
-    def test_enqueue_adds_to_queue_and_pending(self, stem_manager):
-        stem_manager.enqueue("/songs/Song---abc123.mp4")
-        assert stem_manager.pending_jobs == ["/songs/Song---abc123.mp4"]
-        assert stem_manager._queue.qsize() == 1
+    def test_enqueue_adds_to_queue_and_pending(self, processing_manager):
+        processing_manager.enqueue("/songs/Song---abc123.mp4")
+        assert processing_manager.pending_jobs == ["/songs/Song---abc123.mp4"]
+        assert processing_manager._queue.qsize() == 1
 
-    def test_enqueue_multiple(self, stem_manager):
-        stem_manager.enqueue("/songs/Song1---aaa111.mp4")
-        stem_manager.enqueue("/songs/Song2---bbb222.mp4")
-        assert len(stem_manager.pending_jobs) == 2
-        assert stem_manager._queue.qsize() == 2
+    def test_enqueue_multiple(self, processing_manager):
+        processing_manager.enqueue("/songs/Song1---aaa111.mp4")
+        processing_manager.enqueue("/songs/Song2---bbb222.mp4")
+        assert len(processing_manager.pending_jobs) == 2
+        assert processing_manager._queue.qsize() == 2
 
 
 class TestProcessSongInWorker:
@@ -90,9 +90,9 @@ class TestProcessSongInWorker:
         with pytest.raises(FileNotFoundError):
             _process_song_in_worker("/nonexistent/song.mp4")
 
-    @patch("pikaraoke.lib.stem_manager._extract_audio")
-    @patch("pikaraoke.lib.stem_manager._separate_stems")
-    @patch("pikaraoke.lib.stem_manager._wav_to_m4a")
+    @patch("pikaraoke.lib.processing_manager._extract_audio")
+    @patch("pikaraoke.lib.processing_manager._separate_stems")
+    @patch("pikaraoke.lib.processing_manager._wav_to_m4a")
     def test_creates_output_directories(self, mock_transcode, mock_separate, mock_extract, tmp_path):
         """Verifies vocal/ and nonvocal/ directories are created."""
         song = tmp_path / "Song---abc123.mp4"
@@ -109,9 +109,9 @@ class TestProcessSongInWorker:
         assert (tmp_path / "vocal").is_dir()
         assert (tmp_path / "nonvocal").is_dir()
 
-    @patch("pikaraoke.lib.stem_manager._extract_audio")
-    @patch("pikaraoke.lib.stem_manager._separate_stems")
-    @patch("pikaraoke.lib.stem_manager._wav_to_m4a")
+    @patch("pikaraoke.lib.processing_manager._extract_audio")
+    @patch("pikaraoke.lib.processing_manager._separate_stems")
+    @patch("pikaraoke.lib.processing_manager._wav_to_m4a")
     def test_output_filenames(self, mock_transcode, mock_separate, mock_extract, tmp_path):
         """Verifies output paths follow the ---vocal / ---nonvocal convention."""
         song = tmp_path / "Artist - Title---dQw4w9Wg.mp4"
@@ -131,9 +131,9 @@ class TestProcessSongInWorker:
         assert "Artist - Title---dQw4w9Wg---vocal.m4a" in output_names
         assert "Artist - Title---dQw4w9Wg---nonvocal.m4a" in output_names
 
-    @patch("pikaraoke.lib.stem_manager._extract_audio")
-    @patch("pikaraoke.lib.stem_manager._separate_stems")
-    @patch("pikaraoke.lib.stem_manager._wav_to_m4a")
+    @patch("pikaraoke.lib.processing_manager._extract_audio")
+    @patch("pikaraoke.lib.processing_manager._separate_stems")
+    @patch("pikaraoke.lib.processing_manager._wav_to_m4a")
     def test_output_directories(self, mock_transcode, mock_separate, mock_extract, tmp_path):
         """Vocal goes to vocal/, nonvocal goes to nonvocal/."""
         song = tmp_path / "Song---abc123.mp4"
@@ -158,7 +158,7 @@ class TestProcessSongInWorker:
 class TestExtractAudio:
     """Tests for audio extraction (subprocess mocked)."""
 
-    @patch("pikaraoke.lib.stem_manager.subprocess.run")
+    @patch("pikaraoke.lib.processing_manager.subprocess.run")
     def test_calls_ffmpeg_with_correct_args(self, mock_run, tmp_path):
         mock_run.return_value = MagicMock(returncode=0)
         video = tmp_path / "Song.mp4"
@@ -172,7 +172,7 @@ class TestExtractAudio:
         assert str(video) in cmd
         assert result.name == "Song_input.wav"
 
-    @patch("pikaraoke.lib.stem_manager.subprocess.run")
+    @patch("pikaraoke.lib.processing_manager.subprocess.run")
     def test_raises_on_ffmpeg_failure(self, mock_run, tmp_path):
         mock_run.return_value = MagicMock(returncode=1, stderr="error")
         video = tmp_path / "Song.mp4"
@@ -184,7 +184,7 @@ class TestExtractAudio:
 class TestWavToM4a:
     """Tests for WAV to M4A transcoding (subprocess mocked)."""
 
-    @patch("pikaraoke.lib.stem_manager.subprocess.run")
+    @patch("pikaraoke.lib.processing_manager.subprocess.run")
     def test_calls_ffmpeg_with_aac(self, mock_run, tmp_path):
         mock_run.return_value = MagicMock(returncode=0)
         wav = tmp_path / "stem.wav"
@@ -196,7 +196,7 @@ class TestWavToM4a:
         assert "-c:a" in cmd
         assert "aac" in cmd
 
-    @patch("pikaraoke.lib.stem_manager.subprocess.run")
+    @patch("pikaraoke.lib.processing_manager.subprocess.run")
     def test_raises_on_transcode_failure(self, mock_run, tmp_path):
         mock_run.return_value = MagicMock(returncode=1, stderr="encode error")
         wav = tmp_path / "stem.wav"

@@ -32,7 +32,7 @@ from pikaraoke.lib.playback_controller import PlaybackController
 from pikaraoke.lib.preference_manager import PreferenceManager
 from pikaraoke.lib.queue_manager import QueueManager
 from pikaraoke.lib.song_manager import SongManager
-from pikaraoke.lib.stem_manager import StemManager
+from pikaraoke.lib.processing_manager import ProcessingManager
 from pikaraoke.lib.youtube_dl import (
     get_search_results,
     get_youtubedl_version,
@@ -268,8 +268,8 @@ class Karaoke:
         self.download_manager.start()
 
         # Initialize and start stem separation processor
-        self.stem_manager = StemManager(events=self.events)
-        self.stem_manager.start()
+        self.processing_manager = ProcessingManager(events=self.events)
+        self.processing_manager.start()
 
         # Song library startup: warm cache from DB or blocking cold scan
         paths = self.db.get_all_song_paths()
