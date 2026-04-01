@@ -1,5 +1,6 @@
 *.pyc
 *.swp
+*.log
 .venv/
 .venv*
 /.vscode/
@@ -14,7 +15,11 @@ docker-compose.yml
 /.idea/
 .coverage
 .claude/
-/logs
+.qwen/
+logs/
+audio-separator/
+whisper-model/
+mpv
 
 # Briefcase build artifacts
 *.briefcase.toml
