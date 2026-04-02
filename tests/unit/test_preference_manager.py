@@ -284,6 +284,8 @@ def test_preference_manager_defaults_exist():
         "mid_score_phrases",
         "high_score_phrases",
         "show_splash_clock",
+        "subtitle_delay",
+        "temp_dir",
     }
 
     assert set(PreferenceManager.DEFAULTS.keys()) == expected_keys

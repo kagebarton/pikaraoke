@@ -251,7 +251,9 @@ class TestFileResolverHandleAegissubSubtitle:
     def test_finds_ass_file(self, mock_tmp, mock_create, mock_duration, tmp_path):
         """Test finding .ass subtitle file."""
         video_file = tmp_path / "song.mp4"
-        ass_file = tmp_path / "song.ass"
+        subtitles_dir = tmp_path / "subtitles"
+        subtitles_dir.mkdir()
+        ass_file = subtitles_dir / "song.ass"
         video_file.touch()
         ass_file.touch()
 
@@ -265,7 +267,9 @@ class TestFileResolverHandleAegissubSubtitle:
     def test_finds_uppercase_ass_file(self, mock_tmp, mock_create, mock_duration, tmp_path):
         """Test finding .ASS subtitle file (uppercase)."""
         video_file = tmp_path / "song.mp4"
-        ass_file = tmp_path / "song.ASS"
+        subtitles_dir = tmp_path / "subtitles"
+        subtitles_dir.mkdir()
+        ass_file = subtitles_dir / "song.ASS"
         video_file.touch()
         ass_file.touch()
 

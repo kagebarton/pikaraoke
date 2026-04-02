@@ -108,3 +108,10 @@ This is a fork of upstream PiKaraoke. Minimize merge conflicts when pulling upst
 - Create abstractions for single uses
 - Write speculative "future-proofing" code
 - Commit debug prints or commented code
+
+## Temporary Files
+
+All non-persistent files (intermediate processing artifacts, logs, HLS segments,
+download temp files) must use the centralized `temp_dir` preference from config.ini.
+Never hardcode temp paths or use `tempfile.gettempdir()` directly. Use
+`get_temp_directory()` from `get_platform.py` to resolve the configured path.

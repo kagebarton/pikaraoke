@@ -2,6 +2,7 @@
 
 import logging
 import multiprocessing
+import os
 import shutil
 import subprocess
 import tempfile
@@ -9,6 +10,7 @@ from pathlib import Path
 from multiprocessing import Process, Queue, SimpleQueue
 
 from pikaraoke.lib.events import EventSystem
+from pikaraoke.lib.get_platform import get_temp_directory
 
 # Model for audio-separator: MelBand Roformer Karaoke — best single-model
 # vocal clarity with complementary 2-stem output.
@@ -25,20 +27,26 @@ AAC_QUALITY = "2"
 
 FFMPEG_THREADS = "4"
 
-PROCESSING_LOG_FILE = "processing_manager.log"
-
 _processing_log_handler: logging.FileHandler | None = None
+_processing_log_file: str = ""
 
 
-def _get_log_handler() -> logging.FileHandler:
+def _get_log_handler(temp_dir: str = "") -> logging.FileHandler:
     """Return the shared FileHandler for processing logs (created once)."""
-    global _processing_log_handler
-    if _processing_log_handler is None:
-        _processing_log_handler = logging.FileHandler(PROCESSING_LOG_FILE)
+    global _processing_log_handler, _processing_log_file
+    
+    resolved_temp_dir = get_temp_directory(temp_dir) if temp_dir else ""
+    log_file_path = os.path.join(resolved_temp_dir, "processing_manager.log") if resolved_temp_dir else "processing_manager.log"
+    
+    if _processing_log_handler is None or _processing_log_file != log_file_path:
+        if _processing_log_handler is not None:
+            _processing_log_handler.close()
+        _processing_log_handler = logging.FileHandler(log_file_path)
         _processing_log_handler.setFormatter(
             logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s",
                               datefmt="%Y-%m-%d %H:%M:%S")
         )
+        _processing_log_file = log_file_path
     return _processing_log_handler
 
 
@@ -53,14 +61,15 @@ class ProcessingManager:
     CPU-intensive stem separation.
     """
 
-    def __init__(self, events: EventSystem) -> None:
+    def __init__(self, events: EventSystem, temp_dir: str = "") -> None:
         self._events = events
+        self._temp_dir = temp_dir
         self._queue: Queue = Queue()
         self._result_queue: SimpleQueue = SimpleQueue()
         self._worker_process: Process | None = None
         self.pending_jobs: list[str] = []
 
-        handler = _get_log_handler()
+        handler = _get_log_handler(temp_dir)
 
         processing_logger = logging.getLogger(__name__)
         processing_logger.addHandler(handler)
@@ -106,7 +115,7 @@ class ProcessingManager:
     def _make_worker_process(self) -> Process:
         return Process(
             target=_run_worker_process,
-            args=(self._queue, self._result_queue),
+            args=(self._queue, self._result_queue, self._temp_dir),
             daemon=False,
         )
 
@@ -119,14 +128,14 @@ class ProcessingManager:
                 pass
 
 
-def _run_worker_process(queue: Queue, result_queue: Queue) -> None:
+def _run_worker_process(queue: Queue, result_queue: Queue, temp_dir: str = "") -> None:
     """Entry point for the stem processing worker process.
 
     This runs in a separate process to avoid blocking the main application
     during CPU-intensive stem separation. Exits cleanly when None is received.
     """
     # Configure logging in the worker process
-    handler = _get_log_handler()
+    handler = _get_log_handler(temp_dir)
     processing_logger = logging.getLogger(__name__)
     processing_logger.addHandler(handler)
     processing_logger.setLevel(logging.DEBUG)
@@ -154,7 +163,7 @@ def _run_worker_process(queue: Queue, result_queue: Queue) -> None:
             logging.info(f"Processing: {song_path}")
 
             try:
-                _process_song_in_worker(song_path, separator)
+                _process_song_in_worker(song_path, separator, temp_dir)
             except Exception as e:
                 logging.error(f"Stem separation failed for {song_path}: {e}")
             finally:
@@ -169,7 +178,7 @@ def _run_worker_process(queue: Queue, result_queue: Queue) -> None:
         logging.info("Audio separator model unloaded")
 
 
-def _process_song_in_worker(song_path: str, separator) -> None:
+def _process_song_in_worker(song_path: str, separator, temp_dir: str = "") -> None:
     """Run the full stem separation pipeline for a single song."""
     video = Path(song_path)
     if not video.exists():
@@ -190,7 +199,8 @@ def _process_song_in_worker(song_path: str, separator) -> None:
 
     logging.info(f"Processing stems: {video.name}")
 
-    tmp_dir = tempfile.mkdtemp(prefix="pikaraoke_stems_")
+    resolved_temp_dir = get_temp_directory(temp_dir) if temp_dir else None
+    tmp_dir = tempfile.mkdtemp(prefix="pikaraoke_stems_", dir=resolved_temp_dir)
     try:
         # Step 1: Extract audio to WAV
         audio_wav = _extract_audio(video, tmp_dir)

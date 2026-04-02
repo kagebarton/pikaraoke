@@ -180,6 +180,31 @@ def get_data_directory() -> str:
     return path
 
 
+def get_temp_directory(configured: str = "") -> str:
+    """Get the configured temporary directory for intermediate files.
+
+    If a configured path is provided and valid, uses that (creating if needed).
+    Otherwise defaults to ~/.pikaraoke/tmp.
+
+    Args:
+        configured: Optional configured path from preferences. Empty string
+                    means use the default location.
+
+    Returns:
+        Path to the temporary directory.
+    """
+    if configured:
+        path = os.path.expanduser(configured)
+    else:
+        path = os.path.join(get_data_directory(), "tmp")
+
+    # Ensure the directory exists
+    if not os.path.exists(path):
+        os.makedirs(path)
+
+    return path
+
+
 def is_running_in_docker():
     """Check if we're running in a container using existence of /.dockerenv."""
     return os.path.exists("/.dockerenv")

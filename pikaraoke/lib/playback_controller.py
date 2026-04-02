@@ -153,7 +153,7 @@ class PlaybackController:
         # Small delay to ensure FFmpeg fully terminates and file handles close
         # Critical on Raspberry Pi with slow SD cards and hardware encoder cleanup
         time.sleep(0.3)
-        delete_tmp_dir()
+        delete_tmp_dir(self.preferences.get_or_default("temp_dir"))
         logging.debug("Cleanup complete")
 
         self.events.emit("song_ended")

@@ -41,6 +41,7 @@ class DownloadManager:
         download_path: str,
         youtubedl_proxy: str | None = None,
         additional_ytdl_args: str | None = None,
+        temp_dir: str = "",
     ) -> None:
         """Initialize the download manager.
 
@@ -52,6 +53,7 @@ class DownloadManager:
             download_path: Directory where downloads are saved.
             youtubedl_proxy: Optional proxy URL for yt-dlp.
             additional_ytdl_args: Optional additional arguments for yt-dlp.
+            temp_dir: Optional directory for yt-dlp temporary files.
         """
         self._events = events
         self._preferences = preferences
@@ -60,6 +62,7 @@ class DownloadManager:
         self._download_path = download_path
         self._youtubedl_proxy = youtubedl_proxy
         self._additional_ytdl_args = additional_ytdl_args
+        self._temp_dir = temp_dir
         self.download_queue: Queue = Queue()
         self.pending_downloads: list[dict] = []  # Shadow queue for visibility
         self.download_errors: list[dict] = []  # Track failed downloads
@@ -230,6 +233,7 @@ class DownloadManager:
             self._preferences.get_or_default("high_quality"),
             self._youtubedl_proxy,
             self._additional_ytdl_args,
+            self._temp_dir,
         )
         logging.debug("Youtube-dl command: " + " ".join(cmd))
 

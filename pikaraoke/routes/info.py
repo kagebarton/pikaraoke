@@ -80,6 +80,7 @@ def info():
             "mid": k.mid_score_phrases,
             "high": k.high_score_phrases,
         },
+        temp_dir=k.temp_dir,
     )
 
 

@@ -1,5 +1,7 @@
 """Pytest fixtures for PiKaraoke tests."""
 
+from unittest.mock import MagicMock
+
 import pytest
 
 from pikaraoke.lib.events import EventSystem
@@ -87,6 +89,9 @@ class MockKaraoke:
         self.volume = 0.85
         self.running = True
         self.now_playing_notification = None
+        self.subtitle_delay = 0
+        self.temp_dir = ""
+        self.processing_manager = MagicMock()
 
         # Set preferences that differ from defaults
         self.preferences.set("enable_fair_queue", True)

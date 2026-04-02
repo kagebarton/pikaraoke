@@ -472,6 +472,13 @@
 						</label>
 					</div>
 
+					<div class="user-preference-container" style="flex-direction: column">
+						<label class="label" for="pref-temp-dir">Temporary files directory (blank = ~/.pikaraoke/tmp)</label>
+						<input id="pref-temp-dir" class="user-preference-input input" type="text"
+							   data-pref="temp_dir" data-start-value="{{ temp_dir }}" value="{{ temp_dir }}"
+							   style="width: 100%; margin-right: 0" />
+					</div>
+
 					<div style="margin-top: 20px">
 						{# MSG: Text for the link where the user can clear all user preferences #}
 						<a id="clear-preferences-link" class="button is-danger is-outlined" href="{{ url_for('preferences.clear_preferences') }}">{% trans %}Clear preferences{% endtrans %}</a>

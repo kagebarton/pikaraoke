@@ -15,6 +15,7 @@ from typing import Any
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.ffmpeg import build_ffmpeg_cmd
 from pikaraoke.lib.file_resolver import FileResolver, is_transcoding_required
+from pikaraoke.lib.get_platform import get_temp_directory
 from pikaraoke.lib.preference_manager import PreferenceManager
 
 
@@ -106,8 +107,9 @@ class StreamManager:
 
         logging.debug(f"Requires transcoding: {requires_transcoding}")
 
+        temp_dir = get_temp_directory(self.preferences.get_or_default("temp_dir"))
         try:
-            fr = FileResolver(file_path, streaming_format)
+            fr = FileResolver(file_path, streaming_format, temp_dir=temp_dir)
         except Exception as e:
             error_message = _("Error resolving file: %s") % str(e)
             logging.error(error_message)

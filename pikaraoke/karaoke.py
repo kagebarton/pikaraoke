@@ -23,6 +23,7 @@ from pikaraoke.lib.get_platform import (
     get_data_directory,
     get_os_version,
     get_platform,
+    get_temp_directory,
     is_raspberry_pi,
 )
 from pikaraoke.lib.karaoke_database import KaraokeDatabase
@@ -121,6 +122,7 @@ class Karaoke:
         show_splash_clock: bool | None = None,
         splash_delay: int | None = None,
         subtitle_delay: float | None = None,
+        temp_dir: str | None = None,
         volume: float | None = None,
     ) -> None:
         """Initialize the Karaoke instance.
@@ -202,6 +204,9 @@ class Karaoke:
         cli_args = {k: v for k, v in locals().items() if k != "self"}
         self._load_preferences(**cli_args)
 
+        # Resolve temp_dir using the centralized helper
+        self.temp_dir = get_temp_directory(self.temp_dir)
+
         # Log the settings to debug level
         self.log_settings_to_debug()
 
@@ -264,11 +269,12 @@ class Karaoke:
             download_path=self.download_path,
             youtubedl_proxy=self.youtubedl_proxy,
             additional_ytdl_args=self.additional_ytdl_args,
+            temp_dir=self.temp_dir,
         )
         self.download_manager.start()
 
         # Initialize and start stem separation processor
-        self.processing_manager = ProcessingManager(events=self.events)
+        self.processing_manager = ProcessingManager(events=self.events, temp_dir=self.temp_dir)
         self.processing_manager.start()
 
         # Song library startup: warm cache from DB or blocking cold scan

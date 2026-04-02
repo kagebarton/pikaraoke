@@ -70,8 +70,10 @@ class TestBuildYtdlDownloadCommand:
         assert "-f" in cmd
         assert "-o" in cmd
         output_idx = cmd.index("-o") + 1
-        assert cmd[output_idx].endswith("%(title)s---%(id)s.%(ext)s")
-        assert "/songs" in cmd[output_idx]
+        assert cmd[output_idx] == "%(title)s---%(id)s.%(ext)s"
+        assert "--paths" in cmd
+        paths_idx = cmd.index("--paths") + 1
+        assert cmd[paths_idx] == "home:/songs"
         assert "https://www.youtube.com/watch?v=test123" in cmd
 
     @patch("pikaraoke.lib.youtube_dl.get_installed_js_runtime", return_value=None)

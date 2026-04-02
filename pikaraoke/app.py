@@ -262,7 +262,7 @@ def main() -> None:
     if browser is not None:
         browser.close()
 
-    delete_tmp_dir()
+    delete_tmp_dir(k.temp_dir)
     sys.exit()
 
 

@@ -9,30 +9,46 @@ import zipfile
 from sys import maxsize
 
 from pikaraoke.lib.ffmpeg import get_media_duration
-from pikaraoke.lib.get_platform import get_platform
+from pikaraoke.lib.get_platform import get_temp_directory
 
 
-def get_tmp_dir() -> str:
+def get_tmp_dir(base_dir: str = "") -> str:
     """Get the temporary directory path scoped to this process.
+
+    Args:
+        base_dir: Optional base directory for temp files. If provided,
+                  uses os.path.join(base_dir, pid). Otherwise uses
+                  the system temp directory.
 
     Returns:
         Path to the process-specific temporary directory.
     """
     pid = os.getpid()  # for scoping tmp directories to this process
-    tmp_dir = os.path.join(tempfile.gettempdir(), f"{pid}")
+    if base_dir:
+        tmp_dir = os.path.join(base_dir, f"{pid}")
+    else:
+        tmp_dir = os.path.join(tempfile.gettempdir(), f"{pid}")
     return tmp_dir
 
 
-def create_tmp_dir() -> None:
-    """Create the temporary directory if it doesn't exist."""
-    tmp_dir = get_tmp_dir()
+def create_tmp_dir(base_dir: str = "") -> None:
+    """Create the temporary directory if it doesn't exist.
+
+    Args:
+        base_dir: Optional base directory for temp files.
+    """
+    tmp_dir = get_tmp_dir(base_dir)
     if not os.path.exists(tmp_dir):
         os.makedirs(tmp_dir)
 
 
-def delete_tmp_dir() -> None:
-    """Delete the temporary directory and all its contents."""
-    tmp_dir = get_tmp_dir()
+def delete_tmp_dir(base_dir: str = "") -> None:
+    """Delete the temporary directory and all its contents.
+
+    Args:
+        base_dir: Optional base directory for temp files.
+    """
+    tmp_dir = get_tmp_dir(base_dir)
     if os.path.exists(tmp_dir):
         # On Windows, files may still be locked briefly after process termination
         # Use error handler to ignore permission errors on individual files
@@ -114,15 +130,18 @@ class FileResolver:
     file_extension: str | None = None
     ass_file_path: str | None = None
 
-    def __init__(self, file_path: str, streaming_format: str = "hls") -> None:
+    def __init__(
+        self, file_path: str, streaming_format: str = "hls", temp_dir: str = ""
+    ) -> None:
         """Initialize the FileResolver with a media file path.
 
         Args:
             file_path: Path to the media file to resolve.
             streaming_format: Video streaming format ('hls' or 'mp4').
+            temp_dir: Optional base directory for temporary files.
         """
-        create_tmp_dir()
-        self.tmp_dir = get_tmp_dir()
+        create_tmp_dir(temp_dir)
+        self.tmp_dir = get_tmp_dir(temp_dir)
         self.resolved_file_path = self.process_file(file_path)
         # Include timestamp to ensure unique stream UIDs for repeated plays
         unique_string = f"{file_path}_{time.time()}"

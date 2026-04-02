@@ -12,6 +12,7 @@ _ = flask_babel.gettext
 
 from pikaraoke.lib.current_app import get_karaoke_instance
 from pikaraoke.lib.file_resolver import FileResolver, get_tmp_dir
+from pikaraoke.lib.get_platform import get_temp_directory
 
 stream_bp = Blueprint("stream", __name__)
 
@@ -20,8 +21,9 @@ stream_bp = Blueprint("stream", __name__)
 @stream_bp.route("/stream/<id>.m3u8")
 def stream_playlist(id):
     """Serve HLS playlist file."""
-    file_path = os.path.join(get_tmp_dir(), f"{id}.m3u8")
     k = get_karaoke_instance()
+    temp_dir = get_temp_directory(k.temp_dir)
+    file_path = os.path.join(get_tmp_dir(temp_dir), f"{id}.m3u8")
 
     # Mark song as started when client connects (idempotent)
     # Validate stream ID matches current song to prevent stale requests from setting is_playing
@@ -60,7 +62,9 @@ def stream_segment_m4s(filename):
     if ".." in filename or "/" in filename:
         return Response("Invalid segment", status=400)
 
-    segment_path = os.path.join(get_tmp_dir(), f"{filename}.m4s")
+    k = get_karaoke_instance()
+    temp_dir = get_temp_directory(k.temp_dir)
+    segment_path = os.path.join(get_tmp_dir(temp_dir), f"{filename}.m4s")
 
     if os.path.exists(segment_path):
         return send_file(segment_path, mimetype="video/mp4")
@@ -76,7 +80,9 @@ def stream_init(filename):
     if ".." in filename or "/" in filename:
         return Response("Invalid init file", status=400)
 
-    init_path = os.path.join(get_tmp_dir(), f"{filename}_init.mp4")
+    k = get_karaoke_instance()
+    temp_dir = get_temp_directory(k.temp_dir)
+    init_path = os.path.join(get_tmp_dir(temp_dir), f"{filename}_init.mp4")
     if os.path.exists(init_path):
         return send_file(init_path, mimetype="video/mp4")
     else:
@@ -91,7 +97,9 @@ def stream_segment(filename):
     if ".." in filename or "/" in filename:
         return Response("Invalid segment", status=400)
 
-    segment_path = os.path.join(get_tmp_dir(), f"{filename}.ts")
+    k = get_karaoke_instance()
+    temp_dir = get_temp_directory(k.temp_dir)
+    segment_path = os.path.join(get_tmp_dir(temp_dir), f"{filename}.ts")
 
     if os.path.exists(segment_path):
         return send_file(segment_path, mimetype="video/mp2t")
@@ -119,8 +127,9 @@ def stream_main(id):
 @stream_bp.route("/stream/<id>.mp4")
 def stream_progressive_mp4(id):
     """Stream progressive MP4 from HLS-generated segments."""
-    file_path = os.path.join(get_tmp_dir(), f"{id}.mp4")
     k = get_karaoke_instance()
+    temp_dir = get_temp_directory(k.temp_dir)
+    file_path = os.path.join(get_tmp_dir(temp_dir), f"{id}.mp4")
 
     # Mark song as started when client connects (idempotent)
     # Validate stream ID matches current song to prevent stale requests from setting is_playing
@@ -201,7 +210,8 @@ def stream_full(id):
         if now_playing_url and id in now_playing_url:
             k.playback_controller.start_song()
 
-    file_path = os.path.join(get_tmp_dir(), f"{id}.mp4")
+    temp_dir = get_temp_directory(k.temp_dir)
+    file_path = os.path.join(get_tmp_dir(temp_dir), f"{id}.mp4")
     return stream_file_path_full(file_path)
 
 
@@ -225,7 +235,8 @@ def stream_subtitle(id):
         original_file_path = k.playback_controller.now_playing_filename
         now_playing_url = k.playback_controller.now_playing_url
         if original_file_path and now_playing_url and id in now_playing_url:
-            fr = FileResolver(original_file_path)
+            temp_dir = get_temp_directory(k.temp_dir)
+            fr = FileResolver(original_file_path, temp_dir=temp_dir)
             ass_file_path = fr.ass_file_path
             if ass_file_path and os.path.exists(ass_file_path):
                 return send_file(
