@@ -19,7 +19,7 @@ def build_song_record(
 ) -> dict:
     """Construct a song dict ready for KaraokeDatabase.insert_songs().
 
-    Inspects the file's directory for companion files (.cdg, .ass) to
+    Inspects the file's directory for companion files (.ass) to
     determine the correct format.
 
     Args:
@@ -55,12 +55,10 @@ def _extract_youtube_id(file_path: str) -> str | None:
 
 
 def _detect_format(file_path: str, files_lower: set[str]) -> str:
-    """Detect the song format, checking for companion files (.cdg, .ass)."""
+    """Detect the song format, checking for companion files (.ass)."""
     base, ext = os.path.splitext(os.path.basename(file_path))
     ext = ext.lower()
     base_lower = base.lower()
-    if ext == ".mp3" and (base_lower + ".cdg") in files_lower:
-        return "cdg"
     if ext == ".mp4" and (base_lower + ".ass") in files_lower:
         return "ass"
     return ext.lstrip(".")

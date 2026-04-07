@@ -235,7 +235,7 @@ def parse_pikaraoke_args() -> argparse.Namespace:
         "-c",
         "--complete-transcode-before-play",
         action="store_true",
-        help="Wait for ffmpeg video transcoding to fully complete before playback begins. Transcoding occurs when you have normalization on, play a cdg file, or change key. May improve performance and browser compatibility (Safari, Firefox), but will significantly increase the delay before playback begins. On modern hardware, the delay is likely negligible.",
+        help="Wait for ffmpeg video transcoding to fully complete before playback begins. Transcoding occurs when you have normalization on or change key. May improve performance and browser compatibility (Safari, Firefox), but will significantly increase the delay before playback begins. On modern hardware, the delay is likely negligible.",
         required=False,
     )
     parser.add_argument(

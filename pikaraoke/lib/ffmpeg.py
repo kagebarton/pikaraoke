@@ -38,12 +38,10 @@ def build_ffmpeg_cmd(
     force_mp4_encoding: bool = False,
     buffer_fully_before_playback: bool = False,
     avsync: float = 0,
-    cdg_pixel_scaling: bool = False,
 ) -> Any:
     """Build an ffmpeg command for transcoding media.
 
-    Handles video/audio codec selection, pitch shifting, audio normalization,
-    and CDG file rendering.
+    Handles video/audio codec selection and pitch shifting.
 
     Args:
         fr: FileResolver instance with source file information.
@@ -51,13 +49,11 @@ def build_ffmpeg_cmd(
         normalize_audio: Whether to apply loudness normalization.
         force_mp4_encoding: If True, force mp4 encoding.
         avsync: Audio/video sync adjustment in seconds.
-        cdg_pixel_scaling: Enable pixel scaling for CDG rendering.
 
     Returns:
         ffmpeg stream object ready to execute with run_async().
     """
     avsync = float(avsync)
-    is_cdg = fr.cdg_file_path is not None
     is_transposed = semitones != 0
 
     if fr.file_path is None:
@@ -67,25 +63,19 @@ def build_ffmpeg_cmd(
     using_hardware_encoder = supports_hardware_h264_encoding()
     default_vcodec = "h264_v4l2m2m" if using_hardware_encoder else "libx264"
 
-    # CDG always needs encoding; MP4 can copy video stream (already H.264 compatible)
+    # MP4 can copy video stream (already H.264 compatible)
     # WEBM uses VP8/VP9 which must be transcoded to H.264 for fMP4 containers
-    if is_cdg:
-        vcodec = "libx264"
-    else:
-        vcodec = "copy" if fr.file_extension == ".mp4" else default_vcodec
+    vcodec = "copy" if fr.file_extension == ".mp4" else default_vcodec
 
-    # Optimize bitrate: CDG is simple graphics (500k), video files need more
+    # Optimize bitrate
     # Pi 3B+ struggles with 5M in real-time, 2M provides better stability
-    if is_cdg:
-        vbitrate = "500k"
-    elif using_hardware_encoder:
+    if using_hardware_encoder:
         vbitrate = "2M"
     else:
         vbitrate = "5M"
 
     # Copy audio if no processing needed, otherwise re-encode with AAC
-    # CDG always re-encodes audio for compatibility
-    acodec = "aac" if is_cdg or is_transposed or normalize_audio or avsync != 0 else "copy"
+    acodec = "aac" if is_transposed or normalize_audio or avsync != 0 else "copy"
 
     # For container formats with VFR or timestamp issues, use genpts
     if fr.file_extension in [".webm", ".avi", ".mov", ".mkv"]:
@@ -108,15 +98,8 @@ def build_ffmpeg_cmd(
     if normalize_audio:
         audio = audio.filter("loudnorm", i=-16, tp=-1.5, lra=11)
 
-    # Video source: CDG input or original video stream
-    if is_cdg:
-        logging.info("Playing CDG/MP3 file: " + fr.file_path)
-        cdg_input = ffmpeg.input(fr.cdg_file_path, copyts=None)
-        video = cdg_input.video.filter("fps", fps=25)
-        if cdg_pixel_scaling:
-            video = video.filter("scale", -1, 720, flags="neighbor")
-    else:
-        video = input.video
+    # Video source
+    video = input.video
 
     # Build output based on format
     if force_mp4_encoding:
@@ -134,7 +117,6 @@ def build_ffmpeg_cmd(
             f="mp4",
             video_bitrate=vbitrate,
             movflags=movflags,
-            **({"pix_fmt": "yuv420p"} if is_cdg else {}),
         )
     else:
         # HLS format with fMP4 segments
@@ -159,8 +141,6 @@ def build_ffmpeg_cmd(
             hls_fmp4_init_filename=fr.init_filename,
             hls_segment_filename=fr.segment_pattern,
             video_bitrate=vbitrate,
-            # CDG needs pix_fmt for proper color space
-            **({"pix_fmt": "yuv420p"} if is_cdg else {}),
             **{
                 "vsync": "cfr",
                 "avoid_negative_ts": "make_zero",

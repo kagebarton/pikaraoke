@@ -551,9 +551,6 @@ const setupUIScaling = () => {
     { selector: '#qr-code', origin: 'bottom left' },
     { selector: '#up-next', origin: 'bottom right' },
     { selector: '#dvd', origin: null },
-    { selector: '#your-score-text', origin: null },
-    { selector: '#score-number-text', origin: null },
-    { selector: '#score-review-text', origin: null },
     { selector: '#splash-notification', origin: 'top left' },
     { selector: '#clock', origin: 'top left' },
   ];

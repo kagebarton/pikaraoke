@@ -12,7 +12,7 @@
 				let timeoutId = setTimeout(function() {
 					$this.attr("data-start-value", val);
 
-					if (pref == "bg_music_volume" || pref == "volume") {
+					if (pref == "volume") {
 						val = val / 100;
 					}
 					changePreferences(pref, val);

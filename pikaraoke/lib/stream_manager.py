@@ -189,7 +189,6 @@ class StreamManager:
             "complete_transcode_before_play"
         )
         avsync = self.preferences.get_or_default("avsync")
-        cdg_pixel_scaling = self.preferences.get_or_default("cdg_pixel_scaling")
         buffer_size = int(self.preferences.get_or_default("buffer_size")) * 1000
 
         ffmpeg_cmd = build_ffmpeg_cmd(
@@ -199,7 +198,6 @@ class StreamManager:
             not is_hls,  # force mp4 encoding
             complete_transcode_before_play,
             avsync,
-            cdg_pixel_scaling,
         )
         self.ffmpeg_process = ffmpeg_cmd.run_async(pipe_stderr=True, pipe_stdin=True)
 
