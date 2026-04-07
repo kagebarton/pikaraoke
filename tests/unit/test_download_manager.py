@@ -166,9 +166,11 @@ class TestDownloadManagerExecuteDownload:
         # Mock find_by_id to return a path
         song_manager.songs.find_by_id.return_value = "/songs/Artist - Song---abc123.mp4"
 
-        rc = download_manager._execute_download(
-            "https://youtube.com/watch?v=abc123", False, "User", "Title"
-        )
+        # Mock Path.mkdir to avoid filesystem operations
+        with patch("pathlib.Path.mkdir"):
+            rc = download_manager._execute_download(
+                "https://youtube.com/watch?v=abc123", False, "User", "Title"
+            )
 
         assert rc == 0
         song_manager.songs.find_by_id.assert_called_once_with("/songs", "abc123")
@@ -200,9 +202,11 @@ class TestDownloadManagerExecuteDownload:
         song_manager.songs.find_by_id.return_value = "/songs/Song---abc.mp4"
         song_manager.songs.add_if_valid.return_value = True
 
-        download_manager._execute_download(
-            "https://youtube.com/watch?v=abc", True, "TestUser", "Title"
-        )
+        # Mock Path.mkdir to avoid filesystem operations
+        with patch("pathlib.Path.mkdir"):
+            download_manager._execute_download(
+                "https://youtube.com/watch?v=abc", True, "TestUser", "Title"
+            )
 
         queue_manager.enqueue.assert_called_once_with(
             "/songs/Song---abc.mp4", "TestUser", log_action=False
@@ -376,11 +380,13 @@ class TestDownloadManagerSpecialCharacters:
         song_manager.songs.find_by_id.return_value = file_path
         song_manager.songs.add_if_valid.return_value = True
 
-        download_manager._execute_download(
-            f"https://youtube.com/watch?v={video_id}",
-            enqueue=True,
-            user="TestUser",
-            title="Test",
-        )
+        # Mock Path.mkdir to avoid filesystem operations
+        with patch("pathlib.Path.mkdir"):
+            download_manager._execute_download(
+                f"https://youtube.com/watch?v={video_id}",
+                enqueue=True,
+                user="TestUser",
+                title="Test",
+            )
 
         queue_manager.enqueue.assert_called_once_with(file_path, "TestUser", log_action=False)

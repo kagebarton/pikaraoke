@@ -90,14 +90,15 @@ class TestBuildYtdlDownloadCommand:
 
     @patch("pikaraoke.lib.youtube_dl.get_installed_js_runtime", return_value=None)
     def test_standard_quality_format(self, mock_js):
-        """Test that standard quality uses mp4 format."""
+        """Test that standard quality uses 720p format."""
         cmd = build_ytdl_download_command(
             video_url="https://www.youtube.com/watch?v=test123",
             download_path="/songs",
             high_quality=False,
         )
         format_idx = cmd.index("-f") + 1
-        assert cmd[format_idx] == "mp4"
+        assert "bestvideo" in cmd[format_idx]
+        assert "720" in cmd[format_idx]
 
     @patch("pikaraoke.lib.youtube_dl.get_installed_js_runtime", return_value=None)
     def test_with_proxy(self, mock_js):

@@ -21,6 +21,12 @@ def events():
 
 
 @pytest.fixture
+def mock_separator():
+    """Create a mock audio-separator Separator instance."""
+    return MagicMock()
+
+
+@pytest.fixture
 def processing_manager(events):
     """Create a ProcessingManager with a real EventSystem."""
     return ProcessingManager(events=events)
@@ -70,7 +76,7 @@ class TestProcessingManagerEnqueue:
 class TestProcessSongInWorker:
     """Tests for the stem separation pipeline."""
 
-    def test_skips_when_stems_exist(self, tmp_path):
+    def test_skips_when_stems_exist(self, tmp_path, mock_separator):
         """Already-processed songs are skipped."""
         song = tmp_path / "Song---abc123.mp4"
         song.write_bytes(b"fake video")
@@ -83,17 +89,17 @@ class TestProcessSongInWorker:
         (nonvocal_dir / "Song---abc123---nonvocal.m4a").write_bytes(b"fake inst")
 
         # Should return without doing anything
-        _process_song_in_worker(str(song))
+        _process_song_in_worker(str(song), mock_separator)
 
-    def test_raises_on_missing_file(self):
+    def test_raises_on_missing_file(self, mock_separator):
         with pytest.raises(FileNotFoundError):
-            _process_song_in_worker("/nonexistent/song.mp4")
+            _process_song_in_worker("/nonexistent/song.mp4", mock_separator)
 
     @patch("pikaraoke.lib.processing_manager._extract_audio")
     @patch("pikaraoke.lib.processing_manager._separate_stems")
     @patch("pikaraoke.lib.processing_manager._wav_to_m4a")
     def test_creates_output_directories(
-        self, mock_transcode, mock_separate, mock_extract, tmp_path
+        self, mock_transcode, mock_separate, mock_extract, mock_separator, tmp_path
     ):
         """Verifies vocal/ and nonvocal/ directories are created."""
         song = tmp_path / "Song---abc123.mp4"
@@ -105,7 +111,7 @@ class TestProcessSongInWorker:
             tmp_path / "instrumental.wav",
         )
 
-        _process_song_in_worker(str(song))
+        _process_song_in_worker(str(song), mock_separator)
 
         assert (tmp_path / "vocal").is_dir()
         assert (tmp_path / "nonvocal").is_dir()
@@ -113,7 +119,9 @@ class TestProcessSongInWorker:
     @patch("pikaraoke.lib.processing_manager._extract_audio")
     @patch("pikaraoke.lib.processing_manager._separate_stems")
     @patch("pikaraoke.lib.processing_manager._wav_to_m4a")
-    def test_output_filenames(self, mock_transcode, mock_separate, mock_extract, tmp_path):
+    def test_output_filenames(
+        self, mock_transcode, mock_separate, mock_extract, mock_separator, tmp_path
+    ):
         """Verifies output paths follow the ---vocal / ---nonvocal convention."""
         song = tmp_path / "Artist - Title---dQw4w9Wg.mp4"
         song.write_bytes(b"fake video")
@@ -126,7 +134,7 @@ class TestProcessSongInWorker:
         )
         mock_transcode.side_effect = lambda wav, out: transcode_calls.append(out)
 
-        _process_song_in_worker(str(song))
+        _process_song_in_worker(str(song), mock_separator)
 
         output_names = [p.name for p in transcode_calls]
         assert "Artist - Title---dQw4w9Wg---vocal.m4a" in output_names
@@ -135,7 +143,9 @@ class TestProcessSongInWorker:
     @patch("pikaraoke.lib.processing_manager._extract_audio")
     @patch("pikaraoke.lib.processing_manager._separate_stems")
     @patch("pikaraoke.lib.processing_manager._wav_to_m4a")
-    def test_output_directories(self, mock_transcode, mock_separate, mock_extract, tmp_path):
+    def test_output_directories(
+        self, mock_transcode, mock_separate, mock_extract, mock_separator, tmp_path
+    ):
         """Vocal goes to vocal/, nonvocal goes to nonvocal/."""
         song = tmp_path / "Song---abc123.mp4"
         song.write_bytes(b"fake video")
@@ -148,7 +158,7 @@ class TestProcessSongInWorker:
         )
         mock_transcode.side_effect = lambda wav, out: transcode_calls.append(out)
 
-        _process_song_in_worker(str(song))
+        _process_song_in_worker(str(song), mock_separator)
 
         vocal_path = transcode_calls[0]
         nonvocal_path = transcode_calls[1]

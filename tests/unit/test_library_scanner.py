@@ -347,6 +347,7 @@ class TestBuildSongRecord:
         record = build_song_record(str(mp3))
         assert record["format"] == "mp3"
 
+
 class TestExtractYoutubeId:
     def test_pikaraoke_format(self):
         assert _extract_youtube_id("Song---dQw4w9WgXcQ.mp4") == "dQw4w9WgXcQ"
