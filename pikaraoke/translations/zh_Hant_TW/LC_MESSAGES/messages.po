@@ -764,22 +764,6 @@ msgstr "使用者偏好設定"
 msgid "Splash screen settings"
 msgstr "啟動畫面設定"
 
-#. Checkbox label which enable/disables background video on the Splash Screen
-#: templates/info.html:241
-msgid "Disable background video"
-msgstr "停用背景影片"
-
-#. Checkbox label which enable/disables background music on the Splash Screen
-#: templates/info.html:247
-#, fuzzy
-msgid "Disable background music"
-msgstr "停用背景影片"
-
-#. Checkbox label which enable/disables the Score Screen
-#: templates/info.html:253
-msgid "Disable the score screen after each song"
-msgstr "停用每首歌曲後的分數畫面"
-
 #. Checkbox label which enable/disables notifications on the splash screen
 #: templates/info.html:259
 msgid "Hide notifications"
@@ -806,62 +790,14 @@ msgstr "隱藏所有覆蓋層，包括正在播放、即將播放和 QR 碼"
 msgid "Default volume of the videos (min 0, max 100)"
 msgstr "影片的預設音量（最小 0，最大 100）"
 
-#. Numberbox label for setting the background music volume
-#: templates/info.html:288
-msgid "Volume of the background music (min 0, max 100)"
-msgstr "背景音樂的音量（最小 0，最大 100）"
-
-#. Numberbox label for setting the inactive delay before showing the
-#. screensaver
-#: templates/info.html:295
-msgid ""
-"The amount of idle time in seconds before the screen saver activates. Set"
-" to 0 to disable it."
-msgstr "螢幕保護程式啟動前的閒置時間（秒）。設為 0 可停用。"
-
 #. Numberbox label for setting the delay before playing the next song
 #: templates/info.html:302
 msgid "The delay in seconds before starting the next song"
 msgstr "開始下一首歌曲前的延遲時間（秒）"
 
-#. Title text for the Score Phrases section of preferences
-#: templates/info.html:313
-msgid "Score phrases"
-msgstr ""
-
 #. Help text explaining how to add phrases
 #: templates/info.html:320
 msgid "Add one phrase per line in each box and hit save."
-msgstr ""
-
-#. Title for LOW Score Phrases
-#: templates/info.html:322
-msgid "LOW Score Phrases (score < 30)"
-msgstr ""
-
-#. Placeholder for the low score phrases textarea
-#: templates/info.html:324
-msgid "Could be better..."
-msgstr ""
-
-#. Title for MID Score Phrases
-#: templates/info.html:327
-msgid "MID Score Phrases (30 > score < 60)"
-msgstr ""
-
-#. Placeholder for the MID score phrases textarea
-#: templates/info.html:329
-msgid "That was ok..."
-msgstr ""
-
-#. Title for HIGH Score Phrases
-#: templates/info.html:332
-msgid "HIGH Score Phrases (60 < score)"
-msgstr ""
-
-#. Placeholder for the HIGH score phrases textarea
-#: templates/info.html:334
-msgid "Wonderfull..."
 msgstr ""
 
 #. Title text for the language settings section of preferences
@@ -895,13 +831,6 @@ msgid ""
 "Transcode video completely before playing (better browser compatibility, "
 "slower starts). Buffer size will be ignored.*"
 msgstr "在播放前完全轉碼影片（更好的瀏覽器相容性，較慢的啟動）。緩衝區大小將被忽略。*"
-
-#. Checkbox label which enable/disables CDG pixel scaling
-#: templates/info.html:389
-msgid ""
-"Enable CDG pixel scaling (crisper visuals for CDG files, may increase CPU"
-" usage)"
-msgstr ""
 
 #. Numberbox label for audio video synchronization
 #: templates/info.html:396
@@ -1303,11 +1232,6 @@ msgstr "即將播放："
 msgid "Next singer:"
 msgstr "下一位歌手："
 
-#. The title of the score screen, telling the user their singing score
-#: templates/splash.html:118
-msgid "Your Score"
-msgstr "您的分數"
-
 #. Prompt for interaction in order to enable video autoplay.
 #: templates/splash.html:132
 #,
@@ -1339,9 +1263,6 @@ msgstr "確認"
 
 #~ msgid "Sort by Date"
 #~ msgstr "按日期排序"
-
-#~ msgid "Disable background music"
-#~ msgstr "停用背景音樂"
 
 #~ msgid "Disable admin mode: <a href=\"%(logout_url)s\">Log out</a>"
 #~ msgstr "停用管理員模式：<a href=\"%(logout_url)s\">登出</a>"
@@ -1380,24 +1301,12 @@ msgstr "確認"
 #~ msgid "Song will appear in the \"available songs\" list."
 #~ msgstr "歌曲將出現在「可用歌曲」列表中。"
 
-#~ msgid "HIGH Score Phrases (score > 60)"
-#~ msgstr ""
-
 #~ msgid ""
 #~ "Do you want to change the name "
 #~ "of the person using this device? "
 #~ "This will show up on queued songs."
 #~ " Current: %(currentUser)s"
 #~ msgstr "您想更改使用此設備的人的名字嗎？這將顯示在已排隊的歌曲上。當前：%(currentUser)s"
-
-#~ msgid ""
-#~ "* Videos are only transcoded when: "
-#~ "normalization is on, audio/video "
-#~ "synchronization not zero, a song is "
-#~ "transposed, playing a CDG/MOV/AVI/MKV file."
-#~ " Most unmodified MP4 files will not"
-#~ " need to be transcoded."
-#~ msgstr "* 只有在以下情況下才會轉碼影片：標準化開啟、歌曲被轉調、播放 CDG/MOV/AVI/MKV 檔案。大多數未修改的 MP4 檔案不需要轉碼。"
 
 #~ msgid ""
 #~ "Add <input id=\"randomNumberInput\" class=\"input"
@@ -1434,4 +1343,3 @@ msgstr "確認"
 
 #~ msgid "Link:"
 #~ msgstr "連結："
-

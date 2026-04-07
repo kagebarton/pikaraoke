@@ -771,22 +771,6 @@ msgstr "Пользовательские настройки"
 msgid "Splash screen settings"
 msgstr "Установки заставки"
 
-#. Checkbox label which enable/disables background video on the Splash Screen
-#: templates/info.html:241
-msgid "Disable background video"
-msgstr "Отключить фоновое видео"
-
-#. Checkbox label which enable/disables background music on the Splash Screen
-#: templates/info.html:247
-#, fuzzy
-msgid "Disable background music"
-msgstr "Отключить фоновое видео"
-
-#. Checkbox label which enable/disables the Score Screen
-#: templates/info.html:253
-msgid "Disable the score screen after each song"
-msgstr "Отключить экран набранных балов после каждой песни"
-
 #. Checkbox label which enable/disables notifications on the splash screen
 #: templates/info.html:259
 msgid "Hide notifications"
@@ -813,64 +797,14 @@ msgstr "Скрыть все оверлеи, включая сейчас игра
 msgid "Default volume of the videos (min 0, max 100)"
 msgstr "Громкость видео по уморчанию (мин 0, макс 100)"
 
-#. Numberbox label for setting the background music volume
-#: templates/info.html:288
-msgid "Volume of the background music (min 0, max 100)"
-msgstr "Громкость фоновой музыки (мин 0, макс 100)"
-
-#. Numberbox label for setting the inactive delay before showing the
-#. screensaver
-#: templates/info.html:295
-msgid ""
-"The amount of idle time in seconds before the screen saver activates. Set"
-" to 0 to disable it."
-msgstr ""
-"Период бездействия в секундах до того, как включится хранитель экрана. "
-"Поставьте 0, чтобы отключить его."
-
 #. Numberbox label for setting the delay before playing the next song
 #: templates/info.html:302
 msgid "The delay in seconds before starting the next song"
 msgstr "Задержка в секундах перед стартом следующей песни"
 
-#. Title text for the Score Phrases section of preferences
-#: templates/info.html:313
-msgid "Score phrases"
-msgstr ""
-
 #. Help text explaining how to add phrases
 #: templates/info.html:320
 msgid "Add one phrase per line in each box and hit save."
-msgstr ""
-
-#. Title for LOW Score Phrases
-#: templates/info.html:322
-msgid "LOW Score Phrases (score < 30)"
-msgstr ""
-
-#. Placeholder for the low score phrases textarea
-#: templates/info.html:324
-msgid "Could be better..."
-msgstr ""
-
-#. Title for MID Score Phrases
-#: templates/info.html:327
-msgid "MID Score Phrases (30 > score < 60)"
-msgstr ""
-
-#. Placeholder for the MID score phrases textarea
-#: templates/info.html:329
-msgid "That was ok..."
-msgstr ""
-
-#. Title for HIGH Score Phrases
-#: templates/info.html:332
-msgid "HIGH Score Phrases (60 < score)"
-msgstr ""
-
-#. Placeholder for the HIGH score phrases textarea
-#: templates/info.html:334
-msgid "Wonderfull..."
 msgstr ""
 
 #. Title text for the language settings section of preferences
@@ -907,15 +841,6 @@ msgstr ""
 "Полностью транскодировать видео до того, как запустить проигрывание "
 "(улучшает совместимость с браузерами, замедляет старт). Размер буфера "
 "будет проигнорирован.*"
-
-#. Checkbox label which enable/disables CDG pixel scaling
-#: templates/info.html:389
-msgid ""
-"Enable CDG pixel scaling (crisper visuals for CDG files, may increase CPU"
-" usage)"
-msgstr ""
-"Включить CDG пиксельное масштабирование (улучшит внешний вид файлов CDG, "
-"может увеличить нагрузку на CPU)"
 
 #. Numberbox label for audio video synchronization
 #: templates/info.html:396
@@ -1327,11 +1252,6 @@ msgstr "Следующая:"
 msgid "Next singer:"
 msgstr "Следующий певец:"
 
-#. The title of the score screen, telling the user their singing score
-#: templates/splash.html:118
-msgid "Your Score"
-msgstr "Ваши баллы"
-
 #. Prompt for interaction in order to enable video autoplay.
 #: templates/splash.html:132
 msgid ""
@@ -1357,9 +1277,6 @@ msgstr "Согласен"
 
 #~ msgid "Sort by Date"
 #~ msgstr "Отсортировать по дате"
-
-#~ msgid "Disable background music"
-#~ msgstr "Отключить фоновую музыку"
 
 #~ msgid "Disable admin mode: <a href=\"%(logout_url)s\">Log out</a>"
 #~ msgstr "Покинуть режим администратора: <a href=\"%(logout_url)s\">Выход</a>"
@@ -1394,9 +1311,6 @@ msgstr "Согласен"
 #~ msgid "Song will appear in the \"available songs\" list."
 #~ msgstr "Песня будет представлена в списке доступных песен."
 
-#~ msgid "HIGH Score Phrases (score > 60)"
-#~ msgstr ""
-
 #~ msgid ""
 #~ "Do you want to change the name "
 #~ "of the person using this device? "
@@ -1406,21 +1320,6 @@ msgstr "Согласен"
 #~ "Вы хотите изменить  имя, использующее "
 #~ "данное устройство? Оно будет отображаться "
 #~ "в очереди песен. Текущее: %(currentUser)s"
-
-#~ msgid ""
-#~ "* Videos are only transcoded when: "
-#~ "normalization is on, audio/video "
-#~ "synchronization not zero, a song is "
-#~ "transposed, playing a CDG/MOV/AVI/MKV file."
-#~ " Most unmodified MP4 files will not"
-#~ " need to be transcoded."
-#~ msgstr ""
-#~ "* Видео транскодируются только тогда, "
-#~ "когда: включена  нормализация звука, "
-#~ "audio/video синхронизация не равна нулю, "
-#~ "песня транспонирована, проигрывается CDG/MOV/AVI/MKV"
-#~ " файл. Большинство нетронутых MP4 файлов"
-#~ "  не будут требовать транскодирования."
 
 #~ msgid "CPU: %(cpu)s"
 #~ msgstr "ЦПУ: %(cpu)s"
@@ -1452,4 +1351,3 @@ msgstr "Согласен"
 
 #~ msgid "Link:"
 #~ msgstr "Ссылка:"
-

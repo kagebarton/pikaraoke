@@ -776,22 +776,6 @@ msgstr "Preferências de usuário"
 msgid "Splash screen settings"
 msgstr "Configurações da tela de apresentação"
 
-#. Checkbox label which enable/disables background video on the Splash Screen
-#: templates/info.html:241
-msgid "Disable background video"
-msgstr "Desativar vídeo de fundo"
-
-#. Checkbox label which enable/disables background music on the Splash Screen
-#: templates/info.html:247
-#, fuzzy
-msgid "Disable background music"
-msgstr "Desativar vídeo de fundo"
-
-#. Checkbox label which enable/disables the Score Screen
-#: templates/info.html:253
-msgid "Disable the score screen after each song"
-msgstr "Desativar tela de pontuaçãoa após cada música"
-
 #. Checkbox label which enable/disables notifications on the splash screen
 #: templates/info.html:259
 msgid "Hide notifications"
@@ -820,65 +804,15 @@ msgstr ""
 msgid "Default volume of the videos (min 0, max 100)"
 msgstr "Volume padrão dos videos (min 0, max 100)"
 
-#. Numberbox label for setting the background music volume
-#: templates/info.html:288
-msgid "Volume of the background music (min 0, max 100)"
-msgstr "Volume da música de fundo (min 0, max 100)"
-
-#. Numberbox label for setting the inactive delay before showing the
-#. screensaver
-#: templates/info.html:295
-msgid ""
-"The amount of idle time in seconds before the screen saver activates. Set"
-" to 0 to disable it."
-msgstr ""
-"Tempo de inatividade em segundos antes de ativar a proteção de tela. "
-"Defina 0 para desabilitar."
-
 #. Numberbox label for setting the delay before playing the next song
 #: templates/info.html:302
 msgid "The delay in seconds before starting the next song"
 msgstr "Tempo de espera em segundos antes de iniciar a próxima música"
 
-#. Title text for the Score Phrases section of preferences
-#: templates/info.html:313
-msgid "Score phrases"
-msgstr "Frases das pontuações"
-
 #. Help text explaining how to add phrases
 #: templates/info.html:320
 msgid "Add one phrase per line in each box and hit save."
 msgstr "Adicione uma frase por linha em cada caixa e clique em salvar."
-
-#. Title for LOW Score Phrases
-#: templates/info.html:322
-msgid "LOW Score Phrases (score < 30)"
-msgstr "Frases para notas BAIXAS (nota < 30)"
-
-#. Placeholder for the low score phrases textarea
-#: templates/info.html:324
-msgid "Could be better..."
-msgstr "Poderia ser melhor..."
-
-#. Title for MID Score Phrases
-#: templates/info.html:327
-msgid "MID Score Phrases (30 > score < 60)"
-msgstr "Frases para notas MÉDIAS (30 > nota < 30)"
-
-#. Placeholder for the MID score phrases textarea
-#: templates/info.html:329
-msgid "That was ok..."
-msgstr "Foi legalzinho..."
-
-#. Title for HIGH Score Phrases
-#: templates/info.html:332
-msgid "HIGH Score Phrases (60 < score)"
-msgstr "Frases para notas ALTAS (60 < score)"
-
-#. Placeholder for the HIGH score phrases textarea
-#: templates/info.html:334
-msgid "Wonderfull..."
-msgstr "Maravilhoso..."
 
 #. Title text for the language settings section of preferences
 #: templates/info.html:342
@@ -914,15 +848,6 @@ msgstr ""
 "Transcodificar o vídeo completamente antes de reproduzir (melhor "
 "compatibilidade com navegadores, início mais lento). O tamanho do buffer "
 "será ignorado.*"
-
-#. Checkbox label which enable/disables CDG pixel scaling
-#: templates/info.html:389
-msgid ""
-"Enable CDG pixel scaling (crisper visuals for CDG files, may increase CPU"
-" usage)"
-msgstr ""
-"Ativar o dimensionamento de pixels CDG (visuais mais nítidos para "
-"arquivos CDG, pode aumentar o uso da CPU)"
 
 #. Numberbox label for audio video synchronization
 #: templates/info.html:396
@@ -1326,11 +1251,6 @@ msgstr "A seguir:"
 msgid "Next singer:"
 msgstr "Próximo cantor:"
 
-#. The title of the score screen, telling the user their singing score
-#: templates/splash.html:118
-msgid "Your Score"
-msgstr "Sua nota"
-
 #. Prompt for interaction in order to enable video autoplay.
 #: templates/splash.html:132
 msgid ""
@@ -1372,21 +1292,6 @@ msgstr "Confirmar"
 #~ "Isto aparecerá nas músicas da fila "
 #~ "de espera. Atual: %(currentUser)s"
 
-#~ msgid ""
-#~ "* Videos are only transcoded when: "
-#~ "normalization is on, audio/video "
-#~ "synchronization not zero, a song is "
-#~ "transposed, playing a CDG/MOV/AVI/MKV file."
-#~ " Most unmodified MP4 files will not"
-#~ " need to be transcoded."
-#~ msgstr ""
-#~ "* Os vídeos são transcodificados apenas"
-#~ " quando: a normalização está ativada, "
-#~ "uma música é transposta, ou ao "
-#~ "reproduzir um arquivo CDG/MOV/AVI/MKV. A "
-#~ "maioria dos arquivos MP4 não modificados"
-#~ " não precisará ser transcodificada."
-
 #~ msgid "CPU: %(cpu)s"
 #~ msgstr "CPU: %(cpu)s"
 
@@ -1416,4 +1321,3 @@ msgstr "Confirmar"
 
 #~ msgid "Link:"
 #~ msgstr "Link:"
-
