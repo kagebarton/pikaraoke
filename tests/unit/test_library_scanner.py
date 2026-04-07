@@ -319,22 +319,6 @@ class TestBuildSongRecord:
         assert record["format"] == "mp4"
         assert record["youtube_id"] == "dQw4w9WgXcQ"
 
-    def test_cdg_pair_detected(self, tmp_path):
-        mp3 = tmp_path / "Track---abc1234567x.mp3"
-        cdg = tmp_path / "Track---abc1234567x.cdg"
-        mp3.touch()
-        cdg.touch()
-        record = build_song_record(str(mp3))
-        assert record["format"] == "cdg"
-
-    def test_cdg_uppercase_detected(self, tmp_path):
-        mp3 = tmp_path / "Track---abc1234567x.mp3"
-        cdg = tmp_path / "Track---abc1234567x.CDG"
-        mp3.touch()
-        cdg.touch()
-        record = build_song_record(str(mp3))
-        assert record["format"] == "cdg"
-
     def test_mp4_ass_pair_detected(self, tmp_path):
         mp4 = tmp_path / "Song---abc1234567x.mp4"
         ass = tmp_path / "Song---abc1234567x.ass"
@@ -362,14 +346,6 @@ class TestBuildSongRecord:
         mp3.touch()
         record = build_song_record(str(mp3))
         assert record["format"] == "mp3"
-
-    def test_uses_cached_files_in_dir(self, tmp_path):
-        mp3 = tmp_path / "Track.mp3"
-        mp3.touch()
-        # Pass a fake directory listing with a .cdg companion
-        record = build_song_record(str(mp3), files_in_dir={"Track.cdg", "Track.mp3"})
-        assert record["format"] == "cdg"
-
 
 class TestExtractYoutubeId:
     def test_pikaraoke_format(self):

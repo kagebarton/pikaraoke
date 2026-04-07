@@ -1,7 +1,6 @@
 """Unit tests for file_resolver module."""
 
 import os
-import zipfile
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -11,44 +10,9 @@ from pikaraoke.lib.file_resolver import (
     create_tmp_dir,
     delete_tmp_dir,
     get_tmp_dir,
-    is_cdg_file,
     is_transcoding_required,
     string_to_hash,
 )
-
-
-class TestIsCdgFile:
-    """Tests for the is_cdg_file function."""
-
-    def test_zip_file_is_cdg(self):
-        """Test that .zip files are identified as CDG."""
-        assert is_cdg_file("/songs/karaoke.zip") is True
-
-    def test_mp3_file_is_cdg(self):
-        """Test that .mp3 files are identified as CDG."""
-        assert is_cdg_file("/songs/karaoke.mp3") is True
-
-    def test_mp4_file_is_not_cdg(self):
-        """Test that .mp4 files are not CDG."""
-        assert is_cdg_file("/songs/video.mp4") is False
-
-    def test_webm_file_is_not_cdg(self):
-        """Test that .webm files are not CDG."""
-        assert is_cdg_file("/songs/video.webm") is False
-
-    def test_mkv_file_is_not_cdg(self):
-        """Test that .mkv files are not CDG."""
-        assert is_cdg_file("/songs/video.mkv") is False
-
-    def test_case_insensitive_zip(self):
-        """Test that ZIP detection is case insensitive."""
-        assert is_cdg_file("/songs/karaoke.ZIP") is True
-        assert is_cdg_file("/songs/karaoke.Zip") is True
-
-    def test_case_insensitive_mp3(self):
-        """Test that MP3 detection is case insensitive."""
-        assert is_cdg_file("/songs/karaoke.MP3") is True
-        assert is_cdg_file("/songs/karaoke.Mp3") is True
 
 
 class TestIsTranscodingRequired:
@@ -73,14 +37,6 @@ class TestIsTranscodingRequired:
     def test_mov_needs_transcoding(self):
         """Test that .mov files need transcoding."""
         assert is_transcoding_required("/songs/video.mov") is True
-
-    def test_mp3_needs_transcoding(self):
-        """Test that .mp3 files need transcoding (CDG audio)."""
-        assert is_transcoding_required("/songs/karaoke.mp3") is True
-
-    def test_zip_needs_transcoding(self):
-        """Test that .zip files need transcoding (CDG package)."""
-        assert is_transcoding_required("/songs/karaoke.zip") is True
 
     def test_case_insensitive_mp4(self):
         """Test that MP4 detection is case insensitive."""
@@ -290,98 +246,6 @@ class TestFileResolverHandleAegissubSubtitle:
         assert fr.ass_file_path is None
 
 
-class TestFileResolverHandleMp3Cdg:
-    """Tests for FileResolver.handle_mp3_cdg method."""
-
-    @patch("pikaraoke.lib.file_resolver.get_media_duration", return_value=180)
-    @patch("pikaraoke.lib.file_resolver.create_tmp_dir")
-    @patch("pikaraoke.lib.file_resolver.get_tmp_dir", return_value="/tmp/12345")
-    def test_finds_cdg_file(self, mock_tmp, mock_create, mock_duration, tmp_path):
-        """Test finding .cdg file for MP3."""
-        mp3_file = tmp_path / "song.mp3"
-        cdg_file = tmp_path / "song.cdg"
-        mp3_file.touch()
-        cdg_file.touch()
-
-        fr = FileResolver(str(mp3_file))
-
-        assert fr.file_path == str(mp3_file)
-        assert fr.cdg_file_path == str(cdg_file)
-
-    @patch("pikaraoke.lib.file_resolver.get_media_duration", return_value=180)
-    @patch("pikaraoke.lib.file_resolver.create_tmp_dir")
-    @patch("pikaraoke.lib.file_resolver.get_tmp_dir", return_value="/tmp/12345")
-    def test_finds_uppercase_cdg_file(self, mock_tmp, mock_create, mock_duration, tmp_path):
-        """Test finding .CDG file (uppercase)."""
-        mp3_file = tmp_path / "song.mp3"
-        cdg_file = tmp_path / "song.CDG"
-        mp3_file.touch()
-        cdg_file.touch()
-
-        fr = FileResolver(str(mp3_file))
-
-        assert fr.cdg_file_path.casefold() == str(cdg_file).casefold()
-
-    @patch("pikaraoke.lib.file_resolver.create_tmp_dir")
-    @patch("pikaraoke.lib.file_resolver.get_tmp_dir", return_value="/tmp/12345")
-    def test_raises_when_no_cdg(self, mock_tmp, mock_create, tmp_path):
-        """Test that exception is raised when no CDG file exists."""
-        mp3_file = tmp_path / "song.mp3"
-        mp3_file.touch()
-
-        with pytest.raises(Exception, match="No matching .cdg file found"):
-            FileResolver(str(mp3_file))
-
-
-class TestFileResolverHandleZippedCdg:
-    """Tests for FileResolver.handle_zipped_cdg method."""
-
-    @patch("pikaraoke.lib.file_resolver.get_media_duration", return_value=180)
-    @patch("pikaraoke.lib.file_resolver.create_tmp_dir")
-    def test_extracts_valid_zip(self, mock_create, mock_duration, tmp_path):
-        """Test extracting valid CDG zip file."""
-        # Create a valid CDG zip
-        zip_path = tmp_path / "song.zip"
-        extracted_dir = tmp_path / "extracted"
-
-        with zipfile.ZipFile(zip_path, "w") as zf:
-            zf.writestr("track.mp3", b"fake mp3 data")
-            zf.writestr("track.cdg", b"fake cdg data")
-
-        with patch("pikaraoke.lib.file_resolver.get_tmp_dir", return_value=str(tmp_path)):
-            fr = FileResolver(str(zip_path))
-
-        assert fr.file_path is not None
-        assert "track.mp3" in fr.file_path
-        assert fr.cdg_file_path is not None
-        assert "track.cdg" in fr.cdg_file_path
-
-    @patch("pikaraoke.lib.file_resolver.create_tmp_dir")
-    def test_raises_when_zip_missing_cdg(self, mock_create, tmp_path):
-        """Test exception when zip has MP3 but no CDG."""
-        zip_path = tmp_path / "song.zip"
-
-        with zipfile.ZipFile(zip_path, "w") as zf:
-            zf.writestr("track.mp3", b"fake mp3 data")
-
-        with patch("pikaraoke.lib.file_resolver.get_tmp_dir", return_value=str(tmp_path)):
-            with pytest.raises(Exception, match="No .mp3 or .cdg was found"):
-                FileResolver(str(zip_path))
-
-    @patch("pikaraoke.lib.file_resolver.create_tmp_dir")
-    def test_raises_when_zip_mismatched_names(self, mock_create, tmp_path):
-        """Test exception when MP3 and CDG have different base names."""
-        zip_path = tmp_path / "song.zip"
-
-        with zipfile.ZipFile(zip_path, "w") as zf:
-            zf.writestr("track1.mp3", b"fake mp3 data")
-            zf.writestr("track2.cdg", b"fake cdg data")
-
-        with patch("pikaraoke.lib.file_resolver.get_tmp_dir", return_value=str(tmp_path)):
-            with pytest.raises(Exception, match="did not have a matching .cdg file"):
-                FileResolver(str(zip_path))
-
-
 class TestFileResolverGetCurrentStreamSize:
     """Tests for FileResolver.get_current_stream_size method."""
 
@@ -434,7 +298,6 @@ class TestFileResolverProcessFile:
 
         assert fr.file_extension == ".mp4"
         assert fr.file_path == str(video_file)
-        assert fr.cdg_file_path is None
 
     @patch("pikaraoke.lib.file_resolver.get_media_duration", return_value=180)
     @patch("pikaraoke.lib.file_resolver.create_tmp_dir")

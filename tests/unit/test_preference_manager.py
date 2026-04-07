@@ -232,30 +232,28 @@ def test_preference_manager_unicode_characters(temp_config_file):
 
     # Test Chinese characters (simplified and traditional)
     chinese_text = "你好世界! 繁體字測試 12345!"
-    success, message = prefs.set("low_score_phrases", chinese_text)
+    success, message = prefs.set("temp_dir", chinese_text)
     assert success is True
     assert "successfully" in message.lower()
 
-    result = prefs.get("low_score_phrases")
+    result = prefs.get("temp_dir")
     assert result == chinese_text
 
     # Test emoji and special Unicode characters
     emoji_text = "Great job! 🎤 🎵 ⭐"
-    prefs.set("high_score_phrases", emoji_text)
-    result = prefs.get("high_score_phrases")
+    prefs.set("temp_dir", emoji_text)
+    result = prefs.get("temp_dir")
     assert result == emoji_text
 
     # Test accented characters
     accented_text = "Très bien! Excelente! Schön!"
-    prefs.set("mid_score_phrases", accented_text)
-    result = prefs.get("mid_score_phrases")
+    prefs.set("temp_dir", accented_text)
+    result = prefs.get("temp_dir")
     assert result == accented_text
 
     # Test persistence: create new instance and verify Unicode persists
     prefs2 = PreferenceManager(temp_config_file)
-    assert prefs2.get("low_score_phrases") == chinese_text
-    assert prefs2.get("high_score_phrases") == emoji_text
-    assert prefs2.get("mid_score_phrases") == accented_text
+    assert prefs2.get("temp_dir") == accented_text
 
 
 def test_preference_manager_defaults_exist():
@@ -270,19 +268,10 @@ def test_preference_manager_defaults_exist():
         "complete_transcode_before_play",
         "buffer_size",
         "hide_overlay",
-        "screensaver_timeout",
-        "disable_bg_music",
-        "bg_music_volume",
-        "disable_bg_video",
-        "disable_score",
         "limit_user_songs_by",
         "enable_fair_queue",
-        "cdg_pixel_scaling",
         "avsync",
         "browse_results_per_page",
-        "low_score_phrases",
-        "mid_score_phrases",
-        "high_score_phrases",
         "show_splash_clock",
         "subtitle_delay",
         "temp_dir",
@@ -302,27 +291,21 @@ def test_preference_manager_defaults_types():
     assert isinstance(defaults["normalize_audio"], bool)
     assert isinstance(defaults["complete_transcode_before_play"], bool)
     assert isinstance(defaults["hide_overlay"], bool)
-    assert isinstance(defaults["disable_bg_music"], bool)
-    assert isinstance(defaults["disable_bg_video"], bool)
-    assert isinstance(defaults["disable_score"], bool)
     assert isinstance(defaults["enable_fair_queue"], bool)
-    assert isinstance(defaults["cdg_pixel_scaling"], bool)
 
     # Integer preferences
     assert isinstance(defaults["splash_delay"], int)
     assert isinstance(defaults["buffer_size"], int)
-    assert isinstance(defaults["screensaver_timeout"], int)
     assert isinstance(defaults["limit_user_songs_by"], int)
+    assert isinstance(defaults["browse_results_per_page"], int)
     assert isinstance(defaults["avsync"], (int, float))
+    assert isinstance(defaults["subtitle_delay"], (int, float))
 
     # Float preferences
     assert isinstance(defaults["volume"], float)
-    assert isinstance(defaults["bg_music_volume"], float)
 
     # String preferences
-    assert isinstance(defaults["low_score_phrases"], str)
-    assert isinstance(defaults["mid_score_phrases"], str)
-    assert isinstance(defaults["high_score_phrases"], str)
+    assert isinstance(defaults["temp_dir"], str)
 
 
 def test_preference_manager_get_or_default_returns_default(temp_config_file):

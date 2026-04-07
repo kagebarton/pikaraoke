@@ -67,7 +67,7 @@ class TestSongListValidation:
         assert sl.is_valid_song(str(song_file)) is True
 
     def test_is_valid_song_zip(self, tmp_path):
-        """Test that .zip files are valid (CDG format)."""
+        """Test that .zip files are valid."""
         sl = SongList()
         song_file = tmp_path / "song.zip"
         song_file.touch()
