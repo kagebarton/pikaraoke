@@ -278,7 +278,9 @@ const setupOverlayMenus = () => {
 
   // Set initial state to hidden
   triggerInactivity();
-  $('#menu a').click(function () {
+  $('#menu a').click(function (e) {
+    e.preventDefault();
+    e.stopPropagation();
     if (showMenu) {
       $('#menu-container').hide();
       $('#menu-container iframe').attr('src', '');
@@ -570,10 +572,8 @@ $(function () {
   // Setup various features and listeners
   setupUIScaling();
   if (PikaraokeConfig.showSplashClock) startClock();
-  setupScreensaver();
   setupOverlayMenus();
   setupVideoPlayer();
-  setupBackgroundMusicPlayer();
 
   // Handle browser compatibility
   handleUnsupportedBrowser();

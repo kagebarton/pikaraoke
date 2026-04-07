@@ -9,7 +9,6 @@ from flask_smorest import Blueprint
 from pikaraoke.lib.current_app import get_karaoke_instance, get_site_name
 from pikaraoke.lib.raspi_wifi_config import get_raspi_wifi_text
 
-
 splash_bp = Blueprint("splash", __name__)
 
 
