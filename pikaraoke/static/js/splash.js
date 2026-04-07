@@ -3,6 +3,8 @@ let mouseTimer = null;
 let cursorVisible = false;
 let nowPlaying = {};
 let octopusInstance = null;
+let pendingSubtitleUrl = null;
+let pendingSubtitleDelay = 0;
 let showMenu = false;
 let menuButtonVisible = false;
 let autoplayConfirmed = false;
@@ -91,9 +93,15 @@ const hideVideo = () => {
 
 const endSong = async (reason = null) => {
   currentVideoUrl = null;
+  pendingSubtitleUrl = null;
+  pendingSubtitleDelay = 0;
   if (hlsInstance) {
     hlsInstance.destroy();
     hlsInstance = null;
+  }
+  if (octopusInstance) {
+    octopusInstance.dispose();
+    octopusInstance = null;
   }
   const video = getVideoPlayer();
   video.pause();
@@ -108,6 +116,34 @@ const endSong = async (reason = null) => {
 }
 
 const getVideoPlayer = () => $("#video")[0]
+
+// timeOffset: negative = earlier, positive = later (same convention as pendingSubtitleDelay)
+const initializeSubtitles = () => {
+  const video = getVideoPlayer();
+  if (!pendingSubtitleUrl || !video) return;
+  if (octopusInstance) {
+    octopusInstance.dispose();
+    octopusInstance = null;
+  }
+  const options = {
+    video: video,
+    subUrl: pendingSubtitleUrl,
+    fonts: ["/static/fonts/Arial.ttf", "/static/fonts/DroidSansFallback.ttf"],
+    debug: true,
+    workerUrl: "/static/js/subtitles-octopus-worker.js",
+    timeOffset: -pendingSubtitleDelay
+  };
+  try {
+    octopusInstance = new SubtitlesOctopus(options);
+    if (uiScale) {
+      const canvas = video.parentNode.querySelector('canvas');
+      if (canvas) {
+        canvas.style.transform = `scale(${uiScale})`;
+        canvas.style.transformOrigin = 'bottom center';
+      }
+    }
+  } catch (e) { console.error(e); }
+}
 
 const flashNotification = (message, categoryClass) => {
   const sn = $("#splash-notification");
@@ -149,38 +185,11 @@ const handleNowPlayingUpdate = (np) => {
 
   const video = getVideoPlayer();
 
-  // Setup ASS subtitle file if found
-  const subtitleUrl = np.now_playing_subtitle_url;
-  if (octopusInstance) {
-    octopusInstance.dispose();
-    octopusInstance = null;
-  }
-  if (subtitleUrl && video) {
-    // Use per-song subtitle delay from now_playing data, or fall back to config default
-    const songSubtitleDelay = np.subtitle_delay !== undefined 
-      ? np.subtitle_delay 
-      : PikaraokeConfig.subtitleDelay;
-    const options = {
-      video: video,
-      subUrl: subtitleUrl,
-      fonts: ["/static/fonts/Arial.ttf", "/static/fonts/DroidSansFallback.ttf"],
-      debug: true,
-      workerUrl: "/static/js/subtitles-octopus-worker.js",
-      // Invert the sign: user expects negative = earlier, but timeOffset works opposite
-      timeOffset: songSubtitleDelay ? -songSubtitleDelay : 0
-    };
-    try {
-      octopusInstance = new SubtitlesOctopus(options);
-      if (uiScale) {
-        // Find the canvas created by SubtitlesOctopus (sibling of the video)
-        const canvas = video.parentNode.querySelector('canvas');
-        if (canvas) {
-          canvas.style.transform = `scale(${uiScale})`;
-          canvas.style.transformOrigin = 'bottom center';
-        }
-      }
-    } catch (e) { console.error(e); }
-  }
+  // Store subtitle info for initialization after video starts playing
+  pendingSubtitleUrl = np.now_playing_subtitle_url;
+  pendingSubtitleDelay = np.subtitle_delay !== undefined
+    ? np.subtitle_delay
+    : PikaraokeConfig.subtitleDelay;
 
   if (np.now_playing_url && np.now_playing_url !== currentVideoUrl) {
     currentVideoUrl = np.now_playing_url;
@@ -304,6 +313,7 @@ const setupVideoPlayer = () => {
   const video = getVideoPlayer();
   video.addEventListener("play", () => {
     $("#video-container").show();
+    initializeSubtitles();
     if (isMaster) {
       setTimeout(() => { socket.emit("start_song") }, 1200);
     }
@@ -372,24 +382,9 @@ const PREFERENCE_EFFECTS = {
   },
   hide_url:            (v) => { $("#qr-code").toggle(!v); },
   subtitle_delay:      (v) => {
+    // Settings default changed — only update the config value.
+    // The current song's override is unaffected; the new default applies from the next song.
     PikaraokeConfig.subtitleDelay = v;
-    // Re-initialize subtitles with new offset if currently playing
-    if (octopusInstance && nowPlaying.now_playing_subtitle_url) {
-      octopusInstance.dispose();
-      octopusInstance = null;
-      const video = getVideoPlayer();
-      const options = {
-        video: video,
-        subUrl: nowPlaying.now_playing_subtitle_url,
-        fonts: ["/static/fonts/Arial.ttf", "/static/fonts/DroidSansFallback.ttf"],
-        debug: true,
-        workerUrl: "/static/js/subtitles-octopus-worker.js",
-        timeOffset: PikaraokeConfig.subtitleDelay ? -PikaraokeConfig.subtitleDelay : 0
-      };
-      try {
-        octopusInstance = new SubtitlesOctopus(options);
-      } catch (e) { console.error(e); }
-    }
   },
 };
 
@@ -489,27 +484,18 @@ const setupSocketEvents = () => {
   socket.on("preferences_reset", applyPreferencesReset);
   socket.on("subtitle_delay", (delay) => {
     // Update subtitle delay when changed from home page (temporary for current song)
+    const delayValue = parseFloat(delay);
     if (nowPlaying) {
-      nowPlaying.subtitle_delay = parseFloat(delay);
+      nowPlaying.subtitle_delay = delayValue;
     }
+    pendingSubtitleDelay = delayValue;
     // Re-initialize subtitles if active to apply the new delay immediately
-    if (octopusInstance && nowPlaying.now_playing_subtitle_url) {
-      octopusInstance.dispose();
-      octopusInstance = null;
+    if (nowPlaying.now_playing_subtitle_url) {
+      pendingSubtitleUrl = nowPlaying.now_playing_subtitle_url;
       const video = getVideoPlayer();
-      const delayValue = parseFloat(delay);
-      const options = {
-        video: video,
-        subUrl: nowPlaying.now_playing_subtitle_url,
-        fonts: ["/static/fonts/Arial.ttf", "/static/fonts/DroidSansFallback.ttf"],
-        debug: true,
-        workerUrl: "/static/js/subtitles-octopus-worker.js",
-        // Invert the sign: user expects negative = earlier, but timeOffset works opposite
-        timeOffset: delayValue ? -delayValue : 0
-      };
-      try {
-        octopusInstance = new SubtitlesOctopus(options);
-      } catch (e) { console.error(e); }
+      if (video && !video.paused && !video.ended) {
+        initializeSubtitles();
+      }
     }
   });
 

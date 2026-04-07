@@ -119,6 +119,10 @@ class PreferenceManager:
 
             # Auto-sync target object if registered
             if self._target is not None:
+                # Skip subtitle_delay — it has a per-song override on the Karaoke
+                # instance that should not be overwritten by settings changes
+                if preference == "subtitle_delay":
+                    return (True, _("Your preferences were changed successfully"))
                 default = self.DEFAULTS.get(preference)
                 typed_val = str(val) if isinstance(default, str) else self._convert_value(val)
                 setattr(self._target, preference, typed_val)
