@@ -30,7 +30,6 @@ from pikaraoke.lib.get_platform import (
 from pikaraoke.lib.song_manager import SongManager
 from pikaraoke.lib.youtube_dl import upgrade_youtubedl
 from pikaraoke.routes.admin import admin_bp
-from pikaraoke.routes.background_music import background_music_bp
 from pikaraoke.routes.batch_song_renamer import batch_song_renamer_bp
 from pikaraoke.routes.controller import controller_bp
 from pikaraoke.routes.files import files_bp
@@ -84,7 +83,6 @@ _api_blueprints = [
     preferences_bp,
     admin_bp,
     controller_bp,
-    background_music_bp,
     images_bp,
     nowplaying_bp,
     stream_bp,
@@ -188,16 +186,9 @@ def main() -> None:
         show_splash_clock=args.show_splash_clock,
         url=args.url,
         prefer_hostname=args.prefer_hostname,
-        disable_bg_music=args.disable_bg_music,
-        bg_music_volume=args.bg_music_volume,
-        bg_music_path=args.bg_music_path,
-        disable_bg_video=args.disable_bg_video,
-        bg_video_path=args.bg_video_path,
-        disable_score=args.disable_score,
         limit_user_songs_by=args.limit_user_songs_by,
         avsync=float(args.avsync) if args.avsync is not None else None,
         config_file_path=args.config_file_path,
-        cdg_pixel_scaling=args.cdg_pixel_scaling,
         streaming_format=args.streaming_format,
         additional_ytdl_args=getattr(args, "ytdl_args", None),
         socketio=socketio,

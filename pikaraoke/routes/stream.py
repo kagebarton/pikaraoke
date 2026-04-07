@@ -215,17 +215,6 @@ def stream_full(id):
     return stream_file_path_full(file_path)
 
 
-@stream_bp.route("/stream/bg_video")
-def stream_bg_video():
-    """Stream the background video file."""
-    k = get_karaoke_instance()
-    file_path = k.bg_video_path
-    if k.bg_video_path is not None:
-        return send_file(os.path.abspath(file_path), mimetype="video/mp4")
-    else:
-        return Response("Background video not found.", status=404)
-
-
 # subtitle .ass
 @stream_bp.route("/subtitle/<id>")
 def stream_subtitle(id):

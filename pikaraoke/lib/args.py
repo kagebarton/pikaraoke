@@ -152,20 +152,6 @@ def parse_pikaraoke_args() -> argparse.Namespace:
         required=False,
     )
     parser.add_argument(
-        "--bg-music-path",
-        nargs="+",
-        help="Path to a custom directory for the splash screen background music. Directory must contain mp3 files which will be randomized in a playlist.",
-        default=None,
-        required=False,
-    )
-    parser.add_argument(
-        "--bg-video-path",
-        nargs="+",
-        help="Path to a background video mp4 file. Will play in the background of the splash screen.",
-        default=None,
-        required=False,
-    )
-    parser.add_argument(
         "--config-file-path",
         help=f"Path to a config file to load settings from. CLI arguments override and persist to this file. (default: {default_config_file_path})",
         default=default_config_file_path,
@@ -216,14 +202,6 @@ def parse_pikaraoke_args() -> argparse.Namespace:
         required=False,
     )
     parser.add_argument(
-        "-t",
-        "--screensaver-timeout",
-        help=f"Delay before the screensaver begins (in secs). Set to 0 to disable screensaver. (default: {_DEFAULTS['screensaver_timeout']})",
-        default=None,
-        type=int,
-        required=False,
-    )
-    parser.add_argument(
         "--hide-url",
         action="store_true",
         help="Hide URL and QR code from the splash screen.",
@@ -269,30 +247,6 @@ def parse_pikaraoke_args() -> argparse.Namespace:
         required=False,
     )
     parser.add_argument(
-        "--disable-bg-music",
-        action="store_true",
-        help="Disable background music on splash screen",
-        required=False,
-    )
-    parser.add_argument(
-        "--bg-music-volume",
-        help=f"Set the volume of background music on splash screen. A value between 0 and 1. (default: {_DEFAULTS['bg_music_volume']})",
-        default=None,
-        required=False,
-    )
-    parser.add_argument(
-        "--disable-bg-video",
-        action="store_true",
-        help="Disable background video on splash screen",
-        required=False,
-    )
-    parser.add_argument(
-        "--disable-score",
-        help="Disable the score screen after each song",
-        action="store_true",
-        required=False,
-    )
-    parser.add_argument(
         "--limit-user-songs-by",
         help=f"Limit the number of songs a user can add to queue. User name 'Pikaraoke' is always unlimited (default: {_DEFAULTS['limit_user_songs_by']} = unlimited)",
         default=None,
@@ -304,47 +258,18 @@ def parse_pikaraoke_args() -> argparse.Namespace:
         default=None,
         required=False,
     )
-    parser.add_argument(
-        "--cdg-pixel-scaling",
-        help="Enable CDG pixel scaling to improve video rendering of CDG files. This may increase CPU usage and may cause performance issues on slower devices.",
-        action="store_true",
-        required=False,
-    )
-    parser.add_argument(
-        "--dolphly",
-        action="store_true",
-        help="Enable top-secret DOLPHLY mode.",
-        required=False,
-    )
-
     args = parser.parse_args()
 
     # Additional sanitization of args (only process if provided)
     if args.volume is not None:
         args.volume = parse_volume(args.volume, "Volume")
-    if args.bg_music_volume is not None:
-        args.bg_music_volume = parse_volume(args.bg_music_volume, "Background Music Volume")
     if args.limit_user_songs_by is not None:
         args.limit_user_songs_by = int(args.limit_user_songs_by)
 
     logo_path = arg_path_parse(args.logo_path)
-    bg_music_path = arg_path_parse(args.bg_music_path)
-    bg_video_path = arg_path_parse(args.bg_video_path)
-
-    if args.dolphly:
-        logo_path = os.path.join(os.path.dirname(__file__), "..", "static", "images", "dolphly.png")
-        bg_video_path = os.path.join(
-            os.path.dirname(__file__), "..", "static", "video", "the_drive_by_visualdon.mp4"
-        )
-
-    if bg_video_path is not None and not os.path.isfile(bg_video_path):
-        print(f"Background video not found: {bg_video_path}. Setting to None")
-
     dl_path = os.path.expanduser(arg_path_parse(args.download_path) or default_dl_dir)
 
     args.logo_path = logo_path
-    args.bg_music_path = bg_music_path
-    args.bg_video_path = bg_video_path
     args.download_path = dl_path
 
     return args

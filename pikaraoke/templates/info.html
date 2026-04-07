@@ -1,25 +1,5 @@
 {% extends 'base.html' %} {% block scripts %}
 	<script>
-		async function updatePhrases(phrases) {
-			let returnData = null
-
-			try {
-				for (const phraseRange in phrases) {
-					returnData = await $.get("{{ url_for('preferences.change_preferences') }}", {
-							pref: phraseRange,
-							val: phrases[phraseRange]
-					})
-
-					if (!returnData[0]) break
-				}
-
-				if (returnData[0]) showNotification(returnData[1], "is-success");
-				else showNotification(returnData[1], "is-danger");
-			} catch (_e) {
-				showNotification("{{ _('Something went wrong! Your preferences were not changed') }}", "is-danger");
-			}
-		}
-
 		$(function () {
 			$(".user-preference-input").change(function() {
 				let val = $(this).val();
@@ -118,22 +98,6 @@
 			$(this).toggleClass("is-collapsed");
 			$(this).next(".collapsible-content").slideToggle(200);
 		});
-
-			function serializePhrases(textareaValue) {
-				return textareaValue.split("\n").map(s => s.trim().replace(/[|]/g, "")).filter(s => s).join("|");
-			}
-
-			$("#save-phrases").click(function (e){
-				e.preventDefault();
-
-				let phrases = {
-					"low_score_phrases": serializePhrases($("#low-score-phrases").val()),
-					"mid_score_phrases": serializePhrases($("#mid-score-phrases").val()),
-					"high_score_phrases": serializePhrases($("#high-score-phrases").val())
-				}
-
-				updatePhrases(phrases)
-			})
 
 			// Fetch system stats asynchronously
 			$.getJSON("{{ url_for('info.get_system_stats') }}", function(data) {
@@ -278,24 +242,6 @@
 			<div class="card-content collapsible-content">
 				<div class="content">
 					<div class="user-preference-container">
-						<input id="pref-bg-video" class="user-preference-checkbox checkbox" type="checkbox" data-pref="disable_bg_video" {% if disable_bg_video == True %}checked{% endif %} />
-						<label class="label" for="pref-bg-video">{# MSG: Checkbox label which enable/disables background video on the Splash Screen #} {% trans %}Disable background video{% endtrans %}
-						</label>
-					</div>
-
-					<div class="user-preference-container">
-						<input id="pref-bg-music" class="user-preference-checkbox checkbox" type="checkbox" data-pref="disable_bg_music" {% if disable_bg_music == True %}checked{% endif %} />
-						<label class="label" for="pref-bg-music">{# MSG: Checkbox label which enable/disables background music on the Splash Screen #} {% trans %}Disable background music{% endtrans %}
-						</label>
-					</div>
-
-					<div class="user-preference-container">
-						<input id="pref-score" type="checkbox" class="user-preference-checkbox checkbox" data-pref="disable_score" {% if disable_score == True %}checked{% endif %}>
-						<label class="label" for="pref-score">{# MSG: Checkbox label which enable/disables the Score Screen #} {% trans %}Disable the score screen after each song{% endtrans %}
-						</label>
-					</div>
-
-					<div class="user-preference-container">
 						<input id="pref-notifications" type="checkbox" class="user-preference-checkbox checkbox" data-pref="hide_notifications" {% if hide_notifications == True %}checked{% endif %}>
 						<label class="label" for="pref-notifications">{# MSG: Checkbox label which enable/disables notifications on the splash screen #} {% trans %}Hide notifications{% endtrans %}
 						</label>
@@ -325,55 +271,11 @@
 					</div>
 
 					<div class="user-preference-container is-align-items-center">
-						<input id="bg-music-volume" class="user-preference-input input" type="number" min="0" max="100" step="5" data-pref="bg_music_volume" data-start-value="{{ bg_music_volume }}" value="{{ bg_music_volume }}" />
-						<label class="label" for="bg-music-volume">{# MSG: Numberbox label for setting the background music volume#} {% trans %}Volume of the background music (min 0, max 100){% endtrans %}
-						</label>
-					</div>
-
-					<div class="user-preference-container is-align-items-center">
-						<input id="pref-screensaver-timeout" class="user-preference-input input" type="number" min="0" max="999" data-pref="screensaver_timeout" data-start-value="{{ screensaver_timeout }}" value="{{ screensaver_timeout }}" />
-						<label class="label" for="pref-screensaver-timeout">
-							{# MSG: Numberbox label for setting the inactive delay before showing the screensaver  #} {% trans %}The amount of idle time in seconds before the screen saver activates. Set to 0 to disable it.{% endtrans %}
-						</label>
-					</div>
-
-					<div class="user-preference-container is-align-items-center">
 						<input id="pref-splash-delay" class="user-preference-input input" type="number" min="0" max="99" data-pref="splash_delay" data-start-value="{{ splash_delay }}" value="{{ splash_delay }}" />
 						<label class="label" for="pref-splash-delay">
 							{# MSG: Numberbox label for setting the delay before playing the next song #} {% trans %}The delay in seconds before starting the next song{% endtrans %}
 						</label>
 					</div>
-				</div>
-			</div>
-
-			<hr class="my-0">
-
-			<header class="card-header py-3 px-5 collapsible-header is-collapsed">
-				<div class="media-content">
-				{# MSG: Title text for the Score Phrases section of preferences #}
-				<h3 class="title m-0">{% trans %}Score phrases{% endtrans %}</h3>
-
-			</div>
-		</header>
-		<div class="card-content collapsible-content">
-			<div class="content">
-					{# MSG: Help text explaining how to add phrases #}
-					<p class="subtitle has-text-warning mt-1 is-size-6">{% trans %}Add one phrase per line in each box and hit save.{% endtrans %}</p>
-					{# MSG: Title for LOW Score Phrases #}
-					<h5>{% trans %}LOW Score Phrases (score < 30){% endtrans %}</h5>
-					{# MSG: Placeholder for the low score phrases textarea #}
-					<textarea id="low-score-phrases" class="textarea" placeholder="{% trans %}Could be better...{% endtrans %}">{{ score_phrases.low | replace('|', '\n') }}</textarea>
-					<hr>
-					{# MSG: Title for MID Score Phrases #}
-					<h5>{% trans %}MID Score Phrases (30 > score < 60){% endtrans %}</h5>
-					{# MSG: Placeholder for the MID score phrases textarea #}
-					<textarea id="mid-score-phrases" class="textarea" placeholder="{% trans %}That was ok...{% endtrans %}">{{ score_phrases.mid | replace('|', '\n') }}</textarea>
-					<hr>
-					{# MSG: Title for HIGH Score Phrases #}
-					<h5>{% trans %}HIGH Score Phrases (60 < score){% endtrans %}</h5>
-					{# MSG: Placeholder for the HIGH score phrases textarea #}
-					<textarea id="high-score-phrases" class="textarea" placeholder="{% trans %}Wonderfull...{% endtrans %}">{{ score_phrases.high | replace('|', '\n') }}</textarea>
-					<a id="save-phrases" class="button is-fullwidth is-primary mt-5">Save phrases</a>
 				</div>
 			</div>
 
@@ -422,12 +324,6 @@
 					<div class="user-preference-container">
 					<input id="pref-complete_transcode_before_play" type="checkbox" class="user-preference-checkbox checkbox" data-pref="complete_transcode_before_play" {% if complete_transcode_before_play == True %}checked{% endif %}>
 					<label class="label" for="pref-complete_transcode_before_play">{# MSG: Checkbox label which enable/disables full transcode before playback #} {% trans %}Transcode video completely before playing (better browser compatibility, slower starts). Buffer size will be ignored.*{% endtrans %}
-					</label>
-					</div>
-
-					<div class="user-preference-container">
-					<input id="pref-cdg-scaling" type="checkbox" class="user-preference-checkbox checkbox" data-pref="cdg_pixel_scaling" {% if cdg_pixel_scaling == True %}checked{% endif %}>
-					<label class="label" for="pref-cdg-scaling">{# MSG: Checkbox label which enable/disables CDG pixel scaling #} {% trans %}Enable CDG pixel scaling (crisper visuals for CDG files, may increase CPU usage){% endtrans %}
 					</label>
 					</div>
 

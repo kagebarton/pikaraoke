@@ -70,9 +70,6 @@ class Karaoke:
     base_path: str = os.path.dirname(__file__)
     loop_interval: int = 500  # in milliseconds
     default_logo_path: str = os.path.join(base_path, "static", "images", "logo.png")
-    default_bg_music_path: str = os.path.join(base_path, "static", "music")
-    default_bg_video_path: str = os.path.join(base_path, "static", "video", "night_sea.mp4")
-    screensaver_timeout: int
 
     normalize_audio: bool
     show_splash_clock: bool
@@ -88,8 +85,6 @@ class Karaoke:
         self,
         # Non-preference parameters (keep their own defaults)
         additional_ytdl_args: str | None = None,
-        bg_music_path: str | None = None,
-        bg_video_path: str | None = None,
         config_file_path: str = "config.ini",
         download_path: str = "/usr/lib/pikaraoke/songs",
         hide_splash_screen: bool | None = None,
@@ -104,21 +99,15 @@ class Karaoke:
         youtubedl_proxy: str | None = None,
         # Preference parameters (defaults from PreferenceManager.DEFAULTS)
         avsync: float | None = None,
-        bg_music_volume: float | None = None,
         browse_results_per_page: int | None = None,
         buffer_size: int | None = None,
-        cdg_pixel_scaling: bool | None = None,
         complete_transcode_before_play: bool | None = None,
-        disable_bg_music: bool | None = None,
-        disable_bg_video: bool | None = None,
-        disable_score: bool | None = None,
         hide_notifications: bool | None = None,
         hide_overlay: bool | None = None,
         hide_url: bool | None = None,
         high_quality: bool | None = None,
         limit_user_songs_by: int | None = None,
         normalize_audio: bool | None = None,
-        screensaver_timeout: int | None = None,
         show_splash_clock: bool | None = None,
         splash_delay: int | None = None,
         subtitle_delay: float | None = None,
@@ -143,20 +132,12 @@ class Karaoke:
             youtubedl_proxy: Proxy URL for yt-dlp.
             logo_path: Custom logo image path.
             hide_overlay: Hide video overlay.
-            screensaver_timeout: Screensaver activation delay in seconds.
             url: Override auto-detected URL.
             prefer_hostname: Use hostname instead of IP in URL.
-            disable_bg_music: Disable background music.
-            bg_music_volume: Background music volume (0.0 to 1.0).
-            bg_music_path: Directory for background music files.
-            bg_video_path: Path to background video file.
-            disable_bg_video: Disable background video.
-            disable_score: Disable score screen.
             limit_user_songs_by: Max songs per user in queue (0 = unlimited).
             avsync: Audio/video sync adjustment in seconds.
             subtitle_delay: Subtitle timing delay in seconds (negative = earlier).
             config_file_path: Path to config.ini file.
-            cdg_pixel_scaling: Enable CDG pixel scaling.
             streaming_format: Video streaming format ('hls' or 'mp4').
             browse_results_per_page: Number of search results per page.
             additional_ytdl_args: Additional yt-dlp command arguments.
@@ -193,8 +174,6 @@ class Karaoke:
         self.additional_ytdl_args = additional_ytdl_args
         self.logo_path = self.default_logo_path if logo_path is None else logo_path
         self.prefer_hostname = prefer_hostname
-        self.bg_music_path = self.default_bg_music_path if bg_music_path is None else bg_music_path
-        self.bg_video_path = self.default_bg_video_path if bg_video_path is None else bg_video_path
         self.streaming_format = streaming_format
         self.socketio = socketio
         self.url_override = url
