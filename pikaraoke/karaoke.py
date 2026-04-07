@@ -31,9 +31,9 @@ from pikaraoke.lib.library_scanner import LibraryScanner, ScanResult
 from pikaraoke.lib.network import get_ip
 from pikaraoke.lib.playback_controller import PlaybackController
 from pikaraoke.lib.preference_manager import PreferenceManager
+from pikaraoke.lib.processing_manager import ProcessingManager
 from pikaraoke.lib.queue_manager import QueueManager
 from pikaraoke.lib.song_manager import SongManager
-from pikaraoke.lib.processing_manager import ProcessingManager
 from pikaraoke.lib.youtube_dl import (
     get_search_results,
     get_youtubedl_version,

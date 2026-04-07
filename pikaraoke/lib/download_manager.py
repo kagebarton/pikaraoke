@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import contextlib
 import logging
-import os
 import re
 import subprocess
 import uuid
@@ -346,7 +345,8 @@ class DownloadManager:
 
         # All subtitle candidates in the song folder: Song---abc123.en.ass, .vtt, .srv3, etc.
         candidates = {
-            f for ext in (".ass", ".vtt", ".srv3", ".ttml")
+            f
+            for ext in (".ass", ".vtt", ".srv3", ".ttml")
             for f in video.parent.glob(f"{video.stem}*{ext}")
         }
 

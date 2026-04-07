@@ -1,6 +1,5 @@
 """Unit tests for processing_manager module."""
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -9,9 +8,9 @@ from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.processing_manager import (
     ProcessingManager,
     _extract_audio,
+    _process_song_in_worker,
     _separate_stems,
     _wav_to_m4a,
-    _process_song_in_worker,
 )
 
 
@@ -93,7 +92,9 @@ class TestProcessSongInWorker:
     @patch("pikaraoke.lib.processing_manager._extract_audio")
     @patch("pikaraoke.lib.processing_manager._separate_stems")
     @patch("pikaraoke.lib.processing_manager._wav_to_m4a")
-    def test_creates_output_directories(self, mock_transcode, mock_separate, mock_extract, tmp_path):
+    def test_creates_output_directories(
+        self, mock_transcode, mock_separate, mock_extract, tmp_path
+    ):
         """Verifies vocal/ and nonvocal/ directories are created."""
         song = tmp_path / "Song---abc123.mp4"
         song.write_bytes(b"fake video")

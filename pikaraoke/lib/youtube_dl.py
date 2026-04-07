@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import shlex
 import subprocess
 import sys
@@ -162,7 +161,7 @@ def build_ytdl_download_command(
         cmd += ["--proxy", youtubedl_proxy]
     if temp_dir:
         cmd += ["--paths", f"temp:{temp_dir}"]
-        #cmd += ["--paths", f"download:{temp_dir}"]
+        # cmd += ["--paths", f"download:{temp_dir}"]
     if additional_args:
         cmd += shlex.split(additional_args)
     cmd += [video_url]

@@ -1,13 +1,12 @@
 """Processing queue for splitting songs into vocal and instrumental stems."""
 
 import logging
-import multiprocessing
 import os
 import shutil
 import subprocess
 import tempfile
-from pathlib import Path
 from multiprocessing import Process, Queue, SimpleQueue
+from pathlib import Path
 
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.get_platform import get_temp_directory
@@ -34,17 +33,22 @@ _processing_log_file: str = ""
 def _get_log_handler(temp_dir: str = "") -> logging.FileHandler:
     """Return the shared FileHandler for processing logs (created once)."""
     global _processing_log_handler, _processing_log_file
-    
+
     resolved_temp_dir = get_temp_directory(temp_dir) if temp_dir else ""
-    log_file_path = os.path.join(resolved_temp_dir, "processing_manager.log") if resolved_temp_dir else "processing_manager.log"
-    
+    log_file_path = (
+        os.path.join(resolved_temp_dir, "processing_manager.log")
+        if resolved_temp_dir
+        else "processing_manager.log"
+    )
+
     if _processing_log_handler is None or _processing_log_file != log_file_path:
         if _processing_log_handler is not None:
             _processing_log_handler.close()
         _processing_log_handler = logging.FileHandler(log_file_path)
         _processing_log_handler.setFormatter(
-            logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s",
-                              datefmt="%Y-%m-%d %H:%M:%S")
+            logging.Formatter(
+                "[%(asctime)s] %(levelname)s: %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+            )
         )
         _processing_log_file = log_file_path
     return _processing_log_handler
@@ -172,6 +176,7 @@ def _run_worker_process(queue: Queue, result_queue: Queue, temp_dir: str = "") -
         del separator
         try:
             import torch
+
             torch.cuda.empty_cache()
         except ImportError:
             pass
@@ -223,18 +228,24 @@ def _extract_audio(video_path: Path, tmp_dir: str) -> Path:
     """Extract audio from video file to a temporary WAV."""
     wav_path = Path(tmp_dir) / f"{video_path.stem}_input.wav"
     cmd = [
-        "ffmpeg", "-y",
-        "-i", str(video_path),
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(video_path),
         "-vn",
-        "-ac", "2",
-        "-ar", "44100",
-        "-sample_fmt", "s16",
+        "-ac",
+        "2",
+        "-ar",
+        "44100",
+        "-sample_fmt",
+        "s16",
         str(wav_path),
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         raise RuntimeError(f"ffmpeg audio extraction failed: {result.stderr}")
     return wav_path
+
 
 def _separate_stems(audio_path: Path, tmp_dir: str, separator) -> tuple[Path, Path]:
     """Run audio-separator and return (vocals_wav, instrumental_wav)."""
@@ -254,20 +265,23 @@ def _separate_stems(audio_path: Path, tmp_dir: str, separator) -> tuple[Path, Pa
             instrumental_wav = full_path
 
     if not vocals_wav or not instrumental_wav:
-        raise RuntimeError(
-            f"Could not identify vocal/instrumental stems in output: {output_paths}"
-        )
+        raise RuntimeError(f"Could not identify vocal/instrumental stems in output: {output_paths}")
     return vocals_wav, instrumental_wav
 
 
 def _wav_to_m4a(wav_path: Path, output_path: Path) -> None:
     """Transcode a WAV stem to AAC-in-M4A."""
     cmd = [
-        "ffmpeg", "-y",
-        "-threads", FFMPEG_THREADS,
-        "-i", str(wav_path),
-        "-c:a", "aac",
-        "-q:a", AAC_QUALITY,
+        "ffmpeg",
+        "-y",
+        "-threads",
+        FFMPEG_THREADS,
+        "-i",
+        str(wav_path),
+        "-c:a",
+        "aac",
+        "-q:a",
+        AAC_QUALITY,
         str(output_path),
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)

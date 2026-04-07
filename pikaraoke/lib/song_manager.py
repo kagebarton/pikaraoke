@@ -125,7 +125,7 @@ class SongManager:
         os.rename(song_path, new_path)
         for companion in companions:
             companion_dir = os.path.dirname(companion)
-            tail = os.path.basename(companion)[len(base):]  # e.g. ".cdg", ".ass", "---vocal.m4a"
+            tail = os.path.basename(companion)[len(base) :]  # e.g. ".cdg", ".ass", "---vocal.m4a"
             os.rename(companion, os.path.join(companion_dir, new_name + tail))
         self.songs.rename(song_path, new_path)
         self._db.update_path(song_path, new_path)
