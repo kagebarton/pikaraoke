@@ -1164,13 +1164,6 @@ msgstr ""
 "          歌曲未出現在「可用歌曲」下拉選單中，點擊\n"
 "          「搜尋」在 Youtube 上尋找"
 
-#. Checkbox label which enables matching songs which are not karaoke versions
-#. (i.e. the songs still                                         have a singer
-#. and are not just instrumentals.)
-#: templates/search.html:637
-msgid "Include non-karaoke matches"
-msgstr "包含非卡拉OK版本"
-
 #. Label for an input which takes a YouTube url directly instead of searching
 #. titles.
 #: templates/search.html:643

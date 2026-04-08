@@ -339,13 +339,11 @@
 		$("#search-link").on("click", function (e) {
 			e.preventDefault();
 			var search_term = $(".search-selectize .selectize-input input").val();
-			var include_non_karaoke = $("#include-non-karaoke").is(":checked");
 			if (search_term) {
 				$("#searching_loader").removeClass("is-hidden");
 				$("#searching_loader #search_term").text(search_term);
 				$("#search-link").attr("disabled", "true");
 				$("#search_string").val(search_term);
-				$("#non_karaoke").val(include_non_karaoke);
 				$("#container_search_result").hide();
 				$("#container_search_form form").submit();
 			}
@@ -425,13 +423,6 @@
 
 		// Restore checkbox states from cookies
 		restoreCheckboxStates();
-
-		// Save checkbox states when they change
-		$("#include-non-karaoke").change(function () {
-			Cookies.set("include-non-karaoke", $(this).is(":checked"), {
-				expires: 365,
-			});
-		});
 
 		$("#add-to-queue-direct, #add-to-queue-search").change(function () {
 			Cookies.set("add-to-queue-on-download", $(this).is(":checked"), {
@@ -556,12 +547,6 @@
 	}
 
 	function restoreCheckboxStates() {
-		// Restore "Include non-karaoke matches" checkbox state
-		var includeNonKaraoke = Cookies.get("include-non-karaoke");
-		if (includeNonKaraoke !== undefined) {
-			$("#include-non-karaoke").prop("checked", includeNonKaraoke === "true");
-		}
-
 		// Restore "Add to queue once downloaded" checkbox state
 		var addToQueue = Cookies.get("add-to-queue-on-download");
 		if (addToQueue !== undefined) {
@@ -631,14 +616,6 @@
 	<div>
 		<div id="advanced-settings" class="box has-background-black-bis" style="margin-top: 10px; display: none">
 			<div class="control">
-				<label class="checkbox is-flex is-align-items-center">
-					<input type="checkbox" class="checkbox" id="include-non-karaoke" name="include-non-karaoke" />
-					{# MSG: Checkbox label which enables matching songs which are not karaoke versions (i.e. the songs still
-					have a singer and are not just instrumentals.) #} {% trans %}Include non-karaoke matches{% endtrans %}
-				</label>
-			</div>
-			<hr />
-			<div class="control">
 				<div class="label">
 					{# MSG: Label for an input which takes a YouTube url directly instead of searching titles. #} {% trans
 					%}Direct download YouTube url:{% endtrans %}
@@ -673,7 +650,6 @@
 	<div class="field is-hidden" id="container_search_form">
 		<form action="{{ url_for('search.search') }}" method="get">
 			<input id="search_string" type="text" name="search_string" />
-			<input type="text" id="non_karaoke" name="non_karaoke" />
 		</form>
 	</div>
 

@@ -1177,13 +1177,6 @@ msgstr ""
 "Jos kappaleesi ei näy \"Saatavilla olevat kappaleet\", avattavassa "
 "valikossa klikkaa \"Etsi\" tarkistaaksesi Youtuben tarjonnan."
 
-#. Checkbox label which enables matching songs which are not karaoke versions
-#. (i.e. the songs still                                         have a singer
-#. and are not just instrumentals.)
-#: templates/search.html:637
-msgid "Include non-karaoke matches"
-msgstr "Sisällytä myös ei-karaoke versiot."
-
 #. Label for an input which takes a YouTube url directly instead of searching
 #. titles.
 #: templates/search.html:643

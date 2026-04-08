@@ -1181,13 +1181,6 @@ msgstr ""
 "- Jika lagu tidak muncul di daftar \"Lagu Tersedia\", klik 'Cari' untuk "
 "mencarinya di YouTube"
 
-#. Checkbox label which enables matching songs which are not karaoke versions
-#. (i.e. the songs still                                         have a singer
-#. and are not just instrumentals.)
-#: templates/search.html:637
-msgid "Include non-karaoke matches"
-msgstr "Sertakan hasil yang bukan versi karaoke"
-
 #. Label for an input which takes a YouTube url directly instead of searching
 #. titles.
 #: templates/search.html:643

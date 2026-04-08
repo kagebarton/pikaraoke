@@ -1157,13 +1157,6 @@ msgid ""
 "it on Youtube"
 msgstr "如果曲目不在“已有歌曲”列表中，点击”搜索“转跳到YouTube上搜索"
 
-#. Checkbox label which enables matching songs which are not karaoke versions
-#. (i.e. the songs still                                         have a singer
-#. and are not just instrumentals.)
-#: templates/search.html:637
-msgid "Include non-karaoke matches"
-msgstr "搜索包含原唱版本（非伴奏）"
-
 #. Label for an input which takes a YouTube url directly instead of searching
 #. titles.
 #: templates/search.html:643

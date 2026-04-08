@@ -1209,13 +1209,6 @@ msgstr ""
 "disponibles\", cliquez sur\n"
 "          'Rechercher' pour la trouver sur Youtube"
 
-#. Checkbox label which enables matching songs which are not karaoke versions
-#. (i.e. the songs still                                         have a singer
-#. and are not just instrumentals.)
-#: templates/search.html:637
-msgid "Include non-karaoke matches"
-msgstr "Inclure les résultats non-karaoké"
-
 #. Label for an input which takes a YouTube url directly instead of searching
 #. titles.
 #: templates/search.html:643
