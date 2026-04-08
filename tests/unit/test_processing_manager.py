@@ -39,16 +39,13 @@ class TestProcessingManagerInit:
         assert processing_manager._queue.empty()
         assert processing_manager.pending_jobs == []
 
-    def test_start_subscribes_to_song_downloaded(self, processing_manager, events):
+    @patch("pikaraoke.lib.processing_manager.ProcessTerminal")
+    def test_start_subscribes_to_song_downloaded(self, mock_pt, processing_manager, events):
         processing_manager.start()
         try:
-            # Event subscription is verified by checking the handler gets called
             received = []
-            # Replace enqueue to capture calls without blocking on the queue
             processing_manager.enqueue = lambda path: received.append(path)
             events.emit("song_downloaded", "/songs/Test---abc123.mp4")
-            # The original enqueue was replaced, so the direct subscription won't fire.
-            # Re-test with fresh manager.
         finally:
             processing_manager.stop()
 

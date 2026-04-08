@@ -35,6 +35,7 @@ class ProcessTerminal:
         self._socket_path = socket_path
 
         self._master_fd: int | None = None
+        self._slave_fd: int | None = None
         self._server_socket: socket.socket | None = None
         self._terminal_proc: subprocess.Popen | None = None
         self._relay_thread: threading.Thread | None = None
@@ -86,7 +87,7 @@ class ProcessTerminal:
                 pass
             self._master_fd = None
 
-        if hasattr(self, "_slave_fd") and self._slave_fd is not None:
+        if self._slave_fd is not None:
             try:
                 os.close(self._slave_fd)
             except OSError:
@@ -116,7 +117,7 @@ class ProcessTerminal:
 
     def get_slave_fd(self) -> int | None:
         """Return the PTY slave fd for the worker to dup2 onto stdout/stderr."""
-        return getattr(self, "_slave_fd", None)
+        return self._slave_fd
 
     # -- Internals ------------------------------------------------------------
 
@@ -155,42 +156,50 @@ class ProcessTerminal:
         self._server_socket.settimeout(0.5)
 
         client: socket.socket | None = None
+        # Pre-connection buffer: drain PTY so the worker never blocks, but
+        # keep the bytes so we can flush them once the client connects.
+        pre_buffer: bytearray = bytearray()
+        MAX_PRE_BUFFER = 64 * 1024  # 64 KB cap
 
         while not self._shutdown_event.is_set():
-            try:
-                if client is None:
-                    try:
-                        conn, _ = self._server_socket.accept()
-                        client = conn
-                        logger.debug("ProcessTerminal: terminal client connected")
-                    except socket.timeout:
-                        continue
-                    except OSError:
-                        break
-
-            except OSError:
-                break
-
-            try:
-                ready, _, _ = select.select([self._master_fd], [], [], 0.1)
-                if ready:
-                    try:
-                        data = os.read(self._master_fd, 4096)
-                    except OSError:
-                        break
-                    if not data:
-                        break
+            # Always drain PTY master so the worker never blocks on a full buffer.
+            ready, _, _ = select.select([self._master_fd], [], [], 0.1)
+            if ready:
+                try:
+                    data = os.read(self._master_fd, 4096)
+                except OSError:
+                    break
+                if not data:
+                    break
+                if client is not None:
                     try:
                         client.sendall(data)
                     except (OSError, BrokenPipeError):
                         logger.debug("ProcessTerminal: terminal client disconnected")
                         client = None
-                        # Fall back to main stderr.
                         sys.stderr.buffer.write(data)
                         sys.stderr.buffer.flush()
+                else:
+                    if len(pre_buffer) < MAX_PRE_BUFFER:
+                        pre_buffer.extend(data)
 
-            except OSError:
-                break
+            # Accept a new client connection if not yet connected.
+            if client is None:
+                try:
+                    conn, _ = self._server_socket.accept()
+                    client = conn
+                    logger.debug("ProcessTerminal: terminal client connected")
+                    # Flush everything that arrived before the client connected.
+                    if pre_buffer:
+                        try:
+                            client.sendall(bytes(pre_buffer))
+                        except (OSError, BrokenPipeError):
+                            client = None
+                        pre_buffer.clear()
+                except socket.timeout:
+                    pass
+                except OSError:
+                    break
 
         if client is not None:
             try:
@@ -211,28 +220,19 @@ class ProcessTerminal:
         exe = sys.executable or "python3"
         cmd_parts: list[str] = []
 
-        terminal = self._find_terminal()
-        if terminal is None:
-            logger.warning(
-                "ProcessTerminal: no terminal emulator found; "
-                "output will fall back to main stderr"
-            )
-            return
-
         if is_macos():
             # Use osascript to open Terminal.app and run the reader.
-            script = (
-                f'do script "{exe} -m {reader_module} {socket_path}" '
-                f'in window 1'
-            )
+            script = f'do script "{exe} -m {reader_module} {socket_path}"'
             cmd_parts = ["osascript", "-e", script]
         else:
-            # Linux: various terminal emulators support -e.
-            cmd_parts = [
-                terminal,
-                "-e",
-                f"{exe} -m {reader_module} {socket_path}",
-            ]
+            terminal = self._find_terminal()
+            if terminal is None:
+                logger.warning(
+                    "ProcessTerminal: no terminal emulator found; "
+                    "output will fall back to main stderr"
+                )
+                return
+            cmd_parts = [terminal, "-e", f"{exe} -m {reader_module} {socket_path}"]
 
         try:
             self._terminal_proc = subprocess.Popen(

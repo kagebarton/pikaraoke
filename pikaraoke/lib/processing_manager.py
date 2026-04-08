@@ -119,7 +119,7 @@ class ProcessingManager:
                 pass
 
 
-def _setup_processing_logger() -> None:
+def _setup_processing_logger() -> logging.Logger:
     """Configure the module logger to write only to stderr (no disk file).
 
     The stderr fd will have been dup2'd to the PTY slave by the worker, so
