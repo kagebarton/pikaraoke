@@ -38,6 +38,7 @@ class PreferenceManager:
         "browse_results_per_page": 100,
         "show_splash_clock": False,
         "temp_dir": "",
+        "blocked_processing_words": "",
     }
 
     def __init__(self, config_file_path: str = "config.ini", target: object | None = None) -> None:

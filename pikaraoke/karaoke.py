@@ -110,6 +110,7 @@ class Karaoke:
         normalize_audio: bool | None = None,
         show_splash_clock: bool | None = None,
         splash_delay: int | None = None,
+        blocked_processing_words: str | None = None,
         subtitle_delay: float | None = None,
         temp_dir: str | None = None,
         volume: float | None = None,
@@ -253,7 +254,9 @@ class Karaoke:
         self.download_manager.start()
 
         # Initialize and start stem separation processor
-        self.processing_manager = ProcessingManager(events=self.events, temp_dir=self.temp_dir)
+        self.processing_manager = ProcessingManager(
+            events=self.events, preferences=self.preferences, temp_dir=self.temp_dir
+        )
         self.processing_manager.start()
 
         # Song library startup: warm cache from DB or blocking cold scan

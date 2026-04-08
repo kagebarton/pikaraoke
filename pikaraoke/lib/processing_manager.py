@@ -11,6 +11,7 @@ from pathlib import Path
 
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.get_platform import get_temp_directory, is_windows
+from pikaraoke.lib.preference_manager import PreferenceManager
 from pikaraoke.lib.process_terminal import ProcessTerminal
 
 # Model for audio-separator: MelBand Roformer Karaoke — best single-model
@@ -41,10 +42,9 @@ class ProcessingManager:
     stdout/stderr) is redirected to a secondary terminal window via a PTY.
     """
 
-    def __init__(
-        self, events: EventSystem, preferences: PreferenceManager, temp_dir: str = ""
-    ) -> None:
+    def __init__(self, events: EventSystem, preferences: PreferenceManager, temp_dir: str = "") -> None:
         self._events = events
+        self._preferences = preferences
         self._temp_dir = temp_dir
         self._queue: Queue = Queue()
         self._result_queue: SimpleQueue = SimpleQueue()
@@ -89,9 +89,7 @@ class ProcessingManager:
             name = Path(song_path).stem.lower()
             blocked = [w.strip().lower() for w in blocked_str.split(",") if w.strip()]
             if any(w in name for w in blocked):
-                logging.info(
-                    f"Skipping stem processing (title matches blocked word): {Path(song_path).name}"
-                )
+                logging.info(f"Skipping stem processing (title matches blocked word): {Path(song_path).name}")
                 return
 
         self._drain_results()
