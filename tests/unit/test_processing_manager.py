@@ -41,13 +41,16 @@ class TestProcessingManagerInit:
 
     def test_start_subscribes_to_song_downloaded(self, processing_manager, events):
         processing_manager.start()
-        # Event subscription is verified by checking the handler gets called
-        received = []
-        # Replace enqueue to capture calls without blocking on the queue
-        processing_manager.enqueue = lambda path: received.append(path)
-        events.emit("song_downloaded", "/songs/Test---abc123.mp4")
-        # The original enqueue was replaced, so the direct subscription won't fire.
-        # Re-test with fresh manager.
+        try:
+            # Event subscription is verified by checking the handler gets called
+            received = []
+            # Replace enqueue to capture calls without blocking on the queue
+            processing_manager.enqueue = lambda path: received.append(path)
+            events.emit("song_downloaded", "/songs/Test---abc123.mp4")
+            # The original enqueue was replaced, so the direct subscription won't fire.
+            # Re-test with fresh manager.
+        finally:
+            processing_manager.stop()
 
     def test_start_subscribes_and_enqueues(self, events):
         manager = ProcessingManager(events=events)
