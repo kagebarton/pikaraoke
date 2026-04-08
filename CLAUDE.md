@@ -63,7 +63,7 @@ Only support these two patterns.
 
 ## Environment
 
-This project runs in a **conda environment** named `avtest` (not uv). Use `/home/ken/miniconda3/envs/avtest/bin/python -m pytest` to run tests and `pre-commit` directly (not via `uv run`).
+This project runs in a **conda environment** named `pik` (not uv). Use `/home/ken/miniconda3/envs/pik/bin/python -m pytest` to run tests and `pre-commit` directly (not via `uv run`).
 
 ## Code Quality
 
@@ -78,14 +78,18 @@ Never commit to `master` directly.
 
 ## Plans
 
+Store all plan files in the `plans/` folder in the root of the project.
+
 Name plan files with a short, descriptive kebab-case filename that reflects the task
 (e.g., `subtitle-delay-cleanup.md`, `auth-refactor.md`), not the auto-generated random
 name Claude Code assigns by default.
 
 Include a line at the top of each plan specifying which Claude model created it:
+
 ```
 Model: Claude Sonnet 4.6
 ```
+
 or `Claude Opus 4.6` / `Claude Haiku 4.5` as appropriate.
 
 ## Pull Requests

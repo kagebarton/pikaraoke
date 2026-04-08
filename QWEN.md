@@ -64,7 +64,7 @@ pikaraoke/
 
 ### Development Setup
 
-**Important:** This project uses a **conda environment** named `avtest`, not uv for running tests.
+**Important:** This project uses a **conda environment** named `pik`, not uv for running tests.
 
 ```bash
 # Install uv if not already installed
@@ -73,14 +73,14 @@ pikaraoke/
 # Install dependencies and run
 uv run pikaraoke
 
-# Run tests (conda env 'avtest', NOT uv)
-/home/ken/miniconda3/envs/avtest/bin/python -m pytest
+# Run tests (conda env 'pik', NOT uv)
+/home/ken/miniconda3/envs/pik/bin/python -m pytest
 
 # Run specific test file
-/home/ken/miniconda3/envs/avtest/bin/python -m pytest tests/unit/test_file_resolver.py -v
+/home/ken/miniconda3/envs/pik/bin/python -m pytest tests/unit/test_file_resolver.py -v
 
 # Run tests with verbose output and stop on first failure
-/home/ken/miniconda3/envs/avtest/bin/python -m pytest -x -v
+/home/ken/miniconda3/envs/pik/bin/python -m pytest -x -v
 
 # Run pre-commit checks
 pre-commit run --config code_quality/.pre-commit-config.yaml --all-files
@@ -145,6 +145,7 @@ docker run -p 5555:5555 \
 ### Filename Conventions
 
 YouTube video filenames use 11-character video IDs:
+
 - PiKaraoke format: `Title---dQw4w9WgXcQ.mp4` (triple dash separator)
 - yt-dlp format: `Title [dQw4w9WgXcQ].mp4` (brackets)
 
@@ -154,7 +155,7 @@ Only support these two patterns.
 
 - **Standard**: Conventional Commits 1.0.0
 - **Branch**: Never commit directly to master
-- **Plan files**: Use kebab-case descriptive names (e.g., `subtitle-delay-cleanup.md`)
+- **Plan files**: Use kebab-case descriptive names (e.g., `subtitle-delay-cleanup.md`). Store in `plans/` at the project root.
 
 ## Key Architecture Components
 
@@ -171,11 +172,13 @@ Only support these two patterns.
 ### Routes (Flask Blueprints)
 
 **API Routes** (exposed in Swagger when enabled):
+
 - `queue_bp`, `search_bp`, `files_bp`, `preferences_bp`
-- `admin_bp`, `controller_bp`, `background_music_bp`
+- `admin_bp`, `controller_bp`
 - `images_bp`, `nowplaying_bp`, `stream_bp`, `metadata_bp`
 
 **Internal Routes** (UI only):
+
 - `home_bp`, `info_bp`, `splash_bp`, `batch_song_renamer_bp`
 
 ### Preferences System
@@ -184,11 +187,11 @@ Configuration stored in `config.ini` with centralized `temp_dir` for all tempora
 
 ## Environment Notes
 
-**This project runs in a conda environment named `avtest` (not uv).**
+**This project runs in a conda environment named `pik` (not uv).**
 
 ```bash
 # Run pytest
-/home/ken/miniconda3/envs/avtest/bin/python -m pytest
+/home/ken/miniconda3/envs/pik/bin/python -m pytest
 
 # Run pre-commit directly (not via `uv run`)
 pre-commit run --config code_quality/.pre-commit-config.yaml --all-files
