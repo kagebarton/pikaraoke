@@ -1,28 +1,27 @@
-"""Processing queue for splitting songs into vocal and instrumental stems."""
+"""Processing manager: orchestrator + persistent StemWorker.
 
+Coordinates the 3-step pipeline (FFmpeg extract → stem separation → FFmpeg
+transcode) in a real threading.Thread, delegating the actual separation work
+to a :class:`StemWorker` subprocess that holds the model loaded across songs.
+"""
+
+import enum
+import glob
 import logging
 import os
+import queue
 import shutil
 import subprocess
-import sys
 import tempfile
-from multiprocessing import Process, Queue, SimpleQueue
+import threading
+from dataclasses import dataclass
 from pathlib import Path
 
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.get_platform import get_temp_directory, is_windows
 from pikaraoke.lib.preference_manager import PreferenceManager
 from pikaraoke.lib.process_terminal import ProcessTerminal
-
-# Model for audio-separator: MelBand Roformer Karaoke — best single-model
-# vocal clarity with complementary 2-stem output.
-MODEL_NAME = "mel_band_roformer_karaoke_aufr33_viperx_sdr_10.1956.ckpt"
-
-# Where audio-separator stores downloaded models (~400 MB on first run).
-MODEL_DIR = "./audio-separator/models"
-
-# Intermediate format for separation (lossless before final transcode).
-SEPARATION_FORMAT = "wav"
+from pikaraoke.lib.stem_worker import StemWorker, WorkerDiedError
 
 # M4A encoding quality: "2" ≈ 128 kbps VBR AAC — transparent for karaoke.
 AAC_QUALITY = "2"
@@ -30,36 +29,56 @@ AAC_QUALITY = "2"
 FFMPEG_THREADS = "4"
 
 
+class _Step(enum.Enum):
+    EXTRACTING = "extracting"
+    STEMMING = "stemming"
+    TRANSCODING = "transcoding"
+
+
+@dataclass
+class _JobState:
+    song_path: str
+    step: _Step
+    ffmpeg_process: subprocess.Popen | None = None
+    cancelled: bool = False
+
+
+class _CancelledError(Exception):
+    """Raised when a running job has been cancelled."""
+
+
 class ProcessingManager:
-    """Processes downloaded songs into vocal and instrumental stems.
+    """Orchestrates stem processing with surgical cancellation.
 
-    Subscribes to song_downloaded events and queues each song for background
-    stem separation using audio-separator. Outputs are placed in vocal/ and
-    nonvocal/ subdirectories beneath the song's parent folder.
+    Runs a real-thread orchestrator loop that:
+    1. Calls FFmpeg to extract audio (in-thread)
+    2. Submits the WAV to a persistent ``StemWorker`` subprocess
+    3. Calls FFmpeg to transcode stems to M4A (in-thread)
 
-    Runs in a separate process to avoid blocking the main application during
-    CPU-intensive stem separation. All output (Python logging + subprocess
-    stdout/stderr) is redirected to a secondary terminal window via a PTY.
+    ``cancel_active()`` targets only the relevant subprocess (FFmpeg Popen
+    or StemWorker) based on the current pipeline step, so the model stays
+    loaded unless cancel lands during actual stemming.
     """
 
-    def __init__(self, events: EventSystem, preferences: PreferenceManager, temp_dir: str = "") -> None:
+    def __init__(
+        self, events: EventSystem, preferences: PreferenceManager, temp_dir: str = ""
+    ) -> None:
         self._events = events
         self._preferences = preferences
         self._temp_dir = temp_dir
-        self._queue: Queue = Queue()
-        self._result_queue: SimpleQueue = SimpleQueue()
-        self._worker_process: Process | None = None
+        self._stem_worker: StemWorker
+        self._pending_queue: queue.Queue[str | None] = queue.Queue()
+        self.pending_jobs: list[str] = []  # public, derived
+        self._active_state: _JobState | None = None
+        self._state_lock = threading.Lock()
+        self._cancelled_paths: set[str] = set()
+        self._orchestrator_thread: threading.Thread | None = None
+        self._stop_event = threading.Event()
         self._process_terminal: ProcessTerminal | None = None
         self._pty_slave_fd: int | None = None
-        self.pending_jobs: list[str] = []
 
     def start(self) -> None:
-        """Start the background worker process and subscribe to events."""
-        # Import audio-separator eagerly on the main thread so the heavy
-        # PyTorch/numpy import doesn't hold Python's import lock later and
-        # block the download thread.
-        from audio_separator.separator import Separator  # noqa: F401
-
+        """Start PTY, StemWorker, orchestrator thread, subscribe to events."""
         self._events.on("song_downloaded", self.enqueue)
 
         if not is_windows():
@@ -67,18 +86,26 @@ class ProcessingManager:
             self._process_terminal.start()
             self._pty_slave_fd = self._process_terminal.get_slave_fd()
 
-        self._worker_process = self._make_worker_process()
-        self._worker_process.start()
-        logging.debug("Stem processing queue worker started")
+        self._stem_worker = StemWorker(
+            pty_slave_fd=self._pty_slave_fd,
+            temp_dir=self._temp_dir,
+        )
+        self._stem_worker.start()
+
+        self._orchestrator_thread = threading.Thread(target=self._orchestrator_loop, daemon=True)
+        self._orchestrator_thread.start()
 
     def stop(self) -> None:
-        """Shut down the worker process and terminal gracefully."""
-        if self._worker_process is not None and self._worker_process.is_alive():
-            self._queue.put(None)
-            self._worker_process.join(timeout=10)
-            if self._worker_process.is_alive():
-                self._worker_process.terminate()
+        """Shut down orchestrator thread, StemWorker, PTY gracefully."""
+        self._stop_event.set()
+        try:
+            self._pending_queue.put(None)  # shutdown sentinel
+        except Exception:
+            pass
+        if self._orchestrator_thread is not None and self._orchestrator_thread.is_alive():
+            self._orchestrator_thread.join(timeout=10)
 
+        self._stem_worker.stop()
         if self._process_terminal is not None:
             self._process_terminal.stop()
 
@@ -89,220 +116,264 @@ class ProcessingManager:
             name = Path(song_path).stem.lower()
             blocked = [w.strip().lower() for w in blocked_str.split(",") if w.strip()]
             if any(w in name for w in blocked):
-                logging.info(f"Skipping stem processing (title matches blocked word): {Path(song_path).name}")
+                logging.info(
+                    f"Skipping stem processing (title matches blocked word): {Path(song_path).name}"
+                )
                 return
 
-        self._drain_results()
-        if self._worker_process is not None and not self._worker_process.is_alive():
-            logging.warning("Stem worker process died unexpectedly, restarting")
-            self._worker_process = self._make_worker_process()
-            self._worker_process.start()
-        self._queue.put(song_path)
         self.pending_jobs.append(song_path)
+        try:
+            self._pending_queue.put(song_path)
+        except Exception:
+            # Queue may be shut down — remove from pending_jobs to stay consistent.
+            self.pending_jobs.remove(song_path)
+            logging.warning(f"Failed to enqueue: {Path(song_path).name}")
+            return
         logging.info(f"Queued for stem separation: {Path(song_path).name}")
 
-    def _make_worker_process(self) -> Process:
-        return Process(
-            target=_run_worker_process,
-            args=(self._queue, self._result_queue, self._temp_dir, self._pty_slave_fd),
-            daemon=False,
-        )
+    def cancel_pending(self, song_path: str) -> None:
+        """Remove a song from the pending processing queue."""
+        with self._state_lock:
+            if song_path in self.pending_jobs:
+                self.pending_jobs.remove(song_path)
+            self._cancelled_paths.add(song_path)
+        logging.info(f"Cancelled pending job: {Path(song_path).name}")
 
-    def _drain_results(self) -> None:
-        """Remove completed jobs from pending_jobs."""
-        while not self._result_queue.empty():
+    def cancel_active(self, song_path: str) -> None:
+        """Cancel the currently active processing job, targeting the active step.
+
+        Safe to call from gevent context: only sends signals and sets flags,
+        never joins a subprocess. The orchestrator thread observes the
+        cancelled flag on its next ``_check_cancelled()`` and raises
+        ``_CancelledError``.
+        """
+        with self._state_lock:
+            state = self._active_state
+            if state is None or state.song_path != song_path:
+                logging.warning(f"Cancel requested for non-active job: {Path(song_path).name}")
+                return
+            state.cancelled = True
+            step = state.step
+            ffmpeg_proc = state.ffmpeg_process
+
+        logging.info(f"Cancelling active job ({step.value}): {Path(song_path).name}")
+
+        if step in (_Step.EXTRACTING, _Step.TRANSCODING):
+            if ffmpeg_proc is not None:
+                try:
+                    ffmpeg_proc.kill()
+                except ProcessLookupError:
+                    pass
+        elif step is _Step.STEMMING:
+            self._stem_worker.kill()
+
+    def get_active_job(self) -> str | None:
+        """Return the path of the currently active processing job, or None."""
+        with self._state_lock:
+            if self._active_state is not None:
+                return self._active_state.song_path
+        return None
+
+    # -- Orchestrator loop --------------------------------------------------
+
+    def _orchestrator_loop(self) -> None:
+        while not self._stop_event.is_set():
             try:
-                self.pending_jobs.remove(self._result_queue.get())
-            except ValueError:
-                pass
-
-
-def _setup_processing_logger() -> logging.Logger:
-    """Configure the module logger to write only to stderr (no disk file).
-
-    The stderr fd will have been dup2'd to the PTY slave by the worker, so
-    all log output flows to the secondary terminal. On the main process side,
-    stderr goes to the main process stderr (normal behaviour).
-    """
-    handler = logging.StreamHandler(sys.stderr)
-    handler.setFormatter(
-        logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
-    )
-
-    processing_logger = logging.getLogger("pikaraoke.lib.processing_manager")
-    processing_logger.handlers = []
-    processing_logger.addHandler(handler)
-    processing_logger.propagate = False
-    processing_logger.setLevel(logging.DEBUG)
-
-    sep_logger = logging.getLogger("audio_separator")
-    sep_logger.handlers = []
-    sep_logger.addHandler(handler)
-    sep_logger.setLevel(logging.DEBUG)
-    sep_logger.propagate = False
-
-    return processing_logger
-
-
-def _run_worker_process(
-    queue: Queue, result_queue: SimpleQueue, temp_dir: str = "", pty_slave_fd: int | None = None
-) -> None:
-    """Entry point for the stem processing worker process.
-
-    This runs in a separate process to avoid blocking the main application
-    during CPU-intensive stem separation. Exits cleanly when None is received.
-    """
-    # Redirect stdout/stderr to the PTY slave so all output (including
-    # subprocess stderr from ffmpeg) appears in the secondary terminal.
-    if pty_slave_fd is not None:
-        os.dup2(pty_slave_fd, 1)
-        os.dup2(pty_slave_fd, 2)
-        os.close(pty_slave_fd)
-
-    processing_logger = _setup_processing_logger()
-    processing_logger.info("Stem worker process started")
-
-    from audio_separator.separator import Separator
-
-    separator = Separator(
-        model_file_dir=MODEL_DIR,
-        output_format=SEPARATION_FORMAT,
-    )
-    separator.load_model(model_filename=MODEL_NAME)
-    processing_logger.info("Audio separator model loaded")
-
-    try:
-        while True:
-            song_path = queue.get()
+                song_path = self._pending_queue.get(timeout=0.5)
+            except queue.Empty:
+                continue
             if song_path is None:
-                break
-            processing_logger.info(f"Processing: {song_path}")
+                return  # shutdown sentinel
+
+            with self._state_lock:
+                if song_path in self._cancelled_paths:
+                    self._cancelled_paths.discard(song_path)
+                    if song_path in self.pending_jobs:
+                        self.pending_jobs.remove(song_path)
+                    continue
+                self._active_state = _JobState(song_path=song_path, step=_Step.EXTRACTING)
 
             try:
-                _process_song_in_worker(song_path, separator, temp_dir, processing_logger)
+                self._run_pipeline(song_path)
+                self._events.emit("processing_complete", song_path)
+                logging.info(f"Processing complete: {Path(song_path).name}")
+            except _CancelledError:
+                self._cleanup_stems(song_path)
+                logging.info(f"Processing cancelled: {Path(song_path).name}")
             except Exception as e:
-                processing_logger.error(f"Stem separation failed for {song_path}: {e}")
+                logging.error(f"Processing failed for {Path(song_path).name}: {e}")
+                self._events.emit(
+                    "processing_error",
+                    {"song_path": song_path, "error": str(e)},
+                )
+                self._cleanup_stems(song_path)
             finally:
-                result_queue.put(song_path)
-    finally:
-        del separator
+                with self._state_lock:
+                    if song_path in self.pending_jobs:
+                        self.pending_jobs.remove(song_path)
+                    self._active_state = None
+                # Eager restart: if cancel or crash killed the worker, bring
+                # it back before the next job arrives.
+                if not self._stem_worker.is_alive():
+                    try:
+                        self._stem_worker.start()
+                    except Exception as e:
+                        logging.error(f"Failed to restart stem worker: {e}")
+
+    # -- Pipeline execution -------------------------------------------------
+
+    def _run_pipeline(self, song_path: str) -> None:
+        video = Path(song_path)
+        if not video.exists():
+            raise FileNotFoundError(f"Song file not found: {song_path}")
+
+        vocal_out, nonvocal_out = self._stem_output_paths(video)
+        if vocal_out.exists() and nonvocal_out.exists():
+            logging.info(f"Stems already exist, skipping: {video.name}")
+            return
+
+        resolved_temp_dir = get_temp_directory(self._temp_dir) if self._temp_dir else None
+        tmp_dir = Path(tempfile.mkdtemp(prefix="pikaraoke_stems_", dir=resolved_temp_dir))
         try:
-            import torch
+            # Step 1: FFmpeg extract (in orchestrator thread)
+            logging.debug(f"[pipeline] extracting: {video.name}")
+            wav_in = self._ffmpeg_extract(video, tmp_dir)
+            logging.debug(f"[pipeline] extract done: {wav_in}")
+            self._check_cancelled()
 
-            torch.cuda.empty_cache()
-        except ImportError:
-            pass
-        processing_logger.info("Audio separator model unloaded")
+            # Step 2: Stem separation (in StemWorker subprocess)
+            self._set_step(_Step.STEMMING)
+            if not self._stem_worker.is_alive():
+                self._stem_worker.start()
+            logging.debug(f"[pipeline] calling separate: {video.name}")
+            try:
+                vocal_wav, instrumental_wav = self._stem_worker.separate(wav_in, tmp_dir)
+            except WorkerDiedError:
+                self._check_cancelled()  # re-raises _CancelledError if cancelled
+                raise RuntimeError("Stem worker died unexpectedly during separation")
+            logging.debug(
+                f"[pipeline] separate returned: vocal={vocal_wav}, instrumental={instrumental_wav}"
+            )
+            self._check_cancelled()
 
+            # Step 3: FFmpeg transcode x2 (in orchestrator thread)
+            self._set_step(_Step.TRANSCODING)
+            logging.debug(f"[pipeline] starting transcode")
+            vocal_out.parent.mkdir(exist_ok=True)
+            nonvocal_out.parent.mkdir(exist_ok=True)
+            logging.debug(f"[pipeline] transcode vocal: {vocal_out.name}")
+            self._ffmpeg_transcode(vocal_wav, vocal_out)
+            logging.debug(f"[pipeline] vocal transcode done")
+            self._check_cancelled()
+            logging.debug(f"[pipeline] transcode instrumental: {nonvocal_out.name}")
+            self._ffmpeg_transcode(instrumental_wav, nonvocal_out)
+            logging.debug(f"[pipeline] instrumental transcode done")
+            self._check_cancelled()
+        finally:
+            logging.debug(f"[pipeline] cleanup tmp: {tmp_dir}")
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
-def _process_song_in_worker(
-    song_path: str, separator, temp_dir: str = "", logger: logging.Logger | None = None
-) -> None:
-    """Run the full stem separation pipeline for a single song."""
-    if logger is None:
-        logger = logging.getLogger("pikaraoke.lib.processing_manager")
+    @staticmethod
+    def _stem_output_paths(video: Path) -> tuple[Path, Path]:
+        """Return (vocal_output_path, nonvocal_output_path)."""
+        vocal_dir = video.parent / "vocal"
+        nonvocal_dir = video.parent / "nonvocal"
+        vocal_out = vocal_dir / f"{video.stem}---vocal.m4a"
+        nonvocal_out = nonvocal_dir / f"{video.stem}---nonvocal.m4a"
+        return vocal_out, nonvocal_out
 
-    video = Path(song_path)
-    if not video.exists():
-        raise FileNotFoundError(f"Song file not found: {song_path}")
+    def _set_step(self, step: _Step) -> None:
+        with self._state_lock:
+            if self._active_state is not None:
+                self._active_state.step = step
+                self._active_state.ffmpeg_process = None
 
-    vocal_dir = video.parent / "vocal"
-    nonvocal_dir = video.parent / "nonvocal"
-    vocal_dir.mkdir(exist_ok=True)
-    nonvocal_dir.mkdir(exist_ok=True)
+    def _check_cancelled(self) -> None:
+        with self._state_lock:
+            if self._active_state is not None and self._active_state.cancelled:
+                raise _CancelledError()
 
-    vocal_out = vocal_dir / f"{video.stem}---vocal.m4a"
-    nonvocal_out = nonvocal_dir / f"{video.stem}---nonvocal.m4a"
+    # -- FFmpeg wrappers ----------------------------------------------------
 
-    # Skip if both stems already exist
-    if vocal_out.exists() and nonvocal_out.exists():
-        logger.info(f"Stems already exist, skipping: {video.name}")
-        return
+    def _ffmpeg_extract(self, video: Path, tmp_dir: Path) -> Path:
+        """Extract audio from video to a temporary WAV."""
+        wav_path = tmp_dir / f"{video.stem}_input.wav"
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(video),
+            "-vn",
+            "-ac",
+            "2",
+            "-ar",
+            "44100",
+            "-sample_fmt",
+            "s16",
+            str(wav_path),
+        ]
+        self._run_ffmpeg(cmd, "audio extraction")
+        return wav_path
 
-    logger.info(f"Processing stems: {video.name}")
+    def _ffmpeg_transcode(self, wav_path: Path, output_path: Path) -> None:
+        """Transcode a WAV stem to AAC-in-M4A."""
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-threads",
+            FFMPEG_THREADS,
+            "-i",
+            str(wav_path),
+            "-c:a",
+            "aac",
+            "-q:a",
+            AAC_QUALITY,
+            str(output_path),
+        ]
+        self._run_ffmpeg(cmd, "transcode")
 
-    resolved_temp_dir = get_temp_directory(temp_dir) if temp_dir else None
-    tmp_dir = tempfile.mkdtemp(prefix="pikaraoke_stems_", dir=resolved_temp_dir)
-    try:
-        # Step 1: Extract audio to WAV
-        audio_wav = _extract_audio(video, tmp_dir)
+    def _run_ffmpeg(self, cmd: list[str], label: str) -> None:
+        stdout_fd = self._pty_slave_fd if self._pty_slave_fd is not None else subprocess.DEVNULL
+        stderr_fd = self._pty_slave_fd if self._pty_slave_fd is not None else subprocess.DEVNULL
+        proc = subprocess.Popen(cmd, stdout=stdout_fd, stderr=stderr_fd)
+        with self._state_lock:
+            if self._active_state is not None:
+                self._active_state.ffmpeg_process = proc
+        try:
+            rc = proc.wait()
+        finally:
+            with self._state_lock:
+                if self._active_state is not None:
+                    self._active_state.ffmpeg_process = None
+        if rc != 0:
+            with self._state_lock:
+                cancelled = self._active_state is not None and self._active_state.cancelled
+            if cancelled:
+                raise _CancelledError()
+            raise RuntimeError(f"ffmpeg {label} failed (exit code {rc})")
 
-        # Step 2: Separate into vocal + instrumental WAV stems
-        logger.info("Separating stems")
-        vocals_wav, instrumental_wav = _separate_stems(audio_wav, tmp_dir, separator)
+    # -- Cleanup ------------------------------------------------------------
 
-        # Step 3: Transcode both stems to M4A
-        logger.info("Transcoding stems")
-        _wav_to_m4a(vocals_wav, vocal_out)
-        _wav_to_m4a(instrumental_wav, nonvocal_out)
+    def _cleanup_stems(self, song_path: str) -> None:
+        """Clean up partial stem files for a given song."""
+        import tempfile as _tempfile
 
-        logger.info(f"Stem separation complete: {video.name}")
-    finally:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
-
-
-def _extract_audio(video_path: Path, tmp_dir: str) -> Path:
-    """Extract audio from video file to a temporary WAV."""
-    wav_path = Path(tmp_dir) / f"{video_path.stem}_input.wav"
-    cmd = [
-        "ffmpeg",
-        "-y",
-        "-i",
-        str(video_path),
-        "-vn",
-        "-ac",
-        "2",
-        "-ar",
-        "44100",
-        "-sample_fmt",
-        "s16",
-        str(wav_path),
-    ]
-    # No capture_output: stderr inherits the PTY so progress bars render.
-    result = subprocess.run(cmd, stdout=subprocess.DEVNULL, text=True)
-    if result.returncode != 0:
-        raise RuntimeError(f"ffmpeg audio extraction failed (exit code {result.returncode})")
-    return wav_path
-
-
-def _separate_stems(audio_path: Path, tmp_dir: str, separator) -> tuple[Path, Path]:
-    """Run audio-separator and return (vocals_wav, instrumental_wav)."""
-    separator.output_dir = tmp_dir
-    if separator.model_instance:
-        separator.model_instance.output_dir = tmp_dir
-    output_paths = separator.separate(str(audio_path))
-
-    vocals_wav = None
-    instrumental_wav = None
-    for p in output_paths:
-        full_path = Path(tmp_dir) / Path(p).name
-        lower = full_path.name.lower()
-        if "vocal" in lower and "no_vocal" not in lower and "instrumental" not in lower:
-            vocals_wav = full_path
-        elif "instrumental" in lower or "no_vocal" in lower:
-            instrumental_wav = full_path
-
-    if not vocals_wav or not instrumental_wav:
-        raise RuntimeError(f"Could not identify vocal/instrumental stems in output: {output_paths}")
-    return vocals_wav, instrumental_wav
-
-
-def _wav_to_m4a(wav_path: Path, output_path: Path) -> None:
-    """Transcode a WAV stem to AAC-in-M4A."""
-    cmd = [
-        "ffmpeg",
-        "-y",
-        "-threads",
-        FFMPEG_THREADS,
-        "-i",
-        str(wav_path),
-        "-c:a",
-        "aac",
-        "-q:a",
-        AAC_QUALITY,
-        str(output_path),
-    ]
-    # No capture_output: stderr inherits the PTY so progress bars render.
-    result = subprocess.run(cmd, stdout=subprocess.DEVNULL, text=True)
-    if result.returncode != 0:
-        raise RuntimeError(f"ffmpeg transcode failed (exit code {result.returncode})")
+        video = Path(song_path)
+        stem_base = video.stem
+        for stem_dir_name in ("vocal", "nonvocal"):
+            stem_dir = video.parent / stem_dir_name
+            if stem_dir.is_dir():
+                for f in stem_dir.glob(f"{stem_base}---*"):
+                    try:
+                        f.unlink()
+                        logging.debug(f"Cleaned up partial stem: {f}")
+                    except OSError as e:
+                        logging.warning(f"Failed to clean partial stem {f}: {e}")
+        resolved_temp = get_temp_directory(self._temp_dir) if self._temp_dir else None
+        search_dir = resolved_temp if resolved_temp else _tempfile.gettempdir()
+        for d in glob.glob(os.path.join(search_dir, "pikaraoke_stems_*")):
+            try:
+                shutil.rmtree(d, ignore_errors=True)
+                logging.debug(f"Cleaned up temp dir: {d}")
+            except OSError:
+                pass
