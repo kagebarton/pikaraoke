@@ -1,0 +1,254 @@
+{% extends 'base.html' %}
+
+{% block header %}
+<div>
+    <h1 class>{% block title %}{% trans %}Processing{% endtrans %}{% endblock %}</h1>
+    <div id="pipeline-legend" class="is-size-7 has-text-grey">
+        <span class="mr-3"><i class="icon icon-down-big"></i> {% trans %}Download{% endtrans %}</span>
+        <span class="mr-3"><i class="icon icon-music"></i> {% trans %}Separation{% endtrans %}</span>
+        <span class="mr-2">&bull;</span>
+        <span class="mr-3 step-pending">{% trans %}pending{% endtrans %}</span>
+        <span class="mr-3 step-active">{% trans %}active{% endtrans %}</span>
+        <span class="mr-3 step-complete">{% trans %}complete{% endtrans %}</span>
+        <span class="mr-3 step-cancelling">{% trans %}cancelling{% endtrans %}</span>
+        <span class="step-error">{% trans %}error{% endtrans %}</span>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<table class="table is-striped is-fullwidth" id="pipeline-table">
+    <thead>
+        <tr>
+            <th style="width: 50%;">{% trans %}Title{% endtrans %}</th>
+            <th style="width: 50%;"></th>
+        </tr>
+    </thead>
+    <tbody id="pipeline-body">
+    </tbody>
+</table>
+
+<p id="pipeline-empty" class="has-text-warning has-text-centered" style="display: none;">
+    {% trans %}No songs in the processing pipeline.{% endtrans %}
+</p>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    'use strict';
+
+    var pollInterval = 1000; // 1 second
+    var pollTimer = null;
+
+    function escape(str) {
+        return encodeURIComponent(str);
+    }
+
+    function fetchStatus() {
+        if ($('#pipeline-table').length === 0) {
+            return; // Left the page
+        }
+        $.get('{{ url_for("processing.processing_status") }}', function(data) {
+            var items = JSON.parse(data);
+            renderItems(items);
+        });
+        // Keep polling
+        pollTimer = setTimeout(fetchStatus, pollInterval);
+    }
+
+    function renderItems(items) {
+        var html = '';
+        items.forEach(function(item) {
+            html += renderRow(item);
+        });
+        $('#pipeline-body').html(html);
+
+        if (items.length === 0) {
+            $('#pipeline-empty').show();
+            $('#pipeline-table').hide();
+        } else {
+            $('#pipeline-empty').hide();
+            $('#pipeline-table').show();
+        }
+    }
+
+    function renderRow(item) {
+        var dlClass = stepClass(item.download_status, 'download');
+        var sepClass = stepClass(item.processing_status, 'separation');
+        var progressHtml = '';
+        if (item.download_status === 'active' && item.download_progress > 0) {
+            progressHtml = '<span class="is-size-7 has-text-grey ml-1">' + Math.round(item.download_progress) + '%</span>';
+        }
+
+        var actionHtml = actionButton(item);
+
+        var titleHtml = '<td style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 0.75rem; vertical-align: middle;">';
+        titleHtml += '<span class="is-truncated" title="' + escapeHtml(item.title) + '">' + escapeHtml(item.title) + '</span>';
+        if (item.error_message && item.download_status === 'error') {
+            titleHtml += '<br><span class="is-size-7 has-text-danger" title="' + escapeHtml(item.error_message) + '">' + escapeHtml(item.error_message.substring(0, 80)) + '</span>';
+        }
+        titleHtml += '</td>';
+
+        var iconHtml = '<td style="vertical-align: middle;">';
+        iconHtml += '<div style="display: flex; align-items: center; gap: 0.25rem; justify-content: flex-end;">';
+        iconHtml += '<i class="icon icon-down-big ' + dlClass + '" title="Download: ' + item.download_status + '"></i>';
+        iconHtml += '<i class="icon icon-music ' + sepClass + '" title="Separation: ' + item.processing_status + '"></i>';
+        if (progressHtml) {
+            iconHtml += progressHtml;
+        }
+        if (actionHtml) {
+            iconHtml += actionHtml;
+        }
+        iconHtml += '</div></td>';
+
+        return '<tr data-id="' + item.id + '">' + titleHtml + iconHtml + '</tr>';
+    }
+
+    function stepClass(status, type) {
+        // status: pending | active | complete | error | waiting | cancelling
+        if (status === 'active') return 'step-active';
+        if (status === 'complete') return 'step-complete';
+        if (status === 'error') return 'step-error';
+        if (status === 'cancelling') return 'step-cancelling';
+        return 'step-pending';
+    }
+
+    function actionButton(item) {
+        // No action while cancellation is in progress
+        if (item.processing_status === 'cancelling') {
+            return '';
+        }
+        // Cancel for in-progress items
+        if (item.download_status === 'active' || item.download_status === 'pending' ||
+            item.processing_status === 'active' || item.processing_status === 'pending') {
+            return '<a href="#" class="pipeline-cancel-btn ml-1" data-id="' + item.id + '" title="{% trans %}Cancel{% endtrans %}"><i class="icon icon-cancel-circled-1 has-text-danger"></i></a>';
+        }
+        // Enqueue for completed items
+        if (item.download_status === 'complete' && item.processing_status === 'complete' && item.song_path) {
+            return '<a href="#" class="pipeline-enqueue-btn ml-1" data-id="' + item.id + '" title="{% trans %}Queue{% endtrans %}"><i class="icon icon-list-add has-text-success"></i></a>';
+        }
+        // Remove for completed/errored items
+        if (item.download_status === 'complete' || item.download_status === 'error' ||
+            item.processing_status === 'complete' || item.processing_status === 'error') {
+            return '<a href="#" class="pipeline-remove-btn ml-1" data-id="' + item.id + '" title="{% trans %}Remove{% endtrans %}"><i class="icon icon-trash-empty has-text-grey"></i></a>';
+        }
+        return '';
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        var div = document.createElement('div');
+        div.appendChild(document.createTextNode(str));
+        return div.innerHTML;
+    }
+
+    function cancelItem(itemId) {
+        $.ajax({
+            url: '{{ url_for("processing.cancel_item", item_id="ITEM_ID") }}'.replace('ITEM_ID', itemId),
+            type: 'POST'
+        }).done(function() {
+            fetchStatus(); // Refresh immediately
+        });
+    }
+
+    function enqueueItem(itemId) {
+        $.ajax({
+            url: '{{ url_for("processing.enqueue_item", item_id="ITEM_ID") }}'.replace('ITEM_ID', itemId),
+            type: 'POST'
+        }).done(function() {
+            fetchStatus(); // Refresh immediately
+        });
+    }
+
+    function removeItem(itemId) {
+        $.ajax({
+            url: '{{ url_for("processing.remove_item", item_id="ITEM_ID") }}'.replace('ITEM_ID', itemId),
+            type: 'POST'
+        }).done(function() {
+            fetchStatus(); // Refresh immediately
+        });
+    }
+
+    // Event delegation for action buttons
+    $(document).on('click', '.pipeline-cancel-btn', function(e) {
+        e.preventDefault();
+        cancelItem($(this).data('id'));
+    });
+
+    $(document).on('click', '.pipeline-enqueue-btn', function(e) {
+        e.preventDefault();
+        enqueueItem($(this).data('id'));
+    });
+
+    $(document).on('click', '.pipeline-remove-btn', function(e) {
+        e.preventDefault();
+        removeItem($(this).data('id'));
+    });
+
+    // Socket listeners for download activity trigger refresh
+    if (typeof window.socket !== 'undefined') {
+        window.socket.on('download_started', function() {
+            fetchStatus();
+        });
+        window.socket.on('download_stopped', function() {
+            fetchStatus();
+        });
+    }
+
+    // Start polling
+    $(function() {
+        fetchStatus();
+    });
+
+    // Cleanup on page hide
+    window.addEventListener('beforeunload', function() {
+        if (pollTimer) {
+            clearTimeout(pollTimer);
+        }
+    });
+})();
+</script>
+
+<style>
+    /* Icon step states */
+    .step-pending {
+        color: #666;
+    }
+    .step-active {
+        color: #00d1b2;
+        animation: pulse-teal 1.2s ease-in-out infinite;
+    }
+    .step-complete {
+        color: #00d1b2;
+    }
+    .step-error {
+        color: #f14668;
+    }
+    .step-cancelling {
+        color: #ffb347;
+        animation: pulse-amber 1.2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-amber {
+        0%, 100% { color: #666; }
+        50% { color: #ffb347; }
+    }
+
+    @keyframes pulse-teal {
+        0%, 100% { color: #666; }
+        50% { color: #00d1b2; }
+    }
+
+    /* Truncated text */
+    .is-truncated {
+        display: inline-block;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+</style>
+{% endblock %}

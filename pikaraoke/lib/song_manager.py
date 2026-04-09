@@ -5,6 +5,7 @@ import logging
 import os
 import re
 
+from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.get_platform import is_windows
 from pikaraoke.lib.karaoke_database import KaraokeDatabase
 from pikaraoke.lib.library_scanner import build_song_record
@@ -29,10 +30,13 @@ class SongManager:
     delete, rename, and display name operations.
     """
 
-    def __init__(self, download_path: str, db: KaraokeDatabase) -> None:
+    def __init__(
+        self, download_path: str, db: KaraokeDatabase, events: EventSystem | None = None
+    ) -> None:
         self.download_path = download_path
         self.songs = SongList()
         self._db = db
+        self._events = events
 
     @staticmethod
     def filename_from_path(
@@ -98,6 +102,8 @@ class SongManager:
                 os.remove(companion)
         self.songs.remove(song_path)
         self._db.delete_by_path(song_path)
+        if self._events:
+            self._events.emit("song_deleted", song_path)
 
     def rename(self, song_path: str, new_name: str) -> str:
         """Rename a song on disk, in SongList, and in DB. Returns new path.

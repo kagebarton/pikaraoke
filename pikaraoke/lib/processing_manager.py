@@ -164,8 +164,10 @@ class ProcessingManager:
                     ffmpeg_proc.kill()
                 except ProcessLookupError:
                     pass
-        elif step is _Step.STEMMING:
-            self._stem_worker.kill()
+        # During STEMMING we do NOT kill the worker — audio-separator has no
+        # cancellation API and killing forces a model reload. Instead we let
+        # the current separation finish; _check_cancelled() will raise
+        # _CancelledError when separate() returns and the model stays loaded.
 
     def get_active_job(self) -> str | None:
         """Return the path of the currently active processing job, or None."""
@@ -199,6 +201,7 @@ class ProcessingManager:
                 logging.info(f"Processing complete: {Path(song_path).name}")
             except _CancelledError:
                 self._cleanup_stems(song_path)
+                self._events.emit("processing_cancelled", song_path)
                 logging.info(f"Processing cancelled: {Path(song_path).name}")
             except Exception as e:
                 logging.error(f"Processing failed for {Path(song_path).name}: {e}")

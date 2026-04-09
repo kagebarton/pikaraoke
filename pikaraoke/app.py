@@ -39,6 +39,7 @@ from pikaraoke.routes.info import info_bp
 from pikaraoke.routes.metadata_api import metadata_bp
 from pikaraoke.routes.now_playing import nowplaying_bp
 from pikaraoke.routes.preferences import preferences_bp
+from pikaraoke.routes.processing import processing_bp
 from pikaraoke.routes.queue import queue_bp
 from pikaraoke.routes.search import search_bp
 from pikaraoke.routes.socket_events import setup_socket_events
@@ -95,6 +96,7 @@ _internal_blueprints = [
     info_bp,
     splash_bp,
     batch_song_renamer_bp,
+    processing_bp,
 ]
 
 for bp in _api_blueprints:

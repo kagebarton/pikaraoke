@@ -1,17 +1,17 @@
 """Persistent subprocess worker for stem separation.
 
 Owns the audio-separator model lifecycle. Runs in a ``multiprocessing.Process``
-that loads the model once and processes separation jobs from a ``Queue``.
+that loads the model once and processes separation jobs via a ``Pipe``.
 
-Result IPC uses ``multiprocessing.Pipe()`` (direct pipe write, no feeder
-thread) so that gevent monkey-patching in the parent process does not
-interfere with result delivery from the worker subprocess.
+Both job and result channels use ``multiprocessing.Pipe()`` (direct OS pipe
+write, no feeder thread) so that gevent monkey-patching in the parent process
+does not interfere with IPC in either direction.
 """
 
 import logging
 import os
 import sys
-from multiprocessing import Pipe, Process, Queue
+from multiprocessing import Pipe, Process
 from multiprocessing.connection import Connection
 from pathlib import Path
 
@@ -34,32 +34,35 @@ class StemWorker:
     """A persistent subprocess that holds the stem separation model.
 
     The worker process is spawned on ``start()``, loads the model, and then
-    loops on an input ``Queue``. Results are returned via a ``Pipe``
-    (``Connection.send`` / ``Connection.recv``) to avoid gevent
-    monkey-patching interference with ``Queue``'s feeder thread.
+    loops on an input pipe connection. Both job and result channels use
+    ``Pipe()`` (direct OS pipe write, no feeder thread) to avoid gevent
+    monkey-patching interference with ``Queue``'s ``QueueFeederThread``.
 
-    Queues and pipes are created fresh on every ``start()`` so that
-    ``kill()`` + restart doesn't leave orphan IPC state.
+    Pipes are created fresh on every ``start()`` so that ``kill()`` + restart
+    doesn't leave orphan IPC state.
     """
 
     def __init__(self, pty_slave_fd: int | None, temp_dir: str) -> None:
         self._pty_slave_fd = pty_slave_fd
         self._temp_dir = temp_dir
         self._process: Process | None = None
-        self._job_queue: Queue | None = None
+        self._job_send: Connection | None = None
+        self._job_recv: Connection | None = None
         self._result_recv: Connection | None = None
         self._result_send: Connection | None = None
 
     def start(self) -> None:
         """Spawn the subprocess with fresh IPC channels."""
-        self._job_queue = Queue()
-        recv, send = Pipe(duplex=False)
-        self._result_recv = recv
-        self._result_send = send
+        job_recv, job_send = Pipe(duplex=False)
+        self._job_send = job_send
+        self._job_recv = job_recv
+        result_recv, result_send = Pipe(duplex=False)
+        self._result_recv = result_recv
+        self._result_send = result_send
         self._process = Process(
             target=_stem_worker_main,
             args=(
-                self._job_queue,
+                self._job_recv,
                 self._result_send,
                 self._temp_dir,
                 self._pty_slave_fd,
@@ -78,12 +81,12 @@ class StemWorker:
         Raises ``WorkerDiedError`` if the worker dies mid-job.
         """
         rq = self._result_recv
-        jq = self._job_queue
+        js = self._job_send
         proc = self._process
-        if rq is None or jq is None or proc is None:
+        if rq is None or js is None or proc is None:
             raise WorkerDiedError("Stem worker is not running")
 
-        jq.put((str(wav_path), str(output_dir)))
+        js.send((str(wav_path), str(output_dir)))
         while True:
             if rq.poll(0.5):
                 msg = rq.recv()
@@ -108,13 +111,14 @@ class StemWorker:
             except OSError:
                 pass
         self._process = None
-        self._job_queue = None
-        for conn in (self._result_recv, self._result_send):
+        for conn in (self._job_send, self._job_recv, self._result_recv, self._result_send):
             if conn is not None:
                 try:
                     conn.close()
                 except OSError:
                     pass
+        self._job_send = None
+        self._job_recv = None
         self._result_recv = None
         self._result_send = None
 
@@ -122,10 +126,10 @@ class StemWorker:
         """Graceful shutdown: send sentinel, join, fall back to kill on timeout."""
         if self._process is None or not self._process.is_alive():
             return
-        jq = self._job_queue
-        if jq is not None:
+        js = self._job_send
+        if js is not None:
             try:
-                jq.put(None)
+                js.send(None)
             except OSError:
                 pass
         try:
@@ -171,7 +175,7 @@ def _setup_processing_logger() -> logging.Logger:
 
 
 def _stem_worker_main(
-    job_queue: Queue,
+    job_recv: Connection,
     result_send: Connection,
     temp_dir: str = "",
     pty_slave_fd: int | None = None,
@@ -179,7 +183,7 @@ def _stem_worker_main(
     """Entry point for the stem separation worker subprocess.
 
     Redirects stdout/stderr to the PTY slave, loads the model, then loops
-    on ``job_queue``. Results are sent on ``result_send`` as:
+    on ``job_recv``. Results are sent on ``result_send`` as:
     - ``("ok", vocal_path, instrumental_path)`` on success.
     - ``("error", message)`` on failure.
     """
@@ -203,7 +207,7 @@ def _stem_worker_main(
 
     try:
         while True:
-            item = job_queue.get()
+            item = job_recv.recv()
             if item is None:
                 break
             wav_path_str, output_dir_str = item

@@ -66,6 +66,8 @@ class DownloadManager:
         self.pending_downloads: list[dict] = []  # Shadow queue for visibility
         self.download_errors: list[dict] = []  # Track failed downloads
         self.active_download: dict | None = None
+        self._active_process: subprocess.Popen | None = None  # Stored for cancellation
+        self._cancelled_urls: set[str] = set()  # URLs cancelled while pending
         self._worker_thread: Thread | None = None
         self._is_downloading: bool = False  # Track if a download is currently in progress
 
@@ -154,6 +156,17 @@ class DownloadManager:
         self.download_queue.put(download_data)
         self.pending_downloads.append(download_data)
 
+        # Emit download_queued event for pipeline tracker
+        self._events.emit(
+            "download_queued",
+            {
+                "video_url": video_url,
+                "enqueue": enqueue,
+                "user": user,
+                "title": displayed_title,
+            },
+        )
+
     def _process_queue(self) -> None:
         """Worker thread that processes downloads from the queue serially.
 
@@ -162,6 +175,15 @@ class DownloadManager:
         """
         while True:
             download_request = self.download_queue.get()
+
+            # Skip if this URL was cancelled while pending
+            video_url = download_request["video_url"]
+            if video_url in self._cancelled_urls:
+                self._cancelled_urls.discard(video_url)
+                self.download_queue.task_done()
+                if self.download_queue.empty():
+                    self._events.emit("download_stopped")
+                continue
 
             # Remove from shadow queue
             # Note: Since this is a single worker thread and append happens on main thread,
@@ -245,6 +267,7 @@ class DownloadManager:
             bufsize=1,  # Line buffered
             universal_newlines=True,
         )
+        self._active_process = process
 
         output_buffer = []
 
@@ -276,6 +299,7 @@ class DownloadManager:
 
         rc = process.poll()
         output = "".join(output_buffer)
+        self._active_process = None
 
         if rc != 0:
             # Logic removed: We no longer retry synchronously as it blocks the queue.
@@ -286,15 +310,16 @@ class DownloadManager:
                 "notification", _("Error downloading song: ") + displayed_title, "danger"
             )
             logging.error(f"yt-dlp stderr: {output}")
-            self.download_errors.append(
-                {
-                    "id": str(uuid.uuid4()),
-                    "title": displayed_title,
-                    "url": video_url,
-                    "user": user,
-                    "error": output or "Unknown error",
-                }
-            )
+            error_data = {
+                "id": str(uuid.uuid4()),
+                "title": displayed_title,
+                "url": video_url,
+                "user": user,
+                "error": output or "Unknown error",
+            }
+            self.download_errors.append(error_data)
+            # Emit download_error event for pipeline tracker
+            self._events.emit("download_error", error_data)
         else:
             if self.active_download:
                 self.active_download["progress"] = 100
@@ -336,6 +361,58 @@ class DownloadManager:
                     )
 
         return rc
+
+    def cancel_active_download(self) -> None:
+        """Cancel the currently active download and clean up partial files."""
+        if self._active_process is not None:
+            try:
+                self._active_process.kill()
+            except ProcessLookupError:
+                pass
+            self._active_process = None
+
+        # Clean up partial downloads matching the active video ID
+        if self.active_download:
+            video_id = get_youtube_id_from_url(self.active_download["url"])
+            if video_id:
+                self._cleanup_partial_downloads(video_id)
+
+        self._is_downloading = False
+        self.active_download = None
+
+    def cancel_pending_download(self, video_url: str) -> None:
+        """Cancel a download that is still in the pending queue."""
+        self._cancelled_urls.add(video_url)
+        # Remove from shadow queue
+        self.pending_downloads = [
+            d for d in self.pending_downloads if d["video_url"] != video_url
+        ]
+        # Also drain from the Queue (there's no public remove, so we rebuild)
+        new_queue: Queue = Queue()
+        skipped = False
+        while not self.download_queue.empty():
+            item = self.download_queue.get_nowait()
+            if item["video_url"] == video_url and not skipped:
+                skipped = True
+                self.download_queue.task_done()
+            else:
+                new_queue.put(item)
+        self.download_queue = new_queue
+
+    def _cleanup_partial_downloads(self, video_id: str) -> None:
+        """Remove partial download files matching a video ID."""
+        from pathlib import Path
+
+        download_dir = Path(self._download_path)
+        # Match patterns: Title---VIDEOID.mp4, Title [VIDEOID].mp4, and any partial files
+        for pattern in [f"*---{video_id}*", f"*[{video_id}]*", f"*{video_id}*"]:
+            for f in download_dir.glob(pattern):
+                if f.is_file():
+                    try:
+                        f.unlink()
+                        logging.debug(f"Cleaned up partial download: {f}")
+                    except OSError as e:
+                        logging.warning(f"Failed to clean partial download {f}: {e}")
 
     def _rename_subtitle_file(self, video_path: str) -> None:
         video = Path(video_path)
