@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html data-theme="dark">
+
+<head>
+  <title>Processing Mockup</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="pikaraoke/static/jquery-3.7.1.min.js"></script>
+  <link rel="stylesheet" href="pikaraoke/static/bulma.min.css">
+  <link rel="stylesheet" href="pikaraoke/static/bulma-dark.css">
+  <link rel="stylesheet" href="pikaraoke/static/custom.css">
+  <link rel="stylesheet" href="pikaraoke/static/fontello/css/fontello.css">
+
+  <style>
+    tr:nth-child(even) { background-color: rgb(50, 55, 55); }
+
+    .is-truncated {
+        display: inline-block;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* Fixed-width icon columns */
+    .col-progress { width: 2rem; text-align: right; vertical-align: middle; padding-left: 0; padding-right: 4px; }
+    .col-icon     { width: 1.5rem; text-align: center; vertical-align: middle; padding-left: 4px; padding-right: 4px; }
+    .col-icon:last-child { padding-right: 4px; }
+
+    th.col-icon .icon { color: #666 !important; }
+    th.col-progress { color: #666; }
+
+    /* Common wrapper — all state icons sit in identical boxes */
+    .state-box {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.2em;
+        height: 1.2em;
+        vertical-align: middle;
+        line-height: 1;
+    }
+
+    /* CSS clock (pending) */
+    .state-clock {
+        display: block;
+        width: 1em;
+        height: 1em;
+        border: 2.5px solid white;
+        border-radius: 50%;
+        box-sizing: border-box;
+        position: relative;
+    }
+    .state-clock::before { /* minute hand — 12 o'clock */
+        content: '';
+        position: absolute;
+        width: 1.5px;
+        height: 30%;
+        background: white;
+        left: calc(50% - 0.75px);
+        bottom: 50%;
+        transform-origin: bottom center;
+        transform: rotate(0deg);
+        border-radius: 1px;
+    }
+    .state-clock::after { /* hour hand — 3 o'clock, extends through center */
+        content: '';
+        position: absolute;
+        width: 2.1px;
+        height: 40%;
+        background: white;
+        left: calc(50% - 1px);
+        bottom: 38%;
+        transform-origin: 50% 75%;
+        transform: rotate(90deg);
+        border-radius: 1px;
+    }
+
+    /* CSS arc spinner (active) */
+    .state-spinner {
+        display: block;
+        width: 1em;
+        height: 1em;
+        border: 2.5px solid rgba(255,255,255,0.2);
+        border-top-color: white;
+        border-radius: 50%;
+        box-sizing: border-box;
+        animation: spin 0.8s linear infinite;
+    }
+    .state-spinner-grey {
+        border-color: rgba(128,128,128,0.2);
+        border-top-color: #888;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* Fontello icons inside .state-box — reset line-height/margins */
+    .state-box > .icon {
+        font-size: 1em;
+        line-height: 1;
+        margin: 0;
+    }
+    .icon-state-ok    { color: white; }
+    .icon-state-error { color: white; }
+
+    /* Action icons */
+    .pipeline-action-btn { text-decoration: none; }
+    .icon-action-queue  { color: #00d1b2; }
+    .icon-action-cancel { color: #f14668; }
+    .icon-action-remove { color: #f14668; }
+  </style>
+</head>
+
+<body>
+  <div class="container" style="padding: 5px; max-width: 900px;">
+    <div class="box" style="margin-top: 5px;">
+      <header class="title">
+        <h1>Processing</h1>
+      </header>
+      <div class="content">
+        <table class="table is-striped is-fullwidth" id="pipeline-table">
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th class="col-progress"></th>
+              <th class="col-icon"><span class="state-box"><i class="icon icon-down-big"></i></span></th>
+              <th class="col-icon"><span class="state-box"><i class="icon icon-music"></i></span></th>
+              <th class="col-icon"></th>
+              <th class="col-icon"></th>
+            </tr>
+          </thead>
+          <tbody id="pipeline-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function() {
+    'use strict';
+
+    var mockItems = [
+        {
+            id: '1',
+            title: 'Bohemian Rhapsody - Queen',
+            download_status: 'pending',
+            processing_status: 'pending',
+            download_progress: 0,
+            error_message: null,
+            song_path: null
+        },
+        {
+            id: '2',
+            title: 'Never Gonna Give You Up - Rick Astley',
+            download_status: 'active',
+            processing_status: 'pending',
+            download_progress: 42,
+            error_message: null,
+            song_path: null
+        },
+        {
+            id: '3',
+            title: 'Take On Me - a-ha',
+            download_status: 'complete',
+            processing_status: 'pending',
+            download_progress: 100,
+            error_message: null,
+            song_path: null
+        },
+        {
+            id: '4',
+            title: "Don't Stop Believin' - Journey",
+            download_status: 'complete',
+            processing_status: 'active',
+            download_progress: 100,
+            error_message: null,
+            song_path: null
+        },
+        {
+            id: '5',
+            title: 'Sweet Caroline - Neil Diamond',
+            download_status: 'complete',
+            processing_status: 'complete',
+            download_progress: 100,
+            error_message: null,
+            song_path: '/songs/Sweet Caroline---abc12345678.mp4'
+        },
+        {
+            id: '6',
+            title: 'Hotel California - Eagles (This Is A Very Long Title That Should Get Truncated Eventually When The Window Is Narrow Enough)',
+            download_status: 'error',
+            processing_status: 'pending',
+            download_progress: 0,
+            error_message: 'ERROR: Video unavailable. This video has been removed by the uploader.',
+            song_path: null
+        },
+        {
+            id: '7',
+            title: 'Wonderwall - Oasis',
+            download_status: 'complete',
+            processing_status: 'error',
+            download_progress: 100,
+            error_message: null,
+            song_path: null
+        },
+        {
+            id: '8',
+            title: "Livin' on a Prayer - Bon Jovi",
+            download_status: 'cancelling',
+            processing_status: 'cancelling',
+            download_progress: 15,
+            error_message: null,
+            song_path: null
+        },
+        {
+            id: '9',
+            title: 'Mr. Brightside - The Killers',
+            download_status: 'complete',
+            processing_status: 'cancelling',
+            download_progress: 100,
+            error_message: null,
+            song_path: null
+        },
+        {
+            id: '10',
+            title: 'Somebody That I Used to Know - Gotye',
+            download_status: 'complete',
+            processing_status: 'complete',
+            download_progress: 100,
+            error_message: null,
+            song_path: null  // complete but no path — remove, not enqueue
+        }
+    ];
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        var div = document.createElement('div');
+        div.appendChild(document.createTextNode(str));
+        return div.innerHTML;
+    }
+
+    function stateIcon(status) {
+        var inner = '';
+        if (status === 'pending')    inner = '<span class="state-clock"></span>';
+        else if (status === 'active')     inner = '<span class="state-spinner"></span>';
+        else if (status === 'complete')   inner = '<i class="icon icon-ok icon-state-ok"></i>';
+        else if (status === 'error')      inner = '<i class="icon icon-cancel-circled-1 icon-state-error"></i>';
+        else if (status === 'cancelling') inner = '<span class="state-spinner state-spinner-grey"></span>';
+        else return '';
+        return '<span class="state-box">' + inner + '</span>';
+    }
+
+    function queueCell(item) {
+        if (item.download_status === 'complete' && item.processing_status === 'complete' && item.song_path) {
+            return '<span class="state-box"><a href="#" class="pipeline-action-btn" title="Queue">'
+                 + '<i class="icon icon-list-add icon-action-queue"></i></a></span>';
+        }
+        return '';
+    }
+
+    function cancelCell(item) {
+        if (item.processing_status === 'cancelling') return '';
+        if (item.download_status === 'active'   || item.download_status === 'pending' ||
+            item.processing_status === 'active' || item.processing_status === 'pending') {
+            return '<span class="state-box"><a href="#" class="pipeline-action-btn" title="Cancel">'
+                 + '<i class="icon icon-cancel-circled-1 icon-action-cancel"></i></a></span>';
+        }
+        if (item.download_status === 'complete' || item.download_status === 'error' ||
+            item.processing_status === 'complete' || item.processing_status === 'error') {
+            return '<span class="state-box"><a href="#" class="pipeline-action-btn" title="Remove">'
+                 + '<i class="icon icon-trash-empty icon-action-remove"></i></a></span>';
+        }
+        return '';
+    }
+
+    function renderRow(item) {
+        var progressHtml = '';
+        if (item.download_status === 'active' && item.download_progress > 0) {
+            progressHtml = '<span class="is-size-7 has-text-grey">'
+                         + Math.round(item.download_progress) + '%</span>';
+        }
+
+        var titleHtml = '<td style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 0.75rem; vertical-align: middle;">';
+        titleHtml += '<span class="is-truncated" title="' + escapeHtml(item.title) + '">' + escapeHtml(item.title) + '</span>';
+        if (item.error_message && item.download_status === 'error') {
+            titleHtml += '<br><span class="is-size-7 has-text-danger" title="' + escapeHtml(item.error_message) + '">'
+                       + escapeHtml(item.error_message.substring(0, 80)) + '</span>';
+        }
+        titleHtml += '</td>';
+
+        return '<tr data-id="' + item.id + '">'
+             + titleHtml
+             + '<td class="col-progress">' + progressHtml + '</td>'
+             + '<td class="col-icon">' + stateIcon(item.download_status) + '</td>'
+             + '<td class="col-icon">' + stateIcon(item.processing_status) + '</td>'
+             + '<td class="col-icon">' + queueCell(item) + '</td>'
+             + '<td class="col-icon">' + cancelCell(item) + '</td>'
+             + '</tr>';
+    }
+
+    $(function() {
+        var html = '';
+        mockItems.forEach(function(item) { html += renderRow(item); });
+        $('#pipeline-body').html(html);
+        $(document).on('click', 'a[href="#"]', function(e) { e.preventDefault(); });
+    });
+})();
+</script>
+
+</body>
+</html>
