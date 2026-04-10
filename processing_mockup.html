@@ -22,12 +22,38 @@
     }
 
     /* Fixed-width icon columns */
-    .col-progress { width: 2rem; text-align: right; vertical-align: middle; padding-left: 0; padding-right: 4px; }
-    .col-icon     { width: 1.5rem; text-align: center; vertical-align: middle; padding-left: 4px; padding-right: 4px; }
-    .col-icon:last-child { padding-right: 4px; }
+    .col-icon     { width: 1.5rem; text-align: center; vertical-align: middle; padding: 0; }
 
     th.col-icon .icon { color: #666 !important; }
-    th.col-progress { color: #666; }
+
+    /* Title cell */
+    .col-title {
+        vertical-align: middle;
+    }
+    .title-row {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+    }
+    .title-row .is-truncated {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .progress-label { flex: 0 0 auto; margin-left: 0.5em; }
+
+    /* Strip Bulma's cell padding so icon columns align predictably.
+       Bulma's typography is unaffected — only spacing is overridden. */
+    #pipeline-table th, #pipeline-table td { padding: 0; vertical-align: middle; }
+    #pipeline-table td:first-child { padding: 0.5em 0.25rem 0.5em 0; }
+
+    /* Debug: show table cell borders */
+    /* #pipeline-table th,
+    #pipeline-table td {
+        border: 1px solid #555 !important;
+    } */
 
     /* Common wrapper — all state icons sit in identical boxes */
     .state-box {
@@ -40,46 +66,11 @@
         line-height: 1;
     }
 
-    /* CSS clock (pending) */
-    .state-clock {
-        display: block;
-        width: 1em;
-        height: 1em;
-        border: 2.5px solid white;
-        border-radius: 50%;
-        box-sizing: border-box;
-        position: relative;
-    }
-    .state-clock::before { /* minute hand — 12 o'clock */
-        content: '';
-        position: absolute;
-        width: 1.5px;
-        height: 30%;
-        background: white;
-        left: calc(50% - 0.75px);
-        bottom: 50%;
-        transform-origin: bottom center;
-        transform: rotate(0deg);
-        border-radius: 1px;
-    }
-    .state-clock::after { /* hour hand — 3 o'clock, extends through center */
-        content: '';
-        position: absolute;
-        width: 2.1px;
-        height: 40%;
-        background: white;
-        left: calc(50% - 1px);
-        bottom: 38%;
-        transform-origin: 50% 75%;
-        transform: rotate(90deg);
-        border-radius: 1px;
-    }
-
     /* CSS arc spinner (active) */
     .state-spinner {
         display: block;
-        width: 1em;
-        height: 1em;
+        width: 0.9em;
+        height: 0.9em;
         border: 2.5px solid rgba(255,255,255,0.2);
         border-top-color: white;
         border-radius: 50%;
@@ -123,7 +114,6 @@
           <thead>
             <tr>
               <th>Title</th>
-              <th class="col-progress"></th>
               <th class="col-icon"><span class="state-box"><i class="icon icon-down-big"></i></span></th>
               <th class="col-icon"><span class="state-box"><i class="icon icon-music"></i></span></th>
               <th class="col-icon"></th>
@@ -143,7 +133,7 @@
     var mockItems = [
         {
             id: '1',
-            title: 'Bohemian Rhapsody - Queen',
+            title: 'Download: pending · Processing: pending',
             download_status: 'pending',
             processing_status: 'pending',
             download_progress: 0,
@@ -152,7 +142,7 @@
         },
         {
             id: '2',
-            title: 'Never Gonna Give You Up - Rick Astley',
+            title: 'Download: active (42%) · Processing: pending',
             download_status: 'active',
             processing_status: 'pending',
             download_progress: 42,
@@ -161,7 +151,7 @@
         },
         {
             id: '3',
-            title: 'Take On Me - a-ha',
+            title: 'Download: complete · Processing: pending',
             download_status: 'complete',
             processing_status: 'pending',
             download_progress: 100,
@@ -170,7 +160,7 @@
         },
         {
             id: '4',
-            title: "Don't Stop Believin' - Journey",
+            title: 'Download: complete · Processing: active',
             download_status: 'complete',
             processing_status: 'active',
             download_progress: 100,
@@ -179,7 +169,7 @@
         },
         {
             id: '5',
-            title: 'Sweet Caroline - Neil Diamond',
+            title: 'Download: complete · Processing: complete — enqueue available',
             download_status: 'complete',
             processing_status: 'complete',
             download_progress: 100,
@@ -188,7 +178,7 @@
         },
         {
             id: '6',
-            title: 'Hotel California - Eagles (This Is A Very Long Title That Should Get Truncated Eventually When The Window Is Narrow Enough)',
+            title: 'Download: error — long error message that should be truncated eventually when the window is narrow enough',
             download_status: 'error',
             processing_status: 'pending',
             download_progress: 0,
@@ -197,7 +187,7 @@
         },
         {
             id: '7',
-            title: 'Wonderwall - Oasis',
+            title: 'Download: complete · Processing: error',
             download_status: 'complete',
             processing_status: 'error',
             download_progress: 100,
@@ -206,7 +196,7 @@
         },
         {
             id: '8',
-            title: "Livin' on a Prayer - Bon Jovi",
+            title: 'Download: cancelling · Processing: cancelling',
             download_status: 'cancelling',
             processing_status: 'cancelling',
             download_progress: 15,
@@ -215,7 +205,7 @@
         },
         {
             id: '9',
-            title: 'Mr. Brightside - The Killers',
+            title: 'Download: complete · Processing: cancelling',
             download_status: 'complete',
             processing_status: 'cancelling',
             download_progress: 100,
@@ -224,7 +214,7 @@
         },
         {
             id: '10',
-            title: 'Somebody That I Used to Know - Gotye',
+            title: 'Download: complete · Processing: complete — no path, remove only',
             download_status: 'complete',
             processing_status: 'complete',
             download_progress: 100,
@@ -242,7 +232,7 @@
 
     function stateIcon(status) {
         var inner = '';
-        if (status === 'pending')    inner = '<span class="state-clock"></span>';
+        if (status === 'pending')    inner = '<i class="icon icon-clock"></i>';
         else if (status === 'active')     inner = '<span class="state-spinner"></span>';
         else if (status === 'complete')   inner = '<i class="icon icon-ok icon-state-ok"></i>';
         else if (status === 'error')      inner = '<i class="icon icon-cancel-circled-1 icon-state-error"></i>';
@@ -274,24 +264,33 @@
         return '';
     }
 
-    function renderRow(item) {
-        var progressHtml = '';
-        if (item.download_status === 'active' && item.download_progress > 0) {
-            progressHtml = '<span class="is-size-7 has-text-grey">'
-                         + Math.round(item.download_progress) + '%</span>';
-        }
+    function progressLabel(item) {
+        if (item.download_status === 'cancelling' || item.processing_status === 'cancelling')
+            return 'cancelling';
+        if (item.download_status === 'active')    return 'downloading';
+        if (item.processing_status === 'active')  return 'separating';
+        return '';
+    }
 
-        var titleHtml = '<td style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 0.75rem; vertical-align: middle;">';
+    function renderRow(item) {
+        var label = progressLabel(item);
+        var labelHtml = label
+            ? '<span class="progress-label is-size-7 has-text-grey">' + label + '</span>'
+            : '';
+
+        var titleHtml = '<td class="col-title">';
+        titleHtml += '<div class="title-row">';
         titleHtml += '<span class="is-truncated" title="' + escapeHtml(item.title) + '">' + escapeHtml(item.title) + '</span>';
+        titleHtml += labelHtml;
+        titleHtml += '</div>';
         if (item.error_message && item.download_status === 'error') {
-            titleHtml += '<br><span class="is-size-7 has-text-danger" title="' + escapeHtml(item.error_message) + '">'
+            titleHtml += '<span class="is-size-7 has-text-danger" title="' + escapeHtml(item.error_message) + '">'
                        + escapeHtml(item.error_message.substring(0, 80)) + '</span>';
         }
         titleHtml += '</td>';
 
         return '<tr data-id="' + item.id + '">'
              + titleHtml
-             + '<td class="col-progress">' + progressHtml + '</td>'
              + '<td class="col-icon">' + stateIcon(item.download_status) + '</td>'
              + '<td class="col-icon">' + stateIcon(item.processing_status) + '</td>'
              + '<td class="col-icon">' + queueCell(item) + '</td>'
@@ -299,11 +298,61 @@
              + '</tr>';
     }
 
+    function removeRow(id, delay) {
+        var $row = $('tr[data-id="' + id + '"]');
+        if (delay) {
+            setTimeout(function() { $row.fadeOut(1000, function() { $(this).remove(); }); }, delay);
+        } else {
+            $row.fadeOut(1000, function() { $(this).remove(); });
+        }
+    }
+
+    function updateRow(id) {
+        var item = mockItems.find(function(i) { return i.id === id; });
+        if (!item) return;
+        $('tr[data-id="' + id + '"]').replaceWith(renderRow(item));
+    }
+
     $(function() {
         var html = '';
         mockItems.forEach(function(item) { html += renderRow(item); });
         $('#pipeline-body').html(html);
-        $(document).on('click', 'a[href="#"]', function(e) { e.preventDefault(); });
+
+        // Cancel / Remove button
+        $(document).on('click', '.col-icon a[title="Cancel"]', function(e) {
+            e.preventDefault();
+            var id = $(this).closest('tr').data('id').toString();
+            var item = mockItems.find(function(i) { return i.id === id; });
+            if (!item) return;
+
+            if (item.download_status === 'active' || item.download_status === 'pending') {
+                // Cancel download: immediate removal
+                removeRow(id);
+            } else if (item.processing_status === 'pending') {
+                // Cancel pending processing: immediate removal
+                removeRow(id);
+            } else if (item.processing_status === 'active') {
+                // Cancel active processing: show cancelling state, then remove after delay
+                item.download_status = 'cancelling';
+                item.processing_status = 'cancelling';
+                item.cancelling = true;
+                updateRow(id);
+                removeRow(id, 5000);
+            }
+        });
+
+        $(document).on('click', '.col-icon a[title="Remove"]', function(e) {
+            e.preventDefault();
+            var id = $(this).closest('tr').data('id').toString();
+            removeRow(id);
+        });
+
+        // Queue / Enqueue button
+        $(document).on('click', '.col-icon a[title="Queue"]', function(e) {
+            e.preventDefault();
+            var id = $(this).closest('tr').data('id').toString();
+            removeRow(id);
+        });
     });
 })();
 </script>
