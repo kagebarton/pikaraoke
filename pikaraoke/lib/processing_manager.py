@@ -121,12 +121,13 @@ class ProcessingManager:
                 )
                 return
 
-        self.pending_jobs.append(song_path)
+        with self._state_lock:
+            self.pending_jobs.append(song_path)
         try:
             self._pending_queue.put(song_path)
         except Exception:
-            # Queue may be shut down — remove from pending_jobs to stay consistent.
-            self.pending_jobs.remove(song_path)
+            with self._state_lock:
+                self.pending_jobs.remove(song_path)
             logging.warning(f"Failed to enqueue: {Path(song_path).name}")
             return
         logging.info(f"Queued for stem separation: {Path(song_path).name}")

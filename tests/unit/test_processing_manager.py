@@ -93,23 +93,29 @@ class TestProcessingManagerCancelActive:
 
     @patch("pikaraoke.lib.processing_manager.StemWorker")
     @patch("pikaraoke.lib.processing_manager.ProcessTerminal")
-    def test_cancel_active_stemming_kills_stem_worker(self, mock_pt, mock_sw, events, preferences):
+    def test_cancel_active_stemming_sets_flag_does_not_kill_worker(self, mock_pt, mock_sw, events, preferences):
+        """Cancel during stemming uses delayed cancel: sets flag, does not kill worker.
+
+        The worker finishes the current separation so the model stays loaded.
+        _check_cancelled() raises _CancelledError after separate() returns.
+        """
         mock_sw_instance = MagicMock()
         mock_sw.return_value = mock_sw_instance
 
         mgr = ProcessingManager(events=events, preferences=preferences)
         mgr.start()
 
-        # Manually set up an active state simulating the stemming step.
         from pikaraoke.lib.processing_manager import _JobState, _Step
 
         mgr._active_state = _JobState(song_path="/songs/Test---abc.mp4", step=_Step.STEMMING)
 
         mgr.cancel_active("/songs/Test---abc.mp4")
-        mock_sw_instance.kill.assert_called_once()
 
-        # Active state should be marked cancelled.
+        # Active state should be marked cancelled — orchestrator will raise _CancelledError
+        # after separate() returns naturally, keeping the model loaded.
         assert mgr._active_state.cancelled is True
+        # Worker should NOT be killed — it stays alive to finish the current separation.
+        mock_sw_instance.kill.assert_not_called()
 
         mgr.stop()
 

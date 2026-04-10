@@ -9,9 +9,21 @@ from typing import Any
 
 from pikaraoke.lib.download_manager import DownloadManager
 from pikaraoke.lib.events import EventSystem
+from pikaraoke.lib.metadata_parser import youtube_id_suffix
 from pikaraoke.lib.processing_manager import ProcessingManager
 from pikaraoke.lib.queue_manager import QueueManager
 from pikaraoke.lib.song_manager import SongManager
+from pikaraoke.lib.youtube_dl import get_youtube_id_from_url
+
+
+def _video_id_from_path(path: str) -> str | None:
+    """Extract the 11-char YouTube ID from a song filename."""
+    suffix = youtube_id_suffix(path)
+    if not suffix:
+        return None
+    if suffix.startswith("---"):
+        return suffix[3:]
+    return suffix.strip(" []")
 
 
 class PipelineItem:
@@ -29,7 +41,7 @@ class PipelineItem:
         self.url: str = url
         self.user: str = user
         self.download_status: str = "pending"  # pending | active | complete | error
-        self.processing_status: str = "waiting"  # waiting | pending | active | complete
+        self.processing_status: str = "waiting"  # waiting | pending | active | complete | error | cancelling
         self.download_progress: float = 0.0
         self.error_message: str | None = None
         self.cancelling: bool = False
@@ -97,20 +109,18 @@ class PipelineTracker:
 
                 # Derive processing status
                 if item.song_path is None:
-                    # Download not yet complete
+                    # Download not yet complete — show error if download failed
                     if item.download_status == "error":
-                        item.processing_status = "waiting"
+                        item.processing_status = "error"
                     else:
                         item.processing_status = "waiting"
                 elif active_job == item.song_path:
                     item.processing_status = "active"
                 elif item.song_path in pending_jobs:
                     item.processing_status = "pending"
-                elif item.download_status == "error":
-                    item.processing_status = "complete"  # download errored, processing never ran
                 else:
                     # Download complete and not in processing queues
-                    # Check if processing already completed (item was marked via event)
+                    # Preserve "complete"/"error" already set by events
                     if item.processing_status not in ("complete", "error"):
                         item.processing_status = "complete"
 
@@ -129,6 +139,9 @@ class PipelineTracker:
         with self._lock:
             item = self._find_item(item_id)
             if item is None:
+                return False
+
+            if item.cancelling:
                 return False
 
             if item.download_status == "active":
@@ -188,11 +201,13 @@ class PipelineTracker:
             self._items.append(item)
 
     def _on_song_downloaded(self, song_path: str) -> None:
+        path_id = _video_id_from_path(song_path)
         with self._lock:
             for item in self._items:
-                if item.download_status in ("pending", "active"):
-                    # Match by checking if the song_path contains the video URL ID
-                    # or by order (most recent active download)
+                if item.download_status not in ("pending", "active"):
+                    continue
+                url_id = get_youtube_id_from_url(item.url)
+                if path_id and url_id and path_id == url_id:
                     item.song_path = song_path
                     item.download_status = "complete"
                     item.download_progress = 100.0

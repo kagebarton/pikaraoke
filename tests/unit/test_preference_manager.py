@@ -275,6 +275,7 @@ def test_preference_manager_defaults_exist():
         "show_splash_clock",
         "subtitle_delay",
         "temp_dir",
+        "blocked_processing_words",
     }
 
     assert set(PreferenceManager.DEFAULTS.keys()) == expected_keys

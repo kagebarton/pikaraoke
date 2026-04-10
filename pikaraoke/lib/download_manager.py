@@ -174,13 +174,17 @@ class DownloadManager:
         Each download is processed completely before the next one starts.
         """
         while True:
-            download_request = self.download_queue.get()
+            # Capture queue reference before get() — cancel_pending_download may
+            # replace self.download_queue mid-download; task_done() must be called
+            # on the same instance that get() was called on.
+            q = self.download_queue
+            download_request = q.get()
 
             # Skip if this URL was cancelled while pending
             video_url = download_request["video_url"]
             if video_url in self._cancelled_urls:
                 self._cancelled_urls.discard(video_url)
-                self.download_queue.task_done()
+                q.task_done()
                 if self.download_queue.empty():
                     self._events.emit("download_stopped")
                 continue
@@ -217,7 +221,7 @@ class DownloadManager:
             finally:
                 self._is_downloading = False
                 self.active_download = None
-                self.download_queue.task_done()
+                q.task_done()
 
                 # Check if we are done with all downloads
                 if self.download_queue.empty():

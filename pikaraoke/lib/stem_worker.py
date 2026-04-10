@@ -52,7 +52,22 @@ class StemWorker:
         self._result_send: Connection | None = None
 
     def start(self) -> None:
-        """Spawn the subprocess with fresh IPC channels."""
+        """Spawn the subprocess with fresh IPC channels.
+
+        Closes any existing connections before creating new ones to prevent
+        fd leaks on repeated crash + restart cycles.
+        """
+        for conn in (self._job_send, self._job_recv, self._result_recv, self._result_send):
+            if conn is not None:
+                try:
+                    conn.close()
+                except OSError:
+                    pass
+        self._job_send = None
+        self._job_recv = None
+        self._result_recv = None
+        self._result_send = None
+
         job_recv, job_send = Pipe(duplex=False)
         self._job_send = job_send
         self._job_recv = job_recv
