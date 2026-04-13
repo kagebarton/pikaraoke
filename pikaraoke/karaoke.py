@@ -2,7 +2,6 @@
 
 import logging
 import os
-import socket
 import subprocess
 import threading
 import time
@@ -17,7 +16,6 @@ from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.ffmpeg import (
     get_ffmpeg_version,
     is_transpose_enabled,
-    supports_hardware_h264_encoding,
 )
 from pikaraoke.lib.get_platform import (
     get_data_directory,
@@ -26,6 +24,7 @@ from pikaraoke.lib.get_platform import (
     get_temp_directory,
     is_raspberry_pi,
 )
+from pikaraoke.lib.mpv_controller import MpvController
 from pikaraoke.lib.karaoke_database import KaraokeDatabase
 from pikaraoke.lib.library_scanner import LibraryScanner, ScanResult
 from pikaraoke.lib.network import get_ip
@@ -89,21 +88,15 @@ class Karaoke:
         additional_ytdl_args: str | None = None,
         config_file_path: str = "config.ini",
         download_path: str = "/usr/lib/pikaraoke/songs",
-        hide_splash_screen: bool | None = None,
         log_level: int = logging.DEBUG,
         logo_path: str | None = None,
         port: int = 5555,
-        prefer_hostname: bool | None = None,
         preferred_language: str | None = None,
         socketio=None,
-        streaming_format: str = "hls",
         url: str | None = None,
         youtubedl_proxy: str | None = None,
         # Preference parameters (defaults from PreferenceManager.DEFAULTS)
-        avsync: float | None = None,
         browse_results_per_page: int | None = None,
-        buffer_size: int | None = None,
-        complete_transcode_before_play: bool | None = None,
         hide_notifications: bool | None = None,
         hide_overlay: bool | None = None,
         hide_url: bool | None = None,
@@ -124,24 +117,18 @@ class Karaoke:
             download_path: Directory path for downloaded songs.
             hide_url: Hide URL and QR code on splash screen.
             hide_notifications: Disable notification popups.
-            hide_splash_screen: Run in headless mode.
             high_quality: Download higher quality videos (up to 1080p).
             volume: Default volume level (0.0 to 1.0).
             normalize_audio: Apply loudness normalization.
-            complete_transcode_before_play: Buffer entire file before playback.
-            buffer_size: Transcode buffer size in KB.
             log_level: Logging level (e.g., logging.DEBUG).
             splash_delay: Seconds to wait between songs.
             youtubedl_proxy: Proxy URL for yt-dlp.
             logo_path: Custom logo image path.
             hide_overlay: Hide video overlay.
             url: Override auto-detected URL.
-            prefer_hostname: Use hostname instead of IP in URL.
             limit_user_songs_by: Max songs per user in queue (0 = unlimited).
-            avsync: Audio/video sync adjustment in seconds.
             subtitle_delay: Subtitle timing delay in seconds (negative = earlier).
             config_file_path: Path to config.ini file.
-            streaming_format: Video streaming format ('hls' or 'mp4').
             browse_results_per_page: Number of search results per page.
             additional_ytdl_args: Additional yt-dlp command arguments.
             socketio: SocketIO instance for real-time event emission.
@@ -162,7 +149,6 @@ class Karaoke:
         self.os_version = get_os_version()
         self.ffmpeg_version = get_ffmpeg_version()
         self.is_transpose_enabled = is_transpose_enabled()
-        self.supports_hardware_h264_encoding = supports_hardware_h264_encoding()
         self.youtubedl_version = get_youtubedl_version()
         self.is_raspberry_pi = is_raspberry_pi()
 
@@ -170,14 +156,11 @@ class Karaoke:
 
         # Set non-preference attributes (not stored in config)
         self.port = port
-        self.hide_splash_screen = hide_splash_screen
         self.download_path = download_path
         self.log_level = log_level
         self.youtubedl_proxy = youtubedl_proxy
         self.additional_ytdl_args = additional_ytdl_args
         self.logo_path = self.default_logo_path if logo_path is None else logo_path
-        self.prefer_hostname = prefer_hostname
-        self.streaming_format = streaming_format
         self.socketio = socketio
         self.url_override = url
         self.url = self.get_url()
@@ -205,12 +188,21 @@ class Karaoke:
             self.preferences.set("preferred_language", preferred_language)
             logging.info(f"Setting preferred language to: {preferred_language}")
 
-        # Initialize playback controller for video playback and FFmpeg coordination
+        # Initialize MPV controller
+        self.mpv_controller = MpvController()
+        self.mpv_controller._server_url = self.url
+        try:
+            self.mpv_controller.start()
+        except RuntimeError as e:
+            logging.error(f"MPV failed to start: {e}")
+            logging.error("Install MPV (apt install mpv / brew install mpv) and restart.")
+
+        # Initialize playback controller for video playback
         self.playback_controller = PlaybackController(
             preferences=self.preferences,
             events=self.events,
             filename_from_path=SongManager.filename_from_path,
-            streaming_format=self.streaming_format,
+            mpv=self.mpv_controller,
         )
 
         # Event bridging: the coordinator wires manager events to the UI (SocketIO/notifications).
@@ -269,6 +261,15 @@ class Karaoke:
             song_manager=self.song_manager,
             events=self.events,
         )
+
+        # Wire overlay callbacks so the MPV poll thread can send OSD overlays
+        if self.mpv_controller.is_running:
+            self.mpv_controller.set_overlay_callbacks(
+                get_now_playing=lambda: self.playback_controller.now_playing,
+                get_up_next=lambda: self.queue_manager.queue[0]["title"] if self.queue_manager.queue else None,
+                get_semitones=lambda: self.playback_controller.now_playing_transpose,
+                is_playing=lambda: self.playback_controller.is_playing,
+            )
 
         # Song library startup: warm cache from DB or blocking cold scan
         paths = self.db.get_all_song_paths()
@@ -373,10 +374,7 @@ class Karaoke:
             logging.debug("Overriding URL with " + self.url_override)
             url = self.url_override
         else:
-            if self.prefer_hostname:
-                url = f"http://{socket.getfqdn().lower()}:{self.port}"
-            else:
-                url = f"http://{self.ip}:{self.port}"
+            url = f"http://{self.ip}:{self.port}"
         return url
 
     def log_settings_to_debug(self) -> None:
@@ -443,26 +441,22 @@ class Karaoke:
             self.send_notification(message, "primary")
 
     def transpose_current(self, semitones: int) -> None:
-        """Restart the current song with a new transpose value.
+        """Live pitch change on current song (no restart, no re-enqueue).
 
         Args:
             semitones: Number of semitones to transpose.
         """
-        filename = self.playback_controller.now_playing_filename
-        user = self.playback_controller.now_playing_user
-        now_playing = self.playback_controller.now_playing
-
-        if filename is None or user is None:
+        if not self.playback_controller.is_playing:
             logging.warning("Cannot transpose: no song currently playing")
             return
-        # MSG: Message shown after the song is transposed, first is the semitones and then the song name
-        self.log_and_send(_("Transposing by %s semitones: %s") % (semitones, now_playing))
-        # Insert the same song at the top of the queue with transposition
-        self.queue_manager.enqueue(filename, user, semitones, True)
-        self.playback_controller.skip(log_action=False)
+        self.log_and_send(
+            _("Transposing by %s semitones: %s") % (semitones, self.playback_controller.now_playing)
+        )
+        self.playback_controller.set_pitch(semitones)
+        self.update_now_playing_socket()
 
     def volume_change(self, vol_level: float) -> bool:
-        """Set the volume level.
+        """Set system volume level.
 
         Args:
             vol_level: Volume level (0.0 to 1.0).
@@ -471,8 +465,9 @@ class Karaoke:
             True after setting volume.
         """
         self.volume = vol_level
-        # MSG: Message shown after the volume is changed, will be followed by the volume level
-        self.log_and_send(_("Volume: %s") % (int(self.volume * 100)))
+        pct = max(0, min(100, int(vol_level * 100)))
+        self.mpv_controller.set_system_volume(pct)
+        self.log_and_send(_("Volume: %s") % pct)
         self.update_now_playing_socket()
         return True
 
@@ -489,26 +484,22 @@ class Karaoke:
         logging.debug(f"Decreasing volume by 10%: {self.volume}")
 
     def set_subtitle_delay(self, delay: float) -> None:
-        """Set subtitle delay for current song only (temporary override).
+        """Set subtitle delay -- applies live to MPV.
 
         Args:
             delay: Subtitle delay in seconds (negative = earlier, positive = later).
         """
         self.subtitle_delay = delay
-        # MSG: Message shown after subtitle delay is changed
-        self.log_and_send(_("Subtitle delay: %s seconds") % (delay))
+        self.playback_controller.set_subtitle_delay(delay)
+        self.log_and_send(_("Subtitle delay: %s seconds") % delay)
         self.update_now_playing_socket()
 
     def restart(self) -> bool:
-        """Restart the current song from the beginning.
-
-        Returns:
-            True if successful, False if nothing playing.
-        """
+        """Restart current song from beginning."""
         if self.playback_controller.is_playing:
             now_playing = self.playback_controller.now_playing
             logging.info("Restarting: " + (now_playing or "unknown song"))
-            self.playback_controller.is_paused = False
+            self.playback_controller.restart()
             self.update_now_playing_socket()
             return True
         else:
@@ -516,9 +507,10 @@ class Karaoke:
             return False
 
     def stop(self) -> None:
-        """Stop the karaoke run loop."""
+        """Stop the karaoke run loop and shut down MPV."""
         self.running = False
         self.processing_manager.stop()
+        self.mpv_controller.quit()
 
     def handle_run_loop(self) -> None:
         """Handle one iteration of the main run loop with a sleep interval."""
@@ -566,17 +558,27 @@ class Karaoke:
 
         This method blocks until stop() is called or KeyboardInterrupt.
         """
+        if not self.mpv_controller.is_running:
+            logging.error("Cannot start run loop: MPV is not running")
+            return
+
         logging.debug("Starting PiKaraoke run loop")
-        logging.info(f"Connect the player host to: {self.url}/splash")
+        logging.info(f"PiKaraoke started at: {self.url}")
         self.running = True
         while self.running:
             try:
+                # Song-end detection (reads mpv.is_idle)
+                self.playback_controller.check_playback_ended()
+
                 # Clean up if playback ended but state wasn't reset
                 if (
                     not self.playback_controller.is_playing
                     and self.playback_controller.now_playing is not None
                 ):
                     self.reset_now_playing()
+
+                # Broadcast position to remote UI clients
+                self.playback_controller.broadcast_position(self.socketio)
 
                 # Start next song from queue if not currently playing
                 if len(self.queue_manager.queue) > 0 and not self.playback_controller.is_playing:
@@ -599,7 +601,6 @@ class Karaoke:
                     if not result.success and result.error:
                         self.log_and_send(result.error, "danger")
 
-                self.playback_controller.log_output()
                 self.handle_run_loop()
             except KeyboardInterrupt:
                 logging.warning("Keyboard interrupt: Exiting pikaraoke...")

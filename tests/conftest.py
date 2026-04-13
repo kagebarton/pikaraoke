@@ -18,8 +18,6 @@ class MockPlaybackController:
     now_playing_user: str | None = None
     now_playing_transpose: int = 0
     now_playing_duration: int | None = None
-    now_playing_url: str | None = None
-    now_playing_subtitle_url: str | None = None
     now_playing_position: float | None = None
     is_paused: bool = True
     is_playing: bool = False
@@ -40,13 +38,11 @@ class MockPlaybackController:
         self.now_playing = None
         self.now_playing_filename = None
         self.now_playing_user = None
-        self.now_playing_url = None
-        self.now_playing_subtitle_url = None
-        self.is_paused = True
-        self.is_playing = False
         self.now_playing_transpose = 0
         self.now_playing_duration = None
         self.now_playing_position = None
+        self.is_paused = True
+        self.is_playing = False
 
     def get_now_playing(self) -> dict:
         return {
@@ -54,11 +50,32 @@ class MockPlaybackController:
             "now_playing_user": self.now_playing_user,
             "now_playing_duration": self.now_playing_duration,
             "now_playing_transpose": self.now_playing_transpose,
-            "now_playing_url": self.now_playing_url,
-            "now_playing_subtitle_url": self.now_playing_subtitle_url,
             "now_playing_position": self.now_playing_position,
             "is_paused": self.is_paused,
         }
+
+    def restart(self) -> bool:
+        """Mock restart."""
+        if self.is_playing:
+            self.is_paused = False
+            return True
+        return False
+
+    def set_pitch(self, semitones: int) -> None:
+        """Mock set_pitch."""
+        self.now_playing_transpose = semitones
+
+    def set_subtitle_delay(self, seconds: float) -> None:
+        """Mock set_subtitle_delay."""
+        pass
+
+    def check_playback_ended(self) -> None:
+        """Mock check_playback_ended."""
+        pass
+
+    def broadcast_position(self, socketio) -> None:
+        """Mock broadcast_position."""
+        pass
 
 
 class MockSongManager:
@@ -86,6 +103,10 @@ class MockKaraoke:
             config_file_path=str(tmp_path / "config.ini"), target=self
         )
         self.playback_controller = MockPlaybackController()
+        self.mpv_controller = MagicMock()
+        self.mpv_controller.set_system_volume = MagicMock()
+        self.mpv_controller.quit = MagicMock()
+        self.mpv_controller.is_running = True
         self.volume = 0.85
         self.running = True
         self.now_playing_notification = None

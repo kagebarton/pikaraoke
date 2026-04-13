@@ -53,9 +53,7 @@ def parse_volume(volume: str | float | None, volume_type: str) -> float | None:
 platform = get_platform()
 default_port = 5555
 default_log_level = logging.INFO
-default_prefer_hostname = False
 default_config_file_path = "config.ini"
-default_streaming_format = "hls"
 default_dl_dir = get_default_dl_dir(platform)
 
 # Alias for cleaner help text formatting
@@ -106,23 +104,9 @@ def parse_pikaraoke_args() -> argparse.Namespace:
         required=False,
     )
     parser.add_argument(
-        "--prefer-hostname",
-        action="store_true",
-        help=f"Use the local hostname instead of the IP as the connection URL. Use at your discretion: mDNS is not guaranteed to work on all LAN configurations. (default: {default_prefer_hostname})",
-        default=default_prefer_hostname,
-        required=False,
-    )
-    parser.add_argument(
-        "--hide-splash-screen",
-        "--headless",
-        action="store_true",
-        help="Headless mode. Don't launch the splash screen/player on the pikaraoke server",
-        required=False,
-    )
-    parser.add_argument(
         "--logo-path",
         nargs="+",
-        help="Path to a custom logo image file for the splash screen. Recommended dimensions ~ 2048x1024px",
+        help="Path to a custom logo image file for the MPV window. Recommended dimensions ~ 2048x1024px",
         default=None,
         required=False,
     )
@@ -131,18 +115,6 @@ def parse_pikaraoke_args() -> argparse.Namespace:
         "--url",
         help="Override the displayed IP address with a supplied URL. This argument should include port, if necessary",
         default=None,
-        required=False,
-    )
-    parser.add_argument(
-        "--window-size",
-        help="Desired window geometry in pixels for headed mode, specified as width,height (Example: --window-size 800,600). Only works on Chromium browsers. Disables kiosk fullscreen mode. This can be used to open a windowed mode splash screen and move it to an external monitor where it can be fullscreened from the menu or a keyboard shortcut (F11 key, or control+cmd+f on Mac).",
-        default=0,
-        required=False,
-    )
-    parser.add_argument(
-        "--external-monitor",
-        action="store_true",
-        help="Experimental: Launch the splash screen on an external monitor by positioning window at x=2000. Useful for dual-monitor setups. Only works on Chromium browsers and possibly only windows.",
         required=False,
     )
     parser.add_argument(
@@ -167,13 +139,6 @@ def parse_pikaraoke_args() -> argparse.Namespace:
         "--enable-swagger",
         action="store_true",
         help="Enable Swagger API documentation at /apidocs.",
-        required=False,
-    )
-    parser.add_argument(
-        "--streaming-format",
-        help=f"Video streaming format: 'hls' (HLS with fMP4 segments) or 'mp4' (pushes mp4 directly to the browser - legacy format that might work better on some configurations). (default: {default_streaming_format})",
-        choices=["hls", "mp4"],
-        default=default_streaming_format,
         required=False,
     )
 
@@ -232,29 +197,8 @@ def parse_pikaraoke_args() -> argparse.Namespace:
         required=False,
     )
     parser.add_argument(
-        "-c",
-        "--complete-transcode-before-play",
-        action="store_true",
-        help="Wait for ffmpeg video transcoding to fully complete before playback begins. Transcoding occurs when you have normalization on or change key. May improve performance and browser compatibility (Safari, Firefox), but will significantly increase the delay before playback begins. On modern hardware, the delay is likely negligible.",
-        required=False,
-    )
-    parser.add_argument(
-        "-b",
-        "--buffer-size",
-        help=f"Buffer size for transcoded video (in kilobytes). Increase if you experience songs cutting off early. Higher size will transcode more of the file before streaming it to the client. This will increase the delay before playback begins. This value is ignored if --complete-transcode-before-play was specified. (default: {_DEFAULTS['buffer_size']})",
-        default=None,
-        type=int,
-        required=False,
-    )
-    parser.add_argument(
         "--limit-user-songs-by",
         help=f"Limit the number of songs a user can add to queue. User name 'Pikaraoke' is always unlimited (default: {_DEFAULTS['limit_user_songs_by']} = unlimited)",
-        default=None,
-        required=False,
-    )
-    parser.add_argument(
-        "--avsync",
-        help=f"Use avsync (in seconds) if the audio and video streams are out of sync. (negative = advances audio | positive = delays audio) (default: {_DEFAULTS['avsync']})",
         default=None,
         required=False,
     )

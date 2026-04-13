@@ -37,7 +37,6 @@ def pause():
 def transpose(semitones):
     """Transpose (pitch shift) the current song."""
     k = get_karaoke_instance()
-    broadcast_event("skip", "transpose current")
     k.transpose_current(int(semitones))
     return redirect(url_for("home.home"))
 

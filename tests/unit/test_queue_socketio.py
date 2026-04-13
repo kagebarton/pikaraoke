@@ -140,8 +140,6 @@ class TestSocketIOEventFormats:
         pc.now_playing_transpose = 0
         pc.now_playing_duration = 240
         pc.now_playing_position = 30
-        pc.now_playing_url = "https://youtube.com/watch?v=dQw4w9WgXcQ"
-        pc.now_playing_subtitle_url = None
         pc.is_paused = False
         k.queue_manager.enqueue("/songs/Next Song---xYz1234AbCd.mp4", "NextUser")
         k.socketio.emit.reset_mock()
@@ -156,8 +154,6 @@ class TestSocketIOEventFormats:
             "now_playing_transpose",
             "now_playing_duration",
             "now_playing_position",
-            "now_playing_url",
-            "now_playing_subtitle_url",
             "is_paused",
             "volume",
             "up_next",

@@ -17,10 +17,8 @@ from flask_socketio import SocketIO
 from pikaraoke import VERSION, karaoke
 from pikaraoke.constants import LANGUAGES
 from pikaraoke.lib.args import parse_pikaraoke_args
-from pikaraoke.lib.browser import Browser
 from pikaraoke.lib.current_app import get_karaoke_instance
 from pikaraoke.lib.ffmpeg import is_ffmpeg_installed
-from pikaraoke.lib.file_resolver import delete_tmp_dir
 from pikaraoke.lib.get_platform import (
     get_data_directory,
     get_platform,
@@ -43,8 +41,6 @@ from pikaraoke.routes.processing import processing_bp
 from pikaraoke.routes.queue import queue_bp
 from pikaraoke.routes.search import search_bp
 from pikaraoke.routes.socket_events import setup_socket_events
-from pikaraoke.routes.splash import splash_bp
-from pikaraoke.routes.stream import stream_bp
 
 _ = flask_babel.gettext
 
@@ -86,7 +82,6 @@ _api_blueprints = [
     controller_bp,
     images_bp,
     nowplaying_bp,
-    stream_bp,
     metadata_bp,
 ]
 
@@ -94,7 +89,6 @@ _api_blueprints = [
 _internal_blueprints = [
     home_bp,
     info_bp,
-    splash_bp,
     batch_song_renamer_bp,
     processing_bp,
 ]
@@ -177,21 +171,15 @@ def main() -> None:
         log_level=args.log_level,
         volume=args.volume,
         normalize_audio=args.normalize_audio,
-        complete_transcode_before_play=args.complete_transcode_before_play,
-        buffer_size=args.buffer_size,
         hide_url=args.hide_url,
         hide_notifications=args.hide_notifications,
-        hide_splash_screen=args.hide_splash_screen,
         high_quality=args.high_quality,
         logo_path=args.logo_path,
         hide_overlay=args.hide_overlay,
         show_splash_clock=args.show_splash_clock,
         url=args.url,
-        prefer_hostname=args.prefer_hostname,
         limit_user_songs_by=args.limit_user_songs_by,
-        avsync=float(args.avsync) if args.avsync is not None else None,
         config_file_path=args.config_file_path,
-        streaming_format=args.streaming_format,
         additional_ytdl_args=getattr(args, "ytdl_args", None),
         socketio=socketio,
         preferred_language=args.preferred_language,
@@ -227,35 +215,20 @@ def main() -> None:
     server = WSGIServer(("0.0.0.0", int(args.port)), app, log=None, error_log=logging.getLogger())
     server.start()
 
-    # Handle sigterm, apparently cherrypy won't shut down without explicit handling
-    # signal.signal(signal.SIGTERM, lambda signum, stack_frame: k.stop())
-
-    # force headless mode when on Android
-    if (platform == "android") and not args.hide_splash_screen:
-        args.hide_splash_screen = True
-        logging.info("Forced to run headless mode in Android")
-
-    # Start the splash screen browser
-    if not args.hide_splash_screen:
-        browser = Browser(k, args.window_size, args.external_monitor)
-        browser.launch_splash_screen()
-        if not browser:
-            logging.error("Failed to launch splash screen browser")
-            sys.exit()
-    else:
-        browser = None
-
     if args.enable_swagger:
         logging.info(f"Swagger API docs enabled at {k.url}/apidocs")
 
-    # Start the karaoke process
+    # Start the karaoke run loop
     k.run()
 
-    # Close running browser when done
-    if browser is not None:
-        browser.close()
+    # Shut down MPV
+    k.stop()
 
-    delete_tmp_dir(k.temp_dir)
+    # Clean up temp directory
+    import shutil
+
+    if k.temp_dir and os.path.exists(k.temp_dir):
+        shutil.rmtree(k.temp_dir, ignore_errors=True)
     sys.exit()
 
 

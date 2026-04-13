@@ -265,12 +265,9 @@ def test_preference_manager_defaults_exist():
         "splash_delay",
         "volume",
         "normalize_audio",
-        "complete_transcode_before_play",
-        "buffer_size",
         "hide_overlay",
         "limit_user_songs_by",
         "enable_fair_queue",
-        "avsync",
         "browse_results_per_page",
         "show_splash_clock",
         "subtitle_delay",
@@ -290,16 +287,13 @@ def test_preference_manager_defaults_types():
     assert isinstance(defaults["hide_notifications"], bool)
     assert isinstance(defaults["high_quality"], bool)
     assert isinstance(defaults["normalize_audio"], bool)
-    assert isinstance(defaults["complete_transcode_before_play"], bool)
     assert isinstance(defaults["hide_overlay"], bool)
     assert isinstance(defaults["enable_fair_queue"], bool)
 
     # Integer preferences
     assert isinstance(defaults["splash_delay"], int)
-    assert isinstance(defaults["buffer_size"], int)
     assert isinstance(defaults["limit_user_songs_by"], int)
     assert isinstance(defaults["browse_results_per_page"], int)
-    assert isinstance(defaults["avsync"], (int, float))
     assert isinstance(defaults["subtitle_delay"], (int, float))
 
     # Float preferences
