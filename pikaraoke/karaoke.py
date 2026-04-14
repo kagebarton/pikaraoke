@@ -73,7 +73,7 @@ class Karaoke:
     default_logo_path: str = os.path.join(base_path, "static", "images", "logo.png")
 
     normalize_audio: bool
-    show_splash_clock: bool
+    show_clock: bool
 
     # Download manager for serialized downloads
     download_manager: DownloadManager
@@ -98,12 +98,12 @@ class Karaoke:
         # Preference parameters (defaults from PreferenceManager.DEFAULTS)
         browse_results_per_page: int | None = None,
         hide_notifications: bool | None = None,
-        hide_overlay: bool | None = None,
+        hide_now_playing_overlay: bool | None = None,
         hide_url: bool | None = None,
         high_quality: bool | None = None,
         limit_user_songs_by: int | None = None,
         normalize_audio: bool | None = None,
-        show_splash_clock: bool | None = None,
+        show_clock: bool | None = None,
         splash_delay: int | None = None,
         blocked_processing_words: str | None = None,
         subtitle_delay: float | None = None,
@@ -124,7 +124,7 @@ class Karaoke:
             splash_delay: Seconds to wait between songs.
             youtubedl_proxy: Proxy URL for yt-dlp.
             logo_path: Custom logo image path.
-            hide_overlay: Hide video overlay.
+            hide_now_playing_overlay: Hide now playing and up next overlays.
             url: Override auto-detected URL.
             limit_user_songs_by: Max songs per user in queue (0 = unlimited).
             subtitle_delay: Subtitle timing delay in seconds (negative = earlier).
@@ -191,6 +191,7 @@ class Karaoke:
         # Initialize MPV controller
         self.mpv_controller = MpvController()
         self.mpv_controller._server_url = self.url
+        self.mpv_controller._preferences = self.preferences
         try:
             self.mpv_controller.start()
         except RuntimeError as e:

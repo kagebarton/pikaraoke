@@ -248,8 +248,8 @@
 					</div>
 
 					<div class="user-preference-container">
-						<input id="pref-splash-clock" type="checkbox" class="user-preference-checkbox checkbox" data-pref="show_splash_clock" {% if show_splash_clock == True %}checked{% endif %}>
-						<label class="label" for="pref-splash-clock">{# MSG: Checkbox label which enable/disables the digital clock on the splash screen #} {% trans %}Show splash clock{% endtrans %}
+						<input id="pref-show-clock" type="checkbox" class="user-preference-checkbox checkbox" data-pref="show_clock" {% if show_clock == True %}checked{% endif %}>
+						<label class="label" for="pref-show-clock">{# MSG: Checkbox label which enable/disables the digital clock overlay #} {% trans %}Show clock{% endtrans %}
 						</label>
 					</div>
 					<div class="user-preference-container">
@@ -259,8 +259,8 @@
 					</div>
 
 					<div class="user-preference-container">
-						<input id="pref-overlay" type="checkbox" class="user-preference-checkbox checkbox" data-pref="hide_overlay" {% if hide_overlay == True %}checked{% endif %}>
-						<label class="label" for="pref-overlay">{# MSG: Checkbox label which enable/disables showing overlay data on the splash screen #} {% trans %}Hide all overlays, including now playing, up next, and QR code{% endtrans %}
+						<input id="pref-overlay" type="checkbox" class="user-preference-checkbox checkbox" data-pref="hide_now_playing_overlay" {% if hide_now_playing_overlay == True %}checked{% endif %}>
+						<label class="label" for="pref-overlay">{# MSG: Checkbox label which enable/disables the now playing and up next overlays #} {% trans %}Hide now playing and up next overlays{% endtrans %}
 						</label>
 					</div>
 

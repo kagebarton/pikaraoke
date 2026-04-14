@@ -173,9 +173,9 @@ def parse_pikaraoke_args() -> argparse.Namespace:
         required=False,
     )
     parser.add_argument(
-        "--hide-overlay",
+        "--hide-now-playing-overlay",
         action="store_true",
-        help="Hide all overlays that show on top of video, including current/next song, pikaraoke QR code and IP",
+        help="Hide the now playing and up next overlays.",
         required=False,
     )
     parser.add_argument(
@@ -185,9 +185,9 @@ def parse_pikaraoke_args() -> argparse.Namespace:
         required=False,
     )
     parser.add_argument(
-        "--show-splash-clock",
+        "--show-clock",
         action="store_true",
-        help="Show the digital clock on the splash screen.",
+        help="Show the digital clock overlay.",
         required=False,
     )
     parser.add_argument(

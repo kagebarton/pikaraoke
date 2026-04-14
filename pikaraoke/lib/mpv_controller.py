@@ -97,6 +97,9 @@ class MpvController:
         self._get_semitones: Callable[[], int] = lambda: 0
         self._is_playing: Callable[[], bool] = lambda: False
 
+        # Preferences -- set by Karaoke before calling start()
+        self._preferences = None  # PreferenceManager, set by Karaoke.__init__
+
         # Paths -- set by Karaoke before calling start()
         self._placeholder_path = os.path.join(
             os.path.dirname(os.path.dirname(__file__)), "static", "images", "placeholder.png"
@@ -443,6 +446,12 @@ class MpvController:
         last_osd_w = None
         last_osd_h = None
         while not self._poll_stop.is_set():
+            # Read overlay preferences each cycle so live changes take effect
+            prefs = self._preferences
+            hide_url = prefs.get_or_default("hide_url") if prefs else False
+            hide_now_playing = prefs.get_or_default("hide_now_playing_overlay") if prefs else False
+            show_clock = prefs.get_or_default("show_clock") if prefs else False
+
             # Query state
             pos = self.query_property("time-pos")
             if pos is not None:
@@ -469,33 +478,44 @@ class MpvController:
                     last_osd_w = cur_w
                     last_osd_h = cur_h
                     # Re-send all overlays on resize
-                    self.send_qr_overlay()
-                    title = self._get_now_playing()
-                    self.send_nowplaying_overlay(title)
-                    if self._is_playing():
-                        self.send_timecode_overlay(
-                            self.position, self.duration, self._get_semitones()
-                        )
-                    up_next = self._get_up_next()
-                    self.send_upnext_overlay(up_next)
-                    self.send_clock_overlay()
+                    if not hide_url:
+                        self.send_qr_overlay()
+                    if not hide_now_playing:
+                        title = self._get_now_playing()
+                        self.send_nowplaying_overlay(title)
+                        if self._is_playing():
+                            self.send_timecode_overlay(
+                                self.position, self.duration, self._get_semitones()
+                            )
+                        up_next = self._get_up_next()
+                        self.send_upnext_overlay(up_next)
+                    if show_clock:
+                        self.send_clock_overlay()
 
-            # Update overlays every cycle (same as prototype)
-            self.send_url_overlay()
-            title = self._get_now_playing()
-            self.send_nowplaying_overlay(title)
+            # Update overlays every cycle
+            if not hide_url:
+                self.send_url_overlay()
 
-            # Timecode only during playback
-            if self._is_playing():
-                self.send_timecode_overlay(
-                    self.position, self.duration, self._get_semitones()
-                )
+            if not hide_now_playing:
+                title = self._get_now_playing()
+                self.send_nowplaying_overlay(title)
+                if self._is_playing():
+                    self.send_timecode_overlay(
+                        self.position, self.duration, self._get_semitones()
+                    )
+                else:
+                    self.clear_osd(OSD_TIMECODE)
+                up_next = self._get_up_next()
+                self.send_upnext_overlay(up_next)
             else:
+                self.clear_osd(OSD_NOWPLAYING)
                 self.clear_osd(OSD_TIMECODE)
+                self.clear_osd(OSD_UPNEXT)
 
-            up_next = self._get_up_next()
-            self.send_upnext_overlay(up_next)
-            self.send_clock_overlay()
+            if show_clock:
+                self.send_clock_overlay()
+            else:
+                self.clear_osd(OSD_CLOCK)
 
             self._poll_stop.wait(0.5)
 
