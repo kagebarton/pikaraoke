@@ -293,6 +293,9 @@ class MpvController:
             if subtitle_path.endswith(".srt") and subtitle_delay != 0:
                 self.set_property("sub-delay", subtitle_delay)
 
+        # Re-send QR overlay after loading new file (loadfile clears bitmap overlays)
+        self.send_qr_overlay()
+
         # Reset state
         self.position = 0.0
         self.is_idle = False
