@@ -388,9 +388,7 @@ class DownloadManager:
         """Cancel a download that is still in the pending queue."""
         self._cancelled_urls.add(video_url)
         # Remove from shadow queue
-        self.pending_downloads = [
-            d for d in self.pending_downloads if d["video_url"] != video_url
-        ]
+        self.pending_downloads = [d for d in self.pending_downloads if d["video_url"] != video_url]
         # Also drain from the Queue (there's no public remove, so we rebuild)
         new_queue: Queue = Queue()
         skipped = False

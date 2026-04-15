@@ -9,6 +9,7 @@ Remove six features entirely from PiKaraoke: score screen, screen saver, backgro
 ### 1. Score Screen
 
 **Delete files:**
+
 - `pikaraoke/static/score.js`
 - `pikaraoke/static/score.css`
 - `pikaraoke/static/fireworks.js`
@@ -18,6 +19,7 @@ Remove six features entirely from PiKaraoke: score screen, screen saver, backgro
 - `pikaraoke/static/sounds/score-drums.mp3`
 
 **Modify:**
+
 - `pikaraoke/routes/splash.py` — Remove `_default_score_phrases()`, `_parse_stored_phrases()`, `_get_active_score_phrases()`, `/splash/score_phrases` route, `disable_score` template var
 - `pikaraoke/routes/preferences.py` — Remove `_SCORE_PHRASE_KEYS` and `score_phrases_update` broadcast logic
 - `pikaraoke/routes/info.py` — Remove `disable_score` and `score_phrases` template vars
@@ -30,19 +32,22 @@ Remove six features entirely from PiKaraoke: score screen, screen saver, backgro
 - `pikaraoke/static/js/splash.js` — Remove `isScoreShown`, `scoreReviews`, score logic in `endSong()`, socket listeners
 
 **Tests:**
+
 - `tests/unit/test_splash_routes.py` — Remove `TestDefaultScorePhrases`, `TestGetActiveScorePhrases`, `TestScorePhrasesEndpoint`
 - `tests/unit/test_preference_routes.py` — Remove score broadcast tests
 - `tests/unit/test_preference_manager.py` — Remove score phrase and `disable_score` assertions
 
----
+______________________________________________________________________
 
 ### 2. Screen Saver
 
 **Delete files:**
+
 - `pikaraoke/static/screensaver.js`
 - `pikaraoke/static/screensaver.css`
 
 **Modify:**
+
 - `pikaraoke/lib/preference_manager.py` — Remove `screensaver_timeout` default
 - `pikaraoke/lib/args.py` — Remove `--screensaver-timeout` / `-t` argument
 - `pikaraoke/karaoke.py` — Remove `screensaver_timeout` parameter/property
@@ -52,13 +57,15 @@ Remove six features entirely from PiKaraoke: score screen, screen saver, backgro
 - `pikaraoke/static/js/splash.js` — Remove `screensaverTimeoutSeconds`, `setupScreensaver()`, idle timer, preference effect, ready call
 
 **Tests:**
+
 - `tests/unit/test_preference_manager.py` — Remove `screensaver_timeout` assertions
 
----
+______________________________________________________________________
 
 ### 3. Background Music + Background Video + Dolphy Mode
 
 **Delete files:**
+
 - `pikaraoke/routes/background_music.py`
 - `pikaraoke/static/music/midnight-dorufin.mp3` (and `music/` dir)
 - `pikaraoke/static/video/night_sea.mp4`
@@ -66,6 +73,7 @@ Remove six features entirely from PiKaraoke: score screen, screen saver, backgro
 - `pikaraoke/static/images/dolphly.png`
 
 **Modify:**
+
 - `pikaraoke/lib/preference_manager.py` — Remove `disable_bg_music`, `bg_music_volume`, `disable_bg_video`
 - `pikaraoke/lib/args.py` — Remove `--bg-music-path`, `--disable-bg-music`, `--bg-music-volume`, `--bg-video-path`, `--disable-bg-video`, `--dolphly` arguments and related path/volume parsing
 - `pikaraoke/karaoke.py` — Remove all bg_music and bg_video parameters/properties
@@ -78,14 +86,16 @@ Remove six features entirely from PiKaraoke: score screen, screen saver, backgro
 - `pikaraoke/static/js/splash.js` — Remove all bg music/video functions and preference effects
 
 **Tests:**
+
 - `tests/unit/test_preference_manager.py` — Remove bg assertions
 - `tests/unit/test_preference_routes.py` — Remove bg_video broadcast test
 
----
+______________________________________________________________________
 
 ### 4. MP3+CDG Support
 
 **Modify:**
+
 - `pikaraoke/lib/file_resolver.py` — Remove `is_cdg_file()`, `handle_zipped_cdg()`, `handle_mp3_cdg()`, `cdg_file_path`
 - `pikaraoke/lib/ffmpeg.py` — Remove CDG codec/bitrate/input handling
 - `pikaraoke/lib/stream_manager.py` — Remove `cdg_pixel_scaling` passthrough
@@ -99,18 +109,19 @@ Remove six features entirely from PiKaraoke: score screen, screen saver, backgro
 - `pikaraoke/templates/info.html` — Remove CDG pixel scaling checkbox
 
 **Tests:**
+
 - `tests/unit/test_file_resolver.py` — Remove `TestIsCdgFile`, `TestFileResolverHandleMp3Cdg`, `TestFileResolverHandleZippedCdg`
 - `tests/unit/test_song_manager.py` — Remove CDG companion file tests
 - `tests/unit/test_library_scanner.py` — Remove CDG format detection tests
 - `tests/unit/test_preference_manager.py` — Remove `cdg_pixel_scaling` assertions
 
----
+______________________________________________________________________
 
 ### 5. Translation Cleanup
 
 Remove stale strings from all `.po` and `.pot` files for screensaver and score features.
 
----
+______________________________________________________________________
 
 ## Commit Order
 

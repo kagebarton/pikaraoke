@@ -274,7 +274,5 @@ def _separate_in_worker(
             instrumental_wav = full_path
 
     if not vocals_wav or not instrumental_wav:
-        raise RuntimeError(
-            f"Could not identify vocal/instrumental stems in output: {output_paths}"
-        )
+        raise RuntimeError(f"Could not identify vocal/instrumental stems in output: {output_paths}")
     return vocals_wav, instrumental_wav

@@ -41,7 +41,9 @@ class PipelineItem:
         self.url: str = url
         self.user: str = user
         self.download_status: str = "pending"  # pending | active | complete | error
-        self.processing_status: str = "waiting"  # waiting | pending | active | complete | error | cancelling
+        self.processing_status: str = (
+            "waiting"  # waiting | pending | active | complete | error | cancelling
+        )
         self.download_progress: float = 0.0
         self.error_message: str | None = None
         self.cancelling: bool = False

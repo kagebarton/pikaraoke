@@ -9,7 +9,7 @@ engine. Migrate only existing PiKaraoke features -- no new prototype-only featur
 (dual-stem vocal slider, file browser, subtitle mode selector). The web UI becomes
 remote-only; the playback screen is a native MPV window.
 
----
+______________________________________________________________________
 
 ## Design Decisions
 
@@ -29,7 +29,7 @@ migration unless a blocking issue is discovered.
 | Song-end detection | 500ms polling of `idle-active` | Acceptable latency; event-based `observe_property` can be added later |
 | `splash_delay` | Keep configurable delay between songs | Pause on placeholder image between songs, same as current behavior |
 
----
+______________________________________________________________________
 
 ## Architecture
 
@@ -49,6 +49,7 @@ QueueManager --> PlaybackController --> MpvController --> MPV subprocess
 ```
 
 **`MpvController`** -- thin layer, no business logic:
+
 - Manages MPV subprocess lifecycle (start, quit)
 - Sends IPC commands (loadfile, seek, cycle pause, set_property, etc.)
 - Queries IPC properties (time-pos, duration, pause, idle-active, osd-width/height)
@@ -58,13 +59,14 @@ QueueManager --> PlaybackController --> MpvController --> MPV subprocess
 - System volume via audio server abstraction (wpctl/pactl/amixer)
 
 **`PlaybackController`** -- orchestrator, owns playback state:
+
 - Owns `now_playing`, `now_playing_user`, `now_playing_filename`, etc.
 - Calls `MpvController` methods for playback operations
 - Detects song-end by reading `mpv.is_idle` (was playing, now idle)
 - Emits events via `EventSystem`
 - No direct IPC socket access
 
----
+______________________________________________________________________
 
 ## New Module: `pikaraoke/lib/mpv_controller.py`
 
@@ -87,17 +89,18 @@ def __init__(self, ipc_socket_path: str = "/tmp/mpv-socket") -> None:
 ```
 
 State attributes:
+
 ```python
 # Subprocess
 self._mpv_proc: subprocess.Popen | None = None
 self._ipc_socket_path: str
-self.is_running: bool = False      # True after successful start(), False after quit()
+self.is_running: bool = False  # True after successful start(), False after quit()
 
 # State updated by poll thread (read by PlaybackController)
-self.position: float = 0.0        # time-pos
-self.duration: float = 0.0        # duration
-self.is_idle: bool = True          # idle-active
-self.is_paused: bool = False       # pause property
+self.position: float = 0.0  # time-pos
+self.duration: float = 0.0  # duration
+self.is_idle: bool = True  # idle-active
+self.is_paused: bool = False  # pause property
 
 # Poll thread
 self._poll_thread: threading.Thread | None = None
@@ -108,7 +111,7 @@ self._overlay_sock: socket.socket | None = None
 self._overlay_sock_lock: threading.Lock
 
 # Playback filter state (needed for live rebuild)
-self._current_pitch: float = 1.0           # rubberband multiplier
+self._current_pitch: float = 1.0  # rubberband multiplier
 self._current_normalization_db: float | None = None
 ```
 
@@ -141,6 +144,7 @@ def start(self) -> None:
     7. self.is_running = True
     """
 
+
 def quit(self) -> None:
     """Stop poll thread, close overlay socket, send quit command, clean up.
 
@@ -154,9 +158,11 @@ def quit(self) -> None:
 def send_command(self, cmd: dict) -> None:
     """Fire-and-forget JSON command to MPV via a transient socket."""
 
+
 def query_property(self, name: str) -> Any:
     """Query a property and return its value (or None on failure)."""
     # Wraps: {"command": ["get_property", name]}
+
 
 def set_property(self, name: str, value: Any) -> None:
     """Set a property on the running MPV instance."""
@@ -184,15 +190,19 @@ def play(
     5. Update internal filter state (_current_pitch, etc.)
     """
 
+
 def stop(self) -> None:
     """Stop playback: clear lavfi-complex, load placeholder, clear OSD."""
+
 
 def seek(self, position: float) -> None:
     """Seek to absolute position in seconds."""
     # {"command": ["seek", position, "absolute"]}
 
+
 def toggle_pause(self) -> None:
     """Toggle pause state via 'cycle pause'."""
+
 
 def set_pitch(self, semitones: int) -> None:
     """Live mid-song pitch change: rebuild lavfi-complex with new pitch."""
@@ -200,9 +210,11 @@ def set_pitch(self, semitones: int) -> None:
     # Rebuild filter with current _current_normalization_db and new pitch
     # set_property("lavfi-complex", new_filter)
 
+
 def set_subtitle_delay(self, seconds: float) -> None:
     """Set subtitle delay on running MPV."""
     # set_property("sub-delay", seconds)
+
 
 def restart(self) -> None:
     """Seek to 0 and unpause."""
@@ -227,6 +239,7 @@ def _detect_audio_backend(self) -> str:
     # shutil.which("pactl") -> "pactl"
     # shutil.which("amixer") -> "amixer"
 
+
 def get_system_volume(self) -> int:
     """Query system default sink volume as 0-100.
 
@@ -236,6 +249,7 @@ def get_system_volume(self) -> int:
     - amixer: parse `amixer get Master`
     Returns 100 on failure.
     """
+
 
 def set_system_volume(self, percent: int) -> None:
     """Set system volume (0-100).
@@ -299,6 +313,7 @@ def clear_all_overlays(self) -> None:
 ```
 
 OSD ID constants (module-level):
+
 ```python
 OSD_URL = 1
 OSD_NOWPLAYING = 2
@@ -315,7 +330,7 @@ def apply_srt_style(self) -> None:
     # Ported from prototype SRT_STYLE dict
 ```
 
----
+______________________________________________________________________
 
 ## Modified Module: `pikaraoke/lib/playback_controller.py`
 
@@ -347,6 +362,7 @@ Removed parameters: `streaming_format`
 New parameter: `mpv` (injected `MpvController` instance)
 
 Additional instance state:
+
 ```python
 self._playback_lock = threading.Lock()  # guards is_playing transitions
 ```
@@ -354,6 +370,7 @@ self._playback_lock = threading.Lock()  # guards is_playing transitions
 ### State Attributes
 
 Keep:
+
 ```python
 now_playing: str | None
 now_playing_filename: str | None
@@ -361,13 +378,14 @@ now_playing_user: str | None
 now_playing_transpose: int
 now_playing_duration: int | None
 now_playing_position: float | None  # now read from mpv.position
-is_paused: bool                     # now read from mpv.is_paused
+is_paused: bool  # now read from mpv.is_paused
 is_playing: bool
 ```
 
 Remove:
+
 ```python
-now_playing_url: str | None           # no stream URLs
+now_playing_url: str | None  # no stream URLs
 now_playing_subtitle_url: str | None  # no stream URLs
 ```
 
@@ -379,8 +397,10 @@ now_playing_subtitle_url: str | None  # no stream URLs
 @dataclass
 class PlaybackResult:
     """Simplified result -- no stream URLs needed with MPV."""
+
     success: bool
     error: str | None = None
+
 
 def play_file(self, file_path: str, user: str, semitones: int = 0) -> PlaybackResult:
     """Start playback of a media file. Non-blocking -- MPV plays immediately.
@@ -441,7 +461,7 @@ def get_now_playing(self) -> dict:
         "now_playing_duration": self.now_playing_duration,
         "now_playing_transpose": self.now_playing_transpose,
         "now_playing_position": self.mpv.position,  # live from poll thread
-        "is_paused": self.mpv.is_paused,             # live from MPV query
+        "is_paused": self.mpv.is_paused,  # live from MPV query
     }
     # Removed: now_playing_url, now_playing_subtitle_url
 ```
@@ -510,7 +530,7 @@ def restart(self) -> bool:
 - `log_output()` -- no FFmpeg stderr
 - `ffmpeg_process` property -- no FFmpeg
 
----
+______________________________________________________________________
 
 ## Modified Module: `pikaraoke/karaoke.py`
 
@@ -557,9 +577,10 @@ def transpose_current(self, semitones: int) -> None:
     if not self.playback_controller.is_playing:
         logging.warning("Cannot transpose: no song currently playing")
         return
-    self.log_and_send(_("Transposing by %s semitones: %s") % (
-        semitones, self.playback_controller.now_playing
-    ))
+    self.log_and_send(
+        _("Transposing by %s semitones: %s")
+        % (semitones, self.playback_controller.now_playing)
+    )
     self.playback_controller.set_pitch(semitones)
     self.update_now_playing_socket()
 ```
@@ -585,7 +606,9 @@ def volume_change(self, vol_level: float) -> bool:
 def restart(self) -> bool:
     """Restart current song from beginning."""
     if self.playback_controller.is_playing:
-        logging.info("Restarting: " + (self.playback_controller.now_playing or "unknown"))
+        logging.info(
+            "Restarting: " + (self.playback_controller.now_playing or "unknown")
+        )
         self.playback_controller.restart()
         self.update_now_playing_socket()
         return True
@@ -621,8 +644,10 @@ def run(self) -> None:
             self.playback_controller.check_playback_ended()
 
             # Clean up if playback ended but state wasn't reset
-            if (not self.playback_controller.is_playing
-                    and self.playback_controller.now_playing is not None):
+            if (
+                not self.playback_controller.is_playing
+                and self.playback_controller.now_playing is not None
+            ):
                 self.reset_now_playing()
 
             # Broadcast position to remote UI clients
@@ -686,6 +711,7 @@ def get_now_playing(self) -> dict:
 ```python
 # Remove:
 from pikaraoke.lib.ffmpeg import supports_hardware_h264_encoding
+
 # Keep get_ffmpeg_version and is_transpose_enabled only if still used elsewhere
 ```
 
@@ -694,7 +720,7 @@ from pikaraoke.lib.ffmpeg import supports_hardware_h264_encoding
 - `streaming_format`
 - `supports_hardware_h264_encoding`
 
----
+______________________________________________________________________
 
 ## Modified Module: `pikaraoke/routes/socket_events.py`
 
@@ -732,7 +758,7 @@ def setup_socket_events(socketio):
         k.reset_now_playing_notification()
 ```
 
----
+______________________________________________________________________
 
 ## Modified Module: `pikaraoke/routes/controller.py`
 
@@ -761,7 +787,7 @@ No route changes needed -- `karaoke.volume_change()` now calls system volume.
 
 No route changes needed -- `karaoke.set_subtitle_delay()` now forwards to MPV.
 
----
+______________________________________________________________________
 
 ## Modified Module: `pikaraoke/lib/preference_manager.py`
 
@@ -782,7 +808,7 @@ No route changes needed -- `karaoke.set_subtitle_delay()` now forwards to MPV.
 "subtitle_delay": 0,       # default subtitle delay
 ```
 
----
+______________________________________________________________________
 
 ## Modified Module: `pikaraoke/lib/args.py`
 
@@ -803,7 +829,7 @@ No route changes needed -- `karaoke.set_subtitle_delay()` now forwards to MPV.
 Remove corresponding parameters: `streaming_format`, `avsync`, `buffer_size`,
 `complete_transcode_before_play`
 
----
+______________________________________________________________________
 
 ## Files to Remove
 
@@ -824,7 +850,7 @@ Remove corresponding parameters: `streaming_format`, `avsync`, `buffer_size`,
 |------|----------------|
 | `pikaraoke/lib/get_platform.py` | Remove stream-specific temp dir usage only; `get_temp_directory` stays for downloads/processing |
 
----
+______________________________________________________________________
 
 ## Data Flow: Song Playback Lifecycle
 
@@ -889,7 +915,7 @@ Remote UI commands (via HTTP routes / Socket.IO):
 5. Loop continues: if queue has songs, start next after splash_delay
 ```
 
----
+______________________________________________________________________
 
 ## Data Flow: Filter Chain
 
@@ -906,13 +932,15 @@ Remote UI commands (via HTTP routes / Socket.IO):
 ### Live Pitch Change
 
 When user hits transpose, only the `lavfi-complex` is rebuilt and re-applied:
+
 ```python
 new_filter = build_filter(new_pitch, current_normalization_db)
 set_property("lavfi-complex", new_filter)
 ```
+
 No song restart, no queue manipulation, no FFmpeg re-launch.
 
----
+______________________________________________________________________
 
 ## Migration Order
 
@@ -930,15 +958,15 @@ No song restart, no queue manipulation, no FFmpeg re-launch.
 
 ### Phase 2: Rewire `PlaybackController`
 
-1. Replace `StreamManager` with `MpvController`
-2. Remove stream URL / FFmpeg / temp dir logic
-3. Simplify `PlaybackResult` (keep `success` + `error`, drop stream fields)
-4. Add `_playback_lock` for thread-safe state transitions
-5. Add `check_playback_ended()` (with lock), `broadcast_position()`, `set_pitch()`, `restart()`
-6. Update `play_file()` to be non-blocking, return simplified `PlaybackResult`
-7. Update `pause()` to query MPV
-8. Update `end_song()` with is_playing guard to prevent double-end
-9. Update `get_now_playing()` to remove stream URLs
+01. Replace `StreamManager` with `MpvController`
+02. Remove stream URL / FFmpeg / temp dir logic
+03. Simplify `PlaybackResult` (keep `success` + `error`, drop stream fields)
+04. Add `_playback_lock` for thread-safe state transitions
+05. Add `check_playback_ended()` (with lock), `broadcast_position()`, `set_pitch()`, `restart()`
+06. Update `play_file()` to be non-blocking, return simplified `PlaybackResult`
+07. Update `pause()` to query MPV
+08. Update `end_song()` with is_playing guard to prevent double-end
+09. Update `get_now_playing()` to remove stream URLs
 10. Update tests
 
 ### Phase 3: Rewire `Karaoke`
@@ -971,20 +999,20 @@ No song restart, no queue manipulation, no FFmpeg re-launch.
 
 ### Phase 6: Manual verification
 
-- [ ] Start PiKaraoke, MPV window appears with placeholder
-- [ ] Queue a song from remote UI, playback starts on MPV window
-- [ ] Overlays show: now playing, timecode, QR code, clock
-- [ ] Remote UI shows progress bar updating
-- [ ] Transpose +2 mid-song: pitch changes live, no restart
-- [ ] Volume up/down: system volume changes
-- [ ] Pause/resume from remote UI
-- [ ] Restart: song seeks to beginning
-- [ ] Subtitle delay: SRT timing shifts
-- [ ] Song ends naturally: placeholder shown, next song starts after delay
-- [ ] Skip: song stops immediately, next starts after delay
-- [ ] Queue multiple songs: transitions work correctly
-- [ ] Resize MPV window: overlays reposition
-- [ ] Up Next overlay shows when next song differs
-- [ ] Missing video file: error logged, no crash
-- [ ] MPV binary not installed: clear error message, run loop does not start
-- [ ] Volume controls work on PipeWire (wpctl), PulseAudio (pactl), and ALSA (amixer)
+- \[ \] Start PiKaraoke, MPV window appears with placeholder
+- \[ \] Queue a song from remote UI, playback starts on MPV window
+- \[ \] Overlays show: now playing, timecode, QR code, clock
+- \[ \] Remote UI shows progress bar updating
+- \[ \] Transpose +2 mid-song: pitch changes live, no restart
+- \[ \] Volume up/down: system volume changes
+- \[ \] Pause/resume from remote UI
+- \[ \] Restart: song seeks to beginning
+- \[ \] Subtitle delay: SRT timing shifts
+- \[ \] Song ends naturally: placeholder shown, next song starts after delay
+- \[ \] Skip: song stops immediately, next starts after delay
+- \[ \] Queue multiple songs: transitions work correctly
+- \[ \] Resize MPV window: overlays reposition
+- \[ \] Up Next overlay shows when next song differs
+- \[ \] Missing video file: error logged, no crash
+- \[ \] MPV binary not installed: clear error message, run loop does not start
+- \[ \] Volume controls work on PipeWire (wpctl), PulseAudio (pactl), and ALSA (amixer)

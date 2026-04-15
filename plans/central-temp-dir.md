@@ -7,14 +7,17 @@ Temp/intermediate files are currently scattered across system temp (`/tmp`), wor
 ## Files to Modify
 
 ### 1. Add preference and helper — `pikaraoke/lib/get_platform.py`
+
 - Add `get_temp_directory(configured: str = "") -> str` function near `get_data_directory()`
 - If `configured` is non-empty and valid, return it (create if needed)
 - Otherwise return `os.path.join(get_data_directory(), "tmp")`, create if needed
 
 ### 2. Register default — `pikaraoke/lib/preference_manager.py`
+
 - Add `"temp_dir": ""` to `DEFAULTS` dict (empty string = use default `~/.pikaraoke/tmp`)
 
 ### 3. Update file_resolver.py — `pikaraoke/lib/file_resolver.py`
+
 - Import `get_temp_directory` from `get_platform`
 - Change `get_tmp_dir()` to accept an optional `base_dir: str = ""` parameter
 - When `base_dir` provided, use `os.path.join(base_dir, f"{pid}")` instead of `os.path.join(tempfile.gettempdir(), f"{pid}")`
@@ -23,19 +26,23 @@ Temp/intermediate files are currently scattered across system temp (`/tmp`), wor
 - Update callers in `stream_manager.py` and `routes/stream.py` to pass `temp_dir` from karaoke instance
 
 ### 4. Update processing_manager.py — `pikaraoke/lib/processing_manager.py`
+
 - **Intermediate files**: Pass `temp_dir` to worker process via args; use it in `tempfile.mkdtemp(prefix="pikaraoke_stems_", dir=temp_dir)`
 - **Log file**: Change `PROCESSING_LOG_FILE` to use `os.path.join(temp_dir, "processing_manager.log")` — pass temp_dir into `ProcessingManager.__init__` and through to `_get_log_handler`
 
 ### 5. Update youtube_dl.py — `pikaraoke/lib/youtube_dl.py`
+
 - Add `temp_dir: str = ""` parameter to `build_ytdl_download_command`
 - If non-empty, add `"--paths", f"temp:{temp_dir}"` to the yt-dlp args
 - Update caller in `download_manager.py` to pass the value
 
 ### 6. Wire through karaoke.py — `pikaraoke/karaoke.py`
+
 - After preferences load, resolve `self.temp_dir = get_temp_directory(self.temp_dir)`
 - Pass `temp_dir` to `ProcessingManager`, `DownloadManager` (for yt-dlp), and anywhere `FileResolver` is created
 
 ### 7. UI entry — `pikaraoke/templates/info.html` + `pikaraoke/routes/info.py`
+
 - In `info.py`: pass `temp_dir=k.temp_dir` to template context
 - In `info.html`: add a text input in the **Server settings** section:
   ```html
@@ -47,13 +54,15 @@ Temp/intermediate files are currently scattered across system temp (`/tmp`), wor
   ```
 
 ### 8. CLAUDE.md rule
+
 Add under an appropriate section:
+
 ```
 ## Temporary Files
 
-All non-persistent files (intermediate processing artifacts, logs, HLS segments, 
-download temp files) must use the centralized `temp_dir` preference from config.ini. 
-Never hardcode temp paths or use `tempfile.gettempdir()` directly. Use 
+All non-persistent files (intermediate processing artifacts, logs, HLS segments,
+download temp files) must use the centralized `temp_dir` preference from config.ini.
+Never hardcode temp paths or use `tempfile.gettempdir()` directly. Use
 `get_temp_directory()` from `get_platform.py` to resolve the configured path.
 ```
 

@@ -8,7 +8,7 @@ The user wants a dedicated web UI page to monitor the download-and-stem-separati
 
 This plan has been updated to reflect the refactored `ProcessingManager` (orchestrator thread + `StemWorker` subprocess with Pipe-based IPC) and to cover additional UX objectives around icon layout and song deletion.
 
----
+______________________________________________________________________
 
 ## Architecture
 
@@ -17,19 +17,23 @@ This plan has been updated to reflect the refactored `ProcessingManager` (orches
 A lightweight event-driven tracker that maintains an ordered list of songs moving through the pipeline. Neither manager currently retains completed items, so a unified tracker is required.
 
 **Data model per item:**
+
 ```python
-id: str               # UUID for stable client-side identity
-title: str            # display title
-song_path: str | None # set after download completes
-url: str              # video URL
-user: str             # who initiated download
+id: str  # UUID for stable client-side identity
+title: str  # display title
+song_path: str | None  # set after download completes
+url: str  # video URL
+user: str  # who initiated download
 download_status: str  # "pending" | "active" | "complete" | "error"
-processing_status: str # "waiting" | "pending" | "active" | "complete" | "error" | "cancelling"
+processing_status: (
+    str  # "waiting" | "pending" | "active" | "complete" | "error" | "cancelling"
+)
 download_progress: float  # 0-100
-cancelling: bool      # True while waiting for delayed cancel to finish (during stemming)
+cancelling: bool  # True while waiting for delayed cancel to finish (during stemming)
 ```
 
 **Status derivation strategy** (avoids cross-process event complexity):
+
 - Download status: read directly from `download_manager.active_download` and `pending_downloads`
 - Processing status: derived from `processing_manager.pending_jobs` + `get_active_job()`:
   - `song_path is None` (download still in progress) → "waiting"
@@ -40,6 +44,7 @@ cancelling: bool      # True while waiting for delayed cancel to finish (during 
 No `_drain_results()` call is needed — the refactored `ProcessingManager` uses a real orchestrator thread that mutates `pending_jobs` and `_active_state` directly under `_state_lock`, so the list is always fresh.
 
 **Event hooks needed:**
+
 - `download_queued` (event from `DownloadManager`) → create `PipelineItem`
 - `song_downloaded` → set `song_path`, mark download complete
 - `download_error` (event from `DownloadManager`) → mark download error
@@ -50,11 +55,12 @@ No `_drain_results()` call is needed — the refactored `ProcessingManager` uses
 
 **Thread safety:** `threading.Lock` guards the items list. The orchestrator thread, gevent download worker greenlet, and Flask request handlers all touch the tracker. Critical discipline: all I/O operations (file deletion, song_manager calls) happen *outside* the lock to prevent deadlock with gevent polling. Lock is held only for state mutations (set flags, add/remove items).
 
----
+______________________________________________________________________
 
 ## Files to Create
 
 ### 1. `pikaraoke/lib/pipeline_tracker.py`
+
 - `PipelineTracker` class with items list, lock, event subscriptions
 - `get_status()` enriches items with live download progress + derived processing status
 - `cancel(item_id)` delegates to the appropriate manager based on current state
@@ -63,6 +69,7 @@ No `_drain_results()` call is needed — the refactored `ProcessingManager` uses
 - `_on_song_deleted(song_path)` removes any tracker item whose `song_path` matches
 
 ### 2. `pikaraoke/routes/processing.py`
+
 - Blueprint: `processing_bp = Blueprint("processing", __name__)`
 - `GET /processing` — render page template
 - `GET /processing/status` — JSON status of all pipeline items
@@ -71,6 +78,7 @@ No `_drain_results()` call is needed — the refactored `ProcessingManager` uses
 - `POST /processing/<item_id>/remove` — remove completed/errored item from tracker
 
 ### 3. `pikaraoke/templates/processing.html`
+
 - Extends `base.html`, follows queue.html patterns
 - JS polls `/processing/status` every 1s
 - Socket events `download_started` / `download_stopped` trigger immediate refresh
@@ -82,7 +90,7 @@ No `_drain_results()` call is needed — the refactored `ProcessingManager` uses
 - Empty state message when no items
 - **Icon legend** in the upper-right of the page header explaining icon/color meanings (download icon, separation icon, pending vs active vs complete vs error states)
 
----
+______________________________________________________________________
 
 ## Files to Modify
 
@@ -91,6 +99,7 @@ No `_drain_results()` call is needed — the refactored `ProcessingManager` uses
 Current state: already has `_is_downloading` flag, `active_download` dict with progress tracking, `pending_downloads` shadow queue, `download_errors` list with UUIDs, and `get_downloads_status()`. The `process` variable from `subprocess.Popen` is local to `_execute_download`.
 
 Changes needed:
+
 - Store `self._active_process` as an instance attribute (promote the local `process` variable in `_execute_download`)
 - Emit `download_queued` event in `queue_download()` with download data dict
 - Emit `download_error` event in `_execute_download()` when `rc != 0` with video URL (in addition to existing error tracking)
@@ -101,6 +110,7 @@ Changes needed:
 ### 5. `pikaraoke/lib/processing_manager.py`
 
 **Already refactored** — the orchestrator thread + `StemWorker` subprocess architecture is in place, and all cancellation surface the tracker needs already exists:
+
 - `pending_jobs: list[str]` — public, mutated under `_state_lock`
 - `cancel_pending(song_path)` — removes from queue, adds to `_cancelled_paths`
 - `cancel_active(song_path)` — targets active step (FFmpeg `kill()` or `StemWorker.kill()`)
@@ -114,6 +124,7 @@ Changes needed:
 Current state: `delete(song_path)` removes the file, companions, SongList entry, and DB row. Does not emit an event.
 
 Changes needed:
+
 - Accept an optional `EventSystem` in `__init__` (or wire via existing mechanism used elsewhere)
 - Emit `song_deleted` event with `song_path` at the end of `delete()`
 - The `PipelineTracker` subscribes to this event and drops any matching item so the Processing page immediately stops showing deleted songs
@@ -125,6 +136,7 @@ If `SongManager` does not already receive `EventSystem`, prefer a direct `events
 Current state: instantiates `DownloadManager` and `ProcessingManager` sequentially near the end of `__init__`. Event wiring (e.g., `song_downloaded → song_manager.register_download`) is done earlier.
 
 Changes needed:
+
 - Import `PipelineTracker`
 - If needed, pass `events` to `SongManager` so it can emit `song_deleted`
 - Instantiate `PipelineTracker` after both managers are created
@@ -136,6 +148,7 @@ Changes needed:
 Current state: has `_internal_blueprints` list containing `home_bp`, `info_bp`, `splash_bp`, `batch_song_renamer_bp`.
 
 Changes needed:
+
 - Import `processing_bp` from `pikaraoke.routes.processing`
 - Add to `_internal_blueprints` list
 
@@ -144,6 +157,7 @@ Changes needed:
 Current state: navbar items are in `.navbar-brand` div. Items: home, queue, search, browse. Nav highlight JS is inline using `currentPath` checks.
 
 Changes needed:
+
 - Add navbar item after browse (before the burger button):
   ```html
   <a id="processing" class="navbar-item" href="{{ url_for('processing.processing') }}">
@@ -158,6 +172,7 @@ Changes needed:
 Current state: `updateNavHighlight()` handles `/`, `/queue`, `/search`, `/browse`, `/info`.
 
 Changes needed:
+
 - Add to `updateNavHighlight()`:
   ```javascript
   } else if (path === '/processing') {
@@ -165,7 +180,7 @@ Changes needed:
   }
   ```
 
----
+______________________________________________________________________
 
 ## UI Design
 
@@ -177,18 +192,21 @@ Changes needed:
 ```
 
 Implementation notes:
+
 - Row is a flexbox with `align-items: center`
 - Title column: `flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 0.75rem`
 - Icon column: `flex: 0 0 auto; display: flex; gap: 0.25rem` — icons sit flush on the right
 - `min-width: 0` on the title column is critical: without it, flex items default to `min-width: auto` which lets text expand and push icons off-row
 
 This satisfies the objectives:
+
 - **Title doesn't overflow into the icon area** — icon column is `flex: 0 0 auto`, title uses ellipsis once space runs out
 - **Icons tightly spaced on the right** — `gap: 0.25rem` and no surrounding padding beyond the row's own
 
 ### Icon Legend (upper-right of page header)
 
 Compact inline legend above the list, right-aligned:
+
 ```
 [dl icon] Download   [sep icon] Separation   •   grey = pending   teal-pulse = active   teal = complete   red = error
 ```
@@ -214,7 +232,7 @@ Compact inline legend above the list, right-aligned:
 - **Queue action**: `icon-list-add` (green)
 - **Remove action**: `icon-trash-empty` (grey)
 
----
+______________________________________________________________________
 
 ## Cancellation & Removal Behavior
 
@@ -229,10 +247,11 @@ Compact inline legend above the list, right-aligned:
 | Song deleted from edit page | (automatic) | `song_deleted` event → tracker drops matching item(s) |
 
 **File cleanup on cancel:**
+
 - Partial downloads: glob `download_path` for files matching the video ID
 - Partial stems: `processing_manager._cleanup_stems()` already handles this (deletes `vocal/*---vocal.m4a`, `nonvocal/*---nonvocal.m4a`, and `pikaraoke_stems_*` temp dirs)
 
----
+______________________________________________________________________
 
 ## Implementation Order
 
@@ -241,19 +260,19 @@ Compact inline legend above the list, right-aligned:
 3. **API**: create `routes/processing.py`, register blueprint in `app.py`
 4. **Frontend**: create `templates/processing.html` with legend + flex row layout, modify `base.html` navbar, modify `spa-navigation.js`
 
----
+______________________________________________________________________
 
 ## Verification
 
-1. Start PiKaraoke, navigate to Processing page via navbar icon
-2. Verify legend appears in upper-right with icon/color key
-3. Search and download a song — verify it appears with download icon flashing teal
-4. After download completes, verify download icon goes solid teal and separation icon starts flashing
-5. After separation completes, verify both icons are solid teal and queue button appears
-6. Click queue button — verify song is added to playback queue
-7. Download another song and cancel during download — verify partial files are cleaned up
-8. Download a song, let it complete, then cancel during separation — verify stems are cleaned up and the worker comes back for the next job
-9. Delete a song from the edit page while it is in the tracker — verify it disappears from the Processing page immediately
+01. Start PiKaraoke, navigate to Processing page via navbar icon
+02. Verify legend appears in upper-right with icon/color key
+03. Search and download a song — verify it appears with download icon flashing teal
+04. After download completes, verify download icon goes solid teal and separation icon starts flashing
+05. After separation completes, verify both icons are solid teal and queue button appears
+06. Click queue button — verify song is added to playback queue
+07. Download another song and cancel during download — verify partial files are cleaned up
+08. Download a song, let it complete, then cancel during separation — verify stems are cleaned up and the worker comes back for the next job
+09. Delete a song from the edit page while it is in the tracker — verify it disappears from the Processing page immediately
 10. Resize the window / use long titles — verify title truncates with ellipsis and icons stay tight on the right, never overlapping the title
 11. Test on mobile viewport — verify responsive layout (legend may hide, row layout remains usable)
 12. Run `pre-commit run --config code_quality/.pre-commit-config.yaml --all-files`

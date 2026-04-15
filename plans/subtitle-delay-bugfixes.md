@@ -24,7 +24,7 @@ remaining issues were identified in review:
 - `pikaraoke/routes/controller.py`
 - `pikaraoke/static/js/splash.js`
 
----
+______________________________________________________________________
 
 ## Fix 1 — Flip order in controller.py (lines 84–86)
 
@@ -42,7 +42,7 @@ k.set_subtitle_delay(float(seconds))
 broadcast_event("subtitle_delay", seconds)
 ```
 
----
+______________________________________________________________________
 
 ## Fix 2 — Remove ternary in `initializeSubtitles` (splash.js line 133)
 
@@ -58,7 +58,7 @@ Also remove the inline comment "Invert the sign: user expects negative = earlier
 timeOffset works opposite" — move the explanation to the `initializeSubtitles` function
 docblock/comment instead so it's said once.
 
----
+______________________________________________________________________
 
 ## Fix 3 — Guard `initializeSubtitles()` calls on live delay change (splash.js)
 
@@ -79,6 +79,7 @@ if (video && !video.paused && !video.ended) {
 Apply this guard in both locations:
 
 **`PREFERENCE_EFFECTS.subtitle_delay` (lines 383–391):**
+
 ```js
 subtitle_delay: (v) => {
   PikaraokeConfig.subtitleDelay = v;
@@ -94,6 +95,7 @@ subtitle_delay: (v) => {
 ```
 
 **`"subtitle_delay"` socket handler (lines 488–500):**
+
 ```js
 socket.on("subtitle_delay", (delay) => {
   const delayValue = parseFloat(delay);
@@ -111,7 +113,7 @@ socket.on("subtitle_delay", (delay) => {
 });
 ```
 
----
+______________________________________________________________________
 
 ## Verification
 

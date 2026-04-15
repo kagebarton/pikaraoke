@@ -93,7 +93,9 @@ class TestProcessingManagerCancelActive:
 
     @patch("pikaraoke.lib.processing_manager.StemWorker")
     @patch("pikaraoke.lib.processing_manager.ProcessTerminal")
-    def test_cancel_active_stemming_sets_flag_does_not_kill_worker(self, mock_pt, mock_sw, events, preferences):
+    def test_cancel_active_stemming_sets_flag_does_not_kill_worker(
+        self, mock_pt, mock_sw, events, preferences
+    ):
         """Cancel during stemming uses delayed cancel: sets flag, does not kill worker.
 
         The worker finishes the current separation so the model stays loaded.

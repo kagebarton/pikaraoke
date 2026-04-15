@@ -14,7 +14,7 @@ The playback screen becomes fully native MPV — no browser UI at all. The web U
 
 **What changes:** `PlaybackController` swaps `StreamManager` for an MPV controller. The MPV prototype (in `mpv/`) provides the foundation. Audio normalization moves from live FFmpeg `loudnorm` to a pre-computed dB value (stored in song database by `ProcessingManager`, passed to playback as a `volume` filter parameter).
 
----
+______________________________________________________________________
 
 ## Architecture Change
 
@@ -41,7 +41,7 @@ QueueManager → PlaybackController → MPV Controller → MPV subprocess
                           Socket.IO position broadcast (for remote UI)
 ```
 
----
+______________________________________________________________________
 
 ## Method-Level Mapping
 
@@ -70,7 +70,7 @@ QueueManager → PlaybackController → MPV Controller → MPV subprocess
 | Splash HTML overlays | `send_nowplaying_overlay()`, `send_timecode_overlay()`, `send_upnext_overlay()`, `send_qr_overlay()`, `send_clock_overlay()` | ✅ | MPV OSD replaces all HTML overlays |
 | Subtitles Octopus (ASS) | `sub-add` + MPV native ASS rendering + `apply_srt_style()` | ✅ | MPV handles ASS natively, better than Octopus |
 
----
+______________________________________________________________________
 
 ## Gaps to Fill
 
@@ -105,7 +105,7 @@ QueueManager → PlaybackController → MPV Controller → MPV subprocess
 | 10 | **FFmpeg output logging** | `log_output()` → `StreamManager.log_ffmpeg_output()` — no longer needed. Can be removed or made a no-op. |
 | 11 | **Master/slave splash architecture** | `register_splash`, master election, slave position sync in `socket_events.py` — all dead code with no browser playback. Remove alongside splash.html/splash.js. |
 
----
+______________________________________________________________________
 
 ## Features in Prototype Not Needed by PiKaraoke
 
@@ -119,7 +119,7 @@ QueueManager → PlaybackController → MPV Controller → MPV subprocess
 | Flask exit endpoint | `exit_app()` | PiKaraoke has its own shutdown |
 | `SHOW_QR`, `SHOW_CLOCK` flags | Module-level constants | Configurable via PiKaraoke preferences |
 
----
+______________________________________________________________________
 
 ## Components to Remove
 
@@ -135,7 +135,7 @@ QueueManager → PlaybackController → MPV Controller → MPV subprocess
 | `pikaraoke/lib/get_platform.py` (`get_temp_directory` stream usage only) | Only remove stream-specific temp dir usage. `get_temp_directory` itself is used project-wide (downloads, processing) and must stay. |
 | `pikaraoke/lib/omxclient.py` | Legacy OMX player, already superseded |
 
----
+______________________________________________________________________
 
 ## Components to Create
 
@@ -160,7 +160,7 @@ Key methods to implement:
 | `quit_mpv()` | Graceful shutdown |
 | `end_song()` | Clear filter, load placeholder, reset state, clear OSD |
 
----
+______________________________________________________________________
 
 ## Components to Modify
 
@@ -175,57 +175,64 @@ Key methods to implement:
 | `pikaraoke/lib/preference_manager.py` | Add MPV-specific defaults if needed. Remove from DEFAULTS: `complete_transcode_before_play`, `buffer_size`, `avsync`. Keep `normalize_audio` (now controls whether pre-computed dB value is applied during playback). |
 | `pikaraoke/lib/args.py` | Remove `--streaming-format`, `--complete-transcode-before-play`, `--buffer-size`, `--avsync` args. Keep `--normalize-audio` (repurposed: enables applying pre-computed normalization dB during MPV playback). |
 
----
+______________________________________________________________________
 
 ## Test Plan
 
 ### MPV Lifecycle
-- [ ] `start_mpv()` launches MPV in idle mode, creates IPC socket
-- [ ] `quit_mpv()` gracefully terminates MPV, cleans up socket file
-- [ ] MPV survives Flask request/reload cycles (persistent process)
+
+- \[ \] `start_mpv()` launches MPV in idle mode, creates IPC socket
+- \[ \] `quit_mpv()` gracefully terminates MPV, cleans up socket file
+- \[ \] MPV survives Flask request/reload cycles (persistent process)
 
 ### Playback
-- [ ] `mpv_play(file)` loads and plays a video file
-- [ ] `mpv_play(file, semitones=2)` plays with pitch shifted up 2 semitones
-- [ ] `mpv_play(file, semitones=-3)` plays with pitch shifted down 3 semitones
-- [ ] `mpv_stop()` stops playback, shows placeholder, clears OSD
-- [ ] `mpv_seek(60)` jumps to 60 seconds
-- [ ] `mpv_restart()` returns to 0:00
-- [ ] `pause()` toggles pause/resume
-- [ ] `mpv_set_pitch(1)` changes pitch mid-song without restart
-- [ ] `mpv_set_volume(0.5)` changes volume mid-song
-- [ ] `mpv_set_sub_delay(-0.8)` delays SRT subtitles
+
+- \[ \] `mpv_play(file)` loads and plays a video file
+- \[ \] `mpv_play(file, semitones=2)` plays with pitch shifted up 2 semitones
+- \[ \] `mpv_play(file, semitones=-3)` plays with pitch shifted down 3 semitones
+- \[ \] `mpv_stop()` stops playback, shows placeholder, clears OSD
+- \[ \] `mpv_seek(60)` jumps to 60 seconds
+- \[ \] `mpv_restart()` returns to 0:00
+- \[ \] `pause()` toggles pause/resume
+- \[ \] `mpv_set_pitch(1)` changes pitch mid-song without restart
+- \[ \] `mpv_set_volume(0.5)` changes volume mid-song
+- \[ \] `mpv_set_sub_delay(-0.8)` delays SRT subtitles
 
 ### Song Transitions
-- [ ] Song ends naturally → `idle-active` detected → `end_song()` fires → placeholder shown
-- [ ] `end_song()` emits `song_ended` event
-- [ ] `play()` after `end_song()` loads new song correctly
-- [ ] State resets between songs (semitones=0, volume=default, sub_delay=default)
+
+- \[ \] Song ends naturally → `idle-active` detected → `end_song()` fires → placeholder shown
+- \[ \] `end_song()` emits `song_ended` event
+- \[ \] `play()` after `end_song()` loads new song correctly
+- \[ \] State resets between songs (semitones=0, volume=default, sub_delay=default)
 
 ### Overlays
-- [ ] Now Playing shows title during playback, clears when stopped
-- [ ] Timecode shows elapsed/total + pitch + volume during playback
-- [ ] Up Next shows when next song differs from current
-- [ ] QR code overlay renders at correct size
-- [ ] Clock overlay shows correct time (if enabled)
-- [ ] Overlays reposition on window resize
+
+- \[ \] Now Playing shows title during playback, clears when stopped
+- \[ \] Timecode shows elapsed/total + pitch + volume during playback
+- \[ \] Up Next shows when next song differs from current
+- \[ \] QR code overlay renders at correct size
+- \[ \] Clock overlay shows correct time (if enabled)
+- \[ \] Overlays reposition on window resize
 
 ### Subtitles
-- [ ] ASS subtitles load and render with embedded styles
-- [ ] SRT subtitles load and render with configured style
-- [ ] `sub-delay` applies correctly to SRT files
-- [ ] Subtitle file switch mid-playback works (`sub-remove` + `sub-add`)
+
+- \[ \] ASS subtitles load and render with embedded styles
+- \[ \] SRT subtitles load and render with configured style
+- \[ \] `sub-delay` applies correctly to SRT files
+- \[ \] Subtitle file switch mid-playback works (`sub-remove` + `sub-add`)
 
 ### Socket.IO Integration
-- [ ] `playback_position` emitted every 500ms during playback
-- [ ] Position broadcast reaches remote UI clients
-- [ ] `playback_started` event fires when song begins
-- [ ] `song_ended` event fires when song ends
+
+- \[ \] `playback_position` emitted every 500ms during playback
+- \[ \] Position broadcast reaches remote UI clients
+- \[ \] `playback_started` event fires when song begins
+- \[ \] `song_ended` event fires when song ends
 
 ### Edge Cases
-- [ ] Missing video file → returns error, no crash
-- [ ] MPV process dies unexpectedly → graceful recovery or error
-- [ ] IPC socket unavailable → command silently fails, no crash
-- [ ] Rapid play/stop cycles → no race conditions
-- [ ] Dual-stem files (vocal + nonvocal) load and mix correctly
-- [ ] Single-stem files play without dual-stem filter chain
+
+- \[ \] Missing video file → returns error, no crash
+- \[ \] MPV process dies unexpectedly → graceful recovery or error
+- \[ \] IPC socket unavailable → command silently fails, no crash
+- \[ \] Rapid play/stop cycles → no race conditions
+- \[ \] Dual-stem files (vocal + nonvocal) load and mix correctly
+- \[ \] Single-stem files play without dual-stem filter chain

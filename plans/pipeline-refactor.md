@@ -35,11 +35,12 @@ subprocess). The model stays loaded unless cancel lands during actual stemming.
 Pipeline tracking (`pipeline_tracker.py`) is out of scope and will be revisited
 after this refactor lands.
 
----
+______________________________________________________________________
 
 ## Scope
 
 **In scope:**
+
 - New file: `pikaraoke/lib/stem_worker.py` — `StemWorker` class encapsulating
   the subprocess lifecycle.
 - Rewrite: `pikaraoke/lib/processing_manager.py` — orchestrator thread with
@@ -48,12 +49,13 @@ after this refactor lands.
   `pipeline_tracker.py`.
 
 **Out of scope:**
+
 - `pipeline_tracker.py` changes (deferred).
 - `download_manager.py` changes.
 - Any UI or route changes.
 - Future `LyricWorker` (design fits the pattern, but not implemented).
 
----
+______________________________________________________________________
 
 ## Architecture
 
@@ -62,6 +64,7 @@ after this refactor lands.
 A thin subprocess wrapper. Owns the stem model lifecycle and nothing else.
 
 **Responsibilities:**
+
 - Spawn a `multiprocessing.Process` that loads `audio_separator.Separator` and
   loops on an input `Queue`, returning results via `multiprocessing.Pipe`.
 - Fresh IPC channels per spawn (critical — solves the queue-orphan bug and
@@ -80,20 +83,23 @@ class StemWorker:
     def __init__(self, pty_slave_fd: int | None, temp_dir: str) -> None: ...
     def start(self) -> None:
         """Spawn the subprocess with fresh queues. Blocks until the model is loaded."""
+
     def is_alive(self) -> bool: ...
     def separate(self, wav_path: Path, output_dir: Path) -> tuple[Path, Path]:
         """Submit a WAV, block for result. Raises WorkerDiedError if killed mid-job."""
+
     def kill(self) -> None:
         """SIGKILL the subprocess and discard queues. Does not restart."""
+
     def stop(self) -> None:
         """Graceful shutdown: send sentinel, join, fall back to kill on timeout."""
 ```
 
 **Worker protocol (IPC message shapes):**
+
 - Input queue (`Queue`): job payload `(wav_path: str, output_dir: str)` tuple, or
   `None` sentinel for graceful shutdown.
-- Result pipe (`multiprocessing.Pipe`, `Connection.send()`): `("ok", vocal_wav: str,
-  instrumental_wav: str)` or `("error", error_message: str)`. Pipe is used instead
+- Result pipe (`multiprocessing.Pipe`, `Connection.send()`): `("ok", vocal_wav: str, instrumental_wav: str)` or `("error", error_message: str)`. Pipe is used instead
   of Queue to avoid interference from gevent monkey-patching in the parent process
   (see "IPC Implementation Detail" section below).
 - Serializing the exception class itself is brittle across processes; a string
@@ -103,7 +109,7 @@ class StemWorker:
 
 ```python
 def separate(self, wav_path: Path, output_dir: Path) -> tuple[Path, Path]:
-    rq = self._result_recv    # Connection from Pipe(duplex=False)
+    rq = self._result_recv  # Connection from Pipe(duplex=False)
     jq = self._job_queue
     proc = self._process
     if rq is None or jq is None or proc is None:
@@ -132,7 +138,7 @@ monkey-patching issues (see section below).
 trimmed to just model load + separation loop (no FFmpeg, no pipeline). It
 moves into `stem_worker.py`.
 
----
+______________________________________________________________________
 
 ### Rewritten: `ProcessingManager` (orchestrator)
 
@@ -149,6 +155,7 @@ class _Step(Enum):
     STEMMING = "stemming"
     TRANSCODING = "transcoding"
 
+
 @dataclass
 class _JobState:
     song_path: str
@@ -159,11 +166,13 @@ class _JobState:
 
 ```python
 self._stem_worker: StemWorker
-self._pending_queue: queue.Queue[str | None]   # internal, consumed by orchestrator thread
-self.pending_jobs: list[str]                    # public, derived from pending_queue + active
-self._active_state: _JobState | None            # current in-flight job, None if idle
-self._state_lock: threading.Lock                # guards pending_jobs + _active_state
-self._cancelled_paths: set[str]                 # pending cancels resolved before pickup
+self._pending_queue: queue.Queue[
+    str | None
+]  # internal, consumed by orchestrator thread
+self.pending_jobs: list[str]  # public, derived from pending_queue + active
+self._active_state: _JobState | None  # current in-flight job, None if idle
+self._state_lock: threading.Lock  # guards pending_jobs + _active_state
+self._cancelled_paths: set[str]  # pending cancels resolved before pickup
 self._orchestrator_thread: threading.Thread
 self._stop_event: threading.Event
 ```
@@ -211,7 +220,9 @@ def _orchestrator_loop(self) -> None:
             logging.info(f"Processing cancelled: {Path(song_path).name}")
         except Exception as e:
             logging.error(f"Processing failed for {Path(song_path).name}: {e}")
-            self._events.emit("processing_error", {"song_path": song_path, "error": str(e)})
+            self._events.emit(
+                "processing_error", {"song_path": song_path, "error": str(e)}
+            )
             self._cleanup_stems(song_path)
         finally:
             with self._state_lock:
@@ -271,11 +282,13 @@ def _run_pipeline(self, song_path: str) -> None:
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
+
 def _set_step(self, step: _Step) -> None:
     with self._state_lock:
         if self._active_state is not None:
             self._active_state.step = step
             self._active_state.ffmpeg_process = None
+
 
 def _check_cancelled(self) -> None:
     with self._state_lock:
@@ -294,19 +307,48 @@ next FFmpeg call (and the StemWorker) will also use it. It's closed in
 ```python
 def _ffmpeg_extract(self, video: Path, tmp_dir: Path) -> Path:
     wav_path = tmp_dir / f"{video.stem}_input.wav"
-    cmd = ["ffmpeg", "-y", "-i", str(video), "-vn", "-ac", "2",
-           "-ar", "44100", "-sample_fmt", "s16", str(wav_path)]
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(video),
+        "-vn",
+        "-ac",
+        "2",
+        "-ar",
+        "44100",
+        "-sample_fmt",
+        "s16",
+        str(wav_path),
+    ]
     self._run_ffmpeg(cmd, "audio extraction")
     return wav_path
 
+
 def _ffmpeg_transcode(self, wav_path: Path, output_path: Path) -> None:
-    cmd = ["ffmpeg", "-y", "-threads", FFMPEG_THREADS, "-i", str(wav_path),
-           "-c:a", "aac", "-q:a", AAC_QUALITY, str(output_path)]
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-threads",
+        FFMPEG_THREADS,
+        "-i",
+        str(wav_path),
+        "-c:a",
+        "aac",
+        "-q:a",
+        AAC_QUALITY,
+        str(output_path),
+    ]
     self._run_ffmpeg(cmd, "transcode")
 
+
 def _run_ffmpeg(self, cmd: list[str], label: str) -> None:
-    stdout_fd = self._pty_slave_fd if self._pty_slave_fd is not None else subprocess.DEVNULL
-    stderr_fd = self._pty_slave_fd if self._pty_slave_fd is not None else subprocess.DEVNULL
+    stdout_fd = (
+        self._pty_slave_fd if self._pty_slave_fd is not None else subprocess.DEVNULL
+    )
+    stderr_fd = (
+        self._pty_slave_fd if self._pty_slave_fd is not None else subprocess.DEVNULL
+    )
     proc = subprocess.Popen(cmd, stdout=stdout_fd, stderr=stderr_fd)
     with self._state_lock:
         if self._active_state is not None:
@@ -339,7 +381,9 @@ def cancel_active(self, song_path: str) -> None:
     with self._state_lock:
         state = self._active_state
         if state is None or state.song_path != song_path:
-            logging.warning(f"Cancel requested for non-active job: {Path(song_path).name}")
+            logging.warning(
+                f"Cancel requested for non-active job: {Path(song_path).name}"
+            )
             return
         state.cancelled = True
         step = state.step
@@ -375,7 +419,7 @@ add to `_cancelled_paths`. The orchestrator loop checks this set when it
 pulls an item off the internal queue. No file cleanup needed (nothing has
 started).
 
----
+______________________________________________________________________
 
 ## IPC Implementation Detail: Pipe vs Queue (gevent monkey-patching issue)
 
@@ -414,6 +458,7 @@ worker and orchestrator, unaffected by gevent monkey-patching.
   results via `result_send.send()`, orchestrator receives via polling + `result_recv.recv()`.
 
 **Code changes:**
+
 - `StemWorker.__init__`: add `_job_send`, `_job_recv`, `_result_send`, `_result_recv`
   attributes for the two `Pipe()` connections.
 - `StemWorker.start()`: create both pipes fresh on every spawn. This ensures
@@ -430,7 +475,7 @@ worker and orchestrator, unaffected by gevent monkey-patching.
   `"no vocal"` (with space) and `"no_vocal"` (with underscore) to avoid
   misclassifying `(No Vocals)` output files as vocals.
 
----
+______________________________________________________________________
 
 ## Preserved: PTY / ProcessTerminal integration
 
@@ -449,13 +494,14 @@ The PTY slave fd is still owned by `ProcessingManager` (same as today):
   main process; only the worker subprocess (which had its own inherited
   copy) goes away.
 
----
+______________________________________________________________________
 
 ## Files to Create
 
 ### `pikaraoke/lib/stem_worker.py`
 
 Contents:
+
 - `WorkerDiedError` exception
 - `StemWorker` class (public API above)
 - `_stem_worker_main()` — process entry point, adapted from the current
@@ -470,6 +516,7 @@ Contents:
 ### `pikaraoke/lib/processing_manager.py`
 
 Rewritten around the orchestrator thread design above. Keeps:
+
 - Module-level constants for FFmpeg (`FFMPEG_THREADS`, `AAC_QUALITY`)
 - `_cleanup_stems()` helper (unchanged)
 - Blocked-words filter in `enqueue()` (unchanged)
@@ -477,6 +524,7 @@ Rewritten around the orchestrator thread design above. Keeps:
   `cancel_active`, `get_active_job`, `pending_jobs`)
 
 Removes:
+
 - `_run_worker_process`, `_process_song_in_worker`, `_separate_stems`,
   `_extract_audio`, `_wav_to_m4a` (extract/transcode become `_ffmpeg_extract`
   and `_ffmpeg_transcode` instance methods; `_separate_stems` moves into
@@ -503,7 +551,7 @@ continue to work. Existing tests should keep passing (any that mock the
 worker process will need to be updated to mock `StemWorker` instead; audit
 during implementation).
 
----
+______________________________________________________________________
 
 ## Concurrency & Safety Notes
 
@@ -542,13 +590,14 @@ during implementation).
    eagerly restarts the worker for the next job.
 
 7. **Shutdown ordering in `stop()`:**
+
    1. `self._stop_event.set()`
    2. `self._pending_queue.put(None)` (wake orchestrator thread)
    3. `self._orchestrator_thread.join(timeout=10)`
    4. `self._stem_worker.stop()` (graceful sentinel, then kill on timeout)
    5. `self._process_terminal.stop()` (closes PTY)
 
----
+______________________________________________________________________
 
 ## Critical Files
 
@@ -559,12 +608,13 @@ during implementation).
 - [pikaraoke/lib/pipeline_tracker.py](pikaraoke/lib/pipeline_tracker.py) — read-only reference; verify no signatures change
 
 Reused helpers:
+
 - `get_temp_directory()` from [pikaraoke/lib/get_platform.py](pikaraoke/lib/get_platform.py)
 - `ProcessTerminal` from [pikaraoke/lib/process_terminal.py](pikaraoke/lib/process_terminal.py)
 - `_cleanup_stems()` logic (moves with `ProcessingManager`)
 - Blocked-words filter logic in `enqueue()` (moves with `ProcessingManager`)
 
----
+______________________________________________________________________
 
 ## Verification
 
@@ -578,46 +628,46 @@ Reused helpers:
 
 3. **Manual pipeline verification:**
    a. Start PiKaraoke, download a song end-to-end, verify stems are produced
-      in `vocal/` and `nonvocal/`.
+   in `vocal/` and `nonvocal/`.
    b. Verify the processing terminal window still receives both FFmpeg
-      progress output and audio-separator log lines.
+   progress output and audio-separator log lines.
    c. Download a second song while the first is still processing — verify
-      sequential processing and that `processing_started`/`processing_complete`
-      events fire in order (watch the Processing page UI or log).
+   sequential processing and that `processing_started`/`processing_complete`
+   events fire in order (watch the Processing page UI or log).
 
 4. **Cancel-during-extract:**
    a. Download a long video. Immediately after download completes, cancel
-      via the Processing page.
+   via the Processing page.
    b. Verify FFmpeg exits promptly, no stems are created, `_cleanup_stems`
-      runs, and the StemWorker model is **not** reloaded (check log: no
-      "Audio separator model loaded" message after cancel).
+   runs, and the StemWorker model is **not** reloaded (check log: no
+   "Audio separator model loaded" message after cancel).
 
 5. **Cancel-during-stemming:**
    a. Download a song, let extract finish, cancel during the separation step.
    b. Verify the StemWorker process is SIGKILL'd, orchestrator raises
-      `WorkerDiedError` → `_CancelledError`, stems are cleaned up, and the
-      worker is eagerly restarted (log: "Audio separator model loaded" appears
-      once more before the next job).
+   `WorkerDiedError` → `_CancelledError`, stems are cleaned up, and the
+   worker is eagerly restarted (log: "Audio separator model loaded" appears
+   once more before the next job).
 
 6. **Cancel-during-transcode:**
    a. Download a song, let separation finish, cancel during the transcode
-      step. Note: transcode is fast — may need a long stem or to add a brief
-      artificial delay during manual testing if you want to reliably hit this
-      window.
+   step. Note: transcode is fast — may need a long stem or to add a brief
+   artificial delay during manual testing if you want to reliably hit this
+   window.
    b. Verify FFmpeg exits, partial `vocal/*.m4a` is cleaned up, model is
-      **not** reloaded.
+   **not** reloaded.
 
 7. **Worker crash recovery:**
    a. Manually `kill -9` the stem worker subprocess while it's separating.
    b. Verify orchestrator emits `processing_error`, then successfully
-      processes the next queued song (eager restart).
+   processes the next queued song (eager restart).
 
 8. **Queue orphan regression check:**
    a. Queue 3 songs back-to-back. Cancel song 1 mid-stemming.
    b. Verify songs 2 and 3 still process correctly (no stale queue items,
-      no duplicate processing).
+   no duplicate processing).
 
 9. **Shutdown cleanliness:**
    a. Stop PiKaraoke (Ctrl+C) while stemming is in progress.
    b. Verify no orphaned Python processes (`ps aux | grep python`), PTY
-      socket file is cleaned up, and shutdown completes within ~15s.
+   socket file is cleaned up, and shutdown completes within ~15s.

@@ -21,7 +21,9 @@ def processing():
     k = get_karaoke_instance()
     return render_template(
         "processing.html",
-        site_title=getattr(k, "preferences", None) and k.preferences.get("site_name") or "PiKaraoke",
+        site_title=getattr(k, "preferences", None)
+        and k.preferences.get("site_name")
+        or "PiKaraoke",
         title="Processing",
     )
 

@@ -26,11 +26,13 @@ Use a named FIFO on a RAM-backed filesystem (`/run/user/{uid}/`). No data hits d
 ### 1. Remove file-logging infrastructure
 
 Delete:
+
 - `PROCESSING_LOG_FILE` constant
 - `_processing_log_handler` global
 - `_get_log_handler()` function
 
 Add:
+
 - `logger = logging.getLogger(__name__)` module-level logger
 
 ### 2. Add FIFO + terminal helper functions
@@ -41,6 +43,7 @@ def _find_terminal() -> str | None:
         if shutil.which(term):
             return term
     return None
+
 
 def _create_log_fifo() -> str:
     """Create a named FIFO on tmpfs. Returns the path."""
@@ -56,6 +59,7 @@ def _create_log_fifo() -> str:
 ### 3. Modify `ProcessingManager.__init__`
 
 Add instance variables:
+
 ```python
 self._fifo_path: str | None = None
 self._log_stream: io.TextIOWrapper | None = None
@@ -70,15 +74,23 @@ if terminal:
     self._fifo_path = _create_log_fifo()
     # Launch terminal reading from FIFO — cat will block until writer opens
     self._terminal_proc = subprocess.Popen(
-        [terminal, "-title", "PiKaraoke: Stem Processing", "-e",
-         "cat", self._fifo_path],
+        [
+            terminal,
+            "-title",
+            "PiKaraoke: Stem Processing",
+            "-e",
+            "cat",
+            self._fifo_path,
+        ],
     )
     # Open write end — blocks until cat opens read end (self-synchronizing)
     self._log_stream = open(self._fifo_path, "w", buffering=1)
     handler: logging.Handler = logging.StreamHandler(self._log_stream)
-    handler.setFormatter(logging.Formatter(
-        "[%(asctime)s] %(levelname)s: %(message)s", datefmt="%H:%M:%S"
-    ))
+    handler.setFormatter(
+        logging.Formatter(
+            "[%(asctime)s] %(levelname)s: %(message)s", datefmt="%H:%M:%S"
+        )
+    )
 else:
     handler = logging.NullHandler()
 
@@ -92,6 +104,7 @@ logger.propagate = False
 ### 5. Modify worker to accept FIFO path
 
 Change `_make_worker_process` to pass `self._fifo_path`:
+
 ```python
 def _make_worker_process(self) -> Process:
     return Process(
@@ -102,11 +115,13 @@ def _make_worker_process(self) -> Process:
 ```
 
 Change `_run_worker_process` signature:
+
 ```python
 def _run_worker_process(queue, result_queue, fifo_path: str | None) -> None:
 ```
 
 Worker sets up its own handler by opening the FIFO path:
+
 ```python
 if fifo_path:
     stream = open(fifo_path, "w", buffering=1)
@@ -126,7 +141,7 @@ sep_logger.setLevel(logging.DEBUG)
 sep_logger.propagate = False
 ```
 
-**Multiple writers to a FIFO are safe** — POSIX guarantees atomic writes for messages <= PIPE_BUF (4096 bytes on Linux). Log lines are well under this limit.
+**Multiple writers to a FIFO are safe** — POSIX guarantees atomic writes for messages \<= PIPE_BUF (4096 bytes on Linux). Log lines are well under this limit.
 
 ### 6. Change all `logging.*` calls to `logger.*`
 
@@ -161,23 +176,35 @@ def stop(self) -> None:
 ## Potential Pitfalls & Mitigations
 
 ### FIFO open blocking
-`open(fifo_path, "w")` blocks until a reader opens the other end. Since `cat` is launched first, it should open the read end quickly. In practice this is < 1 second. If it's a concern, we could open in a thread with a timeout — but start simple.
+
+`open(fifo_path, "w")` blocks until a reader opens the other end. Since `cat` is launched first, it should open the read end quickly. In practice this is \< 1 second. If it's a concern, we could open in a thread with a timeout — but start simple.
 
 ### Terminal `-e` syntax differences
+
 - `xterm -e cmd arg1 arg2` — treats remaining args as command + args
 - `lxterminal -e "cmd arg1 arg2"` — expects single string after -e
 - `xfce4-terminal -e "cmd arg1 arg2"` — same as lxterminal
 
 Mitigation: use `sh -c` wrapper for consistency:
+
 ```python
-[terminal, "-title", "PiKaraoke: Stem Processing", "-e", f"sh -c 'cat {shlex.quote(self._fifo_path)}'"]
+[
+    terminal,
+    "-title",
+    "PiKaraoke: Stem Processing",
+    "-e",
+    f"sh -c 'cat {shlex.quote(self._fifo_path)}'",
+]
 ```
 
 ### Worker dies and restarts (line 99)
+
 When `_check_worker_health()` restarts the worker, the new worker needs the FIFO path. Since `_make_worker_process` reads `self._fifo_path`, this works automatically.
 
 ### FIFO cleanup on crash
+
 If the process crashes without calling `stop()`, the FIFO file remains on tmpfs. Mitigated by:
+
 1. `_create_log_fifo()` unlinks existing FIFO before creating a new one
 2. tmpfs is cleared on reboot anyway
 

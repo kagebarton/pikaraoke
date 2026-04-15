@@ -6,7 +6,7 @@ Model: Claude Haiku 4.5
 
 Evaluation of the `ProcessingManager` refactor and `PipelineTracker` implementation against plan objectives. Identified 6 bugs, 5 robustness concerns, and 3 architectural improvements. Fixes are small and low-risk; ready to implement immediately.
 
----
+______________________________________________________________________
 
 ## Critical Bugs (Fix Now)
 
@@ -15,6 +15,7 @@ Evaluation of the `ProcessingManager` refactor and `PipelineTracker` implementat
 **File:** `pikaraoke/lib/pipeline_tracker.py:191-200`
 
 **Problem:**
+
 ```python
 for item in self._items:
     if item.download_status in ("pending", "active"):
@@ -27,19 +28,25 @@ The comment claims "Match by checking if the song_path contains the video URL ID
 
 **Fix:**
 Extract video ID from both `song_path` (filename) and `item.url`, match by ID:
+
 ```python
 from pikaraoke.lib.youtube_dl import get_youtube_id_from_path, get_youtube_id_from_url
+
 
 def _on_song_downloaded(self, song_path: str) -> None:
     video_id = get_youtube_id_from_path(song_path)
     if not video_id:
         logging.warning(f"Could not extract video ID from {song_path}")
         return
-    
+
     with self._lock:
         for item in self._items:
             item_id = get_youtube_id_from_url(item.url)
-            if item_id and item_id == video_id and item.download_status in ("pending", "active"):
+            if (
+                item_id
+                and item_id == video_id
+                and item.download_status in ("pending", "active")
+            ):
                 item.song_path = song_path
                 item.download_status = "complete"
                 item.download_progress = 100.0
@@ -48,13 +55,14 @@ def _on_song_downloaded(self, song_path: str) -> None:
 
 **Risk:** Low. Requires importing existing helpers; no API changes.
 
----
+______________________________________________________________________
 
 ### B2: `ProcessingManager.enqueue()` mutates `pending_jobs` without lock
 
 **File:** `pikaraoke/lib/processing_manager.py:112-132`
 
 **Problem:**
+
 ```python
 def enqueue(self, song_path: str) -> None:
     # ... filter logic ...
@@ -68,6 +76,7 @@ def enqueue(self, song_path: str) -> None:
 Every other access to `pending_jobs` (`cancel_pending`, `_orchestrator_loop`, `get_status`) is guarded by `_state_lock`. This inconsistency means concurrent readers (UI polling `get_status`) can observe transient states. CPython's GIL prevents crashes, but the invariant is broken.
 
 **Fix:**
+
 ```python
 def enqueue(self, song_path: str) -> None:
     # ... filter logic ...
@@ -85,13 +94,14 @@ def enqueue(self, song_path: str) -> None:
 
 **Risk:** Low. Lock is already used everywhere else; same pattern.
 
----
+______________________________________________________________________
 
 ### B3: `StemWorker.start()` leaks old pipe file descriptors on restart
 
 **File:** `pikaraoke/lib/stem_worker.py:54-73`
 
 **Problem:**
+
 ```python
 def start(self) -> None:
     job_recv, job_send = Pipe(duplex=False)
@@ -104,19 +114,29 @@ On worker crash → eager restart, the old pipe connections are overwritten with
 
 **Fix:**
 Call `kill()` (which closes all connections) before creating new ones:
+
 ```python
 def start(self) -> None:
     # Close any old connections from a previous start/restart
     if self._process is not None and self._process.is_alive():
         self._process.terminate()  # request graceful exit
-    if any(conn is not None for conn in (self._job_send, self._job_recv, self._result_send, self._result_recv)):
+    if any(
+        conn is not None
+        for conn in (
+            self._job_send,
+            self._job_recv,
+            self._result_send,
+            self._result_recv,
+        )
+    ):
         self.kill()  # closes all old connections
-    
+
     job_recv, job_send = Pipe(duplex=False)
     # ... rest of start logic
 ```
 
 Or inline the close logic if you prefer not to call `kill()` from `start()`:
+
 ```python
 def start(self) -> None:
     for conn in (self._job_send, self._job_recv, self._result_recv, self._result_send):
@@ -125,20 +145,21 @@ def start(self) -> None:
                 conn.close()
             except OSError:
                 pass
-    
+
     job_recv, job_send = Pipe(duplex=False)
     # ... rest
 ```
 
 **Risk:** Low. Defensive; prevents a slow leak under repeated crashes.
 
----
+______________________________________________________________________
 
 ### B4: Dead/confusing branch in `get_status`
 
 **File:** `pikaraoke/lib/pipeline_tracker.py:109-110`
 
 **Problem:**
+
 ```python
 elif item.download_status == "error":
     item.processing_status = "complete"  # download errored, processing never ran
@@ -148,6 +169,7 @@ This branch is unreachable: if download errored, the earlier `if item.song_path 
 
 **Fix:**
 Delete the branch entirely. The logic is:
+
 - If `song_path is None` → "waiting" (download still pending/active or error)
 - Else if active → "active"
 - Else if pending → "pending"
@@ -155,13 +177,14 @@ Delete the branch entirely. The logic is:
 
 **Risk:** Trivial cleanup.
 
----
+______________________________________________________________________
 
 ### B5: Errored download shows "waiting" on processing icon — misleading
 
 **File:** `pikaraoke/lib/pipeline_tracker.py:99-104`
 
 **Problem:**
+
 ```python
 if item.song_path is None:
     if item.download_status == "error":
@@ -174,6 +197,7 @@ When a download errors, the item sits in the tracker showing a grey "waiting" pr
 
 **Fix:**
 Introduce a "n/a" (not-applicable) processing status, or distinguish in `stepClass()`:
+
 ```python
 if item.download_status == "error" and item.song_path is None:
     item.processing_status = "n/a"  # download failed, processing never started
@@ -182,6 +206,7 @@ elif item.song_path is None:
 ```
 
 Update the UI (`processing.html`):
+
 ```javascript
 function stepClass(status, type) {
     if (status === 'n/a') return 'step-n-a';  // lighter grey, no pulse
@@ -191,6 +216,7 @@ function stepClass(status, type) {
 ```
 
 And CSS:
+
 ```css
 .step-n-a {
     color: #999;  /* lighter grey than pending */
@@ -199,6 +225,7 @@ And CSS:
 ```
 
 Or simpler: just use "error" for the processing icon when download failed:
+
 ```python
 if item.download_status == "error":
     item.processing_status = "error"
@@ -208,7 +235,7 @@ elif item.song_path is None:
 
 **Risk:** Low. UI clarification; no state changes.
 
----
+______________________________________________________________________
 
 ### B6: Rapid cancel clicks re-enter active-cancel branch
 
@@ -221,6 +248,7 @@ Not a bug, but the button should be suppressed to prevent re-entry.
 
 **Fix:**
 Early-return if already cancelling:
+
 ```python
 def cancel(self, item_id: str) -> bool:
     song_to_delete: str | None = None
@@ -228,18 +256,18 @@ def cancel(self, item_id: str) -> bool:
         item = self._find_item(item_id)
         if item is None:
             return False
-        
+
         # Already cancelling: ignore
         if item.cancelling:
             return False
-        
+
         if item.download_status == "active":
             # ... rest
 ```
 
 **Risk:** Trivial. Defensive.
 
----
+______________________________________________________________________
 
 ## Robustness Concerns (Track)
 
@@ -248,6 +276,7 @@ def cancel(self, item_id: str) -> bool:
 If a user deletes a song from the edit page while it's still in the tracker mid-processing, `_on_song_deleted` removes the tracker item. The orchestrator keeps processing and eventually fires `processing_complete`, which calls `_on_processing_complete` and fails to find the item — silent no-op.
 
 **Status:** Not a bug, but add a comment to `_on_processing_complete`:
+
 ```python
 def _on_processing_complete(self, song_path: str) -> None:
     with self._lock:
@@ -258,7 +287,7 @@ def _on_processing_complete(self, song_path: str) -> None:
         # Item not found: song was deleted mid-processing (user action). Silent no-op.
 ```
 
----
+______________________________________________________________________
 
 ### R2: `get_status()` mutates item fields — surprising API
 
@@ -267,10 +296,11 @@ def _on_processing_complete(self, song_path: str) -> None:
 The method reads state but also writes `item.download_progress`, `item.download_status`, `item.processing_status`. Correct (lock is held), but semantically surprising for a "get" method.
 
 **Recommendation:** Add a docstring clarifying that this is a refresh-and-return operation:
+
 ```python
 def get_status(self) -> list[dict[str, Any]]:
     """Return enriched status for all pipeline items.
-    
+
     Derives processing status from ProcessingManager state, merges live
     download progress from DownloadManager, and mutates items under lock.
     Called on each UI poll to keep items' transient state fresh.
@@ -279,7 +309,7 @@ def get_status(self) -> list[dict[str, Any]]:
 
 No code change needed; just documentation.
 
----
+______________________________________________________________________
 
 ### R3: Orchestrator thread 0.5s polling timeout is unnecessary
 
@@ -296,13 +326,14 @@ while not self._stop_event.is_set():
 The shutdown sentinel (`put(None)`) already wakes the blocked `get()`. The 0.5s timeout adds a redundant wakeup every 500ms even when idle. Minor inefficiency.
 
 **Recommendation:** Use blocking `get()` — the timeout was defensive but unnecessary:
+
 ```python
 song_path = self._pending_queue.get()  # blocks until item or sentinel
 ```
 
 **Trade-off:** Loses the heartbeat. If you ever want a periodic "health check" in the orchestrator (e.g., worker crash detection), keep the timeout. For now, blocking is cleaner.
 
----
+______________________________________________________________________
 
 ### R4: `subprocess.Popen` has no `close_fds=True` — Windows compat edge case
 
@@ -315,11 +346,12 @@ proc = subprocess.Popen(cmd, stdout=stdout_fd, stderr=stderr_fd)
 Missing `close_fds=True`. On POSIX (Linux/macOS), it's default `True` since Python 3.7. On Windows, it's default `False`, risking fd inheritance.
 
 **Status:** Low risk (you gate the PTY on `is_windows()` elsewhere, so Windows is already handled carefully). But for robustness:
+
 ```python
 proc = subprocess.Popen(cmd, stdout=stdout_fd, stderr=stderr_fd, close_fds=True)
 ```
 
----
+______________________________________________________________________
 
 ### R5: `cancel_pending_download` rebuilds the entire Queue
 
@@ -341,13 +373,14 @@ self.download_queue = new_queue
 O(n) rebuild. For realistic queue sizes (single digits), fine. But the `task_done()` call for the skipped item is necessary only if the original queue owner hasn't drained the queue fully. Edge case, probably unreachable, but fragile.
 
 **Status:** Works in practice. Worth a comment explaining why `task_done()` is safe here:
+
 ```python
 # Call task_done() for the removed item so the queue is consistent.
 # The original _process_queue hasn't reached this item yet (we're removing it).
 self.download_queue.task_done()
 ```
 
----
+______________________________________________________________________
 
 ## Architectural Improvements (Defer)
 
@@ -388,11 +421,14 @@ ProcessingManager (main process, orchestration + worker lifecycle)
 ```
 
 **Design sketch:**
+
 ```python
 class PipelineStage(Protocol):
     name: str
+
     def run(self, ctx: StageContext) -> None: ...
     def cancel(self, ctx: StageContext) -> None: ...  # optional; flag-only default
+
 
 class StageContext:
     song_path: Path
@@ -400,29 +436,40 @@ class StageContext:
     artifacts: dict[str, Path]  # "wav_in", "vocal_wav", "instrumental_wav", ...
     cancelled: threading.Event
 
+
 # Concrete stages:
 class FFmpegExtractStage(PipelineStage):
     def run(self, ctx): ...  # spawns ffmpeg, captures wav_in
 
+
 class StemSeparationStage(PipelineStage):
     def __init__(self, stem_worker: StemWorker) -> None:
         self._worker = stem_worker  # injected, not owned — stays across jobs
+
     def run(self, ctx):
-        vocal, instrumental = self._worker.separate(ctx.artifacts["wav_in"], ctx.tmp_dir)
+        vocal, instrumental = self._worker.separate(
+            ctx.artifacts["wav_in"], ctx.tmp_dir
+        )
         ctx.artifacts["vocal_wav"] = vocal
         ctx.artifacts["instrumental_wav"] = instrumental
-    def cancel(self, ctx): pass  # delayed cancel — let separate() finish
+
+    def cancel(self, ctx):
+        pass  # delayed cancel — let separate() finish
+
 
 class LyricExtractionStage(PipelineStage):  # future
     def __init__(self, lyric_worker: LyricWorker) -> None:
         self._worker = lyric_worker
+
     def run(self, ctx): ...
+
 
 class FFmpegTranscodeStage(PipelineStage):
     def run(self, ctx): ...  # spawns ffmpeg for vocal + instrumental
 ```
 
 Then:
+
 ```python
 def __init__(self, ...):
     self._stem_worker = StemWorker(...)
@@ -467,13 +514,14 @@ Adding `LyricExtractionStage` with a new `LyricWorker` follows the same pattern 
 
 **Note:** Keep this plan entry so the intent is clear when LyricWorker arrives. The architecture is already compatible with worker injection; LyricWorker just becomes another stage.
 
----
+______________________________________________________________________
 
 ### A2: Pure event-driven tracker — no state cross-references
 
 **Why:** Current tracker bridges manager state on each `get_status()` call (B1, B4, B5 stem from this). An alternative: make managers emit structured lifecycle events with correlation IDs, and the tracker is purely event-driven with no `get_status` cross-references.
 
 Example events:
+
 ```
 download_queued(item_id, url, title, user)
 download_started(item_id, url)
@@ -489,6 +537,7 @@ processing_errored(song_path, error)
 ```
 
 Tracker becomes:
+
 ```python
 def get_status(self) -> list[dict]:
     with self._lock:
@@ -499,13 +548,14 @@ def get_status(self) -> list[dict]:
 
 **When:** Aspirational. Not worth the refactor until the current approach shows real strain (e.g., B1 strikes in production).
 
----
+______________________________________________________________________
 
 ### A3: Socket-driven UI refresh instead of polling
 
 **Why:** `/processing/status` is polled every 1s, waking the server even when nothing changed. You already have Socket.IO for `download_started`/`download_stopped` — extend it.
 
 **Design:**
+
 ```python
 # In tracker, on state change:
 self._events.emit("pipeline_updated", self.get_status())
@@ -532,37 +582,42 @@ if (typeof window.socket === 'undefined') {
 
 **Trade-off:** Adds socket event traffic. 1s polling is already cheap enough that this is an optimization, not a fix. Nice-to-have.
 
----
+______________________________________________________________________
 
 ## Implementation Order
 
-1. **Immediate (all <5 min):**
+1. **Immediate (all \<5 min):**
+
    - B2: add lock to `enqueue()`
    - B3: close old pipes in `start()`
    - B4: delete dead branch
    - B6: early-return if `cancelling`
 
 2. **Short-term (same session):**
+
    - B1: match downloads by video ID
    - B5: clarify errored download icon
    - R2: clarify `get_status()` docstring
    - R3: use blocking `get()` in orchestrator
 
 3. **Nice-to-have (polish):**
+
    - R4: add `close_fds=True` to Popen
    - R5: comment on `task_done()` safety
    - R1: comment on delete collision
 
 4. **Defer (implement with LyricWorker):**
+
    - A1: stage-based pipeline
    - A2: pure event-driven tracker
    - A3: socket-driven UI refresh
 
----
+______________________________________________________________________
 
 ## Testing
 
 After fixes, re-verify:
+
 1. Rapid cancel clicks don't cause duplicate state mutations.
 2. Download completion correctly pairs song_path to tracker entry (edge case: out-of-order events).
 3. Errored downloads show appropriate icon.
