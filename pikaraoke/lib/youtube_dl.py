@@ -151,10 +151,8 @@ def build_ytdl_download_command(
         "--write-subs",
         "--sub-langs",
         "en.*",
-        #'--sub-format',
-        #'best',
         "--convert-subs",
-        "ass",
+        "srt",
     ]
     cmd = yt_dlp_cmd + args + _js_runtime_args()
     if youtubedl_proxy:

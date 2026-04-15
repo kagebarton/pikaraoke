@@ -36,9 +36,9 @@ _OVERLAY_STYLE = "\\bord3\\shad2\\3c&H000000&\\4c&H000000&\\4a&H80&"
 
 
 class ScreenMode(Enum):
-    IDLE = "idle"       # placeholder loaded; splash overlays visible
-    PLAYING = "playing" # video playing
-    PAUSED = "paused"   # video paused
+    IDLE = "idle"  # placeholder loaded; splash overlays visible
+    PLAYING = "playing"  # video playing
+    PAUSED = "paused"  # video paused
 
 
 @dataclass(frozen=True)
@@ -72,14 +72,15 @@ class Overlay:
     """
 
     id: int
-    anchor: str                # ASS anchor tag, e.g. "\\an7"
-    pos: tuple[float, float]   # logical coords on 1920x1080 canvas
+    anchor: str  # ASS anchor tag, e.g. "\\an7"
+    pos: tuple[float, float]  # logical coords on 1920x1080 canvas
     font_size: int
     color: str
     text: str
 
 
 # ── Pure helpers ───────────────────────────────────────────────────────────────
+
 
 def _overlay_font_size(screen_h: int) -> int:
     qr_h = max(120, screen_h // 6)
@@ -98,6 +99,7 @@ def render_ass(o: Overlay) -> str:
 
 
 # ── Overlay builders ───────────────────────────────────────────────────────────
+
 
 def _build_url_overlay(state: OverlayState, fs: int) -> Overlay:
     qr_h = max(120, state.screen_h // 6)
@@ -164,6 +166,7 @@ def _build_clock_overlay(state: OverlayState, fs: int) -> Overlay:
 
 # ── Decision layer ─────────────────────────────────────────────────────────────
 
+
 def compute_overlays(state: OverlayState) -> dict[int, Overlay]:
     """Return the set of overlays that should be visible for the given state.
 
@@ -199,6 +202,7 @@ def compute_overlays(state: OverlayState) -> dict[int, Overlay]:
 
 
 # ── Diff & apply ───────────────────────────────────────────────────────────────
+
 
 class OverlayManager:
     """Diffs desired overlays against last-sent and drives MpvController IPC.

@@ -19,8 +19,8 @@ from pikaraoke.lib.overlay_manager import (
     render_ass,
 )
 
-
 # ── Helpers ────────────────────────────────────────────────────────────────────
+
 
 def _idle_state(**overrides) -> OverlayState:
     defaults = dict(
@@ -70,6 +70,7 @@ def _mock_mpv():
 
 # ── compute_overlays: IDLE ─────────────────────────────────────────────────────
 
+
 class TestComputeOverlaysIdle:
     def test_url_always_visible_on_idle(self):
         state = _idle_state()
@@ -101,6 +102,7 @@ class TestComputeOverlaysIdle:
 
 
 # ── compute_overlays: PLAYING ──────────────────────────────────────────────────
+
 
 class TestComputeOverlaysPlaying:
     def test_url_present_by_default(self):
@@ -177,11 +179,16 @@ class TestComputeOverlaysPlaying:
 
 # ── render_ass ─────────────────────────────────────────────────────────────────
 
+
 class TestRenderAss:
     def test_contains_anchor_and_position(self):
         o = Overlay(
-            id=OSD_URL, anchor="\\an7", pos=(100.0, 0.0),
-            font_size=30, color="&HFFFFFF&", text="http://test",
+            id=OSD_URL,
+            anchor="\\an7",
+            pos=(100.0, 0.0),
+            font_size=30,
+            color="&HFFFFFF&",
+            text="http://test",
         )
         result = render_ass(o)
         assert "\\an7" in result
@@ -191,14 +198,19 @@ class TestRenderAss:
 
     def test_text_is_at_end(self):
         o = Overlay(
-            id=OSD_NOWPLAYING, anchor="\\an9", pos=(1920.0, 0.0),
-            font_size=40, color="&H507FFF&", text="Now Playing: Foo",
+            id=OSD_NOWPLAYING,
+            anchor="\\an9",
+            pos=(1920.0, 0.0),
+            font_size=40,
+            color="&H507FFF&",
+            text="Now Playing: Foo",
         )
         result = render_ass(o)
         assert result.endswith("Now Playing: Foo")
 
 
 # ── OverlayManager diff behaviour ─────────────────────────────────────────────
+
 
 class TestOverlayManagerDiff:
     def test_first_apply_sends_visible_overlays(self):

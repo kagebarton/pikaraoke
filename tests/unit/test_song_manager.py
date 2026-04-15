@@ -116,17 +116,17 @@ class TestDelete:
         assert not song.exists()
         assert len(sm.songs) == 0
 
-    def test_deletes_ass_companion(self, tmp_path, mock_db):
+    def test_deletes_srt_companion(self, tmp_path, mock_db):
         song = tmp_path / "Test---abc.mp4"
         subtitles_dir = tmp_path / "subtitles"
         subtitles_dir.mkdir()
-        ass = subtitles_dir / "Test---abc.ass"
+        srt = subtitles_dir / "Test---abc.srt"
         song.write_text("fake")
-        ass.write_text("fake")
+        srt.write_text("fake")
         sm = SongManager(str(tmp_path), db=mock_db)
         sm.songs.add_if_valid(_native(song))
         sm.delete(_native(song))
-        assert not ass.exists()
+        assert not srt.exists()
 
     def test_nonexistent_file_no_error(self, tmp_path, mock_db):
         sm = SongManager(str(tmp_path), db=mock_db)
@@ -143,18 +143,18 @@ class TestRename:
         assert not song.exists()
         assert (tmp_path / "New Name---abc.mp4").exists()
 
-    def test_renames_ass_companion(self, tmp_path, mock_db):
+    def test_renames_srt_companion(self, tmp_path, mock_db):
         song = tmp_path / "Old---abc.mp4"
         subtitles_dir = tmp_path / "subtitles"
         subtitles_dir.mkdir()
-        ass = subtitles_dir / "Old---abc.ass"
+        srt = subtitles_dir / "Old---abc.srt"
         song.write_text("fake")
-        ass.write_text("fake")
+        srt.write_text("fake")
         sm = SongManager(str(tmp_path), db=mock_db)
         sm.songs.add_if_valid(_native(song))
         sm.rename(_native(song), "New---abc")
-        assert (subtitles_dir / "New---abc.ass").exists()
-        assert not ass.exists()
+        assert (subtitles_dir / "New---abc.srt").exists()
+        assert not srt.exists()
 
     def test_returns_new_path(self, tmp_path, mock_db):
         song = tmp_path / "Old---abc.mp4"

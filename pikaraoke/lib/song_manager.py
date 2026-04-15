@@ -63,22 +63,21 @@ class SongManager:
         return name
 
     def _get_companion_files(self, song_path: str) -> list[str]:
-        """Return paths to companion files (.ass, vocal/nonvocal) that exist alongside a song.
+        """Return paths to companion files (.srt, vocal/nonvocal) that exist alongside a song.
 
-        ASS subtitle files are expected in a 'subtitles' subfolder.
+        Downloaded subtitles (.srt) are expected in a 'subtitles' subfolder.
         Audio separator files are expected in 'vocal/' and 'nonvocal/' subfolders.
+        # Karaoke captions (.ass, generated from confirmed lyrics) will be added here
+        # in a separate subfolder in a future change.
         """
         dirpath = os.path.dirname(song_path)
         base = os.path.splitext(os.path.basename(song_path))[0]
         companions = []
 
-        # ASS subtitles live in the subtitles/ subfolder
-        subtitles_dir = os.path.join(dirpath, "subtitles")
-        for ext in (".ass", ".ASS", ".Ass"):
-            ass_path = os.path.join(subtitles_dir, base + ext)
-            if os.path.exists(ass_path):
-                companions.append(ass_path)
-                break
+        # Downloaded subtitles live in the subtitles/ subfolder as .srt
+        srt_path = os.path.join(dirpath, "subtitles", base + ".srt")
+        if os.path.exists(srt_path):
+            companions.append(srt_path)
 
         # Audio separator files live in vocal/ and nonvocal/ subfolders
         for subdir, suffix in (("vocal", "---vocal"), ("nonvocal", "---nonvocal")):

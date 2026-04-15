@@ -319,22 +319,6 @@ class TestBuildSongRecord:
         assert record["format"] == "mp4"
         assert record["youtube_id"] == "dQw4w9WgXcQ"
 
-    def test_mp4_ass_pair_detected(self, tmp_path):
-        mp4 = tmp_path / "Song---abc1234567x.mp4"
-        ass = tmp_path / "Song---abc1234567x.ass"
-        mp4.touch()
-        ass.touch()
-        record = build_song_record(str(mp4))
-        assert record["format"] == "ass"
-
-    def test_ass_uppercase_detected(self, tmp_path):
-        mp4 = tmp_path / "Song---abc1234567x.mp4"
-        ass = tmp_path / "Song---abc1234567x.ASS"
-        mp4.touch()
-        ass.touch()
-        record = build_song_record(str(mp4))
-        assert record["format"] == "ass"
-
     def test_zip_format(self, tmp_path):
         zf = tmp_path / "Song---abc1234567x.zip"
         zf.touch()

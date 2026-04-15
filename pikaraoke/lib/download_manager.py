@@ -349,7 +349,7 @@ class DownloadManager:
             if song_path:
                 self._events.emit("song_downloaded", song_path)
                 # Rename subtitle file to remove language code
-                self._rename_subtitle_file(song_path)
+                self._move_downloaded_subtitle(song_path)
             else:
                 logging.warning(
                     f"Could not find downloaded song in {self._download_path} matching ID: {video_id}"
@@ -416,25 +416,25 @@ class DownloadManager:
                     except OSError as e:
                         logging.warning(f"Failed to clean partial download {f}: {e}")
 
-    def _rename_subtitle_file(self, video_path: str) -> None:
+    def _move_downloaded_subtitle(self, video_path: str) -> None:
         video = Path(video_path)
         subtitles_dir = video.parent / "subtitles"
         subtitles_dir.mkdir(exist_ok=True)
-        target = subtitles_dir / f"{video.stem}.ass"
+        target = subtitles_dir / f"{video.stem}.srt"
 
-        # All subtitle candidates in the song folder: Song---abc123.en.ass, .vtt, .srv3, etc.
+        # All subtitle candidates in the song folder: Song---abc123.en.srt, .vtt, .srv3, etc.
         candidates = {
             f
-            for ext in (".ass", ".vtt", ".srv3", ".ttml")
+            for ext in (".srt", ".vtt", ".srv3", ".ttml")
             for f in video.parent.glob(f"{video.stem}*{ext}")
         }
 
-        ass_files = {f for f in candidates if f.suffix == ".ass"}
-        if not ass_files:
+        srt_files = {f for f in candidates if f.suffix == ".srt"}
+        if not srt_files:
             logging.debug(f"No subtitle found for video: {video_path}")
             return
 
-        source = next(iter(ass_files))
+        source = next(iter(srt_files))
         try:
             source.rename(target)
             logging.debug(f"Moved subtitle: {source.name} -> {target}")

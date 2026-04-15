@@ -100,7 +100,7 @@ class PlaybackController:
             f"Playing file: {file_path} for user: {user}, transposed {semitones} semitones"
         )
 
-        # Find subtitle file (check subtitles/ subfolder for .ass, fall back to .srt)
+        # Find subtitle file (.srt in subtitles/ subfolder)
         subtitle_path = self._find_subtitle(file_path)
         subtitle_delay = self.preferences.get_or_default("subtitle_delay")
 
@@ -135,10 +135,10 @@ class PlaybackController:
         return PlaybackResult(success=True)
 
     def _find_subtitle(self, file_path: str) -> str | None:
-        """Find subtitle file for a media file.
+        """Find the downloaded-subtitle (.srt) companion for a media file.
 
-        Checks the 'subtitles' subfolder for .ass (karaoke subtitle),
-        falling back to .srt.
+        Karaoke captions (.ass, generated from confirmed lyrics) will be
+        added here behind a user preference in a future change.
 
         Args:
             file_path: Path to the media file.
@@ -147,21 +147,10 @@ class PlaybackController:
             Path to subtitle file, or None.
         """
         base_name = os.path.splitext(os.path.basename(file_path))[0]
-        subtitles_dir = os.path.join(os.path.dirname(file_path), "subtitles")
-
-        # Check for .ass first (karaoke subtitle with embedded styles)
-        for ext in (".ass", ".ASS", ".Ass"):
-            ass_path = os.path.join(subtitles_dir, base_name + ext)
-            if os.path.exists(ass_path):
-                logging.debug(f"ASS subtitle file found: {ass_path}")
-                return ass_path
-
-        # Fall back to .srt
-        srt_path = os.path.join(subtitles_dir, base_name + ".srt")
+        srt_path = os.path.join(os.path.dirname(file_path), "subtitles", base_name + ".srt")
         if os.path.exists(srt_path):
             logging.debug(f"SRT subtitle file found: {srt_path}")
             return srt_path
-
         return None
 
     def end_song(self, reason: str | None = None) -> None:

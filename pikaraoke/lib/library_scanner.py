@@ -2,7 +2,6 @@
 
 import logging
 import os
-from collections import defaultdict
 from dataclasses import dataclass
 
 from pikaraoke.lib.karaoke_database import KaraokeDatabase
@@ -12,34 +11,16 @@ from pikaraoke.lib.song_list import SongList
 _VALID_EXTENSIONS = SongList.VALID_EXTENSIONS
 
 
-def build_song_record(
-    file_path: str,
-    files_in_dir: set[str] | None = None,
-    files_lower: set[str] | None = None,
-) -> dict:
+def build_song_record(file_path: str) -> dict:
     """Construct a song dict ready for KaraokeDatabase.insert_songs().
-
-    Inspects the file's directory for companion files (.ass) to
-    determine the correct format.
 
     Args:
         file_path: Full path to the song file.
-        files_in_dir: Pre-cached directory listing. When None, os.listdir
-            is called (convenient for single-file registration).
-        files_lower: Pre-lowered filenames for companion detection. Built
-            from files_in_dir when not provided.
     """
-    if files_in_dir is None:
-        try:
-            files_in_dir = set(os.listdir(os.path.dirname(file_path)))
-        except OSError:
-            files_in_dir = set()
-    if files_lower is None:
-        files_lower = {f.lower() for f in files_in_dir}
     return {
         "file_path": file_path,
         "youtube_id": _extract_youtube_id(file_path),
-        "format": _detect_format(file_path, files_lower),
+        "format": _detect_format(file_path),
     }
 
 
@@ -54,14 +35,9 @@ def _extract_youtube_id(file_path: str) -> str | None:
     return suffix.strip(" []")
 
 
-def _detect_format(file_path: str, files_lower: set[str]) -> str:
-    """Detect the song format, checking for companion files (.ass)."""
-    base, ext = os.path.splitext(os.path.basename(file_path))
-    ext = ext.lower()
-    base_lower = base.lower()
-    if ext == ".mp4" and (base_lower + ".ass") in files_lower:
-        return "ass"
-    return ext.lstrip(".")
+def _detect_format(file_path: str) -> str:
+    """Detect the song format from its extension."""
+    return os.path.splitext(file_path)[1].lstrip(".").lower()
 
 
 @dataclass
@@ -138,23 +114,7 @@ class LibraryScanner:
         else:
             circuit_tripped = self._check_circuit_breaker(len(to_delete), len(db_paths))
 
-        # Cache directory listings so os.listdir is called once per directory
-        # instead of once per file (companion file detection needs the listing).
-        if to_insert:
-            by_dir: dict[str, list[str]] = defaultdict(list)
-            for p in to_insert:
-                by_dir[os.path.dirname(p)].append(p)
-            records = []
-            for dirpath, paths in by_dir.items():
-                try:
-                    files_in_dir = set(os.listdir(dirpath))
-                except OSError:
-                    files_in_dir = set()
-                files_lower = {f.lower() for f in files_in_dir}
-                for p in paths:
-                    records.append(build_song_record(p, files_in_dir, files_lower))
-        else:
-            records = []
+        records = [build_song_record(p) for p in to_insert]
         deletes = list(to_delete) if to_delete and not circuit_tripped else []
 
         self._db.apply_scan_diff(moves, records, deletes)

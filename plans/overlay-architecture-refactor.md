@@ -34,9 +34,9 @@ Location: `pikaraoke/lib/overlay_manager.py`
 
 ```python
 class ScreenMode(Enum):
-    IDLE    = "idle"     # placeholder image loaded, splash overlays visible
+    IDLE = "idle"  # placeholder image loaded, splash overlays visible
     PLAYING = "playing"  # video loaded, playing
-    PAUSED  = "paused"   # video loaded, paused
+    PAUSED = "paused"  # video loaded, paused
 ```
 
 `PLAYING` and `PAUSED` are distinct so overlays can (optionally, later) react to pause. For now they produce identical overlays.
@@ -76,12 +76,12 @@ Declarative description of one OSD entry. Knows nothing about *when* it should a
 ```python
 @dataclass(frozen=True)
 class Overlay:
-    id: int                       # OSD_URL, OSD_NOWPLAYING, ...
-    anchor: str                   # ASS anchor tag, e.g. "\\an7"
-    pos: tuple[float, float]      # logical coords in a 1920x1080 canvas
-    font_size: int                # final ASS \fs value
-    color: str                    # ASS color, e.g. "&HFFFFFF&"
-    text: str                     # already-formatted display text
+    id: int  # OSD_URL, OSD_NOWPLAYING, ...
+    anchor: str  # ASS anchor tag, e.g. "\\an7"
+    pos: tuple[float, float]  # logical coords in a 1920x1080 canvas
+    font_size: int  # final ASS \fs value
+    color: str  # ASS color, e.g. "&HFFFFFF&"
+    text: str  # already-formatted display text
 ```
 
 Equality comparison is what powers the diff: an overlay whose `Overlay` is unchanged since last tick is not re-sent. This eliminates IPC spam and the "update every cycle" behavior in today's poll loop.
@@ -91,11 +91,11 @@ Equality comparison is what powers the diff: an overlay whose `Overlay` is uncha
 Stay in `mpv_controller.py` (re-exported for `overlay_manager`):
 
 ```python
-OSD_URL        = 1
+OSD_URL = 1
 OSD_NOWPLAYING = 2
-OSD_TIMECODE   = 3
-OSD_UPNEXT     = 4
-OSD_CLOCK      = 5
+OSD_TIMECODE = 3
+OSD_UPNEXT = 4
+OSD_CLOCK = 5
 
 ALL_OSD_IDS = (OSD_URL, OSD_NOWPLAYING, OSD_TIMECODE, OSD_UPNEXT, OSD_CLOCK)
 ```
@@ -120,10 +120,13 @@ def compute_overlays(state: OverlayState) -> dict[int, Overlay]:
         result[OSD_URL] = _build_url_overlay(state, fs)
 
     # Now playing / timecode / up next: only while a song is loaded
-    if state.mode in (ScreenMode.PLAYING, ScreenMode.PAUSED) and not state.hide_now_playing:
+    if (
+        state.mode in (ScreenMode.PLAYING, ScreenMode.PAUSED)
+        and not state.hide_now_playing
+    ):
         if state.now_playing_title:
             result[OSD_NOWPLAYING] = _build_nowplaying_overlay(state, fs)
-            result[OSD_TIMECODE]   = _build_timecode_overlay(state, fs)
+            result[OSD_TIMECODE] = _build_timecode_overlay(state, fs)
         if state.up_next_title:
             result[OSD_UPNEXT] = _build_upnext_overlay(state, fs)
 
@@ -184,7 +187,7 @@ class OverlayManager:
 
     def _apply_qr(self, state: OverlayState) -> None:
         """Redraw QR bitmap only when screen size or visibility changes."""
-        visible = (state.mode == ScreenMode.IDLE or not state.hide_url)
+        visible = state.mode == ScreenMode.IDLE or not state.hide_url
         key = (state.screen_h,) if visible else None
         if key == self._last_bitmap_key:
             return
@@ -221,6 +224,7 @@ self._screen_mode: ScreenMode = ScreenMode.IDLE
 self._overlay_manager: OverlayManager  # constructed in __init__
 self._overlay_state_provider: Callable[[], OverlayState] | None = None
 
+
 def set_overlay_state_provider(self, provider: Callable[[], OverlayState]) -> None:
     """Register a callable that builds the current OverlayState.
 
@@ -228,6 +232,7 @@ def set_overlay_state_provider(self, provider: Callable[[], OverlayState]) -> No
     (and on mode changes) to get a fresh snapshot of playback + preference data.
     """
     self._overlay_state_provider = provider
+
 
 def set_mode(self, mode: ScreenMode) -> None:
     """Transition the display mode. Single place where placeholder/video loading lives."""
@@ -240,6 +245,7 @@ def set_mode(self, mode: ScreenMode) -> None:
     # PLAYING/PAUSED do not loadfile here -- that's play()'s job, which
     # calls set_mode(PLAYING) *after* loadfile.
     self._tick_overlays()
+
 
 def _tick_overlays(self) -> None:
     """Build an OverlayState and hand it to OverlayManager.apply()."""
@@ -264,7 +270,7 @@ def _poll_loop(self) -> None:
         dur = self.query_property("duration")
         if dur is not None:
             self.duration = float(dur)
-        self.is_idle   = self.query_property("idle-active") is True
+        self.is_idle = self.query_property("idle-active") is True
         self.is_paused = self.query_property("pause") is True
 
         # Resize detection -> invalidate so next apply() re-sends everything
@@ -457,15 +463,15 @@ One path. The "resize" branch in today's poll loop disappears.
 
 New tests (`tests/unit/test_overlay_manager.py`) — pure unit tests, no MPV:
 
-1. `compute_overlays` returns URL + CLOCK (when pref on) in IDLE mode.
-2. `compute_overlays` omits URL when `hide_url=True` and mode is PLAYING.
-3. `compute_overlays` always includes URL when mode is IDLE (splash screen rule), even if `hide_url=True`.
-4. `compute_overlays` omits NOWPLAYING/TIMECODE/UPNEXT when mode is IDLE.
-5. `compute_overlays` omits UPNEXT when `up_next_title is None`.
-6. `compute_overlays` includes CLOCK iff `show_clock=True`, independent of mode.
-7. `render_ass` produces the expected ASS string for a known `Overlay`.
-8. `OverlayManager.apply` with unchanged state calls no `send_osd` on the second invocation.
-9. `OverlayManager.apply` after a mode change sends only the *added* overlays and clears removed ones.
+01. `compute_overlays` returns URL + CLOCK (when pref on) in IDLE mode.
+02. `compute_overlays` omits URL when `hide_url=True` and mode is PLAYING.
+03. `compute_overlays` always includes URL when mode is IDLE (splash screen rule), even if `hide_url=True`.
+04. `compute_overlays` omits NOWPLAYING/TIMECODE/UPNEXT when mode is IDLE.
+05. `compute_overlays` omits UPNEXT when `up_next_title is None`.
+06. `compute_overlays` includes CLOCK iff `show_clock=True`, independent of mode.
+07. `render_ass` produces the expected ASS string for a known `Overlay`.
+08. `OverlayManager.apply` with unchanged state calls no `send_osd` on the second invocation.
+09. `OverlayManager.apply` after a mode change sends only the *added* overlays and clears removed ones.
 10. `OverlayManager.invalidate()` forces a full re-send on next `apply`.
 
 Tests 8–10 use a fake `MpvController` that records calls.
