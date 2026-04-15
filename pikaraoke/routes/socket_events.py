@@ -1,6 +1,5 @@
 """Socket.IO event handlers for PiKaraoke."""
 
-import logging
 
 from flask import request
 

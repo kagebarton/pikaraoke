@@ -20,6 +20,9 @@ class ChangePreferenceQuery(Schema):
     val = fields.String(required=True, metadata={"description": "New value for the preference"})
 
 
+_OVERLAY_PREFS = {"hide_url", "hide_now_playing_overlay", "show_clock"}
+
+
 @preferences_bp.route("/change_preferences", methods=["GET"])
 @preferences_bp.arguments(ChangePreferenceQuery, location="query")
 def change_preferences(query):
@@ -31,6 +34,8 @@ def change_preferences(query):
         success, message = k.preferences.set(preference, val)
         if success:
             broadcast_event("preferences_update", {"key": preference, "value": val})
+            if preference in _OVERLAY_PREFS:
+                k.playback_controller.refresh_overlays()
         return jsonify([success, message])
     else:
         # MSG: Message shown after trying to change preferences without admin permissions.

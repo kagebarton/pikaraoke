@@ -13,10 +13,7 @@ from qrcode.image.pure import PyPNGImage
 
 from pikaraoke.lib.download_manager import DownloadManager
 from pikaraoke.lib.events import EventSystem
-from pikaraoke.lib.ffmpeg import (
-    get_ffmpeg_version,
-    is_transpose_enabled,
-)
+from pikaraoke.lib.ffmpeg import get_ffmpeg_version, is_transpose_enabled
 from pikaraoke.lib.get_platform import (
     get_data_directory,
     get_os_version,
@@ -24,9 +21,9 @@ from pikaraoke.lib.get_platform import (
     get_temp_directory,
     is_raspberry_pi,
 )
-from pikaraoke.lib.mpv_controller import MpvController
 from pikaraoke.lib.karaoke_database import KaraokeDatabase
 from pikaraoke.lib.library_scanner import LibraryScanner, ScanResult
+from pikaraoke.lib.mpv_controller import MpvController
 from pikaraoke.lib.network import get_ip
 from pikaraoke.lib.pipeline_tracker import PipelineTracker
 from pikaraoke.lib.playback_controller import PlaybackController
@@ -263,13 +260,13 @@ class Karaoke:
             events=self.events,
         )
 
-        # Wire overlay callbacks so the MPV poll thread can send OSD overlays
+        # Wire overlay state provider so the MPV poll thread can render OSD overlays
         if self.mpv_controller.is_running:
-            self.mpv_controller.set_overlay_callbacks(
-                get_now_playing=lambda: self.playback_controller.now_playing,
-                get_up_next=lambda: self.queue_manager.queue[0]["title"] if self.queue_manager.queue else None,
-                get_semitones=lambda: self.playback_controller.now_playing_transpose,
-                is_playing=lambda: self.playback_controller.is_playing,
+            self.playback_controller._get_up_next_title = (
+                lambda: self.queue_manager.queue[0]["title"] if self.queue_manager.queue else None
+            )
+            self.mpv_controller.set_overlay_state_provider(
+                self.playback_controller.build_overlay_state
             )
 
         # Song library startup: warm cache from DB or blocking cold scan

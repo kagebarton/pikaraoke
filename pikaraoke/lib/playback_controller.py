@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Callable
 from flask_babel import _
 
 from pikaraoke.lib.events import EventSystem
+from pikaraoke.lib.overlay_manager import OverlayState, ScreenMode
 from pikaraoke.lib.preference_manager import PreferenceManager
 
 if TYPE_CHECKING:
@@ -76,10 +77,10 @@ class PlaybackController:
         self.filename_from_path = filename_from_path
         self.mpv = mpv
         self._playback_lock = threading.Lock()
+        # Injected by Karaoke after queue_manager is available
+        self._get_up_next_title: Callable[[], str | None] = lambda: None
 
-    def play_file(
-        self, file_path: str, user: str, semitones: int = 0
-    ) -> PlaybackResult:
+    def play_file(self, file_path: str, user: str, semitones: int = 0) -> PlaybackResult:
         """Start playback of a media file. Non-blocking -- MPV plays immediately.
 
         Args:
@@ -258,6 +259,39 @@ class PlaybackController:
         self.now_playing_position = None
         self.is_paused = True
         self.is_playing = False
+
+    def build_overlay_state(self) -> OverlayState:
+        """Snapshot all data needed by compute_overlays into one immutable record.
+
+        Called each poll tick (and on immediate renders) by MpvController._tick_overlays.
+        """
+        if self.is_playing:
+            mode = ScreenMode.PAUSED if self.mpv.is_paused else ScreenMode.PLAYING
+        else:
+            mode = ScreenMode.IDLE
+
+        return OverlayState(
+            mode=mode,
+            now_playing_title=self.now_playing,
+            up_next_title=self._get_up_next_title(),
+            semitones=self.now_playing_transpose,
+            position=self.mpv.position,
+            duration=self.mpv.duration,
+            screen_w=int(self.mpv.query_property("osd-width") or 1920),
+            screen_h=int(self.mpv.query_property("osd-height") or 1080),
+            hide_url=self.preferences.get_or_default("hide_url"),
+            hide_now_playing=self.preferences.get_or_default("hide_now_playing_overlay"),
+            show_clock=self.preferences.get_or_default("show_clock"),
+            server_url=self.mpv._server_url,
+        )
+
+    def refresh_overlays(self) -> None:
+        """Force an immediate overlay re-render outside the poll cycle.
+
+        Call this after toggling any overlay-related preference so the change
+        is visible within the current frame rather than waiting up to 500ms.
+        """
+        self.mpv._tick_overlays()
 
     def check_playback_ended(self) -> None:
         """Called from the main run loop. Detects song-end via MPV idle state.

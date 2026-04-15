@@ -265,11 +265,11 @@ def test_preference_manager_defaults_exist():
         "splash_delay",
         "volume",
         "normalize_audio",
-        "hide_overlay",
+        "hide_now_playing_overlay",
         "limit_user_songs_by",
         "enable_fair_queue",
         "browse_results_per_page",
-        "show_splash_clock",
+        "show_clock",
         "subtitle_delay",
         "temp_dir",
         "blocked_processing_words",
@@ -287,7 +287,7 @@ def test_preference_manager_defaults_types():
     assert isinstance(defaults["hide_notifications"], bool)
     assert isinstance(defaults["high_quality"], bool)
     assert isinstance(defaults["normalize_audio"], bool)
-    assert isinstance(defaults["hide_overlay"], bool)
+    assert isinstance(defaults["hide_now_playing_overlay"], bool)
     assert isinstance(defaults["enable_fair_queue"], bool)
 
     # Integer preferences

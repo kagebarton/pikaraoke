@@ -10,19 +10,12 @@ import socket
 import subprocess
 import threading
 import time
-from datetime import datetime
 from typing import Callable
-import qrcode
 
-from flask_babel import _
+import qrcode
 from PIL import Image
 
-# ── OSD ID constants ───────────────────────────────────────────────────────────
-OSD_URL = 1
-OSD_NOWPLAYING = 2
-OSD_TIMECODE = 3
-OSD_UPNEXT = 4
-OSD_CLOCK = 5
+from pikaraoke.lib.overlay_manager import OverlayManager, OverlayState, ScreenMode
 
 # ── SRT subtitle style ─────────────────────────────────────────────────────────
 SRT_STYLE = {
@@ -38,18 +31,15 @@ SRT_STYLE = {
     "sub-margin-y": 100,
 }
 
-# Overlay text colors (ASS hex BB GG RR format)
-_URL_COLOR = "&HFFFFFF&"
-_NOWPLAYING_COLOR = "&H507FFF&"
-_TIMECODE_COLOR = "&HAAD5FF&"
-_UPNEXT_COLOR = "&HB48246&"
-_CLOCK_COLOR = "&HFFFFFF&"
-
-# Common ASS style tags for overlay text
-_OVERLAY_STYLE = "\\bord3\\shad2\\3c&H000000&\\4c&H000000&\\4a&H80&"
-
-_OVERLAY_MARGIN_TOP = 0
-_OVERLAY_MARGIN_BOTTOM = 0
+# OSD ID constants (re-exported for callers that only import mpv_controller)
+from pikaraoke.lib.overlay_manager import (  # noqa: E402
+    ALL_OSD_IDS,
+    OSD_CLOCK,
+    OSD_NOWPLAYING,
+    OSD_TIMECODE,
+    OSD_UPNEXT,
+    OSD_URL,
+)
 
 
 def _semiround(val: float, decimals: int = 4) -> float:
@@ -91,11 +81,10 @@ class MpvController:
         # Audio backend
         self._audio_backend: str | None = None
 
-        # Overlay callbacks -- set by PlaybackController for data MpvController doesn't own
-        self._get_now_playing: Callable[[], str | None] = lambda: None
-        self._get_up_next: Callable[[], str | None] = lambda: None
-        self._get_semitones: Callable[[], int] = lambda: 0
-        self._is_playing: Callable[[], bool] = lambda: False
+        # Overlay manager and state provider
+        self._overlay_manager = OverlayManager(self)
+        self._overlay_state_provider: Callable[[], OverlayState] | None = None
+        self._screen_mode: ScreenMode = ScreenMode.IDLE
 
         # Preferences -- set by Karaoke before calling start()
         self._preferences = None  # PreferenceManager, set by Karaoke.__init__
@@ -109,25 +98,13 @@ class MpvController:
 
     # ── Lifecycle ──────────────────────────────────────────────────────────────
 
-    def set_overlay_callbacks(
-        self,
-        get_now_playing: Callable[[], str | None],
-        get_up_next: Callable[[], str | None],
-        get_semitones: Callable[[], int],
-        is_playing: Callable[[], bool],
-    ) -> None:
-        """Register callbacks for overlay data owned by PlaybackController.
+    def set_overlay_state_provider(self, provider: Callable[[], OverlayState]) -> None:
+        """Register a callable that builds the current OverlayState each tick.
 
-        Args:
-            get_now_playing: Returns current song display title.
-            get_up_next: Returns next song display title (or None).
-            get_semitones: Returns current transpose value.
-            is_playing: Returns whether a song is actively playing.
+        Called once by Karaoke during wiring. The provider is invoked each poll
+        cycle and on mode changes to get a fresh snapshot of playback + prefs.
         """
-        self._get_now_playing = get_now_playing
-        self._get_up_next = get_up_next
-        self._get_semitones = get_semitones
-        self._is_playing = is_playing
+        self._overlay_state_provider = provider
 
     def start(self) -> None:
         """Launch MPV in idle mode, start poll thread, load placeholder."""
@@ -157,9 +134,7 @@ class MpvController:
         ]
 
         logging.info("Starting MPV...")
-        self._mpv_proc = subprocess.Popen(
-            cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-        )
+        self._mpv_proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         # Poll for IPC socket readiness (max 5s)
         for _ in range(50):
@@ -171,17 +146,12 @@ class MpvController:
             self._mpv_proc = None
             raise RuntimeError("MPV failed to create IPC socket within 5 seconds")
 
-        # Generate high-res QR for the playback screen (separate from the web UI's small QR)
+        # Generate high-res QR for the playback screen
         self._generate_qr()
 
-        # Load placeholder, apply SRT style, start poll thread
+        # Load placeholder, apply SRT style
         self.load_placeholder()
         self.apply_srt_style()
-
-        # Show QR and URL overlays on idle screen
-        self.send_qr_overlay()
-        self.send_url_overlay()
-        self.send_clock_overlay()
 
         # Detect audio backend
         try:
@@ -293,21 +263,21 @@ class MpvController:
             if subtitle_path.endswith(".srt") and subtitle_delay != 0:
                 self.set_property("sub-delay", subtitle_delay)
 
-        # Reset state
+        # Reset state then transition mode (triggers immediate overlay tick)
         self.position = 0.0
         self.is_idle = False
         self.is_paused = False
         self.duration = float(self.query_property("duration") or 0.0)
+        self.set_mode(ScreenMode.PLAYING)
 
     def stop(self) -> None:
-        """Stop playback: clear lavfi-complex, load placeholder, clear OSD."""
+        """Stop playback: clear lavfi-complex, return to idle/placeholder."""
         self.set_property("lavfi-complex", "")
-        self.load_placeholder()
-        self.clear_all_overlays()
         self.position = 0.0
         self.duration = 0.0
         self.is_idle = True
         self.is_paused = False
+        self.set_mode(ScreenMode.IDLE)
 
     def seek(self, position: float) -> None:
         """Seek to absolute position in seconds."""
@@ -332,6 +302,29 @@ class MpvController:
         """Seek to 0 and unpause."""
         self.seek(0)
         self.set_property("pause", False)
+
+    # ── Screen mode ────────────────────────────────────────────────────────────
+
+    def set_mode(self, mode: ScreenMode) -> None:
+        """Transition the display mode and trigger an immediate overlay render.
+
+        This is the single place that drives placeholder loading -- callers
+        (play, stop) just set the desired mode.
+        """
+        if mode == self._screen_mode:
+            self._tick_overlays()
+            return
+        self._screen_mode = mode
+        if mode == ScreenMode.IDLE:
+            self.load_placeholder()
+        self._tick_overlays()
+
+    def _tick_overlays(self) -> None:
+        """Build an OverlayState snapshot and hand it to OverlayManager."""
+        if self._overlay_state_provider is None:
+            return
+        state = self._overlay_state_provider()
+        self._overlay_manager.apply(state)
 
     # ── Filter Builder ─────────────────────────────────────────────────────────
 
@@ -390,25 +383,34 @@ class MpvController:
             if self._audio_backend == "wpctl":
                 r = subprocess.run(
                     ["wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@"],
-                    capture_output=True, text=True, timeout=1,
+                    capture_output=True,
+                    text=True,
+                    timeout=1,
                 )
                 import re
+
                 m = re.search(r"(\d+(?:\.\d+)?)", r.stdout)
                 return round(float(m.group(1)) * 100) if m else 100
             elif self._audio_backend == "pactl":
                 r = subprocess.run(
                     ["pactl", "get-sink-volume", "@DEFAULT_SINK@"],
-                    capture_output=True, text=True, timeout=1,
+                    capture_output=True,
+                    text=True,
+                    timeout=1,
                 )
                 import re
+
                 m = re.search(r"(\d+)%", r.stdout)
                 return int(m.group(1)) if m else 100
             elif self._audio_backend == "amixer":
                 r = subprocess.run(
                     ["amixer", "get", "Master"],
-                    capture_output=True, text=True, timeout=1,
+                    capture_output=True,
+                    text=True,
+                    timeout=1,
                 )
                 import re
+
                 m = re.search(r"(\d+)%", r.stdout)
                 return int(m.group(1)) if m else 100
         except Exception:
@@ -424,17 +426,20 @@ class MpvController:
             if self._audio_backend == "wpctl":
                 subprocess.run(
                     ["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", f"{pct / 100:.2f}"],
-                    check=False, timeout=2,
+                    check=False,
+                    timeout=2,
                 )
             elif self._audio_backend == "pactl":
                 subprocess.run(
                     ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{pct}%"],
-                    check=False, timeout=2,
+                    check=False,
+                    timeout=2,
                 )
             elif self._audio_backend == "amixer":
                 subprocess.run(
                     ["amixer", "set", "Master", f"{pct}%"],
-                    check=False, timeout=2,
+                    check=False,
+                    timeout=2,
                 )
         except Exception as e:
             logging.warning(f"Failed to set system volume: {e}")
@@ -442,17 +447,11 @@ class MpvController:
     # ── Poll Thread ────────────────────────────────────────────────────────────
 
     def _poll_loop(self) -> None:
-        """Background thread: query MPV state every 500ms and send overlays."""
+        """Background thread: query MPV state every 500ms and update overlays."""
         last_osd_w = None
         last_osd_h = None
         while not self._poll_stop.is_set():
-            # Read overlay preferences each cycle so live changes take effect
-            prefs = self._preferences
-            hide_url = prefs.get_or_default("hide_url") if prefs else False
-            hide_now_playing = prefs.get_or_default("hide_now_playing_overlay") if prefs else False
-            show_clock = prefs.get_or_default("show_clock") if prefs else False
-
-            # Query state
+            # Query MPV state
             pos = self.query_property("time-pos")
             if pos is not None:
                 self.position = float(pos)
@@ -461,65 +460,20 @@ class MpvController:
             if dur is not None:
                 self.duration = float(dur)
 
-            idle = self.query_property("idle-active")
-            self.is_idle = idle is True
+            self.is_idle = self.query_property("idle-active") is True
+            self.is_paused = self.query_property("pause") is True
 
-            paused = self.query_property("pause")
-            self.is_paused = paused is True
+            # Resize detection -- invalidate overlay cache so next tick re-renders all
+            w = self.query_property("osd-width")
+            h = self.query_property("osd-height")
+            if w is not None and h is not None and (w != last_osd_w or h != last_osd_h):
+                last_osd_w, last_osd_h = w, h
+                self._overlay_manager.invalidate()
 
-            # Monitor OSD dimensions for resize
-            resp_w = self.query_property("osd-width")
-            resp_h = self.query_property("osd-height")
-            cur_w = resp_w if resp_w is not None else None
-            cur_h = resp_h if resp_h is not None else None
-
-            if cur_w is not None and cur_h is not None:
-                if cur_w != last_osd_w or cur_h != last_osd_h:
-                    last_osd_w = cur_w
-                    last_osd_h = cur_h
-                    # Re-send all overlays on resize
-                    if not hide_url:
-                        self.send_qr_overlay()
-                    if not hide_now_playing:
-                        title = self._get_now_playing()
-                        self.send_nowplaying_overlay(title)
-                        if self._is_playing():
-                            self.send_timecode_overlay(
-                                self.position, self.duration, self._get_semitones()
-                            )
-                        up_next = self._get_up_next()
-                        self.send_upnext_overlay(up_next)
-                    if show_clock:
-                        self.send_clock_overlay()
-
-            # Update overlays every cycle
-            if not hide_url:
-                self.send_url_overlay()
-
-            if not hide_now_playing:
-                title = self._get_now_playing()
-                self.send_nowplaying_overlay(title)
-                if self._is_playing():
-                    self.send_timecode_overlay(
-                        self.position, self.duration, self._get_semitones()
-                    )
-                else:
-                    self.clear_osd(OSD_TIMECODE)
-                up_next = self._get_up_next()
-                self.send_upnext_overlay(up_next)
-            else:
-                self.clear_osd(OSD_NOWPLAYING)
-                self.clear_osd(OSD_TIMECODE)
-                self.clear_osd(OSD_UPNEXT)
-
-            if show_clock:
-                self.send_clock_overlay()
-            else:
-                self.clear_osd(OSD_CLOCK)
-
+            self._tick_overlays()
             self._poll_stop.wait(0.5)
 
-    # ── Overlay Methods ────────────────────────────────────────────────────────
+    # ── OSD primitives ─────────────────────────────────────────────────────────
 
     def _get_overlay_sock(self) -> socket.socket | None:
         """Return the persistent overlay socket, creating it if needed."""
@@ -582,29 +536,33 @@ class MpvController:
 
     def send_osd(self, overlay_id: int, data: str, res_x: int = 1920, res_y: int = 1080) -> None:
         """Send an ASS event string to a specific OSD overlay slot."""
-        self.send_overlay_command({
-            "command": {
-                "name": "osd-overlay",
-                "id": overlay_id,
-                "format": "ass-events",
-                "data": data,
-                "res_x": res_x,
-                "res_y": res_y,
+        self.send_overlay_command(
+            {
+                "command": {
+                    "name": "osd-overlay",
+                    "id": overlay_id,
+                    "format": "ass-events",
+                    "data": data,
+                    "res_x": res_x,
+                    "res_y": res_y,
+                }
             }
-        })
+        )
 
     def clear_osd(self, overlay_id: int, res_x: int = 1920, res_y: int = 1080) -> None:
         """Clear a specific OSD overlay slot."""
-        self.send_overlay_command({
-            "command": {
-                "name": "osd-overlay",
-                "id": overlay_id,
-                "format": "none",
-                "data": "",
-                "res_x": res_x,
-                "res_y": res_y,
+        self.send_overlay_command(
+            {
+                "command": {
+                    "name": "osd-overlay",
+                    "id": overlay_id,
+                    "format": "none",
+                    "data": "",
+                    "res_x": res_x,
+                    "res_y": res_y,
+                }
             }
-        })
+        )
 
     def load_placeholder(self) -> None:
         """Load the placeholder image into the running MPV instance."""
@@ -615,15 +573,6 @@ class MpvController:
         """Push SRT subtitle style properties to MPV."""
         for prop, val in SRT_STYLE.items():
             self.set_property(prop, val)
-
-    @staticmethod
-    def _osd_screen_h(osd_height_query_result) -> int:
-        return osd_height_query_result if osd_height_query_result is not None else 1080
-
-    @staticmethod
-    def _overlay_font_size(screen_h: int) -> int:
-        qr_h = max(120, screen_h // 6)
-        return qr_h // 3
 
     def _generate_qr(self) -> None:
         """Generate a high-res QR code for the MPV overlay screen.
@@ -642,111 +591,32 @@ class MpvController:
         img.save(qr_path)
         self._qr_code_path = qr_path
 
-    def send_qr_overlay(self, url: str = "", qr_image_path: str = "") -> None:
-        """Send the QR code bitmap as a persistent overlay via overlay-add."""
-        qr_path = qr_image_path or self._qr_code_path
+    def remove_qr_bitmap(self) -> None:
+        """Remove the QR bitmap overlay from MPV (overlay slot 0)."""
+        self.send_overlay_command({"command": ["overlay-remove", 0]})
+
+    def send_qr_bitmap(self, screen_h: int, screen_w: int = 1920) -> None:
+        """Send the QR code BGRA bitmap to MPV overlay slot 0.
+
+        Called by OverlayManager when visibility or screen size changes.
+        """
+        qr_path = self._qr_code_path
         if not qr_path or not os.path.exists(qr_path):
             return
 
-        screen_h = self._osd_screen_h(self.query_property("osd-height"))
-        screen_w = self.query_property("osd-width") or 1920
         qr_h = max(120, screen_h // 6)
-
         qr_img = Image.open(qr_path).convert("RGBA").resize((qr_h, qr_h))
         # Convert RGBA -> BGRA for mpv overlay format
         r, g, b, a = qr_img.split()
         bgra = Image.merge("RGBA", (b, g, r, a))
         bgra_bytes = bgra.tobytes()
 
-        overlay_path = "/tmp/qr_overlay.bgra"
+        from pikaraoke.lib.get_platform import get_temp_directory
+
+        overlay_path = os.path.join(get_temp_directory(), "qr_overlay.bgra")
         with open(overlay_path, "wb") as f:
             f.write(bgra_bytes)
 
-        self.send_overlay_command({
-            "command": [
-                "overlay-add", 0, 0, 0, overlay_path, 0, "bgra", qr_h, qr_h, qr_h * 4
-            ]
-        })
-
-    def send_url_overlay(self, url: str = "") -> None:
-        """Send the server URL text as an OSD overlay, positioned to the right of the QR image."""
-        screen_h = self._osd_screen_h(self.query_property("osd-height"))
-        screen_w = self.query_property("osd-width") or 1920
-        qr_h = max(120, screen_h // 6)
-        font_size = self._overlay_font_size(screen_h)
-
-        url_text = url or self._server_url
-        x = (qr_h + 10) * 1920 / screen_w
-        y = _OVERLAY_MARGIN_TOP
-        data = (
-            f"{{\\an7\\pos({x},{y})\\fs{font_size}{_OVERLAY_STYLE}\\c{_URL_COLOR}}}{url_text}"
+        self.send_overlay_command(
+            {"command": ["overlay-add", 0, 0, 0, overlay_path, 0, "bgra", qr_h, qr_h, qr_h * 4]}
         )
-        self.send_osd(OSD_URL, data)
-
-    @staticmethod
-    def _fmt_time(seconds: float) -> str:
-        m, s = divmod(int(seconds), 60)
-        return f"{m}:{s:02d}"
-
-    def send_nowplaying_overlay(self, title: str) -> None:
-        """Send 'Now Playing: <title>' line via osd-overlay."""
-        if not title:
-            self.clear_osd(OSD_NOWPLAYING)
-            return
-        screen_h = self._osd_screen_h(self.query_property("osd-height"))
-        fs = self._overlay_font_size(screen_h)
-        data = (
-            f"{{\\an9\\pos(1920,{_OVERLAY_MARGIN_TOP})\\fs{fs}{_OVERLAY_STYLE}"
-            f"\\c{_NOWPLAYING_COLOR}}}Now Playing: {title}"
-        )
-        self.send_osd(OSD_NOWPLAYING, data)
-
-    def send_timecode_overlay(
-        self, elapsed: float, total: float, semitones: int
-    ) -> None:
-        """Send elapsed/total time + pitch via osd-overlay."""
-        screen_h = self._osd_screen_h(self.query_property("osd-height"))
-        fs = self._overlay_font_size(screen_h)
-        y = _OVERLAY_MARGIN_TOP + int(fs * 0.9)
-
-        elapsed_str = self._fmt_time(elapsed)
-        total_str = self._fmt_time(total)
-        st_str = f"+{semitones}st" if semitones > 0 else f"{semitones}st"
-
-        data = (
-            f"{{\\an9\\pos(1920,{y})\\fs{fs - 15}{_OVERLAY_STYLE}"
-            f"\\c{_TIMECODE_COLOR}}}{elapsed_str} / {total_str} | Pitch: {st_str}"
-        )
-        self.send_osd(OSD_TIMECODE, data)
-
-    def send_upnext_overlay(self, next_title: str | None) -> None:
-        """Send 'Up Next: <title>' via osd-overlay."""
-        if not next_title:
-            self.clear_osd(OSD_UPNEXT)
-            return
-        screen_h = self._osd_screen_h(self.query_property("osd-height"))
-        fs = self._overlay_font_size(screen_h)
-        y = _OVERLAY_MARGIN_TOP + int(fs * 0.9) + int((fs - 10) * 1.05)
-        data = (
-            f"{{\\an9\\pos(1920,{y})\\fs{fs - 10}{_OVERLAY_STYLE}"
-            f"\\c{_UPNEXT_COLOR}}}Up Next: {next_title}"
-        )
-        self.send_osd(OSD_UPNEXT, data)
-
-    def send_clock_overlay(self) -> None:
-        """Send current time as an OSD overlay, bottom-left corner."""
-        screen_h = self._osd_screen_h(self.query_property("osd-height"))
-        fs = self._overlay_font_size(screen_h)
-        y = 1080 - _OVERLAY_MARGIN_BOTTOM
-        now = datetime.now()
-        clock_text = now.strftime("%I:%M %p").lstrip("0")
-        data = (
-            f"{{\\an1\\pos(0,{y})\\fs{fs}{_OVERLAY_STYLE}"
-            f"\\c{_CLOCK_COLOR}}}{clock_text}"
-        )
-        self.send_osd(OSD_CLOCK, data)
-
-    def clear_all_overlays(self) -> None:
-        """Clear all OSD overlays."""
-        for overlay_id in [OSD_URL, OSD_NOWPLAYING, OSD_TIMECODE, OSD_UPNEXT, OSD_CLOCK]:
-            self.clear_osd(overlay_id)
