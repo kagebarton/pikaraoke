@@ -62,7 +62,7 @@ class Karaoke:
     pipeline_tracker: PipelineTracker
 
     now_playing_notification: str | None = None
-    volume: float
+    _volume: float  # backing field; access via .volume property
 
     qr_code_path: str | None = None
     base_path: str = os.path.dirname(__file__)
@@ -191,6 +191,12 @@ class Karaoke:
         self.mpv_controller._preferences = self.preferences
         try:
             self.mpv_controller.start()
+            # Apply the loaded volume preference to the system now that MPV is running.
+            # self.volume was set by _load_preferences() before mpv_controller existed,
+            # so the property setter's is_running guard did not fire — this explicit call
+            # bridges that gap so the actual system volume matches the saved default.
+            pct = max(0, min(100, int(self.volume * 100)))
+            self.mpv_controller.set_system_volume(pct)
         except RuntimeError as e:
             logging.error(f"MPV failed to start: {e}")
             logging.error("Install MPV (apt install mpv / brew install mpv) and restart.")
@@ -453,8 +459,26 @@ class Karaoke:
         self.playback_controller.set_pitch(semitones)
         self.update_now_playing_socket()
 
+    @property
+    def volume(self) -> float:
+        """Current volume level (0.0 to 1.0).
+
+        The setter automatically applies the value to the system audio sink
+        whenever MPV is running, keeping the UI and system volume in sync
+        regardless of whether the write comes from the slider, a preference
+        save, vol_up/down, or startup initialization.
+        """
+        return getattr(self, "_volume", 0.85)
+
+    @volume.setter
+    def volume(self, value: float) -> None:
+        self._volume = value
+        if getattr(self, "mpv_controller", None) and self.mpv_controller.is_running:
+            pct = max(0, min(100, int(value * 100)))
+            self.mpv_controller.set_system_volume(pct)
+
     def volume_change(self, vol_level: float) -> bool:
-        """Set system volume level.
+        """Set system volume level, log, and notify clients.
 
         Args:
             vol_level: Volume level (0.0 to 1.0).
@@ -462,10 +486,8 @@ class Karaoke:
         Returns:
             True after setting volume.
         """
-        self.volume = vol_level
-        pct = max(0, min(100, int(vol_level * 100)))
-        self.mpv_controller.set_system_volume(pct)
-        self.log_and_send(_("Volume: %s") % pct)
+        self.volume = vol_level  # property setter applies to system volume
+        self.log_and_send(_("Volume: %s") % int(vol_level * 100))
         self.update_now_playing_socket()
         return True
 
