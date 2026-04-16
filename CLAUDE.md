@@ -1,121 +1,61 @@
 # CLAUDE.md
 
-Guidance for Claude Code when working on PiKaraoke.
+PiKaraoke: karaoke system for Raspberry Pi/Windows/macOS/Linux with YouTube search, queuing, pitch shifting.
 
-## Project Overview
+**Core:** Code clarity over docs. Simplicity over flexibility. Single source of truth.
 
-PiKaraoke is a karaoke system for Raspberry Pi, Windows, macOS, and Linux. Web interface for YouTube song search, queuing, and playback with pitch shifting and streaming.
+## Project Structure
 
-## Core Principles
-
-**Single-owner maintainability:** Code clarity over documentation. Simplicity over flexibility. One source of truth.
+The mpv prototype is in the `mpv/` subfolder under the project root.
 
 ## Refactoring
 
-**Refactor iteratively as you work.** When touching code:
+Refactor iteratively when touching code:
 
-- Extract classes when a module has multiple responsibilities (like `Browser` was extracted from utilities)
-- Extract functions when logic is repeated or a function exceeds ~50 lines
-- Rename unclear variables/functions immediately
-- Delete dead code - never comment it out. When new code supersedes existing methods, remove the old methods and their tests in the same commit
-- Update related code consistently (no half-migrations)
+- Extract classes for multiple responsibilities, functions for repeated logic or >50 lines
+- Rename unclear names, delete dead code (never comment out)
+- Delete old methods/tests when superseded
 
-**When to refactor:**
-
-- Code you're modifying is hard to understand
-- You're adding a third similar pattern (rule of three)
-- A function/class is doing too many things
-
-**When NOT to refactor:**
-
-- Unrelated code "while you're in the area"
-- Working code that you're not modifying
-- To add flexibility you don't need yet
+**Refactor when:** modifying hard-to-understand code, third similar pattern, function doing too much\
+**Don't refactor:** unrelated code, working untouched code, speculative flexibility
 
 ## Code Style
 
-- PEP 8, 4 spaces, meaningful names
-- Type hints required: modern syntax (`str | None`) — Python 3.10+ is the minimum, no `from __future__ import annotations` needed
-- Concise docstrings for public APIs - explain "why", not "how"
-- No emoji or unicode emoji substitutes
+- PEP 8, 4 spaces, meaningful names, type hints (modern syntax: `str | None`, Python 3.10+)
+- Concise docstrings for public APIs—explain "why", not "how"
+- No emoji
 
-## Filename Conventions
+## Filenames
 
-YouTube video filenames use exactly 11-character IDs:
-
-- PiKaraoke format: `Title---dQw4w9WgXcQ.mp4` (triple dash)
-- yt-dlp format: `Title [dQw4w9WgXcQ].mp4` (brackets)
-
-Only support these two patterns.
+YouTube videos: exactly 11-char IDs only: `Title---dQw4w9WgXcQ.mp4` or `Title [dQw4w9WgXcQ].mp4`
 
 ## Error Handling
 
-- Catch specific exceptions, never bare `except:`
-- Log errors, never swallow silently
+- Catch specific exceptions, never bare `except:`. Log errors, never swallow silently
 - Use context managers for resources
 
 ## Testing
 
-- pytest with mocked external I/O and subprocess operations only
-- Test business logic and integration points
-- Skip trivial getters/setters
-- Use real `EventSystem` and `PreferenceManager` instances (they're lightweight)
+pytest with mocked external I/O/subprocess. Test business logic and integration, skip trivial getters/setters. Use real `EventSystem` and `PreferenceManager` instances.
 
 ## Environment
 
-This project runs in a **conda environment** named `pik` (not uv). Use `/home/ken/miniconda3/envs/pik/bin/python -m pytest` to run tests and `pre-commit` directly (not via `uv run`).
-
-## Code Quality
-
-```bash
-# Run pre-commit checks
-pre-commit run --config code_quality/.pre-commit-config.yaml --all-files
-```
-
-Tools: Black (100 char), isort, pycln, pylint, mdformat.
-
-Never commit to `master` directly.
+Conda env `pik` (not uv). Run tests: `/home/ken/miniconda3/envs/pik/bin/python -m pytest`. Run pre-commit: `pre-commit run --config code_quality/.pre-commit-config.yaml --all-files`. Tools: Black (100 char), isort, pycln, pylint, mdformat. Never commit to `master` directly.
 
 ## Plans
 
-Store all plan files in the `plans/` folder in the root of the project.
-
-Name plan files with a short, descriptive kebab-case filename that reflects the task
-(e.g., `subtitle-delay-cleanup.md`, `auth-refactor.md`), not the auto-generated random
-name Claude Code assigns by default.
-
-Include a line at the top of each plan specifying which Claude model created it:
-
-```
-Model: Claude Sonnet 4.6
-```
-
-or `Claude Opus 4.6` / `Claude Haiku 4.5` as appropriate.
+Store in `plans/` with descriptive kebab-case names (e.g., `subtitle-delay-cleanup.md`). Include model at top: `Model: Claude Sonnet 4.6`.
 
 ## Pull Requests
 
-PRs must include a test plan: a minimal checklist targeting only the changes made, enabling quick manual verification.
+Include test plan: minimal checklist for manual verification.
 
 ## Fork Maintenance
 
-This is a fork of upstream PiKaraoke. Minimize merge conflicts when pulling upstream changes:
+Avoid modifying upstream files. New features go in new files. If upstream must change, make smallest possible change (hook, import, or flag). Match upstream architecture. Don't restructure upstream for style alone.
 
-- **New functionality goes in new files** — avoid modifying upstream source files when the feature can live in a separate module that upstream files import or call into
-- **When upstream files must be modified**, make the smallest possible change: a single hook call, import, or flag rather than inline logic
-- **Match upstream architecture** — new code should look like it belongs; follow the same patterns, naming, and file organization already in place
-- **Never restructure upstream files** for style or preference alone — only refactor what you're functionally changing
+## Rules
 
-## What NOT to Do
-
-- Add unrequested features
-- Add error handling for impossible states
-- Create abstractions for single uses
-- Write speculative "future-proofing" code
-- Commit debug prints or commented code
-
-## Temporary Files
-
-All non-persistent files (intermediate processing artifacts, logs, HLS segments,
-download temp files) must use the centralized `temp_dir` preference from config.ini.
-Never hardcode temp paths or use `tempfile.gettempdir()` directly. Use
-`get_temp_directory()` from `get_platform.py` to resolve the configured path.
+- Don't add unrequested features, error handling for impossible states, or speculative abstractions
+- Never commit debug prints or commented code
+- Temp files: use `get_temp_directory()` from `get_platform.py`, never hardcode paths or `tempfile.gettempdir()`
