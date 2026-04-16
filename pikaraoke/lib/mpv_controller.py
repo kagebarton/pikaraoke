@@ -286,6 +286,7 @@ class MpvController:
     def toggle_pause(self) -> None:
         """Toggle pause state via 'cycle pause'."""
         self.send_command({"command": ["cycle", "pause"]})
+        self.is_paused = not self.is_paused
 
     def set_pitch(self, semitones: int) -> None:
         """Live mid-song pitch change: rebuild lavfi-complex with new pitch."""
