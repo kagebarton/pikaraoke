@@ -143,8 +143,8 @@ class ProcessingManager:
     def cancel_active(self, song_path: str) -> None:
         """Cancel the currently active processing job, targeting the active step.
 
-        Safe to call from gevent context: only sends signals and sets flags,
-        never joins a subprocess. The orchestrator thread observes the
+        Thread-safe: only sends signals and sets flags, never joins a
+        subprocess. The orchestrator thread observes the
         cancelled flag on its next ``_check_cancelled()`` and raises
         ``_CancelledError``.
         """

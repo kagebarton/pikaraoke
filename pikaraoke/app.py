@@ -1,12 +1,9 @@
 """Flask application entry point and server initialization."""
 
-from gevent import monkey, spawn
-
-monkey.patch_all()
-
 import logging
 import os
 import sys
+from threading import Thread
 from urllib.parse import quote
 
 import flask_babel
@@ -44,10 +41,8 @@ from pikaraoke.routes.socket_events import setup_socket_events
 
 _ = flask_babel.gettext
 
-from gevent.pywsgi import WSGIServer
-
 args = parse_pikaraoke_args()
-socketio = SocketIO(async_mode="gevent", cors_allowed_origins=args.url)
+socketio = SocketIO(async_mode="threading", cors_allowed_origins=args.url)
 babel = Babel()
 
 
@@ -210,26 +205,32 @@ def main() -> None:
     app.jinja_env.globals.update(filename_from_path=SongManager.filename_from_path)
     app.jinja_env.globals.update(url_escape=quote)
 
-    spawn(upgrade_youtubedl)
-
-    server = WSGIServer(("0.0.0.0", int(args.port)), app, log=None, error_log=logging.getLogger())
-    server.start()
+    Thread(target=upgrade_youtubedl, daemon=True).start()
 
     if args.enable_swagger:
         logging.info(f"Swagger API docs enabled at {k.url}/apidocs")
 
-    # Start the karaoke run loop
-    k.run()
+    # Run the karaoke polling loop in a background thread so socketio.run()
+    # can stay on the main thread to handle SIGINT cleanly.
+    Thread(target=k.run, daemon=True).start()
 
-    # Shut down MPV
-    k.stop()
+    try:
+        socketio.run(
+            app,
+            host="0.0.0.0",
+            port=int(args.port),
+            log_output=False,
+            use_reloader=False,
+            allow_unsafe_werkzeug=True,
+        )
+    finally:
+        k.stop()
 
-    # Clean up temp directory
-    import shutil
+        import shutil
 
-    if k.temp_dir and os.path.exists(k.temp_dir):
-        shutil.rmtree(k.temp_dir, ignore_errors=True)
-    sys.exit()
+        if k.temp_dir and os.path.exists(k.temp_dir):
+            shutil.rmtree(k.temp_dir, ignore_errors=True)
+        sys.exit()
 
 
 if __name__ == "__main__":

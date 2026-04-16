@@ -2,10 +2,6 @@
 
 Owns the audio-separator model lifecycle. Runs in a ``multiprocessing.Process``
 that loads the model once and processes separation jobs via a ``Pipe``.
-
-Both job and result channels use ``multiprocessing.Pipe()`` (direct OS pipe
-write, no feeder thread) so that gevent monkey-patching in the parent process
-does not interfere with IPC in either direction.
 """
 
 import logging
@@ -35,8 +31,7 @@ class StemWorker:
 
     The worker process is spawned on ``start()``, loads the model, and then
     loops on an input pipe connection. Both job and result channels use
-    ``Pipe()`` (direct OS pipe write, no feeder thread) to avoid gevent
-    monkey-patching interference with ``Queue``'s ``QueueFeederThread``.
+    ``Pipe()`` (direct OS pipe write, no feeder thread).
 
     Pipes are created fresh on every ``start()`` so that ``kill()`` + restart
     doesn't leave orphan IPC state.
