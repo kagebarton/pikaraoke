@@ -31,6 +31,7 @@ def mock_mpv():
     mpv.set_subtitle_delay = MagicMock()
     mpv.restart = MagicMock()
     mpv.build_filter = MagicMock(return_value="[aid1]rubberband@rb=pitch=1.0[ao]")
+    mpv.osd_size = (1920, 1080)
     return mpv
 
 
@@ -285,35 +286,7 @@ class TestPlaybackControllerResetNowPlaying:
 
 
 class TestPlaybackControllerNewMethods:
-    """Tests for new methods added in MPV migration."""
-
-    def test_check_playback_ended(self, test_prefs, mock_mpv):
-        """Test check_playback_ended detects idle."""
-        events = EventSystem()
-        filename_fn = lambda x, remove_youtube_id=True: x
-
-        pc = PlaybackController(test_prefs, events, filename_fn, mock_mpv)
-        pc.now_playing = "Test Song"
-        pc.is_playing = True
-        mock_mpv.is_idle = True
-
-        pc.check_playback_ended()
-
-        assert pc.is_playing is False
-
-    def test_check_playback_ended_not_idle(self, test_prefs, mock_mpv):
-        """Test check_playback_ended does nothing when not idle."""
-        events = EventSystem()
-        filename_fn = lambda x, remove_youtube_id=True: x
-
-        pc = PlaybackController(test_prefs, events, filename_fn, mock_mpv)
-        pc.now_playing = "Test Song"
-        pc.is_playing = True
-        mock_mpv.is_idle = False
-
-        pc.check_playback_ended()
-
-        assert pc.is_playing is True
+    """Tests for methods added in MPV migration."""
 
     def test_set_pitch(self, test_prefs, mock_mpv):
         """Test set_pitch changes pitch."""

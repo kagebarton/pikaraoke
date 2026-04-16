@@ -227,7 +227,7 @@ class OverlayManager:
             if new is None and old is not None:
                 self._mpv.clear_osd(oid)
             elif new is not None and new != old:
-                self._mpv.send_osd(oid, render_ass(new))
+                self._mpv.osd_overlay(oid, render_ass(new))
 
         self._last_sent = desired
         self._apply_qr(state)

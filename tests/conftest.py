@@ -69,10 +69,6 @@ class MockPlaybackController:
         """Mock set_subtitle_delay."""
         pass
 
-    def check_playback_ended(self) -> None:
-        """Mock check_playback_ended."""
-        pass
-
     def broadcast_position(self, socketio) -> None:
         """Mock broadcast_position."""
         pass

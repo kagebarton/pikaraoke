@@ -23,6 +23,7 @@ dependencies = [
   "ffmpeg-python==0.2.0",
   "yt-dlp[default]>=2026.03.03",
   "flask-socketio>=5.5.0",
+  "python-mpv>=1.0.7",
 ]
 
 [project.optional-dependencies]

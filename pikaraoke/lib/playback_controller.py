@@ -266,8 +266,8 @@ class PlaybackController:
             semitones=self.now_playing_transpose,
             position=self.mpv.position,
             duration=self.mpv.duration,
-            screen_w=int(self.mpv.query_property("osd-width") or 1920),
-            screen_h=int(self.mpv.query_property("osd-height") or 1080),
+            screen_w=self.mpv.osd_size[0],
+            screen_h=self.mpv.osd_size[1],
             hide_url=self.preferences.get_or_default("hide_url"),
             hide_now_playing=self.preferences.get_or_default("hide_now_playing_overlay"),
             show_clock=self.preferences.get_or_default("show_clock"),
@@ -281,16 +281,6 @@ class PlaybackController:
         is visible within the current frame rather than waiting up to 500ms.
         """
         self.mpv._tick_overlays()
-
-    def check_playback_ended(self) -> None:
-        """Called from the main run loop. Detects song-end via MPV idle state.
-
-        Uses _playback_lock to prevent race conditions between idle detection
-        and concurrent skip/transpose/pause commands.
-        """
-        with self._playback_lock:
-            if self.is_playing and self.mpv.is_idle:
-                self.end_song(reason="complete")
 
     def broadcast_position(self, socketio) -> None:
         """Emit current playback position to all Socket.IO clients."""

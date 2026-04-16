@@ -62,7 +62,7 @@ def _playing_state(**overrides) -> OverlayState:
 
 def _mock_mpv():
     mpv = MagicMock()
-    mpv.send_osd = MagicMock()
+    mpv.osd_overlay = MagicMock()
     mpv.clear_osd = MagicMock()
     mpv.send_qr_bitmap = MagicMock()
     return mpv
@@ -219,8 +219,8 @@ class TestOverlayManagerDiff:
         state = _idle_state()
         manager.apply(state)
         # URL should be sent, nothing else
-        mpv.send_osd.assert_called_once()
-        call_args = mpv.send_osd.call_args[0]
+        mpv.osd_overlay.assert_called_once()
+        call_args = mpv.osd_overlay.call_args[0]
         assert call_args[0] == OSD_URL
 
     def test_unchanged_state_does_not_resend(self):
@@ -228,19 +228,19 @@ class TestOverlayManagerDiff:
         manager = OverlayManager(mpv)
         state = _idle_state()
         manager.apply(state)
-        mpv.send_osd.reset_mock()
+        mpv.osd_overlay.reset_mock()
         manager.apply(state)
-        mpv.send_osd.assert_not_called()
+        mpv.osd_overlay.assert_not_called()
 
     def test_mode_change_adds_playing_overlays(self):
         mpv = _mock_mpv()
         manager = OverlayManager(mpv)
         manager.apply(_idle_state())
-        mpv.send_osd.reset_mock()
+        mpv.osd_overlay.reset_mock()
         mpv.clear_osd.reset_mock()
 
         manager.apply(_playing_state())
-        sent_ids = {c.args[0] for c in mpv.send_osd.call_args_list}
+        sent_ids = {c.args[0] for c in mpv.osd_overlay.call_args_list}
         assert OSD_NOWPLAYING in sent_ids
         assert OSD_TIMECODE in sent_ids
 
@@ -260,23 +260,23 @@ class TestOverlayManagerDiff:
         manager = OverlayManager(mpv)
         state = _idle_state()
         manager.apply(state)
-        mpv.send_osd.reset_mock()
+        mpv.osd_overlay.reset_mock()
 
         manager.invalidate()
         manager.apply(state)
-        mpv.send_osd.assert_called()
+        mpv.osd_overlay.assert_called()
 
     def test_only_changed_overlay_is_resent(self):
         mpv = _mock_mpv()
         manager = OverlayManager(mpv)
         state1 = _playing_state(position=10.0, show_clock=True)
         manager.apply(state1)
-        mpv.send_osd.reset_mock()
+        mpv.osd_overlay.reset_mock()
 
         # Advance time only -- only TIMECODE should differ
         state2 = _playing_state(position=11.0, show_clock=True)
         manager.apply(state2)
-        sent_ids = {c.args[0] for c in mpv.send_osd.call_args_list}
+        sent_ids = {c.args[0] for c in mpv.osd_overlay.call_args_list}
         assert OSD_TIMECODE in sent_ids
         assert OSD_NOWPLAYING not in sent_ids
 

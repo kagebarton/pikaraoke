@@ -189,6 +189,26 @@ class Karaoke:
         self.mpv_controller = MpvController()
         self.mpv_controller._server_url = self.url
         self.mpv_controller._preferences = self.preferences
+
+        # Initialize playback controller before wiring callbacks (callbacks reference it)
+        self.playback_controller = PlaybackController(
+            preferences=self.preferences,
+            events=self.events,
+            filename_from_path=SongManager.filename_from_path,
+            mpv=self.mpv_controller,
+        )
+
+        # Wire song-end callback through PlaybackController
+        def _on_song_end():
+            with self.playback_controller._playback_lock:
+                self.playback_controller.end_song(reason="complete")
+
+        self.mpv_controller.set_callbacks(
+            on_song_end=_on_song_end,
+            on_resize=self.mpv_controller._tick_overlays,
+            on_tick=self.mpv_controller._tick_overlays,
+        )
+
         try:
             self.mpv_controller.start()
             # Apply the loaded volume preference to the system now that MPV is running.
@@ -200,14 +220,6 @@ class Karaoke:
         except RuntimeError as e:
             logging.error(f"MPV failed to start: {e}")
             logging.error("Install MPV (apt install mpv / brew install mpv) and restart.")
-
-        # Initialize playback controller for video playback
-        self.playback_controller = PlaybackController(
-            preferences=self.preferences,
-            events=self.events,
-            filename_from_path=SongManager.filename_from_path,
-            mpv=self.mpv_controller,
-        )
 
         # Event bridging: the coordinator wires manager events to the UI (SocketIO/notifications).
         self.events.on("notification", self.log_and_send)
@@ -587,9 +599,6 @@ class Karaoke:
         self.running = True
         while self.running:
             try:
-                # Song-end detection (reads mpv.is_idle)
-                self.playback_controller.check_playback_ended()
-
                 # Clean up if playback ended but state wasn't reset
                 if (
                     not self.playback_controller.is_playing
