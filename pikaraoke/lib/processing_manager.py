@@ -339,7 +339,7 @@ class ProcessingManager:
     def _run_ffmpeg(self, cmd: list[str], label: str) -> None:
         stdout_fd = self._pty_slave_fd if self._pty_slave_fd is not None else subprocess.DEVNULL
         stderr_fd = self._pty_slave_fd if self._pty_slave_fd is not None else subprocess.DEVNULL
-        proc = subprocess.Popen(cmd, stdout=stdout_fd, stderr=stderr_fd)
+        proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=stdout_fd, stderr=stderr_fd)
         with self._state_lock:
             if self._active_state is not None:
                 self._active_state.ffmpeg_process = proc

@@ -265,6 +265,7 @@ class DownloadManager:
         # Use Popen to capture output in real-time
         process = subprocess.Popen(
             cmd,
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
