@@ -41,6 +41,17 @@ from pikaraoke.routes.socket_events import setup_socket_events
 
 _ = flask_babel.gettext
 
+
+class _NoGetFilter(logging.Filter):
+    """Suppress werkzeug HTTP access log lines for GET and socket.io polling POST requests."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        return "GET" not in msg and not ("POST" in msg and "/socket.io/" in msg)
+
+
+logging.getLogger("werkzeug").addFilter(_NoGetFilter())
+
 args = parse_pikaraoke_args()
 socketio = SocketIO(async_mode="threading", cors_allowed_origins=args.url)
 babel = Babel()

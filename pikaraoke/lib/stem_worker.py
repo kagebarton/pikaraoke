@@ -37,9 +37,10 @@ class StemWorker:
     doesn't leave orphan IPC state.
     """
 
-    def __init__(self, pty_slave_fd: int | None, temp_dir: str) -> None:
+    def __init__(self, pty_slave_fd: int | None, temp_dir: str, log_level: int = logging.INFO) -> None:
         self._pty_slave_fd = pty_slave_fd
         self._temp_dir = temp_dir
+        self._log_level = log_level
         self._process: Process | None = None
         self._job_send: Connection | None = None
         self._job_recv: Connection | None = None
@@ -76,6 +77,7 @@ class StemWorker:
                 self._result_send,
                 self._temp_dir,
                 self._pty_slave_fd,
+                self._log_level,
             ),
             daemon=True,
         )
@@ -157,7 +159,7 @@ class StemWorker:
                 pass
 
 
-def _setup_processing_logger() -> logging.Logger:
+def _setup_processing_logger(log_level: int = logging.INFO) -> logging.Logger:
     """Configure the module logger to write only to stderr (no disk file).
 
     The stderr fd will have been dup2'd to the PTY slave by the worker, so
@@ -173,12 +175,12 @@ def _setup_processing_logger() -> logging.Logger:
     processing_logger.handlers = []
     processing_logger.addHandler(handler)
     processing_logger.propagate = False
-    processing_logger.setLevel(logging.DEBUG)
+    processing_logger.setLevel(log_level)
 
     sep_logger = logging.getLogger("audio_separator")
     sep_logger.handlers = []
     sep_logger.addHandler(handler)
-    sep_logger.setLevel(logging.DEBUG)
+    sep_logger.setLevel(log_level)
     sep_logger.propagate = False
 
     return processing_logger
@@ -189,6 +191,7 @@ def _stem_worker_main(
     result_send: Connection,
     temp_dir: str = "",
     pty_slave_fd: int | None = None,
+    log_level: int = logging.INFO,
 ) -> None:
     """Entry point for the stem separation worker subprocess.
 
@@ -203,7 +206,7 @@ def _stem_worker_main(
         os.dup2(pty_slave_fd, 2)
         os.close(pty_slave_fd)
 
-    processing_logger = _setup_processing_logger()
+    processing_logger = _setup_processing_logger(log_level)
     processing_logger.info("Stem worker process started")
 
     from audio_separator.separator import Separator

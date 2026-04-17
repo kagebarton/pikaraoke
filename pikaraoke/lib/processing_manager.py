@@ -61,11 +61,16 @@ class ProcessingManager:
     """
 
     def __init__(
-        self, events: EventSystem, preferences: PreferenceManager, temp_dir: str = ""
+        self,
+        events: EventSystem,
+        preferences: PreferenceManager,
+        temp_dir: str = "",
+        log_level: int = logging.INFO,
     ) -> None:
         self._events = events
         self._preferences = preferences
         self._temp_dir = temp_dir
+        self._log_level = log_level
         self._stem_worker: StemWorker
         self._pending_queue: queue.Queue[str | None] = queue.Queue()
         self.pending_jobs: list[str] = []  # public, derived
@@ -89,6 +94,7 @@ class ProcessingManager:
         self._stem_worker = StemWorker(
             pty_slave_fd=self._pty_slave_fd,
             temp_dir=self._temp_dir,
+            log_level=self._log_level,
         )
         self._stem_worker.start()
 

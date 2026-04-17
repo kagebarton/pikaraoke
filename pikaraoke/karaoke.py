@@ -265,7 +265,10 @@ class Karaoke:
 
         # Initialize and start stem separation processor
         self.processing_manager = ProcessingManager(
-            events=self.events, preferences=self.preferences, temp_dir=self.temp_dir
+            events=self.events,
+            preferences=self.preferences,
+            temp_dir=self.temp_dir,
+            log_level=self.log_level,
         )
         self.processing_manager.start()
 
