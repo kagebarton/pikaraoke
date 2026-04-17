@@ -2,6 +2,30 @@
 <script>
 	var volume = {{ volume|default(0.85) }};
 
+	// Per-key debounce for step buttons
+	var _stepTimers = {};
+	function debounceStep(fn, key, delay = 300) {
+		clearTimeout(_stepTimers[key]);
+		_stepTimers[key] = setTimeout(fn, delay);
+	}
+
+	function stepPitch(delta) {
+		var slider = document.getElementById("transpose");
+		var val = Math.max(-12, Math.min(12, parseInt(slider.value) + delta));
+		slider.value = val;
+		document.getElementById("semitones-label").innerHTML = getSemitonesLabel(val);
+		debounceStep(() => $.get("/transpose/" + val), '_pitch');
+	}
+
+	function stepSubtitleDelay(delta) {
+		var slider = document.getElementById("subtitle-delay-slider");
+		var val = Math.max(-5, Math.min(5,
+			parseFloat((parseFloat(slider.value) + delta).toFixed(1))));
+		slider.value = val;
+		document.getElementById("subtitle-delay-label").innerHTML = formatSubtitleDelay(val);
+		debounceStep(() => $.get("/subtitle_delay/" + val), '_sub');
+	}
+
 	// Format subtitle delay display (e.g., "+0.5", "-0.3", "0")
 	function formatSubtitleDelay(value) {
 		var num = parseFloat(value);
@@ -107,20 +131,11 @@
 			}, 500)
 		);
 
-		$("#submit-transpose").click(function () {
-			var value;
-			if (slider) {
-				value = slider.value;
-			} else {
-				value = 0;
-			}
-			r = confirm("Transpose this song: " + getSemitonesLabel(value) + "?");
-			if (r) {
-				$.get("/transpose/" + value);
-			}
-			slider.value = 0;
-			output.innerHTML = getSemitonesLabel(slider.value);
-		});
+		if (slider && output) {
+			slider.onchange = function () {
+				debounceStep(() => $.get("/transpose/" + slider.value), '_pitch');
+			};
+		}
 
 		// Subtitle delay slider handler
 		var subtitleDelaySlider = document.getElementById("subtitle-delay-slider");
@@ -130,13 +145,10 @@
 			subtitleDelaySlider.oninput = function () {
 				subtitleDelayLabel.innerHTML = formatSubtitleDelay(this.value);
 			};
+			subtitleDelaySlider.onchange = function () {
+				debounceStep(() => $.get("/subtitle_delay/" + subtitleDelaySlider.value), '_sub');
+			};
 		}
-
-		$("#submit-subtitle-delay").click(function () {
-			var value = $("#subtitle-delay-slider").val();
-			$.get("/subtitle_delay/" + value);
-			showNotification("Subtitle delay: " + value + "s", "is-success");
-		});
 
 		$("#pause-resume").click(function () {
 			$.get("/pause");
@@ -274,7 +286,8 @@
 		</div>
 	</div>
 	<div style="width: 100%">
-		<div class="is-flex">
+		<div class="is-flex" style="align-items: center; gap: 8px">
+			<button class="button is-rounded is-small" onclick="stepSubtitleDelay(-0.1)" style="flex-shrink: 0">−</button>
 			<input
 				type="range"
 				min="-5"
@@ -282,12 +295,9 @@
 				value="0"
 				step="0.1"
 				id="subtitle-delay-slider"
-				style="width: 100%"
+				style="flex: 1; min-width: 0"
 			/>
-			<button id="submit-subtitle-delay" class="button is-rounded is-small" style="margin-left: 10px">
-				{# MSG: Label on the button to confirm the change in subtitle delay #}
-				{% trans %}Change{% endtrans %}
-			</button>
+			<button class="button is-rounded is-small" onclick="stepSubtitleDelay(0.1)" style="flex-shrink: 0">+</button>
 		</div>
 	</div>
 	<hr />
@@ -304,21 +314,18 @@
 		</div>
 	</div>
 	<div style="width: 100%">
-		<div class="is-flex">
+		<div class="is-flex" style="align-items: center; gap: 8px">
+			<button class="button is-rounded is-small" onclick="stepPitch(-1)" style="flex-shrink: 0">−</button>
 			<input
 				type="range"
 				min="-12"
 				max="12"
 				value="0"
-				width="300px"
 				class="transpose-slider"
 				id="transpose"
-				style="width: 100%"
+				style="flex: 1; min-width: 0"
 			/>
-			<button id="submit-transpose" class="button is-rounded is-small" style="margin-left: 10px">
-				{# MSG: Label on the button to confirm the change in key/pitch of the playing song. #} {% trans %}Change{%
-				endtrans %}
-			</button>
+			<button class="button is-rounded is-small" onclick="stepPitch(1)" style="flex-shrink: 0">+</button>
 		</div>
 	</div>
 	{% endif %}
