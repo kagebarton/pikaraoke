@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bulma Color Samples</title>
+  <link rel="stylesheet" href="pikaraoke/static/bulma.min.css">
+  <link rel="stylesheet" href="pikaraoke/static/bulma-dark.css">
+  <style>
+    body { padding: 20px; }
+    .color-sample {
+      display: inline-block;
+      width: 60px;
+      height: 40px;
+      border-radius: 4px;
+      margin-right: 10px;
+      vertical-align: middle;
+      border: 1px solid #555;
+    }
+    .color-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .color-name {
+      font-family: monospace;
+      font-size: 0.9em;
+      min-width: 220px;
+    }
+    h2 { margin-top: 30px; border-bottom: 1px solid #444; padding-bottom: 5px; }
+    .text-sample {
+      padding: 8px 16px;
+      border-radius: 4px;
+      margin-bottom: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 class="title">Bulma Color Reference</h1>
+    <p class="subtitle">Available colors in processing_mockup.html</p>
+
+    <h2>CSS Variables (var(--name))</h2>
+    <div class="color-row">
+      <div class="color-sample" style="background: var(--bulma-primary)"></div>
+      <code class="color-name">--bulma-primary</code>
+      <span>Queue action color (teal)</span>
+    </div>
+    <div class="color-row">
+      <div class="color-sample" style="background: var(--bulma-link)"></div>
+      <code class="color-name">--bulma-link</code>
+      <span>Blue</span>
+    </div>
+    <div class="color-row">
+      <div class="color-sample" style="background: var(--bulma-info)"></div>
+      <code class="color-name">--bulma-info</code>
+      <span>Light blue</span>
+    </div>
+    <div class="color-row">
+      <div class="color-sample" style="background: var(--bulma-success)"></div>
+      <code class="color-name">--bulma-success</code>
+      <span>Green</span>
+    </div>
+    <div class="color-row">
+      <div class="color-sample" style="background: var(--bulma-warning)"></div>
+      <code class="color-name">--bulma-warning</code>
+      <span>Yellow</span>
+    </div>
+    <div class="color-row">
+      <div class="color-sample" style="background: var(--bulma-danger)"></div>
+      <code class="color-name">--bulma-danger</code>
+      <span>Red (different from your #f14668)</span>
+    </div>
+    <div class="color-row">
+      <div class="color-sample" style="background: var(--bulma-dark)"></div>
+      <code class="color-name">--bulma-dark</code>
+      <span>Dark grey</span>
+    </div>
+    <div class="color-row">
+      <div class="color-sample" style="background: var(--bulma-light)"></div>
+      <code class="color-name">--bulma-light</code>
+      <span>Light grey</span>
+    </div>
+    <div class="color-row">
+      <div class="color-sample" style="background: var(--bulma-grey)"></div>
+      <code class="color-name">--bulma-grey</code>
+      <span>Medium grey</span>
+    </div>
+    <div class="color-row">
+      <div class="color-sample" style="background: var(--bulma-grey-light)"></div>
+      <code class="color-name">--bulma-grey-light</code>
+      <span>Light grey</span>
+    </div>
+    <div class="color-row">
+      <div class="color-sample" style="background: var(--bulma-grey-lighter)"></div>
+      <code class="color-name">--bulma-grey-lighter</code>
+      <span>Lighter grey</span>
+    </div>
+    <div class="color-row">
+      <div class="color-sample" style="background: var(--bulma-grey-dark)"></div>
+      <code class="color-name">--bulma-grey-dark</code>
+      <span>Dark grey</span>
+    </div>
+    <div class="color-row">
+      <div class="color-sample" style="background: var(--bulma-grey-darker)"></div>
+      <code class="color-name">--bulma-grey-darker</code>
+      <span>Darker grey</span>
+    </div>
+
+    <h2>Text Utility Classes</h2>
+    <div class="text-sample has-text-primary">has-text-primary</div>
+    <div class="text-sample has-text-link">has-text-link</div>
+    <div class="text-sample has-text-info">has-text-info</div>
+    <div class="text-sample has-text-success">has-text-success</div>
+    <div class="text-sample has-text-warning">has-text-warning</div>
+    <div class="text-sample has-text-danger">has-text-danger</div>
+    <div class="text-sample has-text-dark">has-text-dark</div>
+    <div class="text-sample has-text-light">has-text-light</div>
+    <div class="text-sample has-text-white">has-text-white</div>
+    <div class="text-sample has-text-black">has-text-black</div>
+
+    <h2>Grey Shades</h2>
+    <div class="text-sample has-text-grey">has-text-grey</div>
+    <div class="text-sample has-text-grey-light">has-text-grey-light</div>
+    <div class="text-sample has-text-grey-lighter">has-text-grey-lighter</div>
+    <div class="text-sample has-text-grey-dark">has-text-grey-dark</div>
+    <div class="text-sample has-text-grey-darker">has-text-grey-darker</div>
+
+    <h2>Background/Context Classes (Button Colors)</h2>
+    <div style="margin-top: 10px;">
+      <button class="button is-primary">is-primary</button>
+      <button class="button is-link">is-link</button>
+      <button class="button is-info">is-info</button>
+      <button class="button is-success">is-success</button>
+      <button class="button is-warning">is-warning</button>
+      <button class="button is-danger">is-danger</button>
+      <button class="button is-dark">is-dark</button>
+      <button class="button is-light">is-light</button>
+    </div>
+
+    <h2>Your Custom Colors</h2>
+    <div class="color-row">
+      <div class="color-sample" style="background: #888"></div>
+      <code class="color-name">Progress label (#888)</code>
+      <span>Grey</span>
+    </div>
+    <div class="color-row">
+      <div class="color-sample" style="background: #f14668"></div>
+      <code class="color-name">Cancel/Remove (#f14668)</code>
+      <span>Red</span>
+    </div>
+    <div class="color-row">
+      <div class="color-sample" style="background: #8a2c3d"></div>
+      <code class="color-name">Cancelling spinner (#8a2c3d)</code>
+      <span>Dark red</span>
+    </div>
+    <div class="color-row">
+      <div class="color-sample" style="background: #00d1b2"></div>
+      <code class="color-name">Queue (#00d1b2)</code>
+      <span>Teal</span>
+    </div>
+  </div>
+</body>
+</html>

@@ -39,6 +39,9 @@
 .icon-info-circled:before { content: '\e825'; } /* '' */
 .icon-braille:before { content: '\e826'; } /* '' */
 .icon-clock:before { content: '\e827'; } /* '' */
+.icon-minus:before { content: '\e828'; } /* '' */
+.icon-minus-circled:before { content: '\e829'; } /* '' */
+.icon-spin3:before { content: '\e832'; } /* '' */
 .icon-left-circled:before { content: '\f0a8'; } /* '' */
 .icon-right-circled:before { content: '\f0a9'; } /* '' */
 .icon-up-circled:before { content: '\f0aa'; } /* '' */

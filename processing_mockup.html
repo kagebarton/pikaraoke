@@ -10,8 +10,44 @@
   <link rel="stylesheet" href="pikaraoke/static/custom.css">
   <link rel="stylesheet" href="pikaraoke/static/fontello/css/fontello.css">
 
-  <style>
-    tr:nth-child(even) { background-color: rgb(50, 55, 55); }
+<style>
+/* ==========================================================================
+   ICON COLUMN SIZES - Configure all icon column widths here
+   ========================================================================== */
+:root {
+  --icon-col-download: 1.75rem;   /* Download status column */
+  --icon-col-process: 1.75rem;    /* Processing status column */
+  --icon-col-queue: 2rem;    /* Queue action column */
+  --icon-col-cancel: 2rem;  /* Cancel/Remove action column */
+
+/* Icon sizes */
+--spinner-size: 1.375em; /* CSS-generated spinner diameter */
+--spinner-speed: 2s; /* Spinner rotation duration (lower = faster) */
+--spinner-y-offset: -0.06em; /* Vertical adjustment to align with Fontello icons (tweak as needed) */
+--icon-size-clock: 1.5em; /* Pending state icon */
+--icon-size-ok: 1.5em; /* Complete state icon */
+--icon-size-error: 1.6em; /* Error state icon */
+--icon-size-queue: 1.6em; /* Queue action icon */
+--icon-size-cancel: 1.6em; /* Cancel/Remove action icon */
+--icon-size-header: 1.5em; /* Table header icons */
+
+/* Icon colors */
+--icon-color-spinner: var(--bulma-grey); /* Active spinner - matches progress label */
+--icon-color-spinner-dim: color-mix(in srgb, var(--bulma-grey) 30%, transparent); /* Spinner background track */
+--icon-color-cancelling: var(--bulma-danger); /* Cancelling state (spinner + label) */
+--icon-color-clock: var(--bulma-grey); /* Pending state (clock) */
+--icon-color-ok: var(--bulma-grey); /* Complete state */
+--icon-color-error: var(--bulma-grey); /* Error state */
+--icon-color-queue: var(--bulma-primary); /* Queue action (teal) */
+--icon-color-cancel: var(--bulma-danger); /* Cancel action (red) */
+--icon-color-remove: var(--bulma-danger); /* Remove action (red) */
+--icon-color-header: inherit; /* Table header icons - matches table header text */
+
+/* Text colors */
+--text-color-progress: var(--bulma-grey); /* Progress labels (downloading, separating) */
+}
+
+tr:nth-child(even) { background-color: rgb(50, 55, 55); }
 
     .is-truncated {
         display: inline-block;
@@ -21,10 +57,13 @@
         white-space: nowrap;
     }
 
-    /* Fixed-width icon columns */
-    .col-icon     { width: 1.5rem; text-align: center; vertical-align: middle; padding: 0; }
+/* Fixed-width icon columns */
+.col-icon-download { width: var(--icon-col-download); text-align: center; vertical-align: middle; padding: 0; }
+.col-icon-process { width: var(--icon-col-process); text-align: center; vertical-align: middle; padding: 0; }
+.col-icon-queue { width: var(--icon-col-queue); text-align: center; vertical-align: middle; padding: 0; }
+.col-icon-cancel { width: var(--icon-col-cancel); text-align: center; vertical-align: middle; padding: 0; }
 
-    th.col-icon .icon { color: #666 !important; }
+    #pipeline-table th[class^="col-icon"] .icon { color: var(--icon-color-header) !important; font-size: var(--icon-size-header); }
 
     /* Title cell */
     .col-title {
@@ -38,68 +77,72 @@
     .title-row .is-truncated {
         flex: 1 1 auto;
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
     }
-    .progress-label { flex: 0 0 auto; margin-left: 0.5em; }
+    .progress-label { flex: 0 0 auto; margin-left: 0.5em; color: var(--text-color-progress); }
+.progress-label.cancelling { color: var(--icon-color-cancelling); }
 
     /* Strip Bulma's cell padding so icon columns align predictably.
        Bulma's typography is unaffected — only spacing is overridden. */
     #pipeline-table th, #pipeline-table td { padding: 0; vertical-align: middle; }
     #pipeline-table td:first-child { padding: 0.5em 0.25rem 0.5em 0; }
 
-    /* Debug: show table cell borders */
-    /* #pipeline-table th,
-    #pipeline-table td {
-        border: 1px solid #555 !important;
-    } */
+/* Common wrapper — all state icons sit in identical boxes */
+.state-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--spinner-size);
+  height: var(--spinner-size);
+  vertical-align: middle;
+  line-height: 1;
+}
+/* CSS-Generated spinner - replaces Fontello icon-spin3 */
+.spinner-css {
+  display: inline-block;
+  width: var(--spinner-size);
+  height: var(--spinner-size);
+  border: calc(var(--spinner-size) * 0.13) solid var(--icon-color-spinner-dim);
+  border-top-color: var(--icon-color-spinner);
+  border-right-color: var(--icon-color-spinner);
+  border-radius: 50%;
+  animation: spin var(--spinner-speed) linear infinite;
+  margin-top: var(--spinner-y-offset);
+}
 
-    /* Common wrapper — all state icons sit in identical boxes */
-    .state-box {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 1.2em;
-        height: 1.2em;
-        vertical-align: middle;
-        line-height: 1;
-    }
+/* Grey spinner for cancelling state */
+.spinner-css.cancelling {
+  border-top-color: var(--icon-color-cancelling);
+  border-right-color: var(--icon-color-cancelling);
+}
 
-    /* CSS arc spinner (active) */
-    .state-spinner {
-        display: block;
-        width: 0.9em;
-        height: 0.9em;
-        border: 2.5px solid rgba(255,255,255,0.2);
-        border-top-color: white;
-        border-radius: 50%;
-        box-sizing: border-box;
-        animation: spin 0.8s linear infinite;
-    }
-    .state-spinner-grey {
-        border-color: rgba(128,128,128,0.2);
-        border-top-color: #888;
-    }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
 
-    @keyframes spin {
-        to { transform: rotate(360deg); }
-    }
+/* Fontello icons inside .state-box — reset line-height/margins */
+.state-box > .icon,
+.state-box > a > .icon {
+  line-height: 1;
+  margin: 0;
+}
+.state-box > .icon.icon-clock,
+.state-box > a > .icon.icon-clock { font-size: var(--icon-size-clock); color: var(--icon-color-clock); }
+.state-box > .icon.icon-ok,
+.state-box > a > .icon.icon-ok { font-size: var(--icon-size-ok); }
+.state-box > .icon.icon-state-error,
+.state-box > a > .icon.icon-state-error { font-size: var(--icon-size-error); }
+.state-box > a > .icon.icon-action-queue { font-size: var(--icon-size-queue); }
+.state-box > a > .icon.icon-action-cancel,
+.state-box > a > .icon.icon-action-remove { font-size: var(--icon-size-cancel); }
+.icon-state-ok { color: var(--icon-color-ok); }
+.icon-state-error { color: var(--icon-color-error); }
+.icon-state-cancelling { color: var(--icon-color-cancelling); }
 
-    /* Fontello icons inside .state-box — reset line-height/margins */
-    .state-box > .icon {
-        font-size: 1em;
-        line-height: 1;
-        margin: 0;
-    }
-    .icon-state-ok    { color: white; }
-    .icon-state-error { color: white; }
-
-    /* Action icons */
-    .pipeline-action-btn { text-decoration: none; }
-    .icon-action-queue  { color: #00d1b2; }
-    .icon-action-cancel { color: #f14668; }
-    .icon-action-remove { color: #f14668; }
+/* Action icons */
+.pipeline-action-btn { text-decoration: none; }
+.icon-action-queue { color: var(--icon-color-queue); }
+.icon-action-cancel { color: var(--icon-color-cancel); }
+.icon-action-remove { color: var(--icon-color-remove); }
   </style>
 </head>
 
@@ -112,13 +155,13 @@
       <div class="content">
         <table class="table is-striped is-fullwidth" id="pipeline-table">
           <thead>
-            <tr>
-              <th>Title</th>
-              <th class="col-icon"><span class="state-box"><i class="icon icon-down-big"></i></span></th>
-              <th class="col-icon"><span class="state-box"><i class="icon icon-music"></i></span></th>
-              <th class="col-icon"></th>
-              <th class="col-icon"></th>
-            </tr>
+      <tr>
+        <th>Title</th>
+        <th class="col-icon-download"><span class="state-box"><i class="icon icon-down-big"></i></span></th>
+        <th class="col-icon-process"><span class="state-box"><i class="icon icon-music"></i></span></th>
+        <th class="col-icon-queue"></th>
+        <th class="col-icon-cancel"></th>
+      </tr>
           </thead>
           <tbody id="pipeline-body"></tbody>
         </table>
@@ -136,7 +179,6 @@
             title: 'Download: pending · Processing: pending',
             download_status: 'pending',
             processing_status: 'pending',
-            download_progress: 0,
             error_message: null,
             song_path: null
         },
@@ -145,7 +187,6 @@
             title: 'Download: active (42%) · Processing: pending',
             download_status: 'active',
             processing_status: 'pending',
-            download_progress: 42,
             error_message: null,
             song_path: null
         },
@@ -154,7 +195,6 @@
             title: 'Download: complete · Processing: pending',
             download_status: 'complete',
             processing_status: 'pending',
-            download_progress: 100,
             error_message: null,
             song_path: null
         },
@@ -163,7 +203,6 @@
             title: 'Download: complete · Processing: active',
             download_status: 'complete',
             processing_status: 'active',
-            download_progress: 100,
             error_message: null,
             song_path: null
         },
@@ -172,7 +211,6 @@
             title: 'Download: complete · Processing: complete — enqueue available',
             download_status: 'complete',
             processing_status: 'complete',
-            download_progress: 100,
             error_message: null,
             song_path: '/songs/Sweet Caroline---abc12345678.mp4'
         },
@@ -190,7 +228,6 @@
             title: 'Download: complete · Processing: error',
             download_status: 'complete',
             processing_status: 'error',
-            download_progress: 100,
             error_message: null,
             song_path: null
         },
@@ -199,7 +236,6 @@
             title: 'Download: cancelling · Processing: cancelling',
             download_status: 'cancelling',
             processing_status: 'cancelling',
-            download_progress: 15,
             error_message: null,
             song_path: null
         },
@@ -208,7 +244,6 @@
             title: 'Download: complete · Processing: cancelling',
             download_status: 'complete',
             processing_status: 'cancelling',
-            download_progress: 100,
             error_message: null,
             song_path: null
         },
@@ -217,7 +252,6 @@
             title: 'Download: complete · Processing: complete — no path, remove only',
             download_status: 'complete',
             processing_status: 'complete',
-            download_progress: 100,
             error_message: null,
             song_path: null  // complete but no path — remove, not enqueue
         }
@@ -230,16 +264,16 @@
         return div.innerHTML;
     }
 
-    function stateIcon(status) {
-        var inner = '';
-        if (status === 'pending')    inner = '<i class="icon icon-clock"></i>';
-        else if (status === 'active')     inner = '<span class="state-spinner"></span>';
-        else if (status === 'complete')   inner = '<i class="icon icon-ok icon-state-ok"></i>';
-        else if (status === 'error')      inner = '<i class="icon icon-cancel-circled-1 icon-state-error"></i>';
-        else if (status === 'cancelling') inner = '<span class="state-spinner state-spinner-grey"></span>';
-        else return '';
-        return '<span class="state-box">' + inner + '</span>';
-    }
+function stateIcon(status, isCancellingContext) {
+  var inner = '';
+  if (status === 'pending') inner = '<i class="icon icon-clock"></i>';
+  else if (status === 'active') inner = '<span class="spinner-css"></span>';
+  else if (status === 'complete') inner = '<i class="icon icon-ok ' + (isCancellingContext ? 'icon-state-cancelling' : 'icon-state-ok') + '"></i>';
+  else if (status === 'error') inner = '<i class="icon icon-cancel-circled-1 icon-state-error"></i>';
+  else if (status === 'cancelling') inner = '<span class="spinner-css cancelling"></span>';
+  else return '';
+  return '<span class="state-box">' + inner + '</span>';
+}
 
     function queueCell(item) {
         if (item.download_status === 'complete' && item.processing_status === 'complete' && item.song_path) {
@@ -272,11 +306,13 @@
         return '';
     }
 
-    function renderRow(item) {
-        var label = progressLabel(item);
-        var labelHtml = label
-            ? '<span class="progress-label is-size-7 has-text-grey">' + label + '</span>'
-            : '';
+function renderRow(item) {
+  var label = progressLabel(item);
+  var isCancelling = item.download_status === 'cancelling' || item.processing_status === 'cancelling';
+  var labelClass = isCancelling ? 'progress-label is-size-7 cancelling' : 'progress-label is-size-7';
+  var labelHtml = label
+    ? '<span class="' + labelClass + '">' + label + '</span>'
+    : '';
 
         var titleHtml = '<td class="col-title">';
         titleHtml += '<div class="title-row">';
@@ -289,13 +325,14 @@
         }
         titleHtml += '</td>';
 
-        return '<tr data-id="' + item.id + '">'
-             + titleHtml
-             + '<td class="col-icon">' + stateIcon(item.download_status) + '</td>'
-             + '<td class="col-icon">' + stateIcon(item.processing_status) + '</td>'
-             + '<td class="col-icon">' + queueCell(item) + '</td>'
-             + '<td class="col-icon">' + cancelCell(item) + '</td>'
-             + '</tr>';
+var isCancellingContext = item.download_status === 'cancelling' || item.processing_status === 'cancelling';
+return '<tr data-id="' + item.id + '">'
+    + titleHtml
+    + '<td class="col-icon-download">' + stateIcon(item.download_status, isCancellingContext) + '</td>'
+    + '<td class="col-icon-process">' + stateIcon(item.processing_status, isCancellingContext) + '</td>'
+    + '<td class="col-icon-queue">' + queueCell(item) + '</td>'
+    + '<td class="col-icon-cancel">' + cancelCell(item) + '</td>'
+    + '</tr>';
     }
 
     function removeRow(id, delay) {
@@ -319,7 +356,7 @@
         $('#pipeline-body').html(html);
 
         // Cancel / Remove button
-        $(document).on('click', '.col-icon a[title="Cancel"]', function(e) {
+        $(document).on('click', '.col-icon-cancel a[title="Cancel"]', function(e) {
             e.preventDefault();
             var id = $(this).closest('tr').data('id').toString();
             var item = mockItems.find(function(i) { return i.id === id; });
@@ -335,20 +372,19 @@
                 // Cancel active processing: show cancelling state, then remove after delay
                 item.download_status = 'cancelling';
                 item.processing_status = 'cancelling';
-                item.cancelling = true;
                 updateRow(id);
                 removeRow(id, 5000);
             }
         });
 
-        $(document).on('click', '.col-icon a[title="Remove"]', function(e) {
+        $(document).on('click', '.col-icon-cancel a[title="Remove"]', function(e) {
             e.preventDefault();
             var id = $(this).closest('tr').data('id').toString();
             removeRow(id);
         });
 
         // Queue / Enqueue button
-        $(document).on('click', '.col-icon a[title="Queue"]', function(e) {
+        $(document).on('click', '.col-icon-queue a[title="Queue"]', function(e) {
             e.preventDefault();
             var id = $(this).closest('tr').data('id').toString();
             removeRow(id);
