@@ -330,10 +330,30 @@
 			$("#song_to_add-selectized").width("100%");
 		}
 
+		// Save results to sessionStorage if server-rendered them, otherwise restore from sessionStorage
+		const resultsContainer = document.getElementById("container_search_result");
+		if (resultsContainer) {
+			sessionStorage.setItem("pikaraoke_search_results", resultsContainer.outerHTML);
+			sessionStorage.setItem("pikaraoke_search_term", "{{search_string|e}}");
+		} else {
+			const savedResults = sessionStorage.getItem("pikaraoke_search_results");
+			if (savedResults) {
+				$("#searching_loader").after(savedResults);
+				const savedTerm = sessionStorage.getItem("pikaraoke_search_term");
+				if (savedTerm) {
+					$("#song_to_add-selectized").val(savedTerm);
+					$("#song_to_add-selectized").width("100%");
+				}
+			}
+		}
+
 		$("#clear-search").on("click", function (e) {
 			e.preventDefault();
 			$select[0].selectize.clear();
 			$("#song_to_add-selectized").val("");
+			sessionStorage.removeItem("pikaraoke_search_results");
+			sessionStorage.removeItem("pikaraoke_search_term");
+			$("#container_search_result").remove();
 		});
 
 		$("#search-link").on("click", function (e) {
@@ -467,14 +487,44 @@
 			});
 		}
 
-		const items = document.querySelectorAll(".search_result_items li");
-		items.forEach((item) =>
-			item.querySelector("button").addEventListener("click", function () {
-				const url = item.getAttribute("value");
-				const title = item.getAttribute("data-ytTitle");
-				downloadSong(url, title, this);
-			})
-		);
+		function enqueueLocalSong(filePath, button) {
+			var $btn = $(button);
+			var originalText = $btn.html();
+			$btn.css("min-width", $btn.outerWidth() + "px");
+			$btn.addClass("is-loading").attr("disabled", true);
+			$.ajax({
+				url: "{{ url_for('queue.enqueue') }}",
+				type: "GET",
+				data: { song: filePath, user: getUserCookie() || "" },
+				success: function (data) {
+					var result = typeof data === "string" ? JSON.parse(data) : data;
+					if (result.success) {
+						$btn.removeClass("is-loading").html('<i class="icon icon-ok"></i>');
+					} else {
+						$btn.removeClass("is-loading").addClass("is-warning").text("Already queued");
+					}
+					setTimeout(function () {
+						$btn.removeClass("is-warning").html(originalText)
+							.removeAttr("disabled").css("min-width", "");
+					}, 3000);
+				},
+				error: function () {
+					$btn.removeClass("is-loading").addClass("is-danger").text("!");
+					setTimeout(function () {
+						$btn.removeClass("is-danger").html(originalText)
+							.removeAttr("disabled").css("min-width", "");
+					}, 3000);
+				},
+			});
+		}
+
+		$(document).on("click", ".search_result_items_enqueue", function () {
+			enqueueLocalSong($(this).closest("li").attr("data-file-path"), this);
+		});
+		$(document).on("click", ".search_result_items_download", function () {
+			var $item = $(this).closest("li");
+			downloadSong($item.attr("value"), $item.attr("data-ytTitle"), this);
+		});
 
 
 
@@ -677,8 +727,8 @@
 			</label>
 		</div>
 		<ul id="search-results" class="search_result_items">
-			{% for title,url,id,channel,duration in search_results %}
-			<li data-ytID="{{id}}" data-ytTitle="{{title}}" value="{{url}}" data-index="{{loop.index0}}">
+			{% for title,url,id,channel,duration,existing_path in search_results %}
+			<li data-ytID="{{id}}" data-ytTitle="{{title}}" value="{{url}}" data-index="{{loop.index0}}"{% if existing_path %} data-file-path="{{existing_path}}"{% endif %}>
 				<div class="img-wrapper" data-url="{{url}}">
 					<div class="img-frame">
 						<img src="https://img.youtube.com/vi/{{id}}/mqdefault.jpg" />
@@ -691,7 +741,11 @@
 						{% if channel %}<div class="is-size-7 has-text-grey">{{ channel }}</div>{% endif %}
 						<a href="{{url}}" target="_blank" rel="noopener noreferrer" class="is-size-7 has-text-info">YouTube ↗</a>
 					</div>
+					{% if existing_path %}
+					<button class="button is-success search_result_items_enqueue">Add to Queue</button>
+					{% else %}
 					<button class="button search_result_items_download">Download</button>
+					{% endif %}
 				</div>
 			</li>
 			{% endfor %}
