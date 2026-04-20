@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html data-theme="dark">
+<html id="html-root" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,157 +8,510 @@
   <link rel="stylesheet" href="pikaraoke/static/bulma-dark.css">
   <style>
     body { padding: 20px; }
-    .color-sample {
-      display: inline-block;
-      width: 60px;
-      height: 40px;
-      border-radius: 4px;
-      margin-right: 10px;
-      vertical-align: middle;
-      border: 1px solid #555;
-    }
-    .color-row {
-      display: flex;
-      align-items: center;
-      margin-bottom: 8px;
-    }
-    .color-name {
-      font-family: monospace;
-      font-size: 0.9em;
-      min-width: 220px;
-    }
-    h2 { margin-top: 30px; border-bottom: 1px solid #444; padding-bottom: 5px; }
-    .text-sample {
-      padding: 8px 16px;
-      border-radius: 4px;
-      margin-bottom: 4px;
-    }
+    .swatch { display: inline-block; width: 50px; height: 34px; border-radius: 4px; border: 1px solid rgba(128,128,128,0.3); vertical-align: middle; }
+    .color-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+    .color-name { font-family: monospace; font-size: 0.8em; min-width: 240px; }
+    .shade-grid { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px; }
+    .shade-cell { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+    .shade-swatch { width: 44px; height: 30px; border-radius: 3px; border: 1px solid rgba(128,128,128,0.3); }
+    .shade-label { font-family: monospace; font-size: 0.65em; text-align: center; }
+    h2 { margin-top: 30px; border-bottom: 1px solid var(--bulma-border); padding-bottom: 5px; }
+    h3 { margin-top: 20px; margin-bottom: 8px; font-size: 1em; font-weight: bold; opacity: 0.8; }
+    .semantic-section { margin-bottom: 24px; padding: 16px; border-radius: 6px; border: 1px solid var(--bulma-border); }
+    .button-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+    .text-row { padding: 4px 0; font-family: monospace; }
+    #theme-toggle { position: fixed; top: 16px; right: 16px; z-index: 100; }
+    .variant-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+    .variant-row { display: flex; align-items: center; gap: 10px; }
+    .variant-row code { font-size: 0.8em; }
   </style>
 </head>
 <body>
   <div class="container">
+    <button id="theme-toggle" class="button is-small" onclick="toggleTheme()">Toggle Light/Dark</button>
+
     <h1 class="title">Bulma Color Reference</h1>
-    <p class="subtitle">Available colors in processing_mockup.html</p>
+    <p class="subtitle">All CSS variables and utility classes — toggle theme above</p>
 
-    <h2>CSS Variables (var(--name))</h2>
-    <div class="color-row">
-      <div class="color-sample" style="background: var(--bulma-primary)"></div>
-      <code class="color-name">--bulma-primary</code>
-      <span>Queue action color (teal)</span>
-    </div>
-    <div class="color-row">
-      <div class="color-sample" style="background: var(--bulma-link)"></div>
-      <code class="color-name">--bulma-link</code>
-      <span>Blue</span>
-    </div>
-    <div class="color-row">
-      <div class="color-sample" style="background: var(--bulma-info)"></div>
-      <code class="color-name">--bulma-info</code>
-      <span>Light blue</span>
-    </div>
-    <div class="color-row">
-      <div class="color-sample" style="background: var(--bulma-success)"></div>
-      <code class="color-name">--bulma-success</code>
-      <span>Green</span>
-    </div>
-    <div class="color-row">
-      <div class="color-sample" style="background: var(--bulma-warning)"></div>
-      <code class="color-name">--bulma-warning</code>
-      <span>Yellow</span>
-    </div>
-    <div class="color-row">
-      <div class="color-sample" style="background: var(--bulma-danger)"></div>
-      <code class="color-name">--bulma-danger</code>
-      <span>Red (different from your #f14668)</span>
-    </div>
-    <div class="color-row">
-      <div class="color-sample" style="background: var(--bulma-dark)"></div>
-      <code class="color-name">--bulma-dark</code>
-      <span>Dark grey</span>
-    </div>
-    <div class="color-row">
-      <div class="color-sample" style="background: var(--bulma-light)"></div>
-      <code class="color-name">--bulma-light</code>
-      <span>Light grey</span>
-    </div>
-    <div class="color-row">
-      <div class="color-sample" style="background: var(--bulma-grey)"></div>
-      <code class="color-name">--bulma-grey</code>
-      <span>Medium grey</span>
-    </div>
-    <div class="color-row">
-      <div class="color-sample" style="background: var(--bulma-grey-light)"></div>
-      <code class="color-name">--bulma-grey-light</code>
-      <span>Light grey</span>
-    </div>
-    <div class="color-row">
-      <div class="color-sample" style="background: var(--bulma-grey-lighter)"></div>
-      <code class="color-name">--bulma-grey-lighter</code>
-      <span>Lighter grey</span>
-    </div>
-    <div class="color-row">
-      <div class="color-sample" style="background: var(--bulma-grey-dark)"></div>
-      <code class="color-name">--bulma-grey-dark</code>
-      <span>Dark grey</span>
-    </div>
-    <div class="color-row">
-      <div class="color-sample" style="background: var(--bulma-grey-darker)"></div>
-      <code class="color-name">--bulma-grey-darker</code>
-      <span>Darker grey</span>
+    <!-- ── SEMANTIC COLORS ── -->
+    <h2>Semantic Color Scales</h2>
+    <p style="font-size:0.85em; opacity:0.7; margin-bottom:16px;">Each color has shades 00–100, plus base/light/dark/soft/bold variants and their inverts.</p>
+
+    <!-- PRIMARY -->
+    <div class="semantic-section">
+      <strong>primary</strong>
+      <h3>Shades</h3>
+      <div class="shade-grid">
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-primary-00)"></div><div class="shade-label">00</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-primary-05)"></div><div class="shade-label">05</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-primary-10)"></div><div class="shade-label">10</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-primary-15)"></div><div class="shade-label">15</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-primary-20)"></div><div class="shade-label">20</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-primary-25)"></div><div class="shade-label">25</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-primary-30)"></div><div class="shade-label">30</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-primary-35)"></div><div class="shade-label">35</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-primary-40)"></div><div class="shade-label">40</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-primary-45)"></div><div class="shade-label">45</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-primary-50)"></div><div class="shade-label">50</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-primary-55)"></div><div class="shade-label">55</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-primary-60)"></div><div class="shade-label">60</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-primary-65)"></div><div class="shade-label">65</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-primary-70)"></div><div class="shade-label">70</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-primary-75)"></div><div class="shade-label">75</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-primary-80)"></div><div class="shade-label">80</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-primary-85)"></div><div class="shade-label">85</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-primary-90)"></div><div class="shade-label">90</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-primary-95)"></div><div class="shade-label">95</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-primary-100)"></div><div class="shade-label">100</div></div>
+      </div>
+      <h3>Variants</h3>
+      <div class="variant-list">
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-primary)"></div><code>--bulma-primary</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-primary-base)"></div><code>--bulma-primary-base</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-primary-invert)"></div><code>--bulma-primary-invert</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-primary-light)"></div><code>--bulma-primary-light</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-primary-light-invert)"></div><code>--bulma-primary-light-invert</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-primary-dark)"></div><code>--bulma-primary-dark</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-primary-dark-invert)"></div><code>--bulma-primary-dark-invert</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-primary-soft)"></div><code>--bulma-primary-soft</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-primary-soft-invert)"></div><code>--bulma-primary-soft-invert</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-primary-bold)"></div><code>--bulma-primary-bold</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-primary-bold-invert)"></div><code>--bulma-primary-bold-invert</code></div>
+      </div>
     </div>
 
-    <h2>Text Utility Classes</h2>
-    <div class="text-sample has-text-primary">has-text-primary</div>
-    <div class="text-sample has-text-link">has-text-link</div>
-    <div class="text-sample has-text-info">has-text-info</div>
-    <div class="text-sample has-text-success">has-text-success</div>
-    <div class="text-sample has-text-warning">has-text-warning</div>
-    <div class="text-sample has-text-danger">has-text-danger</div>
-    <div class="text-sample has-text-dark">has-text-dark</div>
-    <div class="text-sample has-text-light">has-text-light</div>
-    <div class="text-sample has-text-white">has-text-white</div>
-    <div class="text-sample has-text-black">has-text-black</div>
+    <!-- LINK -->
+    <div class="semantic-section">
+      <strong>link</strong>
+      <h3>Shades</h3>
+      <div class="shade-grid">
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-link-00)"></div><div class="shade-label">00</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-link-05)"></div><div class="shade-label">05</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-link-10)"></div><div class="shade-label">10</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-link-15)"></div><div class="shade-label">15</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-link-20)"></div><div class="shade-label">20</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-link-25)"></div><div class="shade-label">25</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-link-30)"></div><div class="shade-label">30</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-link-35)"></div><div class="shade-label">35</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-link-40)"></div><div class="shade-label">40</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-link-45)"></div><div class="shade-label">45</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-link-50)"></div><div class="shade-label">50</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-link-55)"></div><div class="shade-label">55</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-link-60)"></div><div class="shade-label">60</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-link-65)"></div><div class="shade-label">65</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-link-70)"></div><div class="shade-label">70</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-link-75)"></div><div class="shade-label">75</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-link-80)"></div><div class="shade-label">80</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-link-85)"></div><div class="shade-label">85</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-link-90)"></div><div class="shade-label">90</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-link-95)"></div><div class="shade-label">95</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-link-100)"></div><div class="shade-label">100</div></div>
+      </div>
+      <h3>Variants</h3>
+      <div class="variant-list">
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-link)"></div><code>--bulma-link</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-link-base)"></div><code>--bulma-link-base</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-link-invert)"></div><code>--bulma-link-invert</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-link-light)"></div><code>--bulma-link-light</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-link-light-invert)"></div><code>--bulma-link-light-invert</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-link-dark)"></div><code>--bulma-link-dark</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-link-dark-invert)"></div><code>--bulma-link-dark-invert</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-link-soft)"></div><code>--bulma-link-soft</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-link-soft-invert)"></div><code>--bulma-link-soft-invert</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-link-bold)"></div><code>--bulma-link-bold</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-link-bold-invert)"></div><code>--bulma-link-bold-invert</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-link-text)"></div><code>--bulma-link-text</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-link-text-hover)"></div><code>--bulma-link-text-hover</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-link-text-active)"></div><code>--bulma-link-text-active</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-link-active)"></div><code>--bulma-link-active</code></div>
+      </div>
+    </div>
 
-    <h2>Grey Shades</h2>
-    <div class="text-sample has-text-grey">has-text-grey</div>
-    <div class="text-sample has-text-grey-light">has-text-grey-light</div>
-    <div class="text-sample has-text-grey-lighter">has-text-grey-lighter</div>
-    <div class="text-sample has-text-grey-dark">has-text-grey-dark</div>
-    <div class="text-sample has-text-grey-darker">has-text-grey-darker</div>
+    <!-- INFO -->
+    <div class="semantic-section">
+      <strong>info</strong>
+      <h3>Shades</h3>
+      <div class="shade-grid">
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-info-00)"></div><div class="shade-label">00</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-info-05)"></div><div class="shade-label">05</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-info-10)"></div><div class="shade-label">10</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-info-15)"></div><div class="shade-label">15</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-info-20)"></div><div class="shade-label">20</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-info-25)"></div><div class="shade-label">25</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-info-30)"></div><div class="shade-label">30</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-info-35)"></div><div class="shade-label">35</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-info-40)"></div><div class="shade-label">40</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-info-45)"></div><div class="shade-label">45</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-info-50)"></div><div class="shade-label">50</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-info-55)"></div><div class="shade-label">55</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-info-60)"></div><div class="shade-label">60</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-info-65)"></div><div class="shade-label">65</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-info-70)"></div><div class="shade-label">70</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-info-75)"></div><div class="shade-label">75</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-info-80)"></div><div class="shade-label">80</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-info-85)"></div><div class="shade-label">85</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-info-90)"></div><div class="shade-label">90</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-info-95)"></div><div class="shade-label">95</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-info-100)"></div><div class="shade-label">100</div></div>
+      </div>
+      <h3>Variants</h3>
+      <div class="variant-list">
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-info)"></div><code>--bulma-info</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-info-base)"></div><code>--bulma-info-base</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-info-invert)"></div><code>--bulma-info-invert</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-info-light)"></div><code>--bulma-info-light</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-info-light-invert)"></div><code>--bulma-info-light-invert</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-info-dark)"></div><code>--bulma-info-dark</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-info-dark-invert)"></div><code>--bulma-info-dark-invert</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-info-soft)"></div><code>--bulma-info-soft</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-info-soft-invert)"></div><code>--bulma-info-soft-invert</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-info-bold)"></div><code>--bulma-info-bold</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-info-bold-invert)"></div><code>--bulma-info-bold-invert</code></div>
+      </div>
+    </div>
 
-    <h2>Background/Context Classes (Button Colors)</h2>
-    <div style="margin-top: 10px;">
+    <!-- SUCCESS -->
+    <div class="semantic-section">
+      <strong>success</strong>
+      <h3>Shades</h3>
+      <div class="shade-grid">
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-success-00)"></div><div class="shade-label">00</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-success-05)"></div><div class="shade-label">05</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-success-10)"></div><div class="shade-label">10</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-success-15)"></div><div class="shade-label">15</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-success-20)"></div><div class="shade-label">20</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-success-25)"></div><div class="shade-label">25</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-success-30)"></div><div class="shade-label">30</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-success-35)"></div><div class="shade-label">35</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-success-40)"></div><div class="shade-label">40</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-success-45)"></div><div class="shade-label">45</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-success-50)"></div><div class="shade-label">50</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-success-55)"></div><div class="shade-label">55</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-success-60)"></div><div class="shade-label">60</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-success-65)"></div><div class="shade-label">65</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-success-70)"></div><div class="shade-label">70</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-success-75)"></div><div class="shade-label">75</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-success-80)"></div><div class="shade-label">80</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-success-85)"></div><div class="shade-label">85</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-success-90)"></div><div class="shade-label">90</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-success-95)"></div><div class="shade-label">95</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-success-100)"></div><div class="shade-label">100</div></div>
+      </div>
+      <h3>Variants</h3>
+      <div class="variant-list">
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-success)"></div><code>--bulma-success</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-success-base)"></div><code>--bulma-success-base</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-success-invert)"></div><code>--bulma-success-invert</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-success-light)"></div><code>--bulma-success-light</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-success-light-invert)"></div><code>--bulma-success-light-invert</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-success-dark)"></div><code>--bulma-success-dark</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-success-dark-invert)"></div><code>--bulma-success-dark-invert</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-success-soft)"></div><code>--bulma-success-soft</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-success-soft-invert)"></div><code>--bulma-success-soft-invert</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-success-bold)"></div><code>--bulma-success-bold</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-success-bold-invert)"></div><code>--bulma-success-bold-invert</code></div>
+      </div>
+    </div>
+
+    <!-- WARNING -->
+    <div class="semantic-section">
+      <strong>warning</strong>
+      <h3>Shades</h3>
+      <div class="shade-grid">
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-warning-00)"></div><div class="shade-label">00</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-warning-05)"></div><div class="shade-label">05</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-warning-10)"></div><div class="shade-label">10</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-warning-15)"></div><div class="shade-label">15</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-warning-20)"></div><div class="shade-label">20</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-warning-25)"></div><div class="shade-label">25</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-warning-30)"></div><div class="shade-label">30</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-warning-35)"></div><div class="shade-label">35</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-warning-40)"></div><div class="shade-label">40</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-warning-45)"></div><div class="shade-label">45</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-warning-50)"></div><div class="shade-label">50</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-warning-55)"></div><div class="shade-label">55</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-warning-60)"></div><div class="shade-label">60</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-warning-65)"></div><div class="shade-label">65</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-warning-70)"></div><div class="shade-label">70</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-warning-75)"></div><div class="shade-label">75</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-warning-80)"></div><div class="shade-label">80</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-warning-85)"></div><div class="shade-label">85</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-warning-90)"></div><div class="shade-label">90</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-warning-95)"></div><div class="shade-label">95</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-warning-100)"></div><div class="shade-label">100</div></div>
+      </div>
+      <h3>Variants</h3>
+      <div class="variant-list">
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-warning)"></div><code>--bulma-warning</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-warning-base)"></div><code>--bulma-warning-base</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-warning-invert)"></div><code>--bulma-warning-invert</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-warning-light)"></div><code>--bulma-warning-light</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-warning-light-invert)"></div><code>--bulma-warning-light-invert</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-warning-dark)"></div><code>--bulma-warning-dark</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-warning-dark-invert)"></div><code>--bulma-warning-dark-invert</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-warning-soft)"></div><code>--bulma-warning-soft</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-warning-soft-invert)"></div><code>--bulma-warning-soft-invert</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-warning-bold)"></div><code>--bulma-warning-bold</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-warning-bold-invert)"></div><code>--bulma-warning-bold-invert</code></div>
+      </div>
+    </div>
+
+    <!-- DANGER -->
+    <div class="semantic-section">
+      <strong>danger</strong>
+      <h3>Shades</h3>
+      <div class="shade-grid">
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-danger-00)"></div><div class="shade-label">00</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-danger-05)"></div><div class="shade-label">05</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-danger-10)"></div><div class="shade-label">10</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-danger-15)"></div><div class="shade-label">15</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-danger-20)"></div><div class="shade-label">20</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-danger-25)"></div><div class="shade-label">25</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-danger-30)"></div><div class="shade-label">30</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-danger-35)"></div><div class="shade-label">35</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-danger-40)"></div><div class="shade-label">40</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-danger-45)"></div><div class="shade-label">45</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-danger-50)"></div><div class="shade-label">50</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-danger-55)"></div><div class="shade-label">55</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-danger-60)"></div><div class="shade-label">60</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-danger-65)"></div><div class="shade-label">65</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-danger-70)"></div><div class="shade-label">70</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-danger-75)"></div><div class="shade-label">75</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-danger-80)"></div><div class="shade-label">80</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-danger-85)"></div><div class="shade-label">85</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-danger-90)"></div><div class="shade-label">90</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-danger-95)"></div><div class="shade-label">95</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-danger-100)"></div><div class="shade-label">100</div></div>
+      </div>
+      <h3>Variants</h3>
+      <div class="variant-list">
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-danger)"></div><code>--bulma-danger</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-danger-base)"></div><code>--bulma-danger-base</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-danger-invert)"></div><code>--bulma-danger-invert</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-danger-light)"></div><code>--bulma-danger-light</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-danger-light-invert)"></div><code>--bulma-danger-light-invert</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-danger-dark)"></div><code>--bulma-danger-dark</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-danger-dark-invert)"></div><code>--bulma-danger-dark-invert</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-danger-soft)"></div><code>--bulma-danger-soft</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-danger-soft-invert)"></div><code>--bulma-danger-soft-invert</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-danger-bold)"></div><code>--bulma-danger-bold</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-danger-bold-invert)"></div><code>--bulma-danger-bold-invert</code></div>
+      </div>
+    </div>
+
+    <!-- TEXT -->
+    <div class="semantic-section">
+      <strong>text</strong>
+      <h3>Shades</h3>
+      <div class="shade-grid">
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-text-00)"></div><div class="shade-label">00</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-text-05)"></div><div class="shade-label">05</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-text-10)"></div><div class="shade-label">10</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-text-15)"></div><div class="shade-label">15</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-text-20)"></div><div class="shade-label">20</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-text-25)"></div><div class="shade-label">25</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-text-30)"></div><div class="shade-label">30</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-text-35)"></div><div class="shade-label">35</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-text-40)"></div><div class="shade-label">40</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-text-45)"></div><div class="shade-label">45</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-text-50)"></div><div class="shade-label">50</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-text-55)"></div><div class="shade-label">55</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-text-60)"></div><div class="shade-label">60</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-text-65)"></div><div class="shade-label">65</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-text-70)"></div><div class="shade-label">70</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-text-75)"></div><div class="shade-label">75</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-text-80)"></div><div class="shade-label">80</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-text-85)"></div><div class="shade-label">85</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-text-90)"></div><div class="shade-label">90</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-text-95)"></div><div class="shade-label">95</div></div>
+        <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-text-100)"></div><div class="shade-label">100</div></div>
+      </div>
+      <h3>Variants</h3>
+      <div class="variant-list">
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-text)"></div><code>--bulma-text</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-text-base)"></div><code>--bulma-text-base</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-text-invert)"></div><code>--bulma-text-invert</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-text-light)"></div><code>--bulma-text-light</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-text-light-invert)"></div><code>--bulma-text-light-invert</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-text-dark)"></div><code>--bulma-text-dark</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-text-dark-invert)"></div><code>--bulma-text-dark-invert</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-text-soft)"></div><code>--bulma-text-soft</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-text-soft-invert)"></div><code>--bulma-text-soft-invert</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-text-bold)"></div><code>--bulma-text-bold</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-text-bold-invert)"></div><code>--bulma-text-bold-invert</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-text-weak)"></div><code>--bulma-text-weak</code></div>
+        <div class="variant-row"><div class="shade-swatch" style="background:var(--bulma-text-strong)"></div><code>--bulma-text-strong</code></div>
+      </div>
+    </div>
+
+    <!-- ── STATIC COLORS ── -->
+    <h2>Static Colors</h2>
+
+    <h3>Black family</h3>
+    <div class="shade-grid">
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-black)"></div><div class="shade-label">black</div></div>
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-black-base)"></div><div class="shade-label">base</div></div>
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-black-bis)"></div><div class="shade-label">bis</div></div>
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-black-ter)"></div><div class="shade-label">ter</div></div>
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-black-invert)"></div><div class="shade-label">invert</div></div>
+    </div>
+
+    <h3>White family</h3>
+    <div class="shade-grid">
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-white)"></div><div class="shade-label">white</div></div>
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-white-base)"></div><div class="shade-label">base</div></div>
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-white-bis)"></div><div class="shade-label">bis</div></div>
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-white-ter)"></div><div class="shade-label">ter</div></div>
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-white-invert)"></div><div class="shade-label">invert</div></div>
+    </div>
+
+    <h3>Grey family</h3>
+    <div class="shade-grid">
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-grey-darker)"></div><div class="shade-label">darker</div></div>
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-grey-dark)"></div><div class="shade-label">dark</div></div>
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-grey)"></div><div class="shade-label">grey</div></div>
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-grey-light)"></div><div class="shade-label">light</div></div>
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-grey-lighter)"></div><div class="shade-label">lighter</div></div>
+    </div>
+
+    <h3>dark / light</h3>
+    <div class="shade-grid">
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-dark)"></div><div class="shade-label">dark</div></div>
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-dark-base)"></div><div class="shade-label">dark-base</div></div>
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-dark-invert)"></div><div class="shade-label">dark-inv</div></div>
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-light)"></div><div class="shade-label">light</div></div>
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-light-base)"></div><div class="shade-label">light-base</div></div>
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-light-invert)"></div><div class="shade-label">light-inv</div></div>
+    </div>
+
+    <!-- ── SCHEME / BACKGROUND ── -->
+    <h2>Scheme &amp; Background</h2>
+
+    <h3>Scheme colors (theme-aware surface colors)</h3>
+    <div class="shade-grid">
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-scheme-main)"></div><div class="shade-label">main</div></div>
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-scheme-main-bis)"></div><div class="shade-label">main-bis</div></div>
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-scheme-main-ter)"></div><div class="shade-label">main-ter</div></div>
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-scheme-invert)"></div><div class="shade-label">invert</div></div>
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-scheme-invert-bis)"></div><div class="shade-label">inv-bis</div></div>
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-scheme-invert-ter)"></div><div class="shade-label">inv-ter</div></div>
+    </div>
+
+    <h3>Background</h3>
+    <div class="shade-grid">
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-background)"></div><div class="shade-label">background</div></div>
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-background-hover)"></div><div class="shade-label">hover</div></div>
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-background-active)"></div><div class="shade-label">active</div></div>
+    </div>
+
+    <h3>Border</h3>
+    <div class="shade-grid">
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-border)"></div><div class="shade-label">border</div></div>
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-border-hover)"></div><div class="shade-label">hover</div></div>
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-border-active)"></div><div class="shade-label">active</div></div>
+      <div class="shade-cell"><div class="shade-swatch" style="background:var(--bulma-border-weak)"></div><div class="shade-label">weak</div></div>
+    </div>
+
+    <!-- ── UTILITY TEXT CLASSES ── -->
+    <h2>has-text-* Utility Classes</h2>
+    <div class="text-row has-text-primary">has-text-primary</div>
+    <div class="text-row has-text-link">has-text-link</div>
+    <div class="text-row has-text-info">has-text-info</div>
+    <div class="text-row has-text-success">has-text-success</div>
+    <div class="text-row has-text-warning">has-text-warning</div>
+    <div class="text-row has-text-danger">has-text-danger</div>
+    <div class="text-row has-text-dark">has-text-dark</div>
+    <div class="text-row has-text-light">has-text-light</div>
+    <div class="text-row has-text-white">has-text-white</div>
+    <div class="text-row has-text-black">has-text-black</div>
+    <div class="text-row has-text-grey">has-text-grey</div>
+    <div class="text-row has-text-grey-light">has-text-grey-light</div>
+    <div class="text-row has-text-grey-lighter">has-text-grey-lighter</div>
+    <div class="text-row has-text-grey-dark">has-text-grey-dark</div>
+    <div class="text-row has-text-grey-darker">has-text-grey-darker</div>
+
+    <!-- ── BUTTON CLASSES ── -->
+    <h2>Button Colors (is-* classes)</h2>
+    <div class="button-row">
       <button class="button is-primary">is-primary</button>
+      <button class="button is-primary is-light">is-primary is-light</button>
+      <button class="button is-primary is-dark">is-primary is-dark</button>
+    </div>
+    <div class="button-row">
       <button class="button is-link">is-link</button>
+      <button class="button is-link is-light">is-link is-light</button>
+      <button class="button is-link is-dark">is-link is-dark</button>
+    </div>
+    <div class="button-row">
       <button class="button is-info">is-info</button>
+      <button class="button is-info is-light">is-info is-light</button>
+      <button class="button is-info is-dark">is-info is-dark</button>
+    </div>
+    <div class="button-row">
       <button class="button is-success">is-success</button>
+      <button class="button is-success is-light">is-success is-light</button>
+      <button class="button is-success is-dark">is-success is-dark</button>
+    </div>
+    <div class="button-row">
       <button class="button is-warning">is-warning</button>
+      <button class="button is-warning is-light">is-warning is-light</button>
+      <button class="button is-warning is-dark">is-warning is-dark</button>
+    </div>
+    <div class="button-row">
       <button class="button is-danger">is-danger</button>
+      <button class="button is-danger is-light">is-danger is-light</button>
+      <button class="button is-danger is-dark">is-danger is-dark</button>
+    </div>
+    <div class="button-row">
       <button class="button is-dark">is-dark</button>
       <button class="button is-light">is-light</button>
+      <button class="button">default</button>
+      <button class="button is-ghost">is-ghost</button>
+      <button class="button is-text">is-text</button>
     </div>
 
-    <h2>Your Custom Colors</h2>
-    <div class="color-row">
-      <div class="color-sample" style="background: #888"></div>
-      <code class="color-name">Progress label (#888)</code>
-      <span>Grey</span>
+    <!-- ── TAG / NOTIFICATION CLASSES ── -->
+    <h2>Tags &amp; Notifications</h2>
+    <div class="button-row" style="flex-wrap:wrap; gap:6px; align-items:center;">
+      <span class="tag is-primary">is-primary</span>
+      <span class="tag is-primary is-light">is-primary is-light</span>
+      <span class="tag is-link">is-link</span>
+      <span class="tag is-link is-light">is-link is-light</span>
+      <span class="tag is-info">is-info</span>
+      <span class="tag is-info is-light">is-info is-light</span>
+      <span class="tag is-success">is-success</span>
+      <span class="tag is-success is-light">is-success is-light</span>
+      <span class="tag is-warning">is-warning</span>
+      <span class="tag is-warning is-light">is-warning is-light</span>
+      <span class="tag is-danger">is-danger</span>
+      <span class="tag is-danger is-light">is-danger is-light</span>
+      <span class="tag is-dark">is-dark</span>
+      <span class="tag is-light">is-light</span>
     </div>
-    <div class="color-row">
-      <div class="color-sample" style="background: #f14668"></div>
-      <code class="color-name">Cancel/Remove (#f14668)</code>
-      <span>Red</span>
-    </div>
-    <div class="color-row">
-      <div class="color-sample" style="background: #8a2c3d"></div>
-      <code class="color-name">Cancelling spinner (#8a2c3d)</code>
-      <span>Dark red</span>
-    </div>
-    <div class="color-row">
-      <div class="color-sample" style="background: #00d1b2"></div>
-      <code class="color-name">Queue (#00d1b2)</code>
-      <span>Teal</span>
-    </div>
+
+    <!-- ── NOTIFICATION BOXES ── -->
+    <h2>Notification Boxes</h2>
+    <div class="notification is-primary is-light" style="padding:10px; margin-bottom:6px;">is-primary is-light</div>
+    <div class="notification is-link is-light" style="padding:10px; margin-bottom:6px;">is-link is-light</div>
+    <div class="notification is-info is-light" style="padding:10px; margin-bottom:6px;">is-info is-light</div>
+    <div class="notification is-success is-light" style="padding:10px; margin-bottom:6px;">is-success is-light</div>
+    <div class="notification is-warning is-light" style="padding:10px; margin-bottom:6px;">is-warning is-light</div>
+    <div class="notification is-danger is-light" style="padding:10px; margin-bottom:6px;">is-danger is-light</div>
+    <div class="notification is-primary" style="padding:10px; margin-bottom:6px;">is-primary</div>
+    <div class="notification is-link" style="padding:10px; margin-bottom:6px;">is-link</div>
+    <div class="notification is-info" style="padding:10px; margin-bottom:6px;">is-info</div>
+    <div class="notification is-success" style="padding:10px; margin-bottom:6px;">is-success</div>
+    <div class="notification is-warning" style="padding:10px; margin-bottom:6px;">is-warning</div>
+    <div class="notification is-danger" style="padding:10px; margin-bottom:6px;">is-danger</div>
+
+    <div style="height: 40px;"></div>
   </div>
+
+  <script>
+    function toggleTheme() {
+      const el = document.getElementById('html-root');
+      el.dataset.theme = el.dataset.theme === 'dark' ? 'light' : 'dark';
+    }
+  </script>
 </body>
 </html>

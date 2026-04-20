@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html data-theme="dark">
+
+<head>
+<title>Processing Mockup v2 - Static & Dynamic States</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="pikaraoke/static/jquery-3.7.1.min.js"></script>
+<link rel="stylesheet" href="pikaraoke/static/bulma.min.css">
+<link rel="stylesheet" href="pikaraoke/static/bulma-dark.css">
+<link rel="stylesheet" href="pikaraoke/static/custom.css">
+<link rel="stylesheet" href="pikaraoke/static/fontello/css/fontello.css">
+
+<style>
+/* ==========================================================================
+ICON COLUMN SIZES - from ORIGINAL MOCKUP
+========================================================================== */
+:root {
+--icon-col-download: 1.75rem;
+--icon-col-process: 1.75rem;
+--icon-col-queue: 2rem;
+--icon-col-cancel: 2rem;
+
+/* Icon sizes */
+--spinner-size: 1.375em;
+--spinner-speed: 2s;
+--spinner-y-offset: -0.06em;
+--icon-size-clock: 1.5em;
+--icon-size-ok: 1.5em;
+--icon-size-error: 1.6em;
+--icon-size-queue: 1.6em;
+--icon-size-cancel: 1.6em;
+--icon-size-header: 1.5em;
+
+/* Icon colors - from ORIGINAL MOCKUP (mostly grey) */
+--icon-color-spinner: var(--bulma-grey);
+--icon-color-spinner-dim: color-mix(in srgb, var(--bulma-grey) 30%, transparent);
+--icon-color-cancelling: var(--bulma-danger);
+--icon-color-clock: var(--bulma-grey);
+--icon-color-ok: var(--bulma-grey);
+--icon-color-error: var(--bulma-grey);
+--icon-color-queue: var(--bulma-primary);
+--icon-color-cancel: var(--bulma-danger);
+--icon-color-remove: var(--bulma-danger);
+--icon-color-header: inherit;
+
+/* Text colors */
+--text-color-progress: var(--bulma-grey);
+--text-color-cancelling: var(--bulma-danger);
+}
+
+tr:nth-child(even) { background-color: rgb(50, 55, 55); }
+
+.is-truncated {
+display: inline-block;
+max-width: 100%;
+overflow: hidden;
+text-overflow: ellipsis;
+white-space: nowrap;
+}
+
+/* Fixed-width icon columns */
+.col-icon-download { width: var(--icon-col-download); text-align: center; vertical-align: middle; padding: 0; }
+.col-icon-process { width: var(--icon-col-process); text-align: center; vertical-align: middle; padding: 0; }
+.col-icon-queue { width: var(--icon-col-queue); text-align: center; vertical-align: middle; padding: 0; }
+.col-icon-cancel { width: var(--icon-col-cancel); text-align: center; vertical-align: middle; padding: 0; }
+
+#pipeline-table th[class^="col-icon"] .icon { color: var(--icon-color-header) !important; font-size: var(--icon-size-header); }
+
+/* Title cell */
+.col-title {
+vertical-align: middle;
+}
+.title-row {
+display: flex;
+align-items: center;
+min-width: 0;
+}
+.title-row .is-truncated {
+flex: 1 1 auto;
+min-width: 0;
+}
+.progress-label { flex: 0 0 auto; margin-left: 0.5em; color: var(--text-color-progress); }
+.progress-label.cancelling { color: var(--icon-color-cancelling); }
+
+/* Strip Bulma's cell padding */
+#pipeline-table th, #pipeline-table td { padding: 0; vertical-align: middle; }
+#pipeline-table td:first-child { padding: 0.5em 0.25rem 0.5em 0; }
+
+/* Common wrapper */
+.state-box {
+display: inline-flex;
+align-items: center;
+justify-content: center;
+width: var(--spinner-size);
+height: var(--spinner-size);
+vertical-align: middle;
+line-height: 1;
+}
+
+/* CSS-Generated spinner - from ORIGINAL MOCKUP */
+.spinner-css {
+display: inline-block;
+width: var(--spinner-size);
+height: var(--spinner-size);
+border: calc(var(--spinner-size) * 0.13) solid var(--icon-color-spinner-dim);
+border-top-color: var(--icon-color-spinner);
+border-right-color: var(--icon-color-spinner);
+border-radius: 50%;
+animation: spin var(--spinner-speed) linear infinite;
+margin-top: var(--spinner-y-offset);
+}
+
+/* Cancelling spinner - red/danger color */
+.spinner-css.cancelling {
+border-top-color: var(--icon-color-cancelling);
+border-right-color: var(--icon-color-cancelling);
+}
+
+@keyframes spin {
+to { transform: rotate(360deg); }
+}
+
+/* Fontello icons inside .state-box */
+.state-box > .icon,
+.state-box > a > .icon {
+line-height: 1;
+margin: 0;
+}
+.state-box > .icon.icon-clock,
+.state-box > a > .icon.icon-clock { font-size: var(--icon-size-clock); color: var(--icon-color-clock); }
+.state-box > .icon.icon-ok,
+.state-box > a > .icon.icon-ok { font-size: var(--icon-size-ok); }
+.state-box > .icon.icon-cancel-circled-1,
+.state-box > a > .icon.icon-cancel-circled-1.icon-state-error { font-size: var(--icon-size-error); }
+.state-box > a > .icon.icon-list-add.icon-action-queue { font-size: var(--icon-size-queue); }
+.state-box > a > .icon.icon-cancel-circled-1.icon-action-cancel,
+.state-box > a > .icon.icon-trash-empty { font-size: var(--icon-size-cancel); }
+
+/* State icon colors - all grey except cancelling which is red */
+.icon-state-ok { color: var(--icon-color-ok); }
+.icon-state-error { color: var(--icon-color-error); }
+.icon-state-cancelling { color: var(--icon-color-cancelling); }
+
+/* Action icons */
+.pipeline-action-btn { text-decoration: none; }
+.icon-action-queue { color: var(--icon-color-queue); }
+.icon-action-cancel { color: var(--icon-color-cancel); }
+.icon-action-remove { color: var(--icon-color-remove); }
+
+/* Pipeline legend - simple styling */
+#pipeline-legend {
+margin-bottom: 1rem;
+font-size: 0.85rem;
+}
+#pipeline-legend .mr-3 { margin-right: 0.75rem; }
+
+/* Section headers */
+.section-header {
+background: rgba(255,255,255,0.1);
+padding: 0.5em 0.75em;
+font-weight: 600;
+font-size: 0.8rem;
+text-transform: uppercase;
+letter-spacing: 0.05em;
+margin-top: 1rem;
+}
+
+/* Controls */
+.controls {
+margin-bottom: 1rem;
+padding: 1rem;
+background: rgba(255,255,255,0.05);
+border-radius: 4px;
+}
+.controls button {
+margin-right: 0.5rem;
+margin-bottom: 0.5rem;
+}
+
+
+</style>
+</head>
+
+<body>
+<div class="container" style="padding: 5px; max-width: 900px;">
+<div class="box" style="margin-top: 5px;">
+<header class="title">
+<h1>Processing</h1>
+</header>
+
+<!-- Pipeline Legend -->
+<div id="pipeline-legend" class="has-text-grey">
+<span class="mr-3"><i class="icon icon-down-big"></i> Download</span>
+<span class="mr-3"><i class="icon icon-music"></i> Separation</span>
+<span class="mr-2">&bull;</span>
+<span class="mr-3"><i class="icon icon-clock"></i> pending</span>
+<span class="mr-3"><span class="spinner-css" style="width: 0.9em; height: 0.9em; border-width: 2px; margin: 0; display: inline-block; vertical-align: middle;"></span> active</span>
+<span class="mr-3"><i class="icon icon-ok"></i> complete</span>
+<span class="mr-3"><span class="spinner-css cancelling" style="width: 0.9em; height: 0.9em; border-width: 2px; margin: 0; display: inline-block; vertical-align: middle;"></span> cancelling</span>
+<span><i class="icon icon-cancel-circled-1"></i> error</span>
+</div>
+
+<!-- Dynamic Controls -->
+<div class="controls">
+<h4 class="subtitle is-6 mb-2">Dynamic Pipeline Simulator</h4>
+<button class="button is-small is-primary" id="btn-add-download">Add Download</button>
+<button class="button is-small is-info" id="btn-add-processing">Add Processing</button>
+<button class="button is-small is-success" id="btn-add-complete">Add Complete</button>
+<button class="button is-small is-warning" id="btn-add-error">Add Error</button>
+<button class="button is-small is-danger" id="btn-clear-all">Clear All Dynamic</button>
+</div>
+
+<div class="content">
+<table class="table is-striped is-fullwidth" id="pipeline-table">
+<thead>
+<tr>
+<th>Title</th>
+<th class="col-icon-download"><span class="state-box"><i class="icon icon-down-big"></i></span></th>
+<th class="col-icon-process"><span class="state-box"><i class="icon icon-music"></i></span></th>
+<th class="col-icon-queue"></th>
+<th class="col-icon-cancel"></th>
+</tr>
+</thead>
+<tbody id="pipeline-body">
+<!-- Static Examples Section -->
+<tr class="section-header-row">
+<td colspan="5" class="section-header">Static State Examples (Reference)</td>
+</tr>
+</tbody>
+</table>
+
+<p id="pipeline-empty" class="has-text-warning has-text-centered" style="display: none;">
+No songs in the processing pipeline.
+</p>
+</div>
+</div>
+</div>
+
+<script>
+(function() {
+'use strict';
+
+// Counter for dynamic item IDs
+var dynamicIdCounter = 1000;
+var activeSimulations = {};
+
+// Static mock items showing all states users will see
+var staticMockItems = [
+{
+id: 'static-1',
+title: 'Both Pending - Waiting to start download',
+download_status: 'pending',
+processing_status: 'pending',
+download_progress: 0,
+error_message: null,
+song_path: null,
+isStatic: true
+},
+{
+id: 'static-2',
+title: 'Downloading - Can cancel',
+download_status: 'active',
+processing_status: 'pending',
+download_progress: 0,
+error_message: null,
+song_path: null,
+isStatic: true
+},
+{
+id: 'static-3',
+title: 'Download Complete, Processing Pending',
+download_status: 'complete',
+processing_status: 'pending',
+download_progress: 100,
+error_message: null,
+song_path: null,
+isStatic: true
+},
+{
+id: 'static-4',
+title: 'Download Complete, Processing Active - Can cancel',
+download_status: 'complete',
+processing_status: 'active',
+download_progress: 100,
+error_message: null,
+song_path: null,
+isStatic: true
+},
+{
+id: 'static-5',
+title: 'Complete - Ready to Queue',
+download_status: 'complete',
+processing_status: 'complete',
+download_progress: 100,
+error_message: null,
+song_path: '/songs/Sweet Caroline---abc12345678.mp4',
+isStatic: true
+},
+{
+id: 'static-6',
+title: 'Complete - No Song Path (Remove Only)',
+download_status: 'complete',
+processing_status: 'complete',
+download_progress: 100,
+error_message: null,
+song_path: null,
+isStatic: true
+},
+{
+id: 'static-7',
+title: 'Download Error - Video unavailable',
+download_status: 'error',
+processing_status: 'pending',
+download_progress: 0,
+error_message: 'ERROR: Video unavailable. This video has been removed by the uploader.',
+song_path: null,
+isStatic: true
+},
+{
+id: 'static-8',
+title: 'Processing Error - Separation failed',
+download_status: 'complete',
+processing_status: 'error',
+download_progress: 100,
+error_message: null,
+song_path: null,
+isStatic: true
+},
+{
+id: 'static-9',
+title: 'Download Cancelling - Will remove shortly',
+download_status: 'cancelling',
+processing_status: 'cancelling',
+download_progress: 60,
+error_message: null,
+song_path: null,
+isStatic: true
+},
+{
+id: 'static-10',
+title: 'Processing Cancelling - Will remove shortly',
+download_status: 'complete',
+processing_status: 'cancelling',
+download_progress: 100,
+error_message: null,
+song_path: null,
+isStatic: true
+}
+];
+
+function escapeHtml(str) {
+if (!str) return '';
+var div = document.createElement('div');
+div.appendChild(document.createTextNode(str));
+return div.innerHTML;
+}
+
+function stateIcon(status, isCancellingContext) {
+var inner = '';
+if (status === 'pending') inner = '<i class="icon icon-clock"></i>';
+else if (status === 'active') inner = '<span class="spinner-css"></span>';
+else if (status === 'complete') inner = '<i class="icon icon-ok ' + (isCancellingContext ? 'icon-state-cancelling' : 'icon-state-ok') + '"></i>';
+else if (status === 'error') inner = '<i class="icon icon-cancel-circled-1 icon-state-error"></i>';
+else if (status === 'cancelling') inner = '<span class="spinner-css cancelling"></span>';
+else return '';
+return '<span class="state-box">' + inner + '</span>';
+}
+
+function queueCell(item) {
+if (item.download_status === 'complete' && item.processing_status === 'complete' && item.song_path) {
+return '<span class="state-box"><a href="#" class="pipeline-action-btn pipeline-enqueue-btn" data-id="' + item.id + '" title="Queue">'
++ '<i class="icon icon-list-add icon-action-queue"></i></a></span>';
+}
+return '';
+}
+
+function cancelCell(item) {
+// No action while cancelling
+if (item.processing_status === 'cancelling') return '';
+
+// Cancel for in-progress items
+if (item.download_status === 'active' || item.download_status === 'pending' ||
+item.processing_status === 'active' || item.processing_status === 'pending') {
+return '<span class="state-box"><a href="#" class="pipeline-action-btn pipeline-cancel-btn" data-id="' + item.id + '" title="Cancel">'
++ '<i class="icon icon-cancel-circled-1 icon-action-cancel"></i></a></span>';
+}
+
+// Remove for completed/errored items
+if (item.download_status === 'complete' || item.download_status === 'error' ||
+item.processing_status === 'complete' || item.processing_status === 'error') {
+return '<span class="state-box"><a href="#" class="pipeline-action-btn pipeline-remove-btn" data-id="' + item.id + '" title="Remove">'
++ '<i class="icon icon-trash-empty icon-action-remove"></i></a></span>';
+}
+return '';
+}
+
+function progressLabel(item) {
+if (item.download_status === 'cancelling' || item.processing_status === 'cancelling')
+return 'cancelling';
+if (item.download_status === 'active') return 'downloading';
+if (item.processing_status === 'active') return 'separating';
+return '';
+}
+
+function renderRow(item) {
+var label = progressLabel(item);
+var isCancelling = item.download_status === 'cancelling' || item.processing_status === 'cancelling';
+var labelClass = isCancelling ? 'progress-label cancelling' : 'progress-label';
+var labelHtml = label
+? '<span class="' + labelClass + '">' + label + '</span>'
+: '';
+
+var titleHtml = '<td class="col-title">';
+titleHtml += '<div class="title-row">';
+titleHtml += '<span class="is-truncated" title="' + escapeHtml(item.title) + '">' + escapeHtml(item.title) + '</span>';
+titleHtml += labelHtml;
+titleHtml += '</div>';
+
+// Error message
+if (item.error_message && item.download_status === 'error') {
+titleHtml += '<span class="is-size-7 has-text-danger" title="' + escapeHtml(item.error_message) + '">'
++ escapeHtml(item.error_message.substring(0, 80)) + '</span>';
+}
+
+titleHtml += '</td>';
+
+var isCancellingContext = item.download_status === 'cancelling' || item.processing_status === 'cancelling';
+return '<tr data-id="' + item.id + '">'
++ titleHtml
++ '<td class="col-icon-download">' + stateIcon(item.download_status, isCancellingContext) + '</td>'
++ '<td class="col-icon-process">' + stateIcon(item.processing_status, isCancellingContext) + '</td>'
++ '<td class="col-icon-queue">' + queueCell(item) + '</td>'
++ '<td class="col-icon-cancel">' + cancelCell(item) + '</td>'
++ '</tr>';
+}
+
+function removeRow(id, delay, callback) {
+var $row = $('tr[data-id="' + id + '" ]');
+if (delay) {
+setTimeout(function() {
+$row.fadeOut(1000, function() {
+$(this).remove();
+if (callback) callback();
+});
+}, delay);
+} else {
+$row.fadeOut(1000, function() {
+$(this).remove();
+if (callback) callback();
+});
+}
+// Stop any simulation for this item
+if (activeSimulations[id]) {
+clearInterval(activeSimulations[id]);
+delete activeSimulations[id];
+}
+}
+
+function updateRow(item) {
+$('tr[data-id="' + item.id + '" ]').replaceWith(renderRow(item));
+}
+
+function addDynamicItem(initialStatus) {
+var id = 'dynamic-' + (++dynamicIdCounter);
+var item = {
+id: id,
+title: 'Dynamic Item ' + (dynamicIdCounter - 1000),
+download_status: 'pending',
+processing_status: 'pending',
+download_progress: 0,
+error_message: null,
+song_path: null,
+isStatic: false
+};
+
+if (initialStatus === 'complete') {
+item.download_status = 'complete';
+item.processing_status = 'complete';
+item.download_progress = 100;
+item.song_path = '/songs/DynamicSong' + id + '---xyz123.mp4';
+item.title = 'Dynamic Item ' + (dynamicIdCounter - 1000) + ' (Complete)';
+} else if (initialStatus === 'error') {
+item.download_status = 'error';
+item.processing_status = 'pending';
+item.error_message = 'ERROR: Dynamic simulated error message';
+item.title = 'Dynamic Item ' + (dynamicIdCounter - 1000) + ' (Error)';
+} else if (initialStatus === 'processing') {
+item.download_status = 'complete';
+item.processing_status = 'active';
+item.download_progress = 100;
+item.title = 'Dynamic Item ' + (dynamicIdCounter - 1000) + ' (Processing...)';
+startProcessingSimulation(id, item);
+} else {
+// download status
+item.download_status = 'active';
+item.download_progress = 0;
+item.title = 'Dynamic Item ' + (dynamicIdCounter - 1000) + ' (Downloading...)';
+startDownloadSimulation(id, item);
+}
+
+// Insert after section header
+var $sectionHeader = $('.section-header-row').last();
+if ($sectionHeader.length) {
+$sectionHeader.after(renderRow(item));
+} else {
+$('#pipeline-body').append(renderRow(item));
+}
+
+updateEmptyState();
+return item;
+}
+
+function startDownloadSimulation(id, item) {
+// Simulate download time (3-6 seconds)
+var duration = 3000 + Math.random() * 3000;
+activeSimulations[id] = setTimeout(function() {
+if (item.download_status === 'cancelling') return;
+
+item.download_status = 'complete';
+item.processing_status = 'active';
+item.title = item.title.replace('Downloading...', 'Processing...');
+updateRow(item);
+startProcessingSimulation(id, item);
+}, duration);
+}
+
+function startProcessingSimulation(id, item) {
+activeSimulations[id] = setInterval(function() {
+if (item.processing_status === 'cancelling') return;
+
+// Simulate processing time
+if (Math.random() > 0.85) {
+item.processing_status = 'complete';
+item.song_path = '/songs/Simulated' + id + '---abc123.mp4';
+item.title = item.title.replace('Processing...', 'Complete');
+clearInterval(activeSimulations[id]);
+delete activeSimulations[id];
+}
+updateRow(item);
+}, 1200);
+}
+
+function cancelItem(id) {
+var $row = $('tr[data-id="' + id + '" ]');
+var title = $row.find('.is-truncated').text();
+
+// Find the item data from the DOM
+var downloadIcon = $row.find('.col-icon-download .state-box').html();
+var processIcon = $row.find('.col-icon-process .state-box').html();
+
+var isDownloading = downloadIcon && downloadIcon.includes('spinner-css') && !downloadIcon.includes('cancelling');
+var isProcessing = processIcon && processIcon.includes('spinner-css') && !processIcon.includes('cancelling');
+
+// Stop simulation
+if (activeSimulations[id]) {
+clearTimeout(activeSimulations[id]);
+delete activeSimulations[id];
+}
+
+// Create cancelling item
+var cancellingItem = {
+id: id,
+title: title,
+download_status: isDownloading ? 'cancelling' : 'complete',
+processing_status: isProcessing ? 'cancelling' : (isDownloading ? 'cancelling' : 'pending'),
+download_progress: 0,
+error_message: null,
+song_path: null,
+isStatic: false
+};
+
+// Update to show cancelling state
+updateRow(cancellingItem);
+
+// Cancel during download: show cancelling, then fade out immediately (no wait)
+if (isDownloading && !isProcessing) {
+removeRow(id, 0);
+setTimeout(updateEmptyState, 1000);
+return;
+}
+
+// Cancel during processing: show cancelling state for 5s, then fade out
+removeRow(id, 5000);
+setTimeout(updateEmptyState, 6000);
+}
+
+  function updateEmptyState() {
+var $rows = $('#pipeline-body tr:not(.section-header-row)');
+if ($rows.length === 0) {
+$('#pipeline-empty').show();
+$('#pipeline-table').hide();
+} else {
+$('#pipeline-empty').hide();
+$('#pipeline-table').show();
+}
+}
+
+// Initialize
+$(function() {
+// Render static examples
+var html = '<tr class="section-header-row"><td colspan="5" class="section-header">Static State Examples (Reference)</td></tr>';
+staticMockItems.forEach(function(item) {
+html += renderRow(item);
+});
+html += '<tr class="section-header-row"><td colspan="5" class="section-header">Dynamic Items (Interactive)</td></tr>';
+$('#pipeline-body').html(html);
+
+  // Cancel button handler — confirm before acting (same as edit.html delete)
+  $(document).on('click', '.pipeline-cancel-btn', function(e) {
+    e.preventDefault();
+    var id = $(this).data('id');
+    var $row = $('tr[data-id="' + id + '" ]');
+    var title = $row.find('.is-truncated').text();
+    var downloadIcon = $row.find('.col-icon-download .state-box').html();
+    var isDownloading = downloadIcon && downloadIcon.includes('spinner-css') && !downloadIcon.includes('cancelling');
+
+    var actionName = isDownloading ? 'download' : 'processing';
+    var message = 'Are you sure you want to cancel "' + title + '"? The ' + actionName + ' will be stopped and the item removed.';
+    if (!window.confirm(message)) return;
+    cancelItem(id);
+  });
+
+  // Remove button handler — confirm before acting (same as edit.html delete)
+  $(document).on('click', '.pipeline-remove-btn', function(e) {
+    e.preventDefault();
+    var id = $(this).data('id');
+    var $row = $('tr[data-id="' + id + '" ]');
+    var title = $row.find('.is-truncated').text();
+    var message = 'Are you sure you want to remove "' + title + '"?';
+    if (!window.confirm(message)) return;
+    removeRow(id);
+    setTimeout(updateEmptyState, 1100);
+  });
+
+// Enqueue button handler - no confirmation needed
+$(document).on('click', '.pipeline-enqueue-btn', function(e) {
+e.preventDefault();
+var id = $(this).data('id');
+removeRow(id);
+setTimeout(updateEmptyState, 1100);
+});
+
+  // Control buttons
+$('#btn-add-download').on('click', function() {
+addDynamicItem('download');
+});
+
+$('#btn-add-processing').on('click', function() {
+addDynamicItem('processing');
+});
+
+$('#btn-add-complete').on('click', function() {
+addDynamicItem('complete');
+});
+
+$('#btn-add-error').on('click', function() {
+addDynamicItem('error');
+});
+
+$('#btn-clear-all').on('click', function() {
+// Remove all dynamic items (those not in staticMockItems)
+$('#pipeline-body tr').each(function() {
+var id = $(this).data('id');
+if (id && id.toString().startsWith('dynamic-')) {
+// Stop simulation immediately, don't animate
+if (activeSimulations[id]) {
+clearInterval(activeSimulations[id]);
+delete activeSimulations[id];
+}
+$(this).remove();
+}
+});
+updateEmptyState();
+});
+
+updateEmptyState();
+});
+})();
+</script>
+
+</body>
+</html>
