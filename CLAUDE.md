@@ -42,6 +42,8 @@ pytest with mocked external I/O/subprocess. Test business logic and integration,
 
 Conda env `pik` (not uv). Run tests: `/home/ken/miniconda3/envs/pik/bin/python -m pytest`. Run pre-commit: `pre-commit run --config code_quality/.pre-commit-config.yaml --all-files`. Tools: Black (100 char), isort, pycln, pylint, mdformat. Never commit to `master` directly.
 
+Exclude `plans/` and `static/` from pre-commit: these contain working docs and generated assets that don't need linting.
+
 ## Plans
 
 Store in `plans/` with descriptive kebab-case names (e.g., `subtitle-delay-cleanup.md`). Include model at top: `Model: Claude Sonnet 4.6`.

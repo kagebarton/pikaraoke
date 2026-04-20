@@ -37,7 +37,9 @@ class StemWorker:
     doesn't leave orphan IPC state.
     """
 
-    def __init__(self, pty_slave_fd: int | None, temp_dir: str, log_level: int = logging.INFO) -> None:
+    def __init__(
+        self, pty_slave_fd: int | None, temp_dir: str, log_level: int = logging.INFO
+    ) -> None:
         self._pty_slave_fd = pty_slave_fd
         self._temp_dir = temp_dir
         self._log_level = log_level

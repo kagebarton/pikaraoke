@@ -106,6 +106,7 @@ class Karaoke:
         subtitle_delay: float | None = None,
         temp_dir: str | None = None,
         volume: float | None = None,
+        vocal_volume: float | None = None,
     ) -> None:
         """Initialize the Karaoke instance.
 
@@ -225,7 +226,7 @@ class Karaoke:
         self.events.on("notification", self.log_and_send)
         self.events.on(
             "queue_update",
-            lambda: self.socketio.emit("queue_update", namespace="/") if self.socketio else None,
+            lambda: (self.socketio.emit("queue_update", namespace="/") if self.socketio else None),
         )
         self.events.on("now_playing_update", self.update_now_playing_socket)
         self.events.on("playback_started", self.update_now_playing_socket)
@@ -234,11 +235,11 @@ class Karaoke:
         self.events.on("song_downloaded", self.song_manager.register_download)
         self.events.on(
             "sync_started",
-            lambda: self.socketio.emit("sync_started", namespace="/") if self.socketio else None,
+            lambda: (self.socketio.emit("sync_started", namespace="/") if self.socketio else None),
         )
         self.events.on(
             "sync_finished",
-            lambda: self.socketio.emit("sync_finished", namespace="/") if self.socketio else None,
+            lambda: (self.socketio.emit("sync_finished", namespace="/") if self.socketio else None),
         )
 
         # Initialize queue manager
@@ -283,8 +284,8 @@ class Karaoke:
 
         # Wire overlay state provider so the MPV poll thread can render OSD overlays
         if self.mpv_controller.is_running:
-            self.playback_controller._get_up_next_title = (
-                lambda: self.queue_manager.queue[0]["title"] if self.queue_manager.queue else None
+            self.playback_controller._get_up_next_title = lambda: (
+                self.queue_manager.queue[0]["title"] if self.queue_manager.queue else None
             )
             self.mpv_controller.set_overlay_state_provider(
                 self.playback_controller.build_overlay_state
@@ -529,6 +530,28 @@ class Karaoke:
         self.log_and_send(_("Subtitle delay: %s seconds") % delay)
         self.update_now_playing_socket()
 
+    def set_vocal_volume(self, volume: float) -> None:
+        """Set vocal volume for dual-stem playback.
+
+        Args:
+            volume: Vocal volume level (0.0 to 1.0).
+        """
+        self.vocal_volume = volume
+        self.playback_controller.set_vocal_volume(volume)
+        self.log_and_send(_("Vocal volume: %s%%") % int(volume * 100))
+        self.update_now_playing_socket()
+
+    def set_sub_mode(self, mode: str) -> None:
+        """Set subtitle mode for current song.
+
+        Args:
+            mode: One of 'karaoke', 'srt', 'off'.
+        """
+        self.playback_controller.set_sub_mode(mode)
+        mode_labels = {"karaoke": "Karaoke", "srt": "Subtitles", "off": "Off"}
+        self.log_and_send(_("Subtitle mode: %s") % mode_labels.get(mode, mode))
+        self.update_now_playing_socket()
+
     def restart(self) -> bool:
         """Restart current song from beginning."""
         if self.playback_controller.is_playing:
@@ -561,6 +584,8 @@ class Karaoke:
         self.volume = self.preferences.get_or_default("volume")
         # Reset subtitle delay to config default for next song
         self.subtitle_delay = self.preferences.get_or_default("subtitle_delay")
+        # Reset vocal volume to config default for next song
+        self.vocal_volume = self.preferences.get_or_default("vocal_volume")
         self.update_now_playing_socket()
 
     def get_now_playing(self) -> dict[str, Any]:
@@ -581,6 +606,7 @@ class Karaoke:
             "next_user": next_song["user"] if next_song else None,
             "volume": self.volume,
             "subtitle_delay": self.subtitle_delay,
+            "vocal_volume": self.vocal_volume,
         }
 
     def update_now_playing_socket(self) -> None:

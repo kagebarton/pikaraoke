@@ -42,6 +42,18 @@ from pikaraoke.lib.overlay_manager import (  # noqa: E402
 
 log = logging.getLogger(__name__)
 
+# ── Rubberband filter presets (from mpv/ prototype) ─────────────────────────
+_RB_VOCAL = (
+    "pitchq=quality:transients=crisp:detector=compound"
+    ":phase=laminar:window=long:formant=preserved"
+    ":channels=together:smoothing=off"
+)
+_RB_NONVOCAL = (
+    "pitchq=quality:transients=crisp:detector=percussive"
+    ":phase=laminar:window=short:formant=shifted"
+    ":channels=apart:smoothing=off"
+)
+
 
 def _semiround(val: float, decimals: int = 4) -> float:
     """Round to avoid floating-point noise in filter strings."""
@@ -57,6 +69,8 @@ def _safe(method):
     """
 
     def wrapper(self, *args, **kwargs):
+        if self._player is None:
+            return None
         try:
             return method(self, *args, **kwargs)
         except mpv.ShutdownError:
@@ -97,6 +111,13 @@ class MpvController:
         # Playback filter state (needed for live rebuild)
         self._current_pitch: float = 1.0
         self._current_normalization_db: float | None = None
+        self._dual_stem: bool = False
+        self._current_vocal_volume: float = 1.0
+
+        # Subtitle mode state
+        self._available_subs: dict[str, str | None] = {"ass": None, "srt": None}
+        self._current_sub_mode: str = "off"
+        self._subtitle_delay: float = 0.0
 
         # Audio backend
         self._audio_backend: str | None = None
@@ -115,7 +136,10 @@ class MpvController:
         self._preferences = None
 
         self._placeholder_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)), "static", "images", "placeholder.png"
+            os.path.dirname(os.path.dirname(__file__)),
+            "static",
+            "images",
+            "placeholder.png",
         )
         self._qr_code_path: str | None = None
         self._server_url: str = ""
@@ -282,14 +306,29 @@ class MpvController:
         self,
         file_path: str,
         semitones: int = 0,
-        subtitle_path: str | None = None,
+        *,
+        ass_path: str | None = None,
+        srt_path: str | None = None,
+        initial_sub_mode: str = "off",
         subtitle_delay: float = 0.0,
         normalization_db: float | None = None,
+        vocal_path: str | None = None,
+        nonvocal_path: str | None = None,
+        vocal_volume: float = 1.0,
     ) -> None:
         """Load a file and start playback with pitch/normalization/subtitles."""
         pitch = 2 ** (semitones / 12)
         self._current_pitch = pitch
         self._current_normalization_db = normalization_db
+
+        # Store available subtitle paths and resolve initial mode
+        self._available_subs = {"ass": ass_path, "srt": srt_path}
+        self._current_sub_mode = initial_sub_mode
+        self._subtitle_delay = subtitle_delay
+
+        # Dual-stem state
+        self._dual_stem = bool(vocal_path and nonvocal_path)
+        self._current_vocal_volume = vocal_volume
 
         # Set before loadfile to guard _on_idle_active
         self.is_idle = False
@@ -303,14 +342,24 @@ class MpvController:
         if not self._duration_ready.wait(timeout=5):
             log.warning("Duration not ready after 5s -- proceeding anyway")
 
-        filter_str = self.build_filter(pitch, normalization_db)
+        # Add audio tracks for dual-stem playback
+        if self._dual_stem:
+            self._player.command("audio-add", vocal_path, "auto")
+            self._player.command("audio-add", nonvocal_path, "auto")
+            time.sleep(0.2)
+
+        filter_str = self.build_filter(
+            pitch,
+            normalization_db,
+            dual_stem=self._dual_stem,
+            vocal_volume=vocal_volume,
+        )
         with self._lock:
             self._player.lavfi_complex = filter_str
 
-        if subtitle_path and os.path.exists(subtitle_path):
-            self._player.sub_add(subtitle_path, "select")
-            if subtitle_path.endswith(".srt") and subtitle_delay != 0:
-                self._player.sub_delay = float(subtitle_delay)
+        # Apply subtitle mode after lavfi-complex is set (skip_remove=True
+        # on initial play to avoid segfault when lavfi-complex is active)
+        self._apply_subtitle_mode(initial_sub_mode, skip_remove=True, subtitle_delay=subtitle_delay)
 
         self.duration = float(self._player.duration or 0.0)
         self.set_mode(ScreenMode.PLAYING)
@@ -341,13 +390,93 @@ class MpvController:
         """Live mid-song pitch change: rebuild lavfi-complex with new pitch."""
         pitch = 2 ** (semitones / 12)
         self._current_pitch = pitch
-        filter_str = self.build_filter(pitch, self._current_normalization_db)
+        filter_str = self.build_filter(
+            pitch,
+            self._current_normalization_db,
+            dual_stem=self._dual_stem,
+            vocal_volume=self._current_vocal_volume,
+        )
         with self._lock:
             self._player.lavfi_complex = filter_str
 
     @_safe
+    def set_vocal_volume(self, volume: float) -> None:
+        """Live vocal volume change via ZMQ (no filter rebuild needed).
+
+        Only works when dual-stem is active; no-op otherwise.
+        """
+        if not self._dual_stem:
+            return
+        self._current_vocal_volume = volume
+        try:
+            import zmq
+
+            ctx = zmq.Context.instance()
+            sock = ctx.socket(zmq.REQ)
+            sock.setsockopt(zmq.RCVTIMEO, 500)
+            sock.connect("tcp://127.0.0.1:5556")
+            sock.send_string(f"volume@vocalvol volume {volume}")
+            sock.recv()
+            sock.close()
+        except Exception:
+            log.debug("set_vocal_volume ZMQ send failed (non-fatal)")
+
+    @_safe
+    def _apply_subtitle_mode(
+        self, mode: str, *, skip_remove: bool = False, subtitle_delay: float = 0.0
+    ) -> None:
+        """Atomic: update state, remove current sub, add new, apply delay.
+
+        Invariant: sub_delay is 0.0 for any mode != 'srt'.
+
+        Args:
+            mode: One of 'karaoke', 'srt', 'off'.
+            skip_remove: When True, skip the sub_remove() call. Used on
+                initial play where mpv may have auto-loaded a matching subtitle;
+                calling sub-remove on that auto-loaded track while lavfi-complex
+                is active triggers a libmpv segfault. sub_add(..., "select")
+                alone correctly replaces the active subtitle without the crash.
+            subtitle_delay: Delay to apply when mode is 'srt'. Ignored for
+                other modes (delay is reset to 0.0).
+        """
+        prev_mode = self._current_sub_mode
+        self._current_sub_mode = mode
+        path = None
+        if mode == "karaoke":
+            path = self._available_subs.get("ass")
+        elif mode == "srt":
+            path = self._available_subs.get("srt")
+
+        if not skip_remove:
+            # sid="no" is safe with lavfi-complex active; sub-remove segfaults libmpv.
+            self._player.sid = "no"
+
+        if path and os.path.exists(path):
+            self._player.sub_add(path, "select")
+            if mode == "srt":
+                self.apply_srt_style()
+                self._player.sub_delay = float(subtitle_delay)
+            else:
+                self._player.sub_delay = 0.0
+        else:
+            self._player.sub_delay = 0.0
+
+    @_safe
+    def set_sub_mode(self, mode: str) -> None:
+        """Public wrapper for subtitle mode changes (skip_remove=False).
+
+        When switching to 'srt' mode, applies the current subtitle delay.
+        """
+        self._apply_subtitle_mode(mode, skip_remove=False, subtitle_delay=self._subtitle_delay)
+
+    @_safe
     def set_subtitle_delay(self, seconds: float) -> None:
-        """Set subtitle delay on the running player."""
+        """Set subtitle delay on the running player.
+
+        Delay is meaningful only in 'srt' mode; _apply_subtitle_mode
+        enforces delay=0 for other modes.
+        """
+        self._subtitle_delay = float(seconds)
         self._player.sub_delay = float(seconds)
 
     @_safe
@@ -477,38 +606,46 @@ class MpvController:
     # ── Filter Builder ─────────────────────────────────────────────────────────
 
     @staticmethod
-    def build_filter(pitch: float, normalization_db: float | None = None) -> str:
-        """Build the lavfi-complex string for single-stem playback.
+    def build_filter(
+        pitch: float,
+        normalization_db: float | None = None,
+        dual_stem: bool = False,
+        vocal_volume: float = 1.0,
+    ) -> str:
+        """Build the lavfi-complex string for single-stem or dual-stem playback.
 
-        Chain: [aid1] -> rubberband(pitch) -> volume(normalization_db) -> [ao]
+        Single-stem: [aid1] -> rubberband(_RB_VOCAL) -> volume(norm) -> [ao]
+        Dual-stem:   [aid2] -> volume@vocalvol -> azmq -> rubberband(_RB_VOCAL) -> [vocal];
+                     [aid3] -> volume -> rubberband(_RB_NONVOCAL) -> [nonvocal];
+                     amix -> volume(norm) -> [ao]
         """
         pitch = _semiround(pitch)
+
+        if dual_stem:
+            # Nonvocal volume is always 1.0 (fixed)
+            nonvocal_vol = 1.0
+            amix_out = (
+                f"[vocal][nonvocal]amix=inputs=2:normalize=0[mixed];"
+                f"[mixed]volume={normalization_db}dB[ao]"
+                if normalization_db is not None
+                else "[vocal][nonvocal]amix=inputs=2:normalize=0[ao]"
+            )
+            return (
+                f"[aid2]volume@vocalvol={vocal_volume}"
+                f",azmq=bind_address=tcp\\\\://127.0.0.1\\\\:5556"
+                f",rubberband@vocalrb=pitch={pitch}:{_RB_VOCAL}[vocal];"
+                f"[aid3]volume@nonvocalvol={nonvocal_vol}"
+                f",rubberband@nonvocalrb=pitch={pitch}:{_RB_NONVOCAL}[nonvocal];"
+                f"{amix_out}"
+            )
+
+        # Single-stem branch
         if normalization_db is not None:
             norm_str = f"{normalization_db}dB"
             return (
-                f"[aid1]rubberband@rb=pitch={pitch}"
-                f":pitchq=quality"
-                f":transients=crisp"
-                f":detector=compound"
-                f":phase=laminar"
-                f":window=long"
-                f":formant=preserved"
-                f":channels=together"
-                f":smoothing=off"
-                f"[pre];[pre]volume={norm_str}[ao]"
+                f"[aid1]rubberband@rb=pitch={pitch}:{_RB_VOCAL}" f"[pre];[pre]volume={norm_str}[ao]"
             )
-        return (
-            f"[aid1]rubberband@rb=pitch={pitch}"
-            f":pitchq=quality"
-            f":transients=crisp"
-            f":detector=compound"
-            f":phase=laminar"
-            f":window=long"
-            f":formant=preserved"
-            f":channels=together"
-            f":smoothing=off"
-            f"[ao]"
-        )
+        return f"[aid1]rubberband@rb=pitch={pitch}:{_RB_VOCAL}[ao]"
 
     # ── Volume (Audio Server Abstraction) ──────────────────────────────────────
 

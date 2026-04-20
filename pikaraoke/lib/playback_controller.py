@@ -54,6 +54,10 @@ class PlaybackController:
     now_playing_transpose: int = 0
     now_playing_duration: int | None = None
     now_playing_position: float | None = None
+    now_playing_sub_mode: str = "off"
+    now_playing_subs_available: dict[str, bool] | None = None  # set in __init__
+    now_playing_dual_stem: bool = False
+    now_playing_vocal_volume: float = 0.0
     is_paused: bool = True
     is_playing: bool = False
 
@@ -79,6 +83,8 @@ class PlaybackController:
         self._playback_lock = threading.Lock()
         # Injected by Karaoke after queue_manager is available
         self._get_up_next_title: Callable[[], str | None] = lambda: None
+        # Subtitle availability (mutable dict, not class-level default)
+        self.now_playing_subs_available: dict[str, bool] = {"ass": False, "srt": False}
 
     def play_file(self, file_path: str, user: str, semitones: int = 0) -> PlaybackResult:
         """Start playback of a media file. Non-blocking -- MPV plays immediately.
@@ -100,9 +106,17 @@ class PlaybackController:
             f"Playing file: {file_path} for user: {user}, transposed {semitones} semitones"
         )
 
-        # Find subtitle file (.srt in subtitles/ subfolder)
-        subtitle_path = self._find_subtitle(file_path)
+        # Find subtitle files (.ass in karaoke/ subfolder, .srt in subtitles/ subfolder)
+        subs = self._find_subtitles(file_path)
         subtitle_delay = self.preferences.get_or_default("subtitle_delay")
+
+        # Resolve initial subtitle mode: karaoke if .ass exists, srt if .srt exists, off otherwise
+        if subs["ass"] and os.path.exists(subs["ass"]):
+            initial_sub_mode = "karaoke"
+        elif subs["srt"] and os.path.exists(subs["srt"]):
+            initial_sub_mode = "srt"
+        else:
+            initial_sub_mode = "off"
 
         # Get normalization_db from song database (if normalize_audio enabled)
         normalization_db = None
@@ -111,13 +125,22 @@ class PlaybackController:
             # For now, normalization is toggled but no per-song dB values are stored
             normalization_db = None  # Will be populated when ProcessingManager stores it
 
+        # Find dual-stem companion files (vocal + nonvocal)
+        vocal_path, nonvocal_path = self._find_companions(file_path)
+        vocal_volume = self.preferences.get_or_default("vocal_volume")
+
         with self._playback_lock:
             self.mpv.play(
                 file_path,
                 semitones=semitones,
-                subtitle_path=subtitle_path,
+                ass_path=subs["ass"],
+                srt_path=subs["srt"],
+                initial_sub_mode=initial_sub_mode,
                 subtitle_delay=subtitle_delay,
                 normalization_db=normalization_db,
+                vocal_path=vocal_path,
+                nonvocal_path=nonvocal_path,
+                vocal_volume=vocal_volume,
             )
 
             self.now_playing = self.filename_from_path(file_path, remove_youtube_id=True)
@@ -126,6 +149,13 @@ class PlaybackController:
             self.now_playing_transpose = semitones
             self.now_playing_duration = int(self.mpv.duration) if self.mpv.duration else None
             self.now_playing_position = 0.0
+            self.now_playing_sub_mode = initial_sub_mode
+            self.now_playing_subs_available = {
+                "ass": subs["ass"] is not None and os.path.exists(subs["ass"]),
+                "srt": subs["srt"] is not None and os.path.exists(subs["srt"]),
+            }
+            self.now_playing_dual_stem = vocal_path is not None and nonvocal_path is not None
+            self.now_playing_vocal_volume = vocal_volume
             self.is_paused = False
             self.is_playing = True
 
@@ -134,24 +164,51 @@ class PlaybackController:
         logging.debug("MPV playback started")
         return PlaybackResult(success=True)
 
-    def _find_subtitle(self, file_path: str) -> str | None:
-        """Find the downloaded-subtitle (.srt) companion for a media file.
+    def _find_subtitles(self, file_path: str) -> dict[str, str | None]:
+        """Find companion subtitle files for a media file.
 
-        Karaoke captions (.ass, generated from confirmed lyrics) will be
-        added here behind a user preference in a future change.
+        Looks for .ass in karaoke/ subfolder and .srt in subtitles/ subfolder.
 
         Args:
             file_path: Path to the media file.
 
         Returns:
-            Path to subtitle file, or None.
+            Dict with 'ass' and 'srt' keys; values are paths or None.
         """
         base_name = os.path.splitext(os.path.basename(file_path))[0]
-        srt_path = os.path.join(os.path.dirname(file_path), "subtitles", base_name + ".srt")
+        parent = os.path.dirname(file_path)
+
+        ass_path = os.path.join(parent, "karaoke", base_name + ".ass")
+        srt_path = os.path.join(parent, "subtitles", base_name + ".srt")
+
+        result: dict[str, str | None] = {"ass": None, "srt": None}
+        if os.path.exists(ass_path):
+            logging.debug(f"ASS subtitle file found: {ass_path}")
+            result["ass"] = ass_path
         if os.path.exists(srt_path):
             logging.debug(f"SRT subtitle file found: {srt_path}")
-            return srt_path
-        return None
+            result["srt"] = srt_path
+        return result
+
+    def _find_companions(self, file_path: str) -> tuple[str | None, str | None]:
+        """Find dual-stem companion audio files for a media file.
+
+        Both stems must exist (half-stem playback is not supported).
+
+        Args:
+            file_path: Path to the media file.
+
+        Returns:
+            Tuple of (vocal_path, nonvocal_path), or (None, None) if missing.
+        """
+        base = os.path.splitext(os.path.basename(file_path))[0]
+        parent = os.path.dirname(file_path)
+        vocal = os.path.join(parent, "vocal", f"{base}---vocal.m4a")
+        nonvocal = os.path.join(parent, "nonvocal", f"{base}---nonvocal.m4a")
+        if os.path.exists(vocal) and os.path.exists(nonvocal):
+            logging.debug(f"Dual-stem companions found: {vocal}, {nonvocal}")
+            return (vocal, nonvocal)
+        return (None, None)
 
     def end_song(self, reason: str | None = None) -> None:
         """End current song. Must be called with _playback_lock held
@@ -236,6 +293,10 @@ class PlaybackController:
             "now_playing_transpose": self.now_playing_transpose,
             "now_playing_position": self.mpv.position,
             "is_paused": self.mpv.is_paused,
+            "sub_mode": self.now_playing_sub_mode,
+            "subs_available": self.now_playing_subs_available,
+            "dual_stem": self.now_playing_dual_stem,
+            "vocal_volume": self.now_playing_vocal_volume,
         }
 
     def reset_now_playing(self) -> None:
@@ -246,6 +307,10 @@ class PlaybackController:
         self.now_playing_transpose = 0
         self.now_playing_duration = None
         self.now_playing_position = None
+        self.now_playing_sub_mode = "off"
+        self.now_playing_subs_available = {"ass": False, "srt": False}
+        self.now_playing_dual_stem = False
+        self.now_playing_vocal_volume = 0.0
         self.is_paused = True
         self.is_playing = False
 
@@ -272,6 +337,8 @@ class PlaybackController:
             hide_now_playing=self.preferences.get_or_default("hide_now_playing_overlay"),
             show_clock=self.preferences.get_or_default("show_clock"),
             server_url=self.mpv._server_url,
+            dual_stem=self.now_playing_dual_stem,
+            vocal_volume=self.now_playing_vocal_volume,
         )
 
     def refresh_overlays(self) -> None:
@@ -298,6 +365,25 @@ class PlaybackController:
         """Forward subtitle delay to MPV."""
         if self.is_playing:
             self.mpv.set_subtitle_delay(seconds)
+
+    def set_sub_mode(self, mode: str) -> None:
+        """Change subtitle mode for the current song."""
+        if self.is_playing:
+            self.mpv.set_sub_mode(mode)
+            self.now_playing_sub_mode = mode
+            self.events.emit("now_playing_update")
+
+    def set_vocal_volume(self, volume: float) -> None:
+        """Change vocal volume for the current song (dual-stem only)."""
+        if self.is_playing:
+            self.mpv.set_vocal_volume(volume)
+            self.now_playing_vocal_volume = volume
+            self.events.emit("now_playing_update")
+
+    def seek(self, position: float) -> None:
+        """Seek to absolute position in seconds."""
+        if self.is_playing:
+            self.mpv.seek(position)
 
     def restart(self) -> bool:
         """Restart current song from beginning (seek 0 + unpause)."""

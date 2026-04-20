@@ -12,10 +12,13 @@
 				let timeoutId = setTimeout(function() {
 					$this.attr("data-start-value", val);
 
-					if (pref == "volume") {
-						val = val / 100;
-					}
-					changePreferences(pref, val);
+    if (pref == "volume") {
+      val = val / 100;
+    }
+    if (pref == "vocal_volume") {
+      val = val / 100;
+    }
+    changePreferences(pref, val);
 				}, 1000);
 
 				// If the user changes the value again before the daly expires, cancel the timeout
@@ -325,6 +328,14 @@
 					<input id="pref-subtitle-delay" class="user-preference-input input" type="number" step="0.1" min="-10" max="10" data-pref="subtitle_delay" data-start-value="{{ subtitle_delay }}" value="{{ subtitle_delay }}" />
 					<label class="label" for="pref-subtitle-delay">
 							{# MSG: Numberbox label for subtitle delay #} {% trans %}Subtitle delay in seconds (negative = earlier | positive = later){% endtrans %}
+					</label>
+					</div>
+
+					<div class="user-preference-container is-align-items-center">
+					<input id="pref-vocal-volume" class="user-preference-input input" type="number" step="1" min="0" max="100"
+					  data-pref="vocal_volume" data-start-value="{{ vocal_volume }}" value="{{ vocal_volume }}" />
+					<label class="label" for="pref-vocal-volume">
+					  {# MSG: Numberbox label for default vocal volume #} {% trans %}Default vocal volume (0-100%, dual-stem songs only){% endtrans %}
 					</label>
 					</div>
 

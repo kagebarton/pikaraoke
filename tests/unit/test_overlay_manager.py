@@ -176,6 +176,21 @@ class TestComputeOverlaysPlaying:
         result = compute_overlays(state)
         assert "-2st" in result[OSD_TIMECODE].text
 
+    def test_timecode_excludes_vocals_when_not_dual_stem(self):
+        state = _playing_state(dual_stem=False)
+        result = compute_overlays(state)
+        assert "Vocals:" not in result[OSD_TIMECODE].text
+
+    def test_timecode_includes_vocals_pct_when_dual_stem(self):
+        state = _playing_state(dual_stem=True, vocal_volume=0.4)
+        result = compute_overlays(state)
+        assert "Vocals: 40%" in result[OSD_TIMECODE].text
+
+    def test_timecode_vocals_zero_pct(self):
+        state = _playing_state(dual_stem=True, vocal_volume=0.0)
+        result = compute_overlays(state)
+        assert "Vocals: 0%" in result[OSD_TIMECODE].text
+
 
 # ── render_ass ─────────────────────────────────────────────────────────────────
 

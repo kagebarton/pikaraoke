@@ -1,240 +1,342 @@
 {% extends 'base.html' %} {% block scripts %}
 <script>
-	var volume = {{ volume|default(0.85) }};
+var volume = {{ volume|default(0.85) }};
 
-	// Per-key debounce for step buttons
-	var _stepTimers = {};
-	function debounceStep(fn, key, delay = 300) {
-		clearTimeout(_stepTimers[key]);
-		_stepTimers[key] = setTimeout(fn, delay);
-	}
+// Per-key debounce for step buttons
+var _stepTimers = {};
+function debounceStep(fn, key, delay = 300) {
+  clearTimeout(_stepTimers[key]);
+  _stepTimers[key] = setTimeout(fn, delay);
+}
 
-	function stepPitch(delta) {
-		var slider = document.getElementById("transpose");
-		var val = Math.max(-12, Math.min(12, parseInt(slider.value) + delta));
-		slider.value = val;
-		document.getElementById("semitones-label").innerHTML = getSemitonesLabel(val);
-		debounceStep(() => $.get("/transpose/" + val), '_pitch');
-	}
+function stepPitch(delta) {
+  var slider = document.getElementById("transpose");
+  var val = Math.max(-12, Math.min(12, parseInt(slider.value) + delta));
+  slider.value = val;
+  document.getElementById("semitones-label").innerHTML = getSemitonesLabel(val);
+  debounceStep(() => $.get("/transpose/" + val), '_pitch');
+}
 
-	function stepSubtitleDelay(delta) {
-		var slider = document.getElementById("subtitle-delay-slider");
-		var val = Math.max(-5, Math.min(5,
-			parseFloat((parseFloat(slider.value) + delta).toFixed(1))));
-		slider.value = val;
-		document.getElementById("subtitle-delay-label").innerHTML = formatSubtitleDelay(val);
-		debounceStep(() => $.get("/subtitle_delay/" + val), '_sub');
-	}
+function stepSubtitleDelay(delta) {
+  var slider = document.getElementById("subtitle-delay-slider");
+  var val = Math.max(-5, Math.min(5, parseFloat((parseFloat(slider.value) + delta).toFixed(1))));
+  slider.value = val;
+  document.getElementById("subtitle-delay-label").innerHTML = formatSubtitleDelay(val);
+  debounceStep(() => $.get("/subtitle_delay/" + val), '_sub');
+}
 
-	// Format subtitle delay display (e.g., "+0.5", "-0.3", "0")
-	function formatSubtitleDelay(value) {
-		var num = parseFloat(value);
-		if (num > 0) return "+" + num.toFixed(1);
-		if (num < 0) return num.toFixed(1);
-		return "0";
-	}
+function stepVocalVolume(delta) {
+  var slider = document.getElementById("vocal-volume-slider");
+  var val = Math.max(0, Math.min(100, parseInt(slider.value) + delta));
+  slider.value = val;
+  document.getElementById("vocal-volume-label").innerHTML = val + "%";
+  debounceStep(() => $.get("/vocal_volume/" + (val / 100)), '_vocalvol');
+}
 
-	// Ensure global socket exists
-	if (typeof window.socket === 'undefined') {
-		window.socket = io();
-	}
+// Format subtitle delay display (e.g., "+0.5", "-0.3", "0")
+function formatSubtitleDelay(value) {
+  var num = parseFloat(value);
+  if (num > 0) return "+" + num.toFixed(1);
+  if (num < 0) return num.toFixed(1);
+  return "0";
+}
 
-	function loadNowPlaying() {
-		console.log("Loading now playing data");
-		$.get('{{ url_for("now_playing.now_playing") }}', function (data) {
-			handleNowPlaying(JSON.parse(data));
-		});
-	}
+// Subtitle mode toggle
+function setSubMode(mode) {
+  debounceStep(() => $.get("/sub_mode/" + mode), '_submode');
+  // optimistic UI — server pushes confirmation via socket
+  applySubModeToButtons(mode);
+  $("#subtitle-delay-section").toggle(mode === "srt");
+}
 
-	function handleNowPlaying(np) {
-		console.log(np);
-		if (np.now_playing) {
-			var nowPlayingHtml = `<p style="margin-bottom: 5px">${np.now_playing}</p>
-          <p class="has-text-success" style="margin-bottom: 5px"><i class="icon icon-mic-1" title="Current singer"></i>${np.now_playing_user}</p>`;
+function applySubModeToButtons(mode) {
+  document.querySelectorAll("#subtitle-mode-section [data-mode]").forEach(b => {
+    b.classList.toggle("is-info", b.dataset.mode === mode);
+    b.classList.toggle("is-selected", b.dataset.mode === mode);
+  });
+}
 
-			if (np.now_playing_transpose != 0) {
-				nowPlayingHtml +=
-					// {# MSG: Label for display of how many semitones the song has been shifted. #}
-					"<span class='is-size-6 has-text-success'><b>Key</b>: " +
-					getSemitonesLabel(np.now_playing_transpose) +
-					"<span>";
-			}
+// Format seconds as m:ss
+function fmtTime(s) {
+  if (!s || s <= 0) return "0:00";
+  var m = Math.floor(s / 60);
+  var sec = Math.floor(s % 60);
+  return m + ":" + (sec < 10 ? "0" : "") + sec;
+}
 
-			$("#now-playing").html(nowPlayingHtml);
-			$(".control-box").show();
-		} else {
-			// {# MSG: Message which shows in the "Now Playing" section when there is no song currently playing #}
-			$("#now-playing").html("{{ _('Nothing is playing right now.') }}");
-			$(".control-box").hide();
-		}
+// Seek bar state
+var _seekDragging = false;
+var _seekDuration = 0;
 
-		if (np.up_next) {
-			$("#up-next").html(`<p style="margin-bottom: 5px">${np.up_next}</p>
-          <p class="has-text-success">
-            {# MSG: Title text for the icon marking the next person to sing. #}
-            <i class="icon icon-mic-1" title="{{ _('Next singer') }}"></i>${np.next_user}</p>`);
-		} else {
-			// {# MSG: Alternative text for the "Up next" section if no more songs are queued up. #}
-			$("#up-next").html("{{ _('No song is queued.') }}");
-		}
+// Ensure global socket exists
+if (typeof window.socket === 'undefined') {
+  window.socket = io();
+}
 
-		if (np.now_playing_transpose != 0) {
-			$("#transpose").val(np.now_playing_transpose);
-			$("#semitones-label").html(getSemitonesLabel(np.now_playing_transpose));
-		} else {
-			$("#transpose").val(0);
-			$("#semitones-label").html(getSemitonesLabel(np.now_playing_transpose));
-		}
+function loadNowPlaying() {
+  console.log("Loading now playing data");
+  $.get('{{ url_for("now_playing.now_playing") }}', function (data) {
+    handleNowPlaying(JSON.parse(data));
+  });
+}
 
-		// Sync subtitle delay slider with server state
-		if (np.subtitle_delay !== undefined) {
-			$("#subtitle-delay-slider").val(np.subtitle_delay);
-			$("#subtitle-delay-label").html(formatSubtitleDelay(np.subtitle_delay));
-		}
+function handleNowPlaying(np) {
+  console.log(np);
+  if (np.now_playing) {
+    var nowPlayingHtml = `<p style="margin-bottom: 5px">${np.now_playing}</p>
+    <p class="has-text-success" style="margin-bottom: 5px"><i class="icon icon-mic-1" title="Current singer"></i>${np.now_playing_user}</p>`;
 
-		// set the volume slider to the current volume
-		if (np.volume != volume) {
-			volume = np.volume;
-			console.log("setting volume to " + volume);
-			$("#volume-slider").val(volume);
-		}
+    if (np.now_playing_transpose != 0) {
+      nowPlayingHtml +=
+      // {# MSG: Label for display of how many semitones the song has been shifted. #}
+      "<span class='is-size-6 has-text-success'><b>Key</b>: " +
+      getSemitonesLabel(np.now_playing_transpose) +
+      "<span>";
+    }
 
-		if (np.is_paused) {
-			$("#pause-resume").removeClass("icon-pause");
-			$("#pause-resume").addClass("icon-play");
-			$(".playing_gif").attr("src", "{{  url_for('static', filename='images/now-playing.png') }}");
-		} else {
-			$("#pause-resume").removeClass("icon-play");
-			$("#pause-resume").addClass("icon-pause");
-			$(".playing_gif").attr("src", "{{  url_for('static', filename='images/now-playing.gif') }}");
-		}
-	}
+    $("#now-playing").html(nowPlayingHtml);
+    $(".control-box").show();
+  } else {
+    // {# MSG: Message which shows in the "Now Playing" section when there is no song currently playing #}
+    $("#now-playing").html("{{ _('Nothing is playing right now.') }}");
+    $(".control-box").hide();
+  }
 
-	$(function () {
-		$(".control-box").hide();
+  if (np.up_next) {
+    $("#up-next").html(`<p style="margin-bottom: 5px">${np.up_next}</p>
+    <p class="has-text-success">
+    {# MSG: Title text for the icon marking the next person to sing. #}
+    <i class="icon icon-mic-1" title="{{ _('Next singer') }}"></i>${np.next_user}</p>`);
+  } else {
+    // {# MSG: Alternative text for the "Up next" section if no more songs are queued up. #}
+    $("#up-next").html("{{ _('No song is queued.') }}");
+  }
 
-		var slider = document.getElementById("transpose");
-		var output = document.getElementById("semitones-label");
-		if (slider && output) {
-			output.innerHTML = getSemitonesLabel(slider.value);
-			// Update the current slider value (each time you drag the slider handle)
-			slider.oninput = function () {
-				output.innerHTML = getSemitonesLabel(slider.value);
-			};
-		}
+  if (np.now_playing_transpose != 0) {
+    $("#transpose").val(np.now_playing_transpose);
+    $("#semitones-label").html(getSemitonesLabel(np.now_playing_transpose));
+  } else {
+    $("#transpose").val(0);
+    $("#semitones-label").html(getSemitonesLabel(np.now_playing_transpose));
+  }
 
-		$("#volume-slider").on(
-			"input",
-			debounce(function (event) {
-				const value = this.value;
-				$.get("/volume/" + value);
-			}, 500)
-		);
+  // Sync subtitle delay slider with server state
+  if (np.subtitle_delay !== undefined) {
+    $("#subtitle-delay-slider").val(np.subtitle_delay);
+    $("#subtitle-delay-label").html(formatSubtitleDelay(np.subtitle_delay));
+  }
 
-		if (slider && output) {
-			slider.onchange = function () {
-				debounceStep(() => $.get("/transpose/" + slider.value), '_pitch');
-			};
-		}
+  // Vocal volume section visibility and sync
+  if (np.dual_stem) {
+    $("#vocal-volume-section").show();
+    if (np.vocal_volume !== undefined) {
+      var pct = Math.round(np.vocal_volume * 100);
+      $("#vocal-volume-slider").val(pct);
+      $("#vocal-volume-label").html(pct + "%");
+    }
+  } else {
+    $("#vocal-volume-section").hide();
+  }
 
-		// Subtitle delay slider handler
-		var subtitleDelaySlider = document.getElementById("subtitle-delay-slider");
-		var subtitleDelayLabel = document.getElementById("subtitle-delay-label");
-		if (subtitleDelaySlider && subtitleDelayLabel) {
-			subtitleDelayLabel.innerHTML = formatSubtitleDelay(subtitleDelaySlider.value);
-			subtitleDelaySlider.oninput = function () {
-				subtitleDelayLabel.innerHTML = formatSubtitleDelay(this.value);
-			};
-			subtitleDelaySlider.onchange = function () {
-				debounceStep(() => $.get("/subtitle_delay/" + subtitleDelaySlider.value), '_sub');
-			};
-		}
+  // Subtitle mode section
+  if (np.subs_available && (np.subs_available.ass || np.subs_available.srt)) {
+    $("#subtitle-mode-section").show();
+    var karaokeBtn = document.querySelector("[data-mode='karaoke']");
+    var srtBtn = document.querySelector("[data-mode='srt']");
+    if (karaokeBtn) karaokeBtn.disabled = !np.subs_available.ass;
+    if (srtBtn) srtBtn.disabled = !np.subs_available.srt;
+    if (np.sub_mode) applySubModeToButtons(np.sub_mode);
+    $("#subtitle-delay-section").toggle(np.sub_mode === "srt");
+  } else {
+    $("#subtitle-mode-section").hide();
+    $("#subtitle-delay-section").hide();
+  }
 
-		$("#pause-resume").click(function () {
-			$.get("/pause");
-			togglePausePlayButton();
-		});
+  // Seek bar
+  _seekDuration = np.now_playing_duration || 0;
+  document.getElementById("time-total").innerHTML = fmtTime(_seekDuration);
+  if (!_seekDragging && _seekDuration > 0) {
+    var seekBar = document.getElementById("seek-bar");
+    seekBar.value = ((np.now_playing_position || 0) / _seekDuration) * 100;
+  }
+  document.getElementById("time-elapsed").innerHTML = fmtTime(np.now_playing_position || 0);
 
-		$("#vol-up").click(function () {
-			$.get("/vol_up");
-		});
+  // set the volume slider to the current volume
+  if (np.volume != volume) {
+    volume = np.volume;
+    console.log("setting volume to " + volume);
+    $("#volume-slider").val(volume);
+  }
 
-		$("#vol-down").click(function () {
-			$.get("/vol_down");
-		});
+  if (np.is_paused) {
+    $("#pause-resume").removeClass("icon-pause");
+    $("#pause-resume").addClass("icon-play");
+    $(".playing_gif").attr("src", "{{ url_for('static', filename='images/now-playing.png') }}");
+  } else {
+    $("#pause-resume").removeClass("icon-play");
+    $("#pause-resume").addClass("icon-pause");
+    $(".playing_gif").attr("src", "{{ url_for('static', filename='images/now-playing.gif') }}");
+  }
+}
 
-		$("#restart").click(function () {
-			r = confirm("Are you sure you want to restart this track?");
-			if (r) {
-				$.get("/restart");
-			}
-		});
+// Listen for playback_position events from server (seeks / polls)
+window.socket.on("playback_position", function (pos) {
+  if (!_seekDragging && _seekDuration > 0) {
+    document.getElementById("seek-bar").value = (pos / _seekDuration) * 100;
+  }
+  document.getElementById("time-elapsed").innerHTML = fmtTime(pos);
+});
 
-		$("#skip").click(function () {
-			r = confirm(
-				// {# MSG: Confirmation message when clicking a button to skip a track. #}
-				`{{ _("Are you sure you want to skip this track? If you didn't add this song, ask permission first!") }}`
-			);
-			if (r) {
-				$.get("/skip");
-			}
-		});
+$(function () {
+  $(".control-box").hide();
 
-		$("#semitones-info").click(function () {
-			showNotification(
-				"A semitone is also known as a half-step. It is the smallest interval used in classical Western music, equal to a twelfth of an octave or half a tone.",
-				"is-info",
-				10000
-			);
-		});
+  var slider = document.getElementById("transpose");
+  var output = document.getElementById("semitones-label");
+  if (slider && output) {
+    output.innerHTML = getSemitonesLabel(slider.value);
+    // Update the current slider value (each time you drag the slider handle)
+    slider.oninput = function () {
+      output.innerHTML = getSemitonesLabel(slider.value);
+    };
+  }
 
-		$("#subtitle-delay-info").click(function () {
-			showNotification(
-				"Negative delay = subtitles appear earlier. Positive delay = subtitles appear later.",
-				"is-info",
-				10000
-			);
-		});
+  $("#volume-slider").on(
+    "input",
+    debounce(function (event) {
+      const value = this.value;
+      $.get("/volume/" + value);
+    }, 500)
+  );
 
-		function togglePausePlayButton() {
-			if ($("#pause-resume").hasClass("icon-pause")) {
-				$("#pause-resume").removeClass("icon-pause");
-				$("#pause-resume").addClass("icon-play");
-			} else {
-				$("#pause-resume").removeClass("icon-play");
-				$("#pause-resume").addClass("icon-pause");
-			}
-		}
+  if (slider && output) {
+    slider.onchange = function () {
+      debounceStep(() => $.get("/transpose/" + slider.value), '_pitch');
+    };
+  }
 
-		//for first time load of splash screen
-		loadNowPlaying();
-		//for pushed updates to now playing state
-		window.socket.on("now_playing", (np) => handleNowPlaying(np));
+  // Subtitle delay slider handler
+  var subtitleDelaySlider = document.getElementById("subtitle-delay-slider");
+  var subtitleDelayLabel = document.getElementById("subtitle-delay-label");
+  if (subtitleDelaySlider && subtitleDelayLabel) {
+    subtitleDelayLabel.innerHTML = formatSubtitleDelay(subtitleDelaySlider.value);
+    subtitleDelaySlider.oninput = function () {
+      subtitleDelayLabel.innerHTML = formatSubtitleDelay(this.value);
+    };
+    subtitleDelaySlider.onchange = function () {
+      debounceStep(() => $.get("/subtitle_delay/" + subtitleDelaySlider.value), '_sub');
+    };
+  }
 
-		document.addEventListener("visibilitychange", function () {
-			console.log("on visibility change");
+  // Vocal volume slider handler
+  var vvSlider = document.getElementById("vocal-volume-slider");
+  var vvLabel = document.getElementById("vocal-volume-label");
+  if (vvSlider && vvLabel) {
+    vvSlider.oninput = function () {
+      vvLabel.innerHTML = vvSlider.value + "%";
+    };
+    vvSlider.onchange = function () {
+      debounceStep(() => $.get("/vocal_volume/" + (vvSlider.value / 100)), '_vocalvol');
+    };
+  }
 
-			if (document.visibilityState === "visible") {
-				loadNowPlaying();
-				console.log(window.socket);
-				if (!window.socket.connected) {
-					console.log("Reconnecting socket...");
-					window.socket = io();
-					window.socket.on("now_playing", (np) => handleNowPlaying(np));
-				}
-			}
-		});
-	});
+  // Seek bar handlers
+  var seekBar = document.getElementById("seek-bar");
+  seekBar.addEventListener("input", function () { _seekDragging = true; });
+  seekBar.addEventListener("change", function () {
+    var pos = (seekBar.value / 100) * _seekDuration;
+    // Hold the drag-lock until *after* the seek confirms AND a small grace
+    // window passes, so a stale playback_position event in flight cannot
+    // snap the slider back to the pre-seek position.
+    $.get("/seek/" + pos).always(function () {
+      setTimeout(function () { _seekDragging = false; }, 200);
+    });
+  });
+
+  $("#pause-resume").click(function () {
+    $.get("/pause");
+    togglePausePlayButton();
+  });
+
+  $("#vol-up").click(function () {
+    $.get("/vol_up");
+  });
+
+  $("#vol-down").click(function () {
+    $.get("/vol_down");
+  });
+
+  $("#restart").click(function () {
+    r = confirm("Are you sure you want to restart this track?");
+    if (r) {
+      $.get("/restart");
+    }
+  });
+
+  $("#skip").click(function () {
+    r = confirm(
+    // {# MSG: Confirmation message when clicking a button to skip a track. #}
+    `{{ _("Are you sure you want to skip this track? If you didn't add this song, ask permission first!") }}`
+    );
+    if (r) {
+      $.get("/skip");
+    }
+  });
+
+  $("#semitones-info").click(function () {
+    showNotification(
+      "A semitone is also known as a half-step. It is the smallest interval used in classical Western music, equal to a twelfth of an octave or half a tone.",
+      "is-info",
+      10000
+    );
+  });
+
+  $("#subtitle-delay-info").click(function () {
+    showNotification(
+      "Negative delay = subtitles appear earlier. Positive delay = subtitles appear later.",
+      "is-info",
+      10000
+    );
+  });
+
+  function togglePausePlayButton() {
+    if ($("#pause-resume").hasClass("icon-pause")) {
+      $("#pause-resume").removeClass("icon-pause");
+      $("#pause-resume").addClass("icon-play");
+    } else {
+      $("#pause-resume").removeClass("icon-play");
+      $("#pause-resume").addClass("icon-pause");
+    }
+  }
+
+  //for first time load of splash screen
+  loadNowPlaying();
+  //for pushed updates to now playing state
+  window.socket.on("now_playing", (np) => handleNowPlaying(np));
+
+  document.addEventListener("visibilitychange", function () {
+    console.log("on visibility change");
+
+    if (document.visibilityState === "visible") {
+      loadNowPlaying();
+      console.log(window.socket);
+      if (!window.socket.connected) {
+        console.log("Reconnecting socket...");
+        window.socket = io();
+        window.socket.on("now_playing", (np) => handleNowPlaying(np));
+      }
+    }
+  });
+});
 </script>
 {% endblock %} {% block header %}
 <h1>
-	{% block title %} {# MSG: Header showing the currently playing song. #} {% trans %}Now Playing{% endtrans %}
-	<img
-		style="display: none"
-		class="playing_gif control-box"
-		width="40"
-		src="{{  url_for('static', filename='images/now-playing.png') }}"
-	/>{% endblock %}
+{% block title %} {# MSG: Header showing the currently playing song. #} {% trans %}Now Playing{% endtrans %}
+<img
+  style="display: none"
+  class="playing_gif control-box"
+  width="40"
+  src="{{ url_for('static', filename='images/now-playing.png') }}"
+/>{% endblock %}
 </h1>
 {% endblock %} {% block content %}
 
@@ -247,88 +349,137 @@
 
 {% if admin %}
 <div class="has-background-black-bis box control-box" style="max-width: 500px; display: none">
-	{# MSG: Title of the box with controls such as pause and skip. #}
-	<h4>{% trans %}Player Control{% endtrans %}</h4>
-	<div class="is-size-3" style="display: flex; justify-content: space-between">
-		<div class="is-size-3">
-			{# MSG: Title attribute on the button to restart the current song. #}
-			<a title="{{ _('Restart Song') }}" id="restart"><i class="icon icon-to-start"></i> </a>&nbsp;&nbsp; {# MSG:
-			Title attribute on the button to play or pause the current song. #}
-			<a title="{{ _('Play/Pause') }}"><i id="pause-resume" class="icon icon-pause"></i> </a>&nbsp;&nbsp; {# MSG:
-			Title attribute on the button to skip to the next song. #}
-			<a title="{{ _('Stop Current Song') }}" id="skip"><i class="icon icon-to-end"></i> </a>
-		</div>
-		<div class="is-size-3" style="display: flex; align-items: center">
-			<i id="vol-down" class="icon icon-volume-down"></i>
-			<input
-				type="range"
-				min="0"
-				max="1"
-				value="{{ volume|default(0.85) }}"
-				step="0.025"
-				id="volume-slider"
-				style="margin: 0 8px 0px 5px; width: 100px"
-			/>
-			<i id="vol-up" class="icon icon-volume-up"></i>
-		</div>
-	</div>
-	<hr />
+  {# MSG: Title of the box with controls such as pause and skip. #}
+  <h4>{% trans %}Player Control{% endtrans %}</h4>
 
-	<div class="is-flex" style="justify-content: space-between">
-		<div>
-			{# MSG: Title of a control to adjust subtitle timing. #}
-			<h4>{% trans %}Subtitle Delay{% endtrans %}</h4>
-		</div>
-		<div class="is-flex">
-			<h4 id="subtitle-delay-label"></h4>
-			<span style="margin-left: 5px">sec</span>
-			<a id="subtitle-delay-info" style="margin-left: 8px"> <i class="icon icon-info-circled-1" title="Info"></i></a>
-		</div>
-	</div>
-	<div style="width: 100%">
-		<div class="is-flex" style="align-items: center; gap: 8px">
-			<button class="button is-rounded is-small" onclick="stepSubtitleDelay(-0.1)" style="flex-shrink: 0">−</button>
-			<input
-				type="range"
-				min="-5"
-				max="5"
-				value="0"
-				step="0.1"
-				id="subtitle-delay-slider"
-				style="flex: 1; min-width: 0"
-			/>
-			<button class="button is-rounded is-small" onclick="stepSubtitleDelay(0.1)" style="flex-shrink: 0">+</button>
-		</div>
-	</div>
-	<hr />
+  {# ── Seek bar ──────────────────────────────────────────────────────── #}
+  <div class="seek-row" style="display: flex; align-items: center; gap: 8px; margin-bottom: 0.75rem;">
+    <span id="time-elapsed" class="is-size-7" style="width: 40px; text-align: right;">0:00</span>
+    <input type="range" id="seek-bar" min="0" max="100" value="0" step="0.1"
+      style="flex: 1; min-width: 0;" />
+    <span id="time-total" class="is-size-7" style="width: 40px;">0:00</span>
+  </div>
 
-	{% if is_transpose_enabled %}
-	<div class="is-flex" style="justify-content: space-between">
-		<div>
-			{# MSG: Title of a control to change the key/pitch of the playing song. #}
-			<h4>{% trans %}Change Key{% endtrans %}</h4>
-		</div>
-		<div class="is-flex">
-			<h4 id="semitones-label"></h4>
-			<a id="semitones-info"> <i class="icon icon-info-circled-1" title="Info"></i></a>
-		</div>
-	</div>
-	<div style="width: 100%">
-		<div class="is-flex" style="align-items: center; gap: 8px">
-			<button class="button is-rounded is-small" onclick="stepPitch(-1)" style="flex-shrink: 0">−</button>
-			<input
-				type="range"
-				min="-12"
-				max="12"
-				value="0"
-				class="transpose-slider"
-				id="transpose"
-				style="flex: 1; min-width: 0"
-			/>
-			<button class="button is-rounded is-small" onclick="stepPitch(1)" style="flex-shrink: 0">+</button>
-		</div>
-	</div>
-	{% endif %}
+  <div class="is-size-3" style="display: flex; justify-content: space-between">
+    <div class="is-size-3">
+      {# MSG: Title attribute on the button to restart the current song. #}
+      <a title="{{ _('Restart Song') }}" id="restart"><i class="icon icon-to-start"></i> </a>&nbsp;&nbsp; {# MSG:
+      Title attribute on the button to play or pause the current song. #}
+      <a title="{{ _('Play/Pause') }}"><i id="pause-resume" class="icon icon-pause"></i> </a>&nbsp;&nbsp; {# MSG:
+      Title attribute on the button to skip to the next song. #}
+      <a title="{{ _('Stop Current Song') }}" id="skip"><i class="icon icon-to-end"></i> </a>
+    </div>
+    <div class="is-size-3" style="display: flex; align-items: center">
+      <i id="vol-down" class="icon icon-volume-down"></i>
+      <input
+        type="range"
+        min="0"
+        max="1"
+        value="{{ volume|default(0.85) }}"
+        step="0.025"
+        id="volume-slider"
+        style="margin: 0 8px 0px 5px; width: 100px"
+      />
+      <i id="vol-up" class="icon icon-volume-up"></i>
+    </div>
+  </div>
+  <hr />
+
+  {# ── Vocal volume section (dual-stem only) ─────────────────────────── #}
+  <div id="vocal-volume-section" style="display: none">
+    <div class="is-flex" style="justify-content: space-between">
+      <div><h4>{% trans %}Vocal Volume{% endtrans %}</h4></div>
+      <div class="is-flex">
+        <h4 id="vocal-volume-label">40%</h4>
+      </div>
+    </div>
+    <div style="width: 100%">
+      <div class="is-flex" style="align-items: center; gap: 8px">
+        <button class="button is-rounded is-small"
+          onclick="stepVocalVolume(-10)" style="flex-shrink: 0">&minus;</button>
+        <input type="range" min="0" max="100" value="40" step="1"
+          id="vocal-volume-slider" style="flex: 1; min-width: 0" />
+        <button class="button is-rounded is-small"
+          onclick="stepVocalVolume(10)" style="flex-shrink: 0">+</button>
+      </div>
+    </div>
+    <hr />
+  </div>
+
+  {# ── Subtitle mode section ─────────────────────────────────────────── #}
+  <div id="subtitle-mode-section" style="display: none">
+    <div class="is-flex" style="justify-content: space-between">
+      <div><h4>{% trans %}Subtitles{% endtrans %}</h4></div>
+    </div>
+    <div class="buttons has-addons" style="margin-bottom: 0.5rem">
+      <button class="button is-small" data-mode="karaoke"
+        onclick="setSubMode('karaoke')">Karaoke</button>
+      <button class="button is-small" data-mode="srt"
+        onclick="setSubMode('srt')">Subtitles</button>
+      <button class="button is-small is-selected is-info" data-mode="off"
+        onclick="setSubMode('off')">Off</button>
+    </div>
+    <hr />
+  </div>
+
+  {# ── Subtitle delay section (only visible in 'srt' mode) ───────────── #}
+  <div id="subtitle-delay-section">
+    <div class="is-flex" style="justify-content: space-between">
+      <div>
+        {# MSG: Title of a control to adjust subtitle timing. #}
+        <h4>{% trans %}Subtitle Delay{% endtrans %}</h4>
+      </div>
+      <div class="is-flex">
+        <h4 id="subtitle-delay-label"></h4>
+        <span style="margin-left: 5px">sec</span>
+        <a id="subtitle-delay-info" style="margin-left: 8px"> <i class="icon icon-info-circled-1" title="Info"></i></a>
+      </div>
+    </div>
+    <div style="width: 100%">
+      <div class="is-flex" style="align-items: center; gap: 8px">
+        <button class="button is-rounded is-small" onclick="stepSubtitleDelay(-0.1)" style="flex-shrink: 0">−</button>
+        <input
+          type="range"
+          min="-5"
+          max="5"
+          value="0"
+          step="0.1"
+          id="subtitle-delay-slider"
+          style="flex: 1; min-width: 0"
+        />
+        <button class="button is-rounded is-small" onclick="stepSubtitleDelay(0.1)" style="flex-shrink: 0">+</button>
+      </div>
+    </div>
+    <hr />
+  </div>
+
+  {% if is_transpose_enabled %}
+  <div class="is-flex" style="justify-content: space-between">
+    <div>
+      {# MSG: Title of a control to change the key/pitch of the playing song. #}
+      <h4>{% trans %}Change Key{% endtrans %}</h4>
+    </div>
+    <div class="is-flex">
+      <h4 id="semitones-label"></h4>
+      <a id="semitones-info"> <i class="icon icon-info-circled-1" title="Info"></i></a>
+    </div>
+  </div>
+  <div style="width: 100%">
+    <div class="is-flex" style="align-items: center; gap: 8px">
+      <button class="button is-rounded is-small" onclick="stepPitch(-1)" style="flex-shrink: 0">−</button>
+      <input
+        type="range"
+        min="-12"
+        max="12"
+        value="0"
+        class="transpose-slider"
+        id="transpose"
+        style="flex: 1; min-width: 0"
+      />
+      <button class="button is-rounded is-small" onclick="stepPitch(1)" style="flex-shrink: 0">+</button>
+    </div>
+  </div>
+  {% endif %}
 </div>
 {% endif %}
 

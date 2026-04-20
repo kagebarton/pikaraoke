@@ -107,6 +107,7 @@ class MockKaraoke:
         self.running = True
         self.now_playing_notification = None
         self.subtitle_delay = 0
+        self.vocal_volume = 0.4
         self.temp_dir = ""
         self.processing_manager = MagicMock()
 

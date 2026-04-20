@@ -61,6 +61,7 @@ def info():
         normalize_audio=k.normalize_audio,
         high_quality=k.high_quality,
         subtitle_delay=k.preferences.get_or_default("subtitle_delay"),
+        vocal_volume=int(k.preferences.get_or_default("vocal_volume") * 100),
         limit_user_songs_by=k.limit_user_songs_by,
         enable_fair_queue=k.enable_fair_queue,
         languages=LANGUAGES,

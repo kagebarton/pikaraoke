@@ -61,6 +61,9 @@ class OverlayState:
     hide_now_playing: bool
     show_clock: bool
     server_url: str
+    # dual-stem vocal volume (for timecode overlay)
+    dual_stem: bool = False
+    vocal_volume: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -130,13 +133,16 @@ def _build_timecode_overlay(state: OverlayState, fs: int) -> Overlay:
     elapsed = _fmt_time(state.position)
     total = _fmt_time(state.duration)
     st_str = f"+{state.semitones}st" if state.semitones > 0 else f"{state.semitones}st"
+    text = f"{elapsed} / {total} | Pitch: {st_str}"
+    if state.dual_stem:
+        text += f" | Vocals: {int(state.vocal_volume * 100)}%"
     return Overlay(
         id=OSD_TIMECODE,
         anchor="\\an9",
         pos=(1920, y),
         font_size=fs - 15,
         color=_TIMECODE_COLOR,
-        text=f"{elapsed} / {total} | Pitch: {st_str}",
+        text=text,
     )
 
 

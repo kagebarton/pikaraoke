@@ -36,6 +36,7 @@ class PreferenceManager:
         "show_clock": False,
         "temp_dir": "",
         "blocked_processing_words": "",
+        "vocal_volume": 0.4,
     }
 
     def __init__(self, config_file_path: str = "config.ini", target: object | None = None) -> None:
@@ -75,7 +76,10 @@ class PreferenceManager:
                 logging.error(f"Failed to migrate config file: {e}")
 
     def get(
-        self, preference: str, default_value: Any = None, section: str = "USERPREFERENCES"
+        self,
+        preference: str,
+        default_value: Any = None,
+        section: str = "USERPREFERENCES",
     ) -> Any:
         """Get a preference value, auto-converting to bool/int/float."""
         # Silently ignores missing files
@@ -121,7 +125,7 @@ class PreferenceManager:
                 # instance — saving a new default should not affect the current song.
                 # volume:        k.volume tracks live playback; default applies at song start
                 # subtitle_delay: same pattern — per-song override via the now-playing slider
-                if preference in ("subtitle_delay", "volume"):
+                if preference in ("subtitle_delay", "volume", "vocal_volume"):
                     return (True, _("Your preferences were changed successfully"))
                 default = self.DEFAULTS.get(preference)
                 typed_val = str(val) if isinstance(default, str) else self._convert_value(val)
