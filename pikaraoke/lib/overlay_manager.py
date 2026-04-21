@@ -23,22 +23,46 @@ OSD_NOWPLAYING = 2
 OSD_TIMECODE = 3
 OSD_UPNEXT = 4
 OSD_CLOCK = 5
+OSD_QUEUE_PREVIEW = 6
 
-ALL_OSD_IDS = (OSD_URL, OSD_NOWPLAYING, OSD_TIMECODE, OSD_UPNEXT, OSD_CLOCK)
+ALL_OSD_IDS = (OSD_URL, OSD_NOWPLAYING, OSD_TIMECODE, OSD_UPNEXT, OSD_CLOCK, OSD_QUEUE_PREVIEW)
 
 # ── ASS style constants ────────────────────────────────────────────────────────
-_URL_COLOR = "&HFFFFFF&"
-_NOWPLAYING_COLOR = "&H507FFF&"
-_TIMECODE_COLOR = "&HAAD5FF&"
-_UPNEXT_COLOR = "&HB48246&"
-_CLOCK_COLOR = "&HFFFFFF&"
+# ASS colors are BGR: &HBBGGRR&
+_COLOR_URL          = "&HFFFFFF&"   # rgb(255,255,255) white
+_COLOR_CLOCK        = "&HFFFFFF&"   # rgb(255,255,255) white
+_COLOR_NOWPLAYING   = "&H507FFF&"   # rgb(255,127,80)  orange — now-playing title, queue preview first row
+_COLOR_UPNEXT       = "&HB48246&"   # rgb(70,130,180)  blue   — upnext row, queue preview rest rows
+_COLOR_TIMECODE     = "&HAAD5FF&"   # rgb(255,213,170) light orange — timecode row, singer on orange rows
+_COLOR_SINGER_BLUE  = "&HFACD8C&"   # rgb(140,205,250) light blue  — singer name on blue rows
 _OVERLAY_STYLE = "\\bord3\\shad2\\3c&H000000&\\4c&H000000&\\4a&H80&"
+
+
+# ── OSD icon symbols ──────────────────────────────────────────────────────────
+_ICON_PLAY = "▶"          # U+25B6
+_ICON_CLEF = "𝄞"          # U+1D11E
+_ICON_CLOCK = "🕐"         # U+1F550
+_ICON_NEXT = "⏭"          # U+23ED
+_ICON_MIC_SINGER = "🎙"   # U+1F399  condenser — matches web UI singer name
+_ICON_MIC_VOCAL = "🗣️"    # U+1F32C  head exhale — vocal volume level
 
 
 class ScreenMode(Enum):
     IDLE = "idle"  # placeholder loaded; splash overlays visible
     PLAYING = "playing"  # video playing
     PAUSED = "paused"  # video paused
+
+
+@dataclass(frozen=True)
+class QueuedSong:
+    """Minimal queue entry consumed by overlays.
+
+    Decoupled from the queue dict so overlay logic stays pure. The future
+    "next N songs" overlay will receive a list of these.
+    """
+
+    title: str
+    singer: str
 
 
 @dataclass(frozen=True)
@@ -50,7 +74,7 @@ class OverlayState:
 
     mode: ScreenMode
     now_playing_title: str | None
-    up_next_title: str | None
+    queue_preview: tuple[QueuedSong, ...]
     semitones: int
     position: float
     duration: float
@@ -64,6 +88,7 @@ class OverlayState:
     # dual-stem vocal volume (for timecode overlay)
     dual_stem: bool = False
     vocal_volume: float = 0.0
+    singer_name: str = ""
 
 
 @dataclass(frozen=True)
@@ -112,7 +137,7 @@ def _build_url_overlay(state: OverlayState, fs: int) -> Overlay:
         anchor="\\an7",
         pos=(x, 0),
         font_size=fs,
-        color=_URL_COLOR,
+        color=_COLOR_URL,
         text=state.server_url,
     )
 
@@ -123,8 +148,8 @@ def _build_nowplaying_overlay(state: OverlayState, fs: int) -> Overlay:
         anchor="\\an9",
         pos=(1920, 0),
         font_size=fs,
-        color=_NOWPLAYING_COLOR,
-        text=f"Now Playing: {state.now_playing_title}",
+        color=_COLOR_NOWPLAYING,
+        text=f"{_ICON_PLAY} {state.now_playing_title}",
     )
 
 
@@ -133,28 +158,55 @@ def _build_timecode_overlay(state: OverlayState, fs: int) -> Overlay:
     elapsed = _fmt_time(state.position)
     total = _fmt_time(state.duration)
     st_str = f"+{state.semitones}st" if state.semitones > 0 else f"{state.semitones}st"
-    text = f"{elapsed} / {total} | Pitch: {st_str}"
+    text = f"{_ICON_MIC_SINGER} {state.singer_name} | {elapsed} / {total} | {_ICON_CLEF} {st_str}"
     if state.dual_stem:
-        text += f" | Vocals: {int(state.vocal_volume * 100)}%"
+        text += f" | {_ICON_MIC_VOCAL} {int(state.vocal_volume * 100)}%"
     return Overlay(
         id=OSD_TIMECODE,
         anchor="\\an9",
         pos=(1920, y),
         font_size=fs - 15,
-        color=_TIMECODE_COLOR,
+        color=_COLOR_TIMECODE,
         text=text,
     )
 
 
 def _build_upnext_overlay(state: OverlayState, fs: int) -> Overlay:
     y = int(fs * 0.9) + int((fs - 10) * 1.05)
+    song = state.queue_preview[0]
+    singer_part = f"{{\\c{_COLOR_SINGER_BLUE}}}{_ICON_MIC_SINGER} {song.singer}"
     return Overlay(
         id=OSD_UPNEXT,
         anchor="\\an9",
         pos=(1920, y),
         font_size=fs - 10,
-        color=_UPNEXT_COLOR,
-        text=f"Up Next: {state.up_next_title}",
+        color=_COLOR_UPNEXT,
+        text=f"{_ICON_NEXT} {song.title} {singer_part}",
+    )
+
+
+def _build_queue_preview_overlay(state: OverlayState, fs: int) -> Overlay:
+    songs = state.queue_preview[:5]
+    # First row: orange, singer in lighter orange
+    singer1 = f"{{\\c{_COLOR_TIMECODE}}}{_ICON_MIC_SINGER} {songs[0].singer}"
+    first = f"{_ICON_NEXT} {songs[0].title} {singer1}"
+    # Remaining rows: blue, singer in lighter blue
+    rest = [
+        f"{i}. {s.title} {{\\c{_COLOR_SINGER_BLUE}}}{_ICON_MIC_SINGER} {s.singer}"
+        for i, s in enumerate(songs[1:], 2)
+    ]
+    if rest:
+        inline = f"{{\\c{_COLOR_UPNEXT}\\fs{fs - 10}}}"
+        text = first + "\\N" + inline + "\\N".join(rest)
+    else:
+        text = first
+    return Overlay(
+        id=OSD_QUEUE_PREVIEW,
+        anchor="\\an9",
+        pos=(1920, 0),
+        font_size=fs,
+        color=_COLOR_NOWPLAYING,
+        text=text,
     )
 
 
@@ -165,8 +217,8 @@ def _build_clock_overlay(state: OverlayState, fs: int) -> Overlay:
         anchor="\\an1",
         pos=(0, 1080),
         font_size=fs,
-        color=_CLOCK_COLOR,
-        text=clock_text,
+        color=_COLOR_CLOCK,
+        text=f"{_ICON_CLOCK}{clock_text}",
     )
 
 
@@ -186,20 +238,20 @@ def compute_overlays(state: OverlayState) -> dict[int, Overlay]:
 
     # ── Placeholder (IDLE) overlays ────────────────────────────────────────────
     if state.mode == ScreenMode.IDLE:
-        pass  # placeholder-only overlays go here
+        if state.queue_preview and not state.hide_now_playing:
+            result[OSD_QUEUE_PREVIEW] = _build_queue_preview_overlay(state, fs)
 
     # ── Playback overlays ──────────────────────────────────────────────────────
     if state.mode in (ScreenMode.PLAYING, ScreenMode.PAUSED) and not state.hide_now_playing:
         if state.now_playing_title:
             result[OSD_NOWPLAYING] = _build_nowplaying_overlay(state, fs)
             result[OSD_TIMECODE] = _build_timecode_overlay(state, fs)
+        if state.queue_preview:
+            result[OSD_UPNEXT] = _build_upnext_overlay(state, fs)
 
     # ── All-screen overlays ────────────────────────────────────────────────────
     if not state.hide_url:
         result[OSD_URL] = _build_url_overlay(state, fs)
-
-    if state.up_next_title and not state.hide_now_playing:
-        result[OSD_UPNEXT] = _build_upnext_overlay(state, fs)
 
     if state.show_clock:
         result[OSD_CLOCK] = _build_clock_overlay(state, fs)

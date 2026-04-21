@@ -26,6 +26,7 @@ from pikaraoke.lib.library_scanner import LibraryScanner, ScanResult
 from pikaraoke.lib.mpv_controller import MpvController
 from pikaraoke.lib.network import get_ip
 from pikaraoke.lib.pipeline_tracker import PipelineTracker
+from pikaraoke.lib.overlay_manager import QueuedSong
 from pikaraoke.lib.playback_controller import PlaybackController
 from pikaraoke.lib.preference_manager import PreferenceManager
 from pikaraoke.lib.processing_manager import ProcessingManager
@@ -284,8 +285,9 @@ class Karaoke:
 
         # Wire overlay state provider so the MPV poll thread can render OSD overlays
         if self.mpv_controller.is_running:
-            self.playback_controller._get_up_next_title = lambda: (
-                self.queue_manager.queue[0]["title"] if self.queue_manager.queue else None
+            self.playback_controller._get_queue_preview = lambda: tuple(
+                QueuedSong(title=item["title"], singer=item["user"])
+                for item in self.queue_manager.queue[:5]
             )
             self.mpv_controller.set_overlay_state_provider(
                 self.playback_controller.build_overlay_state

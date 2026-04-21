@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Callable
 from flask_babel import _
 
 from pikaraoke.lib.events import EventSystem
-from pikaraoke.lib.overlay_manager import OverlayState, ScreenMode
+from pikaraoke.lib.overlay_manager import OverlayState, QueuedSong, ScreenMode
 from pikaraoke.lib.preference_manager import PreferenceManager
 
 if TYPE_CHECKING:
@@ -82,7 +82,7 @@ class PlaybackController:
         self.mpv = mpv
         self._playback_lock = threading.Lock()
         # Injected by Karaoke after queue_manager is available
-        self._get_up_next_title: Callable[[], str | None] = lambda: None
+        self._get_queue_preview: Callable[[], tuple[QueuedSong, ...]] = lambda: ()
         # Subtitle availability (mutable dict, not class-level default)
         self.now_playing_subs_available: dict[str, bool] = {"ass": False, "srt": False}
 
@@ -160,6 +160,7 @@ class PlaybackController:
             self.is_playing = True
 
         self.events.emit("playback_started")
+        self.refresh_overlays()
 
         logging.debug("MPV playback started")
         return PlaybackResult(success=True)
@@ -234,6 +235,7 @@ class PlaybackController:
 
         self.mpv.stop()
         self.reset_now_playing()
+        self.refresh_overlays()
         self.events.emit("song_ended")
         logging.debug("Cleanup complete")
 
@@ -327,7 +329,7 @@ class PlaybackController:
         return OverlayState(
             mode=mode,
             now_playing_title=self.now_playing,
-            up_next_title=self._get_up_next_title(),
+            queue_preview=self._get_queue_preview(),
             semitones=self.now_playing_transpose,
             position=self.mpv.position,
             duration=self.mpv.duration,
@@ -339,6 +341,7 @@ class PlaybackController:
             server_url=self.mpv._server_url,
             dual_stem=self.now_playing_dual_stem,
             vocal_volume=self.now_playing_vocal_volume,
+            singer_name=self.now_playing_user,
         )
 
     def refresh_overlays(self) -> None:
