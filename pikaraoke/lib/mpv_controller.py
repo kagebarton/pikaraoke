@@ -125,7 +125,6 @@ class MpvController:
         # Overlay manager and state provider
         self._overlay_manager = OverlayManager(self)
         self._overlay_state_provider: Callable[[], OverlayState] | None = None
-        self._screen_mode: ScreenMode = ScreenMode.IDLE
 
         # Callbacks -- set via set_callbacks() before start()
         self._on_song_end: Callable[[], None] | None = None
@@ -210,7 +209,9 @@ class MpvController:
         try:
             self._audio_backend = self._detect_audio_backend()
         except RuntimeError:
-            logging.warning("No audio server found (wpctl/pactl/amixer). Volume controls disabled.")
+            logging.warning(
+                "No audio server found (wpctl/pactl/amixer). Volume controls disabled."
+            )
             self._audio_backend = None
 
         self.is_running = True
@@ -301,7 +302,6 @@ class MpvController:
 
     # ── Playback ───────────────────────────────────────────────────────────────
 
-    @_safe
     def play(
         self,
         file_path: str,
@@ -333,6 +333,9 @@ class MpvController:
         # Set before loadfile to guard _on_idle_active
         self.is_idle = False
         self.is_paused = False
+        self._player.pause = (
+            False  # also clear MPV's pause property (pause-on-start fix)
+        )
         self.position = 0.0
 
         self._duration_ready.clear()
@@ -359,21 +362,31 @@ class MpvController:
 
         # Apply subtitle mode after lavfi-complex is set (skip_remove=True
         # on initial play to avoid segfault when lavfi-complex is active)
-        self._apply_subtitle_mode(initial_sub_mode, skip_remove=True, subtitle_delay=subtitle_delay)
+        self._apply_subtitle_mode(
+            initial_sub_mode, skip_remove=True, subtitle_delay=subtitle_delay
+        )
 
         self.duration = float(self._player.duration or 0.0)
-        self.set_mode(ScreenMode.PLAYING)
+        # no set_mode — caller decides when to render
 
-    @_safe
     def stop(self) -> None:
         """Stop playback and return to idle/placeholder."""
-        self.is_idle = True  # guard _on_idle_active before clearing filter
+        # is_idle must be set True BEFORE clearing lavfi_complex. The
+        # _on_idle_active observer fires on the MPV event thread when the
+        # filter clear causes the player to go idle, and its guard
+        # `if value is True and not self.is_idle` is what keeps it from
+        # re-entering on_song_end. _playback_lock is non-reentrant, so a
+        # second on_song_end while the first still holds it would deadlock.
+        self.is_idle = True
         with self._lock:
             self._player.lavfi_complex = ""
-        self.position = 0.0
-        self.duration = 0.0
-        self.is_paused = False
-        self.set_mode(ScreenMode.IDLE)
+            self.position = 0.0
+            self.duration = 0.0
+            self.is_paused = False
+            self._player.pause = (
+                False  # also clear MPV's pause property (pause-on-start fix)
+            )
+        # no set_mode — caller decides when to render/load placeholder
 
     @_safe
     def seek(self, position: float) -> None:
@@ -467,7 +480,9 @@ class MpvController:
 
         When switching to 'srt' mode, applies the current subtitle delay.
         """
-        self._apply_subtitle_mode(mode, skip_remove=False, subtitle_delay=self._subtitle_delay)
+        self._apply_subtitle_mode(
+            mode, skip_remove=False, subtitle_delay=self._subtitle_delay
+        )
 
     @_safe
     def set_subtitle_delay(self, seconds: float) -> None:
@@ -485,23 +500,9 @@ class MpvController:
         self._player.command("seek", 0, "absolute")
         self._player.pause = False
 
-    # ── Screen mode ────────────────────────────────────────────────────────────
+    # ── Overlay rendering ─────────────────────────────────────────────────────
 
-    def set_mode(self, mode: ScreenMode) -> None:
-        """Transition the display mode and trigger an immediate overlay render.
-
-        This is the single place that drives placeholder loading -- callers
-        (play, stop) just set the desired mode.
-        """
-        if mode == self._screen_mode:
-            self._tick_overlays()
-            return
-        self._screen_mode = mode
-        if mode == ScreenMode.IDLE:
-            self.load_placeholder()
-        self._tick_overlays()
-
-    def _tick_overlays(self) -> None:
+    def tick_overlays(self) -> None:
         """Build an OverlayState snapshot and hand it to OverlayManager."""
         if self._overlay_state_provider is None:
             return
@@ -511,7 +512,9 @@ class MpvController:
     # ── OSD / Overlay ──────────────────────────────────────────────────────────
 
     @_safe
-    def osd_overlay(self, overlay_id: int, data: str, res_x: int = 1920, res_y: int = 1080) -> None:
+    def osd_overlay(
+        self, overlay_id: int, data: str, res_x: int = 1920, res_y: int = 1080
+    ) -> None:
         """Send an ASS-events OSD overlay."""
         self._player.command(
             "osd-overlay",
@@ -566,7 +569,6 @@ class MpvController:
         """Remove a bitmap overlay slot."""
         self._player.command("overlay-remove", overlay_id)
 
-    @_safe
     def load_placeholder(self) -> None:
         """Load the placeholder image into the running mpv instance."""
         if os.path.exists(self._placeholder_path):
@@ -643,7 +645,8 @@ class MpvController:
         if normalization_db is not None:
             norm_str = f"{normalization_db}dB"
             return (
-                f"[aid1]rubberband@rb=pitch={pitch}:{_RB_VOCAL}" f"[pre];[pre]volume={norm_str}[ao]"
+                f"[aid1]rubberband@rb=pitch={pitch}:{_RB_VOCAL}"
+                f"[pre];[pre]volume={norm_str}[ao]"
             )
         return f"[aid1]rubberband@rb=pitch={pitch}:{_RB_VOCAL}[ao]"
 

@@ -176,7 +176,9 @@ class Karaoke:
 
         # Initialize database, scanner, and song manager (startup runs at end of __init__)
         self.db = KaraokeDatabase()
-        self.song_manager = SongManager(self.download_path, db=self.db, events=self.events)
+        self.song_manager = SongManager(
+            self.download_path, db=self.db, events=self.events
+        )
         self._scanner = LibraryScanner(self.db)
         self._sync_lock = threading.Lock()
 
@@ -207,8 +209,8 @@ class Karaoke:
 
         self.mpv_controller.set_callbacks(
             on_song_end=_on_song_end,
-            on_resize=self.mpv_controller._tick_overlays,
-            on_tick=self.mpv_controller._tick_overlays,
+            on_resize=self.mpv_controller.tick_overlays,
+            on_tick=self.mpv_controller.tick_overlays,
         )
 
         try:
@@ -221,13 +223,19 @@ class Karaoke:
             self.mpv_controller.set_system_volume(pct)
         except RuntimeError as e:
             logging.error(f"MPV failed to start: {e}")
-            logging.error("Install MPV (apt install mpv / brew install mpv) and restart.")
+            logging.error(
+                "Install MPV (apt install mpv / brew install mpv) and restart."
+            )
 
         # Event bridging: the coordinator wires manager events to the UI (SocketIO/notifications).
         self.events.on("notification", self.log_and_send)
         self.events.on(
             "queue_update",
-            lambda: (self.socketio.emit("queue_update", namespace="/") if self.socketio else None),
+            lambda: (
+                self.socketio.emit("queue_update", namespace="/")
+                if self.socketio
+                else None
+            ),
         )
         self.events.on("now_playing_update", self.update_now_playing_socket)
         self.events.on("playback_started", self.update_now_playing_socket)
@@ -236,11 +244,19 @@ class Karaoke:
         self.events.on("song_downloaded", self.song_manager.register_download)
         self.events.on(
             "sync_started",
-            lambda: (self.socketio.emit("sync_started", namespace="/") if self.socketio else None),
+            lambda: (
+                self.socketio.emit("sync_started", namespace="/")
+                if self.socketio
+                else None
+            ),
         )
         self.events.on(
             "sync_finished",
-            lambda: (self.socketio.emit("sync_finished", namespace="/") if self.socketio else None),
+            lambda: (
+                self.socketio.emit("sync_finished", namespace="/")
+                if self.socketio
+                else None
+            ),
         )
 
         # Initialize queue manager
@@ -317,7 +333,9 @@ class Karaoke:
                 ]
                 if count
             ]
-            self.events.emit("notification", f"Library updated: {', '.join(parts)}", "success")
+            self.events.emit(
+                "notification", f"Library updated: {', '.join(parts)}", "success"
+            )
 
         if result.circuit_tripped:
             logging.error(
@@ -379,7 +397,9 @@ class Karaoke:
             end_time = int(time.time()) + 30
             while int(time.time()) < end_time:
                 addresses_str = (
-                    subprocess.check_output(["hostname", "-I"]).strip().decode("utf-8", "ignore")
+                    subprocess.check_output(["hostname", "-I"])
+                    .strip()
+                    .decode("utf-8", "ignore")
                 )
                 addresses = addresses_str.split(" ")
                 self.ip = addresses[0]
@@ -439,7 +459,9 @@ class Karaoke:
             self.now_playing_notification = message + "::is-" + color
             # Emit notification via SocketIO for event-driven architecture
             if self.socketio:
-                self.socketio.emit("notification", self.now_playing_notification, namespace="/")
+                self.socketio.emit(
+                    "notification", self.now_playing_notification, namespace="/"
+                )
 
     def log_and_send(self, message: str, category: str = "info") -> None:
         """Log a message and send it as a notification.
@@ -472,7 +494,8 @@ class Karaoke:
             logging.warning("Cannot transpose: no song currently playing")
             return
         self.log_and_send(
-            _("Transposing by %s semitones: %s") % (semitones, self.playback_controller.now_playing)
+            _("Transposing by %s semitones: %s")
+            % (semitones, self.playback_controller.now_playing)
         )
         self.playback_controller.set_pitch(semitones)
         self.update_now_playing_socket()
@@ -641,7 +664,10 @@ class Karaoke:
                 self.playback_controller.broadcast_position(self.socketio)
 
                 # Start next song from queue if not currently playing
-                if len(self.queue_manager.queue) > 0 and not self.playback_controller.is_playing:
+                if (
+                    len(self.queue_manager.queue) > 0
+                    and not self.playback_controller.is_playing
+                ):
                     self.reset_now_playing()
                     # Splash delay between songs
                     splash_delay = self.preferences.get_or_default("splash_delay")

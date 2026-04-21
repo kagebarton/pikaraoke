@@ -86,7 +86,9 @@ class PlaybackController:
         # Subtitle availability (mutable dict, not class-level default)
         self.now_playing_subs_available: dict[str, bool] = {"ass": False, "srt": False}
 
-    def play_file(self, file_path: str, user: str, semitones: int = 0) -> PlaybackResult:
+    def play_file(
+        self, file_path: str, user: str, semitones: int = 0
+    ) -> PlaybackResult:
         """Start playback of a media file. Non-blocking -- MPV plays immediately.
 
         Args:
@@ -123,44 +125,64 @@ class PlaybackController:
         if self.preferences.get_or_default("normalize_audio"):
             # Normalization value will be fetched from song database when implemented
             # For now, normalization is toggled but no per-song dB values are stored
-            normalization_db = None  # Will be populated when ProcessingManager stores it
+            normalization_db = (
+                None  # Will be populated when ProcessingManager stores it
+            )
 
         # Find dual-stem companion files (vocal + nonvocal)
         vocal_path, nonvocal_path = self._find_companions(file_path)
         vocal_volume = self.preferences.get_or_default("vocal_volume")
 
         with self._playback_lock:
-            self.mpv.play(
-                file_path,
-                semitones=semitones,
-                ass_path=subs["ass"],
-                srt_path=subs["srt"],
-                initial_sub_mode=initial_sub_mode,
-                subtitle_delay=subtitle_delay,
-                normalization_db=normalization_db,
-                vocal_path=vocal_path,
-                nonvocal_path=nonvocal_path,
-                vocal_volume=vocal_volume,
+            # 1. Set all PC state that doesn't depend on mpv.play having run
+            self.now_playing = self.filename_from_path(
+                file_path, remove_youtube_id=True
             )
-
-            self.now_playing = self.filename_from_path(file_path, remove_youtube_id=True)
             self.now_playing_filename = file_path
             self.now_playing_user = user
             self.now_playing_transpose = semitones
-            self.now_playing_duration = int(self.mpv.duration) if self.mpv.duration else None
             self.now_playing_position = 0.0
             self.now_playing_sub_mode = initial_sub_mode
             self.now_playing_subs_available = {
                 "ass": subs["ass"] is not None and os.path.exists(subs["ass"]),
                 "srt": subs["srt"] is not None and os.path.exists(subs["srt"]),
             }
-            self.now_playing_dual_stem = vocal_path is not None and nonvocal_path is not None
+            self.now_playing_dual_stem = (
+                vocal_path is not None and nonvocal_path is not None
+            )
             self.now_playing_vocal_volume = vocal_volume
             self.is_paused = False
             self.is_playing = True
 
+            try:
+                # 2. Run MPV loadfile + filter setup (no inner render now)
+                self.mpv.play(
+                    file_path,
+                    semitones=semitones,
+                    ass_path=subs["ass"],
+                    srt_path=subs["srt"],
+                    initial_sub_mode=initial_sub_mode,
+                    subtitle_delay=subtitle_delay,
+                    normalization_db=normalization_db,
+                    vocal_path=vocal_path,
+                    nonvocal_path=nonvocal_path,
+                    vocal_volume=vocal_volume,
+                )
+
+                # 3. Duration is only known after mpv.play completes the duration wait
+                self.now_playing_duration = (
+                    int(self.mpv.duration) if self.mpv.duration else None
+                )
+
+                # 4. Single render with fully-consistent state
+                self.mpv.tick_overlays()
+            except Exception:
+                logging.exception("mpv.play() failed — rolling back PC state")
+                self.reset_now_playing()
+                self.events.emit("song_ended")
+                return PlaybackResult(success=False, error="MPV playback failed")
+
         self.events.emit("playback_started")
-        self.refresh_overlays()
 
         logging.debug("MPV playback started")
         return PlaybackResult(success=True)
@@ -233,9 +255,31 @@ class PlaybackController:
                     "danger",
                 )
 
-        self.mpv.stop()
+        # 1. Clear PC state before any render observes it
         self.reset_now_playing()
-        self.refresh_overlays()
+
+        try:
+            # 2. Stop MPV playback (filter clear, pause clear, counters reset)
+            self.mpv.stop()
+        except Exception:
+            logging.exception(
+                "mpv.stop() failed in end_song — attempting partial cleanup"
+            )
+            # Force MpvController to a safe idle state even if stop() failed partway
+            self.mpv.is_idle = True
+            self.mpv.is_paused = False
+            self.mpv.position = 0.0
+            self.mpv.duration = 0.0
+
+        try:
+            # 3. Show splash (best-effort — cosmetic if this fails)
+            self.mpv.load_placeholder()
+            self.mpv.tick_overlays()
+        except Exception:
+            logging.exception(
+                "load_placeholder/tick_overlays failed in end_song — cosmetic only"
+            )
+
         self.events.emit("song_ended")
         logging.debug("Cleanup complete")
 
@@ -273,9 +317,13 @@ class PlaybackController:
             # Query actual state from MPV
             is_now_paused = self.mpv.is_paused
             if is_now_paused:
-                self.events.emit("notification", _("Pause: %s") % self.now_playing, "info")
+                self.events.emit(
+                    "notification", _("Pause: %s") % self.now_playing, "info"
+                )
             else:
-                self.events.emit("notification", _("Resume: %s") % self.now_playing, "info")
+                self.events.emit(
+                    "notification", _("Resume: %s") % self.now_playing, "info"
+                )
             self.events.emit("now_playing_update")
             return True
         else:
@@ -319,7 +367,7 @@ class PlaybackController:
     def build_overlay_state(self) -> OverlayState:
         """Snapshot all data needed by compute_overlays into one immutable record.
 
-        Called each poll tick (and on immediate renders) by MpvController._tick_overlays.
+        Called each poll tick (and on immediate renders) by MpvController.tick_overlays.
         """
         if self.is_playing:
             mode = ScreenMode.PAUSED if self.mpv.is_paused else ScreenMode.PLAYING
@@ -336,7 +384,9 @@ class PlaybackController:
             screen_w=self.mpv.osd_size[0],
             screen_h=self.mpv.osd_size[1],
             hide_url=self.preferences.get_or_default("hide_url"),
-            hide_now_playing=self.preferences.get_or_default("hide_now_playing_overlay"),
+            hide_now_playing=self.preferences.get_or_default(
+                "hide_now_playing_overlay"
+            ),
             show_clock=self.preferences.get_or_default("show_clock"),
             server_url=self.mpv._server_url,
             dual_stem=self.now_playing_dual_stem,
@@ -350,7 +400,7 @@ class PlaybackController:
         Call this after toggling any overlay-related preference so the change
         is visible within the current frame rather than waiting up to 500ms.
         """
-        self.mpv._tick_overlays()
+        self.mpv.tick_overlays()
 
     def broadcast_position(self, socketio) -> None:
         """Emit current playback position to all Socket.IO clients."""

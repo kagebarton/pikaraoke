@@ -30,8 +30,11 @@ def mock_mpv():
     mpv.set_pitch = MagicMock()
     mpv.set_subtitle_delay = MagicMock()
     mpv.restart = MagicMock()
+    mpv.tick_overlays = MagicMock()
+    mpv.load_placeholder = MagicMock()
     mpv.build_filter = MagicMock(return_value="[aid1]rubberband@rb=pitch=1.0[ao]")
     mpv.osd_size = (1920, 1080)
+    mpv._server_url = "http://127.0.0.1:5555"
     return mpv
 
 
@@ -97,6 +100,21 @@ class TestPlaybackControllerPlayFile:
         assert pc.is_paused is False
         assert pc.is_playing is True
         mock_mpv.play.assert_called_once()
+        # State is set before mpv.play and tick_overlays called once after
+        mock_mpv.tick_overlays.assert_called_once()
+        # Verify ordering: state-set happens before mpv.play
+        play_call_index = None
+        tick_call_index = None
+        for i, call in enumerate(mock_mpv.method_calls):
+            if call[0] == "play":
+                play_call_index = i
+            elif call[0] == "tick_overlays":
+                tick_call_index = i
+        assert play_call_index is not None, "mpv.play should have been called"
+        assert tick_call_index is not None, "mpv.tick_overlays should have been called"
+        assert tick_call_index > play_call_index, (
+            "tick_overlays must come after mpv.play"
+        )
 
     @patch("pikaraoke.lib.playback_controller.os.path.isfile", return_value=True)
     def test_play_file_stream_failure(self, mock_isfile, test_prefs, mock_mpv):
@@ -117,7 +135,9 @@ class TestPlaybackControllerMissingFile:
     """Tests for file-existence guard in play_file."""
 
     @patch("flask_babel._", side_effect=lambda x: x)
-    def test_returns_error_for_nonexistent_file(self, mock_gettext, test_prefs, mock_mpv):
+    def test_returns_error_for_nonexistent_file(
+        self, mock_gettext, test_prefs, mock_mpv
+    ):
         events = EventSystem()
         filename_fn = lambda x, remove_youtube_id=True: x
 
@@ -129,7 +149,9 @@ class TestPlaybackControllerMissingFile:
         assert "not found" in result.error
 
     @patch("pikaraoke.lib.playback_controller.os.path.isfile", return_value=True)
-    def test_existing_file_proceeds_normally(self, mock_isfile, test_prefs, mock_mpv, tmp_path):
+    def test_existing_file_proceeds_normally(
+        self, mock_isfile, test_prefs, mock_mpv, tmp_path
+    ):
         events = EventSystem()
         filename_fn = lambda x, remove_youtube_id=True: "Test Song"
 
@@ -165,6 +187,8 @@ class TestPlaybackControllerEndSong:
         assert pc.is_playing is False
         assert pc.now_playing is None
         mock_mpv.stop.assert_called_once()
+        mock_mpv.load_placeholder.assert_called_once()
+        mock_mpv.tick_overlays.assert_called_once()
         assert "song_ended" in emitted_events
 
     def test_end_song_prevents_double_end(self, test_prefs, mock_mpv):

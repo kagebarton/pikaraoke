@@ -7,12 +7,14 @@ import pytest
 from pikaraoke.lib.overlay_manager import (
     OSD_CLOCK,
     OSD_NOWPLAYING,
+    OSD_QUEUE_PREVIEW,
     OSD_TIMECODE,
     OSD_UPNEXT,
     OSD_URL,
     Overlay,
     OverlayManager,
     OverlayState,
+    QueuedSong,
     ScreenMode,
     _overlay_font_size,
     compute_overlays,
@@ -21,12 +23,15 @@ from pikaraoke.lib.overlay_manager import (
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
+_SONG_A = QueuedSong(title="Take On Me", singer="UserA")
+_SONG_B = QueuedSong(title="Bohemian Rhapsody", singer="UserB")
+
 
 def _idle_state(**overrides) -> OverlayState:
     defaults = dict(
         mode=ScreenMode.IDLE,
         now_playing_title=None,
-        up_next_title=None,
+        queue_preview=(),
         semitones=0,
         position=0.0,
         duration=0.0,
@@ -36,6 +41,9 @@ def _idle_state(**overrides) -> OverlayState:
         hide_now_playing=False,
         show_clock=False,
         server_url="http://pikaraoke.local:5555",
+        dual_stem=False,
+        vocal_volume=0.0,
+        singer_name="",
     )
     defaults.update(overrides)
     return OverlayState(**defaults)
@@ -45,7 +53,7 @@ def _playing_state(**overrides) -> OverlayState:
     defaults = dict(
         mode=ScreenMode.PLAYING,
         now_playing_title="Never Gonna Give You Up",
-        up_next_title="Take On Me",
+        queue_preview=(_SONG_A,),
         semitones=0,
         position=42.0,
         duration=212.0,
@@ -55,6 +63,9 @@ def _playing_state(**overrides) -> OverlayState:
         hide_now_playing=False,
         show_clock=False,
         server_url="http://pikaraoke.local:5555",
+        dual_stem=False,
+        vocal_volume=0.0,
+        singer_name="Singer1",
     )
     defaults.update(overrides)
     return OverlayState(**defaults)
@@ -65,6 +76,7 @@ def _mock_mpv():
     mpv.osd_overlay = MagicMock()
     mpv.clear_osd = MagicMock()
     mpv.send_qr_bitmap = MagicMock()
+    mpv.remove_qr_bitmap = MagicMock()
     return mpv
 
 
@@ -89,6 +101,21 @@ class TestComputeOverlaysIdle:
         assert OSD_NOWPLAYING not in result
         assert OSD_TIMECODE not in result
         assert OSD_UPNEXT not in result
+
+    def test_queue_preview_absent_when_no_queue(self):
+        state = _idle_state(queue_preview=())
+        result = compute_overlays(state)
+        assert OSD_QUEUE_PREVIEW not in result
+
+    def test_queue_preview_present_when_queue_has_songs(self):
+        state = _idle_state(queue_preview=(_SONG_A, _SONG_B))
+        result = compute_overlays(state)
+        assert OSD_QUEUE_PREVIEW in result
+
+    def test_queue_preview_hidden_when_hide_now_playing(self):
+        state = _idle_state(queue_preview=(_SONG_A,), hide_now_playing=True)
+        result = compute_overlays(state)
+        assert OSD_QUEUE_PREVIEW not in result
 
     def test_clock_absent_when_pref_off(self):
         state = _idle_state(show_clock=False)
@@ -121,13 +148,13 @@ class TestComputeOverlaysPlaying:
         assert OSD_NOWPLAYING in result
         assert OSD_TIMECODE in result
 
-    def test_upnext_present_when_title_set(self):
-        state = _playing_state(up_next_title="Take On Me")
+    def test_upnext_present_when_queue_has_songs(self):
+        state = _playing_state(queue_preview=(_SONG_A,))
         result = compute_overlays(state)
         assert OSD_UPNEXT in result
 
-    def test_upnext_absent_when_no_title(self):
-        state = _playing_state(up_next_title=None)
+    def test_upnext_absent_when_queue_empty(self):
+        state = _playing_state(queue_preview=())
         result = compute_overlays(state)
         assert OSD_UPNEXT not in result
 
@@ -153,7 +180,9 @@ class TestComputeOverlaysPlaying:
     def test_paused_mode_produces_same_overlays_as_playing(self):
         playing = _playing_state(mode=ScreenMode.PLAYING)
         paused = _playing_state(mode=ScreenMode.PAUSED)
-        assert set(compute_overlays(playing).keys()) == set(compute_overlays(paused).keys())
+        assert set(compute_overlays(playing).keys()) == set(
+            compute_overlays(paused).keys()
+        )
 
     def test_nowplaying_text_contains_title(self):
         state = _playing_state(now_playing_title="Bohemian Rhapsody")
@@ -179,17 +208,19 @@ class TestComputeOverlaysPlaying:
     def test_timecode_excludes_vocals_when_not_dual_stem(self):
         state = _playing_state(dual_stem=False)
         result = compute_overlays(state)
-        assert "Vocals:" not in result[OSD_TIMECODE].text
+        assert "🗣️" not in result[OSD_TIMECODE].text
 
     def test_timecode_includes_vocals_pct_when_dual_stem(self):
         state = _playing_state(dual_stem=True, vocal_volume=0.4)
         result = compute_overlays(state)
-        assert "Vocals: 40%" in result[OSD_TIMECODE].text
+        assert "🗣️" in result[OSD_TIMECODE].text
+        assert "40%" in result[OSD_TIMECODE].text
 
     def test_timecode_vocals_zero_pct(self):
         state = _playing_state(dual_stem=True, vocal_volume=0.0)
         result = compute_overlays(state)
-        assert "Vocals: 0%" in result[OSD_TIMECODE].text
+        assert "🗣️" in result[OSD_TIMECODE].text
+        assert "0%" in result[OSD_TIMECODE].text
 
 
 # ── render_ass ─────────────────────────────────────────────────────────────────
@@ -250,11 +281,13 @@ class TestOverlayManagerDiff:
     def test_mode_change_adds_playing_overlays(self):
         mpv = _mock_mpv()
         manager = OverlayManager(mpv)
-        manager.apply(_idle_state())
+        # IDLE state with queue items (produces QUEUE_PREVIEW)
+        manager.apply(_idle_state(queue_preview=(_SONG_A,)))
         mpv.osd_overlay.reset_mock()
         mpv.clear_osd.reset_mock()
 
-        manager.apply(_playing_state())
+        # Transition to PLAYING — now-playing + timecode + upnext appear
+        manager.apply(_playing_state(queue_preview=(_SONG_A,)))
         sent_ids = {c.args[0] for c in mpv.osd_overlay.call_args_list}
         assert OSD_NOWPLAYING in sent_ids
         assert OSD_TIMECODE in sent_ids
@@ -262,10 +295,11 @@ class TestOverlayManagerDiff:
     def test_mode_change_clears_removed_overlays(self):
         mpv = _mock_mpv()
         manager = OverlayManager(mpv)
-        manager.apply(_playing_state())
+        manager.apply(_playing_state(queue_preview=(_SONG_A,)))
         mpv.clear_osd.reset_mock()
 
-        manager.apply(_idle_state())
+        # Transition to IDLE — playing overlays cleared
+        manager.apply(_idle_state(queue_preview=(_SONG_A,)))
         cleared_ids = {c.args[0] for c in mpv.clear_osd.call_args_list}
         assert OSD_NOWPLAYING in cleared_ids
         assert OSD_TIMECODE in cleared_ids
@@ -328,6 +362,6 @@ class TestOverlayManagerDiff:
         mpv = _mock_mpv()
         manager = OverlayManager(mpv)
         manager.apply(_idle_state(hide_url=False))
-        mpv.remove_qr_bitmap = MagicMock()
+        mpv.remove_qr_bitmap.reset_mock()
         manager.apply(_idle_state(hide_url=True))
         mpv.remove_qr_bitmap.assert_called_once()
