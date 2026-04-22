@@ -1,254 +1,461 @@
 {% extends 'base.html' %}
 
 {% block header %}
-<div>
-    <h1 class>{% block title %}{% trans %}Processing{% endtrans %}{% endblock %}</h1>
-    <div id="pipeline-legend" class="is-size-7 has-text-grey">
-        <span class="mr-3"><i class="icon icon-down-big"></i> {% trans %}Download{% endtrans %}</span>
-        <span class="mr-3"><i class="icon icon-music"></i> {% trans %}Separation{% endtrans %}</span>
-        <span class="mr-2">&bull;</span>
-        <span class="mr-3 step-pending">{% trans %}pending{% endtrans %}</span>
-        <span class="mr-3 step-active">{% trans %}active{% endtrans %}</span>
-        <span class="mr-3 step-complete">{% trans %}complete{% endtrans %}</span>
-        <span class="mr-3 step-cancelling">{% trans %}cancelling{% endtrans %}</span>
-        <span class="step-error">{% trans %}error{% endtrans %}</span>
-    </div>
-</div>
+<h1 class>{% block title %}{% trans %}Processing{% endtrans %}{% endblock %}</h1>
 {% endblock %}
 
 {% block content %}
 
 <table class="table is-striped is-fullwidth" id="pipeline-table">
-    <thead>
-        <tr>
-            <th style="width: 50%;">{% trans %}Title{% endtrans %}</th>
-            <th style="width: 50%;"></th>
-        </tr>
-    </thead>
-    <tbody id="pipeline-body">
-    </tbody>
+  <thead>
+    <tr>
+      <th>{% trans %}Title{% endtrans %}</th>
+      <th class="col-icon-download"><span class="state-box"><i class="icon icon-down-big"></i></span></th>
+      <th class="col-icon-process"><span class="state-box"><i class="icon icon-music"></i></span></th>
+      <th class="col-icon-queue"></th>
+      <th class="col-icon-cancel"></th>
+    </tr>
+  </thead>
+  <tbody id="pipeline-body">
+  </tbody>
 </table>
 
 <p id="pipeline-empty" class="has-text-warning has-text-centered" style="display: none;">
-    {% trans %}No songs in the processing pipeline.{% endtrans %}
+  {% trans %}No songs in the processing pipeline.{% endtrans %}
 </p>
 
 {% endblock %}
 
 {% block scripts %}
 <script>
+// Translations for processing page confirm prompts, injected via window.i18n
+// (see base.html:22-32 and spa-navigation.js:138-140 for the same pattern)
+window.i18n = window.i18n || {};
+// {# MSG: Confirmation dialog when cancelling a pipeline item. SONG_TITLE is replaced with the item title #}
+window.i18n.confirmCancelPipeline = "{{ _('Are you sure you want to cancel SONG_TITLE?') }}";
+// {# MSG: Confirmation dialog when removing a pipeline item. SONG_TITLE is replaced with the item title #}
+window.i18n.confirmRemovePipeline = "{{ _('Are you sure you want to remove SONG_TITLE?') }}";
+
 (function() {
-    'use strict';
+  'use strict';
 
-    var pollInterval = 1000; // 1 second
-    var pollTimer = null;
+  var pollInterval = 1000; // 1 second
+  var pollTimer = null;
 
-    function escape(str) {
-        return encodeURIComponent(str);
+  /* ------------------------------------------------------------------
+     State icon — CSS-spinner-based, replaces old stepClass/pulse system.
+     isCancellingContext turns a completed icon red so the whole row reads
+     as cancelled, not just the cancelling spinner column.
+     ------------------------------------------------------------------ */
+
+  function stateIcon(status, isCancellingContext) {
+    var inner = '';
+    // waiting: treat same as pending (clock icon)
+    if (status === 'pending' || status === 'waiting') inner = '<i class="icon icon-clock"></i>';
+    else if (status === 'active') inner = '<span class="spinner-css"></span>';
+    else if (status === 'complete') inner = '<i class="icon icon-ok ' + (isCancellingContext ? 'icon-state-cancelling' : 'icon-state-ok') + '"></i>';
+    else if (status === 'error') inner = '<i class="icon icon-cancel-circled-1 icon-state-error"></i>';
+    else if (status === 'cancelling') inner = '<span class="spinner-css cancelling"></span>';
+    else return '';
+    return '<span class="state-box">' + inner + '</span>';
+  }
+
+  /* ------------------------------------------------------------------
+     Queue cell — green + icon (matches files.html/queue.html convention)
+     ------------------------------------------------------------------ */
+
+  function queueCell(item) {
+    if (item.download_status === 'complete' && item.processing_status === 'complete' && item.song_path) {
+      var label = "{% trans %}Queue{% endtrans %}";
+      return '<span class="state-box"><a href="#" class="pipeline-action-btn pipeline-enqueue-btn" data-id="' + item.id + '" title="' + label + '" aria-label="' + label + '">'
+        + '<i class="icon icon-list-add icon-action-queue"></i></a></span>';
+    }
+    return '';
+  }
+
+  /* ------------------------------------------------------------------
+     Cancel/Remove cell
+     Note on 'waiting' tolerance: cancelCell checks download_status first.
+     When download is active/pending the cancel button shows. The 'waiting'
+     status only appears on processing_status while download is still in
+     flight, so this implicit dependency means waiting items are handled
+     by the download_status branches below.
+     ------------------------------------------------------------------ */
+
+  function cancelCell(item) {
+    // No action while cancelling is in progress
+    if (item.processing_status === 'cancelling') return '';
+
+    // Cancel for in-progress items
+    if (item.download_status === 'active' || item.download_status === 'pending' ||
+        item.processing_status === 'active' || item.processing_status === 'pending') {
+      var label = "{% trans %}Cancel{% endtrans %}";
+      return '<span class="state-box"><a href="#" class="pipeline-action-btn pipeline-cancel-btn" data-id="' + item.id + '" title="' + label + '" aria-label="' + label + '">'
+        + '<i class="icon icon-cancel-circled-1 icon-action-cancel"></i></a></span>';
     }
 
-    function fetchStatus() {
-        if ($('#pipeline-table').length === 0) {
-            return; // Left the page
-        }
-        $.get('{{ url_for("processing.processing_status") }}', function(data) {
-            var items = JSON.parse(data);
-            renderItems(items);
-        });
-        // Keep polling
-        pollTimer = setTimeout(fetchStatus, pollInterval);
+    // Remove for completed/errored items
+    if (item.download_status === 'complete' || item.download_status === 'error' ||
+        item.processing_status === 'complete' || item.processing_status === 'error') {
+      var label = "{% trans %}Remove{% endtrans %}";
+      return '<span class="state-box"><a href="#" class="pipeline-action-btn pipeline-remove-btn" data-id="' + item.id + '" title="' + label + '" aria-label="' + label + '">'
+        + '<i class="icon icon-trash-empty icon-action-remove"></i></a></span>';
+    }
+    return '';
+  }
+
+  /* ------------------------------------------------------------------
+     Progress label — replaces download progress percentage
+     ------------------------------------------------------------------ */
+
+  function progressLabel(item) {
+    if (item.download_status === 'cancelling' || item.processing_status === 'cancelling')
+      return '{% trans %}cancelling{% endtrans %}';
+    if (item.download_status === 'active')
+      return '{% trans %}downloading{% endtrans %}';
+    if (item.processing_status === 'active')
+      return '{% trans %}separating{% endtrans %}';
+    return '';
+  }
+
+  /* ------------------------------------------------------------------
+     Render a single row
+     ------------------------------------------------------------------ */
+
+  function renderRow(item) {
+    var label = progressLabel(item);
+    var isCancelling = item.download_status === 'cancelling' || item.processing_status === 'cancelling';
+    var labelClass = isCancelling ? 'progress-label cancelling' : 'progress-label';
+    var labelHtml = label
+      ? '<span class="' + labelClass + '">' + label + '</span>'
+      : '';
+
+    var titleHtml = '<td class="col-title">';
+    titleHtml += '<div class="title-row">';
+    titleHtml += '<span class="is-truncated" title="' + escapeHtml(item.title) + '">' + escapeHtml(item.title) + '</span>';
+    titleHtml += labelHtml;
+    titleHtml += '</div>';
+
+    // Error message — show for both download errors and processing/separation errors
+    if (item.error_message && (item.download_status === 'error' || item.processing_status === 'error')) {
+      titleHtml += '<span class="is-size-7 has-text-danger" title="' + escapeHtml(item.error_message) + '">'
+        + escapeHtml(item.error_message.substring(0, 80)) + '</span>';
     }
 
-    function renderItems(items) {
-        var html = '';
-        items.forEach(function(item) {
-            html += renderRow(item);
-        });
-        $('#pipeline-body').html(html);
+    titleHtml += '</td>';
 
-        if (items.length === 0) {
-            $('#pipeline-empty').show();
-            $('#pipeline-table').hide();
-        } else {
-            $('#pipeline-empty').hide();
-            $('#pipeline-table').show();
-        }
-    }
+    // State key for keyed row updates — includes every field that changes the
+    // rendered row so unchanged rows are preserved (avoiding spinner jitter).
+    // download_progress is deliberately excluded since it's no longer rendered.
+    var stateKey = item.download_status + '|' + item.processing_status
+      + '|' + (item.song_path || '') + '|' + (item.error_message || '');
 
-    function renderRow(item) {
-        var dlClass = stepClass(item.download_status, 'download');
-        var sepClass = stepClass(item.processing_status, 'separation');
-        var progressHtml = '';
-        if (item.download_status === 'active' && item.download_progress > 0) {
-            progressHtml = '<span class="is-size-7 has-text-grey ml-1">' + Math.round(item.download_progress) + '%</span>';
-        }
+    return '<tr data-id="' + item.id + '" data-state-key="' + escapeHtml(stateKey) + '" data-proc-status="' + item.processing_status + '">'
+      + titleHtml
+      + '<td class="col-icon-download">' + stateIcon(item.download_status, isCancelling) + '</td>'
+      + '<td class="col-icon-process">' + stateIcon(item.processing_status, isCancelling) + '</td>'
+      + '<td class="col-icon-queue">' + queueCell(item) + '</td>'
+      + '<td class="col-icon-cancel">' + cancelCell(item) + '</td>'
+      + '</tr>';
+  }
 
-        var actionHtml = actionButton(item);
+  /* ------------------------------------------------------------------
+     Keyed row updates — compare data-state-key instead of replacing
+     the entire tbody innerHTML, so CSS-animated spinners don't restart.
+     ------------------------------------------------------------------ */
 
-        var titleHtml = '<td style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 0.75rem; vertical-align: middle;">';
-        titleHtml += '<span class="is-truncated" title="' + escapeHtml(item.title) + '">' + escapeHtml(item.title) + '</span>';
-        if (item.error_message && item.download_status === 'error') {
-            titleHtml += '<br><span class="is-size-7 has-text-danger" title="' + escapeHtml(item.error_message) + '">' + escapeHtml(item.error_message.substring(0, 80)) + '</span>';
-        }
-        titleHtml += '</td>';
-
-        var iconHtml = '<td style="vertical-align: middle;">';
-        iconHtml += '<div style="display: flex; align-items: center; gap: 0.25rem; justify-content: flex-end;">';
-        iconHtml += '<i class="icon icon-down-big ' + dlClass + '" title="Download: ' + item.download_status + '"></i>';
-        iconHtml += '<i class="icon icon-music ' + sepClass + '" title="Separation: ' + item.processing_status + '"></i>';
-        if (progressHtml) {
-            iconHtml += progressHtml;
-        }
-        if (actionHtml) {
-            iconHtml += actionHtml;
-        }
-        iconHtml += '</div></td>';
-
-        return '<tr data-id="' + item.id + '">' + titleHtml + iconHtml + '</tr>';
-    }
-
-    function stepClass(status, type) {
-        // status: pending | active | complete | error | waiting | cancelling
-        if (status === 'active') return 'step-active';
-        if (status === 'complete') return 'step-complete';
-        if (status === 'error') return 'step-error';
-        if (status === 'cancelling') return 'step-cancelling';
-        return 'step-pending';
-    }
-
-    function actionButton(item) {
-        // No action while cancellation is in progress
-        if (item.processing_status === 'cancelling') {
-            return '';
-        }
-        // Cancel for in-progress items
-        if (item.download_status === 'active' || item.download_status === 'pending' ||
-            item.processing_status === 'active' || item.processing_status === 'pending') {
-            return '<a href="#" class="pipeline-cancel-btn ml-1" data-id="' + item.id + '" title="{% trans %}Cancel{% endtrans %}"><i class="icon icon-cancel-circled-1 has-text-danger"></i></a>';
-        }
-        // Enqueue for completed items
-        if (item.download_status === 'complete' && item.processing_status === 'complete' && item.song_path) {
-            return '<a href="#" class="pipeline-enqueue-btn ml-1" data-id="' + item.id + '" title="{% trans %}Queue{% endtrans %}"><i class="icon icon-list-add has-text-success"></i></a>';
-        }
-        // Remove for completed/errored items
-        if (item.download_status === 'complete' || item.download_status === 'error' ||
-            item.processing_status === 'complete' || item.processing_status === 'error') {
-            return '<a href="#" class="pipeline-remove-btn ml-1" data-id="' + item.id + '" title="{% trans %}Remove{% endtrans %}"><i class="icon icon-trash-empty has-text-grey"></i></a>';
-        }
-        return '';
-    }
-
-    function escapeHtml(str) {
-        if (!str) return '';
-        var div = document.createElement('div');
-        div.appendChild(document.createTextNode(str));
-        return div.innerHTML;
-    }
-
-    function cancelItem(itemId) {
-        $.ajax({
-            url: '{{ url_for("processing.cancel_item", item_id="ITEM_ID") }}'.replace('ITEM_ID', itemId),
-            type: 'POST'
-        }).done(function() {
-            fetchStatus(); // Refresh immediately
-        });
-    }
-
-    function enqueueItem(itemId) {
-        $.ajax({
-            url: '{{ url_for("processing.enqueue_item", item_id="ITEM_ID") }}'.replace('ITEM_ID', itemId),
-            type: 'POST'
-        }).done(function() {
-            fetchStatus(); // Refresh immediately
-        });
-    }
-
-    function removeItem(itemId) {
-        $.ajax({
-            url: '{{ url_for("processing.remove_item", item_id="ITEM_ID") }}'.replace('ITEM_ID', itemId),
-            type: 'POST'
-        }).done(function() {
-            fetchStatus(); // Refresh immediately
-        });
-    }
-
-    // Event delegation for action buttons
-    $(document).on('click', '.pipeline-cancel-btn', function(e) {
-        e.preventDefault();
-        cancelItem($(this).data('id'));
+  function renderItems(items) {
+    var seen = {};
+    var $body = $('#pipeline-body');
+    items.slice().reverse().forEach(function(item) {
+      seen[item.id] = true;
+      var $existing = $body.find('tr[data-id="' + item.id + '"]');
+      var currKey = item.download_status + '|' + item.processing_status
+        + '|' + (item.song_path || '') + '|' + (item.error_message || '');
+      if ($existing.length === 0) {
+        $body.append(renderRow(item));
+      } else if ($existing.attr('data-state-key') !== currKey) {
+        $existing.replaceWith(renderRow(item));
+      }
     });
 
-    $(document).on('click', '.pipeline-enqueue-btn', function(e) {
-        e.preventDefault();
-        enqueueItem($(this).data('id'));
+    // Remove rows whose items are gone from the payload
+    $body.find('tr').each(function() {
+      var id = $(this).attr('data-id');
+      if (id && !seen[id] && !$(this).hasClass('is-fading')) $(this).remove();
     });
 
-    $(document).on('click', '.pipeline-remove-btn', function(e) {
-        e.preventDefault();
-        removeItem($(this).data('id'));
-    });
-
-    // Socket listeners for download activity trigger refresh
-    if (typeof window.socket !== 'undefined') {
-        window.socket.on('download_started', function() {
-            fetchStatus();
-        });
-        window.socket.on('download_stopped', function() {
-            fetchStatus();
-        });
+    if (items.length === 0) {
+      $('#pipeline-empty').show();
+      $('#pipeline-table').hide();
+    } else {
+      $('#pipeline-empty').hide();
+      $('#pipeline-table').show();
     }
+  }
 
-    // Start polling
-    $(function() {
-        fetchStatus();
-    });
+  /* ------------------------------------------------------------------
+     Optimistic-UI fade
+     ------------------------------------------------------------------ */
 
-    // Cleanup on page hide
-    window.addEventListener('beforeunload', function() {
-        if (pollTimer) {
-            clearTimeout(pollTimer);
-        }
+  function fadeAndRemove($row) {
+    $row.addClass('is-fading').fadeOut(1000, function() { $(this).remove(); });
+  }
+
+  /* ------------------------------------------------------------------
+     AJAX helpers
+     ------------------------------------------------------------------ */
+
+  function fetchStatus() {
+    if ($('#pipeline-table').length === 0) {
+      return; // Left the page
+    }
+    $.get('{{ url_for("processing.processing_status") }}', function(data) {
+      var items = JSON.parse(data);
+      renderItems(items);
     });
+    // Keep polling
+    pollTimer = setTimeout(fetchStatus, pollInterval);
+  }
+
+  function enqueueItem(itemId) {
+    $.ajax({
+      url: '{{ url_for("processing.enqueue_item", item_id="ITEM_ID") }}'.replace('ITEM_ID', itemId),
+      type: 'POST'
+    }).done(function() {
+      fadeAndRemove($('tr[data-id="' + itemId + '"]'));
+      fetchStatus();
+    });
+  }
+
+  function removeItem(itemId) {
+    $.ajax({
+      url: '{{ url_for("processing.remove_item", item_id="ITEM_ID") }}'.replace('ITEM_ID', itemId),
+      type: 'POST'
+    }).done(function() {
+      fadeAndRemove($('tr[data-id="' + itemId + '"]'));
+      fetchStatus();
+    });
+  }
+
+  /* ------------------------------------------------------------------
+     Event delegation — action buttons with confirmation prompts
+     ------------------------------------------------------------------ */
+
+  // Cancel — confirm via window.confirm(), then branch fade on processing_status.
+  // When download is active/pending, cancel() removes the item synchronously so
+  // fading is safe. When separation is active, cancel() is async (item stays in
+  // tracker with cancelling=True), so we skip the fade and let the poll update
+  // the row to show the cancelling spinner.
+  $(document).on('click', '.pipeline-cancel-btn', function(e) {
+    e.preventDefault();
+    var id = $(this).data('id');
+    var $row = $('tr[data-id="' + id + '"]');
+    var title = $row.find('.is-truncated').text();
+    var msg = (window.i18n && window.i18n.confirmCancelPipeline)
+      ? window.i18n.confirmCancelPipeline.replace('SONG_TITLE', title)
+      : 'Are you sure you want to cancel "' + title + '"?';
+    if (!window.confirm(msg)) return;
+
+    var procStatus = $row.attr('data-proc-status');
+    $.ajax({
+      url: '{{ url_for("processing.cancel_item", item_id="ITEM_ID") }}'.replace('ITEM_ID', id),
+      type: 'POST'
+    }).done(function() {
+      if (procStatus !== 'active') {
+        fadeAndRemove($row);
+      }
+      fetchStatus();
+    });
+  });
+
+  // Enqueue — no confirmation needed
+  $(document).on('click', '.pipeline-enqueue-btn', function(e) {
+    e.preventDefault();
+    enqueueItem($(this).data('id'));
+  });
+
+  // Remove — confirm via window.confirm() before acting
+  $(document).on('click', '.pipeline-remove-btn', function(e) {
+    e.preventDefault();
+    var id = $(this).data('id');
+    var $row = $('tr[data-id="' + id + '"]');
+    var title = $row.find('.is-truncated').text();
+    var msg = (window.i18n && window.i18n.confirmRemovePipeline)
+      ? window.i18n.confirmRemovePipeline.replace('SONG_TITLE', title)
+      : 'Are you sure you want to remove "' + title + '"?';
+    if (!window.confirm(msg)) return;
+
+    removeItem(id);
+  });
+
+  /* ------------------------------------------------------------------
+     Utilities
+     ------------------------------------------------------------------ */
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(str));
+    return div.innerHTML;
+  }
+
+  // Socket listeners for download activity trigger refresh
+  if (typeof window.socket !== 'undefined') {
+    window.socket.on('download_started', function() {
+      fetchStatus();
+    });
+    window.socket.on('download_stopped', function() {
+      fetchStatus();
+    });
+  }
+
+  // Start polling
+  $(function() {
+    fetchStatus();
+  });
+
+  // Cleanup on page hide
+  window.addEventListener('beforeunload', function() {
+    if (pollTimer) {
+      clearTimeout(pollTimer);
+    }
+  });
 })();
 </script>
 
 <style>
-    /* Icon step states */
-    .step-pending {
-        color: #666;
-    }
-    .step-active {
-        color: #00d1b2;
-        animation: pulse-teal 1.2s ease-in-out infinite;
-    }
-    .step-complete {
-        color: #00d1b2;
-    }
-    .step-error {
-        color: #f14668;
-    }
-    .step-cancelling {
-        color: #ffb347;
-        animation: pulse-amber 1.2s ease-in-out infinite;
-    }
+/* ==========================================================================
+   CSS custom properties — Bulma 0.9.x doesn't define --bulma-* vars,
+   so we provide concrete values here matching the project theme.
+   ========================================================================== */
+:root {
+  --bulma-grey: #b5b5b5;
+  --bulma-grey-dark: #4a4a4a;
+  --bulma-danger: #f14668;
+  --bulma-success: #48c774;
 
-    @keyframes pulse-amber {
-        0%, 100% { color: #666; }
-        50% { color: #ffb347; }
-    }
+  /* Icon column sizes */
+  --icon-col-download: 1.75rem;
+  --icon-col-process: 1.75rem;
+  --icon-col-queue: 2rem;
+  --icon-col-cancel: 2rem;
 
-    @keyframes pulse-teal {
-        0%, 100% { color: #666; }
-        50% { color: #00d1b2; }
-    }
+  /* Icon sizes */
+  --spinner-size: 0.975em;
+  --spinner-speed: 2s;
+  --spinner-y-offset: -0.06em;
+  --icon-size-clock: 1em;
+  --icon-size-ok: 1em;
+  --icon-size-error: 1.1em;
+  --icon-size-queue: 1.6em;
+  --icon-size-cancel: 1.6em;
+  --icon-size-header: 1.5em;
 
-    /* Truncated text */
-    .is-truncated {
-        display: inline-block;
-        max-width: 100%;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
+  /* Icon colors — mostly grey; only cancelling spinner and action buttons carry color */
+  --icon-color-spinner: var(--bulma-grey);
+  --icon-color-spinner-dim: rgba(181, 181, 181, 0.3); /* 30% of --bulma-grey */
+  --icon-color-cancelling: var(--bulma-danger);
+  --icon-color-clock: var(--bulma-grey);
+  --icon-color-ok: var(--bulma-grey);
+  --icon-color-error: var(--bulma-grey);
+  --icon-color-queue: var(--bulma-success);
+  --icon-color-cancel: var(--bulma-danger);
+  --icon-color-remove: var(--bulma-danger);
+  --icon-color-header: inherit;
+
+  /* Text sizes */
+  --text-size-progress: 0.75rem;
+
+  /* Text colors */
+  --text-color-progress: var(--bulma-grey);
+  --text-color-cancelling: var(--bulma-danger);
+}
+
+/* Fixed-width icon columns */
+.col-icon-download { width: var(--icon-col-download); text-align: center; vertical-align: middle; padding: 0; }
+.col-icon-process { width: var(--icon-col-process); text-align: center; vertical-align: middle; padding: 0; }
+.col-icon-queue { width: var(--icon-col-queue); text-align: center; vertical-align: middle; padding: 0; }
+.col-icon-cancel { width: var(--icon-col-cancel); text-align: center; vertical-align: middle; padding: 0; }
+
+#pipeline-table th[class^="col-icon"] .icon { color: var(--icon-color-header) !important; font-size: var(--icon-size-header); }
+
+/* Title cell */
+.col-title { vertical-align: middle; }
+.title-row { display: flex; align-items: center; min-width: 0; }
+.title-row .is-truncated { flex: 1 1 auto; min-width: 0; }
+.progress-label { flex: 0 0 auto; margin-left: 0.5em; font-size: var(--text-size-progress); color: var(--text-color-progress); }
+.progress-label.cancelling { color: var(--icon-color-cancelling); }
+
+/* Strip Bulma's cell padding for compact icon columns */
+#pipeline-table th, #pipeline-table td { padding: 0; vertical-align: middle; }
+#pipeline-table td:first-child { padding: 0.5em 0.25rem 0.5em 0; }
+
+/* Common wrapper for state icons — fills full cell width so content centers
+   against the same axis as the header icon above it. */
+.state-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  line-height: 1;
+}
+
+/* CSS-generated rotating spinner */
+.spinner-css {
+  display: inline-block;
+  width: var(--spinner-size);
+  height: var(--spinner-size);
+  border: calc(var(--spinner-size) * 0.13) solid var(--icon-color-spinner-dim);
+  border-top-color: var(--icon-color-spinner);
+  border-right-color: var(--icon-color-spinner);
+  border-radius: 50%;
+  animation: spin var(--spinner-speed) linear infinite;
+  margin-top: var(--spinner-y-offset);
+}
+
+/* Cancelling spinner — red/danger color */
+.spinner-css.cancelling {
+  border-top-color: var(--icon-color-cancelling);
+  border-right-color: var(--icon-color-cancelling);
+}
+
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Fontello icons inside .state-box */
+.state-box > .icon,
+.state-box > a > .icon { line-height: 1; margin: 0; }
+.state-box > .icon.icon-clock,
+.state-box > a > .icon.icon-clock { font-size: var(--icon-size-clock); color: var(--icon-color-clock); }
+.state-box > .icon.icon-ok,
+.state-box > a > .icon.icon-ok { font-size: var(--icon-size-ok); }
+.state-box > .icon.icon-cancel-circled-1,
+.state-box > a > .icon.icon-cancel-circled-1.icon-state-error { font-size: var(--icon-size-error); }
+.state-box > a > .icon.icon-list-add.icon-action-queue { font-size: var(--icon-size-queue); }
+.state-box > a > .icon.icon-cancel-circled-1.icon-action-cancel,
+.state-box > a > .icon.icon-trash-empty { font-size: var(--icon-size-cancel); }
+
+/* State icon colors */
+.icon-state-ok { color: var(--icon-color-ok); }
+.icon-state-error { color: var(--icon-color-error); }
+.icon-state-cancelling { color: var(--icon-color-cancelling); }
+
+/* Action icons */
+.pipeline-action-btn { text-decoration: none; }
+.icon-action-queue { color: var(--icon-color-queue); }
+.icon-action-cancel { color: var(--icon-color-cancel); }
+.icon-action-remove { color: var(--icon-color-remove); }
+
+/* Truncated text */
+.is-truncated {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 </style>
 {% endblock %}
