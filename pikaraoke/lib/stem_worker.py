@@ -13,7 +13,7 @@ from pathlib import Path
 
 # Model for audio-separator: MelBand Roformer Karaoke — best single-model
 # vocal clarity with complementary 2-stem output.
-MODEL_NAME = "mel_band_roformer_karaoke_aufr33_viperx_sdr_10.1956.ckpt"
+MODEL_NAME = "vocals_mel_band_roformer.ckpt"
 
 # Where audio-separator stores downloaded models (~400 MB on first run).
 MODEL_DIR = "./audio-separator/models"
@@ -266,12 +266,18 @@ def _separate_in_worker(
     for p in output_paths:
         full_path = Path(tmp_dir) / Path(p).name
         lower = full_path.name.lower()
-        # "no vocal" / "no_vocal" must be excluded from the vocals match
-        no_vocal = "no vocal" in lower or "no_vocal" in lower
-        if "vocal" in lower and not no_vocal and "instrumental" not in lower:
+        # "(vocals)" and "(other)" tags from roformer-style models
+        if "(vocals)" in lower:
             vocals_wav = full_path
-        elif "instrumental" in lower or no_vocal:
+        elif "(other)" in lower:
             instrumental_wav = full_path
+        else:
+            # Fallback for models that use "instrumental" / "no vocal" naming
+            no_vocal = "no vocal" in lower or "no_vocal" in lower
+            if "vocal" in lower and not no_vocal and "instrumental" not in lower:
+                vocals_wav = full_path
+            elif "instrumental" in lower or no_vocal:
+                instrumental_wav = full_path
 
     if not vocals_wav or not instrumental_wav:
         raise RuntimeError(f"Could not identify vocal/instrumental stems in output: {output_paths}")
