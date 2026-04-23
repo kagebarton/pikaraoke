@@ -242,12 +242,18 @@ window.i18n.confirmRemovePipeline = "{{ _('Are you sure you want to remove SONG_
      Event delegation — action buttons with confirmation prompts
      ------------------------------------------------------------------ */
 
+  // Remove any previously-registered handlers before rebinding. The SPA
+  // navigation in spa-navigation.js re-executes this inline script on every
+  // visit; without .off() the document-delegated handlers accumulate and a
+  // single click fires N AJAX calls / N confirm dialogs after N visits.
+  $(document).off('click.processing');
+
   // Cancel — confirm via window.confirm(), then branch fade on processing_status.
   // When download is active/pending, cancel() removes the item synchronously so
   // fading is safe. When separation is active, cancel() is async (item stays in
   // tracker with cancelling=True), so we skip the fade and let the poll update
   // the row to show the cancelling spinner.
-  $(document).on('click', '.pipeline-cancel-btn', function(e) {
+  $(document).on('click.processing', '.pipeline-cancel-btn', function(e) {
     e.preventDefault();
     var id = $(this).data('id');
     var $row = $('tr[data-id="' + id + '"]');
@@ -270,13 +276,13 @@ window.i18n.confirmRemovePipeline = "{{ _('Are you sure you want to remove SONG_
   });
 
   // Enqueue — no confirmation needed
-  $(document).on('click', '.pipeline-enqueue-btn', function(e) {
+  $(document).on('click.processing', '.pipeline-enqueue-btn', function(e) {
     e.preventDefault();
     enqueueItem($(this).data('id'));
   });
 
   // Remove — confirm via window.confirm() before acting
-  $(document).on('click', '.pipeline-remove-btn', function(e) {
+  $(document).on('click.processing', '.pipeline-remove-btn', function(e) {
     e.preventDefault();
     var id = $(this).data('id');
     var $row = $('tr[data-id="' + id + '"]');
@@ -300,8 +306,11 @@ window.i18n.confirmRemovePipeline = "{{ _('Are you sure you want to remove SONG_
     return div.innerHTML;
   }
 
-  // Socket listeners for download activity trigger refresh
+  // Socket listeners for download activity trigger refresh. Detach prior
+  // registrations — the SPA re-executes this script each visit.
   if (typeof window.socket !== 'undefined') {
+    window.socket.off('download_started');
+    window.socket.off('download_stopped');
     window.socket.on('download_started', function() {
       fetchStatus();
     });

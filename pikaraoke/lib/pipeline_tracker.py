@@ -187,9 +187,16 @@ class PipelineTracker:
             return True
 
     def remove(self, item_id: str) -> bool:
-        """Remove a completed or errored item from the tracker."""
+        """Remove a completed or errored item from the tracker and delete its file from disk."""
+        song_to_delete: str | None = None
         with self._lock:
-            return self._remove_item(item_id)
+            item = self._find_item(item_id)
+            if item is not None:
+                song_to_delete = item.song_path
+            removed = self._remove_item(item_id)
+        if song_to_delete:
+            self._delete_song(song_to_delete)
+        return removed
 
     # -- Event handlers -----------------------------------------------------
 
@@ -260,7 +267,7 @@ class PipelineTracker:
     # -- Internal helpers ---------------------------------------------------
 
     def _delete_song(self, song_path: str) -> None:
-        """Delete song file from library. Called with _lock held."""
+        """Delete song file from library. Must be called outside _lock."""
         try:
             self._song_manager.delete(song_path)
         except Exception as e:

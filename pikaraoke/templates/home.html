@@ -225,7 +225,10 @@ nowPlayingHtml += `</p>`;
   }
 }
 
-// Listen for playback_position events from server (seeks / polls)
+// SPA navigation re-executes this inline script on every visit, so socket
+// listeners must be detached before rebinding or they fire N times per event
+// after N visits.
+window.socket.off("playback_position");
 window.socket.on("playback_position", function (pos) {
   if (!_seekDragging && _seekDuration > 0) {
     document.getElementById("seek-bar").value = (pos / _seekDuration) * 100;
@@ -357,9 +360,16 @@ $(function () {
   //for first time load of splash screen
   loadNowPlaying();
   //for pushed updates to now playing state
+  window.socket.off("now_playing");
   window.socket.on("now_playing", (np) => handleNowPlaying(np));
 
-  document.addEventListener("visibilitychange", function () {
+  // Replace any previously-registered visibilitychange listener from a prior
+  // SPA visit. Storing the handler on window lets us pass the same reference
+  // to removeEventListener.
+  if (window.homePage_onVisibilityChange) {
+    document.removeEventListener("visibilitychange", window.homePage_onVisibilityChange);
+  }
+  window.homePage_onVisibilityChange = function () {
     console.log("on visibility change");
 
     if (document.visibilityState === "visible") {
@@ -371,7 +381,8 @@ $(function () {
         window.socket.on("now_playing", (np) => handleNowPlaying(np));
       }
     }
-  });
+  };
+  document.addEventListener("visibilitychange", window.homePage_onVisibilityChange);
 });
 </script>
 {% endblock %} {% block header %}

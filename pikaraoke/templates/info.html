@@ -134,6 +134,11 @@
 				});
 			});
 
+			// SPA navigation re-executes this inline script on every visit, so
+			// detach any prior listeners before rebinding.
+			window.socket.off("sync_started");
+			window.socket.off("sync_finished");
+
 			// SocketIO: manage Sync Now button state
 			window.socket.on("sync_started", function() {
 				$("#sync-library-btn").addClass("is-loading").prop("disabled", true);

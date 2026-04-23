@@ -458,8 +458,13 @@
           window.closeNowPlayingOptions();
       });
 
+      // SPA navigation re-executes this inline script on every visit. Remove any
+      // previously-registered handlers via the .queue namespace before rebinding,
+      // otherwise a single click fires N times after N visits.
+      $(document).off('click.queue');
+
       // Queue song options button (for queued songs)
-      $(document).on('click', '.queue-song-options-btn', function(e) {
+      $(document).on('click.queue', '.queue-song-options-btn', function(e) {
           e.preventDefault();
           var $btn = $(this);
           var index = parseInt($btn.data('index'), 10);
@@ -469,13 +474,13 @@
       });
 
       // Now-playing options button
-      $(document).on('click', '.now-playing-options-btn', function(e) {
+      $(document).on('click.queue', '.now-playing-options-btn', function(e) {
           e.preventDefault();
           openNowPlayingOptions();
       });
 
       // Playback controls handler (still used for any inline buttons if needed)
-      $(document).on('click', '.playback-btn', function(e) {
+      $(document).on('click.queue', '.playback-btn', function(e) {
           e.preventDefault();
           var action = $(this).data('action');
           $.get('/' + action);

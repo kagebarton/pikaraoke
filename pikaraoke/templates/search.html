@@ -402,7 +402,13 @@
 		i = -1;
 		changeImage();
 
-		$(document).on("change", "#search_result_selector", function () {
+		// Remove any previously-registered handlers before rebinding. The SPA
+		// navigation in spa-navigation.js re-executes this inline script on every
+		// visit; without .off() the document-delegated handlers accumulate and a
+		// single download click fires N AJAX calls, creating duplicate pipeline rows.
+		$(document).off(".search");
+
+		$(document).on("change.search", "#search_result_selector", function () {
 			var url = $("#search_result_selector").val();
 			$("#youtube-link").attr("href", url);
 			$("#youtube-link").text(url);
@@ -412,7 +418,13 @@
 		$("#youtube-thumb").click(function (e) {
 			changeImage();
 		});
-		setInterval(function () {
+		// SPA navigation re-executes this inline script on every visit; clear any
+		// prior interval so cycling speed stays constant and old intervals don't
+		// leak (they keep firing forever since beforeunload doesn't fire in SPA).
+		if (window.searchPage_thumbInterval) {
+			clearInterval(window.searchPage_thumbInterval);
+		}
+		window.searchPage_thumbInterval = setInterval(function () {
 			$("#youtube-thumb").trigger("click");
 		}, 2000);
 
@@ -518,10 +530,10 @@
 			});
 		}
 
-		$(document).on("click", ".search_result_items_enqueue", function () {
+		$(document).on("click.search", ".search_result_items_enqueue", function () {
 			enqueueLocalSong($(this).closest("li").attr("data-file-path"), this);
 		});
-		$(document).on("click", ".search_result_items_download", function () {
+		$(document).on("click.search", ".search_result_items_download", function () {
 			var $item = $(this).closest("li");
 			downloadSong($item.attr("value"), $item.attr("data-ytTitle"), this);
 		});
