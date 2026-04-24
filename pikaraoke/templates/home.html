@@ -45,6 +45,7 @@
 {% block scripts %}
 <script>
 var volume = {{ volume|default(0.85) }};
+var isAdmin = {{ admin | tojson }};
 
 // Per-key debounce for step buttons
 var _stepTimers = {};
@@ -141,7 +142,9 @@ getSemitonesLabel(np.now_playing_transpose) +
 nowPlayingHtml += `</p>`;
 
     $("#now-playing").html(nowPlayingHtml);
-    $(".control-box").show();
+    if (isAdmin || Cookies.get("user") === np.now_playing_user) {
+      $(".control-box").show();
+    }
   } else {
     // {# MSG: Message which shows in the "Now Playing" section when there is no song currently playing #}
     $("#now-playing").html("{{ _('Nothing is playing right now.') }}");
@@ -198,16 +201,14 @@ nowPlayingHtml += `</p>`;
     $("#subtitle-delay-section").hide();
   }
 
-  // Seek bar (admin-only elements)
+  // Seek bar
   _seekDuration = np.now_playing_duration || 0;
-  var timeTotal = document.getElementById("time-total");
-  var timeElapsed = document.getElementById("time-elapsed");
-  var seekBar = document.getElementById("seek-bar");
-  if (timeTotal) timeTotal.innerHTML = fmtTime(_seekDuration);
-  if (seekBar && !_seekDragging && _seekDuration > 0) {
+  document.getElementById("time-total").innerHTML = fmtTime(_seekDuration);
+  if (!_seekDragging && _seekDuration > 0) {
+    var seekBar = document.getElementById("seek-bar");
     seekBar.value = ((np.now_playing_position || 0) / _seekDuration) * 100;
   }
-  if (timeElapsed) timeElapsed.innerHTML = fmtTime(np.now_playing_position || 0);
+  document.getElementById("time-elapsed").innerHTML = fmtTime(np.now_playing_position || 0);
 
   // set the volume slider to the current volume
   if (np.volume != volume) {
@@ -232,12 +233,10 @@ nowPlayingHtml += `</p>`;
 // after N visits.
 window.socket.off("playback_position");
 window.socket.on("playback_position", function (pos) {
-  var seekBar = document.getElementById("seek-bar");
-  var timeElapsed = document.getElementById("time-elapsed");
-  if (seekBar && !_seekDragging && _seekDuration > 0) {
-    seekBar.value = (pos / _seekDuration) * 100;
+  if (!_seekDragging && _seekDuration > 0) {
+    document.getElementById("seek-bar").value = (pos / _seekDuration) * 100;
   }
-  if (timeElapsed) timeElapsed.innerHTML = fmtTime(pos);
+  document.getElementById("time-elapsed").innerHTML = fmtTime(pos);
 });
 
 $(function () {
@@ -292,20 +291,18 @@ $(function () {
     };
   }
 
-  // Seek bar handlers (admin-only)
+  // Seek bar handlers
   var seekBar = document.getElementById("seek-bar");
-  if (seekBar) {
-    seekBar.addEventListener("input", function () { _seekDragging = true; });
-    seekBar.addEventListener("change", function () {
-      var pos = (seekBar.value / 100) * _seekDuration;
-      // Hold the drag-lock until *after* the seek confirms AND a small grace
-      // window passes, so a stale playback_position event in flight cannot
-      // snap the slider back to the pre-seek position.
-      $.get("/seek/" + pos).always(function () {
-        setTimeout(function () { _seekDragging = false; }, 200);
-      });
+  seekBar.addEventListener("input", function () { _seekDragging = true; });
+  seekBar.addEventListener("change", function () {
+    var pos = (seekBar.value / 100) * _seekDuration;
+    // Hold the drag-lock until *after* the seek confirms AND a small grace
+    // window passes, so a stale playback_position event in flight cannot
+    // snap the slider back to the pre-seek position.
+    $.get("/seek/" + pos).always(function () {
+      setTimeout(function () { _seekDragging = false; }, 200);
     });
-  }
+  });
 
   $("#pause-resume").click(function () {
     $.get("/pause");
@@ -410,7 +407,6 @@ $(function () {
 <p id="up-next" class="has-text-warning"></p>
 <hr />
 
-{% if admin %}
 <div class="has-background-black-bis box control-box" style="max-width: 500px; display: none">
   {# MSG: Title of the box with controls such as pause and skip. #}
   <h4>{% trans %}Player Control{% endtrans %}</h4>
@@ -544,7 +540,6 @@ $(function () {
     <hr />
   </div>
 </div>
-{% endif %}
 
 <div></div>
 {% endblock %}
