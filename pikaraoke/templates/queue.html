@@ -2,8 +2,11 @@
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
 
 <script>
-  // Pass admin status from server to JavaScript
-  var isAdmin = JSON.parse('{{ admin | tojson }}');
+// Pass admin status from server to JavaScript
+var isAdmin = JSON.parse('{{ admin | tojson }}');
+
+// Get current user from cookie for self-service controls
+var currentUser = (typeof getUserCookie === 'function') ? getUserCookie() : null;
 
   // Escape strings for safe use in HTML attributes
   function escape(str) {
@@ -159,13 +162,15 @@
     html += '<span class="is-size-7 has-text-weight-bold has-text-success is-hidden-tablet" style="width: 100%;">' + np.now_playing + '</span>';
     html += '</div></td>';
 
-    if (isAdmin) {
-      html += '<td style="width: ' + COL_WIDTH.options + '; vertical-align: middle; text-align: right;">';
-      html += '<a class="has-text-grey-light is-small is-text now-playing-options-btn" title="{{ _("Options") }}">';
-      html += '<i class="icon-cog is-size-5"></i></a>';
-      html += '</td>';
-    }
-    html += '</tr>';
+  if (isAdmin) {
+    html += '<td style="width: ' + COL_WIDTH.options + '; vertical-align: middle; text-align: right;">';
+    html += '<a class="has-text-grey-light is-small is-text now-playing-options-btn" title="{{ _("Options") }}">';
+    html += '<i class="icon-cog is-size-5"></i></a>';
+    html += '</td>';
+  } else if (currentUser) {
+    html += '<td style="width: ' + COL_WIDTH.options + '; vertical-align: middle; text-align: right;"></td>';
+  }
+  html += '</tr>';
     return html;
   }
 
@@ -289,41 +294,56 @@
   });
 
 
-  // Generate queue row HTML
-  function generateQueueRow(e, index) {
-    var html = '<tr data-index="' + index + '">';
-    html += '<td style="width: ' + COL_WIDTH.number + '; padding: 8px 8px; vertical-align: middle; text-align: center;">' + (index + 1) + '</td>';
+// Generate queue row HTML
+function generateQueueRow(e, index) {
+  var isPaused = !!e.paused;
+  var rowClass = isPaused ? ' class="row-paused"' : '';
+  var html = '<tr data-index="' + index + '"' + rowClass + '>';
+  html += '<td style="width: ' + COL_WIDTH.number + '; padding: 8px 8px; vertical-align: middle; text-align: center;">' + (index + 1) + '</td>';
 
-    if (isAdmin) {
-      html += '<td class="drag-handle" style="width: ' + COL_WIDTH.drag + '; vertical-align: middle; text-align: center; cursor: grab; touch-action: none;" title="{{ _("Drag to reorder") }}">';
-      html += '<i class="icon icon-braille has-text-grey-light"></i>';
-      html += '</td>';
-    }
+  if (isAdmin) {
+    html += '<td class="drag-handle" style="width: ' + COL_WIDTH.drag + '; vertical-align: middle; text-align: center; cursor: grab; touch-action: none;" title="{{ _("Drag to reorder") }}">';
+    html += '<i class="icon icon-braille has-text-grey-light"></i>';
+    html += '</td>';
+  }
 
-    html += '<td style="padding: 8px 10px; vertical-align: middle;">';
-    html += '<div class="is-flex is-flex-wrap-wrap is-align-items-baseline">';
-    html += '<span class="has-text-success">' + e.user + '</span>';
-    html += '<span class="is-hidden-mobile has-text-grey mx-2">&bull;</span>';
-    html += '<span class="has-text-weight-bold is-hidden-mobile">' + e.title + '</span>';
-    html += '<span class="is-size-7 has-text-weight-bold is-hidden-tablet" style="width: 100%;">' + e.title + '</span>';
-    html += '</div></td>';
+  html += '<td style="padding: 8px 10px; vertical-align: middle;">';
+  html += '<div class="is-flex is-flex-wrap-wrap is-align-items-baseline">';
+  html += '<span class="has-text-success">' + e.user + '</span>';
+  html += '<span class="is-hidden-mobile has-text-grey mx-2">&bull;</span>';
+  html += '<span class="has-text-weight-bold is-hidden-mobile">' + e.title + '</span>';
+  html += '<span class="is-size-7 has-text-weight-bold is-hidden-tablet" style="width: 100%;">' + e.title + '</span>';
+  if (isPaused) {
+    html += '<span class="tag is-warning is-light ml-2">{{ _("paused") }}</span>';
+  }
+  html += '</div></td>';
 
-    if (isAdmin) {
+  // Options column: admin gets it always; non-admin gets it if they have a cookie
+  if (isAdmin) {
+    html += '<td style="width: ' + COL_WIDTH.options + '; vertical-align: middle; text-align: right; padding-right: 10px;">';
+    html += '<a class="has-text-grey-light is-small is-text queue-song-options-btn" data-index="' + index + '" data-file="' + escape(e.file) + '" data-title="' + escape(e.title) + '" data-paused="' + (isPaused ? '1' : '0') + '" title="{{ _("Options") }}">';
+    html += '<i class="icon-cog is-size-5"></i></a>';
+    html += '</td>';
+  } else if (currentUser) {
+    if (e.user === currentUser) {
       html += '<td style="width: ' + COL_WIDTH.options + '; vertical-align: middle; text-align: right; padding-right: 10px;">';
-      html += '<a class="has-text-grey-light is-small is-text queue-song-options-btn" data-index="' + index + '" data-file="' + escape(e.file) + '" data-title="' + escape(e.title) + '" title="{{ _("Options") }}">';
+      html += '<a class="has-text-grey-light is-small is-text queue-song-user-btn" data-file="' + escape(e.file) + '" data-title="' + escape(e.title) + '" data-paused="' + (isPaused ? '1' : '0') + '" title="{{ _("Options") }}">';
       html += '<i class="icon-cog is-size-5"></i></a>';
       html += '</td>';
+    } else {
+      html += '<td style="width: ' + COL_WIDTH.options + '; vertical-align: middle; text-align: right; padding-right: 10px;"></td>';
     }
-
-    html += '</tr>';
-    return html;
   }
+
+  html += '</tr>';
+  return html;
+}
 
   window.queuePage_generateHTML = function() {
     var html = "<tbody>";
     var queue = window.queuePageState.queue;
     var np = window.queuePageState.nowPlaying;
-    var colSpan = isAdmin ? 4 : 2;
+    var colSpan = isAdmin ? 4 : (currentUser ? 3 : 2);
 
     if (np && np.now_playing) {
       html += generateNowPlayingRow(np);
@@ -380,36 +400,80 @@
       window.closeSongOptions();
   };
 
-  // Open the modal menu
-  window.openSongOptions = function(index, file, title) {
-      // Store song info for AJAX actions
-      window.currentSongOptions = {
-          index: index,
-          file: file,
-          title: title
-      };
+// Open the modal menu
+window.openSongOptions = function(index, file, title, paused) {
+  // Store song info for AJAX actions
+  window.currentSongOptions = {
+    index: index,
+    file: file,
+    title: title,
+    paused: paused
+  };
 
-      $('#modal-song-title').text(title);
+  $('#modal-song-title').text(title);
 
-      // Reset all options to visible first
-      $('#opt-up, #opt-top, #opt-down, #opt-bottom').show();
+  // Reset all options to visible first
+  $('#opt-up, #opt-top, #opt-down, #opt-bottom, #opt-pause').show();
 
-      // Hide "Up"/"Play Next" if first in queue (index 0)
-      if (index === 0) {
-          $('#opt-up, #opt-top').hide();
-      }
-      // Hide "Down"/"Bottom" if last in queue
-      var queueLen = window.queuePageState.queue.length;
-      if (index >= queueLen - 1) {
-          $('#opt-down, #opt-bottom').hide();
-      }
-
-      $('#song-options-modal').addClass('is-active');
+  // Hide "Up"/"Play Next" if first in queue (index 0)
+  if (index === 0) {
+    $('#opt-up, #opt-top').hide();
+  }
+  // Hide "Down"/"Bottom" if last in queue
+  var queueLen = window.queuePageState.queue.length;
+  if (index >= queueLen - 1) {
+    $('#opt-down, #opt-bottom').hide();
   }
 
-  window.closeSongOptions = function() {
-      $('#song-options-modal').removeClass('is-active');
+  // Update pause label based on current state
+  if (paused) {
+    $('#opt-pause-label').text("{% trans %}Unpause{% endtrans %}");
+  } else {
+    $('#opt-pause-label').text("{% trans %}Pause{% endtrans %}");
   }
+
+  $('#song-options-modal').addClass('is-active');
+}
+
+window.closeSongOptions = function() {
+  $('#song-options-modal').removeClass('is-active');
+}
+
+// User song options modal (for non-admin users)
+window.currentUserSong = { file: '', title: '', paused: false };
+
+window.openUserSongOptions = function(file, title, paused) {
+  window.currentUserSong = { file: file, title: title, paused: paused };
+  $('#user-modal-song-title').text(title);
+  // All .queue-song-user-btn elements belong to the current user — check if every one is paused
+  var btns = $('.queue-song-user-btn');
+  var allPaused = btns.length > 0 && btns.toArray().every(function(btn) {
+    var p = $(btn).data('paused');
+    return p === '1' || p === 1;
+  });
+  $('#user-opt-pause-label').text(allPaused
+    ? "{% trans %}I'm back (unpause){% endtrans %}"
+    : "{% trans %}Pause (I'll be right back){% endtrans %}");
+  $('#user-song-options-modal').addClass('is-active');
+};
+
+window.closeUserSongOptions = function() {
+  $('#user-song-options-modal').removeClass('is-active');
+};
+
+window.executeUserAction = function(action) {
+  var endpoint = action === 'delete' ? '/queue/user/delete' : '/queue/user/pause';
+  $.post(endpoint, {
+    song: window.currentUserSong.file,
+    user: currentUser
+  }).done(function(resp) {
+    var result = JSON.parse(resp);
+    if (!result.success) console.error('User queue action failed:', result.error);
+  }).fail(function(xhr) {
+    console.error('User queue action request failed', xhr.status);
+  });
+  window.closeUserSongOptions();
+};
 
   // Socket listeners setup (same as before)
   // Socket listeners - refresh on queue or now_playing changes
@@ -452,26 +516,38 @@
     window.queuePage_getDownloads();
     window.queuePage_getQueue();
 
-      // Close modals on background click
-      $('.modal-background').click(function() {
-          window.closeSongOptions();
-          window.closeNowPlayingOptions();
-      });
+  // Close modals on background click
+  $('.modal-background').click(function() {
+    window.closeSongOptions();
+    window.closeNowPlayingOptions();
+    window.closeUserSongOptions();
+  });
 
       // SPA navigation re-executes this inline script on every visit. Remove any
       // previously-registered handlers via the .queue namespace before rebinding,
       // otherwise a single click fires N times after N visits.
       $(document).off('click.queue');
 
-      // Queue song options button (for queued songs)
-      $(document).on('click.queue', '.queue-song-options-btn', function(e) {
-          e.preventDefault();
-          var $btn = $(this);
-          var index = parseInt($btn.data('index'), 10);
-          var file = decodeURIComponent($btn.data('file'));
-          var title = decodeURIComponent($btn.data('title'));
-          openSongOptions(index, file, title);
-      });
+  // Queue song options button (for queued songs)
+  $(document).on('click.queue', '.queue-song-options-btn', function(e) {
+    e.preventDefault();
+    var $btn = $(this);
+    var index = parseInt($btn.data('index'), 10);
+    var file = decodeURIComponent($btn.data('file'));
+    var title = decodeURIComponent($btn.data('title'));
+    var paused = $btn.data('paused') === '1' || $btn.data('paused') === 1;
+    openSongOptions(index, file, title, paused);
+  });
+
+  // User song options button (for non-admin users' own songs)
+  $(document).on('click.queue', '.queue-song-user-btn', function(e) {
+    e.preventDefault();
+    var $btn = $(this);
+    var file = decodeURIComponent($btn.data('file'));
+    var title = decodeURIComponent($btn.data('title'));
+    var paused = $btn.data('paused') === '1' || $btn.data('paused') === 1;
+    openUserSongOptions(file, title, paused);
+  });
 
       // Now-playing options button
       $(document).on('click.queue', '.now-playing-options-btn', function(e) {
@@ -498,6 +574,13 @@
 {% endblock %}
 
 {% block content %}
+
+<style>
+.row-paused td { opacity: 0.5; }
+.row-paused .tag { opacity: 1; }
+.row-paused .queue-song-user-btn,
+.row-paused .queue-song-options-btn { opacity: 1; }
+</style>
 
 <table class="table is-striped" id="auto-refresh" style="margin-bottom: 30px">
 </table>
@@ -536,8 +619,12 @@
             {% trans %}Move Down{% endtrans %}
         </a>
         <a id="opt-bottom" class="panel-block py-3" href="#" onclick="executeQueueAction('bottom'); return false;">
-            <span class="icon has-text-info mr-2"><i class="icon-angle-double-down"></i></span>
-            {% trans %}Move to Bottom{% endtrans %}
+          <span class="icon has-text-info mr-2"><i class="icon-angle-double-down"></i></span>
+          {% trans %}Move to Bottom{% endtrans %}
+        </a>
+        <a id="opt-pause" class="panel-block py-3" href="#" onclick="executeQueueAction('pause'); return false;">
+          <span class="icon mr-2"><i class="icon-pause"></i></span>
+          <span id="opt-pause-label">{% trans %}Pause{% endtrans %}</span>
         </a>
         <a id="opt-delete" class="panel-block py-3 has-text-danger" href="#" onclick="executeQueueAction('delete'); return false;">
             <span class="icon mr-2"><i class="icon-trash-empty"></i></span>
@@ -571,6 +658,26 @@
   </div>
 </div>
 {% endif %}
+
+<div class="modal" id="user-song-options-modal">
+  <div class="modal-background"></div>
+  <div class="modal-card" style="width: 90%; max-width: 400px;">
+    <header class="modal-card-head" style="padding: 15px;">
+      <p class="modal-card-title is-size-6" id="user-modal-song-title" style="max-width: 95%">{% trans %}Your Song{% endtrans %}</p>
+      <button class="delete" aria-label="close" onclick="closeUserSongOptions()"></button>
+    </header>
+    <section class="modal-card-body" style="padding: 0;">
+      <a id="user-opt-pause" class="panel-block py-3" href="#" onclick="executeUserAction('pause'); return false;">
+        <span class="icon mr-2"><i class="icon-pause"></i></span>
+        <span id="user-opt-pause-label">{% trans %}Pause (I'll be right back){% endtrans %}</span>
+      </a>
+      <a class="panel-block py-3 has-text-danger" href="#" onclick="executeUserAction('delete'); return false;">
+        <span class="icon mr-2"><i class="icon-trash-empty"></i></span>
+        {% trans %}Remove from Queue{% endtrans %}
+      </a>
+    </section>
+  </div>
+</div>
 
 <div id="downloads-section" style="display:none; margin-top: 30px; border-top: 1px solid #dbdbdb; padding-top: 20px;">
     <h3 class="title is-4">{{ _('Download queue') }}</h3>

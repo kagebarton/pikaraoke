@@ -22,7 +22,8 @@ Pipeline items already carry a `user` field: set by `PipelineItem.__init__` ([pi
 - **Remove (delete) is admin-only.** Once a song finishes processing the remove button is only shown to admins, matching the edit-song page. Non-admins have no path to delete a completed item.
 - **Everyone can still enqueue any completed song.** The `/processing/<item_id>/enqueue` endpoint and its queue button stay open. Explicit per user requirement.
 - **Existing admin cancel/remove endpoints get gated with `is_admin()`.** Currently they have no auth — tightening matches the queue design.
-- **One new user endpoint for cancel only.** Takes `item_id` and `user` in the POST body. Ownership is verified against `PipelineTracker._find_item(item_id).user`. No user remove endpoint is added.
+- **One new user endpoint for cancel only.** Takes `item_id` in the POST body. The user identity is read server-side from the `user` cookie (mirroring how `is_admin()` reads the `admin` cookie) — never trusted from form data. Ownership is verified against `PipelineTracker._find_item(item_id).user`. No user remove endpoint is added.
+- **Route ordering.** Flask/Werkzeug sort routes by specificity so the literal `/processing/user/cancel` should win over `/processing/<item_id>/cancel`, but to remove any doubt register the new user route *before* the existing `<item_id>` routes in the file.
 - **No new modal.** The processing page uses inline action buttons, not a modal. The ownership gate is a single guard at the top of `cancelCell()`.
 
 ## Key Files
@@ -52,11 +53,14 @@ This is the only change to the tracker. No data model change — `user` is alrea
 
 ### 2. `routes/processing.py`
 
-**Imports** — add `request`, `is_admin`, and `_` (for error messages if desired):
+**Imports** — add `request`, `jsonify`, `is_admin`, and `flask_babel` for i18n:
 
 ```python
-from flask import render_template, request
+import flask_babel
+from flask import jsonify, render_template, request
 from pikaraoke.lib.current_app import get_karaoke_instance, is_admin
+
+_ = flask_babel.gettext
 ```
 
 **Pass `admin` to the template** (around [line 22-28](pikaraoke/routes/processing.py#L22-L28)):
@@ -76,32 +80,32 @@ def processing():
     )
 ```
 
-**Gate the existing cancel/remove endpoints with `is_admin()`** (around [line 39-60](pikaraoke/routes/processing.py#L39-L60)):
+**Gate the existing cancel/remove endpoints with `is_admin()`** (around [line 39-60](pikaraoke/routes/processing.py#L39-L60)). Also switch JSON responses to `jsonify()` so `Content-Type: application/json` is set correctly, and wrap user-facing error strings in `_()`:
 
 ```python
 @processing_bp.route("/processing/<item_id>/cancel", methods=["POST"])
 def cancel_item(item_id):
     """Cancel an in-progress download or processing job (admin only)."""
     if not is_admin():
-        return json.dumps({"success": False, "error": "Admin only"}), 403
+        return jsonify({"success": False, "error": _("Admin only")}), 403
     k = get_karaoke_instance()
     success = k.pipeline_tracker.cancel(item_id)
-    return json.dumps({"success": success})
+    return jsonify({"success": success})
 
 
 @processing_bp.route("/processing/<item_id>/remove", methods=["POST"])
 def remove_item(item_id):
     """Remove a completed or errored item from the tracker (admin only)."""
     if not is_admin():
-        return json.dumps({"success": False, "error": "Admin only"}), 403
+        return jsonify({"success": False, "error": _("Admin only")}), 403
     k = get_karaoke_instance()
     success = k.pipeline_tracker.remove(item_id)
-    return json.dumps({"success": success})
+    return jsonify({"success": success})
 ```
 
 `/processing/<item_id>/enqueue` stays open — everyone can queue completed songs.
 
-**Add one new user endpoint** at the bottom of the file:
+**Add one new user endpoint.** Register it *before* the `/processing/<item_id>/...` routes in the file so the literal `user` segment can never be captured as an item_id. The user is read from the `user` cookie server-side — form data is never trusted for identity:
 
 ```python
 @processing_bp.route("/processing/user/cancel", methods=["POST"])
@@ -109,15 +113,17 @@ def user_cancel_item():
     """Let a user cancel their own pipeline item."""
     k = get_karaoke_instance()
     item_id = request.form.get("id", "")
-    user = request.form.get("user", "")
+    user = request.cookies.get("user", "")
+    if not user:
+        return jsonify({"success": False, "error": _("Not owner")}), 403
     owner = k.pipeline_tracker.get_item_user(item_id)
     if owner is None or owner != user:
-        return json.dumps({"success": False, "error": "Not owner"}), 403
+        return jsonify({"success": False, "error": _("Not owner")}), 403
     success = k.pipeline_tracker.cancel(item_id)
-    return json.dumps({"success": success})
+    return jsonify({"success": success})
 ```
 
-No user remove endpoint — remove stays admin-only. Kept as raw `request.form` lookups to match the style of the existing processing routes.
+No user remove endpoint — remove stays admin-only. The `item_id` stays as a raw `request.form.get()` lookup to match the style of the existing processing routes, but identity *must* come from the cookie, not the form.
 
 ### 3. `processing.html`
 
@@ -128,7 +134,7 @@ var isAdmin = {{ admin | tojson }};
 var currentUser = (typeof getUserCookie === 'function') ? getUserCookie() : null;
 ```
 
-**Gate `cancelCell()`** — the function renders both the cancel button (for in-progress items) and the remove button (for completed/errored items). Split the logic so the remove button is admin-only and the cancel button is owner-or-admin (around [line 85](pikaraoke/templates/processing.html#L85)):
+**Gate `cancelCell()`** — the function renders both the cancel button (for in-progress items) and the remove button (for completed/errored items). Split the logic so the remove button is admin-only and the cancel button is owner-or-admin (around [line 85](pikaraoke/templates/processing.html#L85)). The remove-button branch must use the existing compound condition (checks both `download_status` and `processing_status`) so download-error items don't silently lose their remove button:
 
 ```javascript
 function cancelCell(item) {
@@ -137,8 +143,11 @@ function cancelCell(item) {
 
     var isOwner = currentUser && item.user === currentUser;
 
-    // Remove button: admin only (matches edit-song page behaviour)
-    if (item.processing_status === 'complete' || item.processing_status === 'error') {
+    // Remove button: admin only (matches edit-song page behaviour).
+    // Compound condition mirrors the existing implementation — a download-error
+    // item may still have processing_status === 'waiting', so check both.
+    if (item.download_status === 'complete' || item.download_status === 'error' ||
+        item.processing_status === 'complete' || item.processing_status === 'error') {
         if (!isAdmin) return '';
         // ... render remove button unchanged
     }
@@ -173,16 +182,22 @@ $(document).on('click.processing', '.pipeline-cancel-btn', function(e) {
       : {
           url: '{{ url_for("processing.user_cancel_item") }}',
           type: 'POST',
-          data: { id: id, user: currentUser }
+          data: { id: id }
         };
     $.ajax(ajaxOpts).done(function() {
       if (procStatus !== 'active') {
         fadeAndRemove($row);
       }
       fetchStatus();
+    }).fail(function() {
+      // 403 (stale cookie, ownership mismatch) or other failure —
+      // refresh the table so the user sees the item is still there.
+      fetchStatus();
     });
 });
 ```
+
+The form no longer sends `user` — the server reads identity from the `user` cookie.
 
 **`removeItem()` is unchanged** — it already calls the admin-only `/processing/<id>/remove` endpoint. Since non-admins never see the remove button, no branching is needed here.
 
@@ -193,9 +208,12 @@ $(document).on('click.processing', '.pipeline-cancel-btn', function(e) {
 - **`test_processing_routes.py`** (create if absent, or extend existing route tests):
   - Non-admin without matching user cookie gets 403 on `/processing/user/cancel`.
   - Non-admin with matching user cookie successfully cancels their own item via `/processing/user/cancel`.
+  - **Spoof test:** Non-admin POSTs `/processing/user/cancel` with `id=<victim's item>` and a `user=<victim>` *form field* but a `user=<attacker>` *cookie* — expect 403. The server must ignore the form field and use the cookie.
+  - Non-admin with no `user` cookie at all gets 403 on `/processing/user/cancel`.
   - Non-admin hitting the admin `/processing/<id>/cancel` or `/processing/<id>/remove` gets 403.
   - Non-admin can still POST `/processing/<id>/enqueue` (stays open).
   - `get_item_user()` returns the user for a known item and `None` for unknown.
+  - Error responses have `Content-Type: application/json` (via `jsonify()`).
 
 No mocks for the tracker itself — existing tests use real `EventSystem` and `PreferenceManager` per CLAUDE.md.
 
@@ -204,7 +222,8 @@ No mocks for the tracker itself — existing tests use real `EventSystem` and `P
 - [ ] As User A, submit a YouTube URL. Verify cancel button appears on A's row. As User B (different cookie), verify cancel button does NOT appear on A's row.
 - [ ] As User A, cancel A's own item during download. Verify cancellation works, row disappears.
 - [ ] As User A, cancel A's own item during separation. Verify cancelling spinner shows, row eventually disappears.
-- [ ] As User A, attempt to cancel User B's item via direct POST to `/processing/user/cancel` with `id=<B's item>&user=<A's name>`. Verify 403.
+- [ ] As User A, attempt to cancel User B's item via direct POST to `/processing/user/cancel` with `id=<B's item>`. Verify 403 (cookie says A, item owner is B).
+- [ ] **Spoof attempt:** As User A, POST `/processing/user/cancel` with `id=<B's item>` and `user=<B>` as a form field, keeping A's `user` cookie. Verify 403 — the server must read identity from the cookie, not the form.
 - [ ] As User A, attempt to hit admin endpoint `/processing/<B's item>/cancel`. Verify 403.
 - [ ] As User A with a completed item, verify NO remove button appears (remove is admin-only).
 - [ ] As admin, cancel/remove any user's item. Verify both work.

@@ -39,8 +39,13 @@ class TestQueueRoutes:
         mock_get_instance.return_value = mock_karaoke
 
         # Mock successful status return
-        expected_status = {"active": {"title": "Test Song", "progress": 50}, "pending": []}
-        mock_karaoke.download_manager.get_downloads_status.return_value = expected_status
+        expected_status = {
+            "active": {"title": "Test Song", "progress": 50},
+            "pending": [],
+        }
+        mock_karaoke.download_manager.get_downloads_status.return_value = (
+            expected_status
+        )
 
         response = client.get("/queue/downloads")
 
@@ -84,6 +89,7 @@ class TestQueueApiContract:
                 "file": "/songs/Artist - Song---abc123.mp4",
                 "title": "Artist - Song",
                 "semitones": 0,
+                "paused": False,
             }
         ]
         mock_get_instance.return_value = mock_karaoke
@@ -100,6 +106,7 @@ class TestQueueApiContract:
         assert "file" in item
         assert "title" in item
         assert "semitones" in item
+        assert "paused" in item
 
     @patch("pikaraoke.routes.queue.get_karaoke_instance")
     def test_get_queue_empty_returns_empty_array(self, mock_get_instance, client):
@@ -117,7 +124,13 @@ class TestQueueApiContract:
 
 def _make_queue_item(n: int) -> dict:
     """Create a queue item dict for testing."""
-    return {"file": f"/songs/song{n}.mp4", "title": f"Song {n}", "user": f"User{n}", "semitones": 0}
+    return {
+        "file": f"/songs/song{n}.mp4",
+        "title": f"Song {n}",
+        "user": f"User{n}",
+        "semitones": 0,
+        "paused": False,
+    }
 
 
 class TestQueueEditSocketUpdates:
@@ -202,7 +215,9 @@ class TestQueueEditSocketUpdates:
 
         assert response.status_code == 302
         assert len(queue_updates) >= 1, "queue_update event should be emitted"
-        assert len(now_playing_updates) >= 1, "now_playing_update event should be emitted"
+        assert len(now_playing_updates) >= 1, (
+            "now_playing_update event should be emitted"
+        )
 
     @pytest.mark.parametrize(
         "action,song_param,expected_new_index",
@@ -235,7 +250,9 @@ class TestQueueEditSocketUpdates:
         assert response.status_code == 302
         assert qm.queue[expected_new_index]["file"] in song_param.split("=")[1]
         assert len(queue_updates) == 1, "queue_update event should be emitted once"
-        assert len(now_playing_updates) == 1, "now_playing_update event should be emitted once"
+        assert len(now_playing_updates) == 1, (
+            "now_playing_update event should be emitted once"
+        )
 
     @patch("pikaraoke.routes.queue.is_admin", return_value=True)
     @patch("pikaraoke.routes.queue.get_karaoke_instance")
@@ -256,4 +273,141 @@ class TestQueueEditSocketUpdates:
         assert data["success"] is True
         assert qm.queue[3]["file"] == "/songs/song2.mp4"
         assert len(queue_updates) == 1, "queue_update event should be emitted once"
-        assert len(now_playing_updates) == 1, "now_playing_update event should be emitted once"
+        assert len(now_playing_updates) == 1, (
+            "now_playing_update event should be emitted once"
+        )
+
+
+class TestUserQueueEndpoints:
+    """Tests for user self-service queue endpoints (delete/pause own songs)."""
+
+    @pytest.fixture
+    def app_with_secret(self):
+        """Create a Flask app with secret key for session support."""
+        app = Flask(__name__)
+        app.secret_key = "test"
+        app.register_blueprint(queue_bp)
+        app.extensions["babel"] = MagicMock()
+        return app
+
+    @pytest.fixture
+    def client_with_session(self, app_with_secret):
+        """Create a test client with session support."""
+        return app_with_secret.test_client()
+
+    @pytest.fixture
+    def queue_env(self, tmp_path):
+        """Create a QueueManager with event tracking and mock karaoke instance."""
+        events = EventSystem()
+        preferences = PreferenceManager(config_file_path=str(tmp_path / "config.ini"))
+        qm = QueueManager(
+            preferences=preferences,
+            events=events,
+            get_now_playing_user=lambda: None,
+            filename_from_path=lambda path, *args: path.split("/")[-1],
+            get_available_songs=lambda: [],
+        )
+
+        mock_karaoke = MagicMock()
+        mock_karaoke.queue_manager = qm
+        mock_karaoke.song_manager.filename_from_path.return_value = "song"
+
+        return qm, mock_karaoke
+
+    @patch("pikaraoke.routes.queue.get_karaoke_instance")
+    def test_user_delete_own_song_succeeds(
+        self, mock_get_instance, client_with_session, queue_env
+    ):
+        """User can delete their own queued song."""
+        qm, mock_karaoke = queue_env
+        qm.enqueue("/songs/song1---abc.mp4", "User1")
+        qm.enqueue("/songs/song2---def.mp4", "User2")
+        mock_get_instance.return_value = mock_karaoke
+
+        response = client_with_session.post(
+            "/queue/user/delete",
+            data={"song": "/songs/song1---abc.mp4", "user": "User1"},
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["success"] is True
+        assert len(qm.queue) == 1
+
+    @patch("pikaraoke.routes.queue.get_karaoke_instance")
+    def test_user_delete_other_users_song_fails(
+        self, mock_get_instance, client_with_session, queue_env
+    ):
+        """User cannot delete another user's queued song."""
+        qm, mock_karaoke = queue_env
+        qm.enqueue("/songs/song1---abc.mp4", "User1")
+        qm.enqueue("/songs/song2---def.mp4", "User2")
+        mock_get_instance.return_value = mock_karaoke
+
+        response = client_with_session.post(
+            "/queue/user/delete",
+            data={"song": "/songs/song1---abc.mp4", "user": "User2"},
+        )
+
+        assert response.status_code == 403
+        data = json.loads(response.data)
+        assert data["success"] is False
+
+    @patch("pikaraoke.routes.queue.get_karaoke_instance")
+    def test_user_pause_own_song_succeeds(
+        self, mock_get_instance, client_with_session, queue_env
+    ):
+        """User can pause their own queued song."""
+        qm, mock_karaoke = queue_env
+        qm.enqueue("/songs/song1---abc.mp4", "User1")
+        mock_get_instance.return_value = mock_karaoke
+
+        response = client_with_session.post(
+            "/queue/user/pause",
+            data={"song": "/songs/song1---abc.mp4", "user": "User1"},
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["success"] is True
+        assert qm.queue[0]["paused"] is True
+
+    @patch("pikaraoke.routes.queue.get_karaoke_instance")
+    def test_user_pause_acts_only_on_own_songs(
+        self, mock_get_instance, client_with_session, queue_env
+    ):
+        """Pause endpoint acts on the requesting user's songs only; cannot affect other users."""
+        qm, mock_karaoke = queue_env
+        qm.enqueue("/songs/song1---abc.mp4", "User1")
+        mock_get_instance.return_value = mock_karaoke
+
+        # User2 has no songs — returns success=False but does not touch User1's songs
+        response = client_with_session.post(
+            "/queue/user/pause",
+            data={"song": "/songs/song1---abc.mp4", "user": "User2"},
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["success"] is False
+        assert qm.queue[0]["paused"] is False
+
+    @patch("pikaraoke.routes.queue.get_karaoke_instance")
+    def test_user_unpause_own_song_succeeds(
+        self, mock_get_instance, client_with_session, queue_env
+    ):
+        """User can unpause their own queued song."""
+        qm, mock_karaoke = queue_env
+        qm.enqueue("/songs/song1---abc.mp4", "User1")
+        qm.queue[0]["paused"] = True
+        mock_get_instance.return_value = mock_karaoke
+
+        response = client_with_session.post(
+            "/queue/user/pause",
+            data={"song": "/songs/song1---abc.mp4", "user": "User1"},
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["success"] is True
+        assert qm.queue[0]["paused"] is False

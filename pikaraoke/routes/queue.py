@@ -32,23 +32,31 @@ class ReorderForm(Schema):
 
 
 class EnqueueQuery(Schema):
-    song = fields.String(required=True, metadata={"description": "Path to the song file"})
+    song = fields.String(
+        required=True, metadata={"description": "Path to the song file"}
+    )
     user = fields.String(
         load_default="", metadata={"description": "Name of the user adding the song"}
     )
 
 
 class EnqueueForm(Schema):
-    song_to_add = fields.String(required=True, metadata={"description": "Path to the song file"})
+    song_to_add = fields.String(
+        required=True, metadata={"description": "Path to the song file"}
+    )
     song_added_by = fields.String(
         load_default="", metadata={"description": "Name of the user adding the song"}
     )
 
 
 class QueueEditQuery(Schema):
-    action = fields.String(required=True, metadata={"description": "Queue edit action to perform"})
+    action = fields.String(
+        required=True, metadata={"description": "Queue edit action to perform"}
+    )
     song = fields.String(
-        metadata={"description": "Path to the song file (required unless action is 'clear')"}
+        metadata={
+            "description": "Path to the song file (required unless action is 'clear')"
+        }
     )
 
 
@@ -145,6 +153,7 @@ def queue_edit(query):
             "up": _("Moved up in queue"),
             "down": _("Moved down in queue"),
             "delete": _("Deleted from queue"),
+            "pause": _("Toggled pause on queue item"),
         }
         error_labels = {
             "top": _("Error moving to top of queue"),
@@ -152,18 +161,23 @@ def queue_edit(query):
             "up": _("Error moving up in queue"),
             "down": _("Error moving down in queue"),
             "delete": _("Error deleting from queue"),
+            "pause": _("Error toggling pause"),
         }
 
         if action == "top":
             success = k.queue_manager.move_to_top(song)
         elif action == "bottom":
             success = k.queue_manager.move_to_bottom(song)
+        elif action == "pause":
+            success = k.queue_manager.toggle_pause_song(song)
         else:
             success = k.queue_manager.queue_edit(song, action)
 
         if action in success_labels:
             message = (
-                (success_labels[action] if success else error_labels[action]) + ": " + song_title
+                (success_labels[action] if success else error_labels[action])
+                + ": "
+                + song_title
             )
 
         if message and not is_ajax:
@@ -213,3 +227,38 @@ def delete_download_error(error_id):
     if k.download_manager.remove_error(error_id):
         return json.dumps({"success": True})
     return json.dumps({"success": False, "error": "Error not found"}), 404
+
+
+class UserQueueActionForm(Schema):
+    song = fields.String(required=True)
+    user = fields.String(required=True)
+
+
+def _verify_ownership(queue, song_path, user):
+    """Return True if `user` owns the queue item matching `song_path`."""
+    for item in queue:
+        if item["file"] == song_path:
+            return item["user"] == user
+    return False
+
+
+@queue_bp.route("/queue/user/delete", methods=["POST"])
+@queue_bp.arguments(UserQueueActionForm, location="form")
+def user_delete(form):
+    """Let a user delete their own queued song."""
+    k = get_karaoke_instance()
+    song = form["song"]
+    user = form["user"]
+    if not _verify_ownership(k.queue_manager.queue, song, user):
+        return json.dumps({"success": False, "error": "Not owner"}), 403
+    success = k.queue_manager.queue_edit(song, "delete")
+    return json.dumps({"success": success})
+
+
+@queue_bp.route("/queue/user/pause", methods=["POST"])
+@queue_bp.arguments(UserQueueActionForm, location="form")
+def user_pause(form):
+    """Toggle pause on all of a user's queued songs (step-away mode)."""
+    k = get_karaoke_instance()
+    success = k.queue_manager.toggle_pause_user(form["user"])
+    return json.dumps({"success": success})

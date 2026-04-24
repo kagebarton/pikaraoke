@@ -274,6 +274,7 @@ def test_preference_manager_defaults_exist():
         "temp_dir",
         "blocked_processing_words",
         "vocal_volume",
+        "admin_password",
     }
 
     assert set(PreferenceManager.DEFAULTS.keys()) == expected_keys
