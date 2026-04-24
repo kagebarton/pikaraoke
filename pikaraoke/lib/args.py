@@ -118,12 +118,6 @@ def parse_pikaraoke_args() -> argparse.Namespace:
         required=False,
     )
     parser.add_argument(
-        "--admin-password",
-        help="Administrator password, for locking down certain features of the web UI such as queue editing, player controls, song editing, and system shutdown. If unspecified, everyone is an admin.",
-        default=None,
-        required=False,
-    )
-    parser.add_argument(
         "--config-file-path",
         help=f"Path to a config file to load settings from. CLI arguments override and persist to this file. (default: {default_config_file_path})",
         default=default_config_file_path,

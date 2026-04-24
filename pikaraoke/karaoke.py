@@ -103,6 +103,7 @@ class Karaoke:
         normalize_audio: bool | None = None,
         show_clock: bool | None = None,
         splash_delay: int | None = None,
+        admin_password: str | None = None,
         blocked_processing_words: str | None = None,
         subtitle_delay: float | None = None,
         temp_dir: str | None = None,

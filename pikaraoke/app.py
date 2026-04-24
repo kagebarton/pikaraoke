@@ -209,7 +209,7 @@ def main() -> None:
     k.events.on("download_stopped", _broadcast_in_context("download_stopped"))
 
     # expose shared configuration variables to the flask app
-    app.config["ADMIN_PASSWORD"] = args.admin_password
+    app.config["ADMIN_PASSWORD"] = k.admin_password or None
     app.config["SITE_NAME"] = "PiKaraoke"
 
     # Expose some functions to jinja templates
