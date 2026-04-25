@@ -37,9 +37,12 @@ window.i18n.confirmCancelPipeline = "{{ _('Are you sure you want to cancel SONG_
 window.i18n.confirmRemovePipeline = "{{ _('Are you sure you want to remove SONG_TITLE?') }}";
 
 (function() {
-  'use strict';
+'use strict';
 
-  var pollInterval = 1000; // 1 second
+var isAdmin = {{ admin | tojson }};
+var currentUser = (typeof getUserCookie === 'function') ? getUserCookie() : null;
+
+var pollInterval = 1000; // 1 second
   var pollTimer = null;
 
   /* ------------------------------------------------------------------
@@ -82,27 +85,34 @@ window.i18n.confirmRemovePipeline = "{{ _('Are you sure you want to remove SONG_
      by the download_status branches below.
      ------------------------------------------------------------------ */
 
-  function cancelCell(item) {
-    // No action while cancelling is in progress
-    if (item.processing_status === 'cancelling') return '';
+function cancelCell(item) {
+  // No action while cancelling is in progress
+  if (item.processing_status === 'cancelling') return '';
 
-    // Cancel for in-progress items
-    if (item.download_status === 'active' || item.download_status === 'pending' ||
-        item.processing_status === 'active' || item.processing_status === 'pending') {
-      var label = "{% trans %}Cancel{% endtrans %}";
-      return '<span class="state-box"><a href="#" class="pipeline-action-btn pipeline-cancel-btn" data-id="' + item.id + '" title="' + label + '" aria-label="' + label + '">'
-        + '<i class="icon icon-cancel-circled-1 icon-action-cancel"></i></a></span>';
-    }
+  var isOwner = currentUser && item.user === currentUser;
 
-    // Remove for completed/errored items
-    if (item.download_status === 'complete' || item.download_status === 'error' ||
-        item.processing_status === 'complete' || item.processing_status === 'error') {
-      var label = "{% trans %}Remove{% endtrans %}";
-      return '<span class="state-box"><a href="#" class="pipeline-action-btn pipeline-remove-btn" data-id="' + item.id + '" title="' + label + '" aria-label="' + label + '">'
-        + '<i class="icon icon-trash-empty icon-action-remove"></i></a></span>';
-    }
-    return '';
+  // Remove for completed/errored items: admin only (matches edit-song page behaviour).
+  // Compound condition mirrors the existing implementation — a download-error
+  // item may still have processing_status === 'waiting', so check both.
+  if (item.download_status === 'complete' || item.download_status === 'error' ||
+    item.processing_status === 'complete' || item.processing_status === 'error') {
+    if (!isAdmin) return '';
+    var label = "{% trans %}Remove{% endtrans %}";
+    return '<span class="state-box"><a href="#" class="pipeline-action-btn pipeline-remove-btn" data-id="' + item.id + '" title="' + label + '" aria-label="' + label + '">'
+      + '<i class="icon icon-trash-empty icon-action-remove"></i></a></span>';
   }
+
+  // Cancel for in-progress items: owner or admin only
+  if (item.download_status === 'active' || item.download_status === 'pending' ||
+    item.processing_status === 'active' || item.processing_status === 'pending') {
+    if (!isAdmin && !isOwner) return '';
+    var label = "{% trans %}Cancel{% endtrans %}";
+    return '<span class="state-box"><a href="#" class="pipeline-action-btn pipeline-cancel-btn" data-id="' + item.id + '" title="' + label + '" aria-label="' + label + '">'
+      + '<i class="icon icon-cancel-circled-1 icon-action-cancel"></i></a></span>';
+  }
+
+  return '';
+}
 
   /* ------------------------------------------------------------------
      Progress label — replaces download progress percentage
@@ -253,27 +263,38 @@ window.i18n.confirmRemovePipeline = "{{ _('Are you sure you want to remove SONG_
   // fading is safe. When separation is active, cancel() is async (item stays in
   // tracker with cancelling=True), so we skip the fade and let the poll update
   // the row to show the cancelling spinner.
-  $(document).on('click.processing', '.pipeline-cancel-btn', function(e) {
-    e.preventDefault();
-    var id = $(this).data('id');
-    var $row = $('tr[data-id="' + id + '"]');
-    var title = $row.find('.is-truncated').text();
-    var msg = (window.i18n && window.i18n.confirmCancelPipeline)
-      ? window.i18n.confirmCancelPipeline.replace('SONG_TITLE', title)
-      : 'Are you sure you want to cancel "' + title + '"?';
-    if (!window.confirm(msg)) return;
+$(document).on('click.processing', '.pipeline-cancel-btn', function(e) {
+  e.preventDefault();
+  var id = $(this).data('id');
+  var $row = $('tr[data-id="' + id + '"]');
+  var title = $row.find('.is-truncated').text();
+  var msg = (window.i18n && window.i18n.confirmCancelPipeline)
+    ? window.i18n.confirmCancelPipeline.replace('SONG_TITLE', title)
+    : 'Are you sure you want to cancel "' + title + '"?';
+  if (!window.confirm(msg)) return;
 
-    var procStatus = $row.attr('data-proc-status');
-    $.ajax({
+  var procStatus = $row.attr('data-proc-status');
+  var ajaxOpts = isAdmin
+    ? {
       url: '{{ url_for("processing.cancel_item", item_id="ITEM_ID") }}'.replace('ITEM_ID', id),
       type: 'POST'
-    }).done(function() {
-      if (procStatus !== 'active') {
-        fadeAndRemove($row);
-      }
-      fetchStatus();
-    });
+    }
+    : {
+      url: '{{ url_for("processing.user_cancel_item") }}',
+      type: 'POST',
+      data: { id: id }
+    };
+  $.ajax(ajaxOpts).done(function() {
+    if (procStatus !== 'active') {
+      fadeAndRemove($row);
+    }
+    fetchStatus();
+  }).fail(function() {
+    // 403 (stale cookie, ownership mismatch) or other failure —
+    // refresh the table so the user sees the item is still there.
+    fetchStatus();
   });
+});
 
   // Enqueue — no confirmation needed
   $(document).on('click.processing', '.pipeline-enqueue-btn', function(e) {

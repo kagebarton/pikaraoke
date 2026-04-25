@@ -175,6 +175,12 @@ class PipelineTracker:
             self._delete_song(song_to_delete)
         return True
 
+    def get_item_user(self, item_id: str) -> str | None:
+        """Return the user who submitted a pipeline item, or None if not found."""
+        with self._lock:
+            item = self._find_item(item_id)
+            return item.user if item else None
+
     def enqueue(self, item_id: str) -> bool:
         """Queue a completed song for playback."""
         with self._lock:

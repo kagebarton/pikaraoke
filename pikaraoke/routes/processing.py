@@ -5,10 +5,10 @@ from __future__ import annotations
 import json
 
 import flask_babel
-from flask import render_template
+from flask import jsonify, render_template, request
 from flask_smorest import Blueprint
 
-from pikaraoke.lib.current_app import get_karaoke_instance
+from pikaraoke.lib.current_app import get_karaoke_instance, is_admin
 
 _ = flask_babel.gettext
 
@@ -25,6 +25,7 @@ def processing():
         and k.preferences.get("site_name")
         or "PiKaraoke",
         title="Processing",
+        admin=is_admin(),
     )
 
 
@@ -36,12 +37,29 @@ def processing_status():
     return json.dumps(items)
 
 
+@processing_bp.route("/processing/user/cancel", methods=["POST"])
+def user_cancel_item():
+    """Let a user cancel their own pipeline item."""
+    k = get_karaoke_instance()
+    item_id = request.form.get("id", "")
+    user = request.cookies.get("user", "")
+    if not user:
+        return jsonify({"success": False, "error": _("Not owner")}), 403
+    owner = k.pipeline_tracker.get_item_user(item_id)
+    if owner is None or owner != user:
+        return jsonify({"success": False, "error": _("Not owner")}), 403
+    success = k.pipeline_tracker.cancel(item_id)
+    return jsonify({"success": success})
+
+
 @processing_bp.route("/processing/<item_id>/cancel", methods=["POST"])
 def cancel_item(item_id):
-    """Cancel an in-progress download or processing job."""
+    """Cancel an in-progress download or processing job (admin only)."""
+    if not is_admin():
+        return jsonify({"success": False, "error": _("Admin only")}), 403
     k = get_karaoke_instance()
     success = k.pipeline_tracker.cancel(item_id)
-    return json.dumps({"success": success})
+    return jsonify({"success": success})
 
 
 @processing_bp.route("/processing/<item_id>/enqueue", methods=["POST"])
@@ -54,7 +72,9 @@ def enqueue_item(item_id):
 
 @processing_bp.route("/processing/<item_id>/remove", methods=["POST"])
 def remove_item(item_id):
-    """Remove a completed or errored item from the tracker."""
+    """Remove a completed or errored item from the tracker (admin only)."""
+    if not is_admin():
+        return jsonify({"success": False, "error": _("Admin only")}), 403
     k = get_karaoke_instance()
     success = k.pipeline_tracker.remove(item_id)
-    return json.dumps({"success": success})
+    return jsonify({"success": success})
