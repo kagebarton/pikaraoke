@@ -407,8 +407,11 @@ class DownloadManager:
         from pathlib import Path
 
         download_dir = Path(self._download_path)
-        # Match patterns: Title---VIDEOID.mp4, Title [VIDEOID].mp4, and any partial files
-        for pattern in [f"*---{video_id}*", f"*[{video_id}]*", f"*{video_id}*"]:
+        # Match both filename conventions: Title---VIDEOID.mp4 and Title [VIDEOID].mp4.
+        # The triple-dash pattern is checked first for specificity; the bare ID pattern
+        # catches the bracketed format (and anything else) without using glob character
+        # classes, which would misinterpret [VIDEOID] as a character set and match everything.
+        for pattern in [f"*---{video_id}*", f"*{video_id}*"]:
             for f in download_dir.glob(pattern):
                 if f.is_file():
                     try:
