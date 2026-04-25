@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 
 import flask_babel
 from flask import jsonify, render_template, request
@@ -44,10 +45,16 @@ def user_cancel_item():
     item_id = request.form.get("id", "")
     user = request.cookies.get("user", "")
     if not user:
+        logging.warning("User cancel rejected: no user cookie (item_id=%s)", item_id)
         return jsonify({"success": False, "error": _("Not owner")}), 403
     owner = k.pipeline_tracker.get_item_user(item_id)
     if owner is None or owner != user:
+        logging.warning(
+            "User cancel rejected: cookie user %r != owner %r (item_id=%s)",
+            user, owner, item_id,
+        )
         return jsonify({"success": False, "error": _("Not owner")}), 403
+    logging.info("User cancel request: item_id=%s user=%s", item_id, user)
     success = k.pipeline_tracker.cancel(item_id)
     return jsonify({"success": success})
 
@@ -56,7 +63,9 @@ def user_cancel_item():
 def cancel_item(item_id):
     """Cancel an in-progress download or processing job (admin only)."""
     if not is_admin():
+        logging.warning("Admin cancel rejected: not admin (item_id=%s)", item_id)
         return jsonify({"success": False, "error": _("Admin only")}), 403
+    logging.info("Admin cancel request: item_id=%s", item_id)
     k = get_karaoke_instance()
     success = k.pipeline_tracker.cancel(item_id)
     return jsonify({"success": success})

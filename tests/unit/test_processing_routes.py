@@ -255,6 +255,10 @@ class TestUserCancelEndpoint:
         assert response.status_code == 403
         data = json.loads(response.data)
         assert data["success"] is False
+        # The item must still be in the tracker — the spoof attempt must not
+        # have modified server-side state at all.
+        assert len(tracker._items) == 1
+        assert tracker._items[0].id == item.id
 
     @patch(f"{ROUTE_PREFIX}._", side_effect=lambda x: x)
     @patch(f"{ROUTE_PREFIX}.get_karaoke_instance")

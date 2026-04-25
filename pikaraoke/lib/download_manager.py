@@ -367,8 +367,31 @@ class DownloadManager:
 
         return rc
 
-    def cancel_active_download(self) -> None:
-        """Cancel the currently active download and clean up partial files."""
+    def cancel_active_download(self, target_url: str | None = None) -> None:
+        """Cancel the currently active download and clean up partial files.
+
+        Args:
+            target_url: The URL the caller believes is currently downloading.
+                If provided and it does not match ``self.active_download['url']``,
+                the call is a no-op (the active download has already moved on
+                to a different song and must not be killed).
+        """
+        active_url = self.active_download["url"] if self.active_download else None
+
+        if target_url is not None and active_url != target_url:
+            logging.warning(
+                "cancel_active_download: target URL %r does not match active URL %r — "
+                "skipping to avoid killing a different download",
+                target_url,
+                active_url,
+            )
+            return
+
+        if active_url:
+            logging.info("Cancelling active download: %s", active_url)
+        else:
+            logging.info("cancel_active_download called but no download is active")
+
         if self._active_process is not None:
             try:
                 self._active_process.kill()

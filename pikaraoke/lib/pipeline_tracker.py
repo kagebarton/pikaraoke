@@ -141,20 +141,34 @@ class PipelineTracker:
         with self._lock:
             item = self._find_item(item_id)
             if item is None:
+                logging.warning("Cancel: item not found (id=%s)", item_id)
                 return False
 
             if item.cancelling:
+                logging.debug("Cancel: item already cancelling (id=%s)", item_id)
                 return False
 
             if item.download_status == "active":
-                self._download_manager.cancel_active_download()
+                logging.info(
+                    "Cancel: aborting active download for '%s' (url=%s)", item.title, item.url
+                )
+                self._download_manager.cancel_active_download(item.url)
                 self._remove_item(item_id)
                 return True
             if item.download_status == "pending":
+                logging.info(
+                    "Cancel: removing pending download for '%s' (url=%s)", item.title, item.url
+                )
                 self._download_manager.cancel_pending_download(item.url)
                 self._remove_item(item_id)
                 return True
             if item.song_path and item.processing_status == "pending":
+                logging.info(
+                    "Cancel: removing pending processing job for '%s'; "
+                    "song file will be deleted so the next attempt starts clean: %s",
+                    item.title,
+                    item.song_path,
+                )
                 self._processing_manager.cancel_pending(item.song_path)
                 song_to_delete = item.song_path
                 self._remove_item(item_id)
@@ -164,9 +178,20 @@ class PipelineTracker:
                 # UI shows the amber pulse until the pipeline exits.
                 # _on_processing_cancelled handles item removal + song deletion
                 # once the orchestrator emits the event.
+                logging.info(
+                    "Cancel: requesting cancellation of active processing for '%s'",
+                    item.title,
+                )
                 self._processing_manager.cancel_active(item.song_path)
                 item.cancelling = True
             else:
+                logging.warning(
+                    "Cancel: no cancellable state for '%s' "
+                    "(download_status=%s, processing_status=%s)",
+                    item.title,
+                    item.download_status,
+                    item.processing_status,
+                )
                 return False
 
         # File I/O outside the lock — song_manager.delete() does DB + disk ops
