@@ -39,6 +39,14 @@
     --button-disabled-text: var(--bulma-grey);
     --button-disabled-opacity: 0.6;
   }
+
+  /* Tighten vertical rhythm around Now Playing / Next Song */
+  header.title:not(:last-child) { margin-bottom: 0.5rem; }
+  #now-playing { margin-bottom: 0.25rem; }
+  .content hr { margin: 0.5rem 0; }
+  .content h3 { margin-bottom: 0.25rem; }
+  .content h3:not(:first-child) { margin-top: 0.25rem; }
+  #up-next { margin-bottom: 0.25rem; }
 </style>
 {% endblock %}
 
@@ -128,19 +136,7 @@ function loadNowPlaying() {
 function handleNowPlaying(np) {
   console.log(np);
   if (np.now_playing) {
-var nowPlayingHtml = `<p style="margin-bottom: 5px">${np.now_playing}</p>
-<p class="has-text-success" style="margin-bottom: 5px; display: flex; align-items: center"><i class="icon icon-mic-1" title="Current singer"></i>${np.now_playing_user}`;
-
-if (np.now_playing_transpose != 0) {
-nowPlayingHtml +=
-// {# MSG: Label for display of how many semitones the song has been shifted. #}
-`<span class='is-size-6' style='margin-left: 24px'><b>Key</b>: ` +
-getSemitonesLabel(np.now_playing_transpose) +
-"</span>";
-}
-
-nowPlayingHtml += `</p>`;
-
+    var nowPlayingHtml = `<p style="margin-bottom: 5px">${np.now_playing}<span class="has-text-success" style="margin-left: 12px"><i class="icon icon-mic-1" title="{{ _('Current singer') }}"></i>${np.now_playing_user}</span></p>`;
     $("#now-playing").html(nowPlayingHtml);
     if (isAdmin || Cookies.get("user") === np.now_playing_user) {
       $(".control-box").show();
@@ -152,10 +148,7 @@ nowPlayingHtml += `</p>`;
   }
 
   if (np.up_next) {
-    $("#up-next").html(`<p style="margin-bottom: 5px">${np.up_next}</p>
-    <p class="has-text-success">
-    {# MSG: Title text for the icon marking the next person to sing. #}
-    <i class="icon icon-mic-1" title="{{ _('Next singer') }}"></i>${np.next_user}</p>`);
+    $("#up-next").html(`<p style="margin-bottom: 5px">${np.up_next}<span class="has-text-success" style="margin-left: 12px"><i class="icon icon-mic-1" title="{{ _('Next singer') }}"></i>${np.next_user}</span></p>`);
   } else {
     // {# MSG: Alternative text for the "Up next" section if no more songs are queued up. #}
     $("#up-next").html("{{ _('No song is queued.') }}");

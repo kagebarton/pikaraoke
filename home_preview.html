@@ -93,6 +93,14 @@
       --button-disabled-text: var(--bulma-grey);
       --button-disabled-opacity: 0.6;
     }
+
+    /* Tighten vertical rhythm around Now Playing / Next Song */
+    header.title:not(:last-child) { margin-bottom: 0.5rem; }
+    #now-playing { margin-bottom: 0.25rem; }
+    .content hr { margin: 0.5rem 0; }
+    .content h3 { margin-bottom: 0.25rem; }
+    .content h3:not(:first-child) { margin-top: 0.25rem; }
+    #up-next { margin-bottom: 0.25rem; }
   </style>
 
   <!-- Styles from base.html -->
@@ -167,8 +175,7 @@
 
     function handleNowPlaying(np) {
       if (np.now_playing) {
-        var nowPlayingHtml = `<p style="margin-bottom: 5px">${np.now_playing}</p>
-        <p class="has-text-success" style="margin-bottom: 5px"><i class="icon icon-mic-1"></i>${np.now_playing_user}</p>`;
+        var nowPlayingHtml = `<p style="margin-bottom: 5px">${np.now_playing}<span class="has-text-success" style="margin-left: 12px"><i class="icon icon-mic-1"></i>${np.now_playing_user}</span></p>`;
         if (np.now_playing_transpose != 0) {
           nowPlayingHtml += "<span class='is-size-6 has-text-success'><b>Key</b>: " + getSemitonesLabel(np.now_playing_transpose) + "</span>";
         }
@@ -180,8 +187,7 @@
       }
 
       if (np.up_next) {
-        $("#up-next").html(`<p style="margin-bottom: 5px">${np.up_next}</p>
-        <p class="has-text-success"><i class="icon icon-mic-1"></i>${np.next_user}</p>`);
+        $("#up-next").html(`<p style="margin-bottom: 5px">${np.up_next}<span class="has-text-success" style="margin-left: 12px"><i class="icon icon-mic-1"></i>${np.next_user}</span></p>`);
       } else {
         $("#up-next").html("No song is queued.");
       }
