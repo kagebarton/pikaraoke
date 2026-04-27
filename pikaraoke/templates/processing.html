@@ -91,24 +91,25 @@ function cancelCell(item) {
 
   var isOwner = currentUser && item.user === currentUser;
 
-  // Remove for completed/errored items: admin only (matches edit-song page behaviour).
-  // Compound condition mirrors the existing implementation — a download-error
-  // item may still have processing_status === 'waiting', so check both.
-  if (item.download_status === 'complete' || item.download_status === 'error' ||
-    item.processing_status === 'complete' || item.processing_status === 'error') {
-    if (!isAdmin) return '';
-    var label = "{% trans %}Remove{% endtrans %}";
-    return '<span class="state-box"><a href="#" class="pipeline-action-btn pipeline-remove-btn" data-id="' + item.id + '" title="' + label + '" aria-label="' + label + '">'
-      + '<i class="icon icon-trash-empty icon-action-remove"></i></a></span>';
-  }
-
-  // Cancel for in-progress items: owner or admin only
+  // Cancel takes priority over remove: an item with download_status='complete'
+  // and processing_status in ('pending','active') is mid-pipeline and must
+  // expose a Cancel button, not Remove. The remove branch below is the
+  // fallthrough for fully terminal rows.
   if (item.download_status === 'active' || item.download_status === 'pending' ||
     item.processing_status === 'active' || item.processing_status === 'pending') {
     if (!isAdmin && !isOwner) return '';
     var label = "{% trans %}Cancel{% endtrans %}";
     return '<span class="state-box"><a href="#" class="pipeline-action-btn pipeline-cancel-btn" data-id="' + item.id + '" title="' + label + '" aria-label="' + label + '">'
       + '<i class="icon icon-cancel-circled-1 icon-action-cancel"></i></a></span>';
+  }
+
+  // Remove for terminal items: admin only (matches edit-song page behaviour).
+  if (item.download_status === 'complete' || item.download_status === 'error' ||
+    item.processing_status === 'complete' || item.processing_status === 'error') {
+    if (!isAdmin) return '';
+    var label = "{% trans %}Remove{% endtrans %}";
+    return '<span class="state-box"><a href="#" class="pipeline-action-btn pipeline-remove-btn" data-id="' + item.id + '" title="' + label + '" aria-label="' + label + '">'
+      + '<i class="icon icon-trash-empty icon-action-remove"></i></a></span>';
   }
 
   return '';
@@ -192,10 +193,19 @@ function cancelCell(item) {
       }
     });
 
-    // Remove rows whose items are gone from the payload
+    // Rows whose items are gone from the payload: rows that were showing the
+    // 'cancelling' spinner (i.e. an active separation that has now completed
+    // its cancellation server-side) get a fade-out so the UX matches a
+    // user-initiated cancel. All other disappeared rows are removed instantly.
     $body.find('tr').each(function() {
-      var id = $(this).attr('data-id');
-      if (id && !seen[id] && !$(this).hasClass('is-fading')) $(this).remove();
+      var $tr = $(this);
+      var id = $tr.attr('data-id');
+      if (!id || seen[id] || $tr.hasClass('is-fading')) return;
+      if ($tr.attr('data-proc-status') === 'cancelling') {
+        fadeAndRemove($tr);
+      } else {
+        $tr.remove();
+      }
     });
 
     if (items.length === 0) {
@@ -277,6 +287,13 @@ $(document).on('click.processing', '.pipeline-cancel-btn', function(e) {
   if (!window.confirm(msg)) return;
 
   var procStatus = $row.attr('data-proc-status');
+  // Lock the row against poll-driven removal/replacement before the AJAX
+  // goes out. Cancelling a download/pending-job removes the item from the
+  // tracker synchronously, so the next 1s poll could otherwise wipe the row
+  // before the AJAX done() callback runs the fade.
+  if (procStatus !== 'active') {
+    $row.addClass('is-fading');
+  }
   var ajaxOpts = isAdmin
     ? {
       url: '{{ url_for("processing.cancel_item", item_id="ITEM_ID") }}'.replace('ITEM_ID', id),
@@ -289,12 +306,13 @@ $(document).on('click.processing', '.pipeline-cancel-btn', function(e) {
     };
   $.ajax(ajaxOpts).done(function() {
     if (procStatus !== 'active') {
-      fadeAndRemove($row);
+      $row.fadeOut(1000, function() { $(this).remove(); });
     }
     fetchStatus();
   }).fail(function() {
     // 403 (stale cookie, ownership mismatch) or other failure —
-    // refresh the table so the user sees the item is still there.
+    // unlock the row and refresh so the user sees the item is still there.
+    $row.removeClass('is-fading');
     fetchStatus();
   });
 });
