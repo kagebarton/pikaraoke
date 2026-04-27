@@ -44,14 +44,20 @@ log = logging.getLogger(__name__)
 
 # ── Rubberband filter presets (from mpv/ prototype) ─────────────────────────
 _RB_VOCAL = (
-    "pitchq=quality:transients=crisp:detector=compound"
+    "pitchq=quality:transients=mixed:detector=compound"
     ":phase=laminar:window=long:formant=preserved"
     ":channels=together:smoothing=off"
 )
 _RB_NONVOCAL = (
     "pitchq=quality:transients=crisp:detector=percussive"
     ":phase=laminar:window=short:formant=shifted"
-    ":channels=apart:smoothing=off"
+    ":channels=together:smoothing=off"
+)
+# Full mix (single-stem): standard window balances vocal smoothness against drum tightness.
+_RB_FULLMIX = (
+    "pitchq=quality:transients=mixed:detector=compound"
+    ":phase=laminar:window=standard:formant=preserved"
+    ":channels=together:smoothing=off"
 )
 
 
@@ -645,10 +651,10 @@ class MpvController:
         if normalization_db is not None:
             norm_str = f"{normalization_db}dB"
             return (
-                f"[aid1]rubberband@rb=pitch={pitch}:{_RB_VOCAL}"
+                f"[aid1]rubberband@rb=pitch={pitch}:{_RB_FULLMIX}"
                 f"[pre];[pre]volume={norm_str}[ao]"
             )
-        return f"[aid1]rubberband@rb=pitch={pitch}:{_RB_VOCAL}[ao]"
+        return f"[aid1]rubberband@rb=pitch={pitch}:{_RB_FULLMIX}[ao]"
 
     # ── Volume (Audio Server Abstraction) ──────────────────────────────────────
 
