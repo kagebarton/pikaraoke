@@ -165,7 +165,7 @@ var currentUser = (typeof getUserCookie === 'function') ? getUserCookie() : null
   if (isAdmin) {
     html += '<td style="width: ' + COL_WIDTH.options + '; vertical-align: middle; text-align: right;">';
     html += '<a class="has-text-grey-light is-small is-text now-playing-options-btn" title="{{ _("Options") }}">';
-    html += '<i class="icon-cog is-size-5"></i></a>';
+    html += '<i class="icon-cog is-size-4"></i></a>';
     html += '</td>';
   } else if (currentUser) {
     html += '<td style="width: ' + COL_WIDTH.options + '; vertical-align: middle; text-align: right;"></td>';
@@ -322,13 +322,13 @@ function generateQueueRow(e, index) {
   if (isAdmin) {
     html += '<td style="width: ' + COL_WIDTH.options + '; vertical-align: middle; text-align: right; padding-right: 10px;">';
     html += '<a class="has-text-grey-light is-small is-text queue-song-options-btn" data-index="' + index + '" data-file="' + escape(e.file) + '" data-title="' + escape(e.title) + '" data-paused="' + (isPaused ? '1' : '0') + '" title="{{ _("Options") }}">';
-    html += '<i class="icon-cog is-size-5"></i></a>';
+    html += '<i class="icon-cog is-size-4"></i></a>';
     html += '</td>';
   } else if (currentUser) {
     if (e.user === currentUser) {
       html += '<td style="width: ' + COL_WIDTH.options + '; vertical-align: middle; text-align: right; padding-right: 10px;">';
       html += '<a class="has-text-grey-light is-small is-text queue-song-user-btn" data-file="' + escape(e.file) + '" data-title="' + escape(e.title) + '" data-paused="' + (isPaused ? '1' : '0') + '" title="{{ _("Options") }}">';
-      html += '<i class="icon-cog is-size-5"></i></a>';
+      html += '<i class="icon-cog is-size-4"></i></a>';
       html += '</td>';
     } else {
       html += '<td style="width: ' + COL_WIDTH.options + '; vertical-align: middle; text-align: right; padding-right: 10px;"></td>';
@@ -589,7 +589,7 @@ window.executeUserAction = function(action) {
 <div class="is-flex is-justify-content-space-between is-align-items-center mb-3">
 	<div class="is-flex is-align-items-center">
 		<a class="add-random has-text-success" href="#"
-			><i class="icon icon-plus-circled is-size-5 mr-1"></i></a>
+			><i class="icon icon-plus-circled is-size-4 mr-1"></i></a>
 			{% trans %}Add <input id="randomNumberInput" class="input mx-2 p-2" pattern="\d*" maxlength="2" value="3" min="1" max="99" style="width: 42px" /> random songs{% endtrans %}
 	</div>
 	<div>
