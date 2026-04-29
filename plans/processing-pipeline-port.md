@@ -159,22 +159,28 @@ The adapter forwards the resolved `Path | None` to `orchestrator.run_one_async(s
 
 ### Schema (`pikaraoke/lib/karaoke_database.py`)
 
-Add a single column for the dB gain offset that brings the song to the
-configured loudnorm target (this is what playback would apply at runtime):
+Two new columns:
 
-```sql
-ALTER TABLE songs ADD COLUMN loudnorm_offset_db REAL;
-```
+- `loudnorm_offset_db REAL` — dB gain offset that brings the song to the
+  configured loudnorm target (what playback would apply at runtime).
+- `processing_status TEXT NOT NULL DEFAULT 'skipped'` — pipeline state for
+  the row. Values: `'pending' | 'ready' | 'failed' | 'skipped'`. The
+  `'skipped'` default means pre-upgrade rows stay singable with whatever
+  subs they already have (no surprise reprocess backlog); the new-song
+  insert path writes `'pending'` explicitly so newly downloaded songs gate
+  on the pipeline. An admin reconcile tool (out of scope for this port)
+  will let users flip `'skipped'` → `'pending'` to opt into reprocess.
 
-Apply via a small migration step in `_create_schema`. After the existing
+Apply via small migration steps in `_create_schema`. After the existing
 `executescript(_SCHEMA)`:
 
 ```python
 def _create_schema(self) -> None:
     self._conn.executescript(_SCHEMA)
     self._migrate_v2_loudnorm()
+    self._migrate_v3_processing_status()
     with self._conn:
-        self._conn.execute("PRAGMA user_version = 2")
+        self._conn.execute("PRAGMA user_version = 3")
 
 def _migrate_v2_loudnorm(self) -> None:
     """Add loudnorm_offset_db column if not present (idempotent)."""
@@ -182,9 +188,23 @@ def _migrate_v2_loudnorm(self) -> None:
     if "loudnorm_offset_db" not in cols:
         with self._conn:
             self._conn.execute("ALTER TABLE songs ADD COLUMN loudnorm_offset_db REAL")
+
+def _migrate_v3_processing_status(self) -> None:
+    """Add processing_status column if not present (idempotent).
+
+    Default 'skipped' so pre-upgrade rows back-migrate without triggering
+    a reprocess backlog. New-song insert path writes 'pending' explicitly.
+    """
+    cols = {row[1] for row in self._conn.execute("PRAGMA table_info(songs)")}
+    if "processing_status" not in cols:
+        with self._conn:
+            self._conn.execute(
+                "ALTER TABLE songs ADD COLUMN processing_status TEXT "
+                "NOT NULL DEFAULT 'skipped'"
+            )
 ```
 
-Bump `PRAGMA user_version` from 1 to 2.
+Bump `PRAGMA user_version` from 1 to 3.
 
 ### KaraokeDatabase methods
 
@@ -205,15 +225,43 @@ def get_loudnorm_offset(self, file_path: str) -> float | None:
             (file_path,),
         ).fetchone()
         return row[0] if row else None
+
+def set_processing_status(self, file_path: str, status: str) -> None:
+    """Set 'pending' | 'ready' | 'failed' | 'skipped'."""
+    with self._lock, self._conn:
+        self._conn.execute(
+            "UPDATE songs SET processing_status = ?, "
+            "updated_at = CURRENT_TIMESTAMP WHERE file_path = ?",
+            (status, file_path),
+        )
+
+def get_processing_status(self, file_path: str) -> str | None:
+    with self._lock:
+        row = self._conn.execute(
+            "SELECT processing_status FROM songs WHERE file_path = ?",
+            (file_path,),
+        ).fetchone()
+        return row[0] if row else None
 ```
 
-### SongManager method
+### SongManager methods
 
 ```python
 def set_loudnorm_offset(self, song_path: str, offset_db: float) -> None:
     """Forwarder so callers don't reach into KaraokeDatabase directly."""
     self._db.set_loudnorm_offset(song_path, offset_db)
+
+def set_processing_status(self, song_path: str, status: str) -> None:
+    """Forwarder for processing_status writes."""
+    self._db.set_processing_status(song_path, status)
 ```
+
+### New-song insert path
+
+The path that inserts a song row in response to `song_downloaded` writes
+`processing_status = 'pending'` on the INSERT (locate during
+implementation — today this is in the `SongManager` ingestion path).
+Existing rows are untouched; only new downloads enter at `'pending'`.
 
 ### SongManager._get_companion_files — include .ass
 
@@ -398,9 +446,12 @@ takes the model-load hit; subsequent jobs reuse the loaded model.
 
 ### `enqueue(song_path)`
 
-Same shape as today ([processing_manager.py:118-139](pikaraoke/lib/processing_manager.py#L118-L139)):
+Same shape as today ([processing_manager.py:118-139](pikaraoke/lib/processing_manager.py#L118-L139)), with status bookkeeping in the blocked-words branch:
 
-1. Apply `blocked_processing_words` filter (verbatim).
+1. Apply `blocked_processing_words` filter — on match:
+   - `self._song_manager.set_processing_status(song_path, "skipped")` (if `_song_manager` is set)
+   - `self._events.emit("processing_skipped", song_path)` so `pipeline_tracker` can drop the row from its in-flight set and any badge clears immediately
+   - return.
 2. `self.pending_jobs.append(song_path)` under `_state_lock`.
 3. `self._pending_queue.put(song_path)`.
 
@@ -478,6 +529,9 @@ def _run_loop(self) -> None:
 def _process_song(self, song_path: str) -> None:
     if self._stems_already_exist(song_path):
         # Match current behaviour: skip silently if outputs already there.
+        # Mark ready so the row passes the queue gate.
+        if self._song_manager is not None:
+            self._song_manager.set_processing_status(song_path, "ready")
         self._events.emit("processing_complete", song_path)
         return
 
@@ -494,21 +548,28 @@ def _process_song(self, song_path: str) -> None:
     try:
         ctx = self._orchestrator.join()
     except PipelineCancelled:
+        # Leave status as 'pending' — user-initiated cancel, not a system
+        # failure. The stale-pending badge surfaces it on next page load
+        # so the user can retry or use the admin reconcile tool.
         self._events.emit("processing_cancelled", song_path)
         logging.info(f"Processing cancelled: {Path(song_path).name}")
         return
     except Exception as e:
+        if self._song_manager is not None:
+            self._song_manager.set_processing_status(song_path, "failed")
         logging.error(f"Processing failed for {Path(song_path).name}: {e}")
         self._events.emit("processing_error", {"song_path": song_path, "error": str(e)})
         return
 
-    # Persist loudnorm offset
+    # Persist loudnorm offset and ready status
     offset = ctx.artifacts.get("loudnorm_target_offset")
-    if offset is not None:
-        try:
-            self._song_manager.set_loudnorm_offset(song_path, float(offset))
-        except Exception as e:
-            logging.warning(f"Failed to persist loudnorm offset for {song_path}: {e}")
+    if self._song_manager is not None:
+        if offset is not None:
+            try:
+                self._song_manager.set_loudnorm_offset(song_path, float(offset))
+            except Exception as e:
+                logging.warning(f"Failed to persist loudnorm offset for {song_path}: {e}")
+        self._song_manager.set_processing_status(song_path, "ready")
 
     self._events.emit("processing_complete", song_path)
     logging.info(f"Processing complete: {Path(song_path).name}")
@@ -546,6 +607,34 @@ keeping it in `ctx.artifacts` (per-job context) avoids polluting the
 shared config object and keeps the `PipelineConfig` surface clean for
 tests and CLI runners.
 
+## Library gating (`files.html` and queue/sing routes)
+
+`processing_status` does two jobs:
+
+1. **Server-side gate** — the actual safety. Routes that enqueue a song
+   for playback (and the "sing now" path) check `processing_status` and
+   reject `'pending'` / `'failed'` with a clear message. `'ready'` and
+   `'skipped'` are both singable. UI badges are only the explanation
+   layer; the gate stands on its own.
+2. **Badges on the library page** — render a badge for each row whose
+   status is currently in `pipeline_tracker`'s in-flight set OR whose
+   persisted status is `'pending'` / `'failed'` at page-render time
+   (stale from a prior session). `'ready'` and `'skipped'` rows render
+   plain so the bulk of the library stays uncluttered.
+
+Tracker-driven badges flip live (queued → processing → ready) over the
+existing pipeline_tracker SSE channel. Stale-status badges are static
+until the user retries / reprocesses.
+
+The `processing_skipped` event from `enqueue()`'s blocked-words branch
+lets `pipeline_tracker` clear the row from its in-flight set immediately,
+so a badge that briefly appeared during the download → enqueue handoff
+disappears as soon as the filter rejects it.
+
+The admin reconcile tool (out of scope here) will be where users flip
+`'skipped'` rows back to `'pending'` to opt into pipeline reprocess for
+their pre-upgrade library.
+
 ## Dependencies (`pyproject.toml`)
 
 Add to `dependencies`:
@@ -571,14 +660,21 @@ Add to `dependencies`:
   - `cancel_active` calls `orchestrator.cancel_active()` only when path matches.
   - `_process_song` emits `processing_complete` with `song_path` when
     `orchestrator.join()` returns a ctx; calls
-    `song_manager.set_loudnorm_offset` with the expected float.
-  - `_process_song` emits `processing_cancelled` when `PipelineCancelled` raised.
+    `song_manager.set_loudnorm_offset` with the expected float and
+    `song_manager.set_processing_status(path, "ready")`.
+  - `_process_song` emits `processing_cancelled` when `PipelineCancelled`
+    raised; **does not** write status (leaves `'pending'`).
   - `_process_song` emits `processing_error` with `{song_path, error}` on
-    arbitrary exception.
+    arbitrary exception; calls `set_processing_status(path, "failed")`.
+  - `enqueue` on a blocked-word match calls
+    `set_processing_status(path, "skipped")` and emits `processing_skipped`.
   - `_resolve_lyrics_path` returns the `.srt` when present and `None` otherwise.
-- DB: add a `KaraokeDatabase` test that round-trips `set_loudnorm_offset` /
-  `get_loudnorm_offset` and verifies the column survives after a re-open
-  (migration idempotency).
+- DB: add `KaraokeDatabase` tests that round-trip `set_loudnorm_offset` /
+  `get_loudnorm_offset` and `set_processing_status` /
+  `get_processing_status`, and verify both columns survive after re-open
+  (migration idempotency). Also verify the v3 migration: insert a row at
+  v1 schema, run `_create_schema`, confirm the row reads back as
+  `'skipped'`.
 - Pipeline internals (stages/workers): the prototype's existing tests in
   `mpv/pipeline/` (if any) come along for the ride — but most are integration
   tests requiring real models, so don't run by default. CLAUDE.md's testing
