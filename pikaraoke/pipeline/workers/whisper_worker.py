@@ -370,6 +370,7 @@ class WhisperWorker:
             suppress_silence=self._config.suppress_silence,
             suppress_word_ts=self._config.suppress_word_ts,
             only_voice_freq=self._config.only_voice_freq,
+            min_word_dur=self._config.min_word_dur,
         )
 
         if cancel_event is None:
@@ -549,8 +550,13 @@ class WhisperWorker:
             suppress_word_ts=self._config.suppress_word_ts,
             only_voice_freq=self._config.only_voice_freq,
             condition_on_previous_text=self._config.condition_on_previous_text,
+            temperature=self._config.temperature,
+            beam_size=self._config.beam_size,
+            min_word_dur=self._config.min_word_dur,
             word_timestamps=True,
         )
+        if self._config.initial_prompt:
+            transcribe_kwargs["initial_prompt"] = self._config.initial_prompt
 
         if cancel_event is None:
             with _route_to_pty(self._pty_fd):

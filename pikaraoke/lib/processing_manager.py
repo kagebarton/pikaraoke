@@ -20,7 +20,7 @@ from pikaraoke.lib.get_platform import get_temp_directory, is_windows
 from pikaraoke.lib.preference_manager import PreferenceManager
 from pikaraoke.lib.process_terminal import ProcessTerminal
 from pikaraoke.lib.song_manager import SongManager
-from pikaraoke.pipeline.config import PipelineConfig, build_whisper_config
+from pikaraoke.pipeline.config import PipelineConfig
 from pikaraoke.pipeline.context import CancelToken, PipelineCancelled, StageContext
 from pikaraoke.pipeline.orchestrator import PipelineOrchestrator
 from pikaraoke.pipeline.stages.base import BaseStage
@@ -154,7 +154,7 @@ class ProcessingManager:
             log_level=self._log_level,
         )
         self._whisper_worker = WhisperWorker(
-            build_whisper_config(self._config),
+            self._config.whisper,
             pty_slave_fd=self._pty_slave_fd,
         )
 

@@ -76,7 +76,6 @@ class TestInit:
 class TestStart:
     @patch("pikaraoke.lib.processing_manager.is_windows", return_value=True)
     @patch("pikaraoke.lib.processing_manager.get_temp_directory", return_value="/tmp/pk")
-    @patch("pikaraoke.lib.processing_manager.build_whisper_config")
     @patch("pikaraoke.lib.processing_manager.ProcessTerminal")
     @patch("pikaraoke.lib.processing_manager.WhisperWorker")
     @patch("pikaraoke.lib.processing_manager.StemWorker")
@@ -87,7 +86,6 @@ class TestStart:
         mock_sw_cls,
         mock_ww_cls,
         mock_pt_cls,
-        mock_bwc,
         mock_gtd,
         mock_iw,
         events,
