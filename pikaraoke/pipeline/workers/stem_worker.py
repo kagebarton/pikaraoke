@@ -332,6 +332,7 @@ def _worker_main(
         output_format=SEPARATION_FORMAT,
     )
     separator.load_model(model_filename=model_name)
+    _clear_gpu_cache()
     worker_log.info("Audio separator model loaded — ready for jobs")
 
     try:

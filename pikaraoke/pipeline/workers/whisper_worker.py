@@ -12,12 +12,9 @@ worker runs stable-ts in the same process. Cancellation is done by
 registering a forward pre-hook on the encoder nn.Module to check a
 threading.Event before each encoder forward pass.
 
-The model is loaded once and stays loaded across jobs. If alignment is
-cancelled, the exception unwinds cleanly and the model weights survive.
-
-Lazy loading: the model is loaded on first use (transcribe/align/refine)
-rather than eagerly at startup, keeping app boot snappy.  Subsequent jobs
-reuse the loaded model.  unload_model() remains idempotent.
+The model is loaded once (by LyricAlignStage, after stem separation) and
+stays loaded across jobs. If alignment is cancelled, the exception unwinds
+cleanly and the model weights survive.
 
 PTY routing: when ``pty_slave_fd`` is provided, whisper output (model load
 progress, VAD chatter, stable-ts/CTranslate2 logs) is redirected to the
@@ -103,25 +100,10 @@ class WhisperWorker:
         self._encoder_module = None
         self._audioloader_patched = False
         self._pty_fd = pty_slave_fd
-        self._load_lock = threading.Lock()
 
     @property
     def model_loaded(self) -> bool:
         return self._model is not None and self._model_loaded
-
-    # ------------------------------------------------------------------
-    # Lazy loading support
-    # ------------------------------------------------------------------
-
-    def _ensure_loaded(self) -> None:
-        """Load the model on first use if not already loaded.  Thread-safe."""
-        if self._model is not None:
-            return
-        with self._load_lock:
-            if self._model is not None:
-                return
-            with _route_to_pty(self._pty_fd):
-                self.load_model()
 
     # ------------------------------------------------------------------
     # PTY routing context manager
@@ -143,7 +125,9 @@ class WhisperWorker:
     def load_model(self) -> None:
         """Load the PyTorch whisper model via stable-ts.
 
-        This is expensive (~10-30s) and is called lazily on first use.
+        Called once by LyricAlignStage after stem separation completes, so
+        whisper doesn't compete with audio-separator for GPU memory during
+        separation. Idempotent — no-op if already loaded.
         Also caches the encoder nn.Module reference and patches AudioLoader
         to suppress FFmpeg broken-pipe stderr on cancellation.
         """
@@ -161,10 +145,11 @@ class WhisperWorker:
         logger.info(f"Loading whisper model: {model_source} on {device}")
         start = time.time()
 
-        self._model = stable_whisper.load_model(
-            model_source,
-            device=device,
-        )
+        with _route_to_pty(self._pty_fd):
+            self._model = stable_whisper.load_model(
+                model_source,
+                device=device,
+            )
 
         # Cache the encoder nn.Module for hook registration.
         # stable_whisper.load_model() returns whisper.model.Whisper directly —
@@ -373,7 +358,7 @@ class WhisperWorker:
         Raises:
             AlignmentCancelledError: If alignment was cancelled mid-computation.
         """
-        self._ensure_loaded()
+
 
         if self._model is None:
             raise RuntimeError("Model not loaded — call load_model() first")
@@ -451,7 +436,7 @@ class WhisperWorker:
         Raises:
             AlignmentCancelledError: If refinement was cancelled mid-computation.
         """
-        self._ensure_loaded()
+
 
         if self._model is None:
             raise RuntimeError("Model not loaded — call load_model() first")
@@ -551,7 +536,7 @@ class WhisperWorker:
         Raises:
             AlignmentCancelledError: If transcription was cancelled mid-computation.
         """
-        self._ensure_loaded()
+
 
         if self._model is None:
             raise RuntimeError("Model not loaded — call load_model() first")

@@ -9,7 +9,7 @@ _MODELS_DIR = str(_REPO_ROOT / "models")
 class WhisperModelConfig:
     model_path: str = str(_REPO_ROOT / "models" / "large-v3-turbo.pt")
     device: str = "auto"
-    compute_type: str = "int8"
+    compute_type: str = "float16"
     language: str = "en"
     vad: bool = True
     vad_threshold: float = 0.25
@@ -31,7 +31,7 @@ class PipelineConfig:
 
     # --- Device/compute ---
     whisper_device: str = "auto"
-    whisper_compute_type: str = "int8"
+    whisper_compute_type: str = "float16"
 
     # --- Intermediate files directory ---
     intermediate_dir: str = ""  # Empty = system temp dir; adapter resolves via get_temp_directory()

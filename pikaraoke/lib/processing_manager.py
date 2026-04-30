@@ -127,6 +127,12 @@ class ProcessingManager:
         """Start PTY, workers, orchestrator thread, subscribe to events."""
         self._events.on("song_downloaded", self.enqueue)
 
+        # Reduce CUDA allocator fragmentation so stem and whisper models can
+        # coexist with mpv's graphics context on a single GPU.
+        import os
+
+        os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+
         # Build config, resolving intermediate temp dir via get_temp_directory()
         self._config = PipelineConfig()
         if self._temp_dir:

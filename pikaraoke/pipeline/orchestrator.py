@@ -10,8 +10,8 @@ Each ``run_one_async()`` call creates a **fresh** CancelToken with a
 jobs from each other, preventing stale cancel-forwarder daemon threads
 from injecting spurious signals into subsequent jobs.
 
-Whisper model loading is deferred to first use (lazy) so app boot stays
-snappy on Pi-class hardware.
+Both workers are started eagerly so GPU OOM surfaces at startup rather than
+mid-queue on a subsequent song.
 """
 
 import logging
@@ -64,6 +64,8 @@ class PipelineOrchestrator:
             return
         logger.info("Starting stem worker...")
         self._stem_worker.start()
+        logger.info("Loading whisper model...")
+        self._whisper_worker.load_model()
         self._workers_started = True
 
     def stop(self) -> None:
