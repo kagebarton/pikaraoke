@@ -71,10 +71,14 @@ class FFmpegTranscodeStage(BaseStage):
         cmd = [
             "ffmpeg",
             "-y",
-            "-threads", self._config.ffmpeg_threads,
-            "-i", str(wav_path),
-            "-c:a", "aac",
-            "-q:a", self._config.aac_quality,
+            "-threads",
+            self._config.ffmpeg_threads,
+            "-i",
+            str(wav_path),
+            "-c:a",
+            "aac",
+            "-q:a",
+            self._config.aac_quality,
             str(output_path),
         ]
         run_ffmpeg(cmd, ctx, Phase.TRANSCODE)

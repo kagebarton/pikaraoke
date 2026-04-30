@@ -11,7 +11,12 @@ current production behaviour in processing_manager.py).
 
 import subprocess
 
-from pikaraoke.pipeline.context import KillProcess, Phase, PipelineCancelled, StageContext
+from pikaraoke.pipeline.context import (
+    KillProcess,
+    Phase,
+    PipelineCancelled,
+    StageContext,
+)
 
 
 def run_ffmpeg(
@@ -39,7 +44,8 @@ def run_ffmpeg(
     pty_fd = ctx.artifacts.get("pty_slave_fd")
     stdout_fd = pty_fd if pty_fd is not None else subprocess.DEVNULL
     stderr_fd = (
-        subprocess.PIPE if capture_stderr
+        subprocess.PIPE
+        if capture_stderr
         else (pty_fd if pty_fd is not None else subprocess.DEVNULL)
     )
 

@@ -8,7 +8,7 @@ Reviewed: `plans/processing-pipeline-port.md` against the current codebase
 `pipeline_tracker.py`, `youtube_dl.py`, `karaoke.py`, `pyproject.toml`,
 `tests/unit/test_processing_manager.py`, and related plans).
 
----
+______________________________________________________________________
 
 ## Critical Issues (must fix before implementation)
 
@@ -31,7 +31,7 @@ uncommitted?) and either commit it to the repo under the referenced path or
 rewrite the plan to describe the prototype's interfaces as design
 specifications rather than copy-and-adapt instructions.
 
----
+______________________________________________________________________
 
 ### C2: `LyricAlignStage` and `WhisperWorker` are undefined — no interface spec
 
@@ -52,7 +52,7 @@ the adapter but not for the pipeline internals it calls.
 (signatures, return types, artifact keys). This is the contract the adapter
 depends on.
 
----
+______________________________________________________________________
 
 ### C3: `song_manager` constructor change breaks the public API guarantee
 
@@ -62,6 +62,7 @@ from today)" header says the API doesn't change, then immediately adds a
 parameter.
 
 Current code at `karaoke.py:286-291`:
+
 ```python
 self.processing_manager = ProcessingManager(
     events=self.events,
@@ -93,7 +94,7 @@ need the new parameter).
 (acceptable since loudnorm persistence is a new feature, not a hard dependency).
 Or explicitly enumerate every construction site that needs updating.
 
----
+______________________________________________________________________
 
 ### C4: Stem model name mismatch — existing `stem_worker.py` hardcodes a different model
 
@@ -124,7 +125,7 @@ a fallback if the file isn't in `<repo_root>/models/`, (b) add a startup check
 that logs a clear error if the model file is missing, or (c) document the
 migration step in the verification section.
 
----
+______________________________________________________________________
 
 ## Significant Issues (should fix)
 
@@ -148,11 +149,12 @@ with partial stems on re-enqueue.
 mirroring the current code. Also call it when `_stems_already_exist` returns
 True if the user explicitly re-enqueues (optional enhancement).
 
----
+______________________________________________________________________
 
 ### S2: `_stems_already_exist` skip silently emits `processing_complete`
 
 The plan (line 396-398) says:
+
 ```python
 if self._stems_already_exist(song_path):
     self._events.emit("processing_complete", song_path)
@@ -176,7 +178,7 @@ find the item.
 **Recommendation:** Add the log line back. Consider emitting a different event
 (e.g., `processing_skipped`) if tracker semantics matter.
 
----
+______________________________________________________________________
 
 ### S3: Eager stem-worker restart is missing from the orchestrator loop
 
@@ -217,17 +219,17 @@ robustness guarantee is lost.
 block. This was specifically designed for this scenario (see
 `pipeline-refactor.md:226-231` and `pipeline-robustness-fixes.md:A1`).
 
----
+______________________________________________________________________
 
 ### S4: PTY fd through `PipelineConfig` is a process-global side channel
 
-The plan (lines 440-450) chooses option 2: add `pty_slave_fd: int | None =
-None` to `PipelineConfig`. But `PipelineConfig` is a dataclass shared across
+The plan (lines 440-450) chooses option 2: add `pty_slave_fd: int | None = None` to `PipelineConfig`. But `PipelineConfig` is a dataclass shared across
 all stages and the orchestrator. Putting a process-specific fd (which changes
 per run, per platform, and is meaningless in a worker subprocess) into a
 config object conflates configuration with runtime state.
 
 This also means:
+
 - If `PipelineConfig` is ever serialized (e.g., logged, pickled for IPC), the
   fd integer leaks as a meaningless number.
 - If someone constructs a `PipelineConfig` independently (e.g., in tests or a
@@ -244,7 +246,7 @@ imports") is contradicted by this choice.
 not in the shared config. Alternatively, pass `pty_slave_fd` through the
 `StageContext` constructor or as a separate argument to `run_one_async`.
 
----
+______________________________________________________________________
 
 ### S5: `WhisperWorker` is "in-process" but the plan also calls `orchestrator.start()` to "load whisper model"
 
@@ -269,11 +271,12 @@ transcription request, or making the LyricAlign stage a no-op when
 `lyrics_path` is provided (SRT mode). Document the memory and startup cost in
 the plan.
 
----
+______________________________________________________________________
 
 ### S6: `playback_controller.py` already has a placeholder for `normalization_db`
 
 At `playback_controller.py:123-130`:
+
 ```python
 normalization_db = None
 if self.preferences.get_or_default("normalize_audio"):
@@ -297,11 +300,12 @@ realize it.
 `playback_controller.py:123-130` as the integration point for the follow-up
 work.
 
----
+______________________________________________________________________
 
 ### S7: `song_manager._get_companion_files` doesn't include `.ass` files yet
 
 At `song_manager.py:70-71`:
+
 ```python
 # Karaoke captions (.ass, generated from confirmed lyrics) will be added here
 # in a separate subfolder in a separate change.
@@ -318,13 +322,14 @@ plan introduces output that the cleanup code doesn't know about.
 part of this change. The playback_controller already looks for
 `{parent}/karaoke/{base_name}.ass` (line 204), confirming the convention.
 
----
+______________________________________________________________________
 
 ## Minor Issues (worth noting)
 
 ### M1: `_resolve_lyrics_path` only checks the first `.srt` candidate
 
 The plan's adapter helper (lines 144-153):
+
 ```python
 candidate = song.parent / "subtitles" / f"{song.stem}.srt"
 return candidate if candidate.is_file() else None
@@ -340,7 +345,7 @@ code). However, if a user manually places a differently-named `.srt` in the
 **Recommendation:** Either document that only yt-dlp-placed `.srt` files are
 supported, or add a fallback glob for any `.srt` matching the stem.
 
----
+______________________________________________________________________
 
 ### M2: Database migration relies on `PRAGMA table_info` but doesn't check `PRAGMA user_version`
 
@@ -366,7 +371,7 @@ def _create_schema(self) -> None:
             self._conn.execute("PRAGMA user_version = 2")
 ```
 
----
+______________________________________________________________________
 
 ### M3: `pyproject.toml` dependency additions need version reconciliation
 
@@ -391,7 +396,7 @@ The plan proposes adding `audio-separator[gpu]>=0.30`, `stable-ts>=2.17`,
 PyTorch. The app already has a path without processing (blocked words, manual
 mode).
 
----
+______________________________________________________________________
 
 ### M4: `cancel_active` semantic change — no more per-step targeting
 
@@ -413,16 +418,18 @@ cancel mechanism preserves the delayed-cancel-for-stem-workers behavior. The
 plan mentions "KillProcess" for FFmpeg and "SetEvent" for workers, which
 sounds right, but this should be an explicit assertion, not an assumption.
 
----
+______________________________________________________________________
 
 ### M5: `pending_jobs` list mutation uses slice assignment — subtle difference
 
 The plan (line 381, 387):
+
 ```python
 self.pending_jobs[:] = [p for p in self.pending_jobs if p != song_path]
 ```
 
 The current code uses `.remove()`:
+
 ```python
 if song_path in self.pending_jobs:
     self.pending_jobs.remove(song_path)
@@ -435,10 +442,9 @@ adapter accidentally reassigned `self.pending_jobs = [filtered]`, external
 readers holding the old reference would see stale data. The plan's approach is
 correct but could use a comment explaining why.
 
-**Recommendation:** Add a brief comment: `# In-place mutation preserves
-identity for external readers (PipelineTracker).`
+**Recommendation:** Add a brief comment: `# In-place mutation preserves identity for external readers (PipelineTracker).`
 
----
+______________________________________________________________________
 
 ### M6: Tests reference `_Step` and `_JobState` which vanish
 
@@ -463,7 +469,7 @@ an equivalent integration test.
 dependencies (StemWorker, WhisperWorker, FFmpeg Popen) but runs the real
 adapter loop. This catches wiring bugs that pure orchestrator mocks miss.
 
----
+______________________________________________________________________
 
 ### M7: `build_whisper_config` helper referenced but not defined
 
@@ -474,7 +480,7 @@ returns or what `WhisperWorker.__init__` expects.
 
 **Recommendation:** Define this helper's interface inline in the plan.
 
----
+______________________________________________________________________
 
 ### M8: `intermediate_dir` default change needs validation
 
@@ -502,7 +508,7 @@ behavioral change that should be noted.
 `~/.pikaraoke/tmp` path is likely better (persistent, user-visible), but it's
 different from the OS temp dir.
 
----
+______________________________________________________________________
 
 ## Design Observations (non-blocking)
 
@@ -512,6 +518,7 @@ The plan says "port" but also introduces: (a) a new loudnorm stage, (b) a new
 lyric_align stage, (c) a new database column, (d) a new whisper worker, (e)
 new dependencies, and (f) a rewritten adapter. That's significantly more than
 a port. The "port" framing understates the risk. Consider splitting into:
+
 1. Port the 3-stage pipeline (extract→stem→transcode) as-is, validating the
    orchestrator/stage/worker architecture.
 2. Add loudnorm stage + DB column.
@@ -536,7 +543,7 @@ convention it uses. The playback_controller expects
 `{parent}/karaoke/{base_name}.ass` — this convention should be documented in
 the plan.
 
----
+______________________________________________________________________
 
 ## Summary
 

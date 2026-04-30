@@ -3,7 +3,7 @@
 Review of `plans/overlay-state-and-pause-fix.md` against the current codebase
 (HEAD as of 2026-04-21).
 
----
+______________________________________________________________________
 
 ## Correctly Identified
 
@@ -43,7 +43,7 @@ Review of `plans/overlay-state-and-pause-fix.md` against the current codebase
    `preferences.py:38` (live pref toggles), and the two in-band-aids inside
    `play_file:163` and `end_song:238`. The method itself should be kept.
 
----
+______________________________________________________________________
 
 ## Potential Issues
 
@@ -159,7 +159,7 @@ called during that window. If a future MPV version changes `time-pos` behavior
 during loading, the stale-duration flash returns. Low risk, but worth a
 comment in the code.
 
----
+______________________________________________________________________
 
 ## Summary
 

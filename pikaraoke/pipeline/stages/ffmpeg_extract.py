@@ -5,7 +5,6 @@ Uses run_ffmpeg() from _ffmpeg_helpers for cancellation support.
 """
 
 import logging
-from pathlib import Path
 
 from pikaraoke.pipeline.config import PipelineConfig
 from pikaraoke.pipeline.context import Phase, StageContext
@@ -28,12 +27,17 @@ class FFmpegExtractStage(BaseStage):
         cmd = [
             "ffmpeg",
             "-y",
-            "-threads", self._config.ffmpeg_threads,
-            "-i", str(ctx.song_path),
+            "-threads",
+            self._config.ffmpeg_threads,
+            "-i",
+            str(ctx.song_path),
             "-vn",
-            "-ac", "2",
-            "-ar", "44100",
-            "-sample_fmt", "s16",
+            "-ac",
+            "2",
+            "-ar",
+            "44100",
+            "-sample_fmt",
+            "s16",
             str(wav_out),
         ]
         logger.info(f"[{self.name}] Extracting audio: {ctx.song_path.name}")

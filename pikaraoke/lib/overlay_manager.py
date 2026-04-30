@@ -29,22 +29,24 @@ ALL_OSD_IDS = (OSD_URL, OSD_NOWPLAYING, OSD_TIMECODE, OSD_UPNEXT, OSD_CLOCK, OSD
 
 # ── ASS style constants ────────────────────────────────────────────────────────
 # ASS colors are BGR: &HBBGGRR&
-_COLOR_URL          = "&HFFFFFF&"   # rgb(255,255,255) white
-_COLOR_CLOCK        = "&HFFFFFF&"   # rgb(255,255,255) white
-_COLOR_NOWPLAYING   = "&H507FFF&"   # rgb(255,127,80)  orange — now-playing title, queue preview first row
-_COLOR_UPNEXT       = "&HB48246&"   # rgb(70,130,180)  blue   — upnext row, queue preview rest rows
-_COLOR_TIMECODE     = "&HAAD5FF&"   # rgb(255,213,170) light orange — timecode row, singer on orange rows
-_COLOR_SINGER_BLUE  = "&HFACD8C&"   # rgb(140,205,250) light blue  — singer name on blue rows
+_COLOR_URL = "&HFFFFFF&"  # rgb(255,255,255) white
+_COLOR_CLOCK = "&HFFFFFF&"  # rgb(255,255,255) white
+_COLOR_NOWPLAYING = (
+    "&H507FFF&"  # rgb(255,127,80)  orange — now-playing title, queue preview first row
+)
+_COLOR_UPNEXT = "&HB48246&"  # rgb(70,130,180)  blue   — upnext row, queue preview rest rows
+_COLOR_TIMECODE = "&HAAD5FF&"  # rgb(255,213,170) light orange — timecode row, singer on orange rows
+_COLOR_SINGER_BLUE = "&HFACD8C&"  # rgb(140,205,250) light blue  — singer name on blue rows
 _OVERLAY_STYLE = "\\bord3\\shad2\\3c&H000000&\\4c&H000000&\\4a&H80&"
 
 
 # ── OSD icon symbols ──────────────────────────────────────────────────────────
-_ICON_PLAY = "▶"          # U+25B6
-_ICON_CLEF = "𝄞"          # U+1D11E
-_ICON_CLOCK = "🕐"         # U+1F550
-_ICON_NEXT = "⏭"          # U+23ED
-_ICON_MIC_SINGER = "🎙"   # U+1F399  condenser — matches web UI singer name
-_ICON_MIC_VOCAL = "🗣️"    # U+1F32C  head exhale — vocal volume level
+_ICON_PLAY = "▶"  # U+25B6
+_ICON_CLEF = "𝄞"  # U+1D11E
+_ICON_CLOCK = "🕐"  # U+1F550
+_ICON_NEXT = "⏭"  # U+23ED
+_ICON_MIC_SINGER = "🎙"  # U+1F399  condenser — matches web UI singer name
+_ICON_MIC_VOCAL = "🗣️"  # U+1F32C  head exhale — vocal volume level
 
 
 class ScreenMode(Enum):

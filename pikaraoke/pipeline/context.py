@@ -16,33 +16,38 @@ from typing import Any, Optional, Protocol
 
 from pikaraoke.pipeline.config import PipelineConfig
 
-
 # ---------------------------------------------------------------------------
 # Phase enum
 # ---------------------------------------------------------------------------
 
+
 class Phase(enum.Enum):
     """Cancellation grain — one per stage or per model-call within a stage."""
-    EXTRACT = "extract"                  # ffmpeg_extract stage
-    LOUDNORM = "loudnorm"                # loudnorm_analyze stage
+
+    EXTRACT = "extract"  # ffmpeg_extract stage
+    LOUDNORM = "loudnorm"  # loudnorm_analyze stage
     STEM_SEPARATION = "stem_separation"  # stem_separation stage (per-chunk)
-    TRANSCODE = "transcode"              # ffmpeg_transcode stage (both stems)
-    ALIGN = "align"                      # lyric_align: model.align()
-    TRANSCRIBE = "transcribe"            # lyric_align: model.transcribe()
-    REFINE = "refine"                    # lyric_align: model.refine()
+    TRANSCODE = "transcode"  # ffmpeg_transcode stage (both stems)
+    ALIGN = "align"  # lyric_align: model.align()
+    TRANSCRIBE = "transcribe"  # lyric_align: model.transcribe()
+    REFINE = "refine"  # lyric_align: model.refine()
 
 
 # ---------------------------------------------------------------------------
 # Cancellable protocol + concrete implementations
 # ---------------------------------------------------------------------------
 
+
 class Cancellable(Protocol):
     """Abstraction for anything the orchestrator can cancel mid-flight."""
-    def cancel(self) -> None: ...
+
+    def cancel(self) -> None:
+        ...
 
 
 class KillProcess:
     """Cancel an ffmpeg subprocess by SIGKILL."""
+
     def __init__(self, proc: subprocess.Popen) -> None:
         self._proc = proc
 
@@ -55,6 +60,7 @@ class KillProcess:
 
 class SetEvent:
     """Cancel a model worker call by setting its threading.Event."""
+
     def __init__(self, event: threading.Event) -> None:
         self._event = event
 
@@ -66,8 +72,10 @@ class SetEvent:
 # PipelineCancelled exception
 # ---------------------------------------------------------------------------
 
+
 class PipelineCancelled(Exception):
     """Raised when the active job has been cancelled."""
+
     def __init__(self, phase: Optional[Phase] = None) -> None:
         self.phase = phase
         if phase is not None:
@@ -79,6 +87,7 @@ class PipelineCancelled(Exception):
 # ---------------------------------------------------------------------------
 # CancelToken
 # ---------------------------------------------------------------------------
+
 
 @dataclass(eq=False, repr=False)
 class CancelToken:
@@ -93,9 +102,9 @@ class CancelToken:
     so that the activity's exit check reliably sees it.
     """
 
-    event: threading.Event               # per-job model-worker event
-    cancelled: bool = False              # sticky flag, set by cancel()
-    phase: Optional[Phase] = None       # current phase (None = between activities)
+    event: threading.Event  # per-job model-worker event
+    cancelled: bool = False  # sticky flag, set by cancel()
+    phase: Optional[Phase] = None  # current phase (None = between activities)
     active: Optional[Cancellable] = None  # registered cancel target
     lock: threading.Lock = field(default_factory=threading.Lock)
 
@@ -167,12 +176,13 @@ class CancelToken:
 # StageContext
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class StageContext:
     """Per-job context passed forward through the pipeline stages."""
 
-    song_path: Path                          # input audio/video file
-    tmp_dir: Path                            # per-job temp directory
-    config: PipelineConfig                   # shared config reference
+    song_path: Path  # input audio/video file
+    tmp_dir: Path  # per-job temp directory
+    config: PipelineConfig  # shared config reference
     artifacts: dict[str, Any] = field(default_factory=dict)
-    cancel: Optional[CancelToken] = None     # None when run without cancel
+    cancel: Optional[CancelToken] = None  # None when run without cancel

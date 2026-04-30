@@ -99,8 +99,7 @@ Each bug traces to the same architectural seam: **the client re-derives
 state and authorization that the server already knows, and a 1s poll
 races with user-initiated actions**. The `is-fading` class is being used
 as a poll-blocker lock, the cancel-vs-remove distinction is reconstructed
-client-side from `download_status × processing_status × isAdmin ×
-isOwner` (10+ cell states × 4 actor types), and the polling cadence
+client-side from `download_status × processing_status × isAdmin × isOwner` (10+ cell states × 4 actor types), and the polling cadence
 creates timing-dependent UX.
 
 ## Suggested architectural improvements
@@ -115,7 +114,7 @@ allowed actions directly in the status payload:
 
 ```python
 # in PipelineTracker._item_to_dict, with request context (user cookie + admin) available
-"actions": ["cancel"]    # or ["enqueue", "remove"], or [], etc.
+"actions": ["cancel"]  # or ["enqueue", "remove"], or [], etc.
 ```
 
 The template becomes a trivial map of `action → button`. Auth lives in
@@ -131,6 +130,7 @@ emissions inside the same tracker methods that already mutate `_items`.
 The client subscribes and re-renders on each push.
 
 Benefits:
+
 - No race between cancel-AJAX and the next poll → no need for the
   `is-fading` poll-lock hack.
 - Updates are instant, not 1s-laggy.
@@ -181,8 +181,7 @@ review surface and make any regression harder to bisect. The current
 contract doesn't change.
 
 After the port, the architecture pass also gets the natural opportunity
-to surface per-stage progress in the tracker payload (e.g., `stage:
-"lyric_align"`), which the current 3-bucket processing_status can't
+to surface per-stage progress in the tracker payload (e.g., `stage: "lyric_align"`), which the current 3-bucket processing_status can't
 express cleanly.
 
 ## Out of scope for this document

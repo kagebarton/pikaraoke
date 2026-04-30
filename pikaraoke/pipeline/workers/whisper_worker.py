@@ -297,8 +297,7 @@ class WhisperWorker:
         AudioLoader._audio_loading_process = _quiet_audio_loading_process
         self._audioloader_patched = True
         logger.debug(
-            "Patched AudioLoader._audio_loading_process() to suppress "
-            "FFmpeg broken-pipe stderr"
+            "Patched AudioLoader._audio_loading_process() to suppress " "FFmpeg broken-pipe stderr"
         )
 
     def _terminate_orphaned_audioloaders(self) -> None:
@@ -347,9 +346,7 @@ class WhisperWorker:
                     terminated_count += 1
 
         if terminated_count > 0:
-            logger.debug(
-                f"Terminated {terminated_count} orphaned FFmpeg subprocess(es)"
-            )
+            logger.debug(f"Terminated {terminated_count} orphaned FFmpeg subprocess(es)")
 
     # ------------------------------------------------------------------
     # Public methods

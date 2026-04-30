@@ -21,7 +21,7 @@ shippable; they are ordered so later features can build on earlier scaffolding.
 | 6 | Seek bar in now-playing UI | yes | yes | yes | — |
 | 7 | Per-song reset of vocal volume | — | — | — | 2 |
 
----
+______________________________________________________________________
 
 ## 1. Dual-stem (vocal/nonvocal) playback
 
@@ -29,7 +29,7 @@ shippable; they are ordered so later features can build on earlier scaffolding.
 
 `ProcessingManager` already produces `<song>---vocal.m4a` and
 `<song>---nonvocal.m4a` under `vocal/` and `nonvocal/` siblings of the source
-file (see [_stem_output_paths()](pikaraoke/lib/processing_manager.py#L286-L293)).
+file (see [\_stem_output_paths()](pikaraoke/lib/processing_manager.py#L286-L293)).
 `MpvController.play()` ignores them; the lavfi-complex chain only references
 `[aid1]`. Port the prototype's dual-stem chain so that — when both stems exist —
 playback wires `[aid2]` (vocal) and `[aid3]` (nonvocal) into a per-track
@@ -90,6 +90,7 @@ self._current_vocal_volume: float = 1.0
 
 - **`MpvController.play()`** — when `vocal_path` and `nonvocal_path` exist on
   disk:
+
   1. After `loadfile`, call `self._player.command("audio-add", vocal_path, "auto")`
      and again for the nonvocal stem.
   2. Sleep ~200 ms for the `audio-add` to settle (matches prototype).
@@ -128,7 +129,9 @@ self._current_vocal_volume: float = 1.0
   is not exposed via azmq).
 
 - **`MpvController.set_vocal_volume(volume: float) -> None`** (new):
+
   - When `_dual_stem` is False: no-op (single-stem has no separate vocal track).
+
   - When True: send a ZMQ command to filter label `volume@vocalvol` via a tiny
     raw-socket helper (no `pyzmq` dependency — confirmed):
 
@@ -213,7 +216,7 @@ play_file
   stem exists (half-state guard).
 - `play_file` does not pass companion paths when stems are missing.
 
----
+______________________________________________________________________
 
 ## 2. Vocal volume control (UI + route + preference)
 
@@ -243,6 +246,7 @@ if preference in ("subtitle_delay", "volume", "vocal_volume"):
 
 - New attribute: `self.vocal_volume: float`. Loaded by `_load_preferences`
   automatically because the key exists in `DEFAULTS`.
+
 - New method `Karaoke.set_vocal_volume(volume: float)`:
 
   ```python
@@ -377,7 +381,7 @@ Add to the server-settings card
 In [routes/info.py](pikaraoke/routes/info.py#L37-L70) add:
 
 ```python
-vocal_volume=int(k.preferences.get_or_default("vocal_volume") * 100),
+vocal_volume = (int(k.preferences.get_or_default("vocal_volume") * 100),)
 ```
 
 (Number-input value is 0-100; convert to 0.0-1.0 in `preferences.set()` — easiest
@@ -392,7 +396,7 @@ preference_manager.)
 - `PlaybackController.set_vocal_volume()` no-ops when not playing.
 - `set_vocal_volume` route → `k.set_vocal_volume` → `mpv.set_vocal_volume` chain.
 
----
+______________________________________________________________________
 
 ## 3. Karaoke (.ass) subtitle support + mode toggle
 
@@ -474,18 +478,20 @@ self._current_sub_mode: str = "off"
   delay = 0 for non-srt modes.
 
 - **`MpvController.play()`** — store `self._available_subs` and
-  `self._current_sub_mode`, then call `_apply_subtitle_mode(initial_sub_mode,
-  skip_remove=True)` after lavfi-complex is set.
+  `self._current_sub_mode`, then call `_apply_subtitle_mode(initial_sub_mode, skip_remove=True)` after lavfi-complex is set.
 
 ### PlaybackController
 
 - New helper `_find_subtitles(file_path)` returns
   `{"ass": path | None, "srt": path | None}`. Replaces the existing
   `_find_subtitle` method.
+
 - `play_file` resolves initial mode and passes `ass_path`, `srt_path`,
   `initial_sub_mode` to `mpv.play`.
+
 - New attribute `self.now_playing_sub_mode: str` and
   `self.now_playing_subs_available: dict[str, bool]`.
+
 - New method:
 
   ```python
@@ -500,6 +506,7 @@ self._current_sub_mode: str = "off"
 
 - `Karaoke.set_sub_mode(mode)` — log notification, delegate to playback
   controller, emit socket update.
+
 - `get_now_playing()` payload additions:
 
   ```python
@@ -599,7 +606,7 @@ the feature degrades cleanly.
 - Mode toggle while paused does not crash (covered by `skip_remove=True` only
   on initial play).
 
----
+______________________________________________________________________
 
 ## 4. Volume normalization (deferred — placeholder only)
 
@@ -644,7 +651,7 @@ change too until the read path actually exists.
 
 None for this plan. Tests land with the producer change.
 
----
+______________________________________________________________________
 
 ## 5. "Vocals: NN%" in timecode overlay
 
@@ -653,7 +660,7 @@ None for this plan. Tests land with the producer change.
 Prototype's timecode overlay
 ([mpv/app.py:395-410](mpv/app.py#L395-L410)) reads
 `{elapsed} / {total} | Pitch: {st} | Vocals: {pct}%`. Main's
-[_build_timecode_overlay](pikaraoke/lib/overlay_manager.py#L128-L140) shows
+[\_build_timecode_overlay](pikaraoke/lib/overlay_manager.py#L128-L140) shows
 only pitch. Add the vocal-volume tail when dual-stem is active.
 
 Depends on #2 (vocal volume must exist as state).
@@ -667,7 +674,7 @@ Extend `OverlayState` ([overlay_manager.py:44-63](pikaraoke/lib/overlay_manager.
 class OverlayState:
     ...
     dual_stem: bool
-    vocal_volume: float   # 0.0-1.0
+    vocal_volume: float  # 0.0-1.0
 ```
 
 Because `OverlayState` is `@dataclass(frozen=True)` with no defaults, every
@@ -702,7 +709,7 @@ automatically the next tick after `set_vocal_volume` updates state.
 - Overlay text excludes "Vocals:" when `dual_stem=False`.
 - Overlay text includes correct percentage when `dual_stem=True`.
 
----
+______________________________________________________________________
 
 ## 6. Seek bar in now-playing UI
 
@@ -809,7 +816,7 @@ if (!_seekDragging && _seekDuration > 0) {
 - `PlaybackController.seek()` no-ops when not playing.
 - `/seek/<position>` route delegates to `playback_controller.seek`.
 
----
+______________________________________________________________________
 
 ## 7. Per-song reset of vocal volume
 
@@ -837,7 +844,7 @@ listed separately for completeness — fold into #2's commit.
 
 - After `reset_now_playing()`, `k.vocal_volume == preferences.get_or_default("vocal_volume")`.
 
----
+______________________________________________________________________
 
 ## Suggested rollout order
 

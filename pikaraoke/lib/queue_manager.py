@@ -44,9 +44,7 @@ class QueueManager:
         if limit == 0 or user in ("Pikaraoke", "Randomizer"):
             return False
 
-        now_playing_user = (
-            self._get_now_playing_user() if self._get_now_playing_user else None
-        )
+        now_playing_user = self._get_now_playing_user() if self._get_now_playing_user else None
         count = sum(1 for item in self.queue if item["user"] == user) + (
             1 if now_playing_user == user else 0
         )
@@ -118,8 +116,7 @@ class QueueManager:
             logging.debug("User limited by: " + str(limit))
             return [
                 False,
-                _("You reached the limit of %s song(s) from an user in queue!")
-                % (str(limit)),
+                _("You reached the limit of %s song(s) from an user in queue!") % (str(limit)),
             ]
 
         queue_item = {
@@ -311,9 +308,7 @@ class QueueManager:
 
         if action == "down":
             if index == len(self.queue) - 1:
-                logging.warning(
-                    "Song is already last, can't bump down in queue: " + song_path
-                )
+                logging.warning("Song is already last, can't bump down in queue: " + song_path)
                 return False
             return self.reorder(index, index + 1)
 

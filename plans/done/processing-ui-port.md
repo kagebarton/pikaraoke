@@ -189,18 +189,18 @@ The current file renders `Math.round(item.download_progress) + '%'` next to the 
 
 ## Test plan
 
-- [ ] Visit `/processing` with an empty pipeline → "No songs in the processing pipeline." message shows, table hidden.
-- [ ] Start a download → row appears, download icon shows spinner, "downloading" label visible, separation icon shows clock, cancel icon (red X) shows in the cancel column.
-- [ ] Click cancel during download → confirm dialog appears; after OK, row transitions to cancelling spinner (red), then disappears on next poll.
-- [ ] Let a download finish → download icon becomes grey check, separation icon shows spinner with "separating" label.
-- [ ] Click cancel during separation → confirm dialog; row shows cancelling spinner (red) on separation column, then disappears after backend completes the in-flight separation.
-- [ ] Let full pipeline finish → both icons grey check, queue (+) button appears in queue column, remove (trash) in cancel column.
-- [ ] Click queue → item is enqueued and row disappears on next poll (no confirmation).
-- [ ] Click remove on a completed item → confirm dialog; row disappears.
-- [ ] Trigger a download error (e.g. private/removed video) → download icon shows grey X, error message under the title, remove (trash) button in cancel column.
-- [ ] Zebra striping renders (Bulma `is-striped`).
-- [ ] Light/dark theme both look correct — icon greys and the spinner border remain visible on both backgrounds.
-- [ ] i18n: switch to a non-English locale and confirm Title / Download / Separation / legend / labels / confirm prompts all translate.
-- [ ] Spinner does not visibly jitter/restart on each 1s poll (keyed row updates preserve unchanged rows).
-- [ ] Cancelling, queueing, or removing a row fades it out over 1s (optimistic UI) rather than waiting for the next poll.
-- [ ] Screen reader announces "Cancel" / "Queue" / "Remove" on the icon buttons (aria-label present).
+- \[ \] Visit `/processing` with an empty pipeline → "No songs in the processing pipeline." message shows, table hidden.
+- \[ \] Start a download → row appears, download icon shows spinner, "downloading" label visible, separation icon shows clock, cancel icon (red X) shows in the cancel column.
+- \[ \] Click cancel during download → confirm dialog appears; after OK, row transitions to cancelling spinner (red), then disappears on next poll.
+- \[ \] Let a download finish → download icon becomes grey check, separation icon shows spinner with "separating" label.
+- \[ \] Click cancel during separation → confirm dialog; row shows cancelling spinner (red) on separation column, then disappears after backend completes the in-flight separation.
+- \[ \] Let full pipeline finish → both icons grey check, queue (+) button appears in queue column, remove (trash) in cancel column.
+- \[ \] Click queue → item is enqueued and row disappears on next poll (no confirmation).
+- \[ \] Click remove on a completed item → confirm dialog; row disappears.
+- \[ \] Trigger a download error (e.g. private/removed video) → download icon shows grey X, error message under the title, remove (trash) button in cancel column.
+- \[ \] Zebra striping renders (Bulma `is-striped`).
+- \[ \] Light/dark theme both look correct — icon greys and the spinner border remain visible on both backgrounds.
+- \[ \] i18n: switch to a non-English locale and confirm Title / Download / Separation / legend / labels / confirm prompts all translate.
+- \[ \] Spinner does not visibly jitter/restart on each 1s poll (keyed row updates preserve unchanged rows).
+- \[ \] Cancelling, queueing, or removing a row fades it out over 1s (optimistic UI) rather than waiting for the next poll.
+- \[ \] Screen reader announces "Cancel" / "Queue" / "Remove" on the icon buttons (aria-label present).

@@ -112,9 +112,7 @@ class TestPlaybackControllerPlayFile:
                 tick_call_index = i
         assert play_call_index is not None, "mpv.play should have been called"
         assert tick_call_index is not None, "mpv.tick_overlays should have been called"
-        assert tick_call_index > play_call_index, (
-            "tick_overlays must come after mpv.play"
-        )
+        assert tick_call_index > play_call_index, "tick_overlays must come after mpv.play"
 
     @patch("pikaraoke.lib.playback_controller.os.path.isfile", return_value=True)
     def test_play_file_stream_failure(self, mock_isfile, test_prefs, mock_mpv):
@@ -135,9 +133,7 @@ class TestPlaybackControllerMissingFile:
     """Tests for file-existence guard in play_file."""
 
     @patch("flask_babel._", side_effect=lambda x: x)
-    def test_returns_error_for_nonexistent_file(
-        self, mock_gettext, test_prefs, mock_mpv
-    ):
+    def test_returns_error_for_nonexistent_file(self, mock_gettext, test_prefs, mock_mpv):
         events = EventSystem()
         filename_fn = lambda x, remove_youtube_id=True: x
 
@@ -149,9 +145,7 @@ class TestPlaybackControllerMissingFile:
         assert "not found" in result.error
 
     @patch("pikaraoke.lib.playback_controller.os.path.isfile", return_value=True)
-    def test_existing_file_proceeds_normally(
-        self, mock_isfile, test_prefs, mock_mpv, tmp_path
-    ):
+    def test_existing_file_proceeds_normally(self, mock_isfile, test_prefs, mock_mpv, tmp_path):
         events = EventSystem()
         filename_fn = lambda x, remove_youtube_id=True: "Test Song"
 

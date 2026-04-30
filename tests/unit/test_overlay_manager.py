@@ -180,9 +180,7 @@ class TestComputeOverlaysPlaying:
     def test_paused_mode_produces_same_overlays_as_playing(self):
         playing = _playing_state(mode=ScreenMode.PLAYING)
         paused = _playing_state(mode=ScreenMode.PAUSED)
-        assert set(compute_overlays(playing).keys()) == set(
-            compute_overlays(paused).keys()
-        )
+        assert set(compute_overlays(playing).keys()) == set(compute_overlays(paused).keys())
 
     def test_nowplaying_text_contains_title(self):
         state = _playing_state(now_playing_title="Bohemian Rhapsody")

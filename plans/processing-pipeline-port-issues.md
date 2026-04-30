@@ -6,7 +6,7 @@ references are accurate.
 
 Date: 2026-04-29
 
----
+______________________________________________________________________
 
 ## CRITICAL
 
@@ -46,7 +46,7 @@ includes the column) would silently break upgrades from version 1.
 
 **Recommendation:** Add the `if cur < N:` guards shown above.
 
----
+______________________________________________________________________
 
 ### 2. `_stems_already_exist` check is insufficient for the 5-stage pipeline
 
@@ -72,17 +72,17 @@ The same scenario occurs if `lyric_align` fails but transcode succeeded.
 **Recommendation:** Either:
 
 a) Extend `_stems_already_exist` to also check for `karaoke/{stem}.ass` (the
-   minimum required output for karaoke playback per `playback_controller.py:204`),
-   OR
+minimum required output for karaoke playback per `playback_controller.py:204`),
+OR
 b) Gate the early-exit on `processing_status` — only skip when the status is
-   already `'ready'` or `'skipped'`. If `'pending'` or `'failed'`, always run
-   the pipeline and let individual stages be internally incremental.
+already `'ready'` or `'skipped'`. If `'pending'` or `'failed'`, always run
+the pipeline and let individual stages be internally incremental.
 
 Option (b) is cleaner and aligns with the plan's own intent of using
 `processing_status` as a gate. The current plan has `_stems_already_exist` acting
 as a bypass around the status system.
 
----
+______________________________________________________________________
 
 ## HIGH
 
@@ -102,7 +102,7 @@ creates the old structure and migrations add the columns. This works, but:
 defaults, AND keep the migration methods for idempotent upgrades from prior
 versions.
 
----
+______________________________________________________________________
 
 ### 4. `build_song_record` path needs explicit handling for `processing_status`
 
@@ -124,14 +124,14 @@ scanned songs default to `'skipped'`.
 **Recommendation:** Either:
 
 a) Add `"processing_status": "pending"` to `build_song_record` and have
-   `scan()` override it to `'skipped'` on its bulk insert, or
+`scan()` override it to `'skipped'` on its bulk insert, or
 b) Add a separate `processing_status` parameter to `build_song_record` (default
-   `"skipped"`), and have `register_download` call it with `"pending"`.
+`"skipped"`), and have `register_download` call it with `"pending"`.
 
 This is not a "locate during implementation" detail — it's a design decision
 that affects whether library-scanned songs get swept into the pipeline backlog.
 
----
+______________________________________________________________________
 
 ### 5. PTY file descriptor lifecycle and ownership is unclear
 
@@ -152,7 +152,7 @@ prematurely (e.g., by `ProcessTerminal.stop()`), subsequent
 `ProcessingManager` and only closed in `stop()` after the orchestrator thread
 joins. `ProcessTerminal` should not close the slave fd independently.
 
----
+______________________________________________________________________
 
 ### 6. `processing_skipped` event not subscribed in `PipelineTracker`
 
@@ -169,11 +169,12 @@ subscribes to 7 events: `download_queued`, `song_downloaded`, `download_error`,
 **Recommendation:** Add the subscription and implement a handler that clears
 the item from `_items` (or marks its status `"skipped"`) when the event fires.
 
----
+______________________________________________________________________
 
 ### 7. Subtitle language selection is unverified
 
 `download_manager._move_downloaded_subtitle()` (line 446–476):
+
 - Globs for `*.srt`, `*.vtt`, `*.srv3`, `*.ttml` in the song directory.
 - Picks the **first** `.srt` by filesystem order.
 - Deletes **all other subtitle files** (all formats, all languages).
@@ -189,12 +190,12 @@ forces `whisper_language = "en"` in the config.
 
 **Recommendation:** Either:
 a) Add `--sub-lang en` to yt-dlp options (best: prevents non-English downloads
-   entirely),
+entirely),
 b) Filter `.srt` files by language prefix in `_move_downloaded_subtitle`
-   (prefer `*.en.srt`, fall back to any `.srt`), or
+(prefer `*.en.srt`, fall back to any `.srt`), or
 c) Have `_resolve_lyrics_path` try `{stem}.en.srt` first, then `{stem}.srt`.
 
----
+______________________________________________________________________
 
 ## MEDIUM
 
@@ -210,12 +211,13 @@ But `files.browse` (files.py:40–115) passes only raw song paths from
 `PipelineTracker.get_status()` call exists.
 
 **Recommendation:** Add a subsection specifying:
+
 - The route should join DB processing_status with PipelineTracker's in-flight
   set for each song.
 - The template (`files.html`) should render a badge or indicator per row.
 - The changes should be localized enough that a UI reviewer can find them.
 
----
+______________________________________________________________________
 
 ### 9. WhisperWorker output goes to the main terminal, not the secondary PTY
 
@@ -235,7 +237,7 @@ secondary terminal.
 Since it's in-process, this would need `sys.stderr` redirection around the
 whisper calls. Mark this as a conscious tradeoff in the plan.
 
----
+______________________________________________________________________
 
 ### 10. `cancel_pending` does not emit an event
 
@@ -256,7 +258,7 @@ react to a pending cancellation without polling `pending_jobs`.
 from `cancel_pending` as well. The event handler already distinguishes
 pending vs active by matching song_path.
 
----
+______________________________________________________________________
 
 ### 11. Migration `user_version` jumps from 1 to 3
 
@@ -266,7 +268,7 @@ maintainers. The two migrations (v2 and v3) could coexist in one step.
 **Recommendation:** Either combine into one version step (v2) or add a comment
 explaining the skip.
 
----
+______________________________________________________________________
 
 ### 12. `PipelineConfig.intermediate_dir` type inconsistency
 
@@ -280,7 +282,7 @@ cause mypy/pyright issues.
 `get_temp_directory()` currently returns `str` — this could be updated to
 return `Path` or the assignment could wrap it.
 
----
+______________________________________________________________________
 
 ### 13. Breaking model path change buried in verification section
 
@@ -299,13 +301,12 @@ Goals sections, and must be included in release upgrade notes.
 **Recommendation:** Move this warning to the top of the plan (Context section)
 so implementers and reviewers see it immediately.
 
----
+______________________________________________________________________
 
 ### 14. Processing status naming collision with PipelineItem
 
 `PipelineTracker.PipelineItem` already has a `processing_status` field
-(pipeline_tracker.py:44–46) with values `waiting | pending | active | complete
-| error | cancelling`. The proposed DB column is also called `processing_status`
+(pipeline_tracker.py:44–46) with values `waiting | pending | active | complete | error | cancelling`. The proposed DB column is also called `processing_status`
 with values `pending | ready | failed | skipped`.
 
 These are **different concepts** — the tracker field is per-job in-flight state
@@ -314,10 +315,11 @@ pipeline state (for library gating). The identical name will cause confusion
 during implementation.
 
 **Recommendation:** Rename one. For example:
+
 - DB column: `pipeline_state` or `processing_phase`
 - Tracker field: unchanged (many templates/routes depend on it)
 
----
+______________________________________________________________________
 
 ### 15. Queue route gating mentioned but not specified
 
@@ -329,7 +331,7 @@ files or code changes are identified.
 changes — at minimum `routes/queue.py:enqueue()`, any "play now" endpoint,
 and the SSE flow for queue adds.
 
----
+______________________________________________________________________
 
 ## LOW
 
@@ -347,7 +349,7 @@ Lines 540–543 contain a confused design note:
 The `PreparePtyStage` approach (resolved later in the plan) makes this comment
 obsolete. The code should drop it.
 
----
+______________________________________________________________________
 
 ### 17. Unnecessary `threading.Lock` for lazy whisper loading
 
@@ -358,7 +360,7 @@ so there is no concurrent access. The lock has no benefit and adds complexity.
 **Recommendation:** Simplify to a `bool` flag checked under the assumption of
 single-threaded access.
 
----
+______________________________________________________________________
 
 ### 18. No backoff for eager `StemWorker` restart on persistent failures
 
@@ -369,7 +371,7 @@ job produces a restart attempt and an error log.
 **Recommendation:** Consider adding a backoff (exponential or capped retry
 count) so a persistent failure doesn't flood logs on every queued job.
 
----
+______________________________________________________________________
 
 ### 19. Prototype `requirements.txt` is unversioned — plan's pins are new
 
@@ -400,7 +402,7 @@ before committing the plan's pins. Note that `torch>=2.2` may conflict with
 other system packages — on Pi-class hardware this is a significant
 constraint.
 
----
+______________________________________________________________________
 
 ## SUMMARY TABLE
 

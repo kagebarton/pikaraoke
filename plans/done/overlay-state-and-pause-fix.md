@@ -18,14 +18,13 @@ subsequent render can observe before the transition completes. Fix the pause
 bug, then make state updates strictly precede the renders that read them so
 the band-aids (and the remaining uncovered race) all fall out together.
 
----
+______________________________________________________________________
 
 ## 1. Pause-on-start bug
 
 ### Root cause
 
-`MpvController.play()` and `stop()` set the Python attribute `self.is_paused =
-False` but never touch MPV's actual `pause` property. MPV preserves `pause`
+`MpvController.play()` and `stop()` set the Python attribute `self.is_paused = False` but never touch MPV's actual `pause` property. MPV preserves `pause`
 across `loadfile` calls, and the placeholder image (loaded with
 `image_display_duration=inf`) leaves MPV in `pause=True`. The next video
 therefore loads paused.
@@ -45,7 +44,7 @@ One-line addition in each of `play()` and `stop()`:
 # pikaraoke/lib/mpv_controller.py, inside play() around line 335
 self.is_idle = False
 self.is_paused = False
-self._player.pause = False   # NEW — also clear MPV's pause property
+self._player.pause = False  # NEW — also clear MPV's pause property
 self.position = 0.0
 ```
 
@@ -54,7 +53,7 @@ self.position = 0.0
 self.position = 0.0
 self.duration = 0.0
 self.is_paused = False
-self._player.pause = False   # NEW — symmetry; covers user-paused-then-skipped
+self._player.pause = False  # NEW — symmetry; covers user-paused-then-skipped
 ```
 
 The explicit assignment to `self._player.pause` triggers MPV's change
@@ -70,7 +69,7 @@ guarantees the property is cleared on both sides.
   while paused, verify second song plays.
 - Sanity: `restart()` still works (already had the correct pattern).
 
----
+______________________________________________________________________
 
 ## 2. State-then-render refactor
 
@@ -218,6 +217,7 @@ sources are consistent.
 ##### `MpvController.play()` — remove `set_mode`; add pause-clear
 
 Before (current):
+
 ```python
 def play(self, file_path, semitones=0, *, ass_path=None, ...):
     # ... subtitle/stem setup ...
@@ -235,6 +235,7 @@ def play(self, file_path, semitones=0, *, ass_path=None, ...):
 ```
 
 After:
+
 ```python
 def play(self, file_path, semitones=0, *, ass_path=None, ...):
     # ... subtitle/stem setup unchanged ...
@@ -255,6 +256,7 @@ def play(self, file_path, semitones=0, *, ass_path=None, ...):
 ##### `MpvController.stop()` — remove `set_mode`; add pause-clear
 
 Before:
+
 ```python
 def stop(self):
     self.is_idle = True
@@ -263,10 +265,11 @@ def stop(self):
     self.position = 0.0
     self.duration = 0.0
     self.is_paused = False
-    self.set_mode(ScreenMode.IDLE)            # ← REMOVE (triggers bad render)
+    self.set_mode(ScreenMode.IDLE)  # ← REMOVE (triggers bad render)
 ```
 
 After:
+
 ```python
 def stop(self):
     # Set is_idle BEFORE clearing lavfi_complex. _on_idle_active fires on the
@@ -280,7 +283,7 @@ def stop(self):
     self.position = 0.0
     self.duration = 0.0
     self.is_paused = False
-    self._player.pause = False                # ← ADD (pause fix)
+    self._player.pause = False  # ← ADD (pause fix)
     # no set_mode — caller decides when to render/load placeholder
 ```
 
@@ -297,11 +300,14 @@ now explicitly part of the public API consumed by `PlaybackController`.
 ##### `PlaybackController.play_file()` — state first, then mpv, then tick
 
 Before:
+
 ```python
 def play_file(self, file_path, user, semitones=0):
     # ... validate, find subs/companions ...
     with self._playback_lock:
-        self.mpv.play(file_path, ..., vocal_volume=vocal_volume)  # triggers inner tick (stale)
+        self.mpv.play(
+            file_path, ..., vocal_volume=vocal_volume
+        )  # triggers inner tick (stale)
         self.now_playing = self.filename_from_path(file_path, remove_youtube_id=True)
         self.now_playing_filename = file_path
         # ... set remaining now_playing_* ...
@@ -309,11 +315,12 @@ def play_file(self, file_path, user, semitones=0):
         self.is_playing = True
 
     self.events.emit("playback_started")
-    self.refresh_overlays()                   # ← band-aid render
+    self.refresh_overlays()  # ← band-aid render
     return PlaybackResult(success=True)
 ```
 
 After:
+
 ```python
 def play_file(self, file_path, user, semitones=0):
     # ... validate, find subs/companions (unchanged) ...
@@ -329,7 +336,9 @@ def play_file(self, file_path, user, semitones=0):
             "ass": subs["ass"] is not None and os.path.exists(subs["ass"]),
             "srt": subs["srt"] is not None and os.path.exists(subs["srt"]),
         }
-        self.now_playing_dual_stem = vocal_path is not None and nonvocal_path is not None
+        self.now_playing_dual_stem = (
+            vocal_path is not None and nonvocal_path is not None
+        )
         self.now_playing_vocal_volume = vocal_volume
         self.is_paused = False
         self.is_playing = True
@@ -338,7 +347,9 @@ def play_file(self, file_path, user, semitones=0):
         self.mpv.play(file_path, ..., vocal_volume=vocal_volume)
 
         # 3. Duration is only known after mpv.play completes the duration wait
-        self.now_playing_duration = int(self.mpv.duration) if self.mpv.duration else None
+        self.now_playing_duration = (
+            int(self.mpv.duration) if self.mpv.duration else None
+        )
 
         # 4. Single render with fully-consistent state
         self.mpv.tick_overlays()
@@ -357,18 +368,20 @@ subsequent tick corrects. Acceptable degradation, no flash.
 ##### `PlaybackController.end_song()` — reset PC state first, then mpv, then placeholder, then tick
 
 Before:
+
 ```python
 def end_song(self, reason=None):
     if not self.is_playing:
         return
     # ... log, emit abnormal notification ...
-    self.mpv.stop()                           # triggers inner tick (stale)
+    self.mpv.stop()  # triggers inner tick (stale)
     self.reset_now_playing()
-    self.refresh_overlays()                   # ← band-aid render
+    self.refresh_overlays()  # ← band-aid render
     self.events.emit("song_ended")
 ```
 
 After:
+
 ```python
 def end_song(self, reason=None):
     if not self.is_playing:
@@ -460,6 +473,7 @@ render is unchanged. The only deletions are the two internal renders that
 #### Who still calls `refresh_overlays()`?
 
 These paths stay — they're legitimate "state changed mid-song, render now":
+
 - `set_pitch`, `set_sub_mode`, `set_vocal_volume` (all already emit
   `now_playing_update` and need a fresh OSD)
 - Preference toggles for `hide_url`, `hide_now_playing_overlay`, `show_clock`
@@ -469,7 +483,7 @@ These paths stay — they're legitimate "state changed mid-song, render now":
 The refactor only deletes the two `refresh_overlays()` calls in `play_file`
 and `end_song` (the band-aids). The method itself stays.
 
----
+______________________________________________________________________
 
 ## 3. Risks / caveats
 
@@ -511,7 +525,7 @@ propagate; `play_file` / `end_song` then call `reset_now_playing()` in a
 fine — silent failure there only leaves the last video frame visible, which
 is cosmetic.
 
----
+______________________________________________________________________
 
 ## 4. Files touched
 
@@ -544,7 +558,7 @@ is cosmetic.
   now_playing\_\* state-set happens before `mock_mpv.play` (inspect the
   `method_calls` ordering on the mock).
 
----
+______________________________________________________________________
 
 ## 5. Implementation order
 
@@ -573,7 +587,7 @@ Do them in this sequence — each step is independently testable:
    the old ordering. Update `test_play_file_success` to assert the new
    `tick_overlays()` call and the state-set-before-`mpv.play` ordering.
 
----
+______________________________________________________________________
 
 ## 6. Test plan (manual)
 

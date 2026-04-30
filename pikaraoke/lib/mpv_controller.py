@@ -215,9 +215,7 @@ class MpvController:
         try:
             self._audio_backend = self._detect_audio_backend()
         except RuntimeError:
-            logging.warning(
-                "No audio server found (wpctl/pactl/amixer). Volume controls disabled."
-            )
+            logging.warning("No audio server found (wpctl/pactl/amixer). Volume controls disabled.")
             self._audio_backend = None
 
         self.is_running = True
@@ -339,9 +337,7 @@ class MpvController:
         # Set before loadfile to guard _on_idle_active
         self.is_idle = False
         self.is_paused = False
-        self._player.pause = (
-            False  # also clear MPV's pause property (pause-on-start fix)
-        )
+        self._player.pause = False  # also clear MPV's pause property (pause-on-start fix)
         self.position = 0.0
 
         self._duration_ready.clear()
@@ -368,9 +364,7 @@ class MpvController:
 
         # Apply subtitle mode after lavfi-complex is set (skip_remove=True
         # on initial play to avoid segfault when lavfi-complex is active)
-        self._apply_subtitle_mode(
-            initial_sub_mode, skip_remove=True, subtitle_delay=subtitle_delay
-        )
+        self._apply_subtitle_mode(initial_sub_mode, skip_remove=True, subtitle_delay=subtitle_delay)
 
         self.duration = float(self._player.duration or 0.0)
         # no set_mode — caller decides when to render
@@ -389,9 +383,7 @@ class MpvController:
             self.position = 0.0
             self.duration = 0.0
             self.is_paused = False
-            self._player.pause = (
-                False  # also clear MPV's pause property (pause-on-start fix)
-            )
+            self._player.pause = False  # also clear MPV's pause property (pause-on-start fix)
         # no set_mode — caller decides when to render/load placeholder
 
     @_safe
@@ -486,9 +478,7 @@ class MpvController:
 
         When switching to 'srt' mode, applies the current subtitle delay.
         """
-        self._apply_subtitle_mode(
-            mode, skip_remove=False, subtitle_delay=self._subtitle_delay
-        )
+        self._apply_subtitle_mode(mode, skip_remove=False, subtitle_delay=self._subtitle_delay)
 
     @_safe
     def set_subtitle_delay(self, seconds: float) -> None:
@@ -518,9 +508,7 @@ class MpvController:
     # ── OSD / Overlay ──────────────────────────────────────────────────────────
 
     @_safe
-    def osd_overlay(
-        self, overlay_id: int, data: str, res_x: int = 1920, res_y: int = 1080
-    ) -> None:
+    def osd_overlay(self, overlay_id: int, data: str, res_x: int = 1920, res_y: int = 1080) -> None:
         """Send an ASS-events OSD overlay."""
         self._player.command(
             "osd-overlay",

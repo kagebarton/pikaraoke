@@ -386,16 +386,16 @@ No mocks for the queue itself — the existing tests use real `EventSystem` and 
 
 ## Test Plan
 
-- [ ] Queue two songs as User A, two as User B. Pause User A's first song. Verify playback plays them in order: A2, B1, B2 (A1 skipped).
-- [ ] Unpause A's first song. Verify it plays next when the current song ends.
-- [ ] Pause every song in the queue. Verify nothing plays (splash/idle).
-- [ ] Unpause one song. Verify it starts playing within one loop tick (~500ms + splash delay).
-- [ ] As User A, attempt to pause User B's song via direct POST. Verify 403.
-- [ ] As admin, pause/unpause any user's song via the admin modal. Verify it works.
-- [ ] Verify `limit_user_songs_by` treats paused songs as counted (set limit to 2, queue 2 songs, pause one, try to queue a third — should be rejected).
-- [ ] Verify fair queue: User A queues songs 1, 2, pauses song 1. User B queues song 1. Expected order after B queues: A1(paused), B1, A2. Unpausing A1 doesn't reorder.
-- [ ] Mobile layout: paused tag displays correctly on narrow screens.
-- [ ] Refresh the page mid-pause. Verify paused state persists (comes from queue state, not client-side).
+- \[ \] Queue two songs as User A, two as User B. Pause User A's first song. Verify playback plays them in order: A2, B1, B2 (A1 skipped).
+- \[ \] Unpause A's first song. Verify it plays next when the current song ends.
+- \[ \] Pause every song in the queue. Verify nothing plays (splash/idle).
+- \[ \] Unpause one song. Verify it starts playing within one loop tick (~500ms + splash delay).
+- \[ \] As User A, attempt to pause User B's song via direct POST. Verify 403.
+- \[ \] As admin, pause/unpause any user's song via the admin modal. Verify it works.
+- \[ \] Verify `limit_user_songs_by` treats paused songs as counted (set limit to 2, queue 2 songs, pause one, try to queue a third — should be rejected).
+- \[ \] Verify fair queue: User A queues songs 1, 2, pauses song 1. User B queues song 1. Expected order after B queues: A1(paused), B1, A2. Unpausing A1 doesn't reorder.
+- \[ \] Mobile layout: paused tag displays correctly on narrow screens.
+- \[ \] Refresh the page mid-pause. Verify paused state persists (comes from queue state, not client-side).
 
 ## Out of Scope
 

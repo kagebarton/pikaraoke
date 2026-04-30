@@ -21,11 +21,7 @@ from pikaraoke.lib.preference_manager import PreferenceManager
 from pikaraoke.lib.process_terminal import ProcessTerminal
 from pikaraoke.lib.song_manager import SongManager
 from pikaraoke.pipeline.config import PipelineConfig, build_whisper_config
-from pikaraoke.pipeline.context import (
-    CancelToken,
-    PipelineCancelled,
-    StageContext,
-)
+from pikaraoke.pipeline.context import CancelToken, PipelineCancelled, StageContext
 from pikaraoke.pipeline.orchestrator import PipelineOrchestrator
 from pikaraoke.pipeline.stages.base import BaseStage
 from pikaraoke.pipeline.stages.ffmpeg_extract import FFmpegExtractStage
@@ -42,6 +38,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # PreparePtyStage — seeds ctx.artifacts["pty_slave_fd"] before any stage runs
 # ---------------------------------------------------------------------------
+
 
 class PreparePtyStage(BaseStage):
     """Tiny stage that seeds the PTY slave fd into ctx.artifacts.
@@ -64,16 +61,18 @@ class PreparePtyStage(BaseStage):
 # _ActiveJob — tracks the currently running pipeline invocation
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class _ActiveJob:
     song_path: str
-    cancel_token: CancelToken          # from orchestrator.run_one_async()
-    cancelling: bool = False           # vestigial: set but not read; signals intent
+    cancel_token: CancelToken  # from orchestrator.run_one_async()
+    cancelling: bool = False  # vestigial: set but not read; signals intent
 
 
 # ---------------------------------------------------------------------------
 # ProcessingManager
 # ---------------------------------------------------------------------------
+
 
 class ProcessingManager:
     """Orchestrates pipeline processing with surgical cancellation.
@@ -112,7 +111,7 @@ class ProcessingManager:
 
         # Queue and cancellation bookkeeping
         self._pending_queue: queue.Queue[str | None] = queue.Queue()
-        self.pending_jobs: list[str] = []                    # public, derived
+        self.pending_jobs: list[str] = []  # public, derived
         self._cancelled_paths: set[str] = set()
         self._active: _ActiveJob | None = None
         self._state_lock = threading.Lock()
@@ -168,9 +167,7 @@ class ProcessingManager:
         )
         self._orchestrator.start()  # starts stem worker only; whisper is lazy
 
-        self._orchestrator_thread = threading.Thread(
-            target=self._run_loop, daemon=True
-        )
+        self._orchestrator_thread = threading.Thread(target=self._run_loop, daemon=True)
         self._orchestrator_thread.start()
 
     def stop(self) -> None:
@@ -229,9 +226,7 @@ class ProcessingManager:
         with self._state_lock:
             active = self._active
             if active is None or active.song_path != song_path:
-                logging.warning(
-                    f"Cancel requested for non-active job: {Path(song_path).name}"
-                )
+                logging.warning(f"Cancel requested for non-active job: {Path(song_path).name}")
                 return
             active.cancelling = True
         logging.info(f"Cancelling active job: {Path(song_path).name}")
@@ -258,9 +253,7 @@ class ProcessingManager:
             with self._state_lock:
                 if song_path in self._cancelled_paths:
                     self._cancelled_paths.discard(song_path)
-                    self.pending_jobs[:] = [
-                        p for p in self.pending_jobs if p != song_path
-                    ]
+                    self.pending_jobs[:] = [p for p in self.pending_jobs if p != song_path]
                     continue
 
             try:
@@ -268,9 +261,7 @@ class ProcessingManager:
             finally:
                 # In-place mutation preserves identity for external readers
                 with self._state_lock:
-                    self.pending_jobs[:] = [
-                        p for p in self.pending_jobs if p != song_path
-                    ]
+                    self.pending_jobs[:] = [p for p in self.pending_jobs if p != song_path]
                     self._active = None
 
                 # Eager restart: if a cancel or crash killed the stem worker,
@@ -310,9 +301,7 @@ class ProcessingManager:
             if self._song_manager is not None:
                 self._song_manager.set_pipeline_state(song_path, "failed")
             logging.error(f"Processing failed for {Path(song_path).name}: {e}")
-            self._events.emit(
-                "processing_error", {"song_path": song_path, "error": str(e)}
-            )
+            self._events.emit("processing_error", {"song_path": song_path, "error": str(e)})
             return
 
         # Persist loudnorm offset and ready state
@@ -320,13 +309,9 @@ class ProcessingManager:
         if self._song_manager is not None:
             if offset is not None:
                 try:
-                    self._song_manager.set_loudnorm_offset(
-                        song_path, float(offset)
-                    )
+                    self._song_manager.set_loudnorm_offset(song_path, float(offset))
                 except Exception as e:
-                    logging.warning(
-                        f"Failed to persist loudnorm offset for {song_path}: {e}"
-                    )
+                    logging.warning(f"Failed to persist loudnorm offset for {song_path}: {e}")
             self._song_manager.set_pipeline_state(song_path, "ready")
 
         self._events.emit("processing_complete", song_path)

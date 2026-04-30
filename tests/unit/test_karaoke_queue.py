@@ -8,15 +8,10 @@ class TestEnqueue:
 
     def test_enqueue_adds_song_to_queue(self, mock_karaoke):
         """Test that enqueue adds a song to the queue."""
-        result = mock_karaoke.queue_manager.enqueue(
-            "/songs/test---dQw4w9WgXcQ.mp4", "TestUser"
-        )
+        result = mock_karaoke.queue_manager.enqueue("/songs/test---dQw4w9WgXcQ.mp4", "TestUser")
 
         assert len(mock_karaoke.queue_manager.queue) == 1
-        assert (
-            mock_karaoke.queue_manager.queue[0]["file"]
-            == "/songs/test---dQw4w9WgXcQ.mp4"
-        )
+        assert mock_karaoke.queue_manager.queue[0]["file"] == "/songs/test---dQw4w9WgXcQ.mp4"
         assert mock_karaoke.queue_manager.queue[0]["user"] == "TestUser"
         assert mock_karaoke.queue_manager.queue[0]["title"] == "test"
         assert mock_karaoke.queue_manager.queue[0]["semitones"] == 0
@@ -25,9 +20,7 @@ class TestEnqueue:
 
     def test_enqueue_with_semitones(self, mock_karaoke):
         """Test that enqueue respects semitones parameter."""
-        mock_karaoke.queue_manager.enqueue(
-            "/songs/test---abc123.mp4", "TestUser", semitones=3
-        )
+        mock_karaoke.queue_manager.enqueue("/songs/test---abc123.mp4", "TestUser", semitones=3)
 
         assert mock_karaoke.queue_manager.queue[0]["semitones"] == 3
 
@@ -45,9 +38,7 @@ class TestEnqueue:
         """Test that add_to_front puts song at position 0."""
         mock_karaoke.queue_manager.enqueue("/songs/song1---abc.mp4", "User1")
         mock_karaoke.queue_manager.enqueue("/songs/song2---def.mp4", "User2")
-        mock_karaoke.queue_manager.enqueue(
-            "/songs/song3---ghi.mp4", "User3", add_to_front=True
-        )
+        mock_karaoke.queue_manager.enqueue("/songs/song3---ghi.mp4", "User3", add_to_front=True)
 
         assert mock_karaoke.queue_manager.queue[0]["file"] == "/songs/song3---ghi.mp4"
         assert len(mock_karaoke.queue_manager.queue) == 3
@@ -58,9 +49,7 @@ class TestEnqueue:
 
         mock_karaoke.queue_manager.enqueue("/songs/song1---abc.mp4", "LimitedUser")
         mock_karaoke.queue_manager.enqueue("/songs/song2---def.mp4", "LimitedUser")
-        result = mock_karaoke.queue_manager.enqueue(
-            "/songs/song3---ghi.mp4", "LimitedUser"
-        )
+        result = mock_karaoke.queue_manager.enqueue("/songs/song3---ghi.mp4", "LimitedUser")
 
         assert result[0] is False
         assert len(mock_karaoke.queue_manager.queue) == 2
@@ -70,9 +59,7 @@ class TestEnqueue:
         mock_karaoke.preferences.set("limit_user_songs_by", 1)
 
         mock_karaoke.queue_manager.enqueue("/songs/song1---abc.mp4", "Pikaraoke")
-        result = mock_karaoke.queue_manager.enqueue(
-            "/songs/song2---def.mp4", "Pikaraoke"
-        )
+        result = mock_karaoke.queue_manager.enqueue("/songs/song2---def.mp4", "Pikaraoke")
 
         assert result[0] is True
         assert len(mock_karaoke.queue_manager.queue) == 2
@@ -82,9 +69,7 @@ class TestEnqueue:
         mock_karaoke.preferences.set("limit_user_songs_by", 1)
 
         mock_karaoke.queue_manager.enqueue("/songs/song1---abc.mp4", "Randomizer")
-        result = mock_karaoke.queue_manager.enqueue(
-            "/songs/song2---def.mp4", "Randomizer"
-        )
+        result = mock_karaoke.queue_manager.enqueue("/songs/song2---def.mp4", "Randomizer")
 
         assert result[0] is True
         assert len(mock_karaoke.queue_manager.queue) == 2
@@ -120,9 +105,7 @@ class TestQueueEdit:
         mock_karaoke.queue_manager.enqueue("/songs/song1---abc.mp4", "User1")
         mock_karaoke.queue_manager.enqueue("/songs/song2---def.mp4", "User2")
 
-        result = mock_karaoke.queue_manager.queue_edit(
-            "/songs/song1---abc.mp4", "delete"
-        )
+        result = mock_karaoke.queue_manager.queue_edit("/songs/song1---abc.mp4", "delete")
 
         assert result is True
         assert len(mock_karaoke.queue_manager.queue) == 1
@@ -194,16 +177,12 @@ class TestQueueAddRandom:
         assert result is False
         assert len(mock_karaoke.queue_manager.queue) == 0
 
-    def test_queue_add_random_partial_when_not_enough_songs(
-        self, mock_karaoke_with_songs
-    ):
+    def test_queue_add_random_partial_when_not_enough_songs(self, mock_karaoke_with_songs):
         """Test that it adds what it can when requesting more than available."""
         result = mock_karaoke_with_songs.queue_manager.queue_add_random(10)
 
         assert result is False  # Returns False when ran out
-        assert (
-            len(mock_karaoke_with_songs.queue_manager.queue) == 5
-        )  # Added all available
+        assert len(mock_karaoke_with_songs.queue_manager.queue) == 5  # Added all available
 
 
 class TestQueueClear:
@@ -226,26 +205,17 @@ class TestIsSongInQueue:
         """Test detection of song in queue."""
         mock_karaoke.queue_manager.enqueue("/songs/song1---abc.mp4", "User1")
 
-        assert (
-            mock_karaoke.queue_manager.is_song_in_queue("/songs/song1---abc.mp4")
-            is True
-        )
+        assert mock_karaoke.queue_manager.is_song_in_queue("/songs/song1---abc.mp4") is True
 
     def test_is_song_in_queue_false(self, mock_karaoke):
         """Test detection of song not in queue."""
         mock_karaoke.queue_manager.enqueue("/songs/song1---abc.mp4", "User1")
 
-        assert (
-            mock_karaoke.queue_manager.is_song_in_queue("/songs/other---xyz.mp4")
-            is False
-        )
+        assert mock_karaoke.queue_manager.is_song_in_queue("/songs/other---xyz.mp4") is False
 
     def test_is_song_in_queue_empty(self, mock_karaoke):
         """Test with empty queue."""
-        assert (
-            mock_karaoke.queue_manager.is_song_in_queue("/songs/song1---abc.mp4")
-            is False
-        )
+        assert mock_karaoke.queue_manager.is_song_in_queue("/songs/song1---abc.mp4") is False
 
 
 class TestIsUserLimited:
@@ -304,9 +274,7 @@ class TestFairQueuePosition:
         """Test that user's second song goes after all first-round songs."""
         mock_karaoke.queue_manager.enqueue("/songs/song1---aaa.mp4", "UserA")
         mock_karaoke.queue_manager.enqueue("/songs/song2---bbb.mp4", "UserB")
-        mock_karaoke.queue_manager.enqueue(
-            "/songs/song3---ccc.mp4", "UserA"
-        )  # UserA's second
+        mock_karaoke.queue_manager.enqueue("/songs/song3---ccc.mp4", "UserA")  # UserA's second
 
         users = [item["user"] for item in mock_karaoke.queue_manager.queue]
         assert users == ["UserA", "UserB", "UserA"]
@@ -353,9 +321,7 @@ class TestFairQueuePosition:
         """Test that add_to_front bypasses fair queue logic."""
         mock_karaoke.queue_manager.enqueue("/songs/a1---a01.mp4", "UserA")
         mock_karaoke.queue_manager.enqueue("/songs/b1---b01.mp4", "UserB")
-        mock_karaoke.queue_manager.enqueue(
-            "/songs/a2---a02.mp4", "UserA", add_to_front=True
-        )
+        mock_karaoke.queue_manager.enqueue("/songs/a2---a02.mp4", "UserA", add_to_front=True)
 
         # add_to_front should still put song at position 0
         assert mock_karaoke.queue_manager.queue[0]["file"] == "/songs/a2---a02.mp4"

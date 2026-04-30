@@ -51,7 +51,9 @@ def user_cancel_item():
     if owner is None or owner != user:
         logging.warning(
             "User cancel rejected: cookie user %r != owner %r (item_id=%s)",
-            user, owner, item_id,
+            user,
+            owner,
+            item_id,
         )
         return jsonify({"success": False, "error": _("Not owner")}), 403
     logging.info("User cancel request: item_id=%s user=%s", item_id, user)

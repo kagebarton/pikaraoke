@@ -7,7 +7,7 @@ Date: 2026-04-24
 
 The plan is well-structured and aligns well with the existing codebase patterns. However, several issues ranging from critical bugs to minor gaps were found. Below they are organized by severity.
 
----
+______________________________________________________________________
 
 ## Critical Issues
 
@@ -72,7 +72,7 @@ This isn't a crash bug (the `continue` guard exists), but it is a user-facing gl
 
 **Mitigation:** Consider moving `reset_now_playing()` to after the `pop_next()` succeeds, or re-checking `has_playable_song()` after the splash delay. This is optional but improves robustness.
 
----
+______________________________________________________________________
 
 ## Significant Issues
 
@@ -120,7 +120,7 @@ The plan shows queue rows with sequential numbers (1, 2, 3...) regardless of whe
 
 Song B is "up next" but has number 2. The numbering reflects queue position (correct) but may confuse users who expect "up next" to always be #1. This is a UX consideration, not a bug — but worth noting.
 
----
+______________________________________________________________________
 
 ## Moderate Issues
 
@@ -175,7 +175,7 @@ The plan mentions this in the table (Section 4) but doesn't show the explicit Ja
 
 The plan says to update `generateNowPlayingRow()` to emit an options cell for non-admins, but doesn't show the code for it. For the now-playing row, there's no "pause queue item" action (the plan explicitly scopes out pausing the currently-playing song), so the only user action on now-playing would be... nothing? The now-playing row shouldn't get a user options gear. But the plan's column layout says non-admin-with-cookie gets 3 columns, and the now-playing row currently has 2 columns (non-admin) or 4 columns (admin). Adding a blank third column to the now-playing row for non-admins with cookies is needed for alignment but isn't shown in the plan.
 
----
+______________________________________________________________________
 
 ## Minor Issues
 
@@ -204,6 +204,7 @@ When a user pauses their song, the `queue_update` socket event triggers `queuePa
 ### 15. CSS `.row-paused` opacity affects the gear icon, making it hard to click
 
 The plan's CSS:
+
 ```css
 .row-paused td { opacity: 0.5; }
 .row-paused .tag { opacity: 1; }
@@ -212,6 +213,7 @@ The plan's CSS:
 The options column's gear icon will be at 0.5 opacity, which makes it harder to see and click. The user needs to click that gear to unpause their song — a catch-22 if it's too faded to notice.
 
 **Recommendation:** Also restore opacity on the options cell:
+
 ```css
 .row-paused .queue-song-user-btn { opacity: 1; }
 ```
@@ -232,7 +234,7 @@ The plan says "Update `openSongOptions()` to set the pause label based on the so
 
 The admin modal calls `executeQueueAction('pause')` which builds a URL: `/queue/edit?song=...&action=pause`. This hits the existing `queue_edit` GET endpoint. Since "pause" is a state-changing operation, using GET is semantically incorrect (idempotency), but it matches the existing pattern for all other queue edit actions (up, down, top, bottom, delete). Consistent, if imperfect.
 
----
+______________________________________________________________________
 
 ## Missing from the Plan
 
@@ -260,7 +262,7 @@ Related to issue #1 — the `now_playing` SocketIO event payload includes `up_ne
 
 The existing `toggle_pause_song` emits `queue_update` and `now_playing_update` (for UI refresh) but does **not** emit a `notification` event. Other user-facing actions like enqueue, delete, and clear all emit notifications. Consider adding one like `"UserA paused Song X"` or `"UserA unpaused Song X"` so other users on the queue page see what happened.
 
----
+______________________________________________________________________
 
 ## Verdict
 

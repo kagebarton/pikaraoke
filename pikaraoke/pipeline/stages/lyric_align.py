@@ -31,7 +31,10 @@ import srt
 from pikaraoke.pipeline.config import PipelineConfig
 from pikaraoke.pipeline.context import Phase, PipelineCancelled, SetEvent, StageContext
 from pikaraoke.pipeline.stages.base import BaseStage
-from pikaraoke.pipeline.workers.whisper_worker import AlignmentCancelledError, WhisperWorker
+from pikaraoke.pipeline.workers.whisper_worker import (
+    AlignmentCancelledError,
+    WhisperWorker,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +63,8 @@ class LyricAlignStage(BaseStage):
 
             logger.info(f"[{self.name}] Aligning lyrics to vocal stem: {Path(vocal_wav).name}")
             result = _model_call(
-                ctx, Phase.ALIGN,
+                ctx,
+                Phase.ALIGN,
                 lambda: self._worker.align(
                     vocal_path=vocal_wav,
                     lyrics_text=lyrics_text,
@@ -76,7 +80,8 @@ class LyricAlignStage(BaseStage):
             write_srt = lyrics_format == "txt"
 
             result = _model_call(
-                ctx, Phase.REFINE,
+                ctx,
+                Phase.REFINE,
                 lambda: self._worker.refine(
                     vocal_path=vocal_wav,
                     result=result,
@@ -87,7 +92,8 @@ class LyricAlignStage(BaseStage):
             # --- Transcription mode: TRANSCRIBE → (regroup) → REFINE ---
             logger.info(f"[{self.name}] Transcribing vocal stem: {Path(vocal_wav).name}")
             result = _model_call(
-                ctx, Phase.TRANSCRIBE,
+                ctx,
+                Phase.TRANSCRIBE,
                 lambda: self._worker.transcribe(
                     vocal_path=vocal_wav,
                     cancel_event=ctx.cancel.event if ctx.cancel else None,
@@ -105,7 +111,8 @@ class LyricAlignStage(BaseStage):
             write_srt = True
 
             result = _model_call(
-                ctx, Phase.REFINE,
+                ctx,
+                Phase.REFINE,
                 lambda: self._worker.refine(
                     vocal_path=vocal_wav,
                     result=result,
@@ -176,12 +183,14 @@ class LyricAlignStage(BaseStage):
         all_words = []
         for segment in result.segments:
             for i, word in enumerate(segment.words):
-                all_words.append({
-                    "word": word.word.strip(),
-                    "start": word.start,
-                    "end": word.end,
-                    "is_segment_first": i == 0,
-                })
+                all_words.append(
+                    {
+                        "word": word.word.strip(),
+                        "start": word.start,
+                        "end": word.end,
+                        "is_segment_first": i == 0,
+                    }
+                )
         return all_words
 
     def _match_words_to_lines(self, words: list[dict], lines: list[str]) -> list[dict]:
@@ -195,7 +204,7 @@ class LyricAlignStage(BaseStage):
 
         for line in lines:
             line_word_count = len(line.split())
-            line_words = words[word_index:word_index + line_word_count]
+            line_words = words[word_index : word_index + line_word_count]
             word_index += line_word_count
 
             if not line_words:
@@ -230,12 +239,14 @@ class LyricAlignStage(BaseStage):
                 }
                 for i, w in enumerate(segment.words)
             ]
-            line_objects.append({
-                "text": segment.text.strip(),
-                "words": words,
-                "start": words[0]["start"],
-                "end": words[-1]["end"],
-            })
+            line_objects.append(
+                {
+                    "text": segment.text.strip(),
+                    "words": words,
+                    "start": words[0]["start"],
+                    "end": words[-1]["end"],
+                }
+            )
         return line_objects
 
     def _generate_ass(self, line_objects: list[dict]) -> str:

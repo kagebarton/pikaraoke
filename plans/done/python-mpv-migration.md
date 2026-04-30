@@ -13,7 +13,7 @@ The overlay system (`OverlayManager`), filter builder, volume control, and
 `PlaybackController` orchestration layer remain structurally intact. Changes to
 files outside `mpv_controller.py` are minimal and mechanical.
 
----
+______________________________________________________________________
 
 ## Why python-mpv over raw IPC
 
@@ -27,7 +27,7 @@ files outside `mpv_controller.py` are minimal and mechanical.
 | Code volume | ~320 lines of socket/subprocess plumbing | ~100 lines of python-mpv wiring |
 | Error surface | Socket timeouts, stale sockets, reconnect races, JSON parse errors | `mpv.ShutdownError` + standard exceptions |
 
----
+______________________________________________________________________
 
 ## Architecture (after migration)
 
@@ -53,7 +53,7 @@ files outside `mpv_controller.py` are minimal and mechanical.
 State flow is now push-based: mpv pushes property changes → observer callbacks
 update `MpvController` fields and fire application callbacks → no poll thread.
 
----
+______________________________________________________________________
 
 ## Files Changed
 
@@ -67,7 +67,7 @@ update `MpvController` fields and fire application callbacks → no poll thread.
 | `tests/unit/test_playback_controller.py` | Update mock, remove `check_playback_ended` tests |
 | `tests/conftest.py` | Update `mock_mpv` fixture |
 
----
+______________________________________________________________________
 
 ## Detailed Design
 
@@ -80,7 +80,7 @@ update `MpvController` fields and fire application callbacks → no poll thread.
 
 No `pyzmq` — that is prototype-only for dual-stem live filter params.
 
----
+______________________________________________________________________
 
 ### 2. MpvController — new class structure
 
@@ -90,8 +90,8 @@ No `pyzmq` — that is prototype-only for dual-stem live filter params.
 class MpvController:
     def __init__(self) -> None:
         self._player: mpv.MPV | None = None
-        self._lock = threading.RLock()            # guards filter rebuilds
-        self._duration_ready = threading.Event()   # set when duration > 0
+        self._lock = threading.RLock()  # guards filter rebuilds
+        self._duration_ready = threading.Event()  # set when duration > 0
 
         # Observer-tracked state (read by PlaybackController)
         self.position: float = 0.0
@@ -125,7 +125,9 @@ class MpvController:
         # Paths
         self._placeholder_path = os.path.join(
             os.path.dirname(os.path.dirname(__file__)),
-            "static", "images", "placeholder.png",
+            "static",
+            "images",
+            "placeholder.png",
         )
         self._qr_code_path: str | None = None
         self._server_url: str = ""
@@ -133,12 +135,14 @@ class MpvController:
 ```
 
 **What's removed vs current:**
+
 - `_mpv_proc` (subprocess.Popen)
 - `_ipc_socket_path`
 - `_poll_thread`, `_poll_stop` (threading.Event for poll)
 - `_overlay_sock`, `_overlay_sock_lock` (persistent socket)
 
 **What's added vs current:**
+
 - `_player` (mpv.MPV instance)
 - `_lock` (RLock for filter rebuilds)
 - `_duration_ready` (threading.Event)
@@ -161,6 +165,7 @@ def _safe(method):
         except Exception:
             log.exception("MpvController.%s failed", method.__name__)
             return None
+
     wrapper.__name__ = method.__name__
     return wrapper
 ```
@@ -196,7 +201,7 @@ def duration_ready(self) -> threading.Event:
 Exposed so `play()` can `self._duration_ready.wait(timeout=5)` instead of
 the current busy-wait loop.
 
----
+______________________________________________________________________
 
 ### 3. Lifecycle methods
 
@@ -233,15 +238,15 @@ def start(self) -> None:
     p = self._player
 
     # Property observers
-    p.observe_property("time-pos",    self._on_time_pos)
-    p.observe_property("duration",    self._on_duration)
+    p.observe_property("time-pos", self._on_time_pos)
+    p.observe_property("duration", self._on_duration)
     p.observe_property("idle-active", self._on_idle_active)
-    p.observe_property("pause",       self._on_pause)
-    p.observe_property("osd-width",   self._on_osd_dim)
-    p.observe_property("osd-height",  self._on_osd_dim)
+    p.observe_property("pause", self._on_pause)
+    p.observe_property("osd-width", self._on_osd_dim)
+    p.observe_property("osd-height", self._on_osd_dim)
 
     # Keyboard bindings (mpv window)
-    @p.on_key_press('f')
+    @p.on_key_press("f")
     def _toggle_fullscreen():
         p.fullscreen = not p.fullscreen
 
@@ -262,12 +267,14 @@ def start(self) -> None:
 ```
 
 **What's removed vs current `start()`:**
+
 - `shutil.which("mpv")` binary lookup
 - `subprocess.Popen(cmd, ...)` spawn
 - IPC socket path cleanup + readiness polling loop (50 × 100ms)
 - Poll thread creation and start
 
 **What's added:**
+
 - `mpv.MPV(...)` constructor (replaces subprocess + 7 CLI flags)
 - 6 `observe_property` calls (replaces entire poll thread)
 - `on_key_press('f')` binding
@@ -290,12 +297,13 @@ def quit(self) -> None:
 ```
 
 **What's removed vs current `quit()`:**
+
 - Poll thread stop + join
 - `_close_overlay_sock()`
 - `send_command({"command": ["quit"]})` + subprocess wait/kill
 - IPC socket file unlink
 
----
+______________________________________________________________________
 
 ### 4. Observer callbacks
 
@@ -409,7 +417,7 @@ def _on_osd_dim(self, name, value):
 **Replaces:** the poll loop's `query_property("osd-width")` / `osd-height`
 comparison + `invalidate()` call.
 
----
+______________________________________________________________________
 
 ### 5. Playback methods
 
@@ -419,8 +427,14 @@ All decorated with `@_safe`.
 
 ```python
 @_safe
-def play(self, file_path, semitones=0, subtitle_path=None,
-         subtitle_delay=0.0, normalization_db=None):
+def play(
+    self,
+    file_path,
+    semitones=0,
+    subtitle_path=None,
+    subtitle_delay=0.0,
+    normalization_db=None,
+):
     pitch = 2 ** (semitones / 12)
     self._current_pitch = pitch
     self._current_normalization_db = normalization_db
@@ -432,7 +446,7 @@ def play(self, file_path, semitones=0, subtitle_path=None,
 
     # Load and wait for duration
     self._duration_ready.clear()
-    self._fired_osd_dim = (None, None)     # force overlay refresh
+    self._fired_osd_dim = (None, None)  # force overlay refresh
     self._player.loadfile(file_path)
 
     if not self._duration_ready.wait(timeout=5):
@@ -454,6 +468,7 @@ def play(self, file_path, semitones=0, subtitle_path=None,
 ```
 
 **Key changes vs current:**
+
 - `send_command({"command": ["loadfile", ...]})` → `self._player.loadfile(path)`
 - Busy-wait loop → `self._duration_ready.wait(timeout=5)`
 - `set_property("lavfi-complex", ...)` → `self._player.lavfi_complex = ...`
@@ -543,7 +558,7 @@ def apply_srt_style(self):
 **Change:** `set_property(prop, val)` → `setattr(self._player, prop.replace("-", "_"), val)`.
 python-mpv maps `prop_name` to `prop-name` via underscore-to-hyphen.
 
----
+______________________________________________________________________
 
 ### 6. OSD / Overlay methods
 
@@ -553,8 +568,7 @@ All decorated with `@_safe`.
 
 ```python
 @_safe
-def osd_overlay(self, overlay_id: int, data: str,
-                res_x: int = 1920, res_y: int = 1080):
+def osd_overlay(self, overlay_id: int, data: str, res_x: int = 1920, res_y: int = 1080):
     self._player.command(
         "osd-overlay",
         id=overlay_id,
@@ -573,8 +587,7 @@ instead of ~40.
 
 ```python
 @_safe
-def clear_osd(self, overlay_id: int,
-              res_x: int = 1920, res_y: int = 1080):
+def clear_osd(self, overlay_id: int, res_x: int = 1920, res_y: int = 1080):
     self._player.command(
         "osd-overlay",
         id=overlay_id,
@@ -589,11 +602,29 @@ def clear_osd(self, overlay_id: int,
 
 ```python
 @_safe
-def overlay_add(self, overlay_id: int, x: int, y: int, path: str,
-                offset: int, fmt: str, w: int, h: int, stride: int):
+def overlay_add(
+    self,
+    overlay_id: int,
+    x: int,
+    y: int,
+    path: str,
+    offset: int,
+    fmt: str,
+    w: int,
+    h: int,
+    stride: int,
+):
     self._player.command(
         "overlay-add",
-        overlay_id, x, y, path, offset, fmt, w, h, stride,
+        overlay_id,
+        x,
+        y,
+        path,
+        offset,
+        fmt,
+        w,
+        h,
+        stride,
     )
 ```
 
@@ -605,7 +636,7 @@ def overlay_remove(self, overlay_id: int):
     self._player.command("overlay-remove", overlay_id)
 ```
 
----
+______________________________________________________________________
 
 ### 7. Methods unchanged
 
@@ -620,7 +651,7 @@ These methods have no IPC dependency and remain as-is:
 - `set_mode(mode)` — screen mode transition + overlay tick
 - `_tick_overlays()` — builds OverlayState snapshot, hands to OverlayManager
 
----
+______________________________________________________________________
 
 ### 8. Methods deleted
 
@@ -637,7 +668,7 @@ These methods have no IPC dependency and remain as-is:
 | `send_qr_bitmap(screen_h, screen_w)` | Rewritten to use `overlay_add(...)` |
 | `remove_qr_bitmap()` | Rewritten to use `overlay_remove(...)` |
 
----
+______________________________________________________________________
 
 ### 9. OverlayManager changes
 
@@ -658,7 +689,7 @@ elif new is not None and new != old:
 internally in MpvController to use `overlay_add()` but the signature stays
 the same — **no change needed in OverlayManager**.
 
----
+______________________________________________________________________
 
 ### 10. PlaybackController changes
 
@@ -668,12 +699,12 @@ the same — **no change needed in OverlayManager**.
 
 ```python
 # Before
-screen_w=int(self.mpv.query_property("osd-width") or 1920),
-screen_h=int(self.mpv.query_property("osd-height") or 1080),
+screen_w = (int(self.mpv.query_property("osd-width") or 1920),)
+screen_h = (int(self.mpv.query_property("osd-height") or 1080),)
 
 # After
-screen_w=self.mpv.osd_size[0],
-screen_h=self.mpv.osd_size[1],
+screen_w = (self.mpv.osd_size[0],)
+screen_h = (self.mpv.osd_size[1],)
 ```
 
 #### 10b. `pause()` — remove manual state read
@@ -698,7 +729,7 @@ No code change needed here; the observer makes `is_paused` reliably accurate.
 — entirely removed. Song-end is now detected by `_on_idle_active` observer →
 `_on_song_end` callback → `PlaybackController.end_song(reason="complete")`.
 
----
+______________________________________________________________________
 
 ### 11. Karaoke wiring changes
 
@@ -721,10 +752,12 @@ self.mpv_controller._preferences = self.preferences
 # PlaybackController must exist before wiring callbacks
 self.playback_controller = PlaybackController(...)
 
+
 # Wire song-end callback through PlaybackController
 def _on_song_end():
     with self.playback_controller._playback_lock:
         self.playback_controller.end_song(reason="complete")
+
 
 self.mpv_controller.set_callbacks(
     on_song_end=_on_song_end,
@@ -768,8 +801,10 @@ def run(self) -> None:
     while self.running:
         try:
             # Clean up if playback ended but state wasn't reset
-            if (not self.playback_controller.is_playing
-                    and self.playback_controller.now_playing is not None):
+            if (
+                not self.playback_controller.is_playing
+                and self.playback_controller.now_playing is not None
+            ):
                 self.reset_now_playing()
 
             # Broadcast position to remote UI clients
@@ -784,7 +819,7 @@ def run(self) -> None:
             ...
 ```
 
----
+______________________________________________________________________
 
 ### 12. send_qr_bitmap / remove_qr_bitmap rewrite
 
@@ -805,18 +840,20 @@ def send_qr_bitmap(self, screen_h: int, screen_w: int = 1920) -> None:
     bgra_bytes = bgra.tobytes()
 
     from pikaraoke.lib.get_platform import get_temp_directory
+
     overlay_path = os.path.join(get_temp_directory(), "qr_overlay.bgra")
     with open(overlay_path, "wb") as f:
         f.write(bgra_bytes)
 
     self.overlay_add(0, 0, 0, overlay_path, 0, "bgra", qr_h, qr_h, qr_h * 4)
 
+
 @_safe
 def remove_qr_bitmap(self) -> None:
     self.overlay_remove(0)
 ```
 
----
+______________________________________________________________________
 
 ### 13. Thread safety model
 
@@ -830,7 +867,7 @@ def remove_qr_bitmap(self) -> None:
 The `_lock` (RLock) in MpvController guards only lavfi-complex rebuilds
 (`play`, `stop`, `set_pitch`) to prevent interleaved filter string writes.
 
----
+______________________________________________________________________
 
 ### 14. Test changes
 
@@ -850,18 +887,41 @@ class MockMpv:
     def osd_size(self) -> tuple[int, int]:
         return (1920, 1080)
 
-    def play(self, *a, **kw): pass
-    def stop(self): pass
-    def seek(self, pos): pass
-    def toggle_pause(self): pass
-    def set_pitch(self, st): pass
-    def set_subtitle_delay(self, s): pass
-    def restart(self): pass
-    def set_mode(self, mode): pass
-    def _tick_overlays(self): pass
-    def set_overlay_state_provider(self, p): pass
-    def osd_overlay(self, *a, **kw): pass
-    def clear_osd(self, *a, **kw): pass
+    def play(self, *a, **kw):
+        pass
+
+    def stop(self):
+        pass
+
+    def seek(self, pos):
+        pass
+
+    def toggle_pause(self):
+        pass
+
+    def set_pitch(self, st):
+        pass
+
+    def set_subtitle_delay(self, s):
+        pass
+
+    def restart(self):
+        pass
+
+    def set_mode(self, mode):
+        pass
+
+    def _tick_overlays(self):
+        pass
+
+    def set_overlay_state_provider(self, p):
+        pass
+
+    def osd_overlay(self, *a, **kw):
+        pass
+
+    def clear_osd(self, *a, **kw):
+        pass
 ```
 
 **Removed:** `query_property`, `send_command`, `set_property`,
@@ -874,7 +934,7 @@ class MockMpv:
 - Verify `test_pause` still works (is_paused is now observer-driven but mock
   can still set it directly)
 
----
+______________________________________________________________________
 
 ### 15. Migration sequence
 
@@ -889,7 +949,7 @@ Execute in this order to keep tests passing at each step:
 7. **Run tests** — `python -m pytest`
 8. **Manual smoke test** — start app, play a song, verify overlays/pause/skip/pitch
 
----
+______________________________________________________________________
 
 ### 16. Risk areas
 

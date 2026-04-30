@@ -4,7 +4,7 @@
 
 The plan at `plans/user-processing-controls.md` adds user-ownership gating to the processing pipeline's cancel/remove actions, mirroring the pattern established in `plans/user-queue-controls.md`. Overall the plan is well-structured, accurate in its line-number references, and consistent with the existing codebase. The findings below are organized by severity.
 
----
+______________________________________________________________________
 
 ## Critical Issues
 
@@ -37,7 +37,7 @@ The existing endpoints also have this issue (they all return `json.dumps(...)` w
 
 **Recommendation**: Use `flask.jsonify()` instead of `json.dumps()`, which sets the correct `Content-Type: application/json` header. Or at minimum, return a `Response` with `mimetype="application/json"`. This applies to both new and existing endpoints.
 
----
+______________________________________________________________________
 
 ## Moderate Issues
 
@@ -130,7 +130,7 @@ The plan's approach matches `home.html` and is correct — Jinja's `|tojson` fil
 
 **Recommendation**: Not a blocker for this plan, but the project should standardize on one approach. `{{ admin | tojson }}` without `JSON.parse()` is simpler and sufficient.
 
----
+______________________________________________________________________
 
 ## Minor Issues
 
@@ -179,12 +179,14 @@ return json.dumps({"success": False, "error": _("Not owner")}), 403
 The plan's proposed `processing()` route keeps the existing inline site-title logic:
 
 ```python
-site_title=getattr(k, "preferences", None) and k.preferences.get("site_name") or "PiKaraoke",
+site_title = (
+    getattr(k, "preferences", None) and k.preferences.get("site_name") or "PiKaraoke",
+)
 ```
 
 Other routes (`queue.py` line 59-65) use `get_site_name()` from `current_app`. The plan doesn't refactor this to match, which is fine (out of scope), but worth noting the inconsistency.
 
----
+______________________________________________________________________
 
 ## Plan Accuracy (Line Numbers & Code References)
 
@@ -209,7 +211,7 @@ Other routes (`queue.py` line 59-65) use `get_site_name()` from `current_app`. T
 
 All line-number references in the plan are accurate against the current codebase.
 
----
+______________________________________________________________________
 
 ## Design Consistency with Sibling Plan (`user-queue-controls.md`)
 
@@ -226,7 +228,7 @@ All line-number references in the plan are accurate against the current codebase
 
 The processing plan explicitly acknowledges the input-validation difference and justifies it by the existing processing route style. This is a reasonable trade-off.
 
----
+______________________________________________________________________
 
 ## Recommendations Summary
 

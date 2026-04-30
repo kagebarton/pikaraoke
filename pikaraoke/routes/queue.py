@@ -32,31 +32,23 @@ class ReorderForm(Schema):
 
 
 class EnqueueQuery(Schema):
-    song = fields.String(
-        required=True, metadata={"description": "Path to the song file"}
-    )
+    song = fields.String(required=True, metadata={"description": "Path to the song file"})
     user = fields.String(
         load_default="", metadata={"description": "Name of the user adding the song"}
     )
 
 
 class EnqueueForm(Schema):
-    song_to_add = fields.String(
-        required=True, metadata={"description": "Path to the song file"}
-    )
+    song_to_add = fields.String(required=True, metadata={"description": "Path to the song file"})
     song_added_by = fields.String(
         load_default="", metadata={"description": "Name of the user adding the song"}
     )
 
 
 class QueueEditQuery(Schema):
-    action = fields.String(
-        required=True, metadata={"description": "Queue edit action to perform"}
-    )
+    action = fields.String(required=True, metadata={"description": "Queue edit action to perform"})
     song = fields.String(
-        metadata={
-            "description": "Path to the song file (required unless action is 'clear')"
-        }
+        metadata={"description": "Path to the song file (required unless action is 'clear')"}
     )
 
 
@@ -175,9 +167,7 @@ def queue_edit(query):
 
         if action in success_labels:
             message = (
-                (success_labels[action] if success else error_labels[action])
-                + ": "
-                + song_title
+                (success_labels[action] if success else error_labels[action]) + ": " + song_title
             )
 
         if message and not is_ajax:
@@ -196,8 +186,16 @@ def _do_enqueue(song: str, user: str) -> str:
     # Gate: reject songs whose pipeline_state is 'pending' or 'failed'
     state = k.song_manager.get_pipeline_state(song)
     if state in ("pending", "failed"):
-        return json.dumps({"song": k.song_manager.filename_from_path(song), "success": False,
-                           "error": f"Cannot enqueue: song is {state}"}), 409
+        return (
+            json.dumps(
+                {
+                    "song": k.song_manager.filename_from_path(song),
+                    "success": False,
+                    "error": f"Cannot enqueue: song is {state}",
+                }
+            ),
+            409,
+        )
     rc = k.queue_manager.enqueue(song, user)
     broadcast_event("queue_update")
     song_title = k.song_manager.filename_from_path(song)

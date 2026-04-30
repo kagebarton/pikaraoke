@@ -184,9 +184,7 @@ class StemWorker:
         if tag == "ok":
             return Path(msg[1]), Path(msg[2])
         if tag == "cancelled":
-            raise WorkerCancelledError(
-                "Separation cancelled between chunks (model still loaded)"
-            )
+            raise WorkerCancelledError("Separation cancelled between chunks (model still loaded)")
         raise RuntimeError(f"Stem worker error: {msg[1]}")
 
     def kill(self) -> None:
@@ -353,9 +351,7 @@ def _worker_main(
                 )
                 result_send.send(("ok", str(vocal_wav), str(instrumental_wav)))
             except _CancelledInsideDemix:
-                worker_log.info(
-                    "Separation cancelled between chunks — model still loaded"
-                )
+                worker_log.info("Separation cancelled between chunks — model still loaded")
                 _clear_gpu_state(separator, worker_log)
                 result_send.send(("cancelled",))
             except Exception as e:
@@ -443,9 +439,7 @@ def _separate_with_cancel_check(
                 cancel_recv.recv()  # consume the signal
             except (EOFError, OSError):
                 pass
-            worker_log.info(
-                f"Cancel detected before chunk #{chunk_counter[0] + 1} — aborting"
-            )
+            worker_log.info(f"Cancel detected before chunk #{chunk_counter[0] + 1} — aborting")
             raise _CancelledInsideDemix()
 
         # Run the real forward pass
@@ -482,9 +476,7 @@ def _separate_with_cancel_check(
             vocals_wav = full_path
 
     if not vocals_wav or not instrumental_wav:
-        raise RuntimeError(
-            f"Could not identify vocal/instrumental stems in output: {output_paths}"
-        )
+        raise RuntimeError(f"Could not identify vocal/instrumental stems in output: {output_paths}")
 
     return vocals_wav, instrumental_wav
 
@@ -509,9 +501,7 @@ def _run_separation_unpatched(
         elif "vocal" in lower:
             vocals_wav = full_path
     if not vocals_wav or not instrumental_wav:
-        raise RuntimeError(
-            f"Could not identify vocal/instrumental stems: {output_paths}"
-        )
+        raise RuntimeError(f"Could not identify vocal/instrumental stems: {output_paths}")
     return vocals_wav, instrumental_wav
 
 
@@ -542,9 +532,7 @@ def _setup_worker_logger(log_level: int = logging.INFO) -> logging.Logger:
     """Configure the worker subprocess logger."""
     handler = logging.StreamHandler(sys.stderr)
     handler.setFormatter(
-        logging.Formatter(
-            "[%(asctime)s] %(levelname)s: %(message)s", datefmt="%H:%M:%S"
-        )
+        logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s", datefmt="%H:%M:%S")
     )
     processing_logger = logging.getLogger("pikaraoke.pipeline.workers.stem_worker")
     processing_logger.handlers = []

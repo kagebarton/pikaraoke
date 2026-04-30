@@ -83,13 +83,10 @@ class KaraokeDatabase:
         cols = {row[1] for row in self._conn.execute("PRAGMA table_info(songs)")}
         with self._conn:
             if "loudnorm_offset_db" not in cols:
-                self._conn.execute(
-                    "ALTER TABLE songs ADD COLUMN loudnorm_offset_db REAL"
-                )
+                self._conn.execute("ALTER TABLE songs ADD COLUMN loudnorm_offset_db REAL")
             if "pipeline_state" not in cols:
                 self._conn.execute(
-                    "ALTER TABLE songs ADD COLUMN pipeline_state TEXT "
-                    "NOT NULL DEFAULT 'skipped'"
+                    "ALTER TABLE songs ADD COLUMN pipeline_state TEXT " "NOT NULL DEFAULT 'skipped'"
                 )
 
     # ------------------------------------------------------------------

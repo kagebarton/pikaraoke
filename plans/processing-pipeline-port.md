@@ -189,10 +189,13 @@ def run_ffmpeg(cmd, ctx, phase, *, capture_stderr=False) -> str:
     pty_fd = ctx.artifacts.get("pty_slave_fd")
     stdout_fd = pty_fd if pty_fd is not None else subprocess.DEVNULL
     stderr_fd = (
-        subprocess.PIPE if capture_stderr
+        subprocess.PIPE
+        if capture_stderr
         else (pty_fd if pty_fd is not None else subprocess.DEVNULL)
     )
-    proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=stdout_fd, stderr=stderr_fd)
+    proc = subprocess.Popen(
+        cmd, stdin=subprocess.DEVNULL, stdout=stdout_fd, stderr=stderr_fd
+    )
     ...
 ```
 
@@ -302,6 +305,7 @@ def _create_schema(self) -> None:
     with self._conn:
         self._conn.execute("PRAGMA user_version = 2")
 
+
 def _migrate_v2_pipeline_columns(self) -> None:
     """Add loudnorm_offset_db and pipeline_state columns (idempotent).
 
@@ -312,9 +316,7 @@ def _migrate_v2_pipeline_columns(self) -> None:
     cols = {row[1] for row in self._conn.execute("PRAGMA table_info(songs)")}
     with self._conn:
         if "loudnorm_offset_db" not in cols:
-            self._conn.execute(
-                "ALTER TABLE songs ADD COLUMN loudnorm_offset_db REAL"
-            )
+            self._conn.execute("ALTER TABLE songs ADD COLUMN loudnorm_offset_db REAL")
         if "pipeline_state" not in cols:
             self._conn.execute(
                 "ALTER TABLE songs ADD COLUMN pipeline_state TEXT "
@@ -336,6 +338,7 @@ def set_loudnorm_offset(self, file_path: str, offset_db: float) -> None:
             (offset_db, file_path),
         )
 
+
 def get_loudnorm_offset(self, file_path: str) -> float | None:
     with self._lock:
         row = self._conn.execute(
@@ -343,6 +346,7 @@ def get_loudnorm_offset(self, file_path: str) -> float | None:
             (file_path,),
         ).fetchone()
         return row[0] if row else None
+
 
 def set_pipeline_state(self, file_path: str, state: str) -> None:
     """Set 'pending' | 'ready' | 'failed' | 'skipped'."""
@@ -352,6 +356,7 @@ def set_pipeline_state(self, file_path: str, state: str) -> None:
             "updated_at = CURRENT_TIMESTAMP WHERE file_path = ?",
             (state, file_path),
         )
+
 
 def get_pipeline_state(self, file_path: str) -> str | None:
     with self._lock:
@@ -386,6 +391,7 @@ def set_loudnorm_offset(self, song_path: str, offset_db: float) -> None:
     """Forwarder so callers don't reach into KaraokeDatabase directly."""
     self._db.set_loudnorm_offset(song_path, offset_db)
 
+
 def set_pipeline_state(self, song_path: str, state: str) -> None:
     """Forwarder for pipeline_state writes."""
     self._db.set_pipeline_state(song_path, state)
@@ -418,7 +424,7 @@ def build_song_record(file_path: str, *, pipeline_state: str = "skipped") -> dic
 `scan()` keeps the default. `register_download()` calls
 `build_song_record(path, pipeline_state="pending")`.
 
-### SongManager._get_companion_files — include .ass
+### SongManager.\_get_companion_files — include .ass
 
 `song_manager.py:70-71` has a placeholder comment noting `.ass` files
 will be added "in a separate change." This is that change. Extend
@@ -495,7 +501,9 @@ class ProcessingManager:
         self,
         events: EventSystem,
         preferences: PreferenceManager,
-        song_manager: SongManager | None = None,  # NEW (optional) — needed for loudnorm DB write; if None, offset is not persisted
+        song_manager: (
+            SongManager | None
+        ) = None,  # NEW (optional) — needed for loudnorm DB write; if None, offset is not persisted
         temp_dir: str = "",
         log_level: int = logging.INFO,
     ) -> None: ...
@@ -507,7 +515,7 @@ class ProcessingManager:
     def cancel_active(self, song_path: str) -> None: ...
     def get_active_job(self) -> str | None: ...
 
-    pending_jobs: list[str]                    # public, derived
+    pending_jobs: list[str]  # public, derived
 ```
 
 `song_manager` is **optional** so the existing test fixture
@@ -526,8 +534,9 @@ constructor call. No other call sites change.
 @dataclass
 class _ActiveJob:
     song_path: str
-    cancel_token: CancelToken          # from orchestrator.run_one_async()
-    cancelling: bool = False           # set by cancel_active()
+    cancel_token: CancelToken  # from orchestrator.run_one_async()
+    cancelling: bool = False  # set by cancel_active()
+
 
 class ProcessingManager:
     _events: EventSystem
@@ -544,9 +553,9 @@ class ProcessingManager:
     _process_terminal: ProcessTerminal | None
     _pty_slave_fd: int | None
 
-    _pending_queue: queue.Queue[str | None]    # FIFO; None == shutdown sentinel
-    pending_jobs: list[str]                    # mirrors queue for tracker
-    _cancelled_paths: set[str]                 # paths cancelled while pending
+    _pending_queue: queue.Queue[str | None]  # FIFO; None == shutdown sentinel
+    pending_jobs: list[str]  # mirrors queue for tracker
+    _cancelled_paths: set[str]  # paths cancelled while pending
 
     _active: _ActiveJob | None
     _state_lock: threading.Lock
@@ -759,7 +768,9 @@ def _process_song(self, song_path: str) -> None:
             try:
                 self._song_manager.set_loudnorm_offset(song_path, float(offset))
             except Exception as e:
-                logging.warning(f"Failed to persist loudnorm offset for {song_path}: {e}")
+                logging.warning(
+                    f"Failed to persist loudnorm offset for {song_path}: {e}"
+                )
         self._song_manager.set_pipeline_state(song_path, "ready")
 
     self._events.emit("processing_complete", song_path)
@@ -937,9 +948,7 @@ chasing a dependency-hell bug post-port.
    - Start app; download a YouTube song that ships with English subs;
      watch the processing page advance through the 5 stages; verify
      `vocal/`, `nonvocal/`, `karaoke/*.ass` outputs land; verify both
-     new columns populate (`sqlite3 pikaraoke.db "SELECT file_path,
-     loudnorm_offset_db, pipeline_state FROM songs WHERE
-     loudnorm_offset_db IS NOT NULL"` — `pipeline_state` should read
+     new columns populate (`sqlite3 pikaraoke.db "SELECT file_path, loudnorm_offset_db, pipeline_state FROM songs WHERE loudnorm_offset_db IS NOT NULL"` — `pipeline_state` should read
      `'ready'`).
    - Download a song with **no** subs; verify the pipeline runs
      transcribe mode and an `.ass` is written.

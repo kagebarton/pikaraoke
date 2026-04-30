@@ -219,18 +219,18 @@ No mocks for the tracker itself — existing tests use real `EventSystem` and `P
 
 ## Test Plan
 
-- [ ] As User A, submit a YouTube URL. Verify cancel button appears on A's row. As User B (different cookie), verify cancel button does NOT appear on A's row.
-- [ ] As User A, cancel A's own item during download. Verify cancellation works, row disappears.
-- [ ] As User A, cancel A's own item during separation. Verify cancelling spinner shows, row eventually disappears.
-- [ ] As User A, attempt to cancel User B's item via direct POST to `/processing/user/cancel` with `id=<B's item>`. Verify 403 (cookie says A, item owner is B).
-- [ ] **Spoof attempt:** As User A, POST `/processing/user/cancel` with `id=<B's item>` and `user=<B>` as a form field, keeping A's `user` cookie. Verify 403 — the server must read identity from the cookie, not the form.
-- [ ] As User A, attempt to hit admin endpoint `/processing/<B's item>/cancel`. Verify 403.
-- [ ] As User A with a completed item, verify NO remove button appears (remove is admin-only).
-- [ ] As admin, cancel/remove any user's item. Verify both work.
-- [ ] As admin with a completed item, verify remove button appears and works.
-- [ ] As any non-admin user, verify queue button appears on completed songs submitted by OTHERS and successfully queues them.
-- [ ] Refresh the page with a pending download. Verify ownership gating survives refresh (data comes from the polled status, not client-side).
-- [ ] User without a cookie (never named themselves): verify cancel buttons are absent from all rows, queue button still works.
+- \[ \] As User A, submit a YouTube URL. Verify cancel button appears on A's row. As User B (different cookie), verify cancel button does NOT appear on A's row.
+- \[ \] As User A, cancel A's own item during download. Verify cancellation works, row disappears.
+- \[ \] As User A, cancel A's own item during separation. Verify cancelling spinner shows, row eventually disappears.
+- \[ \] As User A, attempt to cancel User B's item via direct POST to `/processing/user/cancel` with `id=<B's item>`. Verify 403 (cookie says A, item owner is B).
+- \[ \] **Spoof attempt:** As User A, POST `/processing/user/cancel` with `id=<B's item>` and `user=<B>` as a form field, keeping A's `user` cookie. Verify 403 — the server must read identity from the cookie, not the form.
+- \[ \] As User A, attempt to hit admin endpoint `/processing/<B's item>/cancel`. Verify 403.
+- \[ \] As User A with a completed item, verify NO remove button appears (remove is admin-only).
+- \[ \] As admin, cancel/remove any user's item. Verify both work.
+- \[ \] As admin with a completed item, verify remove button appears and works.
+- \[ \] As any non-admin user, verify queue button appears on completed songs submitted by OTHERS and successfully queues them.
+- \[ \] Refresh the page with a pending download. Verify ownership gating survives refresh (data comes from the polled status, not client-side).
+- \[ \] User without a cookie (never named themselves): verify cancel buttons are absent from all rows, queue button still works.
 
 ## Out of Scope
 

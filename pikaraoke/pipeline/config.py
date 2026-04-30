@@ -27,9 +27,7 @@ class PipelineConfig:
     # --- Model paths ---
     whisper_model_path: str = str(_REPO_ROOT / "models" / "large-v3-turbo.pt")
     separator_model_dir: str = _MODELS_DIR
-    separator_model_name: str = (
-        "mel_band_roformer_karaoke_aufr33_viperx_sdr_10.1956.ckpt"
-    )
+    separator_model_name: str = "vocals_mel_band_roformer.ckpt"
 
     # --- Device/compute ---
     whisper_device: str = "auto"

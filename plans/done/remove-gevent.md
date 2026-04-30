@@ -18,12 +18,14 @@ threading mode is more than sufficient.
 ## Scope
 
 **Files modified:**
+
 - `pikaraoke/app.py` — bulk of the changes
 - `pikaraoke/lib/stem_worker.py` — docstring cleanup only
 - `pikaraoke/lib/processing_manager.py` — comment cleanup only
 - `pyproject.toml` — remove `gevent` dependency
 
 **Files NOT modified (no code changes needed):**
+
 - `pikaraoke/karaoke.py` — `run()` loop uses `time.sleep()`, works identically
   under threading
 - `pikaraoke/lib/process_terminal.py` — "spawn" in this file refers to
@@ -36,22 +38,27 @@ threading mode is more than sufficient.
 ### Step 1: Rewrite `app.py` imports and server startup
 
 **Remove** (lines 3-5):
+
 ```python
 from gevent import monkey, spawn
+
 monkey.patch_all()
 ```
 
 **Remove** (line 47):
+
 ```python
 from gevent.pywsgi import WSGIServer
 ```
 
 **Add** at top of file (after existing stdlib imports):
+
 ```python
 from threading import Thread
 ```
 
 **Change** SocketIO init (line 50):
+
 ```python
 # Before:
 socketio = SocketIO(async_mode="gevent", cors_allowed_origins=args.url)
@@ -63,6 +70,7 @@ socketio = SocketIO(async_mode="threading", cors_allowed_origins=args.url)
 ### Step 2: Replace `gevent.spawn` with `threading.Thread`
 
 **Change** (line 213):
+
 ```python
 # Before:
 spawn(upgrade_youtubedl)
@@ -74,10 +82,13 @@ Thread(target=upgrade_youtubedl, daemon=True).start()
 ### Step 3: Restructure server startup to use `socketio.run()`
 
 This is the one structural change. Currently:
+
 ```python
-server = WSGIServer(("0.0.0.0", int(args.port)), app, log=None, error_log=logging.getLogger())
-server.start()        # non-blocking (gevent greenlet)
-k.run()               # blocks main thread
+server = WSGIServer(
+    ("0.0.0.0", int(args.port)), app, log=None, error_log=logging.getLogger()
+)
+server.start()  # non-blocking (gevent greenlet)
+k.run()  # blocks main thread
 k.stop()
 # cleanup...
 ```
@@ -86,6 +97,7 @@ With threading mode, `socketio.run()` blocks. The karaoke run loop also blocks.
 One of them must move to a background thread.
 
 **Decision: run `k.run()` in a daemon thread.** Rationale:
+
 - `k.run()` is a simple polling loop (`time.sleep(0.5)` per iteration) — safe
   to run in any thread.
 - `socketio.run()` expects to be the main-thread signal handler for clean
@@ -94,6 +106,7 @@ One of them must move to a background thread.
 - `k.stop()` must still be called on shutdown.
 
 **New startup code:**
+
 ```python
 Thread(target=upgrade_youtubedl, daemon=True).start()
 
@@ -117,11 +130,13 @@ finally:
     k.stop()
 
     import shutil
+
     if k.temp_dir and os.path.exists(k.temp_dir):
         shutil.rmtree(k.temp_dir, ignore_errors=True)
 ```
 
 Notes on `socketio.run()` arguments:
+
 - `log_output=False` — suppresses Werkzeug per-request logs (matches current
   `WSGIServer(log=None)` behavior)
 - `use_reloader=False` — we're not in dev mode
@@ -132,6 +147,7 @@ Notes on `socketio.run()` arguments:
 ### Step 4: Remove `gevent` from dependencies
 
 **In `pyproject.toml`**, delete:
+
 ```
 "gevent>=24.11.1",
 ```
@@ -163,22 +179,23 @@ pre-commit run --config code_quality/.pre-commit-config.yaml --all-files
 ```
 
 **Manual test plan:**
-- [ ] App starts without gevent import errors
-- [ ] Web UI loads, WebSocket connection establishes (check browser console)
-- [ ] Queue a song via YouTube search — download completes, song plays
-- [ ] Queue multiple songs — queue advances correctly after each song
-- [ ] Pause/resume/skip from web UI
-- [ ] Volume control works
-- [ ] Stem separation (if enabled) completes without hanging
-- [ ] Ctrl+C in terminal cleanly shuts down (no zombie processes)
-- [ ] Test on Raspberry Pi if available (gevent C-extension build was a pain
+
+- \[ \] App starts without gevent import errors
+- \[ \] Web UI loads, WebSocket connection establishes (check browser console)
+- \[ \] Queue a song via YouTube search — download completes, song plays
+- \[ \] Queue multiple songs — queue advances correctly after each song
+- \[ \] Pause/resume/skip from web UI
+- \[ \] Volume control works
+- \[ \] Stem separation (if enabled) completes without hanging
+- \[ \] Ctrl+C in terminal cleanly shuts down (no zombie processes)
+- \[ \] Test on Raspberry Pi if available (gevent C-extension build was a pain
   point there — confirm it's no longer needed)
 
 ## Risks and mitigations
 
 | Risk | Likelihood | Mitigation |
 |------|-----------|------------|
-| `socketio.run()` + Werkzeug can't handle concurrent WebSocket clients | Low — PiKaraoke serves <10 clients | Monitor; if issues arise, add `simple-websocket` or `gevent-websocket` back as a transport-only dependency (no monkeypatching) |
+| `socketio.run()` + Werkzeug can't handle concurrent WebSocket clients | Low — PiKaraoke serves \<10 clients | Monitor; if issues arise, add `simple-websocket` or `gevent-websocket` back as a transport-only dependency (no monkeypatching) |
 | `k.run()` thread + Flask request threads cause race conditions | Low — `k.run()` reads state, Flask routes mutate it, existing locks cover this | Existing `_state_lock` in processing_manager and queue_manager already handle thread safety |
 | `allow_unsafe_werkzeug=True` concerns | None for this use case — LAN-only karaoke app | Document in code comment |
 | Some downstream code implicitly depends on gevent's cooperative scheduling | Very low — grep shows no other gevent imports | Test thoroughly |

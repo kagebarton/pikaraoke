@@ -239,9 +239,7 @@ class TestQueueManagerEdit:
         queue_updates = []
         now_playing_updates = []
         queue_manager._events.on("queue_update", lambda: queue_updates.append(True))
-        queue_manager._events.on(
-            "now_playing_update", lambda: now_playing_updates.append(True)
-        )
+        queue_manager._events.on("now_playing_update", lambda: now_playing_updates.append(True))
 
         queue_manager.queue_edit("/songs/song1---abc.mp4", "delete")
 
@@ -322,9 +320,7 @@ class TestQueueManagerMoveToTopBottom:
         queue_updates = []
         now_playing_updates = []
         queue_manager._events.on("queue_update", lambda: queue_updates.append(True))
-        queue_manager._events.on(
-            "now_playing_update", lambda: now_playing_updates.append(True)
-        )
+        queue_manager._events.on("now_playing_update", lambda: now_playing_updates.append(True))
 
         queue_manager.move_to_top("/songs/song2---def.mp4")
 
@@ -339,9 +335,7 @@ class TestQueueManagerMoveToTopBottom:
         queue_updates = []
         now_playing_updates = []
         queue_manager._events.on("queue_update", lambda: queue_updates.append(True))
-        queue_manager._events.on(
-            "now_playing_update", lambda: now_playing_updates.append(True)
-        )
+        queue_manager._events.on("now_playing_update", lambda: now_playing_updates.append(True))
 
         queue_manager.move_to_bottom("/songs/song1---abc.mp4")
 
@@ -423,9 +417,7 @@ class TestQueueManagerReorder:
         queue_updates = []
         now_playing_updates = []
         queue_manager._events.on("queue_update", lambda: queue_updates.append(True))
-        queue_manager._events.on(
-            "now_playing_update", lambda: now_playing_updates.append(True)
-        )
+        queue_manager._events.on("now_playing_update", lambda: now_playing_updates.append(True))
 
         queue_manager.reorder(1, 0)
 
@@ -755,9 +747,7 @@ class TestQueueManagerHelpers:
         """is_song_in_queue should return False for non-queued songs."""
         assert queue_manager.is_song_in_queue("/songs/test---abc.mp4") is False
 
-    def test_is_user_limited_returns_false_for_pikaraoke_user(
-        self, preferences, events
-    ):
+    def test_is_user_limited_returns_false_for_pikaraoke_user(self, preferences, events):
         """Pikaraoke system user should never be limited."""
         preferences.set("limit_user_songs_by", 1)
         qm = QueueManager(

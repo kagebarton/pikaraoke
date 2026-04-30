@@ -26,6 +26,7 @@ After commit `128dc33` (python-mpv migration), FFmpeg audio extraction in the st
 ## What Changed in 128dc33
 
 Files modified:
+
 - `pikaraoke/lib/mpv_controller.py` — **complete rewrite**: subprocess mpv + JSON IPC socket replaced with in-process libmpv via python-mpv ctypes bindings
 - `pikaraoke/karaoke.py` — initialization order changed: PlaybackController created before `mpv_controller.start()`; `check_playback_ended()` removed from main loop (callbacks handle it now); callback wiring added
 - `pikaraoke/lib/overlay_manager.py` — minor (2 lines)
@@ -60,6 +61,7 @@ Files modified:
 ### Simulation Test (`/tmp/sim_test.py`)
 
 Created a comprehensive simulation that matches the real pikaraoke setup:
+
 - Loads libmpv in-process via `mpv.MPV(idle=True, force_window=True, ...)`
 - Creates PTY pair with `os.openpty()`, sets inheritable
 - Spawns a `multiprocessing.Process` worker (simulating StemWorker fork)
@@ -70,6 +72,7 @@ Created a comprehensive simulation that matches the real pikaraoke setup:
 ### What the Simulation Doesn't Capture
 
 The simulation is a minimal reproduction. The real pikaraoke process has:
+
 - Flask/SocketIO web server running
 - Multiple event system subscriptions
 - PreferenceManager, SongManager, and other subsystems initialized
@@ -92,6 +95,7 @@ The simulation test DID load libmpv, so this hypothesis is weakened but not elim
 ### H2: File descriptor leak or contamination
 
 The real pikaraoke process has many more open file descriptors than the simulation:
+
 - Flask server socket
 - SocketIO connections
 - Multiple pipe pairs (StemWorker IPC)
@@ -111,6 +115,7 @@ Loading libmpv in-process (vs as a subprocess) increases the main process's memo
 ## Recommended Next Steps
 
 1. **Add instrumentation to the real pikaraoke process** — Before the `subprocess.Popen` call in `_run_ffmpeg`, log:
+
    - `os.listdir('/proc/self/fd')` (open file descriptors)
    - `os.environ` relevant vars (LD_LIBRARY_PATH, LD_PRELOAD)
    - Memory usage (`/proc/self/status` VmRSS)
@@ -127,24 +132,28 @@ Loading libmpv in-process (vs as a subprocess) increases the main process's memo
 ## Attempted Fixes
 
 ### Fix 2: Minimal environment + -fflags +discardcorrupt
+
 - **Date**: 2026-04-17
-- **Change**: 
+- **Change**:
   - Pass minimal environment (only PATH, HOME, USER, LANG) to FFmpeg subprocess
   - Add `-fflags +discardcorrupt` to FFmpeg extraction command to skip corrupted frames
 - **Result**: **FAILED** - Same AAC decode errors still occur
 - **Analysis**: The issue is deeper than environment variables - possibly file descriptor inheritance or PTY-specific
 
 ### Fix 3: Bypass PTY (stdout/stderr=DEVNULL)
+
 - **Date**: 2026-04-17
 - **Result**: **FAILED** - Still 41kb WAV, same AAC errors
 - **Analysis**: PTY is not the cause
 
 ### Fix 4: Debug probe — FFmpeg before vs after mpv.MPV() init
+
 - **Date**: 2026-04-17
 - **Result**: BEFORE_MPV produces correct 7.6MB WAV, AFTER_MPV produces 37KB WAV
 - **Analysis**: Confirmed libmpv loading is the cause
 
 ### Fix 5: stdin=subprocess.DEVNULL (ROOT CAUSE FOUND)
+
 - **Date**: 2026-04-17
 - **Result**: **SUCCESS** - Full 7,696,462 byte WAV produced correctly
 - **Root cause**: libmpv takes over the process stdin (fd 0). When FFmpeg inherits

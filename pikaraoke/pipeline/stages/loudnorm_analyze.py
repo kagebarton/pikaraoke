@@ -37,14 +37,17 @@ class LoudnormAnalyzeStage(BaseStage):
             "ffmpeg",
             "-hide_banner",
             "-nostats",
-            "-threads", self._config.ffmpeg_threads,
-            "-i", str(extracted_wav),
+            "-threads",
+            self._config.ffmpeg_threads,
+            "-i",
+            str(extracted_wav),
             "-af",
             f"loudnorm=I={self._config.loudnorm_target_i}"
             f":TP={self._config.loudnorm_target_tp}"
             f":LRA={self._config.loudnorm_target_lra}"
             f":print_format=json",
-            "-f", "null",
+            "-f",
+            "null",
             "-",
         ]
         logger.info(f"[{self.name}] Running loudnorm analysis on: {Path(extracted_wav).name}")
@@ -110,4 +113,4 @@ class LoudnormAnalyzeStage(BaseStage):
         if start_idx is None:
             return None
 
-        return "\n".join(lines[start_idx:end_idx + 1])
+        return "\n".join(lines[start_idx : end_idx + 1])

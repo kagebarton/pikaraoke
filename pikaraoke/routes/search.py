@@ -47,8 +47,7 @@ def search():
     if search_string:
         raw_results = get_search_results(search_string)
         search_results = [
-            (*r, k.song_manager.songs.find_by_id(k.download_path, r[2]))
-            for r in raw_results
+            (*r, k.song_manager.songs.find_by_id(k.download_path, r[2])) for r in raw_results
         ]
     else:
         search_string = None

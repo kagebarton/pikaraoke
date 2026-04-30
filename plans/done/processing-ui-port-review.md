@@ -4,7 +4,7 @@ Reviewer: Kilo (z-ai/glm-5.1)
 Date: 2026-04-22
 Target plan: [`processing-ui-port.md`](processing-ui-port.md)
 
----
+______________________________________________________________________
 
 ## Critical Issues
 
@@ -28,7 +28,7 @@ else if (status === 'complete')
 
 This also simplifies the `stateIcon` signature — remove the `isCancellingContext` parameter entirely, and remove the `isCancellingContext` computation from `renderRow`.
 
----
+______________________________________________________________________
 
 ## Moderate Issues
 
@@ -157,7 +157,7 @@ The mockup's `:root` block references CSS variables like `var(--bulma-grey)` and
 
 Or, alternatively, replace all `var(--bulma-*)` references with the hardcoded color values directly. The hardcoded approach is simpler but less maintainable if the project ever upgrades to Bulma 1.0.
 
----
+______________________________________________________________________
 
 ## Minor Issues
 
@@ -191,7 +191,7 @@ The plan's step 3 only mentions handling `waiting` in `stateIcon()`. It doesn't 
 
 When a row is faded out and removed, the remaining rows shift their `:nth-child` parity, causing a brief visual flash as stripes invert. This is a pre-existing issue (base.html line 173-175 defines global `tr:nth-child(even)` striping), not introduced by the plan. The `fadeAndRemove()` animation makes it more noticeable though. No action required, but worth noting.
 
----
+______________________________________________________________________
 
 ## Summary
 

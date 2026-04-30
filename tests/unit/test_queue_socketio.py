@@ -85,9 +85,7 @@ class TestQueueSocketEmissions:
         k.queue_manager.enqueue("/songs/song1---abc.mp4", "User1")
 
         queue_update_calls = [
-            call
-            for call in k.socketio.emit.call_args_list
-            if call[0][0] == "queue_update"
+            call for call in k.socketio.emit.call_args_list if call[0][0] == "queue_update"
         ]
         assert len(queue_update_calls) > 0
 
@@ -130,9 +128,7 @@ class TestQueuePauseSocketEmissions:
         k.queue_manager.toggle_pause_song("/songs/song1---abc.mp4")
 
         queue_update_calls = [
-            call
-            for call in k.socketio.emit.call_args_list
-            if call[0][0] == "queue_update"
+            call for call in k.socketio.emit.call_args_list if call[0][0] == "queue_update"
         ]
         assert len(queue_update_calls) > 0
 
@@ -145,9 +141,7 @@ class TestQueuePauseSocketEmissions:
         k.queue_manager.toggle_pause_song("/songs/song1---abc.mp4")
 
         now_playing_calls = [
-            call
-            for call in k.socketio.emit.call_args_list
-            if call[0][0] == "now_playing"
+            call for call in k.socketio.emit.call_args_list if call[0][0] == "now_playing"
         ]
         assert len(now_playing_calls) > 0
 
@@ -188,9 +182,7 @@ class TestSocketIOEventFormats:
     def test_queue_item_has_required_fields(self, karaoke_with_socketio):
         """Queue items contain fields required by frontend."""
         k = karaoke_with_socketio
-        k.queue_manager.enqueue(
-            "/songs/Artist - Song---dQw4w9WgXcQ.mp4", "TestUser", semitones=2
-        )
+        k.queue_manager.enqueue("/songs/Artist - Song---dQw4w9WgXcQ.mp4", "TestUser", semitones=2)
 
         queue_item = k.queue_manager.queue[0]
 
