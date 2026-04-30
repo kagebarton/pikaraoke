@@ -10,6 +10,7 @@ with phase-targeted cancellation.
 from __future__ import annotations
 
 import logging
+import os
 import queue
 import threading
 from dataclasses import dataclass
@@ -33,6 +34,49 @@ from pikaraoke.pipeline.workers.stem_worker import StemWorker
 from pikaraoke.pipeline.workers.whisper_worker import WhisperWorker
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# _PtyHandler — routes Python log records to the PTY processing terminal
+# ---------------------------------------------------------------------------
+
+
+class _PtyHandler(logging.Handler):
+    """Write formatted log records to the PTY slave fd.
+
+    Attached to the pikaraoke.pipeline and pikaraoke.lib.processing_manager
+    loggers so stage progress messages appear in the processing terminal
+    alongside ffmpeg/separator/whisper subprocess output.
+    """
+
+    _LOGGERS = ("pikaraoke.pipeline", "pikaraoke.lib.processing_manager")
+
+    def __init__(self, pty_fd: int) -> None:
+        super().__init__()
+        self._pty_fd = pty_fd
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            msg = self.format(record) + "\n"
+            os.write(self._pty_fd, msg.encode("utf-8", errors="replace"))
+        except OSError:
+            pass
+
+    @classmethod
+    def attach(cls, pty_fd: int, formatter: logging.Formatter) -> "_PtyHandler":
+        handler = cls(pty_fd)
+        handler.setFormatter(formatter)
+        for name in cls._LOGGERS:
+            lg = logging.getLogger(name)
+            lg.addHandler(handler)
+            lg.propagate = False
+        return handler
+
+    def detach(self) -> None:
+        for name in self._LOGGERS:
+            lg = logging.getLogger(name)
+            lg.removeHandler(self)
+            lg.propagate = True
 
 
 # ---------------------------------------------------------------------------
@@ -108,6 +152,7 @@ class ProcessingManager:
         # PTY (owned by this manager for its full lifetime)
         self._process_terminal: ProcessTerminal | None = None
         self._pty_slave_fd: int | None = None
+        self._pty_log_handler: _PtyHandler | None = None
 
         # Queue and cancellation bookkeeping
         self._pending_queue: queue.Queue[str | None] = queue.Queue()
@@ -145,6 +190,11 @@ class ProcessingManager:
             self._process_terminal = ProcessTerminal()
             self._process_terminal.start()
             self._pty_slave_fd = self._process_terminal.get_slave_fd()
+
+        # Route pipeline Python log records to the processing terminal
+        if self._pty_slave_fd is not None:
+            root_formatter = logging.root.handlers[0].formatter if logging.root.handlers else None
+            self._pty_log_handler = _PtyHandler.attach(self._pty_slave_fd, root_formatter)
 
         # Construct workers with PTY fd
         self._stem_worker = StemWorker(
@@ -188,6 +238,10 @@ class ProcessingManager:
 
         self._orchestrator.stop()  # unloads whisper, stops stem worker
 
+        if self._pty_log_handler is not None:
+            self._pty_log_handler.detach()
+            self._pty_log_handler = None
+
         # Close PTY slave fd AFTER orchestrator has joined — closing while a
         # stage still holds it open as subprocess stdout/stderr would cause EBADF.
         if self._process_terminal is not None:
@@ -200,7 +254,7 @@ class ProcessingManager:
             name = Path(song_path).stem.lower()
             blocked = [w.strip().lower() for w in blocked_str.split(",") if w.strip()]
             if any(w in name for w in blocked):
-                logging.info(
+                logger.info(
                     f"Skipping pipeline (title matches blocked word): {Path(song_path).name}"
                 )
                 if self._song_manager is not None:
