@@ -394,5 +394,8 @@ class ProcessingManager:
         for name in (f"{song.stem}.en.srt", f"{song.stem}.srt"):
             candidate = subs_dir / name
             if candidate.is_file():
+                logger.info(f"Found lyrics for alignment: {candidate.name}")
                 return candidate
+            logger.debug(f"Lyrics candidate not found: {candidate}")
+        logger.info(f"No subtitle found for alignment — will transcribe: {song.name}")
         return None

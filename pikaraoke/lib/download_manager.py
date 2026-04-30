@@ -348,9 +348,10 @@ class DownloadManager:
                 logging.warning("No video ID available to find downloaded song")
 
             if song_path:
-                self._events.emit("song_downloaded", song_path)
-                # Rename subtitle file to remove language code
+                # Move subtitle into subtitles/ BEFORE emitting song_downloaded,
+                # so the processing pipeline can find it for alignment.
                 self._move_downloaded_subtitle(song_path)
+                self._events.emit("song_downloaded", song_path)
             else:
                 logging.warning(
                     f"Could not find downloaded song in {self._download_path} matching ID: {video_id}"
