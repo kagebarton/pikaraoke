@@ -11,16 +11,18 @@ from pikaraoke.lib.song_list import SongList
 _VALID_EXTENSIONS = SongList.VALID_EXTENSIONS
 
 
-def build_song_record(file_path: str) -> dict:
+def build_song_record(file_path: str, *, pipeline_state: str = "skipped") -> dict:
     """Construct a song dict ready for KaraokeDatabase.insert_songs().
 
     Args:
         file_path: Full path to the song file.
+        pipeline_state: 'skipped' for bulk scan, 'pending' for new downloads.
     """
     return {
         "file_path": file_path,
         "youtube_id": _extract_youtube_id(file_path),
         "format": _detect_format(file_path),
+        "pipeline_state": pipeline_state,
     }
 
 

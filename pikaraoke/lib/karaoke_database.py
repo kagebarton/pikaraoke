@@ -22,6 +22,8 @@ CREATE TABLE IF NOT EXISTS songs (
     metadata_status TEXT DEFAULT 'pending',
     enrichment_attempts INTEGER DEFAULT 0,
     last_enrichment_attempt TEXT,
+    loudnorm_offset_db REAL,
+    pipeline_state TEXT NOT NULL DEFAULT 'skipped',
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
@@ -65,8 +67,30 @@ class KaraokeDatabase:
 
     def _create_schema(self) -> None:
         self._conn.executescript(_SCHEMA)
+        cur_version = self._conn.execute("PRAGMA user_version").fetchone()[0]
+        if cur_version < 2:
+            self._migrate_v2_pipeline_columns()
         with self._conn:
-            self._conn.execute("PRAGMA user_version = 1")
+            self._conn.execute("PRAGMA user_version = 2")
+
+    def _migrate_v2_pipeline_columns(self) -> None:
+        """Add loudnorm_offset_db and pipeline_state columns (idempotent).
+
+        Defaults: pipeline_state='skipped' so pre-upgrade rows back-migrate
+        without triggering a reprocess backlog. The new-song insert path
+        writes 'pending' explicitly via build_song_record.
+        """
+        cols = {row[1] for row in self._conn.execute("PRAGMA table_info(songs)")}
+        with self._conn:
+            if "loudnorm_offset_db" not in cols:
+                self._conn.execute(
+                    "ALTER TABLE songs ADD COLUMN loudnorm_offset_db REAL"
+                )
+            if "pipeline_state" not in cols:
+                self._conn.execute(
+                    "ALTER TABLE songs ADD COLUMN pipeline_state TEXT "
+                    "NOT NULL DEFAULT 'skipped'"
+                )
 
     # ------------------------------------------------------------------
     # Read operations
@@ -92,8 +116,8 @@ class KaraokeDatabase:
         with self._lock, self._conn:
             self._conn.executemany(
                 """
-                INSERT OR IGNORE INTO songs (file_path, youtube_id, format)
-                VALUES (:file_path, :youtube_id, :format)
+                INSERT OR IGNORE INTO songs (file_path, youtube_id, format, pipeline_state)
+                VALUES (:file_path, :youtube_id, :format, :pipeline_state)
                 """,
                 songs,
             )
@@ -134,8 +158,8 @@ class KaraokeDatabase:
             if inserts:
                 self._conn.executemany(
                     """
-                    INSERT OR IGNORE INTO songs (file_path, youtube_id, format)
-                    VALUES (:file_path, :youtube_id, :format)
+                    INSERT OR IGNORE INTO songs (file_path, youtube_id, format, pipeline_state)
+                    VALUES (:file_path, :youtube_id, :format, :pipeline_state)
                     """,
                     inserts,
                 )
@@ -156,6 +180,59 @@ class KaraokeDatabase:
     def update_path(self, old_path: str, new_path: str) -> None:
         """Update a single song's file path (UI-triggered rename)."""
         self.update_paths([(old_path, new_path)])
+
+    # ------------------------------------------------------------------
+    # Pipeline state / loudnorm methods
+    # ------------------------------------------------------------------
+
+    def set_loudnorm_offset(self, file_path: str, offset_db: float) -> None:
+        """Persist the loudnorm target offset (in dB) for one song."""
+        with self._lock, self._conn:
+            self._conn.execute(
+                "UPDATE songs SET loudnorm_offset_db = ?, "
+                "updated_at = CURRENT_TIMESTAMP WHERE file_path = ?",
+                (offset_db, file_path),
+            )
+
+    def get_loudnorm_offset(self, file_path: str) -> float | None:
+        """Return the loudnorm target offset for a song, or None."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT loudnorm_offset_db FROM songs WHERE file_path = ?",
+                (file_path,),
+            ).fetchone()
+            return row[0] if row else None
+
+    def set_pipeline_state(self, file_path: str, state: str) -> None:
+        """Set 'pending' | 'ready' | 'failed' | 'skipped'."""
+        with self._lock, self._conn:
+            self._conn.execute(
+                "UPDATE songs SET pipeline_state = ?, "
+                "updated_at = CURRENT_TIMESTAMP WHERE file_path = ?",
+                (state, file_path),
+            )
+
+    def get_pipeline_state(self, file_path: str) -> str | None:
+        """Return the pipeline_state for a song, or None."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT pipeline_state FROM songs WHERE file_path = ?",
+                (file_path,),
+            ).fetchone()
+            return row[0] if row else None
+
+    def get_pipeline_states(self, paths: list[str]) -> dict[str, str]:
+        """Return a dict mapping file_path → pipeline_state for the given paths."""
+        with self._lock:
+            result = {}
+            for path in paths:
+                row = self._conn.execute(
+                    "SELECT pipeline_state FROM songs WHERE file_path = ?",
+                    (path,),
+                ).fetchone()
+                if row and row[0] is not None:
+                    result[path] = row[0]
+            return result
 
     # ------------------------------------------------------------------
     # Metadata (app-level key-value store)

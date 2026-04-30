@@ -461,7 +461,10 @@ class DownloadManager:
             logging.debug(f"No subtitle found for video: {video_path}")
             return
 
-        source = next(iter(srt_files))
+        # Prefer .en.srt over bare .srt as a defense against yt-dlp
+        # filename variations where multiple language tracks were emitted.
+        en_srts = {f for f in srt_files if ".en.srt" in f.name}
+        source = next(iter(en_srts)) if en_srts else next(iter(srt_files))
         try:
             source.rename(target)
             logging.debug(f"Moved subtitle: {source.name} -> {target}")

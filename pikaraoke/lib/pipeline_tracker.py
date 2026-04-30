@@ -81,6 +81,7 @@ class PipelineTracker:
         self._events.on("processing_complete", self._on_processing_complete)
         self._events.on("processing_cancelled", self._on_processing_cancelled)
         self._events.on("processing_error", self._on_processing_error)
+        self._events.on("processing_skipped", self._on_processing_skipped)
         self._events.on("song_deleted", self._on_song_deleted)
 
     def get_status(self) -> list[dict[str, Any]]:
@@ -292,6 +293,14 @@ class PipelineTracker:
                     break
 
     def _on_song_deleted(self, song_path: str) -> None:
+        with self._lock:
+            self._items = [item for item in self._items if item.song_path != song_path]
+
+    def _on_processing_skipped(self, song_path: str) -> None:
+        """Remove the item from the in-flight set when blocked-words filter rejects it.
+
+        Without this handler the rejected song's badge never clears.
+        """
         with self._lock:
             self._items = [item for item in self._items if item.song_path != song_path]
 

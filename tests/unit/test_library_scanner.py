@@ -293,6 +293,7 @@ class TestDirectoryChange:
                 "file_path": str(old_dir / f"Song{i}---{'a' * 10}{i}.mp4"),
                 "youtube_id": None,
                 "format": "mp4",
+                "pipeline_state": "skipped",
             }
             for i in range(10)
         ]
@@ -330,6 +331,18 @@ class TestBuildSongRecord:
         mp3.touch()
         record = build_song_record(str(mp3))
         assert record["format"] == "mp3"
+
+    def test_default_pipeline_state_is_skipped(self, tmp_path):
+        song = tmp_path / "Song---dQw4w9WgXcQ.mp4"
+        song.touch()
+        record = build_song_record(str(song))
+        assert record["pipeline_state"] == "skipped"
+
+    def test_pipeline_state_override_pending(self, tmp_path):
+        song = tmp_path / "Song---dQw4w9WgXcQ.mp4"
+        song.touch()
+        record = build_song_record(str(song), pipeline_state="pending")
+        assert record["pipeline_state"] == "pending"
 
 
 class TestExtractYoutubeId:

@@ -73,9 +73,7 @@ class TestAdminCancelEndpoint:
     @patch(f"{ROUTE_PREFIX}._", side_effect=lambda x: x)
     @patch(f"{ROUTE_PREFIX}.is_admin", return_value=False)
     @patch(f"{ROUTE_PREFIX}.get_karaoke_instance")
-    def test_non_admin_gets_403(
-        self, mock_get_instance, mock_is_admin, mock_gettext, client
-    ):
+    def test_non_admin_gets_403(self, mock_get_instance, mock_is_admin, mock_gettext, client):
         """Non-admin hitting the admin cancel endpoint gets 403."""
         mock_karaoke = MagicMock()
         mock_get_instance.return_value = mock_karaoke
@@ -90,9 +88,7 @@ class TestAdminCancelEndpoint:
     @patch(f"{ROUTE_PREFIX}._", side_effect=lambda x: x)
     @patch(f"{ROUTE_PREFIX}.is_admin", return_value=True)
     @patch(f"{ROUTE_PREFIX}.get_karaoke_instance")
-    def test_admin_can_cancel(
-        self, mock_get_instance, mock_is_admin, mock_gettext, client
-    ):
+    def test_admin_can_cancel(self, mock_get_instance, mock_is_admin, mock_gettext, client):
         """Admin can cancel any item via the admin endpoint."""
         tracker = _make_tracker()
         item = PipelineItem(title="Test", url="https://example.com", user="Alice")
@@ -113,9 +109,7 @@ class TestAdminCancelEndpoint:
     @patch(f"{ROUTE_PREFIX}._", side_effect=lambda x: x)
     @patch(f"{ROUTE_PREFIX}.is_admin", return_value=False)
     @patch(f"{ROUTE_PREFIX}.get_karaoke_instance")
-    def test_error_response_is_json(
-        self, mock_get_instance, mock_is_admin, mock_gettext, client
-    ):
+    def test_error_response_is_json(self, mock_get_instance, mock_is_admin, mock_gettext, client):
         """Admin-gated endpoints return application/json via jsonify()."""
         mock_karaoke = MagicMock()
         mock_get_instance.return_value = mock_karaoke
@@ -131,9 +125,7 @@ class TestAdminRemoveEndpoint:
     @patch(f"{ROUTE_PREFIX}._", side_effect=lambda x: x)
     @patch(f"{ROUTE_PREFIX}.is_admin", return_value=False)
     @patch(f"{ROUTE_PREFIX}.get_karaoke_instance")
-    def test_non_admin_gets_403(
-        self, mock_get_instance, mock_is_admin, mock_gettext, client
-    ):
+    def test_non_admin_gets_403(self, mock_get_instance, mock_is_admin, mock_gettext, client):
         """Non-admin hitting the admin remove endpoint gets 403."""
         mock_karaoke = MagicMock()
         mock_get_instance.return_value = mock_karaoke
@@ -147,9 +139,7 @@ class TestAdminRemoveEndpoint:
     @patch(f"{ROUTE_PREFIX}._", side_effect=lambda x: x)
     @patch(f"{ROUTE_PREFIX}.is_admin", return_value=True)
     @patch(f"{ROUTE_PREFIX}.get_karaoke_instance")
-    def test_admin_can_remove(
-        self, mock_get_instance, mock_is_admin, mock_gettext, client
-    ):
+    def test_admin_can_remove(self, mock_get_instance, mock_is_admin, mock_gettext, client):
         """Admin can remove any item via the admin endpoint."""
         tracker = _make_tracker()
         item = PipelineItem(title="Test", url="https://example.com", user="Alice")
@@ -174,9 +164,7 @@ class TestUserCancelEndpoint:
 
     @patch(f"{ROUTE_PREFIX}._", side_effect=lambda x: x)
     @patch(f"{ROUTE_PREFIX}.get_karaoke_instance")
-    def test_user_cancel_own_item_succeeds(
-        self, mock_get_instance, mock_gettext, client
-    ):
+    def test_user_cancel_own_item_succeeds(self, mock_get_instance, mock_gettext, client):
         """User with matching cookie can cancel their own item."""
         tracker = _make_tracker()
         item = PipelineItem(title="My Song", url="https://example.com", user="Alice")
@@ -203,9 +191,7 @@ class TestUserCancelEndpoint:
 
     @patch(f"{ROUTE_PREFIX}._", side_effect=lambda x: x)
     @patch(f"{ROUTE_PREFIX}.get_karaoke_instance")
-    def test_user_cancel_other_users_item_fails(
-        self, mock_get_instance, mock_gettext, client
-    ):
+    def test_user_cancel_other_users_item_fails(self, mock_get_instance, mock_gettext, client):
         """User cannot cancel another user's item — cookie doesn't match."""
         tracker = _make_tracker()
         item = PipelineItem(title="Their Song", url="https://example.com", user="Bob")
@@ -340,3 +326,40 @@ class TestEnqueueStaysOpen:
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data["success"] is True
+
+
+class TestProcessingSkippedEvent:
+    """processing_skipped from ProcessingManager clears the item from PipelineTracker."""
+
+    def test_blocked_word_item_removed_from_tracker(self):
+        """When processing_skipped fires, the matching item is removed from _items."""
+        events = EventSystem()
+        tracker = _make_tracker()
+
+        # Simulate a song that made it to the download-complete stage
+        item = PipelineItem(title="Demo Song", url="https://example.com", user="Bob")
+        item.download_status = "complete"
+        item.song_path = "/songs/Demo Song---abc123.mp4"
+        tracker._items.append(item)
+
+        assert len(tracker._items) == 1
+
+        events.on("processing_skipped", tracker._on_processing_skipped)
+        events.emit("processing_skipped", "/songs/Demo Song---abc123.mp4")
+
+        assert len(tracker._items) == 0
+
+    def test_processing_skipped_only_removes_matching_item(self):
+        """processing_skipped removes only the item with the matching song_path."""
+        tracker = _make_tracker()
+
+        item_a = PipelineItem(title="Song A", url="https://example.com/a", user="Bob")
+        item_a.song_path = "/songs/A---abc123.mp4"
+        item_b = PipelineItem(title="Song B", url="https://example.com/b", user="Carol")
+        item_b.song_path = "/songs/B---xyz456.mp4"
+        tracker._items = [item_a, item_b]
+
+        tracker._on_processing_skipped("/songs/A---abc123.mp4")
+
+        assert len(tracker._items) == 1
+        assert tracker._items[0].song_path == "/songs/B---xyz456.mp4"

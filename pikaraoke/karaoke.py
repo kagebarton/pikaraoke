@@ -286,6 +286,7 @@ class Karaoke:
         self.processing_manager = ProcessingManager(
             events=self.events,
             preferences=self.preferences,
+            song_manager=self.song_manager,
             temp_dir=self.temp_dir,
             log_level=self.log_level,
         )

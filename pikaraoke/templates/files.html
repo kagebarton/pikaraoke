@@ -122,23 +122,34 @@
 {{ pagination.links }} {{ pagination.info }}
 <table>
 	{% for song in songs %}
-	{% set display_name = filename_from_path(song) %}
-	<tr value="{{ song }}">
+	{% set display_name = filename_from_path(song.path) %}
+	<tr value="{{ song.path }}">
 		<td style="padding: 5px 0px">{{loop.index + pagination.skip}}</td>
-		<td id="{{display_name[0].lower()}}" style="padding-right: 0">
+		<td style="padding-right: 0">
 			<a
 				class="add-song-link has-text-weight-bold has-text-success"
 				title="Add '{{display_name}}' to queue"
-				href="{{url_for('queue.enqueue')}}?song={{url_escape(song.encode('utf-8','surrogateescape'))}}&user="
+				href="{{url_for('queue.enqueue')}}?song={{url_escape(song.path.encode('utf-8','surrogateescape'))}}&user="
 				><i class="icon icon-list-add is-size-4"></i>
 			</a>
 		</td>
-		<td class="break-word" style="padding-right: 0">{{display_name}}</td>
+		<td class="break-word" style="padding-right: 0">
+			{{display_name}}
+			{% if song.is_active %}
+			<span class="tag is-info is-light ml-2">processing</span>
+			{% elif song.tracker_status in ("waiting", "pending", "active") %}
+			<span class="tag is-warning is-light ml-2">{{ song.tracker_status }}</span>
+			{% elif song.pipeline_state == "pending" %}
+			<span class="tag is-danger is-light ml-2" title="Pipeline incomplete — needs reprocessing">pending</span>
+			{% elif song.pipeline_state == "failed" %}
+			<span class="tag is-danger ml-2" title="Processing failed — check logs">failed</span>
+			{% endif %}
+		</td>
 		{% if admin %}
 		<td style="padding-right: 0">
 			<a
 				class="edit-button"
-				href="{{url_for('files.edit_file')}}?song={{url_escape(song.encode('utf-8','surrogateescape'))}}&referrer={{url_escape(current_url)}}"
+				href="{{url_for('files.edit_file')}}?song={{url_escape(song.path.encode('utf-8','surrogateescape'))}}&referrer={{url_escape(current_url)}}"
 				title="Edit song"
 				><i class="icon icon-edit-1 is-size-4"></i>
 			</a>

@@ -1,0 +1,97 @@
+from dataclasses import dataclass
+from pathlib import Path
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_MODELS_DIR = str(_REPO_ROOT / "models")
+
+
+@dataclass
+class WhisperModelConfig:
+    model_path: str = str(_REPO_ROOT / "models" / "large-v3-turbo.pt")
+    device: str = "auto"
+    compute_type: str = "int8"
+    language: str = "en"
+    vad: bool = True
+    vad_threshold: float = 0.25
+    suppress_silence: bool = True
+    suppress_word_ts: bool = False
+    only_voice_freq: bool = False
+    refine_steps: str = "se"
+    refine_word_level: bool = True
+    regroup: str = ""
+    condition_on_previous_text: bool = False
+
+
+@dataclass
+class PipelineConfig:
+    # --- Model paths ---
+    whisper_model_path: str = str(_REPO_ROOT / "models" / "large-v3-turbo.pt")
+    separator_model_dir: str = _MODELS_DIR
+    separator_model_name: str = (
+        "mel_band_roformer_karaoke_aufr33_viperx_sdr_10.1956.ckpt"
+    )
+
+    # --- Device/compute ---
+    whisper_device: str = "auto"
+    whisper_compute_type: str = "int8"
+
+    # --- Intermediate files directory ---
+    intermediate_dir: str = ""  # Empty = system temp dir; adapter resolves via get_temp_directory()
+
+    # --- Loudnorm targets ---
+    loudnorm_target_i: float = -24.0  # Target integrated loudness (LUFS)
+    loudnorm_target_tp: float = -2.0  # Target true peak (dBTP)
+    loudnorm_target_lra: float = 7.0  # Target loudness range (LU)
+
+    # --- Whisper alignment options ---
+    whisper_language: str = "en"
+    whisper_vad: bool = True
+    whisper_vad_threshold: float = 0.25
+    whisper_suppress_silence: bool = True
+    whisper_suppress_word_ts: bool = False
+    whisper_only_voice_freq: bool = False
+    whisper_refine_steps: str = "se"  # 's' = refine starts, 'e' = refine ends, 'se' = both
+    whisper_refine_word_level: bool = True
+    whisper_regroup: str = ""
+    whisper_condition_on_previous_text: bool = False
+
+    # --- ASS styling ---
+    font_name: str = "Arial"
+    font_size: int = 60
+    primary_color: str = "&H00D7FF&"  # Soft Yellow
+    secondary_color: str = "&H00FFFFFF"  # White (not yet sung)
+    outline_color: str = "&H00000000"  # Black outline
+    back_color: str = "&H80000000&"  # Translucent shadow
+    outline_width: int = 3
+    shadow_offset: int = 2
+    margin_left: int = 50
+    margin_right: int = 50
+    margin_vertical: int = 150
+
+    # --- Karaoke timing (centiseconds) ---
+    line_lead_in_cs: int = 80
+    line_lead_out_cs: int = 20
+    first_word_nudge_cs: int = 0
+
+    # --- FFmpeg transcoding ---
+    aac_quality: str = "2"  # ≈ 128 kbps VBR AAC
+    ffmpeg_threads: str = "4"
+
+
+def build_whisper_config(cfg: PipelineConfig) -> WhisperModelConfig:
+    """Build a WhisperModelConfig from a PipelineConfig."""
+    return WhisperModelConfig(
+        model_path=cfg.whisper_model_path,
+        device=cfg.whisper_device,
+        compute_type=cfg.whisper_compute_type,
+        language=cfg.whisper_language,
+        vad=cfg.whisper_vad,
+        vad_threshold=cfg.whisper_vad_threshold,
+        suppress_silence=cfg.whisper_suppress_silence,
+        suppress_word_ts=cfg.whisper_suppress_word_ts,
+        only_voice_freq=cfg.whisper_only_voice_freq,
+        refine_steps=cfg.whisper_refine_steps,
+        refine_word_level=cfg.whisper_refine_word_level,
+        regroup=cfg.whisper_regroup,
+        condition_on_previous_text=cfg.whisper_condition_on_previous_text,
+    )

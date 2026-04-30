@@ -193,6 +193,11 @@ def queue_edit(query):
 
 def _do_enqueue(song: str, user: str) -> str:
     k = get_karaoke_instance()
+    # Gate: reject songs whose pipeline_state is 'pending' or 'failed'
+    state = k.song_manager.get_pipeline_state(song)
+    if state in ("pending", "failed"):
+        return json.dumps({"song": k.song_manager.filename_from_path(song), "success": False,
+                           "error": f"Cannot enqueue: song is {state}"}), 409
     rc = k.queue_manager.enqueue(song, user)
     broadcast_event("queue_update")
     song_title = k.song_manager.filename_from_path(song)
