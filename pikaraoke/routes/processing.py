@@ -34,7 +34,10 @@ def processing():
 def processing_status():
     """Get the status of all pipeline items."""
     k = get_karaoke_instance()
-    items = k.pipeline_tracker.get_status()
+    items = k.pipeline_tracker.get_status(
+        admin=is_admin(),
+        user=request.cookies.get("user", ""),
+    )
     return json.dumps(items)
 
 

@@ -39,11 +39,12 @@ window.i18n.confirmRemovePipeline = "{{ _('Are you sure you want to remove SONG_
 (function() {
 'use strict';
 
+// isAdmin is used only to choose the correct cancel URL (admin vs user route).
+// Button visibility is now driven by the server-computed `actions` array.
 var isAdmin = {{ admin | tojson }};
-var currentUser = (typeof getUserCookie === 'function') ? getUserCookie() : null;
 
-var pollInterval = 1000; // 1 second
-  var pollTimer = null;
+var pollInterval = 10000; // 10 second fallback (push is primary)
+var pollTimer = null;
 
   /* ------------------------------------------------------------------
      State icon — CSS-spinner-based, replaces old stepClass/pulse system.
@@ -63,55 +64,38 @@ var pollInterval = 1000; // 1 second
     return '<span class="state-box">' + inner + '</span>';
   }
 
-  /* ------------------------------------------------------------------
-     Queue cell — green + icon (matches files.html/queue.html convention)
-     ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+Queue cell — green + icon (matches files.html/queue.html convention)
+------------------------------------------------------------------ */
 
-  function queueCell(item) {
-    if (item.download_status === 'complete' && item.processing_status === 'complete' && item.song_path) {
-      var label = "{% trans %}Queue{% endtrans %}";
-      return '<span class="state-box"><a href="#" class="pipeline-action-btn pipeline-enqueue-btn" data-id="' + item.id + '" title="' + label + '" aria-label="' + label + '">'
-        + '<i class="icon icon-list-add icon-action-queue"></i></a></span>';
-    }
-    return '';
+function queueCell(item) {
+  if (item.actions && item.actions.indexOf('enqueue') !== -1) {
+    var label = "{% trans %}Queue{% endtrans %}";
+    return '<span class="state-box"><a href="#" class="pipeline-action-btn pipeline-enqueue-btn" data-id="' + item.id + '" title="' + label + '" aria-label="' + label + '">'
+      + '<i class="icon icon-list-add icon-action-queue"></i></a></span>';
   }
+  return '';
+}
 
-  /* ------------------------------------------------------------------
-     Cancel/Remove cell
-     Note on 'waiting' tolerance: cancelCell checks download_status first.
-     When download is active/pending the cancel button shows. The 'waiting'
-     status only appears on processing_status while download is still in
-     flight, so this implicit dependency means waiting items are handled
-     by the download_status branches below.
-     ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+Cancel/Remove cell — driven by server-computed actions list.
+The server decides which actions are allowed based on auth + state;
+the client just renders the corresponding button, eliminating the
+cancel-vs-remove branch-ordering bug class entirely.
+------------------------------------------------------------------ */
 
 function cancelCell(item) {
-  // No action while cancelling is in progress
-  if (item.processing_status === 'cancelling') return '';
-
-  var isOwner = currentUser && item.user === currentUser;
-
-  // Cancel takes priority over remove: an item with download_status='complete'
-  // and processing_status in ('pending','active') is mid-pipeline and must
-  // expose a Cancel button, not Remove. The remove branch below is the
-  // fallthrough for fully terminal rows.
-  if (item.download_status === 'active' || item.download_status === 'pending' ||
-    item.processing_status === 'active' || item.processing_status === 'pending') {
-    if (!isAdmin && !isOwner) return '';
+  if (!item.actions) return '';
+  if (item.actions.indexOf('cancel') !== -1) {
     var label = "{% trans %}Cancel{% endtrans %}";
     return '<span class="state-box"><a href="#" class="pipeline-action-btn pipeline-cancel-btn" data-id="' + item.id + '" title="' + label + '" aria-label="' + label + '">'
       + '<i class="icon icon-cancel-circled-1 icon-action-cancel"></i></a></span>';
   }
-
-  // Remove for terminal items: admin only (matches edit-song page behaviour).
-  if (item.download_status === 'complete' || item.download_status === 'error' ||
-    item.processing_status === 'complete' || item.processing_status === 'error') {
-    if (!isAdmin) return '';
+  if (item.actions.indexOf('remove') !== -1) {
     var label = "{% trans %}Remove{% endtrans %}";
     return '<span class="state-box"><a href="#" class="pipeline-action-btn pipeline-remove-btn" data-id="' + item.id + '" title="' + label + '" aria-label="' + label + '">'
       + '<i class="icon icon-trash-empty icon-action-remove"></i></a></span>';
   }
-
   return '';
 }
 
@@ -155,11 +139,14 @@ function cancelCell(item) {
 
     titleHtml += '</td>';
 
-    // State key for keyed row updates — includes every field that changes the
-    // rendered row so unchanged rows are preserved (avoiding spinner jitter).
-    // download_progress is deliberately excluded since it's no longer rendered.
-    var stateKey = item.download_status + '|' + item.processing_status
-      + '|' + (item.song_path || '') + '|' + (item.error_message || '');
+  // State key for keyed row updates — includes every field that changes the
+  // rendered row so unchanged rows are preserved (avoiding spinner jitter).
+  // download_progress is deliberately excluded since it's no longer rendered.
+  // actions array is included so button changes trigger re-renders.
+  var actionsKey = (item.actions || []).sort().join(',');
+  var stateKey = item.download_status + '|' + item.processing_status
+    + '|' + (item.song_path || '') + '|' + (item.error_message || '')
+    + '|' + actionsKey;
 
     return '<tr data-id="' + item.id + '" data-state-key="' + escapeHtml(stateKey) + '" data-proc-status="' + item.processing_status + '">'
       + titleHtml
@@ -175,47 +162,44 @@ function cancelCell(item) {
      the entire tbody innerHTML, so CSS-animated spinners don't restart.
      ------------------------------------------------------------------ */
 
-  function renderItems(items) {
-    var seen = {};
-    var $body = $('#pipeline-body');
-    items.slice().reverse().forEach(function(item) {
-      seen[item.id] = true;
-      var $existing = $body.find('tr[data-id="' + item.id + '"]');
-      var currKey = item.download_status + '|' + item.processing_status
-        + '|' + (item.song_path || '') + '|' + (item.error_message || '');
-      if ($existing.length === 0) {
-        $body.append(renderRow(item));
-      } else if ($existing.attr('data-state-key') !== currKey && !$existing.hasClass('is-fading')) {
-        // Guard: never clobber a row that is mid-fade — the optimistic UI
-        // already told the user the cancel is in progress; replacing it with
-        // a fresh opaque row would "blink" the cancel animation away.
-        $existing.replaceWith(renderRow(item));
-      }
-    });
-
-    // Rows whose items are gone from the payload: rows that were showing the
-    // 'cancelling' spinner (i.e. an active separation that has now completed
-    // its cancellation server-side) get a fade-out so the UX matches a
-    // user-initiated cancel. All other disappeared rows are removed instantly.
-    $body.find('tr').each(function() {
-      var $tr = $(this);
-      var id = $tr.attr('data-id');
-      if (!id || seen[id] || $tr.hasClass('is-fading')) return;
-      if ($tr.attr('data-proc-status') === 'cancelling') {
-        fadeAndRemove($tr);
-      } else {
-        $tr.remove();
-      }
-    });
-
-    if (items.length === 0) {
-      $('#pipeline-empty').show();
-      $('#pipeline-table').hide();
-    } else {
-      $('#pipeline-empty').hide();
-      $('#pipeline-table').show();
+function renderItems(items) {
+  var seen = {};
+  var $body = $('#pipeline-body');
+  items.slice().reverse().forEach(function(item) {
+    seen[item.id] = true;
+    var $existing = $body.find('tr[data-id="' + item.id + '"]');
+    var currKey = item.download_status + '|' + item.processing_status
+      + '|' + (item.song_path || '') + '|' + (item.error_message || '')
+      + '|' + (item.actions || []).sort().join(',');
+    if ($existing.length === 0) {
+      $body.append(renderRow(item));
+    } else if ($existing.attr('data-state-key') !== currKey) {
+      $existing.replaceWith(renderRow(item));
     }
+  });
+
+  // Rows whose items are gone from the payload: rows that were showing the
+  // 'cancelling' spinner get a fade-out so the UX matches a user-initiated
+  // cancel. All other disappeared rows are removed instantly.
+  $body.find('tr').each(function() {
+    var $tr = $(this);
+    var id = $tr.attr('data-id');
+    if (!id || seen[id]) return;
+    if ($tr.attr('data-proc-status') === 'cancelling') {
+      fadeAndRemove($tr);
+    } else {
+      $tr.remove();
+    }
+  });
+
+  if (items.length === 0) {
+    $('#pipeline-empty').show();
+    $('#pipeline-table').hide();
+  } else {
+    $('#pipeline-empty').hide();
+    $('#pipeline-table').show();
   }
+}
 
   /* ------------------------------------------------------------------
      Optimistic-UI fade
@@ -225,21 +209,25 @@ function cancelCell(item) {
     $row.addClass('is-fading').fadeOut(1000, function() { $(this).remove(); });
   }
 
-  /* ------------------------------------------------------------------
-     AJAX helpers
-     ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+AJAX helpers — fetchStatus is now triggered by Socket.IO push
+(pipeline_updated) with a 10s fallback poll for reconnect / missed-event
+drift, instead of the old 1s poll that raced with user actions.
+------------------------------------------------------------------ */
 
-  function fetchStatus() {
-    if ($('#pipeline-table').length === 0) {
-      return; // Left the page
-    }
-    $.get('{{ url_for("processing.processing_status") }}', function(data) {
-      var items = JSON.parse(data);
-      renderItems(items);
-    });
-    // Keep polling
-    pollTimer = setTimeout(fetchStatus, pollInterval);
+function fetchStatus() {
+  if ($('#pipeline-table').length === 0) {
+    return; // Left the page
   }
+  $.get('{{ url_for("processing.processing_status") }}', function(data) {
+    var items = JSON.parse(data);
+    renderItems(items);
+  });
+  // 10s fallback poll — covers reconnect / missed-event drift.
+  // Primary updates come from the `pipeline_updated` socket event.
+  if (pollTimer) { clearTimeout(pollTimer); }
+  pollTimer = setTimeout(fetchStatus, pollInterval);
+}
 
   function enqueueItem(itemId) {
     $.ajax({
@@ -271,11 +259,11 @@ function cancelCell(item) {
   // single click fires N AJAX calls / N confirm dialogs after N visits.
   $(document).off('click.processing');
 
-  // Cancel — confirm via window.confirm(), then branch fade on processing_status.
-  // When download is active/pending, cancel() removes the item synchronously so
-  // fading is safe. When separation is active, cancel() is async (item stays in
-  // tracker with cancelling=True), so we skip the fade and let the poll update
-  // the row to show the cancelling spinner.
+// Cancel — confirm via window.confirm(), then branch fade on processing_status.
+// When download is active/pending, cancel() removes the item synchronously so
+// fading is safe. When separation is active, cancel() is async (item stays in
+// tracker with cancelling=True), so we skip the fade and let the push-driven
+// fetchStatus update the row to show the cancelling spinner.
 $(document).on('click.processing', '.pipeline-cancel-btn', function(e) {
   e.preventDefault();
   var id = $(this).data('id');
@@ -287,13 +275,6 @@ $(document).on('click.processing', '.pipeline-cancel-btn', function(e) {
   if (!window.confirm(msg)) return;
 
   var procStatus = $row.attr('data-proc-status');
-  // Lock the row against poll-driven removal/replacement before the AJAX
-  // goes out. Cancelling a download/pending-job removes the item from the
-  // tracker synchronously, so the next 1s poll could otherwise wipe the row
-  // before the AJAX done() callback runs the fade.
-  if (procStatus !== 'active') {
-    $row.addClass('is-fading');
-  }
   var ajaxOpts = isAdmin
     ? {
       url: '{{ url_for("processing.cancel_item", item_id="ITEM_ID") }}'.replace('ITEM_ID', id),
@@ -306,13 +287,18 @@ $(document).on('click.processing', '.pipeline-cancel-btn', function(e) {
     };
   $.ajax(ajaxOpts).done(function() {
     if (procStatus !== 'active') {
-      $row.fadeOut(1000, function() { $(this).remove(); });
+      // Synchronous cancel (download/pending) — item is already gone from
+      // the tracker; fade the row immediately.
+      fadeAndRemove($row);
     }
+    // For active processing: no local fade — the push-driven fetchStatus
+    // will update the row to show the cancelling spinner, and a second
+    // push when the orchestrator finishes will trigger the fade via
+    // renderItems' cancelling-row detection.
     fetchStatus();
   }).fail(function() {
-    // 403 (stale cookie, ownership mismatch) or other failure —
-    // unlock the row and refresh so the user sees the item is still there.
-    $row.removeClass('is-fading');
+    // 403 (stale cookie, ownership mismatch) or other failure — refresh
+    // so the user sees the item is still there.
     fetchStatus();
   });
 });
@@ -348,18 +334,20 @@ $(document).on('click.processing', '.pipeline-cancel-btn', function(e) {
     return div.innerHTML;
   }
 
-  // Socket listeners for download activity trigger refresh. Detach prior
-  // registrations — the SPA re-executes this script each visit.
-  if (typeof window.socket !== 'undefined') {
-    window.socket.off('download_started');
-    window.socket.off('download_stopped');
-    window.socket.on('download_started', function() {
-      fetchStatus();
-    });
-    window.socket.on('download_stopped', function() {
-      fetchStatus();
-    });
-  }
+// Socket listeners — push-driven re-renders replace the old 1s poll.
+// `pipeline_updated` is emitted by the server after every tracker
+// mutation (new item, status change, removal, cancel). Detach prior
+// registrations — the SPA re-executes this script each visit.
+if (typeof window.socket !== 'undefined') {
+  window.socket.off('pipeline_updated');
+  window.socket.off('download_started');
+  window.socket.off('download_stopped');
+  window.socket.on('pipeline_updated', function() {
+    fetchStatus();
+  });
+  // download_started/stopped are now covered by pipeline_updated,
+  // but keep listeners for other pages that may rely on them.
+}
 
   // Start polling
   $(function() {

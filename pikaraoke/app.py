@@ -213,6 +213,15 @@ def main() -> None:
     k.events.on("download_started", _broadcast_in_context("download_started"))
     k.events.on("download_stopped", _broadcast_in_context("download_stopped"))
 
+    # Wire pipeline tracker changes to push `pipeline_updated` over Socket.IO.
+    # This replaces the 1s polling on the processing page with push-driven
+    # re-renders, eliminating the race between cancel-AJAX and the poll.
+    def _pipeline_changed():
+        with app.app_context():
+            broadcast_event("pipeline_updated")
+
+    k.pipeline_tracker._on_change = _pipeline_changed
+
     # expose shared configuration variables to the flask app
     app.config["ADMIN_PASSWORD"] = k.admin_password or None
     app.config["SITE_NAME"] = "PiKaraoke"
