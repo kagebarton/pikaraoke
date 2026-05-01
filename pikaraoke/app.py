@@ -43,11 +43,16 @@ _ = flask_babel.gettext
 
 
 class _NoGetFilter(logging.Filter):
-    """Suppress werkzeug HTTP access log lines for GET and socket.io polling POST requests."""
+    """Suppress werkzeug HTTP access log lines for GET and noisy POST requests."""
 
     def filter(self, record: logging.LogRecord) -> bool:
         msg = record.getMessage()
-        return "GET" not in msg and not ("POST" in msg and "/socket.io/" in msg)
+        return (
+            "GET" not in msg
+            and not ("POST" in msg and "/socket.io/" in msg)
+            and not ("POST" in msg and "/download" in msg)
+            and not ("POST" in msg and "/cancel" in msg)
+        )
 
 
 logging.getLogger("werkzeug").addFilter(_NoGetFilter())
