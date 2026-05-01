@@ -199,6 +199,7 @@ class Karaoke:
             events=self.events,
             filename_from_path=SongManager.filename_from_path,
             mpv=self.mpv_controller,
+            get_loudnorm_offset=self.song_manager.get_loudnorm_offset,
         )
 
         # Wire song-end callback through PlaybackController

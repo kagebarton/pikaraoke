@@ -142,6 +142,10 @@ class SongManager:
         """Forwarder so callers don't reach into KaraokeDatabase directly."""
         self._db.set_loudnorm_offset(song_path, offset_db)
 
+    def get_loudnorm_offset(self, song_path: str) -> float | None:
+        """Forwarder for loudnorm_offset reads."""
+        return self._db.get_loudnorm_offset(song_path)
+
     def set_pipeline_state(self, song_path: str, state: str) -> None:
         """Forwarder for pipeline_state writes."""
         self._db.set_pipeline_state(song_path, state)

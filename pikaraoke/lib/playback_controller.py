@@ -67,6 +67,7 @@ class PlaybackController:
         events: EventSystem,
         filename_from_path: Callable[[str, bool], str],
         mpv: MpvController,
+        get_loudnorm_offset: Callable[[str], float | None] = lambda path: None,
     ) -> None:
         """Initialize the playback controller.
 
@@ -75,11 +76,13 @@ class PlaybackController:
             events: EventSystem instance for event emission.
             filename_from_path: Function to extract display name from path.
             mpv: MpvController instance for MPV IPC.
+            get_loudnorm_offset: Function to fetch loudnorm offset from DB.
         """
         self.preferences = preferences
         self.events = events
         self.filename_from_path = filename_from_path
         self.mpv = mpv
+        self.get_loudnorm_offset = get_loudnorm_offset
         self._playback_lock = threading.Lock()
         # Injected by Karaoke after queue_manager is available
         self._get_queue_preview: Callable[[], tuple[QueuedSong, ...]] = lambda: ()
@@ -121,9 +124,7 @@ class PlaybackController:
         # Get normalization_db from song database (if normalize_audio enabled)
         normalization_db = None
         if self.preferences.get_or_default("normalize_audio"):
-            # Normalization value will be fetched from song database when implemented
-            # For now, normalization is toggled but no per-song dB values are stored
-            normalization_db = None  # Will be populated when ProcessingManager stores it
+            normalization_db = self.get_loudnorm_offset(file_path)
 
         # Find dual-stem companion files (vocal + nonvocal)
         vocal_path, nonvocal_path = self._find_companions(file_path)
