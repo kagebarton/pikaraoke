@@ -227,18 +227,29 @@ AJAX helpers — fetchStatus is now triggered by Socket.IO push
 drift, instead of the old 1s poll that raced with user actions.
 ------------------------------------------------------------------ */
 
-function fetchStatus() {
-  if ($('#pipeline-table').length === 0) {
-    return; // Left the page
+var fetchTimer = null;
+function fetchStatus(immediate) {
+  if (fetchTimer) { clearTimeout(fetchTimer); fetchTimer = null; }
+
+  var doFetch = function() {
+    if ($('#pipeline-table').length === 0) {
+      return; // Left the page
+    }
+    $.get('{{ url_for("processing.processing_status") }}', function(data) {
+      var items = JSON.parse(data);
+      renderItems(items);
+    });
+    // 10s fallback poll — covers reconnect / missed-event drift.
+    // Primary updates come from the `pipeline_updated` socket event.
+    if (pollTimer) { clearTimeout(pollTimer); }
+    pollTimer = setTimeout(fetchStatus, pollInterval);
+  };
+
+  if (immediate === true) {
+    doFetch();
+  } else {
+    fetchTimer = setTimeout(doFetch, 250);
   }
-  $.get('{{ url_for("processing.processing_status") }}', function(data) {
-    var items = JSON.parse(data);
-    renderItems(items);
-  });
-  // 10s fallback poll — covers reconnect / missed-event drift.
-  // Primary updates come from the `pipeline_updated` socket event.
-  if (pollTimer) { clearTimeout(pollTimer); }
-  pollTimer = setTimeout(fetchStatus, pollInterval);
 }
 
   function enqueueItem(itemId) {
@@ -363,7 +374,7 @@ if (typeof window.socket !== 'undefined') {
 
   // Start polling
   $(function() {
-    fetchStatus();
+    fetchStatus(true);
   });
 
   // Cleanup on page hide

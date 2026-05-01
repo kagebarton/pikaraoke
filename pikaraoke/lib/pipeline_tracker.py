@@ -252,28 +252,38 @@ class PipelineTracker:
         # Route non-terminal items through cancel() to avoid orphaning
         # active processing jobs (which would keep running after their
         # tracker entry and song file are deleted).
-        song_to_delete: str | None = None
-        removed = False
-        with self._lock:
-            item = self._find_item(item_id)
-            if item is None:
-                return False
-            if item.processing_status not in ("complete", "error") or item.cancelling:
-                # Release lock before calling cancel(), which acquires it.
-                pass
-            else:
-                # Terminal item — safe to remove directly.
-                song_to_delete = item.song_path
-                removed = self._remove_item(item_id)
+        # We loop up to twice to handle the race condition where an active item
+        # transitions to terminal exactly between dropping the lock and calling cancel().
+        for _ in range(2):
+            song_to_delete: str | None = None
+            removed = False
+            with self._lock:
+                item = self._find_item(item_id)
+                if item is None:
+                    return False
+                if item.cancelling:
+                    return False
+                if item.processing_status not in ("complete", "error"):
+                    # Release lock before calling cancel(), which acquires it.
+                    is_terminal = False
+                else:
+                    # Terminal item — safe to remove directly.
+                    song_to_delete = item.song_path
+                    removed = self._remove_item(item_id)
+                    is_terminal = True
 
-        if song_to_delete:
-            self._delete_song(song_to_delete)
-        if removed:
-            self._notify_change()
-            return True
+            if is_terminal:
+                if song_to_delete:
+                    self._delete_song(song_to_delete)
+                if removed:
+                    self._notify_change()
+                return removed
 
-        # Non-terminal: delegate to cancel() for clean shutdown.
-        return self.cancel(item_id)
+            # Non-terminal: delegate to cancel() for clean shutdown.
+            if self.cancel(item_id):
+                return True
+
+        return False
 
     # -- Event handlers -----------------------------------------------------
 
