@@ -107,6 +107,7 @@ class CancelToken:
     phase: Optional[Phase] = None  # current phase (None = between activities)
     active: Optional[Cancellable] = None  # registered cancel target
     lock: threading.Lock = field(default_factory=threading.Lock)
+    on_phase_change: Optional[Any] = None
 
     # Stage-facing -----------------------------------------------------------
 
@@ -127,6 +128,14 @@ class CancelToken:
                 raise PipelineCancelled(phase)
             self.phase = phase
             self.active = target
+            
+        if self.on_phase_change is not None:
+            try:
+                self.on_phase_change(phase.value)
+            except Exception:
+                import logging
+                logging.getLogger(__name__).debug("on_phase_change callback failed", exc_info=True)
+                
         try:
             yield
         finally:

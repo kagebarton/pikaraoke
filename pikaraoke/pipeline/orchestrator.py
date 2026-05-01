@@ -130,7 +130,10 @@ class PipelineOrchestrator:
         self._validate_inputs(song_path, lyrics_path)
 
         # Fresh token per job (closes review issue #3)
-        self._cancel_token = CancelToken(event=threading.Event())
+        self._cancel_token = CancelToken(
+            event=threading.Event(),
+            on_phase_change=self._on_stage_change,
+        )
         self._result = {}
 
         def _thread_target():
@@ -213,11 +216,6 @@ class PipelineOrchestrator:
             for stage in self._stages:
                 cancel_token.check_cancelled() # cancel between stages
                 logger.info(f"[pipeline] ▶ {stage.name}")
-                if self._on_stage_change is not None:
-                    try:
-                        self._on_stage_change(stage.name)
-                    except Exception:
-                        logger.debug("on_stage_change callback failed", exc_info=True)
                 stage.run(ctx)
                 logger.info(f"[pipeline] ✓ {stage.name}")
             return ctx
