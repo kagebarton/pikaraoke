@@ -1,20 +1,19 @@
-"""Stem worker: persistent subprocess with mid-separation cancellation.
+"""Stem worker: persistent subprocess with hook-based mid-separation cancellation.
 
-This is adapted from cancel_separator/workers/cancelable_stem_worker.py.
 The worker runs audio-separator in a subprocess (model loaded once, stays
-loaded), but injects a **per-chunk cancellation check** into the model's
-demix loop.
+loaded), and injects a **per-chunk cancellation check** into the model's
+demix loop using PyTorch's register_forward_pre_hook().
 
 How it works:
 1. The worker process loads the audio-separator model at startup.
 2. On each separate() call, the main process sends (wav_path, output_dir)
 over a Pipe, and a cancel_event is forwarded via a dedicated cancel Pipe.
-3. Before calling separator.separate(), the worker **monkey-patches** the
-model's `model_run.forward()` to check the cancel pipe before each
-forward pass. In the Roformer demix loop, `self.model_run(part.unsqueeze(0))[0]`
+3. Before calling separator.separate(), the worker **registers a forward
+pre-hook** on model_run that checks the cancel pipe before each forward
+pass. In the Roformer demix loop, `self.model_run(part.unsqueeze(0))[0]`
 is called once per chunk — so the check runs between chunks.
 4. When the caller sets the cancel event, the main process forwards
-a signal on the cancel pipe. The patched forward() detects it and raises
+a signal on the cancel pipe. The pre-hook detects it and raises
 _CancelledInsideDemix.
 5. The exception unwinds through demix() → separate() → _separate_file().
 Because we're in a subprocess, the exception stays local.
@@ -24,15 +23,16 @@ Because we're in a subprocess, the exception stays local.
 the GPU as class attributes, not on the Python stack. The next job
 can call separate() immediately without reloading.
 
-Why patch forward() not __call__?
-- PyTorch nn.Module.__call__ is a class-level special method (dunder).
-Python looks up dunder methods on the CLASS, not the instance, so
-instance-level __call__ patches are silently ignored.
-- forward() is a regular method. It IS looked up on the instance first,
-so we can safely monkey-patch it on the model_run object.
-- nn.Module.__call__ internally calls self.forward(...), so our patch
-runs at the same point in the call stack — right before the actual
-model computation for each chunk.
+Why hooks instead of monkey-patching forward()?
+- model_run is a torch.nn.Module (Roformer). PyTorch exposes a stable,
+  documented hook API designed for exactly this purpose.
+- register_forward_pre_hook(fn) returns a RemovableHandle — canonical
+  cleanup, no save/restore of the original forward.
+- The hook fires through nn.Module.__call__ at the same point a
+  monkey-patched forward would — right before each chunk's computation.
+- Resilient to upstream changes: if audio-separator swaps model_run
+  mid-job, the hook is registered on the module instance, not on its
+  __dict__, so it stays attached.
 
 Pipe-based cancel signaling avoids shared-memory issues between processes.
 
@@ -283,12 +283,16 @@ def _forward_cancel(cancel_event: threading.Event, cancel_send: Connection) -> N
 
 
 class _CancelledInsideDemix(Exception):
-    """Raised inside the patched forward() when cancel is detected.
+    """Raised inside the forward pre-hook when cancel is detected.
 
     This exception unwinds through:
-    forward() → demix() → separate() → _separate_file()
+    pre_hook() → nn.Module.__call__() → forward() → demix() → separate()
     and is caught in the worker main loop. The model weights survive
     because they're GPU attributes on self.model_run, not stack locals.
+
+    Must remain at module scope — the cancel_pre_hook closure inside
+    _separate_with_cancel_check captures it from the enclosing module
+    scope, not from the function body.
     """
 
 
@@ -305,8 +309,8 @@ def _worker_main(
     """Entry point for the stem worker subprocess.
 
     Loads the audio-separator model, then loops on job_recv. For each
-    job, it monkey-patches model_instance.model_run.forward() to add
-    a per-chunk cancellation check that polls cancel_recv.
+    job, it registers a forward pre-hook on model_instance.model_run
+    to add a per-chunk cancellation check that polls cancel_recv.
 
     Results sent on result_send:
     - ("ok", vocal_path, instrumental_path) on success
@@ -378,29 +382,29 @@ def _separate_with_cancel_check(
     cancel_recv: Connection,
     worker_log: logging.Logger,
 ) -> tuple[Path, Path]:
-    """Run separation with a monkey-patched model.forward() that checks for cancellation.
+    """Run separation with a forward pre-hook that checks for cancellation.
 
     Injection point: In the Roformer demix() loop, the model is called
     once per chunk:
 
-    with torch.no_grad():
-        for i in tqdm(range(0, mix.shape[1], step)):
-            part = mix[:, i : i + chunk_size]
-            ...
-            x = self.model_run(part.unsqueeze(0))[0] # ← HERE
-            ...
+        with torch.no_grad():
+            for i in tqdm(range(0, mix.shape[1], step)):
+                part = mix[:, i : i + chunk_size]
+                ...
+                x = self.model_run(part.unsqueeze(0))[0]  # ← HERE
+                ...
 
-    nn.Module.__call__ internally calls self.forward(...), so patching
-    forward() on the instance gives us a hook that runs right before each
-    chunk's model computation.
+    nn.Module.__call__ fires all registered forward pre-hooks before
+    calling self.forward(...), so our hook runs right before each
+    chunk's model computation — same point as the old monkey-patch.
 
-    We patch model_run.forward() to:
-    1. Poll cancel_recv (non-blocking, timeout=0)
-    2. If data is available, raise _CancelledInsideDemix
-    3. Otherwise, call the original forward() and return its result
+    The hook:
+    1. Polls cancel_recv (non-blocking, timeout=0)
+    2. If data is available, raises _CancelledInsideDemix
+    3. Otherwise, increments the chunk counter and returns
 
-    The patch is applied before separator.separate() and removed in a
-    finally block, so it's always restored even on cancellation or error.
+    The hook is registered before separator.separate() and removed in a
+    finally block, so it's always cleaned up even on cancellation or error.
     """
     separator.output_dir = str(tmp_dir)
     if separator.model_instance:
@@ -416,50 +420,60 @@ def _separate_with_cancel_check(
         worker_log.warning("No model_run found — running without cancel check")
         return _run_separation_unpatched(audio_path, tmp_dir, separator, worker_log)
 
-    # --- Monkey-patch model_run.forward() ---
+    # --- Register forward pre-hook on model_run ---
     #
-    # Why forward() not __call__?
-    # Python's method resolution for dunder methods (like __call__)
-    # always looks at the CLASS, not the instance. So setting
-    # model_run.__call__ = ... is silently ignored by the interpreter.
-    # But forward() is a regular method — instance attributes are
-    # checked first, so our patch works correctly.
-    #
-    # nn.Module.__call__ flow:
-    # model_run(inputs)
-    # → nn.Module.__call__(self, inputs) # class-level, unpatchable
-    # → hooks, then self.forward(inputs) # instance-level, patchable ✓
+    # Why a pre-hook instead of monkey-patching forward()?
+    # - register_forward_pre_hook() is PyTorch's documented extension
+    #   point — it's the intended way to inject behaviour before forward.
+    # - Returns a RemovableHandle — canonical cleanup, no save/restore.
+    # - Resilient: the hook is registered on the module instance itself,
+    #   so it survives if audio-separator rebinds model_run.forward.
 
-    original_forward = model_run.forward
     chunk_counter = [0]
+    cancelled = [False]
 
-    def cancelable_forward(*args, **kwargs):
-        # Poll cancel_recv (non-blocking)
+    def cancel_pre_hook(module, inputs):
+        # Do NOT inspect or modify `inputs` — keeps this hook
+        # order-independent with respect to any future pre-hooks
+        # audio-separator might register.
         if cancel_recv.poll(0):
             try:
                 cancel_recv.recv()  # consume the signal
             except (EOFError, OSError):
                 pass
-            worker_log.info(f"Cancel detected before chunk #{chunk_counter[0] + 1} — aborting")
+            cancelled[0] = True
+            worker_log.info(
+                f"Cancel detected before chunk #{chunk_counter[0] + 1} — aborting"
+            )
             raise _CancelledInsideDemix()
+        chunk_counter[0] += 1  # incremented BEFORE forward
+        # (we ran the check, not the forward yet)
 
-        # Run the real forward pass
-        result = original_forward(*args, **kwargs)
-        chunk_counter[0] += 1
-        return result
-
-    model_run.forward = cancelable_forward
-    worker_log.debug("Patched model_run.forward() with per-chunk cancel check")
+    handle = model_run.register_forward_pre_hook(cancel_pre_hook)
+    worker_log.debug(
+        "Registered forward pre-hook on model_run for per-chunk cancel check"
+    )
 
     try:
         output_paths = separator.separate(str(audio_path))
     finally:
-        # Always restore original forward() — even on cancel/error
-        model_run.forward = original_forward
+        # Hook-specific hardening: handle.remove() is a dict delete and
+        # essentially cannot raise, but if it did while a _CancelledInsideDemix
+        # was propagating, the cancel exception would be replaced and
+        # _worker_main would fall through to the generic except branch and
+        # send ("error", ...) instead of ("cancelled",).
+        try:
+            handle.remove()
+        except Exception:
+            pass
         worker_log.debug(
-            f"Restored original model_run.forward() "
-            f"(processed {chunk_counter[0]} chunks before exit)"
+            f"Removed hook (processed {chunk_counter[0]} chunks before exit)"
         )
+
+    # audio-separator catches exceptions internally and returns [] — re-raise
+    # so _worker_main sees _CancelledInsideDemix, not a stem-ID RuntimeError.
+    if cancelled[0]:
+        raise _CancelledInsideDemix()
 
     # Identify vocal/instrumental stems from output paths.
     # Handles both karaoke-model output ((vocals)/(instrumental)) and
