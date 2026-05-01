@@ -1257,6 +1257,56 @@ msgstr ""
 msgid "Confirm"
 msgstr "Konfirmasi"
 
+#. Processing pipeline stage: extracting audio from downloaded file
+#: templates/processing.html:0
+msgid "extracting"
+msgstr ""
+
+#. Processing pipeline stage: loudness normalization analysis
+#: templates/processing.html:0
+msgid "analyzing"
+msgstr ""
+
+#. Processing pipeline stage: vocal/instrumental stem separation
+#: templates/processing.html:0
+msgid "separating"
+msgstr ""
+
+#. Processing pipeline stage: transcoding audio to final format
+#: templates/processing.html:0
+msgid "transcoding"
+msgstr ""
+
+#. Processing pipeline stage: aligning downloaded lyrics to audio
+#: templates/processing.html:0
+msgid "aligning lyrics"
+msgstr ""
+
+#. Processing pipeline stage: transcribing lyrics via speech recognition
+#: templates/processing.html:0
+msgid "transcribing lyrics"
+msgstr ""
+
+#. Processing pipeline stage: refining transcribed lyrics timestamps
+#: templates/processing.html:0
+msgid "refining lyrics"
+msgstr ""
+
+#. Processing pipeline stage: generic fallback label
+#: templates/processing.html:0
+msgid "processing"
+msgstr ""
+
+#. Processing pipeline status: cancellation in progress
+#: templates/processing.html:0
+msgid "cancelling"
+msgstr ""
+
+#. Processing pipeline status: download in progress
+#: templates/processing.html:0
+msgid "downloading"
+msgstr ""
+
 #~ msgid "Add 3 random songs"
 #~ msgstr "Tambah 3 lagu acak"
 

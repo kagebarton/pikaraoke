@@ -37,17 +37,19 @@ class PipelineOrchestrator:
         stem_worker: StemWorker,
         whisper_worker: WhisperWorker,
         config: PipelineConfig,
+        on_stage_change: Optional[object] = None,
     ) -> None:
         self._stages = list(stages)
         self._stem_worker = stem_worker
         self._whisper_worker = whisper_worker
         self._config = config
+        self._on_stage_change = on_stage_change
         self._workers_started = False
 
         # Async state — set by run_one_async, read by join/cancel_active
         self._cancel_token: Optional[CancelToken] = None
         self._pipeline_thread: Optional[threading.Thread] = None
-        self._result: dict[str, object] = {}  # {"ctx": ..., "exception": ...}
+        self._result: dict[str, object] = {} # {"ctx": ..., "exception": ...}
 
     # ------------------------------------------------------------------
     # Worker lifecycle (idempotent)
@@ -209,8 +211,13 @@ class PipelineOrchestrator:
 
         try:
             for stage in self._stages:
-                cancel_token.check_cancelled()  # cancel between stages
+                cancel_token.check_cancelled() # cancel between stages
                 logger.info(f"[pipeline] ▶ {stage.name}")
+                if self._on_stage_change is not None:
+                    try:
+                        self._on_stage_change(stage.name)
+                    except Exception:
+                        logger.debug("on_stage_change callback failed", exc_info=True)
                 stage.run(ctx)
                 logger.info(f"[pipeline] ✓ {stage.name}")
             return ctx

@@ -249,6 +249,37 @@ class TestGetActiveJob:
         assert manager.get_active_job() == "/songs/Active---abc.mp4"
 
 
+class TestGetActivePhase:
+    def test_returns_none_when_idle(self, manager):
+        assert manager.get_active_phase() is None
+
+    def test_returns_none_when_no_phase_set(self, manager):
+        token = CancelToken(event=threading.Event())
+        manager._active = _ActiveJob(song_path="/songs/Active---abc.mp4", cancel_token=token)
+        assert manager.get_active_phase() is None
+
+    def test_returns_phase_value_when_set(self, manager):
+        from pikaraoke.pipeline.context import Phase
+        token = CancelToken(event=threading.Event())
+        token.phase = Phase.STEM_SEPARATION
+        manager._active = _ActiveJob(song_path="/songs/Active---abc.mp4", cancel_token=token)
+        assert manager.get_active_phase() == "stem_separation"
+
+    def test_returns_extract_phase(self, manager):
+        from pikaraoke.pipeline.context import Phase
+        token = CancelToken(event=threading.Event())
+        token.phase = Phase.EXTRACT
+        manager._active = _ActiveJob(song_path="/songs/Active---abc.mp4", cancel_token=token)
+        assert manager.get_active_phase() == "extract"
+
+    def test_returns_transcode_phase(self, manager):
+        from pikaraoke.pipeline.context import Phase
+        token = CancelToken(event=threading.Event())
+        token.phase = Phase.TRANSCODE
+        manager._active = _ActiveJob(song_path="/songs/Active---abc.mp4", cancel_token=token)
+        assert manager.get_active_phase() == "transcode"
+
+
 # ---------------------------------------------------------------------------
 # _resolve_lyrics_path()
 # ---------------------------------------------------------------------------

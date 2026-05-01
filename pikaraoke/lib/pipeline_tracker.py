@@ -40,10 +40,11 @@ class PipelineItem:
         self.song_path: str | None = None
         self.url: str = url
         self.user: str = user
-        self.download_status: str = "pending"  # pending | active | complete | error
+        self.download_status: str = "pending" # pending | active | complete | error
         self.processing_status: str = (
-            "waiting"  # waiting | pending | active | complete | error | cancelling
+            "waiting" # waiting | pending | active | complete | error | cancelling
         )
+        self.processing_phase: str | None = None
         self.download_progress: float = 0.0
         self.error_message: str | None = None
         self.cancelling: bool = False
@@ -85,6 +86,7 @@ class PipelineTracker:
         self._events.on("processing_error", self._on_processing_error)
         self._events.on("processing_skipped", self._on_processing_skipped)
         self._events.on("song_deleted", self._on_song_deleted)
+        self._events.on("pipeline_stage_changed", self._on_pipeline_stage_changed)
 
     def get_status(
         self, admin: bool = False, user: str | None = None
@@ -102,6 +104,7 @@ class PipelineTracker:
         """
         with self._lock:
             active_job = self._processing_manager.get_active_job()
+            active_phase = self._processing_manager.get_active_phase()
             pending_jobs = list(self._processing_manager.pending_jobs)
             active_download = self._download_manager.active_download
 
@@ -117,6 +120,7 @@ class PipelineTracker:
                 # Cancelling overrides all other processing status
                 if item.cancelling:
                     item.processing_status = "cancelling"
+                    item.processing_phase = None
                     results.append(self._item_to_dict(item, admin, user))
                     continue
 
@@ -127,15 +131,19 @@ class PipelineTracker:
                         item.processing_status = "error"
                     else:
                         item.processing_status = "waiting"
+                    item.processing_phase = None
                 elif active_job == item.song_path:
                     item.processing_status = "active"
+                    item.processing_phase = active_phase
                 elif item.song_path in pending_jobs:
                     item.processing_status = "pending"
+                    item.processing_phase = None
                 else:
                     # Download complete and not in processing queues
                     # Preserve "complete"/"error" already set by events
                     if item.processing_status not in ("complete", "error"):
                         item.processing_status = "complete"
+                    item.processing_phase = None
 
                 results.append(self._item_to_dict(item, admin, user))
 
@@ -308,8 +316,9 @@ class PipelineTracker:
             for item in self._items:
                 if item.song_path == song_path:
                     item.processing_status = "complete"
+                    item.processing_phase = None
                     break
-        self._notify_change()
+            self._notify_change()
 
     def _on_processing_cancelled(self, song_path: str) -> None:
         should_delete = False
@@ -331,9 +340,10 @@ class PipelineTracker:
             for item in self._items:
                 if item.song_path == song_path:
                     item.processing_status = "error"
+                    item.processing_phase = None
                     item.error_message = data.get("error", "Unknown error")
                     break
-        self._notify_change()
+            self._notify_change()
 
     def _on_song_deleted(self, song_path: str) -> None:
         with self._lock:
@@ -347,6 +357,15 @@ class PipelineTracker:
         """
         with self._lock:
             self._items = [item for item in self._items if item.song_path != song_path]
+            self._notify_change()
+
+    def _on_pipeline_stage_changed(self) -> None:
+        """Push an update when the pipeline transitions between stages.
+
+        The actual phase value is read live by get_status() from
+        ProcessingManager.get_active_phase(), so this handler just
+        fires _notify_change to trigger a push-driven re-render.
+        """
         self._notify_change()
 
     # -- Internal helpers ---------------------------------------------------
@@ -423,6 +442,7 @@ class PipelineTracker:
             "user": item.user,
             "download_status": item.download_status,
             "processing_status": item.processing_status,
+            "processing_phase": item.processing_phase,
             "download_progress": item.download_progress,
             "error_message": item.error_message,
             "actions": actions,

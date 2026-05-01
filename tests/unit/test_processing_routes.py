@@ -25,6 +25,7 @@ def _make_tracker():
     mock_dm.active_download = None
     mock_pm = MagicMock()
     mock_pm.get_active_job.return_value = None
+    mock_pm.get_active_phase.return_value = None
     mock_pm.pending_jobs = []
     mock_qm = MagicMock()
     mock_sm = MagicMock()
@@ -571,7 +572,7 @@ class TestOnChangeCallback:
         """A failing on_change callback is caught and logged."""
         calls = []
         tracker = _make_tracker()
-        tracker._on_change = lambda: 1 / 0  # Will raise ZeroDivisionError
+        tracker._on_change = lambda: 1 / 0 # Will raise ZeroDivisionError
 
         # Should not raise — the exception is caught
         tracker._on_download_queued({
@@ -582,3 +583,129 @@ class TestOnChangeCallback:
 
         # The item should still be added despite the callback failure
         assert len(tracker._items) == 1
+
+
+class TestProcessingPhase:
+    """Tests for processing_phase field in status responses."""
+
+    def test_phase_none_when_not_active(self):
+        """processing_phase is None when no job is active."""
+        tracker = _make_tracker()
+        item = PipelineItem(title="Test", url="https://example.com", user="Alice")
+        item.song_path = "/songs/test.mp4"
+        item.download_status = "complete"
+        item.processing_status = "complete"
+        tracker._items.append(item)
+
+        status = tracker.get_status(admin=False, user="Alice")
+        assert status[0]["processing_phase"] is None
+
+    def test_phase_populated_when_active(self):
+        """processing_phase is set when the item is the active job."""
+        tracker = _make_tracker()
+        item = PipelineItem(title="Test", url="https://example.com", user="Alice")
+        item.song_path = "/songs/test.mp4"
+        item.download_status = "complete"
+        tracker._items.append(item)
+        tracker._processing_manager.get_active_job.return_value = "/songs/test.mp4"
+        tracker._processing_manager.get_active_phase.return_value = "stem_separation"
+
+        status = tracker.get_status(admin=False, user="Alice")
+        assert status[0]["processing_status"] == "active"
+        assert status[0]["processing_phase"] == "stem_separation"
+
+    def test_phase_changes_with_stage(self):
+        """processing_phase updates when the pipeline stage changes."""
+        tracker = _make_tracker()
+        item = PipelineItem(title="Test", url="https://example.com", user="Alice")
+        item.song_path = "/songs/test.mp4"
+        item.download_status = "complete"
+        tracker._items.append(item)
+        tracker._processing_manager.get_active_job.return_value = "/songs/test.mp4"
+
+        # First call: extract phase
+        tracker._processing_manager.get_active_phase.return_value = "extract"
+        status = tracker.get_status(admin=False, user="Alice")
+        assert status[0]["processing_phase"] == "extract"
+
+        # Second call: transcode phase
+        tracker._processing_manager.get_active_phase.return_value = "transcode"
+        status = tracker.get_status(admin=False, user="Alice")
+        assert status[0]["processing_phase"] == "transcode"
+
+    def test_phase_cleared_on_completion(self):
+        """processing_phase is None after processing completes."""
+        tracker = _make_tracker()
+        item = PipelineItem(title="Test", url="https://example.com", user="Alice")
+        item.song_path = "/songs/test.mp4"
+        item.download_status = "complete"
+        item.processing_phase = "stem_separation"
+        tracker._items.append(item)
+
+        # Simulate processing_complete event
+        tracker._on_processing_complete("/songs/test.mp4")
+
+        status = tracker.get_status(admin=False, user="Alice")
+        assert status[0]["processing_status"] == "complete"
+        assert status[0]["processing_phase"] is None
+
+    def test_phase_cleared_on_error(self):
+        """processing_phase is None after processing errors."""
+        tracker = _make_tracker()
+        item = PipelineItem(title="Test", url="https://example.com", user="Alice")
+        item.song_path = "/songs/test.mp4"
+        item.download_status = "complete"
+        item.processing_phase = "transcode"
+        tracker._items.append(item)
+
+        tracker._on_processing_error({"song_path": "/songs/test.mp4", "error": "boom"})
+
+        status = tracker.get_status(admin=False, user="Alice")
+        assert status[0]["processing_status"] == "error"
+        assert status[0]["processing_phase"] is None
+
+    def test_phase_none_for_waiting_item(self):
+        """processing_phase is None when item hasn't started processing."""
+        tracker = _make_tracker()
+        item = PipelineItem(title="Test", url="https://example.com", user="Alice")
+        # No song_path yet — download not complete
+        tracker._items.append(item)
+
+        status = tracker.get_status(admin=False, user="Alice")
+        assert status[0]["processing_status"] == "waiting"
+        assert status[0]["processing_phase"] is None
+
+    def test_phase_none_for_pending_item(self):
+        """processing_phase is None when item is pending processing."""
+        tracker = _make_tracker()
+        item = PipelineItem(title="Test", url="https://example.com", user="Alice")
+        item.song_path = "/songs/test.mp4"
+        item.download_status = "complete"
+        tracker._items.append(item)
+        tracker._processing_manager.pending_jobs = ["/songs/test.mp4"]
+
+        status = tracker.get_status(admin=False, user="Alice")
+        assert status[0]["processing_status"] == "pending"
+        assert status[0]["processing_phase"] is None
+
+    def test_phase_none_when_cancelling(self):
+        """processing_phase is None when item is in cancelling state."""
+        tracker = _make_tracker()
+        item = PipelineItem(title="Test", url="https://example.com", user="Alice")
+        item.song_path = "/songs/test.mp4"
+        item.download_status = "complete"
+        item.processing_phase = "stem_separation"
+        item.cancelling = True
+        tracker._items.append(item)
+
+        status = tracker.get_status(admin=False, user="Alice")
+        assert status[0]["processing_status"] == "cancelling"
+        assert status[0]["processing_phase"] is None
+
+    def test_pipeline_stage_changed_fires_notify(self):
+        """pipeline_stage_changed event fires _notify_change."""
+        calls = []
+        tracker = _make_tracker()
+        tracker._on_change = lambda: calls.append(1)
+        tracker._on_pipeline_stage_changed()
+        assert len(calls) == 1

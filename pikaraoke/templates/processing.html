@@ -103,15 +103,27 @@ function cancelCell(item) {
      Progress label — replaces download progress percentage
      ------------------------------------------------------------------ */
 
-  function progressLabel(item) {
-    if (item.download_status === 'cancelling' || item.processing_status === 'cancelling')
-      return '{% trans %}cancelling{% endtrans %}';
-    if (item.download_status === 'active')
-      return '{% trans %}downloading{% endtrans %}';
-    if (item.processing_status === 'active')
-      return '{% trans %}separating{% endtrans %}';
-    return '';
+function progressLabel(item) {
+  if (item.download_status === 'cancelling' || item.processing_status === 'cancelling')
+    return '{% trans %}cancelling{% endtrans %}';
+  if (item.download_status === 'active')
+    return '{% trans %}downloading{% endtrans %}';
+  if (item.processing_status === 'active' && item.processing_phase) {
+    switch (item.processing_phase) {
+      case 'extract':       return '{% trans %}extracting{% endtrans %}';
+      case 'loudnorm':      return '{% trans %}analyzing{% endtrans %}';
+      case 'stem_separation': return '{% trans %}separating{% endtrans %}';
+      case 'transcode':     return '{% trans %}transcoding{% endtrans %}';
+      case 'align':         return '{% trans %}aligning lyrics{% endtrans %}';
+      case 'transcribe':    return '{% trans %}transcribing lyrics{% endtrans %}';
+      case 'refine':        return '{% trans %}refining lyrics{% endtrans %}';
+      default:              return '{% trans %}processing{% endtrans %}';
+    }
   }
+  if (item.processing_status === 'active')
+    return '{% trans %}processing{% endtrans %}';
+  return '';
+}
 
   /* ------------------------------------------------------------------
      Render a single row
@@ -143,10 +155,10 @@ function cancelCell(item) {
   // rendered row so unchanged rows are preserved (avoiding spinner jitter).
   // download_progress is deliberately excluded since it's no longer rendered.
   // actions array is included so button changes trigger re-renders.
-  var actionsKey = (item.actions || []).sort().join(',');
-  var stateKey = item.download_status + '|' + item.processing_status
-    + '|' + (item.song_path || '') + '|' + (item.error_message || '')
-    + '|' + actionsKey;
+	var actionsKey = (item.actions || []).sort().join(',');
+	var stateKey = item.download_status + '|' + item.processing_status
+	+ '|' + (item.processing_phase || '') + '|' + (item.song_path || '') + '|' + (item.error_message || '')
+	+ '|' + actionsKey;
 
     return '<tr data-id="' + item.id + '" data-state-key="' + escapeHtml(stateKey) + '" data-proc-status="' + item.processing_status + '">'
       + titleHtml
@@ -169,8 +181,8 @@ function renderItems(items) {
     seen[item.id] = true;
     var $existing = $body.find('tr[data-id="' + item.id + '"]');
     var currKey = item.download_status + '|' + item.processing_status
-      + '|' + (item.song_path || '') + '|' + (item.error_message || '')
-      + '|' + (item.actions || []).sort().join(',');
+    + '|' + (item.processing_phase || '') + '|' + (item.song_path || '') + '|' + (item.error_message || '')
+    + '|' + (item.actions || []).sort().join(',');
     if ($existing.length === 0) {
       $body.append(renderRow(item));
     } else if ($existing.attr('data-state-key') !== currKey) {

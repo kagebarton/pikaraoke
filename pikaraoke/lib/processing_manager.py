@@ -219,7 +219,8 @@ class ProcessingManager:
         ]
 
         self._orchestrator = PipelineOrchestrator(
-            stages, self._stem_worker, self._whisper_worker, self._config
+            stages, self._stem_worker, self._whisper_worker, self._config,
+            on_stage_change=lambda _name: self._events.emit("pipeline_stage_changed"),
         )
         self._orchestrator.start()  # starts stem worker only; whisper is lazy
 
@@ -296,6 +297,19 @@ class ProcessingManager:
         """Return the path of the currently active processing job, or None."""
         with self._state_lock:
             return self._active.song_path if self._active else None
+
+    def get_active_phase(self) -> str | None:
+        """Return the current pipeline phase of the active job, or None.
+
+        The phase value matches :class:`Phase` enum values (e.g. ``"extract"``,
+        ``"stem_separation"``, ``"transcode"``). Returns ``None`` when no job
+        is active or no phase has been entered yet.
+        """
+        with self._state_lock:
+            if self._active is None:
+                return None
+            phase = self._active.cancel_token.get_phase()
+            return phase.value if phase is not None else None
 
     # ------------------------------------------------------------------
     # Orchestrator loop
