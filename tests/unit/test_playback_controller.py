@@ -1,5 +1,6 @@
 """Unit tests for playback_controller module."""
 
+import sqlite3
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -355,3 +356,100 @@ class TestPlaybackControllerNewMethods:
         pc.set_subtitle_delay(1.5)
 
         mock_mpv.set_subtitle_delay.assert_called_once_with(1.5)
+
+
+class TestPlaybackControllerLoudnorm:
+    """Tests for loudnorm offset wiring from DB to MPV playback."""
+
+    @patch("pikaraoke.lib.playback_controller.os.path.isfile", return_value=True)
+    def test_loudnorm_offset_forwarded_when_normalize_enabled(self, mock_isfile, test_prefs, mock_mpv):
+        """When normalize_audio is enabled and get_loudnorm_offset returns a value,
+        it should be forwarded as normalization_db to mpv.play()."""
+        events = EventSystem()
+        filename_fn = lambda x, remove_youtube_id=True: "Test Song"
+        get_offset = MagicMock(return_value=-4.2)
+
+        test_prefs.set("normalize_audio", True)
+
+        pc = PlaybackController(test_prefs, events, filename_fn, mock_mpv, get_loudnorm_offset=get_offset)
+        mock_mpv.duration = 180
+
+        result = pc.play_file("/songs/test.mp4", "TestUser")
+
+        assert result.success is True
+        get_offset.assert_called_once_with("/songs/test.mp4")
+        mock_mpv.play.assert_called_once()
+        call_kwargs = mock_mpv.play.call_args[1]
+        assert call_kwargs["normalization_db"] == -4.2
+
+    @patch("pikaraoke.lib.playback_controller.os.path.isfile", return_value=True)
+    def test_loudnorm_offset_not_fetched_when_normalize_disabled(self, mock_isfile, test_prefs, mock_mpv):
+        """When normalize_audio is disabled, get_loudnorm_offset should not be called
+        and normalization_db should be None."""
+        events = EventSystem()
+        filename_fn = lambda x, remove_youtube_id=True: "Test Song"
+        get_offset = MagicMock(return_value=-4.2)
+
+        test_prefs.set("normalize_audio", False)
+
+        pc = PlaybackController(test_prefs, events, filename_fn, mock_mpv, get_loudnorm_offset=get_offset)
+        mock_mpv.duration = 180
+
+        result = pc.play_file("/songs/test.mp4", "TestUser")
+
+        assert result.success is True
+        get_offset.assert_not_called()
+        mock_mpv.play.assert_called_once()
+        call_kwargs = mock_mpv.play.call_args[1]
+        assert call_kwargs["normalization_db"] is None
+
+    @patch("pikaraoke.lib.playback_controller.os.path.isfile", return_value=True)
+    def test_loudnorm_offset_none_when_db_returns_none(self, mock_isfile, test_prefs, mock_mpv):
+        """When get_loudnorm_offset returns None (song not processed yet),
+        normalization_db should be None (no volume filter applied)."""
+        events = EventSystem()
+        filename_fn = lambda x, remove_youtube_id=True: "Test Song"
+        get_offset = MagicMock(return_value=None)
+
+        test_prefs.set("normalize_audio", True)
+
+        pc = PlaybackController(test_prefs, events, filename_fn, mock_mpv, get_loudnorm_offset=get_offset)
+        mock_mpv.duration = 180
+
+        result = pc.play_file("/songs/test.mp4", "TestUser")
+
+        assert result.success is True
+        get_offset.assert_called_once_with("/songs/test.mp4")
+        mock_mpv.play.assert_called_once()
+        call_kwargs = mock_mpv.play.call_args[1]
+        assert call_kwargs["normalization_db"] is None
+
+    @patch("pikaraoke.lib.playback_controller.os.path.isfile", return_value=True)
+    def test_loudnorm_offset_falls_back_on_db_exception(self, mock_isfile, test_prefs, mock_mpv):
+        """When get_loudnorm_offset raises an exception (e.g. DB closed),
+        playback should still succeed with normalization_db=None."""
+        events = EventSystem()
+        filename_fn = lambda x, remove_youtube_id=True: "Test Song"
+        get_offset = MagicMock(side_effect=sqlite3.OperationalError("database is closed"))
+
+        test_prefs.set("normalize_audio", True)
+
+        pc = PlaybackController(test_prefs, events, filename_fn, mock_mpv, get_loudnorm_offset=get_offset)
+        mock_mpv.duration = 180
+
+        result = pc.play_file("/songs/test.mp4", "TestUser")
+
+        assert result.success is True
+        get_offset.assert_called_once_with("/songs/test.mp4")
+        mock_mpv.play.assert_called_once()
+        call_kwargs = mock_mpv.play.call_args[1]
+        assert call_kwargs["normalization_db"] is None
+
+    def test_default_get_loudnorm_offset_returns_none(self, test_prefs, mock_mpv):
+        """Without injecting get_loudnorm_offset, the default lambda returns None."""
+        events = EventSystem()
+        filename_fn = lambda x, remove_youtube_id=True: x
+
+        pc = PlaybackController(test_prefs, events, filename_fn, mock_mpv)
+
+        assert pc.get_loudnorm_offset("/any/path.mp4") is None

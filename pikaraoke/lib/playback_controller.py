@@ -124,7 +124,10 @@ class PlaybackController:
         # Get normalization_db from song database (if normalize_audio enabled)
         normalization_db = None
         if self.preferences.get_or_default("normalize_audio"):
-            normalization_db = self.get_loudnorm_offset(file_path)
+            try:
+                normalization_db = self.get_loudnorm_offset(file_path)
+            except Exception:
+                logging.warning(f"Failed to fetch loudnorm offset for {file_path}", exc_info=True)
 
         # Find dual-stem companion files (vocal + nonvocal)
         vocal_path, nonvocal_path = self._find_companions(file_path)
