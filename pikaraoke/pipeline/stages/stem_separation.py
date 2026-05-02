@@ -2,9 +2,11 @@
 
 Wraps worker.separate() in a cancel activity scope so the orchestrator
 can cancel mid-separation via SetEvent.  Translates WorkerCancelledError
-to PipelineCancelled.  The stale auto-start path has been removed —
-with orchestrator-managed lifecycle, a dead worker mid-pipeline is a
-real failure.
+to PipelineCancelled.  A dead worker mid-pipeline is still a real failure
+for the current job (raises RuntimeError), but the StemWorker auto-restarts
+its subprocess at the start of the next separate() call, so subsequent
+songs proceed with a fresh CUDA context rather than blocking on a wedged
+worker.
 """
 
 import logging

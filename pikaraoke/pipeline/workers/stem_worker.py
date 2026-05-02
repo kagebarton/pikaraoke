@@ -146,12 +146,30 @@ class StemWorker:
                 When set, the worker will abort separation between chunks.
                 If None, the separation runs to completion (no cancellation).
         """
-        rq = self._result_recv
-        js = self._job_send
         proc = self._process
 
-        if rq is None or js is None or proc is None:
+        if proc is None:
             raise WorkerDiedError("Stem worker is not running")
+
+        # Auto-restart if the subprocess died between jobs (e.g. it exited
+        # after an OOM). The job that triggered the death still failed, but
+        # subsequent jobs get a fresh subprocess with a clean CUDA context
+        # rather than blocking forever on a torn-down pipe.
+        if not proc.is_alive():
+            logger.warning(
+                "Stem worker subprocess (PID %s) is not alive; restarting before next job",
+                proc.pid,
+            )
+            self.start()
+            proc = self._process
+            if proc is None:
+                raise WorkerDiedError("Stem worker failed to restart")
+
+        rq = self._result_recv
+        js = self._job_send
+
+        if rq is None or js is None:
+            raise WorkerDiedError("Stem worker IPC channels are not available")
 
         # Clear any stale cancel signal from a prior job's leaked
         # cancel-forwarder daemon thread before starting this job.
