@@ -405,12 +405,12 @@ class WhisperWorker:
                 f"— model still loaded"
             )
             self._terminate_orphaned_audioloaders()
-            _clear_gpu_state()
             raise AlignmentCancelledError(
                 f"Alignment cancelled after {encode_counter[0]} encode passes "
                 f"(model still loaded)"
             )
         finally:
+            _clear_gpu_state()
             try:
                 handle.remove()
             except Exception:
@@ -479,12 +479,12 @@ class WhisperWorker:
                 f"— model still loaded"
             )
             self._terminate_orphaned_audioloaders()
-            _clear_gpu_state()
             raise AlignmentCancelledError(
                 f"Refinement cancelled after {encode_counter[0]} encode passes "
                 f"(model still loaded)"
             )
         finally:
+            _clear_gpu_state()
             try:
                 handle.remove()
             except Exception:
@@ -590,12 +590,12 @@ class WhisperWorker:
                 f"— model still loaded"
             )
             self._terminate_orphaned_audioloaders()
-            _clear_gpu_state()
             raise AlignmentCancelledError(
                 f"Transcription cancelled after {encode_counter[0]} encode passes "
                 f"(model still loaded)"
             )
         finally:
+            _clear_gpu_state()
             try:
                 handle.remove()
             except Exception:
@@ -653,11 +653,13 @@ def _route_to_pty(pty_fd: int | None):
 
 
 def _clear_gpu_state() -> None:
-    """Clear intermediate GPU state after a cancelled operation.
+    """Clear intermediate GPU state after every inference run.
 
-    After _CancelledInsideEncoder unwinds, there should be no leftover GPU
-    state from the interrupted encoder pass (CTranslate2 manages its own
-    memory internally). But we clear the PyTorch cache as a safety net.
+    Called in the finally block of align/refine/transcribe so that PyTorch
+    GPU cache is released after every outcome — success, cancellation, or
+    error. CTranslate2 manages its own memory internally, but clearing the
+    PyTorch cache as a safety net ensures maximal free GPU memory before
+    the next inference run.
     """
     _clear_gpu_cache()
 
