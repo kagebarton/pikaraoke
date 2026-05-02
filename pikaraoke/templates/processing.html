@@ -114,10 +114,9 @@ function progressLabel(item) {
       case 'loudnorm':      return '{% trans %}analyzing{% endtrans %}';
       case 'stem_separation': return '{% trans %}separating{% endtrans %}';
       case 'transcode':     return '{% trans %}transcoding{% endtrans %}';
-      case 'align':         return '{% trans %}aligning lyrics{% endtrans %}';
-      case 'transcribe':    return '{% trans %}transcribing lyrics{% endtrans %}';
-      case 'refine':        return '{% trans %}refining lyrics{% endtrans %}';
-      default:              return '{% trans %}processing{% endtrans %}';
+            case 'align': return '{% trans %}aligning lyrics{% endtrans %}';
+            case 'transcribe': return '{% trans %}transcribing lyrics{% endtrans %}';
+            default: return '{% trans %}processing{% endtrans %}';
     }
   }
   if (item.processing_status === 'active')

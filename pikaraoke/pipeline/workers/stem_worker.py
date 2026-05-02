@@ -46,9 +46,16 @@ import logging
 import os
 import sys
 import threading
-from multiprocessing import Pipe, Process
+from multiprocessing import Pipe
 from multiprocessing.connection import Connection
 from pathlib import Path
+
+from pikaraoke.pipeline.workers._ipc import (
+    WORKER_CONTEXT,
+    WorkerDiedError,
+    drain_pipe,
+    forward_cancel,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -61,8 +68,7 @@ class WorkerCancelledError(Exception):
     """Raised when the worker detects cancellation mid-separation."""
 
 
-class WorkerDiedError(Exception):
-    """Raised when the stem worker subprocess dies during a job."""
+__all__ = ["WorkerCancelledError", "WorkerDiedError", "StemWorker"]
 
 
 class StemWorker:
@@ -111,7 +117,7 @@ class StemWorker:
         self._cancel_send = cancel_send
         self._cancel_recv = cancel_recv
 
-        self._process = Process(
+        self._process = WORKER_CONTEXT.Process(
             target=_worker_main,
             args=(
                 self._job_recv,
@@ -181,7 +187,7 @@ class StemWorker:
         cancel_forwarder: threading.Thread | None = None
         if cancel_event is not None and self._cancel_send is not None:
             cancel_forwarder = threading.Thread(
-                target=_forward_cancel,
+                target=forward_cancel,
                 args=(cancel_event, self._cancel_send),
                 daemon=True,
             )
@@ -245,19 +251,9 @@ class StemWorker:
         self._close_all_connections()
 
     def _drain_cancel_pipe(self) -> None:
-        """Drain the cancel pipe so it's clean for the next job.
-
-        The worker subprocess already drains cancel_recv in its finally block,
-        but we also drain from the main-process side as a safety net. If a
-        cancel was sent but the worker finished before reading it, the signal
-        would be left in the pipe and could trigger on the next job.
-        """
+        """Drain the cancel pipe so it's clean for the next job."""
         if self._cancel_recv is not None:
-            while self._cancel_recv.poll(0):
-                try:
-                    self._cancel_recv.recv()
-                except (EOFError, OSError):
-                    break
+            drain_pipe(self._cancel_recv)
 
     def _close_all_connections(self) -> None:
         for conn in (
@@ -279,20 +275,6 @@ class StemWorker:
         self._result_send = None
         self._cancel_send = None
         self._cancel_recv = None
-
-
-def _forward_cancel(cancel_event: threading.Event, cancel_send: Connection) -> None:
-    """Forward a threading.Event to a multiprocessing Pipe.
-
-    Bridges the main-process threading world to the subprocess Pipe
-    world. The thread exits after sending — the cancel signal only
-    needs to be sent once per job.
-    """
-    cancel_event.wait()
-    try:
-        cancel_send.send(1)
-    except (OSError, BrokenPipeError):
-        pass
 
 
 # ============================================================================
@@ -376,37 +358,33 @@ def _worker_main(
             output_dir = Path(output_dir_str)
             worker_log.info(f"Separating: {wav_path.name}")
 
+        try:
+            vocal_wav, instrumental_wav = _separate_with_cancel_check(
+                wav_path, output_dir, separator, cancel_recv, worker_log
+            )
+            result_send.send(("ok", str(vocal_wav), str(instrumental_wav)))
+        except _CancelledInsideDemix:
+            worker_log.info("Separation cancelled between chunks — model still loaded")
+            _clear_gpu_state(separator, worker_log)
+            result_send.send(("cancelled",))
+        except oom_exc_types as e:
+            # OOM mid-demix leaves audio-separator's internal state and
+            # the CUDA caching allocator in an unsafe condition; reusing
+            # this Separator typically wedges the next forward pass.
+            # Report the error and exit so the parent gets a clean
+            # WorkerDiedError on the next job instead of a hang.
+            worker_log.error(f"OOM during separation for {wav_path}: {e}")
             try:
-                vocal_wav, instrumental_wav = _separate_with_cancel_check(
-                    wav_path, output_dir, separator, cancel_recv, worker_log
-                )
-                result_send.send(("ok", str(vocal_wav), str(instrumental_wav)))
-            except _CancelledInsideDemix:
-                worker_log.info("Separation cancelled between chunks — model still loaded")
-                _clear_gpu_state(separator, worker_log)
-                result_send.send(("cancelled",))
-            except oom_exc_types as e:
-                # OOM mid-demix leaves audio-separator's internal state and
-                # the CUDA caching allocator in an unsafe condition; reusing
-                # this Separator typically wedges the next forward pass.
-                # Report the error and exit so the parent gets a clean
-                # WorkerDiedError on the next job instead of a hang.
-                worker_log.error(f"OOM during separation for {wav_path}: {e}")
-                try:
-                    result_send.send(("error", f"OOM during stem separation: {e}"))
-                except (OSError, BrokenPipeError):
-                    pass
-                return
-            except Exception as e:
-                worker_log.error(f"Stem separation failed for {wav_path}: {e}")
-                result_send.send(("error", str(e)))
-            finally:
-                # Drain any remaining cancel signals so the pipe is clean
-                while cancel_recv.poll(0):
-                    try:
-                        cancel_recv.recv()
-                    except (EOFError, OSError):
-                        break
+                result_send.send(("error", f"OOM during stem separation: {e}"))
+            except (OSError, BrokenPipeError):
+                pass
+            return
+        except Exception as e:
+            worker_log.error(f"Stem separation failed for {wav_path}: {e}")
+            result_send.send(("error", str(e)))
+        finally:
+            # Drain any remaining cancel signals so the pipe is clean
+            drain_pipe(cancel_recv)
     finally:
         del separator
         _clear_gpu_cache()

@@ -1,17 +1,17 @@
 """Pipeline orchestrator with cancellation support.
 
 Owns both worker lifecycles (StemWorker, WhisperWorker), creates and
-cleans up the temp directory, and runs stages sequentially.  Supports
+cleans up the temp directory, and runs stages sequentially. Supports
 both synchronous one-shot execution (``run_one``) and asynchronous
 execution with cancellation (``run_one_async`` + ``join``).
 
 Each ``run_one_async()`` call creates a **fresh** CancelToken with a
-**fresh** threading.Event — never reused across jobs.  This isolates
+**fresh** threading.Event — never reused across jobs. This isolates
 jobs from each other, preventing stale cancel-forwarder daemon threads
 from injecting spurious signals into subsequent jobs.
 
-Both workers are started eagerly so GPU OOM surfaces at startup rather than
-mid-queue on a subsequent song.
+Both workers are started eagerly via start()/stop() so GPU OOM surfaces
+at startup rather than mid-queue on a subsequent song.
 """
 
 import logging
@@ -56,22 +56,21 @@ class PipelineOrchestrator:
     # ------------------------------------------------------------------
 
     def start(self) -> None:
-        """Spawn workers (idempotent).  Driver calls this once before any run.
+        """Spawn workers (idempotent). Driver calls this once before any run.
 
-        Only the stem worker is started eagerly.  Whisper model loading is
-        deferred to first use — the first lyric_align invocation takes the
-        hit, but app boot stays fast.
+        Both workers are started eagerly so GPU OOM surfaces at startup
+        rather than mid-queue on a subsequent song.
         """
         if self._workers_started:
             return
         logger.info("Starting stem worker...")
         self._stem_worker.start()
-        logger.info("Loading whisper model...")
-        self._whisper_worker.load_model()
+        logger.info("Starting whisper worker...")
+        self._whisper_worker.start()
         self._workers_started = True
 
     def stop(self) -> None:
-        """Tear down workers (idempotent).  Driver calls this once at end."""
+        """Tear down workers (idempotent). Driver calls this once at end."""
         if not self._workers_started:
             return
         logger.info("Stopping stem worker...")
@@ -79,11 +78,11 @@ class PipelineOrchestrator:
             self._stem_worker.stop()
         except Exception as e:
             logger.warning(f"stem_worker.stop() failed: {e}")
-        logger.info("Unloading whisper model...")
+        logger.info("Stopping whisper worker...")
         try:
-            self._whisper_worker.unload_model()
+            self._whisper_worker.stop()
         except Exception as e:
-            logger.warning(f"whisper_worker.unload_model() failed: {e}")
+            logger.warning(f"whisper_worker.stop() failed: {e}")
         self._workers_started = False
 
     # ------------------------------------------------------------------

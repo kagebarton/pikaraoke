@@ -28,9 +28,8 @@ class Phase(enum.Enum):
     LOUDNORM = "loudnorm"  # loudnorm_analyze stage
     STEM_SEPARATION = "stem_separation"  # stem_separation stage (per-chunk)
     TRANSCODE = "transcode"  # ffmpeg_transcode stage (both stems)
-    ALIGN = "align"  # lyric_align: model.align()
-    TRANSCRIBE = "transcribe"  # lyric_align: model.transcribe()
-    REFINE = "refine"  # lyric_align: model.refine()
+    ALIGN = "align"  # lyric_align: align+refine
+    TRANSCRIBE = "transcribe"  # lyric_align: transcribe+refine
 
 
 # ---------------------------------------------------------------------------

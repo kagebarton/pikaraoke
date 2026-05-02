@@ -10,8 +10,11 @@ In both modes the same ASS and SRT generators are used. The difference is
 how line objects are built: alignment pairs words to predefined lyric lines
 by count; transcription uses stable-ts segments directly as lines.
 
-Each model call (align, transcribe, refine) is wrapped in its own
-cancellation activity scope (Phase.ALIGN / Phase.TRANSCRIBE / Phase.REFINE).
+Each model call is wrapped in its own cancellation activity scope
+(Phase.ALIGN / Phase.TRANSCRIBE). The refine phase is now folded into
+the worker's align_refine / transcribe_refine methods, so Phase.REFINE
+no longer exists on the parent side.
+
 ASS/SRT are written to ctx.tmp_dir first and moved to the final output
 directory only after both writes succeed — preventing orphan files on
 cancellation.
@@ -56,80 +59,34 @@ class LyricAlignStage(BaseStage):
             raise RuntimeError(f"[{self.name}] No vocal_wav in artifacts")
 
         if lyrics_path is not None:
-            # --- Alignment mode: ALIGN → REFINE ---
+            # --- Alignment mode: ALIGN (includes refine) ---
             lyrics_text, lyrics_format = self._load_lyrics(lyrics_path)
             ctx.artifacts["lyrics_text"] = lyrics_text
             ctx.artifacts["lyrics_format"] = lyrics_format
 
             logger.info(f"[{self.name}] Aligning lyrics to vocal stem: {Path(vocal_wav).name}")
-            result = _model_call(
+            line_objects = _model_call(
                 ctx,
                 Phase.ALIGN,
-                lambda: self._worker.align(
+                lambda: self._worker.align_refine(
                     vocal_path=vocal_wav,
                     lyrics_text=lyrics_text,
                     cancel_event=ctx.cancel.event if ctx.cancel else None,
                 ),
             )
-
-            words = self._extract_words(result)
-            lines = [line.strip() for line in lyrics_text.split("\n") if line.strip()]
-            line_objects = self._match_words_to_lines(words, lines)
-
-            # SRT only when input was .txt (no timestamps to preserve from .srt input)
             write_srt = lyrics_format == "txt"
-
-            result = _model_call(
-                ctx,
-                Phase.REFINE,
-                lambda: self._worker.refine(
-                    vocal_path=vocal_wav,
-                    result=result,
-                    cancel_event=ctx.cancel.event if ctx.cancel else None,
-                ),
-            )
         else:
-            # --- Transcription mode: TRANSCRIBE → (regroup) → REFINE ---
+            # --- Transcription mode: TRANSCRIBE (includes refine) ---
             logger.info(f"[{self.name}] Transcribing vocal stem: {Path(vocal_wav).name}")
-            result = _model_call(
+            line_objects = _model_call(
                 ctx,
                 Phase.TRANSCRIBE,
-                lambda: self._worker.transcribe(
+                lambda: self._worker.transcribe_refine(
                     vocal_path=vocal_wav,
                     cancel_event=ctx.cancel.event if ctx.cancel else None,
                 ),
             )
-
-            # regroup is fast (CPU-bound, milliseconds) and runs OUTSIDE any
-            # activity scope. It's not cancellable. A cancel arriving during
-            # regroup is caught by REFINE's activity() on entry via the sticky
-            # `cancelled` flag.
-            if self._config.whisper.regroup:
-                result.regroup(self._config.whisper.regroup)
-
-            line_objects = self._segments_to_line_objects(result)
             write_srt = True
-
-            result = _model_call(
-                ctx,
-                Phase.REFINE,
-                lambda: self._worker.refine(
-                    vocal_path=vocal_wav,
-                    result=result,
-                    cancel_event=ctx.cancel.event if ctx.cancel else None,
-                ),
-            )
-
-        # Generate ASS and SRT strings (CPU-bound, not cancellable)
-        # -- but we still need to re-extract line_objects from the *refined*
-        # result.  The refine step may have adjusted word timestamps, so
-        # rebuild line_objects from the refined result.
-        if lyrics_path is not None:
-            words = self._extract_words(result)
-            lines = [line.strip() for line in lyrics_text.split("\n") if line.strip()]
-            line_objects = self._match_words_to_lines(words, lines)
-        else:
-            line_objects = self._segments_to_line_objects(result)
 
         ass_content = self._generate_ass(line_objects)
         srt_content = self._generate_srt(line_objects) if write_srt else None
@@ -177,77 +134,6 @@ class LyricAlignStage(BaseStage):
         else:
             lyrics_text = lyrics_path.read_text(encoding="utf-8")
             return lyrics_text, "txt"
-
-    def _extract_words(self, result) -> list[dict]:
-        """Flatten WhisperResult into [{word, start, end, is_segment_first}, ...]."""
-        all_words = []
-        for segment in result.segments:
-            for i, word in enumerate(segment.words):
-                all_words.append(
-                    {
-                        "word": word.word.strip(),
-                        "start": word.start,
-                        "end": word.end,
-                        "is_segment_first": i == 0,
-                    }
-                )
-        return all_words
-
-    def _match_words_to_lines(self, words: list[dict], lines: list[str]) -> list[dict]:
-        """Assign aligned words to lyrics lines by count.
-
-        Count-based pairing: assumes the lyrics file has the same word
-        count and order as what stable-ts aligned.
-        """
-        line_objects = []
-        word_index = 0
-
-        for line in lines:
-            line_word_count = len(line.split())
-            line_words = words[word_index : word_index + line_word_count]
-            word_index += line_word_count
-
-            if not line_words:
-                continue
-
-            line_obj = {
-                "text": line,
-                "words": line_words,
-                "start": line_words[0]["start"],
-                "end": line_words[-1]["end"],
-            }
-            line_objects.append(line_obj)
-
-        return line_objects
-
-    def _segments_to_line_objects(self, result) -> list[dict]:
-        """Build line objects directly from stable-ts segments (transcription mode).
-
-        Each segment becomes one subtitle line; its words are used for karaoke
-        timing. Segments with no words are skipped.
-        """
-        line_objects = []
-        for segment in result.segments:
-            if not segment.words:
-                continue
-            words = [
-                {
-                    "word": w.word.strip(),
-                    "start": w.start,
-                    "end": w.end,
-                    "is_segment_first": i == 0,
-                }
-                for i, w in enumerate(segment.words)
-            ]
-            line_objects.append(
-                {
-                    "text": segment.text.strip(),
-                    "words": words,
-                    "start": words[0]["start"],
-                    "end": words[-1]["end"],
-                }
-            )
-        return line_objects
 
     def _generate_ass(self, line_objects: list[dict]) -> str:
         """Build .ass content from line objects using config styling/timing.
