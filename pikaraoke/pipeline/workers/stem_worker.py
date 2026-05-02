@@ -329,7 +329,15 @@ def _worker_main(
     worker_log = _setup_worker_logger(log_level)
     worker_log.info("Stem worker process started (PID %d)", os.getpid())
 
+    import torch
     from audio_separator.separator import Separator
+
+    # Resolve OOM exception types once. torch.cuda.OutOfMemoryError exists
+    # on modern PyTorch; fall back to RuntimeError on older builds.
+    oom_exc_types: tuple[type[BaseException], ...] = (
+        getattr(torch.cuda, "OutOfMemoryError", RuntimeError),
+        MemoryError,
+    )
 
     separator = Separator(
         model_file_dir=model_dir,
@@ -359,6 +367,18 @@ def _worker_main(
                 worker_log.info("Separation cancelled between chunks — model still loaded")
                 _clear_gpu_state(separator, worker_log)
                 result_send.send(("cancelled",))
+            except oom_exc_types as e:
+                # OOM mid-demix leaves audio-separator's internal state and
+                # the CUDA caching allocator in an unsafe condition; reusing
+                # this Separator typically wedges the next forward pass.
+                # Report the error and exit so the parent gets a clean
+                # WorkerDiedError on the next job instead of a hang.
+                worker_log.error(f"OOM during separation for {wav_path}: {e}")
+                try:
+                    result_send.send(("error", f"OOM during stem separation: {e}"))
+                except (OSError, BrokenPipeError):
+                    pass
+                return
             except Exception as e:
                 worker_log.error(f"Stem separation failed for {wav_path}: {e}")
                 result_send.send(("error", str(e)))
@@ -442,17 +462,13 @@ def _separate_with_cancel_check(
             except (EOFError, OSError):
                 pass
             cancelled[0] = True
-            worker_log.info(
-                f"Cancel detected before chunk #{chunk_counter[0] + 1} — aborting"
-            )
+            worker_log.info(f"Cancel detected before chunk #{chunk_counter[0] + 1} — aborting")
             raise _CancelledInsideDemix()
         chunk_counter[0] += 1  # incremented BEFORE forward
         # (we ran the check, not the forward yet)
 
     handle = model_run.register_forward_pre_hook(cancel_pre_hook)
-    worker_log.debug(
-        "Registered forward pre-hook on model_run for per-chunk cancel check"
-    )
+    worker_log.debug("Registered forward pre-hook on model_run for per-chunk cancel check")
 
     try:
         output_paths = separator.separate(str(audio_path))
@@ -466,9 +482,7 @@ def _separate_with_cancel_check(
             handle.remove()
         except Exception:
             pass
-        worker_log.debug(
-            f"Removed hook (processed {chunk_counter[0]} chunks before exit)"
-        )
+        worker_log.debug(f"Removed hook (processed {chunk_counter[0]} chunks before exit)")
 
     # audio-separator catches exceptions internally and returns [] — re-raise
     # so _worker_main sees _CancelledInsideDemix, not a stem-ID RuntimeError.
