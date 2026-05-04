@@ -10,6 +10,11 @@ from pikaraoke.lib.get_platform import get_installed_js_runtime
 
 yt_dlp_cmd = [sys.executable, "-m", "yt_dlp"]
 
+# Browser to impersonate via curl_cffi TLS fingerprint spoofing.
+# This makes yt-dlp's HTTP requests indistinguishable from a real Chrome browser,
+# bypassing YouTube's primary bot-detection vector (TLS/JA3 fingerprinting).
+_IMPERSONATE_TARGET = "chrome"
+
 
 def _js_runtime_args() -> list[str]:
     """Return yt-dlp args to select the preferred JS runtime, if any."""
@@ -18,6 +23,33 @@ def _js_runtime_args() -> list[str]:
         # Deno is automatically assumed by yt-dlp, and does not need specification here
         return ["--js-runtimes", runtime]
     return []
+
+
+def _impersonate_args() -> list[str]:
+    """Return yt-dlp args for browser impersonation via curl_cffi.
+
+    Returns --impersonate flag only if curl_cffi is installed AND yt-dlp can
+    actually load it. yt-dlp pins a specific curl_cffi version range; an
+    incompatible version makes every --impersonate target unavailable, so we
+    suppress the flag and warn instead of producing a runtime error.
+    """
+    try:
+        import curl_cffi  # noqa: F401 — presence check only
+    except ImportError:
+        logging.debug("curl_cffi not installed; skipping --impersonate")
+        return []
+
+    try:
+        import yt_dlp.networking._curlcffi  # noqa: F401 — version-compat check
+    except ImportError as e:
+        installed = getattr(curl_cffi, "__version__", "unknown")
+        logging.warning(
+            f"curl_cffi {installed} is incompatible with the installed yt-dlp "
+            f"({e}); skipping --impersonate. Pin curl_cffi to a supported range."
+        )
+        return []
+
+    return ["--impersonate", _IMPERSONATE_TARGET]
 
 
 def get_youtubedl_version() -> str:
@@ -154,7 +186,7 @@ def build_ytdl_download_command(
         "--convert-subs",
         "srt",
     ]
-    cmd = yt_dlp_cmd + args + _js_runtime_args()
+    cmd = yt_dlp_cmd + args + _js_runtime_args() + _impersonate_args()
     if youtubedl_proxy:
         cmd += ["--proxy", youtubedl_proxy]
     if temp_dir:
@@ -179,7 +211,8 @@ def get_search_results(query: str) -> list[list[str]]:
     logging.info(f"Searching YouTube for: {query}")
     num_results = 10
     yt_search = f'ytsearch{num_results}:"{query}"'
-    cmd = yt_dlp_cmd + ["-j", "--no-playlist", "--flat-playlist", yt_search]
+    cmd = yt_dlp_cmd + ["-j", "--no-playlist", "--flat-playlist"] + _impersonate_args()
+    cmd += [yt_search]
     logging.debug(f"yt-dlp search command: {' '.join(cmd)}")
     try:
         output = subprocess.check_output(cmd).decode("utf-8", "ignore")
@@ -213,7 +246,7 @@ def get_stream_url(video_url: str) -> str | None:
     Returns:
         Direct playable stream URL, or None if yt-dlp failed.
     """
-    cmd = yt_dlp_cmd + ["-g", "-f", "worst[ext=mp4]/worst"] + _js_runtime_args()
+    cmd = yt_dlp_cmd + ["-g", "-f", "worst[ext=mp4]/worst"] + _js_runtime_args() + _impersonate_args()
     cmd += [video_url]
     logging.debug(f"yt-dlp get stream URL command: {' '.join(cmd)}")
     try:
