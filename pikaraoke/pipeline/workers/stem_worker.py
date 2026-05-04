@@ -36,10 +36,13 @@ Why hooks instead of monkey-patching forward()?
 
 Pipe-based cancel signaling avoids shared-memory issues between processes.
 
-PTY integration: When ``pty_slave_fd`` is provided, the worker subprocess
-redirects stdout/stderr to that fd before loading the model, so all
-model load progress and audio-separator output appears on the secondary
-terminal.
+PTY integration: When ``pty_slave_path`` is provided, the worker
+subprocess opens that PTY device and redirects stdout/stderr to it
+before loading the model, so all model load progress and
+audio-separator output appears on the secondary terminal. The path
+(rather than an inherited fd) is required because the worker is
+spawned, not forked, and spawn'd children cannot inherit file
+descriptors from the parent.
 """
 
 import logging
@@ -86,13 +89,13 @@ class StemWorker:
         log_level: int = logging.INFO,
         model_dir: str = DEFAULT_MODEL_DIR,
         model_name: str = DEFAULT_MODEL_NAME,
-        pty_slave_fd: int | None = None,
+        pty_slave_path: str | None = None,
     ) -> None:
         self._temp_dir = temp_dir
         self._log_level = log_level
         self._model_dir = model_dir
         self._model_name = model_name
-        self._pty_slave_fd = pty_slave_fd
+        self._pty_slave_path = pty_slave_path
         self._process: Process | None = None
         self._job_send: Connection | None = None
         self._job_recv: Connection | None = None
@@ -127,7 +130,7 @@ class StemWorker:
                 self._log_level,
                 self._model_dir,
                 self._model_name,
-                self._pty_slave_fd,
+                self._pty_slave_path,
             ),
             daemon=True,
         )
@@ -304,7 +307,7 @@ def _worker_main(
     log_level: int = logging.INFO,
     model_dir: str = DEFAULT_MODEL_DIR,
     model_name: str = DEFAULT_MODEL_NAME,
-    pty_slave_fd: int | None = None,
+    pty_slave_path: str | None = None,
 ) -> None:
     """Entry point for the stem worker subprocess.
 
@@ -317,14 +320,22 @@ def _worker_main(
     - ("cancelled",) when separation was cancelled between chunks
     - ("error", message) on failure
 
-    When pty_slave_fd is provided, stdout/stderr are redirected to it
-    before loading the model.
+    When pty_slave_path is provided, the worker opens that PTY device
+    and redirects stdout/stderr to it before loading the model. The
+    worker is a spawn'd subprocess and cannot inherit fds from the
+    parent, so it must open the device by path.
     """
-    # Route output to secondary terminal if PTY fd is available
-    if pty_slave_fd is not None:
-        os.dup2(pty_slave_fd, 1)
-        os.dup2(pty_slave_fd, 2)
-        os.close(pty_slave_fd)
+    # Route output to secondary terminal if a PTY path was provided.
+    if pty_slave_path is not None:
+        try:
+            pty_fd = os.open(pty_slave_path, os.O_WRONLY)
+            os.dup2(pty_fd, 1)
+            os.dup2(pty_fd, 2)
+            os.close(pty_fd)
+        except OSError:
+            # Fall back to the parent's stdout/stderr if the PTY can't be
+            # opened (e.g. parent already tore the terminal down).
+            pass
 
     worker_log = _setup_worker_logger(log_level)
     worker_log.info("Stem worker process started (PID %d)", os.getpid())
@@ -358,33 +369,33 @@ def _worker_main(
             output_dir = Path(output_dir_str)
             worker_log.info(f"Separating: {wav_path.name}")
 
-        try:
-            vocal_wav, instrumental_wav = _separate_with_cancel_check(
-                wav_path, output_dir, separator, cancel_recv, worker_log
-            )
-            result_send.send(("ok", str(vocal_wav), str(instrumental_wav)))
-        except _CancelledInsideDemix:
-            worker_log.info("Separation cancelled between chunks — model still loaded")
-            _clear_gpu_state(separator, worker_log)
-            result_send.send(("cancelled",))
-        except oom_exc_types as e:
-            # OOM mid-demix leaves audio-separator's internal state and
-            # the CUDA caching allocator in an unsafe condition; reusing
-            # this Separator typically wedges the next forward pass.
-            # Report the error and exit so the parent gets a clean
-            # WorkerDiedError on the next job instead of a hang.
-            worker_log.error(f"OOM during separation for {wav_path}: {e}")
             try:
-                result_send.send(("error", f"OOM during stem separation: {e}"))
-            except (OSError, BrokenPipeError):
-                pass
-            return
-        except Exception as e:
-            worker_log.error(f"Stem separation failed for {wav_path}: {e}")
-            result_send.send(("error", str(e)))
-        finally:
-            # Drain any remaining cancel signals so the pipe is clean
-            drain_pipe(cancel_recv)
+                vocal_wav, instrumental_wav = _separate_with_cancel_check(
+                    wav_path, output_dir, separator, cancel_recv, worker_log
+                )
+                result_send.send(("ok", str(vocal_wav), str(instrumental_wav)))
+            except _CancelledInsideDemix:
+                worker_log.info("Separation cancelled between chunks — model still loaded")
+                _clear_gpu_state(separator, worker_log)
+                result_send.send(("cancelled",))
+            except oom_exc_types as e:
+                # OOM mid-demix leaves audio-separator's internal state and
+                # the CUDA caching allocator in an unsafe condition; reusing
+                # this Separator typically wedges the next forward pass.
+                # Report the error and exit so the parent gets a clean
+                # WorkerDiedError on the next job instead of a hang.
+                worker_log.error(f"OOM during separation for {wav_path}: {e}")
+                try:
+                    result_send.send(("error", f"OOM during stem separation: {e}"))
+                except (OSError, BrokenPipeError):
+                    pass
+                return
+            except Exception as e:
+                worker_log.error(f"Stem separation failed for {wav_path}: {e}")
+                result_send.send(("error", str(e)))
+            finally:
+                # Drain any remaining cancel signals so the pipe is clean
+                drain_pipe(cancel_recv)
     finally:
         del separator
         _clear_gpu_cache()

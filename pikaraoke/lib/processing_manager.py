@@ -186,26 +186,29 @@ class ProcessingManager:
             self._config.intermediate_dir = get_temp_directory()
 
         # Spawn PTY on non-Windows
+        pty_slave_path: str | None = None
         if not is_windows():
             self._process_terminal = ProcessTerminal()
             self._process_terminal.start()
             self._pty_slave_fd = self._process_terminal.get_slave_fd()
+            pty_slave_path = self._process_terminal.get_slave_path()
 
         # Route pipeline Python log records to the processing terminal
         if self._pty_slave_fd is not None:
             root_formatter = logging.root.handlers[0].formatter if logging.root.handlers else None
             self._pty_log_handler = _PtyHandler.attach(self._pty_slave_fd, root_formatter)
 
-        # Construct workers with PTY fd
+        # Workers run as spawn'd subprocesses and cannot inherit fds, so
+        # they receive the PTY device path and re-open it themselves.
         self._stem_worker = StemWorker(
-            pty_slave_fd=self._pty_slave_fd,
+            pty_slave_path=pty_slave_path,
             model_dir=self._config.separator_model_dir,
             model_name=self._config.separator_model_name,
             log_level=self._log_level,
         )
         self._whisper_worker = WhisperWorker(
             self._config.whisper,
-            pty_slave_fd=self._pty_slave_fd,
+            pty_slave_path=pty_slave_path,
         )
 
         # Build stages: PreparePtyStage first so all subsequent stages see pty_slave_fd
@@ -219,7 +222,10 @@ class ProcessingManager:
         ]
 
         self._orchestrator = PipelineOrchestrator(
-            stages, self._stem_worker, self._whisper_worker, self._config,
+            stages,
+            self._stem_worker,
+            self._whisper_worker,
+            self._config,
             on_stage_change=lambda _name: self._events.emit("pipeline_stage_changed"),
         )
         self._orchestrator.start()  # starts stem worker only; whisper is lazy

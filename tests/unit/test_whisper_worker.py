@@ -24,14 +24,13 @@ from pikaraoke.pipeline.workers.whisper_worker import (
     _segments_to_line_objects,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers: fake subprocess that speaks the whisper worker protocol
 # ---------------------------------------------------------------------------
 
 
 def _fake_worker_main_ok(
-    job_recv, result_send, cancel_recv, config_dict, log_level, pty_slave_fd
+    job_recv, result_send, cancel_recv, config_dict, log_level, pty_slave_path
 ):
     """Fake worker that sends ("ready",), handles one align_refine job,
     then exits on None sentinel."""
@@ -44,7 +43,7 @@ def _fake_worker_main_ok(
 
 
 def _fake_worker_main_cancelled(
-    job_recv, result_send, cancel_recv, config_dict, log_level, pty_slave_fd
+    job_recv, result_send, cancel_recv, config_dict, log_level, pty_slave_path
 ):
     """Fake worker that sends ("ready",) then ("cancelled",) for any job."""
     result_send.send(("ready",))
@@ -55,7 +54,7 @@ def _fake_worker_main_cancelled(
 
 
 def _fake_worker_main_error(
-    job_recv, result_send, cancel_recv, config_dict, log_level, pty_slave_fd
+    job_recv, result_send, cancel_recv, config_dict, log_level, pty_slave_path
 ):
     """Fake worker that sends ("ready",) then ("error", msg) for any job."""
     result_send.send(("ready",))
@@ -66,21 +65,21 @@ def _fake_worker_main_error(
 
 
 def _fake_worker_main_die_on_boot(
-    job_recv, result_send, cancel_recv, config_dict, log_level, pty_slave_fd
+    job_recv, result_send, cancel_recv, config_dict, log_level, pty_slave_path
 ):
     """Fake worker that closes the pipe immediately (dies during load)."""
     result_send.close()
 
 
 def _fake_worker_main_slow_boot(
-    job_recv, result_send, cancel_recv, config_dict, log_level, pty_slave_fd
+    job_recv, result_send, cancel_recv, config_dict, log_level, pty_slave_path
 ):
     """Fake worker that takes too long to send ("ready",)."""
     time.sleep(WHISPER_LOAD_TIMEOUT_SEC + 5)
 
 
 def _fake_worker_main_die_during_job(
-    job_recv, result_send, cancel_recv, config_dict, log_level, pty_slave_fd
+    job_recv, result_send, cancel_recv, config_dict, log_level, pty_slave_path
 ):
     """Fake worker that sends ("ready",) then dies during a job."""
     result_send.send(("ready",))
@@ -101,7 +100,7 @@ def config():
 
 @pytest.fixture
 def worker(config):
-    """WhisperWorker with no pty_slave_fd."""
+    """WhisperWorker with no pty_slave_path."""
     return WhisperWorker(config=config)
 
 
@@ -188,17 +187,13 @@ class TestStart:
                 try:
                     msg = result_recv.recv()
                 except EOFError:
-                    raise WorkerDiedError(
-                        "Whisper worker pipe closed during model load"
-                    )
+                    raise WorkerDiedError("Whisper worker pipe closed during model load")
             else:
                 # Pipe didn't close yet (timing issue) — force the check
                 try:
                     result_recv.recv()
                 except EOFError:
-                    raise WorkerDiedError(
-                        "Whisper worker pipe closed during model load"
-                    )
+                    raise WorkerDiedError("Whisper worker pipe closed during model load")
 
         # Clean up
         for conn in (job_send, job_recv, result_recv, result_send, cancel_send, cancel_recv):
@@ -405,7 +400,14 @@ class TestStopKill:
         worker._process = mock_process
 
         # Set up mock pipes for cleanup
-        for attr in ("_job_send", "_job_recv", "_result_recv", "_result_send", "_cancel_send", "_cancel_recv"):
+        for attr in (
+            "_job_send",
+            "_job_recv",
+            "_result_recv",
+            "_result_send",
+            "_cancel_send",
+            "_cancel_recv",
+        ):
             setattr(worker, attr, MagicMock())
 
         worker.kill()

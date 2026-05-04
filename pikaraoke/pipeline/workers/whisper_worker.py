@@ -11,10 +11,13 @@ Conversion helpers (``_extract_words``, ``_match_words_to_lines``,
 ``_segments_to_line_objects``) live here so they are available to the
 subprocess entry point without importing from the stage module.
 
-PTY routing: when ``pty_slave_fd`` is provided, whisper output (model load
-progress, VAD chatter, stable-ts/CTranslate2 logs) is redirected to the
-secondary terminal via fd-level dup2 at subprocess entry. This captures
-C-level writes that Python-level redirects would miss.
+PTY routing: when ``pty_slave_path`` is provided, the worker opens
+that PTY device and redirects stdout/stderr to it via fd-level dup2 at
+subprocess entry. This captures C-level writes (CTranslate2,
+stable-ts) that Python-level redirects would miss. The path (rather
+than an inherited fd) is required because the worker is spawned, not
+forked, and spawn'd children cannot inherit file descriptors from the
+parent.
 
 AudioLoader FFmpeg subprocess cleanup:
 On cancellation, the Aligner's while loop exits via exception, skipping
@@ -193,10 +196,10 @@ class WhisperWorker:
     def __init__(
         self,
         config: Optional[WhisperModelConfig] = None,
-        pty_slave_fd: int | None = None,
+        pty_slave_path: str | None = None,
     ) -> None:
         self._config = config or WhisperModelConfig()
-        self._pty_fd = pty_slave_fd
+        self._pty_slave_path = pty_slave_path
 
         # --- Subprocess state ---
         self._process = None
@@ -243,7 +246,7 @@ class WhisperWorker:
                 cancel_recv,
                 asdict(self._config),
                 logger.getEffectiveLevel(),
-                self._pty_fd,
+                self._pty_slave_path,
             ),
             daemon=True,
         )
@@ -270,8 +273,7 @@ class WhisperWorker:
                 raise RuntimeError(f"Unexpected boot message: {msg}")
             if not self._process.is_alive():
                 raise WorkerDiedError(
-                    f"Whisper worker died during model load "
-                    f"(exit={self._process.exitcode})"
+                    f"Whisper worker died during model load " f"(exit={self._process.exitcode})"
                 )
             if time.monotonic() > deadline:
                 self.kill()
@@ -413,9 +415,7 @@ class WhisperWorker:
             # even send the job, don't bother round-tripping the
             # freshly-loaded subprocess.
             if cancel_event is not None and cancel_event.is_set():
-                raise AlignmentCancelledError(
-                    "Cancelled during whisper worker restart"
-                )
+                raise AlignmentCancelledError("Cancelled during whisper worker restart")
 
         rq = self._result_recv
         js = self._job_send
@@ -453,8 +453,7 @@ class WhisperWorker:
                     break
                 if not proc.is_alive():
                     raise WorkerDiedError(
-                        f"Whisper worker died during job "
-                        f"(exit={proc.exitcode})"
+                        f"Whisper worker died during job " f"(exit={proc.exitcode})"
                     )
         finally:
             if self._cancel_recv is not None:
@@ -464,9 +463,7 @@ class WhisperWorker:
         if tag == "ok":
             return msg[1]
         if tag == "cancelled":
-            raise AlignmentCancelledError(
-                "Alignment cancelled (model still loaded)"
-            )
+            raise AlignmentCancelledError("Alignment cancelled (model still loaded)")
         raise RuntimeError(f"Whisper worker error: {msg[1]}")
 
     # ------------------------------------------------------------------
@@ -495,7 +492,6 @@ class WhisperWorker:
         self._cancel_recv = None
 
 
-
 # ============================================================================
 # Subprocess entry point
 # ============================================================================
@@ -507,7 +503,7 @@ def _worker_main(
     cancel_recv: Connection,
     config_dict: dict,
     log_level: int = logging.INFO,
-    pty_slave_fd: int | None = None,
+    pty_slave_path: str | None = None,
 ) -> None:
     """Entry point for the whisper worker subprocess.
 
@@ -521,14 +517,50 @@ def _worker_main(
     - ("cancelled",) when cancelled between encoder passes
     - ("error", message) on failure (including OOM)
     """
-    # Route output to secondary terminal if PTY fd is available.
-    # This is permanent for the subprocess lifetime — no need for
-    # the _route_to_pty context manager.
-    if pty_slave_fd is not None:
-        os.dup2(pty_slave_fd, 1)
-        os.dup2(pty_slave_fd, 2)
-        os.close(pty_slave_fd)
+    # Route output to secondary terminal if a PTY path was provided.
+    # The worker is spawn'd, so it must open the slave by path rather
+    # than rely on inherited file descriptors. Permanent redirection
+    # for the subprocess lifetime.
+    if pty_slave_path is not None:
+        try:
+            pty_fd = os.open(pty_slave_path, os.O_WRONLY)
+            os.dup2(pty_fd, 1)
+            os.dup2(pty_fd, 2)
+            os.close(pty_fd)
+        except OSError:
+            # Fall back to the parent's stdout/stderr if the PTY can't
+            # be opened (e.g. parent already tore the terminal down).
+            pass
 
+    # Belt-and-suspenders: if anything in this function raises, write the
+    # traceback to a known log file before the subprocess dies. The PTY
+    # closes too quickly to read the error otherwise.
+    try:
+        _whisper_worker_main_inner(
+            job_recv, result_send, cancel_recv, config_dict, log_level
+        )
+    except BaseException:
+        import traceback
+
+        from pikaraoke.lib.get_platform import get_temp_directory
+
+        try:
+            crash_log = os.path.join(get_temp_directory(), "whisper_worker_crash.log")
+            with open(crash_log, "a") as f:
+                f.write(f"--- whisper worker crash (pid {os.getpid()}) ---\n")
+                traceback.print_exc(file=f)
+        except OSError:
+            pass
+        raise
+
+
+def _whisper_worker_main_inner(
+    job_recv: Connection,
+    result_send: Connection,
+    cancel_recv: Connection,
+    config_dict: dict,
+    log_level: int,
+) -> None:
     worker_log = _setup_worker_logger(log_level)
     worker_log.info("Whisper worker process started (PID %d)", os.getpid())
 
@@ -554,7 +586,6 @@ def _worker_main(
     model = stable_whisper.load_model(
         config.model_path,
         device=device,
-        compute_type=config.compute_type,
     )
     encoder_module = model.encoder
 
@@ -582,15 +613,24 @@ def _worker_main(
                 if kind == "align_refine":
                     _, vocal_path, lyrics_text = item
                     line_objects = _do_align_refine(
-                        model, encoder_module, vocal_path, lyrics_text,
-                        cancel_recv, config, worker_log,
+                        model,
+                        encoder_module,
+                        vocal_path,
+                        lyrics_text,
+                        cancel_recv,
+                        config,
+                        worker_log,
                     )
                     result_send.send(("ok", line_objects))
                 elif kind == "transcribe_refine":
                     _, vocal_path = item
                     line_objects = _do_transcribe_refine(
-                        model, encoder_module, vocal_path,
-                        cancel_recv, config, worker_log,
+                        model,
+                        encoder_module,
+                        vocal_path,
+                        cancel_recv,
+                        config,
+                        worker_log,
                     )
                     result_send.send(("ok", line_objects))
                 else:
@@ -608,15 +648,20 @@ def _worker_main(
                     worker_log.error(
                         "OOM during whisper %s for %s: %s | "
                         "allocated=%.1fGB reserved=%.1fGB max=%.1fGB",
-                        kind, vocal_path, e,
+                        kind,
+                        vocal_path,
+                        e,
                         torch.cuda.memory_allocated() / 1e9,
                         torch.cuda.memory_reserved() / 1e9,
                         torch.cuda.max_memory_allocated() / 1e9,
                     )
                 except Exception as diag_err:
                     worker_log.error(
-                        "OOM during whisper %s for %s: %s "
-                        "(memory query failed: %s)", kind, vocal_path, e, diag_err,
+                        "OOM during whisper %s for %s: %s " "(memory query failed: %s)",
+                        kind,
+                        vocal_path,
+                        e,
+                        diag_err,
                     )
                 try:
                     result_send.send(("error", f"OOM during whisper {kind}: {e}"))
@@ -943,8 +988,7 @@ def _patch_audioloader_stderr_in_subprocess(worker_log: logging.Logger) -> None:
 
     AudioLoader._audio_loading_process = _quiet_audio_loading_process
     worker_log.debug(
-        "Patched AudioLoader._audio_loading_process() to suppress "
-        "FFmpeg broken-pipe stderr"
+        "Patched AudioLoader._audio_loading_process() to suppress " "FFmpeg broken-pipe stderr"
     )
 
 

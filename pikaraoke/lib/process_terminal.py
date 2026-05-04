@@ -119,6 +119,21 @@ class ProcessTerminal:
         """Return the PTY slave fd for the worker to dup2 onto stdout/stderr."""
         return self._slave_fd
 
+    def get_slave_path(self) -> str | None:
+        """Return the PTY slave device path (e.g. /dev/pts/3).
+
+        Spawn'd subprocesses cannot inherit file descriptors from the
+        parent, so they must re-open the slave by path. fork-based
+        children can still use get_slave_fd() instead.
+        """
+        if self._slave_fd is None:
+            return None
+        try:
+            return os.ttyname(self._slave_fd)
+        except OSError as e:
+            logger.warning("ProcessTerminal: failed to resolve slave path: %s", e)
+            return None
+
     # -- Internals ------------------------------------------------------------
 
     def _cleanup_stale_socket(self) -> None:

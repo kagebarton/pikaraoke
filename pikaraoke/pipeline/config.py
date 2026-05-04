@@ -10,7 +10,6 @@ class WhisperModelConfig:
     # --- Model loading ---
     model_path: str = str(_REPO_ROOT / "models" / "large-v3-turbo.pt")
     device: str = "auto"
-    compute_type: str = "float16"
 
     # --- Language / VAD ---
     language: str = "en"
