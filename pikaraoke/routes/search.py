@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 import flask_babel
 from flask import current_app, jsonify, render_template, request, url_for
@@ -10,11 +11,16 @@ from flask_smorest import Blueprint
 from marshmallow import Schema, fields
 
 from pikaraoke.lib.current_app import get_karaoke_instance, get_site_name
+from pikaraoke.lib.genius import write_choice
+from pikaraoke.lib.genius_lyrics import clean_genius_query
 from pikaraoke.lib.youtube_dl import get_search_results, get_stream_url
 
 _ = flask_babel.gettext
 
 search_bp = Blueprint("search", __name__)
+
+# YouTube ID validation: exactly 11 chars of the allowed character set
+_YT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 
 
 class AutocompleteQuery(Schema):
@@ -59,6 +65,7 @@ def search():
         songs=k.song_manager.songs,
         search_results=search_results,
         search_string=search_string,
+        genius_client=k.genius_client,
     )
 
 
@@ -106,3 +113,57 @@ def download(form):
     k.download_manager.queue_download(song, queue, user, title)
 
     return jsonify({"status": "ok"})
+
+
+@search_bp.route("/lyrics_search")
+def lyrics_search():
+    """GET ``?q=<query>`` → JSON list of ``{id, title, artist}``.
+
+    Returns ``[]`` when Genius is disabled or the search fails.  Always 200
+    so the UI can render an empty state without error handling.
+    """
+    k = get_karaoke_instance()
+    query = request.args.get("q", "").strip()
+    if not query:
+        return jsonify([])
+    cleaned = clean_genius_query(query)
+    if not cleaned:
+        return jsonify([])
+    hits = k.genius_client.search(cleaned)
+    return jsonify([{"id": h.id, "title": h.title, "artist": h.artist} for h in hits])
+
+
+@search_bp.route("/lyrics_select", methods=["POST"])
+def lyrics_select():
+    """POST ``{ yt_id, genius_id?, mode?, yt_title? }`` → 204.
+
+    Validates *yt_id* is the 11-char YouTube ID.  One of
+    ``{genius_id, mode}`` must be present.  Writes the sidecar; does
+    not fetch lyrics yet.
+
+    Replaces the prototype's ``/lyrics_download`` route — the prototype
+    fetched and saved lyrics text immediately; we only record the choice.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    yt_id = str(data.get("yt_id", "")).strip()
+
+    if not _YT_ID_RE.match(yt_id):
+        return jsonify({"error": "Invalid yt_id: must be exactly 11 alphanumeric/underscore/dash characters"}), 400
+
+    genius_id = data.get("genius_id")
+    mode = data.get("mode")
+    yt_title = str(data.get("yt_title", "")).strip()
+
+    if genius_id is not None:
+        try:
+            genius_id = int(genius_id)
+        except (ValueError, TypeError):
+            return jsonify({"error": "genius_id must be an integer"}), 400
+        payload = {"yt_id": yt_id, "genius_id": genius_id, "yt_title": yt_title}
+    elif mode is not None:
+        payload = {"yt_id": yt_id, "mode": str(mode).strip()}
+    else:
+        return jsonify({"error": "One of genius_id or mode is required"}), 400
+
+    write_choice(yt_id, payload)
+    return "", 204

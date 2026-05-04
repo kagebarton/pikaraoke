@@ -275,6 +275,7 @@ def test_preference_manager_defaults_exist():
         "blocked_processing_words",
         "vocal_volume",
         "admin_password",
+    "genius_token",
     }
 
     assert set(PreferenceManager.DEFAULTS.keys()) == expected_keys
@@ -304,6 +305,7 @@ def test_preference_manager_defaults_types():
 
     # String preferences
     assert isinstance(defaults["temp_dir"], str)
+    assert isinstance(defaults["genius_token"], str)
 
 
 def test_preference_manager_get_or_default_returns_default(temp_config_file):

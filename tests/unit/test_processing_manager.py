@@ -281,37 +281,8 @@ class TestGetActivePhase:
 
 
 # ---------------------------------------------------------------------------
-# _resolve_lyrics_path()
+# _resolve_lyrics_path() — REMOVED; logic now in LyricsFetchStage._find_srt
 # ---------------------------------------------------------------------------
-
-
-class TestResolveLyricsPath:
-    def test_prefers_en_srt(self, tmp_path):
-        song = tmp_path / "Song---abc123.mp4"
-        subs = tmp_path / "subtitles"
-        subs.mkdir()
-        (subs / "Song---abc123.en.srt").write_text("1\n00:00:01,000 --> 00:00:02,000\nHello\n")
-        (subs / "Song---abc123.srt").write_text("fallback")
-        result = ProcessingManager._resolve_lyrics_path(str(song))
-        assert result == subs / "Song---abc123.en.srt"
-
-    def test_falls_back_to_plain_srt(self, tmp_path):
-        song = tmp_path / "Song---abc123.mp4"
-        subs = tmp_path / "subtitles"
-        subs.mkdir()
-        (subs / "Song---abc123.srt").write_text("1\n00:00:01,000 --> 00:00:02,000\nHello\n")
-        result = ProcessingManager._resolve_lyrics_path(str(song))
-        assert result == subs / "Song---abc123.srt"
-
-    def test_returns_none_when_no_srt(self, tmp_path):
-        song = tmp_path / "Song---abc123.mp4"
-        result = ProcessingManager._resolve_lyrics_path(str(song))
-        assert result is None
-
-    def test_returns_none_when_subtitles_dir_missing(self, tmp_path):
-        song = tmp_path / "Song---abc123.mp4"
-        result = ProcessingManager._resolve_lyrics_path(str(song))
-        assert result is None
 
 
 # ---------------------------------------------------------------------------

@@ -14,6 +14,7 @@ from qrcode.image.pure import PyPNGImage
 from pikaraoke.lib.download_manager import DownloadManager
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.ffmpeg import get_ffmpeg_version, is_transpose_enabled
+from pikaraoke.lib.genius import GeniusClient
 from pikaraoke.lib.get_platform import (
     get_data_directory,
     get_os_version,
@@ -106,6 +107,7 @@ class Karaoke:
         admin_password: str | None = None,
         blocked_processing_words: str | None = None,
         subtitle_delay: float | None = None,
+        genius_token: str | None = None,
         temp_dir: str | None = None,
         volume: float | None = None,
         vocal_volume: float | None = None,
@@ -268,10 +270,12 @@ class Karaoke:
         self.download_manager.start()
 
         # Initialize and start stem separation processor
+        self.genius_client = GeniusClient(api_token=self.genius_token or "")
         self.processing_manager = ProcessingManager(
             events=self.events,
             preferences=self.preferences,
             song_manager=self.song_manager,
+            genius_client=self.genius_client,
             temp_dir=self.temp_dir,
             log_level=self.log_level,
         )

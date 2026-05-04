@@ -162,38 +162,51 @@
 		z-index: 3; /* above the play-icon overlays (z-index 1 and 2) */
 	}
 
-	/* Loading overlay for the video preview modal.
-	   Bulma's is-loading only styles buttons/controls, not arbitrary divs,
-	   so we define the spinner here for .modal-content. */
-	.modal-content.is-loading {
-		position: relative;
-	}
-	.modal-content.is-loading::before {
-		content: "";
-		position: absolute;
-		inset: 0;
-		background: rgba(0, 0, 0, 0.6);
-		z-index: 10;
-	}
-	.modal-content.is-loading::after {
-		content: "";
-		position: absolute;
-		top: 50%;
-		left: 50%;
-		width: 2.5rem;
-		height: 2.5rem;
-		margin-top: -1.25rem;
-		margin-left: -1.25rem;
-		border: 3px solid rgba(255, 255, 255, 0.3);
-		border-top-color: #fff;
-		border-radius: 50%;
-		animation: spinAround 0.6s linear infinite;
-		z-index: 11;
-	}
-	@keyframes spinAround {
-		from { transform: rotate(0deg); }
-		to { transform: rotate(360deg); }
-	}
+/* ── Lyrics picker inside modal ── */
+:root {
+  --lyrics-dropdown-font-size: 1.1rem;
+  --lyrics-custom-search-gap: 1.75rem;
+  --lyrics-message-font-size: 1rem;
+  --modal-width: 640px;
+}
+#modal-js-example { align-items: flex-start; overflow-y: auto; }
+#modal-js-example .modal-content {
+  width: 95vw;
+  max-width: var(--modal-width);
+  max-height: none;
+  margin: 20px auto;
+  overflow: visible;
+}
+#lyrics-dropdown,
+#lyrics-custom-input,
+#lyrics-custom-btn,
+#lyrics-download-btn { font-size: var(--lyrics-dropdown-font-size) !important; }
+#lyrics-custom-input,
+#lyrics-custom-btn { height: 2.5em; line-height: 2.5em; }
+#lyrics-dropdown { max-width: 100%; }
+#lyrics-loading,
+#lyrics-empty,
+#lyrics-results-label { font-size: var(--lyrics-message-font-size); }
+#lyrics-results-label { color: #aaa; margin-bottom: 0.1rem; }
+#lyrics-select-wrap:not(.is-hidden) ~ #lyrics-custom-search:not(.is-hidden),
+#lyrics-select-wrap:not(.is-hidden) ~ #lyrics-download-wrap:not(.is-hidden) {
+  margin-top: var(--lyrics-custom-search-gap);
+}
+#lyrics-select-wrap.select::after { display: none !important; }
+#lyrics-select-wrap.select { position: relative; }
+#lyrics-select-wrap.select::before {
+  content: '⌄';
+  position: absolute;
+  right: 0.2em;
+  top: 50%;
+  transform: translateY(-75%);
+  font-size: 6em;
+  color: var(--bulma-primary, #00d1b2);
+  pointer-events: none;
+  z-index: 4;
+}
+#lyrics-section { margin-top: 0.75rem; }
+#modal-js-example.is-fading-out { transition: opacity 2s; opacity: 0; pointer-events: none; }
 </style>
 <script>
 	$(function () {
@@ -215,18 +228,19 @@
 
 		//START SELECTIZE CHANGES
 
-		//if enter key press, by default search button is click
-		$(document).keypress(function (event) {
-			if (event.which == "13") {
-				event.preventDefault();
+//if enter key press, by default search button is click
+// (but not when focus is inside the lyrics custom search input)
+$(document).keypress(function (event) {
+if (event.which == "13" && !$(event.target).is("#lyrics-custom-input")) {
+event.preventDefault();
 
-				if ($(".search-selectize .selectize-input input").val()) {
-					$("#search-link").trigger("click");
-				} else if ($(".search-selectize").find(":selected").text()) {
-					$("#add-queue-link").trigger("click");
-				}
-			}
-		});
+if ($(".search-selectize .selectize-input input").val()) {
+$("#search-link").trigger("click");
+} else if ($(".search-selectize").find(":selected").text()) {
+$("#add-queue-link").trigger("click");
+}
+}
+});
 
 		$("#add-queue-link").hide();
 		$("#add-queue-link").attr("disabled", "true");
@@ -499,6 +513,23 @@
 			});
 		}
 
+		function postDownload(songUrl, songTitle) {
+			// Fire-and-forget /download POST without touching any button — used
+			// by the modal flow where the button already shows "Added for
+			// processing..." and we don't want is-loading to clobber it.
+			$.ajax({
+				url: "{{ url_for('search.download') }}",
+				type: "POST",
+				contentType: "application/json",
+				data: JSON.stringify({
+					song_url: songUrl,
+					song_title: songTitle || "",
+					song_added_by: getUserCookie() || "",
+					queue: $("#add-to-queue-search").is(":checked"),
+				}),
+			});
+		}
+
 		function enqueueLocalSong(filePath, button) {
 			var $btn = $(button);
 			var originalText = $btn.html();
@@ -533,63 +564,210 @@
 		$(document).on("click.search", ".search_result_items_enqueue", function () {
 			enqueueLocalSong($(this).closest("li").attr("data-file-path"), this);
 		});
-		$(document).on("click.search", ".search_result_items_download", function () {
-			var $item = $(this).closest("li");
-			downloadSong($item.attr("value"), $item.attr("data-ytTitle"), this);
-		});
+// ── Lyrics picker state & functions ──────────────────────────────────────
+var _activeYtTitle = "";
+var _activeYtId = "";
 
+function resetLyricsSection() {
+  $("#lyrics-loading").addClass("is-hidden");
+  $("#lyrics-results-label").addClass("is-hidden");
+  $("#lyrics-select-wrap").addClass("is-hidden");
+  $("#lyrics-empty").addClass("is-hidden");
+  $("#lyrics-custom-search").addClass("is-hidden");
+  $("#lyrics-download-wrap").addClass("is-hidden");
+  $("#lyrics-custom-input").val("");
+  $("#lyrics-dropdown").empty();
+}
 
+function populateLyricsDropdown(data) {
+  var $sel = $("#lyrics-dropdown").empty();
+  $("#lyrics-loading").addClass("is-hidden");
+  if (!data.length) {
+    $("#lyrics-empty").removeClass("is-hidden");
+    $("#lyrics-custom-search").removeClass("is-hidden");
+    $("#lyrics-custom-input").focus();
+  } else {
+    var $genius = $('<optgroup label="Genius.com Results">');
+    data.forEach(function (item) {
+      $genius.append($("<option>").val(item.id).text(item.title + " — " + item.artist));
+    });
+    $sel.append($genius);
 
-		$("#search-results").on("click", ".img-wrapper", function () {
-			const modal = document.getElementById("modal-js-example");
-			const modalVideo = document.getElementById("modal-video");
-			const modalContent = modal.querySelector(".modal-content");
-			const videoUrl = $(this).data("url");
+    var $other = $('<optgroup label="Other Options">');
+    $other.append($("<option>").val("__custom__").text("🔍 Custom Search..."));
+    $other.append($("<option>").val("__raw__").text("📝 Raw Transcription"));
+    $sel.append($other);
 
-			modal.classList.add("is-active");
-			modalContent.classList.add("is-loading");
+    $("#lyrics-results-label").removeClass("is-hidden");
+    $("#lyrics-select-wrap").removeClass("is-hidden");
+    // Trigger change so download-button visibility matches the auto-selected option
+    $("#lyrics-dropdown").trigger("change");
+  }
+}
 
-			// Unlock autoplay on iOS/mobile: briefly play the empty video element
-			// synchronously inside the click handler so Safari associates it with
-			// a user gesture. Without this, the async AJAX callback's .play() is blocked.
-			modalVideo.play().then(function () { modalVideo.pause(); }).catch(function () {});
+function runLyricsSearch(query) {
+  $("#lyrics-loading").removeClass("is-hidden");
+  $("#lyrics-select-wrap").addClass("is-hidden");
+  $("#lyrics-empty").addClass("is-hidden");
+  $("#lyrics-custom-search").addClass("is-hidden");
+  $("#lyrics-dropdown").empty();
+  $.ajax({
+    url: "{{ url_for('search.lyrics_search') }}",
+    type: "get",
+    data: { q: query },
+    success: populateLyricsDropdown,
+    error: function () {
+      populateLyricsDropdown([]);
+    },
+  });
+}
 
-			const closeButton = modal.querySelector(".modal-close");
-			closeButton.focus();
+// Lyrics dropdown change handler
+$(document).on("change.search", "#lyrics-dropdown", function () {
+  var val = $(this).val();
+  if (val === "__custom__") {
+    $("#lyrics-custom-search").removeClass("is-hidden");
+    $("#lyrics-download-wrap").addClass("is-hidden");
+    $("#lyrics-custom-input").focus();
+  } else if (val === "__raw__") {
+    $("#lyrics-custom-search").addClass("is-hidden");
+    $("#lyrics-download-wrap").removeClass("is-hidden");
+    $("#lyrics-download-btn").removeAttr("disabled").text("{% trans %}Download{% endtrans %}");
+  } else {
+    $("#lyrics-custom-search").addClass("is-hidden");
+    $("#lyrics-download-wrap").removeClass("is-hidden");
+    $("#lyrics-download-btn").removeAttr("disabled").text("{% trans %}Download{% endtrans %}");
+  }
+});
 
-			// Remove the spinner when the video starts playing or errors — not when
-			// the AJAX returns, since the video still has to buffer after src is set.
-			const stopLoading = function () {
-				modalContent.classList.remove("is-loading");
-			};
-			modalVideo.addEventListener("playing", stopLoading, { once: true });
-			modalVideo.addEventListener("error", stopLoading, { once: true });
+function doCustomLyricsSearch() {
+  var query = $("#lyrics-custom-input").val().trim();
+  if (!query) return;
+  runLyricsSearch(query);
+}
 
-			const closeModal = function () {
-				modal.classList.remove("is-active");
-				modalContent.classList.remove("is-loading");
-				modalVideo.pause();
-				modalVideo.src = "";
-			};
+$(document).on("click.search", "#lyrics-custom-btn", doCustomLyricsSearch);
+$(document).on("keydown.search", "#lyrics-custom-input", function (e) {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    doCustomLyricsSearch();
+  }
+});
 
-			closeButton.onclick = closeModal;
-			modal.querySelector(".modal-background").onclick = closeModal;
+// Lyrics download/select button: writes the sidecar choice then triggers download
+$(document).on("click.search", "#lyrics-download-btn", function () {
+  var $btn = $(this);
+  if ($btn.is(":disabled")) return;
+  var val = $("#lyrics-dropdown").val();
+  if (val === "__raw__") {
+    // Raw transcription selected — write the raw choice and proceed
+    $.ajax({
+      url: "{{ url_for('search.lyrics_select') }}",
+      type: "POST",
+      contentType: "application/json",
+      data: JSON.stringify({ yt_id: _activeYtId, mode: "raw", yt_title: _activeYtTitle }),
+    });
+    $btn.addClass("is-success").attr("disabled", true)
+      .html('<i class="icon icon-ok"></i>&nbsp; {% trans %}Added for processing...{% endtrans %}');
+    var $li = $("#search-results li[data-ytid='" + _activeYtId + "']");
+    postDownload($li.attr("value"), $li.attr("data-yttitle"));
+    fadeOutPreviewModal();
+    return;
+  }
+  if (!val || val === "__custom__") return;
 
-			$.ajax({
-				url: "{{ url_for('search.preview') }}" + "?url=" + encodeURIComponent(videoUrl),
-				type: "get",
-				success: function (data) {
-					if (modal.classList.contains("is-active")) {
-						modalVideo.src = data.stream_url;
-						modalVideo.load();
-						modalVideo.play().catch(function () {});
-					}
-				},
-				error: function () {
-					closeModal();
-				},
-			});
-		});
+  var originalHtml = $btn.html();
+  $btn.css("min-width", $btn.outerWidth() + "px").addClass("is-loading").attr("disabled", true);
+
+  var songId = parseInt(val, 10);
+
+  function flashError(detail) {
+    console.warn("Lyrics select failed:", detail);
+    $btn.removeClass("is-loading").addClass("is-danger").text("!");
+    setTimeout(function () {
+      $btn.removeClass("is-danger").html(originalHtml).removeAttr("disabled").css("min-width", "");
+    }, 3000);
+  }
+
+  $.ajax({
+    url: "{{ url_for('search.lyrics_select') }}",
+    type: "POST",
+    contentType: "application/json",
+    data: JSON.stringify({ yt_id: _activeYtId, genius_id: songId, yt_title: _activeYtTitle }),
+    success: function () {
+      $btn.removeClass("is-loading").addClass("is-success")
+        .html('<i class="icon icon-ok"></i>&nbsp; {% trans %}Added for processing...{% endtrans %}');
+      var $li = $("#search-results li[data-ytid='" + _activeYtId + "']");
+      postDownload($li.attr("value"), $li.attr("data-yttitle"));
+      fadeOutPreviewModal();
+    },
+    error: function (xhr) {
+      flashError(xhr && xhr.responseText ? xhr.responseText : "network error");
+    },
+  });
+});
+
+// ── Preview modal (refactored from inline handler) ───────────────────────
+
+function closePreviewModal() {
+  const modal = document.getElementById("modal-js-example");
+  const modalVideo = document.getElementById("modal-video");
+  modal.classList.remove("is-active", "is-fading-out");
+  modalVideo.pause();
+  modalVideo.removeAttribute("src");
+  modalVideo.load();
+  resetLyricsSection();
+}
+
+function fadeOutPreviewModal() {
+  const modal = document.getElementById("modal-js-example");
+  modal.classList.add("is-fading-out");
+  setTimeout(closePreviewModal, 2000);
+}
+
+function openPreviewModal($li) {
+  const modal = document.getElementById("modal-js-example");
+  const modalVideo = document.getElementById("modal-video");
+  const videoUrl = $li.attr("value") || $li.find(".img-wrapper").data("url");
+
+  _activeYtTitle = $li.attr("data-yttitle") || "";
+  _activeYtId = $li.attr("data-ytid") || "";
+
+  modal.classList.add("is-active");
+
+  // Unlock autoplay on iOS/mobile: briefly play the empty video element
+  // synchronously inside the click handler so Safari associates it with
+  // a user gesture. Without this, the async AJAX callback's .play() is blocked.
+  modalVideo.play().then(function () { modalVideo.pause(); }).catch(function () {});
+
+  const closeButton = modal.querySelector(".modal-close");
+  closeButton.focus();
+  closeButton.onclick = closePreviewModal;
+  modal.querySelector(".modal-background").onclick = closePreviewModal;
+
+  $.ajax({
+    url: "{{ url_for('search.preview') }}" + "?url=" + encodeURIComponent(videoUrl),
+    type: "get",
+    success: function (data) {
+      if (modal.classList.contains("is-active") && data.stream_url) {
+        modalVideo.src = data.stream_url;
+        modalVideo.load();
+        modalVideo.play().catch(function () {});
+      }
+    },
+  });
+
+  resetLyricsSection();
+  runLyricsSearch(_activeYtTitle);
+}
+
+// Both thumbnail and Select button open the preview modal
+$("#search-results").on("click.search", ".img-wrapper", function () {
+  openPreviewModal($(this).closest("li"));
+});
+$(document).on("click.search", ".search_result_items_select", function () {
+  openPreviewModal($(this).closest("li"));
+});
 	});
 
 	function isYoutubeURL(s) {
@@ -756,7 +934,7 @@
 					{% if existing_path %}
 					<button class="button is-success search_result_items_enqueue">Add to Queue</button>
 					{% else %}
-					<button class="button search_result_items_download">Download</button>
+          <button class="button search_result_items_select">{% trans %}Select{% endtrans %}</button>
 					{% endif %}
 				</div>
 			</li>
@@ -764,11 +942,32 @@
 		</ul>
 		<div id="modal-js-example" class="modal">
 			<div class="modal-background"></div>
-			<div class="modal-content">
-				<div class="video-container">
-					<video id="modal-video" controls></video>
-				</div>
-			</div>
+      <div class="modal-content">
+        <div class="video-container">
+          <video id="modal-video" controls playsinline muted preload="metadata"></video>
+        </div>
+        <div id="lyrics-section">
+          <p id="lyrics-loading" class="has-text-grey is-hidden">Searching lyrics...</p>
+          <p id="lyrics-results-label" class="is-hidden">Genius.com lyrics search results:</p>
+          <div id="lyrics-select-wrap" class="select is-fullwidth is-small is-hidden">
+            <select id="lyrics-dropdown"></select>
+          </div>
+          <p id="lyrics-empty" class="has-text-grey is-hidden">No lyrics results found. Use custom search below...</p>
+          <div id="lyrics-custom-search" class="is-hidden">
+            <div class="field has-addons">
+              <div class="control is-expanded">
+                <input id="lyrics-custom-input" class="input" type="text" placeholder="Search lyrics..." />
+              </div>
+              <div class="control">
+                <button id="lyrics-custom-btn" class="button is-warning">{% trans %}Search{% endtrans %}</button>
+              </div>
+            </div>
+          </div>
+          <div id="lyrics-download-wrap" class="is-hidden">
+            <button id="lyrics-download-btn" class="button is-primary is-fullwidth" disabled>{% trans %}Download{% endtrans %}</button>
+          </div>
+        </div>
+      </div>
 			<button class="modal-close is-large" aria-label="close"></button>
 		</div>
 	</div>

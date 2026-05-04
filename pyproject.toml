@@ -30,6 +30,7 @@ dependencies = [
     "faster-whisper>=1.0.3",
     "srt>=3.5.3",
     "torch>=2.2",
+    "lyricsgenius>=3.0",
 ]
 
 [project.optional-dependencies]

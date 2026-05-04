@@ -622,6 +622,25 @@ def youtube_id_suffix(file_path: str) -> str:
     return ""
 
 
+def extract_youtube_id(file_path: str) -> str | None:
+    """Extract the bare 11-char YouTube ID from a filename.
+
+    Canonical implementation that calls :func:`youtube_id_suffix` and strips
+    delimiters (``---`` or ``[ ]``) to return the bare ID.  Replaces the
+    private ``library_scanner._extract_youtube_id`` logic so there is a single
+    source of truth.
+
+    Returns ``None`` for files without a recognisable ID (manually-added
+    library files, etc.).
+    """
+    suffix = youtube_id_suffix(file_path)
+    if not suffix:
+        return None
+    if suffix.startswith("---"):
+        return suffix[3:]
+    return suffix.strip(" []")
+
+
 def has_youtube_id(filename: str) -> bool:
     """Detect if a filename contains a YouTube ID in PiKaraoke or yt-dlp format."""
     return bool(youtube_id_suffix(filename))

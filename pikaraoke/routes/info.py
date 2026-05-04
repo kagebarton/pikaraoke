@@ -68,6 +68,7 @@ def info():
         preferred_language=preferred_language,
         browse_results_per_page=k.browse_results_per_page,
         temp_dir=k.temp_dir,
+        genius_token=k.preferences.get("genius_token", ""),
     )
 
 

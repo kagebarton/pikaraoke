@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from pikaraoke.lib.events import EventSystem
+from pikaraoke.lib.genius import GeniusClient
 from pikaraoke.lib.get_platform import get_temp_directory, is_windows
 from pikaraoke.lib.preference_manager import PreferenceManager
 from pikaraoke.lib.process_terminal import ProcessTerminal
@@ -29,6 +30,7 @@ from pikaraoke.pipeline.stages.ffmpeg_extract import FFmpegExtractStage
 from pikaraoke.pipeline.stages.ffmpeg_transcode import FFmpegTranscodeStage
 from pikaraoke.pipeline.stages.loudnorm_analyze import LoudnormAnalyzeStage
 from pikaraoke.pipeline.stages.lyric_align import LyricAlignStage
+from pikaraoke.pipeline.stages.lyrics_fetch import LyricsFetchStage
 from pikaraoke.pipeline.stages.stem_separation import StemSeparationStage
 from pikaraoke.pipeline.workers.stem_worker import StemWorker
 from pikaraoke.pipeline.workers.whisper_worker import WhisperWorker
@@ -134,12 +136,14 @@ class ProcessingManager:
         events: EventSystem,
         preferences: PreferenceManager,
         song_manager: SongManager | None = None,
+        genius_client: GeniusClient | None = None,
         temp_dir: str = "",
         log_level: int = logging.INFO,
     ) -> None:
         self._events = events
         self._preferences = preferences
         self._song_manager = song_manager
+        self._genius = genius_client  # may be None before start() is called
         self._temp_dir = temp_dir
         self._log_level = log_level
 
@@ -214,6 +218,7 @@ class ProcessingManager:
         # Build stages: PreparePtyStage first so all subsequent stages see pty_slave_fd
         stages = [
             PreparePtyStage(self._pty_slave_fd),
+            LyricsFetchStage(self._genius),
             FFmpegExtractStage(self._config),
             LoudnormAnalyzeStage(self._config),
             StemSeparationStage(self._stem_worker),
@@ -364,8 +369,7 @@ class ProcessingManager:
                 self._events.emit("processing_complete", song_path)
                 return
 
-        lyrics_path = self._resolve_lyrics_path(song_path)
-        token = self._orchestrator.run_one_async(Path(song_path), lyrics_path)
+        token = self._orchestrator.run_one_async(Path(song_path))
         with self._state_lock:
             self._active = _ActiveJob(song_path=song_path, cancel_token=token)
 
@@ -400,22 +404,3 @@ class ProcessingManager:
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
-
-    @staticmethod
-    def _resolve_lyrics_path(song_path: str) -> Path | None:
-        """Look for an existing yt-dlp-downloaded .srt next to the song.
-
-        Prefers ``<song.parent>/subtitles/<song.stem>.en.srt``, falling back to
-        ``<song.parent>/subtitles/<song.stem>.srt``. Returns None if neither is
-        present — LyricAlignStage falls through to transcribe mode.
-        """
-        song = Path(song_path)
-        subs_dir = song.parent / "subtitles"
-        for name in (f"{song.stem}.en.srt", f"{song.stem}.srt"):
-            candidate = subs_dir / name
-            if candidate.is_file():
-                logger.info(f"Found lyrics for alignment: {candidate.name}")
-                return candidate
-            logger.debug(f"Lyrics candidate not found: {candidate}")
-        logger.info(f"No subtitle found for alignment — will transcribe: {song.name}")
-        return None

@@ -38,6 +38,7 @@ class PreferenceManager:
         "blocked_processing_words": "",
         "vocal_volume": 0.4,
         "admin_password": "",
+        "genius_token": "",
     }
 
     def __init__(self, config_file_path: str = "config.ini", target: object | None = None) -> None:

@@ -26,11 +26,13 @@ constants.
 
 import datetime
 import logging
+import re
 import shutil
 from pathlib import Path
 
 import srt
 
+from pikaraoke.lib.genius_lyrics import parse_genius_sections
 from pikaraoke.pipeline.config import PipelineConfig
 from pikaraoke.pipeline.context import Phase, PipelineCancelled, SetEvent, StageContext
 from pikaraoke.pipeline.stages.base import BaseStage
@@ -60,9 +62,11 @@ class LyricAlignStage(BaseStage):
 
         if lyrics_path is not None:
             # --- Alignment mode: ALIGN (includes refine) ---
-            lyrics_text, lyrics_format = self._load_lyrics(lyrics_path)
+            lyrics_text, lyrics_format, lyrics_structure = self._load_lyrics(lyrics_path)
             ctx.artifacts["lyrics_text"] = lyrics_text
             ctx.artifacts["lyrics_format"] = lyrics_format
+            if lyrics_structure is not None:
+                ctx.artifacts["lyrics_structure"] = lyrics_structure
 
             logger.info(f"[{self.name}] Aligning lyrics to vocal stem: {Path(vocal_wav).name}")
             line_objects = _model_call(
@@ -74,7 +78,7 @@ class LyricAlignStage(BaseStage):
                     cancel_event=ctx.cancel.event if ctx.cancel else None,
                 ),
             )
-            write_srt = lyrics_format == "txt"
+            write_srt = self._should_write_srt(ctx.song_path)
         else:
             # --- Transcription mode: TRANSCRIBE (includes refine) ---
             logger.info(f"[{self.name}] Transcribing vocal stem: {Path(vocal_wav).name}")
@@ -86,7 +90,7 @@ class LyricAlignStage(BaseStage):
                     cancel_event=ctx.cancel.event if ctx.cancel else None,
                 ),
             )
-            write_srt = True
+            write_srt = self._should_write_srt(ctx.song_path)
 
         ass_content = self._generate_ass(line_objects)
         srt_content = self._generate_srt(line_objects) if write_srt else None
@@ -119,21 +123,42 @@ class LyricAlignStage(BaseStage):
 
     # --- Helpers ---
 
-    def _load_lyrics(self, lyrics_path: Path) -> tuple[str, str]:
-        """Return (lyrics_text, lyrics_format) where format is 'txt' or 'srt'.
+    def _load_lyrics(self, lyrics_path: Path) -> tuple[str, str, list[dict] | None]:
+        """Return ``(lyrics_text, lyrics_format, structure)``.
 
-        If lyrics_path is .srt: parse with srt library, concatenate text,
-        discard original timestamps. If .txt: read raw text.
+        ``structure`` is a list of ``{line, section, attribution}`` dicts
+        when the input is Genius-formatted ``.txt``, else ``None``.
+
+        For Genius ``.txt``:
+        - Parse section headers with :func:`parse_genius_sections`.
+        - Strip header lines and empty lines from the text.
+        - The remaining text (using ``align_text`` from each line) is what
+          stable-ts aligns to.
+        - ``structure`` preserves header context for each surviving line.
+
+        For non-Genius ``.txt`` and ``.srt``: behaves as today;
+        ``structure`` is ``None``.
         """
         suffix = Path(lyrics_path).suffix.lower()
         if suffix == ".srt":
             raw = lyrics_path.read_text(encoding="utf-8")
             subs = list(srt.parse(raw))
             lyrics_text = "\n".join(sub.content for sub in subs)
-            return lyrics_text, "srt"
+            return lyrics_text, "srt", None
         else:
-            lyrics_text = lyrics_path.read_text(encoding="utf-8")
-            return lyrics_text, "txt"
+            raw = lyrics_path.read_text(encoding="utf-8")
+
+            # Detection heuristic: presence of any section-header line
+            header_re = re.compile(r"^\s*\[.*\]\s*$", re.MULTILINE)
+            if header_re.search(raw):
+                sections = parse_genius_sections(raw)
+                if sections:
+                    # Use align_text (inline parens stripped) for alignment
+                    lyrics_text = "\n".join(line["align_text"] for line in sections)
+                    return lyrics_text, "txt", sections
+
+            # Plain .txt (no Genius headers)
+            return raw, "txt", None
 
     def _generate_ass(self, line_objects: list[dict]) -> str:
         """Build .ass content from line objects using config styling/timing.
@@ -238,6 +263,20 @@ class LyricAlignStage(BaseStage):
             for i, line_obj in enumerate(line_objects, start=1)
         ]
         return srt.compose(subtitles)
+
+    @staticmethod
+    def _should_write_srt(song_path: Path) -> bool:
+        """Skip SRT generation when yt-dlp already provided one.
+
+        Replaces the previous ``write_srt = lyrics_format == "txt"`` /
+        ``write_srt = True`` assignments with a filesystem check,
+        decoupled from input mode.
+        """
+        subs = song_path.parent / "subtitles"
+        return not (
+            (subs / f"{song_path.stem}.en.srt").exists()
+            or (subs / f"{song_path.stem}.srt").exists()
+        )
 
 
 def _model_call(ctx, phase: Phase, fn):

@@ -246,7 +246,7 @@ def get_stream_url(video_url: str) -> str | None:
     Returns:
         Direct playable stream URL, or None if yt-dlp failed.
     """
-    cmd = yt_dlp_cmd + ["-g", "-f", "worst[ext=mp4]/worst"] + _js_runtime_args() + _impersonate_args()
+    cmd = yt_dlp_cmd + ["-g", "-f", "18/worst[ext=mp4][protocol*=http]/worst[protocol*=http]"] + _js_runtime_args() + _impersonate_args()
     cmd += [video_url]
     logging.debug(f"yt-dlp get stream URL command: {' '.join(cmd)}")
     try:
