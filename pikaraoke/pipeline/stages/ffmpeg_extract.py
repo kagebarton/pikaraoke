@@ -26,6 +26,9 @@ class FFmpegExtractStage(BaseStage):
         wav_out = ctx.tmp_dir / f"{ctx.song_path.stem}_input.wav"
         cmd = [
             "ffmpeg",
+            "-hide_banner",
+            "-loglevel", "warning",
+            "-stats",
             "-y",
             "-threads",
             self._config.ffmpeg_threads,

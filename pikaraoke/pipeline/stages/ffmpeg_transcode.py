@@ -70,6 +70,9 @@ class FFmpegTranscodeStage(BaseStage):
     def _transcode(self, wav_path: Path, output_path: Path, ctx: StageContext) -> None:
         cmd = [
             "ffmpeg",
+            "-hide_banner",
+            "-loglevel", "warning",
+            "-stats",
             "-y",
             "-threads",
             self._config.ffmpeg_threads,

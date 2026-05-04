@@ -36,7 +36,6 @@ class LoudnormAnalyzeStage(BaseStage):
         cmd = [
             "ffmpeg",
             "-hide_banner",
-            "-nostats",
             "-threads",
             self._config.ffmpeg_threads,
             "-i",

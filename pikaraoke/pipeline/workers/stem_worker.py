@@ -350,9 +350,15 @@ def _worker_main(
         MemoryError,
     )
 
+    # Pass log_level=WARNING so Separator.__init__ doesn't reset its logger
+    # back to INFO and flood us with init/system-info chatter. The
+    # architecture separators share the same logger reference, so this
+    # silences per-chunk noise from load_model and separate too. The tqdm
+    # progress bar and warnings/errors still come through.
     separator = Separator(
         model_file_dir=model_dir,
         output_format=SEPARATION_FORMAT,
+        log_level=logging.WARNING,
     )
     separator.load_model(model_filename=model_name)
     _clear_gpu_cache()
@@ -576,10 +582,16 @@ def _setup_worker_logger(log_level: int = logging.INFO) -> logging.Logger:
     processing_logger.propagate = False
     processing_logger.setLevel(log_level)
 
-    sep_logger = logging.getLogger("audio_separator")
-    sep_logger.handlers = []
-    sep_logger.addHandler(handler)
-    sep_logger.setLevel(log_level)
-    sep_logger.propagate = False
+    # Suppress audio-separator INFO noise. Must set level on both the
+    # parent logger ("audio_separator") and the child logger that
+    # Separator.__init__ creates ("audio_separator.separator"), because
+    # Separator.__init__ calls self.logger.setLevel(log_level) on the
+    # child, overriding any level inherited from the parent.
+    for name in ("audio_separator", "audio_separator.separator"):
+        sep_logger = logging.getLogger(name)
+        sep_logger.handlers = []
+        sep_logger.addHandler(handler)
+        sep_logger.setLevel(logging.WARNING)
+        sep_logger.propagate = False
 
     return processing_logger
