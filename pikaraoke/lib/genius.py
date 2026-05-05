@@ -71,6 +71,9 @@ class GeniusClient:
         self._timeout = timeout
         self._lock = threading.Lock()
 
+        # Suppress noisy lyricsgenius INFO logs (e.g. "Done.")
+        logging.getLogger("lyricsgenius").setLevel(logging.WARNING)
+
         if api_token:
             self._genius = lyricsgenius.Genius(api_token, timeout=timeout)
             self._genius.remove_section_headers = False
