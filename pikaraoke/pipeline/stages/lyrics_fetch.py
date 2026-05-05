@@ -81,6 +81,14 @@ class LyricsFetchStage(BaseStage):
             delete_choice(yt_id)
             return
 
+        # Branch b2: explicit YouTube SRT selection
+        if choice and choice.get("mode") == "srt":
+            srt_path = self._find_srt(ctx.song_path)
+            ctx.artifacts["lyrics_path"] = srt_path
+            ctx.artifacts["lyrics_origin"] = "srt" if srt_path else "none"
+            delete_choice(yt_id)
+            return
+
         # Branch c: SRT fallback (current behaviour)
         srt_path = self._find_srt(ctx.song_path)
         ctx.artifacts["lyrics_path"] = srt_path

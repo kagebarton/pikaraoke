@@ -237,33 +237,42 @@ def get_search_results(query: str) -> list[list[str]]:
         raise
 
 
-def get_stream_url(video_url: str) -> str | None:
-    """Get a direct stream URL for a YouTube video without downloading it.
+def get_preview_info(video_url: str) -> tuple[str | None, bool]:
+    """Return ``(stream_url, has_en_captions)`` in a single yt-dlp call.
 
-    Args:
-        video_url: YouTube video URL.
-
-    Returns:
-        Direct playable stream URL, or None if yt-dlp failed.
+    ``has_en_captions`` is ``True`` when either manual subtitles or
+    auto-generated captions exist for English (any ``en*`` lang code).
     """
-    cmd = yt_dlp_cmd + ["-g", "-f", "18/worst[ext=mp4][protocol*=http]/worst[protocol*=http]"] + _js_runtime_args() + _impersonate_args()
-    cmd += [video_url]
-    logging.debug(f"yt-dlp get stream URL command: {' '.join(cmd)}")
+    cmd = yt_dlp_cmd + [
+        "--skip-download",
+        "-f", "18/worst[ext=mp4][protocol*=http]/worst[protocol*=http]",
+        "--print", "url",
+        "--print", "%(subtitles)j",
+    ] + _js_runtime_args() + _impersonate_args() + [video_url]
+    logging.debug(f"yt-dlp preview info command: {' '.join(cmd)}")
     try:
         result = subprocess.run(cmd, capture_output=True, timeout=15)
         if result.returncode != 0:
             logging.warning(
-                f"yt-dlp stream URL failed for {video_url}: {result.stderr.decode('utf-8', 'ignore')}"
+                f"yt-dlp preview info failed for {video_url}: {result.stderr.decode('utf-8', 'ignore')}"
             )
-            return None
-        output = result.stdout.decode("utf-8").strip()
-        if not output:
-            logging.warning(f"yt-dlp returned empty output for: {video_url}")
-            return None
-        return output.splitlines()[0]
+            return None, False
+        lines = [l for l in result.stdout.decode("utf-8", "ignore").splitlines() if l.strip()]
+        stream_url = lines[0].strip() if lines else None
+        has_en = False
+        if len(lines) > 1:
+            sub_line = lines[1].strip()
+            if sub_line and sub_line not in ("NA", "null"):
+                try:
+                    data = json.loads(sub_line)
+                    if isinstance(data, dict) and any(k.lower().startswith("en") for k in data):
+                        has_en = True
+                except json.JSONDecodeError:
+                    pass
+        return stream_url, has_en
     except subprocess.TimeoutExpired:
-        logging.error(f"yt-dlp stream URL timed out for: {video_url}")
-        return None
+        logging.error(f"yt-dlp preview info timed out for: {video_url}")
+        return None, False
     except (FileNotFoundError, PermissionError) as e:
         logging.error(f"Could not run yt-dlp: {e}")
-        return None
+        return None, False

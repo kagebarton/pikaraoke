@@ -567,6 +567,7 @@ $("#add-queue-link").trigger("click");
 // ── Lyrics picker state & functions ──────────────────────────────────────
 var _activeYtTitle = "";
 var _activeYtId = "";
+var _activeSrtAvailable = false;
 
 function resetLyricsSection() {
   $("#lyrics-loading").addClass("is-hidden");
@@ -577,32 +578,55 @@ function resetLyricsSection() {
   $("#lyrics-download-wrap").addClass("is-hidden");
   $("#lyrics-custom-input").val("");
   $("#lyrics-dropdown").empty();
+  _activeSrtAvailable = false;
+}
+
+function ensureSrtOption() {
+  // Inject "📺 YouTube Captions" into the existing dropdown if /preview
+  // discovered captions after the dropdown was already populated.
+  if (!_activeSrtAvailable) return;
+  var $sel = $("#lyrics-dropdown");
+  if (!$sel.children().length) return;
+  if ($sel.find('option[value="__srt__"]').length) return;
+  var $other = $sel.find('optgroup[label="Other Options"]');
+  if (!$other.length) return;
+  $other.find('option[value="__custom__"]').after(
+    $('<option>').val('__srt__').text('📺 YouTube Captions')
+  );
 }
 
 function populateLyricsDropdown(data) {
   var $sel = $("#lyrics-dropdown").empty();
   $("#lyrics-loading").addClass("is-hidden");
-  if (!data.length) {
-    $("#lyrics-empty").removeClass("is-hidden");
-    $("#lyrics-custom-search").removeClass("is-hidden");
-    $("#lyrics-custom-input").focus();
-  } else {
+
+  if (data.length) {
     var $genius = $('<optgroup label="Genius.com Results">');
     data.forEach(function (item) {
       $genius.append($("<option>").val(item.id).text(item.title + " — " + item.artist));
     });
     $sel.append($genius);
-
-    var $other = $('<optgroup label="Other Options">');
-    $other.append($("<option>").val("__custom__").text("🔍 Custom Search..."));
-    $other.append($("<option>").val("__raw__").text("📝 Raw Transcription"));
-    $sel.append($other);
-
     $("#lyrics-results-label").removeClass("is-hidden");
-    $("#lyrics-select-wrap").removeClass("is-hidden");
-    // Trigger change so download-button visibility matches the auto-selected option
-    $("#lyrics-dropdown").trigger("change");
+    $("#lyrics-empty").addClass("is-hidden");
+  } else {
+    $("#lyrics-results-label").addClass("is-hidden");
+    $("#lyrics-empty").removeClass("is-hidden");
   }
+
+  // "Other Options" is always shown — Raw Transcription is always available,
+  // and YouTube Captions is added when the /preview probe found en captions.
+  var $other = $('<optgroup label="Other Options">');
+  $other.append($("<option>").val("__custom__").text("🔍 Custom Search..."));
+  if (_activeSrtAvailable) {
+    $other.append($("<option>").val("__srt__").text("📺 YouTube Captions"));
+  }
+  $other.append($("<option>").val("__raw__").text("📝 Raw Transcription"));
+  $sel.append($other);
+
+  $("#lyrics-select-wrap").removeClass("is-hidden");
+  // Trigger change so download-button visibility matches the auto-selected option.
+  // With no Genius hits, the first option is "Custom Search..." which the change
+  // handler reveals (and focuses) — matches the previous empty-state UX.
+  $("#lyrics-dropdown").trigger("change");
 }
 
 function runLyricsSearch(query) {
@@ -629,7 +653,7 @@ $(document).on("change.search", "#lyrics-dropdown", function () {
     $("#lyrics-custom-search").removeClass("is-hidden");
     $("#lyrics-download-wrap").addClass("is-hidden");
     $("#lyrics-custom-input").focus();
-  } else if (val === "__raw__") {
+  } else if (val === "__raw__" || val === "__srt__") {
     $("#lyrics-custom-search").addClass("is-hidden");
     $("#lyrics-download-wrap").removeClass("is-hidden");
     $("#lyrics-download-btn").removeAttr("disabled").text("{% trans %}Download{% endtrans %}");
@@ -659,13 +683,15 @@ $(document).on("click.search", "#lyrics-download-btn", function () {
   var $btn = $(this);
   if ($btn.is(":disabled")) return;
   var val = $("#lyrics-dropdown").val();
-  if (val === "__raw__") {
-    // Raw transcription selected — write the raw choice and proceed
+  if (val === "__raw__" || val === "__srt__") {
+    // Mode-only selection (raw transcription or YouTube captions) —
+    // write the choice and proceed.
+    var modeValue = val === "__raw__" ? "raw" : "srt";
     $.ajax({
       url: "{{ url_for('search.lyrics_select') }}",
       type: "POST",
       contentType: "application/json",
-      data: JSON.stringify({ yt_id: _activeYtId, mode: "raw", yt_title: _activeYtTitle }),
+      data: JSON.stringify({ yt_id: _activeYtId, mode: modeValue, yt_title: _activeYtTitle }),
     });
     $btn.addClass("is-success").attr("disabled", true)
       .html('<i class="icon icon-ok"></i>&nbsp; {% trans %}Added for processing...{% endtrans %}');
@@ -753,6 +779,10 @@ function openPreviewModal($li) {
         modalVideo.src = data.stream_url;
         modalVideo.load();
         modalVideo.play().catch(function () {});
+      }
+      if (data.srt_available) {
+        _activeSrtAvailable = true;
+        ensureSrtOption();
       }
     },
   });

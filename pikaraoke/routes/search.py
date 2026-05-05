@@ -13,7 +13,7 @@ from marshmallow import Schema, fields
 from pikaraoke.lib.current_app import get_karaoke_instance, get_site_name
 from pikaraoke.lib.genius import write_choice
 from pikaraoke.lib.genius_lyrics import clean_genius_query
-from pikaraoke.lib.youtube_dl import get_search_results, get_stream_url
+from pikaraoke.lib.youtube_dl import get_preview_info, get_search_results
 
 _ = flask_babel.gettext
 
@@ -92,11 +92,11 @@ def autocomplete(query):
 @search_bp.route("/preview")
 @search_bp.arguments(PreviewQuery, location="query")
 def preview(query):
-    """Get a direct stream URL for previewing a YouTube video."""
-    stream_url = get_stream_url(query["url"])
+    """Get a direct stream URL and SRT availability for a YouTube video."""
+    stream_url, srt_available = get_preview_info(query["url"])
     if stream_url is None:
         return jsonify({"error": "Could not fetch stream URL"}), 500
-    return jsonify({"stream_url": stream_url})
+    return jsonify({"stream_url": stream_url, "srt_available": srt_available})
 
 
 @search_bp.route("/download", methods=["POST"])
@@ -161,7 +161,10 @@ def lyrics_select():
             return jsonify({"error": "genius_id must be an integer"}), 400
         payload = {"yt_id": yt_id, "genius_id": genius_id, "yt_title": yt_title}
     elif mode is not None:
-        payload = {"yt_id": yt_id, "mode": str(mode).strip()}
+        mode_str = str(mode).strip()
+        if mode_str not in ("raw", "srt"):
+            return jsonify({"error": "mode must be 'raw' or 'srt'"}), 400
+        payload = {"yt_id": yt_id, "mode": mode_str}
     else:
         return jsonify({"error": "One of genius_id or mode is required"}), 400
 
