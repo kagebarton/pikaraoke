@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>TV Color Palette Preview</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #111;
+            color: #eee;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            margin-bottom: 5px;
+            text-align: center;
+            color: #ffcc00;
+        }
+
+        h2 {
+            margin-top: 30px;
+            margin-bottom: 10px;
+            text-align: center;
+            color: #ffcc00;
+        }
+
+        .section {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .palette-container {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 1200px;
+        }
+
+        .color-swatch {
+            width: 140px;
+            height: 100px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            align-items: center;
+            padding: 8px;
+            border: 2px solid #333;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: bold;
+            font-family: monospace;
+            color: #ffffff;
+            text-shadow: 0px 0px 3px #000, 0px 0px 3px #000;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+        .color-swatch:hover {
+            transform: scale(1.05);
+            z-index: 10;
+            border-color: #fff;
+        }
+
+        .color-swatch span.label {
+            font-size: 11px;
+            font-family: sans-serif;
+            opacity: 0.9;
+            margin-top: 4px;
+        }
+
+        .color-swatch span.hex {
+            font-size: 13px;
+            font-family: monospace;
+            font-weight: bold;
+        }
+
+        .divider {
+            width: 60%;
+            height: 2px;
+            background: #333;
+            margin: 30px 0;
+        }
+
+        .note {
+            color: #888;
+            font-size: 14px;
+            max-width: 800px;
+            text-align: center;
+            margin: 10px 0 20px 0;
+        }
+        .note strong {
+            color: #ccc;
+        }
+        .note .forbidden {
+            color: #ff4444;
+            font-weight: bold;
+        }
+        .note .available {
+            color: #44ff88;
+            font-weight: bold;
+        }
+
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 13px;
+        }
+        .legend-swatch {
+            width: 15px;
+            height: 15px;
+            border: 1px solid #555;
+        }
+    </style>
+</head>
+<body>
+
+<h1>TV Color Palette Preview</h1>
+
+<div class="section">
+    <div class="note">
+        <strong>Constraint Check:</strong><br>
+        <span class="forbidden">EXCLUDED (Already Used):</span> Overlay Blue <code>rgb(70,130,180)</code>, 
+        Overlay Orange <code>rgb(255,127,80)</code>, 
+        Caption Goldenrod <code>rgb(218,165,32)</code><br>
+        <span class="available">AVAILABLE (New 6-color palette):</span> Cyan, Red, Yellow-Green, Plum, Sage, Dusty Rose
+    </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- USED / FORBIDDEN COLORS -->
+<h2>Used / Forbidden Colors</h2>
+<div class="note">These colors are already assigned and cannot be used for speaker diarization.</div>
+<div class="palette-container" id="forbidden-colors"></div>
+
+<div class="divider"></div>
+
+<!-- NEW DISTINCT 6-COLOR PALETTE -->
+<h2>New Distinct 6-Speaker Palette</h2>
+<div class="note">Muted, high-contrast colors designed for TV readability. Each is visually distinct from the others and avoids the forbidden colors above.</div>
+<div class="palette-container" id="new-palette"></div>
+
+<div class="divider"></div>
+
+<script>
+    // Forbidden colors (already used)
+    const forbidden = [
+        { color: 'rgb(70, 130, 180)',   hex: '#4682B4', label: 'Overlay Blue',  used: 'Overlay' },
+        { color: 'rgb(255, 127, 80)',  hex: '#FF7F50', label: 'Overlay Orange', used: 'Overlay' },
+        { color: 'rgb(218, 165, 32)',  hex: '#DAA520', label: 'Caption Goldenrod', used: 'Captions' }
+    ];
+
+    // New distinct 6-color muted palette (Revised to avoid clashing hues)
+    const newPalette = [
+        { color: 'rgb(0, 168, 168)',   hex: '#00A8A8', label: 'Muted Cyan',         ass: '&H00A8A800&' },
+        { color: 'rgb(180, 50, 50)',   hex: '#B43232', label: 'Muted Red',          ass: '&H003232B4&' },
+        { color: 'rgb(140, 210, 40)',  hex: '#8CD228', label: 'Muted Lime',         ass: '&H0028D28C&' },
+        { color: 'rgb(100, 50, 160)',  hex: '#6432A0', label: 'Muted Plum',         ass: '&H00A03264&' },
+        { color: 'rgb(160, 130, 110)', hex: '#6E82A0', label: 'Muted Sage',         ass: '&H006E82A0&' },
+        { color: 'rgb(200, 100, 120)', hex: '#6464C8', label: 'Muted Dusty Rose',   ass: '&H006464C8&' }
+    ];
+
+    function renderSwatches(containerId, items, showASS) {
+        const container = document.getElementById(containerId);
+        items.forEach(item => {
+            const swatch = document.createElement('div');
+            swatch.className = 'color-swatch';
+            swatch.style.background = item.color;
+            swatch.innerHTML = `
+                <span class="hex"><strong>${item.hex}</strong></span>
+                <span class="label">${item.label}</span>
+                ${showASS ? `<span class="label">ASS: ${item.ass}</span>` : `<span class="label">Used for: ${item.used}</span>`}
+            `;
+            swatch.title = `${item.label}: ${item.color} / ${item.hex}`;
+            container.appendChild(swatch);
+        });
+    }
+
+    renderSwatches('forbidden-colors', forbidden, false);
+    renderSwatches('new-palette', newPalette, true);
+</script>
+
+</body>
+</html>

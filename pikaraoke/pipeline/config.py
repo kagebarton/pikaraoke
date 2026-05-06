@@ -83,14 +83,20 @@ class PipelineConfig:
     # Per-speaker colors for multi-speaker karaoke ASS output.
     # Index 0 → first dominant_speaker seen, etc.
     # Format: &HAABBGGRR& (8 hex digits, alpha + reversed RGB, trailing &).
+    #
+    # Ordering rule: every consecutive pair must be visually distinct so
+    # that a 2-singer duet, 3-singer trio, etc. all read as obviously
+    # different colors. RGB primaries lead (muted cyan / red / green — each
+    # complementary to the next), then the secondaries are interleaved so
+    # the two pinks are never adjacent.
     speaker_colors: list = field(
         default_factory=lambda: [
-            "&H00FFFF00&",  # 0 — cyan
-            "&H00B469FF&",  # 1 — pink
-            "&H0000FF00&",  # 2 — green
-            "&H000080FF&",  # 3 — orange
-            "&H00FA82FA&",  # 4 — lavender
-            "&H000000FF&",  # 5 — red
+            "&H00A8A800&",  # 0 — muted cyan
+            "&H003232B4&",  # 1 — muted red
+            "&H0028D28C&",  # 2 — muted lime (more green)
+            "&H00A03264&",  # 3 — muted plum (more purple, darker)
+            "&H006E82A0&",  # 4 — muted sage
+            "&H006464C8&",  # 5 — muted dusty rose
         ]
     )
     ensemble_color: str = "&H0000D7FF&"  # goldenrod for unlabeled lines
