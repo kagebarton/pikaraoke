@@ -76,15 +76,11 @@ class TestDownloadManagerQueueDownload:
         notifications = []
         events.on("notification", lambda msg, *args: notifications.append(msg))
 
-        download_events = []
-        events.on("download_started", lambda: download_events.append("started"))
-
         download_manager.queue_download("https://youtube.com/watch?v=test", user="TestUser")
 
         assert download_manager.download_queue.qsize() == 1
         assert len(notifications) == 1
         assert "Download starting" in notifications[0]
-        assert len(download_events) == 1
 
     @patch("flask_babel._", side_effect=lambda x: x)
     def test_queue_download_with_pending(self, mock_gettext, download_manager, events):
@@ -237,11 +233,6 @@ class TestDownloadManagerExecuteDownload:
         # Should have "Error downloading" message with danger category
         assert any("Error downloading" in msg and cat == "danger" for msg, cat in notifications)
 
-        # Should populate download_errors
-        assert len(download_manager.download_errors) == 1
-        assert download_manager.download_errors[0]["title"] == "Title"
-        assert "error" in download_manager.download_errors[0]
-
     @patch("flask_babel._", side_effect=lambda x: x)
     @patch("subprocess.Popen")
     @patch("pikaraoke.lib.download_manager.build_ytdl_download_command")
@@ -267,76 +258,6 @@ class TestDownloadManagerExecuteDownload:
 
         # Should log error about queueing
         assert any("Error queueing" in msg and cat == "danger" for msg, cat in notifications)
-
-
-class TestDownloadManagerStatus:
-    """Tests for DownloadManager.get_downloads_status method."""
-
-    def test_get_downloads_status_empty(self, download_manager):
-        """Test status with no downloads."""
-        status = download_manager.get_downloads_status()
-
-        assert status["active"] is None
-        assert status["pending"] == []
-
-    def test_get_downloads_status_pending(self, download_manager):
-        """Test status with pending downloads."""
-        download_manager.queue_download("http://example.com/1", title="Song 1")
-        download_manager.queue_download("http://example.com/2", title="Song 2")
-
-        status = download_manager.get_downloads_status()
-
-        assert status["active"] is None
-        assert len(status["pending"]) == 2
-        assert status["pending"][0]["title"] == "Song 1"
-        assert status["pending"][1]["title"] == "Song 2"
-
-    def test_get_downloads_status_active(self, download_manager):
-        """Test status with active download."""
-        # Simulate active download
-        download_manager.active_download = {
-            "title": "Active Song",
-            "progress": 50.0,
-            "status": "downloading",
-        }
-
-        status = download_manager.get_downloads_status()
-
-        assert status["active"]["title"] == "Active Song"
-        assert status["active"]["progress"] == 50.0
-
-    def test_get_downloads_status_errors(self, download_manager):
-        """Test status with download errors."""
-        download_manager.download_errors = [
-            {
-                "id": "1234",
-                "title": "Failed Song",
-                "url": "http://example.com/fail",
-                "user": "User",
-                "error": "Error message",
-            }
-        ]
-
-        status = download_manager.get_downloads_status()
-
-        assert len(status["errors"]) == 1
-        assert status["errors"][0]["title"] == "Failed Song"
-
-    def test_remove_error(self, download_manager):
-        """Test removing an error by ID."""
-        download_manager.download_errors = [
-            {"id": "1234", "title": "Failed Song", "error": "Error"}
-        ]
-
-        # Test remove invalid ID
-        result = download_manager.remove_error("9999")
-        assert result is False
-        assert len(download_manager.download_errors) == 1
-
-        # Test remove valid ID
-        result = download_manager.remove_error("1234")
-        assert result is True
-        assert len(download_manager.download_errors) == 0
 
 
 class TestDownloadManagerSpecialCharacters:

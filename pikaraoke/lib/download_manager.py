@@ -64,7 +64,6 @@ class DownloadManager:
         self._temp_dir = temp_dir
         self.download_queue: Queue = Queue()
         self.pending_downloads: list[dict] = []  # Shadow queue for visibility
-        self.download_errors: list[dict] = []  # Track failed downloads
         self.active_download: dict | None = None
         self._active_process: subprocess.Popen | None = None  # Stored for cancellation
         self._cancelled_urls: set[str] = set()  # URLs cancelled while pending
@@ -76,31 +75,6 @@ class DownloadManager:
         self._worker_thread = Thread(target=self._process_queue, daemon=True)
         self._worker_thread.start()
         logging.debug("Download queue worker started")
-
-    def get_downloads_status(self) -> dict:
-        """Get the status of active and pending downloads.
-
-        Returns:
-            Dict containing 'active' download info and list of 'pending' downloads.
-        """
-        return {
-            "active": self.active_download,
-            "pending": self.pending_downloads,
-            "errors": self.download_errors,
-        }
-
-    def remove_error(self, error_id: str) -> bool:
-        """Remove an error from the list by ID.
-
-        Args:
-            error_id: The ID of the error to remove.
-
-        Returns:
-            True if removed, False if not found.
-        """
-        initial_len = len(self.download_errors)
-        self.download_errors = [e for e in self.download_errors if e["id"] != error_id]
-        return len(self.download_errors) < initial_len
 
     def queue_download(
         self,
@@ -140,16 +114,11 @@ class DownloadManager:
             # MSG: Message shown when download is added and will start immediately
             self._events.emit("notification", _("Download starting: %s") % displayed_title)
 
-        # If queue was just started (was not downloading before), emit event
-        if not self._is_downloading and self.download_queue.empty():
-            self._events.emit("download_started")
-
         download_data = {
             "video_url": video_url,
             "enqueue": enqueue,
             "user": user,
             "title": title,
-            "display_title": displayed_title,
         }
 
         # Add to the download queue and shadow list
@@ -200,7 +169,7 @@ class DownloadManager:
 
             # Initialize active download state
             self.active_download = {
-                "title": download_request.get("display_title", download_request["video_url"]),
+                "title": download_request["title"] or download_request["video_url"],
                 "url": download_request["video_url"],
                 "user": download_request["user"],
                 "progress": 0.0,
@@ -307,9 +276,6 @@ class DownloadManager:
         self._active_process = None
 
         if rc != 0:
-            # Logic removed: We no longer retry synchronously as it blocks the queue.
-            # Failed downloads are now failed fast and logged.
-
             # MSG: Message shown after the download process is completed but the song is not found
             self._events.emit(
                 "notification", _("Error downloading song: ") + displayed_title, "danger"
@@ -322,7 +288,6 @@ class DownloadManager:
                 "user": user,
                 "error": output or "Unknown error",
             }
-            self.download_errors.append(error_data)
             # Emit download_error event for pipeline tracker
             self._events.emit("download_error", error_data)
         else:
