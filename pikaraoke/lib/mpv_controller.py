@@ -185,8 +185,35 @@ class MpvController:
         """Event set when duration > 0 is known; cleared on each play()."""
         return self._duration_ready
 
-    def start(self) -> None:
-        """Create the libmpv instance, register observers, load placeholder."""
+    _AUTO_DEVICE = {"name": "auto", "description": "Autoselect device"}
+
+    def list_audio_devices(self) -> list[dict[str, str]]:
+        """Available libmpv audio output devices for the running player.
+
+        Reads ``audio-device-list`` from the active mpv instance. Returns a
+        single ``auto`` entry when the player is not yet running or libmpv
+        cannot enumerate devices.
+        """
+        if self._player is None:
+            return [dict(self._AUTO_DEVICE)]
+        try:
+            raw = self._player.audio_device_list or []
+        except (AttributeError, RuntimeError, OSError) as e:
+            log.warning("Failed to enumerate audio devices: %s", e)
+            return [dict(self._AUTO_DEVICE)]
+        return [
+            {"name": str(dev.get("name", "")), "description": str(dev.get("description", ""))}
+            for dev in raw
+        ]
+
+    def start(self, audio_device: str | None = None) -> None:
+        """Create the libmpv instance, register observers, load placeholder.
+
+        Args:
+            audio_device: Optional libmpv audio device name (e.g. ``pipewire/xrdp-sink``).
+                When ``None`` or ``"auto"`` the OS default is used. Names that are
+                not present in ``audio-device-list`` fall back to auto with a warning.
+        """
         self._player = mpv.MPV(
             idle=True,
             force_window=True,
@@ -197,6 +224,15 @@ class MpvController:
             input_vo_keyboard=True,
         )
         p = self._player
+
+        if audio_device and audio_device != "auto":
+            available = {d["name"] for d in self.list_audio_devices()}
+            if audio_device in available:
+                p["audio-device"] = audio_device
+            else:
+                log.warning(
+                    "Saved audio device %r not available; falling back to auto", audio_device
+                )
         p.observe_property("time-pos", self._on_time_pos)
         p.observe_property("duration", self._on_duration)
         p.observe_property("idle-active", self._on_idle_active)

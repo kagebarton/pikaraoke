@@ -275,7 +275,8 @@ def test_preference_manager_defaults_exist():
         "blocked_processing_words",
         "vocal_volume",
         "admin_password",
-    "genius_token",
+        "genius_token",
+        "audio_device",
     }
 
     assert set(PreferenceManager.DEFAULTS.keys()) == expected_keys

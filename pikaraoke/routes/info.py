@@ -18,6 +18,20 @@ from pikaraoke.lib.get_platform import get_platform
 _ = flask_babel.gettext
 
 
+def _audio_devices_for_render(k) -> tuple[str, list[dict[str, str]]]:
+    """Return (saved_device, devices) ensuring the saved device is selectable.
+
+    If the saved device is not in the enumerated list (e.g. unplugged hardware),
+    prepend a synthetic entry so the user can still see what is currently set
+    instead of silently rebinding to ``auto`` on save.
+    """
+    saved = k.preferences.get_or_default("audio_device")
+    devices = k.mpv_controller.list_audio_devices()
+    if saved and saved != "auto" and not any(d["name"] == saved for d in devices):
+        devices = [{"name": saved, "description": f"{saved} (unavailable)"}, *devices]
+    return saved, devices
+
+
 info_bp = Blueprint("info", __name__)
 
 
@@ -33,6 +47,7 @@ def info():
     preferred_language = k.preferences.get("preferred_language", "en")
     # youtube-dl
     youtubedl_version = k.youtubedl_version
+    audio_device, audio_devices = _audio_devices_for_render(k)
 
     return render_template(
         "info.html",
@@ -69,6 +84,8 @@ def info():
         browse_results_per_page=k.browse_results_per_page,
         temp_dir=k.temp_dir,
         genius_token=k.preferences.get("genius_token", ""),
+        audio_device=audio_device,
+        audio_devices=audio_devices,
     )
 
 
@@ -104,3 +121,10 @@ def get_system_stats():
     disk_str = str(free) + "GB free / " + str(total) + "GB total ( " + str(disk.percent) + "% )"
 
     return jsonify({"cpu": cpu, "memory": memory_str, "disk": disk_str})
+
+
+@info_bp.route("/info/audio_devices")
+def get_audio_devices():
+    """Get available audio output devices from the running mpv player."""
+    k = get_karaoke_instance()
+    return jsonify({"devices": k.mpv_controller.list_audio_devices()})

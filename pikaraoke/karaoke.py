@@ -216,7 +216,8 @@ class Karaoke:
         )
 
         try:
-            self.mpv_controller.start()
+            audio_device = self.preferences.get_or_default("audio_device")
+            self.mpv_controller.start(audio_device=audio_device)
             # Apply the loaded volume preference to the system now that MPV is running.
             # self.volume was set by _load_preferences() before mpv_controller existed,
             # so the property setter's is_running guard did not fire — this explicit call
