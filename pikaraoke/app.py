@@ -187,7 +187,7 @@ def main() -> None:
         high_quality=args.high_quality,
         logo_path=args.logo_path,
         hide_now_playing_overlay=args.hide_now_playing_overlay,
-        show_clock=args.show_clock,
+        hide_clock=args.hide_clock,
         url=args.url,
         limit_user_songs_by=args.limit_user_songs_by,
         config_file_path=args.config_file_path,

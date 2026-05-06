@@ -371,7 +371,7 @@ class PlaybackController:
             screen_h=self.mpv.osd_size[1],
             hide_url=self.preferences.get_or_default("hide_url"),
             hide_now_playing=self.preferences.get_or_default("hide_now_playing_overlay"),
-            show_clock=self.preferences.get_or_default("show_clock"),
+            hide_clock=self.preferences.get_or_default("hide_clock"),
             server_url=self.mpv._server_url,
             dual_stem=self.now_playing_dual_stem,
             vocal_volume=self.now_playing_vocal_volume,

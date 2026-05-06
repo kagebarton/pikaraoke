@@ -34,7 +34,7 @@ class PreferenceManager:
         "subtitle_delay": 0,
         "audio_delay": 0.0,
         "browse_results_per_page": 100,
-        "show_clock": False,
+        "hide_clock": False,
         "temp_dir": "",
         "blocked_processing_words": "",
         "vocal_volume": 0.4,

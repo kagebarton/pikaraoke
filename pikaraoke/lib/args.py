@@ -179,9 +179,9 @@ def parse_pikaraoke_args() -> argparse.Namespace:
         required=False,
     )
     parser.add_argument(
-        "--show-clock",
+        "--hide-clock",
         action="store_true",
-        help="Show the digital clock overlay.",
+        help="Hide the digital clock overlay.",
         required=False,
     )
     parser.add_argument(

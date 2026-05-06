@@ -85,7 +85,7 @@ class OverlayState:
     # preference snapshot
     hide_url: bool
     hide_now_playing: bool
-    show_clock: bool
+    hide_clock: bool
     server_url: str
     # dual-stem vocal volume (for timecode overlay)
     dual_stem: bool = False
@@ -255,7 +255,7 @@ def compute_overlays(state: OverlayState) -> dict[int, Overlay]:
     if not state.hide_url:
         result[OSD_URL] = _build_url_overlay(state, fs)
 
-    if state.show_clock:
+    if not state.hide_clock:
         result[OSD_CLOCK] = _build_clock_overlay(state, fs)
 
     return result

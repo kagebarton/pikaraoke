@@ -39,7 +39,7 @@ def _idle_state(**overrides) -> OverlayState:
         screen_h=1080,
         hide_url=False,
         hide_now_playing=False,
-        show_clock=False,
+        hide_clock=False,
         server_url="http://pikaraoke.local:5555",
         dual_stem=False,
         vocal_volume=0.0,
@@ -61,7 +61,7 @@ def _playing_state(**overrides) -> OverlayState:
         screen_h=1080,
         hide_url=False,
         hide_now_playing=False,
-        show_clock=False,
+        hide_clock=False,
         server_url="http://pikaraoke.local:5555",
         dual_stem=False,
         vocal_volume=0.0,
@@ -117,15 +117,15 @@ class TestComputeOverlaysIdle:
         result = compute_overlays(state)
         assert OSD_QUEUE_PREVIEW not in result
 
-    def test_clock_absent_when_pref_off(self):
-        state = _idle_state(show_clock=False)
-        result = compute_overlays(state)
-        assert OSD_CLOCK not in result
-
-    def test_clock_present_when_pref_on(self):
-        state = _idle_state(show_clock=True)
+    def test_clock_present_by_default(self):
+        state = _idle_state(hide_clock=False)
         result = compute_overlays(state)
         assert OSD_CLOCK in result
+
+    def test_clock_absent_when_hidden(self):
+        state = _idle_state(hide_clock=True)
+        result = compute_overlays(state)
+        assert OSD_CLOCK not in result
 
 
 # ── compute_overlays: PLAYING ──────────────────────────────────────────────────
@@ -172,8 +172,8 @@ class TestComputeOverlaysPlaying:
         assert OSD_TIMECODE not in result
 
     def test_clock_honours_pref_independent_of_mode(self):
-        on = _playing_state(show_clock=True)
-        off = _playing_state(show_clock=False)
+        on = _playing_state(hide_clock=False)
+        off = _playing_state(hide_clock=True)
         assert OSD_CLOCK in compute_overlays(on)
         assert OSD_CLOCK not in compute_overlays(off)
 
@@ -262,10 +262,9 @@ class TestOverlayManagerDiff:
         manager = OverlayManager(mpv)
         state = _idle_state()
         manager.apply(state)
-        # URL should be sent, nothing else
-        mpv.osd_overlay.assert_called_once()
-        call_args = mpv.osd_overlay.call_args[0]
-        assert call_args[0] == OSD_URL
+        # URL and clock are both visible by default on splash
+        sent_ids = {c.args[0] for c in mpv.osd_overlay.call_args_list}
+        assert sent_ids == {OSD_URL, OSD_CLOCK}
 
     def test_unchanged_state_does_not_resend(self):
         mpv = _mock_mpv()
@@ -316,12 +315,12 @@ class TestOverlayManagerDiff:
     def test_only_changed_overlay_is_resent(self):
         mpv = _mock_mpv()
         manager = OverlayManager(mpv)
-        state1 = _playing_state(position=10.0, show_clock=True)
+        state1 = _playing_state(position=10.0, hide_clock=False)
         manager.apply(state1)
         mpv.osd_overlay.reset_mock()
 
         # Advance time only -- only TIMECODE should differ
-        state2 = _playing_state(position=11.0, show_clock=True)
+        state2 = _playing_state(position=11.0, hide_clock=False)
         manager.apply(state2)
         sent_ids = {c.args[0] for c in mpv.osd_overlay.call_args_list}
         assert OSD_TIMECODE in sent_ids

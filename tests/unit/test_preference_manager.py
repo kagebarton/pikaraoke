@@ -269,7 +269,7 @@ def test_preference_manager_defaults_exist():
         "limit_user_songs_by",
         "enable_fair_queue",
         "browse_results_per_page",
-        "show_clock",
+        "hide_clock",
         "subtitle_delay",
         "audio_delay",
         "temp_dir",

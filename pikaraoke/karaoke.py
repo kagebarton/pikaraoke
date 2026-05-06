@@ -72,7 +72,7 @@ class Karaoke:
     default_logo_path: str = os.path.join(base_path, "static", "images", "logo.png")
 
     normalize_audio: bool
-    show_clock: bool
+    hide_clock: bool
 
     # Download manager for serialized downloads
     download_manager: DownloadManager
@@ -102,7 +102,7 @@ class Karaoke:
         high_quality: bool | None = None,
         limit_user_songs_by: int | None = None,
         normalize_audio: bool | None = None,
-        show_clock: bool | None = None,
+        hide_clock: bool | None = None,
         splash_delay: int | None = None,
         admin_password: str | None = None,
         blocked_processing_words: str | None = None,

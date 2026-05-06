@@ -20,7 +20,7 @@ class ChangePreferenceQuery(Schema):
     val = fields.String(required=True, metadata={"description": "New value for the preference"})
 
 
-_OVERLAY_PREFS = {"hide_url", "hide_now_playing_overlay", "show_clock"}
+_OVERLAY_PREFS = {"hide_url", "hide_now_playing_overlay", "hide_clock"}
 
 
 @preferences_bp.route("/change_preferences", methods=["GET"])
