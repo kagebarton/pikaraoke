@@ -32,6 +32,7 @@ class PreferenceManager:
         "limit_user_songs_by": 0,
         "enable_fair_queue": False,
         "subtitle_delay": 0,
+        "audio_delay": 0.0,
         "browse_results_per_page": 100,
         "show_clock": False,
         "temp_dir": "",

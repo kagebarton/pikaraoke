@@ -37,3 +37,15 @@ def test_list_audio_devices_handles_none_response():
     c._player = MagicMock()
     c._player.audio_device_list = None
     assert c.list_audio_devices() == []
+
+
+def test_set_audio_delay_writes_property_on_running_player():
+    c = MpvController()
+    c._player = MagicMock()
+    c.set_audio_delay(-0.05)
+    c._player.__setitem__.assert_called_once_with("audio-delay", -0.05)
+
+
+def test_set_audio_delay_noop_when_player_not_running():
+    c = MpvController()
+    c.set_audio_delay(-0.05)  # _safe wrapper short-circuits when _player is None

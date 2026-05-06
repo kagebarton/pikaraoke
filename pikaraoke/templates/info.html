@@ -267,6 +267,13 @@
 						</label>
 					</div>
 
+					<div class="user-preference-container is-align-items-center">
+						<input id="pref-audio-delay" class="user-preference-input input" type="number" step="0.01" min="-2" max="2" data-pref="audio_delay" data-start-value="{{ audio_delay }}" value="{{ audio_delay }}" />
+						<label class="label" for="pref-audio-delay">
+							{# MSG: Numberbox label for audio delay (A/V sync offset) #} {% trans %}Audio delay in seconds (negative = audio earlier, for external audio loops e.g. SPDIF mixer){% endtrans %}
+						</label>
+					</div>
+
 					<div class="user-preference-container">
 						<input id="pref-normalize" type="checkbox" class="user-preference-checkbox checkbox" data-pref="normalize_audio" {% if normalize_audio == True %}checked{% endif %}>
 						<label class="label" for="pref-normalize">{# MSG: Checkbox label which enable/disables audio volume normalization #} {% trans %}Normalize audio volume{% endtrans %}

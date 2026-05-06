@@ -206,13 +206,16 @@ class MpvController:
             for dev in raw
         ]
 
-    def start(self, audio_device: str | None = None) -> None:
+    def start(self, audio_device: str | None = None, audio_delay: float = 0.0) -> None:
         """Create the libmpv instance, register observers, load placeholder.
 
         Args:
             audio_device: Optional libmpv audio device name (e.g. ``pipewire/xrdp-sink``).
                 When ``None`` or ``"auto"`` the OS default is used. Names that are
                 not present in ``audio-device-list`` fall back to auto with a warning.
+            audio_delay: Global A/V sync offset in seconds. Negative delays the
+                video so externally-routed audio (e.g. SPDIF loop through a mixer)
+                lines up at the TV.
         """
         self._player = mpv.MPV(
             idle=True,
@@ -233,6 +236,8 @@ class MpvController:
                 log.warning(
                     "Saved audio device %r not available; falling back to auto", audio_device
                 )
+        if audio_delay:
+            p["audio-delay"] = float(audio_delay)
         p.observe_property("time-pos", self._on_time_pos)
         p.observe_property("duration", self._on_duration)
         p.observe_property("idle-active", self._on_idle_active)
@@ -525,6 +530,15 @@ class MpvController:
         """
         self._subtitle_delay = float(seconds)
         self._player.sub_delay = float(seconds)
+
+    @_safe
+    def set_audio_delay(self, seconds: float) -> None:
+        """Set global A/V sync offset on the running player.
+
+        Negative values delay the video relative to audio, compensating for
+        externally-routed audio loops (e.g. SPDIF out → mixer → SPDIF in).
+        """
+        self._player["audio-delay"] = float(seconds)
 
     @_safe
     def restart(self) -> None:

@@ -36,6 +36,8 @@ def change_preferences(query):
             broadcast_event("preferences_update", {"key": preference, "value": val})
             if preference in _OVERLAY_PREFS:
                 k.playback_controller.refresh_overlays()
+            if preference == "audio_delay":
+                k.mpv_controller.set_audio_delay(float(val))
         return jsonify([success, message])
     else:
         # MSG: Message shown after trying to change preferences without admin permissions.

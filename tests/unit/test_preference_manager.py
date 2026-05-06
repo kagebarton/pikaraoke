@@ -271,6 +271,7 @@ def test_preference_manager_defaults_exist():
         "browse_results_per_page",
         "show_clock",
         "subtitle_delay",
+        "audio_delay",
         "temp_dir",
         "blocked_processing_words",
         "vocal_volume",
@@ -299,6 +300,7 @@ def test_preference_manager_defaults_types():
     assert isinstance(defaults["limit_user_songs_by"], int)
     assert isinstance(defaults["browse_results_per_page"], int)
     assert isinstance(defaults["subtitle_delay"], (int, float))
+    assert isinstance(defaults["audio_delay"], (int, float))
 
     # Float preferences
     assert isinstance(defaults["volume"], float)
