@@ -22,7 +22,7 @@ def _make_tracker():
     """Create a real PipelineTracker with mocked managers and an event system."""
     events = EventSystem()
     mock_dm = MagicMock()
-    mock_dm.active_download = None
+    mock_dm.active_url = None
     mock_pm = MagicMock()
     mock_pm.get_active_job.return_value = None
     mock_pm.get_active_phase.return_value = None
@@ -535,11 +535,13 @@ class TestOnChangeCallback:
         tracker = _make_tracker()
         tracker._on_change = lambda: calls.append(1)
 
-        tracker._on_download_queued({
-            "title": "Test Song",
-            "video_url": "https://example.com",
-            "user": "Alice",
-        })
+        tracker._on_download_queued(
+            {
+                "title": "Test Song",
+                "video_url": "https://example.com",
+                "user": "Alice",
+            }
+        )
 
         assert len(calls) == 1
         assert len(tracker._items) == 1
@@ -562,24 +564,28 @@ class TestOnChangeCallback:
         """No crash when on_change is None (default)."""
         tracker = _make_tracker()
         # Should not raise
-        tracker._on_download_queued({
-            "title": "Test Song",
-            "video_url": "https://example.com",
-            "user": "Alice",
-        })
+        tracker._on_download_queued(
+            {
+                "title": "Test Song",
+                "video_url": "https://example.com",
+                "user": "Alice",
+            }
+        )
 
     def test_on_change_exception_does_not_crash(self):
         """A failing on_change callback is caught and logged."""
         calls = []
         tracker = _make_tracker()
-        tracker._on_change = lambda: 1 / 0 # Will raise ZeroDivisionError
+        tracker._on_change = lambda: 1 / 0  # Will raise ZeroDivisionError
 
         # Should not raise — the exception is caught
-        tracker._on_download_queued({
-            "title": "Test Song",
-            "video_url": "https://example.com",
-            "user": "Alice",
-        })
+        tracker._on_download_queued(
+            {
+                "title": "Test Song",
+                "video_url": "https://example.com",
+                "user": "Alice",
+            }
+        )
 
         # The item should still be added despite the callback failure
         assert len(tracker._items) == 1

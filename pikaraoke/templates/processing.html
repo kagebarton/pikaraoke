@@ -152,7 +152,6 @@ function progressLabel(item) {
 
   // State key for keyed row updates — includes every field that changes the
   // rendered row so unchanged rows are preserved (avoiding spinner jitter).
-  // download_progress is deliberately excluded since it's no longer rendered.
   // actions array is included so button changes trigger re-renders.
 	var actionsKey = (item.actions || []).sort().join(',');
 	var stateKey = item.download_status + '|' + item.processing_status
@@ -362,13 +361,9 @@ $(document).on('click.processing', '.pipeline-cancel-btn', function(e) {
 // registrations — the SPA re-executes this script each visit.
 if (typeof window.socket !== 'undefined') {
   window.socket.off('pipeline_updated');
-  window.socket.off('download_started');
-  window.socket.off('download_stopped');
   window.socket.on('pipeline_updated', function() {
     fetchStatus();
   });
-  // download_started/stopped are now covered by pipeline_updated,
-  // but keep listeners for other pages that may rely on them.
 }
 
   // Start polling

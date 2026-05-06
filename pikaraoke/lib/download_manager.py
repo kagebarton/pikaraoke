@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
-import re
 import subprocess
-import uuid
 from pathlib import Path
 from queue import Queue
 from threading import Thread
@@ -63,8 +61,8 @@ class DownloadManager:
         self._additional_ytdl_args = additional_ytdl_args
         self._temp_dir = temp_dir
         self.download_queue: Queue = Queue()
-        self.pending_downloads: list[dict] = []  # Shadow queue for visibility
-        self.active_download: dict | None = None
+        self.pending_downloads: list[dict] = []  # Shadow queue for cancellation lookup
+        self.active_url: str | None = None
         self._active_process: subprocess.Popen | None = None  # Stored for cancellation
         self._cancelled_urls: set[str] = set()  # URLs cancelled while pending
         self._worker_thread: Thread | None = None
@@ -154,8 +152,6 @@ class DownloadManager:
             if video_url in self._cancelled_urls:
                 self._cancelled_urls.discard(video_url)
                 q.task_done()
-                if self.download_queue.empty():
-                    self._events.emit("download_stopped")
                 continue
 
             # Remove from shadow queue
@@ -166,17 +162,7 @@ class DownloadManager:
                 self.pending_downloads.pop(0)
 
             self._is_downloading = True
-
-            # Initialize active download state
-            self.active_download = {
-                "title": download_request["title"] or download_request["video_url"],
-                "url": download_request["video_url"],
-                "user": download_request["user"],
-                "progress": 0.0,
-                "status": "starting",
-                "eta": "--:--",
-                "speed": "---",
-            }
+            self.active_url = video_url
 
             try:
                 self._execute_download(
@@ -189,12 +175,8 @@ class DownloadManager:
                 logging.error(f"Error processing download: {e}")
             finally:
                 self._is_downloading = False
-                self.active_download = None
+                self.active_url = None
                 q.task_done()
-
-                # Check if we are done with all downloads
-                if self.download_queue.empty():
-                    self._events.emit("download_stopped")
 
     def _execute_download(
         self,
@@ -231,48 +213,18 @@ class DownloadManager:
         )
         logging.debug("Youtube-dl command: " + " ".join(cmd))
 
-        # Use Popen to capture output in real-time
         process = subprocess.Popen(
             cmd,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            bufsize=1,  # Line buffered
-            universal_newlines=True,
         )
         self._active_process = process
-
-        output_buffer = []
-
-        # Regex to parse progress from yt-dlp stdout
-        # Example: [download]   0.0% of    4.62MiB at  396.66KiB/s ETA 00:12
-        progress_regex = re.compile(
-            r"\[download\]\s+(\d+\.?\d*)%\s+of\s+.*?\s+at\s+([^\s]+)\s+ETA\s+([^\s]+)"
-        )
         video_id = get_youtube_id_from_url(video_url)
 
-        while True:
-            line = process.stdout.readline()
-            if not line and process.poll() is not None:
-                break
-            if line:
-                output_buffer.append(line)
-                match = progress_regex.search(line)
-                if match and self.active_download:
-                    percent = float(match.group(1))
-                    speed = match.group(2)
-                    eta = match.group(3)
-
-                    self.active_download["progress"] = percent
-                    self.active_download["status"] = "downloading"
-                    self.active_download["speed"] = speed
-                    self.active_download["eta"] = eta
-                # Log only non-progress lines to avoid spamming logs, or log everything at debug
-                # logging.debug(line.strip())
-
-        rc = process.poll()
-        output = "".join(output_buffer)
+        output, _stderr = process.communicate()
+        rc = process.returncode
         self._active_process = None
 
         if rc != 0:
@@ -281,20 +233,11 @@ class DownloadManager:
                 "notification", _("Error downloading song: ") + displayed_title, "danger"
             )
             logging.error(f"yt-dlp stderr: {output}")
-            error_data = {
-                "id": str(uuid.uuid4()),
-                "title": displayed_title,
-                "url": video_url,
-                "user": user,
-                "error": output or "Unknown error",
-            }
-            # Emit download_error event for pipeline tracker
-            self._events.emit("download_error", error_data)
+            self._events.emit(
+                "download_error",
+                {"url": video_url, "error": output or "Unknown error"},
+            )
         else:
-            if self.active_download:
-                self.active_download["progress"] = 100
-                self.active_download["status"] = "complete"
-
             if enqueue:
                 # MSG: Message shown after the download is completed and queued
                 self._events.emit(
@@ -338,11 +281,11 @@ class DownloadManager:
 
         Args:
             target_url: The URL the caller believes is currently downloading.
-                If provided and it does not match ``self.active_download['url']``,
+                If provided and it does not match ``self.active_url``,
                 the call is a no-op (the active download has already moved on
                 to a different song and must not be killed).
         """
-        active_url = self.active_download["url"] if self.active_download else None
+        active_url = self.active_url
 
         if target_url is not None and active_url != target_url:
             logging.warning(
@@ -365,14 +308,13 @@ class DownloadManager:
                 pass
             self._active_process = None
 
-        # Clean up partial downloads matching the active video ID
-        if self.active_download:
-            video_id = get_youtube_id_from_url(self.active_download["url"])
+        if active_url:
+            video_id = get_youtube_id_from_url(active_url)
             if video_id:
                 self._cleanup_partial_downloads(video_id)
 
         self._is_downloading = False
-        self.active_download = None
+        self.active_url = None
 
     def cancel_pending_download(self, video_url: str) -> None:
         """Cancel a download that is still in the pending queue."""

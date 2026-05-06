@@ -40,12 +40,11 @@ class PipelineItem:
         self.song_path: str | None = None
         self.url: str = url
         self.user: str = user
-        self.download_status: str = "pending" # pending | active | complete | error
+        self.download_status: str = "pending"  # pending | active | complete | error
         self.processing_status: str = (
-            "waiting" # waiting | pending | active | complete | error | cancelling
+            "waiting"  # waiting | pending | active | complete | error | cancelling
         )
         self.processing_phase: str | None = None
-        self.download_progress: float = 0.0
         self.error_message: str | None = None
         self.cancelling: bool = False
 
@@ -88,15 +87,14 @@ class PipelineTracker:
         self._events.on("song_deleted", self._on_song_deleted)
         self._events.on("pipeline_stage_changed", self._on_pipeline_stage_changed)
 
-    def get_status(
-        self, admin: bool = False, user: str | None = None
-    ) -> list[dict[str, Any]]:
+    def get_status(self, admin: bool = False, user: str | None = None) -> list[dict[str, Any]]:
         """Return enriched status for all pipeline items.
 
-        Derives processing status from ProcessingManager state and merges
-        live download progress from DownloadManager.  Includes an ``actions``
-        list per item so the client doesn't have to re-derive which buttons
-        to show — auth logic lives here, in one place.
+        Derives processing status from ProcessingManager state and flips
+        the active download status by reading DownloadManager.active_url.
+        Includes an ``actions`` list per item so the client doesn't have
+        to re-derive which buttons to show — auth logic lives here, in
+        one place.
 
         Args:
             admin: Whether the requesting user is an admin.
@@ -106,16 +104,12 @@ class PipelineTracker:
             active_job = self._processing_manager.get_active_job()
             active_phase = self._processing_manager.get_active_phase()
             pending_jobs = list(self._processing_manager.pending_jobs)
-            active_download = self._download_manager.active_download
+            active_url = self._download_manager.active_url
 
             results = []
             for item in self._items:
-                # Merge live download progress
-                if active_download and active_download["url"] == item.url:
-                    item.download_progress = active_download.get("progress", 0.0)
+                if active_url == item.url and item.download_status == "pending":
                     item.download_status = "active"
-                elif item.download_status == "pending":
-                    item.download_progress = 0.0
 
                 # Cancelling overrides all other processing status
                 if item.cancelling:
@@ -307,7 +301,6 @@ class PipelineTracker:
                 if path_id and url_id and path_id == url_id:
                     item.song_path = song_path
                     item.download_status = "complete"
-                    item.download_progress = 100.0
                     break
         self._notify_change()
 
@@ -453,7 +446,6 @@ class PipelineTracker:
             "download_status": item.download_status,
             "processing_status": item.processing_status,
             "processing_phase": item.processing_phase,
-            "download_progress": item.download_progress,
             "error_message": item.error_message,
             "actions": actions,
         }

@@ -153,10 +153,9 @@ class TestDownloadManagerExecuteDownload:
 
         mock_build_cmd.return_value = ["yt-dlp", "-o", "/songs/", "url"]
 
-        # Mock Popen process
         mock_process = MagicMock()
-        mock_process.stdout.readline.side_effect = ["Starting download...", ""]
-        mock_process.poll.return_value = 0
+        mock_process.communicate.return_value = ("Starting download...", None)
+        mock_process.returncode = 0
         mock_popen.return_value = mock_process
 
         # Mock find_by_id to return a path
@@ -188,10 +187,9 @@ class TestDownloadManagerExecuteDownload:
         """Test download with enqueue adds to queue."""
         mock_build_cmd.return_value = ["yt-dlp", "url"]
 
-        # Mock Popen process
         mock_process = MagicMock()
-        mock_process.stdout.readline.side_effect = ["Starting download...", ""]
-        mock_process.poll.return_value = 0
+        mock_process.communicate.return_value = ("Starting download...", None)
+        mock_process.returncode = 0
         mock_popen.return_value = mock_process
 
         # Mock find_by_id
@@ -209,11 +207,10 @@ class TestDownloadManagerExecuteDownload:
         )
 
     @patch("flask_babel._", side_effect=lambda x: x)
-    @patch("subprocess.run")
     @patch("subprocess.Popen")
-    @patch("pikaraoke.lib.youtube_dl.build_ytdl_download_command")
+    @patch("pikaraoke.lib.download_manager.build_ytdl_download_command")
     def test_execute_download_failure(
-        self, mock_build_cmd, mock_popen, mock_run, mock_gettext, download_manager, events
+        self, mock_build_cmd, mock_popen, mock_gettext, download_manager, events
     ):
         """Test download failure is handled without retry."""
         notifications = []
@@ -221,10 +218,9 @@ class TestDownloadManagerExecuteDownload:
 
         mock_build_cmd.return_value = ["yt-dlp", "url"]
 
-        # First call (Popen) fails
         mock_process = MagicMock()
-        mock_process.stdout.readline.return_value = ""
-        mock_process.poll.return_value = 1
+        mock_process.communicate.return_value = ("", None)
+        mock_process.returncode = 1
         mock_popen.return_value = mock_process
 
         rc = download_manager._execute_download("url", False, "User", "Title")
@@ -245,10 +241,9 @@ class TestDownloadManagerExecuteDownload:
 
         mock_build_cmd.return_value = ["yt-dlp", "url"]
 
-        # Mock Popen process
         mock_process = MagicMock()
-        mock_process.stdout.readline.side_effect = ["No parseable path in output", ""]
-        mock_process.poll.return_value = 0
+        mock_process.communicate.return_value = ("No parseable path in output", None)
+        mock_process.returncode = 0
         mock_popen.return_value = mock_process
 
         # Mock find_by_id to return None (file not found)
@@ -294,8 +289,8 @@ class TestDownloadManagerSpecialCharacters:
         """Test enqueue works with special characters in filename."""
         mock_build_cmd.return_value = ["yt-dlp", "url"]
         mock_process = MagicMock()
-        mock_process.stdout.readline.side_effect = ["Done", ""]
-        mock_process.poll.return_value = 0
+        mock_process.communicate.return_value = ("Done", None)
+        mock_process.returncode = 0
         mock_popen.return_value = mock_process
 
         song_manager.songs.find_by_id.return_value = file_path
