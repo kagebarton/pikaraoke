@@ -1,16 +1,20 @@
-"""Unit tests for LyricAlignStage — Genius header parsing and conditional SRT write.
+"""Unit tests for LyricAlignStage — Genius header parsing, NW matching, and multi-speaker ASS.
 
-These tests cover the _load_lyrics and _should_write_srt changes introduced
-by the Genius integration plan. The full alignment/transcription path is
-already tested via test_lyric_conversion.py (line-object conversion helpers).
+These tests cover the _load_lyrics, _should_write_srt, speaker assignment,
+and multi-speaker ASS generation introduced by the Genius integration plan.
 """
 
-from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
-from pikaraoke.pipeline.stages.lyric_align import LyricAlignStage
-
+from pikaraoke.pipeline.config import PipelineConfig
+from pikaraoke.pipeline.stages.lyric_align import (
+    LyricAlignStage,
+    _assign_speakers_from_genius,
+    _dominant_speaker_presence,
+    _safe_style_name,
+)
 
 # ---------------------------------------------------------------------------
 # _load_lyrics — Genius header parsing (3-tuple return)
@@ -35,8 +39,7 @@ class TestLoadLyrics:
     def test_srt_returns_srt_format_no_structure(self, stage, tmp_path):
         srt_file = tmp_path / "test.srt"
         srt_file.write_text(
-            "1\n00:00:01,000 --> 00:00:02,000\nHello\n"
-            "2\n00:00:02,000 --> 00:00:03,000\nWorld\n",
+            "1\n00:00:01,000 --> 00:00:02,000\nHello\n" "2\n00:00:02,000 --> 00:00:03,000\nWorld\n",
             encoding="utf-8",
         )
 
@@ -161,3 +164,214 @@ class TestShouldWriteSrt:
 
         # Either existing SRT prevents writing
         assert LyricAlignStage._should_write_srt(song) is False
+
+
+# ---------------------------------------------------------------------------
+# Speaker assignment
+# ---------------------------------------------------------------------------
+
+
+class TestAssignSpeakersFromGenius:
+    def test_assigns_speaker_and_dominant(self):
+        line_objects = [
+            {"text": "hello", "words": [{"word": "hello", "speaker": None}]},
+        ]
+        genius_lines = [
+            {"speaker_label": "Brian", "dominant_speaker": "Brian"},
+        ]
+        _assign_speakers_from_genius(line_objects, genius_lines)
+        assert line_objects[0]["speaker"] == "Brian"
+        assert line_objects[0]["dominant_speaker"] == "Brian"
+        assert line_objects[0]["words"][0]["speaker"] == "Brian"
+        assert line_objects[0]["words"][0]["dominant_speaker"] == "Brian"
+
+    def test_assigns_duet(self):
+        line_objects = [
+            {"text": "hello", "words": [{"word": "hello"}]},
+            {"text": "world", "words": [{"word": "world"}]},
+        ]
+        genius_lines = [
+            {"speaker_label": "Brian & AJ", "dominant_speaker": "Brian"},
+            {"speaker_label": "Nick", "dominant_speaker": "Nick"},
+        ]
+        _assign_speakers_from_genius(line_objects, genius_lines)
+        assert line_objects[0]["speaker"] == "Brian & AJ"
+        assert line_objects[0]["dominant_speaker"] == "Brian"
+        assert line_objects[1]["speaker"] == "Nick"
+        assert line_objects[1]["dominant_speaker"] == "Nick"
+
+
+class TestAssignSpeakersZipsSilently:
+    def test_more_line_objects_than_genius_lines(self):
+        """Extra line_objects past the genius_lines list stay unlabeled."""
+        line_objects = [
+            {"text": "a", "words": [{"word": "a"}]},
+            {"text": "b", "words": [{"word": "b"}]},
+            {"text": "c", "words": [{"word": "c"}]},
+        ]
+        genius_lines = [
+            {"speaker_label": "Brian", "dominant_speaker": "Brian"},
+            {"speaker_label": "AJ", "dominant_speaker": "AJ"},
+        ]
+        # Should not raise
+        _assign_speakers_from_genius(line_objects, genius_lines)
+        assert line_objects[0]["speaker"] == "Brian"
+        assert line_objects[1]["speaker"] == "AJ"
+        # Third line never received a speaker key
+        assert "speaker" not in line_objects[2]
+
+
+class TestDominantSpeakerPresence:
+    def test_single_speaker(self):
+        line_objects = [{"dominant_speaker": "Brian"}]
+        present, has_ensemble = _dominant_speaker_presence(line_objects)
+        assert present == ["Brian"]
+        assert has_ensemble is False
+
+    def test_ensemble(self):
+        line_objects = [{"speaker": None}]
+        present, has_ensemble = _dominant_speaker_presence(line_objects)
+        assert present == []
+        assert has_ensemble is True
+
+    def test_first_appearance_order(self):
+        line_objects = [
+            {"dominant_speaker": "AJ"},
+            {"dominant_speaker": "Brian"},
+            {"dominant_speaker": "AJ"},
+        ]
+        present, has_ensemble = _dominant_speaker_presence(line_objects)
+        assert present == ["AJ", "Brian"]
+        assert has_ensemble is False
+
+
+class TestSafeStyleName:
+    def test_collapses_runs_of_unsafe_chars(self):
+        # " & " (three non-word chars) collapses to one underscore
+        assert _safe_style_name("Brian & AJ") == "Brian_AJ"
+
+    def test_leaves_safe_chars(self):
+        assert _safe_style_name("Brian") == "Brian"
+        assert _safe_style_name("Kevin_AJ") == "Kevin_AJ"
+
+    def test_strips_leading_and_trailing_underscores(self):
+        assert _safe_style_name(" Brian ") == "Brian"
+        assert _safe_style_name("!Brian!") == "Brian"
+
+
+# ---------------------------------------------------------------------------
+# Multi-speaker ASS generation
+# ---------------------------------------------------------------------------
+
+
+class TestGenerateAss:
+    """Tests for _generate_ass with multi-speaker styles."""
+
+    @pytest.fixture
+    def stage(self):
+        return LyricAlignStage(
+            whisper_worker=MagicMock(),
+            config=PipelineConfig(),
+        )
+
+    def test_single_speaker_style(self, stage):
+        # Plain .txt files: line_objects from NW matching don't have
+        # speaker/dominant_speaker keys at all
+        line_objects = [
+            {
+                "text": "Hello",
+                "words": [{"word": "Hello", "start": 0.0, "end": 1.0}],
+            }
+        ]
+        ass = stage._generate_ass(line_objects)
+        assert "Style: Karaoke," in ass
+        assert "Dialogue:" in ass
+
+    def test_multi_speaker_styles(self, stage):
+        line_objects = [
+            {
+                "text": "Brian's line",
+                "words": [{"word": "Hello", "start": 0.0, "end": 1.0}],
+                "speaker": "Brian",
+                "dominant_speaker": "Brian",
+            },
+            {
+                "text": "AJ's line",
+                "words": [{"word": "World", "start": 1.0, "end": 2.0}],
+                "speaker": "AJ",
+                "dominant_speaker": "AJ",
+            },
+        ]
+        ass = stage._generate_ass(line_objects)
+        assert "Style: Karaoke_Brian," in ass
+        assert "Style: Karaoke_AJ," in ass
+        assert "Karaoke_Brian,,0,0,0,," in ass or "Karaoke_AJ,,0,0,0,," in ass
+
+    def test_ensemble_emits_ensemble_style(self, stage):
+        # An explicit speaker=None line triggers Karaoke_ensemble
+        line_objects = [
+            {
+                "text": "Brian's line",
+                "words": [{"word": "Hello", "start": 0.0, "end": 1.0}],
+                "speaker": "Brian",
+                "dominant_speaker": "Brian",
+            },
+            {
+                "text": "All together",
+                "words": [{"word": "Together", "start": 1.0, "end": 2.0}],
+                "speaker": None,
+                "dominant_speaker": None,
+            },
+        ]
+        ass = stage._generate_ass(line_objects)
+        assert "Style: Karaoke_Brian," in ass
+        assert "Style: Karaoke_ensemble," in ass
+
+    def test_solo_genius_emits_single_karaoke_style(self, stage):
+        """A Genius song where genius_singer_mode == 'solo' goes through
+        the same code path as plain .txt — line_objects have no speaker
+        keys, so _generate_ass picks the single 'Karaoke' style.
+        """
+        line_objects = [
+            {
+                "text": "Hello",
+                "words": [{"word": "Hello", "start": 0.0, "end": 1.0}],
+            },
+            {
+                "text": "World",
+                "words": [{"word": "World", "start": 1.0, "end": 2.0}],
+            },
+        ]
+        ass = stage._generate_ass(line_objects)
+        assert "Style: Karaoke," in ass
+        # Multi/ensemble styles must not appear
+        assert "Karaoke_ensemble" not in ass
+        assert "Style: Karaoke_" not in ass
+
+    def test_no_inline_speaker_labels_in_dialogue_text(self, stage):
+        """Speaker info goes to Style assignment only — never into the
+        rendered Dialogue text.
+        """
+        line_objects = [
+            {
+                "text": "Brian's line",
+                "words": [{"word": "Hello", "start": 0.0, "end": 1.0}],
+                "speaker": "Brian",
+                "dominant_speaker": "Brian",
+            },
+            {
+                "text": "AJ's line",
+                "words": [{"word": "World", "start": 1.0, "end": 2.0}],
+                "speaker": "AJ",
+                "dominant_speaker": "AJ",
+            },
+        ]
+        ass = stage._generate_ass(line_objects)
+        for line in ass.splitlines():
+            if not line.startswith("Dialogue:"):
+                continue
+            # The text after the 9th comma is the karaoke text. Speaker
+            # names must never appear there.
+            karaoke_text = line.split(",", 9)[-1]
+            assert "Brian" not in karaoke_text
+            assert "AJ" not in karaoke_text

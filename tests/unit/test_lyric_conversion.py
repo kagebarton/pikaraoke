@@ -16,22 +16,21 @@ import pytest
 
 from pikaraoke.pipeline.workers.whisper_worker import (
     _extract_words,
-    _match_words_to_lines,
     _segments_to_line_objects,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures that mimic stable-ts WhisperResult structure
 # ---------------------------------------------------------------------------
 
 
-def _make_word(word: str, start: float, end: float):
+def _make_word(word: str, start: float, end: float, probability: float = 1.0):
     """Create a mock word object matching stable-ts WhisperResult word shape."""
     w = MagicMock()
     w.word = word
     w.start = start
     w.end = end
+    w.probability = probability
     # Ensure str() gives the word text for debugging
     w.__str__ = lambda self: f"Word({word})"
     return w
@@ -61,16 +60,15 @@ class TestExtractWords:
     """Tests for _extract_words (now in whisper_worker module)."""
 
     def test_single_segment_single_word(self):
-        result = _make_result(
-            [_make_segment("Hello", [_make_word(" Hello ", 0.0, 0.5)])]
-        )
+        result = _make_result([_make_segment("Hello", [_make_word(" Hello ", 0.0, 0.5)])])
         words = _extract_words(result)
         assert len(words) == 1
         assert words[0] == {
             "word": "Hello",
             "start": 0.0,
             "end": 0.5,
-            "is_segment_first": True,
+            "speaker": None,
+            "dominant_speaker": None,
         }
 
     def test_single_segment_multiple_words(self):
@@ -87,8 +85,6 @@ class TestExtractWords:
         )
         words = _extract_words(result)
         assert len(words) == 2
-        assert words[0]["is_segment_first"] is True
-        assert words[1]["is_segment_first"] is False
 
     def test_multiple_segments(self):
         result = _make_result(
@@ -105,8 +101,6 @@ class TestExtractWords:
         )
         words = _extract_words(result)
         assert len(words) == 2
-        assert words[0]["is_segment_first"] is True
-        assert words[1]["is_segment_first"] is True  # first word of second segment
 
     def test_empty_result(self):
         result = _make_result([])
@@ -114,103 +108,48 @@ class TestExtractWords:
         assert words == []
 
     def test_whitespace_stripped(self):
-        result = _make_result(
-            [_make_segment(" Hello ", [_make_word(" Hello ", 0.0, 0.5)])]
-        )
+        result = _make_result([_make_segment(" Hello ", [_make_word(" Hello ", 0.0, 0.5)])])
         words = _extract_words(result)
         assert words[0]["word"] == "Hello"
 
     def test_preserves_float_timestamps(self):
-        result = _make_result(
-            [_make_segment("Hi", [_make_word(" Hi ", 1.234, 5.678)])]
-        )
+        result = _make_result([_make_segment("Hi", [_make_word(" Hi ", 1.234, 5.678)])])
         words = _extract_words(result)
         assert words[0]["start"] == 1.234
         assert words[0]["end"] == 5.678
 
+    def test_drops_low_probability_words(self):
+        """Silent-region hallucinations (prob < 0.0001) are filtered out."""
+        result = _make_result(
+            [
+                _make_segment(
+                    "Hello phantom world",
+                    [
+                        _make_word(" Hello ", 0.0, 0.5, probability=0.95),
+                        _make_word(" phantom ", 0.5, 0.5, probability=0.00005),
+                        _make_word(" world ", 1.0, 1.5, probability=0.85),
+                    ],
+                )
+            ]
+        )
+        words = _extract_words(result)
+        assert [w["word"] for w in words] == ["Hello", "world"]
 
-# ---------------------------------------------------------------------------
-# _match_words_to_lines tests
-# ---------------------------------------------------------------------------
-
-
-class TestMatchWordsToLines:
-    """Tests for _match_words_to_lines (now in whisper_worker module)."""
-
-    def test_one_line_one_word(self):
-        words = [{"word": "Hello", "start": 0.0, "end": 0.5, "is_segment_first": True}]
-        lines = ["Hello"]
-        result = _match_words_to_lines(words, lines)
-        assert len(result) == 1
-        assert result[0]["text"] == "Hello"
-        assert result[0]["start"] == 0.0
-        assert result[0]["end"] == 0.5
-        assert len(result[0]["words"]) == 1
-
-    def test_two_lines(self):
-        words = [
-            {"word": "Hello", "start": 0.0, "end": 0.5, "is_segment_first": True},
-            {"word": "world", "start": 0.5, "end": 1.0, "is_segment_first": False},
-        ]
-        lines = ["Hello", "world"]
-        result = _match_words_to_lines(words, lines)
-        assert len(result) == 2
-        assert result[0]["text"] == "Hello"
-        assert result[0]["start"] == 0.0
-        assert result[0]["end"] == 0.5
-        assert result[1]["text"] == "world"
-        assert result[1]["start"] == 0.5
-        assert result[1]["end"] == 1.0
-
-    def test_multi_word_line(self):
-        words = [
-            {"word": "Hello", "start": 0.0, "end": 0.5, "is_segment_first": True},
-            {"word": "beautiful", "start": 0.5, "end": 1.0, "is_segment_first": False},
-            {"word": "world", "start": 1.0, "end": 1.5, "is_segment_first": False},
-        ]
-        lines = ["Hello beautiful world"]
-        result = _match_words_to_lines(words, lines)
-        assert len(result) == 1
-        assert result[0]["text"] == "Hello beautiful world"
-        assert len(result[0]["words"]) == 3
-        assert result[0]["start"] == 0.0
-        assert result[0]["end"] == 1.5
-
-    def test_mixed_line_lengths(self):
-        words = [
-            {"word": "I", "start": 0.0, "end": 0.2, "is_segment_first": True},
-            {"word": "sing", "start": 0.2, "end": 0.5, "is_segment_first": False},
-            {"word": "a", "start": 0.5, "end": 0.6, "is_segment_first": True},
-            {"word": "song", "start": 0.6, "end": 1.0, "is_segment_first": False},
-        ]
-        lines = ["I sing", "a song"]
-        result = _match_words_to_lines(words, lines)
-        assert len(result) == 2
-        assert result[0]["text"] == "I sing"
-        assert result[0]["start"] == 0.0
-        assert result[0]["end"] == 0.5
-        assert result[1]["text"] == "a song"
-        assert result[1]["start"] == 0.5
-        assert result[1]["end"] == 1.0
-
-    def test_empty_lines_skipped(self):
-        words = [
-            {"word": "Hello", "start": 0.0, "end": 0.5, "is_segment_first": True},
-        ]
-        lines = ["", "Hello", ""]
-        result = _match_words_to_lines(words, lines)
-        assert len(result) == 1
-        assert result[0]["text"] == "Hello"
-
-    def test_no_words_for_line_skips(self):
-        """A line with zero words (e.g. all words already consumed) is skipped."""
-        words = [
-            {"word": "Hello", "start": 0.0, "end": 0.5, "is_segment_first": True},
-        ]
-        lines = ["Hello", "orphan line"]
-        result = _match_words_to_lines(words, lines)
-        assert len(result) == 1
-        assert result[0]["text"] == "Hello"
+    def test_keeps_words_without_probability_attribute(self):
+        """Words missing a probability attr (older mocks / formats) are kept."""
+        result = MagicMock()
+        seg = MagicMock()
+        # Build a word that does NOT have a `probability` attribute set.
+        # Using spec= prevents MagicMock from auto-generating one.
+        w = MagicMock(spec=["word", "start", "end"])
+        w.word = " Hello "
+        w.start = 0.0
+        w.end = 0.5
+        seg.words = [w]
+        result.segments = [seg]
+        words = _extract_words(result)
+        assert len(words) == 1
+        assert words[0]["word"] == "Hello"
 
 
 # ---------------------------------------------------------------------------
@@ -239,8 +178,6 @@ class TestSegmentsToLineObjects:
         assert line_objects[0]["start"] == 0.0
         assert line_objects[0]["end"] == 1.0
         assert len(line_objects[0]["words"]) == 2
-        assert line_objects[0]["words"][0]["is_segment_first"] is True
-        assert line_objects[0]["words"][1]["is_segment_first"] is False
 
     def test_multiple_segments(self):
         result = _make_result(
@@ -259,9 +196,6 @@ class TestSegmentsToLineObjects:
         assert len(line_objects) == 2
         assert line_objects[0]["text"] == "Hello"
         assert line_objects[1]["text"] == "World"
-        # is_segment_first is True for the first word of each segment
-        assert line_objects[0]["words"][0]["is_segment_first"] is True
-        assert line_objects[1]["words"][0]["is_segment_first"] is True
 
     def test_segment_with_no_words_skipped(self):
         result = _make_result(
@@ -355,19 +289,6 @@ class TestLineObjectContract:
             ]
         )
         line_objects = _segments_to_line_objects(result)
-        serialized = json.dumps(line_objects)
-        deserialized = json.loads(serialized)
-        assert deserialized == line_objects
-
-    def test_match_words_to_lines_produces_json_serializable_output(self):
-        import json
-
-        words = [
-            {"word": "Hello", "start": 0.0, "end": 0.5, "is_segment_first": True},
-            {"word": "world", "start": 0.5, "end": 1.0, "is_segment_first": False},
-        ]
-        lines = ["Hello", "world"]
-        line_objects = _match_words_to_lines(words, lines)
         serialized = json.dumps(line_objects)
         deserialized = json.loads(serialized)
         assert deserialized == line_objects

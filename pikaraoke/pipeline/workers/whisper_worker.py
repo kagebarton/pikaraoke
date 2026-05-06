@@ -7,9 +7,11 @@ stream) and enables auto-restart on failure.
 The model is loaded once and stays loaded across jobs. If alignment is
 cancelled, the exception unwinds cleanly and the model weights survive.
 
-Conversion helpers (``_extract_words``, ``_match_words_to_lines``,
-``_segments_to_line_objects``) live here so they are available to the
-subprocess entry point without importing from the stage module.
+Conversion helpers (``_extract_words``, ``_segments_to_line_objects``)
+live here so they are available to the subprocess entry point without
+importing from the stage module. Word-to-line matching for alignment
+mode is the caller's responsibility — see
+``pikaraoke.lib.word_alignment.match_words_to_lines``.
 
 PTY routing: when ``pty_slave_path`` is provided, the worker opens
 that PTY device and redirects stdout/stderr to it via fd-level dup2 at
@@ -42,6 +44,7 @@ from multiprocessing.connection import Connection
 from pathlib import Path
 from typing import Optional
 
+from pikaraoke.lib.word_alignment import _MIN_WORD_PROBABILITY
 from pikaraoke.pipeline.config import WhisperModelConfig
 from pikaraoke.pipeline.workers._ipc import (
     WORKER_CONTEXT,
@@ -92,53 +95,42 @@ class AlignmentCancelledError(Exception):
 
 
 def _extract_words(result) -> list[dict]:
-    """Flatten WhisperResult into [{word, start, end, is_segment_first}, ...].
+    """Flatten WhisperResult into [{word, start, end, speaker, dominant_speaker}, ...].
 
-    ``is_segment_first`` is True for the first word of each segment —
-    used by the ASS generator to apply first-word nudge timing.
-    Computed from the *post-regroup* segment boundaries so that the
-    nudge reflects the final segmentation used in the ASS/SRT output.
+    Drops words with ``probability < _MIN_WORD_PROBABILITY``. These are
+    silent-region hallucinations: stable-ts emits them when forced to
+    transcribe an unintelligible region, clustered at a single
+    zero-duration timestamp. Letting the matcher anchor to them collapses
+    whole lines to that timestamp.
+
+    Each word dict is initialized with ``speaker: None`` and
+    ``dominant_speaker: None`` so downstream code can rely on a uniform
+    shape before speaker assignment runs.
     """
     all_words = []
+    dropped = 0
     for segment in result.segments:
-        for i, word in enumerate(segment.words):
+        for word in segment.words:
+            prob = getattr(word, "probability", None)
+            if prob is not None and prob < _MIN_WORD_PROBABILITY:
+                dropped += 1
+                continue
             all_words.append(
                 {
                     "word": word.word.strip(),
                     "start": word.start,
                     "end": word.end,
-                    "is_segment_first": i == 0,
+                    "speaker": None,
+                    "dominant_speaker": None,
                 }
             )
+    if dropped:
+        logger.info(
+            "Dropped %d low-probability whisper words (< %.4f)",
+            dropped,
+            _MIN_WORD_PROBABILITY,
+        )
     return all_words
-
-
-def _match_words_to_lines(words: list[dict], lines: list[str]) -> list[dict]:
-    """Assign aligned words to lyrics lines by count.
-
-    Count-based pairing: assumes the lyrics file has the same word
-    count and order as what stable-ts aligned.
-    """
-    line_objects = []
-    word_index = 0
-
-    for line in lines:
-        line_word_count = len(line.split())
-        line_words = words[word_index : word_index + line_word_count]
-        word_index += line_word_count
-
-        if not line_words:
-            continue
-
-        line_obj = {
-            "text": line,
-            "words": line_words,
-            "start": line_words[0]["start"],
-            "end": line_words[-1]["end"],
-        }
-        line_objects.append(line_obj)
-
-    return line_objects
 
 
 def _segments_to_line_objects(result) -> list[dict]:
@@ -146,6 +138,9 @@ def _segments_to_line_objects(result) -> list[dict]:
 
     Each segment becomes one subtitle line; its words are used for karaoke
     timing. Segments with no words are skipped.
+
+    In transcription mode, there are no Genius headers to assign speakers
+    from, so speaker/dominant_speaker remain None (single-style ASS).
     """
     line_objects = []
     for segment in result.segments:
@@ -156,9 +151,10 @@ def _segments_to_line_objects(result) -> list[dict]:
                 "word": w.word.strip(),
                 "start": w.start,
                 "end": w.end,
-                "is_segment_first": i == 0,
+                "speaker": None,
+                "dominant_speaker": None,
             }
-            for i, w in enumerate(segment.words)
+            for w in segment.words
         ]
         line_objects.append(
             {
@@ -332,11 +328,13 @@ class WhisperWorker:
         lyrics_text: str,
         cancel_event: Optional[threading.Event] = None,
     ) -> list[dict]:
-        """Run align() then refine(), returning line_objects.
+        """Run align() then refine(), returning a flat whisper word list.
 
         Sends job to subprocess, blocks for result.
 
-        Returns: list[LineObject] — JSON-serializable dicts.
+        Returns: list[dict] — flat whisper words, JSON-serializable.
+        The caller (LyricAlignStage) is responsible for matching words
+        to lyric lines via Needleman-Wunsch.
 
         Raises:
             AlignmentCancelledError: If either align or refine was cancelled.
@@ -536,9 +534,7 @@ def _worker_main(
     # traceback to a known log file before the subprocess dies. The PTY
     # closes too quickly to read the error otherwise.
     try:
-        _whisper_worker_main_inner(
-            job_recv, result_send, cancel_recv, config_dict, log_level
-        )
+        _whisper_worker_main_inner(job_recv, result_send, cancel_recv, config_dict, log_level)
     except BaseException:
         import traceback
 
@@ -612,7 +608,7 @@ def _whisper_worker_main_inner(
             try:
                 if kind == "align_refine":
                     _, vocal_path, lyrics_text = item
-                    line_objects = _do_align_refine(
+                    words = _do_align_refine(
                         model,
                         encoder_module,
                         vocal_path,
@@ -621,7 +617,7 @@ def _whisper_worker_main_inner(
                         config,
                         worker_log,
                     )
-                    result_send.send(("ok", line_objects))
+                    result_send.send(("ok", words))
                 elif kind == "transcribe_refine":
                     _, vocal_path = item
                     line_objects = _do_transcribe_refine(
@@ -697,11 +693,12 @@ def _do_align_refine(
     config: WhisperModelConfig,
     worker_log: logging.Logger,
 ) -> list[dict]:
-    """Run align() then refine() in the subprocess, returning line_objects.
+    """Run align() then refine() in the subprocess, returning a flat word list.
 
     Registers a fresh forward pre-hook before each model call.
-    Converts the refined WhisperResult into line_objects via
-    _match_words_to_lines.
+    Returns the refined WhisperResult flattened by _extract_words; the
+    caller (LyricAlignStage) runs Needleman-Wunsch matching to lyric
+    lines and any speaker assignment.
     """
     align_kwargs = dict(
         language=config.language,
@@ -766,10 +763,8 @@ def _do_align_refine(
         except Exception:
             pass
 
-    # --- convert to line_objects ---
-    words = _extract_words(refined)
-    lyric_lines = [line.strip() for line in lyrics_text.split("\n") if line.strip()]
-    return _match_words_to_lines(words, lyric_lines)
+    # --- convert to flat words (caller runs NW matching + speaker assignment) ---
+    return _extract_words(refined)
 
 
 def _do_transcribe_refine(
@@ -782,9 +777,9 @@ def _do_transcribe_refine(
 ) -> list[dict]:
     """Run transcribe() then refine() in the subprocess, returning line_objects.
 
-    If config.regroup is set, regroups before refine.
-    Converts the refined WhisperResult into line_objects via
-    _segments_to_line_objects.
+    If config.regroup is set, regroups before refine. Converts the refined
+    WhisperResult into line_objects via _segments_to_line_objects (one
+    segment per line).
     """
     transcribe_kwargs = dict(
         language=config.language,

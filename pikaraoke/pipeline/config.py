@@ -14,13 +14,13 @@ class WhisperModelConfig:
     # --- Language / VAD ---
     language: str = "en"
     vad: bool = True
-    vad_threshold: float = 0.1        # lower = more sensitive; 0.1 catches soft vocals
+    vad_threshold: float = 0.1  # lower = more sensitive; 0.1 catches soft vocals
 
     # --- Silence handling ---
     # False: preserve timing in quiet regions (breathing, held pauses between phrases).
     # On a pre-separated vocal stem there is no background noise to suppress.
     suppress_silence: bool = False
-    suppress_word_ts: bool = False     # keep word-level timestamps in quiet regions
+    suppress_word_ts: bool = False  # keep word-level timestamps in quiet regions
 
     # --- Frequency filtering ---
     # True: restrict mel features to the human vocal range (~85–3000 Hz).
@@ -28,21 +28,21 @@ class WhisperModelConfig:
     only_voice_freq: bool = True
 
     # --- Transcription decoding ---
-    temperature: float = 0.0          # 0 = greedy/deterministic; best for alignment accuracy
-    beam_size: int = 5                 # beam search width for transcription
+    temperature: float = 0.0  # 0 = greedy/deterministic; best for alignment accuracy
+    beam_size: int = 5  # beam search width for transcription
     condition_on_previous_text: bool = False  # False prevents hallucination drift in long songs
-    initial_prompt: str = ""           # optional text hint to guide transcription style/vocab
+    initial_prompt: str = ""  # optional text hint to guide transcription style/vocab
 
     # --- Word duration floor ---
     # 0.05 s allows short syllables in fast lyrics (default stable-ts is 0.1 s).
     min_word_dur: float = 0.025
 
     # --- Refinement ---
-    refine_steps: str = "se"          # 's' = refine starts, 'e' = ends, 'se' = both
+    refine_steps: str = "se"  # 's' = refine starts, 'e' = ends, 'se' = both
     refine_word_level: bool = True
 
     # --- Regrouping (transcription mode only) ---
-    regroup: str = ""                  # stable-ts regroup expression; empty = no regrouping
+    regroup: str = ""  # stable-ts regroup expression; empty = no regrouping
 
 
 @dataclass
@@ -78,9 +78,23 @@ class PipelineConfig:
     # --- Karaoke timing (centiseconds) ---
     line_lead_in_cs: int = 80
     line_lead_out_cs: int = 20
-    first_word_nudge_cs: int = 0
+
+    # --- Speaker diarization colors palette ---
+    # Per-speaker colors for multi-speaker karaoke ASS output.
+    # Index 0 → first dominant_speaker seen, etc.
+    # Format: &HAABBGGRR& (8 hex digits, alpha + reversed RGB, trailing &).
+    speaker_colors: list = field(
+        default_factory=lambda: [
+            "&H00FFFF00&",  # 0 — cyan
+            "&H00B469FF&",  # 1 — pink
+            "&H0000FF00&",  # 2 — green
+            "&H000080FF&",  # 3 — orange
+            "&H00FA82FA&",  # 4 — lavender
+            "&H000000FF&",  # 5 — red
+        ]
+    )
+    ensemble_color: str = "&H0000D7FF&"  # goldenrod for unlabeled lines
 
     # --- FFmpeg transcoding ---
     aac_quality: str = "2"  # ≈ 128 kbps VBR AAC
     ffmpeg_threads: str = "4"
-

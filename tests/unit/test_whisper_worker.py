@@ -20,7 +20,6 @@ from pikaraoke.pipeline.workers.whisper_worker import (
     AlignmentCancelledError,
     WhisperWorker,
     _extract_words,
-    _match_words_to_lines,
     _segments_to_line_objects,
 )
 
@@ -439,9 +438,9 @@ class TestExtractWords:
         """Build a mock WhisperResult with segments and words."""
         result = MagicMock()
 
-        word1 = MagicMock(word=" Hello", start=0.0, end=0.5)
-        word2 = MagicMock(word=" world", start=0.5, end=1.0)
-        word3 = MagicMock(word=" foo", start=1.0, end=1.5)
+        word1 = MagicMock(word=" Hello", start=0.0, end=0.5, probability=0.9)
+        word2 = MagicMock(word=" world", start=0.5, end=1.0, probability=0.9)
+        word3 = MagicMock(word=" foo", start=1.0, end=1.5, probability=0.9)
 
         seg1 = MagicMock()
         seg1.words = [word1, word2]
@@ -460,45 +459,36 @@ class TestExtractWords:
         assert words[0]["word"] == "Hello"
         assert words[1]["word"] == "world"
 
-    def test_segment_first_flag(self, mock_result):
+    def test_drops_low_probability(self):
+        """Silent-region hallucinations (prob < 0.0001) get filtered."""
+        good = MagicMock(word=" real", start=0.0, end=0.5, probability=0.85)
+        phantom = MagicMock(word=" ghost", start=0.5, end=0.5, probability=0.00005)
+        seg = MagicMock()
+        seg.words = [good, phantom]
+        result = MagicMock()
+        result.segments = [seg]
+        words = _extract_words(result)
+        assert [w["word"] for w in words] == ["real"]
+
+
+class TestExtractWordsSpeakerFields:
+    """Tests for speaker/dominant_speaker initialization in _extract_words."""
+
+    @pytest.fixture
+    def mock_result(self):
+        result = MagicMock()
+        word1 = MagicMock(word=" Hello", start=0.0, end=0.5, probability=0.9)
+        word2 = MagicMock(word=" world", start=0.5, end=1.0, probability=0.9)
+        seg = MagicMock()
+        seg.words = [word1, word2]
+        result.segments = [seg]
+        return result
+
+    def test_initializes_speaker_to_none(self, mock_result):
         words = _extract_words(mock_result)
-        assert words[0]["is_segment_first"] is True
-        assert words[1]["is_segment_first"] is False
-        assert words[2]["is_segment_first"] is True
-
-
-class TestMatchWordsToLines:
-    def test_basic_count_match(self):
-        words = [
-            {"word": "Hello", "start": 0.0, "end": 0.5, "is_segment_first": True},
-            {"word": "world", "start": 0.5, "end": 1.0, "is_segment_first": False},
-        ]
-        lines = ["Hello world"]
-        result = _match_words_to_lines(words, lines)
-        assert len(result) == 1
-        assert result[0]["text"] == "Hello world"
-        assert result[0]["start"] == 0.0
-        assert result[0]["end"] == 1.0
-
-    def test_multiline(self):
-        words = [
-            {"word": "A", "start": 0.0, "end": 0.5, "is_segment_first": True},
-            {"word": "B", "start": 0.5, "end": 1.0, "is_segment_first": False},
-            {"word": "C", "start": 1.0, "end": 1.5, "is_segment_first": True},
-        ]
-        lines = ["A B", "C"]
-        result = _match_words_to_lines(words, lines)
-        assert len(result) == 2
-        assert result[0]["text"] == "A B"
-        assert result[1]["text"] == "C"
-
-    def test_empty_lines_skipped(self):
-        words = [
-            {"word": "X", "start": 0.0, "end": 1.0, "is_segment_first": True},
-        ]
-        lines = ["", "X", ""]
-        result = _match_words_to_lines(words, lines)
-        assert len(result) == 1
+        for w in words:
+            assert w["speaker"] is None
+            assert w["dominant_speaker"] is None
 
 
 class TestSegmentsToLineObjects:
@@ -525,3 +515,15 @@ class TestSegmentsToLineObjects:
         seg.words = []
         result.segments = [seg]
         assert _segments_to_line_objects(result) == []
+
+    def test_initializes_speaker_fields(self):
+        """Transcription mode words get speaker=None, dominant_speaker=None."""
+        result = MagicMock()
+        word1 = MagicMock(word=" Hello", start=0.0, end=0.5)
+        seg = MagicMock()
+        seg.text = " Hello "
+        seg.words = [word1]
+        result.segments = [seg]
+        line_objects = _segments_to_line_objects(result)
+        assert line_objects[0]["words"][0]["speaker"] is None
+        assert line_objects[0]["words"][0]["dominant_speaker"] is None
