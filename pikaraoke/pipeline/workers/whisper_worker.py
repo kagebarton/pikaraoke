@@ -638,7 +638,6 @@ def _whisper_worker_main_inner(
             except _CancelledInsideEncoder:
                 worker_log.info("Cancelled mid-encoder; model still loaded")
                 _terminate_orphaned_audioloaders()
-                _clear_gpu_state()
                 result_send.send(("cancelled",))
             except oom_exc_types as e:
                 # Same posture as stem_worker: report and exit.
@@ -672,6 +671,11 @@ def _whisper_worker_main_inner(
                 worker_log.exception(f"Whisper {kind} failed")
                 result_send.send(("error", str(e)))
             finally:
+                # Free PyTorch's CUDA cache after every job — success,
+                # cancellation, or error — so the next inference starts
+                # with maximal free GPU memory. CTranslate2 owns its own
+                # memory; this only releases the PyTorch-side cache.
+                _clear_gpu_state()
                 drain_pipe(cancel_recv)
     finally:
         del model
