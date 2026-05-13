@@ -369,6 +369,7 @@ class ProcessingManager:
                 self._events.emit("processing_complete", song_path)
                 return
 
+        logging.info(f"Processing started: {Path(song_path).name}")
         token = self._orchestrator.run_one_async(Path(song_path))
         with self._state_lock:
             self._active = _ActiveJob(song_path=song_path, cancel_token=token)

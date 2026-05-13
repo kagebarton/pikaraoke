@@ -2,6 +2,7 @@
 
 import logging
 import os
+import re
 import sys
 from threading import Thread
 from urllib.parse import quote
@@ -47,11 +48,9 @@ class _NoGetFilter(logging.Filter):
 
     def filter(self, record: logging.LogRecord) -> bool:
         msg = record.getMessage()
-        return (
-            "GET" not in msg
-            and not ("POST" in msg and "/socket.io/" in msg)
-            and not ("POST" in msg and "/download" in msg)
-            and not ("POST" in msg and "/cancel" in msg)
+        return not (
+            ("GET " in msg or "POST " in msg)
+            and re.search(r'" [23]\d\d ', msg)  # only suppress 2xx/3xx
         )
 
 
