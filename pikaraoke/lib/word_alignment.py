@@ -30,14 +30,6 @@ assert _MAX_MATCH <= -(
     _GAP_LYRIC + _GAP_WHISPER
 ), "Single match score must not exceed gap-pair cost"
 
-# Words with probability below this threshold are treated as Whisper
-# hallucinations — they appear when the model is forced to emit tokens
-# for a silent/unintelligible region and clusters them at a single
-# zero-duration timestamp. Letting NW match them collapses whole lines
-# to that timestamp. Real low-confidence words sit around 0.05+; the
-# phantom cluster is in the 1e-5 to 1e-3 range.
-_MIN_WORD_PROBABILITY = 0.0001
-
 # ---------------------------------------------------------------------------
 # Normalization
 # ---------------------------------------------------------------------------

@@ -61,7 +61,7 @@ class TestExtractWords:
 
     def test_single_segment_single_word(self):
         result = _make_result([_make_segment("Hello", [_make_word(" Hello ", 0.0, 0.5)])])
-        words = _extract_words(result)
+        words = _extract_words(result, min_word_probability=0.0001)
         assert len(words) == 1
         assert words[0] == {
             "word": "Hello",
@@ -83,7 +83,7 @@ class TestExtractWords:
                 )
             ]
         )
-        words = _extract_words(result)
+        words = _extract_words(result, min_word_probability=0.0001)
         assert len(words) == 2
 
     def test_multiple_segments(self):
@@ -99,22 +99,22 @@ class TestExtractWords:
                 ),
             ]
         )
-        words = _extract_words(result)
+        words = _extract_words(result, min_word_probability=0.0001)
         assert len(words) == 2
 
     def test_empty_result(self):
         result = _make_result([])
-        words = _extract_words(result)
+        words = _extract_words(result, min_word_probability=0.0001)
         assert words == []
 
     def test_whitespace_stripped(self):
         result = _make_result([_make_segment(" Hello ", [_make_word(" Hello ", 0.0, 0.5)])])
-        words = _extract_words(result)
+        words = _extract_words(result, min_word_probability=0.0001)
         assert words[0]["word"] == "Hello"
 
     def test_preserves_float_timestamps(self):
         result = _make_result([_make_segment("Hi", [_make_word(" Hi ", 1.234, 5.678)])])
-        words = _extract_words(result)
+        words = _extract_words(result, min_word_probability=0.0001)
         assert words[0]["start"] == 1.234
         assert words[0]["end"] == 5.678
 
@@ -132,7 +132,7 @@ class TestExtractWords:
                 )
             ]
         )
-        words = _extract_words(result)
+        words = _extract_words(result, min_word_probability=0.0001)
         assert [w["word"] for w in words] == ["Hello", "world"]
 
     def test_keeps_words_without_probability_attribute(self):
@@ -147,7 +147,7 @@ class TestExtractWords:
         w.end = 0.5
         seg.words = [w]
         result.segments = [seg]
-        words = _extract_words(result)
+        words = _extract_words(result, min_word_probability=0.0001)
         assert len(words) == 1
         assert words[0]["word"] == "Hello"
 
@@ -268,7 +268,7 @@ class TestLineObjectContract:
                 )
             ]
         )
-        words = _extract_words(result)
+        words = _extract_words(result, min_word_probability=0.0001)
         # Must not raise
         serialized = json.dumps(words)
         deserialized = json.loads(serialized)

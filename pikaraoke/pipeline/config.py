@@ -3,46 +3,172 @@ from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _MODELS_DIR = str(_REPO_ROOT / "models")
+_DEFAULT_MODEL = str(_REPO_ROOT / "models" / "large-v3-turbo.pt")
+
+
+@dataclass
+class LoadModelKwargs:
+    """Splatted into ``stable_whisper.load_model(model_path, **rest)``.
+
+    ``model_path`` is consumed positionally; everything else flows in
+    as a kwarg.
+    """
+
+    model_path: str = _DEFAULT_MODEL
+    device: str = "auto"  # 'auto' → 'cuda' if available else 'cpu'
+
+
+@dataclass
+class AlignKwargs:
+    """Splatted into ``model.align(audio, text, **kwargs)`` — walk path.
+
+    Walk mode uses a two-pointer matcher with gap interpolation, so
+    we maximize anchor words (low ``min_word_dur``) and trust the
+    matcher to interpolate between them.
+    """
+
+    language: str = "en"
+
+    # Silero VAD pre-pass: gates whisper to voiced regions only.
+    vad: bool = True
+    vad_threshold: float = 0.05  # lower = more sensitive
+
+    # Suppress timestamps in silent regions.
+    suppress_silence: bool = True
+    suppress_word_ts: bool = True
+
+    # Restrict mel features to the human vocal range (~85-3000 Hz).
+    only_voice_freq: bool = True
+
+    # Word duration floor / ceiling. None = stable-ts default.
+    min_word_dur: float = 0.1  # more anchor words for walk matcher
+    max_word_dur: float | None = 5.0  # trust walk matcher interpolation
+
+    # Drop zero-duration words instead of leaving 0-cs entries.
+    remove_instant_words: bool = True
+
+    # Treat each '\n' in alignment text as a segment boundary.
+    original_split: bool = False
+
+    # Abort alignment if zero-duration-word fraction exceeds this.
+    failure_threshold: float | None = None
+
+    # Skip non-speech regions (relies on VAD/suppress_silence accuracy).
+    nonspeech_skip: float | None = None
+
+    # Max tokens aligned per pass. Higher reduces misalignment risk.
+    # None → stable-ts default (100).
+    token_step: int | None = 150
+
+
+@dataclass
+class TranscribeKwargs:
+    """Splatted into ``model.transcribe(audio, **kwargs)`` — transcribe path.
+
+    No lyrics are supplied. Segment-level filters are relaxed because
+    singing has lower per-token logprobs and higher compression ratios
+    (chorus repetition) than speech, so speech-tuned defaults reject
+    valid content.
+    """
+
+    language: str = "en"
+
+    vad: bool = True
+    vad_threshold: float = 0.05
+
+    suppress_silence: bool = True
+    suppress_word_ts: bool = True
+
+    only_voice_freq: bool = True
+
+    min_word_dur: float = 0.1
+
+    word_timestamps: bool = True
+
+    # Decoding
+    temperature: float = 0.0
+    beam_size: int = 5
+    patience: float | None = 1.0
+    length_penalty: float | None = 1.0
+
+    # Whisper segment-level filters — relaxed for sung vocals.
+    no_speech_threshold: float | None = 0.3  # was 0.6 — keep "uncertain" segments
+    logprob_threshold: float | None = None  # was -1.0 — disable; trips on singing
+    compression_ratio_threshold: float | None = 3.0  # was 2.4 — allow repeat-heavy choruses
+
+    # False avoids hallucination/skip cascades when one segment goes wrong.
+    condition_on_previous_text: bool = False
+
+    # Optional text hint to guide style/vocab.
+    initial_prompt: str | None = None
+
+
+@dataclass
+class RefineKwargs:
+    """Splatted into ``model.refine(audio, result, **kwargs)`` — shared by both paths."""
+
+    steps: str = "se"  # 's' = starts, 'e' = ends, 'se' = both
+    word_level: bool = True
+
+
+@dataclass
+class PostProcessKwargs:
+    """``WhisperResult`` post-processing applied after refine().
+
+    Each field controls a separate call on the result object — these
+    are NOT splatted into one method:
+      * ``adjust_gaps_threshold`` → ``result.adjust_gaps(duration_threshold=)``
+      * ``merge_by_gap_min``      → ``result.merge_by_gap(min_gap=)``
+      * ``min_word_probability``  → filter inside ``_extract_words``
+
+    Used as two independent instances on ``WhisperModelConfig`` —
+    ``align_post_process`` and ``transcribe_post_process`` — so each
+    path can tune the thresholds independently.
+    """
+
+    # Word probability floor used by _extract_words. Words below this
+    # are silent-region hallucinations clustered at zero-duration
+    # timestamps. 0 disables the filter.
+    min_word_probability: float = 0.0001
+
+    # Merge words closer than this. None disables.
+    adjust_gaps_threshold: float | None = None
+
+    # Merge tiny adjacent segments. None disables.
+    merge_by_gap_min: float | None = None
+
+
+# Stable-ts regroup expression for the transcribe path.
+# Methods chained with "_"; args follow "=". Shortcuts:
+#   cm = clamp_max, sp = split_by_punctuation, sg = split_by_gap,
+#   mg = merge_by_gap (min_gap+max_words).
+_DEFAULT_REGROUP = "cm_sp=.* /,/?/!/。_sg=.3_mg=.2+5"
 
 
 @dataclass
 class WhisperModelConfig:
-    # --- Model loading ---
-    model_path: str = str(_REPO_ROOT / "models" / "large-v3-turbo.pt")
-    device: str = "auto"
+    """Top-level whisper config — one section per stable-ts call.
 
-    # --- Language / VAD ---
-    language: str = "en"
-    vad: bool = True
-    vad_threshold: float = 0.1  # lower = more sensitive; 0.1 catches soft vocals
+    All defaults are baked into the section dataclasses. Instantiating
+    ``WhisperModelConfig()`` produces a fully-tuned config — the walk
+    path reads ``align``, the transcribe path reads ``transcribe`` and
+    ``regroup``, both paths share ``load_model`` and ``refine``, and
+    each path has its own post-process section.
 
-    # --- Silence handling ---
-    # False: preserve timing in quiet regions (breathing, held pauses between phrases).
-    # On a pre-separated vocal stem there is no background noise to suppress.
-    suppress_silence: bool = False
-    suppress_word_ts: bool = False  # keep word-level timestamps in quiet regions
+    To tune a value, edit the default on the relevant section dataclass.
+    To add a new stable-ts kwarg, add a field to the matching section —
+    no worker edit required.
+    """
 
-    # --- Frequency filtering ---
-    # True: restrict mel features to the human vocal range (~85–3000 Hz).
-    # Always beneficial on a vocal stem — removes any residual low-frequency bleed.
-    only_voice_freq: bool = True
+    load_model: LoadModelKwargs = field(default_factory=LoadModelKwargs)
+    align: AlignKwargs = field(default_factory=AlignKwargs)
+    transcribe: TranscribeKwargs = field(default_factory=TranscribeKwargs)
+    refine: RefineKwargs = field(default_factory=RefineKwargs)
+    align_post_process: PostProcessKwargs = field(default_factory=PostProcessKwargs)
+    transcribe_post_process: PostProcessKwargs = field(default_factory=PostProcessKwargs)
 
-    # --- Transcription decoding ---
-    temperature: float = 0.0  # 0 = greedy/deterministic; best for alignment accuracy
-    beam_size: int = 5  # beam search width for transcription
-    condition_on_previous_text: bool = False  # False prevents hallucination drift in long songs
-    initial_prompt: str = ""  # optional text hint to guide transcription style/vocab
-
-    # --- Word duration floor ---
-    # 0.05 s allows short syllables in fast lyrics (default stable-ts is 0.1 s).
-    min_word_dur: float = 0.025
-
-    # --- Refinement ---
-    refine_steps: str = "se"  # 's' = refine starts, 'e' = ends, 'se' = both
-    refine_word_level: bool = True
-
-    # --- Regrouping (transcription mode only) ---
-    regroup: str = ""  # stable-ts regroup expression; empty = no regrouping
+    # Used by the transcribe path only; ignored by the walk path.
+    regroup: str = _DEFAULT_REGROUP
 
 
 @dataclass

@@ -44,8 +44,14 @@ from multiprocessing.connection import Connection
 from pathlib import Path
 from typing import Optional
 
-from pikaraoke.lib.word_alignment import _MIN_WORD_PROBABILITY
-from pikaraoke.pipeline.config import WhisperModelConfig
+from pikaraoke.pipeline.config import (
+    AlignKwargs,
+    LoadModelKwargs,
+    PostProcessKwargs,
+    RefineKwargs,
+    TranscribeKwargs,
+    WhisperModelConfig,
+)
 from pikaraoke.pipeline.workers._ipc import (
     WORKER_CONTEXT,
     WorkerDiedError,
@@ -85,6 +91,46 @@ class AlignmentCancelledError(Exception):
 
 
 # ============================================================================
+# Config helpers
+# ============================================================================
+
+
+def _splat(section) -> dict:
+    """Return section's fields as kwargs, dropping None values so
+    stable-ts defaults apply for unset options."""
+    return {k: v for k, v in asdict(section).items() if v is not None}
+
+
+def _rebuild_config(d: dict) -> WhisperModelConfig:
+    """Reconstruct WhisperModelConfig from its asdict() form.
+
+    asdict() flattens nested dataclasses to nested dicts; this rebuilds
+    each section back into its dataclass so attribute access works in
+    the subprocess.
+    """
+    return WhisperModelConfig(
+        load_model=LoadModelKwargs(**d["load_model"]),
+        align=AlignKwargs(**d["align"]),
+        transcribe=TranscribeKwargs(**d["transcribe"]),
+        refine=RefineKwargs(**d["refine"]),
+        align_post_process=PostProcessKwargs(**d["align_post_process"]),
+        transcribe_post_process=PostProcessKwargs(**d["transcribe_post_process"]),
+        regroup=d["regroup"],
+    )
+
+
+def _apply_post_process(result, pp: PostProcessKwargs) -> None:
+    """Apply WhisperResult post-processing steps in-place.
+
+    Each field controls a separate stable-ts call; None disables.
+    """
+    if pp.adjust_gaps_threshold is not None:
+        result.adjust_gaps(duration_threshold=pp.adjust_gaps_threshold)
+    if pp.merge_by_gap_min is not None:
+        result.merge_by_gap(min_gap=pp.merge_by_gap_min)
+
+
+# ============================================================================
 # Conversion helpers: WhisperResult → line_objects (JSON-serializable)
 # ============================================================================
 #
@@ -94,14 +140,14 @@ class AlignmentCancelledError(Exception):
 # LyricAlignStage.
 
 
-def _extract_words(result) -> list[dict]:
+def _extract_words(result, min_word_probability: float) -> list[dict]:
     """Flatten WhisperResult into [{word, start, end, speaker, dominant_speaker}, ...].
 
-    Drops words with ``probability < _MIN_WORD_PROBABILITY``. These are
+    Drops words with ``probability < min_word_probability``. These are
     silent-region hallucinations: stable-ts emits them when forced to
     transcribe an unintelligible region, clustered at a single
     zero-duration timestamp. Letting the matcher anchor to them collapses
-    whole lines to that timestamp.
+    whole lines to that timestamp. Pass 0 to disable the filter.
 
     Each word dict is initialized with ``speaker: None`` and
     ``dominant_speaker: None`` so downstream code can rely on a uniform
@@ -112,7 +158,7 @@ def _extract_words(result) -> list[dict]:
     for segment in result.segments:
         for word in segment.words:
             prob = getattr(word, "probability", None)
-            if prob is not None and prob < _MIN_WORD_PROBABILITY:
+            if prob is not None and prob < min_word_probability:
                 dropped += 1
                 continue
             all_words.append(
@@ -128,7 +174,7 @@ def _extract_words(result) -> list[dict]:
         logger.info(
             "Dropped %d low-probability whisper words (< %.4f)",
             dropped,
-            _MIN_WORD_PROBABILITY,
+            min_word_probability,
         )
     return all_words
 
@@ -570,17 +616,17 @@ def _whisper_worker_main_inner(
     )
 
     # Reconstruct config from dict.
-    config = WhisperModelConfig(**config_dict)
+    config = _rebuild_config(config_dict)
 
-    device = config.device
+    device = config.load_model.device
     if device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    worker_log.info(f"Loading whisper model: {config.model_path} on {device}")
+    worker_log.info(f"Loading whisper model: {config.load_model.model_path} on {device}")
     start = time.time()
 
     model = stable_whisper.load_model(
-        config.model_path,
+        config.load_model.model_path,
         device=device,
     )
     encoder_module = model.encoder
@@ -700,15 +746,7 @@ def _do_align_refine(
     caller (LyricAlignStage) runs Needleman-Wunsch matching to lyric
     lines and any speaker assignment.
     """
-    align_kwargs = dict(
-        language=config.language,
-        vad=config.vad,
-        vad_threshold=config.vad_threshold,
-        suppress_silence=config.suppress_silence,
-        suppress_word_ts=config.suppress_word_ts,
-        only_voice_freq=config.only_voice_freq,
-        min_word_dur=config.min_word_dur,
-    )
+    align_kwargs = _splat(config.align)
 
     # --- align phase ---
     encode_counter = [0]
@@ -735,10 +773,7 @@ def _do_align_refine(
             pass
 
     # --- refine phase ---
-    refine_kwargs = dict(
-        steps=config.refine_steps,
-        word_level=config.refine_word_level,
-    )
+    refine_kwargs = _splat(config.refine)
 
     encode_counter = [0]
 
@@ -763,8 +798,11 @@ def _do_align_refine(
         except Exception:
             pass
 
+    # --- post-process (CPU-bound result manipulation) ---
+    _apply_post_process(refined, config.align_post_process)
+
     # --- convert to flat words (caller runs NW matching + speaker assignment) ---
-    return _extract_words(refined)
+    return _extract_words(refined, config.align_post_process.min_word_probability)
 
 
 def _do_transcribe_refine(
@@ -781,21 +819,7 @@ def _do_transcribe_refine(
     WhisperResult into line_objects via _segments_to_line_objects (one
     segment per line).
     """
-    transcribe_kwargs = dict(
-        language=config.language,
-        vad=config.vad,
-        vad_threshold=config.vad_threshold,
-        suppress_silence=config.suppress_silence,
-        suppress_word_ts=config.suppress_word_ts,
-        only_voice_freq=config.only_voice_freq,
-        condition_on_previous_text=config.condition_on_previous_text,
-        temperature=config.temperature,
-        beam_size=config.beam_size,
-        min_word_dur=config.min_word_dur,
-        word_timestamps=True,
-    )
-    if config.initial_prompt:
-        transcribe_kwargs["initial_prompt"] = config.initial_prompt
+    transcribe_kwargs = _splat(config.transcribe)
 
     # --- transcribe phase ---
     encode_counter = [0]
@@ -827,10 +851,7 @@ def _do_transcribe_refine(
         result.regroup(config.regroup)
 
     # --- refine phase ---
-    refine_kwargs = dict(
-        steps=config.refine_steps,
-        word_level=config.refine_word_level,
-    )
+    refine_kwargs = _splat(config.refine)
 
     encode_counter = [0]
 
@@ -854,6 +875,9 @@ def _do_transcribe_refine(
             handle.remove()
         except Exception:
             pass
+
+    # --- post-process (CPU-bound result manipulation) ---
+    _apply_post_process(refined, config.transcribe_post_process)
 
     # --- convert to line_objects ---
     return _segments_to_line_objects(refined)

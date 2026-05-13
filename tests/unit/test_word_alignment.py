@@ -8,7 +8,6 @@ import pytest
 
 from pikaraoke.lib.word_alignment import (
     _BAND_MIN_LENGTH,
-    _MIN_WORD_PROBABILITY,
     _levenshtein,
     _needleman_wunsch,
     _needleman_wunsch_banded,

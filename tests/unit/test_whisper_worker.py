@@ -451,23 +451,23 @@ class TestExtractWords:
         return result
 
     def test_extracts_all_words(self, mock_result):
-        words = _extract_words(mock_result)
+        words = _extract_words(mock_result, min_word_probability=0.0001)
         assert len(words) == 3
 
     def test_strips_whitespace(self, mock_result):
-        words = _extract_words(mock_result)
+        words = _extract_words(mock_result, min_word_probability=0.0001)
         assert words[0]["word"] == "Hello"
         assert words[1]["word"] == "world"
 
     def test_drops_low_probability(self):
-        """Silent-region hallucinations (prob < 0.0001) get filtered."""
+        """Silent-region hallucinations (prob < threshold) get filtered."""
         good = MagicMock(word=" real", start=0.0, end=0.5, probability=0.85)
         phantom = MagicMock(word=" ghost", start=0.5, end=0.5, probability=0.00005)
         seg = MagicMock()
         seg.words = [good, phantom]
         result = MagicMock()
         result.segments = [seg]
-        words = _extract_words(result)
+        words = _extract_words(result, min_word_probability=0.0001)
         assert [w["word"] for w in words] == ["real"]
 
 
@@ -485,7 +485,7 @@ class TestExtractWordsSpeakerFields:
         return result
 
     def test_initializes_speaker_to_none(self, mock_result):
-        words = _extract_words(mock_result)
+        words = _extract_words(mock_result, min_word_probability=0.0001)
         for w in words:
             assert w["speaker"] is None
             assert w["dominant_speaker"] is None
