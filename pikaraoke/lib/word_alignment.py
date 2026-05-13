@@ -30,6 +30,18 @@ assert _MAX_MATCH <= -(
     _GAP_LYRIC + _GAP_WHISPER
 ), "Single match score must not exceed gap-pair cost"
 
+# Acceptable per-word duration when interpolating runs of unmatched lyric
+# tokens. Slots outside this bracket suggest the run is not actually being
+# sung: below the floor is usually an end-of-song / zero-gap pileup; above
+# the ceiling on a multi-token run is usually an instrumental section where
+# the lyric source repeats a chorus the audio skips. Out-of-bracket runs
+# collapse to zero-duration entries pinned to the previous anchor — the
+# line text stays in the data but per-word karaoke animation is suppressed.
+# The ceiling only applies to multi-token runs; a single missing word over
+# a wide gap (held note next to it) is still interpolated.
+_INTERP_SLOT_MIN_S = 0.15
+_INTERP_SLOT_MAX_S = 0.6
+
 # ---------------------------------------------------------------------------
 # Normalization
 # ---------------------------------------------------------------------------
@@ -339,8 +351,12 @@ def match_words_to_lines(
     word inherit that word's timing; unmatched tokens (mid-line gaps or
     runs whisper missed) get timestamps interpolated linearly between the
     surrounding matched anchors so per-word karaoke highlighting still
-    fires on those words. Word text is taken from the lyric source (raw
-    form, original case and punctuation) rather than the whisper output.
+    fires on those words. Runs whose per-word slot falls outside the
+    plausibility bracket (see ``_INTERP_SLOT_MIN_S`` / ``_INTERP_SLOT_MAX_S``)
+    collapse to zero-duration so an unsung chorus repeat or instrumental
+    section doesn't race the highlighter through silence. Word text is
+    taken from the lyric source (raw form, original case and punctuation)
+    rather than the whisper output.
 
     Whisper words that match no lyric token (hallucinations, backing vox)
     are silently dropped. Lyric lines that contain no normalizable tokens
@@ -424,6 +440,11 @@ def match_words_to_lines(
 
     # Gap interpolation: fill runs of unmatched tokens with linearly
     # distributed timestamps between the surrounding matched anchors.
+    # Runs whose per-word slot falls outside [_INTERP_SLOT_MIN_S,
+    # _INTERP_SLOT_MAX_S] collapse to zero-duration entries at prev_end
+    # (the run is unlikely to be sung — see constant docstring).
+    suppressed_runs = 0
+    suppressed_tokens = 0
     k = 0
     while k < n_tokens:
         if token_words[k] is not None:
@@ -438,18 +459,42 @@ def match_words_to_lines(
             next_start = prev_end
         run_len = run_end - k
         slot = (next_start - prev_end) / run_len if run_len > 0 else 0.0
-        for offset in range(run_len):
-            s = prev_end + offset * slot
-            e = prev_end + (offset + 1) * slot
-            _, _, raw = lyric_tokens[k + offset]
-            token_words[k + offset] = {
-                "word": raw,
-                "start": s,
-                "end": e,
-                "speaker": None,
-                "dominant_speaker": None,
-            }
+        out_of_bracket = slot < _INTERP_SLOT_MIN_S or (slot > _INTERP_SLOT_MAX_S and run_len > 1)
+        if out_of_bracket:
+            suppressed_runs += 1
+            suppressed_tokens += run_len
+            for offset in range(run_len):
+                _, _, raw = lyric_tokens[k + offset]
+                token_words[k + offset] = {
+                    "word": raw,
+                    "start": prev_end,
+                    "end": prev_end,
+                    "speaker": None,
+                    "dominant_speaker": None,
+                }
+        else:
+            for offset in range(run_len):
+                s = prev_end + offset * slot
+                e = prev_end + (offset + 1) * slot
+                _, _, raw = lyric_tokens[k + offset]
+                token_words[k + offset] = {
+                    "word": raw,
+                    "start": s,
+                    "end": e,
+                    "speaker": None,
+                    "dominant_speaker": None,
+                }
         k = run_end
+
+    if suppressed_runs:
+        logger.info(
+            "Suppressed per-word animation for %d token(s) across %d run(s) "
+            "(slot outside [%.2fs, %.2fs])",
+            suppressed_tokens,
+            suppressed_runs,
+            _INTERP_SLOT_MIN_S,
+            _INTERP_SLOT_MAX_S,
+        )
 
     # Group per-token entries by lyric line.
     line_word_lists: list = [[] for _ in range(n_lines)]
