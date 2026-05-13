@@ -257,17 +257,23 @@ class TestMatchWordsToLines:
         result = match_words_to_lines(words, lines)
         assert result == []
 
-    def test_deduplicates_while_preserving_order(self):
+    def test_duplicate_lyric_token_gets_interpolated(self):
+        # "hello" appears twice in lyric but whisper only emitted one "hello".
+        # NW matches the first occurrence; the second is an unmatched gap
+        # at the tail with no following anchor, so interpolation gives it
+        # a zero-duration entry pinned to the previous anchor's end.
         words = [
             {"word": "hello", "start": 0.0, "end": 0.5},
             {"word": "world", "start": 0.5, "end": 1.0},
         ]
         lines = ["hello world hello"]
         result = match_words_to_lines(words, lines)
-        # "hello" appears twice in lyric but should map to same whisper word (index 0)
         assert len(result) == 1
-        # Should only have 2 unique words
-        assert len(result[0]["words"]) == 2
+        emitted = [w["word"] for w in result[0]["words"]]
+        assert emitted == ["hello", "world", "hello"]
+        # Trailing interpolated word pins to the last anchor's end.
+        assert result[0]["words"][2]["start"] == 1.0
+        assert result[0]["words"][2]["end"] == 1.0
 
     def test_punctuation_difference_still_matches(self):
         words = [
@@ -308,6 +314,36 @@ class TestMatchWordsToLines:
         assert len(result) == 2
         # Second line must still anchor on "anymore"
         assert any(w["word"] == "anymore" for w in result[1]["words"])
+
+    def test_mid_line_gap_gets_interpolated(self):
+        # Whisper misses the middle word of a three-word line. The gap
+        # token should still appear in the words list with timing
+        # linearly interpolated between the two anchors.
+        words = [
+            {"word": "Hello", "start": 0.0, "end": 1.0},
+            {"word": "world", "start": 3.0, "end": 4.0},
+        ]
+        lines = ["Hello cruel world"]
+        result = match_words_to_lines(words, lines)
+        emitted = [w["word"] for w in result[0]["words"]]
+        assert emitted == ["Hello", "cruel", "world"]
+        cruel = result[0]["words"][1]
+        # Interpolated between Hello.end=1.0 and world.start=3.0 (single
+        # token in the gap → spans the full window).
+        assert cruel["start"] == 1.0
+        assert cruel["end"] == 3.0
+
+    def test_gap_uses_raw_lyric_token_text(self):
+        # Output word text comes from the lyric source (preserving case
+        # and punctuation), not from whisper's normalized output.
+        words = [
+            {"word": "hello,", "start": 0.0, "end": 0.5},
+            {"word": "world", "start": 0.5, "end": 1.0},
+        ]
+        lines = ["Hello, World!"]
+        result = match_words_to_lines(words, lines)
+        emitted = [w["word"] for w in result[0]["words"]]
+        assert emitted == ["Hello,", "World!"]
 
     def test_pass_through_extra_word_fields(self):
         # speaker / dominant_speaker initialized in _extract_words must

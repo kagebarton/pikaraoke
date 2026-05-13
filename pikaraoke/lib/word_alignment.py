@@ -330,16 +330,22 @@ def match_words_to_lines(
 ) -> list[dict]:
     """Assign whisper words to lyric lines via Needleman-Wunsch alignment.
 
-    Replaces the count-based approach. Each lyric token is globally
-    aligned to a whisper token using a scoring function (+2 exact, +1
-    fuzzy/contraction, 0 mismatch, -1 gap). This tolerates contraction
-    splitting, punctuation differences, and limited whisper hallucinations
-    without cascading the error across all subsequent lines.
+    Each lyric token is globally aligned to a whisper token using a scoring
+    function (+2 exact, +1 fuzzy/contraction, 0 mismatch, -1 gap). This
+    tolerates contraction splitting, punctuation differences, and limited
+    whisper hallucinations without cascading errors across following lines.
+
+    Every lyric token ends up in the output. Tokens NW matched to a whisper
+    word inherit that word's timing; unmatched tokens (mid-line gaps or
+    runs whisper missed) get timestamps interpolated linearly between the
+    surrounding matched anchors so per-word karaoke highlighting still
+    fires on those words. Word text is taken from the lyric source (raw
+    form, original case and punctuation) rather than the whisper output.
 
     Whisper words that match no lyric token (hallucinations, backing vox)
-    are silently dropped. Lyric lines where no whisper words aligned get
-    an empty words list and inherit the previous line's end time — the
-    ASS generator skips them; SRT still emits the text.
+    are silently dropped. Lyric lines that contain no normalizable tokens
+    after stripping (e.g. paren-only display lines) get an empty words
+    list and their start/end interpolated from neighboring lines.
 
     Args:
         words: flat whisper word list from _extract_words().
@@ -350,15 +356,16 @@ def match_words_to_lines(
     if align_lines is None:
         align_lines = lines
 
-    # Build flat lyric token list tagged with line index
-    lyric_tokens = []  # [(norm_tok, line_idx)]
+    # Build flat lyric token list tagged with line index and raw form
+    lyric_tokens: list = []  # [(norm_tok, line_idx, raw_tok)]
     for line_idx, aline in enumerate(align_lines):
         aline_split = aline.replace("—", " ").replace("--", " ")
         for tok in aline_split.split():
             norm = _normalize_token(tok)
             if norm:
-                lyric_tokens.append((norm, line_idx))
+                lyric_tokens.append((norm, line_idx, tok))
 
+    n_lines = len(lines)
     if not lyric_tokens or not words:
         return [{"text": d, "words": [], "start": 0.0, "end": 0.0} for d in lines]
 
@@ -367,81 +374,124 @@ def match_words_to_lines(
 
     alignment = _needleman_wunsch(lyric_norms, whisper_norms)
 
-    lyric_to_whisper = [None] * len(lyric_tokens)
+    lyric_to_whisper: list = [None] * len(lyric_tokens)
     for l_idx, w_idx in alignment:
         if l_idx is not None and w_idx is not None:
             if _score(lyric_norms[l_idx], whisper_norms[w_idx]) >= 1:
                 lyric_to_whisper[l_idx] = w_idx
 
-    # Group whisper word indices by lyric line (monotone → already ordered)
-    n_lines = len(lines)
-    line_whisper_indices: list[list[int]] = [[] for _ in range(n_lines)]
-    prev_line_last_widx = -1
-    for ltok_idx, (_, line_idx) in enumerate(lyric_tokens):
-        w_idx = lyric_to_whisper[ltok_idx]
+    # Build per-lyric-token word entries. Matched tokens inherit whisper
+    # timing; unmatched ones stay None for now and get interpolated below.
+    n_tokens = len(lyric_tokens)
+    token_words: list = [None] * n_tokens
+    for k, (_, _, raw) in enumerate(lyric_tokens):
+        w_idx = lyric_to_whisper[k]
         if w_idx is not None:
-            line_whisper_indices[line_idx].append(w_idx)
-            if w_idx < prev_line_last_widx and line_idx > 0:
-                logger.warning(
-                    "Non-monotonic whisper index: line %d got w_idx %d "
-                    "but previous line ended at w_idx %d — possible line-boundary leakage",
-                    line_idx,
-                    w_idx,
-                    prev_line_last_widx,
-                )
-            prev_line_last_widx = max(prev_line_last_widx, w_idx)
+            wsrc = words[w_idx]
+            token_words[k] = {
+                "word": raw,
+                "start": wsrc["start"],
+                "end": wsrc["end"],
+                "speaker": None,
+                "dominant_speaker": None,
+            }
 
-    # Build one line_obj per lyric line
+    matched_count = sum(1 for tw in token_words if tw is not None)
+    logger.info(
+        "NW align: matched %d/%d reference tokens (%.1f%%)",
+        matched_count,
+        n_tokens,
+        100.0 * matched_count / n_tokens if n_tokens else 0.0,
+    )
+
+    # Diagnostic: warn on non-monotonic matched whisper indices across line
+    # boundaries — the signal that line-locality tie-break in NW traceback
+    # would help. Only meaningful on matched tokens; skip interpolated ones.
+    prev_line_last_widx = -1
+    for k, (_, line_idx, _) in enumerate(lyric_tokens):
+        w_idx = lyric_to_whisper[k]
+        if w_idx is None:
+            continue
+        if w_idx < prev_line_last_widx and line_idx > 0:
+            logger.warning(
+                "Non-monotonic whisper index: line %d got w_idx %d "
+                "but previous line ended at w_idx %d — possible line-boundary leakage",
+                line_idx,
+                w_idx,
+                prev_line_last_widx,
+            )
+        prev_line_last_widx = max(prev_line_last_widx, w_idx)
+
+    # Gap interpolation: fill runs of unmatched tokens with linearly
+    # distributed timestamps between the surrounding matched anchors.
+    k = 0
+    while k < n_tokens:
+        if token_words[k] is not None:
+            k += 1
+            continue
+        run_end = k
+        while run_end < n_tokens and token_words[run_end] is None:
+            run_end += 1
+        prev_end = token_words[k - 1]["end"] if k > 0 else 0.0
+        next_start = token_words[run_end]["start"] if run_end < n_tokens else prev_end
+        if next_start < prev_end:
+            next_start = prev_end
+        run_len = run_end - k
+        slot = (next_start - prev_end) / run_len if run_len > 0 else 0.0
+        for offset in range(run_len):
+            s = prev_end + offset * slot
+            e = prev_end + (offset + 1) * slot
+            _, _, raw = lyric_tokens[k + offset]
+            token_words[k + offset] = {
+                "word": raw,
+                "start": s,
+                "end": e,
+                "speaker": None,
+                "dominant_speaker": None,
+            }
+        k = run_end
+
+    # Group per-token entries by lyric line.
+    line_word_lists: list = [[] for _ in range(n_lines)]
+    for k, (_, line_idx, _) in enumerate(lyric_tokens):
+        line_word_lists[line_idx].append(token_words[k])
+
     line_objects = []
     for line_idx in range(n_lines):
-        display_text = lines[line_idx]
-        w_indices = line_whisper_indices[line_idx]
-
-        if not w_indices:
+        line_words = line_word_lists[line_idx]
+        if line_words:
             line_objects.append(
                 {
-                    "text": display_text,
-                    "words": [],
-                    "start": None,
-                    "end": None,
-                }
-            )
-        else:
-            seen: set = set()
-            unique: list = []
-            for idx in w_indices:
-                if idx not in seen:
-                    seen.add(idx)
-                    unique.append(idx)
-            line_words = [words[i] for i in unique]
-            line_objects.append(
-                {
-                    "text": display_text,
+                    "text": lines[line_idx],
                     "words": line_words,
                     "start": line_words[0]["start"],
                     "end": line_words[-1]["end"],
                 }
             )
-
-    # Interpolate missing lines
-    for i, obj in enumerate(line_objects):
-        if obj["start"] is None:
-            logger.warning(
-                "No aligned whisper words for line: %r. Interpolating timestamps.", obj["text"]
+        else:
+            line_objects.append(
+                {
+                    "text": lines[line_idx],
+                    "words": [],
+                    "start": None,
+                    "end": None,
+                }
             )
 
+    # Lines with no normalizable tokens (paren-only display lines, blank
+    # lines) inherit timing from neighbors. Expected — no warning.
+    for i, obj in enumerate(line_objects):
+        if obj["start"] is None:
             prev_end = 0.0
             for j in range(i - 1, -1, -1):
                 if line_objects[j]["end"] is not None:
                     prev_end = line_objects[j]["end"]
                     break
-
             next_start = prev_end
             for j in range(i + 1, len(line_objects)):
                 if line_objects[j]["start"] is not None:
                     next_start = line_objects[j]["start"]
                     break
-
             obj["start"] = prev_end
             obj["end"] = next_start
 

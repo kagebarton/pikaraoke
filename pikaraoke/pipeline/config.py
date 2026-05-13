@@ -20,11 +20,11 @@ class LoadModelKwargs:
 
 @dataclass
 class AlignKwargs:
-    """Splatted into ``model.align(audio, text, **kwargs)`` — walk path.
+    """Splatted into ``model.align(audio, text, **kwargs)``.
 
-    Walk mode uses a two-pointer matcher with gap interpolation, so
-    we maximize anchor words (low ``min_word_dur``) and trust the
-    matcher to interpolate between them.
+    The downstream NW matcher interpolates timing for any lyric token
+    whisper missed, so we maximize anchor words (low ``min_word_dur``)
+    and trust the matcher to fill the gaps.
     """
 
     language: str = "en"
@@ -41,8 +41,8 @@ class AlignKwargs:
     only_voice_freq: bool = True
 
     # Word duration floor / ceiling. None = stable-ts default.
-    min_word_dur: float = 0.1  # more anchor words for walk matcher
-    max_word_dur: float | None = 5.0  # trust walk matcher interpolation
+    min_word_dur: float = 0.1  # more anchor words for NW matcher
+    max_word_dur: float | None = 5.0  # trust NW gap interpolation
 
     # Drop zero-duration words instead of leaving 0-cs entries.
     remove_instant_words: bool = True
@@ -150,7 +150,7 @@ class WhisperModelConfig:
     """Top-level whisper config — one section per stable-ts call.
 
     All defaults are baked into the section dataclasses. Instantiating
-    ``WhisperModelConfig()`` produces a fully-tuned config — the walk
+    ``WhisperModelConfig()`` produces a fully-tuned config — the align
     path reads ``align``, the transcribe path reads ``transcribe`` and
     ``regroup``, both paths share ``load_model`` and ``refine``, and
     each path has its own post-process section.
@@ -167,7 +167,7 @@ class WhisperModelConfig:
     align_post_process: PostProcessKwargs = field(default_factory=PostProcessKwargs)
     transcribe_post_process: PostProcessKwargs = field(default_factory=PostProcessKwargs)
 
-    # Used by the transcribe path only; ignored by the walk path.
+    # Used by the transcribe path only; ignored by the align path.
     regroup: str = _DEFAULT_REGROUP
 
 

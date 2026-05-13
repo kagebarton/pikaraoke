@@ -51,7 +51,11 @@ class _PtyHandler(logging.Handler):
     alongside ffmpeg/separator/whisper subprocess output.
     """
 
-    _LOGGERS = ("pikaraoke.pipeline", "pikaraoke.lib.processing_manager")
+    _LOGGERS = (
+        "pikaraoke.pipeline",
+        "pikaraoke.lib.processing_manager",
+        "pikaraoke.lib.word_alignment",
+    )
 
     def __init__(self, pty_fd: int) -> None:
         super().__init__()
