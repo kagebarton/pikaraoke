@@ -2,15 +2,16 @@
 
 Two modes:
 - Alignment (lyrics_path provided): aligns the given .txt or .srt lyrics to
-  the vocal stem via stable-ts model.align(), then refines timestamps.
-  Needleman-Wunsch word matching replaces the previous count-based approach,
-  tolerating contractions, punctuation differences, and limited hallucinations.
+  the vocal stem via stable-ts model.align(), then refines timestamps. A
+  two-pointer walk matcher pairs lyric tokens to whisper words with gap
+  interpolation for unmatched references — every lyric token ends up in
+  the karaoke output, gap-free.
 - Transcription (no lyrics_path): runs model.transcribe() directly; stable-ts
   determines segment/word boundaries from the audio alone.
 
 In both modes the same ASS and SRT generators are used. The difference is
 how line objects are built: alignment pairs words to predefined lyric lines
-via NW; transcription uses stable-ts segments directly as lines.
+via the walk matcher; transcription uses stable-ts segments directly as lines.
 
 Each model call is wrapped in its own cancellation activity scope
 (Phase.ALIGN / Phase.TRANSCRIBE). The refine phase is now folded into
@@ -69,7 +70,7 @@ class LyricAlignStage(BaseStage):
 
             logger.info(f"[{self.name}] Aligning lyrics to vocal stem: {Path(vocal_wav).name}")
 
-            # Worker returns flat whisper words; parent runs NW matching + speaker assignment
+            # Worker returns flat whisper words; parent runs walk matching + speaker assignment
             words = _model_call(
                 ctx,
                 Phase.ALIGN,
@@ -80,7 +81,7 @@ class LyricAlignStage(BaseStage):
                 ),
             )
 
-            # Build line objects via Needleman-Wunsch
+            # Build line objects via the walk matcher
             if lyrics_structure is not None:
                 lyrics_lines = [l["text"] for l in lyrics_structure]
                 align_lines = [l["align_text"] for l in lyrics_structure]
@@ -93,7 +94,7 @@ class LyricAlignStage(BaseStage):
             # Diarize only when Genius headers actually attribute lines to
             # individual singers. Solo Genius songs (no ":" attribution) and
             # plain .txt / SRT inputs all fall through to the single-style
-            # ASS path, matching the count-based generator's previous output.
+            # ASS path.
             if lyrics_structure is not None and genius_singer_mode(lyrics_structure) == "multi":
                 _assign_speakers_from_genius(line_objects, lyrics_structure)
 

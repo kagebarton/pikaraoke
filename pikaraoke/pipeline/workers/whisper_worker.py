@@ -380,7 +380,7 @@ class WhisperWorker:
 
         Returns: list[dict] — flat whisper words, JSON-serializable.
         The caller (LyricAlignStage) is responsible for matching words
-        to lyric lines via Needleman-Wunsch.
+        to lyric lines via the walk matcher.
 
         Raises:
             AlignmentCancelledError: If either align or refine was cancelled.
@@ -743,8 +743,8 @@ def _do_align_refine(
 
     Registers a fresh forward pre-hook before each model call.
     Returns the refined WhisperResult flattened by _extract_words; the
-    caller (LyricAlignStage) runs Needleman-Wunsch matching to lyric
-    lines and any speaker assignment.
+    caller (LyricAlignStage) runs the walk matcher to assign words to
+    lyric lines and applies any speaker assignment.
     """
     align_kwargs = _splat(config.align)
 
@@ -801,7 +801,7 @@ def _do_align_refine(
     # --- post-process (CPU-bound result manipulation) ---
     _apply_post_process(refined, config.align_post_process)
 
-    # --- convert to flat words (caller runs NW matching + speaker assignment) ---
+    # --- convert to flat words (caller runs walk matching + speaker assignment) ---
     return _extract_words(refined, config.align_post_process.min_word_probability)
 
 

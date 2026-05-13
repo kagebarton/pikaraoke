@@ -1,4 +1,4 @@
-"""Unit tests for LyricAlignStage — Genius header parsing, NW matching, and multi-speaker ASS.
+"""Unit tests for LyricAlignStage — Genius header parsing, walk matching, and multi-speaker ASS.
 
 These tests cover the _load_lyrics, _should_write_srt, speaker assignment,
 and multi-speaker ASS generation introduced by the Genius integration plan.
@@ -275,7 +275,7 @@ class TestGenerateAss:
         )
 
     def test_single_speaker_style(self, stage):
-        # Plain .txt files: line_objects from NW matching don't have
+        # Plain .txt files: line_objects from the walk matcher don't have
         # speaker/dominant_speaker keys at all
         line_objects = [
             {
