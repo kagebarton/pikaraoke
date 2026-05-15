@@ -65,7 +65,9 @@ class TestWalkAlign:
         assert mapping == [0, 1]
 
     def test_skips_hallucinated_whisper_word(self):
-        # Whisper inserts an extra token between two lyric tokens.
+        # Whisper inserts an extra token between two lyric tokens. The
+        # whisper-skip budget lets the walker absorb it without losing
+        # the lyric anchor.
         mapping = _walk_align(["hello", "world"], ["hello", "phantom", "world"])
         assert mapping == [0, 2]
 
@@ -76,14 +78,25 @@ class TestWalkAlign:
         assert mapping[1] is None
         assert mapping[2] == 1
 
-    def test_desync_past_lookahead_is_lossy(self):
-        # Lookahead=3 can recover up to 3 skips; beyond that the matcher
-        # advances both pointers blindly and may lose alignment.
-        lyric = ["a", "b", "c", "d", "e"]
-        whisper = ["x1", "x2", "x3", "x4", "x5", "a", "b", "c", "d", "e"]
-        mapping = _walk_align(lyric, whisper, lookahead=3)
-        # Lookahead window of 3 isn't enough to skip 5 hallucinations.
-        assert mapping.count(None) > 0
+    def test_confirm_matches_rejects_spurious_anchor(self):
+        # "i" appears in both streams but isn't the right re-sync point —
+        # the next token doesn't match. With confirm_matches=2 the spurious
+        # anchor is rejected.
+        lyric = ["a", "b", "i", "c", "d"]
+        whisper = ["i", "x", "y", "z"]
+        mapping = _walk_align(
+            lyric, whisper, lyric_lookahead=3, whisper_lookahead=3, confirm_matches=2
+        )
+        # The "i" candidate should be rejected; nothing matches confidently.
+        assert mapping == [None, None, None, None, None]
+
+    def test_absorbs_long_whisper_noise(self):
+        # whisper_lookahead=10 lets the walker re-sync past a long run of
+        # whisper-only tokens. Symmetric lookahead=3 wouldn't recover this.
+        lyric = ["a", "b"]
+        whisper = ["a", "x1", "x2", "x3", "x4", "x5", "x6", "x7", "b"]
+        mapping = _walk_align(lyric, whisper)
+        assert mapping == [0, 8]
 
 
 # ---------------------------------------------------------------------------
@@ -152,15 +165,13 @@ class TestMatchWordsToLines:
         result = match_words_to_lines(words, lines)
         assert result == []
 
-    def test_unmatched_lyric_tokens_are_interpolated(self):
-        # Walk matcher is gap-free: every reference token gets an entry,
-        # even when there's no whisper anchor for it.
+    def test_short_unmatched_run_interpolated(self):
+        # A 1-token unmatched run is below max_interp_run=5 and well above
+        # min_interp_slot=0.1s, so it gets interpolated.
         words = [
             {"word": "hello", "start": 0.0, "end": 1.0},
             {"word": "world", "start": 3.0, "end": 4.0},
         ]
-        # "lost" has no whisper counterpart — should be interpolated
-        # linearly between 1.0 and 3.0.
         lines = ["hello lost world"]
         result = match_words_to_lines(words, lines)
         assert len(result[0]["words"]) == 3
@@ -168,6 +179,82 @@ class TestMatchWordsToLines:
         assert interpolated["word"] == "lost"
         assert interpolated["start"] == 1.0
         assert interpolated["end"] == 3.0
+
+    def test_long_unmatched_run_dropped(self):
+        # 2 unmatched tokens > max_interp_run=1 → dropped, not interpolated.
+        # Override max_interp_run instead of stuffing more lyric tokens
+        # between the anchors: lyric_lookahead=3 caps how many we can
+        # actually traverse, so the run-length cap is the cleaner knob to
+        # exercise here.
+        words = [
+            {"word": "hello", "start": 0.0, "end": 1.0},
+            {"word": "world", "start": 30.0, "end": 31.0},
+        ]
+        lines = ["hello a b world"]
+        result = match_words_to_lines(words, lines, max_interp_run=1)
+        emitted = [w["word"] for w in result[0]["words"]]
+        assert emitted == ["hello", "world"]
+
+    def test_degenerate_interp_slot_dropped(self):
+        # Two unmatched tokens bracketed by anchors 0.1s apart → per-token
+        # slot 0.05s, below min_interp_slot=0.1s → drop.
+        words = [
+            {"word": "hello", "start": 0.0, "end": 1.0},
+            {"word": "world", "start": 1.1, "end": 2.0},
+        ]
+        lines = ["hello a b world"]
+        result = match_words_to_lines(words, lines)
+        emitted = [w["word"] for w in result[0]["words"]]
+        assert emitted == ["hello", "world"]
+
+    def test_collapsed_matched_run_demoted_and_dropped(self):
+        # 12 lyric tokens all 1:1-matched to whisper words pinned at one
+        # timestamp (stable-ts giving up). max_collapsed_run=8 with
+        # collapse_window=0.3s → run is demoted to unmatched, then dropped
+        # because the run length exceeds max_interp_run=5.
+        lyric_words = [chr(ord("a") + i) for i in range(12)]
+        words = [{"word": w, "start": 5.0, "end": 5.001} for w in lyric_words]
+        # Bracket the collapsed run with clean anchors so the dropped run
+        # has neighbors to interpolate against (the interp would still be
+        # near-zero-slot, but the drop happens on length anyway).
+        words = (
+            [{"word": "start", "start": 0.0, "end": 1.0}]
+            + words
+            + [{"word": "end", "start": 10.0, "end": 11.0}]
+        )
+        lines = ["start " + " ".join(lyric_words) + " end"]
+        result = match_words_to_lines(words, lines)
+        emitted = [w["word"] for w in result[0]["words"]]
+        # Only the bracketing anchors survive; the collapsed run is gone.
+        assert emitted == ["start", "end"]
+
+    def test_line_with_all_tokens_dropped_is_suppressed(self):
+        # First line has only droppable tokens; should emit with words=[]
+        # and start=None so the SRT/ASS generators skip it. max_interp_run=0
+        # forces every unmatched run to drop, regardless of length.
+        words = [
+            {"word": "world", "start": 30.0, "end": 31.0},
+        ]
+        lines = ["a b", "world"]
+        result = match_words_to_lines(words, lines, max_interp_run=0)
+        assert result[0]["words"] == []
+        assert result[0]["start"] is None
+        assert result[1]["words"]
+
+    def test_paren_only_line_still_inherits_when_others_drop(self):
+        # Lines with no normalizable tokens (paren-only display lines)
+        # MUST still inherit neighbor timing, even after the new
+        # suppression logic. Distinguished from "all-dropped" via the
+        # lines_with_tokens set.
+        words = [
+            {"word": "hello", "start": 0.0, "end": 1.0},
+            {"word": "world", "start": 5.0, "end": 6.0},
+        ]
+        lines = ["hello", "(break)", "world"]
+        align_lines = ["hello", "", "world"]
+        result = match_words_to_lines(words, lines, align_lines)
+        assert result[1]["start"] == 1.0
+        assert result[1]["end"] == 5.0
 
     def test_punctuation_difference_still_matches(self):
         words = [

@@ -2,10 +2,27 @@
 
 Ported from mpv/genius_align/word_extraction.py. stable-ts emits aligned
 words in reference order, so a lockstep walk with bounded lookahead is
-sufficient — no DP table, no fuzzy scoring. Reference tokens that fail
-to anchor get placeholder timestamps interpolated linearly between the
-surrounding matched words, so every lyric token ends up in the karaoke
-output.
+sufficient — no DP table, no fuzzy scoring.
+
+Biases (vs. a naive symmetric walker):
+  * Asymmetric lookahead — lyric_lookahead=3, whisper_lookahead=10 so
+    the walker can absorb runs of extra/noisy whisper output without
+    losing lyric anchors.
+  * Confirmed re-sync — a candidate anchor at (i+di, j+dj) is rejected
+    unless the next confirm_matches-1 pairs also match. Filters spurious
+    single-word anchors on common tokens during a desync.
+  * Whisper-skip budget — when no anchor exists in the lookahead window,
+    advance only the whisper pointer (up to whisper_skip_budget steps)
+    before reluctantly skipping the lyric token. Lyrics are source of
+    truth; extra whisper output is noise to absorb.
+
+Unmatched lyric tokens get placeholder timestamps interpolated linearly
+between the surrounding matched words. Long unmatched runs and
+degenerately fast runs are dropped instead of interpolated (assumed to
+be lyrics absent from the audio — a skipped verse, a restructured
+chorus). Matched runs that collapse onto a single timestamp (stable-ts
+giving up and pinning every word to one instant) are demoted to
+unmatched so the drop logic applies to them too.
 """
 
 import logging
@@ -59,13 +76,7 @@ def _normalize_token(token: str) -> str:
 
 
 def _match_simple(lyric_tok: str, whisper_tok: str) -> bool:
-    """Cheap equivalence check: exact, contraction, or 1:N contraction split.
-
-    Strict-by-design: no Levenshtein, no phonetic table. The walk matcher
-    relies on stable-ts emitting words in reference order, so we just need
-    to recognize the cases where a single reference token corresponds to
-    a different surface form in the whisper output.
-    """
+    """Cheap equivalence check: exact, contraction, or 1:N contraction split."""
     if lyric_tok == whisper_tok:
         return True
     l_exp = _CONTRACTIONS.get(lyric_tok)
@@ -86,39 +97,78 @@ def _match_simple(lyric_tok: str, whisper_tok: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _walk_align(lyric_norms: list, whisper_norms: list, lookahead: int = 3) -> list:
-    """Two-pointer lockstep alignment with bounded lookahead.
+def _walk_align(
+    lyric_norms: list,
+    whisper_norms: list,
+    lyric_lookahead: int = 3,
+    whisper_lookahead: int = 10,
+    confirm_matches: int = 2,
+    whisper_skip_budget: int = 10,
+) -> list:
+    """Two-pointer alignment biased toward preserving lyric anchors.
 
-    Returns mapping[lyric_idx] = whisper_idx | None. On mismatch, scans an
-    (lookahead+1) x (lookahead+1) window for the nearest re-sync point and
-    advances both pointers to it (skipped lyric tokens stay None; skipped
-    whisper words are dropped). If no re-sync is found within the window,
-    advances both pointers by one.
+    Returns mapping[lyric_idx] = whisper_idx | None.
+
+    On mismatch, scans an asymmetric (lyric_lookahead+1) x (whisper_lookahead+1)
+    window for a re-sync point. A candidate is only accepted if the next
+    confirm_matches-1 token pairs also match — this filters out spurious
+    single-word anchors on common short tokens during a desync.
+
+    When no confirmed re-sync exists in the window, advances only the
+    whisper pointer (dropping noisy/extra whisper output) up to
+    whisper_skip_budget steps before reluctantly skipping the current
+    lyric token. Skipped lyric tokens stay None and get interpolated
+    downstream.
     """
     m, n = len(lyric_norms), len(whisper_norms)
     mapping: list = [None] * m
     i = j = 0
+    whisper_skips = 0
     while i < m and j < n:
         if _match_simple(lyric_norms[i], whisper_norms[j]):
             mapping[i] = j
             i += 1
             j += 1
+            whisper_skips = 0
             continue
         best = None
-        best_cost = lookahead * 2 + 1
-        for di in range(min(lookahead + 1, m - i)):
-            for dj in range(min(lookahead + 1, n - j)):
+        best_cost = lyric_lookahead + whisper_lookahead + 1
+        max_di = min(lyric_lookahead + 1, m - i)
+        max_dj = min(whisper_lookahead + 1, n - j)
+        for di in range(max_di):
+            for dj in range(max_dj):
                 if di == 0 and dj == 0:
                     continue
                 cost = di + dj
                 if cost >= best_cost:
                     continue
-                if _match_simple(lyric_norms[i + di], whisper_norms[j + dj]):
+                if not _match_simple(lyric_norms[i + di], whisper_norms[j + dj]):
+                    continue
+                # Confirm with the next (confirm_matches - 1) pairs. If we
+                # run off either sequence before confirming, accept anyway
+                # — end-of-sequence anchors can't be confirmed but are
+                # usually still correct.
+                confirmed = True
+                for k in range(1, confirm_matches):
+                    li, wi = i + di + k, j + dj + k
+                    if li >= m or wi >= n:
+                        break
+                    if not _match_simple(lyric_norms[li], whisper_norms[wi]):
+                        confirmed = False
+                        break
+                if confirmed:
                     best = (di, dj)
                     best_cost = cost
         if best is None:
-            i += 1
+            # Advance whisper pointer only: preserve the current lyric
+            # token as an unmatched candidate. Cap consecutive whisper-only
+            # advances so a truly missing lyric token doesn't stall the
+            # walker forever.
             j += 1
+            whisper_skips += 1
+            if whisper_skips >= whisper_skip_budget:
+                i += 1
+                whisper_skips = 0
         else:
             di, dj = best
             i += di
@@ -126,6 +176,7 @@ def _walk_align(lyric_norms: list, whisper_norms: list, lookahead: int = 3) -> l
             mapping[i] = j
             i += 1
             j += 1
+            whisper_skips = 0
     return mapping
 
 
@@ -138,26 +189,63 @@ def match_words_to_lines(
     words: list,
     lines: list[str],
     align_lines: list[str] | None = None,
-    lookahead: int = 3,
+    lyric_lookahead: int = 3,
+    whisper_lookahead: int = 10,
+    confirm_matches: int = 2,
+    whisper_skip_budget: int = 10,
+    max_interp_run: int = 5,
+    min_interp_slot: float = 0.1,
+    max_collapsed_run: int = 8,
+    collapse_window: float = 0.3,
 ) -> list[dict]:
     """Assign whisper words to lyric lines via two-pointer walk matching.
 
-    For each reference token, either pair it with a whisper word (and use
-    that word's timing) or synthesize a placeholder word with timestamps
-    interpolated linearly between the surrounding matched anchors. Every
-    reference token therefore ends up in the karaoke output, and the
-    final per-line word lists are gap-free.
+    Each reference token is either paired with a whisper word (using that
+    word's timing) or interpolated linearly between the surrounding
+    matched anchors. Short unmatched runs are interpolated so the line
+    stays gap-free; a run is dropped — rather than interpolated — when
+    either it is longer than ``max_interp_run`` or its interpolation slot
+    would fall below ``min_interp_slot``. Both signal lyrics absent from
+    the audio: faking timing would just animate phantom words, and a
+    near-zero slot crams them illegibly.
 
-    Whisper words that match no lyric token (hallucinations, backing vox)
-    are silently dropped. Lyric lines with no normalizable tokens
-    (paren-only display lines) inherit timing from their neighbors.
+    Lines whose tokens are all dropped via the interp cap return with
+    ``words=[]`` and ``start=None`` — the SRT/ASS generators skip these.
+    Paren-only display lines (no normalizable tokens at all) still
+    inherit timing from neighbors and render statically.
+
+    Whisper words that match no lyric token (hallucinations, backing
+    vocals) are silently dropped.
 
     Args:
         words: flat whisper word list from the worker.
         lines: display text per lyric line (may include inline parens).
         align_lines: paren-stripped text per lyric line for alignment.
             If None, falls back to lines.
-        lookahead: max (lyric, whisper) skip window when re-syncing.
+        lyric_lookahead: max lyric tokens to skip when re-syncing.
+        whisper_lookahead: max whisper words to skip when re-syncing —
+            asymmetrically larger so the walker can absorb stretches of
+            extra/noisy whisper output without losing lyric anchors.
+        confirm_matches: required consecutive matches at a re-sync point
+            before accepting it (filters spurious common-word anchors).
+        whisper_skip_budget: max consecutive whisper-only advances before
+            the walker reluctantly skips the current lyric token.
+        max_interp_run: largest unmatched-token run that still gets
+            linearly interpolated. Longer runs are dropped — assumed to
+            be lyrics absent from the audio. Set very large to disable.
+        min_interp_slot: minimum per-token interpolation slot, in seconds.
+            If the bracketing anchors are too close to give each token at
+            least this much time, the run is dropped instead of crammed.
+            Set to 0.0 to disable.
+        max_collapsed_run: longest run of *matched* tokens allowed to share
+            essentially one timestamp. stable-ts force-places every word
+            of an unalignable section at a single instant; the walker
+            pairs those 1:1 so the interp caps never see them. A run
+            longer than this many matched tokens inside ``collapse_window``
+            seconds is demoted to unmatched so the interp/drop logic
+            applies. Set very large to disable.
+        collapse_window: max span, in seconds, for a matched-token run to
+            count as collapsed for the ``max_collapsed_run`` check.
     """
     if align_lines is None:
         align_lines = lines
@@ -177,10 +265,15 @@ def match_words_to_lines(
     whisper_norms = [_normalize_token(w["word"]) for w in words]
     lyric_norms = [lt[0] for lt in lyric_tokens]
 
-    mapping = _walk_align(lyric_norms, whisper_norms, lookahead)
+    mapping = _walk_align(
+        lyric_norms,
+        whisper_norms,
+        lyric_lookahead=lyric_lookahead,
+        whisper_lookahead=whisper_lookahead,
+        confirm_matches=confirm_matches,
+        whisper_skip_budget=whisper_skip_budget,
+    )
 
-    # Materialize a word dict for every anchored lyric token, copying timing
-    # from the matched whisper word.
     n_tokens = len(lyric_tokens)
     token_words: list = [None] * n_tokens
     for k, (_, _, raw) in enumerate(lyric_tokens):
@@ -195,16 +288,39 @@ def match_words_to_lines(
                 "dominant_speaker": wsrc.get("dominant_speaker"),
             }
 
-    matched_count = sum(1 for tw in token_words if tw is not None)
-    logger.info(
-        "Walk align: matched %d/%d reference tokens (%.1f%%); %d whisper words consumed",
-        matched_count,
-        n_tokens,
-        100.0 * matched_count / n_tokens if n_tokens else 0.0,
-        sum(1 for v in mapping if v is not None),
-    )
+    # Demote collapsed matched runs: when stable-ts can't locate a lyric
+    # section it force-places every word at one timestamp. The walker
+    # pairs those 1:1 so the interp caps never see them — find long runs
+    # of matched tokens crammed into < collapse_window seconds and
+    # demote them to None so the interp/drop logic below applies.
+    collapsed_tokens = 0
+    if max_collapsed_run < n_tokens:
+        k = 0
+        while k < n_tokens:
+            if token_words[k] is None:
+                k += 1
+                continue
+            run_end = k + 1
+            while (
+                run_end < n_tokens
+                and token_words[run_end] is not None
+                and token_words[run_end]["start"] - token_words[k]["start"] < collapse_window
+            ):
+                run_end += 1
+            run_len = run_end - k
+            if run_len > max_collapsed_run:
+                for idx in range(k, run_end):
+                    token_words[idx] = None
+                collapsed_tokens += run_len
+                k = run_end
+            else:
+                k += 1
 
-    # Interpolate runs of unmatched lyric tokens between anchored neighbors.
+    matched_count = sum(1 for tw in token_words if tw is not None)
+
+    # Interpolate short unmatched runs; drop long runs entirely (token_words
+    # stays None — those tokens won't appear in the karaoke output).
+    dropped_tokens = 0
     k = 0
     while k < n_tokens:
         if token_words[k] is not None:
@@ -213,12 +329,25 @@ def match_words_to_lines(
         run_end = k
         while run_end < n_tokens and token_words[run_end] is None:
             run_end += 1
+        run_len = run_end - k
+        if run_len > max_interp_run:
+            dropped_tokens += run_len
+            k = run_end
+            continue
         prev_end = token_words[k - 1]["end"] if k > 0 else 0.0
         next_start = token_words[run_end]["start"] if run_end < n_tokens else prev_end
         if next_start < prev_end:
             next_start = prev_end
-        run_len = run_end - k
         slot = (next_start - prev_end) / run_len if run_len > 0 else 0.0
+        if run_len > 0 and slot < min_interp_slot:
+            # Degenerate interpolation: bracketing anchors are too close
+            # to fit these tokens at a readable pace. Almost always a
+            # skipped section whose run was fragmented by spurious
+            # common-word anchors — drop it rather than cram near-zero-
+            # duration phantom words into a sliver of time.
+            dropped_tokens += run_len
+            k = run_end
+            continue
         for offset in range(run_len):
             s = prev_end + offset * slot
             e = prev_end + (offset + 1) * slot
@@ -232,9 +361,30 @@ def match_words_to_lines(
             }
         k = run_end
 
+    logger.info(
+        "Walk align: matched %d/%d reference tokens (%.1f%%); "
+        "%d whisper words consumed; %d tokens demoted (collapsed run); "
+        "%d tokens dropped (uninterpolatable)",
+        matched_count,
+        n_tokens,
+        100.0 * matched_count / n_tokens if n_tokens else 0.0,
+        sum(1 for v in mapping if v is not None),
+        collapsed_tokens,
+        dropped_tokens,
+    )
+
+    # Track which lines had any normalizable tokens at all, so we can
+    # distinguish "paren-only display line" (inherit neighbor timing,
+    # render statically) from "every token was dropped by the interp cap"
+    # (suppress the line — audio doesn't contain it).
+    lines_with_tokens: set = set()
+    for _, line_idx, _ in lyric_tokens:
+        lines_with_tokens.add(line_idx)
+
     line_word_lists: list = [[] for _ in range(n_lines)]
     for k, (_, line_idx, _) in enumerate(lyric_tokens):
-        line_word_lists[line_idx].append(token_words[k])
+        if token_words[k] is not None:
+            line_word_lists[line_idx].append(token_words[k])
 
     line_objects: list = []
     for line_idx in range(n_lines):
@@ -260,20 +410,22 @@ def match_words_to_lines(
             )
 
     # Lines with no normalizable tokens (paren-only display lines) inherit
-    # timing from neighbors.
+    # timing from neighbors. Lines whose tokens were all dropped via the
+    # interp cap stay with start=None so the SRT/ASS generators skip them.
     for i, obj in enumerate(line_objects):
-        if obj["start"] is None:
-            prev_end = 0.0
-            for j in range(i - 1, -1, -1):
-                if line_objects[j]["end"] is not None:
-                    prev_end = line_objects[j]["end"]
-                    break
-            next_start = prev_end
-            for j in range(i + 1, len(line_objects)):
-                if line_objects[j]["start"] is not None:
-                    next_start = line_objects[j]["start"]
-                    break
-            obj["start"] = prev_end
-            obj["end"] = next_start
+        if obj["start"] is not None or i in lines_with_tokens:
+            continue
+        prev_end = 0.0
+        for j in range(i - 1, -1, -1):
+            if line_objects[j]["end"] is not None:
+                prev_end = line_objects[j]["end"]
+                break
+        next_start = prev_end
+        for j in range(i + 1, len(line_objects)):
+            if line_objects[j]["start"] is not None:
+                next_start = line_objects[j]["start"]
+                break
+        obj["start"] = prev_end
+        obj["end"] = next_start
 
     return line_objects

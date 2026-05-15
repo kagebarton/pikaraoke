@@ -274,6 +274,7 @@ class LyricAlignStage(BaseStage):
                 content=line_obj["text"],
             )
             for i, line_obj in enumerate(line_objects, start=1)
+            if line_obj["words"]
         ]
         return srt.compose(subtitles)
 
