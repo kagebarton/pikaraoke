@@ -13,10 +13,12 @@ In both modes the same ASS and SRT generators are used. The difference is
 how line objects are built: alignment pairs words to predefined lyric lines
 via the walk matcher; transcription uses stable-ts segments directly as lines.
 
-Each model call is wrapped in its own cancellation activity scope
-(Phase.ALIGN / Phase.TRANSCRIBE). The refine phase is now folded into
-the worker's align_refine / transcribe_refine methods, so Phase.REFINE
-no longer exists on the parent side.
+Each model call is wrapped in its own cancellation activity scope.
+Alignment uses two scopes — Phase.ALIGN_CHECK (align only, captures
+stable-ts's segment-failure ratio) followed by Phase.REFINE (refine the
+cached align result). Splitting these means a future escalation policy
+can discard the align output before paying refine's cost. Transcription
+mode stays a single Phase.TRANSCRIBE call.
 
 ASS/SRT are written to ctx.tmp_dir first and moved to the final output
 directory only after both writes succeed — preventing orphan files on
@@ -70,13 +72,32 @@ class LyricAlignStage(BaseStage):
 
             logger.info(f"[{self.name}] Aligning lyrics to vocal stem: {Path(vocal_wav).name}")
 
-            # Worker returns flat whisper words; parent runs walk matching + speaker assignment
-            words = _model_call(
+            # Two-phase alignment: align first (cheap relative to refine),
+            # then refine the cached result. A future escalation gate can
+            # discard the cached result here and switch matchers before
+            # paying refine's cost.
+            check = _model_call(
                 ctx,
-                Phase.ALIGN,
-                lambda: self._worker.align_refine(
+                Phase.ALIGN_CHECK,
+                lambda: self._worker.align_check(
                     vocal_path=vocal_wav,
                     lyrics_text=lyrics_text,
+                    cancel_event=ctx.cancel.event if ctx.cancel else None,
+                ),
+            )
+            result_id = check["result_id"]
+            logger.info(
+                "[%s] align() failure ratio: %.1f%%",
+                self.name,
+                check["fail_ratio"] * 100,
+            )
+
+            words = _model_call(
+                ctx,
+                Phase.REFINE,
+                lambda: self._worker.refine_from_cached(
+                    result_id=result_id,
+                    vocal_path=vocal_wav,
                     cancel_event=ctx.cancel.event if ctx.cancel else None,
                 ),
             )
@@ -297,11 +318,16 @@ def _assign_speakers_from_genius(line_objects: list[dict], genius_lines: list[di
     """Copy speaker_label and dominant_speaker from each genius_line onto
     the matching line_obj (and onto every word). Modifies in place.
 
-    Best-effort zip — silently truncates to the shorter list. In practice
-    line_objects and genius_lines come from the same parse_genius_sections
-    call so they're 1:1; this is just a safety net.
+    Matchers that can drop, repeat, or split lyric lines tag each
+    line_obj with a ``line_id`` back-reference into ``genius_lines``;
+    matchers that emit 1:1 with the input don't. Look up by ``line_id``
+    when present, fall back to positional index otherwise.
     """
-    for line_obj, gl in zip(line_objects, genius_lines):
+    for idx, line_obj in enumerate(line_objects):
+        gl_idx = line_obj.get("line_id", idx)
+        if gl_idx >= len(genius_lines):
+            continue
+        gl = genius_lines[gl_idx]
         line_obj["speaker"] = gl["speaker_label"]
         line_obj["dominant_speaker"] = gl["dominant_speaker"]
         for word in line_obj["words"]:

@@ -34,15 +34,18 @@ FFmpeg stderr to /dev/null (harmless muxer errors never reach terminal).
 import gc
 import logging
 import os
+import re
 import subprocess
 import sys
 import threading
 import time
+import uuid
+import warnings
 from dataclasses import asdict
 from multiprocessing import Pipe
 from multiprocessing.connection import Connection
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from pikaraoke.pipeline.config import (
     AlignKwargs,
@@ -66,6 +69,30 @@ logger = logging.getLogger(__name__)
 # 60s gives ~6× headroom.
 WHISPER_LOAD_TIMEOUT_SEC = 60
 
+# stable-ts emits "<n>/<m> segments failed to align." as a UserWarning at
+# the end of Aligner.align(). align_check captures this so the stage can
+# decide whether align()'s forced word placement is trustworthy before
+# spending time on refine().
+_ALIGN_FAILURE_RE = re.compile(r"(\d+)\s*/\s*(\d+)\s+segments failed to align")
+
+
+def _extract_align_failure_ratio(caught_warnings, worker_log: logging.Logger) -> float:
+    """Scan captured warnings for stable-ts's 'N/M segments failed to align'
+    message and return N/M. Every captured warning is re-emitted via
+    ``worker_log`` so capturing doesn't silently swallow them. Returns 0.0
+    if no failure warning is present or the message couldn't be parsed.
+    """
+    ratio = 0.0
+    for w in caught_warnings:
+        msg = str(w.message)
+        m = _ALIGN_FAILURE_RE.search(msg)
+        if m:
+            failed, total = int(m.group(1)), int(m.group(2))
+            if total > 0:
+                ratio = failed / total
+        worker_log.warning("%s: %s", w.category.__name__, msg)
+    return ratio
+
 
 class _CancelledInsideEncoder(Exception):
     """Raised by the forward pre-hook when cancel is detected.
@@ -80,9 +107,9 @@ class _CancelledInsideEncoder(Exception):
     Whisper nn.Module (stored on GPU/CPU), not stack locals that get destroyed
     during unwinding.
 
-    Must remain at module scope — the cancel_pre_hook closure inside
-    _do_align_refine / _do_transcribe_refine captures it from the
-    enclosing module scope, not from the function body.
+    Must remain at module scope — the cancel hook closure inside
+    _run_with_cancel_hook captures it from the enclosing module scope,
+    not from the function body.
     """
 
 
@@ -231,8 +258,16 @@ class WhisperWorker:
 
     Public API:
     start() / stop() / kill() / is_alive() — lifecycle
-    align_refine(vocal_path, lyrics_text, cancel_event) — alignment
-    transcribe_refine(vocal_path, cancel_event) — transcription
+    align_check(vocal_path, lyrics_text, cancel_event) — align only, returns
+        {"fail_ratio": float, "result_id": str} so the caller can gate on
+        the failure ratio before paying for refine
+    refine_from_cached(result_id, vocal_path, cancel_event) — refine an
+        align result previously cached by align_check
+    discard_cached(result_id) — evict a cached align result without refining
+    transcribe_words(vocal_path, cancel_event) — transcribe → regroup →
+        refine, returns flat words (for the tiling matcher)
+    transcribe_refine(vocal_path, cancel_event) — transcribe → regroup →
+        refine, returns line_objects (transcription-only mode)
     """
 
     def __init__(
@@ -368,30 +403,6 @@ class WhisperWorker:
     # Public inference methods
     # ------------------------------------------------------------------
 
-    def align_refine(
-        self,
-        vocal_path: Path,
-        lyrics_text: str,
-        cancel_event: Optional[threading.Event] = None,
-    ) -> list[dict]:
-        """Run align() then refine(), returning a flat whisper word list.
-
-        Sends job to subprocess, blocks for result.
-
-        Returns: list[dict] — flat whisper words, JSON-serializable.
-        The caller (LyricAlignStage) is responsible for matching words
-        to lyric lines via the walk matcher.
-
-        Raises:
-            AlignmentCancelledError: If either align or refine was cancelled.
-            WorkerDiedError: If the subprocess dies during the job.
-            RuntimeError: If the subprocess reports an error.
-        """
-        return self._run_job(
-            ("align_refine", str(vocal_path), lyrics_text),
-            cancel_event,
-        )
-
     def transcribe_refine(
         self,
         vocal_path: Path,
@@ -410,6 +421,71 @@ class WhisperWorker:
         """
         return self._run_job(
             ("transcribe_refine", str(vocal_path)),
+            cancel_event,
+        )
+
+    def align_check(
+        self,
+        vocal_path: Path,
+        lyrics_text: str,
+        cancel_event: Optional[threading.Event] = None,
+    ) -> dict:
+        """Run align() only; return {"fail_ratio": float, "result_id": str}.
+
+        The aligned WhisperResult stays cached in the subprocess under
+        ``result_id`` so the caller can either follow up with
+        ``refine_from_cached`` or discard it via ``discard_cached``.
+
+        Raises:
+            AlignmentCancelledError: If align was cancelled. No result is
+                cached in this case.
+            WorkerDiedError, RuntimeError: As for align_refine.
+        """
+        return self._run_job(
+            ("align_check", str(vocal_path), lyrics_text),
+            cancel_event,
+        )
+
+    def refine_from_cached(
+        self,
+        result_id: str,
+        vocal_path: Path,
+        cancel_event: Optional[threading.Event] = None,
+    ) -> list[dict]:
+        """Refine a cached align result and return a flat word list.
+
+        Raises:
+            RuntimeError: If ``result_id`` is not in the cache (worker
+                restart between align_check and refine_from_cached, or a
+                discard_cached call already evicted it). The caller should
+                treat this as a hard failure — do not silently re-align.
+        """
+        return self._run_job(
+            ("refine_from_cached", result_id, str(vocal_path)),
+            cancel_event,
+        )
+
+    def discard_cached(self, result_id: str) -> None:
+        """Evict a cached align result without refining. Fast; no cancel.
+
+        Returns silently if ``result_id`` is unknown (already evicted, or
+        the subprocess restarted) — the goal is freeing memory, not
+        confirming presence.
+        """
+        self._run_job(("discard_cached", result_id), cancel_event=None)
+
+    def transcribe_words(
+        self,
+        vocal_path: Path,
+        cancel_event: Optional[threading.Event] = None,
+    ) -> list[dict]:
+        """Run transcribe → regroup → refine, returning a flat word list.
+
+        Same heavy pipeline as ``transcribe_refine`` but flattened for the
+        tiling matcher (which does its own line segmentation).
+        """
+        return self._run_job(
+            ("transcribe_words", str(vocal_path)),
             cancel_event,
         )
 
@@ -552,7 +628,8 @@ def _worker_main(
     """Entry point for the whisper worker subprocess.
 
     Loads the stable-ts model, then loops on job_recv. For each job,
-    it runs the requested inference (align_refine or transcribe_refine)
+    it runs the requested inference (align_check, refine_from_cached,
+    transcribe_words, or transcribe_refine)
     with per-encoder-pass cancellation via forward pre-hook.
 
     Results sent on result_send:
@@ -637,6 +714,13 @@ def _whisper_worker_main_inner(
     # Patch AudioLoader in the subprocess too.
     _patch_audioloader_stderr_in_subprocess(worker_log)
 
+    # Result-cache for the split align_check → refine_from_cached flow.
+    # Single-entry; a new align_check evicts the previous result, and
+    # refine_from_cached pops on use. Crossing the IPC boundary with a
+    # WhisperResult would require pickling stable-ts internals — keeping
+    # the result here means the parent only ever sees an opaque id.
+    cached_results: dict[str, Any] = {}
+
     # Signal ready so the parent's start() can return.
     result_send.send(("ready",))
 
@@ -652,13 +736,47 @@ def _whisper_worker_main_inner(
             drain_pipe(cancel_recv)
 
             try:
-                if kind == "align_refine":
+                if kind == "align_check":
                     _, vocal_path, lyrics_text = item
-                    words = _do_align_refine(
+                    raw_result, fail_ratio = _do_align_only(
                         model,
                         encoder_module,
                         vocal_path,
                         lyrics_text,
+                        cancel_recv,
+                        config,
+                        worker_log,
+                    )
+                    result_id = uuid.uuid4().hex
+                    cached_results.clear()
+                    cached_results[result_id] = raw_result
+                    result_send.send(("ok", {"fail_ratio": fail_ratio, "result_id": result_id}))
+                elif kind == "refine_from_cached":
+                    _, result_id, vocal_path = item
+                    cached = cached_results.pop(result_id, None)
+                    if cached is None:
+                        result_send.send(("error", f"stale or unknown result_id: {result_id}"))
+                    else:
+                        words = _do_refine_from_cached(
+                            model,
+                            encoder_module,
+                            vocal_path,
+                            cached,
+                            cancel_recv,
+                            config,
+                            worker_log,
+                        )
+                        result_send.send(("ok", words))
+                elif kind == "discard_cached":
+                    _, result_id = item
+                    cached_results.pop(result_id, None)
+                    result_send.send(("ok", None))
+                elif kind == "transcribe_words":
+                    _, vocal_path = item
+                    words = _do_transcribe_words(
+                        model,
+                        encoder_module,
+                        vocal_path,
                         cancel_recv,
                         config,
                         worker_log,
@@ -730,7 +848,69 @@ def _whisper_worker_main_inner(
 # ============================================================================
 
 
-def _do_align_refine(
+def _run_with_cancel_hook(encoder_module, cancel_recv, worker_log, label, fn):
+    """Run ``fn()`` with a fresh forward pre-hook on the encoder that
+    raises ``_CancelledInsideEncoder`` between encoder passes when a
+    cancel signal arrives on ``cancel_recv``. The hook is always removed.
+    """
+    encode_counter = [0]
+
+    def cancel_hook(module, inputs):
+        if cancel_recv.poll(0):
+            try:
+                cancel_recv.recv()
+            except (EOFError, OSError):
+                pass
+            worker_log.info(
+                f"Cancel detected before {label} pass #{encode_counter[0] + 1} — aborting"
+            )
+            raise _CancelledInsideEncoder()
+        encode_counter[0] += 1
+
+    handle = encoder_module.register_forward_pre_hook(cancel_hook)
+    try:
+        return fn()
+    finally:
+        try:
+            handle.remove()
+        except Exception:
+            pass
+
+
+def _align_pass(model, encoder_module, vocal_path, lyrics_text, cancel_recv, config, worker_log):
+    align_kwargs = _splat(config.align)
+    return _run_with_cancel_hook(
+        encoder_module,
+        cancel_recv,
+        worker_log,
+        "align",
+        lambda: model.align(vocal_path, lyrics_text, **align_kwargs),
+    )
+
+
+def _refine_pass(model, encoder_module, vocal_path, result, cancel_recv, config, worker_log):
+    refine_kwargs = _splat(config.refine)
+    return _run_with_cancel_hook(
+        encoder_module,
+        cancel_recv,
+        worker_log,
+        "refine",
+        lambda: model.refine(vocal_path, result, **refine_kwargs),
+    )
+
+
+def _transcribe_pass(model, encoder_module, vocal_path, cancel_recv, config, worker_log):
+    transcribe_kwargs = _splat(config.transcribe)
+    return _run_with_cancel_hook(
+        encoder_module,
+        cancel_recv,
+        worker_log,
+        "transcribe",
+        lambda: model.transcribe(vocal_path, **transcribe_kwargs),
+    )
+
+
+def _do_align_only(
     model,
     encoder_module,
     vocal_path: str,
@@ -738,71 +918,63 @@ def _do_align_refine(
     cancel_recv: Connection,
     config: WhisperModelConfig,
     worker_log: logging.Logger,
-) -> list[dict]:
-    """Run align() then refine() in the subprocess, returning a flat word list.
+):
+    """Run align() only, capturing stable-ts's segment-failure ratio.
 
-    Registers a fresh forward pre-hook before each model call.
-    Returns the refined WhisperResult flattened by _extract_words; the
-    caller (LyricAlignStage) runs the walk matcher to assign words to
-    lyric lines and applies any speaker assignment.
+    Returns ``(WhisperResult, fail_ratio)``. The caller decides whether to
+    follow up with refine_from_cached (good alignment) or discard the
+    result and escalate to the tiling pipeline (bad alignment).
     """
-    align_kwargs = _splat(config.align)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        result = _align_pass(
+            model, encoder_module, vocal_path, lyrics_text, cancel_recv, config, worker_log
+        )
+    fail_ratio = _extract_align_failure_ratio(caught, worker_log)
+    return result, fail_ratio
 
-    # --- align phase ---
-    encode_counter = [0]
 
-    def align_hook(module, inputs):
-        if cancel_recv.poll(0):
-            try:
-                cancel_recv.recv()
-            except (EOFError, OSError):
-                pass
-            worker_log.info(
-                f"Cancel detected before align pass #{encode_counter[0] + 1} — aborting"
-            )
-            raise _CancelledInsideEncoder()
-        encode_counter[0] += 1
-
-    handle = encoder_module.register_forward_pre_hook(align_hook)
-    try:
-        result = model.align(vocal_path, lyrics_text, **align_kwargs)
-    finally:
-        try:
-            handle.remove()
-        except Exception:
-            pass
-
-    # --- refine phase ---
-    refine_kwargs = _splat(config.refine)
-
-    encode_counter = [0]
-
-    def refine_hook(module, inputs):
-        if cancel_recv.poll(0):
-            try:
-                cancel_recv.recv()
-            except (EOFError, OSError):
-                pass
-            worker_log.info(
-                f"Cancel detected before refine pass #{encode_counter[0] + 1} — aborting"
-            )
-            raise _CancelledInsideEncoder()
-        encode_counter[0] += 1
-
-    handle = encoder_module.register_forward_pre_hook(refine_hook)
-    try:
-        refined = model.refine(vocal_path, result, **refine_kwargs)
-    finally:
-        try:
-            handle.remove()
-        except Exception:
-            pass
-
-    # --- post-process (CPU-bound result manipulation) ---
+def _do_refine_from_cached(
+    model,
+    encoder_module,
+    vocal_path: str,
+    cached_result,
+    cancel_recv: Connection,
+    config: WhisperModelConfig,
+    worker_log: logging.Logger,
+) -> list[dict]:
+    """Refine an already-aligned WhisperResult, post-process, and flatten
+    to a word list. Mirrors the back half of the old align_refine path.
+    """
+    refined = _refine_pass(
+        model, encoder_module, vocal_path, cached_result, cancel_recv, config, worker_log
+    )
     _apply_post_process(refined, config.align_post_process)
-
-    # --- convert to flat words (caller runs walk matching + speaker assignment) ---
     return _extract_words(refined, config.align_post_process.min_word_probability)
+
+
+def _do_transcribe_words(
+    model,
+    encoder_module,
+    vocal_path: str,
+    cancel_recv: Connection,
+    config: WhisperModelConfig,
+    worker_log: logging.Logger,
+) -> list[dict]:
+    """Run transcribe → regroup → refine and return a flat word list.
+
+    Used by the tiling matcher, which needs flat tokens (not line_objects)
+    over the IPC boundary because tiling does its own line segmentation.
+    """
+    result = _transcribe_pass(model, encoder_module, vocal_path, cancel_recv, config, worker_log)
+    if config.regroup:
+        worker_log.info(f"Regrouping transcription segments: {config.regroup}")
+        result.regroup(config.regroup)
+    refined = _refine_pass(
+        model, encoder_module, vocal_path, result, cancel_recv, config, worker_log
+    )
+    _apply_post_process(refined, config.transcribe_post_process)
+    return _extract_words(refined, config.transcribe_post_process.min_word_probability)
 
 
 def _do_transcribe_refine(
@@ -813,73 +985,18 @@ def _do_transcribe_refine(
     config: WhisperModelConfig,
     worker_log: logging.Logger,
 ) -> list[dict]:
-    """Run transcribe() then refine() in the subprocess, returning line_objects.
+    """Run transcribe → regroup → refine and return line_objects.
 
-    If config.regroup is set, regroups before refine. Converts the refined
-    WhisperResult into line_objects via _segments_to_line_objects (one
-    segment per line).
+    Transcription mode (no lyrics file) — one segment becomes one line.
     """
-    transcribe_kwargs = _splat(config.transcribe)
-
-    # --- transcribe phase ---
-    encode_counter = [0]
-
-    def transcribe_hook(module, inputs):
-        if cancel_recv.poll(0):
-            try:
-                cancel_recv.recv()
-            except (EOFError, OSError):
-                pass
-            worker_log.info(
-                f"Cancel detected before transcribe pass #{encode_counter[0] + 1} — aborting"
-            )
-            raise _CancelledInsideEncoder()
-        encode_counter[0] += 1
-
-    handle = encoder_module.register_forward_pre_hook(transcribe_hook)
-    try:
-        result = model.transcribe(vocal_path, **transcribe_kwargs)
-    finally:
-        try:
-            handle.remove()
-        except Exception:
-            pass
-
-    # --- regroup (CPU-bound, no hook needed) ---
+    result = _transcribe_pass(model, encoder_module, vocal_path, cancel_recv, config, worker_log)
     if config.regroup:
         worker_log.info(f"Regrouping transcription segments: {config.regroup}")
         result.regroup(config.regroup)
-
-    # --- refine phase ---
-    refine_kwargs = _splat(config.refine)
-
-    encode_counter = [0]
-
-    def refine_hook(module, inputs):
-        if cancel_recv.poll(0):
-            try:
-                cancel_recv.recv()
-            except (EOFError, OSError):
-                pass
-            worker_log.info(
-                f"Cancel detected before refine pass #{encode_counter[0] + 1} — aborting"
-            )
-            raise _CancelledInsideEncoder()
-        encode_counter[0] += 1
-
-    handle = encoder_module.register_forward_pre_hook(refine_hook)
-    try:
-        refined = model.refine(vocal_path, result, **refine_kwargs)
-    finally:
-        try:
-            handle.remove()
-        except Exception:
-            pass
-
-    # --- post-process (CPU-bound result manipulation) ---
+    refined = _refine_pass(
+        model, encoder_module, vocal_path, result, cancel_recv, config, worker_log
+    )
     _apply_post_process(refined, config.transcribe_post_process)
-
-    # --- convert to line_objects ---
     return _segments_to_line_objects(refined)
 
 

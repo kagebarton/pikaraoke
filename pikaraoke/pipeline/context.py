@@ -28,7 +28,9 @@ class Phase(enum.Enum):
     LOUDNORM = "loudnorm"  # loudnorm_analyze stage
     STEM_SEPARATION = "stem_separation"  # stem_separation stage (per-chunk)
     TRANSCODE = "transcode"  # ffmpeg_transcode stage (both stems)
-    ALIGN = "align"  # lyric_align: align+refine
+    ALIGN = "align"  # lyric_align: align+refine (legacy bundled call)
+    ALIGN_CHECK = "align_check"  # lyric_align: align only, gate on failure ratio
+    REFINE = "refine"  # lyric_align: refine the cached align result
     TRANSCRIBE = "transcribe"  # lyric_align: transcribe+refine
 
 
@@ -127,14 +129,15 @@ class CancelToken:
                 raise PipelineCancelled(phase)
             self.phase = phase
             self.active = target
-            
+
         if self.on_phase_change is not None:
             try:
                 self.on_phase_change(phase.value)
             except Exception:
                 import logging
+
                 logging.getLogger(__name__).debug("on_phase_change callback failed", exc_info=True)
-                
+
         try:
             yield
         finally:

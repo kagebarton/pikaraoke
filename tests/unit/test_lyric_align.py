@@ -221,6 +221,35 @@ class TestAssignSpeakersZipsSilently:
         assert "speaker" not in line_objects[2]
 
 
+class TestAssignSpeakersByLineId:
+    """Tiling-style line_objects carry a line_id back-reference into the
+    original genius_lines because tiling can drop, repeat, or split lines.
+    Speaker assignment must follow the back-reference, not the positional
+    index.
+    """
+
+    def test_line_id_overrides_positional_index(self):
+        # 3 line_objects from a 5-line lyric: object 0 maps to line 0,
+        # object 1 and 2 both map to line 4 (repeated chorus).
+        line_objects = [
+            {"text": "verse", "line_id": 0, "words": [{"word": "verse"}]},
+            {"text": "chorus", "line_id": 4, "words": [{"word": "chorus"}]},
+            {"text": "chorus", "line_id": 4, "words": [{"word": "chorus"}]},
+        ]
+        genius_lines = [
+            {"speaker_label": "A", "dominant_speaker": "A"},
+            {"speaker_label": "B", "dominant_speaker": "B"},
+            {"speaker_label": "C", "dominant_speaker": "C"},
+            {"speaker_label": "D", "dominant_speaker": "D"},
+            {"speaker_label": "E", "dominant_speaker": "E"},
+        ]
+        _assign_speakers_from_genius(line_objects, genius_lines)
+        assert line_objects[0]["speaker"] == "A"
+        assert line_objects[1]["speaker"] == "E"
+        assert line_objects[2]["speaker"] == "E"
+        assert line_objects[2]["words"][0]["speaker"] == "E"
+
+
 class TestDominantSpeakerPresence:
     def test_single_speaker(self):
         line_objects = [{"dominant_speaker": "Brian"}]
