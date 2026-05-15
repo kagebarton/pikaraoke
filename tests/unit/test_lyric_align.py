@@ -404,3 +404,103 @@ class TestGenerateAss:
             karaoke_text = line.split(",", 9)[-1]
             assert "Brian" not in karaoke_text
             assert "AJ" not in karaoke_text
+
+
+# ---------------------------------------------------------------------------
+# Match-method selection + auto escalation
+# ---------------------------------------------------------------------------
+
+
+class TestMatchMethodEscalation:
+    """LyricAlignStage chooses walk vs tiling based on cfg.match_method and
+    the ratio reported by align_check.
+    """
+
+    def _make_stage_and_ctx(self, tmp_path, match_method="auto", fail_ratio=0.0, threshold=0.1):
+        from pikaraoke.pipeline.context import StageContext
+
+        cfg = PipelineConfig()
+        cfg.match_method = match_method
+        cfg.align_failure_escalation = threshold
+
+        worker = MagicMock()
+        # align_check always returns the canned ratio and a synthetic id.
+        worker.align_check.return_value = {
+            "fail_ratio": fail_ratio,
+            "result_id": "rid-1",
+        }
+        worker.refine_from_cached.return_value = [
+            {"word": "hello", "start": 0.0, "end": 1.0, "speaker": None, "dominant_speaker": None},
+            {"word": "world", "start": 1.0, "end": 2.0, "speaker": None, "dominant_speaker": None},
+        ]
+        worker.transcribe_words.return_value = [
+            {"word": "hello", "start": 0.0, "end": 1.0, "speaker": None, "dominant_speaker": None},
+            {"word": "world", "start": 1.0, "end": 2.0, "speaker": None, "dominant_speaker": None},
+        ]
+
+        stage = LyricAlignStage(whisper_worker=worker, config=cfg)
+
+        song_path = tmp_path / "song.mp4"
+        song_path.write_bytes(b"")
+        vocal_wav = tmp_path / "song.vocals.wav"
+        vocal_wav.write_bytes(b"")
+        lyrics_path = tmp_path / "song.txt"
+        lyrics_path.write_text("hello world\n", encoding="utf-8")
+
+        tmp_dir = tmp_path / "tmp"
+        tmp_dir.mkdir()
+
+        ctx = StageContext(
+            song_path=song_path,
+            tmp_dir=tmp_dir,
+            config=cfg,
+            artifacts={"vocal_wav": vocal_wav, "lyrics_path": lyrics_path},
+            cancel=None,
+        )
+        return stage, ctx, worker
+
+    def test_walk_method_uses_align_check_only(self, tmp_path):
+        stage, ctx, worker = self._make_stage_and_ctx(tmp_path, match_method="walk")
+        stage.run(ctx)
+        worker.align_check.assert_called_once()
+        worker.refine_from_cached.assert_called_once()
+        worker.transcribe_words.assert_not_called()
+        worker.discard_cached.assert_not_called()
+
+    def test_tiling_method_skips_align_entirely(self, tmp_path):
+        stage, ctx, worker = self._make_stage_and_ctx(tmp_path, match_method="tiling")
+        stage.run(ctx)
+        worker.align_check.assert_not_called()
+        worker.refine_from_cached.assert_not_called()
+        worker.transcribe_words.assert_called_once()
+
+    def test_auto_below_threshold_keeps_walk(self, tmp_path):
+        stage, ctx, worker = self._make_stage_and_ctx(
+            tmp_path, match_method="auto", fail_ratio=0.05, threshold=0.1
+        )
+        stage.run(ctx)
+        worker.align_check.assert_called_once()
+        worker.refine_from_cached.assert_called_once()
+        worker.transcribe_words.assert_not_called()
+        worker.discard_cached.assert_not_called()
+
+    def test_auto_above_threshold_escalates_to_tiling(self, tmp_path):
+        stage, ctx, worker = self._make_stage_and_ctx(
+            tmp_path, match_method="auto", fail_ratio=0.25, threshold=0.1
+        )
+        stage.run(ctx)
+        worker.align_check.assert_called_once()
+        # Escalation: discard the cached result; do NOT refine; transcribe instead.
+        worker.discard_cached.assert_called_once_with("rid-1")
+        worker.refine_from_cached.assert_not_called()
+        worker.transcribe_words.assert_called_once()
+
+    def test_auto_discard_failure_doesnt_block_escalation(self, tmp_path):
+        # discard_cached can raise if the worker died between check and the
+        # discard call. The stage must keep going to the tiling matcher.
+        stage, ctx, worker = self._make_stage_and_ctx(
+            tmp_path, match_method="auto", fail_ratio=0.5, threshold=0.1
+        )
+        worker.discard_cached.side_effect = RuntimeError("worker died")
+        stage.run(ctx)
+        worker.transcribe_words.assert_called_once()

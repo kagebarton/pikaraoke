@@ -188,6 +188,24 @@ class PipelineConfig:
     # --- Whisper alignment options ---
     whisper: WhisperModelConfig = field(default_factory=WhisperModelConfig)
 
+    # --- Lyric match method ---
+    # "walk" — stable-ts align() + two-pointer walk matcher with gap
+    #   interpolation. Trusts word order; covers every lyric line.
+    # "tiling" — stable-ts transcribe() + order-independent fuzzy
+    #   candidate + interval-scheduling DP. Resilient to
+    #   remixes/repeats/drift; may drop unmatched lines.
+    # "auto" (default) — run walk, but if stable-ts align() fails more
+    #   than ``align_failure_escalation`` of its segments, discard the
+    #   align result and re-run with the tiling matcher on an honest
+    #   transcription. The escalation happens *before* the refine pass,
+    #   so a discarded align doesn't pay for refine.
+    match_method: str = "auto"
+
+    # Fraction of stable-ts align() segments that must fail before the
+    # "auto" gate escalates to the tiling matcher. 0.1 → escalate at >10%
+    # (e.g. 7/48 ≈ 0.15 triggers).
+    align_failure_escalation: float = 0.1
+
     # --- ASS styling ---
     font_name: str = "Arial"
     font_size: int = 60

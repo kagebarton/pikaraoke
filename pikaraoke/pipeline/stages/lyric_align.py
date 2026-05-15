@@ -34,6 +34,7 @@ from pathlib import Path
 import srt
 
 from pikaraoke.lib.genius_lyrics import genius_singer_mode, parse_genius_sections
+from pikaraoke.lib.tiling_match import match_words_to_lines_tiling
 from pikaraoke.lib.word_alignment import match_words_to_lines
 from pikaraoke.pipeline.config import PipelineConfig
 from pikaraoke.pipeline.context import Phase, PipelineCancelled, SetEvent, StageContext
@@ -72,37 +73,6 @@ class LyricAlignStage(BaseStage):
 
             logger.info(f"[{self.name}] Aligning lyrics to vocal stem: {Path(vocal_wav).name}")
 
-            # Two-phase alignment: align first (cheap relative to refine),
-            # then refine the cached result. A future escalation gate can
-            # discard the cached result here and switch matchers before
-            # paying refine's cost.
-            check = _model_call(
-                ctx,
-                Phase.ALIGN_CHECK,
-                lambda: self._worker.align_check(
-                    vocal_path=vocal_wav,
-                    lyrics_text=lyrics_text,
-                    cancel_event=ctx.cancel.event if ctx.cancel else None,
-                ),
-            )
-            result_id = check["result_id"]
-            logger.info(
-                "[%s] align() failure ratio: %.1f%%",
-                self.name,
-                check["fail_ratio"] * 100,
-            )
-
-            words = _model_call(
-                ctx,
-                Phase.REFINE,
-                lambda: self._worker.refine_from_cached(
-                    result_id=result_id,
-                    vocal_path=vocal_wav,
-                    cancel_event=ctx.cancel.event if ctx.cancel else None,
-                ),
-            )
-
-            # Build line objects via the walk matcher
             if lyrics_structure is not None:
                 lyrics_lines = [l["text"] for l in lyrics_structure]
                 align_lines = [l["align_text"] for l in lyrics_structure]
@@ -110,7 +80,70 @@ class LyricAlignStage(BaseStage):
                 lyrics_lines = [line.strip() for line in lyrics_text.split("\n") if line.strip()]
                 align_lines = None
 
-            line_objects = match_words_to_lines(words, lyrics_lines, align_lines)
+            method = self._config.match_method
+            use_tiling = method == "tiling"
+
+            if not use_tiling:
+                # walk / auto: run align() first so we can gate on its
+                # failure ratio *before* paying for refine.
+                check = _model_call(
+                    ctx,
+                    Phase.ALIGN_CHECK,
+                    lambda: self._worker.align_check(
+                        vocal_path=vocal_wav,
+                        lyrics_text=lyrics_text,
+                        cancel_event=ctx.cancel.event if ctx.cancel else None,
+                    ),
+                )
+                result_id = check["result_id"]
+                fail_ratio = check["fail_ratio"]
+                threshold = self._config.align_failure_escalation
+
+                if method == "auto" and fail_ratio > threshold:
+                    logger.warning(
+                        "[%s] align() failed %.0f%% of segments (> %.0f%% threshold) "
+                        "— escalating to tiling matcher",
+                        self.name,
+                        fail_ratio * 100,
+                        threshold * 100,
+                    )
+                    # Best-effort eviction; if the worker died between
+                    # check and now, discard errors and we just ignore.
+                    try:
+                        self._worker.discard_cached(result_id)
+                    except Exception as exc:
+                        logger.debug("discard_cached failed during escalation: %s", exc)
+                    use_tiling = True
+                else:
+                    if method == "auto":
+                        logger.info(
+                            "[%s] align() failure ratio %.0f%% within threshold "
+                            "— keeping walk match",
+                            self.name,
+                            fail_ratio * 100,
+                        )
+                    words = _model_call(
+                        ctx,
+                        Phase.REFINE,
+                        lambda: self._worker.refine_from_cached(
+                            result_id=result_id,
+                            vocal_path=vocal_wav,
+                            cancel_event=ctx.cancel.event if ctx.cancel else None,
+                        ),
+                    )
+                    line_objects = match_words_to_lines(words, lyrics_lines, align_lines)
+
+            if use_tiling:
+                logger.info(f"[{self.name}] Transcribing for tiling match: {Path(vocal_wav).name}")
+                words = _model_call(
+                    ctx,
+                    Phase.TRANSCRIBE,
+                    lambda: self._worker.transcribe_words(
+                        vocal_path=vocal_wav,
+                        cancel_event=ctx.cancel.event if ctx.cancel else None,
+                    ),
+                )
+                line_objects = match_words_to_lines_tiling(words, lyrics_lines, align_lines)
 
             # Diarize only when Genius headers actually attribute lines to
             # individual singers. Solo Genius songs (no ":" attribution) and
@@ -318,10 +351,10 @@ def _assign_speakers_from_genius(line_objects: list[dict], genius_lines: list[di
     """Copy speaker_label and dominant_speaker from each genius_line onto
     the matching line_obj (and onto every word). Modifies in place.
 
-    Matchers that can drop, repeat, or split lyric lines tag each
-    line_obj with a ``line_id`` back-reference into ``genius_lines``;
-    matchers that emit 1:1 with the input don't. Look up by ``line_id``
-    when present, fall back to positional index otherwise.
+    Matchers that can drop, repeat, or split lyric lines (tiling) tag
+    each line_obj with a ``line_id`` back-reference into ``genius_lines``;
+    matchers that emit 1:1 with the input (walk) don't. Look up by
+    ``line_id`` when present, fall back to positional index otherwise.
     """
     for idx, line_obj in enumerate(line_objects):
         gl_idx = line_obj.get("line_id", idx)
