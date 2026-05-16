@@ -10,7 +10,6 @@ from pikaraoke.lib.genius_lyrics import (
     split_groups,
 )
 
-
 # ---------------------------------------------------------------------------
 # _section_base
 # ---------------------------------------------------------------------------
@@ -156,7 +155,7 @@ class TestParseGeniusSections:
         assert parse_genius_sections("") == []
 
     def test_no_headers(self):
-        """Lines without any headers — all treated as ensemble, section=''. """
+        """Lines without any headers — all treated as ensemble, section=''."""
         text = "Just a song\nWith no sections\n"
         result = parse_genius_sections(text)
 
@@ -171,6 +170,43 @@ class TestParseGeniusSections:
 
         assert result[0]["speaker_label"] == "Brian & AJ"
         assert result[0]["dominant_speaker"] == "Brian"
+
+    def test_speaker_only_header(self):
+        """Colon-less header that's not a section keyword is a speaker."""
+        text = "[Glinda]\nFirst line\n[Elphaba]\nSecond line\n"
+        result = parse_genius_sections(text)
+
+        assert result[0]["speaker_label"] == "Glinda"
+        assert result[0]["dominant_speaker"] == "Glinda"
+        assert result[0]["is_ensemble"] is False
+        assert result[0]["section"] == "Glinda"
+        assert result[1]["speaker_label"] == "Elphaba"
+        assert result[1]["dominant_speaker"] == "Elphaba"
+
+    def test_speaker_only_duet_header(self):
+        """'[Glinda & Elphaba]' parses as a duet attribution."""
+        text = "[Glinda & Elphaba]\nWe sing together\n"
+        result = parse_genius_sections(text)
+
+        assert result[0]["speaker_label"] == "Glinda & Elphaba"
+        assert result[0]["dominant_speaker"] == "Glinda"
+        assert result[0]["is_ensemble"] is False
+
+    def test_speaker_only_all_is_ensemble(self):
+        """'[All]' as a speaker-only header still resolves to ensemble."""
+        text = "[All]\nSing together\n"
+        result = parse_genius_sections(text)
+
+        assert result[0]["speaker_label"] is None
+        assert result[0]["is_ensemble"] is True
+
+    def test_section_keywords_still_treated_as_sections(self):
+        """A bare '[Verse]' or '[Pre-Chorus]' must not be parsed as a speaker."""
+        for keyword in ("Verse", "Chorus", "Pre-Chorus", "Bridge", "Outro"):
+            text = f"[{keyword}]\nA line\n"
+            result = parse_genius_sections(text)
+            assert result[0]["speaker_label"] is None, keyword
+            assert result[0]["is_ensemble"] is True, keyword
 
 
 # ---------------------------------------------------------------------------

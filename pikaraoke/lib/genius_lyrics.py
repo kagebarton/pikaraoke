@@ -30,10 +30,43 @@ _HEADER_RE = re.compile(r"^\[([^\]]+)\]\s*$")
 # Strip trailing section number for fuzzy carry-forward ("Verse 2" → "Verse")
 _SEC_NUM_RE = re.compile(r"\s+\d+$")
 
+# Known song-section keywords. A colon-less bracket whose first word matches
+# is treated as a section name ("[Verse 2]"); anything else is treated as a
+# speaker-only attribution ("[Glinda]", "[Glinda & Elphaba]").
+_SECTION_KEYWORDS = frozenset(
+    {
+        "verse",
+        "chorus",
+        "pre-chorus",
+        "prechorus",
+        "post-chorus",
+        "postchorus",
+        "bridge",
+        "intro",
+        "outro",
+        "refrain",
+        "hook",
+        "interlude",
+        "breakdown",
+        "coda",
+        "instrumental",
+        "spoken",
+        "drop",
+    }
+)
+
 
 def _section_base(name: str) -> str:
     """Return the section name with trailing numbers stripped."""
     return _SEC_NUM_RE.sub("", name).strip()
+
+
+def _is_section_keyword_header(content: str) -> bool:
+    """True if the bracket content begins with a song-section keyword."""
+    parts = content.split()
+    if not parts:
+        return False
+    return parts[0].lower() in _SECTION_KEYWORDS
 
 
 # ---------------------------------------------------------------------------
@@ -150,6 +183,15 @@ def parse_genius_sections(lyrics_text: str) -> list[dict]:
                             current_section,
                             base,
                         )
+                # Speaker-only header like "[Glinda]" or "[Glinda & Elphaba]":
+                # the bracket has no colon, no carry-forward match, and doesn't
+                # start with a section keyword. Parse the content as attribution.
+                if current_groups is None and not _is_section_keyword_header(current_section):
+                    parsed = split_groups(current_section)
+                    if parsed:
+                        current_groups = parsed
+                        section_history[current_section] = current_groups
+                        section_base_history[_section_base(current_section)] = current_groups
             continue
 
         # Build align_text: strip inline parenthesized fragments for alignment
@@ -159,9 +201,7 @@ def parse_genius_sections(lyrics_text: str) -> list[dict]:
             continue
 
         # Non-header, non-blank — emit a line dict
-        speaker_label, dominant_speaker, is_ensemble = _resolve_attribution(
-            current_groups
-        )
+        speaker_label, dominant_speaker, is_ensemble = _resolve_attribution(current_groups)
 
         result.append(
             {
