@@ -651,18 +651,29 @@ function populateLyricsDropdown(data) {
   $("#lyrics-dropdown").trigger("change");
 }
 
-function runLyricsSearch(query) {
+function runLyricsSearch(query, fallback) {
   $("#lyrics-loading").removeClass("is-hidden");
   $("#lyrics-select-wrap").addClass("is-hidden");
   $("#lyrics-empty").addClass("is-hidden");
   $("#lyrics-custom-search").addClass("is-hidden");
   $("#lyrics-dropdown").empty();
+  var shouldFallback = fallback && fallback.trim() && fallback.trim() !== query.trim();
   $.ajax({
     url: "{{ url_for('search.lyrics_search') }}",
     type: "get",
     data: { q: query },
-    success: populateLyricsDropdown,
+    success: function (data) {
+      if (!data.length && shouldFallback) {
+        runLyricsSearch(fallback);
+        return;
+      }
+      populateLyricsDropdown(data);
+    },
     error: function () {
+      if (shouldFallback) {
+        runLyricsSearch(fallback);
+        return;
+      }
       populateLyricsDropdown([]);
     },
   });
@@ -817,7 +828,8 @@ function openPreviewModal($li) {
   });
 
   resetLyricsSection();
-  runLyricsSearch(_activeYtTitle);
+  var searchTerm = sessionStorage.getItem("pikaraoke_search_term") || "";
+  runLyricsSearch(_activeYtTitle, searchTerm);
 }
 
 // Both thumbnail and Select button open the preview modal
