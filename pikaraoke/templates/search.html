@@ -206,7 +206,8 @@
 #lyrics-dropdown { max-width: 100%; }
 #lyrics-loading,
 #lyrics-empty,
-#lyrics-results-label { font-size: var(--lyrics-message-font-size); }
+#lyrics-results-label,
+#lyrics-srt-note { font-size: var(--lyrics-message-font-size); }
 #lyrics-results-label,
 #lyrics-empty { margin-bottom: 0.1rem; }
 #lyrics-results-label { color: #aaa; }
@@ -594,34 +595,45 @@ $("#add-queue-link").trigger("click");
 			enqueueLocalSong($(this).closest("li").attr("data-file-path"), this);
 		});
 // ── Lyrics picker state & functions ──────────────────────────────────────
+//
+// Flow:
+//   1. Modal opens → entire #lyrics-section hidden, preview probe runs.
+//   2. Probe responds:
+//      - srt_available=true  → show SRT-primary UI (download button +
+//        "More options" link to reveal Custom Search / Raw Transcription).
+//        No Genius search is performed.
+//      - srt_available=false → run Genius search using the active title
+//        (falls back to the page's search term) and populate dropdown with
+//        Genius results + Custom Search + Raw Transcription.
+
 var _activeYtTitle = "";
 var _activeYtId = "";
 var _activeSrtAvailable = false;
 
 function resetLyricsSection() {
+  $("#lyrics-section").addClass("is-hidden");
   $("#lyrics-loading").addClass("is-hidden");
   $("#lyrics-results-label").addClass("is-hidden");
   $("#lyrics-select-wrap").addClass("is-hidden");
   $("#lyrics-empty").addClass("is-hidden");
   $("#lyrics-custom-search").addClass("is-hidden");
   $("#lyrics-download-wrap").addClass("is-hidden");
+  $("#lyrics-srt-primary").addClass("is-hidden");
+  $("#lyrics-more-options").addClass("is-hidden");
   $("#lyrics-custom-input").val("");
   $("#lyrics-dropdown").empty();
+  $("#lyrics-srt-btn")
+    .removeClass("is-loading is-success is-danger")
+    .removeAttr("disabled")
+    .text("{% trans %}Download{% endtrans %}");
   _activeSrtAvailable = false;
 }
 
-function ensureSrtOption() {
-  // Inject "📺 YouTube Captions" into the existing dropdown if /preview
-  // discovered captions after the dropdown was already populated.
-  if (!_activeSrtAvailable) return;
-  var $sel = $("#lyrics-dropdown");
-  if (!$sel.children().length) return;
-  if ($sel.find('option[value="__srt__"]').length) return;
-  var $other = $sel.find('optgroup[label="Other Options"]');
-  if (!$other.length) return;
-  $other.find('option[value="__custom__"]').after(
-    $('<option>').val('__srt__').text('📺 YouTube Captions')
-  );
+function showSrtPrimary() {
+  $("#lyrics-section").removeClass("is-hidden");
+  $("#lyrics-loading").addClass("is-hidden");
+  $("#lyrics-srt-primary").removeClass("is-hidden");
+  $("#lyrics-more-options").removeClass("is-hidden");
 }
 
 function populateLyricsDropdown(data) {
@@ -641,8 +653,6 @@ function populateLyricsDropdown(data) {
     $("#lyrics-empty").removeClass("is-hidden");
   }
 
-  // "Other Options" is always shown — Raw Transcription is always available,
-  // and YouTube Captions is added when the /preview probe found en captions.
   var $other = $('<optgroup label="Other Options">');
   $other.append($("<option>").val("__custom__").text("🔍 Custom Search..."));
   if (_activeSrtAvailable) {
@@ -659,6 +669,7 @@ function populateLyricsDropdown(data) {
 }
 
 function runLyricsSearch(query, fallback) {
+  $("#lyrics-section").removeClass("is-hidden");
   $("#lyrics-loading").removeClass("is-hidden");
   $("#lyrics-select-wrap").addClass("is-hidden");
   $("#lyrics-empty").addClass("is-hidden");
@@ -693,10 +704,6 @@ $(document).on("change.search", "#lyrics-dropdown", function () {
     $("#lyrics-custom-search").removeClass("is-hidden");
     $("#lyrics-download-wrap").addClass("is-hidden");
     $("#lyrics-custom-input").focus();
-  } else if (val === "__raw__" || val === "__srt__") {
-    $("#lyrics-custom-search").addClass("is-hidden");
-    $("#lyrics-download-wrap").removeClass("is-hidden");
-    $("#lyrics-download-btn").removeAttr("disabled").text("{% trans %}Download{% endtrans %}");
   } else {
     $("#lyrics-custom-search").addClass("is-hidden");
     $("#lyrics-download-wrap").removeClass("is-hidden");
@@ -718,14 +725,39 @@ $(document).on("keydown.search", "#lyrics-custom-input", function (e) {
   }
 });
 
+// "More options" link in the SRT-primary view replaces the SRT-primary
+// block with the full Genius/Custom/Raw dropdown. "YouTube Captions"
+// is kept available as one of the dropdown options.
+$(document).on("click.search", "#lyrics-more-options-link", function (e) {
+  e.preventDefault();
+  $("#lyrics-srt-primary").addClass("is-hidden");
+  var searchTerm = sessionStorage.getItem("pikaraoke_search_term") || "";
+  runLyricsSearch(_activeYtTitle, searchTerm);
+});
+
+// SRT-primary "Use YouTube captions" button: write srt-mode choice + download.
+$(document).on("click.search", "#lyrics-srt-btn", function () {
+  var $btn = $(this);
+  if ($btn.is(":disabled")) return;
+  $.ajax({
+    url: "{{ url_for('search.lyrics_select') }}",
+    type: "POST",
+    contentType: "application/json",
+    data: JSON.stringify({ yt_id: _activeYtId, mode: "srt", yt_title: _activeYtTitle }),
+  });
+  $btn.addClass("is-success").attr("disabled", true)
+    .html('<i class="icon icon-ok"></i>&nbsp; {% trans %}Added for processing...{% endtrans %}');
+  var $li = $("#search-results li[data-ytid='" + _activeYtId + "']");
+  postDownload($li.attr("value"), $li.attr("data-yttitle"));
+  fadeOutPreviewModal(1000);
+});
+
 // Lyrics download/select button: writes the sidecar choice then triggers download
 $(document).on("click.search", "#lyrics-download-btn", function () {
   var $btn = $(this);
   if ($btn.is(":disabled")) return;
   var val = $("#lyrics-dropdown").val();
   if (val === "__raw__" || val === "__srt__") {
-    // Mode-only selection (raw transcription or YouTube captions) —
-    // write the choice and proceed.
     var modeValue = val === "__raw__" ? "raw" : "srt";
     $.ajax({
       url: "{{ url_for('search.lyrics_select') }}",
@@ -820,25 +852,34 @@ function openPreviewModal($li) {
     document.getElementById("video-loading-overlay").classList.add("is-hidden");
   }, { once: true });
 
+  resetLyricsSection();
+
   $.ajax({
     url: "{{ url_for('search.preview') }}" + "?url=" + encodeURIComponent(videoUrl),
     type: "get",
     success: function (data) {
-      if (modal.classList.contains("is-active") && data.stream_url) {
+      if (!modal.classList.contains("is-active")) return;
+      if (data.stream_url) {
         modalVideo.src = data.stream_url;
         modalVideo.load();
         modalVideo.play().catch(function () {});
       }
       if (data.srt_available) {
         _activeSrtAvailable = true;
-        ensureSrtOption();
+        showSrtPrimary();
+      } else {
+        var searchTerm = sessionStorage.getItem("pikaraoke_search_term") || "";
+        runLyricsSearch(_activeYtTitle, searchTerm);
       }
     },
+    error: function () {
+      // Preview probe failed — fall back to the Genius search flow so
+      // the user still has a way to pick lyrics.
+      if (!modal.classList.contains("is-active")) return;
+      var searchTerm = sessionStorage.getItem("pikaraoke_search_term") || "";
+      runLyricsSearch(_activeYtTitle, searchTerm);
+    },
   });
-
-  resetLyricsSection();
-  var searchTerm = sessionStorage.getItem("pikaraoke_search_term") || "";
-  runLyricsSearch(_activeYtTitle, searchTerm);
 }
 
 // Both thumbnail and Select button open the preview modal
@@ -1028,8 +1069,17 @@ $(document).on("click.search", ".search_result_items_select", function () {
           <div id="video-loading-overlay"><div class="video-spinner"></div></div>
           <video id="modal-video" controls playsinline muted preload="metadata"></video>
         </div>
-        <div id="lyrics-section">
+        <div id="lyrics-section" class="is-hidden">
           <p id="lyrics-loading" class="has-text-grey is-hidden">Searching lyrics...</p>
+          <div id="lyrics-srt-primary" class="is-hidden">
+            <p id="lyrics-srt-note" class="has-text-grey" style="margin-bottom: 0.4rem;">
+              {% trans %}YouTube captions will be used for lyrics.{% endtrans %}
+            </p>
+            <button id="lyrics-srt-btn" class="button is-primary is-fullwidth">{% trans %}Download{% endtrans %}</button>
+            <p id="lyrics-more-options" class="has-text-centered" style="margin-top: 0.5rem;">
+              <a id="lyrics-more-options-link" class="is-size-7 has-text-grey">{% trans %}More options{% endtrans %}</a>
+            </p>
+          </div>
           <p id="lyrics-results-label" class="is-hidden">Genius.com lyrics search results:</p>
           <p id="lyrics-empty" class="has-text-grey is-hidden">No lyrics results found. Use custom search below...</p>
           <div id="lyrics-select-wrap" class="select is-fullwidth is-small is-hidden">

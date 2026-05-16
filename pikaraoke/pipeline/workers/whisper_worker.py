@@ -168,17 +168,13 @@ def _apply_post_process(result, pp: PostProcessKwargs) -> None:
 
 
 def _extract_words(result, min_word_probability: float) -> list[dict]:
-    """Flatten WhisperResult into [{word, start, end, speaker, dominant_speaker}, ...].
+    """Flatten WhisperResult into [{word, start, end}, ...].
 
     Drops words with ``probability < min_word_probability``. These are
     silent-region hallucinations: stable-ts emits them when forced to
     transcribe an unintelligible region, clustered at a single
     zero-duration timestamp. Letting the matcher anchor to them collapses
     whole lines to that timestamp. Pass 0 to disable the filter.
-
-    Each word dict is initialized with ``speaker: None`` and
-    ``dominant_speaker: None`` so downstream code can rely on a uniform
-    shape before speaker assignment runs.
     """
     all_words = []
     dropped = 0
@@ -193,8 +189,6 @@ def _extract_words(result, min_word_probability: float) -> list[dict]:
                     "word": word.word.strip(),
                     "start": word.start,
                     "end": word.end,
-                    "speaker": None,
-                    "dominant_speaker": None,
                 }
             )
     if dropped:
@@ -211,9 +205,6 @@ def _segments_to_line_objects(result) -> list[dict]:
 
     Each segment becomes one subtitle line; its words are used for karaoke
     timing. Segments with no words are skipped.
-
-    In transcription mode, there are no Genius headers to assign speakers
-    from, so speaker/dominant_speaker remain None (single-style ASS).
     """
     line_objects = []
     for segment in result.segments:
@@ -224,8 +215,6 @@ def _segments_to_line_objects(result) -> list[dict]:
                 "word": w.word.strip(),
                 "start": w.start,
                 "end": w.end,
-                "speaker": None,
-                "dominant_speaker": None,
             }
             for w in segment.words
         ]

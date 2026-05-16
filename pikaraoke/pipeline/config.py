@@ -129,7 +129,7 @@ class PostProcessKwargs:
     # Word probability floor used by _extract_words. Words below this
     # are silent-region hallucinations clustered at zero-duration
     # timestamps. 0 disables the filter.
-    min_word_probability: float = 0.0001
+    min_word_probability: float = 0
 
     # Merge words closer than this. None disables.
     adjust_gaps_threshold: float | None = None
@@ -222,28 +222,6 @@ class PipelineConfig:
     # --- Karaoke timing (centiseconds) ---
     line_lead_in_cs: int = 80
     line_lead_out_cs: int = 20
-
-    # --- Speaker diarization colors palette ---
-    # Per-speaker colors for multi-speaker karaoke ASS output.
-    # Index 0 → first dominant_speaker seen, etc.
-    # Format: &HAABBGGRR& (8 hex digits, alpha + reversed RGB, trailing &).
-    #
-    # Ordering rule: every consecutive pair must be visually distinct so
-    # that a 2-singer duet, 3-singer trio, etc. all read as obviously
-    # different colors. RGB primaries lead (muted cyan / red / green — each
-    # complementary to the next), then the secondaries are interleaved so
-    # the two pinks are never adjacent.
-    speaker_colors: list = field(
-        default_factory=lambda: [
-            "&H00A8A800&",  # 0 — muted cyan
-            "&H003232B4&",  # 1 — muted red
-            "&H0028D28C&",  # 2 — muted lime (more green)
-            "&H00A03264&",  # 3 — muted plum (more purple, darker)
-            "&H006E82A0&",  # 4 — muted sage
-            "&H006464C8&",  # 5 — muted dusty rose
-        ]
-    )
-    ensemble_color: str = "&H0000D7FF&"  # goldenrod for unlabeled lines
 
     # --- FFmpeg transcoding ---
     aac_quality: str = "2"  # ≈ 128 kbps VBR AAC

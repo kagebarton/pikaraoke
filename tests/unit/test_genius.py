@@ -1,6 +1,5 @@
 """Unit tests for pikaraoke.lib.genius — GeniusClient and sidecar I/O."""
 
-import json
 import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -17,7 +16,6 @@ from pikaraoke.lib.genius import (
     read_choice,
     write_choice,
 )
-
 
 # ---------------------------------------------------------------------------
 # GeniusClient — construction
@@ -53,13 +51,13 @@ class TestGeniusClientConstruction:
             client = GeniusClient(api_token="tok", timeout=30.0)
             mock_cls.assert_called_once_with("tok", timeout=30.0)
 
-    def test_remove_section_headers_false(self):
-        """Genius client must preserve section headers for parsing."""
+    def test_remove_section_headers_true(self):
+        """Genius client strips section headers so the aligner sees only sung text."""
         with patch("pikaraoke.lib.genius.lyricsgenius.Genius") as mock_cls:
             mock_inst = MagicMock()
             mock_cls.return_value = mock_inst
             GeniusClient(api_token="tok")
-            assert mock_inst.remove_section_headers is False
+            assert mock_inst.remove_section_headers is True
 
     def test_skip_non_songs_true(self):
         with patch("pikaraoke.lib.genius.lyricsgenius.Genius") as mock_cls:
@@ -218,9 +216,7 @@ class TestGeniusClientSearch:
                         },
                     }
                 )
-            mock_inst.search.return_value = {
-                "sections": [{"hits": hits_data}]
-            }
+            mock_inst.search.return_value = {"sections": [{"hits": hits_data}]}
 
             hits = client.search("query", limit=3)
             assert len(hits) == 3

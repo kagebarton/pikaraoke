@@ -294,19 +294,9 @@ class TestMatchWordsToLines:
         assert len(result) == 2
         assert any(w["word"] == "anymore" for w in result[1]["words"])
 
-    def test_pass_through_extra_word_fields(self):
-        # speaker / dominant_speaker initialized in _extract_words must
-        # survive the round-trip into the line_obj's words list.
-        words = [
-            {
-                "word": "hello",
-                "start": 0.0,
-                "end": 1.0,
-                "speaker": None,
-                "dominant_speaker": None,
-            }
-        ]
+    def test_word_dict_has_expected_keys(self):
+        words = [{"word": "hello", "start": 0.0, "end": 1.0}]
         lines = ["hello"]
         result = match_words_to_lines(words, lines)
-        assert "speaker" in result[0]["words"][0]
-        assert "dominant_speaker" in result[0]["words"][0]
+        emitted = result[0]["words"][0]
+        assert set(emitted) == {"word", "start", "end"}

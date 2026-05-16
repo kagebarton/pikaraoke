@@ -284,8 +284,6 @@ def match_words_to_lines(
                 "word": raw,
                 "start": wsrc["start"],
                 "end": wsrc["end"],
-                "speaker": wsrc.get("speaker"),
-                "dominant_speaker": wsrc.get("dominant_speaker"),
             }
 
     # Demote collapsed matched runs: when stable-ts can't locate a lyric
@@ -356,8 +354,6 @@ def match_words_to_lines(
                 "word": raw,
                 "start": s,
                 "end": e,
-                "speaker": None,
-                "dominant_speaker": None,
             }
         k = run_end
 

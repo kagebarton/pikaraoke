@@ -5,7 +5,8 @@ Two modes:
   the vocal stem via stable-ts model.align(), then refines timestamps. A
   two-pointer walk matcher pairs lyric tokens to whisper words with gap
   interpolation for unmatched references — every lyric token ends up in
-  the karaoke output, gap-free.
+  the karaoke output, gap-free. On poor walk alignment quality, escalates
+  to the order-independent tiling matcher.
 - Transcription (no lyrics_path): runs model.transcribe() directly; stable-ts
   determines segment/word boundaries from the audio alone.
 
@@ -27,13 +28,12 @@ cancellation.
 
 import datetime
 import logging
-import re
 import shutil
 from pathlib import Path
 
 import srt
 
-from pikaraoke.lib.genius_lyrics import genius_singer_mode, parse_genius_sections
+from pikaraoke.lib.genius_lyrics import parse_lyric_lines
 from pikaraoke.lib.tiling_match import match_words_to_lines_tiling
 from pikaraoke.lib.word_alignment import match_words_to_lines
 from pikaraoke.pipeline.config import PipelineConfig
@@ -64,21 +64,11 @@ class LyricAlignStage(BaseStage):
             raise RuntimeError(f"[{self.name}] No vocal_wav in artifacts")
 
         if lyrics_path is not None:
-            # --- Alignment mode: ALIGN (includes refine) ---
-            lyrics_text, lyrics_format, lyrics_structure = self._load_lyrics(lyrics_path)
-            ctx.artifacts["lyrics_text"] = lyrics_text
-            ctx.artifacts["lyrics_format"] = lyrics_format
-            if lyrics_structure is not None:
-                ctx.artifacts["lyrics_structure"] = lyrics_structure
+            # --- Alignment mode ---
+            lyrics_lines, align_lines = self._load_lyrics(lyrics_path)
+            lyrics_text = "\n".join(align_lines)
 
             logger.info(f"[{self.name}] Aligning lyrics to vocal stem: {Path(vocal_wav).name}")
-
-            if lyrics_structure is not None:
-                lyrics_lines = [l["text"] for l in lyrics_structure]
-                align_lines = [l["align_text"] for l in lyrics_structure]
-            else:
-                lyrics_lines = [line.strip() for line in lyrics_text.split("\n") if line.strip()]
-                align_lines = None
 
             method = self._config.match_method
             use_tiling = method == "tiling"
@@ -100,28 +90,18 @@ class LyricAlignStage(BaseStage):
                 threshold = self._config.align_failure_escalation
 
                 if method == "auto" and fail_ratio > threshold:
-                    # Genius lyrics often diverge from the actual performance
-                    # (covers, edits, alternate lyrics). Before falling back
-                    # to the order-independent tiling matcher, try aligning
-                    # the YouTube captions if we have them — they usually
-                    # reflect what's actually sung.
-                    fallback = self._try_youtube_srt_align(
-                        ctx,
-                        vocal_wav,
-                        fail_ratio,
-                        threshold,
-                        prior_result_id=result_id,
+                    logger.warning(
+                        "[%s] align() failed %.0f%% of segments (> %.0f%% threshold) "
+                        "— escalating to tiling matcher",
+                        self.name,
+                        fail_ratio * 100,
+                        threshold * 100,
                     )
-                    if fallback is not None:
-                        result_id = fallback["result_id"]
-                        lyrics_lines = fallback["lyrics_lines"]
-                        align_lines = None
-                        lyrics_structure = None
-                    else:
-                        use_tiling = True
+                    self._discard_cached_safely(result_id, "escalation")
+                    use_tiling = True
 
                 if not use_tiling:
-                    if method == "auto" and fail_ratio <= threshold:
+                    if method == "auto":
                         logger.info(
                             "[%s] align() failure ratio %.0f%% within threshold "
                             "— keeping walk match",
@@ -151,16 +131,9 @@ class LyricAlignStage(BaseStage):
                 )
                 line_objects = match_words_to_lines_tiling(words, lyrics_lines, align_lines)
 
-            # Diarize only when Genius headers actually attribute lines to
-            # individual singers. Solo Genius songs (no ":" attribution) and
-            # plain .txt / SRT inputs all fall through to the single-style
-            # ASS path.
-            if lyrics_structure is not None and genius_singer_mode(lyrics_structure) == "multi":
-                _assign_speakers_from_genius(line_objects, lyrics_structure)
-
             write_srt = self._should_write_srt(ctx.song_path)
         else:
-            # --- Transcription mode: TRANSCRIBE (includes refine) ---
+            # --- Transcription mode ---
             logger.info(f"[{self.name}] Transcribing vocal stem: {Path(vocal_wav).name}")
             line_objects = _model_call(
                 ctx,
@@ -203,54 +176,45 @@ class LyricAlignStage(BaseStage):
 
     # --- Helpers ---
 
-    def _load_lyrics(self, lyrics_path: Path) -> tuple[str, str, list[dict] | None]:
-        """Return ``(lyrics_text, lyrics_format, structure)``.
+    def _load_lyrics(self, lyrics_path: Path) -> tuple[list[str], list[str]]:
+        """Return ``(display_lines, align_lines)``.
 
-        ``structure`` is a list of ``{line, section, attribution}`` dicts
-        when the input is Genius-formatted ``.txt``, else ``None``.
+        For ``.srt``: parsed subtitle content; ``align_lines`` mirrors
+        ``display_lines``.
 
-        For Genius ``.txt``:
-        - Parse section headers with :func:`parse_genius_sections`.
-        - Strip header lines and empty lines from the text.
-        - The remaining text (using ``align_text`` from each line) is what
-          stable-ts aligns to.
-        - ``structure`` preserves header context for each surviving line.
-
-        For non-Genius ``.txt`` and ``.srt``: behaves as today;
-        ``structure`` is ``None``.
+        For ``.txt``: split into per-line ``{text, align_text}`` via
+        :func:`parse_lyric_lines`. ``align_lines`` has inline parens
+        stripped (so ``"(I can't help) Falling in love"`` aligns as
+        ``"Falling in love"`` while the display preserves the parens).
         """
         suffix = Path(lyrics_path).suffix.lower()
         if suffix == ".srt":
             raw = lyrics_path.read_text(encoding="utf-8")
             subs = list(srt.parse(raw))
-            lyrics_text = "\n".join(sub.content for sub in subs)
-            return lyrics_text, "srt", None
-        else:
-            raw = lyrics_path.read_text(encoding="utf-8")
+            lines = [sub.content.strip() for sub in subs if sub.content.strip()]
+            return lines, list(lines)
 
-            # Detection heuristic: presence of any section-header line
-            header_re = re.compile(r"^\s*\[.*\]\s*$", re.MULTILINE)
-            if header_re.search(raw):
-                sections = parse_genius_sections(raw)
-                if sections:
-                    # Use align_text (inline parens stripped) for alignment
-                    lyrics_text = "\n".join(line["align_text"] for line in sections)
-                    return lyrics_text, "txt", sections
-
-            # Plain .txt (no Genius headers)
-            return raw, "txt", None
+        raw = lyrics_path.read_text(encoding="utf-8")
+        parsed = parse_lyric_lines(raw)
+        if not parsed:
+            # Fallback for genuinely empty input — keep the matcher's
+            # contract of always receiving lists.
+            return [], []
+        display_lines = [item["text"] for item in parsed]
+        align_lines = [item["align_text"] for item in parsed]
+        return display_lines, align_lines
 
     def _generate_ass(self, line_objects: list[dict]) -> str:
-        """Build .ass content from line objects using config styling/timing.
-
-        Multi-speaker: emits one Style row per unique speaker_label
-        (so duets like "Glinda & Elphaba" get their own color), with
-        per-speaker colors from config. No inline speaker labels.
-        """
+        """Build .ass content from line objects using the single Karaoke style."""
         cfg = self._config
-        present, has_ensemble = _speaker_label_presence(line_objects)
-        single_speaker = len(present) <= 1 and not has_ensemble
-        styles_block = _generate_styles(cfg, present, single_speaker, has_ensemble)
+        styles_block = (
+            f"Style: Karaoke,{cfg.font_name},{cfg.font_size},"
+            f"{cfg.primary_color},{cfg.secondary_color},"
+            f"{cfg.outline_color},{cfg.back_color},"
+            f"0,0,0,0,100,100,0,0,1,"
+            f"{cfg.outline_width},{cfg.shadow_offset},2,"
+            f"{cfg.margin_left},{cfg.margin_right},{cfg.margin_vertical},1\n"
+        )
 
         header = (
             f"[Script Info]\n"
@@ -276,14 +240,6 @@ class LyricAlignStage(BaseStage):
             words = line_obj["words"]
             if not words:
                 continue
-
-            speaker = line_obj.get("speaker")
-            if single_speaker:
-                style = "Karaoke"
-            elif speaker is None:
-                style = "Karaoke_ensemble"
-            else:
-                style = f"Karaoke_{_safe_style_name(speaker)}"
 
             # Pad the event window around the sung word boundaries
             event_start = max(0.0, words[0]["start"] - cfg.line_lead_in_cs / 100.0)
@@ -314,7 +270,7 @@ class LyricAlignStage(BaseStage):
             karaoke_text = "".join(parts)
             events.append(
                 f"Dialogue: 0,{_seconds_to_ass_time(event_start)},"
-                f"{_seconds_to_ass_time(event_end)},{style},,0,0,0,,{karaoke_text}"
+                f"{_seconds_to_ass_time(event_end)},Karaoke,,0,0,0,,{karaoke_text}"
             )
 
         return header + "\n".join(events) + "\n"
@@ -342,292 +298,12 @@ class LyricAlignStage(BaseStage):
         """Skip SRT generation when yt-dlp already provided one."""
         return _find_youtube_srt_path(song_path) is None
 
-    def _try_youtube_srt_align(
-        self,
-        ctx: StageContext,
-        vocal_wav: Path,
-        prior_fail_ratio: float,
-        threshold: float,
-        prior_result_id: str,
-    ) -> dict | None:
-        """Re-run align_check using the YouTube subtitle file as reference.
-
-        Only attempted when the original lyrics came from Genius (the case
-        most prone to lyric/performance mismatch). Discards the prior
-        cached align result first so the worker only holds one at a time.
-
-        Returns ``{"result_id", "lyrics_lines"}`` if the YT SRT alignment
-        is within ``threshold``, or ``None`` to indicate the caller should
-        escalate to tiling.
-        """
-        if ctx.artifacts.get("lyrics_origin") != "genius":
-            logger.warning(
-                "[%s] align() failed %.0f%% of segments (> %.0f%% threshold) "
-                "— escalating to tiling matcher",
-                self.name,
-                prior_fail_ratio * 100,
-                threshold * 100,
-            )
-            self._discard_cached_safely(prior_result_id, "escalation")
-            return None
-
-        yt_srt = _find_youtube_srt_path(ctx.song_path)
-        if yt_srt is None:
-            logger.warning(
-                "[%s] align() failed %.0f%% of segments (> %.0f%% threshold), "
-                "no YouTube SRT available — escalating to tiling matcher",
-                self.name,
-                prior_fail_ratio * 100,
-                threshold * 100,
-            )
-            self._discard_cached_safely(prior_result_id, "escalation")
-            return None
-
-        logger.warning(
-            "[%s] align() failed %.0f%% of segments (> %.0f%% threshold) "
-            "— retrying with YouTube subtitles: %s",
-            self.name,
-            prior_fail_ratio * 100,
-            threshold * 100,
-            yt_srt.name,
-        )
-        self._discard_cached_safely(prior_result_id, "YT SRT fallback")
-
-        yt_text, _, _ = self._load_lyrics(yt_srt)
-        yt_check = _model_call(
-            ctx,
-            Phase.ALIGN_CHECK,
-            lambda: self._worker.align_check(
-                vocal_path=vocal_wav,
-                lyrics_text=yt_text,
-                cancel_event=ctx.cancel.event if ctx.cancel else None,
-            ),
-        )
-        yt_fail_ratio = yt_check["fail_ratio"]
-        yt_result_id = yt_check["result_id"]
-
-        if yt_fail_ratio > threshold:
-            logger.warning(
-                "[%s] YouTube SRT alignment also failed %.0f%% (> %.0f%% threshold) "
-                "— escalating to tiling matcher",
-                self.name,
-                yt_fail_ratio * 100,
-                threshold * 100,
-            )
-            self._discard_cached_safely(yt_result_id, "post-YT escalation")
-            return None
-
-        logger.info(
-            "[%s] YouTube SRT alignment ratio %.0f%% within threshold "
-            "— using YT subtitles as lyric source",
-            self.name,
-            yt_fail_ratio * 100,
-        )
-        lyrics_lines = [l.strip() for l in yt_text.split("\n") if l.strip()]
-        return {"result_id": yt_result_id, "lyrics_lines": lyrics_lines}
-
     def _discard_cached_safely(self, result_id: str, context_msg: str) -> None:
         """Evict a cached align result; log and swallow if the worker died."""
         try:
             self._worker.discard_cached(result_id)
         except Exception as exc:
             logger.debug("discard_cached failed during %s: %s", context_msg, exc)
-
-
-# ---------------------------------------------------------------------------
-# Speaker assignment helpers
-# ---------------------------------------------------------------------------
-
-
-def _assign_speakers_from_genius(line_objects: list[dict], genius_lines: list[dict]) -> None:
-    """Copy speaker_label and dominant_speaker from each genius_line onto
-    the matching line_obj (and onto every word). Modifies in place.
-
-    Matchers that can drop, repeat, or split lyric lines (tiling) tag
-    each line_obj with a ``line_id`` back-reference into ``genius_lines``;
-    matchers that emit 1:1 with the input (walk) don't. Look up by
-    ``line_id`` when present, fall back to positional index otherwise.
-
-    When a lyric text repeats across genius_lines with different speaker
-    attribution (e.g. a chorus sung by different singers each pass), the
-    tiling matcher picks an arbitrary repeat's line_id for each audio
-    rendition. :func:`_remap_duplicate_text_line_ids` reassigns those
-    line_ids in audio-time order before speaker lookup.
-    """
-    _remap_duplicate_text_line_ids(line_objects, genius_lines)
-    for idx, line_obj in enumerate(line_objects):
-        gl_idx = line_obj.get("line_id", idx)
-        if gl_idx >= len(genius_lines):
-            continue
-        gl = genius_lines[gl_idx]
-        line_obj["speaker"] = gl["speaker_label"]
-        line_obj["dominant_speaker"] = gl["dominant_speaker"]
-        for word in line_obj["words"]:
-            word["speaker"] = gl["speaker_label"]
-            word["dominant_speaker"] = gl["dominant_speaker"]
-
-
-# Same-rendition units (e.g. a main phrase and its paren-split backing
-# vocal) cluster within a second or two; distinct chorus renditions are
-# separated by verses/bridges (tens of seconds). 1.0s is comfortably
-# inside that gap.
-_CLUSTER_GAP_TOLERANCE_S = 1.0
-
-
-def _remap_duplicate_text_line_ids(line_objects: list[dict], genius_lines: list[dict]) -> None:
-    """Reassign line_ids of text-duplicated genius lines in time order.
-
-    When the same lyric text appears multiple times in genius_lines (a
-    chorus repeated with different speaker attribution per rendition),
-    the tiling matcher's DP picks an arbitrary repeat's line_id for
-    each audio rendition. That breaks speaker assignment.
-
-    Walk line_objects in start-time order, group by time-overlap (so
-    main + paren-split backing vocals of one rendition stay together),
-    and for each cluster pop the next available genius index from the
-    pool of duplicates for that text. Texts that appear once are left
-    alone; pools that exhaust (more audio renditions than genius
-    repeats) leave remaining clusters at their original line_id.
-    """
-    text_to_indices: dict[str, list[int]] = {}
-    for idx, gl in enumerate(genius_lines):
-        text = gl.get("text")
-        if not text:
-            continue
-        text_to_indices.setdefault(text, []).append(idx)
-    dup_pool = {t: list(idxs) for t, idxs in text_to_indices.items() if len(idxs) > 1}
-    if not dup_pool:
-        return
-
-    # Lines whose tokens were all dropped by the walk matcher's interp cap
-    # carry start=None/end=None — exclude them from time-ordered clustering.
-    objs_with_time = [
-        o for o in line_objects if o.get("start") is not None and o.get("end") is not None
-    ]
-    if not objs_with_time:
-        return
-    sorted_objs = sorted(objs_with_time, key=lambda o: o["start"])
-
-    clusters: list[list[dict]] = []
-    current: list[dict] = []
-    current_end = float("-inf")
-    for obj in sorted_objs:
-        if obj["start"] > current_end + _CLUSTER_GAP_TOLERANCE_S:
-            if current:
-                clusters.append(current)
-            current = [obj]
-            current_end = obj["end"]
-        else:
-            current.append(obj)
-            current_end = max(current_end, obj["end"])
-    if current:
-        clusters.append(current)
-
-    for cluster in clusters:
-        # Distinct duplicate-pool texts represented in this cluster.
-        # Two different duplicate texts in one cluster (e.g. back-to-back
-        # repeated hooks) each consume from their own pool independently.
-        cluster_dup_texts: set[str] = set()
-        for obj in cluster:
-            lid = obj.get("line_id")
-            if lid is None or lid >= len(genius_lines):
-                continue
-            t = genius_lines[lid].get("text")
-            if t in dup_pool:
-                cluster_dup_texts.add(t)
-        for t in cluster_dup_texts:
-            if not dup_pool[t]:
-                continue
-            new_idx = dup_pool[t].pop(0)
-            for obj in cluster:
-                lid = obj.get("line_id")
-                if lid is None or lid >= len(genius_lines):
-                    continue
-                if genius_lines[lid].get("text") == t:
-                    obj["line_id"] = new_idx
-
-
-# ---------------------------------------------------------------------------
-# ASS style helpers
-# ---------------------------------------------------------------------------
-
-# Collapse runs of non-word chars into a single underscore so e.g.
-# "Kevin & AJ" becomes "Kevin_AJ" rather than "Kevin___AJ". Trailing
-# underscores from punctuation at the start/end of the label are also
-# stripped.
-_UNSAFE_CHAR_RE = re.compile(r"[^\w]+")
-
-# Ensemble style constants
-_ENSEMBLE_STYLE = "Karaoke_ensemble"
-
-
-def _safe_style_name(label: str) -> str:
-    """Sanitise a speaker label into an ASCII-safe ASS style name component."""
-    return _UNSAFE_CHAR_RE.sub("_", label).strip("_")
-
-
-def _generate_styles(cfg, present, single_speaker, has_ensemble=False):
-    """Generate one Style row per unique speaker_label, or a single Karaoke style."""
-    rows = []
-    if single_speaker:
-        rows.append(
-            f"Style: Karaoke,{cfg.font_name},{cfg.font_size},"
-            f"{cfg.primary_color},{cfg.secondary_color},"
-            f"{cfg.outline_color},{cfg.back_color},"
-            f"0,0,0,0,100,100,0,0,1,"
-            f"{cfg.outline_width},{cfg.shadow_offset},2,"
-            f"{cfg.margin_left},{cfg.margin_right},{cfg.margin_vertical},1"
-        )
-    else:
-        for color_idx, label in enumerate(present):
-            primary = (
-                cfg.speaker_colors[color_idx]
-                if color_idx < len(cfg.speaker_colors)
-                else cfg.speaker_colors[color_idx % len(cfg.speaker_colors)]
-            )
-            safe = _safe_style_name(label)
-            rows.append(
-                f"Style: Karaoke_{safe},{cfg.font_name},{cfg.font_size},"
-                f"{primary},{cfg.secondary_color},"
-                f"{cfg.outline_color},{cfg.back_color},"
-                f"0,0,0,0,100,100,0,0,1,"
-                f"{cfg.outline_width},{cfg.shadow_offset},2,"
-                f"{cfg.margin_left},{cfg.margin_right},{cfg.margin_vertical},1"
-            )
-        if has_ensemble:
-            ensemble_color = getattr(cfg, "ensemble_color", "&H0000D7FF&")
-            rows.append(
-                f"Style: {_ENSEMBLE_STYLE},{cfg.font_name},{cfg.font_size},"
-                f"{ensemble_color},{cfg.secondary_color},"
-                f"{cfg.outline_color},{cfg.back_color},"
-                f"0,0,0,0,100,100,0,0,1,"
-                f"{cfg.outline_width},{cfg.shadow_offset},2,"
-                f"{cfg.margin_left},{cfg.margin_right},{cfg.margin_vertical},1"
-            )
-    return "\n".join(rows) + "\n"
-
-
-def _speaker_label_presence(line_objects):
-    """Return (present_labels, has_ensemble) keyed by speaker_label.
-
-    present_labels: list of non-None speaker_label values in
-    **first-appearance order**. A duet like "Glinda & Elphaba" is its
-    own label, distinct from either soloist.
-
-    has_ensemble: True if any line has speaker=None (explicitly assigned,
-    not just missing the key).
-    """
-    seen = set()
-    present = []
-    for line in line_objects:
-        label = line.get("speaker")
-        if label is not None and label not in seen:
-            seen.add(label)
-            present.append(label)
-    # Only count as "ensemble" if the key is explicitly present with None value
-    # (Genius header case), not when the key is absent (plain .txt / .srt).
-    has_ensemble = any("speaker" in l and l["speaker"] is None for l in line_objects)
-    return present, has_ensemble
 
 
 # ---------------------------------------------------------------------------

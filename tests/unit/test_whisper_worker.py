@@ -472,26 +472,6 @@ class TestExtractWords:
         assert [w["word"] for w in words] == ["real"]
 
 
-class TestExtractWordsSpeakerFields:
-    """Tests for speaker/dominant_speaker initialization in _extract_words."""
-
-    @pytest.fixture
-    def mock_result(self):
-        result = MagicMock()
-        word1 = MagicMock(word=" Hello", start=0.0, end=0.5, probability=0.9)
-        word2 = MagicMock(word=" world", start=0.5, end=1.0, probability=0.9)
-        seg = MagicMock()
-        seg.words = [word1, word2]
-        result.segments = [seg]
-        return result
-
-    def test_initializes_speaker_to_none(self, mock_result):
-        words = _extract_words(mock_result, min_word_probability=0.0001)
-        for w in words:
-            assert w["speaker"] is None
-            assert w["dominant_speaker"] is None
-
-
 class TestSegmentsToLineObjects:
     @pytest.fixture
     def mock_result(self):
@@ -516,18 +496,6 @@ class TestSegmentsToLineObjects:
         seg.words = []
         result.segments = [seg]
         assert _segments_to_line_objects(result) == []
-
-    def test_initializes_speaker_fields(self):
-        """Transcription mode words get speaker=None, dominant_speaker=None."""
-        result = MagicMock()
-        word1 = MagicMock(word=" Hello", start=0.0, end=0.5)
-        seg = MagicMock()
-        seg.text = " Hello "
-        seg.words = [word1]
-        result.segments = [seg]
-        line_objects = _segments_to_line_objects(result)
-        assert line_objects[0]["words"][0]["speaker"] is None
-        assert line_objects[0]["words"][0]["dominant_speaker"] is None
 
 
 # ---------------------------------------------------------------------------

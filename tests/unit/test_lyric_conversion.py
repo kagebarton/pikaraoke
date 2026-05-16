@@ -67,8 +67,6 @@ class TestExtractWords:
             "word": "Hello",
             "start": 0.0,
             "end": 0.5,
-            "speaker": None,
-            "dominant_speaker": None,
         }
 
     def test_single_segment_multiple_words(self):

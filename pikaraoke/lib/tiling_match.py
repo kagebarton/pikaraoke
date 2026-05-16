@@ -25,8 +25,7 @@ transcribes as its own run, never contiguous with the main phrase.
 
 Output line_objects carry a ``line_id`` back-reference into ``lines``
 (the same lyric line may appear zero times or many times — dropped,
-repeated, or split across parenthetical units), so downstream speaker
-assignment maps by index rather than positional zip.
+repeated, or split across parenthetical units).
 """
 
 import logging
@@ -288,8 +287,6 @@ def _build_line_object(
                 "word": raw,
                 "start": src["start"],
                 "end": src["end"],
-                "speaker": src.get("speaker"),
-                "dominant_speaker": src.get("dominant_speaker"),
             }
 
     win_start = win_words[0]["start"]
@@ -316,8 +313,6 @@ def _build_line_object(
                 "word": raw,
                 "start": s,
                 "end": e,
-                "speaker": None,
-                "dominant_speaker": None,
             }
         k = run_end
 

@@ -20,8 +20,8 @@ from __future__ import annotations
 
 import json
 import logging
-import threading
 import tempfile
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -76,7 +76,10 @@ class GeniusClient:
 
         if api_token:
             self._genius = lyricsgenius.Genius(api_token, timeout=timeout)
-            self._genius.remove_section_headers = False
+            # Headers ([Verse], [Chorus: Brian], etc.) are stripped server-side
+            # by the lyricsgenius lib so the aligner sees only sung text — no
+            # bracketed metadata to confuse whisper alignment.
+            self._genius.remove_section_headers = True
             self._genius.skip_non_songs = True
         else:
             self._genius = None  # type: ignore[assignment]
@@ -134,8 +137,8 @@ class GeniusClient:
         """Scrape lyrics for a specific song id.
 
         Raises :class:`GeniusUnavailable` on any error or when the scraped
-        page yields empty lyrics.  Returns the raw text including section
-        headers (e.g. ``[Verse 1]``, ``[Chorus: Artist]``).
+        page yields empty lyrics.  Returns text with section headers
+        removed (see ``remove_section_headers`` in ``__init__``).
         """
         if not self._token or self._genius is None:
             raise GeniusUnavailable("Genius API token not configured")
@@ -175,9 +178,7 @@ def write_choice(yt_id: str, payload: dict) -> Path:
     payload.setdefault("yt_id", yt_id)
 
     # Atomic write: write to a temp file in the same directory, then rename.
-    fd, tmp_path = tempfile.mkstemp(
-        dir=str(target.parent), prefix=f".{yt_id}-", suffix=".json"
-    )
+    fd, tmp_path = tempfile.mkstemp(dir=str(target.parent), prefix=f".{yt_id}-", suffix=".json")
     try:
         import os
 
