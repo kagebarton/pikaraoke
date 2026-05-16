@@ -228,6 +228,13 @@
   z-index: 4;
 }
 #lyrics-section { margin-top: 0.75rem; }
+#modal-video-title {
+  color: #fff;
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem 0;
+  word-break: break-word;
+}
 #modal-js-example.is-fading-out { transition: opacity 2s; opacity: 0; pointer-events: none; }
 </style>
 <script>
@@ -795,6 +802,8 @@ function openPreviewModal($li) {
   _activeYtTitle = $li.attr("data-yttitle") || "";
   _activeYtId = $li.attr("data-ytid") || "";
 
+  document.getElementById("modal-video-title").textContent = _activeYtTitle;
+
   modal.classList.add("is-active");
 
   // Unlock autoplay on iOS/mobile: briefly play the empty video element
@@ -1014,6 +1023,7 @@ $(document).on("click.search", ".search_result_items_select", function () {
 		<div id="modal-js-example" class="modal">
 			<div class="modal-background"></div>
       <div class="modal-content">
+        <p id="modal-video-title"></p>
         <div class="video-container">
           <div id="video-loading-overlay"><div class="video-spinner"></div></div>
           <video id="modal-video" controls playsinline muted preload="metadata"></video>
