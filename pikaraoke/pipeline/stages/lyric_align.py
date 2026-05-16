@@ -382,9 +382,7 @@ def _assign_speakers_from_genius(line_objects: list[dict], genius_lines: list[di
 _CLUSTER_GAP_TOLERANCE_S = 1.0
 
 
-def _remap_duplicate_text_line_ids(
-    line_objects: list[dict], genius_lines: list[dict]
-) -> None:
+def _remap_duplicate_text_line_ids(line_objects: list[dict], genius_lines: list[dict]) -> None:
     """Reassign line_ids of text-duplicated genius lines in time order.
 
     When the same lyric text appears multiple times in genius_lines (a
@@ -409,7 +407,11 @@ def _remap_duplicate_text_line_ids(
     if not dup_pool:
         return
 
-    objs_with_time = [o for o in line_objects if "start" in o and "end" in o]
+    # Lines whose tokens were all dropped by the walk matcher's interp cap
+    # carry start=None/end=None — exclude them from time-ordered clustering.
+    objs_with_time = [
+        o for o in line_objects if o.get("start") is not None and o.get("end") is not None
+    ]
     if not objs_with_time:
         return
     sorted_objs = sorted(objs_with_time, key=lambda o: o["start"])
@@ -476,10 +478,9 @@ def _generate_styles(cfg, present, single_speaker, has_ensemble=False):
     """Generate one Style row per dominant speaker, or a single Karaoke style."""
     rows = []
     if single_speaker:
-        primary = cfg.speaker_colors[0] if cfg.speaker_colors else "&H0000D7FF&"
         rows.append(
             f"Style: Karaoke,{cfg.font_name},{cfg.font_size},"
-            f"{primary},{cfg.secondary_color},"
+            f"{cfg.primary_color},{cfg.secondary_color},"
             f"{cfg.outline_color},{cfg.back_color},"
             f"0,0,0,0,100,100,0,0,1,"
             f"{cfg.outline_width},{cfg.shadow_offset},2,"

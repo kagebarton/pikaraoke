@@ -263,12 +263,9 @@ class TestAssignSpeakersDuplicateTextRemap:
         # (the DP ties-break to the lowest line_id when identical-text
         # candidates have equal scores).
         line_objects = [
-            {"text": "oh oh", "line_id": 0, "start": 10.0, "end": 12.0,
-             "words": [{"word": "oh"}]},
-            {"text": "oh oh", "line_id": 0, "start": 40.0, "end": 42.0,
-             "words": [{"word": "oh"}]},
-            {"text": "oh oh", "line_id": 0, "start": 70.0, "end": 72.0,
-             "words": [{"word": "oh"}]},
+            {"text": "oh oh", "line_id": 0, "start": 10.0, "end": 12.0, "words": [{"word": "oh"}]},
+            {"text": "oh oh", "line_id": 0, "start": 40.0, "end": 42.0, "words": [{"word": "oh"}]},
+            {"text": "oh oh", "line_id": 0, "start": 70.0, "end": 72.0, "words": [{"word": "oh"}]},
         ]
         genius_lines = [
             {"text": "oh oh", "speaker_label": "A", "dominant_speaker": "A"},
@@ -285,14 +282,22 @@ class TestAssignSpeakersDuplicateTextRemap:
         # backing), both pointing at the parent's line_id. They cluster
         # by time-overlap and should both remap to the same new line_id.
         line_objects = [
-            {"text": "main", "line_id": 0, "start": 10.0, "end": 12.0,
-             "words": [{"word": "main"}]},
-            {"text": "backing", "line_id": 0, "start": 10.5, "end": 12.5,
-             "words": [{"word": "backing"}]},
-            {"text": "main", "line_id": 0, "start": 40.0, "end": 42.0,
-             "words": [{"word": "main"}]},
-            {"text": "backing", "line_id": 0, "start": 40.5, "end": 42.5,
-             "words": [{"word": "backing"}]},
+            {"text": "main", "line_id": 0, "start": 10.0, "end": 12.0, "words": [{"word": "main"}]},
+            {
+                "text": "backing",
+                "line_id": 0,
+                "start": 10.5,
+                "end": 12.5,
+                "words": [{"word": "backing"}],
+            },
+            {"text": "main", "line_id": 0, "start": 40.0, "end": 42.0, "words": [{"word": "main"}]},
+            {
+                "text": "backing",
+                "line_id": 0,
+                "start": 40.5,
+                "end": 42.5,
+                "words": [{"word": "backing"}],
+            },
         ]
         genius_lines = [
             {"text": "main (backing)", "speaker_label": "A", "dominant_speaker": "A"},
@@ -307,12 +312,9 @@ class TestAssignSpeakersDuplicateTextRemap:
     def test_unique_lines_left_alone(self):
         # Verse text is unique → no remapping; chorus duplicates get remapped.
         line_objects = [
-            {"text": "verse one", "line_id": 0, "start": 0.0, "end": 5.0,
-             "words": [{"word": "v"}]},
-            {"text": "chorus", "line_id": 1, "start": 10.0, "end": 12.0,
-             "words": [{"word": "c"}]},
-            {"text": "chorus", "line_id": 1, "start": 30.0, "end": 32.0,
-             "words": [{"word": "c"}]},
+            {"text": "verse one", "line_id": 0, "start": 0.0, "end": 5.0, "words": [{"word": "v"}]},
+            {"text": "chorus", "line_id": 1, "start": 10.0, "end": 12.0, "words": [{"word": "c"}]},
+            {"text": "chorus", "line_id": 1, "start": 30.0, "end": 32.0, "words": [{"word": "c"}]},
         ]
         genius_lines = [
             {"text": "verse one", "speaker_label": "A", "dominant_speaker": "A"},
@@ -328,12 +330,9 @@ class TestAssignSpeakersDuplicateTextRemap:
         # Pool of 2, but 3 audio renditions: the third keeps its
         # already-assigned line_id (no pool entry left to pop).
         line_objects = [
-            {"text": "chorus", "line_id": 0, "start": 10.0, "end": 12.0,
-             "words": [{"word": "c"}]},
-            {"text": "chorus", "line_id": 0, "start": 30.0, "end": 32.0,
-             "words": [{"word": "c"}]},
-            {"text": "chorus", "line_id": 1, "start": 50.0, "end": 52.0,
-             "words": [{"word": "c"}]},
+            {"text": "chorus", "line_id": 0, "start": 10.0, "end": 12.0, "words": [{"word": "c"}]},
+            {"text": "chorus", "line_id": 0, "start": 30.0, "end": 32.0, "words": [{"word": "c"}]},
+            {"text": "chorus", "line_id": 1, "start": 50.0, "end": 52.0, "words": [{"word": "c"}]},
         ]
         genius_lines = [
             {"text": "chorus", "speaker_label": "A", "dominant_speaker": "A"},
@@ -348,12 +347,9 @@ class TestAssignSpeakersDuplicateTextRemap:
         # Matcher coincidentally picked line_ids in reverse temporal
         # order. Remapping should overwrite based on time.
         line_objects = [
-            {"text": "chorus", "line_id": 2, "start": 10.0, "end": 12.0,
-             "words": [{"word": "c"}]},
-            {"text": "chorus", "line_id": 0, "start": 30.0, "end": 32.0,
-             "words": [{"word": "c"}]},
-            {"text": "chorus", "line_id": 1, "start": 50.0, "end": 52.0,
-             "words": [{"word": "c"}]},
+            {"text": "chorus", "line_id": 2, "start": 10.0, "end": 12.0, "words": [{"word": "c"}]},
+            {"text": "chorus", "line_id": 0, "start": 30.0, "end": 32.0, "words": [{"word": "c"}]},
+            {"text": "chorus", "line_id": 1, "start": 50.0, "end": 52.0, "words": [{"word": "c"}]},
         ]
         genius_lines = [
             {"text": "chorus", "speaker_label": "A", "dominant_speaker": "A"},
@@ -362,6 +358,24 @@ class TestAssignSpeakersDuplicateTextRemap:
         ]
         _assign_speakers_from_genius(line_objects, genius_lines)
         assert [o["speaker"] for o in line_objects] == ["A", "B", "C"]
+
+    def test_dropped_lines_with_none_timing_skipped(self):
+        # Walk-matcher lines whose tokens were all dropped via the interp cap
+        # carry start=None / end=None. They must be excluded from time-ordered
+        # clustering — comparing None against floats raises a TypeError.
+        line_objects = [
+            {"text": "chorus", "line_id": 0, "start": 10.0, "end": 12.0, "words": [{"word": "c"}]},
+            {"text": "dropped", "line_id": 2, "start": None, "end": None, "words": []},
+            {"text": "chorus", "line_id": 0, "start": 30.0, "end": 32.0, "words": [{"word": "c"}]},
+        ]
+        genius_lines = [
+            {"text": "chorus", "speaker_label": "A", "dominant_speaker": "A"},
+            {"text": "chorus", "speaker_label": "B", "dominant_speaker": "B"},
+            {"text": "dropped", "speaker_label": "C", "dominant_speaker": "C"},
+        ]
+        _assign_speakers_from_genius(line_objects, genius_lines)
+        assert line_objects[0]["speaker"] == "A"
+        assert line_objects[2]["speaker"] == "B"
 
 
 class TestDominantSpeakerPresence:
