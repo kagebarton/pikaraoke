@@ -355,7 +355,14 @@ def _assign_speakers_from_genius(line_objects: list[dict], genius_lines: list[di
     each line_obj with a ``line_id`` back-reference into ``genius_lines``;
     matchers that emit 1:1 with the input (walk) don't. Look up by
     ``line_id`` when present, fall back to positional index otherwise.
+
+    When a lyric text repeats across genius_lines with different speaker
+    attribution (e.g. a chorus sung by different singers each pass), the
+    tiling matcher picks an arbitrary repeat's line_id for each audio
+    rendition. :func:`_remap_duplicate_text_line_ids` reassigns those
+    line_ids in audio-time order before speaker lookup.
     """
+    _remap_duplicate_text_line_ids(line_objects, genius_lines)
     for idx, line_obj in enumerate(line_objects):
         gl_idx = line_obj.get("line_id", idx)
         if gl_idx >= len(genius_lines):
@@ -366,6 +373,84 @@ def _assign_speakers_from_genius(line_objects: list[dict], genius_lines: list[di
         for word in line_obj["words"]:
             word["speaker"] = gl["speaker_label"]
             word["dominant_speaker"] = gl["dominant_speaker"]
+
+
+# Same-rendition units (e.g. a main phrase and its paren-split backing
+# vocal) cluster within a second or two; distinct chorus renditions are
+# separated by verses/bridges (tens of seconds). 1.0s is comfortably
+# inside that gap.
+_CLUSTER_GAP_TOLERANCE_S = 1.0
+
+
+def _remap_duplicate_text_line_ids(
+    line_objects: list[dict], genius_lines: list[dict]
+) -> None:
+    """Reassign line_ids of text-duplicated genius lines in time order.
+
+    When the same lyric text appears multiple times in genius_lines (a
+    chorus repeated with different speaker attribution per rendition),
+    the tiling matcher's DP picks an arbitrary repeat's line_id for
+    each audio rendition. That breaks speaker assignment.
+
+    Walk line_objects in start-time order, group by time-overlap (so
+    main + paren-split backing vocals of one rendition stay together),
+    and for each cluster pop the next available genius index from the
+    pool of duplicates for that text. Texts that appear once are left
+    alone; pools that exhaust (more audio renditions than genius
+    repeats) leave remaining clusters at their original line_id.
+    """
+    text_to_indices: dict[str, list[int]] = {}
+    for idx, gl in enumerate(genius_lines):
+        text = gl.get("text")
+        if not text:
+            continue
+        text_to_indices.setdefault(text, []).append(idx)
+    dup_pool = {t: list(idxs) for t, idxs in text_to_indices.items() if len(idxs) > 1}
+    if not dup_pool:
+        return
+
+    objs_with_time = [o for o in line_objects if "start" in o and "end" in o]
+    if not objs_with_time:
+        return
+    sorted_objs = sorted(objs_with_time, key=lambda o: o["start"])
+
+    clusters: list[list[dict]] = []
+    current: list[dict] = []
+    current_end = float("-inf")
+    for obj in sorted_objs:
+        if obj["start"] > current_end + _CLUSTER_GAP_TOLERANCE_S:
+            if current:
+                clusters.append(current)
+            current = [obj]
+            current_end = obj["end"]
+        else:
+            current.append(obj)
+            current_end = max(current_end, obj["end"])
+    if current:
+        clusters.append(current)
+
+    for cluster in clusters:
+        # Distinct duplicate-pool texts represented in this cluster.
+        # Two different duplicate texts in one cluster (e.g. back-to-back
+        # repeated hooks) each consume from their own pool independently.
+        cluster_dup_texts: set[str] = set()
+        for obj in cluster:
+            lid = obj.get("line_id")
+            if lid is None or lid >= len(genius_lines):
+                continue
+            t = genius_lines[lid].get("text")
+            if t in dup_pool:
+                cluster_dup_texts.add(t)
+        for t in cluster_dup_texts:
+            if not dup_pool[t]:
+                continue
+            new_idx = dup_pool[t].pop(0)
+            for obj in cluster:
+                lid = obj.get("line_id")
+                if lid is None or lid >= len(genius_lines):
+                    continue
+                if genius_lines[lid].get("text") == t:
+                    obj["line_id"] = new_idx
 
 
 # ---------------------------------------------------------------------------

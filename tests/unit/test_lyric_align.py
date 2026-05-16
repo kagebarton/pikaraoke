@@ -250,6 +250,120 @@ class TestAssignSpeakersByLineId:
         assert line_objects[2]["words"][0]["speaker"] == "E"
 
 
+class TestAssignSpeakersDuplicateTextRemap:
+    """When the same lyric text appears multiple times in genius_lines with
+    different speaker attribution per repeat, the tiling matcher picks an
+    arbitrary repeat's line_id for each audio rendition. Speaker assignment
+    must reassign line_ids in audio-time order so each rendition gets the
+    speaker of the next-available repeat.
+    """
+
+    def test_three_chorus_renditions_all_matched_to_first_repeat(self):
+        # Worst case: matcher picked line_id=0 for all three renditions
+        # (the DP ties-break to the lowest line_id when identical-text
+        # candidates have equal scores).
+        line_objects = [
+            {"text": "oh oh", "line_id": 0, "start": 10.0, "end": 12.0,
+             "words": [{"word": "oh"}]},
+            {"text": "oh oh", "line_id": 0, "start": 40.0, "end": 42.0,
+             "words": [{"word": "oh"}]},
+            {"text": "oh oh", "line_id": 0, "start": 70.0, "end": 72.0,
+             "words": [{"word": "oh"}]},
+        ]
+        genius_lines = [
+            {"text": "oh oh", "speaker_label": "A", "dominant_speaker": "A"},
+            {"text": "oh oh", "speaker_label": "B", "dominant_speaker": "B"},
+            {"text": "oh oh", "speaker_label": "C", "dominant_speaker": "C"},
+        ]
+        _assign_speakers_from_genius(line_objects, genius_lines)
+        assert [o["speaker"] for o in line_objects] == ["A", "B", "C"]
+        assert line_objects[0]["words"][0]["speaker"] == "A"
+        assert line_objects[2]["words"][0]["speaker"] == "C"
+
+    def test_main_and_paren_split_share_remapping(self):
+        # One chorus rendition produces two line_objects (main + paren
+        # backing), both pointing at the parent's line_id. They cluster
+        # by time-overlap and should both remap to the same new line_id.
+        line_objects = [
+            {"text": "main", "line_id": 0, "start": 10.0, "end": 12.0,
+             "words": [{"word": "main"}]},
+            {"text": "backing", "line_id": 0, "start": 10.5, "end": 12.5,
+             "words": [{"word": "backing"}]},
+            {"text": "main", "line_id": 0, "start": 40.0, "end": 42.0,
+             "words": [{"word": "main"}]},
+            {"text": "backing", "line_id": 0, "start": 40.5, "end": 42.5,
+             "words": [{"word": "backing"}]},
+        ]
+        genius_lines = [
+            {"text": "main (backing)", "speaker_label": "A", "dominant_speaker": "A"},
+            {"text": "main (backing)", "speaker_label": "B", "dominant_speaker": "B"},
+        ]
+        _assign_speakers_from_genius(line_objects, genius_lines)
+        assert line_objects[0]["speaker"] == "A"
+        assert line_objects[1]["speaker"] == "A"
+        assert line_objects[2]["speaker"] == "B"
+        assert line_objects[3]["speaker"] == "B"
+
+    def test_unique_lines_left_alone(self):
+        # Verse text is unique → no remapping; chorus duplicates get remapped.
+        line_objects = [
+            {"text": "verse one", "line_id": 0, "start": 0.0, "end": 5.0,
+             "words": [{"word": "v"}]},
+            {"text": "chorus", "line_id": 1, "start": 10.0, "end": 12.0,
+             "words": [{"word": "c"}]},
+            {"text": "chorus", "line_id": 1, "start": 30.0, "end": 32.0,
+             "words": [{"word": "c"}]},
+        ]
+        genius_lines = [
+            {"text": "verse one", "speaker_label": "A", "dominant_speaker": "A"},
+            {"text": "chorus", "speaker_label": "B", "dominant_speaker": "B"},
+            {"text": "chorus", "speaker_label": "C", "dominant_speaker": "C"},
+        ]
+        _assign_speakers_from_genius(line_objects, genius_lines)
+        assert line_objects[0]["speaker"] == "A"
+        assert line_objects[1]["speaker"] == "B"
+        assert line_objects[2]["speaker"] == "C"
+
+    def test_extra_audio_rendition_falls_back_to_original(self):
+        # Pool of 2, but 3 audio renditions: the third keeps its
+        # already-assigned line_id (no pool entry left to pop).
+        line_objects = [
+            {"text": "chorus", "line_id": 0, "start": 10.0, "end": 12.0,
+             "words": [{"word": "c"}]},
+            {"text": "chorus", "line_id": 0, "start": 30.0, "end": 32.0,
+             "words": [{"word": "c"}]},
+            {"text": "chorus", "line_id": 1, "start": 50.0, "end": 52.0,
+             "words": [{"word": "c"}]},
+        ]
+        genius_lines = [
+            {"text": "chorus", "speaker_label": "A", "dominant_speaker": "A"},
+            {"text": "chorus", "speaker_label": "B", "dominant_speaker": "B"},
+        ]
+        _assign_speakers_from_genius(line_objects, genius_lines)
+        # First two consume A and B in time order; third keeps its
+        # original line_id=1 → B.
+        assert [o["speaker"] for o in line_objects] == ["A", "B", "B"]
+
+    def test_remap_uses_time_order_not_matcher_order(self):
+        # Matcher coincidentally picked line_ids in reverse temporal
+        # order. Remapping should overwrite based on time.
+        line_objects = [
+            {"text": "chorus", "line_id": 2, "start": 10.0, "end": 12.0,
+             "words": [{"word": "c"}]},
+            {"text": "chorus", "line_id": 0, "start": 30.0, "end": 32.0,
+             "words": [{"word": "c"}]},
+            {"text": "chorus", "line_id": 1, "start": 50.0, "end": 52.0,
+             "words": [{"word": "c"}]},
+        ]
+        genius_lines = [
+            {"text": "chorus", "speaker_label": "A", "dominant_speaker": "A"},
+            {"text": "chorus", "speaker_label": "B", "dominant_speaker": "B"},
+            {"text": "chorus", "speaker_label": "C", "dominant_speaker": "C"},
+        ]
+        _assign_speakers_from_genius(line_objects, genius_lines)
+        assert [o["speaker"] for o in line_objects] == ["A", "B", "C"]
+
+
 class TestDominantSpeakerPresence:
     def test_single_speaker(self):
         line_objects = [{"dominant_speaker": "Brian"}]
