@@ -111,7 +111,9 @@ class GeniusClient:
             if h.get("type") != "song":
                 continue
             result = h.get("result", {})
-            artist_name = result.get("primary_artist", {}).get("name", "")
+            artist_name = result.get("artist_names") or result.get("primary_artist", {}).get(
+                "name", ""
+            )
             if blocked_term in artist_name.lower():
                 continue
             hits.append(
