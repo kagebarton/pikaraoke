@@ -100,22 +100,28 @@ class LyricAlignStage(BaseStage):
                 threshold = self._config.align_failure_escalation
 
                 if method == "auto" and fail_ratio > threshold:
-                    logger.warning(
-                        "[%s] align() failed %.0f%% of segments (> %.0f%% threshold) "
-                        "— escalating to tiling matcher",
-                        self.name,
-                        fail_ratio * 100,
-                        threshold * 100,
+                    # Genius lyrics often diverge from the actual performance
+                    # (covers, edits, alternate lyrics). Before falling back
+                    # to the order-independent tiling matcher, try aligning
+                    # the YouTube captions if we have them — they usually
+                    # reflect what's actually sung.
+                    fallback = self._try_youtube_srt_align(
+                        ctx,
+                        vocal_wav,
+                        fail_ratio,
+                        threshold,
+                        prior_result_id=result_id,
                     )
-                    # Best-effort eviction; if the worker died between
-                    # check and now, discard errors and we just ignore.
-                    try:
-                        self._worker.discard_cached(result_id)
-                    except Exception as exc:
-                        logger.debug("discard_cached failed during escalation: %s", exc)
-                    use_tiling = True
-                else:
-                    if method == "auto":
+                    if fallback is not None:
+                        result_id = fallback["result_id"]
+                        lyrics_lines = fallback["lyrics_lines"]
+                        align_lines = None
+                        lyrics_structure = None
+                    else:
+                        use_tiling = True
+
+                if not use_tiling:
+                    if method == "auto" and fail_ratio <= threshold:
                         logger.info(
                             "[%s] align() failure ratio %.0f%% within threshold "
                             "— keeping walk match",
@@ -237,11 +243,12 @@ class LyricAlignStage(BaseStage):
     def _generate_ass(self, line_objects: list[dict]) -> str:
         """Build .ass content from line objects using config styling/timing.
 
-        Multi-speaker: emits one Style row per dominant_speaker,
-        with per-speaker colors from config. No inline speaker labels.
+        Multi-speaker: emits one Style row per unique speaker_label
+        (so duets like "Glinda & Elphaba" get their own color), with
+        per-speaker colors from config. No inline speaker labels.
         """
         cfg = self._config
-        present, has_ensemble = _dominant_speaker_presence(line_objects)
+        present, has_ensemble = _speaker_label_presence(line_objects)
         single_speaker = len(present) <= 1 and not has_ensemble
         styles_block = _generate_styles(cfg, present, single_speaker, has_ensemble)
 
@@ -270,15 +277,13 @@ class LyricAlignStage(BaseStage):
             if not words:
                 continue
 
-            # Determine style from dominant_speaker (falls back to speaker)
             speaker = line_obj.get("speaker")
-            dominant = line_obj.get("dominant_speaker", speaker)
             if single_speaker:
                 style = "Karaoke"
-            elif dominant is None:
+            elif speaker is None:
                 style = "Karaoke_ensemble"
             else:
-                style = f"Karaoke_{_safe_style_name(dominant)}"
+                style = f"Karaoke_{_safe_style_name(speaker)}"
 
             # Pad the event window around the sung word boundaries
             event_start = max(0.0, words[0]["start"] - cfg.line_lead_in_cs / 100.0)
@@ -335,11 +340,98 @@ class LyricAlignStage(BaseStage):
     @staticmethod
     def _should_write_srt(song_path: Path) -> bool:
         """Skip SRT generation when yt-dlp already provided one."""
-        subs = song_path.parent / "subtitles"
-        return not (
-            (subs / f"{song_path.stem}.en.srt").exists()
-            or (subs / f"{song_path.stem}.srt").exists()
+        return _find_youtube_srt_path(song_path) is None
+
+    def _try_youtube_srt_align(
+        self,
+        ctx: StageContext,
+        vocal_wav: Path,
+        prior_fail_ratio: float,
+        threshold: float,
+        prior_result_id: str,
+    ) -> dict | None:
+        """Re-run align_check using the YouTube subtitle file as reference.
+
+        Only attempted when the original lyrics came from Genius (the case
+        most prone to lyric/performance mismatch). Discards the prior
+        cached align result first so the worker only holds one at a time.
+
+        Returns ``{"result_id", "lyrics_lines"}`` if the YT SRT alignment
+        is within ``threshold``, or ``None`` to indicate the caller should
+        escalate to tiling.
+        """
+        if ctx.artifacts.get("lyrics_origin") != "genius":
+            logger.warning(
+                "[%s] align() failed %.0f%% of segments (> %.0f%% threshold) "
+                "— escalating to tiling matcher",
+                self.name,
+                prior_fail_ratio * 100,
+                threshold * 100,
+            )
+            self._discard_cached_safely(prior_result_id, "escalation")
+            return None
+
+        yt_srt = _find_youtube_srt_path(ctx.song_path)
+        if yt_srt is None:
+            logger.warning(
+                "[%s] align() failed %.0f%% of segments (> %.0f%% threshold), "
+                "no YouTube SRT available — escalating to tiling matcher",
+                self.name,
+                prior_fail_ratio * 100,
+                threshold * 100,
+            )
+            self._discard_cached_safely(prior_result_id, "escalation")
+            return None
+
+        logger.warning(
+            "[%s] align() failed %.0f%% of segments (> %.0f%% threshold) "
+            "— retrying with YouTube subtitles: %s",
+            self.name,
+            prior_fail_ratio * 100,
+            threshold * 100,
+            yt_srt.name,
         )
+        self._discard_cached_safely(prior_result_id, "YT SRT fallback")
+
+        yt_text, _, _ = self._load_lyrics(yt_srt)
+        yt_check = _model_call(
+            ctx,
+            Phase.ALIGN_CHECK,
+            lambda: self._worker.align_check(
+                vocal_path=vocal_wav,
+                lyrics_text=yt_text,
+                cancel_event=ctx.cancel.event if ctx.cancel else None,
+            ),
+        )
+        yt_fail_ratio = yt_check["fail_ratio"]
+        yt_result_id = yt_check["result_id"]
+
+        if yt_fail_ratio > threshold:
+            logger.warning(
+                "[%s] YouTube SRT alignment also failed %.0f%% (> %.0f%% threshold) "
+                "— escalating to tiling matcher",
+                self.name,
+                yt_fail_ratio * 100,
+                threshold * 100,
+            )
+            self._discard_cached_safely(yt_result_id, "post-YT escalation")
+            return None
+
+        logger.info(
+            "[%s] YouTube SRT alignment ratio %.0f%% within threshold "
+            "— using YT subtitles as lyric source",
+            self.name,
+            yt_fail_ratio * 100,
+        )
+        lyrics_lines = [l.strip() for l in yt_text.split("\n") if l.strip()]
+        return {"result_id": yt_result_id, "lyrics_lines": lyrics_lines}
+
+    def _discard_cached_safely(self, result_id: str, context_msg: str) -> None:
+        """Evict a cached align result; log and swallow if the worker died."""
+        try:
+            self._worker.discard_cached(result_id)
+        except Exception as exc:
+            logger.debug("discard_cached failed during %s: %s", context_msg, exc)
 
 
 # ---------------------------------------------------------------------------
@@ -475,7 +567,7 @@ def _safe_style_name(label: str) -> str:
 
 
 def _generate_styles(cfg, present, single_speaker, has_ensemble=False):
-    """Generate one Style row per dominant speaker, or a single Karaoke style."""
+    """Generate one Style row per unique speaker_label, or a single Karaoke style."""
     rows = []
     if single_speaker:
         rows.append(
@@ -515,11 +607,12 @@ def _generate_styles(cfg, present, single_speaker, has_ensemble=False):
     return "\n".join(rows) + "\n"
 
 
-def _dominant_speaker_presence(line_objects):
-    """Return (present_labels, has_ensemble) keyed by dominant_speaker.
+def _speaker_label_presence(line_objects):
+    """Return (present_labels, has_ensemble) keyed by speaker_label.
 
-    present_labels: list of non-None dominant_speaker values in
-    **first-appearance order**.
+    present_labels: list of non-None speaker_label values in
+    **first-appearance order**. A duet like "Glinda & Elphaba" is its
+    own label, distinct from either soloist.
 
     has_ensemble: True if any line has speaker=None (explicitly assigned,
     not just missing the key).
@@ -527,10 +620,10 @@ def _dominant_speaker_presence(line_objects):
     seen = set()
     present = []
     for line in line_objects:
-        ds = line.get("dominant_speaker", line.get("speaker"))
-        if ds is not None and ds not in seen:
-            seen.add(ds)
-            present.append(ds)
+        label = line.get("speaker")
+        if label is not None and label not in seen:
+            seen.add(label)
+            present.append(label)
     # Only count as "ensemble" if the key is explicitly present with None value
     # (Genius header case), not when the key is absent (plain .txt / .srt).
     has_ensemble = any("speaker" in l and l["speaker"] is None for l in line_objects)
@@ -556,6 +649,21 @@ def _model_call(ctx, phase: Phase, fn):
             return fn()
     except AlignmentCancelledError:
         raise PipelineCancelled(phase)
+
+
+def _find_youtube_srt_path(song_path: Path) -> Path | None:
+    """Return the YouTube-supplied SRT for ``song_path`` if one exists.
+
+    Mirrors the discovery logic in
+    :meth:`pikaraoke.pipeline.stages.lyrics_fetch.LyricsFetchStage._find_srt`
+    so both stages agree on which file represents the YT captions.
+    """
+    subs = song_path.parent / "subtitles"
+    for name in (f"{song_path.stem}.en.srt", f"{song_path.stem}.srt"):
+        candidate = subs / name
+        if candidate.is_file():
+            return candidate
+    return None
 
 
 def _seconds_to_ass_time(seconds: float) -> str:

@@ -12,8 +12,8 @@ from pikaraoke.pipeline.config import PipelineConfig
 from pikaraoke.pipeline.stages.lyric_align import (
     LyricAlignStage,
     _assign_speakers_from_genius,
-    _dominant_speaker_presence,
     _safe_style_name,
+    _speaker_label_presence,
 )
 
 # ---------------------------------------------------------------------------
@@ -378,27 +378,38 @@ class TestAssignSpeakersDuplicateTextRemap:
         assert line_objects[2]["speaker"] == "B"
 
 
-class TestDominantSpeakerPresence:
+class TestSpeakerLabelPresence:
     def test_single_speaker(self):
-        line_objects = [{"dominant_speaker": "Brian"}]
-        present, has_ensemble = _dominant_speaker_presence(line_objects)
+        line_objects = [{"speaker": "Brian"}]
+        present, has_ensemble = _speaker_label_presence(line_objects)
         assert present == ["Brian"]
         assert has_ensemble is False
 
     def test_ensemble(self):
         line_objects = [{"speaker": None}]
-        present, has_ensemble = _dominant_speaker_presence(line_objects)
+        present, has_ensemble = _speaker_label_presence(line_objects)
         assert present == []
         assert has_ensemble is True
 
     def test_first_appearance_order(self):
         line_objects = [
-            {"dominant_speaker": "AJ"},
-            {"dominant_speaker": "Brian"},
-            {"dominant_speaker": "AJ"},
+            {"speaker": "AJ"},
+            {"speaker": "Brian"},
+            {"speaker": "AJ"},
         ]
-        present, has_ensemble = _dominant_speaker_presence(line_objects)
+        present, has_ensemble = _speaker_label_presence(line_objects)
         assert present == ["AJ", "Brian"]
+        assert has_ensemble is False
+
+    def test_duet_label_distinct_from_soloists(self):
+        """A duet label ("Glinda & Elphaba") is its own color slot."""
+        line_objects = [
+            {"speaker": "Glinda"},
+            {"speaker": "Elphaba"},
+            {"speaker": "Glinda & Elphaba"},
+        ]
+        present, has_ensemble = _speaker_label_presence(line_objects)
+        assert present == ["Glinda", "Elphaba", "Glinda & Elphaba"]
         assert has_ensemble is False
 
 
@@ -483,6 +494,34 @@ class TestGenerateAss:
         ass = stage._generate_ass(line_objects)
         assert "Style: Karaoke_Brian," in ass
         assert "Style: Karaoke_ensemble," in ass
+
+    def test_duet_label_gets_its_own_style(self, stage):
+        """A "Glinda & Elphaba" line emits its own style row, not collapsed
+        into the dominant singer's slot."""
+        line_objects = [
+            {
+                "text": "Glinda solo",
+                "words": [{"word": "Solo", "start": 0.0, "end": 1.0}],
+                "speaker": "Glinda",
+                "dominant_speaker": "Glinda",
+            },
+            {
+                "text": "Elphaba solo",
+                "words": [{"word": "Solo", "start": 1.0, "end": 2.0}],
+                "speaker": "Elphaba",
+                "dominant_speaker": "Elphaba",
+            },
+            {
+                "text": "Duet",
+                "words": [{"word": "Together", "start": 2.0, "end": 3.0}],
+                "speaker": "Glinda & Elphaba",
+                "dominant_speaker": "Glinda",
+            },
+        ]
+        ass = stage._generate_ass(line_objects)
+        assert "Style: Karaoke_Glinda," in ass
+        assert "Style: Karaoke_Elphaba," in ass
+        assert "Style: Karaoke_Glinda_Elphaba," in ass
 
     def test_solo_genius_emits_single_karaoke_style(self, stage):
         """A Genius song where genius_singer_mode == 'solo' goes through
@@ -631,4 +670,93 @@ class TestMatchMethodEscalation:
         )
         worker.discard_cached.side_effect = RuntimeError("worker died")
         stage.run(ctx)
+        worker.transcribe_words.assert_called_once()
+
+
+class TestYouTubeSrtFallback:
+    """When align(genius) fails, try align(YT SRT) before tiling."""
+
+    def _make(self, tmp_path, *, origin="genius", first_ratio=0.5, second_ratio=0.0,
+              yt_srt_text: str | None = "1\n00:00:00,000 --> 00:00:01,000\nhello world\n"):
+        from pikaraoke.pipeline.context import StageContext
+
+        cfg = PipelineConfig()
+        cfg.match_method = "auto"
+        cfg.align_failure_escalation = 0.1
+
+        worker = MagicMock()
+        worker.align_check.side_effect = [
+            {"fail_ratio": first_ratio, "result_id": "rid-genius"},
+            {"fail_ratio": second_ratio, "result_id": "rid-yt"},
+        ]
+        worker.refine_from_cached.return_value = [
+            {"word": "hello", "start": 0.0, "end": 1.0, "speaker": None, "dominant_speaker": None},
+            {"word": "world", "start": 1.0, "end": 2.0, "speaker": None, "dominant_speaker": None},
+        ]
+        worker.transcribe_words.return_value = [
+            {"word": "hello", "start": 0.0, "end": 1.0, "speaker": None, "dominant_speaker": None},
+            {"word": "world", "start": 1.0, "end": 2.0, "speaker": None, "dominant_speaker": None},
+        ]
+
+        stage = LyricAlignStage(whisper_worker=worker, config=cfg)
+
+        song_path = tmp_path / "song.mp4"
+        song_path.write_bytes(b"")
+        vocal_wav = tmp_path / "song.vocals.wav"
+        vocal_wav.write_bytes(b"")
+        lyrics_path = tmp_path / "song.txt"
+        lyrics_path.write_text("hello world\n", encoding="utf-8")
+
+        if yt_srt_text is not None:
+            (tmp_path / "subtitles").mkdir()
+            (tmp_path / "subtitles" / "song.en.srt").write_text(yt_srt_text, encoding="utf-8")
+
+        tmp_dir = tmp_path / "tmp"
+        tmp_dir.mkdir()
+
+        ctx = StageContext(
+            song_path=song_path,
+            tmp_dir=tmp_dir,
+            config=cfg,
+            artifacts={
+                "vocal_wav": vocal_wav,
+                "lyrics_path": lyrics_path,
+                "lyrics_origin": origin,
+            },
+            cancel=None,
+        )
+        return stage, ctx, worker
+
+    def test_yt_srt_rescues_failed_genius_alignment(self, tmp_path):
+        stage, ctx, worker = self._make(tmp_path, first_ratio=0.5, second_ratio=0.05)
+        stage.run(ctx)
+        # Two align_check calls (genius, then YT SRT); refine uses YT cache.
+        assert worker.align_check.call_count == 2
+        worker.discard_cached.assert_called_once_with("rid-genius")
+        worker.refine_from_cached.assert_called_once()
+        assert worker.refine_from_cached.call_args.kwargs["result_id"] == "rid-yt"
+        worker.transcribe_words.assert_not_called()
+
+    def test_yt_srt_also_fails_falls_through_to_tiling(self, tmp_path):
+        stage, ctx, worker = self._make(tmp_path, first_ratio=0.5, second_ratio=0.4)
+        stage.run(ctx)
+        assert worker.align_check.call_count == 2
+        # Both cached results discarded; tiling runs.
+        assert worker.discard_cached.call_count == 2
+        worker.refine_from_cached.assert_not_called()
+        worker.transcribe_words.assert_called_once()
+
+    def test_no_yt_srt_falls_straight_to_tiling(self, tmp_path):
+        stage, ctx, worker = self._make(tmp_path, first_ratio=0.5, yt_srt_text=None)
+        stage.run(ctx)
+        worker.align_check.assert_called_once()
+        worker.discard_cached.assert_called_once_with("rid-genius")
+        worker.transcribe_words.assert_called_once()
+
+    def test_origin_not_genius_skips_yt_srt_fallback(self, tmp_path):
+        # If lyrics already came from the YT SRT (origin=srt), don't re-align
+        # the same source — escalate straight to tiling.
+        stage, ctx, worker = self._make(tmp_path, origin="srt", first_ratio=0.5)
+        stage.run(ctx)
+        worker.align_check.assert_called_once()
         worker.transcribe_words.assert_called_once()
