@@ -206,6 +206,14 @@ class PipelineConfig:
     # (e.g. 7/48 ≈ 0.15 triggers).
     align_failure_escalation: float = 0.1
 
+    # When True, the lyric-align stage writes a JSON bundle to
+    # ``<song_dir>/alignment_debug/<stem>.json`` capturing the matcher
+    # inputs (whisper words + lyric lines), the knob values that ran,
+    # and per-pass telemetry. Used for offline tuning of the walk/tiling
+    # knobs (see pikaraoke.lib.alignment_capture). Cheap (~50–200 KB/song)
+    # and easy to wipe; flip off once the corpus is sufficient.
+    capture_alignment_debug: bool = True
+
     # --- ASS styling ---
     font_name: str = "Arial"
     font_size: int = 60

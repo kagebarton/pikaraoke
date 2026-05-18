@@ -198,6 +198,38 @@ def match_words_to_lines(
     max_collapsed_run: int = 8,
     collapse_window: float = 0.3,
 ) -> list[dict]:
+    """Thin wrapper around :func:`match_words_to_lines_with_stats` that
+    discards the stats dict. See that function for full documentation.
+    """
+    line_objects, _stats = match_words_to_lines_with_stats(
+        words,
+        lines,
+        align_lines=align_lines,
+        lyric_lookahead=lyric_lookahead,
+        whisper_lookahead=whisper_lookahead,
+        confirm_matches=confirm_matches,
+        whisper_skip_budget=whisper_skip_budget,
+        max_interp_run=max_interp_run,
+        min_interp_slot=min_interp_slot,
+        max_collapsed_run=max_collapsed_run,
+        collapse_window=collapse_window,
+    )
+    return line_objects
+
+
+def match_words_to_lines_with_stats(
+    words: list,
+    lines: list[str],
+    align_lines: list[str] | None = None,
+    lyric_lookahead: int = 3,
+    whisper_lookahead: int = 10,
+    confirm_matches: int = 2,
+    whisper_skip_budget: int = 10,
+    max_interp_run: int = 5,
+    min_interp_slot: float = 0.1,
+    max_collapsed_run: int = 8,
+    collapse_window: float = 0.3,
+) -> tuple[list[dict], dict]:
     """Assign whisper words to lyric lines via two-pointer walk matching.
 
     Each reference token is either paired with a whisper word (using that
@@ -246,7 +278,23 @@ def match_words_to_lines(
             applies. Set very large to disable.
         collapse_window: max span, in seconds, for a matched-token run to
             count as collapsed for the ``max_collapsed_run`` check.
+
+    Returns:
+        ``(line_objects, stats)``. ``stats`` is a dict capturing knob
+        values and per-run telemetry (matched/dropped/collapsed/interp
+        run lengths) used downstream by the alignment-capture writer to
+        seed offline knob tuning.
     """
+    knobs = {
+        "lyric_lookahead": lyric_lookahead,
+        "whisper_lookahead": whisper_lookahead,
+        "confirm_matches": confirm_matches,
+        "whisper_skip_budget": whisper_skip_budget,
+        "max_interp_run": max_interp_run,
+        "min_interp_slot": min_interp_slot,
+        "max_collapsed_run": max_collapsed_run,
+        "collapse_window": collapse_window,
+    }
     if align_lines is None:
         align_lines = lines
 
@@ -260,7 +308,29 @@ def match_words_to_lines(
 
     n_lines = len(lines)
     if not lyric_tokens or not words:
-        return [{"text": d, "words": [], "start": 0.0, "end": 0.0} for d in lines]
+        empty_stats = {
+            "knobs": knobs,
+            "n_words": len(words),
+            "n_lines": n_lines,
+            "n_tokens": len(lyric_tokens),
+            "matched_count": 0,
+            "whisper_consumed": 0,
+            "collapsed_tokens": 0,
+            "dropped_tokens": 0,
+            "collapsed_run_lengths": [],
+            "interp_run_lengths": [],
+            "dropped_run_lengths": [],
+            "collapsed_token_indices": [],
+            "dropped_token_indices": [],
+            "mapping": [],
+            "lines_with_words": 0,
+            "empty_line_reasons": {},
+            "early_return": True,
+        }
+        return (
+            [{"text": d, "words": [], "start": 0.0, "end": 0.0} for d in lines],
+            empty_stats,
+        )
 
     whisper_norms = [_normalize_token(w["word"]) for w in words]
     lyric_norms = [lt[0] for lt in lyric_tokens]
@@ -292,6 +362,8 @@ def match_words_to_lines(
     # of matched tokens crammed into < collapse_window seconds and
     # demote them to None so the interp/drop logic below applies.
     collapsed_tokens = 0
+    collapsed_run_lengths: list[int] = []
+    collapsed_token_indices: list[list[int]] = []
     if max_collapsed_run < n_tokens:
         k = 0
         while k < n_tokens:
@@ -310,6 +382,8 @@ def match_words_to_lines(
                 for idx in range(k, run_end):
                     token_words[idx] = None
                 collapsed_tokens += run_len
+                collapsed_run_lengths.append(run_len)
+                collapsed_token_indices.append(list(range(k, run_end)))
                 k = run_end
             else:
                 k += 1
@@ -319,6 +393,9 @@ def match_words_to_lines(
     # Interpolate short unmatched runs; drop long runs entirely (token_words
     # stays None — those tokens won't appear in the karaoke output).
     dropped_tokens = 0
+    interp_run_lengths: list[int] = []
+    dropped_run_lengths: list[int] = []
+    dropped_token_indices: list[list[int]] = []
     k = 0
     while k < n_tokens:
         if token_words[k] is not None:
@@ -330,6 +407,8 @@ def match_words_to_lines(
         run_len = run_end - k
         if run_len > max_interp_run:
             dropped_tokens += run_len
+            dropped_run_lengths.append(run_len)
+            dropped_token_indices.append(list(range(k, run_end)))
             k = run_end
             continue
         prev_end = token_words[k - 1]["end"] if k > 0 else 0.0
@@ -344,8 +423,12 @@ def match_words_to_lines(
             # common-word anchors — drop it rather than cram near-zero-
             # duration phantom words into a sliver of time.
             dropped_tokens += run_len
+            dropped_run_lengths.append(run_len)
+            dropped_token_indices.append(list(range(k, run_end)))
             k = run_end
             continue
+        if run_len > 0:
+            interp_run_lengths.append(run_len)
         for offset in range(run_len):
             s = prev_end + offset * slot
             e = prev_end + (offset + 1) * slot
@@ -424,4 +507,37 @@ def match_words_to_lines(
         obj["start"] = prev_end
         obj["end"] = next_start
 
-    return line_objects
+    # Per-empty-line diagnosis. Distinguishes "line had no normalizable
+    # tokens to start with" (paren-only / structural junk — a lyrics-
+    # parser signal) from "every token was dropped by collapse-demote
+    # or the interp cap" (a knob-tuning signal). Without this split the
+    # aggregate lines_with_words count conflates both.
+    empty_line_reasons: dict[int, str] = {}
+    for line_idx, obj in enumerate(line_objects):
+        if obj["words"]:
+            continue
+        if line_idx in lines_with_tokens:
+            empty_line_reasons[line_idx] = "all_tokens_dropped"
+        else:
+            empty_line_reasons[line_idx] = "no_normalizable_tokens"
+
+    stats = {
+        "knobs": knobs,
+        "n_words": len(words),
+        "n_lines": n_lines,
+        "n_tokens": n_tokens,
+        "matched_count": matched_count,
+        "whisper_consumed": sum(1 for v in mapping if v is not None),
+        "collapsed_tokens": collapsed_tokens,
+        "dropped_tokens": dropped_tokens,
+        "collapsed_run_lengths": collapsed_run_lengths,
+        "interp_run_lengths": interp_run_lengths,
+        "dropped_run_lengths": dropped_run_lengths,
+        "collapsed_token_indices": collapsed_token_indices,
+        "dropped_token_indices": dropped_token_indices,
+        "mapping": list(mapping),
+        "lines_with_words": sum(1 for o in line_objects if o["words"]),
+        "empty_line_reasons": empty_line_reasons,
+        "early_return": False,
+    }
+    return line_objects, stats

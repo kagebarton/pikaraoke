@@ -333,6 +333,28 @@ def match_words_to_lines_tiling(
     lookahead: int = 3,
     anchor_fallback: bool = True,
 ) -> list[dict]:
+    """Thin wrapper around :func:`match_words_to_lines_tiling_with_stats`
+    that discards the stats dict. See that function for full documentation.
+    """
+    line_objects, _stats = match_words_to_lines_tiling_with_stats(
+        words,
+        lines,
+        align_lines=align_lines,
+        max_edit_ratio=max_edit_ratio,
+        lookahead=lookahead,
+        anchor_fallback=anchor_fallback,
+    )
+    return line_objects
+
+
+def match_words_to_lines_tiling_with_stats(
+    words: list,
+    lines: list[str],
+    align_lines: list[str] | None = None,
+    max_edit_ratio: float = 0.25,
+    lookahead: int = 3,
+    anchor_fallback: bool = True,
+) -> tuple[list[dict], dict]:
     """Order-independent matcher — see module docstring.
 
     Returns line_objects sorted by start time. Unlike the walk matcher
@@ -363,8 +385,20 @@ def match_words_to_lines_tiling(
         lookahead: walk-aligner lookahead inside a selected window.
         anchor_fallback: enable the contiguous-anchor re-scan for lines
             that got zero candidates in the main pass.
+
+    Returns:
+        ``(line_objects, stats)``. ``stats`` is a dict capturing knob
+        values and per-pass telemetry (candidate counts, selected window
+        widths, line/unit coverage) for the alignment-capture writer to
+        seed offline knob tuning.
     """
     del align_lines  # accepted for API parity, see docstring
+
+    knobs = {
+        "max_edit_ratio": max_edit_ratio,
+        "lookahead": lookahead,
+        "anchor_fallback": anchor_fallback,
+    }
 
     # Build match units. Most lines yield one unit; a line with
     # parenthetical phrases splits into the main phrase + each paren as
@@ -379,32 +413,87 @@ def match_words_to_lines_tiling(
             unit_texts.append(unit_text)
             unit_tokens.append(_tokenize_unit(unit_text))
 
+    # Capture-bundle sidecar: `unit_id` (position in this list) lets
+    # downstream analysis resolve any candidate/selected reference back
+    # to its source line text, including for paren-split units that
+    # don't map 1:1 to display lines.
+    units_field = [
+        {"line_id": unit_line_ids[i], "text": unit_texts[i]} for i in range(len(unit_texts))
+    ]
+
     if not words:
-        return []
+        empty_stats = {
+            "knobs": knobs,
+            "n_words": 0,
+            "n_lines": len(lines),
+            "units_total": len(unit_texts),
+            "units": units_field,
+            "candidates_main": 0,
+            "candidates_anchor": 0,
+            "anchor_zero_candidate_units": 0,
+            "anchor_units_recovered": 0,
+            "zero_candidate_unit_ids": [],
+            "anchor_recovered_unit_ids": [],
+            "per_unit_candidate_counts_main": [0] * len(unit_texts),
+            "per_unit_candidate_counts_anchor": [0] * len(unit_texts),
+            "per_unit_best_score": [None] * len(unit_texts),
+            "selected_count": 0,
+            "selected_score_sum": 0.0,
+            "units_matched": 0,
+            "lines_covered": 0,
+            "selected_windows": [],
+            "early_return": True,
+        }
+        return [], empty_stats
 
     token_norms = [_normalize_token(w["word"]) for w in words]
     unit_lines_norm = [[t[0] for t in toks] for toks in unit_tokens]
 
-    candidates = find_candidates(token_norms, unit_lines_norm, max_edit_ratio)
+    main_candidates = find_candidates(token_norms, unit_lines_norm, max_edit_ratio)
+    candidates_main = len(main_candidates)
+    candidates_anchor = 0
+    anchor_candidates: list = []
 
-    if anchor_fallback:
-        matched_units = {c[2] for c in candidates}
-        zero_candidate_units = [
-            uid for uid, toks in enumerate(unit_lines_norm) if toks and uid not in matched_units
-        ]
-        if zero_candidate_units:
-            anchor_cands = find_anchor_candidates(
-                token_norms, unit_lines_norm, zero_candidate_units
-            )
-            recovered = len({c[2] for c in anchor_cands})
-            logger.info(
-                "Anchor fallback: re-scanned %d zero-candidate units → "
-                "%d candidates recovering %d units",
-                len(zero_candidate_units),
-                len(anchor_cands),
-                recovered,
-            )
-            candidates.extend(anchor_cands)
+    # Computed unconditionally so the bundle records *which* units the
+    # main pass missed — even when anchor_fallback is disabled, this is
+    # the population the fallback would target.
+    matched_units_main = {c[2] for c in main_candidates}
+    zero_candidate_unit_ids = sorted(
+        uid for uid, toks in enumerate(unit_lines_norm) if toks and uid not in matched_units_main
+    )
+    anchor_recovered_unit_ids: list[int] = []
+
+    if anchor_fallback and zero_candidate_unit_ids:
+        anchor_candidates = find_anchor_candidates(
+            token_norms, unit_lines_norm, zero_candidate_unit_ids
+        )
+        anchor_recovered_unit_ids = sorted({c[2] for c in anchor_candidates})
+        candidates_anchor = len(anchor_candidates)
+        logger.info(
+            "Anchor fallback: re-scanned %d zero-candidate units → "
+            "%d candidates recovering %d units",
+            len(zero_candidate_unit_ids),
+            len(anchor_candidates),
+            len(anchor_recovered_unit_ids),
+        )
+
+    # Per-unit stats — distribution of candidates and best score per unit.
+    # Reveals chorus units that flood the DP with candidates, and units
+    # that had a strong match available but lost to overlap pressure.
+    n_units = len(unit_texts)
+    per_unit_candidate_counts_main = [0] * n_units
+    per_unit_candidate_counts_anchor = [0] * n_units
+    per_unit_best_score: list[float | None] = [None] * n_units
+    for c in main_candidates:
+        per_unit_candidate_counts_main[c[2]] += 1
+        if per_unit_best_score[c[2]] is None or c[3] > per_unit_best_score[c[2]]:
+            per_unit_best_score[c[2]] = float(c[3])
+    for c in anchor_candidates:
+        per_unit_candidate_counts_anchor[c[2]] += 1
+        if per_unit_best_score[c[2]] is None or c[3] > per_unit_best_score[c[2]]:
+            per_unit_best_score[c[2]] = float(c[3])
+
+    candidates = main_candidates + anchor_candidates
 
     selected = best_tiling(candidates)
 
@@ -420,8 +509,19 @@ def match_words_to_lines_tiling(
     )
 
     line_objects = []
-    for start_idx, end_idx, unit_idx, _score in selected:
+    selected_windows: list[dict] = []
+    for start_idx, end_idx, unit_idx, score in selected:
         win_words = words[start_idx:end_idx]
+        selected_windows.append(
+            {
+                "unit_id": unit_idx,
+                "line_id": unit_line_ids[unit_idx],
+                "score": float(score),
+                "width": end_idx - start_idx,
+                "start_idx": start_idx,
+                "end_idx": end_idx,
+            }
+        )
         obj = _build_line_object(
             unit_texts[unit_idx],
             unit_line_ids[unit_idx],
@@ -432,4 +532,27 @@ def match_words_to_lines_tiling(
         line_objects.append(obj)
 
     line_objects.sort(key=lambda o: o["start"])
-    return line_objects
+
+    stats = {
+        "knobs": knobs,
+        "n_words": len(words),
+        "n_lines": len(lines),
+        "units_total": len(unit_texts),
+        "units": units_field,
+        "candidates_main": candidates_main,
+        "candidates_anchor": candidates_anchor,
+        "anchor_zero_candidate_units": len(zero_candidate_unit_ids),
+        "anchor_units_recovered": len(anchor_recovered_unit_ids),
+        "zero_candidate_unit_ids": zero_candidate_unit_ids,
+        "anchor_recovered_unit_ids": anchor_recovered_unit_ids,
+        "per_unit_candidate_counts_main": per_unit_candidate_counts_main,
+        "per_unit_candidate_counts_anchor": per_unit_candidate_counts_anchor,
+        "per_unit_best_score": per_unit_best_score,
+        "selected_count": len(selected),
+        "selected_score_sum": float(sum(c[3] for c in selected)),
+        "units_matched": len({c[2] for c in selected}),
+        "lines_covered": len({unit_line_ids[c[2]] for c in selected}),
+        "selected_windows": selected_windows,
+        "early_return": False,
+    }
+    return line_objects, stats

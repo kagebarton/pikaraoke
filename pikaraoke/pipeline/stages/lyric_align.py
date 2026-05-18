@@ -26,6 +26,7 @@ directory only after both writes succeed — preventing orphan files on
 cancellation.
 """
 
+import dataclasses
 import datetime
 import logging
 import shutil
@@ -33,9 +34,10 @@ from pathlib import Path
 
 import srt
 
+from pikaraoke.lib import alignment_capture
 from pikaraoke.lib.genius_lyrics import parse_lyric_lines
-from pikaraoke.lib.tiling_match import match_words_to_lines_tiling
-from pikaraoke.lib.word_alignment import match_words_to_lines
+from pikaraoke.lib.tiling_match import match_words_to_lines_tiling_with_stats
+from pikaraoke.lib.word_alignment import match_words_to_lines_with_stats
 from pikaraoke.pipeline.config import PipelineConfig
 from pikaraoke.pipeline.context import Phase, PipelineCancelled, SetEvent, StageContext
 from pikaraoke.pipeline.stages.base import BaseStage
@@ -63,6 +65,16 @@ class LyricAlignStage(BaseStage):
         if vocal_wav is None:
             raise RuntimeError(f"[{self.name}] No vocal_wav in artifacts")
 
+        # Debug-capture scratchpad: populated as the stage progresses,
+        # written at the end only on the alignment-mode happy paths.
+        capture_words: list | None = None
+        capture_words_source: str | None = None
+        capture_walk_stats: dict | None = None
+        capture_tiling_stats: dict | None = None
+        capture_fail_ratio: float | None = None
+        capture_escalated = False
+        capture_method_used: str | None = None
+
         if lyrics_path is not None:
             # --- Alignment mode ---
             lyrics_lines, align_lines = self._load_lyrics(lyrics_path)
@@ -87,6 +99,7 @@ class LyricAlignStage(BaseStage):
                 )
                 result_id = check["result_id"]
                 fail_ratio = check["fail_ratio"]
+                capture_fail_ratio = fail_ratio
                 threshold = self._config.align_failure_escalation
 
                 if method == "auto" and fail_ratio > threshold:
@@ -99,6 +112,7 @@ class LyricAlignStage(BaseStage):
                     )
                     self._discard_cached_safely(result_id, "escalation")
                     use_tiling = True
+                    capture_escalated = True
 
                 if not use_tiling:
                     if method == "auto":
@@ -117,7 +131,12 @@ class LyricAlignStage(BaseStage):
                             cancel_event=ctx.cancel.event if ctx.cancel else None,
                         ),
                     )
-                    line_objects = match_words_to_lines(words, lyrics_lines, align_lines)
+                    line_objects, capture_walk_stats = match_words_to_lines_with_stats(
+                        words, lyrics_lines, align_lines
+                    )
+                    capture_words = words
+                    capture_words_source = "refine"
+                    capture_method_used = "walk"
 
             if use_tiling:
                 logger.info(f"[{self.name}] Transcribing for tiling match: {Path(vocal_wav).name}")
@@ -129,7 +148,12 @@ class LyricAlignStage(BaseStage):
                         cancel_event=ctx.cancel.event if ctx.cancel else None,
                     ),
                 )
-                line_objects = match_words_to_lines_tiling(words, lyrics_lines, align_lines)
+                line_objects, capture_tiling_stats = match_words_to_lines_tiling_with_stats(
+                    words, lyrics_lines, align_lines
+                )
+                capture_words = words
+                capture_words_source = "transcribe"
+                capture_method_used = "tiling"
 
             write_srt = self._should_write_srt(ctx.song_path)
         else:
@@ -144,6 +168,7 @@ class LyricAlignStage(BaseStage):
                 ),
             )
             write_srt = self._should_write_srt(ctx.song_path)
+            capture_method_used = "transcribe"
 
         ass_content = self._generate_ass(line_objects)
         srt_content = self._generate_srt(line_objects) if write_srt else None
@@ -174,7 +199,105 @@ class LyricAlignStage(BaseStage):
             ctx.artifacts["srt_file"] = final_srt
             logger.info(f"[{self.name}] SRT written: {final_srt}")
 
+        if self._config.capture_alignment_debug and lyrics_path is not None:
+            self._write_debug_capture(
+                ctx,
+                lyrics_path=lyrics_path,
+                lyrics_lines=lyrics_lines,
+                align_lines=align_lines,
+                words=capture_words,
+                words_source=capture_words_source,
+                walk_stats=capture_walk_stats,
+                tiling_stats=capture_tiling_stats,
+                fail_ratio=capture_fail_ratio,
+                method_used=capture_method_used,
+                escalated=capture_escalated,
+                line_objects=line_objects,
+            )
+
     # --- Helpers ---
+
+    def _write_debug_capture(
+        self,
+        ctx: StageContext,
+        *,
+        lyrics_path: Path,
+        lyrics_lines: list[str],
+        align_lines: list[str],
+        words: list | None,
+        words_source: str | None,
+        walk_stats: dict | None,
+        tiling_stats: dict | None,
+        fail_ratio: float | None,
+        method_used: str | None,
+        escalated: bool,
+        line_objects: list[dict],
+    ) -> None:
+        """Assemble + write the alignment-debug JSON. Errors are logged
+        and swallowed — capture failure must never fail the pipeline.
+        """
+        try:
+            cfg = self._config
+            config_snapshot = {
+                "match_method": cfg.match_method,
+                "align_failure_escalation": cfg.align_failure_escalation,
+                "whisper": dataclasses.asdict(cfg.whisper),
+            }
+            lyrics_suffix = Path(lyrics_path).suffix.lower().lstrip(".")
+            try:
+                lyrics_rel = str(Path(lyrics_path).relative_to(ctx.song_path.parent))
+            except ValueError:
+                lyrics_rel = str(lyrics_path)
+            lyrics = {
+                "origin": ctx.artifacts.get("lyrics_origin", "unknown"),
+                "source_path": lyrics_rel,
+                "source_kind": lyrics_suffix or "unknown",
+                "lines": list(lyrics_lines),
+                "align_lines": list(align_lines),
+            }
+            pipeline_decisions = {
+                "align_check_fail_ratio": fail_ratio,
+                "method_used": method_used,
+                "escalated_to_tiling": escalated,
+            }
+            yt_srt = _find_youtube_srt_path(ctx.song_path)
+            # When the YT SRT *is* the lyric source (common — the lyrics
+            # stage often hands us the YT captions directly), it can't
+            # serve as an independent ground-truth reference. Detect via
+            # resolved-path equality and null out the ref so offline
+            # analysis can skip it cleanly.
+            yt_srt_is_lyric_source = False
+            if yt_srt is not None:
+                try:
+                    yt_srt_is_lyric_source = Path(yt_srt).resolve() == Path(lyrics_path).resolve()
+                except OSError:
+                    yt_srt_is_lyric_source = False
+            ground_truth_refs = {
+                "youtube_srt_present": yt_srt is not None,
+                "youtube_srt_is_lyric_source": yt_srt_is_lyric_source,
+                "youtube_srt_path": (
+                    str(yt_srt.relative_to(ctx.song_path.parent))
+                    if yt_srt is not None and not yt_srt_is_lyric_source
+                    else None
+                ),
+            }
+            bundle = alignment_capture.build_bundle(
+                song_stem=ctx.song_path.stem,
+                config_snapshot=config_snapshot,
+                lyrics=lyrics,
+                pipeline_decisions=pipeline_decisions,
+                words=words,
+                words_source=words_source,
+                walk_stats=walk_stats,
+                tiling_stats=tiling_stats,
+                output_summary=alignment_capture.summarize_line_objects(line_objects),
+                output_line_timings=alignment_capture.output_line_timings(line_objects),
+                ground_truth_refs=ground_truth_refs,
+            )
+            path = alignment_capture.write_bundle(ctx.song_path, bundle)
+            logger.info(f"[{self.name}] Alignment-debug capture written: {path}")
+        except Exception:
+            logger.exception(f"[{self.name}] Failed to write alignment-debug capture")
 
     def _load_lyrics(self, lyrics_path: Path) -> tuple[list[str], list[str]]:
         """Return ``(display_lines, align_lines)``.
