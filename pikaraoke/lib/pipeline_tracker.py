@@ -47,6 +47,10 @@ class PipelineItem:
         self.processing_phase: str | None = None
         self.error_message: str | None = None
         self.cancelling: bool = False
+        # Lyric source + matcher combo recorded at processing completion
+        # (e.g. "genius+tiling", "srt+walk", "transcribe"). Surfaced in the
+        # processing-page label so bad-match combos are visible at a glance.
+        self.lyric_method: str | None = None
 
 
 class PipelineTracker:
@@ -314,12 +318,16 @@ class PipelineTracker:
                     break
         self._notify_change()
 
-    def _on_processing_complete(self, song_path: str) -> None:
+    def _on_processing_complete(self, data: dict[str, Any]) -> None:
+        song_path = data["song_path"]
+        lyric_method = data.get("lyric_method")
         with self._lock:
             for item in self._items:
                 if item.song_path == song_path:
                     item.processing_status = "complete"
                     item.processing_phase = None
+                    if lyric_method is not None:
+                        item.lyric_method = lyric_method
                     break
             self._notify_change()
 
@@ -448,4 +456,5 @@ class PipelineTracker:
             "processing_phase": item.processing_phase,
             "error_message": item.error_message,
             "actions": actions,
+            "lyric_method": item.lyric_method,
         }

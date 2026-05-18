@@ -170,6 +170,16 @@ class LyricAlignStage(BaseStage):
             write_srt = self._should_write_srt(ctx.song_path)
             capture_method_used = "transcribe"
 
+        # Surface the lyric source + matcher combination on the context so
+        # the processing-page row can render it (e.g. "genius+tiling" flags
+        # the worst-case combo at a glance). Independent of the debug
+        # capture flag below — the UI label must work even with capture off.
+        lyrics_origin = ctx.artifacts.get("lyrics_origin", "none")
+        if lyrics_path is None:
+            ctx.artifacts["lyric_method"] = "transcribe"
+        else:
+            ctx.artifacts["lyric_method"] = f"{lyrics_origin}+{capture_method_used}"
+
         ass_content = self._generate_ass(line_objects)
         srt_content = self._generate_srt(line_objects) if write_srt else None
 

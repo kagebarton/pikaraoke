@@ -556,7 +556,7 @@ class TestOnChangeCallback:
         item.song_path = "/songs/test.mp4"
         tracker._items.append(item)
 
-        tracker._on_processing_complete("/songs/test.mp4")
+        tracker._on_processing_complete({"song_path": "/songs/test.mp4", "lyric_method": None})
 
         assert len(calls) == 1
 
@@ -649,7 +649,7 @@ class TestProcessingPhase:
         tracker._items.append(item)
 
         # Simulate processing_complete event
-        tracker._on_processing_complete("/songs/test.mp4")
+        tracker._on_processing_complete({"song_path": "/songs/test.mp4", "lyric_method": None})
 
         status = tracker.get_status(admin=False, user="Alice")
         assert status[0]["processing_status"] == "complete"

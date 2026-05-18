@@ -371,7 +371,10 @@ class ProcessingManager:
         if self._song_manager is not None:
             state = self._song_manager.get_pipeline_state(song_path)
             if state in ("ready", "skipped"):
-                self._events.emit("processing_complete", song_path)
+                self._events.emit(
+                    "processing_complete",
+                    {"song_path": song_path, "lyric_method": None},
+                )
                 return
 
         logging.info(f"Processing started: {Path(song_path).name}")
@@ -404,7 +407,10 @@ class ProcessingManager:
                     logging.warning(f"Failed to persist loudnorm offset for {song_path}: {e}")
             self._song_manager.set_pipeline_state(song_path, "ready")
 
-        self._events.emit("processing_complete", song_path)
+        self._events.emit(
+            "processing_complete",
+            {"song_path": song_path, "lyric_method": ctx.artifacts.get("lyric_method")},
+        )
         logging.info(f"Processing complete: {Path(song_path).name}")
 
     # ------------------------------------------------------------------

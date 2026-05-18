@@ -260,6 +260,7 @@ class TestGetActivePhase:
 
     def test_returns_phase_value_when_set(self, manager):
         from pikaraoke.pipeline.context import Phase
+
         token = CancelToken(event=threading.Event())
         token.phase = Phase.STEM_SEPARATION
         manager._active = _ActiveJob(song_path="/songs/Active---abc.mp4", cancel_token=token)
@@ -267,6 +268,7 @@ class TestGetActivePhase:
 
     def test_returns_extract_phase(self, manager):
         from pikaraoke.pipeline.context import Phase
+
         token = CancelToken(event=threading.Event())
         token.phase = Phase.EXTRACT
         manager._active = _ActiveJob(song_path="/songs/Active---abc.mp4", cancel_token=token)
@@ -274,6 +276,7 @@ class TestGetActivePhase:
 
     def test_returns_transcode_phase(self, manager):
         from pikaraoke.pipeline.context import Phase
+
         token = CancelToken(event=threading.Event())
         token.phase = Phase.TRANSCODE
         manager._active = _ActiveJob(song_path="/songs/Active---abc.mp4", cancel_token=token)
@@ -303,7 +306,7 @@ class TestProcessSongEarlyExit:
         events.on("processing_complete", received.append)
         mgr._process_song("/songs/Song---abc123.mp4")
 
-        assert received == ["/songs/Song---abc123.mp4"]
+        assert received == [{"song_path": "/songs/Song---abc123.mp4", "lyric_method": None}]
         mock_orchestrator.run_one_async.assert_not_called()
 
     def test_skipped_state_emits_complete_without_orchestrator(
@@ -318,7 +321,7 @@ class TestProcessSongEarlyExit:
         events.on("processing_complete", received.append)
         mgr._process_song("/songs/Song---abc123.mp4")
 
-        assert received == ["/songs/Song---abc123.mp4"]
+        assert received == [{"song_path": "/songs/Song---abc123.mp4", "lyric_method": None}]
         mock_orchestrator.run_one_async.assert_not_called()
 
     def test_no_song_manager_proceeds_to_orchestrator(self, events, preferences, mock_orchestrator):
@@ -341,7 +344,7 @@ class TestProcessSongEarlyExit:
 class TestProcessSongSuccess:
     def test_success_emits_processing_complete(self, events, preferences, mock_orchestrator):
         ctx = MagicMock(spec=StageContext)
-        ctx.artifacts = {"loudnorm_target_offset": "-3.2"}
+        ctx.artifacts = {"loudnorm_target_offset": "-3.2", "lyric_method": "genius+walk"}
         mock_orchestrator.join.return_value = ctx
 
         sm = MagicMock()
@@ -353,7 +356,9 @@ class TestProcessSongSuccess:
         events.on("processing_complete", received.append)
         mgr._process_song("/songs/Song---abc123.mp4")
 
-        assert received == ["/songs/Song---abc123.mp4"]
+        assert received == [
+            {"song_path": "/songs/Song---abc123.mp4", "lyric_method": "genius+walk"}
+        ]
 
     def test_success_sets_pipeline_state_ready(self, events, preferences, mock_orchestrator):
         ctx = MagicMock(spec=StageContext)

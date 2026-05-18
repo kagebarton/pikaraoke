@@ -121,6 +121,8 @@ function progressLabel(item) {
   }
   if (item.processing_status === 'active')
     return '{% trans %}processing{% endtrans %}';
+  if (item.processing_status === 'complete' && item.lyric_method)
+    return item.lyric_method;
   return '';
 }
 
@@ -131,7 +133,12 @@ function progressLabel(item) {
   function renderRow(item) {
     var label = progressLabel(item);
     var isCancelling = item.download_status === 'cancelling' || item.processing_status === 'cancelling';
-    var labelClass = isCancelling ? 'progress-label cancelling' : 'progress-label';
+    // genius+tiling is the empirically worst-quality combo — flag it
+    // visually so a glance at the page surfaces likely-bad rows.
+    var isBadLyricMethod = item.processing_status === 'complete' && item.lyric_method === 'genius+tiling';
+    var labelClass = 'progress-label';
+    if (isCancelling) labelClass += ' cancelling';
+    else if (isBadLyricMethod) labelClass += ' warn';
     var labelHtml = label
       ? '<span class="' + labelClass + '">' + label + '</span>'
       : '';
@@ -156,7 +163,7 @@ function progressLabel(item) {
 	var actionsKey = (item.actions || []).sort().join(',');
 	var stateKey = item.download_status + '|' + item.processing_status
 	+ '|' + (item.processing_phase || '') + '|' + (item.song_path || '') + '|' + (item.error_message || '')
-	+ '|' + actionsKey;
+	+ '|' + actionsKey + '|' + (item.lyric_method || '');
 
     return '<tr data-id="' + item.id + '" data-state-key="' + escapeHtml(stateKey) + '" data-proc-status="' + item.processing_status + '">'
       + titleHtml
@@ -180,7 +187,7 @@ function renderItems(items) {
     var $existing = $body.find('tr[data-id="' + item.id + '"]');
     var currKey = item.download_status + '|' + item.processing_status
     + '|' + (item.processing_phase || '') + '|' + (item.song_path || '') + '|' + (item.error_message || '')
-    + '|' + (item.actions || []).sort().join(',');
+    + '|' + (item.actions || []).sort().join(',') + '|' + (item.lyric_method || '');
     if ($existing.length === 0) {
       $body.append(renderRow(item));
     } else if ($existing.attr('data-state-key') !== currKey) {
@@ -442,6 +449,7 @@ if (typeof window.socket !== 'undefined') {
 .title-row .is-truncated { flex: 1 1 auto; min-width: 0; }
 .progress-label { flex: 0 0 auto; margin-left: 0.5em; font-size: var(--text-size-progress); color: var(--text-color-progress); }
 .progress-label.cancelling { color: var(--icon-color-cancelling); }
+.progress-label.warn { color: var(--icon-color-cancelling); }
 
 /* Strip Bulma's cell padding for compact icon columns */
 #pipeline-table th, #pipeline-table td { padding: 0; vertical-align: middle; }
