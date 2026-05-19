@@ -16,6 +16,8 @@ import threading
 from dataclasses import dataclass
 from pathlib import Path
 
+PIPELINE_THREAD_PREFIX = "pikaraoke-pipeline"
+
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.genius import GeniusClient
 from pikaraoke.lib.get_platform import get_temp_directory, is_windows
@@ -43,24 +45,58 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
+def _is_pipeline_thread(record: logging.LogRecord) -> bool:
+    """True if the record was emitted on a thread driving the pipeline.
+
+    Pipeline threads are named with :data:`PIPELINE_THREAD_PREFIX` so any
+    module called from them — including new ones — routes to the processing
+    terminal without needing an explicit allowlist.
+    """
+    return record.threadName is not None and record.threadName.startswith(PIPELINE_THREAD_PREFIX)
+
+
+def _is_lifecycle(record: logging.LogRecord) -> bool:
+    """True if the record is a pipeline-lifecycle event (job start/end)."""
+    return getattr(record, "lifecycle", False) is True
+
+
+LIFECYCLE_EXTRA = {"lifecycle": True}
+
+
+class _PipelineThreadFilter(logging.Filter):
+    """Route records between the main terminal and the processing terminal.
+
+    Pipeline-lifecycle records (start/complete/cancel/fail) are duplicated
+    to both so the main terminal still shows when a song begins and ends.
+    """
+
+    def __init__(self, accept: bool) -> None:
+        super().__init__()
+        self._accept = accept
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if self._accept:
+            # PTY: emit on pipeline thread; skip non-pipeline lifecycle echoes.
+            return _is_pipeline_thread(record)
+        # Main stderr: emit non-pipeline records plus lifecycle events.
+        return not _is_pipeline_thread(record) or _is_lifecycle(record)
+
+
 class _PtyHandler(logging.Handler):
     """Write formatted log records to the PTY slave fd.
 
-    Attached to the pikaraoke.pipeline and pikaraoke.lib.processing_manager
-    loggers so stage progress messages appear in the processing terminal
-    alongside ffmpeg/separator/whisper subprocess output.
+    Attached to the root logger and gated by thread name: any record emitted
+    while the current thread name starts with :data:`PIPELINE_THREAD_PREFIX`
+    is forwarded to the processing terminal. Records from other threads are
+    dropped by the handler's filter and continue to the existing stderr
+    handler — to which we add the inverse filter so pipeline-thread records
+    do *not* also leak to the main terminal.
     """
-
-    _LOGGERS = (
-        "pikaraoke.pipeline",
-        "pikaraoke.lib.processing_manager",
-        "pikaraoke.lib.word_alignment",
-        "srt",
-    )
 
     def __init__(self, pty_fd: int) -> None:
         super().__init__()
         self._pty_fd = pty_fd
+        self.addFilter(_PipelineThreadFilter(accept=True))
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
@@ -70,20 +106,27 @@ class _PtyHandler(logging.Handler):
             pass
 
     @classmethod
-    def attach(cls, pty_fd: int, formatter: logging.Formatter) -> "_PtyHandler":
+    def attach(cls, pty_fd: int, formatter: logging.Formatter | None) -> "_PtyHandler":
         handler = cls(pty_fd)
-        handler.setFormatter(formatter)
-        for name in cls._LOGGERS:
-            lg = logging.getLogger(name)
-            lg.addHandler(handler)
-            lg.propagate = False
+        if formatter is not None:
+            handler.setFormatter(formatter)
+
+        root = logging.getLogger()
+        root.addHandler(handler)
+        # Keep pipeline-thread logs out of the main terminal.
+        for existing in root.handlers:
+            if existing is handler:
+                continue
+            existing.addFilter(_PipelineThreadFilter(accept=False))
         return handler
 
     def detach(self) -> None:
-        for name in self._LOGGERS:
-            lg = logging.getLogger(name)
-            lg.removeHandler(self)
-            lg.propagate = True
+        root = logging.getLogger()
+        root.removeHandler(self)
+        for existing in root.handlers:
+            for flt in list(existing.filters):
+                if isinstance(flt, _PipelineThreadFilter) and not flt._accept:
+                    existing.removeFilter(flt)
 
 
 # ---------------------------------------------------------------------------
@@ -240,7 +283,11 @@ class ProcessingManager:
         )
         self._orchestrator.start()  # starts stem worker only; whisper is lazy
 
-        self._orchestrator_thread = threading.Thread(target=self._run_loop, daemon=True)
+        self._orchestrator_thread = threading.Thread(
+            target=self._run_loop,
+            name=f"{PIPELINE_THREAD_PREFIX}-loop",
+            daemon=True,
+        )
         self._orchestrator_thread.start()
 
     def stop(self) -> None:
@@ -377,7 +424,7 @@ class ProcessingManager:
                 )
                 return
 
-        logging.info(f"Processing started: {Path(song_path).name}")
+        logging.info(f"Processing started: {Path(song_path).name}", extra=LIFECYCLE_EXTRA)
         token = self._orchestrator.run_one_async(Path(song_path))
         with self._state_lock:
             self._active = _ActiveJob(song_path=song_path, cancel_token=token)
@@ -388,12 +435,16 @@ class ProcessingManager:
             # Leave state as 'pending' — user-initiated cancel, not a system
             # failure. The stale-pending badge surfaces it on next page load.
             self._events.emit("processing_cancelled", song_path)
-            logging.info(f"Processing cancelled: {Path(song_path).name}")
+            logging.info(
+                f"Processing cancelled: {Path(song_path).name}", extra=LIFECYCLE_EXTRA
+            )
             return
         except Exception as e:
             if self._song_manager is not None:
                 self._song_manager.set_pipeline_state(song_path, "failed")
-            logging.error(f"Processing failed for {Path(song_path).name}: {e}")
+            logging.error(
+                f"Processing failed for {Path(song_path).name}: {e}", extra=LIFECYCLE_EXTRA
+            )
             self._events.emit("processing_error", {"song_path": song_path, "error": str(e)})
             return
 
@@ -411,7 +462,7 @@ class ProcessingManager:
             "processing_complete",
             {"song_path": song_path, "lyric_method": ctx.artifacts.get("lyric_method")},
         )
-        logging.info(f"Processing complete: {Path(song_path).name}")
+        logging.info(f"Processing complete: {Path(song_path).name}", extra=LIFECYCLE_EXTRA)
 
     # ------------------------------------------------------------------
     # Helpers

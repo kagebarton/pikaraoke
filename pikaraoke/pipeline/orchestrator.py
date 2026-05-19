@@ -144,7 +144,7 @@ class PipelineOrchestrator:
 
         self._pipeline_thread = threading.Thread(
             target=_thread_target,
-            name="pipeline-worker",
+            name="pikaraoke-pipeline-worker",
             daemon=True,
         )
         self._pipeline_thread.start()
