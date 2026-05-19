@@ -130,7 +130,7 @@ def find_candidates(
     token_norms: list of normalized whisper word strings
     lyric_lines: list of lists of normalized lyric words
     Returns: list of (start_idx, end_idx, line_id, score) where score is
-    the normalized match ratio in (0.0, 1.0].
+    the raw matched-token count ``n - dist`` (integer-valued float).
 
     Windows range from ``n - window_slack_lo`` to ``n + window_slack_hi``
     wide: narrower windows catch lines whisper only partially heard,
@@ -140,7 +140,15 @@ def find_candidates(
     A candidate must also have at least ``min(2, n)`` tokens of genuine
     content overlap (``n - dist``). Without this floor, the narrow-window
     slack lets a 2-word line "match" a single token by pure deletion
-    (score 0.5), and the DP happily tiles those degenerate fragments.
+    and the DP happily tiles those degenerate fragments.
+
+    Score is the raw matched-token count, NOT a normalized ratio. The
+    tiling DP maximizes the sum of selected scores, so raw counts make
+    it maximize total lyric coverage. Normalization (the old ``(n-dist)/n``)
+    gave every perfect short fragment a score of 1.0, letting a 2-token
+    paren-split unit beat a 6-token full line with one whisper error
+    when they competed for overlapping windows. Edit-quality gating is
+    already handled by ``max_edit_ratio``; the score shouldn't repeat it.
     """
     candidates = []
     T = len(token_norms)
@@ -159,7 +167,7 @@ def find_candidates(
                 window = token_norms[i : i + window_size]
                 dist = _edit_distance(line_words, window)
                 if dist <= max_allowed and (n - dist) >= min_overlap:
-                    score = (n - dist) / n
+                    score = float(n - dist)
                     candidates.append((i, i + window_size, line_id, score))
     return candidates
 
@@ -183,9 +191,13 @@ def find_anchor_candidates(
     recognizable phrase is proof the line was sung here even if the
     surrounding words diverge.
 
-    Score is ``anchor_run / n`` — only the confidently-matched span counts
-    — so these weaker matches never outweigh a real find_candidates match
-    in the tiling DP. Restricting the scan to ``line_ids`` keeps it bounded
+    Score is the raw anchor-run length — the count of confidently-matched
+    consecutive tokens — matching the main-pass scoring scheme so the
+    tiling DP can compare across passes on the same units. An N-token
+    anchor run can never beat what main would have scored for the same
+    line: main pass would have found ``n - dist`` with ``dist <= n - run``
+    (the run contributes 0 to dist), so main's score is at least
+    ``run``. Restricting the scan to ``line_ids`` keeps the pass bounded
     and means it never pollutes lines that already matched cleanly.
     """
     candidates = []
@@ -205,7 +217,7 @@ def find_anchor_candidates(
                 window = token_norms[i : i + window_size]
                 run = _longest_contiguous_run(line_words, window)
                 if run >= min_run:
-                    candidates.append((i, i + window_size, line_id, run / n))
+                    candidates.append((i, i + window_size, line_id, float(run)))
     return candidates
 
 

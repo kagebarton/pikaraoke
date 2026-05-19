@@ -22,7 +22,16 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 3
+# v4: tiling scores are raw matched-token counts (n - dist), not
+#     normalized ratios. Previously score in [0, 1]; now score in [0, n].
+#     Affects tiling_stats.selected_windows[].score,
+#     tiling_stats.per_unit_best_score[], tiling_stats.selected_score_sum.
+# v3: added output_line_timings, walk_stats.empty_line_reasons,
+#     lyrics.origin, full config.whisper snapshot.
+# v2: added tiling per-unit fields (units, zero_candidate_unit_ids,
+#     anchor_recovered_unit_ids, selected_windows replacing window_widths).
+# v1: initial.
+SCHEMA_VERSION = 4
 
 
 def build_bundle(

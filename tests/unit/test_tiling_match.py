@@ -150,8 +150,8 @@ class TestFindAnchorCandidates:
         lyric = _norms("alpha", "bravo", "charlie", "delta", "echo")
         cands = find_anchor_candidates(token_norms, [lyric], line_ids=[0])
         assert cands, "anchor fallback should find a candidate on a 3-word run"
-        # Score should be anchor_run / n = 3/5 = 0.6.
-        assert any(abs(c[3] - 0.6) < 1e-9 for c in cands)
+        # Score is the raw anchor-run length (matches main-pass scoring).
+        assert any(abs(c[3] - 3.0) < 1e-9 for c in cands)
 
     def test_too_short_line_skipped(self):
         # A 2-word line can never anchor confidently (min_run_floor=3).
