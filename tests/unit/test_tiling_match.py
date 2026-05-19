@@ -76,20 +76,49 @@ class TestSplitParenUnits:
     def test_no_parens(self):
         assert _split_paren_units("just a line") == ["just a line"]
 
-    def test_single_paren(self):
-        assert _split_paren_units("main (backing)") == ["main", "backing"]
+    def test_single_substantial_paren(self):
+        assert _split_paren_units("main phrase here (real backing line)") == [
+            "main phrase here",
+            "real backing line",
+        ]
 
-    def test_multiple_parens(self):
-        assert _split_paren_units("a (b) c (d)") == ["a c", "b", "d"]
+    def test_multiple_substantial_parens(self):
+        assert _split_paren_units(
+            "first main phrase (first backing line) second main phrase (second backing line)"
+        ) == [
+            "first main phrase second main phrase",
+            "first backing line",
+            "second backing line",
+        ]
 
-    def test_only_paren(self):
-        # The original line is paren-only — only the paren content survives.
-        assert _split_paren_units("(backing only)") == ["backing only"]
+    def test_only_substantial_paren(self):
+        assert _split_paren_units("(backing line only here)") == ["backing line only here"]
 
     def test_collapses_whitespace_left_by_paren_removal(self):
         # Removing the paren shouldn't leave a double-space hole.
-        result = _split_paren_units("main    (back)    tail")
-        assert result[0] == "main tail"
+        result = _split_paren_units("main phrase    (real backing line)    tail end")
+        assert result[0] == "main phrase tail end"
+
+    def test_short_paren_is_ad_lib_no_split(self):
+        # "(Ayy)", "(Oh)" — too short to be a real backing-vocal line.
+        # Stay inline rather than carving off a 2-token competing unit.
+        assert _split_paren_units("Beauty and— (Ayy)") == ["Beauty and— (Ayy)"]
+        assert _split_paren_units("I'm walking down the street (Oh)") == [
+            "I'm walking down the street (Oh)"
+        ]
+
+    def test_mixed_substantial_and_ad_lib(self):
+        # Substantial paren splits off; ad-lib stays inline on main.
+        assert _split_paren_units(
+            "main phrase here (real backing line) tail end (Yeah)"
+        ) == ["main phrase here tail end (Yeah)", "real backing line"]
+
+    def test_short_main_after_split_keeps_line_intact(self):
+        # If the main half would be under-length after splitting off the
+        # substantial paren, abandon the split entirely.
+        assert _split_paren_units("oh no (full real backing phrase here)") == [
+            "oh no (full real backing phrase here)"
+        ]
 
 
 # ---------------------------------------------------------------------------

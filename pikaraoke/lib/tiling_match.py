@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 _PAREN_RE = re.compile(r"\(([^()]*)\)")
 
 
-def _split_paren_units(text: str) -> list[str]:
+def _split_paren_units(text: str, min_split_tokens: int = 3) -> list[str]:
     """Split a lyric line into match units on parenthetical phrases.
 
     "All the voices in my mind (Tell me when it kicks in)" yields
@@ -51,19 +51,42 @@ def _split_paren_units(text: str) -> list[str]:
     so the combined line can never match a single contiguous window.
     Splitting lets the main phrase and each parenthetical match
     independently. Lines with no parens return unchanged as one unit.
+
+    Ad-lib guard: parens whose contents are shorter than
+    ``min_split_tokens`` (e.g. "(Ayy)", "(Oh)", "(Yeah)") are left
+    inline rather than carved off as their own unit. A 1-2 token unit
+    competes with longer canonical units for the same window and almost
+    always wins on coverage (e.g. "Beauty and— (Ayy)" was creating a
+    2-token "Beauty and" unit that beat the 4-token "Beauty and the
+    Beast" line). The threshold matches the real-backing-vocal use case
+    the split exists for: phrases substantial enough to be a co-sung line.
+    If splitting off the substantial parens would leave the main phrase
+    under-length, the whole line stays as one unit.
     """
     parens = _PAREN_RE.findall(text)
     if not parens:
         return [text]
+
+    substantial = [p for p in parens if len(_tokenize_unit(p)) >= min_split_tokens]
+    if not substantial:
+        return [text]
+
+    # Strip only the substantial parens out; ad-lib parens remain inline
+    # in the main text so the main-line tokenization still covers them.
+    substantial_set = set(substantial)
+    main = _PAREN_RE.sub(
+        lambda m: " " if m.group(1) in substantial_set else m.group(0),
+        text,
+    )
+    main = " ".join(main.split())
+
+    if main and len(_tokenize_unit(main)) < min_split_tokens:
+        return [text]
+
     units = []
-    # Collapse the whitespace sub() leaves where parens were removed.
-    main = " ".join(_PAREN_RE.sub(" ", text).split())
     if main:
         units.append(main)
-    for p in parens:
-        p = p.strip()
-        if p:
-            units.append(p)
+    units.extend(p.strip() for p in substantial if p.strip())
     return units or [text]
 
 
