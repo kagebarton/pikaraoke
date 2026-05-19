@@ -72,7 +72,9 @@ class LyricAlignStage(BaseStage):
         capture_walk_stats: dict | None = None
         capture_tiling_stats: dict | None = None
         capture_fail_ratio: float | None = None
+        capture_collapse_ratio: float | None = None
         capture_escalated = False
+        capture_escalation_trigger: str | None = None
         capture_method_used: str | None = None
 
         if lyrics_path is not None:
@@ -87,7 +89,13 @@ class LyricAlignStage(BaseStage):
 
             if not use_tiling:
                 # walk / auto: run align() first so we can gate on its
-                # failure ratio *before* paying for refine.
+                # failure ratio *and* a collapse-ratio signal *before*
+                # paying for refine. align_check returns the pre-refine
+                # word list; refine only nudges timestamps, so a quick
+                # walk over those words gives us an honest collapse
+                # signal that catches the failure mode where stable-ts
+                # force-places long runs of tokens at one timestamp
+                # (segment-level success, word-level garbage).
                 check = _model_call(
                     ctx,
                     Phase.ALIGN_CHECK,
@@ -99,16 +107,38 @@ class LyricAlignStage(BaseStage):
                 )
                 result_id = check["result_id"]
                 fail_ratio = check["fail_ratio"]
+                raw_words = check["words"]
                 capture_fail_ratio = fail_ratio
-                threshold = self._config.align_failure_escalation
 
-                if method == "auto" and fail_ratio > threshold:
+                _, raw_stats = match_words_to_lines_with_stats(raw_words, lyrics_lines, align_lines)
+                n_raw_tokens = raw_stats["n_tokens"]
+                collapse_ratio = (
+                    sum(raw_stats["collapsed_run_lengths"]) / n_raw_tokens if n_raw_tokens else 0.0
+                )
+                capture_collapse_ratio = collapse_ratio
+
+                fail_thresh = self._config.align_failure_escalation
+                collapse_thresh = self._config.collapse_escalation_threshold
+                fail_trips = fail_ratio > fail_thresh
+                collapse_trips = collapse_ratio > collapse_thresh
+
+                if method == "auto" and (fail_trips or collapse_trips):
+                    triggers = []
+                    if fail_trips:
+                        triggers.append("fail_ratio")
+                    if collapse_trips:
+                        triggers.append("collapse_ratio")
+                    capture_escalation_trigger = "+".join(triggers)
                     logger.warning(
-                        "[%s] align() failed %.0f%% of segments (> %.0f%% threshold) "
-                        "— escalating to tiling matcher",
+                        "[%s] escalating to tiling matcher (%s): "
+                        "fail_ratio=%.0f%% (thresh %.0f%%), "
+                        "collapse_ratio=%.0f%% (thresh %.0f%%)",
                         self.name,
+                        capture_escalation_trigger,
                         fail_ratio * 100,
-                        threshold * 100,
+                        fail_thresh * 100,
+                        collapse_ratio * 100,
+                        collapse_thresh * 100,
                     )
                     self._discard_cached_safely(result_id, "escalation")
                     use_tiling = True
@@ -117,10 +147,14 @@ class LyricAlignStage(BaseStage):
                 if not use_tiling:
                     if method == "auto":
                         logger.info(
-                            "[%s] align() failure ratio %.0f%% within threshold "
-                            "— keeping walk match",
+                            "[%s] align gates passed: "
+                            "fail_ratio=%.0f%% (thresh %.0f%%), "
+                            "collapse_ratio=%.0f%% (thresh %.0f%%) — keeping walk match",
                             self.name,
                             fail_ratio * 100,
+                            fail_thresh * 100,
+                            collapse_ratio * 100,
+                            collapse_thresh * 100,
                         )
                     words = _model_call(
                         ctx,
@@ -220,8 +254,10 @@ class LyricAlignStage(BaseStage):
                 walk_stats=capture_walk_stats,
                 tiling_stats=capture_tiling_stats,
                 fail_ratio=capture_fail_ratio,
+                collapse_ratio=capture_collapse_ratio,
                 method_used=capture_method_used,
                 escalated=capture_escalated,
+                escalation_trigger=capture_escalation_trigger,
                 line_objects=line_objects,
             )
 
@@ -239,8 +275,10 @@ class LyricAlignStage(BaseStage):
         walk_stats: dict | None,
         tiling_stats: dict | None,
         fail_ratio: float | None,
+        collapse_ratio: float | None,
         method_used: str | None,
         escalated: bool,
+        escalation_trigger: str | None,
         line_objects: list[dict],
     ) -> None:
         """Assemble + write the alignment-debug JSON. Errors are logged
@@ -251,6 +289,7 @@ class LyricAlignStage(BaseStage):
             config_snapshot = {
                 "match_method": cfg.match_method,
                 "align_failure_escalation": cfg.align_failure_escalation,
+                "collapse_escalation_threshold": cfg.collapse_escalation_threshold,
                 "whisper": dataclasses.asdict(cfg.whisper),
             }
             lyrics_suffix = Path(lyrics_path).suffix.lower().lstrip(".")
@@ -267,8 +306,10 @@ class LyricAlignStage(BaseStage):
             }
             pipeline_decisions = {
                 "align_check_fail_ratio": fail_ratio,
+                "collapse_ratio": collapse_ratio,
                 "method_used": method_used,
                 "escalated_to_tiling": escalated,
+                "escalation_trigger": escalation_trigger,
             }
             yt_srt = _find_youtube_srt_path(ctx.song_path)
             # When the YT SRT *is* the lyric source (common — the lyrics

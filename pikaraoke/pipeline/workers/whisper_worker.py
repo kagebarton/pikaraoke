@@ -419,7 +419,16 @@ class WhisperWorker:
         lyrics_text: str,
         cancel_event: Optional[threading.Event] = None,
     ) -> dict:
-        """Run align() only; return {"fail_ratio": float, "result_id": str}.
+        """Run align() only; return {"fail_ratio": float, "result_id": str,
+        "words": list[dict]}.
+
+        ``words`` is the pre-refine word list extracted from the cached
+        align result. Refine only nudges timestamps; it never adds or
+        removes tokens. So the caller can run the walk matcher against
+        these words to compute a collapse-ratio escalation signal
+        *before* paying for refine — catching the failure mode where
+        stable-ts force-places long runs of tokens at a single timestamp
+        (segments don't fail, but the timing is garbage).
 
         The aligned WhisperResult stays cached in the subprocess under
         ``result_id`` so the caller can either follow up with
@@ -736,10 +745,24 @@ def _whisper_worker_main_inner(
                         config,
                         worker_log,
                     )
+                    # Extract pre-refine words so the stage can compute a
+                    # collapse-ratio escalation signal without paying for
+                    # refine. No probability filter — collapse detection
+                    # cares about timestamps, not word confidence.
+                    raw_words = _extract_words(raw_result, 0.0)
                     result_id = uuid.uuid4().hex
                     cached_results.clear()
                     cached_results[result_id] = raw_result
-                    result_send.send(("ok", {"fail_ratio": fail_ratio, "result_id": result_id}))
+                    result_send.send(
+                        (
+                            "ok",
+                            {
+                                "fail_ratio": fail_ratio,
+                                "result_id": result_id,
+                                "words": raw_words,
+                            },
+                        )
+                    )
                 elif kind == "refine_from_cached":
                     _, result_id, vocal_path = item
                     cached = cached_results.pop(result_id, None)

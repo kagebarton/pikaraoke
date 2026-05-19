@@ -140,7 +140,14 @@ def _make_stage_and_ctx(tmp_path, *, match_method="auto", fail_ratio=0.0, thresh
     cfg.align_failure_escalation = threshold
 
     worker = MagicMock()
-    worker.align_check.return_value = {"fail_ratio": fail_ratio, "result_id": "rid-1"}
+    worker.align_check.return_value = {
+        "fail_ratio": fail_ratio,
+        "result_id": "rid-1",
+        "words": [
+            {"word": "hello", "start": 0.0, "end": 1.0},
+            {"word": "world", "start": 1.0, "end": 2.0},
+        ],
+    }
     worker.refine_from_cached.return_value = [
         {"word": "hello", "start": 0.0, "end": 1.0},
         {"word": "world", "start": 1.0, "end": 2.0},
@@ -216,4 +223,31 @@ class TestMatchMethodEscalation:
         )
         worker.discard_cached.side_effect = RuntimeError("worker died")
         stage.run(ctx)
+        worker.transcribe_words.assert_called_once()
+
+    def test_auto_escalates_on_collapse_ratio_alone(self, tmp_path):
+        # Catches the Pocahontas failure mode: fail_ratio is well below
+        # the segment-level threshold but stable-ts force-placed a long
+        # run of tokens at one timestamp. Collapse-ratio gate should fire.
+        stage, ctx, worker = _make_stage_and_ctx(
+            tmp_path, match_method="auto", fail_ratio=0.05, threshold=0.1
+        )
+        # 12 lyric tokens, first 9 raw whisper words crammed at t=0 →
+        # walk demotes them as one collapsed run → 9/12 = 75% > default
+        # collapse threshold 0.15. fail_ratio 0.05 stays below 0.1.
+        lyric_words = [f"w{i}" for i in range(12)]
+        ctx.artifacts["lyrics_path"].write_text(" ".join(lyric_words) + "\n", encoding="utf-8")
+        collapsed = [{"word": w, "start": 0.0, "end": 0.0} for w in lyric_words[:9]]
+        spread = [
+            {"word": w, "start": 10.0 + i, "end": 10.0 + i + 0.5}
+            for i, w in enumerate(lyric_words[9:])
+        ]
+        worker.align_check.return_value = {
+            "fail_ratio": 0.05,
+            "result_id": "rid-1",
+            "words": collapsed + spread,
+        }
+        stage.run(ctx)
+        worker.discard_cached.assert_called_once_with("rid-1")
+        worker.refine_from_cached.assert_not_called()
         worker.transcribe_words.assert_called_once()

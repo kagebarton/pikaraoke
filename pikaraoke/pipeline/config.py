@@ -206,6 +206,16 @@ class PipelineConfig:
     # (e.g. 7/48 ≈ 0.15 triggers).
     align_failure_escalation: float = 0.1
 
+    # Complementary escalation signal: fraction of lyric tokens caught by
+    # the walk matcher's collapse demotion (stable-ts force-placing many
+    # tokens at a single timestamp, looking like alignment success at the
+    # segment level but garbage at the word level). Computed from a quick
+    # walk on the pre-refine word list — refine doesn't add or remove
+    # tokens, so the collapse pattern is preserved. 0.15 → escalate at
+    # >15% (e.g. Pocahontas "Colors of the Wind" hits 0.35 here while its
+    # fail_ratio is only 0.07 — collapse catches what fail_ratio misses).
+    collapse_escalation_threshold: float = 0.15
+
     # When True, the lyric-align stage writes a JSON bundle to
     # ``<song_dir>/alignment_debug/<stem>.json`` capturing the matcher
     # inputs (whisper words + lyric lines), the knob values that ran,
