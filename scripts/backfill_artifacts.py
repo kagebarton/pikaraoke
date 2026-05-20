@@ -10,8 +10,9 @@ pipeline outputs are missing per song:
 
 For each song missing karaoke or subtitles, the user is shown an
 interactive Genius search prompt up-front; the chosen lyrics source is
-written to the standard Genius choice sidecar (read by
-``LyricsFetchStage``).  Once all prompts are collected, the pipeline
+held on the job and resolved to a concrete file (fetched Genius lyrics,
+local SRT, or none) at run time, then handed to the pipeline as an
+explicit ``lyrics_path``.  Once all prompts are collected, the pipeline
 runs unattended.
 
 Only the stages needed to produce missing artifacts run.  When stems
@@ -28,14 +29,20 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import shutil
 import sys
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
 # Allow running as ``python scripts/backfill_artifacts.py`` from repo root.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from pikaraoke.lib.genius import GeniusClient, GeniusHit, write_choice  # noqa: E402
+from pikaraoke.lib.genius import (  # noqa: E402
+    GeniusClient,
+    GeniusHit,
+    GeniusUnavailable,
+)
 from pikaraoke.lib.get_platform import (  # noqa: E402
     get_default_dl_dir,
     get_platform,
@@ -43,18 +50,20 @@ from pikaraoke.lib.get_platform import (  # noqa: E402
 )
 from pikaraoke.lib.metadata_parser import (  # noqa: E402
     clean_search_query,
-    extract_youtube_id,
     youtube_id_suffix,
 )
 from pikaraoke.lib.preference_manager import PreferenceManager  # noqa: E402
 from pikaraoke.pipeline.config import PipelineConfig  # noqa: E402
 from pikaraoke.pipeline.orchestrator import PipelineOrchestrator  # noqa: E402
 from pikaraoke.pipeline.stages.ffmpeg_extract import FFmpegExtractStage  # noqa: E402
-from pikaraoke.pipeline.stages.ffmpeg_transcode import FFmpegTranscodeStage  # noqa: E402
+from pikaraoke.pipeline.stages.ffmpeg_transcode import (  # noqa: E402
+    FFmpegTranscodeStage,
+)
 from pikaraoke.pipeline.stages.load_vocal import LoadVocalFromM4aStage  # noqa: E402
-from pikaraoke.pipeline.stages.loudnorm_analyze import LoudnormAnalyzeStage  # noqa: E402
+from pikaraoke.pipeline.stages.loudnorm_analyze import (  # noqa: E402
+    LoudnormAnalyzeStage,
+)
 from pikaraoke.pipeline.stages.lyric_align import LyricAlignStage  # noqa: E402
-from pikaraoke.pipeline.stages.lyrics_fetch import LyricsFetchStage  # noqa: E402
 from pikaraoke.pipeline.stages.stem_separation import StemSeparationStage  # noqa: E402
 from pikaraoke.pipeline.workers.stem_worker import StemWorker  # noqa: E402
 from pikaraoke.pipeline.workers.whisper_worker import WhisperWorker  # noqa: E402
@@ -210,25 +219,48 @@ def _prompt_one(job: SongJob, genius: GeniusClient) -> tuple:
         # Empty answer with no hits: re-prompt for a query.
 
 
-def stash_choices(jobs: list[SongJob]) -> None:
-    """Persist each job's Genius choice as the standard sidecar JSON."""
-    for j in jobs:
-        if not j.choice:
-            continue
-        yt_id = extract_youtube_id(str(j.song_path))
-        if not yt_id:
-            # No YouTube ID -> LyricsFetchStage can't look up the choice.
-            # Treat as "transcribe" (raw) and warn.
-            print(f"  ! {j.song_path.name}: no YouTube ID, will transcribe")
-            j.choice = ("raw",)
-            continue
-        kind = j.choice[0]
-        if kind == "genius":
-            write_choice(yt_id, {"genius_id": j.choice[1]})
-        elif kind == "srt":
-            write_choice(yt_id, {"mode": "srt"})
-        elif kind == "raw":
-            write_choice(yt_id, {"mode": "raw"})
+def _find_local_srt(song: Path) -> Path | None:
+    """Return ``subtitles/<stem>.en.srt`` then ``<stem>.srt``, or None."""
+    subs = song.parent / "subtitles"
+    for name in (f"{song.stem}.en.srt", f"{song.stem}.srt"):
+        candidate = subs / name
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def resolve_lyrics_path(job: SongJob, genius: GeniusClient, lyrics_dir: Path) -> Path | None:
+    """Resolve the explicit ``lyrics_path`` to hand ``run_one``, or None.
+
+    The pipeline reads only ``ctx.artifacts["lyrics_path"]``; the
+    orchestrator sets it from the ``run_one`` argument.  We resolve the
+    user's phase-2 choice to a concrete file here rather than via the
+    YouTube-ID-keyed choice sidecar, so songs without a YouTube ID can
+    still use Genius lyrics.
+
+      * genius -> fetch lyrics, write ``<stem>.txt``, return it
+      * srt    -> existing local SRT, return it
+      * raw    -> None (force transcription)
+    """
+    kind = job.choice[0] if job.choice else "raw"
+
+    if kind == "genius":
+        try:
+            text = genius.fetch_lyrics(job.choice[1])
+        except GeniusUnavailable as e:
+            print(f"  ! Genius fetch failed ({e}); transcribing instead")
+            return None
+        out = lyrics_dir / f"{job.song_path.stem}.txt"
+        out.write_text(text, encoding="utf-8")
+        return out
+
+    if kind == "srt":
+        srt_path = _find_local_srt(job.song_path)
+        if srt_path is None:
+            print("  ! no local SRT found; transcribing instead")
+        return srt_path
+
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -239,16 +271,15 @@ def stash_choices(jobs: list[SongJob]) -> None:
 def build_stages_for(missing: set[str], whisper, config: PipelineConfig, stem_worker):
     """Return only the stages needed for *missing*.
 
-    LyricsFetchStage runs whenever lyric work is needed; it reads the
-    choice sidecar written in phase 2.  LoadVocalFromM4aStage decodes
-    the cached vocal m4a back to WAV when the separator pass is skipped.
+    Lyrics are resolved by the CLI (``resolve_lyrics_path``) and handed
+    to ``run_one`` as an explicit path, so no LyricsFetchStage is needed.
+    LoadVocalFromM4aStage decodes the cached vocal m4a back to WAV when
+    the separator pass is skipped.
     """
     needs_stems = STEMS in missing
     needs_lyric = KARAOKE in missing or SUBTITLES in missing
 
     stages = []
-    if needs_lyric:
-        stages.append(LyricsFetchStage(_make_genius(config)))
     if needs_stems:
         stages.append(FFmpegExtractStage(config))
         stages.append(LoudnormAnalyzeStage(config))
@@ -273,7 +304,7 @@ def _make_genius(_config: PipelineConfig) -> GeniusClient:
     return _genius_singleton
 
 
-def run_jobs(jobs: list[SongJob], config: PipelineConfig) -> tuple[int, int]:
+def run_jobs(jobs: list[SongJob], config: PipelineConfig, genius: GeniusClient) -> tuple[int, int]:
     """Run each job's pipeline serially.  Returns (succeeded, failed)."""
     any_stems = any(STEMS in j.missing for j in jobs)
     any_lyric = any(KARAOKE in j.missing or SUBTITLES in j.missing for j in jobs)
@@ -289,6 +320,12 @@ def run_jobs(jobs: list[SongJob], config: PipelineConfig) -> tuple[int, int]:
     if any_lyric:
         whisper_worker.start()
 
+    # Holds fetched Genius lyrics .txt files for the duration of the run;
+    # run_one validates that lyrics_path exists, so it must outlive each job.
+    lyrics_dir = Path(
+        tempfile.mkdtemp(prefix="backfill_lyrics_", dir=config.intermediate_dir or None)
+    )
+
     succeeded = failed = 0
     try:
         for i, job in enumerate(jobs, 1):
@@ -298,15 +335,18 @@ def run_jobs(jobs: list[SongJob], config: PipelineConfig) -> tuple[int, int]:
             if not stages:
                 print("  (nothing to do)")
                 continue
+            needs_lyric = KARAOKE in job.missing or SUBTITLES in job.missing
+            lyrics_path = resolve_lyrics_path(job, genius, lyrics_dir) if needs_lyric else None
             orch = PipelineOrchestrator(stages, stem_worker, whisper_worker, config)
             try:
-                orch.run_one(job.song_path)
+                orch.run_one(job.song_path, lyrics_path)
                 print(f"  OK: {job.song_path.name}")
                 succeeded += 1
             except Exception as e:
                 print(f"  FAILED: {job.song_path.name}: {e}")
                 failed += 1
     finally:
+        shutil.rmtree(lyrics_dir, ignore_errors=True)
         if any_stems:
             stem_worker.stop()
         if any_lyric:
@@ -389,8 +429,7 @@ def main() -> int:
         print("No songs left after prompts.")
         return 0
 
-    stash_choices(jobs)
-    succeeded, failed = run_jobs(jobs, config)
+    succeeded, failed = run_jobs(jobs, config, genius)
     print(f"\nDone. succeeded={succeeded} failed={failed}")
     return 0 if failed == 0 else 1
 

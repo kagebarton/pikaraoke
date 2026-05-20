@@ -7,7 +7,6 @@ LyricAlignStage.
 """
 
 import logging
-from pathlib import Path
 
 from pikaraoke.pipeline.context import Phase, StageContext
 from pikaraoke.pipeline.stages._ffmpeg_helpers import run_ffmpeg
@@ -30,12 +29,17 @@ class LoadVocalFromM4aStage(BaseStage):
         cmd = [
             "ffmpeg",
             "-hide_banner",
-            "-loglevel", "warning",
+            "-loglevel",
+            "warning",
             "-y",
-            "-i", str(vocal_m4a),
-            "-ac", "2",
-            "-ar", "44100",
-            "-sample_fmt", "s16",
+            "-i",
+            str(vocal_m4a),
+            "-ac",
+            "2",
+            "-ar",
+            "44100",
+            "-sample_fmt",
+            "s16",
             str(vocal_wav),
         ]
         logger.info(f"[{self.name}] Decoding cached vocal stem: {vocal_m4a.name}")

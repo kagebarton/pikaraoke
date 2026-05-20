@@ -23,15 +23,19 @@ post-report confirmation prompt.
 
 1. **Scan** — enumerate video files in `folder`, classify per-song
    missing artifacts:
+
    - `stems` — both `vocal/<stem>---vocal.m4a` and
      `nonvocal/<stem>---nonvocal.m4a` present?
    - `karaoke` — `karaoke/<stem>.ass` present?
    - `subtitles` — `subtitles/<stem>.srt` OR `<stem>.en.srt` present?
      (The `.en.srt` form is YouTube captions; either counts.)
+
 2. **Report + confirm** — print a table of songs and their missing
    artifacts. Confirm before proceeding unless `--yes`.
+
 3. **Interactive Genius prompt** — for each song needing lyric work
    (`karaoke` or `subtitles` missing), prompt up front:
+
    ```
    <song name>
      search query [<default>]: <enter or edit>
@@ -39,17 +43,37 @@ post-report confirmation prompt.
      ...
      choose [1-N/s/t/k or new query]:
    ```
+
    Options: numbered hit picks Genius lyrics; `s` = use local SRT;
    `t` = transcribe (no reference lyrics); `k` = skip song entirely;
    any other input is treated as a new search query.
 
-   Selections are stashed via `genius.write_choice()` (the same sidecar
-   format `LyricsFetchStage` consumes from the live app), so phase 4
-   runs unattended.
+   Selections are held in memory on each `SongJob` and resolved to a
+   concrete lyrics file at run time by `resolve_lyrics_path()`, so phase
+   4 runs unattended.
+
 4. **Run unattended** — per song, build a *minimal* stage list (see
-   `build_stages_for`) and run via `PipelineOrchestrator.run_one`.
-   Stem worker starts only if any job needs stems; whisper worker only
-   if any job needs lyric work.
+   `build_stages_for`) and run via `PipelineOrchestrator.run_one(song, lyrics_path)`. Stem worker starts only if any job needs stems;
+   whisper worker only if any job needs lyric work.
+
+### Lyrics resolution
+
+The pipeline reads only `ctx.artifacts["lyrics_path"]`, which the
+orchestrator sets from the `run_one(song, lyrics_path)` argument. The
+CLI therefore resolves the user's phase-2 choice to a concrete path
+itself (`resolve_lyrics_path`) and hands it straight to `run_one`:
+
+- **genius** → `genius.fetch_lyrics(id)`, written to a temp `<stem>.txt`
+  (lives in a run-scoped dir, cleaned up at the end).
+- **srt** → existing `subtitles/<stem>.en.srt` or `<stem>.srt`.
+- **raw** → `None`, which makes `LyricAlignStage` transcribe.
+
+This deliberately bypasses the live app's `LyricsFetchStage` +
+`genius.write_choice()` sidecar, which is keyed by YouTube ID — that
+mechanism can't serve files without an 11-char ID (e.g. manually-added
+library songs), so it would silently fall back to transcription even
+when a Genius pick was made. Resolving in the CLI removes that
+dependency entirely (and leaves no stale sidecar files behind).
 
 ### Stage selection
 
@@ -58,8 +82,8 @@ post-report confirmation prompt.
 | Missing                      | Stages                                                                                       |
 |------------------------------|----------------------------------------------------------------------------------------------|
 | `stems`                      | `FFmpegExtractStage → LoudnormAnalyzeStage → StemSeparationStage → FFmpegTranscodeStage`     |
-| `stems` + (karaoke/subs)     | `LyricsFetchStage → ... full chain ... → LyricAlignStage`                                    |
-| karaoke and/or subs only     | `LyricsFetchStage → LoadVocalFromM4aStage → LyricAlignStage`                                 |
+| `stems` + (karaoke/subs)     | `... full stem chain ... → LyricAlignStage`                                                  |
+| karaoke and/or subs only     | `LoadVocalFromM4aStage → LyricAlignStage`                                                    |
 
 `LoadVocalFromM4aStage` (in `pikaraoke/pipeline/stages/load_vocal.py`)
 decodes the cached `vocal/<stem>---vocal.m4a` back to a WAV in
@@ -88,9 +112,14 @@ the same stage classes, workers, and config as
 
 1. **Stage list construction.** `processing_manager.start()` hardcodes
    the full stage list; this CLI's `build_stages_for()` picks subsets.
-2. **No PTY.** ffmpeg subprocess output goes to `DEVNULL`; Python
+2. **Lyrics resolution.** The live app uses `LyricsFetchStage` + the
+   YouTube-ID-keyed choice sidecar; this CLI resolves lyrics itself and
+   passes an explicit `lyrics_path` to `run_one` (see "Lyrics
+   resolution" above). So `LyricsFetchStage` is **not** in the CLI's
+   stage list.
+3. **No PTY.** ffmpeg subprocess output goes to `DEVNULL`; Python
    logging goes to stderr.
-3. **No queue.** Songs run serially in a simple `for` loop. No
+4. **No queue.** Songs run serially in a simple `for` loop. No
    cancellation, no event system, no song manager.
 
 ### What changes in the pipeline propagate automatically?
@@ -126,12 +155,11 @@ owns the "which subset for which missing set" logic. Not done yet.
   so this is fine on a single-GPU box, but a multi-GPU setup could
   pipeline stems(song N+1) against align(song N).
 - **No resume.** A crash mid-run loses no artifacts (they're written
-  atomically per stage), but already-prompted Genius choices for
-  songs that didn't run yet are left as stale sidecar JSON in the
-  temp `lyric_choices/` dir. `LyricsFetchStage.delete_choice()`
-  cleans them up on successful consumption, but skipped or crashed
-  songs leave them behind. A `--resume` mode could just rely on the
-  scan re-running.
+  atomically per stage), but any Genius prompts already answered for
+  songs that hadn't run yet are lost — re-running re-prompts them. The
+  scan is idempotent, so a `--resume` would mostly just be re-running
+  the tool. (Choices live in memory, not on disk, so nothing stale is
+  left behind.)
 - **Genius search query default** is `clean_search_query(stem - yt_id)`,
   which sometimes underperforms vs. just the title. Could try a few
   variants (title-only, title+primary-artist) and merge results.
