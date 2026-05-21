@@ -20,7 +20,9 @@ dependencies = [
     "flask-smorest>=0.46.0",
     "Babel==2.17.0",
     "Flask-Babel==4.0.0",
-    "ffmpeg-python==0.2.0",
+    "marshmallow>=3.0", # imported directly by route schemas (also a flask-smorest dep)
+    "Pillow>=10.0", # imported directly by mpv_controller (also a qrcode[png] dep)
+    "pyzmq>=25.0", # mpv_controller IPC
     "yt-dlp[default]>=2026.03.03",
     "curl_cffi>=0.10,<0.15", # Required for yt-dlp --impersonate; range matches yt-dlp's supported versions
     "flask-socketio>=5.5.0",
@@ -61,13 +63,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["pikaraoke"]
-
-# Poetry-specific configuration (reads from [project] above)
-[tool.poetry]
-package-mode = true
-
-[tool.poetry.group.dev.dependencies]
-pre-commit = "^3.7.1"
 
 [tool.pyright]
 include = ["src"]
