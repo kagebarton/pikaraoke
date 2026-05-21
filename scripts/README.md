@@ -12,12 +12,16 @@ same pipeline stages as the running app.
 ### Usage
 
 ```bash
-python scripts/backfill_artifacts.py [folder] [--dry-run] [--yes]
+python scripts/backfill_artifacts.py [folder] [--dry-run] [--yes] \
+    [--match-method {auto,walk,tiling}]
 ```
 
 Default `folder` = `get_default_dl_dir()` (e.g. `~/pikaraoke-songs`).
 `--dry-run` prints the report and exits. `--yes` skips the
-post-report confirmation prompt.
+post-report confirmation prompt. `--match-method` overrides
+`PipelineConfig.match_method` for this run (default `auto`): force
+`walk` (two-pointer walk matcher) or `tiling` (order-independent
+matcher) to compare matchers without editing the config.
 
 ### Flow
 
