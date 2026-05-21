@@ -21,8 +21,10 @@ between the surrounding matched words. Long unmatched runs and
 degenerately fast runs are dropped instead of interpolated (assumed to
 be lyrics absent from the audio — a skipped verse, a restructured
 chorus). Matched runs that collapse onto a single timestamp (stable-ts
-giving up and pinning every word to one instant) are demoted to
-unmatched so the drop logic applies to them too.
+giving up and pinning every word to one instant) are demoted and
+re-timed by interpolation across the bracketing anchors; since the words
+matched 1:1 they're known present, so they're exempt from the long-run
+drop and only the readability (min-slot) gate can still drop them.
 """
 
 import logging
@@ -264,7 +266,10 @@ def match_words_to_lines_with_stats(
             the walker reluctantly skips the current lyric token.
         max_interp_run: largest unmatched-token run that still gets
             linearly interpolated. Longer runs are dropped — assumed to
-            be lyrics absent from the audio. Set very large to disable.
+            be lyrics absent from the audio. Does NOT apply to collapse-
+            demoted runs (see ``max_collapsed_run``): those matched 1:1
+            and are known present, so they interpolate at any length,
+            gated only by ``min_interp_slot``. Set very large to disable.
         min_interp_slot: minimum per-token interpolation slot, in seconds.
             If the bracketing anchors are too close to give each token at
             least this much time, the run is dropped instead of crammed.
@@ -274,8 +279,9 @@ def match_words_to_lines_with_stats(
             of an unalignable section at a single instant; the walker
             pairs those 1:1 so the interp caps never see them. A run
             longer than this many matched tokens inside ``collapse_window``
-            seconds is demoted to unmatched so the interp/drop logic
-            applies. Set very large to disable.
+            seconds is demoted so it gets re-timed by interpolation across
+            the bracketing anchors (exempt from ``max_interp_run`` since
+            the words are known present). Set very large to disable.
         collapse_window: max span, in seconds, for a matched-token run to
             count as collapsed for the ``max_collapsed_run`` check.
 
@@ -392,6 +398,7 @@ def match_words_to_lines_with_stats(
 
     # Interpolate short unmatched runs; drop long runs entirely (token_words
     # stays None — those tokens won't appear in the karaoke output).
+    collapsed_indices_set = {idx for run in collapsed_token_indices for idx in run}
     dropped_tokens = 0
     interp_run_lengths: list[int] = []
     dropped_run_lengths: list[int] = []
@@ -405,7 +412,15 @@ def match_words_to_lines_with_stats(
         while run_end < n_tokens and token_words[run_end] is None:
             run_end += 1
         run_len = run_end - k
-        if run_len > max_interp_run:
+        # Collapse-demoted tokens matched whisper output 1:1 — they were
+        # sung, only their timestamps collapsed onto one instant. The
+        # max_interp_run cap targets lyrics *absent* from the audio, which
+        # these are not, so interpolate them across the bracketing anchors
+        # regardless of run length. The min_interp_slot gate below still
+        # drops a run whose anchors are too close to place it legibly
+        # (a collapse at the song's end, or with no real gap after it).
+        from_collapse = any(idx in collapsed_indices_set for idx in range(k, run_end))
+        if run_len > max_interp_run and not from_collapse:
             dropped_tokens += run_len
             dropped_run_lengths.append(run_len)
             dropped_token_indices.append(list(range(k, run_end)))

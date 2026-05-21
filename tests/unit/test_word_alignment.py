@@ -207,26 +207,41 @@ class TestMatchWordsToLines:
         emitted = [w["word"] for w in result[0]["words"]]
         assert emitted == ["hello", "world"]
 
-    def test_collapsed_matched_run_demoted_and_dropped(self):
+    def test_collapsed_run_reinterpolated_across_real_gap(self):
         # 12 lyric tokens all 1:1-matched to whisper words pinned at one
-        # timestamp (stable-ts giving up). max_collapsed_run=8 with
-        # collapse_window=0.3s → run is demoted to unmatched, then dropped
-        # because the run length exceeds max_interp_run=5.
+        # timestamp (stable-ts giving up). The run exceeds max_collapsed_run=8
+        # so it's demoted — but because the words matched (so are known
+        # present) and the bracketing anchors are 1.0s..20.0s apart, it's
+        # re-timed by interpolation rather than dropped on length.
         lyric_words = [chr(ord("a") + i) for i in range(12)]
-        words = [{"word": w, "start": 5.0, "end": 5.001} for w in lyric_words]
-        # Bracket the collapsed run with clean anchors so the dropped run
-        # has neighbors to interpolate against (the interp would still be
-        # near-zero-slot, but the drop happens on length anyway).
+        crammed = [{"word": w, "start": 5.0, "end": 5.001} for w in lyric_words]
         words = (
             [{"word": "start", "start": 0.0, "end": 1.0}]
-            + words
-            + [{"word": "end", "start": 10.0, "end": 11.0}]
+            + crammed
+            + [{"word": "end", "start": 20.0, "end": 21.0}]
         )
         lines = ["start " + " ".join(lyric_words) + " end"]
         result = match_words_to_lines(words, lines)
         emitted = [w["word"] for w in result[0]["words"]]
-        # Only the bracketing anchors survive; the collapsed run is gone.
-        assert emitted == ["start", "end"]
+        assert emitted == ["start", *lyric_words, "end"]
+        # Spread across the 1.0 → 20.0 gap, not crammed at 5.0.
+        starts = [w["start"] for w in result[0]["words"]]
+        assert starts == sorted(starts)
+        assert result[0]["words"][1]["start"] >= 1.0
+        assert result[0]["words"][-2]["end"] <= 20.0
+
+    def test_collapsed_run_at_song_end_still_dropped(self):
+        # A collapse with no following anchor has no gap to interpolate
+        # into: next_start collapses to prev_end, the per-token slot is 0,
+        # and the min_interp_slot readability gate drops it. The collapse
+        # exemption from max_interp_run does not override that gate.
+        lyric_words = [chr(ord("a") + i) for i in range(12)]
+        crammed = [{"word": w, "start": 5.0, "end": 5.001} for w in lyric_words]
+        words = [{"word": "start", "start": 0.0, "end": 1.0}] + crammed
+        lines = ["start " + " ".join(lyric_words)]
+        result = match_words_to_lines(words, lines)
+        emitted = [w["word"] for w in result[0]["words"]]
+        assert emitted == ["start"]
 
     def test_line_with_all_tokens_dropped_is_suppressed(self):
         # First line has only droppable tokens; should emit with words=[]
