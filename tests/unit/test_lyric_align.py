@@ -251,3 +251,36 @@ class TestMatchMethodEscalation:
         worker.discard_cached.assert_called_once_with("rid-1")
         worker.refine_from_cached.assert_not_called()
         worker.transcribe_words.assert_called_once()
+
+    def test_auto_escalates_on_concentration_alone(self, tmp_path):
+        # Catches "The Next Ten Minutes": forced alignment crams one whole
+        # section onto a single timestamp while both ratios stay under
+        # their thresholds. 100 lyric tokens, a contiguous 12-token block
+        # collapsed → collapse_ratio 0.12 (< 0.15) and fail_ratio 0.05
+        # (< 0.1), but the 12-token run trips the concentration gate
+        # (>= 10 tokens).
+        stage, ctx, worker = _make_stage_and_ctx(
+            tmp_path, match_method="auto", fail_ratio=0.05, threshold=0.1
+        )
+        lyric_words = [f"w{i}" for i in range(100)]
+        ctx.artifacts["lyrics_path"].write_text(" ".join(lyric_words) + "\n", encoding="utf-8")
+        words = []
+        t = 0.0
+        for w in lyric_words[:44]:
+            words.append({"word": w, "start": t, "end": t + 0.3})
+            t += 0.5
+        for w in lyric_words[44:56]:  # 12 tokens crammed at one instant
+            words.append({"word": w, "start": 100.0, "end": 100.0})
+        t = 130.0
+        for w in lyric_words[56:]:
+            words.append({"word": w, "start": t, "end": t + 0.3})
+            t += 0.5
+        worker.align_check.return_value = {
+            "fail_ratio": 0.05,
+            "result_id": "rid-1",
+            "words": words,
+        }
+        stage.run(ctx)
+        worker.discard_cached.assert_called_once_with("rid-1")
+        worker.refine_from_cached.assert_not_called()
+        worker.transcribe_words.assert_called_once()

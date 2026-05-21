@@ -73,6 +73,7 @@ class LyricAlignStage(BaseStage):
         capture_tiling_stats: dict | None = None
         capture_fail_ratio: float | None = None
         capture_collapse_ratio: float | None = None
+        capture_max_loss_run: int | None = None
         capture_escalated = False
         capture_escalation_trigger: str | None = None
         capture_method_used: str | None = None
@@ -116,29 +117,44 @@ class LyricAlignStage(BaseStage):
                     sum(raw_stats["collapsed_run_lengths"]) / n_raw_tokens if n_raw_tokens else 0.0
                 )
                 capture_collapse_ratio = collapse_ratio
+                # Longest single contiguous chunk align botched (collapsed or
+                # dropped). Catches a concentrated failure that the ratios
+                # miss — interp smears a big run, transcribe+tiling doesn't.
+                max_loss_run = max(
+                    raw_stats["collapsed_run_lengths"] + raw_stats["dropped_run_lengths"],
+                    default=0,
+                )
+                capture_max_loss_run = max_loss_run
 
                 fail_thresh = self._config.align_failure_escalation
                 collapse_thresh = self._config.collapse_escalation_threshold
+                concentration_thresh = self._config.concentration_escalation_run
                 fail_trips = fail_ratio > fail_thresh
                 collapse_trips = collapse_ratio > collapse_thresh
+                concentration_trips = max_loss_run >= concentration_thresh
 
-                if method == "auto" and (fail_trips or collapse_trips):
+                if method == "auto" and (fail_trips or collapse_trips or concentration_trips):
                     triggers = []
                     if fail_trips:
                         triggers.append("fail_ratio")
                     if collapse_trips:
                         triggers.append("collapse_ratio")
+                    if concentration_trips:
+                        triggers.append("concentration")
                     capture_escalation_trigger = "+".join(triggers)
                     logger.warning(
                         "[%s] escalating to tiling matcher (%s): "
                         "fail_ratio=%.0f%% (thresh %.0f%%), "
-                        "collapse_ratio=%.0f%% (thresh %.0f%%)",
+                        "collapse_ratio=%.0f%% (thresh %.0f%%), "
+                        "max_loss_run=%d tokens (thresh %d)",
                         self.name,
                         capture_escalation_trigger,
                         fail_ratio * 100,
                         fail_thresh * 100,
                         collapse_ratio * 100,
                         collapse_thresh * 100,
+                        max_loss_run,
+                        concentration_thresh,
                     )
                     self._discard_cached_safely(result_id, "escalation")
                     use_tiling = True
@@ -149,12 +165,15 @@ class LyricAlignStage(BaseStage):
                         logger.info(
                             "[%s] align gates passed: "
                             "fail_ratio=%.0f%% (thresh %.0f%%), "
-                            "collapse_ratio=%.0f%% (thresh %.0f%%) — keeping walk match",
+                            "collapse_ratio=%.0f%% (thresh %.0f%%), "
+                            "max_loss_run=%d tokens (thresh %d) — keeping walk match",
                             self.name,
                             fail_ratio * 100,
                             fail_thresh * 100,
                             collapse_ratio * 100,
                             collapse_thresh * 100,
+                            max_loss_run,
+                            concentration_thresh,
                         )
                     words = _model_call(
                         ctx,
@@ -255,6 +274,7 @@ class LyricAlignStage(BaseStage):
                 tiling_stats=capture_tiling_stats,
                 fail_ratio=capture_fail_ratio,
                 collapse_ratio=capture_collapse_ratio,
+                max_loss_run=capture_max_loss_run,
                 method_used=capture_method_used,
                 escalated=capture_escalated,
                 escalation_trigger=capture_escalation_trigger,
@@ -276,6 +296,7 @@ class LyricAlignStage(BaseStage):
         tiling_stats: dict | None,
         fail_ratio: float | None,
         collapse_ratio: float | None,
+        max_loss_run: int | None,
         method_used: str | None,
         escalated: bool,
         escalation_trigger: str | None,
@@ -307,6 +328,7 @@ class LyricAlignStage(BaseStage):
             pipeline_decisions = {
                 "align_check_fail_ratio": fail_ratio,
                 "collapse_ratio": collapse_ratio,
+                "max_loss_run": max_loss_run,
                 "method_used": method_used,
                 "escalated_to_tiling": escalated,
                 "escalation_trigger": escalation_trigger,

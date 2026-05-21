@@ -216,6 +216,18 @@ class PipelineConfig:
     # fail_ratio is only 0.07 — collapse catches what fail_ratio misses).
     collapse_escalation_threshold: float = 0.15
 
+    # Concentration signal: escalate when the *longest contiguous* run of
+    # collapsed-or-dropped lyric tokens reaches this many tokens, even if
+    # the overall ratios stay under their thresholds. A scattered 10% of
+    # drops interpolates fine; a single contiguous section that big means
+    # forced alignment structurally failed there and the walk's linear
+    # interpolation smears it — exactly where transcribe+tiling, with real
+    # per-word timestamps, wins. Absolute (not fractional) because a
+    # "missing section" is roughly constant in size regardless of song
+    # length (e.g. "The Next Ten Minutes" collapses a 38-token block while
+    # its collapse_ratio is only 0.14, under the gate above).
+    concentration_escalation_run: int = 10
+
     # When True, the lyric-align stage writes a JSON bundle to
     # ``<song_dir>/alignment_debug/<stem>.json`` capturing the matcher
     # inputs (whisper words + lyric lines), the knob values that ran,
