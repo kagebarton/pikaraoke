@@ -9,6 +9,13 @@ Reconstruct the cumulative diff between `master` and `removediarize`
 logically-isolated commits on a fresh branch, performing a strict code
 review along the way.
 
+> **Coverage:** this plan reconstructs `removediarize` **up to and including
+> tip `6137ed6`** (`feat(tiling): keep ad-lib parens inline instead of
+> splitting them off`, 2026-05-18) on base `master` `e7bc348`. If
+> `removediarize` has advanced past `6137ed6` when you execute, the plan no
+> longer covers the full diff — re-run the baseline sweep and fold any new
+> commits into the relevant feature commits before starting.
+
 This is **not** a history replay. Diarization code that was added and
 later removed must never appear — we build toward the *end state* of
 `removediarize`, organized cleanly. Commit messages on the source branch
@@ -56,6 +63,120 @@ content.
   go beyond a literal reproduction and are called out as `Review-fix:` /
   new-test items on the relevant commits.
 - **Deliverable:** this plan only. No branch/commits created yet.
+
+## Execution baseline & review gates
+
+*(Added for strict-review execution. Captured 2026-05-22 against
+`origin/removediarize`. `removediarize` is **remote-only** — before
+starting, either `git branch removediarize origin/removediarize` or
+substitute `origin/removediarize` in every command in this plan.)*
+
+### Baseline metrics (the verification spine)
+
+| Metric | Value |
+|---|---|
+| Merge-base (`git merge-base master origin/removediarize`) | `e7bc348a61ca9db0d692bf24d294a164f9757757` |
+| `master` tip | `e7bc348` — **equals the merge-base**, so `next` from master is the exact diff baseline; no drift |
+| `removediarize` tip | `6137ed6` |
+| Net diff | 220 files, +45011 / −19954 (94 A · 94 M · 32 D) |
+| **Baseline test count** | **947** (`pytest --collect-only`, 0 collection errors) |
+| **Baseline skip/xfail** | **0** (no `@pytest.mark.skip`/`xfail`/`pytest.skip(` anywhere in `tests/`) |
+
+Tip green-ness alone does **not** catch a silently-dropped test file — a
+smaller suite is still green. So at the tip: `pytest --collect-only -q | tail -1`
+must report **≥ 947**, and the skip count must stay **0** (any new skip needs a
+written justification in the owning commit body). The final
+`git diff removediarize` gate is the backstop for dropped *files*; this count
+is the fast smoke for dropped *tests*.
+
+### Split-completeness sweep (Split-Candidates audit)
+
+All 90 files with >200 changed lines were checked against the split map. No
+large file is silently staged-whole-without-consideration. Breakdown:
+
+- **OMIT (cruft):** every `plans/**`, `mockup/**`, `QWEN.md` — dropped, LOC irrelevant.
+- **Regenerated (C46):** all `translations/**/messages.po` + `messages.pot` — rebuilt, not staged.
+- **Pure deletions (C1/C13/C15):** `subtitles-octopus.js`, `splash.js`, `COPYRIGHT`,
+  `stream_manager.py`, `file_resolver.py`, `splash.html`, `stream.py`, `ffmpeg.py` (net),
+  and their tests.
+- **New single-concern modules — WHOLE-justified** (one new module = one concern,
+  nothing to bisect across): `mpv_controller`, `whisper_worker`, `stem_worker`,
+  `tiling_match`, `word_alignment`, `lyric_align`, `genius`, `processing_manager`,
+  `pipeline_tracker`, `process_terminal`, `orchestrator`, `config`,
+  `backfill_artifacts`, `processing.html`, + their tests.
+- **Modified, multi-concern, >200 — already SPLIT in the map:** `karaoke.py`,
+  `playback_controller.py`, `info.html`.
+- **Modified, WHOLE-justified by the per-page rule** (a template regression
+  bisects to one screen): `home.html` (761), `search.html` (629), `queue.html` (383).
+- **Modified, WHOLE single-refactor:** `download_manager.py` (257 — one concern).
+
+`app.py`, `args.py`, `preference_manager.py` are <200 lines but still split —
+they trip the *>3-concerns* half of the threshold and are already in the map.
+**Verdict: clean — no unflagged split candidate.**
+
+### Upstream-file gate (fork-maintenance rule)
+
+These pre-existing (upstream-inherited) code/template files are modified by the
+reconstruction. Per CLAUDE.md, each edit must be the smallest necessary change;
+flag any edit here for extra review. **New files** (everything under
+`pipeline/`, `mpv_controller`, `overlay_manager`, `genius*`, `tiling_match`,
+`word_alignment`, `processing_manager`, `pipeline_tracker`, `process_terminal`,
+`alignment_capture`, etc.) are exempt — they are the feature surface.
+
+`app.py`, `karaoke.py`, `lib/{args,download_manager,ffmpeg,get_platform,
+karaoke_database,library_scanner,metadata_parser,playback_controller,
+preference_manager,queue_manager,song_manager,youtube_dl}.py`,
+`routes/{admin,controller,files,info,preferences,queue,search,socket_events}.py`,
+`templates/{base,files,home,info,queue,search}.html`, `static/custom.css`,
+`static/spa-navigation.js`, `static/fontello/*`, `.gitignore`, `pyproject.toml`.
+
+### Standing gates (apply to every commit during review)
+
+- No debug prints. **Exception:** the `print()`s in `args.py` /
+  `process_terminal_reader.py` are legitimate CLI output — allowed.
+- No commented-out code; delete instead.
+- No bare `except:` — specific exceptions, log don't swallow, context managers for resources.
+- No new `@pytest.mark.skip`/`xfail` (baseline 0); a new skip needs a written reason.
+- No upstream-file edit beyond the smallest necessary (see Upstream-file gate).
+- Working state at the boundary: `python -c "import pikaraoke.app"` +
+  `pytest --collect-only` succeed. **Tip must be fully green**; the C17→C32 boot
+  window is the only sanctioned non-booting stretch.
+- Pre-commit clean per the policy below.
+
+### Risk register (scrutinize hardest, in order)
+
+1. **C5 / C9 — glob library-wipe absorption.** Data-loss risk: confirm the
+   cancel/delete glob is literal-safe and cannot match unintended library paths.
+2. **C18 / C32 — karaoke.py shared atomic hunks, two `e` passes.** Highest
+   chance of a leaked/missed hunk; the C32 `Karaoke(...)` call site must match
+   the signature in the same commit or boot breaks.
+3. **C-PROC — vertical processing UI.** Integration seam (routes + push wiring +
+   template) with no unit coverage on the push path; verify `_on_change` →
+   `pipeline_updated` actually fires and remove is race-safe.
+4. **C21 / C22 — out-of-process workers.** Subprocess IPC, OOM-exit/restart, GPU
+   cache clear, cancel hook; hard to fully unit-test — lean on the C-PROC smoke.
+5. **C14 — playback on MPV + loudnorm fold.** Multi-file; loudnorm read failure
+   must degrade gracefully (no playback crash).
+6. **C16 — gevent→threading + splash teardown.** Server-model change; verify
+   clean Ctrl-C shutdown and that real-time push still works.
+7. **C-CLK — clock feature gathered from 8 commits' exclusions.** Risk that an
+   earlier commit failed to `n`-skip/`e`-extract a clock hunk (or over-excluded);
+   after C-CLK, `git diff removediarize -- <each listed file>` must be empty.
+
+### Rollback tags & pre-commit policy
+
+- **Tag before starting:** `git tag next-backup` (worktree is disposable, but the
+  tag makes resets explicit).
+- **Tag each boundary:** after a commit's Test passes, `git tag next-step-<N>`.
+  A bad commit then resets cleanly: `git reset --hard next-step-<N-1>` without
+  recounting. On failure: capture the test output + `git diff next-step-<N-1> HEAD`,
+  diagnose (missing hunk = staging error; leaked hunk = wrong anchor, fix the
+  plan first; test depends on unstaged code = move the test later), **update this
+  plan**, then re-stage.
+- **Pre-commit policy = every commit.** Since each commit's content equals the
+  tip, formatter churn is minimal. Before each commit run
+  `pre-commit run --config code_quality/.pre-commit-config.yaml --files <changed>`;
+  if Black/isort reformats, re-stage and commit.
 
 ## Mechanics
 
