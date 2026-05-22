@@ -233,8 +233,21 @@ class PipelineConfig:
     repair_max_line_fraction: float = 0.5
 
     # Boundary slack (seconds) for the per-span word time-filter, so a word
-    # sitting right on a window edge isn't clipped.
+    # sitting right on a window edge isn't clipped. Under clip re-decode it
+    # also sets how much real neighbour audio each clip includes.
     repair_window_margin_s: float = 0.3
+
+    # Repair words-source. True (#3): transcribe only each failed span's
+    # audio clip — far cheaper for the common 1-2 hole case. False (#2):
+    # one whole-song transcribe, time-filtered per span. Clip transcription
+    # risks whisper context loss on very short spans, so it stays behind this
+    # flag pending corpus validation; flip to True once validated.
+    repair_clip_transcribe: bool = False
+
+    # Pad a clip window out to at least this many seconds (centred, clamped
+    # to the song head) before transcribing, so whisper keeps enough context
+    # to decode the span. Only used when repair_clip_transcribe is True.
+    repair_clip_min_duration_s: float = 6.0
 
     # When True, the lyric-align stage writes a JSON bundle to
     # ``<song_dir>/alignment_debug/<stem>.json`` capturing the matcher

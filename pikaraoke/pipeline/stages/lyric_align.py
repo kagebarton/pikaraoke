@@ -36,6 +36,7 @@ import datetime
 import logging
 import shutil
 from pathlib import Path
+from typing import Callable
 
 import srt
 
@@ -45,7 +46,13 @@ from pikaraoke.lib.tiling_match import match_words_to_lines_tiling_with_stats
 from pikaraoke.lib.word_alignment import match_words_to_lines_with_stats
 from pikaraoke.pipeline.config import PipelineConfig
 from pikaraoke.pipeline.context import Phase, PipelineCancelled, SetEvent, StageContext
+from pikaraoke.pipeline.stages._ffmpeg_helpers import run_ffmpeg
 from pikaraoke.pipeline.stages.base import BaseStage
+
+# A repair words-provider: maps an absolute audio window (t0, t1) to whisper
+# words in absolute song time. #2 filters the one whole-song transcribe; #3
+# transcribes only the span's audio clip. _repair_spans is agnostic to which.
+WordsForWindow = Callable[[float, float], list[dict]]
 from pikaraoke.pipeline.workers.whisper_worker import (
     AlignmentCancelledError,
     WhisperWorker,
@@ -83,6 +90,7 @@ class LyricAlignStage(BaseStage):
         capture_escalation_trigger: str | None = None
         capture_method_used: str | None = None
         capture_repair_ranges: list | None = None
+        capture_repair_words_source: str | None = None
 
         if lyrics_path is not None:
             # --- Alignment mode ---
@@ -202,22 +210,36 @@ class LyricAlignStage(BaseStage):
                         self._config.concentration_escalation_run,
                     )
                     if repair_ranges:
-                        logger.info(
-                            f"[{self.name}] Transcribing to repair {len(repair_ranges)} "
-                            f"span(s): {Path(vocal_wav).name}"
-                        )
-                        transcribe_words = _model_call(
-                            ctx,
-                            Phase.TRANSCRIBE,
-                            lambda: self._worker.transcribe_words(
-                                vocal_path=vocal_wav,
-                                cancel_event=ctx.cancel.event if ctx.cancel else None,
-                            ),
-                        )
+                        # The repair routine pulls each span's words through a
+                        # provider: #3 transcribes only the span's audio clip;
+                        # #2 filters one whole-song transcribe. Downstream
+                        # (tile -> splice) is identical either way.
+                        if self._config.repair_clip_transcribe:
+                            logger.info(
+                                f"[{self.name}] Repairing {len(repair_ranges)} span(s) via "
+                                f"clip transcribe: {Path(vocal_wav).name}"
+                            )
+                            provider = self._make_clip_provider(ctx, vocal_wav)
+                            capture_repair_words_source = "clip"
+                        else:
+                            logger.info(
+                                f"[{self.name}] Transcribing to repair {len(repair_ranges)} "
+                                f"span(s): {Path(vocal_wav).name}"
+                            )
+                            whole_words = _model_call(
+                                ctx,
+                                Phase.TRANSCRIBE,
+                                lambda: self._worker.transcribe_words(
+                                    vocal_path=vocal_wav,
+                                    cancel_event=ctx.cancel.event if ctx.cancel else None,
+                                ),
+                            )
+                            provider = self._make_whole_song_provider(whole_words)
+                            capture_repair_words_source = "whole_song_filter"
                         line_objects, capture_repair_ranges = self._repair_spans(
                             line_objects,
                             repair_ranges,
-                            transcribe_words,
+                            provider,
                             lyrics_lines,
                             align_lines,
                         )
@@ -301,6 +323,7 @@ class LyricAlignStage(BaseStage):
                 escalated=capture_escalated,
                 escalation_trigger=capture_escalation_trigger,
                 repair_ranges=capture_repair_ranges,
+                repair_words_source=capture_repair_words_source,
                 line_objects=line_objects,
             )
 
@@ -324,6 +347,7 @@ class LyricAlignStage(BaseStage):
         escalated: bool,
         escalation_trigger: str | None,
         repair_ranges: list | None,
+        repair_words_source: str | None,
         line_objects: list[dict],
     ) -> None:
         """Assemble + write the alignment-debug JSON. Errors are logged
@@ -361,6 +385,7 @@ class LyricAlignStage(BaseStage):
                 "escalated_to_tiling": escalated,
                 "escalation_trigger": escalation_trigger,
                 "repair_ranges": repair_ranges or [],
+                "repair_words_source": repair_words_source,
             }
             yt_srt = _find_youtube_srt_path(ctx.song_path)
             # When the YT SRT *is* the lyric source (common — the lyrics
@@ -534,12 +559,13 @@ class LyricAlignStage(BaseStage):
         self,
         line_objects: list[dict],
         repair_ranges: list[dict],
-        transcribe_words: list,
+        words_for_window: WordsForWindow,
         lines: list[str],
         align_lines: list[str],
     ) -> tuple[list[dict], list[dict]]:
         """Repair concentrated walk failures by re-tiling each failed span
-        against the transcribe words in its audio window, splicing per line.
+        against the words ``words_for_window`` provides for its audio window,
+        splicing per line.
 
         walk's good lines are kept everywhere outside the ranges; inside a
         range, tiling's timing replaces a line only when tiling found it (a
@@ -547,8 +573,13 @@ class LyricAlignStage(BaseStage):
         Each range's window is bracketed by its good-line neighbours, so the
         spliced objects fall between them and overall timing stays ordered.
 
+        ``words_for_window`` is the provider seam: it filters one whole-song
+        transcribe (#2) or transcribes the span's audio clip (#3), returning
+        words in absolute song time. This method is agnostic to which.
+
         Returns ``(line_objects, repair_meta)`` — repair_meta is the per-range
-        capture record (window, lines repaired/kept, window word count).
+        capture record (window, lines repaired/kept, and the absolute-timed
+        words tiled for that span, for offline re-tuning).
         """
         n_lines = len(lines)
         range_lines: set[int] = set()
@@ -557,7 +588,6 @@ class LyricAlignStage(BaseStage):
         # One-sided right boundary for a range at the song's tail.
         ends = [o["end"] for o in line_objects if o["words"] and o["end"] is not None]
         global_last_end = max(ends) if ends else 0.0
-        margin = self._config.repair_window_margin_s
 
         spliced_by_range: dict[tuple[int, int], list[dict]] = {}
         repair_meta: list[dict] = []
@@ -565,7 +595,7 @@ class LyricAlignStage(BaseStage):
             l0, l1 = r["line_start"], r["line_end"]
             t0 = _good_line_end_before(line_objects, l0, range_lines)
             t1 = _good_line_start_after(line_objects, l1, range_lines, global_last_end)
-            window_words = _words_for_window(transcribe_words, t0, t1, margin)
+            window_words = words_for_window(t0, t1)
             repair_objs, _stats = match_words_to_lines_tiling_with_stats(
                 window_words, lines[l0 : l1 + 1], align_lines[l0 : l1 + 1]
             )
@@ -582,6 +612,7 @@ class LyricAlignStage(BaseStage):
                     "lines_repaired": len(repaired),
                     "lines_kept_from_walk": (l1 - l0 + 1) - len(repaired),
                     "window_word_count": len(window_words),
+                    "words": window_words,
                 }
             )
 
@@ -603,6 +634,79 @@ class LyricAlignStage(BaseStage):
             result.append(walk_obj)
 
         return result, repair_meta
+
+    def _make_whole_song_provider(self, words: list) -> WordsForWindow:
+        """#2 provider: filter one whole-song transcribe to each window."""
+        margin = self._config.repair_window_margin_s
+
+        def words_for_window(t0: float, t1: float) -> list[dict]:
+            return _words_for_window(words, t0, t1, margin)
+
+        return words_for_window
+
+    def _make_clip_provider(self, ctx: StageContext, vocal_wav: Path) -> WordsForWindow:
+        """#3 provider: transcribe only each span's audio clip.
+
+        Extracts ``[t0 - margin, t1 + margin]`` (padded to
+        ``repair_clip_min_duration_s``) from the vocal stem, transcribes the
+        clip, and shifts the clip-relative word timestamps back to absolute
+        song time. The clip is deleted after use.
+        """
+        margin = self._config.repair_window_margin_s
+        min_dur = self._config.repair_clip_min_duration_s
+        cancel_event = ctx.cancel.event if ctx.cancel else None
+
+        def words_for_window(t0: float, t1: float) -> list[dict]:
+            lo = max(0.0, t0 - margin)
+            hi = t1 + margin
+            lo, hi = _pad_to_min_duration(lo, hi, min_dur)
+            clip = self._extract_clip_wav(ctx, vocal_wav, lo, hi)
+            try:
+                clip_words = _model_call(
+                    ctx,
+                    Phase.TRANSCRIBE,
+                    lambda: self._worker.transcribe_words(
+                        vocal_path=clip, cancel_event=cancel_event
+                    ),
+                )
+            finally:
+                clip.unlink(missing_ok=True)
+            # Clip words are clip-relative; shift to absolute song time.
+            return [
+                {"word": w["word"], "start": w["start"] + lo, "end": w["end"] + lo}
+                for w in clip_words
+            ]
+
+        return words_for_window
+
+    def _extract_clip_wav(self, ctx: StageContext, vocal_wav: Path, lo: float, hi: float) -> Path:
+        """Extract ``[lo, hi]`` of the vocal stem to a 16 kHz mono PCM wav in
+        the per-job temp dir, returning its path (the caller unlinks it).
+
+        ``-ss`` before ``-i`` is sample-accurate for the separator's PCM wav
+        and faster than post-input seek; move it after ``-i`` only if the
+        vocal stem ever becomes a compressed format.
+        """
+        clip = ctx.tmp_dir / f"{ctx.song_path.stem}.repair_{int(lo * 1000)}_{int(hi * 1000)}.wav"
+        cmd = [
+            "ffmpeg",
+            "-ss",
+            f"{lo:.3f}",
+            "-i",
+            str(vocal_wav),
+            "-t",
+            f"{hi - lo:.3f}",
+            "-ac",
+            "1",
+            "-ar",
+            "16000",
+            "-c:a",
+            "pcm_s16le",
+            "-y",
+            str(clip),
+        ]
+        run_ffmpeg(cmd, ctx, Phase.CLIP_EXTRACT)
+        return clip
 
 
 # ---------------------------------------------------------------------------
@@ -721,6 +825,22 @@ def _words_for_window(words: list, t0: float, t1: float, margin: float) -> list:
     lo = t0 - margin
     hi = t1 + margin
     return [w for w in words if lo <= w["start"] <= hi]
+
+
+def _pad_to_min_duration(lo: float, hi: float, min_dur: float) -> tuple[float, float]:
+    """Widen ``[lo, hi]`` symmetrically to at least ``min_dur`` seconds so a
+    clip keeps enough context for whisper. When ``lo`` clamps at 0.0 the unused
+    low padding rolls onto the high side. A ``hi`` past end-of-file is harmless
+    to ffmpeg ``-t``, so no song-duration clamp is needed.
+    """
+    span = hi - lo
+    if span >= min_dur:
+        return lo, hi
+    deficit = min_dur - span
+    new_lo = max(0.0, lo - deficit / 2.0)
+    used_low = lo - new_lo
+    new_hi = hi + (deficit - used_low)
+    return new_lo, new_hi
 
 
 def _splice_range(

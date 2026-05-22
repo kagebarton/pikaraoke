@@ -32,6 +32,7 @@ class Phase(enum.Enum):
     ALIGN_CHECK = "align_check"  # lyric_align: align only, gate on failure ratio
     REFINE = "refine"  # lyric_align: refine the cached align result
     TRANSCRIBE = "transcribe"  # lyric_align: transcribe+refine
+    CLIP_EXTRACT = "clip_extract"  # lyric_align: extract a [t0,t1] vocal clip for repair
 
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 """Unit tests for LyricAlignStage — lyrics loading, single-style ASS,
 concentration-only routing, and sectional tiling repair."""
 
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -10,6 +11,7 @@ from pikaraoke.pipeline.stages.lyric_align import (
     LyricAlignStage,
     _build_repair_ranges,
     _decide_route,
+    _pad_to_min_duration,
     _splice_range,
     _words_for_window,
 )
@@ -436,6 +438,43 @@ class TestMatchMethodRouting:
         stage.run(ctx)
         worker.transcribe_words.assert_called_once()
 
+    def test_auto_concentration_repairs_via_clip(self, tmp_path, monkeypatch):
+        # Same concentrated-hole song as the whole-song repair test, but with
+        # repair_clip_transcribe=True: the repair pulls words from a clip
+        # transcribe (one per range) instead of one whole-song transcribe.
+        monkeypatch.setattr(
+            "pikaraoke.pipeline.stages.lyric_align.run_ffmpeg",
+            lambda cmd, ctx, phase: None,
+        )
+        tokens = [f"t{i}" for i in range(60)]
+        lines = "\n".join(" ".join(tokens[3 * k : 3 * k + 3]) for k in range(20))
+        words = _aligned_words(tokens, collapse_range=(15, 27))  # 12 tokens, lines 5-8
+        # The clip transcribe returns the span's words clip-relative (the
+        # provider offsets them); content matches t15..t26 so tiling matches.
+        clip_words = [
+            {"word": tokens[i], "start": (i - 15) * 1.0, "end": (i - 15) * 1.0 + 0.5}
+            for i in range(15, 27)
+        ]
+        stage, ctx, worker = _make_stage_and_ctx(
+            tmp_path,
+            match_method="auto",
+            lyrics_text=lines,
+            raw_words=words,
+            refine_words=words,
+            transcribe_words=clip_words,
+        )
+        stage._config.repair_clip_transcribe = True
+        stage.run(ctx)
+        worker.align_check.assert_called_once()
+        worker.refine_from_cached.assert_called_once()
+        # one range -> one clip transcribe, on a clip path (never the stem)
+        worker.transcribe_words.assert_called_once()
+        clip_arg = worker.transcribe_words.call_args.kwargs["vocal_path"]
+        assert clip_arg != ctx.artifacts["vocal_wav"]
+        assert "repair_" in clip_arg.name
+        worker.discard_cached.assert_not_called()
+        assert ctx.artifacts["lyric_method"] == "none+walk+repair"
+
 
 class TestRepairSpans:
     """_repair_spans: keep walk's good lines, adopt tiling timing per span."""
@@ -475,7 +514,8 @@ class TestRepairSpans:
             {"word": "g", "start": 4.0, "end": 4.4},
             {"word": "h", "start": 4.5, "end": 4.9},
         ]
-        result, meta = stage._repair_spans(walk, ranges, transcribe, lines, list(lines))
+        provider = stage._make_whole_song_provider(transcribe)
+        result, meta = stage._repair_spans(walk, ranges, provider, lines, list(lines))
         assert [o["text"] for o in result] == ["a b", "c d", "e f", "g h", "i j", "k l"]
         # Good walk lines kept verbatim (object identity).
         assert result[0] is walk[0]
@@ -488,6 +528,8 @@ class TestRepairSpans:
         assert meta[0]["lines_repaired"] == 2
         assert meta[0]["lines_kept_from_walk"] == 0
         assert meta[0]["window_word_count"] == 4
+        # the absolute-timed tiling input is captured for offline re-tuning
+        assert meta[0]["words"] == transcribe
 
     def test_line_tiling_misses_keeps_walk(self, stage):
         # Window words only cover line 2; line 3 finds nothing → walk kept,
@@ -499,7 +541,8 @@ class TestRepairSpans:
             {"word": "e", "start": 3.0, "end": 3.4},
             {"word": "f", "start": 3.5, "end": 3.9},
         ]
-        result, meta = stage._repair_spans(walk, ranges, transcribe, lines, list(lines))
+        provider = stage._make_whole_song_provider(transcribe)
+        result, meta = stage._repair_spans(walk, ranges, provider, lines, list(lines))
         assert result[2]["start"] == 3.0  # line 2 repaired
         assert result[3] is walk[3]  # line 3 kept from walk
         assert meta[0]["lines_repaired"] == 1
@@ -509,8 +552,86 @@ class TestRepairSpans:
         lines = ["a b", "c d", "e f", "g h", "i j", "k l"]
         walk = self._line_objects()
         ranges = [{"line_start": 2, "line_end": 3, "failed_tokens": 4}]
-        result, meta = stage._repair_spans(walk, ranges, [], lines, list(lines))
+        provider = stage._make_whole_song_provider([])
+        result, meta = stage._repair_spans(walk, ranges, provider, lines, list(lines))
         assert result[2] is walk[2]
         assert result[3] is walk[3]
         assert meta[0]["lines_repaired"] == 0
         assert meta[0]["lines_kept_from_walk"] == 2
+
+
+# ---------------------------------------------------------------------------
+# Clip re-decode (#3) — padding, extraction, offset provider
+# ---------------------------------------------------------------------------
+
+
+class TestPadToMinDuration:
+    def test_already_long_enough_unchanged(self):
+        assert _pad_to_min_duration(10.0, 20.0, 6.0) == (10.0, 20.0)
+
+    def test_short_window_centered(self):
+        assert _pad_to_min_duration(10.0, 11.0, 6.0) == (7.5, 13.5)
+
+    def test_head_clamp_rolls_deficit_to_high(self):
+        # lo can't go below 0, so the unused low pad rolls onto the high side.
+        assert _pad_to_min_duration(1.0, 2.0, 6.0) == (0.0, 6.0)
+
+
+class TestClipProvider:
+    @pytest.fixture
+    def stage(self):
+        cfg = PipelineConfig()
+        cfg.repair_clip_transcribe = True
+        return LyricAlignStage(whisper_worker=MagicMock(), config=cfg)
+
+    @staticmethod
+    def _ctx(tmp_path):
+        from pikaraoke.pipeline.context import StageContext
+
+        song = tmp_path / "song.mp4"
+        song.write_bytes(b"")
+        tmp = tmp_path / "tmp"
+        tmp.mkdir()
+        return StageContext(
+            song_path=song, tmp_dir=tmp, config=PipelineConfig(), artifacts={}, cancel=None
+        )
+
+    def test_extract_clip_wav_builds_command(self, stage, tmp_path, monkeypatch):
+        from pikaraoke.pipeline.context import Phase
+
+        calls = []
+        monkeypatch.setattr(
+            "pikaraoke.pipeline.stages.lyric_align.run_ffmpeg",
+            lambda cmd, ctx, phase: calls.append((cmd, phase)),
+        )
+        ctx = self._ctx(tmp_path)
+        clip = stage._extract_clip_wav(ctx, Path("/v/vocal.wav"), 7.5, 13.5)
+        cmd, phase = calls[0]
+        assert cmd[0] == "ffmpeg"
+        assert cmd[cmd.index("-ss") + 1] == "7.500"
+        assert cmd[cmd.index("-t") + 1] == "6.000"  # hi - lo
+        assert "16000" in cmd and "pcm_s16le" in cmd
+        assert phase == Phase.CLIP_EXTRACT
+        assert clip.parent == ctx.tmp_dir
+        assert clip.name.endswith(".wav") and "repair_" in clip.name
+
+    def test_clip_provider_offsets_to_absolute_and_unlinks(self, stage, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            "pikaraoke.pipeline.stages.lyric_align.run_ffmpeg",
+            lambda cmd, ctx, phase: None,
+        )
+        # Worker returns clip-relative words; provider must shift them by the
+        # clip's absolute start (lo).
+        stage._worker.transcribe_words.return_value = [
+            {"word": "x", "start": 0.5, "end": 1.0},
+            {"word": "y", "start": 1.5, "end": 2.0},
+        ]
+        ctx = self._ctx(tmp_path)
+        provider = stage._make_clip_provider(ctx, Path("/v/vocal.wav"))
+        # window [10,11] -> margin .3 -> [9.7,11.3] -> padded to 6s -> lo=7.5
+        words = provider(10.0, 11.0)
+        assert [w["word"] for w in words] == ["x", "y"]
+        assert [w["start"] for w in words] == [8.0, 9.0]
+        assert [w["end"] for w in words] == [8.5, 9.5]
+        clip_arg = stage._worker.transcribe_words.call_args.kwargs["vocal_path"]
+        assert clip_arg.parent == ctx.tmp_dir
