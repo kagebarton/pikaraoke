@@ -187,6 +187,35 @@ def _walk_align(
 # ---------------------------------------------------------------------------
 
 
+def _make_loss_span(
+    token_start: int,
+    token_end: int,
+    lyric_tokens: list,
+    t0: float,
+    t1: float,
+    from_collapse: bool,
+    recovered: bool,
+) -> dict:
+    """Build one ``loss_spans`` entry for a contiguous failed-token run.
+
+    ``token_end`` is half-open; ``line_start/line_end`` are the inclusive
+    lyric-line range the run touches; ``t0/t1`` are the bracketing matched
+    anchor times. ``kind`` records the failure origin (collapse-demoted vs
+    unmatched) and ``recovered`` whether it ended up interpolated (present)
+    rather than dropped (absent).
+    """
+    return {
+        "token_start": token_start,
+        "token_end": token_end,
+        "line_start": lyric_tokens[token_start][1],
+        "line_end": lyric_tokens[token_end - 1][1],
+        "t0": t0,
+        "t1": t1,
+        "kind": "collapsed" if from_collapse else "dropped",
+        "recovered": recovered,
+    }
+
+
 def match_words_to_lines(
     words: list,
     lines: list[str],
@@ -289,7 +318,11 @@ def match_words_to_lines_with_stats(
         ``(line_objects, stats)``. ``stats`` is a dict capturing knob
         values and per-run telemetry (matched/dropped/collapsed/interp
         run lengths) used downstream by the alignment-capture writer to
-        seed offline knob tuning.
+        seed offline knob tuning. ``stats["loss_spans"]`` carries the
+        collapsed/dropped runs as structured ``{token_start, token_end,
+        line_start, line_end, t0, t1, kind, recovered}`` entries so the
+        align stage can locate a concentrated failure (lines + audio
+        window) without re-deriving it from the raw index lists.
     """
     knobs = {
         "lyric_lookahead": lyric_lookahead,
@@ -328,6 +361,7 @@ def match_words_to_lines_with_stats(
             "dropped_run_lengths": [],
             "collapsed_token_indices": [],
             "dropped_token_indices": [],
+            "loss_spans": [],
             "mapping": [],
             "lines_with_words": 0,
             "empty_line_reasons": {},
@@ -398,11 +432,16 @@ def match_words_to_lines_with_stats(
 
     # Interpolate short unmatched runs; drop long runs entirely (token_words
     # stays None — those tokens won't appear in the karaoke output).
+    # loss_spans records the collapsed/dropped runs (not the benign short
+    # interp gaps) with their bracketing anchor times + line ranges, so the
+    # align stage can map a concentrated failure to lines + an audio window
+    # without re-deriving it.
     collapsed_indices_set = {idx for run in collapsed_token_indices for idx in run}
     dropped_tokens = 0
     interp_run_lengths: list[int] = []
     dropped_run_lengths: list[int] = []
     dropped_token_indices: list[list[int]] = []
+    loss_spans: list[dict] = []
     k = 0
     while k < n_tokens:
         if token_words[k] is not None:
@@ -420,16 +459,19 @@ def match_words_to_lines_with_stats(
         # drops a run whose anchors are too close to place it legibly
         # (a collapse at the song's end, or with no real gap after it).
         from_collapse = any(idx in collapsed_indices_set for idx in range(k, run_end))
-        if run_len > max_interp_run and not from_collapse:
-            dropped_tokens += run_len
-            dropped_run_lengths.append(run_len)
-            dropped_token_indices.append(list(range(k, run_end)))
-            k = run_end
-            continue
         prev_end = token_words[k - 1]["end"] if k > 0 else 0.0
         next_start = token_words[run_end]["start"] if run_end < n_tokens else prev_end
         if next_start < prev_end:
             next_start = prev_end
+        if run_len > max_interp_run and not from_collapse:
+            dropped_tokens += run_len
+            dropped_run_lengths.append(run_len)
+            dropped_token_indices.append(list(range(k, run_end)))
+            loss_spans.append(
+                _make_loss_span(k, run_end, lyric_tokens, prev_end, next_start, False, False)
+            )
+            k = run_end
+            continue
         slot = (next_start - prev_end) / run_len if run_len > 0 else 0.0
         if run_len > 0 and slot < min_interp_slot:
             # Degenerate interpolation: bracketing anchors are too close
@@ -440,10 +482,22 @@ def match_words_to_lines_with_stats(
             dropped_tokens += run_len
             dropped_run_lengths.append(run_len)
             dropped_token_indices.append(list(range(k, run_end)))
+            loss_spans.append(
+                _make_loss_span(
+                    k, run_end, lyric_tokens, prev_end, next_start, from_collapse, False
+                )
+            )
             k = run_end
             continue
         if run_len > 0:
             interp_run_lengths.append(run_len)
+            # A collapse-demoted run that interpolated cleanly is still a
+            # failed span (present but linearly smeared) — record it. A
+            # benign short gap between tight anchors is not a failure.
+            if from_collapse:
+                loss_spans.append(
+                    _make_loss_span(k, run_end, lyric_tokens, prev_end, next_start, True, True)
+                )
         for offset in range(run_len):
             s = prev_end + offset * slot
             e = prev_end + (offset + 1) * slot
@@ -550,6 +604,7 @@ def match_words_to_lines_with_stats(
         "dropped_run_lengths": dropped_run_lengths,
         "collapsed_token_indices": collapsed_token_indices,
         "dropped_token_indices": dropped_token_indices,
+        "loss_spans": loss_spans,
         "mapping": list(mapping),
         "lines_with_words": sum(1 for o in line_objects if o["words"]),
         "empty_line_reasons": empty_line_reasons,

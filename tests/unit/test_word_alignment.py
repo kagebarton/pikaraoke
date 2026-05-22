@@ -5,6 +5,7 @@ from pikaraoke.lib.word_alignment import (
     _normalize_token,
     _walk_align,
     match_words_to_lines,
+    match_words_to_lines_with_stats,
 )
 
 # ---------------------------------------------------------------------------
@@ -315,3 +316,94 @@ class TestMatchWordsToLines:
         result = match_words_to_lines(words, lines)
         emitted = result[0]["words"][0]
         assert set(emitted) == {"word", "start", "end"}
+
+
+# ---------------------------------------------------------------------------
+# loss_spans — structured failed-token runs for the repair router
+# ---------------------------------------------------------------------------
+
+
+class TestLossSpans:
+    def test_collapsed_run_recovered(self):
+        # 12 tokens crammed at one timestamp, bracketed by anchors 1.0s and
+        # 20.0s apart → demoted (run > max_collapsed_run=8) then re-timed by
+        # interpolation. loss_spans records it as a recovered collapse with
+        # the bracketing anchor times.
+        lyric_words = [chr(ord("a") + i) for i in range(12)]
+        crammed = [{"word": w, "start": 5.0, "end": 5.001} for w in lyric_words]
+        words = (
+            [{"word": "start", "start": 0.0, "end": 1.0}]
+            + crammed
+            + [{"word": "end", "start": 20.0, "end": 21.0}]
+        )
+        lines = ["start " + " ".join(lyric_words) + " end"]
+        _objs, stats = match_words_to_lines_with_stats(words, lines)
+        spans = stats["loss_spans"]
+        assert len(spans) == 1
+        s = spans[0]
+        assert s["kind"] == "collapsed"
+        assert s["recovered"] is True
+        assert (s["token_start"], s["token_end"]) == (1, 13)
+        assert (s["line_start"], s["line_end"]) == (0, 0)
+        assert s["t0"] == 1.0
+        assert s["t1"] == 20.0
+
+    def test_dropped_run_absent(self):
+        # A 2-token unmatched run over max_interp_run=1 is dropped (absent),
+        # recorded kind="dropped", recovered=False, anchors = surrounding ends.
+        words = [
+            {"word": "hello", "start": 0.0, "end": 1.0},
+            {"word": "world", "start": 30.0, "end": 31.0},
+        ]
+        lines = ["hello a b world"]
+        _objs, stats = match_words_to_lines_with_stats(words, lines, max_interp_run=1)
+        spans = stats["loss_spans"]
+        assert len(spans) == 1
+        s = spans[0]
+        assert s["kind"] == "dropped"
+        assert s["recovered"] is False
+        assert (s["token_start"], s["token_end"]) == (1, 3)
+        assert s["t0"] == 1.0
+        assert s["t1"] == 30.0
+
+    def test_benign_short_gap_not_recorded(self):
+        # A single interpolated token between tight anchors is a benign gap,
+        # not a failure — it must NOT appear in loss_spans.
+        words = [
+            {"word": "hello", "start": 0.0, "end": 1.0},
+            {"word": "world", "start": 3.0, "end": 4.0},
+        ]
+        lines = ["hello lost world"]
+        _objs, stats = match_words_to_lines_with_stats(words, lines)
+        assert stats["loss_spans"] == []
+
+    def test_collapse_at_song_end_dropped_kind_preserved(self):
+        # A collapse with no following anchor drops on the min-slot gate but
+        # is still attributed to its collapse origin (kind="collapsed").
+        lyric_words = [chr(ord("a") + i) for i in range(12)]
+        crammed = [{"word": w, "start": 5.0, "end": 5.001} for w in lyric_words]
+        words = [{"word": "start", "start": 0.0, "end": 1.0}] + crammed
+        lines = ["start " + " ".join(lyric_words)]
+        _objs, stats = match_words_to_lines_with_stats(words, lines)
+        spans = stats["loss_spans"]
+        assert len(spans) == 1
+        assert spans[0]["kind"] == "collapsed"
+        assert spans[0]["recovered"] is False
+
+    def test_run_line_range_spans_multiple_lines(self):
+        # A dropped run straddling a line break records both line indices.
+        words = [
+            {"word": "a", "start": 0.0, "end": 1.0},
+            {"word": "d", "start": 30.0, "end": 31.0},
+        ]
+        lines = ["a b", "c d"]
+        _objs, stats = match_words_to_lines_with_stats(words, lines, max_interp_run=1)
+        spans = stats["loss_spans"]
+        assert len(spans) == 1
+        s = spans[0]
+        assert (s["line_start"], s["line_end"]) == (0, 1)
+        assert (s["token_start"], s["token_end"]) == (1, 3)
+
+    def test_empty_input_has_loss_spans_key(self):
+        _objs, stats = match_words_to_lines_with_stats([], ["hello"])
+        assert stats["loss_spans"] == []
