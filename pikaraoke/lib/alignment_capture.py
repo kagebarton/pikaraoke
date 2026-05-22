@@ -22,6 +22,16 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# Additive since v4 (no bump — additions only):
+#   - walk_stats.loss_spans: collapsed/dropped runs as {token_start,
+#     token_end, line_start, line_end, t0, t1, kind, recovered}.
+#   - pipeline_decisions.repair_ranges: per-span repair records
+#     {line_start, line_end, t0, t1, lines_repaired, lines_kept_from_walk,
+#     window_word_count}.
+#   - pipeline_decisions.method_used gains the "walk+repair" value;
+#     escalation_trigger gains "concentration" (repair) and "coverage_cap"
+#     (whole-song tiling). Routing is concentration-only; the recorded
+#     align_check_fail_ratio / collapse_ratio are telemetry, not gates.
 # v4: tiling scores are raw matched-token counts (n - dist), not
 #     normalized ratios. Previously score in [0, 1]; now score in [0, n].
 #     Affects tiling_stats.selected_windows[].score,

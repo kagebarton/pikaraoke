@@ -194,39 +194,47 @@ class PipelineConfig:
     # "tiling" — stable-ts transcribe() + order-independent fuzzy
     #   candidate + interval-scheduling DP. Resilient to
     #   remixes/repeats/drift; may drop unmatched lines.
-    # "auto" (default) — run walk, but if stable-ts align() fails more
-    #   than ``align_failure_escalation`` of its segments, discard the
-    #   align result and re-run with the tiling matcher on an honest
-    #   transcription. The escalation happens *before* the refine pass,
-    #   so a discarded align doesn't pay for refine.
+    # "auto" (default) — run a quick walk on the pre-refine align words and
+    #   route on *concentrated missing sections* alone: no concentrated hole
+    #   keeps walk; a hole in an otherwise-healthy song repairs just that
+    #   span (walk elsewhere + tiling over the failed span's audio window);
+    #   holes covering more than ``repair_max_line_fraction`` of lines fall
+    #   back to whole-song tiling (discard align, skip refine). Routing
+    #   happens *before* refine, so a discarded align doesn't pay for refine.
     match_method: str = "auto"
 
-    # Fraction of stable-ts align() segments that must fail before the
-    # "auto" gate escalates to the tiling matcher. 0.1 → escalate at >10%
-    # (e.g. 7/48 ≈ 0.15 triggers).
+    # Telemetry only (no longer gates routing): fraction of stable-ts
+    # align() segments that failed. 0.1 historically escalated at >10%.
+    # Kept so a kept-walk song that should have escalated can be spotted
+    # retroactively in the capture bundle and a targeted rule added.
     align_failure_escalation: float = 0.1
 
-    # Complementary escalation signal: fraction of lyric tokens caught by
-    # the walk matcher's collapse demotion (stable-ts force-placing many
-    # tokens at a single timestamp, looking like alignment success at the
-    # segment level but garbage at the word level). Computed from a quick
-    # walk on the pre-refine word list — refine doesn't add or remove
-    # tokens, so the collapse pattern is preserved. 0.15 → escalate at
-    # >15% (e.g. Pocahontas "Colors of the Wind" hits 0.35 here while its
-    # fail_ratio is only 0.07 — collapse catches what fail_ratio misses).
+    # Telemetry only (no longer gates routing): fraction of lyric tokens
+    # caught by the walk matcher's collapse demotion (stable-ts force-placing
+    # many tokens at a single timestamp — segment-level success, word-level
+    # garbage). Kept for the same retroactive-check reason as above.
     collapse_escalation_threshold: float = 0.15
 
-    # Concentration signal: escalate when the *longest contiguous* run of
-    # collapsed-or-dropped lyric tokens reaches this many tokens, even if
-    # the overall ratios stay under their thresholds. A scattered 10% of
-    # drops interpolates fine; a single contiguous section that big means
-    # forced alignment structurally failed there and the walk's linear
-    # interpolation smears it — exactly where transcribe+tiling, with real
-    # per-word timestamps, wins. Absolute (not fractional) because a
-    # "missing section" is roughly constant in size regardless of song
-    # length (e.g. "The Next Ten Minutes" collapses a 38-token block while
-    # its collapse_ratio is only 0.14, under the gate above).
+    # The one routing knob: a repair range is a maximal block of adjacent
+    # collapsed-or-dropped lyric-token runs; the range triggers repair when
+    # its combined failed-token count reaches this many tokens. A scattered
+    # 10% of drops interpolates fine; a contiguous section this big means
+    # forced alignment structurally failed there and walk's linear interp
+    # smears it — exactly where tiling, with real per-word timestamps, wins.
+    # Absolute (not fractional) because a "missing section" is roughly
+    # constant in size regardless of song length (e.g. "The Next Ten
+    # Minutes" collapses a 38-token block). ~3 is the mechanical floor
+    # (tiling can't grip less), ~6-8 a full line; 10 is a safe default.
     concentration_escalation_run: int = 10
+
+    # When repair ranges cover more than this fraction of lyric lines the
+    # song is "broken nearly everywhere" — prefer one whole-song tiling pass
+    # over piecemeal repair (and discard align without paying refine).
+    repair_max_line_fraction: float = 0.5
+
+    # Boundary slack (seconds) for the per-span word time-filter, so a word
+    # sitting right on a window edge isn't clipped.
+    repair_window_margin_s: float = 0.3
 
     # When True, the lyric-align stage writes a JSON bundle to
     # ``<song_dir>/alignment_debug/<stem>.json`` capturing the matcher

@@ -5,8 +5,12 @@ Two modes:
   the vocal stem via stable-ts model.align(), then refines timestamps. A
   two-pointer walk matcher pairs lyric tokens to whisper words with gap
   interpolation for unmatched references — every lyric token ends up in
-  the karaoke output, gap-free. On poor walk alignment quality, escalates
-  to the order-independent tiling matcher.
+  the karaoke output, gap-free. In "auto" mode the stage routes on
+  concentrated walk failures alone (see ``_decide_route``): a clean song
+  keeps walk; a concentrated missing section in an otherwise-healthy song
+  is *repaired* in place (walk everywhere, the order-independent tiling
+  matcher only over the failed span's audio window); a song broken nearly
+  everywhere falls back to whole-song tiling.
 - Transcription (no lyrics_path): runs model.transcribe() directly; stable-ts
   determines segment/word boundaries from the audio alone.
 
@@ -15,11 +19,12 @@ how line objects are built: alignment pairs words to predefined lyric lines
 via the walk matcher; transcription uses stable-ts segments directly as lines.
 
 Each model call is wrapped in its own cancellation activity scope.
-Alignment uses two scopes — Phase.ALIGN_CHECK (align only, captures
-stable-ts's segment-failure ratio) followed by Phase.REFINE (refine the
-cached align result). Splitting these means a future escalation policy
-can discard the align output before paying refine's cost. Transcription
-mode stays a single Phase.TRANSCRIBE call.
+Alignment splits Phase.ALIGN_CHECK (align only — its pre-refine words feed
+a quick walk whose loss_spans drive routing) from Phase.REFINE (refine the
+cached align result), so a whole-song-tiling route can discard the align
+output before paying refine. The repair route additionally runs
+Phase.TRANSCRIBE after refine to tile the failed spans. Transcription mode
+stays a single Phase.TRANSCRIBE call.
 
 ASS/SRT are written to ctx.tmp_dir first and moved to the final output
 directory only after both writes succeed — preventing orphan files on
@@ -77,6 +82,7 @@ class LyricAlignStage(BaseStage):
         capture_escalated = False
         capture_escalation_trigger: str | None = None
         capture_method_used: str | None = None
+        capture_repair_ranges: list | None = None
 
         if lyrics_path is not None:
             # --- Alignment mode ---
@@ -86,17 +92,19 @@ class LyricAlignStage(BaseStage):
             logger.info(f"[{self.name}] Aligning lyrics to vocal stem: {Path(vocal_wav).name}")
 
             method = self._config.match_method
-            use_tiling = method == "tiling"
 
-            if not use_tiling:
-                # walk / auto: run align() first so we can gate on its
-                # failure ratio *and* a collapse-ratio signal *before*
-                # paying for refine. align_check returns the pre-refine
-                # word list; refine only nudges timestamps, so a quick
-                # walk over those words gives us an honest collapse
-                # signal that catches the failure mode where stable-ts
-                # force-places long runs of tokens at one timestamp
-                # (segment-level success, word-level garbage).
+            if method == "tiling":
+                # Forced whole-song tiling: skip align entirely.
+                route = "whole_tiling"
+                result_id = None
+            else:
+                # walk / auto: run align() first so we can route on a quick
+                # pre-refine walk *before* paying for refine. align_check
+                # returns the pre-refine word list; refine only nudges
+                # timestamps, so the quick walk's loss_spans honestly locate
+                # a concentrated failure (the failure mode where stable-ts
+                # force-places a long run of tokens at one timestamp —
+                # segment-level success, word-level garbage).
                 check = _model_call(
                     ctx,
                     Phase.ALIGN_CHECK,
@@ -107,91 +115,50 @@ class LyricAlignStage(BaseStage):
                     ),
                 )
                 result_id = check["result_id"]
-                fail_ratio = check["fail_ratio"]
+                capture_fail_ratio = check["fail_ratio"]
                 raw_words = check["words"]
-                capture_fail_ratio = fail_ratio
 
                 _, raw_stats = match_words_to_lines_with_stats(raw_words, lyrics_lines, align_lines)
+                # fail_ratio / collapse_ratio no longer gate routing — kept
+                # as telemetry so a kept-walk song that should have escalated
+                # can be spotted retroactively. Routing is concentration-only.
                 n_raw_tokens = raw_stats["n_tokens"]
-                collapse_ratio = (
+                capture_collapse_ratio = (
                     sum(raw_stats["collapsed_run_lengths"]) / n_raw_tokens if n_raw_tokens else 0.0
                 )
-                capture_collapse_ratio = collapse_ratio
-                # Longest single contiguous chunk align botched (collapsed or
-                # dropped). Catches a concentrated failure that the ratios
-                # miss — interp smears a big run, transcribe+tiling doesn't.
-                max_loss_run = max(
+                capture_max_loss_run = max(
                     raw_stats["collapsed_run_lengths"] + raw_stats["dropped_run_lengths"],
                     default=0,
                 )
-                capture_max_loss_run = max_loss_run
 
-                fail_thresh = self._config.align_failure_escalation
-                collapse_thresh = self._config.collapse_escalation_threshold
-                concentration_thresh = self._config.concentration_escalation_run
-                fail_trips = fail_ratio > fail_thresh
-                collapse_trips = collapse_ratio > collapse_thresh
-                concentration_trips = max_loss_run >= concentration_thresh
-
-                if method == "auto" and (fail_trips or collapse_trips or concentration_trips):
-                    triggers = []
-                    if fail_trips:
-                        triggers.append("fail_ratio")
-                    if collapse_trips:
-                        triggers.append("collapse_ratio")
-                    if concentration_trips:
-                        triggers.append("concentration")
-                    capture_escalation_trigger = "+".join(triggers)
-                    logger.warning(
-                        "[%s] escalating to tiling matcher (%s): "
-                        "fail_ratio=%.0f%% (thresh %.0f%%), "
-                        "collapse_ratio=%.0f%% (thresh %.0f%%), "
-                        "max_loss_run=%d tokens (thresh %d)",
+                if method == "walk":
+                    route = "keep_walk"
+                else:  # auto — route on concentrated missing sections alone
+                    route, routing_ranges = _decide_route(
+                        raw_stats["loss_spans"],
+                        len(lyrics_lines),
+                        self._config.concentration_escalation_run,
+                        self._config.repair_max_line_fraction,
+                    )
+                    logger.info(
+                        "[%s] route=%s (fail_ratio=%.0f%%, collapse_ratio=%.0f%%, "
+                        "max_loss_run=%d, concentration_run=%d, repair_ranges=%d)",
                         self.name,
-                        capture_escalation_trigger,
-                        fail_ratio * 100,
-                        fail_thresh * 100,
-                        collapse_ratio * 100,
-                        collapse_thresh * 100,
-                        max_loss_run,
-                        concentration_thresh,
+                        route,
+                        capture_fail_ratio * 100,
+                        capture_collapse_ratio * 100,
+                        capture_max_loss_run,
+                        self._config.concentration_escalation_run,
+                        len(routing_ranges),
                     )
+
+            if route == "whole_tiling":
+                if result_id is not None:
+                    # Came from auto coverage cap (broken nearly everywhere):
+                    # discard the align result so we don't pay refine on it.
                     self._discard_cached_safely(result_id, "escalation")
-                    use_tiling = True
                     capture_escalated = True
-
-                if not use_tiling:
-                    if method == "auto":
-                        logger.info(
-                            "[%s] align gates passed: "
-                            "fail_ratio=%.0f%% (thresh %.0f%%), "
-                            "collapse_ratio=%.0f%% (thresh %.0f%%), "
-                            "max_loss_run=%d tokens (thresh %d) — keeping walk match",
-                            self.name,
-                            fail_ratio * 100,
-                            fail_thresh * 100,
-                            collapse_ratio * 100,
-                            collapse_thresh * 100,
-                            max_loss_run,
-                            concentration_thresh,
-                        )
-                    words = _model_call(
-                        ctx,
-                        Phase.REFINE,
-                        lambda: self._worker.refine_from_cached(
-                            result_id=result_id,
-                            vocal_path=vocal_wav,
-                            cancel_event=ctx.cancel.event if ctx.cancel else None,
-                        ),
-                    )
-                    line_objects, capture_walk_stats = match_words_to_lines_with_stats(
-                        words, lyrics_lines, align_lines
-                    )
-                    capture_words = words
-                    capture_words_source = "refine"
-                    capture_method_used = "walk"
-
-            if use_tiling:
+                    capture_escalation_trigger = "coverage_cap"
                 logger.info(f"[{self.name}] Transcribing for tiling match: {Path(vocal_wav).name}")
                 words = _model_call(
                     ctx,
@@ -207,6 +174,61 @@ class LyricAlignStage(BaseStage):
                 capture_words = words
                 capture_words_source = "transcribe"
                 capture_method_used = "tiling"
+            else:
+                # keep_walk and repair both refine + walk; repair then tiles
+                # the failed spans on top.
+                words = _model_call(
+                    ctx,
+                    Phase.REFINE,
+                    lambda: self._worker.refine_from_cached(
+                        result_id=result_id,
+                        vocal_path=vocal_wav,
+                        cancel_event=ctx.cancel.event if ctx.cancel else None,
+                    ),
+                )
+                line_objects, capture_walk_stats = match_words_to_lines_with_stats(
+                    words, lyrics_lines, align_lines
+                )
+                capture_words = words
+                capture_words_source = "refine"
+                capture_method_used = "walk"
+
+                if route == "repair":
+                    # Recompute ranges from post-refine timing — windows
+                    # depend on it, so the pre-refine routing estimate is
+                    # not reused here.
+                    repair_ranges = _build_repair_ranges(
+                        capture_walk_stats["loss_spans"],
+                        self._config.concentration_escalation_run,
+                    )
+                    if repair_ranges:
+                        logger.info(
+                            f"[{self.name}] Transcribing to repair {len(repair_ranges)} "
+                            f"span(s): {Path(vocal_wav).name}"
+                        )
+                        transcribe_words = _model_call(
+                            ctx,
+                            Phase.TRANSCRIBE,
+                            lambda: self._worker.transcribe_words(
+                                vocal_path=vocal_wav,
+                                cancel_event=ctx.cancel.event if ctx.cancel else None,
+                            ),
+                        )
+                        line_objects, capture_repair_ranges = self._repair_spans(
+                            line_objects,
+                            repair_ranges,
+                            transcribe_words,
+                            lyrics_lines,
+                            align_lines,
+                        )
+                        capture_method_used = "walk+repair"
+                        capture_escalation_trigger = "concentration"
+                    else:
+                        # Refine dissolved the pre-refine concentration —
+                        # pure walk, no transcribe paid.
+                        logger.info(
+                            f"[{self.name}] repair route: no post-refine ranges, keeping walk"
+                        )
 
             write_srt = self._should_write_srt(ctx.song_path)
         else:
@@ -278,6 +300,7 @@ class LyricAlignStage(BaseStage):
                 method_used=capture_method_used,
                 escalated=capture_escalated,
                 escalation_trigger=capture_escalation_trigger,
+                repair_ranges=capture_repair_ranges,
                 line_objects=line_objects,
             )
 
@@ -300,6 +323,7 @@ class LyricAlignStage(BaseStage):
         method_used: str | None,
         escalated: bool,
         escalation_trigger: str | None,
+        repair_ranges: list | None,
         line_objects: list[dict],
     ) -> None:
         """Assemble + write the alignment-debug JSON. Errors are logged
@@ -309,8 +333,12 @@ class LyricAlignStage(BaseStage):
             cfg = self._config
             config_snapshot = {
                 "match_method": cfg.match_method,
+                # Routing is concentration-only; the next two are telemetry.
                 "align_failure_escalation": cfg.align_failure_escalation,
                 "collapse_escalation_threshold": cfg.collapse_escalation_threshold,
+                "concentration_escalation_run": cfg.concentration_escalation_run,
+                "repair_max_line_fraction": cfg.repair_max_line_fraction,
+                "repair_window_margin_s": cfg.repair_window_margin_s,
                 "whisper": dataclasses.asdict(cfg.whisper),
             }
             lyrics_suffix = Path(lyrics_path).suffix.lower().lstrip(".")
@@ -332,6 +360,7 @@ class LyricAlignStage(BaseStage):
                 "method_used": method_used,
                 "escalated_to_tiling": escalated,
                 "escalation_trigger": escalation_trigger,
+                "repair_ranges": repair_ranges or [],
             }
             yt_srt = _find_youtube_srt_path(ctx.song_path)
             # When the YT SRT *is* the lyric source (common — the lyrics
@@ -501,6 +530,80 @@ class LyricAlignStage(BaseStage):
         except Exception as exc:
             logger.debug("discard_cached failed during %s: %s", context_msg, exc)
 
+    def _repair_spans(
+        self,
+        line_objects: list[dict],
+        repair_ranges: list[dict],
+        transcribe_words: list,
+        lines: list[str],
+        align_lines: list[str],
+    ) -> tuple[list[dict], list[dict]]:
+        """Repair concentrated walk failures by re-tiling each failed span
+        against the transcribe words in its audio window, splicing per line.
+
+        walk's good lines are kept everywhere outside the ranges; inside a
+        range, tiling's timing replaces a line only when tiling found it (a
+        line walk had is never dropped — mistimed-but-present beats absent).
+        Each range's window is bracketed by its good-line neighbours, so the
+        spliced objects fall between them and overall timing stays ordered.
+
+        Returns ``(line_objects, repair_meta)`` — repair_meta is the per-range
+        capture record (window, lines repaired/kept, window word count).
+        """
+        n_lines = len(lines)
+        range_lines: set[int] = set()
+        for r in repair_ranges:
+            range_lines.update(range(r["line_start"], r["line_end"] + 1))
+        # One-sided right boundary for a range at the song's tail.
+        ends = [o["end"] for o in line_objects if o["words"] and o["end"] is not None]
+        global_last_end = max(ends) if ends else 0.0
+        margin = self._config.repair_window_margin_s
+
+        spliced_by_range: dict[tuple[int, int], list[dict]] = {}
+        repair_meta: list[dict] = []
+        for r in repair_ranges:
+            l0, l1 = r["line_start"], r["line_end"]
+            t0 = _good_line_end_before(line_objects, l0, range_lines)
+            t1 = _good_line_start_after(line_objects, l1, range_lines, global_last_end)
+            window_words = _words_for_window(transcribe_words, t0, t1, margin)
+            repair_objs, _stats = match_words_to_lines_tiling_with_stats(
+                window_words, lines[l0 : l1 + 1], align_lines[l0 : l1 + 1]
+            )
+            for obj in repair_objs:
+                obj["line_id"] += l0  # remap sublist line_id to absolute
+            spliced_by_range[(l0, l1)] = _splice_range(line_objects, repair_objs, l0, l1)
+            repaired = {o["line_id"] for o in repair_objs}
+            repair_meta.append(
+                {
+                    "line_start": l0,
+                    "line_end": l1,
+                    "t0": t0,
+                    "t1": t1,
+                    "lines_repaired": len(repaired),
+                    "lines_kept_from_walk": (l1 - l0 + 1) - len(repaired),
+                    "window_word_count": len(window_words),
+                }
+            )
+
+        # Reassemble in lyric order: walk lines between ranges, then each
+        # range's spliced objects in place. Ranges are disjoint.
+        result: list[dict] = []
+        cursor = 0
+        for r in sorted(repair_ranges, key=lambda x: x["line_start"]):
+            l0, l1 = r["line_start"], r["line_end"]
+            for li in range(cursor, l0):
+                walk_obj = line_objects[li]
+                walk_obj.setdefault("line_id", li)
+                result.append(walk_obj)
+            result.extend(spliced_by_range[(l0, l1)])
+            cursor = l1 + 1
+        for li in range(cursor, n_lines):
+            walk_obj = line_objects[li]
+            walk_obj.setdefault("line_id", li)
+            result.append(walk_obj)
+
+        return result, repair_meta
+
 
 # ---------------------------------------------------------------------------
 # Pipeline call wrapper
@@ -545,3 +648,133 @@ def _seconds_to_ass_time(seconds: float) -> str:
     s = int(seconds % 60)
     cs = int((seconds % 1) * 100)  # centiseconds
     return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
+
+
+# ---------------------------------------------------------------------------
+# Sectional tiling repair (windowed merge) — pure helpers
+# ---------------------------------------------------------------------------
+
+
+def _build_repair_ranges(loss_spans: list[dict], concentration_run: int) -> list[dict]:
+    """Merge adjacent failed-token runs into line-ranges, keeping those
+    whose combined collapsed/dropped token count reaches ``concentration_run``.
+
+    Merge-then-threshold: adjacent (touching or with no fully-good line
+    between) loss spans combine first, then a merged range qualifies only if
+    its total failed tokens >= N. Two sub-N collapses on neighbouring lines
+    thus combine into one repair range instead of both being missed, while a
+    lone small run still falls through to walk's interpolation.
+
+    Returns ``[{line_start, line_end, failed_tokens}]`` in line order.
+    """
+    if not loss_spans:
+        return []
+    spans = sorted(loss_spans, key=lambda s: (s["line_start"], s["line_end"]))
+    merged: list[dict] = []
+    for s in spans:
+        tokens = s["token_end"] - s["token_start"]
+        if merged and s["line_start"] <= merged[-1]["line_end"] + 1:
+            merged[-1]["line_end"] = max(merged[-1]["line_end"], s["line_end"])
+            merged[-1]["failed_tokens"] += tokens
+        else:
+            merged.append(
+                {
+                    "line_start": s["line_start"],
+                    "line_end": s["line_end"],
+                    "failed_tokens": tokens,
+                }
+            )
+    return [m for m in merged if m["failed_tokens"] >= concentration_run]
+
+
+def _decide_route(
+    loss_spans: list[dict],
+    n_lines: int,
+    concentration_run: int,
+    max_line_fraction: float,
+) -> tuple[str, list[dict]]:
+    """Route an auto-mode song on its concentrated failures alone.
+
+    Returns ``(route, repair_ranges)`` where route is one of ``"keep_walk"``
+    (no concentrated hole — interpolation handles it), ``"whole_tiling"``
+    (ranges cover more than ``max_line_fraction`` of lines — broken nearly
+    everywhere, so discard align entirely), or ``"repair"`` (concentrated
+    holes in an otherwise-healthy song).
+    """
+    ranges = _build_repair_ranges(loss_spans, concentration_run)
+    if not ranges:
+        return "keep_walk", ranges
+    lines_covered = sum(r["line_end"] - r["line_start"] + 1 for r in ranges)
+    if n_lines > 0 and lines_covered / n_lines > max_line_fraction:
+        return "whole_tiling", ranges
+    return "repair", ranges
+
+
+def _words_for_window(words: list, t0: float, t1: float, margin: float) -> list:
+    """Transcribe words whose start falls in ``[t0 - margin, t1 + margin]``
+    (inclusive). The small margin avoids clipping a boundary word.
+
+    This is the seam for #3 (clip re-decode): in #2 it filters the one
+    whole-song transcribe; later it becomes a clip transcribe over the
+    extracted ``[t0, t1]`` audio. Everything downstream is identical.
+    """
+    lo = t0 - margin
+    hi = t1 + margin
+    return [w for w in words if lo <= w["start"] <= hi]
+
+
+def _splice_range(
+    walk_line_objects: list[dict],
+    repair_objects: list[dict],
+    l0: int,
+    l1: int,
+) -> list[dict]:
+    """Per-line preference splice for one repair range ``[l0, l1]``.
+
+    For each lyric line in the range: if tiling produced object(s) for it
+    (matched by absolute ``line_id``), use them (repeats sorted by start);
+    otherwise keep walk's existing object so a line walk had never
+    disappears — mistimed-but-present beats absent. Returns the range's
+    objects in lyric order.
+    """
+    by_line: dict[int, list[dict]] = {}
+    for obj in repair_objects:
+        by_line.setdefault(obj["line_id"], []).append(obj)
+    spliced: list[dict] = []
+    for line_id in range(l0, l1 + 1):
+        if line_id in by_line:
+            spliced.extend(sorted(by_line[line_id], key=lambda o: o["start"]))
+        else:
+            walk_obj = walk_line_objects[line_id]
+            walk_obj.setdefault("line_id", line_id)
+            spliced.append(walk_obj)
+    return spliced
+
+
+def _good_line_end_before(line_objects: list[dict], l0: int, range_lines: set[int]) -> float:
+    """End time of the last good line before ``l0`` (0.0 at the song head).
+
+    A good line is one not in any repair range and with real timing.
+    """
+    for li in range(l0 - 1, -1, -1):
+        if li in range_lines:
+            continue
+        obj = line_objects[li]
+        if obj.get("start") is not None and obj.get("end") is not None:
+            return obj["end"]
+    return 0.0
+
+
+def _good_line_start_after(
+    line_objects: list[dict], l1: int, range_lines: set[int], global_last_end: float
+) -> float:
+    """Start time of the first good line after ``l1`` (``global_last_end``
+    at the song tail). See :func:`_good_line_end_before`.
+    """
+    for li in range(l1 + 1, len(line_objects)):
+        if li in range_lines:
+            continue
+        obj = line_objects[li]
+        if obj.get("start") is not None:
+            return obj["start"]
+    return global_last_end
