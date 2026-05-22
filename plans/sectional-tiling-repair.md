@@ -50,9 +50,11 @@ loss. The only thing that warrants leaving walk is a *big contiguous hole*.
 
 Computed on the **pre-refine** quick walk (cheap, before paying refine):
 
-1. Build concentrated failed line-ranges: contiguous collapsed-or-dropped
-   token runs ≥ `concentration_escalation_run`, mapped to lyric lines and
-   merged where adjacent.
+1. Build concentrated failed line-ranges (**merge-then-threshold** — see
+   "Repair threshold floor"): map every collapsed-or-dropped token run to
+   its lyric lines, merge adjacent ranges, then keep a merged range only if
+   its *combined* failed-token count ≥ `concentration_escalation_run`. Two
+   adjacent sub-`N` collapses thus combine instead of both being missed.
 2. No ranges → **keep walk**. (Sub-threshold scattered collapses stay on
    walk; interpolation already covers them.)
 3. Ranges cover > `repair_max_line_fraction` of lines → **whole-song
@@ -263,16 +265,50 @@ now route to `repair` (assert `transcribe` + splice), not whole-song tiling.
 
 ## Open questions
 
-- `concentration_escalation_run` (10 tokens ≈ 1–2 lines) and
-  `repair_max_line_fraction` (0.5) defaults — tune against the corpus. With
-  the ratio gates gone, `N` is the main dial: lower N repairs more
-  aggressively (one whole-song transcribe under #2; cheap per-section
-  under #3).
+All three are answerable directly from the capture bundles (their purpose).
+The values below are priors to ship with, to be confirmed against the corpus.
+
+- `concentration_escalation_run` (`N`, 10 tokens ≈ 1–2 lines) and
+  `repair_max_line_fraction` (0.5). With the ratio gates gone, `N` is the
+  main dial.
+  **Recommendation:** keep `N=10` under #2 — every repaired song pays a
+  whole-song transcribe, so only genuine multi-line holes should trip it,
+  and 10 sits safely above the ~6–8 practical floor. Drop it toward ~6 once
+  #3 (clip transcribe) lands: the splice fallback makes a low `N` only
+  wasteful, never wrong, and a clip is cheap. For the coverage cap, if
+  anything *raise* it (→0.6), don't lower it — repair is strictly safer than
+  whole-song tiling (it never drops a walk line), and under #2 the compute is
+  nearly identical (both pay one transcribe; repair also pays refine), so the
+  cap only marks where refine is wasted, which is high. A rarely-hit
+  backstop; don't over-tune it.
 - **Pervasive medium collapse:** many runs each just under `N`, collectively
-  large but separated by thin good slivers, so merged ranges stay under the
-  coverage cap. Concentration-only routing keeps walk (lines present but
+  large but separated by thin good slivers, so they neither merge nor clear
+  the coverage cap. Concentration-only routing keeps walk (lines present but
   linearly smeared in many places) — the dropped `collapse_ratio` gate used
-  to catch this. Watch for such a capture (Pocahontas may be one — check its
-  run-length distribution); if real, re-add a coverage rule on *total* loss
-  tokens rather than the single largest run.
-- Margin vs boundary-word clipping — validate `repair_window_margin_s`.
+  to catch this. Merge-then-threshold does *not* close it (the runs aren't
+  adjacent). Watch for such a capture (Pocahontas may be one — check its
+  run-length distribution).
+  **Recommendation:** if real, route it to **repair, not whole-song tiling**
+  — the old gate's discard-and-tile was the wrong (destructive) response to a
+  mostly-working walk. Signal on the *total tokens in runs ≥ a per-run floor*
+  (~4–5), not the raw loss ratio (which over-triggers on benign 1-token gaps
+  — why the ratio gate was dropped); if that filtered total exceeds a
+  fraction (reuse `0.15` as the prior, tuned on Pocahontas), repair every
+  such run (the splice fallback keeps it safe). Measure first, though: if the
+  good slivers are typically one line wide, the lighter fix is to let the
+  merge bridge a single good line — adjacent-modulo-one runs then combine and
+  clear `N` with no new gate.
+- Margin vs boundary-word clipping — validate `repair_window_margin_s` (0.3).
+  **Recommendation:** leave it; it's a guard rail, not a dial. `t0`/`t1` are
+  the end/start of the bracketing *good lines*, so the failed words already
+  sit inside `[t0, t1]` — the margin only catches a boundary word whose
+  timestamp drifted slightly past a neighbor. The real risk is a margin too
+  *large* (it pulls neighbor words in, and tiling can mis-assign one for
+  repeated lyrics), so keep it small (≤ 0.5s). Revisit only if a captured
+  repaired range shows a clipped first/last word.
+
+When the corpus is in hand, the analysis that settles all three: per song,
+re-derive merged-range failed-token totals and the medium-run total, sweep
+`N` and the coverage cap, and print the route each song would take. The knee
+sets `N`; the "keeps walk but high medium-run total" rows are the
+pervasive-collapse population.
