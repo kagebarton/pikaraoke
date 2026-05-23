@@ -476,14 +476,23 @@ class WhisperWorker:
         self,
         vocal_path: Path,
         cancel_event: Optional[threading.Event] = None,
+        *,
+        refine: bool = True,
     ) -> list[dict]:
-        """Run transcribe → regroup → refine, returning a flat word list.
+        """Run transcribe → regroup → (optionally) refine, returning a flat word list.
 
         Same heavy pipeline as ``transcribe_refine`` but flattened for the
         tiling matcher (which does its own line segmentation).
+
+        ``refine`` defaults to True for backward compatibility (tiling and
+        the legacy walk+repair path want refined word timestamps). The
+        joint matcher passes ``refine=False`` because its align-won lines
+        use align's already-refined per-word timings; transcribe is only
+        consulted for line *placement*, and whisper's word_timestamps
+        precision is enough for the lines where transcribe wins.
         """
         return self._run_job(
-            ("transcribe_words", str(vocal_path)),
+            ("transcribe_words", str(vocal_path), refine),
             cancel_event,
         )
 
@@ -784,7 +793,10 @@ def _whisper_worker_main_inner(
                     cached_results.pop(result_id, None)
                     result_send.send(("ok", None))
                 elif kind == "transcribe_words":
-                    _, vocal_path = item
+                    # 2-tuple legacy form: ("transcribe_words", path) → refine=True
+                    # 3-tuple new form:   ("transcribe_words", path, refine)
+                    _, vocal_path, *rest = item
+                    refine = rest[0] if rest else True
                     words = _do_transcribe_words(
                         model,
                         encoder_module,
@@ -792,6 +804,7 @@ def _whisper_worker_main_inner(
                         cancel_recv,
                         config,
                         worker_log,
+                        refine=refine,
                     )
                     result_send.send(("ok", words))
                 elif kind == "transcribe_refine":
@@ -972,21 +985,29 @@ def _do_transcribe_words(
     cancel_recv: Connection,
     config: WhisperModelConfig,
     worker_log: logging.Logger,
+    *,
+    refine: bool = True,
 ) -> list[dict]:
-    """Run transcribe → regroup → refine and return a flat word list.
+    """Run transcribe → regroup → (optionally) refine and return a flat word list.
 
-    Used by the tiling matcher, which needs flat tokens (not line_objects)
-    over the IPC boundary because tiling does its own line segmentation.
+    Used by the tiling matcher (``refine=True``, the default) and by the
+    joint matcher (``refine=False`` — the joint matcher relies on align's
+    refined per-word timings for align-won lines, so refining transcribe
+    a second time is wasted whole-song decode for marginal benefit on a
+    minority of lines).
     """
     result = _transcribe_pass(model, encoder_module, vocal_path, cancel_recv, config, worker_log)
     if config.regroup:
         worker_log.info(f"Regrouping transcription segments: {config.regroup}")
         result.regroup(config.regroup)
-    refined = _refine_pass(
-        model, encoder_module, vocal_path, result, cancel_recv, config, worker_log
-    )
-    _apply_post_process(refined, config.transcribe_post_process)
-    return _extract_words(refined, config.transcribe_post_process.min_word_probability)
+    if refine:
+        result = _refine_pass(
+            model, encoder_module, vocal_path, result, cancel_recv, config, worker_log
+        )
+    else:
+        worker_log.info("Skipping refine pass (refine=False)")
+    _apply_post_process(result, config.transcribe_post_process)
+    return _extract_words(result, config.transcribe_post_process.min_word_probability)
 
 
 def _do_transcribe_refine(

@@ -571,6 +571,27 @@ def _fake_worker_replies(replies):
     return fake
 
 
+def _fake_worker_captures(captured: list, replies):
+    """Like ``_fake_worker_replies`` but also appends each received job
+    tuple to ``captured`` so tests can assert on the IPC payload (e.g. the
+    refine flag threaded onto transcribe_words)."""
+
+    def fake(job_recv, result_send, cancel_recv, config_dict, log_level, pty_slave_path):
+        result_send.send(("ready",))
+        for reply in replies:
+            item = job_recv.recv()
+            if item is None:
+                return
+            captured.append(item)
+            result_send.send(reply)
+        while True:
+            item = job_recv.recv()
+            if item is None:
+                return
+
+    return fake
+
+
 def _wire_fake_worker(worker, fake_main):
     """Hook a fake _worker_main into a WhisperWorker, bypassing start().
 
@@ -654,6 +675,28 @@ class TestNewFacadeMethods:
         try:
             out = worker.transcribe_words("/tmp/vocal.wav")
             assert out == words
+        finally:
+            worker._job_send.send(None)
+            thread.join(timeout=3)
+
+    def test_transcribe_words_default_passes_refine_true(self, worker):
+        captured: list = []
+        fake = _fake_worker_captures(captured, [("ok", [])])
+        thread = _wire_fake_worker(worker, fake)
+        try:
+            worker.transcribe_words("/tmp/vocal.wav")
+            assert captured == [("transcribe_words", "/tmp/vocal.wav", True)]
+        finally:
+            worker._job_send.send(None)
+            thread.join(timeout=3)
+
+    def test_transcribe_words_refine_false_threaded_through(self, worker):
+        captured: list = []
+        fake = _fake_worker_captures(captured, [("ok", [])])
+        thread = _wire_fake_worker(worker, fake)
+        try:
+            worker.transcribe_words("/tmp/vocal.wav", refine=False)
+            assert captured == [("transcribe_words", "/tmp/vocal.wav", False)]
         finally:
             worker._job_send.send(None)
             thread.join(timeout=3)
