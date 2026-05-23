@@ -286,7 +286,7 @@ class TestJointRoute:
         # placement for the misplaced line.
         stage, ctx, worker = _make_stage_and_ctx(tmp_path, match_method="joint")
 
-        # Long line so the transcribe_match outscores the alpha=4 prior:
+        # Long line so the transcribe_match outscores the joint_alpha prior:
         # 8 tokens of lyrics. Align maps them all to 3-9s (wrong audio).
         # Transcribe finds the matching content at 15-19s.
         lyric_words = ["no", "worries", "for", "the", "rest", "of", "your", "days"]

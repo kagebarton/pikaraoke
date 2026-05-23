@@ -276,31 +276,30 @@ class TestEndToEndHakunaShape:
     """
 
     def test_misplaced_long_line_routes_to_transcribe(self):
-        # Two clean lines + one misplaced line ("the long one").
+        # Intro at 0-3s; the long line that align misplaces; ending line
+        # genuinely AFTER the long line's correct location (we now enforce
+        # lyric-monotonic order, so line 2 must come after line 1).
         lines = [
             "intro line here",
             "no worries for the rest of your days",
             "ending line here",
         ]
         align_lines = lines
-        # Align places:
-        #   intro at 0-3s, the long misplaced line at 3-9s (where dialogue is),
-        #   ending at 9-12s (correctly).
+        # Align places line 1 at 3-9s (the dialogue region — wrong),
+        # then ending at 9-12s (also wrong — align thought the song was
+        # already over).
         align_words = (
             _aw_seq("intro", "line", "here", t0=0.0, dt=1.0)
             + _aw_seq("no", "worries", "for", "the", "rest", "of", "your", "days", t0=3.0, dt=0.75)
             + _aw_seq("ending", "line", "here", t0=9.0, dt=1.0)
         )
-        # Transcribe hears:
-        #   intro line here at 0-3s (clean),
-        #   dialogue garbage at 3-9s (no match for the long line),
-        #   the long line actually sung at 15-19s,
-        #   ending line at 9-12s.
+        # Transcribe hears the true audio: intro at 0-3s, dialogue at 3-9s,
+        # the long line actually sung at 15-19s, ending line at 20-23s.
         transcribe_words = (
             _aw_seq("intro", "line", "here", t0=0.0, dt=1.0)
             + _aw_seq("hello", "what", "are", "you", "doing", "here", t0=3.0, dt=1.0)
-            + _aw_seq("ending", "line", "here", t0=9.0, dt=1.0)
             + _aw_seq("no", "worries", "for", "the", "rest", "of", "your", "days", t0=15.0, dt=0.5)
+            + _aw_seq("ending", "line", "here", t0=20.0, dt=1.0)
         )
 
         objs, stats = match_words_to_lines_joint_with_stats(
@@ -308,13 +307,16 @@ class TestEndToEndHakunaShape:
         )
 
         assert len(objs) == 3
-        # Intro + ending: align wins (transcribe corroborates align's placement).
+        # Intro: align wins (transcribe corroborates align's placement).
         assert stats["selected_source"][0] == "align"
-        assert stats["selected_source"][2] == "align"
-        # The misplaced line should go to transcribe — placed at ~15s, not 3s.
+        # The misplaced long line should go to transcribe — placed near 15s.
         assert stats["selected_source"][1] == "transcribe"
-        assert objs[1]["start"] >= 14.5  # near the transcribe location, not 3.0
-        assert objs[1]["start"] <= 16.0
+        assert 14.5 <= objs[1]["start"] <= 16.0
+        # The ending line should route to transcribe (the real audio at 20s),
+        # since align placed it at 9-12s which would violate monotonic order
+        # after line 1's 15-19s win.
+        assert stats["selected_source"][2] == "transcribe"
+        assert objs[2]["start"] >= 19.5
 
 
 # ---------------------------------------------------------------------------

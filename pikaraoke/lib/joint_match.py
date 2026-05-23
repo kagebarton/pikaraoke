@@ -40,7 +40,7 @@ For the design rationale and the corpus that motivated this matcher, see
 """
 
 import logging
-from bisect import bisect_right
+from bisect import bisect_left
 
 from pikaraoke.lib.tiling_match import (
     _build_line_object,
@@ -322,7 +322,9 @@ def _build_transcribe_candidates(
         t0 = transcribe_words[start_idx]["start"]
         t1 = transcribe_words[end_idx - 1]["end"]
         a_agree = _align_agreement_for_window(t0, t1, align_ranges[line_id])
-        score = float(t_score) + alpha * a_agree
+        window_count = end_idx - start_idx
+        alpha_weight = _alpha_weight(t_score, window_count)
+        score = float(t_score) + alpha * a_agree * alpha_weight
         out.append(
             {
                 "line_id": line_id,
@@ -332,11 +334,42 @@ def _build_transcribe_candidates(
                 "score": score,
                 "transcribe_match": float(t_score),
                 "align_agreement": a_agree,
+                "alpha_weight": alpha_weight,
                 "transcribe_idx_start": start_idx,
                 "transcribe_idx_end": end_idx,
             }
         )
     return out
+
+
+_ALPHA_GATE_COUNT = 2
+
+
+def _alpha_weight(matched: float, count: int) -> float:
+    """Gate the alpha bonus by transcribe corroboration.
+
+    ``matched`` is the line tokens that found a match against the
+    transcribe slice; ``count`` is the slice's word count.
+
+    Binary gate: a candidate's alpha bonus drops to zero **only** when
+    transcribe heard substantial speech (``count >= _ALPHA_GATE_COUNT``)
+    but **none** of it matched the line — i.e. align placed the lyric on
+    confidently-wrong audio. Otherwise the bonus stays at 1.0 so:
+
+      * silent / instrumental windows keep their align preference,
+      * partial transcribe matches keep their align preference (whisper
+        misheard a token, not "this isn't the line"),
+      * align-corroborated transcribe candidates score the same as the
+        align candidate at the same position (clean-song ties → align
+        wins, preserving refined per-word timings).
+
+    A graduated ``matched / count`` formula was tried and proved too
+    aggressive — find_candidates' margin pulls neighbour words into the
+    count, so even perfect tight matches saw their alpha_weight cut.
+    """
+    if count >= _ALPHA_GATE_COUNT and matched == 0:
+        return 0.0
+    return 1.0
 
 
 def _build_align_candidates(
@@ -363,7 +396,7 @@ def _build_align_candidates(
             pad = (_MIN_ALIGN_WIDTH_S - (t1 - t0)) / 2.0
             t0 = max(0.0, t0 - pad)
             t1 = t1 + pad
-        t_match = _transcribe_match_in_window(
+        t_match, count_in_window = _transcribe_match_and_count_in_window(
             line_norms[line_id],
             transcribe_norms,
             transcribe_starts,
@@ -372,7 +405,8 @@ def _build_align_candidates(
             margin_s,
             max_edit_ratio,
         )
-        score = float(t_match) + alpha * 1.0
+        alpha_weight = _alpha_weight(t_match, count_in_window)
+        score = float(t_match) + alpha * 1.0 * alpha_weight
         out.append(
             {
                 "line_id": line_id,
@@ -382,6 +416,7 @@ def _build_align_candidates(
                 "score": score,
                 "transcribe_match": float(t_match),
                 "align_agreement": 1.0,
+                "alpha_weight": alpha_weight,
                 "token_start": ar["token_start"],
                 "token_end": ar["token_end"],
             }
@@ -410,6 +445,42 @@ def _align_agreement_for_window(t0: float, t1: float, align_range: dict | None) 
     return min(1.0, overlap / a_dur)
 
 
+def _transcribe_match_and_count_in_window(
+    line_norms: list[str],
+    transcribe_norms: list[str],
+    transcribe_starts: list[float],
+    t0: float,
+    t1: float,
+    margin_s: float,
+    max_edit_ratio: float,
+) -> tuple[int, int]:
+    """Return ``(matched_tokens, transcribe_word_count)`` for the window.
+
+    Used by align-candidate scoring so the joint DP can tell apart
+    "transcribe silent here" (count=0; trust align fully) from
+    "transcribe loud but nothing matched" (count>=1, matched=0; align
+    contradicted, drop the alpha bonus). The match value is what
+    ``find_candidates`` would have scored at this slice — exactly the
+    same scoring function transcribe candidates use.
+    """
+    lo = t0 - margin_s
+    hi = t1 + margin_s
+    # Word indices whose start time is in [lo, hi). bisect_left so that a
+    # word starting strictly before ``lo`` (even if its end is after ``lo``)
+    # is excluded — overlap-include would otherwise inflate the count and
+    # punish align scoring for a neighbour word brushing the window edge.
+    left = bisect_left(transcribe_starts, lo)
+    right = bisect_left(transcribe_starts, hi)
+    window = transcribe_norms[left:right]
+    count = len(window)
+    if not window or not line_norms:
+        return 0, count
+    cands = find_candidates(list(window), [line_norms], max_edit_ratio=max_edit_ratio)
+    if not cands:
+        return 0, count
+    return int(max(c[3] for c in cands)), count
+
+
 def _transcribe_match_in_window(
     line_norms: list[str],
     transcribe_norms: list[str],
@@ -419,28 +490,11 @@ def _transcribe_match_in_window(
     margin_s: float,
     max_edit_ratio: float,
 ) -> int:
-    """Count of line tokens that ``find_candidates`` would have matched for
-    this line inside ``[t0-margin, t1+margin]`` of the transcribe stream.
-
-    Reuses ``find_candidates`` over the windowed slice so the scoring
-    function for align candidates is *exactly* what a transcribe candidate
-    at the same position would have scored (modulo the slice). Falls back
-    to 0 when the window is empty.
-    """
-    lo = t0 - margin_s
-    hi = t1 + margin_s
-    # transcribe_starts is monotonic; bisect to clip the slice.
-    left = bisect_right(transcribe_starts, lo) - 1
-    if left < 0:
-        left = 0
-    right = bisect_right(transcribe_starts, hi)
-    window = transcribe_norms[left:right]
-    if not window or not line_norms:
-        return 0
-    cands = find_candidates([w for w in window], [line_norms], max_edit_ratio=max_edit_ratio)
-    if not cands:
-        return 0
-    return int(max(c[3] for c in cands))
+    """Backward-compatible alias returning only the matched-token count."""
+    matched, _ = _transcribe_match_and_count_in_window(
+        line_norms, transcribe_norms, transcribe_starts, t0, t1, margin_s, max_edit_ratio
+    )
+    return matched
 
 
 # ---------------------------------------------------------------------------
@@ -449,40 +503,51 @@ def _transcribe_match_in_window(
 
 
 def _best_tiling_by_time(candidates: list[dict]) -> list[dict]:
-    """Pick the highest-scoring non-overlapping subset of candidates.
+    """Pick the highest-scoring set of candidates that is both
+    *non-overlapping in time* AND *monotonic by line_id*.
 
-    Same DP as ``tiling_match.best_tiling`` but on time intervals instead
-    of token indices. Float-valued endpoints with an ``end <= start`` rule
-    (touching is allowed, real overlap is not).
+    Forced alignment guarantees lyric order, so the joint DP must respect
+    it: line_id N's selection must end before line_id (N+k)'s selection
+    starts. Without this constraint a chorus line whose transcribe
+    candidate sits later in audio time than a subsequent lyric line's
+    align candidate would steal the later position, leaving the
+    subsequent line stuck on its (wrong-audio) align candidate —
+    observed empirically on Hakuna Matata where the dialogue interlude
+    creates that exact gap. (Order-independent matching is still
+    available via ``match_method='tiling'`` for remix-style content.)
+
+    Sorted by (line_id, t0) so each candidate's predecessors in the
+    iteration order are exactly the candidates that could legally
+    precede it in the chain. O(M²) — well within budget for our M.
     """
     if not candidates:
         return []
-    cands = sorted(candidates, key=lambda c: c["t1"])
-    ends = [c["t1"] for c in cands]
+    cands = sorted(candidates, key=lambda c: (c["line_id"], c["t0"]))
     m = len(cands)
-    dp = [0.0] * (m + 1)
-    choice: list = [None] * (m + 1)
-    for i in range(1, m + 1):
-        c = cands[i - 1]
-        j = bisect_right(ends, c["t0"], 0, i - 1) - 1
-        include = c["score"] + (dp[j + 1] if j >= 0 else 0.0)
-        exclude = dp[i - 1]
-        if include > exclude:
-            dp[i] = include
-            choice[i] = (i - 1, j)
-        else:
-            dp[i] = exclude
-            choice[i] = None
+    dp = [c["score"] for c in cands]
+    prev = [None] * m
+    for i in range(m):
+        ci = cands[i]
+        for j in range(i):
+            cj = cands[j]
+            if cj["line_id"] >= ci["line_id"]:
+                # Same line (can't double-count) or higher (sorted ascending,
+                # impossible). At-most-one candidate per line in the chain.
+                continue
+            if cj["t1"] > ci["t0"]:
+                continue
+            candidate_score = dp[j] + ci["score"]
+            if candidate_score > dp[i]:
+                dp[i] = candidate_score
+                prev[i] = j
+    best_i = max(range(m), key=lambda i: dp[i])
     selected = []
-    i = m
-    while i > 0:
-        if choice[i] is not None:
-            ci, j = choice[i]
-            selected.append(cands[ci])
-            i = j + 1
-        else:
-            i -= 1
-    return selected[::-1]
+    cur = best_i
+    while cur is not None:
+        selected.append(cands[cur])
+        cur = prev[cur]
+    selected.reverse()
+    return selected
 
 
 # ---------------------------------------------------------------------------

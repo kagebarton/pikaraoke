@@ -228,14 +228,19 @@ class PipelineConfig:
     # --- Joint-matcher knobs (used only when match_method == "joint") ---
 
     # Weight on the align prior in the joint scoring formula:
-    #   score = transcribe_match + joint_alpha * align_agreement
+    #   score = transcribe_match + joint_alpha * align_agreement * alpha_weight
     # Roughly the number of "free" matched-token credits an align
     # candidate gets just by being where forced alignment placed the
     # line. Higher → trust align more (regress toward walk on clean
     # songs); lower → trust transcribe more (regress toward tiling).
-    # 4.0 is the design prior (≈ one short line of free credit) pending
-    # the α-sweep on the 23-song corpus called for in the plan.
-    joint_alpha: float = 4.0
+    # Corpus-tuned: 2.0 from the 27-song α-sweep documented in
+    # plans/joint-alignment-dp.md. The design prior was 4.0; the sweep
+    # showed α=4 keeps Hakuna Matata's late lyrics misplaced into the
+    # dialogue region (the DP prefers an all-align chain with α=4's
+    # bonus), while α=2 routes them correctly to the sung reprise.
+    # Corpus aggregate moves by ~30 lines / 1639 (≈2%) between α=2 and
+    # α=4 — most songs are insensitive in that range.
+    joint_alpha: float = 2.0
 
     # Time slack on each side of a candidate window when deciding which
     # transcribe words count as "inside" for transcribe_match scoring,

@@ -338,21 +338,45 @@ The shape we expect: at low α, transcribe noise wins on clean songs
 (regression). At high α, Hakuna-style failures stick to align. The
 plateau between sets α.
 
-## Open questions
+## Open questions — α settled against the 27-song corpus
 
-- **Initial α.** Prior: 4.0 — gives an align candidate the credit of ~4
-  matched tokens just for being where align placed it, which is roughly
-  one short line. Loose enough that an 8-token transcribe candidate
-  overpowers it (the Hakuna shape); tight enough that single-token
-  transcribe noise in a clean region can't dethrone align. **Confirm via
-  the sweep above before flipping the default `match_method`.**
-- **Chorus repetition.** The DP's non-overlap + ordered selection
-  constrains repeats the same way today's tiling does. The α-bonus on
-  align candidates means align's monotonic prediction for chorus
-  instance #3 actively pulls toward instance #3 even when instance #1's
-  transcribe match is equally strong. Likely resolved; the test should
-  include a synthetic chorus case and one corpus chorus song (e.g.
-  Bloodstream — multiple "I think I might've inhaled you" repeats).
+- **α — settled at 2.0** (down from the 4.0 design prior). The 27-song
+  α-sweep (sweep script under `/tmp/joint_alpha_sweep.py`, log at
+  `/tmp/alpha_sweep_v3.log`) ran with the as-implemented matcher (monotonic
+  line-id DP + the binary alpha-weight gate that drops the bonus when
+  transcribe heard ≥2 words in the window and none matched). Corpus totals
+  across α:
+
+  ```
+     α    align  transcribe  interp   total
+   1.0      406         873     360    1639
+   2.0      426         853     360    1639   ← chosen default
+   4.0      457         826     356    1639
+   6.0      483         807     349    1639
+   8.0      511         756     372    1639
+  12.0      519         739     381    1639
+  16.0      550         655     434    1639
+  ```
+
+  Hakuna Matata's late-line placement (lines ≥25; dialogue region 120-200s)
+  is the deciding signal — at α=2 the matcher places **1 line in dialogue
+  / 9 post-dialogue (sung reprise + outro) / 5 pre-dialogue (first chorus)**;
+  at α≥4 it regresses to **7 in dialogue / 0 post / 8 pre** because the
+  larger per-line α bonus tips the DP into preferring an all-align chain
+  that keeps the late lines stuck on dialogue audio. The binary alpha-weight
+  gate handles the high-density-mismatch case but is blind to collapsed
+  align candidates with sub-second windows (count_in_window < 2 escapes
+  the gate); lowering α to 2 absorbs the residual blind spot at the cost
+  of ~30 lines / 1639 (≈2%) shifting from align to transcribe across the
+  rest of the corpus — well within the per-word-timing precision band
+  (~100-200ms) of whisper word_timestamps.
+- **Chorus repetition.** The DP's lyric-id-monotonic + non-overlap
+  selection handles the canonical chorus case (chorus listed N times in
+  lyrics, sung N times in audio at distinct times). The hard case is N
+  in lyrics, fewer in audio (Hakuna's late chorus repeats) — the surplus
+  lyric lines land in interp between bracketing placed neighbours, which
+  is the correct degradation. **Watched in the sweep, no regression
+  observed.**
 - **Per-word timings inside transcribe-won windows.** The lyric→
   transcribe-word mapping inside a selected window (today done by tiling)
   is correct when the transcribe text closely matches the lyric — fuzzy
@@ -360,9 +384,18 @@ plateau between sets α.
   badly misheard most words inside the chosen window, per-word timings
   fall back to interpolation across the window. Acceptable; the same
   failure exists today on the repair path.
-- **Walk retirement.** Phase 3 question. If the corpus shows joint mode
+- **Walk retirement.** Phase 4 question. If the corpus shows joint mode
   never loses to walk on clean songs, walk and `word_alignment.py` can be
-  deleted entirely. Keep until we have that evidence.
+  deleted entirely. Keep until we have that evidence (re-process the 5
+  test songs with `match_method=joint` and compare against the existing
+  walk outputs before flipping the default).
+- **Tightening the alpha-weight gate.** The binary gate (`count >= 2 AND
+  matched == 0`) misses tiny collapsed align windows where transcribe
+  density doesn't reach 2 words in the window. Lowering α to 2 covers
+  this empirically; a more principled fix would compute the count over a
+  minimum-width neighborhood (e.g. `max(window, 0.5s)`) so collapsed
+  windows still see surrounding transcribe density. Defer until a
+  failure mode surfaces that α=2 doesn't already absorb.
 
 ## Testing
 
