@@ -381,12 +381,13 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--match-method",
-        choices=["auto", "walk", "tiling"],
+        choices=["auto", "walk", "tiling", "joint"],
         default=None,
         help=(
             "Force the lyric matcher instead of PipelineConfig's default "
             "('auto'): 'walk' = two-pointer walk matcher, 'tiling' = "
-            "order-independent tiling matcher."
+            "order-independent tiling matcher, 'joint' = joint align + "
+            "transcribe DP (one matcher, no escalation gates)."
         ),
     )
     return p.parse_args()

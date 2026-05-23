@@ -22,6 +22,15 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# Additive since v4 (no bump — additions only):
+#   - joint_stats: stats dict from the joint matcher
+#     (lib/joint_match.py:match_words_to_lines_joint_with_stats), captured
+#     when pipeline_decisions.method_used == "joint".
+#   - transcribe_words: the transcribe word list the joint matcher consumed
+#     alongside the align words (top-level ``words`` field continues to
+#     hold the align/refine words on joint runs). Both sources are saved
+#     verbatim so the joint matcher can be re-run at future α values
+#     without paying for whisper.
 # v4: tiling scores are raw matched-token counts (n - dist), not
 #     normalized ratios. Previously score in [0, 1]; now score in [0, n].
 #     Affects tiling_stats.selected_windows[].score,
@@ -47,6 +56,8 @@ def build_bundle(
     output_summary: dict[str, Any],
     output_line_timings: list[dict],
     ground_truth_refs: dict[str, Any],
+    joint_stats: dict | None = None,
+    transcribe_words: list[dict] | None = None,
 ) -> dict[str, Any]:
     """Assemble the capture dict. Pure — no I/O.
 
@@ -63,6 +74,8 @@ def build_bundle(
         "words_source": words_source,
         "walk_stats": walk_stats,
         "tiling_stats": tiling_stats,
+        "joint_stats": joint_stats,
+        "transcribe_words": transcribe_words,
         "output_summary": output_summary,
         "output_line_timings": output_line_timings,
         "ground_truth_refs": ground_truth_refs,

@@ -194,6 +194,15 @@ class PipelineConfig:
     # "tiling" — stable-ts transcribe() + order-independent fuzzy
     #   candidate + interval-scheduling DP. Resilient to
     #   remixes/repeats/drift; may drop unmatched lines.
+    # "joint" — align + transcribe (no internal refine) fed simultaneously
+    #   into a single interval-scheduling DP. Each lyric line scores its
+    #   align candidate AND its transcribe candidates; the DP picks the
+    #   max-score non-overlapping subset. Per-word timings come from
+    #   whichever source won each line — align's refined timings on
+    #   clean lines (preserving walk-level precision) and transcribe's
+    #   word_timestamps on lines align misplaced. No routing/gating
+    #   layer; one matcher covers walk-clean, align-collapse, and
+    #   walk-against-wrong-audio (Hakuna-style) failure modes uniformly.
     # "auto" (default) — run walk, but if stable-ts align() fails more
     #   than ``align_failure_escalation`` of its segments, discard the
     #   align result and re-run with the tiling matcher on an honest
@@ -215,6 +224,24 @@ class PipelineConfig:
     # >15% (e.g. Pocahontas "Colors of the Wind" hits 0.35 here while its
     # fail_ratio is only 0.07 — collapse catches what fail_ratio misses).
     collapse_escalation_threshold: float = 0.15
+
+    # --- Joint-matcher knobs (used only when match_method == "joint") ---
+
+    # Weight on the align prior in the joint scoring formula:
+    #   score = transcribe_match + joint_alpha * align_agreement
+    # Roughly the number of "free" matched-token credits an align
+    # candidate gets just by being where forced alignment placed the
+    # line. Higher → trust align more (regress toward walk on clean
+    # songs); lower → trust transcribe more (regress toward tiling).
+    # 4.0 is the design prior (≈ one short line of free credit) pending
+    # the α-sweep on the 23-song corpus called for in the plan.
+    joint_alpha: float = 4.0
+
+    # Time slack on each side of a candidate window when deciding which
+    # transcribe words count as "inside" for transcribe_match scoring,
+    # and how much collapsed align candidates get padded for the DP's
+    # non-overlap constraint. Reuses the previous repair-margin value.
+    joint_margin_s: float = 0.3
 
     # When True, the lyric-align stage writes a JSON bundle to
     # ``<song_dir>/alignment_debug/<stem>.json`` capturing the matcher
