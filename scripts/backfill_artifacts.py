@@ -27,6 +27,7 @@ Run from the repo root::
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
 import shutil
@@ -80,8 +81,9 @@ SUBTITLES = "subtitles"
 class SongJob:
     song_path: Path
     missing: set[str] = field(default_factory=set)
-    # Populated during phase 2 (Genius prompt):
+    # Populated during phase 2 (Genius prompt) or by --use-bundle-lyrics:
     #   ("genius", genius_id) | ("srt",) | ("raw",) | ("skip",)
+    #   | ("bundle", bundle_json_path)
     choice: tuple = ()
 
 
@@ -156,12 +158,40 @@ def _default_query(song: Path) -> str:
     return cleaned or title
 
 
+def apply_bundle_lyric_choices(jobs: list[SongJob], bundles_dir: Path) -> int:
+    """Pre-populate ``job.choice`` for any song with a cached bundle.
+
+    With ``--use-bundle-lyrics`` we short-circuit the Genius search and
+    re-use the cleaned ``lyrics.align_lines`` stored in the alignment-debug
+    bundle. The pipeline still runs ``parse_lyric_lines`` on the resulting
+    .txt (idempotent on already-cleaned text), so all current cleanup
+    logic applies. Returns the number of jobs auto-resolved.
+    """
+    n = 0
+    for job in jobs:
+        if job.choice:
+            continue
+        if not (KARAOKE in job.missing or SUBTITLES in job.missing):
+            continue
+        bundle_path = bundles_dir / f"{job.song_path.stem}.json"
+        if not bundle_path.is_file():
+            continue
+        job.choice = ("bundle", bundle_path)
+        n += 1
+    return n
+
+
 def prompt_genius_choices(jobs: list[SongJob], genius: GeniusClient) -> list[SongJob]:
     """Walk each job needing lyric work; populate ``job.choice``.
 
+    Jobs with ``job.choice`` already set (e.g. by ``--use-bundle-lyrics``)
+    are kept as-is without prompting.
+
     Returns the kept jobs (skip choices are dropped from the run list).
     """
-    needs_prompt = [j for j in jobs if KARAOKE in j.missing or SUBTITLES in j.missing]
+    needs_prompt = [
+        j for j in jobs if (KARAOKE in j.missing or SUBTITLES in j.missing) and not j.choice
+    ]
     if not needs_prompt:
         return jobs
 
@@ -240,6 +270,8 @@ def resolve_lyrics_path(job: SongJob, genius: GeniusClient, lyrics_dir: Path) ->
 
       * genius -> fetch lyrics, write ``<stem>.txt``, return it
       * srt    -> existing local SRT, return it
+      * bundle -> reuse cached align_lines from alignment-debug bundle,
+                  write ``<stem>.txt``, return it
       * raw    -> None (force transcription)
     """
     kind = job.choice[0] if job.choice else "raw"
@@ -259,6 +291,18 @@ def resolve_lyrics_path(job: SongJob, genius: GeniusClient, lyrics_dir: Path) ->
         if srt_path is None:
             print("  ! no local SRT found; transcribing instead")
         return srt_path
+
+    if kind == "bundle":
+        bundle_path = Path(job.choice[1])
+        try:
+            data = json.loads(bundle_path.read_text())
+            align_lines = data["lyrics"]["align_lines"]
+        except (OSError, KeyError, json.JSONDecodeError) as e:
+            print(f"  ! bundle read failed ({e}); transcribing instead")
+            return None
+        out = lyrics_dir / f"{job.song_path.stem}.txt"
+        out.write_text("\n".join(align_lines), encoding="utf-8")
+        return out
 
     return None
 
@@ -390,6 +434,16 @@ def parse_args() -> argparse.Namespace:
             "transcribe DP (one matcher, no escalation gates)."
         ),
     )
+    p.add_argument(
+        "--use-bundle-lyrics",
+        action="store_true",
+        help=(
+            "For each song missing karaoke/subtitles, if an alignment-debug "
+            "bundle exists at <folder>/alignment_debug/<stem>.json, reuse "
+            "its cleaned lyrics.align_lines instead of prompting for a "
+            "Genius search hit. Songs without a bundle still prompt normally."
+        ),
+    )
     return p.parse_args()
 
 
@@ -437,6 +491,11 @@ def main() -> int:
             "WARNING: no genius_token in preferences; Genius searches will "
             "return no hits. Use [t] (transcribe) or [s] (local SRT) only.\n"
         )
+
+    if args.use_bundle_lyrics:
+        n_bundle = apply_bundle_lyric_choices(jobs, folder / "alignment_debug")
+        if n_bundle:
+            print(f"Reusing bundle lyrics for {n_bundle} song(s); skipping their Genius prompts.")
 
     jobs = prompt_genius_choices(jobs, genius)
     if not jobs:
