@@ -323,7 +323,11 @@ def _build_transcribe_candidates(
         t1 = transcribe_words[end_idx - 1]["end"]
         a_agree = _align_agreement_for_window(t0, t1, align_ranges[line_id])
         window_count = end_idx - start_idx
-        alpha_weight = _alpha_weight(t_score, window_count)
+        # Transcribe candidates only exist because find_candidates accepted
+        # them, so by construction at least one lyric token overlaps the
+        # window. Pass True explicitly to keep the gate semantics consistent
+        # with the align-candidate path.
+        alpha_weight = _alpha_weight(t_score > 0, window_count)
         score = float(t_score) + alpha * a_agree * alpha_weight
         out.append(
             {
@@ -345,29 +349,36 @@ def _build_transcribe_candidates(
 _ALPHA_GATE_COUNT = 2
 
 
-def _alpha_weight(matched: float, count: int) -> float:
+def _alpha_weight(any_overlap: bool, count: int) -> float:
     """Gate the alpha bonus by transcribe corroboration.
 
-    ``matched`` is the line tokens that found a match against the
-    transcribe slice; ``count`` is the slice's word count.
+    ``any_overlap`` is True iff at least one normalised lyric token also
+    appears anywhere in the transcribe slice. ``count`` is the slice's
+    word count.
 
     Binary gate: a candidate's alpha bonus drops to zero **only** when
     transcribe heard substantial speech (``count >= _ALPHA_GATE_COUNT``)
-    but **none** of it matched the line — i.e. align placed the lyric on
-    confidently-wrong audio. Otherwise the bonus stays at 1.0 so:
+    AND none of that speech overlaps lexically with the lyric line — i.e.
+    align placed the lyric on confidently-wrong audio (Hakuna's dialogue
+    interlude). Otherwise the bonus stays at 1.0 so:
 
       * silent / instrumental windows keep their align preference,
-      * partial transcribe matches keep their align preference (whisper
-        misheard a token, not "this isn't the line"),
+      * mistranscribed lyrics keep their align preference — even a single
+        recognised word in the window (e.g. "I've" / "been" / "time" for a
+        line whisper rendered as "I've been spinning out the time") is
+        enough corroboration to trust align,
       * align-corroborated transcribe candidates score the same as the
         align candidate at the same position (clean-song ties → align
         wins, preserving refined per-word timings).
 
-    A graduated ``matched / count`` formula was tried and proved too
-    aggressive — find_candidates' margin pulls neighbour words into the
-    count, so even perfect tight matches saw their alpha_weight cut.
+    Using lexical overlap (set intersection) rather than the strict
+    edit-distance threshold ``find_candidates`` uses is the whole point:
+    the gate's job is to catch "unrelated speech," not to enforce match
+    quality — the score formula already encodes quality via
+    ``transcribe_match``. The earlier ``matched == 0`` check inherited
+    that threshold and false-fired on mistranscribed lyric lines.
     """
-    if count >= _ALPHA_GATE_COUNT and matched == 0:
+    if count >= _ALPHA_GATE_COUNT and not any_overlap:
         return 0.0
     return 1.0
 
@@ -396,7 +407,7 @@ def _build_align_candidates(
             pad = (_MIN_ALIGN_WIDTH_S - (t1 - t0)) / 2.0
             t0 = max(0.0, t0 - pad)
             t1 = t1 + pad
-        t_match, count_in_window = _transcribe_match_and_count_in_window(
+        t_match, any_overlap, count_in_window = _transcribe_match_and_count_in_window(
             line_norms[line_id],
             transcribe_norms,
             transcribe_starts,
@@ -405,7 +416,7 @@ def _build_align_candidates(
             margin_s,
             max_edit_ratio,
         )
-        alpha_weight = _alpha_weight(t_match, count_in_window)
+        alpha_weight = _alpha_weight(any_overlap, count_in_window)
         score = float(t_match) + alpha * 1.0 * alpha_weight
         out.append(
             {
@@ -453,15 +464,18 @@ def _transcribe_match_and_count_in_window(
     t1: float,
     margin_s: float,
     max_edit_ratio: float,
-) -> tuple[int, int]:
-    """Return ``(matched_tokens, transcribe_word_count)`` for the window.
+) -> tuple[int, bool, int]:
+    """Return ``(matched_tokens, any_overlap, transcribe_word_count)``.
 
-    Used by align-candidate scoring so the joint DP can tell apart
-    "transcribe silent here" (count=0; trust align fully) from
-    "transcribe loud but nothing matched" (count>=1, matched=0; align
-    contradicted, drop the alpha bonus). The match value is what
-    ``find_candidates`` would have scored at this slice — exactly the
-    same scoring function transcribe candidates use.
+    ``matched_tokens`` is the ``find_candidates`` score at this slice —
+    same scoring function transcribe candidates use, kept as the
+    score-formula's ``transcribe_match`` term.
+
+    ``any_overlap`` is True iff at least one normalised lyric token also
+    appears anywhere in the slice. The alpha-weight gate uses this raw
+    overlap (not ``matched_tokens``) so the gate fires only on truly
+    unrelated speech, not on mistranscribed-but-still-lyric content that
+    happens to exceed find_candidates' edit-distance threshold.
     """
     lo = t0 - margin_s
     hi = t1 + margin_s
@@ -474,11 +488,12 @@ def _transcribe_match_and_count_in_window(
     window = transcribe_norms[left:right]
     count = len(window)
     if not window or not line_norms:
-        return 0, count
+        return 0, False, count
+    any_overlap = not set(line_norms).isdisjoint(window)
     cands = find_candidates(list(window), [line_norms], max_edit_ratio=max_edit_ratio)
     if not cands:
-        return 0, count
-    return int(max(c[3] for c in cands)), count
+        return 0, any_overlap, count
+    return int(max(c[3] for c in cands)), any_overlap, count
 
 
 def _transcribe_match_in_window(
@@ -491,7 +506,7 @@ def _transcribe_match_in_window(
     max_edit_ratio: float,
 ) -> int:
     """Backward-compatible alias returning only the matched-token count."""
-    matched, _ = _transcribe_match_and_count_in_window(
+    matched, _, _ = _transcribe_match_and_count_in_window(
         line_norms, transcribe_norms, transcribe_starts, t0, t1, margin_s, max_edit_ratio
     )
     return matched

@@ -2,10 +2,12 @@
 
 from pikaraoke.lib.joint_match import (
     _align_agreement_for_window,
+    _alpha_weight,
     _best_tiling_by_time,
     _build_align_candidates,
     _line_align_ranges,
     _tokenise_lines,
+    _transcribe_match_and_count_in_window,
     _transcribe_match_in_window,
     match_words_to_lines_joint_with_stats,
 )
@@ -134,6 +136,59 @@ class TestTranscribeMatchInWindow:
         assert n == 0
 
 
+class TestTranscribeMatchAndCountInWindow:
+    """The 3-tuple form drives the alpha-weight gate via ``any_overlap``."""
+
+    def test_any_overlap_on_partial_lexical_hit(self):
+        # Lyric: "spinnin now for time"; transcribe heard "spinning out the time".
+        # find_candidates rejects this (edit ratio > 0.25 over 4 tokens) so
+        # matched_score == 0, but "time" overlaps lexically — gate must not fire.
+        line_norms = ["spinnin", "now", "for", "time"]
+        tnorms = ["spinning", "out", "the", "time"]
+        tstarts = [10.0, 10.5, 11.0, 11.5]
+        matched, any_overlap, count = _transcribe_match_and_count_in_window(
+            line_norms, tnorms, tstarts, 10.0, 12.0, margin_s=0.3, max_edit_ratio=0.25
+        )
+        assert matched == 0
+        assert any_overlap is True
+        assert count == 4
+
+    def test_no_overlap_unrelated_speech(self):
+        # Hakuna-shape: lyric is sung lyrics but window has dialogue.
+        line_norms = ["no", "worries", "for", "the", "rest"]
+        tnorms = ["hello", "what", "are", "you", "doing"]
+        tstarts = [10.0, 10.5, 11.0, 11.5, 12.0]
+        matched, any_overlap, count = _transcribe_match_and_count_in_window(
+            line_norms, tnorms, tstarts, 10.0, 12.5, margin_s=0.3, max_edit_ratio=0.25
+        )
+        assert matched == 0
+        assert any_overlap is False
+        assert count == 5
+
+    def test_empty_window_returns_false_overlap(self):
+        matched, any_overlap, count = _transcribe_match_and_count_in_window(
+            ["a", "b"], [], [], 0.0, 1.0, margin_s=0.3, max_edit_ratio=0.25
+        )
+        assert matched == 0
+        assert any_overlap is False
+        assert count == 0
+
+
+class TestAlphaWeightGate:
+    def test_unrelated_speech_zeros_bonus(self):
+        # Hakuna case: substantial transcribe speech, zero lyric overlap.
+        assert _alpha_weight(any_overlap=False, count=5) == 0.0
+
+    def test_partial_overlap_keeps_bonus(self):
+        # Bloodstream case: mistranscribed lyric with at least one token match.
+        assert _alpha_weight(any_overlap=True, count=5) == 1.0
+
+    def test_silent_window_keeps_bonus(self):
+        # count below gate threshold — instrumental / silent region.
+        assert _alpha_weight(any_overlap=False, count=1) == 1.0
+        assert _alpha_weight(any_overlap=False, count=0) == 1.0
+
+
 # ---------------------------------------------------------------------------
 # Align candidate construction
 # ---------------------------------------------------------------------------
@@ -196,6 +251,52 @@ class TestBuildAlignCandidates:
         )
         assert len(cands) == 1
         assert cands[0]["line_id"] == 1
+
+    def test_mistranscribed_lyric_keeps_alpha_bonus(self):
+        # Bloodstream-shape: align placed the line correctly, but whisper
+        # mistranscribed enough words that find_candidates rejects the slice.
+        # At least one lyric token still appears in the window, so the gate
+        # must NOT fire — align preserves its α bonus.
+        line_norms = [["spinnin", "now", "for", "time"]]
+        align_ranges = [{"t0": 10.0, "t1": 12.0, "token_start": 0, "token_end": 4}]
+        transcribe_words = _aw_seq("spinning", "out", "the", "time", t0=10.0, dt=0.5)
+        transcribe_norms = ["spinning", "out", "the", "time"]
+        cands = _build_align_candidates(
+            line_norms,
+            align_ranges,
+            transcribe_words,
+            transcribe_norms,
+            margin_s=0.3,
+            max_edit_ratio=0.25,
+            alpha=4.0,
+        )
+        assert len(cands) == 1
+        c = cands[0]
+        assert c["transcribe_match"] == 0  # find_candidates still rejects
+        assert c["alpha_weight"] == 1.0  # gate did NOT fire — partial overlap saved it
+        assert c["score"] == 4.0  # 0 + 4.0 * 1.0 * 1.0
+
+    def test_unrelated_speech_zeros_alpha_bonus(self):
+        # Hakuna-shape: align placed the line into a dialogue region whose
+        # transcribe content has no lyric-token overlap at all. Gate fires.
+        line_norms = [["no", "worries", "for", "the", "rest"]]
+        align_ranges = [{"t0": 10.0, "t1": 13.0, "token_start": 0, "token_end": 5}]
+        transcribe_words = _aw_seq("hello", "what", "are", "you", "doing", t0=10.0, dt=0.5)
+        transcribe_norms = ["hello", "what", "are", "you", "doing"]
+        cands = _build_align_candidates(
+            line_norms,
+            align_ranges,
+            transcribe_words,
+            transcribe_norms,
+            margin_s=0.3,
+            max_edit_ratio=0.25,
+            alpha=4.0,
+        )
+        assert len(cands) == 1
+        c = cands[0]
+        assert c["transcribe_match"] == 0
+        assert c["alpha_weight"] == 0.0
+        assert c["score"] == 0.0
 
 
 # ---------------------------------------------------------------------------
