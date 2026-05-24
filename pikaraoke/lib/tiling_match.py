@@ -401,9 +401,9 @@ def match_words_to_lines_tiling_with_stats(
     ``line_id``.
 
     Paren-splitting reads ``lines`` (display text with inline parens)
-    rather than ``align_lines``: pikaraoke's Genius parser strips parens
-    from align_text upstream, so splitting align_lines would never
-    actually split anything. The display text retains parens so this is
+    rather than ``align_lines``: align_lines has the bracket characters
+    removed by ``parse_lyric_lines``, so splitting it on parens would
+    never find anything. The display text retains parens so this is
     where the split happens.
 
     When ``anchor_fallback`` is set, match units that produced zero

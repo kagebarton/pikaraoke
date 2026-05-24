@@ -34,6 +34,21 @@ class TestLoadLyrics:
         # SRT has no paren-strip distinction — display == align
         assert align == display
 
+    def test_srt_cleanup_strips_noise(self, stage, tmp_path):
+        """SRT route runs each sub through clean_srt_line: musical
+        notes, HTML tags, bracketed/paren stage directions, and 2-line
+        wraps all vanish; entries that become empty are dropped."""
+        srt_file = tmp_path / "test.srt"
+        srt_file.write_text(
+            "1\n00:00:01,000 --> 00:00:02,000\n(gentle music)\n"
+            "\n2\n00:00:02,000 --> 00:00:03,000\n<i>♪ Hello\nworld ♪</i>\n"
+            "\n3\n00:00:03,000 --> 00:00:04,000\n[together]\n♪ Beauty and the beast ♪\n",
+            encoding="utf-8",
+        )
+        display, align = stage._load_lyrics(srt_file)
+        assert display == ["Hello world", "Beauty and the beast"]
+        assert align == display
+
     def test_plain_txt(self, stage, tmp_path):
         txt_file = tmp_path / "lyrics.txt"
         txt_file.write_text("Just some lyrics\nNo headers here\n", encoding="utf-8")
@@ -41,12 +56,14 @@ class TestLoadLyrics:
         assert display == ["Just some lyrics", "No headers here"]
         assert align == display
 
-    def test_txt_strips_inline_parens_for_align(self, stage, tmp_path):
+    def test_txt_keeps_inline_paren_contents_for_align(self, stage, tmp_path):
+        """Bracket chars stripped from align text, but enclosed words
+        kept — those backing vocals are sung in the audio."""
         txt_file = tmp_path / "lyrics.txt"
         txt_file.write_text("(I can't help) Falling in love\n", encoding="utf-8")
         display, align = stage._load_lyrics(txt_file)
         assert display == ["(I can't help) Falling in love"]
-        assert align == ["Falling in love"]
+        assert align == ["I can't help Falling in love"]
 
     def test_txt_skips_blank_and_bracket_lines(self, stage, tmp_path):
         txt_file = tmp_path / "lyrics.txt"

@@ -35,7 +35,7 @@ from pathlib import Path
 import srt
 
 from pikaraoke.lib import alignment_capture
-from pikaraoke.lib.genius_lyrics import parse_lyric_lines
+from pikaraoke.lib.genius_lyrics import clean_srt_line, parse_lyric_lines
 from pikaraoke.lib.joint_match import match_words_to_lines_joint_with_stats
 from pikaraoke.lib.tiling_match import match_words_to_lines_tiling_with_stats
 from pikaraoke.lib.word_alignment import match_words_to_lines_with_stats
@@ -380,19 +380,25 @@ class LyricAlignStage(BaseStage):
     def _load_lyrics(self, lyrics_path: Path) -> tuple[list[str], list[str]]:
         """Return ``(display_lines, align_lines)``.
 
-        For ``.srt``: parsed subtitle content; ``align_lines`` mirrors
-        ``display_lines``.
+        For ``.srt``: each subtitle's content is run through
+        :func:`clean_srt_line` (strips HTML tags, musical notes,
+        ``[stage directions]``, ``(stage directions)``, collapses
+        2-line wraps, normalizes curly quotes). Lines with no letters
+        after cleanup are dropped. ``align_lines`` mirrors
+        ``display_lines`` — SRT has no separate align/display
+        distinction.
 
         For ``.txt``: split into per-line ``{text, align_text}`` via
-        :func:`parse_lyric_lines`. ``align_lines`` has inline parens
-        stripped (so ``"(I can't help) Falling in love"`` aligns as
-        ``"Falling in love"`` while the display preserves the parens).
+        :func:`parse_lyric_lines`. ``align_lines`` has the bracket
+        characters removed but keeps their contents (so ``"(I can't
+        help) Falling in love"`` aligns as ``"I can't help Falling in
+        love"`` while the display preserves the parens).
         """
         suffix = Path(lyrics_path).suffix.lower()
         if suffix == ".srt":
             raw = lyrics_path.read_text(encoding="utf-8")
             subs = list(srt.parse(raw))
-            lines = [sub.content.strip() for sub in subs if sub.content.strip()]
+            lines = [c for c in (clean_srt_line(sub.content) for sub in subs) if c]
             return lines, list(lines)
 
         raw = lyrics_path.read_text(encoding="utf-8")
