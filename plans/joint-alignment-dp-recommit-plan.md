@@ -1,19 +1,34 @@
 Model: Claude Opus 4.7
 
-# Re-commit plan: `removediarize` → clean reviewed branch
+# Re-commit plan: `joint-alignment-dp` → clean reviewed branch
 
 ## Goal
 
-Reconstruct the cumulative diff between `master` and `removediarize`
-(129 messy commits, ~220 files, +45k/−20k) as a sequence of ~50 small,
+Reconstruct the cumulative diff between `master` and `joint-alignment-dp`
+(141 messy commits, ~227 files, +51k/−20k) as a sequence of ~51 small,
 logically-isolated commits on a fresh branch, performing a strict code
 review along the way.
 
 This is **not** a history replay. Diarization code that was added and
 later removed must never appear — we build toward the *end state* of
-`removediarize`, organized cleanly. Commit messages on the source branch
+`joint-alignment-dp`, organized cleanly. Commit messages on the source branch
 are unreliable and are ignored; grouping is driven entirely by diff
 content.
+
+> **Source branch note.** This plan was first written against `removediarize`
+> (then at commit `971db07`). The source branch is now **`joint-alignment-dp`**,
+> which is `971db07` plus the joint-alignment-DP matcher line of work. The two
+> branches **diverged at `81ac04cb`**: `removediarize` continued with a
+> walk-interpolation re-time and a concentrated-failure tiling escalation
+> (commits `9a9c2646`, `e7401594`) that the joint matcher *superseded and
+> replaced*, so that work is intentionally **not** reconstructed here. Because
+> `971db07` is an ancestor of `joint-alignment-dp`, the original C0–C47 entries
+> (which describe `master..971db07`) remain accurate; the joint work layers on
+> top — folded into the commits that already own each file (per the re-fold
+> decision), plus one new matcher commit **C26A**. All `--source=` /
+> `git diff <branch>` commands below pull from `joint-alignment-dp`; pulling
+> from the now-divergent `removediarize` would reproduce abandoned work and
+> miss the matcher.
 
 ## Decisions (confirmed)
 
@@ -42,13 +57,15 @@ content.
   Commits are ordered so nothing is left half-wired longer than necessary.
 - **Review:** fix issues as they are found, folded **into** the owning feature
   commit (never as a follow-up fix commit). The final tree may therefore
-  differ from `removediarize` where review warranted a change; record each
+  differ from `joint-alignment-dp` where review warranted a change; record each
   such deviation as a `Review-fix:` trailer in that feature commit's body. A
   `Review-fix` corrects the *original branch's* code in place — it is not a
   fix of an earlier commit in this series.
 - **Cruft:** dropped from the new branch entirely — `QWEN.md`, `mockup/`,
-  and all WIP/scratch docs under `plans/` (including this file's siblings).
-  Final tree is leaner than `removediarize`.
+  and all WIP/scratch docs under `plans/` (including this file's siblings and
+  `plans/joint-alignment-dp.md`, the matcher's design doc — it documents the
+  α-sweep and the superseded repair line, not current code). Final tree is
+  leaner than `joint-alignment-dp`.
 - **Fidelity scope:** the branch should represent *current* functionality,
   so reconstruction also (a) purges transition-era orphaned assets the
   branch left behind, (b) corrects user-facing docs that describe removed
@@ -59,7 +76,7 @@ content.
 
 ## Mechanics
 
-Work in a throwaway worktree so `master` and `removediarize` stay untouched:
+Work in a throwaway worktree so `master` and `joint-alignment-dp` stay untouched:
 
 ```bash
 git worktree add ../pk-next -b next master
@@ -70,10 +87,10 @@ Branch name is **`next`** — a short-lived integration branch that, once
 reviewed and verified, is renamed to `master` (it becomes the new mainline,
 so the name only needs to signal "the future master," not describe content).
 
-Build each commit by pulling end-state content from `removediarize`:
+Build each commit by pulling end-state content from `joint-alignment-dp`:
 
-- Whole file: `git checkout removediarize -- <path>`
-- **Partial file (multi-concern split):** `git restore --source=removediarize -p -- <path>`
+- Whole file: `git checkout joint-alignment-dp -- <path>`
+- **Partial file (multi-concern split):** `git restore --source=joint-alignment-dp -p -- <path>`
   and stage only the hunks belonging to the current concern. This is the
   key tool for splitting `karaoke.py`, `app.py`, `args.py`, and
   `preference_manager.py`, each of which is touched by several concerns.
@@ -82,7 +99,7 @@ Build each commit by pulling end-state content from `removediarize`:
 **No commit fixes an earlier commit.** Two ways this discipline is enforced
 during execution:
 - *Historical fixes are absorbed, not replayed.* You pull end-state content
-  from `removediarize`, which already contains every historical bug-fix. So
+  from `joint-alignment-dp`, which already contains every historical bug-fix. So
   the feature commit that introduces (say) `pipeline_tracker.py` ships the
   already-race-free version — there is no "introduce, then fix" pair. If you
   ever find yourself wanting to write "fix the X added in C<n>", stop: the
@@ -99,7 +116,7 @@ commit, run the full suite + pre-commit. Then verify completeness:
 
 ```bash
 # Only intentionally-dropped cruft and deliberate review-fixes should show.
-git diff removediarize -- . ':!QWEN.md' ':!mockup/**' ':!plans/**'
+git diff joint-alignment-dp -- . ':!QWEN.md' ':!mockup/**' ':!plans/**'
 ```
 
 Anything unexpected in that diff is a hunk that was missed during the
@@ -127,9 +144,9 @@ either `conda activate pik` first, or prefix with
 `/home/ken/miniconda3/envs/pik/bin/`. Bare `pytest` will hit missing deps.
 ```bash
 # 1. Bring the end-state content for this commit's files into the worktree.
-git restore --source=removediarize --staged --worktree -- <whole-file>   # whole file: stages it directly
+git restore --source=joint-alignment-dp --staged --worktree -- <whole-file>   # whole file: stages it directly
 #    …or, for a file shared across commits, pull only this commit's hunks:
-git restore --source=removediarize -p -- <shared-file>                   # y/n/s/e per hunk (updates worktree only)
+git restore --source=joint-alignment-dp -p -- <shared-file>                   # y/n/s/e per hunk (updates worktree only)
 git add -- <shared-file>                                                 # then stage what you kept
 
 # 2. Sanity-check it's not half-wired before committing:
@@ -171,7 +188,7 @@ it; the line stays in the working tree and C-CLK picks it up later. Verify with
 `hide_clock`) and `git diff -- …` (should still show it, unstaged).
 
 ### "Is this file done?" check
-After the last commit that touches a file, `git diff removediarize -- <file>`
+After the last commit that touches a file, `git diff joint-alignment-dp -- <file>`
 should be **empty**. If it isn't, you missed a hunk — stage it into the right
 commit (use `--amend` if it's the commit you just made).
 
@@ -191,7 +208,7 @@ commit (use `--amend` if it's the commit you just made).
 - Undo the last commit but keep the changes staged: `git reset --soft HEAD~1`.
 - Throw away uncommitted edits to a file: `git checkout -- <file>`.
 - Start the whole branch over: `git worktree remove ../pk-next` then re-add it.
-- Nothing here touches `master` or `removediarize`, so you cannot lose the
+- Nothing here touches `master` or `joint-alignment-dp`, so you cannot lose the
   source by experimenting.
 
 ### First-run costs (for the end-to-end smoke)
@@ -208,7 +225,7 @@ that review would delete. Verified findings (2026-05-21) are noted inline.
 1. **Green baseline on the source tip.** Reconstruction targets the end
    state, so confirm it is actually green before trusting it:
    ```bash
-   git checkout removediarize
+   git checkout joint-alignment-dp
    /home/ken/miniconda3/envs/pik/bin/python -m pytest
    pre-commit run --config code_quality/.pre-commit-config.yaml --all-files
    ```
@@ -240,13 +257,13 @@ that review would delete. Verified findings (2026-05-21) are noted inline.
    above catches missed *hunks*, not missed *whole files*. Capture the list
    up front and tick files off as you commit:
    ```bash
-   git diff --name-status master...removediarize > /tmp/recommit-manifest.txt
+   git diff --name-status master...joint-alignment-dp > /tmp/recommit-manifest.txt
    ```
 5. **Read the full diff once, end to end**, before slicing — with 220 files
    it's the only way to catch cross-file couplings the per-file plan can't
    see (e.g. a template depending on a route field):
    ```bash
-   git diff master...removediarize > /tmp/full.diff
+   git diff master...joint-alignment-dp > /tmp/full.diff
    ```
 
 Why this works: the net-diff approach beats history-replay precisely
@@ -267,6 +284,8 @@ across commits via `git restore -p`:
 | `preference_manager.py` | `DEFAULTS` dict — one atomic hunk mixing renames/removals + new keys; park whole in C17. Live-override skip block in `get()` (C34). |
 | `routes/socket_events.py` | **correction:** this is splash-handler *removal* only (`register_splash`/`handle_playback_position`/`handle_disconnect`/`start_song` + globals) → C16. No pipeline events here. |
 | `args.py` | MPV/overlay args + removal of streaming/buffer/avsync + logo → C17; `--hide-clock` arg → C-CLK |
+| `tests/conftest.py` | shared mock fixtures, split across the features they back: drop `MockPlaybackController.now_playing_url`/`now_playing_subtitle_url` → C16/C18 (streaming removal); add `restart`/`set_pitch`/`set_subtitle_delay`/`broadcast_position` + `mpv_controller` → C18/C35; add `subtitle_delay`/`vocal_volume`/`temp_dir` → C35; add `processing_manager` → C32. Each hunk rides with the commit whose behavior its test exercises (per the test-cleanup note below). |
+| `pipeline/stages/lyric_align.py` | base lyric-align/fetch stage + the SRT/Genius cleanup loader (`clean_srt_line` import, `_load_lyrics` rewrite) → C26; the joint route (`joint_match` import, `use_joint` branch, `_run_joint`, joint capture plumbing) → C26A. `test_lyric_align.py` splits the same way (base/cleanup tests → C26, three joint tests → C26A). |
 
 ### Two constraints that force some "concerns" to co-commit
 
@@ -402,11 +421,33 @@ never as a standalone fix commit.
 | Refine global temp folder | C2 (helper) + usage in C5/C14/C18/C28/C32 | spans (cross-cutting plumbing) |
 | Filter logs · reduce clutter · simplify HTTP filter | C16 (app filter) + C28 (mgr) + C21 (workers) | spans (per-emitter) |
 | `fix(scripts)` resolve lyrics in-CLI | C47 (script) + C20 (load_vocal touch) | spans |
+| `fix(joint-match)` monotonic DP + bisect; corpus-tune α=2 | C26A (matcher fns) + C19 (`joint_alpha=2.0`) | spans (code/config) |
+| `fix(joint-match)` gate on lexical overlap | C26A (`_alpha_weight`) | single |
+| `feat(lyric-clean)` differentiated SRT/Genius cleanup, keep parens | C23 (genius_lyrics) + C25 (tiling docstring) + C26 (loader) | spans (per-source) |
+
+The **joint matcher** is itself a feature spanning C19 (config knobs) + C22
+(whisper `refine=False` + capture fields) + **C26A** (the new matcher module
+*and* its opt-in `lyric_align` route) + C47 (`--match-method joint`). The matcher
+module and its stage route are kept together in C26A (one vertical feature); the
+inert touchpoints in shared files ride with those files' commits (C19/C22). Like
+the other **spans** rows, no commit fixes an earlier one: each carries its file's
+end-state and the route works once C26A lands. It is opt-in (default
+`match_method` stays `auto`), so every pre-existing matcher test stays green at
+each step. Flipping the default to `joint` and retiring walk/tiling was *not* in
+the source diff (`master..joint-alignment-dp` keeps all three) and is therefore
+not in scope.
 
 Two cleanup notes:
 - **"Test fixes" / "Test update after removal"** are *not* commits — each
   test change rides with the module commit whose behavior it exercises (tests
-  and code move together, per CLAUDE.md).
+  and code move together, per CLAUDE.md). Note the **module-less test edits**:
+  `tests/unit/test_karaoke_utils.py` drops two `now_playing_url` reset
+  assertions (its `karaoke_utils`/playback module is otherwise unchanged) — that
+  hunk rides with the streaming-removal / now-playing rework (**C16/C18**);
+  `tests/unit/test_song_list.py` only drops "(CDG format)" from a docstring
+  (the `song_list` module is unchanged) — it rides with the **CDG-removal**
+  hunks (C16 call-site / C17 prefs). `tests/conftest.py` is shared and splits
+  per the split-map row above.
 - **"Fixes after removal"** (splash/score teardown follow-ups) dissolve into
   the removal commits C15/C16 and the home-page commit C41 — there is no
   post-removal cleanup commit.
@@ -420,34 +461,45 @@ not a deferred fix.
 
 ## Phase A — Hygiene & foundations (no behavior coupling)
 
-**C0 — Dependency manifest** *(already committed on `removediarize` as
-`5475c153`; reproduce it as the first commit here)*
-- *Commit:* `build(deps): declare full runtime manifest in pyproject + requirements`
-  > Final dependency set plus the synced `requirements.txt` mirror. Drops
-  > `gevent`/`ffmpeg-python`; adds `python-mpv`, `curl_cffi`,
-  > `audio-separator[gpu]`, `faster-whisper`, `stable-ts`, `torch`,
+**C0 — Dependency manifest** *(already committed on `joint-alignment-dp` as
+`b7500370`; reproduce it as the first commit here)*
+- *Commit:* `build(deps): declare full runtime manifest in pyproject + requirements + lock`
+  > Final dependency set plus the synced `requirements.txt` mirror and the
+  > regenerated `uv.lock`. Drops `gevent`/`ffmpeg-python`; adds `python-mpv`,
+  > `curl_cffi`, `audio-separator[gpu]`, `faster-whisper`, `stable-ts`, `torch`,
   > `lyricsgenius`, `srt`; declares previously-transitive
   > `marshmallow`/`Pillow`/`pyzmq`. ML deps are core, not an optional extra.
-- The complete final `pyproject.toml [project.dependencies]` **and**
-  `requirements.txt` in one commit. `requirements.txt` mirrors the full dep
-  set, so it can't be split per-feature — it lands whole here, and every
-  later code commit then has its imports already declared.
-- *Review:* `requirements.txt` stays in sync with pyproject; no dep declared
-  that nothing imports (`pip-check`/grep).
-- *Auto-test:* `pip install -e .` resolves; `python -c "import pikaraoke.app"`.
+- The complete final `pyproject.toml [project.dependencies]`, `requirements.txt`,
+  **and `uv.lock`** in one commit. All three mirror the full dep set, so none
+  can be split per-feature — they land whole here, and every later code commit
+  then has its imports already declared. `uv.lock` is **kept** (uv install
+  capability is retained alongside the conda/pip workflow); regenerate it from
+  the final `pyproject.toml` rather than hand-editing, so it matches the locked
+  resolution.
+- *Review:* `requirements.txt` and `uv.lock` stay in sync with pyproject; no dep
+  declared that nothing imports (`pip-check`/grep). Day-to-day dev still uses the
+  conda `pik` env (per CLAUDE.md); `uv.lock` is for the uv path.
+- *Auto-test:* `pip install -e .` resolves; `python -c "import pikaraoke.app"`;
+  `uv lock --check` (lockfile matches `pyproject.toml`).
 - *Verify:*
   - [ ] `pip install -e .` completes in a clean env
   - [ ] app starts without an import/dependency error
+  - [ ] `uv lock --check` passes (lock matches pyproject); a `uv sync` resolves
 
-**C1 — Repo ignores & dead binary assets**
-- *Commit:* `chore: remove dead static assets, ignore model folders`
+**C1 — Repo ignores, dead assets & unused module**
+- *Commit:* `chore: remove dead static assets + unused module, ignore model folders`
   > Delete unused bundled audio/video/images plus HLS and jQuery-UI
-  > leftovers; add model-folder `.gitignore` entries. Pure deletions —
-  > nothing at the tip references these.
+  > leftovers, and the orphaned `raspi_wifi_config.py` module; add
+  > model-folder `.gitignore` entries. Pure deletions — nothing at the tip
+  > references these.
 - `.gitignore` (model-folder ignores), remove unused binaries:
   `static/sounds/*`, `static/video/*`, `static/music/*`,
   `static/images/dolphly.png`, `static/js/default.woff2`,
   `static/js/COPYRIGHT`, `static/images/placeholder.png` (add).
+- `git rm pikaraoke/lib/raspi_wifi_config.py` — dead module (Raspberry-Pi
+  Wi-Fi hotspot config); **zero references at the tip** (verified
+  `git grep raspi_wifi` is empty in `pikaraoke/`). Pure deletion, no caller
+  to update.
 - *Review-fix — transition-era orphans the branch left behind* (verified
   unreferenced in templates/JS/py at the tip; these survived the branch's
   own cleanup because no commit happened to touch them):
@@ -732,13 +784,24 @@ not a deferred fix.
   > base class. No runtime path yet.
 - `pipeline/__init__.py`, `pipeline/config.py`, `pipeline/context.py`,
   `pipeline/stages/__init__.py`, `pipeline/stages/base.py`.
+- *Joint-matcher knobs land here (config end-state).* `config.py` ships the
+  three `match_method == "joint"` tunables in their final, corpus-tuned form
+  (they're inert data until the joint route consumes them in C26A):
+  - `match_method` gains a documented `"joint"` value (default stays `"auto"`).
+  - `joint_alpha: float = 2.0` — weight on the align prior in the joint score
+    (`score = transcribe_match + joint_alpha * align_agreement * alpha_weight`).
+    Ships at the corpus-tuned **2.0**, not the design-prior 4.0 — the historical
+    `fix(joint-match) … corpus-tune alpha=2` is absorbed into this final value
+    (see Fix-absorption audit), never a later config bump.
+  - `joint_margin_s: float = 0.3` — window/overlap time slack (reuses the prior
+    repair-margin value).
 - *New test:* these have no direct coverage. Add a small
   `test_pipeline_config.py` asserting the config defaults/validation and the
   `context` construction the stages rely on — cheap, pure-Python, and it
-  pins the many tunables in `config.py`.
+  pins the many tunables in `config.py` (including `joint_alpha`/`joint_margin_s`).
 - *Auto-test:* `pytest -k "pipeline_config or context"`
 - *Verify:*
-  - [ ] (no user-facing behavior; exercised end-to-end at C-PROC)
+  - [ ] (no user-facing behavior; the joint route is exercised at C26A / C-PROC)
 
 **C20 — ffmpeg stages**
 - *Commit:* `feat(pipeline): add ffmpeg extract/transcode/loudnorm/load-vocal stages`
@@ -766,26 +829,69 @@ not a deferred fix.
 **C22 — Whisper worker + alignment capture**
 - *Commit:* `feat(pipeline): add out-of-process whisper alignment worker`
   > Faster-whisper transcription/alignment in a subprocess; clears GPU cache
-  > after every run. Ships the out-of-process move in final, stable form.
+  > after every run. `transcribe_words` takes an optional `refine` kwarg so
+  > callers can skip the second whole-song refine pass. Ships the
+  > out-of-process move in final, stable form.
 - `workers/whisper_worker.py`, `lib/alignment_capture.py` +
   `tests/unit/test_whisper_worker.py`.
+- *`refine=False` kwarg (worker end-state).* `transcribe_words` and the inner
+  `_do_transcribe_words` gain a keyword-only `refine: bool = True`; when
+  `False`, the `_refine_pass` is skipped (logs `"Skipping refine pass"`) and
+  post-process/extract runs on the un-refined result. The worker dispatcher
+  stays **backward-compatible**: it unpacks `("transcribe_words", path, *rest)`
+  so the legacy 2-tuple (`refine=True` implicit) and the new 3-tuple both work.
+  `refine=True` is still the default — only the joint route (C26A) passes
+  `False`. The added `test_whisper_worker.py` cases cover both tuple forms and
+  the skip-refine path.
+- *`alignment_capture` joint fields (additive, no schema bump).* `build_bundle`
+  gains two optional kwargs, `joint_stats: dict | None = None` and
+  `transcribe_words: list[dict] | None = None`, emitted into the bundle dict.
+  Schema stays **v4** (additions only); both are populated only on joint runs
+  so a saved bundle can re-run the joint matcher offline at other α without
+  paying for whisper again. Wired by the lyric-align stage in C26A.
 - *Review:* GPU-cache clear after every run; the worker runs out-of-process
   in its final, stable form (the follow-up out-of-process corrections are
-  absorbed here, not separate commits).
+  absorbed here, not separate commits); the tuple dispatch handles the legacy
+  arity without a version flag.
 - *Auto-test:* `pytest tests/unit/test_whisper_worker.py`
 - *Verify:*
   - [ ] (at C-PROC) GPU memory returns to baseline between processed songs
+  - [ ] a legacy 2-tuple `transcribe_words` request still runs with refine on
 
 **C23 — Genius lyrics integration**
-- *Commit:* `feat(lyrics): add Genius search + lyric fetch`
+- *Commit:* `feat(lyrics): add Genius search + lyric fetch + line cleanup`
   > GeniusClient search/select/fetch; shows all artists in results; narrowly
-  > suppresses lyricsgenius INFO log noise.
+  > suppresses lyricsgenius INFO log noise. `genius_lyrics` ships the
+  > differentiated per-line cleanup: `parse_lyric_lines` keeps paren
+  > *contents* (sung backing vocals), and `normalize_lyric_line` /
+  > `clean_srt_line` are the shared txt/SRT line cleaners.
 - `lib/genius.py`, `lib/genius_lyrics.py` +
   `tests/unit/test_genius.py`, `test_genius_lyrics.py`.
-- *Review:* lyricsgenius INFO-log suppression scoped narrowly; token handling.
+- *Differentiated cleanup (genius_lyrics end-state).* This is the
+  `feat(lyric-clean)` content, owned here because it lives in `genius_lyrics.py`
+  (the SRT/tiling/stage touchpoints fold into C25/C26 — see Fix-absorption
+  audit, "spans"):
+  - `parse_lyric_lines` no longer strips paren *contents* from `align_text`;
+    it removes only the `(`/`)` characters and keeps the words (corpus audit:
+    Genius parens are almost always sung backing vocals / call-and-response,
+    not stage directions — stripping them hid audible tokens from the matcher).
+  - New `normalize_lyric_line` (source-agnostic): collapses 2-line wraps,
+    strips HTML tags, `[stage directions]`, musical-note glyphs (`♪♫♬♩`),
+    normalizes curly quotes. Does **not** touch parens.
+  - New `clean_srt_line`: `normalize_lyric_line` + drop `(stage direction)`
+    contents (SRT parens are non-lyric in the corpus, unlike Genius) +
+    return `""` for letter-less lines so the SRT loader can drop them.
+  - Lines with no letters after normalization are dropped in `parse_lyric_lines`
+    too (kills the stray `(`/`)`/`]`/`'` fragments that became empty matcher
+    lines). `_INLINE_PAREN_RE` is replaced by `_PAREN_CONTENT_RE`/
+    `_BRACKET_CONTENT_RE`/`_HTML_TAG_RE`/`_MUSICAL_NOTE_RE`/`_HAS_LETTER_RE`.
+- *Review:* lyricsgenius INFO-log suppression scoped narrowly; token handling;
+  align_text keeps paren contents while display text keeps the brackets; SRT vs
+  txt paren handling is intentionally different (asserted in the new tests).
 - *Auto-test:* `pytest tests/unit/test_genius.py tests/unit/test_genius_lyrics.py`
 - *Verify:*
   - [ ] with a Genius token set, search returns multiple artists; logs aren't spammed with "Done."
+  - [ ] a Genius line like `"(I can't help) Falling in love"` aligns as `"I can't help Falling in love"` (parens kept); an SRT `"(gentle music)"` line is dropped
 
 **C24 — Word alignment (NW)**
 - *Commit:* `feat(lyrics): add Needleman–Wunsch word matcher`
@@ -802,6 +908,12 @@ not a deferred fix.
   > Raw matched-token scoring; keeps ad-lib parens inline.
 - `lib/tiling_match.py` + `tests/unit/test_tiling_match.py`.
   (Raw matched-token scoring; inline ad-lib parens.)
+- *Cleanup-feature touchpoint (end-state).* `match_words_to_lines_tiling_with_stats`'s
+  paren-split docstring is reworded to match C23's change — it splits on the
+  display `lines` because `align_lines` now has only the bracket *characters*
+  removed (contents kept), not the contents stripped. Docstring-only; rides
+  with the `feat(lyric-clean)` span (see Fix-absorption audit). C26A reuses this
+  module's `find_candidates` / `find_anchor_candidates` / DP shape.
 - *Auto-test:* `pytest tests/unit/test_tiling_match.py`
 - *Verify:*
   - [ ] (unit-covered; exercised at C-PROC)
@@ -809,14 +921,92 @@ not a deferred fix.
 **C26 — Lyric align & fetch stages + conversion**
 - *Commit:* `feat(pipeline): add lyric-fetch + lyric-align stages`
   > Fetch (Genius / YouTube captions) and align lyrics into subtitles;
-  > race-free subtitle resolution; default subtitle delay.
-- `stages/lyric_align.py`, `stages/lyrics_fetch.py` +
-  `tests/unit/test_lyric_align.py`, `test_lyrics_fetch.py`,
-  `test_lyric_conversion.py`. YouTube-captions source option; subtitle
-  race-free subtitle resolution; default subtitle delay.
+  > race-free subtitle resolution; default subtitle delay. Walk/auto/tiling
+  > match methods; differentiated SRT/Genius line cleanup at load time. (The
+  > opt-in `joint` route is split out to C26A.)
+- `stages/lyric_align.py` (base + cleanup hunks only — **not** the joint route,
+  see split map), `stages/lyrics_fetch.py` +
+  `tests/unit/test_lyric_align.py` (base + cleanup tests),
+  `test_lyrics_fetch.py`, `test_lyric_conversion.py`. YouTube-captions source
+  option; race-free subtitle resolution; default subtitle delay.
+- *Multi-concern file — `lyric_align.py` splits across two commits:* (a) the
+  base lyric-align/fetch stage + (b) the cleanup-loader rewrite land here; (c)
+  the joint route lands in **C26A**. Stage with `git restore -p`: take the
+  `_load_lyrics`/base hunks and `n`-skip the `joint_match` import, the
+  `use_joint` branch, `_run_joint`, and the `joint_stats`/`transcribe_words`
+  capture params.
+- *Cleanup loader (b — the `feat(lyric-clean)` span lands its stage piece
+  here).* `_load_lyrics` now imports `clean_srt_line` from `genius_lyrics`
+  (C23): the `.srt` branch runs each subtitle through `clean_srt_line` and
+  drops letter-less results; the `.txt` branch's docstring documents that
+  `align_lines` keeps paren contents. No more pass-through of raw SRT noise
+  (notes, wraps, HTML, stage directions).
+- *Review:* walk/auto/tiling behavior changes only via the cleaner inputs; no
+  `joint_match` import here (that arrives with the route in C26A).
 - *Auto-test:* `pytest tests/unit/ -k "lyric"`
 - *Verify:*
   - [ ] (at C-PROC) a processed song plays with time-synced subtitles
+  - [ ] an SRT source with `♪`, wraps, and `(stage direction)` lines yields clean subtitle lines
+
+**C26A — Joint alignment DP matcher + opt-in stage route**
+- *Commit:* `feat(lyrics): add joint alignment DP matcher + opt-in stage route`
+  > Single-pass matcher that consumes align words + transcribe words + lyric
+  > lines together, plus the `LyricAlignStage` route that uses it behind
+  > `match_method == "joint"`. Per line it builds one align candidate (at forced
+  > alignment's predicted span) and zero-or-more transcribe candidates (via
+  > tiling's `find_candidates`/`find_anchor_candidates`); each scores
+  > `transcribe_match + alpha * align_agreement * alpha_weight`, and an
+  > interval-scheduling DP picks the highest-scoring monotonic, non-overlapping
+  > subset. Per-word timings come from whichever source won each line; unplaced
+  > lines are interpolated between bracketing neighbours so output is 1:1 with
+  > the lyric lines. Opt-in — default `match_method` stays `auto`.
+- New module `lib/joint_match.py` + `tests/unit/test_joint_match.py` (public
+  API `match_words_to_lines_joint_with_stats(...)` and the thin
+  `match_words_to_lines_joint(...)`; imports the candidate/DP machinery from
+  `tiling_match`, C25).
+- `stages/lyric_align.py` (joint-route hunks only — the other half of the
+  C26 split): the `from pikaraoke.lib.joint_match import
+  match_words_to_lines_joint_with_stats` import, the `use_joint` branch in
+  `run()`, the `_run_joint` method (`align_check` → `refine_from_cached` →
+  `transcribe_words(refine=False)` → `match_words_to_lines_joint_with_stats`
+  with `joint_alpha`/`joint_margin_s` from config), and the capture-joint
+  plumbing (`capture_joint_stats`/`capture_transcribe_words` locals + the
+  `joint_stats`/`transcribe_words` params threaded into `build_bundle`, plus
+  `joint_alpha` in `pipeline_decisions`). No escalation/gating layer — the DP
+  arbitrates per line.
+- `tests/unit/test_lyric_align.py` (the three joint tests, riding with the
+  route): the three-call flow (refine=False on transcribe), align-timings on
+  clean lines, and the Hakuna-shape route-to-transcribe case.
+- *Ordering.* **After C25** (uses `tiling_match`) **and after C26** (adds the
+  route to the `lyric_align.py` that C26 creates). The `joint_alpha`/
+  `joint_margin_s` knobs it reads live in C19; the whisper `refine=False` kwarg
+  and `build_bundle` joint fields it uses live in C22. Nothing between here and
+  C-PROC needs it (the orchestrator C27 doesn't import it).
+- *Fix absorption (no fix-of-earlier-commit).* Ships the matcher in its final,
+  corpus-validated form; the two historical `fix(joint-match)` commits fold into
+  the functions they touched, never replayed:
+  - `_best_tiling_by_time` enforces **lyric-id monotonicity** (sorted by
+    `(line_id, t0)`, O(M²)) in addition to time non-overlap — so chorus repeats
+    / dialogue interludes can't make the DP place a later lyric at an earlier
+    time (the Hakuna Matata failure). [from `fix … monotonic DP`]
+  - `_alpha_weight` is a binary gate that zeroes the align bonus when transcribe
+    heard substantial speech (≥2 words) in the window but **none of the lyric's
+    tokens appear there** — gated on raw **set-intersection / lexical overlap**,
+    not the edit-distance `find_candidates` score (which over-rejected
+    mistranscribed-but-correct lines). [from both fix commits]
+  - `_transcribe_match_and_count_in_window` uses `bisect_left` on start times
+    (was `bisect_right - 1`, which over-included a word starting before the
+    window). [from `fix … monotonic DP`]
+  - The `joint_alpha=2.0` default lives in C19; the whisper `refine=False` kwarg
+    and `build_bundle` joint fields live in C22.
+- *Review:* the route is genuinely opt-in (walk/auto/tiling untouched, so the
+  existing tests stay green); `refine=False` is passed only here; the DP
+  respects forced alignment's lyric order; the gate keys on lexical overlap; no
+  diarization; equal-score tie-break deterministically favours align.
+- *Auto-test:* `pytest tests/unit/test_joint_match.py tests/unit/test_lyric_align.py`
+- *Verify:*
+  - [ ] `pytest tests/unit/test_joint_match.py` green in isolation (matcher needs no stage)
+  - [ ] processing with `--match-method joint` (via C47) places lines; clean songs keep align timings, a misplaced long line routes to transcribe
 
 **C27 — Orchestrator**
 - *Commit:* `feat(pipeline): add stage orchestrator`
@@ -1124,12 +1314,28 @@ after every file it touches has its non-clock changes)*
 - *Commit:* `feat(scripts): backfill stems/lyrics for existing library`
   > Standalone script to (re)generate stems/subtitles/loudnorm for songs
   > already in the library; resolves lyrics in-CLI so non-YouTube-ID songs
-  > use Genius.
+  > use Genius. `--match-method` forces the matcher for the run and
+  > `--use-bundle-lyrics` reuses cleaned lyrics from saved alignment bundles.
 - `scripts/backfill_artifacts.py`, `scripts/README.md`,
   `scripts/*lyrics*` resolve lyrics in-CLI (so non-YouTube-ID songs use Genius).
-- *Auto-test:* `python scripts/backfill_artifacts.py --help`.
+- *Matcher-comparison + offline-replay flags (script end-state).* Two args land
+  in final form (the staged `--match-method walk|tiling` → then `joint` history
+  collapses to one option list):
+  - `--match-method {auto,walk,tiling,joint}` (default `None`) overrides
+    `config.match_method` for the run, so matchers can be compared on one
+    library without editing config. (`joint` only works once C19/C22/C26A
+    are in; ordering already satisfies that.)
+  - `--use-bundle-lyrics`: for a song missing karaoke/subtitles, if
+    `<folder>/alignment_debug/<stem>.json` exists, reuse its cleaned
+    `lyrics.align_lines` (write `<stem>.txt`, choice `("bundle", path)`) instead
+    of an interactive Genius prompt; songs without a bundle still prompt. Lets
+    the joint matcher be re-verified on a curated set without re-running Genius.
+    `_load_lyrics`/`parse_lyric_lines` still run (idempotent on cleaned text).
+- *Auto-test:* `python scripts/backfill_artifacts.py --help` (lists
+  `--match-method`/`--use-bundle-lyrics`).
 - *Verify:*
   - [ ] run it on one existing song — stems/subtitles/loudnorm get produced; a non-YouTube-ID song resolves lyrics via Genius
+  - [ ] `--match-method joint` forces the joint matcher; `--use-bundle-lyrics` skips the Genius prompt for a song that has a saved bundle
 
 ---
 
@@ -1138,7 +1344,7 @@ after every file it touches has its non-clock changes)*
 ```bash
 /home/ken/miniconda3/envs/pik/bin/python -m pytest          # full suite green
 pre-commit run --config code_quality/.pre-commit-config.yaml --all-files
-git diff removediarize -- . ':!QWEN.md' ':!mockup/**' ':!plans/**'  # only review-fixes show
+git diff joint-alignment-dp -- . ':!QWEN.md' ':!mockup/**' ':!plans/**'  # only review-fixes show
 ```
 
 **End-to-end smoke (not just unit-green).** The wiring commits (C18/C32/C-PROC)
@@ -1147,6 +1353,13 @@ boot the app → search → download a song → process it (stem + whisper +
 lyric align) → libmpv playback with now-playing/clock overlays and
 subtitles → exercise queue + singer playback controls. This is the only
 check that proves the integration seams actually connect.
+
+Also exercise the **joint route** end-to-end (its stage → worker → matcher
+seam — `transcribe_words(refine=False)` feeding the joint DP — is unit-mocked,
+not run for real by the suite):
+`python scripts/backfill_artifacts.py <song-folder> --match-method joint`
+on a couple of reference songs (one clean, one Hakuna-shaped). Confirm
+subtitles land 1:1 with the lyric lines and clean lines keep align timings.
 
 Open the PR from `next` with a test plan mirroring the manual-verification
 items in Phases C–F. Once reviewed and the end-to-end smoke passes, `next`
@@ -1165,5 +1378,5 @@ is renamed to `master` (the new mainline).
   end-to-end smoke needs real models + hardware.
 - **Translations** regenerated, not carried (C46).
 - **Dependencies + `requirements.txt`** tracked and consolidated into C0,
-  reproducing `removediarize@5475c153`. An optional CI sync-check between
+  reproducing `joint-alignment-dp@b7500370`. An optional CI sync-check between
   `requirements.txt` and pyproject is worth adding since both files are kept.
