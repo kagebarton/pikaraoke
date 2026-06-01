@@ -175,6 +175,55 @@ class TestBuildYtdlDownloadCommand:
         assert cmd[-1] == "https://www.youtube.com/watch?v=test123"
 
 
+class TestImpersonateArgs:
+    """Tests for the _impersonate_args helper function."""
+
+    @patch("pikaraoke.lib.youtube_dl._impersonate_args")
+    def test_returns_impersonate_args_when_curl_cffi_installed(self, mock_fn):
+        """Test that _impersonate_args returns impersonation flags."""
+        mock_fn.return_value = ["--impersonate", "chrome"]
+        from pikaraoke.lib.youtube_dl import _impersonate_args
+
+        result = _impersonate_args()
+        assert result == ["--impersonate", "chrome"]
+
+    @patch("pikaraoke.lib.youtube_dl._impersonate_args")
+    def test_returns_empty_when_curl_cffi_missing(self, mock_fn):
+        """Test that _impersonate_args returns empty list without curl_cffi."""
+        mock_fn.return_value = []
+        from pikaraoke.lib.youtube_dl import _impersonate_args
+
+        result = _impersonate_args()
+        assert result == []
+
+    def test_logs_warning_on_yt_dlp_version_mismatch(self, caplog):
+        """Test that a curl_cffi/yt-dlp version mismatch logs a warning and disables --impersonate."""
+        import builtins
+        import logging as _logging
+
+        from pikaraoke.lib import youtube_dl as ytdl
+
+        fake_curl_cffi = MagicMock()
+        fake_curl_cffi.__version__ = "0.15.0"
+        real_import = builtins.__import__
+
+        def fake_import(name, *args, **kwargs):
+            if name == "curl_cffi":
+                return fake_curl_cffi
+            if name == "yt_dlp.networking._curlcffi":
+                raise ImportError(
+                    "Only curl_cffi versions 0.5.10 and 0.10.x through 0.14.x are supported"
+                )
+            return real_import(name, *args, **kwargs)
+
+        with patch.object(builtins, "__import__", side_effect=fake_import):
+            with caplog.at_level(_logging.WARNING, logger=ytdl.__name__):
+                result = ytdl._impersonate_args()
+
+        assert result == []
+        assert any("0.15.0" in r.message and "incompatible" in r.message for r in caplog.records)
+
+
 class TestGetYoutubedlVersion:
     """Tests for the get_youtubedl_version function."""
 
