@@ -1,138 +1,151 @@
 # PiKaraoke
 
-<img width="588" height="339" alt="Image" src="https://i.ibb.co/Z6MTM4wt/pikaraoke-readme.png" />
+<img width="480" alt="PiKaraoke" src="../pikaraoke/static/images/placeholder.png" />
 
-PiKaraoke is a cross-platform karaoke server that brings the professional "KTV" experience to your home. It transforms your computer or Raspberry Pi into a dedicated karaoke station with a full-screen player and an instant web interface. Guests can join by simply scanning a QR code—no app downloads required—to browse your local library, manage the queue, and access countless karaoke hits from YouTube.
+PiKaraoke is a cross-platform karaoke server that brings the "KTV" experience to your home. It turns your computer into a dedicated karaoke station with a full-screen player and an instant web interface. Guests join by scanning a QR code—no app downloads required—to browse your local library, manage the queue, and pull songs from YouTube.
 
-- 📱 Instant Mobile Remote: Search and queue songs from any smartphone—just scan and sing.
-- 📺 Dedicated Player: High-performance splash screen that can be opened on any web browser for a true karaoke room feel.
-- 🌐 YouTube & Local Media: Play your own files or access more from the web.
-- 🎹 Live Pitch Shifting: Adjust the key of any song to match your vocal range.
-- 🛠️ Admin Control: Manage the queue and settings via a password-protected admin mode.
-- 🎯 Hyper-accurate vocal performance scoring system: (not really, it's random. But kind of fun!)
-- 🐧 Lightweight & Versatile: Runs anywhere from a basic Raspberry Pi to a high-end PC.
+This is a heavily modified fork of [vicwomg/pikaraoke](https://github.com/vicwomg/pikaraoke). Its headline addition is **automatic karaoke creation**: any downloaded song is run through a processing pipeline that separates out the lead vocals and generates time-synced lyric subtitles, so ordinary music videos become singable karaoke tracks without pre-made instrumentals. Processing kicks off automatically when a song is downloaded—no manual step—and you can watch each stage run on the [processing dashboard](#features).
 
-Love PiKaraoke? This project is independently maintained and free for everyone to enjoy. If PiKaraoke has made your parties better and you'd like to help keep the project alive and growing, feel free to [buy me a coffee](https://www.buymeacoffee.com/vicwomg)! <br/><br/>
-<a href="https://www.buymeacoffee.com/vicwomg" target="_blank"><img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" alt="Buy Me A Coffee" style="height: 41px !important;width: 174px !important;box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;-webkit-box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;" ></a>
+## Features
 
-[![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-green.svg)](https://conventionalcommits.org)
+- 🎤 **Automatic karaoke creation**: stem separation removes the lead vocal, and Whisper forced-alignment turns fetched lyrics into time-synced on-screen subtitles.
+- 📝 **Lyrics from Genius or YouTube captions**: fetches and aligns lyrics from Genius.com or a video's YouTube captions.
+- 📺 **Native full-screen player**: a libmpv window with QR code, now-playing / up-next / clock overlays—no browser tab required for playback.
+- 📱 **Mobile remote**: search and queue songs from any smartphone—just scan and sing.
+- 🌐 **YouTube & local media**: play your own files or download more from the web.
+- 🎹 **Live pitch shifting**: adjust the key of any song on the fly (via Rubberband).
+- 🎚️ **Live now-playing controls**: volume, subtitle delay, subtitle mode, and vocal volume (mix the lead vocal back in for a guide track) adjustable mid-song.
+- 🔊 **Audio polish**: per-song loudness normalization, global A/V sync delay, and selectable audio output device.
+- 🛠️ **Processing dashboard**: watch the pipeline run live, with a streaming terminal of each stage.
+- 📂 **Backfill tool**: regenerate stems, subtitles, and loudness data for songs already in your library.
+- 🔐 **Admin control**: manage the queue and settings behind a password-protected admin mode.
+
+### Removed from the parent project
+
+This fork drops several upstream features in favor of the libmpv player and processing pipeline:
+
+- In-browser HLS playback and the browser-based splash screen (replaced by the native libmpv window)
+- The random "performance scoring" / fireworks feature
+- Background music and the screensaver
+- CDG (.cdg) playback support
+- The separate download-queue UI
 
 ## Table of Contents
 
-- [Supported Devices / OS / Platforms](#supported-devices--os--platforms)
-- [Quick Install](#quick-install)
-- [Manual Installation](#manual-installation)
+- [Requirements](#requirements)
+- [Installation](#installation)
 - [Usage](#usage)
-- [Docker](#docker-instructions)
-- [Screenshots](#screenshots)
-- [Developing pikaraoke](#developing-pikaraoke)
-- [Troubleshooting](#troubleshooting)
+- [Lyrics setup](#lyrics-setup)
+- [Backfilling an existing library](#backfilling-an-existing-library)
+- [Developing PiKaraoke](#developing-pikaraoke)
+- [Troubleshooting](#troubleshooting-and-guides)
 
-## Supported Devices / OS / Platforms
+## Requirements
 
-- OSX
-- Windows
-- Linux
-- Raspberry Pi 4 or higher (Pi3 works ok with overclocking)
+- **OS**: developed and tested on **Ubuntu 24.04**. Other Linux distributions, macOS, and Windows may work but are untested.
 
-## Quick Install
+- **GPU**: an NVIDIA GPU with CUDA is strongly recommended. Stem separation and Whisper alignment run on the GPU; on CPU they are extremely slow. The development host is a **6 GB RTX 2060**, so that is roughly the minimum proven configuration—more VRAM gives more headroom. On this host, processing runs at roughly **2× real time** (a 4-minute song is ready in about 2 minutes).
 
-For a streamlined installation that handles all dependencies (uv, ffmpeg, deno) and installs PiKaraoke, run the following in your terminal:
+- **NVIDIA driver**: `torch` pulls in its own CUDA runtime on Linux, but you still need a recent enough NVIDIA driver on the host for it to work.
 
-### Linux & macOS
+- **Python**: 3.10 or greater.
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/vicwomg/pikaraoke/master/build_scripts/install/install.sh | bash
-```
+- **FFmpeg** built with `librubberband` (pitch shifting) and `libzmq` (the `azmq` filter, used to mix the lead vocal back in live on dual-stem karaoke tracks). Ubuntu 24.04's stock FFmpeg (6.1.1) includes both, so no extra setup is needed there. On a distro or build without the `azmq` filter, check `ffmpeg -filters | grep zmq` and install a build that has it.
 
-### Windows (PowerShell)
+- **libmpv 0.41 or newer.** The on-screen overlays use libmpv's `osd-overlay` command with ASS-formatted events, and Ubuntu 24.04's stock mpv (0.37) does **not** render them correctly. Install a newer libmpv from the [UbuntuHandbook mpv PPA](https://launchpad.net/~ubuntuhandbook1/+archive/ubuntu/mpv) (`ppa:ubuntuhandbook1/mpv`), which is the 0.41 build this project is developed against:
 
-```powershell
-irm https://raw.githubusercontent.com/vicwomg/pikaraoke/master/build_scripts/install/install.ps1 | iex
-```
+  ```sh
+  sudo add-apt-repository ppa:ubuntuhandbook1/mpv
+  sudo apt update && sudo apt install libmpv2
+  ```
 
-After installation, you can launch pikaraoke from the command line with `pikaraoke` or from a desktop shortcut. Re-running the above command will update a previous pikaraoke installation to the latest version.
+- **A JS runtime on your PATH** (used by yt-dlp). [Deno](https://deno.com/) is easiest for non-developers; [Node.js](https://nodejs.org/en/download/) also works.
 
-## Manual installation (advanced users)
+On first run, the stem-separation and Whisper models are downloaded automatically (a few GB), so the first processed song takes longer.
 
-### Prerequisites
+## Installation
 
-- A modern web browser (Chrome/Chromium/Edge recommended)
-- Python 3.10 or greater: [Python downloads](https://www.python.org/downloads/)
-- FFmpeg (preferably a build with lib-rubberband for transposing): [FFmpeg downloads](https://ffmpeg.org/download.html)
-- A js runtime installed to your PATH. [Node.js](https://nodejs.org/en/download/) is most common, [Deno](https://deno.com/) is probably easiest for non-developers.
-
-### Install the pikaraoke package
-
-We recommend installing pikaraoke via [uv](https://github.com/astral-sh/uv).
+Clone the repository:
 
 ```sh
-uv tool install pikaraoke
+git clone https://github.com/kagebarton/pikaraoke.git
+cd pikaraoke
 ```
 
-You may alternately use the standard python `pip install pikaraoke` installer if you are familiar with virtual environments or you are not concerned with global package isolation.
+### Option A: uv (recommended)
+
+The repo ships a `uv.lock`, so [uv](https://github.com/astral-sh/uv) gives a reproducible install:
+
+```sh
+uv run pikaraoke
+```
+
+`uv run` resolves the locked dependencies and launches PiKaraoke in one step.
+
+### Option B: pip / conda
+
+Install into a virtual environment of your choice:
+
+```sh
+# venv
+python -m venv .venv
+source .venv/bin/activate
+
+# or conda
+# conda create -n pik python=3.10
+# conda activate pik
+
+pip install -e .
+pikaraoke
+```
 
 ## Usage
 
-Run pikaraoke from the command line with:
+Launch the player from the command line:
 
 ```sh
 pikaraoke
 ```
 
-Launches the player in "headed" mode via your default browser. Scan the QR code to connect mobile remotes. Use `pikaraoke --headless` to run as a background server for external browsers.
+This opens the full-screen libmpv player window. Scan the QR code shown on screen to connect mobile remotes.
 
-See the help command `pikaraoke --help` for available options.
+See `pikaraoke --help` for all options (port, download path, volume, overlay toggles, audio device, and more).
 
-To upgrade to the latest version of pikaraoke, run:
+## Lyrics setup
 
-```sh
-uv tool upgrade pikaraoke
-```
+The lyric pipeline can source lyrics from a video's YouTube captions automatically. To also use **Genius.com** as a lyrics source, set a Genius API token in the web interface preferences (the `genius_token` setting). Without a token, PiKaraoke falls back to YouTube captions.
 
-## Docker instructions
+## Backfilling an existing library
 
-Run PiKaraoke in Docker using the command below. Note the requirements for port mapping, LAN IP specification, and persistent volume mounts (set to ~/.pikaraoke in the example for simplicity):
+To generate stems, subtitles, and loudness data for songs already in your library, use the backfill script:
 
 ```sh
-docker run -p 5555:5555 \
-  -v ~/pikaraoke-songs:/app/pikaraoke-songs \
-  -v ~/.pikaraoke:/home/pikaraoke/.pikaraoke \
-  vicwomg/pikaraoke:latest \
-  -u http://<YOUR_LAN_IP>:5555
+python scripts/backfill_artifacts.py --help
 ```
 
-For more information and a configurable docker-compose example, [see official Dockerhub repo](https://hub.docker.com/r/vicwomg/pikaraoke)
+See [scripts/README.md](../scripts/README.md) for details.
 
-## Screenshots
+## Developing PiKaraoke
 
-<div style="display: flex; flex-wrap: wrap;">
-<img width="250" alt="pikaraoke-nowplaying" src="https://user-images.githubusercontent.com/4107190/95813193-2cd5c180-0ccc-11eb-89f4-11a69676dc6f.png">
-<img width="250" alt="pikaraoke-queue" src="https://user-images.githubusercontent.com/4107190/95813195-2d6e5800-0ccc-11eb-8f00-1369350a8a1c.png">
-<img width="250"  alt="pikaraoke-browse" src="https://user-images.githubusercontent.com/4107190/95813182-27787700-0ccc-11eb-82c8-fde7f0a631c1.png">
-<img width="250"  alt="pikaraoke-search1" src="https://user-images.githubusercontent.com/4107190/95813197-2e06ee80-0ccc-11eb-9bf9-ddb24d988332.png">
-<img width="250"  alt="pikaraoke-search2" src="https://user-images.githubusercontent.com/4107190/95813190-2ba49480-0ccc-11eb-84e3-f902cbd489a2.png">
-<img width="400" height="300" alt="pikaraoke-tv2" src="https://user-images.githubusercontent.com/4107190/95813564-019fa200-0ccd-11eb-95e1-57a002c357a3.png">
-</div>
-
-## Developing pikaraoke
-
-The Pikaraoke project utilizes `uv` for dependency management and local development.
-
-- Install [uv](https://github.com/astral-sh/uv)
-- Git clone this repo
-
-From the pikaraoke directory:
+Dependencies are managed with `uv`.
 
 ```sh
-# install dependencies and run pikaraoke from local code
-uv run pikaraoke
+git clone https://github.com/kagebarton/pikaraoke.git
+cd pikaraoke
+uv run pikaraoke   # install deps and run from local code
 ```
 
-See the [Pikaraoke development guide](https://github.com/vicwomg/pikaraoke/wiki/Pikaraoke-development-guide) for more details.
+Run the tests and linters before committing:
+
+```sh
+python -m pytest
+pre-commit run --config code_quality/.pre-commit-config.yaml --all-files
+```
+
+[![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-green.svg)](https://conventionalcommits.org)
 
 ## Troubleshooting and guides
 
-See the [TROUBLESHOOTING wiki](https://github.com/vicwomg/pikaraoke/wiki/FAQ-&-Troubleshooting) for help with issues.
-
-There are also some great guides [on the wiki](https://github.com/vicwomg/pikaraoke/wiki/) to running pikaraoke in all manner of bizarre places including Android, Chromecast, and embedded TVs!
+For background on the original project, see the [upstream wiki](https://github.com/vicwomg/pikaraoke/wiki/), which still covers general setup, FAQs, and creative deployments. Note that upstream guides predate this fork's libmpv player and processing pipeline, so playback- and lyrics-specific sections may not apply.
+</content>
+</invoke>
