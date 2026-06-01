@@ -1,29 +1,43 @@
 [project]
 name = "pikaraoke"
 version = "1.19.0"
-description = "Youtube-based Karaoke machine for Raspberry Pi, OSX, Windows, and Linux"
+description = "Karaoke machine with automatic vocal removal and lyric subtitle generation"
 authors = [{name = "Vic Wong"}]
+maintainers = [{name = "kagebarton"}]
 readme = "docs/README.md"
 requires-python = ">=3.10"
-keywords = ["karaoke", "ktv", "video", "audio", "youtube", "raspberry-pi", "osx", "windows", "linux"]
+keywords = ["karaoke", "ktv", "video", "audio", "youtube", "lyrics", "whisper", "stem-separation", "linux"]
 classifiers = [
   "Topic :: Multimedia :: Video",
   "Topic :: Multimedia :: Sound/Audio",
   "Topic :: Games/Entertainment"
 ]
 dependencies = [
-  "Flask>=3.1.0,<3.1.3",  # 3.1.3 breaks flask-socketio; remove cap when fixed
-  "qrcode[png]==8.2",
-  "psutil==7.2.1",
-  "requests==2.32.5",
-  "flask-paginate==2024.4.12",
-  "flask-smorest>=0.46.0",
-  "Babel==2.17.0",
-  "Flask-Babel==4.0.0",
-  "ffmpeg-python==0.2.0",
-  "yt-dlp[default]>=2026.03.03",
-  "flask-socketio>=5.5.0",
-  "gevent>=24.11.1",
+    "Flask>=3.1.0,<3.1.3", # 3.1.3 breaks flask-socketio; remove cap when fixed
+    "qrcode[png]==8.2",
+    "psutil==7.2.1",
+    "requests==2.32.5",
+    "flask-paginate==2024.4.12",
+    "flask-smorest>=0.46.0",
+    "Babel==2.17.0",
+    "Flask-Babel==4.0.0",
+    "marshmallow>=3.0", # imported directly by route schemas (also a flask-smorest dep)
+    "Pillow>=10.0", # imported directly by mpv_controller (also a qrcode[png] dep)
+    "pyzmq>=25.0", # mpv_controller IPC
+    "yt-dlp[default]>=2026.03.03",
+    "curl_cffi>=0.10,<0.15", # Required for yt-dlp --impersonate; range matches yt-dlp's supported versions
+    "flask-socketio>=5.5.0",
+    "python-mpv>=1.0.7",
+    "audio-separator[gpu]>=0.30",
+    "stable-ts>=2.17",
+    "faster-whisper>=1.0.3",
+    "srt>=3.5.3",
+    "torch>=2.2",
+    # torchaudio is a transitive dep (stable_whisper), but [tool.uv.sources]
+    # only overrides direct deps. Declared so the Windows CUDA index applies
+    # and the ABI stays consistent with torch.
+    "torchaudio>=2.2",
+    "lyricsgenius>=3.0",
 ]
 
 [project.optional-dependencies]
@@ -45,8 +59,8 @@ dev = [
 pikaraoke = "pikaraoke.app:main"
 
 [project.urls]
-Homepage = "https://github.com/vicwomg/pikaraoke"
-Repository = "https://github.com/vicwomg/pikaraoke"
+Homepage = "https://github.com/kagebarton/pikaraoke"
+Repository = "https://github.com/kagebarton/pikaraoke"
 
 [build-system]
 requires = ["hatchling"]
@@ -55,12 +69,18 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["pikaraoke"]
 
-# Poetry-specific configuration (reads from [project] above)
-[tool.poetry]
-package-mode = true
+# Windows-only: PyPI ships CPU-only torch wheels for Windows, so route
+# torch/torchvision/torchaudio through the PyTorch CUDA 12.4 index there.
+# Linux keeps using PyPI (whose Linux wheels already include CUDA).
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
 
-[tool.poetry.group.dev.dependencies]
-pre-commit = "^3.7.1"
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu124", marker = "sys_platform == 'win32'" }]
+torchvision = [{ index = "pytorch-cu124", marker = "sys_platform == 'win32'" }]
+torchaudio = [{ index = "pytorch-cu124", marker = "sys_platform == 'win32'" }]
 
 [tool.pyright]
 include = ["src"]
