@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import shlex
 import subprocess
 import sys
@@ -148,6 +147,7 @@ def build_ytdl_download_command(
     high_quality: bool = False,
     youtubedl_proxy: str | None = None,
     additional_args: str | None = None,
+    temp_dir: str = "",
 ) -> list[str]:
     """Build the yt-dlp command line for downloading a video.
 
@@ -157,29 +157,40 @@ def build_ytdl_download_command(
         high_quality: If True, download up to 1080p; otherwise download mp4.
         youtubedl_proxy: Optional proxy server URL.
         additional_args: Optional additional command-line arguments as a string.
+        temp_dir: Optional directory for yt-dlp temporary files.
 
     Returns:
         List of command-line arguments for subprocess execution.
     """
-    dl_path = os.path.join(download_path, "%(title)s---%(id)s.%(ext)s")
     file_quality = (
         "bestvideo[ext!=webm][height<=1080]+bestaudio[ext!=webm]/best[ext!=webm]"
         if high_quality
-        else "mp4"
+        else "bestvideo[ext!=webm][height<=720]+bestaudio[ext!=webm]/best[ext!=webm]"
     )
     args = [
         "-f",
         file_quality,
+        # Use --paths home: + filename-only -o so that --paths temp: is respected
+        # for .part files and merge intermediates. A full path in -o overrides temp:.
+        "--paths",
+        f"home:{download_path}",
         "-o",
-        dl_path,
+        "%(title)s---%(id)s.%(ext)s",
         "-S",
         "vcodec:h264",
         "--compat-options",
         "filename-sanitization",
+        "--write-subs",
+        "--sub-langs",
+        "en.*",
+        "--convert-subs",
+        "srt",
     ]
     cmd = yt_dlp_cmd + args + _js_runtime_args() + _impersonate_args()
     if youtubedl_proxy:
         cmd += ["--proxy", youtubedl_proxy]
+    if temp_dir:
+        cmd += ["--paths", f"temp:{temp_dir}"]
     if additional_args:
         cmd += shlex.split(additional_args)
     cmd += [video_url]

@@ -76,15 +76,11 @@ class TestDownloadManagerQueueDownload:
         notifications = []
         events.on("notification", lambda msg, *args: notifications.append(msg))
 
-        download_events = []
-        events.on("download_started", lambda: download_events.append("started"))
-
         download_manager.queue_download("https://youtube.com/watch?v=test", user="TestUser")
 
         assert download_manager.download_queue.qsize() == 1
         assert len(notifications) == 1
         assert "Download starting" in notifications[0]
-        assert len(download_events) == 1
 
     @patch("flask_babel._", side_effect=lambda x: x)
     def test_queue_download_with_pending(self, mock_gettext, download_manager, events):
@@ -157,18 +153,19 @@ class TestDownloadManagerExecuteDownload:
 
         mock_build_cmd.return_value = ["yt-dlp", "-o", "/songs/", "url"]
 
-        # Mock Popen process
         mock_process = MagicMock()
-        mock_process.stdout.readline.side_effect = ["Starting download...", ""]
-        mock_process.poll.return_value = 0
+        mock_process.communicate.return_value = ("Starting download...", None)
+        mock_process.returncode = 0
         mock_popen.return_value = mock_process
 
         # Mock find_by_id to return a path
         song_manager.songs.find_by_id.return_value = "/songs/Artist - Song---abc123.mp4"
 
-        rc = download_manager._execute_download(
-            "https://youtube.com/watch?v=abc123", False, "User", "Title"
-        )
+        # Mock Path.mkdir to avoid filesystem operations
+        with patch("pathlib.Path.mkdir"):
+            rc = download_manager._execute_download(
+                "https://youtube.com/watch?v=abc123", False, "User", "Title"
+            )
 
         assert rc == 0
         song_manager.songs.find_by_id.assert_called_once_with("/songs", "abc123")
@@ -190,30 +187,30 @@ class TestDownloadManagerExecuteDownload:
         """Test download with enqueue adds to queue."""
         mock_build_cmd.return_value = ["yt-dlp", "url"]
 
-        # Mock Popen process
         mock_process = MagicMock()
-        mock_process.stdout.readline.side_effect = ["Starting download...", ""]
-        mock_process.poll.return_value = 0
+        mock_process.communicate.return_value = ("Starting download...", None)
+        mock_process.returncode = 0
         mock_popen.return_value = mock_process
 
         # Mock find_by_id
         song_manager.songs.find_by_id.return_value = "/songs/Song---abc.mp4"
         song_manager.songs.add_if_valid.return_value = True
 
-        download_manager._execute_download(
-            "https://youtube.com/watch?v=abc", True, "TestUser", "Title"
-        )
+        # Mock Path.mkdir to avoid filesystem operations
+        with patch("pathlib.Path.mkdir"):
+            download_manager._execute_download(
+                "https://youtube.com/watch?v=abc", True, "TestUser", "Title"
+            )
 
         queue_manager.enqueue.assert_called_once_with(
             "/songs/Song---abc.mp4", "TestUser", log_action=False
         )
 
     @patch("flask_babel._", side_effect=lambda x: x)
-    @patch("subprocess.run")
     @patch("subprocess.Popen")
-    @patch("pikaraoke.lib.youtube_dl.build_ytdl_download_command")
+    @patch("pikaraoke.lib.download_manager.build_ytdl_download_command")
     def test_execute_download_failure(
-        self, mock_build_cmd, mock_popen, mock_run, mock_gettext, download_manager, events
+        self, mock_build_cmd, mock_popen, mock_gettext, download_manager, events
     ):
         """Test download failure is handled without retry."""
         notifications = []
@@ -221,10 +218,9 @@ class TestDownloadManagerExecuteDownload:
 
         mock_build_cmd.return_value = ["yt-dlp", "url"]
 
-        # First call (Popen) fails
         mock_process = MagicMock()
-        mock_process.stdout.readline.return_value = ""
-        mock_process.poll.return_value = 1
+        mock_process.communicate.return_value = ("", None)
+        mock_process.returncode = 1
         mock_popen.return_value = mock_process
 
         rc = download_manager._execute_download("url", False, "User", "Title")
@@ -232,11 +228,6 @@ class TestDownloadManagerExecuteDownload:
         assert rc == 1
         # Should have "Error downloading" message with danger category
         assert any("Error downloading" in msg and cat == "danger" for msg, cat in notifications)
-
-        # Should populate download_errors
-        assert len(download_manager.download_errors) == 1
-        assert download_manager.download_errors[0]["title"] == "Title"
-        assert "error" in download_manager.download_errors[0]
 
     @patch("flask_babel._", side_effect=lambda x: x)
     @patch("subprocess.Popen")
@@ -250,10 +241,9 @@ class TestDownloadManagerExecuteDownload:
 
         mock_build_cmd.return_value = ["yt-dlp", "url"]
 
-        # Mock Popen process
         mock_process = MagicMock()
-        mock_process.stdout.readline.side_effect = ["No parseable path in output", ""]
-        mock_process.poll.return_value = 0
+        mock_process.communicate.return_value = ("No parseable path in output", None)
+        mock_process.returncode = 0
         mock_popen.return_value = mock_process
 
         # Mock find_by_id to return None (file not found)
@@ -263,76 +253,6 @@ class TestDownloadManagerExecuteDownload:
 
         # Should log error about queueing
         assert any("Error queueing" in msg and cat == "danger" for msg, cat in notifications)
-
-
-class TestDownloadManagerStatus:
-    """Tests for DownloadManager.get_downloads_status method."""
-
-    def test_get_downloads_status_empty(self, download_manager):
-        """Test status with no downloads."""
-        status = download_manager.get_downloads_status()
-
-        assert status["active"] is None
-        assert status["pending"] == []
-
-    def test_get_downloads_status_pending(self, download_manager):
-        """Test status with pending downloads."""
-        download_manager.queue_download("http://example.com/1", title="Song 1")
-        download_manager.queue_download("http://example.com/2", title="Song 2")
-
-        status = download_manager.get_downloads_status()
-
-        assert status["active"] is None
-        assert len(status["pending"]) == 2
-        assert status["pending"][0]["title"] == "Song 1"
-        assert status["pending"][1]["title"] == "Song 2"
-
-    def test_get_downloads_status_active(self, download_manager):
-        """Test status with active download."""
-        # Simulate active download
-        download_manager.active_download = {
-            "title": "Active Song",
-            "progress": 50.0,
-            "status": "downloading",
-        }
-
-        status = download_manager.get_downloads_status()
-
-        assert status["active"]["title"] == "Active Song"
-        assert status["active"]["progress"] == 50.0
-
-    def test_get_downloads_status_errors(self, download_manager):
-        """Test status with download errors."""
-        download_manager.download_errors = [
-            {
-                "id": "1234",
-                "title": "Failed Song",
-                "url": "http://example.com/fail",
-                "user": "User",
-                "error": "Error message",
-            }
-        ]
-
-        status = download_manager.get_downloads_status()
-
-        assert len(status["errors"]) == 1
-        assert status["errors"][0]["title"] == "Failed Song"
-
-    def test_remove_error(self, download_manager):
-        """Test removing an error by ID."""
-        download_manager.download_errors = [
-            {"id": "1234", "title": "Failed Song", "error": "Error"}
-        ]
-
-        # Test remove invalid ID
-        result = download_manager.remove_error("9999")
-        assert result is False
-        assert len(download_manager.download_errors) == 1
-
-        # Test remove valid ID
-        result = download_manager.remove_error("1234")
-        assert result is True
-        assert len(download_manager.download_errors) == 0
 
 
 class TestDownloadManagerSpecialCharacters:
@@ -369,18 +289,106 @@ class TestDownloadManagerSpecialCharacters:
         """Test enqueue works with special characters in filename."""
         mock_build_cmd.return_value = ["yt-dlp", "url"]
         mock_process = MagicMock()
-        mock_process.stdout.readline.side_effect = ["Done", ""]
-        mock_process.poll.return_value = 0
+        mock_process.communicate.return_value = ("Done", None)
+        mock_process.returncode = 0
         mock_popen.return_value = mock_process
 
         song_manager.songs.find_by_id.return_value = file_path
         song_manager.songs.add_if_valid.return_value = True
 
-        download_manager._execute_download(
-            f"https://youtube.com/watch?v={video_id}",
-            enqueue=True,
-            user="TestUser",
-            title="Test",
-        )
+        # Mock Path.mkdir to avoid filesystem operations
+        with patch("pathlib.Path.mkdir"):
+            download_manager._execute_download(
+                f"https://youtube.com/watch?v={video_id}",
+                enqueue=True,
+                user="TestUser",
+                title="Test",
+            )
 
         queue_manager.enqueue.assert_called_once_with(file_path, "TestUser", log_action=False)
+
+    def test_move_downloaded_subtitle_bracketed_title(self, download_manager, tmp_path):
+        """Subtitle move must handle glob metacharacters in the title (e.g. [Live]).
+
+        Regression: an unescaped glob on video.stem treats '[Live]' as a character
+        class, so the .srt is never found/moved and the alignment pipeline gets nothing.
+        """
+        stem = "Song [Live]---abc12345678"
+        video = tmp_path / f"{stem}.mp4"
+        video.write_text("x")
+        srt = tmp_path / f"{stem}.en.srt"
+        srt.write_text("1\n00:00:00,000 --> 00:00:01,000\nhi\n")
+
+        download_manager._move_downloaded_subtitle(str(video))
+
+        moved = tmp_path / "subtitles" / f"{stem}.srt"
+        assert moved.exists(), "subtitle should move into subtitles/ even with [brackets] in title"
+        assert not srt.exists(), "original subtitle should be removed after the move"
+
+
+class TestCancelActiveDownload:
+    """Tests for cancelling the in-flight download (process kill + partial cleanup)."""
+
+    def test_cancel_kills_process_and_cleans_only_matching_partials(
+        self, download_manager, tmp_path
+    ):
+        """Cancel must kill yt-dlp and delete the active song's partials, leaving the
+        rest of the library intact — including songs whose titles contain glob
+        metacharacters like '[Live]'.
+
+        Regression: cleanup keyed on a bracketed ``[VIDEOID]`` would be read as a glob
+        character class and could match (and unlink) unrelated songs. Matching on the
+        bare 11-char ID keeps it literal-safe.
+        """
+        download_manager._download_path = str(tmp_path)
+        active_id = "dQw4w9WgXcQ"
+        active_url = f"https://www.youtube.com/watch?v={active_id}"
+
+        active_partials = [
+            tmp_path / f"Cancelled Song [{active_id}].mp4.part",
+            tmp_path / f"Cancelled Song---{active_id}.webm",
+        ]
+        keepers = [
+            tmp_path / "Keeper [oHg5SJYRHA0].mp4",
+            tmp_path / "Live At [Live] [9bZkp7q19f0].mp4",
+        ]
+        for f in active_partials + keepers:
+            f.write_text("x")
+
+        proc = MagicMock()
+        download_manager._active_process = proc
+        download_manager.active_url = active_url
+        download_manager._is_downloading = True
+
+        download_manager.cancel_active_download(active_url)
+
+        proc.kill.assert_called_once()
+        assert download_manager._active_process is None
+        assert download_manager.active_url is None
+        assert download_manager._is_downloading is False
+        for f in active_partials:
+            assert not f.exists(), f"active partial {f.name} should be cleaned up"
+        for f in keepers:
+            assert f.exists(), f"unrelated library file {f.name} must survive cancel"
+
+    def test_cancel_with_mismatched_url_is_noop(self, download_manager, tmp_path):
+        """A stale cancel (target URL no longer the active one) must not kill the
+        process or touch the library — the active download has moved on."""
+        download_manager._download_path = str(tmp_path)
+        active_id = "dQw4w9WgXcQ"
+        active_url = f"https://www.youtube.com/watch?v={active_id}"
+        partial = tmp_path / f"Now Playing [{active_id}].mp4.part"
+        partial.write_text("x")
+
+        proc = MagicMock()
+        download_manager._active_process = proc
+        download_manager.active_url = active_url
+        download_manager._is_downloading = True
+
+        download_manager.cancel_active_download("https://www.youtube.com/watch?v=oHg5SJYRHA0")
+
+        proc.kill.assert_not_called()
+        assert download_manager._active_process is proc
+        assert download_manager.active_url == active_url
+        assert download_manager._is_downloading is True
+        assert partial.exists(), "a mismatched cancel must not clean another download's files"

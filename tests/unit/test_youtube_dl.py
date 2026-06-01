@@ -14,6 +14,20 @@ from pikaraoke.lib.youtube_dl import (
 )
 
 
+def _default_patches():
+    """Return the standard patches for build_ytdl_download_command tests.
+
+    Patches both get_installed_js_runtime and _impersonate_args so command
+    construction is deterministic regardless of the test environment.
+    """
+    return (
+        patch("pikaraoke.lib.youtube_dl.get_installed_js_runtime", return_value=None),
+        patch(
+            "pikaraoke.lib.youtube_dl._impersonate_args", return_value=["--impersonate", "chrome"]
+        ),
+    )
+
+
 class TestGetYoutubeIdFromUrl:
     """Tests for the get_youtube_id_from_url function."""
 
@@ -57,8 +71,9 @@ class TestGetYoutubeIdFromUrl:
 class TestBuildYtdlDownloadCommand:
     """Tests for the build_ytdl_download_command function."""
 
+    @patch("pikaraoke.lib.youtube_dl._impersonate_args", return_value=["--impersonate", "chrome"])
     @patch("pikaraoke.lib.youtube_dl.get_installed_js_runtime", return_value=None)
-    def test_basic_command(self, mock_js):
+    def test_basic_command(self, mock_js, mock_impersonate):
         """Test building basic download command."""
         cmd = build_ytdl_download_command(
             video_url="https://www.youtube.com/watch?v=test123",
@@ -70,12 +85,15 @@ class TestBuildYtdlDownloadCommand:
         assert "-f" in cmd
         assert "-o" in cmd
         output_idx = cmd.index("-o") + 1
-        assert cmd[output_idx].endswith("%(title)s---%(id)s.%(ext)s")
-        assert "/songs" in cmd[output_idx]
+        assert cmd[output_idx] == "%(title)s---%(id)s.%(ext)s"
+        assert "--paths" in cmd
+        paths_idx = cmd.index("--paths") + 1
+        assert cmd[paths_idx] == "home:/songs"
         assert "https://www.youtube.com/watch?v=test123" in cmd
 
+    @patch("pikaraoke.lib.youtube_dl._impersonate_args", return_value=["--impersonate", "chrome"])
     @patch("pikaraoke.lib.youtube_dl.get_installed_js_runtime", return_value=None)
-    def test_high_quality_format(self, mock_js):
+    def test_high_quality_format(self, mock_js, mock_impersonate):
         """Test that high quality uses correct format string."""
         cmd = build_ytdl_download_command(
             video_url="https://www.youtube.com/watch?v=test123",
@@ -86,19 +104,22 @@ class TestBuildYtdlDownloadCommand:
         assert "bestvideo" in cmd[format_idx]
         assert "1080" in cmd[format_idx]
 
+    @patch("pikaraoke.lib.youtube_dl._impersonate_args", return_value=["--impersonate", "chrome"])
     @patch("pikaraoke.lib.youtube_dl.get_installed_js_runtime", return_value=None)
-    def test_standard_quality_format(self, mock_js):
-        """Test that standard quality uses mp4 format."""
+    def test_standard_quality_format(self, mock_js, mock_impersonate):
+        """Test that standard quality uses 720p format."""
         cmd = build_ytdl_download_command(
             video_url="https://www.youtube.com/watch?v=test123",
             download_path="/songs",
             high_quality=False,
         )
         format_idx = cmd.index("-f") + 1
-        assert cmd[format_idx] == "mp4"
+        assert "bestvideo" in cmd[format_idx]
+        assert "720" in cmd[format_idx]
 
+    @patch("pikaraoke.lib.youtube_dl._impersonate_args", return_value=["--impersonate", "chrome"])
     @patch("pikaraoke.lib.youtube_dl.get_installed_js_runtime", return_value=None)
-    def test_with_proxy(self, mock_js):
+    def test_with_proxy(self, mock_js, mock_impersonate):
         """Test command with proxy setting."""
         cmd = build_ytdl_download_command(
             video_url="https://www.youtube.com/watch?v=test123",
@@ -109,8 +130,9 @@ class TestBuildYtdlDownloadCommand:
         proxy_idx = cmd.index("--proxy") + 1
         assert cmd[proxy_idx] == "http://proxy:8080"
 
+    @patch("pikaraoke.lib.youtube_dl._impersonate_args", return_value=["--impersonate", "chrome"])
     @patch("pikaraoke.lib.youtube_dl.get_installed_js_runtime", return_value=None)
-    def test_with_additional_args(self, mock_js):
+    def test_with_additional_args(self, mock_js, mock_impersonate):
         """Test command with additional arguments."""
         cmd = build_ytdl_download_command(
             video_url="https://www.youtube.com/watch?v=test123",
@@ -121,8 +143,9 @@ class TestBuildYtdlDownloadCommand:
         assert "--age-limit" in cmd
         assert "18" in cmd
 
+    @patch("pikaraoke.lib.youtube_dl._impersonate_args", return_value=["--impersonate", "chrome"])
     @patch("pikaraoke.lib.youtube_dl.get_installed_js_runtime", return_value="node")
-    def test_with_js_runtime_node(self, mock_js):
+    def test_with_js_runtime_node(self, mock_js, mock_impersonate):
         """Test that node JS runtime is added to command."""
         cmd = build_ytdl_download_command(
             video_url="https://www.youtube.com/watch?v=test123",
@@ -132,8 +155,9 @@ class TestBuildYtdlDownloadCommand:
         js_idx = cmd.index("--js-runtimes") + 1
         assert cmd[js_idx] == "node"
 
+    @patch("pikaraoke.lib.youtube_dl._impersonate_args", return_value=["--impersonate", "chrome"])
     @patch("pikaraoke.lib.youtube_dl.get_installed_js_runtime", return_value="deno")
-    def test_deno_not_added(self, mock_js):
+    def test_deno_not_added(self, mock_js, mock_impersonate):
         """Test that deno JS runtime is NOT added (it's yt-dlp default)."""
         cmd = build_ytdl_download_command(
             video_url="https://www.youtube.com/watch?v=test123",
@@ -141,8 +165,9 @@ class TestBuildYtdlDownloadCommand:
         )
         assert "--js-runtimes" not in cmd
 
+    @patch("pikaraoke.lib.youtube_dl._impersonate_args", return_value=["--impersonate", "chrome"])
     @patch("pikaraoke.lib.youtube_dl.get_installed_js_runtime", return_value="bun")
-    def test_with_js_runtime_bun(self, mock_js):
+    def test_with_js_runtime_bun(self, mock_js, mock_impersonate):
         """Test that bun JS runtime is added to command."""
         cmd = build_ytdl_download_command(
             video_url="https://www.youtube.com/watch?v=test123",
@@ -152,8 +177,9 @@ class TestBuildYtdlDownloadCommand:
         js_idx = cmd.index("--js-runtimes") + 1
         assert cmd[js_idx] == "bun"
 
+    @patch("pikaraoke.lib.youtube_dl._impersonate_args", return_value=["--impersonate", "chrome"])
     @patch("pikaraoke.lib.youtube_dl.get_installed_js_runtime", return_value=None)
-    def test_vcodec_sort(self, mock_js):
+    def test_vcodec_sort(self, mock_js, mock_impersonate):
         """Test that h264 codec sorting is included."""
         cmd = build_ytdl_download_command(
             video_url="https://www.youtube.com/watch?v=test123",
@@ -163,8 +189,9 @@ class TestBuildYtdlDownloadCommand:
         sort_idx = cmd.index("-S") + 1
         assert cmd[sort_idx] == "vcodec:h264"
 
+    @patch("pikaraoke.lib.youtube_dl._impersonate_args", return_value=["--impersonate", "chrome"])
     @patch("pikaraoke.lib.youtube_dl.get_installed_js_runtime", return_value=None)
-    def test_url_is_last_argument(self, mock_js):
+    def test_url_is_last_argument(self, mock_js, mock_impersonate):
         """Test that video URL is always the last argument."""
         cmd = build_ytdl_download_command(
             video_url="https://www.youtube.com/watch?v=test123",
@@ -173,6 +200,28 @@ class TestBuildYtdlDownloadCommand:
             additional_args="--no-playlist",
         )
         assert cmd[-1] == "https://www.youtube.com/watch?v=test123"
+
+    @patch("pikaraoke.lib.youtube_dl._impersonate_args", return_value=["--impersonate", "chrome"])
+    @patch("pikaraoke.lib.youtube_dl.get_installed_js_runtime", return_value=None)
+    def test_impersonate_included_when_available(self, mock_js, mock_impersonate):
+        """Test that --impersonate chrome is added when curl_cffi is available."""
+        cmd = build_ytdl_download_command(
+            video_url="https://www.youtube.com/watch?v=test123",
+            download_path="/songs",
+        )
+        assert "--impersonate" in cmd
+        imp_idx = cmd.index("--impersonate") + 1
+        assert cmd[imp_idx] == "chrome"
+
+    @patch("pikaraoke.lib.youtube_dl._impersonate_args", return_value=[])
+    @patch("pikaraoke.lib.youtube_dl.get_installed_js_runtime", return_value=None)
+    def test_impersonate_omitted_when_unavailable(self, mock_js, mock_impersonate):
+        """Test that --impersonate is omitted when curl_cffi is not installed."""
+        cmd = build_ytdl_download_command(
+            video_url="https://www.youtube.com/watch?v=test123",
+            download_path="/songs",
+        )
+        assert "--impersonate" not in cmd
 
 
 class TestImpersonateArgs:
@@ -260,7 +309,7 @@ class TestUpgradeYoutubedl:
             "pikaraoke.lib.youtube_dl.get_youtubedl_version", return_value="2024.02.01"
         ), patch("shutil.which", return_value=None), patch(
             "subprocess.check_output"
-        ) as mock_check, patch(
+        ) as mock_check, patch(  # noqa: SIM117
             "pikaraoke.lib.youtube_dl.sys.prefix", "/venv"
         ), patch(
             "pikaraoke.lib.youtube_dl.sys.base_prefix", "/different"
@@ -287,7 +336,7 @@ class TestUpgradeYoutubedl:
             "pikaraoke.lib.youtube_dl.get_youtubedl_version", return_value="2024.02.01"
         ), patch("shutil.which", return_value=None), patch(
             "subprocess.check_output"
-        ) as mock_check, patch(
+        ) as mock_check, patch(  # noqa: SIM117
             "pikaraoke.lib.youtube_dl.sys.prefix", "/usr"
         ), patch(
             "pikaraoke.lib.youtube_dl.sys.base_prefix", "/usr"
