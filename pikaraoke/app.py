@@ -208,19 +208,6 @@ def main() -> None:
     with app.app_context():
         app.config["KARAOKE_INSTANCE"] = k
 
-    # Wire download events to SocketIO broadcasts with app context
-    from pikaraoke.lib.current_app import broadcast_event
-
-    def _broadcast_in_context(event_name):
-        def handler():
-            with app.app_context():
-                broadcast_event(event_name)
-
-        return handler
-
-    k.events.on("download_started", _broadcast_in_context("download_started"))
-    k.events.on("download_stopped", _broadcast_in_context("download_stopped"))
-
     # expose shared configuration variables to the flask app
     app.config["ADMIN_PASSWORD"] = args.admin_password
     app.config["SITE_NAME"] = "PiKaraoke"

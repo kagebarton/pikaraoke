@@ -197,19 +197,3 @@ def enqueue(query):
 def enqueue_form(form):
     """Add a song to the queue (used by the search page)."""
     return _do_enqueue(form["song_to_add"], form["song_added_by"])
-
-
-@queue_bp.route("/queue/downloads")
-def get_current_downloads():
-    """Get the status of current and pending downloads."""
-    k = get_karaoke_instance()
-    return json.dumps(k.download_manager.get_downloads_status())
-
-
-@queue_bp.route("/queue/downloads/errors/<error_id>", methods=["DELETE"])
-def delete_download_error(error_id):
-    """Remove a download error from the list."""
-    k = get_karaoke_instance()
-    if k.download_manager.remove_error(error_id):
-        return json.dumps({"success": True})
-    return json.dumps({"success": False, "error": "Error not found"}), 404
