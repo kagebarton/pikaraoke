@@ -8,6 +8,7 @@ from pikaraoke.lib.metadata_parser import (
     _detect_artist_first,
     clean_search_query,
     clear_song_name_cache,
+    extract_youtube_id,
     get_best_result,
     get_song_correct_name,
     has_artist_title_separator,
@@ -559,6 +560,31 @@ class TestHasYoutubeId:
 
     def test_full_path_ytdlp(self):
         assert has_youtube_id("/songs/Artist - Song [dQw4w9WgXcQ].mp4") is True
+
+
+class TestExtractYoutubeId:
+    """Tests for the extract_youtube_id function (canonical bare-ID extraction, DD6)."""
+
+    def test_pikaraoke_format(self):
+        assert extract_youtube_id("/songs/Artist - Song---dQw4w9WgXcQ.mp4") == "dQw4w9WgXcQ"
+
+    def test_ytdlp_bracket_format(self):
+        assert extract_youtube_id("/songs/Artist - Song [dQw4w9WgXcQ].mp4") == "dQw4w9WgXcQ"
+
+    def test_no_youtube_id(self):
+        assert extract_youtube_id("/songs/Just A Song.mp4") is None
+
+    def test_pikaraoke_preferred_over_ytdlp(self):
+        """When both formats present, pikaraoke (---) takes priority."""
+        result = extract_youtube_id("/songs/Song [AAAAAAAAAAA]---BBBBBBBBBBB.mp4")
+        assert result == "BBBBBBBBBBB"
+
+    def test_returns_bare_id_no_delimiters(self):
+        """Returned ID must not include --- or [ ] delimiters."""
+        result = extract_youtube_id("/songs/Song---dQw4w9WgXcQ.mp4")
+        assert "---" not in result
+        assert "[" not in result
+        assert "]" not in result
 
 
 class TestHasArtistTitleSeparator:
