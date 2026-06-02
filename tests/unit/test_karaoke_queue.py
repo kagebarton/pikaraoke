@@ -15,6 +15,7 @@ class TestEnqueue:
         assert mock_karaoke.queue_manager.queue[0]["user"] == "TestUser"
         assert mock_karaoke.queue_manager.queue[0]["title"] == "test"
         assert mock_karaoke.queue_manager.queue[0]["semitones"] == 0
+        assert mock_karaoke.queue_manager.queue[0]["paused"] is False
         assert result[0] is True
 
     def test_enqueue_with_semitones(self, mock_karaoke):

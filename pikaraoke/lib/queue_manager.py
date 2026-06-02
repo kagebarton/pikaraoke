@@ -124,6 +124,7 @@ class QueueManager:
             "file": song_path,
             "title": title,
             "semitones": semitones,
+            "paused": False,
         }
         if add_to_front:
             # MSG: Message shown after the song is added to the top of the queue
@@ -238,19 +239,59 @@ class QueueManager:
         return self.reorder(index, len(self.queue) - 1)
 
     def pop_next(self) -> dict[str, Any] | None:
-        """Remove and return the next song from the queue.
+        """Remove and return the next non-paused song from the queue.
+
+        Skips over paused songs (they remain in queue in place). Returns None
+        if the queue is empty or all remaining songs are paused.
 
         Does not emit queue_update to avoid UI flicker during song transitions.
         The playback system emits now_playing events which trigger queue UI updates.
-
-        Returns None if queue is empty.
         """
-        if not self.queue:
-            return None
+        for idx, item in enumerate(self.queue):
+            if not item.get("paused", False):
+                song = self.queue.pop(idx)
+                logging.info(f"Popped song from queue: {song['title']}")
+                return song
+        return None
 
-        song = self.queue.pop(0)
-        logging.info(f"Popped song from queue: {song['title']}")
-        return song
+    def has_playable_song(self) -> bool:
+        """True if the queue has at least one non-paused song."""
+        return any(not item.get("paused", False) for item in self.queue)
+
+    def toggle_pause_song(self, song_path: str) -> bool:
+        """Toggle the paused flag on a single queued song. Used by admins. Returns False if not found."""
+        index = self._find_song_index(song_path)
+        if index == -1:
+            logging.error("Song not found in queue: " + song_path)
+            return False
+        item = self.queue[index]
+        item["paused"] = not item.get("paused", False)
+        state = "paused" if item["paused"] else "unpaused"
+        logging.info(f"Song {state}: {song_path}")
+        self._events.emit("queue_update")
+        self._events.emit("now_playing_update")
+        return True
+
+    def toggle_pause_user(self, user: str) -> bool:
+        """Toggle pause on all queued songs for a user (step-away mode).
+
+        Pauses all if any are unpaused; unpauses all if all are paused.
+        Returns False if the user has no songs in the queue.
+        """
+        user_items = [item for item in self.queue if item["user"] == user]
+        if not user_items:
+            logging.error(f"No queued songs found for user: {user}")
+            return False
+        new_state = not all(item.get("paused", False) for item in user_items)
+        for item in user_items:
+            item["paused"] = new_state
+        logging.info(f"All songs for {user} {'paused' if new_state else 'unpaused'}")
+        # MSG: Shown when a user pauses/unpauses all their queued songs
+        msg = _("%s paused their songs") % user if new_state else _("%s is back") % user
+        self._events.emit("notification", msg, "info")
+        self._events.emit("queue_update")
+        self._events.emit("now_playing_update")
+        return True
 
     def queue_edit(self, song_path: str, action: str) -> bool:
         """Move or remove a song in the queue. Action: 'up', 'down', or 'delete'."""

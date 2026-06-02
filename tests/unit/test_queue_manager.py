@@ -474,6 +474,35 @@ class TestQueueManagerPopNext:
         assert song["semitones"] == 5
         assert song["title"] == "test"
 
+    def test_pop_next_skips_paused_songs(self, queue_manager):
+        """Popping next should skip paused songs and return the first non-paused one."""
+        queue_manager.enqueue("/songs/song1---abc.mp4", "User1")
+        queue_manager.enqueue("/songs/song2---def.mp4", "User2")
+        queue_manager.enqueue("/songs/song3---ghi.mp4", "User3")
+        # Pause the first song
+        queue_manager.queue[0]["paused"] = True
+
+        song = queue_manager.pop_next()
+
+        assert song is not None
+        assert song["file"] == "/songs/song2---def.mp4"
+        assert len(queue_manager.queue) == 2
+        # The paused song should still be in the queue
+        assert queue_manager.queue[0]["file"] == "/songs/song1---abc.mp4"
+        assert queue_manager.queue[0]["paused"] is True
+
+    def test_pop_next_returns_none_when_all_paused(self, queue_manager):
+        """Popping next should return None when all songs are paused."""
+        queue_manager.enqueue("/songs/song1---abc.mp4", "User1")
+        queue_manager.enqueue("/songs/song2---def.mp4", "User2")
+        queue_manager.queue[0]["paused"] = True
+        queue_manager.queue[1]["paused"] = True
+
+        song = queue_manager.pop_next()
+
+        assert song is None
+        assert len(queue_manager.queue) == 2
+
 
 class TestQueueManagerClear:
     """Test queue clearing."""
@@ -506,6 +535,163 @@ class TestQueueManagerClear:
         queue_manager.queue_clear()
 
         assert len(captured) == 1
+
+
+class TestQueueManagerHasPlayableSong:
+    """Test has_playable_song functionality."""
+
+    def test_has_playable_song_true_with_unpaused_songs(self, queue_manager):
+        """has_playable_song should return True when there are unpaused songs."""
+        queue_manager.enqueue("/songs/song1---abc.mp4", "User1")
+
+        assert queue_manager.has_playable_song() is True
+
+    def test_has_playable_song_false_with_empty_queue(self, queue_manager):
+        """has_playable_song should return False when queue is empty."""
+        assert queue_manager.has_playable_song() is False
+
+    def test_has_playable_song_false_when_all_paused(self, queue_manager):
+        """has_playable_song should return False when all songs are paused."""
+        queue_manager.enqueue("/songs/song1---abc.mp4", "User1")
+        queue_manager.queue[0]["paused"] = True
+
+        assert queue_manager.has_playable_song() is False
+
+    def test_has_playable_song_true_with_mixed_pause_state(self, queue_manager):
+        """has_playable_song should return True when at least one song is not paused."""
+        queue_manager.enqueue("/songs/song1---abc.mp4", "User1")
+        queue_manager.enqueue("/songs/song2---def.mp4", "User2")
+        queue_manager.queue[0]["paused"] = True
+
+        assert queue_manager.has_playable_song() is True
+
+
+class TestQueueManagerTogglePause:
+    """Test toggle_pause_song (admin per-song) and toggle_pause_user (step-away) functionality."""
+
+    def test_toggle_pause_sets_song_to_paused(self, queue_manager):
+        """Toggling pause on an unpaused song should set paused to True."""
+        queue_manager.enqueue("/songs/song1---abc.mp4", "User1")
+
+        result = queue_manager.toggle_pause_song("/songs/song1---abc.mp4")
+
+        assert result is True
+        assert queue_manager.queue[0]["paused"] is True
+
+    def test_toggle_pause_unpauses_song(self, queue_manager):
+        """Toggling pause on a paused song should set paused to False."""
+        queue_manager.enqueue("/songs/song1---abc.mp4", "User1")
+        queue_manager.queue[0]["paused"] = True
+
+        result = queue_manager.toggle_pause_song("/songs/song1---abc.mp4")
+
+        assert result is True
+        assert queue_manager.queue[0]["paused"] is False
+
+    def test_toggle_pause_returns_false_for_nonexistent_song(self, queue_manager):
+        """Toggling pause on a nonexistent song should return False."""
+        result = queue_manager.toggle_pause_song("/songs/nonexistent---xyz.mp4")
+
+        assert result is False
+
+    def test_toggle_pause_emits_queue_update(self, queue_manager):
+        """Toggling pause should emit queue_update event."""
+        queue_manager.enqueue("/songs/song1---abc.mp4", "User1")
+        captured = []
+        queue_manager._events.on("queue_update", lambda: captured.append(True))
+
+        queue_manager.toggle_pause_song("/songs/song1---abc.mp4")
+
+        assert len(captured) == 1
+
+    def test_toggle_pause_emits_now_playing_update(self, queue_manager):
+        """Toggling pause should emit now_playing_update event."""
+        queue_manager.enqueue("/songs/song1---abc.mp4", "User1")
+        captured = []
+        queue_manager._events.on("now_playing_update", lambda: captured.append(True))
+
+        queue_manager.toggle_pause_song("/songs/song1---abc.mp4")
+
+        assert len(captured) == 1
+
+    # toggle_pause_user tests
+
+    def test_toggle_pause_user_pauses_all_songs(self, queue_manager):
+        """toggle_pause_user pauses all of a user's songs when any are unpaused."""
+        queue_manager.enqueue("/songs/song1---abc.mp4", "User1")
+        queue_manager.enqueue("/songs/song2---def.mp4", "User1")
+
+        result = queue_manager.toggle_pause_user("User1")
+
+        assert result is True
+        assert all(item["paused"] is True for item in queue_manager.queue)
+
+    def test_toggle_pause_user_unpauses_all_songs(self, queue_manager):
+        """toggle_pause_user unpauses all songs when all are already paused."""
+        queue_manager.enqueue("/songs/song1---abc.mp4", "User1")
+        queue_manager.enqueue("/songs/song2---def.mp4", "User1")
+        for item in queue_manager.queue:
+            item["paused"] = True
+
+        result = queue_manager.toggle_pause_user("User1")
+
+        assert result is True
+        assert all(item["paused"] is False for item in queue_manager.queue)
+
+    def test_toggle_pause_user_only_affects_that_user(self, queue_manager):
+        """toggle_pause_user does not affect other users' songs."""
+        queue_manager.enqueue("/songs/song1---abc.mp4", "User1")
+        queue_manager.enqueue("/songs/song2---def.mp4", "User2")
+
+        queue_manager.toggle_pause_user("User1")
+
+        assert queue_manager.queue[0]["paused"] is True
+        assert queue_manager.queue[1]["paused"] is False
+
+    def test_toggle_pause_user_returns_false_for_unknown_user(self, queue_manager):
+        """toggle_pause_user returns False when the user has no queued songs."""
+        result = queue_manager.toggle_pause_user("Ghost")
+
+        assert result is False
+
+    def test_toggle_pause_user_emits_notification(self, queue_manager):
+        """toggle_pause_user emits a notification when pausing."""
+        queue_manager.enqueue("/songs/song1---abc.mp4", "User1")
+        captured = []
+        queue_manager._events.on("notification", lambda msg, cat: captured.append((msg, cat)))
+
+        queue_manager.toggle_pause_user("User1")
+
+        assert len(captured) == 1
+        assert "paused" in captured[0][0].lower()
+
+    def test_toggle_pause_user_unpause_notification(self, queue_manager):
+        """toggle_pause_user emits a notification when unpausing."""
+        queue_manager.enqueue("/songs/song1---abc.mp4", "User1")
+        queue_manager.queue[0]["paused"] = True
+        captured = []
+        queue_manager._events.on("notification", lambda msg, cat: captured.append((msg, cat)))
+
+        queue_manager.toggle_pause_user("User1")
+
+        assert len(captured) == 1
+        assert "back" in captured[0][0].lower()
+
+
+class TestQueueManagerEnqueuePausedField:
+    """Test that enqueue initializes the paused field."""
+
+    def test_enqueue_initializes_paused_false(self, queue_manager):
+        """Enqueue should initialize paused field to False."""
+        queue_manager.enqueue("/songs/song1---abc.mp4", "User1")
+
+        assert queue_manager.queue[0]["paused"] is False
+
+    def test_enqueue_paused_field_present(self, queue_manager):
+        """Enqueue should include paused field in queue item."""
+        queue_manager.enqueue("/songs/song1---abc.mp4", "User1")
+
+        assert "paused" in queue_manager.queue[0]
 
 
 class TestQueueManagerRandom:
