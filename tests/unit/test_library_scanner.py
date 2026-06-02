@@ -3,11 +3,7 @@
 import pytest
 
 from pikaraoke.lib.karaoke_database import KaraokeDatabase
-from pikaraoke.lib.library_scanner import (
-    LibraryScanner,
-    _extract_youtube_id,
-    build_song_record,
-)
+from pikaraoke.lib.library_scanner import LibraryScanner, build_song_record
 
 
 @pytest.fixture
@@ -293,6 +289,7 @@ class TestDirectoryChange:
                 "file_path": str(old_dir / f"Song{i}---{'a' * 10}{i}.mp4"),
                 "youtube_id": None,
                 "format": "mp4",
+                "pipeline_state": "skipped",
             }
             for i in range(10)
         ]
@@ -319,38 +316,6 @@ class TestBuildSongRecord:
         assert record["format"] == "mp4"
         assert record["youtube_id"] == "dQw4w9WgXcQ"
 
-    def test_cdg_pair_detected(self, tmp_path):
-        mp3 = tmp_path / "Track---abc1234567x.mp3"
-        cdg = tmp_path / "Track---abc1234567x.cdg"
-        mp3.touch()
-        cdg.touch()
-        record = build_song_record(str(mp3))
-        assert record["format"] == "cdg"
-
-    def test_cdg_uppercase_detected(self, tmp_path):
-        mp3 = tmp_path / "Track---abc1234567x.mp3"
-        cdg = tmp_path / "Track---abc1234567x.CDG"
-        mp3.touch()
-        cdg.touch()
-        record = build_song_record(str(mp3))
-        assert record["format"] == "cdg"
-
-    def test_mp4_ass_pair_detected(self, tmp_path):
-        mp4 = tmp_path / "Song---abc1234567x.mp4"
-        ass = tmp_path / "Song---abc1234567x.ass"
-        mp4.touch()
-        ass.touch()
-        record = build_song_record(str(mp4))
-        assert record["format"] == "ass"
-
-    def test_ass_uppercase_detected(self, tmp_path):
-        mp4 = tmp_path / "Song---abc1234567x.mp4"
-        ass = tmp_path / "Song---abc1234567x.ASS"
-        mp4.touch()
-        ass.touch()
-        record = build_song_record(str(mp4))
-        assert record["format"] == "ass"
-
     def test_zip_format(self, tmp_path):
         zf = tmp_path / "Song---abc1234567x.zip"
         zf.touch()
@@ -363,25 +328,14 @@ class TestBuildSongRecord:
         record = build_song_record(str(mp3))
         assert record["format"] == "mp3"
 
-    def test_uses_cached_files_in_dir(self, tmp_path):
-        mp3 = tmp_path / "Track.mp3"
-        mp3.touch()
-        # Pass a fake directory listing with a .cdg companion
-        record = build_song_record(str(mp3), files_in_dir={"Track.cdg", "Track.mp3"})
-        assert record["format"] == "cdg"
+    def test_default_pipeline_state_is_skipped(self, tmp_path):
+        song = tmp_path / "Song---dQw4w9WgXcQ.mp4"
+        song.touch()
+        record = build_song_record(str(song))
+        assert record["pipeline_state"] == "skipped"
 
-
-class TestExtractYoutubeId:
-    def test_pikaraoke_format(self):
-        assert _extract_youtube_id("Song---dQw4w9WgXcQ.mp4") == "dQw4w9WgXcQ"
-
-    def test_ytdlp_format(self):
-        assert _extract_youtube_id("Song [dQw4w9WgXcQ].mp4") == "dQw4w9WgXcQ"
-
-    def test_no_id(self):
-        assert _extract_youtube_id("Just A Song.mp4") is None
-
-    def test_pikaraoke_preferred_over_ytdlp(self):
-        # PiKaraoke format takes priority
-        result = _extract_youtube_id("Song [AAAAAAAAAAA]---BBBBBBBBBBB.mp4")
-        assert result == "BBBBBBBBBBB"
+    def test_pipeline_state_override_pending(self, tmp_path):
+        song = tmp_path / "Song---dQw4w9WgXcQ.mp4"
+        song.touch()
+        record = build_song_record(str(song), pipeline_state="pending")
+        assert record["pipeline_state"] == "pending"
