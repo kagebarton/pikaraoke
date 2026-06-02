@@ -49,8 +49,8 @@ class TestFilenameFromPath:
     def test_no_extension(self):
         assert SongManager.filename_from_path("/songs/SongName") == "SongName"
 
-    def test_cdg_zip(self):
-        """CDG+ZIP files have no YouTube ID, so the name is returned as-is."""
+    def test_zip_file(self):
+        """ZIP files have no YouTube ID, so the name is returned as-is."""
         assert SongManager.filename_from_path("/songs/Karaoke Track.zip") == "Karaoke Track"
 
     def test_bracket_format_youtube_id(self):
@@ -116,25 +116,59 @@ class TestDelete:
         assert not song.exists()
         assert len(sm.songs) == 0
 
-    def test_deletes_cdg_companion(self, tmp_path, mock_db):
+    def test_deletes_srt_companion(self, tmp_path, mock_db):
         song = tmp_path / "Test---abc.mp4"
-        cdg = tmp_path / "Test---abc.cdg"
+        subtitles_dir = tmp_path / "subtitles"
+        subtitles_dir.mkdir()
+        srt = subtitles_dir / "Test---abc.srt"
         song.write_text("fake")
-        cdg.write_text("fake")
+        srt.write_text("fake")
         sm = SongManager(str(tmp_path), db=mock_db)
         sm.songs.add_if_valid(_native(song))
         sm.delete(_native(song))
-        assert not cdg.exists()
+        assert not srt.exists()
 
-    def test_deletes_ass_companion(self, tmp_path, mock_db):
+    def test_deletes_stem_and_caption_companions(self, tmp_path, mock_db):
+        """Vocal/nonvocal stems and the karaoke caption live in their own subfolders."""
         song = tmp_path / "Test---abc.mp4"
-        ass = tmp_path / "Test---abc.ass"
         song.write_text("fake")
-        ass.write_text("fake")
+        companions = []
+        for subdir, name in (
+            ("vocal", "Test---abc---vocal.m4a"),
+            ("nonvocal", "Test---abc---nonvocal.m4a"),
+            ("karaoke", "Test---abc.ass"),
+        ):
+            d = tmp_path / subdir
+            d.mkdir()
+            f = d / name
+            f.write_text("fake")
+            companions.append(f)
         sm = SongManager(str(tmp_path), db=mock_db)
         sm.songs.add_if_valid(_native(song))
         sm.delete(_native(song))
-        assert not ass.exists()
+        assert all(not f.exists() for f in companions)
+
+    def test_emits_song_deleted_event(self, tmp_path, mock_db):
+        song = tmp_path / "Test---abc.mp4"
+        song.write_text("fake")
+        events = MagicMock()
+        sm = SongManager(str(tmp_path), db=mock_db, events=events)
+        sm.songs.add_if_valid(_native(song))
+        sm.delete(_native(song))
+        events.emit.assert_called_once_with("song_deleted", _native(song))
+
+    def test_delete_leaves_unrelated_song(self, tmp_path, mock_db):
+        """Companion paths are constructed literally, so a sibling whose name shares
+        the prefix is never touched (guards against the historical library-wipe)."""
+        song = tmp_path / "Song [abc].mp4"
+        sibling = tmp_path / "Song [abc] Live---xyz12345678.mp4"
+        song.write_text("fake")
+        sibling.write_text("fake")
+        sm = SongManager(str(tmp_path), db=mock_db)
+        sm.songs.add_if_valid(_native(song))
+        sm.delete(_native(song))
+        assert not song.exists()
+        assert sibling.exists()
 
     def test_nonexistent_file_no_error(self, tmp_path, mock_db):
         sm = SongManager(str(tmp_path), db=mock_db)
@@ -151,27 +185,32 @@ class TestRename:
         assert not song.exists()
         assert (tmp_path / "New Name---abc.mp4").exists()
 
-    def test_renames_cdg_companion(self, tmp_path, mock_db):
+    def test_renames_srt_companion(self, tmp_path, mock_db):
         song = tmp_path / "Old---abc.mp4"
-        cdg = tmp_path / "Old---abc.cdg"
+        subtitles_dir = tmp_path / "subtitles"
+        subtitles_dir.mkdir()
+        srt = subtitles_dir / "Old---abc.srt"
         song.write_text("fake")
-        cdg.write_text("fake")
+        srt.write_text("fake")
         sm = SongManager(str(tmp_path), db=mock_db)
         sm.songs.add_if_valid(_native(song))
         sm.rename(_native(song), "New---abc")
-        assert (tmp_path / "New---abc.cdg").exists()
-        assert not cdg.exists()
+        assert (subtitles_dir / "New---abc.srt").exists()
+        assert not srt.exists()
 
-    def test_renames_ass_companion(self, tmp_path, mock_db):
+    def test_renames_stem_companion_within_subfolder(self, tmp_path, mock_db):
+        """A vocal stem keeps its '---vocal.m4a' tail and stays in vocal/."""
         song = tmp_path / "Old---abc.mp4"
-        ass = tmp_path / "Old---abc.ass"
+        vocal_dir = tmp_path / "vocal"
+        vocal_dir.mkdir()
+        vocal = vocal_dir / "Old---abc---vocal.m4a"
         song.write_text("fake")
-        ass.write_text("fake")
+        vocal.write_text("fake")
         sm = SongManager(str(tmp_path), db=mock_db)
         sm.songs.add_if_valid(_native(song))
         sm.rename(_native(song), "New---abc")
-        assert (tmp_path / "New---abc.ass").exists()
-        assert not ass.exists()
+        assert (vocal_dir / "New---abc---vocal.m4a").exists()
+        assert not vocal.exists()
 
     def test_returns_new_path(self, tmp_path, mock_db):
         song = tmp_path / "Old---abc.mp4"
