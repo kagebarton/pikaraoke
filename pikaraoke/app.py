@@ -1,12 +1,10 @@
 """Flask application entry point and server initialization."""
 
-from gevent import monkey, spawn
-
-monkey.patch_all()
-
 import logging
 import os
+import re
 import sys
+from threading import Thread
 from urllib.parse import quote
 
 import flask_babel
@@ -17,20 +15,12 @@ from flask_socketio import SocketIO
 from pikaraoke import VERSION, karaoke
 from pikaraoke.constants import LANGUAGES
 from pikaraoke.lib.args import parse_pikaraoke_args
-from pikaraoke.lib.browser import Browser
 from pikaraoke.lib.current_app import get_karaoke_instance
 from pikaraoke.lib.ffmpeg import is_ffmpeg_installed
-from pikaraoke.lib.file_resolver import delete_tmp_dir
-from pikaraoke.lib.get_platform import (
-    get_data_directory,
-    get_platform,
-    has_js_runtime,
-    is_windows,
-)
+from pikaraoke.lib.get_platform import has_js_runtime
 from pikaraoke.lib.song_manager import SongManager
 from pikaraoke.lib.youtube_dl import upgrade_youtubedl
 from pikaraoke.routes.admin import admin_bp
-from pikaraoke.routes.background_music import background_music_bp
 from pikaraoke.routes.batch_song_renamer import batch_song_renamer_bp
 from pikaraoke.routes.controller import controller_bp
 from pikaraoke.routes.files import files_bp
@@ -43,15 +33,25 @@ from pikaraoke.routes.preferences import preferences_bp
 from pikaraoke.routes.queue import queue_bp
 from pikaraoke.routes.search import search_bp
 from pikaraoke.routes.socket_events import setup_socket_events
-from pikaraoke.routes.splash import splash_bp
-from pikaraoke.routes.stream import stream_bp
 
 _ = flask_babel.gettext
 
-from gevent.pywsgi import WSGIServer
+
+class _NoGetFilter(logging.Filter):
+    """Suppress werkzeug HTTP access log lines for GET and noisy POST requests."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        return not (
+            ("GET " in msg or "POST " in msg)
+            and re.search(r'" [23]\d\d \S+\s*$', msg)  # 2xx/3xx access line only
+        )
+
+
+logging.getLogger("werkzeug").addFilter(_NoGetFilter())
 
 args = parse_pikaraoke_args()
-socketio = SocketIO(async_mode="gevent", cors_allowed_origins=args.url)
+socketio = SocketIO(async_mode="threading", cors_allowed_origins=args.url)
 babel = Babel()
 
 
@@ -84,10 +84,8 @@ _api_blueprints = [
     preferences_bp,
     admin_bp,
     controller_bp,
-    background_music_bp,
     images_bp,
     nowplaying_bp,
-    stream_bp,
     metadata_bp,
 ]
 
@@ -95,7 +93,6 @@ _api_blueprints = [
 _internal_blueprints = [
     home_bp,
     info_bp,
-    splash_bp,
     batch_song_renamer_bp,
 ]
 
@@ -143,8 +140,6 @@ def main() -> None:
     Initializes the Flask server, Karaoke engine, and splash screen.
     Blocks until the application is terminated.
     """
-    platform = get_platform()
-
     args = parse_pikaraoke_args()
 
     # --- LOGGING SETUP ---
@@ -216,41 +211,32 @@ def main() -> None:
     app.jinja_env.globals.update(filename_from_path=SongManager.filename_from_path)
     app.jinja_env.globals.update(url_escape=quote)
 
-    spawn(upgrade_youtubedl)
-
-    server = WSGIServer(("0.0.0.0", int(args.port)), app, log=None, error_log=logging.getLogger())
-    server.start()
-
-    # Handle sigterm, apparently cherrypy won't shut down without explicit handling
-    # signal.signal(signal.SIGTERM, lambda signum, stack_frame: k.stop())
-
-    # force headless mode when on Android
-    if (platform == "android") and not args.hide_splash_screen:
-        args.hide_splash_screen = True
-        logging.info("Forced to run headless mode in Android")
-
-    # Start the splash screen browser
-    if not args.hide_splash_screen:
-        browser = Browser(k, args.window_size, args.external_monitor)
-        browser.launch_splash_screen()
-        if not browser:
-            logging.error("Failed to launch splash screen browser")
-            sys.exit()
-    else:
-        browser = None
+    Thread(target=upgrade_youtubedl, daemon=True).start()
 
     if args.enable_swagger:
         logging.info(f"Swagger API docs enabled at {k.url}/apidocs")
 
-    # Start the karaoke process
-    k.run()
+    # Run the karaoke polling loop in a background thread so socketio.run()
+    # can stay on the main thread to handle SIGINT cleanly.
+    Thread(target=k.run, daemon=True).start()
 
-    # Close running browser when done
-    if browser is not None:
-        browser.close()
+    try:
+        socketio.run(
+            app,
+            host="0.0.0.0",
+            port=int(args.port),
+            log_output=False,
+            use_reloader=False,
+            allow_unsafe_werkzeug=True,
+        )
+    finally:
+        k.stop()
 
-    delete_tmp_dir()
-    sys.exit()
+        import shutil
+
+        if k.temp_dir and os.path.exists(k.temp_dir):
+            shutil.rmtree(k.temp_dir, ignore_errors=True)
+        sys.exit()
 
 
 if __name__ == "__main__":
