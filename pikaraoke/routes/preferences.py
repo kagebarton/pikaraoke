@@ -7,11 +7,8 @@ from marshmallow import Schema, fields
 
 from pikaraoke.lib.current_app import broadcast_event, get_karaoke_instance, is_admin
 from pikaraoke.lib.preference_manager import PreferenceManager
-from pikaraoke.routes.splash import _get_active_score_phrases
 
 _ = flask_babel.gettext
-
-_SCORE_PHRASE_KEYS = {"low_score_phrases", "mid_score_phrases", "high_score_phrases"}
 
 preferences_bp = Blueprint("preferences", __name__)
 
@@ -34,8 +31,6 @@ def change_preferences(query):
         success, message = k.preferences.set(preference, val)
         if success:
             broadcast_event("preferences_update", {"key": preference, "value": val})
-            if preference in _SCORE_PHRASE_KEYS:
-                broadcast_event("score_phrases_update", _get_active_score_phrases(k))
         return jsonify([success, message])
     else:
         # MSG: Message shown after trying to change preferences without admin permissions.
@@ -52,7 +47,6 @@ def clear_preferences():
         if success:
             k.update_now_playing_socket()
             broadcast_event("preferences_reset", PreferenceManager.DEFAULTS)
-            broadcast_event("score_phrases_update", _get_active_score_phrases(k))
         flash(message, "is-success" if success else "is-danger")
     else:
         # MSG: Message shown after trying to clear preferences without admin permissions.
