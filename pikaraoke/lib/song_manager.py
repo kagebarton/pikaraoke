@@ -135,8 +135,16 @@ class SongManager:
         self._db.insert_songs([build_song_record(song_path, pipeline_state="pending")])
 
     # ------------------------------------------------------------------
-    # Pipeline state forwarders
+    # Pipeline state / loudnorm forwarders
     # ------------------------------------------------------------------
+
+    def set_loudnorm_offset(self, song_path: str, offset_db: float) -> None:
+        """Forwarder so callers don't reach into KaraokeDatabase directly."""
+        self._db.set_loudnorm_offset(song_path, offset_db)
+
+    def get_loudnorm_offset(self, song_path: str) -> float | None:
+        """Forwarder for loudnorm_offset reads."""
+        return self._db.get_loudnorm_offset(song_path)
 
     def set_pipeline_state(self, song_path: str, state: str) -> None:
         """Forwarder for pipeline_state writes."""
@@ -147,5 +155,5 @@ class SongManager:
         return self._db.get_pipeline_state(song_path)
 
     def get_pipeline_states(self, paths: list[str]) -> dict[str, str]:
-        """Batch forwarder: returns dict mapping file_path -> pipeline_state."""
+        """Batch forwarder: returns dict mapping file_path → pipeline_state."""
         return self._db.get_pipeline_states(paths)

@@ -1,26 +1,41 @@
 """Playback controller for managing video playback state and coordination."""
 
+from __future__ import annotations
+
 import logging
 import os
-import time
+import threading
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
 from flask_babel import _
 
 from pikaraoke.lib.events import EventSystem
-from pikaraoke.lib.file_resolver import delete_tmp_dir
+from pikaraoke.lib.overlay_manager import OverlayState, QueuedSong, ScreenMode
 from pikaraoke.lib.preference_manager import PreferenceManager
-from pikaraoke.lib.stream_manager import PlaybackResult, StreamManager
 
 if TYPE_CHECKING:
-    import subprocess
+    from pikaraoke.lib.mpv_controller import MpvController
+
+
+@dataclass
+class PlaybackResult:
+    """Result of a playback operation.
+
+    Attributes:
+        success: Whether playback started successfully.
+        error: Error message if playback failed.
+    """
+
+    success: bool
+    error: str | None = None
 
 
 class PlaybackController:
-    """Controller for managing playback state and stream coordination.
+    """Controller for managing playback state and MPV coordination.
 
-    Owns all "now playing" state and coordinates with StreamManager for
-    FFmpeg transcoding and playback.
+    Owns all "now playing" state and coordinates with MpvController for
+    native MPV playback.
 
     Attributes:
         now_playing: Title of the currently playing song.
@@ -28,12 +43,9 @@ class PlaybackController:
         now_playing_user: User who queued the current song.
         now_playing_transpose: Semitones to transpose current song.
         now_playing_duration: Duration of current song in seconds.
-        now_playing_url: Stream URL for current song.
-        now_playing_subtitle_url: URL path for subtitles.
         now_playing_position: Current playback position in seconds.
         is_paused: Whether playback is paused.
         is_playing: Whether a song is currently playing.
-        ffmpeg_process: Currently running FFmpeg subprocess.
     """
 
     now_playing: str | None = None
@@ -41,9 +53,11 @@ class PlaybackController:
     now_playing_user: str | None = None
     now_playing_transpose: int = 0
     now_playing_duration: int | None = None
-    now_playing_url: str | None = None
-    now_playing_subtitle_url: str | None = None
     now_playing_position: float | None = None
+    now_playing_sub_mode: str = "off"
+    now_playing_subs_available: dict[str, bool] | None = None  # set in __init__
+    now_playing_dual_stem: bool = False
+    now_playing_vocal_volume: float = 0.0
     is_paused: bool = True
     is_playing: bool = False
 
@@ -52,7 +66,8 @@ class PlaybackController:
         preferences: PreferenceManager,
         events: EventSystem,
         filename_from_path: Callable[[str, bool], str],
-        streaming_format: str = "hls",
+        mpv: MpvController,
+        get_loudnorm_offset: Callable[[str], float | None] = lambda path: None,
     ) -> None:
         """Initialize the playback controller.
 
@@ -60,22 +75,22 @@ class PlaybackController:
             preferences: PreferenceManager instance for configuration.
             events: EventSystem instance for event emission.
             filename_from_path: Function to extract display name from path.
-            streaming_format: Video streaming format ('hls' or 'mp4').
+            mpv: MpvController instance for MPV IPC.
+            get_loudnorm_offset: Function to fetch loudnorm offset from DB.
         """
         self.preferences = preferences
         self.events = events
         self.filename_from_path = filename_from_path
-        self.stream_manager = StreamManager(preferences, streaming_format)
-
-    @property
-    def ffmpeg_process(self) -> "subprocess.Popen | None":
-        """Get the current FFmpeg process."""
-        return self.stream_manager.ffmpeg_process
+        self.mpv = mpv
+        self.get_loudnorm_offset = get_loudnorm_offset
+        self._playback_lock = threading.Lock()
+        # Injected by Karaoke after queue_manager is available
+        self._get_queue_preview: Callable[[], tuple[QueuedSong, ...]] = lambda: ()
+        # Subtitle availability (mutable dict, not class-level default)
+        self.now_playing_subs_available: dict[str, bool] = {"ass": False, "srt": False}
 
     def play_file(self, file_path: str, user: str, semitones: int = 0) -> PlaybackResult:
-        """Start playback of a media file.
-
-        Blocks until client connects or timeout occurs.
+        """Start playback of a media file. Non-blocking -- MPV plays immediately.
 
         Args:
             file_path: Path to the media file to play.
@@ -83,7 +98,7 @@ class PlaybackController:
             semitones: Number of semitones to transpose (0 = no change).
 
         Returns:
-            PlaybackResult with success status and stream information.
+            PlaybackResult with success status and optional error message.
         """
         if not os.path.isfile(file_path):
             error_msg = _("Song file not found: %s") % file_path
@@ -94,69 +109,169 @@ class PlaybackController:
             f"Playing file: {file_path} for user: {user}, transposed {semitones} semitones"
         )
 
-        result = self.stream_manager.play_file(file_path, semitones)
+        # Find subtitle files (.ass in karaoke/ subfolder, .srt in subtitles/ subfolder)
+        subs = self._find_subtitles(file_path)
+        subtitle_delay = self.preferences.get_or_default("subtitle_delay")
 
-        if not result.success:
-            return result
+        # Resolve initial subtitle mode: karaoke if .ass exists, srt if .srt exists, off otherwise
+        if subs["ass"] and os.path.exists(subs["ass"]):
+            initial_sub_mode = "karaoke"
+        elif subs["srt"] and os.path.exists(subs["srt"]):
+            initial_sub_mode = "srt"
+        else:
+            initial_sub_mode = "off"
 
-        self.now_playing = self.filename_from_path(file_path, remove_youtube_id=True)
-        self.now_playing_filename = file_path
-        self.now_playing_user = user
-        self.now_playing_transpose = semitones
-        self.now_playing_duration = result.duration
-        self.now_playing_url = result.stream_url
-        self.now_playing_subtitle_url = result.subtitle_url
-        self.is_paused = False
+        # Get normalization_db from song database (if normalize_audio enabled)
+        normalization_db = None
+        if self.preferences.get_or_default("normalize_audio"):
+            try:
+                normalization_db = self.get_loudnorm_offset(file_path)
+            except Exception:
+                logging.warning(f"Failed to fetch loudnorm offset for {file_path}", exc_info=True)
+
+        # Find dual-stem companion files (vocal + nonvocal)
+        vocal_path, nonvocal_path = self._find_companions(file_path)
+        vocal_volume = self.preferences.get_or_default("vocal_volume")
+
+        with self._playback_lock:
+            # 1. Set all PC state that doesn't depend on mpv.play having run
+            self.now_playing = self.filename_from_path(file_path, remove_youtube_id=True)
+            self.now_playing_filename = file_path
+            self.now_playing_user = user
+            self.now_playing_transpose = semitones
+            self.now_playing_position = 0.0
+            self.now_playing_sub_mode = initial_sub_mode
+            self.now_playing_subs_available = {
+                "ass": subs["ass"] is not None and os.path.exists(subs["ass"]),
+                "srt": subs["srt"] is not None and os.path.exists(subs["srt"]),
+            }
+            self.now_playing_dual_stem = vocal_path is not None and nonvocal_path is not None
+            self.now_playing_vocal_volume = vocal_volume
+            self.is_paused = False
+            self.is_playing = True
+
+            try:
+                # 2. Run MPV loadfile + filter setup (no inner render now)
+                self.mpv.play(
+                    file_path,
+                    semitones=semitones,
+                    ass_path=subs["ass"],
+                    srt_path=subs["srt"],
+                    initial_sub_mode=initial_sub_mode,
+                    subtitle_delay=subtitle_delay,
+                    normalization_db=normalization_db,
+                    vocal_path=vocal_path,
+                    nonvocal_path=nonvocal_path,
+                    vocal_volume=vocal_volume,
+                )
+
+                # 3. Duration is only known after mpv.play completes the duration wait
+                self.now_playing_duration = int(self.mpv.duration) if self.mpv.duration else None
+
+                # 4. Single render with fully-consistent state
+                self.mpv.tick_overlays()
+            except Exception:
+                logging.exception("mpv.play() failed — rolling back PC state")
+                self.reset_now_playing()
+                self.events.emit("song_ended")
+                return PlaybackResult(success=False, error="MPV playback failed")
 
         self.events.emit("playback_started")
 
-        # Wait for client to connect
-        max_retries = 100
-        while not self.is_playing and max_retries > 0:
-            time.sleep(0.1)
-            max_retries -= 1
+        logging.debug("MPV playback started")
+        return PlaybackResult(success=True)
 
-        if not self.is_playing:
-            error_msg = _("Stream was not playable! Skipping track")
-            logging.error(error_msg)
-            self.end_song(reason="timeout")
-            return PlaybackResult(success=False, error=error_msg)
+    def _find_subtitles(self, file_path: str) -> dict[str, str | None]:
+        """Find companion subtitle files for a media file.
 
-        logging.debug("Stream is playing")
-        return result
-
-    def start_song(self) -> None:
-        """Mark the current song as actively playing.
-
-        Called by Flask route when client connects to stream.
-        Idempotent - safe to call multiple times.
-        """
-        if not self.is_playing:
-            logging.info(f"Song starting: {self.now_playing}")
-            self.is_playing = True
-
-    def end_song(self, reason: str | None = None) -> None:
-        """End the current song and clean up resources.
+        Looks for .ass in karaoke/ subfolder and .srt in subtitles/ subfolder.
 
         Args:
-            reason: Optional reason for ending (e.g., 'complete', 'skip', 'timeout').
+            file_path: Path to the media file.
+
+        Returns:
+            Dict with 'ass' and 'srt' keys; values are paths or None.
         """
+        base_name = os.path.splitext(os.path.basename(file_path))[0]
+        parent = os.path.dirname(file_path)
+
+        ass_path = os.path.join(parent, "karaoke", base_name + ".ass")
+        srt_path = os.path.join(parent, "subtitles", base_name + ".srt")
+
+        result: dict[str, str | None] = {"ass": None, "srt": None}
+        if os.path.exists(ass_path):
+            logging.debug(f"ASS subtitle file found: {ass_path}")
+            result["ass"] = ass_path
+        if os.path.exists(srt_path):
+            logging.debug(f"SRT subtitle file found: {srt_path}")
+            result["srt"] = srt_path
+        return result
+
+    def _find_companions(self, file_path: str) -> tuple[str | None, str | None]:
+        """Find dual-stem companion audio files for a media file.
+
+        Both stems must exist (half-stem playback is not supported).
+
+        Args:
+            file_path: Path to the media file.
+
+        Returns:
+            Tuple of (vocal_path, nonvocal_path), or (None, None) if missing.
+        """
+        base = os.path.splitext(os.path.basename(file_path))[0]
+        parent = os.path.dirname(file_path)
+        vocal = os.path.join(parent, "vocal", f"{base}---vocal.m4a")
+        nonvocal = os.path.join(parent, "nonvocal", f"{base}---nonvocal.m4a")
+        if os.path.exists(vocal) and os.path.exists(nonvocal):
+            logging.debug(f"Dual-stem companions found: {vocal}, {nonvocal}")
+            return (vocal, nonvocal)
+        return (None, None)
+
+    def end_song(self, reason: str | None = None) -> None:
+        """End current song. Must be called with _playback_lock held
+        (check_playback_ended acquires it) or acquires it when called
+        externally (skip, Socket.IO end_song).
+
+        Args:
+            reason: Optional reason for ending (e.g., 'complete', 'skip').
+        """
+        # Guard: prevent double end_song
+        if not self.is_playing:
+            return
+
         logging.info(f"Song ending: {self.now_playing}")
         if reason:
             logging.info(f"Reason: {reason}")
             if reason not in ("complete", "skip"):
-                # MSG: Message shown when the song ends abnormally
-                self.events.emit("notification", _("Song ended abnormally: %s") % reason, "danger")
+                self.events.emit(
+                    "notification",
+                    _("Song ended abnormally: %s") % reason,
+                    "danger",
+                )
 
+        # 1. Clear PC state before any render observes it
         self.reset_now_playing()
-        self.stream_manager.kill_ffmpeg()
-        # Small delay to ensure FFmpeg fully terminates and file handles close
-        # Critical on Raspberry Pi with slow SD cards and hardware encoder cleanup
-        time.sleep(0.3)
-        delete_tmp_dir()
-        logging.debug("Cleanup complete")
+
+        try:
+            # 2. Stop MPV playback (filter clear, pause clear, counters reset)
+            self.mpv.stop()
+        except Exception:
+            logging.exception("mpv.stop() failed in end_song — attempting partial cleanup")
+            # Force MpvController to a safe idle state even if stop() failed partway
+            self.mpv.is_idle = True
+            self.mpv.is_paused = False
+            self.mpv.position = 0.0
+            self.mpv.duration = 0.0
+
+        try:
+            # 3. Show splash (best-effort — cosmetic if this fails)
+            self.mpv.load_placeholder()
+            self.mpv.tick_overlays()
+        except Exception:
+            logging.exception("load_placeholder/tick_overlays failed in end_song — cosmetic only")
 
         self.events.emit("song_ended")
+        logging.debug("Cleanup complete")
 
     def skip(self, log_action: bool = True) -> bool:
         """Skip the currently playing song.
@@ -169,9 +284,13 @@ class PlaybackController:
         """
         if self.is_playing:
             if log_action:
-                # MSG: Message shown after the song is skipped, will be followed by song name
-                self.events.emit("notification", _("Skip: %s") % self.now_playing, "info")
-            self.end_song(reason="skip")
+                self.events.emit(
+                    "notification",
+                    _("Skip: %s") % self.now_playing,
+                    "info",
+                )
+            with self._playback_lock:
+                self.end_song(reason="skip")
             return True
         else:
             logging.warning("Tried to skip, but no file is playing!")
@@ -184,13 +303,17 @@ class PlaybackController:
             True if successful, False if nothing playing.
         """
         if self.is_playing:
-            if self.is_paused:
-                # MSG: Message shown after the song is resumed, will be followed by song name
-                self.events.emit("notification", _("Resume: %s") % self.now_playing, "info")
-            else:
-                # MSG: Message shown after the song is paused, will be followed by song name
-                self.events.emit("notification", _("Pause: %s") % self.now_playing, "info")
+            self.mpv.toggle_pause()
+            # Track pause state on the controller as the deterministic source for
+            # callers like the /pause route. Deriving it from the toggle (rather than
+            # reading self.mpv.is_paused) avoids a race: the _on_pause observer that
+            # updates mpv.is_paused runs on mpv's event thread and may not have fired
+            # yet, which would broadcast/notify the inverted state.
             self.is_paused = not self.is_paused
+            if self.is_paused:
+                self.events.emit("notification", _("Pause: %s") % self.now_playing, "info")
+            else:
+                self.events.emit("notification", _("Resume: %s") % self.now_playing, "info")
             self.events.emit("now_playing_update")
             return True
         else:
@@ -208,10 +331,12 @@ class PlaybackController:
             "now_playing_user": self.now_playing_user,
             "now_playing_duration": self.now_playing_duration,
             "now_playing_transpose": self.now_playing_transpose,
-            "now_playing_url": self.now_playing_url,
-            "now_playing_subtitle_url": self.now_playing_subtitle_url,
-            "now_playing_position": self.now_playing_position,
-            "is_paused": self.is_paused,
+            "now_playing_position": self.mpv.position,
+            "is_paused": self.mpv.is_paused,
+            "sub_mode": self.now_playing_sub_mode,
+            "subs_available": self.now_playing_subs_available,
+            "dual_stem": self.now_playing_dual_stem,
+            "vocal_volume": self.now_playing_vocal_volume,
         }
 
     def reset_now_playing(self) -> None:
@@ -219,14 +344,74 @@ class PlaybackController:
         self.now_playing = None
         self.now_playing_filename = None
         self.now_playing_user = None
-        self.now_playing_url = None
-        self.now_playing_subtitle_url = None
-        self.is_paused = True
-        self.is_playing = False
         self.now_playing_transpose = 0
         self.now_playing_duration = None
         self.now_playing_position = None
+        self.now_playing_sub_mode = "off"
+        self.now_playing_subs_available = {"ass": False, "srt": False}
+        self.now_playing_dual_stem = False
+        self.now_playing_vocal_volume = 0.0
+        self.is_paused = True
+        self.is_playing = False
 
-    def log_output(self) -> None:
-        """Log any pending FFmpeg output."""
-        self.stream_manager.log_ffmpeg_output()
+    def build_overlay_state(self) -> OverlayState:
+        """Snapshot all data needed by compute_overlays into one immutable record.
+
+        Called each poll tick (and on immediate renders) by MpvController.tick_overlays.
+        """
+        if self.is_playing:
+            mode = ScreenMode.PAUSED if self.mpv.is_paused else ScreenMode.PLAYING
+        else:
+            mode = ScreenMode.IDLE
+
+        return OverlayState(
+            mode=mode,
+            now_playing_title=self.now_playing,
+            queue_preview=self._get_queue_preview(),
+            semitones=self.now_playing_transpose,
+            position=self.mpv.position,
+            duration=self.mpv.duration,
+            screen_w=self.mpv.osd_size[0],
+            screen_h=self.mpv.osd_size[1],
+            hide_url=self.preferences.get_or_default("hide_url"),
+            hide_now_playing=self.preferences.get_or_default("hide_now_playing_overlay"),
+            hide_clock=self.preferences.get_or_default("hide_clock"),
+            server_url=self.mpv._server_url,
+            dual_stem=self.now_playing_dual_stem,
+            vocal_volume=self.now_playing_vocal_volume,
+            singer_name=self.now_playing_user,
+        )
+
+    def refresh_overlays(self) -> None:
+        """Force an immediate overlay re-render outside the poll cycle.
+
+        Call this after toggling any overlay-related preference so the change
+        is visible within the current frame rather than waiting up to 500ms.
+        """
+        self.mpv.tick_overlays()
+
+    def broadcast_position(self, socketio) -> None:
+        """Emit current playback position to all Socket.IO clients."""
+        if self.is_playing and socketio:
+            socketio.emit("playback_position", self.mpv.position, namespace="/")
+
+    def set_pitch(self, semitones: int) -> None:
+        """Live pitch change on current song."""
+        if self.is_playing:
+            self.mpv.set_pitch(semitones)
+            self.now_playing_transpose = semitones
+            self.events.emit("now_playing_update")
+
+    def seek(self, position: float) -> None:
+        """Seek to absolute position in seconds."""
+        if self.is_playing:
+            self.mpv.seek(position)
+
+    def restart(self) -> bool:
+        """Restart current song from beginning (seek 0 + unpause)."""
+        if self.is_playing:
+            self.mpv.restart()
+            self.events.emit("now_playing_update")
+            return True
+        logging.warning("Tried to restart, but no file is playing!")
+        return False
