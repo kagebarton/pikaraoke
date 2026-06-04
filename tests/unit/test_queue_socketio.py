@@ -116,6 +116,66 @@ class TestQueueSocketEmissions:
         assert len(k.queue_manager.queue) == 0
 
 
+class TestQueuePauseSocketEmissions:
+    """Verify pause/unpause operations emit correct SocketIO events."""
+
+    def test_toggle_pause_triggers_queue_update(self, karaoke_with_socketio):
+        """Toggling pause on a queued song triggers queue_update event."""
+        k = karaoke_with_socketio
+        k.queue_manager.enqueue("/songs/song1---abc.mp4", "User1")
+        k.socketio.emit.reset_mock()
+
+        k.queue_manager.toggle_pause_song("/songs/song1---abc.mp4")
+
+        queue_update_calls = [
+            call for call in k.socketio.emit.call_args_list if call[0][0] == "queue_update"
+        ]
+        assert len(queue_update_calls) > 0
+
+    def test_toggle_pause_triggers_now_playing_update(self, karaoke_with_socketio):
+        """Toggling pause on a queued song triggers now_playing event."""
+        k = karaoke_with_socketio
+        k.queue_manager.enqueue("/songs/song1---abc.mp4", "User1")
+        k.socketio.emit.reset_mock()
+
+        k.queue_manager.toggle_pause_song("/songs/song1---abc.mp4")
+
+        now_playing_calls = [
+            call for call in k.socketio.emit.call_args_list if call[0][0] == "now_playing"
+        ]
+        assert len(now_playing_calls) > 0
+
+    def test_up_next_skips_paused_songs(self, karaoke_with_socketio):
+        """now_playing up_next should skip paused songs and show the next non-paused."""
+        k = karaoke_with_socketio
+        k.playback_controller.now_playing = "/songs/current---xyz.mp4"
+        k.queue_manager.enqueue("/songs/Paused Song---dQw4w9WgXcQ.mp4", "User1")
+        k.queue_manager.enqueue("/songs/Next Song---xYz1234AbCd.mp4", "User2")
+        # Pause the first queued song
+        k.queue_manager.queue[0]["paused"] = True
+        k.socketio.emit.reset_mock()
+
+        k.update_now_playing_socket()
+
+        payload = k.socketio.emit.call_args[0][1]
+        assert payload["up_next"] == "Next Song"
+        assert payload["next_user"] == "User2"
+
+    def test_up_next_null_when_all_paused(self, karaoke_with_socketio):
+        """now_playing up_next should be None when all queued songs are paused."""
+        k = karaoke_with_socketio
+        k.playback_controller.now_playing = "/songs/current---xyz.mp4"
+        k.queue_manager.enqueue("/songs/Paused Song---dQw4w9WgXcQ.mp4", "User1")
+        k.queue_manager.queue[0]["paused"] = True
+        k.socketio.emit.reset_mock()
+
+        k.update_now_playing_socket()
+
+        payload = k.socketio.emit.call_args[0][1]
+        assert payload["up_next"] is None
+        assert payload["next_user"] is None
+
+
 class TestSocketIOEventFormats:
     """Verify SocketIO event payload structure matches frontend expectations."""
 
@@ -130,6 +190,7 @@ class TestSocketIOEventFormats:
         assert queue_item["user"] == "TestUser"
         assert queue_item["title"] == "Artist - Song"
         assert queue_item["semitones"] == 2
+        assert "paused" in queue_item
 
     def test_now_playing_payload_has_required_fields(self, karaoke_with_socketio):
         """now_playing event payload contains all fields required by frontend."""
@@ -140,8 +201,6 @@ class TestSocketIOEventFormats:
         pc.now_playing_transpose = 0
         pc.now_playing_duration = 240
         pc.now_playing_position = 30
-        pc.now_playing_url = "https://youtube.com/watch?v=dQw4w9WgXcQ"
-        pc.now_playing_subtitle_url = None
         pc.is_paused = False
         k.queue_manager.enqueue("/songs/Next Song---xYz1234AbCd.mp4", "NextUser")
         k.socketio.emit.reset_mock()
@@ -156,8 +215,6 @@ class TestSocketIOEventFormats:
             "now_playing_transpose",
             "now_playing_duration",
             "now_playing_position",
-            "now_playing_url",
-            "now_playing_subtitle_url",
             "is_paused",
             "volume",
             "up_next",

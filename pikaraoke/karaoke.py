@@ -2,7 +2,6 @@
 
 import logging
 import os
-import socket
 import subprocess
 import threading
 import time
@@ -14,11 +13,7 @@ from qrcode.image.pure import PyPNGImage
 
 from pikaraoke.lib.download_manager import DownloadManager
 from pikaraoke.lib.events import EventSystem
-from pikaraoke.lib.ffmpeg import (
-    get_ffmpeg_version,
-    is_transpose_enabled,
-    supports_hardware_h264_encoding,
-)
+from pikaraoke.lib.ffmpeg import get_ffmpeg_version, is_transpose_enabled
 from pikaraoke.lib.get_platform import (
     get_data_directory,
     get_os_version,
@@ -27,7 +22,9 @@ from pikaraoke.lib.get_platform import (
 )
 from pikaraoke.lib.karaoke_database import KaraokeDatabase
 from pikaraoke.lib.library_scanner import LibraryScanner, ScanResult
+from pikaraoke.lib.mpv_controller import MpvController
 from pikaraoke.lib.network import get_ip
+from pikaraoke.lib.overlay_manager import QueuedSong
 from pikaraoke.lib.playback_controller import PlaybackController
 from pikaraoke.lib.preference_manager import PreferenceManager
 from pikaraoke.lib.queue_manager import QueueManager
@@ -68,12 +65,9 @@ class Karaoke:
     base_path: str = os.path.dirname(__file__)
     loop_interval: int = 500  # in milliseconds
     default_logo_path: str = os.path.join(base_path, "static", "images", "logo.png")
-    default_bg_music_path: str = os.path.join(base_path, "static", "music")
-    default_bg_video_path: str = os.path.join(base_path, "static", "video", "night_sea.mp4")
-    screensaver_timeout: int
 
     normalize_audio: bool
-    show_splash_clock: bool
+    hide_clock: bool
 
     # Download manager for serialized downloads
     download_manager: DownloadManager
@@ -86,38 +80,24 @@ class Karaoke:
         self,
         # Non-preference parameters (keep their own defaults)
         additional_ytdl_args: str | None = None,
-        bg_music_path: str | None = None,
-        bg_video_path: str | None = None,
         config_file_path: str = "config.ini",
         download_path: str = "/usr/lib/pikaraoke/songs",
-        hide_splash_screen: bool | None = None,
         log_level: int = logging.DEBUG,
         logo_path: str | None = None,
         port: int = 5555,
-        prefer_hostname: bool | None = None,
         preferred_language: str | None = None,
         socketio=None,
-        streaming_format: str = "hls",
         url: str | None = None,
         youtubedl_proxy: str | None = None,
         # Preference parameters (defaults from PreferenceManager.DEFAULTS)
-        avsync: float | None = None,
-        bg_music_volume: float | None = None,
         browse_results_per_page: int | None = None,
-        buffer_size: int | None = None,
-        cdg_pixel_scaling: bool | None = None,
-        complete_transcode_before_play: bool | None = None,
-        disable_bg_music: bool | None = None,
-        disable_bg_video: bool | None = None,
-        disable_score: bool | None = None,
         hide_notifications: bool | None = None,
-        hide_overlay: bool | None = None,
+        hide_now_playing_overlay: bool | None = None,
         hide_url: bool | None = None,
         high_quality: bool | None = None,
         limit_user_songs_by: int | None = None,
         normalize_audio: bool | None = None,
-        screensaver_timeout: int | None = None,
-        show_splash_clock: bool | None = None,
+        hide_clock: bool | None = None,
         splash_delay: int | None = None,
         volume: float | None = None,
     ) -> None:
@@ -128,31 +108,17 @@ class Karaoke:
             download_path: Directory path for downloaded songs.
             hide_url: Hide URL and QR code on splash screen.
             hide_notifications: Disable notification popups.
-            hide_splash_screen: Run in headless mode.
             high_quality: Download higher quality videos (up to 1080p).
             volume: Default volume level (0.0 to 1.0).
             normalize_audio: Apply loudness normalization.
-            complete_transcode_before_play: Buffer entire file before playback.
-            buffer_size: Transcode buffer size in KB.
             log_level: Logging level (e.g., logging.DEBUG).
             splash_delay: Seconds to wait between songs.
             youtubedl_proxy: Proxy URL for yt-dlp.
             logo_path: Custom logo image path.
-            hide_overlay: Hide video overlay.
-            screensaver_timeout: Screensaver activation delay in seconds.
+            hide_now_playing_overlay: Hide now playing and up next overlays.
             url: Override auto-detected URL.
-            prefer_hostname: Use hostname instead of IP in URL.
-            disable_bg_music: Disable background music.
-            bg_music_volume: Background music volume (0.0 to 1.0).
-            bg_music_path: Directory for background music files.
-            bg_video_path: Path to background video file.
-            disable_bg_video: Disable background video.
-            disable_score: Disable score screen.
             limit_user_songs_by: Max songs per user in queue (0 = unlimited).
-            avsync: Audio/video sync adjustment in seconds.
             config_file_path: Path to config.ini file.
-            cdg_pixel_scaling: Enable CDG pixel scaling.
-            streaming_format: Video streaming format ('hls' or 'mp4').
             browse_results_per_page: Number of search results per page.
             additional_ytdl_args: Additional yt-dlp command arguments.
             socketio: SocketIO instance for real-time event emission.
@@ -160,7 +126,7 @@ class Karaoke:
         """
         logging.basicConfig(
             format="[%(asctime)s] %(levelname)s: %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
+            datefmt="%H:%M:%S",
             level=int(log_level),
         )
 
@@ -173,7 +139,6 @@ class Karaoke:
         self.os_version = get_os_version()
         self.ffmpeg_version = get_ffmpeg_version()
         self.is_transpose_enabled = is_transpose_enabled()
-        self.supports_hardware_h264_encoding = supports_hardware_h264_encoding()
         self.youtubedl_version = get_youtubedl_version()
         self.is_raspberry_pi = is_raspberry_pi()
 
@@ -181,16 +146,11 @@ class Karaoke:
 
         # Set non-preference attributes (not stored in config)
         self.port = port
-        self.hide_splash_screen = hide_splash_screen
         self.download_path = download_path
         self.log_level = log_level
         self.youtubedl_proxy = youtubedl_proxy
         self.additional_ytdl_args = additional_ytdl_args
         self.logo_path = self.default_logo_path if logo_path is None else logo_path
-        self.prefer_hostname = prefer_hostname
-        self.bg_music_path = self.default_bg_music_path if bg_music_path is None else bg_music_path
-        self.bg_video_path = self.default_bg_video_path if bg_video_path is None else bg_video_path
-        self.streaming_format = streaming_format
         self.socketio = socketio
         self.url_override = url
         self.url = self.get_url()
@@ -215,13 +175,38 @@ class Karaoke:
             self.preferences.set("preferred_language", preferred_language)
             logging.info(f"Setting preferred language to: {preferred_language}")
 
-        # Initialize playback controller for video playback and FFmpeg coordination
+        # Initialize MPV controller
+        self.mpv_controller = MpvController()
+        self.mpv_controller._server_url = self.url
+        self.mpv_controller._preferences = self.preferences
+
+        # Initialize playback controller before wiring callbacks (callbacks reference it)
         self.playback_controller = PlaybackController(
             preferences=self.preferences,
             events=self.events,
             filename_from_path=SongManager.filename_from_path,
-            streaming_format=self.streaming_format,
+            mpv=self.mpv_controller,
+            get_loudnorm_offset=self.song_manager.get_loudnorm_offset,
         )
+
+        # Wire song-end callback through PlaybackController
+        def _on_song_end():
+            with self.playback_controller._playback_lock:
+                self.playback_controller.end_song(reason="complete")
+
+        self.mpv_controller.set_callbacks(
+            on_song_end=_on_song_end,
+            on_resize=self.mpv_controller.tick_overlays,
+            on_tick=self.mpv_controller.tick_overlays,
+        )
+
+        audio_device = self.preferences.get_or_default("audio_device")
+        self.mpv_controller.start(audio_device=audio_device, audio_delay=self.audio_delay)
+        # Apply the loaded volume preference to the system now that MPV is running.
+        # self.volume was loaded by _load_preferences() before mpv_controller existed,
+        # so apply it explicitly here to sync the system audio sink to the saved default.
+        pct = max(0, min(100, int(self.volume * 100)))
+        self.mpv_controller.set_system_volume(pct)
 
         # Event bridging: the coordinator wires manager events to the UI (SocketIO/notifications).
         self.events.on("notification", self.log_and_send)
@@ -263,6 +248,17 @@ class Karaoke:
             additional_ytdl_args=self.additional_ytdl_args,
         )
         self.download_manager.start()
+
+        # Wire overlay state provider so the MPV poll thread can render OSD overlays
+        if self.mpv_controller.is_running:
+            self.playback_controller._get_queue_preview = lambda: tuple(
+                QueuedSong(title=item["title"], singer=item["user"])
+                for item in self.queue_manager.queue
+                if not item.get("paused", False)
+            )[:5]
+            self.mpv_controller.set_overlay_state_provider(
+                self.playback_controller.build_overlay_state
+            )
 
         # Song library startup: warm cache from DB or blocking cold scan
         paths = self.db.get_all_song_paths()
@@ -367,10 +363,7 @@ class Karaoke:
             logging.debug("Overriding URL with " + self.url_override)
             url = self.url_override
         else:
-            if self.prefer_hostname:
-                url = f"http://{socket.getfqdn().lower()}:{self.port}"
-            else:
-                url = f"http://{self.ip}:{self.port}"
+            url = f"http://{self.ip}:{self.port}"
         return url
 
     def log_settings_to_debug(self) -> None:
@@ -499,8 +492,9 @@ class Karaoke:
             return False
 
     def stop(self) -> None:
-        """Stop the karaoke run loop."""
+        """Stop the karaoke run loop and shut down MPV."""
         self.running = False
+        self.mpv_controller.quit()
 
     def handle_run_loop(self) -> None:
         """Handle one iteration of the main run loop with a sleep interval."""
@@ -523,7 +517,7 @@ class Karaoke:
             Dictionary with now playing info, queue preview, and volume.
         """
         queue = self.queue_manager.queue
-        next_song = queue[0] if queue else None
+        next_song = next((item for item in queue if not item.get("paused", False)), None)
 
         # Get playback state from PlaybackController
         playback_state = self.playback_controller.get_now_playing()
@@ -545,8 +539,12 @@ class Karaoke:
 
         This method blocks until stop() is called or KeyboardInterrupt.
         """
+        if not self.mpv_controller.is_running:
+            logging.error("Cannot start run loop: MPV is not running")
+            return
+
         logging.debug("Starting PiKaraoke run loop")
-        logging.info(f"Connect the player host to: {self.url}/splash")
+        logging.info(f"PiKaraoke started at: {self.url}")
         self.running = True
         while self.running:
             try:
@@ -557,8 +555,14 @@ class Karaoke:
                 ):
                     self.reset_now_playing()
 
+                # Broadcast position to remote UI clients
+                self.playback_controller.broadcast_position(self.socketio)
+
                 # Start next song from queue if not currently playing
-                if len(self.queue_manager.queue) > 0 and not self.playback_controller.is_playing:
+                if (
+                    self.queue_manager.has_playable_song()
+                    and not self.playback_controller.is_playing
+                ):
                     self.reset_now_playing()
                     # Splash delay between songs
                     splash_delay = self.preferences.get_or_default("splash_delay")
@@ -578,7 +582,6 @@ class Karaoke:
                     if not result.success and result.error:
                         self.log_and_send(result.error, "danger")
 
-                self.playback_controller.log_output()
                 self.handle_run_loop()
             except KeyboardInterrupt:
                 logging.warning("Keyboard interrupt: Exiting pikaraoke...")

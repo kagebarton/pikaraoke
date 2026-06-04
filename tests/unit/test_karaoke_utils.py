@@ -117,7 +117,6 @@ class TestResetNowPlaying:
         pc.now_playing = "Test Song"
         pc.now_playing_filename = "/songs/test.mp4"
         pc.now_playing_user = "TestUser"
-        pc.now_playing_url = "http://localhost/stream"
         pc.now_playing_transpose = 3
         pc.now_playing_duration = 200
         pc.is_paused = False
@@ -128,7 +127,6 @@ class TestResetNowPlaying:
         assert pc.now_playing is None
         assert pc.now_playing_filename is None
         assert pc.now_playing_user is None
-        assert pc.now_playing_url is None
         assert pc.now_playing_transpose == 0
         assert pc.now_playing_duration is None
         assert pc.now_playing_position is None
