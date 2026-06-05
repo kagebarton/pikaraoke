@@ -172,28 +172,15 @@ def main() -> None:
         log_level=args.log_level,
         volume=args.volume,
         normalize_audio=args.normalize_audio,
-        complete_transcode_before_play=args.complete_transcode_before_play,
-        buffer_size=args.buffer_size,
         hide_url=args.hide_url,
         hide_notifications=args.hide_notifications,
-        hide_splash_screen=args.hide_splash_screen,
         high_quality=args.high_quality,
         logo_path=args.logo_path,
-        hide_overlay=args.hide_overlay,
-        show_splash_clock=args.show_splash_clock,
+        hide_now_playing_overlay=args.hide_now_playing_overlay,
+        hide_clock=args.hide_clock,
         url=args.url,
-        prefer_hostname=args.prefer_hostname,
-        disable_bg_music=args.disable_bg_music,
-        bg_music_volume=args.bg_music_volume,
-        bg_music_path=args.bg_music_path,
-        disable_bg_video=args.disable_bg_video,
-        bg_video_path=args.bg_video_path,
-        disable_score=args.disable_score,
         limit_user_songs_by=args.limit_user_songs_by,
-        avsync=float(args.avsync) if args.avsync is not None else None,
         config_file_path=args.config_file_path,
-        cdg_pixel_scaling=args.cdg_pixel_scaling,
-        streaming_format=args.streaming_format,
         additional_ytdl_args=getattr(args, "ytdl_args", None),
         socketio=socketio,
         preferred_language=args.preferred_language,
@@ -204,7 +191,7 @@ def main() -> None:
         app.config["KARAOKE_INSTANCE"] = k
 
     # expose shared configuration variables to the flask app
-    app.config["ADMIN_PASSWORD"] = args.admin_password
+    app.config["ADMIN_PASSWORD"] = k.admin_password or None
     app.config["SITE_NAME"] = "PiKaraoke"
 
     # Expose some functions to jinja templates
