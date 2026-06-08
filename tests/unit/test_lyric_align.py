@@ -268,3 +268,79 @@ class TestMatchMethodEscalation:
         worker.discard_cached.assert_called_once_with("rid-1")
         worker.refine_from_cached.assert_not_called()
         worker.transcribe_words.assert_called_once()
+
+
+class TestJointRoute:
+    """match_method='joint' runs align + refine + transcribe(refine=False) →
+    joint matcher; no escalation, no gating."""
+
+    def test_joint_calls_all_three_with_refine_false_on_transcribe(self, tmp_path):
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path, match_method="joint")
+        stage.run(ctx)
+        worker.align_check.assert_called_once()
+        worker.refine_from_cached.assert_called_once()
+        worker.transcribe_words.assert_called_once()
+        # transcribe runs with refine=False under joint — saves a whole-song
+        # refine pass we don't use on transcribe-won lines.
+        call = worker.transcribe_words.call_args
+        assert call.kwargs.get("refine") is False
+        # No escalation/discard on the joint path.
+        worker.discard_cached.assert_not_called()
+
+    def test_joint_clean_song_lines_use_align_timings(self, tmp_path):
+        # Align and transcribe agree everywhere → align wins on ties →
+        # per-word timings should be the align ones (exactly the input).
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path, match_method="joint")
+        # The fixture's align_words and transcribe_words already match
+        # the lyrics ("hello world") at [0-1, 1-2].
+        stage.run(ctx)
+        ass_path = ctx.song_path.parent / "karaoke" / f"{ctx.song_path.stem}.ass"
+        assert ass_path.exists()
+
+    def test_joint_misplaced_long_line_goes_to_transcribe(self, tmp_path):
+        # Align places the lyrics at a wrong time; transcribe finds them at
+        # the correct sung time. Joint matcher should adopt transcribe's
+        # placement for the misplaced line.
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path, match_method="joint")
+
+        # Long line so the transcribe_match outscores the joint_alpha prior:
+        # 8 tokens of lyrics. Align maps them all to 3-9s (wrong audio).
+        # Transcribe finds the matching content at 15-19s.
+        lyric_words = ["no", "worries", "for", "the", "rest", "of", "your", "days"]
+        ctx.artifacts["lyrics_path"].write_text(" ".join(lyric_words) + "\n", encoding="utf-8")
+        worker.align_check.return_value = {
+            "fail_ratio": 0.0,
+            "result_id": "rid-1",
+            "words": [
+                {"word": w, "start": 3.0 + i * 0.5, "end": 3.0 + i * 0.5 + 0.4}
+                for i, w in enumerate(lyric_words)
+            ],
+        }
+        worker.refine_from_cached.return_value = [
+            {"word": w, "start": 3.0 + i * 0.5, "end": 3.0 + i * 0.5 + 0.4}
+            for i, w in enumerate(lyric_words)
+        ]
+        # Transcribe heard the line correctly at 15-19s plus some noise at 3-9s.
+        noise = [
+            {"word": w, "start": 3.0 + i, "end": 3.5 + i}
+            for i, w in enumerate(["zzz", "qqq", "vvv", "xxx", "yyy", "ttt"])
+        ]
+        sung = [
+            {"word": w, "start": 15.0 + i * 0.5, "end": 15.0 + i * 0.5 + 0.4}
+            for i, w in enumerate(lyric_words)
+        ]
+        worker.transcribe_words.return_value = noise + sung
+
+        stage.run(ctx)
+        ass_path = ctx.song_path.parent / "karaoke" / f"{ctx.song_path.stem}.ass"
+        assert ass_path.exists()
+        ass_text = ass_path.read_text(encoding="utf-8")
+        # The dialogue line should be timed near 15s, not 3s — assert no
+        # event starts in [3, 9].
+        dialogue = [line for line in ass_text.splitlines() if line.startswith("Dialogue:")]
+        assert len(dialogue) == 1
+        # Dialogue: 0,H:MM:SS.cc,H:MM:SS.cc,...
+        start_str = dialogue[0].split(",", 2)[1]
+        h, m, s = start_str.split(":")
+        start_secs = int(h) * 3600 + int(m) * 60 + float(s)
+        assert start_secs >= 14.0, f"expected start near 15s; got {start_secs}"

@@ -36,6 +36,7 @@ import srt
 
 from pikaraoke.lib import alignment_capture
 from pikaraoke.lib.genius_lyrics import clean_srt_line, parse_lyric_lines
+from pikaraoke.lib.joint_match import match_words_to_lines_joint_with_stats
 from pikaraoke.lib.tiling_match import match_words_to_lines_tiling_with_stats
 from pikaraoke.lib.word_alignment import match_words_to_lines_with_stats
 from pikaraoke.pipeline.config import PipelineConfig
@@ -71,6 +72,8 @@ class LyricAlignStage(BaseStage):
         capture_words_source: str | None = None
         capture_walk_stats: dict | None = None
         capture_tiling_stats: dict | None = None
+        capture_joint_stats: dict | None = None
+        capture_transcribe_words: list | None = None
         capture_fail_ratio: float | None = None
         capture_collapse_ratio: float | None = None
         capture_escalated = False
@@ -86,8 +89,25 @@ class LyricAlignStage(BaseStage):
 
             method = self._config.match_method
             use_tiling = method == "tiling"
+            use_joint = method == "joint"
 
-            if not use_tiling:
+            if use_joint:
+                (
+                    line_objects,
+                    capture_words,
+                    capture_transcribe_words,
+                    capture_joint_stats,
+                ) = self._run_joint(
+                    ctx,
+                    vocal_wav,
+                    lyrics_text,
+                    lyrics_lines,
+                    align_lines,
+                )
+                capture_words_source = "refine"
+                capture_method_used = "joint"
+
+            elif not use_tiling:
                 # walk / auto: run align() first so we can gate on its
                 # failure ratio *and* a collapse-ratio signal *before*
                 # paying for refine. align_check returns the pre-refine
@@ -253,6 +273,8 @@ class LyricAlignStage(BaseStage):
                 words_source=capture_words_source,
                 walk_stats=capture_walk_stats,
                 tiling_stats=capture_tiling_stats,
+                joint_stats=capture_joint_stats,
+                transcribe_words=capture_transcribe_words,
                 fail_ratio=capture_fail_ratio,
                 collapse_ratio=capture_collapse_ratio,
                 method_used=capture_method_used,
@@ -274,6 +296,8 @@ class LyricAlignStage(BaseStage):
         words_source: str | None,
         walk_stats: dict | None,
         tiling_stats: dict | None,
+        joint_stats: dict | None,
+        transcribe_words: list | None,
         fail_ratio: float | None,
         collapse_ratio: float | None,
         method_used: str | None,
@@ -310,6 +334,7 @@ class LyricAlignStage(BaseStage):
                 "method_used": method_used,
                 "escalated_to_tiling": escalated,
                 "escalation_trigger": escalation_trigger,
+                "joint_alpha": cfg.joint_alpha if method_used == "joint" else None,
             }
             yt_srt = _find_youtube_srt_path(ctx.song_path)
             # When the YT SRT *is* the lyric source (common — the lyrics
@@ -341,6 +366,8 @@ class LyricAlignStage(BaseStage):
                 words_source=words_source,
                 walk_stats=walk_stats,
                 tiling_stats=tiling_stats,
+                joint_stats=joint_stats,
+                transcribe_words=transcribe_words,
                 output_summary=alignment_capture.summarize_line_objects(line_objects),
                 output_line_timings=alignment_capture.output_line_timings(line_objects),
                 ground_truth_refs=ground_truth_refs,
@@ -484,6 +511,66 @@ class LyricAlignStage(BaseStage):
             self._worker.discard_cached(result_id)
         except Exception as exc:
             logger.debug("discard_cached failed during %s: %s", context_msg, exc)
+
+    def _run_joint(
+        self,
+        ctx: StageContext,
+        vocal_wav: Path,
+        lyrics_text: str,
+        lyrics_lines: list[str],
+        align_lines: list[str],
+    ) -> tuple[list[dict], list[dict], list[dict], dict]:
+        """Run the joint matcher route: align + refine + transcribe (no refine)
+        → joint DP matcher.
+
+        Returns ``(line_objects, refined_align_words, transcribe_words, joint_stats)``.
+        Refined align words and the transcribe words are returned for the
+        capture bundle — both are needed to re-run the joint matcher
+        offline at different α values.
+        """
+        check = _model_call(
+            ctx,
+            Phase.ALIGN_CHECK,
+            lambda: self._worker.align_check(
+                vocal_path=vocal_wav,
+                lyrics_text=lyrics_text,
+                cancel_event=ctx.cancel.event if ctx.cancel else None,
+            ),
+        )
+        result_id = check["result_id"]
+
+        align_words = _model_call(
+            ctx,
+            Phase.REFINE,
+            lambda: self._worker.refine_from_cached(
+                result_id=result_id,
+                vocal_path=vocal_wav,
+                cancel_event=ctx.cancel.event if ctx.cancel else None,
+            ),
+        )
+
+        logger.info(
+            f"[{self.name}] Transcribing (no refine) for joint match: {Path(vocal_wav).name}"
+        )
+        transcribe_words = _model_call(
+            ctx,
+            Phase.TRANSCRIBE,
+            lambda: self._worker.transcribe_words(
+                vocal_path=vocal_wav,
+                cancel_event=ctx.cancel.event if ctx.cancel else None,
+                refine=False,
+            ),
+        )
+
+        line_objects, joint_stats = match_words_to_lines_joint_with_stats(
+            align_words,
+            transcribe_words,
+            lyrics_lines,
+            align_lines,
+            alpha=self._config.joint_alpha,
+            margin_s=self._config.joint_margin_s,
+        )
+        return line_objects, align_words, transcribe_words, joint_stats
 
 
 # ---------------------------------------------------------------------------
