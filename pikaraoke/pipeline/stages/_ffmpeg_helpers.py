@@ -58,12 +58,22 @@ def run_ffmpeg(
 
     stderr_data: bytes | None = None
     if ctx.cancel is not None:
-        with ctx.cancel.activity(phase, KillProcess(proc)):
-            if capture_stderr:
-                _, stderr_data = proc.communicate()
-            else:
-                proc.wait()
-        # activity() re-raises PipelineCancelled on exit if cancelled
+        try:
+            with ctx.cancel.activity(phase, KillProcess(proc)):
+                if capture_stderr:
+                    _, stderr_data = proc.communicate()
+                else:
+                    proc.wait()
+            # activity() re-raises PipelineCancelled on exit if cancelled
+        except PipelineCancelled:
+            # A cancel landing between Popen() above and activity()'s
+            # __enter__ registering KillProcess raises here with the proc
+            # still un-killed (it wasn't the cancel target yet) — SIGKILL and
+            # reap it so no orphaned ffmpeg finishes into the doomed tmp_dir.
+            # No-op if the cancel mechanism already killed it inside the body.
+            proc.kill()
+            proc.wait()
+            raise
     else:
         # No cancel support — straight wait, no activity bookkeeping.
         if capture_stderr:

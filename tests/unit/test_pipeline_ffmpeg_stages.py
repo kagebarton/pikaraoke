@@ -81,14 +81,21 @@ class TestRunFfmpeg:
         assert popen.call_args.kwargs["stdout"] == 7
         assert popen.call_args.kwargs["stderr"] == 7
 
-    def test_precancelled_token_raises_before_wait(self, tmp_path):
+    def test_precancelled_token_reaps_orphan_and_raises(self, tmp_path):
+        # A cancel that lands before activity() registers KillProcess (the
+        # Popen-to-__enter__ window, reproduced here with an already-cancelled
+        # token) must still SIGKILL + reap the just-spawned proc — the activity
+        # body never runs, so the cancel mechanism never killed it, and an
+        # un-reaped ffmpeg would otherwise finish into the doomed tmp_dir.
         proc = _mock_popen()
         tok = CancelToken(event=threading.Event())
         tok.cancel()
         with patch(_POPEN, return_value=proc):
             with pytest.raises(PipelineCancelled):
                 run_ffmpeg(["ffmpeg"], _ctx(tmp_path, cancel=tok), Phase.EXTRACT)
-        proc.wait.assert_not_called()
+        proc.kill.assert_called_once()  # orphan reaped
+        proc.wait.assert_called_once()  # ...and waited (body's wait never ran)
+        proc.communicate.assert_not_called()  # body work never started
 
 
 class TestLoudnormJsonExtraction:
