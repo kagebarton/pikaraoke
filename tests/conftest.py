@@ -54,6 +54,25 @@ class MockPlaybackController:
             "is_paused": self.is_paused,
         }
 
+    def restart(self) -> bool:
+        """Mock restart."""
+        if self.is_playing:
+            self.is_paused = False
+            return True
+        return False
+
+    def set_pitch(self, semitones: int) -> None:
+        """Mock set_pitch."""
+        self.now_playing_transpose = semitones
+
+    def set_subtitle_delay(self, seconds: float) -> None:
+        """Mock set_subtitle_delay."""
+        pass
+
+    def broadcast_position(self, socketio) -> None:
+        """Mock broadcast_position."""
+        pass
+
 
 class MockSongManager:
     """Minimal mock of SongManager for testing."""
@@ -87,6 +106,8 @@ class MockKaraoke:
         self.volume = 0.85
         self.running = True
         self.now_playing_notification = None
+        self.subtitle_delay = 0
+        self.vocal_volume = 0.4
         self.temp_dir = ""
         self.processing_manager = MagicMock()
 

@@ -37,7 +37,6 @@ def pause():
 def transpose(semitones):
     """Transpose (pitch shift) the current song."""
     k = get_karaoke_instance()
-    broadcast_event("skip", "transpose current")
     k.transpose_current(int(semitones))
     return redirect(url_for("home.home"))
 
@@ -76,3 +75,40 @@ def vol_down():
     broadcast_event("volume", "down")
     k.vol_down()
     return redirect(url_for("home.home"))
+
+
+@controller_bp.route("/subtitle_delay/<seconds>")
+def subtitle_delay(seconds):
+    """Set subtitle delay for current song (temporary override)."""
+    k = get_karaoke_instance()
+    k.set_subtitle_delay(float(seconds))
+    broadcast_event("subtitle_delay", seconds)
+    return redirect(url_for("home.home"))
+
+
+@controller_bp.route("/vocal_volume/<volume>")
+def vocal_volume(volume):
+    """Set vocal volume for dual-stem songs."""
+    k = get_karaoke_instance()
+    k.set_vocal_volume(float(volume))
+    broadcast_event("vocal_volume", volume)
+    return redirect(url_for("home.home"))
+
+
+@controller_bp.route("/sub_mode/<mode>")
+def sub_mode(mode):
+    """Set subtitle mode for current song."""
+    if mode not in ("karaoke", "srt", "off"):
+        return ("invalid mode", 400)
+    k = get_karaoke_instance()
+    k.set_sub_mode(mode)
+    broadcast_event("sub_mode", mode)
+    return redirect(url_for("home.home"))
+
+
+@controller_bp.route("/seek/<position>")
+def seek(position):
+    """Seek to absolute position in seconds."""
+    k = get_karaoke_instance()
+    k.playback_controller.seek(float(position))
+    return ("", 204)

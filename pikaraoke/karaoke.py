@@ -64,7 +64,7 @@ class Karaoke:
     pipeline_tracker: PipelineTracker
 
     now_playing_notification: str | None = None
-    volume: float
+    _volume: float  # backing field; access via .volume property
 
     qr_code_path: str | None = None
     base_path: str = os.path.dirname(__file__)
@@ -105,9 +105,12 @@ class Karaoke:
         hide_clock: bool | None = None,
         splash_delay: int | None = None,
         blocked_processing_words: str | None = None,
+        subtitle_delay: float | None = None,
+        audio_delay: float | None = None,
         genius_token: str | None = None,
         temp_dir: str | None = None,
         volume: float | None = None,
+        vocal_volume: float | None = None,
     ) -> None:
         """Initialize the Karaoke instance.
 
@@ -126,6 +129,7 @@ class Karaoke:
             hide_now_playing_overlay: Hide now playing and up next overlays.
             url: Override auto-detected URL.
             limit_user_songs_by: Max songs per user in queue (0 = unlimited).
+            subtitle_delay: Subtitle timing delay in seconds (negative = earlier).
             config_file_path: Path to config.ini file.
             browse_results_per_page: Number of search results per page.
             additional_ytdl_args: Additional yt-dlp command arguments.
@@ -214,8 +218,9 @@ class Karaoke:
         audio_device = self.preferences.get_or_default("audio_device")
         self.mpv_controller.start(audio_device=audio_device, audio_delay=self.audio_delay)
         # Apply the loaded volume preference to the system now that MPV is running.
-        # self.volume was loaded by _load_preferences() before mpv_controller existed,
-        # so apply it explicitly here to sync the system audio sink to the saved default.
+        # self.volume was set by _load_preferences() before mpv_controller existed,
+        # so the property setter's is_running guard did not fire — this explicit call
+        # bridges that gap so the actual system volume matches the saved default.
         pct = max(0, min(100, int(self.volume * 100)))
         self.mpv_controller.set_system_volume(pct)
 
@@ -463,26 +468,40 @@ class Karaoke:
             self.send_notification(message, "primary")
 
     def transpose_current(self, semitones: int) -> None:
-        """Restart the current song with a new transpose value.
+        """Live pitch change on current song (no restart, no re-enqueue).
 
         Args:
             semitones: Number of semitones to transpose.
         """
-        filename = self.playback_controller.now_playing_filename
-        user = self.playback_controller.now_playing_user
-        now_playing = self.playback_controller.now_playing
-
-        if filename is None or user is None:
+        if not self.playback_controller.is_playing:
             logging.warning("Cannot transpose: no song currently playing")
             return
-        # MSG: Message shown after the song is transposed, first is the semitones and then the song name
-        self.log_and_send(_("Transposing by %s semitones: %s") % (semitones, now_playing))
-        # Insert the same song at the top of the queue with transposition
-        self.queue_manager.enqueue(filename, user, semitones, True)
-        self.playback_controller.skip(log_action=False)
+        self.log_and_send(
+            _("Transposing by %s semitones: %s") % (semitones, self.playback_controller.now_playing)
+        )
+        self.playback_controller.set_pitch(semitones)
+        self.update_now_playing_socket()
+
+    @property
+    def volume(self) -> float:
+        """Current volume level (0.0 to 1.0).
+
+        The setter automatically applies the value to the system audio sink
+        whenever MPV is running, keeping the UI and system volume in sync
+        regardless of whether the write comes from the slider, a preference
+        save, vol_up/down, or startup initialization.
+        """
+        return getattr(self, "_volume", 0.85)
+
+    @volume.setter
+    def volume(self, value: float) -> None:
+        self._volume = value
+        if getattr(self, "mpv_controller", None) and self.mpv_controller.is_running:
+            pct = max(0, min(100, int(value * 100)))
+            self.mpv_controller.set_system_volume(pct)
 
     def volume_change(self, vol_level: float) -> bool:
-        """Set the volume level.
+        """Set system volume level, log, and notify clients.
 
         Args:
             vol_level: Volume level (0.0 to 1.0).
@@ -490,9 +509,8 @@ class Karaoke:
         Returns:
             True after setting volume.
         """
-        self.volume = vol_level
-        # MSG: Message shown after the volume is changed, will be followed by the volume level
-        self.log_and_send(_("Volume: %s") % (int(self.volume * 100)))
+        self.volume = vol_level  # property setter applies to system volume
+        self.log_and_send(_("Volume: %s") % int(vol_level * 100))
         self.update_now_playing_socket()
         return True
 
@@ -508,16 +526,45 @@ class Karaoke:
         self.volume_change(new_vol)
         logging.debug(f"Decreasing volume by 10%: {self.volume}")
 
-    def restart(self) -> bool:
-        """Restart the current song from the beginning.
+    def set_subtitle_delay(self, delay: float) -> None:
+        """Set subtitle delay -- applies live to MPV.
 
-        Returns:
-            True if successful, False if nothing playing.
+        Args:
+            delay: Subtitle delay in seconds (negative = earlier, positive = later).
         """
+        self.subtitle_delay = delay
+        self.playback_controller.set_subtitle_delay(delay)
+        self.log_and_send(_("Subtitle delay: %s seconds") % delay)
+        self.update_now_playing_socket()
+
+    def set_vocal_volume(self, volume: float) -> None:
+        """Set vocal volume for dual-stem playback.
+
+        Args:
+            volume: Vocal volume level (0.0 to 1.0).
+        """
+        self.vocal_volume = volume
+        self.playback_controller.set_vocal_volume(volume)
+        self.log_and_send(_("Vocal volume: %s%%") % int(volume * 100))
+        self.update_now_playing_socket()
+
+    def set_sub_mode(self, mode: str) -> None:
+        """Set subtitle mode for current song.
+
+        Args:
+            mode: One of 'karaoke', 'srt', 'off'.
+        """
+        self.playback_controller.set_sub_mode(mode)
+        mode_labels = {"karaoke": "Karaoke", "srt": "Subtitles", "off": "Off"}
+        self.log_and_send(_("Subtitle mode: %s") % mode_labels.get(mode, mode))
+        self.update_now_playing_socket()
+
+    def restart(self) -> bool:
+        """Restart current song from beginning."""
         if self.playback_controller.is_playing:
             now_playing = self.playback_controller.now_playing
             logging.info("Restarting: " + (now_playing or "unknown song"))
-            self.playback_controller.is_paused = False
+            self.playback_controller.restart()
             self.update_now_playing_socket()
             return True
         else:
@@ -542,6 +589,10 @@ class Karaoke:
         """Reset all now playing state to defaults."""
         self.playback_controller.reset_now_playing()
         self.volume = self.preferences.get_or_default("volume")
+        # Reset subtitle delay to config default for next song
+        self.subtitle_delay = self.preferences.get_or_default("subtitle_delay")
+        # Reset vocal volume to config default for next song
+        self.vocal_volume = self.preferences.get_or_default("vocal_volume")
         self.update_now_playing_socket()
 
     def get_now_playing(self) -> dict[str, Any]:
@@ -561,6 +612,8 @@ class Karaoke:
             "up_next": next_song["title"] if next_song else None,
             "next_user": next_song["user"] if next_song else None,
             "volume": self.volume,
+            "subtitle_delay": self.subtitle_delay,
+            "vocal_volume": self.vocal_volume,
         }
 
     def update_now_playing_socket(self) -> None:
