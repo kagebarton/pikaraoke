@@ -3,7 +3,6 @@
 import datetime
 import os
 import subprocess
-import sys
 import threading
 import time
 
@@ -29,11 +28,16 @@ class AuthForm(Schema):
 
 
 def delayed_halt(cmd: int, k: Karaoke):
+    import shutil
+
     time.sleep(1.5)
     k.queue_manager.queue_clear()
     k.stop()
+    if k.temp_dir and os.path.exists(k.temp_dir):
+        shutil.rmtree(k.temp_dir, ignore_errors=True)
     if cmd == 0:
-        sys.exit()
+        # sys.exit() only kills the calling thread; os._exit() terminates the process.
+        os._exit(0)
     if cmd == 1:
         os.system("shutdown now")
     if cmd == 2:
@@ -177,7 +181,7 @@ def auth(form):
         # MSG: Message shown after logging in as admin successfully
         flash(_("Admin mode granted!"), "is-success")
     else:
-        resp = make_response(redirect(url_for("admin.login", next=next_url)))
+        resp = make_response(redirect(url_for("info.info", next=next_url)))
         # MSG: Message shown after failing to login as admin
         flash(_("Incorrect admin password!"), "is-danger")
     return resp

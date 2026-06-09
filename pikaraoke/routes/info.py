@@ -18,6 +18,20 @@ from pikaraoke.lib.get_platform import get_platform
 _ = flask_babel.gettext
 
 
+def _audio_devices_for_render(k) -> tuple[str, list[dict[str, str]]]:
+    """Return (saved_device, devices) ensuring the saved device is selectable.
+
+    If the saved device is not in the enumerated list (e.g. unplugged hardware),
+    prepend a synthetic entry so the user can still see what is currently set
+    instead of silently rebinding to ``auto`` on save.
+    """
+    saved = k.preferences.get_or_default("audio_device")
+    devices = k.mpv_controller.list_audio_devices()
+    if saved and saved != "auto" and not any(d["name"] == saved for d in devices):
+        devices = [{"name": saved, "description": f"{saved} (unavailable)"}, *devices]
+    return saved, devices
+
+
 info_bp = Blueprint("info", __name__)
 
 
@@ -33,6 +47,7 @@ def info():
     preferred_language = k.preferences.get("preferred_language", "en")
     # youtube-dl
     youtubedl_version = k.youtubedl_version
+    audio_device, audio_devices = _audio_devices_for_render(k)
 
     return render_template(
         "info.html",
@@ -52,33 +67,27 @@ def info():
         disk=None,
         is_pi=k.is_raspberry_pi,
         is_linux=is_linux,
-        volume=int(k.volume * 100),
-        bg_music_volume=int(k.bg_music_volume * 100),
-        disable_bg_music=k.disable_bg_music,
-        disable_bg_video=k.disable_bg_video,
-        disable_score=k.disable_score,
+        volume=int(k.preferences.get_or_default("volume") * 100),
         hide_notifications=k.hide_notifications,
-        show_splash_clock=k.show_splash_clock,
+        hide_clock=k.hide_clock,
         hide_url=k.hide_url,
-        hide_overlay=k.hide_overlay,
-        screensaver_timeout=k.screensaver_timeout,
+        hide_now_playing_overlay=k.hide_now_playing_overlay,
         splash_delay=k.splash_delay,
         normalize_audio=k.normalize_audio,
-        cdg_pixel_scaling=k.cdg_pixel_scaling,
         high_quality=k.high_quality,
-        complete_transcode_before_play=k.complete_transcode_before_play,
-        avsync=k.avsync,
+        subtitle_delay=k.preferences.get_or_default("subtitle_delay"),
+        audio_delay=k.preferences.get_or_default("audio_delay"),
+        vocal_volume=int(k.preferences.get_or_default("vocal_volume") * 100),
         limit_user_songs_by=k.limit_user_songs_by,
         enable_fair_queue=k.enable_fair_queue,
-        buffer_size=k.buffer_size,
         languages=LANGUAGES,
         preferred_language=preferred_language,
         browse_results_per_page=k.browse_results_per_page,
-        score_phrases={
-            "low": k.low_score_phrases,
-            "mid": k.mid_score_phrases,
-            "high": k.high_score_phrases,
-        },
+        temp_dir=k.temp_dir,
+        blocked_processing_words=k.preferences.get_or_default("blocked_processing_words"),
+        genius_token=k.preferences.get("genius_token", ""),
+        audio_device=audio_device,
+        audio_devices=audio_devices,
     )
 
 
@@ -114,3 +123,10 @@ def get_system_stats():
     disk_str = str(free) + "GB free / " + str(total) + "GB total ( " + str(disk.percent) + "% )"
 
     return jsonify({"cpu": cpu, "memory": memory_str, "disk": disk_str})
+
+
+@info_bp.route("/info/audio_devices")
+def get_audio_devices():
+    """Get available audio output devices from the running mpv player."""
+    k = get_karaoke_instance()
+    return jsonify({"devices": k.mpv_controller.list_audio_devices()})
