@@ -24,12 +24,18 @@
   margin-right: 0;
 }
 
-.control-box a {
-  color: #cccccc;
+.control-box a,
+.control-box i[onclick],
+#vol-up,
+#vol-down {
+  color: var(--controls-link-color);
 }
 
-.control-box a:hover {
-  color: #74ccb3;
+.control-box a:hover,
+.control-box i[onclick]:hover,
+#vol-up:hover,
+#vol-down:hover {
+  color: var(--controls-link-hover);
 }
 
 .pagination {
@@ -65,6 +71,42 @@
 input {
   /* prevents mobile zooming */
   font-size: 16px !important;
+}
+
+/* Subtitle mode button styling */
+#subtitle-mode-section .buttons {
+  width: 100%;
+}
+
+#subtitle-mode-section .buttons .button {
+  flex: 1;
+}
+
+.subtitle-mode-btn {
+  background-color: var(--button-normal-bg) !important;
+  color: var(--button-normal-text) !important;
+  border-color: var(--button-normal-border) !important;
+  font-size: var(--controls-button-size) !important;
+  font-weight: var(--controls-button-weight) !important;
+}
+
+.subtitle-mode-btn:hover {
+  background-color: var(--button-hover-bg) !important;
+  color: var(--button-hover-text) !important;
+}
+
+.subtitle-mode-btn.is-selected {
+  background-color: var(--button-selected-bg) !important;
+  color: var(--button-selected-text) !important;
+  border-color: var(--button-selected-bg) !important;
+}
+
+.subtitle-mode-btn:disabled {
+  background-color: var(--button-disabled-bg) !important;
+  color: var(--button-disabled-text) !important;
+  border-color: var(--button-normal-border) !important;
+  cursor: not-allowed !important;
+  opacity: var(--button-disabled-opacity) !important;
 }
 
 table {
