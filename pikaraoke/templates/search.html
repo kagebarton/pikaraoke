@@ -433,6 +433,11 @@ $("#add-queue-link").trigger("click");
 						}
 						$select[0].selectize.clear();
 					},
+					error: function (xhr) {
+						var msg = "";
+						try { msg = JSON.parse(xhr.responseText).error; } catch (err) {}
+						showNotification(msg || "Could not add to the queue.", "is-danger");
+					},
 				});
 			}
 		});
@@ -571,9 +576,10 @@ $("#add-queue-link").trigger("click");
 				data: { song: filePath, user: getUserCookie() || "" },
 				success: function (data) {
 					var result = typeof data === "string" ? JSON.parse(data) : data;
-					if (result.success) {
+					if (result.success[0]) {
 						$btn.removeClass("is-loading").html('<i class="icon icon-ok"></i>');
 					} else {
+						showNotification(result.success[1], "is-danger");
 						$btn.removeClass("is-loading").addClass("is-warning").text("Already queued");
 					}
 					setTimeout(function () {
@@ -581,7 +587,10 @@ $("#add-queue-link").trigger("click");
 							.removeAttr("disabled").css("min-width", "");
 					}, 3000);
 				},
-				error: function () {
+				error: function (xhr) {
+					var msg = "";
+					try { msg = JSON.parse(xhr.responseText).error; } catch (err) {}
+					showNotification(msg || "Could not add to the queue.", "is-danger");
 					$btn.removeClass("is-loading").addClass("is-danger").text("!");
 					setTimeout(function () {
 						$btn.removeClass("is-danger").html(originalText)

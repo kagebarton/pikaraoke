@@ -26,6 +26,11 @@
 					// {# MSG: Notification when a song does not get added to the queue.  The song name comes after this string. #}
 					showNotification(obj.success[1], "is-danger");
 				}
+			}).fail(function (xhr) {
+				// {# MSG: Notification when the server rejects a song (e.g. it is still being processed). #}
+				var msg = "";
+				try { msg = JSON.parse(xhr.responseText).error; } catch (err) {}
+				showNotification(msg || "Could not add song to the queue.", "is-danger");
 			});
 		});
 	});
