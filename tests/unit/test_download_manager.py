@@ -371,6 +371,37 @@ class TestCancelActiveDownload:
         for f in keepers:
             assert f.exists(), f"unrelated library file {f.name} must survive cancel"
 
+    def test_cancel_cleans_partials_in_separate_temp_dir(self, download_manager, tmp_path):
+        """With a separate temp_dir, yt-dlp writes .part/merge intermediates there via
+        ``--paths temp:``; cancel must sweep that directory too, keyed on the active id,
+        or the partials orphan (unrelated temp files must survive)."""
+        songs_dir = tmp_path / "songs"
+        temp_dir = tmp_path / "temp"
+        songs_dir.mkdir()
+        temp_dir.mkdir()
+        download_manager._download_path = str(songs_dir)
+        download_manager._temp_dir = str(temp_dir)
+        active_id = "dQw4w9WgXcQ"
+        active_url = f"https://www.youtube.com/watch?v={active_id}"
+
+        temp_partials = [
+            temp_dir / f"Cancelled Song [{active_id}].mp4.part",
+            temp_dir / f"Cancelled Song---{active_id}.f137.mp4",
+        ]
+        temp_keeper = temp_dir / "Other [oHg5SJYRHA0].mp4.part"
+        for f in temp_partials + [temp_keeper]:
+            f.write_text("x")
+
+        download_manager._active_process = MagicMock()
+        download_manager.active_url = active_url
+        download_manager._is_downloading = True
+
+        download_manager.cancel_active_download(active_url)
+
+        for f in temp_partials:
+            assert not f.exists(), f"temp partial {f.name} should be cleaned up"
+        assert temp_keeper.exists(), "an unrelated download's temp partial must survive"
+
     def test_cancel_with_mismatched_url_is_noop(self, download_manager, tmp_path):
         """A stale cancel (target URL no longer the active one) must not kill the
         process or touch the library — the active download has moved on."""

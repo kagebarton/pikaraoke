@@ -335,19 +335,28 @@ class DownloadManager:
         self.download_queue = new_queue
 
     def _cleanup_partial_downloads(self, video_id: str) -> None:
-        """Remove partial download files matching a video ID."""
-        download_dir = Path(self._download_path)
+        """Remove partial download files matching a video ID.
+
+        Sweeps the temp directory as well as the download directory: with a
+        non-empty temp_dir, yt-dlp writes .part/merge intermediates under
+        ``--paths temp:`` there, so a cancelled download would orphan them
+        unless both locations are cleaned.
+        """
         # Match the bare 11-char ID, which covers both filename conventions
         # (Title---VIDEOID.* and Title [VIDEOID].*). Globbing the literal ID rather than
         # a [VIDEOID] bracket pattern avoids the character-class misread that would match
         # every file in the directory.
-        for f in download_dir.glob(f"*{video_id}*"):
-            if f.is_file():
-                try:
-                    f.unlink()
-                    logging.debug(f"Cleaned up partial download: {f}")
-                except OSError as e:
-                    logging.warning(f"Failed to clean partial download {f}: {e}")
+        search_dirs = [Path(self._download_path)]
+        if self._temp_dir and Path(self._temp_dir) != Path(self._download_path):
+            search_dirs.append(Path(self._temp_dir))
+        for search_dir in search_dirs:
+            for f in search_dir.glob(f"*{video_id}*"):
+                if f.is_file():
+                    try:
+                        f.unlink()
+                        logging.debug(f"Cleaned up partial download: {f}")
+                    except OSError as e:
+                        logging.warning(f"Failed to clean partial download {f}: {e}")
 
     def _move_downloaded_subtitle(self, video_path: str) -> None:
         video = Path(video_path)

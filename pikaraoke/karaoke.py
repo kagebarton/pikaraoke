@@ -14,10 +14,12 @@ from qrcode.image.pure import PyPNGImage
 from pikaraoke.lib.download_manager import DownloadManager
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.ffmpeg import get_ffmpeg_version, is_transpose_enabled
+from pikaraoke.lib.genius import GeniusClient
 from pikaraoke.lib.get_platform import (
     get_data_directory,
     get_os_version,
     get_platform,
+    get_temp_directory,
     is_raspberry_pi,
 )
 from pikaraoke.lib.karaoke_database import KaraokeDatabase
@@ -25,8 +27,10 @@ from pikaraoke.lib.library_scanner import LibraryScanner, ScanResult
 from pikaraoke.lib.mpv_controller import MpvController
 from pikaraoke.lib.network import get_ip
 from pikaraoke.lib.overlay_manager import QueuedSong
+from pikaraoke.lib.pipeline_tracker import PipelineTracker
 from pikaraoke.lib.playback_controller import PlaybackController
 from pikaraoke.lib.preference_manager import PreferenceManager
+from pikaraoke.lib.processing_manager import ProcessingManager
 from pikaraoke.lib.queue_manager import QueueManager
 from pikaraoke.lib.song_manager import SongManager
 from pikaraoke.lib.youtube_dl import (
@@ -57,6 +61,7 @@ class Karaoke:
     song_manager: SongManager
     queue_manager: QueueManager
     playback_controller: PlaybackController
+    pipeline_tracker: PipelineTracker
 
     now_playing_notification: str | None = None
     volume: float
@@ -99,6 +104,9 @@ class Karaoke:
         normalize_audio: bool | None = None,
         hide_clock: bool | None = None,
         splash_delay: int | None = None,
+        blocked_processing_words: str | None = None,
+        genius_token: str | None = None,
+        temp_dir: str | None = None,
         volume: float | None = None,
     ) -> None:
         """Initialize the Karaoke instance.
@@ -159,12 +167,15 @@ class Karaoke:
         cli_args = {k: v for k, v in locals().items() if k != "self"}
         self._load_preferences(**cli_args)
 
+        # Resolve temp_dir using the centralized helper
+        self.temp_dir = get_temp_directory(self.temp_dir)
+
         # Log the settings to debug level
         self.log_settings_to_debug()
 
         # Initialize database, scanner, and song manager (startup runs at end of __init__)
         self.db = KaraokeDatabase()
-        self.song_manager = SongManager(self.download_path, db=self.db)
+        self.song_manager = SongManager(self.download_path, db=self.db, events=self.events)
         self._scanner = LibraryScanner(self.db)
         self._sync_lock = threading.Lock()
 
@@ -246,8 +257,30 @@ class Karaoke:
             download_path=self.download_path,
             youtubedl_proxy=self.youtubedl_proxy,
             additional_ytdl_args=self.additional_ytdl_args,
+            temp_dir=self.temp_dir,
         )
         self.download_manager.start()
+
+        # Initialize and start stem separation processor
+        self.genius_client = GeniusClient(api_token=self.genius_token or "")
+        self.processing_manager = ProcessingManager(
+            events=self.events,
+            preferences=self.preferences,
+            song_manager=self.song_manager,
+            genius_client=self.genius_client,
+            temp_dir=self.temp_dir,
+            log_level=self.log_level,
+        )
+        self.processing_manager.start()
+
+        # Initialize pipeline tracker for processing page
+        self.pipeline_tracker = PipelineTracker(
+            download_manager=self.download_manager,
+            processing_manager=self.processing_manager,
+            queue_manager=self.queue_manager,
+            song_manager=self.song_manager,
+            events=self.events,
+        )
 
         # Wire overlay state provider so the MPV poll thread can render OSD overlays
         if self.mpv_controller.is_running:
@@ -494,6 +527,7 @@ class Karaoke:
     def stop(self) -> None:
         """Stop the karaoke run loop and shut down MPV."""
         self.running = False
+        self.processing_manager.stop()
         self.mpv_controller.quit()
 
     def handle_run_loop(self) -> None:
