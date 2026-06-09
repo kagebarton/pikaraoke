@@ -87,6 +87,8 @@ class MockKaraoke:
         self.volume = 0.85
         self.running = True
         self.now_playing_notification = None
+        self.temp_dir = ""
+        self.processing_manager = MagicMock()
 
         # Set preferences that differ from defaults
         self.preferences.set("enable_fair_queue", True)
