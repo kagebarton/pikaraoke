@@ -80,7 +80,10 @@ class PreferenceManager:
                 logging.error(f"Failed to migrate config file: {e}")
 
     def get(
-        self, preference: str, default_value: Any = None, section: str = "USERPREFERENCES"
+        self,
+        preference: str,
+        default_value: Any = None,
+        section: str = "USERPREFERENCES",
     ) -> Any:
         """Get a preference value, auto-converting to bool/int/float."""
         # Silently ignores missing files
@@ -122,6 +125,12 @@ class PreferenceManager:
 
             # Auto-sync target object if registered
             if self._target is not None:
+                # Skip preferences that have per-song live overrides on the Karaoke
+                # instance — saving a new default should not affect the current song.
+                # volume:        k.volume tracks live playback; default applies at song start
+                # subtitle_delay: same pattern — per-song override via the now-playing slider
+                if preference in ("subtitle_delay", "volume", "vocal_volume"):
+                    return (True, _("Your preferences were changed successfully"))
                 default = self.DEFAULTS.get(preference)
                 typed_val = str(val) if isinstance(default, str) else self._convert_value(val)
                 setattr(self._target, preference, typed_val)

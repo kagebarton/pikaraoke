@@ -477,14 +477,14 @@ def test_set_syncs_target_object(temp_config_file):
     target = MockTarget()
     prefs = PreferenceManager(temp_config_file, target=target)
 
-    # Set a preference
-    success, message = prefs.set("volume", "0.7")
+    # Set a preference that is not in the per-song-override skip list
+    success, message = prefs.set("splash_delay", "5")
     assert success is True
 
     # Verify target object was synced with typed value
-    assert hasattr(target, "volume")
-    assert target.volume == 0.7
-    assert isinstance(target.volume, float)
+    assert hasattr(target, "splash_delay")
+    assert target.splash_delay == 5
+    assert isinstance(target.splash_delay, int)
 
 
 def test_set_without_target_does_not_fail(temp_config_file):
