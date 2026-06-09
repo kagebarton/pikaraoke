@@ -402,6 +402,25 @@ class PlaybackController:
             self.now_playing_transpose = semitones
             self.events.emit("now_playing_update")
 
+    def set_subtitle_delay(self, seconds: float) -> None:
+        """Forward subtitle delay to MPV."""
+        if self.is_playing:
+            self.mpv.set_subtitle_delay(seconds)
+
+    def set_sub_mode(self, mode: str) -> None:
+        """Change subtitle mode for the current song."""
+        if self.is_playing:
+            self.mpv.set_sub_mode(mode)
+            self.now_playing_sub_mode = mode
+            self.events.emit("now_playing_update")
+
+    def set_vocal_volume(self, volume: float) -> None:
+        """Change vocal volume for the current song (dual-stem only)."""
+        if self.is_playing:
+            self.mpv.set_vocal_volume(volume)
+            self.now_playing_vocal_volume = volume
+            self.events.emit("now_playing_update")
+
     def seek(self, position: float) -> None:
         """Seek to absolute position in seconds."""
         if self.is_playing:

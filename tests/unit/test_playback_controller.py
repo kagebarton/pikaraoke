@@ -373,6 +373,18 @@ class TestPlaybackControllerNewMethods:
 
         assert result is False
 
+    def test_set_subtitle_delay(self, test_prefs, mock_mpv):
+        """Test set_subtitle_delay forwards to MPV."""
+        events = EventSystem()
+        filename_fn = lambda x, remove_youtube_id=True: x
+
+        pc = PlaybackController(test_prefs, events, filename_fn, mock_mpv)
+        pc.is_playing = True
+
+        pc.set_subtitle_delay(1.5)
+
+        mock_mpv.set_subtitle_delay.assert_called_once_with(1.5)
+
 
 class TestPlaybackControllerLoudnorm:
     """Tests for loudnorm offset wiring from DB to MPV playback."""
