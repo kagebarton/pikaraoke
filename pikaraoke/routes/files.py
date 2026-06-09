@@ -101,6 +101,29 @@ def browse():
         href=pagination_href,
     )
     start_index = (page - 1) * results_per_page
+    page_songs = songs[start_index : start_index + results_per_page]
+
+    # Enrich with pipeline_state and tracker status for badge rendering
+    pipeline_states = k.song_manager.get_pipeline_states(page_songs)
+    tracker_items = {
+        item["song_path"]: item for item in k.pipeline_tracker.get_status() if item.get("song_path")
+    }
+    active_job = k.processing_manager.get_active_job()
+
+    enriched_songs = []
+    for song_path in page_songs:
+        persisted = pipeline_states.get(song_path, "skipped")
+        tracker = tracker_items.get(song_path)
+        tracker_status = tracker["processing_status"] if tracker else None
+        enriched_songs.append(
+            {
+                "path": song_path,
+                "pipeline_state": persisted,
+                "tracker_status": tracker_status,
+                "is_active": song_path == active_job,
+            }
+        )
+
     return render_template(
         "files.html",
         pagination=pagination,
@@ -109,7 +132,7 @@ def browse():
         letter=letter,
         # MSG: Title of the files page.
         title=_("Browse"),
-        songs=songs[start_index : start_index + results_per_page],
+        songs=enriched_songs,
         admin=is_admin(),
         current_url=current_url,
     )
