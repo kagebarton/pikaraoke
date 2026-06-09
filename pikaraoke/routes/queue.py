@@ -145,6 +145,7 @@ def queue_edit(query):
             "up": _("Moved up in queue"),
             "down": _("Moved down in queue"),
             "delete": _("Deleted from queue"),
+            "pause": _("Toggled pause on queue item"),
         }
         error_labels = {
             "top": _("Error moving to top of queue"),
@@ -152,12 +153,15 @@ def queue_edit(query):
             "up": _("Error moving up in queue"),
             "down": _("Error moving down in queue"),
             "delete": _("Error deleting from queue"),
+            "pause": _("Error toggling pause"),
         }
 
         if action == "top":
             success = k.queue_manager.move_to_top(song)
         elif action == "bottom":
             success = k.queue_manager.move_to_bottom(song)
+        elif action == "pause":
+            success = k.queue_manager.toggle_pause_song(song)
         else:
             success = k.queue_manager.queue_edit(song, action)
 
@@ -179,6 +183,19 @@ def queue_edit(query):
 
 def _do_enqueue(song: str, user: str) -> str:
     k = get_karaoke_instance()
+    # Gate: reject songs whose pipeline_state is 'pending' or 'failed'
+    state = k.song_manager.get_pipeline_state(song)
+    if state in ("pending", "failed"):
+        return (
+            json.dumps(
+                {
+                    "song": k.song_manager.filename_from_path(song),
+                    "success": False,
+                    "error": f"Cannot enqueue: song is {state}",
+                }
+            ),
+            409,
+        )
     rc = k.queue_manager.enqueue(song, user)
     broadcast_event("queue_update")
     song_title = k.song_manager.filename_from_path(song)
@@ -197,3 +214,38 @@ def enqueue(query):
 def enqueue_form(form):
     """Add a song to the queue (used by the search page)."""
     return _do_enqueue(form["song_to_add"], form["song_added_by"])
+
+
+class UserQueueActionForm(Schema):
+    song = fields.String(required=True)
+    user = fields.String(required=True)
+
+
+def _verify_ownership(queue, song_path, user):
+    """Return True if `user` owns the queue item matching `song_path`."""
+    for item in queue:
+        if item["file"] == song_path:
+            return item["user"] == user
+    return False
+
+
+@queue_bp.route("/queue/user/delete", methods=["POST"])
+@queue_bp.arguments(UserQueueActionForm, location="form")
+def user_delete(form):
+    """Let a user delete their own queued song."""
+    k = get_karaoke_instance()
+    song = form["song"]
+    user = form["user"]
+    if not _verify_ownership(k.queue_manager.queue, song, user):
+        return json.dumps({"success": False, "error": "Not owner"}), 403
+    success = k.queue_manager.queue_edit(song, "delete")
+    return json.dumps({"success": success})
+
+
+@queue_bp.route("/queue/user/pause", methods=["POST"])
+@queue_bp.arguments(UserQueueActionForm, location="form")
+def user_pause(form):
+    """Toggle pause on all of a user's queued songs (step-away mode)."""
+    k = get_karaoke_instance()
+    success = k.queue_manager.toggle_pause_user(form["user"])
+    return json.dumps({"success": success})
