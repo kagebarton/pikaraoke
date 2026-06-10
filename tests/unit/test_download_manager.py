@@ -1,5 +1,6 @@
 """Unit tests for download_manager module."""
 
+import threading
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -232,6 +233,41 @@ class TestDownloadManagerExecuteDownload:
     @patch("flask_babel._", side_effect=lambda x: x)
     @patch("subprocess.Popen")
     @patch("pikaraoke.lib.download_manager.build_ytdl_download_command")
+    def test_user_cancel_suppresses_error_toast(
+        self, mock_build_cmd, mock_popen, mock_gettext, download_manager, events
+    ):
+        """A user cancel kills yt-dlp, so the process exits non-zero — but that
+        must surface as silence, not the danger toast / download_error a genuine
+        failure raises."""
+        notifications = []
+        events.on("notification", lambda msg, cat="info": notifications.append((msg, cat)))
+        download_errors = []
+        events.on("download_error", lambda data: download_errors.append(data))
+
+        mock_build_cmd.return_value = ["yt-dlp", "url"]
+
+        mock_process = MagicMock()
+
+        # Model the real race: the cancel arrives while the download is running,
+        # flipping the flag just before communicate() returns the killed rc.
+        def _communicate():
+            download_manager._cancelling = True
+            return ("", None)
+
+        mock_process.communicate.side_effect = _communicate
+        mock_process.returncode = 1
+        mock_popen.return_value = mock_process
+
+        rc = download_manager._execute_download("url", False, "User", "Title")
+
+        assert rc == 1
+        assert not any(cat == "danger" for _msg, cat in notifications)
+        assert download_errors == []
+        assert download_manager._cancelling is False  # flag consumed for the next run
+
+    @patch("flask_babel._", side_effect=lambda x: x)
+    @patch("subprocess.Popen")
+    @patch("pikaraoke.lib.download_manager.build_ytdl_download_command")
     def test_execute_download_enqueue_without_path(
         self, mock_build_cmd, mock_popen, mock_gettext, download_manager, song_manager, events
     ):
@@ -423,3 +459,104 @@ class TestCancelActiveDownload:
         assert download_manager.active_url == active_url
         assert download_manager._is_downloading is True
         assert partial.exists(), "a mismatched cancel must not clean another download's files"
+
+
+class TestCancelPendingDownload:
+    """Tests for cancelling a still-queued download (no process kill)."""
+
+    @staticmethod
+    def _request(url):
+        return {"video_url": url, "enqueue": True, "user": "User", "title": "Title"}
+
+    def test_cancel_queued_item_drops_it_without_recording_skip(self, download_manager):
+        """A queued cancel is satisfied by the queue rebuild alone; the URL must
+        NOT land in the skip-set, or a later re-queue of the same song would be
+        silently dropped by the worker."""
+        url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        req = self._request(url)
+        download_manager.download_queue.put(req)
+        download_manager.pending_downloads.append(req)
+
+        download_manager.cancel_pending_download(url)
+
+        assert download_manager.download_queue.empty()
+        assert download_manager.pending_downloads == []
+        assert url not in download_manager._cancelled_urls
+
+    def test_cancel_keeps_other_queued_items(self, download_manager):
+        """Cancelling one queued URL must leave the rest of the queue intact."""
+        cancel_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        keep_url = "https://www.youtube.com/watch?v=oHg5SJYRHA0"
+        for u in (cancel_url, keep_url):
+            req = self._request(u)
+            download_manager.download_queue.put(req)
+            download_manager.pending_downloads.append(req)
+
+        download_manager.cancel_pending_download(cancel_url)
+
+        remaining = []
+        while not download_manager.download_queue.empty():
+            remaining.append(download_manager.download_queue.get_nowait()["video_url"])
+        assert remaining == [keep_url]
+        assert [d["video_url"] for d in download_manager.pending_downloads] == [keep_url]
+        assert cancel_url not in download_manager._cancelled_urls
+
+    def test_cancel_just_dequeued_item_records_skip(self, download_manager):
+        """If the worker just dequeued the item (queue empty, not yet active),
+        the rebuild can't find it, so the URL is recorded for the worker to skip
+        as it starts."""
+        url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        # Queue empty and nothing active: the item is in the dequeue window.
+        assert download_manager.active_url is None
+        download_manager.cancel_pending_download(url)
+
+        assert url in download_manager._cancelled_urls
+
+    def test_cancel_active_url_routed_as_pending_kills_instead_of_recording(
+        self, download_manager, tmp_path
+    ):
+        """The tracker flips status to 'active' only lazily, so an in-flight
+        download can be routed through the pending path. It must be killed, not
+        recorded — a recorded entry would leak (the worker is past its skip
+        check and would never discard it)."""
+        download_manager._download_path = str(tmp_path)
+        active_id = "dQw4w9WgXcQ"
+        active_url = f"https://www.youtube.com/watch?v={active_id}"
+        proc = MagicMock()
+        download_manager._active_process = proc
+        download_manager.active_url = active_url
+        download_manager._is_downloading = True
+
+        download_manager.cancel_pending_download(active_url)
+
+        proc.kill.assert_called_once()
+        assert download_manager.active_url is None
+        assert download_manager._is_downloading is False
+        assert active_url not in download_manager._cancelled_urls  # killed, not leaked
+
+    def test_worker_skips_and_discards_recorded_url(self, download_manager):
+        """End-to-end: the worker skips a request whose URL is in _cancelled_urls
+        AND discards that entry, so a recorded in-flight cancel can never leak."""
+        executed = []
+        processed_keeper = threading.Event()
+
+        def fake_execute(video_url, enqueue, user, title):
+            executed.append(video_url)
+            if video_url == keep_url:
+                processed_keeper.set()
+            return 0
+
+        download_manager._execute_download = fake_execute  # bypass real subprocess
+
+        cancel_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        keep_url = "https://www.youtube.com/watch?v=oHg5SJYRHA0"
+        download_manager._cancelled_urls.add(cancel_url)
+
+        download_manager.start()
+        download_manager.download_queue.put(self._request(cancel_url))
+        download_manager.download_queue.put(self._request(keep_url))
+
+        assert processed_keeper.wait(timeout=5), "worker never reached the keeper URL"
+        assert cancel_url not in executed, "a recorded URL must be skipped, not downloaded"
+        assert keep_url in executed
+        assert cancel_url not in download_manager._cancelled_urls, "skip must discard (no leak)"

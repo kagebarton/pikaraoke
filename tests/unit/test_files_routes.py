@@ -53,6 +53,7 @@ def app():
         "queue.queue",
         "search.search",
         "info.info",
+        "processing.processing",
         "queue.enqueue",
         "batch_song_renamer.browse",
     ):

@@ -30,6 +30,7 @@ _STUB_ENDPOINTS = (
     "queue.queue",
     "files.browse",
     "info.info",
+    "processing.processing",
     "queue.enqueue",
 )
 

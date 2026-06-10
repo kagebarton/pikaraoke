@@ -15,7 +15,7 @@ from flask_socketio import SocketIO
 from pikaraoke import VERSION, karaoke
 from pikaraoke.constants import LANGUAGES
 from pikaraoke.lib.args import parse_pikaraoke_args
-from pikaraoke.lib.current_app import get_karaoke_instance
+from pikaraoke.lib.current_app import broadcast_event, get_karaoke_instance
 from pikaraoke.lib.ffmpeg import is_ffmpeg_installed
 from pikaraoke.lib.get_platform import has_js_runtime
 from pikaraoke.lib.song_manager import SongManager
@@ -30,6 +30,7 @@ from pikaraoke.routes.info import info_bp
 from pikaraoke.routes.metadata_api import metadata_bp
 from pikaraoke.routes.now_playing import nowplaying_bp
 from pikaraoke.routes.preferences import preferences_bp
+from pikaraoke.routes.processing import processing_bp
 from pikaraoke.routes.queue import queue_bp
 from pikaraoke.routes.search import search_bp
 from pikaraoke.routes.socket_events import setup_socket_events
@@ -94,6 +95,7 @@ _internal_blueprints = [
     home_bp,
     info_bp,
     batch_song_renamer_bp,
+    processing_bp,
 ]
 
 for bp in _api_blueprints:
@@ -189,6 +191,15 @@ def main() -> None:
     # expose karaoke object to the flask app
     with app.app_context():
         app.config["KARAOKE_INSTANCE"] = k
+
+    # Wire pipeline tracker changes to push `pipeline_updated` over Socket.IO.
+    # This replaces the 1s polling on the processing page with push-driven
+    # re-renders, eliminating the race between cancel-AJAX and the poll.
+    def _pipeline_changed():
+        with app.app_context():
+            broadcast_event("pipeline_updated")
+
+    k.pipeline_tracker._on_change = _pipeline_changed
 
     # expose shared configuration variables to the flask app
     app.config["ADMIN_PASSWORD"] = k.admin_password or None
