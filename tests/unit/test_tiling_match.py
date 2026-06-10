@@ -109,9 +109,10 @@ class TestSplitParenUnits:
 
     def test_mixed_substantial_and_ad_lib(self):
         # Substantial paren splits off; ad-lib stays inline on main.
-        assert _split_paren_units(
-            "main phrase here (real backing line) tail end (Yeah)"
-        ) == ["main phrase here tail end (Yeah)", "real backing line"]
+        assert _split_paren_units("main phrase here (real backing line) tail end (Yeah)") == [
+            "main phrase here tail end (Yeah)",
+            "real backing line",
+        ]
 
     def test_short_main_after_split_keeps_line_intact(self):
         # If the main half would be under-length after splitting off the
