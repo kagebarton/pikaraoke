@@ -31,6 +31,7 @@ _STUB_ENDPOINTS = (
     "queue.queue",
     "search.search",
     "files.browse",
+    "processing.processing",
     "admin.auth",
     "admin.expand_fs",
     "admin.library_stats",

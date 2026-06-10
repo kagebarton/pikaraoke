@@ -65,7 +65,12 @@ class DownloadManager:
         self.pending_downloads: list[dict] = []  # Shadow queue for cancellation lookup
         self.active_url: str | None = None
         self._active_process: subprocess.Popen | None = None  # Stored for cancellation
-        self._cancelled_urls: set[str] = set()  # URLs cancelled while pending
+        # URLs the worker must skip — only for the in-flight case (already dequeued
+        # before cancel_pending_download could rebuild it out of the queue). A
+        # still-queued cancel is handled by the rebuild alone and never recorded
+        # here, or a later re-queue of the same URL would be silently skipped.
+        self._cancelled_urls: set[str] = set()
+        self._cancelling: bool = False  # Suppress the error toast for a user-killed download
         self._worker_thread: Thread | None = None
         self._is_downloading: bool = False  # Track if a download is currently in progress
 
@@ -201,6 +206,11 @@ class DownloadManager:
 
         displayed_title = title if title else video_url
 
+        # A fresh download starts un-cancelled; a user cancel during the run below
+        # flips this flag so the non-zero exit from the killed process is treated
+        # as a deliberate stop rather than a download error.
+        self._cancelling = False
+
         # MSG: Message shown when download actually starts (after waiting in queue)
         self._events.emit("notification", _("Downloading video: %s") % displayed_title)
 
@@ -229,15 +239,22 @@ class DownloadManager:
         self._active_process = None
 
         if rc != 0:
-            # MSG: Message shown after the download process is completed but the song is not found
-            self._events.emit(
-                "notification", _("Error downloading song: ") + displayed_title, "danger"
-            )
-            logging.error(f"yt-dlp stderr: {output}")
-            self._events.emit(
-                "download_error",
-                {"url": video_url, "error": output or "Unknown error"},
-            )
+            if self._cancelling:
+                # The user cancelled: this non-zero rc is from our own process
+                # kill, not a real failure, so stay quiet instead of flashing a
+                # spurious danger toast / download_error.
+                self._cancelling = False
+                logging.info("Download cancelled by user: %s", displayed_title)
+            else:
+                # MSG: Message shown after the download process is completed but the song is not found
+                self._events.emit(
+                    "notification", _("Error downloading song: ") + displayed_title, "danger"
+                )
+                logging.error(f"yt-dlp stderr: {output}")
+                self._events.emit(
+                    "download_error",
+                    {"url": video_url, "error": output or "Unknown error"},
+                )
         else:
             if enqueue:
                 # MSG: Message shown after the download is completed and queued
@@ -303,6 +320,9 @@ class DownloadManager:
             logging.info("cancel_active_download called but no download is active")
 
         if self._active_process is not None:
+            # Flag the kill so the worker's non-zero rc is read as a deliberate
+            # cancel (no danger toast) rather than a download failure.
+            self._cancelling = True
             try:
                 self._active_process.kill()
             except ProcessLookupError:
@@ -318,21 +338,40 @@ class DownloadManager:
         self.active_url = None
 
     def cancel_pending_download(self, video_url: str) -> None:
-        """Cancel a download that is still in the pending queue."""
-        self._cancelled_urls.add(video_url)
+        """Cancel a download the caller believes is still queued.
+
+        Drops the item from the shadow list and the work queue. If the rebuild
+        can't find it the item already left the queue, which means one of:
+
+        * it is the **active** download — the tracker flips status to "active"
+          only lazily, so an in-flight song can be routed here; kill it via the
+          active path rather than recording it (the worker is past its skip
+          check, so a recorded entry would never be consumed and would leak);
+        * the worker **just dequeued** it but hasn't marked it active yet —
+          record it so the worker skips (and discards) it as it starts.
+
+        A still-queued item is dropped by the rebuild alone and is *not*
+        recorded; otherwise a later re-queue of the same URL would be silently
+        skipped.
+        """
         # Remove from shadow queue
         self.pending_downloads = [d for d in self.pending_downloads if d["video_url"] != video_url]
-        # Also drain from the Queue (there's no public remove, so we rebuild)
+        # Drain from the Queue (there's no public remove, so we rebuild)
         new_queue: Queue = Queue()
-        skipped = False
+        removed = False
         while not self.download_queue.empty():
             item = self.download_queue.get_nowait()
-            if item["video_url"] == video_url and not skipped:
-                skipped = True
+            if item["video_url"] == video_url and not removed:
+                removed = True
                 self.download_queue.task_done()
             else:
                 new_queue.put(item)
         self.download_queue = new_queue
+        if not removed:
+            if video_url == self.active_url:
+                self.cancel_active_download(video_url)
+            else:
+                self._cancelled_urls.add(video_url)
 
     def _cleanup_partial_downloads(self, video_id: str) -> None:
         """Remove partial download files matching a video ID.

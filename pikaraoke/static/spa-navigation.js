@@ -414,6 +414,8 @@
             $('#browse').addClass('is-active');
         } else if (path === '/info') {
             $('#info').addClass('is-active');
+        } else if (path === '/processing') {
+            $('#processing').addClass('is-active');
         }
     }
 
