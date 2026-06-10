@@ -1,0 +1,210 @@
+"""Timing evaluation of matcher output against YouTube manual captions.
+
+Ground-truth design: for songs whose lyric source was the YouTube SRT,
+the matcher consumed the SRT *text* while ``_load_lyrics`` discarded the
+cue *timings*. Comparing matcher output timings against the cue timings
+is therefore a held-out, text-identical, pure timing evaluation.
+
+Subtitle cues lead the vocal by a display margin, so raw deltas carry a
+per-song systematic offset. Each song gets a single global offset fit
+(median of per-line deltas); all metrics are computed on the residuals.
+
+See ``plans/matcher-timing-eval.md`` for the corpus and roadmap;
+``scripts/eval_alignment.py`` is the CLI driver.
+"""
+
+import difflib
+import re
+from dataclasses import dataclass, field
+from statistics import median
+
+import srt
+
+from pikaraoke.lib.genius_lyrics import clean_srt_line
+from pikaraoke.lib.joint_match import match_words_to_lines_joint_with_stats
+
+# Residuals beyond this are gross misplacements (wrong section / chorus
+# instance), the error class the matcher knobs are tuned to eliminate.
+GROSS_RESIDUAL_S = 2.0
+
+# Straight/curly apostrophes, backtick, acute accent.
+_APOSTROPHES = re.compile("['‘’`´]")
+_HTML_TAG = re.compile(r"<[^>]+>")
+_NON_ALNUM = re.compile(r"[^a-z0-9 ]+")
+
+
+def normalize_line(text: str) -> str:
+    """Casefolded, alphanumeric-only form used to pair lyric lines with
+    subtitle cues. Tolerant of cleanup drift between capture time and
+    eval time (HTML tags older cleanup kept, quote styles, musical-note
+    glyphs, punctuation). Apostrophes are deleted (not space-replaced)
+    so "don't" == "dont".
+    """
+    text = _HTML_TAG.sub(" ", text.lower())
+    return " ".join(_NON_ALNUM.sub(" ", _APOSTROPHES.sub("", text)).split())
+
+
+def parse_reference_cues(srt_text: str) -> tuple[list[str], list[float]]:
+    """Cleaned cue texts and their start times (seconds) from an SRT.
+
+    Mirrors the ``_load_lyrics`` SRT transform (clean + drop empty) but
+    keeps the timing that ``_load_lyrics`` throws away — the timing is
+    the ground truth being recovered.
+    """
+    texts: list[str] = []
+    starts: list[float] = []
+    for sub in srt.parse(srt_text):
+        cleaned = clean_srt_line(sub.content)
+        if cleaned:
+            texts.append(cleaned)
+            starts.append(sub.start.total_seconds())
+    return texts, starts
+
+
+def map_lines_to_cues(bundle_lines: list[str], cue_texts: list[str]) -> dict[int, int]:
+    """Map matcher line_id -> reference cue index by sequence matching.
+
+    Matching is positional-order-preserving on normalized text, so lines
+    dropped or reworded by cleanup drift simply fall out of the mapping
+    (and out of scoring) instead of pairing wrongly.
+    """
+    a = [normalize_line(t) for t in bundle_lines]
+    b = [normalize_line(t) for t in cue_texts]
+    sm = difflib.SequenceMatcher(a=a, b=b, autojunk=False)
+    mapping: dict[int, int] = {}
+    for block in sm.get_matching_blocks():
+        for k in range(block.size):
+            mapping[block.a + k] = block.b + k
+    return mapping
+
+
+@dataclass
+class SongScore:
+    song: str
+    n_lines: int  # lyric lines the matcher saw
+    n_mapped: int  # lines paired with a reference cue
+    n_scored: int  # paired lines the matcher actually placed
+    offset_s: float  # fitted display-lead offset (median delta)
+    median_abs_residual_s: float
+    n_within_half_s: int  # raw counts so corpus pooling stays exact
+    n_within_one_s: int
+    pct_within_half_s: float
+    pct_within_one_s: float
+    gross_count: int  # |residual| > GROSS_RESIDUAL_S
+    worst: list[dict] = field(default_factory=list)  # top offenders, for diagnosis
+
+
+def score_song(
+    song: str,
+    placed_starts: dict[int, float],
+    cue_starts_by_line: dict[int, float],
+    line_texts: list[str],
+    n_lines: int,
+    worst_n: int = 5,
+) -> SongScore:
+    """Score one song's placed line starts against its reference cues.
+
+    Args:
+        placed_starts: line_id -> matcher start time, placed lines only.
+        cue_starts_by_line: line_id -> reference cue start time, mapped
+            lines only.
+        line_texts: full lyric line list (indexed by line_id) for the
+            worst-offender report.
+        n_lines: total lyric line count (denominator context).
+    """
+    scored_ids = sorted(set(placed_starts) & set(cue_starts_by_line))
+    deltas = {lid: placed_starts[lid] - cue_starts_by_line[lid] for lid in scored_ids}
+    if not scored_ids:
+        return SongScore(
+            song=song,
+            n_lines=n_lines,
+            n_mapped=len(cue_starts_by_line),
+            n_scored=0,
+            offset_s=0.0,
+            median_abs_residual_s=0.0,
+            n_within_half_s=0,
+            n_within_one_s=0,
+            pct_within_half_s=0.0,
+            pct_within_one_s=0.0,
+            gross_count=0,
+        )
+    offset = median(deltas.values())
+    residuals = {lid: d - offset for lid, d in deltas.items()}
+    abs_res = sorted(abs(r) for r in residuals.values())
+    n = len(abs_res)
+    worst_ids = sorted(residuals, key=lambda lid: abs(residuals[lid]), reverse=True)[:worst_n]
+    worst = [
+        {
+            "line_id": lid,
+            "residual_s": round(residuals[lid], 2),
+            "text": line_texts[lid] if lid < len(line_texts) else "",
+        }
+        for lid in worst_ids
+        if abs(residuals[lid]) > GROSS_RESIDUAL_S
+    ]
+    n_half = sum(1 for r in abs_res if r <= 0.5)
+    n_one = sum(1 for r in abs_res if r <= 1.0)
+    return SongScore(
+        song=song,
+        n_lines=n_lines,
+        n_mapped=len(cue_starts_by_line),
+        n_scored=n,
+        offset_s=round(offset, 3),
+        median_abs_residual_s=round(median(abs_res), 3),
+        n_within_half_s=n_half,
+        n_within_one_s=n_one,
+        pct_within_half_s=round(100.0 * n_half / n, 1),
+        pct_within_one_s=round(100.0 * n_one / n, 1),
+        gross_count=sum(1 for r in abs_res if r > GROSS_RESIDUAL_S),
+        worst=worst,
+    )
+
+
+def placed_starts_from_line_objects(line_objects: list[dict]) -> dict[int, float]:
+    """line_id -> start for lines the matcher placed with real words.
+
+    Interp/absent lines carry no words and are excluded — they never
+    render, so they have no timing to evaluate.
+    """
+    return {
+        obj["line_id"]: obj["start"]
+        for obj in line_objects
+        if obj.get("words") and obj.get("start") is not None
+    }
+
+
+def replay_joint_from_bundle(
+    bundle: dict,
+    *,
+    alpha: float,
+    margin_s: float,
+    max_edit_ratio: float = 0.25,
+    lookahead: int = 3,
+    anchor_fallback: bool = True,
+) -> tuple[list[dict], dict]:
+    """Re-run the joint matcher from a debug bundle's cached inputs.
+
+    Uses the bundle's ``lyrics.lines`` / ``lyrics.align_lines`` verbatim
+    (NOT a re-cleaned version of the source SRT): the cached align words
+    correspond 1:1 to the flat token stream of the *capture-time*
+    align_lines, and that correspondence must be preserved. Re-cleaning
+    is only ever applied on the reference-cue side of the eval.
+
+    Raises KeyError/ValueError if the bundle lacks the cached inputs.
+    """
+    align_words = bundle["words"]
+    transcribe_words = bundle["transcribe_words"]
+    if not align_words or transcribe_words is None:
+        raise ValueError(f"bundle {bundle.get('song_stem', '?')!r} lacks cached matcher inputs")
+    lyrics = bundle["lyrics"]
+    return match_words_to_lines_joint_with_stats(
+        align_words,
+        transcribe_words,
+        lyrics["lines"],
+        lyrics["align_lines"],
+        alpha=alpha,
+        margin_s=margin_s,
+        max_edit_ratio=max_edit_ratio,
+        lookahead=lookahead,
+        anchor_fallback=anchor_fallback,
+    )
