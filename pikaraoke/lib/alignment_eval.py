@@ -178,7 +178,7 @@ def replay_joint_from_bundle(
     *,
     alpha: float,
     margin_s: float,
-    max_edit_ratio: float = 0.25,
+    max_edit_ratio: float = 0.75,
     lookahead: int = 3,
     anchor_fallback: bool = True,
 ) -> tuple[list[dict], dict]:

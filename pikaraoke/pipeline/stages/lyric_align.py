@@ -569,6 +569,7 @@ class LyricAlignStage(BaseStage):
             align_lines,
             alpha=self._config.joint_alpha,
             margin_s=self._config.joint_margin_s,
+            max_edit_ratio=self._config.joint_max_edit_ratio,
         )
         return line_objects, align_words, transcribe_words, joint_stats
 

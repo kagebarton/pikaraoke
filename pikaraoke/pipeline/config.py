@@ -248,6 +248,16 @@ class PipelineConfig:
     # non-overlap constraint. Reuses the previous repair-margin value.
     joint_margin_s: float = 0.3
 
+    # Edit-distance gate for transcribe candidate generation: windows
+    # whose normalized edit ratio against the lyric line exceeds this
+    # are never candidates. Whisper mishears sung vocals often, so a
+    # strict gate rejects weak-but-correct matches the DP score would
+    # have ranked fine anyway. The held-out caption eval
+    # (plans/matcher-timing-eval.md) showed 0.25 -> 0.75 lifts placed
+    # coverage 85.6% -> 89.4% with median residual improved and gross
+    # misplacements unchanged; coverage saturates at 0.75.
+    joint_max_edit_ratio: float = 0.75
+
     # When True, the lyric-align stage writes a JSON bundle to
     # ``<song_dir>/alignment_debug/<stem>.json`` capturing the matcher
     # inputs (whisper words + lyric lines), the knob values that ran,

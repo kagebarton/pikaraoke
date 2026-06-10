@@ -254,7 +254,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--folder", default=DEFAULT_FOLDER, help="song library folder")
     p.add_argument("--alpha", type=float, default=cfg.joint_alpha)
     p.add_argument("--margin-s", type=float, default=cfg.joint_margin_s)
-    p.add_argument("--max-edit-ratio", type=float, default=0.25)
+    p.add_argument("--max-edit-ratio", type=float, default=cfg.joint_max_edit_ratio)
     p.add_argument("--no-anchor-fallback", action="store_true")
     p.add_argument(
         "--as-run",

@@ -66,9 +66,9 @@ def match_words_to_lines_joint_with_stats(
     lines: list[str],
     align_lines: list[str],
     *,
-    alpha: float = 4.0,
+    alpha: float = 2.0,
     margin_s: float = 0.3,
-    max_edit_ratio: float = 0.25,
+    max_edit_ratio: float = 0.75,
     lookahead: int = 3,
     anchor_fallback: bool = True,
 ) -> tuple[list[dict], dict]:
@@ -94,7 +94,10 @@ def match_words_to_lines_joint_with_stats(
             window for ``transcribe_match`` computation, and (b) padding
             collapsed align candidates so the DP can reject them on
             non-overlap.
-        max_edit_ratio: passed to ``find_candidates``.
+        max_edit_ratio: passed to ``find_candidates``. Like ``alpha``,
+            the corpus-tuned default lives in
+            ``PipelineConfig.joint_max_edit_ratio``; signature defaults
+            here mirror it.
         lookahead: passed to per-window per-word timing builder.
         anchor_fallback: if True, run ``find_anchor_candidates`` for lines
             that produced zero transcribe candidates in the main pass.
@@ -220,9 +223,9 @@ def match_words_to_lines_joint(
     lines: list[str],
     align_lines: list[str],
     *,
-    alpha: float = 4.0,
+    alpha: float = 2.0,
     margin_s: float = 0.3,
-    max_edit_ratio: float = 0.25,
+    max_edit_ratio: float = 0.75,
     lookahead: int = 3,
     anchor_fallback: bool = True,
 ) -> list[dict]:

@@ -74,7 +74,9 @@ Only if the harness shows headroom after Phases 2–3.
 | Eval lib + tests | done — 17 tests, suite 1018 passed |
 | Eval CLI | done — replay + --as-run modes |
 | Baseline numbers | done — see below |
-| Phase 2 | not started |
+| Phase 2a: replay knob sweep | done — max_edit_ratio 0.25 → 0.75 shipped; α/margin/fallback confirmed |
+| Phase 2b: probability weighting | not started |
+| Phase 2c: GPU sweeps (initial_prompt, temp fallback, model A/B) | not started |
 | Phase 3 | not started |
 
 ## Baseline (2026-06-10)
@@ -92,3 +94,33 @@ had 23 wrong-chorus-instance placements under walk) but drops ~25% of
 lines to interp, which never render. Phase 3 (windowed re-align)
 targets exactly that coverage gap; Mirrors (76/120 placed) is the
 test case.
+
+## Phase 2a results (2026-06-10): replay knob sweep
+
+Grid: α ∈ {0.5, 1, 2, 3, 3.5, 4, 6} × margin ∈ {0.15, 0.3, 0.5},
+max_edit_ratio ∈ {0.15 … 1.0}, anchor_fallback on/off. All replayed
+from cached bundles (no GPU).
+
+- **α**: flat across [0.5, 3] (identical metrics), cliff at 3.5+
+  entirely from Mirrors — it force-places 14 more lines but 26 land on
+  the wrong chorus instance (gross 4 → 28 pooled). Production α=2.0 is
+  correct; the function default was 4.0 (inside the cliff) and has been
+  fixed to 2.0.
+- **margin_s**: insensitive in [0.15, 0.5]; 0.3 kept.
+- **anchor_fallback**: off loses 21 placed lines and adds a gross;
+  on (current) confirmed.
+- **max_edit_ratio**: the win. 0.25 → 0.75 lifts coverage
+  85.6% → 89.4% (410 → 428 scored), median 0.24 → 0.22 s, gross
+  unchanged at 4. The 18 newly admitted lines score median 0.13 s
+  residual (17/18 within 0.5 s, none gross), and the looser gate fixes
+  a Mirrors gross error (L65 −3.30 s → +0.20 s). One regression: More
+  Than That L4 −0.45 → −3.11 s (appears by 0.5 already). Coverage
+  saturates at 0.75; flat to 1.0. Regression proxy on the 14
+  replayable non-SRT bundles: most byte-identical, gains of 1–2
+  plausible lines (Beauty and the Beast, Hakuna Matata), no
+  reshuffling. **Shipped: `joint_max_edit_ratio = 0.75` in
+  PipelineConfig, passed at the lyric_align call site.**
+
+Remaining gross at production knobs (Phase 2b/3 targets): For Good
+final-line repeat (−6.7 s), Can You Feel The Love Tonight (1),
+Mirrors (1), More Than That L4 (1).
