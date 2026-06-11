@@ -77,6 +77,8 @@ Only if the harness shows headroom after Phases 2–3.
 | Phase 2a: replay knob sweep | done — max_edit_ratio 0.25 → 0.75 shipped; α/margin/fallback confirmed |
 | Phase 2b: probability weighting | done — rejected by measurement (flat at every exponent); corpus refreshed with probabilities |
 | Corpus expansion: LRCLIB refs | done — 14 non-SRT songs added; corpus now 23 songs / 989 lines |
+| De-reverb experiment | done — corpus-validated; ship as gated retry (transcribe yield < ~30 words/min), not always-on |
+| De-reverb pipeline integration | not started — needs stem-worker second model + retry hook in lyric_align |
 | Phase 2c: GPU sweeps (initial_prompt, temp fallback, model A/B) | not started |
 | Phase 3 | not started — primary target updated: repeat-block align desync (see 2b) |
 
@@ -242,3 +244,45 @@ NSYNC Paradise +73 s verse block (7), Girl In The Bubble (5 — its
 transcribe pass heard only 57 words; weak vocal stem is a separate
 diagnostic), then singles. Hakuna/Bloodstream gross are reference
 noise.
+
+## De-reverb experiment (2026-06-11): starved-stem recovery
+
+Girl In The Bubble's vocal stem is audible but drenched in
+reverb/echo; whisper transcribe heard only 57 words for the whole song
+(14.4 words/min, zero in the 100–220 s middle) and the matcher placed
+19/36 lines. De-reverbing the stem before the whisper passes
+(audio-separator `dereverb_mel_band_roformer_anvuew_sdr_19.1729.ckpt`,
+same MelBand Roformer family as the vocal model; 913 MB, ~35 s/song on
+the RTX 2060) recovered it completely:
+
+| Bubble | placed | median | ≤1.0 s | gross | transcribe words |
+| --- | --- | --- | --- | --- | --- |
+| wet stem | 19/36 | 0.75 s | 68.4% | 5 | 57 |
+| anvuew de-reverb | 36/36 | 0.21 s | 94.4% | 0 | 180 |
+
+The Sucial de-reverb-echo v2 model was also tested and rejected:
+transcribe yield unchanged (57), matcher slightly worse than baseline.
+
+Corpus-wide validation (all 23 songs de-reverbed, fresh captures with
+identical lyric lines, replay at production knobs): pooled gross
+71 → 59, ≤1.0 s 84.3% → 85.1%, placed 989 → 962. But the wins
+concentrate in two songs — Bubble (above) and Mirrors (gross 22 → 5,
+≤1.0 s 74.3% → 88.4%; the align pass tracks the repeat outro better on
+dry audio and drops untrackable lines to interp instead of placing
+them wrong, 109 → 86 placed) — while 8 previously-clean songs
+regressed: Bye Bye Bye gross 3 → 6 and placed 74 → 61, More Than That
+0 → 2, Be Our Guest 0 → 1, Belle 5 → 7, plus median upticks. On some
+dry stems de-reverb removes real content (Can You Feel The Love
+Tonight transcribe yield 186 → 121).
+
+**Decision: gate it, don't default it.** Wet-stem transcribe yield
+separates perfectly on this corpus: Bubble 14.4 words/min, every other
+song ≥ 50.5. Integration shape: after the transcribe pass, if yield
+< ~30 words/min, de-reverb the stem and re-run align + transcribe.
+Cost lands only on affected songs. Mirrors' improvement is forfeited
+by the gate (76 words/min) — that failure class is Phase 3's target.
+
+Artifacts: de-reverbed stems in `<songs>/dereverb/`
+(`<stem>---vocal-dereverb.wav`), capture bundles in
+`<songs>/alignment_debug_dereverb/`, eval JSONs
+/tmp/eval_dereverb.json vs /tmp/eval_fresh_combined.json.
