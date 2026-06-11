@@ -23,6 +23,14 @@ class TestNormalizeToken:
         # Full-width Latin → ASCII Latin under NFKC.
         assert _normalize_token("Ｈｅｌｌｏ") == "hello"
 
+    def test_folds_cyrillic_homoglyphs(self):
+        # Lyric-site watermark: "wеre" with U+0435 CYRILLIC SMALL LETTER IE.
+        assert _normalize_token("wеre") == "were"
+
+    def test_folds_diacritics(self):
+        # Whisper transcribes accented words unaccented.
+        assert _normalize_token("soufflé") == "souffle"
+
     def test_empty(self):
         assert _normalize_token("!") == ""
 

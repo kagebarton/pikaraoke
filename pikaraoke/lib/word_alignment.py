@@ -37,6 +37,23 @@ logger = logging.getLogger(__name__)
 
 _STRIP_NONWORD_RE = re.compile(r"[^\w]", re.UNICODE)
 
+# Cyrillic lookalikes of Latin letters. Lyric sites watermark fetched
+# text with these ("wеre" with U+0435), which silently breaks token
+# equality against whisper output.
+_CONFUSABLES = str.maketrans("аеіоруѕсхј", "aeiopyscxj")
+
+
+def fold_to_ascii(text: str) -> str:
+    """Fold homoglyphs and diacritics to plain ASCII letters.
+
+    Whisper writes accented words unaccented ("souffle" for "soufflé"),
+    so both comparison sides are folded before matching. Expects
+    lowercased input (the confusable table is lowercase-only).
+    """
+    text = unicodedata.normalize("NFKD", text.translate(_CONFUSABLES))
+    return "".join(ch for ch in text if not unicodedata.combining(ch))
+
+
 _CONTRACTIONS = {
     "im": "i am",
     "ive": "i have",
@@ -70,8 +87,8 @@ _CONTRACTIONS = {
 
 
 def _normalize_token(token: str) -> str:
-    """Lowercase, NFKC-normalize, strip non-word chars."""
-    token = unicodedata.normalize("NFKC", token).lower()
+    """Lowercase, NFKC-normalize, ASCII-fold, strip non-word chars."""
+    token = fold_to_ascii(unicodedata.normalize("NFKC", token).lower())
     return _STRIP_NONWORD_RE.sub("", token)
 
 
