@@ -8,11 +8,13 @@ the joint matcher from each song's alignment-debug bundle (cached
 whisper words; no GPU) at the given knob values, fits one display-lead
 offset per song, and reports residual metrics per song and pooled.
 
-Eligibility per song:
-  * ``alignment_debug/<stem>.json`` bundle with ``lyrics.source_kind == "srt"``
-  * upstream manual EN captions verified via yt-dlp (cached in
+Eligibility per song (bundle in the debug dir, plus a timing reference):
+  * ``lyrics.source_kind == "srt"``: the YouTube SRT cue timings, gated
+    on upstream manual EN captions verified via yt-dlp (cached in
     ``alignment_debug/yt_subtitle_provenance.json``; queried on miss)
-  * cached ``words`` + ``transcribe_words`` in the bundle (replay mode)
+  * other sources: a hand-vetted LRCLIB file at ``<folder>/lrclib/<stem>``
+    (timing reference only; absolute offset absorbed by the per-song fit)
+  * replay mode needs cached ``words`` + ``transcribe_words`` in the bundle
 
 Run from the repo root::
 
@@ -37,6 +39,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from pikaraoke.lib.alignment_eval import (  # noqa: E402
     SongScore,
     map_lines_to_cues,
+    parse_lrc_lines,
     parse_reference_cues,
     placed_starts_from_line_objects,
     replay_joint_from_bundle,
@@ -119,14 +122,15 @@ def verify_provenance(stem: str, debug_dir: Path, prov: dict, offline: bool) -> 
 
 def evaluate_bundle(
     bundle: dict,
-    srt_path: Path,
+    cue_texts: list[str],
+    cue_starts: list[float],
     *,
     as_run: bool,
     knobs: dict,
+    ref: str,
 ) -> SongScore | str:
     """Score one bundle; returns a SongScore or a skip-reason string."""
     lines = bundle["lyrics"]["lines"]
-    cue_texts, cue_starts = parse_reference_cues(srt_path.read_text(encoding="utf-8"))
     mapping = map_lines_to_cues(lines, cue_texts)
     if not mapping:
         return "no lines mapped to reference cues"
@@ -153,6 +157,10 @@ def evaluate_bundle(
         cue_starts_by_line=cue_starts_by_line,
         line_texts=lines,
         n_lines=len(lines),
+        ref=ref,
+        # LRCLIB clocks come from a different master; absorb constant
+        # tempo drift so only structural divergence scores against us.
+        fit_drift=(ref == "lrclib"),
     )
 
 
@@ -178,6 +186,64 @@ def find_reference_srt(bundle: dict, song_dir: Path) -> Path | None:
     return None
 
 
+def find_reference_lrc(bundle: dict, song_dir: Path) -> Path | None:
+    """Resolve a hand-vetted LRCLIB timing file for a non-SRT-sourced song.
+
+    Files in ``<folder>/lrclib/`` are named by song stem (no extension);
+    falls back to a video-ID glob for songs renamed since capture.
+    """
+    lrc_dir = song_dir / "lrclib"
+    cand = lrc_dir / bundle["song_stem"]
+    if cand.is_file():
+        return cand
+    m = _VIDEO_ID_RE.search(bundle["song_stem"])
+    if m:
+        hits = sorted(lrc_dir.glob(f"*{m.group(1)}*"))
+        if hits:
+            return hits[0]
+    return None
+
+
+def resolve_reference(
+    bundle: dict,
+    song_dir: Path,
+    debug_dir: Path,
+    prov: dict,
+    offline: bool,
+) -> tuple[list[str], list[float], str] | str | None:
+    """Resolve a bundle's timing reference.
+
+    Returns ``(cue_texts, cue_starts, ref_kind)``, a skip-reason string,
+    or None when the song simply isn't in the eval corpus (non-SRT
+    source with no LRCLIB file).
+
+    SRT-sourced songs score against the YouTube SRT cue timings
+    (provenance-gated: upstream manual captions only). Other songs score
+    against hand-vetted LRCLIB synced lyrics — timing reference only;
+    their absolute clock may differ from the video, which the per-song
+    offset fit absorbs.
+    """
+    stem = bundle["song_stem"]
+    if bundle.get("lyrics", {}).get("source_kind") == "srt":
+        verified = verify_provenance(stem, debug_dir, prov, offline)
+        if verified is None:
+            return "provenance unverifiable"
+        if not verified:
+            return "no manual EN captions upstream"
+        srt_path = find_reference_srt(bundle, song_dir)
+        if srt_path is None:
+            return "reference SRT missing"
+        texts, starts = parse_reference_cues(srt_path.read_text(encoding="utf-8"))
+        return texts, starts, "yt-srt"
+    lrc_path = find_reference_lrc(bundle, song_dir)
+    if lrc_path is None:
+        return None
+    texts, starts = parse_lrc_lines(lrc_path.read_text(encoding="utf-8"))
+    if not texts:
+        return "LRC file has no synced lines"
+    return texts, starts, "lrclib"
+
+
 # ---------------------------------------------------------------------------
 # Reporting
 # ---------------------------------------------------------------------------
@@ -188,54 +254,61 @@ def print_report(
 ) -> dict:
     """Print the per-song table + pooled summary; return the summary dict."""
     header = (
-        f"{'song':<42} {'lines':>5} {'mapped':>6} {'scored':>6} "
-        f"{'offset':>7} {'med|Δ|':>7} {'≤0.5s':>6} {'≤1.0s':>6} {'gross':>5}"
+        f"{'song':<42} {'ref':>6} {'lines':>5} {'mapped':>6} {'scored':>6} "
+        f"{'offset':>7} {'dr/min':>6} {'med|Δ|':>7} {'≤0.5s':>6} {'≤1.0s':>6} {'gross':>5}"
     )
     print(header)
     print("-" * len(header))
     for s in scores:
+        drift = f"{s.drift_s_per_min:>6.2f}" if s.drift_s_per_min else f"{'':>6}"
         print(
-            f"{s.song[:42]:<42} {s.n_lines:>5} {s.n_mapped:>6} {s.n_scored:>6} "
-            f"{s.offset_s:>6.2f}s {s.median_abs_residual_s:>6.2f}s "
+            f"{s.song[:42]:<42} {s.ref:>6} {s.n_lines:>5} {s.n_mapped:>6} {s.n_scored:>6} "
+            f"{s.offset_s:>6.2f}s {drift} {s.median_abs_residual_s:>6.2f}s "
             f"{s.pct_within_half_s:>5.1f}% {s.pct_within_one_s:>5.1f}% {s.gross_count:>5}"
         )
         for w in s.worst:
             text = " / ".join(w["text"].splitlines())
             print(f"{'':>10} !{w['residual_s']:+8.2f}s  L{w['line_id']:<3} {text[:60]}")
 
-    total_scored = sum(s.n_scored for s in scores)
-    pooled = {
-        "songs": len(scores),
-        "n_scored": total_scored,
-        "pct_within_half_s": (
-            round(100.0 * sum(s.n_within_half_s for s in scores) / total_scored, 1)
-            if total_scored
-            else 0.0
-        ),
-        "pct_within_one_s": (
-            round(100.0 * sum(s.n_within_one_s for s in scores) / total_scored, 1)
-            if total_scored
-            else 0.0
-        ),
-        "gross_count": sum(s.gross_count for s in scores),
-        "median_of_medians_s": (
-            round(
-                sorted(s.median_abs_residual_s for s in scores)[len(scores) // 2],
-                3,
-            )
-            if scores
-            else 0.0
-        ),
-        "knobs": knobs,
-    }
+    def _pool(subset: list[SongScore]) -> dict:
+        total = sum(s.n_scored for s in subset)
+        return {
+            "songs": len(subset),
+            "n_scored": total,
+            "pct_within_half_s": (
+                round(100.0 * sum(s.n_within_half_s for s in subset) / total, 1) if total else 0.0
+            ),
+            "pct_within_one_s": (
+                round(100.0 * sum(s.n_within_one_s for s in subset) / total, 1) if total else 0.0
+            ),
+            "gross_count": sum(s.gross_count for s in subset),
+            "median_of_medians_s": (
+                round(sorted(s.median_abs_residual_s for s in subset)[len(subset) // 2], 3)
+                if subset
+                else 0.0
+            ),
+        }
+
+    def _print_pool(label: str, p: dict) -> None:
+        print(
+            f"{label:<42} "
+            f"{'':>6} {'':>5} {'':>6} {p['n_scored']:>6} {'':>7} {'':>6} "
+            f"{p['median_of_medians_s']:>6.2f}s "
+            f"{p['pct_within_half_s']:>5.1f}% {p['pct_within_one_s']:>5.1f}% "
+            f"{p['gross_count']:>5}"
+        )
+
+    pooled = _pool(scores)
+    pooled["knobs"] = knobs
     print("-" * len(header))
-    print(
-        f"{'POOLED (' + str(pooled['songs']) + ' songs)':<42} "
-        f"{'':>5} {'':>6} {pooled['n_scored']:>6} {'':>7} "
-        f"{pooled['median_of_medians_s']:>6.2f}s "
-        f"{pooled['pct_within_half_s']:>5.1f}% {pooled['pct_within_one_s']:>5.1f}% "
-        f"{pooled['gross_count']:>5}"
-    )
+    ref_kinds = sorted({s.ref for s in scores})
+    if len(ref_kinds) > 1:
+        pooled["by_ref"] = {}
+        for kind in ref_kinds:
+            sub = _pool([s for s in scores if s.ref == kind])
+            pooled["by_ref"][kind] = sub
+            _print_pool(f"POOLED {kind} ({sub['songs']} songs)", sub)
+    _print_pool(f"POOLED ({pooled['songs']} songs)", pooled)
     if skipped:
         print()
         for stem, reason in skipped:
@@ -297,20 +370,16 @@ def main() -> int:
         stem = bundle.get("song_stem", path.stem)
         if args.songs and args.songs.lower() not in stem.lower():
             continue
-        if bundle.get("lyrics", {}).get("source_kind") != "srt":
+        ref = resolve_reference(bundle, song_dir, debug_dir, prov, args.offline)
+        if ref is None:
+            continue  # not in the eval corpus
+        if isinstance(ref, str):
+            skipped.append((stem, ref))
             continue
-        verified = verify_provenance(stem, debug_dir, prov, args.offline)
-        if verified is None:
-            skipped.append((stem, "provenance unverifiable"))
-            continue
-        if not verified:
-            skipped.append((stem, "no manual EN captions upstream"))
-            continue
-        srt_path = find_reference_srt(bundle, song_dir)
-        if srt_path is None:
-            skipped.append((stem, "reference SRT missing"))
-            continue
-        result = evaluate_bundle(bundle, srt_path, as_run=args.as_run, knobs=knobs)
+        cue_texts, cue_starts, ref_kind = ref
+        result = evaluate_bundle(
+            bundle, cue_texts, cue_starts, as_run=args.as_run, knobs=knobs, ref=ref_kind
+        )
         if isinstance(result, str):
             skipped.append((stem, result))
             continue

@@ -6,6 +6,7 @@ from pikaraoke.lib.alignment_eval import (
     GROSS_RESIDUAL_S,
     map_lines_to_cues,
     normalize_line,
+    parse_lrc_lines,
     parse_reference_cues,
     placed_starts_from_line_objects,
     replay_joint_from_bundle,
@@ -40,6 +41,26 @@ class TestParseReferenceCues:
     def test_dropped_cue_does_not_shift_timing_pairing(self):
         texts, starts = parse_reference_cues(self.SRT)
         assert dict(zip(texts, starts))["Second line"] == 15.25
+
+
+class TestParseLrcLines:
+    def test_basic_synced_lines(self):
+        texts, starts = parse_lrc_lines(
+            "[00:13.28] Tale as old as time\n[01:02.5] True as it can be\n"
+        )
+        assert texts == ["Tale as old as time", "True as it can be"]
+        assert starts == [13.28, 62.5]
+
+    def test_skips_metadata_unstamped_and_empty(self):
+        lrc = "[ar:Artist]\n[offset:+200]\nno stamp here\n[00:10.00]\n[00:20.00] Real line\n"
+        texts, starts = parse_lrc_lines(lrc)
+        assert texts == ["Real line"]
+        assert starts == [20.0]
+
+    def test_multiple_stamps_emit_line_per_stamp_sorted(self):
+        texts, starts = parse_lrc_lines("[00:30.00][00:10.00] Chorus\n[00:20.00] Verse\n")
+        assert texts == ["Chorus", "Verse", "Chorus"]
+        assert starts == [10.0, 20.0, 30.0]
 
 
 class TestMapLinesToCues:
@@ -104,6 +125,27 @@ class TestScoreSong:
         placed = {0: 10.0, 1: 20.4, 2: 30.1}
         s = score_song("x", placed, cues, ["a", "b", "c"], n_lines=3)
         assert s.worst == []
+
+    def test_drift_fit_absorbs_reference_tempo_mismatch(self):
+        # Reference synced to a 5% slower master: delta grows linearly.
+        cues = {i: 60.0 * i for i in range(5)}
+        placed = {i: t * 1.05 + 3.0 for i, t in cues.items()}
+        s = score_song("x", placed, cues, ["a"] * 5, n_lines=5, fit_drift=True)
+        assert s.median_abs_residual_s == 0.0
+        assert s.drift_s_per_min == pytest.approx(3.0)
+        assert s.gross_count == 0
+
+    def test_drift_fit_falls_back_on_structural_break(self):
+        # Constant offset except an inserted-section block: the drift
+        # model fits worse and must not be selected.
+        cues = {i: 20.0 * i for i in range(8)}
+        placed = {i: t + 1.0 for i, t in cues.items()}
+        placed[6] += 50.0
+        placed[7] += 50.0
+        s = score_song("x", placed, cues, ["a"] * 8, n_lines=8, fit_drift=True)
+        assert s.drift_s_per_min == 0.0
+        assert s.gross_count == 2
+        assert s.median_abs_residual_s == 0.0
 
 
 class TestPlacedStartsFromLineObjects:

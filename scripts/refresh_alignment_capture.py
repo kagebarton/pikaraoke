@@ -36,6 +36,7 @@ from eval_alignment import (  # noqa: E402
     _VIDEO_ID_RE,
     DEFAULT_FOLDER,
     PROVENANCE_FILE,
+    find_reference_lrc,
     find_reference_srt,
 )
 
@@ -81,8 +82,15 @@ def decode_vocal(vocal_m4a: Path, wav_path: Path) -> None:
     )
 
 
-def collect_jobs(song_dir: Path, debug_dir: Path, songs_filter: str | None) -> list[tuple]:
-    """(srt_path, vocal_m4a) per SRT-sourced bundle with resolvable inputs."""
+def collect_jobs(song_dir: Path, debug_dir: Path, songs_filter: str | None) -> list[dict]:
+    """One job dict per corpus song with resolvable inputs.
+
+    SRT-sourced songs re-read lyrics from the YouTube SRT (today's
+    cleaning, matching what production would feed align). Other songs
+    need an LRCLIB timing reference to be in the corpus, and reuse the
+    bundle's capture-time lines verbatim — their original lyric source
+    files lived in temp dirs and are gone.
+    """
     jobs = []
     for path in sorted(debug_dir.glob("*.json")):
         if path.name == PROVENANCE_FILE:
@@ -91,25 +99,48 @@ def collect_jobs(song_dir: Path, debug_dir: Path, songs_filter: str | None) -> l
         stem = bundle.get("song_stem", path.stem)
         if songs_filter and songs_filter.lower() not in stem.lower():
             continue
-        if bundle.get("lyrics", {}).get("source_kind") != "srt":
-            continue
-        srt_path = find_reference_srt(bundle, song_dir)
-        if srt_path is None:
-            print(f"skip {stem[:60]} — reference SRT missing")
-            continue
-        vocal = find_vocal_m4a(song_dir, srt_path.stem)
+        lyrics = bundle.get("lyrics", {})
+        if lyrics.get("source_kind") == "srt":
+            srt_path = find_reference_srt(bundle, song_dir)
+            if srt_path is None:
+                print(f"skip {stem[:60]} — reference SRT missing")
+                continue
+            stem = srt_path.stem
+            lines, _starts = parse_reference_cues(srt_path.read_text(encoding="utf-8"))
+            align_lines = list(lines)
+            source_kind = "srt"
+            source_path = f"subtitles/{srt_path.name}"
+        else:
+            if find_reference_lrc(bundle, song_dir) is None:
+                print(f"skip {stem[:60]} — no LRCLIB timing reference")
+                continue
+            lines = lyrics.get("lines") or []
+            align_lines = lyrics.get("align_lines") or list(lines)
+            if not lines:
+                print(f"skip {stem[:60]} — bundle lacks cached lyric lines")
+                continue
+            source_kind = lyrics.get("source_kind", "txt")
+            source_path = lyrics.get("source_path")
+        vocal = find_vocal_m4a(song_dir, stem)
         if vocal is None:
             print(f"skip {stem[:60]} — vocal stem missing")
             continue
-        jobs.append((srt_path, vocal))
+        jobs.append(
+            {
+                "stem": stem,
+                "lines": lines,
+                "align_lines": align_lines,
+                "vocal": vocal,
+                "source_kind": source_kind,
+                "source_path": source_path,
+            }
+        )
     return jobs
 
 
-def capture_song(worker: WhisperWorker, srt_path: Path, wav_path: Path) -> dict:
+def capture_song(worker: WhisperWorker, job: dict, wav_path: Path) -> dict:
     """Run align+refine and transcribe(no refine); return the bundle dict."""
-    lines, _starts = parse_reference_cues(srt_path.read_text(encoding="utf-8"))
-    align_lines = list(lines)
-    lyrics_text = "\n".join(align_lines)
+    lyrics_text = "\n".join(job["align_lines"])
 
     check = worker.align_check(vocal_path=wav_path, lyrics_text=lyrics_text)
     align_words = worker.refine_from_cached(check["result_id"], wav_path)
@@ -118,14 +149,14 @@ def capture_song(worker: WhisperWorker, srt_path: Path, wav_path: Path) -> dict:
     return {
         "schema": "eval-refresh-v1",
         "captured_at": datetime.now().isoformat(timespec="seconds"),
-        "song_stem": srt_path.stem,
+        "song_stem": job["stem"],
         "words": align_words,
         "transcribe_words": transcribe_words,
         "lyrics": {
-            "source_kind": "srt",
-            "source_path": f"subtitles/{srt_path.name}",
-            "lines": lines,
-            "align_lines": align_lines,
+            "source_kind": job["source_kind"],
+            "source_path": job["source_path"],
+            "lines": job["lines"],
+            "align_lines": job["align_lines"],
         },
     }
 
@@ -167,17 +198,17 @@ def main() -> int:
     print("loading whisper model...")
     worker.start()
     try:
-        for i, (srt_path, vocal) in enumerate(jobs, 1):
-            stem = srt_path.stem
+        for i, job in enumerate(jobs, 1):
+            stem = job["stem"]
             out_path = out_dir / f"{stem}.json"
             if out_path.is_file() and not args.force:
                 print(f"[{i}/{len(jobs)}] exists, skipping: {stem[:60]}")
                 continue
             print(f"[{i}/{len(jobs)}] {stem[:60]}", flush=True)
             wav_path = tmp_dir / f"{stem}_vocal.wav"
-            decode_vocal(vocal, wav_path)
+            decode_vocal(job["vocal"], wav_path)
             try:
-                bundle = capture_song(worker, srt_path, wav_path)
+                bundle = capture_song(worker, job, wav_path)
             finally:
                 wav_path.unlink(missing_ok=True)
             out_path.write_text(json.dumps(bundle, ensure_ascii=False), encoding="utf-8")

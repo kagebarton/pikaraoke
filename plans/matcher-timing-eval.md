@@ -76,6 +76,7 @@ Only if the harness shows headroom after Phases 2–3.
 | Baseline numbers | done — see below |
 | Phase 2a: replay knob sweep | done — max_edit_ratio 0.25 → 0.75 shipped; α/margin/fallback confirmed |
 | Phase 2b: probability weighting | done — rejected by measurement (flat at every exponent); corpus refreshed with probabilities |
+| Corpus expansion: LRCLIB refs | done — 14 non-SRT songs added; corpus now 23 songs / 989 lines |
 | Phase 2c: GPU sweeps (initial_prompt, temp fallback, model A/B) | not started |
 | Phase 3 | not started — primary target updated: repeat-block align desync (see 2b) |
 
@@ -172,3 +173,72 @@ Consequences:
   around a repeated block and re-align the block within the anchored
   audio slice. Mirrors' outro (22 gross) is the test case; For Good /
   Bye Bye Bye / Can You Feel (3 each) are secondary.
+
+## Corpus expansion (2026-06-11): LRCLIB timing references
+
+Non-SRT-sourced songs now score against hand-vetted LRCLIB synced
+lyrics placed at `<songs>/lrclib/<stem>` (no extension). LRCLIB is a
+*timing reference only* — its text variants have no quality control and
+were already rejected as a lyric source — so the matcher still consumes
+its real production lyrics; only the eval's reference cues come from
+the LRC.
+
+Trust model per reference kind:
+
+- `yt-srt`: same video, professional sync. Constant offset fit
+  (display lead), as before.
+- `lrclib`: usually synced to a *different master*. Offset + linear
+  drift fit (robust Theil–Sen), with model selection — the drift term
+  is kept only when it fits better than the constant. This rescued
+  Mulan (drift −2.55 s/min ≈ 4% tempo difference: median 1.68 s → 0.12 s,
+  gross 14 → 0) and Best Part Of Me (−1.60 s/min), while
+  structural-break references — video edits with inserted sections the
+  LRC doesn't have — correctly fall back and stay visibly bad
+  (Hakuna Matata +105 s dialog insert, Bloodstream extended YTMAs
+  edit). Treat gross counts on those two as reference noise, not
+  matcher error.
+
+Pooled stats are reported per reference kind; mapping coverage is
+naturally lower for lrclib songs (different text variant, e.g. ZAYN
+33/72 mapped) — unmapped lines drop out of scoring instead of
+mispairing.
+
+The refresh driver also captures these songs now (their original
+lyric txts lived in temp dirs and are gone, so it reuses each
+bundle's capture-time lines verbatim). That added two songs that were
+never replayable before (NSYNC Paradise, The Girl In The Bubble —
+fresh passes regenerate both word streams). Defying Gravity, Popular,
+Wicked-For-Good soundtrack, and the stray "paradise" bundle have no
+LRC and stay out of the corpus.
+
+### Numbers
+
+Old May-era bundles, replay at production knobs:
+
+| Pool | Songs | Scored | Median | ≤0.5 s | ≤1.0 s | Gross |
+| --- | --- | --- | --- | --- | --- | --- |
+| yt-srt | 8 | 428 | 0.22 s | 77.1% | 93.7% | 4 |
+| lrclib | 12 | 409 | 0.29 s | 69.9% | 85.8% | 23 |
+
+As-run walk-era output: 23 songs / 979 scored / 62 gross (Mirrors 23).
+
+**Fresh corpus (current baseline), replay at production knobs:**
+
+| Pool | Songs | Scored | Median | ≤0.5 s | ≤1.0 s | Gross |
+| --- | --- | --- | --- | --- | --- | --- |
+| yt-srt | 9 | 540 | 0.36 s | 62.2% | 84.4% | 36 |
+| lrclib | 14 | 449 | 0.30 s | 67.7% | 84.2% | 35 |
+| **combined** | **23** | **989** | **0.33 s** | **64.7%** | **84.3%** | **71** |
+
+Consistency check: the txt songs' fresh captures reuse the same lyric
+lines as their old bundles, and their scores match the old replay
+almost exactly (lrclib gross 23 → 35 is fully explained by the two
+newly added songs). This independently confirms the Phase 2b finding:
+the yt-srt fresh-capture regression came from the lyric-cleanup input
+change, not whisper nondeterminism.
+
+Phase 3 target list (fresh corpus): Mirrors outro 22 gross,
+NSYNC Paradise +73 s verse block (7), Girl In The Bubble (5 — its
+transcribe pass heard only 57 words; weak vocal stem is a separate
+diagnostic), then singles. Hakuna/Bloodstream gross are reference
+noise.

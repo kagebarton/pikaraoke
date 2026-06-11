@@ -31,6 +31,7 @@ GROSS_RESIDUAL_S = 2.0
 _APOSTROPHES = re.compile("['‘’`´]")
 _HTML_TAG = re.compile(r"<[^>]+>")
 _NON_ALNUM = re.compile(r"[^a-z0-9 ]+")
+_LRC_STAMP = re.compile(r"\[(\d+):(\d{2}(?:\.\d+)?)\]")
 
 
 def normalize_line(text: str) -> str:
@@ -59,6 +60,39 @@ def parse_reference_cues(srt_text: str) -> tuple[list[str], list[float]]:
             texts.append(cleaned)
             starts.append(sub.start.total_seconds())
     return texts, starts
+
+
+def parse_lrc_lines(lrc_text: str) -> tuple[list[str], list[float]]:
+    """Texts and start seconds from LRC synced lyrics (LRCLIB exports).
+
+    Used as a *timing reference only* — LRCLIB text variants are too
+    inconsistent to feed the matcher (no quality control), but a synced
+    variant's line *deltas* are usually sound. The absolute clock often
+    differs from the video (different master/edit); the per-song offset
+    fit in :func:`score_song` absorbs that, so only deltas matter.
+
+    Tolerates multiple leading ``[mm:ss.xx]`` stamps per line; skips
+    metadata tags, unstamped lines, and stamps with empty text. Output
+    is sorted by time.
+    """
+    texts: list[str] = []
+    starts: list[float] = []
+    for raw in lrc_text.splitlines():
+        stamps = []
+        pos = 0
+        for m in _LRC_STAMP.finditer(raw):
+            if m.start() != pos:
+                break
+            stamps.append(60 * int(m.group(1)) + float(m.group(2)))
+            pos = m.end()
+        text = raw[pos:].strip()
+        if not stamps or not text:
+            continue
+        for t in stamps:
+            texts.append(text)
+            starts.append(t)
+    order = sorted(range(len(starts)), key=starts.__getitem__)
+    return [texts[i] for i in order], [starts[i] for i in order]
 
 
 def map_lines_to_cues(bundle_lines: list[str], cue_texts: list[str]) -> dict[int, int]:
@@ -92,6 +126,31 @@ class SongScore:
     pct_within_one_s: float
     gross_count: int  # |residual| > GROSS_RESIDUAL_S
     worst: list[dict] = field(default_factory=list)  # top offenders, for diagnosis
+    ref: str = "yt-srt"  # timing reference kind: "yt-srt" or "lrclib"
+    drift_s_per_min: float = 0.0  # fitted reference-clock drift (lrclib only)
+
+
+def _fit_offset_and_drift(cue_starts: list[float], deltas: list[float]) -> tuple[float, float]:
+    """Robust linear fit ``delta ≈ offset + drift * cue_start`` (Theil–Sen).
+
+    Used for references whose clock is untrusted (LRCLIB synced to a
+    different master): a constant tempo difference shows up as smooth
+    drift in the deltas, which is reference artifact, not matcher error.
+    Median-of-pairwise-slopes keeps structural breaks (inserted dialog
+    sections) out of the fit so they still surface as gross residuals.
+    """
+    pts = sorted(zip(cue_starts, deltas))
+    slopes = [
+        (d2 - d1) / (t2 - t1)
+        for i, (t1, d1) in enumerate(pts)
+        for t2, d2 in pts[i + 1 :]
+        if t2 > t1
+    ]
+    if not slopes:
+        return median(deltas), 0.0
+    drift = median(slopes)
+    offset = median(d - drift * t for t, d in pts)
+    return offset, drift
 
 
 def score_song(
@@ -101,6 +160,8 @@ def score_song(
     line_texts: list[str],
     n_lines: int,
     worst_n: int = 5,
+    ref: str = "yt-srt",
+    fit_drift: bool = False,
 ) -> SongScore:
     """Score one song's placed line starts against its reference cues.
 
@@ -111,6 +172,9 @@ def score_song(
         line_texts: full lyric line list (indexed by line_id) for the
             worst-offender report.
         n_lines: total lyric line count (denominator context).
+        ref: timing-reference kind label carried into the score.
+        fit_drift: also fit a linear reference-clock drift term (for
+            references synced to a different master than the video).
     """
     scored_ids = sorted(set(placed_starts) & set(cue_starts_by_line))
     deltas = {lid: placed_starts[lid] - cue_starts_by_line[lid] for lid in scored_ids}
@@ -127,9 +191,27 @@ def score_song(
             pct_within_half_s=0.0,
             pct_within_one_s=0.0,
             gross_count=0,
+            ref=ref,
         )
     offset = median(deltas.values())
+    drift = 0.0
     residuals = {lid: d - offset for lid, d in deltas.items()}
+    if fit_drift and len(scored_ids) >= 2:
+        # Model selection: keep the drift fit only when it actually fits
+        # better than a constant offset. Tempo-mismatch references improve
+        # a lot; structural-break references (inserted dialog sections)
+        # would drag the slope and must fall back to the constant fit.
+        d_offset, d_drift = _fit_offset_and_drift(
+            [cue_starts_by_line[lid] for lid in scored_ids],
+            [deltas[lid] for lid in scored_ids],
+        )
+        d_residuals = {
+            lid: d - (d_offset + d_drift * cue_starts_by_line[lid]) for lid, d in deltas.items()
+        }
+        if median(abs(r) for r in d_residuals.values()) < median(
+            abs(r) for r in residuals.values()
+        ):
+            offset, drift, residuals = d_offset, d_drift, d_residuals
     abs_res = sorted(abs(r) for r in residuals.values())
     n = len(abs_res)
     worst_ids = sorted(residuals, key=lambda lid: abs(residuals[lid]), reverse=True)[:worst_n]
@@ -157,6 +239,8 @@ def score_song(
         pct_within_one_s=round(100.0 * n_one / n, 1),
         gross_count=sum(1 for r in abs_res if r > GROSS_RESIDUAL_S),
         worst=worst,
+        ref=ref,
+        drift_s_per_min=round(60.0 * drift, 2),
     )
 
 
