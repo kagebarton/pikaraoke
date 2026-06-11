@@ -19,6 +19,15 @@ class TestNormalizeLine:
         assert normalize_line("Don't stop, believin'!") == "dont stop believin"
         assert normalize_line("Don’t stop, believin’!") == "dont stop believin"
 
+    def test_acute_accent_apostrophe_deleted_not_split(self):
+        # U+00B4 NFKD-decomposes to space + combining mark; apostrophe
+        # deletion must run before ASCII folding or "don´t" -> "don t".
+        assert normalize_line("don´t") == "dont"
+
+    def test_folds_homoglyphs_and_diacritics(self):
+        assert normalize_line("as it did when we wеre young") == "as it did when we were young"
+        assert normalize_line("cheese soufflé") == "cheese souffle"
+
     def test_strips_musical_notes_and_collapses_whitespace(self):
         assert normalize_line("♪  Hello   world ♪") == "hello world"
 
@@ -85,6 +94,32 @@ class TestMapLinesToCues:
         mapping = map_lines_to_cues(bundle, cues)
         assert 1 not in mapping
         assert mapping[0] == 0 and mapping[2] == 2
+
+    def test_near_equal_drift_still_maps(self):
+        # g-dropping between lyric variants must not break the pairing.
+        bundle = ["I've been waitin' forever right here"]
+        cues = ["I've been waiting forever right here"]
+        assert map_lines_to_cues(bundle, cues) == {0: 0}
+
+    def test_repeated_chorus_pairs_each_instance_to_its_own_cues(self):
+        # Both sides contain the chorus twice; the bundle's first instance
+        # has small text drift. Exact-equality block matching used to pair
+        # bundle instance 2 with cue instance 1, shifting every chorus cue
+        # by a whole section (observed on NSYNC - Paradise).
+        chorus = [
+            "and all this time I've always wondered",
+            "as it did when we were young",
+            "right here for this moment",
+        ]
+        drifted = [
+            "and all this time I've always wondered",
+            "as it did when we wеre young",  # Cyrillic е watermark
+            "right here for this moment",
+        ]
+        bundle = ["intro line one"] + drifted + ["bridge line here"] + chorus
+        cues = ["intro line one"] + chorus + ["bridge line here"] + chorus
+        mapping = map_lines_to_cues(bundle, cues)
+        assert mapping == {i: i for i in range(len(bundle))}
 
 
 class TestScoreSong:

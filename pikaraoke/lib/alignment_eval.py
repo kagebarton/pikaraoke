@@ -22,6 +22,7 @@ import srt
 
 from pikaraoke.lib.genius_lyrics import clean_srt_line
 from pikaraoke.lib.joint_match import match_words_to_lines_joint_with_stats
+from pikaraoke.lib.word_alignment import fold_to_ascii
 
 # Residuals beyond this are gross misplacements (wrong section / chorus
 # instance), the error class the matcher knobs are tuned to eliminate.
@@ -39,10 +40,14 @@ def normalize_line(text: str) -> str:
     subtitle cues. Tolerant of cleanup drift between capture time and
     eval time (HTML tags older cleanup kept, quote styles, musical-note
     glyphs, punctuation). Apostrophes are deleted (not space-replaced)
-    so "don't" == "dont".
+    so "don't" == "dont". Homoglyphs/diacritics are ASCII-folded so a
+    Cyrillic-watermarked line still pairs with its reference cue.
     """
-    text = _HTML_TAG.sub(" ", text.lower())
-    return " ".join(_NON_ALNUM.sub(" ", _APOSTROPHES.sub("", text)).split())
+    # Apostrophes must be deleted before folding: NFKD decomposes the
+    # acute accent (U+00B4) into space + combining mark, which would turn
+    # "don´t" into "don t" instead of "dont".
+    text = _APOSTROPHES.sub("", _HTML_TAG.sub(" ", text.lower()))
+    return " ".join(_NON_ALNUM.sub(" ", fold_to_ascii(text)).split())
 
 
 def parse_reference_cues(srt_text: str) -> tuple[list[str], list[float]]:
@@ -95,20 +100,68 @@ def parse_lrc_lines(lrc_text: str) -> tuple[list[str], list[float]]:
     return [texts[i] for i in order], [starts[i] for i in order]
 
 
-def map_lines_to_cues(bundle_lines: list[str], cue_texts: list[str]) -> dict[int, int]:
-    """Map matcher line_id -> reference cue index by sequence matching.
+# Minimum per-line text similarity for a line/cue pair to count as a
+# match in the mapping alignment. Below this, lines reworded by cleanup
+# drift fall out of the mapping (and out of scoring) instead of pairing
+# wrongly. Corpus-swept 2026-06-11: 0.65 admits cross-split mis-pairs
+# ("a whole new world" ~ "whole new world with you"); 0.85 drops them
+# while keeping g-dropping/prefix drift ("waitin'"/"waiting") paired.
+_MAP_MIN_RATIO = 0.85
+# Cost of skipping a line/cue in the alignment. Small but nonzero so
+# contiguous diagonals beat scattered skips when total match score ties.
+_MAP_GAP_COST = 0.05
 
-    Matching is positional-order-preserving on normalized text, so lines
-    dropped or reworded by cleanup drift simply fall out of the mapping
-    (and out of scoring) instead of pairing wrongly.
+
+def map_lines_to_cues(bundle_lines: list[str], cue_texts: list[str]) -> dict[int, int]:
+    """Map matcher line_id -> reference cue index by fuzzy sequence alignment.
+
+    Order-preserving global alignment (Needleman-Wunsch) on normalized
+    text with per-pair similarity scoring. Exact-equality block matching
+    (difflib) mis-paired repeated sections: when a chorus appears twice
+    on both sides but the first instances differ slightly (line-split or
+    "waitin'"/"waiting" drift), the longest *exact* block pairs sheet
+    instance 2 with reference instance 1, shifting every cue by a whole
+    chorus. Fuzzy per-line similarity keeps near-equal lines on the
+    diagonal, so each instance aligns to its own cues.
     """
     a = [normalize_line(t) for t in bundle_lines]
     b = [normalize_line(t) for t in cue_texts]
-    sm = difflib.SequenceMatcher(a=a, b=b, autojunk=False)
+    n, m = len(a), len(b)
+    sim = [[0.0] * m for _ in range(n)]
+    for i in range(n):
+        if not a[i]:
+            continue
+        sm = difflib.SequenceMatcher(autojunk=False)
+        sm.set_seq2(a[i])
+        for j in range(m):
+            if not b[j]:
+                continue
+            sm.set_seq1(b[j])
+            if sm.real_quick_ratio() < _MAP_MIN_RATIO or sm.quick_ratio() < _MAP_MIN_RATIO:
+                continue
+            r = sm.ratio()
+            if r >= _MAP_MIN_RATIO:
+                sim[i][j] = r
+
+    # H[i][j]: best score aligning a[:i] with b[:j].
+    h = [[0.0] * (m + 1) for _ in range(n + 1)]
+    for i in range(1, n + 1):
+        for j in range(1, m + 1):
+            best = h[i - 1][j - 1] + sim[i - 1][j - 1] if sim[i - 1][j - 1] else None
+            skip = max(h[i - 1][j], h[i][j - 1]) - _MAP_GAP_COST
+            h[i][j] = skip if best is None or skip > best else best
+
     mapping: dict[int, int] = {}
-    for block in sm.get_matching_blocks():
-        for k in range(block.size):
-            mapping[block.a + k] = block.b + k
+    i, j = n, m
+    while i > 0 and j > 0:
+        if sim[i - 1][j - 1] and h[i][j] == h[i - 1][j - 1] + sim[i - 1][j - 1]:
+            mapping[i - 1] = j - 1
+            i -= 1
+            j -= 1
+        elif h[i - 1][j] >= h[i][j - 1]:
+            i -= 1
+        else:
+            j -= 1
     return mapping
 
 
