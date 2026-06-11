@@ -67,7 +67,15 @@ class TestExtractWords:
             "word": "Hello",
             "start": 0.0,
             "end": 0.5,
+            "probability": 1.0,
         }
+
+    def test_word_without_probability_omits_key(self):
+        word = _make_word(" Hello ", 0.0, 0.5)
+        del word.probability
+        result = _make_result([_make_segment("Hello", [word])])
+        words = _extract_words(result, min_word_probability=0.0001)
+        assert words == [{"word": "Hello", "start": 0.0, "end": 0.5}]
 
     def test_single_segment_multiple_words(self):
         result = _make_result(

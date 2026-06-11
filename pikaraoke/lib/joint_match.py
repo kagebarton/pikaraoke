@@ -499,22 +499,6 @@ def _transcribe_match_and_count_in_window(
     return int(max(c[3] for c in cands)), any_overlap, count
 
 
-def _transcribe_match_in_window(
-    line_norms: list[str],
-    transcribe_norms: list[str],
-    transcribe_starts: list[float],
-    t0: float,
-    t1: float,
-    margin_s: float,
-    max_edit_ratio: float,
-) -> int:
-    """Backward-compatible alias returning only the matched-token count."""
-    matched, _, _ = _transcribe_match_and_count_in_window(
-        line_norms, transcribe_norms, transcribe_starts, t0, t1, margin_s, max_edit_ratio
-    )
-    return matched
-
-
 # ---------------------------------------------------------------------------
 # DP: weighted interval scheduling on time intervals
 # ---------------------------------------------------------------------------

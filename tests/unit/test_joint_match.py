@@ -8,7 +8,6 @@ from pikaraoke.lib.joint_match import (
     _line_align_ranges,
     _tokenise_lines,
     _transcribe_match_and_count_in_window,
-    _transcribe_match_in_window,
     match_words_to_lines_joint_with_stats,
 )
 
@@ -109,7 +108,7 @@ class TestTranscribeMatchInWindow:
     def test_perfect_match(self):
         tnorms = ["no", "worries", "for", "the", "rest"]
         tstarts = [10.0, 11.0, 12.0, 13.0, 14.0]
-        n = _transcribe_match_in_window(
+        n, _, _ = _transcribe_match_and_count_in_window(
             ["no", "worries", "for"], tnorms, tstarts, 10.0, 13.0, margin_s=0.5, max_edit_ratio=0.25
         )
         assert n == 3
@@ -118,7 +117,7 @@ class TestTranscribeMatchInWindow:
         tnorms = ["other", "stuff"]
         tstarts = [10.0, 11.0]
         # window way outside transcribe range
-        n = _transcribe_match_in_window(
+        n, _, _ = _transcribe_match_and_count_in_window(
             ["no", "worries", "for"],
             tnorms,
             tstarts,
@@ -130,7 +129,7 @@ class TestTranscribeMatchInWindow:
         assert n == 0
 
     def test_empty_window(self):
-        n = _transcribe_match_in_window(
+        n, _, _ = _transcribe_match_and_count_in_window(
             ["a", "b"], [], [], 0.0, 1.0, margin_s=0.3, max_edit_ratio=0.25
         )
         assert n == 0

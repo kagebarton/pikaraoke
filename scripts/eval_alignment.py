@@ -252,6 +252,11 @@ def parse_args() -> argparse.Namespace:
     cfg = PipelineConfig()
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--folder", default=DEFAULT_FOLDER, help="song library folder")
+    p.add_argument(
+        "--debug-dir",
+        default=None,
+        help="bundle directory (default: <folder>/alignment_debug)",
+    )
     p.add_argument("--alpha", type=float, default=cfg.joint_alpha)
     p.add_argument("--margin-s", type=float, default=cfg.joint_margin_s)
     p.add_argument("--max-edit-ratio", type=float, default=cfg.joint_max_edit_ratio)
@@ -270,9 +275,9 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     song_dir = Path(args.folder)
-    debug_dir = song_dir / "alignment_debug"
+    debug_dir = Path(args.debug_dir) if args.debug_dir else song_dir / "alignment_debug"
     if not debug_dir.is_dir():
-        print(f"no alignment_debug dir under {song_dir}")
+        print(f"no bundle dir: {debug_dir}")
         return 1
 
     knobs = {

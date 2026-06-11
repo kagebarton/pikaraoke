@@ -75,9 +75,9 @@ Only if the harness shows headroom after Phases 2–3.
 | Eval CLI | done — replay + --as-run modes |
 | Baseline numbers | done — see below |
 | Phase 2a: replay knob sweep | done — max_edit_ratio 0.25 → 0.75 shipped; α/margin/fallback confirmed |
-| Phase 2b: probability weighting | not started |
+| Phase 2b: probability weighting | done — rejected by measurement (flat at every exponent); corpus refreshed with probabilities |
 | Phase 2c: GPU sweeps (initial_prompt, temp fallback, model A/B) | not started |
-| Phase 3 | not started |
+| Phase 3 | not started — primary target updated: repeat-block align desync (see 2b) |
 
 ## Baseline (2026-06-10)
 
@@ -101,12 +101,12 @@ Grid: α ∈ {0.5, 1, 2, 3, 3.5, 4, 6} × margin ∈ {0.15, 0.3, 0.5},
 max_edit_ratio ∈ {0.15 … 1.0}, anchor_fallback on/off. All replayed
 from cached bundles (no GPU).
 
-- **α**: flat across [0.5, 3] (identical metrics), cliff at 3.5+
+- **α**: flat across \[0.5, 3\] (identical metrics), cliff at 3.5+
   entirely from Mirrors — it force-places 14 more lines but 26 land on
   the wrong chorus instance (gross 4 → 28 pooled). Production α=2.0 is
   correct; the function default was 4.0 (inside the cliff) and has been
   fixed to 2.0.
-- **margin_s**: insensitive in [0.15, 0.5]; 0.3 kept.
+- **margin_s**: insensitive in \[0.15, 0.5\]; 0.3 kept.
 - **anchor_fallback**: off loses 21 placed lines and adds a gross;
   on (current) confirmed.
 - **max_edit_ratio**: the win. 0.25 → 0.75 lifts coverage
@@ -124,3 +124,51 @@ from cached bundles (no GPU).
 Remaining gross at production knobs (Phase 2b/3 targets): For Good
 final-line repeat (−6.7 s), Can You Feel The Love Tonight (1),
 Mirrors (1), More Than That L4 (1).
+
+## Phase 2b results (2026-06-10): probability weighting + corpus refresh
+
+The worker now retains whisper word probabilities in extracted word
+dicts (`_extract_words`), and `scripts/refresh_alignment_capture.py`
+re-captured the corpus with them: align + refine and transcribe (no
+refine) against the cached vocal stems — exactly the joint production
+passes — written to `<songs>/alignment_debug_probs/` for
+`eval_alignment.py --debug-dir`. The library is untouched. Bye Bye
+Bye is replayable again (no cached transcribe_words before), so the
+corpus is 9 songs / 540 scored lines.
+
+**Probability weighting: rejected.** A `prob_exp` knob (scale
+`transcribe_match` by mean window word probability \*\* exp) swept at
+{0, 0.5, 1, 2, 4} moved nothing: coverage identical, median 0.35–0.36 s,
+gross 34–37 with no consistent direction. The gross lines are real
+sung vocals — whisper is confident on *every* instance of a repeated
+line, so probability cannot disambiguate instances. The matcher
+plumbing was removed after measurement (this commit's history has it);
+the worker-side retention stays for diagnostics.
+
+**The bigger finding: the corpus baseline moved under us.** Fresh
+inputs at identical knobs score much worse than the May-era bundles
+(median 0.36 vs 0.22 s, gross 36 vs 4) — because the May lyric-cleanup
+change (keep-paren-contents etc.) altered what align sees. Old
+captures fed align junk tokens (`♪`, `(upbeat music)`); align
+quality was visibly bad, so the DP left hard lines unplaced (Mirrors
+76/120) and gross stayed low *by accident of under-placement*.
+Today's cleaner lines make align confident nearly everywhere: joint
+now places 97.3% of lines, and align's classic failure — desync
+across long repeated-line blocks — flows straight through the DP.
+All 22 Mirrors gross lines are align-won placements of the
+"You are, you are the love of my life" outro repeats (residuals −4 to
+−50 s). Transcribe can't veto: every instance matches every window.
+
+Consequences:
+
+- `alignment_debug_probs` (via `--debug-dir`) is the eval corpus
+  from now on; the old `alignment_debug` numbers describe inputs the
+  pipeline no longer produces.
+- Current true baseline (production knobs): 9 songs, 540 scored,
+  median 0.36 s, 62.2% ≤ 0.5 s, 84.4% ≤ 1.0 s, **36 gross**, 97.3%
+  coverage.
+- Phase 3's primary target changes: not just interp coverage, but
+  **repeat-block instance disambiguation** — anchor on distinct lines
+  around a repeated block and re-align the block within the anchored
+  audio slice. Mirrors' outro (22 gross) is the test case; For Good /
+  Bye Bye Bye / Can You Feel (3 each) are secondary.

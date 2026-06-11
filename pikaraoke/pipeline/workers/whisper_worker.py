@@ -168,13 +168,16 @@ def _apply_post_process(result, pp: PostProcessKwargs) -> None:
 
 
 def _extract_words(result, min_word_probability: float) -> list[dict]:
-    """Flatten WhisperResult into [{word, start, end}, ...].
+    """Flatten WhisperResult into [{word, start, end, probability?}, ...].
 
     Drops words with ``probability < min_word_probability``. These are
     silent-region hallucinations: stable-ts emits them when forced to
     transcribe an unintelligible region, clustered at a single
     zero-duration timestamp. Letting the matcher anchor to them collapses
     whole lines to that timestamp. Pass 0 to disable the filter.
+
+    Surviving words keep their probability (when whisper provides one)
+    so the joint matcher can weight match scores by word confidence.
     """
     all_words = []
     dropped = 0
@@ -184,13 +187,14 @@ def _extract_words(result, min_word_probability: float) -> list[dict]:
             if prob is not None and prob < min_word_probability:
                 dropped += 1
                 continue
-            all_words.append(
-                {
-                    "word": word.word.strip(),
-                    "start": word.start,
-                    "end": word.end,
-                }
-            )
+            entry = {
+                "word": word.word.strip(),
+                "start": word.start,
+                "end": word.end,
+            }
+            if prob is not None:
+                entry["probability"] = round(prob, 4)
+            all_words.append(entry)
     if dropped:
         logger.info(
             "Dropped %d low-probability whisper words (< %.4f)",
