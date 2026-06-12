@@ -81,7 +81,7 @@ class TestIpcPrimitives:
         recv, send = Pipe()
         event = threading.Event()
         event.set()
-        forward_cancel(event, send)  # returns once the byte is sent
+        forward_cancel(event, send, threading.Event())  # done unset; sends the byte
         assert recv.recv() == 1
 
     def test_forward_cancel_swallows_broken_pipe(self):
@@ -89,7 +89,17 @@ class TestIpcPrimitives:
         send.close()
         event = threading.Event()
         event.set()
-        forward_cancel(event, send)  # must not raise on a closed pipe
+        forward_cancel(event, send, threading.Event())  # must not raise on a closed pipe
+
+    def test_forward_cancel_exits_when_job_done(self):
+        # A job that completes without cancelling sets ``done``; the forwarder
+        # must exit without sending, rather than strand a thread blocked on the
+        # never-fired cancel event for the life of the process.
+        recv, send = Pipe()
+        done = threading.Event()
+        done.set()
+        forward_cancel(threading.Event(), send, done)
+        assert recv.poll(0) is False
 
     def test_drain_pipe_empties_pending_messages(self):
         recv, send = Pipe()

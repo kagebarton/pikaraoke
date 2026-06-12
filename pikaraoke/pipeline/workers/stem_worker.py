@@ -188,14 +188,14 @@ class StemWorker:
         js.send((str(wav_path), str(output_dir)))
 
         # Forward threading.Event → cancel Pipe via a daemon thread
-        cancel_forwarder: threading.Thread | None = None
+        forwarder_done: threading.Event | None = None
         if cancel_event is not None and self._cancel_send is not None:
-            cancel_forwarder = threading.Thread(
+            forwarder_done = threading.Event()
+            threading.Thread(
                 target=forward_cancel,
-                args=(cancel_event, self._cancel_send),
+                args=(cancel_event, self._cancel_send, forwarder_done),
                 daemon=True,
-            )
-            cancel_forwarder.start()
+            ).start()
 
         # Block until result
         try:
@@ -206,6 +206,8 @@ class StemWorker:
                 if not proc.is_alive():
                     raise WorkerDiedError("Stem worker died during separation")
         finally:
+            if forwarder_done is not None:
+                forwarder_done.set()
             self._drain_cancel_pipe()
 
         tag = msg[0]

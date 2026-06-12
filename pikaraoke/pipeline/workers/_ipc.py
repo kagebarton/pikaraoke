@@ -29,18 +29,23 @@ class WorkerDiedError(Exception):
     """Raised when a worker subprocess dies during a job or boot."""
 
 
-def forward_cancel(event: threading.Event, cancel_send: Connection) -> None:
-    """Daemon-thread target: wait for event, send one byte to the cancel pipe.
+def forward_cancel(event: threading.Event, cancel_send: Connection, done: threading.Event) -> None:
+    """Daemon-thread target: forward the cancel event to the cancel pipe.
 
     Bridges the main-process threading world to the subprocess Pipe world.
-    The thread exits after sending — the cancel signal only needs to be sent
-    once per job.
+    Exits when the cancel fires (one byte sent — a job only needs one) or
+    when ``done`` is set by the job finishing. Without the ``done`` exit,
+    every uncancelled job would strand a thread blocked on ``event.wait()``
+    for the life of the process.
     """
-    event.wait()
-    try:
-        cancel_send.send(1)
-    except (OSError, BrokenPipeError):
-        pass
+    while not done.is_set():
+        if event.wait(0.5):
+            if not done.is_set():
+                try:
+                    cancel_send.send(1)
+                except (OSError, BrokenPipeError):
+                    pass
+            return
 
 
 def drain_pipe(conn: Connection) -> None:

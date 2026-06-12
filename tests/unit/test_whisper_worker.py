@@ -322,9 +322,10 @@ class TestCancelForwarding:
 
         cancel_recv, cancel_send = Pipe(duplex=False)
         event = threading.Event()
+        done = threading.Event()
 
         # Start the forwarder thread
-        t = threading.Thread(target=forward_cancel, args=(event, cancel_send), daemon=True)
+        t = threading.Thread(target=forward_cancel, args=(event, cancel_send, done), daemon=True)
         t.start()
 
         # Set the event
@@ -336,6 +337,30 @@ class TestCancelForwarding:
         assert byte == 1
 
         # Clean up
+        for conn in (cancel_recv, cancel_send):
+            try:
+                conn.close()
+            except OSError:
+                pass
+
+    def test_forwarder_exits_when_job_completes_without_cancel(self):
+        """The done signal must release the thread — otherwise every
+        uncancelled job strands a forwarder for the process lifetime."""
+        from pikaraoke.pipeline.workers._ipc import forward_cancel
+
+        cancel_recv, cancel_send = Pipe(duplex=False)
+        event = threading.Event()
+        done = threading.Event()
+
+        t = threading.Thread(target=forward_cancel, args=(event, cancel_send, done), daemon=True)
+        t.start()
+        done.set()
+        t.join(timeout=2)
+        assert not t.is_alive(), "forwarder must exit once the job is done"
+        # A cancel after completion must not reach the pipe.
+        event.set()
+        assert not cancel_recv.poll(0.1)
+
         for conn in (cancel_recv, cancel_send):
             try:
                 conn.close()
