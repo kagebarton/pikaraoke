@@ -116,7 +116,15 @@ class TestStemWorkerSeparate:
         w, _proc, _rq = _worker_with_fakes(result=("ok", "/o/v.wav", "/o/i.wav"))
         out = w.separate(Path("/in/x.wav"), Path("/o"))
         assert out == (Path("/o/v.wav"), Path("/o/i.wav"))
-        w._job_send.send.assert_called_once_with(("/in/x.wav", "/o"))
+        w._job_send.send.assert_called_once_with(("/in/x.wav", "/o", None))
+
+    def test_model_override_travels_in_job_tuple(self):
+        # A model_name override (e.g. the de-reverb roformer) rides in the
+        # job tuple's third slot; the default job sends None there.
+        w, _proc, _rq = _worker_with_fakes(result=("ok", "/o/v.wav", "/o/i.wav"))
+        out = w.separate(Path("/in/x.wav"), Path("/o"), model_name="dereverb.ckpt")
+        assert out == (Path("/o/v.wav"), Path("/o/i.wav"))
+        w._job_send.send.assert_called_once_with(("/in/x.wav", "/o", "dereverb.ckpt"))
 
     def test_cancelled_tag_raises_worker_cancelled(self):
         w, _proc, _rq = _worker_with_fakes(result=("cancelled",))
@@ -287,6 +295,27 @@ class TestStemIdentification:
         sep = self._separator(["x_(Drums).wav", "x_(Bass).wav"])
         with pytest.raises(RuntimeError, match="Could not identify"):
             _run_separation_unpatched(Path("a.wav"), Path("/o"), sep, _LOG)
+
+    def test_no_vocals_stem_counts_as_instrumental(self):
+        sep = self._separator(["x_(Vocals).wav", "x_(No Vocals).wav"])
+        vocal, inst = _run_separation_unpatched(Path("a.wav"), Path("/o"), sep, _LOG)
+        assert vocal.name == "x_(Vocals).wav"
+        assert inst.name == "x_(No Vocals).wav"
+
+    def test_dereverb_reverb_tags_win_over_embedded_vocals(self):
+        # De-reverb output names embed the input's "(Vocals)" tag from the
+        # earlier karaoke separation, so the (no)reverb checks must run first:
+        # the dry (Noreverb) stem fills the vocal slot, the (Reverb) tail the
+        # instrumental slot.
+        sep = self._separator(
+            [
+                "clip_(Vocals)_(Noreverb)_dereverb.wav",
+                "clip_(Vocals)_(Reverb)_dereverb.wav",
+            ]
+        )
+        vocal, inst = _run_separation_unpatched(Path("a.wav"), Path("/o"), sep, _LOG)
+        assert "(Noreverb)" in vocal.name
+        assert "(Reverb)" in inst.name
 
 
 # --- Stage adapter ---------------------------------------------------------

@@ -32,6 +32,7 @@ class Phase(enum.Enum):
     ALIGN_CHECK = "align_check"  # lyric_align: align only, gate on failure ratio
     REFINE = "refine"  # lyric_align: refine the cached align result
     TRANSCRIBE = "transcribe"  # lyric_align: transcribe+refine
+    DEREVERB = "dereverb"  # lyric_align: de-reverb the vocal stem for the retry
 
 
 # ---------------------------------------------------------------------------

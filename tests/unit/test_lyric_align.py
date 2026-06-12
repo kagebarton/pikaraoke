@@ -149,12 +149,17 @@ class TestGenerateAss:
 # ---------------------------------------------------------------------------
 
 
-def _make_stage_and_ctx(tmp_path, *, match_method="auto", fail_ratio=0.0, threshold=0.1):
+def _make_stage_and_ctx(
+    tmp_path, *, match_method="auto", fail_ratio=0.0, threshold=0.1, dereverb_yield_wpm=0.0
+):
     from pikaraoke.pipeline.context import StageContext
 
     cfg = PipelineConfig()
     cfg.match_method = match_method
     cfg.align_failure_escalation = threshold
+    # Off by default so the de-reverb gate never trips on fixtures with
+    # tiny word counts; TestDereverbRetry opts in explicitly.
+    cfg.dereverb_yield_wpm = dereverb_yield_wpm
 
     worker = MagicMock()
     worker.align_check.return_value = {
@@ -174,7 +179,7 @@ def _make_stage_and_ctx(tmp_path, *, match_method="auto", fail_ratio=0.0, thresh
         {"word": "world", "start": 1.0, "end": 2.0},
     ]
 
-    stage = LyricAlignStage(whisper_worker=worker, config=cfg)
+    stage = LyricAlignStage(whisper_worker=worker, config=cfg, stem_worker=MagicMock())
 
     song_path = tmp_path / "song.mp4"
     song_path.write_bytes(b"")
@@ -496,3 +501,92 @@ class TestWindowedRealign:
         starts = self._ass_start_seconds(ctx)
         lead_in = stage._config.line_lead_in_cs / 100.0
         assert starts == pytest.approx([10.0 - lead_in, 20.0 - lead_in], abs=0.011)
+
+
+# ---------------------------------------------------------------------------
+# De-reverb retry gate (joint route)
+# ---------------------------------------------------------------------------
+
+
+class TestDereverbRetry:
+    """Low transcribe yield → de-reverb the stem via the stem worker and
+    re-run the whisper legs on the dry stem; any retry failure keeps the
+    wet-stem results."""
+
+    def _make(self, tmp_path, monkeypatch, *, duration_s=60.0):
+        import pikaraoke.pipeline.stages.lyric_align as la_mod
+
+        # Fixture transcribe returns 2 words; over 60 s that is 2 wpm
+        # (gate trips at 30), over 1 s it is 120 wpm (gate passes).
+        stage, ctx, worker = _make_stage_and_ctx(
+            tmp_path, match_method="joint", dereverb_yield_wpm=30.0
+        )
+        monkeypatch.setattr(la_mod, "_wav_duration", lambda _p: duration_s)
+        return stage, ctx, worker, stage._stem_worker
+
+    def test_low_yield_reruns_whisper_legs_on_dry_stem(self, tmp_path, monkeypatch):
+        stage, ctx, worker, stem_worker = self._make(tmp_path, monkeypatch)
+        dry = ctx.tmp_dir / "vocal_(Noreverb)_dereverb.wav"
+        tail = ctx.tmp_dir / "vocal_(Reverb)_dereverb.wav"
+        stem_worker.separate.return_value = (dry, tail)
+
+        stage.run(ctx)
+
+        stem_worker.separate.assert_called_once()
+        sep_kwargs = stem_worker.separate.call_args.kwargs
+        assert sep_kwargs["model_name"] == stage._config.dereverb_model_name
+        assert sep_kwargs["wav_path"] == ctx.artifacts["vocal_wav"]
+        # Both whisper legs ran twice: wet pass, then dry retry.
+        assert worker.align_check.call_count == 2
+        assert worker.align_check.call_args_list[1].kwargs["vocal_path"] == dry
+        assert worker.transcribe_words.call_count == 2
+        assert worker.transcribe_words.call_args_list[1].kwargs["vocal_path"] == dry
+        ass_path = ctx.song_path.parent / "karaoke" / f"{ctx.song_path.stem}.ass"
+        assert ass_path.exists()
+
+    def test_dereverb_telemetry_lands_in_capture_bundle(self, tmp_path, monkeypatch):
+        stage, ctx, worker, stem_worker = self._make(tmp_path, monkeypatch)
+        stem_worker.separate.return_value = (
+            ctx.tmp_dir / "v_(Noreverb).wav",
+            ctx.tmp_dir / "v_(Reverb).wav",
+        )
+        stage.run(ctx)
+        debug_dir = ctx.song_path.parent / "alignment_debug"
+        bundles = list(debug_dir.glob("*.json"))
+        assert len(bundles) == 1
+        assert '"dereverb"' in bundles[0].read_text(encoding="utf-8")
+
+    def test_high_yield_skips_retry(self, tmp_path, monkeypatch):
+        stage, ctx, worker, stem_worker = self._make(tmp_path, monkeypatch, duration_s=1.0)
+        stage.run(ctx)
+        stem_worker.separate.assert_not_called()
+        worker.align_check.assert_called_once()
+        worker.transcribe_words.assert_called_once()
+
+    def test_retry_failure_keeps_wet_results(self, tmp_path, monkeypatch):
+        stage, ctx, worker, stem_worker = self._make(tmp_path, monkeypatch)
+        stem_worker.separate.side_effect = RuntimeError("stem worker died")
+        stage.run(ctx)  # must not raise
+        worker.align_check.assert_called_once()
+        worker.transcribe_words.assert_called_once()
+        ass_path = ctx.song_path.parent / "karaoke" / f"{ctx.song_path.stem}.ass"
+        assert ass_path.exists()
+
+    def test_cancellation_propagates_not_degraded(self, tmp_path, monkeypatch):
+        import threading
+
+        from pikaraoke.pipeline.context import CancelToken, PipelineCancelled
+        from pikaraoke.pipeline.workers.stem_worker import WorkerCancelledError
+
+        stage, ctx, worker, stem_worker = self._make(tmp_path, monkeypatch)
+        ctx.cancel = CancelToken(event=threading.Event())
+        stem_worker.separate.side_effect = WorkerCancelledError("cancelled between chunks")
+        with pytest.raises(PipelineCancelled):
+            stage.run(ctx)
+
+    def test_no_stem_worker_disables_gate(self, tmp_path, monkeypatch):
+        stage, ctx, worker, _ = self._make(tmp_path, monkeypatch)
+        stage._stem_worker = None
+        stage.run(ctx)  # gate silently off — single wet pass
+        worker.align_check.assert_called_once()
+        worker.transcribe_words.assert_called_once()

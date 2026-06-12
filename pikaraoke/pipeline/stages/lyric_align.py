@@ -21,6 +21,12 @@ cached align result). Splitting these means a future escalation policy
 can discard the align output before paying refine's cost. Transcription
 mode stays a single Phase.TRANSCRIBE call.
 
+On the joint route, a reverb-washed vocal stem (whole-stem transcribe
+yield below ``dereverb_yield_wpm``) triggers a de-reverb retry: the stem
+worker swaps to the de-reverb roformer, and align + transcribe + the
+joint matcher re-run on the dry stem. Any retry failure keeps the
+wet-stem results — the retry can only improve a song, never fail it.
+
 ASS/SRT are written to ctx.tmp_dir first and moved to the final output
 directory only after both writes succeed — preventing orphan files on
 cancellation.
@@ -52,6 +58,7 @@ from pikaraoke.pipeline.config import PipelineConfig
 from pikaraoke.pipeline.context import Phase, PipelineCancelled, SetEvent, StageContext
 from pikaraoke.pipeline.stages._ffmpeg_helpers import run_ffmpeg
 from pikaraoke.pipeline.stages.base import BaseStage
+from pikaraoke.pipeline.workers.stem_worker import StemWorker, WorkerCancelledError
 from pikaraoke.pipeline.workers.whisper_worker import (
     AlignmentCancelledError,
     WhisperWorker,
@@ -65,9 +72,16 @@ class LyricAlignStage(BaseStage):
 
     name = "lyric_align"
 
-    def __init__(self, whisper_worker: WhisperWorker, config: PipelineConfig) -> None:
+    def __init__(
+        self,
+        whisper_worker: WhisperWorker,
+        config: PipelineConfig,
+        stem_worker: StemWorker | None = None,
+    ) -> None:
         self._worker = whisper_worker
         self._config = config
+        # Used only by the joint route's de-reverb retry; None disables it.
+        self._stem_worker = stem_worker
 
     def run(self, ctx: StageContext) -> None:
         lyrics_path = ctx.artifacts.get("lyrics_path")
@@ -573,6 +587,31 @@ class LyricAlignStage(BaseStage):
             ),
         )
 
+        # De-reverb retry gate: a reverb-washed stem starves transcribe
+        # (the one corpus case yields 14.4 wpm vs >= 50.5 everywhere
+        # else), which guts both joint scoring and windowed re-align.
+        # Retry the whisper legs on a de-reverbed stem; any failure
+        # keeps the wet-stem results.
+        dereverb_stats: dict | None = None
+        yield_wpm = self._transcribe_yield_wpm(transcribe_words, vocal_wav)
+        if yield_wpm is not None and yield_wpm < self._config.dereverb_yield_wpm:
+            logger.warning(
+                "[%s] transcribe yield %.1f wpm < %.1f — vocal stem looks "
+                "reverb-washed; retrying on a de-reverbed stem",
+                self.name,
+                yield_wpm,
+                self._config.dereverb_yield_wpm,
+            )
+            dereverb_stats = {"yield_wpm": round(yield_wpm, 1), "succeeded": False}
+            retried = self._dereverb_retry(ctx, vocal_wav, lyrics_text)
+            if retried is not None:
+                vocal_wav, align_words, transcribe_words = retried
+                retry_wpm = self._transcribe_yield_wpm(transcribe_words, vocal_wav)
+                dereverb_stats["succeeded"] = True
+                dereverb_stats["retry_yield_wpm"] = (
+                    round(retry_wpm, 1) if retry_wpm is not None else None
+                )
+
         line_objects, joint_stats = match_words_to_lines_joint_with_stats(
             align_words,
             transcribe_words,
@@ -582,6 +621,8 @@ class LyricAlignStage(BaseStage):
             margin_s=self._config.joint_margin_s,
             max_edit_ratio=self._config.joint_max_edit_ratio,
         )
+        if dereverb_stats is not None:
+            joint_stats["dereverb"] = dereverb_stats
         if self._config.joint_windowed_realign:
             try:
                 line_objects = self._realign_windows(
@@ -601,6 +642,86 @@ class LyricAlignStage(BaseStage):
                     "[%s] windowed re-align failed; keeping pass-1 placements", self.name
                 )
         return line_objects, align_words, transcribe_words, joint_stats
+
+    def _transcribe_yield_wpm(self, transcribe_words: list[dict], vocal_wav: Path) -> float | None:
+        """Whole-stem transcribe yield in words per minute.
+
+        None when the de-reverb retry is unavailable (no stem worker,
+        knob disabled) or the stem duration can't be read — the gate
+        treats None as "don't retry".
+        """
+        cfg = self._config
+        if self._stem_worker is None or cfg.dereverb_yield_wpm <= 0 or not cfg.dereverb_model_name:
+            return None
+        try:
+            minutes = _wav_duration(vocal_wav) / 60.0
+        except (wave.Error, OSError, EOFError):
+            return None
+        if minutes <= 0:
+            return None
+        return len(transcribe_words) / minutes
+
+    def _dereverb_retry(
+        self,
+        ctx: StageContext,
+        vocal_wav: Path,
+        lyrics_text: str,
+    ) -> tuple[Path, list[dict], list[dict]] | None:
+        """De-reverb the vocal stem and re-run align + transcribe on it.
+
+        Returns ``(dry_vocal_wav, align_words, transcribe_words)``, or
+        None to keep the wet-stem results — a retry must never fail the
+        song. Cancellation always propagates.
+        """
+        cancel_event = ctx.cancel.event if ctx.cancel else None
+        try:
+            dry_wav, _reverb_tail = _model_call(
+                ctx,
+                Phase.DEREVERB,
+                lambda: self._stem_worker.separate(
+                    wav_path=Path(vocal_wav),
+                    output_dir=ctx.tmp_dir,
+                    cancel_event=cancel_event,
+                    model_name=self._config.dereverb_model_name,
+                ),
+            )
+            check = _model_call(
+                ctx,
+                Phase.ALIGN_CHECK,
+                lambda: self._worker.align_check(
+                    vocal_path=dry_wav,
+                    lyrics_text=lyrics_text,
+                    cancel_event=cancel_event,
+                ),
+            )
+            align_words = _model_call(
+                ctx,
+                Phase.REFINE,
+                lambda: self._worker.refine_from_cached(
+                    result_id=check["result_id"],
+                    vocal_path=dry_wav,
+                    cancel_event=cancel_event,
+                ),
+            )
+            transcribe_words = _model_call(
+                ctx,
+                Phase.TRANSCRIBE,
+                lambda: self._worker.transcribe_words(
+                    vocal_path=dry_wav,
+                    cancel_event=cancel_event,
+                    refine=False,
+                ),
+            )
+        except PipelineCancelled:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "[%s] de-reverb retry failed, keeping wet-stem results: %s",
+                self.name,
+                exc,
+            )
+            return None
+        return dry_wav, align_words, transcribe_words
 
     def _realign_windows(
         self,
@@ -762,9 +883,9 @@ class LyricAlignStage(BaseStage):
 
 def _model_call(ctx, phase: Phase, fn):
     """Wrap a single model call in an activity scope (or run it bare
-    when ctx.cancel is None).  Translates AlignmentCancelledError to
-    PipelineCancelled so the orchestrator only needs to catch one
-    exception type.
+    when ctx.cancel is None).  Translates both workers' cancellation
+    exceptions to PipelineCancelled so the orchestrator only needs to
+    catch one exception type.
     """
     if ctx.cancel is None:
         return fn()
@@ -772,7 +893,7 @@ def _model_call(ctx, phase: Phase, fn):
     try:
         with ctx.cancel.activity(phase, SetEvent(cancel_event)):
             return fn()
-    except AlignmentCancelledError:
+    except (AlignmentCancelledError, WorkerCancelledError):
         raise PipelineCancelled(phase)
 
 

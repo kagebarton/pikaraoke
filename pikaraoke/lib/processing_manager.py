@@ -269,7 +269,7 @@ class ProcessingManager:
             LoudnormAnalyzeStage(self._config),
             StemSeparationStage(self._stem_worker),
             FFmpegTranscodeStage(self._config),
-            LyricAlignStage(self._whisper_worker, self._config),
+            LyricAlignStage(self._whisper_worker, self._config, stem_worker=self._stem_worker),
         ]
 
         self._orchestrator = PipelineOrchestrator(

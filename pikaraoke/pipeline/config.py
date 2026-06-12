@@ -269,6 +269,22 @@ class PipelineConfig:
     # 46% of song audio re-aligned).
     joint_windowed_realign: bool = True
 
+    # De-reverb retry for the joint route. When the whole-stem transcribe
+    # yield falls below this many words per minute, the vocal stem is
+    # treated as reverb-washed: the stem worker swaps to the de-reverb
+    # roformer, de-reverbs the stem, and align + transcribe + the joint
+    # matcher re-run on the dry stem (any failure keeps the wet-stem
+    # results). Corpus evidence (plans/matcher-timing-eval.md): the one
+    # reverb-washed song yields 14.4 wpm; every other song >= 50.5.
+    # 0 disables the retry.
+    dereverb_yield_wpm: float = 30.0
+
+    # Same MelBand Roformer family and size as the karaoke model, so the
+    # swap never exceeds today's proven VRAM peak. Keep the ckpt
+    # pre-downloaded in models/ — a missing file means a 913 MB fetch in
+    # the middle of the first gated song.
+    dereverb_model_name: str = "dereverb_mel_band_roformer_anvuew_sdr_19.1729.ckpt"
+
     # When True, the lyric-align stage writes a JSON bundle to
     # ``<song_dir>/alignment_debug/<stem>.json`` capturing the matcher
     # inputs (whisper words + lyric lines), the knob values that ran,
