@@ -696,6 +696,12 @@ def _whisper_worker_main_inner(
     worker_log = _setup_worker_logger(log_level)
     worker_log.info("Whisper worker process started (PID %d)", os.getpid())
 
+    # Must be set before torch initializes CUDA: expandable segments let the
+    # caching allocator grow/shrink instead of pinning fixed blocks, which
+    # avoids fragmentation OOM when this process shares a small GPU with the
+    # stem worker and mpv. setdefault so an externally set conf wins.
+    os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+
     import stable_whisper
     import torch
 

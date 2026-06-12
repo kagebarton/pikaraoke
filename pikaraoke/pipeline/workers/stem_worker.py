@@ -17,8 +17,9 @@ a signal on the cancel pipe. The pre-hook detects it and raises
 _CancelledInsideDemix.
 5. The exception unwinds through demix() → separate() → _separate_file().
 Because we're in a subprocess, the exception stays local.
-6. The worker catches _CancelledInsideDemix, clears GPU state, and sends
-("cancelled",) back over the result Pipe.
+6. The worker catches _CancelledInsideDemix and sends ("cancelled",)
+back over the result Pipe. GPU state (cached source arrays, allocator
+cache) is released after every job, whatever the outcome.
 7. The model weights (self.model_run) survive the exception — they're on
 the GPU as class attributes, not on the Python stack. The next job
 can call separate() immediately without reloading.
@@ -343,6 +344,12 @@ def _worker_main(
     worker_log = _setup_worker_logger(log_level)
     worker_log.info("Stem worker process started (PID %d)", os.getpid())
 
+    # Must be set before torch initializes CUDA: expandable segments let the
+    # caching allocator grow/shrink instead of pinning fixed blocks, which
+    # avoids fragmentation OOM when this process shares a small GPU with the
+    # whisper worker and mpv. setdefault so an externally set conf wins.
+    os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+
     import torch
     from audio_separator.separator import Separator
 
@@ -385,7 +392,6 @@ def _worker_main(
                 result_send.send(("ok", str(vocal_wav), str(instrumental_wav)))
             except _CancelledInsideDemix:
                 worker_log.info("Separation cancelled between chunks — model still loaded")
-                _clear_gpu_state(separator, worker_log)
                 result_send.send(("cancelled",))
             except oom_exc_types as e:
                 # OOM mid-demix leaves audio-separator's internal state and
@@ -403,6 +409,13 @@ def _worker_main(
                 worker_log.error(f"Stem separation failed for {wav_path}: {e}")
                 result_send.send(("error", str(e)))
             finally:
+                # Release per-job GPU state after every outcome, not just
+                # cancellation: audio-separator keeps the full-song source
+                # arrays referenced on the model instance, and the CUDA
+                # allocator's cached demix activations are invisible-but-
+                # reserved to the whisper worker and mpv. On this shared
+                # 6 GB card that headroom matters more than allocator reuse.
+                _clear_gpu_state(separator, worker_log)
                 # Drain any remaining cancel signals so the pipe is clean
                 drain_pipe(cancel_recv)
     finally:
@@ -551,7 +564,7 @@ def _run_separation_unpatched(
 
 
 def _clear_gpu_state(separator, worker_log: logging.Logger) -> None:
-    """Clear intermediate GPU state after a cancelled separation."""
+    """Clear per-job GPU state: cached source arrays + CUDA allocator cache."""
     if separator.model_instance is not None:
         try:
             separator.model_instance.clear_gpu_cache()
