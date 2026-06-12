@@ -210,6 +210,7 @@ def resolve_reference(
     debug_dir: Path,
     prov: dict,
     offline: bool,
+    prefer_lrclib: bool = False,
 ) -> tuple[list[str], list[float], str] | str | None:
     """Resolve a bundle's timing reference.
 
@@ -222,9 +223,20 @@ def resolve_reference(
     against hand-vetted LRCLIB synced lyrics — timing reference only;
     their absolute clock may differ from the video, which the per-song
     offset fit absorbs.
+
+    ``prefer_lrclib`` scores SRT-sourced songs against an LRCLIB file
+    when one exists (falling back to the SRT). Required once the matcher
+    consumes SRT timings: scoring SRT-informed placement against the
+    same SRT would grade the matcher against its own input.
     """
     stem = bundle["song_stem"]
     if bundle.get("lyrics", {}).get("source_kind") == "srt":
+        if prefer_lrclib:
+            lrc_path = find_reference_lrc(bundle, song_dir)
+            if lrc_path is not None:
+                texts, starts = parse_lrc_lines(lrc_path.read_text(encoding="utf-8"))
+                if texts:
+                    return texts, starts, "lrclib"
         verified = verify_provenance(stem, debug_dir, prov, offline)
         if verified is None:
             return "provenance unverifiable"
@@ -341,6 +353,12 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument("--songs", default=None, help="substring filter on song stem")
     p.add_argument("--offline", action="store_true", help="skip provenance queries on cache miss")
+    p.add_argument(
+        "--prefer-lrclib",
+        action="store_true",
+        help="score SRT-sourced songs against LRCLIB when available "
+        "(non-circular reference for SRT-informed matching)",
+    )
     p.add_argument("--json", dest="json_out", default=None, help="write results JSON here")
     return p.parse_args()
 
@@ -370,7 +388,9 @@ def main() -> int:
         stem = bundle.get("song_stem", path.stem)
         if args.songs and args.songs.lower() not in stem.lower():
             continue
-        ref = resolve_reference(bundle, song_dir, debug_dir, prov, args.offline)
+        ref = resolve_reference(
+            bundle, song_dir, debug_dir, prov, args.offline, prefer_lrclib=args.prefer_lrclib
+        )
         if ref is None:
             continue  # not in the eval corpus
         if isinstance(ref, str):
