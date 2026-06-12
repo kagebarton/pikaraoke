@@ -30,6 +30,7 @@ import dataclasses
 import datetime
 import logging
 import shutil
+import wave
 from pathlib import Path
 
 import srt
@@ -38,9 +39,18 @@ from pikaraoke.lib import alignment_capture
 from pikaraoke.lib.genius_lyrics import clean_srt_line, parse_lyric_lines
 from pikaraoke.lib.joint_match import match_words_to_lines_joint_with_stats
 from pikaraoke.lib.tiling_match import match_words_to_lines_tiling_with_stats
+from pikaraoke.lib.windowed_realign import (
+    analyze_pass1,
+    build_spans,
+    merge_spans,
+    replay_span,
+    span_align_lines,
+    span_needs_realign,
+)
 from pikaraoke.lib.word_alignment import match_words_to_lines_with_stats
 from pikaraoke.pipeline.config import PipelineConfig
 from pikaraoke.pipeline.context import Phase, PipelineCancelled, SetEvent, StageContext
+from pikaraoke.pipeline.stages._ffmpeg_helpers import run_ffmpeg
 from pikaraoke.pipeline.stages.base import BaseStage
 from pikaraoke.pipeline.workers.whisper_worker import (
     AlignmentCancelledError,
@@ -314,6 +324,7 @@ class LyricAlignStage(BaseStage):
                 "match_method": cfg.match_method,
                 "align_failure_escalation": cfg.align_failure_escalation,
                 "collapse_escalation_threshold": cfg.collapse_escalation_threshold,
+                "joint_windowed_realign": cfg.joint_windowed_realign,
                 "whisper": dataclasses.asdict(cfg.whisper),
             }
             lyrics_suffix = Path(lyrics_path).suffix.lower().lstrip(".")
@@ -571,7 +582,177 @@ class LyricAlignStage(BaseStage):
             margin_s=self._config.joint_margin_s,
             max_edit_ratio=self._config.joint_max_edit_ratio,
         )
+        if self._config.joint_windowed_realign:
+            try:
+                line_objects = self._realign_windows(
+                    ctx,
+                    vocal_wav,
+                    line_objects,
+                    joint_stats,
+                    lyrics_lines,
+                    align_lines,
+                    align_words,
+                    transcribe_words,
+                )
+            except PipelineCancelled:
+                raise
+            except Exception:
+                logger.exception(
+                    "[%s] windowed re-align failed; keeping pass-1 placements", self.name
+                )
         return line_objects, align_words, transcribe_words, joint_stats
+
+    def _realign_windows(
+        self,
+        ctx: StageContext,
+        vocal_wav: Path,
+        line_objects: list[dict],
+        joint_stats: dict,
+        lyrics_lines: list[str],
+        align_lines: list[str],
+        align_words: list[dict],
+        transcribe_words: list[dict],
+    ) -> list[dict]:
+        """Second pass: re-align suspect spans between trusted anchors.
+
+        Per-span failures degrade to the pass-1 placement — a refinement
+        must never fail the song. Cancellation always propagates.
+        """
+        cfg = self._config
+        anchors, suspects = analyze_pass1(
+            align_lines,
+            line_objects,
+            joint_stats,
+            transcribe_words,
+            margin_s=cfg.joint_margin_s,
+            max_edit_ratio=cfg.joint_max_edit_ratio,
+        )
+        telemetry = {
+            "n_anchors": len(anchors),
+            "n_suspects": len(suspects),
+            "n_spans": 0,
+            "n_realigned": 0,
+            "n_spans_kept_pass1": 0,
+        }
+        joint_stats["windowed_realign"] = telemetry
+        if not suspects or not anchors:
+            # No suspects: nothing to repair. No anchors (transcribe
+            # found nothing to corroborate): the lone full-song span
+            # would just repeat pass-1 at full GPU cost for no possible
+            # gain — new placements need transcribe corroboration.
+            logger.info(
+                "[%s] windowed re-align skipped: %s",
+                self.name,
+                "no suspect lines" if not suspects else "no trusted anchors",
+            )
+            return line_objects
+
+        spans = build_spans(anchors, len(lyrics_lines), _wav_duration(vocal_wav))
+        todo = [s for s in spans if span_needs_realign(s, suspects)]
+        telemetry["n_spans"] = len(spans)
+        telemetry["n_realigned"] = len(todo)
+        if not todo:
+            return line_objects
+
+        logger.info(
+            "[%s] windowed re-align: %d/%d spans have suspect lines (%d anchors, %d suspects)",
+            self.name,
+            len(todo),
+            len(spans),
+            len(anchors),
+            len(suspects),
+        )
+        results = [
+            self._realign_one_span(
+                ctx, vocal_wav, span, k, lyrics_lines, align_lines, transcribe_words
+            )
+            for k, span in enumerate(todo)
+        ]
+        telemetry["n_spans_kept_pass1"] = sum(1 for r in results if r is None)
+        return merge_spans(line_objects, todo, results, len(lyrics_lines), align_words)
+
+    def _realign_one_span(
+        self,
+        ctx: StageContext,
+        vocal_wav: Path,
+        span: dict,
+        span_idx: int,
+        lyrics_lines: list[str],
+        align_lines: list[str],
+        transcribe_words: list[dict],
+    ) -> tuple[dict[int, dict], dict[int, str]] | None:
+        """Slice + re-align one span; None means keep pass-1 for it."""
+        sub_lines = span_align_lines(span, align_lines)
+        if sub_lines is None:
+            return None
+        slice_path = ctx.tmp_dir / f"realign_span{span_idx:02d}.wav"
+        try:
+            # -ss/-to as input options: sample-exact for PCM WAV and
+            # seeks instead of decoding everything before t0.
+            run_ffmpeg(
+                [
+                    "ffmpeg",
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-y",
+                    "-ss",
+                    f"{span['t0']:.3f}",
+                    "-to",
+                    f"{span['t1']:.3f}",
+                    "-i",
+                    str(vocal_wav),
+                    str(slice_path),
+                ],
+                ctx,
+                Phase.EXTRACT,
+            )
+            check = _model_call(
+                ctx,
+                Phase.ALIGN_CHECK,
+                lambda: self._worker.align_check(
+                    vocal_path=slice_path,
+                    lyrics_text="\n".join(sub_lines),
+                    cancel_event=ctx.cancel.event if ctx.cancel else None,
+                ),
+            )
+            words = _model_call(
+                ctx,
+                Phase.REFINE,
+                lambda: self._worker.refine_from_cached(
+                    result_id=check["result_id"],
+                    vocal_path=slice_path,
+                    cancel_event=ctx.cancel.event if ctx.cancel else None,
+                ),
+            )
+        except PipelineCancelled:
+            raise
+        except Exception as exc:
+            # A dead worker is also just a degraded span: the next
+            # worker job auto-restarts the subprocess.
+            logger.warning(
+                "[%s] span L%d-%d re-align failed, keeping pass-1: %s",
+                self.name,
+                span["lid_lo"],
+                span["lid_hi"],
+                exc,
+            )
+            return None
+        finally:
+            slice_path.unlink(missing_ok=True)
+        for w in words:
+            w["start"] += span["t0"]
+            w["end"] += span["t0"]
+        return replay_span(
+            span,
+            words,
+            transcribe_words,
+            lyrics_lines,
+            align_lines,
+            alpha=self._config.joint_alpha,
+            margin_s=self._config.joint_margin_s,
+            max_edit_ratio=self._config.joint_max_edit_ratio,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -593,6 +774,18 @@ def _model_call(ctx, phase: Phase, fn):
             return fn()
     except AlignmentCancelledError:
         raise PipelineCancelled(phase)
+
+
+def _wav_duration(path: Path) -> float:
+    """Duration in seconds from the WAV header.
+
+    Both vocal-WAV producers (load_vocal's ffmpeg decode and the stem
+    separator) emit 16-bit PCM, which the stdlib reader handles; an
+    exotic format raises wave.Error, which the caller's degrade-to-pass-1
+    guard absorbs.
+    """
+    with wave.open(str(path)) as wav:
+        return wav.getnframes() / wav.getframerate()
 
 
 def _find_youtube_srt_path(song_path: Path) -> Path | None:

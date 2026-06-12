@@ -344,3 +344,155 @@ class TestJointRoute:
         h, m, s = start_str.split(":")
         start_secs = int(h) * 3600 + int(m) * 60 + float(s)
         assert start_secs >= 14.0, f"expected start near 15s; got {start_secs}"
+
+
+# ---------------------------------------------------------------------------
+# Windowed re-align second pass (joint route)
+# ---------------------------------------------------------------------------
+
+
+class TestWindowedRealign:
+    """Orchestration of the second pass: gating, slice calls, merge,
+    per-span error degradation. Merge/anchor semantics themselves are
+    covered in tests/unit/test_windowed_realign.py."""
+
+    LINE0 = "glowing river twilight ember"
+    LINE1 = "phantom of the lost parade"
+
+    def _make(self, tmp_path, monkeypatch):
+        import pikaraoke.pipeline.stages.lyric_align as la_mod
+
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path, match_method="joint")
+        ctx.artifacts["lyrics_path"].write_text(f"{self.LINE0}\n{self.LINE1}\n", encoding="utf-8")
+
+        def _words(specs):
+            return [{"word": w, "start": s, "end": e} for w, s, e in specs]
+
+        line0_words = _words(
+            [
+                ("glowing", 10.0, 10.4),
+                ("river", 10.6, 10.9),
+                ("twilight", 11.0, 11.4),
+                ("ember", 11.5, 12.0),
+            ]
+        )
+        line1_wrong = _words(
+            [
+                ("phantom", 20.0, 20.3),
+                ("of", 20.4, 20.5),
+                ("the", 20.6, 20.7),
+                ("lost", 20.8, 21.2),
+                ("parade", 21.4, 22.0),
+            ]
+        )
+        # Slice words are slice-relative; the span starts at the anchor's
+        # start minus pad: 10.0 - 0.75 = 9.25. Line 1 lands at 25-27 absolute.
+        slice_words = _words(
+            [
+                ("glowing", 0.75, 1.15),
+                ("river", 1.35, 1.65),
+                ("twilight", 1.75, 2.15),
+                ("ember", 2.25, 2.75),
+                ("phantom", 15.75, 16.05),
+                ("of", 16.15, 16.25),
+                ("the", 16.35, 16.45),
+                ("lost", 16.55, 16.95),
+                ("parade", 17.15, 17.75),
+            ]
+        )
+
+        worker.align_check.side_effect = [
+            {"fail_ratio": 0.0, "result_id": "rid-1", "words": line0_words + line1_wrong},
+            {"fail_ratio": 0.0, "result_id": "rid-2", "words": slice_words},
+        ]
+        worker.refine_from_cached.side_effect = [line0_words + line1_wrong, slice_words]
+        # Transcribe echoes only line 0 — line 1 is uncorroborated (suspect).
+        worker.transcribe_words.return_value = list(line0_words)
+
+        ffmpeg_calls = []
+        monkeypatch.setattr(
+            la_mod, "run_ffmpeg", lambda cmd, _ctx, _phase: ffmpeg_calls.append(cmd)
+        )
+        monkeypatch.setattr(la_mod, "_wav_duration", lambda _p: 30.0)
+        return stage, ctx, worker, ffmpeg_calls
+
+    @staticmethod
+    def _ass_start_seconds(ctx) -> list[float]:
+        ass_path = ctx.song_path.parent / "karaoke" / f"{ctx.song_path.stem}.ass"
+        starts = []
+        for line in ass_path.read_text(encoding="utf-8").splitlines():
+            if line.startswith("Dialogue:"):
+                h, m, s = line.split(",", 2)[1].split(":")
+                starts.append(int(h) * 3600 + int(m) * 60 + float(s))
+        return starts
+
+    def test_suspect_span_is_sliced_realigned_and_merged(self, tmp_path, monkeypatch):
+        stage, ctx, worker, ffmpeg_calls = self._make(tmp_path, monkeypatch)
+        stage.run(ctx)
+
+        # Second align ran on the span slice with the span's lyric lines.
+        assert worker.align_check.call_count == 2
+        span_call = worker.align_check.call_args_list[1]
+        assert span_call.kwargs["lyrics_text"] == f"{self.LINE0}\n{self.LINE1}"
+        assert worker.refine_from_cached.call_count == 2
+        cmd = ffmpeg_calls[0]
+        assert cmd[cmd.index("-ss") + 1] == "9.250"
+        assert cmd[cmd.index("-to") + 1] == "30.000"
+
+        # Line 1's pass-1 placement (20s) was replaced by the slice
+        # re-align (25s absolute); line 0 kept its anchor timing. ASS
+        # timestamps truncate to centiseconds, hence the tolerance.
+        starts = self._ass_start_seconds(ctx)
+        lead_in = stage._config.line_lead_in_cs / 100.0
+        assert starts == pytest.approx([10.0 - lead_in, 25.0 - lead_in], abs=0.011)
+
+    def test_span_failure_keeps_pass1_placement(self, tmp_path, monkeypatch):
+        stage, ctx, worker, _ = self._make(tmp_path, monkeypatch)
+        pass1_check = next(iter(worker.align_check.side_effect))
+        worker.align_check.side_effect = [
+            pass1_check,
+            RuntimeError("refine blew up on a degenerate slice"),
+        ]
+        stage.run(ctx)
+
+        starts = self._ass_start_seconds(ctx)
+        lead_in = stage._config.line_lead_in_cs / 100.0
+        assert starts == pytest.approx([10.0 - lead_in, 20.0 - lead_in], abs=0.011)
+
+    def test_no_suspects_skips_second_pass_entirely(self, tmp_path, monkeypatch):
+        import pikaraoke.pipeline.stages.lyric_align as la_mod
+
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path, match_method="joint")
+
+        def _boom(_p):
+            raise AssertionError("duration probe must not run when nothing is suspect")
+
+        monkeypatch.setattr(la_mod, "_wav_duration", _boom)
+        stage.run(ctx)
+        # Fixture lyrics are fully transcribe-corroborated: one align pass only.
+        worker.align_check.assert_called_once()
+        worker.refine_from_cached.assert_called_once()
+
+    def test_no_anchors_skips_second_pass(self, tmp_path, monkeypatch):
+        # All lines suspect but nothing trustworthy to pin spans on:
+        # the lone full-song span would just repeat pass-1, so skip.
+        stage, ctx, worker, ffmpeg_calls = self._make(tmp_path, monkeypatch)
+        worker.transcribe_words.return_value = []
+        stage.run(ctx)
+        worker.align_check.assert_called_once()
+        assert ffmpeg_calls == []
+
+    def test_hook_failure_keeps_pass1_for_the_song(self, tmp_path, monkeypatch):
+        import pikaraoke.pipeline.stages.lyric_align as la_mod
+
+        stage, ctx, worker, _ = self._make(tmp_path, monkeypatch)
+
+        def _broken(_p):
+            raise RuntimeError("corrupt WAV header")
+
+        monkeypatch.setattr(la_mod, "_wav_duration", _broken)
+        stage.run(ctx)  # must not raise
+
+        starts = self._ass_start_seconds(ctx)
+        lead_in = stage._config.line_lead_in_cs / 100.0
+        assert starts == pytest.approx([10.0 - lead_in, 20.0 - lead_in], abs=0.011)

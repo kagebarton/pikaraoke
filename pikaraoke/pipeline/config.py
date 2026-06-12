@@ -258,6 +258,17 @@ class PipelineConfig:
     # misplacements unchanged; coverage saturates at 0.75.
     joint_max_edit_ratio: float = 0.75
 
+    # Second pass for the joint matcher: spans between trusted pass-1
+    # anchors whose interior holds a suspect line (unplaced or weakly
+    # corroborated) are re-aligned in isolation — the audio slice plus
+    # only that span's lyric lines — and merged back conservatively
+    # (see pikaraoke.lib.windowed_realign). Corpus-measured (Phase 3,
+    # plans/matcher-timing-eval.md): gross misplacements 77 -> 58
+    # across 23 songs. GPU cost: zero on fully-corroborated songs, up
+    # to ~2x the align+refine leg on suspect-heavy ones (corpus mean:
+    # 46% of song audio re-aligned).
+    joint_windowed_realign: bool = True
+
     # When True, the lyric-align stage writes a JSON bundle to
     # ``<song_dir>/alignment_debug/<stem>.json`` capturing the matcher
     # inputs (whisper words + lyric lines), the knob values that ran,
