@@ -2,11 +2,15 @@
 """Score matcher timing against YouTube manual-caption ground truth.
 
 For songs whose lyric source was the YouTube SRT, the matcher consumed
-the SRT text while the cue timings were discarded — so the cue timings
-are a held-out, text-identical timing reference. This script replays
-the joint matcher from each song's alignment-debug bundle (cached
-whisper words; no GPU) at the given knob values, fits one display-lead
-offset per song, and reports residual metrics per song and pooled.
+the SRT text while the cue timings were held out — a text-identical
+timing reference. This script replays the joint matcher from each
+song's alignment-debug bundle (cached whisper words; no GPU) at the
+given knob values, fits one display-lead offset per song, and reports
+residual metrics per song and pooled.
+
+``--srt-prior`` additionally applies the production SRT timing prior to
+the replayed placement; score those runs with ``--prefer-lrclib``, since
+SRT-informed placement graded against the same SRT would be circular.
 
 Eligibility per song (bundle in the debug dir, plus a timing reference):
   * ``lyrics.source_kind == "srt"``: the YouTube SRT cue timings, gated
@@ -45,6 +49,7 @@ from pikaraoke.lib.alignment_eval import (  # noqa: E402
     replay_joint_from_bundle,
     score_song,
 )
+from pikaraoke.lib.srt_prior import apply_srt_prior, cue_spans_from_srt  # noqa: E402
 from pikaraoke.pipeline.config import PipelineConfig  # noqa: E402
 
 DEFAULT_FOLDER = "/home/ken/pikaraoke-songs"
@@ -128,14 +133,18 @@ def evaluate_bundle(
     as_run: bool,
     knobs: dict,
     ref: str,
-) -> SongScore | str:
-    """Score one bundle; returns a SongScore or a skip-reason string."""
+    prior_cues: dict[int, tuple[float, float]] | None = None,
+) -> tuple[SongScore, dict | None] | str:
+    """Score one bundle; returns ``(score, srt_prior_stats)`` or a
+    skip-reason string. ``prior_cues`` applies the SRT timing prior to
+    the replayed placement (replay mode only), matching production."""
     lines = bundle["lyrics"]["lines"]
     mapping = map_lines_to_cues(lines, cue_texts)
     if not mapping:
         return "no lines mapped to reference cues"
     cue_starts_by_line = {lid: cue_starts[ci] for lid, ci in mapping.items()}
 
+    prior_stats = None
     if as_run:
         placed = {
             t["line_id"]: t["start"]
@@ -149,9 +158,19 @@ def evaluate_bundle(
             line_objects, _stats = replay_joint_from_bundle(bundle, **knobs)
         except (KeyError, ValueError) as e:
             return f"replay impossible: {e}"
+        if prior_cues:
+            line_objects, prior_stats = apply_srt_prior(
+                line_objects,
+                bundle["transcribe_words"],
+                lines,
+                bundle["lyrics"]["align_lines"],
+                prior_cues,
+                margin_s=knobs["margin_s"],
+                max_edit_ratio=knobs["max_edit_ratio"],
+            )
         placed = placed_starts_from_line_objects(line_objects)
 
-    return score_song(
+    score = score_song(
         song=bundle["song_stem"],
         placed_starts=placed,
         cue_starts_by_line=cue_starts_by_line,
@@ -162,6 +181,26 @@ def evaluate_bundle(
         # tempo drift so only structural divergence scores against us.
         fit_drift=(ref == "lrclib"),
     )
+    return score, prior_stats
+
+
+def prior_cues_for_bundle(bundle: dict, song_dir: Path) -> dict[int, tuple[float, float]] | None:
+    """Cue spans keyed by line id for replaying the SRT timing prior.
+
+    Production extracts the spans at lyric load; the replay
+    reconstructs them from the source SRT. Positional identity holds
+    unless the cleanup changed since capture — then fall back to the
+    fuzzy line-to-cue mapping.
+    """
+    srt_path = find_reference_srt(bundle, song_dir)
+    if srt_path is None:
+        return None
+    texts, spans = cue_spans_from_srt(srt_path.read_text(encoding="utf-8"))
+    lines = bundle["lyrics"]["lines"]
+    if texts == lines:
+        return dict(enumerate(spans))
+    mapping = map_lines_to_cues(lines, texts)
+    return {lid: spans[ci] for lid, ci in mapping.items()} or None
 
 
 def find_reference_srt(bundle: dict, song_dir: Path) -> Path | None:
@@ -359,6 +398,12 @@ def parse_args() -> argparse.Namespace:
         help="score SRT-sourced songs against LRCLIB when available "
         "(non-circular reference for SRT-informed matching)",
     )
+    p.add_argument(
+        "--srt-prior",
+        action="store_true",
+        help="apply the SRT timing prior to replayed placements "
+        "(matches production joint_srt_prior; use with --prefer-lrclib)",
+    )
     p.add_argument("--json", dest="json_out", default=None, help="write results JSON here")
     return p.parse_args()
 
@@ -381,6 +426,7 @@ def main() -> int:
 
     scores: list[SongScore] = []
     skipped: list[tuple[str, str]] = []
+    prior_by_song: dict[str, dict] = {}
     for path in sorted(debug_dir.glob("*.json")):
         if path.name == PROVENANCE_FILE:
             continue
@@ -397,13 +443,29 @@ def main() -> int:
             skipped.append((stem, ref))
             continue
         cue_texts, cue_starts, ref_kind = ref
+        prior_cues = None
+        if (
+            args.srt_prior
+            and not args.as_run
+            and bundle.get("lyrics", {}).get("source_kind") == "srt"
+        ):
+            prior_cues = prior_cues_for_bundle(bundle, song_dir)
         result = evaluate_bundle(
-            bundle, cue_texts, cue_starts, as_run=args.as_run, knobs=knobs, ref=ref_kind
+            bundle,
+            cue_texts,
+            cue_starts,
+            as_run=args.as_run,
+            knobs=knobs,
+            ref=ref_kind,
+            prior_cues=prior_cues,
         )
         if isinstance(result, str):
             skipped.append((stem, result))
             continue
-        scores.append(result)
+        score, prior_stats = result
+        scores.append(score)
+        if prior_stats is not None:
+            prior_by_song[stem] = prior_stats
 
     if not scores:
         print("no eligible songs scored")
@@ -414,6 +476,20 @@ def main() -> int:
     # Replay knobs don't apply to as-run scoring; don't report them as if they did.
     pooled = print_report(scores, skipped, None if args.as_run else knobs)
 
+    if prior_by_song:
+        print("\nSRT prior:")
+        for stem, st in prior_by_song.items():
+            if st["bailed"]:
+                print(
+                    f"  {stem[:50]:<50} bailed: {st['bailed']} " f"(anchors={st['n_anchors_fit']})"
+                )
+            else:
+                print(
+                    f"  {stem[:50]:<50} offset={st['offset_s']:+.2f}s "
+                    f"mad={st['mad_s']:.2f}s anchors={st['n_anchors_fit']} "
+                    f"snapped={st['n_snapped']} filled={st['n_filled']}"
+                )
+
     if args.json_out:
         payload = {
             "mode": "as-run" if args.as_run else "replay",
@@ -421,6 +497,8 @@ def main() -> int:
             "songs": [dataclasses.asdict(s) for s in scores],
             "skipped": [{"song": s, "reason": r} for s, r in skipped],
         }
+        if prior_by_song:
+            payload["srt_prior"] = prior_by_song
         Path(args.json_out).write_text(
             json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"
         )

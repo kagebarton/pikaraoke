@@ -269,6 +269,17 @@ class PipelineConfig:
     # 46% of song audio re-aligned).
     joint_windowed_realign: bool = True
 
+    # SRT timing prior for the joint route. For SRT-sourced lyrics, the
+    # uploader-synced cue times calibrate against the audio placement
+    # (robust offset fit over trusted anchors, bail-out on few anchors
+    # or wide spread), then repair gross disagreements and fill lines
+    # the audio could not place (see pikaraoke.lib.srt_prior).
+    # Corpus-measured against held-out LRCLIB references
+    # (plans/srt-timing-prior.md): gross misplacements 75 -> 50 across
+    # 22 songs, no song regressed; the Mirrors chant outro (audio-
+    # unplaceable) alone repairs 21 lines. Zero GPU cost.
+    joint_srt_prior: bool = True
+
     # De-reverb retry for the joint route. When the whole-stem transcribe
     # yield falls below this many words per minute, the vocal stem is
     # treated as reverb-washed: the stem worker swaps to the de-reverb

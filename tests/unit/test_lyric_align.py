@@ -13,7 +13,7 @@ from pikaraoke.pipeline.stages.lyric_align import LyricAlignStage
 
 
 class TestLoadLyrics:
-    """Tests for _load_lyrics returning (display_lines, align_lines)."""
+    """Tests for _load_lyrics returning (display_lines, align_lines, cue_spans)."""
 
     @pytest.fixture
     def stage(self):
@@ -29,10 +29,11 @@ class TestLoadLyrics:
             "\n2\n00:00:02,000 --> 00:00:03,000\nWorld\n",
             encoding="utf-8",
         )
-        display, align = stage._load_lyrics(srt_file)
+        display, align, cues = stage._load_lyrics(srt_file)
         assert display == ["Hello", "World"]
         # SRT has no paren-strip distinction — display == align
         assert align == display
+        assert cues == [(1.0, 2.0), (2.0, 3.0)]
 
     def test_srt_cleanup_strips_noise(self, stage, tmp_path):
         """SRT route runs each sub through clean_srt_line: musical
@@ -45,25 +46,30 @@ class TestLoadLyrics:
             "\n3\n00:00:03,000 --> 00:00:04,000\n[together]\n♪ Beauty and the beast ♪\n",
             encoding="utf-8",
         )
-        display, align = stage._load_lyrics(srt_file)
+        display, align, cues = stage._load_lyrics(srt_file)
         assert display == ["Hello world", "Beauty and the beast"]
         assert align == display
+        # Cue spans stay parallel to the *kept* lines: the dropped
+        # (gentle music) entry takes its timing with it.
+        assert cues == [(2.0, 3.0), (3.0, 4.0)]
 
     def test_plain_txt(self, stage, tmp_path):
         txt_file = tmp_path / "lyrics.txt"
         txt_file.write_text("Just some lyrics\nNo headers here\n", encoding="utf-8")
-        display, align = stage._load_lyrics(txt_file)
+        display, align, cues = stage._load_lyrics(txt_file)
         assert display == ["Just some lyrics", "No headers here"]
         assert align == display
+        assert cues is None
 
     def test_txt_keeps_inline_paren_contents_for_align(self, stage, tmp_path):
         """Bracket chars stripped from align text, but enclosed words
         kept — those backing vocals are sung in the audio."""
         txt_file = tmp_path / "lyrics.txt"
         txt_file.write_text("(I can't help) Falling in love\n", encoding="utf-8")
-        display, align = stage._load_lyrics(txt_file)
+        display, align, cues = stage._load_lyrics(txt_file)
         assert display == ["(I can't help) Falling in love"]
         assert align == ["I can't help Falling in love"]
+        assert cues is None
 
     def test_txt_skips_blank_and_bracket_lines(self, stage, tmp_path):
         txt_file = tmp_path / "lyrics.txt"
@@ -71,8 +77,9 @@ class TestLoadLyrics:
             "[Verse]\n\nFirst line\n[Chorus]\nSecond line\n",
             encoding="utf-8",
         )
-        display, align = stage._load_lyrics(txt_file)
+        display, align, cues = stage._load_lyrics(txt_file)
         assert display == ["First line", "Second line"]
+        assert cues is None
 
 
 # ---------------------------------------------------------------------------

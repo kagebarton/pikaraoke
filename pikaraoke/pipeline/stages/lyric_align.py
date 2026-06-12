@@ -42,8 +42,9 @@ from pathlib import Path
 import srt
 
 from pikaraoke.lib import alignment_capture
-from pikaraoke.lib.genius_lyrics import clean_srt_line, parse_lyric_lines
+from pikaraoke.lib.genius_lyrics import parse_lyric_lines
 from pikaraoke.lib.joint_match import match_words_to_lines_joint_with_stats
+from pikaraoke.lib.srt_prior import apply_srt_prior, cue_spans_from_srt
 from pikaraoke.lib.tiling_match import match_words_to_lines_tiling_with_stats
 from pikaraoke.lib.windowed_realign import (
     analyze_pass1,
@@ -106,7 +107,7 @@ class LyricAlignStage(BaseStage):
 
         if lyrics_path is not None:
             # --- Alignment mode ---
-            lyrics_lines, align_lines = self._load_lyrics(lyrics_path)
+            lyrics_lines, align_lines, cue_spans = self._load_lyrics(lyrics_path)
             lyrics_text = "\n".join(align_lines)
 
             logger.info(f"[{self.name}] Aligning lyrics to vocal stem: {Path(vocal_wav).name}")
@@ -127,6 +128,7 @@ class LyricAlignStage(BaseStage):
                     lyrics_text,
                     lyrics_lines,
                     align_lines,
+                    cue_spans,
                 )
                 capture_words_source = "refine"
                 capture_method_used = "joint"
@@ -402,8 +404,10 @@ class LyricAlignStage(BaseStage):
         except Exception:
             logger.exception(f"[{self.name}] Failed to write alignment-debug capture")
 
-    def _load_lyrics(self, lyrics_path: Path) -> tuple[list[str], list[str]]:
-        """Return ``(display_lines, align_lines)``.
+    def _load_lyrics(
+        self, lyrics_path: Path
+    ) -> tuple[list[str], list[str], list[tuple[float, float]] | None]:
+        """Return ``(display_lines, align_lines, cue_spans)``.
 
         For ``.srt``: each subtitle's content is run through
         :func:`clean_srt_line` (strips HTML tags, musical notes,
@@ -411,30 +415,32 @@ class LyricAlignStage(BaseStage):
         2-line wraps, normalizes curly quotes). Lines with no letters
         after cleanup are dropped. ``align_lines`` mirrors
         ``display_lines`` — SRT has no separate align/display
-        distinction.
+        distinction. ``cue_spans`` carries each kept line's
+        uploader-synced ``(start, end)`` for the joint route's SRT
+        timing prior.
 
         For ``.txt``: split into per-line ``{text, align_text}`` via
         :func:`parse_lyric_lines`. ``align_lines`` has the bracket
         characters removed but keeps their contents (so ``"(I can't
         help) Falling in love"`` aligns as ``"I can't help Falling in
-        love"`` while the display preserves the parens).
+        love"`` while the display preserves the parens). ``cue_spans``
+        is None — plain lyrics carry no timing.
         """
         suffix = Path(lyrics_path).suffix.lower()
         if suffix == ".srt":
             raw = lyrics_path.read_text(encoding="utf-8")
-            subs = list(srt.parse(raw))
-            lines = [c for c in (clean_srt_line(sub.content) for sub in subs) if c]
-            return lines, list(lines)
+            lines, spans = cue_spans_from_srt(raw)
+            return lines, list(lines), spans
 
         raw = lyrics_path.read_text(encoding="utf-8")
         parsed = parse_lyric_lines(raw)
         if not parsed:
             # Fallback for genuinely empty input — keep the matcher's
             # contract of always receiving lists.
-            return [], []
+            return [], [], None
         display_lines = [item["text"] for item in parsed]
         align_lines = [item["align_text"] for item in parsed]
-        return display_lines, align_lines
+        return display_lines, align_lines, None
 
     def _generate_ass(self, line_objects: list[dict]) -> str:
         """Build .ass content from line objects using the single Karaoke style."""
@@ -544,9 +550,13 @@ class LyricAlignStage(BaseStage):
         lyrics_text: str,
         lyrics_lines: list[str],
         align_lines: list[str],
+        cue_spans: list[tuple[float, float]] | None,
     ) -> tuple[list[dict], list[dict], list[dict], dict]:
         """Run the joint matcher route: align + refine + transcribe (no refine)
         → joint DP matcher.
+
+        ``cue_spans`` (SRT-sourced lyrics only) feeds the SRT timing
+        prior after the audio passes finish.
 
         Returns ``(line_objects, refined_align_words, transcribe_words, joint_stats)``.
         Refined align words and the transcribe words are returned for the
@@ -640,6 +650,22 @@ class LyricAlignStage(BaseStage):
             except Exception:
                 logger.exception(
                     "[%s] windowed re-align failed; keeping pass-1 placements", self.name
+                )
+        if cue_spans is not None and self._config.joint_srt_prior:
+            try:
+                line_objects, prior_stats = apply_srt_prior(
+                    line_objects,
+                    transcribe_words,
+                    lyrics_lines,
+                    align_lines,
+                    dict(enumerate(cue_spans)),
+                    margin_s=self._config.joint_margin_s,
+                    max_edit_ratio=self._config.joint_max_edit_ratio,
+                )
+                joint_stats["srt_prior"] = prior_stats
+            except Exception:
+                logger.exception(
+                    "[%s] SRT timing prior failed; keeping audio placements", self.name
                 )
         return line_objects, align_words, transcribe_words, joint_stats
 

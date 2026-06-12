@@ -1,9 +1,11 @@
 """Timing evaluation of matcher output against YouTube manual captions.
 
 Ground-truth design: for songs whose lyric source was the YouTube SRT,
-the matcher consumed the SRT *text* while ``_load_lyrics`` discarded the
-cue *timings*. Comparing matcher output timings against the cue timings
-is therefore a held-out, text-identical, pure timing evaluation.
+the matcher consumed the SRT *text* while the cue *timings* were held
+out, making them a text-identical, pure timing reference. Since the SRT
+timing prior (pikaraoke.lib.srt_prior) ships, that held-out property
+only covers placements the prior left untouched — SRT-informed output
+must be scored against LRCLIB instead (``--prefer-lrclib``).
 
 Subtitle cues lead the vocal by a display margin, so raw deltas carry a
 per-song systematic offset. Each song gets a single global offset fit
@@ -18,10 +20,8 @@ import re
 from dataclasses import dataclass, field
 from statistics import median
 
-import srt
-
-from pikaraoke.lib.genius_lyrics import clean_srt_line
 from pikaraoke.lib.joint_match import match_words_to_lines_joint_with_stats
+from pikaraoke.lib.srt_prior import cue_spans_from_srt
 from pikaraoke.lib.word_alignment import fold_to_ascii
 
 # Residuals beyond this are gross misplacements (wrong section / chorus
@@ -53,18 +53,12 @@ def normalize_line(text: str) -> str:
 def parse_reference_cues(srt_text: str) -> tuple[list[str], list[float]]:
     """Cleaned cue texts and their start times (seconds) from an SRT.
 
-    Mirrors the ``_load_lyrics`` SRT transform (clean + drop empty) but
-    keeps the timing that ``_load_lyrics`` throws away — the timing is
-    the ground truth being recovered.
+    Same transform as the production cue extraction
+    (:func:`pikaraoke.lib.srt_prior.cue_spans_from_srt`), keeping just
+    the start times the reference comparison needs.
     """
-    texts: list[str] = []
-    starts: list[float] = []
-    for sub in srt.parse(srt_text):
-        cleaned = clean_srt_line(sub.content)
-        if cleaned:
-            texts.append(cleaned)
-            starts.append(sub.start.total_seconds())
-    return texts, starts
+    texts, spans = cue_spans_from_srt(srt_text)
+    return texts, [start for start, _end in spans]
 
 
 def parse_lrc_lines(lrc_text: str) -> tuple[list[str], list[float]]:
