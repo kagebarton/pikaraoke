@@ -50,7 +50,7 @@ This fork drops several upstream features in favor of the libmpv player and proc
 
 - **Python**: 3.10 or greater.
 
-- **FFmpeg** built with `librubberband` (pitch shifting) and `libzmq` (the `azmq` filter, used to mix the lead vocal back in live on dual-stem karaoke tracks). Ubuntu 24.04's stock FFmpeg (6.1.1) includes both, so no extra setup is needed there. On a distro or build without the `azmq` filter, check `ffmpeg -filters | grep zmq` and install a build that has it.
+- **FFmpeg** built with `librubberband` (pitch shifting). Ubuntu 24.04's stock FFmpeg (6.1.1) includes it, so no extra setup is needed there.
 
 - **libmpv 0.41 or newer.** The on-screen overlays use libmpv's `osd-overlay` command with ASS-formatted events, and Ubuntu 24.04's stock mpv (0.37) does **not** render them correctly. Install a newer libmpv from the [UbuntuHandbook mpv PPA](https://launchpad.net/~ubuntuhandbook1/+archive/ubuntu/mpv) (`ppa:ubuntuhandbook1/mpv`), which is the 0.41 build this project is developed against:
 

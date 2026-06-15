@@ -126,6 +126,15 @@ def test_set_vocal_volume_noop_for_single_stem(controller):
     assert controller._current_vocal_volume == 1.0  # early return leaves it unchanged
 
 
+def test_set_vocal_volume_rebuilds_filter_for_dual_stem(controller):
+    controller._dual_stem = True
+    controller.set_vocal_volume(0.3)
+    assert controller._current_vocal_volume == 0.3
+    # dual-stem graph rebuilt at the new vocal volume, with no live ZMQ channel
+    assert "volume=0.3" in controller._player.lavfi_complex
+    assert "azmq" not in controller._player.lavfi_complex
+
+
 # ── osd_size property ──────────────────────────────────────────────────────────
 
 
@@ -152,8 +161,8 @@ def test_build_filter_single_stem_applies_normalization_volume():
 
 def test_build_filter_dual_stem_graph():
     f = MpvController.build_filter(1.0, dual_stem=True, vocal_volume=0.8)
-    assert "volume@vocalvol=0.8" in f
-    assert "azmq=bind_address=" in f
+    assert "[aid2]volume=0.8" in f
+    assert "azmq" not in f  # no ZMQ filter: graph is portable to builds without it
     assert f"rubberband@vocalrb=pitch=1.0:{_RB_VOCAL}[vocal]" in f
     assert f"rubberband@nonvocalrb=pitch=1.0:{_RB_NONVOCAL}[nonvocal]" in f
     assert f.endswith("[vocal][nonvocal]amix=inputs=2:normalize=0[ao]")
