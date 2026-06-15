@@ -31,8 +31,10 @@ def run_ffmpeg(
     Returns captured stderr (as a string) when *capture_stderr* is True,
     otherwise returns an empty string.
 
-    When ``ctx.artifacts["pty_slave_fd"]`` is present, ffmpeg stdout/stderr
-    are routed to that fd so output appears on the secondary terminal.
+    When ``ctx.artifacts["pty_slave_fd"]`` is present (the Linux/macOS
+    processing terminal), ffmpeg stdout/stderr are routed to that fd.
+    Otherwise they inherit the parent's stdio so output appears on the main
+    terminal (e.g. on Windows, which has no processing terminal).
 
     Raises:
         PipelineCancelled: if the job was cancelled (the Popen was SIGKILL'd
@@ -41,13 +43,11 @@ def run_ffmpeg(
         RuntimeError: if ffmpeg exits with a non-zero code and the job was
             NOT cancelled.
     """
+    # An fd routes to the processing terminal (Linux/macOS); None makes ffmpeg
+    # inherit the parent's stdio — the main terminal (e.g. Windows).
     pty_fd = ctx.artifacts.get("pty_slave_fd")
-    stdout_fd = pty_fd if pty_fd is not None else subprocess.DEVNULL
-    stderr_fd = (
-        subprocess.PIPE
-        if capture_stderr
-        else (pty_fd if pty_fd is not None else subprocess.DEVNULL)
-    )
+    stdout_fd = pty_fd
+    stderr_fd = subprocess.PIPE if capture_stderr else pty_fd
 
     proc = subprocess.Popen(
         cmd,

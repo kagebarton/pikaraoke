@@ -50,14 +50,15 @@ def _mock_popen(returncode=0, stderr=b""):
 class TestRunFfmpeg:
     """run_ffmpeg's wait/error/capture/PTY/cancel contract."""
 
-    def test_success_without_capture_returns_empty_and_uses_devnull(self, tmp_path):
+    def test_success_without_capture_returns_empty_and_inherits_parent_stdio(self, tmp_path):
         proc = _mock_popen(returncode=0)
         with patch(_POPEN, return_value=proc) as popen:
             out = run_ffmpeg(["ffmpeg", "-i", "x"], _ctx(tmp_path), Phase.EXTRACT)
         assert out == ""
         proc.wait.assert_called_once()
-        assert popen.call_args.kwargs["stdout"] == subprocess.DEVNULL
-        assert popen.call_args.kwargs["stderr"] == subprocess.DEVNULL
+        # No PTY fd -> inherit the parent's stdio (the main terminal), not discarded.
+        assert popen.call_args.kwargs["stdout"] is None
+        assert popen.call_args.kwargs["stderr"] is None
 
     def test_nonzero_exit_raises_runtimeerror(self, tmp_path):
         proc = _mock_popen(returncode=1)
