@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 import pikaraoke.lib.process_terminal as pt
+from pikaraoke.lib.get_platform import is_windows
 from pikaraoke.lib.process_terminal import ProcessTerminal
 
 
@@ -57,6 +58,11 @@ class TestStartGuards:
         assert term.get_slave_path() is None
 
 
+@pytest.mark.skipif(
+    is_windows(),
+    reason="_relay_loop uses AF_UNIX sockets; the relay never runs on Windows "
+    "(start() returns early), so it has no Windows behaviour to test.",
+)
 class TestRelayLoopGuards:
     """The relay loop must not die silently on socket-setup failure (which would
     leave the PTY undrained and block a worker) and must exit cleanly if its
