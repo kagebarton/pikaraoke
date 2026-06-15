@@ -279,8 +279,9 @@ class ProcessingManager:
             self._config,
             on_stage_change=lambda _name: self._events.emit("pipeline_stage_changed"),
         )
-        self._orchestrator.start()  # starts stem worker only; whisper is lazy
-
+        # The orchestrator's workers (and their stem/whisper model loads) are
+        # started on the run-loop thread, not here, so start() returns at once
+        # and the Flask server can come online before the models finish loading.
         self._orchestrator_thread = threading.Thread(
             target=self._run_loop,
             name=f"{PIPELINE_THREAD_PREFIX}-loop",
@@ -393,6 +394,20 @@ class ProcessingManager:
     # ------------------------------------------------------------------
 
     def _run_loop(self) -> None:
+        # Load the stem and whisper models here, on this background thread,
+        # rather than in start() — keeping model loading off the startup
+        # critical path so the Flask server binds immediately. Jobs enqueued
+        # while the models load wait in _pending_queue until the loop below
+        # begins consuming them, so no extra synchronization is needed.
+        if not self._stop_event.is_set():
+            try:
+                self._orchestrator.start()
+            except Exception as e:
+                # Don't kill the loop: a worker that failed to load (e.g. a
+                # transient GPU OOM) is restarted by the per-job recovery logic
+                # in separate()/_run_job() and the finally block below.
+                logging.error(f"Pipeline workers failed to start: {e}")
+
         while not self._stop_event.is_set():
             try:
                 song_path = self._pending_queue.get(timeout=0.5)
@@ -415,13 +430,22 @@ class ProcessingManager:
                     self.pending_jobs[:] = [p for p in self.pending_jobs if p != song_path]
                     self._active = None
 
-                # Eager restart: if a cancel or crash killed the stem worker,
-                # bring it back before the next job arrives.
+                # Eager restart: a cancel, crash, or failed/timed-out initial
+                # load can leave a worker down; bring it back before the next
+                # job. is_alive() is False after a load timeout too (kill()
+                # clears the process handle), so this also recovers a worker
+                # that never finished its startup model load. Restarting whisper
+                # reloads its model and briefly blocks the loop, acceptable here.
                 if not self._stem_worker.is_alive():
                     try:
                         self._stem_worker.start()
                     except Exception as e:
                         logging.error(f"Failed to restart stem worker: {e}")
+                if not self._whisper_worker.is_alive():
+                    try:
+                        self._whisper_worker.start()
+                    except Exception as e:
+                        logging.error(f"Failed to restart whisper worker: {e}")
 
     # ------------------------------------------------------------------
     # Single-job processing
