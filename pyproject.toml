@@ -23,7 +23,6 @@ dependencies = [
     "Flask-Babel==4.0.0",
     "marshmallow>=3.0", # imported directly by route schemas (also a flask-smorest dep)
     "Pillow>=10.0", # imported directly by mpv_controller (also a qrcode[png] dep)
-    "pyzmq>=25.0", # mpv_controller IPC
     "yt-dlp[default]>=2026.03.03",
     "curl_cffi>=0.10,<0.15", # Required for yt-dlp --impersonate; range matches yt-dlp's supported versions
     "flask-socketio>=5.5.0",

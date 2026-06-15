@@ -501,43 +501,36 @@ class MpvController:
     @_safe
     def set_pitch(self, semitones: int) -> None:
         """Live mid-song pitch change: rebuild lavfi-complex with new pitch."""
-        pitch = 2 ** (semitones / 12)
-        self._current_pitch = pitch
+        self._current_pitch = 2 ** (semitones / 12)
+        self._rebuild_lavfi_complex()
+
+    @_safe
+    def set_vocal_volume(self, volume: float) -> None:
+        """Live vocal volume change: rebuild lavfi-complex with the new volume.
+
+        Only works when dual-stem is active; no-op otherwise. The UI debounces
+        the slider, so this fires once per adjustment rather than per drag step.
+        """
+        if not self._dual_stem:
+            return
+        self._current_vocal_volume = volume
+        self._rebuild_lavfi_complex()
+
+    def _rebuild_lavfi_complex(self) -> None:
+        """Rebuild lavfi-complex from current pitch/normalization/vocal state.
+
+        The shared tail of set_pitch() and set_vocal_volume(): each mutates one
+        piece of live filter state, then calls this to rebuild the whole graph
+        from the current state and swap it in under the player lock.
+        """
         filter_str = self.build_filter(
-            pitch,
+            self._current_pitch,
             self._current_normalization_db,
             dual_stem=self._dual_stem,
             vocal_volume=self._current_vocal_volume,
         )
         with self._lock:
             self._player.lavfi_complex = filter_str
-
-    @_safe
-    def set_vocal_volume(self, volume: float) -> None:
-        """Live vocal volume change via ZMQ (no filter rebuild needed).
-
-        Only works when dual-stem is active; no-op otherwise.
-        """
-        if not self._dual_stem:
-            return
-        self._current_vocal_volume = volume
-        try:
-            import zmq
-        except ImportError:
-            log.debug("pyzmq unavailable; cannot set live vocal volume")
-            return
-        ctx = zmq.Context.instance()
-        sock = ctx.socket(zmq.REQ)
-        sock.setsockopt(zmq.RCVTIMEO, 500)
-        sock.setsockopt(zmq.LINGER, 0)
-        try:
-            sock.connect("tcp://127.0.0.1:5556")
-            sock.send_string(f"volume@vocalvol volume {volume}")
-            sock.recv()
-        except Exception:
-            log.debug("set_vocal_volume ZMQ send failed (non-fatal)")
-        finally:
-            sock.close()
 
     @_safe
     def _apply_subtitle_mode(
@@ -727,10 +720,14 @@ class MpvController:
     ) -> str:
         """Build the lavfi-complex string for single-stem or dual-stem playback.
 
-        Single-stem: [aid1] -> rubberband(_RB_VOCAL) -> volume(norm) -> [ao]
-        Dual-stem:   [aid2] -> volume@vocalvol -> azmq -> rubberband(_RB_VOCAL) -> [vocal];
-                     [aid3] -> volume -> rubberband(_RB_NONVOCAL) -> [nonvocal];
+        Single-stem: [aid1] -> rubberband(_RB_FULLMIX) -> volume(norm) -> [ao]
+        Dual-stem:   [aid2] -> volume(vocal) -> rubberband(_RB_VOCAL) -> [vocal];
+                     [aid3] -> volume(1.0) -> rubberband(_RB_NONVOCAL) -> [nonvocal];
                      amix -> volume(norm) -> [ao]
+
+        Vocal volume is baked into the graph; set_vocal_volume() rebuilds it on
+        change. There is no live ZMQ channel, so the graph stays portable to
+        ffmpeg/libmpv builds without the azmq filter (e.g. the Windows libmpv DLL).
         """
         pitch = _semiround(pitch)
 
@@ -744,10 +741,9 @@ class MpvController:
                 else "[vocal][nonvocal]amix=inputs=2:normalize=0[ao]"
             )
             return (
-                f"[aid2]volume@vocalvol={vocal_volume}"
-                f",azmq=bind_address=tcp\\\\://127.0.0.1\\\\:5556"
+                f"[aid2]volume={vocal_volume}"
                 f",rubberband@vocalrb=pitch={pitch}:{_RB_VOCAL}[vocal];"
-                f"[aid3]volume@nonvocalvol={nonvocal_vol}"
+                f"[aid3]volume={nonvocal_vol}"
                 f",rubberband@nonvocalrb=pitch={pitch}:{_RB_NONVOCAL}[nonvocal];"
                 f"{amix_out}"
             )
