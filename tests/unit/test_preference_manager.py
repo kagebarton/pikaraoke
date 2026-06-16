@@ -272,6 +272,8 @@ def test_preference_manager_defaults_exist():
         "browse_results_per_page",
         "hide_clock",
         "subtitle_delay",
+        "subtitle_scale",
+        "subtitle_pos_offset",
         "audio_delay",
         "temp_dir",
         "blocked_processing_words",
