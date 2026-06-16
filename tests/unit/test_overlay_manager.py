@@ -378,6 +378,29 @@ class TestOverlayManagerDiff:
         manager.apply(_idle_state(hide_url=True))
         mpv.remove_qr_bitmap.assert_called_once()
 
+    def test_qr_resized_when_overlay_scale_changes(self):
+        mpv = _mock_mpv()
+        manager = OverlayManager(mpv)
+        manager.apply(_idle_state(overlay_scale=1.0))
+        base_qr = mpv.send_qr_bitmap.call_args.args[0]
+        mpv.send_qr_bitmap.reset_mock()
+        manager.apply(_idle_state(overlay_scale=2.0))
+        mpv.send_qr_bitmap.assert_called_once()
+        assert mpv.send_qr_bitmap.call_args.args[0] == base_qr * 2
+
+
+# ── overlay_scale (user-facing size multiplier) ──────────────────────────────
+
+
+class TestOverlayScale:
+    def test_overlay_scale_threads_into_font_size(self):
+        scaled = compute_overlays(_playing_state(overlay_scale=2.0))[OSD_NOWPLAYING].font_size
+        assert scaled == _overlay_font_size(1080, 2.0)
+        assert scaled > _overlay_font_size(1080, 1.0)
+
+    def test_scale_of_one_matches_unscaled_default(self):
+        assert _overlay_font_size(1080, 1.0) == _overlay_font_size(1080)
+
 
 # ── ASS escaping (Review-fix: user-text tag/line-break injection) ─────────────
 

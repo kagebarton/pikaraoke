@@ -380,6 +380,7 @@ class PlaybackController:
             dual_stem=self.now_playing_dual_stem,
             vocal_volume=self.now_playing_vocal_volume,
             singer_name=self.now_playing_user,
+            overlay_scale=self.preferences.get_or_default("overlay_scale"),
         )
 
     def refresh_overlays(self) -> None:

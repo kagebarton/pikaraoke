@@ -684,12 +684,11 @@ class MpvController:
             setattr(self._player, prop.replace("-", "_"), val)
 
     @_safe
-    def send_qr_bitmap(self, screen_h: int, screen_w: int = 1920) -> None:
-        """Send the QR code BGRA bitmap to mpv overlay slot 0."""
+    def send_qr_bitmap(self, qr_h: int) -> None:
+        """Send the QR code BGRA bitmap (qr_h px square) to mpv overlay slot 0."""
         qr_path = self._qr_code_path
         if not qr_path or not os.path.exists(qr_path):
             return
-        qr_h = max(120, screen_h // 6)
         with Image.open(qr_path) as qr_src:
             qr_img = qr_src.convert("RGBA").resize((qr_h, qr_h))
         r, g, b, a = qr_img.split()
