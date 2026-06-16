@@ -77,6 +77,8 @@ def info():
         normalize_audio=k.normalize_audio,
         high_quality=k.high_quality,
         subtitle_delay=k.preferences.get_or_default("subtitle_delay"),
+        subtitle_scale=k.preferences.get_or_default("subtitle_scale"),
+        subtitle_pos_offset=k.preferences.get_or_default("subtitle_pos_offset"),
         audio_delay=k.preferences.get_or_default("audio_delay"),
         vocal_volume=int(k.preferences.get_or_default("vocal_volume") * 100),
         limit_user_songs_by=k.limit_user_songs_by,

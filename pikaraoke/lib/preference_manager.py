@@ -33,6 +33,8 @@ class PreferenceManager:
         "limit_user_songs_by": 0,
         "enable_fair_queue": False,
         "subtitle_delay": 0,
+        "subtitle_scale": 1.0,
+        "subtitle_pos_offset": 0,
         "audio_delay": 0.0,
         "browse_results_per_page": 100,
         "hide_clock": False,

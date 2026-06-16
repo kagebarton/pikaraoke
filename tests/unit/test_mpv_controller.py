@@ -113,6 +113,31 @@ def test_set_subtitle_delay_sets_property_and_state(controller):
     assert controller._player.sub_delay == 0.4
 
 
+def test_set_subtitle_style_scale_and_position(controller):
+    controller._current_sub_mode = "srt"
+    controller.set_subtitle_style(1.5, 20)
+    assert controller._subtitle_scale == 1.5
+    assert controller._subtitle_pos_offset == 20
+    assert controller._player.sub_scale == 1.5
+    # positive offset raises subtitles -> lower sub-pos (100 - 20)
+    assert controller._player.sub_pos == 80
+    assert controller._player.sub_ass_override == "no"
+
+
+def test_set_subtitle_style_overrides_ass_for_karaoke(controller):
+    controller._current_sub_mode = "karaoke"
+    controller.set_subtitle_style(1.0, 0)
+    # karaoke .ass needs override raised so size/position reach the script
+    assert controller._player.sub_ass_override == "scale"
+    assert controller._player.sub_pos == 100
+
+
+def test_set_subtitle_style_clamps_position_to_mpv_range(controller):
+    controller._current_sub_mode = "srt"
+    controller.set_subtitle_style(1.0, -80)  # would push sub-pos to 180
+    assert controller._player.sub_pos == 150
+
+
 def test_set_pitch_rebuilds_filter_at_new_pitch(controller):
     controller.set_pitch(2)
     assert controller._current_pitch == pytest.approx(2 ** (2 / 12))

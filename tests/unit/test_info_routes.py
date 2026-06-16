@@ -50,6 +50,8 @@ _PREF_DEFAULTS = {
     "volume": 0.85,
     "vocal_volume": 0.4,
     "subtitle_delay": 0.0,
+    "subtitle_scale": 1.0,
+    "subtitle_pos_offset": 0,
     "audio_delay": 0.0,
     "audio_device": "auto",
     "blocked_processing_words": "",

@@ -112,6 +112,8 @@ class PlaybackController:
         # Find subtitle files (.ass in karaoke/ subfolder, .srt in subtitles/ subfolder)
         subs = self._find_subtitles(file_path)
         subtitle_delay = self.preferences.get_or_default("subtitle_delay")
+        subtitle_scale = self.preferences.get_or_default("subtitle_scale")
+        subtitle_pos_offset = self.preferences.get_or_default("subtitle_pos_offset")
 
         # Resolve initial subtitle mode: karaoke if .ass exists, srt if .srt exists, off otherwise
         if subs["ass"] and os.path.exists(subs["ass"]):
@@ -159,6 +161,8 @@ class PlaybackController:
                     srt_path=subs["srt"],
                     initial_sub_mode=initial_sub_mode,
                     subtitle_delay=subtitle_delay,
+                    subtitle_scale=subtitle_scale,
+                    subtitle_pos_offset=subtitle_pos_offset,
                     normalization_db=normalization_db,
                     vocal_path=vocal_path,
                     nonvocal_path=nonvocal_path,
@@ -406,6 +410,11 @@ class PlaybackController:
         """Forward subtitle delay to MPV."""
         if self.is_playing:
             self.mpv.set_subtitle_delay(seconds)
+
+    def set_subtitle_style(self, scale: float, pos_offset: float) -> None:
+        """Forward subtitle size/position to MPV."""
+        if self.is_playing:
+            self.mpv.set_subtitle_style(scale, pos_offset)
 
     def set_sub_mode(self, mode: str) -> None:
         """Change subtitle mode for the current song."""

@@ -125,6 +125,8 @@ class MpvController:
         self._available_subs: dict[str, str | None] = {"ass": None, "srt": None}
         self._current_sub_mode: str = "off"
         self._subtitle_delay: float = 0.0
+        self._subtitle_scale: float = 1.0
+        self._subtitle_pos_offset: float = 0.0
 
         # Audio backend
         self._audio_backend: str | None = None
@@ -357,6 +359,8 @@ class MpvController:
         srt_path: str | None = None,
         initial_sub_mode: str = "off",
         subtitle_delay: float = 0.0,
+        subtitle_scale: float = 1.0,
+        subtitle_pos_offset: float = 0.0,
         normalization_db: float | None = None,
         vocal_path: str | None = None,
         nonvocal_path: str | None = None,
@@ -374,6 +378,8 @@ class MpvController:
         self._available_subs = {"ass": ass_path, "srt": srt_path}
         self._current_sub_mode = initial_sub_mode
         self._subtitle_delay = subtitle_delay
+        self._subtitle_scale = subtitle_scale
+        self._subtitle_pos_offset = subtitle_pos_offset
 
         # Dual-stem state
         self._dual_stem = bool(vocal_path and nonvocal_path)
@@ -569,6 +575,7 @@ class MpvController:
                 self._player.sub_delay = float(subtitle_delay)
             else:
                 self._player.sub_delay = 0.0
+            self._apply_subtitle_style()
         else:
             self._player.sub_delay = 0.0
 
@@ -589,6 +596,30 @@ class MpvController:
         """
         self._subtitle_delay = float(seconds)
         self._player.sub_delay = float(seconds)
+
+    @_safe
+    def set_subtitle_style(self, scale: float, pos_offset: float) -> None:
+        """Set subtitle size scale and vertical offset on the running player."""
+        self._subtitle_scale = float(scale)
+        self._subtitle_pos_offset = float(pos_offset)
+        self._apply_subtitle_style()
+
+    @_safe
+    def _apply_subtitle_style(self) -> None:
+        """Push subtitle size/position to mpv for the active subtitle mode.
+
+        `sub-scale` multiplies the font size. `sub-pos` is mpv's vertical line
+        position (0 = top, 100 = default bottom, 150 = below frame), so a
+        positive offset raises the subtitle by lowering sub-pos.
+
+        For karaoke (.ass) the script defines its own style, so `sub-ass-override`
+        must be raised to 'scale' for size/position to take effect; that level
+        leaves the karaoke fill (\\k) timing tags intact. SRT is plain text and
+        honours the options directly, so override stays 'no'.
+        """
+        self._player.sub_scale = self._subtitle_scale
+        self._player.sub_pos = max(0, min(150, int(round(100 - self._subtitle_pos_offset))))
+        self._player.sub_ass_override = "scale" if self._current_sub_mode == "karaoke" else "no"
 
     @_safe
     def set_audio_delay(self, seconds: float) -> None:

@@ -38,6 +38,11 @@ def change_preferences(query):
                 k.playback_controller.refresh_overlays()
             if preference == "audio_delay":
                 k.mpv_controller.set_audio_delay(float(val))
+            if preference in ("subtitle_scale", "subtitle_pos_offset"):
+                k.playback_controller.set_subtitle_style(
+                    float(k.preferences.get_or_default("subtitle_scale")),
+                    float(k.preferences.get_or_default("subtitle_pos_offset")),
+                )
         return jsonify([success, message])
     else:
         # MSG: Message shown after trying to change preferences without admin permissions.
