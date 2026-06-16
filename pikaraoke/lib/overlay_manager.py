@@ -80,7 +80,6 @@ class OverlayState:
     semitones: int
     position: float
     duration: float
-    screen_w: int
     screen_h: int
     # preference snapshot
     hide_url: bool
@@ -154,12 +153,11 @@ def render_ass(o: Overlay) -> str:
 
 
 def _build_url_overlay(state: OverlayState, fs: int) -> Overlay:
-    qr_h = _qr_height(state.screen_h, state.overlay_scale)
-    x = (qr_h + 10) * 1920 / state.screen_w
+    # Bottom-right corner; QR bitmap stays in the top-left independently.
     return Overlay(
         id=OSD_URL,
-        anchor="\\an7",
-        pos=(x, 0),
+        anchor="\\an3",
+        pos=(1920, 1080),
         font_size=fs,
         color=_COLOR_URL,
         text=_ass_escape(state.server_url),

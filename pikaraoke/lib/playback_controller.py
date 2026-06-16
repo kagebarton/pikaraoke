@@ -371,7 +371,6 @@ class PlaybackController:
             semitones=self.now_playing_transpose,
             position=self.mpv.position,
             duration=self.mpv.duration,
-            screen_w=self.mpv.osd_size[0],
             screen_h=self.mpv.osd_size[1],
             hide_url=self.preferences.get_or_default("hide_url"),
             hide_now_playing=self.preferences.get_or_default("hide_now_playing_overlay"),
