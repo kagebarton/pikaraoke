@@ -91,6 +91,8 @@ class OverlayState:
     dual_stem: bool = False
     vocal_volume: float = 0.0
     singer_name: str = ""
+    # user-facing multiplier scaling every overlay (1.0 = default size)
+    overlay_scale: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -112,9 +114,17 @@ class Overlay:
 # ── Pure helpers ───────────────────────────────────────────────────────────────
 
 
-def _overlay_font_size(screen_h: int) -> int:
-    qr_h = max(120, screen_h // 6)
-    return qr_h // 3
+def _qr_height(screen_h: int, scale: float = 1.0) -> int:
+    """Side length of the QR bitmap, the base unit all overlays size against.
+
+    The 120px floor keeps the code scannable on small windows; `scale` is the
+    user's overlay-size multiplier applied after the floor so it scales too.
+    """
+    return int(max(120, screen_h // 6) * scale)
+
+
+def _overlay_font_size(screen_h: int, scale: float = 1.0) -> int:
+    return _qr_height(screen_h, scale) // 3
 
 
 def _fmt_time(seconds: float) -> str:
@@ -144,7 +154,7 @@ def render_ass(o: Overlay) -> str:
 
 
 def _build_url_overlay(state: OverlayState, fs: int) -> Overlay:
-    qr_h = max(120, state.screen_h // 6)
+    qr_h = _qr_height(state.screen_h, state.overlay_scale)
     x = (qr_h + 10) * 1920 / state.screen_w
     return Overlay(
         id=OSD_URL,
@@ -252,7 +262,7 @@ def compute_overlays(state: OverlayState) -> dict[int, Overlay]:
     3. Add one branch here.
     """
     result: dict[int, Overlay] = {}
-    fs = _overlay_font_size(state.screen_h)
+    fs = _overlay_font_size(state.screen_h, state.overlay_scale)
 
     # ── Placeholder (IDLE) overlays ────────────────────────────────────────────
     if state.mode == ScreenMode.IDLE:
@@ -293,6 +303,7 @@ class OverlayManager:
         self._force_resend = False
         self._last_bitmap_visible: bool | None = None
         self._last_bitmap_screen_h: int | None = None
+        self._last_bitmap_scale: float | None = None
 
     def apply(self, state: OverlayState) -> None:
         """Compute desired overlays and apply only the diff to MPV."""
@@ -320,15 +331,21 @@ class OverlayManager:
         self._force_resend = True
         self._last_bitmap_visible = None
         self._last_bitmap_screen_h = None
+        self._last_bitmap_scale = None
 
     def _apply_qr(self, state: OverlayState) -> None:
-        """Redraw QR bitmap only when visibility or screen size changes."""
+        """Redraw QR bitmap only when visibility, screen size, or scale changes."""
         visible = not state.hide_url
-        if visible == self._last_bitmap_visible and state.screen_h == self._last_bitmap_screen_h:
+        if (
+            visible == self._last_bitmap_visible
+            and state.screen_h == self._last_bitmap_screen_h
+            and state.overlay_scale == self._last_bitmap_scale
+        ):
             return
         if visible:
-            self._mpv.send_qr_bitmap(state.screen_h, state.screen_w)
+            self._mpv.send_qr_bitmap(_qr_height(state.screen_h, state.overlay_scale))
         else:
             self._mpv.remove_qr_bitmap()
         self._last_bitmap_visible = visible
         self._last_bitmap_screen_h = state.screen_h
+        self._last_bitmap_scale = state.overlay_scale

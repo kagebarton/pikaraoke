@@ -53,6 +53,7 @@ _PREF_DEFAULTS = {
     "audio_delay": 0.0,
     "audio_device": "auto",
     "blocked_processing_words": "",
+    "overlay_scale": 1.0,
 }
 
 

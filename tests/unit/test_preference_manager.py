@@ -266,6 +266,7 @@ def test_preference_manager_defaults_exist():
         "volume",
         "normalize_audio",
         "hide_now_playing_overlay",
+        "overlay_scale",
         "limit_user_songs_by",
         "enable_fair_queue",
         "browse_results_per_page",
@@ -305,6 +306,7 @@ def test_preference_manager_defaults_types():
     # Float preferences
     assert isinstance(defaults["volume"], float)
     assert isinstance(defaults["vocal_volume"], float)
+    assert isinstance(defaults["overlay_scale"], float)
 
     # String preferences
     assert isinstance(defaults["temp_dir"], str)

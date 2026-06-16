@@ -29,6 +29,7 @@ class PreferenceManager:
         "volume": 0.85,
         "normalize_audio": False,
         "hide_now_playing_overlay": False,
+        "overlay_scale": 1.0,
         "limit_user_songs_by": 0,
         "enable_fair_queue": False,
         "subtitle_delay": 0,

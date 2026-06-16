@@ -333,6 +333,13 @@
 						<label class="label" for="pref-overlay">{# MSG: Checkbox label which enable/disables the now playing and up next overlays #} {% trans %}Hide now playing and up next overlays{% endtrans %}
 						</label>
 					</div>
+
+					<div class="user-preference-container is-align-items-center">
+						<input id="pref-overlay-scale" class="user-preference-input input" type="number" step="0.1" min="0.5" max="3" data-pref="overlay_scale" data-start-value="{{ overlay_scale }}" value="{{ overlay_scale }}" />
+						<label class="label" for="pref-overlay-scale">
+							{# MSG: Numberbox label for the overlay size multiplier #} {% trans %}Overlay size, including QR code (1.0 = default, 2.0 = double){% endtrans %}
+						</label>
+					</div>
 				</div>
 			</div>
 

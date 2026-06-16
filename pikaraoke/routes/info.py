@@ -72,6 +72,7 @@ def info():
         hide_clock=k.hide_clock,
         hide_url=k.hide_url,
         hide_now_playing_overlay=k.hide_now_playing_overlay,
+        overlay_scale=k.preferences.get_or_default("overlay_scale"),
         splash_delay=k.splash_delay,
         normalize_audio=k.normalize_audio,
         high_quality=k.high_quality,
