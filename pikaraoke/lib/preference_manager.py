@@ -46,6 +46,12 @@ class PreferenceManager:
         "audio_device": "auto",
     }
 
+    # User-preference keys with no Web UI field. Seeded as blank entries on
+    # first run so they're discoverable by opening config.ini. A blank value
+    # reads back as the unset default, so seeding never changes behavior. Only
+    # keys whose empty string is a valid "use default" sentinel belong here.
+    HIDDEN_SETTINGS = ("download_path", "admin_password")
+
     def __init__(self, config_file_path: str = "config.ini", target: object | None = None) -> None:
         """Initialize with config path and optional target object to sync.
 
@@ -182,6 +188,32 @@ class PreferenceManager:
             return float(val)
 
         return val
+
+    def scaffold_hidden_settings(self) -> None:
+        """Write blank placeholders for HIDDEN_SETTINGS that aren't set yet.
+
+        These keys have no Web UI field; seeding them lets users discover them
+        by opening config.ini. Existing values are never overwritten, and a
+        blank placeholder reads back as the unset default.
+        """
+        self._config_obj.read(self.config_file_path, encoding="utf-8")
+
+        if "USERPREFERENCES" not in self._config_obj:
+            self._config_obj.add_section("USERPREFERENCES")
+
+        prefs = self._config_obj["USERPREFERENCES"]
+        missing = [key for key in self.HIDDEN_SETTINGS if key not in prefs]
+        if not missing:
+            return
+
+        for key in missing:
+            prefs[key] = ""
+
+        try:
+            with open(self.config_file_path, "w", encoding="utf-8") as conf:
+                self._config_obj.write(conf)
+        except OSError as e:
+            logging.error(f"Failed to seed hidden settings in config: {e}")
 
     def apply_all(self, **cli_overrides: Any) -> None:
         """Hydrate target object with all preferences from config/defaults.

@@ -696,3 +696,40 @@ def test_reset_all_preserves_other_sections(temp_config_file):
 
     # Admin section should survive the reset
     assert prefs.get("db_path", section="ADMIN") == "/data/db.sqlite"
+
+
+# --- Tests for scaffolding hidden (config-only) settings ---
+
+
+def test_scaffold_seeds_blank_keys_for_hidden_settings(temp_config_file):
+    """scaffold_hidden_settings writes blank placeholders that read as unset."""
+    prefs = PreferenceManager(temp_config_file)
+
+    prefs.scaffold_hidden_settings()
+
+    for key in PreferenceManager.HIDDEN_SETTINGS:
+        # Placeholder exists in the file (sentinel default proves it's present)
+        # and reads back as the unset default (blank means "use default").
+        assert prefs.get(key, "MISSING") == "", f"{key} not seeded"
+
+
+def test_scaffold_does_not_overwrite_existing_values(temp_config_file):
+    """scaffold_hidden_settings must never clobber a user-set value."""
+    prefs = PreferenceManager(temp_config_file)
+    prefs.set("admin_password", "hunter2")
+    prefs.set("download_path", "/music/library")
+
+    prefs.scaffold_hidden_settings()
+
+    assert prefs.get("admin_password", "") == "hunter2"
+    assert prefs.get("download_path", "") == "/music/library"
+
+
+def test_scaffold_preserves_other_preferences(temp_config_file):
+    """Seeding hidden settings leaves unrelated preferences intact."""
+    prefs = PreferenceManager(temp_config_file)
+    prefs.set("volume", "0.5")
+
+    prefs.scaffold_hidden_settings()
+
+    assert prefs.get("volume") == 0.5
