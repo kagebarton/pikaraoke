@@ -160,12 +160,7 @@ def main() -> None:
             "No js runtime is installed (such as Deno, Bun, Node.js, or QuickJS). This is required to run yt-dlp. Some downloads may not work. See: https://github.com/yt-dlp/yt-dlp/wiki/EJS"
         )
 
-    # setup/create download directory if necessary
-    if not os.path.exists(args.download_path):
-        print("Creating download path: " + args.download_path)
-        os.makedirs(args.download_path)
-
-    # Configure karaoke process
+    # Configure karaoke process (Karaoke resolves and creates download_path)
     k = karaoke.Karaoke(
         port=args.port,
         download_path=args.download_path,
