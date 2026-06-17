@@ -2,10 +2,11 @@
 
 Model: Claude Fable 5
 
-Status: **plan only — measurement-first, nothing started.** Sketched
-2026-06-12 after the SRT prior shipped (plans/srt-timing-prior.md).
-Steps 1–2 are offline measurement against data already on disk and do
-NOT require deciding the constraint question below; step 3 does.
+Status: **step 1 done (2026-06-16) — KEEP auto-search; step 2 next.**
+Sketched 2026-06-12 after the SRT prior shipped
+(plans/srt-timing-prior.md). Steps 1–2 are offline measurement against
+data already on disk and do NOT require deciding the constraint
+question below; step 3 does. Step-1 results under that section.
 
 ## Constraint to re-open (user's call, not before step 3)
 
@@ -66,9 +67,11 @@ Two computed numbers replace the hand-vet:
 1. **Mapping rate** — `map_lines_to_cues` (fuzzy NW, 0.85 ratio floor)
    of the candidate's synced lines against *our actual lyric sheet*.
    Junk/wrong-language/divergent-edit variants score low and are
-   rejected; fetch top-k, keep the best. Threshold TBD from step-1
-   data (hand-picked variants ranged 30/79 … 36/39 — the floor must
-   tolerate coarse-but-correct syncs).
+   rejected; fetch top-k, keep the best. Step 1 measured the floor at
+   ~38% (the Selfish 30/79 case, as predicted) — but found mapping
+   rate separates only *right song* from wrong song: same-song
+   variants with wrong timing still map up to 86%, so anchor MAD
+   (below), not mapping rate, makes the timing cut.
 2. **Anchor MAD** — the prior's own offset-fit spread (0.75 s
    threshold, ≥4 anchors) vets the winner's *timing* at match time.
    A good-text/garbage-sync variant bails exactly like sloppy captions.
@@ -92,6 +95,53 @@ Ground truth already exists: the 24 hand-fetched files in
   verdict on the top-ranked candidate vs the hand-picked one.
 - Output: keep/kill decision on auto-search, and the mapping-rate
   threshold measured rather than guessed.
+
+### Step 1 results (2026-06-16) — KEEP
+
+Tooling (both untracked under `scripts/`):
+`capture_lrclib_keys.py` interactively captures canonical Genius
+title/artist (the production lyric-choice sidecars are ephemeral and
+were absent; mirrors `backfill_artifacts.py`, writes
+`<songs>/lrclib/genius_keys.json`); `probe_lrclib_search.py` runs the
+offline, cached LRCLIB queries and classifies each song. Keys captured
+for the 16 non-SRT ground-truth songs; the 8 SRT-sourced fall back to a
+title parse.
+
+Of 24 songs: **22 HIT, 1 SAFE-SKIP, 1 SEARCH-MISS.** A *HIT* is a
+returned synced variant whose timing matches the hand-fetched reference
+(≥4 lines mapped, offset+drift residual MAD ≤0.5 s).
+
+- **SAFE-SKIP — Bloodstream.** Search found the right song (album
+  version, 76% mapping) but the awards video drops verses, so no
+  variant matches its edited timing (MAD 10.4 s). Anchor MAD bails →
+  prior no-ops → safe. The hand-fetched ref was a hard-won edit-
+  matching variant a real user wouldn't find; auto-search correctly
+  returns the album cut.
+- **SEARCH-MISS — Best Part of Me**, a fixable key bug:
+  `track_name="Best Part of Me (Live At Abbey Road)"` +
+  `artist_name="Ed Sheeran (Ft. Yebba)"` → 0 records; cleaned to
+  `Best Part of Me` / `Ed Sheeran` → 20 synced. **Step 3 must strip
+  parenthetical/feature qualifiers before the structured query.**
+
+Findings carried into step 3:
+
+- **Mapping rate finds the song, not the timing** (see the vetting
+  note above): the load-bearing timing gate is anchor MAD.
+- **Duration ranking is unreliable but was harmless here.** Video↔
+  soundtrack gaps are large (Colors of the Wind −173 s, Mulan −39 s),
+  yet the video-duration-closest synced candidate was the timing match
+  21/22 times — only because each song's pool is homogeneous (all
+  soundtrack variants). Rank by mapping rate; duration is a tiebreak at
+  most.
+- Movie-clip predictions held: Hakuna Matata mapped 24/40 (the 16
+  dialogue lines correctly got no cue — fail-safe) at MAD 0.24 s; Girl
+  in the Bubble 36/36 at MAD 0.00 s.
+
+Caveat bounding the claim: a HIT means "search found the soundtrack
+sync we hand-vetted," scored against the hand-fetched reference. For
+structurally edited videos, matching the soundtrack ref does not prove
+the variant matches the video's own audio past the edit — that only
+surfaces against the video clock, which is exactly what step 2 tests.
 
 ## Step 2 — LRCLIB-as-input ceiling on the srt-sourced testbed
 
