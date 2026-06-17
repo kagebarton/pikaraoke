@@ -147,6 +147,9 @@ class Karaoke:
         # Initialize event system and preferences (foundation for all components)
         self.events = EventSystem()
         self.preferences = PreferenceManager(config_file_path, target=self)
+        # Seed blank placeholders for config-only settings (download_path,
+        # admin_password) so they're discoverable in config.ini.
+        self.preferences.scaffold_hidden_settings()
 
         # Platform-specific initializations
         self.platform = get_platform()
