@@ -179,11 +179,14 @@ def lyric_sheet(stem: str, debug_dir: Path) -> list[str] | None:
 # ---------------------------------------------------------------------------
 
 
-def lrclib_search(params: dict, cache_dir: Path, refresh: bool) -> list[dict]:
+def lrclib_search(
+    params: dict, cache_dir: Path, refresh: bool, offline: bool = False
+) -> list[dict]:
     """``GET /api/search`` with the given params; cache the raw response.
 
     Cached by a hash of the params so re-runs are offline and don't
-    re-hit the API. Returns [] on any network/parse failure.
+    re-hit the API. Returns [] on any network/parse failure, or — when
+    ``offline`` — on any cache miss instead of querying the API.
     """
     key = hashlib.sha1(urllib.parse.urlencode(sorted(params.items())).encode()).hexdigest()[:16]
     cache_file = cache_dir / f"{key}.json"
@@ -192,6 +195,8 @@ def lrclib_search(params: dict, cache_dir: Path, refresh: bool) -> list[dict]:
             return json.loads(cache_file.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             pass
+    if offline:
+        return []
     try:
         resp = requests.get(
             SEARCH_URL, params=params, headers={"User-Agent": USER_AGENT}, timeout=30

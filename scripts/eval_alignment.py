@@ -42,6 +42,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from pikaraoke.lib.alignment_eval import (  # noqa: E402
     SongScore,
+    cue_spans_from_lrc,
     map_lines_to_cues,
     parse_lrc_lines,
     parse_reference_cues,
@@ -51,6 +52,16 @@ from pikaraoke.lib.alignment_eval import (  # noqa: E402
 )
 from pikaraoke.lib.srt_prior import apply_srt_prior, cue_spans_from_srt  # noqa: E402
 from pikaraoke.pipeline.config import PipelineConfig  # noqa: E402
+from scripts.capture_lrclib_keys import (  # noqa: E402
+    KEYS_FILENAME,
+    default_query,
+    load_keys,
+)
+from scripts.probe_lrclib_search import (  # noqa: E402
+    ffprobe_duration,
+    find_media,
+    lrclib_search,
+)
 
 DEFAULT_FOLDER = "/home/ken/pikaraoke-songs"
 PROVENANCE_FILE = "yt_subtitle_provenance.json"
@@ -200,6 +211,65 @@ def prior_cues_for_bundle(bundle: dict, song_dir: Path) -> dict[int, tuple[float
     if texts == lines:
         return dict(enumerate(spans))
     mapping = map_lines_to_cues(lines, texts)
+    return {lid: spans[ci] for lid, ci in mapping.items()} or None
+
+
+def select_lrclib_candidate(
+    records: list[dict], sheet: list[str], video_dur: float | None
+) -> dict | None:
+    """Production-shaped pick from a search result set: the synced
+    candidate whose text best maps to our lyric sheet, ties broken toward
+    the video's duration (step-1 found duration the effective selector
+    among same-text variants). Reference-free — no timing ground truth is
+    consulted, so this is the choice step-3 production would make."""
+    best: dict | None = None
+    best_key: tuple[float, float] | None = None
+    for r in records:
+        synced = r.get("syncedLyrics")
+        if not synced:
+            continue
+        cand_texts, _ = parse_lrc_lines(synced)
+        if not cand_texts:
+            continue
+        map_rate = len(map_lines_to_cues(sheet, cand_texts)) / len(sheet) if sheet else 0.0
+        dur = float(r.get("duration") or 0.0)
+        dur_key = -abs(dur - video_dur) if video_dur is not None else 0.0
+        key = (map_rate, dur_key)
+        if best_key is None or key > best_key:
+            best, best_key = r, key
+    return best
+
+
+def prior_cues_from_lrclib(
+    bundle: dict, song_dir: Path, offline: bool = False
+) -> dict[int, tuple[float, float]] | None:
+    """Cue spans keyed by line id from the auto-fetched top LRCLIB variant.
+
+    Replays step-1's search (cached under ``<folder>/lrclib/probe_cache``):
+    query by the captured canonical Genius key, else a cleaned title
+    parse; pick a candidate with :func:`select_lrclib_candidate`; turn
+    its LRC into spans and map them onto the lyric sheet by text. Returns
+    None when search yields nothing usable — the prior then no-ops, as in
+    production with no fetch. Measures the whole pipeline (search + vet +
+    prior), not just the prior, so the hand-vetted file is never read.
+    """
+    stem = bundle["song_stem"]
+    lrc_dir = song_dir / "lrclib"
+    keys = load_keys(lrc_dir / KEYS_FILENAME)
+    if stem in keys:
+        params = {"track_name": keys[stem]["title"], "artist_name": keys[stem]["artist"]}
+    else:
+        params = {"q": default_query(stem)}
+    records = lrclib_search(params, lrc_dir / "probe_cache", refresh=False, offline=offline)
+    if not records:
+        return None
+    lines = bundle["lyrics"]["lines"]
+    media = find_media(stem, song_dir)
+    chosen = select_lrclib_candidate(records, lines, ffprobe_duration(media) if media else None)
+    if chosen is None:
+        return None
+    cue_texts, spans = cue_spans_from_lrc(chosen["syncedLyrics"])
+    mapping = map_lines_to_cues(lines, cue_texts)
     return {lid: spans[ci] for lid, ci in mapping.items()} or None
 
 
@@ -398,11 +468,19 @@ def parse_args() -> argparse.Namespace:
         help="score SRT-sourced songs against LRCLIB when available "
         "(non-circular reference for SRT-informed matching)",
     )
-    p.add_argument(
+    prior = p.add_mutually_exclusive_group()
+    prior.add_argument(
         "--srt-prior",
         action="store_true",
         help="apply the SRT timing prior to replayed placements "
         "(matches production joint_srt_prior; use with --prefer-lrclib)",
+    )
+    prior.add_argument(
+        "--lrclib-prior",
+        action="store_true",
+        help="apply the timing prior from the auto-fetched top LRCLIB variant "
+        "to SRT-sourced songs, scored against the held-out YT SRT "
+        "(step 2 of plans/lrclib-timing-prior.md)",
     )
     p.add_argument("--json", dest="json_out", default=None, help="write results JSON here")
     return p.parse_args()
@@ -444,12 +522,11 @@ def main() -> int:
             continue
         cue_texts, cue_starts, ref_kind = ref
         prior_cues = None
-        if (
-            args.srt_prior
-            and not args.as_run
-            and bundle.get("lyrics", {}).get("source_kind") == "srt"
-        ):
-            prior_cues = prior_cues_for_bundle(bundle, song_dir)
+        if not args.as_run and bundle.get("lyrics", {}).get("source_kind") == "srt":
+            if args.srt_prior:
+                prior_cues = prior_cues_for_bundle(bundle, song_dir)
+            elif args.lrclib_prior:
+                prior_cues = prior_cues_from_lrclib(bundle, song_dir, offline=args.offline)
         result = evaluate_bundle(
             bundle,
             cue_texts,
@@ -477,7 +554,7 @@ def main() -> int:
     pooled = print_report(scores, skipped, None if args.as_run else knobs)
 
     if prior_by_song:
-        print("\nSRT prior:")
+        print(f"\n{'LRCLIB' if args.lrclib_prior else 'SRT'} prior:")
         for stem, st in prior_by_song.items():
             if st["bailed"]:
                 print(
@@ -498,7 +575,7 @@ def main() -> int:
             "skipped": [{"song": s, "reason": r} for s, r in skipped],
         }
         if prior_by_song:
-            payload["srt_prior"] = prior_by_song
+            payload["lrclib_prior" if args.lrclib_prior else "srt_prior"] = prior_by_song
         Path(args.json_out).write_text(
             json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"
         )

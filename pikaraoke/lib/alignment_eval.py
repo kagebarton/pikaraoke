@@ -94,6 +94,29 @@ def parse_lrc_lines(lrc_text: str) -> tuple[list[str], list[float]]:
     return [texts[i] for i in order], [starts[i] for i in order]
 
 
+# LRCLIB synced lines carry only a start stamp; the timing prior needs a
+# span. End each line at the next line's start and hold the final line
+# this long — long enough to re-space a sung line's words, which is all
+# the fill path does with the end (no later cue bounds it).
+LRC_LAST_LINE_HOLD_S = 4.0
+
+
+def cue_spans_from_lrc(lrc_text: str) -> tuple[list[str], list[tuple[float, float]]]:
+    """Cleaned cue texts and ``(start, end)`` spans from LRC synced lyrics.
+
+    The LRC adapter for :func:`pikaraoke.lib.srt_prior.apply_srt_prior`,
+    parallel to :func:`pikaraoke.lib.srt_prior.cue_spans_from_srt`:
+    LRCLIB exports stamp only starts, so each line ends at the next
+    start, and the last line holds ``LRC_LAST_LINE_HOLD_S`` seconds.
+    """
+    texts, starts = parse_lrc_lines(lrc_text)
+    spans = [
+        (starts[i], starts[i + 1] if i + 1 < len(starts) else starts[i] + LRC_LAST_LINE_HOLD_S)
+        for i in range(len(starts))
+    ]
+    return texts, spans
+
+
 # Minimum per-line text similarity for a line/cue pair to count as a
 # match in the mapping alignment. Below this, lines reworded by cleanup
 # drift fall out of the mapping (and out of scoring) instead of pairing

@@ -2,11 +2,13 @@
 
 Model: Claude Fable 5
 
-Status: **step 1 done (2026-06-16) — KEEP auto-search; step 2 next.**
+Status: **steps 1–2 done (2026-06-17; step-2 testbed widened to 10 songs
+same day) — ship-shaped: no regressions, safe bails; awaiting the
+constraint call before step 3.**
 Sketched 2026-06-12 after the SRT prior shipped
 (plans/srt-timing-prior.md). Steps 1–2 are offline measurement against
 data already on disk and do NOT require deciding the constraint
-question below; step 3 does. Step-1 results under that section.
+question below; step 3 does. Step-1/2 results under their sections.
 
 ## Constraint to re-open (user's call, not before step 3)
 
@@ -162,6 +164,67 @@ references; use one as input, the other as judge:
   bail-out behavior looks safe (bails on real mismatches, not on
   repairable ones). If structural-edit bails dominate, evaluate the
   piecewise/drift fit contingency before going further.
+
+### Step 2 results (2026-06-17) — ship-shaped
+
+Built into `scripts/eval_alignment.py` as `--lrclib-prior` (mutually
+exclusive with `--srt-prior`): for an SRT-sourced song it auto-fetches
+the top LRCLIB variant — same cached search as step 1, picked
+reference-free by `select_lrclib_candidate` (mapping rate vs our sheet,
+duration tiebreak), never the hand file — adapts its stamps to spans
+(`alignment_eval.cue_spans_from_lrc`: end = next start, last + 4 s),
+applies the shipped `apply_srt_prior`, and scores against the held-out
+YT SRT. Run offline (`--offline` now also gates the LRCLIB fetch):
+
+    eval_alignment.py --folder <dir> --offline            # baseline
+    eval_alignment.py --folder <dir> --offline --lrclib-prior
+
+Testbed: 10 SRT-sourced songs resolving a YT-SRT judge (the prior
+engaged on 9; #OutOfOz "For Good" got no candidate → no-op). Incomplete
+and Bye Bye Bye, originally not runnable offline, were re-captured into
+the testbed on 2026-06-17: Incomplete had no cached vocal stem (re-
+separated from its video) and no caption provenance (queried once
+online: manual EN captions, valid YT-SRT judge); Bye Bye Bye only
+lacked matcher inputs. Both got fresh whisper inputs via
+`refresh_alignment_capture.py`. The original 8 keep their untouched
+bundles, so their baseline and prior numbers are identical to the
+first run (8-song subset: gross 4 → 3).
+
+**No song regressed** (gross count and absolute ≤0.5 s / ≤1.0 s line
+counts each same-or-better everywhere). Pooled YT-SRT gross 9 → 6,
+within-1 s 93.4 → 93.8 %, within-0.5 s 75.9 → 76.7 %, +5 lines newly
+rendered (fills). Per song:
+
+- **Snap repaired a gross** — More Than That: offset +13.5 s (MAD
+  0.33 s), 1 snap + 1 fill, gross 1 → 0. **Incomplete (new): offset
+  −2.0 s (MAD 0.36 s), 2 snaps, gross 2 → 0** — clean repair, no fills,
+  no collateral.
+- **Fills, no harm** — Let It Go (+0.0 s), Speechless (+0.9 s), Can You
+  Feel the Love Tonight (−11.9 s): one fill each, ≥ baseline.
+- **Snap + fill, gross held** — Bye Bye Bye (new): offset −0.5 s (MAD
+  0.26 s), 1 snap + 1 fill, ≤0.5 s and ≤1.0 s counts +1 each, gross
+  3 → 3. The 3 residual gross are repeated-line ("bye bye bye") matcher
+  misplacements outside the snap window — the prior left them untouched.
+- **No-op offset-only** — Part of Your World (−4.0 s), Selfish
+  (+0.1 s): audio already within the snap threshold.
+- **Safe bail** — Mirrors: anchor-residual MAD > 0.75 s (`wide_spread`)
+  → prior no-ops, scores identical to baseline. This is the
+  structurally awkward song; the gate declined exactly as designed.
+
+Large constant master offsets (+13.5 s, −11.9 s) absorbed cleanly, as
+the offset fit predicted; no drift-fit contingency was needed. Watch
+item: Can You Feel the Love Tonight sat at MAD 0.74 s, just under the
+0.75 s bail threshold — it passed and helped, but it's the closest call.
+
+Decision gate **met**: no regressions, the lone bail was a real
+mismatch not a repairable one. Snap now has more support — 4 snaps
+across 3 songs (More Than That ×1, Incomplete ×2, Bye Bye Bye ×1), each
+either repairing a gross or improving within-threshold counts with zero
+collateral. Incomplete is a second clean gross-repair (2 → 0); the
+remaining caution is Bye Bye Bye, where snap correctly leaves
+repeated-line matcher errors alone (neither helped nor harmed). The
+fill-only conservative first ship still holds, with snap now a stronger
+candidate for promotion than at n = 1.
 
 ## Step 3 — production shape (only after 1–2, and the constraint call)
 
