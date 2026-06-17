@@ -17,6 +17,7 @@ from pikaraoke.lib.ffmpeg import get_ffmpeg_version, is_transpose_enabled
 from pikaraoke.lib.genius import GeniusClient
 from pikaraoke.lib.get_platform import (
     get_data_directory,
+    get_default_dl_dir,
     get_os_version,
     get_platform,
     get_temp_directory,
@@ -86,7 +87,7 @@ class Karaoke:
         # Non-preference parameters (keep their own defaults)
         additional_ytdl_args: str | None = None,
         config_file_path: str = "config.ini",
-        download_path: str = "/usr/lib/pikaraoke/songs",
+        download_path: str | None = None,
         log_level: int = logging.DEBUG,
         logo_path: str | None = None,
         port: int = 5555,
@@ -116,7 +117,8 @@ class Karaoke:
 
         Args:
             port: HTTP server port number.
-            download_path: Directory path for downloaded songs.
+            download_path: Directory for downloaded songs. If None, falls back
+                to config.ini download_path, then the platform default.
             hide_url: Hide URL and QR code on splash screen.
             hide_notifications: Disable notification popups.
             high_quality: Download higher quality videos (up to 1080p).
@@ -158,7 +160,17 @@ class Karaoke:
 
         # Set non-preference attributes (not stored in config)
         self.port = port
-        self.download_path = download_path
+        # download_path precedence: CLI flag > config file > platform default.
+        # Read directly (not via DEFAULTS/apply_all) so it has no Web UI field;
+        # users set it by hand-editing config.ini.
+        self.download_path = os.path.expanduser(
+            download_path
+            or self.preferences.get("download_path", "")
+            or get_default_dl_dir(self.platform)
+        )
+        if not os.path.exists(self.download_path):
+            logging.info(f"Creating download path: {self.download_path}")
+            os.makedirs(self.download_path, exist_ok=True)
         self.log_level = log_level
         self.youtubedl_proxy = youtubedl_proxy
         self.additional_ytdl_args = additional_ytdl_args

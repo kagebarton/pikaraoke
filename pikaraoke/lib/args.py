@@ -82,8 +82,8 @@ def parse_pikaraoke_args() -> argparse.Namespace:
         "-d",
         "--download-path",
         nargs="+",
-        help=f"Desired path for downloaded songs. (default: {default_dl_dir})",
-        default=default_dl_dir,
+        help=f"Desired path for downloaded songs. Overrides config.ini download_path. (default: {default_dl_dir})",
+        default=None,
         required=False,
     )
     parser.add_argument(
@@ -205,9 +205,10 @@ def parse_pikaraoke_args() -> argparse.Namespace:
         args.limit_user_songs_by = int(args.limit_user_songs_by)
 
     logo_path = arg_path_parse(args.logo_path)
-    dl_path = os.path.expanduser(arg_path_parse(args.download_path) or default_dl_dir)
 
     args.logo_path = logo_path
-    args.download_path = dl_path
+    # Leave download_path unexpanded/None here; Karaoke resolves the full
+    # precedence (CLI flag > config file > platform default) and expands it.
+    args.download_path = arg_path_parse(args.download_path)
 
     return args
