@@ -41,7 +41,7 @@ from pathlib import Path
 
 import srt
 
-from pikaraoke.lib import alignment_capture
+from pikaraoke.lib import alignment_capture, lrclib
 from pikaraoke.lib.genius_lyrics import parse_lyric_lines
 from pikaraoke.lib.joint_match import match_words_to_lines_joint_with_stats
 from pikaraoke.lib.srt_prior import apply_srt_prior, cue_spans_from_srt
@@ -341,6 +341,11 @@ class LyricAlignStage(BaseStage):
                 "align_failure_escalation": cfg.align_failure_escalation,
                 "collapse_escalation_threshold": cfg.collapse_escalation_threshold,
                 "joint_windowed_realign": cfg.joint_windowed_realign,
+                "joint_alpha": cfg.joint_alpha,
+                "joint_margin_s": cfg.joint_margin_s,
+                "joint_max_edit_ratio": cfg.joint_max_edit_ratio,
+                "joint_srt_prior": cfg.joint_srt_prior,
+                "joint_lrclib_prior": cfg.joint_lrclib_prior,
                 "whisper": dataclasses.asdict(cfg.whisper),
             }
             lyrics_suffix = Path(lyrics_path).suffix.lower().lstrip(".")
@@ -355,6 +360,11 @@ class LyricAlignStage(BaseStage):
                 "lines": list(lyrics_lines),
                 "align_lines": list(align_lines),
             }
+            # The chosen LRCLIB variant (txt-sourced songs): the persisted
+            # .lrc path plus a reference to the specific search result.
+            lrclib_ref = ctx.artifacts.get("lrclib")
+            if lrclib_ref is not None:
+                lyrics["lrclib"] = lrclib_ref
             pipeline_decisions = {
                 "align_check_fail_ratio": fail_ratio,
                 "collapse_ratio": collapse_ratio,
@@ -398,6 +408,7 @@ class LyricAlignStage(BaseStage):
                 output_summary=alignment_capture.summarize_line_objects(line_objects),
                 output_line_timings=alignment_capture.output_line_timings(line_objects),
                 ground_truth_refs=ground_truth_refs,
+                media_duration_s=ctx.artifacts.get("media_duration_s"),
             )
             path = alignment_capture.write_bundle(ctx.song_path, bundle)
             logger.info(f"[{self.name}] Alignment-debug capture written: {path}")
@@ -667,7 +678,52 @@ class LyricAlignStage(BaseStage):
                 logger.exception(
                     "[%s] SRT timing prior failed; keeping audio placements", self.name
                 )
+        elif self._config.joint_lrclib_prior and ctx.artifacts.get("lrclib"):
+            # Txt-sourced song with an auto-fetched LRCLIB variant. Mutually
+            # exclusive with the SRT prior by origin (the elif and the
+            # lyrics-fetch stage only stashing "lrclib" on the Genius branch).
+            line_objects = self._apply_lrclib_prior(
+                ctx, line_objects, transcribe_words, lyrics_lines, align_lines, joint_stats
+            )
         return line_objects, align_words, transcribe_words, joint_stats
+
+    def _apply_lrclib_prior(
+        self,
+        ctx: StageContext,
+        line_objects: list[dict],
+        transcribe_words: list[dict],
+        lyrics_lines: list[str],
+        align_lines: list[str],
+        joint_stats: dict,
+    ) -> list[dict]:
+        """Fill-only LRCLIB timing prior for txt-sourced songs.
+
+        Reads the ``.lrc`` the lyrics-fetch stage chose + persisted, maps its
+        cues onto our lyric lines, and runs the shipped prior with
+        ``snap=False`` — fills lines the audio could not place without ever
+        overriding a placement. Degrades to the audio result on any failure.
+        """
+        ref = ctx.artifacts["lrclib"]
+        try:
+            synced, _ = lrclib.read_lrc(ctx.song_path.parent / ref["lrc_file"])
+            cues = lrclib.cue_spans_for_lines(synced, lyrics_lines)
+            if not cues:
+                return line_objects
+            line_objects, prior_stats = apply_srt_prior(
+                line_objects,
+                transcribe_words,
+                lyrics_lines,
+                align_lines,
+                cues,
+                margin_s=self._config.joint_margin_s,
+                max_edit_ratio=self._config.joint_max_edit_ratio,
+                snap=False,
+                source="lrclib",
+            )
+            joint_stats["lrclib_prior"] = prior_stats
+        except Exception:
+            logger.exception("[%s] LRCLIB timing prior failed; keeping audio placements", self.name)
+        return line_objects
 
     def _transcribe_yield_wpm(self, transcribe_words: list[dict], vocal_wav: Path) -> float | None:
         """Whole-stem transcribe yield in words per minute.

@@ -2,23 +2,20 @@
 
 Model: Claude Fable 5
 
-Status: **steps 1–2 done (2026-06-17; step-2 testbed widened to 10 songs
-same day) — ship-shaped: no regressions, safe bails; awaiting the
-constraint call before step 3.**
-Sketched 2026-06-12 after the SRT prior shipped
-(plans/srt-timing-prior.md). Steps 1–2 are offline measurement against
-data already on disk and do NOT require deciding the constraint
-question below; step 3 does. Step-1/2 results under their sections.
+Status: **steps 1–3 done. Step 3 shipped 2026-06-22 (fill-only,
+default-on): LRCLIB is now a live matcher input for Genius-origin
+songs.** Steps 1–2 were offline measurement (no regressions, safe
+bails); step 3 productionized the prior after the constraint call below.
 
-## Constraint to re-open (user's call, not before step 3)
+## Constraint — RESOLVED (relaxed 2026-06-22)
 
-Standing constraint: LRCLIB is verification-only — "they will not be
-available to the matcher or the deployed project." This plan's end
-state would relax that: LRCLIB cues become a matcher input for
-txt-sourced songs, fetched at processing time (architecturally similar
-to the existing Genius fetch: free public API, no key, cache the
-choice). Steps 1–2 only measure; the decision is deferred until their
-numbers exist.
+The standing constraint (LRCLIB verification-only — "not available to
+the matcher or the deployed project") is **relaxed**: with steps 1–2
+ship-shaped, the user authorized making LRCLIB cues a matcher input for
+txt-sourced songs, fetched at processing time (architecturally like the
+existing Genius fetch: free public API, no key). The chosen variant is
+persisted as a real `.lrc` beside the song so reprocessing is
+deterministic and offline-safe. See step 3.
 
 ## Motivation
 
@@ -176,8 +173,10 @@ duration tiebreak), never the hand file — adapts its stamps to spans
 applies the shipped `apply_srt_prior`, and scores against the held-out
 YT SRT. Run offline (`--offline` now also gates the LRCLIB fetch):
 
-    eval_alignment.py --folder <dir> --offline            # baseline
-    eval_alignment.py --folder <dir> --offline --lrclib-prior
+```
+eval_alignment.py --folder <dir> --offline            # baseline
+eval_alignment.py --folder <dir> --offline --lrclib-prior
+```
 
 Testbed: 10 SRT-sourced songs resolving a YT-SRT judge (the prior
 engaged on 9; #OutOfOz "For Good" got no candidate → no-op). Incomplete
@@ -226,24 +225,64 @@ repeated-line matcher errors alone (neither helped nor harmed). The
 fill-only conservative first ship still holds, with snap now a stronger
 candidate for promotion than at n = 1.
 
-## Step 3 — production shape (only after 1–2, and the constraint call)
+## Step 3 — production shape (shipped 2026-06-22, fill-only)
 
-- Fetch lives in the lyrics-fetch stage alongside the Genius call
-  (origin "genius" only); persist the chosen variant beside the
-  lyrics (like the genius choice file) so reprocessing is
-  deterministic and offline-safe; no fetch → no cues → prior is a
-  no-op, song processes exactly as today.
-- Conservative first ship: **fill-only** (no snap) — fills cannot
-  break a correct audio placement; snap promotion only if step-2
-  numbers support it (the SRT prior's snap was justified by a 2.6%
-  cue-side gross rate; LRCLIB's equivalent must be measured).
-- `joint_lrclib_prior` config knob, default per step-2 verdict.
-- Eval after shipping: txt songs lose LRCLIB as an honest reference.
-  Claims stay on the srt-sourced testbed (input LRCLIB / judge SRT);
-  txt-song improvements are reported as coverage/render deltas only,
-  or judged by ear, unless a second reference appears (YT manual
-  captions on a txt-sourced song's video — empty set in today's
-  corpus, worth re-checking as the library grows).
+What shipped:
+
+- **Fetch + persist in the lyrics-fetch stage** (Genius branch only).
+  `LyricsFetchStage._fetch_lrclib_prior` cleans the canonical Genius
+  title/artist (`lrclib.clean_key` — the step-1 SEARCH-MISS fix: strips
+  parenthetical/feature qualifiers), queries `lrclib.search`, picks
+  reference-free with `lrclib.select_candidate` (duration tiebreak uses
+  `ffmpeg.probe_duration`), and writes the chosen variant to
+  **`<song>/lyrics/<stem>.lrc`** with a provenance header
+  (`[ti]/[ar]/[al]/[length]/[lrclib_id]`, invisible to the cue parser).
+  An existing `.lrc` is reused without re-querying (offline-safe
+  reprocess). No candidate / no fetch → no cues → prior no-ops, song
+  processes exactly as today.
+- **Fill-only** (`apply_srt_prior(..., snap=False)`): fills lines the
+  audio could not place; never overrides a placement. Snap stays
+  deferred — its promotion needs a separately-measured cue-side gross
+  rate for LRCLIB (the SRT prior's snap was justified by 2.6%).
+- **`joint_lrclib_prior` config knob, default True.** Mutually
+  exclusive with the SRT prior by origin (LRCLIB cues only exist for
+  Genius-origin songs). Applied in `LyricAlignStage._apply_lrclib_prior`.
+- **Schema v5** (`alignment_capture.py`): the bundle records
+  `lyrics.lrclib` (the persisted `.lrc` path + the specific LRCLIB
+  search result: id/track/artist/album/duration + query),
+  `joint_stats.lrclib_prior` (offset/MAD/fills, `snap_enabled`),
+  `media_duration_s`, and a completed `config_snapshot` (joint/prior
+  knobs). The eval's `select_lrclib_candidate`/`cue_spans_for_lines`
+  delegate to the shipped `lrclib` module, and its `--lrclib-prior` now
+  applies the prior **fill-only** (`snap=False`), matching production.
+- The production logic lives in the new `pikaraoke/lib/lrclib.py`;
+  `pikaraoke/lib/alignment_eval.py` keeps the pure cue/mapping helpers
+  it reuses.
+
+### Shipped fill-only measurement (SRT testbed, 2026-06-22)
+
+The step-2 "gross 9→6" was the snap-**on** ceiling. The shipped config
+is fill-only, so it makes **no** gross repairs (those were snap-driven —
+Incomplete 2→0 and More Than That 1→0 were snaps). Re-measured with
+`--lrclib-prior` fill-only:
+
+- Pooled YT-SRT gross **9 → 9** (no repair), within-0.5 s 75.9 → 76.2 %,
+  within-1 s 93.4 → 93.2 %, **+5 lines rendered** (fills on More Than
+  That, Let It Go, Speechless, Bye Bye Bye, Can You Feel). No song
+  regressed (no fill became a gross); Mirrors safe-bailed (`wide_spread`).
+
+So the conservative first ship buys **coverage only** on the testbed —
+the gross wins need snap. Step-2 showed snap repaired those grosses with
+zero collateral (4 clean snaps / 3 songs), so promoting snap is the
+obvious next lever; deferred here pending the user's call, since txt
+songs (the real target) can't grade snap's cue-side gross rate offline.
+
+Eval after shipping (unchanged plan): txt songs lose LRCLIB as an
+honest reference. Claims stay on the srt-sourced testbed (input LRCLIB /
+judge SRT); txt-song improvements are reported as coverage/render deltas
+or judged by ear, unless a second reference appears (YT manual captions
+on a txt-sourced song's video — empty set in today's corpus, worth
+re-checking as the library grows).
 
 ## Open questions
 

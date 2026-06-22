@@ -148,6 +148,32 @@ class TestCoverageFill:
         assert out[4] is objs[4]
 
 
+class TestFillOnly:
+    """snap=False (LRCLIB path): fill unplaced lines, never move placed ones."""
+
+    def test_gross_placed_line_not_snapped(self):
+        lines, objs, transcribe, cues = _anchor_song(lead_s=1.5)
+        # A placed line 28.5 s off its cue: snap=True would move it.
+        lines.append("quebec romeo sierra tango")
+        objs.append(_placed_obj(4, lines[4], 70.0))
+        cues[4] = (40.0, 42.0)
+        out, stats = apply_srt_prior(objs, transcribe, lines, lines, cues, snap=False, **KNOBS)
+        assert stats["bailed"] is None
+        assert stats["snap_enabled"] is False
+        assert stats["n_snapped"] == 0
+        assert out[4] is objs[4]  # left exactly where the matcher placed it
+
+    def test_unplaced_line_still_filled(self):
+        lines, objs, transcribe, cues = _anchor_song(lead_s=1.5)
+        lines.append("quebec romeo sierra tango")
+        objs.append(_interp_obj(4, 41.9, 50.0))
+        cues[4] = (50.0, 52.0)
+        out, stats = apply_srt_prior(objs, transcribe, lines, lines, cues, snap=False, **KNOBS)
+        assert stats["filled_line_ids"] == [4]
+        assert out[4]["source"] == "srt"
+        assert out[4]["start"] == 51.5  # cue + offset, as in snap mode
+
+
 class TestCueSpansFromSrt:
     def test_cleanup_and_spans_stay_parallel(self):
         srt_text = (

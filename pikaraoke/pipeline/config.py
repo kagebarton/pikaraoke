@@ -280,6 +280,20 @@ class PipelineConfig:
     # unplaceable) alone repairs 21 lines. Zero GPU cost.
     joint_srt_prior: bool = True
 
+    # LRCLIB timing prior for the joint route. For Genius-origin (txt)
+    # lyrics — which carry no cue times — the lyrics-fetch stage queries
+    # LRCLIB for the best-matching synced variant, persists it as
+    # <song>/lyrics/<stem>.lrc, and the same prior calibrates its cues
+    # against the audio. Run FILL-ONLY here (no snap): fills cannot break a
+    # correct audio placement, but LRCLIB cues come from a different master
+    # with no quality control, so snapping a placed line toward a wrong
+    # variant could. Mutually exclusive with the SRT prior by origin.
+    # Step-2 ceiling on the SRT testbed (plans/lrclib-timing-prior.md):
+    # pooled gross 9 -> 6, no song regressed. One LRCLIB query per
+    # Genius-origin song; no candidate -> no cues -> no-op (processes as
+    # today). Zero GPU cost.
+    joint_lrclib_prior: bool = True
+
     # De-reverb retry for the joint route. When the whole-stem transcribe
     # yield falls below this many words per minute, the vocal stem is
     # treated as reverb-washed: the stem worker swaps to the de-reverb

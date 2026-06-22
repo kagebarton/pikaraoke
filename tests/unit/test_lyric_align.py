@@ -1,9 +1,11 @@
 """Unit tests for LyricAlignStage — lyrics loading, single-style ASS, escalation."""
 
+import json
 from unittest.mock import MagicMock
 
 import pytest
 
+from pikaraoke.lib import lrclib
 from pikaraoke.pipeline.config import PipelineConfig
 from pikaraoke.pipeline.stages.lyric_align import LyricAlignStage
 
@@ -597,3 +599,88 @@ class TestDereverbRetry:
         stage.run(ctx)  # gate silently off — single wet pass
         worker.align_check.assert_called_once()
         worker.transcribe_words.assert_called_once()
+
+
+class TestJointLrclibPrior:
+    """Joint route: the fill-only LRCLIB timing prior for txt-sourced songs."""
+
+    _LINES = [
+        "alpha bravo charlie delta",
+        "echo foxtrot golf hotel",
+        "india juliet kilo lima",
+        "mike november oscar papa",
+    ]
+
+    def _words(self):
+        words = []
+        for i, line in enumerate(self._LINES):
+            t0 = 10.0 * (i + 1)
+            for j, tok in enumerate(line.split()):
+                words.append({"word": tok, "start": t0 + 0.5 * j, "end": t0 + 0.5 * j + 0.4})
+        return words
+
+    def _setup(self, tmp_path):
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path, match_method="joint")
+        words = self._words()
+        ctx.artifacts["lyrics_path"].write_text("\n".join(self._LINES) + "\n", encoding="utf-8")
+        worker.align_check.return_value = {"fail_ratio": 0.0, "result_id": "rid-1", "words": words}
+        worker.refine_from_cached.return_value = words
+        worker.transcribe_words.return_value = words
+        # Persisted LRCLIB choice: each cue leads the audio by 1.5 s.
+        synced = "".join(f"[00:{8.5 + 10 * i:05.2f}]{line}\n" for i, line in enumerate(self._LINES))
+        rel = f"lyrics/{ctx.song_path.stem}.lrc"
+        lrclib.write_lrc(
+            ctx.song_path.parent / rel,
+            {"id": 5, "trackName": "T", "artistName": "A", "syncedLyrics": synced},
+        )
+        ctx.artifacts["lrclib"] = {
+            "lrc_file": rel,
+            "record": {"id": 5, "trackName": "T", "artistName": "A"},
+            "query": {"track_name": "T", "artist_name": "A"},
+        }
+        ctx.artifacts["media_duration_s"] = 212.0
+        return stage, ctx
+
+    def test_fill_only_prior_runs_and_is_captured(self, tmp_path):
+        stage, ctx = self._setup(tmp_path)
+        stage.run(ctx)
+
+        debug = ctx.song_path.parent / "alignment_debug" / f"{ctx.song_path.stem}.json"
+        bundle = json.loads(debug.read_text(encoding="utf-8"))
+
+        prior = bundle["joint_stats"]["lrclib_prior"]
+        assert prior["bailed"] is None
+        assert prior["snap_enabled"] is False  # fill-only on the LRCLIB path
+        assert prior["offset_s"] == 1.5
+        assert prior["n_snapped"] == 0
+
+        # Schema v5 reference + context land in the bundle.
+        assert bundle["schema_version"] == 5
+        assert bundle["lyrics"]["lrclib"]["record"]["id"] == 5
+        assert bundle["media_duration_s"] == 212.0
+        assert bundle["config"]["joint_lrclib_prior"] is True
+
+    def test_srt_origin_never_triggers_lrclib(self, tmp_path):
+        # An SRT-sourced song carries cue_spans and no "lrclib" artifact:
+        # the SRT prior owns it; the LRCLIB block must stay dormant.
+        stage, ctx = self._setup(tmp_path)
+        srt = ctx.song_path.parent / "subtitles" / f"{ctx.song_path.stem}.srt"
+        srt.parent.mkdir(exist_ok=True)
+        srt.write_text(
+            "".join(
+                f"{i + 1}\n00:00:{8 + 10 * i:02d},500 --> 00:00:{9 + 10 * i:02d},500\n{line}\n\n"
+                for i, line in enumerate(self._LINES)
+            ),
+            encoding="utf-8",
+        )
+        ctx.artifacts["lyrics_path"] = srt
+        del ctx.artifacts["lrclib"]
+        stage.run(ctx)
+
+        bundle = json.loads(
+            (ctx.song_path.parent / "alignment_debug" / f"{ctx.song_path.stem}.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        assert "lrclib_prior" not in bundle["joint_stats"]
+        assert "srt_prior" in bundle["joint_stats"]

@@ -20,12 +20,15 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from pikaraoke.lib import lrclib
+from pikaraoke.lib.ffmpeg import probe_duration
 from pikaraoke.lib.genius import (
     GeniusClient,
     GeniusUnavailable,
     delete_choice,
     read_choice,
 )
+from pikaraoke.lib.genius_lyrics import parse_lyric_lines
 from pikaraoke.lib.metadata_parser import extract_youtube_id
 from pikaraoke.pipeline.context import StageContext
 from pikaraoke.pipeline.stages.base import BaseStage
@@ -65,12 +68,13 @@ class LyricsFetchStage(BaseStage):
         # Branch a: explicit Genius selection
         if choice and "genius_id" in choice:
             try:
-                text = self._genius.fetch_lyrics(int(choice["genius_id"]))
+                song = self._genius.fetch_song(int(choice["genius_id"]))
                 lyrics_path = ctx.tmp_dir / "lyrics.txt"
-                lyrics_path.write_text(text, encoding="utf-8")
+                lyrics_path.write_text(song.text, encoding="utf-8")
                 ctx.artifacts["lyrics_path"] = lyrics_path
                 ctx.artifacts["lyrics_origin"] = "genius"
                 delete_choice(yt_id)
+                self._fetch_lrclib_prior(ctx, song.title, song.artist, song.text)
                 return
             except GeniusUnavailable as e:
                 logger.warning("Genius fetch failed for %s: %s — falling back", yt_id, e)
@@ -100,6 +104,52 @@ class LyricsFetchStage(BaseStage):
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def _fetch_lrclib_prior(
+        self, ctx: StageContext, title: str, artist: str, lyrics_text: str
+    ) -> None:
+        """Fetch + persist the best LRCLIB synced variant as the timing prior.
+
+        Genius-origin only (called from Branch a), gated by
+        ``config.joint_lrclib_prior``. Persists ``<song>/lyrics/<stem>.lrc`` and
+        stashes ``ctx.artifacts["lrclib"]`` (the LRC file path + the chosen
+        record + query) for the align stage and the debug bundle. An existing
+        ``.lrc`` is reused without re-querying (offline-safe reprocess). Never
+        raises: any failure or absent candidate just means no prior — the song
+        processes exactly as today.
+        """
+        if not ctx.config.joint_lrclib_prior:
+            return
+        try:
+            rel = f"lyrics/{ctx.song_path.stem}.lrc"
+            lrc_path = ctx.song_path.parent / rel
+
+            media_dur = probe_duration(ctx.song_path)
+            if media_dur is not None:
+                ctx.artifacts["media_duration_s"] = media_dur
+
+            if lrc_path.is_file():
+                _synced, record = lrclib.read_lrc(lrc_path)
+                ctx.artifacts["lrclib"] = {"lrc_file": rel, "record": record, "query": None}
+                return
+
+            track, artist_q = lrclib.clean_key(title, artist)
+            records = lrclib.search(track, artist_q)
+            if not records:
+                return
+            sheet = [item["text"] for item in parse_lyric_lines(lyrics_text)]
+            chosen = lrclib.select_candidate(records, sheet, media_dur)
+            if chosen is None:
+                return
+            lrclib.write_lrc(lrc_path, chosen)
+            ctx.artifacts["lrclib"] = {
+                "lrc_file": rel,
+                "record": lrclib.record_meta(chosen),
+                "query": {"track_name": track, "artist_name": artist_q},
+            }
+            logger.info("LRCLIB prior: %s", lrc_path.name)
+        except Exception:
+            logger.exception("LRCLIB prior fetch failed; processing without it")
 
     @staticmethod
     def _extract_yt_id(song_path: Path) -> str | None:

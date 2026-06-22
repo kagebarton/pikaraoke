@@ -42,13 +42,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from pikaraoke.lib.alignment_eval import (  # noqa: E402
     SongScore,
-    cue_spans_from_lrc,
     map_lines_to_cues,
     parse_lrc_lines,
     parse_reference_cues,
     placed_starts_from_line_objects,
     replay_joint_from_bundle,
     score_song,
+)
+from pikaraoke.lib.lrclib import cue_spans_for_lines  # noqa: E402
+from pikaraoke.lib.lrclib import (  # noqa: E402
+    select_candidate as select_lrclib_candidate,
 )
 from pikaraoke.lib.srt_prior import apply_srt_prior, cue_spans_from_srt  # noqa: E402
 from pikaraoke.pipeline.config import PipelineConfig  # noqa: E402
@@ -145,10 +148,12 @@ def evaluate_bundle(
     knobs: dict,
     ref: str,
     prior_cues: dict[int, tuple[float, float]] | None = None,
+    snap: bool = True,
 ) -> tuple[SongScore, dict | None] | str:
-    """Score one bundle; returns ``(score, srt_prior_stats)`` or a
-    skip-reason string. ``prior_cues`` applies the SRT timing prior to
-    the replayed placement (replay mode only), matching production."""
+    """Score one bundle; returns ``(score, prior_stats)`` or a skip-reason
+    string. ``prior_cues`` applies the timing prior to the replayed
+    placement (replay mode only). ``snap`` mirrors production: True for the
+    SRT prior, False (fill-only) for the LRCLIB prior."""
     lines = bundle["lyrics"]["lines"]
     mapping = map_lines_to_cues(lines, cue_texts)
     if not mapping:
@@ -178,6 +183,7 @@ def evaluate_bundle(
                 prior_cues,
                 margin_s=knobs["margin_s"],
                 max_edit_ratio=knobs["max_edit_ratio"],
+                snap=snap,
             )
         placed = placed_starts_from_line_objects(line_objects)
 
@@ -214,32 +220,6 @@ def prior_cues_for_bundle(bundle: dict, song_dir: Path) -> dict[int, tuple[float
     return {lid: spans[ci] for lid, ci in mapping.items()} or None
 
 
-def select_lrclib_candidate(
-    records: list[dict], sheet: list[str], video_dur: float | None
-) -> dict | None:
-    """Production-shaped pick from a search result set: the synced
-    candidate whose text best maps to our lyric sheet, ties broken toward
-    the video's duration (step-1 found duration the effective selector
-    among same-text variants). Reference-free — no timing ground truth is
-    consulted, so this is the choice step-3 production would make."""
-    best: dict | None = None
-    best_key: tuple[float, float] | None = None
-    for r in records:
-        synced = r.get("syncedLyrics")
-        if not synced:
-            continue
-        cand_texts, _ = parse_lrc_lines(synced)
-        if not cand_texts:
-            continue
-        map_rate = len(map_lines_to_cues(sheet, cand_texts)) / len(sheet) if sheet else 0.0
-        dur = float(r.get("duration") or 0.0)
-        dur_key = -abs(dur - video_dur) if video_dur is not None else 0.0
-        key = (map_rate, dur_key)
-        if best_key is None or key > best_key:
-            best, best_key = r, key
-    return best
-
-
 def prior_cues_from_lrclib(
     bundle: dict, song_dir: Path, offline: bool = False
 ) -> dict[int, tuple[float, float]] | None:
@@ -268,9 +248,7 @@ def prior_cues_from_lrclib(
     chosen = select_lrclib_candidate(records, lines, ffprobe_duration(media) if media else None)
     if chosen is None:
         return None
-    cue_texts, spans = cue_spans_from_lrc(chosen["syncedLyrics"])
-    mapping = map_lines_to_cues(lines, cue_texts)
-    return {lid: spans[ci] for lid, ci in mapping.items()} or None
+    return cue_spans_for_lines(chosen["syncedLyrics"], lines)
 
 
 def find_reference_srt(bundle: dict, song_dir: Path) -> Path | None:
@@ -535,6 +513,8 @@ def main() -> int:
             knobs=knobs,
             ref=ref_kind,
             prior_cues=prior_cues,
+            # Production ships the LRCLIB prior fill-only; the SRT prior snaps.
+            snap=not args.lrclib_prior,
         )
         if isinstance(result, str):
             skipped.append((stem, result))

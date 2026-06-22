@@ -22,6 +22,22 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# v5: LRCLIB timing prior shipped to production (plans/lrclib-timing-prior.md,
+#     step 3). A milestone bump even though the changes are additive — it
+#     marks the first run-affecting matcher change since v4. Added:
+#   - lyrics.lrclib: for txt-sourced songs, the chosen LRCLIB variant —
+#     {lrc_file (relative path to the persisted <song>/lyrics/<stem>.lrc),
+#     record (the specific search result: id/trackName/artistName/albumName/
+#     duration), query}.
+#   - joint_stats.lrclib_prior: the prior's per-song stats, parallel to
+#     joint_stats.srt_prior. On a successful apply: offset_s/mad_s/
+#     n_anchors_fit/n_snapped/n_filled/snap_enabled. On bail-out: only
+#     n_anchors_fit + bailed (the reason), same shape as srt_prior.
+#   - media_duration_s: source media duration (ffprobe), the LRCLIB
+#     selection tiebreak and a drift-aware-eval input.
+#   - config_snapshot now records the joint/prior knobs that shape output:
+#     joint_alpha, joint_margin_s, joint_max_edit_ratio, joint_srt_prior,
+#     joint_lrclib_prior.
 # Additive since v4 (no bump — additions only):
 #   - joint_stats: stats dict from the joint matcher
 #     (lib/joint_match.py:match_words_to_lines_joint_with_stats), captured
@@ -40,7 +56,7 @@ logger = logging.getLogger(__name__)
 # v2: added tiling per-unit fields (units, zero_candidate_unit_ids,
 #     anchor_recovered_unit_ids, selected_windows replacing window_widths).
 # v1: initial.
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 def build_bundle(
@@ -58,6 +74,7 @@ def build_bundle(
     ground_truth_refs: dict[str, Any],
     joint_stats: dict | None = None,
     transcribe_words: list[dict] | None = None,
+    media_duration_s: float | None = None,
 ) -> dict[str, Any]:
     """Assemble the capture dict. Pure — no I/O.
 
@@ -69,6 +86,7 @@ def build_bundle(
         "captured_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "config": config_snapshot,
         "lyrics": lyrics,
+        "media_duration_s": media_duration_s,
         "pipeline_decisions": pipeline_decisions,
         "words": words or [],
         "words_source": words_source,

@@ -49,7 +49,6 @@ import argparse
 import dataclasses
 import hashlib
 import json
-import subprocess
 import sys
 import time
 import urllib.parse
@@ -67,6 +66,7 @@ from pikaraoke.lib.alignment_eval import (  # noqa: E402
     map_lines_to_cues,
     parse_lrc_lines,
 )
+from pikaraoke.lib.ffmpeg import probe_duration as ffprobe_duration  # noqa: E402
 from scripts.capture_lrclib_keys import (  # noqa: E402
     KEYS_FILENAME,
     default_query,
@@ -138,27 +138,6 @@ def find_media(stem: str, folder: Path) -> Path | None:
         if cand.is_file():
             return cand
     return None
-
-
-def ffprobe_duration(media: Path) -> float | None:
-    try:
-        out = subprocess.check_output(
-            [
-                "ffprobe",
-                "-v",
-                "error",
-                "-show_entries",
-                "format=duration",
-                "-of",
-                "csv=p=0",
-                str(media),
-            ],
-            stderr=subprocess.DEVNULL,
-            timeout=30,
-        )
-        return float(out.strip())
-    except (subprocess.SubprocessError, OSError, ValueError):
-        return None
 
 
 def lyric_sheet(stem: str, debug_dir: Path) -> list[str] | None:

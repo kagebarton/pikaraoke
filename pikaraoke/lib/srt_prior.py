@@ -82,6 +82,8 @@ def apply_srt_prior(
     *,
     margin_s: float,
     max_edit_ratio: float,
+    snap: bool = True,
+    source: str = "srt",
 ) -> tuple[list[dict], dict]:
     """Repair and coverage-fill ``line_objects`` from SRT cue times.
 
@@ -90,10 +92,21 @@ def apply_srt_prior(
     line ids to offset-uncorrected cue ``(start, end)`` spans; lines
     without a cue are never touched.
 
+    ``snap=False`` runs the prior fill-only: lines the audio placed are
+    left exactly where the matcher put them, and only unplaced lines are
+    filled. Used by the LRCLIB-input path, whose cues come from a
+    different master clock with no quality control — fills cannot break a
+    correct audio placement, but snapping to a wrong-variant cue could
+    (plans/lrclib-timing-prior.md, step 3).
+
+    ``source`` is the provenance tag stamped on repaired/filled lines
+    (``"srt"`` for the SRT prior, ``"lrclib"`` for the LRCLIB path) so
+    downstream consumers can attribute each cue to its origin.
+
     Returns ``(line_objects, prior_stats)``. On bail-out the input list
     is returned unchanged and ``prior_stats["bailed"]`` names the
     reason; otherwise repaired/filled lines are replaced by copies
-    tagged ``source="srt"``.
+    tagged with ``source``.
     """
     sources = ["absent"] * len(lines)
     for obj in line_objects:
@@ -142,19 +155,20 @@ def apply_srt_prior(
         # negative word times floor-divide into garbage ASS timestamps.
         target = max(0.0, cue[0] + offset)
         if obj.get("words") and obj.get("start") is not None:
-            if abs(obj["start"] - target) > SNAP_DISAGREE_S:
-                out.append(_shift_line(obj, target - obj["start"]))
+            if snap and abs(obj["start"] - target) > SNAP_DISAGREE_S:
+                out.append(_shift_line(obj, target - obj["start"], source))
                 snapped.append(lid)
             else:
                 out.append(obj)
         else:
-            fill = _fill_line(lid, lines[lid], align_lines[lid], target, cue[1] + offset)
+            fill = _fill_line(lid, lines[lid], align_lines[lid], target, cue[1] + offset, source)
             if fill is not None:
                 out.append(fill)
                 filled.append(lid)
             else:
                 out.append(obj)
 
+    stats["snap_enabled"] = snap
     stats["n_snapped"] = len(snapped)
     stats["n_filled"] = len(filled)
     stats["snapped_line_ids"] = snapped
@@ -170,7 +184,7 @@ def apply_srt_prior(
     return out, stats
 
 
-def _shift_line(obj: dict, delta: float) -> dict:
+def _shift_line(obj: dict, delta: float, source: str) -> dict:
     """Copy of ``obj`` with all word timings shifted by ``delta``."""
     shifted = dict(obj)
     shifted["words"] = [
@@ -178,11 +192,13 @@ def _shift_line(obj: dict, delta: float) -> dict:
     ]
     shifted["start"] = obj["start"] + delta
     shifted["end"] = obj["end"] + delta
-    shifted["source"] = "srt"
+    shifted["source"] = source
     return shifted
 
 
-def _fill_line(lid: int, text: str, align_line: str, t0: float, t1: float) -> dict | None:
+def _fill_line(
+    lid: int, text: str, align_line: str, t0: float, t1: float, source: str
+) -> dict | None:
     """Line object with even-paced words across ``[t0, t1]``.
 
     None for display-only lines with no alignable tokens — there is
@@ -204,5 +220,5 @@ def _fill_line(lid: int, text: str, align_line: str, t0: float, t1: float) -> di
         "words": words,
         "start": t0,
         "end": t1,
-        "source": "srt",
+        "source": source,
     }
