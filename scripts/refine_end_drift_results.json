@@ -1,0 +1,173 @@
+{
+  "songs": [
+    {
+      "song": "Beauty and the Beast (1991) - Be Our Guest [UHD]---MiraOCjABn8",
+      "n": 472,
+      "med_abs_end": 0.0,
+      "p90_abs_end": 0.026,
+      "max_abs_end": 0.768,
+      "signed_med_end": 0.0,
+      "pct_se_earlier": 5.9,
+      "pct_se_later": 1.5,
+      "pct_moved_250": 2.3,
+      "max_abs_start": 0.0,
+      "baseline_skew": 0.0
+    },
+    {
+      "song": "Beauty and the Beast (1991) - Belle [UHD]---otxTf5hZ0Yw",
+      "n": 614,
+      "med_abs_end": 0.0,
+      "p90_abs_end": 0.034,
+      "max_abs_end": 2.301,
+      "signed_med_end": 0.0,
+      "pct_se_earlier": 5.7,
+      "pct_se_later": 2.6,
+      "pct_moved_250": 2.8,
+      "max_abs_start": 0.0,
+      "baseline_skew": 0.0
+    },
+    {
+      "song": "Ed Sheeran - Best Part Of Me (feat. YEBBA) (Live At Abbey Road)---wGyh_53ecgg",
+      "n": 266,
+      "med_abs_end": 0.0,
+      "p90_abs_end": 0.212,
+      "max_abs_end": 1.07,
+      "signed_med_end": 0.0,
+      "pct_se_earlier": 15.0,
+      "pct_se_later": 3.0,
+      "pct_moved_250": 7.5,
+      "max_abs_start": 0.0,
+      "baseline_skew": 0.0
+    },
+    {
+      "song": "Josh Gad - In Summer (From 'Frozen'_Sing-Along)---9tcaM06eGrY",
+      "n": 205,
+      "med_abs_end": 0.0,
+      "p90_abs_end": 0.047,
+      "max_abs_end": 0.5,
+      "signed_med_end": 0.0,
+      "pct_se_earlier": 7.8,
+      "pct_se_later": 2.0,
+      "pct_moved_250": 3.9,
+      "max_abs_start": 0.0,
+      "baseline_skew": 0.0
+    },
+    {
+      "song": "Mena Massoud, Naomi Scott - A Whole New World (from Aladdin) (Official Video)---eitDnP0_83k",
+      "n": 230,
+      "med_abs_end": 0.0,
+      "p90_abs_end": 0.228,
+      "max_abs_end": 1.102,
+      "signed_med_end": 0.0,
+      "pct_se_earlier": 14.8,
+      "pct_se_later": 3.5,
+      "pct_moved_250": 8.3,
+      "max_abs_start": 0.0,
+      "baseline_skew": 0.0
+    },
+    {
+      "song": "The Lion King - Hakuna Matata Music Video I 4K Ultra HD---fwLxDUQBdEg",
+      "n": 187,
+      "med_abs_end": 0.0,
+      "p90_abs_end": 0.034,
+      "max_abs_end": 1.95,
+      "signed_med_end": 0.0,
+      "pct_se_earlier": 6.4,
+      "pct_se_later": 2.1,
+      "pct_moved_250": 3.7,
+      "max_abs_start": 0.0,
+      "baseline_skew": 0.0
+    },
+    {
+      "song": "ZAYN, Zhavia Ward - A Whole New World (End Title) (From 'Aladdin')---rg_zwK_sSEY",
+      "n": 274,
+      "med_abs_end": 0.0,
+      "p90_abs_end": 0.294,
+      "max_abs_end": 0.858,
+      "signed_med_end": 0.0,
+      "pct_se_earlier": 22.3,
+      "pct_se_later": 3.3,
+      "pct_moved_250": 11.3,
+      "max_abs_start": 0.0,
+      "baseline_skew": 0.0
+    }
+  ],
+  "skipped": [],
+  "cost": {
+    "se": [
+      {
+        "song": "Beauty and the Beast (1991) - Be Our Guest [UHD]---MiraOCjABn8",
+        "align_s": 10.4,
+        "refine_s": 81.1
+      },
+      {
+        "song": "Beauty and the Beast (1991) - Belle [UHD]---otxTf5hZ0Yw",
+        "align_s": 16.8,
+        "refine_s": 106.1
+      },
+      {
+        "song": "Ed Sheeran - Best Part Of Me (feat. YEBBA) (Live At Abbey Road)---wGyh_53ecgg",
+        "align_s": 12.7,
+        "refine_s": 75.6
+      },
+      {
+        "song": "Josh Gad - In Summer (From 'Frozen'_Sing-Along)---9tcaM06eGrY",
+        "align_s": 4.8,
+        "refine_s": 42.4
+      },
+      {
+        "song": "Mena Massoud, Naomi Scott - A Whole New World (from Aladdin) (Official Video)---eitDnP0_83k",
+        "align_s": 18.1,
+        "refine_s": 57.2
+      },
+      {
+        "song": "The Lion King - Hakuna Matata Music Video I 4K Ultra HD---fwLxDUQBdEg",
+        "align_s": 10.0,
+        "refine_s": 61.5
+      },
+      {
+        "song": "ZAYN, Zhavia Ward - A Whole New World (End Title) (From 'Aladdin')---rg_zwK_sSEY",
+        "align_s": 12.1,
+        "refine_s": 74.6
+      }
+    ],
+    "s": [
+      {
+        "song": "Beauty and the Beast (1991) - Be Our Guest [UHD]---MiraOCjABn8",
+        "align_s": 10.6,
+        "refine_s": 41.7
+      },
+      {
+        "song": "Beauty and the Beast (1991) - Belle [UHD]---otxTf5hZ0Yw",
+        "align_s": 16.6,
+        "refine_s": 54.6
+      },
+      {
+        "song": "Ed Sheeran - Best Part Of Me (feat. YEBBA) (Live At Abbey Road)---wGyh_53ecgg",
+        "align_s": 13.1,
+        "refine_s": 38.7
+      },
+      {
+        "song": "Josh Gad - In Summer (From 'Frozen'_Sing-Along)---9tcaM06eGrY",
+        "align_s": 4.8,
+        "refine_s": 21.2
+      },
+      {
+        "song": "Mena Massoud, Naomi Scott - A Whole New World (from Aladdin) (Official Video)---eitDnP0_83k",
+        "align_s": 17.9,
+        "refine_s": 28.5
+      },
+      {
+        "song": "The Lion King - Hakuna Matata Music Video I 4K Ultra HD---fwLxDUQBdEg",
+        "align_s": 9.9,
+        "refine_s": 31.1
+      },
+      {
+        "song": "ZAYN, Zhavia Ward - A Whole New World (End Title) (From 'Aladdin')---rg_zwK_sSEY",
+        "align_s": 12.2,
+        "refine_s": 37.2
+      }
+    ]
+  },
+  "baseline_tol_s": 0.05
+}

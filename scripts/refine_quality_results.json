@@ -1,0 +1,1629 @@
+{
+  "arms": {
+    "SE": [
+      {
+        "song": "#OutOfOz - 'For Good' Performed by Kristin Chenoweth and Idina Menzel _ WICKED the Musical---TZ0pXUb5jVU",
+        "n_lines": 61,
+        "n_mapped": 60,
+        "n_scored": 56,
+        "offset_s": -0.328,
+        "median_abs_residual_s": 0.214,
+        "n_within_half_s": 43,
+        "n_within_one_s": 53,
+        "pct_within_half_s": 76.8,
+        "pct_within_one_s": 94.6,
+        "gross_count": 1,
+        "worst": [
+          {
+            "line_id": 60,
+            "residual_s": -6.74,
+            "text": "\u266a For good \u266a"
+          }
+        ],
+        "ref": "yt-srt",
+        "drift_s_per_min": 0.0
+      },
+      {
+        "song": "Ariana Grande, John Legend - Beauty and the Beast (From Beauty and the Beast - Official Video)---axySrE0Kg6k",
+        "n_lines": 56,
+        "n_mapped": 34,
+        "n_scored": 30,
+        "offset_s": 10.335,
+        "median_abs_residual_s": 0.184,
+        "n_within_half_s": 26,
+        "n_within_one_s": 28,
+        "pct_within_half_s": 86.7,
+        "pct_within_one_s": 93.3,
+        "gross_count": 1,
+        "worst": [
+          {
+            "line_id": 1,
+            "residual_s": -29.05,
+            "text": "True as it can be"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.0
+      },
+      {
+        "song": "Beauty and the Beast (1991) - Be Our Guest [UHD]---MiraOCjABn8",
+        "n_lines": 77,
+        "n_mapped": 68,
+        "n_scored": 66,
+        "offset_s": -3.523,
+        "median_abs_residual_s": 0.165,
+        "n_within_half_s": 54,
+        "n_within_one_s": 60,
+        "pct_within_half_s": 81.8,
+        "pct_within_one_s": 90.9,
+        "gross_count": 0,
+        "worst": [],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.14
+      },
+      {
+        "song": "Beauty and the Beast (1991) - Belle [UHD]---otxTf5hZ0Yw",
+        "n_lines": 110,
+        "n_mapped": 90,
+        "n_scored": 83,
+        "offset_s": -4.63,
+        "median_abs_residual_s": 0.3,
+        "n_within_half_s": 53,
+        "n_within_one_s": 68,
+        "pct_within_half_s": 63.9,
+        "pct_within_one_s": 81.9,
+        "gross_count": 7,
+        "worst": [
+          {
+            "line_id": 60,
+            "residual_s": 8.1,
+            "text": "Wow, you didn't miss a shot, Gaston"
+          },
+          {
+            "line_id": 61,
+            "residual_s": -6.37,
+            "text": "You're the greatest hunter in the whole world"
+          },
+          {
+            "line_id": 64,
+            "residual_s": -6.3,
+            "text": "And no girl, for that matter"
+          },
+          {
+            "line_id": 63,
+            "residual_s": -5.73,
+            "text": "No beast alive stands a chance against you"
+          },
+          {
+            "line_id": 62,
+            "residual_s": -5.65,
+            "text": "I know"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.0
+      },
+      {
+        "song": "Ed Sheeran - Best Part Of Me (feat. YEBBA) (Live At Abbey Road)---wGyh_53ecgg",
+        "n_lines": 38,
+        "n_mapped": 36,
+        "n_scored": 35,
+        "offset_s": 2.158,
+        "median_abs_residual_s": 0.371,
+        "n_within_half_s": 20,
+        "n_within_one_s": 27,
+        "pct_within_half_s": 57.1,
+        "pct_within_one_s": 77.1,
+        "gross_count": 4,
+        "worst": [
+          {
+            "line_id": 36,
+            "residual_s": -4.33,
+            "text": "Baby, I'm so in love with you"
+          },
+          {
+            "line_id": 15,
+            "residual_s": -3.87,
+            "text": "And lately, everything's making sense, too"
+          },
+          {
+            "line_id": 35,
+            "residual_s": 2.32,
+            "text": "Oh, baby, I'm so in love with you"
+          },
+          {
+            "line_id": 31,
+            "residual_s": 2.05,
+            "text": "With you"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": -1.54
+      },
+      {
+        "song": "Ed\u00a0Sheeran\u00a0&\u00a0Rudimental\u00ad\u00a0- Bloodstream\u00a0[Official\u00a0Music\u00a0Video\u00ad\u00a0YTMAs]---Orq_75kFi8I",
+        "n_lines": 74,
+        "n_mapped": 37,
+        "n_scored": 29,
+        "offset_s": -11.31,
+        "median_abs_residual_s": 1.13,
+        "n_within_half_s": 7,
+        "n_within_one_s": 13,
+        "pct_within_half_s": 24.1,
+        "pct_within_one_s": 44.8,
+        "gross_count": 11,
+        "worst": [
+          {
+            "line_id": 38,
+            "residual_s": -79.69,
+            "text": "All the voices in my mind"
+          },
+          {
+            "line_id": 42,
+            "residual_s": -75.85,
+            "text": "All the voices in my mind"
+          },
+          {
+            "line_id": 39,
+            "residual_s": -74.55,
+            "text": "Callin' out across the line"
+          },
+          {
+            "line_id": 41,
+            "residual_s": -74.36,
+            "text": "Callin' out across the line"
+          },
+          {
+            "line_id": 40,
+            "residual_s": -73.7,
+            "text": "All the voices in my mind"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.0
+      },
+      {
+        "song": "Idina Menzel - Let It Go (from Frozen) (Official Video)---YVVTZgwYwVo",
+        "n_lines": 49,
+        "n_mapped": 30,
+        "n_scored": 29,
+        "offset_s": 1.31,
+        "median_abs_residual_s": 0.43,
+        "n_within_half_s": 15,
+        "n_within_one_s": 22,
+        "pct_within_half_s": 51.7,
+        "pct_within_one_s": 75.9,
+        "gross_count": 2,
+        "worst": [
+          {
+            "line_id": 1,
+            "residual_s": 5.96,
+            "text": "\u266a The snow glows white\non the mountain tonight \u266a"
+          },
+          {
+            "line_id": 35,
+            "residual_s": 3.59,
+            "text": "\u266a My power flurries through\nthe air into the ground \u266a"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.0
+      },
+      {
+        "song": "Jodi Benson - Part of Your World (From 'The Little Mermaid')---SXKlJuO07eM",
+        "n_lines": 55,
+        "n_mapped": 30,
+        "n_scored": 30,
+        "offset_s": -19.125,
+        "median_abs_residual_s": 0.329,
+        "n_within_half_s": 18,
+        "n_within_one_s": 28,
+        "pct_within_half_s": 60.0,
+        "pct_within_one_s": 93.3,
+        "gross_count": 0,
+        "worst": [],
+        "ref": "lrclib",
+        "drift_s_per_min": -0.23
+      },
+      {
+        "song": "Josh Gad - In Summer (From 'Frozen'_Sing-Along)---9tcaM06eGrY",
+        "n_lines": 31,
+        "n_mapped": 15,
+        "n_scored": 15,
+        "offset_s": -0.61,
+        "median_abs_residual_s": 0.28,
+        "n_within_half_s": 10,
+        "n_within_one_s": 12,
+        "pct_within_half_s": 66.7,
+        "pct_within_one_s": 80.0,
+        "gross_count": 0,
+        "worst": [],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.0
+      },
+      {
+        "song": "Justin Timberlake - Mirrors (Official Video)---uuZE_IRwLNI",
+        "n_lines": 123,
+        "n_mapped": 106,
+        "n_scored": 68,
+        "offset_s": 5.855,
+        "median_abs_residual_s": 0.41,
+        "n_within_half_s": 37,
+        "n_within_one_s": 57,
+        "pct_within_half_s": 54.4,
+        "pct_within_one_s": 83.8,
+        "gross_count": 5,
+        "worst": [
+          {
+            "line_id": 93,
+            "residual_s": 3.8,
+            "text": "\u266a And I can't wait, wait, wait,\nwait, wait to get you home \u266a"
+          },
+          {
+            "line_id": 58,
+            "residual_s": 3.16,
+            "text": "\u266a Tomorrow's a mystery, oh \u266a"
+          },
+          {
+            "line_id": 32,
+            "residual_s": -3.05,
+            "text": "\u266a 'Cause I see truth\nsomewhere in your eyes \u266a"
+          },
+          {
+            "line_id": 103,
+            "residual_s": -2.29,
+            "text": "\u266a Girl, you're my reflection,\nall I see is you \u266a"
+          },
+          {
+            "line_id": 47,
+            "residual_s": -2.22,
+            "text": "\u266a It was easy comin' back here\nto you once I figured it out \u266a"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": -0.08
+      },
+      {
+        "song": "Justin Timberlake - Selfish (Official Video)---je0roKRn3nY",
+        "n_lines": 79,
+        "n_mapped": 30,
+        "n_scored": 30,
+        "offset_s": 7.235,
+        "median_abs_residual_s": 0.09,
+        "n_within_half_s": 27,
+        "n_within_one_s": 29,
+        "pct_within_half_s": 90.0,
+        "pct_within_one_s": 96.7,
+        "gross_count": 0,
+        "worst": [],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.0
+      },
+      {
+        "song": "Mena Massoud, Naomi Scott - A Whole New World (from Aladdin) (Official Video)---eitDnP0_83k",
+        "n_lines": 64,
+        "n_mapped": 30,
+        "n_scored": 25,
+        "offset_s": 23.6,
+        "median_abs_residual_s": 0.22,
+        "n_within_half_s": 21,
+        "n_within_one_s": 22,
+        "pct_within_half_s": 84.0,
+        "pct_within_one_s": 88.0,
+        "gross_count": 2,
+        "worst": [
+          {
+            "line_id": 7,
+            "residual_s": 5.41,
+            "text": "I can show you the world"
+          },
+          {
+            "line_id": 58,
+            "residual_s": -2.79,
+            "text": "A whole new world"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.0
+      },
+      {
+        "song": "Mulan _ I'll Make a Man Out of You _ @disneykids---vGfJeW_CcFY",
+        "n_lines": 47,
+        "n_mapped": 42,
+        "n_scored": 33,
+        "offset_s": 35.478,
+        "median_abs_residual_s": 0.143,
+        "n_within_half_s": 30,
+        "n_within_one_s": 30,
+        "pct_within_half_s": 90.9,
+        "pct_within_one_s": 90.9,
+        "gross_count": 1,
+        "worst": [
+          {
+            "line_id": 41,
+            "residual_s": -2.76,
+            "text": ") We must be swift as a coursing river"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": -2.58
+      },
+      {
+        "song": "Naomi Scott - Speechless (from Aladdin) (Official Video)---mw5VIEIvuMI",
+        "n_lines": 51,
+        "n_mapped": 43,
+        "n_scored": 42,
+        "offset_s": 0.475,
+        "median_abs_residual_s": 0.193,
+        "n_within_half_s": 37,
+        "n_within_one_s": 40,
+        "pct_within_half_s": 88.1,
+        "pct_within_one_s": 95.2,
+        "gross_count": 0,
+        "worst": [],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.0
+      },
+      {
+        "song": "Pocahontas - Colors of the Wind (Blu-ray 1080p HD)---9ThO76peOw0",
+        "n_lines": 37,
+        "n_mapped": 35,
+        "n_scored": 35,
+        "offset_s": -6.513,
+        "median_abs_residual_s": 0.318,
+        "n_within_half_s": 29,
+        "n_within_one_s": 34,
+        "pct_within_half_s": 82.9,
+        "pct_within_one_s": 97.1,
+        "gross_count": 0,
+        "worst": [],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.07
+      },
+      {
+        "song": "The Lion King - Can You Feel The Love Tonight---25QyCxVkXwQ",
+        "n_lines": 34,
+        "n_mapped": 30,
+        "n_scored": 29,
+        "offset_s": 0.05,
+        "median_abs_residual_s": 0.46,
+        "n_within_half_s": 16,
+        "n_within_one_s": 23,
+        "pct_within_half_s": 55.2,
+        "pct_within_one_s": 79.3,
+        "gross_count": 1,
+        "worst": [
+          {
+            "line_id": 32,
+            "residual_s": -2.17,
+            "text": "\u266a His carefree days\nwith us are history \u266a"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.0
+      },
+      {
+        "song": "The Lion King - Hakuna Matata Music Video I 4K Ultra HD---fwLxDUQBdEg",
+        "n_lines": 40,
+        "n_mapped": 20,
+        "n_scored": 18,
+        "offset_s": 9.001,
+        "median_abs_residual_s": 0.787,
+        "n_within_half_s": 8,
+        "n_within_one_s": 12,
+        "pct_within_half_s": 44.4,
+        "pct_within_one_s": 66.7,
+        "gross_count": 3,
+        "worst": [
+          {
+            "line_id": 28,
+            "residual_s": -50.15,
+            "text": "Hakuna matata"
+          },
+          {
+            "line_id": 33,
+            "residual_s": 37.63,
+            "text": "Hakuna matata"
+          },
+          {
+            "line_id": 5,
+            "residual_s": 11.03,
+            "text": "Why, when he was a young warthog"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": -0.09
+      },
+      {
+        "song": "The Next Ten Minutes Lyrics---0j8kL24ph8U",
+        "n_lines": 71,
+        "n_mapped": 66,
+        "n_scored": 63,
+        "offset_s": 0.604,
+        "median_abs_residual_s": 0.509,
+        "n_within_half_s": 31,
+        "n_within_one_s": 54,
+        "pct_within_half_s": 49.2,
+        "pct_within_one_s": 85.7,
+        "gross_count": 5,
+        "worst": [
+          {
+            "line_id": 66,
+            "residual_s": -12.85,
+            "text": "I do"
+          },
+          {
+            "line_id": 50,
+            "residual_s": -9.06,
+            "text": "Forever"
+          },
+          {
+            "line_id": 26,
+            "residual_s": -4.33,
+            "text": "There are so many lives I wanna share with you"
+          },
+          {
+            "line_id": 45,
+            "residual_s": -3.4,
+            "text": "I want to bear your child"
+          },
+          {
+            "line_id": 63,
+            "residual_s": -2.79,
+            "text": "I do"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.03
+      },
+      {
+        "song": "ZAYN, Zhavia Ward - A Whole New World (End Title) (From 'Aladdin')---rg_zwK_sSEY",
+        "n_lines": 72,
+        "n_mapped": 35,
+        "n_scored": 35,
+        "offset_s": -1.53,
+        "median_abs_residual_s": 0.361,
+        "n_within_half_s": 24,
+        "n_within_one_s": 32,
+        "pct_within_half_s": 68.6,
+        "pct_within_one_s": 91.4,
+        "gross_count": 1,
+        "worst": [
+          {
+            "line_id": 42,
+            "residual_s": 4.2,
+            "text": "A whole new world"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.1
+      }
+    ],
+    "S": [
+      {
+        "song": "#OutOfOz - 'For Good' Performed by Kristin Chenoweth and Idina Menzel _ WICKED the Musical---TZ0pXUb5jVU",
+        "n_lines": 61,
+        "n_mapped": 60,
+        "n_scored": 56,
+        "offset_s": -0.328,
+        "median_abs_residual_s": 0.214,
+        "n_within_half_s": 43,
+        "n_within_one_s": 53,
+        "pct_within_half_s": 76.8,
+        "pct_within_one_s": 94.6,
+        "gross_count": 1,
+        "worst": [
+          {
+            "line_id": 60,
+            "residual_s": -6.74,
+            "text": "\u266a For good \u266a"
+          }
+        ],
+        "ref": "yt-srt",
+        "drift_s_per_min": 0.0
+      },
+      {
+        "song": "Ariana Grande, John Legend - Beauty and the Beast (From Beauty and the Beast - Official Video)---axySrE0Kg6k",
+        "n_lines": 56,
+        "n_mapped": 34,
+        "n_scored": 30,
+        "offset_s": 10.335,
+        "median_abs_residual_s": 0.184,
+        "n_within_half_s": 26,
+        "n_within_one_s": 28,
+        "pct_within_half_s": 86.7,
+        "pct_within_one_s": 93.3,
+        "gross_count": 1,
+        "worst": [
+          {
+            "line_id": 1,
+            "residual_s": -29.05,
+            "text": "True as it can be"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.0
+      },
+      {
+        "song": "Beauty and the Beast (1991) - Be Our Guest [UHD]---MiraOCjABn8",
+        "n_lines": 77,
+        "n_mapped": 68,
+        "n_scored": 66,
+        "offset_s": -3.517,
+        "median_abs_residual_s": 0.172,
+        "n_within_half_s": 55,
+        "n_within_one_s": 60,
+        "pct_within_half_s": 83.3,
+        "pct_within_one_s": 90.9,
+        "gross_count": 0,
+        "worst": [],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.15
+      },
+      {
+        "song": "Beauty and the Beast (1991) - Belle [UHD]---otxTf5hZ0Yw",
+        "n_lines": 110,
+        "n_mapped": 90,
+        "n_scored": 83,
+        "offset_s": -4.62,
+        "median_abs_residual_s": 0.295,
+        "n_within_half_s": 53,
+        "n_within_one_s": 68,
+        "pct_within_half_s": 63.9,
+        "pct_within_one_s": 81.9,
+        "gross_count": 7,
+        "worst": [
+          {
+            "line_id": 60,
+            "residual_s": 8.09,
+            "text": "Wow, you didn't miss a shot, Gaston"
+          },
+          {
+            "line_id": 61,
+            "residual_s": -6.38,
+            "text": "You're the greatest hunter in the whole world"
+          },
+          {
+            "line_id": 64,
+            "residual_s": -6.31,
+            "text": "And no girl, for that matter"
+          },
+          {
+            "line_id": 63,
+            "residual_s": -5.74,
+            "text": "No beast alive stands a chance against you"
+          },
+          {
+            "line_id": 62,
+            "residual_s": -5.66,
+            "text": "I know"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.0
+      },
+      {
+        "song": "Ed Sheeran - Best Part Of Me (feat. YEBBA) (Live At Abbey Road)---wGyh_53ecgg",
+        "n_lines": 38,
+        "n_mapped": 36,
+        "n_scored": 35,
+        "offset_s": 2.02,
+        "median_abs_residual_s": 0.422,
+        "n_within_half_s": 18,
+        "n_within_one_s": 27,
+        "pct_within_half_s": 51.4,
+        "pct_within_one_s": 77.1,
+        "gross_count": 3,
+        "worst": [
+          {
+            "line_id": 36,
+            "residual_s": -4.45,
+            "text": "Baby, I'm so in love with you"
+          },
+          {
+            "line_id": 15,
+            "residual_s": -3.84,
+            "text": "And lately, everything's making sense, too"
+          },
+          {
+            "line_id": 35,
+            "residual_s": 2.22,
+            "text": "Oh, baby, I'm so in love with you"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": -1.47
+      },
+      {
+        "song": "Ed\u00a0Sheeran\u00a0&\u00a0Rudimental\u00ad\u00a0- Bloodstream\u00a0[Official\u00a0Music\u00a0Video\u00ad\u00a0YTMAs]---Orq_75kFi8I",
+        "n_lines": 74,
+        "n_mapped": 37,
+        "n_scored": 28,
+        "offset_s": -11.272,
+        "median_abs_residual_s": 1.083,
+        "n_within_half_s": 7,
+        "n_within_one_s": 13,
+        "pct_within_half_s": 25.0,
+        "pct_within_one_s": 46.4,
+        "gross_count": 10,
+        "worst": [
+          {
+            "line_id": 38,
+            "residual_s": -79.76,
+            "text": "All the voices in my mind"
+          },
+          {
+            "line_id": 42,
+            "residual_s": -75.89,
+            "text": "All the voices in my mind"
+          },
+          {
+            "line_id": 39,
+            "residual_s": -74.59,
+            "text": "Callin' out across the line"
+          },
+          {
+            "line_id": 41,
+            "residual_s": -74.42,
+            "text": "Callin' out across the line"
+          },
+          {
+            "line_id": 40,
+            "residual_s": -73.76,
+            "text": "All the voices in my mind"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.0
+      },
+      {
+        "song": "Idina Menzel - Let It Go (from Frozen) (Official Video)---YVVTZgwYwVo",
+        "n_lines": 49,
+        "n_mapped": 30,
+        "n_scored": 29,
+        "offset_s": 1.31,
+        "median_abs_residual_s": 0.43,
+        "n_within_half_s": 15,
+        "n_within_one_s": 22,
+        "pct_within_half_s": 51.7,
+        "pct_within_one_s": 75.9,
+        "gross_count": 2,
+        "worst": [
+          {
+            "line_id": 1,
+            "residual_s": 5.96,
+            "text": "\u266a The snow glows white\non the mountain tonight \u266a"
+          },
+          {
+            "line_id": 35,
+            "residual_s": 3.59,
+            "text": "\u266a My power flurries through\nthe air into the ground \u266a"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.0
+      },
+      {
+        "song": "Jodi Benson - Part of Your World (From 'The Little Mermaid')---SXKlJuO07eM",
+        "n_lines": 55,
+        "n_mapped": 30,
+        "n_scored": 30,
+        "offset_s": -19.125,
+        "median_abs_residual_s": 0.329,
+        "n_within_half_s": 18,
+        "n_within_one_s": 28,
+        "pct_within_half_s": 60.0,
+        "pct_within_one_s": 93.3,
+        "gross_count": 0,
+        "worst": [],
+        "ref": "lrclib",
+        "drift_s_per_min": -0.23
+      },
+      {
+        "song": "Josh Gad - In Summer (From 'Frozen'_Sing-Along)---9tcaM06eGrY",
+        "n_lines": 31,
+        "n_mapped": 15,
+        "n_scored": 15,
+        "offset_s": -0.7,
+        "median_abs_residual_s": 0.25,
+        "n_within_half_s": 10,
+        "n_within_one_s": 12,
+        "pct_within_half_s": 66.7,
+        "pct_within_one_s": 80.0,
+        "gross_count": 0,
+        "worst": [],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.0
+      },
+      {
+        "song": "Justin Timberlake - Mirrors (Official Video)---uuZE_IRwLNI",
+        "n_lines": 123,
+        "n_mapped": 106,
+        "n_scored": 68,
+        "offset_s": 5.855,
+        "median_abs_residual_s": 0.41,
+        "n_within_half_s": 37,
+        "n_within_one_s": 57,
+        "pct_within_half_s": 54.4,
+        "pct_within_one_s": 83.8,
+        "gross_count": 5,
+        "worst": [
+          {
+            "line_id": 93,
+            "residual_s": 3.8,
+            "text": "\u266a And I can't wait, wait, wait,\nwait, wait to get you home \u266a"
+          },
+          {
+            "line_id": 58,
+            "residual_s": 3.16,
+            "text": "\u266a Tomorrow's a mystery, oh \u266a"
+          },
+          {
+            "line_id": 32,
+            "residual_s": -3.05,
+            "text": "\u266a 'Cause I see truth\nsomewhere in your eyes \u266a"
+          },
+          {
+            "line_id": 103,
+            "residual_s": -2.29,
+            "text": "\u266a Girl, you're my reflection,\nall I see is you \u266a"
+          },
+          {
+            "line_id": 47,
+            "residual_s": -2.22,
+            "text": "\u266a It was easy comin' back here\nto you once I figured it out \u266a"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": -0.08
+      },
+      {
+        "song": "Justin Timberlake - Selfish (Official Video)---je0roKRn3nY",
+        "n_lines": 79,
+        "n_mapped": 30,
+        "n_scored": 30,
+        "offset_s": 7.235,
+        "median_abs_residual_s": 0.09,
+        "n_within_half_s": 27,
+        "n_within_one_s": 29,
+        "pct_within_half_s": 90.0,
+        "pct_within_one_s": 96.7,
+        "gross_count": 0,
+        "worst": [],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.0
+      },
+      {
+        "song": "Mena Massoud, Naomi Scott - A Whole New World (from Aladdin) (Official Video)---eitDnP0_83k",
+        "n_lines": 64,
+        "n_mapped": 30,
+        "n_scored": 28,
+        "offset_s": 23.546,
+        "median_abs_residual_s": 0.165,
+        "n_within_half_s": 23,
+        "n_within_one_s": 24,
+        "pct_within_half_s": 82.1,
+        "pct_within_one_s": 85.7,
+        "gross_count": 2,
+        "worst": [
+          {
+            "line_id": 7,
+            "residual_s": 5.46,
+            "text": "I can show you the world"
+          },
+          {
+            "line_id": 58,
+            "residual_s": -4.14,
+            "text": "A whole new world"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.0
+      },
+      {
+        "song": "Mulan _ I'll Make a Man Out of You _ @disneykids---vGfJeW_CcFY",
+        "n_lines": 47,
+        "n_mapped": 42,
+        "n_scored": 33,
+        "offset_s": 35.478,
+        "median_abs_residual_s": 0.143,
+        "n_within_half_s": 30,
+        "n_within_one_s": 30,
+        "pct_within_half_s": 90.9,
+        "pct_within_one_s": 90.9,
+        "gross_count": 1,
+        "worst": [
+          {
+            "line_id": 41,
+            "residual_s": -2.76,
+            "text": ") We must be swift as a coursing river"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": -2.58
+      },
+      {
+        "song": "Naomi Scott - Speechless (from Aladdin) (Official Video)---mw5VIEIvuMI",
+        "n_lines": 51,
+        "n_mapped": 43,
+        "n_scored": 42,
+        "offset_s": 0.475,
+        "median_abs_residual_s": 0.193,
+        "n_within_half_s": 37,
+        "n_within_one_s": 40,
+        "pct_within_half_s": 88.1,
+        "pct_within_one_s": 95.2,
+        "gross_count": 0,
+        "worst": [],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.0
+      },
+      {
+        "song": "Pocahontas - Colors of the Wind (Blu-ray 1080p HD)---9ThO76peOw0",
+        "n_lines": 37,
+        "n_mapped": 35,
+        "n_scored": 35,
+        "offset_s": -6.513,
+        "median_abs_residual_s": 0.318,
+        "n_within_half_s": 29,
+        "n_within_one_s": 34,
+        "pct_within_half_s": 82.9,
+        "pct_within_one_s": 97.1,
+        "gross_count": 0,
+        "worst": [],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.07
+      },
+      {
+        "song": "The Lion King - Can You Feel The Love Tonight---25QyCxVkXwQ",
+        "n_lines": 34,
+        "n_mapped": 30,
+        "n_scored": 29,
+        "offset_s": 0.05,
+        "median_abs_residual_s": 0.46,
+        "n_within_half_s": 16,
+        "n_within_one_s": 23,
+        "pct_within_half_s": 55.2,
+        "pct_within_one_s": 79.3,
+        "gross_count": 1,
+        "worst": [
+          {
+            "line_id": 32,
+            "residual_s": -2.17,
+            "text": "\u266a His carefree days\nwith us are history \u266a"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.0
+      },
+      {
+        "song": "The Lion King - Hakuna Matata Music Video I 4K Ultra HD---fwLxDUQBdEg",
+        "n_lines": 40,
+        "n_mapped": 20,
+        "n_scored": 18,
+        "offset_s": 9.001,
+        "median_abs_residual_s": 0.787,
+        "n_within_half_s": 8,
+        "n_within_one_s": 12,
+        "pct_within_half_s": 44.4,
+        "pct_within_one_s": 66.7,
+        "gross_count": 3,
+        "worst": [
+          {
+            "line_id": 28,
+            "residual_s": -50.15,
+            "text": "Hakuna matata"
+          },
+          {
+            "line_id": 33,
+            "residual_s": 37.63,
+            "text": "Hakuna matata"
+          },
+          {
+            "line_id": 5,
+            "residual_s": 11.03,
+            "text": "Why, when he was a young warthog"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": -0.09
+      },
+      {
+        "song": "The Next Ten Minutes Lyrics---0j8kL24ph8U",
+        "n_lines": 71,
+        "n_mapped": 66,
+        "n_scored": 63,
+        "offset_s": 0.617,
+        "median_abs_residual_s": 0.467,
+        "n_within_half_s": 33,
+        "n_within_one_s": 54,
+        "pct_within_half_s": 52.4,
+        "pct_within_one_s": 85.7,
+        "gross_count": 5,
+        "worst": [
+          {
+            "line_id": 66,
+            "residual_s": -12.84,
+            "text": "I do"
+          },
+          {
+            "line_id": 50,
+            "residual_s": -9.05,
+            "text": "Forever"
+          },
+          {
+            "line_id": 26,
+            "residual_s": -4.34,
+            "text": "There are so many lives I wanna share with you"
+          },
+          {
+            "line_id": 45,
+            "residual_s": -3.37,
+            "text": "I want to bear your child"
+          },
+          {
+            "line_id": 63,
+            "residual_s": -2.78,
+            "text": "I do"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.03
+      },
+      {
+        "song": "ZAYN, Zhavia Ward - A Whole New World (End Title) (From 'Aladdin')---rg_zwK_sSEY",
+        "n_lines": 72,
+        "n_mapped": 35,
+        "n_scored": 35,
+        "offset_s": -1.522,
+        "median_abs_residual_s": 0.371,
+        "n_within_half_s": 24,
+        "n_within_one_s": 32,
+        "pct_within_half_s": 68.6,
+        "pct_within_one_s": 91.4,
+        "gross_count": 1,
+        "worst": [
+          {
+            "line_id": 42,
+            "residual_s": 4.2,
+            "text": "A whole new world"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.1
+      }
+    ],
+    "OFF": [
+      {
+        "song": "#OutOfOz - 'For Good' Performed by Kristin Chenoweth and Idina Menzel _ WICKED the Musical---TZ0pXUb5jVU",
+        "n_lines": 61,
+        "n_mapped": 60,
+        "n_scored": 56,
+        "offset_s": -0.328,
+        "median_abs_residual_s": 0.214,
+        "n_within_half_s": 43,
+        "n_within_one_s": 53,
+        "pct_within_half_s": 76.8,
+        "pct_within_one_s": 94.6,
+        "gross_count": 1,
+        "worst": [
+          {
+            "line_id": 60,
+            "residual_s": -6.74,
+            "text": "\u266a For good \u266a"
+          }
+        ],
+        "ref": "yt-srt",
+        "drift_s_per_min": 0.0
+      },
+      {
+        "song": "Ariana Grande, John Legend - Beauty and the Beast (From Beauty and the Beast - Official Video)---axySrE0Kg6k",
+        "n_lines": 56,
+        "n_mapped": 34,
+        "n_scored": 30,
+        "offset_s": 10.335,
+        "median_abs_residual_s": 0.184,
+        "n_within_half_s": 26,
+        "n_within_one_s": 28,
+        "pct_within_half_s": 86.7,
+        "pct_within_one_s": 93.3,
+        "gross_count": 1,
+        "worst": [
+          {
+            "line_id": 1,
+            "residual_s": -29.05,
+            "text": "True as it can be"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.0
+      },
+      {
+        "song": "Beauty and the Beast (1991) - Be Our Guest [UHD]---MiraOCjABn8",
+        "n_lines": 77,
+        "n_mapped": 68,
+        "n_scored": 66,
+        "offset_s": -3.6,
+        "median_abs_residual_s": 0.167,
+        "n_within_half_s": 55,
+        "n_within_one_s": 59,
+        "pct_within_half_s": 83.3,
+        "pct_within_one_s": 89.4,
+        "gross_count": 0,
+        "worst": [],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.17
+      },
+      {
+        "song": "Beauty and the Beast (1991) - Belle [UHD]---otxTf5hZ0Yw",
+        "n_lines": 110,
+        "n_mapped": 90,
+        "n_scored": 83,
+        "offset_s": -4.585,
+        "median_abs_residual_s": 0.288,
+        "n_within_half_s": 50,
+        "n_within_one_s": 67,
+        "pct_within_half_s": 60.2,
+        "pct_within_one_s": 80.7,
+        "gross_count": 7,
+        "worst": [
+          {
+            "line_id": 60,
+            "residual_s": 8.21,
+            "text": "Wow, you didn't miss a shot, Gaston"
+          },
+          {
+            "line_id": 61,
+            "residual_s": -6.32,
+            "text": "You're the greatest hunter in the whole world"
+          },
+          {
+            "line_id": 64,
+            "residual_s": -6.25,
+            "text": "And no girl, for that matter"
+          },
+          {
+            "line_id": 63,
+            "residual_s": -5.68,
+            "text": "No beast alive stands a chance against you"
+          },
+          {
+            "line_id": 62,
+            "residual_s": -5.6,
+            "text": "I know"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": -0.03
+      },
+      {
+        "song": "Ed Sheeran - Best Part Of Me (feat. YEBBA) (Live At Abbey Road)---wGyh_53ecgg",
+        "n_lines": 38,
+        "n_mapped": 36,
+        "n_scored": 35,
+        "offset_s": 2.071,
+        "median_abs_residual_s": 0.435,
+        "n_within_half_s": 19,
+        "n_within_one_s": 29,
+        "pct_within_half_s": 54.3,
+        "pct_within_one_s": 82.9,
+        "gross_count": 4,
+        "worst": [
+          {
+            "line_id": 36,
+            "residual_s": -4.36,
+            "text": "Baby, I'm so in love with you"
+          },
+          {
+            "line_id": 15,
+            "residual_s": -3.83,
+            "text": "And lately, everything's making sense, too"
+          },
+          {
+            "line_id": 35,
+            "residual_s": 2.3,
+            "text": "Oh, baby, I'm so in love with you"
+          },
+          {
+            "line_id": 31,
+            "residual_s": 2.05,
+            "text": "With you"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": -1.51
+      },
+      {
+        "song": "Ed\u00a0Sheeran\u00a0&\u00a0Rudimental\u00ad\u00a0- Bloodstream\u00a0[Official\u00a0Music\u00a0Video\u00ad\u00a0YTMAs]---Orq_75kFi8I",
+        "n_lines": 74,
+        "n_mapped": 37,
+        "n_scored": 28,
+        "offset_s": -11.505,
+        "median_abs_residual_s": 1.045,
+        "n_within_half_s": 8,
+        "n_within_one_s": 14,
+        "pct_within_half_s": 28.6,
+        "pct_within_one_s": 50.0,
+        "gross_count": 10,
+        "worst": [
+          {
+            "line_id": 38,
+            "residual_s": -79.53,
+            "text": "All the voices in my mind"
+          },
+          {
+            "line_id": 42,
+            "residual_s": -75.66,
+            "text": "All the voices in my mind"
+          },
+          {
+            "line_id": 39,
+            "residual_s": -74.36,
+            "text": "Callin' out across the line"
+          },
+          {
+            "line_id": 41,
+            "residual_s": -74.18,
+            "text": "Callin' out across the line"
+          },
+          {
+            "line_id": 40,
+            "residual_s": -73.53,
+            "text": "All the voices in my mind"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.0
+      },
+      {
+        "song": "Idina Menzel - Let It Go (from Frozen) (Official Video)---YVVTZgwYwVo",
+        "n_lines": 49,
+        "n_mapped": 30,
+        "n_scored": 29,
+        "offset_s": 1.31,
+        "median_abs_residual_s": 0.43,
+        "n_within_half_s": 15,
+        "n_within_one_s": 22,
+        "pct_within_half_s": 51.7,
+        "pct_within_one_s": 75.9,
+        "gross_count": 2,
+        "worst": [
+          {
+            "line_id": 1,
+            "residual_s": 5.96,
+            "text": "\u266a The snow glows white\non the mountain tonight \u266a"
+          },
+          {
+            "line_id": 35,
+            "residual_s": 3.59,
+            "text": "\u266a My power flurries through\nthe air into the ground \u266a"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.0
+      },
+      {
+        "song": "Jodi Benson - Part of Your World (From 'The Little Mermaid')---SXKlJuO07eM",
+        "n_lines": 55,
+        "n_mapped": 30,
+        "n_scored": 30,
+        "offset_s": -19.125,
+        "median_abs_residual_s": 0.329,
+        "n_within_half_s": 18,
+        "n_within_one_s": 27,
+        "pct_within_half_s": 60.0,
+        "pct_within_one_s": 90.0,
+        "gross_count": 0,
+        "worst": [],
+        "ref": "lrclib",
+        "drift_s_per_min": -0.23
+      },
+      {
+        "song": "Josh Gad - In Summer (From 'Frozen'_Sing-Along)---9tcaM06eGrY",
+        "n_lines": 31,
+        "n_mapped": 15,
+        "n_scored": 15,
+        "offset_s": -0.81,
+        "median_abs_residual_s": 0.25,
+        "n_within_half_s": 8,
+        "n_within_one_s": 12,
+        "pct_within_half_s": 53.3,
+        "pct_within_one_s": 80.0,
+        "gross_count": 0,
+        "worst": [],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.0
+      },
+      {
+        "song": "Justin Timberlake - Mirrors (Official Video)---uuZE_IRwLNI",
+        "n_lines": 123,
+        "n_mapped": 106,
+        "n_scored": 68,
+        "offset_s": 5.855,
+        "median_abs_residual_s": 0.41,
+        "n_within_half_s": 37,
+        "n_within_one_s": 57,
+        "pct_within_half_s": 54.4,
+        "pct_within_one_s": 83.8,
+        "gross_count": 5,
+        "worst": [
+          {
+            "line_id": 93,
+            "residual_s": 3.8,
+            "text": "\u266a And I can't wait, wait, wait,\nwait, wait to get you home \u266a"
+          },
+          {
+            "line_id": 58,
+            "residual_s": 3.16,
+            "text": "\u266a Tomorrow's a mystery, oh \u266a"
+          },
+          {
+            "line_id": 32,
+            "residual_s": -3.05,
+            "text": "\u266a 'Cause I see truth\nsomewhere in your eyes \u266a"
+          },
+          {
+            "line_id": 103,
+            "residual_s": -2.29,
+            "text": "\u266a Girl, you're my reflection,\nall I see is you \u266a"
+          },
+          {
+            "line_id": 47,
+            "residual_s": -2.22,
+            "text": "\u266a It was easy comin' back here\nto you once I figured it out \u266a"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": -0.08
+      },
+      {
+        "song": "Justin Timberlake - Selfish (Official Video)---je0roKRn3nY",
+        "n_lines": 79,
+        "n_mapped": 30,
+        "n_scored": 30,
+        "offset_s": 7.235,
+        "median_abs_residual_s": 0.09,
+        "n_within_half_s": 27,
+        "n_within_one_s": 29,
+        "pct_within_half_s": 90.0,
+        "pct_within_one_s": 96.7,
+        "gross_count": 0,
+        "worst": [],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.0
+      },
+      {
+        "song": "Mena Massoud, Naomi Scott - A Whole New World (from Aladdin) (Official Video)---eitDnP0_83k",
+        "n_lines": 64,
+        "n_mapped": 30,
+        "n_scored": 28,
+        "offset_s": 23.546,
+        "median_abs_residual_s": 0.191,
+        "n_within_half_s": 22,
+        "n_within_one_s": 24,
+        "pct_within_half_s": 78.6,
+        "pct_within_one_s": 85.7,
+        "gross_count": 2,
+        "worst": [
+          {
+            "line_id": 7,
+            "residual_s": 5.46,
+            "text": "I can show you the world"
+          },
+          {
+            "line_id": 58,
+            "residual_s": -4.14,
+            "text": "A whole new world"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.0
+      },
+      {
+        "song": "Mulan _ I'll Make a Man Out of You _ @disneykids---vGfJeW_CcFY",
+        "n_lines": 47,
+        "n_mapped": 42,
+        "n_scored": 33,
+        "offset_s": 35.478,
+        "median_abs_residual_s": 0.143,
+        "n_within_half_s": 30,
+        "n_within_one_s": 30,
+        "pct_within_half_s": 90.9,
+        "pct_within_one_s": 90.9,
+        "gross_count": 1,
+        "worst": [
+          {
+            "line_id": 41,
+            "residual_s": -2.76,
+            "text": ") We must be swift as a coursing river"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": -2.58
+      },
+      {
+        "song": "Naomi Scott - Speechless (from Aladdin) (Official Video)---mw5VIEIvuMI",
+        "n_lines": 51,
+        "n_mapped": 43,
+        "n_scored": 42,
+        "offset_s": 0.475,
+        "median_abs_residual_s": 0.193,
+        "n_within_half_s": 37,
+        "n_within_one_s": 40,
+        "pct_within_half_s": 88.1,
+        "pct_within_one_s": 95.2,
+        "gross_count": 0,
+        "worst": [],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.0
+      },
+      {
+        "song": "Pocahontas - Colors of the Wind (Blu-ray 1080p HD)---9ThO76peOw0",
+        "n_lines": 37,
+        "n_mapped": 35,
+        "n_scored": 35,
+        "offset_s": -6.513,
+        "median_abs_residual_s": 0.318,
+        "n_within_half_s": 29,
+        "n_within_one_s": 34,
+        "pct_within_half_s": 82.9,
+        "pct_within_one_s": 97.1,
+        "gross_count": 0,
+        "worst": [],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.07
+      },
+      {
+        "song": "The Lion King - Can You Feel The Love Tonight---25QyCxVkXwQ",
+        "n_lines": 34,
+        "n_mapped": 30,
+        "n_scored": 29,
+        "offset_s": 0.05,
+        "median_abs_residual_s": 0.46,
+        "n_within_half_s": 16,
+        "n_within_one_s": 23,
+        "pct_within_half_s": 55.2,
+        "pct_within_one_s": 79.3,
+        "gross_count": 1,
+        "worst": [
+          {
+            "line_id": 32,
+            "residual_s": -2.17,
+            "text": "\u266a His carefree days\nwith us are history \u266a"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.0
+      },
+      {
+        "song": "The Lion King - Hakuna Matata Music Video I 4K Ultra HD---fwLxDUQBdEg",
+        "n_lines": 40,
+        "n_mapped": 20,
+        "n_scored": 18,
+        "offset_s": 8.391,
+        "median_abs_residual_s": 0.578,
+        "n_within_half_s": 7,
+        "n_within_one_s": 11,
+        "pct_within_half_s": 38.9,
+        "pct_within_one_s": 61.1,
+        "gross_count": 3,
+        "worst": [
+          {
+            "line_id": 28,
+            "residual_s": -50.24,
+            "text": "Hakuna matata"
+          },
+          {
+            "line_id": 33,
+            "residual_s": 37.46,
+            "text": "Hakuna matata"
+          },
+          {
+            "line_id": 5,
+            "residual_s": 11.51,
+            "text": "Why, when he was a young warthog"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.19
+      },
+      {
+        "song": "The Next Ten Minutes Lyrics---0j8kL24ph8U",
+        "n_lines": 71,
+        "n_mapped": 66,
+        "n_scored": 63,
+        "offset_s": 0.563,
+        "median_abs_residual_s": 0.595,
+        "n_within_half_s": 26,
+        "n_within_one_s": 53,
+        "pct_within_half_s": 41.3,
+        "pct_within_one_s": 84.1,
+        "gross_count": 5,
+        "worst": [
+          {
+            "line_id": 66,
+            "residual_s": -12.7,
+            "text": "I do"
+          },
+          {
+            "line_id": 50,
+            "residual_s": -8.93,
+            "text": "Forever"
+          },
+          {
+            "line_id": 26,
+            "residual_s": -4.25,
+            "text": "There are so many lives I wanna share with you"
+          },
+          {
+            "line_id": 45,
+            "residual_s": -3.26,
+            "text": "I want to bear your child"
+          },
+          {
+            "line_id": 63,
+            "residual_s": -2.65,
+            "text": "I do"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.01
+      },
+      {
+        "song": "ZAYN, Zhavia Ward - A Whole New World (End Title) (From 'Aladdin')---rg_zwK_sSEY",
+        "n_lines": 72,
+        "n_mapped": 35,
+        "n_scored": 35,
+        "offset_s": -1.418,
+        "median_abs_residual_s": 0.33,
+        "n_within_half_s": 24,
+        "n_within_one_s": 33,
+        "pct_within_half_s": 68.6,
+        "pct_within_one_s": 94.3,
+        "gross_count": 1,
+        "worst": [
+          {
+            "line_id": 42,
+            "residual_s": 4.3,
+            "text": "A whole new world"
+          }
+        ],
+        "ref": "lrclib",
+        "drift_s_per_min": 0.0
+      }
+    ]
+  },
+  "cost": [
+    {
+      "song": "#OutOfOz - 'For Good' Performed by Kristin Chenoweth and Idina Menzel _ WICKED the Musical---TZ0pXUb5jVU",
+      "align_s": 11.9,
+      "refine_s": 42.4
+    },
+    {
+      "song": "Ariana Grande, John Legend - Beauty and the Beast (From Beauty and the Beast - Official Video)---axySrE0Kg6k",
+      "align_s": 2.3,
+      "refine_s": 7.8
+    },
+    {
+      "song": "Beauty and the Beast (1991) - Be Our Guest [UHD]---MiraOCjABn8",
+      "align_s": 9.0,
+      "refine_s": 40.5
+    },
+    {
+      "song": "Beauty and the Beast (1991) - Belle [UHD]---otxTf5hZ0Yw",
+      "align_s": 16.2,
+      "refine_s": 53.7
+    },
+    {
+      "song": "Ed Sheeran - Best Part Of Me (feat. YEBBA) (Live At Abbey Road)---wGyh_53ecgg",
+      "align_s": 12.8,
+      "refine_s": 38.2
+    },
+    {
+      "song": "Ed\u00a0Sheeran\u00a0&\u00a0Rudimental\u00ad\u00a0- Bloodstream\u00a0[Official\u00a0Music\u00a0Video\u00ad\u00a0YTMAs]---Orq_75kFi8I",
+      "align_s": 18.5,
+      "refine_s": 44.7
+    },
+    {
+      "song": "Idina Menzel - Let It Go (from Frozen) (Official Video)---YVVTZgwYwVo",
+      "align_s": 10.0,
+      "refine_s": 36.2
+    },
+    {
+      "song": "Jodi Benson - Part of Your World (From 'The Little Mermaid')---SXKlJuO07eM",
+      "align_s": 7.9,
+      "refine_s": 29.8
+    },
+    {
+      "song": "Josh Gad - In Summer (From 'Frozen'_Sing-Along)---9tcaM06eGrY",
+      "align_s": 4.6,
+      "refine_s": 21.1
+    },
+    {
+      "song": "Justin Timberlake - Mirrors (Official Video)---uuZE_IRwLNI",
+      "align_s": 22.3,
+      "refine_s": 74.7
+    },
+    {
+      "song": "Justin Timberlake - Selfish (Official Video)---je0roKRn3nY",
+      "align_s": 10.0,
+      "refine_s": 36.4
+    },
+    {
+      "song": "Mena Massoud, Naomi Scott - A Whole New World (from Aladdin) (Official Video)---eitDnP0_83k",
+      "align_s": 18.0,
+      "refine_s": 28.5
+    },
+    {
+      "song": "Mulan _ I'll Make a Man Out of You _ @disneykids---vGfJeW_CcFY",
+      "align_s": 17.1,
+      "refine_s": 18.8
+    },
+    {
+      "song": "Naomi Scott - Speechless (from Aladdin) (Official Video)---mw5VIEIvuMI",
+      "align_s": 7.3,
+      "refine_s": 29.9
+    },
+    {
+      "song": "Pocahontas - Colors of the Wind (Blu-ray 1080p HD)---9ThO76peOw0",
+      "align_s": 5.1,
+      "refine_s": 17.7
+    },
+    {
+      "song": "The Lion King - Can You Feel The Love Tonight---25QyCxVkXwQ",
+      "align_s": 7.0,
+      "refine_s": 31.0
+    },
+    {
+      "song": "The Lion King - Hakuna Matata Music Video I 4K Ultra HD---fwLxDUQBdEg",
+      "align_s": 9.9,
+      "refine_s": 31.6
+    },
+    {
+      "song": "The Next Ten Minutes Lyrics---0j8kL24ph8U",
+      "align_s": 20.9,
+      "refine_s": 69.2
+    },
+    {
+      "song": "ZAYN, Zhavia Ward - A Whole New World (End Title) (From 'Aladdin')---rg_zwK_sSEY",
+      "align_s": 12.3,
+      "refine_s": 37.1
+    }
+  ],
+  "skipped": [
+    [
+      "Backstreet Boys - I Want It That Way (Official HD Video)---4fndeDfaWCg",
+      "reference SRT missing"
+    ],
+    [
+      "Backstreet Boys - Incomplete (Official HD Video)---WVe80iZtlYU",
+      "vocal stem missing"
+    ],
+    [
+      "Backstreet Boys - More Than That (Official HD Video)---1OwfYjemrYw",
+      "vocal stem missing"
+    ],
+    [
+      "Demi Lovato - Confident (Official Video)---cwLRQn61oUY",
+      "reference SRT missing"
+    ],
+    [
+      "NSYNC - Bye Bye Bye (Official Video)---Eo-KmOd3i7s",
+      "bundle lacks cached matcher inputs"
+    ],
+    [
+      "NSYNC - Paradise",
+      "bundle lacks cached matcher inputs"
+    ],
+    [
+      "The Girl In The Bubble (Full Song) _ WICKED - FOR GOOD (4K)---n9YsIrpGmaU",
+      "bundle lacks cached matcher inputs"
+    ]
+  ],
+  "knobs": {
+    "alpha": 2.0,
+    "margin_s": 0.3,
+    "max_edit_ratio": 0.75,
+    "anchor_fallback": true
+  }
+}

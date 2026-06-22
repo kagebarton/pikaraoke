@@ -17,7 +17,7 @@ is a shared desktop, the desktop baseline (D) is subtracted to isolate the
 workload footprint; the production-equivalent peak is reported as
 (workload delta + mpv ~300 MiB) against the 6144 MiB card.
 
-Run:  .venv/Scripts/python.exe plans/probe_concurrent_vram.py
+Run:  .venv/Scripts/python.exe scripts/probe_concurrent_vram.py
 """
 
 from __future__ import annotations
@@ -136,7 +136,11 @@ def main() -> None:
     is_proxy = sep_model != ANVUEW
     print(
         f"Separator model: {sep_model}"
-        + ("  [PROXY for anvuew - same MelBand Roformer arch]" if is_proxy else "  [production de-reverb model]"),
+        + (
+            "  [PROXY for anvuew - same MelBand Roformer arch]"
+            if is_proxy
+            else "  [production de-reverb model]"
+        ),
         flush=True,
     )
 
@@ -291,7 +295,9 @@ def main() -> None:
     print(f"sequential sum   : {s_wall + w_wall:.1f} s")
     print(f"CONCURRENT wall  : {c_wall:.1f} s")
     saved = (s_wall + w_wall) - c_wall
-    print(f"overlap saved    : {saved:.1f} s  ({100 * saved / (s_wall + w_wall):.0f}% of sequential)")
+    print(
+        f"overlap saved    : {saved:.1f} s  ({100 * saved / (s_wall + w_wall):.0f}% of sequential)"
+    )
     print(
         f"vs long pole     : concurrent {c_wall:.1f}s vs W_ONLY {w_wall:.1f}s "
         f"-> demix {'HIDDEN behind refine' if c_wall <= w_wall * 1.15 else 'NOT fully hidden'}"

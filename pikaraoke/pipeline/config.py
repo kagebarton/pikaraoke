@@ -107,7 +107,7 @@ class TranscribeKwargs:
 class RefineKwargs:
     """Splatted into ``model.refine(audio, result, **kwargs)`` — shared by both paths."""
 
-    steps: str = "se"  # 's' = starts, 'e' = ends, 'se' = both
+    steps: str = "s"  # starts only; halves refine vs "se" (see plans/reduce-refine-time.md)
     word_level: bool = True
 
 
@@ -194,7 +194,7 @@ class PipelineConfig:
     # "tiling" — stable-ts transcribe() + order-independent fuzzy
     #   candidate + interval-scheduling DP. Resilient to
     #   remixes/repeats/drift; may drop unmatched lines.
-    # "joint" — align + transcribe (no internal refine) fed simultaneously
+    # "joint" (default) — align + transcribe (no internal refine) fed simultaneously
     #   into a single interval-scheduling DP. Each lyric line scores its
     #   align candidate AND its transcribe candidates; the DP picks the
     #   max-score non-overlapping subset. Per-word timings come from
@@ -203,12 +203,12 @@ class PipelineConfig:
     #   word_timestamps on lines align misplaced. No routing/gating
     #   layer; one matcher covers walk-clean, align-collapse, and
     #   walk-against-wrong-audio (Hakuna-style) failure modes uniformly.
-    # "auto" (default) — run walk, but if stable-ts align() fails more
+    # "auto" — run walk, but if stable-ts align() fails more
     #   than ``align_failure_escalation`` of its segments, discard the
     #   align result and re-run with the tiling matcher on an honest
     #   transcription. The escalation happens *before* the refine pass,
     #   so a discarded align doesn't pay for refine.
-    match_method: str = "auto"
+    match_method: str = "joint"
 
     # Fraction of stable-ts align() segments that must fail before the
     # "auto" gate escalates to the tiling matcher. 0.1 → escalate at >10%

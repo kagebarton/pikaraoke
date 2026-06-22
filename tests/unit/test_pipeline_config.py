@@ -21,8 +21,13 @@ from pikaraoke.pipeline.context import (
 class TestPipelineConfigDefaults:
     """Pin the tunables the stages and matchers read straight off the config."""
 
-    def test_match_method_defaults_to_auto(self):
-        assert PipelineConfig().match_method == "auto"
+    def test_match_method_defaults_to_joint(self):
+        assert PipelineConfig().match_method == "joint"
+
+    def test_refine_steps_defaults_to_starts_only(self):
+        # "s" (starts) ships over "se": halves refine at no line-start cost
+        # (plans/reduce-refine-time.md). Word-end refinement is dropped.
+        assert WhisperModelConfig().refine.steps == "s"
 
     def test_joint_knobs_are_corpus_tuned(self):
         # joint_alpha ships at the 2.0 sweep result, NOT the 4.0 design prior;

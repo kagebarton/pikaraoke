@@ -18,7 +18,7 @@ Phases:
   INFER_ONLY   - N align+refine, separator idle  [the long pole]
   CONCURRENT   - both at once -> is each op slower than standalone?
 
-Run:  .venv/Scripts/python.exe plans/probe_load_during_inference.py [sep_model.ckpt]
+Run:  .venv/Scripts/python.exe scripts/probe_load_during_inference.py [sep_model.ckpt]
 """
 
 from __future__ import annotations

@@ -338,7 +338,7 @@ refine run sequentially, never overlapped (measurement below).
 Probed the per-span optimization's open question — can de-reverb demix
 overlap whisper refine to hide its cost — on an A2000 6 GB (same class as
 the 2060), driving the real StemWorker (anvuew) + WhisperWorker. Drivers:
-`plans/probe_concurrent_vram.py`, `plans/probe_load_during_inference.py`.
+`scripts/probe_concurrent_vram.py`, `scripts/probe_load_during_inference.py`.
 
 - **VRAM is not the constraint.** Both models co-resident *and* inferencing
   peak at ~5.5 GB production-equivalent (workload delta + mpv 300), fitting

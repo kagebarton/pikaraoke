@@ -8,9 +8,9 @@ span in windowed re-align. Refine re-runs the encoder once per step char
 compares steps variants.
 
 Run for each variant:
-  .venv/Scripts/python.exe plans/probe_refine_cost.py se
-  .venv/Scripts/python.exe plans/probe_refine_cost.py s
-  .venv/Scripts/python.exe plans/probe_refine_cost.py e
+  .venv/Scripts/python.exe scripts/probe_refine_cost.py se
+  .venv/Scripts/python.exe scripts/probe_refine_cost.py s
+  .venv/Scripts/python.exe scripts/probe_refine_cost.py e
 
 Times align_check (= align) and refine_from_cached (= refine) separately.
 Synthetic 20 s slice with VAD off (align force-aligns the text); refine does
