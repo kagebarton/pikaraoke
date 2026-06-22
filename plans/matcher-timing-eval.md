@@ -330,7 +330,37 @@ worst song); dereverb swap+demix peak 2132 MiB ≤ karaoke demix peak
 2190; combined two-worker peak 5378 MiB (budget 6144, mpv ~300);
 retry wall-clock ≈ 79 s (38 s swap+demix + dry whisper legs). Later
 refinement: per-span dereverb slices (Mirrors) reuse the same swap
-machinery — one swap, N slices, restore after the last.
+machinery — one swap, N slices, restore after the last; demix then
+refine run sequentially, never overlapped (measurement below).
+
+### Concurrency measurement (2026-06-22): demix‖refine rejected, sequential confirmed
+
+Probed the per-span optimization's open question — can de-reverb demix
+overlap whisper refine to hide its cost — on an A2000 6 GB (same class as
+the 2060), driving the real StemWorker (anvuew) + WhisperWorker. Drivers:
+`plans/probe_concurrent_vram.py`, `plans/probe_load_during_inference.py`.
+
+- **VRAM is not the constraint.** Both models co-resident *and* inferencing
+  peak at ~5.5 GB production-equivalent (workload delta + mpv 300), fitting
+  6144 with 500-1100 MiB headroom. Co-residency (weights + 2 CUDA contexts)
+  is ~4.65 GB; activation sets add only tens of MiB. Confirmed with real
+  anvuew vs the size-matched vocals-roformer proxy (both 871 MiB): concurrent
+  peak 5494 MiB, headroom 650.
+- **Concurrent inference is catastrophically slow — overlap rejected.**
+  demix ‖ refine ran 3.6-11x SLOWER than sequential (a 6 s demix ballooned
+  to 2.5-4.5 min). Cause is WDDM time-slicing contention, not memory pressure
+  (it was *worse* with more free VRAM); no MPS on Windows, so no true
+  co-execution on the target. The "pipeline demix behind refine" idea is dead.
+- **A model LOAD during inference is benign.** Load slows 1.08x; whisper
+  slows 1.8x but only during the ~5 s load window; concurrent wall ≈
+  sequential. The shipped eager-restore-overlaps-re-align design is validated
+  — keep it.
+
+Consequence for per-span de-reverb: keep the free per-span yield gate (from
+pass-1 transcribe) + batched swap (co-residency is cheap on VRAM), but run
+demix and refine SEQUENTIALLY — batch-demix the flagged slices (whisper
+idle), then refine the dry slices (stem idle). Never overlap two GPU
+inferences on this card.
 
 ## Eval reference-mapping fixes (2026-06-11): homoglyph fold + fuzzy cue mapping
 
