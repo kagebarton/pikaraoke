@@ -15,7 +15,7 @@ Per lyric line we build two kinds of candidates:
   how well transcribe corroborates align's placement — low for Hakuna-
   style dialogue mis-matches, high for clean lines.
 * **transcribe candidates.** Found by fuzzy-matching the line's tokens
-  against the transcribe word stream (the existing ``tiling_match.find_candidates``
+  against the transcribe word stream (the ``candidate_match.find_candidates``
   / ``find_anchor_candidates`` machinery). Each carries the matched-token
   count as ``transcribe_match`` and gets an ``align_agreement`` based on
   time overlap with align's predicted window for the same line.
@@ -24,8 +24,8 @@ Each candidate's joint score is::
 
     score = transcribe_match + alpha * align_agreement
 
-The interval-scheduling DP (``_best_tiling_by_time``, reused-in-spirit
-from ``tiling_match.best_tiling`` but on time intervals not token indices)
+The interval-scheduling DP (``_best_tiling_by_time``, a weighted
+interval-scheduling pass over time intervals rather than token indices)
 picks the maximum-score non-overlapping subset. Per-word timings come
 from whichever source won each line — align's refined word timings when
 the align candidate won (so clean-song precision is preserved exactly
@@ -42,7 +42,7 @@ For the design rationale and the corpus that motivated this matcher, see
 import logging
 from bisect import bisect_left
 
-from pikaraoke.lib.tiling_match import (
+from pikaraoke.lib.candidate_match import (
     _build_line_object,
     find_anchor_candidates,
     find_candidates,
@@ -515,8 +515,7 @@ def _best_tiling_by_time(candidates: list[dict]) -> list[dict]:
     align candidate would steal the later position, leaving the
     subsequent line stuck on its (wrong-audio) align candidate —
     observed empirically on Hakuna Matata where the dialogue interlude
-    creates that exact gap. (Order-independent matching is still
-    available via ``match_method='tiling'`` for remix-style content.)
+    creates that exact gap.
 
     Sorted by (line_id, t0) so each candidate's predecessors in the
     iteration order are exactly the candidates that could legally
