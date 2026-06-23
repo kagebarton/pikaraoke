@@ -257,14 +257,16 @@ class PipelineConfig:
     # lyrics — which carry no cue times — the lyrics-fetch stage queries
     # LRCLIB for the best-matching synced variant, persists it as
     # <song>/lyrics/<stem>.lrc, and the same prior calibrates its cues
-    # against the audio. Run FILL-ONLY here (no snap): fills cannot break a
-    # correct audio placement, but LRCLIB cues come from a different master
-    # with no quality control, so snapping a placed line toward a wrong
-    # variant could. Mutually exclusive with the SRT prior by origin.
-    # Step-2 ceiling on the SRT testbed (plans/lrclib-timing-prior.md):
-    # pooled gross 9 -> 6, no song regressed. One LRCLIB query per
-    # Genius-origin song; no candidate -> no cues -> no-op (processes as
-    # today). Zero GPU cost.
+    # against the audio: snap gross disagreements + fill unplaced lines.
+    # LRCLIB cues come from a different master with no quality control, so
+    # the anchor-MAD bail-out gates the variant's timing first — a
+    # wrong-sync variant bails rather than mis-snapping (Mirrors does
+    # exactly this on the testbed). Mutually exclusive with the SRT prior
+    # by origin. SRT testbed, LRCLIB-input/SRT-judge
+    # (plans/lrclib-timing-prior.md): pooled gross 4 -> 3, no song
+    # regressed on any absolute count; +4 lines filled. One LRCLIB query
+    # per Genius-origin song; no candidate -> no cues -> no-op (processes
+    # as today). Zero GPU cost.
     joint_lrclib_prior: bool = True
 
     # De-reverb retry for the joint route. When the whole-stem transcribe

@@ -148,12 +148,10 @@ def evaluate_bundle(
     knobs: dict,
     ref: str,
     prior_cues: dict[int, tuple[float, float]] | None = None,
-    snap: bool = True,
 ) -> tuple[SongScore, dict | None] | str:
     """Score one bundle; returns ``(score, prior_stats)`` or a skip-reason
     string. ``prior_cues`` applies the timing prior to the replayed
-    placement (replay mode only). ``snap`` mirrors production: True for the
-    SRT prior, False (fill-only) for the LRCLIB prior."""
+    placement (replay mode only)."""
     lines = bundle["lyrics"]["lines"]
     mapping = map_lines_to_cues(lines, cue_texts)
     if not mapping:
@@ -183,7 +181,6 @@ def evaluate_bundle(
                 prior_cues,
                 margin_s=knobs["margin_s"],
                 max_edit_ratio=knobs["max_edit_ratio"],
-                snap=snap,
             )
         placed = placed_starts_from_line_objects(line_objects)
 
@@ -513,8 +510,6 @@ def main() -> int:
             knobs=knobs,
             ref=ref_kind,
             prior_cues=prior_cues,
-            # Production ships the LRCLIB prior fill-only; the SRT prior snaps.
-            snap=not args.lrclib_prior,
         )
         if isinstance(result, str):
             skipped.append((stem, result))

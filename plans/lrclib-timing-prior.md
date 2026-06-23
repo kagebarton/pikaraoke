@@ -2,10 +2,13 @@
 
 Model: Claude Fable 5
 
-Status: **steps 1–3 done. Step 3 shipped 2026-06-22 (fill-only,
-default-on): LRCLIB is now a live matcher input for Genius-origin
-songs.** Steps 1–2 were offline measurement (no regressions, safe
-bails); step 3 productionized the prior after the constraint call below.
+Status: **steps 1–4 done. Step 3 shipped 2026-06-22 (fill-only,
+default-on); step 4 promoted snap 2026-06-23 — the LRCLIB prior now
+repairs gross misplacements as well as filling, the fill-only mode is
+removed.** LRCLIB is a live matcher input for Genius-origin songs. Steps
+1–2 were offline measurement (no regressions, safe bails); step 3
+productionized the prior after the constraint call below; step 4 flipped
+snap on after re-confirming the step-2 ceiling through the shipped path.
 
 ## Constraint — RESOLVED (relaxed 2026-06-22)
 
@@ -250,7 +253,7 @@ What shipped:
 - **Schema v5** (`alignment_capture.py`): the bundle records
   `lyrics.lrclib` (the persisted `.lrc` path + the specific LRCLIB
   search result: id/track/artist/album/duration + query),
-  `joint_stats.lrclib_prior` (offset/MAD/fills, `snap_enabled`),
+  `joint_stats.lrclib_prior` (offset/MAD/snapped/filled line ids),
   `media_duration_s`, and a completed `config_snapshot` (joint/prior
   knobs). The eval's `select_lrclib_candidate`/`cue_spans_for_lines`
   delegate to the shipped `lrclib` module, and its `--lrclib-prior` now
@@ -273,9 +276,7 @@ Incomplete 2→0 and More Than That 1→0 were snaps). Re-measured with
 
 So the conservative first ship buys **coverage only** on the testbed —
 the gross wins need snap. Step-2 showed snap repaired those grosses with
-zero collateral (4 clean snaps / 3 songs), so promoting snap is the
-obvious next lever; deferred here pending the user's call, since txt
-songs (the real target) can't grade snap's cue-side gross rate offline.
+zero collateral (4 clean snaps / 3 songs); snap was promoted in step 4.
 
 Eval after shipping (unchanged plan): txt songs lose LRCLIB as an
 honest reference. Claims stay on the srt-sourced testbed (input LRCLIB /
@@ -283,6 +284,43 @@ judge SRT); txt-song improvements are reported as coverage/render deltas
 or judged by ear, unless a second reference appears (YT manual captions
 on a txt-sourced song's video — empty set in today's corpus, worth
 re-checking as the library grows).
+
+## Step 4 — snap promotion (2026-06-23)
+
+The fill-only first ship was conservative because snap on LRCLIB cues
+had no offline grade on the real target (txt songs). The justification
+for promoting it anyway is that the anchor-MAD bail-out, not the
+fill/snap choice, is what protects against a wrong-sync variant: a
+right-text/garbage-timing variant bails (Mirrors does exactly this on
+the testbed), so when the prior *does* engage its cues are
+offset-calibrated and trustworthy enough to repair a >2 s gross. The SRT
+testbed (LRCLIB input / held-out YT-SRT judge) measures that directly.
+
+Re-confirmed the step-2 ceiling through the **shipped** code path (the
+prior now delegates to `pikaraoke/lib/lrclib.py`), `--lrclib-prior` with
+snap on, vs the no-prior baseline. Incomplete and Bye Bye Bye no longer
+have replayable bundles in the folder (skipped), so the runnable testbed
+is the original 8-song subset the plan predicted (step 3: "8-song
+subset: gross 4 → 3"):
+
+| 8-song subset, YT-SRT judge | scored | ≤0.5 s (n) | ≤1.0 s (n) | gross |
+| --- | --- | --- | --- | --- |
+| baseline (no prior) | 428 | 330 | 401 | **4** |
+| LRCLIB prior, snap on | 432 | 335 | 405 | **3** |
+
+- **No song regressed on any absolute count.** The one repair is More
+  Than That (offset +13.5 s, MAD 0.33 s, 1 snap + 1 fill, gross 1 → 0);
+  fills (+4 lines) land on More Than That, Let It Go, Speechless, Can You
+  Feel with every threshold count same-or-better. Mirrors safe-bailed
+  (`wide_spread`), identical to baseline.
+
+Shipped (`snap=True` is now the only mode): `_apply_lrclib_prior`
+(`lyric_align.py`) drops its `snap=False` override; `apply_srt_prior`
+(`srt_prior.py`) loses the `snap` parameter and the `snap_enabled` stat
+entirely (the fill-only mode had no remaining caller — both priors
+snap); the eval's `--lrclib-prior` and `evaluate_bundle` follow. Stage
+test `test_gross_line_snaps_to_lrclib_cue` end-to-end guards that an
+LRCLIB cue repairs a gross-placed line.
 
 ## Open questions
 

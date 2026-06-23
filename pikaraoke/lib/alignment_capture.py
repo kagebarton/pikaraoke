@@ -38,8 +38,9 @@ logger = logging.getLogger(__name__)
 #     duration), query}.
 #   - joint_stats.lrclib_prior: the prior's per-song stats, parallel to
 #     joint_stats.srt_prior. On a successful apply: offset_s/mad_s/
-#     n_anchors_fit/n_snapped/n_filled/snap_enabled. On bail-out: only
-#     n_anchors_fit + bailed (the reason), same shape as srt_prior.
+#     n_anchors_fit/n_snapped/n_filled (+ snapped/filled line ids). On
+#     bail-out: only n_anchors_fit + bailed (the reason), same shape as
+#     srt_prior.
 #   - media_duration_s: source media duration (ffprobe), the LRCLIB
 #     selection tiebreak and a drift-aware-eval input.
 #   - config_snapshot now records the joint/prior knobs that shape output:

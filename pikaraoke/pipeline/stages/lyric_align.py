@@ -540,12 +540,14 @@ class LyricAlignStage(BaseStage):
         align_lines: list[str],
         joint_stats: dict,
     ) -> list[dict]:
-        """Fill-only LRCLIB timing prior for txt-sourced songs.
+        """LRCLIB timing prior for txt-sourced songs.
 
         Reads the ``.lrc`` the lyrics-fetch stage chose + persisted, maps its
-        cues onto our lyric lines, and runs the shipped prior with
-        ``snap=False`` — fills lines the audio could not place without ever
-        overriding a placement. Degrades to the audio result on any failure.
+        cues onto our lyric lines, and runs the shipped prior: snaps gross
+        disagreements to ``cue + offset`` and fills lines the audio could not
+        place. The anchor-MAD gate vets the variant's timing first, so a
+        wrong-sync variant bails rather than mis-snapping. Degrades to the
+        audio result on any failure.
         """
         ref = ctx.artifacts["lrclib"]
         try:
@@ -561,7 +563,6 @@ class LyricAlignStage(BaseStage):
                 cues,
                 margin_s=self._config.joint_margin_s,
                 max_edit_ratio=self._config.joint_max_edit_ratio,
-                snap=False,
                 source="lrclib",
             )
             joint_stats["lrclib_prior"] = prior_stats

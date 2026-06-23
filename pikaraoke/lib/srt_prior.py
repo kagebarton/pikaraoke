@@ -82,7 +82,6 @@ def apply_srt_prior(
     *,
     margin_s: float,
     max_edit_ratio: float,
-    snap: bool = True,
     source: str = "srt",
 ) -> tuple[list[dict], dict]:
     """Repair and coverage-fill ``line_objects`` from SRT cue times.
@@ -91,13 +90,6 @@ def apply_srt_prior(
     present, each carrying a ``source``). ``cue_spans_by_line`` maps
     line ids to offset-uncorrected cue ``(start, end)`` spans; lines
     without a cue are never touched.
-
-    ``snap=False`` runs the prior fill-only: lines the audio placed are
-    left exactly where the matcher put them, and only unplaced lines are
-    filled. Used by the LRCLIB-input path, whose cues come from a
-    different master clock with no quality control — fills cannot break a
-    correct audio placement, but snapping to a wrong-variant cue could
-    (plans/lrclib-timing-prior.md, step 3).
 
     ``source`` is the provenance tag stamped on repaired/filled lines
     (``"srt"`` for the SRT prior, ``"lrclib"`` for the LRCLIB path) so
@@ -155,7 +147,7 @@ def apply_srt_prior(
         # negative word times floor-divide into garbage ASS timestamps.
         target = max(0.0, cue[0] + offset)
         if obj.get("words") and obj.get("start") is not None:
-            if snap and abs(obj["start"] - target) > SNAP_DISAGREE_S:
+            if abs(obj["start"] - target) > SNAP_DISAGREE_S:
                 out.append(_shift_line(obj, target - obj["start"], source))
                 snapped.append(lid)
             else:
@@ -168,7 +160,6 @@ def apply_srt_prior(
             else:
                 out.append(obj)
 
-    stats["snap_enabled"] = snap
     stats["n_snapped"] = len(snapped)
     stats["n_filled"] = len(filled)
     stats["snapped_line_ids"] = snapped

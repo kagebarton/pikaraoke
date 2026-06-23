@@ -4,8 +4,8 @@ Genius-origin (txt) songs reach the matcher with no per-line cue times, so the
 timing prior that repairs/fills SRT-sourced songs has nothing to work with.
 LRCLIB (https://lrclib.net) hosts community synced lyrics; this module fetches
 the best-matching synced variant at processing time and persists it as a
-``.lrc`` beside the song, so the prior (``pikaraoke/lib/srt_prior.py``, run
-fill-only on this path) can place lines the audio could not.
+``.lrc`` beside the song, so the prior (``pikaraoke/lib/srt_prior.py``) can
+repair gross-misplaced lines and fill lines the audio could not place.
 
 Selection is reference-free: rank candidates by how well their text maps to our
 lyric sheet (``map_lines_to_cues``), with the video duration as a tiebreak. The

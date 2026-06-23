@@ -497,7 +497,7 @@ class TestDereverbRetry:
 
 
 class TestJointLrclibPrior:
-    """Joint route: the fill-only LRCLIB timing prior for txt-sourced songs."""
+    """Joint route: the LRCLIB timing prior for txt-sourced songs."""
 
     _LINES = [
         "alpha bravo charlie delta",
@@ -506,10 +506,13 @@ class TestJointLrclibPrior:
         "mike november oscar papa",
     ]
 
-    def _words(self):
+    def _words(self, last_line_at: float | None = None):
+        """Audio words placing each line at 10/20/30/40 s. ``last_line_at``
+        overrides the final line's onset (used to fake a gross misplacement)."""
         words = []
         for i, line in enumerate(self._LINES):
-            t0 = 10.0 * (i + 1)
+            last = i == len(self._LINES) - 1
+            t0 = last_line_at if (last and last_line_at is not None) else 10.0 * (i + 1)
             for j, tok in enumerate(line.split()):
                 words.append({"word": tok, "start": t0 + 0.5 * j, "end": t0 + 0.5 * j + 0.4})
         return words
@@ -533,10 +536,10 @@ class TestJointLrclibPrior:
             "query": {"track_name": "T", "artist_name": "A"},
         }
         ctx.artifacts["media_duration_s"] = 212.0
-        return stage, ctx
+        return stage, ctx, worker
 
-    def test_fill_only_prior_runs_and_is_captured(self, tmp_path):
-        stage, ctx = self._setup(tmp_path)
+    def test_prior_runs_and_is_captured(self, tmp_path):
+        stage, ctx, _ = self._setup(tmp_path)
         stage.run(ctx)
 
         debug = ctx.song_path.parent / "alignment_debug" / f"{ctx.song_path.stem}.json"
@@ -544,9 +547,8 @@ class TestJointLrclibPrior:
 
         prior = bundle["joint_stats"]["lrclib_prior"]
         assert prior["bailed"] is None
-        assert prior["snap_enabled"] is False  # fill-only on the LRCLIB path
         assert prior["offset_s"] == 1.5
-        assert prior["n_snapped"] == 0
+        assert prior["n_snapped"] == 0  # every line placed within the snap window
 
         # Schema version + LRCLIB reference + context land in the bundle.
         assert bundle["schema_version"] == 6
@@ -554,10 +556,30 @@ class TestJointLrclibPrior:
         assert bundle["media_duration_s"] == 212.0
         assert bundle["config"]["joint_lrclib_prior"] is True
 
+    def test_gross_line_snaps_to_lrclib_cue(self, tmp_path):
+        # The LRCLIB prior snaps (not fill-only): a line the audio drops
+        # ~30 s past its cue is repaired to cue + offset; the other three
+        # lines anchor the +1.5 s offset.
+        stage, ctx, worker = self._setup(tmp_path)
+        gross = self._words(last_line_at=70.0)
+        worker.align_refine.return_value = gross
+        worker.transcribe_words.return_value = gross
+        stage.run(ctx)
+
+        bundle = json.loads(
+            (ctx.song_path.parent / "alignment_debug" / f"{ctx.song_path.stem}.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        prior = bundle["joint_stats"]["lrclib_prior"]
+        assert prior["bailed"] is None
+        assert prior["offset_s"] == 1.5
+        assert prior["snapped_line_ids"] == [3]
+
     def test_srt_origin_never_triggers_lrclib(self, tmp_path):
         # An SRT-sourced song carries cue_spans and no "lrclib" artifact:
         # the SRT prior owns it; the LRCLIB block must stay dormant.
-        stage, ctx = self._setup(tmp_path)
+        stage, ctx, _ = self._setup(tmp_path)
         srt = ctx.song_path.parent / "subtitles" / f"{ctx.song_path.stem}.srt"
         srt.parent.mkdir(exist_ok=True)
         srt.write_text(
