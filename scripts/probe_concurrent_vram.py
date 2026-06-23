@@ -9,7 +9,7 @@ inference paths match production exactly.
 
 Three phases, each K iterations on the same ~20 s slice:
   S_ONLY      - de-reverb demix only (whisper idle)
-  W_ONLY      - align_check + refine_from_cached only (stem idle)  [the long pole]
+  W_ONLY      - align_refine only (stem idle)  [the long pole]
   CONCURRENT  - both at once, in parallel parent threads
 
 Device VRAM is sampled (~10 Hz) via nvidia-smi throughout. Because this host
@@ -201,8 +201,7 @@ def main() -> None:
         times = []
         for _ in range(K):
             s = time.monotonic()
-            chk = whisper.align_check(vocal_path=slice_wav, lyrics_text=LYRICS)
-            whisper.refine_from_cached(result_id=chk["result_id"], vocal_path=slice_wav)
+            whisper.align_refine(vocal_path=slice_wav, lyrics_text=LYRICS)
             times.append(time.monotonic() - s)
         return times
 
@@ -217,7 +216,7 @@ def main() -> None:
     time.sleep(1.0)
 
     # --- W_ONLY ---
-    banner(f"Phase W_ONLY: {K}x align_check + refine (stem idle) [long pole]")
+    banner(f"Phase W_ONLY: {K}x align_refine (stem idle) [long pole]")
     sampler.set_phase("w_only")
     t = time.monotonic()
     refine_times = run_refine()

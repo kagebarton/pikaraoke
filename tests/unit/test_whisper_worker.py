@@ -19,7 +19,6 @@ from pikaraoke.pipeline.workers.whisper_worker import (
     WHISPER_LOAD_TIMEOUT_SEC,
     AlignmentCancelledError,
     WhisperWorker,
-    _extract_align_failure_ratio,
     _extract_words,
     _segments_to_line_objects,
 )
@@ -524,52 +523,6 @@ class TestSegmentsToLineObjects:
 
 
 # ---------------------------------------------------------------------------
-# _extract_align_failure_ratio — scrape stable-ts's warning
-# ---------------------------------------------------------------------------
-
-
-class _CapturedWarning:
-    """Stand-in for a warnings.WarningMessage."""
-
-    def __init__(self, message: str, category=UserWarning):
-        self.message = message
-        self.category = category
-
-
-class TestExtractAlignFailureRatio:
-    def test_parses_ratio(self):
-        warns = [_CapturedWarning("12/48 segments failed to align.")]
-        log = MagicMock()
-        assert _extract_align_failure_ratio(warns, log) == pytest.approx(12 / 48)
-
-    def test_handles_whitespace_around_slash(self):
-        warns = [_CapturedWarning("7 / 14 segments failed to align.")]
-        assert _extract_align_failure_ratio(warns, MagicMock()) == 0.5
-
-    def test_no_warning_returns_zero(self):
-        assert _extract_align_failure_ratio([], MagicMock()) == 0.0
-
-    def test_unrelated_warning_returns_zero(self):
-        warns = [_CapturedWarning("some other deprecation warning")]
-        assert _extract_align_failure_ratio(warns, MagicMock()) == 0.0
-
-    def test_zero_total_returns_zero(self):
-        warns = [_CapturedWarning("0/0 segments failed to align.")]
-        assert _extract_align_failure_ratio(warns, MagicMock()) == 0.0
-
-    def test_reemits_warnings_to_logger(self):
-        warns = [
-            _CapturedWarning("3/9 segments failed to align."),
-            _CapturedWarning("an unrelated warning", DeprecationWarning),
-        ]
-        log = MagicMock()
-        _extract_align_failure_ratio(warns, log)
-        # Every captured warning should be re-emitted so capturing the
-        # message stream doesn't silently swallow them.
-        assert log.warning.call_count == 2
-
-
-# ---------------------------------------------------------------------------
 # Parent-side facade methods for the new IPC verbs
 # ---------------------------------------------------------------------------
 
@@ -652,43 +605,24 @@ def _wire_fake_worker(worker, fake_main):
 
 
 class TestNewFacadeMethods:
-    def test_align_check_returns_dict(self, worker):
-        fake = _fake_worker_replies([("ok", {"fail_ratio": 0.05, "result_id": "abc123"})])
-        thread = _wire_fake_worker(worker, fake)
-        try:
-            out = worker.align_check("/tmp/vocal.wav", "lyrics")
-            assert out == {"fail_ratio": 0.05, "result_id": "abc123"}
-        finally:
-            worker._job_send.send(None)
-            thread.join(timeout=3)
-
-    def test_refine_from_cached_returns_words(self, worker):
+    def test_align_refine_returns_words(self, worker):
         words = [{"word": "hi", "start": 0.0, "end": 0.5}]
         fake = _fake_worker_replies([("ok", words)])
         thread = _wire_fake_worker(worker, fake)
         try:
-            out = worker.refine_from_cached("abc123", "/tmp/vocal.wav")
+            out = worker.align_refine("/tmp/vocal.wav", "lyrics")
             assert out == words
         finally:
             worker._job_send.send(None)
             thread.join(timeout=3)
 
-    def test_refine_from_cached_raises_on_stale_id(self, worker):
-        fake = _fake_worker_replies([("error", "stale or unknown result_id: ghost")])
+    def test_align_refine_sends_expected_job(self, worker):
+        captured: list = []
+        fake = _fake_worker_captures(captured, [("ok", [])])
         thread = _wire_fake_worker(worker, fake)
         try:
-            with pytest.raises(RuntimeError, match="stale or unknown result_id"):
-                worker.refine_from_cached("ghost", "/tmp/vocal.wav")
-        finally:
-            worker._job_send.send(None)
-            thread.join(timeout=3)
-
-    def test_discard_cached_returns_quietly(self, worker):
-        fake = _fake_worker_replies([("ok", None)])
-        thread = _wire_fake_worker(worker, fake)
-        try:
-            # Should not raise; we don't assert anything about the return.
-            worker.discard_cached("abc123")
+            worker.align_refine("/tmp/vocal.wav", "the lyrics")
+            assert captured == [("align_refine", "/tmp/vocal.wav", "the lyrics")]
         finally:
             worker._job_send.send(None)
             thread.join(timeout=3)
@@ -726,12 +660,12 @@ class TestNewFacadeMethods:
             worker._job_send.send(None)
             thread.join(timeout=3)
 
-    def test_align_check_cancel_raises(self, worker):
+    def test_align_refine_cancel_raises(self, worker):
         fake = _fake_worker_replies([("cancelled",)])
         thread = _wire_fake_worker(worker, fake)
         try:
             with pytest.raises(AlignmentCancelledError):
-                worker.align_check("/tmp/vocal.wav", "lyrics")
+                worker.align_refine("/tmp/vocal.wav", "lyrics")
         finally:
             worker._job_send.send(None)
             thread.join(timeout=3)

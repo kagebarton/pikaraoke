@@ -28,9 +28,7 @@ class Phase(enum.Enum):
     LOUDNORM = "loudnorm"  # loudnorm_analyze stage
     STEM_SEPARATION = "stem_separation"  # stem_separation stage (per-chunk)
     TRANSCODE = "transcode"  # ffmpeg_transcode stage (both stems)
-    ALIGN = "align"  # lyric_align: align+refine (legacy bundled call)
-    ALIGN_CHECK = "align_check"  # lyric_align: align only, gate on failure ratio
-    REFINE = "refine"  # lyric_align: refine the cached align result
+    ALIGN = "align"  # lyric_align: align + refine in one worker call
     TRANSCRIBE = "transcribe"  # lyric_align: transcribe+refine
     DEREVERB = "dereverb"  # lyric_align: de-reverb the vocal stem for the retry
 

@@ -11,7 +11,7 @@ contend far less. This probe measures that directly.
 Separator side: a spawn'd subprocess that repeatedly drop+reloads the roformer
 (exactly StemWorker._swap_model: instance=None -> gc -> empty_cache ->
 load_model -> empty_cache), timing each load. No demix.
-Whisper side: the real WhisperWorker running align_check + refine_from_cached.
+Whisper side: the real WhisperWorker running align_refine.
 
 Phases:
   LOAD_ONLY    - N roformer reloads, whisper idle
@@ -212,8 +212,7 @@ def main() -> None:
         times = []
         for _ in range(n):
             s = time.monotonic()
-            chk = whisper.align_check(vocal_path=slice_wav, lyrics_text=LYRICS)
-            whisper.refine_from_cached(result_id=chk["result_id"], vocal_path=slice_wav)
+            whisper.align_refine(vocal_path=slice_wav, lyrics_text=LYRICS)
             times.append(time.monotonic() - s)
         return times
 

@@ -142,8 +142,7 @@ def capture_song(worker: WhisperWorker, job: dict, wav_path: Path) -> dict:
     """Run align+refine and transcribe(no refine); return the bundle dict."""
     lyrics_text = "\n".join(job["align_lines"])
 
-    check = worker.align_check(vocal_path=wav_path, lyrics_text=lyrics_text)
-    align_words = worker.refine_from_cached(check["result_id"], wav_path)
+    align_words = worker.align_refine(vocal_path=wav_path, lyrics_text=lyrics_text)
     transcribe_words = worker.transcribe_words(wav_path, refine=False)
 
     return {

@@ -140,7 +140,7 @@ class TestCancelToken:
         # exit check only synthesises when the body completed cleanly.
         tok = self._token()
         with pytest.raises(ValueError):
-            with tok.activity(Phase.REFINE, _RecordingCancellable()):
+            with tok.activity(Phase.TRANSCRIBE, _RecordingCancellable()):
                 tok.cancel()
                 raise ValueError("boom")
 

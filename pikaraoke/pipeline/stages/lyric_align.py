@@ -15,9 +15,9 @@ how line objects are built: alignment maps words onto predefined lyric lines
 via the joint matcher; transcription uses stable-ts segments directly as lines.
 
 Each model call is wrapped in its own cancellation activity scope.
-Alignment uses Phase.ALIGN_CHECK (align only) then Phase.REFINE (refine the
-cached align result) then Phase.TRANSCRIBE (independent transcribe pass).
-Transcription mode stays a single Phase.TRANSCRIBE call.
+Alignment uses Phase.ALIGN (align + refine in one worker call) then
+Phase.TRANSCRIBE (independent transcribe pass). Transcription mode stays a
+single Phase.TRANSCRIBE call.
 
 On the alignment route, a reverb-washed vocal stem (whole-stem transcribe
 yield below ``dereverb_yield_wpm``) triggers a de-reverb retry: the stem
@@ -429,23 +429,12 @@ class LyricAlignStage(BaseStage):
         capture bundle — both are needed to re-run the joint matcher
         offline at different α values.
         """
-        check = _model_call(
-            ctx,
-            Phase.ALIGN_CHECK,
-            lambda: self._worker.align_check(
-                vocal_path=vocal_wav,
-                lyrics_text=lyrics_text,
-                cancel_event=ctx.cancel.event if ctx.cancel else None,
-            ),
-        )
-        result_id = check["result_id"]
-
         align_words = _model_call(
             ctx,
-            Phase.REFINE,
-            lambda: self._worker.refine_from_cached(
-                result_id=result_id,
+            Phase.ALIGN,
+            lambda: self._worker.align_refine(
                 vocal_path=vocal_wav,
+                lyrics_text=lyrics_text,
                 cancel_event=ctx.cancel.event if ctx.cancel else None,
             ),
         )
@@ -622,21 +611,12 @@ class LyricAlignStage(BaseStage):
                     model_name=self._config.dereverb_model_name,
                 ),
             )
-            check = _model_call(
-                ctx,
-                Phase.ALIGN_CHECK,
-                lambda: self._worker.align_check(
-                    vocal_path=dry_wav,
-                    lyrics_text=lyrics_text,
-                    cancel_event=cancel_event,
-                ),
-            )
             align_words = _model_call(
                 ctx,
-                Phase.REFINE,
-                lambda: self._worker.refine_from_cached(
-                    result_id=check["result_id"],
+                Phase.ALIGN,
+                lambda: self._worker.align_refine(
                     vocal_path=dry_wav,
+                    lyrics_text=lyrics_text,
                     cancel_event=cancel_event,
                 ),
             )
@@ -765,21 +745,12 @@ class LyricAlignStage(BaseStage):
                 ctx,
                 Phase.EXTRACT,
             )
-            check = _model_call(
-                ctx,
-                Phase.ALIGN_CHECK,
-                lambda: self._worker.align_check(
-                    vocal_path=slice_path,
-                    lyrics_text="\n".join(sub_lines),
-                    cancel_event=ctx.cancel.event if ctx.cancel else None,
-                ),
-            )
             words = _model_call(
                 ctx,
-                Phase.REFINE,
-                lambda: self._worker.refine_from_cached(
-                    result_id=check["result_id"],
+                Phase.ALIGN,
+                lambda: self._worker.align_refine(
                     vocal_path=slice_path,
+                    lyrics_text="\n".join(sub_lines),
                     cancel_event=ctx.cancel.event if ctx.cancel else None,
                 ),
             )

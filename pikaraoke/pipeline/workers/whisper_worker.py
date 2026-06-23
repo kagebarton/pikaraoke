@@ -34,18 +34,16 @@ FFmpeg stderr to /dev/null (harmless muxer errors never reach terminal).
 import gc
 import logging
 import os
-import re
 import subprocess
 import sys
 import threading
 import time
-import uuid
 import warnings
 from dataclasses import asdict
 from multiprocessing import Pipe
 from multiprocessing.connection import Connection
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 from pikaraoke.pipeline.config import (
     AlignKwargs,
@@ -68,30 +66,6 @@ logger = logging.getLogger(__name__)
 # model load. On the target hardware, large-v3-turbo loads in ~10s, so
 # 60s gives ~6× headroom.
 WHISPER_LOAD_TIMEOUT_SEC = 60
-
-# stable-ts emits "<n>/<m> segments failed to align." as a UserWarning at
-# the end of Aligner.align(). align_check captures this so the stage can
-# decide whether align()'s forced word placement is trustworthy before
-# spending time on refine().
-_ALIGN_FAILURE_RE = re.compile(r"(\d+)\s*/\s*(\d+)\s+segments failed to align")
-
-
-def _extract_align_failure_ratio(caught_warnings, worker_log: logging.Logger) -> float:
-    """Scan captured warnings for stable-ts's 'N/M segments failed to align'
-    message and return N/M. Every captured warning is re-emitted via
-    ``worker_log`` so capturing doesn't silently swallow them. Returns 0.0
-    if no failure warning is present or the message couldn't be parsed.
-    """
-    ratio = 0.0
-    for w in caught_warnings:
-        msg = str(w.message)
-        m = _ALIGN_FAILURE_RE.search(msg)
-        if m:
-            failed, total = int(m.group(1)), int(m.group(2))
-            if total > 0:
-                ratio = failed / total
-        worker_log.warning("%s: %s", w.category.__name__, msg)
-    return ratio
 
 
 class _CancelledInsideEncoder(Exception):
@@ -251,14 +225,11 @@ class WhisperWorker:
 
     Public API:
     start() / stop() / kill() / is_alive() — lifecycle
-    align_check(vocal_path, lyrics_text, cancel_event) — align only, returns
-        {"fail_ratio": float, "result_id": str} so the caller can gate on
-        the failure ratio before paying for refine
-    refine_from_cached(result_id, vocal_path, cancel_event) — refine an
-        align result previously cached by align_check
-    discard_cached(result_id) — evict a cached align result without refining
-    transcribe_words(vocal_path, cancel_event) — transcribe → regroup →
-        refine, returns flat words (for the tiling matcher)
+    align_refine(vocal_path, lyrics_text, cancel_event) — align → refine,
+        returns flat words (the joint matcher's align-candidate source)
+    transcribe_words(vocal_path, cancel_event, refine=) — transcribe →
+        regroup → (optionally) refine, returns flat words (the joint
+        matcher's transcribe pass; refine=False on that route)
     transcribe_refine(vocal_path, cancel_event) — transcribe → regroup →
         refine, returns line_objects (transcription-only mode)
     """
@@ -417,64 +388,27 @@ class WhisperWorker:
             cancel_event,
         )
 
-    def align_check(
+    def align_refine(
         self,
         vocal_path: Path,
         lyrics_text: str,
         cancel_event: Optional[threading.Event] = None,
-    ) -> dict:
-        """Run align() only; return {"fail_ratio": float, "result_id": str,
-        "words": list[dict]}.
-
-        ``words`` is the pre-refine word list extracted from the cached
-        align result. Refine only nudges timestamps; it never adds or
-        removes tokens. So the caller can run the walk matcher against
-        these words to compute a collapse-ratio escalation signal
-        *before* paying for refine — catching the failure mode where
-        stable-ts force-places long runs of tokens at a single timestamp
-        (segments don't fail, but the timing is garbage).
-
-        The aligned WhisperResult stays cached in the subprocess under
-        ``result_id`` so the caller can either follow up with
-        ``refine_from_cached`` or discard it via ``discard_cached``.
-
-        Raises:
-            AlignmentCancelledError: If align was cancelled. No result is
-                cached in this case.
-            WorkerDiedError, RuntimeError: As for refine_from_cached.
-        """
-        return self._run_job(
-            ("align_check", str(vocal_path), lyrics_text),
-            cancel_event,
-        )
-
-    def refine_from_cached(
-        self,
-        result_id: str,
-        vocal_path: Path,
-        cancel_event: Optional[threading.Event] = None,
     ) -> list[dict]:
-        """Refine a cached align result and return a flat word list.
+        """Run align() then refine(), returning a flat refined word list.
+
+        One subprocess job: forced-align the lyrics to the audio, then
+        refine the resulting word timestamps. Returns one entry per lyric
+        token, in lyric order — the joint matcher's align-candidate source.
 
         Raises:
-            RuntimeError: If ``result_id`` is not in the cache (worker
-                restart between align_check and refine_from_cached, or a
-                discard_cached call already evicted it). The caller should
-                treat this as a hard failure — do not silently re-align.
+            AlignmentCancelledError: If align or refine was cancelled.
+            WorkerDiedError: If the subprocess dies during the job.
+            RuntimeError: If the subprocess reports an error.
         """
         return self._run_job(
-            ("refine_from_cached", result_id, str(vocal_path)),
+            ("align_refine", str(vocal_path), lyrics_text),
             cancel_event,
         )
-
-    def discard_cached(self, result_id: str) -> None:
-        """Evict a cached align result without refining. Fast; no cancel.
-
-        Returns silently if ``result_id`` is unknown (already evicted, or
-        the subprocess restarted) — the goal is freeing memory, not
-        confirming presence.
-        """
-        self._run_job(("discard_cached", result_id), cancel_event=None)
 
     def transcribe_words(
         self,
@@ -485,15 +419,15 @@ class WhisperWorker:
     ) -> list[dict]:
         """Run transcribe → regroup → (optionally) refine, returning a flat word list.
 
-        Same heavy pipeline as ``transcribe_refine`` but flattened for the
-        tiling matcher (which does its own line segmentation).
+        Same heavy pipeline as ``transcribe_refine`` but flattened to a
+        word list rather than line_objects.
 
-        ``refine`` defaults to True for backward compatibility (tiling and
-        the legacy walk+repair path want refined word timestamps). The
-        joint matcher passes ``refine=False`` because its align-won lines
-        use align's already-refined per-word timings; transcribe is only
-        consulted for line *placement*, and whisper's word_timestamps
-        precision is enough for the lines where transcribe wins.
+        The joint matcher passes ``refine=False``: its align-won lines use
+        align's already-refined per-word timings, and transcribe is only
+        consulted for line *placement*, so whisper's word_timestamps
+        precision is enough for the lines where transcribe wins. ``refine``
+        defaults to True for the transcription-only callers that want
+        refined word timestamps.
         """
         return self._run_job(
             ("transcribe_words", str(vocal_path), refine),
@@ -641,9 +575,9 @@ def _worker_main(
     """Entry point for the whisper worker subprocess.
 
     Loads the stable-ts model, then loops on job_recv. For each job,
-    it runs the requested inference (align_check, refine_from_cached,
-    transcribe_words, or transcribe_refine)
-    with per-encoder-pass cancellation via forward pre-hook.
+    it runs the requested inference (align_refine, transcribe_words, or
+    transcribe_refine) with per-encoder-pass cancellation via forward
+    pre-hook.
 
     Results sent on result_send:
     - ("ready",) once after model load
@@ -733,13 +667,6 @@ def _whisper_worker_main_inner(
     # Patch AudioLoader in the subprocess too.
     _patch_audioloader_stderr_in_subprocess(worker_log)
 
-    # Result-cache for the split align_check → refine_from_cached flow.
-    # Single-entry; a new align_check evicts the previous result, and
-    # refine_from_cached pops on use. Crossing the IPC boundary with a
-    # WhisperResult would require pickling stable-ts internals — keeping
-    # the result here means the parent only ever sees an opaque id.
-    cached_results: dict[str, Any] = {}
-
     # Signal ready so the parent's start() can return.
     result_send.send(("ready",))
 
@@ -755,9 +682,9 @@ def _whisper_worker_main_inner(
             drain_pipe(cancel_recv)
 
             try:
-                if kind == "align_check":
+                if kind == "align_refine":
                     _, vocal_path, lyrics_text = item
-                    raw_result, fail_ratio = _do_align_only(
+                    words = _do_align_refine(
                         model,
                         encoder_module,
                         vocal_path,
@@ -766,44 +693,7 @@ def _whisper_worker_main_inner(
                         config,
                         worker_log,
                     )
-                    # Extract pre-refine words so the stage can compute a
-                    # collapse-ratio escalation signal without paying for
-                    # refine. No probability filter — collapse detection
-                    # cares about timestamps, not word confidence.
-                    raw_words = _extract_words(raw_result, 0.0)
-                    result_id = uuid.uuid4().hex
-                    cached_results.clear()
-                    cached_results[result_id] = raw_result
-                    result_send.send(
-                        (
-                            "ok",
-                            {
-                                "fail_ratio": fail_ratio,
-                                "result_id": result_id,
-                                "words": raw_words,
-                            },
-                        )
-                    )
-                elif kind == "refine_from_cached":
-                    _, result_id, vocal_path = item
-                    cached = cached_results.pop(result_id, None)
-                    if cached is None:
-                        result_send.send(("error", f"stale or unknown result_id: {result_id}"))
-                    else:
-                        words = _do_refine_from_cached(
-                            model,
-                            encoder_module,
-                            vocal_path,
-                            cached,
-                            cancel_recv,
-                            config,
-                            worker_log,
-                        )
-                        result_send.send(("ok", words))
-                elif kind == "discard_cached":
-                    _, result_id = item
-                    cached_results.pop(result_id, None)
-                    result_send.send(("ok", None))
+                    result_send.send(("ok", words))
                 elif kind == "transcribe_words":
                     # 2-tuple legacy form: ("transcribe_words", path) → refine=True
                     # 3-tuple new form:   ("transcribe_words", path, refine)
@@ -947,7 +837,7 @@ def _transcribe_pass(model, encoder_module, vocal_path, cancel_recv, config, wor
     )
 
 
-def _do_align_only(
+def _do_align_refine(
     model,
     encoder_module,
     vocal_path: str,
@@ -955,36 +845,17 @@ def _do_align_only(
     cancel_recv: Connection,
     config: WhisperModelConfig,
     worker_log: logging.Logger,
-):
-    """Run align() only, capturing stable-ts's segment-failure ratio.
-
-    Returns ``(WhisperResult, fail_ratio)``. The caller decides whether to
-    follow up with refine_from_cached (good alignment) or discard the
-    result and escalate to the tiling pipeline (bad alignment).
-    """
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        result = _align_pass(
-            model, encoder_module, vocal_path, lyrics_text, cancel_recv, config, worker_log
-        )
-    fail_ratio = _extract_align_failure_ratio(caught, worker_log)
-    return result, fail_ratio
-
-
-def _do_refine_from_cached(
-    model,
-    encoder_module,
-    vocal_path: str,
-    cached_result,
-    cancel_recv: Connection,
-    config: WhisperModelConfig,
-    worker_log: logging.Logger,
 ) -> list[dict]:
-    """Refine an already-aligned WhisperResult, post-process, and flatten
-    to a word list. Mirrors the back half of the old align_refine path.
+    """Run align() then refine(), post-process, and flatten to a word list.
+
+    One entry per lyric token, in lyric order — the joint matcher's
+    align-candidate source.
     """
+    aligned = _align_pass(
+        model, encoder_module, vocal_path, lyrics_text, cancel_recv, config, worker_log
+    )
     refined = _refine_pass(
-        model, encoder_module, vocal_path, cached_result, cancel_recv, config, worker_log
+        model, encoder_module, vocal_path, aligned, cancel_recv, config, worker_log
     )
     _apply_post_process(refined, config.align_post_process)
     return _extract_words(refined, config.align_post_process.min_word_probability)
@@ -1002,11 +873,11 @@ def _do_transcribe_words(
 ) -> list[dict]:
     """Run transcribe → regroup → (optionally) refine and return a flat word list.
 
-    Used by the tiling matcher (``refine=True``, the default) and by the
-    joint matcher (``refine=False`` — the joint matcher relies on align's
-    refined per-word timings for align-won lines, so refining transcribe
-    a second time is wasted whole-song decode for marginal benefit on a
-    minority of lines).
+    The joint matcher passes ``refine=False`` — it relies on align's
+    refined per-word timings for align-won lines, so refining transcribe a
+    second time is wasted whole-song decode for marginal benefit on a
+    minority of lines. ``refine=True`` (the default) serves the
+    transcription-only callers.
     """
     result = _transcribe_pass(model, encoder_module, vocal_path, cancel_recv, config, worker_log)
     if config.regroup:

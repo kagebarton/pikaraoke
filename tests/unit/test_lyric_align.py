@@ -167,15 +167,7 @@ def _make_stage_and_ctx(tmp_path, *, dereverb_yield_wpm=0.0):
     cfg.dereverb_yield_wpm = dereverb_yield_wpm
 
     worker = MagicMock()
-    worker.align_check.return_value = {
-        "fail_ratio": 0.0,
-        "result_id": "rid-1",
-        "words": [
-            {"word": "hello", "start": 0.0, "end": 1.0},
-            {"word": "world", "start": 1.0, "end": 2.0},
-        ],
-    }
-    worker.refine_from_cached.return_value = [
+    worker.align_refine.return_value = [
         {"word": "hello", "start": 0.0, "end": 1.0},
         {"word": "world", "start": 1.0, "end": 2.0},
     ]
@@ -207,21 +199,18 @@ def _make_stage_and_ctx(tmp_path, *, dereverb_yield_wpm=0.0):
 
 
 class TestJointRoute:
-    """Alignment mode runs align + refine + transcribe(refine=False) →
+    """Alignment mode runs align_refine + transcribe(refine=False) →
     joint matcher; no escalation, no gating."""
 
-    def test_joint_calls_all_three_with_refine_false_on_transcribe(self, tmp_path):
+    def test_joint_calls_align_refine_and_transcribe_refine_false(self, tmp_path):
         stage, ctx, worker = _make_stage_and_ctx(tmp_path)
         stage.run(ctx)
-        worker.align_check.assert_called_once()
-        worker.refine_from_cached.assert_called_once()
+        worker.align_refine.assert_called_once()
         worker.transcribe_words.assert_called_once()
         # transcribe runs with refine=False under joint — saves a whole-song
         # refine pass we don't use on transcribe-won lines.
         call = worker.transcribe_words.call_args
         assert call.kwargs.get("refine") is False
-        # No escalation/discard on the joint path.
-        worker.discard_cached.assert_not_called()
 
     def test_joint_clean_song_lines_use_align_timings(self, tmp_path):
         # Align and transcribe agree everywhere → align wins on ties →
@@ -244,15 +233,7 @@ class TestJointRoute:
         # Transcribe finds the matching content at 15-19s.
         lyric_words = ["no", "worries", "for", "the", "rest", "of", "your", "days"]
         ctx.artifacts["lyrics_path"].write_text(" ".join(lyric_words) + "\n", encoding="utf-8")
-        worker.align_check.return_value = {
-            "fail_ratio": 0.0,
-            "result_id": "rid-1",
-            "words": [
-                {"word": w, "start": 3.0 + i * 0.5, "end": 3.0 + i * 0.5 + 0.4}
-                for i, w in enumerate(lyric_words)
-            ],
-        }
-        worker.refine_from_cached.return_value = [
+        worker.align_refine.return_value = [
             {"word": w, "start": 3.0 + i * 0.5, "end": 3.0 + i * 0.5 + 0.4}
             for i, w in enumerate(lyric_words)
         ]
@@ -337,11 +318,7 @@ class TestWindowedRealign:
             ]
         )
 
-        worker.align_check.side_effect = [
-            {"fail_ratio": 0.0, "result_id": "rid-1", "words": line0_words + line1_wrong},
-            {"fail_ratio": 0.0, "result_id": "rid-2", "words": slice_words},
-        ]
-        worker.refine_from_cached.side_effect = [line0_words + line1_wrong, slice_words]
+        worker.align_refine.side_effect = [line0_words + line1_wrong, slice_words]
         # Transcribe echoes only line 0 — line 1 is uncorroborated (suspect).
         worker.transcribe_words.return_value = list(line0_words)
 
@@ -367,10 +344,9 @@ class TestWindowedRealign:
         stage.run(ctx)
 
         # Second align ran on the span slice with the span's lyric lines.
-        assert worker.align_check.call_count == 2
-        span_call = worker.align_check.call_args_list[1]
+        assert worker.align_refine.call_count == 2
+        span_call = worker.align_refine.call_args_list[1]
         assert span_call.kwargs["lyrics_text"] == f"{self.LINE0}\n{self.LINE1}"
-        assert worker.refine_from_cached.call_count == 2
         cmd = ffmpeg_calls[0]
         assert cmd[cmd.index("-ss") + 1] == "9.250"
         assert cmd[cmd.index("-to") + 1] == "30.000"
@@ -384,10 +360,10 @@ class TestWindowedRealign:
 
     def test_span_failure_keeps_pass1_placement(self, tmp_path, monkeypatch):
         stage, ctx, worker, _ = self._make(tmp_path, monkeypatch)
-        pass1_check = next(iter(worker.align_check.side_effect))
-        worker.align_check.side_effect = [
-            pass1_check,
-            RuntimeError("refine blew up on a degenerate slice"),
+        pass1_words = next(iter(worker.align_refine.side_effect))
+        worker.align_refine.side_effect = [
+            pass1_words,
+            RuntimeError("align_refine blew up on a degenerate slice"),
         ]
         stage.run(ctx)
 
@@ -406,8 +382,7 @@ class TestWindowedRealign:
         monkeypatch.setattr(la_mod, "_wav_duration", _boom)
         stage.run(ctx)
         # Fixture lyrics are fully transcribe-corroborated: one align pass only.
-        worker.align_check.assert_called_once()
-        worker.refine_from_cached.assert_called_once()
+        worker.align_refine.assert_called_once()
 
     def test_no_anchors_skips_second_pass(self, tmp_path, monkeypatch):
         # All lines suspect but nothing trustworthy to pin spans on:
@@ -415,7 +390,7 @@ class TestWindowedRealign:
         stage, ctx, worker, ffmpeg_calls = self._make(tmp_path, monkeypatch)
         worker.transcribe_words.return_value = []
         stage.run(ctx)
-        worker.align_check.assert_called_once()
+        worker.align_refine.assert_called_once()
         assert ffmpeg_calls == []
 
     def test_hook_failure_keeps_pass1_for_the_song(self, tmp_path, monkeypatch):
@@ -449,9 +424,7 @@ class TestDereverbRetry:
 
         # Fixture transcribe returns 2 words; over 60 s that is 2 wpm
         # (gate trips at 30), over 1 s it is 120 wpm (gate passes).
-        stage, ctx, worker = _make_stage_and_ctx(
-            tmp_path, dereverb_yield_wpm=30.0
-        )
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path, dereverb_yield_wpm=30.0)
         monkeypatch.setattr(la_mod, "_wav_duration", lambda _p: duration_s)
         return stage, ctx, worker, stage._stem_worker
 
@@ -468,8 +441,8 @@ class TestDereverbRetry:
         assert sep_kwargs["model_name"] == stage._config.dereverb_model_name
         assert sep_kwargs["wav_path"] == ctx.artifacts["vocal_wav"]
         # Both whisper legs ran twice: wet pass, then dry retry.
-        assert worker.align_check.call_count == 2
-        assert worker.align_check.call_args_list[1].kwargs["vocal_path"] == dry
+        assert worker.align_refine.call_count == 2
+        assert worker.align_refine.call_args_list[1].kwargs["vocal_path"] == dry
         assert worker.transcribe_words.call_count == 2
         assert worker.transcribe_words.call_args_list[1].kwargs["vocal_path"] == dry
         ass_path = ctx.song_path.parent / "karaoke" / f"{ctx.song_path.stem}.ass"
@@ -491,14 +464,14 @@ class TestDereverbRetry:
         stage, ctx, worker, stem_worker = self._make(tmp_path, monkeypatch, duration_s=1.0)
         stage.run(ctx)
         stem_worker.separate.assert_not_called()
-        worker.align_check.assert_called_once()
+        worker.align_refine.assert_called_once()
         worker.transcribe_words.assert_called_once()
 
     def test_retry_failure_keeps_wet_results(self, tmp_path, monkeypatch):
         stage, ctx, worker, stem_worker = self._make(tmp_path, monkeypatch)
         stem_worker.separate.side_effect = RuntimeError("stem worker died")
         stage.run(ctx)  # must not raise
-        worker.align_check.assert_called_once()
+        worker.align_refine.assert_called_once()
         worker.transcribe_words.assert_called_once()
         ass_path = ctx.song_path.parent / "karaoke" / f"{ctx.song_path.stem}.ass"
         assert ass_path.exists()
@@ -519,7 +492,7 @@ class TestDereverbRetry:
         stage, ctx, worker, _ = self._make(tmp_path, monkeypatch)
         stage._stem_worker = None
         stage.run(ctx)  # gate silently off — single wet pass
-        worker.align_check.assert_called_once()
+        worker.align_refine.assert_called_once()
         worker.transcribe_words.assert_called_once()
 
 
@@ -545,8 +518,7 @@ class TestJointLrclibPrior:
         stage, ctx, worker = _make_stage_and_ctx(tmp_path)
         words = self._words()
         ctx.artifacts["lyrics_path"].write_text("\n".join(self._LINES) + "\n", encoding="utf-8")
-        worker.align_check.return_value = {"fail_ratio": 0.0, "result_id": "rid-1", "words": words}
-        worker.refine_from_cached.return_value = words
+        worker.align_refine.return_value = words
         worker.transcribe_words.return_value = words
         # Persisted LRCLIB choice: each cue leads the audio by 1.5 s.
         synced = "".join(f"[00:{8.5 + 10 * i:05.2f}]{line}\n" for i, line in enumerate(self._LINES))
