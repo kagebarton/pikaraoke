@@ -13,16 +13,13 @@ same pipeline stages as the running app.
 
 ```bash
 python scripts/backfill_artifacts.py [folder] [--dry-run] [--yes] \
-    [--match-method {auto,walk,tiling,joint}] [--use-bundle-lyrics]
+    [--use-bundle-lyrics]
 ```
 
 Default `folder` = `get_default_dl_dir()` (e.g. `~/pikaraoke-songs`).
 `--dry-run` prints the report and exits. `--yes` skips the
-post-report confirmation prompt. `--match-method` overrides
-`PipelineConfig.match_method` for this run (default `auto`): force
-`walk` (two-pointer walk matcher), `tiling` (order-independent
-matcher), or `joint` (joint align + transcribe DP, one matcher with
-no escalation gates) to compare matchers without editing the config.
+post-report confirmation prompt. Alignment uses the joint matcher
+(align + transcribe DP); there is no matcher to select.
 `--use-bundle-lyrics` reuses cleaned `lyrics.align_lines` from a saved
 `alignment_debug/<stem>.json` bundle instead of prompting Genius (see
 "Lyrics resolution" below); songs without a bundle still prompt.

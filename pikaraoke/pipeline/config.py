@@ -20,11 +20,12 @@ class LoadModelKwargs:
 
 @dataclass
 class AlignKwargs:
-    """Splatted into ``model.align(audio, text, **kwargs)`` — walk path.
+    """Splatted into ``model.align(audio, text, **kwargs)``.
 
-    Walk mode uses a two-pointer matcher with gap interpolation, so
-    we maximize anchor words (low ``min_word_dur``) and trust the
-    matcher to interpolate between them.
+    Forced alignment is the joint matcher's align-candidate source. The
+    matcher pairs lyric tokens to words with gap interpolation, so we
+    maximize anchor words (low ``min_word_dur``) and trust it to
+    interpolate between them.
     """
 
     language: str = "en"
@@ -41,8 +42,8 @@ class AlignKwargs:
     only_voice_freq: bool = True
 
     # Word duration floor / ceiling. None = stable-ts default.
-    min_word_dur: float = 0.1  # more anchor words for walk matcher
-    max_word_dur: float | None = 5.0  # trust walk matcher interpolation
+    min_word_dur: float = 0.1  # more anchor words for the joint matcher
+    max_word_dur: float | None = 5.0  # trust matcher gap interpolation
 
     # Drop zero-duration words instead of leaving 0-cs entries.
     remove_instant_words: bool = True
@@ -150,10 +151,10 @@ class WhisperModelConfig:
     """Top-level whisper config — one section per stable-ts call.
 
     All defaults are baked into the section dataclasses. Instantiating
-    ``WhisperModelConfig()`` produces a fully-tuned config — the walk
-    path reads ``align``, the transcribe path reads ``transcribe`` and
-    ``regroup``, both paths share ``load_model`` and ``refine``, and
-    each path has its own post-process section.
+    ``WhisperModelConfig()`` produces a fully-tuned config — the align
+    pass reads ``align``, the transcribe pass reads ``transcribe`` and
+    ``regroup``, both share ``load_model`` and ``refine``, and each has
+    its own post-process section.
 
     To tune a value, edit the default on the relevant section dataclass.
     To add a new stable-ts kwarg, add a field to the matching section —
@@ -167,7 +168,7 @@ class WhisperModelConfig:
     align_post_process: PostProcessKwargs = field(default_factory=PostProcessKwargs)
     transcribe_post_process: PostProcessKwargs = field(default_factory=PostProcessKwargs)
 
-    # Used by the transcribe path only; ignored by the walk path.
+    # Used by the transcribe pass only; ignored by the align pass.
     regroup: str = _DEFAULT_REGROUP
 
 
@@ -188,51 +189,23 @@ class PipelineConfig:
     # --- Whisper alignment options ---
     whisper: WhisperModelConfig = field(default_factory=WhisperModelConfig)
 
-    # --- Lyric match method ---
-    # "walk" — stable-ts align() + two-pointer walk matcher with gap
-    #   interpolation. Trusts word order; covers every lyric line.
-    # "tiling" — stable-ts transcribe() + order-independent fuzzy
-    #   candidate + interval-scheduling DP. Resilient to
-    #   remixes/repeats/drift; may drop unmatched lines.
-    # "joint" (default) — align + transcribe (no internal refine) fed simultaneously
-    #   into a single interval-scheduling DP. Each lyric line scores its
-    #   align candidate AND its transcribe candidates; the DP picks the
-    #   max-score non-overlapping subset. Per-word timings come from
-    #   whichever source won each line — align's refined timings on
-    #   clean lines (preserving walk-level precision) and transcribe's
-    #   word_timestamps on lines align misplaced. No routing/gating
-    #   layer; one matcher covers walk-clean, align-collapse, and
-    #   walk-against-wrong-audio (Hakuna-style) failure modes uniformly.
-    # "auto" — run walk, but if stable-ts align() fails more
-    #   than ``align_failure_escalation`` of its segments, discard the
-    #   align result and re-run with the tiling matcher on an honest
-    #   transcription. The escalation happens *before* the refine pass,
-    #   so a discarded align doesn't pay for refine.
-    match_method: str = "joint"
-
-    # Fraction of stable-ts align() segments that must fail before the
-    # "auto" gate escalates to the tiling matcher. 0.1 → escalate at >10%
-    # (e.g. 7/48 ≈ 0.15 triggers).
-    align_failure_escalation: float = 0.1
-
-    # Complementary escalation signal: fraction of lyric tokens caught by
-    # the walk matcher's collapse demotion (stable-ts force-placing many
-    # tokens at a single timestamp, looking like alignment success at the
-    # segment level but garbage at the word level). Computed from a quick
-    # walk on the pre-refine word list — refine doesn't add or remove
-    # tokens, so the collapse pattern is preserved. 0.15 → escalate at
-    # >15% (e.g. Pocahontas "Colors of the Wind" hits 0.35 here while its
-    # fail_ratio is only 0.07 — collapse catches what fail_ratio misses).
-    collapse_escalation_threshold: float = 0.15
-
-    # --- Joint-matcher knobs (used only when match_method == "joint") ---
+    # --- Joint matcher ---
+    # Alignment runs stable-ts align() + refine and an independent
+    # transcribe() pass, then feeds both placements into a single
+    # interval-scheduling DP (pikaraoke.lib.joint_match). Each lyric line
+    # scores its align candidate AND its transcribe candidates; the DP picks
+    # the max-score non-overlapping subset. Per-word timings come from
+    # whichever source won each line — align's refined timings on clean
+    # lines, transcribe's word_timestamps on lines align misplaced. One
+    # matcher covers clean songs, align-collapse, and align-against-wrong-
+    # audio (Hakuna-style) failure modes uniformly.
 
     # Weight on the align prior in the joint scoring formula:
     #   score = transcribe_match + joint_alpha * align_agreement * alpha_weight
     # Roughly the number of "free" matched-token credits an align
     # candidate gets just by being where forced alignment placed the
-    # line. Higher → trust align more (regress toward walk on clean
-    # songs); lower → trust transcribe more (regress toward tiling).
+    # line. Higher → trust align more (all-align on clean songs); lower
+    # → trust transcribe more (all-transcribe on misaligned songs).
     # Corpus-tuned: 2.0 from the 27-song α-sweep documented in
     # plans/joint-alignment-dp.md. The design prior was 4.0; the sweep
     # showed α=4 keeps Hakuna Matata's late lyrics misplaced into the
@@ -313,7 +286,7 @@ class PipelineConfig:
     # When True, the lyric-align stage writes a JSON bundle to
     # ``<song_dir>/alignment_debug/<stem>.json`` capturing the matcher
     # inputs (whisper words + lyric lines), the knob values that ran,
-    # and per-pass telemetry. Used for offline tuning of the walk/tiling
+    # and per-pass telemetry. Used for offline tuning of the joint matcher
     # knobs (see pikaraoke.lib.alignment_capture). Cheap (~50–200 KB/song)
     # and easy to wipe; flip off once the corpus is sufficient.
     capture_alignment_debug: bool = True

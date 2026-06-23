@@ -22,6 +22,13 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# v6: walk and tiling matchers removed — the joint matcher is the sole
+#     alignment path. Removed fields: walk_stats, tiling_stats (top-level),
+#     and config.match_method / config.align_failure_escalation /
+#     config.collapse_escalation_threshold from config_snapshot, plus
+#     pipeline_decisions.align_check_fail_ratio / collapse_ratio /
+#     escalated_to_tiling / escalation_trigger. joint_stats is now always
+#     present on alignment-mode captures.
 # v5: LRCLIB timing prior shipped to production (plans/lrclib-timing-prior.md,
 #     step 3). A milestone bump even though the changes are additive — it
 #     marks the first run-affecting matcher change since v4. Added:
@@ -56,7 +63,7 @@ logger = logging.getLogger(__name__)
 # v2: added tiling per-unit fields (units, zero_candidate_unit_ids,
 #     anchor_recovered_unit_ids, selected_windows replacing window_widths).
 # v1: initial.
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 def build_bundle(
@@ -67,8 +74,6 @@ def build_bundle(
     pipeline_decisions: dict[str, Any],
     words: list[dict] | None,
     words_source: str | None,
-    walk_stats: dict | None,
-    tiling_stats: dict | None,
     output_summary: dict[str, Any],
     output_line_timings: list[dict],
     ground_truth_refs: dict[str, Any],
@@ -90,8 +95,6 @@ def build_bundle(
         "pipeline_decisions": pipeline_decisions,
         "words": words or [],
         "words_source": words_source,
-        "walk_stats": walk_stats,
-        "tiling_stats": tiling_stats,
         "joint_stats": joint_stats,
         "transcribe_words": transcribe_words,
         "output_summary": output_summary,
@@ -119,10 +122,8 @@ def output_line_timings(line_objects: list[dict]) -> list[dict]:
     """Per-line start/end the matcher emitted, for offline comparison
     against an independent reference (e.g. a non-circular YouTube SRT).
 
-    Walk line_objects have implicit line_id (position == line_id) since
-    they're 1:1 with the lyric line list. Tiling line_objects carry an
-    explicit ``line_id`` field and may repeat or skip. Either shape is
-    handled here.
+    Joint line_objects carry an explicit ``line_id`` field; the fallback
+    to positional index keeps this robust to any line-object shape.
     """
     out: list[dict] = []
     for idx, obj in enumerate(line_objects):

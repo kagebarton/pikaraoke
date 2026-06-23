@@ -1,4 +1,4 @@
-"""Unit tests for LyricAlignStage — lyrics loading, single-style ASS, escalation."""
+"""Unit tests for LyricAlignStage — lyrics loading, single-style ASS, joint route."""
 
 import json
 from unittest.mock import MagicMock
@@ -154,25 +154,21 @@ class TestGenerateAss:
 
 
 # ---------------------------------------------------------------------------
-# Match-method selection + auto escalation
+# Joint alignment route
 # ---------------------------------------------------------------------------
 
 
-def _make_stage_and_ctx(
-    tmp_path, *, match_method="auto", fail_ratio=0.0, threshold=0.1, dereverb_yield_wpm=0.0
-):
+def _make_stage_and_ctx(tmp_path, *, dereverb_yield_wpm=0.0):
     from pikaraoke.pipeline.context import StageContext
 
     cfg = PipelineConfig()
-    cfg.match_method = match_method
-    cfg.align_failure_escalation = threshold
     # Off by default so the de-reverb gate never trips on fixtures with
     # tiny word counts; TestDereverbRetry opts in explicitly.
     cfg.dereverb_yield_wpm = dereverb_yield_wpm
 
     worker = MagicMock()
     worker.align_check.return_value = {
-        "fail_ratio": fail_ratio,
+        "fail_ratio": 0.0,
         "result_id": "rid-1",
         "words": [
             {"word": "hello", "start": 0.0, "end": 1.0},
@@ -210,86 +206,12 @@ def _make_stage_and_ctx(
     return stage, ctx, worker
 
 
-class TestMatchMethodEscalation:
-    def test_walk_method_uses_align_check_only(self, tmp_path):
-        stage, ctx, worker = _make_stage_and_ctx(tmp_path, match_method="walk")
-        stage.run(ctx)
-        worker.align_check.assert_called_once()
-        worker.refine_from_cached.assert_called_once()
-        worker.transcribe_words.assert_not_called()
-        worker.discard_cached.assert_not_called()
-
-    def test_tiling_method_skips_align_entirely(self, tmp_path):
-        stage, ctx, worker = _make_stage_and_ctx(tmp_path, match_method="tiling")
-        stage.run(ctx)
-        worker.align_check.assert_not_called()
-        worker.refine_from_cached.assert_not_called()
-        worker.transcribe_words.assert_called_once()
-
-    def test_auto_below_threshold_keeps_walk(self, tmp_path):
-        stage, ctx, worker = _make_stage_and_ctx(
-            tmp_path, match_method="auto", fail_ratio=0.05, threshold=0.1
-        )
-        stage.run(ctx)
-        worker.align_check.assert_called_once()
-        worker.refine_from_cached.assert_called_once()
-        worker.transcribe_words.assert_not_called()
-        worker.discard_cached.assert_not_called()
-
-    def test_auto_above_threshold_escalates_to_tiling(self, tmp_path):
-        stage, ctx, worker = _make_stage_and_ctx(
-            tmp_path, match_method="auto", fail_ratio=0.25, threshold=0.1
-        )
-        stage.run(ctx)
-        worker.align_check.assert_called_once()
-        worker.discard_cached.assert_called_once_with("rid-1")
-        worker.refine_from_cached.assert_not_called()
-        worker.transcribe_words.assert_called_once()
-
-    def test_auto_discard_failure_doesnt_block_escalation(self, tmp_path):
-        # discard_cached can raise if the worker died between check and the
-        # discard call. The stage must keep going to the tiling matcher.
-        stage, ctx, worker = _make_stage_and_ctx(
-            tmp_path, match_method="auto", fail_ratio=0.5, threshold=0.1
-        )
-        worker.discard_cached.side_effect = RuntimeError("worker died")
-        stage.run(ctx)
-        worker.transcribe_words.assert_called_once()
-
-    def test_auto_escalates_on_collapse_ratio_alone(self, tmp_path):
-        # Catches the Pocahontas failure mode: fail_ratio is well below
-        # the segment-level threshold but stable-ts force-placed a long
-        # run of tokens at one timestamp. Collapse-ratio gate should fire.
-        stage, ctx, worker = _make_stage_and_ctx(
-            tmp_path, match_method="auto", fail_ratio=0.05, threshold=0.1
-        )
-        # 12 lyric tokens, first 9 raw whisper words crammed at t=0 →
-        # walk demotes them as one collapsed run → 9/12 = 75% > default
-        # collapse threshold 0.15. fail_ratio 0.05 stays below 0.1.
-        lyric_words = [f"w{i}" for i in range(12)]
-        ctx.artifacts["lyrics_path"].write_text(" ".join(lyric_words) + "\n", encoding="utf-8")
-        collapsed = [{"word": w, "start": 0.0, "end": 0.0} for w in lyric_words[:9]]
-        spread = [
-            {"word": w, "start": 10.0 + i, "end": 10.0 + i + 0.5}
-            for i, w in enumerate(lyric_words[9:])
-        ]
-        worker.align_check.return_value = {
-            "fail_ratio": 0.05,
-            "result_id": "rid-1",
-            "words": collapsed + spread,
-        }
-        stage.run(ctx)
-        worker.discard_cached.assert_called_once_with("rid-1")
-        worker.refine_from_cached.assert_not_called()
-        worker.transcribe_words.assert_called_once()
-
-
 class TestJointRoute:
-    """match_method='joint' runs align + refine + transcribe(refine=False) →
+    """Alignment mode runs align + refine + transcribe(refine=False) →
     joint matcher; no escalation, no gating."""
 
     def test_joint_calls_all_three_with_refine_false_on_transcribe(self, tmp_path):
-        stage, ctx, worker = _make_stage_and_ctx(tmp_path, match_method="joint")
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path)
         stage.run(ctx)
         worker.align_check.assert_called_once()
         worker.refine_from_cached.assert_called_once()
@@ -304,7 +226,7 @@ class TestJointRoute:
     def test_joint_clean_song_lines_use_align_timings(self, tmp_path):
         # Align and transcribe agree everywhere → align wins on ties →
         # per-word timings should be the align ones (exactly the input).
-        stage, ctx, worker = _make_stage_and_ctx(tmp_path, match_method="joint")
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path)
         # The fixture's align_words and transcribe_words already match
         # the lyrics ("hello world") at [0-1, 1-2].
         stage.run(ctx)
@@ -315,7 +237,7 @@ class TestJointRoute:
         # Align places the lyrics at a wrong time; transcribe finds them at
         # the correct sung time. Joint matcher should adopt transcribe's
         # placement for the misplaced line.
-        stage, ctx, worker = _make_stage_and_ctx(tmp_path, match_method="joint")
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path)
 
         # Long line so the transcribe_match outscores the joint_alpha prior:
         # 8 tokens of lyrics. Align maps them all to 3-9s (wrong audio).
@@ -376,7 +298,7 @@ class TestWindowedRealign:
     def _make(self, tmp_path, monkeypatch):
         import pikaraoke.pipeline.stages.lyric_align as la_mod
 
-        stage, ctx, worker = _make_stage_and_ctx(tmp_path, match_method="joint")
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path)
         ctx.artifacts["lyrics_path"].write_text(f"{self.LINE0}\n{self.LINE1}\n", encoding="utf-8")
 
         def _words(specs):
@@ -476,7 +398,7 @@ class TestWindowedRealign:
     def test_no_suspects_skips_second_pass_entirely(self, tmp_path, monkeypatch):
         import pikaraoke.pipeline.stages.lyric_align as la_mod
 
-        stage, ctx, worker = _make_stage_and_ctx(tmp_path, match_method="joint")
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path)
 
         def _boom(_p):
             raise AssertionError("duration probe must not run when nothing is suspect")
@@ -528,7 +450,7 @@ class TestDereverbRetry:
         # Fixture transcribe returns 2 words; over 60 s that is 2 wpm
         # (gate trips at 30), over 1 s it is 120 wpm (gate passes).
         stage, ctx, worker = _make_stage_and_ctx(
-            tmp_path, match_method="joint", dereverb_yield_wpm=30.0
+            tmp_path, dereverb_yield_wpm=30.0
         )
         monkeypatch.setattr(la_mod, "_wav_duration", lambda _p: duration_s)
         return stage, ctx, worker, stage._stem_worker
@@ -620,7 +542,7 @@ class TestJointLrclibPrior:
         return words
 
     def _setup(self, tmp_path):
-        stage, ctx, worker = _make_stage_and_ctx(tmp_path, match_method="joint")
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path)
         words = self._words()
         ctx.artifacts["lyrics_path"].write_text("\n".join(self._LINES) + "\n", encoding="utf-8")
         worker.align_check.return_value = {"fail_ratio": 0.0, "result_id": "rid-1", "words": words}
@@ -654,8 +576,8 @@ class TestJointLrclibPrior:
         assert prior["offset_s"] == 1.5
         assert prior["n_snapped"] == 0
 
-        # Schema v5 reference + context land in the bundle.
-        assert bundle["schema_version"] == 5
+        # Schema version + LRCLIB reference + context land in the bundle.
+        assert bundle["schema_version"] == 6
         assert bundle["lyrics"]["lrclib"]["record"]["id"] == 5
         assert bundle["media_duration_s"] == 212.0
         assert bundle["config"]["joint_lrclib_prior"] is True

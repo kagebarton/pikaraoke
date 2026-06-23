@@ -2,26 +2,24 @@
 
 Two modes:
 - Alignment (lyrics_path provided): aligns the given .txt or .srt lyrics to
-  the vocal stem via stable-ts model.align(), then refines timestamps. A
-  two-pointer walk matcher pairs lyric tokens to whisper words with gap
-  interpolation for unmatched references — every lyric token ends up in
-  the karaoke output, gap-free. On poor walk alignment quality, escalates
-  to the order-independent tiling matcher.
+  the vocal stem via stable-ts model.align() + refine, transcribes the stem
+  independently, and feeds both placements into the joint matcher — which
+  scores each lyric line's align candidate against its transcribe candidates
+  and picks the max-score non-overlapping subset (see
+  pikaraoke.lib.joint_match). Every lyric line ends up in the karaoke output.
 - Transcription (no lyrics_path): runs model.transcribe() directly; stable-ts
   determines segment/word boundaries from the audio alone.
 
 In both modes the same ASS and SRT generators are used. The difference is
-how line objects are built: alignment pairs words to predefined lyric lines
-via the walk matcher; transcription uses stable-ts segments directly as lines.
+how line objects are built: alignment maps words onto predefined lyric lines
+via the joint matcher; transcription uses stable-ts segments directly as lines.
 
 Each model call is wrapped in its own cancellation activity scope.
-Alignment uses two scopes — Phase.ALIGN_CHECK (align only, captures
-stable-ts's segment-failure ratio) followed by Phase.REFINE (refine the
-cached align result). Splitting these means a future escalation policy
-can discard the align output before paying refine's cost. Transcription
-mode stays a single Phase.TRANSCRIBE call.
+Alignment uses Phase.ALIGN_CHECK (align only) then Phase.REFINE (refine the
+cached align result) then Phase.TRANSCRIBE (independent transcribe pass).
+Transcription mode stays a single Phase.TRANSCRIBE call.
 
-On the joint route, a reverb-washed vocal stem (whole-stem transcribe
+On the alignment route, a reverb-washed vocal stem (whole-stem transcribe
 yield below ``dereverb_yield_wpm``) triggers a de-reverb retry: the stem
 worker swaps to the de-reverb roformer, and align + transcribe + the
 joint matcher re-run on the dry stem. Any retry failure keeps the
@@ -45,7 +43,6 @@ from pikaraoke.lib import alignment_capture, lrclib
 from pikaraoke.lib.genius_lyrics import parse_lyric_lines
 from pikaraoke.lib.joint_match import match_words_to_lines_joint_with_stats
 from pikaraoke.lib.srt_prior import apply_srt_prior, cue_spans_from_srt
-from pikaraoke.lib.tiling_match import match_words_to_lines_tiling_with_stats
 from pikaraoke.lib.windowed_realign import (
     analyze_pass1,
     build_spans,
@@ -54,7 +51,6 @@ from pikaraoke.lib.windowed_realign import (
     span_align_lines,
     span_needs_realign,
 )
-from pikaraoke.lib.word_alignment import match_words_to_lines_with_stats
 from pikaraoke.pipeline.config import PipelineConfig
 from pikaraoke.pipeline.context import Phase, PipelineCancelled, SetEvent, StageContext
 from pikaraoke.pipeline.stages._ffmpeg_helpers import run_ffmpeg
@@ -95,145 +91,32 @@ class LyricAlignStage(BaseStage):
         # written at the end only on the alignment-mode happy paths.
         capture_words: list | None = None
         capture_words_source: str | None = None
-        capture_walk_stats: dict | None = None
-        capture_tiling_stats: dict | None = None
         capture_joint_stats: dict | None = None
         capture_transcribe_words: list | None = None
-        capture_fail_ratio: float | None = None
-        capture_collapse_ratio: float | None = None
-        capture_escalated = False
-        capture_escalation_trigger: str | None = None
         capture_method_used: str | None = None
 
         if lyrics_path is not None:
-            # --- Alignment mode ---
+            # --- Alignment mode (joint matcher) ---
             lyrics_lines, align_lines, cue_spans = self._load_lyrics(lyrics_path)
             lyrics_text = "\n".join(align_lines)
 
             logger.info(f"[{self.name}] Aligning lyrics to vocal stem: {Path(vocal_wav).name}")
 
-            method = self._config.match_method
-            use_tiling = method == "tiling"
-            use_joint = method == "joint"
-
-            if use_joint:
-                (
-                    line_objects,
-                    capture_words,
-                    capture_transcribe_words,
-                    capture_joint_stats,
-                ) = self._run_joint(
-                    ctx,
-                    vocal_wav,
-                    lyrics_text,
-                    lyrics_lines,
-                    align_lines,
-                    cue_spans,
-                )
-                capture_words_source = "refine"
-                capture_method_used = "joint"
-
-            elif not use_tiling:
-                # walk / auto: run align() first so we can gate on its
-                # failure ratio *and* a collapse-ratio signal *before*
-                # paying for refine. align_check returns the pre-refine
-                # word list; refine only nudges timestamps, so a quick
-                # walk over those words gives us an honest collapse
-                # signal that catches the failure mode where stable-ts
-                # force-places long runs of tokens at one timestamp
-                # (segment-level success, word-level garbage).
-                check = _model_call(
-                    ctx,
-                    Phase.ALIGN_CHECK,
-                    lambda: self._worker.align_check(
-                        vocal_path=vocal_wav,
-                        lyrics_text=lyrics_text,
-                        cancel_event=ctx.cancel.event if ctx.cancel else None,
-                    ),
-                )
-                result_id = check["result_id"]
-                fail_ratio = check["fail_ratio"]
-                raw_words = check["words"]
-                capture_fail_ratio = fail_ratio
-
-                _, raw_stats = match_words_to_lines_with_stats(raw_words, lyrics_lines, align_lines)
-                n_raw_tokens = raw_stats["n_tokens"]
-                collapse_ratio = (
-                    sum(raw_stats["collapsed_run_lengths"]) / n_raw_tokens if n_raw_tokens else 0.0
-                )
-                capture_collapse_ratio = collapse_ratio
-
-                fail_thresh = self._config.align_failure_escalation
-                collapse_thresh = self._config.collapse_escalation_threshold
-                fail_trips = fail_ratio > fail_thresh
-                collapse_trips = collapse_ratio > collapse_thresh
-
-                if method == "auto" and (fail_trips or collapse_trips):
-                    triggers = []
-                    if fail_trips:
-                        triggers.append("fail_ratio")
-                    if collapse_trips:
-                        triggers.append("collapse_ratio")
-                    capture_escalation_trigger = "+".join(triggers)
-                    logger.warning(
-                        "[%s] escalating to tiling matcher (%s): "
-                        "fail_ratio=%.0f%% (thresh %.0f%%), "
-                        "collapse_ratio=%.0f%% (thresh %.0f%%)",
-                        self.name,
-                        capture_escalation_trigger,
-                        fail_ratio * 100,
-                        fail_thresh * 100,
-                        collapse_ratio * 100,
-                        collapse_thresh * 100,
-                    )
-                    self._discard_cached_safely(result_id, "escalation")
-                    use_tiling = True
-                    capture_escalated = True
-
-                if not use_tiling:
-                    if method == "auto":
-                        logger.info(
-                            "[%s] align gates passed: "
-                            "fail_ratio=%.0f%% (thresh %.0f%%), "
-                            "collapse_ratio=%.0f%% (thresh %.0f%%) — keeping walk match",
-                            self.name,
-                            fail_ratio * 100,
-                            fail_thresh * 100,
-                            collapse_ratio * 100,
-                            collapse_thresh * 100,
-                        )
-                    words = _model_call(
-                        ctx,
-                        Phase.REFINE,
-                        lambda: self._worker.refine_from_cached(
-                            result_id=result_id,
-                            vocal_path=vocal_wav,
-                            cancel_event=ctx.cancel.event if ctx.cancel else None,
-                        ),
-                    )
-                    line_objects, capture_walk_stats = match_words_to_lines_with_stats(
-                        words, lyrics_lines, align_lines
-                    )
-                    capture_words = words
-                    capture_words_source = "refine"
-                    capture_method_used = "walk"
-
-            if use_tiling:
-                logger.info(f"[{self.name}] Transcribing for tiling match: {Path(vocal_wav).name}")
-                words = _model_call(
-                    ctx,
-                    Phase.TRANSCRIBE,
-                    lambda: self._worker.transcribe_words(
-                        vocal_path=vocal_wav,
-                        cancel_event=ctx.cancel.event if ctx.cancel else None,
-                    ),
-                )
-                line_objects, capture_tiling_stats = match_words_to_lines_tiling_with_stats(
-                    words, lyrics_lines, align_lines
-                )
-                capture_words = words
-                capture_words_source = "transcribe"
-                capture_method_used = "tiling"
+            (
+                line_objects,
+                capture_words,
+                capture_transcribe_words,
+                capture_joint_stats,
+            ) = self._run_joint(
+                ctx,
+                vocal_wav,
+                lyrics_text,
+                lyrics_lines,
+                align_lines,
+                cue_spans,
+            )
+            capture_words_source = "refine"
+            capture_method_used = "joint"
 
             write_srt = self._should_write_srt(ctx.song_path)
         else:
@@ -297,15 +180,9 @@ class LyricAlignStage(BaseStage):
                 align_lines=align_lines,
                 words=capture_words,
                 words_source=capture_words_source,
-                walk_stats=capture_walk_stats,
-                tiling_stats=capture_tiling_stats,
                 joint_stats=capture_joint_stats,
                 transcribe_words=capture_transcribe_words,
-                fail_ratio=capture_fail_ratio,
-                collapse_ratio=capture_collapse_ratio,
                 method_used=capture_method_used,
-                escalated=capture_escalated,
-                escalation_trigger=capture_escalation_trigger,
                 line_objects=line_objects,
             )
 
@@ -320,15 +197,9 @@ class LyricAlignStage(BaseStage):
         align_lines: list[str],
         words: list | None,
         words_source: str | None,
-        walk_stats: dict | None,
-        tiling_stats: dict | None,
         joint_stats: dict | None,
         transcribe_words: list | None,
-        fail_ratio: float | None,
-        collapse_ratio: float | None,
         method_used: str | None,
-        escalated: bool,
-        escalation_trigger: str | None,
         line_objects: list[dict],
     ) -> None:
         """Assemble + write the alignment-debug JSON. Errors are logged
@@ -337,9 +208,6 @@ class LyricAlignStage(BaseStage):
         try:
             cfg = self._config
             config_snapshot = {
-                "match_method": cfg.match_method,
-                "align_failure_escalation": cfg.align_failure_escalation,
-                "collapse_escalation_threshold": cfg.collapse_escalation_threshold,
                 "joint_windowed_realign": cfg.joint_windowed_realign,
                 "joint_alpha": cfg.joint_alpha,
                 "joint_margin_s": cfg.joint_margin_s,
@@ -366,11 +234,7 @@ class LyricAlignStage(BaseStage):
             if lrclib_ref is not None:
                 lyrics["lrclib"] = lrclib_ref
             pipeline_decisions = {
-                "align_check_fail_ratio": fail_ratio,
-                "collapse_ratio": collapse_ratio,
                 "method_used": method_used,
-                "escalated_to_tiling": escalated,
-                "escalation_trigger": escalation_trigger,
                 "joint_alpha": cfg.joint_alpha if method_used == "joint" else None,
             }
             yt_srt = _find_youtube_srt_path(ctx.song_path)
@@ -401,8 +265,6 @@ class LyricAlignStage(BaseStage):
                 pipeline_decisions=pipeline_decisions,
                 words=words,
                 words_source=words_source,
-                walk_stats=walk_stats,
-                tiling_stats=tiling_stats,
                 joint_stats=joint_stats,
                 transcribe_words=transcribe_words,
                 output_summary=alignment_capture.summarize_line_objects(line_objects),
@@ -546,13 +408,6 @@ class LyricAlignStage(BaseStage):
     def _should_write_srt(song_path: Path) -> bool:
         """Skip SRT generation when yt-dlp already provided one."""
         return _find_youtube_srt_path(song_path) is None
-
-    def _discard_cached_safely(self, result_id: str, context_msg: str) -> None:
-        """Evict a cached align result; log and swallow if the worker died."""
-        try:
-            self._worker.discard_cached(result_id)
-        except Exception as exc:
-            logger.debug("discard_cached failed during %s: %s", context_msg, exc)
 
     def _run_joint(
         self,

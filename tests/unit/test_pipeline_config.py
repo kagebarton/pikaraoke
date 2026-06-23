@@ -21,9 +21,6 @@ from pikaraoke.pipeline.context import (
 class TestPipelineConfigDefaults:
     """Pin the tunables the stages and matchers read straight off the config."""
 
-    def test_match_method_defaults_to_joint(self):
-        assert PipelineConfig().match_method == "joint"
-
     def test_refine_steps_defaults_to_starts_only(self):
         # "s" (starts) ships over "se": halves refine at no line-start cost
         # (plans/reduce-refine-time.md). Word-end refinement is dropped.
@@ -35,11 +32,6 @@ class TestPipelineConfigDefaults:
         cfg = PipelineConfig()
         assert cfg.joint_alpha == 2.0
         assert cfg.joint_margin_s == 0.3
-
-    def test_auto_escalation_thresholds(self):
-        cfg = PipelineConfig()
-        assert cfg.align_failure_escalation == 0.1
-        assert cfg.collapse_escalation_threshold == 0.15
 
     def test_loudnorm_targets(self):
         cfg = PipelineConfig()
