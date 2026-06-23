@@ -628,6 +628,7 @@ def _whisper_worker_main_inner(
     log_level: int,
 ) -> None:
     worker_log = _setup_worker_logger(log_level)
+    _demote_alignment_warnings(worker_log)
     worker_log.info("Whisper worker process started (PID %d)", os.getpid())
 
     # Must be set before torch initializes CUDA: expandable segments let the
@@ -1084,3 +1085,24 @@ def _setup_worker_logger(log_level: int = logging.INFO) -> logging.Logger:
     sw_logger.propagate = False
 
     return worker_logger
+
+
+def _demote_alignment_warnings(worker_log: logging.Logger) -> None:
+    """Route stable_whisper's per-pass alignment warnings to DEBUG.
+
+    The aligner warns on every partially-aligned pass ("N/M segments failed to
+    align", "Failed to align the last N/M words"), but the joint matcher
+    recovers those lines and prints its own authoritative "Joint match: ..."
+    summary, so the raw warnings are noise at INFO. Demote them to DEBUG — they
+    reappear under ``-v`` when alignment quality is under investigation — and
+    leave every other warning (deprecations, our own stream warning) untouched.
+    """
+    default_showwarning = warnings.showwarning
+
+    def showwarning(message, category, filename, lineno, file=None, line=None):
+        if category is UserWarning and "stable_whisper" in filename and "alignment" in filename:
+            worker_log.debug("stable_whisper align: %s", message)
+            return
+        default_showwarning(message, category, filename, lineno, file, line)
+
+    warnings.showwarning = showwarning
