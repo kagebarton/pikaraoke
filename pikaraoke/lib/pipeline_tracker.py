@@ -48,8 +48,8 @@ class PipelineItem:
         self.error_message: str | None = None
         self.cancelling: bool = False
         # Lyric source + matcher combo recorded at processing completion
-        # (e.g. "genius+tiling", "srt+walk", "transcribe"). Surfaced in the
-        # processing-page label so bad-match combos are visible at a glance.
+        # (e.g. "genius+joint", "srt+joint", "transcribe"). Surfaced in the
+        # processing-page label so the lyric source is visible at a glance.
         self.lyric_method: str | None = None
 
 

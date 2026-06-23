@@ -428,17 +428,6 @@ def parse_args() -> argparse.Namespace:
         help="Skip the post-report confirmation prompt.",
     )
     p.add_argument(
-        "--match-method",
-        choices=["auto", "walk", "tiling", "joint"],
-        default=None,
-        help=(
-            "Force the lyric matcher instead of PipelineConfig's default "
-            "('auto'): 'walk' = two-pointer walk matcher, 'tiling' = "
-            "order-independent tiling matcher, 'joint' = joint align + "
-            "transcribe DP (one matcher, no escalation gates)."
-        ),
-    )
-    p.add_argument(
         "--use-bundle-lyrics",
         action="store_true",
         help=(
@@ -486,9 +475,6 @@ def main() -> int:
 
     config = PipelineConfig()
     config.intermediate_dir = get_temp_directory()
-    if args.match_method is not None:
-        config.match_method = args.match_method
-        print(f"Lyric matcher forced to: {args.match_method}")
     genius = _make_genius(config)
     if not genius._token:
         print(
