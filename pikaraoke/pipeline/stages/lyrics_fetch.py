@@ -74,6 +74,12 @@ class LyricsFetchStage(BaseStage):
                 ctx.artifacts["lyrics_path"] = lyrics_path
                 ctx.artifacts["lyrics_origin"] = "genius"
                 delete_choice(yt_id)
+                logger.info(
+                    "Lyrics: Genius — %r by %r (genius #%s)",
+                    song.title,
+                    song.artist,
+                    choice["genius_id"],
+                )
                 self._fetch_lrclib_prior(ctx, song.title, song.artist, song.text)
                 return
             except GeniusUnavailable as e:
@@ -86,6 +92,7 @@ class LyricsFetchStage(BaseStage):
             ctx.artifacts["lyrics_path"] = None
             ctx.artifacts["lyrics_origin"] = "none"
             delete_choice(yt_id)
+            logger.info("Lyrics: user chose to transcribe — skipping subtitles")
             return
 
         # Branch b2: explicit YouTube SRT selection
@@ -94,12 +101,20 @@ class LyricsFetchStage(BaseStage):
             ctx.artifacts["lyrics_path"] = srt_path
             ctx.artifacts["lyrics_origin"] = "srt" if srt_path else "none"
             delete_choice(yt_id)
+            if srt_path:
+                logger.info("Lyrics: YouTube SRT, user-selected (%s)", srt_path.name)
+            else:
+                logger.warning("Lyrics: SRT selected but none found — will transcribe")
             return
 
         # Branch c: SRT fallback (current behaviour)
         srt_path = self._find_srt(ctx.song_path)
         ctx.artifacts["lyrics_path"] = srt_path
         ctx.artifacts["lyrics_origin"] = "srt" if srt_path else "none"
+        if srt_path:
+            logger.info("Lyrics: YouTube SRT (%s)", srt_path.name)
+        else:
+            logger.info("Lyrics: no subtitles found — will transcribe from audio")
 
     # ------------------------------------------------------------------
     # Helpers
@@ -131,15 +146,28 @@ class LyricsFetchStage(BaseStage):
             if lrc_path.is_file():
                 _synced, record = lrclib.read_lrc(lrc_path)
                 ctx.artifacts["lrclib"] = {"lrc_file": rel, "record": record, "query": None}
+                logger.info("Timing prior: reusing cached LRCLIB — %s", _lrc_label(record))
                 return
 
             track, artist_q = lrclib.clean_key(title, artist)
             records = lrclib.search(track, artist_q)
             if not records:
+                logger.info(
+                    "Timing prior: no LRCLIB match for %r by %r — aligning without a prior",
+                    track,
+                    artist_q,
+                )
                 return
             sheet = [item["text"] for item in parse_lyric_lines(lyrics_text)]
             chosen = lrclib.select_candidate(records, sheet, media_dur)
             if chosen is None:
+                logger.info(
+                    "Timing prior: %d LRCLIB record(s) for %r by %r but none matched the "
+                    "lyric sheet — aligning without a prior",
+                    len(records),
+                    track,
+                    artist_q,
+                )
                 return
             lrclib.write_lrc(lrc_path, chosen)
             ctx.artifacts["lrclib"] = {
@@ -147,9 +175,9 @@ class LyricsFetchStage(BaseStage):
                 "record": lrclib.record_meta(chosen),
                 "query": {"track_name": track, "artist_name": artist_q},
             }
-            logger.info("LRCLIB prior: %s", lrc_path.name)
+            logger.info("Timing prior: LRCLIB — %s", _lrc_label(chosen))
         except Exception:
-            logger.exception("LRCLIB prior fetch failed; processing without it")
+            logger.exception("Timing prior: LRCLIB fetch failed — aligning without a prior")
 
     @staticmethod
     def _extract_yt_id(song_path: Path) -> str | None:
@@ -165,18 +193,20 @@ class LyricsFetchStage(BaseStage):
     def _find_srt(song_path: Path) -> Path | None:
         """Look for ``subtitles/<stem>.en.srt`` then ``subtitles/<stem>.srt``.
 
-        Logic moved verbatim from
-        ``processing_manager._resolve_lyrics_path``.
+        Pure lookup; the calling branch logs the resolved source so the message
+        can say whether the SRT was user-selected or an automatic fallback.
         """
         subs_dir = song_path.parent / "subtitles"
         for name in (f"{song_path.stem}.en.srt", f"{song_path.stem}.srt"):
             candidate = subs_dir / name
             if candidate.is_file():
-                logger.info("Found lyrics for alignment: %s", candidate.name)
                 return candidate
-        logger.debug("Lyrics candidate not found: %s", candidate)
-        logger.info(
-            "No subtitle found for alignment — will transcribe: %s",
-            song_path.name,
-        )
         return None
+
+
+def _lrc_label(record: dict) -> str:
+    """Human-readable identity for an LRCLIB record: ``'Title' by 'Artist' (lrclib #id)``."""
+    return (
+        f"{record.get('trackName')!r} by {record.get('artistName')!r} "
+        f"(lrclib #{record.get('id')})"
+    )
