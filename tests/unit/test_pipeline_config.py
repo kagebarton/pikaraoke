@@ -21,8 +21,10 @@ from pikaraoke.pipeline.context import (
 class TestPipelineConfigDefaults:
     """Pin the tunables the stages and matchers read straight off the config."""
 
-    def test_match_method_defaults_to_auto(self):
-        assert PipelineConfig().match_method == "auto"
+    def test_refine_steps_defaults_to_starts_only(self):
+        # "s" (starts) ships over "se": halves refine at no line-start cost
+        # (plans/reduce-refine-time.md). Word-end refinement is dropped.
+        assert WhisperModelConfig().refine.steps == "s"
 
     def test_joint_knobs_are_corpus_tuned(self):
         # joint_alpha ships at the 2.0 sweep result, NOT the 4.0 design prior;
@@ -30,11 +32,6 @@ class TestPipelineConfigDefaults:
         cfg = PipelineConfig()
         assert cfg.joint_alpha == 2.0
         assert cfg.joint_margin_s == 0.3
-
-    def test_auto_escalation_thresholds(self):
-        cfg = PipelineConfig()
-        assert cfg.align_failure_escalation == 0.1
-        assert cfg.collapse_escalation_threshold == 0.15
 
     def test_loudnorm_targets(self):
         cfg = PipelineConfig()
@@ -143,7 +140,7 @@ class TestCancelToken:
         # exit check only synthesises when the body completed cleanly.
         tok = self._token()
         with pytest.raises(ValueError):
-            with tok.activity(Phase.REFINE, _RecordingCancellable()):
+            with tok.activity(Phase.TRANSCRIBE, _RecordingCancellable()):
                 tok.cancel()
                 raise ValueError("boom")
 

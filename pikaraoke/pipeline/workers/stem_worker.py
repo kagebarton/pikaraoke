@@ -6,8 +6,11 @@ demix loop using PyTorch's register_forward_pre_hook().
 
 How it works:
 1. The worker process loads the audio-separator model at startup.
-2. On each separate() call, the main process sends (wav_path, output_dir)
-over a Pipe, and a cancel_event is forwarded via a dedicated cancel Pipe.
+2. On each separate() call, the main process sends (wav_path, output_dir,
+model_name) over a Pipe, and a cancel_event is forwarded via a dedicated
+cancel Pipe. model_name is usually None (run the default model); a job
+may override it (e.g. the de-reverb roformer), in which case the worker
+swaps models for the job and eagerly restores the default afterwards.
 3. Before calling separator.separate(), the worker **registers a forward
 pre-hook** on model_run that checks the cancel pipe before each forward
 pass. In the Roformer demix loop, `self.model_run(part.unsqueeze(0))[0]`
@@ -17,8 +20,9 @@ a signal on the cancel pipe. The pre-hook detects it and raises
 _CancelledInsideDemix.
 5. The exception unwinds through demix() → separate() → _separate_file().
 Because we're in a subprocess, the exception stays local.
-6. The worker catches _CancelledInsideDemix, clears GPU state, and sends
-("cancelled",) back over the result Pipe.
+6. The worker catches _CancelledInsideDemix and sends ("cancelled",)
+back over the result Pipe. GPU state (cached source arrays, allocator
+cache) is released after every job, whatever the outcome.
 7. The model weights (self.model_run) survive the exception — they're on
 the GPU as class attributes, not on the Python stack. The next job
 can call separate() immediately without reloading.
@@ -146,6 +150,7 @@ class StemWorker:
         wav_path: Path,
         output_dir: Path,
         cancel_event: threading.Event | None = None,
+        model_name: str | None = None,
     ) -> tuple[Path, Path]:
         """Submit a WAV for separation. Blocks until result or cancellation.
 
@@ -155,6 +160,11 @@ class StemWorker:
             cancel_event: Optional threading.Event from the orchestrator.
                 When set, the worker will abort separation between chunks.
                 If None, the separation runs to completion (no cancellation).
+            model_name: Optional separator model override for this job
+                (e.g. the de-reverb roformer). The worker swaps to it for
+                the job and eagerly restores the default afterwards, so
+                the next default job pays no load latency. None runs the
+                default model.
         """
         proc = self._process
 
@@ -185,17 +195,17 @@ class StemWorker:
         # cancel-forwarder daemon thread before starting this job.
         self._drain_cancel_pipe()
 
-        js.send((str(wav_path), str(output_dir)))
+        js.send((str(wav_path), str(output_dir), model_name))
 
         # Forward threading.Event → cancel Pipe via a daemon thread
-        cancel_forwarder: threading.Thread | None = None
+        forwarder_done: threading.Event | None = None
         if cancel_event is not None and self._cancel_send is not None:
-            cancel_forwarder = threading.Thread(
+            forwarder_done = threading.Event()
+            threading.Thread(
                 target=forward_cancel,
-                args=(cancel_event, self._cancel_send),
+                args=(cancel_event, self._cancel_send, forwarder_done),
                 daemon=True,
-            )
-            cancel_forwarder.start()
+            ).start()
 
         # Block until result
         try:
@@ -206,6 +216,8 @@ class StemWorker:
                 if not proc.is_alive():
                     raise WorkerDiedError("Stem worker died during separation")
         finally:
+            if forwarder_done is not None:
+                forwarder_done.set()
             self._drain_cancel_pipe()
 
         tag = msg[0]
@@ -312,9 +324,12 @@ def _worker_main(
 ) -> None:
     """Entry point for the stem worker subprocess.
 
-    Loads the audio-separator model, then loops on job_recv. For each
-    job, it registers a forward pre-hook on model_instance.model_run
-    to add a per-chunk cancellation check that polls cancel_recv.
+    Loads the audio-separator model, then loops on job_recv. Each job is
+    (wav_path, output_dir, model_name) — model_name None runs the default
+    model; an override swaps models for the job (default restored right
+    after). For each job, it registers a forward pre-hook on
+    model_instance.model_run to add a per-chunk cancellation check that
+    polls cancel_recv.
 
     Results sent on result_send:
     - ("ok", vocal_path, instrumental_path) on success
@@ -341,6 +356,12 @@ def _worker_main(
     worker_log = _setup_worker_logger(log_level)
     worker_log.info("Stem worker process started (PID %d)", os.getpid())
 
+    # Must be set before torch initializes CUDA: expandable segments let the
+    # caching allocator grow/shrink instead of pinning fixed blocks, which
+    # avoids fragmentation OOM when this process shares a small GPU with the
+    # whisper worker and mpv. setdefault so an externally set conf wins.
+    os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+
     import torch
     from audio_separator.separator import Separator
 
@@ -365,25 +386,34 @@ def _worker_main(
     _clear_gpu_cache()
     worker_log.info("Audio separator model loaded — ready for jobs")
 
+    # The model currently on the GPU. None means a swap died halfway
+    # (old model dropped, new load failed); the next job re-loads.
+    loaded_model: str | None = model_name
+
     try:
         while True:
             item = job_recv.recv()
             if item is None:
                 break
 
-            wav_path_str, output_dir_str = item
+            wav_path_str, output_dir_str, job_model = item
             wav_path = Path(wav_path_str)
             output_dir = Path(output_dir_str)
+            target_model = job_model or model_name
             worker_log.info(f"Separating: {wav_path.name}")
 
             try:
+                if target_model != loaded_model:
+                    worker_log.info(f"Swapping separator model: {loaded_model} -> {target_model}")
+                    loaded_model = None
+                    _swap_model(separator, target_model)
+                    loaded_model = target_model
                 vocal_wav, instrumental_wav = _separate_with_cancel_check(
                     wav_path, output_dir, separator, cancel_recv, worker_log
                 )
                 result_send.send(("ok", str(vocal_wav), str(instrumental_wav)))
             except _CancelledInsideDemix:
                 worker_log.info("Separation cancelled between chunks — model still loaded")
-                _clear_gpu_state(separator, worker_log)
                 result_send.send(("cancelled",))
             except oom_exc_types as e:
                 # OOM mid-demix leaves audio-separator's internal state and
@@ -401,8 +431,33 @@ def _worker_main(
                 worker_log.error(f"Stem separation failed for {wav_path}: {e}")
                 result_send.send(("error", str(e)))
             finally:
+                # Release per-job GPU state after every outcome, not just
+                # cancellation: audio-separator keeps the full-song source
+                # arrays referenced on the model instance, and the CUDA
+                # allocator's cached demix activations are invisible-but-
+                # reserved to the whisper worker and mpv. On this shared
+                # 6 GB card that headroom matters more than allocator reuse.
+                _clear_gpu_state(separator, worker_log)
                 # Drain any remaining cancel signals so the pipe is clean
                 drain_pipe(cancel_recv)
+
+            # Eager restore after an override job (or a half-dead swap):
+            # the parent already has its result, so this reload overlaps
+            # the caller's next step (the whisper re-align runs in the
+            # other process) and the worker is back at steady state before
+            # the next song's separation arrives.
+            if loaded_model != model_name:
+                try:
+                    worker_log.info(f"Restoring default separator model: {model_name}")
+                    loaded_model = None
+                    _swap_model(separator, model_name)
+                    loaded_model = model_name
+                except Exception as e:
+                    # No usable model on board — exit so the parent
+                    # auto-restarts a fresh subprocess (default model)
+                    # on the next job.
+                    worker_log.error(f"Failed to restore default separator model: {e}")
+                    return
     finally:
         del separator
         _clear_gpu_cache()
@@ -503,25 +558,7 @@ def _separate_with_cancel_check(
     if cancelled[0]:
         raise _CancelledInsideDemix()
 
-    # Identify vocal/instrumental stems from output paths.
-    # Handles both karaoke-model output ((vocals)/(instrumental)) and
-    # non-karaoke MelBand Roformer output ((vocals)/(other)).
-    vocals_wav = None
-    instrumental_wav = None
-    for p in output_paths:
-        full_path = Path(tmp_dir) / Path(p).name
-        lower = full_path.name.lower()
-        no_vocal = "no vocal" in lower or "no_vocal" in lower
-        is_other = "(other)" in lower
-        if "instrumental" in lower or no_vocal or is_other:
-            instrumental_wav = full_path
-        elif "vocal" in lower:
-            vocals_wav = full_path
-
-    if not vocals_wav or not instrumental_wav:
-        raise RuntimeError(f"Could not identify vocal/instrumental stems in output: {output_paths}")
-
-    return vocals_wav, instrumental_wav
+    return _identify_stems(output_paths, tmp_dir)
 
 
 def _run_separation_unpatched(
@@ -532,24 +569,67 @@ def _run_separation_unpatched(
 ) -> tuple[Path, Path]:
     """Fallback: run separation without cancel check (no model_run found)."""
     output_paths = separator.separate(str(audio_path))
+    return _identify_stems(output_paths, tmp_dir)
+
+
+def _identify_stems(output_paths, tmp_dir: Path) -> tuple[Path, Path]:
+    """Map separator output files to the (vocal, instrumental) result slots.
+
+    Three naming families:
+    - karaoke models: (Vocals) / (Instrumental)
+    - non-karaoke MelBand Roformer: (Vocals) / (other) or "No Vocals"
+    - anvuew de-reverb: (Noreverb) / (Reverb) — the dry vocal fills the
+      vocal slot, the reverb tail the instrumental slot.
+
+    The (no)reverb checks must run first: de-reverb output names embed
+    the *input* file's name, which for a de-reverb retry already contains
+    "(Vocals)" from the karaoke separation that produced it.
+    """
     vocals_wav = None
     instrumental_wav = None
     for p in output_paths:
         full_path = Path(tmp_dir) / Path(p).name
         lower = full_path.name.lower()
         no_vocal = "no vocal" in lower or "no_vocal" in lower
-        is_other = "(other)" in lower
-        if "instrumental" in lower or no_vocal or is_other:
+        if "(noreverb)" in lower:
+            vocals_wav = full_path
+        elif "(reverb)" in lower:
+            instrumental_wav = full_path
+        elif "instrumental" in lower or no_vocal or "(other)" in lower:
             instrumental_wav = full_path
         elif "vocal" in lower:
             vocals_wav = full_path
+
     if not vocals_wav or not instrumental_wav:
-        raise RuntimeError(f"Could not identify vocal/instrumental stems: {output_paths}")
+        raise RuntimeError(f"Could not identify vocal/instrumental stems in output: {output_paths}")
+
     return vocals_wav, instrumental_wav
 
 
+def _swap_model(separator, model_name: str) -> None:
+    """Replace the loaded separator model with ``model_name``.
+
+    Separator.load_model() constructs the new model on the GPU *before*
+    releasing the old one — on a shared 6 GB card holding two roformers
+    at once OOMs, so the old instance must be dropped and its VRAM
+    returned to the allocator before the load starts.
+    """
+    import gc
+
+    import torch
+
+    separator.model_instance = None
+    gc.collect()
+    torch.cuda.empty_cache()
+    separator.load_model(model_filename=model_name)
+    # Return load-transient allocator blocks to the driver (same as the
+    # startup load): the post-swap resident set coexists with whisper
+    # inference in the other process, so ~850 MiB of cache matters here.
+    torch.cuda.empty_cache()
+
+
 def _clear_gpu_state(separator, worker_log: logging.Logger) -> None:
-    """Clear intermediate GPU state after a cancelled separation."""
+    """Clear per-job GPU state: cached source arrays + CUDA allocator cache."""
     if separator.model_instance is not None:
         try:
             separator.model_instance.clear_gpu_cache()

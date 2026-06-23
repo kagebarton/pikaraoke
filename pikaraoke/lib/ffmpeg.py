@@ -1,6 +1,7 @@
 """FFmpeg utilities for media processing and transcoding."""
 
 import subprocess
+from pathlib import Path
 
 
 def get_ffmpeg_version() -> str:
@@ -36,6 +37,32 @@ def is_transpose_enabled() -> bool:
     except IndexError:
         return False
     return "rubberband" in filters.stdout.decode()
+
+
+def probe_duration(media_path: Path) -> float | None:
+    """Media duration in seconds via ffprobe, or None if it can't be read.
+
+    Used as the LRCLIB candidate-selection tiebreak; a missing duration just
+    drops the tiebreak, never fails processing.
+    """
+    try:
+        out = subprocess.check_output(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "csv=p=0",
+                str(media_path),
+            ],
+            stderr=subprocess.DEVNULL,
+            timeout=30,
+        )
+        return float(out.strip())
+    except (subprocess.SubprocessError, OSError, ValueError):
+        return None
 
 
 def is_ffmpeg_installed() -> bool:

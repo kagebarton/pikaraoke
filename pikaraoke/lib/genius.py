@@ -52,6 +52,15 @@ class GeniusHit:
     artist: str
 
 
+@dataclass(frozen=True)
+class GeniusSong:
+    """A fetched song: lyrics plus the canonical title/artist."""
+
+    text: str
+    title: str
+    artist: str
+
+
 # ---------------------------------------------------------------------------
 # GeniusClient
 # ---------------------------------------------------------------------------
@@ -140,12 +149,13 @@ class GeniusClient:
 
     # -- Fetch lyrics -------------------------------------------------------
 
-    def fetch_lyrics(self, genius_id: int) -> str:
-        """Scrape lyrics for a specific song id.
+    def fetch_song(self, genius_id: int) -> GeniusSong:
+        """Scrape a specific song id: lyrics plus its canonical title/artist.
 
         Raises :class:`GeniusUnavailable` on any error or when the scraped
-        page yields empty lyrics.  Returns text with section headers
-        removed (see ``remove_section_headers`` in ``__init__``).
+        page yields empty lyrics.  Lyrics have section headers removed (see
+        ``remove_section_headers`` in ``__init__``); the canonical
+        title/artist feed the LRCLIB structured search.
         """
         if not self._token or self._genius is None:
             raise GeniusUnavailable("Genius API token not configured")
@@ -159,7 +169,15 @@ class GeniusClient:
         if not song or not song.lyrics:
             raise GeniusUnavailable(f"Genius returned empty lyrics for id {genius_id}")
 
-        return song.lyrics
+        return GeniusSong(text=song.lyrics, title=song.title or "", artist=song.artist or "")
+
+    def fetch_lyrics(self, genius_id: int) -> str:
+        """Scrape lyrics for a specific song id (text only).
+
+        Thin wrapper over :meth:`fetch_song` for callers that don't need the
+        canonical key.
+        """
+        return self.fetch_song(genius_id).text
 
 
 # ---------------------------------------------------------------------------
