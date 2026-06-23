@@ -86,11 +86,11 @@ def find_candidates(
     and the DP happily tiles those degenerate fragments.
 
     Score is the raw matched-token count, NOT a normalized ratio. The
-    tiling DP maximizes the sum of selected scores, so raw counts make
-    it maximize total lyric coverage. Normalization (the old ``(n-dist)/n``)
-    gave every perfect short fragment a score of 1.0, letting a 2-token
-    paren-split unit beat a 6-token full line with one whisper error
-    when they competed for overlapping windows. Edit-quality gating is
+    matcher's interval-scheduling DP maximizes the sum of selected scores,
+    so raw counts make it maximize total lyric coverage. Normalization (the
+    old ``(n-dist)/n``) gave every perfect short fragment a score of 1.0,
+    letting a 2-token fragment beat a 6-token full line with one whisper
+    error when they competed for overlapping windows. Edit-quality gating is
     already handled by ``max_edit_ratio``; the score shouldn't repeat it.
     """
     candidates = []
@@ -136,7 +136,7 @@ def find_anchor_candidates(
 
     Score is the raw anchor-run length — the count of confidently-matched
     consecutive tokens — matching the main-pass scoring scheme so the
-    tiling DP can compare across passes on the same units. An N-token
+    DP can compare across passes on the same units. An N-token
     anchor run can never beat what main would have scored for the same
     line: main pass would have found ``n - dist`` with ``dist <= n - run``
     (the run contributes 0 to dist), so main's score is at least
@@ -170,10 +170,9 @@ def _build_line_object(
     """Assign per-word timing within a selected window.
 
     A candidate match only ties a whole lyric line to a token span — for
-    karaoke each lyric word still needs its own start/end. Reuse the walk
-    aligner *within the window* to pair words, then linearly interpolate
-    any unmatched runs across the surrounding anchors (same gap-fill
-    logic as the walk matcher).
+    karaoke each lyric word still needs its own start/end. Reuse
+    ``_walk_align`` *within the window* to pair words, then linearly
+    interpolate any unmatched runs across the surrounding anchors.
     """
     lyric_norms = [t[0] for t in line_toks]
     win_norms = [_normalize_token(w["word"]) for w in win_words]

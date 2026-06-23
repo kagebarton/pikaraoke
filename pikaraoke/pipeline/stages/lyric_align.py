@@ -134,9 +134,9 @@ class LyricAlignStage(BaseStage):
             capture_method_used = "transcribe"
 
         # Surface the lyric source + matcher combination on the context so
-        # the processing-page row can render it (e.g. "genius+tiling" flags
-        # the worst-case combo at a glance). Independent of the debug
-        # capture flag below — the UI label must work even with capture off.
+        # the processing-page row can render it (e.g. "genius+joint" shows
+        # the lyric source at a glance). Independent of the debug capture
+        # flag below — the UI label must work even with capture off.
         lyrics_origin = ctx.artifacts.get("lyrics_origin", "none")
         if lyrics_path is None:
             ctx.artifacts["lyric_method"] = "transcribe"

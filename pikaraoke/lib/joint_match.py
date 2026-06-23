@@ -252,7 +252,7 @@ def _tokenise_lines(align_lines: list[str]) -> list[list[tuple[str, str]]]:
     normalise to empty (punctuation, paren-stripped artefacts).
 
     The flat concatenation across lines is what ``align_words`` is assumed
-    to correspond to 1:1 — the same tokenisation the walk matcher uses.
+    to correspond to 1:1 (forced alignment emits one word per lyric token).
     """
     out: list[list[tuple[str, str]]] = []
     for line in align_lines:
