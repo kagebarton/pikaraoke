@@ -180,7 +180,7 @@ _POLITE_SLEEP_S = 0.3
 # Trailing feature credits ("(Ft. Yebba)", "feat. X") and trailing
 # parenthetical/bracket qualifiers ("(Live At Abbey Road)") that make LRCLIB's
 # structured track/artist search miss the canonical recording (step-1
-# SEARCH-MISS, plans/lrclib-timing-prior.md). Feature credits first (they often
+# SEARCH-MISS). Feature credits first (they often
 # sit inside the parens). Only *trailing* groups are stripped — a leading
 # parenthetical is usually part of the title ("(I Can't Get No) Satisfaction").
 _FEAT_RE = re.compile(r"\s*[(\[]?\s*(?:feat\.?|ft\.?|featuring)\b.*$", re.IGNORECASE)

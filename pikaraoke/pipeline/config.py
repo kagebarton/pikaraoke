@@ -108,7 +108,7 @@ class TranscribeKwargs:
 class RefineKwargs:
     """Splatted into ``model.refine(audio, result, **kwargs)`` — shared by both paths."""
 
-    steps: str = "s"  # starts only; halves refine vs "se" (see plans/reduce-refine-time.md)
+    steps: str = "s"  # starts only; halves refine vs "se"
     word_level: bool = True
 
 
@@ -206,8 +206,8 @@ class PipelineConfig:
     # candidate gets just by being where forced alignment placed the
     # line. Higher → trust align more (all-align on clean songs); lower
     # → trust transcribe more (all-transcribe on misaligned songs).
-    # Corpus-tuned: 2.0 from the 27-song α-sweep documented in
-    # plans/joint-alignment-dp.md. The design prior was 4.0; the sweep
+    # Corpus-tuned: 2.0 from the 27-song α-sweep. The design prior
+    # was 4.0; the sweep
     # showed α=4 keeps Hakuna Matata's late lyrics misplaced into the
     # dialogue region (the DP prefers an all-align chain with α=4's
     # bonus), while α=2 routes them correctly to the sung reprise.
@@ -225,8 +225,8 @@ class PipelineConfig:
     # whose normalized edit ratio against the lyric line exceeds this
     # are never candidates. Whisper mishears sung vocals often, so a
     # strict gate rejects weak-but-correct matches the DP score would
-    # have ranked fine anyway. The held-out caption eval
-    # (plans/matcher-timing-eval.md) showed 0.25 -> 0.75 lifts placed
+    # have ranked fine anyway. The held-out caption eval showed
+    # 0.25 -> 0.75 lifts placed
     # coverage 85.6% -> 89.4% with median residual improved and gross
     # misplacements unchanged; coverage saturates at 0.75.
     joint_max_edit_ratio: float = 0.75
@@ -235,8 +235,8 @@ class PipelineConfig:
     # anchors whose interior holds a suspect line (unplaced or weakly
     # corroborated) are re-aligned in isolation — the audio slice plus
     # only that span's lyric lines — and merged back conservatively
-    # (see pikaraoke.lib.windowed_realign). Corpus-measured (Phase 3,
-    # plans/matcher-timing-eval.md): gross misplacements 77 -> 58
+    # (see pikaraoke.lib.windowed_realign). Corpus-measured (Phase 3):
+    # gross misplacements 77 -> 58
     # across 23 songs. GPU cost: zero on fully-corroborated songs, up
     # to ~2x the align+refine leg on suspect-heavy ones (corpus mean:
     # 46% of song audio re-aligned).
@@ -247,8 +247,8 @@ class PipelineConfig:
     # (robust offset fit over trusted anchors, bail-out on few anchors
     # or wide spread), then repair gross disagreements and fill lines
     # the audio could not place (see pikaraoke.lib.srt_prior).
-    # Corpus-measured against held-out LRCLIB references
-    # (plans/srt-timing-prior.md): gross misplacements 75 -> 50 across
+    # Corpus-measured against held-out LRCLIB references: gross
+    # misplacements 75 -> 50 across
     # 22 songs, no song regressed; the Mirrors chant outro (audio-
     # unplaceable) alone repairs 21 lines. Zero GPU cost.
     joint_srt_prior: bool = True
@@ -262,8 +262,8 @@ class PipelineConfig:
     # the anchor-MAD bail-out gates the variant's timing first — a
     # wrong-sync variant bails rather than mis-snapping (Mirrors does
     # exactly this on the testbed). Mutually exclusive with the SRT prior
-    # by origin. SRT testbed, LRCLIB-input/SRT-judge
-    # (plans/lrclib-timing-prior.md): pooled gross 4 -> 3, no song
+    # by origin. SRT testbed, LRCLIB-input/SRT-judge: pooled gross
+    # 4 -> 3, no song
     # regressed on any absolute count; +4 lines filled. One LRCLIB query
     # per Genius-origin song; no candidate -> no cues -> no-op (processes
     # as today). Zero GPU cost.
@@ -274,8 +274,8 @@ class PipelineConfig:
     # treated as reverb-washed: the stem worker swaps to the de-reverb
     # roformer, de-reverbs the stem, and align + transcribe + the joint
     # matcher re-run on the dry stem (any failure keeps the wet-stem
-    # results). Corpus evidence (plans/matcher-timing-eval.md): the one
-    # reverb-washed song yields 14.4 wpm; every other song >= 50.5.
+    # results). Corpus evidence: the one reverb-washed song yields
+    # 14.4 wpm; every other song >= 50.5.
     # 0 disables the retry.
     dereverb_yield_wpm: float = 30.0
 

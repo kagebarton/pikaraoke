@@ -16,7 +16,7 @@ back under a conservative policy:
   Pass-1 placements may always be replaced or dropped; un-placing an
   uncorroborated line is honest (hidden beats 20-seconds-wrong).
 
-Corpus-measured (plans/matcher-timing-eval.md, Phase 3, 23 songs):
+Corpus-measured (Phase 3, 23 songs):
 gross misplacements 77 -> 58, lines within 1.0 s 84.5% -> 85.7%.
 
 This module is pure logic: anchor/suspect analysis, span construction,

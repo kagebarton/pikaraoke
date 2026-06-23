@@ -32,9 +32,6 @@ transcribe's word timestamps when a transcribe candidate won.
 
 Lines with no selected candidate are interpolated between their bracketing
 selected neighbours so the output is 1:1 with the lyric line list.
-
-For the design rationale and the corpus that motivated this matcher, see
-``plans/joint-alignment-dp.md``.
 """
 
 import logging

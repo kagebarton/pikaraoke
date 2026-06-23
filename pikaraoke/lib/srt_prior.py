@@ -22,8 +22,7 @@ times cannot be trusted directly — the audio calibrates the clock:
 
 Cue+offset is gross-repair quality, not sub-second polish (two corpus
 songs have ~0.5 s-sloppy captions): repairs snap, but well-corroborated
-audio placements are never blended toward cues. Corpus measurement in
-plans/srt-timing-prior.md.
+audio placements are never blended toward cues.
 """
 
 import logging
@@ -45,7 +44,7 @@ PRIOR_MIN_ANCHORS = 4
 # captions have a variable lead (or the anchors are unreliable); a
 # single constant offset would mis-repair, so bail out. The corpus-wide
 # anchor-residual MAD is well under this on every song with accurate
-# captions (plans/srt-timing-prior.md, step 2).
+# captions.
 PRIOR_MAX_MAD_S = 0.75
 
 # A placed line disagreeing with cue+offset by more than this is

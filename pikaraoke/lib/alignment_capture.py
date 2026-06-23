@@ -29,9 +29,9 @@ logger = logging.getLogger(__name__)
 #     pipeline_decisions.align_check_fail_ratio / collapse_ratio /
 #     escalated_to_tiling / escalation_trigger. joint_stats is now always
 #     present on alignment-mode captures.
-# v5: LRCLIB timing prior shipped to production (plans/lrclib-timing-prior.md,
-#     step 3). A milestone bump even though the changes are additive — it
-#     marks the first run-affecting matcher change since v4. Added:
+# v5: LRCLIB timing prior shipped to production. A milestone bump even
+#     though the changes are additive — it marks the first run-affecting
+#     matcher change since v4. Added:
 #   - lyrics.lrclib: for txt-sourced songs, the chosen LRCLIB variant —
 #     {lrc_file (relative path to the persisted <song>/lyrics/<stem>.lrc),
 #     record (the specific search result: id/trackName/artistName/albumName/
