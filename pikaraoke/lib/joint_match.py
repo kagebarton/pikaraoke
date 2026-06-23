@@ -1,11 +1,10 @@
 """Joint alignment DP: align + transcribe + lyrics consumed in one matcher.
 
-The walk matcher trusts forced alignment to be the source of truth; the
-tiling matcher ignores it. Both are degenerate cases of a more general
-question: *given two independent placements of the lyrics in time, which
-one do we believe per line?* Walk says always-align; tiling says
-always-transcribe; this matcher answers per-line by scoring both
-placements and letting an interval-scheduling DP pick.
+Two independent placements of the lyrics in time are available: forced
+alignment and a free transcribe pass. Trusting forced alignment
+everywhere and trusting transcribe everywhere are both degenerate answers
+to *which one do we believe per line?* This matcher answers per-line by
+scoring both placements and letting an interval-scheduling DP pick.
 
 Per lyric line we build two kinds of candidates:
 
@@ -28,9 +27,8 @@ The interval-scheduling DP (``_best_tiling_by_time``, a weighted
 interval-scheduling pass over time intervals rather than token indices)
 picks the maximum-score non-overlapping subset. Per-word timings come
 from whichever source won each line — align's refined word timings when
-the align candidate won (so clean-song precision is preserved exactly
-where walk would have given it today), transcribe's word timestamps
-when a transcribe candidate won.
+the align candidate won (so clean-song precision is preserved exactly),
+transcribe's word timestamps when a transcribe candidate won.
 
 Lines with no selected candidate are interpolated between their bracketing
 selected neighbours so the output is 1:1 with the lyric line list.
@@ -47,7 +45,7 @@ from pikaraoke.lib.candidate_match import (
     find_anchor_candidates,
     find_candidates,
 )
-from pikaraoke.lib.word_alignment import _normalize_token
+from pikaraoke.lib.token_align import _normalize_token
 
 logger = logging.getLogger(__name__)
 
@@ -86,8 +84,8 @@ def match_words_to_lines_joint_with_stats(
             1:1 with the flat token stream from ``align_lines``.
         alpha: weight on the align prior. Score formula is
             ``transcribe_match + alpha * align_agreement``. Higher = trust
-            align more (regress toward walk on clean songs). Lower = trust
-            transcribe more (regress toward tiling). The corpus-tuned
+            align more (all-align on clean songs). Lower = trust transcribe
+            more (all-transcribe on misaligned songs). The corpus-tuned
             default lives in ``PipelineConfig.joint_alpha``.
         margin_s: time slack on each side of a candidate's window when
             (a) deciding which transcribe words count as "inside" the
@@ -105,9 +103,9 @@ def match_words_to_lines_joint_with_stats(
     Returns:
         ``(line_objects, joint_stats)``. ``line_objects`` is one entry per
         lyric line (1:1, in lyric order). Each carries an explicit
-        ``line_id`` back-reference for parity with the tiling matcher.
-        ``joint_stats`` records candidate counts, per-line selected source,
-        and the alpha used — captured for offline tuning.
+        ``line_id`` back-reference into ``lines``. ``joint_stats`` records
+        candidate counts, per-line selected source, and the alpha used —
+        captured for offline tuning.
     """
     knobs = {
         "alpha": alpha,

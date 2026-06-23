@@ -19,7 +19,7 @@ Candidates are ``(start_idx, end_idx, line_id, score)`` tuples over token
 indices; the matcher does its own interval scheduling over them.
 """
 
-from pikaraoke.lib.word_alignment import _normalize_token, _walk_align
+from pikaraoke.lib.token_align import _normalize_token, _walk_align
 
 
 def _edit_distance(a: list, b: list) -> int:
@@ -236,4 +236,3 @@ def _build_line_object(
         "start": tw[0]["start"],
         "end": tw[-1]["end"],
     }
-

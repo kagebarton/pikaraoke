@@ -33,7 +33,7 @@ from pikaraoke.lib.joint_match import (
     _transcribe_match_and_count_in_window,
     match_words_to_lines_joint_with_stats,
 )
-from pikaraoke.lib.word_alignment import _normalize_token
+from pikaraoke.lib.token_align import _normalize_token
 
 # Anchor criteria: placed by align/transcribe, lyric-sheet-unique token
 # sequence of at least this many tokens, transcribe corroboration at or

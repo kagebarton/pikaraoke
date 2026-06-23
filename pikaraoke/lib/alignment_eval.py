@@ -22,7 +22,7 @@ from statistics import median
 
 from pikaraoke.lib.joint_match import match_words_to_lines_joint_with_stats
 from pikaraoke.lib.srt_prior import cue_spans_from_srt
-from pikaraoke.lib.word_alignment import fold_to_ascii
+from pikaraoke.lib.token_align import fold_to_ascii
 
 # Residuals beyond this are gross misplacements (wrong section / chorus
 # instance), the error class the matcher knobs are tuned to eliminate.

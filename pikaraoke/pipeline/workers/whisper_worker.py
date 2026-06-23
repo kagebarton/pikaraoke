@@ -11,7 +11,7 @@ Conversion helpers (``_extract_words``, ``_segments_to_line_objects``)
 live here so they are available to the subprocess entry point without
 importing from the stage module. Word-to-line matching for alignment
 mode is the caller's responsibility — see
-``pikaraoke.lib.word_alignment.match_words_to_lines``.
+``pikaraoke.lib.joint_match.match_words_to_lines_joint_with_stats``.
 
 PTY routing: when ``pty_slave_path`` is provided, the worker opens
 that PTY device and redirects stdout/stderr to it via fd-level dup2 at
