@@ -129,6 +129,27 @@ class TestBranchAGeniusSelection:
         assert (job_tmp / "lyrics.txt").read_text() == "[Verse 1]\nHello world\n"
 
     @patch("pikaraoke.lib.genius.get_temp_directory")
+    def test_genius_selection_stashes_identity(self, mock_gtd, tmp_path):
+        """The chosen Genius id/title/artist is stashed for the debug bundle."""
+        mock_gtd.return_value = str(tmp_path / "temp")
+        (tmp_path / "temp" / "lyric_choices").mkdir(parents=True, exist_ok=True)
+
+        genius = MagicMock(spec=GeniusClient)
+        genius.fetch_song.return_value = GeniusSong(text="lyrics", title="Hello", artist="World")
+
+        song_path = tmp_path / "Song---dQw4w9WgXcQ.mp4"
+        song_path.touch()
+        job_tmp = tmp_path / "job_tmp"
+        job_tmp.mkdir()
+        write_choice("dQw4w9WgXcQ", {"yt_id": "dQw4w9WgXcQ", "genius_id": 456})
+
+        ctx = _make_ctx(song_path, job_tmp)
+        ctx.config.joint_lrclib_prior = False  # isolate the Genius branch
+        LyricsFetchStage(genius).run(ctx)
+
+        assert ctx.artifacts["genius"] == {"id": 456, "title": "Hello", "artist": "World"}
+
+    @patch("pikaraoke.lib.genius.get_temp_directory")
     def test_genius_selection_deletes_choice_on_success(self, mock_gtd, tmp_path):
         mock_gtd.return_value = str(tmp_path / "temp")
         (tmp_path / "temp" / "lyric_choices").mkdir(parents=True, exist_ok=True)

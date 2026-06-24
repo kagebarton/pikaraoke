@@ -285,6 +285,13 @@ class PipelineConfig:
     # the middle of the first gated song.
     dereverb_model_name: str = "dereverb_mel_band_roformer_anvuew_sdr_19.1729.ckpt"
 
+    # When True, a successful de-reverb retry persists its dry stem to
+    # ``<song_dir>/dereverb/<stem>---dereverb.m4a`` and a later retry reuses
+    # it instead of re-separating. Off for the live app (the dry stem is
+    # ephemeral there); the bundle-regen tool flips it on so repeated regens
+    # of a reverb-washed song pay the de-reverb separation only once.
+    cache_dereverb_stem: bool = False
+
     # When True, the lyric-align stage writes a JSON bundle to
     # ``<song_dir>/alignment_debug/<stem>.json`` capturing the matcher
     # inputs (whisper words + lyric lines), the knob values that ran,

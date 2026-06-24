@@ -29,6 +29,34 @@ logger = logging.getLogger(__name__)
 #     pipeline_decisions.align_check_fail_ratio / collapse_ratio /
 #     escalated_to_tiling / escalation_trigger. joint_stats is now always
 #     present on alignment-mode captures.
+#     Also closes the offline-replay gaps for the post-pass-1 stages — with
+#     these the whole alignment pipeline replays from the bundle alone, no
+#     inference and no user input. Added:
+#   - joint_stats.pass1_line_timings: line timings (line_id/start/end/
+#     n_words, the shape of top-level output_line_timings) snapshotted
+#     right after the pass-1 joint DP — before windowed re-align and the
+#     timing priors mutate the placements. The baseline an offline pass-1
+#     re-run validates against; output_line_timings holds the FINAL
+#     (post-realign, post-prior) placements, which diverge whenever either
+#     ran.
+#   - joint_stats.windowed_realign.spans: per-span replay inputs so the
+#     windowed re-align replays offline with no inference. One entry per
+#     re-aligned span, in merge order: the span geometry (lid_lo/lid_hi/
+#     anchor_lo/anchor_hi/t0/t1) plus align_words — the slice's refined
+#     align words shifted to absolute song time, or null when the slice
+#     align failed/was skipped (span kept pass-1). Feed each through
+#     windowed_realign.replay_span + merge_spans (with top-level words/
+#     transcribe_words) to reproduce the merged placements.
+#   - joint_stats.{srt_prior,lrclib_prior}.cue_spans_by_line: the offset-
+#     uncorrected per-line cue spans the prior actually consumed, keyed by
+#     line id (string), values [start, end] in seconds. Makes the prior
+#     replayable from the bundle alone — no re-reading the SRT/.lrc, no
+#     re-running cue cleaning.
+#   - lyrics.genius: for genius-origin songs, the chosen Genius identity —
+#     {id, title, artist}. Lets a regen re-fetch the lyrics / re-query LRCLIB
+#     deterministically instead of re-prompting for an artist-title search.
+#     Absent on songs from other origins and on bundles written before this
+#     field shipped.
 # v5: LRCLIB timing prior shipped to production. A milestone bump even
 #     though the changes are additive — it marks the first run-affecting
 #     matcher change since v4. Added:

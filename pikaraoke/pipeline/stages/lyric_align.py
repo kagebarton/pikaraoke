@@ -184,6 +184,7 @@ class LyricAlignStage(BaseStage):
                 transcribe_words=capture_transcribe_words,
                 method_used=capture_method_used,
                 line_objects=line_objects,
+                wrote_srt=write_srt,
             )
 
     # --- Helpers ---
@@ -201,9 +202,13 @@ class LyricAlignStage(BaseStage):
         transcribe_words: list | None,
         method_used: str | None,
         line_objects: list[dict],
+        wrote_srt: bool,
     ) -> None:
         """Assemble + write the alignment-debug JSON. Errors are logged
         and swallowed — capture failure must never fail the pipeline.
+
+        ``wrote_srt`` is the stage's own SRT-write decision; it determines
+        whether a *real* YouTube caption existed (see ``ground_truth_refs``).
         """
         try:
             cfg = self._config
@@ -233,11 +238,21 @@ class LyricAlignStage(BaseStage):
             lrclib_ref = ctx.artifacts.get("lrclib")
             if lrclib_ref is not None:
                 lyrics["lrclib"] = lrclib_ref
+            # The Genius song identity (id/title/artist) for genius-origin songs,
+            # so a regen can re-resolve the source without re-prompting.
+            genius_ref = ctx.artifacts.get("genius")
+            if genius_ref is not None:
+                lyrics["genius"] = genius_ref
             pipeline_decisions = {
                 "method_used": method_used,
                 "joint_alpha": cfg.joint_alpha if method_used == "joint" else None,
             }
-            yt_srt = _find_youtube_srt_path(ctx.song_path)
+            # A real YouTube caption existed iff the stage did NOT generate its
+            # own SRT this run (``_should_write_srt`` is True only when no SRT
+            # is on disk). Re-probing the filesystem here would re-find a
+            # just-written — or stale, from a prior run — generated SRT at
+            # ``subtitles/<stem>.srt`` and mislabel it as a caption.
+            yt_srt = None if wrote_srt else _find_youtube_srt_path(ctx.song_path)
             # When the YT SRT *is* the lyric source (common — the lyrics
             # stage often hands us the YT captions directly), it can't
             # serve as an independent ground-truth reference. Detect via
@@ -486,6 +501,10 @@ class LyricAlignStage(BaseStage):
             margin_s=self._config.joint_margin_s,
             max_edit_ratio=self._config.joint_max_edit_ratio,
         )
+        # Snapshot the pass-1 placements before windowed re-align and the
+        # timing priors mutate them — the baseline an offline pass-1 re-run
+        # validates against (output_line_timings holds the final placements).
+        joint_stats["pass1_line_timings"] = alignment_capture.output_line_timings(line_objects)
         if dereverb_stats is not None:
             joint_stats["dereverb"] = dereverb_stats
         if self._config.joint_windowed_realign:
@@ -508,15 +527,19 @@ class LyricAlignStage(BaseStage):
                 )
         if cue_spans is not None and self._config.joint_srt_prior:
             try:
+                cue_spans_by_line = dict(enumerate(cue_spans))
                 line_objects, prior_stats = apply_srt_prior(
                     line_objects,
                     transcribe_words,
                     lyrics_lines,
                     align_lines,
-                    dict(enumerate(cue_spans)),
+                    cue_spans_by_line,
                     margin_s=self._config.joint_margin_s,
                     max_edit_ratio=self._config.joint_max_edit_ratio,
                 )
+                # Inline the resolved cue spans so the prior replays from the
+                # bundle alone — no re-reading the SRT, no re-running cleaning.
+                prior_stats["cue_spans_by_line"] = _serialize_cue_spans(cue_spans_by_line)
                 joint_stats["srt_prior"] = prior_stats
             except Exception:
                 logger.exception(
@@ -565,6 +588,7 @@ class LyricAlignStage(BaseStage):
                 max_edit_ratio=self._config.joint_max_edit_ratio,
                 source="lrclib",
             )
+            prior_stats["cue_spans_by_line"] = _serialize_cue_spans(cues)
             joint_stats["lrclib_prior"] = prior_stats
         except Exception:
             logger.exception("[%s] LRCLIB timing prior failed; keeping audio placements", self.name)
@@ -602,16 +626,19 @@ class LyricAlignStage(BaseStage):
         """
         cancel_event = ctx.cancel.event if ctx.cancel else None
         try:
-            dry_wav, _reverb_tail = _model_call(
-                ctx,
-                Phase.DEREVERB,
-                lambda: self._stem_worker.separate(
-                    wav_path=Path(vocal_wav),
-                    output_dir=ctx.tmp_dir,
-                    cancel_event=cancel_event,
-                    model_name=self._config.dereverb_model_name,
-                ),
-            )
+            dry_wav = self._load_cached_dereverb(ctx)
+            if dry_wav is None:
+                dry_wav, _reverb_tail = _model_call(
+                    ctx,
+                    Phase.DEREVERB,
+                    lambda: self._stem_worker.separate(
+                        wav_path=Path(vocal_wav),
+                        output_dir=ctx.tmp_dir,
+                        cancel_event=cancel_event,
+                        model_name=self._config.dereverb_model_name,
+                    ),
+                )
+                self._persist_dereverb(ctx, dry_wav)
             align_words = _model_call(
                 ctx,
                 Phase.ALIGN,
@@ -640,6 +667,97 @@ class LyricAlignStage(BaseStage):
             )
             return None
         return dry_wav, align_words, transcribe_words
+
+    def _dereverb_cache_path(self, ctx: StageContext) -> Path:
+        """Persisted de-reverb stem location: ``<song>/dereverb/<stem>---dereverb.m4a``.
+
+        Mirrors the ``vocal/<stem>---vocal.m4a`` layout so the regen tool and a
+        human can find it the same way.
+        """
+        return ctx.song_path.parent / "dereverb" / f"{ctx.song_path.stem}---dereverb.m4a"
+
+    def _load_cached_dereverb(self, ctx: StageContext) -> Path | None:
+        """Decode the cached de-reverb stem to WAV, or None to separate fresh.
+
+        Returns None when caching is off, no cache exists, or the decode fails
+        (a corrupt cache just means we re-separate). Cancellation propagates.
+        """
+        if not self._config.cache_dereverb_stem:
+            return None
+        cache = self._dereverb_cache_path(ctx)
+        if not cache.is_file():
+            return None
+        dry_wav = ctx.tmp_dir / f"{ctx.song_path.stem}_dereverb.wav"
+        try:
+            run_ffmpeg(
+                [
+                    "ffmpeg",
+                    "-hide_banner",
+                    "-loglevel",
+                    "warning",
+                    "-y",
+                    "-i",
+                    str(cache),
+                    "-ac",
+                    "2",
+                    "-ar",
+                    "44100",
+                    "-sample_fmt",
+                    "s16",
+                    str(dry_wav),
+                ],
+                ctx,
+                Phase.EXTRACT,
+            )
+        except PipelineCancelled:
+            raise
+        except RuntimeError:
+            logger.warning("[%s] cached de-reverb stem decode failed; re-separating", self.name)
+            return None
+        logger.info("[%s] reusing cached de-reverb stem: %s", self.name, cache.name)
+        return dry_wav
+
+    def _persist_dereverb(self, ctx: StageContext, dry_wav: Path) -> None:
+        """Transcode the dry stem to the de-reverb cache (best-effort).
+
+        Caching failures are logged and swallowed — a missing cache only costs a
+        re-separation next time, never the song. Cancellation propagates. Writes
+        to ``tmp_dir`` first and moves into place so a cancel can't leave a
+        partial m4a at the cache path.
+        """
+        if not self._config.cache_dereverb_stem:
+            return
+        cache = self._dereverb_cache_path(ctx)
+        tmp_out = ctx.tmp_dir / cache.name
+        try:
+            run_ffmpeg(
+                [
+                    "ffmpeg",
+                    "-hide_banner",
+                    "-loglevel",
+                    "warning",
+                    "-y",
+                    "-threads",
+                    self._config.ffmpeg_threads,
+                    "-i",
+                    str(dry_wav),
+                    "-c:a",
+                    "aac",
+                    "-q:a",
+                    self._config.aac_quality,
+                    str(tmp_out),
+                ],
+                ctx,
+                Phase.TRANSCODE,
+            )
+            cache.parent.mkdir(exist_ok=True)
+            shutil.move(str(tmp_out), str(cache))
+        except PipelineCancelled:
+            raise
+        except (RuntimeError, OSError):
+            logger.warning("[%s] failed to cache de-reverb stem: %s", self.name, cache)
+            return
+        logger.info("[%s] cached de-reverb stem: %s", self.name, cache.name)
 
     def _realign_windows(
         self,
@@ -701,12 +819,19 @@ class LyricAlignStage(BaseStage):
             len(anchors),
             len(suspects),
         )
-        results = [
-            self._realign_one_span(
+        results: list = []
+        span_captures: list[dict] = []
+        for k, span in enumerate(todo):
+            result, span_words = self._realign_one_span(
                 ctx, vocal_wav, span, k, lyrics_lines, align_lines, transcribe_words
             )
-            for k, span in enumerate(todo)
-        ]
+            results.append(result)
+            # Capture each span's refined align words (absolute song time) so
+            # the re-align replays offline via replay_span + merge_spans with
+            # no inference. align_words is None when the slice align failed or
+            # was skipped — that span kept its pass-1 placement.
+            span_captures.append({**span, "align_words": span_words})
+        telemetry["spans"] = span_captures
         telemetry["n_spans_kept_pass1"] = sum(1 for r in results if r is None)
         return merge_spans(line_objects, todo, results, len(lyrics_lines), align_words)
 
@@ -719,11 +844,18 @@ class LyricAlignStage(BaseStage):
         lyrics_lines: list[str],
         align_lines: list[str],
         transcribe_words: list[dict],
-    ) -> tuple[dict[int, dict], dict[int, str]] | None:
-        """Slice + re-align one span; None means keep pass-1 for it."""
+    ) -> tuple[tuple[dict[int, dict], dict[int, str]] | None, list[dict] | None]:
+        """Slice + re-align one span.
+
+        Returns ``(replay_result, span_words)``. ``replay_result`` is None
+        when the span keeps pass-1 (nothing alignable, or the slice align
+        failed). ``span_words`` is the slice's refined align words shifted
+        to absolute song time — captured for offline replay — or None
+        whenever no inference ran for the span.
+        """
         sub_lines = span_align_lines(span, align_lines)
         if sub_lines is None:
-            return None
+            return None, None
         slice_path = ctx.tmp_dir / f"realign_span{span_idx:02d}.wav"
         try:
             # -ss/-to as input options: sample-exact for PCM WAV and
@@ -767,13 +899,13 @@ class LyricAlignStage(BaseStage):
                 span["lid_hi"],
                 exc,
             )
-            return None
+            return None, None
         finally:
             slice_path.unlink(missing_ok=True)
         for w in words:
             w["start"] += span["t0"]
             w["end"] += span["t0"]
-        return replay_span(
+        replay_result = replay_span(
             span,
             words,
             transcribe_words,
@@ -783,6 +915,7 @@ class LyricAlignStage(BaseStage):
             margin_s=self._config.joint_margin_s,
             max_edit_ratio=self._config.joint_max_edit_ratio,
         )
+        return replay_result, words
 
 
 # ---------------------------------------------------------------------------
@@ -804,6 +937,18 @@ def _model_call(ctx, phase: Phase, fn):
             return fn()
     except (AlignmentCancelledError, WorkerCancelledError):
         raise PipelineCancelled(phase)
+
+
+def _serialize_cue_spans(
+    cue_spans_by_line: dict[int, tuple[float, float]],
+) -> dict[str, list[float]]:
+    """JSON-friendly cue-span map: ``{line_id: [start, end]}``.
+
+    The offset-uncorrected per-line cue spans the timing prior consumed,
+    inlined into the debug bundle so the prior replays without re-reading
+    the SRT/.lrc or re-running cue cleaning.
+    """
+    return {str(lid): [start, end] for lid, (start, end) in cue_spans_by_line.items()}
 
 
 def _wav_duration(path: Path) -> float:

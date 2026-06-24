@@ -73,6 +73,14 @@ class LyricsFetchStage(BaseStage):
                 lyrics_path.write_text(song.text, encoding="utf-8")
                 ctx.artifacts["lyrics_path"] = lyrics_path
                 ctx.artifacts["lyrics_origin"] = "genius"
+                # Persist the Genius identity for the debug bundle so a later
+                # regen can re-fetch lyrics / re-query LRCLIB deterministically
+                # instead of re-prompting for an artist-title search.
+                ctx.artifacts["genius"] = {
+                    "id": int(choice["genius_id"]),
+                    "title": song.title,
+                    "artist": song.artist,
+                }
                 delete_choice(yt_id)
                 logger.info(
                     "Lyrics: Genius — %r by %r (genius #%s)",

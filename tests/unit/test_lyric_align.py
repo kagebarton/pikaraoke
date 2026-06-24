@@ -1,11 +1,15 @@
 """Unit tests for LyricAlignStage — lyrics loading, single-style ASS, joint route."""
 
 import json
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
 from pikaraoke.lib import lrclib
+from pikaraoke.lib.alignment_capture import output_line_timings
+from pikaraoke.lib.joint_match import match_words_to_lines_joint_with_stats
+from pikaraoke.lib.windowed_realign import merge_spans, replay_span
 from pikaraoke.pipeline.config import PipelineConfig
 from pikaraoke.pipeline.stages.lyric_align import LyricAlignStage
 
@@ -358,6 +362,56 @@ class TestWindowedRealign:
         lead_in = stage._config.line_lead_in_cs / 100.0
         assert starts == pytest.approx([10.0 - lead_in, 25.0 - lead_in], abs=0.011)
 
+    def test_capture_enables_offline_realign_replay(self, tmp_path, monkeypatch):
+        """The bundle carries enough to replay pass-1 + windowed re-align
+        offline — no inference, exact reproduction of the as-run output."""
+        stage, ctx, worker, _ = self._make(tmp_path, monkeypatch)
+        stage.run(ctx)
+
+        debug = ctx.song_path.parent / "alignment_debug" / f"{ctx.song_path.stem}.json"
+        bundle = json.loads(debug.read_text(encoding="utf-8"))
+
+        words = bundle["words"]
+        transcribe_words = bundle["transcribe_words"]
+        lines = bundle["lyrics"]["lines"]
+        align_lines = bundle["lyrics"]["align_lines"]
+        knobs = dict(
+            alpha=bundle["config"]["joint_alpha"],
+            margin_s=bundle["config"]["joint_margin_s"],
+            max_edit_ratio=bundle["config"]["joint_max_edit_ratio"],
+        )
+
+        # Re-run pass-1 from the captured inputs and confirm it reproduces
+        # the captured pass-1 baseline exactly (no inference paid).
+        pass1_objs, _ = match_words_to_lines_joint_with_stats(
+            words, transcribe_words, lines, align_lines, **knobs
+        )
+        assert output_line_timings(pass1_objs) == bundle["joint_stats"]["pass1_line_timings"]
+
+        # The captured span words are shifted to absolute song time: the
+        # second line's slice onset (15.75) landed at 25.0 after the +9.25
+        # span shift.
+        spans = bundle["joint_stats"]["windowed_realign"]["spans"]
+        assert len(spans) == 1
+        span_words = spans[0]["align_words"]
+        assert span_words is not None
+        assert span_words[4] == {"word": "phantom", "start": 25.0, "end": 25.3}
+
+        # Replay the windowed re-align from the captured span words alone,
+        # then confirm the merged result matches the final captured output.
+        todo = [{k: v for k, v in s.items() if k != "align_words"} for s in spans]
+        results = [
+            replay_span(span, s["align_words"], transcribe_words, lines, align_lines, **knobs)
+            if s["align_words"]
+            else None
+            for span, s in zip(todo, spans)
+        ]
+        merged = merge_spans(pass1_objs, todo, results, len(lines), words)
+        assert output_line_timings(merged) == bundle["output_line_timings"]
+        # Sanity: the replay actually moved line 1 off its pass-1 placement.
+        assert bundle["joint_stats"]["pass1_line_timings"][1]["start"] == 20.0
+        assert bundle["output_line_timings"][1]["start"] == 25.0
+
     def test_span_failure_keeps_pass1_placement(self, tmp_path, monkeypatch):
         stage, ctx, worker, _ = self._make(tmp_path, monkeypatch)
         pass1_words = next(iter(worker.align_refine.side_effect))
@@ -407,6 +461,71 @@ class TestWindowedRealign:
         starts = self._ass_start_seconds(ctx)
         lead_in = stage._config.line_lead_in_cs / 100.0
         assert starts == pytest.approx([10.0 - lead_in, 20.0 - lead_in], abs=0.011)
+
+
+# ---------------------------------------------------------------------------
+# Genius identity capture
+# ---------------------------------------------------------------------------
+
+
+class TestCaptureGeniusIdentity:
+    """The debug bundle records the Genius id/title/artist when present."""
+
+    def test_genius_artifact_lands_in_bundle(self, tmp_path):
+        stage, ctx, _ = _make_stage_and_ctx(tmp_path)
+        ctx.artifacts["lyrics_origin"] = "genius"
+        ctx.artifacts["genius"] = {"id": 42, "title": "Hello", "artist": "World"}
+
+        stage.run(ctx)
+
+        debug = ctx.song_path.parent / "alignment_debug" / f"{ctx.song_path.stem}.json"
+        bundle = json.loads(debug.read_text(encoding="utf-8"))
+        assert bundle["lyrics"]["genius"] == {"id": 42, "title": "Hello", "artist": "World"}
+
+    def test_absent_when_no_genius_artifact(self, tmp_path):
+        stage, ctx, _ = _make_stage_and_ctx(tmp_path)
+        stage.run(ctx)
+
+        debug = ctx.song_path.parent / "alignment_debug" / f"{ctx.song_path.stem}.json"
+        bundle = json.loads(debug.read_text(encoding="utf-8"))
+        assert "genius" not in bundle["lyrics"]
+
+
+class TestYoutubeSrtProvenance:
+    """``youtube_srt_present`` reflects a *real* caption, never the stage's own
+    generated SRT (which lands at the same ``subtitles/<stem>.srt`` path)."""
+
+    def _gt(self, ctx) -> dict:
+        debug = ctx.song_path.parent / "alignment_debug" / f"{ctx.song_path.stem}.json"
+        return json.loads(debug.read_text(encoding="utf-8"))["ground_truth_refs"]
+
+    def test_generated_srt_not_counted_as_caption(self, tmp_path):
+        # No caption on disk -> the stage generates subtitles/song.srt itself.
+        # That file must NOT be reported back as a YouTube caption.
+        stage, ctx, _ = _make_stage_and_ctx(tmp_path)
+        stage.run(ctx)
+
+        generated = ctx.song_path.parent / "subtitles" / f"{ctx.song_path.stem}.srt"
+        assert generated.is_file()  # the stage did write its own SRT
+        gt = self._gt(ctx)
+        assert gt["youtube_srt_present"] is False
+        assert gt["youtube_srt_path"] is None
+
+    def test_real_caption_counted(self, tmp_path):
+        # A caption already on disk -> the stage skips generation and records
+        # the real caption as present (but not the lyric source — it's a .txt).
+        stage, ctx, _ = _make_stage_and_ctx(tmp_path)
+        subs = ctx.song_path.parent / "subtitles"
+        subs.mkdir()
+        (subs / f"{ctx.song_path.stem}.srt").write_text(
+            "1\n00:00:01,000 --> 00:00:02,000\nreal\n", encoding="utf-8"
+        )
+
+        stage.run(ctx)
+
+        gt = self._gt(ctx)
+        assert gt["youtube_srt_present"] is True
+        assert gt["youtube_srt_is_lyric_source"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -496,6 +615,58 @@ class TestDereverbRetry:
         worker.transcribe_words.assert_called_once()
 
 
+class TestDereverbCache:
+    """``cache_dereverb_stem``: persist the dry stem on a miss, reuse it on a
+    hit so the de-reverb separation runs only once per song."""
+
+    def _make(self, tmp_path, monkeypatch, *, duration_s=60.0):
+        import pikaraoke.pipeline.stages.lyric_align as la_mod
+
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path, dereverb_yield_wpm=30.0)
+        stage._config.cache_dereverb_stem = True
+        monkeypatch.setattr(la_mod, "_wav_duration", lambda _p: duration_s)
+        # Fake ffmpeg: create whatever output path the command declares (last
+        # arg) so the decode/transcode and the tmp->cache move succeed.
+        monkeypatch.setattr(
+            la_mod,
+            "run_ffmpeg",
+            lambda cmd, _ctx, _phase: Path(cmd[-1]).write_bytes(b""),
+        )
+        return stage, ctx, worker, stage._stem_worker
+
+    @staticmethod
+    def _cache_path(ctx):
+        return ctx.song_path.parent / "dereverb" / f"{ctx.song_path.stem}---dereverb.m4a"
+
+    def test_miss_separates_and_persists(self, tmp_path, monkeypatch):
+        stage, ctx, worker, stem_worker = self._make(tmp_path, monkeypatch)
+        dry = ctx.tmp_dir / "dry.wav"
+        dry.write_bytes(b"")
+        stem_worker.separate.return_value = (dry, ctx.tmp_dir / "tail.wav")
+
+        stage.run(ctx)
+
+        stem_worker.separate.assert_called_once()
+        assert self._cache_path(ctx).is_file()
+
+    def test_hit_reuses_cache_and_skips_separation(self, tmp_path, monkeypatch):
+        stage, ctx, worker, stem_worker = self._make(tmp_path, monkeypatch)
+        cache = self._cache_path(ctx)
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_bytes(b"")  # pre-existing cached dry stem
+
+        stage.run(ctx)
+
+        stem_worker.separate.assert_not_called()
+        # Wet pass + dry retry both ran on whisper.
+        assert worker.align_refine.call_count == 2
+        assert worker.transcribe_words.call_count == 2
+        # The retry's dry stem is the decoded cache, not a separation output.
+        assert worker.align_refine.call_args_list[1].kwargs["vocal_path"] == (
+            ctx.tmp_dir / f"{ctx.song_path.stem}_dereverb.wav"
+        )
+
+
 class TestJointLrclibPrior:
     """Joint route: the LRCLIB timing prior for txt-sourced songs."""
 
@@ -550,6 +721,12 @@ class TestJointLrclibPrior:
         assert prior["offset_s"] == 1.5
         assert prior["n_snapped"] == 0  # every line placed within the snap window
 
+        # The resolved (offset-uncorrected) cue spans are inlined so the
+        # prior replays from the bundle alone — no re-reading the .lrc.
+        cue_spans = prior["cue_spans_by_line"]
+        assert len(cue_spans) == 4
+        assert cue_spans["0"][0] == 8.5
+
         # Schema version + LRCLIB reference + context land in the bundle.
         assert bundle["schema_version"] == 6
         assert bundle["lyrics"]["lrclib"]["record"]["id"] == 5
@@ -600,3 +777,7 @@ class TestJointLrclibPrior:
         )
         assert "lrclib_prior" not in bundle["joint_stats"]
         assert "srt_prior" in bundle["joint_stats"]
+        # The SRT prior inlines its resolved cue spans too (one per line).
+        cue_spans = bundle["joint_stats"]["srt_prior"]["cue_spans_by_line"]
+        assert len(cue_spans) == 4
+        assert cue_spans["0"][0] == 8.5
