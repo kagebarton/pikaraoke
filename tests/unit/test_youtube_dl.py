@@ -7,7 +7,9 @@ from unittest.mock import MagicMock, PropertyMock, patch
 import pytest
 
 from pikaraoke.lib.youtube_dl import (
+    _select_en_srt,
     build_ytdl_download_command,
+    download_manual_en_subs,
     get_youtube_id_from_url,
     get_youtubedl_version,
     upgrade_youtubedl,
@@ -360,3 +362,72 @@ class TestUpgradeYoutubedl:
             result = upgrade_youtubedl()
             assert result == "2024.01.01"
             mock_version.assert_called_once_with()
+
+
+class TestSelectEnSrt:
+    """Tests for choosing the canonical caption from yt-dlp's output."""
+
+    def test_prefers_exact_en_and_drops_extras(self, tmp_path):
+        (tmp_path / "Song.en.srt").write_text("en", encoding="utf-8")
+        (tmp_path / "Song.en-US.srt").write_text("us", encoding="utf-8")
+        result = _select_en_srt(str(tmp_path), "Song")
+        assert result == str(tmp_path / "Song.en.srt")
+        assert (tmp_path / "Song.en.srt").read_text(encoding="utf-8") == "en"
+        assert not (tmp_path / "Song.en-US.srt").exists()
+
+    def test_promotes_variant_when_no_exact_en(self, tmp_path):
+        (tmp_path / "Song.en-GB.srt").write_text("gb", encoding="utf-8")
+        result = _select_en_srt(str(tmp_path), "Song")
+        assert result == str(tmp_path / "Song.en.srt")
+        assert (tmp_path / "Song.en.srt").read_text(encoding="utf-8") == "gb"
+
+    def test_ignores_language_less_srt(self, tmp_path):
+        # A pipeline-generated <stem>.srt must not be mistaken for a caption.
+        (tmp_path / "Song.srt").write_text("generated", encoding="utf-8")
+        assert _select_en_srt(str(tmp_path), "Song") is None
+        assert (tmp_path / "Song.srt").exists()
+
+    def test_none_when_no_srt(self, tmp_path):
+        assert _select_en_srt(str(tmp_path), "Song") is None
+
+
+class TestDownloadManualEnSubs:
+    """Tests for downloading a manual English caption via yt-dlp."""
+
+    def test_success_returns_path(self, tmp_path):
+        dest = tmp_path / "subtitles"
+
+        def fake_run(cmd, **kwargs):
+            dest.mkdir(parents=True, exist_ok=True)
+            (dest / "Song.en.srt").write_text("1\n", encoding="utf-8")
+            return MagicMock(returncode=0, stdout=b"", stderr=b"")
+
+        with _default_patches()[0], _default_patches()[1], patch(
+            "subprocess.run", side_effect=fake_run
+        ):
+            result = download_manual_en_subs("https://yt/watch?v=x", str(dest), "Song")
+        assert result == str(dest / "Song.en.srt")
+
+    def test_no_caption_written_returns_none(self, tmp_path):
+        dest = tmp_path / "subtitles"
+        with _default_patches()[0], _default_patches()[1], patch(
+            "subprocess.run", return_value=MagicMock(returncode=0, stdout=b"", stderr=b"")
+        ):
+            result = download_manual_en_subs("https://yt/watch?v=x", str(dest), "Song")
+        assert result is None
+
+    def test_nonzero_returncode_returns_none(self, tmp_path):
+        dest = tmp_path / "subtitles"
+        with _default_patches()[0], _default_patches()[1], patch(
+            "subprocess.run", return_value=MagicMock(returncode=1, stdout=b"", stderr=b"boom")
+        ):
+            result = download_manual_en_subs("https://yt/watch?v=x", str(dest), "Song")
+        assert result is None
+
+    def test_timeout_returns_none(self, tmp_path):
+        dest = tmp_path / "subtitles"
+        with _default_patches()[0], _default_patches()[1], patch(
+            "subprocess.run", side_effect=subprocess.TimeoutExpired("yt-dlp", 60)
+        ):
+            result = download_manual_en_subs("https://yt/watch?v=x", str(dest), "Song")
+        assert result is None

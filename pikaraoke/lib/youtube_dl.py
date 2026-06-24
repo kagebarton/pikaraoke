@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import shlex
 import subprocess
 import sys
+from pathlib import Path
 
 from pikaraoke.lib.get_platform import get_installed_js_runtime
 
@@ -286,3 +288,77 @@ def get_preview_info(video_url: str) -> tuple[str | None, bool]:
     except (FileNotFoundError, PermissionError) as e:
         logging.error(f"Could not run yt-dlp: {e}")
         return None, False
+
+
+def _select_en_srt(dest_dir: str, stem: str) -> str | None:
+    """Pick the canonical ``<stem>.en.srt`` from yt-dlp's subtitle output.
+
+    yt-dlp may write several English variants (``en``, ``en-US``, ...). Prefer an
+    exact ``<stem>.en.srt``; otherwise promote the first variant to that name and
+    drop the rest, so callers and later runs find one predictable file. A pre-
+    existing language-less ``<stem>.srt`` (e.g. a pipeline-generated transcript)
+    is never matched. Returns the path, or ``None`` when no English SRT exists.
+    """
+    prefix = f"{stem}."
+    variants = []
+    for entry in Path(dest_dir).iterdir():
+        if not entry.is_file() or not entry.name.startswith(prefix):
+            continue
+        lang_ext = entry.name[len(prefix) :]  # e.g. "en.srt", "en-US.srt"
+        if lang_ext.endswith(".srt") and len(lang_ext) > len(".srt"):
+            variants.append(entry)
+    if not variants:
+        return None
+    variants.sort()
+    canonical = Path(dest_dir) / f"{stem}.en.srt"
+    chosen = canonical if canonical in variants else variants[0]
+    if chosen != canonical:
+        chosen.replace(canonical)
+    for extra in variants:
+        if extra != chosen and extra != canonical:
+            extra.unlink(missing_ok=True)
+    return str(canonical)
+
+
+def download_manual_en_subs(video_url: str, dest_dir: str, stem: str) -> str | None:
+    """Download YouTube's *manual* English caption as ``<dest_dir>/<stem>.en.srt``.
+
+    Returns the SRT path when a manual English caption exists and was written;
+    returns ``None`` when there is no such caption or the download failed. Auto-
+    generated (ASR) captions are never fetched and no media is downloaded. The
+    subtitle options mirror :func:`build_ytdl_download_command`, so a fetched
+    caption is what a normal download would have saved alongside the video.
+    """
+    os.makedirs(dest_dir, exist_ok=True)
+    cmd = (
+        yt_dlp_cmd
+        + [
+            "--skip-download",
+            "--write-subs",
+            "--sub-langs",
+            "en.*",
+            "--convert-subs",
+            "srt",
+            "-o",
+            os.path.join(dest_dir, f"{stem}.%(ext)s"),
+        ]
+        + _js_runtime_args()
+        + _impersonate_args()
+        + [video_url]
+    )
+    logging.debug(f"yt-dlp subtitle download command: {' '.join(cmd)}")
+    try:
+        result = subprocess.run(cmd, capture_output=True, timeout=60)
+    except subprocess.TimeoutExpired:
+        logging.warning(f"yt-dlp subtitle download timed out for: {video_url}")
+        return None
+    except (FileNotFoundError, PermissionError) as e:
+        logging.error(f"Could not run yt-dlp: {e}")
+        return None
+    if result.returncode != 0:
+        logging.warning(
+            f"yt-dlp subtitle download failed for {video_url}: "
+            f"{result.stderr.decode('utf-8', 'ignore').strip()}"
+        )
+        return None
+    return _select_en_srt(dest_dir, stem)
