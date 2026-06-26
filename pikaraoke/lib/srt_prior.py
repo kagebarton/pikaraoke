@@ -120,7 +120,10 @@ def apply_srt_prior(
     if len(residuals) < PRIOR_MIN_ANCHORS:
         stats["bailed"] = "few_anchors"
         logger.info(
-            "SRT prior bailed: %d anchor(s) with cues < %d", len(residuals), PRIOR_MIN_ANCHORS
+            "%s prior bailed: %d anchor(s) with cues < %d",
+            source.upper(),
+            len(residuals),
+            PRIOR_MIN_ANCHORS,
         )
         return line_objects, stats
 
@@ -130,7 +133,9 @@ def apply_srt_prior(
     stats["mad_s"] = round(mad, 3)
     if mad > PRIOR_MAX_MAD_S:
         stats["bailed"] = "wide_spread"
-        logger.info("SRT prior bailed: anchor residual MAD %.2fs > %.2fs", mad, PRIOR_MAX_MAD_S)
+        logger.info(
+            "%s prior bailed: anchor residual MAD %.2fs > %.2fs", source.upper(), mad, PRIOR_MAX_MAD_S
+        )
         return line_objects, stats
 
     snapped: list[int] = []
@@ -164,7 +169,8 @@ def apply_srt_prior(
     stats["snapped_line_ids"] = snapped
     stats["filled_line_ids"] = filled
     logger.info(
-        "SRT prior applied: offset=%+.2fs (MAD %.2fs over %d anchors), %d snapped, %d filled",
+        "%s prior applied: offset=%+.2fs (MAD %.2fs over %d anchors), %d snapped, %d filled",
+        source.upper(),
         offset,
         mad,
         len(residuals),
