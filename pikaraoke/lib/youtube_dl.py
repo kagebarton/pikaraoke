@@ -8,6 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from pikaraoke.lib import ytasr
 from pikaraoke.lib.get_platform import get_installed_js_runtime
 
 yt_dlp_cmd = [sys.executable, "-m", "yt_dlp"]
@@ -362,3 +363,99 @@ def download_manual_en_subs(video_url: str, dest_dir: str, stem: str) -> str | N
         )
         return None
     return _select_en_srt(dest_dir, stem)
+
+
+# Canonical name for the selected real-ASR track. The ``.en.asr.json3`` suffix
+# is distinct from ``.en.srt`` / ``.srt`` so SRT discovery never mistakes it for
+# a manual caption.
+ASR_JSON3_SUFFIX = ".en.asr.json3"
+
+
+def _select_asr_track(dest_dir: str, stem: str) -> str | None:
+    """Pick the real word-level ASR track from yt-dlp's json3 output.
+
+    yt-dlp writes one ``<stem>.<lang>.json3`` per English auto-caption track
+    (``en``, ``en-orig``, ...). Only genuine ASR is word-level; a track may be
+    the uploader's manual caption mirrored back (line-level, no per-word timing).
+    Select by *content*, not name: the track with the highest word-seg fraction
+    (the real-ASR discriminator) is promoted to the canonical
+    ``<stem>.en.asr.json3`` and the rest dropped. Returns the canonical path, or
+    ``None`` (after dropping every track) when none clears
+    :data:`ytasr.WORD_SEG_MIN_FRAC`.
+    """
+    prefix = f"{stem}."
+    canonical = Path(dest_dir) / f"{stem}{ASR_JSON3_SUFFIX}"
+    candidates = []
+    for entry in Path(dest_dir).iterdir():
+        if not entry.is_file() or entry == canonical or not entry.name.startswith(prefix):
+            continue
+        lang_ext = entry.name[len(prefix) :]  # e.g. "en.json3", "en-orig.json3"
+        if lang_ext.endswith(".json3") and len(lang_ext) > len(".json3"):
+            candidates.append(entry)
+
+    best: Path | None = None
+    best_frac = -1.0
+    for entry in candidates:
+        try:
+            _, frac = ytasr.parse_json3(entry.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as e:
+            logging.warning(f"Could not parse ASR track {entry.name}: {e}")
+            continue
+        if frac > best_frac:
+            best_frac, best = frac, entry
+
+    if best is None or best_frac < ytasr.WORD_SEG_MIN_FRAC:
+        for entry in candidates:
+            entry.unlink(missing_ok=True)
+        return None
+    if best != canonical:
+        best.replace(canonical)
+    for entry in candidates:
+        if entry != best:
+            entry.unlink(missing_ok=True)
+    return str(canonical)
+
+
+def download_auto_en_subs(video_url: str, dest_dir: str, stem: str) -> str | None:
+    """Download YouTube's *auto-generated* (ASR) English caption as json3.
+
+    Fetches every ``en*`` auto-caption track in word-level ``json3`` and selects
+    the real ASR track by content (:func:`_select_asr_track`), written as
+    ``<dest_dir>/<stem>.en.asr.json3``. Returns that path, or ``None`` when no
+    real word-level ASR exists or the download failed. No media and no manual
+    captions are fetched; json3 is kept un-converted because ``--convert-subs
+    srt`` collapses the per-word timing this prior depends on.
+    """
+    os.makedirs(dest_dir, exist_ok=True)
+    cmd = (
+        yt_dlp_cmd
+        + [
+            "--skip-download",
+            "--write-auto-subs",
+            "--sub-langs",
+            "en.*",
+            "--sub-format",
+            "json3",
+            "-o",
+            os.path.join(dest_dir, f"{stem}.%(ext)s"),
+        ]
+        + _js_runtime_args()
+        + _impersonate_args()
+        + [video_url]
+    )
+    logging.debug(f"yt-dlp auto-sub download command: {' '.join(cmd)}")
+    try:
+        result = subprocess.run(cmd, capture_output=True, timeout=60)
+    except subprocess.TimeoutExpired:
+        logging.warning(f"yt-dlp auto-sub download timed out for: {video_url}")
+        return None
+    except (FileNotFoundError, PermissionError) as e:
+        logging.error(f"Could not run yt-dlp: {e}")
+        return None
+    if result.returncode != 0:
+        logging.warning(
+            f"yt-dlp auto-sub download failed for {video_url}: "
+            f"{result.stderr.decode('utf-8', 'ignore').strip()}"
+        )
+        return None
+    return _select_asr_track(dest_dir, stem)
