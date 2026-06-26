@@ -335,6 +335,107 @@ class TestExecuteFetches:
 
 
 # ---------------------------------------------------------------------------
+# execute_ytasr_fetches — augment genius seed jobs with the YTASR prior
+# ---------------------------------------------------------------------------
+
+# Real ASR: per-word tOffsetMs (word-seg fraction 0.6); 5 words.
+_ASR_WORD_JSON3 = json.dumps(
+    {
+        "events": [
+            {
+                "tStartMs": 1000,
+                "segs": [
+                    {"utf8": "hello"},
+                    {"utf8": " world", "tOffsetMs": 300},
+                    {"utf8": " again", "tOffsetMs": 600},
+                ],
+            },
+            {"tStartMs": 3000, "segs": [{"utf8": "goodbye"}, {"utf8": " world", "tOffsetMs": 400}]},
+        ]
+    }
+)
+# Manual-mirrored / line-level: no per-word offsets (fraction 0).
+_ASR_LINE_JSON3 = json.dumps(
+    {"events": [{"tStartMs": 1000, "segs": [{"utf8": "hello world again goodbye world"}]}]}
+)
+
+
+class TestExecuteYtasrFetches:
+    def _seed_job(self, tmp_path, media=10.0):
+        """A reused genius seed job (the LRCLIB-seed reuse path)."""
+        _touch_video(tmp_path, YT_STEM)
+        bundle = {
+            "lyrics": {
+                "origin": "genius",
+                "genius": {"id": 1, "title": "T", "artist": "A"},
+                "lines": ["hello world again", "goodbye world"],
+            },
+            "media_duration_s": media,
+        }
+        job = _job(tmp_path, YT_STEM, bundle)
+        job.plan = regen.resolve_plan(job, reset=False)
+        assert job.plan.kind == "seed"
+        assert job.plan.seed.get("lyrics_origin") == "genius"
+        return job
+
+    def _asr_writer(self, content):
+        def fake_dl(url, dest, stem):
+            Path(dest).mkdir(parents=True, exist_ok=True)
+            path = Path(dest) / f"{stem}{regen.ASR_JSON3_SUFFIX}"
+            path.write_text(content, encoding="utf-8")
+            return str(path)
+
+        return fake_dl
+
+    def test_usable_asr_is_seeded(self, tmp_path, monkeypatch):
+        job = self._seed_job(tmp_path)
+        monkeypatch.setattr(regen, "download_auto_en_subs", self._asr_writer(_ASR_WORD_JSON3))
+        regen.execute_ytasr_fetches([job], regen.PipelineConfig())
+
+        ytasr_seed = job.plan.seed.get("ytasr")
+        assert ytasr_seed is not None
+        assert ytasr_seed["asr_file"] == f"subtitles/{YT_STEM}.en.asr.json3"
+        assert ytasr_seed["n_words"] == 5
+
+    def test_reuses_on_disk_asr_without_download(self, tmp_path, monkeypatch):
+        job = self._seed_job(tmp_path)
+        asr = tmp_path / "subtitles" / f"{YT_STEM}.en.asr.json3"
+        asr.parent.mkdir(parents=True, exist_ok=True)
+        asr.write_text(_ASR_WORD_JSON3, encoding="utf-8")
+
+        def fail_dl(*a, **k):
+            raise AssertionError("download must not be called when ASR is on disk")
+
+        monkeypatch.setattr(regen, "download_auto_en_subs", fail_dl)
+        regen.execute_ytasr_fetches([job], regen.PipelineConfig())
+        assert job.plan.seed.get("ytasr") is not None
+
+    def test_line_level_asr_not_seeded(self, tmp_path, monkeypatch):
+        job = self._seed_job(tmp_path)
+        monkeypatch.setattr(regen, "download_auto_en_subs", self._asr_writer(_ASR_LINE_JSON3))
+        regen.execute_ytasr_fetches([job], regen.PipelineConfig())
+        assert "ytasr" not in job.plan.seed
+
+    def test_absent_asr_not_seeded(self, tmp_path, monkeypatch):
+        job = self._seed_job(tmp_path)
+        monkeypatch.setattr(regen, "download_auto_en_subs", lambda url, dest, stem: None)
+        regen.execute_ytasr_fetches([job], regen.PipelineConfig())
+        assert "ytasr" not in job.plan.seed
+
+    def test_disabled_flag_skips_fetch(self, tmp_path, monkeypatch):
+        job = self._seed_job(tmp_path)
+
+        def fail_dl(*a, **k):
+            raise AssertionError("download must not run when joint_ytasr_prior is off")
+
+        monkeypatch.setattr(regen, "download_auto_en_subs", fail_dl)
+        config = regen.PipelineConfig()
+        config.joint_ytasr_prior = False
+        regen.execute_ytasr_fetches([job], config)
+        assert "ytasr" not in job.plan.seed
+
+
+# ---------------------------------------------------------------------------
 # clear_output_folders — reset wipes the regenerable outputs (after backup)
 # ---------------------------------------------------------------------------
 

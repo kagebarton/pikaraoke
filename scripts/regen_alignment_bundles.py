@@ -56,6 +56,7 @@ import srt
 # Allow running as ``python scripts/regen_alignment_bundles.py`` from repo root.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from pikaraoke.lib import ytasr  # noqa: E402
 from pikaraoke.lib.alignment_capture import SCHEMA_VERSION  # noqa: E402
 from pikaraoke.lib.ffmpeg import probe_duration  # noqa: E402
 from pikaraoke.lib.genius import (  # noqa: E402
@@ -75,7 +76,11 @@ from pikaraoke.lib.metadata_parser import (  # noqa: E402
 )
 from pikaraoke.lib.preference_manager import PreferenceManager  # noqa: E402
 from pikaraoke.lib.srt_prior import cue_spans_from_srt  # noqa: E402
-from pikaraoke.lib.youtube_dl import download_manual_en_subs  # noqa: E402
+from pikaraoke.lib.youtube_dl import (  # noqa: E402
+    ASR_JSON3_SUFFIX,
+    download_auto_en_subs,
+    download_manual_en_subs,
+)
 from pikaraoke.pipeline.config import PipelineConfig  # noqa: E402
 from pikaraoke.pipeline.context import StageContext  # noqa: E402
 from pikaraoke.pipeline.orchestrator import PipelineOrchestrator  # noqa: E402
@@ -497,6 +502,71 @@ def execute_fetches(jobs: list[SongJob]) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Phase 3c — augment genius seed jobs with a YouTube ASR timing prior (real run)
+# ---------------------------------------------------------------------------
+
+
+def execute_ytasr_fetches(jobs: list[SongJob], config: PipelineConfig) -> None:
+    """Add a YouTube ASR timing prior to reused genius seed jobs (real run only).
+
+    The default genius reuse path seeds the LRCLIB prior and skips
+    ``LyricsFetchStage``, so without this step a regen would never pick up the
+    same-clock, word-level ASR prior the live stage now prefers. For each reused
+    genius-origin seed job with a YouTube id, ensure
+    ``subtitles/<stem>.en.asr.json3`` exists (reuse on disk, else download once —
+    offline-safe like the ``.lrc``), apply the word-seg-fraction + density gates,
+    and on success add ``seed["ytasr"]`` so :class:`SeedArtifactsStage` injects it
+    and the align stage's elif chain prefers it over the seeded LRCLIB. A song
+    without usable ASR is left unchanged (stays on its LRCLIB seed).
+    """
+    if not config.joint_ytasr_prior:
+        return
+    targets = [
+        j
+        for j in jobs
+        if j.plan
+        and j.plan.kind == "seed"
+        and j.plan.seed.get("lyrics_origin") == "genius"
+        and extract_youtube_id(str(j.song_path))
+    ]
+    if not targets:
+        return
+    print(f"Fetching YouTube ASR captions for {len(targets)} genius song(s) via yt-dlp...")
+    for job in targets:
+        try:
+            _seed_ytasr_prior(job)
+        except Exception:
+            logger.exception(
+                "YouTube ASR fetch failed for %s; staying on LRCLIB", job.song_path.name
+            )
+
+
+def _seed_ytasr_prior(job: SongJob) -> None:
+    """Resolve + gate one genius song's ASR caption and seed it when usable."""
+    song = job.song_path
+    rel = f"subtitles/{song.stem}{ASR_JSON3_SUFFIX}"
+    asr_path = song.parent / rel
+    if not asr_path.is_file():
+        yt_id = extract_youtube_id(str(song))
+        url = f"https://www.youtube.com/watch?v={yt_id}"
+        if download_auto_en_subs(url, str(asr_path.parent), song.stem) is None:
+            return
+    words, frac = ytasr.parse_json3(asr_path.read_text(encoding="utf-8"))
+    media = _media_duration(job)
+    if not ytasr.is_usable(words, frac, media):
+        logger.info(
+            "YouTube ASR for %s rejected (word-seg %.0f%%, %d words); staying on LRCLIB",
+            song.name,
+            frac * 100,
+            len(words),
+        )
+        return
+    wpm = len(words) / (media / 60.0) if media else None
+    job.plan.seed["ytasr"] = {"asr_file": rel, "n_words": len(words), "wpm": wpm}
+    logger.info("YouTube ASR for %s adopted as timing prior (%d words)", song.name, len(words))
+
+
+# ---------------------------------------------------------------------------
 # Phase 4 — execute pipeline per song
 # ---------------------------------------------------------------------------
 
@@ -772,6 +842,9 @@ def main() -> int:
     # Download captions before prompting so a fetch failure falls through to the
     # Genius prompt (and a success skips it).
     execute_fetches(jobs)
+    # Augment reused genius seeds with the YouTube ASR prior (the reuse path
+    # skips LyricsFetchStage, so this is where the corpus picks up YTASR).
+    execute_ytasr_fetches(jobs, config)
 
     prompt_jobs(jobs, genius)
     if not any(j.plan and j.plan.kind != "skip" for j in jobs):
