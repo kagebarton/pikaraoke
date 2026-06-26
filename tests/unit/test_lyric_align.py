@@ -728,7 +728,7 @@ class TestJointLrclibPrior:
         assert cue_spans["0"][0] == 8.5
 
         # Schema version + LRCLIB reference + context land in the bundle.
-        assert bundle["schema_version"] == 6
+        assert bundle["schema_version"] == 7
         assert bundle["lyrics"]["lrclib"]["record"]["id"] == 5
         assert bundle["media_duration_s"] == 212.0
         assert bundle["config"]["joint_lrclib_prior"] is True
@@ -781,3 +781,111 @@ class TestJointLrclibPrior:
         cue_spans = bundle["joint_stats"]["srt_prior"]["cue_spans_by_line"]
         assert len(cue_spans) == 4
         assert cue_spans["0"][0] == 8.5
+
+
+class TestJointYtasrPrior:
+    """Joint route: the YouTube ASR timing prior, preferred over LRCLIB."""
+
+    _LINES = [
+        "alpha bravo charlie delta",
+        "echo foxtrot golf hotel",
+        "india juliet kilo lima",
+        "mike november oscar papa",
+    ]
+
+    def _words(self):
+        """Audio words placing each line at 10/20/30/40 s."""
+        words = []
+        for i, line in enumerate(self._LINES):
+            t0 = 10.0 * (i + 1)
+            for j, tok in enumerate(line.split()):
+                words.append({"word": tok, "start": t0 + 0.5 * j, "end": t0 + 0.5 * j + 0.4})
+        return words
+
+    def _asr_json3(self, line_starts):
+        """A word-level json3 placing each given line at ``line_starts`` (s)."""
+        events = []
+        for line, t0 in zip(self._LINES, line_starts):
+            segs = []
+            for j, tok in enumerate(line.split()):
+                seg = {"utf8": tok if j == 0 else f" {tok}"}
+                if j > 0:
+                    seg["tOffsetMs"] = j * 500
+                segs.append(seg)
+            events.append({"tStartMs": int(t0 * 1000), "segs": segs})
+        return json.dumps({"events": events})
+
+    def _setup(self, tmp_path, *, asr_lines=None, with_lrclib=True):
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path)
+        words = self._words()
+        ctx.artifacts["lyrics_path"].write_text("\n".join(self._LINES) + "\n", encoding="utf-8")
+        worker.align_refine.return_value = words
+        worker.transcribe_words.return_value = words
+
+        # Persisted ASR caption, same-clock as the audio (the prior's offset is
+        # ~0). asr_lines defaults to placing all four lines; pass fewer to make
+        # the prior bail on too few anchors.
+        starts = self._asr_starts if asr_lines is None else asr_lines
+        rel = f"subtitles/{ctx.song_path.stem}.en.asr.json3"
+        asr_path = ctx.song_path.parent / rel
+        asr_path.parent.mkdir(parents=True, exist_ok=True)
+        asr_path.write_text(self._asr_json3(starts), encoding="utf-8")
+        ctx.artifacts["ytasr"] = {"asr_file": rel, "n_words": 16, "wpm": 60.0}
+
+        if with_lrclib:
+            # A competing LRCLIB variant: present but must be ignored (YTASR wins).
+            synced = "".join(
+                f"[00:{8.5 + 10 * i:05.2f}]{line}\n" for i, line in enumerate(self._LINES)
+            )
+            lrc_rel = f"lyrics/{ctx.song_path.stem}.lrc"
+            lrclib.write_lrc(
+                ctx.song_path.parent / lrc_rel,
+                {"id": 5, "trackName": "T", "artistName": "A", "syncedLyrics": synced},
+            )
+            ctx.artifacts["lrclib"] = {
+                "lrc_file": lrc_rel,
+                "record": {"id": 5, "trackName": "T", "artistName": "A"},
+                "query": None,
+            }
+        ctx.artifacts["media_duration_s"] = 212.0
+        return stage, ctx, worker
+
+    _asr_starts = [10.0, 20.0, 30.0, 40.0]
+
+    def _bundle(self, ctx):
+        return json.loads(
+            (ctx.song_path.parent / "alignment_debug" / f"{ctx.song_path.stem}.json").read_text(
+                encoding="utf-8"
+            )
+        )
+
+    def test_ytasr_preferred_over_lrclib(self, tmp_path):
+        stage, ctx, _ = self._setup(tmp_path)
+        stage.run(ctx)
+
+        bundle = self._bundle(ctx)
+        # YTASR ran; LRCLIB stayed dormant despite its artifact being present.
+        assert "ytasr_prior" in bundle["joint_stats"]
+        assert "lrclib_prior" not in bundle["joint_stats"]
+        prior = bundle["joint_stats"]["ytasr_prior"]
+        assert prior["bailed"] is None
+        assert prior["offset_s"] == 0.0  # same-clock as the audio
+        assert len(prior["cue_spans_by_line"]) == 4
+
+        # The adopted ASR reference + the new knob land in the bundle.
+        assert bundle["lyrics"]["ytasr"]["asr_file"].endswith(".en.asr.json3")
+        assert bundle["config"]["joint_ytasr_prior"] is True
+        assert bundle["schema_version"] == 7
+
+    def test_bail_keeps_audio_placements(self, tmp_path):
+        # Only the first line is in the ASR -> one cue -> below PRIOR_MIN_ANCHORS,
+        # so the prior bails and the audio placements are kept verbatim.
+        stage, ctx, _ = self._setup(tmp_path, asr_lines=[10.0])
+        stage.run(ctx)
+
+        bundle = self._bundle(ctx)
+        assert bundle["joint_stats"]["ytasr_prior"]["bailed"] == "few_anchors"
+        timings = {t["line_id"]: t["start"] for t in bundle["output_line_timings"]}
+        # Unchanged audio onsets (10/20/30/40), no snap/fill applied.
+        assert timings[0] == 10.0
+        assert timings[3] == 40.0

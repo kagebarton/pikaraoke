@@ -1,5 +1,6 @@
 """Unit tests for pikaraoke.pipeline.stages.lyrics_fetch — LyricsFetchStage."""
 
+import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -121,6 +122,7 @@ class TestBranchAGeniusSelection:
 
         ctx = _make_ctx(song_path, job_tmp)
         ctx.config.joint_lrclib_prior = False  # isolate the Genius branch
+        ctx.config.joint_ytasr_prior = False  # (no prior fetch in this test)
         stage = LyricsFetchStage(genius)
         stage.run(ctx)
 
@@ -145,6 +147,7 @@ class TestBranchAGeniusSelection:
 
         ctx = _make_ctx(song_path, job_tmp)
         ctx.config.joint_lrclib_prior = False  # isolate the Genius branch
+        ctx.config.joint_ytasr_prior = False  # (no prior fetch in this test)
         LyricsFetchStage(genius).run(ctx)
 
         assert ctx.artifacts["genius"] == {"id": 456, "title": "Hello", "artist": "World"}
@@ -166,6 +169,7 @@ class TestBranchAGeniusSelection:
 
         ctx = _make_ctx(song_path, job_tmp)
         ctx.config.joint_lrclib_prior = False  # isolate the Genius branch
+        ctx.config.joint_ytasr_prior = False  # (no prior fetch in this test)
         stage = LyricsFetchStage(genius)
         stage.run(ctx)
 
@@ -235,6 +239,18 @@ class TestBranchALrclibPrior:
 
     _LYRICS = "Hello world\nGoodbye world\n"
     _SYNCED = "[00:01.00]Hello world\n[00:05.00]Goodbye world\n"
+
+    @pytest.fixture(autouse=True)
+    def _no_ytasr(self):
+        # These synthetic songs have no YouTube ASR caption; the YTASR prior
+        # (now tried first) finds nothing and falls through to LRCLIB. Stub the
+        # download so the fall-through is deterministic and never hits the
+        # network.
+        with patch(
+            "pikaraoke.pipeline.stages.lyrics_fetch.youtube_dl.download_auto_en_subs",
+            return_value=None,
+        ):
+            yield
 
     def _genius(self, title="Hello World (Live)", artist="The Band"):
         g = MagicMock(spec=GeniusClient)
@@ -337,6 +353,156 @@ class TestBranchALrclibPrior:
         LyricsFetchStage(self._genius()).run(ctx)  # must not raise
 
         assert "lrclib" not in ctx.artifacts
+        assert ctx.artifacts["lyrics_origin"] == "genius"
+
+
+# ---------------------------------------------------------------------------
+# Branch (a): YouTube ASR timing prior (joint_ytasr_prior), preferred over LRCLIB
+# ---------------------------------------------------------------------------
+
+
+class TestBranchAYtasrPrior:
+    """Genius branch: YouTube ASR caption adopted over LRCLIB when usable."""
+
+    _LYRICS = "hello world again\ngoodbye world\n"
+    # Real ASR: per-word tOffsetMs (word-seg fraction 0.6).
+    _ASR_WORD = json.dumps(
+        {
+            "events": [
+                {
+                    "tStartMs": 1000,
+                    "segs": [
+                        {"utf8": "hello"},
+                        {"utf8": " world", "tOffsetMs": 300},
+                        {"utf8": " again", "tOffsetMs": 600},
+                    ],
+                },
+                {
+                    "tStartMs": 3000,
+                    "segs": [{"utf8": "goodbye"}, {"utf8": " world", "tOffsetMs": 400}],
+                },
+            ]
+        }
+    )
+    # Manual-mirrored / line-level: no per-word offsets (fraction 0).
+    _ASR_LINE = json.dumps(
+        {"events": [{"tStartMs": 1000, "segs": [{"utf8": "hello world again goodbye world"}]}]}
+    )
+    _SYNCED = "[00:01.00]hello world again\n[00:05.00]goodbye world\n"
+
+    def _genius(self, title="Hello", artist="World"):
+        g = MagicMock(spec=GeniusClient)
+        g.fetch_song.return_value = GeniusSong(text=self._LYRICS, title=title, artist=artist)
+        return g
+
+    def _run(self, tmp_path, mock_gtd):
+        mock_gtd.return_value = str(tmp_path / "temp")
+        (tmp_path / "temp" / "lyric_choices").mkdir(parents=True, exist_ok=True)
+        song_path = tmp_path / "Song---dQw4w9WgXcQ.mp4"
+        song_path.touch()
+        job_tmp = tmp_path / "job_tmp"
+        job_tmp.mkdir()
+        write_choice("dQw4w9WgXcQ", {"yt_id": "dQw4w9WgXcQ", "genius_id": 456})
+        ctx = _make_ctx(song_path, job_tmp)
+        return song_path, ctx
+
+    @patch("pikaraoke.pipeline.stages.lyrics_fetch.youtube_dl.download_auto_en_subs")
+    @patch("pikaraoke.pipeline.stages.lyrics_fetch.lrclib.search")
+    @patch("pikaraoke.pipeline.stages.lyrics_fetch.probe_duration", return_value=10.0)
+    @patch("pikaraoke.lib.genius.get_temp_directory")
+    def test_reuses_on_disk_asr_and_skips_lrclib(
+        self, mock_gtd, _probe, mock_search, mock_dl, tmp_path
+    ):
+        song_path, ctx = self._run(tmp_path, mock_gtd)
+        asr_path = song_path.parent / "subtitles" / "Song---dQw4w9WgXcQ.en.asr.json3"
+        asr_path.parent.mkdir(parents=True, exist_ok=True)
+        asr_path.write_text(self._ASR_WORD, encoding="utf-8")
+
+        LyricsFetchStage(self._genius()).run(ctx)
+
+        ref = ctx.artifacts["ytasr"]
+        assert ref["asr_file"] == "subtitles/Song---dQw4w9WgXcQ.en.asr.json3"
+        assert ref["n_words"] == 5
+        assert ref["wpm"] == 30.0  # 5 words / (10s / 60)
+        # Adopted ASR means no download and no LRCLIB query.
+        mock_dl.assert_not_called()
+        mock_search.assert_not_called()
+        assert "lrclib" not in ctx.artifacts
+
+    @patch("pikaraoke.pipeline.stages.lyrics_fetch.youtube_dl.download_auto_en_subs")
+    @patch("pikaraoke.pipeline.stages.lyrics_fetch.lrclib.search")
+    @patch("pikaraoke.pipeline.stages.lyrics_fetch.probe_duration", return_value=10.0)
+    @patch("pikaraoke.lib.genius.get_temp_directory")
+    def test_downloads_when_absent(self, mock_gtd, _probe, mock_search, mock_dl, tmp_path):
+        song_path, ctx = self._run(tmp_path, mock_gtd)
+        asr_path = song_path.parent / "subtitles" / "Song---dQw4w9WgXcQ.en.asr.json3"
+
+        def fake_dl(url, dest_dir, stem):
+            asr_path.parent.mkdir(parents=True, exist_ok=True)
+            asr_path.write_text(self._ASR_WORD, encoding="utf-8")
+            return str(asr_path)
+
+        mock_dl.side_effect = fake_dl
+
+        LyricsFetchStage(self._genius()).run(ctx)
+
+        mock_dl.assert_called_once()
+        assert "ytasr" in ctx.artifacts
+        mock_search.assert_not_called()
+
+    @patch("pikaraoke.pipeline.stages.lyrics_fetch.youtube_dl.download_auto_en_subs")
+    @patch("pikaraoke.pipeline.stages.lyrics_fetch.lrclib.search")
+    @patch("pikaraoke.pipeline.stages.lyrics_fetch.probe_duration", return_value=200.0)
+    @patch("pikaraoke.lib.genius.get_temp_directory")
+    def test_line_level_asr_falls_back_to_lrclib(
+        self, mock_gtd, _probe, mock_search, mock_dl, tmp_path
+    ):
+        mock_search.return_value = [
+            {"id": 9, "trackName": "Hello", "artistName": "World", "syncedLyrics": self._SYNCED}
+        ]
+        song_path, ctx = self._run(tmp_path, mock_gtd)
+        asr_path = song_path.parent / "subtitles" / "Song---dQw4w9WgXcQ.en.asr.json3"
+        asr_path.parent.mkdir(parents=True, exist_ok=True)
+        asr_path.write_text(self._ASR_LINE, encoding="utf-8")
+
+        LyricsFetchStage(self._genius()).run(ctx)
+
+        # Line-level track rejected -> LRCLIB adopted instead.
+        assert "ytasr" not in ctx.artifacts
+        assert ctx.artifacts["lrclib"]["record"]["id"] == 9
+        mock_dl.assert_not_called()  # the on-disk file was present, just unusable
+
+    @patch(
+        "pikaraoke.pipeline.stages.lyrics_fetch.youtube_dl.download_auto_en_subs",
+        return_value=None,
+    )
+    @patch("pikaraoke.pipeline.stages.lyrics_fetch.lrclib.search")
+    @patch("pikaraoke.pipeline.stages.lyrics_fetch.probe_duration", return_value=200.0)
+    @patch("pikaraoke.lib.genius.get_temp_directory")
+    def test_absent_asr_falls_back_to_lrclib(self, mock_gtd, _probe, mock_search, _dl, tmp_path):
+        mock_search.return_value = [
+            {"id": 9, "trackName": "Hello", "artistName": "World", "syncedLyrics": self._SYNCED}
+        ]
+        _song_path, ctx = self._run(tmp_path, mock_gtd)
+
+        LyricsFetchStage(self._genius()).run(ctx)
+
+        assert "ytasr" not in ctx.artifacts
+        assert ctx.artifacts["lrclib"]["record"]["id"] == 9
+
+    @patch(
+        "pikaraoke.pipeline.stages.lyrics_fetch.youtube_dl.download_auto_en_subs",
+        side_effect=RuntimeError("boom"),
+    )
+    @patch("pikaraoke.pipeline.stages.lyrics_fetch.lrclib.search", return_value=[])
+    @patch("pikaraoke.pipeline.stages.lyrics_fetch.probe_duration", return_value=200.0)
+    @patch("pikaraoke.lib.genius.get_temp_directory")
+    def test_ytasr_failure_never_fails_stage(self, mock_gtd, _probe, _search, _dl, tmp_path):
+        _song_path, ctx = self._run(tmp_path, mock_gtd)
+
+        LyricsFetchStage(self._genius()).run(ctx)  # must not raise
+
+        assert "ytasr" not in ctx.artifacts
         assert ctx.artifacts["lyrics_origin"] == "genius"
 
 

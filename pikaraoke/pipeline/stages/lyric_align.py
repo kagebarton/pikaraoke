@@ -39,7 +39,7 @@ from pathlib import Path
 
 import srt
 
-from pikaraoke.lib import alignment_capture, lrclib
+from pikaraoke.lib import alignment_capture, lrclib, ytasr
 from pikaraoke.lib.genius_lyrics import parse_lyric_lines
 from pikaraoke.lib.joint_match import match_words_to_lines_joint_with_stats
 from pikaraoke.lib.srt_prior import apply_srt_prior, cue_spans_from_srt
@@ -219,6 +219,7 @@ class LyricAlignStage(BaseStage):
                 "joint_max_edit_ratio": cfg.joint_max_edit_ratio,
                 "joint_srt_prior": cfg.joint_srt_prior,
                 "joint_lrclib_prior": cfg.joint_lrclib_prior,
+                "joint_ytasr_prior": cfg.joint_ytasr_prior,
                 "whisper": dataclasses.asdict(cfg.whisper),
             }
             lyrics_suffix = Path(lyrics_path).suffix.lower().lstrip(".")
@@ -238,6 +239,11 @@ class LyricAlignStage(BaseStage):
             lrclib_ref = ctx.artifacts.get("lrclib")
             if lrclib_ref is not None:
                 lyrics["lrclib"] = lrclib_ref
+            # The adopted YouTube ASR caption (txt-sourced songs): the persisted
+            # .en.asr.json3 path plus word-count / wpm provenance.
+            ytasr_ref = ctx.artifacts.get("ytasr")
+            if ytasr_ref is not None:
+                lyrics["ytasr"] = ytasr_ref
             # The Genius song identity (id/title/artist) for genius-origin songs,
             # so a regen can re-resolve the source without re-prompting.
             genius_ref = ctx.artifacts.get("genius")
@@ -545,6 +551,14 @@ class LyricAlignStage(BaseStage):
                 logger.exception(
                     "[%s] SRT timing prior failed; keeping audio placements", self.name
                 )
+        elif self._config.joint_ytasr_prior and ctx.artifacts.get("ytasr"):
+            # Txt-sourced song with an adopted YouTube ASR caption. Preferred
+            # over LRCLIB (same-clock, word-level); the lyrics-fetch stage only
+            # stashes "ytasr" on the Genius branch and only when it beat the
+            # quality gates, so this never collides with the SRT prior.
+            line_objects = self._apply_ytasr_prior(
+                ctx, line_objects, transcribe_words, lyrics_lines, align_lines, joint_stats
+            )
         elif self._config.joint_lrclib_prior and ctx.artifacts.get("lrclib"):
             # Txt-sourced song with an auto-fetched LRCLIB variant. Mutually
             # exclusive with the SRT prior by origin (the elif and the
@@ -553,6 +567,50 @@ class LyricAlignStage(BaseStage):
                 ctx, line_objects, transcribe_words, lyrics_lines, align_lines, joint_stats
             )
         return line_objects, align_words, transcribe_words, joint_stats
+
+    def _apply_ytasr_prior(
+        self,
+        ctx: StageContext,
+        line_objects: list[dict],
+        transcribe_words: list[dict],
+        lyrics_lines: list[str],
+        align_lines: list[str],
+        joint_stats: dict,
+    ) -> list[dict]:
+        """YouTube auto-caption (ASR) timing prior for txt-sourced songs.
+
+        Reads the ``.en.asr.json3`` the lyrics-fetch stage adopted, derives
+        per-line cue spans from its word stream (``ytasr.cue_spans_for_lines``),
+        and runs the shipped prior: snaps gross disagreements to ``cue + offset``
+        and fills lines the audio could not place. ASR is same-clock as the
+        video, so the anchor-MAD gate sees a near-zero, tight offset; a partial
+        or noisy track simply yields fewer cues. Degrades to the audio result on
+        any failure.
+        """
+        ref = ctx.artifacts["ytasr"]
+        try:
+            asr_text = (ctx.song_path.parent / ref["asr_file"]).read_text(encoding="utf-8")
+            words, _ = ytasr.parse_json3(asr_text)
+            cues = ytasr.cue_spans_for_lines(words, align_lines)
+            if not cues:
+                return line_objects
+            line_objects, prior_stats = apply_srt_prior(
+                line_objects,
+                transcribe_words,
+                lyrics_lines,
+                align_lines,
+                cues,
+                margin_s=self._config.joint_margin_s,
+                max_edit_ratio=self._config.joint_max_edit_ratio,
+                source="ytasr",
+            )
+            prior_stats["cue_spans_by_line"] = _serialize_cue_spans(cues)
+            joint_stats["ytasr_prior"] = prior_stats
+        except Exception:
+            logger.exception(
+                "[%s] YouTube ASR timing prior failed; keeping audio placements", self.name
+            )
+        return line_objects
 
     def _apply_lrclib_prior(
         self,

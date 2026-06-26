@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from pikaraoke.lib import lrclib
+from pikaraoke.lib import lrclib, youtube_dl, ytasr
 from pikaraoke.lib.ffmpeg import probe_duration
 from pikaraoke.lib.genius import (
     GeniusClient,
@@ -88,7 +88,7 @@ class LyricsFetchStage(BaseStage):
                     song.artist,
                     choice["genius_id"],
                 )
-                self._fetch_lrclib_prior(ctx, song.title, song.artist, song.text)
+                self._fetch_timing_prior(ctx, song.title, song.artist, song.text)
                 return
             except GeniusUnavailable as e:
                 logger.warning("Genius fetch failed for %s: %s — falling back", yt_id, e)
@@ -128,28 +128,88 @@ class LyricsFetchStage(BaseStage):
     # Helpers
     # ------------------------------------------------------------------
 
-    def _fetch_lrclib_prior(
+    def _fetch_timing_prior(
         self, ctx: StageContext, title: str, artist: str, lyrics_text: str
+    ) -> None:
+        """Resolve the timing prior for a Genius-origin song: YTASR, else LRCLIB.
+
+        YouTube auto-captions are same-clock and word-level — a strictly better
+        timing prior than LRCLIB when present — so they are tried first and
+        adopted when they pass the quality gates, otherwise LRCLIB is fetched as
+        before. Media duration is probed once here and reused by both priors.
+        """
+        if not (ctx.config.joint_ytasr_prior or ctx.config.joint_lrclib_prior):
+            return
+        media_dur = probe_duration(ctx.song_path)
+        if media_dur is not None:
+            ctx.artifacts["media_duration_s"] = media_dur
+        if ctx.config.joint_ytasr_prior and self._fetch_ytasr_prior(ctx, media_dur):
+            return
+        self._fetch_lrclib_prior(ctx, title, artist, lyrics_text, media_dur)
+
+    def _fetch_ytasr_prior(self, ctx: StageContext, media_dur: float | None) -> bool:
+        """Fetch + adopt YouTube auto-caption (ASR) timing for a Genius song.
+
+        Reuses an on-disk ``subtitles/<stem>.en.asr.json3`` (offline-safe
+        reprocess), else downloads the real word-level ASR track. Applies the
+        word-seg-fraction + density gates (:func:`ytasr.is_usable`); on success
+        stashes ``ctx.artifacts["ytasr"]`` and returns ``True`` so the caller
+        skips LRCLIB. Returns ``False`` (degrade to LRCLIB) on an absent /
+        line-level / degenerate track or any failure. Never raises.
+        """
+        try:
+            rel = f"subtitles/{ctx.song_path.stem}{youtube_dl.ASR_JSON3_SUFFIX}"
+            asr_path = ctx.song_path.parent / rel
+            if not asr_path.is_file():
+                yt_id = self._extract_yt_id(ctx.song_path)
+                if not yt_id:
+                    return False
+                url = f"https://www.youtube.com/watch?v={yt_id}"
+                downloaded = youtube_dl.download_auto_en_subs(
+                    url, str(asr_path.parent), ctx.song_path.stem
+                )
+                if not downloaded:
+                    logger.info("Timing prior: no usable YouTube ASR caption — trying LRCLIB")
+                    return False
+
+            words, frac = ytasr.parse_json3(asr_path.read_text(encoding="utf-8"))
+            if not ytasr.is_usable(words, frac, media_dur):
+                logger.info(
+                    "Timing prior: YouTube ASR caption rejected "
+                    "(word-seg %.0f%%, %d words) — trying LRCLIB",
+                    frac * 100,
+                    len(words),
+                )
+                return False
+            wpm = len(words) / (media_dur / 60.0) if media_dur else None
+            ctx.artifacts["ytasr"] = {"asr_file": rel, "n_words": len(words), "wpm": wpm}
+            logger.info(
+                "Timing prior: YouTube ASR — %d words (word-seg %.0f%%)", len(words), frac * 100
+            )
+            return True
+        except Exception:
+            logger.exception("Timing prior: YouTube ASR fetch failed — trying LRCLIB")
+            return False
+
+    def _fetch_lrclib_prior(
+        self, ctx: StageContext, title: str, artist: str, lyrics_text: str, media_dur: float | None
     ) -> None:
         """Fetch + persist the best LRCLIB synced variant as the timing prior.
 
-        Genius-origin only (called from Branch a), gated by
+        Genius-origin only (called from :meth:`_fetch_timing_prior`), gated by
         ``config.joint_lrclib_prior``. Persists ``<song>/lyrics/<stem>.lrc`` and
         stashes ``ctx.artifacts["lrclib"]`` (the LRC file path + the chosen
         record + query) for the align stage and the debug bundle. An existing
-        ``.lrc`` is reused without re-querying (offline-safe reprocess). Never
-        raises: any failure or absent candidate just means no prior — the song
-        processes exactly as today.
+        ``.lrc`` is reused without re-querying (offline-safe reprocess).
+        ``media_dur`` is the caller's single probe, used as the candidate-
+        selection duration tiebreak. Never raises: any failure or absent
+        candidate just means no prior — the song processes exactly as today.
         """
         if not ctx.config.joint_lrclib_prior:
             return
         try:
             rel = f"lyrics/{ctx.song_path.stem}.lrc"
             lrc_path = ctx.song_path.parent / rel
-
-            media_dur = probe_duration(ctx.song_path)
-            if media_dur is not None:
-                ctx.artifacts["media_duration_s"] = media_dur
 
             if lrc_path.is_file():
                 _synced, record = lrclib.read_lrc(lrc_path)

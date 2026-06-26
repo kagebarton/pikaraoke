@@ -269,6 +269,17 @@ class PipelineConfig:
     # as today). Zero GPU cost.
     joint_lrclib_prior: bool = True
 
+    # YouTube auto-caption (ASR) timing prior for the joint route. Preferred
+    # over LRCLIB on Genius-origin songs: YouTube ASR is same-clock as the
+    # video (no sync ambiguity, only a small constant emission lag) and
+    # word-level, so the lyrics-fetch stage tries it first and adopts it when
+    # present, falling back to LRCLIB otherwise. Gated by a word-seg-fraction
+    # cut (reject manual-mirrored / line-level tracks) and a words-per-minute
+    # density floor (reject [Music]-degenerate captions); either failure falls
+    # back to LRCLIB. Runs through the same anchor-MAD prior as the others.
+    # Zero GPU cost.
+    joint_ytasr_prior: bool = True
+
     # De-reverb retry for the joint route. When the whole-stem transcribe
     # yield falls below this many words per minute, the vocal stem is
     # treated as reverb-washed: the stem worker swaps to the de-reverb

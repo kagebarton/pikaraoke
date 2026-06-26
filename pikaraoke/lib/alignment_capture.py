@@ -22,6 +22,18 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# v7: YouTube auto-caption (ASR) timing prior shipped to production. A
+#     milestone bump even though the changes are additive — like v5, it marks a
+#     run-affecting matcher change (a new prior preferred over LRCLIB on the
+#     Genius path) and makes the regen tool treat existing v6 bundles as stale
+#     so a default run reprocesses them. Added:
+#   - lyrics.ytasr: for txt-sourced songs whose YouTube ASR caption was adopted
+#     — {asr_file (relative path to the persisted <song>/subtitles/
+#     <stem>.en.asr.json3), n_words, wpm}.
+#   - joint_stats.ytasr_prior: the prior's per-song stats, parallel to
+#     joint_stats.{srt_prior,lrclib_prior} (same shape, including
+#     cue_spans_by_line for offline replay).
+#   - config_snapshot.joint_ytasr_prior: the new knob.
 # v6: walk and tiling matchers removed — the joint matcher is the sole
 #     alignment path. Removed fields: walk_stats, tiling_stats (top-level),
 #     and config.match_method / config.align_failure_escalation /
@@ -92,7 +104,7 @@ logger = logging.getLogger(__name__)
 # v2: added tiling per-unit fields (units, zero_candidate_unit_ids,
 #     anchor_recovered_unit_ids, selected_windows replacing window_widths).
 # v1: initial.
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 
 def build_bundle(
