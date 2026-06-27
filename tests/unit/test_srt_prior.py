@@ -1,6 +1,13 @@
 """Tests for the SRT timing prior (lib/srt_prior.py)."""
 
-from pikaraoke.lib.srt_prior import apply_srt_prior, cue_spans_from_srt
+import pytest
+
+from pikaraoke.lib.srt_prior import (
+    MAX_FILL_WORD_DUR_S,
+    MIN_FILL_DUR_S,
+    apply_srt_prior,
+    cue_spans_from_srt,
+)
 
 KNOBS = dict(margin_s=0.3, max_edit_ratio=0.75)
 
@@ -146,6 +153,29 @@ class TestCoverageFill:
         out, stats = apply_srt_prior(objs, transcribe, lines, lines, cues, **KNOBS)
         assert stats["n_filled"] == 0
         assert out[4] is objs[4]
+
+    def test_wide_cue_fill_is_clamped_to_a_plausible_pace(self):
+        # A 20 s cue (LRCLIB infers a cue's end as the next line's start, so it
+        # balloons across gaps) must not smear the 4-word sweep into a crawl.
+        lines, objs, transcribe, cues = _anchor_song(lead_s=1.5)
+        lines.append("quebec romeo sierra tango")
+        objs.append(_interp_obj(4, 41.9, 50.0))
+        cues[4] = (50.0, 70.0)  # offset +1.5 -> target span 51.5..71.5 (20 s)
+        out, stats = apply_srt_prior(objs, transcribe, lines, lines, cues, **KNOBS)
+        fill = out[4]
+        assert fill["start"] == 51.5  # anchored at the reliable cue start
+        expected = max(MAX_FILL_WORD_DUR_S * 4, MIN_FILL_DUR_S)
+        assert fill["end"] - fill["start"] == pytest.approx(expected)
+        assert fill["end"] < 71.5  # ended early instead of crawling to the cue end
+
+    def test_single_word_wide_cue_hits_readability_floor(self):
+        lines, objs, transcribe, cues = _anchor_song(lead_s=1.5)
+        lines.append("forever")
+        objs.append(_interp_obj(4, 41.9, 50.0))
+        cues[4] = (50.0, 70.0)
+        out, _ = apply_srt_prior(objs, transcribe, lines, lines, cues, **KNOBS)
+        # One token: the per-word cap (0.7 s) is below the readability floor.
+        assert out[4]["end"] - out[4]["start"] == pytest.approx(MIN_FILL_DUR_S)
 
 
 class TestCueSpansFromSrt:

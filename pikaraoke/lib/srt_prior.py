@@ -53,6 +53,18 @@ PRIOR_MAX_MAD_S = 0.75
 # cue+offset is overwhelmingly likely to improve it.
 SNAP_DISAGREE_S = 2.0
 
+# Cap on a filled line's per-word sweep. An external cue can be far wider than
+# the line is actually sung — LRCLIB infers a cue's end as the next line's start
+# (so it balloons across instrumental gaps) and a YTASR cue can straddle one too.
+# Uncapped, _fill_line smears the karaoke sweep across the whole span: a slow
+# crawl overlapping the next line. Anchored at the reliable cue start, the fill
+# is clamped to this pace; a long-but-correct cue simply ends early rather than
+# crawling. Below the ~1.3 s/word crawl-perception threshold with margin.
+MAX_FILL_WORD_DUR_S = 0.7
+
+# Floor so a one- or two-word capped fill is still readable on screen.
+MIN_FILL_DUR_S = 1.2
+
 
 def cue_spans_from_srt(srt_text: str) -> tuple[list[str], list[tuple[float, float]]]:
     """Cleaned cue texts and their ``(start, end)`` spans in seconds.
@@ -134,7 +146,10 @@ def apply_srt_prior(
     if mad > PRIOR_MAX_MAD_S:
         stats["bailed"] = "wide_spread"
         logger.info(
-            "%s prior bailed: anchor residual MAD %.2fs > %.2fs", source.upper(), mad, PRIOR_MAX_MAD_S
+            "%s prior bailed: anchor residual MAD %.2fs > %.2fs",
+            source.upper(),
+            mad,
+            PRIOR_MAX_MAD_S,
         )
         return line_objects, stats
 
@@ -205,6 +220,11 @@ def _fill_line(
         return None
     if t1 <= t0:
         t1 = t0 + 0.5
+    # Clamp an over-wide cue to a plausible sung pace, anchored at the reliable
+    # cue start, so the fill sweeps normally and ends early instead of crawling.
+    max_dur = max(MAX_FILL_WORD_DUR_S * len(toks), MIN_FILL_DUR_S)
+    if t1 - t0 > max_dur:
+        t1 = t0 + max_dur
     step = (t1 - t0) / len(toks)
     words = [
         {"word": raw, "start": t0 + i * step, "end": t0 + (i + 1) * step}
