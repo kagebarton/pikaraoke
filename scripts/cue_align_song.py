@@ -181,30 +181,38 @@ def _wav_duration(path: Path) -> float:
         return w.getnframes() / w.getframerate()
 
 
-def align_song(
+def align_with_cues(
     song: Path,
-    srt_path: Path,
-    vocal: Path,
     *,
+    display_lines: list[str],
+    align_lines: list[str],
+    cue_spans: list[tuple[float, float]],
+    vocal: Path,
     worker: WhisperWorker,
     config: PipelineConfig,
+    out: Path,
+    tag: str,
     gap: float = 1.5,
     pad: float = 0.75,
-    out: Path | None = None,
 ) -> tuple[list[dict], list]:
-    """Cue-align one song with an already-started ``worker``; write the .ass.
+    """Windowed-align one song from a dense per-line cue list; write the .ass.
+
+    The cue-source-agnostic core shared by the SRT path (:func:`align_song`) and
+    the ASR path (``scripts/asr_align_song.py``). ``cue_spans`` is the 1:1
+    per-line ``(start, end)`` list: it is segmented into silence-bounded sections,
+    each section's vocal slice is force-aligned once via ``worker``, the words are
+    split back to lines, and the lines the align could not place are re-paced from
+    their cues. ``tag`` names the scratch WAVs and the default output suffix, so
+    the two paths never clobber each other's files.
 
     Returns ``(line_objects, sections)`` so a caller can score overlap/coverage
-    and correlate drift with section size. The worker lifecycle is the
-    caller's -- a batch runner starts it once.
+    and correlate drift with section size. The worker lifecycle is the caller's.
     """
-    display_lines, cue_spans = cue_spans_from_srt(srt_path.read_text(encoding="utf-8"))
-    align_lines = list(display_lines)  # SRT has no align/display distinction
     if not cue_spans:
-        raise ValueError(f"{srt_path.name}: no cues")
+        raise ValueError(f"{song.stem}: no cues")
 
     tmp = Path(get_temp_directory())
-    vocal_wav = tmp / f"{song.stem}__cuealign_vocal.wav"
+    vocal_wav = tmp / f"{song.stem}__{tag}_vocal.wav"
     _ffmpeg(["-i", str(vocal), "-ac", "2", "-ar", "44100", "-sample_fmt", "s16", str(vocal_wav)])
     try:
         duration = _wav_duration(vocal_wav)
@@ -212,7 +220,7 @@ def align_song(
         logger.info("%s: %d cues -> %d sections", song.stem[:40], len(cue_spans), len(sections))
         line_objects: list[dict] = []
         for i, section in enumerate(sections):
-            slice_wav = tmp / f"{song.stem}__cuealign_s{i:03d}.wav"
+            slice_wav = tmp / f"{song.stem}__{tag}_s{i:03d}.wav"
             _ffmpeg(
                 [
                     "-ss",
@@ -251,7 +259,7 @@ def align_song(
         vocal_wav.unlink(missing_ok=True)
 
     # Re-pace lines the align could not place (under-covered or drifted) across
-    # their offset-corrected cue spans, so the trusted SRT carries them.
+    # their offset-corrected cue spans, so the trusted cues carry them.
     line_objects, _repace_stats = repace_bad_lines(
         line_objects, cue_spans, display_lines, align_lines
     )
@@ -259,14 +267,47 @@ def align_song(
     # Reuse the production ASS renderer for a byte-faithful A/B against the
     # pipeline's own .ass -- it only reads config, mutates nothing.
     ass = LyricAlignStage(worker, config)._generate_ass(line_objects)
-    out = out or (song.parent / "karaoke" / f"{song.stem}.cuealign.ass")
     out.parent.mkdir(exist_ok=True)
     out.write_text(ass, encoding="utf-8")
     logger.info("wrote %s", out)
     return line_objects, sections
 
 
-def _report(line_objects: list[dict]) -> None:
+def align_song(
+    song: Path,
+    srt_path: Path,
+    vocal: Path,
+    *,
+    worker: WhisperWorker,
+    config: PipelineConfig,
+    gap: float = 1.5,
+    pad: float = 0.75,
+    out: Path | None = None,
+) -> tuple[list[dict], list]:
+    """Cue-align one SRT song with an already-started ``worker``; write the .ass.
+
+    Thin loader over :func:`align_with_cues`: reads the uploader SRT into 1:1
+    line cues, then hands them to the shared windowed driver. SRT has no
+    align/display distinction, so ``align_lines`` mirrors the cue texts.
+    """
+    display_lines, cue_spans = cue_spans_from_srt(srt_path.read_text(encoding="utf-8"))
+    out = out or (song.parent / "karaoke" / f"{song.stem}.cuealign.ass")
+    return align_with_cues(
+        song,
+        display_lines=display_lines,
+        align_lines=list(display_lines),
+        cue_spans=cue_spans,
+        vocal=vocal,
+        worker=worker,
+        config=config,
+        out=out,
+        tag="cuealign",
+        gap=gap,
+        pad=pad,
+    )
+
+
+def report(line_objects: list[dict]) -> None:
     placed = [o for o in line_objects if o["words"]]
     hidden = len(line_objects) - len(placed)
     repaced = sum(1 for o in line_objects if o["source"] == SOURCE_FILL)
@@ -314,7 +355,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     finally:
         worker.stop()
-    _report(line_objects)
+    report(line_objects)
     return 0
 
 
