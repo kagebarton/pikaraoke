@@ -1,12 +1,13 @@
 """Joint alignment DP: align + transcribe + lyrics consumed in one matcher.
 
-Two independent placements of the lyrics in time are available: forced
-alignment and a free transcribe pass. Trusting forced alignment
-everywhere and trusting transcribe everywhere are both degenerate answers
-to *which one do we believe per line?* This matcher answers per-line by
-scoring both placements and letting an interval-scheduling DP pick.
+Two independent placements of the lyrics in time are always available:
+forced alignment and a free transcribe pass. A third, optional placement
+(YouTube auto-caption/YTASR words) can be supplied when present. Trusting
+any single source everywhere is a degenerate answer to *which one do we
+believe per line?* This matcher answers per-line by scoring every
+available placement and letting an interval-scheduling DP pick.
 
-Per lyric line we build two kinds of candidates:
+Per lyric line we build up to three kinds of candidates:
 
 * **align candidate.** One per line, at the time span forced alignment
   placed the line's tokens (read from ``align_words``). Has high
@@ -18,17 +19,32 @@ Per lyric line we build two kinds of candidates:
   / ``find_anchor_candidates`` machinery). Each carries the matched-token
   count as ``transcribe_match`` and gets an ``align_agreement`` based on
   time overlap with align's predicted window for the same line.
+* **ytasr candidates** (only when ``ytasr_words`` is supplied). Found by
+  fuzzy-matching against the YTASR word stream the same way transcribe
+  candidates are — YTASR has no 1:1 token guarantee with the lyric line
+  the way align does, so it needs the same multi-candidate treatment as
+  transcribe, not align's single-guaranteed-candidate treatment. Has high
+  ``ytasr_agreement`` by construction; its ``transcribe_match`` and
+  ``align_agreement`` are computed the same way align's are, against its
+  own proposed window.
 
 Each candidate's joint score is::
 
-    score = transcribe_match + alpha * align_agreement
+    score = transcribe_match + weight * (alpha * align_agreement + beta * ytasr_agreement)
+
+where ``weight`` is the transcribe-corroboration gate (see
+``_alpha_weight``) shared by both the alpha and beta terms — it answers
+"does independent transcribe evidence support this specific window,"
+which is orthogonal to which source proposed the window. When
+``ytasr_words`` is not supplied, ``ytasr_agreement`` is always 0 and the
+formula reduces exactly to the two-source score.
 
 The interval-scheduling DP (``_best_tiling_by_time``, a weighted
 interval-scheduling pass over time intervals rather than token indices)
 picks the maximum-score non-overlapping subset. Per-word timings come
 from whichever source won each line — align's refined word timings when
 the align candidate won (so clean-song precision is preserved exactly),
-transcribe's word timestamps when a transcribe candidate won.
+transcribe's or ytasr's word timestamps otherwise.
 
 Lines with no selected candidate are interpolated between their bracketing
 selected neighbours so the output is 1:1 with the lyric line list.
@@ -37,6 +53,7 @@ selected neighbours so the output is 1:1 with the lyric line list.
 import logging
 from bisect import bisect_left
 
+from pikaraoke.lib import ytasr
 from pikaraoke.lib.candidate_match import (
     _build_line_object,
     find_anchor_candidates,
@@ -62,12 +79,14 @@ def match_words_to_lines_joint_with_stats(
     align_lines: list[str],
     *,
     alpha: float = 2.0,
+    beta: float = 2.0,
     margin_s: float = 0.3,
     max_edit_ratio: float = 0.75,
     lookahead: int = 3,
     anchor_fallback: bool = True,
+    ytasr_words: list[dict] | None = None,
 ) -> tuple[list[dict], dict]:
-    """Joint align + transcribe matcher.
+    """Joint align + transcribe (+ optional ytasr) matcher.
 
     Args:
         align_words: refined whisper words from forced alignment. One entry
@@ -79,11 +98,14 @@ def match_words_to_lines_joint_with_stats(
         align_lines: normalised lyric lines (paren-stripped upstream). Used
             for tokenisation; ``align_words`` is assumed to correspond
             1:1 with the flat token stream from ``align_lines``.
-        alpha: weight on the align prior. Score formula is
-            ``transcribe_match + alpha * align_agreement``. Higher = trust
-            align more (all-align on clean songs). Lower = trust transcribe
-            more (all-transcribe on misaligned songs). The corpus-tuned
-            default lives in ``PipelineConfig.joint_alpha``.
+        alpha: weight on the align agreement term. Score formula is
+            ``transcribe_match + weight * (alpha * align_agreement + beta *
+            ytasr_agreement)``. Higher = trust align more (all-align on
+            clean songs). Lower = trust transcribe more (all-transcribe on
+            misaligned songs). The corpus-tuned default lives in
+            ``PipelineConfig.joint_alpha``.
+        beta: weight on the ytasr agreement term, symmetric to ``alpha``.
+            Only has an effect when ``ytasr_words`` is supplied.
         margin_s: time slack on each side of a candidate's window when
             (a) deciding which transcribe words count as "inside" the
             window for ``transcribe_match`` computation, and (b) padding
@@ -96,16 +118,23 @@ def match_words_to_lines_joint_with_stats(
         lookahead: passed to per-window per-word timing builder.
         anchor_fallback: if True, run ``find_anchor_candidates`` for lines
             that produced zero transcribe candidates in the main pass.
+        ytasr_words: YouTube auto-caption words (same shape as
+            ``transcribe_words``, plus a ``norm`` key — see
+            ``ytasr.parse_json3``), or ``None`` to run the plain two-source
+            matcher. When supplied, YTASR is treated as a third candidate
+            source scored symmetrically to align/transcribe, not as a
+            post-hoc timing prior.
 
     Returns:
         ``(line_objects, joint_stats)``. ``line_objects`` is one entry per
         lyric line (1:1, in lyric order). Each carries an explicit
         ``line_id`` back-reference into ``lines``. ``joint_stats`` records
-        candidate counts, per-line selected source, and the alpha used —
+        candidate counts, per-line selected source, and the knobs used —
         captured for offline tuning.
     """
     knobs = {
         "alpha": alpha,
+        "beta": beta,
         "margin_s": margin_s,
         "max_edit_ratio": max_edit_ratio,
         "lookahead": lookahead,
@@ -133,11 +162,32 @@ def match_words_to_lines_joint_with_stats(
     if anchor_fallback and zero_cand_line_ids and transcribe_words:
         anchor_cands = find_anchor_candidates(transcribe_norms, line_norms, zero_cand_line_ids)
 
+    ytasr_words = ytasr_words or []
+    ytasr_cands: list = []
+    ytasr_ranges: list[dict | None] = [None] * n_lines
+    if ytasr_words:
+        ytasr_norms = [w["norm"] for w in ytasr_words]
+        # Full candidate list for the DP to arbitrate over (every hit kept —
+        # unlike cue_spans_for_lines, which is deliberately lossy for the
+        # post-hoc prior's single-span-per-line use case).
+        ytasr_cands = find_candidates(ytasr_norms, line_norms, max_edit_ratio=max_edit_ratio)
+        # Reference range for scoring *other* candidates' ytasr agreement:
+        # reuses cue_spans_for_lines's monotonic-filtered reduction (not
+        # best_candidate_per_line directly) so a repeated chorus line can't
+        # have two different line_ids collapse onto the same ytasr
+        # occurrence, which would silently corrupt their agreement scores.
+        for line_id, (t0, t1) in (
+            ytasr.cue_spans_for_lines(ytasr_words, align_lines) or {}
+        ).items():
+            ytasr_ranges[line_id] = {"t0": t0, "t1": t1}
+
     transcribe_candidates = _build_transcribe_candidates(
         main_cands + anchor_cands,
         transcribe_words,
         align_ranges,
+        ytasr_ranges,
         alpha,
+        beta,
     )
 
     align_candidates = _build_align_candidates(
@@ -145,14 +195,32 @@ def match_words_to_lines_joint_with_stats(
         align_ranges,
         transcribe_words,
         transcribe_norms,
+        ytasr_ranges,
         margin_s,
         max_edit_ratio,
         alpha,
+        beta,
     )
 
-    # align first so ties (same score, same t1) break toward align — align's
-    # refined per-word timings are preferred when both sources agree.
-    all_candidates = align_candidates + transcribe_candidates
+    ytasr_candidates = _build_ytasr_candidates(
+        ytasr_cands,
+        ytasr_words,
+        line_norms,
+        align_ranges,
+        transcribe_words,
+        transcribe_norms,
+        margin_s,
+        max_edit_ratio,
+        alpha,
+        beta,
+    )
+
+    # align first, then transcribe, then ytasr — ties (same score, same t1)
+    # break in that order. Align's refined per-word timings are preferred
+    # when sources agree; between transcribe and ytasr, transcribe is the
+    # same-audio whisper-precision source, so it's preferred over ytasr's
+    # lower-fidelity per-word split.
+    all_candidates = align_candidates + transcribe_candidates + ytasr_candidates
     selected = _best_tiling_by_time(all_candidates)
 
     line_objects = _materialise_line_objects(
@@ -161,6 +229,7 @@ def match_words_to_lines_joint_with_stats(
         lines,
         align_words,
         transcribe_words,
+        ytasr_words,
         align_ranges,
         lookahead,
     )
@@ -177,6 +246,7 @@ def match_words_to_lines_joint_with_stats(
 
     align_won = sum(1 for s in selected_source if s == "align")
     transcribe_won = sum(1 for s in selected_source if s == "transcribe")
+    ytasr_won = sum(1 for s in selected_source if s == "ytasr")
     interpolated = [i for i, s in enumerate(selected_source) if s == "interp"]
     absent = [i for i, s in enumerate(selected_source) if s == "absent"]
 
@@ -185,28 +255,33 @@ def match_words_to_lines_joint_with_stats(
         "n_lines": n_lines,
         "n_align_words": len(align_words),
         "n_transcribe_words": len(transcribe_words),
+        "n_ytasr_words": len(ytasr_words),
         "n_main_candidates": len(main_cands),
         "n_anchor_candidates": len(anchor_cands),
         "n_align_candidates": len(align_candidates),
+        "n_ytasr_candidates": len(ytasr_candidates),
         "n_selected": len(selected),
         "selected_source": selected_source,
         "align_won": align_won,
         "transcribe_won": transcribe_won,
+        "ytasr_won": ytasr_won,
         "interpolated_line_ids": interpolated,
         "absent_line_ids": absent,
         "selected_score_sum": float(sum(c["score"] for c in selected)),
     }
 
     logger.info(
-        "Joint match: %d/%d lines placed (align=%d transcribe=%d interp=%d "
-        "absent=%d) at alpha=%.2f",
+        "Joint match: %d/%d lines placed (align=%d transcribe=%d ytasr=%d "
+        "interp=%d absent=%d) at alpha=%.2f beta=%.2f",
         n_lines - len(absent),
         n_lines,
         align_won,
         transcribe_won,
+        ytasr_won,
         len(interpolated),
         len(absent),
         alpha,
+        beta,
     )
 
     return line_objects, stats
@@ -219,10 +294,12 @@ def match_words_to_lines_joint(
     align_lines: list[str],
     *,
     alpha: float = 2.0,
+    beta: float = 2.0,
     margin_s: float = 0.3,
     max_edit_ratio: float = 0.75,
     lookahead: int = 3,
     anchor_fallback: bool = True,
+    ytasr_words: list[dict] | None = None,
 ) -> list[dict]:
     """Thin wrapper that drops the stats. See ``..._with_stats``."""
     line_objects, _ = match_words_to_lines_joint_with_stats(
@@ -231,10 +308,12 @@ def match_words_to_lines_joint(
         lines,
         align_lines,
         alpha=alpha,
+        beta=beta,
         margin_s=margin_s,
         max_edit_ratio=max_edit_ratio,
         lookahead=lookahead,
         anchor_fallback=anchor_fallback,
+        ytasr_words=ytasr_words,
     )
     return line_objects
 
@@ -310,7 +389,9 @@ def _build_transcribe_candidates(
     tiling_cands: list,
     transcribe_words: list[dict],
     align_ranges: list[dict | None],
+    ytasr_ranges: list[dict | None],
     alpha: float,
+    beta: float,
 ) -> list[dict]:
     """Turn each tiling-style ``(start_idx, end_idx, line_id, score)`` into
     a joint candidate with its time interval and joint score.
@@ -320,13 +401,14 @@ def _build_transcribe_candidates(
         t0 = transcribe_words[start_idx]["start"]
         t1 = transcribe_words[end_idx - 1]["end"]
         a_agree = _range_agreement(t0, t1, align_ranges[line_id])
+        y_agree = _range_agreement(t0, t1, ytasr_ranges[line_id])
         window_count = end_idx - start_idx
         # Transcribe candidates only exist because find_candidates accepted
         # them, so by construction at least one lyric token overlaps the
         # window. Pass True explicitly to keep the gate semantics consistent
         # with the align-candidate path.
-        alpha_weight = _alpha_weight(t_score > 0, window_count)
-        score = float(t_score) + alpha * a_agree * alpha_weight
+        weight = _alpha_weight(t_score > 0, window_count)
+        score = float(t_score) + weight * (alpha * a_agree + beta * y_agree)
         out.append(
             {
                 "line_id": line_id,
@@ -336,7 +418,8 @@ def _build_transcribe_candidates(
                 "score": score,
                 "transcribe_match": float(t_score),
                 "align_agreement": a_agree,
-                "alpha_weight": alpha_weight,
+                "ytasr_agreement": y_agree,
+                "alpha_weight": weight,
                 "transcribe_idx_start": start_idx,
                 "transcribe_idx_end": end_idx,
             }
@@ -386,9 +469,11 @@ def _build_align_candidates(
     align_ranges: list[dict | None],
     transcribe_words: list[dict],
     transcribe_norms: list[str],
+    ytasr_ranges: list[dict | None],
     margin_s: float,
     max_edit_ratio: float,
     alpha: float,
+    beta: float,
 ) -> list[dict]:
     """One align candidate per line that has an align range, scored by the
     transcribe content inside that range.
@@ -414,8 +499,9 @@ def _build_align_candidates(
             margin_s,
             max_edit_ratio,
         )
-        alpha_weight = _alpha_weight(any_overlap, count_in_window)
-        score = float(t_match) + alpha * 1.0 * alpha_weight
+        y_agree = _range_agreement(t0, t1, ytasr_ranges[line_id])
+        weight = _alpha_weight(any_overlap, count_in_window)
+        score = float(t_match) + weight * (alpha * 1.0 + beta * y_agree)
         out.append(
             {
                 "line_id": line_id,
@@ -425,9 +511,68 @@ def _build_align_candidates(
                 "score": score,
                 "transcribe_match": float(t_match),
                 "align_agreement": 1.0,
-                "alpha_weight": alpha_weight,
+                "ytasr_agreement": y_agree,
+                "alpha_weight": weight,
                 "token_start": ar["token_start"],
                 "token_end": ar["token_end"],
+            }
+        )
+    return out
+
+
+def _build_ytasr_candidates(
+    tiling_cands: list,
+    ytasr_words: list[dict],
+    line_norms: list[list[str]],
+    align_ranges: list[dict | None],
+    transcribe_words: list[dict],
+    transcribe_norms: list[str],
+    margin_s: float,
+    max_edit_ratio: float,
+    alpha: float,
+    beta: float,
+) -> list[dict]:
+    """Turn each ytasr ``find_candidates`` hit into a joint candidate.
+
+    Mirrors ``_build_transcribe_candidates``'s shape (every fuzzy-matched
+    hit is a competing DP candidate) rather than ``_build_align_candidates``'s
+    one-guaranteed-candidate-per-line shape — ytasr has no 1:1 token
+    guarantee with the lyric line the way align_words does. Its
+    ``transcribe_match`` and ``align_agreement`` are computed fresh against
+    this candidate's own window exactly as an align candidate's are (not
+    reused from the ``find_candidates`` score that gated this candidate's
+    existence), so all three sources are commensurable on the same axes.
+    """
+    out: list[dict] = []
+    transcribe_starts = [w["start"] for w in transcribe_words]
+    for start_idx, end_idx, line_id, _y_score in tiling_cands:
+        t0 = ytasr_words[start_idx]["start"]
+        t1 = ytasr_words[end_idx - 1]["end"]
+        t_match, any_overlap, count_in_window = _transcribe_match_and_count_in_window(
+            line_norms[line_id],
+            transcribe_norms,
+            transcribe_starts,
+            t0,
+            t1,
+            margin_s,
+            max_edit_ratio,
+        )
+        a_agree = _range_agreement(t0, t1, align_ranges[line_id])
+        weight = _alpha_weight(any_overlap, count_in_window)
+        score = float(t_match) + weight * (alpha * a_agree + beta * 1.0)
+        out.append(
+            {
+                "line_id": line_id,
+                "source": "ytasr",
+                "t0": t0,
+                "t1": t1,
+                "score": score,
+                "transcribe_match": float(t_match),
+                "align_agreement": a_agree,
+                "ytasr_agreement": 1.0,
+                "alpha_weight": weight,
+                "ytasr_idx_start": start_idx,
+                "ytasr_idx_end": end_idx,
             }
         )
     return out
@@ -559,6 +704,7 @@ def _materialise_line_objects(
     lines: list[str],
     align_words: list[dict],
     transcribe_words: list[dict],
+    ytasr_words: list[dict],
     align_ranges: list[dict | None],
     lookahead: int,
 ) -> list[dict]:
@@ -577,6 +723,11 @@ def _materialise_line_objects(
             obj = _align_line_object(
                 line_id, lines[line_id], toks, align_words, align_ranges[line_id]
             )
+        elif cand["source"] == "ytasr":
+            start_idx = cand["ytasr_idx_start"]
+            end_idx = cand["ytasr_idx_end"]
+            win_words = ytasr_words[start_idx:end_idx]
+            obj = _build_line_object(lines[line_id], line_id, toks, win_words, lookahead)
         else:
             start_idx = cand["transcribe_idx_start"]
             end_idx = cand["transcribe_idx_end"]
