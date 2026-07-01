@@ -575,6 +575,26 @@ class TestEndToEndYtasrWins:
         # align's wrong 3s guess.
         assert objs[1]["start"] >= 14.5
 
+    def test_ytasr_scan_uses_own_stricter_ratio(self):
+        # A half-garbled ASR rendering ("a b y z" for "a b c d") clears the
+        # transcribe knob (0.75 allows 3 errors on 4 tokens) but not ytasr's
+        # own CANDIDATE_MAX_EDIT_RATIO (0.34 allows 1): the ytasr scan must
+        # use the latter, so ASR text this weak generates no candidate at
+        # all, no matter how loose the transcribe knob is set.
+        lines = ["a b c d"]
+        align_words = _aw_seq("a", "b", "c", "d", t0=0.0, dt=1.0)
+        ytasr_words = _ytw_seq("a", "b", "y", "z", t0=10.0, dt=1.0)
+
+        _, stats = match_words_to_lines_joint_with_stats(
+            align_words,
+            [],
+            lines,
+            lines,
+            max_edit_ratio=0.75,
+            ytasr_words=ytasr_words,
+        )
+        assert stats["n_ytasr_candidates"] == 0
+
     def test_ytasr_words_none_is_bit_identical_to_two_source(self):
         # The hard backward-compatibility requirement: omitting ytasr_words
         # must reproduce the plain two-source matcher exactly.

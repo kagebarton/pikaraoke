@@ -58,9 +58,15 @@ LAST_WORD_HOLD_S = 0.3
 # the rendered word across the gap. Generous enough for a held note.
 MAX_WORD_DUR_S = 2.0
 
-# Per-line fuzzy-match tolerance against ASR mis-hears. Looser than the matcher's
-# default (0.25): ASR over backing music garbles more than whisper, and a wrong
-# line mapping is caught downstream by the prior's anchor-MAD gate.
+# Per-line fuzzy-match tolerance against ASR mis-hears, shared by every
+# consumer of the ASR stream (the joint DP's ytasr candidates and the post-hoc
+# prior's cue spans). Looser than the matcher's default (0.25) because ASR
+# over backing music garbles more than whisper — but far stricter than the
+# transcribe-candidate knob (0.75): a transcribe candidate's garble is
+# cross-checked word-by-word inside its window, while the ASR text is a ytasr
+# candidate's *only* evidence for existing, so it must earn its way in
+# lexically. Wrong mappings that survive are caught downstream (DP score
+# arbitration; the prior's anchor-MAD gate).
 CANDIDATE_MAX_EDIT_RATIO = 0.34
 
 
@@ -139,15 +145,9 @@ def cue_spans_for_lines(
     """Map the ASR word stream onto lyric ``align_lines`` as per-line cue spans.
 
     The YTASR analog of :func:`pikaraoke.lib.lrclib.cue_spans_for_lines`. Runs a
-    per-line fuzzy candidate search over the ASR tokens, keeps each line's
-    best-scoring candidate, then takes a greedy monotonic subset (a kept line's
-    start index strictly advances) so partial ASR coverage and repeated
-    choruses never reorder — and a start-index *tie* means two lines resolved
-    to the same ASR occurrence (identical repeated lines tie-break to the
-    earliest hit), so only the strongest claimant keeps it: highest score,
-    then earliest line. Each kept line's span is
-    ``(words[start].start, words[end-1].end)``. Lines with no candidate get no
-    cue — the prior leaves/fills them. Returns ``None`` when nothing maps.
+    per-line fuzzy candidate search over the ASR tokens, then reduces via
+    :func:`spans_from_candidates`. Lines with no candidate get no cue — the
+    prior leaves/fills them. Returns ``None`` when nothing maps.
     """
     asr_norms = [w["norm"] for w in words]
     line_toks = [
@@ -155,6 +155,23 @@ def cue_spans_for_lines(
         for line in align_lines
     ]
     candidates = find_candidates(asr_norms, line_toks, max_edit_ratio=CANDIDATE_MAX_EDIT_RATIO)
+    return spans_from_candidates(words, candidates)
+
+
+def spans_from_candidates(
+    words: list[dict], candidates: list
+) -> dict[int, tuple[float, float]] | None:
+    """Reduce ``find_candidates`` hits over ``words`` to per-line cue spans.
+
+    Keeps each line's best-scoring candidate, then takes a greedy monotonic
+    subset (a kept line's start index strictly advances) so partial ASR
+    coverage and repeated choruses never reorder — and a start-index *tie*
+    means two lines resolved to the same ASR occurrence (identical repeated
+    lines tie-break to the earliest hit), so only the strongest claimant
+    keeps it: highest score, then earliest line. Each kept line's span is
+    ``(words[start].start, words[end-1].end)``. Returns ``None`` when
+    ``candidates`` is empty — callers treat that as "nothing maps".
+    """
     best = best_candidate_per_line(candidates)
 
     spans: dict[int, tuple[float, float]] = {}

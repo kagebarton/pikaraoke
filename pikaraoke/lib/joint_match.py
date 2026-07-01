@@ -23,7 +23,9 @@ Per lyric line we build up to three kinds of candidates:
   fuzzy-matching against the YTASR word stream the same way transcribe
   candidates are — YTASR has no 1:1 token guarantee with the lyric line
   the way align does, so it needs the same multi-candidate treatment as
-  transcribe, not align's single-guaranteed-candidate treatment. Has high
+  transcribe, not align's single-guaranteed-candidate treatment — but at
+  the stricter ``ytasr.CANDIDATE_MAX_EDIT_RATIO``, since the ASR text is
+  a ytasr candidate's only evidence for existing. Has high
   ``ytasr_agreement`` by construction; its ``transcribe_match`` and
   ``align_agreement`` are computed the same way align's are, against its
   own proposed window.
@@ -111,10 +113,12 @@ def match_words_to_lines_joint_with_stats(
             window for ``transcribe_match`` computation, and (b) padding
             collapsed align candidates so the DP can reject them on
             non-overlap.
-        max_edit_ratio: passed to ``find_candidates``. Like ``alpha``,
+        max_edit_ratio: passed to ``find_candidates`` for the transcribe
+            scan and to in-window corroboration scoring. Like ``alpha``,
             the corpus-tuned default lives in
             ``PipelineConfig.joint_max_edit_ratio``; signature defaults
-            here mirror it.
+            here mirror it. The ytasr candidate scan instead uses the
+            stricter ``ytasr.CANDIDATE_MAX_EDIT_RATIO`` (see its comment).
         lookahead: passed to per-window per-word timing builder.
         anchor_fallback: if True, run ``find_anchor_candidates`` for lines
             that produced zero transcribe candidates in the main pass.
@@ -167,17 +171,21 @@ def match_words_to_lines_joint_with_stats(
     ytasr_ranges: list[dict | None] = [None] * n_lines
     if ytasr_words:
         ytasr_norms = [w["norm"] for w in ytasr_words]
-        # Full candidate list for the DP to arbitrate over (every hit kept —
-        # unlike cue_spans_for_lines, which is deliberately lossy for the
-        # post-hoc prior's single-span-per-line use case).
-        ytasr_cands = find_candidates(ytasr_norms, line_norms, max_edit_ratio=max_edit_ratio)
+        # Full candidate list for the DP to arbitrate over (every hit kept),
+        # at ytasr's own stricter ratio, NOT the transcribe knob: the ASR
+        # text is a ytasr candidate's only evidence for existing (see
+        # ytasr.CANDIDATE_MAX_EDIT_RATIO).
+        ytasr_cands = find_candidates(
+            ytasr_norms, line_norms, max_edit_ratio=ytasr.CANDIDATE_MAX_EDIT_RATIO
+        )
         # Reference range for scoring *other* candidates' ytasr agreement:
-        # reuses cue_spans_for_lines's monotonic-filtered reduction (not
-        # best_candidate_per_line directly) so a repeated chorus line can't
-        # have two different line_ids collapse onto the same ytasr
-        # occurrence, which would silently corrupt their agreement scores.
+        # the monotonic-filtered reduction (not best_candidate_per_line
+        # directly) so a repeated chorus line can't have two different
+        # line_ids collapse onto the same ytasr occurrence, which would
+        # silently corrupt their agreement scores. Derived from the same
+        # candidate list — no second scan of the ASR stream.
         for line_id, (t0, t1) in (
-            ytasr.cue_spans_for_lines(ytasr_words, align_lines) or {}
+            ytasr.spans_from_candidates(ytasr_words, ytasr_cands) or {}
         ).items():
             ytasr_ranges[line_id] = {"t0": t0, "t1": t1}
 
