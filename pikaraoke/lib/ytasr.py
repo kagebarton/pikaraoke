@@ -30,7 +30,7 @@ from __future__ import annotations
 import json
 import logging
 
-from pikaraoke.lib.candidate_match import find_candidates
+from pikaraoke.lib.candidate_match import best_candidate_per_line, find_candidates
 from pikaraoke.lib.genius_lyrics import clean_srt_line
 from pikaraoke.lib.token_align import _normalize_token
 
@@ -143,12 +143,7 @@ def cue_spans_for_lines(
         for line in align_lines
     ]
     candidates = find_candidates(asr_norms, line_toks, max_edit_ratio=CANDIDATE_MAX_EDIT_RATIO)
-
-    best: dict[int, tuple[int, int, float]] = {}
-    for start, end, line_id, score in candidates:
-        cur = best.get(line_id)
-        if cur is None or (score, -start) > (cur[2], -cur[0]):
-            best[line_id] = (start, end, score)
+    best = best_candidate_per_line(candidates)
 
     spans: dict[int, tuple[float, float]] = {}
     last_start = -1
