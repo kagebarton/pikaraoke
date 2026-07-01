@@ -141,8 +141,11 @@ def cue_spans_for_lines(
     The YTASR analog of :func:`pikaraoke.lib.lrclib.cue_spans_for_lines`. Runs a
     per-line fuzzy candidate search over the ASR tokens, keeps each line's
     best-scoring candidate, then takes a greedy monotonic subset (a kept line's
-    start index never moves backward) so partial ASR coverage and repeated
-    choruses never reorder. Each kept line's span is
+    start index strictly advances) so partial ASR coverage and repeated
+    choruses never reorder — and a start-index *tie* means two lines resolved
+    to the same ASR occurrence (identical repeated lines tie-break to the
+    earliest hit), so only the strongest claimant keeps it: highest score,
+    then earliest line. Each kept line's span is
     ``(words[start].start, words[end-1].end)``. Lines with no candidate get no
     cue — the prior leaves/fills them. Returns ``None`` when nothing maps.
     """
@@ -156,10 +159,21 @@ def cue_spans_for_lines(
 
     spans: dict[int, tuple[float, float]] = {}
     last_start = -1
+    last_line_id = -1
+    last_score = 0.0
     for line_id in sorted(best):
-        start, end, _ = best[line_id]
+        start, end, score = best[line_id]
         if start < last_start:
             continue
+        if start == last_start:
+            if score <= last_score:
+                continue
+            # A stronger claimant of the same occurrence (e.g. a full line
+            # whose refrain prefix is also its own lyric line) evicts the
+            # weaker one — one occurrence, one line.
+            del spans[last_line_id]
         last_start = start
+        last_line_id = line_id
+        last_score = score
         spans[line_id] = (words[start]["start"], words[end - 1]["end"])
     return spans or None

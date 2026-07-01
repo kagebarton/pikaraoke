@@ -134,6 +134,25 @@ class TestCueSpansForLines:
         spans = ytasr.cue_spans_for_lines(words, ["first", "second"])
         assert set(spans) == {0}
 
+    def test_tied_repeat_keeps_only_first_line(self):
+        # Two identical lyric lines whose best hit is the same ASR occurrence
+        # (equal score -> earliest-start tie-break) must not both claim it:
+        # the second line gets no cue instead of a duplicate span.
+        words = _words_from(["hakuna", "matata"])
+        spans = ytasr.cue_spans_for_lines(words, ["hakuna matata", "hakuna matata"])
+        assert set(spans) == {0}
+
+    def test_tied_start_evicts_weaker_claimant(self):
+        # A refrain line that is also the prefix of the following full line
+        # ties on start index but with a lower matched-token score; the
+        # occurrence belongs to the stronger (full-line) claimant.
+        words = _words_from("hakuna matata what a wonderful phrase".split())
+        spans = ytasr.cue_spans_for_lines(
+            words, ["hakuna matata", "hakuna matata what a wonderful phrase"]
+        )
+        assert set(spans) == {1}
+        assert spans[1] == (words[0]["start"], words[5]["end"])
+
     def test_none_when_nothing_maps(self):
         assert ytasr.cue_spans_for_lines([], ["anything"]) is None
         assert ytasr.cue_spans_for_lines(_words_from(["xyz"]), ["completely other words"]) is None
