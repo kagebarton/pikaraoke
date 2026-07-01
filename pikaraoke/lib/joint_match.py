@@ -319,7 +319,7 @@ def _build_transcribe_candidates(
     for start_idx, end_idx, line_id, t_score in tiling_cands:
         t0 = transcribe_words[start_idx]["start"]
         t1 = transcribe_words[end_idx - 1]["end"]
-        a_agree = _align_agreement_for_window(t0, t1, align_ranges[line_id])
+        a_agree = _range_agreement(t0, t1, align_ranges[line_id])
         window_count = end_idx - start_idx
         # Transcribe candidates only exist because find_candidates accepted
         # them, so by construction at least one lyric token overlaps the
@@ -433,20 +433,22 @@ def _build_align_candidates(
     return out
 
 
-def _align_agreement_for_window(t0: float, t1: float, align_range: dict | None) -> float:
-    """Fraction of align's predicted range covered by the candidate window.
+def _range_agreement(t0: float, t1: float, ref_range: dict | None) -> float:
+    """Fraction of a reference range covered by a candidate window.
 
-    A transcribe candidate landing exactly on align's window gets 1.0.
-    A transcribe candidate completely disjoint from align's window gets 0.0
-    (the Hakuna case).
+    A candidate landing exactly on the reference window gets 1.0. A
+    candidate completely disjoint from the reference window gets 0.0
+    (the Hakuna case). Direction-agnostic: used for a transcribe or ytasr
+    candidate's agreement with align's window, and equally for align's or
+    transcribe's agreement with a ytasr reference window.
     """
-    if align_range is None:
+    if ref_range is None:
         return 0.0
-    a0 = align_range["t0"]
-    a1 = align_range["t1"]
+    a0 = ref_range["t0"]
+    a1 = ref_range["t1"]
     a_dur = a1 - a0
     if a_dur <= 0.0:
-        # Collapsed align — any candidate overlapping the instant gets full credit.
+        # Collapsed reference range — any candidate overlapping the instant gets full credit.
         return 1.0 if t0 <= a0 <= t1 else 0.0
     overlap = min(t1, a1) - max(t0, a0)
     if overlap <= 0.0:

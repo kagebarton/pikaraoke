@@ -1,11 +1,11 @@
 """Unit tests for the joint alignment DP matcher."""
 
 from pikaraoke.lib.joint_match import (
-    _align_agreement_for_window,
     _alpha_weight,
     _best_tiling_by_time,
     _build_align_candidates,
     _line_align_ranges,
+    _range_agreement,
     _tokenise_lines,
     _transcribe_match_and_count_in_window,
     match_words_to_lines_joint_with_stats,
@@ -71,32 +71,32 @@ class TestLineAlignRanges:
 
 
 # ---------------------------------------------------------------------------
-# align_agreement
+# range_agreement
 # ---------------------------------------------------------------------------
 
 
-class TestAlignAgreement:
+class TestRangeAgreement:
     def test_exact_overlap(self):
-        assert _align_agreement_for_window(2.0, 4.0, {"t0": 2.0, "t1": 4.0}) == 1.0
+        assert _range_agreement(2.0, 4.0, {"t0": 2.0, "t1": 4.0}) == 1.0
 
     def test_no_overlap(self):
-        assert _align_agreement_for_window(10.0, 12.0, {"t0": 2.0, "t1": 4.0}) == 0.0
+        assert _range_agreement(10.0, 12.0, {"t0": 2.0, "t1": 4.0}) == 0.0
 
     def test_partial_overlap(self):
         # 50% overlap with a 2-second align window.
-        assert _align_agreement_for_window(3.0, 5.0, {"t0": 2.0, "t1": 4.0}) == 0.5
+        assert _range_agreement(3.0, 5.0, {"t0": 2.0, "t1": 4.0}) == 0.5
 
     def test_window_subsumes_align(self):
         # candidate window wider than align — full credit (capped at 1.0).
-        assert _align_agreement_for_window(0.0, 10.0, {"t0": 2.0, "t1": 4.0}) == 1.0
+        assert _range_agreement(0.0, 10.0, {"t0": 2.0, "t1": 4.0}) == 1.0
 
     def test_collapsed_align(self):
         # zero-width align — candidate that brackets the instant gets full credit.
-        assert _align_agreement_for_window(1.0, 3.0, {"t0": 2.0, "t1": 2.0}) == 1.0
-        assert _align_agreement_for_window(5.0, 6.0, {"t0": 2.0, "t1": 2.0}) == 0.0
+        assert _range_agreement(1.0, 3.0, {"t0": 2.0, "t1": 2.0}) == 1.0
+        assert _range_agreement(5.0, 6.0, {"t0": 2.0, "t1": 2.0}) == 0.0
 
     def test_none_range(self):
-        assert _align_agreement_for_window(1.0, 2.0, None) == 0.0
+        assert _range_agreement(1.0, 2.0, None) == 0.0
 
 
 # ---------------------------------------------------------------------------
