@@ -7,6 +7,7 @@ from pikaraoke.lib.srt_prior import (
     MIN_FILL_DUR_S,
     apply_srt_prior,
     cue_spans_from_srt,
+    offset_mad_against_cues,
 )
 
 KNOBS = dict(margin_s=0.3, max_edit_ratio=0.75)
@@ -48,6 +49,39 @@ def _anchor_song(lead_s: float = 1.5):
     transcribe = [w for o in objs for w in o["words"]]
     cues = {i: (10.0 * (i + 1) - lead_s, 10.0 * (i + 1) - lead_s + 2.0) for i in range(4)}
     return list(ANCHOR_TEXTS), objs, transcribe, cues
+
+
+class TestOffsetMadAgainstCues:
+    """Direct tests of the pure calibration step apply_srt_prior delegates to."""
+
+    def test_consistent_anchors_fit_offset(self):
+        anchors = [{"lid": i, "start": 10.0 * (i + 1)} for i in range(4)]
+        cues = {i: (10.0 * (i + 1) - 1.5, 10.0 * (i + 1) - 1.5 + 2.0) for i in range(4)}
+        stats = offset_mad_against_cues(anchors, cues)
+        assert stats == {"n_anchors_fit": 4, "bailed": None, "offset_s": 1.5, "mad_s": 0.0}
+
+    def test_few_anchors_bails_without_offset_or_mad(self):
+        anchors = [{"lid": i, "start": 10.0 * (i + 1)} for i in range(3)]
+        cues = {i: (10.0 * (i + 1) - 1.5, 10.0 * (i + 1) - 1.5 + 2.0) for i in range(3)}
+        stats = offset_mad_against_cues(anchors, cues)
+        assert stats == {"n_anchors_fit": 3, "bailed": "few_anchors"}
+
+    def test_wide_spread_bails_but_still_reports_offset_and_mad(self):
+        anchors = [{"lid": i, "start": 10.0 * (i + 1)} for i in range(4)]
+        leads = (0.0, 0.9, 1.8, 3.6)
+        cues = {
+            i: (10.0 * (i + 1) - lead, 10.0 * (i + 1) - lead + 2.0) for i, lead in enumerate(leads)
+        }
+        stats = offset_mad_against_cues(anchors, cues)
+        assert stats["bailed"] == "wide_spread"
+        assert stats["n_anchors_fit"] == 4
+        assert "offset_s" in stats and "mad_s" in stats
+
+    def test_anchors_without_a_cue_are_ignored(self):
+        anchors = [{"lid": 0, "start": 10.0}, {"lid": 99, "start": 999.0}]
+        cues = {0: (8.5, 10.5)}
+        stats = offset_mad_against_cues(anchors, cues)
+        assert stats["n_anchors_fit"] == 1
 
 
 class TestOffsetFit:

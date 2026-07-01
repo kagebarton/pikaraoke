@@ -84,6 +84,42 @@ def cue_spans_from_srt(srt_text: str) -> tuple[list[str], list[tuple[float, floa
     return texts, spans
 
 
+def offset_mad_against_cues(
+    anchors: list[dict], cue_spans_by_line: dict[int, tuple[float, float]]
+) -> dict:
+    """Median offset + MAD of placed anchor starts vs cue starts.
+
+    Pure calibration math, no mutation or bail-out logging — the read-only
+    half of the timing prior's snap/fill step (see :func:`apply_srt_prior`,
+    which calls this and adds the mutation + logging). Useful on its own
+    for scoring a set of placements against an external cue reference
+    without applying it (e.g. an offline held-out comparison).
+
+    Returns ``{"n_anchors_fit", "bailed", "offset_s", "mad_s"}``. ``bailed``
+    is ``"few_anchors"`` when fewer than :data:`PRIOR_MIN_ANCHORS` anchors
+    have a cue (``offset_s``/``mad_s`` absent), ``"wide_spread"`` when the
+    residual MAD exceeds :data:`PRIOR_MAX_MAD_S` (present but unreliable),
+    or ``None`` when the calibration is trustworthy.
+    """
+    residuals = [
+        a["start"] - cue_spans_by_line[a["lid"]][0]
+        for a in anchors
+        if a["lid"] in cue_spans_by_line
+    ]
+    stats: dict = {"n_anchors_fit": len(residuals), "bailed": None}
+    if len(residuals) < PRIOR_MIN_ANCHORS:
+        stats["bailed"] = "few_anchors"
+        return stats
+
+    offset = median(residuals)
+    mad = median(abs(r - offset) for r in residuals)
+    stats["offset_s"] = round(offset, 3)
+    stats["mad_s"] = round(mad, 3)
+    if mad > PRIOR_MAX_MAD_S:
+        stats["bailed"] = "wide_spread"
+    return stats
+
+
 def apply_srt_prior(
     line_objects: list[dict],
     transcribe_words: list[dict],
@@ -123,28 +159,19 @@ def apply_srt_prior(
         max_edit_ratio=max_edit_ratio,
     )
 
-    residuals = [
-        a["start"] - cue_spans_by_line[a["lid"]][0]
-        for a in anchors
-        if a["lid"] in cue_spans_by_line
-    ]
-    stats: dict = {"n_anchors_fit": len(residuals), "bailed": None}
-    if len(residuals) < PRIOR_MIN_ANCHORS:
-        stats["bailed"] = "few_anchors"
+    stats = offset_mad_against_cues(anchors, cue_spans_by_line)
+    if stats["bailed"] == "few_anchors":
         logger.info(
             "%s prior bailed: %d anchor(s) with cues < %d",
             source.upper(),
-            len(residuals),
+            stats["n_anchors_fit"],
             PRIOR_MIN_ANCHORS,
         )
         return line_objects, stats
 
-    offset = median(residuals)
-    mad = median(abs(r - offset) for r in residuals)
-    stats["offset_s"] = round(offset, 3)
-    stats["mad_s"] = round(mad, 3)
-    if mad > PRIOR_MAX_MAD_S:
-        stats["bailed"] = "wide_spread"
+    offset = stats["offset_s"]
+    mad = stats["mad_s"]
+    if stats["bailed"] == "wide_spread":
         logger.info(
             "%s prior bailed: anchor residual MAD %.2fs > %.2fs",
             source.upper(),
@@ -188,7 +215,7 @@ def apply_srt_prior(
         source.upper(),
         offset,
         mad,
-        len(residuals),
+        stats["n_anchors_fit"],
         len(snapped),
         len(filled),
     )
