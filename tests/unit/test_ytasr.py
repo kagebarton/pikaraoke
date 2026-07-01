@@ -71,6 +71,16 @@ class TestParseJson3:
         assert [w["word"] for w in words] == ["hello"]
         assert frac == 1.0
 
+    def test_word_end_capped_across_gaps(self):
+        # end is inferred from the next word's start, so the word before an
+        # instrumental break would otherwise inherit the whole gap.
+        events = [
+            {"tStartMs": 1000, "segs": [_seg("hello", 0)]},
+            {"tStartMs": 31000, "segs": [_seg("again", 0)]},
+        ]
+        words, _ = ytasr.parse_json3(_json3(events))
+        assert words[0]["end"] == 1.0 + ytasr.MAX_WORD_DUR_S
+
     def test_dedupes_consecutive_rollup(self):
         # Same word at the same start repeated by the rolling window collapses;
         # the same word at a later start is kept.

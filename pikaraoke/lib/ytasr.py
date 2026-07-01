@@ -46,10 +46,17 @@ WORD_SEG_MIN_FRAC = 0.5
 # value with the regen tool's caption gate.
 MIN_CAPTION_WPM = 15.0
 
-# The final word has no following word to bound it; hold it this long. Only the
-# fill path's word re-spacing reads a word ``end``, so the exact value is not
-# load-bearing.
+# The final word has no following word to bound it; hold it this long.
 LAST_WORD_HOLD_S = 0.3
+
+# Cap on a word's inferred duration. ``end`` is inferred as the next word's
+# start, so the last word before an instrumental break would otherwise inherit
+# the whole gap. Word ends feed the joint DP's 3rd-source path (candidate
+# windows, agreement reference spans, per-word render timings), where a
+# ballooned end spans the break: it blocks legal DP successors, dilutes
+# ``_range_agreement`` for candidates covering only the sung part, and sweeps
+# the rendered word across the gap. Generous enough for a held note.
+MAX_WORD_DUR_S = 2.0
 
 # Per-line fuzzy-match tolerance against ASR mis-hears. Looser than the matcher's
 # default (0.25): ASR over backing music garbles more than whisper, and a wrong
@@ -67,7 +74,8 @@ def parse_json3(text: str) -> tuple[list[dict], float]:
     degenerate ``[Music]`` track is judged on its raw timing, not survivors.
 
     Each word's ``start`` is ``(tStartMs + tOffsetMs)/1000``; ``end`` is the next
-    word's start (the last word holds :data:`LAST_WORD_HOLD_S`). Segments empty
+    word's start, capped at :data:`MAX_WORD_DUR_S` (the last word holds
+    :data:`LAST_WORD_HOLD_S`). Segments empty
     after :func:`pikaraoke.lib.genius_lyrics.clean_srt_line` (``[Music]``, ``♪``,
     ``(applause)``) are dropped, and consecutive identical ``(norm, start)``
     tokens are de-duplicated (auto-caption roll-up artifact).
@@ -101,7 +109,8 @@ def parse_json3(text: str) -> tuple[list[dict], float]:
             words.append({"word": tok, "norm": norm, "start": start})
     words.sort(key=lambda w: w["start"])
     for i, w in enumerate(words):
-        w["end"] = words[i + 1]["start"] if i + 1 < len(words) else w["start"] + LAST_WORD_HOLD_S
+        nxt = words[i + 1]["start"] if i + 1 < len(words) else w["start"] + LAST_WORD_HOLD_S
+        w["end"] = min(nxt, w["start"] + MAX_WORD_DUR_S)
 
     word_seg_frac = (n_word_segs / n_segs) if n_segs else 0.0
     return words, word_seg_frac
