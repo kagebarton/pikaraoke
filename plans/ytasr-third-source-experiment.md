@@ -1,4 +1,4 @@
-Model: Claude Sonnet 5
+Model: Claude Sonnet 5 (initial run); Claude Fable 5 (review-fix re-sweep, final verdict)
 
 # YTASR as a 3rd joint-DP candidate source (experiment)
 
@@ -32,89 +32,111 @@ reference (Genius/txt-sourced lyrics).
   into either scheme. Scoring excludes prior-touched lines from each scheme's
   "anchors" (non-circular: 5 songs' old-scheme prior source *is* LRCLIB).
 
-## Results (16-song non-SRT corpus, single dry run, alpha = bundle's own recorded value, beta swept over 0.5/1/1.5/2/3)
+## Fixes landed after the first dry run
 
-10 songs had a usable cached YTASR track (3-source test); 6 fell back to the
-plain 2-source DP (no usable YTASR — the fallback case decision #2 called for,
-not an error). One LRCLIB fetch hit a network timeout (`Girl in the Bubble`,
-"Ariana Grande" query — a copy/paste artifact in that bundle's Genius artist
-field, not this experiment's bug) and degraded to `no_reference` gracefully;
-not re-run for this pass.
+The first run's numbers (kept in git history at `9b135ca`) predate these and
+are superseded:
 
-MAD is against the held-out LRCLIB reference, in seconds, over the scheme's
-own trusted-anchor count (`n_anchors_fit`); `bail:wide_spread` means the
-anchor-residual MAD gate rejected calibration entirely (no usable offset fit).
+- **B1** — `ytasr.parse_json3` word ends capped at `MAX_WORD_DUR_S=2.0`
+  (were ballooning across instrumental gaps into 10-20s "words").
+- **B2** — tied cue starts in the monotonic reduction arbitrated by score
+  (repeated identical lines were collapsing onto the first ASR occurrence).
+- **B3** — ytasr DP candidates generated at `ytasr.CANDIDATE_MAX_EDIT_RATIO`
+  (0.34) instead of the transcribe knob (0.75); reference spans derived from
+  the same single scan (`ytasr.spans_from_candidates`).
+- **B4** — ytasr self-evidence graded as matched-token fraction instead of a
+  flat 1.0 (junk fragments no longer collect full beta).
+- **I1** — 2-of-3 corroboration rescue: on transcribe dissent the alpha/beta
+  bonus survives at `min(align endorsement, ytasr endorsement)` instead of
+  zeroing, so one witness can't veto the other two.
+- **Harness** — alpha now swept as a grid alongside beta AND threaded into
+  the replayed re-align sub-matches (they previously re-ran at the bundle's
+  recorded alpha and overwrote swept lines, distorting per-song best-alpha);
+  flat `<root>/lrclib/<stem>` reference cache tier (reproducible held-out
+  scoring for ytasr-prior songs — this also shifts some *old*-scheme MAD
+  numbers vs the first run, e.g. Bloodstream/Belle/Girl in the Bubble,
+  because those songs previously live-fetched a different LRCLIB variant or
+  had none); `asr0` labeling for gate-passing tracks whose candidate scan
+  matches nothing.
 
-| song | src | old MAD | new MAD (best β) | best β | old→new crawl | old→new overlap |
-|---|---|---|---|---|---|---|
-| Defying Gravity | 3src | bail:wide_spread | bail:wide_spread | 3.0 | 4→4 | 10.7→0.0s |
-| Free | 2src | 0.20s/16a | 0.20s/16a | n/a | 1→1 | 7.0→0.0s |
-| Popular | 3src | bail:wide_spread | bail:wide_spread | 3.0 | 3→2 | 2.5→0.0s |
-| Be Our Guest | 3src | 0.18s/48a | 0.19s/49a | 1.5 | 0→0 | 2.7→0.0s |
-| Belle | 3src | 0.29s/39a | 0.29s/39a | 3.0 | 1→1 | 2.5→0.0s |
-| Best Part Of Me | 3src | bail:wide_spread | bail:wide_spread | 0.5 | 3→3 | 3.5→0.0s |
-| Bloodstream | 3src | bail:wide_spread | **0.32s/11a** | 0.5 | 1→1 | 8.4→0.1s |
-| HUNTR/X | 2src | bail:wide_spread | bail:wide_spread | n/a | 0→0 | 0.0→0.0s |
-| Domino | 2src | 0.43s/7a | 0.43s/7a | n/a | 0→0 | 1.2→0.1s |
-| In Summer | 2src | 0.15s/13a | 0.32s/14a | n/a | 2→2 | 0.0→0.0s |
-| Mulan | 3src | 0.70s/21a | **0.57s/21a** | 2.0 | 0→1 | 5.3→0.0s |
-| NSYNC - Paradise | 2src | 0.32s/10a | 0.32s/10a | n/a | 2→2 | 0.0→0.0s |
-| Colors of the Wind | 3src | 0.29s/32a | **0.08s/30a** | 0.5 | 1→1 | 3.8→0.0s |
-| Hakuna Matata | 3src | bail:wide_spread | **0.35s/8a** | 1.5 | 3→1 | 0.0→0.0s |
-| Next Ten Minutes | 2src | 0.47s/50a | 0.46s/52a | n/a | 2→2 | 5.2→0.0s |
-| Girl in the Bubble | 3src | bail:no_reference | bail:no_reference | 0.5 | 1→1 | 0.2→0.0s |
+## Results (16-song non-SRT corpus, 5×5 alpha×beta grid, best combo by crawl-then-MAD)
 
-## Verdict: partial win — clear on overlap, mixed on MAD, not ready for production
+10 songs have a usable cached YTASR track (3src); 6 fall back to the plain
+2-source DP. MAD is against the held-out LRCLIB reference over the scheme's
+own trusted-anchor count; `bail:wide_spread` = the anchor-residual gate
+rejected calibration entirely.
 
-**Overlap is the standout result**: nearly every song drops to ~0.0s max
-overlap in the new scheme, often from a multi-second overlap in the old one.
-This shows up even on the 6 pure-2-source-fallback songs (where the *only*
-change is dropping the LRCLIB-prior post-processing step), suggesting the
-current prior's snap/fill logic — not the 2-source DP itself — is the source
-of most residual overlaps. This is arguably more perceptually important for
-actual karaoke display than sub-second MAD differences against an
-approximate reference.
+| song | src | old MAD | new MAD (best) | α | β | crawl | overlap |
+|---|---|---|---|---|---|---|---|
+| Defying Gravity | 3src | bail:wide_spread | bail:wide_spread | 0.5 | 0.5 | 4→2 | 10.7→0.1s |
+| Free | 2src | 0.20s/16a | 0.20s/16a | 0.5 | n/a | 1→1 | 7.0→0.0s |
+| Popular | 3src | bail:wide_spread | bail:wide_spread | 1.5 | 2.0 | 3→3 | 2.5→0.0s |
+| Be Our Guest | 3src | 0.18s/48a | **0.15s/49a** | 0.5 | 1.0 | 0→0 | 2.7→0.0s |
+| Belle | 3src | 0.30s/55a | **0.28s/55a** | 3.0 | 0.5 | 1→1 | 2.5→0.0s |
+| Best Part Of Me | 3src | bail:wide_spread | **0.72s/24a** | 0.5 | 2.0 | 3→2 | 3.5→0.0s |
+| Bloodstream | 3src | 0.46s/11a | **0.40s/11a** | 0.5 | 1.0 | 1→1 | 8.4→0.0s |
+| HUNTR/X | 2src | bail:wide_spread | bail:wide_spread | 0.5 | n/a | 0→0 | 0.0→0.0s |
+| Domino | 2src | 0.43s/7a | 0.43s/7a | 0.5 | n/a | 0→0 | 1.2→0.0s |
+| In Summer | 2src | 0.15s/13a | 0.36s/14a | 0.5 | n/a | 2→1 | 0.0→0.0s |
+| Mulan | 3src | 0.70s/21a | 0.74s/22a | 0.5 | 0.5 | 0→0 | 5.3→0.0s |
+| NSYNC - Paradise | 2src | 0.27s/10a | 0.27s/10a | 1.0 | n/a | 2→2 | 0.0→0.0s |
+| Colors of the Wind | 3src | 0.29s/32a | **0.13s/31a** | 0.5 | 3.0 | 1→2 | 3.8→0.0s |
+| Hakuna Matata | 3src | bail:wide_spread | **0.35s/8a** | 0.5 | 3.0 | 3→0 | 0.0→0.0s |
+| Next Ten Minutes | 2src | 0.47s/50a | **0.44s/52a** | 0.5 | n/a | 2→2 | 5.2→0.0s |
+| Girl in the Bubble | 3src | 0.41s/15a | **0.33s/15a** | 0.5 | 2.0 | 1→0 | 0.2→0.0s |
 
-**MAD is genuinely mixed**, comparing the 9 songs where both schemes produced
-a usable (non-bailed) number: 2 improved clearly (Mulan 0.70→0.57, Colors of
-the Wind 0.29→0.08), 1 regressed clearly (In Summer 0.15→0.32 — notably, one
-of the 2-source-fallback songs, so this regression comes purely from dropping
-the LRCLIB prior with nothing to replace it), 1 regressed marginally (Be Our
-Guest 0.18→0.19), 5 were unchanged. 2 songs recovered from a `wide_spread`
-bail-out to a usable MAD (Bloodstream, Hakuna Matata) — arguably a bigger win
-than a small MAD delta, since the old scheme had *no* calibration signal at
-all on these. 4 songs stayed bailed regardless of scheme (a different,
-unaddressed problem — likely LRCLIB match quality or genuine alignment
-difficulty on those specific songs, not something this change touches).
+## Verdict: win — overlap eliminated, MAD net-positive, beta now meaningful
 
-**Net read**: encouraging, not conclusive. This is a single dry run at one
-alpha value (the bundle's own recorded default) with only a 5-point beta
-sweep and no alpha sweep — the same kind of tuning `alpha` itself went
-through before its corpus-tuned default was trusted. The In Summer regression
-shows real cost on at least one song when YTASR isn't even available to
-compensate for losing the prior, so "drop the prior unconditionally" is not
-obviously safe on its own; whether that's specific to In Summer or a broader
-pattern needs more songs.
+**Overlap**: ~0.0s max on every song (10.7s worst-case before), including the
+2src fallbacks — confirming the old prior's snap/fill, not the DP, drove
+residual overlaps.
+
+**MAD/bails**: 6 wins, 2 bail-recoveries (Hakuna Matata; Best Part Of Me —
+the live Abbey Road recording, exactly the differs-from-studio class this
+roadmap keeps YTASR for), 2 regressions: In Summer (2src; the accepted cost
+of dropping the LRCLIB prior — LRCLIB is permanently out per the roadmap
+decision) and Mulan (0.70→0.74, soft; was the first run's biggest win at
+0.57 — B3's stricter ratio likely culled its garbled ASR candidates, its
+best combo is the flat-surface default, worth a targeted look but a fair
+trade against two bail recoveries).
+
+**Beta is now signal**: with self-evidence graded (B4), winning betas spread
+1.0-3.0 precisely on the songs where ytasr carries the load (first run: "low
+beta always wins" — an artifact of flat self-evidence amplifying junk).
+Alpha's near-uniform 0.5 remains mostly the min() first-grid-value tie-break
+on flat surfaces (Belle's 3.0 excepted); don't read it as "alpha wants 0.5".
+
+**I1 (2-of-3 rescue)** is byte-identical on this corpus (both sweeps produce
+identical tables; instrumented: the rescue condition fires with positive
+weight only on Hakuna Matata, 3 candidate scorings, max weight 0.69, no DP
+selection change). Transcribe-dissent windows exist on every song, but align
+and ytasr almost never both back them — consistent with dissent mostly
+marking align-wrong placements, which must stay gated. Kept as tested,
+zero-cost insurance against the transcribe-hallucination-over-clean-line
+failure mode this corpus happens not to contain.
 
 ## Recommendation
 
-Not ready to fold into production (`lyric_align.py`'s `_run_joint`). Before
-that decision:
+Fold into production per the decided roadmap: non-SRT songs get this
+3-source matcher with the priors removed; manual-caption (SRT) songs get the
+cue-align windowed path (`scripts/cue_align_song.py`); a quick transcribe
+pass runs first for dereverb triage; LRCLIB is not reintroduced. Remaining
+before/alongside fold-in:
 
-1. Re-run with `Girl in the Bubble`'s network timeout resolved (retry, or fix
-   the stale "Ariana Grande" Genius-artist field this bundle carries).
-2. Sweep `alpha` alongside `beta` rather than holding it at today's
-   2-source-tuned default — a 3-source score has a different natural balance
-   point.
-3. Investigate the overlap finding directly: instrument *which* lines lose
-   their overlap when the prior is dropped, to confirm the prior's snap/fill
-   (not the 2-source DP) is the actual cause before treating "drop the prior"
-   as a free win independent of adding YTASR.
-4. Widen the corpus past 16 songs before trusting the MAD win/loss counts.
+1. Pick production defaults from this sweep — keep today's 2-source alpha
+   default (the sweep gives no reason to move it) and take beta ≈ 2.0 (the
+   1.0-3.0 winners' middle; per-song best varies but surfaces are flat).
+2. Targeted look at Mulan (why B3 culled its wins; likely garbled ASR right
+   at the 0.34 boundary).
+3. Widen the corpus past 16 songs before trusting win/loss counts further.
+4. Idea still queued: pre-DP ytasr clock-offset calibration (the old prior
+   calibrated; the DP path uses raw timestamps) — measure per-song lag via
+   the harness before building anything.
 
 ## Critical files
 
 - `pikaraoke/lib/joint_match.py`
+- `pikaraoke/lib/ytasr.py` (`MAX_WORD_DUR_S`, `spans_from_candidates`)
 - `pikaraoke/lib/windowed_realign.py`
 - `pikaraoke/lib/srt_prior.py` (`offset_mad_against_cues`)
 - `pikaraoke/lib/candidate_match.py` (`best_candidate_per_line`)
