@@ -318,6 +318,29 @@ class TestBuildAlignCandidates:
         assert c["alpha_weight"] == 0.0
         assert c["score"] == 0.0
 
+    def test_dissent_rescued_by_ytasr_endorsement(self):
+        # Same dissenting-transcribe window, but ytasr independently maps
+        # the line onto align's exact range: 2-of-3 keeps the full bonus.
+        line_norms = [["no", "worries", "for", "the", "rest"]]
+        align_ranges = [{"t0": 10.0, "t1": 13.0, "token_start": 0, "token_end": 5}]
+        transcribe_words = _aw_seq("hello", "what", "are", "you", "doing", t0=10.0, dt=0.5)
+        transcribe_norms = ["hello", "what", "are", "you", "doing"]
+        cands = _build_align_candidates(
+            line_norms,
+            align_ranges,
+            transcribe_words,
+            transcribe_norms,
+            [{"t0": 10.0, "t1": 13.0}],
+            margin_s=0.3,
+            max_edit_ratio=0.25,
+            alpha=4.0,
+            beta=2.0,
+        )
+        c = cands[0]
+        assert c["transcribe_match"] == 0
+        assert c["alpha_weight"] == 1.0
+        assert c["score"] == 0.0 + 1.0 * (4.0 * 1.0 + 2.0 * 1.0)
+
 
 class TestBuildYtasrCandidates:
     def test_scored_like_align_plus_own_agreement_term(self):
@@ -400,12 +423,13 @@ class TestBuildYtasrCandidates:
         assert c["transcribe_match"] == 2
         assert c["score"] == 2.0 + 1.0 * (2.0 * 0.0 + 3.0 * (2 / 3))
 
-    def test_unrelated_transcribe_zeros_both_weighted_terms(self):
-        # Hakuna-shape for ytasr: transcribe heard substantial unrelated
-        # speech in ytasr's proposed window, so the corroboration gate fires.
+    def test_unrelated_transcribe_zeros_terms_when_unpartnered(self):
+        # Transcribe heard substantial unrelated speech in ytasr's proposed
+        # window and align places the line elsewhere: the candidate stands
+        # alone against the dissent, so the gate fires with no 2-of-3 rescue.
         ytasr_words = _ytw_seq("a", "b", t0=10.0, dt=0.5)
         line_norms = [["a", "b"]]
-        align_ranges = [{"t0": 10.0, "t1": 11.0}]
+        align_ranges = [{"t0": 30.0, "t1": 31.0}]
         transcribe_words = _aw_seq("x", "y", t0=10.0, dt=0.5)
         transcribe_norms = ["x", "y"]
         tiling_cands = [(0, 2, 0, 2.0)]
@@ -425,6 +449,33 @@ class TestBuildYtasrCandidates:
         assert c["transcribe_match"] == 0
         assert c["alpha_weight"] == 0.0
         assert c["score"] == 0.0
+
+    def test_transcribe_dissent_rescued_at_align_pair_strength(self):
+        # Transcribe dissents, but align partially endorses ytasr's window:
+        # the bonus survives at min(align endorsement, ytasr solidity) —
+        # graded, not binary. Here align overlaps a third of its range.
+        ytasr_words = _ytw_seq("a", "b", t0=10.0, dt=0.5)
+        line_norms = [["a", "b"]]
+        align_ranges = [{"t0": 10.5, "t1": 12.0}]  # overlap 0.5 of 1.5
+        transcribe_words = _aw_seq("x", "y", t0=10.0, dt=0.5)
+        transcribe_norms = ["x", "y"]
+        tiling_cands = [(0, 2, 0, 2.0)]
+        cands = _build_ytasr_candidates(
+            tiling_cands,
+            ytasr_words,
+            line_norms,
+            align_ranges,
+            transcribe_words,
+            transcribe_norms,
+            margin_s=0.3,
+            max_edit_ratio=0.25,
+            alpha=2.0,
+            beta=3.0,
+        )
+        c = cands[0]
+        assert c["transcribe_match"] == 0
+        assert c["alpha_weight"] == 1 / 3
+        assert c["score"] == 0.0 + (1 / 3) * (2.0 * (1 / 3) + 3.0 * 1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -599,6 +650,34 @@ class TestEndToEndYtasrWins:
         assert stats["n_ytasr_candidates"] > 0
         # Per-word timings for line 1 come from ytasr's stream (~15s), not
         # align's wrong 3s guess.
+        assert objs[1]["start"] >= 14.5
+
+    def test_transcribe_hallucination_survived_by_align_ytasr_pair(self):
+        # Transcribe hallucinated unrelated words over line 1's true window
+        # while align and ytasr both nominate it. Under the transcribe-only
+        # gate every candidate for the line scored 0 and the DP dropped it;
+        # the 2-of-3 rescue keeps align's placement (and its refined
+        # per-word timings) at full bonus.
+        lines = ["intro line here", "no worries today"]
+        align_words = _aw_seq("intro", "line", "here", t0=0.0, dt=1.0) + _aw_seq(
+            "no", "worries", "today", t0=15.0, dt=1.0
+        )
+        transcribe_words = _aw_seq("intro", "line", "here", t0=0.0, dt=1.0) + _aw_seq(
+            "blah", "bleh", "blub", t0=15.0, dt=1.0
+        )
+        ytasr_words = _ytw_seq("no", "worries", "today", t0=15.0, dt=1.0)
+
+        objs, stats = match_words_to_lines_joint_with_stats(
+            align_words,
+            transcribe_words,
+            lines,
+            lines,
+            alpha=4.0,
+            beta=4.0,
+            ytasr_words=ytasr_words,
+        )
+
+        assert stats["selected_source"] == ["align", "align"]
         assert objs[1]["start"] >= 14.5
 
     def test_ytasr_scan_uses_own_stricter_ratio(self):

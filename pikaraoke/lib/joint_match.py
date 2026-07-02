@@ -34,11 +34,16 @@ Each candidate's joint score is::
 
     score = transcribe_match + weight * (alpha * align_agreement + beta * ytasr_agreement)
 
-where ``weight`` is the transcribe-corroboration gate (see
-``_alpha_weight``) shared by both the alpha and beta terms — it answers
-"does independent transcribe evidence support this specific window,"
-which is orthogonal to which source proposed the window. When
-``ytasr_words`` is not supplied, ``ytasr_agreement`` is always 0 and the
+where ``weight`` is the corroboration gate shared by both the alpha and
+beta terms — it answers "does independent evidence support this specific
+window," which is orthogonal to which source proposed the window. It
+starts from transcribe's testimony (``_alpha_weight``: zero only when
+transcribe heard substantial speech with no lexical overlap), but
+transcribe is one fallible witness of three, so a zeroed gate can be
+rescued 2-of-3 style by the other pair: when align and ytasr mutually
+back the window, the bonus survives at the strength of that mutual
+agreement (``_corroboration_weight``). When ``ytasr_words`` is not
+supplied, ``ytasr_agreement`` is always 0, no rescue can fire, and the
 formula reduces exactly to the two-source score.
 
 The interval-scheduling DP (``_best_tiling_by_time``, a weighted
@@ -466,10 +471,36 @@ def _alpha_weight(any_overlap: bool, count: int) -> float:
     quality — the score formula already encodes quality via
     ``transcribe_match``. The earlier ``matched == 0`` check inherited
     that threshold and false-fired on mistranscribed lyric lines.
+
+    For align/ytasr candidates a 0.0 here is not the final word: it is
+    composed by ``_corroboration_weight``, which can rescue the bonus
+    2-of-3 when align and ytasr mutually back the window. Only for
+    transcribe candidates (whose gate can never fire) is this the whole
+    verdict.
     """
     if count >= _ALPHA_GATE_COUNT and not any_overlap:
         return 0.0
     return 1.0
+
+
+def _corroboration_weight(any_overlap: bool, count: int, a_agree: float, y_agree: float) -> float:
+    """2-of-3 corroboration gate on a candidate's agreement bonus.
+
+    ``_alpha_weight`` judges a window by transcribe's testimony alone,
+    which gives one fallible witness veto power over the other two:
+    transcribe mishearing a clean line as unrelated words (hallucination
+    over backing music, heavy dialect) would zero the bonus even when
+    align and ytasr independently nominate the same window. When the
+    transcribe gate fires, the bonus instead survives at
+    ``min(a_agree, y_agree)`` — the strength of the align<->ytasr pair's
+    mutual corroboration; *both* must back the window for the rescue to
+    hold, so a source can never rescue itself. With no ytasr data every
+    rescue is ``min(_, 0.0) == 0.0``, reducing exactly to the
+    transcribe-only gate.
+    """
+    if _alpha_weight(any_overlap, count) == 1.0:
+        return 1.0
+    return min(a_agree, y_agree)
 
 
 def _build_align_candidates(
@@ -508,7 +539,9 @@ def _build_align_candidates(
             max_edit_ratio,
         )
         y_agree = _range_agreement(t0, t1, ytasr_ranges[line_id])
-        weight = _alpha_weight(any_overlap, count_in_window)
+        # a_agree is 1.0 by construction (this window *is* align's belief),
+        # so the rescue reduces to ytasr's endorsement of it.
+        weight = _corroboration_weight(any_overlap, count_in_window, 1.0, y_agree)
         score = float(t_match) + weight * (alpha * 1.0 + beta * y_agree)
         out.append(
             {
@@ -573,7 +606,9 @@ def _build_ytasr_candidates(
         )
         a_agree = _range_agreement(t0, t1, align_ranges[line_id])
         y_agree = y_score / len(line_norms[line_id])
-        weight = _alpha_weight(any_overlap, count_in_window)
+        # The rescue pair here is align's endorsement of this window and
+        # the solidity of ytasr's own lexical claim.
+        weight = _corroboration_weight(any_overlap, count_in_window, a_agree, y_agree)
         score = float(t_match) + weight * (alpha * a_agree + beta * y_agree)
         out.append(
             {
