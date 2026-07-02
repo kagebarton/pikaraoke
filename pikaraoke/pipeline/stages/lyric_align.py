@@ -46,6 +46,7 @@ from pikaraoke.lib import alignment_capture, ytasr
 from pikaraoke.lib.cue_align import align_song
 from pikaraoke.lib.genius_lyrics import parse_lyric_lines
 from pikaraoke.lib.joint_match import match_words_to_lines_joint_with_stats
+from pikaraoke.lib.onset_snap import snap_line_onsets
 from pikaraoke.lib.srt_cues import cue_spans_from_srt
 from pikaraoke.lib.windowed_realign import (
     analyze_pass1,
@@ -183,6 +184,13 @@ class LyricAlignStage(BaseStage):
             ctx.artifacts["lyric_method"] = "transcribe"
         else:
             ctx.artifacts["lyric_method"] = f"{lyrics_origin}+{capture_method_used}"
+
+        # Line-initial word onsets are whisper's least reliable timestamps
+        # (attention smears them back into the preceding gap, and VAD can't
+        # clip reverb-tail "silence"). Snap them to the stem's energy rise.
+        line_objects, onset_stats = snap_line_onsets(line_objects, vocal_wav)
+        if capture_joint_stats is not None:
+            capture_joint_stats["onset_snap"] = onset_stats
 
         ass_content = self._generate_ass(line_objects)
         srt_content = self._generate_srt(line_objects) if write_srt else None
@@ -372,75 +380,7 @@ class LyricAlignStage(BaseStage):
         return display_lines, align_lines, None
 
     def _generate_ass(self, line_objects: list[dict]) -> str:
-        """Build .ass content from line objects using the single Karaoke style."""
-        cfg = self._config
-        styles_block = (
-            f"Style: Karaoke,{cfg.font_name},{cfg.font_size},"
-            f"{cfg.primary_color},{cfg.secondary_color},"
-            f"{cfg.outline_color},{cfg.back_color},"
-            f"0,0,0,0,100,100,0,0,1,"
-            f"{cfg.outline_width},{cfg.shadow_offset},2,"
-            f"{cfg.margin_left},{cfg.margin_right},{cfg.margin_vertical},1\n"
-        )
-
-        header = (
-            f"[Script Info]\n"
-            f"Title: Karaoke Subtitles\n"
-            f"ScriptType: v4.00+\n"
-            f"PlayResX: 1920\n"
-            f"PlayResY: 1080\n"
-            f"Timer: 100.0000\n"
-            f"\n"
-            f"[V4+ Styles]\n"
-            f"Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, "
-            f"OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, "
-            f"ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, "
-            f"Alignment, MarginL, MarginR, MarginV, Encoding\n"
-            f"{styles_block}"
-            f"\n"
-            f"[Events]\n"
-            f"Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
-        )
-
-        events = []
-        for line_obj in line_objects:
-            words = line_obj["words"]
-            if not words:
-                continue
-
-            # Pad the event window around the sung word boundaries
-            event_start = max(0.0, words[0]["start"] - cfg.line_lead_in_cs / 100.0)
-            event_end = words[-1]["end"] + cfg.line_lead_out_cs / 100.0
-
-            # Karaoke cursor starts at the event start time.
-            prev_end = event_start
-            parts = []
-
-            for i, word_data in enumerate(words):
-                word = word_data["word"]
-                word_start = word_data["start"]
-                word_end = word_data["end"]
-                word_dur_cs = max(10, round((word_end - word_start) * 100))
-
-                # Silent cursor advance through any gap before this word.
-                gap_cs = max(0, round((word_start - prev_end) * 100))
-                if gap_cs > 0:
-                    parts.append(f"{{\\k{gap_cs}}}")
-
-                # \kf = left-to-right fill sweep over word_dur_cs centiseconds
-                parts.append(f"{{\\kf{word_dur_cs}}}{word}")
-                prev_end = word_end
-
-                if i < len(words) - 1:
-                    parts.append(" ")
-
-            karaoke_text = "".join(parts)
-            events.append(
-                f"Dialogue: 0,{_seconds_to_ass_time(event_start)},"
-                f"{_seconds_to_ass_time(event_end)},Karaoke,,0,0,0,,{karaoke_text}"
-            )
-
-        return header + "\n".join(events) + "\n"
+        return generate_ass(line_objects, self._config)
 
     def _generate_srt(self, line_objects: list[dict]) -> str:
         """Build .srt from line objects so SRT inherits the same segmentation as ASS.
@@ -1049,6 +989,77 @@ def _find_youtube_srt_path(song_path: Path) -> Path | None:
         if candidate.is_file():
             return candidate
     return None
+
+
+def generate_ass(line_objects: list[dict], cfg: PipelineConfig) -> str:
+    """Build .ass content from line objects using the single Karaoke style."""
+    styles_block = (
+        f"Style: Karaoke,{cfg.font_name},{cfg.font_size},"
+        f"{cfg.primary_color},{cfg.secondary_color},"
+        f"{cfg.outline_color},{cfg.back_color},"
+        f"0,0,0,0,100,100,0,0,1,"
+        f"{cfg.outline_width},{cfg.shadow_offset},2,"
+        f"{cfg.margin_left},{cfg.margin_right},{cfg.margin_vertical},1\n"
+    )
+
+    header = (
+        f"[Script Info]\n"
+        f"Title: Karaoke Subtitles\n"
+        f"ScriptType: v4.00+\n"
+        f"PlayResX: 1920\n"
+        f"PlayResY: 1080\n"
+        f"Timer: 100.0000\n"
+        f"\n"
+        f"[V4+ Styles]\n"
+        f"Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, "
+        f"OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, "
+        f"ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, "
+        f"Alignment, MarginL, MarginR, MarginV, Encoding\n"
+        f"{styles_block}"
+        f"\n"
+        f"[Events]\n"
+        f"Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+    )
+
+    events = []
+    for line_obj in line_objects:
+        words = line_obj["words"]
+        if not words:
+            continue
+
+        # Pad the event window around the sung word boundaries
+        event_start = max(0.0, words[0]["start"] - cfg.line_lead_in_cs / 100.0)
+        event_end = words[-1]["end"] + cfg.line_lead_out_cs / 100.0
+
+        # Karaoke cursor starts at the event start time.
+        prev_end = event_start
+        parts = []
+
+        for i, word_data in enumerate(words):
+            word = word_data["word"]
+            word_start = word_data["start"]
+            word_end = word_data["end"]
+            word_dur_cs = max(10, round((word_end - word_start) * 100))
+
+            # Silent cursor advance through any gap before this word.
+            gap_cs = max(0, round((word_start - prev_end) * 100))
+            if gap_cs > 0:
+                parts.append(f"{{\\k{gap_cs}}}")
+
+            # \kf = left-to-right fill sweep over word_dur_cs centiseconds
+            parts.append(f"{{\\kf{word_dur_cs}}}{word}")
+            prev_end = word_end
+
+            if i < len(words) - 1:
+                parts.append(" ")
+
+        karaoke_text = "".join(parts)
+        events.append(
+            f"Dialogue: 0,{_seconds_to_ass_time(event_start)},"
+            f"{_seconds_to_ass_time(event_end)},Karaoke,,0,0,0,,{karaoke_text}"
+        )
+
+    return header + "\n".join(events) + "\n"
 
 
 def _seconds_to_ass_time(seconds: float) -> str:
