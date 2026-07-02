@@ -536,8 +536,8 @@ def repace_bad_lines(
     Each bad line is rescued in two steps: ``realign(lid, t0, t1)`` -- an
     injected narrow per-line forced align over the offset-corrected window,
     returning absolute-time words or None -- is tried first, and its result is
-    kept only if it comes back covered and good (tagged
-    :data:`SOURCE_REALIGN`). Otherwise the line is rebuilt with paced words
+    kept only if it comes back covered and *inside the window it was aimed
+    at* (:func:`_line_in_span`; tagged :data:`SOURCE_REALIGN`). Otherwise the line is rebuilt with paced words
     across the window (tagged :data:`SOURCE_FILL`), clamped to ``duration``
     when known. Because only bad lines are rewritten, a coarse offset can
     never degrade a well-aligned line.
@@ -563,8 +563,12 @@ def repace_bad_lines(
         cue_start, cue_end = cue_spans[lid]
         t0 = max(0.0, cue_start + offset)
         t1 = cue_end + offset
-        if duration is not None:
-            t1 = min(t1, duration)
+        if duration is not None and t1 > duration:
+            # SRT overruns the media: keep the fill inside the audio, pinning
+            # a cue that starts past the end to the last half-second.
+            t1 = duration
+            if t0 >= t1:
+                t0 = max(0.0, t1 - 0.5)
         if realign is not None:
             raw_words = realign(lid, t0, t1)
             fixed = (
@@ -572,7 +576,7 @@ def repace_bad_lines(
                 if raw_words
                 else None
             )
-            if fixed is not None and _line_is_good(fixed, cue_spans[lid], offset, drift_gap_s):
+            if fixed is not None and _line_in_span(fixed, cue_spans[lid], offset):
                 out.append(fixed)
                 realigned.append(lid)
                 continue
@@ -595,6 +599,11 @@ def repace_bad_lines(
     return out, stats
 
 
+def _instant_fraction(words: list[dict]) -> float:
+    """Fraction of words the aligner emitted as near-zero-duration sweeps."""
+    return sum(1 for w in words if w["end"] - w["start"] < INSTANT_WORD_DUR_S) / len(words)
+
+
 def _line_is_clean(obj: dict, drift_gap_s: float) -> bool:
     """A cleanly-aligned line -- strict enough to serve as an offset anchor.
 
@@ -608,28 +617,41 @@ def _line_is_clean(obj: dict, drift_gap_s: float) -> bool:
     gap = max((b["start"] - a["end"] for a, b in zip(words, words[1:])), default=0.0)
     if gap > drift_gap_s:
         return False
-    instant = sum(1 for w in words if w["end"] - w["start"] < INSTANT_WORD_DUR_S)
-    return instant / len(words) <= MAX_INSTANT_FRACTION
+    return _instant_fraction(words) <= MAX_INSTANT_FRACTION
 
 
 def _line_is_good(
     obj: dict, cue_span: tuple[float, float], offset: float, drift_gap_s: float
 ) -> bool:
     """Clean, or the only fault is a wide internal gap while the whole line
-    sits inside its offset-corrected cue span (within :data:`PAUSE_SLACK_S`).
+    sits inside its offset-corrected cue span.
 
-    That shape is a legit long mid-line pause the caption holds one cue
-    across -- the aligned timing is right, and re-pacing it would spread words
-    evenly across the pause. Real drift (a parked tail) overruns the cue span,
-    so it still fails this test.
+    Clean lines are trusted even outside their cue span: caption cue times
+    carry per-line authoring jitter well past :data:`PAUSE_SLACK_S`, and
+    demoting every such line to a paced fill replaces real audio timing
+    wholesale (a 5x flag-rate blowup on the SRT corpus). Only a per-line
+    re-align's *result* is gated on containment alone (:func:`_line_in_span`),
+    because there displacement is the failure mode being screened for.
     """
     if _line_is_clean(obj, drift_gap_s):
         return True
+    return _line_in_span(obj, cue_span, offset)
+
+
+def _line_in_span(obj: dict, cue_span: tuple[float, float], offset: float) -> bool:
+    """Has words, is not mostly instant, and sits inside its offset-corrected
+    cue span (within :data:`PAUSE_SLACK_S`).
+
+    A wide internal gap *inside* the span is a caption-covered pause, not
+    drift, while a parked tail overruns the span and fails. Containment is
+    the only tell for a tightly-packed re-align result that landed wholly
+    outside its window: a one-word line has no internal gap for a drift test
+    to catch.
+    """
     words = obj["words"]
     if not words:
         return False
-    instant = sum(1 for w in words if w["end"] - w["start"] < INSTANT_WORD_DUR_S)
-    if instant / len(words) > MAX_INSTANT_FRACTION:
+    if _instant_fraction(words) > MAX_INSTANT_FRACTION:
         return False
     c0, c1 = cue_span
     return obj["start"] >= c0 + offset - PAUSE_SLACK_S and obj["end"] <= c1 + offset + PAUSE_SLACK_S

@@ -424,31 +424,13 @@ class TestRepaceBadLines:
         assert out[0] is objs[0]
 
     def test_drifted_line_is_repaced(self):
-        # A line whose words hold a 5 s internal gap is drift -> re-paced.
-        cue_spans = [(0.0, 1.0)] * 4 + [(8.0, 10.0)]
-        lines = ["a", "a", "a", "a", "gg hh"]
-        objs = [
-            {
-                "line_id": i,
-                "text": "a",
-                "words": _words(("a", float(i), i + 0.3)),
-                "start": float(i),
-                "end": i + 0.3,
-                "source": SOURCE,
-            }
-            for i in range(4)
-        ]
-        objs.append(
-            {
-                "line_id": 4,
-                "text": "gg hh",
-                "words": _words(("gg", 8.0, 8.3), ("hh", 13.5, 13.8)),  # 5.2 s gap
-                "start": 8.0,
-                "end": 13.8,
-                "source": SOURCE,
-            }
-        )
-        out, stats = repace_bad_lines(objs, cue_spans, lines, lines, min_anchors=4)
+        # A parked tail: a 5 s internal gap whose far word overruns the cue
+        # span. That is drift -> re-paced.
+        objs, cues, lines = _anchor_lines(4)
+        cues.append((8.0, 10.0))
+        lines.append("gg hh")
+        objs.append(_line(4, "gg hh", ("gg", 8.0, 8.3), ("hh", 13.5, 13.8)))  # 5.2 s gap
+        out, stats = repace_bad_lines(objs, cues, lines, lines)
         assert stats["n_repaced"] == 1
         assert out[4]["source"] == SOURCE_FILL
         gaps = [b["start"] - a["end"] for a, b in zip(out[4]["words"], out[4]["words"][1:])]
@@ -456,30 +438,11 @@ class TestRepaceBadLines:
 
     def test_mostly_instant_line_is_repaced(self):
         # A line of near-zero-duration words has no big gap but a broken sweep.
-        cue_spans = [(0.0, 1.0)] * 4 + [(8.0, 10.0)]
-        lines = ["a", "a", "a", "a", "ii jj"]
-        objs = [
-            {
-                "line_id": i,
-                "text": "a",
-                "words": _words(("a", float(i), i + 0.3)),
-                "start": float(i),
-                "end": i + 0.3,
-                "source": SOURCE,
-            }
-            for i in range(4)
-        ]
-        objs.append(
-            {
-                "line_id": 4,
-                "text": "ii jj",
-                "words": _words(("ii", 8.0, 8.01), ("jj", 8.02, 8.03)),  # both instant
-                "start": 8.0,
-                "end": 8.03,
-                "source": SOURCE,
-            }
-        )
-        out, stats = repace_bad_lines(objs, cue_spans, lines, lines, min_anchors=4)
+        objs, cues, lines = _anchor_lines(4)
+        cues.append((8.0, 10.0))
+        lines.append("ii jj")
+        objs.append(_line(4, "ii jj", ("ii", 8.0, 8.01), ("jj", 8.02, 8.03)))  # both instant
+        out, stats = repace_bad_lines(objs, cues, lines, lines)
         assert stats["n_repaced"] == 1
         assert out[4]["source"] == SOURCE_FILL
         # Re-paced words have real (non-instant) durations.
@@ -511,23 +474,11 @@ class TestRepaceBadLines:
         assert out[1]["start"] == 5.0  # raw cue start
 
     def test_display_only_bad_line_stays_hidden(self):
-        cue_spans = [(0.0, 1.0)] * 4 + [(8.0, 9.0)]
-        lines = ["a", "a", "a", "a", "..."]
-        objs = [
-            {
-                "line_id": i,
-                "text": "a",
-                "words": _words(("a", float(i), i + 0.3)),
-                "start": float(i),
-                "end": i + 0.3,
-                "source": SOURCE,
-            }
-            for i in range(4)
-        ]
-        objs.append(
-            {"line_id": 4, "text": "...", "words": [], "start": None, "end": None, "source": SOURCE}
-        )
-        out, stats = repace_bad_lines(objs, cue_spans, lines, lines)
+        objs, cues, lines = _anchor_lines(4)
+        cues.append((8.0, 9.0))
+        lines.append("...")
+        objs.append(_line(4, "..."))
+        out, stats = repace_bad_lines(objs, cues, lines, lines)
         assert stats["n_repaced"] == 0
         assert out[4]["words"] == []  # no alignable tokens -> nothing to sweep
 
@@ -603,6 +554,45 @@ class TestRepaceBadLines:
         out, stats = repace_bad_lines(objs, cues, lines, lines, realign=parked)
         assert out[4]["source"] == SOURCE_FILL
         assert stats["n_realigned"] == 0 and stats["n_repaced"] == 1
+
+    def test_realign_displaced_tight_result_rejected(self):
+        # A tightly-packed re-align result parked wholly past the cue end has
+        # no internal gap for a drift test to catch -- containment alone must
+        # reject it.
+        objs, cues, lines = _anchor_lines(4)
+        cues.append((8.0, 10.0))
+        lines.append("ee ff")
+        objs.append(_line(4, "ee ff"))
+
+        def displaced(lid, t0, t1):
+            return _words(("ee", 10.7, 10.75), ("ff", 10.8, 10.9))
+
+        out, stats = repace_bad_lines(objs, cues, lines, lines, realign=displaced)
+        assert out[4]["source"] == SOURCE_FILL
+        assert stats["n_realigned"] == 0 and stats["n_repaced"] == 1
+
+    def test_displaced_tight_split_line_is_trusted(self):
+        # A cleanly-aligned line sitting a second past its cue span stays:
+        # caption cue times carry per-line jitter, and the audio timing wins.
+        # (Only a re-align *result* is gated on containment.)
+        objs, cues, lines = _anchor_lines(4)
+        cues.append((8.0, 10.0))
+        lines.append("ee ff")
+        objs.append(_line(4, "ee ff", ("ee", 11.0, 11.3), ("ff", 11.4, 11.8)))
+        out, stats = repace_bad_lines(objs, cues, lines, lines)
+        assert out[4] is objs[4]
+        assert stats["n_repaced"] == 0 and stats["n_realigned"] == 0
+
+    def test_fill_for_cue_past_duration_stays_inside_audio(self):
+        # SRT cue starts after the media ends (trimmed video): the fill must
+        # not emit words past the real song end.
+        objs, cues, lines = _anchor_lines(4)
+        cues.append((100.0, 101.0))
+        lines.append("ee ff")
+        objs.append(_line(4, "ee ff"))
+        out, _stats = repace_bad_lines(objs, cues, lines, lines, duration=95.0)
+        assert out[4]["start"] == pytest.approx(94.5)
+        assert out[4]["end"] == pytest.approx(95.0)
 
 
 class TestFitOffset:

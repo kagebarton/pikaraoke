@@ -224,46 +224,45 @@ def align_with_cues(
     try:
         duration = _wav_duration(vocal_wav)
 
+        def align_slice(wav_name: str, t0: float, t1: float, text: str, label: str) -> list[dict]:
+            """Slice ``[t0, t1]`` from the master wav, force-align ``text`` over
+            it, and return the words shifted to absolute song time.
+
+            Empty on failure: stable-ts gives up on a slice it cannot align at
+            all (returns None internally), surfaced as a worker RuntimeError,
+            and ffmpeg can fail on the slice itself -- either way the cue
+            fallback carries the affected lines and the run continues. A dead
+            worker (WorkerDiedError) still propagates.
+            """
+            slice_wav = tmp / wav_name
+            try:
+                _ffmpeg(
+                    ["-ss", f"{t0:.3f}", "-to", f"{t1:.3f}", "-i", str(vocal_wav), str(slice_wav)]
+                )
+                words = worker.align_refine(slice_wav, text)
+            except (RuntimeError, subprocess.CalledProcessError) as e:
+                logger.warning("%s failed to align: %s; re-pacing from cue", label, e)
+                return []
+            finally:
+                slice_wav.unlink(missing_ok=True)
+            for w in words:
+                w["start"] += t0
+                w["end"] += t0
+            return words
+
         def align_pass(spans: list[tuple[float, float]]) -> tuple[list[dict], list]:
             sections = segment_by_gaps(spans, gap_s=gap, pad_s=pad, duration=duration)
             logger.info("%s: %d cues -> %d sections", song.stem[:40], len(spans), len(sections))
             objs: list[dict] = []
             for i, section in enumerate(sections):
-                slice_wav = tmp / f"{song.stem}__{tag}_s{i:03d}.wav"
-                _ffmpeg(
-                    [
-                        "-ss",
-                        f"{section.t0:.3f}",
-                        "-to",
-                        f"{section.t1:.3f}",
-                        "-i",
-                        str(vocal_wav),
-                        str(slice_wav),
-                    ]
+                sub_text = "\n".join(align_lines[lid] for lid in section.line_ids)
+                words = align_slice(
+                    f"{song.stem}__{tag}_s{i:03d}.wav",
+                    section.t0,
+                    section.t1,
+                    sub_text,
+                    f"section {i} (lines {section.lid_lo}-{section.lid_hi})",
                 )
-                try:
-                    sub_text = "\n".join(align_lines[lid] for lid in section.line_ids)
-                    words = worker.align_refine(slice_wav, sub_text)
-                except RuntimeError as e:
-                    # stable-ts gives up on a slice it cannot align at all
-                    # (returns None internally), surfaced here as a worker
-                    # error. That is the ultimate "align failed" -- leave the
-                    # section's words empty so repace_bad_lines carries every
-                    # line from its cue. The worker stays alive, so the next
-                    # section proceeds.
-                    logger.warning(
-                        "section %d (lines %d-%d) failed to align: %s; re-pacing from cue",
-                        i,
-                        section.lid_lo,
-                        section.lid_hi,
-                        e,
-                    )
-                    words = []
-                finally:
-                    slice_wav.unlink(missing_ok=True)
-                for w in words:
-                    w["start"] += section.t0
-                    w["end"] += section.t0
                 objs.extend(
                     split_section_to_lines(section, words, display_lines, align_lines, spans)
                 )
@@ -291,19 +290,9 @@ def align_with_cues(
             w0, w1 = max(0.0, t0 - pad), min(duration, t1 + pad)
             if w1 - w0 < 0.2:
                 return None
-            slice_wav = tmp / f"{song.stem}__{tag}_l{lid:03d}.wav"
-            _ffmpeg(["-ss", f"{w0:.3f}", "-to", f"{w1:.3f}", "-i", str(vocal_wav), str(slice_wav)])
-            try:
-                words = worker.align_refine(slice_wav, align_lines[lid])
-            except RuntimeError as e:
-                logger.warning("line %d re-align failed: %s; re-pacing from cue", lid, e)
-                return None
-            finally:
-                slice_wav.unlink(missing_ok=True)
-            for w in words:
-                w["start"] += w0
-                w["end"] += w0
-            return words
+            return align_slice(
+                f"{song.stem}__{tag}_l{lid:03d}.wav", w0, w1, align_lines[lid], f"line {lid}"
+            )
 
         # Rescue lines the align could not place: one narrow per-line re-align
         # each, then a paced fill across the cue window for whatever remains.
