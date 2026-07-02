@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """Drive LRCLIB-scaffold windowed alignment for one non-SRT song; write a .ass.
 
 For songs with no uploader SRT (the Genius-lyric group). LRCLIB is the dominant
