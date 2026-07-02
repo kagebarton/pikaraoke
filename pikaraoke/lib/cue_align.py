@@ -23,16 +23,21 @@ Approach:
    sit in silence.
 2. Force-align each section's joined text once (driver), then split the
    returned words back to lines (:func:`split_section_to_lines`). The aligner
-   drops words it could not time (``remove_instant_words``), so the split
-   matches surviving words to lyric tokens by normalised text in order rather
-   than by blind token count -- a dropped word skips its token instead of
-   shifting every later line.
-3. Re-pace the lines the align could not cover (:func:`repace_bad_lines`): a
-   line left under-covered or with a drifted internal gap is re-built with
-   even-paced words across its offset-corrected cue span. The per-song display
-   lead is fit from the lines that *did* align, so the trusted SRT cue carries
-   the lines the audio could not place (the gapless-section failure). Only
-   already-bad lines are touched, so a sloppy offset never degrades a good one.
+   drops words it could not time (``remove_instant_words``), so the split is a
+   monotone assignment (:func:`_match_words_to_tokens`): maximise matched
+   words, break ties by closeness to each token's cue-expected time. Text
+   equality alone would let one unmatchable word stall the scan and let a
+   dropped repeated line steal its twin's words; the time tiebreak uses the
+   trusted cue structure to prevent both.
+3. Rescue the lines the align could not cover (:func:`repace_bad_lines`): the
+   per-song display lead is fit from the cleanly-aligned lines
+   (:func:`fit_offset`), each bad line gets one narrow per-line align attempt
+   over its offset-corrected cue window (the injected ``realign``), and only
+   if that also fails is it re-built with paced words across the window. Only
+   already-bad lines are touched, so a sloppy offset never degrades a good
+   one. The driver also re-sections the whole song on offset-shifted cues
+   when the fitted lead exceeds the slice pad -- past that, every section
+   window provably clips its leading words.
 """
 
 import logging
@@ -84,6 +89,12 @@ MAX_INSTANT_FRACTION = 0.5
 # lead is small, so re-pacing on raw cues still beats leaving a line drifted).
 CUE_MIN_ANCHORS = 4
 
+# A wide internal word-gap is exonerated (a legit long mid-line pause, not
+# drift) only when the whole line still sits inside its offset-corrected cue
+# span, within this slack. Kept under SECTION_PAD_S so a tail parked at a
+# slice edge (cue end + pad) is never mistaken for a covered pause.
+PAUSE_SLACK_S = 0.5
+
 # Default per-token sung pace used by :func:`densify_cue_spans` when no anchored
 # line yields a usable estimate (e.g. every anchor is a single word). A relaxed
 # singing pace; only the unmapped-line fill leans on it.
@@ -107,6 +118,9 @@ SOURCE = "cue_align"
 # Provenance for a line whose timing came from the cue re-pace fallback rather
 # than the audio align (mirrors the SRT prior's "filled" tag).
 SOURCE_FILL = "cue_align_fill"
+# Provenance for a bad line recovered by a narrow per-line re-align over its
+# offset-corrected cue window -- real audio timing, unlike SOURCE_FILL.
+SOURCE_REALIGN = "cue_align_line"
 
 
 @dataclass(frozen=True)
@@ -369,11 +383,79 @@ def warp_scaffold_cues(
     return out
 
 
+def _token_expected_times(n: int, t0: float, t1: float) -> list[float]:
+    """Even-paced expected start for each of ``n`` tokens across ``[t0, t1]``."""
+    return [t0 + (k + 0.5) * (t1 - t0) / n for k in range(n)]
+
+
+def _match_words_to_tokens(
+    token_norms: list[str],
+    token_times: list[float],
+    aligned_words: list[dict],
+) -> list[int | None]:
+    """Monotone token<-word assignment: max matches, then min time deviation.
+
+    Both streams are ordered; a match requires equal normalised text. Among
+    the assignments with the most matches, prefer the one whose word starts
+    sit closest to the tokens' cue-expected times. The tiebreak is what makes
+    repeats safe: when a whole repeated line's words were dropped, plain
+    greedy text matching would hand the twin line's words to the earlier
+    line and shift every later repeat; time deviation picks the twin. It is
+    a tiebreak, not a gate, so a constant display lead (which shifts every
+    deviation equally) cannot flip a correct assignment.
+
+    Returns, per token, the index of its matched word (or None). Words that
+    match no token (e.g. punctuation-only tokens the tokeniser dropped but
+    the aligner emitted) are skipped instead of stalling the scan.
+    """
+    word_norms = [_normalize_token(w["word"]) for w in aligned_words]
+    word_times = [w["start"] for w in aligned_words]
+    n_tok, n_word = len(token_norms), len(word_norms)
+    assign: list[int | None] = [None] * n_tok
+    if not n_tok or not n_word:
+        return assign
+    # dp over (tokens consumed, words consumed) -> (matches, -total_deviation),
+    # maximised lexicographically. Rolling rows plus a per-cell choice record
+    # (0 = skip token, 1 = skip word, 2 = match) for the backtrack.
+    prev: list[tuple[int, float]] = [(0, 0.0)] * (n_word + 1)
+    choices: list[bytes] = []
+    for i in range(1, n_tok + 1):
+        cur: list[tuple[int, float]] = [(0, 0.0)] * (n_word + 1)
+        row = bytearray(n_word + 1)
+        norm, expected = token_norms[i - 1], token_times[i - 1]
+        for j in range(1, n_word + 1):
+            best, choice = prev[j], 0
+            if cur[j - 1] > best:
+                best, choice = cur[j - 1], 1
+            if norm == word_norms[j - 1]:
+                matches, neg_dev = prev[j - 1]
+                cand = (matches + 1, neg_dev - abs(word_times[j - 1] - expected))
+                if cand > best:
+                    best, choice = cand, 2
+            cur[j] = best
+            row[j] = choice
+        choices.append(bytes(row))
+        prev = cur
+    i, j = n_tok, n_word
+    while i > 0 and j > 0:
+        choice = choices[i - 1][j]
+        if choice == 2:
+            assign[i - 1] = j - 1
+            i -= 1
+            j -= 1
+        elif choice == 1:
+            j -= 1
+        else:
+            i -= 1
+    return assign
+
+
 def split_section_to_lines(
     section: Section,
     aligned_words: list[dict],
     display_lines: list[str],
     align_lines: list[str],
+    cue_spans: list[tuple[float, float]],
     *,
     max_word_dur: float = MAX_WORD_DUR_S,
     min_coverage: float = MIN_LINE_COVERAGE,
@@ -382,10 +464,10 @@ def split_section_to_lines(
 
     ``aligned_words`` are the section slice's forced-align words in *absolute
     song time*, in order. The aligner drops words it could not time, so the
-    stream is a subsequence of the section's lyric tokens, not a 1:1 list. Each
-    word is matched to the next lyric token with the same normalised form (a
-    forward scan); a token with no surviving word is simply skipped, so one
-    dropped word no longer shifts the split for every later line.
+    stream is a subsequence of the section's lyric tokens, not a 1:1 list.
+    Words are assigned to tokens by :func:`_match_words_to_tokens`, with each
+    token's expected time paced across its line's cue span -- the cue
+    structure arbitrates which twin a repeated word belongs to.
 
     Each kept word's sweep is capped to ``max_word_dur`` (anchored at its
     start). A line whose covered-token fraction falls below ``min_coverage`` is
@@ -397,24 +479,34 @@ def split_section_to_lines(
     no usable timing).
     """
     line_toks = _tokenise_lines([align_lines[lid] for lid in section.line_ids])
-    word_norms = [_normalize_token(w["word"]) for w in aligned_words]
+    token_norms: list[str] = []
+    token_raws: list[str] = []
+    token_times: list[float] = []
+    for toks, lid in zip(line_toks, section.line_ids):
+        c0, c1 = cue_spans[lid]
+        expected = _token_expected_times(len(toks), c0, c1)
+        for (norm, raw), t in zip(toks, expected):
+            token_norms.append(norm)
+            token_raws.append(raw)
+            token_times.append(t)
+    assign = _match_words_to_tokens(token_norms, token_times, aligned_words)
     out: list[dict] = []
-    wi = 0
+    ti = 0
     for toks, lid in zip(line_toks, section.line_ids):
         n = len(toks)
         words: list[dict] = []
-        for norm, raw in toks:
-            if wi < len(aligned_words) and word_norms[wi] == norm:
+        for _ in toks:
+            wi = assign[ti]
+            if wi is not None:
                 w = aligned_words[wi]
                 words.append(
                     {
-                        "word": raw,
+                        "word": token_raws[ti],
                         "start": w["start"],
                         "end": min(w["end"], w["start"] + max_word_dur),
                     }
                 )
-                wi += 1
-            # else: this token's word was dropped by the aligner -- skip it.
+            ti += 1
         if n and len(words) / n < min_coverage:
             words = []
         out.append(_line_object(lid, display_lines[lid], words))
@@ -430,58 +522,84 @@ def repace_bad_lines(
     drift_gap_s: float = DRIFT_GAP_S,
     min_anchors: int = CUE_MIN_ANCHORS,
     max_word_dur: float = MAX_WORD_DUR_S,
+    duration: float | None = None,
+    realign=None,
 ) -> tuple[list[dict], dict]:
-    """Re-pace the lines the align could not place, from their cue spans.
+    """Rescue the lines the align could not place, from their cue spans.
 
-    A line is *bad* if it has no usable words (under-covered) or holds an
-    internal word-gap over ``drift_gap_s`` (the aligner drifted). Each bad line
-    is rebuilt with even-paced words across its offset-corrected cue span; good
-    lines pass through untouched. The display-lead offset is the median of
-    ``aligned_start - cue_start`` over the *good* lines (below ``min_anchors``,
-    a zero offset is used). Because only bad lines are rewritten, a coarse
-    offset can never degrade a well-aligned line.
+    A line is *bad* if it has no usable words (under-covered), is mostly
+    instant words, or holds an internal word-gap over ``drift_gap_s`` while
+    overrunning its offset-corrected cue span (a wide gap *inside* the span is
+    a caption-covered pause, not drift -- see :func:`_line_is_good`). The
+    display-lead offset comes from :func:`fit_offset` over the clean lines.
 
-    Returns ``(line_objects, stats)``; re-paced lines are tagged
-    :data:`SOURCE_FILL`. ``cue_spans`` is indexed by ``line_id``.
+    Each bad line is rescued in two steps: ``realign(lid, t0, t1)`` -- an
+    injected narrow per-line forced align over the offset-corrected window,
+    returning absolute-time words or None -- is tried first, and its result is
+    kept only if it comes back covered and good (tagged
+    :data:`SOURCE_REALIGN`). Otherwise the line is rebuilt with paced words
+    across the window (tagged :data:`SOURCE_FILL`), clamped to ``duration``
+    when known. Because only bad lines are rewritten, a coarse offset can
+    never degrade a well-aligned line.
+
+    Returns ``(line_objects, stats)``. ``cue_spans`` is indexed by ``line_id``.
     """
-    offset = _fit_offset(line_objects, cue_spans, drift_gap_s, min_anchors)
+    offset = fit_offset(
+        line_objects, cue_spans, align_lines, drift_gap_s=drift_gap_s, min_anchors=min_anchors
+    )
+    line_toks = _tokenise_lines(align_lines)
     out: list[dict] = []
     repaced: list[int] = []
+    realigned: list[int] = []
     for obj in line_objects:
         lid = obj["line_id"]
-        if lid >= len(cue_spans) or _line_is_good(obj, drift_gap_s):
+        if lid >= len(cue_spans) or _line_is_good(obj, cue_spans[lid], offset, drift_gap_s):
+            out.append(obj)
+            continue
+        toks = line_toks[lid]
+        if not toks:  # display-only line (no alignable tokens)
             out.append(obj)
             continue
         cue_start, cue_end = cue_spans[lid]
-        filled = _repace_line(
-            lid,
-            display_lines[lid],
-            align_lines[lid],
-            max(0.0, cue_start + offset),
-            cue_end + offset,
-            max_word_dur,
-        )
-        if filled is None:  # display-only line (no alignable tokens)
-            out.append(obj)
-        else:
-            out.append(filled)
-            repaced.append(lid)
-    stats = {"offset_s": round(offset, 3), "n_repaced": len(repaced), "repaced_line_ids": repaced}
+        t0 = max(0.0, cue_start + offset)
+        t1 = cue_end + offset
+        if duration is not None:
+            t1 = min(t1, duration)
+        if realign is not None:
+            raw_words = realign(lid, t0, t1)
+            fixed = (
+                _line_from_realigned(lid, display_lines[lid], toks, t0, t1, raw_words, max_word_dur)
+                if raw_words
+                else None
+            )
+            if fixed is not None and _line_is_good(fixed, cue_spans[lid], offset, drift_gap_s):
+                out.append(fixed)
+                realigned.append(lid)
+                continue
+        out.append(_repace_line(lid, display_lines[lid], toks, t0, t1, max_word_dur))
+        repaced.append(lid)
+    stats = {
+        "offset_s": round(offset, 3),
+        "n_repaced": len(repaced),
+        "repaced_line_ids": repaced,
+        "n_realigned": len(realigned),
+        "realigned_line_ids": realigned,
+    }
     logger.info(
-        "cue re-pace: offset=%+.2fs, %d/%d line(s) re-paced from cue",
+        "cue rescue: offset=%+.2fs, %d line(s) re-aligned, %d/%d re-paced from cue",
         offset,
+        len(realigned),
         len(repaced),
         len(line_objects),
     )
     return out, stats
 
 
-def _line_is_good(obj: dict, drift_gap_s: float) -> bool:
-    """A cleanly-aligned line -- usable as an offset anchor and left untouched
-    by the re-pace.
+def _line_is_clean(obj: dict, drift_gap_s: float) -> bool:
+    """A cleanly-aligned line -- strict enough to serve as an offset anchor.
 
-    Bad if it has no words, holds a drifted internal gap over ``drift_gap_s``,
-    or is mostly instant words (a crammed sweep the aligner failed to place but
+    False if it has no words, holds an internal gap over ``drift_gap_s``, or
+    is mostly instant words (a crammed sweep the aligner failed to place but
     did not drop).
     """
     words = obj["words"]
@@ -494,48 +612,108 @@ def _line_is_good(obj: dict, drift_gap_s: float) -> bool:
     return instant / len(words) <= MAX_INSTANT_FRACTION
 
 
-def _fit_offset(
+def _line_is_good(
+    obj: dict, cue_span: tuple[float, float], offset: float, drift_gap_s: float
+) -> bool:
+    """Clean, or the only fault is a wide internal gap while the whole line
+    sits inside its offset-corrected cue span (within :data:`PAUSE_SLACK_S`).
+
+    That shape is a legit long mid-line pause the caption holds one cue
+    across -- the aligned timing is right, and re-pacing it would spread words
+    evenly across the pause. Real drift (a parked tail) overruns the cue span,
+    so it still fails this test.
+    """
+    if _line_is_clean(obj, drift_gap_s):
+        return True
+    words = obj["words"]
+    if not words:
+        return False
+    instant = sum(1 for w in words if w["end"] - w["start"] < INSTANT_WORD_DUR_S)
+    if instant / len(words) > MAX_INSTANT_FRACTION:
+        return False
+    c0, c1 = cue_span
+    return obj["start"] >= c0 + offset - PAUSE_SLACK_S and obj["end"] <= c1 + offset + PAUSE_SLACK_S
+
+
+def fit_offset(
     line_objects: list[dict],
     cue_spans: list[tuple[float, float]],
-    drift_gap_s: float,
-    min_anchors: int,
+    align_lines: list[str] | None = None,
+    *,
+    drift_gap_s: float = DRIFT_GAP_S,
+    min_anchors: int = CUE_MIN_ANCHORS,
 ) -> float:
-    """Median ``aligned_start - cue_start`` over the cleanly-aligned lines, or
-    0.0 when too few lines aligned to fit it robustly."""
-    residuals = [
-        obj["start"] - cue_spans[obj["line_id"]][0]
+    """Median display lead ``aligned_start - cue_start`` over the clean lines.
+
+    With ``align_lines``, anchors are narrowed to full-coverage lines (every
+    token got a word) when enough exist: a line whose leading words were
+    dropped starts late, biasing its residual. 0.0 when too few lines aligned
+    to fit robustly. Public because the driver uses the fitted lead to decide
+    whether to re-section the song on shifted cues.
+    """
+    anchors = [
+        obj
         for obj in line_objects
-        if obj["line_id"] < len(cue_spans) and _line_is_good(obj, drift_gap_s)
+        if obj["line_id"] < len(cue_spans) and _line_is_clean(obj, drift_gap_s)
     ]
-    if len(residuals) < min_anchors:
+    if align_lines is not None:
+        counts = [len(toks) for toks in _tokenise_lines(align_lines)]
+        full = [obj for obj in anchors if len(obj["words"]) == counts[obj["line_id"]]]
+        if len(full) >= min_anchors:
+            anchors = full
+    residuals = [obj["start"] - cue_spans[obj["line_id"]][0] for obj in anchors]
+    if len(residuals) < max(1, min_anchors):
         return 0.0
     return median(residuals)
+
+
+def _line_from_realigned(
+    lid: int,
+    display_text: str,
+    toks: list[tuple[str, str]],
+    t0: float,
+    t1: float,
+    raw_words: list[dict],
+    max_word_dur: float,
+) -> dict | None:
+    """Line object from a per-line re-align's absolute-time words, or None if
+    the result covers too little of the line to trust."""
+    norms = [norm for norm, _raw in toks]
+    assign = _match_words_to_tokens(norms, _token_expected_times(len(toks), t0, t1), raw_words)
+    words: list[dict] = []
+    for (_norm, raw), wi in zip(toks, assign):
+        if wi is None:
+            continue
+        w = raw_words[wi]
+        words.append(
+            {"word": raw, "start": w["start"], "end": min(w["end"], w["start"] + max_word_dur)}
+        )
+    if len(words) / len(toks) < MIN_LINE_COVERAGE:
+        return None
+    return _line_object(lid, display_text, words, source=SOURCE_REALIGN)
 
 
 def _repace_line(
     lid: int,
     display_text: str,
-    align_line: str,
+    toks: list[tuple[str, str]],
     t0: float,
     t1: float,
     max_word_dur: float,
-) -> dict | None:
-    """Line object with even-paced words across ``[t0, t1]``, each capped to
-    ``max_word_dur``. None for a display-only line with no alignable tokens."""
-    toks = _tokenise_lines([align_line])[0]
-    if not toks:
-        return None
+) -> dict:
+    """Line object with paced words across ``[t0, t1]``, each capped to
+    ``max_word_dur``. Slots are weighted by normalised token length (a cheap
+    syllable proxy) so a long word sweeps longer than a short one."""
     if t1 <= t0:
         t1 = t0 + 0.5
-    step = (t1 - t0) / len(toks)
-    words = [
-        {
-            "word": raw,
-            "start": t0 + i * step,
-            "end": t0 + i * step + min(step, max_word_dur),
-        }
-        for i, (_norm, raw) in enumerate(toks)
-    ]
+    weights = [max(1, len(norm)) for norm, _raw in toks]
+    total = sum(weights)
+    words: list[dict] = []
+    t = t0
+    for (_norm, raw), weight in zip(toks, weights):
+        dur = (t1 - t0) * weight / total
+        words.append({"word": raw, "start": t, "end": t + min(dur, max_word_dur)})
+        t += dur
     return _line_object(lid, display_text, words, source=SOURCE_FILL)
 
 

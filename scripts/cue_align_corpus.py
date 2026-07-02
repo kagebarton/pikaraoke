@@ -35,7 +35,7 @@ from cue_align_song import (  # noqa: E402
     section_drift,
 )
 
-from pikaraoke.lib.cue_align import SOURCE_FILL  # noqa: E402
+from pikaraoke.lib.cue_align import SOURCE_FILL, SOURCE_REALIGN  # noqa: E402
 from pikaraoke.lib.srt_prior import cue_spans_from_srt  # noqa: E402
 from pikaraoke.pipeline.workers.whisper_worker import WhisperWorker  # noqa: E402
 
@@ -131,6 +131,7 @@ def main(argv: list[str] | None = None) -> int:
                     "placed": placed,
                     "hidden": len(line_objects) - placed,
                     "repaced": sum(1 for o in line_objects if o["source"] == SOURCE_FILL),
+                    "realigned": sum(1 for o in line_objects if o["source"] == SOURCE_REALIGN),
                     "max_gap": art["max_gap"],
                     "n_gap": art["n_gap"],
                     "n_instant": art["n_instant"],
@@ -143,13 +144,14 @@ def main(argv: list[str] | None = None) -> int:
     # Sort worst-first by the drift signature (parked-tail lines, then gap size).
     rows.sort(key=lambda r: (r["n_gap"], r["max_gap"], r["n_instant"]), reverse=True)
     print(
-        f"\n{'song':42} {'plc':>4} {'hid':>4} {'rep':>4} "
+        f"\n{'song':42} {'plc':>4} {'hid':>4} {'rea':>4} {'rep':>4} "
         f"{'maxgap':>7} {'gapL':>4} {'instL':>5} {'ovl':>6}"
     )
-    print("-" * 85)
+    print("-" * 90)
     for r in rows:
         print(
-            f"{r['name'][:42]:42} {r['placed']:4d} {r['hidden']:4d} {r['repaced']:4d} "
+            f"{r['name'][:42]:42} {r['placed']:4d} {r['hidden']:4d} {r['realigned']:4d} "
+            f"{r['repaced']:4d} "
             f"{r['max_gap']:6.1f}s {r['n_gap']:4d} {r['n_instant']:5d} {r['ovl']:5.1f}s"
         )
     tot_gap = sum(r["n_gap"] for r in rows)

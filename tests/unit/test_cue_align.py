@@ -5,8 +5,10 @@ import pytest
 from pikaraoke.lib.cue_align import (
     SOURCE,
     SOURCE_FILL,
+    SOURCE_REALIGN,
     Section,
     densify_cue_spans,
+    fit_offset,
     merge_cue_spans,
     repace_bad_lines,
     segment_by_gaps,
@@ -17,6 +19,36 @@ from pikaraoke.lib.cue_align import (
 
 def _words(*spans: tuple[str, float, float]) -> list[dict]:
     return [{"word": w, "start": s, "end": e} for w, s, e in spans]
+
+
+def _line(lid: int, text: str, *spans: tuple[str, float, float]) -> dict:
+    words = _words(*spans)
+    return {
+        "line_id": lid,
+        "text": text,
+        "words": words,
+        "start": words[0]["start"] if words else None,
+        "end": words[-1]["end"] if words else None,
+        "source": SOURCE,
+    }
+
+
+def _anchor_lines(n: int = 4, offset: float = 0.0) -> tuple[list[dict], list, list[str]]:
+    """n cleanly-aligned two-word lines at cues (2i, 2i+1), aligned ``offset`` late."""
+    objs, cues, lines = [], [], []
+    for i in range(n):
+        c0 = 2.0 * i
+        cues.append((c0, c0 + 1.0))
+        lines.append("a a")
+        objs.append(
+            _line(
+                i,
+                "a a",
+                ("a", c0 + offset, c0 + offset + 0.3),
+                ("a", c0 + offset + 0.4, c0 + offset + 0.8),
+            )
+        )
+    return objs, cues, lines
 
 
 class TestSegmentByGaps:
@@ -219,7 +251,7 @@ class TestSplitSectionToLines:
             ("goodbye", 2.0, 2.5),
             ("now", 2.6, 3.0),
         )
-        objs = split_section_to_lines(section, aligned, display, display)
+        objs = split_section_to_lines(section, aligned, display, display, [(0.0, 1.0), (2.0, 3.0)])
         assert [o["line_id"] for o in objs] == [0, 1]
         assert [w["word"] for w in objs[0]["words"]] == ["hello", "world"]
         assert [w["word"] for w in objs[1]["words"]] == ["goodbye", "now"]
@@ -236,6 +268,7 @@ class TestSplitSectionToLines:
             _words(("oh", 0.1, 0.4), ("yeah", 0.5, 0.9)),
             display_lines=["Oh yeah"],
             align_lines=["oh yeah"],
+            cue_spans=[(0.0, 1.0)],
         )
         assert objs[0]["text"] == "Oh yeah"
         assert [w["word"] for w in objs[0]["words"]] == ["oh", "yeah"]
@@ -248,6 +281,7 @@ class TestSplitSectionToLines:
             _words(("forever", 5.0, 15.0)),
             ["forever"],
             ["forever"],
+            [(5.0, 15.0)],
             max_word_dur=1.5,
         )
         word = objs[0]["words"][0]
@@ -262,6 +296,7 @@ class TestSplitSectionToLines:
             _words(("the", 0.1, 0.3)),
             ["the quick brown fox"],
             ["the quick brown fox"],
+            [(0.0, 4.0)],
             min_coverage=0.5,
         )
         assert objs[0]["words"] == []
@@ -276,6 +311,7 @@ class TestSplitSectionToLines:
             _words(("real", 1.0, 1.4), ("line", 1.5, 1.9)),
             display_lines=["...", "real line"],
             align_lines=["...", "real line"],
+            cue_spans=[(0.0, 0.5), (1.0, 2.0)],
         )
         assert objs[0]["words"] == []
         assert [w["word"] for w in objs[1]["words"]] == ["real", "line"]
@@ -293,9 +329,38 @@ class TestSplitSectionToLines:
             ("goodbye", 2.0, 2.5),
             ("now", 2.6, 3.0),
         )
-        objs = split_section_to_lines(section, aligned, display, display)
+        objs = split_section_to_lines(section, aligned, display, display, [(0.0, 1.2), (2.0, 3.0)])
         assert [w["word"] for w in objs[0]["words"]] == ["hello", "big"]
         assert [w["word"] for w in objs[1]["words"]] == ["goodbye", "now"]
+
+    def test_unmatchable_word_does_not_stall_later_lines(self):
+        # The aligner emitted a standalone "-" whose token the tokeniser
+        # dropped (normalises to empty). Greedy head-matching would stall on
+        # it and hide every later line; the assignment just skips it.
+        section = Section(0, 1, 0.0, 4.0)
+        display = ["hello world", "goodbye now"]
+        aligned = _words(
+            ("hello", 0.1, 0.5),
+            ("world", 0.6, 1.0),
+            ("-", 1.4, 1.5),
+            ("goodbye", 2.0, 2.5),
+            ("now", 2.6, 3.0),
+        )
+        objs = split_section_to_lines(section, aligned, display, display, [(0.0, 1.0), (2.0, 3.0)])
+        assert [w["word"] for w in objs[0]["words"]] == ["hello", "world"]
+        assert [w["word"] for w in objs[1]["words"]] == ["goodbye", "now"]
+
+    def test_dropped_repeat_line_does_not_steal_twins_words(self):
+        # Lines 0 and 1 are the same refrain; the aligner dropped ALL of line
+        # 0's words. Text-only greedy matching would hand line 1's words to
+        # line 0 and shift every later repeat up a line; the time tiebreak
+        # keeps them on line 1 and leaves line 0 for the cue rescue.
+        section = Section(0, 1, 0.0, 6.0)
+        display = ["la la", "la la"]
+        aligned = _words(("la", 3.1, 3.5), ("la", 3.9, 4.4))
+        objs = split_section_to_lines(section, aligned, display, display, [(0.0, 2.0), (3.0, 5.0)])
+        assert objs[0]["words"] == []
+        assert [w["start"] for w in objs[1]["words"]] == [3.1, 3.9]
 
 
 class TestRepaceBadLines:
@@ -465,3 +530,99 @@ class TestRepaceBadLines:
         out, stats = repace_bad_lines(objs, cue_spans, lines, lines)
         assert stats["n_repaced"] == 0
         assert out[4]["words"] == []  # no alignable tokens -> nothing to sweep
+
+    def test_covered_pause_is_not_drift(self):
+        # A 5 s internal gap *inside* the line's cue span is a caption-covered
+        # pause: the aligned timing is right, re-pacing would smear the words
+        # evenly across it.
+        objs, cues, lines = _anchor_lines(4)
+        cues.append((8.0, 15.0))
+        lines.append("gg hh")
+        objs.append(_line(4, "gg hh", ("gg", 8.0, 8.3), ("hh", 13.5, 13.8)))
+        out, stats = repace_bad_lines(objs, cues, lines, lines)
+        assert stats["n_repaced"] == 0
+        assert out[4] is objs[4]
+
+    def test_repace_clamped_to_duration(self):
+        objs, cues, lines = _anchor_lines(4, offset=0.5)
+        cues.append((8.0, 10.0))
+        lines.append("ee ff")
+        objs.append(_line(4, "ee ff"))
+        out, _stats = repace_bad_lines(objs, cues, lines, lines, duration=9.2)
+        # Cue end 10.0 + offset 0.5 clamps to the 9.2 s song end.
+        assert out[4]["end"] == pytest.approx(9.2)
+
+    def test_fill_weights_longer_tokens_longer(self):
+        objs, cues, lines = _anchor_lines(4)
+        cues.append((8.0, 11.0))
+        lines.append("hi wonderful")
+        objs.append(_line(4, "hi wonderful"))
+        out, _stats = repace_bad_lines(objs, cues, lines, lines)
+        hi, wonderful = out[4]["words"]
+        # "wonderful" (9 chars) gets the lion's share of the 3 s span.
+        assert wonderful["start"] - hi["start"] == pytest.approx(3.0 * 2 / 11)
+        assert wonderful["end"] - wonderful["start"] > hi["end"] - hi["start"]
+
+    def test_realign_rescues_before_fill(self):
+        objs, cues, lines = _anchor_lines(4)
+        cues.append((8.0, 10.0))
+        lines.append("ee ff")
+        objs.append(_line(4, "ee ff"))
+        calls = []
+
+        def realign(lid, t0, t1):
+            calls.append((lid, t0, t1))
+            return _words(("ee", 8.1, 8.5), ("ff", 8.6, 9.0))
+
+        out, stats = repace_bad_lines(objs, cues, lines, lines, realign=realign)
+        assert calls == [(4, 8.0, 10.0)]
+        assert out[4]["source"] == SOURCE_REALIGN
+        assert [w["start"] for w in out[4]["words"]] == [8.1, 8.6]
+        assert stats["n_realigned"] == 1 and stats["n_repaced"] == 0
+
+    def test_realign_failure_falls_back_to_fill(self):
+        objs, cues, lines = _anchor_lines(4)
+        cues.append((8.0, 10.0))
+        lines.append("ee ff")
+        objs.append(_line(4, "ee ff"))
+        out, stats = repace_bad_lines(objs, cues, lines, lines, realign=lambda lid, t0, t1: None)
+        assert out[4]["source"] == SOURCE_FILL
+        assert stats["n_realigned"] == 0 and stats["n_repaced"] == 1
+
+    def test_realign_bad_result_rejected(self):
+        # The per-line align parked "ff" far past the cue span -- the same
+        # drift the rescue exists to fix. Keep the paced fill instead.
+        objs, cues, lines = _anchor_lines(4)
+        cues.append((8.0, 10.0))
+        lines.append("ee ff")
+        objs.append(_line(4, "ee ff"))
+
+        def parked(lid, t0, t1):
+            return _words(("ee", 8.1, 8.4), ("ff", 19.5, 19.8))
+
+        out, stats = repace_bad_lines(objs, cues, lines, lines, realign=parked)
+        assert out[4]["source"] == SOURCE_FILL
+        assert stats["n_realigned"] == 0 and stats["n_repaced"] == 1
+
+
+class TestFitOffset:
+    def test_prefers_full_coverage_anchors(self):
+        # Four full-coverage lines aligned +0.5 late; four partial lines whose
+        # dropped first word makes them start +2.0 late. With align_lines the
+        # partials are excluded from the fit; without, they drag the median.
+        cues = [(2.0 * i, 2.0 * i + 1.0) for i in range(8)]
+        lines = ["a b"] * 8
+        objs = []
+        for i in range(4):
+            c0 = cues[i][0]
+            objs.append(_line(i, "a b", ("a", c0 + 0.5, c0 + 0.8), ("b", c0 + 0.9, c0 + 1.2)))
+        for i in range(4, 8):
+            c0 = cues[i][0]
+            objs.append(_line(i, "a b", ("b", c0 + 2.0, c0 + 2.3)))
+        assert fit_offset(objs, cues, lines) == 0.5
+        assert fit_offset(objs, cues) == pytest.approx(1.25)
+
+    def test_zero_when_too_few_anchors(self):
+        cues = [(0.0, 1.0)]
+        objs = [_line(0, "a", ("a", 0.4, 0.7))]
+        assert fit_offset(objs, cues, ["a"]) == 0.0

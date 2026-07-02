@@ -30,6 +30,8 @@ from pathlib import Path
 
 from pikaraoke.lib.cue_align import (
     SOURCE_FILL,
+    SOURCE_REALIGN,
+    fit_offset,
     repace_bad_lines,
     segment_by_gaps,
     split_section_to_lines,
@@ -205,6 +207,10 @@ def align_with_cues(
     their cues. ``tag`` names the scratch WAVs and the default output suffix, so
     the two paths never clobber each other's files.
 
+    When the fitted display lead exceeds ``pad`` the whole song is re-aligned
+    once on offset-shifted cues -- past that, every section window clips its
+    leading sung words, so no per-line repair can recover them.
+
     Returns ``(line_objects, sections)`` so a caller can score overlap/coverage
     and correlate drift with section size. The worker lifecycle is the caller's.
     """
@@ -213,56 +219,104 @@ def align_with_cues(
 
     tmp = Path(get_temp_directory())
     vocal_wav = tmp / f"{song.stem}__{tag}_vocal.wav"
-    _ffmpeg(["-i", str(vocal), "-ac", "2", "-ar", "44100", "-sample_fmt", "s16", str(vocal_wav)])
+    # 16 kHz mono is whisper's native input; anything more just costs decode.
+    _ffmpeg(["-i", str(vocal), "-ac", "1", "-ar", "16000", "-sample_fmt", "s16", str(vocal_wav)])
     try:
         duration = _wav_duration(vocal_wav)
-        sections = segment_by_gaps(cue_spans, gap_s=gap, pad_s=pad, duration=duration)
-        logger.info("%s: %d cues -> %d sections", song.stem[:40], len(cue_spans), len(sections))
-        line_objects: list[dict] = []
-        for i, section in enumerate(sections):
-            slice_wav = tmp / f"{song.stem}__{tag}_s{i:03d}.wav"
-            _ffmpeg(
-                [
-                    "-ss",
-                    f"{section.t0:.3f}",
-                    "-to",
-                    f"{section.t1:.3f}",
-                    "-i",
-                    str(vocal_wav),
-                    str(slice_wav),
-                ]
-            )
-            try:
-                sub_text = "\n".join(align_lines[lid] for lid in section.line_ids)
-                words = worker.align_refine(slice_wav, sub_text)
-            except RuntimeError as e:
-                # stable-ts gives up on a slice it cannot align at all (returns
-                # None internally), surfaced here as a worker error. That is the
-                # ultimate "align failed" -- leave the section's words empty so
-                # repace_bad_lines carries every line from its cue. The worker
-                # stays alive, so the next section proceeds.
-                logger.warning(
-                    "section %d (lines %d-%d) failed to align: %s; re-pacing from cue",
-                    i,
-                    section.lid_lo,
-                    section.lid_hi,
-                    e,
+
+        def align_pass(spans: list[tuple[float, float]]) -> tuple[list[dict], list]:
+            sections = segment_by_gaps(spans, gap_s=gap, pad_s=pad, duration=duration)
+            logger.info("%s: %d cues -> %d sections", song.stem[:40], len(spans), len(sections))
+            objs: list[dict] = []
+            for i, section in enumerate(sections):
+                slice_wav = tmp / f"{song.stem}__{tag}_s{i:03d}.wav"
+                _ffmpeg(
+                    [
+                        "-ss",
+                        f"{section.t0:.3f}",
+                        "-to",
+                        f"{section.t1:.3f}",
+                        "-i",
+                        str(vocal_wav),
+                        str(slice_wav),
+                    ]
                 )
-                words = []
+                try:
+                    sub_text = "\n".join(align_lines[lid] for lid in section.line_ids)
+                    words = worker.align_refine(slice_wav, sub_text)
+                except RuntimeError as e:
+                    # stable-ts gives up on a slice it cannot align at all
+                    # (returns None internally), surfaced here as a worker
+                    # error. That is the ultimate "align failed" -- leave the
+                    # section's words empty so repace_bad_lines carries every
+                    # line from its cue. The worker stays alive, so the next
+                    # section proceeds.
+                    logger.warning(
+                        "section %d (lines %d-%d) failed to align: %s; re-pacing from cue",
+                        i,
+                        section.lid_lo,
+                        section.lid_hi,
+                        e,
+                    )
+                    words = []
+                finally:
+                    slice_wav.unlink(missing_ok=True)
+                for w in words:
+                    w["start"] += section.t0
+                    w["end"] += section.t0
+                objs.extend(
+                    split_section_to_lines(section, words, display_lines, align_lines, spans)
+                )
+            return objs, sections
+
+        line_objects, sections = align_pass(cue_spans)
+        spans = cue_spans
+        offset = fit_offset(line_objects, cue_spans, align_lines)
+        if abs(offset) > pad:
+            # Beyond the pad, every section window provably clips its leading
+            # words; shift the cues onto the audio clock and re-align once.
+            logger.info(
+                "%s: display lead %+.2fs exceeds pad %.2fs; re-sectioning on shifted cues",
+                song.stem[:40],
+                offset,
+                pad,
+            )
+            spans = [
+                (max(0.0, c0 + offset), max(0.0, c0 + offset, c1 + offset)) for c0, c1 in cue_spans
+            ]
+            line_objects, sections = align_pass(spans)
+
+        def realign_line(lid: int, t0: float, t1: float) -> list[dict] | None:
+            """Narrow per-line forced align over a bad line's cue window."""
+            w0, w1 = max(0.0, t0 - pad), min(duration, t1 + pad)
+            if w1 - w0 < 0.2:
+                return None
+            slice_wav = tmp / f"{song.stem}__{tag}_l{lid:03d}.wav"
+            _ffmpeg(["-ss", f"{w0:.3f}", "-to", f"{w1:.3f}", "-i", str(vocal_wav), str(slice_wav)])
+            try:
+                words = worker.align_refine(slice_wav, align_lines[lid])
+            except RuntimeError as e:
+                logger.warning("line %d re-align failed: %s; re-pacing from cue", lid, e)
+                return None
             finally:
                 slice_wav.unlink(missing_ok=True)
             for w in words:
-                w["start"] += section.t0
-                w["end"] += section.t0
-            line_objects.extend(split_section_to_lines(section, words, display_lines, align_lines))
+                w["start"] += w0
+                w["end"] += w0
+            return words
+
+        # Rescue lines the align could not place: one narrow per-line re-align
+        # each, then a paced fill across the cue window for whatever remains.
+        line_objects, _repace_stats = repace_bad_lines(
+            line_objects,
+            spans,
+            display_lines,
+            align_lines,
+            duration=duration,
+            realign=realign_line,
+        )
     finally:
         vocal_wav.unlink(missing_ok=True)
-
-    # Re-pace lines the align could not place (under-covered or drifted) across
-    # their offset-corrected cue spans, so the trusted cues carry them.
-    line_objects, _repace_stats = repace_bad_lines(
-        line_objects, cue_spans, display_lines, align_lines
-    )
 
     # Reuse the production ASS renderer for a byte-faithful A/B against the
     # pipeline's own .ass -- it only reads config, mutates nothing.
@@ -311,10 +365,14 @@ def report(line_objects: list[dict]) -> None:
     placed = [o for o in line_objects if o["words"]]
     hidden = len(line_objects) - len(placed)
     repaced = sum(1 for o in line_objects if o["source"] == SOURCE_FILL)
+    realigned = sum(1 for o in line_objects if o["source"] == SOURCE_REALIGN)
     overlap, worst = max_line_overlap(line_objects)
     widest = max((o["end"] - o["start"]) / len(o["words"]) for o in placed) if placed else 0.0
     print("\n--- cue-align report ---")
-    print(f"lines: {len(line_objects)} placed={len(placed)} hidden={hidden} (re-paced={repaced})")
+    print(
+        f"lines: {len(line_objects)} placed={len(placed)} hidden={hidden} "
+        f"(re-aligned={realigned}, re-paced={repaced})"
+    )
     print(f"max inter-line overlap: {overlap:.2f}s" + (f" (lines {worst})" if worst else ""))
     print(f"widest line pace: {widest:.2f}s/word")
 
