@@ -374,6 +374,32 @@ class TestBuildYtasrCandidates:
         assert c["ytasr_agreement"] == 1.0  # own term unaffected
         assert c["score"] == 2.0 + 1.0 * (2.0 * 0.0 + 3.0 * 1.0)  # 5.0
 
+    def test_partial_hit_grades_self_evidence(self):
+        # A 2-of-3 token hit carries ytasr_agreement 2/3, not a flat 1.0 —
+        # a fragment must not collect the same beta bonus as an exact match.
+        ytasr_words = _ytw_seq("a", "b", t0=10.0, dt=0.5)
+        line_norms = [["a", "b", "c"]]
+        align_ranges = [None]
+        transcribe_words = _aw_seq("a", "b", t0=10.0, dt=0.5)
+        transcribe_norms = ["a", "b"]
+        tiling_cands = [(0, 2, 0, 2.0)]
+        cands = _build_ytasr_candidates(
+            tiling_cands,
+            ytasr_words,
+            line_norms,
+            align_ranges,
+            transcribe_words,
+            transcribe_norms,
+            margin_s=0.3,
+            max_edit_ratio=0.25,
+            alpha=2.0,
+            beta=3.0,
+        )
+        c = cands[0]
+        assert c["ytasr_agreement"] == 2 / 3
+        assert c["transcribe_match"] == 2
+        assert c["score"] == 2.0 + 1.0 * (2.0 * 0.0 + 3.0 * (2 / 3))
+
     def test_unrelated_transcribe_zeros_both_weighted_terms(self):
         # Hakuna-shape for ytasr: transcribe heard substantial unrelated
         # speech in ytasr's proposed window, so the corroboration gate fires.

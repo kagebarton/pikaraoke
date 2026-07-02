@@ -25,10 +25,10 @@ Per lyric line we build up to three kinds of candidates:
   the way align does, so it needs the same multi-candidate treatment as
   transcribe, not align's single-guaranteed-candidate treatment — but at
   the stricter ``ytasr.CANDIDATE_MAX_EDIT_RATIO``, since the ASR text is
-  a ytasr candidate's only evidence for existing. Has high
-  ``ytasr_agreement`` by construction; its ``transcribe_match`` and
-  ``align_agreement`` are computed the same way align's are, against its
-  own proposed window.
+  a ytasr candidate's only evidence for existing. Its ``ytasr_agreement``
+  is its own graded match quality (matched-token fraction of the line);
+  its ``transcribe_match`` and ``align_agreement`` are computed the same
+  way align's are, against its own proposed window.
 
 Each candidate's joint score is::
 
@@ -547,13 +547,19 @@ def _build_ytasr_candidates(
     one-guaranteed-candidate-per-line shape — ytasr has no 1:1 token
     guarantee with the lyric line the way align_words does. Its
     ``transcribe_match`` and ``align_agreement`` are computed fresh against
-    this candidate's own window exactly as an align candidate's are (not
-    reused from the ``find_candidates`` score that gated this candidate's
-    existence), so all three sources are commensurable on the same axes.
+    this candidate's own window exactly as an align candidate's are, so all
+    three sources are commensurable on the same axes. Its self-evidence
+    (``ytasr_agreement``) is graded, not flat: the ``find_candidates`` score
+    over the line's token count, i.e. the fraction of the line ASR actually
+    heard here — a partial hit must not collect the full beta bonus the way
+    an exact one does. (Align's flat ``align_agreement = 1.0`` is *not* the
+    precedent: an align candidate's range is align's belief by definition,
+    and its quality signal rides on ``transcribe_match``; a ytasr candidate's
+    only evidence is this very lexical match.)
     """
     out: list[dict] = []
     transcribe_starts = [w["start"] for w in transcribe_words]
-    for start_idx, end_idx, line_id, _y_score in tiling_cands:
+    for start_idx, end_idx, line_id, y_score in tiling_cands:
         t0 = ytasr_words[start_idx]["start"]
         t1 = ytasr_words[end_idx - 1]["end"]
         t_match, any_overlap, count_in_window = _transcribe_match_and_count_in_window(
@@ -566,8 +572,9 @@ def _build_ytasr_candidates(
             max_edit_ratio,
         )
         a_agree = _range_agreement(t0, t1, align_ranges[line_id])
+        y_agree = y_score / len(line_norms[line_id])
         weight = _alpha_weight(any_overlap, count_in_window)
-        score = float(t_match) + weight * (alpha * a_agree + beta * 1.0)
+        score = float(t_match) + weight * (alpha * a_agree + beta * y_agree)
         out.append(
             {
                 "line_id": line_id,
@@ -577,7 +584,7 @@ def _build_ytasr_candidates(
                 "score": score,
                 "transcribe_match": float(t_match),
                 "align_agreement": a_agree,
-                "ytasr_agreement": 1.0,
+                "ytasr_agreement": y_agree,
                 "alpha_weight": weight,
                 "ytasr_idx_start": start_idx,
                 "ytasr_idx_end": end_idx,
