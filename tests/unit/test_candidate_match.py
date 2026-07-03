@@ -4,6 +4,7 @@ from pikaraoke.lib.candidate_match import (
     _build_line_object,
     _edit_distance,
     _longest_contiguous_run,
+    best_candidate_per_line,
     find_anchor_candidates,
     find_candidates,
 )
@@ -89,6 +90,21 @@ class TestFindCandidates:
         # max_edit_ratio=0.5 alone would accept (dist=1, max_allowed=1).
         cands = find_candidates(token_norms, lyric_lines, max_edit_ratio=0.5)
         assert cands == []
+
+
+class TestBestCandidatePerLine:
+    def test_keeps_highest_score_per_line(self):
+        cands = [(0, 2, 0, 1.0), (5, 7, 0, 3.0), (10, 12, 1, 2.0)]
+        best = best_candidate_per_line(cands)
+        assert best == {0: (5, 7, 3.0), 1: (10, 12, 2.0)}
+
+    def test_ties_break_toward_earliest_start(self):
+        cands = [(5, 7, 0, 2.0), (0, 2, 0, 2.0)]
+        best = best_candidate_per_line(cands)
+        assert best[0] == (0, 2, 2.0)
+
+    def test_empty_input(self):
+        assert best_candidate_per_line([]) == {}
 
 
 class TestFindAnchorCandidates:

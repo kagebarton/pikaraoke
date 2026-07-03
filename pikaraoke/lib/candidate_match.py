@@ -164,6 +164,23 @@ def find_anchor_candidates(
     return candidates
 
 
+def best_candidate_per_line(candidates: list) -> dict[int, tuple[int, int, float]]:
+    """Reduce find_candidates-shaped tuples to one best-scoring hit per line.
+
+    Keeps the highest ``(score, -start_idx)`` entry per ``line_id`` — ties
+    broken toward the earliest start, so a repeated phrase resolves to its
+    first occurrence. For callers that want every competing candidate (e.g.
+    the joint DP), use the raw ``find_candidates`` output directly; this is
+    for callers that need a single reference span per line instead.
+    """
+    best: dict[int, tuple[int, int, float]] = {}
+    for start, end, line_id, score in candidates:
+        cur = best.get(line_id)
+        if cur is None or (score, -start) > (cur[2], -cur[0]):
+            best[line_id] = (start, end, score)
+    return best
+
+
 def _build_line_object(
     text: str, line_id: int, line_toks: list, win_words: list, lookahead: int
 ) -> dict:
