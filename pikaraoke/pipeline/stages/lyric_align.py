@@ -15,15 +15,15 @@ how line objects are built: alignment maps words onto predefined lyric lines
 via the joint matcher; transcription uses stable-ts segments directly as lines.
 
 Each model call is wrapped in its own cancellation activity scope.
-Alignment uses Phase.ALIGN (align + refine in one worker call) then
-Phase.TRANSCRIBE (independent transcribe pass). Transcription mode stays a
-single Phase.TRANSCRIBE call.
+Alignment transcribes first (Phase.TRANSCRIBE, no refine) for the de-reverb
+gate, then aligns (Phase.ALIGN, align + refine in one worker call) once on the
+gated stem. Transcription mode stays a single Phase.TRANSCRIBE call.
 
 On the alignment route, a reverb-washed vocal stem (whole-stem transcribe
 yield below ``dereverb_yield_wpm``) triggers a de-reverb retry: the stem
-worker swaps to the de-reverb roformer, and align + transcribe + the
-joint matcher re-run on the dry stem. Any retry failure keeps the
-wet-stem results — the retry can only improve a song, never fail it.
+worker swaps to the de-reverb roformer and re-transcribes on the dry stem,
+which is then adopted for the single align pass. Any retry failure keeps the
+wet-stem result — the retry can only improve a song, never fail it.
 
 ASS/SRT are written to ctx.tmp_dir first and moved to the final output
 directory only after both writes succeed — preventing orphan files on
@@ -433,8 +433,8 @@ class LyricAlignStage(BaseStage):
         align_lines: list[str],
         cue_spans: list[tuple[float, float]] | None,
     ) -> tuple[list[dict], list[dict], list[dict], dict]:
-        """Run the joint matcher route: align + refine + transcribe (no refine)
-        → joint DP matcher.
+        """Run the joint matcher route: de-reverb gate (transcribe-first) →
+        align + refine on the gated stem → joint DP matcher.
 
         ``cue_spans`` (SRT-sourced lyrics only) feeds the SRT timing
         prior after the audio passes finish.
@@ -444,6 +444,11 @@ class LyricAlignStage(BaseStage):
         capture bundle — both are needed to re-run the joint matcher
         offline at different α values.
         """
+        # Transcribe-first de-reverb gate (shared prefix): transcribe, gate on
+        # yield, adopt a de-reverbed stem if the wet one is reverb-washed. Then
+        # align once on the final stem — one saved align pass when the gate fires.
+        vocal_wav, transcribe_words, dereverb_stats = self._dereverb_gate(ctx, vocal_wav)
+
         align_words = _model_call(
             ctx,
             Phase.ALIGN,
@@ -453,44 +458,6 @@ class LyricAlignStage(BaseStage):
                 cancel_event=ctx.cancel.event if ctx.cancel else None,
             ),
         )
-
-        logger.info(
-            f"[{self.name}] Transcribing (no refine) for joint match: {Path(vocal_wav).name}"
-        )
-        transcribe_words = _model_call(
-            ctx,
-            Phase.TRANSCRIBE,
-            lambda: self._worker.transcribe_words(
-                vocal_path=vocal_wav,
-                cancel_event=ctx.cancel.event if ctx.cancel else None,
-                refine=False,
-            ),
-        )
-
-        # De-reverb retry gate: a reverb-washed stem starves transcribe
-        # (the one corpus case yields 14.4 wpm vs >= 50.5 everywhere
-        # else), which guts both joint scoring and windowed re-align.
-        # Retry the whisper legs on a de-reverbed stem; any failure
-        # keeps the wet-stem results.
-        dereverb_stats: dict | None = None
-        yield_wpm = self._transcribe_yield_wpm(transcribe_words, vocal_wav)
-        if yield_wpm is not None and yield_wpm < self._config.dereverb_yield_wpm:
-            logger.warning(
-                "[%s] transcribe yield %.1f wpm < %.1f — vocal stem looks "
-                "reverb-washed; retrying on a de-reverbed stem",
-                self.name,
-                yield_wpm,
-                self._config.dereverb_yield_wpm,
-            )
-            dereverb_stats = {"yield_wpm": round(yield_wpm, 1), "succeeded": False}
-            retried = self._dereverb_retry(ctx, vocal_wav, lyrics_text)
-            if retried is not None:
-                vocal_wav, align_words, transcribe_words = retried
-                retry_wpm = self._transcribe_yield_wpm(transcribe_words, vocal_wav)
-                dereverb_stats["succeeded"] = True
-                dereverb_stats["retry_yield_wpm"] = (
-                    round(retry_wpm, 1) if retry_wpm is not None else None
-                )
 
         line_objects, joint_stats = match_words_to_lines_joint_with_stats(
             align_words,
@@ -594,6 +561,51 @@ class LyricAlignStage(BaseStage):
             logger.exception("[%s] LRCLIB timing prior failed; keeping audio placements", self.name)
         return line_objects
 
+    def _dereverb_gate(
+        self, ctx: StageContext, vocal_wav: Path
+    ) -> tuple[Path, list[dict], dict | None]:
+        """Transcribe-first de-reverb gate: the shared prefix of the audio routes.
+
+        Transcribe (no refine) on the vocal stem; a reverb-washed stem starves
+        transcribe (the one corpus case yields 14.4 wpm vs >= 50.5 everywhere
+        else), which guts both joint scoring and windowed re-align. Below
+        ``dereverb_yield_wpm`` the stem is de-reverbed and re-transcribed, and
+        the dry stem is adopted; any failure keeps the wet stem. Returns
+        ``(stem_to_align, transcribe_words, dereverb_stats | None)``.
+        """
+        logger.info(
+            f"[{self.name}] Transcribing (no refine) for joint match: {Path(vocal_wav).name}"
+        )
+        transcribe_words = _model_call(
+            ctx,
+            Phase.TRANSCRIBE,
+            lambda: self._worker.transcribe_words(
+                vocal_path=vocal_wav,
+                cancel_event=ctx.cancel.event if ctx.cancel else None,
+                refine=False,
+            ),
+        )
+        dereverb_stats: dict | None = None
+        yield_wpm = self._transcribe_yield_wpm(transcribe_words, vocal_wav)
+        if yield_wpm is not None and yield_wpm < self._config.dereverb_yield_wpm:
+            logger.warning(
+                "[%s] transcribe yield %.1f wpm < %.1f — vocal stem looks "
+                "reverb-washed; retrying on a de-reverbed stem",
+                self.name,
+                yield_wpm,
+                self._config.dereverb_yield_wpm,
+            )
+            dereverb_stats = {"yield_wpm": round(yield_wpm, 1), "succeeded": False}
+            retried = self._dereverb_retry(ctx, vocal_wav)
+            if retried is not None:
+                vocal_wav, transcribe_words = retried
+                retry_wpm = self._transcribe_yield_wpm(transcribe_words, vocal_wav)
+                dereverb_stats["succeeded"] = True
+                dereverb_stats["retry_yield_wpm"] = (
+                    round(retry_wpm, 1) if retry_wpm is not None else None
+                )
+        return vocal_wav, transcribe_words, dereverb_stats
+
     def _transcribe_yield_wpm(self, transcribe_words: list[dict], vocal_wav: Path) -> float | None:
         """Whole-stem transcribe yield in words per minute.
 
@@ -616,13 +628,13 @@ class LyricAlignStage(BaseStage):
         self,
         ctx: StageContext,
         vocal_wav: Path,
-        lyrics_text: str,
-    ) -> tuple[Path, list[dict], list[dict]] | None:
-        """De-reverb the vocal stem and re-run align + transcribe on it.
+    ) -> tuple[Path, list[dict]] | None:
+        """De-reverb the vocal stem and re-transcribe on it.
 
-        Returns ``(dry_vocal_wav, align_words, transcribe_words)``, or
-        None to keep the wet-stem results — a retry must never fail the
-        song. Cancellation always propagates.
+        Returns ``(dry_vocal_wav, transcribe_words)``, or None to keep the
+        wet-stem result — a retry must never fail the song. The single align
+        pass runs on whichever stem the gate returns, so no align happens here.
+        Cancellation always propagates.
         """
         cancel_event = ctx.cancel.event if ctx.cancel else None
         try:
@@ -639,15 +651,6 @@ class LyricAlignStage(BaseStage):
                     ),
                 )
                 self._persist_dereverb(ctx, dry_wav)
-            align_words = _model_call(
-                ctx,
-                Phase.ALIGN,
-                lambda: self._worker.align_refine(
-                    vocal_path=dry_wav,
-                    lyrics_text=lyrics_text,
-                    cancel_event=cancel_event,
-                ),
-            )
             transcribe_words = _model_call(
                 ctx,
                 Phase.TRANSCRIBE,
@@ -666,7 +669,7 @@ class LyricAlignStage(BaseStage):
                 exc,
             )
             return None
-        return dry_wav, align_words, transcribe_words
+        return dry_wav, transcribe_words
 
     def _dereverb_cache_path(self, ctx: StageContext) -> Path:
         """Persisted de-reverb stem location: ``<song>/dereverb/<stem>---dereverb.m4a``.

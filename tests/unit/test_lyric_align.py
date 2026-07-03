@@ -535,8 +535,8 @@ class TestYoutubeSrtProvenance:
 
 class TestDereverbRetry:
     """Low transcribe yield → de-reverb the stem via the stem worker and
-    re-run the whisper legs on the dry stem; any retry failure keeps the
-    wet-stem results."""
+    re-transcribe on the dry stem, then align once on it; any retry failure
+    keeps the wet-stem result."""
 
     def _make(self, tmp_path, monkeypatch, *, duration_s=60.0):
         import pikaraoke.pipeline.stages.lyric_align as la_mod
@@ -559,11 +559,12 @@ class TestDereverbRetry:
         sep_kwargs = stem_worker.separate.call_args.kwargs
         assert sep_kwargs["model_name"] == stage._config.dereverb_model_name
         assert sep_kwargs["wav_path"] == ctx.artifacts["vocal_wav"]
-        # Both whisper legs ran twice: wet pass, then dry retry.
-        assert worker.align_refine.call_count == 2
-        assert worker.align_refine.call_args_list[1].kwargs["vocal_path"] == dry
+        # Transcribe ran twice (wet gate pass, then dry retry); align ran once,
+        # on the adopted dry stem.
         assert worker.transcribe_words.call_count == 2
         assert worker.transcribe_words.call_args_list[1].kwargs["vocal_path"] == dry
+        assert worker.align_refine.call_count == 1
+        assert worker.align_refine.call_args.kwargs["vocal_path"] == dry
         ass_path = ctx.song_path.parent / "karaoke" / f"{ctx.song_path.stem}.ass"
         assert ass_path.exists()
 
@@ -658,11 +659,12 @@ class TestDereverbCache:
         stage.run(ctx)
 
         stem_worker.separate.assert_not_called()
-        # Wet pass + dry retry both ran on whisper.
-        assert worker.align_refine.call_count == 2
+        # Transcribe ran twice (wet gate pass + dry retry); align ran once, on
+        # the adopted dry stem.
         assert worker.transcribe_words.call_count == 2
-        # The retry's dry stem is the decoded cache, not a separation output.
-        assert worker.align_refine.call_args_list[1].kwargs["vocal_path"] == (
+        assert worker.align_refine.call_count == 1
+        # The align's dry stem is the decoded cache, not a separation output.
+        assert worker.align_refine.call_args.kwargs["vocal_path"] == (
             ctx.tmp_dir / f"{ctx.song_path.stem}_dereverb.wav"
         )
 
