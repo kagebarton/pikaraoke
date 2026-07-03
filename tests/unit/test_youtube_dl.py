@@ -1,5 +1,6 @@
 """Unit tests for youtube_dl module."""
 
+import json
 import subprocess
 import sys
 from unittest.mock import MagicMock, PropertyMock, patch
@@ -7,12 +8,35 @@ from unittest.mock import MagicMock, PropertyMock, patch
 import pytest
 
 from pikaraoke.lib.youtube_dl import (
+    _select_asr_track,
     _select_en_srt,
     build_ytdl_download_command,
+    download_auto_en_subs,
     download_manual_en_subs,
     get_youtube_id_from_url,
     get_youtubedl_version,
     upgrade_youtubedl,
+)
+
+# A real-ASR track: per-word segs carry tOffsetMs (word-seg fraction 2/3).
+_ASR_WORD_JSON3 = json.dumps(
+    {
+        "events": [
+            {
+                "tStartMs": 1000,
+                "segs": [
+                    {"utf8": "hello"},
+                    {"utf8": " world", "tOffsetMs": 300},
+                    {"utf8": " again", "tOffsetMs": 600},
+                ],
+            }
+        ]
+    }
+)
+
+# A manual-mirrored / line-level track: no per-word tOffsetMs (fraction 0).
+_ASR_LINE_JSON3 = json.dumps(
+    {"events": [{"tStartMs": 1000, "segs": [{"utf8": "hello world again"}]}]}
 )
 
 
@@ -430,4 +454,98 @@ class TestDownloadManualEnSubs:
             "subprocess.run", side_effect=subprocess.TimeoutExpired("yt-dlp", 60)
         ):
             result = download_manual_en_subs("https://yt/watch?v=x", str(dest), "Song")
+        assert result is None
+
+
+class TestSelectAsrTrack:
+    """Content-based selection of the real ASR json3 track."""
+
+    def test_promotes_word_level_over_line_level(self, tmp_path):
+        # The named-"en" track is actually line-level; the real ASR is "en-orig".
+        (tmp_path / "Song.en.json3").write_text(_ASR_LINE_JSON3, encoding="utf-8")
+        (tmp_path / "Song.en-orig.json3").write_text(_ASR_WORD_JSON3, encoding="utf-8")
+
+        result = _select_asr_track(str(tmp_path), "Song")
+
+        canonical = tmp_path / "Song.en.asr.json3"
+        assert result == str(canonical)
+        assert canonical.read_text(encoding="utf-8") == _ASR_WORD_JSON3
+        # The losing track and the original word file are cleaned up.
+        assert not (tmp_path / "Song.en.json3").exists()
+        assert not (tmp_path / "Song.en-orig.json3").exists()
+
+    def test_none_when_all_line_level(self, tmp_path):
+        (tmp_path / "Song.en.json3").write_text(_ASR_LINE_JSON3, encoding="utf-8")
+        (tmp_path / "Song.en-en.json3").write_text(_ASR_LINE_JSON3, encoding="utf-8")
+
+        assert _select_asr_track(str(tmp_path), "Song") is None
+        # All junk tracks dropped so a later run does not re-evaluate them.
+        assert not (tmp_path / "Song.en.json3").exists()
+        assert not (tmp_path / "Song.en-en.json3").exists()
+
+    def test_ignores_other_stems_and_non_json3(self, tmp_path):
+        (tmp_path / "Other.en.json3").write_text(_ASR_WORD_JSON3, encoding="utf-8")
+        (tmp_path / "Song.en.srt").write_text("1\n", encoding="utf-8")
+        assert _select_asr_track(str(tmp_path), "Song") is None
+        # An unrelated stem and a manual SRT are left untouched.
+        assert (tmp_path / "Other.en.json3").exists()
+        assert (tmp_path / "Song.en.srt").exists()
+
+    def test_none_when_no_tracks(self, tmp_path):
+        assert _select_asr_track(str(tmp_path), "Song") is None
+
+
+class TestDownloadAutoEnSubs:
+    """Tests for downloading the auto-generated (ASR) caption via yt-dlp."""
+
+    def test_success_builds_json3_command_and_returns_path(self, tmp_path):
+        dest = tmp_path / "subtitles"
+        captured = {}
+
+        def fake_run(cmd, **kwargs):
+            captured["cmd"] = cmd
+            dest.mkdir(parents=True, exist_ok=True)
+            (dest / "Song.en.json3").write_text(_ASR_WORD_JSON3, encoding="utf-8")
+            return MagicMock(returncode=0, stdout=b"", stderr=b"")
+
+        with _default_patches()[0], _default_patches()[1], patch(
+            "subprocess.run", side_effect=fake_run
+        ):
+            result = download_auto_en_subs("https://yt/watch?v=x", str(dest), "Song")
+
+        assert result == str(dest / "Song.en.asr.json3")
+        cmd = captured["cmd"]
+        assert "--write-auto-subs" in cmd
+        assert cmd[cmd.index("--sub-format") + 1] == "json3"
+        # Never convert: that would collapse the per-word timing.
+        assert "--convert-subs" not in cmd
+
+    def test_line_level_caption_returns_none(self, tmp_path):
+        dest = tmp_path / "subtitles"
+
+        def fake_run(cmd, **kwargs):
+            dest.mkdir(parents=True, exist_ok=True)
+            (dest / "Song.en.json3").write_text(_ASR_LINE_JSON3, encoding="utf-8")
+            return MagicMock(returncode=0, stdout=b"", stderr=b"")
+
+        with _default_patches()[0], _default_patches()[1], patch(
+            "subprocess.run", side_effect=fake_run
+        ):
+            result = download_auto_en_subs("https://yt/watch?v=x", str(dest), "Song")
+        assert result is None
+
+    def test_nonzero_returncode_returns_none(self, tmp_path):
+        dest = tmp_path / "subtitles"
+        with _default_patches()[0], _default_patches()[1], patch(
+            "subprocess.run", return_value=MagicMock(returncode=1, stdout=b"", stderr=b"boom")
+        ):
+            result = download_auto_en_subs("https://yt/watch?v=x", str(dest), "Song")
+        assert result is None
+
+    def test_timeout_returns_none(self, tmp_path):
+        dest = tmp_path / "subtitles"
+        with _default_patches()[0], _default_patches()[1], patch(
+            "subprocess.run", side_effect=subprocess.TimeoutExpired("yt-dlp", 60)
+        ):
+            result = download_auto_en_subs("https://yt/watch?v=x", str(dest), "Song")
         assert result is None

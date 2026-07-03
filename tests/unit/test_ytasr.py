@@ -1,0 +1,117 @@
+"""Tests for the YouTube auto-caption (ASR) parse/gate/map helpers (lib/ytasr.py)."""
+
+import json
+
+from pikaraoke.lib import ytasr
+from pikaraoke.lib.token_align import _normalize_token
+
+
+def _seg(text, offset=None):
+    seg = {"utf8": text}
+    if offset is not None:
+        seg["tOffsetMs"] = offset
+    return seg
+
+
+def _json3(events):
+    return json.dumps({"events": events})
+
+
+def _words_from(tokens, step=0.5):
+    """Synthetic word stream: evenly spaced, norms from the real tokenizer."""
+    return [
+        {"word": t, "norm": _normalize_token(t), "start": i * step, "end": i * step + step}
+        for i, t in enumerate(tokens)
+    ]
+
+
+class TestParseJson3:
+    def test_offset_math_and_word_spans(self):
+        # First word carries no tOffsetMs (sits at the event start); the second
+        # is offset 500ms into the event.
+        events = [{"tStartMs": 1000, "segs": [_seg("hello"), _seg(" world", 500)]}]
+        words, frac = ytasr.parse_json3(_json3(events))
+
+        assert [w["word"] for w in words] == ["hello", "world"]
+        assert words[0]["start"] == 1.0
+        assert words[1]["start"] == 1.5
+        # end = next word's start; the last word holds LAST_WORD_HOLD_S.
+        assert words[0]["end"] == 1.5
+        assert words[1]["end"] == 1.5 + ytasr.LAST_WORD_HOLD_S
+
+    def test_word_seg_fraction_counts_offset_segs(self):
+        # 3 non-empty segs, 2 carry tOffsetMs -> 2/3.
+        events = [{"tStartMs": 0, "segs": [_seg("a"), _seg(" b", 100), _seg(" c", 200)]}]
+        _, frac = ytasr.parse_json3(_json3(events))
+        assert frac == 2 / 3
+
+    def test_filters_music_notes_and_parens(self):
+        events = [
+            {
+                "tStartMs": 1000,
+                "segs": [
+                    _seg("[Music]", 0),
+                    _seg("♪", 100),
+                    _seg("(applause)", 200),
+                    _seg(" hello", 300),
+                ],
+            }
+        ]
+        words, frac = ytasr.parse_json3(_json3(events))
+
+        assert [w["word"] for w in words] == ["hello"]
+        # The fraction is measured on raw segs (before the filter), so a track
+        # whose tags carry offsets isn't flattered into looking line-level.
+        assert frac == 1.0
+
+    def test_whitespace_only_segs_skipped(self):
+        # The "\n" roll-up separators must not count toward the seg total.
+        events = [{"tStartMs": 0, "segs": [_seg("\n"), _seg("hello", 0), _seg("\n")]}]
+        words, frac = ytasr.parse_json3(_json3(events))
+        assert [w["word"] for w in words] == ["hello"]
+        assert frac == 1.0
+
+    def test_word_end_capped_across_gaps(self):
+        # end is inferred from the next word's start, so the word before an
+        # instrumental break would otherwise inherit the whole gap.
+        events = [
+            {"tStartMs": 1000, "segs": [_seg("hello", 0)]},
+            {"tStartMs": 31000, "segs": [_seg("again", 0)]},
+        ]
+        words, _ = ytasr.parse_json3(_json3(events))
+        assert words[0]["end"] == 1.0 + ytasr.MAX_WORD_DUR_S
+
+    def test_dedupes_consecutive_rollup(self):
+        # Same word at the same start repeated by the rolling window collapses;
+        # the same word at a later start is kept.
+        events = [
+            {"tStartMs": 1000, "segs": [_seg("hello", 0)]},
+            {"tStartMs": 1000, "segs": [_seg("hello", 0)]},
+            {"tStartMs": 2000, "segs": [_seg("hello", 0)]},
+        ]
+        words, _ = ytasr.parse_json3(_json3(events))
+        assert [w["start"] for w in words] == [1.0, 2.0]
+
+
+class TestIsUsable:
+    def test_rejects_line_level_track(self):
+        # 0% word-seg fraction == manual-mirrored / line-level.
+        words = _words_from(["a", "b", "c"])
+        assert ytasr.is_usable(words, 0.0, media_dur=180) is False
+
+    def test_rejects_sparse_music_degeneracy(self):
+        # 5 real words over a 5-minute song == 1 wpm, well under the floor.
+        words = _words_from(["a", "b", "c", "d", "e"])
+        assert ytasr.is_usable(words, 0.8, media_dur=300) is False
+
+    def test_accepts_dense_real_asr(self):
+        # 100 words over 5 minutes == 20 wpm, above MIN_CAPTION_WPM.
+        words = _words_from(["w"] * 100)
+        assert ytasr.is_usable(words, 0.8, media_dur=300) is True
+
+    def test_rejects_when_duration_unknown(self):
+        # Without a duration the density gate can't run, so bail (drop ytasr)
+        # rather than adopt a possibly-degenerate caption unchecked.
+        words = _words_from(["a", "b"])
+        assert ytasr.is_usable(words, 0.8, media_dur=None) is False
+        assert ytasr.is_usable(words, 0.8, media_dur=0) is False
