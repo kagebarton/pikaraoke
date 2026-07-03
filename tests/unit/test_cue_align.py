@@ -583,6 +583,30 @@ class TestRepaceBadLines:
         assert out[4] is objs[4]
         assert stats["n_repaced"] == 0 and stats["n_realigned"] == 0
 
+    def test_displaced_identical_repeat_is_flagged(self):
+        # Six identical chant lines; line 2's words landed two repeat periods
+        # late (on line 4's occurrence). It is internally clean, so clean-trust
+        # would keep it stacked on its twin -- identical-text runs demand
+        # containment instead, and the line falls to the cue fill.
+        objs, cues, lines = _anchor_lines(6)
+        objs[2] = _line(2, "a a", ("a", 8.0, 8.3), ("a", 8.4, 8.8))
+        out, stats = repace_bad_lines(objs, cues, lines, lines)
+        assert out[2]["source"] == SOURCE_FILL
+        assert out[2]["start"] == pytest.approx(4.0)
+        assert out[2]["end"] == pytest.approx(5.0)
+        assert stats["n_repaced"] == 1
+        assert out[1] is objs[1]  # correctly-placed repeats untouched
+
+    def test_jittered_identical_repeat_stays_trusted(self):
+        # Within a repeat run the containment slack is half the repeat period
+        # (1.0 s here), not PAUSE_SLACK_S: a line 0.7 s past its cue is
+        # ordinary caption jitter, far from the aliasing boundary, and stays.
+        objs, cues, lines = _anchor_lines(6)
+        objs[2] = _line(2, "a a", ("a", 4.7, 5.0), ("a", 5.1, 5.5))
+        out, stats = repace_bad_lines(objs, cues, lines, lines)
+        assert out[2] is objs[2]
+        assert stats["n_repaced"] == 0 and stats["n_realigned"] == 0
+
     def test_fill_for_cue_past_duration_stays_inside_audio(self):
         # SRT cue starts after the media ends (trimmed video): the fill must
         # not emit words past the real song end.

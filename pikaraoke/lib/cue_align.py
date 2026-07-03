@@ -530,8 +530,12 @@ def repace_bad_lines(
     A line is *bad* if it has no usable words (under-covered), is mostly
     instant words, or holds an internal word-gap over ``drift_gap_s`` while
     overrunning its offset-corrected cue span (a wide gap *inside* the span is
-    a caption-covered pause, not drift -- see :func:`_line_is_good`). The
-    display-lead offset comes from :func:`fit_offset` over the clean lines.
+    a caption-covered pause, not drift -- see :func:`_line_is_good`). Lines in
+    a run of identical text skip that clean-trust: a repeat displaced onto a
+    neighbouring occurrence comes back internally clean, so detection demands
+    containment there, with slack widened to half the repeat period
+    (:func:`_repeat_detection_slacks`). The display-lead offset comes from
+    :func:`fit_offset` over the clean lines.
 
     Each bad line is rescued in two steps: ``realign(lid, t0, t1)`` -- an
     injected narrow per-line forced align over the offset-corrected window,
@@ -548,12 +552,20 @@ def repace_bad_lines(
         line_objects, cue_spans, align_lines, drift_gap_s=drift_gap_s, min_anchors=min_anchors
     )
     line_toks = _tokenise_lines(align_lines)
+    repeat_slacks = _repeat_detection_slacks(line_toks, cue_spans)
     out: list[dict] = []
     repaced: list[int] = []
     realigned: list[int] = []
     for obj in line_objects:
         lid = obj["line_id"]
-        if lid >= len(cue_spans) or _line_is_good(obj, cue_spans[lid], offset, drift_gap_s):
+        if lid >= len(cue_spans):
+            out.append(obj)
+            continue
+        if lid in repeat_slacks:
+            good = _line_in_span(obj, cue_spans[lid], offset, slack=repeat_slacks[lid])
+        else:
+            good = _line_is_good(obj, cue_spans[lid], offset, drift_gap_s)
+        if good:
             out.append(obj)
             continue
         toks = line_toks[lid]
@@ -631,16 +643,20 @@ def _line_is_good(
     demoting every such line to a paced fill replaces real audio timing
     wholesale (a 5x flag-rate blowup on the SRT corpus). Only a per-line
     re-align's *result* is gated on containment alone (:func:`_line_in_span`),
-    because there displacement is the failure mode being screened for.
+    because there displacement is the failure mode being screened for --
+    and lines in identical-text runs never reach this clean-trust path
+    (:func:`_repeat_detection_slacks`).
     """
     if _line_is_clean(obj, drift_gap_s):
         return True
     return _line_in_span(obj, cue_span, offset)
 
 
-def _line_in_span(obj: dict, cue_span: tuple[float, float], offset: float) -> bool:
+def _line_in_span(
+    obj: dict, cue_span: tuple[float, float], offset: float, slack: float = PAUSE_SLACK_S
+) -> bool:
     """Has words, is not mostly instant, and sits inside its offset-corrected
-    cue span (within :data:`PAUSE_SLACK_S`).
+    cue span (within ``slack``).
 
     A wide internal gap *inside* the span is a caption-covered pause, not
     drift, while a parked tail overruns the span and fails. Containment is
@@ -654,7 +670,36 @@ def _line_in_span(obj: dict, cue_span: tuple[float, float], offset: float) -> bo
     if _instant_fraction(words) > MAX_INSTANT_FRACTION:
         return False
     c0, c1 = cue_span
-    return obj["start"] >= c0 + offset - PAUSE_SLACK_S and obj["end"] <= c1 + offset + PAUSE_SLACK_S
+    return obj["start"] >= c0 + offset - slack and obj["end"] <= c1 + offset + slack
+
+
+def _repeat_detection_slacks(
+    line_toks: list[list[tuple[str, str]]],
+    cue_spans: list[tuple[float, float]],
+) -> dict[int, float]:
+    """Containment slack per line in a run of identical text, else absent.
+
+    A repeat the section align displaced onto a neighbouring occurrence comes
+    back internally clean, so clean-trust cannot see it -- and the displacement
+    is a whole repeat period, not caption-jitter scale. For these lines only,
+    detection requires containment, with slack at half the distance to the
+    nearest identical neighbour's cue start (the aliasing decision boundary),
+    never tighter than :data:`PAUSE_SLACK_S` so ordinary jitter still passes.
+    """
+    norms = [" ".join(norm for norm, _raw in toks) for toks in line_toks]
+    slacks: dict[int, float] = {}
+    n = min(len(norms), len(cue_spans))
+    for lid in range(n):
+        if not norms[lid]:
+            continue
+        periods = [
+            abs(cue_spans[nbr][0] - cue_spans[lid][0])
+            for nbr in (lid - 1, lid + 1)
+            if 0 <= nbr < n and norms[nbr] == norms[lid]
+        ]
+        if periods:
+            slacks[lid] = max(PAUSE_SLACK_S, min(periods) / 2)
+    return slacks
 
 
 def fit_offset(
