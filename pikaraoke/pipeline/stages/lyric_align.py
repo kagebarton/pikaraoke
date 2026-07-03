@@ -42,7 +42,7 @@ import srt
 from pikaraoke.lib import alignment_capture, ytasr
 from pikaraoke.lib.genius_lyrics import parse_lyric_lines
 from pikaraoke.lib.joint_match import match_words_to_lines_joint_with_stats
-from pikaraoke.lib.srt_prior import cue_spans_from_srt
+from pikaraoke.lib.srt_cues import cue_spans_from_srt
 from pikaraoke.lib.windowed_realign import (
     analyze_pass1,
     build_spans,

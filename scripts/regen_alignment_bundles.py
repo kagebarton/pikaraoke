@@ -74,7 +74,7 @@ from pikaraoke.lib.metadata_parser import (  # noqa: E402
     youtube_id_suffix,
 )
 from pikaraoke.lib.preference_manager import PreferenceManager  # noqa: E402
-from pikaraoke.lib.srt_prior import cue_spans_from_srt  # noqa: E402
+from pikaraoke.lib.srt_cues import cue_spans_from_srt  # noqa: E402
 from pikaraoke.lib.youtube_dl import download_manual_en_subs  # noqa: E402
 from pikaraoke.pipeline.config import PipelineConfig  # noqa: E402
 from pikaraoke.pipeline.context import StageContext  # noqa: E402
