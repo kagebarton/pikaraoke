@@ -463,6 +463,68 @@ class TestWindowedRealign:
 
 
 # ---------------------------------------------------------------------------
+# Cue-align route (SRT songs)
+# ---------------------------------------------------------------------------
+
+
+class TestCueAlignRoute:
+    """SRT songs route through the cue-anchored windowed aligner, not the
+    joint matcher; the de-reverb gate is shared with the joint route."""
+
+    def _make_srt(self, tmp_path, monkeypatch):
+        import pikaraoke.pipeline.stages.lyric_align as la_mod
+
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path)
+        subs = ctx.song_path.parent / "subtitles"
+        subs.mkdir()
+        srt_path = subs / f"{ctx.song_path.stem}.en.srt"
+        srt_path.write_text(
+            "1\n00:00:10,000 --> 00:00:12,000\nglowing river\n"
+            "\n2\n00:00:13,000 --> 00:00:15,000\nphantom parade\n",
+            encoding="utf-8",
+        )
+        ctx.artifacts["lyrics_path"] = srt_path
+        ctx.artifacts["lyrics_origin"] = "srt"
+        # One section (1 s inter-cue gap < 1.5 s). Slice-relative words land on
+        # the cues after the +t0 (=9.25 s) shift: glowing@10, river@11,
+        # phantom@13, parade@14.
+        worker.align_refine.return_value = [
+            {"word": "glowing", "start": 0.75, "end": 1.15},
+            {"word": "river", "start": 1.75, "end": 2.15},
+            {"word": "phantom", "start": 3.75, "end": 4.15},
+            {"word": "parade", "start": 4.75, "end": 5.15},
+        ]
+        monkeypatch.setattr(la_mod, "run_ffmpeg", lambda cmd, _ctx, _phase: None)
+        monkeypatch.setattr(la_mod, "_wav_duration", lambda _p: 30.0)
+        return stage, ctx, worker, la_mod
+
+    def test_srt_routes_cue_align_not_joint(self, tmp_path, monkeypatch):
+        stage, ctx, worker, la_mod = self._make_srt(tmp_path, monkeypatch)
+        joint = MagicMock()
+        monkeypatch.setattr(la_mod, "match_words_to_lines_joint_with_stats", joint)
+
+        stage.run(ctx)
+
+        joint.assert_not_called()
+        # Section slice force-aligned once; no re-pace realign needed (clean).
+        worker.align_refine.assert_called_once()
+        assert (
+            worker.align_refine.call_args.kwargs["lyrics_text"] == "glowing river\nphantom parade"
+        )
+        ass_path = ctx.song_path.parent / "karaoke" / f"{ctx.song_path.stem}.ass"
+        assert ass_path.exists()
+        assert ass_path.read_text(encoding="utf-8").count("Dialogue:") == 2
+        assert ctx.artifacts["lyric_method"] == "srt+cue_align"
+
+    def test_srt_shares_dereverb_gate(self, tmp_path, monkeypatch):
+        # Gate transcribes once even though the cue route never uses the words.
+        stage, ctx, worker, _ = self._make_srt(tmp_path, monkeypatch)
+        stage.run(ctx)
+        worker.transcribe_words.assert_called_once()
+        assert worker.transcribe_words.call_args.kwargs["refine"] is False
+
+
+# ---------------------------------------------------------------------------
 # Genius identity capture
 # ---------------------------------------------------------------------------
 

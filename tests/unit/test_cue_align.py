@@ -7,6 +7,7 @@ from pikaraoke.lib.cue_align import (
     SOURCE_FILL,
     SOURCE_REALIGN,
     Section,
+    align_song,
     fit_offset,
     repace_bad_lines,
     segment_by_gaps,
@@ -488,3 +489,83 @@ class TestFitOffset:
         cues = [(0.0, 1.0)]
         objs = [_line(0, "a", ("a", 0.4, 0.7))]
         assert fit_offset(objs, cues, ["a"]) == 0.0
+
+
+def _stub_aligner(words_for):
+    """Injectable slice_align that records its calls and returns ``words_for``."""
+    calls: list[tuple] = []
+
+    def slice_align(t0, t1, text, label):
+        calls.append((t0, t1, text, label))
+        return words_for(t0, t1, text, label)
+
+    slice_align.calls = calls
+    return slice_align
+
+
+# Four "a a" lines at cues 1 s apart -> a single section (gaps < SECTION_GAP_S).
+_SONG_CUES = [(0.0, 1.0), (2.0, 3.0), (4.0, 5.0), (6.0, 7.0)]
+_SONG_LINES = ["a a", "a a", "a a", "a a"]
+
+
+def _on_cue_words(shift: float = 0.0) -> list[dict]:
+    """Two words per line placed inside each (shifted) cue span."""
+    return _words(
+        *[
+            (tok, c0 + shift + 0.5 * k, c0 + shift + 0.5 * k + 0.4)
+            for c0, _c1 in _SONG_CUES
+            for k, tok in enumerate(("a", "a"))
+        ]
+    )
+
+
+class TestAlignSong:
+    """The cue-align driver: sectioning, offset re-section, and re-pace, with
+    the forced aligner injected so the orchestration is exercised purely."""
+
+    def test_clean_song_uses_aligned_words_one_pass(self):
+        aligner = _stub_aligner(lambda *_: _on_cue_words())
+        objs, stats = align_song(_SONG_CUES, _SONG_LINES, _SONG_LINES, 8.0, aligner)
+
+        assert [o["line_id"] for o in objs] == [0, 1, 2, 3]
+        assert all(o["source"] == SOURCE for o in objs)
+        assert stats["n_sections"] == 1
+        assert stats["resectioned"] is False
+        assert stats["repace"]["n_repaced"] == 0
+        assert stats["repace"]["n_realigned"] == 0
+        # One section pass, no per-line rescue; label names the section.
+        assert len(aligner.calls) == 1
+        assert "section" in aligner.calls[0][3]
+
+    def test_large_display_lead_triggers_resection(self):
+        # Aligner reports every line ~1.5 s late (> SECTION_PAD_S): the driver
+        # re-sections once on offset-shifted cues, after which the words match.
+        aligner = _stub_aligner(lambda *_: _on_cue_words(shift=1.5))
+        objs, stats = align_song(_SONG_CUES, _SONG_LINES, _SONG_LINES, 12.0, aligner)
+
+        assert stats["resectioned"] is True
+        assert stats["offset_s"] == pytest.approx(1.5, abs=0.05)
+        # Two section passes (initial + re-section), no per-line rescue needed.
+        assert len(aligner.calls) == 2
+        assert all(o["source"] == SOURCE for o in objs)
+
+    def test_unplaceable_section_repaces_from_cues(self):
+        # Aligner can place nothing: every line is rescued by a per-line realign
+        # (also None) and then filled from its cue span.
+        aligner = _stub_aligner(lambda *_: None)
+        objs, stats = align_song(_SONG_CUES, _SONG_LINES, _SONG_LINES, 8.0, aligner)
+
+        assert all(o["source"] == SOURCE_FILL for o in objs)
+        assert stats["repace"]["n_repaced"] == 4
+        # One section pass + one per-line realign attempt for each of 4 lines.
+        assert len(aligner.calls) == 1 + 4
+        assert any("line" in c[3] for c in aligner.calls)
+
+    def test_unreadable_duration_still_produces_output(self):
+        # duration=None (stem duration unreadable) must not crash; the fill
+        # windows simply lose their audio-end clamp.
+        aligner = _stub_aligner(lambda *_: None)
+        objs, stats = align_song(_SONG_CUES, _SONG_LINES, _SONG_LINES, None, aligner)
+
+        assert [o["line_id"] for o in objs] == [0, 1, 2, 3]
+        assert all(o["source"] == SOURCE_FILL for o in objs)

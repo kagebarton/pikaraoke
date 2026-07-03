@@ -32,6 +32,7 @@ cancellation.
 
 import dataclasses
 import datetime
+import itertools
 import logging
 import shutil
 import wave
@@ -40,6 +41,7 @@ from pathlib import Path
 import srt
 
 from pikaraoke.lib import alignment_capture, ytasr
+from pikaraoke.lib.cue_align import align_song
 from pikaraoke.lib.genius_lyrics import parse_lyric_lines
 from pikaraoke.lib.joint_match import match_words_to_lines_joint_with_stats
 from pikaraoke.lib.srt_cues import cue_spans_from_srt
@@ -96,26 +98,32 @@ class LyricAlignStage(BaseStage):
         capture_method_used: str | None = None
 
         if lyrics_path is not None:
-            # --- Alignment mode (joint matcher) ---
-            lyrics_lines, align_lines, _ = self._load_lyrics(lyrics_path)
-            lyrics_text = "\n".join(align_lines)
-
+            # --- Alignment mode ---
+            lyrics_lines, align_lines, cue_spans = self._load_lyrics(lyrics_path)
             logger.info(f"[{self.name}] Aligning lyrics to vocal stem: {Path(vocal_wav).name}")
 
-            (
-                line_objects,
-                capture_words,
-                capture_transcribe_words,
-                capture_joint_stats,
-            ) = self._run_joint(
-                ctx,
-                vocal_wav,
-                lyrics_text,
-                lyrics_lines,
-                align_lines,
-            )
-            capture_words_source = "refine"
-            capture_method_used = "joint"
+            if cue_spans:
+                # SRT: cue-anchored windowed align driven by the uploader cues.
+                line_objects, capture_joint_stats = self._run_cue_align(
+                    ctx, vocal_wav, lyrics_lines, align_lines, cue_spans
+                )
+                capture_method_used = "cue_align"
+            else:
+                # txt/genius: joint DP matcher (align + transcribe + optional ytasr).
+                (
+                    line_objects,
+                    capture_words,
+                    capture_transcribe_words,
+                    capture_joint_stats,
+                ) = self._run_joint(
+                    ctx,
+                    vocal_wav,
+                    "\n".join(align_lines),
+                    lyrics_lines,
+                    align_lines,
+                )
+                capture_words_source = "refine"
+                capture_method_used = "joint"
 
             write_srt = self._should_write_srt(ctx.song_path)
         else:
@@ -496,6 +504,51 @@ class LyricAlignStage(BaseStage):
                 )
         return line_objects, align_words, transcribe_words, joint_stats
 
+    def _run_cue_align(
+        self,
+        ctx: StageContext,
+        vocal_wav: Path,
+        display_lines: list[str],
+        align_lines: list[str],
+        cue_spans: list[tuple[float, float]],
+    ) -> tuple[list[dict], dict]:
+        """Cue-anchored windowed align for SRT songs — uploader cues drive it.
+
+        Shares the transcribe-first de-reverb gate with the joint route, then
+        hands the (possibly de-reverbed) stem's cue windows to
+        :func:`cue_align.align_song`, injecting :meth:`_slice_align` as the
+        forced aligner. All the sectioning/offset/re-pace logic lives in the
+        library; this method only wires I/O and the audio duration.
+
+        Returns ``(line_objects, stats)`` — the cue-align telemetry (section
+        count, offset, re-pace + de-reverb sub-stats) for the debug bundle.
+        """
+        # Shared de-reverb gate: adopt the dry stem when the wet one is
+        # reverb-washed. The cue route is cue-driven, so the gate's transcribe
+        # words are unused here.
+        vocal_wav, _transcribe_words, dereverb_stats = self._dereverb_gate(ctx, vocal_wav)
+        try:
+            duration: float | None = _wav_duration(vocal_wav)
+        except (wave.Error, OSError, EOFError):
+            # Unreadable stem: without a clamp the cue windows can't be bounded,
+            # so align_song degrades to cue-paced timing rather than crashing.
+            logger.warning("[%s] cue-align: vocal duration unreadable; cue-pacing", self.name)
+            duration = None
+
+        slice_counter = itertools.count()
+
+        def slice_align(t0: float, t1: float, text: str, label: str) -> list[dict] | None:
+            return self._slice_align(
+                ctx, vocal_wav, t0, t1, text, f"cue_slice{next(slice_counter):03d}.wav", label
+            )
+
+        line_objects, stats = align_song(
+            cue_spans, display_lines, align_lines, duration, slice_align
+        )
+        if dereverb_stats is not None:
+            stats["dereverb"] = dereverb_stats
+        return line_objects, stats
+
     def _ytasr_words(self, ctx: StageContext) -> list[dict] | None:
         """Words from the adopted YouTube ASR caption, for the joint 3rd source.
 
@@ -792,6 +845,68 @@ class LyricAlignStage(BaseStage):
         telemetry["n_spans_kept_pass1"] = sum(1 for r in results if r is None)
         return merge_spans(line_objects, todo, results, len(lyrics_lines), align_words)
 
+    def _slice_align(
+        self,
+        ctx: StageContext,
+        vocal_wav: Path,
+        t0: float,
+        t1: float,
+        text: str,
+        slice_name: str,
+        label: str,
+    ) -> list[dict] | None:
+        """Slice ``[t0, t1]`` from ``vocal_wav``, force-align ``text`` over it,
+        and return the words shifted to absolute song time.
+
+        None when the slice align failed — ffmpeg errored or stable-ts gave up
+        on a slice it could not align (surfaced as a worker RuntimeError). A
+        dead worker restarts on the next job, so it degrades like any other
+        failure; the caller carries the affected region. Cancellation
+        propagates. Shared by the windowed re-align and cue-align routes.
+        """
+        slice_path = ctx.tmp_dir / slice_name
+        try:
+            # -ss/-to as input options: sample-exact for PCM WAV and
+            # seeks instead of decoding everything before t0.
+            run_ffmpeg(
+                [
+                    "ffmpeg",
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-y",
+                    "-ss",
+                    f"{t0:.3f}",
+                    "-to",
+                    f"{t1:.3f}",
+                    "-i",
+                    str(vocal_wav),
+                    str(slice_path),
+                ],
+                ctx,
+                Phase.EXTRACT,
+            )
+            words = _model_call(
+                ctx,
+                Phase.ALIGN,
+                lambda: self._worker.align_refine(
+                    vocal_path=slice_path,
+                    lyrics_text=text,
+                    cancel_event=ctx.cancel.event if ctx.cancel else None,
+                ),
+            )
+        except PipelineCancelled:
+            raise
+        except Exception as exc:
+            logger.warning("[%s] %s slice-align failed, degrading: %s", self.name, label, exc)
+            return None
+        finally:
+            slice_path.unlink(missing_ok=True)
+        for w in words:
+            w["start"] += t0
+            w["end"] += t0
+        return words
+
     def _realign_one_span(
         self,
         ctx: StageContext,
@@ -813,55 +928,17 @@ class LyricAlignStage(BaseStage):
         sub_lines = span_align_lines(span, align_lines)
         if sub_lines is None:
             return None, None
-        slice_path = ctx.tmp_dir / f"realign_span{span_idx:02d}.wav"
-        try:
-            # -ss/-to as input options: sample-exact for PCM WAV and
-            # seeks instead of decoding everything before t0.
-            run_ffmpeg(
-                [
-                    "ffmpeg",
-                    "-hide_banner",
-                    "-loglevel",
-                    "error",
-                    "-y",
-                    "-ss",
-                    f"{span['t0']:.3f}",
-                    "-to",
-                    f"{span['t1']:.3f}",
-                    "-i",
-                    str(vocal_wav),
-                    str(slice_path),
-                ],
-                ctx,
-                Phase.EXTRACT,
-            )
-            words = _model_call(
-                ctx,
-                Phase.ALIGN,
-                lambda: self._worker.align_refine(
-                    vocal_path=slice_path,
-                    lyrics_text="\n".join(sub_lines),
-                    cancel_event=ctx.cancel.event if ctx.cancel else None,
-                ),
-            )
-        except PipelineCancelled:
-            raise
-        except Exception as exc:
-            # A dead worker is also just a degraded span: the next
-            # worker job auto-restarts the subprocess.
-            logger.warning(
-                "[%s] span L%d-%d re-align failed, keeping pass-1: %s",
-                self.name,
-                span["lid_lo"],
-                span["lid_hi"],
-                exc,
-            )
+        words = self._slice_align(
+            ctx,
+            vocal_wav,
+            span["t0"],
+            span["t1"],
+            "\n".join(sub_lines),
+            f"realign_span{span_idx:02d}.wav",
+            f"span L{span['lid_lo']}-{span['lid_hi']}",
+        )
+        if words is None:
             return None, None
-        finally:
-            slice_path.unlink(missing_ok=True)
-        for w in words:
-            w["start"] += span["t0"]
-            w["end"] += span["t0"]
         replay_result = replay_span(
             span,
             words,

@@ -1,17 +1,17 @@
 """Cue-anchored windowed alignment: word timings from trusted SRT line cues.
 
-A standalone alternative to the global joint-matcher path, for songs whose
-lyrics come from an uploader-synced SRT. The SRT already solves the matcher's
-job -- line -> time, 1:1 -- so this path never places lines from audio. It
-only derives per-word timing *within* the trusted cue structure, which makes
-the global-placement artifacts (candidate straddle, repeat pile-up,
-slow-crawl) structurally impossible rather than something to patch.
+The production path for SRT songs (the joint matcher handles txt/genius).
+The SRT already solves the matcher's job -- line -> time, 1:1 -- so this path
+never places lines from audio. It only derives per-word timing *within* the
+trusted cue structure, which makes the global-placement artifacts (candidate
+straddle, repeat pile-up, slow-crawl) structurally impossible rather than
+something to patch.
 
-Pipeline-free by design: every function here is pure. All GPU/ffmpeg I/O
-lives in ``scripts/cue_align_song.py`` and is injected (the forced aligner is
-a callable). The module emits the same ``line_objects`` shape the existing
-ASS/SRT generators consume, so it plugs into the renderer unchanged and is
-one swap away from graduating into the pipeline.
+Pipeline-agnostic by design: every function here is pure. :func:`align_song`
+is the driver, but all GPU/ffmpeg I/O is injected as its ``slice_align``
+callable, so the caller owns the audio. ``LyricAlignStage`` routes SRT songs
+here, injecting its forced aligner; the module emits the same ``line_objects``
+shape the existing ASS/SRT generators consume.
 
 Approach:
 
@@ -579,3 +579,81 @@ def _line_object(lid: int, text: str, words: list[dict], *, source: str = SOURCE
         "end": words[-1]["end"] if words else None,
         "source": source,
     }
+
+
+def align_song(
+    cue_spans: list[tuple[float, float]],
+    display_lines: list[str],
+    align_lines: list[str],
+    duration: float | None,
+    slice_align: Callable[[float, float, str, str], list[dict] | None],
+    *,
+    pad_s: float = SECTION_PAD_S,
+) -> tuple[list[dict], dict]:
+    """Windowed-align one song from its 1:1 per-line cue spans.
+
+    The cue-align driver: segment the cues into silence-bounded sections
+    (:func:`segment_by_gaps`), force-align each section's window once via the
+    injected ``slice_align`` (``(t0, t1, text, label) -> absolute-time words or
+    None``), split the words back to lines (:func:`split_section_to_lines`), fit
+    the display lead (:func:`fit_offset`) and -- when it exceeds ``pad_s``, past
+    which every section window clips its leading words -- re-section once on
+    offset-shifted cues, then re-pace the lines the align could not place
+    (:func:`repace_bad_lines`, with a narrow per-line ``slice_align`` rescue).
+
+    ``duration`` clamps the section/fill windows to the audio; ``None`` (an
+    unreadable stem) drops the clamp and the song degrades to cue-paced timing.
+    All GPU/ffmpeg I/O lives behind ``slice_align``, so this stays pure and
+    ``test_cue_align`` can drive it with a stub aligner.
+
+    Returns ``(line_objects, stats)``; ``stats`` carries the section count, the
+    fitted offset, whether a re-section fired, and the repace sub-stats.
+    """
+
+    def align_pass(spans: list[tuple[float, float]]) -> tuple[list[dict], int]:
+        sections = segment_by_gaps(spans, duration=duration)
+        logger.info("cue-align: %d cues -> %d sections", len(spans), len(sections))
+        objs: list[dict] = []
+        for section in sections:
+            sub_text = "\n".join(align_lines[lid] for lid in section.line_ids)
+            words = slice_align(
+                section.t0, section.t1, sub_text, f"section lines {section.lid_lo}-{section.lid_hi}"
+            )
+            objs.extend(
+                split_section_to_lines(section, words or [], display_lines, align_lines, spans)
+            )
+        return objs, len(sections)
+
+    line_objects, n_sections = align_pass(cue_spans)
+    spans = cue_spans
+    offset = fit_offset(line_objects, cue_spans, align_lines)
+    resectioned = abs(offset) > pad_s
+    if resectioned:
+        # Beyond the pad, every section window provably clips its leading
+        # words; shift the cues onto the audio clock and re-align once.
+        logger.info(
+            "cue-align: display lead %+.2fs exceeds pad %.2fs; re-sectioning", offset, pad_s
+        )
+        spans = [
+            (max(0.0, c0 + offset), max(0.0, c0 + offset, c1 + offset)) for c0, c1 in cue_spans
+        ]
+        line_objects, n_sections = align_pass(spans)
+
+    def realign_line(lid: int, t0: float, t1: float) -> list[dict] | None:
+        """Narrow per-line forced align over a bad line's offset-corrected window."""
+        w0 = max(0.0, t0 - pad_s)
+        w1 = t1 + pad_s if duration is None else min(duration, t1 + pad_s)
+        if w1 - w0 < 0.2:
+            return None
+        return slice_align(w0, w1, align_lines[lid], f"line {lid}")
+
+    line_objects, repace_stats = repace_bad_lines(
+        line_objects, spans, display_lines, align_lines, duration=duration, realign=realign_line
+    )
+    stats = {
+        "n_sections": n_sections,
+        "offset_s": round(offset, 3),
+        "resectioned": resectioned,
+        "repace": repace_stats,
+    }
+    return line_objects, stats

@@ -20,7 +20,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 logger = logging.getLogger(__name__)
+
 
 # v7: YouTube ASR promoted from a timing prior to the joint matcher's third
 #     candidate source; all timing-prior post-processing removed. A milestone
@@ -144,6 +147,21 @@ def build_bundle(
     }
 
 
+def _json_default(obj: Any) -> Any:
+    """Coerce the numpy scalars/arrays the matcher stack leaks into the bundle.
+
+    Word timings come off stable-ts as ``np.float64`` and propagate into every
+    derived stat (a fitted offset's ``np.bool_``, line start/end floats). The
+    default JSON encoder rejects those, so a stray numpy value would sink the
+    best-effort capture write; ``.item()``/``.tolist()`` land native types.
+    """
+    if isinstance(obj, np.generic):
+        return obj.item()
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
+
 def write_bundle(song_path: Path, bundle: dict[str, Any]) -> Path:
     """Write the bundle to ``<song_dir>/alignment_debug/<stem>.json``.
 
@@ -154,7 +172,10 @@ def write_bundle(song_path: Path, bundle: dict[str, Any]) -> Path:
     debug_dir.mkdir(exist_ok=True)
     out = debug_dir / f"{song_path.stem}.json"
     tmp = out.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(bundle, indent=2, ensure_ascii=False), encoding="utf-8")
+    tmp.write_text(
+        json.dumps(bundle, indent=2, ensure_ascii=False, default=_json_default),
+        encoding="utf-8",
+    )
     tmp.replace(out)
     return out
 
