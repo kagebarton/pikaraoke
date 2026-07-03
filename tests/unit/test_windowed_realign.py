@@ -88,6 +88,27 @@ class TestAnalyzePass1:
         assert anchors == []
         assert suspects == {0}
 
+    def test_ytasr_sourced_line_can_anchor(self):
+        # ytasr is a full peer source alongside align/transcribe — a
+        # corroborated, unique, long-enough ytasr placement anchors a span
+        # exactly like an align/transcribe one would.
+        align_lines = ["glowing river twilight ember", "second line", "", "mystery"]
+        objs = [
+            _obj(0, 10.0, 12.0, source="ytasr"),
+            _obj(1, 20.0, 21.0),
+            _obj(2, None, None, "absent"),
+            _obj(3, 30.0, 30.5),
+        ]
+        anchors, suspects = analyze_pass1(
+            align_lines,
+            objs,
+            _stats(["ytasr", "align", "absent", "transcribe"]),
+            self._transcribe_echo(),
+            **self.MARGIN,
+        )
+        assert anchors == [{"lid": 0, "start": 10.0, "end": 12.0}]
+        assert 0 not in suspects
+
     def test_repeated_line_text_never_anchors(self):
         align_lines = ["glowing river twilight ember", "glowing river twilight ember"]
         objs = [_obj(0, 10.0, 12.0), _obj(1, 50.0, 52.0)]

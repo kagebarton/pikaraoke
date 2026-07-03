@@ -1,15 +1,17 @@
 """Unit tests for the joint alignment DP matcher."""
 
 from pikaraoke.lib.joint_match import (
-    _align_agreement_for_window,
     _alpha_weight,
     _best_tiling_by_time,
     _build_align_candidates,
+    _build_ytasr_candidates,
     _line_align_ranges,
+    _range_agreement,
     _tokenise_lines,
     _transcribe_match_and_count_in_window,
     match_words_to_lines_joint_with_stats,
 )
+from pikaraoke.lib.token_align import _normalize_token
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -24,6 +26,15 @@ def _aw(word: str, start: float, end: float | None = None) -> dict:
 def _aw_seq(*tokens: str, t0: float = 0.0, dt: float = 1.0, word_dur: float = 0.5) -> list[dict]:
     """Build a uniform-spacing align/transcribe word stream."""
     return [_aw(tok, t0 + i * dt, t0 + i * dt + word_dur) for i, tok in enumerate(tokens)]
+
+
+def _ytw_seq(*tokens: str, t0: float = 0.0, dt: float = 1.0, word_dur: float = 0.5) -> list[dict]:
+    """Build a uniform-spacing ytasr word stream (adds the ``norm`` key
+    ``ytasr.parse_json3`` emits, on top of ``_aw_seq``'s word/start/end shape)."""
+    return [
+        {**w, "norm": _normalize_token(w["word"])}
+        for w in _aw_seq(*tokens, t0=t0, dt=dt, word_dur=word_dur)
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -71,32 +82,32 @@ class TestLineAlignRanges:
 
 
 # ---------------------------------------------------------------------------
-# align_agreement
+# range_agreement
 # ---------------------------------------------------------------------------
 
 
-class TestAlignAgreement:
+class TestRangeAgreement:
     def test_exact_overlap(self):
-        assert _align_agreement_for_window(2.0, 4.0, {"t0": 2.0, "t1": 4.0}) == 1.0
+        assert _range_agreement(2.0, 4.0, {"t0": 2.0, "t1": 4.0}) == 1.0
 
     def test_no_overlap(self):
-        assert _align_agreement_for_window(10.0, 12.0, {"t0": 2.0, "t1": 4.0}) == 0.0
+        assert _range_agreement(10.0, 12.0, {"t0": 2.0, "t1": 4.0}) == 0.0
 
     def test_partial_overlap(self):
         # 50% overlap with a 2-second align window.
-        assert _align_agreement_for_window(3.0, 5.0, {"t0": 2.0, "t1": 4.0}) == 0.5
+        assert _range_agreement(3.0, 5.0, {"t0": 2.0, "t1": 4.0}) == 0.5
 
     def test_window_subsumes_align(self):
         # candidate window wider than align — full credit (capped at 1.0).
-        assert _align_agreement_for_window(0.0, 10.0, {"t0": 2.0, "t1": 4.0}) == 1.0
+        assert _range_agreement(0.0, 10.0, {"t0": 2.0, "t1": 4.0}) == 1.0
 
     def test_collapsed_align(self):
         # zero-width align — candidate that brackets the instant gets full credit.
-        assert _align_agreement_for_window(1.0, 3.0, {"t0": 2.0, "t1": 2.0}) == 1.0
-        assert _align_agreement_for_window(5.0, 6.0, {"t0": 2.0, "t1": 2.0}) == 0.0
+        assert _range_agreement(1.0, 3.0, {"t0": 2.0, "t1": 2.0}) == 1.0
+        assert _range_agreement(5.0, 6.0, {"t0": 2.0, "t1": 2.0}) == 0.0
 
     def test_none_range(self):
-        assert _align_agreement_for_window(1.0, 2.0, None) == 0.0
+        assert _range_agreement(1.0, 2.0, None) == 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -207,9 +218,11 @@ class TestBuildAlignCandidates:
             align_ranges,
             transcribe_words,
             transcribe_norms,
+            [None, None],
             margin_s=0.3,
             max_edit_ratio=0.25,
             alpha=4.0,
+            beta=0.0,
         )
         assert len(cands) == 2
         assert {c["source"] for c in cands} == {"align"}
@@ -226,9 +239,11 @@ class TestBuildAlignCandidates:
             align_ranges,
             [],
             [],
+            [None],
             margin_s=0.3,
             max_edit_ratio=0.25,
             alpha=4.0,
+            beta=0.0,
         )
         assert len(cands) == 1
         c = cands[0]
@@ -244,9 +259,11 @@ class TestBuildAlignCandidates:
             align_ranges,
             [],
             [],
+            [None, None],
             margin_s=0.3,
             max_edit_ratio=0.25,
             alpha=4.0,
+            beta=0.0,
         )
         assert len(cands) == 1
         assert cands[0]["line_id"] == 1
@@ -265,9 +282,11 @@ class TestBuildAlignCandidates:
             align_ranges,
             transcribe_words,
             transcribe_norms,
+            [None],
             margin_s=0.3,
             max_edit_ratio=0.25,
             alpha=4.0,
+            beta=0.0,
         )
         assert len(cands) == 1
         c = cands[0]
@@ -287,15 +306,176 @@ class TestBuildAlignCandidates:
             align_ranges,
             transcribe_words,
             transcribe_norms,
+            [None],
             margin_s=0.3,
             max_edit_ratio=0.25,
             alpha=4.0,
+            beta=0.0,
         )
         assert len(cands) == 1
         c = cands[0]
         assert c["transcribe_match"] == 0
         assert c["alpha_weight"] == 0.0
         assert c["score"] == 0.0
+
+    def test_dissent_rescued_by_ytasr_endorsement(self):
+        # Same dissenting-transcribe window, but ytasr independently maps
+        # the line onto align's exact range: 2-of-3 keeps the full bonus.
+        line_norms = [["no", "worries", "for", "the", "rest"]]
+        align_ranges = [{"t0": 10.0, "t1": 13.0, "token_start": 0, "token_end": 5}]
+        transcribe_words = _aw_seq("hello", "what", "are", "you", "doing", t0=10.0, dt=0.5)
+        transcribe_norms = ["hello", "what", "are", "you", "doing"]
+        cands = _build_align_candidates(
+            line_norms,
+            align_ranges,
+            transcribe_words,
+            transcribe_norms,
+            [{"t0": 10.0, "t1": 13.0}],
+            margin_s=0.3,
+            max_edit_ratio=0.25,
+            alpha=4.0,
+            beta=2.0,
+        )
+        c = cands[0]
+        assert c["transcribe_match"] == 0
+        assert c["alpha_weight"] == 1.0
+        assert c["score"] == 0.0 + 1.0 * (4.0 * 1.0 + 2.0 * 1.0)
+
+
+class TestBuildYtasrCandidates:
+    def test_scored_like_align_plus_own_agreement_term(self):
+        # ytasr proposes one hit for line 0, coinciding exactly with align's
+        # window; transcribe corroborates it too.
+        ytasr_words = _ytw_seq("a", "b", t0=10.0, dt=0.5)
+        line_norms = [["a", "b"]]
+        align_ranges = [{"t0": 10.0, "t1": 11.0}]
+        transcribe_words = _aw_seq("a", "b", t0=10.0, dt=0.5)
+        transcribe_norms = ["a", "b"]
+        tiling_cands = [(0, 2, 0, 2.0)]  # (start_idx, end_idx, line_id, y_score)
+        cands = _build_ytasr_candidates(
+            tiling_cands,
+            ytasr_words,
+            line_norms,
+            align_ranges,
+            transcribe_words,
+            transcribe_norms,
+            margin_s=0.3,
+            max_edit_ratio=0.25,
+            alpha=2.0,
+            beta=3.0,
+        )
+        assert len(cands) == 1
+        c = cands[0]
+        assert c["source"] == "ytasr"
+        assert c["ytasr_agreement"] == 1.0
+        assert c["align_agreement"] == 1.0  # windows coincide exactly
+        assert c["transcribe_match"] == 2  # transcribe corroborates both tokens
+        assert c["alpha_weight"] == 1.0
+        assert c["score"] == 2.0 + 1.0 * (2.0 * 1.0 + 3.0 * 1.0)  # 7.0
+
+    def test_no_align_range_zeros_align_agreement_only(self):
+        ytasr_words = _ytw_seq("a", "b", t0=10.0, dt=0.5)
+        line_norms = [["a", "b"]]
+        align_ranges = [None]
+        transcribe_words = _aw_seq("a", "b", t0=10.0, dt=0.5)
+        transcribe_norms = ["a", "b"]
+        tiling_cands = [(0, 2, 0, 2.0)]
+        cands = _build_ytasr_candidates(
+            tiling_cands,
+            ytasr_words,
+            line_norms,
+            align_ranges,
+            transcribe_words,
+            transcribe_norms,
+            margin_s=0.3,
+            max_edit_ratio=0.25,
+            alpha=2.0,
+            beta=3.0,
+        )
+        c = cands[0]
+        assert c["align_agreement"] == 0.0
+        assert c["ytasr_agreement"] == 1.0  # own term unaffected
+        assert c["score"] == 2.0 + 1.0 * (2.0 * 0.0 + 3.0 * 1.0)  # 5.0
+
+    def test_partial_hit_grades_self_evidence(self):
+        # A 2-of-3 token hit carries ytasr_agreement 2/3, not a flat 1.0 —
+        # a fragment must not collect the same beta bonus as an exact match.
+        ytasr_words = _ytw_seq("a", "b", t0=10.0, dt=0.5)
+        line_norms = [["a", "b", "c"]]
+        align_ranges = [None]
+        transcribe_words = _aw_seq("a", "b", t0=10.0, dt=0.5)
+        transcribe_norms = ["a", "b"]
+        tiling_cands = [(0, 2, 0, 2.0)]
+        cands = _build_ytasr_candidates(
+            tiling_cands,
+            ytasr_words,
+            line_norms,
+            align_ranges,
+            transcribe_words,
+            transcribe_norms,
+            margin_s=0.3,
+            max_edit_ratio=0.25,
+            alpha=2.0,
+            beta=3.0,
+        )
+        c = cands[0]
+        assert c["ytasr_agreement"] == 2 / 3
+        assert c["transcribe_match"] == 2
+        assert c["score"] == 2.0 + 1.0 * (2.0 * 0.0 + 3.0 * (2 / 3))
+
+    def test_unrelated_transcribe_zeros_terms_when_unpartnered(self):
+        # Transcribe heard substantial unrelated speech in ytasr's proposed
+        # window and align places the line elsewhere: the candidate stands
+        # alone against the dissent, so the gate fires with no 2-of-3 rescue.
+        ytasr_words = _ytw_seq("a", "b", t0=10.0, dt=0.5)
+        line_norms = [["a", "b"]]
+        align_ranges = [{"t0": 30.0, "t1": 31.0}]
+        transcribe_words = _aw_seq("x", "y", t0=10.0, dt=0.5)
+        transcribe_norms = ["x", "y"]
+        tiling_cands = [(0, 2, 0, 2.0)]
+        cands = _build_ytasr_candidates(
+            tiling_cands,
+            ytasr_words,
+            line_norms,
+            align_ranges,
+            transcribe_words,
+            transcribe_norms,
+            margin_s=0.3,
+            max_edit_ratio=0.25,
+            alpha=2.0,
+            beta=3.0,
+        )
+        c = cands[0]
+        assert c["transcribe_match"] == 0
+        assert c["alpha_weight"] == 0.0
+        assert c["score"] == 0.0
+
+    def test_transcribe_dissent_rescued_at_align_pair_strength(self):
+        # Transcribe dissents, but align partially endorses ytasr's window:
+        # the bonus survives at min(align endorsement, ytasr solidity) —
+        # graded, not binary. Here align overlaps a third of its range.
+        ytasr_words = _ytw_seq("a", "b", t0=10.0, dt=0.5)
+        line_norms = [["a", "b"]]
+        align_ranges = [{"t0": 10.5, "t1": 12.0}]  # overlap 0.5 of 1.5
+        transcribe_words = _aw_seq("x", "y", t0=10.0, dt=0.5)
+        transcribe_norms = ["x", "y"]
+        tiling_cands = [(0, 2, 0, 2.0)]
+        cands = _build_ytasr_candidates(
+            tiling_cands,
+            ytasr_words,
+            line_norms,
+            align_ranges,
+            transcribe_words,
+            transcribe_norms,
+            margin_s=0.3,
+            max_edit_ratio=0.25,
+            alpha=2.0,
+            beta=3.0,
+        )
+        c = cands[0]
+        assert c["transcribe_match"] == 0
+        assert c["alpha_weight"] == 1 / 3
+        assert c["score"] == 0.0 + (1 / 3) * (2.0 * (1 / 3) + 3.0 * 1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -417,6 +597,128 @@ class TestEndToEndHakunaShape:
         # after line 1's 15-19s win.
         assert stats["selected_source"][2] == "transcribe"
         assert objs[2]["start"] >= 19.5
+
+
+# ---------------------------------------------------------------------------
+# End-to-end: ytasr as a 3rd source recovers what align + transcribe miss
+# ---------------------------------------------------------------------------
+
+
+class TestEndToEndYtasrWins:
+    """Align misplaces a line into unrelated dialogue and transcribe never
+    hears it at all; YTASR correctly captured the line's real audio
+    position. The ytasr candidate should win where neither of the other
+    two sources can support the line.
+    """
+
+    def test_align_and_transcribe_miss_ytasr_recovers(self):
+        lines = ["intro line here", "no worries today"]
+        align_lines = lines
+        # Align: intro correct at 0-3s; the second line placed at the wrong
+        # (dialogue) time, 3-6s.
+        align_words = _aw_seq("intro", "line", "here", t0=0.0, dt=1.0) + _aw_seq(
+            "no", "worries", "today", t0=3.0, dt=1.0
+        )
+        # Transcribe hears the intro correctly, then unrelated dialogue in
+        # the window align (wrongly) chose for line 1 — and never mentions
+        # "no worries today" anywhere, so it produces zero candidates for
+        # that line.
+        transcribe_words = _aw_seq("intro", "line", "here", t0=0.0, dt=1.0) + _aw_seq(
+            "hello", "there", "friend", t0=3.0, dt=1.0
+        )
+        # YTASR correctly captured line 1's real audio position, later in
+        # the song, where transcribe said nothing at all (silence, not
+        # contradiction — the corroboration gate only fires on substantial
+        # *unrelated* speech, not on silence).
+        ytasr_words = _ytw_seq("no", "worries", "today", t0=15.0, dt=1.0)
+
+        objs, stats = match_words_to_lines_joint_with_stats(
+            align_words,
+            transcribe_words,
+            lines,
+            align_lines,
+            alpha=4.0,
+            beta=4.0,
+            ytasr_words=ytasr_words,
+        )
+
+        assert len(objs) == 2
+        assert stats["selected_source"] == ["align", "ytasr"]
+        assert stats["align_won"] == 1
+        assert stats["ytasr_won"] == 1
+        assert stats["transcribe_won"] == 0
+        assert stats["n_ytasr_candidates"] > 0
+        # Per-word timings for line 1 come from ytasr's stream (~15s), not
+        # align's wrong 3s guess.
+        assert objs[1]["start"] >= 14.5
+
+    def test_transcribe_hallucination_survived_by_align_ytasr_pair(self):
+        # Transcribe hallucinated unrelated words over line 1's true window
+        # while align and ytasr both nominate it. Under the transcribe-only
+        # gate every candidate for the line scored 0 and the DP dropped it;
+        # the 2-of-3 rescue keeps align's placement (and its refined
+        # per-word timings) at full bonus.
+        lines = ["intro line here", "no worries today"]
+        align_words = _aw_seq("intro", "line", "here", t0=0.0, dt=1.0) + _aw_seq(
+            "no", "worries", "today", t0=15.0, dt=1.0
+        )
+        transcribe_words = _aw_seq("intro", "line", "here", t0=0.0, dt=1.0) + _aw_seq(
+            "blah", "bleh", "blub", t0=15.0, dt=1.0
+        )
+        ytasr_words = _ytw_seq("no", "worries", "today", t0=15.0, dt=1.0)
+
+        objs, stats = match_words_to_lines_joint_with_stats(
+            align_words,
+            transcribe_words,
+            lines,
+            lines,
+            alpha=4.0,
+            beta=4.0,
+            ytasr_words=ytasr_words,
+        )
+
+        assert stats["selected_source"] == ["align", "align"]
+        assert objs[1]["start"] >= 14.5
+
+    def test_ytasr_scan_uses_own_stricter_ratio(self):
+        # A half-garbled ASR rendering ("a b y z" for "a b c d") clears the
+        # transcribe knob (0.75 allows 3 errors on 4 tokens) but not ytasr's
+        # own CANDIDATE_MAX_EDIT_RATIO (0.34 allows 1): the ytasr scan must
+        # use the latter, so ASR text this weak generates no candidate at
+        # all, no matter how loose the transcribe knob is set.
+        lines = ["a b c d"]
+        align_words = _aw_seq("a", "b", "c", "d", t0=0.0, dt=1.0)
+        ytasr_words = _ytw_seq("a", "b", "y", "z", t0=10.0, dt=1.0)
+
+        _, stats = match_words_to_lines_joint_with_stats(
+            align_words,
+            [],
+            lines,
+            lines,
+            max_edit_ratio=0.75,
+            ytasr_words=ytasr_words,
+        )
+        assert stats["n_ytasr_candidates"] == 0
+
+    def test_ytasr_words_none_is_bit_identical_to_two_source(self):
+        # The hard backward-compatibility requirement: omitting ytasr_words
+        # must reproduce the plain two-source matcher exactly.
+        lines = ["hello world", "good night"]
+        align_lines = lines
+        align_words = _aw_seq("hello", "world", "good", "night", t0=0.0, dt=1.0)
+        transcribe_words = _aw_seq("hello", "world", "good", "night", t0=0.0, dt=1.0)
+
+        objs_default, stats_default = match_words_to_lines_joint_with_stats(
+            align_words, transcribe_words, lines, align_lines, alpha=4.0
+        )
+        objs_explicit, stats_explicit = match_words_to_lines_joint_with_stats(
+            align_words, transcribe_words, lines, align_lines, alpha=4.0, ytasr_words=None
+        )
+
+        assert objs_default == objs_explicit
+        assert stats_default == stats_explicit
+        assert stats_default["ytasr_won"] == 0
+        assert stats_default["n_ytasr_candidates"] == 0
 
 
 # ---------------------------------------------------------------------------

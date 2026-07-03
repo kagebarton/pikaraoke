@@ -35,7 +35,7 @@ from pikaraoke.lib.joint_match import (
 )
 from pikaraoke.lib.token_align import _normalize_token
 
-# Anchor criteria: placed by align/transcribe, lyric-sheet-unique token
+# Anchor criteria: placed by align/transcribe/ytasr, lyric-sheet-unique token
 # sequence of at least this many tokens, transcribe corroboration at or
 # above this ratio. Corpus diagnostic: 19 gross / 616 anchors; the span
 # structure + careful merge absorb the residue, so no stricter filter.
@@ -90,7 +90,7 @@ def analyze_pass1(
         if not seq:
             continue
         obj = obj_by_id[lid]
-        if src not in ("align", "transcribe") or obj.get("start") is None:
+        if src not in ("align", "transcribe", "ytasr") or obj.get("start") is None:
             suspects.add(lid)
             continue
         matched, _, _ = _transcribe_match_and_count_in_window(
