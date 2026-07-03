@@ -39,10 +39,10 @@ from pathlib import Path
 
 import srt
 
-from pikaraoke.lib import alignment_capture, lrclib
+from pikaraoke.lib import alignment_capture, ytasr
 from pikaraoke.lib.genius_lyrics import parse_lyric_lines
 from pikaraoke.lib.joint_match import match_words_to_lines_joint_with_stats
-from pikaraoke.lib.srt_prior import apply_srt_prior, cue_spans_from_srt
+from pikaraoke.lib.srt_prior import cue_spans_from_srt
 from pikaraoke.lib.windowed_realign import (
     analyze_pass1,
     build_spans,
@@ -97,7 +97,7 @@ class LyricAlignStage(BaseStage):
 
         if lyrics_path is not None:
             # --- Alignment mode (joint matcher) ---
-            lyrics_lines, align_lines, cue_spans = self._load_lyrics(lyrics_path)
+            lyrics_lines, align_lines, _ = self._load_lyrics(lyrics_path)
             lyrics_text = "\n".join(align_lines)
 
             logger.info(f"[{self.name}] Aligning lyrics to vocal stem: {Path(vocal_wav).name}")
@@ -113,7 +113,6 @@ class LyricAlignStage(BaseStage):
                 lyrics_text,
                 lyrics_lines,
                 align_lines,
-                cue_spans,
             )
             capture_words_source = "refine"
             capture_method_used = "joint"
@@ -215,10 +214,9 @@ class LyricAlignStage(BaseStage):
             config_snapshot = {
                 "joint_windowed_realign": cfg.joint_windowed_realign,
                 "joint_alpha": cfg.joint_alpha,
+                "joint_beta": cfg.joint_beta,
                 "joint_margin_s": cfg.joint_margin_s,
                 "joint_max_edit_ratio": cfg.joint_max_edit_ratio,
-                "joint_srt_prior": cfg.joint_srt_prior,
-                "joint_lrclib_prior": cfg.joint_lrclib_prior,
                 "whisper": dataclasses.asdict(cfg.whisper),
             }
             lyrics_suffix = Path(lyrics_path).suffix.lower().lstrip(".")
@@ -233,11 +231,11 @@ class LyricAlignStage(BaseStage):
                 "lines": list(lyrics_lines),
                 "align_lines": list(align_lines),
             }
-            # The chosen LRCLIB variant (txt-sourced songs): the persisted
-            # .lrc path plus a reference to the specific search result.
-            lrclib_ref = ctx.artifacts.get("lrclib")
-            if lrclib_ref is not None:
-                lyrics["lrclib"] = lrclib_ref
+            # The adopted YouTube ASR caption (txt-sourced songs): the persisted
+            # .en.asr.json3 path plus word-count / wpm provenance.
+            ytasr_ref = ctx.artifacts.get("ytasr")
+            if ytasr_ref is not None:
+                lyrics["ytasr"] = ytasr_ref
             # The Genius song identity (id/title/artist) for genius-origin songs,
             # so a regen can re-resolve the source without re-prompting.
             genius_ref = ctx.artifacts.get("genius")
@@ -246,6 +244,7 @@ class LyricAlignStage(BaseStage):
             pipeline_decisions = {
                 "method_used": method_used,
                 "joint_alpha": cfg.joint_alpha if method_used == "joint" else None,
+                "joint_beta": cfg.joint_beta if method_used == "joint" else None,
             }
             # A real YouTube caption existed iff the stage did NOT generate its
             # own SRT this run (``_should_write_srt`` is True only when no SRT
@@ -304,8 +303,8 @@ class LyricAlignStage(BaseStage):
         after cleanup are dropped. ``align_lines`` mirrors
         ``display_lines`` — SRT has no separate align/display
         distinction. ``cue_spans`` carries each kept line's
-        uploader-synced ``(start, end)`` for the joint route's SRT
-        timing prior.
+        uploader-synced ``(start, end)`` (consumed by the SRT cue-align
+        path).
 
         For ``.txt``: split into per-line ``{text, align_text}`` via
         :func:`parse_lyric_lines`. ``align_lines`` has the bracket
@@ -431,13 +430,13 @@ class LyricAlignStage(BaseStage):
         lyrics_text: str,
         lyrics_lines: list[str],
         align_lines: list[str],
-        cue_spans: list[tuple[float, float]] | None,
     ) -> tuple[list[dict], list[dict], list[dict], dict]:
         """Run the joint matcher route: de-reverb gate (transcribe-first) →
         align + refine on the gated stem → joint DP matcher.
 
-        ``cue_spans`` (SRT-sourced lyrics only) feeds the SRT timing
-        prior after the audio passes finish.
+        YouTube ASR words (when the lyrics-fetch stage adopted a caption) join
+        align + transcribe as the third candidate source; absent, the matcher
+        runs plain two-source.
 
         Returns ``(line_objects, refined_align_words, transcribe_words, joint_stats)``.
         Refined align words and the transcribe words are returned for the
@@ -459,18 +458,21 @@ class LyricAlignStage(BaseStage):
             ),
         )
 
+        ytasr_words = self._ytasr_words(ctx)
         line_objects, joint_stats = match_words_to_lines_joint_with_stats(
             align_words,
             transcribe_words,
             lyrics_lines,
             align_lines,
             alpha=self._config.joint_alpha,
+            beta=self._config.joint_beta,
             margin_s=self._config.joint_margin_s,
             max_edit_ratio=self._config.joint_max_edit_ratio,
+            ytasr_words=ytasr_words,
         )
-        # Snapshot the pass-1 placements before windowed re-align and the
-        # timing priors mutate them — the baseline an offline pass-1 re-run
-        # validates against (output_line_timings holds the final placements).
+        # Snapshot the pass-1 placements before windowed re-align mutates them —
+        # the baseline an offline pass-1 re-run validates against
+        # (output_line_timings holds the final placements).
         joint_stats["pass1_line_timings"] = alignment_capture.output_line_timings(line_objects)
         if dereverb_stats is not None:
             joint_stats["dereverb"] = dereverb_stats
@@ -492,74 +494,26 @@ class LyricAlignStage(BaseStage):
                 logger.exception(
                     "[%s] windowed re-align failed; keeping pass-1 placements", self.name
                 )
-        if cue_spans is not None and self._config.joint_srt_prior:
-            try:
-                cue_spans_by_line = dict(enumerate(cue_spans))
-                line_objects, prior_stats = apply_srt_prior(
-                    line_objects,
-                    transcribe_words,
-                    lyrics_lines,
-                    align_lines,
-                    cue_spans_by_line,
-                    margin_s=self._config.joint_margin_s,
-                    max_edit_ratio=self._config.joint_max_edit_ratio,
-                )
-                # Inline the resolved cue spans so the prior replays from the
-                # bundle alone — no re-reading the SRT, no re-running cleaning.
-                prior_stats["cue_spans_by_line"] = _serialize_cue_spans(cue_spans_by_line)
-                joint_stats["srt_prior"] = prior_stats
-            except Exception:
-                logger.exception(
-                    "[%s] SRT timing prior failed; keeping audio placements", self.name
-                )
-        elif self._config.joint_lrclib_prior and ctx.artifacts.get("lrclib"):
-            # Txt-sourced song with an auto-fetched LRCLIB variant. Mutually
-            # exclusive with the SRT prior by origin (the elif and the
-            # lyrics-fetch stage only stashing "lrclib" on the Genius branch).
-            line_objects = self._apply_lrclib_prior(
-                ctx, line_objects, transcribe_words, lyrics_lines, align_lines, joint_stats
-            )
         return line_objects, align_words, transcribe_words, joint_stats
 
-    def _apply_lrclib_prior(
-        self,
-        ctx: StageContext,
-        line_objects: list[dict],
-        transcribe_words: list[dict],
-        lyrics_lines: list[str],
-        align_lines: list[str],
-        joint_stats: dict,
-    ) -> list[dict]:
-        """LRCLIB timing prior for txt-sourced songs.
+    def _ytasr_words(self, ctx: StageContext) -> list[dict] | None:
+        """Words from the adopted YouTube ASR caption, for the joint 3rd source.
 
-        Reads the ``.lrc`` the lyrics-fetch stage chose + persisted, maps its
-        cues onto our lyric lines, and runs the shipped prior: snaps gross
-        disagreements to ``cue + offset`` and fills lines the audio could not
-        place. The anchor-MAD gate vets the variant's timing first, so a
-        wrong-sync variant bails rather than mis-snapping. Degrades to the
-        audio result on any failure.
+        The lyrics-fetch stage stashes ``ctx.artifacts["ytasr"]`` only for a
+        caption that cleared the quality gates, so this just parses the
+        persisted json3. Returns None (absent/unreadable) — the matcher then
+        runs plain two-source.
         """
-        ref = ctx.artifacts["lrclib"]
+        ref = ctx.artifacts.get("ytasr")
+        if not ref:
+            return None
         try:
-            synced, _ = lrclib.read_lrc(ctx.song_path.parent / ref["lrc_file"])
-            cues = lrclib.cue_spans_for_lines(synced, lyrics_lines)
-            if not cues:
-                return line_objects
-            line_objects, prior_stats = apply_srt_prior(
-                line_objects,
-                transcribe_words,
-                lyrics_lines,
-                align_lines,
-                cues,
-                margin_s=self._config.joint_margin_s,
-                max_edit_ratio=self._config.joint_max_edit_ratio,
-                source="lrclib",
-            )
-            prior_stats["cue_spans_by_line"] = _serialize_cue_spans(cues)
-            joint_stats["lrclib_prior"] = prior_stats
-        except Exception:
-            logger.exception("[%s] LRCLIB timing prior failed; keeping audio placements", self.name)
-        return line_objects
+            text = (ctx.song_path.parent / ref["asr_file"]).read_text(encoding="utf-8")
+            words, _ = ytasr.parse_json3(text)
+            return words or None
+        except (OSError, ValueError, KeyError):
+            logger.warning("[%s] YTASR json3 unreadable; running two-source", self.name)
+            return None
 
     def _dereverb_gate(
         self, ctx: StageContext, vocal_wav: Path
@@ -940,18 +894,6 @@ def _model_call(ctx, phase: Phase, fn):
             return fn()
     except (AlignmentCancelledError, WorkerCancelledError):
         raise PipelineCancelled(phase)
-
-
-def _serialize_cue_spans(
-    cue_spans_by_line: dict[int, tuple[float, float]],
-) -> dict[str, list[float]]:
-    """JSON-friendly cue-span map: ``{line_id: [start, end]}``.
-
-    The offset-uncorrected per-line cue spans the timing prior consumed,
-    inlined into the debug bundle so the prior replays without re-reading
-    the SRT/.lrc or re-running cue cleaning.
-    """
-    return {str(lid): [start, end] for lid, (start, end) in cue_spans_by_line.items()}
 
 
 def _wav_duration(path: Path) -> float:

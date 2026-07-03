@@ -10,6 +10,18 @@ from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.preference_manager import PreferenceManager
 
 
+@pytest.fixture(autouse=True)
+def _mock_asr_fetch():
+    """Never spawn the real auto-sub yt-dlp subprocess in unit tests.
+
+    ``_execute_download``'s success path calls ``download_auto_en_subs``; stub
+    it module-wide so no test hits the network. Tests that assert on it request
+    this fixture by name.
+    """
+    with patch("pikaraoke.lib.download_manager.download_auto_en_subs", return_value=None) as mock:
+        yield mock
+
+
 @pytest.fixture
 def events():
     """Create a real EventSystem instance for testing."""
@@ -342,6 +354,47 @@ class TestDownloadManagerSpecialCharacters:
             )
 
         queue_manager.enqueue.assert_called_once_with(file_path, "TestUser", log_action=False)
+
+    @patch("flask_babel._", side_effect=lambda x: x)
+    @patch("subprocess.Popen")
+    @patch("pikaraoke.lib.download_manager.build_ytdl_download_command")
+    def test_asr_caption_fetched_after_successful_download(
+        self,
+        mock_build_cmd,
+        mock_popen,
+        mock_gettext,
+        _mock_asr_fetch,
+        download_manager,
+        song_manager,
+    ):
+        """The auto-caption json3 is fetched for the third source at download time."""
+        mock_build_cmd.return_value = ["yt-dlp", "url"]
+        mock_process = MagicMock()
+        mock_process.communicate.return_value = ("done", None)
+        mock_process.returncode = 0
+        mock_popen.return_value = mock_process
+        song_manager.songs.find_by_id.return_value = "/songs/Song---abc12345678.mp4"
+
+        with patch("pathlib.Path.mkdir"):
+            download_manager._execute_download(
+                "https://youtube.com/watch?v=abc12345678", False, "User", "Title"
+            )
+
+        _mock_asr_fetch.assert_called_once()
+        url, subs_dir, stem = _mock_asr_fetch.call_args.args
+        assert url == "https://youtube.com/watch?v=abc12345678"
+        assert subs_dir.endswith("subtitles")
+        assert stem == "Song---abc12345678"
+
+    def test_asr_caption_fetch_failure_is_swallowed(
+        self, _mock_asr_fetch, download_manager, tmp_path
+    ):
+        """A fetch error never fails the download — the song just aligns two-source."""
+        _mock_asr_fetch.side_effect = RuntimeError("yt-dlp exploded")
+        # Must not raise.
+        download_manager._fetch_asr_caption(
+            "https://youtube.com/watch?v=x", tmp_path / "Song---abc12345678.mp4"
+        )
 
     def test_move_downloaded_subtitle_bracketed_title(self, download_manager, tmp_path):
         """Subtitle move must handle glob metacharacters in the title (e.g. [Live]).

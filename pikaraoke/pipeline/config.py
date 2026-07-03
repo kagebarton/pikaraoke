@@ -215,6 +215,13 @@ class PipelineConfig:
     # α=4 — most songs are insensitive in that range.
     joint_alpha: float = 2.0
 
+    # Weight on the YTASR agreement term in the joint scoring formula,
+    # symmetric to joint_alpha. Only affects songs whose YouTube ASR caption
+    # was adopted as the third candidate source; absent, ytasr_agreement is 0
+    # and this has no effect. Corpus-tuned: 2.0 from the 16-song
+    # YTASR-third-source sweep (see plans/ytasr-third-source-experiment.md).
+    joint_beta: float = 2.0
+
     # Time slack on each side of a candidate window when deciding which
     # transcribe words count as "inside" for transcribe_match scoring,
     # and how much collapsed align candidates get padded for the DP's
@@ -242,39 +249,12 @@ class PipelineConfig:
     # 46% of song audio re-aligned).
     joint_windowed_realign: bool = True
 
-    # SRT timing prior for the joint route. For SRT-sourced lyrics, the
-    # uploader-synced cue times calibrate against the audio placement
-    # (robust offset fit over trusted anchors, bail-out on few anchors
-    # or wide spread), then repair gross disagreements and fill lines
-    # the audio could not place (see pikaraoke.lib.srt_prior).
-    # Corpus-measured against held-out LRCLIB references: gross
-    # misplacements 75 -> 50 across
-    # 22 songs, no song regressed; the Mirrors chant outro (audio-
-    # unplaceable) alone repairs 21 lines. Zero GPU cost.
-    joint_srt_prior: bool = True
-
-    # LRCLIB timing prior for the joint route. For Genius-origin (txt)
-    # lyrics — which carry no cue times — the lyrics-fetch stage queries
-    # LRCLIB for the best-matching synced variant, persists it as
-    # <song>/lyrics/<stem>.lrc, and the same prior calibrates its cues
-    # against the audio: snap gross disagreements + fill unplaced lines.
-    # LRCLIB cues come from a different master with no quality control, so
-    # the anchor-MAD bail-out gates the variant's timing first — a
-    # wrong-sync variant bails rather than mis-snapping (Mirrors does
-    # exactly this on the testbed). Mutually exclusive with the SRT prior
-    # by origin. SRT testbed, LRCLIB-input/SRT-judge: pooled gross
-    # 4 -> 3, no song
-    # regressed on any absolute count; +4 lines filled. One LRCLIB query
-    # per Genius-origin song; no candidate -> no cues -> no-op (processes
-    # as today). Zero GPU cost.
-    joint_lrclib_prior: bool = True
-
     # De-reverb retry for the joint route. When the whole-stem transcribe
     # yield falls below this many words per minute, the vocal stem is
     # treated as reverb-washed: the stem worker swaps to the de-reverb
-    # roformer, de-reverbs the stem, and align + transcribe + the joint
-    # matcher re-run on the dry stem (any failure keeps the wet-stem
-    # results). Corpus evidence: the one reverb-washed song yields
+    # roformer, de-reverbs the stem, and transcribe re-runs on the dry
+    # stem (then adopted for the single align pass; any failure keeps the
+    # wet-stem result). Corpus evidence: the one reverb-washed song yields
     # 14.4 wpm; every other song >= 50.5.
     # 0 disables the retry.
     dereverb_yield_wpm: float = 30.0

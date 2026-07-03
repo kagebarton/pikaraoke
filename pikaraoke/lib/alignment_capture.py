@@ -22,6 +22,18 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# v7: YouTube ASR promoted from a timing prior to the joint matcher's third
+#     candidate source; all timing-prior post-processing removed. A milestone
+#     bump (run-affecting) — regen treats v6 bundles as stale and reprocesses.
+#     Removed fields: joint_stats.{srt_prior, lrclib_prior}, lyrics.lrclib, and
+#     config_snapshot.{joint_srt_prior, joint_lrclib_prior}. Added:
+#   - lyrics.ytasr: for txt-sourced songs whose YouTube ASR caption was adopted
+#     — {asr_file (relative path to the persisted <song>/subtitles/
+#     <stem>.en.asr.json3), n_words, wpm}.
+#   - config_snapshot.joint_beta: the YTASR agreement weight, symmetric to
+#     joint_alpha.
+#   - joint_stats gains the third-source counts the matcher emits
+#     (n_ytasr_words, n_ytasr_candidates, ytasr_won) on adopted-caption runs.
 # v6: walk and tiling matchers removed — the joint matcher is the sole
 #     alignment path. Removed fields: walk_stats, tiling_stats (top-level),
 #     and config.match_method / config.align_failure_escalation /
@@ -92,7 +104,7 @@ logger = logging.getLogger(__name__)
 # v2: added tiling per-unit fields (units, zero_candidate_unit_ids,
 #     anchor_recovered_unit_ids, selected_windows replacing window_widths).
 # v1: initial.
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 
 def build_bundle(

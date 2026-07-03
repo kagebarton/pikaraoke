@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from pikaraoke.lib import lrclib
+from pikaraoke.lib import youtube_dl, ytasr
 from pikaraoke.lib.ffmpeg import probe_duration
 from pikaraoke.lib.genius import (
     GeniusClient,
@@ -28,7 +28,6 @@ from pikaraoke.lib.genius import (
     delete_choice,
     read_choice,
 )
-from pikaraoke.lib.genius_lyrics import parse_lyric_lines
 from pikaraoke.lib.metadata_parser import extract_youtube_id
 from pikaraoke.pipeline.context import StageContext
 from pikaraoke.pipeline.stages.base import BaseStage
@@ -74,8 +73,8 @@ class LyricsFetchStage(BaseStage):
                 ctx.artifacts["lyrics_path"] = lyrics_path
                 ctx.artifacts["lyrics_origin"] = "genius"
                 # Persist the Genius identity for the debug bundle so a later
-                # regen can re-fetch lyrics / re-query LRCLIB deterministically
-                # instead of re-prompting for an artist-title search.
+                # regen can re-fetch the lyrics deterministically instead of
+                # re-prompting for an artist-title search.
                 ctx.artifacts["genius"] = {
                     "id": int(choice["genius_id"]),
                     "title": song.title,
@@ -88,7 +87,7 @@ class LyricsFetchStage(BaseStage):
                     song.artist,
                     choice["genius_id"],
                 )
-                self._fetch_lrclib_prior(ctx, song.title, song.artist, song.text)
+                self._resolve_ytasr(ctx)
                 return
             except GeniusUnavailable as e:
                 logger.warning("Genius fetch failed for %s: %s — falling back", yt_id, e)
@@ -128,64 +127,39 @@ class LyricsFetchStage(BaseStage):
     # Helpers
     # ------------------------------------------------------------------
 
-    def _fetch_lrclib_prior(
-        self, ctx: StageContext, title: str, artist: str, lyrics_text: str
-    ) -> None:
-        """Fetch + persist the best LRCLIB synced variant as the timing prior.
+    def _resolve_ytasr(self, ctx: StageContext) -> None:
+        """Adopt an on-disk YouTube ASR caption as the joint matcher's 3rd source.
 
-        Genius-origin only (called from Branch a), gated by
-        ``config.joint_lrclib_prior``. Persists ``<song>/lyrics/<stem>.lrc`` and
-        stashes ``ctx.artifacts["lrclib"]`` (the LRC file path + the chosen
-        record + query) for the align stage and the debug bundle. An existing
-        ``.lrc`` is reused without re-querying (offline-safe reprocess). Never
-        raises: any failure or absent candidate just means no prior — the song
-        processes exactly as today.
+        Genius-origin only (called from Branch a). Reuses the
+        ``subtitles/<stem>.en.asr.json3`` fetched at download time — the live
+        pipeline never fetches (Design Decision 3; the regen tool is the
+        on-demand download path). Parses + quality-gates it
+        (:func:`ytasr.is_usable`) and, on success, stashes
+        ``ctx.artifacts["ytasr"]`` (json3 path + word-count / wpm provenance)
+        for the align stage and the debug bundle. Absent or gated-out → no
+        stash → the matcher runs plain two-source. Never raises.
         """
-        if not ctx.config.joint_lrclib_prior:
-            return
         try:
-            rel = f"lyrics/{ctx.song_path.stem}.lrc"
-            lrc_path = ctx.song_path.parent / rel
+            rel = f"subtitles/{ctx.song_path.stem}{youtube_dl.ASR_JSON3_SUFFIX}"
+            asr_path = ctx.song_path.parent / rel
+            if not asr_path.is_file():
+                logger.info("YTASR: no on-disk ASR caption — aligning two-source")
+                return
 
             media_dur = probe_duration(ctx.song_path)
             if media_dur is not None:
                 ctx.artifacts["media_duration_s"] = media_dur
 
-            if lrc_path.is_file():
-                _synced, record = lrclib.read_lrc(lrc_path)
-                ctx.artifacts["lrclib"] = {"lrc_file": rel, "record": record, "query": None}
-                logger.info("Timing prior: reusing cached LRCLIB — %s", _lrc_label(record))
+            words, word_seg_frac = ytasr.parse_json3(asr_path.read_text(encoding="utf-8"))
+            if not ytasr.is_usable(words, word_seg_frac, media_dur):
+                logger.info("YTASR: on-disk caption failed the quality gate — aligning two-source")
                 return
 
-            track, artist_q = lrclib.clean_key(title, artist)
-            records = lrclib.search(track, artist_q)
-            if not records:
-                logger.info(
-                    "Timing prior: no LRCLIB match for %r by %r — aligning without a prior",
-                    track,
-                    artist_q,
-                )
-                return
-            sheet = [item["text"] for item in parse_lyric_lines(lyrics_text)]
-            chosen = lrclib.select_candidate(records, sheet, media_dur)
-            if chosen is None:
-                logger.info(
-                    "Timing prior: %d LRCLIB record(s) for %r by %r but none matched the "
-                    "lyric sheet — aligning without a prior",
-                    len(records),
-                    track,
-                    artist_q,
-                )
-                return
-            lrclib.write_lrc(lrc_path, chosen)
-            ctx.artifacts["lrclib"] = {
-                "lrc_file": rel,
-                "record": lrclib.record_meta(chosen),
-                "query": {"track_name": track, "artist_name": artist_q},
-            }
-            logger.info("Timing prior: LRCLIB — %s", _lrc_label(chosen))
+            wpm = round(len(words) / (media_dur / 60.0), 1) if media_dur else None
+            ctx.artifacts["ytasr"] = {"asr_file": rel, "n_words": len(words), "wpm": wpm}
+            logger.info("YTASR: adopted %d words (%s wpm) as the 3rd source", len(words), wpm)
         except Exception:
-            logger.exception("Timing prior: LRCLIB fetch failed — aligning without a prior")
+            logger.exception("YTASR: resolve failed — aligning two-source")
 
     @staticmethod
     def _extract_yt_id(song_path: Path) -> str | None:
@@ -210,11 +184,3 @@ class LyricsFetchStage(BaseStage):
             if candidate.is_file():
                 return candidate
         return None
-
-
-def _lrc_label(record: dict) -> str:
-    """Human-readable identity for an LRCLIB record: ``'Title' by 'Artist' (lrclib #id)``."""
-    return (
-        f"{record.get('trackName')!r} by {record.get('artistName')!r} "
-        f"(lrclib #{record.get('id')})"
-    )

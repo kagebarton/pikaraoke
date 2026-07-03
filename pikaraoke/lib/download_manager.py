@@ -16,6 +16,7 @@ from pikaraoke.lib.queue_manager import QueueManager
 from pikaraoke.lib.song_manager import SongManager
 from pikaraoke.lib.youtube_dl import (
     build_ytdl_download_command,
+    download_auto_en_subs,
     get_youtube_id_from_url,
 )
 
@@ -277,6 +278,7 @@ class DownloadManager:
                 # Move subtitle into subtitles/ BEFORE emitting song_downloaded,
                 # so the processing pipeline can find it for alignment.
                 self._move_downloaded_subtitle(song_path)
+                self._fetch_asr_caption(video_url, song_path)
                 self._events.emit("song_downloaded", song_path)
             else:
                 logging.warning(
@@ -396,6 +398,24 @@ class DownloadManager:
                         logging.debug(f"Cleaned up partial download: {f}")
                     except OSError as e:
                         logging.warning(f"Failed to clean partial download {f}: {e}")
+
+    def _fetch_asr_caption(self, video_url: str, song_path: str | Path) -> None:
+        """Fetch YouTube's auto-generated (ASR) caption as json3, best-effort.
+
+        Persisted at ``subtitles/<stem>.en.asr.json3`` for the alignment stage's
+        YTASR third source (consumed by ``lyrics_fetch._resolve_ytasr`` on Genius
+        songs). No auto-caption or any failure is non-fatal — the song just
+        aligns without the third source. Runs a second, media-free yt-dlp pass.
+        """
+        song = Path(song_path)
+        subtitles_dir = song.parent / "subtitles"
+        try:
+            result = download_auto_en_subs(video_url, str(subtitles_dir), song.stem)
+        except Exception:
+            logging.exception("Failed to fetch ASR caption for %s", video_url)
+            return
+        if result:
+            logging.debug("Fetched ASR caption: %s", result)
 
     def _move_downloaded_subtitle(self, video_path: str) -> None:
         video = Path(video_path)
