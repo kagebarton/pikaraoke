@@ -262,7 +262,10 @@ def main() -> int:
 
     for bp in bundle_paths:
         bundle = json.loads(bp.read_text(encoding="utf-8"))
-        if bundle.get("ground_truth_refs", {}).get("youtube_srt_present"):
+        # Skip by lyric source, not SRT presence: youtube_srt_present is true
+        # for nearly every song (some SRT exists on disk); Experiment B owns
+        # only the songs whose lyrics actually came from that SRT.
+        if bundle.get("lyrics", {}).get("source_kind") == "srt":
             continue  # SRT-sourced songs are Experiment B, not A.
 
         song_root = bp.parent.parent
