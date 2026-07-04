@@ -31,6 +31,7 @@ FFmpeg stderr to /dev/null (harmless muxer errors never reach terminal).
 2. Explicitly terminating orphaned AudioLoaders in the cancel handler.
 """
 
+import contextlib
 import gc
 import logging
 import os
@@ -393,6 +394,8 @@ class WhisperWorker:
         vocal_path: Path,
         lyrics_text: str,
         cancel_event: Optional[threading.Event] = None,
+        *,
+        quiet: bool = False,
     ) -> list[dict]:
         """Run align() then refine(), returning a flat refined word list.
 
@@ -400,13 +403,18 @@ class WhisperWorker:
         refine the resulting word timestamps. Returns one entry per lyric
         token, in lyric order — the joint matcher's align-candidate source.
 
+        ``quiet`` suppresses stable-ts's per-pass progress bars for this
+        job — set it on the many short slice-aligns (cue-align sections,
+        windowed re-align spans) whose bars would otherwise scroll the log,
+        and leave it off for the one whole-song pass whose bar is useful.
+
         Raises:
             AlignmentCancelledError: If align or refine was cancelled.
             WorkerDiedError: If the subprocess dies during the job.
             RuntimeError: If the subprocess reports an error.
         """
         return self._run_job(
-            ("align_refine", str(vocal_path), lyrics_text),
+            ("align_refine", str(vocal_path), lyrics_text, quiet),
             cancel_event,
         )
 
@@ -684,7 +692,7 @@ def _whisper_worker_main_inner(
 
             try:
                 if kind == "align_refine":
-                    _, vocal_path, lyrics_text = item
+                    _, vocal_path, lyrics_text, quiet = item
                     words = _do_align_refine(
                         model,
                         encoder_module,
@@ -693,6 +701,7 @@ def _whisper_worker_main_inner(
                         cancel_recv,
                         config,
                         worker_log,
+                        quiet=quiet,
                     )
                     result_send.send(("ok", words))
                 elif kind == "transcribe_words":
@@ -846,20 +855,52 @@ def _do_align_refine(
     cancel_recv: Connection,
     config: WhisperModelConfig,
     worker_log: logging.Logger,
+    *,
+    quiet: bool = False,
 ) -> list[dict]:
     """Run align() then refine(), post-process, and flatten to a word list.
 
     One entry per lyric token, in lyric order — the joint matcher's
-    align-candidate source.
+    align-candidate source. ``quiet`` silences the per-pass progress bars.
     """
-    aligned = _align_pass(
-        model, encoder_module, vocal_path, lyrics_text, cancel_recv, config, worker_log
-    )
-    refined = _refine_pass(
-        model, encoder_module, vocal_path, aligned, cancel_recv, config, worker_log
-    )
-    _apply_post_process(refined, config.align_post_process)
+    with _quiet_progress(quiet):
+        aligned = _align_pass(
+            model, encoder_module, vocal_path, lyrics_text, cancel_recv, config, worker_log
+        )
+        refined = _refine_pass(
+            model, encoder_module, vocal_path, aligned, cancel_recv, config, worker_log
+        )
+        _apply_post_process(refined, config.align_post_process)
     return _extract_words(refined, config.align_post_process.min_word_probability)
+
+
+@contextlib.contextmanager
+def _quiet_progress(active: bool):
+    """Disable stable-ts's Align/Adjustment/Refine tqdm bars while ``active``.
+
+    stable-ts gates its Align and Refine bars on ``verbose``, but the
+    Adjustment bar is hardwired on (``disable=self.options.progress is not
+    None``, which is always True), so no public flag silences all three.
+    Force-disabling the tqdm class itself is the only reliable lever. Scoped to
+    one align_refine job and restored in ``finally``; the worker runs jobs
+    serially, so the class-level patch never races another bar.
+    """
+    if not active:
+        yield
+        return
+    from tqdm import std as tqdm_std
+
+    original_init = tqdm_std.tqdm.__init__
+
+    def _disabled_init(self, *args, **kwargs):
+        kwargs["disable"] = True
+        original_init(self, *args, **kwargs)
+
+    tqdm_std.tqdm.__init__ = _disabled_init
+    try:
+        yield
+    finally:
+        tqdm_std.tqdm.__init__ = original_init
 
 
 def _do_transcribe_words(

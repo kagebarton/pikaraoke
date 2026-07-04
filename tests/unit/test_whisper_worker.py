@@ -622,7 +622,18 @@ class TestNewFacadeMethods:
         thread = _wire_fake_worker(worker, fake)
         try:
             worker.align_refine("/tmp/vocal.wav", "the lyrics")
-            assert captured == [("align_refine", "/tmp/vocal.wav", "the lyrics")]
+            assert captured == [("align_refine", "/tmp/vocal.wav", "the lyrics", False)]
+        finally:
+            worker._job_send.send(None)
+            thread.join(timeout=3)
+
+    def test_align_refine_quiet_threads_flag(self, worker):
+        captured: list = []
+        fake = _fake_worker_captures(captured, [("ok", [])])
+        thread = _wire_fake_worker(worker, fake)
+        try:
+            worker.align_refine("/tmp/vocal.wav", "the lyrics", quiet=True)
+            assert captured == [("align_refine", "/tmp/vocal.wav", "the lyrics", True)]
         finally:
             worker._job_send.send(None)
             thread.join(timeout=3)

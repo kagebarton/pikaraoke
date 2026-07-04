@@ -34,11 +34,13 @@ import dataclasses
 import datetime
 import itertools
 import logging
+import os
 import shutil
 import wave
 from pathlib import Path
 
 import srt
+from tqdm import tqdm
 
 from pikaraoke.lib import alignment_capture, ytasr
 from pikaraoke.lib.cue_align import align_song
@@ -64,6 +66,38 @@ from pikaraoke.pipeline.workers.whisper_worker import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class _PtyWriter:
+    """Text sink over a borrowed PTY slave fd, for routing a tqdm bar there.
+
+    Writes go straight to the fd (like ``_PtyHandler``) so the cue-align
+    section bar lands on the processing terminal, alongside the pipeline's
+    log records and where the per-slice bars used to render. The fd is
+    borrowed, not owned — ``ProcessTerminal`` controls its lifetime, so this
+    never closes it — and ``OSError`` is swallowed so a torn-down terminal
+    can never sink alignment. ``isatty``/``fileno`` let tqdm detect the tty
+    and its width for in-place redraws.
+    """
+
+    def __init__(self, fd: int) -> None:
+        self._fd = fd
+
+    def write(self, text: str) -> int:
+        try:
+            os.write(self._fd, text.encode("utf-8", errors="replace"))
+        except OSError:
+            pass
+        return len(text)
+
+    def flush(self) -> None:
+        pass
+
+    def fileno(self) -> int:
+        return self._fd
+
+    def isatty(self) -> bool:
+        return os.isatty(self._fd)
 
 
 class LyricAlignStage(BaseStage):
@@ -542,8 +576,24 @@ class LyricAlignStage(BaseStage):
                 ctx, vocal_wav, t0, t1, text, f"cue_slice{next(slice_counter):03d}.wav", label
             )
 
+        # Route the section bar to the processing terminal (where the pipeline
+        # logs and the now-suppressed per-slice bars render), not the main
+        # stderr. None off-PTY (Windows/no terminal) → tqdm falls back to
+        # stderr, and disable=None then auto-hides it off-TTY (tests, daemons).
+        pty_fd = ctx.artifacts.get("pty_slave_fd")
+        progress_file = _PtyWriter(pty_fd) if pty_fd is not None else None
+
+        def progress(sections):
+            return tqdm(
+                sections,
+                desc="Cue-align sections",
+                unit="section",
+                file=progress_file,
+                disable=None,
+            )
+
         line_objects, stats = align_song(
-            cue_spans, display_lines, align_lines, duration, slice_align
+            cue_spans, display_lines, align_lines, duration, slice_align, progress=progress
         )
         if dereverb_stats is not None:
             stats["dereverb"] = dereverb_stats
@@ -893,6 +943,7 @@ class LyricAlignStage(BaseStage):
                     vocal_path=slice_path,
                     lyrics_text=text,
                     cancel_event=ctx.cancel.event if ctx.cancel else None,
+                    quiet=True,
                 ),
             )
         except PipelineCancelled:

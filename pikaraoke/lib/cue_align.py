@@ -41,7 +41,7 @@ Approach:
 """
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from statistics import median
 
@@ -589,6 +589,7 @@ def align_song(
     slice_align: Callable[[float, float, str, str], list[dict] | None],
     *,
     pad_s: float = SECTION_PAD_S,
+    progress: Callable[[list[Section]], Iterable[Section]] | None = None,
 ) -> tuple[list[dict], dict]:
     """Windowed-align one song from its 1:1 per-line cue spans.
 
@@ -604,17 +605,20 @@ def align_song(
     ``duration`` clamps the section/fill windows to the audio; ``None`` (an
     unreadable stem) drops the clamp and the song degrades to cue-paced timing.
     All GPU/ffmpeg I/O lives behind ``slice_align``, so this stays pure and
-    ``test_cue_align`` can drive it with a stub aligner.
+    ``test_cue_align`` can drive it with a stub aligner. Display is injected the
+    same way: ``progress`` wraps the per-pass section list (e.g. ``tqdm``) so
+    the caller owns the terminal; ``None`` iterates silently.
 
     Returns ``(line_objects, stats)``; ``stats`` carries the section count, the
     fitted offset, whether a re-section fired, and the repace sub-stats.
     """
+    show_progress = progress or (lambda sections: sections)
 
     def align_pass(spans: list[tuple[float, float]]) -> tuple[list[dict], int]:
         sections = segment_by_gaps(spans, duration=duration)
         logger.info("cue-align: %d cues -> %d sections", len(spans), len(sections))
         objs: list[dict] = []
-        for section in sections:
+        for section in show_progress(sections):
             sub_text = "\n".join(align_lines[lid] for lid in section.line_ids)
             words = slice_align(
                 section.t0, section.t1, sub_text, f"section lines {section.lid_lo}-{section.lid_hi}"
