@@ -56,6 +56,7 @@ import srt
 # Allow running as ``python scripts/regen_alignment_bundles.py`` from repo root.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from pikaraoke.lib import ytasr  # noqa: E402
 from pikaraoke.lib.alignment_capture import SCHEMA_VERSION  # noqa: E402
 from pikaraoke.lib.ffmpeg import probe_duration  # noqa: E402
 from pikaraoke.lib.genius import (  # noqa: E402
@@ -75,7 +76,11 @@ from pikaraoke.lib.metadata_parser import (  # noqa: E402
 )
 from pikaraoke.lib.preference_manager import PreferenceManager  # noqa: E402
 from pikaraoke.lib.srt_cues import cue_spans_from_srt  # noqa: E402
-from pikaraoke.lib.youtube_dl import download_manual_en_subs  # noqa: E402
+from pikaraoke.lib.youtube_dl import (  # noqa: E402
+    ASR_JSON3_SUFFIX,
+    download_auto_en_subs,
+    download_manual_en_subs,
+)
 from pikaraoke.pipeline.config import PipelineConfig  # noqa: E402
 from pikaraoke.pipeline.context import StageContext  # noqa: E402
 from pikaraoke.pipeline.orchestrator import PipelineOrchestrator  # noqa: E402
@@ -502,6 +507,69 @@ def execute_fetches(jobs: list[SongJob]) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Phase 3c — resolve the YTASR 3rd source for reused genius seed jobs
+# ---------------------------------------------------------------------------
+
+
+def seed_ytasr_sources(jobs: list[SongJob]) -> None:
+    """Adopt YouTube ASR captions as the joint matcher's 3rd source (real run).
+
+    The genius reuse path injects artifacts via :class:`SeedArtifactsStage` and
+    skips ``LyricsFetchStage``, so a plain regen never stashes the
+    ``ctx.artifacts["ytasr"]`` block the live stage resolves
+    (``LyricsFetchStage._resolve_ytasr``) — the matcher would silently run
+    two-source. For each reused genius-origin seed job with a YouTube id,
+    ensure ``subtitles/<stem>.en.asr.json3`` exists (reuse on disk, else
+    download once via yt-dlp — the regen tool is the on-demand download path),
+    apply the live stage's quality gate (:func:`ytasr.is_usable`), and on
+    success add ``seed["ytasr"]``. Absent or gated-out leaves the job unchanged
+    (two-source align, same as live).
+    """
+    targets = [
+        j
+        for j in jobs
+        if j.plan
+        and j.plan.kind == "seed"
+        and j.plan.seed.get("lyrics_origin") == "genius"
+        and extract_youtube_id(str(j.song_path))
+    ]
+    if not targets:
+        return
+    print(f"Resolving YouTube ASR captions for {len(targets)} genius song(s)...")
+    for job in targets:
+        try:
+            _seed_ytasr(job)
+        except Exception:
+            logger.exception("YTASR resolve failed for %s; aligning two-source", job.song_path.name)
+
+
+def _seed_ytasr(job: SongJob) -> None:
+    """Resolve + gate one genius song's ASR caption; seed it when usable."""
+    song = job.song_path
+    rel = f"subtitles/{song.stem}{ASR_JSON3_SUFFIX}"
+    asr_path = song.parent / rel
+    if not asr_path.is_file():
+        yt_id = extract_youtube_id(str(song))
+        url = f"https://www.youtube.com/watch?v={yt_id}"
+        if download_auto_en_subs(url, str(asr_path.parent), song.stem) is None:
+            logger.info("YTASR: no downloadable ASR caption for %s", song.name)
+            return
+    words, word_seg_frac = ytasr.parse_json3(asr_path.read_text(encoding="utf-8"))
+    media = _media_duration(job)
+    if not ytasr.is_usable(words, word_seg_frac, media):
+        logger.info(
+            "YTASR for %s rejected (word-seg %.0f%%, %d words); aligning two-source",
+            song.name,
+            word_seg_frac * 100,
+            len(words),
+        )
+        return
+    wpm = round(len(words) / (media / 60.0), 1) if media else None
+    job.plan.seed["ytasr"] = {"asr_file": rel, "n_words": len(words), "wpm": wpm}
+    logger.info("YTASR for %s adopted as 3rd source (%d words)", song.name, len(words))
+
+
+# ---------------------------------------------------------------------------
 # Phase 4 — execute pipeline per song
 # ---------------------------------------------------------------------------
 
@@ -793,6 +861,9 @@ def main() -> int:
     if not any(j.plan and j.plan.kind != "skip" for j in jobs):
         print("No songs left after prompts.")
         return 0
+
+    # All plans are final; give reused genius jobs their YTASR 3rd source.
+    seed_ytasr_sources(jobs)
 
     succeeded, failed, skipped = run_jobs(jobs, config, genius)
     print(f"\nDone. succeeded={succeeded} failed={failed} skipped={skipped}")
