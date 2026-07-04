@@ -32,19 +32,25 @@ Per lyric line we build up to three kinds of candidates:
 
 Each candidate's joint score is::
 
-    score = transcribe_match + weight * (alpha * align_agreement + beta * ytasr_agreement)
+    score = transcribe_match
+            + weight * (alpha * align_agreement + beta * ytasr_agreement
+                        + gamma * mix_agreement)
 
-where ``weight`` is the corroboration gate shared by both the alpha and
-beta terms — it answers "does independent evidence support this specific
+where ``weight`` is the corroboration gate shared by the alpha/beta/gamma
+terms — it answers "does independent evidence support this specific
 window," which is orthogonal to which source proposed the window. It
 starts from transcribe's testimony (``_alpha_weight``: zero only when
 transcribe heard substantial speech with no lexical overlap), but
-transcribe is one fallible witness of three, so a zeroed gate can be
-rescued 2-of-3 style by the other pair: when align and ytasr mutually
-back the window, the bonus survives at the strength of that mutual
-agreement (``_corroboration_weight``). When ``ytasr_words`` is not
-supplied, ``ytasr_agreement`` is always 0, no rescue can fire, and the
-formula reduces exactly to the two-source score.
+transcribe is one fallible witness, so a zeroed gate can be rescued 2-of-3
+style by the other pair: when align and ytasr mutually back the window, the
+bonus survives at the strength of that mutual agreement
+(``_corroboration_weight``). The optional fourth source — a full-mix
+transcribe (``mix_words``) — is scored like ytasr but is the *same whisper
+model* as ``transcribe_words``, so it rides the bonus at ``gamma`` and is
+deliberately kept out of the rescue (one model can't corroborate itself
+into the gate). When ``ytasr_words`` / ``mix_words`` are not supplied, their
+agreement terms are always 0, no rescue can fire, and the formula reduces
+exactly to the two-source score.
 
 The interval-scheduling DP (``_best_tiling_by_time``, a weighted
 interval-scheduling pass over time intervals rather than token indices)
@@ -87,13 +93,16 @@ def match_words_to_lines_joint_with_stats(
     *,
     alpha: float = 2.0,
     beta: float = 2.0,
+    gamma: float = 2.0,
     margin_s: float = 0.3,
     max_edit_ratio: float = 0.75,
     lookahead: int = 3,
     anchor_fallback: bool = True,
     ytasr_words: list[dict] | None = None,
+    mix_words: list[dict] | None = None,
+    mix_max_edit_ratio: float = ytasr.CANDIDATE_MAX_EDIT_RATIO,
 ) -> tuple[list[dict], dict]:
-    """Joint align + transcribe (+ optional ytasr) matcher.
+    """Joint align + transcribe (+ optional ytasr + optional full-mix) matcher.
 
     Args:
         align_words: refined whisper words from forced alignment. One entry
@@ -113,6 +122,13 @@ def match_words_to_lines_joint_with_stats(
             ``PipelineConfig.joint_alpha``.
         beta: weight on the ytasr agreement term, symmetric to ``alpha``.
             Only has an effect when ``ytasr_words`` is supplied.
+        gamma: weight on the full-mix agreement term, symmetric to ``alpha``/
+            ``beta``. Only has an effect when ``mix_words`` is supplied. Full-mix
+            transcribe is the *same whisper model* as ``transcribe_words`` (just
+            on the mix, not the stem), so unlike ytasr its mishearings correlate:
+            the mix term rides the existing corroboration gate but does NOT
+            strengthen it — ``mix`` never enters ``_corroboration_weight``'s
+            2-of-3 rescue, so one model cannot vote itself out of the gate.
         margin_s: time slack on each side of a candidate's window when
             (a) deciding which transcribe words count as "inside" the
             window for ``transcribe_match`` computation, and (b) padding
@@ -133,6 +149,16 @@ def match_words_to_lines_joint_with_stats(
             matcher. When supplied, YTASR is treated as a third candidate
             source scored symmetrically to align/transcribe, not as a
             post-hoc timing prior.
+        mix_words: full-mix transcribe words (plain whisper words, same shape
+            as ``transcribe_words``), or ``None``. When supplied, the mix is a
+            fourth candidate source scored like ytasr — its own lexical match is
+            its self-evidence, at ``mix_max_edit_ratio`` — but weighted by
+            ``gamma`` and kept out of the corroboration rescue (see ``gamma``).
+            ``None`` (or empty) reduces the result exactly to the
+            three-source matcher.
+        mix_max_edit_ratio: edit-distance gate for mix candidate generation.
+            Defaults to ytasr's strict ratio for the same reason — the mix ASR
+            text is a mix candidate's only evidence for existing.
 
     Returns:
         ``(line_objects, joint_stats)``. ``line_objects`` is one entry per
@@ -144,8 +170,10 @@ def match_words_to_lines_joint_with_stats(
     knobs = {
         "alpha": alpha,
         "beta": beta,
+        "gamma": gamma,
         "margin_s": margin_s,
         "max_edit_ratio": max_edit_ratio,
+        "mix_max_edit_ratio": mix_max_edit_ratio,
         "lookahead": lookahead,
         "anchor_fallback": anchor_fallback,
     }
@@ -194,13 +222,27 @@ def match_words_to_lines_joint_with_stats(
         ).items():
             ytasr_ranges[line_id] = {"t0": t0, "t1": t1}
 
+    # Fourth source: full-mix transcribe. Same shape as ytasr — its own lexical
+    # match is its self-evidence, and a monotonic-filtered reference range lets
+    # the other sources score their agreement with where the mix heard the line.
+    mix_words = mix_words or []
+    mix_cands: list = []
+    mix_ranges: list[dict | None] = [None] * n_lines
+    if mix_words:
+        mix_norms = [_normalize_token(w["word"]) for w in mix_words]
+        mix_cands = find_candidates(mix_norms, line_norms, max_edit_ratio=mix_max_edit_ratio)
+        for line_id, (t0, t1) in (ytasr.spans_from_candidates(mix_words, mix_cands) or {}).items():
+            mix_ranges[line_id] = {"t0": t0, "t1": t1}
+
     transcribe_candidates = _build_transcribe_candidates(
         main_cands + anchor_cands,
         transcribe_words,
         align_ranges,
         ytasr_ranges,
+        mix_ranges,
         alpha,
         beta,
+        gamma,
     )
 
     align_candidates = _build_align_candidates(
@@ -209,10 +251,12 @@ def match_words_to_lines_joint_with_stats(
         transcribe_words,
         transcribe_norms,
         ytasr_ranges,
+        mix_ranges,
         margin_s,
         max_edit_ratio,
         alpha,
         beta,
+        gamma,
     )
 
     ytasr_candidates = _build_ytasr_candidates(
@@ -220,20 +264,37 @@ def match_words_to_lines_joint_with_stats(
         ytasr_words,
         line_norms,
         align_ranges,
+        mix_ranges,
         transcribe_words,
         transcribe_norms,
         margin_s,
         max_edit_ratio,
         alpha,
         beta,
+        gamma,
     )
 
-    # align first, then transcribe, then ytasr — ties (same score, same t1)
-    # break in that order. Align's refined per-word timings are preferred
-    # when sources agree; between transcribe and ytasr, transcribe is the
-    # same-audio whisper-precision source, so it's preferred over ytasr's
-    # lower-fidelity per-word split.
-    all_candidates = align_candidates + transcribe_candidates + ytasr_candidates
+    mix_candidates = _build_mix_candidates(
+        mix_cands,
+        mix_words,
+        line_norms,
+        align_ranges,
+        ytasr_ranges,
+        transcribe_words,
+        transcribe_norms,
+        margin_s,
+        max_edit_ratio,
+        alpha,
+        beta,
+        gamma,
+    )
+
+    # align first, then transcribe, then ytasr, then mix — ties (same score,
+    # same t1) break in that order. Align's refined per-word timings are
+    # preferred when sources agree; transcribe is the same-audio
+    # whisper-precision source, preferred over ytasr's lower-fidelity split;
+    # mix is last (same model as transcribe but on the noisier full mix).
+    all_candidates = align_candidates + transcribe_candidates + ytasr_candidates + mix_candidates
     selected = _best_tiling_by_time(all_candidates)
 
     line_objects = _materialise_line_objects(
@@ -243,6 +304,7 @@ def match_words_to_lines_joint_with_stats(
         align_words,
         transcribe_words,
         ytasr_words,
+        mix_words,
         align_ranges,
         lookahead,
     )
@@ -260,6 +322,7 @@ def match_words_to_lines_joint_with_stats(
     align_won = sum(1 for s in selected_source if s == "align")
     transcribe_won = sum(1 for s in selected_source if s == "transcribe")
     ytasr_won = sum(1 for s in selected_source if s == "ytasr")
+    mix_won = sum(1 for s in selected_source if s == "mix")
     interpolated = [i for i, s in enumerate(selected_source) if s == "interp"]
     absent = [i for i, s in enumerate(selected_source) if s == "absent"]
 
@@ -269,32 +332,37 @@ def match_words_to_lines_joint_with_stats(
         "n_align_words": len(align_words),
         "n_transcribe_words": len(transcribe_words),
         "n_ytasr_words": len(ytasr_words),
+        "n_mix_words": len(mix_words),
         "n_main_candidates": len(main_cands),
         "n_anchor_candidates": len(anchor_cands),
         "n_align_candidates": len(align_candidates),
         "n_ytasr_candidates": len(ytasr_candidates),
+        "n_mix_candidates": len(mix_candidates),
         "n_selected": len(selected),
         "selected_source": selected_source,
         "align_won": align_won,
         "transcribe_won": transcribe_won,
         "ytasr_won": ytasr_won,
+        "mix_won": mix_won,
         "interpolated_line_ids": interpolated,
         "absent_line_ids": absent,
         "selected_score_sum": float(sum(c["score"] for c in selected)),
     }
 
     logger.info(
-        "Joint match: %d/%d lines placed (align=%d transcribe=%d ytasr=%d "
-        "interp=%d absent=%d) at alpha=%.2f beta=%.2f",
+        "Joint match: %d/%d lines placed (align=%d transcribe=%d ytasr=%d mix=%d "
+        "interp=%d absent=%d) at alpha=%.2f beta=%.2f gamma=%.2f",
         n_lines - len(absent),
         n_lines,
         align_won,
         transcribe_won,
         ytasr_won,
+        mix_won,
         len(interpolated),
         len(absent),
         alpha,
         beta,
+        gamma,
     )
 
     return line_objects, stats
@@ -308,11 +376,14 @@ def match_words_to_lines_joint(
     *,
     alpha: float = 2.0,
     beta: float = 2.0,
+    gamma: float = 2.0,
     margin_s: float = 0.3,
     max_edit_ratio: float = 0.75,
     lookahead: int = 3,
     anchor_fallback: bool = True,
     ytasr_words: list[dict] | None = None,
+    mix_words: list[dict] | None = None,
+    mix_max_edit_ratio: float = ytasr.CANDIDATE_MAX_EDIT_RATIO,
 ) -> list[dict]:
     """Thin wrapper that drops the stats. See ``..._with_stats``."""
     line_objects, _ = match_words_to_lines_joint_with_stats(
@@ -322,11 +393,14 @@ def match_words_to_lines_joint(
         align_lines,
         alpha=alpha,
         beta=beta,
+        gamma=gamma,
         margin_s=margin_s,
         max_edit_ratio=max_edit_ratio,
         lookahead=lookahead,
         anchor_fallback=anchor_fallback,
         ytasr_words=ytasr_words,
+        mix_words=mix_words,
+        mix_max_edit_ratio=mix_max_edit_ratio,
     )
     return line_objects
 
@@ -403,8 +477,10 @@ def _build_transcribe_candidates(
     transcribe_words: list[dict],
     align_ranges: list[dict | None],
     ytasr_ranges: list[dict | None],
+    mix_ranges: list[dict | None],
     alpha: float,
     beta: float,
+    gamma: float,
 ) -> list[dict]:
     """Turn each tiling-style ``(start_idx, end_idx, line_id, score)`` into
     a joint candidate with its time interval and joint score.
@@ -415,13 +491,14 @@ def _build_transcribe_candidates(
         t1 = transcribe_words[end_idx - 1]["end"]
         a_agree = _range_agreement(t0, t1, align_ranges[line_id])
         y_agree = _range_agreement(t0, t1, ytasr_ranges[line_id])
+        m_agree = _range_agreement(t0, t1, mix_ranges[line_id])
         window_count = end_idx - start_idx
         # Transcribe candidates only exist because find_candidates accepted
         # them, so by construction at least one lyric token overlaps the
         # window. Pass True explicitly to keep the gate semantics consistent
         # with the align-candidate path.
         weight = _alpha_weight(t_score > 0, window_count)
-        score = float(t_score) + weight * (alpha * a_agree + beta * y_agree)
+        score = float(t_score) + weight * (alpha * a_agree + beta * y_agree + gamma * m_agree)
         out.append(
             {
                 "line_id": line_id,
@@ -432,6 +509,7 @@ def _build_transcribe_candidates(
                 "transcribe_match": float(t_score),
                 "align_agreement": a_agree,
                 "ytasr_agreement": y_agree,
+                "mix_agreement": m_agree,
                 "alpha_weight": weight,
                 "transcribe_idx_start": start_idx,
                 "transcribe_idx_end": end_idx,
@@ -509,10 +587,12 @@ def _build_align_candidates(
     transcribe_words: list[dict],
     transcribe_norms: list[str],
     ytasr_ranges: list[dict | None],
+    mix_ranges: list[dict | None],
     margin_s: float,
     max_edit_ratio: float,
     alpha: float,
     beta: float,
+    gamma: float,
 ) -> list[dict]:
     """One align candidate per line that has an align range, scored by the
     transcribe content inside that range.
@@ -539,10 +619,12 @@ def _build_align_candidates(
             max_edit_ratio,
         )
         y_agree = _range_agreement(t0, t1, ytasr_ranges[line_id])
+        m_agree = _range_agreement(t0, t1, mix_ranges[line_id])
         # a_agree is 1.0 by construction (this window *is* align's belief),
-        # so the rescue reduces to ytasr's endorsement of it.
+        # so the rescue reduces to ytasr's endorsement of it. Mix rides the
+        # bonus at gamma but never the rescue (same model as transcribe).
         weight = _corroboration_weight(any_overlap, count_in_window, 1.0, y_agree)
-        score = float(t_match) + weight * (alpha * 1.0 + beta * y_agree)
+        score = float(t_match) + weight * (alpha * 1.0 + beta * y_agree + gamma * m_agree)
         out.append(
             {
                 "line_id": line_id,
@@ -553,6 +635,7 @@ def _build_align_candidates(
                 "transcribe_match": float(t_match),
                 "align_agreement": 1.0,
                 "ytasr_agreement": y_agree,
+                "mix_agreement": m_agree,
                 "alpha_weight": weight,
                 "token_start": ar["token_start"],
                 "token_end": ar["token_end"],
@@ -566,12 +649,14 @@ def _build_ytasr_candidates(
     ytasr_words: list[dict],
     line_norms: list[list[str]],
     align_ranges: list[dict | None],
+    mix_ranges: list[dict | None],
     transcribe_words: list[dict],
     transcribe_norms: list[str],
     margin_s: float,
     max_edit_ratio: float,
     alpha: float,
     beta: float,
+    gamma: float,
 ) -> list[dict]:
     """Turn each ytasr ``find_candidates`` hit into a joint candidate.
 
@@ -605,11 +690,13 @@ def _build_ytasr_candidates(
             max_edit_ratio,
         )
         a_agree = _range_agreement(t0, t1, align_ranges[line_id])
+        m_agree = _range_agreement(t0, t1, mix_ranges[line_id])
         y_agree = y_score / len(line_norms[line_id])
         # The rescue pair here is align's endorsement of this window and
-        # the solidity of ytasr's own lexical claim.
+        # the solidity of ytasr's own lexical claim; mix rides the bonus at
+        # gamma but never the rescue (same model as transcribe).
         weight = _corroboration_weight(any_overlap, count_in_window, a_agree, y_agree)
-        score = float(t_match) + weight * (alpha * a_agree + beta * y_agree)
+        score = float(t_match) + weight * (alpha * a_agree + beta * y_agree + gamma * m_agree)
         out.append(
             {
                 "line_id": line_id,
@@ -620,9 +707,76 @@ def _build_ytasr_candidates(
                 "transcribe_match": float(t_match),
                 "align_agreement": a_agree,
                 "ytasr_agreement": y_agree,
+                "mix_agreement": m_agree,
                 "alpha_weight": weight,
                 "ytasr_idx_start": start_idx,
                 "ytasr_idx_end": end_idx,
+            }
+        )
+    return out
+
+
+def _build_mix_candidates(
+    tiling_cands: list,
+    mix_words: list[dict],
+    line_norms: list[list[str]],
+    align_ranges: list[dict | None],
+    ytasr_ranges: list[dict | None],
+    transcribe_words: list[dict],
+    transcribe_norms: list[str],
+    margin_s: float,
+    max_edit_ratio: float,
+    alpha: float,
+    beta: float,
+    gamma: float,
+) -> list[dict]:
+    """Turn each full-mix ``find_candidates`` hit into a joint candidate.
+
+    Structurally identical to :func:`_build_ytasr_candidates` — every
+    fuzzy-matched hit is a competing DP candidate whose self-evidence
+    (``mix_agreement``) is graded by its own lexical match quality (matched
+    fraction of the line), not flat. The one asymmetry with ytasr: the mix
+    transcribe and the stem ``transcribe_words`` are the *same whisper model*,
+    so the mix must not be able to corroborate itself into the gate. Its
+    ``transcribe_match``/``align_agreement``/``ytasr_agreement`` are scored fresh
+    against this window; the corroboration ``weight`` is computed from
+    (align, ytasr) only, and the mix term enters the linear bonus alone at
+    ``gamma``.
+    """
+    out: list[dict] = []
+    transcribe_starts = [w["start"] for w in transcribe_words]
+    for start_idx, end_idx, line_id, m_score in tiling_cands:
+        t0 = mix_words[start_idx]["start"]
+        t1 = mix_words[end_idx - 1]["end"]
+        t_match, any_overlap, count_in_window = _transcribe_match_and_count_in_window(
+            line_norms[line_id],
+            transcribe_norms,
+            transcribe_starts,
+            t0,
+            t1,
+            margin_s,
+            max_edit_ratio,
+        )
+        a_agree = _range_agreement(t0, t1, align_ranges[line_id])
+        y_agree = _range_agreement(t0, t1, ytasr_ranges[line_id])
+        m_agree = m_score / len(line_norms[line_id])
+        # Rescue pair is (align, ytasr) only — mix never corroborates itself.
+        weight = _corroboration_weight(any_overlap, count_in_window, a_agree, y_agree)
+        score = float(t_match) + weight * (alpha * a_agree + beta * y_agree + gamma * m_agree)
+        out.append(
+            {
+                "line_id": line_id,
+                "source": "mix",
+                "t0": t0,
+                "t1": t1,
+                "score": score,
+                "transcribe_match": float(t_match),
+                "align_agreement": a_agree,
+                "ytasr_agreement": y_agree,
+                "mix_agreement": m_agree,
+                "alpha_weight": weight,
+                "mix_idx_start": start_idx,
+                "mix_idx_end": end_idx,
             }
         )
     return out
@@ -755,6 +909,7 @@ def _materialise_line_objects(
     align_words: list[dict],
     transcribe_words: list[dict],
     ytasr_words: list[dict],
+    mix_words: list[dict],
     align_ranges: list[dict | None],
     lookahead: int,
 ) -> list[dict]:
@@ -777,6 +932,11 @@ def _materialise_line_objects(
             start_idx = cand["ytasr_idx_start"]
             end_idx = cand["ytasr_idx_end"]
             win_words = ytasr_words[start_idx:end_idx]
+            obj = _build_line_object(lines[line_id], line_id, toks, win_words, lookahead)
+        elif cand["source"] == "mix":
+            start_idx = cand["mix_idx_start"]
+            end_idx = cand["mix_idx_end"]
+            win_words = mix_words[start_idx:end_idx]
             obj = _build_line_object(lines[line_id], line_id, toks, win_words, lookahead)
         else:
             start_idx = cand["transcribe_idx_start"]

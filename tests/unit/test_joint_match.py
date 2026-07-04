@@ -4,6 +4,7 @@ from pikaraoke.lib.joint_match import (
     _alpha_weight,
     _best_tiling_by_time,
     _build_align_candidates,
+    _build_mix_candidates,
     _build_ytasr_candidates,
     _line_align_ranges,
     _range_agreement,
@@ -219,6 +220,8 @@ class TestBuildAlignCandidates:
             transcribe_words,
             transcribe_norms,
             [None, None],
+            mix_ranges=[None] * len(line_norms),
+            gamma=0.0,
             margin_s=0.3,
             max_edit_ratio=0.25,
             alpha=4.0,
@@ -240,6 +243,8 @@ class TestBuildAlignCandidates:
             [],
             [],
             [None],
+            mix_ranges=[None] * len(line_norms),
+            gamma=0.0,
             margin_s=0.3,
             max_edit_ratio=0.25,
             alpha=4.0,
@@ -260,6 +265,8 @@ class TestBuildAlignCandidates:
             [],
             [],
             [None, None],
+            mix_ranges=[None] * len(line_norms),
+            gamma=0.0,
             margin_s=0.3,
             max_edit_ratio=0.25,
             alpha=4.0,
@@ -283,6 +290,8 @@ class TestBuildAlignCandidates:
             transcribe_words,
             transcribe_norms,
             [None],
+            mix_ranges=[None] * len(line_norms),
+            gamma=0.0,
             margin_s=0.3,
             max_edit_ratio=0.25,
             alpha=4.0,
@@ -307,6 +316,8 @@ class TestBuildAlignCandidates:
             transcribe_words,
             transcribe_norms,
             [None],
+            mix_ranges=[None] * len(line_norms),
+            gamma=0.0,
             margin_s=0.3,
             max_edit_ratio=0.25,
             alpha=4.0,
@@ -331,6 +342,8 @@ class TestBuildAlignCandidates:
             transcribe_words,
             transcribe_norms,
             [{"t0": 10.0, "t1": 13.0}],
+            mix_ranges=[None] * len(line_norms),
+            gamma=0.0,
             margin_s=0.3,
             max_edit_ratio=0.25,
             alpha=4.0,
@@ -340,6 +353,118 @@ class TestBuildAlignCandidates:
         assert c["transcribe_match"] == 0
         assert c["alpha_weight"] == 1.0
         assert c["score"] == 0.0 + 1.0 * (4.0 * 1.0 + 2.0 * 1.0)
+
+    def test_mix_endorsement_does_not_rescue_dissent(self):
+        # Same dissenting-transcribe window as test_unrelated_speech_zeros, but
+        # now the MIX (not ytasr) endorses align's exact range. Because the mix
+        # is the same whisper model as transcribe, it never enters the 2-of-3
+        # rescue: the gate stays fired and the whole bonus zeroes, even though
+        # mix_agreement is a full 1.0.
+        line_norms = [["no", "worries", "for", "the", "rest"]]
+        align_ranges = [{"t0": 10.0, "t1": 13.0, "token_start": 0, "token_end": 5}]
+        transcribe_words = _aw_seq("hello", "what", "are", "you", "doing", t0=10.0, dt=0.5)
+        transcribe_norms = ["hello", "what", "are", "you", "doing"]
+        cands = _build_align_candidates(
+            line_norms,
+            align_ranges,
+            transcribe_words,
+            transcribe_norms,
+            [None],  # ytasr: no partner
+            [{"t0": 10.0, "t1": 13.0}],  # mix: endorses the exact window
+            margin_s=0.3,
+            max_edit_ratio=0.25,
+            alpha=4.0,
+            beta=2.0,
+            gamma=2.0,
+        )
+        c = cands[0]
+        assert c["mix_agreement"] == 1.0  # mix does back the window...
+        assert c["alpha_weight"] == 0.0  # ...but cannot rescue the gate
+        assert c["score"] == 0.0  # weight 0 zeroes the whole bonus, mix included
+
+
+class TestBuildMixCandidates:
+    """Full-mix candidates are scored like ytasr's — graded self-evidence —
+    but the mix never rescues the corroboration gate (same-model guard)."""
+
+    def test_scored_like_ytasr_with_own_self_evidence(self):
+        mix_words = _aw_seq("a", "b", t0=10.0, dt=0.5)
+        line_norms = [["a", "b"]]
+        align_ranges = [{"t0": 10.0, "t1": 11.0}]
+        transcribe_words = _aw_seq("a", "b", t0=10.0, dt=0.5)
+        transcribe_norms = ["a", "b"]
+        tiling_cands = [(0, 2, 0, 2.0)]  # (start_idx, end_idx, line_id, m_score)
+        cands = _build_mix_candidates(
+            tiling_cands,
+            mix_words,
+            line_norms,
+            align_ranges,
+            [None],  # ytasr_ranges
+            transcribe_words,
+            transcribe_norms,
+            margin_s=0.3,
+            max_edit_ratio=0.25,
+            alpha=2.0,
+            beta=3.0,
+            gamma=4.0,
+        )
+        assert len(cands) == 1
+        c = cands[0]
+        assert c["source"] == "mix"
+        assert c["mix_agreement"] == 1.0
+        assert c["align_agreement"] == 1.0  # windows coincide
+        assert c["ytasr_agreement"] == 0.0  # no ytasr reference
+        assert c["transcribe_match"] == 2
+        assert c["alpha_weight"] == 1.0
+        # score = t_match + weight*(alpha*a + beta*y + gamma*mix)
+        assert c["score"] == 2.0 + 1.0 * (2.0 * 1.0 + 3.0 * 0.0 + 4.0 * 1.0)
+
+    def test_partial_hit_grades_self_evidence(self):
+        # A 2-of-3 token hit carries mix_agreement 2/3, not a flat 1.0.
+        mix_words = _aw_seq("a", "b", t0=10.0, dt=0.5)
+        line_norms = [["a", "b", "c"]]
+        cands = _build_mix_candidates(
+            [(0, 2, 0, 2.0)],
+            mix_words,
+            line_norms,
+            [None],
+            [None],
+            [],
+            [],
+            margin_s=0.3,
+            max_edit_ratio=0.25,
+            alpha=2.0,
+            beta=3.0,
+            gamma=3.0,
+        )
+        assert cands[0]["mix_agreement"] == 2 / 3
+
+    def test_own_claim_never_rescues_gate(self):
+        # Transcribe dissents in the mix window and neither align nor ytasr
+        # endorse it: the mix's own strong lexical claim cannot rescue the
+        # gate, so the bonus zeroes (one model can't corroborate itself).
+        mix_words = _aw_seq("a", "b", t0=10.0, dt=0.5)
+        line_norms = [["a", "b"]]
+        transcribe_words = _aw_seq("x", "y", t0=10.0, dt=0.5)
+        transcribe_norms = ["x", "y"]
+        cands = _build_mix_candidates(
+            [(0, 2, 0, 2.0)],
+            mix_words,
+            line_norms,
+            [None],  # align: no endorsement
+            [None],  # ytasr: no endorsement
+            transcribe_words,
+            transcribe_norms,
+            margin_s=0.3,
+            max_edit_ratio=0.25,
+            alpha=2.0,
+            beta=3.0,
+            gamma=4.0,
+        )
+        c = cands[0]
+        assert c["mix_agreement"] == 1.0
+        assert c["alpha_weight"] == 0.0
+        assert c["score"] == 0.0
 
 
 class TestBuildYtasrCandidates:
@@ -357,8 +482,10 @@ class TestBuildYtasrCandidates:
             ytasr_words,
             line_norms,
             align_ranges,
+            [None] * len(line_norms),
             transcribe_words,
             transcribe_norms,
+            gamma=0.0,
             margin_s=0.3,
             max_edit_ratio=0.25,
             alpha=2.0,
@@ -385,8 +512,10 @@ class TestBuildYtasrCandidates:
             ytasr_words,
             line_norms,
             align_ranges,
+            [None] * len(line_norms),
             transcribe_words,
             transcribe_norms,
+            gamma=0.0,
             margin_s=0.3,
             max_edit_ratio=0.25,
             alpha=2.0,
@@ -411,8 +540,10 @@ class TestBuildYtasrCandidates:
             ytasr_words,
             line_norms,
             align_ranges,
+            [None] * len(line_norms),
             transcribe_words,
             transcribe_norms,
+            gamma=0.0,
             margin_s=0.3,
             max_edit_ratio=0.25,
             alpha=2.0,
@@ -438,8 +569,10 @@ class TestBuildYtasrCandidates:
             ytasr_words,
             line_norms,
             align_ranges,
+            [None] * len(line_norms),
             transcribe_words,
             transcribe_norms,
+            gamma=0.0,
             margin_s=0.3,
             max_edit_ratio=0.25,
             alpha=2.0,
@@ -465,8 +598,10 @@ class TestBuildYtasrCandidates:
             ytasr_words,
             line_norms,
             align_ranges,
+            [None] * len(line_norms),
             transcribe_words,
             transcribe_norms,
+            gamma=0.0,
             margin_s=0.3,
             max_edit_ratio=0.25,
             alpha=2.0,
@@ -719,6 +854,87 @@ class TestEndToEndYtasrWins:
         assert stats_default == stats_explicit
         assert stats_default["ytasr_won"] == 0
         assert stats_default["n_ytasr_candidates"] == 0
+
+
+# ---------------------------------------------------------------------------
+# End-to-end: full-mix fourth source
+# ---------------------------------------------------------------------------
+
+
+class TestEndToEndMixSource:
+    """Full-mix transcribe as the optional fourth candidate source."""
+
+    def test_mix_none_bit_identical_to_three_source(self):
+        # Omitting mix_words (or passing empty) must reproduce the three-source
+        # matcher exactly — mix is inert unless supplied.
+        lines = ["hello world", "good night"]
+        align_words = _aw_seq("hello", "world", "good", "night", t0=0.0, dt=1.0)
+        transcribe_words = _aw_seq("hello", "world", "good", "night", t0=0.0, dt=1.0)
+        ytasr_words = _ytw_seq("hello", "world", "good", "night", t0=0.0, dt=1.0)
+
+        objs_base, _ = match_words_to_lines_joint_with_stats(
+            align_words,
+            transcribe_words,
+            lines,
+            lines,
+            alpha=4.0,
+            beta=4.0,
+            ytasr_words=ytasr_words,
+        )
+        objs_none, stats_none = match_words_to_lines_joint_with_stats(
+            align_words,
+            transcribe_words,
+            lines,
+            lines,
+            alpha=4.0,
+            beta=4.0,
+            ytasr_words=ytasr_words,
+            mix_words=None,
+        )
+        objs_empty, _ = match_words_to_lines_joint_with_stats(
+            align_words,
+            transcribe_words,
+            lines,
+            lines,
+            alpha=4.0,
+            beta=4.0,
+            ytasr_words=ytasr_words,
+            mix_words=[],
+        )
+        assert objs_none == objs_base == objs_empty
+        assert stats_none["mix_won"] == 0
+        assert stats_none["n_mix_candidates"] == 0
+        assert stats_none["n_mix_words"] == 0
+
+    def test_mix_recovers_stem_starved_line(self):
+        # Line 1 is stem-starved: align crammed it at the wrong ~1.6 s and
+        # transcribe heard only unrelated speech there (firing the gate on
+        # align's placement), but the full mix caught the quiet vocal at its
+        # true 10 s. The mix candidate should win the line where the three stem
+        # sources cannot.
+        lines = ["hello world", "quiet secret phrase"]
+        align_words = _aw_seq("hello", "world", t0=0.0, dt=1.0) + _aw_seq(
+            "quiet", "secret", "phrase", t0=1.6, dt=0.1
+        )
+        transcribe_words = _aw_seq("hello", "world", t0=0.0, dt=1.0) + _aw_seq(
+            "zzz", "qqq", t0=1.6, dt=0.1
+        )
+        mix_words = _aw_seq("quiet", "secret", "phrase", t0=10.0, dt=0.5)
+
+        objs, stats = match_words_to_lines_joint_with_stats(
+            align_words,
+            transcribe_words,
+            lines,
+            lines,
+            alpha=2.0,
+            beta=2.0,
+            gamma=2.0,
+            mix_words=mix_words,
+        )
+        assert stats["selected_source"] == ["align", "mix"]
+        assert stats["mix_won"] == 1
+        assert stats["n_mix_candidates"] > 0
+        assert objs[1]["start"] >= 9.5
 
 
 # ---------------------------------------------------------------------------
