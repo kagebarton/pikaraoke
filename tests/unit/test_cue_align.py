@@ -6,6 +6,7 @@ from pikaraoke.lib.cue_align import (
     SOURCE,
     SOURCE_FILL,
     SOURCE_REALIGN,
+    SOURCE_REALIGN_MIX,
     Section,
     align_song,
     fit_offset,
@@ -420,6 +421,96 @@ class TestRepaceBadLines:
         assert out[4]["source"] == SOURCE_FILL
         assert stats["n_realigned"] == 0 and stats["n_repaced"] == 1
 
+    def test_mix_rescues_after_stem_realign_fails(self):
+        # The stem re-align hears nothing (quiet vocal the separator starved),
+        # but the full-mix re-align recovers the line inside its cue span.
+        objs, cues, lines = _anchor_lines(4)
+        cues.append((8.0, 10.0))
+        lines.append("ee ff")
+        objs.append(_line(4, "ee ff"))
+        stem_calls, mix_calls = [], []
+
+        def stem(lid, t0, t1):
+            stem_calls.append((lid, t0, t1))
+            return None
+
+        def mix(lid, t0, t1):
+            mix_calls.append((lid, t0, t1))
+            return _words(("ee", 8.1, 8.5), ("ff", 8.6, 9.0))
+
+        out, stats = repace_bad_lines(objs, cues, lines, lines, realign=stem, realign_mix=mix)
+        assert stem_calls == [(4, 8.0, 10.0)]  # stem tried first
+        assert mix_calls == [(4, 8.0, 10.0)]  # then mix, same window
+        assert out[4]["source"] == SOURCE_REALIGN_MIX
+        assert [w["start"] for w in out[4]["words"]] == [8.1, 8.6]
+        assert stats["n_realigned"] == 0
+        assert stats["n_realigned_mix"] == 1
+        assert stats["realigned_mix_line_ids"] == [4]
+        assert stats["n_mix_attempts"] == 1
+        assert stats["n_repaced"] == 0
+
+    def test_stem_accepted_skips_mix_rung(self):
+        # When the stem re-align is accepted, the mix rung must never run.
+        objs, cues, lines = _anchor_lines(4)
+        cues.append((8.0, 10.0))
+        lines.append("ee ff")
+        objs.append(_line(4, "ee ff"))
+        mix_calls = []
+
+        def mix(lid, t0, t1):
+            mix_calls.append(lid)
+            return _words(("ee", 8.1, 8.5), ("ff", 8.6, 9.0))
+
+        out, stats = repace_bad_lines(
+            objs,
+            cues,
+            lines,
+            lines,
+            realign=lambda lid, t0, t1: _words(("ee", 8.1, 8.5), ("ff", 8.6, 9.0)),
+            realign_mix=mix,
+        )
+        assert out[4]["source"] == SOURCE_REALIGN
+        assert mix_calls == []
+        assert stats["n_realigned"] == 1 and stats["n_realigned_mix"] == 0
+        assert stats["n_mix_attempts"] == 0
+
+    def test_mix_result_gated_by_containment(self):
+        # The mix heard the line but parked it far past the cue span: the same
+        # strict containment gate rejects it and the line falls to the fill.
+        # The attempt is still counted (the safety signal to watch).
+        objs, cues, lines = _anchor_lines(4)
+        cues.append((8.0, 10.0))
+        lines.append("ee ff")
+        objs.append(_line(4, "ee ff"))
+
+        def mix(lid, t0, t1):
+            return _words(("ee", 19.5, 19.8), ("ff", 19.9, 20.2))
+
+        out, stats = repace_bad_lines(
+            objs, cues, lines, lines, realign=lambda *a: None, realign_mix=mix
+        )
+        assert out[4]["source"] == SOURCE_FILL
+        assert stats["n_realigned_mix"] == 0
+        assert stats["n_mix_attempts"] == 1
+        assert stats["n_repaced"] == 1
+
+    def test_both_rungs_fail_falls_to_fill(self):
+        objs, cues, lines = _anchor_lines(4)
+        cues.append((8.0, 10.0))
+        lines.append("ee ff")
+        objs.append(_line(4, "ee ff"))
+        out, stats = repace_bad_lines(
+            objs,
+            cues,
+            lines,
+            lines,
+            realign=lambda *a: None,
+            realign_mix=lambda *a: None,
+        )
+        assert out[4]["source"] == SOURCE_FILL
+        assert stats["n_realigned"] == 0 and stats["n_realigned_mix"] == 0
+        assert stats["n_mix_attempts"] == 1 and stats["n_repaced"] == 1
+
     def test_displaced_tight_split_line_is_trusted(self):
         # A cleanly-aligned line sitting a second past its cue span stays:
         # caption cue times carry per-line jitter, and the audio timing wins.
@@ -569,3 +660,27 @@ class TestAlignSong:
 
         assert [o["line_id"] for o in objs] == [0, 1, 2, 3]
         assert all(o["source"] == SOURCE_FILL for o in objs)
+
+    def test_injected_mix_aligner_rescues_failed_lines(self):
+        # The stem aligner places nothing (section + per-line both None); the
+        # injected mix aligner recovers each line inside its cue window, so all
+        # lines come back as mix re-aligns and none are re-paced from the cue.
+        stem = _stub_aligner(lambda *_: None)
+
+        def _mid_words(t0, t1, text, label):
+            mid = (t0 + t1) / 2
+            return _words(("a", mid - 0.1, mid + 0.1), ("a", mid + 0.15, mid + 0.35))
+
+        mix = _stub_aligner(_mid_words)
+        objs, stats = align_song(
+            _SONG_CUES, _SONG_LINES, _SONG_LINES, 8.0, stem, slice_align_mix=mix
+        )
+
+        assert all(o["source"] == SOURCE_REALIGN_MIX for o in objs)
+        assert stats["repace"]["n_realigned_mix"] == 4
+        assert stats["repace"]["n_repaced"] == 0
+        # One stem section pass + 4 per-line stem rungs (all None), then the mix
+        # rung once per line.
+        assert len(stem.calls) == 1 + 4
+        assert len(mix.calls) == 4
+        assert all("(mix)" in c[3] for c in mix.calls)

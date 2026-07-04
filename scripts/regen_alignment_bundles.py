@@ -364,8 +364,13 @@ def _caption_wpm(srt_path: Path, job: SongJob) -> float | None:
 # ---------------------------------------------------------------------------
 
 
-def print_report(jobs: list[SongJob], folder: Path, reset: bool) -> None:
-    scope = "all songs (reset)" if reset else "missing/stale bundles"
+def print_report(jobs: list[SongJob], folder: Path, reset: bool, include_all: bool) -> None:
+    if reset:
+        scope = "all songs (reset)"
+    elif include_all:
+        scope = "all songs (--all; reuse recorded sources)"
+    else:
+        scope = "missing/stale bundles"
     print(f"\nScanned: {folder}")
     print(f"Selection: {scope}")
     print(f"Songs to regenerate: {len(jobs)}\n")
@@ -581,6 +586,9 @@ def run_jobs(
 ) -> tuple[int, int, int]:
     """Run each job's pipeline serially. Returns (succeeded, failed, skipped)."""
     config.cache_dereverb_stem = True
+    # The regen is the offline-capture tool: always grab the full-mix transcribe
+    # so bundles carry mix_transcribe_words for the full-mix experiments.
+    config.capture_mix_transcribe = True
 
     stem_worker = StemWorker(
         model_dir=config.separator_model_dir,
@@ -701,6 +709,14 @@ def parse_args() -> argparse.Namespace:
         "reuses their recorded source.",
     )
     p.add_argument(
+        "--all",
+        action="store_true",
+        help="Reprocess every song (reusing its recorded lyric source, like the "
+        "default), not just missing/stale bundles. Needed to backfill additive "
+        "bundle fields that don't bump SCHEMA_VERSION (e.g. mix_transcribe_words). "
+        "Unlike --reset, keeps recorded sources and never wipes outputs.",
+    )
+    p.add_argument(
         "--dry-run",
         action="store_true",
         help="Print the report and exit without backing up, prompting or running.",
@@ -731,10 +747,10 @@ def main() -> int:
         print(f"Folder not found: {folder}", file=sys.stderr)
         return 2
 
-    jobs = scan_folder(folder, args.reset)
+    jobs = scan_folder(folder, include_all=args.reset or args.all)
     for job in jobs:
         job.plan = resolve_plan(job, reset=args.reset)
-    print_report(jobs, folder, args.reset)
+    print_report(jobs, folder, args.reset, args.all)
     if not jobs:
         return 0
 

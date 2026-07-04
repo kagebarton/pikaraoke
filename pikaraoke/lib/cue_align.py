@@ -103,6 +103,11 @@ SOURCE_FILL = "cue_align_fill"
 # Provenance for a bad line recovered by a narrow per-line re-align over its
 # offset-corrected cue window -- real audio timing, unlike SOURCE_FILL.
 SOURCE_REALIGN = "cue_align_line"
+# Provenance for a bad line the stem re-align could not recover but a re-align on
+# the full mix did (same narrow window, mix audio). The mix catches quiet vocals
+# the stem separator starved; still gated on the same strict containment check,
+# so a mis-heard mix line falls through to the cue fill like any other.
+SOURCE_REALIGN_MIX = "cue_align_line_mix"
 
 
 @dataclass(frozen=True)
@@ -298,6 +303,36 @@ def split_section_to_lines(
     return out
 
 
+def _realign_rung(
+    realign: Callable[[int, float, float], list[dict] | None],
+    lid: int,
+    display_text: str,
+    toks: list[tuple[str, str]],
+    t0: float,
+    t1: float,
+    cue_span: tuple[float, float],
+    offset: float,
+    max_word_dur: float,
+    source: str,
+) -> dict | None:
+    """One rescue-ladder rung: a narrow re-align plus the strict containment gate.
+
+    Returns the accepted line object (tagged ``source``) or None when the
+    re-align produced nothing, covered too little of the line, or landed
+    outside its offset-corrected cue window -- the displacement screen every
+    re-aligned line must pass, stem or mix.
+    """
+    raw_words = realign(lid, t0, t1)
+    if not raw_words:
+        return None
+    fixed = _line_from_realigned(
+        lid, display_text, toks, t0, t1, raw_words, max_word_dur, source=source
+    )
+    if fixed is None or not _line_in_span(fixed, cue_span, offset):
+        return None
+    return fixed
+
+
 def repace_bad_lines(
     line_objects: list[dict],
     cue_spans: list[tuple[float, float]],
@@ -309,6 +344,7 @@ def repace_bad_lines(
     max_word_dur: float = MAX_WORD_DUR_S,
     duration: float | None = None,
     realign: Callable[[int, float, float], list[dict] | None] | None = None,
+    realign_mix: Callable[[int, float, float], list[dict] | None] | None = None,
 ) -> tuple[list[dict], dict]:
     """Rescue the lines the align could not place, from their cue spans.
 
@@ -322,14 +358,22 @@ def repace_bad_lines(
     (:func:`_repeat_detection_slacks`). The display-lead offset comes from
     :func:`fit_offset` over the clean lines.
 
-    Each bad line is rescued in two steps: ``realign(lid, t0, t1)`` -- an
-    injected narrow per-line forced align over the offset-corrected window,
-    returning absolute-time words or None -- is tried first, and its result is
-    kept only if it comes back covered and *inside the window it was aimed
-    at* (:func:`_line_in_span`; tagged :data:`SOURCE_REALIGN`). Otherwise the line is rebuilt with paced words
-    across the window (tagged :data:`SOURCE_FILL`), clamped to ``duration``
-    when known. Because only bad lines are rewritten, a coarse offset can
-    never degrade a well-aligned line.
+    Each bad line runs a rescue ladder (:func:`_realign_rung`), stopping at the
+    first rung whose result comes back covered and *inside the window it was
+    aimed at* (:func:`_line_in_span`):
+
+    1. ``realign(lid, t0, t1)`` -- a narrow per-line forced align over the
+       offset-corrected window on the vocal stem (tagged :data:`SOURCE_REALIGN`).
+    2. ``realign_mix(lid, t0, t1)`` -- the same narrow align on the full mix,
+       tried only when the stem rung was rejected and a mix aligner is injected
+       (tagged :data:`SOURCE_REALIGN_MIX`). The mix catches quiet vocals the
+       separator starved; the identical containment gate keeps a mis-heard mix
+       line from being trusted.
+    3. Otherwise the line is rebuilt with paced words across the window (tagged
+       :data:`SOURCE_FILL`), clamped to ``duration`` when known.
+
+    Because only bad lines are rewritten, a coarse offset can never degrade a
+    well-aligned line.
 
     Returns ``(line_objects, stats)``. ``cue_spans`` is indexed by ``line_id``.
     """
@@ -341,6 +385,8 @@ def repace_bad_lines(
     out: list[dict] = []
     repaced: list[int] = []
     realigned: list[int] = []
+    realigned_mix: list[int] = []
+    n_mix_attempts = 0
     for obj in line_objects:
         lid = obj["line_id"]
         if lid >= len(cue_spans):
@@ -367,15 +413,39 @@ def repace_bad_lines(
             if t0 >= t1:
                 t0 = max(0.0, t1 - 0.5)
         if realign is not None:
-            raw_words = realign(lid, t0, t1)
-            fixed = (
-                _line_from_realigned(lid, display_lines[lid], toks, t0, t1, raw_words, max_word_dur)
-                if raw_words
-                else None
+            fixed = _realign_rung(
+                realign,
+                lid,
+                display_lines[lid],
+                toks,
+                t0,
+                t1,
+                cue_spans[lid],
+                offset,
+                max_word_dur,
+                SOURCE_REALIGN,
             )
-            if fixed is not None and _line_in_span(fixed, cue_spans[lid], offset):
+            if fixed is not None:
                 out.append(fixed)
                 realigned.append(lid)
+                continue
+        if realign_mix is not None:
+            n_mix_attempts += 1
+            fixed = _realign_rung(
+                realign_mix,
+                lid,
+                display_lines[lid],
+                toks,
+                t0,
+                t1,
+                cue_spans[lid],
+                offset,
+                max_word_dur,
+                SOURCE_REALIGN_MIX,
+            )
+            if fixed is not None:
+                out.append(fixed)
+                realigned_mix.append(lid)
                 continue
         out.append(_repace_line(lid, display_lines[lid], toks, t0, t1, max_word_dur))
         repaced.append(lid)
@@ -385,11 +455,18 @@ def repace_bad_lines(
         "repaced_line_ids": repaced,
         "n_realigned": len(realigned),
         "realigned_line_ids": realigned,
+        "n_realigned_mix": len(realigned_mix),
+        "realigned_mix_line_ids": realigned_mix,
+        "n_mix_attempts": n_mix_attempts,
     }
     logger.info(
-        "cue rescue: offset=%+.2fs, %d line(s) re-aligned, %d/%d re-paced from cue",
+        "cue rescue: offset=%+.2fs, %d re-aligned (+%d on mix, %d/%d mix attempts rejected), "
+        "%d/%d re-paced from cue",
         offset,
         len(realigned),
+        len(realigned_mix),
+        n_mix_attempts - len(realigned_mix),
+        n_mix_attempts,
         len(repaced),
         len(line_objects),
     )
@@ -527,9 +604,12 @@ def _line_from_realigned(
     t1: float,
     raw_words: list[dict],
     max_word_dur: float,
+    *,
+    source: str = SOURCE_REALIGN,
 ) -> dict | None:
     """Line object from a per-line re-align's absolute-time words, or None if
-    the result covers too little of the line to trust."""
+    the result covers too little of the line to trust. ``source`` tags the
+    provenance (stem vs mix re-align)."""
     norms = [norm for norm, _raw in toks]
     assign = _match_words_to_tokens(norms, _token_expected_times(len(toks), t0, t1), raw_words)
     words: list[dict] = []
@@ -542,7 +622,7 @@ def _line_from_realigned(
         )
     if len(words) / len(toks) < MIN_LINE_COVERAGE:
         return None
-    return _line_object(lid, display_text, words, source=SOURCE_REALIGN)
+    return _line_object(lid, display_text, words, source=source)
 
 
 def _repace_line(
@@ -588,6 +668,7 @@ def align_song(
     duration: float | None,
     slice_align: Callable[[float, float, str, str], list[dict] | None],
     *,
+    slice_align_mix: Callable[[float, float, str, str], list[dict] | None] | None = None,
     pad_s: float = SECTION_PAD_S,
     progress: Callable[[list[Section]], Iterable[Section]] | None = None,
 ) -> tuple[list[dict], dict]:
@@ -602,12 +683,18 @@ def align_song(
     offset-shifted cues, then re-pace the lines the align could not place
     (:func:`repace_bad_lines`, with a narrow per-line ``slice_align`` rescue).
 
+    ``slice_align_mix`` (optional, same signature as ``slice_align`` but over the
+    full mix) adds a second rescue rung: a bad line the stem re-align cannot
+    recover is retried on the mix before falling to the cue-paced fill. The mix
+    catches quiet vocals the separator starved; the same strict containment gate
+    applies, so only bad lines are ever touched.
+
     ``duration`` clamps the section/fill windows to the audio; ``None`` (an
     unreadable stem) drops the clamp and the song degrades to cue-paced timing.
-    All GPU/ffmpeg I/O lives behind ``slice_align``, so this stays pure and
-    ``test_cue_align`` can drive it with a stub aligner. Display is injected the
-    same way: ``progress`` wraps the per-pass section list (e.g. ``tqdm``) so
-    the caller owns the terminal; ``None`` iterates silently.
+    All GPU/ffmpeg I/O lives behind the ``slice_align`` callables, so this stays
+    pure and ``test_cue_align`` can drive it with a stub aligner. Display is
+    injected the same way: ``progress`` wraps the per-pass section list (e.g.
+    ``tqdm``) so the caller owns the terminal; ``None`` iterates silently.
 
     Returns ``(line_objects, stats)``; ``stats`` carries the section count, the
     fitted offset, whether a re-section fired, and the repace sub-stats.
@@ -643,16 +730,30 @@ def align_song(
         ]
         line_objects, n_sections = align_pass(spans)
 
-    def realign_line(lid: int, t0: float, t1: float) -> list[dict] | None:
-        """Narrow per-line forced align over a bad line's offset-corrected window."""
+    def _line_window(t0: float, t1: float) -> tuple[float, float] | None:
+        """Offset-corrected line window padded into the flanking silence."""
         w0 = max(0.0, t0 - pad_s)
         w1 = t1 + pad_s if duration is None else min(duration, t1 + pad_s)
-        if w1 - w0 < 0.2:
-            return None
-        return slice_align(w0, w1, align_lines[lid], f"line {lid}")
+        return (w0, w1) if w1 - w0 >= 0.2 else None
+
+    def realign_line(lid: int, t0: float, t1: float) -> list[dict] | None:
+        """Narrow per-line forced align (vocal stem) over a bad line's window."""
+        window = _line_window(t0, t1)
+        return slice_align(*window, align_lines[lid], f"line {lid}") if window else None
+
+    def realign_line_mix(lid: int, t0: float, t1: float) -> list[dict] | None:
+        """Narrow per-line forced align on the full mix, for the second rescue rung."""
+        window = _line_window(t0, t1)
+        return slice_align_mix(*window, align_lines[lid], f"line {lid} (mix)") if window else None
 
     line_objects, repace_stats = repace_bad_lines(
-        line_objects, spans, display_lines, align_lines, duration=duration, realign=realign_line
+        line_objects,
+        spans,
+        display_lines,
+        align_lines,
+        duration=duration,
+        realign=realign_line,
+        realign_mix=realign_line_mix if slice_align_mix is not None else None,
     )
     stats = {
         "n_sections": n_sections,

@@ -25,6 +25,13 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+# Additive since v7 (no bump — additions only):
+#   - mix_transcribe_words: a transcribe (no refine) of the full mix (original
+#     audio, not the vocal stem), captured when config.capture_mix_transcribe
+#     is on. Capture-only — never fed to the matcher — so its presence does not
+#     change any shipped placement. The offline input for the full-mix
+#     alignment experiments (plans/full-mix-alignment-experiments.md).
+#   - config_snapshot.capture_mix_transcribe: the knob that gated the above.
 # v7: YouTube ASR promoted from a timing prior to the joint matcher's third
 #     candidate source; all timing-prior post-processing removed. A milestone
 #     bump (run-affecting) — regen treats v6 bundles as stale and reprocesses.
@@ -123,6 +130,7 @@ def build_bundle(
     ground_truth_refs: dict[str, Any],
     joint_stats: dict | None = None,
     transcribe_words: list[dict] | None = None,
+    mix_transcribe_words: list[dict] | None = None,
     media_duration_s: float | None = None,
 ) -> dict[str, Any]:
     """Assemble the capture dict. Pure — no I/O.
@@ -141,6 +149,7 @@ def build_bundle(
         "words_source": words_source,
         "joint_stats": joint_stats,
         "transcribe_words": transcribe_words,
+        "mix_transcribe_words": mix_transcribe_words,
         "output_summary": output_summary,
         "output_line_timings": output_line_timings,
         "ground_truth_refs": ground_truth_refs,

@@ -129,6 +129,7 @@ class LyricAlignStage(BaseStage):
         capture_words_source: str | None = None
         capture_joint_stats: dict | None = None
         capture_transcribe_words: list | None = None
+        capture_mix_transcribe_words: list | None = None
         capture_method_used: str | None = None
 
         if lyrics_path is not None:
@@ -158,6 +159,11 @@ class LyricAlignStage(BaseStage):
                 )
                 capture_words_source = "refine"
                 capture_method_used = "joint"
+
+            # Capture-only full-mix transcribe (both routes) for the offline
+            # full-mix experiments. Gated on the knob; never fed to the matcher,
+            # so shipped output stays byte-identical.
+            capture_mix_transcribe_words = self._mix_transcribe_words(ctx)
 
             write_srt = self._should_write_srt(ctx.song_path)
         else:
@@ -223,6 +229,7 @@ class LyricAlignStage(BaseStage):
                 words_source=capture_words_source,
                 joint_stats=capture_joint_stats,
                 transcribe_words=capture_transcribe_words,
+                mix_transcribe_words=capture_mix_transcribe_words,
                 method_used=capture_method_used,
                 line_objects=line_objects,
                 wrote_srt=write_srt,
@@ -241,6 +248,7 @@ class LyricAlignStage(BaseStage):
         words_source: str | None,
         joint_stats: dict | None,
         transcribe_words: list | None,
+        mix_transcribe_words: list | None,
         method_used: str | None,
         line_objects: list[dict],
         wrote_srt: bool,
@@ -259,6 +267,7 @@ class LyricAlignStage(BaseStage):
                 "joint_beta": cfg.joint_beta,
                 "joint_margin_s": cfg.joint_margin_s,
                 "joint_max_edit_ratio": cfg.joint_max_edit_ratio,
+                "capture_mix_transcribe": cfg.capture_mix_transcribe,
                 "whisper": dataclasses.asdict(cfg.whisper),
             }
             lyrics_suffix = Path(lyrics_path).suffix.lower().lstrip(".")
@@ -323,6 +332,7 @@ class LyricAlignStage(BaseStage):
                 words_source=words_source,
                 joint_stats=joint_stats,
                 transcribe_words=transcribe_words,
+                mix_transcribe_words=mix_transcribe_words,
                 output_summary=alignment_capture.summarize_line_objects(line_objects),
                 output_line_timings=alignment_capture.output_line_timings(line_objects),
                 ground_truth_refs=ground_truth_refs,
@@ -576,6 +586,28 @@ class LyricAlignStage(BaseStage):
                 ctx, vocal_wav, t0, t1, text, f"cue_slice{next(slice_counter):03d}.wav", label
             )
 
+        # Optional second rescue rung: re-align bad lines on the full mix. Only
+        # built when the knob is on and the mix audio is available; the cue-align
+        # library tries it after the stem re-align and before the cue-paced fill.
+        slice_align_mix = None
+        if self._config.cue_mix_rescue:
+            mix_wav = self._mix_wav(ctx)
+            if mix_wav is not None:
+                mix_counter = itertools.count()
+
+                def slice_align_mix(  # noqa: F811 — bind only when mix rescue is active
+                    t0: float, t1: float, text: str, label: str
+                ) -> list[dict] | None:
+                    return self._slice_align(
+                        ctx,
+                        mix_wav,
+                        t0,
+                        t1,
+                        text,
+                        f"cue_mix_slice{next(mix_counter):03d}.wav",
+                        label,
+                    )
+
         # Route the section bar to the processing terminal (where the pipeline
         # logs and the now-suppressed per-slice bars render), not the main
         # stderr. None off-PTY (Windows/no terminal) → tqdm falls back to
@@ -593,7 +625,13 @@ class LyricAlignStage(BaseStage):
             )
 
         line_objects, stats = align_song(
-            cue_spans, display_lines, align_lines, duration, slice_align, progress=progress
+            cue_spans,
+            display_lines,
+            align_lines,
+            duration,
+            slice_align,
+            slice_align_mix=slice_align_mix,
+            progress=progress,
         )
         if dereverb_stats is not None:
             stats["dereverb"] = dereverb_stats
@@ -616,6 +654,87 @@ class LyricAlignStage(BaseStage):
             return words or None
         except (OSError, ValueError, KeyError):
             logger.warning("[%s] YTASR json3 unreadable; running two-source", self.name)
+            return None
+
+    def _mix_wav(self, ctx: StageContext) -> Path | None:
+        """Full-mix WAV for the mix transcribe (and cue mix rescue) passes.
+
+        Prefers the pipeline's already-decoded ``extracted_wav`` (live path);
+        on the regen path that artifact is absent, so the source media is
+        decoded once to ``tmp_dir/<stem>_mix.wav`` (16 kHz mono s16 — whisper
+        resamples to that anyway) and memoized on the context so a later mix
+        rescue reuses it. Returns None when no mix audio can be produced (a
+        decode failure) — the caller treats that as "mix absent", never a song
+        failure. Cancellation propagates.
+        """
+        extracted = ctx.artifacts.get("extracted_wav")
+        if extracted is not None:
+            return Path(extracted)
+        cached = ctx.artifacts.get("mix_wav")
+        if cached is not None:
+            return Path(cached)
+        mix_wav = ctx.tmp_dir / f"{ctx.song_path.stem}_mix.wav"
+        try:
+            run_ffmpeg(
+                [
+                    "ffmpeg",
+                    "-hide_banner",
+                    "-loglevel",
+                    "warning",
+                    "-y",
+                    "-i",
+                    str(ctx.song_path),
+                    "-vn",
+                    "-ac",
+                    "1",
+                    "-ar",
+                    "16000",
+                    "-sample_fmt",
+                    "s16",
+                    str(mix_wav),
+                ],
+                ctx,
+                Phase.EXTRACT,
+            )
+        except PipelineCancelled:
+            raise
+        except RuntimeError:
+            logger.warning("[%s] mix decode failed; skipping mix transcribe", self.name)
+            return None
+        ctx.artifacts["mix_wav"] = mix_wav
+        return mix_wav
+
+    def _mix_transcribe_words(self, ctx: StageContext) -> list[dict] | None:
+        """Capture-only transcribe (no refine) of the full mix, or None.
+
+        Gated on ``capture_mix_transcribe`` AND ``capture_alignment_debug``
+        (nothing persists the words otherwise, so a lone knob would just burn a
+        GPU pass). Best-effort: any failure logs and returns None (captured as
+        mix-absent). The words are never fed to the matcher — they exist only in
+        the bundle for the offline full-mix experiments — so a miss changes
+        nothing about the shipped alignment. Cancellation propagates.
+        """
+        cfg = self._config
+        if not (cfg.capture_mix_transcribe and cfg.capture_alignment_debug):
+            return None
+        mix_wav = self._mix_wav(ctx)
+        if mix_wav is None:
+            return None
+        logger.info(f"[{self.name}] Transcribing (no refine) full mix: {Path(mix_wav).name}")
+        try:
+            return _model_call(
+                ctx,
+                Phase.TRANSCRIBE,
+                lambda: self._worker.transcribe_words(
+                    vocal_path=mix_wav,
+                    cancel_event=ctx.cancel.event if ctx.cancel else None,
+                    refine=False,
+                ),
+            )
+        except PipelineCancelled:
+            raise
+        except Exception:
+            logger.exception("[%s] mix transcribe failed; capturing as absent", self.name)
             return None
 
     def _dereverb_gate(

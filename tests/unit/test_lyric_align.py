@@ -523,6 +523,144 @@ class TestCueAlignRoute:
         worker.transcribe_words.assert_called_once()
         assert worker.transcribe_words.call_args.kwargs["refine"] is False
 
+    def _spy_align_song(self, monkeypatch, la_mod) -> dict:
+        """Wrap align_song to capture the slice_align_mix it receives."""
+        captured: dict = {}
+        real = la_mod.align_song
+
+        def spy(*args, **kwargs):
+            captured["slice_align_mix"] = kwargs.get("slice_align_mix")
+            return real(*args, **kwargs)
+
+        monkeypatch.setattr(la_mod, "align_song", spy)
+        return captured
+
+    def test_cue_mix_rescue_off_passes_no_mix_aligner(self, tmp_path, monkeypatch):
+        stage, ctx, worker, la_mod = self._make_srt(tmp_path, monkeypatch)
+        captured = self._spy_align_song(monkeypatch, la_mod)
+        stage.run(ctx)
+        assert captured["slice_align_mix"] is None
+
+    def test_cue_mix_rescue_on_binds_mix_aligner(self, tmp_path, monkeypatch):
+        stage, ctx, worker, la_mod = self._make_srt(tmp_path, monkeypatch)
+        stage._config.cue_mix_rescue = True
+        # extracted_wav present -> _mix_wav returns it without a lazy decode.
+        ctx.artifacts["extracted_wav"] = ctx.tmp_dir / "mix.wav"
+        captured = self._spy_align_song(monkeypatch, la_mod)
+        stage.run(ctx)
+        assert captured["slice_align_mix"] is not None
+
+
+# ---------------------------------------------------------------------------
+# Full-mix transcribe capture (Phase A0)
+# ---------------------------------------------------------------------------
+
+
+class TestMixTranscribeCapture:
+    """``capture_mix_transcribe``: one extra full-mix transcribe (no refine),
+    stored in the bundle, never fed to the matcher (output byte-identical)."""
+
+    @staticmethod
+    def _bundle(ctx) -> dict:
+        debug = ctx.song_path.parent / "alignment_debug" / f"{ctx.song_path.stem}.json"
+        return json.loads(debug.read_text(encoding="utf-8"))
+
+    def test_knob_off_no_mix_pass(self, tmp_path):
+        # Default config: transcribe runs once (the de-reverb gate only); the
+        # bundle records a null mix stream and the knob False.
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path)
+        stage.run(ctx)
+        worker.transcribe_words.assert_called_once()
+        bundle = self._bundle(ctx)
+        assert bundle["mix_transcribe_words"] is None
+        assert bundle["config"]["capture_mix_transcribe"] is False
+
+    def test_knob_on_captures_mix_words_from_extracted_wav(self, tmp_path):
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path)
+        stage._config.capture_mix_transcribe = True
+        extracted = ctx.tmp_dir / "extracted.wav"
+        extracted.write_bytes(b"")
+        ctx.artifacts["extracted_wav"] = extracted
+
+        stage.run(ctx)
+
+        # Two transcribe calls: the stem de-reverb gate + the full mix. The mix
+        # pass runs on the extracted WAV (no lazy decode) with refine off.
+        assert worker.transcribe_words.call_count == 2
+        mix_call = worker.transcribe_words.call_args_list[1]
+        assert mix_call.kwargs["vocal_path"] == extracted
+        assert mix_call.kwargs["refine"] is False
+        bundle = self._bundle(ctx)
+        assert bundle["mix_transcribe_words"] == [
+            {"word": "hello", "start": 0.0, "end": 1.0},
+            {"word": "world", "start": 1.0, "end": 2.0},
+        ]
+        assert bundle["config"]["capture_mix_transcribe"] is True
+
+    def test_output_byte_identical_with_knob_on(self, tmp_path):
+        # The mix words are capture-only; final placements must not move.
+        (tmp_path / "off").mkdir()
+        (tmp_path / "on").mkdir()
+        stage_off, ctx_off, _ = _make_stage_and_ctx(tmp_path / "off")
+        stage_off.run(ctx_off)
+
+        stage_on, ctx_on, _ = _make_stage_and_ctx(tmp_path / "on")
+        stage_on._config.capture_mix_transcribe = True
+        ex = ctx_on.tmp_dir / "extracted.wav"
+        ex.write_bytes(b"")
+        ctx_on.artifacts["extracted_wav"] = ex
+        stage_on.run(ctx_on)
+
+        assert (
+            self._bundle(ctx_on)["output_line_timings"]
+            == self._bundle(ctx_off)["output_line_timings"]
+        )
+
+    def test_mix_transcribe_failure_captured_absent_not_fatal(self, tmp_path):
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path)
+        stage._config.capture_mix_transcribe = True
+        ex = ctx.tmp_dir / "extracted.wav"
+        ex.write_bytes(b"")
+        ctx.artifacts["extracted_wav"] = ex
+        # Gate transcribe succeeds; the mix transcribe blows up.
+        gate_words = [{"word": "hello", "start": 0.0, "end": 1.0}]
+        worker.transcribe_words.side_effect = [gate_words, RuntimeError("mix decode wedged")]
+
+        stage.run(ctx)  # must not raise
+
+        bundle = self._bundle(ctx)
+        assert bundle["mix_transcribe_words"] is None
+        assert (ctx.song_path.parent / "karaoke" / f"{ctx.song_path.stem}.ass").exists()
+
+    def test_knob_on_but_debug_off_skips_mix_pass(self, tmp_path):
+        # Nothing persists the words without the debug bundle, so the pass must
+        # not run (no wasted GPU).
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path)
+        stage._config.capture_mix_transcribe = True
+        stage._config.capture_alignment_debug = False
+        ctx.artifacts["extracted_wav"] = ctx.tmp_dir / "x.wav"
+        stage.run(ctx)
+        worker.transcribe_words.assert_called_once()
+
+    def test_mix_wav_prefers_extracted_then_lazy_decodes(self, tmp_path, monkeypatch):
+        import pikaraoke.pipeline.stages.lyric_align as la_mod
+
+        stage, ctx, _ = _make_stage_and_ctx(tmp_path)
+        extracted = ctx.tmp_dir / "extracted.wav"
+        ctx.artifacts["extracted_wav"] = extracted
+        assert stage._mix_wav(ctx) == extracted
+
+        # No extracted_wav: decode the source media once and memoize it.
+        del ctx.artifacts["extracted_wav"]
+        calls = []
+        monkeypatch.setattr(la_mod, "run_ffmpeg", lambda cmd, _ctx, _phase: calls.append(cmd))
+        out = stage._mix_wav(ctx)
+        assert out == ctx.tmp_dir / f"{ctx.song_path.stem}_mix.wav"
+        assert ctx.artifacts["mix_wav"] == out
+        # A second call reuses the memoized decode — ffmpeg runs only once.
+        assert stage._mix_wav(ctx) == out
+        assert len(calls) == 1
+
 
 # ---------------------------------------------------------------------------
 # Genius identity capture

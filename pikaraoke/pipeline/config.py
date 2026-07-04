@@ -280,6 +280,24 @@ class PipelineConfig:
     # and easy to wipe; flip off once the corpus is sufficient.
     capture_alignment_debug: bool = True
 
+    # When True, both audio routes run one extra transcribe (no refine) on the
+    # full mix (the original audio, not the separated vocal stem) and store the
+    # words in the bundle as ``mix_transcribe_words``. Capture only: the mix
+    # words are NOT fed to the matcher, so output stays byte-identical to a run
+    # with the knob off — the captured stream is the offline input for the
+    # full-mix alignment experiments (plans/full-mix-alignment-experiments.md).
+    # Off for the live app; the bundle-regen tool flips it on. Requires
+    # ``capture_alignment_debug`` to persist anything.
+    capture_mix_transcribe: bool = False
+
+    # Cue-align (SRT) route only: add a full-mix re-align rung to the bad-line
+    # rescue ladder. A line the stem re-align cannot recover is retried on the
+    # full mix before falling to the cue-paced fill (same strict containment
+    # gate, tagged ``cue_align_line_mix``). Unlike ``capture_mix_transcribe``
+    # this DOES change output — it is the Experiment B lever
+    # (plans/full-mix-alignment-experiments.md), off until that verdict lands.
+    cue_mix_rescue: bool = False
+
     # --- ASS styling ---
     font_name: str = "Arial"
     font_size: int = 60
