@@ -7,7 +7,13 @@ import numpy as np
 import pytest
 
 from pikaraoke.lib import onset_snap
-from pikaraoke.lib.onset_snap import HOP_S, rms_envelope_db, snap_line_onsets
+from pikaraoke.lib.onset_snap import (
+    HOP_S,
+    rms_envelope_db,
+    snap_line_edges,
+    snap_line_ends,
+    snap_line_onsets,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -215,6 +221,182 @@ class TestSnapLineOnsets:
         obj = _line((1.2, 1.4), (2.5, 2.7))
 
         out, stats = snap_line_onsets([obj], "missing.wav")
+
+        assert out == [obj]
+        assert stats["bailed"] == "decode_failed"
+
+
+# ---------------------------------------------------------------------------
+# snap_line_ends
+# ---------------------------------------------------------------------------
+
+
+class TestSnapLineEnds:
+    def test_clipped_held_note_extends_to_release(self, use_env):
+        # Voice holds at -28dB until 4.0s but the last word's claimed end
+        # is 2.5s; the end must trace the run to its release.
+        use_env(_env(8.0, [(1.0, 4.0, -28.0)]))
+        clipped = _line((1.0, 1.3), (1.5, 2.5), line_id=7)
+        following = _line((6.0, 6.3), (6.5, 7.0))
+
+        out, stats = snap_line_ends([clipped, following], "vocal.wav")
+
+        w_last = out[0]["words"][-1]
+        assert w_last["end"] == pytest.approx(3.9, abs=0.1)
+        assert w_last["start"] == 1.5
+        assert out[0]["end"] == w_last["end"]
+        assert out[0]["words"][:-1] == clipped["words"][:-1]
+        assert out[1] is following
+        assert stats["n_fired"] == 1
+        assert stats["n_extended"] == 1
+        assert stats["extends"][0]["line_id"] == 7
+        assert stats["extends"][0]["extend_s"] == pytest.approx(1.4, abs=0.1)
+        assert stats["extends"][0]["to_bound"] is False
+
+    def test_correct_end_untouched(self, use_env):
+        # Voice falls exactly at the claimed end: no clip evidence.
+        use_env(_env(8.0, [(1.0, 2.5, -28.0)]))
+        obj = _line((1.0, 1.3), (1.5, 2.5))
+
+        out, stats = snap_line_ends([obj], "vocal.wav")
+
+        assert out[0] is obj
+        assert stats["n_fired"] == 0
+        assert stats["n_extended"] == 0
+
+    def test_sub_jitter_extension_untouched(self, use_env):
+        # Voice runs 0.2s past the claimed end; within whisper jitter.
+        use_env(_env(8.0, [(1.0, 2.7, -28.0)]))
+        obj = _line((1.0, 1.3), (1.5, 2.5))
+
+        out, stats = snap_line_ends([obj], "vocal.wav")
+
+        assert out[0] is obj
+        assert stats["n_extended"] == 0
+
+    def test_tremolo_dip_ridden_over(self, use_env):
+        # A 0.1s vibrato dip mid-hold must not register as the release;
+        # the trace continues to the real fall at 4.0s.
+        use_env(_env(8.0, [(1.0, 2.8, -28.0), (2.8, 2.9, -45.0), (2.9, 4.0, -28.0)]))
+        obj = _line((1.0, 1.3), (1.5, 2.5))
+
+        out, _ = snap_line_ends([obj], "vocal.wav")
+
+        assert out[0]["words"][-1]["end"] == pytest.approx(3.9, abs=0.1)
+
+    def test_melisma_bounded_by_next_line(self, use_env):
+        # Voice continuous into the next line: no release before the
+        # bound, so the end extends to just short of the next first word.
+        use_env(_env(12.0, [(1.0, 6.0, -28.0)]))
+        melisma = _line((1.0, 1.3), (1.5, 2.5))
+        nxt = _line((5.0, 5.3), (5.5, 6.0))
+
+        out, stats = snap_line_ends([melisma, nxt], "vocal.wav")
+
+        assert out[0]["words"][-1]["end"] == pytest.approx(4.9, abs=0.03)
+        assert out[1] is nxt
+        assert stats["extends"][0]["to_bound"] is True
+
+    def test_tail_dip_at_envelope_end_not_a_release(self, use_env):
+        # Voice held to the end of the stem with a 2-frame dip at the very
+        # tail (a fade artifact). A truncated window there must not pass
+        # for a RELEASE_SUSTAIN_S fall; the hold extends to the bound.
+        env = _env(4.0, [(1.0, 4.0, -28.0)])
+        env[-2:] = -45.0
+        use_env(env)
+        obj = _line((1.0, 1.3), (1.5, 2.5))
+
+        out, stats = snap_line_ends([obj], "vocal.wav")
+
+        assert out[0]["words"][-1]["end"] == pytest.approx(4.0, abs=0.03)
+        assert stats["extends"][0]["to_bound"] is True
+
+    def test_line_in_silence_untouched(self, use_env):
+        # A line misplaced over digital silence has its sung reference at
+        # the noise floor, where "still near sung level" is trivially
+        # true; the ref floor must keep its end from being dragged to the
+        # next line.
+        use_env(_env(12.0, [(1.0, 4.0, -28.0)]))
+        silent = _line((6.0, 6.3), (6.5, 7.0))
+        nxt = _line((9.0, 9.3), (9.5, 10.0))
+
+        out, stats = snap_line_ends([silent, nxt], "vocal.wav")
+
+        assert out[0] is silent
+        assert out[1] is nxt
+        assert stats["n_low_ref"] == 2
+        assert stats["n_fired"] == 0
+        assert stats["n_extended"] == 0
+
+    def test_overlapping_next_line_skipped(self, use_env):
+        # Doubled-chorus lines overlap: the next line starts before this
+        # line's claimed end, leaving no room to extend.
+        use_env(_env(8.0, [(1.0, 3.0, -28.0)]))
+        doubled = _line((1.0, 1.3), (1.5, 2.5))
+        overlap = _line((2.0, 2.3), (2.5, 3.0))
+
+        out, stats = snap_line_ends([doubled, overlap], "vocal.wav")
+
+        assert out[0] is doubled
+        assert stats["n_fired"] == 0
+
+    def test_short_lines_skipped(self, use_env):
+        use_env(_env(8.0, [(1.0, 4.0, -28.0)]))
+        one_word = _line((1.2, 1.4))
+        empty = {"words": [], "start": None, "end": None}
+
+        out, stats = snap_line_ends([one_word, empty], "vocal.wav")
+
+        assert out == [one_word, empty]
+        assert stats["n_extended"] == 0
+
+    def test_decode_failure_bails(self, monkeypatch):
+        def boom(path):
+            raise FileNotFoundError("missing.wav")
+
+        monkeypatch.setattr(onset_snap, "rms_envelope_db", boom)
+        obj = _line((1.2, 1.4), (2.5, 2.7))
+
+        out, stats = snap_line_ends([obj], "missing.wav")
+
+        assert out == [obj]
+        assert stats["bailed"] == "decode_failed"
+
+
+# ---------------------------------------------------------------------------
+# snap_line_edges
+# ---------------------------------------------------------------------------
+
+
+class TestSnapLineEdges:
+    def test_single_decode_fixes_both_edges(self, monkeypatch):
+        # A line smeared early at the start AND clipped at the end must
+        # come out fixed on both edges from one envelope decode.
+        calls = []
+
+        def fake_env(path):
+            calls.append(path)
+            return _env(8.0, [(2.2, 4.5, -28.0)])
+
+        monkeypatch.setattr(onset_snap, "rms_envelope_db", fake_env)
+        obj = _line((1.2, 1.4), (2.5, 2.7), (3.0, 3.2))
+
+        out, stats = snap_line_edges([obj], "vocal.wav")
+
+        assert len(calls) == 1
+        assert out[0]["words"][0]["start"] == pytest.approx(2.15, abs=0.05)
+        assert out[0]["words"][-1]["end"] == pytest.approx(4.4, abs=0.1)
+        assert stats["onset"]["n_snapped"] == 1
+        assert stats["end"]["n_extended"] == 1
+
+    def test_decode_failure_bails(self, monkeypatch):
+        def boom(path):
+            raise FileNotFoundError("missing.wav")
+
+        monkeypatch.setattr(onset_snap, "rms_envelope_db", boom)
+        obj = _line((1.2, 1.4), (2.5, 2.7))
+
+        out, stats = snap_line_edges([obj], "missing.wav")
 
         assert out == [obj]
         assert stats["bailed"] == "decode_failed"

@@ -46,7 +46,7 @@ from pikaraoke.lib import alignment_capture, ytasr
 from pikaraoke.lib.cue_align import align_song
 from pikaraoke.lib.genius_lyrics import parse_lyric_lines
 from pikaraoke.lib.joint_match import match_words_to_lines_joint_with_stats
-from pikaraoke.lib.onset_snap import snap_line_onsets
+from pikaraoke.lib.onset_snap import snap_line_edges
 from pikaraoke.lib.srt_cues import cue_spans_from_srt
 from pikaraoke.lib.windowed_realign import (
     analyze_pass1,
@@ -185,12 +185,16 @@ class LyricAlignStage(BaseStage):
         else:
             ctx.artifacts["lyric_method"] = f"{lyrics_origin}+{capture_method_used}"
 
-        # Line-initial word onsets are whisper's least reliable timestamps
-        # (attention smears them back into the preceding gap, and VAD can't
-        # clip reverb-tail "silence"). Snap them to the stem's energy rise.
-        line_objects, onset_stats = snap_line_onsets(line_objects, vocal_wav)
+        # Line-edge word timings are whisper's least reliable: onsets smear
+        # back into the preceding gap, and held line-final words get clipped
+        # once their phonetic content stops. Snap both edges to the stem's
+        # energy envelope (one decode, onsets then ends). Snap against the
+        # stem alignment used — the de-reverb gate may have adopted a dry
+        # stem; transcribe mode never gates, so it falls back to vocal_wav.
+        snap_stem = ctx.artifacts.get("aligned_stem", vocal_wav)
+        line_objects, edge_stats = snap_line_edges(line_objects, snap_stem)
         if capture_joint_stats is not None:
-            capture_joint_stats["onset_snap"] = onset_stats
+            capture_joint_stats["edge_snap"] = edge_stats
 
         ass_content = self._generate_ass(line_objects)
         srt_content = self._generate_srt(line_objects) if write_srt else None
@@ -601,6 +605,10 @@ class LyricAlignStage(BaseStage):
                 dereverb_stats["retry_yield_wpm"] = (
                     round(retry_wpm, 1) if retry_wpm is not None else None
                 )
+        # The stem alignment actually ran on — the edge snap must trace
+        # this one, not the wet artifact: its release detector is defeated
+        # by the reverb tail a de-reverbed stem removes.
+        ctx.artifacts["aligned_stem"] = vocal_wav
         return vocal_wav, transcribe_words, dereverb_stats
 
     def _transcribe_yield_wpm(self, transcribe_words: list[dict], vocal_wav: Path) -> float | None:
