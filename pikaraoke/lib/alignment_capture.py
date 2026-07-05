@@ -25,6 +25,11 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+# v8: line-end snap shipped alongside the line-onset snap. A milestone bump
+#     (run-affecting) — output_line_timings now carry extended line-final word
+#     ends on ~1/4 of lines, so regen treats v7 bundles as stale. Renamed:
+#     joint_stats.onset_snap -> joint_stats.edge_snap, reshaped from the flat
+#     onset-snap stats to {onset: <onset-snap stats>, end: <end-snap stats>}.
 # v7: YouTube ASR promoted from a timing prior to the joint matcher's third
 #     candidate source; all timing-prior post-processing removed. A milestone
 #     bump (run-affecting) — regen treats v6 bundles as stale and reprocesses.
@@ -107,7 +112,7 @@ logger = logging.getLogger(__name__)
 # v2: added tiling per-unit fields (units, zero_candidate_unit_ids,
 #     anchor_recovered_unit_ids, selected_windows replacing window_widths).
 # v1: initial.
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 
 def build_bundle(

@@ -25,8 +25,17 @@ from pikaraoke.lib.onset_snap import snap_line_onsets
 from pikaraoke.pipeline.config import PipelineConfig
 from pikaraoke.pipeline.stages.lyric_align import generate_ass
 
-# Experiment outputs living next to production .ass files.
-SKIP_SUFFIXES = (".cuealign", ".jointalign", ".ytasr3src", ".asralign", ".onsetsnap")
+# Experiment outputs living next to production .ass files. Shared by the
+# sibling A/B scripts (end_snap_ass imports this).
+SKIP_SUFFIXES = (
+    ".cuealign",
+    ".jointalign",
+    ".ytasr3src",
+    ".asralign",
+    ".onsetsnap",
+    ".endsnap",
+    ".fullmix",
+)
 
 K_TAG = re.compile(r"\{\\kf?(\d+)\}([^{]*)")
 
