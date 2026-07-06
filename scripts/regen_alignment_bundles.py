@@ -15,17 +15,16 @@ Two modes:
   * default -> trust the existing bundles and on-disk artifacts.  Only songs
     whose bundle is missing or older than the current ``SCHEMA_VERSION`` are
     touched; each reuses its recorded lyric source (an srt-origin caption, or a
-    Genius/LRCLIB identity replaying the LRCLIB prior from the persisted
-    ``.lrc``).  A song with no reusable source falls back to downloading the
-    video's manual English caption, and to a Genius prompt when none exists.
+    Genius identity replaying the YTASR 3rd source from the persisted
+    ``.asr.json3``).  A song with no reusable source falls back to downloading
+    the video's manual English caption, and to a Genius prompt when none exists.
 
   * ``--reset`` -> rebuild every song's lyric source from scratch, ignoring the
     recorded provenance.  The subtitles/karaoke/lyrics folders are wiped after
     the backup (the pipeline rebuilds them, so no stale file survives), then for
     each video YouTube's manual English caption is downloaded and used; when
-    none exists, a Genius pick is prompted (which also re-fetches and saves the
-    LRCLIB lyrics).  Stems are still reused — only the lyric/caption resolution
-    is reset.
+    none exists, a Genius pick is prompted.  Stems are still reused — only the
+    lyric/caption resolution is reset.
 
 Fetched captions are gated by a fixed words-per-minute floor so a dialog-only
 track is sent to the Genius prompt instead of aligned as lyrics.
@@ -75,7 +74,10 @@ from pikaraoke.lib.metadata_parser import (  # noqa: E402
 )
 from pikaraoke.lib.preference_manager import PreferenceManager  # noqa: E402
 from pikaraoke.lib.srt_cues import cue_spans_from_srt  # noqa: E402
-from pikaraoke.lib.youtube_dl import download_manual_en_subs  # noqa: E402
+from pikaraoke.lib.youtube_dl import (  # noqa: E402
+    ASR_JSON3_SUFFIX,
+    download_manual_en_subs,
+)
 from pikaraoke.pipeline.config import PipelineConfig  # noqa: E402
 from pikaraoke.pipeline.context import StageContext  # noqa: E402
 from pikaraoke.pipeline.orchestrator import PipelineOrchestrator  # noqa: E402
@@ -114,9 +116,9 @@ class SeedArtifactsStage(BaseStage):
     """Pre-populate ``ctx.artifacts`` for a bundle replay.
 
     The orchestrator seeds only ``lyrics_path``; the reused lyric origin,
-    the LRCLIB prior reference and the source duration come from the
-    previous bundle and are injected here so ``LyricAlignStage`` reproduces
-    the prior run without re-driving ``LyricsFetchStage``.
+    the YTASR reference and the source duration come from the previous
+    bundle and are injected here so ``LyricAlignStage`` reproduces the
+    prior run without re-driving ``LyricsFetchStage``.
     """
 
     name = "seed_artifacts"
@@ -142,7 +144,7 @@ class Plan:
         local .srt) or ``lyrics_lines`` (written to a temp .txt) and inject
         ``seed`` via :class:`SeedArtifactsStage`.
       * ``sidecar``    -> a fresh Genius selection: write the choice sidecar
-        and run :class:`LyricsFetchStage` (re-fetches lyrics + LRCLIB).
+        and run :class:`LyricsFetchStage` (re-fetches lyrics + resolves YTASR).
       * ``fetch``      -> placeholder for a song whose video caption may be
         downloadable: the run phase tries yt-dlp and, on success + length gate,
         becomes a seed-srt plan, else reverts to :attr:`fallback`.
@@ -249,9 +251,9 @@ def _reuse_plan(job: SongJob) -> Plan | None:
     provenance is pointless:
 
       * ``origin == "srt"`` + an on-disk caption -> reuse it.
-      * recorded identity (``lyrics.genius`` or ``lyrics.lrclib``) + lines ->
-        reuse the bundled lyrics, replaying the LRCLIB prior when the persisted
-        ``.lrc`` is on disk.
+      * recorded Genius identity (``lyrics.genius``) + lines -> reuse the
+        bundled lyrics, replaying the YTASR 3rd source when the persisted
+        ``.asr.json3`` is on disk.
 
     The on-disk SRT is never trusted for a non-srt origin:
     ``ground_truth_refs.youtube_srt_present`` is unreliable — the pipeline
@@ -279,27 +281,25 @@ def _reuse_plan(job: SongJob) -> Plan | None:
         return None
 
     # Non-srt origin: reuse only when the identity metadata the schema needs
-    # is present (Genius id/title/artist or an LRCLIB record).
-    lrclib = lyrics.get("lrclib")
+    # is present (Genius id/title/artist).
     genius = lyrics.get("genius")
     lines = lyrics.get("lines") or lyrics.get("align_lines") or []
-    if not ((genius or lrclib) and lines):
+    if not (genius and lines):
         return None
 
-    seed: dict = {"lyrics_origin": "genius"}
-    if genius:
-        seed["genius"] = genius
+    seed: dict = {"lyrics_origin": "genius", "genius": genius}
     media = bundle.get("media_duration_s")
     if media is not None:
         seed["media_duration_s"] = media
     label = "reuse genius"
-    if lrclib:
-        lrc_rel = lrclib.get("lrc_file")
-        if lrc_rel and (song.parent / lrc_rel).is_file():
-            seed["lrclib"] = lrclib
-            label = "reuse genius+lrclib"
+    ytasr = lyrics.get("ytasr")
+    if ytasr:
+        asr_rel = ytasr.get("asr_file")
+        if asr_rel and (song.parent / asr_rel).is_file():
+            seed["ytasr"] = ytasr
+            label = "reuse genius+ytasr"
         else:
-            label = "reuse genius (lrclib .lrc missing; no prior)"
+            label = "reuse genius (ytasr json3 missing; two-source)"
     return Plan(kind="seed", lyrics_lines=list(lines), seed=seed, label=label)
 
 
@@ -538,8 +538,8 @@ def _prepare_lyrics(job: SongJob, genius: GeniusClient, lyrics_dir: Path):
 
     Writes the temp .txt for reused Genius lyrics and the choice sidecar for
     a fresh Genius selection. A Genius pick on a song without a YouTube id
-    can't use the sidecar, so it degrades to explicit lyrics with no LRCLIB
-    prior (logged).
+    can't use the sidecar, so it degrades to explicit lyrics with no YTASR
+    3rd source (logged).
     """
     plan = job.plan
     song = job.song_path
@@ -565,7 +565,7 @@ def _prepare_lyrics(job: SongJob, genius: GeniusClient, lyrics_dir: Path):
             return None, None
         lyrics_path = lyrics_dir / f"{song.stem}.txt"
         lyrics_path.write_text(gsong.text, encoding="utf-8")
-        print("  ! no YouTube id; LRCLIB prior skipped for this song")
+        print("  ! no YouTube id; YTASR 3rd source unavailable for this song")
         seed = {
             "lyrics_origin": "genius",
             "genius": {"id": plan.genius_id, "title": gsong.title, "artist": gsong.artist},
@@ -655,9 +655,31 @@ def clear_output_folders(folder: Path) -> None:
     The pipeline rebuilds subtitles/karaoke/lyrics for every song reset
     reprocesses, so wiping them first guarantees no stale file (e.g. an old
     generated SRT) survives. Stems and bundles live elsewhere and are untouched.
+
+    Exception: ``subtitles/<stem>.en.asr.json3`` YouTube-ASR captions are
+    download-time artifacts (fetched by the download manager on first add), and
+    nothing in the regen tool re-fetches them. Wiping them would silently drop
+    the joint matcher's third source from every genius song on the next run, so
+    they are kept in place while the rest of subtitles/ is cleared.
     """
     for sub in OUTPUT_DIRS:
-        shutil.rmtree(folder / sub, ignore_errors=True)
+        if sub == "subtitles":
+            _clear_except_asr(folder / sub)
+        else:
+            shutil.rmtree(folder / sub, ignore_errors=True)
+
+
+def _clear_except_asr(subtitles: Path) -> None:
+    """Remove everything in ``subtitles/`` except the non-regenerable ASR captions."""
+    if not subtitles.is_dir():
+        return
+    for entry in list(subtitles.iterdir()):
+        if entry.is_file() and entry.name.endswith(ASR_JSON3_SUFFIX):
+            continue
+        if entry.is_dir():
+            shutil.rmtree(entry, ignore_errors=True)
+        else:
+            entry.unlink(missing_ok=True)
 
 
 # ---------------------------------------------------------------------------
