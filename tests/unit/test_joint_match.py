@@ -1,6 +1,7 @@
 """Unit tests for the joint alignment DP matcher."""
 
 from pikaraoke.lib.joint_match import (
+    _align_line_object,
     _alpha_weight,
     _best_tiling_by_time,
     _build_align_candidates,
@@ -61,8 +62,8 @@ class TestLineAlignRanges:
         align_words = _aw_seq("one", "two", "three", "four", t0=0.0, dt=1.0)
         ranges = _line_align_ranges(line_tokens, align_words)
         # word_dur=0.5, dt=1.0 → "two" at [1.0, 1.5], "four" at [3.0, 3.5]
-        assert ranges[0] == {"t0": 0.0, "t1": 1.5, "token_start": 0, "token_end": 2}
-        assert ranges[1] == {"t0": 2.0, "t1": 3.5, "token_start": 2, "token_end": 4}
+        assert ranges[0] == {"t0": 0.0, "t1": 1.5, "word_idx": [0, 1]}
+        assert ranges[1] == {"t0": 2.0, "t1": 3.5, "word_idx": [2, 3]}
 
     def test_empty_line(self):
         line_tokens = _tokenise_lines(["one", "", "two"])
@@ -72,13 +73,85 @@ class TestLineAlignRanges:
         assert ranges[1] is None
         assert ranges[2]["t0"] == 1.0
 
-    def test_align_too_short(self):
-        # align dropped a token — the affected line gets None.
-        line_tokens = _tokenise_lines(["one two", "three four"])
-        align_words = _aw_seq("one", "two", "three")  # only 3 words
+    def test_dropped_word_leaves_neighbours_exact(self):
+        # The aligner dropped "four". The old cursor walk shifted every
+        # later line's slice; the text-verified assignment keeps lines 0
+        # and 2 exact and gives line 1 its surviving word.
+        line_tokens = _tokenise_lines(["one two", "three four", "five six"])
+        align_words = _aw_seq("one", "two", "three", "five", "six", t0=0.0, dt=1.0)
         ranges = _line_align_ranges(line_tokens, align_words)
-        assert ranges[0] is not None
+        assert ranges[0] == {"t0": 0.0, "t1": 1.5, "word_idx": [0, 1]}
+        assert ranges[1] == {"t0": 2.0, "t1": 2.5, "word_idx": [2, None]}
+        assert ranges[2] == {"t0": 3.0, "t1": 4.5, "word_idx": [3, 4]}
+
+    def test_whole_line_dropped_maps_to_none(self):
+        # Zero matched words — honest abstention: no align belief, no range.
+        line_tokens = _tokenise_lines(["one two", "three four", "five six"])
+        align_words = _aw_seq("one", "two", "five", "six", t0=0.0, dt=1.0)
+        ranges = _line_align_ranges(line_tokens, align_words)
+        assert ranges[0] == {"t0": 0.0, "t1": 1.5, "word_idx": [0, 1]}
         assert ranges[1] is None
+        assert ranges[2] == {"t0": 2.0, "t1": 3.5, "word_idx": [2, 3]}
+
+    def test_empty_norm_word_skipped(self):
+        # The aligner emitted a word for the "&" the tokeniser dropped; it
+        # can never equal a token norm, so nothing shifts.
+        line_tokens = _tokenise_lines(["one two", "three & four"])
+        align_words = [
+            _aw("one", 0.0),
+            _aw("two", 1.0),
+            _aw("three", 2.0),
+            _aw("&", 2.5),
+            _aw("four", 3.0),
+        ]
+        ranges = _line_align_ranges(line_tokens, align_words)
+        assert ranges[0] == {"t0": 0.0, "t1": 1.5, "word_idx": [0, 1]}
+        assert ranges[1] == {"t0": 2.0, "t1": 3.5, "word_idx": [2, 4]}
+
+    def test_twin_lines_anchor_arbitration(self):
+        # Two identical "na na boom" lines; the first line's second "na"
+        # was dropped. The boom anchors pin each line to its own occurrence
+        # — line 1 must not steal line 2's words across the anchor.
+        line_tokens = _tokenise_lines(["na na boom", "na na boom"])
+        align_words = _aw_seq("na", "boom", t0=0.0, dt=1.0) + _aw_seq(
+            "na", "na", "boom", t0=10.0, dt=1.0
+        )
+        ranges = _line_align_ranges(line_tokens, align_words)
+        assert ranges[0] == {"t0": 0.0, "t1": 1.5, "word_idx": [0, None, 1]}
+        assert ranges[1] == {"t0": 10.0, "t1": 12.5, "word_idx": [2, 3, 4]}
+
+
+class TestAlignLineObject:
+    def test_clean_mapping_takes_word_timings_verbatim(self):
+        toks = _tokenise_lines(["one two three"])[0]
+        align_words = _aw_seq("one", "two", "three", t0=0.0, dt=1.0)
+        align_range = {"t0": 0.0, "t1": 2.5, "word_idx": [0, 1, 2]}
+        obj = _align_line_object(0, "one two three", toks, align_words, align_range)
+        assert obj["words"] == [
+            {"word": "one", "start": 0.0, "end": 0.5},
+            {"word": "two", "start": 1.0, "end": 1.5},
+            {"word": "three", "start": 2.0, "end": 2.5},
+        ]
+        assert obj["start"] == 0.0
+        assert obj["end"] == 2.5
+
+    def test_dropped_word_interpolated_inside_own_range(self):
+        # "two" was dropped; it must be paced between "one" and "three"
+        # rather than borrowing a neighbouring line's word.
+        toks = _tokenise_lines(["one two three"])[0]
+        align_words = _aw_seq("one", "three", t0=0.0, dt=2.0)
+        align_range = {"t0": 0.0, "t1": 2.5, "word_idx": [0, None, 1]}
+        obj = _align_line_object(0, "one two three", toks, align_words, align_range)
+        assert obj["words"][0] == {"word": "one", "start": 0.0, "end": 0.5}
+        assert obj["words"][2] == {"word": "three", "start": 2.0, "end": 2.5}
+        assert obj["words"][1] == {"word": "two", "start": 0.5, "end": 2.0}
+
+    def test_none_range_yields_wordless_line(self):
+        toks = _tokenise_lines(["one two"])[0]
+        obj = _align_line_object(0, "one two", toks, [], None)
+        assert obj["words"] == []
+        assert obj["start"] is None
+        assert obj["end"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -208,8 +281,8 @@ class TestBuildAlignCandidates:
     def test_one_per_line_with_range(self):
         line_norms = [["a", "b"], ["c", "d"]]
         align_ranges = [
-            {"t0": 0.0, "t1": 1.0, "token_start": 0, "token_end": 2},
-            {"t0": 2.0, "t1": 3.0, "token_start": 2, "token_end": 4},
+            {"t0": 0.0, "t1": 1.0, "word_idx": [0, 1]},
+            {"t0": 2.0, "t1": 3.0, "word_idx": [2, 3]},
         ]
         transcribe_words = _aw_seq("a", "b", "c", "d", t0=0.0, dt=1.0)
         transcribe_norms = ["a", "b", "c", "d"]
@@ -233,7 +306,7 @@ class TestBuildAlignCandidates:
     def test_collapsed_align_is_padded(self):
         # All tokens forced to one timestamp — t1 - t0 ≈ 0.
         line_norms = [["a", "b"]]
-        align_ranges = [{"t0": 5.0, "t1": 5.0, "token_start": 0, "token_end": 2}]
+        align_ranges = [{"t0": 5.0, "t1": 5.0, "word_idx": [0, 1]}]
         cands = _build_align_candidates(
             line_norms,
             align_ranges,
@@ -253,7 +326,7 @@ class TestBuildAlignCandidates:
 
     def test_no_align_range_skipped(self):
         line_norms = [["a", "b"], ["c", "d"]]
-        align_ranges = [None, {"t0": 1.0, "t1": 2.0, "token_start": 0, "token_end": 2}]
+        align_ranges = [None, {"t0": 1.0, "t1": 2.0, "word_idx": [0, 1]}]
         cands = _build_align_candidates(
             line_norms,
             align_ranges,
@@ -274,7 +347,7 @@ class TestBuildAlignCandidates:
         # At least one lyric token still appears in the window, so the gate
         # must NOT fire — align preserves its α bonus.
         line_norms = [["spinnin", "now", "for", "time"]]
-        align_ranges = [{"t0": 10.0, "t1": 12.0, "token_start": 0, "token_end": 4}]
+        align_ranges = [{"t0": 10.0, "t1": 12.0, "word_idx": [0, 1, 2, 3]}]
         transcribe_words = _aw_seq("spinning", "out", "the", "time", t0=10.0, dt=0.5)
         transcribe_norms = ["spinning", "out", "the", "time"]
         cands = _build_align_candidates(
@@ -298,7 +371,7 @@ class TestBuildAlignCandidates:
         # Hakuna-shape: align placed the line into a dialogue region whose
         # transcribe content has no lyric-token overlap at all. Gate fires.
         line_norms = [["no", "worries", "for", "the", "rest"]]
-        align_ranges = [{"t0": 10.0, "t1": 13.0, "token_start": 0, "token_end": 5}]
+        align_ranges = [{"t0": 10.0, "t1": 13.0, "word_idx": [0, 1, 2, 3, 4]}]
         transcribe_words = _aw_seq("hello", "what", "are", "you", "doing", t0=10.0, dt=0.5)
         transcribe_norms = ["hello", "what", "are", "you", "doing"]
         cands = _build_align_candidates(
@@ -322,7 +395,7 @@ class TestBuildAlignCandidates:
         # Same dissenting-transcribe window, but ytasr independently maps
         # the line onto align's exact range: 2-of-3 keeps the full bonus.
         line_norms = [["no", "worries", "for", "the", "rest"]]
-        align_ranges = [{"t0": 10.0, "t1": 13.0, "token_start": 0, "token_end": 5}]
+        align_ranges = [{"t0": 10.0, "t1": 13.0, "word_idx": [0, 1, 2, 3, 4]}]
         transcribe_words = _aw_seq("hello", "what", "are", "you", "doing", t0=10.0, dt=0.5)
         transcribe_norms = ["hello", "what", "are", "you", "doing"]
         cands = _build_align_candidates(
@@ -780,6 +853,58 @@ class TestEndToEndAlignOnly:
         assert stats["selected_source"] == ["align"]
         # Per-word timings still from align.
         assert objs[0]["words"][0]["start"] == 0.0
+
+
+# ---------------------------------------------------------------------------
+# End-to-end: aligner word drops (the desync fix)
+# ---------------------------------------------------------------------------
+
+
+class TestEndToEndAlignWordDrops:
+    def test_clean_stream_reports_zero_drops(self):
+        lines = ["aaa bbb", "ccc ddd"]
+        align_words = _aw_seq("aaa", "bbb", "ccc", "ddd", t0=0.0, dt=1.0)
+        _, stats = match_words_to_lines_joint_with_stats(align_words, [], lines, lines, alpha=4.0)
+        assert stats["n_align_word_drops"] == 0
+
+    def test_mid_stream_drop_keeps_later_line_exact(self):
+        # "ddd" dropped from line 2; the old cursor walk would have shifted
+        # line 3's timings by one word. Line 3 must stay exact and align-won.
+        lines = ["aaa bbb", "ccc ddd", "eee fff"]
+        align_words = _aw_seq("aaa", "bbb", "ccc", "eee", "fff", t0=0.0, dt=1.0)
+        objs, stats = match_words_to_lines_joint_with_stats(
+            align_words, [], lines, lines, alpha=4.0
+        )
+        assert stats["n_align_word_drops"] == 1
+        assert stats["selected_source"] == ["align", "align", "align"]
+        assert objs[2]["words"] == [
+            {"word": "eee", "start": 3.0, "end": 3.5},
+            {"word": "fff", "start": 4.0, "end": 4.5},
+        ]
+        # The surviving word of line 2 keeps its own timing; "ddd" is
+        # interpolated inside line 2's range, never borrowed from line 3.
+        assert objs[1]["words"][0] == {"word": "ccc", "start": 2.0, "end": 2.5}
+        assert objs[1]["words"][1]["word"] == "ddd"
+        assert objs[1]["words"][1]["start"] < objs[2]["words"][0]["start"]
+
+    def test_whole_line_dropped_completes_and_leaves_neighbours_exact(self):
+        # All of line 2's words dropped: it gets no align belief, is placed
+        # by interpolation, and both neighbours stay exact. drops == 3.
+        lines = ["aaa bbb", "ccc ddd eee", "fff ggg"]
+        align_words = _aw_seq("aaa", "bbb", t0=0.0, dt=1.0) + _aw_seq("fff", "ggg", t0=10.0, dt=1.0)
+        objs, stats = match_words_to_lines_joint_with_stats(
+            align_words, [], lines, lines, alpha=4.0
+        )
+        assert stats["n_align_word_drops"] == 3
+        assert len(objs) == 3
+        assert stats["selected_source"][0] == "align"
+        assert stats["selected_source"][2] == "align"
+        assert stats["selected_source"][1] != "align"
+        assert objs[0]["words"][0]["start"] == 0.0
+        assert objs[2]["words"] == [
+            {"word": "fff", "start": 10.0, "end": 10.5},
+            {"word": "ggg", "start": 11.0, "end": 11.5},
+        ]
 
 
 # ---------------------------------------------------------------------------

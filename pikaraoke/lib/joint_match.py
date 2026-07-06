@@ -63,10 +63,11 @@ from bisect import bisect_left
 from pikaraoke.lib import ytasr
 from pikaraoke.lib.candidate_match import (
     _build_line_object,
+    _fill_unmatched_runs,
     find_anchor_candidates,
     find_candidates,
 )
-from pikaraoke.lib.token_align import _normalize_token
+from pikaraoke.lib.token_align import _normalize_token, match_words_to_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -96,15 +97,17 @@ def match_words_to_lines_joint_with_stats(
     """Joint align + transcribe (+ optional ytasr) matcher.
 
     Args:
-        align_words: refined whisper words from forced alignment. One entry
-            per lyric token, in lyric order (the stable-ts align→refine
-            output our worker emits).
+        align_words: refined whisper words from forced alignment. Nominally
+            one entry per lyric token, in lyric order (the stable-ts
+            align→refine output our worker emits) — the aligner drops words
+            it could not time, so the per-line mapping is re-verified by
+            text (``_line_align_ranges``).
         transcribe_words: whisper words from a free transcribe pass. Need
             not be refined; ``word_timestamps`` precision is sufficient.
         lines: display lyric lines (may contain inline parens, etc).
         align_lines: normalised lyric lines (paren-stripped upstream). Used
-            for tokenisation; ``align_words`` is assumed to correspond
-            1:1 with the flat token stream from ``align_lines``.
+            for tokenisation; ``align_words`` follows the flat token
+            stream from ``align_lines``, minus any dropped words.
         alpha: weight on the align agreement term. Score formula is
             ``transcribe_match + weight * (alpha * align_agreement + beta *
             ytasr_agreement)``. Higher = trust align more (all-align on
@@ -154,6 +157,9 @@ def match_words_to_lines_joint_with_stats(
     n_lines = len(lines)
 
     align_ranges = _line_align_ranges(line_tokens, align_words)
+    n_align_word_drops = sum(len(toks) for toks in line_tokens) - sum(
+        1 for ar in align_ranges if ar is not None for wi in ar["word_idx"] if wi is not None
+    )
 
     transcribe_norms = [_normalize_token(w["word"]) for w in transcribe_words]
     line_norms = [[norm for norm, _raw in toks] for toks in line_tokens]
@@ -267,6 +273,7 @@ def match_words_to_lines_joint_with_stats(
         "knobs": knobs,
         "n_lines": n_lines,
         "n_align_words": len(align_words),
+        "n_align_word_drops": n_align_word_drops,
         "n_transcribe_words": len(transcribe_words),
         "n_ytasr_words": len(ytasr_words),
         "n_main_candidates": len(main_cands),
@@ -340,8 +347,9 @@ def _tokenise_lines(align_lines: list[str]) -> list[list[tuple[str, str]]]:
     """Per-line list of ``(normalised, raw)`` tokens, dropping tokens that
     normalise to empty (punctuation, paren-stripped artefacts).
 
-    The flat concatenation across lines is what ``align_words`` is assumed
-    to correspond to 1:1 (forced alignment emits one word per lyric token).
+    The flat concatenation across lines is what ``align_words`` nominally
+    follows (forced alignment emits one word per lyric token, minus the
+    words it drops — ``_line_align_ranges`` re-verifies the mapping by text).
     """
     out: list[list[tuple[str, str]]] = []
     for line in align_lines:
@@ -358,38 +366,45 @@ def _line_align_ranges(
     line_tokens: list[list[tuple[str, str]]],
     align_words: list[dict],
 ) -> list[dict | None]:
-    """Per-line align-time range and token-index slice into ``align_words``.
+    """Per-line align-time range and per-token word assignment.
 
-    Returns ``None`` for a line if the line has no tokens or if
-    ``align_words`` runs out before the line's tokens are consumed (i.e.
-    forced alignment dropped tokens — rare, but defended against).
+    ``align_words`` is nominally 1:1 with the flat token stream, but the
+    aligner drops words it could not time, so the mapping is re-derived by
+    text: one whole-song :func:`token_align.match_words_to_tokens` pass with
+    index pseudo-times on both sides. There is no external clock on this
+    path; index deviation arbitrates which twin of a repeated line a word
+    belongs to, and the constant index shift a dropped word introduces
+    cancels when comparing local alternatives. Within a run of *identical*
+    tokens the unmatched position is arbitrary — bounded by one word and
+    inherent to indistinguishable tokens.
+
+    Per line: ``{"t0", "t1", "word_idx"}`` where ``word_idx[k]`` indexes
+    ``align_words`` for the line's k-th token (None for a dropped word).
+    A line with no tokens or zero matched words maps to ``None`` — the
+    aligner has no belief about it, so it gets no align candidate.
     """
+    flat_norms = [norm for toks in line_tokens for norm, _raw in toks]
+    assign = match_words_to_tokens(
+        flat_norms,
+        [float(k) for k in range(len(flat_norms))],
+        [_normalize_token(w["word"]) for w in align_words],
+        [float(j) for j in range(len(align_words))],
+    )
     out: list[dict | None] = []
     cursor = 0
     for toks in line_tokens:
-        if not toks:
+        word_idx = assign[cursor : cursor + len(toks)]
+        cursor += len(toks)
+        matched = [wi for wi in word_idx if wi is not None]
+        if not matched:
             out.append(None)
             continue
-        n = len(toks)
-        if cursor + n > len(align_words):
-            out.append(None)
-            continue
-        slice_start = cursor
-        slice_end = cursor + n
-        t0 = align_words[slice_start]["start"]
-        t1 = align_words[slice_end - 1]["end"]
-        # Defend against tokens with start > end (rare; clamp).
+        t0 = align_words[matched[0]]["start"]
+        t1 = align_words[matched[-1]]["end"]
+        # Defend against words with start > end (rare; clamp).
         if t1 < t0:
             t1 = t0
-        out.append(
-            {
-                "t0": t0,
-                "t1": t1,
-                "token_start": slice_start,
-                "token_end": slice_end,
-            }
-        )
-        cursor = slice_end
+        out.append({"t0": t0, "t1": t1, "word_idx": word_idx})
     return out
 
 
@@ -554,8 +569,6 @@ def _build_align_candidates(
                 "align_agreement": 1.0,
                 "ytasr_agreement": y_agree,
                 "alpha_weight": weight,
-                "token_start": ar["token_start"],
-                "token_end": ar["token_end"],
             }
         )
     return out
@@ -795,7 +808,13 @@ def _align_line_object(
     align_words: list[dict],
     align_range: dict | None,
 ) -> dict:
-    """Build a line_object directly from align_words for this line."""
+    """Build a line_object directly from align_words for this line.
+
+    Matched tokens take their align word's timing verbatim; tokens whose
+    words the aligner dropped are interpolated inside the line's own
+    ``[t0, t1]`` (shared :func:`candidate_match._fill_unmatched_runs`), so
+    a drop never borrows a neighbouring line's words.
+    """
     if align_range is None:
         return {
             "text": text,
@@ -804,18 +823,19 @@ def _align_line_object(
             "start": None,
             "end": None,
         }
-    slice_start = align_range["token_start"]
-    slice_end = align_range["token_end"]
-    aw = align_words[slice_start:slice_end]
-    words = []
-    for (_, raw), w in zip(toks, aw):
-        words.append({"word": raw, "start": w["start"], "end": w["end"]})
+    tw: list[dict | None] = [None] * len(toks)
+    for k, (_norm, raw) in enumerate(toks):
+        wi = align_range["word_idx"][k]
+        if wi is not None:
+            w = align_words[wi]
+            tw[k] = {"word": raw, "start": w["start"], "end": w["end"]}
+    words = _fill_unmatched_runs(tw, toks, align_range["t0"], align_range["t1"])
     return {
         "text": text,
         "line_id": line_id,
         "words": words,
-        "start": words[0]["start"] if words else None,
-        "end": words[-1]["end"] if words else None,
+        "start": words[0]["start"],
+        "end": words[-1]["end"],
     }
 
 
