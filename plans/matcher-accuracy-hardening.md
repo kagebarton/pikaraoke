@@ -1033,3 +1033,27 @@ Run `cue_align_corpus.py` (GPU) over the 16 SRT songs for a flag-count baseline.
 **Hard-ordering status:** the pre-fix baseline now exists in this log, so the
 1b fix (`4d38bc1a`) is cleared to land on `fable_matcher_refine`. Phase 1c
 re-runs the command above post-fix and diffs this table.
+
+### Phase 1c — post-fix non-SRT replay diff (2026-07-06)
+
+1b landed (`8ab2b71`+`72fe939`); harness+1b batch inline-reviewed (no blocking
+findings). Re-ran `replay_ytasr_third_source.py <corpus> --alpha 2.0 --beta 2.0`
+on the **same** schema-v8 corpus, post-fix. Reproducible (two runs identical,
+including the live-fetch ↯ songs).
+
+**15 of 17 songs byte-identical** to the Phase 0 table — same MAD, crawl,
+placed, overlap. Confirms the fix leaves the clean 1:1 align case untouched and
+does not perturb any already-placed line's timing.
+
+**2 of 17 changed — both strictly additive align-word-drop recoveries** (the
+predicted outcome):
+
+| Song | src | change | MAD | note |
+|------|-----|--------|-----|------|
+| 'Defying Gravity' | 3src | placed 51→52, crawl 3→4 | bail:wide_spread (unchanged) | recovers a previously-dropped line; it is slow → +1 crawl. Overlap 7.8 unchanged. |
+| Domino | 2src | placed 62→63, overlap 0.0→0.1 | 0.43s / 7a (unchanged) | recovered line grazes its neighbour by 0.1s (sub-frame). |
+
+No regressions corpus-wide: no MAD worsened, no placed count dropped, no new
+large overlap. The fix is purely additive — recovers 2 lines the aligner-word-
+drop bug had silently discarded, every other line keeps its exact prior timing.
+The 0.1s Domino overlap is the only cosmetic side effect, negligible.
