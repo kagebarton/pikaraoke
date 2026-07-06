@@ -26,7 +26,7 @@ from pikaraoke.pipeline.config import PipelineConfig
 from pikaraoke.pipeline.stages.lyric_align import generate_ass
 
 # Experiment outputs living next to production .ass files. Shared by the
-# sibling A/B scripts (end_snap_ass imports this).
+# sibling A/B scripts (end_snap_ass, edge_snap_ass import this).
 SKIP_SUFFIXES = (
     ".cuealign",
     ".jointalign",
@@ -34,6 +34,7 @@ SKIP_SUFFIXES = (
     ".asralign",
     ".onsetsnap",
     ".endsnap",
+    ".edgesnap",
     ".fullmix",
 )
 
