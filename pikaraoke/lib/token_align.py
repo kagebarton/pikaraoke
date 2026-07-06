@@ -12,6 +12,11 @@ Two layers the matchers share:
     absorbs runs of extra/noisy whisper output, a confirmed re-sync
     filters spurious single-word anchors, and a whisper-skip budget drops
     noise before reluctantly skipping a lyric token.
+  * ``match_words_to_tokens`` — a monotone assignment DP (max matched
+    words, then min time deviation) that maps an ordered token sequence
+    to an ordered word stream on strict normalised equality. For word
+    streams produced by forced alignment of the token text itself, where
+    the only divergence is dropped words.
 
 ``candidate_match._build_line_object`` runs ``_walk_align`` inside a
 selected window to assign per-word timings; the joint matcher
@@ -185,3 +190,75 @@ def _walk_align(
             j += 1
             whisper_skips = 0
     return mapping
+
+
+# ---------------------------------------------------------------------------
+# Monotone assignment DP
+# ---------------------------------------------------------------------------
+
+
+def match_words_to_tokens(
+    token_norms: list[str],
+    token_times: list[float],
+    word_norms: list[str],
+    word_times: list[float],
+) -> list[int | None]:
+    """Monotone token<-word assignment: max matches, then min time deviation.
+
+    Both streams are ordered; a match requires equal normalised text (strict
+    — on both call paths the word stream came from forced alignment of the
+    same text, so contraction/homoglyph divergence cannot arise). Among the
+    assignments with the most matches, prefer the one whose word times sit
+    closest to the tokens' expected times. The tiebreak is what makes
+    repeats safe: when a whole repeated line's words were dropped, plain
+    greedy text matching would hand the twin line's words to the earlier
+    line and shift every later repeat; time deviation picks the twin. It is
+    a tiebreak, not a gate, so a constant offset (which shifts every
+    deviation equally) cannot flip a correct assignment.
+
+    Two callers: the cue split (``cue_align``, cue-expected token times vs
+    word start times) and the joint matcher's align-range assignment
+    (``joint_match._line_align_ranges``, index pseudo-times on both sides).
+
+    Returns, per token, the index of its matched word (or None). Words that
+    match no token (e.g. punctuation-only tokens the tokeniser dropped but
+    the aligner emitted) are skipped instead of stalling the scan.
+    """
+    n_tok, n_word = len(token_norms), len(word_norms)
+    assign: list[int | None] = [None] * n_tok
+    if not n_tok or not n_word:
+        return assign
+    # dp over (tokens consumed, words consumed) -> (matches, -total_deviation),
+    # maximised lexicographically. Rolling rows plus a per-cell choice record
+    # (0 = skip token, 1 = skip word, 2 = match) for the backtrack.
+    prev: list[tuple[int, float]] = [(0, 0.0)] * (n_word + 1)
+    choices: list[bytes] = []
+    for i in range(1, n_tok + 1):
+        cur: list[tuple[int, float]] = [(0, 0.0)] * (n_word + 1)
+        row = bytearray(n_word + 1)
+        norm, expected = token_norms[i - 1], token_times[i - 1]
+        for j in range(1, n_word + 1):
+            best, choice = prev[j], 0
+            if cur[j - 1] > best:
+                best, choice = cur[j - 1], 1
+            if norm == word_norms[j - 1]:
+                matches, neg_dev = prev[j - 1]
+                cand = (matches + 1, neg_dev - abs(word_times[j - 1] - expected))
+                if cand > best:
+                    best, choice = cand, 2
+            cur[j] = best
+            row[j] = choice
+        choices.append(bytes(row))
+        prev = cur
+    i, j = n_tok, n_word
+    while i > 0 and j > 0:
+        choice = choices[i - 1][j]
+        if choice == 2:
+            assign[i - 1] = j - 1
+            i -= 1
+            j -= 1
+        elif choice == 1:
+            j -= 1
+        else:
+            i -= 1
+    return assign

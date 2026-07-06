@@ -46,7 +46,7 @@ from dataclasses import dataclass
 from statistics import median
 
 from pikaraoke.lib.joint_match import _tokenise_lines
-from pikaraoke.lib.token_align import _normalize_token
+from pikaraoke.lib.token_align import _normalize_token, match_words_to_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -178,61 +178,19 @@ def _match_words_to_tokens(
     token_times: list[float],
     aligned_words: list[dict],
 ) -> list[int | None]:
-    """Monotone token<-word assignment: max matches, then min time deviation.
+    """Adapter: unpack aligned-word dicts for the shared assignment DP.
 
-    Both streams are ordered; a match requires equal normalised text. Among
-    the assignments with the most matches, prefer the one whose word starts
-    sit closest to the tokens' cue-expected times. The tiebreak is what makes
-    repeats safe: when a whole repeated line's words were dropped, plain
-    greedy text matching would hand the twin line's words to the earlier
-    line and shift every later repeat; time deviation picks the twin. It is
-    a tiebreak, not a gate, so a constant display lead (which shifts every
-    deviation equally) cannot flip a correct assignment.
-
-    Returns, per token, the index of its matched word (or None). Words that
-    match no token (e.g. punctuation-only tokens the tokeniser dropped but
-    the aligner emitted) are skipped instead of stalling the scan.
+    See :func:`token_align.match_words_to_tokens` for the contract. Here the
+    expected times are cue-derived, so the deviation tiebreak arbitrates
+    repeats on the trusted cue structure; a constant display lead shifts
+    every deviation equally and cannot flip a correct assignment.
     """
-    word_norms = [_normalize_token(w["word"]) for w in aligned_words]
-    word_times = [w["start"] for w in aligned_words]
-    n_tok, n_word = len(token_norms), len(word_norms)
-    assign: list[int | None] = [None] * n_tok
-    if not n_tok or not n_word:
-        return assign
-    # dp over (tokens consumed, words consumed) -> (matches, -total_deviation),
-    # maximised lexicographically. Rolling rows plus a per-cell choice record
-    # (0 = skip token, 1 = skip word, 2 = match) for the backtrack.
-    prev: list[tuple[int, float]] = [(0, 0.0)] * (n_word + 1)
-    choices: list[bytes] = []
-    for i in range(1, n_tok + 1):
-        cur: list[tuple[int, float]] = [(0, 0.0)] * (n_word + 1)
-        row = bytearray(n_word + 1)
-        norm, expected = token_norms[i - 1], token_times[i - 1]
-        for j in range(1, n_word + 1):
-            best, choice = prev[j], 0
-            if cur[j - 1] > best:
-                best, choice = cur[j - 1], 1
-            if norm == word_norms[j - 1]:
-                matches, neg_dev = prev[j - 1]
-                cand = (matches + 1, neg_dev - abs(word_times[j - 1] - expected))
-                if cand > best:
-                    best, choice = cand, 2
-            cur[j] = best
-            row[j] = choice
-        choices.append(bytes(row))
-        prev = cur
-    i, j = n_tok, n_word
-    while i > 0 and j > 0:
-        choice = choices[i - 1][j]
-        if choice == 2:
-            assign[i - 1] = j - 1
-            i -= 1
-            j -= 1
-        elif choice == 1:
-            j -= 1
-        else:
-            i -= 1
-    return assign
+    return match_words_to_tokens(
+        token_norms,
+        token_times,
+        [_normalize_token(w["word"]) for w in aligned_words],
+        [w["start"] for w in aligned_words],
+    )
 
 
 def split_section_to_lines(

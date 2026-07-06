@@ -1,6 +1,11 @@
 """Unit tests for token primitives: normalization + the lockstep aligner."""
 
-from pikaraoke.lib.token_align import _match_simple, _normalize_token, _walk_align
+from pikaraoke.lib.token_align import (
+    _match_simple,
+    _normalize_token,
+    _walk_align,
+    match_words_to_tokens,
+)
 
 # ---------------------------------------------------------------------------
 # Normalization
@@ -100,3 +105,35 @@ class TestWalkAlign:
         whisper = ["a", "x1", "x2", "x3", "x4", "x5", "x6", "x7", "b"]
         mapping = _walk_align(lyric, whisper)
         assert mapping == [0, 8]
+
+
+# ---------------------------------------------------------------------------
+# Monotone assignment DP
+# ---------------------------------------------------------------------------
+
+
+class TestMatchWordsToTokens:
+    def test_max_matches_beats_deviation(self):
+        # Two matches at huge time deviation beat one match at zero
+        # deviation — deviation is a tiebreak, never a gate.
+        assign = match_words_to_tokens(["a", "b"], [0.0, 1.0], ["a", "b"], [50.0, 51.0])
+        assert assign == [0, 1]
+
+    def test_deviation_tiebreak_on_repeated_token(self):
+        # One "na" word, two "na" tokens: equal match count either way, so
+        # the word goes to the token whose expected time it sits closest to.
+        assign = match_words_to_tokens(["na", "na"], [0.0, 10.0], ["na"], [9.8])
+        assert assign == [None, 0]
+
+    def test_unmatched_tokens_padded_none(self):
+        assign = match_words_to_tokens(["a", "x", "b"], [0.0, 1.0, 2.0], ["a", "b"], [0.0, 2.0])
+        assert assign == [0, None, 1]
+
+    def test_extra_words_skipped(self):
+        # A word matching no token must not stall the scan.
+        assign = match_words_to_tokens(["a", "b"], [0.0, 1.0], ["a", "zzz", "b"], [0.0, 0.5, 1.0])
+        assert assign == [0, 2]
+
+    def test_empty_inputs(self):
+        assert match_words_to_tokens([], [], ["a"], [0.0]) == []
+        assert match_words_to_tokens(["a"], [0.0], [], []) == [None]
