@@ -181,6 +181,48 @@ def best_candidate_per_line(candidates: list) -> dict[int, tuple[int, int, float
     return best
 
 
+def _fill_unmatched_runs(
+    tw: list[dict | None],
+    line_toks: list[tuple[str, str]],
+    win_start: float,
+    win_end: float,
+) -> list[dict]:
+    """Fill unmatched token runs in ``tw`` by linear interpolation.
+
+    ``tw`` holds one timed-word dict per lyric token (None where the token
+    matched no word). Each None-run is paced evenly between its bracketing
+    matched anchors — the window edges at the line's ends — clamped so a
+    run never starts before the preceding anchor's end. Fills in place and
+    returns the fully-populated list.
+    """
+    n = len(line_toks)
+    k = 0
+    while k < n:
+        if tw[k] is not None:
+            k += 1
+            continue
+        run_end = k
+        while run_end < n and tw[run_end] is None:
+            run_end += 1
+        prev_end = tw[k - 1]["end"] if k > 0 else win_start
+        next_start = tw[run_end]["start"] if run_end < n else win_end
+        if next_start < prev_end:
+            next_start = prev_end
+        run_len = run_end - k
+        slot = (next_start - prev_end) / run_len if run_len > 0 else 0.0
+        for off in range(run_len):
+            s = prev_end + off * slot
+            e = prev_end + (off + 1) * slot
+            _, raw = line_toks[k + off]
+            tw[k + off] = {
+                "word": raw,
+                "start": s,
+                "end": e,
+            }
+        k = run_end
+    return tw
+
+
 def _build_line_object(
     text: str, line_id: int, line_toks: list, win_words: list, lookahead: int
 ) -> dict:
@@ -218,32 +260,7 @@ def _build_line_object(
                 "end": src["end"],
             }
 
-    win_start = win_words[0]["start"]
-    win_end = win_words[-1]["end"]
-    k = 0
-    while k < n:
-        if tw[k] is not None:
-            k += 1
-            continue
-        run_end = k
-        while run_end < n and tw[run_end] is None:
-            run_end += 1
-        prev_end = tw[k - 1]["end"] if k > 0 else win_start
-        next_start = tw[run_end]["start"] if run_end < n else win_end
-        if next_start < prev_end:
-            next_start = prev_end
-        run_len = run_end - k
-        slot = (next_start - prev_end) / run_len if run_len > 0 else 0.0
-        for off in range(run_len):
-            s = prev_end + off * slot
-            e = prev_end + (off + 1) * slot
-            _, raw = line_toks[k + off]
-            tw[k + off] = {
-                "word": raw,
-                "start": s,
-                "end": e,
-            }
-        k = run_end
+    tw = _fill_unmatched_runs(tw, line_toks, win_words[0]["start"], win_words[-1]["end"])
 
     return {
         "text": text,
