@@ -129,16 +129,18 @@ class TestResolvePlanDefault:
         )
         assert plan.kind == "fetch"
 
-    def test_genius_with_lrclib_and_lrc_on_disk_replays_prior(self, tmp_path):
-        (tmp_path / "lyrics").mkdir()
-        (tmp_path / "lyrics" / "s.lrc").write_text("[00:01.00]hi\n", encoding="utf-8")
-        lrclib = {"lrc_file": "lyrics/s.lrc", "record": {"id": 5}, "query": None}
+    def test_genius_with_ytasr_and_json3_on_disk_reuses(self, tmp_path):
+        subs = tmp_path / "subtitles"
+        subs.mkdir()
+        asr_rel = f"subtitles/s{regen.ASR_JSON3_SUFFIX}"
+        (tmp_path / asr_rel).write_text("{}", encoding="utf-8")
+        ytasr = {"asr_file": asr_rel, "n_words": 40, "wpm": 60.0}
         bundle = {
             "media_duration_s": 200.0,
             "lyrics": {
                 "origin": "genius",
                 "lines": ["hello", "world"],
-                "lrclib": lrclib,
+                "ytasr": ytasr,
                 "genius": {"id": 9, "title": "H", "artist": "W"},
             },
         }
@@ -146,25 +148,26 @@ class TestResolvePlanDefault:
         assert plan.kind == "seed"
         assert plan.lyrics_lines == ["hello", "world"]
         assert plan.seed["lyrics_origin"] == "genius"
-        assert plan.seed["lrclib"] == lrclib
+        assert plan.seed["ytasr"] == ytasr
         assert plan.seed["genius"] == {"id": 9, "title": "H", "artist": "W"}
         assert plan.seed["media_duration_s"] == 200.0
-        assert "lrclib" in plan.label
+        assert "ytasr" in plan.label
 
-    def test_genius_with_lrclib_but_lrc_missing_drops_prior(self, tmp_path):
+    def test_genius_with_ytasr_but_json3_missing_drops_source(self, tmp_path):
         bundle = {
             "lyrics": {
                 "origin": "genius",
                 "lines": ["hello"],
-                "lrclib": {"lrc_file": "lyrics/s.lrc", "record": {"id": 5}},
+                "genius": {"id": 9, "title": "H", "artist": "W"},
+                "ytasr": {"asr_file": f"subtitles/s{regen.ASR_JSON3_SUFFIX}", "n_words": 40},
             },
         }
         plan = regen.resolve_plan(_job(tmp_path, "s", bundle), reset=False)
         assert plan.kind == "seed"
-        assert "lrclib" not in plan.seed
+        assert "ytasr" not in plan.seed
         assert "missing" in plan.label
 
-    def test_genius_with_identity_only_seeds_without_prior(self, tmp_path):
+    def test_genius_with_identity_only_seeds_without_source(self, tmp_path):
         bundle = {
             "lyrics": {
                 "origin": "genius",
@@ -174,7 +177,7 @@ class TestResolvePlanDefault:
         }
         plan = regen.resolve_plan(_job(tmp_path, "s", bundle), reset=False)
         assert plan.kind == "seed"
-        assert "lrclib" not in plan.seed
+        assert "ytasr" not in plan.seed
         assert plan.seed["genius"] == {"id": 9, "title": "H", "artist": "W"}
 
     def test_genius_without_identity_falls_through(self, tmp_path):
@@ -195,15 +198,6 @@ class TestResolvePlanDefault:
         }
         plan = regen.resolve_plan(_job(tmp_path, "plain", bundle), reset=False)
         assert plan.kind == "prompt"  # no YouTube id -> straight to prompt
-
-    def test_lrclib_counts_as_identity(self, tmp_path):
-        (tmp_path / "lyrics").mkdir()
-        (tmp_path / "lyrics" / "s.lrc").write_text("[00:01.00]hi\n", encoding="utf-8")
-        lrclib = {"lrc_file": "lyrics/s.lrc", "record": {"id": 5}}
-        bundle = {"lyrics": {"origin": "genius", "lines": ["hi"], "lrclib": lrclib}}
-        plan = regen.resolve_plan(_job(tmp_path, "s", bundle), reset=False)
-        assert plan.kind == "seed"
-        assert plan.seed["lrclib"] == lrclib
 
     def test_unknown_origin_without_identity_falls_through(self, tmp_path):
         bundle = {"lyrics": {"origin": "unknown", "lines": ["a", "b"]}}
@@ -235,15 +229,17 @@ class TestResolvePlanDefault:
 
 class TestResolvePlanReset:
     def test_reset_ignores_reusable_bundle(self, tmp_path):
-        # A perfectly reusable genius+lrclib bundle is discarded in reset mode;
+        # A perfectly reusable genius+ytasr bundle is discarded in reset mode;
         # a song with a YouTube id is re-resolved via fetch.
-        (tmp_path / "lyrics").mkdir()
-        (tmp_path / "lyrics" / f"{YT_STEM}.lrc").write_text("[00:01.00]hi\n", encoding="utf-8")
+        subs = tmp_path / "subtitles"
+        subs.mkdir()
+        asr_rel = f"subtitles/{YT_STEM}{regen.ASR_JSON3_SUFFIX}"
+        (tmp_path / asr_rel).write_text("{}", encoding="utf-8")
         bundle = {
             "lyrics": {
                 "origin": "genius",
                 "lines": ["hi"],
-                "lrclib": {"lrc_file": f"lyrics/{YT_STEM}.lrc", "record": {"id": 5}},
+                "ytasr": {"asr_file": asr_rel, "n_words": 40},
                 "genius": {"id": 9, "title": "H", "artist": "W"},
             },
         }
@@ -347,10 +343,24 @@ class TestClearOutputFolders:
         (tmp_path / "vocal").mkdir()
         (tmp_path / "vocal" / f"{YT_STEM}---vocal.m4a").write_text("a", encoding="utf-8")
         regen.clear_output_folders(tmp_path)
-        assert not (tmp_path / "subtitles").exists()
+        assert not (tmp_path / "subtitles" / "x").exists()
         assert not (tmp_path / "karaoke").exists()
         assert not (tmp_path / "lyrics").exists()
         assert (tmp_path / "vocal" / f"{YT_STEM}---vocal.m4a").exists()
+
+    def test_preserves_asr_captions_wipes_the_rest(self, tmp_path):
+        # ASR captions are non-regenerable download artifacts — they must
+        # survive the reset wipe, unlike generated SRTs and re-fetched captions.
+        subs = tmp_path / "subtitles"
+        subs.mkdir()
+        asr = subs / f"{YT_STEM}{regen.ASR_JSON3_SUFFIX}"
+        asr.write_text("{}", encoding="utf-8")
+        (subs / f"{YT_STEM}.srt").write_text("generated", encoding="utf-8")
+        (subs / f"{YT_STEM}.en.srt").write_text("caption", encoding="utf-8")
+        regen.clear_output_folders(tmp_path)
+        assert asr.exists()
+        assert not (subs / f"{YT_STEM}.srt").exists()
+        assert not (subs / f"{YT_STEM}.en.srt").exists()
 
     def test_missing_folders_is_noop(self, tmp_path):
         regen.clear_output_folders(tmp_path)  # does not raise
