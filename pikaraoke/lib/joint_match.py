@@ -71,13 +71,21 @@ from pikaraoke.lib.token_align import _normalize_token, match_words_to_tokens
 
 logger = logging.getLogger(__name__)
 
-# Minimum width of an align candidate's selection window, in seconds. Forced
-# alignment collapse (every lyric token of a run pinned to one timestamp)
-# would otherwise produce zero-width candidates that the interval-scheduling
-# DP can pick stacked together at the same instant. Padding to this minimum
-# guarantees collapsed candidates conflict under non-overlap so the DP keeps
-# at most one of them.
+# Minimum width of an align candidate's selection window, in seconds. A
+# genuinely narrow but plausibly-paced window is padded up to this minimum so
+# it renders as a visible line rather than a near-instant flash. Collapsed or
+# crammed stacks no longer reach the pad: the _MIN_ALIGN_PACE_S guard below
+# drops them first, so this only widens honest short windows.
 _MIN_ALIGN_WIDTH_S = 0.1
+
+# Minimum plausible pace for an align candidate, in seconds per lyric token.
+# ~17 tokens/s is faster than any real singing, so a range tighter than this
+# is the aligner's give-up signature (a crammed stack pinned to one instant),
+# not a belief worth placing. The min-width pad above would otherwise let one
+# phantom per crammed stack survive the DP and render as a sub-second flash
+# line; dropping the candidate outright lets the line's transcribe/ytasr
+# candidates (or honest interp) decide instead.
+_MIN_ALIGN_PACE_S = 0.06
 
 
 def match_words_to_lines_joint_with_stats(
@@ -539,7 +547,11 @@ def _build_align_candidates(
             continue
         t0 = ar["t0"]
         t1 = ar["t1"]
-        # Pad collapsed align candidates so the DP can reject stacks of them.
+        # Drop before the pad below, which would otherwise widen a crammed
+        # range into a survivable phantom (rationale at _MIN_ALIGN_PACE_S).
+        if (t1 - t0) / len(line_norms[line_id]) < _MIN_ALIGN_PACE_S:
+            continue
+        # Pad a genuinely narrow window up to the min visible width.
         if t1 - t0 < _MIN_ALIGN_WIDTH_S:
             pad = (_MIN_ALIGN_WIDTH_S - (t1 - t0)) / 2.0
             t0 = max(0.0, t0 - pad)

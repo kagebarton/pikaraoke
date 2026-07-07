@@ -303,10 +303,11 @@ class TestBuildAlignCandidates:
         assert all(c["transcribe_match"] == 2 for c in cands)
         assert all(c["score"] == 6.0 for c in cands)
 
-    def test_collapsed_align_is_padded(self):
-        # All tokens forced to one timestamp — t1 - t0 ≈ 0.
-        line_norms = [["a", "b"]]
-        align_ranges = [{"t0": 5.0, "t1": 5.0, "word_idx": [0, 1]}]
+    def test_narrow_align_is_padded(self):
+        # A single short word timed to a sub-min-width but plausible-pace
+        # window survives the pace check and is padded up to the min width.
+        line_norms = [["oh"]]
+        align_ranges = [{"t0": 4.96, "t1": 5.04, "word_idx": [0]}]  # 0.08s, 1 tok
         cands = _build_align_candidates(
             line_norms,
             align_ranges,
@@ -320,9 +321,49 @@ class TestBuildAlignCandidates:
         )
         assert len(cands) == 1
         c = cands[0]
-        assert c["t1"] - c["t0"] >= 0.099  # min width ≈ 0.1s
-        # collapsed centred on 5.0
-        assert abs((c["t0"] + c["t1"]) / 2 - 5.0) < 1e-6
+        assert c["t1"] - c["t0"] >= 0.099  # padded to min width ≈ 0.1s
+        assert abs((c["t0"] + c["t1"]) / 2 - 5.0) < 1e-6  # centred on 5.0
+
+    def test_crammed_stack_dropped(self):
+        # A give-up stack: three lines' tokens pinned to near-zero-width
+        # windows at 17+ tokens/s. None is a placeable belief, so all are
+        # dropped and the lines fall through to transcribe/ytasr or interp.
+        line_norms = [["a", "b"], ["c", "d", "e"], ["f", "g"]]
+        align_ranges = [
+            {"t0": 5.0, "t1": 5.0, "word_idx": [0, 1]},  # 0.0 / 2 tok
+            {"t0": 5.0, "t1": 5.02, "word_idx": [2, 3, 4]},  # 0.007 s/tok
+            {"t0": 5.02, "t1": 5.05, "word_idx": [5, 6]},  # 0.015 s/tok
+        ]
+        cands = _build_align_candidates(
+            line_norms,
+            align_ranges,
+            [],
+            [],
+            [None, None, None],
+            margin_s=0.3,
+            max_edit_ratio=0.25,
+            alpha=4.0,
+            beta=0.0,
+        )
+        assert cands == []
+
+    def test_genuine_short_line_kept(self):
+        # A real one-token line sung over 0.3 s is well above the pace floor.
+        line_norms = [["oh"]]
+        align_ranges = [{"t0": 10.0, "t1": 10.3, "word_idx": [0]}]  # 0.3 s/tok
+        cands = _build_align_candidates(
+            line_norms,
+            align_ranges,
+            [],
+            [],
+            [None],
+            margin_s=0.3,
+            max_edit_ratio=0.25,
+            alpha=4.0,
+            beta=0.0,
+        )
+        assert len(cands) == 1
+        assert cands[0]["line_id"] == 0
 
     def test_no_align_range_skipped(self):
         line_norms = [["a", "b"], ["c", "d"]]
