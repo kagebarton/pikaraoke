@@ -1461,3 +1461,51 @@ Why nothing alerted: the song sat in the Phase 0 baseline at placed 26 — the
 harness diffs ship-vs-ship and scores MAD over placed anchors only, so a
 coverage regression vs dev was invisible. Hence the Phase 4 harness
 amendment (coverage column + flag) and the Phase 4a acceptance case.
+
+### Phase 3a — crammed align-candidate rejection (2026-07-07)
+
+`_MIN_ALIGN_PACE_S = 0.06` (~17 tok/s) added to `_build_align_candidates`:
+before the min-width pad, an align candidate whose pre-pad pace
+`(t1 - t0) / n_tokens` is below the floor is dropped outright (the aligner's
+give-up signature, not a placement). Unit tests: crammed multi-line stack →
+zero candidates; genuine 1-token 0.3 s line → kept; a sub-min-width but
+plausible-pace 1-token line still pads to the min width (rewritten from the
+superseded `test_collapsed_align_is_padded`, which used a 2-token zero-width
+range that the pace check now drops). 56/56 `test_joint_match.py` green;
+`test_windowed_realign` / `test_lyric_align` / `test_candidate_match` green.
+
+**Validation method (isolation on current bundles).** The corpus was in flux
+this session — Ken swapped the Girl in the Bubble bundle mid-run (troubleshoot
+capture → newer two-path-pre-onset-snap capture, back to `3src`/rec 26). So
+rather than diff against the stale Phase 0/1c table, isolated 3a directly:
+replayed the **same** on-disk bundles once with 3a stashed (pre-3a) and once
+with it applied (post-3a). All 17 `rec` values match between the two runs, so
+the diff is 3a's effect alone. `--alpha 2.0 --beta 2.0`.
+
+Clean 3a diff (pre-3a `new` → post-3a `new`):
+
+| Song | placed | MAD | overlap | crawl |
+|------|--------|-----|---------|-------|
+| 'Defying Gravity' | 52 → 51 | bail:wide_spread (=) | 7.8 → 2.2 | 4 → 3 |
+| Bloodstream | 51 → 48 | 0.58s/11a (=) | 0.0 (=) | 1 (=) |
+| Seasons of Love | 26 → 25 | 0.52s/5a (=) | 0.0 (=) | 3 (=) |
+| The Next Ten Minutes | 68 → 67 | 0.46s/52a (=) | 0.0 (=) | 2 (=) |
+| Girl in the Bubble | 26 → 24 | 0.40s → 0.38s/15a | 0.0 (=) | 0 (=) |
+| (other 12 songs) | unchanged | unchanged | unchanged | unchanged |
+
+**Verdict: favorable, purely subtractive of phantoms.** 12 of 17 byte-identical.
+The 5 changed songs each shed 1-3 crammed align candidates. Quality signals all
+point the right way: **no MAD worsened on any song** (unchanged on 16, improved
+0.40→0.38 on Girl in the Bubble), **no new overlap anywhere** (Defying's dropped
+7.8→2.2 — the crammed-stack-removal signature — and its slow flash line stopped
+crawling, 4→3). By construction a line only loses placement when its align
+candidate is >17 tok/s *and* neither transcribe nor ytasr covered it, i.e. an
+align-only sub-second flash — a phantom, not a real anchored line (the untouched
+MAD confirms every held-out anchor kept its timing). Bloodstream (-3) is the
+known 4:07-cut phantom-repeat pile-up; those are exactly the flash lines 3a
+targets. Commit `feat(joint-match): drop implausible-pace align candidates`.
+
+Note for Phase 4: the current Girl in the Bubble bundle is the two-path
+pre-onset-snap capture (`3src`, 26 placed), not the Phase 0 `3src`/26 v8 capture
+nor the troubleshoot `2src`/36 one — re-confirm the 4a acceptance target against
+whatever bundle is on disk when Phase 4 runs.
