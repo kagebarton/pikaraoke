@@ -1475,12 +1475,18 @@ range that the pace check now drops). 56/56 `test_joint_match.py` green;
 `test_windowed_realign` / `test_lyric_align` / `test_candidate_match` green.
 
 **Validation method (isolation on current bundles).** The corpus was in flux
-this session — Ken swapped the Girl in the Bubble bundle mid-run (troubleshoot
-capture → newer two-path-pre-onset-snap capture, back to `3src`/rec 26). So
-rather than diff against the stale Phase 0/1c table, isolated 3a directly:
-replayed the **same** on-disk bundles once with 3a stashed (pre-3a) and once
-with it applied (post-3a). All 17 `rec` values match between the two runs, so
-the diff is 3a's effect alone. `--alpha 2.0 --beta 2.0`.
+during the commit — Ken was swapping the Girl in the Bubble bundle mid-session.
+So rather than diff against the stale Phase 0/1c table, isolated 3a directly:
+replayed the **same** on-disk bundles once with the pre-3a matcher checked out
+(parent `f416d8a`) and once with 3a applied. All 17 `rec` values match between
+the two runs, so the diff is 3a's effect alone. `--alpha 2.0 --beta 2.0`.
+
+**Re-confirmed on the standardized corpus (post-commit).** Ken then regenerated
+the Girl in the Bubble bundle with the `onset_snap_on_ship` matcher so it is
+internally consistent with the rest of the corpus. Re-ran the same isolation
+(pre-3a `f416d8a` vs post-3a HEAD) on those standardized bundles: the diff below
+reproduces **byte-identically** — Girl in the Bubble still 26 → 24, MAD
+0.40 → 0.38, no crawl, no overlap. The regeneration does not change 3a's story.
 
 Clean 3a diff (pre-3a `new` → post-3a `new`):
 
@@ -1505,7 +1511,9 @@ MAD confirms every held-out anchor kept its timing). Bloodstream (-3) is the
 known 4:07-cut phantom-repeat pile-up; those are exactly the flash lines 3a
 targets. Commit `feat(joint-match): drop implausible-pace align candidates`.
 
-Note for Phase 4: the current Girl in the Bubble bundle is the two-path
-pre-onset-snap capture (`3src`, 26 placed), not the Phase 0 `3src`/26 v8 capture
-nor the troubleshoot `2src`/36 one — re-confirm the 4a acceptance target against
-whatever bundle is on disk when Phase 4 runs.
+Note for Phase 4: the current Girl in the Bubble bundle is the
+`onset_snap_on_ship` regeneration (`3src`, 26 placed), now consistent with the
+rest of the corpus — not the Phase 0 v8 capture nor the earlier troubleshoot
+`2src`/36 one. Still re-confirm the 4a acceptance target (placed 26 → ~31-33)
+against whatever bundle is on disk when Phase 4 runs, in case it is refreshed
+again before then.
