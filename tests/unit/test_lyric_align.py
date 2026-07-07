@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import numpy as np
 import pytest
 
 from pikaraoke.lib.alignment_capture import output_line_timings
@@ -522,6 +523,104 @@ class TestCueAlignRoute:
         stage.run(ctx)
         worker.transcribe_words.assert_called_once()
         assert worker.transcribe_words.call_args.kwargs["refine"] is False
+
+
+# ---------------------------------------------------------------------------
+# Vocal-energy veto wiring
+# ---------------------------------------------------------------------------
+
+
+def _read_bundle(ctx) -> dict:
+    path = ctx.song_path.parent / "alignment_debug" / f"{ctx.song_path.stem}.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+class TestEvidenceVetoWiring:
+    """The vocal-energy veto runs only on the joint route and shares the edge
+    snap's single envelope decode."""
+
+    def test_joint_route_vetoes_with_shared_env(self, tmp_path, monkeypatch):
+        import pikaraoke.pipeline.stages.lyric_align as la_mod
+
+        stage, ctx, _ = _make_stage_and_ctx(tmp_path)
+        env = np.array([-30.0, -30.0], dtype=np.float32)
+        decode = MagicMock(return_value=env)
+        veto = MagicMock(side_effect=lambda objs, _env: (objs, {"n_vetoed": 0}))
+        snap = MagicMock(side_effect=lambda objs, _path, env=None: (objs, {}))
+        monkeypatch.setattr(la_mod, "decode_env_db", decode)
+        monkeypatch.setattr(la_mod, "veto_uncorroborated_lines", veto)
+        monkeypatch.setattr(la_mod, "snap_line_edges", snap)
+
+        stage.run(ctx)
+
+        # One decode, shared by the veto (positional) and the snap (keyword).
+        decode.assert_called_once()
+        veto.assert_called_once()
+        assert veto.call_args.args[1] is env
+        assert snap.call_args.kwargs["env"] is env
+        assert _read_bundle(ctx)["joint_stats"]["evidence_veto"] == {"n_vetoed": 0}
+
+    def test_joint_route_records_bail_when_decode_fails(self, tmp_path, monkeypatch):
+        import pikaraoke.pipeline.stages.lyric_align as la_mod
+
+        stage, ctx, _ = _make_stage_and_ctx(tmp_path)
+        monkeypatch.setattr(la_mod, "decode_env_db", MagicMock(return_value=None))
+        veto = MagicMock()
+        monkeypatch.setattr(la_mod, "veto_uncorroborated_lines", veto)
+
+        stage.run(ctx)
+
+        # No envelope -> veto skipped, but the bail is recorded for the GATE.
+        veto.assert_not_called()
+        assert _read_bundle(ctx)["joint_stats"]["evidence_veto"] == {"bailed": "decode_failed"}
+
+    def test_transcribe_mode_never_vetoes(self, tmp_path, monkeypatch):
+        import pikaraoke.pipeline.stages.lyric_align as la_mod
+
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path)
+        del ctx.artifacts["lyrics_path"]  # transcription mode
+        worker.transcribe_refine.return_value = [
+            {
+                "text": "hi",
+                "words": [{"word": "hi", "start": 0.0, "end": 1.0}],
+                "start": 0.0,
+                "end": 1.0,
+            }
+        ]
+        veto = MagicMock()
+        monkeypatch.setattr(la_mod, "veto_uncorroborated_lines", veto)
+
+        stage.run(ctx)
+
+        veto.assert_not_called()
+
+    def test_cue_route_never_vetoes(self, tmp_path, monkeypatch):
+        import pikaraoke.pipeline.stages.lyric_align as la_mod
+
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path)
+        subs = ctx.song_path.parent / "subtitles"
+        subs.mkdir()
+        srt_path = subs / f"{ctx.song_path.stem}.en.srt"
+        srt_path.write_text(
+            "1\n00:00:10,000 --> 00:00:12,000\nglowing river\n"
+            "\n2\n00:00:13,000 --> 00:00:15,000\nphantom parade\n",
+            encoding="utf-8",
+        )
+        ctx.artifacts["lyrics_path"] = srt_path
+        worker.align_refine.return_value = [
+            {"word": "glowing", "start": 0.75, "end": 1.15},
+            {"word": "river", "start": 1.75, "end": 2.15},
+            {"word": "phantom", "start": 3.75, "end": 4.15},
+            {"word": "parade", "start": 4.75, "end": 5.15},
+        ]
+        monkeypatch.setattr(la_mod, "run_ffmpeg", lambda cmd, _ctx, _phase: None)
+        monkeypatch.setattr(la_mod, "_wav_duration", lambda _p: 30.0)
+        veto = MagicMock()
+        monkeypatch.setattr(la_mod, "veto_uncorroborated_lines", veto)
+
+        stage.run(ctx)
+
+        veto.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
