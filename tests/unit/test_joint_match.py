@@ -996,3 +996,68 @@ class TestInterpolation:
         # Interpolated line lives between line 0's end and line 2's start.
         assert objs[1]["start"] >= objs[0]["end"]
         assert objs[1]["end"] <= objs[2]["start"]
+        # Interp placeholders carry no evidence key — the veto never sees them.
+        assert "evidence" not in objs[1]
+
+
+# ---------------------------------------------------------------------------
+# Winning-candidate evidence rides on every materialised object
+# ---------------------------------------------------------------------------
+
+
+class TestEvidenceAttach:
+    """Every placed object carries its winning candidate's evidence terms so
+    the downstream vocal-energy veto can read corroboration off the object."""
+
+    def test_uncorroborated_align_object_is_zero_evidence(self):
+        # Align places the only line; no transcribe, no ytasr overlap. The
+        # object is zero-zero — exactly what the veto tests against silence.
+        lines = ["hello world"]
+        align_words = _aw_seq("hello", "world", t0=0.0, dt=1.0)
+        objs, stats = match_words_to_lines_joint_with_stats(
+            align_words, [], lines, lines, alpha=4.0
+        )
+        assert stats["selected_source"] == ["align"]
+        assert objs[0]["evidence"] == {"transcribe_match": 0.0, "ytasr_agreement": 0.0}
+
+    def test_align_and_ytasr_objects_carry_their_terms(self):
+        # Recovery shape: transcribe corroborates the align-won intro, ytasr
+        # wins line 1 on its own agreement.
+        lines = ["intro line here", "no worries today"]
+        align_words = _aw_seq("intro", "line", "here", t0=0.0, dt=1.0) + _aw_seq(
+            "no", "worries", "today", t0=3.0, dt=1.0
+        )
+        transcribe_words = _aw_seq("intro", "line", "here", t0=0.0, dt=1.0) + _aw_seq(
+            "hello", "there", "friend", t0=3.0, dt=1.0
+        )
+        ytasr_words = _ytw_seq("no", "worries", "today", t0=15.0, dt=1.0)
+
+        objs, stats = match_words_to_lines_joint_with_stats(
+            align_words,
+            transcribe_words,
+            lines,
+            lines,
+            alpha=4.0,
+            beta=4.0,
+            ytasr_words=ytasr_words,
+        )
+
+        assert stats["selected_source"] == ["align", "ytasr"]
+        assert objs[0]["evidence"]["transcribe_match"] > 0
+        assert objs[1]["evidence"]["ytasr_agreement"] > 0
+
+    def test_transcribe_won_object_carries_positive_transcribe_match(self):
+        lines = ["intro line here", "no worries for the rest of your days"]
+        align_words = _aw_seq("intro", "line", "here", t0=0.0, dt=1.0) + _aw_seq(
+            "no", "worries", "for", "the", "rest", "of", "your", "days", t0=3.0, dt=0.75
+        )
+        transcribe_words = _aw_seq("intro", "line", "here", t0=0.0, dt=1.0) + _aw_seq(
+            "no", "worries", "for", "the", "rest", "of", "your", "days", t0=15.0, dt=0.5
+        )
+
+        objs, stats = match_words_to_lines_joint_with_stats(
+            align_words, transcribe_words, lines, lines, alpha=4.0
+        )
+
+        assert stats["selected_source"][1] == "transcribe"
+        assert objs[1]["evidence"]["transcribe_match"] > 0

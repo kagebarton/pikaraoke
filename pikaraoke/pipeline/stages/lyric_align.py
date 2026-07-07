@@ -44,9 +44,10 @@ from tqdm import tqdm
 
 from pikaraoke.lib import alignment_capture, ytasr
 from pikaraoke.lib.cue_align import align_song
+from pikaraoke.lib.evidence_veto import veto_uncorroborated_lines
 from pikaraoke.lib.genius_lyrics import parse_lyric_lines
 from pikaraoke.lib.joint_match import match_words_to_lines_joint_with_stats
-from pikaraoke.lib.onset_snap import snap_line_edges
+from pikaraoke.lib.onset_snap import decode_env_db, snap_line_edges
 from pikaraoke.lib.srt_cues import cue_spans_from_srt
 from pikaraoke.lib.windowed_realign import (
     analyze_pass1,
@@ -192,7 +193,21 @@ class LyricAlignStage(BaseStage):
         # stem alignment used — the de-reverb gate may have adopted a dry
         # stem; transcribe mode never gates, so it falls back to vocal_wav.
         snap_stem = ctx.artifacts.get("aligned_stem", vocal_wav)
-        line_objects, edge_stats = snap_line_edges(line_objects, snap_stem)
+        env = decode_env_db(snap_stem, "edge snap")
+
+        # Joint route only: before the snap, demote zero-corroboration align
+        # lines whose claimed span is near-silent in the stem — lyrics the
+        # aligner smeared over an instrumental break with no transcribe or
+        # ytasr support. Transcribe/cue objects carry no per-candidate
+        # evidence, so the veto never sees them. Shares the snap's decode.
+        if capture_method_used == "joint":
+            if env is not None:
+                line_objects, veto_stats = veto_uncorroborated_lines(line_objects, env)
+            else:
+                veto_stats = {"bailed": "decode_failed"}
+            capture_joint_stats["evidence_veto"] = veto_stats
+
+        line_objects, edge_stats = snap_line_edges(line_objects, snap_stem, env=env)
         if capture_joint_stats is not None:
             capture_joint_stats["edge_snap"] = edge_stats
 

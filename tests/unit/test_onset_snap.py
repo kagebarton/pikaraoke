@@ -401,6 +401,21 @@ class TestSnapLineEdges:
         assert out == [obj]
         assert stats["bailed"] == "decode_failed"
 
+    def test_precomputed_env_skips_decode(self, monkeypatch):
+        # A caller (the stage) shares one envelope with the veto; passing it
+        # in must skip the internal decode entirely.
+        def boom(path):
+            raise AssertionError("must not decode when env is supplied")
+
+        monkeypatch.setattr(onset_snap, "rms_envelope_db", boom)
+        env = _env(8.0, [(2.2, 4.5, -28.0)])
+        obj = _line((1.2, 1.4), (2.5, 2.7), (3.0, 3.2))
+
+        out, stats = snap_line_edges([obj], "vocal.wav", env=env)
+
+        assert out[0]["words"][0]["start"] == pytest.approx(2.15, abs=0.05)
+        assert stats["onset"]["n_snapped"] == 1
+
 
 # ---------------------------------------------------------------------------
 # rms_envelope_db

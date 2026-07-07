@@ -809,6 +809,14 @@ def _materialise_line_objects(
             win_words = transcribe_words[start_idx:end_idx]
             obj = _build_line_object(lines[line_id], line_id, toks, win_words, lookahead)
         obj["source"] = cand["source"]
+        # Evidence rides on the object (not a stats map): the veto runs after
+        # windowed re-align, which can replace objects, and a replay object
+        # carries its own sub-match's evidence this way. Only align-won
+        # objects can be zero-zero, so this is what the veto keys on.
+        obj["evidence"] = {
+            "transcribe_match": cand["transcribe_match"],
+            "ytasr_agreement": cand["ytasr_agreement"],
+        }
         out.append(obj)
     return out
 

@@ -110,12 +110,12 @@ def rms_envelope_db(audio_path: str | Path) -> np.ndarray:
     return db
 
 
-def _decode_env(vocal_path: str | Path, label: str) -> np.ndarray | None:
+def decode_env_db(vocal_path: str | Path, label: str) -> np.ndarray | None:
     """Decode ``vocal_path``'s RMS envelope, or None if ffmpeg can't read it.
 
-    Shared decode-or-bail for the three snap entry points; a None return
-    is each caller's cue to leave the timings unchanged. ``label`` names
-    the pass in the warning.
+    Shared decode-or-bail for the snap entry points and the evidence veto;
+    a None return is each caller's cue to leave the timings unchanged.
+    ``label`` names the pass in the warning.
     """
     try:
         return rms_envelope_db(vocal_path)
@@ -183,7 +183,7 @@ def snap_line_onsets(
     :func:`rms_envelope_db` envelope instead of decoding ``vocal_path``.
     """
     if env is None:
-        env = _decode_env(vocal_path, "onset snap")
+        env = decode_env_db(vocal_path, "onset snap")
         if env is None:
             return line_objects, {"bailed": "decode_failed"}
 
@@ -279,7 +279,7 @@ def snap_line_ends(
     ``env`` reuse semantics as :func:`snap_line_onsets`.
     """
     if env is None:
-        env = _decode_env(vocal_path, "end snap")
+        env = decode_env_db(vocal_path, "end snap")
         if env is None:
             return line_objects, {"bailed": "decode_failed"}
 
@@ -374,15 +374,20 @@ def snap_line_ends(
     return out, stats
 
 
-def snap_line_edges(line_objects: list[dict], vocal_path: str | Path) -> tuple[list[dict], dict]:
+def snap_line_edges(
+    line_objects: list[dict], vocal_path: str | Path, env: np.ndarray | None = None
+) -> tuple[list[dict], dict]:
     """Run the onset and end snaps sharing a single envelope decode.
 
     Onsets first: a snapped-forward line start widens the room the
-    previous line's end may legitimately extend into.
+    previous line's end may legitimately extend into. ``env`` reuses a
+    precomputed :func:`rms_envelope_db` envelope instead of decoding
+    ``vocal_path`` (the stage shares it with the evidence veto).
     """
-    env = _decode_env(vocal_path, "edge snap")
     if env is None:
-        return line_objects, {"bailed": "decode_failed"}
+        env = decode_env_db(vocal_path, "edge snap")
+        if env is None:
+            return line_objects, {"bailed": "decode_failed"}
     out, onset_stats = snap_line_onsets(line_objects, vocal_path, env)
     out, end_stats = snap_line_ends(out, vocal_path, env)
     return out, {"onset": onset_stats, "end": end_stats}
