@@ -1057,3 +1057,59 @@ No regressions corpus-wide: no MAD worsened, no placed count dropped, no new
 large overlap. The fix is purely additive — recovers 2 lines the aligner-word-
 drop bug had silently discarded, every other line keeps its exact prior timing.
 The 0.1s Domino overlap is the only cosmetic side effect, negligible.
+
+### Phase 2a — align word-probability separation study (2026-07-06)
+
+Pre-registered per Appendix C. Scratchpad only, nothing committed. **GATE verdict:
+SKIP 2b** (P2 AUC below the 0.60 floor). Phase 3 proceeds regardless.
+
+**Metric actually used:** fully offline, no matcher re-run. Per placed line whose
+recorded `selected_source ∈ {align, transcribe, ytasr}`, ran the B2 assignment
+(`_line_align_ranges` over `align_lines` tokens + captured refine `words`) and
+took `p_mean`/`p_median`/`p_min` over the line's matched align words. Placement
+start/source read from the shipped `output_line_timings`/`selected_source`.
+Corpus: 17 joint songs; 149 interp/absent lines out of scope; only **4** placed
+lines had zero matched align words (counted separately).
+
+**C1 prerequisite:** PASS — every joint bundle's `words` carry `probability`.
+
+**Proxy labels:**
+- **P1 (independent SRT):** EMPTY — no qualifying song. Every SRT song in the
+  corpus is `youtube_srt_is_lyric_source=True` (cue-path lyric source); no
+  joint-path song carries an independent, non-lyric-source caption track.
+- **P2 (held-out LRCLIB timing error, PRIMARY):** offset-corrected each non-bail
+  song by its anchor median (same math as `offset_mad_against_cues`), then per
+  line `err=|start-cue_start-offset|`; RIGHT `<0.5s`, WRONG `>2.0s`, unlabeled
+  between. 5 bail songs excluded (wide_spread/few-anchor). Labeled: 363 RIGHT,
+  34 WRONG.
+- **P3 (manual gold):** per-line dump for Bloodstream / In Summer / HUNTR_X (not
+  hand-labeled — P2 already decides the gate).
+
+**Per-proxy AUC (rank / Mann-Whitney, RIGHT vs WRONG; ≥0.75 to proceed):**
+
+| subset | p_mean | p_median | p_min |
+|--------|--------|----------|-------|
+| P2 all placed (R=363, W=34) | **0.500** | 0.456 | 0.488 |
+| P2 align-sourced only (R=176, W=16) | **0.589** | 0.475 | 0.586 |
+
+Class medians barely differ (all-placed RIGHT p_mean 0.772 vs WRONG 0.78;
+align-only RIGHT 0.841 vs WRONG 0.79). No proxy shows inverted separation; there
+is simply almost none.
+
+**Why it fails (two confounds, both visible in the data):**
+1. Low align prob is confounded by *winning source* — transcribe/ytasr-won songs
+   (Free, Paradise, Colors of the Wind) have correct placements yet median align
+   `p_mean` ≈ 0.1, because align was not the evidence that placed them.
+2. Even isolating align-sourced lines, the forced aligner emits confident-looking
+   words on mis-timed/phantom lines too (both classes' `p_min` IQR reach ~0.00).
+   P3 corroborates: Bloodstream's phantom repeat pile-up (the 4:07-cut lines)
+   scatters `p_mean` from 0.13 to 0.88 with no usable threshold.
+
+This confirms the C4 caveat: a phantom line's align words are *not* reliably
+low-probability. Align word probability is not a usable phantom discriminator, so
+2b (grading `align_agreement` by align word probability) is dropped. The lever
+for phantom/repeat lines remains upstream lyric-version over-count, per
+[[project-alignment-repeat-pileup-diagnosis]]. Phase 3 (energy veto + crammed-
+candidate rejection) is unaffected and proceeds.
+
+Scratch script (throwaway, uncommitted): `phase2a_prob_separation.py`.
