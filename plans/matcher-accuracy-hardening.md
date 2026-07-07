@@ -54,14 +54,18 @@ the matcher, and analysis where numbers must be judged, not just produced.
 | --- | --- |
 | Phase 0, Phase 1a | Opus |
 | Phase 1b - Phase 2a | Opus from the locked specs (Appendices B/C); Fable on spec failure |
-| Phase 2b - Phase 5 | Opus |
+| Phase 3 - Phase 4 | Opus from the locked specs (Appendices D/E); Fable on spec failure |
+| Phase 5 | Opus |
 | Phase 6 checkpoint | **Fable** |
 
 The design-sensitive content of Phases 1b and 2a was executed by Fable in the
 planning session (2026-07-06) and locked as Appendix B (1b implementation
-blueprint) and Appendix C (2a pre-registered analysis protocol). Implementing
-from those specs is Opus work; the specs themselves are not to be redesigned
-by the executor.
+blueprint) and Appendix C (2a pre-registered analysis protocol). Phase 2b was
+skipped at the 2a GATE (see Results log). The remaining design-sensitive
+content — Phase 3b's evidence/threshold contract and Phase 4's replay/merge
+revision — was locked by Fable on 2026-07-07 as Appendix D (3b decisions) and
+Appendix E (Phase 4 blueprint). Implementing from those specs is Opus work;
+the specs themselves are not to be redesigned by the executor.
 
 Switch points are marked inline with **MODEL BREAK** blocks. At each break,
 STOP: do not continue into the next step. Tell Ken the plan calls for a model
@@ -324,6 +328,11 @@ unaffected. Corpus replay diff vs baseline. Commit:
 
 ### 3b. Vocal-energy veto for uncorroborated placements
 
+**Execute per Appendix D (locked design).** The bullets below are the
+summary; where they and Appendix D differ in detail — notably: evidence
+rides on the line objects, not in a `joint_stats` map, because the veto runs
+after windowed re-align can replace objects — Appendix D wins.
+
 New file `pikaraoke/lib/evidence_veto.py` (fork rule):
 
 - Prereq inside `joint_match`: record per-line selected evidence in
@@ -364,6 +373,15 @@ placements`.
 ## Phase 4 — windowed re-align revision
 
 Two changes, separate commits, one corpus evaluation (review findings 4a/4b).
+
+> **MODEL BREAK (resolved 2026-07-07) — design already done by Fable.**
+> Implement 4a/4b exactly per **Appendix E**; the replay-contract,
+> merge-policy, and protection-semantics decisions are locked there. Opus
+> proceeds without a switch. Ask Ken to switch to Fable only on spec
+> failure: the Girl in the Bubble acceptance run cannot be made to recover
+> the 51-89s span, existing windowed-realign tests cannot stay green via
+> the E1/E3 default parameters, or a needed change reaches inside the
+> sub-match's scoring rather than the replay/merge layer.
 
 ### 4a. YTASR as a third source in span replays
 
@@ -408,6 +426,20 @@ on-disk json3, and the span set is unchanged, so the harness replays this
 without GPU. Diff gross misplacements / MAD / placed counts vs baseline.
 GATE: adopt only on favorable corpus deltas; otherwise revert the merge-policy
 commit and keep 4a or 4b independently per their own numbers.
+
+**Acceptance case (added 2026-07-07): Girl in the Bubble** (last row of the
+Phase 0 table, placed 26 of 36 lines). A live dev-vs-ship A/B showed 10 lines
+missing from the shipped .ass; diagnosis (Results log, "Girl in the Bubble
+coverage regression") confirmed it is exactly this phase's mechanism: pass-1
+ytasr placements destroyed by the 2-source span replay + merge pop. 4a must
+recover the 51-89s span on the existing bundle, fully offline — expect placed
+26 → ~31-33. Lines 32/33/35 stay absent by design (no on-disk source covers
+them; only the removed LRCLIB fill ever timed them).
+
+Harness amendment (ride with 4a): add a coverage column (`placed/n_lines`) to
+the replay summary and flag songs below a threshold (~85%, Ken calibrates) —
+26/36 sat unflagged in the Phase 0 baseline because the harness only scores
+MAD over placed anchors and never compares coverage against dev.
 
 Commits: `feat(windowed-realign): ytasr third source in span replays`;
 `fix(windowed-realign): protect corroborated pass-1 lines in the merge`.
@@ -965,6 +997,283 @@ One Results-log entry containing: the metric definitions actually used, the
 per-proxy AUC table, the per-song table, the GATE verdict, and — if
 proceeding — which aggregation (`p_mean`/`p_median`/`p_min`) 2b should use.
 
+---
+
+## Appendix D — Phase 3b design decisions (locked, Fable, 2026-07-07)
+
+Contract decisions for the vocal-energy veto. The executor implements this
+as written; deviations only via the "Model switching" escalation rules.
+Phase 3a needs no appendix — its phase text is already the full spec.
+
+### D1. Evidence rides on the line object, not in joint_stats
+
+The phase sketch said `joint_stats["selected_evidence"][lid]`. That is wrong
+in one detail the sketch missed: the veto runs **after** windowed re-align,
+and `merge_spans` can replace a pass-1 line object with a span replay's — a
+stats map keyed from pass-1's winning candidates would then describe
+candidates that no longer produced the objects (stale evidence). Instead:
+
+- `_materialise_line_objects` (`joint_match.py`) attaches the winning
+  candidate's evidence to every object it builds:
+  `obj["evidence"] = {"transcribe_match": cand["transcribe_match"],
+  "ytasr_agreement": cand["ytasr_agreement"]}`.
+- Span replays run the same matcher, so replay-produced objects carry their
+  own sub-match evidence automatically and `merge_spans` passes objects
+  through untouched — evidence stays in sync with whichever pass produced
+  the placement, with zero merge/stats plumbing.
+- Interp placeholders and cue-path objects never get the key; a missing
+  `evidence` key means "never veto" (belt-and-braces — the stage gate in D3
+  already keeps the veto off those routes).
+
+Zero-evidence is `transcribe_match == 0 and ytasr_agreement == 0.0`; by
+construction (transcribe candidates carry their own positive `t_score`,
+ytasr candidates their own `y_agree`) only align-won objects can be
+zero-zero, so the `source == "align"` check below is documentation, not a
+filter.
+
+### D2. `pikaraoke/lib/evidence_veto.py`
+
+```python
+from pikaraoke.lib.onset_snap import HOP_S, MIN_REF_DB
+
+def veto_uncorroborated_lines(
+    line_objects: list[dict],
+    env: np.ndarray,
+) -> tuple[list[dict], dict]:
+```
+
+(Signature deviates from the phase sketch: with D1, `joint_stats` is not an
+input; the stage stores the returned stats — see D3.)
+
+- Veto candidates: `words` non-empty, `source == "align"`, `evidence`
+  present with `transcribe_match == 0` and `ytasr_agreement == 0.0`.
+- Silence test: median of `env[int(start / HOP_S) : int(end / HOP_S) + 1]`
+  (slice clamped to `[0, len(env))`; an empty slice — a line past the
+  envelope end — is *not* silence evidence, skip it) below the floor →
+  veto.
+- Threshold (locked): **absolute floor only, reusing
+  `onset_snap.MIN_REF_DB` (-45.0 dB)** — the exact level onset_snap already
+  treats as "not singing anywhere in the claimed span; an upstream
+  misplacement problem" (`onset_snap.py:71-76`). The veto *is* that
+  upstream fix, so the two features share one calibrated constant (import
+  it; never copy the value). No relative-to-song-reference tier in v1: a
+  relative bar risks vetoing quietly-sung real lines (the Phase 2a confound
+  in energy form), and the phase GATE's live line-list review can catch a
+  too-timid veto far more easily than a too-eager one. Record per-line
+  `median_db` in the stats so the GATE data supports raising the floor
+  later if -45 proves too timid.
+- Demotion: replace with a copy — `words=[]`, keep `start`/`end`,
+  `source="veto"`; never mutate in place (onset_snap's copy discipline).
+  ASS/SRT generators already skip word-less lines.
+- Stats: `{"n_zero_evidence", "n_vetoed", "lines": [{"line_id",
+  "median_db", "vetoed"}]}` — one entry per zero-evidence line whether
+  vetoed or kept; the kept-with-energy ones are the GATE's evidence about
+  where the threshold sits.
+
+### D3. Envelope sharing (stage wiring)
+
+- Rename `onset_snap._decode_env` → `onset_snap.decode_env_db` (public;
+  three internal call sites update; zero behavior change). onset_snap is
+  our own module, so the fork rule does not apply.
+- `snap_line_edges(line_objects, vocal_path, env=None)` — new optional
+  parameter mirroring `snap_line_onsets`/`snap_line_ends`; `None` keeps
+  today's internal decode-and-bail.
+- `lyric_align.run()`: decode once before the snap block —
+  `env = decode_env_db(snap_stem, "edge snap")`. On the joint route only
+  (`capture_method_used == "joint"`) and only when `env is not None`, run
+  the veto first and store its stats as
+  `capture_joint_stats["evidence_veto"]`; when `env is None` store
+  `{"bailed": "decode_failed"}` instead. Then
+  `snap_line_edges(line_objects, snap_stem, env=env)` — a None env
+  re-attempts the decode internally and bails with its own stats (the
+  pathological path may log the failure twice; accepted). Cue route and
+  transcribe mode: no veto call, snap unchanged.
+
+### D4. Tests
+
+- Veto module (`tests/unit/test_evidence_veto.py`, real numpy envelopes):
+  zero-evidence align line over a silent span → vetoed (words emptied,
+  start/end kept, `source="veto"`); same line over sung-level energy →
+  kept; `transcribe_match > 0` over silence → kept; `ytasr_agreement > 0`
+  over silence → kept; missing `evidence` key → kept; stats shape.
+- Evidence attach (`test_joint_match.py`): objects from all three sources
+  carry `evidence` matching their winning candidate's terms.
+- Stage (`test_lyric_align.py`): veto runs on the joint route between the
+  re-align merge and the snap; envelope decoded once (mock
+  `decode_env_db`); transcribe mode and cue route never call the veto.
+- onset_snap (`test_onset_snap.py`): `snap_line_edges` with a precomputed
+  `env` skips the decode; existing tests stay green unchanged.
+
+### D5. Non-goals (locked)
+
+- No transcribe-side veto (the review's "extended to the transcribe side"
+  is future work), no relative threshold tier, no config knob.
+- The veto only demotes: it never moves, restores, or re-times a line.
+
+### D6. Commit
+
+One commit: `feat(pipeline): vocal-energy veto for uncorroborated align
+placements` — evidence attach + onset_snap env param/rename + veto module +
+stage wiring + tests. Split a `refactor(onset-snap)` commit out first only
+if the diff reads poorly.
+
+---
+
+## Appendix E — Phase 4 implementation blueprint (locked, Fable, 2026-07-07)
+
+Design constraints honored throughout: `replay_span(..., ytasr_words=None)`
+and `merge_spans(..., pass1_ratios=None)` are byte-identical to today (all
+existing tests stay green unmodified); the span set, suspect analysis, and
+anchor criteria are untouched; nothing changes inside the sub-match's
+scoring — the revision lives entirely in the replay/merge layer.
+
+### E1. `replay_span` — third source + beta (4a)
+
+New keyword-only parameters, defaults preserving today's behavior:
+
+```python
+def replay_span(
+    span, span_words, transcribe_words, lines, align_lines, *,
+    alpha, margin_s, max_edit_ratio,
+    beta: float = 2.0,
+    ytasr_words: list[dict] | None = None,
+) -> tuple[dict[int, dict], dict[int, str]] | None:
+```
+
+- Filter ytasr words to the span with the same pad as transcribe words:
+  `window_ytasr = [w for w in ytasr_words if span["t0"] - TRANSCRIBE_PAD_S
+  <= w["start"] <= span["t1"] + TRANSCRIBE_PAD_S]`. Pass
+  `ytasr_words=window_ytasr or None` and `beta=beta` into the sub-match
+  (one comment: same pad, same rationale — boundary lines straddle).
+- Index consistency: the sub-match's `ytasr_idx_*` index the **filtered**
+  list and its materialisation slices from the list it was handed — pass
+  `window_ytasr` itself into the sub-match; never re-slice from the
+  caller's full list.
+
+### E2. Merge policy for new placements (4a)
+
+The `merge_spans` new-placement rule (`windowed_realign.py:244`) becomes
+`sources2.get(lid) not in ("transcribe", "ytasr")`: a pass-1-unplaced line
+may be newly placed when the replay selected it from either source
+independent of the span's own align. Update the module docstring's second
+merge-policy bullet accordingly ("transcribe or ytasr — independent
+corroboration").
+
+### E3. Corroborated-line protection (4b)
+
+- `analyze_pass1` returns `(anchors, suspects, ratios)`.
+  `ratios: dict[int, float]` holds `matched / len(seq)` for exactly the
+  lines that reach the ratio computation today (placed by
+  align/transcribe/ytasr with a start; display-only and unplaced lines
+  absent). Callers updated: `lyric_align._realign_windows` (uses ratios),
+  harness `_score_against_lrclib` (unpacks, ignores), six
+  `test_windowed_realign.py` call sites (unpack).
+- `replay_span` attaches to each placed replay object its own transcribe
+  corroboration:
+  `obj["corrob_ratio"] = matched / len(seq)` via
+  `_transcribe_match_and_count_in_window(seq, window_norms, window_starts,
+  obj["start"], obj["end"], margin_s, max_edit_ratio)` over the span's
+  padded `window_words` (comment: the pad covers the span, so window words
+  suffice). Empty token seq → 0.0 (defensive; placed objects always carry
+  tokens).
+- `merge_spans` gains keyword-only
+  `pass1_ratios: dict[int, float] | None = None`; `None` disables
+  protection (today's behavior — keeps existing positional-call tests
+  green). New rule, after the edge-tolerance check, before the pop:
+
+```python
+protected = (
+    pass1_ratios is not None
+    and lid in placed1
+    and pass1_ratios.get(lid, 0.0) >= SUSPECT_RATIO
+)
+if protected and (cand is None or cand.get("corrob_ratio", 0.0) < pass1_ratios[lid]):
+    continue  # non-suspect pass-1 line: the replay must meet its bar
+```
+
+  - Replay leaves a protected line unplaced → pass-1 kept (no
+    honest-unplace for corroborated lines).
+  - Replay moves it → adopted only at `corrob_ratio >= ratios[lid]` AND
+    within the existing edge tolerance.
+  - Suspect lines (`< SUSPECT_RATIO`) and lines absent from `ratios` keep
+    today's behavior exactly.
+- **Locked: the protection ratio stays transcribe-based.** Do not fold
+  ytasr agreement into it. The Girl in the Bubble lines (ytasr-placed,
+  transcribe-silent) sit below `SUSPECT_RATIO` by construction — they are
+  deliberately unprotected here; their rescue is E1/E2 (the 3-source replay
+  re-places them from the same ytasr evidence). Widening the ratio would
+  change the meaning of the suspect set and confound the corpus diff; this
+  guard's only job is review finding 4b's "strongly corroborated line that
+  missed anchor criteria" class.
+
+### E4. Stage plumbing
+
+`_run_joint` already parses `ytasr_words` — pass them into
+`_realign_windows`, which threads them through `_realign_one_span` into
+`replay_span`; `beta=self._config.joint_beta` is read at the `replay_span`
+call site, like alpha. `_realign_windows` already calls `analyze_pass1` —
+capture `ratios` there and hand them to `merge_spans`. No new worker calls;
+no capture-schema change (spans are captured as today; ytasr words come
+from the persisted json3 both live and offline).
+
+### E5. Harness updates (ride with the 4a commit)
+
+- `_replay_spans_at_alpha(bundle, alpha)` →
+  `_replay_spans(bundle, ytasr_words, alpha, beta)`, called inside the beta
+  loop — the "one replay per alpha serves the whole beta row" caching is
+  dead once the sub-match consumes beta. Replays are CPU-cheap; nothing
+  replaces the caching. The `n_ytasr_candidates == 0` beta-shortcut in
+  `main` is unaffected.
+- `_replay_output`: compute `ratios` by calling `analyze_pass1` on the
+  pass-1 replay output (its `stats` already carry `selected_source`), then
+  pass `pass1_ratios=ratios` to `merge_spans` — mirroring the stage
+  exactly.
+- Coverage column (the Phase 4 harness amendment): per song print
+  `n_placed/n_lines` (`n_lines = len(bundle["lyrics"]["lines"])`), suffixed
+  `!` when coverage falls below `--min-coverage` (new arg, default 0.85 —
+  Ken calibrates). This flags what the Phase 0 baseline missed: Girl in the
+  Bubble sat unflagged at 26/36 (0.72).
+
+### E6. Tests (`tests/unit/test_windowed_realign.py`)
+
+- t1: `ytasr_words=None` + `pass1_ratios=None` → all existing tests green
+  unmodified (that *is* the 2-source regression suite; add no copy).
+- t2: new placement from ytasr — pass-1-unplaced line, replay selects it
+  from ytasr within edge tolerance → adopted.
+- t3: window filter — a ytasr word outside span±`TRANSCRIBE_PAD_S`
+  contributes no candidate.
+- t4: protected line, replay leaves it unplaced → pass-1 kept.
+- t5: protected line, replay moves it — `corrob_ratio` below pass-1's →
+  kept; at/above → adopted.
+- t6: suspect line still replaceable and droppable (today's behavior).
+- t7: `corrob_ratio` attached to placed replay objects, computed over the
+  padded window words.
+- Stage wiring: ytasr words, beta, and ratios reach
+  `replay_span`/`merge_spans` (extend the existing wiring test in
+  `test_lyric_align.py`).
+
+### E7. Acceptance + validation protocol
+
+Fully offline (span `align_words` are captured; json3 is on disk):
+
+1. Re-run the harness at alpha=2.0/beta=2.0 over the 16-song corpus; diff
+   against the Phase 0/1c tables. No placed-count regression, no MAD
+   worsening, no new large overlap.
+2. **Girl in the Bubble acceptance**: placed 26 → expect ~31-33; lines
+   13/14/16/17/19 placed (13 also depends on Phase 3a, which lands first
+   per plan order); 8/15/18 best-effort; 32/33/35 stay absent by design.
+3. GATE per the phase text: adopt on favorable deltas; the two commits are
+   independently revertable (E1/E2 vs E3 judged on their own numbers).
+
+### E8. Commits
+
+1. `feat(windowed-realign): ytasr third source in span replays` — E1 + E2 +
+   the E4 ytasr/beta threading + E5 + t2/t3.
+2. `fix(windowed-realign): protect corroborated pass-1 lines in the merge`
+   — E3 + the remaining ratio plumbing (stage + harness) + t4-t7.
+
+---
+
 ## Results log
 
 ### Phase 0 — harness port + pre-fix non-SRT baseline (2026-07-06)
@@ -1113,3 +1422,42 @@ for phantom/repeat lines remains upstream lyric-version over-count, per
 candidate rejection) is unaffected and proceeds.
 
 Scratch script (throwaway, uncommitted): `phase2a_prob_separation.py`.
+
+### 2026-07-07 — Girl in the Bubble coverage regression (field report, no code change)
+
+Ken A/B'd shipped output against dev for 'For Good – Girl in the Bubble':
+this branch renders 26 of 36 lines, dev rendered all 36. Diagnosed from the
+debug bundles + `windowed_realign.py`; **not a new failure mode** — it is
+review findings 4a/4b (plus 3a for one line), and Phase 4a is the fix.
+
+Mechanism: pass 1 placed lines 13/14/16/17/19 from ytasr (transcribe is
+nearly silent over 51-89s — 1 word). That same transcribe silence put their
+corroboration below `SUSPECT_RATIO`, so the span replayed — but `replay_span`
+is 2-source (no ytasr), so the replay left them unplaced, and `merge_spans`
+pops every pass-1 interior placement in favor of the replay's result
+(`windowed_realign.py:243-251`). The lower-context replay thus destroyed
+pass-1's correct ytasr placements; they re-interpolated word-less into one
+degenerate shared span (62.73-88.34) and never rendered. Line 13 was
+re-placed by the replay as a zero-width crammed align candidate (3 words, 0 s
+span) and dropped at render — finding 3a's class exactly.
+
+The same collapse occurs on dev (identical `16/16 ... interp=6` replay log);
+dev's LRCLIB prior fill ("16 filled") then repaired the damage post-hoc.
+Removing LRCLIB exposed the bug, it did not cause it. Note 4b alone would
+not protect these lines — its guard keys off transcribe corroboration, which
+is precisely what is absent here; 4a is the load-bearing fix.
+
+Per-line disposition of the 10 missing lines:
+
+- 13/14/16/17/19 — recoverable via 4a (+3a for 13); ytasr json3 has
+  near-verbatim words over 51-89s and pass 1 already placed them from it.
+- 8/15/18 — marginal: ytasr garbles them ("She's been such beautiful
+  stories", "of seeing it in"; "Eventually" lost to a `[music]` tag). 4a's
+  new-placement merge rule gives them a shot; no guarantee.
+- 32/33/35 — unrecoverable from on-disk sources (align, transcribe, and
+  ytasr all garbage there); absent by design. Only LRCLIB ever timed them.
+
+Why nothing alerted: the song sat in the Phase 0 baseline at placed 26 — the
+harness diffs ship-vs-ship and scores MAD over placed anchors only, so a
+coverage regression vs dev was invisible. Hence the Phase 4 harness
+amendment (coverage column + flag) and the Phase 4a acceptance case.
