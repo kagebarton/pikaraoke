@@ -60,6 +60,19 @@ was design-shaped — the appendices are its output.
 | Phase 5 | Sonnet 5; escalate on spec failure |
 | Phase 6 checkpoint | Sonnet 5 from the locked protocol (Appendix F); escalate on spec failure |
 
+Two sibling plans execute alongside this one and are not phases here:
+
+- `plans/lrclib-fill-absence-study.md` (offline study, no production code):
+  slot it after the Phase 3b GATE — ideally after Phase 4 lands, since Phase 4
+  shifts the unplaced population it measures — and before the Phase 6 probe,
+  whose F2 criterion 4 reads its E2 verdict. Untracked on disk by design.
+- `plans/edge-snap-coverage-accuracy.md`: independent parallel track on its
+  own branch (`edge_snap_refine` off `89d28c46`), runnable at any point — the
+  replay harness here excludes edge-snap, so this plan's corpus numbers are
+  insulated from it. The only coupling is a small
+  `onset_snap.py`/`lyric_align.py` merge at branch integration, noted in that
+  plan.
+
 The design-sensitive content of Phases 1b and 2a was executed by Fable in the
 planning session (2026-07-06) and locked as Appendix B (1b implementation
 blueprint) and Appendix C (2a pre-registered analysis protocol). Phase 2b was
@@ -518,7 +531,7 @@ unrequested robustness.)
 > **MODEL BREAK (resolved 2026-07-12) — design already done by Fable.** The
 > checkpoint's judgment is pre-registered as an offline probe with read-off
 > GATE criteria, and the transition-cost design is locked contingent on a
-> GO, as Appendix F. Execute on Opus; escalate to Fable only per the "Model
+> GO, as Appendix F. Execute on Sonnet 5; escalate per the "Model
 > switching" rules.
 
 After Phases 1-4 settle the corpus numbers, run the Appendix F probe and
@@ -529,7 +542,10 @@ a few lines, but a large tuning surface), plus the prerequisite of
 preserving stanza breaks through `parse_lyric_lines`
 (`pikaraoke/lib/genius_lyrics.py:76-104`) as line metadata. Nothing in this
 plan builds it before a GO at the F2 GATE; Appendix F supersedes the
-review's section 6 sketch with the locked shape.
+review's section 6 sketch with the locked shape. Sequencing: run the LRCLIB
+study (`plans/lrclib-fill-absence-study.md`) first when feasible — F2
+criterion 4 excludes lines its E2 verdict already covers, and the criterion
+degrades to no E2 exclusion when the verdict does not exist.
 
 ## Explicitly rejected (do not implement)
 
@@ -1363,7 +1379,8 @@ lines with T >= 0.5 (collateral); count of WRONG lines with T >= 0.5 split
 by the object-carried `evidence` key — zero-evidence align lines are the
 shipped 3b veto's class (`evidence_veto.veto_uncorroborated_lines` demotes
 the near-silent subset of exactly these), so the DP's marginal value is the
-corroborated wrongs; and, when the LRCLIB study has run, which of those
+corroborated wrongs; and, when the LRCLIB study
+(`plans/lrclib-fill-absence-study.md`) has run, which of those
 lines its E2 strong-absence set already covers.
 
 Predictions to check at the GATE (written blind to the probe, 2026-07-12,
