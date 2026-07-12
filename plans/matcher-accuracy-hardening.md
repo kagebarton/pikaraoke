@@ -46,17 +46,19 @@ with the numbers; do not proceed past a GATE on your own judgment.
 
 ## Model switching
 
-Default executor is Opus. Fable's extra depth pays off where the work is
-design-shaped rather than spec-shaped: contract changes that radiate through
-the matcher, and analysis where numbers must be judged, not just produced.
+The remaining work is spec-shaped: every design-sensitive decision is locked
+in an appendix. From 2026-07-12 the default executor is **Sonnet 5** under
+the "Executor discipline" rules below. Escalation ladder: Opus first (spec
+failures, judgment calls a GATE cannot absorb), Fable only if still
+available (genuine redesign). Fable's extra depth was spent where the work
+was design-shaped — the appendices are its output.
 
 | Section | Model |
 | --- | --- |
-| Phase 0, Phase 1a | Opus |
-| Phase 1b - Phase 2a | Opus from the locked specs (Appendices B/C); Fable on spec failure |
-| Phase 3 - Phase 4 | Opus from the locked specs (Appendices D/E); Fable on spec failure |
-| Phase 5 | Opus |
-| Phase 6 checkpoint | Opus from the locked protocol (Appendix F); Fable on spec failure |
+| Phases 0-3 (executed — see Results log) | Opus from Appendices B/C/D |
+| Phase 3b GATE + Phase 4 | Sonnet 5 from Appendices D/E; escalate on spec failure |
+| Phase 5 | Sonnet 5; escalate on spec failure |
+| Phase 6 checkpoint | Sonnet 5 from the locked protocol (Appendix F); escalate on spec failure |
 
 The design-sensitive content of Phases 1b and 2a was executed by Fable in the
 planning session (2026-07-06) and locked as Appendix B (1b implementation
@@ -67,20 +69,49 @@ revision — was locked by Fable on 2026-07-07 as Appendix D (3b decisions) and
 Appendix E (Phase 4 blueprint). The Phase 6 checkpoint got the same treatment
 on 2026-07-12: Appendix F pre-registers its go/no-go probe and locks the
 contingent transition-cost design, so no phase requires Fable by default.
-Implementing from these specs is Opus work; the specs themselves are not to
-be redesigned by the executor.
+Implementing from these specs is executor work; the specs themselves are not
+to be redesigned by the executor, whatever the model.
 
 Switch points are marked inline with **MODEL BREAK** blocks. At each break,
 STOP: do not continue into the next step. Tell Ken the plan calls for a model
 switch (`/model`), and wait — the switch is his to make; if he declines,
 proceed on the current model and note that in the Results log.
 
-Beyond the marked breaks, recommend an escalation to Fable whenever:
+Beyond the marked breaks, recommend an escalation (Opus first; Fable only if
+still available) whenever:
 
 - a GATE's numbers contradict the plan's stated expectations,
 - Phase 0's bit-faithful replay check cannot be made to pass quickly, or
 - a needed change goes beyond the letter of a spec into scoring/DP semantics
   (`_best_tiling_by_time`, `_alpha_weight` / `_corroboration_weight`).
+
+### Executor discipline (Sonnet 5, added 2026-07-12)
+
+The appendices assume a literal executor. These rules bind any executor, but
+they exist because a smaller model is likelier to bridge a gap than to stop
+at one:
+
+- Specs are contracts. When code reality differs from a spec in any detail —
+  a name, a signature, a key, an anchor that will not re-anchor by symbol —
+  STOP and report the exact mismatch. Never bridge it with your own design,
+  and never improve a spec while implementing it.
+- GATEs and MODEL BREAKs are hard stops even when the verdict looks obvious
+  from the numbers. Report to Ken and wait.
+- Every number written into the Results log comes from a command actually
+  run in that session, with the invocation recorded (mirror the existing
+  entries, e.g. `replay_ytasr_third_source.py <corpus> --alpha 2.0
+  --beta 2.0`). Never reconstruct a number from memory, a prior entry, or
+  expectation.
+- "Byte-identical" / "unchanged" claims require a real `diff` of saved
+  outputs from both runs, not an eyeballed table.
+- Pre-registered protocols (Appendices C, F) run exactly as written: the
+  stated statistic, the stated constants, the stated bars. A threshold is
+  never adjusted after seeing results; an ambiguous criterion is an
+  escalation, not a choice.
+- A failing or flaky test at the verification matrix is a STOP, not a
+  retry-until-green; so is any corpus delta the phase text does not predict.
+- No scope beyond the phase text: no extra error handling, no drive-by
+  refactors, no constants or knobs the spec does not name.
 
 ## Phase 0 — port the tuning harnesses to this branch
 
