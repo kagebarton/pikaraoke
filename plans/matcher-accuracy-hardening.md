@@ -56,7 +56,7 @@ the matcher, and analysis where numbers must be judged, not just produced.
 | Phase 1b - Phase 2a | Opus from the locked specs (Appendices B/C); Fable on spec failure |
 | Phase 3 - Phase 4 | Opus from the locked specs (Appendices D/E); Fable on spec failure |
 | Phase 5 | Opus |
-| Phase 6 checkpoint | **Fable** |
+| Phase 6 checkpoint | Opus from the locked protocol (Appendix F); Fable on spec failure |
 
 The design-sensitive content of Phases 1b and 2a was executed by Fable in the
 planning session (2026-07-06) and locked as Appendix B (1b implementation
@@ -64,8 +64,11 @@ blueprint) and Appendix C (2a pre-registered analysis protocol). Phase 2b was
 skipped at the 2a GATE (see Results log). The remaining design-sensitive
 content — Phase 3b's evidence/threshold contract and Phase 4's replay/merge
 revision — was locked by Fable on 2026-07-07 as Appendix D (3b decisions) and
-Appendix E (Phase 4 blueprint). Implementing from those specs is Opus work;
-the specs themselves are not to be redesigned by the executor.
+Appendix E (Phase 4 blueprint). The Phase 6 checkpoint got the same treatment
+on 2026-07-12: Appendix F pre-registers its go/no-go probe and locks the
+contingent transition-cost design, so no phase requires Fable by default.
+Implementing from these specs is Opus work; the specs themselves are not to
+be redesigned by the executor.
 
 Switch points are marked inline with **MODEL BREAK** blocks. At each break,
 STOP: do not continue into the next step. Tell Ken the plan calls for a model
@@ -481,21 +484,21 @@ unrequested robustness.)
 
 ## Phase 6 — checkpoint: transition-cost DP (decide, don't build)
 
-> **MODEL BREAK — ask Ken to switch to Fable for this checkpoint.** Weighing
-> the settled corpus numbers against the cost of a new tuning surface — and,
-> on a "go", designing the transition-cost shape, the stanza-metadata
-> plumbing, and the sweep protocol as a follow-up plan — is design work, not
-> execution.
+> **MODEL BREAK (resolved 2026-07-12) — design already done by Fable.** The
+> checkpoint's judgment is pre-registered as an offline probe with read-off
+> GATE criteria, and the transition-cost design is locked contingent on a
+> GO, as Appendix F. Execute on Opus; escalate to Fable only per the "Model
+> switching" rules.
 
-After Phases 1-4 settle the corpus numbers, decide with Ken whether to plan
-the bigger refactor as its own experiment: transition costs in
-`_best_tiling_by_time` (`joint_match.py:699-743` already iterates all legal
-predecessor pairs — a gap/tempo-plausibility penalty `g(cj, ci)` is
-structurally a few lines, but a large tuning surface), plus the prerequisite
-of preserving stanza breaks and `[Verse]/[Chorus]` headers through
-`parse_lyric_lines` (`pikaraoke/lib/genius_lyrics.py:76-104`) as line
-metadata. Nothing in this plan builds it; the review's section 6 (Appendix)
-is the design sketch.
+After Phases 1-4 settle the corpus numbers, run the Appendix F probe and
+GATE. The mechanism under decision: transition costs in
+`_best_tiling_by_time` (`joint_match.py:724-768` already iterates all legal
+predecessor pairs — a gap-plausibility penalty `g(cj, ci)` is structurally
+a few lines, but a large tuning surface), plus the prerequisite of
+preserving stanza breaks through `parse_lyric_lines`
+(`pikaraoke/lib/genius_lyrics.py:76-104`) as line metadata. Nothing in this
+plan builds it before a GO at the F2 GATE; Appendix F supersedes the
+review's section 6 sketch with the locked shape.
 
 ## Explicitly rejected (do not implement)
 
@@ -1271,6 +1274,174 @@ Fully offline (span `align_words` are captured; json3 is on disk):
    the E4 ytasr/beta threading + E5 + t2/t3.
 2. `fix(windowed-realign): protect corroborated pass-1 lines in the merge`
    — E3 + the remaining ratio plumbing (stage + harness) + t4-t7.
+
+---
+
+## Appendix F — Phase 6 checkpoint protocol + contingent transition-cost design (locked, Fable, 2026-07-12)
+
+Phase 6 was a MODEL BREAK to Fable because it mixed judgment (do the settled
+numbers justify a new tuning surface?) with design (what exactly would be
+built?). This appendix removes both needs: the judgment is pre-registered as
+an offline probe with read-off criteria (F1-F2 — the same treatment Appendix
+C gave Phase 2a), and the design is locked contingent on a GO (F3-F4). Opus
+executes; escalate to Fable only if a criterion is ambiguous on real data or
+the probe cannot be computed as specified.
+
+### F1. Pre-registered reachability probe (offline, scratchpad, no commit)
+
+The transition-cost DP only pays if wrong placements actually look
+transition-implausible while correct ones don't. That is measurable on the
+post-Phase-4 corpus before building anything.
+
+Data: the then-current replay-harness run at α=2.0/β=2.0 over the 17-song
+corpus (the post-Phase-4 baseline table), final merged placements. Labels:
+P2 exactly per Appendix C.3 (offset-corrected error vs the held-out
+reference; RIGHT < 0.5 s, WRONG > 2.0 s, bail songs excluded). Note the
+probe measures final placements rather than DP chains — an approximation in
+the permissive direction: if the statistic cannot separate labels on final
+output, a DP-internal penalty has no separation to exploit either.
+
+Statistic — for each consecutive placed pair (j, i) in a song's final
+line-id-ordered chain, using F3's constants (`G0 = 8.0`, `A = 6.0`,
+`RAMP_S = 10.0`):
+
+```
+gap     = max(0.0, start_i - end_j)     # merged output may graze-overlap
+k       = line_id_i - line_id_j         # >= 1
+allowed = G0 + (k - 1) * A
+p(j,i)  = 0                              if a stanza break lies in
+                                          (line_id_j, line_id_i]
+        = min(1.0, max(0.0, gap - allowed) / RAMP_S)   otherwise
+```
+
+Per placed line: `T = max(p(prev, line), p(line, next))` (chain edges use
+the one existing side). Two arms:
+
+- **metadata arm (the decision arm)**: stanza breaks recovered offline from
+  the song's raw lyric text — run the extended `parse_lyric_lines` (F3) on
+  the on-disk lyric source and verify the parsed line texts equal the
+  bundle's `lyrics.lines`; a song failing recovery drops to the no-metadata
+  arm and is flagged in the table.
+- **no-metadata arm**: all-False breaks. Reported for context only —
+  mid-stanza instrumental gaps will fire here; that is expected, not
+  disqualifying.
+
+Report per song and corpus-wide: T distributions by label; AUC
+(rank/Mann-Whitney, hand-rolled, same convention as C4); count of RIGHT
+lines with T >= 0.5 (collateral); count of WRONG lines with T >= 0.5 split
+by the object-carried `evidence` key — zero-evidence align lines are the
+shipped 3b veto's class (`evidence_veto.veto_uncorroborated_lines` demotes
+the near-silent subset of exactly these), so the DP's marginal value is the
+corroborated wrongs; and, when the LRCLIB study has run, which of those
+lines its E2 strong-absence set already covers.
+
+Predictions to check at the GATE (written blind to the probe, 2026-07-12,
+against post-3a numbers): Bloodstream's residual 4:07-cut surplus repeats
+(the pile-up minus the 3 flash lines 3a already dropped) carry high T in
+the metadata arm; the no-metadata arm shows materially worse RIGHT
+collateral; transcribe/ytasr-won RIGHT lines sit at T ≈ 0. (Defying
+Gravity, the other known overhang, is a bail song — excluded from P2 labels
+by construction, so it cannot appear in these tables.)
+
+### F2. GATE criteria (pre-registered; Ken may adjust only before unblinding)
+
+Read in order; the first failure stops the phase:
+
+1. **Volume bar**: labeled WRONG placements >= 15 corpus-wide post-Phase-4
+   (context: 34 at the 2a study — 15 means Phases 3-4 killed less than
+   half). Below 15: NO-GO — the residual mass no longer justifies a new
+   tuning surface; record the count and close Phase 6.
+2. **Separation bar** (metadata arm): AUC(T; WRONG vs RIGHT) >= 0.75 → GO.
+   0.60-0.75 → tables to Ken as a judgment call. < 0.60 → NO-GO.
+3. **Collateral bound**: RIGHT lines with T >= 0.5 must be < 5% of RIGHT.
+   Breach → NO-GO regardless of AUC (or Ken re-scopes `G0`/`A` upward once,
+   stating the new constants before unblinding the re-run).
+4. **Marginal value**: of the WRONG ∧ T >= 0.5 lines, at least 5 must be
+   veto-ineligible (carrying non-zero `evidence` corroboration — the
+   shipped 3b veto only demotes zero-evidence align lines) and outside the
+   LRCLIB E2 demotion set (when that verdict exists). The DP must kill
+   something nothing else reaches.
+
+### F3. Locked design (build only on a GO)
+
+**Penalty.** In `_best_tiling_by_time`, transitions only — `dp[i]`'s
+initialisation as a fresh chain start is untouched, and no chain-end cost.
+The relaxation (`joint_match.py:757`) becomes:
+
+```python
+candidate_score = dp[j] + ci["score"] - g(cj, ci)
+```
+
+with `g` as in F1 times `lam`:
+`g(cj, ci) = lam * p(cj, ci)`, `gap = max(0.0, ci["t0"] - cj["t1"])`,
+`allowed = G0 + (ci["line_id"] - cj["line_id"] - 1) * A`.
+
+Constants: `RAMP_S = 10.0` and `A = 6.0` fixed (shape parameters,
+second-order); `lam` and `G0` are the sweep surface (F4), defaults
+`lam = 0.0`, `G0 = 8.0`. `lam == 0.0` or `stanza_breaks is None` disables
+the term exactly — replays of old bundles and production-before-adoption are
+byte-identical by construction. Saturation is the safety argument: a
+transition can lose at most `lam <= alpha`, so a corroborated real chain
+(per-line scores >= 3) survives any gap, while an uncorroborated phantom
+(score exactly `alpha`) is fully cancelled by a saturated implausible gap —
+precisely the target class. Precompute a cumulative stanza-break count per
+line so the crossing test is O(1); the DP stays O(M²).
+
+**Stanza metadata.** `parse_lyric_lines` gains `stanza_break_before: bool`
+on each returned line dict: True iff the nearest preceding raw line was
+blank or a `_HEADER_RE` header (first line: False). The stage threads a
+parallel `stanza_breaks: list[bool]` from `_load_lyrics` into the matcher's
+new keyword `stanza_breaks: list[bool] | None = None`;
+`windowed_realign.replay_span` slices it `[lo : hi + 1]` alongside
+`lines`/`align_lines` and passes it into the sub-match (post-Phase-4 it
+joins Appendix E1's keyword-only group, default `None` — byte-identical
+when absent, same convention). Capture: additive `lyrics.stanza_breaks`
+key + `schema_version` bump. The cue route is not threaded — cue placements
+are bounded by uploader cues; out of scope.
+
+**Harness.** `replay_ytasr_third_source.py` gains `--lambda`/`--g0`
+pass-throughs and the F1 stanza-recovery helper (bundles predating the
+schema bump recover breaks from the on-disk lyric text; a song failing
+recovery replays with `stanza_breaks=None` and is flagged).
+
+**Tests** (ride with the DP commit): `lam=0` / no metadata → byte-identical
+selection on an existing end-to-end construction; a zero-corroboration
+phantom candidate parked in a wide same-stanza gap is no longer selected
+(falls to interp) once `lam` saturates; the same candidate across a stanza
+break is kept; a corroborated chain spanning a long mid-stanza instrumental
+gap survives (score margin > `lam`); `replay_span` slicing keeps
+local/absolute break indices consistent.
+
+### F4. Sweep + adoption protocol (on a GO)
+
+- Grid: `lam ∈ {0.5, 1.0, 2.0} × G0 ∈ {4, 8, 12}` s over the 17-song corpus
+  at α=β=2.0. Per-cell metrics: WRONG removed-or-corrected; RIGHT lines lost
+  (a RIGHT line unplaced or moved > 0.5 s); placed counts; MAD; overlap.
+- Pre-registered selection: maximize WRONG removed subject to RIGHT lost
+  <= 1 corpus-wide; ties → smaller `lam`, then larger `G0` (gentler).
+  Robustness: the winning cell's grid neighbours must retain >= 70% of its
+  net win — an isolated spike on 17 songs is not adoptable; take it to Ken
+  instead.
+- GATE: table + `.ass` render diffs of changed songs to Ken. On adoption the
+  chosen constants land as `PipelineConfig.joint_transition_lambda` /
+  `joint_transition_g0_s`, wired like `joint_alpha`. (Named to avoid
+  collision with the review's 2c placement-cost `joint_lambda` — a
+  different, still-rejected mechanism.)
+- Commits: `feat(genius-lyrics): preserve stanza breaks as line metadata`;
+  `feat(joint-match): transition-cost penalty in the tiling DP` (kwargs +
+  harness flags + tests, defaults off); `chore(config): adopt swept
+  transition-cost defaults` (only after the GATE).
+
+### F5. Non-goals (locked)
+
+- No tempo/implied-pace transition term — Phase 3a's shipped
+  `_MIN_ALIGN_PACE_S` rejection owns the pathological case; a mild-tempo
+  penalty is a second knob with no measured target class.
+- No chain-start/-end boundary costs.
+- No fold-in of the 2c placement-cost knob — orthogonal mechanism, stays in
+  the review as the fallback.
+- No cue-path changes; no revisiting 2a (align word probability stays out of
+  the score — measured, no separation).
 
 ---
 
