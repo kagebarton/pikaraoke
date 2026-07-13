@@ -223,6 +223,37 @@ class TestReplaySpan:
         )
         assert result is None
 
+    def test_ytasr_word_outside_pad_contributes_nothing(self):
+        # SPAN is t0=9.0/t1=20.0; TRANSCRIBE_PAD_S=2.0 pads the ytasr window
+        # to [7.0, 22.0]. A word lexically matching line 2 ("Hello world")
+        # but far outside that window must not change the replay at all.
+        far_ytasr = [_word("hello", 30.0, 30.4)]
+        with_far = replay_span(
+            self.SPAN,
+            self._span_words(),
+            [dict(w) for w in self._span_words()],
+            self.LINES,
+            self.LINES,
+            alpha=2.0,
+            margin_s=0.3,
+            max_edit_ratio=0.75,
+            beta=2.0,
+            ytasr_words=far_ytasr,
+        )
+        without = replay_span(
+            self.SPAN,
+            self._span_words(),
+            [dict(w) for w in self._span_words()],
+            self.LINES,
+            self.LINES,
+            alpha=2.0,
+            margin_s=0.3,
+            max_edit_ratio=0.75,
+            beta=2.0,
+            ytasr_words=None,
+        )
+        assert with_far == without
+
 
 class TestMergeSpans:
     ALIGN_WORDS = [_word("x", 0.0, 50.0)]
@@ -262,6 +293,16 @@ class TestMergeSpans:
         by_id = {o["line_id"]: o for o in merged}
         assert by_id[2]["words"] == []
         assert by_id[2]["source"] == "interp"
+
+    def test_new_placement_from_ytasr_source_is_accepted(self):
+        # Independent corroboration from either stream may newly place a
+        # pass-1-unplaced line (4a): ytasr is not second-class to transcribe.
+        merged = merge_spans(
+            self._pass1(), [self.SPAN], [self._result(lid2_source="ytasr")], 5, self.ALIGN_WORDS
+        )
+        by_id = {o["line_id"]: o for o in merged}
+        assert by_id[2]["start"] == 20.0
+        assert by_id[2]["words"] != []
 
     def test_none_result_keeps_pass1_for_the_span(self):
         merged = merge_spans(self._pass1(), [self.SPAN], [None], 5, self.ALIGN_WORDS)
