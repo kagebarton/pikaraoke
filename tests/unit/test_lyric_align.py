@@ -462,6 +462,40 @@ class TestWindowedRealign:
         lead_in = stage._config.line_lead_in_cs / 100.0
         assert starts == pytest.approx([10.0 - lead_in, 20.0 - lead_in], abs=0.011)
 
+    def test_ytasr_beta_and_ratios_reach_span_replay_and_merge(self, tmp_path, monkeypatch):
+        """4a/4b stage plumbing: the adopted YTASR words and configured beta
+        reach replay_span, and analyze_pass1's ratios reach merge_spans —
+        wired all the way from _run_joint through the second pass."""
+        import pikaraoke.pipeline.stages.lyric_align as la_mod
+
+        stage, ctx, worker, _ = self._make(tmp_path, monkeypatch)
+        # Lexically disjoint from both lyric lines so it contributes zero
+        # ytasr candidates to pass-1 — this test is about wiring, not
+        # placement, and must not perturb the existing suspect/anchor split.
+        ctx.artifacts["ytasr"] = {"asr_file": "ytasr.json3"}
+        json3 = {"events": [{"tStartMs": 5000, "segs": [{"utf8": "xyzzy", "tOffsetMs": 0}]}]}
+        (ctx.song_path.parent / "ytasr.json3").write_text(json.dumps(json3), encoding="utf-8")
+
+        replay_spy = MagicMock(wraps=la_mod.replay_span)
+        merge_spy = MagicMock(wraps=la_mod.merge_spans)
+        monkeypatch.setattr(la_mod, "replay_span", replay_spy)
+        monkeypatch.setattr(la_mod, "merge_spans", merge_spy)
+
+        stage.run(ctx)
+
+        replay_spy.assert_called_once()
+        replay_kwargs = replay_spy.call_args.kwargs
+        assert replay_kwargs["beta"] == stage._config.joint_beta
+        assert replay_kwargs["ytasr_words"] == [
+            {"word": "xyzzy", "norm": "xyzzy", "start": 5.0, "end": 5.3}
+        ]
+
+        merge_spy.assert_called_once()
+        pass1_ratios = merge_spy.call_args.kwargs["pass1_ratios"]
+        # Line 0 is fully transcribe-corroborated (the anchor); the exact
+        # value proves this is the real computed ratio, not an empty dict.
+        assert pass1_ratios[0] == 1.0
+
 
 # ---------------------------------------------------------------------------
 # Cue-align route (SRT songs)

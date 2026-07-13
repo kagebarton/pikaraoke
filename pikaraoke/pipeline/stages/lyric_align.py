@@ -801,7 +801,7 @@ class LyricAlignStage(BaseStage):
         must never fail the song. Cancellation always propagates.
         """
         cfg = self._config
-        anchors, suspects = analyze_pass1(
+        anchors, suspects, ratios = analyze_pass1(
             align_lines,
             line_objects,
             joint_stats,
@@ -858,7 +858,9 @@ class LyricAlignStage(BaseStage):
             span_captures.append({**span, "align_words": span_words})
         telemetry["spans"] = span_captures
         telemetry["n_spans_kept_pass1"] = sum(1 for r in results if r is None)
-        return merge_spans(line_objects, todo, results, len(lyrics_lines), align_words)
+        return merge_spans(
+            line_objects, todo, results, len(lyrics_lines), align_words, pass1_ratios=ratios
+        )
 
     def _slice_align(
         self,
