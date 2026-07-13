@@ -47,25 +47,47 @@ with the numbers; do not proceed past a GATE on your own judgment.
 ## Model switching
 
 The remaining work is spec-shaped: every design-sensitive decision is locked
-in an appendix. From 2026-07-12 the default executor is **Sonnet 5** under
-the "Executor discipline" rules below. Escalation ladder: Opus first (spec
-failures, judgment calls a GATE cannot absorb), Fable only if still
-available (genuine redesign). Fable's extra depth was spent where the work
-was design-shaped — the appendices are its output.
+in an appendix. Three roles apply from here forward and are not to blend:
 
-| Section | Model |
-| --- | --- |
-| Phases 0-3 (executed — see Results log) | Opus from Appendices B/C/D |
-| Phase 3b GATE + Phase 4 | Sonnet 5 from Appendices D/E; escalate on spec failure |
-| Phase 5 | Sonnet 5; escalate on spec failure |
-| Phase 6 checkpoint | Sonnet 5 from the locked protocol (Appendix F); escalate on spec failure |
+- **Design** — Fable (Opus may draft if Fable is unavailable, but Ken
+  reviews it before it locks). Fable's extra depth is spent here — the
+  appendices are its output; once an appendix locks it is a contract, not a
+  suggestion, and no executor redesigns it, on any model.
+- **Implement, prototype, run** — Sonnet 5, the default executor since
+  2026-07-12. Writes the code, writes and runs the scratch measurement
+  scripts, executes the pre-registered harness sweeps, starts/runs the unit
+  suite and pre-commit. Stops at the numbers: this role's output at a GATE
+  is a table, never a verdict.
+- **Judge results** — Opus by default; escalate to Fable only if Opus's own
+  read is ambiguous, or the data hints at a confound the pre-registered
+  criterion wasn't built to catch. Takes the executor's table plus the
+  appendix's pre-registered criterion and produces the actual
+  interpretation: which branch of the criterion applies, whether anything
+  in the data undercuts its assumptions, what the recommendation is.
+  Precedent for why this role exists: the Phase 3b GATE outcome (Results
+  log, 2026-07-13) — the initial live-validation table read as a clean
+  pass, and only a second, deeper look caught that the "kept" lines were
+  phantoms the silence test was never built to see. This does not move
+  Ken's authority at GATEs (see "Ground rules" above) — it means what
+  reaches him is a considered read, not a pass-through of the executor's
+  table.
+
+| Phase | Design | Implement/run | Judge results |
+| --- | --- | --- | --- |
+| Phases 0-3b (executed — see Results log) | Fable (Appendices B/C/D) | Opus | Ken directly; Fable retroactively at the Phase 3b GATE outcome |
+| Phase 4 | Fable (Appendix E) | Sonnet 5 | Opus; escalate to Fable if ambiguous |
+| Phase 4.5 | Fable (Appendix G) | Sonnet 5 | Opus; escalate to Fable if ambiguous |
+| Phase 5 | inline in phase text (no appendix) | Sonnet 5 | Opus; escalate to Fable if ambiguous |
+| Phase 6 checkpoint | Fable (Appendix F) | Sonnet 5 | Opus; escalate to Fable if ambiguous |
 
 Two sibling plans execute alongside this one and are not phases here:
 
 - `plans/lrclib-fill-absence-study.md` (offline study, no production code):
   slot it after the Phase 3b GATE — ideally after Phase 4 lands, since Phase 4
   shifts the unplaced population it measures — and before the Phase 6 probe,
-  whose F2 criterion 4 reads its E2 verdict. Untracked on disk by design.
+  whose F2 criterion 4 reads its E2 verdict. Phase 4.5's G2 labels also read
+  E2 (secondary corroboration; 4.5a degrades to manual-gold-only without
+  it), so prefer it before 4.5a when feasible. Untracked on disk by design.
 - `plans/edge-snap-coverage-accuracy.md`: independent parallel track on its
   own branch (`edge_snap_refine` off `89d28c46`), runnable at any point — the
   replay harness here excludes edge-snap, so this plan's corpus numbers are
@@ -82,18 +104,26 @@ revision — was locked by Fable on 2026-07-07 as Appendix D (3b decisions) and
 Appendix E (Phase 4 blueprint). The Phase 6 checkpoint got the same treatment
 on 2026-07-12: Appendix F pre-registers its go/no-go probe and locks the
 contingent transition-cost design, so no phase requires Fable by default.
+The Phase 3b GATE outcome (2026-07-13) opened Phase 4.5; its pre-registered
+study protocol and contingent veto-v2 design were locked the same day as
+Appendix G.
 Implementing from these specs is executor work; the specs themselves are not
 to be redesigned by the executor, whatever the model.
 
-Switch points are marked inline with **MODEL BREAK** blocks. At each break,
-STOP: do not continue into the next step. Tell Ken the plan calls for a model
-switch (`/model`), and wait — the switch is his to make; if he declines,
-proceed on the current model and note that in the Results log.
+Design switch points are marked inline with **MODEL BREAK** blocks. At each
+break, STOP: do not continue into the next step. Tell Ken the plan calls for
+a model switch (`/model`), and wait — the switch is his to make; if he
+declines, proceed on the current model and note that in the Results log.
+GATE judgment gets no inline marker of its own — every GATE already implies
+the handoff above: the executor stops with the table, Opus (then Ken) reads
+it before the plan proceeds past the GATE.
 
-Beyond the marked breaks, recommend an escalation (Opus first; Fable only if
-still available) whenever:
+### Implementation escalation (Sonnet 5 → Opus → Fable)
 
-- a GATE's numbers contradict the plan's stated expectations,
+Distinct from judging results (above): this ladder is for trouble
+implementing, not for interpreting what got measured. Recommend an
+escalation (Opus first; Fable only if still available) whenever:
+
 - Phase 0's bit-faithful replay check cannot be made to pass quickly, or
 - a needed change goes beyond the letter of a spec into scoring/DP semantics
   (`_best_tiling_by_time`, `_alpha_weight` / `_corroboration_weight`).
@@ -109,7 +139,9 @@ at one:
   STOP and report the exact mismatch. Never bridge it with your own design,
   and never improve a spec while implementing it.
 - GATEs and MODEL BREAKs are hard stops even when the verdict looks obvious
-  from the numbers. Report to Ken and wait.
+  from the numbers. Hand the table to Opus/Fable for judgment (the "Judge
+  results" role above); never write your own verdict or recommendation into
+  the Results log.
 - Every number written into the Results log comes from a command actually
   run in that session, with the invocation recorded (mirror the existing
   entries, e.g. `replay_ytasr_third_source.py <corpus> --alpha 2.0
@@ -321,10 +353,11 @@ clearly from present/correct ones (non-overlapping medians, usable threshold
 region). If separation is weak, skip 2b entirely and note it in the Results
 log — Phase 3 still proceeds.
 
-> **MODEL CHECK — 2b through Phase 5 is Opus territory.** If the session is
-> currently on Fable (an escalation, or Ken ran 1b there by choice), ask Ken
-> to switch back to Opus here. Return to Fable only per the escalation rules
-> in "Model switching".
+> **MODEL CHECK (moot) — 2b was skipped at the GATE above (see Results
+> log), so this note never triggered.** Superseded regardless by the
+> 2026-07-12 default-Sonnet change and the design/implement/judge roles in
+> "Model switching"; kept only as a historical marker of the plan's
+> original model assignment for this stretch.
 
 ### 2b. Implement
 
@@ -421,14 +454,19 @@ placements`.
 
 Two changes, separate commits, one corpus evaluation (review findings 4a/4b).
 
-> **MODEL BREAK (resolved 2026-07-07) — design already done by Fable.**
-> Implement 4a/4b exactly per **Appendix E**; the replay-contract,
-> merge-policy, and protection-semantics decisions are locked there. Opus
-> proceeds without a switch. Ask Ken to switch to Fable only on spec
+> **MODEL BREAK (resolved 2026-07-07; executor reassigned 2026-07-13) —
+> design already done by Fable.** Implement 4a/4b exactly per **Appendix
+> E**; the replay-contract, merge-policy, and protection-semantics
+> decisions are locked there. Sonnet 5 proceeds without a switch (the
+> 2026-07-12 default-executor change supersedes this block's original
+> "Opus proceeds" — see "Model switching"). Ask Ken to escalate
+> implementation — Opus first, Fable if still needed — only on spec
 > failure: the Girl in the Bubble acceptance run cannot be made to recover
 > the 51-89s span, existing windowed-realign tests cannot stay green via
 > the E1/E3 default parameters, or a needed change reaches inside the
-> sub-match's scoring rather than the replay/merge layer.
+> sub-match's scoring rather than the replay/merge layer. The E7 GATE
+> itself still gets Opus's judgment before Ken rules, per the "Judge
+> results" role.
 
 ### 4a. YTASR as a third source in span replays
 
@@ -491,6 +529,64 @@ MAD over placed anchors and never compares coverage against dev.
 Commits: `feat(windowed-realign): ytasr third source in span replays`;
 `fix(windowed-realign): protect corroborated pass-1 lines in the merge`.
 
+## Phase 4.5 — counter-evidence veto for zero-evidence align lines
+
+Opened by the Phase 3b GATE outcome (Results log, 2026-07-13), not by the
+review: the energy veto's silence test structurally cannot catch a phantom
+line smeared over *non-lyric singing*. Defying Gravity's outro renders six
+OST-only dialogue lines (79/81/85-88) over the live version's belted
+vocalise + crowd (median −12.5 to −15.6 dB — nowhere near the −45 dB
+floor). Target class: align-won, zero corroboration (`evidence` zero-zero),
+loud span. This extends 3b with a second, independent demotion tier; the
+silence rule is untouched.
+
+Sequencing (binding):
+
+- **After Phase 4 lands and re-baselines.** 4a threads ytasr into span
+  replays, and Defying Gravity replays its tail span (lines 78-88,
+  202-257 s) where ytasr heard the "bring me down" riffs — Phase 4 will
+  reshuffle the exact placements this phase studies; measuring first would
+  be confounded. Same argument as the LRCLIB study's slot.
+- **Before the Phase 6 probe**, so F1 measures the residual landscape.
+  Appendix F is untouched: its criterion-4 "veto-ineligible" class is
+  defined by the `evidence` key, not by what the veto catches, so v2 does
+  not change it.
+- Prefer the LRCLIB study first when feasible — its E2 strong-absence
+  verdict is 4.5a's secondary label source (G2); without it 4.5a runs
+  manual-gold-only.
+
+### 4.5a. Study (scratchpad, offline, no commit)
+
+**Execute per Appendix G (pre-registered protocol — metrics, labels, and
+GATE criteria are fixed there; do not adjust them after seeing data).**
+Enumerate the corpus-wide zero-evidence class from harness replays (no
+GPU), label it (manual gold primary — the class is small: the 3b live runs
+saw 16 such lines across 3 songs), and measure the three pre-registered
+discriminators: lexical counter-evidence (CE), ASR-silent probability
+floor (PF), tail overhang (TO). GATE: read-off per G4; Ken reviews the
+labeled table.
+
+Known coverage limits, stated up front from the Defying Gravity data: CE
+catches 79/81 (ytasr heard different words under them) but cannot catch
+86-88 (both ASR streams are empty in their spans); PF is the only on-disk
+signal for those, and it must overcome 2a's no-separation verdict on the
+narrower class (G3 states the 2a-lock boundary); line 85 is expected to
+survive everything (its align words match the sung riff at p≈0.84-0.93).
+Partial coverage is an acceptable GATE outcome — the study reports which
+sub-class each discriminator covers, with counts, and names the residual.
+
+### 4.5b. Implement (contingent on the G4 GATE)
+
+Second demotion tier in `pikaraoke/lib/evidence_veto.py` per G5: evaluated
+only on the silence rule's survivors, demote-only (`words=[]`,
+`source="veto"`, `start`/`end` kept), stats record which rule fired. Live
+validation mirrors the 3b GATE protocol (G6): regen Defying Gravity +
+Bloodstream, pre-registered line-list expectations, byte-check that
+demoted lines did not move.
+
+Commit: `feat(pipeline): counter-evidence veto for zero-evidence align
+placements`.
+
 ## Phase 5 — cue path: section-duration cap
 
 ### 5a. Survey first (scratchpad, no commit)
@@ -534,7 +630,7 @@ unrequested robustness.)
 > GO, as Appendix F. Execute on Sonnet 5; escalate per the "Model
 > switching" rules.
 
-After Phases 1-4 settle the corpus numbers, run the Appendix F probe and
+After Phases 1-4.5 settle the corpus numbers, run the Appendix F probe and
 GATE. The mechanism under decision: transition costs in
 `_best_tiling_by_time` (`joint_match.py:724-768` already iterates all legal
 predecessor pairs — a gap-plausibility penalty `g(cj, ci)` is structurally
@@ -1330,9 +1426,11 @@ Phase 6 was a MODEL BREAK to Fable because it mixed judgment (do the settled
 numbers justify a new tuning surface?) with design (what exactly would be
 built?). This appendix removes both needs: the judgment is pre-registered as
 an offline probe with read-off criteria (F1-F2 — the same treatment Appendix
-C gave Phase 2a), and the design is locked contingent on a GO (F3-F4). Opus
-executes; escalate to Fable only if a criterion is ambiguous on real data or
-the probe cannot be computed as specified.
+C gave Phase 2a), and the design is locked contingent on a GO (F3-F4). Sonnet
+5 executes the probe (per "Model switching"); escalate implementation — Opus
+first, Fable if still needed — only if a criterion is ambiguous on real data
+or the probe cannot be computed as specified. The F2 GATE itself still gets
+Opus's read before Ken rules, per the "Judge results" role.
 
 ### F1. Pre-registered reachability probe (offline, scratchpad, no commit)
 
@@ -1490,6 +1588,153 @@ local/absolute break indices consistent.
   the review as the fallback.
 - No cue-path changes; no revisiting 2a (align word probability stays out of
   the score — measured, no separation).
+
+---
+
+## Appendix G — Phase 4.5 study protocol + contingent veto-v2 design (locked, Fable, 2026-07-13)
+
+Same treatment as Appendices C (pre-registered study) and D (contract): the
+G1-G4 study runs exactly as written; G5-G6 are built only on a G4 adopt
+verdict, and only for the discriminators G4 adopts.
+
+### G1. Class enumeration (offline)
+
+Replay the harness (post-Phase-4 matcher, α=2.0/β=2.0) over the 17-song
+joint corpus; collect every final placed line whose object carries
+`evidence == {transcribe_match: 0, ytasr_agreement: 0.0}` and non-empty
+words. That is the veto class (only align-won objects can be zero-zero).
+Envelope medians are not available offline — the subset the shipped silence
+rule already demotes is known only for the three 2026-07-13 live-regen
+songs (their bundles carry `evidence_veto.lines`); mark those, leave the
+rest unmarked. In production v2 sees only silence-rule survivors, so a
+line the silence rule would also demote appearing in the study is double
+coverage, not conflict.
+
+### G2. Labels
+
+- **Primary — manual gold**: Ken labels every enumerated line PRESENT
+  (sung in this mix, however garbled) or ABSENT (not in this mix).
+  Corpus-wide expect tens of lines, not hundreds — one sitting. Labels
+  already given, carried in: Defying Gravity 79/81/85-88 ABSENT (Ken,
+  2026-07-13, the GATE finding — 85 "Bring me down" is ABSENT despite the
+  sung riff; the riff is not this lyric line); Bloodstream's zero-evidence
+  members of lines 39-64 PRESENT (the pre-fade repeats).
+- **Secondary — LRCLIB E2 strong-absence** (when that study has run):
+  corroboration only, never overrides manual gold; disagreements go in the
+  report.
+- P2 timing-error labels are NOT usable here: absence is not a timing
+  error, and the class concentrates on P2's excluded bail songs (Defying
+  Gravity is one).
+
+### G3. Discriminators (exact formulas; compute all three per line)
+
+Shared window convention: a stream's words whose `start` lies in
+`[start − margin_s, end + margin_s)`, `margin_s = 0.3`, `bisect_left` on
+starts — the `_transcribe_match_and_count_in_window` convention exactly.
+Lexical overlap = non-empty set intersection of normalized tokens, the
+`_alpha_weight` `any_overlap` convention.
+
+- **CE (counter-evidence)** — per stream S in {transcribe, ytasr}:
+  `fires_S = (count_S >= 2) and no lexical overlap between the line's
+  tokens and S's in-window words`. CE fires iff either stream fires. This
+  is `_alpha_weight`'s gate re-applied to the *final* placement window
+  with ytasr as a second lexical witness — new information on both axes:
+  scoring-time gates never read ytasr lexically, and realign/merge can
+  move a window after scoring.
+- **PF (probability floor)** — evaluated only when neither stream has
+  `count >= 2` (ASR-silent; CE cannot fire): `p_med` = median
+  `probability` over the line's align-built words that carry the key.
+  2a-lock boundary (Appendix F5): probability stays out of candidate
+  *scores*; a veto tier over the zero-evidence class is a narrower
+  question — but it inherits 2a's burden of proof: adopt only on G4
+  numbers, never on the Defying Gravity anecdote (2a measured phantom
+  p_mean scattering 0.13-0.88 on Bloodstream). Sweep the threshold over
+  {0.1, 0.2, 0.3}; G4 picks at most one.
+- **TO (tail overhang)** — the line's `line_id` is greater than the last
+  line whose `evidence` shows any corroboration AND its `start` is later
+  than that line's `end`. Measured for the table; adoptable only under
+  G4's stricter bar — it is the bluntest instrument and the likeliest to
+  hit real align-only outros.
+
+### G4. GATE criteria (pre-registered; read in order)
+
+Per discriminator, on the manually-labeled class: `caught` = ABSENT lines
+it fires on; `collateral` = PRESENT lines it fires on.
+
+1. Adopt CE iff `collateral == 0` and `caught >= 2`. Exactly one
+   collateral → judgment call to Ken with the lines shown; two or more →
+   reject.
+2. Adopt PF (at the single best swept threshold) iff `collateral == 0`
+   and `caught >= 3` — stricter than CE because 2a already failed once on
+   a wider class. Any collateral → reject outright (no judgment band).
+3. Adopt TO only if it catches >= 3 ABSENT lines that no adopted
+   discriminator covers, with `collateral == 0`.
+4. If nothing is adoptable: record the study, close the phase with no
+   code, and carry the residual class size into the Phase 6 probe report.
+
+Composition on adoption: a silence-rule survivor is demoted iff ANY
+adopted discriminator fires. No thresholds re-tuned after unblinding
+(the C4/F2 convention).
+
+### G5. Contingent implementation contract
+
+- `evidence_veto.veto_uncorroborated_lines` gains keyword-only
+  `transcribe_words: list[dict] | None = None` and
+  `ytasr_words: list[dict] | None = None`. A `None` stream means that CE
+  arm never fires; both `None` (and PF/TO unadopted) reduces exactly to
+  the silence rule — existing tests stay green unmodified.
+- Rule order per line: silence rule first (unchanged, including its
+  stats); v2 evaluated only for kept zero-evidence lines.
+- Demotion identical to the silence rule (copy, `words=[]`,
+  `source="veto"`, `start`/`end` kept). Stats: each `lines[]` entry gains
+  `"rule": "silence" | "counter_evidence" | "prob_floor" | "tail" | None`
+  (None = kept) plus the computed per-line inputs (`ce` per stream,
+  `p_med` when evaluated) so the next GATE can audit; additive
+  `n_vetoed_v2` alongside `n_vetoed`.
+- PF plumbing (only if PF adopted): `_align_line_object` copies
+  `probability` onto the word dicts it builds when the align word carries
+  it (additive key; generators ignore it; interpolated fill words carry
+  none). Lines whose words lack the key skip PF — the 2b
+  backward-compatibility convention for old bundles and probability-less
+  outputs.
+- Stage wiring: `lyric_align` already holds `transcribe_words` and parses
+  `ytasr_words` on the joint route — pass both at the existing veto call
+  site. Cue route and transcribe mode: no veto call today, still none.
+- Tests (`test_evidence_veto.py`, wiring in `test_lyric_align.py`): CE
+  fires on a zero-evidence line with >= 2 non-overlapping ytasr words in
+  window; a single overlapping token → kept; ASR-silent line → CE cannot
+  fire; PF per its adoption; silence-rule demotions and stats
+  byte-identical when both streams are `None`; corroborated lines never
+  evaluated; the stage passes both word streams on the joint route only.
+
+### G6. Live validation (mirrors the 3b GATE protocol)
+
+Regen Defying Gravity and Bloodstream via `regen_alignment_bundles.py`
+(single-song schema-bump trick, full backups, as on 2026-07-13).
+Pre-registered expectations: Defying Gravity 79/81 demoted by CE, plus
+whatever G4 adopted for 86-88; line 85 expected to survive (documented
+residual against Ken's ABSENT label); Bloodstream lines 39-64 all kept —
+zero v2 demotions (the precision check); the silence rule's prior
+demotions unchanged. Byte-check `start`/`end` on every demoted line
+(demotes-never-moves, live).
+
+### G7. Non-goals (locked)
+
+- No candidate-score changes of any kind — the 2a/F5 lock stands; PF, if
+  adopted, exists only inside the veto tier.
+- No upstream lyric-version trimming or absence prediction from lyric
+  structure: the repeat-pileup lever is real but a different, larger
+  project.
+- No new online sources; no cue-path changes; the veto still never moves,
+  restores, or re-times a line.
+- The `.srt` self-adoption hazard (Results log, 2026-07-13 GATE outcome)
+  is out of scope — it needs its own decision, not a rider here.
+
+### G8. Commit
+
+One commit on adoption: `feat(pipeline): counter-evidence veto for
+zero-evidence align placements` (PF word-probability plumbing rides
+inside it; split a `refactor` out first only if the diff reads poorly).
 
 ---
 
@@ -1736,3 +1981,170 @@ rest of the corpus — not the Phase 0 v8 capture nor the earlier troubleshoot
 `2src`/36 one. Still re-confirm the 4a acceptance target (placed 26 → ~31-33)
 against whatever bundle is on disk when Phase 4 runs, in case it is refreshed
 again before then.
+
+### Phase 3b GATE — vocal-energy veto live validation (2026-07-13)
+
+Code landed `5625d85` (prior session). This entry is the plan's required
+validation: bundles carry no vocal envelope, so the veto itself can only be
+exercised by a real run, paired with a deterministic corpus replay to prove
+the supporting refactor left everything else untouched.
+
+**Live validation (GPU, real vocal-stem envelope).** Forced exactly
+Bloodstream and HUNTR_X through `regen_alignment_bundles.py
+"D:\shared\pikaraoke-songs"` — temporarily marked just those two bundles
+stale (`schema_version` 8→0) so the other 31 library songs were scanned and
+skipped untouched; both reused their recorded genius(+ytasr) lyric source, no
+network fetch, no Genius prompt. Original bundles preserved (session
+scratchpad) before the run.
+
+| Song | n_zero_evidence | n_vetoed | vetoed line |
+|------|------------------|----------|-------------|
+| Bloodstream | 9 | 1 | line 65 "Callin' out across the line (Brokenhearted)" @ 226.99-232.33s, median −49.2 dB |
+| HUNTR_X | 1 | 1 | line 32 "(Oh)" @ 150.01-151.03s, median −53.7 dB |
+
+Both demotions hold up on inspection, not just the threshold number:
+
+- **Bloodstream line 65** is the *last* of an 8x alternating repeat
+  ("Callin' out across the line (Brokenhearted)" / "...(And I saw scars upon
+  her)", lines 39-65), which continues as further word-fragment repeats into
+  lines 66-73 — the extended-cut outro vamp this 4:07 official-video mix
+  fades out before finishing. This is exactly the "4:07-cut phantom-repeat
+  pile-up" flagged in Phase 2a/3a. The other 7 alternating repeats (lines
+  39-64 — real corroboration or real energy) were correctly left alone; only
+  the truly silent tail repeat was vetoed.
+- **HUNTR_X line 32** is a lone `"(Oh)"` backing ad-lib, 1.0 s wide — the only
+  zero-evidence align line in the whole song.
+
+`start`/`end` are byte-identical before vs after on both vetoed lines —
+confirms "demotes, never moves" live, not just in unit tests.
+
+Full before/after diff of every `output_line_timings` entry (not just the
+veto's own list): HUNTR_X changed exactly 1 line (the veto). Bloodstream
+changed 11 — the veto line, plus 10 others (line 1, line 59, interpolation
+ripple on 66-73) that are **not** in the veto's zero-evidence set. These
+track to ordinary run-to-run whisper variance, not to 3b's code: captured
+align/transcribe/ytasr word *counts* are identical both runs (461/326/231),
+but a few word timestamps shifted enough to flip one borderline crammed-pace
+decision (line 1: align-won 1-word zero-width → no align candidate → interp)
+and ripple into its interpolated neighbors. That's the expected cost of
+validating live against a fresh GPU run rather than a byte-identical replay —
+exactly why the corpus replay below is the control.
+
+**Offline corpus replay (deterministic, snap-free, no envelope)** —
+`replay_ytasr_third_source.py <corpus> --alpha 2.0 --beta 2.0`: 15 of the 17
+non-SRT songs replayed (Bloodstream and HUNTR_X excluded — see caveat below);
+all 15 are **byte-identical** to the post-3a baseline (same MAD, crawl,
+overlap, placed, every song). Confirms 3b's supporting refactor (evidence
+attached to candidate dicts, `_decode_env` → public `decode_env_db`,
+`snap_line_edges`'s new optional `env` param) changed nothing on the path the
+harness/veto don't touch — the veto is purely additive.
+
+**Caveat (pre-existing, unrelated to 3b) — `.srt` does not refresh on regen.**
+`LyricAlignStage._should_write_srt` (`lyric_align.py:423-425`) skips SRT
+generation whenever `subtitles/<stem>.srt` already exists, to avoid clobbering
+a real uploader caption. Both songs already had one from the 2026-07-06 run,
+so this regen rewrote `karaoke/<stem>.ass` (and the bundle) but silently left
+`subtitles/<stem>.srt` untouched — confirmed on disk: Bloodstream's `.srt`
+still contains "Callin' out across the line (Brokenhearted)" as a cue at
+~227s (the `.ass` does not), and HUNTR_X's `.srt` still contains "(Oh)" (the
+`.ass` does not). The `.ass` is what the app actually renders, so the veto's
+live behavior is correctly reflected there; the `.srt` sidecar is just stale.
+Same mechanism explains the `ground_truth_refs` wrinkle: since `wrote_srt` was
+False, the stage re-probed the filesystem, found that same pre-existing SRT,
+and — unable to tell "our own prior output" from "an uploader caption" (the
+code's own comment at `lyric_align.py:318-322` names this exact ambiguity) —
+recorded `youtube_srt_present: True` (`youtube_srt_is_lyric_source` correctly
+stayed False; the live log confirms both songs ran the joint DP, not cue).
+The replay harness's SRT-sourced filter (`replay_ytasr_third_source.py:339`)
+reads that flag and skipped both songs on this run. Not a bug introduced by
+3b — a known, by-design tradeoff of one-shot SRT generation, just not one
+previously observed on a second live regen of an already-processed song.
+Noted for awareness; no fix in scope here.
+
+**Third song — Defying Gravity (a true-negative check — superseded; see
+the GATE outcome entry below: the six kept lines are OST-only phantoms).**
+Same live-regen
+treatment, alone (schema-bump just this one bundle). This song is the
+corpus's densest windowed-realign case (89 lines, 6/7 spans replayed, 37
+anchors/46 suspects) and the biggest beneficiary of 3a's crammed-candidate
+cleanup (overlap 7.8→2.2s), so it was the natural precision check: does the
+veto leave real, loud, zero-corroboration lines alone?
+
+`evidence_veto`: `n_zero_evidence=6, n_vetoed=0`. All six sit in the "No One
+Mourns the Wicked" reprise crowd-chant (lines 79/81/85-88: *"I hope you're
+happy"*, *"Get her!"*, *"Bring me down"*, *"So we've got to bring her"*,
+*"Oh"*, *"Down!"*) — overlapping ensemble dialogue that garbles
+transcribe/ytasr (hence zero corroboration) but is genuinely loud
+(median −15.6 to −12.5 dB, nowhere near the −45 dB floor). Correctly left
+alone: zero false-positive vetoes on real sung/shouted material.
+
+Word counts (align/transcribe/ytasr) are again identical before/after
+(470/267/233), but this song's before/after line diff is noisier than
+Bloodstream/HUNTR_X's — 12 lines shifted (44-48, 82-88), none in the veto's
+zero-evidence set. Same root cause as Bloodstream's line 1/59 (whisper
+timestamp jitter flipping borderline windowed-realign decisions), amplified
+here because this song replays 6 of 7 spans and over half its lines are
+"suspect" — more replay surface for a few-millisecond jitter to tip a
+decision. Not attributable to 3b's code (the veto touched nothing; the
+non-veto diffs are pass-1/windowed-realign candidate selection, unchanged by
+this phase). `.srt` staleness applies here too, same mechanism as above.
+
+**Verdict: PASS.** Across all three songs the veto's behavior is exactly as
+designed: it caught both real phantoms offered to it (Bloodstream's silent
+tail repeat, HUNTR_X's silent ad-lib) and abstained on all six real,
+loud, zero-corroboration lines it was also handed (Defying Gravity's crowd
+chant) — recall and precision both check out on real audio, not just unit
+tests. It moves nothing, and the matcher is provably unperturbed everywhere
+the veto doesn't fire. Regen wrote a full-library backup before each run
+(`D:\Shared\pikaraoke-songs\regen_backup_20260713T133351Z` and
+`regen_backup_20260713T135750Z`; the latter also covers `alignment_debug/`
+per Ken's same-day `9b7e5d4`).
+
+GATE: line lists above are for Ken's review before Phase 4 starts.
+
+### Phase 3b GATE outcome — Defying Gravity's kept lines are phantoms, not true negatives (2026-07-13)
+
+Ken reviewed the rendered .ass: every line after 3:30 is Original-Soundtrack
+dialogue that is not in this live version ("nothing even remotely like those
+lines are sung"). The six zero-evidence lines the veto examined and kept
+(79/81/85-88) are exactly those lines. The 3b entry above called them a
+true-negative precision check — that framing is wrong: the *audio* is real
+and loud (the outro belt riff + crowd; ytasr even hears "bring me down" x3
+at 210.5-216.7 s), but the *lyric lines* placed over it are phantoms. The
+veto's own behavior is still per spec — the silence floor was never the
+instrument for this class — so 3b stands as shipped; the GATE closes with
+the class handed to Phase 4.5 (Appendix G).
+
+Full diagnosis (session of 2026-07-13, Fable). Not a single-commit
+regression — a structural blind spot newly exposed:
+
+- **May 19 bundle (tiling matcher):** rendered nothing after 205 s —
+  tiling required transcribe evidence to place a line at all.
+- **Jun 23 bundle (joint, Linux box):** the whole-song aligner dropped the
+  last 21 words (449 words vs today's 470, byte-identical whisper config —
+  environment/stack difference only), so lines 82-88 had no align range;
+  accidental protection. Only 79/81 leaked.
+- **Jul 4 onward (current stack):** the aligner times every tail token
+  (`n_align_word_drops = 0`); the tail smear enters the DP.
+
+Why every gate passes it: transcribe is silent after 208.8 s, so
+`_alpha_weight` keeps the full alpha bonus *by design* (silence keeps align
+preference) — each tail align candidate scores an unopposed 2.0 and the
+monotonic DP selects the whole chain. The pace gate kills the crammed
+82-84 stack at 217.31 (they fall to hidden interp), but 85-88 are
+plausibly paced — the aligner latched "me... down" onto the sung riff at
+p≈0.84-0.93. The windowed-realign replay re-confirms pass-1 placements
+(only *new* placements need transcribe corroboration, per the merge
+policy). The energy veto then finds −12.5 to −15.6 dB — real singing,
+wrong words — and correctly, per its spec, declines. Phase 6's
+transition-cost DP cannot reach this class either: the phantom chain is
+gap-free against the real block, and the song is a P2 bail song excluded
+from F1's labels by construction.
+
+Side hazard surfaced during diagnosis, out of scope for 4.5 (G7): the
+stale pipeline-generated `subtitles/<stem>.srt` (documented in the 3b
+entry) is also what `lyrics_fetch._find_srt` discovers — a future *live*
+run of this song would adopt the pipeline's own prior output as an
+uploader caption and route through cue_align on it, freezing the leaked
+tail as cues. Needs its own decision (provenance marker for generated
+SRTs, or a sidecar flag); flagged for Ken.
