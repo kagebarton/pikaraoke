@@ -46,6 +46,15 @@ ANCHOR_MIN_RATIO = 0.75
 # Pass-1 corroboration below this marks a line suspect (span gate).
 SUSPECT_RATIO = 0.5
 
+# A pass-1 line wider than this per token is an aligner smear, not a
+# placement worth protecting: its corroboration ratio is computed over
+# its own window, so window bloat manufactures corroboration (NTM
+# "I do": 2 tokens over 77.7s ~ 38.8 s/token scored ratio 1.0).
+# Calibration: widest genuine protect-worthy line observed is 1.52
+# s/token (Paradise line 23, a held single-word note); real holds run
+# 2-3 s. 4.0 sits >2.6x above the good saves and ~10x below the smear.
+PROTECT_MAX_PACE_S = 4.0
+
 # Audio slack around a span's anchor boundaries when slicing.
 SLICE_PAD_S = 0.75
 
@@ -73,14 +82,19 @@ def analyze_pass1(
     """Classify pass-1 lines into span anchors and suspects.
 
     Returns ``(anchors, suspect_line_ids, ratios)``. Anchors are dicts with
-    ``lid``/``start``/``end``, in line order. ``ratios`` holds each line's
-    transcribe corroboration fraction (``matched / len(seq)``) for exactly
-    the lines that reach that computation below — placed by
-    align/transcribe/ytasr with a start; display-only and unplaced lines
-    are absent from it. Used by ``merge_spans`` to protect well-corroborated
-    interior lines from a lower-context span replay. Display-only lines
-    with no normalizable tokens are neither anchors nor suspects — they
-    inherit timing and carry no evidence.
+    ``lid``/``start``/``end``, in line order. ``ratios`` holds each
+    protection-eligible line's transcribe corroboration fraction
+    (``matched / len(seq)``) — placed by align/transcribe/ytasr with a
+    start, and paced at or under ``PROTECT_MAX_PACE_S`` per token; display-
+    only, unplaced, and aligner-smeared lines are absent from it. Used by
+    ``merge_spans`` to protect well-corroborated interior lines from a
+    lower-context span replay: the pace guard exists because the ratio is
+    computed over the line's own window, so an aligner smear's
+    self-corroboration is manufactured by window bloat, not evidence
+    (a 2-token line smeared over 77s trivially contains a matching
+    transcribe word somewhere). Display-only lines with no normalizable
+    tokens are neither anchors nor suspects — they inherit timing and
+    carry no evidence.
     """
     toks = _tokenise_lines(align_lines)
     norm_seqs = [tuple(norm for norm, _raw in t) for t in toks]
@@ -110,7 +124,9 @@ def analyze_pass1(
             max_edit_ratio,
         )
         ratio = matched / len(seq)
-        ratios[lid] = ratio
+        pace = (obj["end"] - obj["start"]) / len(seq)
+        if pace <= PROTECT_MAX_PACE_S:
+            ratios[lid] = ratio
         if ratio < SUSPECT_RATIO:
             suspects.add(lid)
         if len(seq) >= ANCHOR_MIN_TOKENS and seq_count[seq] == 1 and ratio >= ANCHOR_MIN_RATIO:

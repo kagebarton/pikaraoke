@@ -127,6 +127,68 @@ class TestAnalyzePass1:
         assert suspects == set()
 
 
+class TestProtectionWidthGuard:
+    """E3a: a pass-1 line's ratio only protects it from replay override
+    when its own pace is width-sane. The ratio is computed over the
+    line's own window, so an aligner smear manufactures corroboration
+    (a 2-token line smeared over 20s trivially contains both tokens
+    somewhere in transcribe) without it being a real placement."""
+
+    MARGIN = dict(margin_s=0.3, max_edit_ratio=0.75)
+
+    def test_smeared_pass1_line_excluded_from_ratios(self):
+        # 2 tokens over 20s = 10 s/token: an aligner give-up, not a
+        # placement worth protecting, even though transcribe happens to
+        # echo both tokens somewhere inside that huge window.
+        align_lines = ["i do"]
+        objs = [_obj(0, 0.0, 20.0)]
+        transcribe = [_word("i", 10.0, 10.2), _word("do", 15.0, 15.3)]
+        _, _, ratios = analyze_pass1(
+            align_lines, objs, _stats(["align"]), transcribe, **self.MARGIN
+        )
+        assert 0 not in ratios
+
+    def test_slow_but_sane_line_still_enters_ratios(self):
+        # 1 token held 1.6s -- a real sung/held note, well under the guard.
+        align_lines = ["paradise"]
+        objs = [_obj(0, 118.9, 120.5)]
+        transcribe = [_word("paradise", 118.9, 120.5)]
+        _, _, ratios = analyze_pass1(
+            align_lines, objs, _stats(["align"]), transcribe, **self.MARGIN
+        )
+        assert ratios[0] == 1.0
+
+    def test_smeared_line_is_not_protected_from_replay_override(self):
+        # End-to-end pin of the NTM "I do" regression: the smeared
+        # line's raw ratio is 1.0 (transcribe found both tokens), but the
+        # width guard keeps it out of merge protection, so the replay's
+        # width-sane alternative is adopted instead of the 20s smear.
+        align_lines = ["a", "i do", "b"]
+        pass1_objs = [
+            _obj(0, 0.0, 1.0),
+            _obj(1, 5.0, 25.0),  # 2 tokens / 20s = 10 s/token: a smear
+            _obj(2, 40.0, 41.0),
+        ]
+        transcribe = [_word("i", 10.0, 10.2), _word("do", 20.0, 20.3)]
+        _, _, ratios = analyze_pass1(
+            align_lines, pass1_objs, _stats(["align", "align", "align"]), transcribe, **self.MARGIN
+        )
+        assert 1 not in ratios  # confirms the guard fired, not a scoring fluke
+
+        span = {"lid_lo": 0, "lid_hi": 2, "anchor_lo": 0, "anchor_hi": 2, "t0": 0.0, "t1": 45.0}
+        replay_alt = _obj(1, 6.0, 6.5)  # the replay's width-sane alternative
+        merged = merge_spans(
+            pass1_objs,
+            [span],
+            [({1: replay_alt}, {1: "align"})],
+            3,
+            [_word("x", 0.0, 45.0)],
+            pass1_ratios=ratios,
+        )
+        by_id = {o["line_id"]: o for o in merged}
+        assert by_id[1]["start"] == 6.0  # sane replacement adopted, smear discarded
+
+
 class TestBuildSpans:
     def test_no_anchors_yields_single_full_song_span(self):
         spans = build_spans([], n_lines=5, duration=100.0)
