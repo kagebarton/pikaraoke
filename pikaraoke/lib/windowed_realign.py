@@ -69,13 +69,18 @@ def analyze_pass1(
     *,
     margin_s: float,
     max_edit_ratio: float,
-) -> tuple[list[dict], set[int]]:
+) -> tuple[list[dict], set[int], dict[int, float]]:
     """Classify pass-1 lines into span anchors and suspects.
 
-    Returns ``(anchors, suspect_line_ids)``. Anchors are dicts with
-    ``lid``/``start``/``end``, in line order. Display-only lines with no
-    normalizable tokens are neither anchors nor suspects — they inherit
-    timing and carry no evidence.
+    Returns ``(anchors, suspect_line_ids, ratios)``. Anchors are dicts with
+    ``lid``/``start``/``end``, in line order. ``ratios`` holds each line's
+    transcribe corroboration fraction (``matched / len(seq)``) for exactly
+    the lines that reach that computation below — placed by
+    align/transcribe/ytasr with a start; display-only and unplaced lines
+    are absent from it. Used by ``merge_spans`` to protect well-corroborated
+    interior lines from a lower-context span replay. Display-only lines
+    with no normalizable tokens are neither anchors nor suspects — they
+    inherit timing and carry no evidence.
     """
     toks = _tokenise_lines(align_lines)
     norm_seqs = [tuple(norm for norm, _raw in t) for t in toks]
@@ -86,6 +91,7 @@ def analyze_pass1(
 
     anchors: list[dict] = []
     suspects: set[int] = set()
+    ratios: dict[int, float] = {}
     for lid, src in enumerate(stats["selected_source"]):
         seq = norm_seqs[lid]
         if not seq:
@@ -104,11 +110,12 @@ def analyze_pass1(
             max_edit_ratio,
         )
         ratio = matched / len(seq)
+        ratios[lid] = ratio
         if ratio < SUSPECT_RATIO:
             suspects.add(lid)
         if len(seq) >= ANCHOR_MIN_TOKENS and seq_count[seq] == 1 and ratio >= ANCHOR_MIN_RATIO:
             anchors.append({"lid": lid, "start": obj["start"], "end": obj["end"]})
-    return anchors, suspects
+    return anchors, suspects, ratios
 
 
 def build_spans(
@@ -219,11 +226,32 @@ def replay_span(
         max_edit_ratio=max_edit_ratio,
         ytasr_words=window_ytasr or None,
     )
+    norm_seqs = [tuple(norm for norm, _raw in t) for t in _tokenise_lines(align_lines)]
+    window_norms = [_normalize_token(w["word"]) for w in window_words]
+    window_starts = [w["start"] for w in window_words]
     placed: dict[int, dict] = {}
     for obj in local_objects:
         if obj.get("words") and obj.get("start") is not None:
             shifted = dict(obj)
             shifted["line_id"] = lo + obj["line_id"]
+            # The replay's own transcribe corroboration, so merge_spans can
+            # judge whether this placement earns the right to overwrite a
+            # well-corroborated pass-1 line (SUSPECT_RATIO protection below).
+            # The span's pad covers the window, so window words suffice.
+            seq = norm_seqs[shifted["line_id"]]
+            if seq:
+                matched, _, _ = _transcribe_match_and_count_in_window(
+                    list(seq),
+                    window_norms,
+                    window_starts,
+                    obj["start"],
+                    obj["end"],
+                    margin_s,
+                    max_edit_ratio,
+                )
+                shifted["corrob_ratio"] = matched / len(seq)
+            else:
+                shifted["corrob_ratio"] = 0.0
             placed[shifted["line_id"]] = shifted
     sources = {lo + k: src for k, src in enumerate(local_stats["selected_source"])}
     return placed, sources
@@ -235,6 +263,8 @@ def merge_spans(
     span_results: list[tuple[dict[int, dict], dict[int, str]] | None],
     n_lines: int,
     align_words: list[dict],
+    *,
+    pass1_ratios: dict[int, float] | None = None,
 ) -> list[dict]:
     """Apply span replays' interior placements over pass-1.
 
@@ -242,6 +272,14 @@ def merge_spans(
     failed or yielded nothing) keeps pass-1 for that span. Unplaced
     lines are re-interpolated against the merged neighbours, restoring
     the matcher's 1:1 line-object contract.
+
+    ``pass1_ratios`` (from ``analyze_pass1``) protects a well-corroborated
+    pass-1 line (ratio >= ``SUSPECT_RATIO``, i.e. not itself a suspect) from
+    a lower-context span replay: the replay may not un-place it, and may
+    only replace it when its own ``corrob_ratio`` meets or beats pass-1's.
+    ``None`` disables protection entirely (today's behavior). A suspect
+    line, or one absent from ``pass1_ratios`` (display-only/unplaced), is
+    never protected — replaced/dropped exactly as before.
     """
     placed1 = {
         o["line_id"]: o for o in line_objects if o.get("words") and o.get("start") is not None
@@ -262,6 +300,13 @@ def merge_spans(
             cand = placed2.get(lid)
             if cand is not None and not (lo_t <= cand["start"] and cand["end"] <= hi_t):
                 continue  # intrudes into a kept edge anchor: keep pass-1
+            protected = (
+                pass1_ratios is not None
+                and lid in placed1
+                and pass1_ratios.get(lid, 0.0) >= SUSPECT_RATIO
+            )
+            if protected and (cand is None or cand.get("corrob_ratio", 0.0) < pass1_ratios[lid]):
+                continue  # non-suspect pass-1 line: the replay must meet its bar
             merged.pop(lid, None)
             if cand is not None:
                 merged[lid] = cand

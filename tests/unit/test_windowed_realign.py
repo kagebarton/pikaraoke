@@ -51,7 +51,7 @@ class TestAnalyzePass1:
             _obj(2, None, None, "absent"),
             _obj(3, 30.0, 30.5),
         ]
-        anchors, suspects = analyze_pass1(
+        anchors, suspects, _ratios = analyze_pass1(
             align_lines,
             objs,
             _stats(["align", "align", "absent", "transcribe"]),
@@ -68,7 +68,7 @@ class TestAnalyzePass1:
             _obj(2, None, None, "absent"),
             _obj(3, 30.0, 30.5),
         ]
-        _, suspects = analyze_pass1(
+        _, suspects, _ratios = analyze_pass1(
             align_lines,
             objs,
             _stats(["align", "align", "absent", "transcribe"]),
@@ -82,7 +82,7 @@ class TestAnalyzePass1:
     def test_interp_source_is_suspect_even_with_timing(self):
         align_lines = ["glowing river twilight ember"]
         objs = [_obj(0, 10.0, 12.0, source="interp")]
-        anchors, suspects = analyze_pass1(
+        anchors, suspects, _ratios = analyze_pass1(
             align_lines, objs, _stats(["interp"]), self._transcribe_echo(), **self.MARGIN
         )
         assert anchors == []
@@ -99,7 +99,7 @@ class TestAnalyzePass1:
             _obj(2, None, None, "absent"),
             _obj(3, 30.0, 30.5),
         ]
-        anchors, suspects = analyze_pass1(
+        anchors, suspects, _ratios = analyze_pass1(
             align_lines,
             objs,
             _stats(["ytasr", "align", "absent", "transcribe"]),
@@ -112,7 +112,7 @@ class TestAnalyzePass1:
     def test_repeated_line_text_never_anchors(self):
         align_lines = ["glowing river twilight ember", "glowing river twilight ember"]
         objs = [_obj(0, 10.0, 12.0), _obj(1, 50.0, 52.0)]
-        anchors, _ = analyze_pass1(
+        anchors, _, _ratios = analyze_pass1(
             align_lines, objs, _stats(["align", "align"]), self._transcribe_echo(), **self.MARGIN
         )
         assert anchors == []
@@ -120,7 +120,7 @@ class TestAnalyzePass1:
     def test_short_line_never_anchors_but_is_not_suspect_when_corroborated(self):
         align_lines = ["glowing river twilight"]
         objs = [_obj(0, 10.0, 11.4)]
-        anchors, suspects = analyze_pass1(
+        anchors, suspects, _ratios = analyze_pass1(
             align_lines, objs, _stats(["align"]), self._transcribe_echo(), **self.MARGIN
         )
         assert anchors == []
@@ -216,6 +216,38 @@ class TestReplaySpan:
         assert placed[2]["start"] == 11.0
         assert placed[2]["line_id"] == 2
         assert sources[3] in ("align", "transcribe")
+
+    def test_corrob_ratio_attached_when_transcribe_fully_echoes(self):
+        result = replay_span(
+            self.SPAN,
+            self._span_words(),
+            [dict(w) for w in self._span_words()],
+            self.LINES,
+            self.LINES,
+            alpha=2.0,
+            margin_s=0.3,
+            max_edit_ratio=0.75,
+        )
+        assert result is not None
+        placed, _sources = result
+        assert placed[2]["corrob_ratio"] == 1.0
+        assert placed[3]["corrob_ratio"] == 1.0
+
+    def test_corrob_ratio_is_zero_with_no_transcribe_corroboration(self):
+        result = replay_span(
+            self.SPAN,
+            self._span_words(),
+            [],
+            self.LINES,
+            self.LINES,
+            alpha=2.0,
+            margin_s=0.3,
+            max_edit_ratio=0.75,
+        )
+        assert result is not None
+        placed, _sources = result
+        assert placed[2]["corrob_ratio"] == 0.0
+        assert placed[3]["corrob_ratio"] == 0.0
 
     def test_empty_span_words_returns_none(self):
         result = replay_span(
@@ -335,6 +367,68 @@ class TestMergeSpans:
         by_id = {o["line_id"]: o for o in merged}
         assert by_id[2]["words"] == []
         assert by_id[2]["source"] == "interp"
+
+    def _cand(self, lid: int, start: float, end: float, corrob_ratio: float) -> dict:
+        obj = _obj(lid, start, end)
+        obj["corrob_ratio"] = corrob_ratio
+        return obj
+
+    def test_protected_line_left_unplaced_by_replay_keeps_pass1(self):
+        # Line 1's pass-1 ratio (0.8) is well above SUSPECT_RATIO: the
+        # replay dropping it is not honest-unplace material, unlike an
+        # uncorroborated line — pass-1 survives.
+        merged = merge_spans(
+            self._pass1(),
+            [self.SPAN],
+            [({}, {})],
+            5,
+            self.ALIGN_WORDS,
+            pass1_ratios={1: 0.8},
+        )
+        by_id = {o["line_id"]: o for o in merged}
+        assert by_id[1]["start"] == 10.0
+
+    def test_protected_line_replacement_below_its_ratio_is_rejected(self):
+        placed2 = {1: self._cand(1, 12.0, 13.0, corrob_ratio=0.5)}
+        sources2 = {1: "align"}
+        merged = merge_spans(
+            self._pass1(),
+            [self.SPAN],
+            [(placed2, sources2)],
+            5,
+            self.ALIGN_WORDS,
+            pass1_ratios={1: 0.8},
+        )
+        by_id = {o["line_id"]: o for o in merged}
+        assert by_id[1]["start"] == 10.0  # replay's 0.5 < pass-1's 0.8: rejected
+
+    def test_protected_line_replacement_at_or_above_its_ratio_is_adopted(self):
+        placed2 = {1: self._cand(1, 12.0, 13.0, corrob_ratio=0.8)}
+        sources2 = {1: "align"}
+        merged = merge_spans(
+            self._pass1(),
+            [self.SPAN],
+            [(placed2, sources2)],
+            5,
+            self.ALIGN_WORDS,
+            pass1_ratios={1: 0.8},
+        )
+        by_id = {o["line_id"]: o for o in merged}
+        assert by_id[1]["start"] == 12.0  # replay met pass-1's bar: adopted
+
+    def test_suspect_line_stays_replaceable_with_ratios_supplied(self):
+        # A suspect (ratio < SUSPECT_RATIO) is never protected, even when
+        # pass1_ratios is supplied — today's behavior is unchanged for it.
+        merged = merge_spans(
+            self._pass1(),
+            [self.SPAN],
+            [self._result()],
+            5,
+            self.ALIGN_WORDS,
+            pass1_ratios={1: 0.2},
+        )
+        by_id = {o["line_id"]: o for o in merged}
+        assert by_id[1]["start"] == 12.0
 
     def test_small_edge_overlap_within_tolerance_is_accepted(self):
         # Backing-vocal style overlap: L1 starts 0.3s before the

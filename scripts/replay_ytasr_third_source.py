@@ -199,7 +199,7 @@ def _score_against_lrclib(
         return {"bailed": "no_reference"}
     n_lines = len(align_lines)
     sources = _selected_sources(line_objects, n_lines)
-    anchors, _suspects = analyze_pass1(
+    anchors, _suspects, _ratios = analyze_pass1(
         align_lines,
         line_objects,
         {"selected_source": sources},
@@ -258,10 +258,11 @@ def _replay_output(
 ) -> tuple[list[dict], dict]:
     """3-source (or 2-source fallback) DP + windowed re-align merge.
 
-    ``realign`` is this alpha's ``_replay_spans_at_alpha`` output. Returns
+    ``realign`` is this ``(alpha, beta)``'s ``_replay_spans`` output. Returns
     ``(line_objects, joint_stats)`` — stats expose ``n_ytasr_candidates`` so
     the caller can tell a real 3-source run from one where the candidate scan
-    matched nothing.
+    matched nothing. Mirrors the stage: pass-1 corroboration ratios (from
+    ``analyze_pass1``) protect well-corroborated interior lines in the merge.
     """
     transcribe_words = bundle["transcribe_words"]
     lines = bundle["lyrics"]["lines"]
@@ -283,7 +284,17 @@ def _replay_output(
     )
     if realign is not None:
         spans, results = realign
-        line_objects = merge_spans(line_objects, spans, results, len(lines), bundle["words"])
+        _anchors, _suspects, ratios = analyze_pass1(
+            align_lines,
+            line_objects,
+            stats,
+            transcribe_words,
+            margin_s=knobs["margin_s"],
+            max_edit_ratio=knobs["max_edit_ratio"],
+        )
+        line_objects = merge_spans(
+            line_objects, spans, results, len(lines), bundle["words"], pass1_ratios=ratios
+        )
     return line_objects, stats
 
 
