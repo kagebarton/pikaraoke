@@ -29,8 +29,8 @@ Two modes:
 Fetched captions are gated by a fixed words-per-minute floor so a dialog-only
 track is sent to the Genius prompt instead of aligned as lyrics.
 
-Before overwriting outputs, the ``subtitles/``, ``karaoke/`` and ``lyrics/``
-folders are copied once into ``<folder>/regen_backup_<UTC>/``.
+Before overwriting outputs, the ``subtitles/``, ``karaoke/``, ``lyrics/`` and
+``alignment_debug/`` folders are copied once into ``<folder>/regen_backup_<UTC>/``.
 
 Run from the repo root::
 
@@ -626,9 +626,15 @@ def run_jobs(
 # ---------------------------------------------------------------------------
 
 
-# The regenerable per-song output folders: backed up before any run, and wiped
-# up front in reset mode (the pipeline rebuilds them, so nothing stale lingers).
+# The regenerable per-song output folders: wiped up front in reset mode (the
+# pipeline rebuilds them, so nothing stale lingers).
 OUTPUT_DIRS = ("subtitles", "karaoke", "lyrics")
+
+# Folders backed up before any run. Includes alignment_debug (the bundles this
+# script overwrites) in addition to OUTPUT_DIRS, but alignment_debug is never
+# cleared in reset mode: a failed regen should leave the prior bundle in place
+# rather than lose it outright.
+BACKUP_DIRS = OUTPUT_DIRS + ("alignment_debug",)
 
 
 def backup_text_folders(folder: Path) -> Path | None:
@@ -639,7 +645,7 @@ def backup_text_folders(folder: Path) -> Path | None:
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     backup_root = folder / f"regen_backup_{ts}"
     copied: list[str] = []
-    for sub in OUTPUT_DIRS:
+    for sub in BACKUP_DIRS:
         src = folder / sub
         if src.is_dir():
             shutil.copytree(src, backup_root / sub)
@@ -781,9 +787,9 @@ def main() -> int:
     # Back up before any destructive step (folder wipe, caption download, regen).
     backup = backup_text_folders(folder)
     if backup is not None:
-        print(f"Backed up subtitles/karaoke/lyrics to: {backup}\n")
+        print(f"Backed up subtitles/karaoke/lyrics/alignment_debug to: {backup}\n")
     else:
-        print("No subtitles/karaoke/lyrics folders to back up.\n")
+        print("No subtitles/karaoke/lyrics/alignment_debug folders to back up.\n")
 
     # Reset rebuilds every output, so wipe the folders up front — no stale
     # caption or transcript survives to be mistaken for current.
