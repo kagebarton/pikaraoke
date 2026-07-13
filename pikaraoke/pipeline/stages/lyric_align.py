@@ -488,6 +488,7 @@ class LyricAlignStage(BaseStage):
                     align_lines,
                     align_words,
                     transcribe_words,
+                    ytasr_words,
                 )
             except PipelineCancelled:
                 raise
@@ -792,6 +793,7 @@ class LyricAlignStage(BaseStage):
         align_lines: list[str],
         align_words: list[dict],
         transcribe_words: list[dict],
+        ytasr_words: list[dict] | None,
     ) -> list[dict]:
         """Second pass: re-align suspect spans between trusted anchors.
 
@@ -846,7 +848,7 @@ class LyricAlignStage(BaseStage):
         span_captures: list[dict] = []
         for k, span in enumerate(todo):
             result, span_words = self._realign_one_span(
-                ctx, vocal_wav, span, k, lyrics_lines, align_lines, transcribe_words
+                ctx, vocal_wav, span, k, lyrics_lines, align_lines, transcribe_words, ytasr_words
             )
             results.append(result)
             # Capture each span's refined align words (absolute song time) so
@@ -930,6 +932,7 @@ class LyricAlignStage(BaseStage):
         lyrics_lines: list[str],
         align_lines: list[str],
         transcribe_words: list[dict],
+        ytasr_words: list[dict] | None,
     ) -> tuple[tuple[dict[int, dict], dict[int, str]] | None, list[dict] | None]:
         """Slice + re-align one span.
 
@@ -962,6 +965,8 @@ class LyricAlignStage(BaseStage):
             alpha=self._config.joint_alpha,
             margin_s=self._config.joint_margin_s,
             max_edit_ratio=self._config.joint_max_edit_ratio,
+            beta=self._config.joint_beta,
+            ytasr_words=ytasr_words,
         )
         return replay_result, words
 

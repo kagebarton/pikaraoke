@@ -12,9 +12,10 @@ back under a conservative policy:
   both the quality gate and the GPU cost gate (~40% of spans on the
   eval corpus).
 * A line pass-1 left unplaced is only newly placed when the span replay
-  selected it from the transcribe stream — independent corroboration.
-  Pass-1 placements may always be replaced or dropped; un-placing an
-  uncorroborated line is honest (hidden beats 20-seconds-wrong).
+  selected it from transcribe or ytasr — independent corroboration,
+  either way, of the span's own align. Pass-1 placements may always be
+  replaced or dropped; un-placing an uncorroborated line is honest
+  (hidden beats 20-seconds-wrong).
 
 Corpus-measured (Phase 3, 23 songs):
 gross misplacements 77 -> 58, lines within 1.0 s 84.5% -> 85.7%.
@@ -178,13 +179,17 @@ def replay_span(
     alpha: float,
     margin_s: float,
     max_edit_ratio: float,
+    beta: float = 2.0,
+    ytasr_words: list[dict] | None = None,
 ) -> tuple[dict[int, dict], dict[int, str]] | None:
     """Joint-match one span as a sub-problem.
 
     ``span_words`` are the slice's refined align words shifted to
     absolute song time. Returns ``(placed, sources)`` keyed by absolute
     line id — ``placed`` maps to full line objects ready to merge — or
-    None when the slice align produced no words.
+    None when the slice align produced no words. ``ytasr_words`` is
+    filtered to the span with the same pad as transcribe words (boundary
+    lines straddle the same way).
     """
     if not span_words:
         return None
@@ -194,14 +199,25 @@ def replay_span(
         for w in transcribe_words
         if span["t0"] - TRANSCRIBE_PAD_S <= w["start"] <= span["t1"] + TRANSCRIBE_PAD_S
     ]
+    window_ytasr = (
+        [
+            w
+            for w in ytasr_words
+            if span["t0"] - TRANSCRIBE_PAD_S <= w["start"] <= span["t1"] + TRANSCRIBE_PAD_S
+        ]
+        if ytasr_words
+        else None
+    )
     local_objects, local_stats = match_words_to_lines_joint_with_stats(
         span_words,
         window_words,
         lines[lo : hi + 1],
         align_lines[lo : hi + 1],
         alpha=alpha,
+        beta=beta,
         margin_s=margin_s,
         max_edit_ratio=max_edit_ratio,
+        ytasr_words=window_ytasr or None,
     )
     placed: dict[int, dict] = {}
     for obj in local_objects:
@@ -241,7 +257,7 @@ def merge_spans(
         lo_t = lo_obj["end"] - MERGE_EDGE_TOL_S if lo_obj else float("-inf")
         hi_t = hi_obj["start"] + MERGE_EDGE_TOL_S if hi_obj else float("inf")
         for lid in range(lo, hi + 1):
-            if lid not in placed1 and sources2.get(lid) != "transcribe":
+            if lid not in placed1 and sources2.get(lid) not in ("transcribe", "ytasr"):
                 continue
             cand = placed2.get(lid)
             if cand is not None and not (lo_t <= cand["start"] and cand["end"] <= hi_t):

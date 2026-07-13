@@ -19,7 +19,8 @@ What replays exactly vs. approximately:
     (``words`` / ``transcribe_words`` / parsed YTASR) at the swept knobs.
   * **Windowed re-align** replays from each span's captured refined
     ``align_words`` via ``replay_span`` + ``merge_spans``, re-matched at the
-    swept ``alpha``. Span boundaries and the suspect set were chosen from the
+    swept ``alpha``/``beta`` with YTASR threaded in as a third span-replay
+    source. Span boundaries and the suspect set were chosen from the
     original pass-1, so they do not move here.
   * **Edge snap** is *not* replayed — it needs the vocal stem audio this
     offline harness deliberately never touches. The bundle's recorded
@@ -50,6 +51,11 @@ weights align agreement independent of YTASR, so it is swept for every song;
 ``--write-ass`` renders each song's winning combo to
 ``karaoke/<stem>.ytasr3src.ass`` for visual inspection, never overwriting the
 shipped ``<stem>.ass``.
+
+The ``coverage`` column reports the winning combo's ``placed/n_lines``,
+flagged with ``!`` below ``--min-coverage`` (default 0.85) — MAD/overlap are
+scored over placed anchors only, so a song can sit at a low-coverage
+placement count without either metric ever showing it.
 
 ``PATH`` is a song-library folder (scans ``<PATH>/alignment_debug/*.json``).
 """
@@ -204,12 +210,17 @@ def _score_against_lrclib(
     return offset_mad_against_cues(anchors, lrclib_cues)
 
 
-def _replay_spans_at_alpha(bundle: dict, alpha: float) -> tuple[list, list] | None:
-    """Captured re-align spans re-matched at the *swept* alpha.
+def _replay_spans(
+    bundle: dict, ytasr_words: list[dict] | None, alpha: float, beta: float
+) -> tuple[list, list] | None:
+    """Captured re-align spans re-matched at the *swept* alpha/beta.
 
-    The sub-matches are 2-source (beta never enters), so one replay per alpha
-    serves the whole beta row. Returns ``(spans, results)`` for
-    ``merge_spans``, or ``None`` when the bundle recorded no spans.
+    Now a 3-source sub-match (ytasr threaded in), so a replay must be redone
+    per ``(alpha, beta)`` pair — the old "one replay per alpha serves the
+    whole beta row" caching is dead now that beta reaches the sub-match.
+    Replays are CPU-cheap; nothing replaces the caching. Returns
+    ``(spans, results)`` for ``merge_spans``, or ``None`` when the bundle
+    recorded no spans.
     """
     spans = (bundle["joint_stats"].get("windowed_realign") or {}).get("spans")
     if not spans:
@@ -231,6 +242,8 @@ def _replay_spans_at_alpha(bundle: dict, alpha: float) -> tuple[list, list] | No
                 alpha=alpha,
                 margin_s=knobs["margin_s"],
                 max_edit_ratio=knobs["max_edit_ratio"],
+                beta=beta,
+                ytasr_words=ytasr_words,
             )
         )
     return spans, results
@@ -318,6 +331,12 @@ def main() -> int:
         action="store_true",
         help=f"write each song's best-combo karaoke/<stem>.{ASS_TAG}.ass for eyeballing",
     )
+    ap.add_argument(
+        "--min-coverage",
+        type=float,
+        default=0.85,
+        help="flag (with '!') songs whose best-combo placed/n_lines falls below this",
+    )
     args = ap.parse_args()
 
     beta_grid = [float(b) for b in args.beta.split(",")]
@@ -330,9 +349,10 @@ def main() -> int:
 
     print(
         f"{'song':46s} {'src':>4s} {'mad(best)':>16s} {'alpha':>5s} {'beta':>5s} "
-        f"{'crawl(rec>new)':>14s} {'overlap(rec>new)':>18s} {'placed(rec>new)':>16s}"
+        f"{'crawl(rec>new)':>14s} {'overlap(rec>new)':>18s} {'placed(rec>new)':>16s} "
+        f"{'coverage':>10s}"
     )
-    print("-" * 130)
+    print("-" * 142)
 
     for bp in bundle_paths:
         bundle = json.loads(bp.read_text(encoding="utf-8"))
@@ -343,6 +363,7 @@ def main() -> int:
         knobs = bundle["joint_stats"]["knobs"]
         transcribe_words = bundle["transcribe_words"]
         align_lines = bundle["lyrics"]["align_lines"]
+        n_lines = len(bundle["lyrics"]["lines"])
 
         ytasr_words = _load_ytasr_words(bundle, song_root)
         lrclib_cues = _load_lrclib_reference(bundle, song_root, bp.stem)
@@ -351,8 +372,8 @@ def main() -> int:
         beta_sweep = beta_grid if ytasr_words else [0.0]  # beta is a no-op with no ytasr data
         per_combo = {}
         for alpha in alpha_grid:
-            realign = _replay_spans_at_alpha(bundle, alpha)
             for beta in beta_sweep:
+                realign = _replay_spans(bundle, ytasr_words, alpha, beta)
                 objs, stats = _replay_output(bundle, ytasr_words, alpha, beta, realign)
                 per_combo[(alpha, beta)] = {
                     "objs": objs,
@@ -385,12 +406,16 @@ def main() -> int:
             src_flag, beta_col = "asr0", "n/a"
         else:
             src_flag, beta_col = "3src", f"{best_beta:.1f}"
+        coverage = best["summary"]["n_placed"] / n_lines if n_lines else 1.0
+        coverage_flag = "!" if coverage < args.min_coverage else ""
+        coverage_col = f"{best['summary']['n_placed']}/{n_lines}{coverage_flag}"
         print(
             f"{bp.stem[:46]:46s} {src_flag:>4s} {_fmt_mad(best['mad']):>16s} "
             f"{best_alpha:>5.1f} {beta_col:>5s} "
             f"{rec['n_crawl']:6d}->{best['summary']['n_crawl']:<6d} "
             f"{rec['max_overlap']:8.1f}->{best['summary']['max_overlap']:<8.1f} "
-            f"{rec['n_placed']:6d}->{best['summary']['n_placed']:<6d}"
+            f"{rec['n_placed']:6d}->{best['summary']['n_placed']:<6d} "
+            f"{coverage_col:>10s}"
         )
 
         if args.write_ass:
