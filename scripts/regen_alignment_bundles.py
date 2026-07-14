@@ -74,6 +74,10 @@ from pikaraoke.lib.metadata_parser import (  # noqa: E402
 )
 from pikaraoke.lib.preference_manager import PreferenceManager  # noqa: E402
 from pikaraoke.lib.srt_cues import cue_spans_from_srt  # noqa: E402
+from pikaraoke.lib.srt_provenance import (  # noqa: E402
+    clear_generated_marker,
+    is_generated,
+)
 from pikaraoke.lib.youtube_dl import (  # noqa: E402
     ASR_JSON3_SUFFIX,
     download_manual_en_subs,
@@ -219,7 +223,7 @@ def _find_local_srt(song: Path) -> Path | None:
     subs = song.parent / "subtitles"
     for name in (f"{song.stem}.en.srt", f"{song.stem}.srt"):
         candidate = subs / name
-        if candidate.is_file():
+        if candidate.is_file() and not is_generated(candidate):
             return candidate
     return None
 
@@ -488,6 +492,7 @@ def execute_fetches(jobs: list[SongJob]) -> None:
         # _should_write_srt both key on subtitles/<stem>.srt.
         playback_srt = srt_path.with_name(f"{song.stem}.srt")
         os.replace(srt_path, playback_srt)
+        clear_generated_marker(playback_srt)
         job.plan = Plan(
             kind="seed",
             lyrics_path=playback_srt,

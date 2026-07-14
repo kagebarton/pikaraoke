@@ -8,6 +8,7 @@ import pytest
 from pikaraoke.lib.download_manager import DownloadManager
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.preference_manager import PreferenceManager
+from pikaraoke.lib.srt_provenance import is_generated, mark_generated
 
 
 @pytest.fixture(autouse=True)
@@ -413,6 +414,29 @@ class TestDownloadManagerSpecialCharacters:
         moved = tmp_path / "subtitles" / f"{stem}.srt"
         assert moved.exists(), "subtitle should move into subtitles/ even with [brackets] in title"
         assert not srt.exists(), "original subtitle should be removed after the move"
+
+    def test_move_downloaded_subtitle_clears_stale_generated_marker(
+        self, download_manager, tmp_path
+    ):
+        """A freshly downloaded caption promoted onto a path already holding a
+        generated (marked) SRT must not leave the stale marker behind — it
+        would misrepresent the new, real caption as pipeline output."""
+        stem = "Song---abc12345678"
+        video = tmp_path / f"{stem}.mp4"
+        video.write_text("x")
+        subs = tmp_path / "subtitles"
+        subs.mkdir()
+        stale_target = subs / f"{stem}.srt"
+        stale_target.write_text("stale generated content")
+        mark_generated(stale_target)
+        srt = tmp_path / f"{stem}.en.srt"
+        srt.write_text("1\n00:00:00,000 --> 00:00:01,000\nhi\n")
+
+        download_manager._move_downloaded_subtitle(str(video))
+
+        moved = subs / f"{stem}.srt"
+        assert moved.read_text() == "1\n00:00:00,000 --> 00:00:01,000\nhi\n"
+        assert not is_generated(moved)
 
 
 class TestCancelActiveDownload:
