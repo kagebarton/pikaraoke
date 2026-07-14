@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import glob
 import logging
+import os
 import subprocess
 from pathlib import Path
 from queue import Queue
@@ -14,6 +15,7 @@ from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.preference_manager import PreferenceManager
 from pikaraoke.lib.queue_manager import QueueManager
 from pikaraoke.lib.song_manager import SongManager
+from pikaraoke.lib.srt_provenance import clear_generated_marker
 from pikaraoke.lib.youtube_dl import (
     build_ytdl_download_command,
     download_auto_en_subs,
@@ -440,8 +442,13 @@ class DownloadManager:
         en_srts = {f for f in srt_files if ".en.srt" in f.name}
         source = next(iter(en_srts)) if en_srts else next(iter(srt_files))
         try:
-            source.rename(target)
+            # os.replace (not Path.rename) so a caption promoted onto a
+            # path already holding a generated SRT replaces it on Windows
+            # too — Path.rename raises FileExistsError there when the
+            # target exists, unlike POSIX rename's silent replace.
+            os.replace(source, target)
             logging.debug(f"Moved subtitle: {source.name} -> {target}")
+            clear_generated_marker(target)
         except OSError as e:
             logging.warning(f"Failed to move subtitle: {e}")
             return

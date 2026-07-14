@@ -14,6 +14,7 @@ from pikaraoke.lib.genius import (
     read_choice,
     write_choice,
 )
+from pikaraoke.lib.srt_provenance import mark_generated
 from pikaraoke.pipeline.context import StageContext
 from pikaraoke.pipeline.stages.lyrics_fetch import LyricsFetchStage
 
@@ -91,6 +92,29 @@ class TestFindSrt:
         song = tmp_path / "Song---abc123.mp4"
         result = LyricsFetchStage._find_srt(song)
         assert result is None
+
+    def test_marked_generated_srt_returns_none(self, tmp_path):
+        song = tmp_path / "Song---abc123.mp4"
+        subs = tmp_path / "subtitles"
+        subs.mkdir()
+        srt_path = subs / "Song---abc123.srt"
+        srt_path.write_text("1\n00:00:01,000 --> 00:00:02,000\nHello\n")
+        mark_generated(srt_path)
+
+        result = LyricsFetchStage._find_srt(song)
+        assert result is None
+
+    def test_marked_generated_srt_with_real_en_srt_prefers_en_srt(self, tmp_path):
+        song = tmp_path / "Song---abc123.mp4"
+        subs = tmp_path / "subtitles"
+        subs.mkdir()
+        (subs / "Song---abc123.en.srt").write_text("1\n00:00:01,000 --> 00:00:02,000\nHello\n")
+        srt_path = subs / "Song---abc123.srt"
+        srt_path.write_text("1\n00:00:01,000 --> 00:00:02,000\nGenerated\n")
+        mark_generated(srt_path)
+
+        result = LyricsFetchStage._find_srt(song)
+        assert result == subs / "Song---abc123.en.srt"
 
 
 # ---------------------------------------------------------------------------

@@ -9,6 +9,7 @@ import pytest
 
 from pikaraoke.lib.alignment_capture import output_line_timings
 from pikaraoke.lib.joint_match import match_words_to_lines_joint_with_stats
+from pikaraoke.lib.srt_provenance import is_generated, mark_generated
 from pikaraoke.lib.windowed_realign import merge_spans, replay_span
 from pikaraoke.pipeline.config import PipelineConfig
 from pikaraoke.pipeline.stages.lyric_align import LyricAlignStage
@@ -116,6 +117,18 @@ class TestShouldWriteSrt:
         subs.mkdir()
         (subs / "Song---abc123.srt").write_text("existing")
         assert LyricAlignStage._should_write_srt(song) is False
+
+    def test_marked_generated_srt_returns_true(self, tmp_path):
+        # The only on-disk SRT is the pipeline's own prior output (marked),
+        # not a real caption — a regen must refresh it, not skip.
+        song = tmp_path / "Song---abc123.mp4"
+        song.touch()
+        subs = tmp_path / "subtitles"
+        subs.mkdir()
+        srt_path = subs / "Song---abc123.srt"
+        srt_path.write_text("existing")
+        mark_generated(srt_path)
+        assert LyricAlignStage._should_write_srt(song) is True
 
 
 # ---------------------------------------------------------------------------
@@ -695,15 +708,36 @@ class TestYoutubeSrtProvenance:
 
     def test_generated_srt_not_counted_as_caption(self, tmp_path):
         # No caption on disk -> the stage generates subtitles/song.srt itself.
-        # That file must NOT be reported back as a YouTube caption.
+        # That file must NOT be reported back as a YouTube caption, and the
+        # write site leaves a provenance marker next to it.
         stage, ctx, _ = _make_stage_and_ctx(tmp_path)
         stage.run(ctx)
 
         generated = ctx.song_path.parent / "subtitles" / f"{ctx.song_path.stem}.srt"
         assert generated.is_file()  # the stage did write its own SRT
+        assert is_generated(generated)
         gt = self._gt(ctx)
         assert gt["youtube_srt_present"] is False
         assert gt["youtube_srt_path"] is None
+
+    def test_stale_marked_srt_on_second_run_not_counted_as_caption(self, tmp_path):
+        # Second-run regression: a marked SRT from a prior run is already on
+        # disk. The probe must still record no real caption, and the stale
+        # sidecar must be refreshed (rewritten + re-marked), not adopted.
+        stage, ctx, _ = _make_stage_and_ctx(tmp_path)
+        subs = ctx.song_path.parent / "subtitles"
+        subs.mkdir()
+        stale_srt = subs / f"{ctx.song_path.stem}.srt"
+        stale_srt.write_text("1\n00:00:01,000 --> 00:00:02,000\nstale\n", encoding="utf-8")
+        mark_generated(stale_srt)
+
+        stage.run(ctx)
+
+        gt = self._gt(ctx)
+        assert gt["youtube_srt_present"] is False
+        assert gt["youtube_srt_path"] is None
+        assert is_generated(stale_srt)
+        assert "stale" not in stale_srt.read_text(encoding="utf-8")
 
     def test_real_caption_counted(self, tmp_path):
         # A caption already on disk -> the stage skips generation and records

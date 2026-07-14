@@ -29,6 +29,7 @@ from pikaraoke.lib.genius import (
     read_choice,
 )
 from pikaraoke.lib.metadata_parser import extract_youtube_id
+from pikaraoke.lib.srt_provenance import is_generated
 from pikaraoke.pipeline.context import StageContext
 from pikaraoke.pipeline.stages.base import BaseStage
 
@@ -181,6 +182,6 @@ class LyricsFetchStage(BaseStage):
         subs_dir = song_path.parent / "subtitles"
         for name in (f"{song_path.stem}.en.srt", f"{song_path.stem}.srt"):
             candidate = subs_dir / name
-            if candidate.is_file():
+            if candidate.is_file() and not is_generated(candidate):
                 return candidate
         return None

@@ -54,6 +54,7 @@ from pikaraoke.lib.metadata_parser import (  # noqa: E402
     youtube_id_suffix,
 )
 from pikaraoke.lib.preference_manager import PreferenceManager  # noqa: E402
+from pikaraoke.lib.srt_provenance import is_generated  # noqa: E402
 from pikaraoke.pipeline.config import PipelineConfig  # noqa: E402
 from pikaraoke.pipeline.orchestrator import PipelineOrchestrator  # noqa: E402
 from pikaraoke.pipeline.stages.ffmpeg_extract import FFmpegExtractStage  # noqa: E402
@@ -254,7 +255,7 @@ def _find_local_srt(song: Path) -> Path | None:
     subs = song.parent / "subtitles"
     for name in (f"{song.stem}.en.srt", f"{song.stem}.srt"):
         candidate = subs / name
-        if candidate.is_file():
+        if candidate.is_file() and not is_generated(candidate):
             return candidate
     return None
 

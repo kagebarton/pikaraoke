@@ -49,6 +49,7 @@ from pikaraoke.lib.genius_lyrics import parse_lyric_lines
 from pikaraoke.lib.joint_match import match_words_to_lines_joint_with_stats
 from pikaraoke.lib.onset_snap import decode_env_db, snap_line_edges
 from pikaraoke.lib.srt_cues import cue_spans_from_srt
+from pikaraoke.lib.srt_provenance import is_generated, mark_generated
 from pikaraoke.lib.windowed_realign import (
     analyze_pass1,
     build_spans,
@@ -237,6 +238,7 @@ class LyricAlignStage(BaseStage):
             subtitles_dir.mkdir(exist_ok=True)
             final_srt = subtitles_dir / tmp_srt.name
             shutil.move(str(tmp_srt), str(final_srt))
+            mark_generated(final_srt)
             ctx.artifacts["srt_file"] = final_srt
             logger.info(f"[{self.name}] SRT written: {final_srt}")
 
@@ -1016,7 +1018,7 @@ def _find_youtube_srt_path(song_path: Path) -> Path | None:
     subs = song_path.parent / "subtitles"
     for name in (f"{song_path.stem}.en.srt", f"{song_path.stem}.srt"):
         candidate = subs / name
-        if candidate.is_file():
+        if candidate.is_file() and not is_generated(candidate):
             return candidate
     return None
 
