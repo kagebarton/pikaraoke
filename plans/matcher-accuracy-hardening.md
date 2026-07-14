@@ -2397,8 +2397,8 @@ post-E3a table (`replay_post_e3a.txt` values, 14 songs) is the
 against — with the standing caveat that Bloodstream/HUNTR_X/Defying
 Gravity remain harness-excluded until the `.srt` provenance decision.
 **Caveat resolved 2026-07-14 — see the Results log entry below**
-(`plans/srt-provenance-marker.md` Part 1); pending judge read before the
-17-row table there is blessed as the new baseline.
+(`plans/srt-provenance-marker.md` Part 1); judge read complete, 17-row
+table blessed as the new baseline (entry below).
 
 ### SRT provenance corpus cleanup — Part 1 artifacts (Sonnet, 2026-07-14)
 
@@ -2538,3 +2538,56 @@ above is blessed as the adopted baseline.
 Artifacts (session scratchpad, not committed): `prepatch_harness.txt`,
 `postpatch_harness_utf8.txt`, `peek_bundles.py`, `patch_bundles.py`,
 `verify_diff.py`, `mark_generated_srts.py`, `compare_harness_tables.py`.
+
+**Part 1 corpus cleanup — judge read (Fable, 2026-07-14): checks out;
+no STOP missed; the 17-row table is blessed as the post-Phase-4
+baseline, superseding the 14-row `replay_post_e3a.txt` values.** Judge
+re-derived every claim from the files on D: and the raw captures, not
+the prose:
+
+- **Bundles.** All three backups in
+  `provenance_backup_20260714T155515Z\` satisfy the step-3
+  preconditions (`method_used == "joint"`, `youtube_srt_present is
+  True`, `youtube_srt_is_lyric_source is False`); backup + the 2-field
+  transform is structurally identical to each live bundle; a
+  zero-context unified diff shows exactly the two expected changed
+  lines per file and nothing else; each live file round-trips exactly
+  as `json.dumps(indent=2, ensure_ascii=False)` with no trailing
+  newline (the `write_bundle` format); no U+FFFD anywhere. The
+  Bloodstream backup is 174,706 bytes — the `-LiteralPath` fix is
+  confirmed in the saved state, not just claimed.
+- **Markers/SRTs.** Exactly 3 `*.generated` files exist in
+  `subtitles/` (no collateral), each named `<stem>.srt.generated` and
+  agreeing with the backup-recorded `youtube_srt_path`; all three
+  `.srt` bodies are untouched (mtimes 2026-07-06, valid SRT content,
+  markers stamped 2026-07-14). Corpus-wide: 17 joint bundles, **zero**
+  with a truthy `youtube_srt_present`; the only bundles modified on or
+  after 2026-07-14 are the three targets.
+- **Row comparison, recomputed independently** from both the committed
+  tables and the raw captures: 14 shared rows exact on every column, 0
+  missing, exactly 3 new rows = the target songs; neither raw capture
+  contains an LRCLIB-timeout line, so the flake carve-out was truly
+  unused.
+- **Continuity beyond the self-contained protocol**: the pre-patch
+  capture vs the prior recorded baseline (`replay_post_width_sym.txt`)
+  matches on every matcher column across all 14 rows; the only deltas
+  are reference-derived cells on exactly the three
+  reference-tier-change songs (Free mad 0.20s→0.18s and Seasons of
+  Love 0.52s/5a→bail:few_anchors, both from the 2026-07-14 flat-cache
+  provisioning; Popular bail:no_reference→bail:wide_spread, the known
+  live-search flake) — precisely the pattern the spec pre-registered.
+
+One transcription wart, recorded so it is never mistaken for drift:
+the committed post-patch table's Bloodstream row has ASCII spaces
+where the raw capture (and the true filename) has U+00A0 non-breaking
+spaces in the song label — the soft hyphen and every numeric cell
+transcribed exactly; the other 16 rows are byte-identical to the raw
+file. The raw captures are therefore byte-authoritative over the
+tables above; a fresh harness capture diffed against this doc will
+spuriously mismatch that one row's label bytes. (The pre-patch raw
+capture is UTF-16 LE on disk — `Tee-Object`'s default — and decodes
+losslessly.) Both raw captures were copied to
+`D:\shared\pikaraoke-songs\provenance_part1_captures_20260714\` as the
+durable byte-true record. Commit `41c76e9` touches only this plan —
+Part 1 stayed docs+data-only as specified. Next per the agreed order:
+Part 2 (marker code) and the LRCLIB study, both executor work.
