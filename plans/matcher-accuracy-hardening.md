@@ -1352,6 +1352,60 @@ if protected and (cand is None or cand.get("corrob_ratio", 0.0) < pass1_ratios[l
   guard's only job is review finding 4b's "strongly corroborated line that
   missed anchor criteria" class.
 
+### E3a. Protection width-sanity guard (amendment, Fable, 2026-07-13 — Ken ruled option B at the Phase 4 GATE)
+
+The Phase 4 GATE found E3's structural hole (Results log, NTM line 66):
+the protection ratio is computed over the pass-1 line's **own** placed
+window, so a pathologically wide aligner smear self-corroborates — a
+2-token "I do" smeared across 77.7 s (38.8 s/token) trivially contains a
+transcribe "I do" somewhere, scores ratio 1.0, and becomes immune to the
+exact repair the second pass exists to make. Amendment, locked:
+
+- New module constant in `windowed_realign.py`, beside `SUSPECT_RATIO`:
+
+```python
+# A pass-1 line wider than this per token is an aligner smear, not a
+# placement worth protecting: its corroboration ratio is computed over
+# its own window, so window bloat manufactures corroboration (NTM
+# "I do": 2 tokens over 77.7s ~ 38.8 s/token scored ratio 1.0).
+# Calibration: widest genuine protect-worthy line observed is 1.52
+# s/token (Paradise line 23, a held single-word note); real holds run
+# 2-3 s. 4.0 sits >2.6x above the good saves and ~10x below the smear.
+PROTECT_MAX_PACE_S = 4.0
+```
+
+- In `analyze_pass1`, a line enters `ratios` only when
+  `(obj["end"] - obj["start"]) / len(seq) <= PROTECT_MAX_PACE_S`. The
+  suspect and anchor logic are untouched — the guard filters only what
+  is exposed for merge protection. A guarded-out line is simply absent
+  from `ratios`, which `merge_spans` already treats as "never protected"
+  (today's pre-4b behavior) — zero changes in `merge_spans` itself.
+  Update the `ratios` docstring: protection-eligible placed lines only.
+- Failure mode is graceful by construction: a legitimately slow line
+  that trips the guard (e.g. a single note held past 4 s) merely loses
+  protection and falls back to exactly the shipped pre-4b merge — never
+  a new behavior.
+- Non-goal (locked): no symmetric guard on the replay's `corrob_ratio`.
+  A smeared replay proposal was adopted unconditionally pre-4b, so 4b
+  with this guard can only ever equal-or-better the status quo there;
+  adding an unmeasured second guard is scope creep.
+- Tests (t8, `test_windowed_realign.py`): a wide-smeared pass-1 line
+  (2 tokens over ~20 s, transcribe echoing its tokens inside the span)
+  is absent from `ratios` and the merge adopts the replay's alternative
+  (the NTM regression pinned); a slow-but-sane line (1 token, ~1.6 s)
+  still enters `ratios` (the Paradise 23 save pinned); t1-t7 green
+  unmodified.
+- Pre-registered re-validation (offline, no GPU; full-width diff of
+  saved tables, judged per the amended gate-judge-separation rule):
+  re-run the 14-song replay at α=2.0/β=2.0 and expect exactly — NTM row
+  returns to its pre-Phase-4 values (overlap 0.0, line 66 back on the
+  replay's 341.64–346.75); Free, Paradise, and Girl in the Bubble rows
+  byte-identical to the post-Phase-4 run (all three saves and the
+  acceptance case keep); the other 10 rows byte-identical throughout.
+  Any other delta is a STOP.
+- Commit (amends the 4b commit's behavior, rides alone):
+  `fix(windowed-realign): width-sanity guard on merge protection`.
+
 ### E4. Stage plumbing
 
 `_run_joint` already parses `ytasr_words` — pass them into
@@ -2148,3 +2202,197 @@ run of this song would adopt the pipeline's own prior output as an
 uploader caption and route through cue_align on it, freezing the leaked
 tail as cues. Needs its own decision (provenance marker for generated
 SRTs, or a sidecar flag); flagged for Ken.
+
+### Phase 4 GATE — windowed re-align revision (2026-07-13)
+
+Code landed `b825fc5` (4a: ytasr third source in span replays) and
+`6a73386` (4b: protect corroborated pass-1 lines in the merge), per
+Appendix E1/E2 and E3 respectively — two independently-revertable
+commits per E8.
+
+**Validation method (isolation, same technique as the Phase 3a entry).**
+Bundles have moved on since the last table in this log (the 3b entry's
+`.srt`-self-adoption caveat still excludes Bloodstream/HUNTR_X/Defying
+Gravity from this harness — unrelated to Phase 4, not re-triggered by
+it), so rather than diff against a stale table, replayed the **same**
+14 eligible on-disk bundles once with the pre-Phase-4 matcher checked
+out (parent `ebda318`, via a throwaway `git worktree`) and once at HEAD,
+both `replay_ytasr_third_source.py "D:\shared\pikaraoke-songs" --alpha
+2.0 --beta 2.0`, both tables saved. **10 of 14 byte-identical; 4
+changed.** (Correction at judge review, Fable 2026-07-13: the executor's
+initial entry claimed 12/14 from a `diff` truncated at column 96 —
+which cut off exactly the overlap/placed columns where Free's and Next
+Ten Minutes' only deltas live. Full-width comparison of the same two
+saved tables:)
+
+| Song | src | placed | MAD | crawl | overlap | coverage (new column) |
+|------|-----|--------|-----|-------|---------|------------------------|
+| Girl in the Bubble | 3src | 24 → 29 | 0.38s/15a (=) | 0 → 1 | 0.0 → 0.4 | 29/36 ! |
+| NSYNC - Paradise | 2src | 55 (=) | 0.27s/10a (=) | 2 → 3 | 0.0 → 0.7 | 55/65 ! |
+| 'Free' (Sony Animation) | 2src | 40 (=) | 0.20s/16a (=) | 1 (=) | 0.0 → 1.0 | 40/41 |
+| The Next Ten Minutes | 2src | 67 (=) | 0.46s/52a (=) | 2 (=) | 0.0 → 0.2 | 67/71 |
+
+No MAD regressed on any of the 14; no placed count fell. Three of the
+four changed songs are 2src — no ytasr, so 4a is structurally inert on
+them (`beta * ytasr_agreement` is identically 0.0) and their entire
+delta is 4b's protection rule. The coverage column (E5's harness
+amendment, `--min-coverage` default 0.85) has no prior baseline to diff
+— 6/14 songs flag below it, pre-existing and newly visible, not
+Phase-4-caused.
+
+**Girl in the Bubble — the pre-registered acceptance case (E7.2).** A
+line-level diff of the same isolated pre/post replay (24 → 29 placed)
+shows newly placed = exactly `{13, 14, 16, 17, 19}` — the precise set
+E7.2 named — all `source=ytasr`, zero newly-absent lines. Still absent
+both sides: `{0, 8, 15, 18, 32, 33, 35}` — 8/15/18 match the
+pre-registered "best-effort, no guarantee" call (ytasr garbles them);
+32/33/35 match "stays absent by design" (no on-disk source covers
+them). The acceptance case's raw "26 → ~31-33" arithmetic undershoots
+(actual 29) for a fully-accounted, non-code reason the Phase 3a entry
+itself flagged as a risk: the on-disk bundle's cached `rec=26` is a
+different-lineage regeneration (`onset_snap_on_ship`), not this
+branch's own pre-Phase-4 state, which replays at 24 (3a alone drops 2
+crammed candidates from it — matching the Phase 3a entry's own
+"26 → 24" note on this exact bundle). Line 13 was already placed in
+that 24 (it needed only 3a, landed first per plan order), so 4a's own
+marginal recovery is the 4 lines `{14, 16, 17, 19}`. Every specific
+per-line prediction in E7.2 reads correct; the 0 → 1 crawl / 0.0 → 0.4
+overlap deltas are side effects of the newly-placed lines themselves
+(confirmed via the zero-newly-absent count above — no previously-placed
+line was displaced or degraded).
+
+**NSYNC - Paradise (4b).** Both changed lines (23 "Paradise", 53 "And
+it's just what I imagined") share one mechanism: pass-1 placed each via
+`transcribe` with **full** corroboration (`ratio=1.0`, not suspect;
+line 53 at `transcribe_match=6.0/6`); the span replay proposed a
+lower-corroboration `align` alternative (line 53: `corrob_ratio=0.833`,
+5/6). Pre-4b the merge adopted the weaker replay candidate — confirmed
+byte-for-byte by re-running `merge_spans(..., pass1_ratios=None)` —
+post-4b protection rejects the downgrade and keeps pass-1. The 0.68s
+overlap and +1 crawl are the restored pass-1 placement's own
+characteristics: the crawl is a threshold artifact (1-word line 23 goes
+1.30 → 1.52 s/word across the 1.5 crawl line), the overlap is
+cross-pass stitching against the adopted replay neighbour's held-note
+tail.
+
+**'Free' (4b, found at judge review).** One line: 37 "I tried to hide
+but something broke", pass-1 `transcribe` 166.86–170.0 at ratio 0.857
+(6/7 tokens); the replay proposed the same line trimmed to
+168.06–170.0 at `corrob_ratio` 0.714 (5/7 — the trim loses a matched
+token). Protection keeps pass-1's wider, better-matched window; its
+extra 1.2s of lead is what overlaps line 36 by 1.0s. Quality-ambiguous:
+the kept window matches one more transcribe token, but that token sits
+inside the second it shares with line 36, so it may be line 36's word
+double-counted. Bounded either way; MAD/placed unchanged.
+
+**The Next Ten Minutes (4b) — a real regression, found at judge
+review.** Line 66 "I do" (2 tokens): pass-1's align candidate smeared
+it across **328.076–405.756 — 77.7s, 38.8 s/word** — the classic
+aligner give-up on a repeated outro line. Its corroboration ratio still
+computes to **1.0**, because the ratio is measured over the line's own
+placed window: a 77-second window trivially contains a transcribe
+"I do" somewhere. The span replay proposed a width-sane 341.64–346.75
+(2.55 s/word; `corrob_ratio` 0.0 — no transcribe echo at that spot
+either), and pre-4b the merge adopted it. Post-4b, protection sees
+1.0 ≥ 0.5, requires the replay to beat 1.0, and **resurrects the
+77-second smear** the repair pass had been fixing. Lines 63-65 are
+word-less interp knock-ons. The harness metrics are nearly blind to
+this: placed/MAD unchanged, and the line counts as one crawl in *both*
+versions (2.55 and 38.8 s/word are the same `n_crawl`), so the only
+external tell was overlap 0.0 → 0.2 — which the truncated diff missed.
+Root cause is structural, not a coding slip: **E3's protection ratio is
+not width-normalized, so a pathologically wide pass-1 line
+self-corroborates and becomes immune to the exact repair 4b's own
+motivating class needed.** (Metric note for later, no scope now: the
+harness has no width-regression column; a max-s/word or placed-duration
+sum would have caught this without the overlap accident.)
+
+**Judge read (Fable, 2026-07-13).** E7.1: no placed regression, no MAD
+worsening; the new overlaps (0.2/0.4/0.68/1.0s) are all traced and
+bounded, none in the multi-second misplacement class the criterion
+targets — but the literal read-off is overridden for NTM, where the
+metrics pass while the rendered output regresses (the 3b-GATE pattern:
+the table reads clean, the mechanism does not). E7.2: **PASS** — newly
+placed is exactly the named set `{13,14,16,17,19}`, zero newly-absent;
+the "26 → ~31-33" arithmetic reconciles to lineage (rec=26 is the
+`onset_snap_on_ship` regeneration; this branch replays it at 24 pre-4a,
+matching 3a's own "26 → 24" note; line 13 needed only 3a). E7.3, per
+the pre-registered branch ("adopt on favorable deltas; otherwise revert
+the merge-policy commit and keep 4a or 4b independently per their own
+numbers"):
+
+- **4a (`b825fc5`): adopt.** The acceptance case is met exactly, its
+  effect is confined to the song it was built for, and nothing else
+  moved on its account.
+- **4b (`6a73386`): not adoptable as-is.** Its corpus record is 3 lines
+  kept at genuinely better evidence (Paradise ×2, Free ×1 ambiguous)
+  against 1 line badly regressed (NTM's 77.7s smear) — and the
+  regression class is structural (width-biased self-corroboration), so
+  it will recur on any aligner-smeared repeated line. Two options for
+  Ken: **(A)** revert `6a73386` (the pre-registered default; ship keeps
+  today's behavior everywhere, including the replay's Paradise/Free
+  trims, which were acceptable before this phase), or **(B)** keep the
+  mechanism and have the E3 spec amended (a design act: e.g. protection
+  eligibility additionally requires the pass-1 line's own pace to be
+  width-sane, or the ratio computed over a width-capped window), then
+  re-run this same offline validation — cheap, no GPU. B preserves the
+  three good saves; A is the criterion's letter.
+
+**Tests.** `test_windowed_realign.py` + `test_lyric_align.py` +
+`test_joint_match.py`: 130/130 (7 new: t2/t3 for 4a's window-filter and
+ytasr-accepted-as-new-placement-source behavior; t4-t7 plus one stage
+wiring test for 4b's protection logic and `corrob_ratio` attachment).
+Full suite: 1376 passed, 4 failed (the pre-existing Windows/uv
+pipe+sidecar baseline — unchanged count from before this phase), 2
+skipped. `pre-commit run --config code_quality/.pre-commit-config.yaml`
+clean on every changed file.
+
+GATE: held for Ken — the 4b decision (A/B above) rules the phase. One
+sequencing flag for whichever way it goes: Phase 4.5's G1 enumerates
+"the 17-song joint corpus" from harness replays, but the harness
+currently skips Bloodstream/HUNTR_X/Defying Gravity (the 3b
+`.srt`-self-adoption flag), and Defying Gravity is 4.5's principal
+study subject. The post-Phase-4 re-baseline 4.5's sequencing requires
+cannot cover it until that flag question is resolved (Ken's pending
+provenance decision) or G1 reads those bundles directly, bypassing the
+harness filter.
+
+**GATE ruling (Ken, 2026-07-13): option B.** 4a stands adopted; 4b's
+mechanism is kept and repaired via a locked spec amendment — see
+**Appendix E3a** (protection width-sanity guard, `PROTECT_MAX_PACE_S`,
+with its own pinned tests and a pre-registered re-validation
+expectation). Ken also tightened the executor/judge split as standing
+process: the executor's role ends when artifacts are saved (paths + raw
+tables); all subsequent analysis — diffs, mechanism traces, criterion
+read-offs — belongs to the judge model. E3a implementation is executor
+work (Sonnet per the role table); its re-validation artifacts come back
+to the judge before this GATE finally closes.
+
+**E3a re-validation — judge read (Fable, 2026-07-13): expectation met
+exactly; Phase 4 closes.** Executor landed `ad9dae0` (guard + t8 tests;
+133/133 targeted, full suite 1379 passed / same 4 Windows-baseline
+failures, pre-commit clean) and re-ran the pre-registered
+`replay_ytasr_third_source.py <corpus> --alpha 2.0 --beta 2.0`,
+artifact saved alongside the two prior tables. Judge re-derived all
+comparisons from the saved artifacts:
+
+- Full-width `diff` post-Phase-4 vs post-E3a: **exactly one row
+  changed — NTM, overlap 0.2 → 0.0**; the other 13 rows byte-identical,
+  so the Paradise/Free saves and the Girl in the Bubble acceptance row
+  are untouched by the guard.
+- NTM's post-E3a row equals its pre-Phase-4 row on every shared column
+  (MAD 0.46s/52a, crawl 6→2, overlap 0.0, placed 67).
+- Line-level (fresh dumps at HEAD, diffed against the saved post-4
+  dumps): NTM line 66 is back on the replay's `align` 341.644–346.75 —
+  the named expectation — with 63-65 restored to their old word-less
+  interp brackets (328.25–341.644); Paradise and Girl in the Bubble
+  dumps show **zero** differing lines vs post-4; Free line 37 still
+  holds the protected pass-1 `transcribe` 166.86–170.0.
+
+No unexpected delta anywhere — the pre-registered "any other delta is a
+STOP" condition never fired. Per Ken's B ruling the phase closes with
+`b825fc5` (4a) + `6a73386` (4b) + `ad9dae0` (E3a guard) adopted. The
+post-E3a table (`replay_post_e3a.txt` values, 14 songs) is the
+**post-Phase-4 baseline** that Phases 4.5/6 and the LRCLIB study diff
+against — with the standing caveat that Bloodstream/HUNTR_X/Defying
+Gravity remain harness-excluded until the `.srt` provenance decision.
