@@ -70,6 +70,32 @@ TRANSCRIBE_PAD_S = 2.0
 MERGE_EDGE_TOL_S = 0.5
 
 
+def _corroboration_ratio(
+    seq: tuple[str, ...] | list[str],
+    t_norms: list[str],
+    t_starts: list[float],
+    start: float,
+    end: float,
+    margin_s: float,
+    max_edit_ratio: float,
+) -> tuple[float, bool]:
+    """Transcribe-corroboration ratio for a placed line, plus width sanity.
+
+    Returns ``(matched / len(seq), pace <= PROTECT_MAX_PACE_S)``. The ratio
+    is computed over the line's own window, so a width-insane placement
+    manufactures corroboration (see ``PROTECT_MAX_PACE_S``); callers must
+    treat the ratio as protection evidence only when the flag is True.
+    Empty ``seq`` returns ``(0.0, False)``.
+    """
+    if not seq:
+        return 0.0, False
+    matched, _, _ = _transcribe_match_and_count_in_window(
+        list(seq), t_norms, t_starts, start, end, margin_s, max_edit_ratio
+    )
+    pace = (end - start) / len(seq)
+    return matched / len(seq), pace <= PROTECT_MAX_PACE_S
+
+
 def analyze_pass1(
     align_lines: list[str],
     line_objects: list[dict],
@@ -83,16 +109,12 @@ def analyze_pass1(
 
     Returns ``(anchors, suspect_line_ids, ratios)``. Anchors are dicts with
     ``lid``/``start``/``end``, in line order. ``ratios`` holds each
-    protection-eligible line's transcribe corroboration fraction
-    (``matched / len(seq)``) — placed by align/transcribe/ytasr with a
-    start, and paced at or under ``PROTECT_MAX_PACE_S`` per token; display-
-    only, unplaced, and aligner-smeared lines are absent from it. Used by
+    protection-eligible line's transcribe corroboration fraction — placed
+    by align/transcribe/ytasr with a start, and width-sane per
+    ``_corroboration_ratio`` (see ``PROTECT_MAX_PACE_S``); display-only,
+    unplaced, and aligner-smeared lines are absent from it. Used by
     ``merge_spans`` to protect well-corroborated interior lines from a
-    lower-context span replay: the pace guard exists because the ratio is
-    computed over the line's own window, so an aligner smear's
-    self-corroboration is manufactured by window bloat, not evidence
-    (a 2-token line smeared over 77s trivially contains a matching
-    transcribe word somewhere). Display-only lines with no normalizable
+    lower-context span replay. Display-only lines with no normalizable
     tokens are neither anchors nor suspects — they inherit timing and
     carry no evidence.
     """
@@ -114,18 +136,10 @@ def analyze_pass1(
         if src not in ("align", "transcribe", "ytasr") or obj.get("start") is None:
             suspects.add(lid)
             continue
-        matched, _, _ = _transcribe_match_and_count_in_window(
-            list(seq),
-            t_norms,
-            t_starts,
-            obj["start"],
-            obj["end"],
-            margin_s,
-            max_edit_ratio,
+        ratio, width_sane = _corroboration_ratio(
+            seq, t_norms, t_starts, obj["start"], obj["end"], margin_s, max_edit_ratio
         )
-        ratio = matched / len(seq)
-        pace = (obj["end"] - obj["start"]) / len(seq)
-        if pace <= PROTECT_MAX_PACE_S:
+        if width_sane:
             ratios[lid] = ratio
         if ratio < SUSPECT_RATIO:
             suspects.add(lid)
@@ -242,32 +256,25 @@ def replay_span(
         max_edit_ratio=max_edit_ratio,
         ytasr_words=window_ytasr or None,
     )
-    norm_seqs = [tuple(norm for norm, _raw in t) for t in _tokenise_lines(align_lines)]
+    norm_seqs = [tuple(norm for norm, _raw in t) for t in _tokenise_lines(align_lines[lo : hi + 1])]
     window_norms = [_normalize_token(w["word"]) for w in window_words]
     window_starts = [w["start"] for w in window_words]
     placed: dict[int, dict] = {}
     for obj in local_objects:
         if obj.get("words") and obj.get("start") is not None:
             shifted = dict(obj)
+            seq = norm_seqs[obj["line_id"]]
             shifted["line_id"] = lo + obj["line_id"]
             # The replay's own transcribe corroboration, so merge_spans can
             # judge whether this placement earns the right to overwrite a
-            # well-corroborated pass-1 line (SUSPECT_RATIO protection below).
-            # The span's pad covers the window, so window words suffice.
-            seq = norm_seqs[shifted["line_id"]]
-            if seq:
-                matched, _, _ = _transcribe_match_and_count_in_window(
-                    list(seq),
-                    window_norms,
-                    window_starts,
-                    obj["start"],
-                    obj["end"],
-                    margin_s,
-                    max_edit_ratio,
-                )
-                shifted["corrob_ratio"] = matched / len(seq)
-            else:
-                shifted["corrob_ratio"] = 0.0
+            # well-corroborated pass-1 line. Width-insane placements score
+            # 0.0: their corroboration is manufactured by window bloat,
+            # symmetric with analyze_pass1's guard. The span's pad covers
+            # the window, so window words suffice.
+            ratio, width_sane = _corroboration_ratio(
+                seq, window_norms, window_starts, obj["start"], obj["end"], margin_s, max_edit_ratio
+            )
+            shifted["corrob_ratio"] = ratio if width_sane else 0.0
             placed[shifted["line_id"]] = shifted
     sources = {lo + k: src for k, src in enumerate(local_stats["selected_source"])}
     return placed, sources

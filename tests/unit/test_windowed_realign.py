@@ -348,6 +348,64 @@ class TestReplaySpan:
         )
         assert with_far == without
 
+    def test_replay_smeared_placement_zeroes_corrob_ratio(self):
+        # A single short line whose only two align words land ~19.5s
+        # apart forces the joint matcher to smear it just like a pass-1
+        # aligner give-up would. Transcribe fully echoes both tokens
+        # inside that bloated window (matched=2/2 pre-guard), but the
+        # replay's own width guard must zero corrob_ratio -- symmetric
+        # with analyze_pass1's PROTECT_MAX_PACE_S guard -- so a smeared
+        # replay can never manufacture enough corroboration to overwrite
+        # a protected pass-1 line.
+        span = {
+            "lid_lo": 0,
+            "lid_hi": 0,
+            "anchor_lo": None,
+            "anchor_hi": None,
+            "t0": 0.0,
+            "t1": 20.0,
+        }
+        lines = ["i do"]
+        span_words = [_word("i", 0.0, 0.3), _word("do", 19.5, 19.8)]
+        transcribe = [_word("i", 5.0, 5.3), _word("do", 15.0, 15.3)]
+        result = replay_span(
+            span, span_words, transcribe, lines, lines, alpha=2.0, margin_s=0.3, max_edit_ratio=0.75
+        )
+        assert result is not None
+        placed, _sources = result
+        assert placed[0]["end"] - placed[0]["start"] == 19.8  # confirms the smear happened
+        assert placed[0]["corrob_ratio"] == 0.0
+
+    def test_replay_span_with_offset_lid_lo_scores_correct_line(self):
+        # lid_lo=5: each interior line must be scored against ITS OWN
+        # tokens, not a neighbour's -- guards the off-by-lo bug the slice
+        # tokenisation (align_lines[lo:hi+1], indexed by local id) could
+        # reintroduce if a future edit mixes local and absolute indices.
+        span = {
+            "lid_lo": 5,
+            "lid_hi": 6,
+            "anchor_lo": None,
+            "anchor_hi": None,
+            "t0": 9.0,
+            "t1": 20.0,
+        }
+        lines = ["p0", "p1", "p2", "p3", "p4", "alpha beta", "gamma delta"]
+        span_words = [
+            _word("alpha", 11.0, 11.4),
+            _word("beta", 11.5, 11.9),
+            _word("gamma", 15.0, 15.4),
+            _word("delta", 15.5, 15.9),
+        ]
+        transcribe = [_word("alpha", 11.0, 11.4), _word("beta", 11.5, 11.9)]  # corroborates L5 only
+        result = replay_span(
+            span, span_words, transcribe, lines, lines, alpha=2.0, margin_s=0.3, max_edit_ratio=0.75
+        )
+        assert result is not None
+        placed, _sources = result
+        assert set(placed) == {5, 6}
+        assert placed[5]["corrob_ratio"] == 1.0
+        assert placed[6]["corrob_ratio"] == 0.0
+
 
 class TestMergeSpans:
     ALIGN_WORDS = [_word("x", 0.0, 50.0)]
