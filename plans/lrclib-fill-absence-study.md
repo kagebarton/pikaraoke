@@ -670,3 +670,269 @@ escalation to Ken's judgment is triggered under Model switching (no
 prediction is contradicted by *data* — the contradiction is with the
 network), but the four re-fetches are a prerequisite, not an optional
 cleanup, and L0's table should not be quoted as final until they land.
+
+### Phase L0 — retry artifacts (Sonnet, 2026-07-16)
+
+Executed the judge's ruling above, no interpretation added.
+
+**Action:** deleted the 4 poisoned caches after re-verifying each was
+still `0 records, chosen=null` (`fetch/`'s Defying Gravity, Be Our
+Guest, HUNTR_X, Seasons of Love); left Popular's 20-record cache
+untouched, as ruled. Re-ran the same invocation: `uv run python
+"D:/shared/pikaraoke-songs/lrclib_study/lrclib_study.py" l0`.
+
+**Outcome:** corpus cross-check still 17==17. All 17 songs now show
+`variant=True` — zero NO-VARIANT rows remain. One timeout printed this
+run, again for Popular
+(`LRCLIB search failed for 'Popular' / 'Kristin Chenoweth': ... Read
+timed out`) — matches the judge's note that the reference/`same_variant`
+search path is uncached and hits the network on every run; Popular's
+`same_variant` is `None` again, unchanged from before, not a new
+failure.
+
+Updated raw table (`l0_console.txt` and `l0_variants.json` overwritten
+in place with this run's output):
+
+```
+song                                           variant record (artist)                             dur  delta_s   map%  same_var
+--------------------------------------------------------------------------------------------------------------------------------
+'Defying Gravity' - Wicked 20th Anniversary Ed    True Defying Gravity (Kristin Chen)              354    +96.8     87      True
+'Free' _ Official Lyric Video _ Sony Animation    True Free (Rumi)                                 188        -     88     False
+'Popular' - Wicked 20th Anniversary Edition _     True Popular (Kristin Chen)                      224    +12.7     68         -
+Beauty and the Beast (1991) - Be Our Guest [UH    True Be Our Guest (Jerry Orbach)                 223     +5.2     88      True
+Beauty and the Beast (1991) - Belle [UHD]---ot    True Belle (Paige O'Hara)                        306     +8.6     59     False
+Ed Sheeran - Best Part Of Me (feat. YEBBA) (Li    True Best Part of Me (Ed Sheeran)                247     -0.0     95     False
+Ed Sheeran & Rudimental­ - Bloodstream­ [Offici    True Bloodstream (Ed Sheeran)                    289    +41.7     76     False
+HUNTR_X 'This Is What It Sounds Like' (Music V    True What It Sounds Like (HUNTR/X)               250        -     81      True
+Jessie J - Domino (Official Video)---UJtB55Mao    True Domino (Jessie J)                           232        -     91      True
+Josh Gad - In Summer (From 'Frozen'_Sing-Along    True In Summer (Josh Gad)                        111        -     48      True
+Mulan _ I'll Make a Man Out of You _ @disneyki    True I'll Make a Man Out of Y (Donny Osmond)     219    -21.9     89      True
+NSYNC - Paradise                                  True Paradise (Justin Timbe)                     267        -     74     False
+Pocahontas - Colors of the Wind (Blu-ray 1080p    True Colors of the Wind (Judy Kuhn)              211     +8.3     95      True
+Seasons of Love (HD)---UvyHuse6buY                True Seasons of Love (Cast Of The )              183        -     62     False
+The Lion King - Hakuna Matata Music Video I 4K    True Hakuna Matata (Lane, Nathan)                214    -34.0     48      True
+The Next Ten Minutes Lyrics---0j8kL24ph8U         True The Next Ten Minutes (Anna Kendric)         452        -     93      True
+Wicked - For Good  (2025) 4K - The Girl in the    True The Girl in the Bubble (Ariana Grand)       220    +25.9    100      True
+```
+
+No reading of this table offered here (whether it's now clean enough
+to start L1, what Defying Gravity's resolved +96.8s delta means for
+arm B, etc.) — deferred to the judge, same as the first L0 pass.
+
+### Phase L1 — version gates + reach accounting artifacts (Sonnet, 2026-07-16)
+
+Executor stops at artifacts, same posture as both L0 entries: no
+reading of the table against Appendix C.1's predictions, and no
+decision about proceeding to L2, is offered below — deferred to a
+judge session per this study's standing process.
+
+**Invocation:** `uv run python
+"D:/shared/pikaraoke-songs/lrclib_study/lrclib_study.py" l1`, run
+twice from the fully-warm L0 fetch cache (see Reproducibility below).
+Zero network calls this phase: the input-variant fetch reuses L0's
+`fetch/*.json` cache (all 17 populated after the retry) and
+`same_variant` is read from L0's persisted `out/l0_variants.json`
+rather than re-resolving the held-out reference (that path is
+uncached and would break offline reproducibility — see the L0 judge
+read's note on Popular).
+
+**Step-1 corpus cross-check:** still 17==17, script printed `Corpus
+cross-check OK` and did not STOP.
+
+**Two appendix-vs-code deviations applied, both flagged rather than
+resolved as design choices:**
+
+1. **A.2 replay substitution** — already judge-approved in the L0
+   judge-read entry above; applied verbatim as ruled:
+   `harness._replay_spans(bundle, ytasr_words, alpha, beta)` then
+   `harness._replay_output(bundle, ytasr_words, alpha, beta, realign)`,
+   with `alpha`/`beta` read from the bundle's own
+   `pipeline_decisions.joint_alpha`/`joint_beta` and asserted `== 2.0`
+   (not hardcoded blind, per A.2's own instruction). Assertion held
+   for all 17 songs.
+2. **NEW — A.5 arm A's `analyze_pass1` unpack.** The appendix sketch's
+   `anchors, _ = analyze_pass1(...)` does not execute as written:
+   `analyze_pass1` returns a 3-tuple `(anchors, suspect_line_ids,
+   ratios)` per its own signature and docstring
+   (`pikaraoke/lib/windowed_realign.py`), so a 2-target unpack raises
+   `ValueError: too many values to unpack`. Fixed to `anchors,
+   _suspects, _ratios = analyze_pass1(...)`, matching the harness's
+   own identical call in `_score_against_lrclib`
+   (`scripts/replay_ytasr_third_source.py:202`). Unlike A.2, this is a
+   fixed-arity elision in the sketch's shorthand, not a
+   renamed/reshaped function — no alternative reading exists, and
+   unlike A.2 there was no option to defer it (L1 cannot produce any
+   output without this line executing). Flagged here for judge review
+   rather than treated as pre-approved. Recorded in
+   `lrclib_study.py`'s `_arm_a_gate` docstring with the same reasoning.
+
+Separately, not a deviation but worth recording: Appendix A.5's arm B
+instruction to port `_theil_sen` + `warp_scaffold_cues`'s fit/gate
+logic "verbatim from `git show 835ba2c7:pikaraoke/lib/cue_align.py`"
+turns out to be non-optional, not just a reproducibility nicety —
+grepped `pikaraoke/lib/cue_align.py` at HEAD for `_theil_sen`,
+`WARP_MIN_ANCHORS`, `WARP_MAD_GATE_S`, `warp_scaffold_cues` before
+porting and confirmed all four absent: this code was deleted from the
+live file entirely (consistent with LRCLIB's removal from
+production). The port (fit + gate only, never the `densify_cue_spans`
+fallback, per A.5) is in `lrclib_study.py` with a source comment.
+
+**Reproducibility:** ran phase `l1` twice back-to-back from the same
+warm, no-network cache; `out/l1_gates.json` from both runs diffed
+byte-identical. Satisfies Appendix A.8's reproducibility bar for L1.
+
+**Artifacts saved** (durable, outside git, in the study workspace):
+- `D:\shared\pikaraoke-songs\lrclib_study\out\l1_gates.json` — full
+  per-song structured output (`rows`) plus the two corpus-level reach
+  numbers (`reach`), per A.8.
+- `D:\shared\pikaraoke-songs\lrclib_study\out\l1_console.txt` — raw
+  stdout of the second (byte-compared) run, redirected straight to
+  file rather than copied from a terminal transcript.
+
+Raw table (verbatim from `l1_console.txt`; `arm A`/`arm B` columns
+report `bail:<reason>` or `PASS <offset/fit stats>`):
+
+```
+song                                             placed                                arm A                                    arm B  same_var
+-----------------------------------------------------------------------------------------------------------------------------------------------
+'Defying Gravity' - Wicked 20th Anniversary Ed    51/89                     bail:wide_spread                         bail:wide_spread      True
+'Free' _ Official Lyric Video _ Sony Animation    40/41        PASS off=-0.13s mad=0.20s/16a       PASS a=1.002 b=-0.18 mad=0.19s/16a     False
+'Popular' - Wicked 20th Anniversary Edition _     52/62                     bail:wide_spread      PASS a=0.949 b=-11.25 mad=0.64s/28a         -
+Beauty and the Beast (1991) - Be Our Guest [UH    77/77        PASS off=-3.24s mad=0.16s/49a       PASS a=1.002 b=-3.45 mad=0.15s/49a      True
+Beauty and the Beast (1991) - Belle [UHD]---ot  101/110        PASS off=-5.79s mad=0.32s/39a       PASS a=1.002 b=-6.07 mad=0.32s/39a     False
+Ed Sheeran - Best Part Of Me (feat. YEBBA) (Li    37/38        PASS off=+0.12s mad=0.73s/25a       PASS a=0.979 b=+2.36 mad=0.30s/25a     False
+Ed­Sheeran­&­Rudimental­­- Bloodstream­[Offici    48/74                     bail:wide_spread      PASS a=1.022 b=-21.94 mad=0.37s/11a     False
+HUNTR_X 'This Is What It Sounds Like' (Music V    33/53                     bail:wide_spread       PASS a=1.027 b=-1.14 mad=0.42s/18a      True
+Jessie J - Domino (Official Video)---UJtB55Mao    63/67         PASS off=-1.61s mad=0.43s/7a        PASS a=0.995 b=-1.15 mad=0.39s/7a      True
+Josh Gad - In Summer (From 'Frozen'_Sing-Along    29/31        PASS off=-0.74s mad=0.36s/14a       PASS a=0.987 b=+0.04 mad=0.46s/14a      True
+Mulan _ I'll Make a Man Out of You _ @disneyki    36/47                     bail:wide_spread      PASS a=0.958 b=+35.62 mad=0.10s/22a      True
+NSYNC - Paradise                                  55/65       PASS off=+24.02s mad=0.32s/10a      PASS a=1.000 b=+23.98 mad=0.32s/10a     False
+Pocahontas - Colors of the Wind (Blu-ray 1080p    37/37        PASS off=-6.03s mad=0.17s/31a       PASS a=1.001 b=-6.15 mad=0.19s/31a      True
+Seasons of Love (HD)---UvyHuse6buY                25/34        PASS off=+18.58s mad=0.52s/5a       PASS a=0.958 b=+21.06 mad=0.10s/5a     False
+The Lion King - Hakuna Matata Music Video I 4K    33/40         PASS off=+9.16s mad=0.35s/8a       PASS a=0.969 b=+11.06 mad=0.15s/8a      True
+The Next Ten Minutes Lyrics---0j8kL24ph8U         67/71        PASS off=+0.76s mad=0.46s/52a       PASS a=1.002 b=+0.38 mad=0.36s/52a      True
+Wicked - For Good  (2025) 4K - The Girl in the    29/36       PASS off=-23.12s mad=0.38s/15a      PASS a=1.001 b=-23.25 mad=0.38s/15a      True
+```
+
+(Bloodstream's row above has its embedded soft-hyphen/NBSP
+metacharacters written out literally rather than as the
+console's mangled `�` — see `l1_console.txt` for the exact raw
+bytes; cosmetic terminal-encoding artifact only, same as L0, does
+not touch any computed value: song identity flows through `Path`
+objects from `glob`, never the printed string.)
+
+Corpus-level reach (verbatim):
+
+```
+Corpus-level reach:
+  unplaced lines on arm-A-PASS songs (E1 structural ceiling): 54/159 (34%)
+  Defying Gravity + Bloodstream placed lines on arm-A-bail songs (E2 structural blind spot): 99/99 (100%)
+```
+
+No reading of either table against Appendix C.1's predictions or
+either reach number's significance is offered here — deferred to the
+judge.
+
+### Phase L1 — judge read (Opus, 2026-07-16)
+
+Independent re-derivation from the raw artifacts and code, not the
+write-up: recomputed every gate verdict and both reach numbers from
+`l1_gates.json`, regenerated the formatted table from the JSON and
+diffed it against `l1_console.txt` and the quote above, read
+`_arm_a_gate` / `_arm_b_gate` / `_theil_sen` / `phase_l1` /
+`_reach_numbers` against Appendix A.5 and their upstream sources
+(`srt_cues.offset_mad_against_cues`, `windowed_realign.analyze_pass1`,
+`git show 835ba2c7:pikaraoke/lib/cue_align.py`), and re-ran phase `l1`
+end to end from this session.
+
+**1. Table + reach — CONFIRMED, including a full independent re-run.**
+Gate logic recomputed from the stored scalars with the spec constants
+(arm A: `PRIOR_MIN_ANCHORS = 4`, `PRIOR_MAX_MAD_S = 0.75` in
+`srt_cues.py`; arm B: `WARP_MIN_ANCHORS = 5`, `WARP_MAD_GATE_S = 2.0`,
+matching the pinned commit): 0/17 rows inconsistent. Both reach
+numbers recompute exactly (54/159 = 34%; 99/99 = 100%);
+`n_anchors == n_anchors_fit` on all 17 rows is structural (both arms
+filter anchors by lid-in-cues identically). All 17 table rows and both
+reach lines regenerate verbatim from the JSON. My own
+`uv run … lrclib_study.py l1` produced a byte-identical
+`l1_gates.json` — the third identical run, first from a different
+session — with empty stderr: zero network, so the offline
+reproducibility claim is confirmed, not just repeated. The
+`_theil_sen` port is verbatim against `835ba2c7` (docstring shortened,
+body identical); the arm-B gate mirrors `warp_scaffold_cues`'s
+fit+gate exactly (same pair orientation, same median-abs-residual
+test; the study's `degenerate_fit` label splits out a case the source
+folds into its densify fallback — reporting-only, unused in this
+data). All four warp symbols confirmed absent at HEAD, so the pin is
+mandatory, as recorded.
+
+**2. A.5 unpack — fix APPROVED as forced; classification corrected.**
+The 3-target unpack is right and is not a design call: against the
+code the study runs on, `analyze_pass1` returns
+`(anchors, suspect_line_ids, ratios)` (windowed_realign.py:107), a
+2-target unpack raises `ValueError`, anchors is the first element
+under either arity, the two extra returns are merge-protection
+diagnostics irrelevant to the gate, and the harness's own call
+(replay_ytasr_third_source.py:202) is the identical form. But the
+executor's classification — "a fixed-arity elision in the sketch's
+shorthand" — is wrong as history: the plan was locked 2026-07-12
+(`31837f4`) and `analyze_pass1` returned a 2-tuple until `6a73386`
+(2026-07-13, the merge-protection commit) added `ratios`. The sketch
+was executable as written when locked; this is appendix-vs-code drift
+of exactly A.2's class (adjacent work landing after lock), which if
+anything strengthens the ruling — same as A.2: mechanical drift, no
+re-lock needed. Correct the `_arm_a_gate` docstring's characterization
+whenever the file is next touched; nothing operational changes.
+
+**3. C.1 — satisfied; no STOP, no escalation.** Bloodstream and
+Defying Gravity both bail arm A (`wide_spread`, mad 0.84 s and
+7.14 s) — the STOP condition is untriggered. 12/17 pass = 71% ≈
+"roughly 2/3", the top edge of Appendix B's "10-12 of 17". The bail
+set (Defying Gravity, Bloodstream, HUNTR_X, Popular, Mulan) is B's
+three named songs plus two of its three named candidates — as
+on-target as a pre-registration gets. One fragility footnote: Best
+Part Of Me passed at mad 0.73 s against the 0.75 s gate; a 0.02 s
+wobble makes it 11/17. Carry, don't act.
+
+**4. Arm B — computed correctly; Appendix B's arm-B prediction is
+inverted, and the inversion is the phase's most instructive datum.**
+B predicted Defying Gravity (the designated test case) rescued and
+Bloodstream held out ("a linear warp cannot manufacture missing
+verses"). Observed: Defying Gravity is the *only* arm-B bail
+(mad 3.51 s over 34 anchors — its +96.8 s master is structurally
+longer, not linearly slower), while Bloodstream passes cleanly
+(slope 1.022, mad 0.37 s/11a): its anchors all live on shared
+content, so the missing verses contribute no anchors to expose the
+warp. The warp gate is blind to exactly the different-content case
+the constant-offset gate exists to block — the data now demonstrate
+why C.4 makes arm B a reach probe that never drives GO. The genuine
+rescues look real (Mulan is a textbook linear-tempo variant, slope
+0.958 mad 0.097 s/22a; Popular and HUNTR_X similar). Arm-B reach:
+16/17 songs, 121/159 unplaced lines (76%) = 2.24x arm A — nominally
+past C.4's doubling bar on lines (not songs: 12 → 16), but "at equal
+eyeball precision" is unanswerable until L2, and the added reach
+includes Bloodstream's 26 unplaced lines, i.e. the phantom-fill
+danger case itself. L2 runs the arm-B leg anyway, so no escalation —
+but do NOT record C.4's "merits its own study" line unless
+Bloodstream's arm-B fills survive Ken's eyeball; that render is now
+the study's sharpest safety test.
+
+**5. Transcription wart, same class as Part 1's.** The quoted
+Bloodstream row above wrote soft-hyphens (U+00AD) where the true stem
+has NBSPs (U+00A0) — literal metacharacters, but the wrong ones (the
+one real soft-hyphen is placed correctly). Numeric cells exact; the
+other 16 rows are byte-identical to the console capture.
+`l1_console.txt` (cp1252 — NBSP and soft-hyphen both encode there, so
+it decodes losslessly; no U+FFFD anywhere) and `l1_gates.json`
+(UTF-8) stay byte-authoritative; annotated, not rewritten. Also
+endorsed: reading `same_variant` from L0's persisted output rather
+than re-resolving — spec-conformant (A.4 makes it an L0 output) and
+required for the offline bar, per the L0 read's latent note;
+Popular's `None` is the correct carried value.
+
+**Verdict.** Everything checks out; no STOP was missed. C.1 is
+satisfied and no Model-switching escalation is triggered. The L1
+table and both reach numbers are blessed; L2 may proceed on the 12
+arm-A-pass songs (plus the arm-B leg per spec), with two carries:
+Best Part Of Me's fragile pass, and Bloodstream's arm-B fills as the
+eyeball to watch.
