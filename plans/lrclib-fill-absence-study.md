@@ -936,3 +936,547 @@ table and both reach numbers are blessed; L2 may proceed on the 12
 arm-A-pass songs (plus the arm-B leg per spec), with two carries:
 Best Part Of Me's fragile pass, and Bloodstream's arm-B fills as the
 eyeball to watch.
+
+### Phase L2 — gated fill simulation artifacts (Sonnet, 2026-07-16)
+
+Executor stops at artifacts, same posture as L0/L1: no GATE L2 verdict
+(Appendix C.2 needs Ken's eyeball of the `.lrcfill_*.ass` renders, which
+this phase cannot do) and no reading of the numbers below is offered —
+deferred to a judge session, then to Ken's eyeball pass.
+
+**Bundled refactor, not a new deviation.** The L1 judge read above ruled
+`_arm_a_gate`'s docstring should be corrected "whenever the file is next
+touched"; L2 needed the exact same `analyze_pass1` anchor set a second
+time (fit against the held-out reference cues, for the cross-variant
+check), so this touch extracts `_trusted_anchors(bundle, objs)` out of
+`_arm_a_gate` and applies the judge's correction in the same edit
+(appendix-vs-code drift of A.2's class, not "sketch elision"). Regression
+check before trusting it: backed up `l1_gates.json`, re-ran phase `l1`
+end to end, diffed — byte-identical. The refactor changes no computed
+value.
+
+**A real bug, found and fixed.** First `l2` run crashed partway through
+the arm-B leg (`UnicodeEncodeError` printing a HUNTR/X fill's lyric text:
+Windows' cp1252 console codepage can't represent every Unicode
+character LRC/Genius lyric text contains — L0/L1 never hit this because
+they only ever printed song stems). Arm A's `l2_fills_a.json` had
+already written successfully at crash time; arm B's had not. Fix:
+`sys.stdout.reconfigure(encoding="utf-8", errors="replace")` (and
+`stderr`) near the top of the script — UTF-8 has no undefined
+codepoints, so this alone stops the crash; `errors="replace"` is
+defensive, not load-bearing. Re-ran clean end to end afterward (see
+Reproducibility). The JSON outputs were always `encoding="utf-8"` and
+were never at risk; only the console printer was fragile.
+
+**Invocation:** `uv run python
+"D:/shared/pikaraoke-songs/lrclib_study/lrclib_study.py" l2`, run twice
+back-to-back after the encoding fix. Reuses L0's fetch cache and L1's
+persisted `l1_gates.json` (offset/slope/intercept read off it, not
+recomputed) — zero network calls.
+
+**Interpretive calls made this phase, flagged for judge review (none
+pre-approved, unlike the A.2 substitution):**
+
+1. **Cross-variant reference resolution gated on `same_variant is
+   False` specifically**, not merely falsy. Phase L2 step 3 says the
+   check applies "only where NOT `same_variant`", which is ambiguous
+   between `same_variant in (False, None)` and `same_variant is
+   False`. Read as the latter: `same_variant is True` makes the check
+   inapplicable (versions match, nothing to cross-check), and
+   `same_variant is None` means L0 never resolved a reference at all
+   (Popular) — re-attempting resolution here for a `None` song would
+   risk the exact network call L1 deliberately avoided for offline
+   reproducibility (Appendix A.8). Since `same_variant` is only ever a
+   bool when both sides already resolved in L0, gating on `is False`
+   is also the only reading that's guaranteed cache-hit-safe. Confirmed
+   zero network calls this phase either way (see Invocation).
+2. **`_vocal_path` scans the directory instead of `Path.glob`-ing the
+   stem.** Appendix A.6's comment says "glob `song_root/"vocal"` for
+   the stem prefix"; implemented as a plain `.startswith()` scan
+   instead, because this project's own filename convention brackets a
+   YouTube ID (`Title [dQw4w9WgXcQ].mp4`, per CLAUDE.md) and `[...]` is
+   a glob character class — glob-matching a raw stem would misparse a
+   bracketed one. Not exercised on this corpus (every song's exact
+   `<stem>---vocal.m4a` existed), so no observed behavior difference,
+   but the literal instruction was unsafe as written.
+3. **`onset_snap.decode_env_db` used instead of raw `rms_envelope_db`.**
+   A.6's sketch calls `rms_envelope_db` directly, which raises on an
+   undecodable file; `decode_env_db` is the same project's own
+   existing decode-or-bail wrapper for this exact scenario (used by the
+   shipped onset-snap pass and the evidence veto). Same constants, same
+   caller-visible contract (`None` on failure) A.6 already designed
+   the energy check around (`env is None` -> void).
+4. **Energy-check index bounds are clamped**, not in the appendix
+   sketch. Validated by this run's own data, not just theory: Wicked -
+   For Good's arm-A offset (-23.12 s) places `lid=0`'s fill at
+   `t0=-1.86s` (a negative index would have wrapped a numpy slice from
+   the array's tail instead of raising or correctly reading near-zero);
+   Bloodstream's and HUNTR_X's arm-B warps place several fills
+   (Bloodstream lid 66-73, HUNTR_X lid 33-52) past the end of their
+   decoded vocal envelope entirely (`window.size == 0` after
+   clamping) — both songs' media are shorter cuts than the LRCLIB
+   master the warp is keyed to, so a warped late-song cue projects
+   past the actual audio. The clamp reports these as `energy=void`
+   rather than crashing or silently reading wrong data.
+5. **ASS render tag split into `lrcfill_a` / `lrcfill_b`.** The plan
+   names a single `lrcfill` tag; L2 runs two legs producing two
+   different fill sets for songs that pass both arms (e.g. Belle), so
+   one tag would collide. Both still sit alongside the shipped
+   `<stem>.ass`, never overwriting it.
+6. **`auto_pass` is a new, non-appendix metric** = `energy-PASS AND
+   collision-free` per fill. Appendix C.2's `good`/`bad-surviving`
+   fill categories both require Ken's eyeball, which this phase cannot
+   supply; `auto_pass` is the pre-eyeball ceiling GATE L2's "numbers
+   first" asks for — every eventual `good` fill is a subset of
+   `auto_pass`, nothing outside it can become `good`.
+7. **"Plain per-fill dump... into the workspace" (step 4) read as
+   satisfied by the redirected console capture** (`l2_console.txt`),
+   consistent with Appendix A.8's own established text-and-JSON dual
+   persistence, rather than inventing a third per-song file format.
+
+**Reproducibility:** two consecutive `l2` runs from the warm cache;
+`l2_fills_a.json` and `l2_fills_b.json` diffed byte-identical across
+both. Zero network calls (confirmed by the interpretive-call-1
+gating; no exceptions logged).
+
+**Artifacts saved** (durable, outside git, in the study workspace):
+- `D:\shared\pikaraoke-songs\lrclib_study\out\l2_fills_a.json`,
+  `l2_fills_b.json` — full per-song fill lists (lid, text, span, cue
+  text, collision/energy/cross_variant, `auto_pass`) plus each leg's
+  corpus summary.
+- `D:\shared\pikaraoke-songs\lrclib_study\out\l2_console.txt` — raw
+  stdout of the second (byte-compared) run.
+- `karaoke/<stem>.lrcfill_a.ass` / `.lrcfill_b.ass` next to each
+  fill-bearing song's shipped `.ass`, under
+  `D:\shared\pikaraoke-songs\karaoke\` — 9 arm-A files, 13 arm-B
+  files, both counts matching each leg's `n_songs_with_fills` exactly.
+
+Full raw console output (verbatim from `l2_console.txt`):
+
+```
+Corpus cross-check OK: 17 songs (method_used==joint == not youtube_srt_present)
+
+Arm A leg (offset-shift fill, arm-A-passing songs):
+  'Free' _ Official Lyric Video _ Sony Animation---fjOeJssZX_Q unplaced=  1 fills=  1 auto_pass=  0
+      lid= 35 [ 160.89- 162.29] collision=True  energy=PASS  cross_variant=PASS  text='Free, free' cue='(Free, free)'
+  Beauty and the Beast (1991) - Be Our Guest [UHD]---MiraOCjAB unplaced=  0 fills=  0 auto_pass=  0
+  Beauty and the Beast (1991) - Belle [UHD]---otxTf5hZ0Yw      unplaced=  9 fills=  7 auto_pass=  5
+      lid= 81 [ 252.76- 253.35] collision=False energy=PASS  cross_variant=PASS  text='Bonjour' cue='Bonjour'
+      lid= 86 [ 255.91- 256.46] collision=False energy=PASS  cross_variant=PASS  text='What lovely grapes' cue='What lovely grapes'
+      lid= 87 [ 256.46- 257.11] collision=True  energy=PASS  cross_variant=PASS  text='Some cheese' cue='Some cheese'
+      lid= 89 [ 257.63- 258.08] collision=False energy=PASS  cross_variant=bail  text='One pound' cue='One pound'
+      lid= 93 [ 260.56- 261.04] collision=False energy=PASS  cross_variant=PASS  text='This bread' cue='This bread'
+      lid= 94 [ 261.04- 261.59] collision=False energy=PASS  cross_variant=PASS  text='Those fish' cue='Those fish'
+      lid= 95 [ 261.59- 262.11] collision=True  energy=PASS  cross_variant=PASS  text="It's stale" cue="It's stale"
+  Ed Sheeran - Best Part Of Me (feat. YEBBA) (Live At Abbey Ro unplaced=  1 fills=  1 auto_pass=  1
+      lid= 32 [ 193.71- 196.51] collision=False energy=PASS  cross_variant=void  text='Da-dum, da-dum, da-dum, da-dum' cue='Da-dum, da-dum, da-dum, da-dum'
+  Jessie J - Domino (Official Video)---UJtB55MaoD0             unplaced=  4 fills=  4 auto_pass=  1
+      lid= 12 [  42.83-  44.03] collision=True  energy=PASS  cross_variant=void  text='(Ooh-ooh-ooh-ooh)' cue='Ooh, ooh, ooh, ooh'
+      lid= 16 [  50.43-  51.63] collision=True  energy=PASS  cross_variant=void  text='(Ooh-ooh-ooh-ooh)' cue='Ooh, ooh, ooh, ooh'
+      lid= 58 [ 193.94- 195.14] collision=True  energy=PASS  cross_variant=void  text='(Ooh-ooh-ooh-ooh)' cue='Ooh, ooh, ooh, ooh'
+      lid= 66 [ 222.32- 226.32] collision=False energy=PASS  cross_variant=void  text="Take me down like I'm a domino" cue="Take me down like I'm a domino"
+  Josh Gad - In Summer (From 'Frozen'_Sing-Along)---9tcaM06eGr unplaced=  2 fills=  0 auto_pass=  0
+  NSYNC - Paradise                                             unplaced= 10 fills=  6 auto_pass=  2
+      lid=  1 [  40.78-  41.98] collision=False energy=PASS  cross_variant=PASS  text='Ooh' cue='Ooh'
+      lid= 39 [ 183.29- 185.39] collision=False energy=PASS  cross_variant=PASS  text="Everything that's happenin'" cue="Everything that's happening"
+      lid= 42 [ 193.00- 194.20] collision=True  energy=PASS  cross_variant=PASS  text='Paradise' cue='Paradise (I)'
+      lid= 51 [ 227.87- 229.27] collision=True  energy=PASS  cross_variant=PASS  text='And everything' cue='And everything'
+      lid= 52 [ 230.17- 232.97] collision=True  energy=PASS  cross_variant=PASS  text="Everything is happenin' (Oh)" cue='Everything is happening (oh, whoa)'
+      lid= 59 [ 253.90- 256.25] collision=True  energy=PASS  cross_variant=PASS  text="Everything is happenin' (Everything is h" cue='Everything is happening (everything is h'
+  Pocahontas - Colors of the Wind (Blu-ray 1080p HD)---9ThO76p unplaced=  0 fills=  0 auto_pass=  0
+  Seasons of Love (HD)---UvyHuse6buY                           unplaced=  9 fills=  6 auto_pass=  4
+      lid= 26 [ 163.43- 165.53] collision=True  energy=PASS  cross_variant=void  text='Remember the love' cue='Remember the love'
+      lid= 28 [ 168.90- 170.80] collision=False energy=PASS  cross_variant=void  text='Remember the love' cue='Remember the love'
+      lid= 30 [ 178.01- 181.84] collision=False energy=PASS  cross_variant=void  text='Measure, measure your life in love' cue='(Measure, measure your life in love)'
+      lid= 31 [ 181.84- 183.94] collision=False energy=PASS  cross_variant=void  text='Seasons of love' cue='Seasons of love'
+      lid= 32 [ 187.68- 189.78] collision=False energy=PASS  cross_variant=void  text='Seasons of love' cue='Seasons of love'
+      lid= 33 [ 189.87- 193.87] collision=False energy=bail  cross_variant=void  text='Measure your life, measure your life in ' cue='(Measure your life, measure your life in'
+  The Lion King - Hakuna Matata Music Video I 4K Ultra HD---fw unplaced=  7 fills=  2 auto_pass=  0
+      lid= 35 [ 180.56- 181.97] collision=False energy=bail  cross_variant=void  text='Hakuna matata, hakuna matata' cue='(Hakuna matata!) Hakuna matata!'
+      lid= 36 [ 186.97- 188.38] collision=False energy=bail  cross_variant=void  text='Hakuna matata' cue='Hakuna matata!'
+  The Next Ten Minutes Lyrics---0j8kL24ph8U                    unplaced=  4 fills=  4 auto_pass=  3
+      lid=  7 [  46.63-  47.83] collision=False energy=bail  cross_variant=void  text='Cathy' cue='Cathy'
+      lid= 63 [ 330.78- 332.18] collision=False energy=PASS  cross_variant=void  text='I do' cue='I do'
+      lid= 64 [ 334.13- 335.53] collision=False energy=PASS  cross_variant=void  text='I do' cue='I do'
+      lid= 65 [ 337.17- 338.57] collision=False energy=PASS  cross_variant=void  text='I do' cue='I do'
+  Wicked - For Good  (2025) 4K - The Girl in the Bubble (7_8)  unplaced=  7 fills=  7 auto_pass=  5
+      lid=  0 [  -1.86-  -0.66] collision=False energy=bail  cross_variant=void  text='Look' cue='Look'
+      lid=  8 [  29.38-  32.88] collision=False energy=PASS  cross_variant=void  text='She spins such beautiful stories' cue='She spins such beautiful stories'
+      lid= 15 [  65.39-  68.19] collision=False energy=PASS  cross_variant=void  text='Of seeping on in' cue='Of seeping on in'
+      lid= 18 [  77.62-  78.82] collision=True  energy=PASS  cross_variant=void  text='Eventually' cue='Eventually'
+      lid= 32 [ 143.30- 146.10] collision=False energy=PASS  cross_variant=void  text='For the popular girl' cue='For the popular girl'
+      lid= 33 [ 148.69- 151.49] collision=False energy=PASS  cross_variant=void  text='High in the bubble' cue='High in the bubble'
+      lid= 35 [ 175.06- 178.56] collision=False energy=PASS  cross_variant=void  text='For her bubble to pop?' cue='For her bubble to pop?'
+
+Wrote D:\shared\pikaraoke-songs\lrclib_study\out\l2_fills_a.json
+  corpus: 38 fills across 9 songs, 21 auto_pass (energy-PASS and collision-free; NOT yet Ken's eyeball -- GATE L2 per Appendix C.2)
+
+Arm B leg (warp fill, arm-B-passing songs):
+  'Free' _ Official Lyric Video _ Sony Animation---fjOeJssZX_Q unplaced=  1 fills=  1 auto_pass=  0
+      lid= 35 [ 161.09- 162.49] collision=True  energy=PASS  cross_variant=PASS  text='Free, free' cue='(Free, free)'
+  'Popular' - Wicked 20th Anniversary Edition _ WICKED the Mus unplaced= 10 fills=  4 auto_pass=  0
+      lid=  1 [ -10.93-  -6.31] collision=False energy=bail  cross_variant=void  text="Now that we're friends, I've decided to " cue="Elphie, now that we're friends, I've dec"
+      lid=  2 [  -6.31-  -4.18] collision=False energy=bail  cross_variant=void  text="You really don't have to do that" cue="You really don't have to do that"
+      lid=  4 [  -4.18-   0.02] collision=False energy=bail  cross_variant=void  text="That's what makes me so nice" cue="I know. That's what makes me so nice!"
+      lid= 37 [ 105.04- 106.44] collision=False energy=bail  cross_variant=void  text='La-la, la-la' cue='La la, la la!'
+  Beauty and the Beast (1991) - Be Our Guest [UHD]---MiraOCjAB unplaced=  0 fills=  0 auto_pass=  0
+  Beauty and the Beast (1991) - Belle [UHD]---otxTf5hZ0Yw      unplaced=  9 fills=  7 auto_pass=  5
+      lid= 81 [ 252.87- 253.46] collision=False energy=PASS  cross_variant=PASS  text='Bonjour' cue='Bonjour'
+      lid= 86 [ 256.02- 256.57] collision=False energy=PASS  cross_variant=PASS  text='What lovely grapes' cue='What lovely grapes'
+      lid= 87 [ 256.57- 257.22] collision=True  energy=PASS  cross_variant=PASS  text='Some cheese' cue='Some cheese'
+      lid= 89 [ 257.75- 258.20] collision=False energy=PASS  cross_variant=bail  text='One pound' cue='One pound'
+      lid= 93 [ 260.68- 261.16] collision=False energy=PASS  cross_variant=PASS  text='This bread' cue='This bread'
+      lid= 94 [ 261.16- 261.71] collision=False energy=PASS  cross_variant=PASS  text='Those fish' cue='Those fish'
+      lid= 95 [ 261.71- 262.23] collision=True  energy=PASS  cross_variant=PASS  text="It's stale" cue="It's stale"
+  Ed Sheeran - Best Part Of Me (feat. YEBBA) (Live At Abbey Ro unplaced=  1 fills=  1 auto_pass=  1
+      lid= 32 [ 191.83- 194.61] collision=False energy=PASS  cross_variant=void  text='Da-dum, da-dum, da-dum, da-dum' cue='Da-dum, da-dum, da-dum, da-dum'
+  Ed Sheeran & Rudimental­ - Bloodstream [Official Music Video unplaced= 26 fills= 20 auto_pass=  0
+      lid= 27 [ 117.94- 122.21] collision=True  energy=PASS  cross_variant=void  text="Oh, no, no, don't leave me lonely now" cue="Oh, no, no, don't leave me alone lonely "
+      lid= 28 [ 122.21- 127.81] collision=True  energy=PASS  cross_variant=void  text="If you loved me, how'd you never learn?" cue="If you loved me, how'd you never learn?"
+      lid= 29 [ 128.33- 132.09] collision=True  energy=PASS  cross_variant=void  text='Ooh, coloured crimson in my eyes' cue='Ooh, coloured crimson in my eyes'
+      lid= 30 [ 132.09- 136.99] collision=True  energy=PASS  cross_variant=void  text='One or two could free my mind' cue='One or two could free my mind'
+      lid= 39 [ 185.27- 187.90] collision=True  energy=PASS  cross_variant=bail  text="Callin' out across the line" cue='Calling out across the line'
+      lid= 43 [ 196.01- 198.71] collision=True  energy=PASS  cross_variant=bail  text="Callin' out across the line" cue='Calling out across the line'
+      lid= 44 [ 198.71- 201.44] collision=True  energy=PASS  cross_variant=bail  text='All the voices in my mind' cue='All the voices in my mind'
+      lid= 45 [ 201.44- 204.15] collision=True  energy=PASS  cross_variant=bail  text="Callin' out across the line" cue='Calling out across the line'
+      lid= 46 [ 204.15- 206.84] collision=True  energy=PASS  cross_variant=bail  text='All the voices in my mind' cue='All the voices in my mind'
+      lid= 47 [ 206.84- 209.48] collision=True  energy=PASS  cross_variant=bail  text="Callin' out across the line" cue='Calling out across the line'
+      lid= 48 [ 209.48- 212.26] collision=True  energy=PASS  cross_variant=bail  text='All the voices in my mind' cue='All the voices in my mind'
+      lid= 49 [ 212.26- 215.17] collision=True  energy=PASS  cross_variant=bail  text="Callin' out across the line" cue='Calling out across the line'
+      lid= 66 [ 258.67- 261.80] collision=False energy=void  cross_variant=void  text='So, tell me when it kicks in' cue='So tell me when it kicks in'
+      lid= 67 [ 261.80- 264.19] collision=False energy=void  cross_variant=void  text='And I saw scars upon her' cue='And I saw scars upon her'
+      lid= 68 [ 264.19- 267.36] collision=False energy=void  cross_variant=bail  text='Tell me when it kicks in' cue='Tell me when it kicks in'
+      lid= 69 [ 267.36- 268.56] collision=False energy=void  cross_variant=void  text='Brokenhearted' cue='Broken-hearted'
+      lid= 70 [ 269.27- 272.42] collision=False energy=void  cross_variant=void  text='And tell me when it kicks in' cue='Tell me when it kicks in'
+      lid= 71 [ 272.42- 274.79] collision=False energy=void  cross_variant=void  text='And I saw scars upon her' cue='And I saw scars upon her'
+      lid= 72 [ 274.79- 277.84] collision=False energy=void  cross_variant=void  text='Tell me when it kicks in' cue='Tell me when it kicks in'
+      lid= 73 [ 277.84- 279.04] collision=False energy=void  cross_variant=void  text='Brokenhearted' cue='Broken-hearted'
+  HUNTR_X 'This Is What It Sounds Like' (Music Video) _ KPop D unplaced= 20 fills= 15 auto_pass=  0
+      lid= 33 [ 164.62- 166.71] collision=False energy=void  cross_variant=void  text='This is what it sounds like' cue='This is what it sounds like'
+      lid= 35 [ 172.50- 174.60] collision=False energy=void  cross_variant=void  text='This is what it sounds like' cue='This is what it sounds like'
+      lid= 37 [ 180.63- 183.80] collision=False energy=void  cross_variant=void  text='This is what it sounds like' cue='This is what it sounds like'
+      lid= 40 [ 183.80- 187.72] collision=False energy=void  cross_variant=void  text='We broke into a million pieces, and we c' cue='We broke into a million pieces, and we c'
+      lid= 41 [ 187.72- 191.71] collision=False energy=void  cross_variant=void  text="But now I'm seeing all the beauty in the" cue="But now I'm seeing all the beauty in the"
+      lid= 42 [ 191.71- 195.78] collision=False energy=void  cross_variant=void  text='The scars are part of me, darkness and h' cue='The scars are part of me, darkness and h'
+      lid= 43 [ 195.78- 199.54] collision=False energy=void  cross_variant=void  text='My voice without the lies, this is what ' cue='My voice without the lies, this is what '
+      lid= 44 [ 199.54- 203.76] collision=False energy=void  cross_variant=void  text='Why did we cover up the colors stuck ins' cue='Why did we cover up the colors stuck ins'
+      lid= 45 [ 203.76- 207.59] collision=False energy=void  cross_variant=void  text='Get up and let the jagged edges meet the' cue='Get up and let the jagged edges meet the'
+      lid= 46 [ 207.59- 211.77] collision=False energy=void  cross_variant=void  text="Show me what's underneath, I'll find you" cue="Show me what's underneath, I'll find you"
+      lid= 47 [ 211.77- 215.54] collision=False energy=void  cross_variant=void  text='Fearless and undefined, this is what it ' cue='Fearless and undefined, this is what it '
+      lid= 48 [ 215.54- 219.61] collision=False energy=void  cross_variant=void  text='(어둠을 밝히려) My voice without the lies, thi' cue='My voice without the lies, this is what '
+      lid= 49 [ 219.61- 223.43] collision=False energy=void  cross_variant=void  text='(우리 노래 부르리라) Fearless and undefined, thi' cue='Fearless and undefined, this is what it '
+      lid= 50 [ 223.43- 227.31] collision=False energy=void  cross_variant=void  text='(Broken world 거치리라) Truth after all this' cue='Truth after all this time, our voices al'
+      lid= 52 [ 227.31- 231.41] collision=False energy=void  cross_variant=void  text=') When darkness meets the light, this is' cue='When darkness meets the light, this is w'
+  Jessie J - Domino (Official Video)---UJtB55MaoD0             unplaced=  4 fills=  4 auto_pass=  1
+      lid= 12 [  43.06-  44.26] collision=True  energy=PASS  cross_variant=void  text='(Ooh-ooh-ooh-ooh)' cue='Ooh, ooh, ooh, ooh'
+      lid= 16 [  50.62-  51.82] collision=True  energy=PASS  cross_variant=void  text='(Ooh-ooh-ooh-ooh)' cue='Ooh, ooh, ooh, ooh'
+      lid= 58 [ 193.40- 194.60] collision=True  energy=PASS  cross_variant=void  text='(Ooh-ooh-ooh-ooh)' cue='Ooh, ooh, ooh, ooh'
+      lid= 66 [ 221.64- 225.62] collision=False energy=PASS  cross_variant=void  text="Take me down like I'm a domino" cue="Take me down like I'm a domino"
+  Josh Gad - In Summer (From 'Frozen'_Sing-Along)---9tcaM06eGr unplaced=  2 fills=  0 auto_pass=  0
+  Mulan _ I'll Make a Man Out of You _ @disneykids---vGfJeW_Cc unplaced= 11 fills=  9 auto_pass=  1
+      lid= 21 [ 132.07- 133.44] collision=True  energy=PASS  cross_variant=void  text='Be a man' cue='(Be a man)'
+      lid= 23 [ 136.15- 137.28] collision=True  energy=PASS  cross_variant=void  text='Be a man' cue='(Be a man)'
+      lid= 25 [ 140.06- 141.47] collision=True  energy=PASS  cross_variant=void  text='Be a man' cue='(Be a man)'
+      lid= 33 [ 184.54- 185.83] collision=True  energy=PASS  cross_variant=void  text='Be a man' cue='(Be a man)'
+      lid= 35 [ 188.66- 189.78] collision=True  energy=PASS  cross_variant=void  text='Be a man' cue='(Be a man)'
+      lid= 37 [ 192.58- 193.93] collision=True  energy=PASS  cross_variant=void  text='Be a man' cue='(Be a man)'
+      lid= 40 [ 204.70- 206.02] collision=True  energy=PASS  cross_variant=void  text='Be a man' cue='(Be a man)'
+      lid= 42 [ 209.03- 210.02] collision=False energy=PASS  cross_variant=void  text='Be a man' cue='(Be a man)'
+      lid= 44 [ 212.84- 214.17] collision=True  energy=PASS  cross_variant=void  text='Be a man' cue='(Be a man)'
+  NSYNC - Paradise                                             unplaced= 10 fills=  6 auto_pass=  2
+      lid=  1 [  40.74-  41.94] collision=False energy=PASS  cross_variant=PASS  text='Ooh' cue='Ooh'
+      lid= 39 [ 183.29- 185.39] collision=False energy=PASS  cross_variant=PASS  text="Everything that's happenin'" cue="Everything that's happening"
+      lid= 42 [ 193.01- 194.21] collision=True  energy=PASS  cross_variant=PASS  text='Paradise' cue='Paradise (I)'
+      lid= 51 [ 227.89- 229.29] collision=True  energy=PASS  cross_variant=PASS  text='And everything' cue='And everything'
+      lid= 52 [ 230.19- 232.99] collision=True  energy=PASS  cross_variant=PASS  text="Everything is happenin' (Oh)" cue='Everything is happening (oh, whoa)'
+      lid= 59 [ 253.93- 256.28] collision=True  energy=PASS  cross_variant=PASS  text="Everything is happenin' (Everything is h" cue='Everything is happening (everything is h'
+  Pocahontas - Colors of the Wind (Blu-ray 1080p HD)---9ThO76p unplaced=  0 fills=  0 auto_pass=  0
+  Seasons of Love (HD)---UvyHuse6buY                           unplaced=  9 fills=  6 auto_pass=  4
+      lid= 26 [ 159.86- 161.96] collision=True  energy=PASS  cross_variant=void  text='Remember the love' cue='Remember the love'
+      lid= 28 [ 165.10- 166.92] collision=True  energy=PASS  cross_variant=void  text='Remember the love' cue='Remember the love'
+      lid= 30 [ 173.83- 177.50] collision=False energy=PASS  cross_variant=void  text='Measure, measure your life in love' cue='(Measure, measure your life in love)'
+      lid= 31 [ 177.50- 179.60] collision=False energy=PASS  cross_variant=void  text='Seasons of love' cue='Seasons of love'
+      lid= 32 [ 183.09- 185.19] collision=False energy=PASS  cross_variant=void  text='Seasons of love' cue='Seasons of love'
+      lid= 33 [ 185.19- 189.03] collision=False energy=PASS  cross_variant=void  text='Measure your life, measure your life in ' cue='(Measure your life, measure your life in'
+  The Lion King - Hakuna Matata Music Video I 4K Ultra HD---fw unplaced=  7 fills=  2 auto_pass=  1
+      lid= 35 [ 177.19- 178.56] collision=False energy=bail  cross_variant=void  text='Hakuna matata, hakuna matata' cue='(Hakuna matata!) Hakuna matata!'
+      lid= 36 [ 183.41- 184.81] collision=False energy=PASS  cross_variant=void  text='Hakuna matata' cue='Hakuna matata!'
+  The Next Ten Minutes Lyrics---0j8kL24ph8U                    unplaced=  4 fills=  4 auto_pass=  3
+      lid=  7 [  46.33-  47.53] collision=False energy=bail  cross_variant=void  text='Cathy' cue='Cathy'
+      lid= 63 [ 331.00- 332.39] collision=False energy=PASS  cross_variant=void  text='I do' cue='I do'
+      lid= 64 [ 334.35- 335.75] collision=False energy=PASS  cross_variant=void  text='I do' cue='I do'
+      lid= 65 [ 337.40- 338.80] collision=False energy=PASS  cross_variant=void  text='I do' cue='I do'
+  Wicked - For Good  (2025) 4K - The Girl in the Bubble (7_8)  unplaced=  7 fills=  7 auto_pass=  5
+      lid=  0 [  -1.97-  -0.77] collision=False energy=bail  cross_variant=void  text='Look' cue='Look'
+      lid=  8 [  29.30-  32.80] collision=False energy=PASS  cross_variant=void  text='She spins such beautiful stories' cue='She spins such beautiful stories'
+      lid= 15 [  65.34-  68.14] collision=False energy=PASS  cross_variant=void  text='Of seeping on in' cue='Of seeping on in'
+      lid= 18 [  77.58-  78.78] collision=True  energy=PASS  cross_variant=void  text='Eventually' cue='Eventually'
+      lid= 32 [ 143.32- 146.12] collision=False energy=PASS  cross_variant=void  text='For the popular girl' cue='For the popular girl'
+      lid= 33 [ 148.71- 151.51] collision=False energy=PASS  cross_variant=void  text='High in the bubble' cue='High in the bubble'
+      lid= 35 [ 175.11- 178.61] collision=False energy=PASS  cross_variant=void  text='For her bubble to pop?' cue='For her bubble to pop?'
+
+Wrote D:\shared\pikaraoke-songs\lrclib_study\out\l2_fills_b.json
+  corpus: 86 fills across 13 songs, 23 auto_pass (energy-PASS and collision-free; NOT yet Ken's eyeball -- GATE L2 per Appendix C.2)
+```
+
+(Bloodstream's row above has its embedded NBSP/soft-hyphen metacharacters
+written out literally, same annotation as the L0/L1 entries — cosmetic
+console-encoding artifact only, `l2_console.txt`/`l2_fills_b.json` stay
+byte-authoritative.)
+
+No breakdown beyond the script's own printed output above is computed
+here (per Ken's 2026-07-16 tightening: executor verifies artifacts
+exist, does not tally or cross-reference them) and no reading against
+Appendix C.2's bar is offered — GATE L2 per the plan's own text needs
+Ken's eyeball of the `.lrcfill_a.ass` / `.lrcfill_b.ass` renders before
+any fill can be called `good`.
+
+### Phase L2 — judge read (Opus, 2026-07-16)
+
+Independent re-derivation from the raw artifacts and code, not the
+write-up — this round **read-only, by Ken's direction** (new standing
+process: judge rounds reuse the artifacts on disk; end-to-end re-runs
+only on a trigger — an inconsistency in the read-only checks, or a
+determinism claim with nothing behind it. Neither triggered.)
+Re-derived: every fill's `t0/t1` arithmetic from the on-disk inputs
+(fetch-cache cue spans + `l1_gates.json` scalars + the ported caps),
+all tallies and corpus breakdowns, the full console, the plan quote,
+the `_fill_line` port against its pinned source, the `onset_snap` and
+`_write_ass_variant` contracts, and the flat-cache basis of the
+offline claim. (The entry above was tightened mid-round — its corpus
+breakdown block retracted as executor over-reach; the corresponding
+numbers below are my own derivation from the JSONs, which happens to
+confirm what the retracted block said.)
+
+**1. Tables + tallies — CONFIRMED; all 124 fills re-derived
+independently.** For every fill in both JSONs I recomputed `t0/t1`
+from `cue_spans_for_lines` over the cached input variant, the L1 gate
+scalars (`offset_s` for arm A, `slope`/`intercept` for arm B — the
+leg reads them off `l1_gates.json`, so the rounded persisted values
+are the exact inputs), and a replica of the `_fill_line` caps:
+124/124 exact, plus `text` and `cue_text` (via my own
+`map_lines_to_cues` recompute) exact. `auto_pass` arithmetic holds on
+every fill; per-song and corpus tallies confirm (arm A 38/9/21, arm B
+86/13/23); leg membership equals L1's pass sets in bundle order;
+`n_unplaced` matches `l1_gates.json` row-for-row. The **entire
+163-line console regenerates from the two JSONs with zero differing
+lines**. Judge-derived corpus breakdowns: collision=True 12/38 (A)
+and 33/86 (B); energy PASS/bail/void 33/5/0 (A) and 56/7/23 (B);
+cross-variant PASS/bail/void 13/1/24 (A) and 13/10/63 (B); the four
+arm-B-only songs (Popular, Bloodstream, HUNTR_X, Mulan) contribute
+48 fills and exactly 1 auto_pass (Mulan lid 42). Renders: 9 `_a` +
+13 `_b` files exist and match every `ass_path`. Scope note:
+energy/collision verdict *values* were not re-derived per fill (they
+need the audio decode and the replay's placed spans — that is what a
+re-run would buy); the code paths are audited below and the
+aggregates are internally consistent — arm B's `energy void=23`
+decomposes exactly into the two past-media-end groups the entry
+names (Bloodstream lids 66-73 = 8, HUNTR_X lids 33-52 = 15).
+
+**2. Reproducibility — mtime forensics in place of a re-run; offline
+claim verified structurally; refactor regression independently
+confirmed.** All L2 artifacts postdate the script's final edit
+(11:18:05), so nothing on disk is stale against the code reviewed.
+One wrinkle: `l2_console.txt` (11:20:19) predates the on-disk JSONs
+(11:22:25 / 11:23:06), so the console capture and the JSONs come from
+*different* runs of the byte-compared pair — the entry's "raw stdout
+of the second (byte-compared) run" label is off by one run. Under the
+executor's determinism claim this is moot, and the 163/163
+regeneration proves console↔JSON content equivalence directly.
+Offline: the only network-capable path this phase is
+`_load_lrclib_reference` inside the cross-variant setup; it runs only
+for `same_variant is False` songs, and all six of those stems have
+flat-cache files under `lrclib/` on disk (tier-2 hits; Popular, the
+one song whose resolution would go live, is gated out by call 1). The
+`_trusted_anchors` refactor: current `l1_gates.json` is
+SHA-256-identical to my own pre-refactor backup from the L1 judge
+round — an independent regression, no re-run needed. (Footnote: the
+on-disk `l1_gates.json` (11:14:15) predates the encoding fix
+(11:18:05), so the executor's regression ran on the pre-fix script;
+that edit is I/O-only — `sys.stdout/stderr` reconfigure — so the
+conclusion carries.)
+
+**3. The seven interpretive calls — all APPROVED**, with precision
+notes:
+
+1. `same_variant is False` gating: the only reading that is both
+   semantically defined (the check compares against a resolved
+   *different-variant* reference; under `None` no reference ever
+   resolved, so there is nothing to check) and offline-safe
+   (re-resolving Popular hits the network, breaking A.8). Data
+   consistent: every fill on a True/None song is `void`. The
+   additional un-specced void condition — `reference_offset` bailed —
+   is likewise forced: without a trustworthy offset there is no
+   target to be "within 1.0 s" of. That is why Best Part Of Me's and
+   Seasons of Love's fills are all void despite `same_variant=False`
+   (their anchor fits against the *reference* cues bail or lack
+   per-lid cues), while Belle/Free/NSYNC/Bloodstream get real
+   PASS/bail verdicts.
+2. `_vocal_path` directory scan: the literal "glob for the stem
+   prefix" is unsafe under this project's own bracketed-ID filename
+   convention (`[...]` is a glob character class), and I reproduced
+   that hazard myself this round: a bracket-blind `Test-Path` on
+   Belle's flat cache false-negatived until a literal directory
+   listing showed the file. The scan is a strict superset; not
+   exercised (every direct `<stem>---vocal.m4a` existed).
+3. `decode_env_db` over raw `rms_envelope_db`: verified
+   `rms_envelope_db` raises `CalledProcessError` on undecodable input
+   and `decode_env_db` is the project's shared decode-or-None wrapper
+   (same constants, same `None` contract A.6's void case already
+   handles). Reuse over reimplementation is the right call.
+4. Energy-check clamping: the numpy tail-wrap hazard is real (an
+   unclamped negative index reads from the array's *end*). Two
+   behaviors, restated precisely where the entry lumps them: a window
+   wholly past the envelope end → `void` (all 23 observed); a
+   negative `t0` → clamped read at the array head — Girl in the
+   Bubble lid 0 evaluated `env[0:1]` and got `bail`, semantically
+   right for a pre-roll span. Footnote: a wholly negative span is
+   *evaluated* at the head rather than voided; had the audio opened
+   loud it would PASS on non-evidence. Immaterial here (the one
+   instance bailed; production would clamp spans first), but it is
+   the sim's one soft spot if this code is ever reused.
+5. `lrcfill_a`/`lrcfill_b` tag split: forced — nine songs carry
+   renders in both legs; the plan's single `lrcfill` tag would have
+   the arm-B leg overwrite arm A's render. Verified
+   `_write_ass_variant` writes `<stem>.<tag>.ass` alongside the
+   shipped `.ass`, never over it.
+6. `auto_pass`: it is exactly C.2's two automatic conjuncts, so
+   `good ⊆ auto_pass` by construction and it is the correct "numbers
+   first" ceiling. Excluding `cross_variant` from it is right (C.2
+   does not include it); the column stays evidence for the eyeball,
+   not a gate.
+7. Console capture as the per-fill dump: all step-4 fields are
+   present and it sits in the workspace, consistent with A.8's dual
+   text+JSON persistence. Nit: the console truncates `text`/`cue` at
+   40 chars; the JSON is the complete record.
+
+**4. One render defect found — eyeball material, not a bug to fix.**
+The shipped `generate_ass` clamps an event's *start* to ≥ 0 but not
+its *end*, so a fill ending before t=0 formats a negative-hour
+timestamp (`Dialogue: 0,0:00:00.00,-1:59:59.54,…` — verified in the
+file) and the event can never display. Affected: Girl in the Bubble
+lid 0 in both renders, Popular `_b` lids 1-2 (invisible) and lid 4 (a
+sub-second flash at t=0). All are energy-bail, none `auto_pass`, so
+nothing eyeball-relevant is hidden — noted so Ken doesn't chase
+missing lines. Not a production concern: the pipeline never produces
+negative times; the sim feeds the generator out-of-domain input by
+design ("report only"). Also: the quoted Bloodstream row's wart this
+time is NBSP→plain-space normalization with the real soft-hyphen
+preserved (Part 1's wart class, not L1's soft-hyphen substitution);
+numeric cells exact, console/JSON byte-authoritative as annotated.
+
+**5. Pre-eyeball guidance — the arm-B renders are not worth Ken's
+time, and the numbers already close two open questions.**
+
+- **The GATE is the arm-A eyeball: 21 auto_pass fills across 7
+  renders** (Belle 5, Girl in the Bubble 5, Seasons of Love 4, Next
+  Ten Minutes 3, NSYNC 2, Best Part Of Me 1, Domino 1). `good` and
+  `bad_surviving` both read off auto_pass fills only, so the Free and
+  Hakuna Matata renders (0 auto_pass) are optional context. The C.2
+  bar is reachable (ceiling 21 ≥ 6).
+- **Arm-B renders: skip.** C.2 is arm-A-only by its own header, and
+  C.4 is already decided by the automatic gates: raw reach 86 vs 38
+  fills (2.26x) collapses to 23 vs 21 auto_pass (1.10x) — the
+  arm-B-only songs contribute 48 fills and exactly 1 auto_pass.
+  "At least doubles at equal eyeball precision" cannot trigger
+  regardless of what an eyeball finds, because the doubling never
+  survives the gates. C.4's "merits its own study" line is **not
+  recorded**.
+- **The L1 carry resolved at the gate level.** Bloodstream's 20
+  arm-B fills — the designated sharpest safety test — all fail
+  automatically: 12 collide with placed lines (album-only verses
+  projected onto occupied audio) and 8 land past the 4:07 cut's
+  audio end (`void`). The phantom-danger fills never reach a render;
+  the gates themselves neutralized the case the L1 read flagged.
+- **Skeptical-attention list within the 21:** Belle lid 89 ("One
+  pound") is auto_pass with `cross_variant=bail` — the only
+  automatic timing signal available says it is mistimed; Best Part
+  Of Me lid 32 rides the fragile 0.73-mad L1 pass with no
+  corroborating timing evidence (cross-variant voided); and the
+  repeat/chant fills (Seasons' two "Seasons of love" + "Remember the
+  love", Next Ten's three "I do"s) sit on the known repeat-instance
+  weak spot. Corroboration split of the 21: 6 cross-variant PASS
+  (Belle 4, NSYNC 2), 1 bail (Belle 89), 14 void.
+
+**Verdict.** All executor numbers confirmed; all seven interpretive
+calls approved; the refactor is regression-clean against my
+independent pre-refactor backup. GATE L2 now waits on exactly one
+thing: Ken's eyeball of the 7 arm-A renders (21 auto_pass fills)
+against C.2's `good ≥ 6 AND bad_surviving = 0`. The arm-B leg is
+closed as a data exercise — its renders need no eyeball, and C.4
+stays unrecorded.
+
+### GATE L2 — eyeball verdicts and mechanical gate addition (Opus, 2026-07-16)
+
+Ken eyeballed the 7 arm-A renders (the 21 auto_pass fills, per the
+judge read's scope ruling; arm-B renders skipped as ruled).
+Verdicts:
+
+- **16 good**: Belle 5 (including lid 89 "One pound", the one fill
+  the cross-variant check had flagged — a false alarm from the
+  reference side), Girl in the Bubble 5, Next Ten Minutes 3,
+  NSYNC 2, Domino 1.
+- **5 bad_surviving**: Best Part Of Me lid 32 — the "Da-dum" line
+  does not exist in this unplugged arrangement at all; it is
+  replaced by a wordless multi-tone vocalization, so the energy
+  check passed honestly over the wrong content (exactly the phantom
+  class Phase L2's honesty caveats predicted no automatic gate can
+  catch). Seasons of Love lids 28/30/31/32 — the lines exist and the
+  fills sit in the right section, but all are late "by quite a lot"
+  (judge classification: not sung during the swept span →
+  `bad_surviving` under C.2's definition). Ken also observed some of
+  the *placed* lines in that section running late — a separate
+  matcher artifact on a sparse song (5 anchors, 25/34 placed),
+  recorded here as context for the repeat-pileup/matcher-quality
+  thread, not actionable in this study.
+
+**C.2 read-off:** `good = 16 ≥ 6` clears; `bad_surviving = 5 ≠ 0`
+fails — GO is blocked as written. C.2's escape clause is invoked:
+one specific, mechanical gate addition, one L2 re-run with it, one
+re-read of the criterion. This entry records the gate; the re-run is
+the next executor leg.
+
+**Judge diagnosis (mechanisms behind both failures, from data
+already in `l1_gates.json`):** Seasons of Love is a genuine ~4%
+tempo mismatch — its arm-B Theil-Sen fit (slope 0.9582, mad
+0.097 s) is 5x tighter than its arm-A constant-offset fit (mad
+0.52 s), and the constant-offset model's predicted error at the four
+fill positions is 3.8-4.6 s late, matching the eyeball exactly. Best
+Part Of Me carried two warnings: the fragile L1 pass (mad 0.73 vs
+0.75) and slope 0.9787 (2.1% off unity) — tempo drift as a proxy for
+the arrangement mismatch that replaced the lyric. Considered and
+rejected: promoting arm B to fill placer. It would very likely fix
+Seasons' timing (its warp puts lid 28 at 165.1 vs arm A's 168.9) but
+cannot fix Best Part — a nonexistent line has no correct time; arm
+B's version of that fill ([191.8-194.6]) is still collision-free
+energy-PASS, still a phantom → still NO-GO — and arm B's gate is
+content-blind at admission (L1's Bloodstream finding), which is the
+riskier failure class.
+
+**Adopted gate (Ken, 2026-07-16): tempo/arrangement-consistency.**
+A song is fill-eligible iff arm A passes AND its L1 arm-B Theil-Sen
+slope satisfies `|slope − 1| ≤ FILL_MAX_SLOPE_DEV = 0.01`; a song
+whose arm B bailed has no trustworthy slope estimate and is
+ineligible (conservative; the case is empty on this corpus — all 12
+arm-A-pass songs pass arm B). Mechanistic, not fitted: a
+constant-offset fill is invalid by construction when the true
+cue-to-media relation is a warp, and slope drift doubles as an
+arrangement-mismatch signal — the two observed failure modes.
+Separation on this corpus: the two bad songs sit at 4.2% (Seasons)
+and 2.1% (Best Part) deviation; the worst good-fill song is Domino
+at 0.51%; In Summer (1.34%) and Hakuna Matata (3.07%) are also
+excluded at zero cost (no auto_pass fills). The gate reads off the
+already-persisted `l1_gates.json` — no new measurement.
+
+**Re-run instructions (executor leg):** re-run phase `l2` with the
+gate applied to the arm-A fill leg only (the arm-B leg is closed as
+a data exercise; leave it as-is). Fills are per-song independent, so
+the 16 surviving fills must reproduce unchanged; expected arm-A leg:
+10 songs in leg, 7 with fills, 31 fills, 16 auto_pass. Delete the
+two stale renders (`Seasons of Love …lrcfill_a.ass`, `Ed Sheeran -
+Best Part Of Me …lrcfill_a.ass`) so the render set matches the
+eligible set. Then the judge re-reads C.2 once — the final allowed
+pass. Ken's verdicts above carry over to the unchanged 16 fills
+(expected read: `good = 16, bad_surviving = 0` → GO, which per
+Phase L4 means writing the separate production-wiring plan — not
+starting it inside this study).
