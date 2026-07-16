@@ -454,4 +454,219 @@ study" in the Results log for Ken to prioritize.
 
 ## Results log
 
-(created on first use)
+### Phase L0 — corpus audit + variant fetch artifacts (Sonnet, 2026-07-16)
+
+Executor stops at artifacts per this doc's Model switching / the
+established executor-judge split; no interpretation below, per Ken's
+instruction to hand this straight to a judge session.
+
+**Environment substitution** (Ground rules name the Linux conda box;
+this ran on the Windows/uv box instead — capabilities are equivalent,
+nothing in L0 is GPU- or OS-dependent): `REPO` = this checkout,
+`SONG_ROOT`/`WORKSPACE` = `D:\shared\pikaraoke-songs` /
+`D:\shared\pikaraoke-songs\lrclib_study`, invocation `uv run python`
+in place of the conda interpreter. Script:
+`D:\shared\pikaraoke-songs\lrclib_study\lrclib_study.py` (not committed,
+per this file's own "nothing is committed to the repo by this study").
+
+**Invocation:** `uv run python
+"D:/shared/pikaraoke-songs/lrclib_study/lrclib_study.py" l0`
+
+**Step-1 corpus cross-check:** `method_used=="joint"` count and
+`not youtube_srt_present` count both 17, sets equal — script printed
+`Corpus cross-check OK` and did not STOP.
+
+**Artifacts saved** (durable, outside git, in the study workspace):
+- `D:\shared\pikaraoke-songs\lrclib_study\out\l0_variants.json` — full
+  per-song structured output (A.8).
+- `D:\shared\pikaraoke-songs\lrclib_study\out\l0_console.txt` — raw
+  stdout/stderr of the run above, byte-for-byte (includes 5
+  `LRCLIB search failed ... Read timed out` lines and the printed
+  table), copied out of the ephemeral task-output path so a separate
+  session can read it.
+- `D:\shared\pikaraoke-songs\lrclib_study\fetch\*.json` — per-song input
+  variant fetch cache (A.3): query, record metadata list, chosen record
+  incl. `syncedLyrics`.
+
+Raw table (verbatim from `l0_console.txt`):
+
+```
+song                                           variant record (artist)                             dur  delta_s   map%  same_var
+--------------------------------------------------------------------------------------------------------------------------------
+'Defying Gravity' - Wicked 20th Anniversary Ed   False -                                             -        -      -         -
+'Free' _ Official Lyric Video _ Sony Animation    True Free (Rumi)                                 188        -     88     False
+'Popular' - Wicked 20th Anniversary Edition _     True Popular (Kristin Chen)                      224    +12.7     68         -
+Beauty and the Beast (1991) - Be Our Guest [UH   False -                                             -        -      -         -
+Beauty and the Beast (1991) - Belle [UHD]---ot    True Belle (Paige O'Hara)                        306     +8.6     59     False
+Ed Sheeran - Best Part Of Me (feat. YEBBA) (Li    True Best Part of Me (Ed Sheeran)                247     -0.0     95     False
+Ed Sheeran & Rudimental­ - Bloodstream­ [Offici    True Bloodstream (Ed Sheeran)                    289    +41.7     76     False
+HUNTR_X 'This Is What It Sounds Like' (Music V   False -                                             -        -      -         -
+Jessie J - Domino (Official Video)---UJtB55Mao    True Domino (Jessie J)                           232        -     91      True
+Josh Gad - In Summer (From 'Frozen'_Sing-Along    True In Summer (Josh Gad)                        111        -     48      True
+Mulan _ I'll Make a Man Out of You _ @disneyki    True I'll Make a Man Out of Y (Donny Osmond)     219    -21.9     89      True
+NSYNC - Paradise                                  True Paradise (Justin Timbe)                     267        -     74     False
+Pocahontas - Colors of the Wind (Blu-ray 1080p    True Colors of the Wind (Judy Kuhn)              211     +8.3     95      True
+Seasons of Love (HD)---UvyHuse6buY               False -                                             -        -      -         -
+The Lion King - Hakuna Matata Music Video I 4K    True Hakuna Matata (Lane, Nathan)                214    -34.0     48      True
+The Next Ten Minutes Lyrics---0j8kL24ph8U         True The Next Ten Minutes (Anna Kendric)         452        -     93      True
+Wicked - For Good  (2025) 4K - The Girl in the    True The Girl in the Bubble (Ariana Grand)       220    +25.9    100      True
+```
+
+5 `LRCLIB search failed ... Read timed out` lines were printed for:
+Defying Gravity, Popular, Be Our Guest, HUNTR_X ("What It Sounds
+Like"), Seasons of Love. No re-run or retry was attempted. No reading
+of this table (against Appendix B's predictions, C.1, or otherwise) is
+offered here — deferred to the judge.
+
+**Follow-up check (mechanical, not interpretation):** per song, each
+`fetch/<stem>.json` cache records its raw `records` count and whether
+`chosen` is non-null. Confirmed 4 of the 17 caches are `0 records,
+chosen=null` — Defying Gravity, Be Our Guest, HUNTR_X, Seasons of
+Love — matching 4 of the 5 timeout lines exactly; these 4 are the
+entire `variant=False` set in the table above. Popular's timeout does
+not appear here (its cache holds 20 records, `chosen` non-null) — that
+timeout came from a different call (the separate reference-resolution
+path, A.4, consistent with its `same_variant=None`), not the input
+fetch. Cross-referencing those 4 against
+`D:\shared\pikaraoke-songs\lrclib\` (the hand-vetted flat cache,
+reference-only — never read as this study's input, by design, Ground
+rules): a file exists there for Be Our Guest
+(`Beauty and the Beast (1991) - Be Our Guest [UHD]---MiraOCjABn8`) and
+Seasons of Love (`Seasons of Love (HD)---UvyHuse6buY`); no matching
+file exists for Defying Gravity or HUNTR_X either way. Recorded as a
+fact for the judge to weigh, not a conclusion.
+
+**Separate open item, found while scoping L1 (not yet acted on):**
+Appendix A.2's replay sketch calls `harness._replay_spans_at_alpha(bundle,
+2.0)`, which does not exist in the current harness
+(`scripts/replay_ytasr_third_source.py`). The live function is
+`_replay_spans(bundle, ytasr_words, alpha, beta)` — Phase 4a
+(`matcher-accuracy-hardening.md` Appendix E, locked one day after this
+plan's Appendix A) added the `ytasr_words`/`beta` threading. A.2's own
+sketch already has both values in scope (`ytasr_words` computed
+earlier, `beta=2.0` used on the following line), so the literal
+substitution is mechanical, but it is a real mismatch against a locked
+appendix, not implemented, and not for the executor to resolve
+unilaterally per this file's Model switching section.
+
+### Phase L0 — judge read (Opus, 2026-07-16)
+
+Independent re-derivation from the raw artifacts (not the printed
+summaries): re-read the plan end to end, re-computed the cross-check
+from the 33 `alignment_debug/*.json` directly, re-tallied
+`l0_variants.json`, opened the five timed-out `fetch/*.json` caches,
+and read the current harness surfaces (`_replay_spans`,
+`_replay_output`, `_load_lrclib_reference`, `lrclib.search`) rather
+than trusting the write-up. Environment substitution (Windows/uv for
+Linux/conda) is sound — L0 touches no GPU and no OS-specific path;
+verified, not taken on faith.
+
+**1. Corpus cross-check — CONFIRMED.** My own pass: 33 total bundles;
+`method_used=="joint"` = 17; `not youtube_srt_present` = 17; sets
+equal; symmetric difference empty. The step-1 invariant holds from the
+JSON, not just from the printed `Corpus cross-check OK`. `l0_variants.json`
+is 17 rows, `has_genius` True on all 17.
+
+**2. Predictions (Appendix B) — resolved rows consistent; NO-VARIANT
+rows unreadable.** 13 variant-found, 4 NO-VARIANT, `same_variant` 7
+True / 5 False / 5 None. The resolved rows line up with B: Bloodstream
+found but +41.7 s long (album vs the 4:07 cut — the predicted arm-A
+SAFE-SKIP, to be confirmed at L1, not L0); the version-drift songs
+(Hakuna Matata −34.0 s, Girl in the Bubble +25.9 s, I'll Make a Man
+−21.9 s) carry the large deltas B expects. The 7 `same_variant=True`
+are unsurprising per A.4 (live-fetch reference ⇒ same selection path)
+— but they mean **over half the resolved corpus (7/13) yields no
+automatic timing evidence**, so L1/L2's independent-evidence base is
+narrower than the 13 headline suggests; energy + eyeball carry those
+songs. Not a blocker, but carry it into L1's reach accounting. The one
+genuine surprise is structural and belongs to check 3: **there are
+zero confirmed NO-VARIANT songs** — every `variant=False` row is a
+network artifact, so the "variant found?" column cannot yet be read
+against B at all for those four.
+
+**3. The five timeouts — RULING: retry mandatory before L1; four of
+the four NO-VARIANTs are false.** The executor's mechanical read is
+correct and I confirm it end to end. `lrclib.search` swallows the
+`ReadTimeout` and returns `[]` (lrclib.py:235, "Returns `[]` on any
+failure"); `_fetch_input_variant` then writes `records:[], chosen:null`
+to the cache and, on any rerun, reads that cache instead of
+re-searching (lrclib_study.py:132-134). So a transient network failure
+is baked as a *permanent* NO-VARIANT that a rerun cannot self-heal.
+The four `variant=False` caches (Defying Gravity, Be Our Guest,
+HUNTR_X, Seasons of Love) each hold `0 records / chosen=null` and each
+match an **input-fetch** timeout line by title/artist; they are the
+entire `variant=False` set. Popular is the fifth timeout but its input
+cache holds 20 records — its timeout was the uncached reference search
+(A.4), leaving only `same_variant=None`, which self-heals on any rerun
+where the network cooperates (that path is never cached). So the split
+is 4 input + 1 reference, exactly.
+
+This is not a real absence signal:
+- **Two of the four are provably present.** I independently confirmed a
+  hand-vetted flat-cache reference exists at
+  `D:\shared\pikaraoke-songs\lrclib\` for Be Our Guest and Seasons of
+  Love (none for Defying Gravity or HUNTR_X). A human already found an
+  LRCLIB variant for those two, so their NO-VARIANT is a definite false
+  negative; the other two are genuinely unknown pending a successful
+  fetch.
+- **Defying Gravity is arm B's designated test case.** Appendix B and
+  C.4 name it *the* tempo-mismatched variant arm B exists to rescue
+  (LRCLIB master ~354 s vs media ~257 s). With no input variant cached,
+  arm B cannot be evaluated on the one song it was written for — a
+  silent hole in the study, not a data point.
+- **The reproducibility bar would falsely pass.** A warm-cache rerun is
+  byte-identical *because* it re-reads the empty caches — it reproduces
+  the failure, it does not reproduce a fetch.
+
+Action before L1: delete the four empty input caches (Defying Gravity,
+Be Our Guest, HUNTR_X, Seasons of Love) and re-run L0; leave Popular's
+20-record cache (its `same_variant` re-resolves live on its own). This
+does **not** violate the "query live exactly once per song" rule — that
+rule's intent is one *successful* frozen fetch per song; a timeout is
+the query failing, and re-issuing it to actually obtain the answer
+honors the rule rather than breaking it. Only after the four re-fetch
+(whatever they then return — variant or a genuine empty result) can the
+`variant=False` column, the "~10-12 pass arm A" prediction, and arm B's
+reach be read honestly. (Related latent note for the reproducibility
+bar: the reference/`same_variant` search path is uncached and hits the
+network every L0 run, so it is not offline-reproducible — immaterial to
+L1-L3, which the bar actually governs, but worth stating.)
+
+**4. A.2 signature mismatch — CONFIRMED, and the substitution is
+correct.** Verified against the current file myself: the harness has
+only `_replay_spans(bundle, ytasr_words, alpha, beta)` at
+replay_ytasr_third_source.py:213; `_replay_spans_at_alpha` does not
+exist. The substitution is not merely name-compatible but
+**contract-compatible**: `_replay_spans` returns `(spans, results)` or
+`None` (lines 215, 249), and `_replay_output`'s `realign` parameter is
+typed exactly `tuple[list, list] | None` and unpacked as
+`spans, results = realign` (lines 257, 285-286). A.2 already has
+`ytasr_words` in scope and passes `2.0, 2.0` to `_replay_output` on the
+very next line, so:
+
+```python
+realign = harness._replay_spans(bundle, ytasr_words, 2.0, 2.0)
+objs, stats = harness._replay_output(bundle, ytasr_words, 2.0, 2.0, realign)
+```
+
+is the right fix. Beyond "allowed": using the **same** `(ytasr_words,
+alpha, beta)` in both calls is *required* for correctness — Phase 4a
+threaded ytasr/beta into the sub-match, so replaying spans at different
+knobs than the main DP would mis-match the merge. Ruling: apply this
+substitution verbatim when L1 is implemented; it is a mechanical
+appendix-vs-code drift from Phase 4a landing a day later, not a design
+change, so it does not require re-locking A.2 — record the substitution
+in L1's Results entry and proceed.
+
+**Verdict.** L0's bookkeeping is sound where the network cooperated:
+the cross-check is real, the 13 resolved rows are trustworthy and
+consistent with the predictions, the circularity flags are computed
+correctly, and both open items the executor flagged are real and
+correctly diagnosed. But L0 does **not** yet ride cleanly into L1: all
+four NO-VARIANT rows are timeout artifacts (two provably false), and
+Defying Gravity — arm B's test case — is among them. Re-fetch those
+four first, then L1. The A.2 substitution is approved as written. No
+escalation to Ken's judgment is triggered under Model switching (no
+prediction is contradicted by *data* — the contradiction is with the
+network), but the four re-fetches are a prerequisite, not an optional
+cleanup, and L0's table should not be quoted as final until they land.
