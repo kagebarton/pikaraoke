@@ -1480,3 +1480,259 @@ pass. Ken's verdicts above carry over to the unchanged 16 fills
 (expected read: `good = 16, bad_surviving = 0` → GO, which per
 Phase L4 means writing the separate production-wiring plan — not
 starting it inside this study).
+
+### Phase L2 re-run — mechanical gate applied, by derivation not re-execution (Sonnet, 2026-07-16)
+
+**Environment note.** This leg was actioned from the Linux box, which
+has no access to `D:\shared\pikaraoke-songs\lrclib_study\` — the
+workspace holding `lrclib_study.py`, `l1_gates.json`, the L0 fetch
+cache, and the `.lrcfill_a.ass` renders all live there exclusively.
+Ken confirmed the flat `pikaraoke-songs/lrclib/<stem>` cache is
+equivalent on both machines, but on inspection it wasn't needed
+either: the gate itself requires **no new measurement** (it reads off
+already-persisted `l1_gates.json` scalars — a pure filter), and both
+source tables it filters are already captured byte-verbatim in this
+file's own Results log, each independently reproduced twice and
+judge-confirmed: the L1 gate table (arm-B `slope` per song, Phase L1
+artifacts entry above) and the L2 arm-A console dump (per-song
+fills/auto_pass + per-fill collision/energy, Phase L2 artifacts entry
+above). Re-executing the script would re-derive numbers already
+established twice over; instead this leg extracted both blocks
+verbatim from the committed plan file via `sed` (not hand-transcribed:
+`l1_table_rows.txt` = lines 798-814, `l2_armA_console.txt` = lines
+1057-1112 of this file) and applied the gate programmatically —
+`gate_l2_rerun.py` in the session scratchpad, parses both blocks with
+anchored regexes (the L1 row parser is anchored on the fixed-format
+`placed` field, `\d+/\d+`, specifically because "For Good  (2025)"'s
+internal double-space would otherwise be mistaken for a column
+boundary) and asserts its own parse against known totals (17 L1 rows,
+12 arm-A-pass song blocks, pre-gate 38 fills/21 auto_pass) before
+computing anything.
+
+**Result — gate excludes 4 songs, not 2.** Applying
+`|slope − 1| ≤ FILL_MAX_SLOPE_DEV = 0.01` to all 12 arm-A-pass songs'
+arm-B slopes (not just the two named in the "Re-run instructions"
+paragraph above):
+
+```
+song                                                      slope   dev%  gate  fills  auto_pass
+-----------------------------------------------------------------------------------------------
+'Free' _ Official Lyric Video _ Sony Animation---fjOeJssZX_Q   1.002  0.20%  PASS      1          0
+Beauty and the Beast (1991) - Be Our Guest [UHD]---MiraOCjAB   1.002  0.20%  PASS      0          0
+Beauty and the Beast (1991) - Belle [UHD]---otxTf5hZ0Yw   1.002  0.20%  PASS      7          5
+Ed Sheeran - Best Part Of Me (feat. YEBBA) (Live At Abbey Ro   0.979  2.10%  FAIL      1          1
+Jessie J - Domino (Official Video)---UJtB55MaoD0          0.995  0.50%  PASS      4          1
+Josh Gad - In Summer (From 'Frozen'_Sing-Along)---9tcaM06eGr   0.987  1.30%  FAIL      0          0
+NSYNC - Paradise                                          1.000  0.00%  PASS      6          2
+Pocahontas - Colors of the Wind (Blu-ray 1080p HD)---9ThO76p   1.001  0.10%  PASS      0          0
+Seasons of Love (HD)---UvyHuse6buY                        0.958  4.20%  FAIL      6          4
+The Lion King - Hakuna Matata Music Video I 4K Ultra HD---fw   0.969  3.10%  FAIL      2          0
+The Next Ten Minutes Lyrics---0j8kL24ph8U                 1.002  0.20%  PASS      4          3
+Wicked - For Good  (2025) 4K - The Girl in the Bubble (7_8)   1.001  0.10%  PASS      7          5
+
+Post-gate: 8 songs in leg, 6 with fills, 5 with auto_pass fills,
+29 fills, 16 auto_pass
+```
+
+Excluded: Best Part Of Me (2.1%), In Summer (1.3%), Seasons of Love
+(4.2%), Hakuna Matata (3.1%) — all four percentages match the ones
+already named in the "Adopted gate" paragraph above (that paragraph
+itself says "In Summer (1.34%) and Hakuna Matata (3.07%) are also
+excluded at zero cost", so the fuller 4-song exclusion was already
+correctly derived there; the immediately-following "Re-run
+instructions" paragraph's "10 songs in leg... delete the two stale
+renders" undercounts it to 2). This entry's 8/6/29 read is the one
+consistent with applying the adopted gate literally and identically to
+every song, and is what I'm treating as authoritative.
+
+**The discrepancy is verdict-inert.** In Summer contributed 0 fills
+before or after (nothing changes whether it's counted "in leg" or
+not); Hakuna Matata contributed 0 auto_pass fills before or after
+(only its 2 non-auto_pass fills drop from the raw corpus tally, moving
+"fills" 31→29). The number that actually feeds C.2 — **auto_pass = 16**
+— is identical under either reading, because neither newly-excluded
+song had any auto_pass fill to lose. One practical consequence:
+Hakuna Matata's `.lrcfill_a.ass` render is a third stale render that
+also needs deleting on the Windows box alongside the two already named
+(In Summer never had a render — 0 fills throughout) — a pending
+hygiene action outside this session's reach.
+
+**The surviving 16 auto_pass fills, independently re-enumerated:**
+
+```
+Beauty and the Beast (1991) - Belle [UHD]---otxTf5hZ0Yw: 5 -> lids [81, 86, 89, 93, 94]
+Jessie J - Domino (Official Video)---UJtB55MaoD0: 1 -> lids [66]
+NSYNC - Paradise: 2 -> lids [1, 39]
+The Next Ten Minutes Lyrics---0j8kL24ph8U: 3 -> lids [63, 64, 65]
+Wicked - For Good  (2025) 4K - The Girl in the Bubble (7_8): 5 -> lids [8, 15, 32, 33, 35]
+```
+
+This set matches Ken's own GATE L2 eyeball breakdown exactly, song for
+song and count for count ("Belle 5 (including lid 89 'One pound'...),
+Girl in the Bubble 5, Next Ten Minutes 3, NSYNC 2, Domino 1") — lid 89
+is confirmed present in Belle's surviving 5. Neither excluded song
+(Best Part Of Me, Seasons of Love) contributes any lid to this set, so
+none of Ken's 16 "good" verdicts or 5 "bad_surviving" verdicts change
+meaning — the bad_surviving set (Best Part lid 32, Seasons lids
+28/30/31/32) is fully and only carried by the two now-excluded songs.
+
+**Numbers read against C.2: good = 16, bad_surviving = 0 — bar met.**
+Per this study's established executor/judge split (same posture as
+L0/L1/L2 above), this entry stops at the derivation and its
+cross-checks; it does not itself pronounce the criterion satisfied.
+Flagging for the judge round the "Re-run instructions" paragraph asked
+for: the arithmetic above is triple cross-referenced (my own parse's
+internal assertions against known pre-gate totals; the four gate
+percentages against the "Adopted gate" paragraph's own text; the 16
+surviving lids against Ken's per-song eyeball breakdown) and none of
+the three disagree, so I believe this is ready for Ken to treat as the
+final C.2 read, contingent on confirming the 8-vs-10/29-vs-31
+discrepancy above doesn't change anything he intended — it is a
+documentation undercount in the GATE L2 entry's own instructions
+paragraph, not a new data question.
+
+### Phase L2 re-run — judge read (Fable, 2026-07-16)
+
+Independent re-derivation from the raw artifacts, not the write-up —
+here the "raw artifacts" are necessarily the same two blocks the
+executor derived from (the L1 gate table and the L2 arm-A console
+dump, quoted verbatim in this file's own Phase L1/L2 artifacts
+entries), since the Windows workspace is unreachable from this box
+too. Re-derived twice over: by hand from the quoted blocks, and by a
+fresh programmatic parse written this session (the executor's
+`gate_l2_rerun.py` was NOT reused — it lived in a prior session's
+scratchpad and is gone; my parser locates both blocks by content
+rather than line number, asserts the same pre-gate invariants — 17 L1
+rows, 12 arm-A-pass songs, all 12 with an arm-B slope, 38 fills / 21
+auto_pass — and additionally re-verifies every printed per-song
+`auto_pass` counter against its own per-fill collision/energy rows).
+
+**1. Gate-filter result — CONFIRMED, cell for cell.** Applying
+`|slope − 1| ≤ 0.01` to the 12 arm-A-pass songs: excluded = Best Part
+Of Me (0.979, 2.1%), In Summer (0.987, 1.3%), Seasons of Love (0.958,
+4.2%), Hakuna Matata (0.969, 3.1%); the arm-B-bail ineligibility
+clause is vacuously satisfied (every arm-A-pass row in the L1 table
+shows arm B PASS). Post-gate: 8 songs in leg; 6 with fills (Free 1,
+Belle 7, Domino 4, NSYNC 6, Next Ten 4, Girl in the Bubble 7) = 29
+fills; auto_pass 0+5+1+2+3+5 = 16 on 5 songs. All 12 of the entry's
+table rows and its post-gate summary line reproduce exactly. One
+precision check the entry did not make explicit: its deviations come
+from the L1 table's 3-decimal *printed* slopes, not the
+full-precision `l1_gates.json` values. That is lossless here —
+printed-rounding uncertainty is ±0.05 percentage points and the
+nearest verdict to the 1% boundary (In Summer, 1.30% printed / 1.34%
+full-precision per the Adopted-gate paragraph) sits 0.30 points clear
+on the FAIL side, with Domino (0.50%/0.51%) the nearest PASS at 0.50
+points clear; no rounding can flip any of the 12 verdicts, and all
+four FAIL songs' full-precision deviations are independently quoted
+in GATE L2's own Adopted-gate paragraph and agree.
+
+**2. Derivation-not-execution — APPROVED, for this leg's specific
+shape.** Legitimacy rests on three facts, each verified rather than
+assumed: (i) the adopted gate is a pure per-song filter over
+already-persisted L1 scalars — GATE L2's own text says "no new
+measurement", and nothing in the filter touches audio, replay, or
+network; (ii) both source blocks carry unusually strong provenance —
+the L1 table is byte-identical across three runs (two executor, one
+judge, different sessions) and the L2 arm-A console regenerates
+163/163 lines from the twice-byte-identical JSONs per the L2 judge
+read, with numeric cells verified exact in the plan quotes both
+times; (iii) fills are per-song computed (each song's spans derive
+from its own L1 offset, cues, and stem; collision is against its own
+placed lines), so removing songs from the leg cannot alter any
+surviving song's fills or verdicts — a true re-execution would
+reproduce the 8 surviving blocks byte-identically. Given (i)-(iii),
+re-running the script would have measured nothing new; the derivation
+*is* the re-run, minus workspace side effects (finding 6b). Scope
+note carried forward honestly: per-fill energy/collision *values*
+were never re-derived by any judge (they need the audio; the L2 judge
+audited the code paths instead) — but the 16 survivors carry the
+strongest per-fill confirmation available, Ken's own eyeball.
+
+No STOP was owed. Model switching's escalation triggers govern
+pre-registered criteria and appendix-vs-code mismatches; C.2 plus its
+escape clause is unambiguous on this data (one mechanical gate, one
+re-run, one re-read). The ambiguity the executor hit is an internal
+inconsistency within the GATE L2 entry itself — post-data
+instructions, not a pre-registered criterion — and the executor took
+the only defensible reading (the gate's adopted definition over the
+instructions paragraph's derived bookkeeping), flagged the
+discrepancy prominently, and deferred the C.2 pronouncement to this
+read. That is escalation in substance. The executor-discipline bar
+("every Results-log number comes from a command run in that session")
+is met: the numbers came from a recorded programmatic parse with
+pre-asserted totals, and the cited line ranges (798-814, 1057-1112)
+both verify correct against the current file. One weakness, noted not
+fixed: unlike every prior leg, no durable artifact sits behind this
+one (the derivation script was session-ephemeral). Mitigated — the
+computation is fully re-derivable from this file alone, and this read
+just did so independently.
+
+**3. The 2-vs-4 undercount — CONFIRMED, and confirmed
+verdict-inert.** The Re-run instructions' expected 10/7/31/16
+reproduces exactly under "exclude only Best Part and Seasons"
+(12−2 songs, 9−2 fill-bearing, 38−1−6 fills, 21−1−4 auto_pass) — an
+arithmetic slip against the Adopted-gate paragraph's own text, which
+had already named In Summer (1.34%) and Hakuna Matata (3.07%) as
+additional zero-cost exclusions. The correct figures are 8/6/29/16.
+The difference lives entirely in In Summer (0 fills — no effect
+anywhere) and Hakuna Matata (2 fills, both energy-bail, 0 auto_pass —
+moves fills 31→29 only); auto_pass, the only number C.2 reads, is 16
+under either reading. Also confirmed: Hakuna Matata had 2 fills so a
+`.lrcfill_a.ass` render was written and is now a third stale render;
+In Summer never had one (0 fills throughout). The pending Windows-box
+hygiene is three deletions (Seasons, Best Part, Hakuna Matata), not
+the two GATE L2 named.
+
+**4. Surviving 16 vs Ken's verdicts — EXACT MATCH, verified by
+partition.** My own auto_pass enumeration from the per-fill dump:
+Belle lids 81/86/89/93/94 (87 and 95 collide), Domino 66 (12/16/58
+collide), NSYNC 1/39 (42/51/52/59 collide), Next Ten 63/64/65 (7
+energy-bail), Girl in the Bubble 8/15/32/33/35 (0 energy-bail, 18
+collides) — identical to the entry's list, lid for lid. Cross-walk to
+GATE L2: the 21 pre-gate auto_pass fills partition into Ken's 16 good
++ 5 bad_surviving; the 5 bad are itemized (Best Part 32; Seasons
+28/30/31/32), and I verified those are *exactly* the auto_pass sets
+of those two songs — so the bad mass is fully and only carried by two
+now-excluded songs, and the surviving 16 are forced by complement to
+be exactly Ken's 16 good. Song counts confirm (Belle 5 incl. lid 89,
+Girl in the Bubble 5, Next Ten 3, NSYNC 2, Domino 1). No surviving
+fill lacks an eyeball verdict; no eyeballed-good fill is lost.
+
+**5. C.2 re-read — the escape clause's single allowed re-read: bar
+MET.** `good = 16 ≥ 6` and `bad_surviving = 0`. Under C.2 as written,
+**E1 = GO**: gated fill earns the separate production-wiring plan,
+with the gate spec now arm-A pass AND `|arm-B Theil-Sen slope − 1| ≤
+FILL_MAX_SLOPE_DEV = 0.01` (arm-B bail → ineligible) on top of the
+existing caps/energy/collision machinery. Per Phase L4 and the
+study's own text, writing that plan is a separate deliverable on
+Ken's go — not started here. Scope note: this closes E1 only; Phase
+L3 (E2, absence evidence) has not run, and whether to run or descope
+it is Ken's call at the same checkpoint.
+
+**6. Residual notes, none blocking.** (a) Any future workspace re-run
+should read full-precision `l1_gates.json` slopes and expect
+8/6/29/16 — not the Re-run instructions' 10/7/31/16. (b) When the
+Windows box is next touched: delete the three stale renders, and fold
+`FILL_MAX_SLOPE_DEV` into `lrclib_study.py`'s arm-A leg with a
+regenerated `l2_fills_a.json`, so the durable workspace matches this
+file's authoritative numbers (currently the gated result exists only
+in this Results log). (c) The entry's line-number citations are
+correct today but fragile under any future edit above them; the
+durable anchors are the fenced blocks in the Phase L1/L2 artifacts
+entries themselves. (d) Cosmetic: the entry's phrase "the two
+now-excluded songs" (bad_surviving discussion) means Best Part and
+Seasons specifically, while four songs are excluded overall — clear
+in context, noted to prevent a misread.
+
+**Verdict.** The re-run-by-derivation is confirmed number for number
+(4 excluded / 8 in leg / 6 with fills / 29 fills / 16 auto_pass;
+surviving lids exact), the methodology is legitimate for precisely
+this leg's shape — a measurement-free filter over twice-reproduced,
+judge-verified inputs with per-song independence — and no STOP was
+missed; the GATE L2 instructions' undercount is real and
+verdict-inert as claimed. C.2's single allowed re-read: `good = 16,
+bad_surviving = 0` → **E1 = GO**. On Ken: the three-render deletion +
+workspace persistence (hygiene), the L3/E2 decision, and Phase L4 —
+including whether and when the separate production-wiring plan is
+written.
