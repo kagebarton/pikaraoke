@@ -445,3 +445,98 @@ cross-check against the pre-existing survey. It does not pronounce Part 2
 correct or complete; consistent with this file's and
 `matcher-accuracy-hardening.md`'s established executor/judge split, that
 read is left to the judge.
+
+### Part 2 judge read — independent re-derivation of the locked design (Opus, 2026-07-14)
+
+Re-derived from live files/commits, not the write-up. `git show df5e3489`
+(+ `a5c3df3` docs) against my own D1-D4 spec.
+
+**D1 — module.** `pikaraoke/lib/srt_provenance.py`: sole import
+`from pathlib import Path`; `_MARKER_SUFFIX = ".generated"`, `_marker_for`,
+`mark_generated`, `is_generated` (existence via `.is_file()`),
+`clear_generated_marker` (`unlink(missing_ok=True)`) — all verbatim to
+D1. The added `_MARKER_CONTENT` constant carries D1's exact string.
+**Match.**
+
+**D2 — write site.** `mark_generated(final_srt)` sits immediately after
+`shutil.move(...)` at `lyric_align.py:241`, inside the single shared
+`if write_srt and tmp_srt is not None:` block — the one promotion point
+both the alignment and transcribe routes funnel through. Both routes
+covered by one call, as D2 requires. **Match.**
+
+**D3 — four discovery sites.** Each gains the identical
+`and not is_generated(candidate)` guard: `_find_youtube_srt_path`
+(`lyric_align.py:1021`, which `_should_write_srt` delegates to),
+`lyrics_fetch._find_srt`, `regen_alignment_bundles._find_local_srt`,
+`backfill_artifacts._find_local_srt`. Mirrored structure preserved (D6).
+**Match.**
+
+**D4 — two promotion sites.** `download_manager` clears the marker after
+a successful replace; `regen` fetch clears after its existing
+`os.replace` (only the `clear_generated_marker` line added there).
+**Match.**
+
+**The deviation is real and sound.** Verified empirically on this box
+(`uv run python`, throwaway): `Path.rename` onto an existing target
+raises `FileExistsError` — which *is* an `OSError`, so the existing
+`except OSError` in `_move_downloaded_subtitle` would have caught it,
+warned, and `return`ed *before* `clear_generated_marker` ran; `os.replace`
+replaces silently and unlinks the source. So the literal D4 spec would
+have silently no-op'd on Windows in exactly the target-exists scenario D4
+exists to fix. Scope of the swap: it diverges from `Path.rename` *only*
+in the Windows target-exists case (POSIX rename already replaced
+silently, and the sibling regen site already used `os.replace`); `source`
+is always a video-sibling from a non-recursive glob, never the
+`subtitles/` target, so no self-replace edge. No behavior change D4 did
+not intend. Ken-approved and correctly implemented.
+
+**Tests exercise what's claimed, read line-by-line.** The second-run
+test (`test_lyric_align.py:723`) reproduces the actual contamination:
+pre-seeds a *marked* stale `.srt` holding `"stale"`, runs the full stage,
+then asserts `youtube_srt_present` stays False (hazard 1), the sidecar is
+rewritten (`"stale" not in` its text — hazard 3) and re-marked. The
+download-manager test (`test_download_manager.py:418`) seeds a marked
+stale target + a real `.en.srt`, promotes, and asserts the real content
+landed **and** `not is_generated` — which would itself fail on Windows
+under the pre-deviation `Path.rename`, so it doubles as the deviation's
+regression guard. `_should_write_srt`→True on a marked SRT, write-site-
+marks-its-own-output, and the `lyrics_fetch` marked→None / marked+real-
+`.en.srt`→`.en.srt` cases all present and substantive. Not superficial.
+
+**Re-ran the suite myself.** `uv run python -m pytest tests/unit -q`:
+1390 passed, 2 skipped, 4 failed — the 4 are exactly the pre-established
+Windows baseline (`test_genius` sidecar-overwrite, both
+`test_pipeline_stem_worker::TestStemWorkerSeparate`,
+`test_whisper_worker` pipe-close), none touching Part 2 code; the 5th
+(mpv_controller) didn't trip. Zero new failures. Targeted Part-2 set: 99
+passed. `pre-commit ... --files <10 changed>`: every quality hook (pycln,
+isort, black, pylint) clean; sole failure the pre-existing
+`check-shebang-scripts-are-executable` on `regen_alignment_bundles.py` —
+`git ls-tree` shows mode `100644` on both `df5e3489` and its parent
+(`fe8f54b`→`53ee772` is a content-only change), so it predates this
+session as claimed.
+
+**Recomputed the backfill independently** (read-only, live
+`D:\shared\pikaraoke-songs` only, backups excluded): 33 bare `.srt`, 0
+`.en.srt`, 17 `.srt.generated`. Applying the plan's deterministic rule
+straight off the bundles → mark 17 / skip-srt-origin 16 / real-caption
+0 / undeterminable 0. Perfect bijection: every rule-marked stem has a
+marker on disk and every on-disk marker is rule-derived (no leak either
+way). mtimes corroborate the 14+3 split — the 3 Part-1 markers
+(Defying Gravity, Bloodstream, HUNTR_X) at 12:00:16 predate the 12:57:49
+commit and were left untouched; the 14 backfill markers at 12:59:24-25.
+All 17 markers byte-identical, no orphans. Exact match to the claim.
+
+**One cosmetic nit, not a defect, no action.** The on-disk marker bytes
+are CRLF-terminated (`Path.write_text` applies Windows text-mode newline
+translation), so the write-up's "byte-for-byte `...caption.\n`" describes
+the source literal, not the disk bytes (which end `\r\n`). Immaterial:
+`is_generated` keys on file *existence*, never content, and all 17
+markers are mutually identical, so the "3 Part-1 markers confirmed
+identical, not rewritten" claim holds regardless.
+
+**Verdict.** The implementation matches the locked D1-D4 design; the sole
+deviation is necessary, correct, and its behavior change is confined to
+the case D4 targets. Tests, suite, pre-commit, and the backfill all
+re-verify independently. **Part 2 is ready to close, and with Part 1's
+gold-label entry already recorded, this plan — both parts — is done.**
