@@ -1736,3 +1736,54 @@ bad_surviving = 0` → **E1 = GO**. On Ken: the three-render deletion +
 workspace persistence (hygiene), the L3/E2 decision, and Phase L4 —
 including whether and when the separate production-wiring plan is
 written.
+
+### Workspace sync — gate folded into the arm-A leg (Sonnet, 2026-07-17)
+
+Mechanical only, per residual note 6b of the re-run judge read above
+("when the Windows box is next touched"): this session runs on that
+box, so the pending sync is actioned now. No new judgment — every
+number below was already triple-confirmed (this study's own
+derivation, Fable's independent re-derivation, exact match to Ken's
+GATE L2 eyeball breakdown) before this session began.
+
+**Code change** (`D:\shared\pikaraoke-songs\lrclib_study\lrclib_study.py`,
+not committed, per Ground rules): added `FILL_MAX_SLOPE_DEV = 0.01`
+and `_slope_eligible(row)` (`arm_b["bailed"] is None and abs(arm_b["slope"]
+- 1) <= FILL_MAX_SLOPE_DEV`); `_run_l2_leg` takes a new optional
+`extra_eligible` predicate, applied after the existing `bailed`
+filter. Wired in for the arm-A leg call only
+(`extra_eligible=_slope_eligible`); the arm-B leg call is unchanged
+(closed as a data exercise per the L2 judge read, left as-is).
+
+**Invocation:** `uv run python
+"D:/shared/pikaraoke-songs/lrclib_study/lrclib_study.py" l2`, run from
+the repo root (`uv run` needs the project's `pyproject.toml` in scope
+to resolve the venv — running it from inside the workspace directory
+itself fails with `ModuleNotFoundError: No module named 'numpy'`; not
+a code bug, an invocation-directory requirement).
+
+**Result — matches the adjudicated numbers exactly.** New
+`l2_fills_a.json`: 8 songs in leg (Free, Be Our Guest, Belle, Domino,
+NSYNC, Colors of the Wind, Next Ten Minutes, Girl in the Bubble), 6
+with fills, 29 fills, 16 auto_pass — Belle 5, Domino 1, NSYNC 2, Next
+Ten Minutes 3, Girl in the Bubble 5. Best Part Of Me, Seasons of Love,
+Hakuna Matata, In Summer no longer appear in the arm-A leg at all.
+`l2_fills_b.json` (arm-B leg): SHA-256 identical to its pre-edit
+value — confirms the code change touched only the arm-A path, as
+intended.
+
+**Renders synced:** deleted the three stale `.lrcfill_a.ass` files
+(Best Part Of Me, Seasons of Love, Hakuna Matata) from
+`D:\shared\pikaraoke-songs\karaoke\`. 6 `.lrcfill_a.ass` files now on
+disk, matching `n_songs_with_fills` exactly. `.lrcfill_b.ass` files
+untouched (13, as before).
+
+**Console capture:** the pre-gate `l2_console.txt` is preserved as
+`out/l2_console.pre_gate_backup.txt`; the gated run's stdout (`uv`'s
+one-time package-rebuild lines included — cosmetic, same
+warts-included convention as the other phases' console captures)
+replaces it at `out/l2_console.txt`.
+
+No reading offered beyond confirming the numbers match what was
+already adjudicated — this is workspace bookkeeping, not a new GATE
+round.
