@@ -264,7 +264,7 @@ class ProcessingManager:
         # Build stages: PreparePtyStage first so all subsequent stages see pty_slave_fd
         stages = [
             PreparePtyStage(self._pty_slave_fd),
-            LyricsFetchStage(self._genius),
+            LyricsFetchStage(self._genius, self._config),
             FFmpegExtractStage(self._config),
             LoudnormAnalyzeStage(self._config),
             StemSeparationStage(self._stem_worker),

@@ -5,7 +5,12 @@ from unittest.mock import MagicMock, patch
 import requests
 
 from pikaraoke.lib import lrclib
-from pikaraoke.lib.lrclib import map_lines_to_cues, normalize_line, parse_lrc_lines
+from pikaraoke.lib.lrclib import (
+    ensure_lrc,
+    map_lines_to_cues,
+    normalize_line,
+    parse_lrc_lines,
+)
 
 _SYNCED_AB = "[00:01.00]hello world\n[00:05.00]goodbye world\n"
 
@@ -108,6 +113,49 @@ class TestWriteReadLrc:
         texts, starts = parse_lrc_lines(synced)
         assert texts == ["Hello", "World"]
         assert starts == [1.0, 5.0]
+
+
+class TestEnsureLrc:
+    _RECORD = {
+        "id": 7,
+        "trackName": "T",
+        "artistName": "A",
+        "duration": 120.0,
+        "syncedLyrics": _SYNCED_AB,
+    }
+
+    def test_reuses_on_disk_file_without_searching(self, tmp_path):
+        song_path = tmp_path / "Song---dQw4w9WgXcQ.mp4"
+        lrc_dir = song_path.parent / "lyrics"
+        lrc_dir.mkdir()
+        existing = lrc_dir / f"{song_path.stem}.lrc"
+        existing.write_text("[00:01.00]cached\n", encoding="utf-8")
+
+        with patch("pikaraoke.lib.lrclib.search") as mock_search:
+            result = ensure_lrc(song_path, "T", "A", ["hello world"], 120.0)
+
+        assert result == existing
+        mock_search.assert_not_called()
+
+    @patch("pikaraoke.lib.lrclib.search")
+    def test_fetches_selects_and_persists_on_a_miss(self, mock_search, tmp_path):
+        mock_search.return_value = [self._RECORD]
+        song_path = tmp_path / "Song---dQw4w9WgXcQ.mp4"
+
+        result = ensure_lrc(song_path, "T", "A", ["hello world", "goodbye world"], 120.0)
+
+        assert result == song_path.parent / "lyrics" / "Song---dQw4w9WgXcQ.lrc"
+        assert result.is_file()
+        assert "[lrclib_id:7]" in result.read_text(encoding="utf-8")
+
+    @patch("pikaraoke.lib.lrclib.search", return_value=[])
+    def test_no_candidate_persists_nothing_and_returns_none(self, _search, tmp_path):
+        song_path = tmp_path / "Song---dQw4w9WgXcQ.mp4"
+
+        result = ensure_lrc(song_path, "T", "A", ["hello world"], 120.0)
+
+        assert result is None
+        assert not (song_path.parent / "lyrics").exists()
 
 
 class TestCueSpansForLines:

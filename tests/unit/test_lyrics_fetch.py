@@ -15,6 +15,7 @@ from pikaraoke.lib.genius import (
     write_choice,
 )
 from pikaraoke.lib.srt_provenance import mark_generated
+from pikaraoke.pipeline.config import PipelineConfig
 from pikaraoke.pipeline.context import StageContext
 from pikaraoke.pipeline.stages.lyrics_fetch import LyricsFetchStage
 
@@ -29,14 +30,21 @@ def _make_ctx(
     artifacts: dict | None = None,
 ) -> StageContext:
     """Create a minimal StageContext for testing."""
-    from pikaraoke.pipeline.config import PipelineConfig
-
     return StageContext(
         song_path=song_path,
         tmp_dir=tmp_dir,
         config=PipelineConfig(),
         artifacts=artifacts if artifacts is not None else {},
     )
+
+
+@pytest.fixture(autouse=True)
+def _no_lrclib_network(monkeypatch):
+    """``PipelineConfig.lrclib_fill`` defaults on, so any Branch-A test that
+    doesn't explicitly exercise LRCLIB must not hit the network. Tests
+    covering the LRCLIB resolve itself patch ``lrclib.ensure_lrc`` directly,
+    which supersedes this."""
+    monkeypatch.setattr("pikaraoke.pipeline.stages.lyrics_fetch.lrclib.search", lambda *a, **k: [])
 
 
 # ---------------------------------------------------------------------------
@@ -144,7 +152,7 @@ class TestBranchAGeniusSelection:
         write_choice("dQw4w9WgXcQ", {"yt_id": "dQw4w9WgXcQ", "genius_id": 456})
 
         ctx = _make_ctx(song_path, job_tmp)
-        stage = LyricsFetchStage(genius)
+        stage = LyricsFetchStage(genius, PipelineConfig())
         stage.run(ctx)
 
         assert ctx.artifacts["lyrics_path"] == job_tmp / "lyrics.txt"
@@ -167,7 +175,7 @@ class TestBranchAGeniusSelection:
         write_choice("dQw4w9WgXcQ", {"yt_id": "dQw4w9WgXcQ", "genius_id": 456})
 
         ctx = _make_ctx(song_path, job_tmp)
-        LyricsFetchStage(genius).run(ctx)
+        LyricsFetchStage(genius, PipelineConfig()).run(ctx)
 
         assert ctx.artifacts["genius"] == {"id": 456, "title": "Hello", "artist": "World"}
 
@@ -187,7 +195,7 @@ class TestBranchAGeniusSelection:
         write_choice("dQw4w9WgXcQ", {"yt_id": "dQw4w9WgXcQ", "genius_id": 456})
 
         ctx = _make_ctx(song_path, job_tmp)
-        stage = LyricsFetchStage(genius)
+        stage = LyricsFetchStage(genius, PipelineConfig())
         stage.run(ctx)
 
         # Choice file should be deleted
@@ -215,7 +223,7 @@ class TestBranchAGeniusSelection:
         write_choice("dQw4w9WgXcQ", {"yt_id": "dQw4w9WgXcQ", "genius_id": 456})
 
         ctx = _make_ctx(song_path, job_tmp)
-        stage = LyricsFetchStage(genius)
+        stage = LyricsFetchStage(genius, PipelineConfig())
         stage.run(ctx)
 
         assert ctx.artifacts["lyrics_origin"] == "srt"
@@ -239,7 +247,7 @@ class TestBranchAGeniusSelection:
         write_choice("dQw4w9WgXcQ", {"yt_id": "dQw4w9WgXcQ", "genius_id": 456})
 
         ctx = _make_ctx(song_path, job_tmp)
-        stage = LyricsFetchStage(genius)
+        stage = LyricsFetchStage(genius, PipelineConfig())
         stage.run(ctx)
 
         assert ctx.artifacts["lyrics_path"] is None
@@ -283,7 +291,7 @@ class TestBranchAYtasr:
         job_tmp.mkdir()
         write_choice("dQw4w9WgXcQ", {"yt_id": "dQw4w9WgXcQ", "genius_id": 456})
         ctx = _make_ctx(song_path, job_tmp)
-        LyricsFetchStage(self._genius()).run(ctx)
+        LyricsFetchStage(self._genius(), PipelineConfig()).run(ctx)
         return ctx
 
     @patch("pikaraoke.pipeline.stages.lyrics_fetch.probe_duration", return_value=120.0)
@@ -324,6 +332,113 @@ class TestBranchAYtasr:
 
 
 # ---------------------------------------------------------------------------
+# Branch (a): LRCLIB gated-fill source (E1)
+# ---------------------------------------------------------------------------
+
+
+class TestBranchALrclib:
+    """Genius branch: fetch an LRCLIB synced variant for the E1 gated-fill
+    path (``lyrics/<stem>.lrc``). Reuse-on-disk first, else
+    fetch+select+persist; a miss or a disabled knob never blocks the stage."""
+
+    def _genius(self, title="Hello World", artist="The Band", text="Hello world\n"):
+        g = MagicMock(spec=GeniusClient)
+        g.fetch_song.return_value = GeniusSong(text=text, title=title, artist=artist)
+        return g
+
+    def _ctx(self, tmp_path, mock_gtd):
+        mock_gtd.return_value = str(tmp_path / "temp")
+        (tmp_path / "temp" / "lyric_choices").mkdir(parents=True, exist_ok=True)
+        song_path = tmp_path / "Song---dQw4w9WgXcQ.mp4"
+        song_path.touch()
+        job_tmp = tmp_path / "job_tmp"
+        job_tmp.mkdir()
+        write_choice("dQw4w9WgXcQ", {"yt_id": "dQw4w9WgXcQ", "genius_id": 456})
+        # Pre-seed the duration so _resolve_lrclib never falls to a real
+        # probe_duration() call against the touched (non-media) fixture file.
+        ctx = _make_ctx(song_path, job_tmp, artifacts={"media_duration_s": 200.0})
+        return ctx, song_path
+
+    def _lrc_path(self, song_path: Path) -> Path:
+        return song_path.parent / "lyrics" / f"{song_path.stem}.lrc"
+
+    @patch("pikaraoke.pipeline.stages.lyrics_fetch.lrclib.search")
+    @patch("pikaraoke.lib.genius.get_temp_directory")
+    def test_synced_candidate_is_persisted_with_provenance(self, mock_gtd, mock_search, tmp_path):
+        mock_search.return_value = [
+            {
+                "id": 1,
+                "trackName": "Hello World",
+                "artistName": "The Band",
+                "duration": 200.0,
+                "syncedLyrics": "[00:01.00]Hello world\n",
+            }
+        ]
+        ctx, song_path = self._ctx(tmp_path, mock_gtd)
+
+        LyricsFetchStage(self._genius(), PipelineConfig()).run(ctx)
+
+        lrc_path = self._lrc_path(song_path)
+        assert lrc_path.is_file()
+        text = lrc_path.read_text(encoding="utf-8")
+        assert "[ti:Hello World]" in text
+        assert "[ar:The Band]" in text
+        assert "[lrclib_id:1]" in text
+
+    @patch("pikaraoke.pipeline.stages.lyrics_fetch.lrclib.search")
+    @patch("pikaraoke.lib.genius.get_temp_directory")
+    def test_on_disk_lrc_skips_search(self, mock_gtd, mock_search, tmp_path):
+        ctx, song_path = self._ctx(tmp_path, mock_gtd)
+        lrc_path = self._lrc_path(song_path)
+        lrc_path.parent.mkdir(parents=True)
+        lrc_path.write_text("[00:01.00]cached\n", encoding="utf-8")
+
+        LyricsFetchStage(self._genius(), PipelineConfig()).run(ctx)
+
+        mock_search.assert_not_called()
+        assert lrc_path.read_text(encoding="utf-8") == "[00:01.00]cached\n"
+
+    @patch("pikaraoke.pipeline.stages.lyrics_fetch.lrclib.search")
+    @patch("pikaraoke.lib.genius.get_temp_directory")
+    def test_search_failure_writes_no_file_and_completes(self, mock_gtd, mock_search, tmp_path):
+        mock_search.return_value = []  # lrclib.search's own contract: [] on failure
+        ctx, song_path = self._ctx(tmp_path, mock_gtd)
+
+        LyricsFetchStage(self._genius(), PipelineConfig()).run(ctx)
+
+        assert not self._lrc_path(song_path).exists()
+        assert ctx.artifacts["lyrics_origin"] == "genius"
+
+    @patch("pikaraoke.pipeline.stages.lyrics_fetch.lrclib.search")
+    @patch("pikaraoke.lib.genius.get_temp_directory")
+    def test_knob_off_skips_resolve_entirely(self, mock_gtd, mock_search, tmp_path):
+        ctx, song_path = self._ctx(tmp_path, mock_gtd)
+
+        LyricsFetchStage(self._genius(), PipelineConfig(lrclib_fill=False)).run(ctx)
+
+        mock_search.assert_not_called()
+        assert not self._lrc_path(song_path).parent.exists()
+
+    @patch("pikaraoke.pipeline.stages.lyrics_fetch.lrclib.search")
+    @patch("pikaraoke.lib.genius.get_temp_directory")
+    def test_genius_fetch_failure_never_attempts_lrclib(self, mock_gtd, mock_search, tmp_path):
+        mock_gtd.return_value = str(tmp_path / "temp")
+        (tmp_path / "temp" / "lyric_choices").mkdir(parents=True, exist_ok=True)
+        genius = MagicMock(spec=GeniusClient)
+        genius.fetch_song.side_effect = GeniusUnavailable("API error")
+        song_path = tmp_path / "Song---dQw4w9WgXcQ.mp4"
+        song_path.touch()
+        job_tmp = tmp_path / "job_tmp"
+        job_tmp.mkdir()
+        write_choice("dQw4w9WgXcQ", {"yt_id": "dQw4w9WgXcQ", "genius_id": 456})
+        ctx = _make_ctx(song_path, job_tmp)
+
+        LyricsFetchStage(genius, PipelineConfig()).run(ctx)
+
+        mock_search.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
 # Branch (b): raw mode selection
 # ---------------------------------------------------------------------------
 
@@ -345,7 +460,7 @@ class TestBranchBRawSelection:
         write_choice("dQw4w9WgXcQ", {"yt_id": "dQw4w9WgXcQ", "mode": "raw"})
 
         ctx = _make_ctx(song_path, job_tmp)
-        stage = LyricsFetchStage(genius)
+        stage = LyricsFetchStage(genius, PipelineConfig())
         stage.run(ctx)
 
         assert ctx.artifacts["lyrics_path"] is None
@@ -365,7 +480,7 @@ class TestBranchBRawSelection:
         write_choice("dQw4w9WgXcQ", {"yt_id": "dQw4w9WgXcQ", "mode": "raw"})
 
         ctx = _make_ctx(song_path, job_tmp)
-        stage = LyricsFetchStage(genius)
+        stage = LyricsFetchStage(genius, PipelineConfig())
         stage.run(ctx)
 
         assert read_choice("dQw4w9WgXcQ") is None
@@ -391,7 +506,7 @@ class TestBranchCSrtFallback:
         job_tmp.mkdir()
 
         ctx = _make_ctx(song_path, job_tmp)
-        stage = LyricsFetchStage(genius)
+        stage = LyricsFetchStage(genius, PipelineConfig())
         stage.run(ctx)
 
         assert ctx.artifacts["lyrics_path"] == subs / "Song---dQw4w9WgXcQ.en.srt"
@@ -405,7 +520,7 @@ class TestBranchCSrtFallback:
         job_tmp.mkdir()
 
         ctx = _make_ctx(song_path, job_tmp)
-        stage = LyricsFetchStage(genius)
+        stage = LyricsFetchStage(genius, PipelineConfig())
         stage.run(ctx)
 
         assert ctx.artifacts["lyrics_path"] is None
@@ -423,7 +538,7 @@ class TestBranchCSrtFallback:
         job_tmp.mkdir()
 
         ctx = _make_ctx(song_path, job_tmp)
-        stage = LyricsFetchStage(genius)
+        stage = LyricsFetchStage(genius, PipelineConfig())
         stage.run(ctx)
 
         assert ctx.artifacts["lyrics_path"] == subs / "Song---abc1234567.srt"
@@ -449,7 +564,7 @@ class TestShortCircuitOverride:
         override_path = Path("/override/lyrics.txt")
         ctx = _make_ctx(song_path, job_tmp, artifacts={"lyrics_path": override_path})
 
-        stage = LyricsFetchStage(genius)
+        stage = LyricsFetchStage(genius, PipelineConfig())
         stage.run(ctx)
 
         assert ctx.artifacts["lyrics_path"] == override_path
@@ -468,7 +583,7 @@ class TestShortCircuitOverride:
 
         ctx = _make_ctx(song_path, job_tmp, artifacts={"lyrics_path": None})
 
-        stage = LyricsFetchStage(genius)
+        stage = LyricsFetchStage(genius, PipelineConfig())
         stage.run(ctx)
 
         # Should proceed to branch (c) — SRT fallback
@@ -482,7 +597,7 @@ class TestShortCircuitOverride:
         job_tmp.mkdir()
 
         ctx = _make_ctx(song_path, job_tmp, artifacts={"lyrics_path": Path("/x.txt")})
-        stage = LyricsFetchStage(genius)
+        stage = LyricsFetchStage(genius, PipelineConfig())
         stage.run(ctx)
 
         assert ctx.artifacts["lyrics_origin"] == "override"
@@ -499,7 +614,7 @@ class TestShortCircuitOverride:
             job_tmp,
             artifacts={"lyrics_path": Path("/x.txt"), "lyrics_origin": "test"},
         )
-        stage = LyricsFetchStage(genius)
+        stage = LyricsFetchStage(genius, PipelineConfig())
         stage.run(ctx)
 
         assert ctx.artifacts["lyrics_origin"] == "test"
@@ -521,7 +636,7 @@ class TestNoYouTubeId:
         job_tmp.mkdir()
 
         ctx = _make_ctx(song_path, job_tmp)
-        stage = LyricsFetchStage(genius)
+        stage = LyricsFetchStage(genius, PipelineConfig())
         stage.run(ctx)
 
         assert ctx.artifacts["lyrics_path"] is None

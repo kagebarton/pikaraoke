@@ -249,6 +249,16 @@ class PipelineConfig:
     # 46% of song audio re-aligned).
     joint_windowed_realign: bool = True
 
+    # Gated LRCLIB fill (E1, plans/lrclib-fill-absence-study.md Phase L4):
+    # on the joint route, lines the matcher leaves unplaced are filled at
+    # LRCLIB-cue-plus-offset times, iff the song's own audio-vs-LRCLIB
+    # tempo/arrangement-consistency gates pass (see pikaraoke.lib.
+    # lrclib_fill.plan_fills). Fill-only: LRCLIB is never a matcher/DP
+    # candidate source. Covers both the LyricsFetchStage fetch leg and the
+    # LyricAlignStage fill hook. Ships on -- every unsafe case is caught by
+    # the gates (that is what the study validated).
+    lrclib_fill: bool = True
+
     # De-reverb retry for the joint route. When the whole-stem transcribe
     # yield falls below this many words per minute, the vocal stem is
     # treated as reverb-washed: the stem worker swaps to the de-reverb

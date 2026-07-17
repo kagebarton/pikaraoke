@@ -1,11 +1,18 @@
-"""LRCLIB synced-lyrics fetch + selection, for held-out offline scoring only.
+"""LRCLIB synced-lyrics fetch + selection.
 
 LRCLIB (https://lrclib.net) hosts community synced lyrics. This module fetches
 the best-matching synced variant for a song and parses it into per-line cue
-spans. It is used solely as a *held-out reference* by the offline tuning
-harness (``scripts/replay_ytasr_third_source.py``) to score matcher placements
-against an independent timing source -- LRCLIB is permanently out of the
-production pipeline and no production module imports it.
+spans. Two consumers, both held-out or fill-only -- LRCLIB is still never a
+matcher/DP candidate source:
+
+- The offline tuning harness (``scripts/replay_ytasr_third_source.py``) uses
+  it as a *held-out reference* to score matcher placements against an
+  independent timing source.
+- The production pipeline uses it as a gated *fill* source for lines the
+  joint matcher leaves unplaced (``pikaraoke.lib.lrclib_fill``, per the E1 =
+  GO verdict of ``plans/lrclib-fill-absence-study.md``): ``ensure_lrc``
+  resolves a persisted ``lyrics/<stem>.lrc`` for a Genius-origin song, fetched
+  and selected the same way the harness's held-out reference is.
 
 Selection is reference-free: rank candidates by how well their text maps to our
 lyric sheet (``map_lines_to_cues``), with the video duration as a tiebreak, so a
@@ -358,3 +365,26 @@ def _length_to_seconds(length: str) -> float | None:
         return float(int(minutes) * 60 + int(seconds))
     except (ValueError, AttributeError):
         return None
+
+
+def ensure_lrc(
+    song_path: Path, title: str, artist: str, sheet_lines: list[str], media_dur: float | None
+) -> Path | None:
+    """``lyrics/<stem>.lrc`` for ``song_path``: reuse on disk, else fetch +
+    select + persist.
+
+    Returns the path when a variant is available, ``None`` otherwise.
+    Persists only successful selections -- a failed or empty search leaves
+    no file, so the next call retries instead of baking in a transient
+    failure.
+    """
+    path = song_path.parent / "lyrics" / f"{song_path.stem}.lrc"
+    if path.is_file():
+        return path
+    records = search(title, artist)
+    chosen = select_candidate(records, sheet_lines, media_dur)
+    if chosen is None:
+        logger.info("LRCLIB: no synced match for %r by %r", title, artist)
+        return None
+    write_lrc(path, chosen)
+    return path
