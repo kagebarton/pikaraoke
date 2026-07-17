@@ -1831,3 +1831,60 @@ reduce to the five different-variant passers), choosing the
 documented-limitation route instead. Recorded as a dated amendment in
 A.7 plus a second blind-spot clause in the GATE L3 paragraph; C.3
 untouched. The L3 run-vs-descope call itself remains open.
+
+### Phase L4 — consolidated verdict against Appendix C (Sonnet, 2026-07-17)
+
+Consolidation only: every determination below was already reached and
+recorded earlier in this log (cited inline); this entry collects them
+under Appendix C's four criteria per Phase L4's first bullet, plus
+closes the one item the pre-L3 design review left open (L3
+run-vs-descope, Ken's call, relayed 2026-07-17). No new measurement,
+no new eyeball.
+
+**C.1 — satisfied.** Bloodstream and Defying Gravity both bail arm A
+(`wide_spread`, mad 0.84 s and 7.14 s) — the STOP condition never
+triggers (Phase L1 judge read).
+
+**C.2 — E1 = GO.** `good = 16 ≥ 6` and `bad_surviving = 0` (GATE L2
+eyeball + re-run-by-derivation, exact match, lid-for-lid). Gate: arm-A
+pass AND `|arm-B Theil-Sen slope − 1| ≤ FILL_MAX_SLOPE_DEV = 0.01`
+(arm-B bail → ineligible), on top of the existing caps/energy/collision
+machinery. Per C.2, this earns the separate production-wiring plan
+(Phase L4, second bullet).
+
+**C.3 — not evaluated; E2 descoped by Ken pre-execution.** Phase L3
+never ran (`phase_l3` does not exist), so there is no strong-absence/
+wrong-demotion count to read against the `≥5 true demotions ∧ 0 wrong
+demotions` bar — this is a scope decision, not a failed verdict.
+Rationale on record: A.7's candidate derivation is structurally blind
+to right-text-wrong-time phantoms (`map_lines_to_cues` aligns text
+sequences only, no timestamp anywhere in its signature or body —
+judge-verified against `pikaraoke/lib/lrclib.py`), and the reachable
+corpus was already thin (known-overhang placed lines sit 100% on
+arm-A-bail songs; plausible candidate producers reduce to the five
+different-variant passers). A mapped-cue timing-residual diagnostic
+was designed as a fix and descoped by Ken as not worth the addition
+at that corpus size (pre-L3 design review, above). Closing the one
+item that entry left open: running Phase L3 in its original,
+documented-limitation form was also descoped by Ken rather than
+executed. The A.7 amendment stands as a recorded scope limit for any
+future revisit, not a defect requiring one now.
+
+**C.4 — closed, no separate study.** Decided pre-gate on reach alone,
+robust to the later slope gate: arm-B-only songs (pass arm B, not arm
+A) contribute 48 raw fills and exactly 1 auto_pass — a ~2% hit rate.
+Raw reach was 86 vs 38 fills (2.26x), collapsing to 23 vs 21 auto_pass
+(1.10x) at the pre-gate eyeball set; the arm-A denominator has since
+shrunk further to 16 post-slope-gate, which only widens the gap.
+"At least doubles at equal eyeball precision" cannot trigger either
+way (Phase L2 artifacts entry). C.4's "merits its own study" line is
+not recorded.
+
+**Headline.** E1 (gated fill) is a GO and proceeds to a separate
+production-wiring plan; E2 (absence evidence) is descoped
+pre-execution with its design gap documented rather than fixed; arm B
+stays a closed reach probe with no follow-up. Remaining Phase L4 work:
+write the production-wiring plan (separate deliverable, not started
+here), update the LRCLIB ruling in auto-memory and amend
+`matcher-accuracy-hardening.md`'s "Explicitly rejected" section, and
+flag this checkpoint as a good /compact point.

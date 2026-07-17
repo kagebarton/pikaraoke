@@ -649,7 +649,17 @@ degrades to no E2 exclusion when the verdict does not exist.
   ~57 correct drops vs ~22 real-but-unplaced — blanket filling is wrong ~70%
   of the time. Convert the 22 via Phases 1 and 4 instead.
 - LRCLIB in production, or any new online timing source. LRCLIB is held-out
-  scoring only.
+  scoring only. **Narrowed 2026-07-17:** `plans/lrclib-fill-absence-study.md`
+  re-opened this for one narrow, offline-validated use — gated fill of
+  lines the matcher leaves unplaced (arm-A-pass songs only, never a DP
+  candidate source) — and found it a GO (E1: C.2's `good=16,
+  bad_surviving=0` bar met). That necessarily reintroduces an LRCLIB fetch
+  stage in production; the separate production-wiring plan the study calls
+  for (not started here) must reconcile that explicitly against this
+  rejection rather than skip past it. E2 (absence-evidence demotion) was
+  descoped pre-execution — the F2 criterion 4 and Appendix G's G2 labels
+  above, which read E2's verdict, degrade to their own already-documented
+  "no E2 exclusion" fallback, since that verdict does not exist.
 
 ## Verification matrix (every phase)
 
