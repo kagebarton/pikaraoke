@@ -17,6 +17,13 @@ class LoadModelKwargs:
     model_path: str = _DEFAULT_MODEL
     device: str = "auto"  # 'auto' → 'cuda' if available else 'cpu'
 
+    # Load the checkpoint on CPU, halve it, restore LayerNorm to fp32, then
+    # move to device. Roughly halves load VRAM (e.g. large-v3 6.2GB -> ~4.6GB)
+    # at numerically-equivalent output. Not forwarded to
+    # stable_whisper.load_model() as a kwarg — consumed by the worker's load
+    # site. Default off = today's behavior byte-for-byte.
+    fp16_weights: bool = False
+
 
 @dataclass
 class AlignKwargs:

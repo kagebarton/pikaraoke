@@ -628,6 +628,30 @@ def _worker_main(
         raise
 
 
+def _load_whisper_model(model_path: str, device: str, fp16_weights: bool):
+    """Load the stable-ts model, optionally in halved (fp16) weights.
+
+    Whisper's Linear/Conv1d subclasses cast weights to the input's dtype
+    per call, so fp16-stored weights decode identically to fp32-stored
+    weights once inference runs in fp16. LayerNorm is the exception: it
+    upcasts its input to fp32 internally and errors if its own weight/bias
+    are still fp16, so those are restored after ``half()``. Loading on CPU
+    first means the fp32 checkpoint is never materialized on the GPU.
+    """
+    import stable_whisper
+    import torch
+
+    if not fp16_weights:
+        return stable_whisper.load_model(model_path, device=device)
+
+    model = stable_whisper.load_model(model_path, device="cpu")
+    model.half()
+    for module in model.modules():
+        if isinstance(module, torch.nn.LayerNorm):
+            module.float()
+    return model.to(device)
+
+
 def _whisper_worker_main_inner(
     job_recv: Connection,
     result_send: Connection,
@@ -664,9 +688,8 @@ def _whisper_worker_main_inner(
     worker_log.info(f"Loading whisper model: {config.load_model.model_path} on {device}")
     start = time.time()
 
-    model = stable_whisper.load_model(
-        config.load_model.model_path,
-        device=device,
+    model = _load_whisper_model(
+        config.load_model.model_path, device, config.load_model.fp16_weights
     )
     encoder_module = model.encoder
 
