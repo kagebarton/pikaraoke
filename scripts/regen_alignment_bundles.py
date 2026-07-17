@@ -538,7 +538,7 @@ def _build_stages(song: Path, lyric_stage, whisper, config: PipelineConfig, stem
     return stages
 
 
-def _prepare_lyrics(job: SongJob, genius: GeniusClient, lyrics_dir: Path):
+def _prepare_lyrics(job: SongJob, genius: GeniusClient, lyrics_dir: Path, config: PipelineConfig):
     """Resolve a job's plan to ``(lyrics_path, lyric_stage)`` for the run.
 
     Writes the temp .txt for reused Genius lyrics and the choice sidecar for
@@ -561,7 +561,7 @@ def _prepare_lyrics(job: SongJob, genius: GeniusClient, lyrics_dir: Path):
         yt_id = extract_youtube_id(str(song))
         if yt_id:
             write_choice(yt_id, {"genius_id": plan.genius_id})
-            return None, LyricsFetchStage(genius)
+            return None, LyricsFetchStage(genius, config)
         # No YouTube id — sidecar can't be keyed. Fetch the text directly.
         try:
             gsong = genius.fetch_song(plan.genius_id)
@@ -608,7 +608,7 @@ def run_jobs(
         for i, job in enumerate(runnable, 1):
             song = job.song_path
             print(f"\n[{i}/{len(runnable)}] {song.name} — {job.plan.label}")
-            lyrics_path, lyric_stage = _prepare_lyrics(job, genius, lyrics_dir)
+            lyrics_path, lyric_stage = _prepare_lyrics(job, genius, lyrics_dir, config)
             stages = _build_stages(song, lyric_stage, whisper_worker, config, stem_worker)
             orch = PipelineOrchestrator(stages, stem_worker, whisper_worker, config)
             try:

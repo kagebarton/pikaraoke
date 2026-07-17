@@ -20,16 +20,19 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from pikaraoke.lib import youtube_dl, ytasr
+from pikaraoke.lib import lrclib, youtube_dl, ytasr
 from pikaraoke.lib.ffmpeg import probe_duration
 from pikaraoke.lib.genius import (
     GeniusClient,
+    GeniusSong,
     GeniusUnavailable,
     delete_choice,
     read_choice,
 )
+from pikaraoke.lib.genius_lyrics import parse_lyric_lines
 from pikaraoke.lib.metadata_parser import extract_youtube_id
 from pikaraoke.lib.srt_provenance import is_generated
+from pikaraoke.pipeline.config import PipelineConfig
 from pikaraoke.pipeline.context import StageContext
 from pikaraoke.pipeline.stages.base import BaseStage
 
@@ -41,7 +44,7 @@ class LyricsFetchStage(BaseStage):
 
     name = "lyrics_fetch"
 
-    def __init__(self, genius: GeniusClient) -> None:
+    def __init__(self, genius: GeniusClient, config: PipelineConfig) -> None:
         """``genius`` is always a :class:`GeniusClient` instance (Design Decision 2).
 
         When the token is empty, its methods degrade gracefully:
@@ -49,6 +52,7 @@ class LyricsFetchStage(BaseStage):
         :class:`GeniusUnavailable`.
         """
         self._genius = genius
+        self._config = config
 
     def run(self, ctx: StageContext) -> None:
         # Test-override short-circuit: the orchestrator pre-populates
@@ -89,6 +93,8 @@ class LyricsFetchStage(BaseStage):
                     choice["genius_id"],
                 )
                 self._resolve_ytasr(ctx)
+                if self._config.lrclib_fill:
+                    self._resolve_lrclib(ctx, song)
                 return
             except GeniusUnavailable as e:
                 logger.warning("Genius fetch failed for %s: %s — falling back", yt_id, e)
@@ -161,6 +167,29 @@ class LyricsFetchStage(BaseStage):
             logger.info("YTASR: adopted %d words (%s wpm) as the 3rd source", len(words), wpm)
         except Exception:
             logger.exception("YTASR: resolve failed — aligning two-source")
+
+    def _resolve_lrclib(self, ctx: StageContext, song: GeniusSong) -> None:
+        """Fetch an LRCLIB synced variant for the E1 gated-fill path.
+
+        Genius-origin only (called from Branch a). Resolves
+        ``lyrics/<stem>.lrc`` via :func:`lrclib.ensure_lrc` -- reused on
+        disk, else fetched, selected and persisted. No ``ctx.artifacts``
+        stash: :class:`~pikaraoke.pipeline.stages.lyric_align.LyricAlignStage`
+        re-reads the file from disk. Never raises; a miss just means no fill
+        source for this song (the fill hook no-ops with no ``.lrc`` on disk).
+        """
+        try:
+            sheet_lines = [item["text"] for item in parse_lyric_lines(song.text)]
+            media_dur = ctx.artifacts.get("media_duration_s")
+            if media_dur is None:
+                media_dur = probe_duration(ctx.song_path)
+            path = lrclib.ensure_lrc(ctx.song_path, song.title, song.artist, sheet_lines, media_dur)
+            if path is not None:
+                logger.info("LRCLIB: variant available for fill (%s)", path.name)
+            else:
+                logger.info("LRCLIB: no synced variant found — fill unavailable")
+        except Exception:
+            logger.exception("LRCLIB: resolve failed — fill unavailable")
 
     @staticmethod
     def _extract_yt_id(song_path: Path) -> str | None:
