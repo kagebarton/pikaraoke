@@ -1,11 +1,25 @@
 #!/usr/bin/env python3
 """Phase 1 steps 2-3: run the large-v3 fp16 regen against the study copy.
 
-Mirrors ``regen_alignment_bundles.run_jobs()``'s body (one shared worker
-session across all 8 songs, same stage-building / lyric-reuse machinery) but
-adds per-song wall-clock + peak-VRAM instrumentation, which ``run_jobs()``
-does not expose. Points at the Phase 1 study copy only -- never
-``/home/ken/pikaraoke-songs``.
+Mirrors ``regen_alignment_bundles.run_jobs()``'s body (same stage-building /
+lyric-reuse machinery) but adds per-song wall-clock + peak-VRAM
+instrumentation, which ``run_jobs()`` does not expose. Points at the Phase 1
+study copy only -- never ``/home/ken/pikaraoke-songs``.
+
+Deliberately runs with no ``StemWorker`` (``stem_worker=None`` throughout),
+unlike ``run_jobs()``: all 8 study-copy songs already have vocal+nonvocal
+stems (verified at copy time), so the separator is never invoked for
+separation -- but ``run_jobs()`` still starts it unconditionally "the
+de-reverb retry can fire on any song", reserving ~1 GB VRAM for the whole
+run. Co-resident with large-v3 fp16 (~4.6 GB, see Phase 0) that overflows
+this card's ~5.6 GiB usable budget -- the exact "needs worker serialization"
+gap flagged in memory project_large_v3_fp16_trick.md from the older
+jointrefine study, hit here as a mid-run OOM on song 2 of the first attempt.
+``LyricAlignStage``'s de-reverb gate treats ``stem_worker=None`` as a
+designed no-op ("retry unavailable"), not an error (lyric_align.py
+``_transcribe_yield_wpm``) -- and skipping it also holds audio input
+constant across all 8 songs for this run, which is preferable for an A/B
+that is supposed to isolate the whisper-model variable alone.
 
 GPU memory is polled externally via ``nvidia-smi`` (a background thread per
 song) because the model loads inside the whisper worker's spawned
@@ -79,7 +93,6 @@ def main() -> int:
     from pikaraoke.lib.get_platform import get_temp_directory
     from pikaraoke.pipeline.config import PipelineConfig
     from pikaraoke.pipeline.orchestrator import PipelineOrchestrator
-    from pikaraoke.pipeline.workers.stem_worker import StemWorker
     from pikaraoke.pipeline.workers.whisper_worker import WhisperWorker
     from scripts.regen_alignment_bundles import (
         _build_stages,
@@ -122,15 +135,15 @@ def main() -> int:
 
     config = PipelineConfig()
     config.intermediate_dir = get_temp_directory()
-    config.cache_dereverb_stem = True
     config.whisper.load_model.model_path = LARGE_V3_MODEL_PATH
     config.whisper.load_model.fp16_weights = True
     genius = _make_genius()
 
-    stem_worker = StemWorker(
-        model_dir=config.separator_model_dir,
-        model_name=config.separator_model_name,
-    )
+    # No StemWorker: all 8 songs already have stems (verified at copy time),
+    # and holding the separator resident alongside large-v3 fp16 overflows
+    # this card's VRAM budget (see module docstring). stem_worker=None is a
+    # designed no-op for the de-reverb-retry gate, not a hack.
+    stem_worker = None
     whisper_worker = WhisperWorker(config.whisper)
     lyrics_dir = Path(
         tempfile.mkdtemp(prefix="l3v_regen_lyrics_", dir=config.intermediate_dir or None)
@@ -140,7 +153,6 @@ def main() -> int:
     per_song: list[dict] = []
     succeeded = failed = 0
     try:
-        stem_worker.start()
         whisper_worker.start()
         for i, job in enumerate(runnable, 1):
             song = job.song_path
@@ -172,7 +184,6 @@ def main() -> int:
             )
     finally:
         shutil.rmtree(lyrics_dir, ignore_errors=True)
-        stem_worker.stop()
         whisper_worker.stop()
 
     print(f"\nDone. succeeded={succeeded} failed={failed}")
