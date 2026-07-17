@@ -216,10 +216,12 @@ On arm-A-passing songs:
    trio).
 
 **GATE L3**: tables + eyeball list to Ken; verdict per Appendix C.3. Carry
-the structural blind spot forward explicitly: the biggest overhang songs bail
-the gate, so E2's corpus-wide recall is bounded by L1's reach numbers — the
-question is whether the reachable candidates are precise, not whether E2
-solves the phantom problem alone.
+both structural blind spots forward explicitly: (1) the biggest overhang
+songs bail the gate, so E2's corpus-wide recall is bounded by L1's reach
+numbers; (2) the classification is text-only, so mistimed-but-present lines
+never become candidates (A.7 amendment, 2026-07-17). The question is whether
+the reachable candidates are precise, not whether E2 solves the phantom
+problem alone.
 
 ## Phase L4 — verdict and follow-ups
 
@@ -384,6 +386,29 @@ the object-carried `evidence` key off the replayed line objects (shipped in
 Phase 3b, commit `5625d855`: `_materialise_line_objects` attaches it and it
 survives `merge_spans`); uncorroborated ⇔ `transcribe_match == 0 and
 ytasr_agreement == 0.0` — the shipped veto's own eligibility test.
+
+**Amendment (Fable, 2026-07-17, pre-execution, Ken-approved):
+documented limitation — this classification is blind to
+mistimed-but-present lines.** `map_lines_to_cues`
+(`pikaraoke/lib/lrclib.py`) is a pure text-sequence alignment — no
+timestamp enters its signature or body — so a placed line whose text
+exists in the LRC always receives a nominal mapping and never enters
+`candidates`, regardless of where the matcher placed it in time. E2
+therefore sees only text-absence phantoms, not right-text-wrong-time
+ones (the repeat-pileup/chant class; GATE L2's eyeball surfaced live
+instances on Seasons of Love). A mapped-cue timing-residual
+diagnostic was designed and judged sound — flag placed lids whose
+`placed_t0` deviates by more than ~2 s from the offset- or
+warp-corrected time of *their own mapped cue*, which catches both
+pileups and chorus-into-verse placements where a nearest-cue fuzzy
+check structurally cannot (the cue nearest a piled chant line is a
+chant cue and fuzzy-matches) — but Ken descoped it: the reachable
+corpus is thin (all 99 known-overhang placed lines sit on arm-A-bail
+songs; likely candidate producers reduce to the five
+different-variant passers), so the extra table could not change C.3's
+read. Recorded so the E2 verdict is not over-read: a GO licenses
+demotion on text-absence evidence only and says nothing about the
+mistimed class.
 
 ### A.8 Outputs
 
@@ -1787,3 +1812,22 @@ replaces it at `out/l2_console.txt`.
 No reading offered beyond confirming the numbers match what was
 already adjudicated — this is workspace bookkeeping, not a new GATE
 round.
+
+### Pre-L3 design review — A.7 amendment, mistimed-line diagnostic descoped (Fable, 2026-07-17)
+
+Design-review round before any L3 execution; no code or artifacts
+touched (`phase_l3` does not exist yet). Catch: A.7's `candidates`
+derivation is structurally blind to right-text-wrong-time phantoms —
+`map_lines_to_cues` aligns text sequences only, so a mistimed line
+whose text exists in the LRC maps nominally and never becomes a
+candidate. Judge-verified from `pikaraoke/lib/lrclib.py` (no
+timestamp in the mapper's signature or body). Ruling: scope limit,
+not a validity flaw — C.3's strong-absence question stands unchanged.
+A mapped-cue timing-residual diagnostic (context-only, firewalled
+from C.3) was designed as the fix; Ken descoped it as not worth the
+addition given E2's thin reachable corpus (100% of known-overhang
+placed lines on arm-A-bail songs; plausible candidate producers
+reduce to the five different-variant passers), choosing the
+documented-limitation route instead. Recorded as a dated amendment in
+A.7 plus a second blind-spot clause in the GATE L3 paragraph; C.3
+untouched. The L3 run-vs-descope call itself remains open.
