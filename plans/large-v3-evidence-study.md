@@ -3,7 +3,9 @@
 Model: Claude Sonnet 5 (executor); Claude Fable 5 (judge)
 Branch: `fable_matcher_refine` (hook + drivers + docs all commit here)
 Status: GATE S0 passed (Fable, 2026-07-16); Phase 1 executed (Sonnet,
-2026-07-16) — awaiting review before Phase 2
+2026-07-16) and reviewed (Fable, 2026-07-17) — Phase 2 may proceed on
+Ken's go-ahead, Defying Gravity carried forward flagged (deterministic
+large-v3 align-leg collapse, see Phase 1 review)
 
 ## Question
 
@@ -541,3 +543,106 @@ this driver's changes — `n_align_word_drops` is an existing production field
 in `LyricAlignStage`, untouched this study. Recorded as a mechanical fact
 only; no claim here about cause or about whether it should count for or
 against the study's verdict criteria.
+
+### Phase 1 — review (Fable, 2026-07-17)
+
+**Re-derivation.** Recomputed the evidence-density table directly from the
+16 bundles' `joint_stats` (8 baseline + 8 variant), independently of
+`evidence_density.json` — every cell matches both the executor's JSON and
+the table above. Schema check re-derived: all 16 bundles carry
+`schema_version == 8`. Timing/VRAM cross-checked: `regen_console.log` and
+`regen_results.json` agree row-for-row with the table (total 1126.10 s,
+max 5275 MiB); no errors in the log; all four commit diffs read. Copy and
+regen drivers respect the hard rule (regen asserts
+`folder.resolve() != PRODUCTION_FOLDER.resolve()`; the copy driver only
+reads production). The attempt-1 OOM fix (`89b38cf`, `stem_worker=None`)
+is the right shape: it is `LyricAlignStage`'s designed no-op for the
+de-reverb retry, and it also holds audio input constant across the A/B.
+
+**Defying Gravity — investigated. Verdict: a real, deterministic
+large-v3 behavior on this song's audio, not an artifact of the run.**
+
+First, a framing correction to the anomaly note above: `n_align_words` is
+`len(align_words)` as *input* to the matcher (`joint_match.py:283`), and
+`n_align_word_drops` (`joint_match.py:168`) counts lyric tokens left
+without an assigned align word — so "words + drops ≈ 470" is an identity
+(total lyric tokens are constant), not a sign the pool survived. The fact
+is simpler and starker: the align leg delivered 3 words to the matcher
+instead of 470.
+
+Where the 466 went: not the worker's probability filter
+(`min_word_probability` defaults to 0 = disabled; no "Dropped N
+low-probability" line in the log; baseline words with probability 0.0001
+survive it). They were dropped inside stable-ts's own align-failure path
+("N/M segments failed to align" / "Failed to align the last N/M words").
+The console log looked clean because `_demote_alignment_warnings`
+(`whisper_worker.py:1154`) routes exactly those warnings to DEBUG by
+design — the executor's "no error, warning, exception" observation was
+structurally guaranteed for this failure mode, not evidence of health.
+Process lesson for the remaining phases: console silence says nothing
+about align quality; the density table is the detector that caught this.
+
+Shape of the failure: the 3 survivors are lyric tokens 0-2 ("Elphaba Why
+couldn't" — the opening spoken dialog), placed at 175-205 s. A
+derailment: audio 0-175 s matched nothing that survived, the opening
+tokens finally stuck deep in the song, and the remaining ~466 tokens
+failed against the ~50 s of audio left. The align progress bar shows it:
+smooth advance to ~175 s, crawl at 178-186 s (1.4-2.5 sec/s), then an
+instant 211 s → 257 s jump — the aligner dumping the unalignable tail.
+
+**Freak-occurrence probe (Ken's call, 2026-07-17):**
+`scripts/l3v_dg_align_recheck.py`, witness
+`records/phase1/dg_align_recheck.json`. Re-ran the align leg twice under
+the identical config in one fresh worker — run 1 reproduces the regen's
+condition for this song (fresh worker, first job); peak 4559 MiB confirms
+the fp16 model condition. Result: run 1 = 4 words, run 2 = 4 words,
+run 1 == run 2 **bit-exact**, same derailment profile in the progress
+bar. Not a transient. Cross-session the collapse *margin* jitters by one
+word (the regen kept 3, both probe runs keep 4 — an extra "you" at
+207.2 s, and "couldn't"'s boundary moves ~1 s), the classic
+per-process-autotune signature; the collapse itself — same tokens, same
+timestamps — is stable. No bearing on Phase 2, whose determinism
+requirement is on matcher-computed columns (CPU-side). Checked both regen
+backup dirs first for a free replication from attempt 1 (which completed
+this song before its OOM): both hold only the 20:58 baseline — the
+re-copy erased attempt 1's output, so the probe was the cheapest witness.
+
+Context that sharpens the interpretation: baseline turbo's align leg on
+this song was not healthy either — it "aligned" all 470 tokens but
+degenerately in places (opening dialog clustered at 52.3-52.9 s with
+near-zero durations and probabilities; the 20-token non-sung credits tail
+piled at exactly 217.308 s; whole-leg median probability 0.14). Turbo
+hallucinated placements where large-v3 declared failure and dropped. This
+is the jointrefine study's known pattern ("align fail_ratio runs hotter
+on dialog-dense songs" under large-v3) in extreme form — Defying Gravity
+is the most dialog-dense song in this corpus. The fp16 contribution
+cannot be isolated on this box (large-v3 fp32 does not fit — the study's
+premise), but GATE S0 bounded the dtype perturbation ~4 orders of
+magnitude below this macro behavior, large-v3 fp16 aligned Seasons of
+Love cleanly in Phase 0 (149 words), and 7/8 Phase 1 songs are flat — the
+driver is model × audio, with fp16 at most nudging the ±1-word margin.
+
+Downstream damage is contained by design: the 3-source matcher absorbed
+the align absence — variant Defying Gravity still places 89/89 lines,
+`first_line_start` identical (8.36 s), `transcribe_won` 14→29,
+`ytasr_won` 15→17, `lines_with_words` 51→46, interpolated 38→43. What
+changed is the evidence-source mix — which is exactly what Phases 2-3
+measure.
+
+**Call: Phase 2 proceeds with Defying Gravity carried forward,
+flagged — not excluded, not re-run.**
+
+- Not re-run: the probe *is* the re-run; the collapse reproduces
+  bit-exactly. There is nothing different to generate.
+- Not excluded: Defying Gravity is one of the 5 bail songs the GO
+  criteria quantify over; dropping the song where large-v3's align leg is
+  catastrophically *worse* would bias the study toward GO. The collapse
+  is itself a study result — a production large-v3 would inherit it — and
+  belongs in the verdict's consequences either way.
+- Flag for Phase 3: this song's movers will largely reflect align-source
+  loss (a model-behavior delta), not evidence-density gain. Adjudicate
+  them normally — true fixes count toward GO, regressions count toward
+  NO's net-negative arm. The pre-registered criteria already handle both
+  directions; no protocol change.
+
+Phase 2 may start on Ken's go-ahead.
