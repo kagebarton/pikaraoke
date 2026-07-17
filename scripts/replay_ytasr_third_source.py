@@ -114,13 +114,28 @@ def recorded_summary(bundle: dict) -> dict:
 
     This is the shipped (post-edge-snap) output the pipeline actually wrote —
     a sanity reference the snap-free replay is compared against, not the
-    baseline itself.
+    baseline itself. Lines the E1 gated-fill hook filled from LRCLIB
+    (``joint_stats.lrclib_fill.filled_lids``) are excluded before computing
+    any of these stats: they come FROM LRCLIB, so folding them into a
+    placement count sat alongside a LRCLIB-scored replay would be circular.
     """
-    olt = [e for e in bundle["output_line_timings"] if e["n_words"] > 0]
+    filled_lids = set(
+        (bundle.get("joint_stats") or {}).get("lrclib_fill", {}).get("filled_lids") or []
+    )
+    olt = [
+        e
+        for e in bundle["output_line_timings"]
+        if e["n_words"] > 0 and e["line_id"] not in filled_lids
+    ]
     olt.sort(key=lambda e: e["start"])
     overlaps = [olt[i]["end"] - olt[i + 1]["start"] for i in range(len(olt) - 1)]
     crawls = [e for e in olt if (e["end"] - e["start"]) / e["n_words"] > CRAWL_S_PER_WORD]
-    return {"n_placed": len(olt), "max_overlap": max(overlaps, default=0.0), "n_crawl": len(crawls)}
+    return {
+        "n_placed": len(olt),
+        "max_overlap": max(overlaps, default=0.0),
+        "n_crawl": len(crawls),
+        "n_excluded_fills": len(filled_lids),
+    }
 
 
 def _resolve(song_root: Path, rel_path: str) -> Path:
@@ -413,13 +428,16 @@ def main() -> int:
         coverage = best["summary"]["n_placed"] / n_lines if n_lines else 1.0
         coverage_flag = "!" if coverage < args.min_coverage else ""
         coverage_col = f"{best['summary']['n_placed']}/{n_lines}{coverage_flag}"
+        # E1 gated fills are excluded from `rec` (see recorded_summary); note
+        # it on the row so a dropped fill count is visible, not silent.
+        fill_note = f" fills_excluded={rec['n_excluded_fills']}" if rec["n_excluded_fills"] else ""
         print(
             f"{bp.stem[:46]:46s} {src_flag:>4s} {_fmt_mad(best['mad']):>16s} "
             f"{best_alpha:>5.1f} {beta_col:>5s} "
             f"{rec['n_crawl']:6d}->{best['summary']['n_crawl']:<6d} "
             f"{rec['max_overlap']:8.1f}->{best['summary']['max_overlap']:<8.1f} "
             f"{rec['n_placed']:6d}->{best['summary']['n_placed']:<6d} "
-            f"{coverage_col:>10s}"
+            f"{coverage_col:>10s}{fill_note}"
         )
 
         if args.write_ass:
