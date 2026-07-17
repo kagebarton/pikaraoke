@@ -25,6 +25,24 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+# v9: LRCLIB gated fill (E1) shipped to production -- plans/
+#     lrclib-fill-absence-study.md Phase L4 verdict, wired by plans/
+#     lrclib-fill-production-wiring.md. A milestone bump (run-affecting on
+#     genius-origin songs with an available LRCLIB variant): matcher-unplaced
+#     lines may now render, filled at LRCLIB-cue-plus-offset times. Added:
+#   - lyrics.lrclib: for genius-origin songs, the LRCLIB variant read for
+#     fill this run -- {lrc_file (relative path to the persisted <song>/
+#     lyrics/<stem>.lrc), trackName, artistName, albumName, duration, id}
+#     (reconstructed from the .lrc's own header tags, not the search
+#     response -- absent fields the header didn't carry are simply missing).
+#     Present only when a .lrc was on disk to read; distinct in shape from
+#     the v5-era field of the same name (removed in v7), which carried the
+#     raw search response instead.
+#   - joint_stats.lrclib_fill: the fill planner's stats (see
+#     pikaraoke.lib.lrclib_fill.plan_fills) -- n_cues_mapped, arm_a,
+#     slope_fit, eligible, reason, n_candidates, fills, filled_lids. Present
+#     only when planning ran (joint route, knob on, a .lrc was on disk).
+#   - config_snapshot.lrclib_fill: the knob's value this run.
 # v8: line-end snap shipped alongside the line-onset snap. A milestone bump
 #     (run-affecting) — output_line_timings now carry extended line-final word
 #     ends on ~1/4 of lines, so regen treats v7 bundles as stale. Renamed:
@@ -112,7 +130,7 @@ logger = logging.getLogger(__name__)
 # v2: added tiling per-unit fields (units, zero_candidate_unit_ids,
 #     anchor_recovered_unit_ids, selected_windows replacing window_widths).
 # v1: initial.
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 
 def build_bundle(

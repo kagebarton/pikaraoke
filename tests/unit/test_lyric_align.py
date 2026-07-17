@@ -671,6 +671,170 @@ class TestEvidenceVetoWiring:
 
 
 # ---------------------------------------------------------------------------
+# LRCLIB gated fill (E1) wiring
+# ---------------------------------------------------------------------------
+
+
+def _lrc_text(stamps_and_texts: list[tuple[float, str]]) -> str:
+    lines = []
+    for t, text in stamps_and_texts:
+        m, s = divmod(t, 60.0)
+        lines.append(f"[{int(m):02d}:{s:05.2f}]{text}")
+    return "\n".join(lines)
+
+
+class TestLrclibFillWiring:
+    """Wiring for the E1 gated-fill hook: planned on pre-veto/pre-snap
+    objects, spliced post-snap. The gate/construction logic itself (arm A/B,
+    collision, energy, apply_fills) is unit-tested in
+    tests/unit/test_lrclib_fill.py -- this class covers the stage's own
+    plumbing (knob, route gating, .lrc discovery, capture)."""
+
+    LINES = [
+        "alpha bravo charlie delta",
+        "echo foxtrot golf hotel",
+        "india juliet kilo lima",
+        "mike november oscar papa",
+        "quebec romeo sierra tango",
+        "uniform victor whiskey xray",
+    ]
+    ANCHOR_CUES = [10.0, 20.0, 30.0, 40.0, 50.0]
+    OFFSET = -1.0
+    CANDIDATE_CUE = 60.0
+
+    def _make(self, tmp_path, monkeypatch, *, with_lrc=True, perturb=None):
+        import pikaraoke.pipeline.stages.lyric_align as la_mod
+
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path)
+        # Windowed re-align is a separate feature with its own tests; the
+        # fixture below deliberately leaves line 5 unplaced (a suspect),
+        # which would otherwise trigger a second align pass this class
+        # doesn't need or mock for.
+        stage._config.joint_windowed_realign = False
+        ctx.artifacts["lyrics_path"].write_text("\n".join(self.LINES) + "\n", encoding="utf-8")
+
+        perturb = perturb or {}
+        words = []
+        for i, cue in enumerate(self.ANCHOR_CUES):
+            start = cue + self.OFFSET + perturb.get(i, 0.0)
+            toks = self.LINES[i].split()
+            words.extend(
+                {"word": w, "start": start + j * 0.3, "end": start + j * 0.3 + 0.25}
+                for j, w in enumerate(toks)
+            )
+        worker.align_refine.return_value = list(words)
+        worker.transcribe_words.return_value = list(words)
+
+        if with_lrc:
+            lrc_stamps = [(cue, self.LINES[i]) for i, cue in enumerate(self.ANCHOR_CUES)]
+            lrc_stamps.append((self.CANDIDATE_CUE, self.LINES[5]))
+            lyrics_dir = ctx.song_path.parent / "lyrics"
+            lyrics_dir.mkdir(parents=True, exist_ok=True)
+            (lyrics_dir / f"{ctx.song_path.stem}.lrc").write_text(
+                _lrc_text(lrc_stamps), encoding="utf-8"
+            )
+
+        env = np.full(3000, -20.0, dtype=np.float32)  # constant sung level throughout
+        monkeypatch.setattr(la_mod, "decode_env_db", lambda *_a, **_k: env)
+        return stage, ctx, worker
+
+    @staticmethod
+    def _bundle(ctx) -> dict:
+        debug = ctx.song_path.parent / "alignment_debug" / f"{ctx.song_path.stem}.json"
+        return json.loads(debug.read_text(encoding="utf-8"))
+
+    def test_eligible_song_fills_unplaced_line_after_snap(self, tmp_path, monkeypatch):
+        stage, ctx, worker = self._make(tmp_path, monkeypatch)
+        stage.run(ctx)
+
+        bundle = self._bundle(ctx)
+        fill_stats = bundle["joint_stats"]["lrclib_fill"]
+        assert fill_stats["eligible"] is True
+        assert fill_stats["filled_lids"] == [5]
+        assert bundle["lyrics"]["lrclib"]["lrc_file"] == f"lyrics/{ctx.song_path.stem}.lrc"
+        assert bundle["config"]["lrclib_fill"] is True
+        assert bundle["schema_version"] == 9
+
+        ass_path = ctx.song_path.parent / "karaoke" / f"{ctx.song_path.stem}.ass"
+        dialogues = [
+            line
+            for line in ass_path.read_text(encoding="utf-8").splitlines()
+            if line.startswith("Dialogue:")
+        ]
+        assert len(dialogues) == 6  # all 6 lines rendered, including the filled one
+
+    def test_gate_blocked_song_records_reason_and_fills_nothing(self, tmp_path, monkeypatch):
+        # Theil-Sen resists a minority outlier (a single perturbed point
+        # among 5 still medians to the clean slope -- 6 of the 10 pairwise
+        # slopes are untouched); perturbing 2 of the 5 breaks it (measured
+        # slope 1.1375, ~13.75% dev, well past FILL_MAX_SLOPE_DEV of 1%).
+        # Arm A's median-based offset/MAD stays unaffected by the same
+        # minority-outlier margin, so this isolates the slope_dev path
+        # from an arm_a_bail.
+        stage, ctx, worker = self._make(tmp_path, monkeypatch, perturb={3: 3.0, 4: 5.0})
+        stage.run(ctx)
+
+        bundle = self._bundle(ctx)
+        fill_stats = bundle["joint_stats"]["lrclib_fill"]
+        assert fill_stats["eligible"] is False
+        assert fill_stats["filled_lids"] == []
+
+        ass_path = ctx.song_path.parent / "karaoke" / f"{ctx.song_path.stem}.ass"
+        dialogues = [
+            line
+            for line in ass_path.read_text(encoding="utf-8").splitlines()
+            if line.startswith("Dialogue:")
+        ]
+        assert len(dialogues) == 5  # line 5 stays unplaced
+
+    def test_no_lrc_on_disk_is_a_no_op(self, tmp_path, monkeypatch):
+        stage, ctx, worker = self._make(tmp_path, monkeypatch, with_lrc=False)
+        stage.run(ctx)
+
+        bundle = self._bundle(ctx)
+        assert "lrclib_fill" not in bundle["joint_stats"]
+        assert "lrclib" not in bundle["lyrics"]
+
+    def test_knob_off_skips_the_hook_even_with_lrc_present(self, tmp_path, monkeypatch):
+        stage, ctx, worker = self._make(tmp_path, monkeypatch, with_lrc=True)
+        stage._config.lrclib_fill = False
+        stage.run(ctx)
+
+        bundle = self._bundle(ctx)
+        assert "lrclib_fill" not in bundle["joint_stats"]
+        assert "lrclib" not in bundle["lyrics"]
+        assert bundle["config"]["lrclib_fill"] is False
+
+    def test_srt_route_never_runs_the_fill_hook(self, tmp_path, monkeypatch):
+        import pikaraoke.pipeline.stages.lyric_align as la_mod
+
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path)
+        subs = ctx.song_path.parent / "subtitles"
+        subs.mkdir()
+        srt_path = subs / f"{ctx.song_path.stem}.en.srt"
+        srt_path.write_text(
+            "1\n00:00:10,000 --> 00:00:12,000\nglowing river\n"
+            "\n2\n00:00:13,000 --> 00:00:15,000\nphantom parade\n",
+            encoding="utf-8",
+        )
+        ctx.artifacts["lyrics_path"] = srt_path
+        worker.align_refine.return_value = [
+            {"word": "glowing", "start": 0.75, "end": 1.15},
+            {"word": "river", "start": 1.75, "end": 2.15},
+            {"word": "phantom", "start": 3.75, "end": 4.15},
+            {"word": "parade", "start": 4.75, "end": 5.15},
+        ]
+        monkeypatch.setattr(la_mod, "run_ffmpeg", lambda cmd, _ctx, _phase: None)
+        monkeypatch.setattr(la_mod, "_wav_duration", lambda _p: 30.0)
+        plan_fills = MagicMock()
+        monkeypatch.setattr(la_mod.lrclib_fill, "plan_fills", plan_fills)
+
+        stage.run(ctx)
+
+        plan_fills.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
 # Genius identity capture
 # ---------------------------------------------------------------------------
 

@@ -42,7 +42,7 @@ from pathlib import Path
 import srt
 from tqdm import tqdm
 
-from pikaraoke.lib import alignment_capture, ytasr
+from pikaraoke.lib import alignment_capture, lrclib, lrclib_fill, ytasr
 from pikaraoke.lib.cue_align import align_song
 from pikaraoke.lib.evidence_veto import veto_uncorroborated_lines
 from pikaraoke.lib.genius_lyrics import parse_lyric_lines
@@ -196,6 +196,41 @@ class LyricAlignStage(BaseStage):
         snap_stem = ctx.artifacts.get("aligned_stem", vocal_wav)
         env = decode_env_db(snap_stem, "edge snap")
 
+        # Joint route only, gated: plan LRCLIB fills for matcher-unplaced
+        # lines (E1) on PRE-veto, PRE-snap line objects -- a veto-demoted
+        # line was placed at planning time, so it is never a fill candidate
+        # and stays demoted (the study never validated re-filling vetoed
+        # lines). Splicing happens AFTER the snap below: fills ship with
+        # their exact even-paced construction, never edge-snapped.
+        fills: list[dict] = []
+        cfg = self._config
+        capture_lrclib_ref: dict | None = None
+        if capture_method_used == "joint" and cfg.lrclib_fill:
+            lrc_path = _find_lrclib_lrc(ctx.song_path)
+            if lrc_path is not None:
+                synced_text, lrc_meta = lrclib.read_lrc(lrc_path)
+                capture_lrclib_ref = {
+                    # .as_posix(): forward slashes so a bundle written on
+                    # Windows still resolves on a Linux consumer (regen
+                    # tool, offline harness) -- str() would leak backslashes.
+                    "lrc_file": lrc_path.relative_to(ctx.song_path.parent).as_posix(),
+                    **lrc_meta,
+                }
+                if env is None:
+                    capture_joint_stats["lrclib_fill"] = {"eligible": False, "reason": "no_env"}
+                else:
+                    fills, fill_stats = lrclib_fill.plan_fills(
+                        line_objects,
+                        lyrics_lines,
+                        align_lines,
+                        capture_transcribe_words,
+                        synced_text,
+                        env,
+                        margin_s=cfg.joint_margin_s,
+                        max_edit_ratio=cfg.joint_max_edit_ratio,
+                    )
+                    capture_joint_stats["lrclib_fill"] = fill_stats
+
         # Joint route only: before the snap, demote zero-corroboration align
         # lines whose claimed span is near-silent in the stem — lyrics the
         # aligner smeared over an instrumental break with no transcribe or
@@ -211,6 +246,9 @@ class LyricAlignStage(BaseStage):
         line_objects, edge_stats = snap_line_edges(line_objects, snap_stem, env=env)
         if capture_joint_stats is not None:
             capture_joint_stats["edge_snap"] = edge_stats
+
+        if fills:
+            line_objects = lrclib_fill.apply_fills(line_objects, fills)
 
         ass_content = self._generate_ass(line_objects)
         srt_content = self._generate_srt(line_objects) if write_srt else None
@@ -255,6 +293,7 @@ class LyricAlignStage(BaseStage):
                 method_used=capture_method_used,
                 line_objects=line_objects,
                 wrote_srt=write_srt,
+                lrclib_ref=capture_lrclib_ref,
             )
 
     # --- Helpers ---
@@ -273,6 +312,7 @@ class LyricAlignStage(BaseStage):
         method_used: str | None,
         line_objects: list[dict],
         wrote_srt: bool,
+        lrclib_ref: dict | None = None,
     ) -> None:
         """Assemble + write the alignment-debug JSON. Errors are logged
         and swallowed — capture failure must never fail the pipeline.
@@ -288,6 +328,7 @@ class LyricAlignStage(BaseStage):
                 "joint_beta": cfg.joint_beta,
                 "joint_margin_s": cfg.joint_margin_s,
                 "joint_max_edit_ratio": cfg.joint_max_edit_ratio,
+                "lrclib_fill": cfg.lrclib_fill,
                 "whisper": dataclasses.asdict(cfg.whisper),
             }
             lyrics_suffix = Path(lyrics_path).suffix.lower().lstrip(".")
@@ -312,6 +353,10 @@ class LyricAlignStage(BaseStage):
             genius_ref = ctx.artifacts.get("genius")
             if genius_ref is not None:
                 lyrics["genius"] = genius_ref
+            # The LRCLIB variant read for the E1 gated-fill path, when a
+            # lyrics/<stem>.lrc existed on disk for this run.
+            if lrclib_ref is not None:
+                lyrics["lrclib"] = lrclib_ref
             pipeline_decisions = {
                 "method_used": method_used,
                 "joint_alpha": cfg.joint_alpha if method_used == "joint" else None,
@@ -1021,6 +1066,17 @@ def _find_youtube_srt_path(song_path: Path) -> Path | None:
         if candidate.is_file() and not is_generated(candidate):
             return candidate
     return None
+
+
+def _find_lrclib_lrc(song_path: Path) -> Path | None:
+    """Return the persisted LRCLIB variant for ``song_path`` if one exists.
+
+    Mirrors :func:`_find_youtube_srt_path`; the path itself is
+    :meth:`pikaraoke.lib.lrclib.ensure_lrc`'s layout
+    (``lyrics/<stem>.lrc``).
+    """
+    candidate = song_path.parent / "lyrics" / f"{song_path.stem}.lrc"
+    return candidate if candidate.is_file() else None
 
 
 def generate_ass(line_objects: list[dict], cfg: PipelineConfig) -> str:
