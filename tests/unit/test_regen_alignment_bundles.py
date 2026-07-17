@@ -9,8 +9,10 @@ import importlib.util
 import json
 import sys
 from pathlib import Path
+from unittest.mock import MagicMock
 
 from pikaraoke.lib.alignment_capture import SCHEMA_VERSION
+from pikaraoke.pipeline.config import PipelineConfig
 
 # scripts/ is not a package — load the module straight from its file. It must
 # be registered in sys.modules before exec so @dataclass can resolve its own
@@ -345,7 +347,11 @@ class TestClearOutputFolders:
         regen.clear_output_folders(tmp_path)
         assert not (tmp_path / "subtitles" / "x").exists()
         assert not (tmp_path / "karaoke").exists()
-        assert not (tmp_path / "lyrics").exists()
+        # lyrics/ is now content-spared like subtitles/ (an .lrc is a
+        # non-regenerable input, see TestClearOutputFolders below), not
+        # wholesale-removed like karaoke/ -- the non-.lrc file inside it
+        # still gets wiped.
+        assert not (tmp_path / "lyrics" / "x").exists()
         assert (tmp_path / "vocal" / f"{YT_STEM}---vocal.m4a").exists()
 
     def test_preserves_asr_captions_wipes_the_rest(self, tmp_path):
@@ -362,5 +368,93 @@ class TestClearOutputFolders:
         assert not (subs / f"{YT_STEM}.srt").exists()
         assert not (subs / f"{YT_STEM}.en.srt").exists()
 
+    def test_preserves_lrc_variants_wipes_the_rest(self, tmp_path):
+        # LRCLIB variants (E1 gated fill) are non-regenerable fetch-time
+        # inputs -- they must survive the reset wipe like ASR captions do.
+        lyrics = tmp_path / "lyrics"
+        lyrics.mkdir()
+        lrc = lyrics / f"{YT_STEM}.lrc"
+        lrc.write_text("[00:01.00]hi\n", encoding="utf-8")
+        (lyrics / f"{YT_STEM}.txt").write_text("stale reuse txt", encoding="utf-8")
+        regen.clear_output_folders(tmp_path)
+        assert lrc.exists()
+        assert not (lyrics / f"{YT_STEM}.txt").exists()
+
     def test_missing_folders_is_noop(self, tmp_path):
         regen.clear_output_folders(tmp_path)  # does not raise
+
+
+# ---------------------------------------------------------------------------
+# execute_lrclib_backfill — LRCLIB variants for genius reuse plans (E1)
+# ---------------------------------------------------------------------------
+
+
+class TestExecuteLrclibBackfill:
+    def _reuse_job(self, tmp_path, stem="s", lines=("hello", "world")):
+        bundle = {
+            "lyrics": {
+                "origin": "genius",
+                "lines": list(lines),
+                "genius": {"id": 9, "title": "H", "artist": "W"},
+            },
+            "media_duration_s": 200.0,
+        }
+        job = _job(tmp_path, stem, bundle)
+        job.plan = regen.resolve_plan(job, reset=False)
+        assert job.plan.kind == "seed"
+        assert job.plan.seed["lyrics_origin"] == "genius"
+        return job
+
+    def test_calls_ensure_lrc_for_a_genius_reuse_plan(self, tmp_path, monkeypatch):
+        job = self._reuse_job(tmp_path)
+        mock = MagicMock(return_value=None)
+        monkeypatch.setattr(regen.lrclib, "ensure_lrc", mock)
+
+        regen.execute_lrclib_backfill([job], PipelineConfig())
+
+        mock.assert_called_once_with(job.song_path, "H", "W", ["hello", "world"], 200.0)
+
+    def test_knob_off_skips_entirely(self, tmp_path, monkeypatch):
+        job = self._reuse_job(tmp_path)
+        mock = MagicMock()
+        monkeypatch.setattr(regen.lrclib, "ensure_lrc", mock)
+
+        regen.execute_lrclib_backfill([job], PipelineConfig(lrclib_fill=False))
+
+        mock.assert_not_called()
+
+    def test_sidecar_plan_is_never_touched(self, tmp_path, monkeypatch):
+        # A fresh Genius selection resolves via LyricsFetchStage when it
+        # runs -- one call site per plan kind, no double-fetch here.
+        job = _job(tmp_path, YT_STEM, None)
+        job.plan = regen.Plan(kind="sidecar", genius_id=123, label="prompt -> genius")
+        mock = MagicMock()
+        monkeypatch.setattr(regen.lrclib, "ensure_lrc", mock)
+
+        regen.execute_lrclib_backfill([job], PipelineConfig())
+
+        mock.assert_not_called()
+
+    def test_srt_reuse_plan_is_never_touched(self, tmp_path, monkeypatch):
+        _make_srt(tmp_path, "plain")
+        job = _job(tmp_path, "plain", {"lyrics": {"origin": "srt"}})
+        job.plan = regen.resolve_plan(job, reset=False)
+        assert job.plan.seed.get("lyrics_origin") == "srt"
+        mock = MagicMock()
+        monkeypatch.setattr(regen.lrclib, "ensure_lrc", mock)
+
+        regen.execute_lrclib_backfill([job], PipelineConfig())
+
+        mock.assert_not_called()
+
+    def test_missing_identity_is_skipped_defensively(self, tmp_path, monkeypatch):
+        # Not reachable via resolve_plan today (_reuse_plan always pairs
+        # genius identity with lines), but the guard exists -- prove it.
+        job = _job(tmp_path, "s", None)
+        job.plan = regen.Plan(kind="seed", lyrics_lines=["hi"], seed={"lyrics_origin": "genius"})
+        mock = MagicMock()
+        monkeypatch.setattr(regen.lrclib, "ensure_lrc", mock)
+
+        regen.execute_lrclib_backfill([job], PipelineConfig())
+
+        mock.assert_not_called()
