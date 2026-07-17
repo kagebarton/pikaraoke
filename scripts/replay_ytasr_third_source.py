@@ -79,6 +79,7 @@ from pikaraoke.lib.windowed_realign import (  # noqa: E402
     analyze_pass1,
     merge_spans,
     replay_span,
+    selected_sources,
 )
 from pikaraoke.pipeline.config import PipelineConfig  # noqa: E402
 from pikaraoke.pipeline.stages.lyric_align import LyricAlignStage  # noqa: E402
@@ -179,14 +180,6 @@ def _load_lrclib_reference(
     return lrclib.cue_spans_for_lines(record["syncedLyrics"], lines)
 
 
-def _selected_sources(line_objects: list[dict], n_lines: int) -> list[str]:
-    """Per-line source list for analyze_pass1, rebuilt from the objects."""
-    sources = ["absent"] * n_lines
-    for obj in line_objects:
-        sources[obj["line_id"]] = obj.get("source") or "absent"
-    return sources
-
-
 def _score_against_lrclib(
     line_objects: list[dict],
     transcribe_words: list[dict],
@@ -198,7 +191,7 @@ def _score_against_lrclib(
     if lrclib_cues is None:
         return {"bailed": "no_reference"}
     n_lines = len(align_lines)
-    sources = _selected_sources(line_objects, n_lines)
+    sources = selected_sources(line_objects, n_lines)
     anchors, _suspects, _ratios = analyze_pass1(
         align_lines,
         line_objects,

@@ -96,6 +96,14 @@ def _corroboration_ratio(
     return matched / len(seq), pace <= PROTECT_MAX_PACE_S
 
 
+def selected_sources(line_objects: list[dict], n_lines: int) -> list[str]:
+    """Per-line source list for :func:`analyze_pass1`, rebuilt from the objects."""
+    sources = ["absent"] * n_lines
+    for obj in line_objects:
+        sources[obj["line_id"]] = obj.get("source") or "absent"
+    return sources
+
+
 def analyze_pass1(
     align_lines: list[str],
     line_objects: list[dict],
