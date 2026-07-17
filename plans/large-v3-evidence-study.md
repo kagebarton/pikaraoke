@@ -2,7 +2,7 @@
 
 Model: Claude Sonnet 5 (executor); Claude Fable 5 (judge)
 Branch: `fable_matcher_refine` (hook + drivers + docs all commit here)
-Status: Phase 0 executed (Sonnet) — awaiting GATE S0 judge read (Fable)
+Status: GATE S0 passed (Fable, 2026-07-16) — Phase 1 awaiting Ken go-ahead
 
 ## Question
 
@@ -321,6 +321,108 @@ Loaded in 24.44s, total pass 69.5s, peak VRAM 4557 MiB (plan predicted
 model, not compared word-for-word; this step is a load/OOM smoke test
 only). No `error`/`OOM` result from the worker subprocess.
 
-### Phase 0 — judge read (Fable, pending)
+### Phase 0 — judge read (Fable, 2026-07-16)
 
-_Awaiting GATE S0 review._
+**GATE S0: CLEAN PASS.** No structural divergence; the flagged
+asymmetry is resolved from source below (it is predicted by the dtype
+architecture, direction included). Phase 1 is unblocked but starts
+only on Ken's separate go-ahead.
+
+**Independently re-derived** (own code over the raw per-word JSON, not
+the executor's printed tables — GATE L0/L1 methodology): every cell
+matches. Align 151/151 identical word sequence, 0/302 start+end diffs,
+16/151 probability diffs (max 0.0002); transcribe 175/175 identical,
+0/350 timing diffs, 0/175 probability diffs; VRAM 3637 → 2097 MiB
+(saved 1540); large-v3 smoke peak 4557 MiB, no OOM, worker returned
+words normally. Console log cross-checks against the JSON. Claimed
+tests re-run by the judge: 44/44 pass
+(`tests/unit/test_whisper_worker.py` 27 +
+`tests/unit/test_pipeline_config.py` 17).
+
+**Hook diff review (`72b71ec`):** minimal and correct. Flag rides
+`LoadModelKwargs`, so it survives `_rebuild_config`'s
+`LoadModelKwargs(**d["load_model"])` round-trip into the spawned
+worker by construction — the exact spawn-not-fork hazard the plan
+called out. Default-off path is the identical
+`stable_whisper.load_model(model_path, device=device)` call as before.
+`isinstance(module, torch.nn.LayerNorm)` catches whisper's `LayerNorm`
+subclass. Deferred imports match the worker's existing convention.
+Smallest-possible upstream change per fork rules.
+
+**Driver review (`0d630d6`):** exercises the real `WhisperWorker`
+spawn path with the production call shape, gates large-v3 behind the
+identity pass, polls VRAM externally (correct, since the model lives
+in the child), and never writes into `/home/ken/pikaraoke-songs`.
+
+**Precision qualifier on "bit-identical":** the compared floats are
+what production consumes — the worker rounds `probability` to 4
+decimals at serialization (`whisper_worker.py` `_result_to_words`) and
+start/end arrive from stable-ts at ~1 ms resolution. So the claim is
+exactly right operationally (zero divergence in what the matcher ever
+sees) but probability diffs below ~5e-5 are invisible at storage
+precision. Does not change the pass arithmetic: the bar was ≤0.02 s
+for ≥99%; measured is 0 diffs at 1 ms resolution, 20x finer.
+
+**The asymmetry, resolved from source:** the halved model contains
+exactly one lossily-rounded tensor. Every checkpoint tensor is pure
+fp16 on disk, so fp32-upcast-then-`.half()` round-trips those exactly;
+the decoder positional embedding is a checkpoint `Parameter`; the
+decoder mask is 0/-inf (exact in fp16); `alignment_heads` is sparse
+bool. The one exception is the **encoder's sinusoidal
+positional-embedding buffer** (`whisper/model.py:181`) — computed
+fresh in fp32 at construction, not in the checkpoint, so `.half()`
+rounds it (~2^-11 relative). Now trace the two legs:
+
+- *Transcribe* runs fp16 end-to-end (`whisper/transcribe.py:127`,
+  `fp16=True` default on CUDA): Linear/Conv weights cast to fp16 per
+  call in both models — identical operand values since the checkpoint
+  is fp16 — and the sole remaining difference (fp32-add vs fp16-add of
+  the sinusoid buffer at `model.py:198`) lands at or below fp16
+  quantization. **Zero divergence is this leg's mathematical
+  expectation, not missing coverage.**
+- *Align* runs the encoder in fp32 (`stable_whisper/alignment.py:409`
+  moves the mel to device with no dtype cast): checkpoint weights
+  upcast exactly, but the fp16-rounded sinusoid buffer perturbs fp32
+  activations at ~1e-4 — the 16/151 fourth-decimal probability
+  wiggles. Align is thus the leg where the halved model genuinely
+  diverges, and it still produced identical sequences and timing.
+
+Silent-fp32-fallback is independently ruled out by VRAM: one worker
+load served both legs of the fp16 pass at 2097 vs 3637 MiB. So the
+observed asymmetry (align wiggles, transcribe exact) is exactly what
+the dtype architecture predicts, from a single identified,
+deterministic, bounded cause.
+
+**Generalization to Phase 1:** what GATE S0 gates is loader
+correctness, which is song-independent — the recipe touches only the
+load path, the one lossy tensor is identified above, and the LayerNorm
+trap fails loudly, not subtly. What one song does *not* establish is
+corpus-wide turbo fp16≡fp32 (a ~1e-4 logit perturbation could flip a
+discrete decode choice on some other song). Phase 1 does not need
+that: it is a model A/B (large-v3-fp16 vs the turbo-fp32 baseline)
+where fp16 storage is part of the treatment, and the measured
+perturbation scale sits ~4 orders of magnitude below the ≥0.5 s
+line-movement effects the verdict criteria count. The bound carries to
+large-v3 by construction — `large-v3.pt` is also pure fp16 on disk
+(verified 07-16), same buffer construction, so the recipe's only lossy
+tensor is the same one. large-v3-fp16 vs large-v3-fp32 is untestable
+on this box by definition (fp32 OOMs — the study's premise); this
+bounding argument is the best obtainable and matches jointrefine's
+epistemic position. One consequence recorded for later: if the
+turbo-fp16 production ship is ever taken up (out of scope here), do
+not carry this single-song check as proof of corpus-wide identity —
+re-run the identity check across the corpus for that decision.
+
+**Process notes:**
+
+- `72b71ec` adds logic to a production file → /code-review-qualifying
+  per house policy (never auto-launched). The executor's results log
+  omitted the flag; raising it here for Ken.
+- Phase 0 step 1 (salvage verification) was not documented by the
+  executor; verified by the judge instead: all 5 files intact at
+  `/home/ken/pikaraoke-study-l3v/salvage/`, timestamps predating the
+  Phase 0 run.
+- fp16 load adds ~4 s per worker start (8.03 → 12.03 s) — negligible
+  against Phase 1's 25-40 min budget.
+
+**Ruling: GATE S0 passes clean. Phase 1 may start on Ken's go-ahead.**
