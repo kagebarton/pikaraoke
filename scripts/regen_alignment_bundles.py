@@ -55,6 +55,7 @@ import srt
 # Allow running as ``python scripts/regen_alignment_bundles.py`` from repo root.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from pikaraoke.lib import lrclib  # noqa: E402
 from pikaraoke.lib.alignment_capture import SCHEMA_VERSION  # noqa: E402
 from pikaraoke.lib.ffmpeg import probe_duration  # noqa: E402
 from pikaraoke.lib.genius import (  # noqa: E402
@@ -502,6 +503,45 @@ def execute_fetches(jobs: list[SongJob]) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Phase 3c — backfill LRCLIB variants for genius reuse plans (E1 gated fill)
+# ---------------------------------------------------------------------------
+
+
+def execute_lrclib_backfill(jobs: list[SongJob], config: PipelineConfig) -> None:
+    """Resolve ``lyrics/<stem>.lrc`` for every genius reuse plan.
+
+    Reuse plans (``kind == "seed"``, ``lyrics_origin == "genius"``) replay
+    via :class:`SeedArtifactsStage` and bypass ``LyricsFetchStage``
+    entirely, so without this leg an existing song never gains a ``.lrc``.
+    Sidecar plans (a fresh Genius selection) get the resolve from
+    ``LyricsFetchStage`` itself when they run — one call site per plan
+    kind; ``ensure_lrc``'s on-disk check would make a duplicate call
+    harmless, but there is no need to make one.
+    """
+    if not config.lrclib_fill:
+        return
+    targets = [
+        j
+        for j in jobs
+        if j.plan and j.plan.kind == "seed" and j.plan.seed.get("lyrics_origin") == "genius"
+    ]
+    if not targets:
+        return
+    print(f"Backfilling LRCLIB variants for {len(targets)} genius-origin song(s)...")
+    for job in targets:
+        genius = job.plan.seed.get("genius")
+        if not genius or not job.plan.lyrics_lines:
+            continue
+        lrclib.ensure_lrc(
+            job.song_path,
+            genius["title"],
+            genius["artist"],
+            job.plan.lyrics_lines,
+            _media_duration(job),
+        )
+
+
+# ---------------------------------------------------------------------------
 # Phase 4 — execute pipeline per song
 # ---------------------------------------------------------------------------
 
@@ -667,25 +707,33 @@ def clear_output_folders(folder: Path) -> None:
     reprocesses, so wiping them first guarantees no stale file (e.g. an old
     generated SRT) survives. Stems and bundles live elsewhere and are untouched.
 
-    Exception: ``subtitles/<stem>.en.asr.json3`` YouTube-ASR captions are
-    download-time artifacts (fetched by the download manager on first add), and
-    nothing in the regen tool re-fetches them. Wiping them would silently drop
-    the joint matcher's third source from every genius song on the next run, so
-    they are kept in place while the rest of subtitles/ is cleared.
+    Two exceptions -- both non-regenerable inputs fetched once and reused,
+    not outputs the pipeline rebuilds:
+
+    - ``subtitles/<stem>.en.asr.json3`` YouTube-ASR captions (fetched by the
+      download manager on first add). Wiping them would silently drop the
+      joint matcher's third source from every genius song on the next run.
+    - ``lyrics/<stem>.lrc`` LRCLIB variants (fetched by
+      :func:`execute_lrclib_backfill` / ``LyricsFetchStage``, per E1's gated
+      fill). Wiping them would force a re-fetch of every genius song's
+      variant on the next run for no benefit -- ``ensure_lrc`` already
+      reuses an on-disk file unconditionally.
     """
     for sub in OUTPUT_DIRS:
         if sub == "subtitles":
-            _clear_except_asr(folder / sub)
+            _clear_except_suffix(folder / sub, ASR_JSON3_SUFFIX)
+        elif sub == "lyrics":
+            _clear_except_suffix(folder / sub, ".lrc")
         else:
             shutil.rmtree(folder / sub, ignore_errors=True)
 
 
-def _clear_except_asr(subtitles: Path) -> None:
-    """Remove everything in ``subtitles/`` except the non-regenerable ASR captions."""
-    if not subtitles.is_dir():
+def _clear_except_suffix(dir_path: Path, suffix: str) -> None:
+    """Remove everything in ``dir_path`` except files ending in ``suffix``."""
+    if not dir_path.is_dir():
         return
-    for entry in list(subtitles.iterdir()):
-        if entry.is_file() and entry.name.endswith(ASR_JSON3_SUFFIX):
+    for entry in list(dir_path.iterdir()):
+        if entry.is_file() and entry.name.endswith(suffix):
             continue
         if entry.is_dir():
             shutil.rmtree(entry, ignore_errors=True)
@@ -805,6 +853,7 @@ def main() -> int:
     # Download captions before prompting so a fetch failure falls through to the
     # Genius prompt (and a success skips it).
     execute_fetches(jobs)
+    execute_lrclib_backfill(jobs, config)
 
     prompt_jobs(jobs, genius)
     if not any(j.plan and j.plan.kind != "skip" for j in jobs):
