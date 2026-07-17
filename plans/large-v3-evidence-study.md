@@ -2,7 +2,8 @@
 
 Model: Claude Sonnet 5 (executor); Claude Fable 5 (judge)
 Branch: `fable_matcher_refine` (hook + drivers + docs all commit here)
-Status: GATE S0 passed (Fable, 2026-07-16) — Phase 1 awaiting Ken go-ahead
+Status: GATE S0 passed (Fable, 2026-07-16); Phase 1 executed (Sonnet,
+2026-07-16) — awaiting review before Phase 2
 
 ## Question
 
@@ -426,3 +427,117 @@ re-run the identity check across the corpus for that decision.
   against Phase 1's 25-40 min budget.
 
 **Ruling: GATE S0 passes clean. Phase 1 may start on Ken's go-ahead.**
+
+### Phase 1 — study copy + regen artifacts (Sonnet, 2026-07-16)
+
+Executor stops at artifacts, per instruction for this phase: no verdict or
+interpretation below, including on the flagged anomaly — Phase 1 has no
+dedicated gate in this plan, but this section is written for review before
+Phase 2 rather than folded silently into a later gate.
+
+**Copy driver commit:** `263549e` —
+`scripts/l3v_copy_study_songs.py`. Copies the 8 in-scope songs (by YouTube
+id, to avoid hand-retyping titles with apostrophes / non-ASCII dashes) from
+`/home/ken/pikaraoke-songs` into `/home/ken/pikaraoke-study-l3v/songs/` by
+exact stem-prefix match. Found and fixed before any GPU work: the first
+version used `Path.glob(f"{stem}*")`, which silently matched zero files for
+Bloodstream because its title contains literal `[`/`]` (glob character-class
+syntax) — switched to literal `str.startswith()` prefix matching. Read-only
+against the source library.
+
+**Regen driver commits:** `8aba145` (initial) + `89b38cf` (OOM fix) —
+`scripts/l3v_phase1_regen.py`. Mirrors `regen_alignment_bundles.run_jobs()`'s
+body against the study copy only (asserted via `folder.resolve() !=
+PRODUCTION_FOLDER.resolve()`), `reset=False`, config
+`load_model.model_path=models/large-v3.pt` + `fp16_weights=True`. All 8 jobs
+resolved to `plan.kind == "seed"` on both attempts (no network, no Genius
+prompt).
+
+**Step 1 — copy + verify:** 8/8 songs copied (70 files total; per-song count
+7-10, variance is optional dereverb-cache/lrclib-cache presence), all 8
+passed verification (`alignment_debug` bundle + vocal + nonvocal stem
+present).
+
+**Steps 2-3 — regen run, attempt 1 (OOM, superseded):** failed 2/8
+songs — `CUDA out of memory` mid-`transcribe_words` on Popular, then a
+cascading `Whisper worker died during job` on Best Part Of Me (worker
+auto-restart recovering by song 4). Root cause: the driver mirrored
+`run_jobs()`'s pattern of starting a `StemWorker` for the whole run ("the
+de-reverb retry can fire on any song"), reserving ~980 MiB even though all 8
+songs already have stems and never invoke separation. Co-resident with
+large-v3 fp16 (~4.6 GB, Phase 0) against this card's ~5.6 GiB usable budget —
+the exact "needs worker serialization" gap already on record in memory
+`project_large_v3_fp16_trick.md` from the older jointrefine study. Full
+detail in commit `89b38cf`.
+
+**Fix:** drop the `StemWorker` entirely (`stem_worker=None` throughout).
+Confirmed safe before running: `LyricAlignStage._transcribe_yield_wpm`
+(`pikaraoke/pipeline/stages/lyric_align.py:640`) treats `stem_worker is
+None` as a designed "retry unavailable" no-op, not an error, and
+`PipelineOrchestrator.run_one` never touches `stem_worker` outside that gate
+when stems are already present (`_stems_present` true for all 8 —
+`StemSeparationStage` is never constructed). Re-copied the study folder
+first (attempt 1's OOM never reached bundle-write for its 2 failed songs, so
+this was a precaution, not a repair) and re-ran clean.
+
+**Steps 2-3 — regen run, attempt 2 (clean):** 8/8 succeeded, no errors or
+warnings anywhere in the console log.
+
+| song | wall-clock (s) | peak VRAM (MiB) |
+| --- | --- | --- |
+| Defying Gravity | 141.05 | 4563 |
+| Popular | 157.98 | 5275 |
+| Best Part Of Me | 98.08 | 4569 |
+| Bloodstream | 207.33 | 4565 |
+| HUNTR/X | 89.35 | 4565 |
+| Mulan | 136.65 | 4565 |
+| Seasons of Love | 114.56 | 4565 |
+| Next Ten Minutes | 181.10 | 4565 |
+| **total / max** | **1126.10 (18.8 min)** | **5275** |
+
+Total wall-clock came in under the plan's 25-40 min budget (the removed
+stem-worker overhead, not just variance). Peak VRAM matches Phase 0's
+smoke-test prediction (~4557 MiB) on 7/8 songs; Popular alone ran hotter at
+5275 MiB, still comfortably clear of the ~5.6 GiB ceiling.
+
+**Step 3 — schema check:** all 8 variant bundles and all 8 baseline bundles
+carry `schema_version == 8` (current) — the word-count comparison below is
+same-schema, not confounded by a schema migration.
+
+**Step 4 — evidence-density table** (`joint_stats` fields, baseline → large-v3
+fp16 variant; `align w` = survivors after drops, `align d` = drops, `align c`
+= raw align-leg candidates before the DP selection, `transcribe w` =
+transcribe-leg word count):
+
+| song | align w | align d | align c | transcribe w |
+| --- | --- | --- | --- | --- |
+| Defying Gravity | 470 → 3 | 0 → 466 | 48 → 2 | 267 → 273 |
+| Popular | 361 → 361 | 0 → 0 | 55 → 54 | 319 → 313 |
+| Best Part Of Me | 266 → 266 | 0 → 0 | 37 → 20 | 234 → 245 |
+| HUNTR/X | 370 → 363 | 106 → 113 | 35 → 36 | 301 → 302 |
+| Mulan | 292 → 292 | 0 → 0 | 24 → 45 | 312 → 313 |
+| Bloodstream | 500 → 500 | 0 → 0 | 57 → 54 | 324 → 329 |
+| Seasons of Love | 151 → 149 | 28 → 30 | 26 → 27 | 176 → 171 |
+| Next Ten Minutes | 367 → 367 | 0 → 0 | 61 → 53 | 359 → 338 |
+
+Full per-field JSON (all `joint_stats` columns above, both dtypes, all 8
+songs):
+`/home/ken/pikaraoke-study-l3v/records/phase1/evidence_density.json`. Timing
++ VRAM: `/home/ken/pikaraoke-study-l3v/records/phase1/regen_results.json`.
+Console log (attempt 2, the run behind every table above):
+`/home/ken/pikaraoke-study-l3v/records/phase1/regen_console.log`.
+
+**Flagged anomaly, not chased further:** Defying Gravity's align leg —
+`n_align_words` 470→3, `n_align_word_drops` 0→466, out of a raw
+pre-selection candidate pool that stayed roughly the same order of magnitude
+(470 vs. 469 = 3+466). Isolated to this one song — every other song's drop
+count is flat or close to flat baseline-to-variant (largest non-zero baseline
+case, HUNTR/X, moves only 106→113). Console log shows no error, warning,
+exception, or truncated progress bar for this song's run (both Transcribe
+and Align progress bars complete to 100% at a plausible rate); bundle is
+schema-complete (`n_lines` matches baseline, `output_summary` populated,
+`words_source: "refine"` same as baseline). Not a crash and not isolated to
+this driver's changes — `n_align_word_drops` is an existing production field
+in `LyricAlignStage`, untouched this study. Recorded as a mechanical fact
+only; no claim here about cause or about whether it should count for or
+against the study's verdict criteria.
