@@ -2,7 +2,7 @@
 
 Model: Claude Sonnet 5 (executor); Claude Fable 5 (judge)
 Branch: `fable_matcher_refine` (hook + drivers + docs all commit here)
-Status: DRAFT — awaiting Ken greenlight
+Status: Phase 0 executed (Sonnet) — awaiting GATE S0 judge read (Fable)
 
 ## Question
 
@@ -235,3 +235,92 @@ else is CPU-cheap. Executor total ≈ 2-3 h including artifacts.
   before the next phase starts.
 - Plan updates land as `docs(plan)` commits on `fable_matcher_refine`;
   pre-commit excludes `plans/`.
+
+## Results log
+
+### Phase 0 — hook + loader validation artifacts (Sonnet, 2026-07-16)
+
+Executor stops at artifacts per this study's Sonnet-executes/Fable-judges
+split; the GATE S0 verdict belongs to Fable's judge read below, not
+asserted here.
+
+**Hook commit:** `72b71ec` — `pikaraoke/pipeline/config.py`
+(`LoadModelKwargs.fp16_weights: bool = False`, default off) +
+`pikaraoke/pipeline/workers/whisper_worker.py` (new
+`_load_whisper_model()` helper, called from the model-load site inside
+`_whisper_worker_main_inner`). Config round-trip verified by hand
+(`_rebuild_config` reconstructs `fp16_weights` correctly for both
+`True` and `False`). Pre-commit clean. Existing tests pass unmodified:
+27/27 `test_whisper_worker.py` + 17/17 `test_pipeline_config.py`
+(44/44 combined).
+
+**Driver commit:** `0d630d6` — `scripts/fp16_identity_check.py`. Runs
+turbo-fp32 vs turbo-fp16 through the real `WhisperWorker` subprocess
+path (`align_refine()` then `transcribe_words(refine=False)`, matching
+`LyricAlignStage`'s production call shape), gated before a large-v3
+fp16 smoke pass — the script aborts before touching large-v3 if the
+identity check fails. VRAM measured via external `nvidia-smi` polling
+(a background thread in the parent process): the model actually loads
+inside the worker's spawned subprocess, invisible to in-process
+`torch.cuda` stats in the caller.
+
+**Environment:** Linux conda box (`pik` env), GPU confirmed idle
+(6 MiB / 0% util, zero compute processes, no pikaraoke process running)
+immediately before the run. Song: Seasons of Love (34 lyric lines,
+`align_lines` reconstructed from the existing
+`alignment_debug/<stem>.json` bundle's `lyrics.align_lines` —
+read-only, no write into `/home/ken/pikaraoke-songs`). Vocal stem:
+`vocal/Seasons of Love (HD)---UvyHuse6buY---vocal.m4a`.
+
+**Invocation:**
+`/home/ken/miniconda3/envs/pik/bin/python scripts/fp16_identity_check.py --out /home/ken/pikaraoke-study-l3v/records/phase0/identity_check_results.json`
+
+**Artifacts saved** (outside git, in the study records dir):
+- `/home/ken/pikaraoke-study-l3v/records/phase0/identity_check_console.log`
+  — raw stdout/stderr, byte-for-byte.
+- `/home/ken/pikaraoke-study-l3v/records/phase0/identity_check_results.json`
+  — full structured output, including every word's `{word, start, end,
+  probability}` for both dtypes, both legs.
+
+**Step 3 — identity check (turbo fp32 vs turbo fp16):**
+
+| leg | words | sequences_match | start/end diffs | max Δstart/end | probability diffs | max Δprobability | pct within 0.02s |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| align | 151/151 | True | 0/151 | 0.0s | 16/151 | 0.0002 | 100.0% |
+| transcribe | 175/175 | True | 0/175 | 0.0s | 0/175 | 0.0000 | 100.0% |
+
+VRAM: fp32 peak 3637 MiB, fp16 peak 2097 MiB, saved 1540 MiB (plan
+predicted ~1.6 GB, memory `project_large_v3_fp16_trick.md`). Load time:
+fp32 8.03s, fp16 12.03s (the CPU round-trip + halving is one-time
+overhead per worker start).
+
+Mechanical fact for the judge, not a verdict: every align/transcribe
+word's start and end timestamp is bit-identical between the two dtypes
+(0/326 timing diffs total) — stronger than the plan's own tolerance
+(≤0.02s for ≥99% of words). The `probability` field (not part of the
+pass criterion) shows 16/151 tiny divergences on the align leg (max
+0.0002) and 0/175 on transcribe — evidence the fp16 branch executed
+genuinely distinct numerics on the align leg (i.e. not a silent fp32
+fallback) while still landing on identical DTW/argmax timestamp
+decisions for this song.
+
+**Open item for the judge:** the transcribe leg shows zero probability
+divergence at all (vs. align's 16/151) — asymmetric, and not
+independently explained here. Plausibly VAD/mel feature extraction
+sitting outside the half-precision path, or this song's transcribe
+decode trajectory not crossing a numeric boundary either dtype
+touches. Recorded as a fact, not chased further; flagging in case it
+matters for how much this single-song identity check generalizes to
+the 8-song Phase 1 corpus.
+
+**Step 4 — large-v3 fp16 smoke (load + one align pass; only run because
+step 3 passed both legs):**
+
+Loaded in 24.44s, total pass 69.5s, peak VRAM 4557 MiB (plan predicted
+≈4605 MiB standalone), 149 align words (vs. turbo's 151 — different
+model, not compared word-for-word; this step is a load/OOM smoke test
+only). No `error`/`OOM` result from the worker subprocess.
+
+### Phase 0 — judge read (Fable, pending)
+
+_Awaiting GATE S0 review._
