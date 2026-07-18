@@ -61,6 +61,17 @@ SECTION_GAP_S = 1.5
 # sections never claim the same audio.
 SECTION_PAD_S = 0.75
 
+# A section's raw cue-to-cue span (before padding) is capped to this. Most
+# songs' gaps already fall under SECTION_GAP_S, but some SRTs caption
+# continuously with no gap at all (Phase 5a corpus survey: 2/16 SRT songs
+# collapse to one 170-220 s section) -- an oversized single slice is the same
+# whole-song-drift risk segment_by_gaps exists to prevent, just triggered by
+# dense authoring instead of a missing gap. A section over the cap is split at
+# its widest internal gap even though that gap is by definition under
+# SECTION_GAP_S: a boundary outside true silence still beats none, and the
+# pad/clamp/repace machinery already bounds the damage from an imperfect one.
+MAX_SECTION_DUR_S = 60.0
+
 # A single aligned word's sweep is capped to this, anchored at its start, so a
 # held note or a mis-stretched edge word cannot crawl. Set above the legit slow
 # line band (corpus crawls are >=1.9 s/word, legit lines <=1.3 s/word -- see
@@ -123,11 +134,47 @@ class Section:
         return range(self.lid_lo, self.lid_hi + 1)
 
 
+def _widest_internal_gap(lo: int, hi: int, cue_spans: list[tuple[float, float]]) -> int:
+    """Index ``i`` (``lo <= i < hi``) of the widest gap between cues ``i``/``i+1``.
+
+    The caller has already established this section needs a split; ties break
+    toward the gap nearest the section's time midpoint, for the most even cut.
+    """
+    mid = (cue_spans[lo][0] + cue_spans[hi][1]) / 2
+    best_i, best_gap, best_dist = lo, -1.0, None
+    for i in range(lo, hi):
+        gap = cue_spans[i + 1][0] - cue_spans[i][1]
+        dist = abs((cue_spans[i][1] + cue_spans[i + 1][0]) / 2 - mid)
+        if gap > best_gap or (gap == best_gap and dist < best_dist):
+            best_i, best_gap, best_dist = i, gap, dist
+    return best_i
+
+
+def _split_oversized(
+    lo: int, hi: int, cue_spans: list[tuple[float, float]], max_dur_s: float
+) -> list[int]:
+    """Line ids that must start a new section to keep every raw span under ``max_dur_s``.
+
+    Recurses on both halves after each cut -- an uneven split can still leave
+    one side oversized. A single-line section (``lo == hi``) is left alone
+    regardless of its own duration; there is nothing left to split.
+    """
+    if hi == lo or cue_spans[hi][1] - cue_spans[lo][0] <= max_dur_s:
+        return []
+    split = _widest_internal_gap(lo, hi, cue_spans)
+    return (
+        _split_oversized(lo, split, cue_spans, max_dur_s)
+        + [split + 1]
+        + _split_oversized(split + 1, hi, cue_spans, max_dur_s)
+    )
+
+
 def segment_by_gaps(
     cue_spans: list[tuple[float, float]],
     *,
     gap_s: float = SECTION_GAP_S,
     pad_s: float = SECTION_PAD_S,
+    max_dur_s: float = MAX_SECTION_DUR_S,
     duration: float | None = None,
 ) -> list[Section]:
     """Group 1:1 cue spans into sections split at phrase gaps.
@@ -136,7 +183,9 @@ def segment_by_gaps(
     spans need not be offset-corrected -- only the *relative* gaps between
     consecutive cues drive the split, and those survive an unknown constant
     display lead. A boundary is cut wherever the silent gap to the next cue
-    exceeds ``gap_s``.
+    exceeds ``gap_s``; a section that is still longer than ``max_dur_s`` after
+    that (a densely-captioned run with no qualifying gap) is further split at
+    its widest internal gap, recursively, via :func:`_split_oversized`.
 
     Each section's window extends ``pad_s`` into the flanking silence, clamped
     to the gap midpoint (so neighbouring sections never overlap-claim the same
@@ -148,6 +197,14 @@ def segment_by_gaps(
     # Line ids that start a new section: 0, plus every line after a wide gap.
     starts = [0] + [i + 1 for i in range(n - 1) if cue_spans[i + 1][0] - cue_spans[i][1] > gap_s]
     bounds = starts + [n]
+    split_starts = [
+        s
+        for lo, nxt in zip(bounds, bounds[1:])
+        for s in _split_oversized(lo, nxt - 1, cue_spans, max_dur_s)
+    ]
+    if split_starts:
+        starts = sorted(set(starts) | set(split_starts))
+        bounds = starts + [n]
     sections: list[Section] = []
     for lo, nxt in zip(bounds, bounds[1:]):
         hi = nxt - 1
