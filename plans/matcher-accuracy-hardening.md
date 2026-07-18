@@ -2907,3 +2907,172 @@ discriminator is now correct behavior, and G6 does not run (no adoption).
 code; 4.5b and G5/G6 do not run. The 8-line residual above is the input to
 Appendix F's Phase 6 probe report. Next open phase per the sequencing:
 Phase 5 (cue section-duration cap), then the Phase 6 checkpoint.
+
+### Phase 5a survey + 5b implementation + validation (Sonnet 5, 2026-07-18)
+
+**5a survey** (scratchpad, no commit — `phase_5a_survey.py`, pure
+`segment_by_gaps` geometry over the 16 SRT songs' real cue spans, no GPU
+needed): 2/16 songs are true zero-gap "padded-cue" SRTs (no inter-cue gap
+ever exceeds `SECTION_GAP_S`=1.5s) — Selfish collapses to one 217.7s
+section, Part of Your World to one 172.4s section. Broader picture: 12/16
+songs have at least one section over a candidate 60s cap; only 4/16 (Can
+You Feel the Love Tonight, More Than That, Happier, Incomplete) have
+none. Mirrors is in that 12 (2 sections >60s, max 177.2s) — a plausible
+mechanism for its previously-flagged overlap regression (0.7s->2.6s in the
+07-16 baseline, its only one that run). **Ken judged the class
+non-trivial**; proceeded to 5b.
+
+**5b implementation**: `MAX_SECTION_DUR_S = 60.0` added to `cue_align.py`.
+`segment_by_gaps` restructured per spec: `starts` computed from
+`SECTION_GAP_S` exactly as before, then any resulting section whose raw
+cue-to-cue span still exceeds `max_dur_s` is recursively split at its
+widest internal gap (new `_split_oversized`/`_widest_internal_gap`; ties
+break toward the gap nearest the section's time midpoint), then the
+existing pad/clamp window loop runs once, unchanged, over the finer
+boundary list. 5 new tests in `test_cue_align.py::TestSegmentByGaps`:
+zero-gap 90s split, normal-song-unaffected, recursive multi-split, 2-line
+1+1 split, tied-gap midpoint tiebreak. Full suite 1456 passed, pre-commit
+clean.
+
+**Validation** (`cue_align_corpus.py`, GPU, full 16-song SRT corpus)
+against the 07-16 Phase 0 baseline recorded above. First attempt silently
+fell back to CPU (`torch.cuda.is_available()` lost a transient GPU-
+contention race at worker init — device resolves to `"cpu"` with no
+error, since `PipelineConfig`'s default is `"auto"`); caught via the
+Vitals extension's live CPU/GPU readout, not the exit code (0 either way,
+and the run's own numbers are device-independent so nothing downstream
+would have flagged it). Killed the run, smoke-tested Happier alone to
+confirm `device=cuda` plus byte-identical baseline numbers
+(`plc=38 hid=0 rea=0 rep=0 maxgap=1.4s ovl=0.0->0.0`), then re-ran the
+full corpus clean on GPU (confirmed via `device=cuda` in the log and live
+`nvidia-smi` utilization). Result: 16/16 songs, 0/16 drift (`gapL`/`instL`
+both 0, matching baseline exactly — the corpus-wide safety metric this
+harness exists to protect). No line went from placed to hidden anywhere.
+3 whisper worker crashes (`AttributeError: 'NoneType' object has no
+attribute 'language'`, a stable_whisper narrow-slice edge case), all
+caught-and-degraded to cue repace by design — same benign failure
+signature already logged in the 07-16 Environment note (OutOfOz line 50,
+Mulan span, NSYNC lines 73-74).
+
+Overlap (`ovl old->new`, cue-align's own worst inter-line overlap) moved
+on 5/16 songs, all interior to a new sub-section rather than at a split
+seam:
+
+| song | cue-align's own overlap: before -> after this change | delta |
+|---|---|---|
+| Mirrors | 2.6s -> 0.8s | -1.8 |
+| ZAYN/Zhavia Ward - Whole New World (End Title) | 7.5s -> 4.0s | -3.5 |
+| Mena Massoud/Naomi Scott - Whole New World | 2.6s -> 2.1s | -0.5 |
+| Beauty and the Beast | 0.2s -> 0.1s | -0.1 |
+| Part of Your World | 0.7s -> 2.5s | +1.8 |
+
+Each location traced to an exact line pair via the rendered `.ass`
+(production's own `LyricAlignStage._generate_ass`, byte-faithful — the
+harness reuses it, not a harness-only render): Mirrors 7:20-7:28
+("You are, you are the love of my life" repeated back to back), ZAYN
+2:03-2:09 ("A whole new world" / "I used to be"), Mena/Scott 2:06-2:10
+("Hold your breath" / "A hundred thousand things to see"), Beauty and the
+Beast 2:16-2:19 ("Oh" / "Oh" repeated), Part of Your World 1:41-1:45
+("Out of these waters?" / "Oh!"). (The `.ass`-measured magnitude runs a
+constant +1.0s over the table above — `line_lead_in_cs`/`line_lead_out_cs`
+display padding, confirmed algebraically against all five rows — not a
+second discrepancy.)
+
+**Ken's listen-based read (2026-07-18), overriding the naive metric-only
+take**: other than Mirrors, all four are genuine two-voice overlaps in the
+source audio (simultaneous singing), not alignment defects — the overlap
+metric has no voice-separation signal, so it can't tell "wrong" overlap
+from "correct" overlap. Specifically: Part of Your World's metric
+*regression* (0.7s->2.5s) is actually a **correctness improvement** — the
+short "Oh!" interjection now lands in its correct (overlapping) location,
+which the single-giant-slice pass had placed wrong. ZAYN's metric
+*improvement* (7.5s->4.0s) may be the opposite — the original longer
+overlap was actually correct, so this run's shorter one is suspect.
+Mirrors' close double is not a real two-voice overlap.
+
+**Ken's overall call: keep the change** — smaller alignment windows are
+probably better on balance for the drift risk this phase targets, even
+though the corpus-wide overlap metric is not a clean correctness proxy on
+songs with real simultaneous multi-voice singing. No verdict rendered
+here on ZAYN specifically or on the metric's fitness for future
+validation rounds — flagging both for the judge read rather than
+resolving them here. Code/tests are complete and passing; the commit is
+held pending that read.
+
+### Phase 5b — judge read (Fable 5, 2026-07-18)
+
+**Verdict: ship as-is. "Keep it" stands, and on ZAYN the suspicion
+inverts — the 7.5s→4.0s improvement is a genuine correction, not a
+clipped duet.** The deciding evidence is a reference the overlap metric
+ignores but the corpus carries for free: the source SRTs author genuine
+two-voice passages as *stacked cue pairs with identical spans*, so each
+song has a computable maximum authored simultaneity.
+
+ZAYN specifics. The SRT stacks "I used to be" / "A whole new world" at
+an identical 2:03.433→2:08.100 (4.67s), and no authored pair anywhere in
+the song overlaps more than 4.70s — so a faithful alignment cannot
+produce 7.5s; some line must sit ≥2.8s outside its authored cue.
+Production's 7.84s (the harness's own `old` column reads `7.8->4.0`)
+traces in the bundle to exactly that: "Let me share this whole new world
+with you" swept 2.2s early over "There's time to spare" — two cues
+authored strictly *sequential* (zero overlap), i.e. a defect site, not
+the duet Ken listened to. The capped run corrects that pair outright
+(both lines now within ~0.2s of their authored cues, raw overlap ≈ 0)
+and its new worst pair is the *legitimate* stacked duet at 2:03, at 4.0s
+vs 4.67s authored — the shortfall is realign trimming "I used to be" to
+its sung words inside the cue, expected behavior. The confusion was a
+location artifact: the metric is a per-song max, and the max *moved*
+from the defect site to the duet site between runs, so 7.5→4.0 was never
+a same-location comparison. (Caveat: the uncapped 07-16 run's own 7.5s
+pair can't be re-traced — its `.cuealign.ass` was overwritten today and
+the 07-16 log scratchpad is gone; the location inference leans on
+production's independent 7.84s. The verdict doesn't depend on it: no
+authored pair reaches 7.5s, so the old number was a misplacement
+wherever it lived.)
+
+The same test corroborates Ken's Part of Your World correction: the SRT
+stacks "Out of these waters?" / "Oh!" identically at 1:41.633→1:44.700
+(3.07s authored). The old single-172s-slice pass missed the stack (0.7s);
+the capped run converges toward it (2.5s). Deviation from authored:
+2.37s → 0.57s. All five moved songs by |ovl − authored|: Mirrors
+2.60→0.80 (authored 0 — no stacked cues; the residual 0.8s is
+adjacent-repeat bleed, improved from 2.6), ZAYN 2.80→0.70, Beauty and
+the Beast 0.20→0.10, PotW 2.37→0.57; Mena/Scott 1.47→1.97 is the one
+move away, but both values sit *below* its 4.07s authored max — the
+benign (trim) direction — and its authored-max location (2:25.7) isn't
+the traced pair, so it's not a like-for-like deviation. No new-run song
+exceeds its authored max by more than Mirrors' 0.8s; two old-run songs
+exceeded it by 2.6-2.8s.
+
+On the metric's fitness (the second flagged question): raw `ovl` is
+blind to whether overlap is authored, but the asymmetry is usable —
+overlap *above* the song's authored max requires a line displaced
+outside its cue (defect), overlap *below* it is realign trim (benign).
+Recommendation for future cue-align validation rounds: report
+excess-over-authored, `max(0, ovl − authored_ovl)`, alongside raw
+`ovl` — the harness already loads the SRT, so the reference is free. It
+would have flagged old-ZAYN (excess 2.8s) and old-Mirrors (2.6s) while
+correctly passing the PotW "regression". Not implemented here (nothing
+in 5b's scope requires it); Ken's call whether it rides into the next
+validation round.
+
+Pre-registered criterion (5b validation, "flag/overlap counts must not
+regress on normal songs and should improve on the zero-gap class"):
+gapL/instL 0/16 matching baseline; no normal-song overlap regression
+(4 improved); the zero-gap class's PotW raw-metric regression is, by
+the authored-reference and Ken's listen, a correctness improvement —
+criterion satisfied in substance. The held commit can land as specced:
+`feat(cue-align): cap section duration for zero-gap SRTs`.
+
+**5c checked (Sonnet 5, 2026-07-18): skip.** 5c's own trigger —
+"displacement aliasing on non-adjacent repeats" — was checked directly
+against this validation run's output: for every SRT song, every pair of
+identical-text lines more than one line-id apart, verified their assigned
+start times stayed in cue order (no non-adjacent repeat's timing was
+swapped with a different occurrence's). Zero inversions found
+corpus-wide. Per the plan's own instruction ("otherwise skip — don't add
+unrequested robustness"), `_repeat_detection_slacks` is untouched.
+
+**Phase 5 CLOSED (2026-07-18)** — 5a done, 5b shipped per the judge read
+above, 5c's trigger did not fire. Next open phase: Phase 6 (Appendix F
+transition-cost DP checkpoint).
