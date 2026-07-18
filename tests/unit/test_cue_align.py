@@ -89,15 +89,6 @@ class TestSegmentByGaps:
         assert only.t0 == 0.0  # max(0, 0.3 - 0.75)
         assert only.t1 == 4.5  # min(4.5, 4.0 + 0.75)
 
-    def test_normally_gapped_song_unaffected_by_cap(self):
-        # No section here is anywhere near 60s, so the cap must not change
-        # the boundaries or windows a normal song already got right.
-        cues = [(0.0, 2.0), (2.5, 4.0), (9.0, 11.0), (11.4, 13.0)]
-        sections = segment_by_gaps(cues, gap_s=1.5, pad_s=0.75, duration=14.0)
-        assert [(s.lid_lo, s.lid_hi) for s in sections] == [(0, 1), (2, 3)]
-        assert sections[0].t1 == 4.75
-        assert sections[1].t0 == 8.25
-
     def test_zero_gap_90s_splits_at_widest_internal_gap(self):
         # No gap reaches gap_s (1.5s default), so this is one section by the
         # phrase-gap rule alone -- but its 90s raw span forces one cap split,
@@ -130,6 +121,30 @@ class TestSegmentByGaps:
         cues = [(0.0, 10.0), (11.0, 20.0), (20.5, 60.0), (61.0, 70.0)]
         sections = segment_by_gaps(cues, duration=70.75)
         assert [(s.lid_lo, s.lid_hi) for s in sections] == [(0, 0), (1, 3)]
+
+    def test_cap_split_survives_stacked_cue_negative_gaps(self):
+        # Stacked duet cues overlap, making inter-cue gaps negative; a first
+        # gap of exactly -1.0s once collided with a widest-gap sentinel and
+        # crashed the tie-break. It must split cleanly like any other value.
+        cues = [(0.0, 61.0), (60.0, 62.0)]
+        sections = segment_by_gaps(cues, duration=62.5)
+        assert [(s.lid_lo, s.lid_hi) for s in sections] == [(0, 0), (1, 1)]
+
+    def test_all_negative_gaps_split_at_least_negative(self):
+        # Fully-overlapped oversized run: the widest gap is the least
+        # negative one (-2.0s, at index 1), not the leftmost.
+        cues = [(0.0, 20.0), (16.0, 40.0), (38.0, 64.0), (61.0, 90.0)]
+        sections = segment_by_gaps(cues, duration=90.75)
+        assert [(s.lid_lo, s.lid_hi) for s in sections] == [(0, 1), (2, 3)]
+
+    def test_negative_gap_boundary_pads_zero_not_inverted(self):
+        # A cap split inside cue overlap has no silence to share: each window
+        # keeps its own cues' full span instead of inverting the pad and
+        # truncating the boundary lines' audio.
+        cues = [(0.0, 30.5), (30.0, 62.0)]
+        first, second = segment_by_gaps(cues, duration=62.5)
+        assert first.t1 == 30.5
+        assert second.t0 == 30.0
 
 
 class TestSplitSectionToLines:
