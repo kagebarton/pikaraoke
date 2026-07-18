@@ -3124,3 +3124,194 @@ unrequested robustness"), `_repeat_detection_slacks` is untouched.
 **Phase 5 CLOSED (2026-07-18)** — 5a done, 5b shipped per the judge read
 above, 5c's trigger did not fire. Next open phase: Phase 6 (Appendix F
 transition-cost DP checkpoint).
+
+### Phase 6 — F1 probe + F2 GATE (Sonnet 5, 2026-07-18)
+
+Executed per Appendix F. Scratchpad only, no commit; nothing built.
+Sequencing prerequisite: the LRCLIB study is CLOSED
+(`plans/lrclib-fill-absence-study.md` — E1 GO, shipped; E2 never ran, per
+Ken's pre-execution descope), so F2 criterion 4's "outside the LRCLIB E2
+demotion set" clause has no set to exclude against and degrades to its
+already-documented no-exclusion fallback.
+
+**Data**: post-Phase-4 matcher replay (alpha=2.0/beta=2.0) over the
+17-song joint (non-SRT) corpus, reusing `replay_ytasr_third_source.py`'s
+own `_load_ytasr_words`/`_replay_spans`/`_replay_output` — final merged
+placements, the same inputs the harness's own baseline runs use.
+
+**P2 labels**: held-out LRCLIB timing, the same offset-MAD calibration the
+harness already scores against (`analyze_pass1` anchors →
+`offset_mad_against_cues`); RIGHT < 0.5 s, WRONG > 2.0 s. 5 bail songs
+excluded (all `wide_spread`) — the same count Appendix C.3's Phase 2a run
+reported. Labeled corpus-wide: 292 RIGHT, 32 WRONG.
+
+**Stanza-break metadata**: the bundle's recorded `lyrics.source_path` is
+gone for all 17 songs — this corpus's regen wrote lyrics into a shared
+`~/.pikaraoke/tmp/regen_lyrics__*` directory that has since been cleaned
+up (an absolute-path fallback in `lyric_align.py`'s capture, not a bug —
+the path just outlived the tmp dir). Fell back to the path
+`lyrics_fetch.py` documents for exactly this case: re-fetch by the
+bundle's captured Genius id (`regen_alignment_bundles._make_genius()`,
+response cached locally so a re-run makes no repeat network calls). All
+17/17 recovered and verified (parsed text == `bundle["lyrics"]["lines"]`)
+— the metadata arm is a real test, not a degenerate copy of the
+no-metadata arm.
+
+**T statistic** (F1's formula, `G0=8.0`/`A=6.0`/`RAMP_S=10.0`), corpus-wide:
+
+| | AUC (WRONG vs RIGHT) | RIGHT collateral (T ≥ 0.5) |
+|---|---|---|
+| metadata arm | **0.510** | 3/292 (1.0%) |
+| no-metadata arm | 0.523 | 5/292 (1.7%) |
+
+WRONG lines with `T_meta >= 0.5`: **1** — Hakuna Matata line 5, "Why, when
+he was a young warthog" (a spoken aside ytasr placed across a genuinely
+implausible gap) — and it carries non-zero evidence (veto-ineligible), so
+the marginal-value count is **1**.
+
+**F2, pre-registered formulas applied to the table above (mechanical read,
+not a verdict — Opus reads this next per Appendix F's own routing: "The F2
+GATE itself still gets Opus's read before Ken rules"):**
+
+1. Volume bar: 32 >= 15 — clears the literal floor.
+2. Separation bar (metadata arm): AUC 0.510 (no-metadata 0.523) — both
+   below the 0.60 floor per F2.2's literal read.
+3. Collateral bound: 1.0% (metadata) / 1.7% (no-metadata) — both under the
+   5% bar per F2.3's literal read.
+4. Marginal value: 1 veto-ineligible WRONG∧T>=0.5 line (Hakuna Matata line
+   5) against the literal >= 5 floor.
+
+On a fully literal read, criterion 2 does not clear the floor, and
+criterion 4 independently does not either — the F2.4 "phase stops at the
+first failure" instruction would stop at criterion 2 without needing
+criterion 4 at all. Flagging rather than concluding, the way G4 flagged
+CE/PF/TO's confounds before Fable's read:
+
+- Every WRONG line but one sits at `T_meta=0.00`, not spread across the
+  scale — including all 9 Bloodstream WRONG lines (the residual 4:07-cut
+  repeats F1's prediction named). They're near-duplicate lines placed
+  close in time to a correct occurrence of the same text
+  ([[project-alignment-repeat-pileup-diagnosis]]'s chant-pileup pattern),
+  not lines separated by a gap — worth the judge's read on whether that
+  pattern generalizes to "a *gap* term has no purchase on this failure
+  class" or is specific to this corpus's repeat structure.
+- The transcribe-won RIGHT lines sit at `T_meta=0.000` exactly (all of
+  them); ytasr-won mostly (mean 0.032) but with one `T=1.0` outlier (Girl
+  in the Bubble line 31) — one of the 3 metadata-arm collateral hits.
+- The metadata arm's one reachable WRONG line (Hakuna Matata line 5, a
+  spoken aside) sits beside a case where the stanza-break term cancels a
+  *second* adjacent hit: line 28's repeat-chorus phantom is `T_none=1.0`
+  but `T_meta=0.00` because a stanza break genuinely falls at that chorus
+  repeat's boundary. Worth the judge's read on whether that's the term
+  working as designed or giving up a hit it didn't need to.
+- No-metadata collateral (1.7%) runs higher than metadata (1.0%),
+  directionally matching F1's prediction, though both sit far under the
+  5% bound either way.
+
+No verdict recorded here. Next: Opus reads F2 against this table;
+escalate to Fable if it reads as ambiguous, per Appendix F's routing.
+
+Scratch script + per-line data (throwaway, uncommitted):
+`/home/ken/pikaraoke-songs/phase6_f1_study/` (`phase6_f1_probe.py` +
+`phase6_f1_rows.json`, one row per placed line with `T_meta`/`T_none`/
+`label`/`source`/`corroborated`).
+
+### Phase 6 — F2 judgment (Fable 5, 2026-07-18)
+
+Judge read, rendered directly at Fable per Ken's routing (same hand-off as
+the G4 read). Method: the mechanical table was re-verified from
+`phase6_f1_rows.json` (counts, both AUCs, collateral lists, and the
+reachable-WRONG set all reproduce exactly), and — since the rows carry no
+timings — the transition geometry was re-derived by replaying the probe's
+own harness path and extracting raw gap/k/stanza per WRONG transition.
+That re-derivation shares the probe's replay code, so it is an independent
+read of the geometry, not an independent replication of the replay; the T
+values recomputed from raw gaps match the rows at every spot-checked site.
+
+**Q1 — the T≈0 cluster is structurally gap-invisible, not an artifact of
+`G0`/`A` scoping.** The raw transitions settle it:
+
+- Across all 31 zero-T WRONG lines, the largest gap on any
+  non-stanza-crossed side is **3.48 s** against a *minimum* budget of
+  8.0 s (k=1). Most sit at 0.00-1.0 s. One Bloodstream transition
+  (36→37) is a **−6.70 s overlap**; another (42→51) packs **k=9 line-ids
+  into 0.00 s of gap**. The class is *crowded*, not gapped — near-duplicate
+  lines placed adjacent to a correct occurrence of the same text, the
+  [[project-alignment-repeat-pileup-diagnosis]] pileup geometry.
+- Counterfactual constant sweep (recomputed from the raw gaps, metadata
+  arm): `G0` 8.0 → 4.0 → 2.0 leaves the table **byte-identical** (1/32
+  caught, 3/292 collateral). F4's own pre-registered sweep floor
+  (`G0 = 4`) would have changed nothing. Even `G0 = 0` stays at 1/32
+  (collateral 5); the degenerate `G0 = A = 0` — every positive gap
+  penalized, i.e. no design at all — reaches only 2/32 while collateral
+  climbs. The no-metadata arm at `G0 = 0` peaks at 5/32 with 8/292
+  collateral. There is no constant scoping under which this statistic
+  sees the WRONG class, because the formula is one-sided by construction
+  (`max(0.0, gap − allowed)`) and the class's anomaly is in the clamped
+  direction: too *little* time for the line-id distance, not too much.
+- F1's blind-prediction scorecard, for the record: the flagship
+  prediction (Bloodstream residual repeats carry high T_meta) is
+  **refuted** — all 9 at exactly 0.00; the collateral-direction
+  prediction confirmed but immaterial (5 vs 3, both ≪ 5%); the
+  transcribe/ytasr-won RIGHT ≈ 0 prediction confirmed (transcribe
+  exactly 0.000 across the board).
+
+The compression direction the data actually points at is the territory F5
+already declined (implied-pace transition term) and the pileup diagnosis
+already assigns upstream (lyric-version over-counting). Nothing here
+licenses re-opening it as a DP term; the 31 unreachable lines' lever
+remains upstream lyric-version matching.
+
+**Q2 — Hakuna Matata line 28: the stanza-break valve worked as designed,
+and the hit it zeroed was worth nothing to the gate.** Verified from the
+Genius cache text and the re-derived placements: the break before line 29
+is genuinely authored (lid-28 "Hakuna matata" is its own blank-line
+stanza) and matches real audio structure — line 28 is a zero-evidence
+align phantom (`transcribe_match=0.0, ytasr_agreement=0.0`) glued flush
+to the preceding chain at 110.07 s (gap 0.00 to lid 27) when the held-out
+reference puts it at 160.61 s (err 50.5 s), and the 63.17 s gap it opens
+to lid 29 is the song's real instrumental montage (lid 29 is RIGHT at
+176.04 s, err 0.25). Three facts close the question:
+
+- The forgone catch is **veto-class**: zero-evidence align — exactly the
+  population criterion 4 refuses credit for, in either arm. Counting it
+  would not move the marginal-value count off 1.
+- The same gap fired `T_none=1.0` on **RIGHT lid 29** (one of the
+  no-metadata arm's 5 collateral) and on unlabeled lid 31. Zeroing the
+  site deleted one worthless catch and one real collateral flag in the
+  same stroke — the valve's trade was net positive even locally.
+- The symmetric-attribution pattern is structural: T is two-sided (max
+  over both transitions), so every implausible gap flags both endpoints.
+  The arm's one genuine catch (lid 5, gap 14.40 s) bought its collateral
+  the same way — RIGHT lid 4 at T=0.64 is the other endpoint of the same
+  defective transition.
+
+**Q3 — criterion 4 is independently decisive, and the two criteria do not
+disagree.** The marginal-value count is 1 veto-ineligible line against a
+≥ 5 floor in *both* arms (the no-metadata arm's second reachable line is
+lid 28, uncorroborated) and, per the Q1 sweep, at *every* constant
+scoping down to the degenerate. There is also no charitable AUC read to
+arbitrate against: 320 of 324 labeled lines sit at exactly T_meta = 0.00,
+so the AUC is tie-pinned at ≈ 0.5 by construction — 0.510 is not a noisy
+under-estimate of latent separation, it is the true value of a statistic
+with almost no support. Criteria 2 and 4 are the same absence measured
+twice: no separation because no reachable mass. And the single reachable
+line is doubtful prey besides — lid 5 carries `transcribe_match=7.0` /
+`ytasr_agreement=0.71`, precisely the corroborated class F3's saturation
+cap (`lam ≤ alpha`) is designed to spare, so the locked design would at
+best relocate it and might not touch it at all. Honest ceiling on the
+DP's marginal value: at most 1 line, plausibly 0.
+
+**Verdict: NO-GO.** F2's stop-at-first-failure lands on criterion 2 (AUC
+0.510 < 0.60, both arms), nowhere near the 0.60-0.75 judgment band, and
+criterion 4 fails independently (1 < 5, robust to arms and constants).
+Criteria 1 and 3 pass, which sharpens rather than softens the read: the
+residual mass was there to find (32 WRONG) and collateral was never the
+problem — the mechanism simply has no purchase on where this corpus's
+wrongness lives. Per F2.2: record the numbers and close Phase 6 with no
+code. F3/F4 are never built; F5's non-goals stand unmodified. Ken retains
+the final call.
+
+**Ken confirmed the close (2026-07-18). Phase 6 CLOSED per the NO-GO** —
+no code; F3/F4 do not run. Phases 0 through 6 — the plan's full original
+sequence — are now all resolved.
