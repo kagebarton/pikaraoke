@@ -2719,3 +2719,191 @@ against, on this box.
 Artifacts (session scratchpad, not committed): `ytasr_baseline_linux.txt`,
 `_run2`, `_run3`, `ytasr_baseline_composite.txt`, `cue_smoketest_happier.txt`,
 `cue_align_baseline_full.log`, `run_regen_all.py`, `check_regen_plan.py`.
+
+### Phase 4.5a — G1 enumeration + G3 discriminators (Sonnet 5, 2026-07-17)
+
+Per Appendix G, G1-G3 (LRCLIB study closed same day — see its own plan — so
+4.5a runs manual-gold-only from the start, the documented fallback, not a
+deviation). `phase_4_5a_study.py` (workspace, not committed) wraps
+`replay_ytasr_third_source.py`'s own `_load_ytasr_words` /`_replay_spans` /
+`_replay_output` at the fixed point `alpha=2.0, beta=2.0` (post-Phase-4
+matcher) over this box's 17-song non-SRT `alignment_debug` corpus — the same
+corpus the 2026-07-16 Environment note baselined. Re-ran once for a real
+`diff`: byte-identical output both times.
+
+**G1.** 60 zero-evidence lines (non-empty words, `evidence` exactly
+`transcribe_match=0, ytasr_agreement=0.0`) across 13 of the 17 songs; 4
+contribute none. Bloodstream and Defying Gravity's counts (8 and 6) match
+those bundles' own recorded `joint_stats.evidence_veto.n_zero_evidence`
+exactly — a reproducibility check against already-shipped numbers, not just
+an eyeballed table. Caveat: Bloodstream reads 8 here vs. 9 in the
+2026-07-13 Windows live-regen table (Results log, Phase 3b GATE) — expected
+cross-machine whisper/GPU drift, the same effect the Environment note
+already documented corpus-wide, not a new defect. Known silence-rule marks
+(only available for the three 2026-07-13 live-regen bundles):
+Bloodstream line 65 and HUNTR_X line 32 already demoted live; 13 more known
+kept (the rest of those two songs' plus Defying Gravity's zero-evidence
+lines); the remaining 45 unmarked (no vocal envelope offline).
+
+**G2.** Applied the labels already on record: Defying Gravity 79/81/85-88
+ABSENT, Bloodstream's zero-evidence members of 39-64 PRESENT (6 lines: 41,
+57, 58, 60, 61, 62). That leaves 48 lines across 11 further songs (plus
+Bloodstream 0/65 and HUNTR_X 32, outside the given ranges) with no gold
+label yet — Ken's manual PRESENT/ABSENT pass, one sitting per G2's own
+estimate.
+
+**G3, computed corpus-wide, read here only against the 12 already-labeled
+lines** (a preview, not a GATE read — 6 ABSENT/6 PRESENT is under-powered
+against G4's exact-zero-collateral bars; a single collateral hit anywhere
+in the other 48 could still flip an adoption):
+
+- **CE** fires 5/60 corpus-wide; on the labeled subset, 2/6 ABSENT (79, 81)
+  and 0/6 PRESENT.
+- **PF** evaluable on 40/60 (ASR-silent both streams); on the labeled
+  subset, best swept threshold catches 3/6 ABSENT (86, 87, 88 at ≥0.2) with
+  0/6 PRESENT collateral; 0.2 and 0.3 tie at caught=3 (0.1 catches only 2:
+  86, 87). Line 85 survives at every threshold (p_med 0.84), matching G3's
+  own worked prediction.
+- **TO** fires 8/60 corpus-wide; on the labeled subset, 6/6 ABSENT (the
+  full Defying Gravity tail) and 0/6 PRESENT; also fires on Bloodstream's
+  already-vetoed line 65 and one further unlabeled line.
+
+No G4 verdict recorded here — per executor discipline this is the data
+entry, not the read. Artifacts (workspace, not committed):
+`/home/ken/pikaraoke-songs/phase_4_5a_study/phase_4_5a_study.py`,
+`phase_4_5a_console.txt` (full 60-line table), `phase_4_5a_enumeration.json`
+(raw, one record per line incl. per-threshold PF detail). Next: Ken labels
+the remaining 48 lines from that table, then Opus reads G4 against the
+completed table.
+
+### Phase 4.5a — G2 complete, G4 mechanical read (Ken labels + Sonnet 5 computes, 2026-07-18)
+
+Ken labeled all 48 remaining lines in one sitting, and revised one label
+already on record: Defying Gravity line 85 ("Bring me down") was ABSENT at
+the original 2026-07-13 GATE finding; direct listen on 2026-07-18 revises it
+to PRESENT. `phase_4_5a_enumeration.json` (same workspace path) now carries
+`label`/`label_source`/`label_note` per line — updated in place, not
+regenerated, so G1/G3's numbers above are unchanged.
+
+**Final split: 10 ABSENT / 50 PRESENT.** ABSENT: Defying Gravity 79, 81, 86,
+87, 88; Popular 51; Bloodstream 0, 65; HUNTR_X 32; Paradise 0.
+
+Two notes Ken flagged that don't change a label but bear on reading the
+discriminators:
+
+- **Paradise line 0** ("Ooh"): not absent from the song — relocated. The
+  real line is sung near 0:40, ~39s from where this replay placed it.
+  Recorded ABSENT for this placement (the veto's question is "is this
+  claimed span real," not "does this text occur anywhere in the song").
+- **Bloodstream's 6 already-PRESENT lines** (41, 57, 58, 60, 61, 62): the
+  parenthetical echo text ("(Brokenhearted)" / "(Tell me when it kicks
+  in)") may or may not actually be sung under the main line — flagged, not
+  separately labeled (G2 has no partial-line category; the base line is
+  real, so PRESENT stands).
+
+Several PRESENT lines carry a pre-snap timing note (Domino 8, 33: ~2s
+early; Domino 41: ~2s late; Domino 65 and Next Ten Minutes 66: actual span
+~2s longer): expected, since this study's replay is deliberately snap-free
+(G1 — edge snap needs vocal-stem audio this offline harness never touches).
+These lines are real; this replay's `start`/`end` just isn't exactly where
+the post-snap pipeline puts them.
+
+**G4, pre-registered formulas applied to the complete table (mechanical
+read, not a verdict — Opus reads this next per the model-switching table):**
+
+- **CE**: caught 3/10 (Defying Gravity 79, 81; Popular 51), collateral 2/50
+  (Be Our Guest 70 "Course by course, one by one"; Belle 109 "That Belle
+  (Bonjour...)" reprise chant) — two-or-more collateral reads reject per
+  G4.1's literal bar.
+- **PF**: caught 6/10 at the tied-best thresholds 0.2/0.3 (0.1 catches
+  5/10), but collateral 3/50 at *every* swept threshold (Be Our Guest 63
+  "Our command is your request" p_med=0.0007; Belle 82 "Pardon"
+  p_med=0.0001; Belle 84 "Mais oui" p_med=0.0019) — any collateral is an
+  outright reject per G4.2, no judgment band.
+- **TO**: caught 6/10 (the Defying Gravity tail minus 85, plus Bloodstream
+  65), collateral 2/50 — Defying Gravity 85 itself (this session's
+  revision, and the one line G3's own text predicted would be hardest:
+  "expected to survive everything... p≈0.84-0.93") and Domino 65 (the line
+  Ken flagged as ~2s longer than this replay's pre-snap span) — two
+  collateral reads reject per G4.3's `collateral==0` bar.
+
+On a fully literal read, nothing clears G4 — the G4.4 "record the study,
+close the phase with no code" branch. Flagging rather than concluding:
+PF's collateral looks solid (three low-probability-but-real short
+interjections, no timing caveat attached to any of them); CE's and
+especially TO's collateral both sit on lines with a specific, named
+confound (this session's own DG-85 revision; Ken's own pre-snap
+displacement note on Domino 65) — the shape of thing the Judge role exists
+to weigh (Phase 3b GATE precedent: a clean-looking table hid a real
+confound on first read) before treating the literal reject as final.
+
+No verdict recorded here. Next: Opus reads G4 against this table; escalate
+to Fable if it reads as ambiguous.
+
+### Phase 4.5a — G4 judgment (Fable 5, 2026-07-18)
+
+Judge read, rendered directly at Fable per Ken's hand-off. Both flagged
+confounds were examined against the raw enumeration JSON (fire lists and
+p_med ordering re-verified from the artifact, not the prose) before
+accepting the mechanical read. Ken's final call closes the phase.
+
+- **CE: reject** (G4.1, collateral 2 — the two-or-more bar, no judgment
+  band applies). Neither collateral hit is confounded: Be Our Guest 70 and
+  Belle 109 are real ensemble/patter lines where the ASR heard different
+  words — garbled transcription of real singing is indistinguishable from
+  counter-evidence, and that is CE's intrinsic failure mode, not label
+  noise. All five corpus-wide fires are ytasr-witness fires (the
+  transcribe arm never fired), 3 right / 2 wrong: 60% precision for a
+  destructive veto over a class that is 83% PRESENT. The named confounds
+  don't touch CE's ledger at all.
+- **PF: reject** (G4.2, outright — collateral 3 at every threshold, and
+  no confound was ever claimed for it). The JSON is more damning than the
+  summary: the three collateral p_meds (Belle 82 "Pardon" 0.0001, Be Our
+  Guest 63 0.0007, Belle 84 "Mais oui" 0.0019) interleave with the phantom
+  cluster at the very bottom of the scale — "Pardon" ties phantom
+  HUNTR_X 32 "(Oh)" exactly. No threshold catches any useful phantom set
+  without all three, so the *ordering* fails, not the tuning. PF also
+  misses in the other direction (Bloodstream 0, ABSENT at p_med 0.487,
+  invisible at every threshold). This is the second independent
+  confirmation of the 2a lock — align probability on short lines carries
+  no absence signal — and PF should not be re-proposed in Phase 6.
+- **TO: reject** (G4.3, collateral 2 against a `collateral == 0` bar).
+  The confounds were weighed and neither is exculpatory:
+  - DG 85: the PRESENT revision is the better-evidenced label (direct
+    listen, concordant p_med 0.84), so the hit is genuine collateral —
+    and it is precisely the failure G3 pre-registered for TO ("likeliest
+    to hit real align-only outros") landing on the exact line Appendix G
+    predicted would be the hardest call. The confound cuts against TO,
+    not for it.
+  - Domino 65: the ~2s pre-snap span note changes neither the label (the
+    line is real) nor the fire — production's veto tier runs pre-snap,
+    on the same object this snap-free replay reproduces, so adopting TO
+    would demote a real closing line live. Where the true span sits is
+    irrelevant to what the veto would do.
+  - Structurally decisive either way: re-revising DG 85 back to ABSENT
+    would still leave Domino 65 → collateral 1 > 0, and G4.3 has no
+    judgment band. TO's reject is robust to the 85 label in both
+    directions.
+
+**Verdict: G4.4 — record the study, close the phase with no code.** No
+composition. The only pre-registered judgment band anywhere (CE at exactly
+one collateral) is not where the data landed, and reaching it would
+require relabeling an unconfounded PRESENT line to rescue a discriminator
+— post-unblinding label-shopping, barred in spirit by the C4/F2
+convention. (The DG 85 revision was the legitimate kind: self-initiated on
+listen, and it cut against adoption.)
+
+Residual class carried to the Phase 6 probe report: 8 of the 10 ABSENT
+placements survive everything (the silence rule already demotes
+Bloodstream 65 and HUNTR_X 32 live) — DG 79/81/86/87/88 and Bloodstream 0
+known kept live; Popular 51 and Paradise 0 unmarked (no envelope offline —
+the live silence rule may yet catch either). Paradise 0 is a relocation,
+not a pure phantom; its fix is upstream placement, which no veto can
+provide (G7). Bookkeeping: the DG 85 revision obsoletes G6's "documented
+residual against Ken's ABSENT label" note — 85 surviving every
+discriminator is now correct behavior, and G6 does not run (no adoption).
+
+**Ken confirmed the close (2026-07-18). Phase 4.5a CLOSED per G4.4** — no
+code; 4.5b and G5/G6 do not run. The 8-line residual above is the input to
+Appendix F's Phase 6 probe report. Next open phase per the sequencing:
+Phase 5 (cue section-duration cap), then the Phase 6 checkpoint.
