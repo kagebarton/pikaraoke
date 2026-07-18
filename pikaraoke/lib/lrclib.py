@@ -311,7 +311,11 @@ def write_lrc(path: Path, record: dict) -> None:
     body = record.get("syncedLyrics") or ""
     text = "".join(f"{line}\n" for line in header) + body
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
+    # Sibling tmp + rename: an interrupted write must never leave a truncated
+    # .lrc for ensure_lrc's is_file() check to trust as a cache forever.
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    tmp.replace(path)
 
 
 def read_lrc(path: Path) -> tuple[str, dict]:

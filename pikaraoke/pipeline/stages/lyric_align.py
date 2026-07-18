@@ -206,30 +206,36 @@ class LyricAlignStage(BaseStage):
         cfg = self._config
         capture_lrclib_ref: dict | None = None
         if capture_method_used == "joint" and cfg.lrclib_fill:
-            lrc_path = _find_lrclib_lrc(ctx.song_path)
-            if lrc_path is not None:
-                synced_text, lrc_meta = lrclib.read_lrc(lrc_path)
-                capture_lrclib_ref = {
-                    # .as_posix(): forward slashes so a bundle written on
-                    # Windows still resolves on a Linux consumer (regen
-                    # tool, offline harness) -- str() would leak backslashes.
-                    "lrc_file": lrc_path.relative_to(ctx.song_path.parent).as_posix(),
-                    **lrc_meta,
-                }
-                if env is None:
-                    capture_joint_stats["lrclib_fill"] = {"eligible": False, "reason": "no_env"}
-                else:
-                    fills, fill_stats = lrclib_fill.plan_fills(
-                        line_objects,
-                        lyrics_lines,
-                        align_lines,
-                        capture_transcribe_words,
-                        synced_text,
-                        env,
-                        margin_s=cfg.joint_margin_s,
-                        max_edit_ratio=cfg.joint_max_edit_ratio,
-                    )
-                    capture_joint_stats["lrclib_fill"] = fill_stats
+            try:
+                lrc_path = _find_lrclib_lrc(ctx.song_path)
+                if lrc_path is not None:
+                    synced_text, lrc_meta = lrclib.read_lrc(lrc_path)
+                    capture_lrclib_ref = {
+                        # .as_posix(): forward slashes so a bundle written on
+                        # Windows still resolves on a Linux consumer (regen
+                        # tool, offline harness) -- str() would leak backslashes.
+                        "lrc_file": lrc_path.relative_to(ctx.song_path.parent).as_posix(),
+                        **lrc_meta,
+                    }
+                    if env is None:
+                        capture_joint_stats["lrclib_fill"] = {"eligible": False, "reason": "no_env"}
+                    else:
+                        fills, fill_stats = lrclib_fill.plan_fills(
+                            line_objects,
+                            lyrics_lines,
+                            align_lines,
+                            capture_transcribe_words,
+                            synced_text,
+                            env,
+                            margin_s=cfg.joint_margin_s,
+                            max_edit_ratio=cfg.joint_max_edit_ratio,
+                        )
+                        capture_joint_stats["lrclib_fill"] = fill_stats
+            except Exception:
+                logger.exception(
+                    "[%s] LRCLIB fill planning failed; continuing without fills", self.name
+                )
+                capture_joint_stats["lrclib_fill"] = {"eligible": False, "reason": "error"}
 
         # Joint route only: before the snap, demote zero-corroboration align
         # lines whose claimed span is near-silent in the stem — lyrics the
@@ -312,7 +318,7 @@ class LyricAlignStage(BaseStage):
         method_used: str | None,
         line_objects: list[dict],
         wrote_srt: bool,
-        lrclib_ref: dict | None = None,
+        lrclib_ref: dict | None,
     ) -> None:
         """Assemble + write the alignment-debug JSON. Errors are logged
         and swallowed — capture failure must never fail the pipeline.

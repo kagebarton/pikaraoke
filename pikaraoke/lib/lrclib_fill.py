@@ -184,6 +184,7 @@ def _eligibility(arm_a: dict, slope: dict) -> tuple[bool, str | None]:
 
 
 def _stats(
+    *,
     n_cues_mapped: int,
     arm_a: dict | None,
     slope_fit: dict | None,
@@ -230,7 +231,16 @@ def plan_fills(
     """
     cue_spans_by_line = lrclib.cue_spans_for_lines(synced_text, lyrics_lines)
     if cue_spans_by_line is None:
-        return [], _stats(0, None, None, False, "no_mapping", 0, [], [])
+        return [], _stats(
+            n_cues_mapped=0,
+            arm_a=None,
+            slope_fit=None,
+            eligible=False,
+            reason="no_mapping",
+            n_candidates=0,
+            fills=[],
+            filled_lids=[],
+        )
 
     n_lines = len(lyrics_lines)
     sources = selected_sources(line_objects, n_lines)
@@ -248,7 +258,16 @@ def plan_fills(
 
     eligible, reason = _eligibility(arm_a, slope)
     if not eligible:
-        return [], _stats(n_cues_mapped, arm_a, slope, False, reason, 0, [], [])
+        return [], _stats(
+            n_cues_mapped=n_cues_mapped,
+            arm_a=arm_a,
+            slope_fit=slope,
+            eligible=False,
+            reason=reason,
+            n_candidates=0,
+            fills=[],
+            filled_lids=[],
+        )
 
     offset_s = arm_a["offset_s"]
     placed_spans = [
@@ -306,14 +325,14 @@ def plan_fills(
     if fills:
         logger.info("LRCLIB fill: %d/%d candidate line(s) filled", len(fills), len(candidates))
     return fills, _stats(
-        n_cues_mapped,
-        arm_a,
-        slope,
-        True,
-        None,
-        len(candidates),
-        records,
-        [fo["line_id"] for fo in fills],
+        n_cues_mapped=n_cues_mapped,
+        arm_a=arm_a,
+        slope_fit=slope,
+        eligible=True,
+        reason=None,
+        n_candidates=len(candidates),
+        fills=records,
+        filled_lids=[fo["line_id"] for fo in fills],
     )
 
 
