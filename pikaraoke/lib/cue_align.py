@@ -139,15 +139,17 @@ def _widest_internal_gap(lo: int, hi: int, cue_spans: list[tuple[float, float]])
 
     The caller has already established this section needs a split; ties break
     toward the gap nearest the section's time midpoint, for the most even cut.
+    Gaps can be negative (stacked duet cues overlap, to about -5 s in this
+    corpus), so the argmax runs over the raw values with no sentinel floor.
     """
     mid = (cue_spans[lo][0] + cue_spans[hi][1]) / 2
-    best_i, best_gap, best_dist = lo, -1.0, None
-    for i in range(lo, hi):
-        gap = cue_spans[i + 1][0] - cue_spans[i][1]
-        dist = abs((cue_spans[i][1] + cue_spans[i + 1][0]) / 2 - mid)
-        if gap > best_gap or (gap == best_gap and dist < best_dist):
-            best_i, best_gap, best_dist = i, gap, dist
-    return best_i
+    return max(
+        range(lo, hi),
+        key=lambda i: (
+            cue_spans[i + 1][0] - cue_spans[i][1],
+            -abs((cue_spans[i][1] + cue_spans[i + 1][0]) / 2 - mid),
+        ),
+    )
 
 
 def _split_oversized(
@@ -174,7 +176,6 @@ def segment_by_gaps(
     *,
     gap_s: float = SECTION_GAP_S,
     pad_s: float = SECTION_PAD_S,
-    max_dur_s: float = MAX_SECTION_DUR_S,
     duration: float | None = None,
 ) -> list[Section]:
     """Group 1:1 cue spans into sections split at phrase gaps.
@@ -183,13 +184,15 @@ def segment_by_gaps(
     spans need not be offset-corrected -- only the *relative* gaps between
     consecutive cues drive the split, and those survive an unknown constant
     display lead. A boundary is cut wherever the silent gap to the next cue
-    exceeds ``gap_s``; a section that is still longer than ``max_dur_s`` after
-    that (a densely-captioned run with no qualifying gap) is further split at
-    its widest internal gap, recursively, via :func:`_split_oversized`.
+    exceeds ``gap_s``; a section still longer than :data:`MAX_SECTION_DUR_S`
+    after that (a densely-captioned run with no qualifying gap) is further
+    split at its widest internal gap, recursively, via :func:`_split_oversized`.
 
     Each section's window extends ``pad_s`` into the flanking silence, clamped
-    to the gap midpoint (so neighbouring sections never overlap-claim the same
-    audio) and to ``[0, duration]`` when ``duration`` is known.
+    to the gap midpoint (so neighbouring sections never overlap-claim silent
+    audio) and to ``[0, duration]`` when ``duration`` is known. A cap split can
+    land inside cue overlap (negative gap) where there is no silence to share:
+    each window then keeps its own cues' full span, unpadded.
     """
     if not cue_spans:
         return []
@@ -200,10 +203,12 @@ def segment_by_gaps(
     split_starts = [
         s
         for lo, nxt in zip(bounds, bounds[1:])
-        for s in _split_oversized(lo, nxt - 1, cue_spans, max_dur_s)
+        for s in _split_oversized(lo, nxt - 1, cue_spans, MAX_SECTION_DUR_S)
     ]
     if split_starts:
-        starts = sorted(set(starts) | set(split_starts))
+        # Split points are strictly interior to their section, so the lists
+        # are disjoint; sorting interleaves them into the boundary order.
+        starts = sorted(starts + split_starts)
         bounds = starts + [n]
     sections: list[Section] = []
     for lo, nxt in zip(bounds, bounds[1:]):
@@ -213,14 +218,16 @@ def segment_by_gaps(
         if lo == 0:
             t0 = max(0.0, start - pad_s)
         else:
-            # Share the preceding gap with the previous section at its midpoint.
-            t0 = start - min(pad_s, (start - cue_spans[lo - 1][1]) / 2)
+            # Share the preceding gap with the previous section at its
+            # midpoint; a negative gap (cap split inside cue overlap) pads
+            # zero rather than inverting into the boundary line's audio.
+            t0 = start - min(pad_s, max(0.0, (start - cue_spans[lo - 1][1]) / 2))
         if hi == n - 1:
             t1 = end + pad_s
             if duration is not None:
                 t1 = min(duration, t1)
         else:
-            t1 = end + min(pad_s, (cue_spans[hi + 1][0] - end) / 2)
+            t1 = end + min(pad_s, max(0.0, (cue_spans[hi + 1][0] - end) / 2))
         sections.append(Section(lo, hi, round(max(0.0, t0), 3), round(t1, 3)))
     return sections
 
