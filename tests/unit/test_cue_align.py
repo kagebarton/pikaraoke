@@ -89,6 +89,48 @@ class TestSegmentByGaps:
         assert only.t0 == 0.0  # max(0, 0.3 - 0.75)
         assert only.t1 == 4.5  # min(4.5, 4.0 + 0.75)
 
+    def test_normally_gapped_song_unaffected_by_cap(self):
+        # No section here is anywhere near 60s, so the cap must not change
+        # the boundaries or windows a normal song already got right.
+        cues = [(0.0, 2.0), (2.5, 4.0), (9.0, 11.0), (11.4, 13.0)]
+        sections = segment_by_gaps(cues, gap_s=1.5, pad_s=0.75, duration=14.0)
+        assert [(s.lid_lo, s.lid_hi) for s in sections] == [(0, 1), (2, 3)]
+        assert sections[0].t1 == 4.75
+        assert sections[1].t0 == 8.25
+
+    def test_zero_gap_90s_splits_at_widest_internal_gap(self):
+        # No gap reaches gap_s (1.5s default), so this is one section by the
+        # phrase-gap rule alone -- but its 90s raw span forces one cap split,
+        # at the wider of the two candidate gaps (1.0s beats 0.5s).
+        cues = [(0.0, 40.0), (40.5, 41.0), (42.0, 90.0)]
+        sections = segment_by_gaps(cues, duration=90.75)
+        assert [(s.lid_lo, s.lid_hi) for s in sections] == [(0, 1), (2, 2)]
+        for lo, hi in ((0, 1), (2, 2)):
+            assert cues[hi][1] - cues[lo][0] <= 60.0
+
+    def test_recursive_split_respects_cap(self):
+        # One 151.8s zero-gap run needs two cuts: the first (at the wider,
+        # 1.0s gap) still leaves a 100.8s half, which needs a second cut.
+        cues = [(0.0, 50.0), (50.8, 100.8), (101.8, 151.8)]
+        sections = segment_by_gaps(cues, duration=152.5)
+        assert [(s.lid_lo, s.lid_hi) for s in sections] == [(0, 0), (1, 1), (2, 2)]
+        for lo, hi in ((0, 0), (1, 1), (2, 2)):
+            assert cues[hi][1] - cues[lo][0] <= 60.0
+
+    def test_two_line_oversized_section_splits_one_and_one(self):
+        cues = [(0.0, 35.0), (35.8, 70.0)]
+        sections = segment_by_gaps(cues, duration=70.75)
+        assert [(s.lid_lo, s.lid_hi) for s in sections] == [(0, 0), (1, 1)]
+
+    def test_tied_widest_gap_breaks_toward_section_midpoint(self):
+        # Two 1.0s gaps tie exactly for widest (binary-exact endpoints, so the
+        # tie is real, not a float-rounding artifact). The first (near time
+        # 10.5) sits closer to the section's 35.0s midpoint than the second
+        # (near time 60.5), so it wins even though it's the less even cut.
+        cues = [(0.0, 10.0), (11.0, 20.0), (20.5, 60.0), (61.0, 70.0)]
+        sections = segment_by_gaps(cues, duration=70.75)
+        assert [(s.lid_lo, s.lid_hi) for s in sections] == [(0, 0), (1, 3)]
+
 
 class TestSplitSectionToLines:
     def test_splits_words_to_lines_by_token_count(self):
