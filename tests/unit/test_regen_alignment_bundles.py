@@ -9,6 +9,7 @@ import importlib.util
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from pikaraoke.lib.alignment_capture import SCHEMA_VERSION
@@ -447,14 +448,57 @@ class TestExecuteLrclibBackfill:
 
         mock.assert_not_called()
 
-    def test_missing_identity_is_skipped_defensively(self, tmp_path, monkeypatch):
-        # Not reachable via resolve_plan today (_reuse_plan always pairs
-        # genius identity with lines), but the guard exists -- prove it.
-        job = _job(tmp_path, "s", None)
-        job.plan = regen.Plan(kind="seed", lyrics_lines=["hi"], seed={"lyrics_origin": "genius"})
-        mock = MagicMock()
+    def test_one_failing_song_does_not_abort_the_batch(self, tmp_path, monkeypatch):
+        bad = self._reuse_job(tmp_path, stem="bad")
+        good = self._reuse_job(tmp_path, stem="good")
+        mock = MagicMock(side_effect=[OSError("disk full"), None])
         monkeypatch.setattr(regen.lrclib, "ensure_lrc", mock)
 
-        regen.execute_lrclib_backfill([job], PipelineConfig())
+        regen.execute_lrclib_backfill([bad, good], PipelineConfig())
 
-        mock.assert_not_called()
+        assert mock.call_count == 2  # the OSError on "bad" didn't stop "good"
+
+
+# ---------------------------------------------------------------------------
+# _prepare_lyrics — LRCLIB resolve for the no-YouTube-id Genius fallback
+# ---------------------------------------------------------------------------
+
+
+class TestPrepareLyricsNoIdSidecar:
+    """A Genius pick on a song without a YouTube id bypasses
+    LyricsFetchStage (and its LRCLIB leg), so _prepare_lyrics resolves the
+    variant itself — knob-gated and never fatal to the song's run."""
+
+    def _run(self, tmp_path, monkeypatch, config, resolve_error=None):
+        job = _job(tmp_path, "noid", None)
+        job.plan = regen.Plan(kind="sidecar", genius_id=123, label="prompt -> genius")
+        genius = MagicMock()
+        genius.fetch_song.return_value = SimpleNamespace(title="H", artist="W", text="hello\nworld")
+        ensure = MagicMock(return_value=None, side_effect=resolve_error)
+        monkeypatch.setattr(regen.lrclib, "ensure_lrc", ensure)
+        monkeypatch.setattr(regen, "probe_duration", MagicMock(return_value=200.0))
+        lyrics_dir = tmp_path / "lyrics"
+        lyrics_dir.mkdir(exist_ok=True)
+        result = regen._prepare_lyrics(job, genius, lyrics_dir, config)
+        return ensure, result, job
+
+    def test_resolves_lrclib_variant(self, tmp_path, monkeypatch):
+        ensure, (lyrics_path, stage), job = self._run(tmp_path, monkeypatch, PipelineConfig())
+
+        ensure.assert_called_once_with(job.song_path, "H", "W", ["hello", "world"], 200.0)
+        assert lyrics_path is not None
+        assert stage is not None
+
+    def test_knob_off_skips_resolve(self, tmp_path, monkeypatch):
+        ensure, _, _ = self._run(tmp_path, monkeypatch, PipelineConfig(lrclib_fill=False))
+
+        ensure.assert_not_called()
+
+    def test_resolve_failure_is_not_fatal(self, tmp_path, monkeypatch):
+        ensure, (lyrics_path, stage), _ = self._run(
+            tmp_path, monkeypatch, PipelineConfig(), resolve_error=OSError("disk full")
+        )
+
+        ensure.assert_called_once()
+        assert lyrics_path is not None
+        assert stage is not None

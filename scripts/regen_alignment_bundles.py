@@ -63,6 +63,7 @@ from pikaraoke.lib.genius import (  # noqa: E402
     GeniusUnavailable,
     write_choice,
 )
+from pikaraoke.lib.genius_lyrics import parse_lyric_lines  # noqa: E402
 from pikaraoke.lib.get_platform import (  # noqa: E402
     get_default_dl_dir,
     get_platform,
@@ -513,10 +514,11 @@ def execute_lrclib_backfill(jobs: list[SongJob], config: PipelineConfig) -> None
     Reuse plans (``kind == "seed"``, ``lyrics_origin == "genius"``) replay
     via :class:`SeedArtifactsStage` and bypass ``LyricsFetchStage``
     entirely, so without this leg an existing song never gains a ``.lrc``.
-    Sidecar plans (a fresh Genius selection) get the resolve from
-    ``LyricsFetchStage`` itself when they run — one call site per plan
-    kind; ``ensure_lrc``'s on-disk check would make a duplicate call
-    harmless, but there is no need to make one.
+    Sidecar plans (a fresh Genius selection) get the resolve when they
+    run — from ``LyricsFetchStage`` itself, or from ``_prepare_lyrics``
+    for a song with no YouTube id (which bypasses the stage) — one call
+    site per plan kind; ``ensure_lrc``'s on-disk check would make a
+    duplicate call harmless, but there is no need to make one.
     """
     if not config.lrclib_fill:
         return
@@ -529,16 +531,17 @@ def execute_lrclib_backfill(jobs: list[SongJob], config: PipelineConfig) -> None
         return
     print(f"Backfilling LRCLIB variants for {len(targets)} genius-origin song(s)...")
     for job in targets:
-        genius = job.plan.seed.get("genius")
-        if not genius or not job.plan.lyrics_lines:
-            continue
-        lrclib.ensure_lrc(
-            job.song_path,
-            genius["title"],
-            genius["artist"],
-            job.plan.lyrics_lines,
-            _media_duration(job),
-        )
+        try:
+            genius = job.plan.seed["genius"]
+            lrclib.ensure_lrc(
+                job.song_path,
+                genius["title"],
+                genius["artist"],
+                job.plan.lyrics_lines,
+                _media_duration(job),
+            )
+        except Exception:
+            logger.exception("LRCLIB backfill failed for %s; continuing", job.song_path.name)
 
 
 # ---------------------------------------------------------------------------
@@ -611,6 +614,16 @@ def _prepare_lyrics(job: SongJob, genius: GeniusClient, lyrics_dir: Path, config
         lyrics_path = lyrics_dir / f"{song.stem}.txt"
         lyrics_path.write_text(gsong.text, encoding="utf-8")
         print("  ! no YouTube id; YTASR 3rd source unavailable for this song")
+        if config.lrclib_fill:
+            # This path bypasses LyricsFetchStage (and its LRCLIB leg), so
+            # resolve the variant here, where the Genius identity first exists.
+            try:
+                sheet_lines = [item["text"] for item in parse_lyric_lines(gsong.text)]
+                lrclib.ensure_lrc(
+                    song, gsong.title, gsong.artist, sheet_lines, _media_duration(job)
+                )
+            except Exception:
+                logger.exception("LRCLIB resolve failed for %s; continuing", song.name)
         seed = {
             "lyrics_origin": "genius",
             "genius": {"id": plan.genius_id, "title": gsong.title, "artist": gsong.artist},
