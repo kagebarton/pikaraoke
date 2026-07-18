@@ -3064,6 +3064,54 @@ the authored-reference and Ken's listen, a correctness improvement —
 criterion satisfied in substance. The held commit can land as specced:
 `feat(cue-align): cap section duration for zero-gap SRTs`.
 
+### Phase 5b — /code-review of `0495ed5` + fixes (Fable 5, 2026-07-18)
+
+Ken landed 5b as `0495ed5` (code+tests) + `cfb114b` (docs) and asked for
+the review (3-axis per project policy — Correctness/Simplicity/
+Robustness finder agents on Opus — with every surviving candidate
+verified by *executing* its repro against the committed code, not by
+agent vote). 7 findings, all CONFIRMED; 2 candidates refuted (NaN-input
+validation — unreachable via `srt` parsing and guarding it would itself
+violate the no-impossible-state rule; "spec said iteratively vs
+recursion" — the spec's word doesn't prescribe control flow).
+
+The theme: the cap logic was correct in the positive-gap regime all
+five new tests exercised, but broken in the **negative-gap regime**
+(stacked duet cues overlap, gaps to ~-5s — exactly the corpus reality
+the judge read above documented). Root cause: `_widest_internal_gap`'s
+`best_gap = -1.0` sentinel sits inside the real gap domain. Findings:
+(1) first gap exactly -1.0 → tie-break evaluates `dist < None` →
+TypeError, song's cue pass dies; (2) all gaps <= -1.0 → argmax never
+updates, silently splits at the leftmost cue; (3) a cap boundary inside
+cue overlap fed `min(pad_s, gap/2)` a negative value — the section
+window started *after* its first cue's onset (audio truncation, silent);
+(4) sentinel-induced leftmost peeling made recursion depth ~n
+(RecursionError reproduced at 1500 sustained-overlap cues; pathological
+only, and its realistic reach dies with the argmax fix); (5) the
+"normal song unaffected by cap" test duplicated two existing tests'
+exact invocation while the negative-gap regime had zero coverage;
+(6) `max_dur_s` plumbed as a parameter no caller/test ever overrides;
+(7) `sorted(set|set)` merge of provably disjoint sorted lists.
+
+None of (1)-(4) fired in the 16-song validation because real oversized
+sections mix stacked pairs with positive gaps, and any positive gap
+wins the argmax — latent, awaiting a denser duet SRT.
+
+**All 7 applied in `22a7956`**: sentinel-free argmax via
+`max(range(lo, hi), key=(gap, -midpoint_dist))` (tie behavior identical —
+the tied-gap test pins it), `max(0.0, ...)` clamp on both shared-gap pad
+terms (a negative-gap boundary now pads zero; docstring documents the
+windows-may-overlap-in-cue-overlap consequence), `max_dur_s` param
+dropped for the constant, plain `sorted(starts + split_starts)`, dup
+test swapped for three negative-gap tests (crash regression, all-negative
+argmax, no-inversion windows). Verified: all four repros re-run clean
+post-fix (the 1500-cue pathology now splits balanced, depth O(log n));
+suite 1458 passed; pre-commit clean (the two stale shebang-mode script
+failures predate this change and are untouched). Corpus behavior is
+unchanged by construction — the fixes only alter the negative-gap
+regime, which the 16 songs never reach, so the validation table above
+remains the valid record for `22a7956` as well.
+
 **5c checked (Sonnet 5, 2026-07-18): skip.** 5c's own trigger —
 "displacement aliasing on non-adjacent repeats" — was checked directly
 against this validation run's output: for every SRT song, every pair of
