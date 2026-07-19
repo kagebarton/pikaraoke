@@ -753,10 +753,52 @@ word-kind assert via the same mechanism the two controls use
 (recorded as-is, flagged), citing this ruling as provenance. The
 guard stays armed for the remaining 13 songs.
 
-Commit: `feat(scripts): --save-bodies richsync persistence for
-musixmatch_coverage_improve` (script only — the persisted sidecars live
-in `pikaraoke-songs/lyrics/`, outside this git repo, per how every other
-song-library artifact in this project is handled).
+**2026-07-19 — resume executed, 17/17 clean, 0 STOPs.** Implemented
+both rulings first: `clean_key` applied at `ensure_timing`'s entry
+(separate commit, gates E0 sign-off per the ruling — see that entry
+below) and `SAVE_BODIES_SONGS` gained a `kind_exempt` flag independent
+of `control` (Bloodstream is not a wrong-song fixture, so it gets its
+own `kind_demoted_ruling` sidecar field rather than being mislabeled
+`control: true`). Re-ran `--save-bodies`: the 4 already-fetched songs
+(Popular, Belle, Best Part of Me, Bloodstream) reused their on-disk
+sidecars unchanged (disk-first, no refetch — Bloodstream's `line`/0.703
+now carries `kind_demoted_ruling` on top, added on this pass); the
+remaining 13 fetched clean, both guards passing on every one:
+
+| song | recorded | new | delta | kind |
+| --- | --- | --- | --- | --- |
+| Colors of the Wind | 0.950 | 0.946 | -0.004 | word |
+| Domino | 0.670 | 0.910 | +0.240 | word |
+| Rock Your Body | 0.980 | 0.981 | +0.001 | word |
+| Free | 0.805 | 0.805 | +0.000 | word |
+| More Than That | 0.923 | 0.923 | +0.000 | word |
+| Let It Go | 0.702 | 0.702 | +0.000 | word |
+| Part of Your World | 0.704 | 0.704 | +0.000 | word |
+| Like I Love You | 0.869 | 0.869 | +0.000 | word |
+| Mirrors | 0.883 | 0.883 | +0.000 | word |
+| Seasons of Love | 0.912 | 0.912 | +0.000 | word |
+| Can You Feel the Love Tonight | 0.875 | 0.875 | +0.000 | word |
+| Incomplete (control) | 0.296 | 0.296 | +0.000 | word |
+| Selfish (control) | 0.380 | 0.380 | +0.000 | word |
+
+Notable: **Domino jumped 0.670 → 0.910** (`reference_pick` landed a
+materially better-matching candidate than part (a)'s original pick —
+the one-sided tolerance is for exactly this case, not drift). The 8
+songs newly fetched this pass (not reused) all matched their a2-recorded
+rate to 3 decimals, confirming `reference_pick`'s selection is
+deterministic against an unchanged catalog when the original candidate
+is still the best one. Both controls landed exactly on their recorded
+wrong-song rate, `kind: word`, `control: true` written — 2b's
+negative-control fixtures are ready. **17/17 sidecars now on disk in
+`pikaraoke-songs/lyrics/`, Phase 2a complete.**
+
+Commits: `fix(timing-fetch): apply clean_key at ensure_timing entry`
+(Decision B), `fix(scripts): exempt Bloodstream from the --save-bodies
+kind guard` (Decision A), `feat(scripts): --save-bodies richsync
+persistence for musixmatch_coverage_improve` (original script — the
+persisted sidecars live in `pikaraoke-songs/lyrics/`, outside this git
+repo, per how every other song-library artifact in this project is
+handled).
 
 ### 2026-07-18 — Phase 1 (CTC eyeball) run + GATE C
 

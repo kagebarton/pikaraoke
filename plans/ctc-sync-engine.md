@@ -184,6 +184,15 @@ Musixmatch). Fix per the Appendix B addenda — clean at
 sign-off. Does not gate the Phase 2a resume (the probe pre-cleans);
 on-disk sidecars stand.
 
+*Conformance note resolved (2026-07-19):* `title, artist =
+clean_key(title, artist)` added at `ensure_timing`'s entry (commit
+`fix(timing-fetch): apply clean_key at ensure_timing entry`), covering
+every call site including the exception-path empty sidecar's recorded
+`query.term`. Two new tests assert a feat-credit/trailing-paren title
+reaches `_fetch_and_build_sidecar` cleaned, and that the exception path
+records the cleaned term. Full suite green (1512 passed), pre-commit
+clean. **E0 is now Appendix-B-conformant.**
+
 ## Phase E1 — engine core (license: O-1 + S-5 = engine)
 
 Execute per **Appendix E (locked at GATE S)**. Shape (pre-registered;
