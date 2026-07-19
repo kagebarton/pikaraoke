@@ -31,7 +31,7 @@ from __future__ import annotations
 import json
 import logging
 
-from pikaraoke.lib.candidate_match import best_candidate_per_line
+from pikaraoke.lib.candidate_match import best_candidate_per_line, find_candidates
 from pikaraoke.lib.genius_lyrics import clean_srt_line
 from pikaraoke.lib.token_align import _normalize_token
 
@@ -139,6 +139,39 @@ def is_usable(words: list[dict], word_seg_frac: float, media_dur: float | None) 
     if not media_dur or media_dur <= 0:
         return False
     return len(words) / (media_dur / 60.0) >= MIN_CAPTION_WPM
+
+
+def normalize_words(words: list[dict]) -> list[dict]:
+    """Whisper-transcribe words -> ``{norm, start, end}`` for :func:`cue_spans_for_lines`.
+
+    Transcribe words carry ``word``/``start``/``end`` but no normalised form;
+    drop tokens that normalise to empty (punctuation).
+    """
+    out: list[dict] = []
+    for w in words:
+        norm = _normalize_token(w["word"])
+        if norm:
+            out.append({"norm": norm, "start": w["start"], "end": w.get("end", w["start"])})
+    return out
+
+
+def cue_spans_for_lines(
+    words: list[dict], align_lines: list[str]
+) -> dict[int, tuple[float, float]] | None:
+    """Map the ASR word stream onto lyric ``align_lines`` as per-line cue spans.
+
+    The YTASR analog of :func:`pikaraoke.lib.lrclib.cue_spans_for_lines`. Runs a
+    per-line fuzzy candidate search over the ASR tokens, then reduces via
+    :func:`spans_from_candidates`. Lines with no candidate get no cue — the
+    caller leaves/fills them. Returns ``None`` when nothing maps.
+    """
+    asr_norms = [w["norm"] for w in words]
+    line_toks = [
+        [norm for norm in (_normalize_token(t) for t in line.split()) if norm]
+        for line in align_lines
+    ]
+    candidates = find_candidates(asr_norms, line_toks, max_edit_ratio=CANDIDATE_MAX_EDIT_RATIO)
+    return spans_from_candidates(words, candidates)
 
 
 def spans_from_candidates(
