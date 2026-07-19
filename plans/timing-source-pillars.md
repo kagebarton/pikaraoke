@@ -462,6 +462,17 @@ the song participates in Phase 3 as a word song via the
 richsync-line-starts source above, and is exempted from the
 recorded-map_rate regression assert on resume.
 
+*Amendment 2 (2026-07-19, Ken-ratified — warp offset-rescue tier; see
+the Results log's "S-A warp diagnostic" entry):* `warp_scaffold_cues`
+gains a constant-offset rescue tier — when the affine Theil-Sen fit
+fails its MAD gate, fit `offset = median(anchor_start −
+scaffold_start)` with slope fixed at 1.0 over the same common lines,
+accepted iff its residual MAD clears the same `WARP_MAD_GATE_S` and
+the same `WARP_MIN_ANCHORS` floor; otherwise densify fallback exactly
+as before. Reuses the locked constants — no new thresholds. S-A
+re-runs on the amended machinery *before* S-B is built and run, so
+both arms and the S-1 re-read share one warp.
+
 Arms, in order; later arms only where earlier ones justify the GPU time:
 
 - **S-A (required):** scaffold + whisper `slice_align`. Metrics per
@@ -1096,6 +1107,10 @@ concurrently. Root cause is upstream — a sheet/audio version mismatch
 the damage is the fallback, which owns to **GATE S-3** (densify-fallback
 branch) and **Appendix A routing**: version-mismatch songs should route
 to the joint matcher or flag, not densify sparse clustered anchors.
+*(Correction, later same day: Paradise's half of this reading is
+superseded — the gate firing was anchor contamination, not a version
+mismatch or tempo delta; Ken's ground truth + the offline refit are in
+the S-A warp diagnostic entry below. The Defying Gravity half stands.)*
 
 *Mode 2 — warp clean, overlap enters at the align stage (the other
 seven).* Theil-Sen fit MAD ≤ 0.43 on all seven; the scaffold is
@@ -1126,6 +1141,64 @@ cover. (3) The two modes are separately owned — Mode 1 → S-3 /
 Appendix A, Mode 2 → an `align_song` repeat-displacement fix portable
 from the cue-align path — and weighting the scaffold differently fixes
 neither.
+
+### 2026-07-19 — S-A warp diagnostic (Paradise) + Ken-ratified amendment: constant-offset rescue tier
+
+Trigger: Ken supplied ground truth on NSYNC Paradise — he made the
+video himself: the studio track prepended with live-concert dialog
+footage, so the correct scaffold model is a *constant offset*, not a
+tempo change. That contradicts the regression diagnosis above, whose
+Mode-1 reading for Paradise ("fit slope 1.25 ≈ 25% tempo delta …
+sheet/audio version mismatch; the warp gate did its job") is hereby
+superseded; the Defying Gravity half of Mode 1 stands.
+
+**Mechanism (offline reproduction, no GPU — Fable).** Paradise ran on
+12 transcribe-only anchors (no YouTube ASR); 9 are common with the
+51-line sidecar scaffold, and 3 of the 9 are mis-mapped onto repeated
+lyric lines (residuals +46 s, +72 s, +72 s — chorus text matched to
+the wrong occurrence). Theil-Sen draws slopes from point *pairs*, so
+3-of-9 bad points contaminate 21 of 36 pairwise slopes (58%) — the
+affine fit came out slope 1.248 / MAD 3.28 s, fired the 2.0 s gate,
+and the 51-line scaffold was discarded for densify over the same 12
+anchors (3 of them wrong): the actual source of the +4.6 s
+regression. Fixing the slope at 1.0 and taking `offset =
+median(anchor − scaffold)` gives +24.24 s with residual MAD 0.47 s —
+the 6 clean anchors agree to under a second. The mis-mapped repeat
+anchors themselves are the known upstream lyric-repeat lever, out of
+scope; the offset tier contains their damage.
+
+**All-16 sweep (same offline harness).** 14/16 songs fit affine with
+slope 0.99–1.02 and MAD ≤ 0.45 s — the warp is not their problem, and
+all seven Mode-2 regressions sit in this group (overlap enters at the
+align stage; owned as recorded above — the S-B/S-2 comparison
+measures whether the CTC arm removes it before any
+repeat-displacement port is considered). The only other gate-firer is
+Defying Gravity, where rejection is *correct*: slope 0.79 / MAD
+5.80 s, and the offset-only model also fails (MAD 10.27 s) — a
+structurally different recording. Discrimination is clean on exactly
+this corpus. Residual-trimming the affine fit was considered and
+**rejected**: it "rescues" Defying Gravity onto 5 cherry-picked
+points (MAD 0.27 — would wrongly accept a bad scaffold) while leaving
+Paradise below the 5-anchor floor (4 survivors).
+
+**Ratified change (Ken, 2026-07-19).** `warp_scaffold_cues` gains a
+constant-offset rescue tier, tried only when the affine path fails
+(fit `None` or MAD > gate) and `len(common) ≥ WARP_MIN_ANCHORS`:
+`offset = median(anchor_start − scaffold_start)` over the common
+lines; accept iff `median(|residual|) ≤ WARP_MAD_GATE_S`; on accept,
+proceed through the existing warp body with `slope = 1.0, intercept =
+offset`; on reject, densify fallback unchanged. Both constants are
+the locked existing ones — no new thresholds. Strictly additive: the
+14 affine-clean songs cannot reach the new code path.
+
+**Execution (Sonnet, sequenced before S-B):** implement + unit tests
+(a Paradise-shaped contaminated-common case rescued; a
+Defying-Gravity-shaped case still densifies; an affine-clean case
+untouched), log which warp path each song takes, re-run S-A over all
+17. Expected: Paradise is the only rescue; Defying Gravity stays
+densify; any *other* song changing path = STOP → Ken. Output is the
+raw table, never a verdict; the S-1 re-read happens on the best
+scaffold arm after S-B runs.
 
 ### 2026-07-18 — Phase 1 (CTC eyeball) run + GATE C
 
