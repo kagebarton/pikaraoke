@@ -17,16 +17,25 @@ Scoped to the 26 corpus songs part (a) did *not* already resolve to a
 confident word-level hit (``BASELINE`` below); the other 7 are skipped on
 purpose (see the plan's "Baseline" section).
 
+``--save-bodies`` (Phase 2a of ``plans/timing-source-pillars.md``) is a
+second, independent mode: re-runs ``pikaraoke.lib.timing_fetch`` (the E0
+production pillar -- this script no longer carries its own writer, just the
+batch loop + politeness) over the 17 word-level-confident corpus songs and
+persists each to the real production sidecar
+(``lyrics/<stem>.timing.json`` beside the song), so Phase 2b's probe and the
+future production path share one on-disk fixture set.
+
 Run from the repo root::
 
     python scripts/musixmatch_coverage_improve.py
+    python scripts/musixmatch_coverage_improve.py --save-bodies
 
-Needs the ``syncedlyrics`` dev dependency (``pip install -e ".[dev]"`` or see
-``pyproject.toml``'s ``dev`` extra) -- not a runtime dependency of the app.
+``syncedlyrics`` is a runtime dependency (``pikaraoke/lib/timing_fetch.py``).
 """
 
 from __future__ import annotations
 
+import argparse
 import glob
 import json
 import logging
@@ -42,6 +51,7 @@ import syncedlyrics  # noqa: E402
 from syncedlyrics.providers import Musixmatch  # noqa: E402
 from syncedlyrics.utils import format_time, get_cache_path  # noqa: E402
 
+from pikaraoke.lib import timing_fetch  # noqa: E402
 from pikaraoke.lib.lrclib import (  # noqa: E402
     clean_key,
     map_lines_to_cues,
@@ -51,8 +61,39 @@ from pikaraoke.lib.lrclib import (  # noqa: E402
 logging.getLogger("syncedlyrics").setLevel(logging.WARNING)
 
 WORD_TAG = re.compile(r"<\d+:\d{2}(?:\.\d+)?>")
+SONGS_ROOT = Path("/home/ken/pikaraoke-songs")
 BUNDLES_GLOB = "/home/ken/pikaraoke-songs/alignment_debug/*.json"
 TOKEN_PATH = get_cache_path("syncedlyrics", False) / "musixmatch_token.json"
+MEDIA_EXTS = (".mp4", ".webm", ".mkv")
+
+# The 17 word-level-confident (>= WRONG_SONG_MAP_RATE) corpus songs, keyed by
+# YouTube id (stable and glob-safe -- several of these filenames carry
+# non-breaking spaces/soft hyphens that make literal-string matching
+# fragile). Values: (label, recorded map_rate from the probe/improvement
+# plans, control -- a known wrong-song fixture Phase 2b's gate test needs,
+# exempt from the regression assert).
+SAVE_BODIES_SONGS: dict[str, tuple[str, float, bool]] = {
+    # Part (a)'s 7 already-confident rows (plans/musixmatch-coverage-probe.md).
+    "22QYya-LGDY": ("Popular", 0.63, False),
+    "otxTf5hZ0Yw": ("Belle", 0.86, False),
+    "wGyh_53ecgg": ("Best Part of Me", 0.87, False),
+    "Orq_75kFi8I": ("Bloodstream", 0.50, False),
+    "9ThO76peOw0": ("Colors of the Wind", 0.95, False),
+    "UJtB55MaoD0": ("Domino", 0.67, False),
+    "TSVHoHyErBQ": ("Rock Your Body", 0.98, False),
+    # Part (a2)'s 8 new word-level winners (plans/musixmatch-coverage-improvement.md).
+    "fjOeJssZX_Q": ("Free", 0.805, False),
+    "1OwfYjemrYw": ("More Than That", 0.923, False),
+    "YVVTZgwYwVo": ("Let It Go", 0.702, False),
+    "SXKlJuO07eM": ("Part of Your World", 0.704, False),
+    "FQ3slUz7Jo8": ("Like I Love You", 0.869, False),
+    "uuZE_IRwLNI": ("Mirrors", 0.883, False),
+    "UvyHuse6buY": ("Seasons of Love", 0.912, False),
+    "25QyCxVkXwQ": ("Can You Feel the Love Tonight", 0.875, False),
+    # 2 negative controls (known wrong-song, both below the confidence bar).
+    "WVe80iZtlYU": ("Incomplete", 0.296, True),
+    "je0roKRn3nY": ("Selfish", 0.38, True),
+}
 
 # Pacing that survived a full 33-song part-(a) run and this plan's 4-song
 # prototype without a persistent lockout -- see the plan's Robustness
@@ -345,17 +386,22 @@ def _netease_fallback(term: str, sheet: list[str]) -> dict | None:
     return {"kind": "line", "map_rate": round(rate, 3), "term": term, "variant": "netease"}
 
 
-def _term_variants(bundle: dict) -> list[str]:
-    """[full "track artist", title-only] query variants, same derivation
-    part (a) used (``clean_key`` for genius-origin, filename split for
-    srt-origin) -- kept separate so a title-only retry is possible."""
+def _title_artist(bundle: dict) -> tuple[str, str]:
+    """(title, artist) key: ``clean_key`` on the Genius title/artist for
+    genius-origin bundles, else a filename-split fallback for srt-origin
+    ones (part (a)'s derivation)."""
     lyrics = bundle["lyrics"]
     if lyrics.get("genius"):
-        track, artist = clean_key(lyrics["genius"]["title"], lyrics["genius"]["artist"])
-    else:
-        stem = bundle["song_stem"].split("---")[0]
-        artist_raw, sep, title_raw = stem.partition(" - ")
-        track, artist = clean_key(title_raw, artist_raw) if sep else clean_key(stem, "")
+        return clean_key(lyrics["genius"]["title"], lyrics["genius"]["artist"])
+    stem = bundle["song_stem"].split("---")[0]
+    artist_raw, sep, title_raw = stem.partition(" - ")
+    return clean_key(title_raw, artist_raw) if sep else clean_key(stem, "")
+
+
+def _term_variants(bundle: dict) -> list[str]:
+    """[full "track artist", title-only] query variants -- kept separate so
+    a title-only retry is possible."""
+    track, artist = _title_artist(bundle)
     full = f"{track} {artist}".strip()
     return [full, track] if artist and track != full else [full]
 
@@ -396,6 +442,94 @@ def process_song(client: Musixmatch, name: str, bundle: dict) -> dict:
         "source": source,
         "error": None,
     }
+
+
+def _resolve_media(root: Path, stem: str) -> Path | None:
+    for ext in MEDIA_EXTS:
+        cand = root / f"{stem}{ext}"
+        if cand.is_file():
+            return cand
+    return None
+
+
+def save_bodies_main(songs_root: Path = SONGS_ROOT) -> int:
+    """Phase 2a: persist the 17 word-level-confident songs' sidecars.
+
+    Re-runs ``timing_fetch.reference_pick`` (via ``ensure_timing`` -- the
+    disk-first/write path is identical to production, so this exercises the
+    real pillar end to end) against each song's real media path, writing
+    ``lyrics/<stem>.timing.json`` beside it -- the same file the pipeline
+    would produce. Re-running this command is idempotent: an already-written
+    sidecar (from a prior partial run) is reused, not re-fetched.
+
+    Asserts the winner's ``map_rate`` has not regressed more than 0.05 below
+    the recorded probe/improvement-plan value and that word-level songs
+    stayed word-level (a control's low/no-confidence result is expected and
+    exempt) -- either failure means the catalog shifted under us and stops
+    the run rather than silently persisting a worse fixture set.
+    """
+    client = timing_fetch._get_client()  # pylint: disable=protected-access
+    first_word_verified = False
+    rows: list[dict] = []
+    for i, (yt_id, (label, recorded_rate, control)) in enumerate(SAVE_BODIES_SONGS.items(), 1):
+        matches = glob.glob(f"{songs_root}/alignment_debug/*---{yt_id}.json")
+        if len(matches) != 1:
+            print(f"WARNING: {label} ({yt_id}): expected 1 bundle, found {len(matches)} -- skip")
+            continue
+        bundle_path = Path(matches[0])
+        bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
+        media = _resolve_media(songs_root, bundle_path.stem)
+        if media is None:
+            print(f"WARNING: {label} ({yt_id}): no media on disk -- skip")
+            continue
+
+        sidecar_path = media.parent / "lyrics" / f"{media.stem}.timing.json"
+        already_fetched = sidecar_path.is_file()
+        title, artist = _title_artist(bundle)
+        sheet = bundle["lyrics"]["lines"]
+        media_dur = bundle.get("media_duration_s")
+
+        print(
+            f"\n[{i}/{len(SAVE_BODIES_SONGS)}] {label} ({yt_id})"
+            + (" [reused]" if already_fetched else "")
+        )
+        timing_fetch.ensure_timing(media, title, artist, sheet, media_dur)
+        sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
+        new_rate, kind = sidecar["map_rate"], sidecar["kind"]
+
+        if control:
+            sidecar["control"] = True
+            sidecar_path.write_text(json.dumps(sidecar, indent=2), encoding="utf-8")
+        else:
+            if kind != "word":
+                print(f"STOP: {label} ({yt_id}) kind downgraded word -> {kind!r} -- catalog shift?")
+                return 1
+            if new_rate < recorded_rate - 0.05:
+                print(
+                    f"STOP: {label} ({yt_id}) map_rate regressed: "
+                    f"{new_rate:.3f} < {recorded_rate - 0.05:.3f} (recorded {recorded_rate})"
+                )
+                return 1
+
+        delta = new_rate - recorded_rate
+        print(
+            f"    recorded={recorded_rate:.3f} new={new_rate:.3f} (delta {delta:+.3f}) "
+            f"kind={kind} control={control} source={sidecar['source']}"
+        )
+        rows.append({"label": label, "yt_id": yt_id, "recorded": recorded_rate, "new": new_rate})
+
+        if not first_word_verified and not already_fetched and kind == "word":
+            entries = sidecar["body"] or []
+            fields = sorted(entries[0]) if entries else []
+            print(f"    first richsync body fields: {fields} (te present: {'te' in fields})")
+            first_word_verified = True
+
+        if not already_fetched:
+            time.sleep(SONG_SLEEP_S)
+
+    print("\n" + "=" * 80)
+    print(f"{len(rows)}/{len(SAVE_BODIES_SONGS)} sidecars persisted, 0 STOPs")
+    return 0
 
 
 def main() -> int:
@@ -449,4 +583,11 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument(
+        "--save-bodies",
+        action="store_true",
+        help="Phase 2a mode: persist the 17 word-level-confident songs' sidecars",
+    )
+    args = ap.parse_args()
+    sys.exit(save_bodies_main() if args.save_bodies else main())
