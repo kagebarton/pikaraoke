@@ -22,10 +22,12 @@ S-5 ruling:
   route — emission oracle + score gate + guided windowed CTC align,
   with external timing (richsync / line LRC) as trust-ranked structure
   priors and anchors-densify windows when no external timing exists.
-  Requires GATE O = O-1 and S-5 = engine.
+  Requires GATE O = O-1 (or O-1′, the evidence plan's rescue read-off
+  — counts as O-1 everywhere in this plan) and S-5 = engine.
 - **Fallback branch (F1–F2):** the scaffold-first tiers exactly as
   originally planned (warped scaffold → `align_song`; verified-richsync
-  word route). Runs when O-2 or S-5 = scaffold-first.
+  word route). Runs when O-2 (confirmed at GATE O′) or S-5 =
+  scaffold-first.
 
 Either branch ends at E5 (closeout). E0 runs regardless.
 
@@ -36,7 +38,8 @@ Either branch ends at E5 (closeout). E0 runs regardless.
   align, windowed aligns as trellis restrictions (slice the emission,
   never re-slice audio), and per-line/per-word scoring of any
   hypothesized timing (richsync claims, scaffold spans, final output).
-- **Score gate:** per-line emission scores (GATE O band) separate
+- **Score gate:** per-line scores (statistic + band from GATE O, or
+  GATE O′ if the gate statistic was rescued) separate
   trusted lines from desynced/phantom ones. Trusted lines ship as
   aligned; failing sections enter the repair loop.
 - **Structure priors, trust-ranked:** uploader SRT (not this plan's
@@ -112,7 +115,7 @@ corpus:
 | Build phase | License (evidence-plan GATE) |
 | --- | --- |
 | E0 fetch pillar | none — architecture-neutral; sidecar format = Appendix B |
-| E1 engine core | GATE O = O-1 **and** GATE S ruling S-5 = engine |
+| E1 engine core | GATE O = O-1 (or O-1′) **and** GATE S ruling S-5 = engine |
 | E2 engine routes | E1 + GATE R (R-1/R-5 for the word route) |
 | E3 parallel corpus A/B | E2 complete |
 | E4 cutover + deletions | GATE X (defined in E3) |
@@ -570,6 +573,14 @@ here at that GATE.
   mean and min of its word scores (GATE O records which variant
   separated better — that variant is the gate statistic); per-song
   robust z-normalization (median/MAD over all aligned word scores).
+  If the gate statistic was rescued at GATE O′, the engine implements
+  that statistic instead, definition adopted verbatim from evidence
+  plan Phase 1b step 4 (S-decode = greedy-decode similarity over the
+  line's emission slice; S-shift = free-realign displacement in the
+  ±5.0 s-padded slice; S-tx = transcribe-token corroboration in the
+  ±2.0 s-padded window; rolling-5 variants computed within-song).
+  S-tx only: transcribe output missing for a song → that route runs
+  ungated (Appendix A containment; never a song failure).
 - **Repair loop:** a below-band section re-aligns once in its
   warped-prior window padded by `SECTION_PAD_S`; if still below band,
   widen the window ×1.5 and retry once; still failing → prior-paced

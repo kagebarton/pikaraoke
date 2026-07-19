@@ -229,8 +229,48 @@ exists for it.
      known-bad line groups from the matcher-plan era (e.g. Defying
      Gravity's OST-only outro lines 79–88) against the same emissions —
      phantom lines should score low against audio they were never in.
-4. Table: per-line score distributions for synced vs desynced labels,
-   overlap region, candidate gate band.
+4. Rescue statistics (pre-registered 2026-07-19, Ken-directed) —
+   computed in the **same run** whatever the primary read-off comes to,
+   so a GATE O failure costs no second probe. Precedent motivating
+   them: whisper's align *probabilities* failed the separation test,
+   but the transcribe *cross-check* worked — so the rescues are
+   categorical/relative tests, not more confidence scores. Every
+   statistic is oriented higher = more synced, and every statistic
+   (including step 2's two span-score variants) is computed both
+   per-line and as a 5-line centered rolling median within its song
+   (clamped at song edges) — the rolling variant targets the
+   *sectional* shape of the GATE C desyncs:
+   - **S-decode (decode agreement):** slice the cached emission over
+     the line's aligned span (first word's start frame → last word's
+     end frame); CTC greedy decode it (per-frame argmax, collapse
+     repeats, drop blanks, MMS_FA charset); statistic =
+     `difflib.SequenceMatcher(None, decoded, expected).ratio()` over
+     space-stripped normalized character strings, where expected = the
+     line's normalized alignment text. Asks "is this text actually
+     there," which is immune to the quiet-but-correct trap (Girl in
+     the Bubble's opener) that sinks confidence scores.
+   - **S-shift (free-realign displacement):** re-align the line's
+     tokens alone against the emission slice of its span padded
+     ±5.0 s each side (clamped to song bounds; emission slicing, no
+     audio recompute); statistic = −|realigned line midpoint −
+     current line midpoint| in seconds. A synced line stays put; a
+     desynced line jumps to where its text really is. Realign
+     returning `None` → assign the labeled-set minimum; count these.
+   - **S-tx (transcribe corroboration):** from the bundle's
+     `transcribe_words` (verified present for 17/33 songs — including
+     all three desync-labeled songs and Belle; SRT-era songs have
+     `null`): window = line span padded ±2.0 s; statistic = |multiset
+     intersection of the line's normalized tokens with the normalized
+     transcribe tokens whose midpoints fall inside the window| /
+     (line token count). Lines from songs without `transcribe_words`
+     are excluded from S-tx only (record per-class coverage); S-tx is
+     read off only if both label classes retain ≥ 10 lines.
+5. Table: per-line distributions for synced vs desynced labels for
+   **all ten variants** — {mean-word z, min-word z, S-decode, S-shift,
+   S-tx} × {per-line, rolling-5} — each row with its AUC, overlap
+   region, and candidate gate band. Ten AUCs is a multiple-comparisons
+   exposure; the guard is that qualification below requires the
+   conjunctive O-1 bars (band + phantom cross-check), never AUC alone.
 
 **GATE O** — mechanical read-off (Opus executes; Ken rules the gray
 zone). Compute AUC over the labeled lines for both line-score variants
@@ -252,6 +292,43 @@ statistic and both AUCs are recorded:
   cross-check fails. Ken decides with the table; the engine branch
   then requires his explicit GO recorded here. No model resolves the
   gray zone on its own.
+
+A primary read-off of O-2 or O-GRAY is **not final** until GATE O′
+below has been read — the rescue statistics were computed in the same
+run, so the read-off is free.
+
+**GATE O′ — rescue read-off (mechanical; Opus executes; runs only when
+the primary read-off is O-2 or O-GRAY).** Apply O-1's exact bars —
+AUC ≥ 0.85, AND a cut with ≤ 10% synced lines below / ≤ 10% desynced
+lines above, AND the phantom cross-check directional (phantom group
+scored with the *same* statistic against the production timings,
+median < synced p25) — to each of the eight rescue variants (the
+non-span-score rows of the table):
+
+- **O-1′ (rescued separation):** at least one rescue variant clears
+  all three bars. Adopt the highest-AUC qualifier; ties break
+  S-decode > S-shift > S-tx (emission-internal preferred — no
+  gate-time dependency on a transcribe pass having run). **O-1′
+  counts as O-1 for every downstream license**: the engine branch,
+  Phase 3's S-B2 arm, 2b's emission-score statistics, the build
+  plan's licensing table, and Appendix C's emission-family rule. The
+  adopted statistic, variant, and band are recorded in the build
+  plan's Appendix E exactly as O-1's would have been.
+- **O-2 (confirmed):** no rescue variant reaches AUC ≥ 0.65 either.
+  The engine architecture is OFF; the build plan proceeds on its
+  fallback branch exactly as originally written.
+- **O′-GRAY (anything else):** Ken decides with the full ten-row
+  table; the engine branch then requires his explicit GO recorded
+  here. No model resolves it alone.
+
+If S-tx is the adopted gate statistic: whisper transcribe — already
+retained in the engine branch for anchors — becomes a gate-time input;
+a song with no transcribe output runs **ungated** on that route (lines
+ship as aligned; containment per build-plan Appendix A, never a song
+failure). The asymmetric-evidence requirement for corroboration
+(agreement confirms sync; disagreement only demotes) is satisfied
+structurally: the engine's score gate only ever routes lines into the
+repair/fill loop (build-plan Appendix E) and never blocks a song.
 
 ## Phase 2 — richsync: fetch bodies + timing-quality probe (GATE R)
 
