@@ -115,3 +115,60 @@ class TestIsUsable:
         words = _words_from(["a", "b"])
         assert ytasr.is_usable(words, 0.8, media_dur=None) is False
         assert ytasr.is_usable(words, 0.8, media_dur=0) is False
+
+
+class TestNormalizeWords:
+    def test_drops_punctuation_only_tokens(self):
+        words = [
+            {"word": "Hello", "start": 0.0, "end": 0.5},
+            {"word": "--", "start": 0.5, "end": 0.6},
+            {"word": "world", "start": 0.6, "end": 1.0},
+        ]
+        out = ytasr.normalize_words(words)
+        assert [w["norm"] for w in out] == [_normalize_token("Hello"), _normalize_token("world")]
+        assert out[0]["start"] == 0.0 and out[0]["end"] == 0.5
+
+    def test_missing_end_defaults_to_start(self):
+        out = ytasr.normalize_words([{"word": "hi", "start": 1.0}])
+        assert out == [{"norm": _normalize_token("hi"), "start": 1.0, "end": 1.0}]
+
+
+class TestCueSpansForLines:
+    def test_maps_lines_and_leaves_unmatched_uncued(self):
+        words = _words_from("when I see someone than wonderful".split())
+        align_lines = ["when I see someone", "than wonderful", "not in this stream"]
+        spans = ytasr.cue_spans_for_lines(words, align_lines)
+
+        assert set(spans) == {0, 1}
+        assert spans[0] == (words[0]["start"], words[3]["end"])
+        assert spans[1] == (words[4]["start"], words[5]["end"])
+
+    def test_monotonic_drops_backward_line(self):
+        # The stream orders the words opposite to the lyric lines; keeping line 0
+        # forbids line 1 from mapping to an earlier start.
+        words = _words_from(["second", "first"])
+        spans = ytasr.cue_spans_for_lines(words, ["first", "second"])
+        assert set(spans) == {0}
+
+    def test_tied_repeat_keeps_only_first_line(self):
+        # Two identical lyric lines whose best hit is the same ASR occurrence
+        # (equal score -> earliest-start tie-break) must not both claim it:
+        # the second line gets no cue instead of a duplicate span.
+        words = _words_from(["hakuna", "matata"])
+        spans = ytasr.cue_spans_for_lines(words, ["hakuna matata", "hakuna matata"])
+        assert set(spans) == {0}
+
+    def test_tied_start_evicts_weaker_claimant(self):
+        # A refrain line that is also the prefix of the following full line
+        # ties on start index but with a lower matched-token score; the
+        # occurrence belongs to the stronger (full-line) claimant.
+        words = _words_from("hakuna matata what a wonderful phrase".split())
+        spans = ytasr.cue_spans_for_lines(
+            words, ["hakuna matata", "hakuna matata what a wonderful phrase"]
+        )
+        assert set(spans) == {1}
+        assert spans[1] == (words[0]["start"], words[5]["end"])
+
+    def test_none_when_nothing_maps(self):
+        assert ytasr.cue_spans_for_lines([], ["anything"]) is None
+        assert ytasr.cue_spans_for_lines(_words_from(["xyz"]), ["completely other words"]) is None
