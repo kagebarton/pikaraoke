@@ -908,6 +908,74 @@ setup is complete; the S-A/S-B corpus run can proceed.
 Commit: `feat(scripts): --save-line-bodies richsync/line persistence for
 the Phase 3 corpus cohort` (script + this Results log entry together).
 
+### 2026-07-19 — Phase 3 S-A (scaffold + whisper corpus run), Sonnet 5 executor
+
+Ran `scripts/scaffold_align_corpus.py` (`--timing sidecar`, default) over
+all 17 genius-origin bundles. First pass surfaced two real harness gaps,
+neither a design decision — fixed directly (commit
+`fix(scripts): scaffold harness tolerates missing YouTube ASR /
+media_duration_s`), not escalated: **6/17 songs never had YouTube ASR
+captions fetched** (confirmed absent from disk and every backup —
+Free, What It Sounds Like, Domino, In Summer, NSYNC Paradise, The Next
+Ten Minutes), so `run_song`'s `asr_path` is now `Optional`, degrading
+to transcribe-only anchors instead of the corpus runner skipping the
+song; **7/17 bundles have `media_duration_s: None`** (the 6 above plus
+Seasons of Love), so `duration` now falls back to the vocal stem's own
+probed wav length when the bundle field is absent. Verified via a
+single-song smoke test (Domino, hit by both gaps) before rerunning the
+full corpus.
+
+**17/17 songs aligned clean, 0 failures, 0 hidden lines**, 6/17 show a
+drift flag (gap/instant-line signature), 45 mostly-instant lines total
+across the corpus (0 parked-tail gap lines):
+
+```
+song                                        plc  hid  rea  rep rsec  maxgap gapL instL   anc   scf   ovl(old>new)
+----------------------------------------------------------------------------------------------------------------
+Jessie J - Domino (Official Video)---UJtB5   67    0    3   20    -    2.0s    0     1    14    61   1.3->4.6  s
+Seasons of Love (HD)---UvyHuse6buY           34    0    0    7    -    1.9s    0     0    13    31   5.8->0.7  s
+Ed Sheeran & Rudimental­ - Bloodstream [Of   74    0    0   46    -    1.7s    0    13    23    52   9.8->2.3  s
+Ed Sheeran - Best Part Of Me (feat. YEBBA)   38    0    0    4    -    1.7s    0     0    16    33   1.1->0.0  s
+Wicked - For Good  (2025) 4K - The Girl in   36    0    1   19    -    1.7s    0    17    23     0  31.1->3.2  s
+Beauty and the Beast (1991) - Be Our Guest   77    0    2    5    -    1.7s    0     0    61    53   0.0->3.0  s
+'Popular' - Wicked 20th Anniversary Editio   62    0    0   13    -    1.6s    0     1    44    39   2.9->1.7  s
+NSYNC - Paradise                             65    0    4   26    -    1.3s    0     0    12    51   6.1->5.3  s
+'Defying Gravity' - Wicked 20th Anniversar   89    0    3   39    -    1.3s    0     2    43    61   8.4->4.3  s
+Josh Gad - In Summer (From 'Frozen'_Sing-A   31    0    0    2    -    1.3s    0     0    24    18   1.4->1.2  s
+The Next Ten Minutes Lyrics---0j8kL24ph8U    71    0    1    2    -    1.3s    0     0    63    66  13.4->0.5  s
+Beauty and the Beast (1991) - Belle [UHD]-  110    0    1    5    -    1.1s    0     0    85    94   1.5->1.3  s
+'Free' _ Official Lyric Video _ Sony Anima   41    0    0    0    -    1.1s    0     0    28    33   4.6->0.0  s
+HUNTR_X 'This Is What It Sounds Like' (Mus   53    0    0   22    -    1.1s    0    11    15    43   5.5->0.5  s
+Mulan _ I'll Make a Man Out of You _ @disn   47    0    0    7    -    1.0s    0     0    22    35   1.7->2.4  s
+Pocahontas - Colors of the Wind (Blu-ray 1   37    0    0    2    -    0.9s    0     0    35    35   0.0->0.0  s
+The Lion King - Hakuna Matata Music Video    40    0    0    2    -    0.7s    0     0    19    25   0.0->2.8  s
+```
+
+`ovl(old>new)` here is `max_line_overlap` on the bundle's stored
+`output_line_timings` (today's persisted production output for that
+song) vs. this run's scaffold output — **not** the same measurement as
+Phase 0's fresh joint-route replay table above (that table's own
+`overlap(rec>new)` column is the joint matcher's internal metric,
+computed offline, never written back to the bundle). The two are
+different instruments on different routes; reconciling them into the
+S-1 GO/NO-GO comparison (mean worst-overlap, flagged-song count,
+rendered-line coverage vs. the Phase 0 baseline, same songs) is Opus's
+mechanical read-off, not this executor's call — this entry reports the
+raw table per the Model-switching discipline ("Output at a GATE is a
+table, never a verdict"), it does not rule on S-1.
+
+Per the plan text, Girl in the Bubble is excluded from the S-1
+comparison (no line timing at all — `n_scaffold=0` above confirms it,
+`n_anchors=23` from ASR+transcribe only); it ran in this table for
+completeness since the harness now handles it identically to every
+other song, not because it's in scope for S-1.
+
+S-B (CTC `slice_align`, licensed by GATE C-1=yes) has not been run —
+it needs a new scratchpad windowed-CTC adapter (Phase 1's recipe,
+wrapped to the `(t0, t1, text, label) -> words | None` contract) that
+doesn't exist yet, a distinct build step from S-A. Stopping here to
+report S-A rather than starting it without a checkpoint.
+
 ### 2026-07-18 — Phase 1 (CTC eyeball) run + GATE C
 
 Run (Ken, scratchpad probe per `plans/ctc-forced-align-eyeball.md`;
