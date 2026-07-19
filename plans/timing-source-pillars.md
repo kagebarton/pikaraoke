@@ -879,6 +879,35 @@ as Bloodstream's `kind_demoted_ruling` (suggested sidecar field:
 `query_drift_ruling`), citing this ruling as provenance; the guard
 stays armed for the remaining songs.
 
+**2026-07-19 — resume executed, 8/8 clean, 0 STOPs.** Implemented the
+exemption: `LINE_BODIES_SONGS` gained a `query_drift_exempt` flag
+(mirroring `kind_exempt`'s shape, distinct name — this is a retrieval
+event, not a ranking one); I'll Make a Man Out of You's already-persisted
+word/0.745 sidecar was reused unchanged from disk (disk-first, no
+refetch) and gained `query_drift_ruling` on top. Re-ran
+`--save-line-bodies`: the 2 already-fetched songs (Defying Gravity, Be
+Our Guest) reused their sidecars unchanged; the remaining 5 fetched
+clean:
+
+| song | recorded | new | delta | kind | variant |
+| --- | --- | --- | --- | --- | --- |
+| NSYNC Paradise | 0.785 | 0.785 | +0.000 | line | netease |
+| Hakuna Matata | 0.625 | 0.625 | +0.000 | line | netease |
+| What It Sounds Like | 0.811 | 0.811 | +0.000 | line | full |
+| In Summer | 0.581 | 0.581 | +0.000 | line | netease |
+| The Next Ten Minutes | 0.958 | 0.930 | -0.028 | line | full |
+
+The Next Ten Minutes' -0.028 delta is inside the one-sided 0.05
+tolerance (recorded-rate regression, not a STOP) — ordinary reference-pick
+variance, not flagged further. All 5 matched their expected `kind: line`
+and cleared the guard. **8/8 sidecars persisted (7 line-bodies fixtures
++ 1 query-drift word exemption), 0 STOPs.** `pikaraoke-songs/lyrics/`
+now holds 25 sidecars total (17 from Phase 2a + these 8) — Phase 3
+setup is complete; the S-A/S-B corpus run can proceed.
+
+Commit: `feat(scripts): --save-line-bodies richsync/line persistence for
+the Phase 3 corpus cohort` (script + this Results log entry together).
+
 ### 2026-07-18 — Phase 1 (CTC eyeball) run + GATE C
 
 Run (Ken, scratchpad probe per `plans/ctc-forced-align-eyeball.md`;

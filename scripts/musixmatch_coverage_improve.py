@@ -25,10 +25,14 @@ persists each to the real production sidecar
 (``lyrics/<stem>.timing.json`` beside the song), so Phase 2b's probe and the
 future production path share one on-disk fixture set.
 
+``--save-line-bodies`` (Phase 3 setup) is the same mechanism over the 8
+line-level-winner songs the scaffold corpus probe needs sidecars for.
+
 Run from the repo root::
 
     python scripts/musixmatch_coverage_improve.py
     python scripts/musixmatch_coverage_improve.py --save-bodies
+    python scripts/musixmatch_coverage_improve.py --save-line-bodies
 
 ``syncedlyrics`` is a runtime dependency (``pikaraoke/lib/timing_fetch.py``).
 """
@@ -101,6 +105,72 @@ SAVE_BODIES_SONGS: dict[str, tuple[str, float, bool, bool]] = {
     "WVe80iZtlYU": ("Incomplete", 0.296, True, False),
     "je0roKRn3nY": ("Selfish", 0.38, True, False),
 }
+
+# Phase 3 (plans/timing-source-pillars.md) setup: the 8 songs fetched by this
+# mode, keyed by bundle filename (not YouTube id -- "NSYNC - Paradise.json"
+# predates the id-suffix convention and has none). Values: (label, recorded
+# map_rate from plans/musixmatch-coverage-improvement.md's Results table,
+# query_drift_exempt -- Decision C, see below). All 8 fetched via the same
+# ensure_timing path as --save-bodies, including the 3 that were already
+# resolved via NetEase/title-only in a2 (What It Sounds Like, In Summer, The
+# Next Ten Minutes) -- this is their first persistence to the production
+# sidecar format, so every sidecar records its winning mechanism
+# (``query.variant``) even though the fetch itself is a repeat.
+#
+# Fable Decision C (2026-07-19, plans/timing-source-pillars.md Results log
+# "Phase 3 setup -- STOPPED at song 3/8"): I'll Make a Man Out of You's full
+# query now surfaces a confident richsync candidate (word/0.745) that the
+# locked reference_pick early-exit returns without ever re-querying
+# title-only -- the variant that won a2's recorded line/0.851. Ruled a
+# retrieval event (provider drift), not a ranking defect: no code change, the
+# word/0.745 sidecar stands, and the song exits the **line-bodies** cohort
+# (8 -> 7) to participate in Phase 3 as a word song via richsync line starts
+# (2b's word cohort stays 14 -- pre-registered cohorts shrink via guards,
+# they don't grow mid-flight).
+LINE_BODIES_SONGS: dict[str, tuple[str, float, bool]] = {
+    "'Defying Gravity' - Wicked 20th Anniversary Edition _ WICKED the Musical---AoON1CyhQAM.json": (
+        "Defying Gravity",
+        0.685,
+        False,
+    ),
+    "Beauty and the Beast (1991) - Be Our Guest [UHD]---MiraOCjABn8.json": (
+        "Be Our Guest",
+        0.688,
+        False,
+    ),
+    "Mulan _ I'll Make a Man Out of You _ @disneykids---vGfJeW_CcFY.json": (
+        "I'll Make a Man Out of You",
+        0.851,
+        True,
+    ),
+    "NSYNC - Paradise.json": ("NSYNC Paradise", 0.785, False),
+    "The Lion King - Hakuna Matata Music Video I 4K Ultra HD---fwLxDUQBdEg.json": (
+        "Hakuna Matata",
+        0.625,
+        False,
+    ),
+    "HUNTR_X 'This Is What It Sounds Like' (Music Video) _ KPop Demon Hunters _ Netflix Philippines---hI-y5anGcUA.json": (
+        "What It Sounds Like",
+        0.811,
+        False,
+    ),
+    "Josh Gad - In Summer (From 'Frozen'_Sing-Along)---9tcaM06eGrY.json": (
+        "In Summer",
+        0.581,
+        False,
+    ),
+    "The Next Ten Minutes Lyrics---0j8kL24ph8U.json": ("The Next Ten Minutes", 0.958, False),
+}
+
+# Provenance recorded on I'll Make a Man Out of You's sidecar (Decision C).
+QUERY_DRIFT_RULING = (
+    "2026-07-19 Fable Decision C: reference_pick's locked early-exit returned "
+    "a confident full-query richsync candidate (word/0.745) without "
+    "re-querying the title-only variant that won a2's recorded line/0.851 "
+    "(plans/ctc-sync-engine.md Appendix B addenda) -- provider drift, not a "
+    "ranking defect; word/0.745 stands, song exits the line-bodies cohort "
+    "(plans/timing-source-pillars.md Results log, Phase 3 setup STOP entry)."
+)
 
 # Provenance recorded on Bloodstream's sidecar for the kind exemption.
 BLOODSTREAM_KIND_RULING = (
@@ -555,6 +625,87 @@ def save_bodies_main(songs_root: Path = SONGS_ROOT) -> int:
     return 0
 
 
+def save_line_bodies_main(songs_root: Path = SONGS_ROOT) -> int:
+    """Phase 3 setup: persist sidecars for the line-bodies cohort.
+
+    Same ``ensure_timing`` disk-first/write path as :func:`save_bodies_main`,
+    over :data:`LINE_BODIES_SONGS`. These songs are line-level by
+    construction (no richsync candidate mapped well enough in the
+    probe/improvement round), so the guard here is looser than the word
+    cohort's: any confident kind (``line`` or a surprise ``word`` upgrade) is
+    accepted, and only a drop to ``none`` -- losing the match entirely -- or
+    a map_rate regression below the one-sided tolerance stops the run.
+
+    I'll Make a Man Out of You is ``query_drift_exempt`` (Fable Decision C):
+    its full-query pick moved from a2's line/0.851 to a confident word/0.745,
+    which the regression guard would otherwise reject. The guard stays armed
+    for every other song; the line-bodies cohort size is reported separately
+    from the total fetched, since that song now exits it (8 -> 7).
+    """
+    rows: list[dict] = []
+    line_cohort = 0
+    for i, (filename, (label, recorded_rate, query_drift_exempt)) in enumerate(
+        LINE_BODIES_SONGS.items(), 1
+    ):
+        bundle_path = songs_root / "alignment_debug" / filename
+        if not bundle_path.is_file():
+            print(f"WARNING: {label}: bundle not found ({bundle_path}) -- skip")
+            continue
+        bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
+        media = _resolve_media(songs_root, bundle_path.stem)
+        if media is None:
+            print(f"WARNING: {label}: no media on disk -- skip")
+            continue
+
+        sidecar_path = media.parent / "lyrics" / f"{media.stem}.timing.json"
+        already_fetched = sidecar_path.is_file()
+        title, artist = _title_artist(bundle)
+        sheet = bundle["lyrics"]["lines"]
+        media_dur = bundle.get("media_duration_s")
+
+        print(
+            f"\n[{i}/{len(LINE_BODIES_SONGS)}] {label}" + (" [reused]" if already_fetched else "")
+        )
+        timing_fetch.ensure_timing(media, title, artist, sheet, media_dur)
+        sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
+        new_rate, kind, variant = sidecar["map_rate"], sidecar["kind"], sidecar["query"]["variant"]
+
+        if not query_drift_exempt:
+            if kind == "none":
+                print(f"STOP: {label} lost its match entirely (kind -> none) -- catalog shift?")
+                return 1
+            if new_rate < recorded_rate - 0.05:
+                print(
+                    f"STOP: {label} map_rate regressed: "
+                    f"{new_rate:.3f} < {recorded_rate - 0.05:.3f} (recorded {recorded_rate})"
+                )
+                return 1
+
+        if query_drift_exempt:
+            sidecar["query_drift_ruling"] = QUERY_DRIFT_RULING
+            sidecar_path.write_text(json.dumps(sidecar, indent=2), encoding="utf-8")
+        else:
+            line_cohort += 1
+
+        delta = new_rate - recorded_rate
+        print(
+            f"    recorded={recorded_rate:.3f} new={new_rate:.3f} (delta {delta:+.3f}) "
+            f"kind={kind} variant={variant} query_drift_exempt={query_drift_exempt} "
+            f"source={sidecar['source']}"
+        )
+        rows.append({"label": label, "recorded": recorded_rate, "new": new_rate})
+
+        if not already_fetched:
+            time.sleep(SONG_SLEEP_S)
+
+    print("\n" + "=" * 80)
+    print(
+        f"{len(rows)}/{len(LINE_BODIES_SONGS)} sidecars persisted, 0 STOPs "
+        f"({line_cohort} line-bodies fixtures + 1 query-drift word exemption)"
+    )
+    return 0
+
+
 def main() -> int:
     client = Musixmatch(enhanced=False)  # one shared instance/token for the whole run
     bundle_by_name = {}
@@ -612,5 +763,12 @@ if __name__ == "__main__":
         action="store_true",
         help="Phase 2a mode: persist the 17 word-level-confident songs' sidecars",
     )
+    ap.add_argument(
+        "--save-line-bodies",
+        action="store_true",
+        help="Phase 3 mode: persist the 8 line-level-winner songs' sidecars",
+    )
     args = ap.parse_args()
+    if args.save_line_bodies:
+        sys.exit(save_line_bodies_main())
     sys.exit(save_bodies_main() if args.save_bodies else main())
