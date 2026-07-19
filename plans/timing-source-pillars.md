@@ -1158,6 +1158,65 @@ New observations recorded for later locks (not scope changes now):
   to the optional S-E arm (2026-07-18 revision); also informs the
   build plan's deletion inventory.
 
+### 2026-07-19 — Phase 1b pre-registered labels (Ken time ranges → line-id ranges), Sonnet 5 executor
+
+Ken supplied rough time ranges (2026-07-19) for 6 songs' desync
+sections plus 4 additional well-behaved end-to-end songs. Per step 3's
+instruction ("Ken supplies rough time ranges; the executor records
+them as line-id ranges... before computing scores"), each range is
+mapped here against that song's bundle `output_line_timings` (line
+included iff its `[start, end]` span overlaps Ken's range at all;
+boundary lines noted). No scores computed yet — this is the label
+registration only.
+
+**Desynced (line-id ranges, per song):**
+
+| song | Ken's range | line-ids | note |
+| --- | --- | --- | --- |
+| Bloodstream | start–0:06 | 0–1 | line1 (hummed intro) extends to 0:11.26, only its head is in-range |
+| Bloodstream | 1:55–2:00 (crammed 2nd hook) | 26–31 | lines 27–30 are 4 repeats collapsed onto one identical [1:57.94–1:58.84] span — the cram signature itself |
+| Bloodstream | 2:20–2:40 | 36–38 | lines 36/37 are concurrent duplicate spans |
+| Bloodstream | 2:58–end | 51–73 | includes the fully-collapsed zero-width block 66–73 [3:52.33–4:02.17] shared by 8 lines |
+| Popular | start–0:04 | 0–5 | lines 0–4 are spoken dialog collapsed to [0:00.00–0:02.92] |
+| Popular | 2:28–2:32 | 50–51 | |
+| Popular | 2:45–2:51 | 59–61 | |
+| Defying Gravity | 0:07–0:56 | 0–31 | lines 0–20 are the pre-song dialog block collapsed to [0:00.00–0:08.36] |
+| Defying Gravity | 1:38–1:41 | 44–46 | |
+| Defying Gravity | 2:19–2:36 | 55–66 | includes the 9-line collapsed dialog block 56–64 [2:26.67–2:30.59] |
+| Defying Gravity | 3:29–end | 78–88 | **= the matcher-plan-era known-bad OST-only outro group (79–88)** — reuse directly as step 3's phantom cross-check fixture, no separate list needed; line80 is zero-width |
+| Hakuna Matata | 0:30–0:48 | 3–4 | line4 nominally ends 0:35.32; the described "drag" is the 14.4s unfilled gap to line5 at 0:49.72, not a sheet line — flag as a fallback/interpolation artifact, not a scored line span |
+| Hakuna Matata | 1:55–end | 29–39 | line28 ends 1:53.98, just before Ken's 1:55 mark, so it's excluded by the overlap rule; lines 34–39 are zero-width (the dialog swallowed them to nothing — expected desync signature) |
+| Rock Your Body | 2:28–3:10 | 68–72 | ~31.5s unfilled gap after (2:40.73→3:12.24) — the quiet-outro/adlib stretch Ken flagged has no sheet line to score at all |
+| Rock Your Body | 4:00–end | 95–102 | ~18.3s unfilled gap before (3:57.65→4:15.99), same signature |
+| Zayn | 1:55–2:05 | 28–33 | lines 32/33 overlap out of chronological order in the production timing itself (line33 starts 2:03.86, before line32's 2:04.28) — the "overlapping vocals" Ken described |
+| Zayn | 3:30–end | 55–59 | |
+
+**Synced — same songs' good stretches:** the complement of the above
+ranges within each of the 6 songs (e.g. Bloodstream lines 2–25, 32–35,
+39–50, 74 is n/a since 73 is last — i.e. everything not listed above).
+Zero-width lines inside a "good" complement (none found outside the
+ranges above) would be excluded the same way at scoring time.
+
+**Synced — well-behaved end-to-end:** Belle (110 lines), Girl in the
+Bubble (36 lines), John Legend/Ariana Grande Beauty and the Beast (56
+lines), Incomplete (27 lines). **Only 4, not the plan's target of 5**
+— Rock Your Body was the plan's other suggested pick, but Ken's own
+data for it (above) shows two real desync stretches, so it no longer
+qualifies as end-to-end clean and was not substituted into this set.
+Flagging for Ken/Opus visibility, not blocking: the labeled pool is
+already large (6 partial + 4 full songs) and step 5's read-off doesn't
+require exactly 5 end-to-end songs, but a 5th is Ken's to add if he
+wants one.
+
+**Not yet done:** emissions have not been recomputed, no scores exist,
+no AUCs computed. Next step is building the Phase 1b scoring script
+(steps 1–2 of the Phase 1b spec) — the eyeball probe's chunked-emission
+recipe (`plans/ctc-forced-align-eyeball.md` §"CTC recipe") was run by
+Ken directly from a scratchpad script that isn't on disk; a new
+scratchpad script implementing the same recipe plus per-word/per-line
+`TokenSpan.score` extraction, z-normalization, and the ten rescue-stat
+variants is required.
+
 ---
 
 ## Appendices A–D — moved to `plans/ctc-sync-engine.md`
