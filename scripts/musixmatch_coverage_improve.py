@@ -71,29 +71,44 @@ MEDIA_EXTS = (".mp4", ".webm", ".mkv")
 # non-breaking spaces/soft hyphens that make literal-string matching
 # fragile). Values: (label, recorded map_rate from the probe/improvement
 # plans, control -- a known wrong-song fixture Phase 2b's gate test needs,
-# exempt from the regression assert).
-SAVE_BODIES_SONGS: dict[str, tuple[str, float, bool]] = {
+# exempt from both guards -- kind_exempt -- exempt from the word-kind guard
+# only, rate guard stays armed).
+SAVE_BODIES_SONGS: dict[str, tuple[str, float, bool, bool]] = {
     # Part (a)'s 7 already-confident rows (plans/musixmatch-coverage-probe.md).
-    "22QYya-LGDY": ("Popular", 0.63, False),
-    "otxTf5hZ0Yw": ("Belle", 0.86, False),
-    "wGyh_53ecgg": ("Best Part of Me", 0.87, False),
-    "Orq_75kFi8I": ("Bloodstream", 0.50, False),
-    "9ThO76peOw0": ("Colors of the Wind", 0.95, False),
-    "UJtB55MaoD0": ("Domino", 0.67, False),
-    "TSVHoHyErBQ": ("Rock Your Body", 0.98, False),
+    "22QYya-LGDY": ("Popular", 0.63, False, False),
+    "otxTf5hZ0Yw": ("Belle", 0.86, False, False),
+    "wGyh_53ecgg": ("Best Part of Me", 0.87, False, False),
+    # Fable ruling 2026-07-19 (plans/timing-source-pillars.md Results log,
+    # Phase 2a STOP entry): genuine reference-pick ambiguity, not a design
+    # gap -- no `kind` term added to the Appendix B selection key. The
+    # persisted line sidecar (0.703, Arty Remix) stands as-fetched;
+    # Bloodstream demotes to the line-source pool and exits the 2b word
+    # cohort (15 -> 14).
+    "Orq_75kFi8I": ("Bloodstream", 0.50, False, True),
+    "9ThO76peOw0": ("Colors of the Wind", 0.95, False, False),
+    "UJtB55MaoD0": ("Domino", 0.67, False, False),
+    "TSVHoHyErBQ": ("Rock Your Body", 0.98, False, False),
     # Part (a2)'s 8 new word-level winners (plans/musixmatch-coverage-improvement.md).
-    "fjOeJssZX_Q": ("Free", 0.805, False),
-    "1OwfYjemrYw": ("More Than That", 0.923, False),
-    "YVVTZgwYwVo": ("Let It Go", 0.702, False),
-    "SXKlJuO07eM": ("Part of Your World", 0.704, False),
-    "FQ3slUz7Jo8": ("Like I Love You", 0.869, False),
-    "uuZE_IRwLNI": ("Mirrors", 0.883, False),
-    "UvyHuse6buY": ("Seasons of Love", 0.912, False),
-    "25QyCxVkXwQ": ("Can You Feel the Love Tonight", 0.875, False),
+    "fjOeJssZX_Q": ("Free", 0.805, False, False),
+    "1OwfYjemrYw": ("More Than That", 0.923, False, False),
+    "YVVTZgwYwVo": ("Let It Go", 0.702, False, False),
+    "SXKlJuO07eM": ("Part of Your World", 0.704, False, False),
+    "FQ3slUz7Jo8": ("Like I Love You", 0.869, False, False),
+    "uuZE_IRwLNI": ("Mirrors", 0.883, False, False),
+    "UvyHuse6buY": ("Seasons of Love", 0.912, False, False),
+    "25QyCxVkXwQ": ("Can You Feel the Love Tonight", 0.875, False, False),
     # 2 negative controls (known wrong-song, both below the confidence bar).
-    "WVe80iZtlYU": ("Incomplete", 0.296, True),
-    "je0roKRn3nY": ("Selfish", 0.38, True),
+    "WVe80iZtlYU": ("Incomplete", 0.296, True, False),
+    "je0roKRn3nY": ("Selfish", 0.38, True, False),
 }
+
+# Provenance recorded on Bloodstream's sidecar for the kind exemption.
+BLOODSTREAM_KIND_RULING = (
+    "2026-07-19 Fable ruling: no kind term in the Appendix B selection key "
+    "(plans/ctc-sync-engine.md Appendix B addenda); Bloodstream demotes to "
+    "the line-source pool (plans/timing-source-pillars.md Results log, "
+    "Phase 2a STOP entry)."
+)
 
 # Pacing that survived a full 33-song part-(a) run and this plan's 4-song
 # prototype without a persistent lockout -- see the plan's Robustness
@@ -465,13 +480,17 @@ def save_bodies_main(songs_root: Path = SONGS_ROOT) -> int:
     Asserts the winner's ``map_rate`` has not regressed more than 0.05 below
     the recorded probe/improvement-plan value and that word-level songs
     stayed word-level (a control's low/no-confidence result is expected and
-    exempt) -- either failure means the catalog shifted under us and stops
-    the run rather than silently persisting a worse fixture set.
+    exempt from both checks; Bloodstream is exempt from the kind check only,
+    per the 2026-07-19 Fable ruling -- its rate check stays armed) -- a
+    failure means the catalog shifted under us and stops the run rather
+    than silently persisting a worse fixture set.
     """
     client = timing_fetch._get_client()  # pylint: disable=protected-access
     first_word_verified = False
     rows: list[dict] = []
-    for i, (yt_id, (label, recorded_rate, control)) in enumerate(SAVE_BODIES_SONGS.items(), 1):
+    for i, (yt_id, (label, recorded_rate, control, kind_exempt)) in enumerate(
+        SAVE_BODIES_SONGS.items(), 1
+    ):
         matches = glob.glob(f"{songs_root}/alignment_debug/*---{yt_id}.json")
         if len(matches) != 1:
             print(f"WARNING: {label} ({yt_id}): expected 1 bundle, found {len(matches)} -- skip")
@@ -497,11 +516,8 @@ def save_bodies_main(songs_root: Path = SONGS_ROOT) -> int:
         sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
         new_rate, kind = sidecar["map_rate"], sidecar["kind"]
 
-        if control:
-            sidecar["control"] = True
-            sidecar_path.write_text(json.dumps(sidecar, indent=2), encoding="utf-8")
-        else:
-            if kind != "word":
+        if not control:
+            if kind != "word" and not kind_exempt:
                 print(f"STOP: {label} ({yt_id}) kind downgraded word -> {kind!r} -- catalog shift?")
                 return 1
             if new_rate < recorded_rate - 0.05:
@@ -511,10 +527,17 @@ def save_bodies_main(songs_root: Path = SONGS_ROOT) -> int:
                 )
                 return 1
 
+        if control or kind_exempt:
+            if control:
+                sidecar["control"] = True
+            if kind_exempt:
+                sidecar["kind_demoted_ruling"] = BLOODSTREAM_KIND_RULING
+            sidecar_path.write_text(json.dumps(sidecar, indent=2), encoding="utf-8")
+
         delta = new_rate - recorded_rate
         print(
             f"    recorded={recorded_rate:.3f} new={new_rate:.3f} (delta {delta:+.3f}) "
-            f"kind={kind} control={control} source={sidecar['source']}"
+            f"kind={kind} control={control} kind_exempt={kind_exempt} source={sidecar['source']}"
         )
         rows.append({"label": label, "yt_id": yt_id, "recorded": recorded_rate, "new": new_rate})
 
