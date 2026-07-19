@@ -470,6 +470,108 @@ rules.
 
 ## Results log
 
+### 2026-07-19 — Phase 0 (port + harness + baselines), Sonnet 5 executor
+
+Branch `timing_pillars` cut off `musix_ctc` (tip `22c15e4`).
+
+**Port** (`pikaraoke/lib/cue_align.py`): `densify_cue_spans`,
+`merge_cue_spans`, `_theil_sen`, `warp_scaffold_cues` +
+`DENSIFY_DEFAULT_PACE_S`/`DENSIFY_MIN_LINE_DUR_S`/`WARP_MAD_GATE_S`/
+`WARP_MIN_ANCHORS`, copied verbatim from `pathed_align:835ba2c7` per the
+drift check — additive only, no existing function touched. 24 ported
+unit tests (`TestDensifyCueSpans`/`TestMergeCueSpans`/
+`TestWarpScaffoldCues`) pass unmodified against ship's module.
+
+`pikaraoke/lib/ytasr.py`: `cue_spans_for_lines` (ported from
+`pathed_align`'s `ytasr.py:142`, reusing ship's existing
+`spans_from_candidates`/`CANDIDATE_MAX_EDIT_RATIO` verbatim — only the
+`find_candidates` import and the function itself were missing) +
+`normalize_words` (lifted from `pathed_align:scripts/lrc_align_song.py:67`).
+16 new tests (`TestCueSpansForLines` ported + 2 new `TestNormalizeWords`).
+
+Full unit suite: **1482 passed** (was 1482 + this port's ~40 new tests
+net of the pre-existing 1456 5b baseline). Import-smoke clean.
+Pre-commit (`--files` scoped to the changed modules): clean.
+
+**Harness** (`scripts/scaffold_align_song.py` + `scaffold_align_corpus.py`):
+built clean against ship signatures per the plan's supersession note
+(not a port of the dead `pathed_align:scripts/lrc_align_song.py`).
+Single-song driver builds ASR+transcribe anchors
+(`ytasr.cue_spans_for_lines` over parsed YTASR words and over
+`normalize_words(bundle["transcribe_words"])`, unioned transcribe-primary
+via `merge_cue_spans`), warps an external `--timing {sidecar,lrc,none}`
+scaffold onto them (`warp_scaffold_cues`), and hands the dense cues to
+the shared production `cue_align.align_song` — reusing
+`cue_align_song.py`'s `_make_slice_align`/`find_vocal`/`_ffmpeg`/
+`_wav_duration`/`report` shims rather than duplicating the ffmpeg/whisper
+plumbing. Writes `karaoke/<stem>.scaffold.ass` (never the production
+name). The `sidecar` mode reads the Appendix B fetch-pillar sidecar
+(`lyrics/<stem>.timing.json`, not yet populated for any song this
+session — Phase 2a below only *fetches and persists* it, this run
+carries no sidecar-mode corpus pass); `lrc` mode mirrors the dead
+script's live LRCLIB fetch. Corpus runner mirrors `cue_align_corpus.py`'s
+structure (song selection, model-once loop, flag table), selecting
+`lyrics.source_kind != "srt"` bundles. Neither script has unit tests,
+matching the existing SRT pair's precedent (GPU-driven, validated by
+corpus run + eyeball, not pytest). Import-smoke clean; pre-commit
+(isort reformatted the import block, otherwise clean).
+
+**Baseline 1 — fresh joint-route replay** (genius-origin corpus, current
+HEAD): `replay_ytasr_third_source.py /home/ken/pikaraoke-songs --alpha
+2.0 --beta 2.0` (production's own `PipelineConfig` defaults). 17/17
+genius-origin songs replayed, matches the 07-16 Environment-note
+composite table in `plans/matcher-accuracy-hardening.md` (matcher logic
+unchanged since — 5b/Phase 6 touched only `cue_align.py`/docs) to
+within the documented live-LRCLIB-fetch MAD jitter (e.g. Domino
+0.43s/7a -> 0.39s/7a here; the 07-16 note already characterizes this as
+network flake, not matcher drift, confirmed determinism-checked there
+3x):
+
+```
+song                                            src        mad(best) alpha  beta crawl(rec>new)   overlap(rec>new)  placed(rec>new)   coverage
+----------------------------------------------------------------------------------------------------------------------------------------------
+'Defying Gravity' - Wicked 20th Anniversary Ed 3src bail:wide_spread   2.0   2.0      4->3           0.2->0.2          51->51         51/89!
+'Free' _ Official Lyric Video _ Sony Animation 2src        0.20s/16a   2.0   n/a      2->1           1.0->1.0          40->40          40/41
+'Popular' - Wicked 20th Anniversary Edition _  3src bail:wide_spread   2.0   2.0      3->3           0.0->0.0          51->52         52/62!
+Beauty and the Beast (1991) - Be Our Guest [UH 3src        0.16s/49a   2.0   2.0      1->0           0.0->0.0          77->77          77/77
+Beauty and the Beast (1991) - Belle [UHD]---ot 3src        0.39s/55a   2.0   2.0      1->1           0.0->0.0         101->101       101/110
+Ed Sheeran - Best Part Of Me (feat. YEBBA) (Li 3src bail:wide_spread   2.0   2.0      2->2           0.0->0.0          37->37          37/38
+Ed Sheeran & Rudimental­ - Bloodstream [Offici 3src        0.60s/11a   2.0   2.0      1->1           6.7->6.7          47->48         48/74!
+HUNTR_X 'This Is What It Sounds Like' (Music V 2src bail:wide_spread   2.0   n/a      0->0           0.0->0.0          32->33         33/53!
+Jessie J - Domino (Official Video)---UJtB55Mao 2src         0.39s/7a   2.0   n/a      0->0           0.0->0.1          63->63          63/67
+Josh Gad - In Summer (From 'Frozen'_Sing-Along 2src        0.22s/14a   2.0   n/a      2->2           0.0->0.0          29->29          29/31
+Mulan _ I'll Make a Man Out of You _ @disneyki 3src bail:wide_spread   2.0   2.0      0->0           0.0->0.0          36->36         36/47!
+NSYNC - Paradise                               2src        0.27s/10a   2.0   n/a      3->2           0.7->0.7          53->53         53/65!
+Pocahontas - Colors of the Wind (Blu-ray 1080p 3src        0.19s/31a   2.0   2.0      2->2           0.0->0.0          37->37          37/37
+Seasons of Love (HD)---UvyHuse6buY             2src         0.52s/5a   2.0   n/a      8->3           0.0->0.0          25->25         25/34!
+The Lion King - Hakuna Matata Music Video I 4K 3src         0.41s/8a   2.0   2.0      4->3           0.0->0.0          33->33         33/40!
+The Next Ten Minutes Lyrics---0j8kL24ph8U      2src        0.46s/52a   2.0   n/a      5->2           0.0->0.0          67->67          67/71
+Wicked - For Good  (2025) 4K - The Girl in the 3src        0.39s/15a   2.0   2.0      2->2           0.0->0.0          29->29         29/36!
+```
+
+This table, not the 07-16 one, is Phase 3's fresh joint-baseline
+comparison point (S-A criterion (a)).
+
+**Baseline 2 — cue corpus flag counts (SRT songs)**: reused per the
+ground rules' explicit license ("reuse the 5b validation numbers if the
+tree is unchanged since") rather than re-run — `cue_align.py`'s SRT-path
+logic (`segment_by_gaps`/`align_song`/`repace_bad_lines`) is untouched
+by this session's port (additive-only, new functions never called by
+the SRT path), so the 5b-validated state
+(`plans/matcher-accuracy-hardening.md`, "Phase 5b implement +
+validation") still holds exactly: **16/16 SRT songs, 0/16 drift**
+(`gapL`/`instL` both zero every song), 0 lines placed->hidden, flag
+table identical to the 07-16 Phase-0-baseline table there except 5
+known overlap deltas from the `MAX_SECTION_DUR_S` section-cap fix
+(Mirrors 0.7->0.8, ZAYN 7.8->4.0, Mena/Scott 2.6->2.1, Beauty and the
+Beast 0.2->0.1, Part of Your World 0.7->2.5s — Ken's 5b read: all but
+Mirrors are genuine two-voice overlaps, not defects). No fresh GPU run
+executed this session for this baseline.
+
+**Commits**: `feat(cue-align): port scaffold warp machinery from
+pathed_align` (lib + tests) and `feat(scripts): scaffold-align harness
+pair` (the two new scripts), per the plan.
+
 ### 2026-07-18 — Phase 1 (CTC eyeball) run + GATE C
 
 Run (Ken, scratchpad probe per `plans/ctc-forced-align-eyeball.md`;
