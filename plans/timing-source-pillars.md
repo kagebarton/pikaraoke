@@ -446,6 +446,14 @@ Paradise, Hakuna Matata, What It Sounds Like, In Summer, The Next Ten
 Minutes — the last three re-fetched even though NetEase/title-only won
 them in a2, so every sidecar records its winning mechanism.
 
+*Amendment (2026-07-19, Decision C — see Results log):* I'll Make a Man
+Out of You re-fetched as `word`/0.745 (its full query now surfaces a
+confident richsync, so the locked early-exit never re-queried the
+title-only variant that won a2). The line-bodies fixture set is **7**;
+the song participates in Phase 3 as a word song via the
+richsync-line-starts source above, and is exempted from the
+recorded-map_rate regression assert on resume.
+
 Arms, in order; later arms only where earlier ones justify the GPU time:
 
 - **S-A (required):** scaffold + whisper `slice_align`. Metrics per
@@ -799,6 +807,77 @@ persistence for musixmatch_coverage_improve` (original script — the
 persisted sidecars live in `pikaraoke-songs/lyrics/`, outside this git
 repo, per how every other song-library artifact in this project is
 handled).
+
+### 2026-07-19 — Phase 3 setup (--save-line-bodies) — STOPPED at song 3/8; Decision C
+
+Sonnet's line-bodies fetch (the Phase 3 list of 8, same `ensure_timing`
+path as `--save-bodies`) ran 2/8 clean, then STOPPED at I'll Make a Man
+Out of You (`vGfJeW_CcFY`): the full query now returns a richsync
+candidate that clears the confidence bar on its own (track 84351940,
+"I'll Make A Man Out Of You" / "Donny Osmond feat. Disney Characters",
+`word`, map_rate 0.745), so `reference_pick`'s locked early-exit
+returned it without ever re-querying title-only — the variant that
+produced a2's recorded `line`/0.851 (that run's full query came back
+unconfident, firing the retry). The one-sided map_rate regression guard
+fired (0.851 → 0.745); the kind *upgrade* itself was already an
+accepted outcome of the line-bodies guard. Sidecar persisted as-fetched
+(disk-first contract).
+
+**Design ruling (Fable, 2026-07-19) — Decision C: the early-exit stays
+as locked; word/0.745 is the conformant pick; no Appendix B amendment,
+no code change; per-song guard exemption; line-bodies cohort 8 → 7.**
+(Issued under the same Ken-convened window as Decisions A/B; folded at
+Ken's direction.) This is neither a Bloodstream-class ranking question
+nor a clean_key-class deviation: Appendix B locks the early-exit
+explicitly ("title-only tried only when the full query yields nothing
+confident") and today's run executed it exactly. The 0.851 line
+candidate was not demoted or mis-ranked — it was **never retrieved this
+run**, because a2's result was the same procedure answering different
+provider state. Both runs conformant; Musixmatch's index moved
+underneath. The guard did its job: surfaced cross-run drift for
+adjudication instead of swallowing it. Where Bloodstream was a
+*ranking* event (the key adjudicated; the guard caught a kind change),
+this is a *retrieval* event (the key never adjudicated; the guard
+caught provider drift) — they stress different parts of the pillar, and
+both parts held.
+
+**Why no change:** (1) both proposed kind-aware early-exits gate on the
+full-query winner's kind, and the winner here is `word` — the best
+achievable kind — so both would still skip the retry and change
+nothing; adopting either is spec churn. (2) The only change that
+recovers 0.851/line is unconditionally running both variants and
+key-comparing — doubling query cost corpus-wide (the exact cost the
+locked gate exists to avoid) on n=1 evidence of *provider drift*, not
+of a procedure defect: Decision A's n=1 refusal again. (3) No
+correctness pressure: the word candidate is the original Mulan
+recording (Donny Osmond is the film's singing voice — no
+Arty-Remix-style version-mismatch flag) and 0.745 clears the bar
+comfortably. Had both candidates been on the table, the key would
+legitimately have picked 0.851/line (line demotion is first-class per
+Decision A) — but nothing obliges the procedure to go looking, and a
+selection-time kind preference in either direction stays ruled out.
+The 0.851 candidate is *unretrieved*, not "irrelevant because word
+exists" — that framing would smuggle in the kind preference Decision A
+rejected. Cross-run stability is the disk-first sidecar's job, not the
+query surface's: drift only bites on forced refetches, which are
+batch-tool territory with exactly this guard armed.
+
+**Disposition:** the word/0.745 sidecar stands as-fetched. It cannot
+serve as a line-bodies fixture (a richsync body is a different
+artifact), so the song exits that cohort (**8 → 7**) — not orphaned
+from Phase 3, whose line-source enumeration already covers it ("for
+word songs — richsync line starts"); it participates as a word song
+with scaffold line timing from its richsync `ts` values. It does
+**not** retroactively join 2b's word cohort (pre-registered cohorts
+shrink via guards, they don't grow mid-flight; 2b stays 14);
+production routing is cohort-agnostic and routes it word-level per
+Appendix A on its sidecar alone.
+
+**Resume (song 3 exempted, songs 4–8 fresh):** exempt the song from
+the recorded-map_rate regression assert the same flag-and-accept way
+as Bloodstream's `kind_demoted_ruling` (suggested sidecar field:
+`query_drift_ruling`), citing this ruling as provenance; the guard
+stays armed for the remaining songs.
 
 ### 2026-07-18 — Phase 1 (CTC eyeball) run + GATE C
 

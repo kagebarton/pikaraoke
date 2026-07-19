@@ -492,6 +492,18 @@ no-timing route / SRT as today).
   off Appendix-B-conformant. The Phase 2a sidecars on disk were
   fetched through the probe's pre-cleaned path (spec-correct queries)
   and stand — nothing refetched.
+- **Query-variant early-exit confirmed (Decision C, 2026-07-19).** The
+  confidence-gated title-only retry stays as locked. A cross-run
+  map_rate regression caused by provider drift on the full-query
+  surface (Phase 3 setup, I'll Make a Man Out of You: a2 title-only
+  `line`/0.851 → today full-query `word`/0.745, retry never fired) is
+  not a selection defect — the candidate the guard "lost" was never
+  retrieved, not mis-ranked. Kind-aware short-circuits ruled out (both
+  proposed variants gate on the full winner's kind and would skip
+  identically here); always-both-variants ruled out (2× query cost
+  corpus-wide off n=1 drift). Cross-run stability is the disk-first
+  sidecar's job, not the query surface's. Full ruling: evidence plan
+  Results log, Phase 3 setup entry.
 
 ## Appendix C — word-route verification criterion (LOCKED as decision procedure, Fable, 2026-07-18)
 
