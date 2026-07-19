@@ -15,9 +15,16 @@ production ``.ass``). Needs the ``pik`` conda env and a local GPU (and, for
 
     python scripts/scaffold_align_corpus.py
     python scripts/scaffold_align_corpus.py --only Mulan --timing lrc
+    python scripts/scaffold_align_corpus.py --slice-align-module /path/to/probe_aligner.py
+
+``--slice-align-module`` swaps the forced-aligner backend for a probe: the
+file must expose ``make_slice_align`` matching
+``cue_align_song._make_slice_align``'s signature, per
+:func:`scaffold_align_song.run_song`'s ``make_slice_align`` parameter.
 """
 
 import argparse
+import importlib.util
 import json
 import logging
 import sys
@@ -25,7 +32,12 @@ from pathlib import Path
 
 # Import the sibling single-song shims (shared per-song logic + helpers).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cue_align_song import artifact_metrics, find_vocal, max_line_overlap  # noqa: E402
+from cue_align_song import (  # noqa: E402
+    _make_slice_align,
+    artifact_metrics,
+    find_vocal,
+    max_line_overlap,
+)
 from scaffold_align_song import find_asr, find_bundle, run_song  # noqa: E402
 
 from pikaraoke.lib.cue_align import SOURCE_FILL, SOURCE_REALIGN  # noqa: E402
@@ -73,12 +85,28 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument("--pad", type=float, default=0.75, help="slice pad into silence (s)")
     ap.add_argument("--only", help="substring filter on the song filename")
+    ap.add_argument(
+        "--slice-align-module",
+        type=Path,
+        help="path to a module exposing make_slice_align(vocal_wav, tmp, stem, worker) "
+        "-> slice_align, to swap the forced-aligner backend (default: whisper)",
+    )
     args = ap.parse_args(argv)
 
     root: Path = args.songs_root
     debug_dir = args.debug_dir or (root / "alignment_debug")
     if not debug_dir.is_dir():
         ap.error(f"alignment_debug dir not found: {debug_dir}")
+
+    make_slice_align = _make_slice_align
+    if args.slice_align_module:
+        spec = importlib.util.spec_from_file_location(
+            args.slice_align_module.stem, args.slice_align_module
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        make_slice_align = module.make_slice_align
+        logger.info("using slice-align backend from %s", args.slice_align_module)
 
     songs = genius_origin_songs(debug_dir, root)
     if args.only:
@@ -115,6 +143,7 @@ def main(argv: list[str] | None = None) -> int:
                     timing=args.timing,
                     pad=args.pad,
                     out=ass_path,
+                    make_slice_align=make_slice_align,
                 )
             except (ValueError, RuntimeError):
                 logger.exception("scaffold-align failed for %s", media.stem[:40])

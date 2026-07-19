@@ -139,6 +139,7 @@ def run_song(
     timing: str,
     pad: float = 0.75,
     out: Path | None = None,
+    make_slice_align=_make_slice_align,
 ) -> tuple[list[dict], dict, dict]:
     """Scaffold-align one genius-origin song with an already-started ``worker``.
 
@@ -153,6 +154,13 @@ def run_song(
     a lost file), so a ``None`` here degrades to transcribe-only anchors
     rather than the caller skipping the song outright -- ``merge_cue_spans``
     already tolerates either side being empty.
+
+    ``make_slice_align`` swaps the forced-aligner backend: given
+    ``(vocal_wav, tmp, stem, worker)`` it must return a
+    ``(t0, t1, text, label) -> words | None`` callable (the
+    :func:`cue_align.align_song` contract). Defaults to the production
+    whisper backend; a probe backend (e.g. a CTC aligner) can be injected
+    without touching this driver.
 
     ``duration`` prefers the bundle's ``media_duration_s``, falling back to
     the vocal stem's own probed length when the bundle field is absent (a
@@ -198,7 +206,7 @@ def run_song(
             "n_lines": len(align_lines),
         }
 
-        slice_align = _make_slice_align(vocal_wav, tmp, song.stem, worker)
+        slice_align = make_slice_align(vocal_wav, tmp, song.stem, worker)
         line_objects, align_stats = align_song(
             cue_spans, display_lines, align_lines, wav_dur, slice_align, pad_s=pad
         )
