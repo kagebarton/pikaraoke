@@ -47,6 +47,18 @@ def _no_lrclib_network(monkeypatch):
     monkeypatch.setattr("pikaraoke.pipeline.stages.lyrics_fetch.lrclib.search", lambda *a, **k: [])
 
 
+@pytest.fixture(autouse=True)
+def _no_timing_network(monkeypatch):
+    """``_resolve_timing`` runs unconditionally in Branch a, so any test that
+    doesn't explicitly exercise it must not hit the network. Tests covering
+    the timing resolve itself patch ``timing_fetch.ensure_timing`` directly,
+    which supersedes this."""
+    monkeypatch.setattr(
+        "pikaraoke.pipeline.stages.lyrics_fetch.timing_fetch.ensure_timing",
+        lambda *a, **k: None,
+    )
+
+
 # ---------------------------------------------------------------------------
 # _extract_yt_id
 # ---------------------------------------------------------------------------
@@ -436,6 +448,98 @@ class TestBranchALrclib:
         LyricsFetchStage(genius, PipelineConfig()).run(ctx)
 
         mock_search.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Branch (a): synced-timing fetch pillar (E0)
+# ---------------------------------------------------------------------------
+
+
+class TestBranchATiming:
+    """Genius branch: fetch synced word/line timing for the timing-source-
+    pillars router (plans/ctc-sync-engine.md). Reuse-on-disk/fetch is all
+    ``timing_fetch.ensure_timing``'s job — this stage only wires the call
+    site, stashes on success, and never lets a failure block the stage."""
+
+    def _genius(self, title="Hello World", artist="The Band", text="Hello world\n"):
+        g = MagicMock(spec=GeniusClient)
+        g.fetch_song.return_value = GeniusSong(text=text, title=title, artist=artist)
+        return g
+
+    def _ctx(self, tmp_path, mock_gtd):
+        mock_gtd.return_value = str(tmp_path / "temp")
+        (tmp_path / "temp" / "lyric_choices").mkdir(parents=True, exist_ok=True)
+        song_path = tmp_path / "Song---dQw4w9WgXcQ.mp4"
+        song_path.touch()
+        job_tmp = tmp_path / "job_tmp"
+        job_tmp.mkdir()
+        write_choice("dQw4w9WgXcQ", {"yt_id": "dQw4w9WgXcQ", "genius_id": 456})
+        ctx = _make_ctx(song_path, job_tmp, artifacts={"media_duration_s": 200.0})
+        return ctx, song_path
+
+    @patch("pikaraoke.pipeline.stages.lyrics_fetch.timing_fetch.ensure_timing")
+    @patch("pikaraoke.lib.genius.get_temp_directory")
+    def test_confident_timing_is_stashed(self, mock_gtd, mock_ensure, tmp_path):
+        ctx, song_path = self._ctx(tmp_path, mock_gtd)
+        artifact = {
+            "kind": "word",
+            "path": song_path.parent / "lyrics" / "Song---dQw4w9WgXcQ.timing.json",
+            "source": "musixmatch",
+            "map_rate": 0.9,
+            "track": {"track_id": 1},
+        }
+        mock_ensure.return_value = artifact
+
+        LyricsFetchStage(self._genius(), PipelineConfig()).run(ctx)
+
+        assert ctx.artifacts["synced_timing"] == artifact
+        mock_ensure.assert_called_once_with(
+            song_path, "Hello World", "The Band", ["Hello world"], 200.0
+        )
+
+    @patch("pikaraoke.pipeline.stages.lyrics_fetch.timing_fetch.ensure_timing")
+    @patch("pikaraoke.lib.genius.get_temp_directory")
+    def test_no_confident_timing_stashes_nothing(self, mock_gtd, mock_ensure, tmp_path):
+        ctx, _song_path = self._ctx(tmp_path, mock_gtd)
+        mock_ensure.return_value = None
+
+        LyricsFetchStage(self._genius(), PipelineConfig()).run(ctx)
+
+        assert "synced_timing" not in ctx.artifacts
+        assert ctx.artifacts["lyrics_origin"] == "genius"
+
+    @patch("pikaraoke.pipeline.stages.lyrics_fetch.timing_fetch.ensure_timing")
+    @patch("pikaraoke.lib.genius.get_temp_directory")
+    def test_ensure_timing_exception_never_fails_stage(self, mock_gtd, mock_ensure, tmp_path):
+        ctx, _song_path = self._ctx(tmp_path, mock_gtd)
+        mock_ensure.side_effect = RuntimeError("network exploded")
+
+        LyricsFetchStage(self._genius(), PipelineConfig()).run(ctx)
+
+        assert "synced_timing" not in ctx.artifacts
+        assert ctx.artifacts["lyrics_origin"] == "genius"
+
+    @patch("pikaraoke.pipeline.stages.lyrics_fetch.probe_duration", return_value=150.0)
+    @patch("pikaraoke.pipeline.stages.lyrics_fetch.timing_fetch.ensure_timing")
+    @patch("pikaraoke.lib.genius.get_temp_directory")
+    def test_falls_back_to_probe_duration_when_not_yet_cached(
+        self, mock_gtd, mock_ensure, mock_probe, tmp_path
+    ):
+        mock_gtd.return_value = str(tmp_path / "temp")
+        (tmp_path / "temp" / "lyric_choices").mkdir(parents=True, exist_ok=True)
+        song_path = tmp_path / "Song---dQw4w9WgXcQ.mp4"
+        song_path.touch()
+        job_tmp = tmp_path / "job_tmp"
+        job_tmp.mkdir()
+        write_choice("dQw4w9WgXcQ", {"yt_id": "dQw4w9WgXcQ", "genius_id": 456})
+        ctx = _make_ctx(song_path, job_tmp)  # no pre-seeded media_duration_s
+        mock_ensure.return_value = None
+
+        LyricsFetchStage(self._genius(), PipelineConfig()).run(ctx)
+
+        mock_ensure.assert_called_once_with(
+            song_path, "Hello World", "The Band", ["Hello world"], 150.0
+        )
 
 
 # ---------------------------------------------------------------------------
