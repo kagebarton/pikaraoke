@@ -45,6 +45,7 @@ dev = [
   "pre-commit>=3.7.1",
   "pytest>=9.0.2",
   "pytest-cov>=7.0.0",
+  "syncedlyrics>=1.0.1", # scripts/musixmatch_coverage_improve.py only, not imported by the app
 
 ]
 
@@ -53,6 +54,7 @@ dev = [
     "pre-commit>=4.5.0",
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
+    "syncedlyrics>=1.0.1", # scripts/musixmatch_coverage_improve.py only, not imported by the app
 ]
 
 [project.scripts]
