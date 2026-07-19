@@ -403,6 +403,7 @@ def warp_scaffold_cues(
     Returns a contiguous, monotonic ``(start, end)`` list, one span per line.
     """
     if not scaffold:
+        logger.info("cue-align: warp path=densify-fallback (no scaffold)")
         return densify_cue_spans(anchors, align_lines, duration)
     common = [(scaffold[lid][0], anchors[lid][0]) for lid in scaffold if lid in anchors]
     fit = _theil_sen(common) if len(common) >= WARP_MIN_ANCHORS else None
