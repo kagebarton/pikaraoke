@@ -290,6 +290,54 @@ class TestWarpScaffoldCues:
         out = warp_scaffold_cues(anchors, scaffold, align, 120.0)
         assert out == densify_cue_spans(anchors, align, 120.0)
 
+    def test_affine_clean_scaffold_unchanged_by_rescue_tier(self):
+        # The 14-song affine-clean case: identical to test_linear_tempo_
+        # difference_warps_cleanly -- the new offset-rescue path is only
+        # reached when the affine fit itself misses its gate, so a clean
+        # affine fit here must produce the exact same result as before.
+        align = ["a", "b", "c", "d", "e", "f"]
+        anchors = {i: (i * 10.0, i * 10.0 + 1) for i in range(6)}
+        scaffold = {i: (float(i), i + 0.1) for i in range(6)}
+        out = warp_scaffold_cues(anchors, scaffold, align, 60.0)
+        assert all(abs(out[i][0] - i * 10.0) < 1.0 for i in range(6))
+
+    def test_contaminated_common_points_rescued_by_constant_offset(self):
+        # Paradise-shaped: 9 common points, 6 agreeing on a clean +24s constant
+        # offset and 3 mis-mapped onto a repeated line (residuals +46/+72/+72
+        # against that offset). The mis-mapped third of the points contaminate
+        # enough Theil-Sen pairwise slopes that the affine fit misses the
+        # mad_gate (slope ~1.91, MAD ~9.1), but the fixed-slope offset model
+        # -- median(anchor - scaffold) over the same points -- lands exactly
+        # on the true +24s offset with 0 residual on the 6 clean points, so
+        # the scaffold is rescued rather than discarded for densify.
+        align = [str(i) for i in range(9)]
+        anchors = {i: (i * 10.0 + 24.0, i * 10.0 + 24.5) for i in range(6)}
+        anchors[6] = (60.0 + 24.0 + 46.0, 60.0 + 24.0 + 46.5)
+        anchors[7] = (70.0 + 24.0 + 72.0, 70.0 + 24.0 + 72.5)
+        anchors[8] = (80.0 + 24.0 + 72.0, 80.0 + 24.0 + 72.5)
+        scaffold = {i: (i * 10.0, i * 10.0 + 0.4) for i in range(9)}
+        out = warp_scaffold_cues(anchors, scaffold, align, 200.0)
+        # Rescued: every scaffold line warps onto the audio clock at +24s,
+        # not the densify fallback's anchors-only placement.
+        assert out != densify_cue_spans(anchors, align, 200.0)
+        for i in range(9):
+            assert abs(out[i][0] - (i * 10.0 + 24.0)) < 1.0
+
+    def test_offset_model_also_fails_stays_on_densify(self):
+        # Defying-Gravity-shaped: a structurally different recording (a real
+        # tempo delta, slope ~0.79, plus enough scatter that even the affine
+        # fit misses its own gate). The fixed-slope offset model fails too
+        # (MAD ~5.95 > the 2.0 gate) -- neither warp model reconciles it, so
+        # this must still fall back to densify, exactly as before the rescue
+        # tier existed.
+        align = [str(i) for i in range(6)]
+        xs = [0.0, 10.0, 20.0, 30.0, 40.0, 50.0]
+        noise = [0.0, 6.0, -6.0, 8.0, -8.0, 3.0]
+        scaffold = {i: (x, x + 0.5) for i, x in enumerate(xs)}
+        anchors = {i: (x * 0.79 + n, x * 0.79 + n + 0.5) for i, (x, n) in enumerate(zip(xs, noise))}
+        out = warp_scaffold_cues(anchors, scaffold, align, 60.0)
+        assert out == densify_cue_spans(anchors, align, 60.0)
+
     def test_scaffold_clamped_into_duration(self):
         # A scaffold whose lines run past the video end stay in-bounds.
         align = ["a", "b", "c", "d", "e"]

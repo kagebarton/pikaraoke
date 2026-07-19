@@ -391,17 +391,38 @@ def warp_scaffold_cues(
     -- the scaffold's own ends are just the next line's start and carry no
     duration.
 
+    A handful of mis-mapped common points (a fuzzy anchor matched onto the wrong
+    occurrence of a repeated lyric line) can contaminate enough of Theil-Sen's
+    pairwise slopes to fail the affine fit even when the true relationship is a
+    constant offset (e.g. a video with concert footage prepended to the studio
+    track). When the affine path fails, a fixed-slope offset model --
+    ``offset = median(anchor_start - scaffold_start)`` over the same common
+    lines -- is tried as a rescue, accepted under the same ``mad_gate``; this
+    reuses the existing constants and adds no new threshold.
+
     Returns a contiguous, monotonic ``(start, end)`` list, one span per line.
     """
     if not scaffold:
         return densify_cue_spans(anchors, align_lines, duration)
     common = [(scaffold[lid][0], anchors[lid][0]) for lid in scaffold if lid in anchors]
     fit = _theil_sen(common) if len(common) >= WARP_MIN_ANCHORS else None
-    if fit is None:
-        return densify_cue_spans(anchors, align_lines, duration)
-    slope, intercept = fit
-    if median(abs(y - (slope * x + intercept)) for x, y in common) > mad_gate:
-        return densify_cue_spans(anchors, align_lines, duration)
+    affine_ok = (
+        fit is not None and median(abs(y - (fit[0] * x + fit[1])) for x, y in common) <= mad_gate
+    )
+    if affine_ok:
+        slope, intercept = fit
+        logger.info("cue-align: warp path=affine-ok (slope=%.4f, intercept=%.3f)", slope, intercept)
+    else:
+        offset = median(y - x for x, y in common) if len(common) >= WARP_MIN_ANCHORS else None
+        offset_ok = (
+            offset is not None and median(abs(y - (x + offset)) for x, y in common) <= mad_gate
+        )
+        if offset_ok:
+            slope, intercept = 1.0, offset
+            logger.info("cue-align: warp path=offset-rescue (offset=%.3f)", offset)
+        else:
+            logger.info("cue-align: warp path=densify-fallback")
+            return densify_cue_spans(anchors, align_lines, duration)
 
     n = len(align_lines)
     counts = [max(1, len(toks)) for toks in _tokenise_lines(align_lines)]
