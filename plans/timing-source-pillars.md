@@ -496,6 +496,10 @@ veto everywhere and rules anything a rule leaves open):
   higher, rendered-line coverage no lower, and no single song's worst
   overlap regresses by > 1.0 s without a recorded cause Ken accepts.
   Ken's spot-eyeball vetoes any new artifact class the metrics missed.
+  *Status (2026-07-19): NO-GO on the S-A arm's evidence — see Results
+  log. Binds the S-A showing only; re-read on the best scaffold arm
+  once S-B lands. Flagged-count reconciliation and per-song
+  cause-acceptance are open with Ken.*
 - S-2 (aligner per path): the CTC arm is selected for a path iff it is
   at least as good as the whisper arm on all three of mean re-pace,
   mean worst-overlap, and flag count, with no song > 1.0 s worse on
@@ -975,6 +979,141 @@ it needs a new scratchpad windowed-CTC adapter (Phase 1's recipe,
 wrapped to the `(t0, t1, text, label) -> words | None` contract) that
 doesn't exist yet, a distinct build step from S-A. Stopping here to
 report S-A rather than starting it without a checkpoint.
+
+### 2026-07-19 — GATE S-1 read-off (S-A arm) — NO-GO
+
+**GATE S-1 read-off (Fable executing the locked rule, 2026-07-19) —
+S-1: NO-GO on the S-A arm's evidence. Two of the four conjuncts fail
+decisively; one passes decisively; one is not mechanically decidable
+and goes to Ken (moot for this verdict).** (The Model-switching table
+assigns this read-off to Opus; executed by Fable at the requester's
+direction in the same convened window as Decisions A–C. Nothing here
+trades on design authority — the rule was applied as locked, no
+thresholds invented, and Opus re-executing the arithmetic will
+reproduce it.)
+
+*Reconciliation recorded (the S-A entry left this to the read-off):*
+the Phase 0 table's `overlap(rec>new)` right value and the S-A table's
+`ovl(old>new)` right value are different instruments, but both report
+the same physical quantity — that route's worst rendered-line overlap
+in seconds — so the mechanical pairing is right-value vs right-value
+per song, over the 16 in-scope songs (Girl in the Bubble excluded per
+the plan text; `scf=0` confirms). Cross-check that the instruments are
+comparable enough: on the two songs where both routes render the
+identical full sheet, the instruments agree exactly where nothing
+changed (Colors of the Wind 0.0 → 0.0) and disagree only where the
+scaffold genuinely regressed (Be Our Guest 0.0 → 3.0).
+
+- **Mean worst-overlap strictly lower: FAIL.** Scaffold 1.91 s vs
+  baseline 0.54 s (needed < 0.54). Not a gray-zone margin — 3.5× the
+  bar in the wrong direction.
+- **No song regresses > 1.0 s without a recorded cause Ken accepts:
+  FAIL.** Nine songs regress: NSYNC Paradise +4.6, Domino +4.5,
+  Defying Gravity +4.1, Be Our Guest +3.0, Hakuna Matata +2.8, Man
+  Out of You +2.4, Popular +1.7, Belle +1.3, In Summer +1.2. The S-A
+  entry records no causes, so none exist for Ken to have accepted.
+  Improvements for the record: Bloodstream 6.7 → 2.3 and Free
+  1.0 → 0.0.
+- **Rendered-line coverage no lower: PASS decisively.** Scaffold
+  renders the full sheet with zero hidden lines on all 16; strictly
+  higher than baseline on 14, equal on 2 (Be Our Guest, Colors of the
+  Wind).
+- **Flagged-song count no higher: NOT MECHANICALLY DECIDABLE → Ken.**
+  The baseline flag marks coverage shortfall (8 in-scope songs carry
+  the `!` marker); the S-A flag marks drift signature (5 in-scope:
+  Domino, Bloodstream, Popular, Defying Gravity, HUNTR_X — the
+  entry's 6th, Girl in the Bubble, is excluded). These measure
+  different failure modes on different routes — one of which the
+  scaffold structurally cannot exhibit (it always renders everything)
+  and one the joint route doesn't emit. A naive 5 ≤ 8 favors the
+  scaffold, but the rule defines no cross-system mapping and the
+  read-off declines to invent one. Moot: the conjunction already
+  fails twice.
+
+*What the verdict does and doesn't mean:* the rule's conjunction was
+built exactly for this trade — the scaffold bought total coverage at
+the price of overlap, and the locked rule says that trade is not GO.
+Two things are Ken's, not the read-off's: (1) whether "overlap on
+lines the baseline never rendered" is an acceptable recorded cause
+for some of the nine regressions — noting it cannot excuse all of
+them, since Be Our Guest regresses +3.0 s on an identical 77/77
+rendered set, and Domino/Belle/In Summer regress on near-identical
+sets; (2) whether the mean clause should ever be recomputed on a
+common rendered set — that is a rule amendment, not a read-off.
+Procedurally, NO-GO here binds the S-A arm's showing only: S-1
+governs the scaffold route, S-B (CTC `slice_align`) has not run, and
+the route's final S-1 standing should be re-derived on the best
+scaffold arm once S-B lands — consistent with S-2/S-5 already
+waiting on it.
+
+**Regression diagnosis (Ken eyeball → mechanism, 2026-07-19).** Ken
+eyeballed the nine regressions (scaffold `.ass` vs the joint `.ass`,
+same clips). On NSYNC Paradise ~3:25 the overlapping lines are not a
+local over-hold — they are from *different sections of the sheet*
+(pre-hook and chorus rendering concurrently). That ruled out "the
+scaffold just paces line ends too long" and prompted a mechanism
+trace (`warp_scaffold_cues` reproduced offline, no GPU — it is pure
+text-match + Theil-Sen). The nine split cleanly into two unrelated
+failure modes; neither is fixed by changing scaffold selection.
+
+```
+song            Δovl  anchors  MAD    mode
+NSYNC Paradise  +4.6  12/65    3.28   1: scaffold DISCARDED -> densify fallback
+Defying Gravity +4.1  43/89    5.80   1: scaffold DISCARDED -> densify fallback
+Domino          +4.5  14/67    0.19   2: warp used; align displaces a repeat
+Be Our Guest    +3.0  61/77    0.17   2: warp used; align displaces a line
+Hakuna Matata   +2.8  19/40    0.12   2: warp used (signature)
+Man Out of You  +2.4  22/47    0.30   2: warp used (signature)
+Popular         +1.7  44/62    0.43   2: warp used (signature)
+Belle           +1.3  85/110   0.12   2: warp used (signature)
+In Summer       +1.2  24/31    0.06   2: warp used (signature)
+```
+
+*Mode 1 — scaffold discarded, densify fallback (Paradise, Defying
+Gravity).* The MAD gate fired (Paradise 3.28 s over 9 common lines;
+Defying Gravity 5.80 s): the external master's clock genuinely does
+not fit the audio (Paradise fit slope 1.25 ≈ 25 % tempo delta), so the
+scaffold is *correctly* rejected. The route then densifies the anchors
+alone — and Paradise has no YouTube ASR, so whisper-transcribe placed
+only 12/65 sheet lines, clustered at line-ids 2–12 plus a lone 41.
+`densify_cue_spans` linearly interpolates across the 29-line hole
+(id 12→41), spreading whole sheet sections across a span they aren't
+sung in; that interpolation ramp is why unrelated sections render
+concurrently. Root cause is upstream — a sheet/audio version mismatch
+(only 12/65 lines even transcribe-match). The warp gate did its job;
+the damage is the fallback, which owns to **GATE S-3** (densify-fallback
+branch) and **Appendix A routing**: version-mismatch songs should route
+to the joint matcher or flag, not densify sparse clustered anchors.
+
+*Mode 2 — warp clean, overlap enters at the align stage (the other
+seven).* Theil-Sen fit MAD ≤ 0.43 on all seven; the scaffold is
+accepted and the warp cue_spans are monotonic and non-overlapping.
+Verified on two, including the read-off's strongest counter-case:
+Domino's warp cues place L29 "…tension" [1:31.15–1:34.70] then L30
+"Now I'm breathin'" [1:34.70–1:38.48] in order, but the `.ass` pulls
+L30 (a repeat — the same line also sits at L5) back to 1:29.82, swapped
+before L29 and overrunning it; Be Our Guest's warp cues place L69 "Let
+us help you…" [3:08.12–3:09.77] then L70 "Course by course…"
+[3:09.77–3:11.42] in order, but the `.ass` pulls L70 back to 3:05.79,
+before L69, fully containing it. In both the overlap is introduced by
+`align_song`'s windowed whisper pass displacing a line several seconds
+outside its (correct) cue window — the repeat-line displacement class
+the SRT cue-align path already hardened against, re-exposed here because
+warp cue windows are looser at repeats than tight SRT cues. Downstream
+of a healthy warp; independent of the scaffold decision.
+
+*What this settles for the read-off.* (1) The eyeball **confirms** the
+NO-GO — genuine artifacts, not the metric mis-scoring a fine render.
+(2) The acceptable-cause question the read-off left to Ken — whether
+"overlap on lines the baseline never rendered" excuses some regressions
+— does **not** apply to the seven Mode-2 songs: their overlaps are
+same-line align displacements, not new-line artifacts (Be Our Guest,
++3.0 on an identical 77/77 set, is the proof), so that excuse is
+unavailable for exactly the songs the read-off flagged it couldn't
+cover. (3) The two modes are separately owned — Mode 1 → S-3 /
+Appendix A, Mode 2 → an `align_song` repeat-displacement fix portable
+from the cue-align path — and weighting the scaffold differently fixes
+neither.
 
 ### 2026-07-18 — Phase 1 (CTC eyeball) run + GATE C
 
