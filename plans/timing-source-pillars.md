@@ -572,6 +572,76 @@ executed this session for this baseline.
 pathed_align` (lib + tests) and `feat(scripts): scaffold-align harness
 pair` (the two new scripts), per the plan.
 
+### 2026-07-19 — Phase 2a (--save-bodies) — STOPPED at song 4/17, Sonnet 5 executor
+
+Ran after Build plan Phase E0 (`feat(pipeline): synced-timing fetch
+pillar`, committed) landed, per this file's note that E0's lib becomes
+the sidecar writer once it exists — `scripts/musixmatch_coverage_improve.py
+--save-bodies` now calls `timing_fetch.ensure_timing` per song (real
+media path, real `lyrics/<stem>.timing.json` sidecar) instead of
+carrying its own writer; the script supplies only the 17-song batch
+loop, the recorded-map_rate regression assert, and the control-flag
+post-write.
+
+**First body fetched (Popular, `22QYya-LGDY`) — `te` field confirmed
+present**, resolving the plan's open question ("the prior LRC-conversion
+threw structure away, so this is unverified on our corpus"): richsync
+entries carry `ts` (line start, s), `te` (line end, s), `l` (word list,
+each `{c: text incl. leading space, o: offset from ts, s}`), `x` (full
+line text). Sample entry: `{"ts": 7.25, "te": 15.74, "l": [{"c":
+"Whenever", "o": 0}, ...], "x": "Whenever I see someone less fortunate
+than I"}` — 61 word-timed lines total for this song.
+
+**3/17 songs completed clean**, both checks passing (kind stayed
+`word`, rate within the one-sided 0.05 tolerance):
+
+| song | recorded | new | delta | kind | source |
+| --- | --- | --- | --- | --- | --- |
+| Popular | 0.630 | 0.629 | -0.001 | word | musixmatch |
+| Belle | 0.860 | 0.855 | -0.005 | word | musixmatch |
+| Best Part of Me | 0.870 | 0.868 | -0.002 | word | musixmatch |
+
+**STOPPED at song 4/17 (Bloodstream, `Orq_75kFi8I`)** — the pre-registered
+kind-downgrade guard fired: `reference_pick` this run picked a *different*
+Musixmatch candidate than part (a)'s unrecorded original —
+`track_id=82646350`, **"Bloodstream (Arty Remix)" by "Ed Sheeran feat.
+Rudimental"** — whose text maps to our sheet *better* than the original
+0.50 boundary-case pick (**new map_rate 0.703**, comfortably clearing the
+0.05 tolerance) but which has **no richsync on Musixmatch, only a line
+subtitle** (`kind: "line"`). Reference-pick's scoring key is
+`(map_rate, -|length_delta|)` with no term for `kind` (matching part
+(a2)'s original design), so a better-text/worse-timing remix candidate
+legitimately outscores a worse-text/better-timing original-recording
+candidate. Sidecar persisted as-fetched (line, 0.703, this remix's
+track info) — the STOP halts the *batch*, not the write, so this one
+song's real result is on disk, just flagged rather than silently
+accepted into the word-level cohort.
+
+This is judged a genuine reference-pick finding, not an implementation
+bug: part (a)'s own probe table already flagged Bloodstream as "74-line
+sheet, boundary case but a real match (checked)" at exactly the 0.50
+floor — the most fragile row in the 15-song cohort by construction, and
+a boundary case is exactly where a re-run's candidate-list churn (new
+remixes indexed, ranking ties) is most likely to flip the winner. Not
+re-run further or bridged (per this plan's Model-switching discipline:
+STOP and report, not decide) — **remaining 13/17 songs not attempted**.
+
+**Open question for Ken/Opus**: should the word-route selection key
+weight `kind` (prefer richsync even at a lower text-map_rate, within
+some band) for songs Phase 2a specifically wants word-level for, or is
+"best text match, whatever its kind" correct and Bloodstream simply
+demotes to the line-level scaffold pool (as Appendix A's routing
+precedence already handles: word-route FAIL/absent → the sidecar's line
+starts join the line-source pool)? Note this is a **probe-script
+question, not an E0 bug** — `ensure_timing`'s production selection logic
+is unchanged and behaves identically for any Genius-origin song hitting
+this same ambiguity.
+
+Commit: `feat(scripts): --save-bodies richsync persistence for
+musixmatch_coverage_improve` (script only — the persisted sidecars live
+in `pikaraoke-songs/lyrics/`, outside this git repo, per how every other
+song-library artifact in this project is handled).
+
 ### 2026-07-18 — Phase 1 (CTC eyeball) run + GATE C
 
 Run (Ken, scratchpad probe per `plans/ctc-forced-align-eyeball.md`;
