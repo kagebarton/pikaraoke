@@ -38,7 +38,7 @@ import syncedlyrics
 from syncedlyrics.providers import Musixmatch
 from syncedlyrics.utils import get_cache_path
 
-from pikaraoke.lib.lrclib import map_lines_to_cues, parse_lrc_lines
+from pikaraoke.lib.lrclib import clean_key, map_lines_to_cues, parse_lrc_lines
 
 logger = logging.getLogger(__name__)
 
@@ -307,7 +307,14 @@ def ensure_timing(
     confidence (still authoritative; no refetch). An existing *parseable*
     sidecar of any source, including a ``"none"`` miss, is authoritative;
     only a corrupt/missing-schema sidecar triggers a refetch. Never raises.
+
+    ``title``/``artist`` are cleaned via :func:`lrclib.clean_key` up front
+    (idempotent, mirroring :func:`lrclib.search` -- callers may pass raw
+    Genius strings or already-cleaned keys); every downstream use, including
+    the exception-path empty sidecar's recorded ``query.term``, sees only
+    the cleaned form.
     """
+    title, artist = clean_key(title, artist)
     path = _sidecar_path(song_path)
     if path.is_file():
         sidecar = _load_sidecar(path)

@@ -411,3 +411,38 @@ class TestEnsureTiming:
         path = self._sidecar_path(song_path)
         assert path.is_file()
         assert json.loads(path.read_text(encoding="utf-8"))["kind"] == "none"
+
+    def test_feat_credit_and_trailing_parens_cleaned_before_fetch(self, tmp_path):
+        """2026-07-19 conformance fix: the locked Appendix B spec requires
+        clean_key at the query path; the module as first shipped issued raw
+        Genius strings instead."""
+        song_path = tmp_path / "Song---dQw4w9WgXcQ.mp4"
+        song_path.touch()
+        with patch("pikaraoke.lib.timing_fetch._fetch_and_build_sidecar") as mock_fetch:
+            mock_fetch.return_value = timing_fetch._empty_sidecar("Bloodstream Ed Sheeran")
+            timing_fetch.ensure_timing(
+                song_path,
+                "Bloodstream (Remastered)",
+                "Ed Sheeran feat. Rudimental",
+                ["hi"],
+                200.0,
+            )
+        mock_fetch.assert_called_once_with("Bloodstream", "Ed Sheeran", ["hi"], 200.0)
+
+    def test_exception_path_records_cleaned_term(self, tmp_path):
+        song_path = tmp_path / "Song---dQw4w9WgXcQ.mp4"
+        song_path.touch()
+        with patch("pikaraoke.lib.timing_fetch._fetch_and_build_sidecar") as mock_fetch:
+            mock_fetch.side_effect = RuntimeError("boom")
+            timing_fetch.ensure_timing(
+                song_path,
+                "Bloodstream (Remastered)",
+                "Ed Sheeran feat. Rudimental",
+                ["hi"],
+                200.0,
+            )
+        path = self._sidecar_path(song_path)
+        assert (
+            json.loads(path.read_text(encoding="utf-8"))["query"]["term"]
+            == "Bloodstream Ed Sheeran"
+        )
