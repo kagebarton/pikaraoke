@@ -1579,6 +1579,94 @@ lines, not warp-related. Output is the raw table, never a verdict —
 the S-1 re-read happens on the best scaffold arm after S-B runs, per
 the diagnostic's own sequencing.
 
+### 2026-07-19 — Phase 3 S-B (CTC slice_align adapter + corpus run), Sonnet 5 executor
+
+Built a CTC forced-align adapter behind the same `cue_align.align_song`
+`slice_align` contract the whisper arm uses (`(t0, t1, text, label) ->
+absolute-time words | None`), wrapping Phase 1's proven MMS_FA recipe
+verbatim (chunked forward pass, `normalize_word` charset filter with
+dual raw/normalized bookkeeping so an OOV word drops from the
+tokenizer input but every surviving word keeps its real display text,
+frame->seconds via the cached `ratio`) — the same recipe Phase 1b's
+33/33-clean run and this plan's Phase 1 eyeball already validated, no
+changes to the alignment math itself.
+
+Adapter (`sb_ctc_adapter.py`) lives in the scratchpad only, per ground
+rules. Emissions: **sliced from Phase 1b's cached full-song emissions**
+(`scratchpad/emissions/<stem>.pt`, scratchpad-to-scratchpad reuse, all
+17 corpus songs already cached from the 33-song Phase 1b run) rather
+than a fresh per-slice GPU forward pass — one whole-song forward pass
+per song, already on disk, sliced by frame index on every section/line
+call. This made the corpus run essentially GPU-forward-pass-free
+(seconds, not minutes).
+
+Committed harness hook (commit `1d5a1a0`): `scaffold_align_song.run_song`
+gained a `make_slice_align` parameter (default: the existing whisper
+factory), and `scaffold_align_corpus.py` gained a generic
+`--slice-align-module PATH` flag that dynamically loads a module's
+`make_slice_align` — no scratchpad path or CTC-specific code committed,
+the hook is aligner-agnostic. 63/63 `test_cue_align.py` unaffected (no
+production code touched, only the two scaffold scripts); import-smoke
+clean.
+
+Ran the same 17-song corpus (`--slice-align-module
+sb_ctc_adapter.py`), same metrics, same table format. Warp paths were
+identical to the S-A re-run (warp is computed once from the anchors/
+scaffold, independent of which forced-aligner slices the audio) —
+confirms the two arms are being compared on the same cue-span
+foundation, as intended.
+
+Two songs threw a CTC-specific `RuntimeError` ("targets length is too
+long for CTC") on one large multi-line section each: Bloodstream
+(lines 36-73, 38 lines) and HUNTR/X (lines 33-52, 20 lines). Root-caused
+before recording: in both cases the section's real time window is
+degenerate (Bloodstream's is 245.65s-246.90s, ~1.25s, for 38 lines/283
+words) because the underlying cue anchors themselves collapsed onto
+nearly one timestamp — this is Bloodstream's already-flagged "2:58-end,
+same overlap chants" desync region from Ken's Phase 1b labels, an
+upstream anchor-data pathology, not an adapter defect. The existing
+broad `except RuntimeError: return None` (mirroring
+`_make_slice_align`'s own `except (RuntimeError, subprocess.
+CalledProcessError)`) catches it exactly as designed, and
+`align_song`'s cue-repace fallback takes over — both arms degrade
+identically on these lines (S-A's whisper pass also repaces 46/74 and
+22/53 lines on these same two songs). Not a STOP: the contract already
+specifies "None on any aligner failure", and this is a new failure
+*mode* under that same contract, not a new failure *case* requiring an
+unspecified design choice.
+
+Full corpus metrics table (same columns as the S-A table above):
+
+```
+song                                        plc  hid  rea  rep rsec  maxgap gapL instL   anc   scf   ovl(old>new)
+----------------------------------------------------------------------------------------------------------------
+Josh Gad - In Summer (From 'Frozen'_Sing-A   31    0    0    0    -    1.8s    0     0    24    18   1.4->0.0  s
+'Defying Gravity' - Wicked 20th Anniversar   89    0    0    2    -    1.8s    0     0    43    61   8.4->2.6  s
+Jessie J - Domino (Official Video)---UJtB5   67    0    0    1    -    1.4s    0     0    14    61   1.3->0.0  s
+'Free' _ Official Lyric Video _ Sony Anima   41    0    0    0    -    1.4s    0     0    28    33   4.6->0.0  s
+HUNTR_X 'This Is What It Sounds Like' (Mus   53    0    0   21    -    1.3s    0    11    15    43   5.5->0.5  s
+'Popular' - Wicked 20th Anniversary Editio   62    0    0    1    -    1.3s    0     0    44    39   2.9->0.0  s
+Ed Sheeran & Rudimental­ - Bloodstream [Of   74    0    0   38    -    1.3s    0    13    23    52   9.8->0.5  s
+Wicked - For Good  (2025) 4K - The Girl in   36    0    0    1  yes    1.3s    0     1    23     0  31.1->0.0  s
+The Next Ten Minutes Lyrics---0j8kL24ph8U    71    0    1    0    -    1.3s    0     0    63    66  13.4->0.0  s
+Ed Sheeran - Best Part Of Me (feat. YEBBA)   38    0    0    0    -    1.3s    0     0    16    33   1.1->0.0  s
+Beauty and the Beast (1991) - Belle [UHD]-  110    0    0    0    -    1.3s    0     0    85    94   1.5->0.0  s
+NSYNC - Paradise                             65    0    0    2    -    1.2s    0     0    12    51   6.1->1.0  s
+The Lion King - Hakuna Matata Music Video    40    0    0    1    -    1.2s    0     0    19    25   0.0->0.0  s
+Seasons of Love (HD)---UvyHuse6buY           34    0    0    1    -    1.1s    0     0    13    31   5.8->0.0  s
+Mulan _ I'll Make a Man Out of You _ @disn   47    0    0    3    -    1.1s    0     0    22    35   1.7->2.6  s
+Beauty and the Beast (1991) - Be Our Guest   77    0    0    2    -    0.9s    0     0    61    53   0.0->0.3  s
+Pocahontas - Colors of the Wind (Blu-ray 1   37    0    0    0    -    0.8s    0     0    35    35   0.0->0.0  s
+```
+
+prevalence: 3/17 songs show drift (vs the S-A re-run's 7/17); 0
+parked-tail lines, 25 mostly-instant lines total. No crashes beyond
+the two root-caused CTC RuntimeErrors above.
+
+Output is the raw table, never a verdict — S-1 re-read and S-2 are
+read-offs that happen after this entry, per the model-switching table
+(Judge = Opus, escalations to Ken).
+
 ---
 
 ## Appendices A–D — moved to `plans/ctc-sync-engine.md`
