@@ -1497,6 +1497,88 @@ revisited. Ken also deferred the pending /code-review batch
 (`2dc88a2`, `b3da6f7`, `2ef39f7`, `4c8698a`) until the production
 phase begins.
 
+### 2026-07-19 — Offset-rescue tier landed + S-A re-run on amended machinery, Sonnet 5 executor
+
+Implemented the Ken-ratified constant-offset rescue tier
+(`pikaraoke/lib/cue_align.py:warp_scaffold_cues`, commit `9b4229b`):
+when the affine Theil-Sen fit misses `mad_gate` (or has no fit), a
+fixed-slope offset model — `offset = median(anchor_start -
+scaffold_start)` over the same common lines — is tried, accepted
+under the identical `mad_gate`/`WARP_MIN_ANCHORS`; on reject, densify
+fallback exactly as before. No new constants. Three unit tests added
+(affine-clean unchanged, Paradise-shaped contaminated-common rescued,
+DG-shaped both-models-fail still densifies) — 63/63 `test_cue_align.py`
+green. Each call now logs its path (`affine-ok` / `offset-rescue` /
+`densify-fallback` / `densify-fallback (no scaffold)` for the
+pre-existing empty-scaffold branch, added for full per-song coverage).
+
+Re-ran `scripts/scaffold_align_corpus.py` over all 17 genius-origin
+songs on the amended machinery. Per-song warp path (run order):
+
+| # | song | warp path |
+|---|---|---|
+| 1 | Defying Gravity | densify-fallback (MAD gate, both models fail) |
+| 2 | Free | affine-ok (slope 0.9974) |
+| 3 | Popular | affine-ok (slope 1.0074) |
+| 4 | Be Our Guest | affine-ok (slope 1.0017) |
+| 5 | Belle | affine-ok (slope 1.0009) |
+| 6 | Best Part Of Me | affine-ok (slope 1.0002) |
+| 7 | Bloodstream | affine-ok (slope 0.9939) |
+| 8 | HUNTR/X | affine-ok (slope 1.0147) |
+| 9 | Domino | affine-ok (slope 1.0124) |
+| 10 | In Summer | affine-ok (slope 0.9975) |
+| 11 | Man Out of You | affine-ok (slope 0.9881) |
+| 12 | Paradise | **offset-rescue** (offset +24.241s) |
+| 13 | Colors of the Wind | affine-ok (slope 0.9991) |
+| 14 | Seasons of Love | affine-ok (slope 0.9542) |
+| 15 | Hakuna Matata | affine-ok (slope 1.0078) |
+| 16 | Next Ten Minutes | affine-ok (slope 1.0005) |
+| 17 | Girl in the Bubble | densify-fallback (no scaffold found) |
+
+Guards held exactly: Paradise is the only offset-rescue, Defying
+Gravity is the only MAD-gate densify, no other song's path changed
+from the pre-amendment run (Girl in the Bubble's "no scaffold" branch
+is unchanged pre-existing behaviour, only newly logged). 14 affine-ok
++ 1 offset-rescue + 2 densify = 17, matching the warp diagnostic's
+all-16-sweep count (14 clean + DG) plus Paradise now resolved and
+Girl in the Bubble's separately-known no-sidecar case.
+
+Full corpus metrics table (`plc`=placed, `hid`=hidden, `rea`=realigned,
+`rep`=repaced, `rsec`=resectioned, `maxgap`/`gapL`/`instL`=artifact
+counts, `anc`/`scf`=anchor/scaffold coverage, `ovl`=max inter-line
+overlap old→new pipeline):
+
+```
+song                                        plc  hid  rea  rep rsec  maxgap gapL instL   anc   scf   ovl(old>new)
+----------------------------------------------------------------------------------------------------------------
+Jessie J - Domino (Official Video)---UJtB5   67    0    3   20    -    2.0s    0     1    14    61   1.3->4.6  s
+Seasons of Love (HD)---UvyHuse6buY           34    0    0    7    -    1.9s    0     0    13    31   5.8->0.7  s
+Ed Sheeran & Rudimental­ - Bloodstream [Of   74    0    0   46    -    1.7s    0    13    23    52   9.8->2.3  s
+Ed Sheeran - Best Part Of Me (feat. YEBBA)   38    0    0    4    -    1.7s    0     0    16    33   1.1->0.0  s
+Wicked - For Good  (2025) 4K - The Girl in   36    0    1   19    -    1.7s    0    17    23     0  31.1->3.2  s
+Beauty and the Beast (1991) - Be Our Guest   77    0    2    5    -    1.7s    0     0    61    53   0.0->3.0  s
+'Popular' - Wicked 20th Anniversary Editio   62    0    0   13    -    1.6s    0     1    44    39   2.9->1.7  s
+'Defying Gravity' - Wicked 20th Anniversar   89    0    3   39    -    1.3s    0     2    43    61   8.4->4.3  s
+Josh Gad - In Summer (From 'Frozen'_Sing-A   31    0    0    2    -    1.3s    0     0    24    18   1.4->1.2  s
+The Next Ten Minutes Lyrics---0j8kL24ph8U    71    0    1    2    -    1.3s    0     0    63    66  13.4->0.5  s
+Beauty and the Beast (1991) - Belle [UHD]-  110    0    1    5    -    1.1s    0     0    85    94   1.5->1.3  s
+'Free' _ Official Lyric Video _ Sony Anima   41    0    0    0    -    1.1s    0     0    28    33   4.6->0.0  s
+HUNTR_X 'This Is What It Sounds Like' (Mus   53    0    0   22    -    1.1s    0    11    15    43   5.5->0.5  s
+Mulan _ I'll Make a Man Out of You _ @disn   47    0    0    7    -    1.0s    0     0    22    35   1.7->2.4  s
+Pocahontas - Colors of the Wind (Blu-ray 1   37    0    0    2    -    0.9s    0     0    35    35   0.0->0.0  s
+NSYNC - Paradise                             65    0    0    3    -    0.9s    0     1    12    51   6.1->0.4  s
+The Lion King - Hakuna Matata Music Video    40    0    0    2    -    0.7s    0     0    19    25   0.0->2.8  s
+```
+
+Paradise: old_ovl→new_ovl 6.1s→0.4s, consistent with the diagnostic's
+prediction that the rescue removes the densify-caused regression
+(previously discarding the 51-line scaffold for 12 anchors, 3 of them
+mis-mapped). No crashes; two per-line whisper `align_refine` errors
+(pre-existing worker fallback path, "re-pacing from cue") on unrelated
+lines, not warp-related. Output is the raw table, never a verdict —
+the S-1 re-read happens on the best scaffold arm after S-B runs, per
+the diagnostic's own sequencing.
+
 ---
 
 ## Appendices A–D — moved to `plans/ctc-sync-engine.md`
