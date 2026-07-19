@@ -131,7 +131,7 @@ def fetch_lrclib_cues(
 def run_song(
     song: Path,
     bundle: dict,
-    asr_path: Path,
+    asr_path: Path | None,
     vocal: Path,
     *,
     worker: WhisperWorker,
@@ -147,44 +147,57 @@ def run_song(
     warps them together, then hands the dense cue list to the shared
     :func:`cue_align.align_song`. Returns ``(line_objects, align_stats,
     scaffold_stats)``.
+
+    ``asr_path`` is optional: a handful of corpus songs never had YouTube ASR
+    captions available (checked against every backup, genuinely absent, not
+    a lost file), so a ``None`` here degrades to transcribe-only anchors
+    rather than the caller skipping the song outright -- ``merge_cue_spans``
+    already tolerates either side being empty.
+
+    ``duration`` prefers the bundle's ``media_duration_s``, falling back to
+    the vocal stem's own probed length when the bundle field is absent (a
+    handful of corpus bundles predate that field being captured) -- same
+    audio the alignment runs against either way.
     """
     lyrics = bundle["lyrics"]
     display_lines = lyrics["lines"]
     align_lines = lyrics["align_lines"]
-    duration = bundle.get("media_duration_s")
-    if not duration:
-        raise ValueError(f"{song.stem}: bundle has no media_duration_s")
-
-    asr_words, _frac = ytasr.parse_json3(asr_path.read_text(encoding="utf-8"))
-    asr_cues = ytasr.cue_spans_for_lines(asr_words, align_lines) or {}
-    tx_words = ytasr.normalize_words(bundle.get("transcribe_words") or [])
-    tx_cues = ytasr.cue_spans_for_lines(tx_words, align_lines) or {}
-    anchors = merge_cue_spans(tx_cues, asr_cues)
-    if not anchors:
-        raise ValueError(f"{song.stem}: no ASR/transcribe anchors to calibrate against")
-
-    scaffold: dict[int, tuple[float, float]] = {}
-    if timing == "sidecar":
-        sidecar_path = find_timing_sidecar(song)
-        if sidecar_path is not None:
-            scaffold = sidecar_scaffold_cues(sidecar_path, align_lines)
-    elif timing == "lrc":
-        scaffold = fetch_lrclib_cues(lyrics.get("genius"), display_lines, duration)
-
-    cue_spans = warp_scaffold_cues(anchors, scaffold, align_lines, duration)
-    scaffold_stats = {
-        "n_asr": len(asr_cues),
-        "n_tx": len(tx_cues),
-        "n_anchors": len(anchors),
-        "n_scaffold": len(scaffold),
-        "n_lines": len(align_lines),
-    }
 
     tmp = Path(get_temp_directory())
     vocal_wav = tmp / f"{song.stem}__scaffold_vocal.wav"
     _ffmpeg(["-i", str(vocal), "-ac", "1", "-ar", "16000", "-sample_fmt", "s16", str(vocal_wav)])
     try:
         wav_dur = _wav_duration(vocal_wav)
+        duration = bundle.get("media_duration_s") or wav_dur
+
+        if asr_path is not None:
+            asr_words, _frac = ytasr.parse_json3(asr_path.read_text(encoding="utf-8"))
+            asr_cues = ytasr.cue_spans_for_lines(asr_words, align_lines) or {}
+        else:
+            asr_cues = {}
+        tx_words = ytasr.normalize_words(bundle.get("transcribe_words") or [])
+        tx_cues = ytasr.cue_spans_for_lines(tx_words, align_lines) or {}
+        anchors = merge_cue_spans(tx_cues, asr_cues)
+        if not anchors:
+            raise ValueError(f"{song.stem}: no ASR/transcribe anchors to calibrate against")
+
+        scaffold: dict[int, tuple[float, float]] = {}
+        if timing == "sidecar":
+            sidecar_path = find_timing_sidecar(song)
+            if sidecar_path is not None:
+                scaffold = sidecar_scaffold_cues(sidecar_path, align_lines)
+        elif timing == "lrc":
+            scaffold = fetch_lrclib_cues(lyrics.get("genius"), display_lines, duration)
+
+        cue_spans = warp_scaffold_cues(anchors, scaffold, align_lines, duration)
+        scaffold_stats = {
+            "n_asr": len(asr_cues),
+            "n_tx": len(tx_cues),
+            "n_anchors": len(anchors),
+            "n_scaffold": len(scaffold),
+            "n_lines": len(align_lines),
+        }
+
         slice_align = _make_slice_align(vocal_wav, tmp, song.stem, worker)
         line_objects, align_stats = align_song(
             cue_spans, display_lines, align_lines, wav_dur, slice_align, pad_s=pad

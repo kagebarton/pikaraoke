@@ -95,9 +95,14 @@ def main(argv: list[str] | None = None) -> int:
         for media, bundle in songs:
             asr_path = find_asr(media)
             vocal = find_vocal(media)
-            if asr_path is None or vocal is None:
-                logger.warning("skip %s: missing asr/vocal", media.stem[:40])
+            if vocal is None:
+                logger.warning("skip %s: missing vocal", media.stem[:40])
                 continue
+            if asr_path is None:
+                logger.warning(
+                    "%s: no YouTube ASR captions on disk -- anchors from whisper-transcribe only",
+                    media.stem[:40],
+                )
             ass_path = media.parent / "karaoke" / f"{media.stem}.scaffold.ass"
             try:
                 line_objects, align_stats, scaffold_stats = run_song(
