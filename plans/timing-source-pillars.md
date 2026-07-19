@@ -1208,14 +1208,144 @@ already large (6 partial + 4 full songs) and step 5's read-off doesn't
 require exactly 5 end-to-end songs, but a 5th is Ken's to add if he
 wants one.
 
-**Not yet done:** emissions have not been recomputed, no scores exist,
-no AUCs computed. Next step is building the Phase 1b scoring script
-(steps 1–2 of the Phase 1b spec) — the eyeball probe's chunked-emission
-recipe (`plans/ctc-forced-align-eyeball.md` §"CTC recipe") was run by
-Ken directly from a scratchpad script that isn't on disk; a new
-scratchpad script implementing the same recipe plus per-word/per-line
-`TokenSpan.score` extraction, z-normalization, and the ten rescue-stat
-variants is required.
+**Not yet done (at label-registration time):** emissions had not been
+recomputed, no scores existed, no AUCs computed — see the follow-on
+entry below for the completed run.
+
+### 2026-07-19 — Phase 1b run (GATE O primary + GATE O′ rescue), Sonnet 5 executor
+
+Scratchpad scripts (never committed, per ground rules — this is neither
+of the two named exceptions):
+`phase1b_score_oracle.py`/`phase1b_labels.py`/`phase1b_auc.py`/
+`phase1b_phantom.py`/`phase1b_rescue.py`/`phase1b_rescue_auc.py`.
+Emissions, line-scores, and rescue-scores caches also live in the
+scratchpad, not the repo.
+
+**Step 1–2 (emission recompute + primary score).** Re-ran the eyeball
+probe's chunked ~20 s recipe (`plans/ctc-forced-align-eyeball.md` §"CTC
+recipe" — that script itself was never on disk, run by Ken directly
+from a scratchpad copy) over all 33 corpus songs: MMS_FA emission
+cached per song, forced aligner re-run over `align_lines` to recover
+per-word `TokenSpan.score` (not persisted by the original eyeball run),
+grouped into per-line mean/min-word raw scores, z-normalized per song.
+**33/33 clean**, no failures. One environment fix needed: this
+torchaudio build's `torchaudio.load` requires `torchcodec`, not
+installed in `pik`; switched to `soundfile.read` for the decoded-wav
+load, no recipe change.
+
+**Implementation-time bug caught + fixed (S-decode only, step 4):** a
+raw unconstrained argmax over the emission's full 29-class output
+*always* selects the star class (id 28) — checked directly:
+`emission[:, 28]` is exactly `0.0` (log-prob 1.0) on every frame of
+every song inspected, a constant DP-padding column the aligner appends
+for its own constrained-alignment use, not a real per-frame prediction.
+Greedy decode must argmax over `emission[:, :28]` only; fixed before
+any S-decode numbers were recorded (caught via a targeted debug probe
+on Popular line 5, where decode against the padded 29-class slice
+produced an empty string every time).
+
+**Step 3 (labels + cross-check).** Labels: the pre-registered ranges
+above (140 desynced lines, 517 synced lines — the 6 partial songs'
+flagged ranges + complements, plus the 4 end-to-end songs). Coverage:
+100% of labeled lines scored (every line in every labeled range has at
+least one alignable word — the sheet-text-driven score doesn't depend
+on production's own placement, so production's degenerate/zero-width
+groups don't cost coverage here). Phantom cross-check (Defying Gravity
+79–88, production-placed spans, `mean_word_raw` scored directly against
+those fixed spans — not the CTC's own free placement): 9/10 lines
+scored (line 80 has no production span), z-normalized against Defying
+Gravity's own song-level mean/sd —
+
+```
+line  span(s)              mean_word_raw   mean_word_z
+ 79   [210.47,214.63]         0.0549          -0.764
+ 81   [214.63,217.07]         0.2037          -0.026
+ 82   [216.47,217.17]         0.0114          -0.760   (concurrent w/ 83,84)
+ 83   [216.47,217.17]         0.0470          -0.673
+ 84   [216.47,217.17]         0.0343          -0.624
+ 85   [217.17,218.85]         0.1622          -0.184
+ 86   [218.85,219.51]         0.0104          -0.763
+ 87   [219.51,221.55]         0.0108          -0.760
+ 88   [221.55,225.25]         0.0989          -0.426
+```
+
+phantom median z = **−0.624**, vs the labeled synced pool's p25 on the
+same statistic = **−0.719** (from the table below). −0.624 is *not*
+below −0.719 — **the cross-check does not confirm directionally** on
+the candidate primary statistic (mean_word_z).
+
+**Steps 4–5 (rescue stats + full ten-row table).** Computed all five
+statistic families for the 10 labeled songs, each per-line and as a
+5-line centered rolling median (clamped at song edges): mean/min-word-z
+(reused from the primary pass), S-decode (`difflib.SequenceMatcher`
+ratio, decoded vs. expected normalized text over the line's own aligned
+span), S-shift (`-|realigned midpoint − current midpoint|`, realigned
+within the line's own span ±5.0 s, clamped to song bounds), S-tx
+(normalized-token multiset-intersection fraction against
+`transcribe_words` in the line's span ±2.0 s — **4/10 labeled songs
+have no `transcribe_words`**: Rock Your Body, Zayn, John Legend/Ariana
+Grande Beauty and the Beast, Incomplete; S-tx coverage drops to 116
+desynced / 295 synced with those excluded, still ≥10 per class so it is
+read off per the plan's coverage rule).
+
+**GATE O primary table** (mean-word-z, min-word-z; AUC = P(random
+synced line scores higher than random desynced line), band = does a
+cut exist with ≤10% synced below it and ≤10% desynced above it):
+
+| variant | AUC | synced p25 | band cut | synced_below | desynced_above | band_ok |
+| --- | --- | --- | --- | --- | --- | --- |
+| mean_word_z | 0.7162 | −0.719 | −0.260 | 38.7% | 17.9% | **False** |
+| min_word_z | 0.5693 | −0.630 | −0.153 | 58.0% | 10.0% | **False** |
+
+Best AUC (mean_word_z, 0.7162) is in [0.65, 0.85); band fails; phantom
+cross-check fails directionally (above). Per-song coverage: 140/140
+desynced lines scored, 517/517 synced lines scored across all 10
+songs — full detail (per-song breakdown) in the scratchpad
+`auc_final.txt`, reproducible via `phase1b_auc.py`.
+
+**GATE O′ rescue table** (the 8 non-primary-per-line rows: mean/min-
+word-z rolling-5, S-decode/S-shift/S-tx × {per-line, rolling-5}); O-1's
+exact bars applied identically to each:
+
+| variant | n_desync | n_sync | AUC | band cut | synced_below | desynced_above | band_ok |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| mean_word_z_roll5 | 140 | 517 | 0.7536 | 0.003 | 43.7% | 10.0% | False |
+| min_word_z_roll5 | 140 | 517 | 0.5931 | −0.375 | 49.1% | 13.6% | False |
+| s_decode | 140 | 517 | 0.7933 | 0.358 | 33.1% | 13.6% | False |
+| s_decode_roll5 | 140 | 517 | 0.8270 | 0.360 | 30.6% | 7.9% | False |
+| s_shift | 140 | 517 | 0.5386 | −1.476 | 27.9% | 62.9% | False |
+| s_shift_roll5 | 140 | 517 | 0.5824 | −1.476 | 14.1% | 65.0% | False |
+| s_tx | 116 | 295 | 0.8767 | 0.652 | 20.3% | 7.8% | False |
+| s_tx_roll5 | 116 | 295 | **0.8964** | 0.633 | 18.3% | 8.6% | False |
+
+**No variant's band clears the ≤10%/≤10% bar** — including s_tx and
+s_tx_roll5, whose AUCs alone clear the O-1 AUC bar (≥0.85). Since O-1′
+requires all three bars (AUC + band + phantom) on the *same* variant,
+band failure alone already disqualifies every rescue variant; the
+phantom cross-check was not separately computed for the 8 rescue
+variants; per the S-1 read-off's own precedent for a moot conjunct,
+that check would not change the outcome once band has failed.
+
+**Observation, not a proposed change:** S-shift's AUC (0.54/0.58, near
+chance) is the weakest of the eight — plausibly because its pre-
+registered ±5.0 s realign pad is narrow relative to this corpus's
+actual desync spans (several run 15–60 s, e.g. Defying Gravity's dialog
+blocks, Hakuna Matata's swallowed outro), so a desynced line's true
+position is often outside the window the realign is allowed to search,
+capping how far it can jump regardless of how wrong the current
+placement is. The pad is a locked plan constant; flagging for Ken/Opus
+to weigh, not adjusting it unilaterally.
+
+**What this does and doesn't settle.** Mechanical facts only, no
+verdict computed (executor discipline — Judge is Opus, escalations go
+to Ken): best primary AUC (0.7162) is ≥0.65 so the primary read-off is
+not O-2 by that bar; it is also not O-1 (AUC <0.85, band fails, phantom
+fails). Of the 8 rescue variants, none clears all three O-1 bars
+simultaneously (band is the universal blocker), but several clear the
+AUC ≥0.65 floor (mean_word_z_roll5, S-decode, S-decode_roll5, S-tx,
+S-tx_roll5), so the rescue read is not a clean O-2 confirmation either.
+Reproducible via `phase1b_auc.py` / `phase1b_rescue_auc.py` /
+`phase1b_phantom.py` against the cached scratchpad emissions.
 
 ---
 
