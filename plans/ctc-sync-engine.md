@@ -31,6 +31,16 @@ S-5 ruling:
 
 Either branch ends at E5 (closeout). E0 runs regardless.
 
+*Status (2026-07-19): GATE O = O-GRAY, GATE O′ = O′-GRAY; Ken ruled
+engine OFF — no explicit GO (see the evidence plan's Results log,
+GATE O read-off entry). E1's license is therefore unmeetable and the
+build proceeds on the **fallback branch**, subject to its own
+licenses (F1: GATE R; F2: GATE S S-1 on the best scaffold arm — S-A
+read NO-GO, S-B windowed-CTC is next; S-5 = scaffold-first by rule).
+Rider recorded there: s_tx_roll5 (AUC 0.8964) kept as an optional
+advisory demote-only corroboration signal at Ken's discretion;
+Appendix E's gate band stays unfilled.*
+
 ## Architecture (engine branch)
 
 - **Emission oracle:** MMS_FA emission computed once per song on the

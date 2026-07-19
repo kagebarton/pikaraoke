@@ -321,6 +321,14 @@ non-span-score rows of the table):
   table; the engine branch then requires his explicit GO recorded
   here. No model resolves it alone.
 
+*Status (2026-07-19): read off — primary = O-GRAY, rescue = O′-GRAY
+(no variant clears the band; five clear the 0.65 floor). Ken ruled:
+engine branch OFF on this evidence — no explicit GO; scaffold-first
+with the S-B windowed-CTC arm next. See the Results-log entry for the
+verification, the ruling's riders (s_tx_roll5 kept as an optional
+advisory demote-only signal; S-shift pad artifact noted, no
+re-probe), and its consequences.*
+
 If S-tx is the adopted gate statistic: whisper transcribe — already
 retained in the engine branch for anchors — becomes a gate-time input;
 a song with no transcribe output runs **ungated** on that route (lines
@@ -475,6 +483,7 @@ Arms, in order; later arms only where earlier ones justify the GPU time:
   windows sliced from the cached emission, no audio re-slicing). Same
   metrics plus fraction-of-lines-repaired. This is the engine
   architecture's direct A/B against scaffold-first (S-A/S-B).
+  *(Does not run — GATE O′ ruled engine OFF, 2026-07-19.)*
 - **S-C (if S-B or S-B2 looks competitive):** CTC `slice_align` on the
   13-song SRT cue-align corpus vs the 5b whisper baseline — the direct
   "can CTC improve cue align" measurement on the proven path.
@@ -517,6 +526,9 @@ veto everywhere and rules anything a rule leaves open):
   O-GRAY with Ken's explicit GO} AND S-B2 meets the S-2 comparison
   rule against the best scaffold arm AND Ken concurs on eyeball;
   anything else → scaffold-first (fully specified, lower risk).
+  *Status (2026-07-19): the GATE O condition is now unmeetable
+  (O′-GRAY ruled, no GO) — S-5 = scaffold-first by rule; what stays
+  live at GATE S is S-1/S-2/S-3 on the best scaffold arm.*
 
 Scoring-circularity rule (pre-registered): LRCLIB held-out MAD is **not
 a metric for any scaffold-routed song** — once LRCLIB feeds the
@@ -1346,6 +1358,71 @@ AUC ≥0.65 floor (mean_word_z_roll5, S-decode, S-decode_roll5, S-tx,
 S-tx_roll5), so the rescue read is not a clean O-2 confirmation either.
 Reproducible via `phase1b_auc.py` / `phase1b_rescue_auc.py` /
 `phase1b_phantom.py` against the cached scratchpad emissions.
+
+### 2026-07-19 — GATE O + GATE O′ read-off and Ken's ruling — engine branch OFF; S-B next
+
+**Read-off (mechanical, applied to the run entry above):** primary =
+**O-GRAY** — best AUC 0.7162 (mean_word_z) lies in [0.65, 0.85), the
+≤10%/≤10% band fails (38.7%/17.9% at the best cut), and the phantom
+cross-check fails directionally (phantom median z −0.624 is not below
+the synced p25 −0.719). Rescue = **O′-GRAY** — no rescue variant
+clears all three O-1 bars (the band is the universal blocker,
+including for s_tx/s_tx_roll5 whose AUCs 0.8767/0.8964 clear the AUC
+bar alone), and five variants sit above the 0.65 floor
+(mean_word_z_roll5, s_decode, s_decode_roll5, s_tx, s_tx_roll5), so
+the rescue read is not an O-2 confirmation either. Per the locked
+rule, O′-GRAY goes to Ken with the full ten-row table. Process note:
+the Model-switching table assigns GATE read-offs to Opus; executed by
+Fable at Ken's direction, same convened window as the S-1 read-off —
+rule applied as locked, nothing interpreted.
+
+**Verification (Fable, before advising on the ruling):** the three
+headline rescue AUCs were independently recomputed from the raw
+per-line score caches (`rescue_scores/*.json`), not via the AUC
+scripts — exact match (s_tx_roll5 0.8964 at 116/295, s_decode_roll5
+0.8270 and mean_word_z_roll5 0.7536 at 140/517). A full cut sweep on
+s_tx_roll5 confirmed no threshold clears ≤10%/≤10%; the true minimax
+cut (0.500) reaches 12.5% synced-below / 9.5% desynced-above. The
+synced false-flag mass at that cut concentrates in Girl in the Bubble
+(16 lines) and Belle (9) — wet/ensemble vocals where transcribe token
+recall collapses — so the band failure is systematic (an instrument
+weakness on the transcribe side), not sampling noise: a gate adopting
+s_tx_roll5 would routinely route GATE C's showcase-perfect song into
+repair.
+
+**Analysis put to Ken for the gray ruling:** (1) the whisper
+precedent replicated — confidence-type statistics fail (AUC
+0.57–0.75) while content-corroboration statistics almost work
+(0.88–0.90); the emission does not know when it is wrong, a second
+engine's transcript nearly does. (2) The CTC-first engine's
+distinctive premise — *emission-internal* self-policing — is
+specifically what did not qualify (best emission-internal variant
+s_decode_roll5, AUC 0.827, ~30% synced false-flags). (3) Every
+statistic family improves under rolling-5 → the separable object is
+the section, not the line, matching GATE C's C-3; sectional desync
+under free whole-song alignment is exactly the failure mode a
+scaffold prior with windowed alignment prevents by construction.
+(4) S-1's NO-GO on the whisper-scaffold arm and this O′-GRAY point at
+the same untested cell: scaffold + windowed CTC = Phase 3 S-B.
+
+**Ken's ruling (2026-07-19):** engine branch **OFF** on this evidence
+— no explicit GO; proceed scaffold-first with the S-B windowed-CTC
+arm next. Consequences: S-B2 does not run; 2b's GATE-O-conditional
+emission-score statistics stay off; GATE S ruling S-5's engine
+condition is unmeetable, so S-5 = scaffold-first by rule (S-1, S-2,
+S-3 remain live on the best scaffold arm); the build plan proceeds on
+the fallback branch (F1/F2) and its Appendix E gate band stays
+unfilled. Riders: **s_tx_roll5** (AUC 0.8964) is recorded as an
+optional *advisory, demote-only* corroboration signal adoptable later
+at Ken's discretion — its structural role already only routes lines
+toward repair and never blocks a song, so the asymmetric-evidence
+requirement is preserved; **S-shift** is not re-probed despite the
+plausible ±5.0 s-pad artifact — a displacement statistic detects
+free-alignment drift, which the windowed architecture eliminates, so
+a wider-pad re-run only earns its cost if a score gate is ever
+revisited. Ken also deferred the pending /code-review batch
+(`2dc88a2`, `b3da6f7`, `2ef39f7`, `4c8698a`) until the production
+phase begins.
 
 ---
 
