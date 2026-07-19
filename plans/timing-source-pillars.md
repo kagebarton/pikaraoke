@@ -366,9 +366,15 @@ wrong-song gate test needs:
 Commit: `feat(scripts): --save-bodies richsync persistence for
 musixmatch_coverage_improve`.
 
+*Amendment (2026-07-19):* Bloodstream demoted to the line-source pool
+by design ruling (see Results log, Phase 2a STOP entry) — the word
+cohort for 2b is **14** songs, and Bloodstream is exempted from the
+word-kind guard on resume.
+
 ### 2b. Probe: verify-fit + renders (scratchpad)
 
-For each of the 15 songs, offline against its existing bundle:
+For each of the 15 songs (14 after the 2026-07-19 Bloodstream
+demotion — see Results log), offline against its existing bundle:
 
 1. Parse the sidecar richsync into provider-text line objects
    (`ts`/`te`/word offsets → `{word,start,end}` lists).
@@ -713,6 +719,39 @@ starts join the line-source pool)? Note this is a **probe-script
 question, not an E0 bug** — `ensure_timing`'s production selection logic
 is unchanged and behaves identically for any Genius-origin song hitting
 this same ambiguity.
+
+**Design ruling (Fable, 2026-07-19) — Decision A resolved: no `kind`
+term; the Appendix B key stays locked as-is.** Root cause is genuine
+reference-pick ambiguity at a by-construction fragile row (the 0.50
+floor boundary case, independently GATE-C-flagged as the C-3
+version-mismatch song), not a design gap: the key found genuinely
+better text (0.703 vs 0.50) and the guard surfaced the cohort change
+instead of swallowing it — both mechanisms worked. A kind-preference
+band is ruled out: it would buy word granularity at the cost of text
+identity (the matcher-era failure class — Bloodstream's word candidate
+is the known crammed-hook offender, "wrong words, precisely timed");
+timing quality is adjudicated downstream (Appendix C verify,
+`WARP_MAD_GATE_S`, Appendix A routing), where line-kind demotion is a
+first-class route; and any band constant would be invented from n=1
+(one wide enough to flip this case, ≥ 0.21, lets materially worse
+text win across all production genius-origin songs).
+
+**Bloodstream disposition:** the persisted line sidecar (0.703, Arty
+Remix track info) stands as-fetched and is authoritative per
+reuse-on-disk. Bloodstream exits the 2b word cohort (**15 → 14**) and
+joins the line-source/scaffold pool — its sidecar is already the
+shape Phase 3's line arm consumes. Appendix C impact: none structural
+(the threshold rule is cohort-size-agnostic) and mildly beneficial —
+worst-over-PASS is no longer set by a known version-mismatch song.
+Phase 1b untouched (its desync labels come from the GATE C renders,
+not the 2b cohort).
+
+**Resume (remaining 13 songs):** not as-is — on re-run, disk-first
+`ensure_timing` returns Bloodstream's line sidecar and the word-kind
+guard would re-fire. The executor exempts Bloodstream from the
+word-kind assert via the same mechanism the two controls use
+(recorded as-is, flagged), citing this ruling as provenance. The
+guard stays armed for the remaining 13 songs.
 
 Commit: `feat(scripts): --save-bodies richsync persistence for
 musixmatch_coverage_improve` (script only — the persisted sidecars live

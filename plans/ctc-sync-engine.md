@@ -177,6 +177,13 @@ them). Execute per **Appendix B (locked)**:
 Commit: `feat(pipeline): synced-timing fetch pillar (Musixmatch +
 NetEase)`.
 
+*Conformance note (2026-07-19):* the shipped module omitted the
+`clean_key` derivation on the query path (raw Genius strings reached
+Musixmatch). Fix per the Appendix B addenda — clean at
+`ensure_timing` entry + the feat-credit regression test — before E0
+sign-off. Does not gate the Phase 2a resume (the probe pre-cleans);
+on-disk sidecars stand.
+
 ## Phase E1 — engine core (license: O-1 + S-5 = engine)
 
 Execute per **Appendix E (locked at GATE S)**. Shape (pre-registered;
@@ -452,6 +459,30 @@ no-timing route / SRT as today).
 - **Never raises;** all failures log + return no-timing. All sleeps/
   backoff per Ground rules. Fetch happens once per song at add time —
   the pacing exists for the batch tool, production inherits it for free.
+
+**Addenda (Fable rulings, 2026-07-19):**
+
+- **Selection key confirmed — no `kind` term.** The Phase 2a
+  Bloodstream STOP (a better-text line remix outscoring the
+  boundary-case word original) is genuine reference-pick ambiguity,
+  not a key gap. A kind-preference band is ruled out: n=1 evidence,
+  it would prefer wrong-words-precisely-timed over cleaner text, and
+  timing quality is adjudicated downstream — kind demotion routes per
+  Appendix A precedence as a first-class outcome. Full ruling:
+  evidence plan Results log, Phase 2a entry.
+- **`clean_key` home.** The locked "Inputs: … via `lrclib.clean_key`"
+  sentence is implemented *inside* `timing_fetch`, at the top of
+  `ensure_timing` — `title, artist = clean_key(title, artist)` before
+  any use — mirroring `lrclib.search`'s idempotent internal cleaning
+  (callers may pass raw or pre-cleaned keys; every path, including
+  the exception-path empty sidecar, records the cleaned
+  `query.term`). The E0 module as first shipped omitted this and
+  issued raw queries — a confirmed spec deviation; the fix plus a
+  feat-credit/trailing-paren regression test (asserting the issued
+  search term is the cleaned form) are required before E0 is signed
+  off Appendix-B-conformant. The Phase 2a sidecars on disk were
+  fetched through the probe's pre-cleaned path (spec-correct queries)
+  and stand — nothing refetched.
 
 ## Appendix C — word-route verification criterion (LOCKED as decision procedure, Fable, 2026-07-18)
 
