@@ -624,14 +624,18 @@ re-enable exception with its named flag class.
 - **S-2 aligner:** genius-origin scaffold path = **CTC** (`ctc_align`
   adapter per the wiring bullet above; strictly better on all three
   S-2 metrics, see the evidence plan's GATE S read-off). SRT path =
-  whisper/existing cue-align unchanged — the S-C comparison never ran,
-  so the rule's "otherwise whisper (proven default)" applies. *Ken
-  intent (2026-07-19): S-C will eventually run, unordered (separate
-  route, no phase dependency) — CTC may tighten SRT word timings
-  enough to retire edge snapping, which the snap policy above already
-  anticipates (snap off on CTC-timed routes). Until it runs and
-  passes its rule + eyeball, the SRT route and its snap are
-  untouched.*
+  **whisper/existing cue-align, unchanged — S-C ran 2026-07-20** (full
+  16-song SRT corpus): CTC cleared all three aggregate metrics
+  (mean re-pace, mean worst-overlap, flag count) but failed the
+  per-song overlap cap on Mirrors (+1.8 s, 0.8→2.6), a real
+  overlapping-vocal passage; Ken's eyeball veto corroborated (CTC has
+  tighter word timing but struggles to separate genuinely overlapping
+  voices, which whisper handles better) rather than conflicting with
+  the mechanical failure, so the rule's "otherwise whisper (proven
+  default)" applies and the SRT arm is closed. Edge snapping therefore
+  stays enabled on the SRT path (the snap-off default above applies
+  only where CTC is the actual aligner, which it is not here). See the
+  evidence plan's GATE S read-off (S-2, SRT arm / S-C) entry.
 - **S-3 warp-failure branch:** **joint-matcher routing** (Ken,
   2026-07-19) — densify failed the rule on Defying Gravity (2.6 s vs
   0.2 s baseline overlap, robust to aligner arm); Ken accepted the

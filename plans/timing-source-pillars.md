@@ -1985,6 +1985,57 @@ voices is to under-report rather than mis-time them — worth weighing
 against the tighter-timing win rather than reading the aggregate means
 at face value.
 
+### 2026-07-20 — GATE S read-off (S-2, SRT arm / S-C) — CTC rejected on the SRT path; whisper retained by default, cap failure and eyeball veto converge
+
+**(Opus executing the locked S-2 rule verbatim against the same-run S-C
+table above; no threshold invented. Arithmetic reproduces the
+executor's three inputs.)**
+
+**S-2 SRT arm — WHISPER RETAINED (CTC not selected).** The rule
+requires *all three* aggregates at least as good AND no song > 1.0 s
+worse on overlap. The aggregates favor CTC (re-pace 1.62% vs 2.25%;
+worst-overlap 0.306 s vs 0.794 s; flags 0 = 0 tie — "at least as good"
+holds on all three). **But the per-song cap FAILS: Mirrors regresses
++1.8 s on worst-overlap (0.8 → 2.6), well past the 1.0 s bar.** One cap
+violation is dispositive — the conjunction is not met. Mechanically
+the rule falls to its **default clause: whisper, the proven default.**
+This is objective from the table, not a judgment call.
+
+**Ken's eyeball veto — corroborates, no daylight.** The SRT arm's rule
+explicitly adds Ken's eyeball ("extra caution on the proven path"), and
+it was supplied. His finding — CTC has tighter word timing but
+struggles to separate genuinely overlapping voices — is not a *second,
+independent* objection; it **explains why Mirrors fails the cap.** The
+executor already noted Mirrors is the one 5b `MAX_SECTION_DUR_S`-delta
+song Ken had flagged as *not* a genuine two-voice overlap and already
+anomalous (0.7 → 0.8 pre-CTC); Ken's read reclassifies its CTC blowup
+as a real overlapping-vocal passage CTC mishandles, not a
+degenerate-anchor artifact. Mechanical failure and eyeball veto point
+the same way. Additionally Ken's reframe — a CTC overlap dropping to
+0.0 may be *under-reporting* a second voice, not resolving it —
+undercuts confidence in the two aggregates that favored CTC, so even
+the "2-of-3 clearly better" reading is softer than the numbers alone
+suggest. This strengthens, and does not complicate, the whisper
+outcome.
+
+**STOP status — none. The rule resolves this without a fresh Ken
+decision.** Unlike S-1 (whose conjuncts left load-bearing gray zones
+needing ratification), S-2 here is self-contained: cap fail → default
+→ whisper, and the pre-registered eyeball input landed on the same
+result. No open gray-zone call remains for Ken; the veto he already
+gave is the input the rule asked for, and it agrees with the mechanics.
+GATE S's SRT arm is closed by execution.
+
+**Appendix D constant (updated wording, supersedes the S-4 "S-C
+unrun" line):** *S-2 = CTC on the genius-origin scaffold path; whisper
+retained on the SRT cue-align path — S-C ran 2026-07-20 (16-song SRT
+corpus), CTC cleared all three aggregates but failed the per-song
+overlap cap on Mirrors (+1.8 s), a real overlapping-vocal passage;
+Ken's eyeball veto corroborated (CTC weak on overlapping-voice
+separation), so the rule defaults to whisper. Edge-snap default on the
+SRT path is unaffected (stays as-is; the CTC snap-off default applies
+only where CTC is the aligner).*
+
 ---
 
 ## Appendices A–D — moved to `plans/ctc-sync-engine.md`
