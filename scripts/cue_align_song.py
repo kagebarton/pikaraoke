@@ -23,6 +23,7 @@ Needs the ``pik`` conda env and a local GPU. Example::
 """
 
 import argparse
+import importlib.util
 import itertools
 import logging
 import subprocess
@@ -156,6 +157,7 @@ def run_song(
     config: PipelineConfig,
     pad: float = 0.75,
     out: Path | None = None,
+    make_slice_align=_make_slice_align,
 ) -> tuple[list[dict], dict]:
     """Cue-align one SRT song with an already-started ``worker``; write the .ass.
 
@@ -163,6 +165,14 @@ def run_song(
     and hands the SRT cues to :func:`cue_align.align_song`. SRT carries no
     align/display distinction, so ``align_lines`` mirrors the cue texts. The
     worker lifecycle is the caller's. Returns ``(line_objects, stats)``.
+
+    ``make_slice_align`` swaps the forced-aligner backend: given
+    ``(vocal_wav, tmp, stem, worker)`` it must return a
+    ``(t0, t1, text, label) -> words | None`` callable (the
+    :func:`cue_align.align_song` contract). Defaults to the production
+    whisper backend; a probe backend (e.g. a CTC aligner) can be injected
+    without touching this driver -- same parameter as
+    ``scaffold_align_song.run_song``.
     """
     display_lines, cue_spans = cue_spans_from_srt(srt_path.read_text(encoding="utf-8"))
     if not cue_spans:
@@ -174,7 +184,7 @@ def run_song(
     _ffmpeg(["-i", str(vocal), "-ac", "1", "-ar", "16000", "-sample_fmt", "s16", str(vocal_wav)])
     try:
         duration = _wav_duration(vocal_wav)
-        slice_align = _make_slice_align(vocal_wav, tmp, song.stem, worker)
+        slice_align = make_slice_align(vocal_wav, tmp, song.stem, worker)
         line_objects, stats = align_song(
             cue_spans, display_lines, list(display_lines), duration, slice_align, pad_s=pad
         )
@@ -224,6 +234,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--srt", type=Path, help="SRT cues (default: subtitles/<stem>.srt)")
     ap.add_argument("--pad", type=float, default=0.75, help="slice pad into silence (s)")
     ap.add_argument("--out", type=Path, help="output .ass (default: karaoke/<stem>.cuealign.ass)")
+    ap.add_argument(
+        "--slice-align-module",
+        type=Path,
+        help="path to a module exposing make_slice_align(vocal_wav, tmp, stem, worker) "
+        "-> slice_align, to swap the forced-aligner backend (default: whisper)",
+    )
     args = ap.parse_args(argv)
 
     if not args.song.is_file():
@@ -235,12 +251,29 @@ def main(argv: list[str] | None = None) -> int:
     if vocal is None:
         ap.error("no vocal stem found; pass --vocal")
 
+    make_slice_align = _make_slice_align
+    if args.slice_align_module:
+        spec = importlib.util.spec_from_file_location(
+            args.slice_align_module.stem, args.slice_align_module
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        make_slice_align = module.make_slice_align
+        logger.info("using slice-align backend from %s", args.slice_align_module)
+
     config = PipelineConfig()
     worker = WhisperWorker(config.whisper)
     worker.start()
     try:
         line_objects, stats = run_song(
-            args.song, srt_path, vocal, worker=worker, config=config, pad=args.pad, out=args.out
+            args.song,
+            srt_path,
+            vocal,
+            worker=worker,
+            config=config,
+            pad=args.pad,
+            out=args.out,
+            make_slice_align=make_slice_align,
         )
     finally:
         worker.stop()

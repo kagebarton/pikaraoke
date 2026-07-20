@@ -14,9 +14,18 @@ production ``.ass``). Needs the ``pik`` conda env and a local GPU. Example::
 
     python scripts/cue_align_corpus.py
     python scripts/cue_align_corpus.py --only Mirrors
+    python scripts/cue_align_corpus.py --slice-align-module scripts/sb_ctc_adapter.py
+
+``--slice-align-module`` swaps the forced-aligner backend for a probe (e.g.
+S-C's CTC arm): the file must expose ``make_slice_align`` matching
+``cue_align_song._make_slice_align``'s signature. Its output lands in
+``<stem>.cuealign.<module-stem>.ass`` rather than the default
+``<stem>.cuealign.ass`` so a probe run never clobbers the whisper baseline
+those files hold.
 """
 
 import argparse
+import importlib.util
 import json
 import logging
 import sys
@@ -25,6 +34,7 @@ from pathlib import Path
 # Import the sibling single-song shim (shared per-song logic + helpers).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from cue_align_song import (  # noqa: E402
+    _make_slice_align,
     artifact_metrics,
     find_srt,
     find_vocal,
@@ -71,12 +81,30 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--debug-dir", type=Path, help="default: <songs-root>/alignment_debug")
     ap.add_argument("--pad", type=float, default=0.75, help="slice pad into silence (s)")
     ap.add_argument("--only", help="substring filter on the song filename")
+    ap.add_argument(
+        "--slice-align-module",
+        type=Path,
+        help="path to a module exposing make_slice_align(vocal_wav, tmp, stem, worker) "
+        "-> slice_align, to swap the forced-aligner backend (default: whisper)",
+    )
     args = ap.parse_args(argv)
 
     root: Path = args.songs_root
     debug_dir = args.debug_dir or (root / "alignment_debug")
     if not debug_dir.is_dir():
         ap.error(f"alignment_debug dir not found: {debug_dir}")
+
+    make_slice_align = _make_slice_align
+    ass_suffix = "cuealign"
+    if args.slice_align_module:
+        spec = importlib.util.spec_from_file_location(
+            args.slice_align_module.stem, args.slice_align_module
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        make_slice_align = module.make_slice_align
+        ass_suffix = f"cuealign.{args.slice_align_module.stem}"
+        logger.info("using slice-align backend from %s", args.slice_align_module)
 
     songs = srt_sourced_songs(debug_dir, root)
     if args.only:
@@ -96,10 +124,17 @@ def main(argv: list[str] | None = None) -> int:
             if srt_path is None or vocal is None:
                 logger.warning("skip %s: missing srt/vocal", media.stem[:40])
                 continue
-            ass_path = media.parent / "karaoke" / f"{media.stem}.cuealign.ass"
+            ass_path = media.parent / "karaoke" / f"{media.stem}.{ass_suffix}.ass"
             try:
                 line_objects, stats = run_song(
-                    media, srt_path, vocal, worker=worker, config=config, pad=args.pad, out=ass_path
+                    media,
+                    srt_path,
+                    vocal,
+                    worker=worker,
+                    config=config,
+                    pad=args.pad,
+                    out=ass_path,
+                    make_slice_align=make_slice_align,
                 )
             except Exception:
                 logger.exception("cue-align failed for %s", media.stem[:40])
