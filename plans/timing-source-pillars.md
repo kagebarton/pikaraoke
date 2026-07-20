@@ -496,8 +496,13 @@ Arms, in order; later arms only where earlier ones justify the GPU time:
   architecture's direct A/B against scaffold-first (S-A/S-B).
   *(Does not run — GATE O′ ruled engine OFF, 2026-07-19.)*
 - **S-C (if S-B or S-B2 looks competitive):** CTC `slice_align` on the
-  13-song SRT cue-align corpus vs the 5b whisper baseline — the direct
+  SRT cue-align corpus vs the 5b whisper baseline — the direct
   "can CTC improve cue align" measurement on the proven path.
+  *Amendment (2026-07-20, Ken-ruled): this bullet's original "13-song"
+  figure never matched the corpus (16/16 SRT-sourced songs per
+  Baseline 2 and the current on-disk count, confirmed on the Windows
+  box after the machine move). Ken confirmed all 16 have proper
+  uploader SRTs — S-C runs the full 16, not a 13-song subset.*
 - **S-D (diagnostic, cheap, no GPU):** for warp-gate-failed songs, record
   what the fallback would be — union-anchor densify vs joint matcher —
   by comparing S-A's fallback output against the joint baseline for
