@@ -530,7 +530,16 @@ veto everywhere and rules anything a rule leaves open):
   caution on the proven path.
   *Status (2026-07-19): CTC SELECTED for the non-SRT scaffold path —
   strictly better on all three metrics, cap holds (worst worsening
-  +0.6). S-C has not run; the SRT switch stays open.*
+  +0.6). S-C has not run; the SRT switch stays open. Ken intent
+  (2026-07-19): S-C **will eventually run** — unordered, not a
+  sequenced phase (the SRT route is fully separate; no gate depends
+  on it, its GATE C-1 license is already satisfied). Motivation: CTC
+  may give tighter word timings on the SRT route and eliminate the
+  need for edge snapping (consistent with GATE C's finding and
+  Appendix D's snap-off-on-CTC default). Same rule + Ken's eyeball
+  veto when it runs; the S-B adapter already proves the slice_align
+  contract — the SRT harness just needs the same pluggable hook the
+  scaffold harness got.*
 - S-3: warp-failure branch = densify fallback iff its flags + overlap
   on the warp-failed songs are ≤ the joint baseline's on those songs;
   tie → densify (one fewer code path).

@@ -625,7 +625,13 @@ re-enable exception with its named flag class.
   adapter per the wiring bullet above; strictly better on all three
   S-2 metrics, see the evidence plan's GATE S read-off). SRT path =
   whisper/existing cue-align unchanged — the S-C comparison never ran,
-  so the rule's "otherwise whisper (proven default)" applies.
+  so the rule's "otherwise whisper (proven default)" applies. *Ken
+  intent (2026-07-19): S-C will eventually run, unordered (separate
+  route, no phase dependency) — CTC may tighten SRT word timings
+  enough to retire edge snapping, which the snap policy above already
+  anticipates (snap off on CTC-timed routes). Until it runs and
+  passes its rule + eyeball, the SRT route and its snap are
+  untouched.*
 - **S-3 warp-failure branch:** **joint-matcher routing** (Ken,
   2026-07-19) — densify failed the rule on Defying Gravity (2.6 s vs
   0.2 s baseline overlap, robust to aligner arm); Ken accepted the
