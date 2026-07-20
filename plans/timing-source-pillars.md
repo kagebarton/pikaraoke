@@ -1969,6 +1969,22 @@ read-off role per the model-switching table); Mirrors' `.cuealign.ass`
 vs `.cuealign.sb_ctc_adapter.ass` are both on disk at
 `D:/shared/pikaraoke-songs/karaoke/` for the eyeball.
 
+### 2026-07-20 — Ken's eyeball (S-C) — CTC weak on overlapping-voice separation
+
+Ken eyeballed Mirrors, ZAYN's Whole New World (End Title), Part of Your
+World, and Bye Bye Bye (whisper vs CTC, per the mpv A/B commands
+above). Verdict: **CTC has tighter word timing but struggles with
+actual overlapping voices that whisper better separates.** This is the
+eyeball veto S-2's SRT-arm clause calls for ("the same rule plus Ken's
+eyeball veto — extra caution on the proven path") — it both explains
+Mirrors' per-song cap failure mechanically (a real overlapping-vocal
+passage, not a degenerate-anchor artifact) and reframes the
+overlap-improvement songs: an overlap number dropping to 0.0s under
+CTC is not unambiguously a fix if CTC's failure mode on overlapping
+voices is to under-report rather than mis-time them — worth weighing
+against the tighter-timing win rather than reading the aggregate means
+at face value.
+
 ---
 
 ## Appendices A–D — moved to `plans/ctc-sync-engine.md`
