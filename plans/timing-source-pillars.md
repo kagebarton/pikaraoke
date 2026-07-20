@@ -1635,6 +1635,32 @@ specifies "None on any aligner failure", and this is a new failure
 *mode* under that same contract, not a new failure *case* requiring an
 unspecified design choice.
 
+**Chunk-seam validation (post-hoc, Ken's question):** reusing the
+cached whole-song emission (chunked into independent, non-overlapping
+20s forward passes per Phase 1b's recipe) instead of a fresh per-slice
+forward pass is architecturally sound for CTC in a way it is not for
+whisper — the acoustic-model step (`model(audio) -> emission`) takes
+no text and is agnostic to how it will later be sliced, unlike
+`stable_whisper`'s `align_refine`, which jointly aligns a given audio
+window against given text and cannot be decoupled that way. The actual
+alignment DP (`aligner(emission_slice, token_ids)`) still runs fresh
+per `(t0, t1, text)` call; only the underlying per-frame log-probs are
+reused. This is the same technique Phase 1b already ran (33/33 eyeball
+clean) for word/line scoring and the S-shift rescue variant.
+
+The one real risk this raises — a section boundary landing inside a
+20s chunk seam, which a fresh un-chunked recompute wouldn't have — is
+not hypothetical on this corpus: Bloodstream's "lines 6-11" section
+(21.93s-40.20s) straddles the emission's chunk boundary at 40s.
+Spot-checked directly: sliced-from-cache word timings vs. a fresh,
+un-chunked forward pass over exactly that window agree to ≤20ms
+(one frame) on 33/34 word boundaries, with the one exception (a word
+ending exactly at the 40s seam) off by 100ms. Two orders of magnitude
+under this pipeline's own timing tolerances (`PAUSE_SLACK_S`,
+`DRIFT_GAP_S`, `MAX_WORD_DUR_S` are all ≥0.5s) — the reuse does not
+threaten the table below. Script: scratchpad `chunk_seam_check.py`,
+not committed.
+
 Full corpus metrics table (same columns as the S-A table above):
 
 ```
