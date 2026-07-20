@@ -516,19 +516,29 @@ veto everywhere and rules anything a rule leaves open):
   higher, rendered-line coverage no lower, and no single song's worst
   overlap regresses by > 1.0 s without a recorded cause Ken accepts.
   Ken's spot-eyeball vetoes any new artifact class the metrics missed.
-  *Status (2026-07-19): NO-GO on the S-A arm's evidence — see Results
-  log. Binds the S-A showing only; re-read on the best scaffold arm
-  once S-B lands. Flagged-count reconciliation and per-song
-  cause-acceptance are open with Ken.*
+  *Status (2026-07-19, superseding the earlier note): re-read on the
+  S-B arm (selected by S-2) — mean PASS (0.47 vs 0.54), coverage
+  PASS, flag count → Ken (every defensible mapping passes), per-song
+  cap FAIL pending Ken cause-acceptance for exactly two songs
+  (Defying Gravity +2.4, Man Out of You +2.6). Not GO as it stands;
+  one Ken ruling from GO — see the GATE S read-off entry.*
 - S-2 (aligner per path): the CTC arm is selected for a path iff it is
   at least as good as the whisper arm on all three of mean re-pace,
   mean worst-overlap, and flag count, with no song > 1.0 s worse on
   overlap; otherwise whisper (proven default). The SRT switch (S-C vs
   the 5b baseline) uses the same rule plus Ken's eyeball veto — extra
   caution on the proven path.
+  *Status (2026-07-19): CTC SELECTED for the non-SRT scaffold path —
+  strictly better on all three metrics, cap holds (worst worsening
+  +0.6). S-C has not run; the SRT switch stays open.*
 - S-3: warp-failure branch = densify fallback iff its flags + overlap
   on the warp-failed songs are ≤ the joint baseline's on those songs;
   tie → densify (one fewer code path).
+  *Status (2026-07-19): densify FAILS on Defying Gravity (2.6 vs
+  0.2 s overlap, robust to arm choice) — the rule points at Appendix A
+  joint-matcher routing for warp-rejected songs; the coverage trade
+  (51/89 vs 89/89) is open with Ken. Scope: warp-failed = MAD-gate
+  reject only; see the GATE S read-off entry.*
 - S-4: **Appendix D/E constants recorded** (Opus, in
   `plans/ctc-sync-engine.md` — both are already locked as
   design/procedure; this step only fills measured constants such as
@@ -1692,6 +1702,104 @@ the two root-caused CTC RuntimeErrors above.
 Output is the raw table, never a verdict — S-1 re-read and S-2 are
 read-offs that happen after this entry, per the model-switching table
 (Judge = Opus, escalations to Ken).
+
+### 2026-07-19 — GATE S read-off (S-2, S-1 re-read, S-3) — CTC arm selected; S-1 hinges on two Ken rulings; densify fails S-3 on Defying Gravity
+
+**(Fable executing the locked rules at Ken's direction, same convened
+window; order S-2 → S-1 → S-3 per S-5's status note — the arm must be
+picked before the route is re-read. Rules applied as locked, no
+thresholds invented; Opus re-executing the arithmetic will reproduce
+it. Both arms ran the identical warp foundation — the S-B entry
+confirms per-song warp paths matched the S-A re-run exactly — so S-2
+is a pure aligner comparison.)**
+
+**S-2 — CTC (S-B) SELECTED.** Same-instrument head-to-head over the
+16 in-scope songs (Girl in the Bubble excluded per the plan text,
+`scf=0`; including it changes nothing — S-B is better there too,
+3.2 → 0.0). Reading recorded for "mean re-pace": mean over songs of
+the per-song re-paced fraction `rep/plc`; the verdict is unchanged
+under the alternative total-lines reading (S-A 179/936 = 19.1 % vs
+S-B 72/936 = 7.7 %).
+
+- Mean re-pace: S-B 7.1 % vs S-A 17.5 % — **S-B better.**
+- Mean worst-overlap: S-B 0.47 s vs S-A 1.61 s — **S-B better.**
+- Flag count (drift signature, in-scope): S-B 2 (Bloodstream,
+  HUNTR/X) vs S-A 6 (those plus Domino, Popular, Defying Gravity,
+  Paradise) — **S-B better.**
+- No song > 1.0 s worse on overlap: worst worsenings are Man Out of
+  You +0.2 (2.4 → 2.6) and Paradise +0.6 (0.4 → 1.0), both ≤ 1.0 —
+  **PASS.**
+
+All three metrics strictly better plus the cap holds → the rule
+selects CTC for the non-SRT scaffold path. (The SRT switch, S-C vs
+the 5b baseline, has not run and stays open — separate decision,
+extra caution per the rule.) Notable inside the comparison: CTC
+removed six of the seven Mode-2 align-displacement overlaps outright
+(Domino 4.6 → 0.0, Be Our Guest 3.0 → 0.3, Hakuna 2.8 → 0.0, Man Out
+of You is the exception), confirming the S-B hypothesis that the
+whisper repeat-displacement class dies with the aligner swap.
+
+**S-1 re-read (S-B arm vs Phase 0 joint baseline)** — same
+reconciliation as the `658d052` precedent: Phase 0 `overlap(rec>new)`
+right value vs scaffold `ovl(old>new)` right value, per song, 16
+in-scope songs.
+
+- **Mean worst-overlap strictly lower: PASS.** S-B 0.47 s vs baseline
+  0.54 s. The margin is real but thin (0.075 s) and driven by
+  Bloodstream 6.7 → 0.5; recorded so no one mistakes it for a rout.
+- **Rendered-line coverage no lower: PASS decisively.** Full sheet,
+  zero hidden lines on all 16; strictly higher than baseline on 14,
+  equal on 2 (Be Our Guest, Colors of the Wind).
+- **Flagged-song count no higher: NOT MECHANICALLY DECIDABLE → Ken**
+  (precedent followed: baseline `!` = coverage shortfall, 8 in-scope;
+  S-B drift signature = 2; different failure modes, no cross-system
+  mapping in the rule, and the read-off again declines to invent
+  one). Unlike the precedent this conjunct is now load-bearing, so it
+  needs Ken's ratification — noting that every defensible mapping
+  passes (2 ≤ 8; totals including Girl in the Bubble, 3 ≤ 9; the
+  scaffold structurally cannot exhibit the baseline's flag class
+  since it renders everything).
+- **No song regresses > 1.0 s without a recorded cause Ken accepts:
+  FAIL as it stands — exactly two songs, both → Ken.** Defying
+  Gravity 0.2 → 2.6 (+2.4): a recorded cause exists (warp diagnostic:
+  structurally different recording, both warp models correctly
+  rejected, MAD 5.80/10.27; the damage is the densify fallback — i.e.
+  precisely the S-3 question below) but Ken has not formally accepted
+  it. Man Out of You 0.0 → 2.6 (+2.6): **no recorded cause** — the
+  S-A Mode-2 diagnosis (whisper repeat displacement) does not carry,
+  because CTC removed the other six Mode-2 overlaps but not this one;
+  the "overlap on lines the baseline never rendered" excuse is
+  plausibly available (baseline rendered 36/47, S-B renders 47/47)
+  but establishing it requires a diagnostic or Ken's eyeball, not
+  this read-off.
+
+**Verdict: mechanically not GO as it stands — but this is not the
+S-A NO-GO.** Nothing fails on numbers where the rule is
+self-contained; the conjunction hinges entirely on two open Ken
+items: (1) cause-acceptance for Defying Gravity and Man Out of You,
+(2) the flag-count mapping. If S-3 resolves to routing warp-failures
+back to the joint matcher, Defying Gravity exits the scaffold route
+in production and its regression becomes moot — the two rulings
+interlock. Paradise, the original NO-GO's headline regression
+(+4.6), is resolved by the offset rescue: S-A amended 0.7 → 0.4,
+S-B 0.7 → 1.0, both inside the cap.
+
+**S-3 (warp-failure branch) — densify FAILS the rule on Defying
+Gravity's evidence.** Scope call recorded: "warp-failed" = the
+MAD-gate reject only, i.e. **Defying Gravity alone** — Girl in the
+Bubble never reaches the warp decision (no scaffold exists; densify
+is the only possible path, no branch to rule on) and is excluded from
+scaffold comparisons plan-wide. (For completeness: including it would
+not change the outcome — its overlap ties 0.0 = 0.0 and naive flags
+tie 1 = 1 → tie → densify, per the rule's tie-break.) On Defying
+Gravity: densify overlap 2.6 s (best arm; 4.3 s on the whisper arm —
+robust to arm choice) vs baseline 0.2 s → **not ≤** → the rule says
+the warp-failure branch should *not* be densify; the alternative is
+Appendix A routing (send warp-rejected songs back to the joint
+matcher), consistent with the Mode-1 diagnosis already recorded. Left
+open for Ken: the rule ignores the coverage trade (baseline renders
+51/89 with its 0.2 s; densify renders 89/89 with 2.6 s) — accepting
+joint routing means accepting the 38 dropped lines on such songs.
 
 ---
 
