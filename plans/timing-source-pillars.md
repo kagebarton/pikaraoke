@@ -1877,6 +1877,98 @@ flag class the snap fixes appears in the S-arm tables; the S-B
 drift flags are degenerate-anchor artifacts). Appendix E's gate
 band stays unfilled (engine off).
 
+### 2026-07-20 — Phase 3 S-C (CTC on the SRT cue-align corpus), Sonnet 5 executor, Windows box
+
+Ken ruled the corpus for this arm is the full 16 SRT-sourced songs (see
+the Phase 3 amendment above — the plan's original "13-song" figure never
+matched the actual corpus). Run on the Windows dev box (uv, not conda;
+first CTC/torchaudio use here — `torch 2.6.0+cu124`/`torchaudio
+2.6.0+cu124`, CUDA confirmed, MMS_FA bundle freshly downloaded and
+cached). Corpus presence re-verified after the machine move: all 16
+songs' bundle/uploader-SRT/vocal-stem/`karaoke/<stem>.cuealign.ass`
+(the on-disk 5b whisper baseline) confirmed present and stem-matched.
+
+**Harness hook** (mirrors S-B's committed pattern exactly):
+`cue_align_song.run_song` gained a `make_slice_align` parameter
+(default: the existing whisper factory, `_make_slice_align`) and a
+`--slice-align-module` CLI flag; `cue_align_corpus.py` gained the same
+`--slice-align-module PATH` flag (dynamic `importlib` load of a
+module's `make_slice_align`, identical to `scaffold_align_corpus.py`'s
+loader) plus an output-suffix guard: with a module loaded, the corpus
+runner writes `<stem>.cuealign.<module-stem>.ass` instead of
+`<stem>.cuealign.ass`, so a probe run never overwrites the whisper
+baseline files on disk (unlike the scaffold pair, this corpus script's
+default output *is* the file S-C diffs against, so the collision is
+real here and wasn't on the scaffold path). Import-smoke clean;
+pre-commit (`--files scripts/cue_align_song.py scripts/cue_align_corpus.py`)
+clean, no findings.
+
+**Run 1 — whisper baseline refresh** (`cue_align_corpus.py --songs-root
+D:/shared/pikaraoke-songs`): **16/16 placed, 0/16 drift**
+(`gapL`/`instL` both zero every song) — reproduces the documented 5b
+numbers almost exactly, including the five known `MAX_SECTION_DUR_S`
+overlap deltas (Mirrors 0.7→0.8, ZAYN 7.8→4.1, Mena/Scott Whole New
+World 2.6→2.1, Beauty and the Beast 0.2→0.1, Part of Your World
+0.7→2.5 — all within rounding of the recorded figures). Confirms the
+port/tree is unchanged on this box, consistent with the ground rules'
+reuse license, but this is a fresh same-run table so S-2's comparison
+below is apples-to-apples rather than cross-session.
+
+**Run 2 — CTC arm** (`--slice-align-module scripts/sb_ctc_adapter.py`):
+**16/16 placed, 0/16 drift**, all 16 songs completed with no
+`RuntimeError`s (unlike S-B's scaffold corpus, no "targets length too
+long" failures here — SRT sections are shorter/more numerous than the
+scaffold path's warped sections). No emission cache existed on this
+box (cold — Phase 1b's cache is scratchpad-local, box-specific), so
+each song paid a fresh full-song MMS_FA forward pass; still
+substantially faster wall-clock than the whisper arm (92 log lines vs.
+774 — no per-slice ffmpeg+subprocess round trips).
+
+Per-song comparison (whisper → CTC; `ovl` = worst inter-line overlap,
+`rep%` = repaced-from-cue fraction of placed lines):
+
+| song | lines | wh ovl | ctc ovl | Δovl | wh rep% | ctc rep% |
+| --- | --- | --- | --- | --- | --- | --- |
+| Like I Love You | 84 | 0.0 | 0.1 | +0.1 | 0.0 | 1.2 |
+| Let It Go | 47 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |
+| More Than That | 39 | 0.0 | 0.0 | 0.0 | 5.1 | 0.0 |
+| Mirrors | 120 | 0.8 | 2.6 | **+1.8** | 6.7 | 16.7 |
+| Selfish | 79 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |
+| ZAYN Whole New World | 60 | 4.1 | 0.4 | -3.7 | 3.3 | 1.7 |
+| Mena/Scott Whole New World | 54 | 2.1 | 1.8 | -0.3 | 0.0 | 1.9 |
+| For Good | 60 | 1.7 | 0.0 | -1.7 | 8.3 | 0.0 |
+| Part of Your World | 54 | 2.5 | 0.0 | -2.5 | 0.0 | 0.0 |
+| Rock Your Body | 103 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |
+| Can You Feel the Love Tonight | 32 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |
+| Beauty and the Beast | 56 | 0.1 | 0.0 | -0.1 | 7.1 | 1.8 |
+| Happier | 38 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |
+| Incomplete | 27 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |
+| Speechless | 49 | 0.1 | 0.0 | -0.1 | 4.1 | 0.0 |
+| Bye Bye Bye | 75 | 1.3 | 0.0 | -1.3 | 1.3 | 2.7 |
+
+S-2's three mechanical inputs, computed same-run:
+
+- Mean re-pace %: whisper 2.25% vs CTC 1.62% (CTC lower).
+- Mean worst-overlap: whisper 0.794s vs CTC 0.306s (CTC lower).
+- Flag count (gapL + instL): 0 vs 0 on both arms (tie).
+- Per-song cap ("no song > 1.0s worse on overlap"): **Mirrors
+  violates it** — CTC's worst overlap is 1.8s worse than whisper's on
+  that song (0.8s → 2.6s), the same song whose repace fraction nearly
+  triples (6.7% → 16.7%). No other song comes close (next-largest
+  same-direction delta is Like I Love You at +0.1s). Note for the
+  read-off: Mirrors is the one song the 5b Ken-read already flagged as
+  *not* a genuine two-voice overlap (unlike the other four
+  `MAX_SECTION_DUR_S`-delta songs) — its whisper-arm 0.7→0.8s bump was
+  already anomalous before CTC made it worse.
+
+This is a table, not a verdict — S-2's rule requires *all three*
+aggregate metrics to be at least as good AND the per-song cap to hold;
+two of three aggregates favor CTC clearly but the cap fails on one
+song. Left for Opus's read-off + Ken's eyeball veto (mechanical
+read-off role per the model-switching table); Mirrors' `.cuealign.ass`
+vs `.cuealign.sb_ctc_adapter.ass` are both on disk at
+`D:/shared/pikaraoke-songs/karaoke/` for the eyeball.
+
 ---
 
 ## Appendices A–D — moved to `plans/ctc-sync-engine.md`
