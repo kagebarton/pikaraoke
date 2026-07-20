@@ -516,12 +516,12 @@ veto everywhere and rules anything a rule leaves open):
   higher, rendered-line coverage no lower, and no single song's worst
   overlap regresses by > 1.0 s without a recorded cause Ken accepts.
   Ken's spot-eyeball vetoes any new artifact class the metrics missed.
-  *Status (2026-07-19, superseding the earlier note): re-read on the
-  S-B arm (selected by S-2) — mean PASS (0.47 vs 0.54), coverage
-  PASS, flag count → Ken (every defensible mapping passes), per-song
-  cap FAIL pending Ken cause-acceptance for exactly two songs
-  (Defying Gravity +2.4, Man Out of You +2.6). Not GO as it stands;
-  one Ken ruling from GO — see the GATE S read-off entry.*
+  *Status (2026-07-19, final): **GO on the S-B arm** — mean PASS
+  (0.47 vs 0.54), coverage PASS, flag count PASS (Ken ratified the
+  any-defensible-mapping reading), per-song cap PASS (Ken accepted
+  both causes: Defying Gravity = correctly-gated structural mismatch,
+  Man Out of You = genuine two-voice overlap on baseline-hidden
+  lines). See the GATE S final-rulings entry.*
 - S-2 (aligner per path): the CTC arm is selected for a path iff it is
   at least as good as the whisper arm on all three of mean re-pace,
   mean worst-overlap, and flag count, with no song > 1.0 s worse on
@@ -534,11 +534,11 @@ veto everywhere and rules anything a rule leaves open):
 - S-3: warp-failure branch = densify fallback iff its flags + overlap
   on the warp-failed songs are ≤ the joint baseline's on those songs;
   tie → densify (one fewer code path).
-  *Status (2026-07-19): densify FAILS on Defying Gravity (2.6 vs
-  0.2 s overlap, robust to arm choice) — the rule points at Appendix A
-  joint-matcher routing for warp-rejected songs; the coverage trade
-  (51/89 vs 89/89) is open with Ken. Scope: warp-failed = MAD-gate
-  reject only; see the GATE S read-off entry.*
+  *Status (2026-07-19, final): **joint-matcher routing** — densify
+  FAILS on Defying Gravity (2.6 vs 0.2 s, robust to arm choice) and
+  Ken accepted the coverage trade (crammed interpolated dialog is
+  unacceptable for karaoke). Scope: warp-failed = MAD-gate reject
+  only. See the GATE S final-rulings entry.*
 - S-4: **Appendix D/E constants recorded** (Opus, in
   `plans/ctc-sync-engine.md` — both are already locked as
   design/procedure; this step only fills measured constants such as
@@ -1800,6 +1800,68 @@ matcher), consistent with the Mode-1 diagnosis already recorded. Left
 open for Ken: the rule ignores the coverage trade (baseline renders
 51/89 with its 0.2 s; densify renders 89/89 with 2.6 s) — accepting
 joint routing means accepting the 38 dropped lines on such songs.
+
+### 2026-07-19 — GATE S final rulings (Ken) — S-1 GO; S-3 = joint routing; wrapped-header artifact class; S-4 constants recorded
+
+**Ken's rulings, closing everything the read-off left open:**
+
+1. **Cause-acceptance (S-1 per-song cap): both accepted.** Defying
+   Gravity's cause "is clear" (correctly-gated structural mismatch;
+   the damage is the fallback — the S-3 question). Man Out of You:
+   Ken's eyeball found it "actually fine" except a square-bracket
+   line at ~2:10 and minor end-of-song wobble.
+2. **Flag-count mapping: ratified** — Ken accepted the
+   any-defensible-mapping reading (every reading passes, 2 ≤ 8; the
+   conjunct's PASS rests on this ruling, not an invented threshold).
+3. **S-3: joint-matcher routing for warp-rejected songs.** Ken keeps
+   the joint route for DG-like songs — crammed interpolated dialog
+   lines are unacceptable for karaoke; hiding unplaceable lines is
+   the lesser harm. Direction for the production phase (recorded in
+   the build plan): the joint route may adopt CTC as its aligner and
+   be refactored to target exactly this warp-reject/version-mismatch
+   class.
+
+**⇒ S-1 = GO on the S-B arm** (all four conjuncts now pass). With
+S-2 = CTC and S-5 = scaffold-first, GATE S is complete; F2's license
+in the build plan is satisfied. F1 still awaits GATE R (2b unrun).
+S-C (the SRT switch) never ran; the SRT path keeps whisper by the
+rule's default.
+
+**Man Out of You decomposition (Fable verification of Ken's
+eyeball, S-B output confirmed by mtime):** the 2.6 s metric and the
+2:10 artifact are different things. (a) The measured max overlap is
+the *final-chorus* "Be a man" chant under "With all the strength of
+a raging fire" (~3:33) — a genuine two-voice overlap on lines the
+baseline never rendered (baseline 36/47, chants hidden; scaffold
+47/47), the same class Ken ruled genuine at 5b. (b) The 2:10
+artifact is sheet dirt: the stored genius-origin `.txt` wraps the
+section header across two lines (`line[19]='[SHANG &'`,
+`line[20]='SOLDIERS'`); `genius_lyrics.py`'s `_HEADER_RE` /
+`_BRACKET_CONTENT_RE` both require the matched bracket pair on one
+physical line, so the wrapped header survives as two "lyric" lines —
+invisible on the joint route (unmatched → hidden), surfaced by the
+render-everything scaffold route, contributing only ~1.0 s pairs
+(not the 2.6 s driver). (c) End-of-song wobble = dense
+call-and-response chant sequencing, nothing structural.
+
+**Corpus scan of the artifact class:** 5/17 stored genius sheets
+carry wrap dirt (15 lines). Rendering header fragments: Man Out of
+You (`[SHANG &`/`SOLDIERS`) and Defying Gravity (`[CITIZENS OF OZ
+&`/`ELPHABA`, confirmed rendering at 3:28 in its scaffold output).
+Stray lone-paren wrap fragments (HUNTR/X, Paradise, Free, DG,
+ManOut) do not survive to display text. **Disposition: fix-item,
+not an eyeball veto** — production fix recorded in the build plan
+(harden `parse_lyric_lines` for unterminated bracket lines;
+preferred over refetching, which risks wholesale lyric-version
+swaps on five songs).
+
+**S-4 executed:** the S-constants are recorded in the build plan's
+Appendix D — S-2 = CTC on the genius scaffold path / whisper stays
+on SRT (S-C unrun), S-3 = joint routing (Appendix A precedence 3
+resolves to route 4), snap re-enable exception = none (no named
+flag class the snap fixes appears in the S-arm tables; the S-B
+drift flags are degenerate-anchor artifacts). Appendix E's gate
+band stays unfilled (engine off).
 
 ---
 

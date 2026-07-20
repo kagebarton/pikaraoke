@@ -41,6 +41,20 @@ Rider recorded there: s_tx_roll5 (AUC 0.8964) kept as an optional
 advisory demote-only corroboration signal at Ken's discretion;
 Appendix E's gate band stays unfilled.*
 
+*Status (2026-07-19, later): GATE S is complete — S-2 = CTC selected
+for the genius-origin scaffold path, S-1 = GO on the S-B arm (Ken
+ruled the two open conjuncts), S-3 = joint-matcher routing for
+warp-rejected songs (Ken accepted the coverage trade). **F2 is now
+licensed** (S-1 GO + S-5 scaffold-first); F1 still awaits GATE R
+(Phase 2b probe has not run). S-constants recorded in Appendix D.
+Production fix-item recorded at GATE S: wrapped-bracket header lines
+in stored sheets slip `genius_lyrics.parse_lyric_lines`' single-line
+filters and render on the scaffold route (Man Out of You, Defying
+Gravity) — harden the parser before/at F2. Ken direction for the
+production phase: the joint-matcher route (which S-3 now feeds) may
+adopt CTC as its aligner and be refactored to target exactly the
+warp-reject/version-mismatch class (DG-like songs).*
+
 ## Architecture (engine branch)
 
 - **Emission oracle:** MMS_FA emission computed once per song on the
@@ -604,6 +618,27 @@ Data-independent decisions, locked now:
 Recorded at GATE S (mechanical read-offs, rules in the evidence plan's
 GATE S): S-2 aligner per path, S-3 warp-failure branch, any snap
 re-enable exception with its named flag class.
+
+**S-constants (recorded 2026-07-19, GATE S complete):**
+
+- **S-2 aligner:** genius-origin scaffold path = **CTC** (`ctc_align`
+  adapter per the wiring bullet above; strictly better on all three
+  S-2 metrics, see the evidence plan's GATE S read-off). SRT path =
+  whisper/existing cue-align unchanged — the S-C comparison never ran,
+  so the rule's "otherwise whisper (proven default)" applies.
+- **S-3 warp-failure branch:** **joint-matcher routing** (Ken,
+  2026-07-19) — densify failed the rule on Defying Gravity (2.6 s vs
+  0.2 s baseline overlap, robust to aligner arm); Ken accepted the
+  coverage trade (51/89 rendered vs 89/89) with rationale: crammed
+  interpolated dialog lines are unacceptable for karaoke, hiding
+  unplaceable lines is the lesser harm. Appendix A precedence 3's
+  "warp-gate failure → the S-3 branch" therefore resolves to route 4
+  (joint matcher).
+- **Snap re-enable exception: none.** The S-arm flag tables show no
+  named flag class the snap demonstrably fixes (the S-B drift flags —
+  Bloodstream, HUNTR/X — are degenerate-anchor-region artifacts, not
+  edge-timing defects). Snap stays disabled on CTC-timed routes per
+  the locked default.
 
 ## Appendix E — engine core contract (LOCKED design, Fable, 2026-07-18; only the gate band is filled later)
 
