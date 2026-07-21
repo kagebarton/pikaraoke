@@ -264,14 +264,18 @@ def _load_sidecar(path: Path) -> dict | None:
     (the corrupt-sidecar case: caller treats this as absent and refetches)."""
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except (OSError, ValueError):
         return None
     return data if isinstance(data, dict) and "schema_version" in data else None
 
 
 def _write_sidecar(path: Path, sidecar: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(sidecar, indent=2), encoding="utf-8")
+    # Sibling tmp + rename: an interrupted write must never leave a truncated
+    # sidecar for ensure_timing's is_file() check to trust (mirrors write_lrc).
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(sidecar, indent=2), encoding="utf-8")
+    tmp.replace(path)
 
 
 def _artifact_from_sidecar(sidecar: dict, path: Path) -> dict | None:
@@ -326,5 +330,9 @@ def ensure_timing(
     except Exception:
         logger.exception("Timing fetch: failed for %r by %r", title, artist)
         sidecar = _empty_sidecar(f"{title} {artist}".strip())
-    _write_sidecar(path, sidecar)
+    try:
+        _write_sidecar(path, sidecar)
+    except OSError:
+        logger.exception("Timing fetch: could not persist sidecar %s", path)
+        return None
     return _artifact_from_sidecar(sidecar, path)
