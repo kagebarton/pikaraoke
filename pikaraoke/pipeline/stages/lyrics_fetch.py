@@ -169,6 +169,21 @@ class LyricsFetchStage(BaseStage):
         except Exception:
             logger.exception("YTASR: resolve failed — aligning two-source")
 
+    def _media_duration(self, ctx: StageContext) -> float | None:
+        """Media duration, probed once and cached in ctx.artifacts.
+
+        _resolve_lrclib and _resolve_timing both need it; probing is an ffprobe
+        subprocess, so the first resolver to miss the cache probes and stashes
+        it for the rest (a Genius song with no on-disk ASR caption -- where
+        _resolve_ytasr never probes -- otherwise probes twice).
+        """
+        media_dur = ctx.artifacts.get("media_duration_s")
+        if media_dur is None:
+            media_dur = probe_duration(ctx.song_path)
+            if media_dur is not None:
+                ctx.artifacts["media_duration_s"] = media_dur
+        return media_dur
+
     def _resolve_lrclib(self, ctx: StageContext, song: GeniusSong) -> None:
         """Fetch an LRCLIB synced variant for the E1 gated-fill path.
 
@@ -181,9 +196,7 @@ class LyricsFetchStage(BaseStage):
         """
         try:
             sheet_lines = [item["text"] for item in parse_lyric_lines(song.text)]
-            media_dur = ctx.artifacts.get("media_duration_s")
-            if media_dur is None:
-                media_dur = probe_duration(ctx.song_path)
+            media_dur = self._media_duration(ctx)
             path = lrclib.ensure_lrc(ctx.song_path, song.title, song.artist, sheet_lines, media_dur)
             if path is not None:
                 logger.info("LRCLIB: variant available for fill (%s)", path.name)
@@ -207,9 +220,7 @@ class LyricsFetchStage(BaseStage):
         """
         try:
             sheet_lines = [item["text"] for item in parse_lyric_lines(song.text)]
-            media_dur = ctx.artifacts.get("media_duration_s")
-            if media_dur is None:
-                media_dur = probe_duration(ctx.song_path)
+            media_dur = self._media_duration(ctx)
             artifact = timing_fetch.ensure_timing(
                 ctx.song_path, song.title, song.artist, sheet_lines, media_dur
             )
