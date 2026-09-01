@@ -377,3 +377,83 @@ reference.
 ## Results log
 
 (append raw tables here; one docs commit per phase)
+
+### 2026-09-01 — Phase 4 (monotone-discard + inversion telemetry), Windows box — raw table, no verdict
+
+Instrument committed as `feat(joint): monotone-discard + inversion
+telemetry`; corpus replayed by a scratchpad driver on the
+`replay_ytasr_third_source.py` chassis (replay-only, no GPU, no
+whisper). Output is the table; **GATE P is Ken's read-off.**
+
+**Environment deviation (recorded):** run on the Windows dev box (uv
+`.venv`), not the conda `pik` Linux box the Ground rules name — that
+box was not reachable this session. `libmpv` is absent here, so
+`tests/conftest.py` cannot import the package; the suite was run with
+an import stub for `mpv` on `PYTHONPATH`, outside the repo and never
+committed. Full suite: **1512 passed, 4 failed, 2 skipped**; all four
+failures reproduce with this phase's changes stashed
+(`test_genius.py::test_write_overwrites_existing`, two
+`test_pipeline_stem_worker.py` cases, one `test_whisper_worker.py`
+case) and are Windows-platform issues — file-overwrite semantics and
+multiprocessing pipe teardown. `test_joint_match.py`: 62 passed (59
+pre-existing unmodified + 3 new). Pre-commit on the two changed files:
+clean.
+
+**Corpus:** 18 genius-origin bundles of the 34 on disk (16 srt-origin
+skipped via `ground_truth_refs.youtube_srt_present`). *Discrepancy
+flagged, not resolved:* the evidence plan and this plan both describe
+the genius-origin segment as **17** songs; the on-disk count is 18.
+Not investigated — recorded so the judge knows the denominator moved.
+
+**Knobs:** each bundle's own recorded `joint_stats.knobs`
+(alpha/beta/margin_s/max_edit_ratio/lookahead/anchor_fallback) — a
+production-faithful replay, not a sweep.
+
+**Thresholds:** gap > 0.5; inversion eligibility score >= 4.0;
+inversion span > 1.0 s.
+
+**Implementation reading recorded (the spec left it implicit):** the
+inversion walk filters to score >= 4.0 lines *first*, then walks
+adjacent pairs within that filtered set in line_id order. The
+alternative reading — adjacent in the full line_id sequence with both
+ends eligible — would count fewer pairs.
+
+| song | n_lines | sum_gap | n_lines_with_gap | n_inversions | max_span_s |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Defying Gravity (Wicked 20th) | 89 | 33.31 | 18 | 1 | 35.28 |
+| Free (Sony Animation) | 41 | 13.90 | 7 | 6 | 92.66 |
+| Popular (Wicked 20th) | 62 | 21.46 | 8 | 1 | 16.16 |
+| Be Our Guest | 77 | 18.63 | 11 | 3 | 110.54 |
+| Belle | 110 | 19.47 | 13 | 2 | 251.84 |
+| Best Part Of Me | 38 | 14.16 | 8 | 1 | 1.20 |
+| Bloodstream | 74 | 164.38 | 31 | 11 | 109.84 |
+| HUNTR/X This Is What It Sounds Like | 53 | 127.00 | 16 | 6 | 91.86 |
+| Domino | 67 | 48.44 | 15 | 4 | 154.11 |
+| In Summer | 31 | 1.00 | 1 | 0 | 0.00 |
+| I'll Make a Man Out of You | 47 | 45.31 | 15 | 7 | 68.80 |
+| NSYNC Paradise | 65 | 43.98 | 22 | 6 | 133.87 |
+| Colors of the Wind | 37 | 9.89 | 3 | 1 | 80.24 |
+| Seasons of Love | 34 | 23.26 | 10 | 0 | 0.00 |
+| Stay Gold | 38 | 0.00 | 0 | 0 | 0.00 |
+| Hakuna Matata | 40 | 38.58 | 12 | 3 | 101.04 |
+| The Next Ten Minutes | 71 | 17.73 | 8 | 1 | 18.70 |
+| Girl in the Bubble (For Good 2025) | 36 | 29.15 | 13 | 4 | 80.96 |
+
+**Totals:** sum_gap 669.66 over the corpus; 211 of 1010 lines carry a
+gap > 0.5; 57 inversions across 18 songs, 15 songs carrying at least
+one; largest single span 251.84 s (Belle).
+
+**Facts a read-off may want, recorded without interpretation:** one
+song is fully clean on both blocks (Stay Gold, 0.00/0); two songs carry
+gap mass with zero inversions (Seasons of Love 23.26, In Summer 1.00);
+the two largest gap totals (Bloodstream 164.38, HUNTR/X 127.00) are
+also the two songs the S-B arm flagged for drift signature. Per-song
+inversion pair lists and gap-line details were produced by the driver
+and left in the session scratchpad per the probe-output rule; the table
+above is the durable record.
+
+**STOP — GATE P.** No verdict recorded here. The rule: prevalence
+material → commission a section-level DP design as its own plan (breaks
+the 1:1 `line_objects` contract); otherwise record NO-GO and keep the
+monotonic DP as-is.
+
