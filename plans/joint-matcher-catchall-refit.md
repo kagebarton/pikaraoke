@@ -57,6 +57,15 @@ targets that population without gutting the clean tail.
   tables are appended to this plan's Results log via docs commits —
   tables only, **no verdicts**. Gates are read off by Ken/Fable;
   stop and alert at every GATE.
+- **Cross-plan sequencing (Ken, 2026-09-01):** this plan's Phase 4
+  (GATE P) and Phase 2a (GATE J1/J2) are steps 1 and 3 of the
+  measurement block in `plans/timing-source-pillars.md`, "Remaining
+  execution order" — Phase 4 runs first of everything on either plan
+  (cheapest, no GPU, and a material GATE P commissions a section-level
+  DP that breaks the 1:1 `line_objects` contract). Phase 1's code
+  changes are not part of the measurement block and land on this
+  plan's own schedule. Note 1.1 preserves `.lrc` persistence
+  deliberately: that is F2's line source in the build plan.
 - The SRT/cue route must stay byte-identical throughout. Fork
   maintenance: new logic in new files; upstream files change only at
   the call sites this plan names.

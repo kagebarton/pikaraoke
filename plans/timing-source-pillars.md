@@ -127,9 +127,13 @@ after data.
 | 1b (score oracle, GATE O) | locked below | Sonnet 5 | Opus + Ken |
 | 2 (richsync probe, GATE R) | 2a/2b below; Appendix C locks at the GATE | Sonnet 5 | Opus + Ken eyeball |
 | 3 (scaffold probe, GATE S) | below; Appendices D/E lock at the GATE | Sonnet 5 | Opus; escalate if arms conflict |
+| 4 (non-Latin form, GATE L) | below; Appendix D's carve-out amends at L-3 | Sonnet 5 | Opus + Ken eyeball |
 
 Phase dependencies: 1b, 2, 3 can interleave; 1b should complete before
 2b (its scores feed 2b's verification stats) and before 3's S-B2 arm.
+Phase 4 (GATE L) depends on nothing but its own Mandarin corpus (Ken's
+action) and blocks nothing; "Remaining execution order" below sequences
+it against the joint plan's probes.
 Build phases in `plans/ctc-sync-engine.md` consume these GATEs per its
 licensing table; its E0 (fetch pillar) is architecture-neutral and may
 start immediately — the sidecar format both it and Phase 2a share is
@@ -397,11 +401,17 @@ demotion — see Results log), offline against its existing bundle:
    record per song: `n_pairs`, `pair_fraction`, `slope`, `offset_s`,
    residual MAD, per-line |residual| p50/p90/max, and fraction of
    provider lines with zero transcribe evidence in their claimed
-   (warped) span. **If GATE O = O-1:** additionally score the warped
-   richsync timings against the Phase 1b cached emissions, per line —
-   the candidate verification statistic that tests *timing* directly,
-   where transcribe pairing tests text-location agreement; Appendix C
-   chooses between the two families (or both) at the lock.
+   (warped) span. **Emission family — eligible (Ken, 2026-09-01):**
+   additionally score the warped richsync timings against the Phase 1b
+   cached emissions, per line — the candidate verification statistic
+   that tests *timing* directly, where transcribe pairing tests
+   text-location agreement; Appendix C chooses between the two families
+   (or both) at the lock. *(Amended: this read "If GATE O = O-1".
+   GATE O came out GRAY — neither O-1 nor a confirmed O-2 — leaving
+   Appendix C's "only if GATE O ≠ O-2" clause undefined. Ken ruled the
+   family eligible: Appendix C's adoption rule already self-guards, so
+   the procedure decides on 2b's cohorts. Phase 1b emissions are
+   cached; the arm adds no forward passes.)*
 3. Render the `.ass` variants per song where applicable:
    (i) richsync-direct — provider text, timings warped by the fitted
    slope/offset, word sweeps capped at `MAX_WORD_DUR_S`; build
@@ -412,11 +422,16 @@ demotion — see Results log), offline against its existing bundle:
    (iii) for the 7 srt-origin songs, the existing cue-align output — this
    is the **SRT-vs-richsync A/B** Ken asked to see before deciding tier
    order;
-   (iv) **if GATE O = O-1:** richsync-guided CTC align — provider text
-   force-aligned by CTC inside richsync-guided windows (richsync
+   (iv) **runs (Ken, 2026-09-01):** richsync-guided CTC align — provider
+   text force-aligned by CTC inside richsync-guided windows (richsync
    supplies text, line structure and approximate location; CTC supplies
-   frame-accurate on-clock timing). This is the engine plan's word-route
-   candidate (its Phase E2), A/B'd here against (i).
+   frame-accurate on-clock timing). A/B'd here against (i) under
+   Appendix C's R-5 rule. *(Amended: this arm was gated on GATE O = O-1,
+   written when (iv) meant engine machinery — emission oracle plus score
+   gate. What the arm actually needs is a windowed CTC align, which
+   GATE S selected on evidence (S-2) and `scripts/sb_ctc_adapter.py`
+   already implements. Ken ruled the arm runs, so R-5 applies as locked
+   instead of resolving to (i) by precondition failure.)*
 4. Print the mpv A/B commands; table into the Results log.
 
 **GATE R** — Ken eyeballs; Opus reads the table. Rulings produced here:
@@ -571,6 +586,135 @@ scaffold, that oracle is circular (already noted in `835ba2c7`'s plan).
 Scaffold/engine quality is judged on re-pace/overlap/flags + eyeball;
 the harness's held-out scoring remains valid only for joint-matcher
 replays.
+
+## Phase 4 — non-Latin alignment form (GATE L)
+
+Commissioned by Ken 2026-09-01. Rung 2 (the line route) silently drops
+every line it cannot romanize: `sb_ctc_adapter.make_slice_align` builds
+`kept = [(raw, normalize_word(raw)) ...]` and filters the empties, so a
+Hanzi line normalizes to nothing, `kept` empties, and the adapter
+returns `None` — the whole line re-paces from its cue. Appendix D's
+non-Latin carve-out was locked 2026-07-18 as data-independent design
+caution, **not** as a measured finding: no CJK audio has ever been put
+through MMS_FA in this project. This phase measures it.
+
+**Scope: Mandarin only.** One character = one syllable = one pinyin
+token, so timing-to-character back-mapping is 1:1, without the sub-word
+ambiguity the Latin path carries. Japanese (mixed kana/kanji), Korean,
+Thai and Arabic do not share that property and stay on the whisper
+rescue, untouched. Appendix D's rule is already per-line and
+majority-based, so the romanizer gates on majority-CJK lines and
+nothing else changes.
+
+**Display text is not at stake.** Appendix A locks the line route to
+render the sheet, and the adapter already carries `raw` beside the
+alignment form into its returned word list. The romanization is an
+internal alignment form only; the singer reads the original script by
+construction. No display work is in this phase.
+
+**Prerequisite (Ken's action, blocks the phase):** a Mandarin corpus
+with Genius sheets or uploader SRTs, sized like S-C's. No arm runs
+until it exists; nothing else in this plan waits on it.
+
+Arms, in order; later arms only where earlier ones justify the cost:
+
+- **L-0 (diagnostic, cheap, no GPU):** on one Mandarin song, dump the
+  uroman-style alignment form beside `pypinyin` + `jieba` and record
+  heteronym and segmentation damage (多音字 — 长 chang/zhang, 了
+  le/liao, 行 xing/hang are common in lyrics; uroman converts
+  char-by-char with no context, so it picks wrong readings and runs
+  syllables together). Establishes which failure mode is live before
+  any GPU time is spent — romanizer quality, or emission quality.
+- **L-A:** `pypinyin` + `jieba` word segmentation as the alignment
+  form, MMS_FA unchanged, per-character back-map. Adapter delta is one
+  function (`normalize_word` → a pluggable alignment-form callable).
+  Stated hypothesis: MMS_FA was itself trained on uroman-ized text
+  across its 1000+ languages including Mandarin, so its emissions are
+  not inherently blind to romanized Chinese — the model has seen it.
+  Tones are lost; forced alignment does not need them.
+- **L-B (only if L-A fails GATE L):** a second CTC bundle with a Hanzi
+  vocabulary, routed on majority-CJK lines.
+  `torchaudio.functional.forced_align` is model-agnostic — it takes any
+  emission matrix plus token ids — so the emission-slicing recipe
+  carries over unchanged. Candidates: character-level CTC fine-tunes
+  emitting Hanzi directly from a ~3–5k character vocab
+  (`jonatasgrosman/wav2vec2-large-xlsr-53-chinese-zh-cn`, the
+  TencentGameMate `chinese-wav2vec2` fine-tunes). Out-of-vocab
+  characters fall into the existing OOV-skip bookkeeping. Per-character
+  timing is what Chinese karaoke wants anyway, one char being one sung
+  syllable. Costs: a second model download and VRAM (~1.2 GB for the
+  large variant; smaller exist) plus a routing switch on majority-CJK
+  lines. The singing-vs-speech domain gap applies, but it is the same
+  gap MMS_FA already tolerates on the Latin path. (Charsiu, a
+  purpose-built Mandarin forced aligner, is noted and not adopted: its
+  frame-classification API does not slot into the emission recipe.)
+
+**GATE L** — the S-2 rule restated on the Mandarin corpus, no new
+threshold invented: the romanized-CTC arm is selected iff it is at
+least as good as the whisper arm on all three of mean re-pace, mean
+worst-overlap and flag count, with no song > 1.0 s worse on overlap;
+otherwise whisper (proven default) and Appendix D's carve-out stands as
+written. Ken retains the eyeball veto. Rationale for reusing S-2
+verbatim: whisper fallback is already acceptable on rung 2, so a
+romanized CTC arm only earns its place if it beats whisper on the
+failure modes CTC was brought in for — melisma robustness and line-edge
+sharpness.
+
+Rulings produced here:
+
+- L-1: romanized alignment form GO/NO-GO (the S-2 restatement above).
+- L-2: which romanizer — L-A's `pypinyin`+`jieba`, or L-B's Hanzi-vocab
+  bundle. L-B is only reached if L-A fails L-1.
+- L-3: **Appendix D's non-Latin bullet amended** with the resulting
+  constant, recorded there the way S-2 was.
+
+**Dependencies if L-A ships:** `pypinyin` (pure Python, small) and
+`jieba` (~5 MB dictionary) become runtime dependencies, needed only on
+the F2 path. Fork rule: the alignment-form callable lands in a new
+`pikaraoke/lib/align_form.py`, not as edits to `token_align.py`.
+
+## Remaining execution order (Ken, 2026-09-01) — measure first, lock once
+
+Ken's sequencing ruling: run the remaining measurement program to
+completion, then consolidate the build design once, rather than
+amending locked appendices as results trickle in. The dependency check
+that licenses this: **no remaining probe needs production code.** Only
+the V-gates (the build plan's V1/V2, the joint plan's V) are validation
+*of* shipped code, which is tautological.
+
+Order — cheapest and highest overturn-risk first:
+
+1. **Joint plan Phase 4 → GATE P** (telemetry only, no GPU). Cheapest
+   probe on the list and the highest redesign ceiling: material
+   reordering prevalence commissions a section-level DP as its own
+   plan, which breaks the 1:1 `line_objects` contract. Measuring that
+   late would be the expensive mistake.
+2. **Phase 2b → GATE R** (this file; four arms per the 2026-09-01
+   rulings). Largest blast radius on the routing ladder — R-3 can
+   reorder rung 0 against rung 1, and R-1 decides whether the word
+   route exists at all.
+3. **Joint plan Phase 2a → GATE J1/J2** (GPU, scratchpad). J2 feeds
+   Appendix D's snap policy directly, which currently records
+   "re-enable exception: none".
+4. **S-E** (Phase 3's unrun optional arm; offline, no GPU align). Cheap
+   add-on: informs the build plan's deletion inventory and tests Ken's
+   GATE C observation.
+5. **Phase 4 → GATE L** (above) — whenever the Mandarin corpus exists.
+   Blocks nothing and nothing blocks it but the corpus.
+
+Then **one design-consolidation pass**: re-lock the build plan's
+Appendices C, D and E with the real constants in a single revision.
+
+**Carve-out — F2 is a zero-regret build at any point in this
+sequence.** Checked against every pending outcome: an R-1 NO-GO only
+sends more songs into F2's line-source pool (Appendix A already
+specifies that demotion); GATE P and GATE J1 are rung-3 questions;
+GATE L is an additive per-line romanizer inside F2's aligner. The
+single coupling is GATE J2 possibly flipping snap policy on CTC-timed
+routes — a post-pass wiring flag, not a redesign. Build it before or
+after the block at Ken's discretion; the argument for pulling it
+forward is that rung 2 currently has zero production miles, so every
+number on it comes from harnesses.
 
 ## Production phases — moved to `plans/ctc-sync-engine.md`
 
@@ -2037,6 +2181,48 @@ SRT path is unaffected (stays as-is; the CTC snap-off default applies
 only where CTC is the aligner).*
 
 ---
+
+### 2026-09-01 — Ken rulings: 2b arm (iv) runs, emission family eligible; measure-first sequencing; Phase 4 (GATE L) commissioned
+
+Three rulings, no probe run. Recorded because each resolves a case a
+locked procedure did not cover (STOP → Ken per Ground rules).
+
+**1. Phase 2b arm (iv) runs.** The arm's precondition read "if GATE
+O = O-1", which never happened — but Appendix C's R-5 rule is written
+unconditionally and presumes (iv) exists, so honoring the precondition
+literally would have left R-5 undefined and defaulted the word route to
+the foreign-clock warp by omission rather than by comparison. Ken ruled
+the arm runs: the precondition was written when (iv) meant engine
+machinery (emission oracle + score gate), whereas the arm needs only a
+windowed CTC align — which GATE S selected on evidence (S-2) and
+`scripts/sb_ctc_adapter.py` already implements. Phase 2b is a four-arm
+probe; R-5 applies as locked.
+
+**2. Appendix C's emission-score family is eligible.** Its clause read
+"only if GATE O ≠ O-2"; GATE O came out GRAY — neither O-1 nor a
+confirmed O-2 — leaving eligibility undefined. Ken ruled eligible on
+the ground that the bullet's own adoption rule self-guards
+(discriminative on 2b's cohorts → primary gate, otherwise dropped), so
+the pre-registered procedure decides rather than a judgment call
+pre-empting it. Phase 1b emissions are cached, so the arm adds no
+forward passes.
+
+**3. Measure first, lock once.** The remaining probe program runs to
+completion before the build design is consolidated. Licensing fact
+recorded: no remaining probe needs production code — only the V-gates
+are validation of shipped code. Order and rationale in "Remaining
+execution order" above; F2 recorded there as a zero-regret exception.
+
+**Also commissioned: Phase 4 (GATE L)**, the non-Latin alignment-form
+probe — phase text above. Motivation (Ken): multi-language support is
+in the project's future, and Appendix D's non-Latin carve-out means the
+CTC path abstains exactly when that content arrives. The alternative
+considered and **rejected** was retiring CTC and running whisper
+everywhere: S-1 passed only on the S-B (CTC) arm (0.47 s against the
+0.54 s bar), while the whisper arm read 1.61 s and NO-GO, so retiring
+CTC would have un-licensed F2 on this plan's own recorded evidence.
+Recorded so it is not re-litigated: CTC stays, and the multi-language
+question is answered by widening CTC's eligibility, not by removing it.
 
 ## Appendices A–D — moved to `plans/ctc-sync-engine.md`
 

@@ -55,6 +55,20 @@ production phase: the joint-matcher route (which S-3 now feeds) may
 adopt CTC as its aligner and be refactored to target exactly the
 warp-reject/version-mismatch class (DG-like songs).*
 
+*Status (2026-09-01): Ken ruled **measure first, lock once** — the
+remaining probe program (the joint plan's Phase 4/GATE P, the evidence
+plan's Phase 2b/GATE R, the joint plan's Phase 2a/GATE J1-J2, S-E, and
+the newly commissioned Phase 4/GATE L) runs to completion before this
+plan's design is consolidated, because none of it needs production code
+and several outcomes can overturn locked design. Appendices C, D and E
+are then re-locked in a single consolidation pass rather than amended
+piecemeal. Order and rationale: the evidence plan's "Remaining
+execution order". **F2 is exempt — recorded there as zero-regret
+against every pending outcome**, its one coupling being GATE J2's
+possible snap-policy flip (a post-pass wiring flag, not a redesign).
+Two rulings recorded the same day are folded into Appendix C below:
+2b arm (iv) runs, and the emission-score family is eligible.*
+
 ## Architecture (engine branch)
 
 - **Emission oracle:** MMS_FA emission computed once per song on the
@@ -563,17 +577,30 @@ specified).
   line-source pool / repair path, never rendered from richsync; a song
   with > 20% outlier lines fails the gate entirely.
 - zero-evidence-span fraction: general rule, threshold capped ≤ 0.4.
-- Emission-score family (only if GATE O ≠ O-2): per-line score against
-  the GATE O band. Adoption rule: if discriminative under the general
-  rule on 2b's cohorts, it becomes the PRIMARY gate and the transcribe
-  family retains only `n_pairs`/`pair_fraction` as a sanity floor;
-  otherwise transcribe-family-only.
+- Emission-score family (**eligible — Ken, 2026-09-01**): per-line
+  score against the GATE O band. Adoption rule: if discriminative under
+  the general rule on 2b's cohorts, it becomes the PRIMARY gate and the
+  transcribe family retains only `n_pairs`/`pair_fraction` as a sanity
+  floor; otherwise transcribe-family-only. *(Amended: the clause read
+  "only if GATE O ≠ O-2". GATE O came out GRAY — neither O-1 nor a
+  confirmed O-2 — leaving eligibility undefined. Ken ruled the family
+  eligible because this bullet's own adoption rule already self-guards:
+  the procedure tests it on 2b's cohorts and drops it if
+  non-discriminative, so no judgment call pre-empts the measurement.
+  Phase 1b emissions are cached, so the arm costs no forward passes.)*
 
 **R-5 mechanism rule (locked):** richsync-guided CTC (2b arm iv) is
 chosen over the warped render (arm i) unless Ken's A/B finds (iv)
 visibly worse on any song or its line coverage is lower; ties go to
 (iv) — it retires the foreign-clock warp from the output path. Both
 bad ⇒ the R-1 NO-GO path (demote to line source).
+
+*R-5 status (Ken, 2026-09-01): arm (iv) runs.* The evidence plan's
+Phase 2b step 3(iv) gated the arm on "GATE O = O-1", written when (iv)
+meant engine machinery; the arm needs only a windowed CTC align, which
+S-2 selected on evidence and `scripts/sb_ctc_adapter.py` already
+implements. R-5 therefore applies as locked above, rather than
+resolving to (i) by precondition failure.
 
 **Stage wiring (locked):** the word route runs the transcribe pass
 only (align/joint skipped); verify consumes the same transcribe words
@@ -602,7 +629,15 @@ Data-independent decisions, locked now:
   normalized alignment form is empty or majority-non-Latin after
   ASCII fold is CTC-ineligible: engine branch → prior-paced fill with
   its own provenance tag; fallback branch → the existing whisper
-  realign/repace rescue.
+  realign/repace rescue. *Status (2026-09-01): **under test.** This
+  bullet was locked 2026-07-18 as data-independent design caution, not
+  as a measured finding — no CJK audio has been through MMS_FA in this
+  project. The evidence plan's Phase 4 (GATE L) measures a romanized
+  alignment form on a Mandarin corpus under the S-2 rule; its L-3
+  ruling amends this bullet with the resulting constant. Until GATE L
+  rules, the carve-out stands exactly as written and every non-Latin
+  line takes the whisper rescue — which is what makes deferring GATE L
+  safe.*
 - **Richsync ends:** when a scaffold source is a word sidecar,
   `ts`/`te` are used as span starts/ends (`te` clamped at the next
   start); line-level sources keep paced ends.
@@ -699,7 +734,13 @@ here at that GATE.
   digits, trailing-punctuation strip — covers the corpus cases
   `525,600`, `30`, `20.`; hand-rolled, no new dependency); anything
   unhandled → OOV-skip with the Phase 1 index bookkeeping. Non-Latin
-  per-line rule per Appendix D.
+  per-line rule per Appendix D. *Amendment pending GATE L
+  (2026-09-01): the alignment form becomes a pluggable callable so a
+  majority-CJK line can romanize instead of OOV-skipping. The display
+  token is unaffected — it already rides through to the returned word
+  list, so the singer reads the original script by construction. Fork
+  rule: new module `pikaraoke/lib/align_form.py`; `pypinyin`/`jieba`
+  become runtime dependencies only if GATE L's L-A arm ships.*
 - **Caps + metrics:** `MAX_WORD_DUR_S` word-sweep caps as in
   `cue_align`; every engine harness run reports `artifact_metrics`
   plus gated-fraction, repaired-fraction, and fill-fraction per song.
