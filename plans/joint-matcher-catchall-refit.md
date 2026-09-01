@@ -194,6 +194,11 @@ design (own plan; sheet sections permute/repeat, monotonic within a
 section; breaks the 1:1 line_objects contract). Otherwise record
 NO-GO and keep the monotonic DP as-is.
 
+*Status (2026-09-01): **NO-GO** — read off by Fable, recorded in the
+Results log below. The monotonic DP stands unchanged and no
+section-level DP plan is commissioned. Phase 4 is closed; the
+telemetry stays in the matcher as a standing instrument.*
+
 ## Phase 2a — CTC-in-joint offline A/B (scratchpad; gates the swap)
 
 No repo changes except the Results-log docs commit. The CTC recipe is
@@ -387,10 +392,8 @@ whisper). Output is the table; **GATE P is Ken's read-off.**
 
 **Environment deviation (recorded):** run on the Windows dev box (uv
 `.venv`), not the conda `pik` Linux box the Ground rules name — that
-box was not reachable this session. `libmpv` is absent here, so
-`tests/conftest.py` cannot import the package; the suite was run with
-an import stub for `mpv` on `PYTHONPATH`, outside the repo and never
-committed. Full suite: **1512 passed, 4 failed, 2 skipped**; all four
+box was not reachable this session. Full suite under `uv run python -m
+pytest`: **1512 passed, 4 failed, 2 skipped**; all four
 failures reproduce with this phase's changes stashed
 (`test_genius.py::test_write_overwrites_existing`, two
 `test_pipeline_stem_worker.py` cases, one `test_whisper_worker.py`
@@ -398,6 +401,15 @@ case) and are Windows-platform issues — file-overwrite semantics and
 multiprocessing pipe teardown. `test_joint_match.py`: 62 passed (59
 pre-existing unmodified + 3 new). Pre-commit on the two changed files:
 clean.
+
+*Correction (same day):* this entry first recorded `libmpv` as absent
+on this box, with the suite run under an `mpv` import stub. That was
+wrong. `libmpv-2.dll` is hand-placed at `.venv/Scripts/` (118 MB, lost
+on a `.venv` rebuild); invoking `.venv/Scripts/python.exe` directly
+fails at collection because `python-mpv` reads `%PATH%` at import and
+only `uv run` puts `.venv/Scripts` on it. The stub was unnecessary.
+The counts above are unchanged and were re-verified stub-free under
+`uv run`.
 
 **Corpus:** 18 genius-origin bundles of the 34 on disk (16 srt-origin
 skipped via `ground_truth_refs.youtube_srt_present`). *Discrepancy
@@ -457,3 +469,78 @@ material → commission a section-level DP design as its own plan (breaks
 the 1:1 `line_objects` contract); otherwise record NO-GO and keep the
 monotonic DP as-is.
 
+### 2026-09-01 — GATE P read-off (Fable) — NO-GO, monotonic DP stands
+
+**(Fable executing the GATE P read-off against the Phase 4 table above
+plus the driver's per-song pair/gap-line detail. Recorded here at Ken's
+instruction.)**
+
+**Verdict: NO-GO — keep the monotonic DP as-is.** The headline numbers
+look prevalence-material at first glance (211/1010 lines with gap >
+0.5, 57 inversions, 15/18 songs carrying at least one), but the detail
+record shows the mass is not produced by sheet-section reordering. It
+comes from two mechanisms a section-level DP would not fix — and one it
+would actively make worse.
+
+**1. The dominant signature is repeat cross-attraction, not
+permutation.** In song after song the "better" unconstrained candidate
+for a late line is an earlier occurrence of the same repeated text —
+exactly the chorus-steal the monotonic DP exists to refuse.
+
+- *Free*: the flagged lines' argmax sits at a near-constant offset
+  before their selected times — two clusters at ~69 s and ~96 s, i.e.
+  chorus-to-chorus spacing. The gaps are tiny (~2.0), meaning the two
+  occurrences score nearly identically, which is what duplicate text
+  looks like.
+- *Belle*'s 251.84 s "inversion" is the final reprise line matching the
+  opening occurrence (argmax 33.86 s vs selected 289.94 s). *Defying
+  Gravity*'s closing lines (85, 88) point back to the ~57 s hook.
+- Many distinct lines collide on a *single* argmax timestamp: eight Man
+  Out of You lines all argmax at 77.68 s (the chant), HUNTR/X lines
+  33/35/37 all at 54.54 s, Bloodstream lines repeatedly at
+  133.84/160.39/222.92 s. Many-lines-to-one-moment is repeat pileup
+  (the existing diagnosis), not a coherent relocated section.
+- The inversion count is inflated by this: Man Out of You logs the
+  *identical* pair (210.08 → 141.44) three times at different line_ids,
+  and Bloodstream logs 222.92 → 113.079 twice — repeated sheet text
+  re-triggering the same argmax pair. The distinct-event count is well
+  under 57.
+
+**2. The big gap mass sits on the two known drift-signature songs.**
+Bloodstream (164.38) and HUNTR/X (127.00) alone carry 43% of the corpus
+gap total, and both were already flagged by the S-B arm for
+lyric-version drift. Their unplaced blocks (Bloodstream 44–50, HUNTR/X
+40–52) are sheets that do not match the audio version — the lever there
+is upstream lyric-version/length matching per the repeat-pileup
+diagnosis, not DP ordering. A section-level DP cannot place a section
+the audio does not contain.
+
+**3. No case fits the pattern a section-level DP is for.** A genuine
+permutation would show a contiguous block whose alternatives form a
+coherent monotone run at another location with decisively better
+scores. Nothing in the detail matches that; the closest candidates
+(NSYNC Paradise 11–12 vs 31–38, Girl in the Bubble 11–12 vs 29–30) are
+*symmetric* cross-pointing between two occurrences of repeated text —
+the repeat signature, not a swap. Meanwhile the clean tail (Stay Gold
+0/0, In Summer 1.0/0) shows the monotonic DP costs essentially nothing
+where the sheet matches the audio.
+
+**Framing point recorded with the verdict:** the probe's "gap" is
+measured against the unconstrained argmax, which on repeated text is
+frequently the *wrong* occurrence — so much of the measured "cost" is
+the defence working correctly, and the totals are an upper bound on
+real cost.
+
+**Caveats carried forward, none verdict-changing:** the 17-vs-18
+denominator discrepancy the executor flagged remains uninvestigated;
+and the inversion walk's filtered-adjacency reading counts *more* pairs
+than the alternative reading, which only strengthens NO-GO.
+
+**Consequences.** Phase 4 closes with no code change beyond the
+telemetry already committed (`feat(joint): monotone-discard + inversion
+telemetry`), which stays in as a standing instrument. No section-level
+DP plan is commissioned; the 1:1 `line_objects` contract is not
+disturbed. The measurement block advances to step 2, Phase 2b / GATE R
+in `plans/timing-source-pillars.md`. Recorded as a lever this probe
+points at, not commissioned here: upstream lyric-version/length
+matching for the drift-signature songs.

@@ -688,7 +688,12 @@ Order — cheapest and highest overturn-risk first:
    probe on the list and the highest redesign ceiling: material
    reordering prevalence commissions a section-level DP as its own
    plan, which breaks the 1:1 `line_objects` contract. Measuring that
-   late would be the expensive mistake.
+   late would be the expensive mistake. — ***CLOSED 2026-09-01: GATE P
+   = NO-GO*** (Fable's read-off in the joint plan's Results log). Ran
+   over 18 genius-origin bundles; the gap and inversion mass is repeat
+   cross-attraction plus lyric-version drift, not permutation, so the
+   monotonic DP stands and no section-level DP is commissioned. The
+   redesign risk this step existed to price is retired.
 2. **Phase 2b → GATE R** (this file; four arms per the 2026-09-01
    rulings). Largest blast radius on the routing ladder — R-3 can
    reorder rung 0 against rung 1, and R-1 decides whether the word
