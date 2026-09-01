@@ -297,6 +297,7 @@ def match_words_to_lines_joint_with_stats(
         "absent_line_ids": absent,
         "selected_score_sum": float(sum(c["score"] for c in selected)),
     }
+    stats.update(_monotone_telemetry(all_candidates, selected))
 
     logger.info(
         "Joint match: %d/%d lines placed (align=%d transcribe=%d ytasr=%d "
@@ -766,6 +767,84 @@ def _best_tiling_by_time(candidates: list[dict]) -> list[dict]:
         cur = prev[cur]
     selected.reverse()
     return selected
+
+
+# Phase 4 telemetry thresholds (plans/joint-matcher-catchall-refit.md).
+# Measurement only: nothing below feeds back into placement.
+_DISCARD_GAP_MIN = 0.5
+_INVERSION_MIN_SCORE = 4.0  # matched-token units, ANCHOR_MIN_TOKENS precedent
+_INVERSION_MIN_SPAN_S = 1.0
+
+
+def _monotone_telemetry(all_candidates: list[dict], selected: list[dict]) -> dict:
+    """Measure what ``_best_tiling_by_time``'s line-order constraint costs.
+
+    The DP deliberately fights reordering (chorus-steal defence). This
+    reports the two quantities a section-level design would have to beat,
+    without changing any placement: how much candidate score the
+    constraint discards, and how often the unconstrained best placements
+    actually run backwards in audio time.
+    """
+    best: dict[int, dict] = {}
+    for cand in all_candidates:
+        line_id = cand["line_id"]
+        # Strict > keeps the first candidate on a tie, so ``best`` follows
+        # all_candidates' align > transcribe > ytasr order -- the same
+        # source precedence the DP's own tie-break uses.
+        if line_id not in best or cand["score"] > best[line_id]["score"]:
+            best[line_id] = cand
+
+    selected_by_line = {cand["line_id"]: cand for cand in selected}
+
+    sum_gap = 0.0
+    discard_lines = []
+    for line_id in sorted(best):
+        chosen = selected_by_line.get(line_id)
+        gap = best[line_id]["score"] - (chosen["score"] if chosen else 0.0)
+        sum_gap += gap
+        if gap > _DISCARD_GAP_MIN:
+            discard_lines.append(
+                {
+                    "line_id": line_id,
+                    "gap": float(gap),
+                    "best_t0": float(best[line_id]["t0"]),
+                    "selected_t0": float(chosen["t0"]) if chosen else None,
+                }
+            )
+
+    strong = [
+        (line_id, float(best[line_id]["t0"]))
+        for line_id in sorted(best)
+        if best[line_id]["score"] >= _INVERSION_MIN_SCORE
+    ]
+    inversion_pairs = []
+    max_span = 0.0
+    for (earlier_id, earlier_t0), (later_id, later_t0) in zip(strong, strong[1:]):
+        span = earlier_t0 - later_t0
+        if span > _INVERSION_MIN_SPAN_S:
+            inversion_pairs.append(
+                {
+                    "earlier_line_id": earlier_id,
+                    "later_line_id": later_id,
+                    "earlier_t0": earlier_t0,
+                    "later_t0": later_t0,
+                    "span_s": float(span),
+                }
+            )
+            max_span = max(max_span, span)
+
+    return {
+        "monotone_discard": {
+            "sum_gap": float(sum_gap),
+            "n_lines_with_gap": len(discard_lines),
+            "lines": discard_lines,
+        },
+        "inversions": {
+            "n_inversions": len(inversion_pairs),
+            "max_inversion_span_s": float(max_span),
+            "pairs": inversion_pairs,
+        },
+    }
 
 
 # ---------------------------------------------------------------------------

@@ -1061,3 +1061,65 @@ class TestEvidenceAttach:
 
         assert stats["selected_source"][1] == "transcribe"
         assert objs[1]["evidence"]["transcribe_match"] > 0
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 telemetry: what the monotonic line-order constraint costs
+# ---------------------------------------------------------------------------
+
+
+class TestMonotoneTelemetry:
+    """Stats-only blocks measuring the DP's reordering defence.
+
+    The monotonic constraint deliberately refuses out-of-order placements;
+    these report what that refusal discards, without changing any placement.
+    """
+
+    LINES = ["alpha bravo charlie delta", "echo foxtrot golf hotel"]
+    _L0 = ("alpha", "bravo", "charlie", "delta")
+    _L1 = ("echo", "foxtrot", "golf", "hotel")
+
+    def test_monotone_stream_reports_no_discard_or_inversions(self):
+        words = _aw_seq(*self._L0, t0=0.0) + _aw_seq(*self._L1, t0=10.0)
+
+        _, stats = match_words_to_lines_joint_with_stats([], words, self.LINES, self.LINES)
+
+        assert stats["monotone_discard"]["sum_gap"] == 0.0
+        assert stats["monotone_discard"]["n_lines_with_gap"] == 0
+        assert stats["monotone_discard"]["lines"] == []
+        assert stats["inversions"]["n_inversions"] == 0
+        assert stats["inversions"]["max_inversion_span_s"] == 0.0
+
+    def test_reordered_stream_reports_inversion_and_discard(self):
+        # Line 1 sung ten seconds before line 0: the constraint can keep only
+        # one of the two best candidates, so the other's score is discarded.
+        words = _aw_seq(*self._L1, t0=0.0) + _aw_seq(*self._L0, t0=10.0)
+
+        _, stats = match_words_to_lines_joint_with_stats([], words, self.LINES, self.LINES)
+
+        discard = stats["monotone_discard"]
+        assert discard["n_lines_with_gap"] == 1
+        assert discard["sum_gap"] > 0.0
+        dropped = discard["lines"][0]
+        assert dropped["line_id"] == 1
+        assert dropped["best_t0"] == 0.0
+        # Unplaced, so the gap is the full unconstrained best score.
+        assert dropped["selected_t0"] is None
+        assert dropped["gap"] == discard["sum_gap"]
+
+        inversions = stats["inversions"]
+        assert inversions["n_inversions"] == 1
+        assert inversions["max_inversion_span_s"] == 10.0
+        pair = inversions["pairs"][0]
+        assert (pair["earlier_line_id"], pair["later_line_id"]) == (0, 1)
+        assert pair["earlier_t0"] > pair["later_t0"]
+
+    def test_keys_present_with_no_words(self):
+        _, stats = match_words_to_lines_joint_with_stats([], [], self.LINES, self.LINES)
+
+        assert stats["monotone_discard"] == {"sum_gap": 0.0, "n_lines_with_gap": 0, "lines": []}
+        assert stats["inversions"] == {
+            "n_inversions": 0,
+            "max_inversion_span_s": 0.0,
+            "pairs": [],
+        }
