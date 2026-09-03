@@ -456,12 +456,16 @@ demotion — see Results log), offline against its existing bundle:
   Decision rule locked in the build plan's Appendix C: (iv) wins
   unless visibly worse on any song or lower line coverage; ties → (iv).
 
-*Status (2026-09-03): read off by Fable — see the Results log. **R-4 is a
+*Status (2026-09-03): read off by Fable, then R-1 ruled by Ken — see the
+Results log. **R-1 = NO-GO as the route stands** (gate-driven; the
+mechanism is GO on Ken's eyeball, 6 of 10 songs usable), with the
+Appendix A demotion applying and the R-4 re-specification measurements
+M1-M5 commissioned. **R-4 is a
 STOP → Ken**: zero statistics came out discriminative (the procedure needs
 ≥ 2), the assembled clamp set cannot fail both controls, and the outlier
-rule's denominator is unspecified. R-1 = **NO-GO as the route stands**,
-gate-driven rather than mechanism-driven, and reverses if a re-specified
-Appendix C passes; Appendix A's demotion applies meanwhile. R-2 confirmed.
+rule's denominator is unspecified. R-1 **ruled by Ken the same day** as NO-GO as the
+route stands, gate-driven rather than mechanism-driven, reversing if a
+re-specified Appendix C passes; Appendix A's demotion applies meanwhile. R-2 confirmed.
 R-3 SRT-first stands. R-5 no award — arm (iv) carries a window-edge smear
 artifact and re-runs after a fix. Seven decisions are Ken's before this
 gate can close.*
@@ -709,8 +713,10 @@ Order — cheapest and highest overturn-risk first:
    reorder rung 0 against rung 1, and R-1 decides whether the word
    route exists at all. — ***RUN 2026-09-03; GATE R read off, not
    closed***: R-4 STOP → Ken (see the Results log). R-2 and R-3 are
-   settled (provider text as-is; SRT-first). R-1 and R-5 hang on Ken's
-   seven decisions — the controls and cohort labels, two constants, the
+   settled (provider text as-is; SRT-first). ***R-1 ruled 2026-09-03: NO-GO as the route
+   stands, mechanism GO*** — the re-specification measurements M1-M5 are
+   commissioned in the Results log. R-5 still hangs on Ken's
+   remaining decisions — the controls and cohort labels, two constants, the
    edit/structure-mismatch class, an arm (iv) rebuild, and whether the
    R-1 eyeball proceeds now.
 3. **Joint plan Phase 2a → GATE J1/J2** (GPU, scratchpad). J2 feeds
@@ -2743,6 +2749,70 @@ class) is corroborated — Domino's failure was predicted from coverage
 and confirmed by eye. 3 and 4 may dissolve rather than resolve if
 analysis 1 holds. 1, 2 and 6 stand as Fable recorded them. R-1 itself
 remains Ken's to rule.
+
+### 2026-09-03 — R-1 ruled (Ken) — NO-GO as the route stands; mechanism GO on evidence
+
+**(Ken's ruling, taken on the eyeball entry above plus Fable's GATE R
+read-off. This closes STOP item 7 and R-1; R-4 remains open.)**
+
+**R-1 = NO-GO as the route stands.** The ruling is *gate-driven, not
+mechanism-driven*, and the two halves are recorded separately because
+they have different futures:
+
+- **The mechanism is GO on evidence.** Warping provider word timings
+  and rendering them produces usable karaoke on 6 of the 10 songs
+  eyeballed (4 clean, 2 singable), and Colors of the Wind is better
+  than the production output. All four failures trace to the sidecar
+  or the fit — a wrong recording, an edit mismatch, or a coverage hole
+  — and none to warping-and-rendering itself. This is the first direct
+  evidence for the word route's quality; every prior statement about it
+  was inference from statistics.
+- **The route cannot ship.** The word route exists only behind a verify
+  gate, Appendix C could not assemble one (R-4, STOP → Ken), and 4 of
+  14 sidecars would render wrong without it. Shipping the mechanism
+  without a gate is not on the table.
+
+**Consequence (Appendix A, already specified).** The word sidecars
+demote to the line-source pool and their `ts`/`te` continue to improve
+scaffold ends, so the six usable songs keep contributing everything
+except word-level sweeps. The demotion is the existing routing
+behaviour, not new machinery — no code changes on this ruling.
+
+**Reversal condition.** R-1 reverses on a re-specified Appendix C that
+passes. It is not a judgment that richsync word timing is unusable; it
+is a judgment that we cannot yet tell good sidecars from bad ones
+automatically. The measurement that would reverse it is commissioned
+below.
+
+**Commissioned with this ruling — the R-4 re-specification measurements
+(offline, no GPU, data already on disk).** Ken's call, measure-first:
+
+- **M1 — relabel all 16 songs by timing truth** from the transcribe
+  stream, replacing the text-map_rate labels. Ken's 10 eyeball labels
+  are the validation set; a labeller that reproduces them can be
+  trusted on the remaining 6 and on future songs. Produces the evidence
+  for STOP item 2.
+- **M2 — build real negative controls** by cross-pairing sidecars
+  against other songs' media. Guaranteed wrong-song, no fetches, and
+  many rather than 2 — which also retires the n=2 fragility behind
+  every threshold. Produces the evidence for STOP item 1.
+- **M3 — re-run Appendix C's general rule** on M1's labels with M2's
+  controls. Tests whether zero-evidence fraction becomes
+  discriminative, and tests the eyeball entry's analysis 1 by checking
+  whether the residual statistics stay non-discriminative once the
+  labels are corrected.
+- **M4 — per-section pairing-coverage detector** for the
+  edit/structure-mismatch class (STOP item 5). Domino and Popular are
+  the known positives, the four clean songs the known negatives.
+- **M5 (small) — check whether the "slightly rushed" sweeps are
+  `cue_align.MAX_WORD_DUR_S` (1.5 s) truncating sustained notes.** If
+  so it is a one-constant fix rather than a design problem.
+
+**Held, not commissioned:** STOP items 3 (outlier denominator) and 4
+(MAD-threshold population). If the eyeball entry's analysis 1 survives
+M3, both dissolve rather than resolve — a statistic that reads the
+wrong thing is dropped, not tuned. STOP item 6 (arm (iv) rebuild) stays
+deferred behind R-4.
 
 ## Appendices A–D — moved to `plans/ctc-sync-engine.md`
 

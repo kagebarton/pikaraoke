@@ -595,6 +595,13 @@ visibly worse on any song or its line coverage is lower; ties go to
 (iv) — it retires the foreign-clock warp from the output path. Both
 bad ⇒ the R-1 NO-GO path (demote to line source).
 
+*R-1 status (Ken, 2026-09-03): **NO-GO as the route stands** — the
+demote-to-line-source path is the live one. Gate-driven only: the
+render mechanism itself is GO on eyeball evidence (6 of 10 songs
+usable, one better than production). Reverses on a re-specified
+Appendix C that passes; no code changes on the ruling, since Appendix A
+already specifies the demotion.*
+
 *R-5 status (Ken, 2026-09-01): arm (iv) runs.* The evidence plan's
 Phase 2b step 3(iv) gated the arm on "GATE O = O-1", written when (iv)
 meant engine machinery; the arm needs only a windowed CTC align, which
