@@ -42,8 +42,8 @@ from pikaraoke.lib.get_platform import get_temp_directory  # noqa: E402
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger("phase1b")
 
-DEBUG_DIR = Path("/home/ken/pikaraoke-songs/alignment_debug")
-SONGS_ROOT = Path("/home/ken/pikaraoke-songs")
+SONGS_ROOT = Path("/home/ken/pikaraoke-songs")  # --songs-root overrides
+DEBUG_DIR = SONGS_ROOT / "alignment_debug"
 CACHE_ROOT = Path(get_temp_directory()) / "ctc_probe"
 EMISSION_DIR = CACHE_ROOT / "emissions"
 SCORES_DIR = CACHE_ROOT / "line_scores"
@@ -82,6 +82,13 @@ def compute_emission(model, wav: torch.Tensor) -> torch.Tensor:
             emission, _ = model(piece)
             chunks.append(emission.cpu())
     return torch.cat(chunks, dim=1).squeeze(0)
+
+
+def set_songs_root(root: Path) -> None:
+    """Repoint the corpus at another box's library (see ``--songs-root``)."""
+    global SONGS_ROOT, DEBUG_DIR
+    SONGS_ROOT = root
+    DEBUG_DIR = root / "alignment_debug"
 
 
 def all_bundles() -> list[Path]:
@@ -265,8 +272,15 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", help="substring filter on bundle filename")
     ap.add_argument("--force", action="store_true", help="recompute emissions even if cached")
+    ap.add_argument(
+        "--songs-root",
+        type=Path,
+        default=SONGS_ROOT,
+        help="song library root (default: the Linux box's)",
+    )
     args = ap.parse_args(argv)
 
+    set_songs_root(args.songs_root)
     bundles = all_bundles()
     if args.only:
         bundles = [b for b in bundles if args.only.lower() in b.stem.lower()]
