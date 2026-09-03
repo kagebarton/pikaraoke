@@ -2663,6 +2663,87 @@ and R-1 resolve.
 7. Whether the R-1 eyeball proceeds now on the right-recording songs or
    waits for the re-spec.
 
+### 2026-09-03 — R-1 eyeball (Ken), 10 songs on arm (i) — observations, R-1 not ruled
+
+**(Ken's eyeball, executed against the arm-(i) renders copied to
+`pikaraoke-songs/karaoke/<stem>.richsync.ass`. Observations are his;
+the two analyses at the end are the executor's and are flagged as
+untested hypotheses. R-1 is not ruled here.)**
+
+**Method.** Clips, not whole songs — 40-60 s per song, chosen by the
+executor. Round 1 took six songs; round 2 added five after the executor
+found its own round-1 selection **asymmetric**: the three
+expected-bad songs were pointed at their known-bad regions while the
+expected-good songs got arbitrary windows, so any separation was partly
+constructed. Round 2 re-checked two good songs at their *worst*
+measured residual and added three songs where candidate thresholds
+bind. The bias and its correction are recorded because they bound how
+much the good/bad split can be trusted.
+
+| song | clip | Ken's observation | class |
+| --- | --- | --- | --- |
+| Colors of the Wind | 0:40, then 0:00 | "perfect as expected" — including the opening, which carries the song's worst residual (3.33 s @ 16.9 s) | clean |
+| Belle | 1:00, then 3:47 | "fine" with minor ripples in sub-word syllable timing and lead ins/outs; the late section "did great, especially since it's multi-voice rapid fire" | clean |
+| Free | 0:12 | "fine", same minor ripples. Lyric video — the on-screen text is an independent reference | clean |
+| Part of Your World | 0:07 | "fine, more or less in line with Belle and Free". Saw 3 of its 5 worst residuals (to 1.68 s) and did not react to them | clean |
+| More Than That | 1:50 | Lines "come in on time but seem rushed, like they fell back to rescue fill timing"; "only slightly, but noticeably rushed, but still singable" | singable |
+| Like I Love You | 1:37 | "didn't notice any lines being that far adrift at all" — despite three residuals near 50 s in the watched window — "just a few that seemed rushed like More Than That" | singable |
+| Best Part of Me | 3:20 | Timings correct in shape, "just uniformly late" | bad |
+| Popular | 2:30 | "And though you protest" is "a slow crawl and mistimes the rest of the lyrics"; the text itself "more or less a match for what's sung"; many multi-voice ad-libs from that section on | bad |
+| Domino | 1:05 | "falls out of sync from 1:09", as the coverage diagnosis predicted | bad |
+| Seasons of Love | 0:00 | Spoken film intro renders as karaoke text, and the song is "completely mistimed there on" | bad |
+
+Six of ten usable (four clean, two singable), four not. Every failure
+is attributable to the sidecar or the fit — wrong recording, edit
+mismatch, or a coverage hole — and none to the render mechanism.
+
+**Executor analysis 1 — the residual family appears to measure the
+pairing, not the render.** Untested hypothesis, recorded because it
+bears on R-4's re-specification. Three songs carry large residuals that
+Ken did not perceive at all: Colors of the Wind 3.33 s (called
+perfect), Belle 1.88 s (called great), Like I Love You three near 50 s
+(no line noticed adrift). Residuals are computed against
+`cue_spans_for_lines`' pairing of provider lines to transcribe words;
+when that greedy monotone pairing latches onto the wrong repeat, a
+correct render yields a large residual. If this holds, it indicts
+`residual_mad`, `res_p50/p90` and the per-line outlier rule together —
+three of the four statistics Appendix C tests — and Fable's
+"0 discriminative" has a deeper cause than threshold placement. It
+would also make decisions 3 (outlier denominator) and 4 (MAD
+population) moot rather than pending: a discredited statistic is
+dropped, not tuned.
+
+A candidate `res_p90` threshold the executor floated earlier is
+**withdrawn** on these labels: p90 would reject Like I Love You (2.16,
+singable) and pass Domino (0.57, broken).
+
+**Executor analysis 2 — zero-evidence fraction nearly separates the
+labels.** The one Appendix C statistic not derived from residuals.
+Usable songs: 0.000, 0.000, 0.000, 0.000, 0.062, 0.121. Bad songs:
+0.103, 0.148, 0.200, 0.326. One overlapping pair (Belle 0.121 vs Best
+Part of Me 0.103), 0.018 apart. It asks whether the audio contains
+singing where a line claims to be — a property of the render. Fable
+recorded it non-discriminative only because Incomplete scores 0.000:
+that control's 54 s fragmentary spans are wide enough to always contain
+a transcribe word. The statistic was defeated by a broken control, not
+by being uninformative, which points at decisions 1 and 2 rather than
+at a new statistic. **Caveat, stated plainly: n = 10 labels, and the
+separation was read off after the labels were known.** This is a
+hypothesis for a relabelled cohort, not a gate.
+
+**Blind spot recorded.** "Correct line starts, slightly rushed word
+sweeps" is a **sub-line** defect. Every verify-fit statistic compares a
+line's start against a mapped span start; word-level sweep pacing is
+invisible to all of them. Ken judged it singable, so it may never gate
+anything, but no number in the 2b table can see it.
+
+**Consequences for the seven STOP items.** 7 (whether the eyeball
+proceeds) is discharged by this entry. 5 (edit/structure-mismatch
+class) is corroborated — Domino's failure was predicted from coverage
+and confirmed by eye. 3 and 4 may dissolve rather than resolve if
+analysis 1 holds. 1, 2 and 6 stand as Fable recorded them. R-1 itself
+remains Ken's to rule.
+
 ## Appendices A–D — moved to `plans/ctc-sync-engine.md`
 
 Moved 2026-07-18 (same day, with the evidence/build split), same
