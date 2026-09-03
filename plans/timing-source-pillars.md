@@ -2229,6 +2229,164 @@ CTC would have un-licensed F2 on this plan's own recorded evidence.
 Recorded so it is not re-litigated: CTC stays, and the multi-language
 question is answered by widening CTC's eligibility, not by removing it.
 
+### 2026-09-03 — Phase 2b (verify-fit, emission family, render arms) — raw tables, no read-off
+
+**(Sonnet 5 executor, Windows dev box. GATE R is Ken's eyeball plus the
+judge's execution of Appendix C; nothing below is read off, tallied, or
+thresholded here.)**
+
+**Environment:** Windows dev box, `uv run python`, library
+`d:/shared/pikaraoke-songs` (not the conda `pik` Linux box the Ground
+rules name — its scratchpad had aged out, so the Phase 1b emission
+cache was regenerated here). GPU: RTX A2000. The MMS_FA checkpoint was
+already in the torch hub cache from the S-C run. Emissions recomputed
+for all 16 cohort songs and cached under `get_temp_directory()
+/ctc_probe/emissions/` — same compute-once/slice-many contract Phase 1b
+wrote them under, so a re-run of 2b or of Phase 1b on this box reuses
+them.
+
+**Ken's ruling implemented first — transcribe backfill (2026-09-03).**
+Appendix C's negative-control requirement was unrunnable as written:
+both controls (Selfish, Incomplete) are srt-origin bundles carrying
+`transcribe_words: null`, as are 7 of the 14 PASS songs — precisely the
+7 srt-origin songs step 3(iii) names. Every transcribe-family statistic
+is computed off `cue_spans_for_lines(normalize_words(transcribe_words),
+...)`, so with no transcribe stream on either control there is no
+CONTROL value for the general rule to compare against, and "the
+assembled gate must fail both controls" could not be executed. Ken
+ruled: run the transcribe pass on the 9 missing songs. This reproduces
+what Appendix C's own locked stage wiring says the production word
+route does ("the word route runs the transcribe pass only"), rather
+than amending the procedure — the gap is a fixture artifact of bundles
+built when those songs went the cue-align route.
+
+Backfill matched the production de-reverb gate exactly: vocal stem,
+`refine=False` (what `_dereverb_gate` uses, and what the 7 tw-present
+bundles were produced with), retry on the dry stem only if yield falls
+under `dereverb_yield_wpm` (30.0). **No song came near the gate, so no
+retry fired and no dereverb stem was used** — the cohort is homogeneous
+with the 7 existing bundles on stem, pass and refine setting.
+
+| song | words | yield wpm | stem used |
+| --- | --- | --- | --- |
+| Rock Your Body | 587 | 118.3 | vocal |
+| More Than That | 259 | 66.0 | vocal |
+| Let It Go | 275 | 73.2 | vocal |
+| Part of Your World | 263 | 83.7 | vocal |
+| Like I Love You | 573 | 121.4 | vocal |
+| Mirrors | 637 | 76.4 | vocal |
+| Can You Feel the Love Tonight | 186 | 63.9 | vocal |
+| Selfish (control) | 466 | 117.1 | vocal |
+| Incomplete (control) | 204 | 52.2 | vocal |
+
+Written to the scratchpad, never into the library bundles: a probe does
+not mutate artifacts a later `regen_alignment_bundles.py` owns. The
+`tw` column of the next table records which songs read their transcribe
+stream from the bundle and which from this backfill.
+
+**Step 2 — verify-fit prototype + emission family, 14 PASS + 2 CONTROL.**
+Pairing is `ytasr.cue_spans_for_lines` over the provider's richsync line
+texts as specified; Theil-Sen tempo+offset over `(provider_ts,
+mapped_span_start)`; residuals and MAD about the median of those
+residuals; `zero_ev` = fraction of provider lines whose warped
+`[ts, te]` span contains no transcribe word midpoint. `emis_mean` /
+`emis_min` are the emission family: per provider line, its tokens
+force-aligned inside its warped span against the cached emission, taking
+the mean and min per-word `TokenSpan.score`, reported as the per-song
+median of those per-line values.
+
+| song | cohort | tw | lines | pairs | pair_frac | slope | offset_s | MAD | p50 | p90 | max | zero_ev | emis_mean | emis_min |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Popular | PASS | bundle | 61 | 53 | 0.869 | 1.0117 | -8.43 | 0.42 | 0.42 | 2.43 | 23.52 | 0.148 | 0.424 | 0.006 |
+| Belle | PASS | bundle | 116 | 86 | 0.741 | 1.0013 | -7.93 | 0.14 | 0.14 | 0.58 | 1.88 | 0.121 | 0.306 | 0.010 |
+| Best Part of Me | PASS | bundle | 39 | 12 | 0.308 | 1.0179 | -1.39 | 0.60 | 0.63 | 68.48 | 119.01 | 0.103 | 0.341 | 0.002 |
+| Colors of the Wind | PASS | bundle | 37 | 36 | 0.973 | 0.9977 | -6.12 | 0.25 | 0.25 | 0.74 | 3.33 | 0.000 | 0.818 | 0.414 |
+| Domino | PASS | bundle | 65 | 14 | 0.215 | 1.0159 | -0.56 | 0.24 | 0.24 | 0.57 | 143.51 | 0.200 | 0.080 | 0.001 |
+| Rock Your Body | PASS | backfill | 107 | 9 | 0.084 | 1.0266 | 22.75 | 0.70 | 0.70 | 67.61 | 156.45 | 0.140 | 0.055 | 0.002 |
+| Free | PASS | bundle | 46 | 33 | 0.717 | 1.0015 | -0.19 | 0.10 | 0.10 | 0.42 | 0.60 | 0.000 | 0.271 | 0.001 |
+| More Than That | PASS | backfill | 40 | 15 | 0.375 | 1.0039 | 12.91 | 0.51 | 0.51 | 1.00 | 57.42 | 0.000 | 0.107 | 0.004 |
+| Let It Go | PASS | backfill | 40 | 16 | 0.400 | 3.4482 | -20.56 | 5.80 | 6.30 | 50.70 | 68.08 | 0.500 | 0.275 | 0.014 |
+| Part of Your World | PASS | backfill | 56 | 51 | 0.911 | 0.9804 | 0.85 | 0.26 | 0.26 | 0.87 | 1.68 | 0.000 | 0.722 | 0.330 |
+| Like I Love You | PASS | backfill | 81 | 32 | 0.395 | 1.0001 | -4.19 | 0.65 | 0.66 | 2.16 | 51.87 | 0.062 | 0.074 | 0.001 |
+| Mirrors | PASS | backfill | 125 | 21 | 0.168 | 0.9991 | 0.09 | 0.58 | 0.58 | 87.07 | 162.00 | 0.272 | 0.070 | 0.002 |
+| Seasons of Love | PASS | bundle | 43 | 12 | 0.279 | 0.9542 | 1.23 | 0.17 | 0.22 | 3.73 | 19.26 | 0.326 | 0.034 | 0.007 |
+| Can You Feel the Love Tonight | PASS | backfill | 35 | 30 | 0.857 | 0.8733 | -12.17 | 4.48 | 4.34 | 8.19 | 12.47 | 0.114 | 0.085 | 0.006 |
+| Selfish | CONTROL | backfill | 61 | 15 | 0.246 | 1.0072 | 7.11 | 0.08 | 0.08 | 130.35 | 130.46 | 0.016 | 0.195 | 0.001 |
+| Incomplete | CONTROL | backfill | 19 | 5 | 0.263 | 0.9915 | -6.46 | 0.32 | 0.32 | 75.20 | 75.20 | 0.000 | 0.295 | 0.013 |
+
+**Step 3 — render arms.** (i) richsync-direct: every provider word
+warped by that song's fitted slope/offset, sweeps capped. (iv)
+richsync-guided CTC: `sb_ctc_adapter.make_slice_align` re-times each
+line inside its padded warped window, falling back to that line's arm-(i)
+words where the aligner declines, so the two arms differ only where CTC
+actually produced timing. Arms (ii) production and (iii) cue-align were
+already on disk and are referenced by the A/B commands, not regenerated.
+
+| song | lines | rendered | CTC declined | (i) first/last | (iv) first/last |
+| --- | --- | --- | --- | --- | --- |
+| Popular | 61 | 61 | 0 | 0.0 / 200.7 | 1.2 / 203.9 |
+| Belle | 116 | 116 | 0 | 16.9 / 291.6 | 16.6 / 292.2 |
+| Best Part of Me | 39 | 39 | 0 | 12.5 / 235.1 | 13.8 / 233.2 |
+| Colors of the Wind | 37 | 37 | 0 | 0.0 / 185.8 | 0.0 / 185.4 |
+| Domino | 65 | 65 | 0 | 4.7 / 199.4 | 5.3 / 199.8 |
+| Rock Your Body | 107 | 107 | 0 | 31.9 / 294.0 | 31.2 / 294.7 |
+| Free | 46 | 46 | 0 | 12.9 / 180.1 | 12.9 / 180.8 |
+| More Than That | 40 | 40 | 0 | 18.4 / 229.6 | 19.3 / 229.7 |
+| Let It Go | 40 | 40 | 19 | 0.0 / 433.6 | 13.5 / 433.6 |
+| Part of Your World | 56 | 56 | 0 | 7.0 / 165.8 | 7.2 / 167.6 |
+| Like I Love You | 81 | 81 | 0 | 1.3 / 267.0 | 0.6 / 267.0 |
+| Mirrors | 125 | 125 | 0 | 29.1 / 484.9 | 29.2 / 485.3 |
+| Seasons of Love | 43 | 43 | 0 | 6.5 / 190.3 | 5.7 / 188.4 |
+| Can You Feel the Love Tonight | 35 | 35 | 0 | 0.0 / 172.8 | 0.0 / 161.7 |
+
+**Artifacts (session scratchpad, never committed).** `p2b/
+verify_fit.json` (every row above plus the per-line emission scores and
+the raw `(provider_ts, mapped_span_start)` pair list per song),
+`p2b/renders.json`, `p2b/renders/<stem>.richsync.ass` and
+`<stem>.richsync_ctc.ass` (28 files), `p2b/ab_commands.md` (step 4's
+mpv commands, all four arms per song), `tw_backfill/<stem>.json`.
+Drivers: `p2b_verify.py`, `p2b_render.py`, `tw_backfill.py`.
+
+**Executor notes — choices a reader would otherwise have to re-derive,
+and two observations, none of them read-offs.**
+
+1. *Emission scores are raw, not z-normalized.* Phase 1b z-scored
+   per song; that is deliberately not reused here, because Appendix C's
+   general rule compares song-level values ACROSS the PASS and CONTROL
+   cohorts and per-song normalization would erase exactly the
+   between-song differences the rule reads.
+2. *`MAX_WORD_DUR_S` disambiguated.* Two constants carry the name.
+   `cue_align.MAX_WORD_DUR_S` (1.5) is used, as step 3(i)'s phrase
+   "word sweeps capped at" matches that constant's own docstring
+   ("a single aligned word's sweep is capped to this");
+   `ytasr.MAX_WORD_DUR_S` (2.0) is the end-synthesis constant for a
+   foreign ASR stream feeding the DP, not a render sweep cap. Flagged
+   in case the judge reads the reference the other way.
+3. *Arm (iv) window pad = 0.75 s per side*, the cue-align path's
+   established slice pad (`scripts/cue_align_song.py --pad`). The warp
+   is a whole-song fit, so a line's true edges sit near, not on, it.
+4. *Rock Your Body's 9/107 pairs is a repeat collapse, not a fetch or
+   backfill failure.* Its sidecar map_rate is 0.981 and its transcribe
+   stream is dense (587 words, 118 wpm); the provider text matches the
+   audio from the first line. The paired line ids are 0, 1, 65, 100,
+   102–106 — the signature of `spans_from_candidates`' documented
+   monotonic greedy on a 107-line sheet that repeats "Dance with me"
+   and the title hook throughout: repeated text ties, the strongest
+   claimant keeps the occurrence, and the monotone constraint discards
+   the rest. The same mechanism GATE P characterized on the joint path.
+5. *Let It Go's slope of 3.4482 is a different arrangement, not a fit
+   bug.* Its 16 pairs are lines 0–16 contiguous and clean; the richsync
+   body covers ts 0.1–131.6 s while the media's transcribe stream runs
+   14.3–212.4 s, i.e. the provider timed a shorter recording than the
+   one on disk. Theil-Sen then fits a slope no tempo ratio could take,
+   and arm (i) stretches the render to 433.6 s — the visible
+   consequence, left in rather than patched out.
+6. *Pre-existing hook failure, untouched:* `pre-commit --files
+   scripts/phase1b_score_oracle.py` fails
+   `check-shebang-scripts-are-executable` — the file is mode 100644 in
+   the index with a shebang, and so is `sb_ctc_adapter.py`. It predates
+   this session's one-line change and is not fixed here.
+
 ## Appendices A–D — moved to `plans/ctc-sync-engine.md`
 
 Moved 2026-07-18 (same day, with the evidence/build split), same
