@@ -456,6 +456,16 @@ demotion — see Results log), offline against its existing bundle:
   Decision rule locked in the build plan's Appendix C: (iv) wins
   unless visibly worse on any song or lower line coverage; ties → (iv).
 
+*Status (2026-09-03): read off by Fable — see the Results log. **R-4 is a
+STOP → Ken**: zero statistics came out discriminative (the procedure needs
+≥ 2), the assembled clamp set cannot fail both controls, and the outlier
+rule's denominator is unspecified. R-1 = **NO-GO as the route stands**,
+gate-driven rather than mechanism-driven, and reverses if a re-specified
+Appendix C passes; Appendix A's demotion applies meanwhile. R-2 confirmed.
+R-3 SRT-first stands. R-5 no award — arm (iv) carries a window-edge smear
+artifact and re-runs after a fix. Seven decisions are Ken's before this
+gate can close.*
+
 ## Phase 3 — scaffold + engine corpus probe (GATE S)
 
 GPU corpus run via the Phase 0 harness, over the genius-origin songs
@@ -697,7 +707,12 @@ Order — cheapest and highest overturn-risk first:
 2. **Phase 2b → GATE R** (this file; four arms per the 2026-09-01
    rulings). Largest blast radius on the routing ladder — R-3 can
    reorder rung 0 against rung 1, and R-1 decides whether the word
-   route exists at all.
+   route exists at all. — ***RUN 2026-09-03; GATE R read off, not
+   closed***: R-4 STOP → Ken (see the Results log). R-2 and R-3 are
+   settled (provider text as-is; SRT-first). R-1 and R-5 hang on Ken's
+   seven decisions — the controls and cohort labels, two constants, the
+   edit/structure-mismatch class, an arm (iv) rebuild, and whether the
+   R-1 eyeball proceeds now.
 3. **Joint plan Phase 2a → GATE J1/J2** (GPU, scratchpad). J2 feeds
    Appendix D's snap policy directly, which currently records
    "re-enable exception: none".
@@ -2386,6 +2401,267 @@ and two observations, none of them read-offs.**
    `check-shebang-scripts-are-executable` — the file is mode 100644 in
    the index with a shebang, and so is `sb_ctc_adapter.py`. It predates
    this session's one-line change and is not fixed here.
+
+### 2026-09-03 — GATE R read-off (Fable) — R-4 STOP → Ken; R-1 NO-GO as the route stands
+
+**(Fable's judge round against the Phase 2b artifacts above. Recorded
+here verbatim at Ken's instruction. The seven items under "Decisions
+that are Ken's" are STOP items, not actions — nothing below is acted
+on until he rules.)**
+
+Judge round, read-only: no code changes, no plan edits, no re-runs. Every
+number below is computed from the artifacts the Build session saved
+(`p2b/verify_fit.json`, `p2b/renders.json`, the 28 `.ass` renders,
+`tw_backfill/*.json`), the sidecars and bundles on `d:/shared/pikaraoke-songs`,
+and the Results-log entry committed as `ccea7c9` (`--songs-root` as `cf2dca0`).
+Judge scripts live beside this file (`appc.py`, `ass_compare2.py`,
+`edge_pin.py`, `tw_evidence.py`, `controls_r2.py`).
+
+Process note for the Build session: its last message (17:41 UTC) says
+"Phase 2b hasn't run yet". That is a context-loss artifact — the run finished
+and was committed at 12:52 UTC; nothing needs re-running.
+
+#### Summary of rulings
+
+| ruling | outcome |
+| --- | --- |
+| R-4 (Appendix C executed verbatim) | **STOP → Ken.** Zero statistics discriminative (procedure needs ≥ 2); the assembled clamp set cannot fail both controls; one clamp has an unspecified denominator. |
+| R-1 (word route GO/NO-GO) | **NO-GO as the route stands** — gate-driven, not mechanism-driven. Reverses if a re-specified Appendix C passes. Appendix A demotion applies meanwhile. |
+| R-2 (provider text as-is) | **Confirmed.** |
+| R-3 (SRT vs richsync tier order) | **SRT-first stands** (rung 0 above rung 1). Recorded as follow-on scope; no production effect. |
+| R-5 ((iv) guided CTC vs (i) warped render) | **No award.** Arm (iv) as built carries a window-edge smear artifact; A/B deferred to a re-run. (i) is the mechanism of record meanwhile; both moot until R-4 resolves. |
+
+#### R-4 — Appendix C, executed verbatim
+
+Cohorts as locked: PASS = the 14 word sidecars (map_rate ≥ 0.5), CONTROL =
+Selfish + Incomplete.
+
+##### General threshold rule (W = worst PASS, B = best CONTROL)
+
+| statistic | quality direction | W (song) | B (song) | discriminative |
+| --- | --- | --- | --- | --- |
+| pair_fraction | higher | 0.084 (Rock Your Body) | 0.263 (Incomplete) | no |
+| zero-evidence fraction | lower | 0.500 (Let It Go) | 0.000 (Incomplete) | no |
+| emission mean-word (median/line) | higher | 0.034 (Seasons of Love) | 0.295 (Incomplete) | no |
+| emission min-word (median/line) | higher | 0.001 (Free) | 0.013 (Incomplete) | no |
+
+Discriminative count = **0**. The procedure's own text: fewer than 2 → STOP →
+Ken, "the verify design is not viable as specified". Emission family:
+non-discriminative → dropped → transcribe-family-only. (No GATE O band exists
+to score against — Appendix E's band is unfilled — so the executor's
+median-of-line-scores instantiation was the only available reading, and no
+per-line band would rescue it: Incomplete's per-line distribution, p10 0.169
+with 0% of lines below 0.05, beats 12 of the 14 PASS songs.)
+
+Sensitivity (not a ruling): dropping the two wrong-recording PASS songs
+(Let It Go, Can You Feel the Love Tonight) changes nothing — pair_fraction W
+stays 0.084, zero-evidence W becomes 0.326 (Seasons of Love) vs B 0.000,
+emission unchanged. The CONTROL side is what breaks the rule, not the PASS
+side.
+
+##### Clamps (data-independent or locked formulas)
+
+| clamp | value produced |
+| --- | --- |
+| n_pairs floor | ≥ 5 (`WARP_MIN_ANCHORS`; code semantics are `>=`, so 5 passes) |
+| slope window | PASS spans 0.873–3.448 → needed [0.868, 3.453] → **hard cap binds: [0.90, 1.10]** |
+| residual MAD threshold | 1.25 × max PASS MAD (5.80) = 7.25 → **clamped to 2.0 s** |
+| per-line outlier | abs(residual) > 3 × 2.0 = **6.0 s** |
+
+Sensitivity (Ken's call, see below): "max MAD over PASS" taken verbatim over
+all 14 gives 2.0 s; over only the PASS songs inside the slope window it would
+be 1.25 × 0.70 = 0.88 s.
+
+##### Per-song outcome of the clamp set (outlier share shown as of-pairs / of-lines)
+
+| song | cohort | pairs | slope | MAD | outliers | clamp outcome |
+| --- | --- | ---: | ---: | ---: | --- | --- |
+| Popular | PASS | 53/61 | 1.012 | 0.42 | 3 (6% / 5%) | pass |
+| Belle | PASS | 86/116 | 1.001 | 0.14 | 0 | pass |
+| Best Part of Me | PASS | 12/39 | 1.018 | 0.60 | 2 (17% / 5%) | pass |
+| Colors of the Wind | PASS | 36/37 | 0.998 | 0.25 | 0 | pass |
+| Domino | PASS | 14/65 | 1.016 | 0.24 | 1 (7% / 2%) | pass |
+| Rock Your Body | PASS | 9/107 | 1.027 | 0.70 | 3 (33% / 3%) | **fail / pass** (denominator) |
+| Free | PASS | 33/46 | 1.002 | 0.10 | 0 | pass |
+| More Than That | PASS | 15/40 | 1.004 | 0.51 | 1 (7% / 3%) | pass |
+| Let It Go | PASS | 16/40 | 3.448 | 5.80 | 8 | **fail** (slope, MAD) |
+| Part of Your World | PASS | 51/56 | 0.980 | 0.26 | 0 | pass |
+| Like I Love You | PASS | 32/81 | 1.000 | 0.65 | 3 (9% / 4%) | pass |
+| Mirrors | PASS | 21/125 | 0.999 | 0.58 | 4 (19% / 3%) | pass |
+| Seasons of Love | PASS | 12/43 | 0.954 | 0.17 | 1 (8% / 2%) | pass |
+| Can You Feel the Love Tonight | PASS | 30/35 | 0.873 | 4.48 | 10 | **fail** (slope, MAD) |
+| Selfish | CONTROL | 15/61 | 1.007 | 0.08 | 2 (13% / 3%) | **pass** (every reading) |
+| Incomplete | CONTROL | 5/19 | 0.992 | 0.32 | 2 (40% / 11%) | **fail / pass** (denominator) |
+
+##### Negative-control requirement: cannot be met
+
+Selfish passes the clamp set under every reading, so "the assembled gate must
+fail both controls" fails regardless of how the open questions resolve. This
+is the second, independent STOP ground. The third: the outlier rule's "> 20%
+outlier lines" has no stated denominator; paired lines vs provider lines
+flips Incomplete (40% vs 11%) and Rock Your Body (33% vs 3%). Uncovered case.
+
+##### Diagnosis (judge analysis, for Ken — not part of the procedure)
+
+1. **The controls are not wrong-song fixtures.** Selfish's sidecar is
+   "Selfish — Justin Timberlake": the media's own song, correctly timed —
+   10 of 15 pairs sit within 0.13 s (13 within 2.2 s) at slope 1.007 /
+   offset +7.1 s (the video intro); the two 130 s outliers are the greedy
+   pairing jumping to a later chorus repeat (provider 53.0/59.0 s →
+   191/197 s). Its map_rate of 0.38 is a segmentation/orthography artifact
+   against the SRT-derived sheet (61 provider lines vs 79 SRT lines,
+   "lettin'" vs "letting"). The gate passing it is correct behavior.
+   Incomplete's sidecar is a genuine bad one — "Incomplete (Backstreet Boys
+   Karaoke Tribute) — Karaoke Mix", 252 s vs a 234.5 s media, 19
+   fragmentary lines with spans up to 54 s (10.1–63.9 s) — but those giant
+   spans defeat the zero-evidence statistic (0.000) and its emission scores
+   beat most PASS songs. Both controls were selected by text map_rate, which
+   measures neither song identity nor timing.
+2. **The PASS cohort is not timing-clean either.** Five of 14 sidecars time
+   a different recording or edit, confirmed against the transcribe stream
+   (sung time → warp time; production in brackets):
+   - Let It Go — "Let It Go (Armin van Buuren Radio Edit)", 153 s track vs
+     225 s media; arm (i) stretches to 433 s. Caught (slope 3.45).
+   - Can You Feel the Love Tonight — "Teatro" cover, 225 s vs 175 s media.
+     Caught (slope 0.87).
+   - Domino — "Domino - UK Radio Edit": the fit anchors on lines 0–16 only.
+     "Every second is a highlight" sung @69.4 s → warp 75.2 [68.5];
+     "You strum me like a guitar" @100.9 → 86.0 [99.2]; "My heart beats out
+     of time" @93.5 → 81.3 [92.9]. 20 of 31 matchable lines > 5 s off.
+     **Passes under every reading — confirmed false pass.**
+   - Popular — "Popular (Live)", Kristin Chenoweth: tail lines 56–60 are
+     unpaired and land 20 s late ("Your disinterest / I know clandestinely"
+     @154.6/157.2 → 174.1/175.4 [154.3/156.7]). **Passes**; the outlier rule
+     cannot see unpaired lines.
+   - Rock Your Body — warp offset +22.75 s is wrong from line 1 ("Don't be
+     so quick to walk away" sung @9–10 s → warp 32.7 [SRT 9.5]); 73 of 101
+     matchable lines > 5 s off. The 9 pairs (ids 0, 1, 65, 100, 102–106)
+     are the repeat-collapse the executor flagged, here producing a
+     self-consistent wrong fit. Fails only under the of-pairs reading.
+3. **What the clamps can and cannot see.** Slope + MAD catch tempo/arrangement
+   mismatches (2 of 2). A single global slope/offset cannot express a cut or
+   reordered section, so edit mismatches on the same recording (Domino,
+   Popular's tail) pass by construction; the outlier rule only reaches
+   paired lines, and the greedy monotone pairing discards exactly the lines
+   that would expose the mismatch.
+4. **The emission family cannot rescue this at song level**: raw scores are
+   dominated by per-song acoustics (Colors of the Wind median 0.82 vs
+   Seasons of Love 0.03), and z-normalizing per song erases the between-song
+   axis the general rule reads (the executor's note 1 is right).
+
+##### Constants the procedure produced (for the Appendix C record; no gate assembled)
+
+n_pairs ≥ 5; slope in [0.90, 1.10] (hard cap binding); MAD ≤ 2.0 s (clamp
+binding); outlier > 6.0 s; pair_fraction, zero-evidence fraction and both
+emission statistics recorded **non-discriminative**; discriminative count 0;
+negative-control requirement **unmet** (Selfish passes).
+
+#### R-1 — richsync-direct render quality: NO-GO as the route stands
+
+The mechanism is GO-grade where the sidecar times the right recording: the
+warped render agrees with independent references (production joint-matcher
+or SRT cue-align) to a median of 0.1–0.5 s with p90 ≤ 1 s on Belle (72
+matched lines, med 0.15 / p90 0.39), Free (0.09 / 0.44), Colors of the Wind
+(0.31 / 0.74), Part of Your World (0.25 / 0.90), and within ~1.3–2.1 s p90 on
+Mirrors (0.34 / 1.29) and More Than That (0.44 / 2.09); every render is
+well-formed (0 non-monotone lines, 0 zero-duration words across 28 files).
+But the word route exists only behind a verify gate, R-4 could not assemble
+one, and 5 of 14 sidecars would render wrong without it (Let It Go's 433 s
+stretch on a 225 s video; Domino, Popular's tail and Rock Your Body sections
+6–23 s off). Per Appendix A the word sidecars' line starts join the
+line-source pool and `ts`/`te` still improve scaffold ends. This NO-GO is
+about the gate and reverses if a re-specified Appendix C passes.
+
+Ken's eyeball has not happened; targets if it does: Popular 154–195 s,
+Best Part of Me 205–232 s, Seasons of Love's spoken intro (0–40 s; the
+richsync includes the film dialogue "New Years Eve, 1991…", production has
+no lines before 42.5 s), Part of Your World (a Robin Huston cover that
+happens to fit at slope 0.98 — the word sweeps are another singer's).
+
+#### R-2 — provider text as-is: confirmed
+
+Across the 14 sidecars: 0 ALL-CAPS lines; parenthetical backing vocals on
+8 songs (Mirrors 17 lines, Like I Love You 10, Rock Your Body 6, More Than
+That 5, others ≤ 2) rendering as written, e.g. "It's like you're my mirror
+(oh-oh)"; 1 speaker label ("Belle: Little town"); 1 unbalanced paren
+("That's nice. Marie! The baguettes! Hurry up!)"); dialogue lines carried
+from film versions (Can You Feel the Love Tonight "What?" / "Who?" / "Oh",
+Seasons of Love's spoken intro); hyphen-split melisma tokens (Mirrors 28,
+Belle 9, Popular 3: "popu- ler... lar...", "pop- u- lar..."); "Ev'ry"-style
+contractions; numerals ("525,600 minutes") as text. Nothing here reverses
+the decision. Two cosmetic follow-ons Ken may or may not want: strip a
+leading "Name:" label; the hyphen-split tokens are faithful to the singing
+and probably right as-is.
+
+#### R-3 — SRT vs richsync tier order: SRT-first stands
+
+On the 7 both-source songs, the warped richsync against the SRT-based output
+(cue-align arm iii; production ii is also SRT-routed): three richsync sidecars
+time a different recording or edit (Rock Your Body median 24.4 s off, 79% of
+lines > 1 s; Let It Go 106.9 s; Can You Feel the Love Tonight 4.3 s, 80%),
+four agree within a 0.4–0.7 s median (Part of Your World 0.39, More Than
+That 0.58, Mirrors 0.35, Like I Love You 0.74) with 15–33% of lines > 1 s
+apart. SRT is authored for the exact video; the richsync's recording identity
+is unverifiable at fetch time (Part of Your World's cover fits by luck of
+tempo). Rung 0 stays above rung 1. Recorded as follow-on scope per the
+search-scope decision; richsync could at most augment word timing inside SRT
+cues, and S-C already retired CTC on that path, so there is no production
+effect to schedule.
+
+#### R-5 — (iv) richsync-guided CTC vs (i) warped render: no award
+
+Line coverage ties by construction ((iv) falls back to (i) where CTC
+declines; 19/40 on Let It Go, 0 elsewhere). "Visibly worse on any song" is
+Ken's A/B finding, but the arm as built has a construction artifact the
+eyeball would be measuring instead of CTC:
+
+| song | (iv) last word ends at padded window edge | first word starts at window edge | line overlaps (i) → (iv) |
+| --- | ---: | ---: | --- |
+| Mirrors | 61% | 15% | 0 → 54 |
+| Rock Your Body | 55% | 28% | 3 → 69 |
+| Free | 54% | 17% | 1 → 15 |
+| Like I Love You | 51% | 25% | 11 → 30 |
+| More Than That | 50% | 5% | 2 → 6 |
+| Domino | 37% | 23% | 13 → 42 |
+| Seasons of Love | 26% | 23% | 15 → 20 |
+| Belle | 25% | 12% | 10 → 56 |
+| Can You Feel the Love Tonight | 23% | 9% | 14 → 18 |
+| Best Part of Me | 13% | 23% | 0 → 5 |
+| Popular | 11% | 11% | 11 → 23 |
+| Part of Your World / Colors of the Wind / Let It Go | ≤ 11% | ≤ 5% | small |
+
+Mechanism: `sb_ctc_adapter.slice_align` takes each word's end from its last
+token span; when the ±0.75 s pad (plus warp error) puts neighbouring singing
+inside the window, forced alignment stretches the first/last token across it
+to the window boundary, capped only by `MAX_WORD_DUR_S` = 1.5 s. In the render
+that is a last-word sweep running ≥ 0.75 s into the next line — the (i) vs
+(iv) p90 first-word delta sits at exactly 0.75 s on 7 songs. The pinned
+fractions are lower bounds (the 1.5 s cap hides longer smears). Where CTC is
+not pinned it is at least as good as the warp (Colors of the Wind (iv) vs
+production median 0.12 s against (i)'s 0.31; Best Part of Me 0.45 vs 1.03).
+Ruling: (i) is the mechanism of record; (iv) re-runs after the arm is fixed
+(trim sweeps at the next word's onset or the line's warped `te`, and/or a
+tighter pad) before Ken's A/B is spent on it. Both arms are moot until R-4
+and R-1 resolve.
+
+#### Decisions that are Ken's (STOP items)
+
+1. **Controls.** Re-specify as true wrong-song fixtures — cross-pairing a
+   sidecar with another song's media is guaranteed wrong and costs nothing —
+   or accept that Selfish is a right-song sidecar and drop it as a control.
+2. **Cohort labels.** Keep text-match labels (the rule then compares the
+   wrong populations) or relabel by timing truth (transcribe/SRT
+   corroboration) before re-running the general rule.
+3. **Outlier-rule denominator**: paired lines or provider lines.
+4. **MAD-threshold population**: all PASS verbatim (2.0 s clamp) or the
+   slope-window survivors (0.88 s).
+5. **Edit/structure-mismatch class** (Domino, Popular's tail): outside the
+   global-warp design; needs its own check (sectional fit, or pairing
+   coverage per section) if the word route is to survive — a design change,
+   not a constant.
+6. **Arm (iv) rebuild** before the R-5 A/B.
+7. Whether the R-1 eyeball proceeds now on the right-recording songs or
+   waits for the re-spec.
 
 ## Appendices A–D — moved to `plans/ctc-sync-engine.md`
 

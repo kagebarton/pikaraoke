@@ -602,6 +602,11 @@ S-2 selected on evidence and `scripts/sb_ctc_adapter.py` already
 implements. R-5 therefore applies as locked above, rather than
 resolving to (i) by precondition failure.
 
+*R-5 outcome (GATE R, 2026-09-03): **no award.** The arm ran, but as
+built it pins word edges to the padded window boundary, so Ken's A/B
+would be measuring that artifact rather than CTC. (i) is the mechanism
+of record meanwhile; (iv) re-runs after the fix. See the read-off.*
+
 **Stage wiring (locked):** the word route runs the transcribe pass
 only (align/joint skipped); verify consumes the same transcribe words
 the de-reverb gate uses, downstream of any de-reverb retry (the gate's
@@ -610,6 +615,32 @@ verify statistics, route taken, per-line demotions → debug bundle.
 
 **Negative-control requirement:** the assembled gate must fail both
 controls. If it cannot, STOP → Ken.
+
+*Status (GATE R, 2026-09-03): the procedure was executed verbatim by
+Fable; constants **produced, no gate assembled**. Full read-off in the
+evidence plan's Results log.*
+
+- `n_pairs` floor **≥ 5** (as locked; code semantics are `>=`, so 5
+  passes).
+- `slope`: PASS spans 0.873–3.448, needing [0.868, 3.453] — **the hard
+  cap binds, so [0.90, 1.10]**.
+- residual MAD: 1.25 × max PASS MAD (5.80) = 7.25 → **clamped to 2.0 s**.
+- per-line outlier: |residual| > 3 × 2.0 = **6.0 s**.
+- `pair_fraction`, zero-evidence fraction, and both emission statistics:
+  **non-discriminative**. Discriminative count **0**, below the
+  procedure's floor of 2 → **STOP → Ken** by the rule's own text.
+- Emission family: non-discriminative → dropped; transcribe-family-only.
+  (No GATE O band exists to score against — Appendix E's band is
+  unfilled.)
+- Negative-control requirement **unmet**: Selfish passes the clamp set
+  under every reading. An independent STOP ground.
+- **Uncovered case:** the outlier rule's "> 20% outlier lines" has no
+  stated denominator; paired lines vs provider lines flips Incomplete
+  (40% vs 11%) and Rock Your Body (33% vs 3%).
+
+No gate is assembled from these values — they are the record of what the
+procedure produced on 2b's cohorts. Seven decisions are pending with Ken
+(listed in the read-off) before any re-specification.
 
 ## Appendix D — scaffold/aligner integration (LOCKED, Fable, 2026-07-18; S-constants recorded at GATE S)
 
