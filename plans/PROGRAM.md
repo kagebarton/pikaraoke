@@ -313,8 +313,9 @@ number on it comes from harnesses.
 Same three roles as `plans/completed/matcher-accuracy-hardening.md` §"Model
 switching", binding here identically:
 
-- **Design** — Fable, completed 2026-07-18 (**Fable unavailable from
-  2026-07-19 — succession locked**): this document and the build
+- **Design** — Fable, completed 2026-07-18 (**succession locked
+  2026-07-19**; Fable is available again and has read off GATE P and
+  GATE R, but see the escalation rule below): this document and the build
   plan's Appendices A–E are locked, with every formerly
   lock-at-GATE item converted to a pre-registered decision procedure.
   At each GATE the judge *executes* the relevant procedure verbatim
@@ -325,6 +326,29 @@ switching", binding here identically:
   table, never a verdict.
 - **Judge results** — Opus, executing the pre-registered read-off
   rules below; escalations that previously said "to Fable" go to Ken.
+
+### When a result goes to Fable (Ken, 2026-09-04)
+
+Fable is billed per use, so a judge round is spent, not free. Escalate
+**only** when at least one of these holds:
+
+- **Ambiguity in the findings** — they admit more than one reading, or
+  the pre-registered rule does not cover the case actually observed.
+- **Significant new complexity surfaced during the run** that could
+  change the verdict: a mechanism nobody priced, a control that turns
+  out to be broken, an artifact that invalidates an arm.
+- **The read-off is a GATE** whose outcome selects a mechanism or
+  licenses a build phase. These are escalated on principle, not on
+  difficulty.
+
+Otherwise the executor reports its tables and **Ken rules directly**. A
+result that is arithmetically decisive — a refutation that carries its
+own control, a threshold missed by an order of magnitude — does not need
+a judge round to confirm ten numbers.
+
+This changes *who* reads, not the executor's boundary. Judge separation
+still binds: the executor reports paths and raw tables and does not write
+the verdict. It hands them to Ken instead of to Fable.
 
 Executor discipline: the matcher plan's §"Executor discipline (Sonnet 5,
 added 2026-07-12)" applies verbatim — specs are contracts, mismatches are
