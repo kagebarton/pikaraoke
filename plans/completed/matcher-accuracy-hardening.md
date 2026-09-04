@@ -82,13 +82,13 @@ in an appendix. Three roles apply from here forward and are not to blend:
 
 Two sibling plans execute alongside this one and are not phases here:
 
-- `plans/lrclib-fill-absence-study.md` (offline study, no production code):
+- `plans/completed/lrclib-fill-absence-study.md` (offline study, no production code):
   slot it after the Phase 3b GATE — ideally after Phase 4 lands, since Phase 4
   shifts the unplaced population it measures — and before the Phase 6 probe,
   whose F2 criterion 4 reads its E2 verdict. Phase 4.5's G2 labels also read
   E2 (secondary corroboration; 4.5a degrades to manual-gold-only without
   it), so prefer it before 4.5a when feasible. Untracked on disk by design.
-- `plans/edge-snap-coverage-accuracy.md`: independent parallel track on its
+- `plans/completed/edge-snap-coverage-accuracy.md`: independent parallel track on its
   own branch (`edge_snap_refine` off `89d28c46`), runnable at any point — the
   replay harness here excludes edge-snap, so this plan's corpus numbers are
   insulated from it. The only coupling is a small
@@ -161,8 +161,9 @@ at one:
 ## Phase 0 — port the tuning harnesses to this branch
 
 Everything after this phase is measured with these tools; they currently live
-only on `pathed_align`. This is Phase F2 of `plans/two-path-matcher-ship.md`,
-done early.
+only on `pathed_align`. This is Phase F2 of `two-path-matcher-ship.md`
+(Ken's working-tree-only plan, never committed to any branch — the phase
+is restated in full below), done early.
 
 Files on `pathed_align` (read them with
 `git show pathed_align:scripts/<name>.py`):
@@ -639,7 +640,7 @@ preserving stanza breaks through `parse_lyric_lines`
 (`pikaraoke/lib/genius_lyrics.py:76-104`) as line metadata. Nothing in this
 plan builds it before a GO at the F2 GATE; Appendix F supersedes the
 review's section 6 sketch with the locked shape. Sequencing: run the LRCLIB
-study (`plans/lrclib-fill-absence-study.md`) first when feasible — F2
+study (`plans/completed/lrclib-fill-absence-study.md`) first when feasible — F2
 criterion 4 excludes lines its E2 verdict already covers, and the criterion
 degrades to no E2 exclusion when the verdict does not exist.
 
@@ -649,7 +650,7 @@ degrades to no E2 exclusion when the verdict does not exist.
   ~57 correct drops vs ~22 real-but-unplaced — blanket filling is wrong ~70%
   of the time. Convert the 22 via Phases 1 and 4 instead.
 - LRCLIB in production, or any new online timing source. LRCLIB is held-out
-  scoring only. **Narrowed 2026-07-17:** `plans/lrclib-fill-absence-study.md`
+  scoring only. **Narrowed 2026-07-17:** `plans/completed/lrclib-fill-absence-study.md`
   re-opened this for one narrow, offline-validated use — gated fill of
   lines the matcher leaves unplaced (arm-A-pass songs only, never a DP
   candidate source) — and found it a GO (E1: C.2's `good=16,
@@ -1542,7 +1543,7 @@ by the object-carried `evidence` key — zero-evidence align lines are the
 shipped 3b veto's class (`evidence_veto.veto_uncorroborated_lines` demotes
 the near-silent subset of exactly these), so the DP's marginal value is the
 corroborated wrongs; and, when the LRCLIB study
-(`plans/lrclib-fill-absence-study.md`) has run, which of those
+(`plans/completed/lrclib-fill-absence-study.md`) has run, which of those
 lines its E2 strong-absence set already covers.
 
 Predictions to check at the GATE (written blind to the probe, 2026-07-12,
@@ -2407,12 +2408,12 @@ post-E3a table (`replay_post_e3a.txt` values, 14 songs) is the
 against — with the standing caveat that Bloodstream/HUNTR_X/Defying
 Gravity remain harness-excluded until the `.srt` provenance decision.
 **Caveat resolved 2026-07-14 — see the Results log entry below**
-(`plans/srt-provenance-marker.md` Part 1); judge read complete, 17-row
+(`plans/completed/srt-provenance-marker.md` Part 1); judge read complete, 17-row
 table blessed as the new baseline (entry below).
 
 ### SRT provenance corpus cleanup — Part 1 artifacts (Sonnet, 2026-07-14)
 
-Executes `plans/srt-provenance-marker.md` Part 1 (data-only corpus
+Executes `plans/completed/srt-provenance-marker.md` Part 1 (data-only corpus
 cleanup, no production code) — resolves this doc's standing
 Bloodstream/HUNTR_X/Defying Gravity harness-exclusion caveat (isolation
 note above and the E3a judge-read close). Ken's provenance ruling
@@ -3129,7 +3130,7 @@ transition-cost DP checkpoint).
 
 Executed per Appendix F. Scratchpad only, no commit; nothing built.
 Sequencing prerequisite: the LRCLIB study is CLOSED
-(`plans/lrclib-fill-absence-study.md` — E1 GO, shipped; E2 never ran, per
+(`plans/completed/lrclib-fill-absence-study.md` — E1 GO, shipped; E2 never ran, per
 Ken's pre-execution descope), so F2 criterion 4's "outside the LRCLIB E2
 demotion set" clause has no set to exclude against and degrades to its
 already-documented no-exclusion fallback.

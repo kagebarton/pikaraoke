@@ -2,7 +2,7 @@
 
 Model: Claude Sonnet (implementer). Design: Claude Fable 5, 2026-07-17.
 
-Implements the E1 = GO verdict of `plans/lrclib-fill-absence-study.md`
+Implements the E1 = GO verdict of `plans/completed/lrclib-fill-absence-study.md`
 (Phase L4 consolidated verdict, 2026-07-17). This is the "separate
 production-wiring plan" that study's Phase L4 mandates. The study file is
 the authoritative record for every number cited here; do not re-run or
@@ -213,7 +213,7 @@ Also in this commit: update `lrclib.py`'s module docstring — it still says
 "LRCLIB is permanently out of the production pipeline and no production
 module imports it". Narrow it to match the amended ruling: held-out
 reference for the tuning harness AND the gated fill-only production path
-per `plans/lrclib-fill-absence-study.md`; still banned as a matcher/DP
+per `plans/completed/lrclib-fill-absence-study.md`; still banned as a matcher/DP
 source.
 
 ### Tests (`tests/unit/test_lyrics_fetch.py` additions)

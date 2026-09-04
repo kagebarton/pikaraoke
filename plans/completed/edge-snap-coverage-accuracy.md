@@ -6,7 +6,7 @@ Opus on any spec mismatch, see the executor-discipline bullet under Process)
 Execution plan for extending the edge snap feature (`pikaraoke/lib/onset_snap.py`)
 to more cases — single-word lines, interior run edges — and improving its
 accuracy, folding in the six findings from the user's review in
-`plans/edge-snap-review-interleaved.md`. Designed and validated (corpus scan +
+`plans/completed/edge-snap-review-interleaved.md`. Designed and validated (corpus scan +
 17-song reference study) in a prior session; this doc is written so it can be
 executed phase by phase without re-deriving the analysis.
 

@@ -152,7 +152,7 @@ the protection branch.
    — all green. Then the full unit sweep; the 4 known Windows baseline
    failures (pipe/sidecar I/O) are not regressions.
 2. Offline corpus replay: the exact invocation recorded in the Phase 4 GATE /
-   E3a re-validation entries of `plans/matcher-accuracy-hardening.md`
+   E3a re-validation entries of `plans/completed/matcher-accuracy-hardening.md`
    (defaults alpha=2.0, beta=2.0). Save to scratchpad
    `phase4_review_fix/replay_post_width_sym.txt`.
 3. **Full-width** diff (no column truncation) against the post-Phase-4

@@ -12,7 +12,7 @@ identical path (`pikaraoke/pipeline/stages/lyric_align.py:235-241`). Nothing
 on disk distinguishes the two provenances afterward.
 
 Consequences, all previously documented in
-`plans/matcher-accuracy-hardening.md`'s Results log (3b entry + GATE outcome,
+`plans/completed/matcher-accuracy-hardening.md`'s Results log (3b entry + GATE outcome,
 2026-07-13):
 
 1. **Flag contamination on every second run.** The ground-truth probe
@@ -22,9 +22,10 @@ Consequences, all previously documented in
    the bundle records `youtube_srt_present: True`. This poisoned the three
    2026-07-13 live-regen songs (Bloodstream, HUNTR_X, Defying Gravity),
    shrinking the harness corpus (`replay_ytasr_third_source.py:370` filters
-   on the flag) from 17 to 14 and hard-blocking both `plans/
-   lrclib-fill-absence-study.md` (its L0.1 cross-check requires the joint set
-   to equal the harness filter at 17 songs) and Phase 4.5's G1 enumeration.
+   on the flag) from 17 to 14 and hard-blocking both
+   `plans/completed/lrclib-fill-absence-study.md` (its L0.1 cross-check
+   requires the joint set to equal the harness filter at 17 songs) and
+   Phase 4.5's G1 enumeration.
 2. **Live self-adoption hazard.** `lyrics_fetch._find_srt`
    (`pikaraoke/pipeline/stages/lyrics_fetch.py:175-186`) would adopt the
    pipeline's own prior `.srt` as an uploader caption and route through

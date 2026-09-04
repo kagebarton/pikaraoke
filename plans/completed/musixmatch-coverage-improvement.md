@@ -4,7 +4,7 @@ Model: Claude Sonnet 5
 
 ## Objective
 
-Sequel to `plans/musixmatch-coverage-probe.md` (part a). That probe measured
+Sequel to `plans/completed/musixmatch-coverage-probe.md` (part a). That probe measured
 raw Musixmatch coverage and found real problems in *how a match gets picked*,
 not just whether one exists. This plan runs three targeted fixes over the
 26 corpus songs that didn't already get a confident word-level hit, and
@@ -45,7 +45,7 @@ each validated informally in the session that wrote this plan:
 
 ## Baseline (do not re-derive — use this table)
 
-Source of truth: `plans/musixmatch-coverage-probe.md`'s `## Results` →
+Source of truth: `plans/completed/musixmatch-coverage-probe.md`'s `## Results` →
 per-song table, captured verbatim below as `BASELINE` so this script doesn't
 depend on re-parsing markdown or on any prior session's scratchpad (gone).
 **Skip the 7 rows already `word` at `map_rate >= 0.5`** — Popular, Belle,

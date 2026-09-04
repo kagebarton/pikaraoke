@@ -10,7 +10,7 @@ reintroduction of LRCLIB earns its way back in for either of two uses:
 
 - **E1 — gated fill**: render lines the matcher left unplaced (interp/absent)
   at LRCLIB cue time, only behind version/offset/energy gates. This is NOT the
-  blanket interp-render that `plans/matcher-accuracy-hardening.md` rejects
+  blanket interp-render that `plans/completed/matcher-accuracy-hardening.md` rejects
   (~57 correct drops vs ~22 real-but-unplaced; blanket fill wrong ~70%): the
   gates are designed to flip those odds by abstaining per-song (wrong variant)
   and per-line (version over-count).
