@@ -1124,3 +1124,212 @@ reproduction deltas — are robustness only and can never become primary.
 Any change to the aligner, `cue_align`, snap policy, or the F2 build; GATE
 J1/J2's separate CTC-in-the-joint-matcher question; the S-C vs 5b SRT switch,
 which stays open; S-E and GATE L.
+
+### 2026-09-04 — M6 run — both arms, raw tables, no read-off beyond the pre-registered ones
+
+**(Executor. The pre-registration above was ratified and committed (`6d9cdcc`)
+before the probe was written, so every rule applied below was fixed in version
+control while the numbers did not exist. The read-off itself is M6-d and is
+Ken's: nothing here decides whether S-2's genius arm stands. One probe defect
+found and corrected mid-analysis is disclosed in full below.)**
+
+**Artifacts** — session scratchpad `m6/`: `prereg.md`, `arm_id.py`,
+`m6_probe.py`, `m6_results.txt`, `m6_rows.json`, `armW_run.log`,
+`armC_run.log`, per-line dumps `armW/`, `armC/`, renders `renders_W/`,
+`renders_C/`, the 2026-07-19 originals `survivor_2026-07-19/`, the frozen
+cohort `debug17/`, and the two eyeball songs staged in `eyeball/`.
+
+Both arms ran on the Windows box against the frozen 17-bundle cohort, same
+code state, `--timing sidecar --pad 0.75`. Arm C took about 4 minutes for all
+17 songs (one whole-song forward pass each, sliced by frame index); arm W took
+about 2.4 minutes *per song* (451+ sequential `align_refine` calls on ~3 s
+windows). Recorded as context; the pre-registration makes speed no part of any
+criterion.
+
+#### Reproduction check — both arms reproduce, decisively
+
+The pre-registered suspension clause (arm C within 0.2 s of S-B on the two
+eyeball songs) does not fire. Every one of the 17 `ovl` values reproduces in
+both arms, and so do `plc`/`hid`/`rea`/`anc`/`scf`/`maxgap` and the corpus
+lines `prevalence: 3/17` (arm C) and `7/17` (arm W).
+
+```
+song                               W     S-A       d |       C     S-B       d
+Defying Gravity                 4.26    4.30   -0.04 |    2.61    2.60   +0.01
+Free                            0.00    0.00   +0.00 |    0.00    0.00   +0.00
+Popular                         1.72    1.70   +0.02 |    0.00    0.00   +0.00
+Be Our Guest                    2.96    3.00   -0.04 |    0.31    0.30   +0.01
+Belle                           1.27    1.30   -0.03 |    0.00    0.00   +0.00
+Best Part Of Me                 0.00    0.00   +0.00 |    0.00    0.00   +0.00
+Bloodstream                     2.25    2.30   -0.05 |    0.50    0.50   +0.00
+This Is What It Sounds Like     0.50    0.50   +0.00 |    0.50    0.50   +0.00
+Domino                          4.58    4.60   -0.02 |    0.00    0.00   +0.00
+In Summer                       1.17    1.20   -0.03 |    0.00    0.00   +0.00
+Man Out of You                  2.43    2.40   +0.03 |    2.64    2.60   +0.04
+Paradise                        0.38    0.40   -0.03 |    1.03    1.00   +0.03
+Colors of the Wind              0.00    0.00   +0.00 |    0.00    0.00   +0.00
+Seasons of Love                 0.75    0.70   +0.05 |    0.00    0.00   +0.00
+Hakuna Matata                   2.82    2.80   +0.02 |    0.00    0.00   +0.00
+Next Ten Minutes                0.50    0.50   +0.00 |    0.00    0.00   +0.00
+Girl in the Bubble              3.16    3.20   -0.04 |    0.00    0.00   +0.00
+```
+
+Every delta is within rounding of the recorded one-decimal tables. Two arm-C
+songs differ by one in the re-paced count only (Popular and Seasons of Love,
+`rep` 1 → 0), which moves no overlap. Arm C's two "targets length is too long
+for CTC" warnings are the two root-caused failures the S-B entry already
+records. This also settles the arm-identity question raised in the
+pre-registration's finding 2: the surviving `.scaffold.ass` are the CTC arm,
+and that arm reproduces seven weeks later on a different machine.
+
+#### Probe defect found and corrected mid-analysis — disclosed
+
+The first run of `m6_probe.py` evaluated "the other arm's overlap at that same
+location" by applying the *first* arm's `(prev, cur)` order to the second arm's
+spans. Where the two arms place the same two lines in **opposite time order**,
+that computes `end(later) - start(earlier)` — the pair's total span, not an
+overlap — and reads as a large false positive. It produced C@locW values of
+7.71 s on Domino, 3.22 s on Hakuna Matata and 14.84 s on Girl in the Bubble,
+which would have read as "CTC overlaps *more* at the location it claims to
+have fixed".
+
+Caught by hand-checking the Hakuna Matata spans before reporting, not by the
+probe. The fix re-derives the ordering inside each arm — `ovl_at` now sorts the
+pair by start time, reproducing exactly what `max_line_overlap` would report
+for that pair within that arm. Corrected values follow. M6-c was **not**
+affected: it iterates the shared-*adjacency* set, and a shared adjacency has
+the same order in both arms by construction. The probe's `worst()` was
+self-tested against the harness's own `max_line_overlap` on 17/17 arm-C songs
+before either table was produced.
+
+#### M6-a / M6-b — same-location worst overlaps and worst-pair movement
+
+`loc` is a `(prev, cur)` line-id pair. `C@locW` is arm C's overlap at arm W's
+worst location and vice versa. `flip` marks the pairs the two arms place in
+opposite order — descriptive, not commissioned, and reported because `C@locW`
+cannot be read without it.
+
+```
+song                            ovl_W loc_W         C@locW flip |    ovl_C loc_C         W@locC  moved
+Defying Gravity                  4.26 (78, 85)       -6.99   no |     2.61 (86, 82)        2.90  yes
+Free                             0.00 None           n/a      - |     0.00 None           n/a    no
+Popular                          1.72 (51, 53)       -0.50   no |     0.00 None           n/a    yes
+Be Our Guest                     2.96 (70, 69)        0.00  yes |     0.31 (59, 60)        0.00  yes
+Belle                            1.27 (3, 4)          0.00   no |     0.00 None           n/a    yes
+Best Part Of Me                  0.00 None           n/a      - |     0.00 None           n/a    no
+Bloodstream                      2.25 (26, 27)       -0.12   no |     0.50 (37, 38)        0.50  yes
+This Is What It Sounds Like      0.50 (48, 49)        0.50   no |     0.50 (48, 49)        0.50  no
+Domino                           4.58 (30, 29)       -0.04  yes |     0.00 None           n/a    yes
+In Summer                        1.17 (4, 5)          0.00   no |     0.00 None           n/a    yes
+Man Out of You                   2.43 (18, 19)        0.00   no |     2.64 (45, 44)        0.00  yes
+Paradise                         0.38 (26, 27)       -0.12   no |     1.03 (20, 21)        0.00  yes
+Colors of the Wind               0.00 None           n/a      - |     0.00 None           n/a    no
+Seasons of Love                  0.75 (30, 31)       -0.22   no |     0.00 None           n/a    yes
+Hakuna Matata                    2.82 (31, 30)       -0.12  yes |     0.00 None           n/a    yes
+Next Ten Minutes                 0.50 (50, 51)       -0.72   no |     0.00 None           n/a    yes
+Girl in the Bubble               3.16 (30, 13)      -13.21  yes |     0.00 None           n/a    yes
+```
+
+```
+worst pair moved                 : 12 / 16 in-scope songs
+mean worst-overlap (in-scope)    : W 1.599 s   C 0.475 s
+```
+
+The mean pair is the recomputation of S-2's second criterion on this run
+(S-2 recorded S-B 0.47 s vs S-A 1.61 s). It is a declared robustness column,
+not a criterion.
+
+#### M6-c — clipping decomposition
+
+Over every shared adjacency where arm C reduces a real arm-W overlap:
+`ovl_W - ovl_C = (end_W(prev) - end_C(prev)) - (start_W(cur) - start_C(cur))`.
+`from_end` positive means CTC ends the previous line **earlier** — the
+clipping signature the audit predicted. `from_start` positive means CTC starts
+the next line **later**.
+
+```
+song                           wins  sum_dovl  from_end from_start end_share
+Defying Gravity                  13      6.96     -2.57      9.53      -37%
+Free                              0      0.00      0.00      0.00         -
+Popular                           6      3.56     -3.94      7.50     -111%
+Be Our Guest                      2      1.11      0.01      1.09        1%
+Belle                             2      1.88      1.12      0.75       60%
+Best Part Of Me                   0      0.00      0.00      0.00         -
+Bloodstream                       1      2.37     -0.40      2.77      -17%
+This Is What It Sounds Like       1      0.19     -1.14      1.33     -597%
+Domino                            4      2.32     -2.52      4.85     -109%
+In Summer                         1      1.17      0.29      0.88       25%
+Man Out of You                    4      5.12      2.34      2.77       46%
+Paradise                          1      0.50      1.53     -1.04      309%
+Colors of the Wind                0      0.00      0.00      0.00         -
+Seasons of Love                   2      1.49     -1.28      2.77      -86%
+Hakuna Matata                     0      0.00      0.00      0.00         -
+Next Ten Minutes                  2      1.57     -4.04      5.62     -257%
+Girl in the Bubble                7      0.83    -39.94     40.76    -4831%
+```
+
+```
+in-scope total: from earlier ends -10.59 s, from later next-starts 38.83 s
+share of CTC's overlap reduction attributable to earlier ends: -37%
+```
+
+Girl in the Bubble is out of scope (S-2's exclusion, `scf=0`) and is excluded
+from the totals; it is printed because it was rendered. Reported as computed
+and not interpreted here: the in-scope `from_end` total is negative, and
+Hakuna Matata contributes zero rows because arm C reduces no shared-adjacency
+overlap on it.
+
+#### The two eyeball locations, both arms
+
+Arm W's worst-overlap location on each of the two showcase songs, with the
+neighbouring lines and the `source` field of each.
+
+```
+Be Our Guest  — whisper worst overlap 2.96 s at lines (70, 69)
+ arm W   line 68  3:06.25 -> 3:07.90  cue_align_fill  While the candlelight's still glowing
+         line 70  3:06.60 -> 3:10.86  cue_align       Course by course, one by one
+         line 69  3:07.90 -> 3:09.55  cue_align_fill  Let us help you, we'll keep going
+         line 71  3:10.86 -> 3:14.08  cue_align       'Til you shout, "Enough, I'm done"
+ arm C   line 68  3:05.74 -> 3:07.96  cue_align       While the candlelight's still glowing
+         line 69  3:07.96 -> 3:09.14  cue_align       Let us help you, we'll keep going
+         line 70  3:09.14 -> 3:10.82  cue_align       Course by course, one by one
+         line 71  3:10.98 -> 3:14.23  cue_align       'Til you shout, "Enough, I'm done"
+
+Hakuna Matata — whisper worst overlap 2.82 s at lines (31, 30)
+ arm W   line 29  2:41.90 -> 2:43.28  cue_align       Hakuna matata, hakuna matata
+         line 31  2:42.60 -> 2:46.10  cue_align_fill  It means no worries for the rest of your day
+         line 30  2:43.28 -> 2:45.44  cue_align       Hakuna matata, haku...
+         line 32  2:48.18 -> 2:49.00  cue_align       It's our problem-free philosophy
+ arm C   line 29  2:41.88 -> 2:43.92  cue_align       Hakuna matata, hakuna matata
+         line 30  2:43.94 -> 2:44.64  cue_align       Hakuna matata, haku...
+         line 31  2:44.76 -> 2:47.17  cue_align       It means no worries for the rest of your day
+         line 32  2:48.18 -> 2:48.94  cue_align       It's our problem-free philosophy
+```
+
+#### Not commissioned by the pre-registration — flagged
+
+- **Arm W logged 117 `AttributeError: 'NoneType' object has no attribute
+  'language'` failures inside `whisper_worker._do_align_refine`**, each falling
+  back to the "re-pacing from cue" path, plus one `RuntimeError` on a padding
+  size. Zero songs failed outright. The S-A entry recorded "two per-line
+  whisper `align_refine` errors" for the original run; the per-song `rep`
+  counts reproduce exactly, so the fallback was equally active then and the
+  original entry under-reported it. Recorded because it bears on how arm W's
+  spans should be read: a `cue_align_fill` line's timing is not whisper's
+  alignment, it is the cue re-paced.
+- **At both eyeball locations, arm W's overlap involves a `cue_align_fill`
+  line and arm C's four lines are all `cue_align`.** Stated as a fact about
+  the two renders, not as an interpretation of what either sounds like.
+
+#### What is Ken's
+
+M6-d. Watch both arms on Be Our Guest from 3:02 and Hakuna Matata from 2:38
+and answer the pre-registered question: at the location of the whisper arm's
+worst overlap, does the CTC render (i) time both voices correctly, (ii) drop
+or clip the second voice, or (iii) neither — whisper is simply wrong there and
+CTC is right for an unrelated reason? Both (i)/(iii) → S-2 stands; both (ii) →
+S-2 flips; split → no award. The tables above are evidence for that reading
+and, per the ratified rule, cannot flip or confirm the selection on their own.
+
+No further probe is commissioned by this entry, and nothing here touches a
+shipped route.
