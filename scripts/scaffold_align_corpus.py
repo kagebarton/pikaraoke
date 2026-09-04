@@ -86,6 +86,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--pad", type=float, default=0.75, help="slice pad into silence (s)")
     ap.add_argument("--only", help="substring filter on the song filename")
     ap.add_argument(
+        "--dump-json",
+        type=Path,
+        help="directory to write each song's line_objects as <stem>.lines.json; "
+        "the printed table is a per-song summary, so cross-arm comparison needs these",
+    )
+    ap.add_argument(
         "--slice-align-module",
         type=Path,
         help="path to a module exposing make_slice_align(vocal_wav, tmp, stem, worker) "
@@ -148,6 +154,11 @@ def main(argv: list[str] | None = None) -> int:
             except (ValueError, RuntimeError):
                 logger.exception("scaffold-align failed for %s", media.stem[:40])
                 continue
+            if args.dump_json:
+                args.dump_json.mkdir(parents=True, exist_ok=True)
+                (args.dump_json / f"{media.stem}.lines.json").write_text(
+                    json.dumps(line_objects), encoding="utf-8"
+                )
             new_overlap, _ = max_line_overlap(line_objects)
             old_overlap, _ = max_line_overlap(bundle["output_line_timings"])
             placed = sum(1 for o in line_objects if o["words"])
