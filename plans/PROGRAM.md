@@ -158,8 +158,9 @@ target above is the shipped picture.
 
 ### Open decisions that could still move the target
 
-- **R-4 / M1–M5** — the verify criterion. Decides whether precedence 2
-  ever fires. Until then, word sidecars demote to the line pool.
+- **R-4 / M1–M4** — the verify criterion. Decides whether precedence 2
+  ever fires. Until then, word sidecars demote to the line pool. (M5
+  closed 2026-09-04, refuted; it touched no route.)
 - **M6** — S-2's genius arm is the one *unwitnessed selection* in the
   live set. If it flips, precedence 3's aligner changes from CTC to
   whisper, which also flips its snap policy. **Blocks F2.**
@@ -226,8 +227,12 @@ Order — cheapest and highest overturn-risk first:
    ruling. All offline, no GPU, data already on disk. M1 relabel by
    timing truth; M2 build real negative controls by cross-pairing;
    M3 re-run Appendix C on M1 labels + M2 controls; M4 per-section
-   pairing-coverage detector; M5 check whether rushed sweeps are
-   `cue_align.MAX_WORD_DUR_S` truncating sustained notes.
+   pairing-coverage detector; ~~M5 check whether rushed sweeps are
+   `cue_align.MAX_WORD_DUR_S` truncating sustained notes~~ — **CLOSED
+   2026-09-04, REFUTED**: the songs Ken called clean absorbed larger
+   in-clip sweep truncations than the two he called rushed, so the
+   constant stays at 1.5 s. The "rushed" class is still unexplained and
+   feeds M1's labelling rule.
 4. **M6** — re-read S-2's genius arm against the S-C reframe. Added
    2026-09-04 by the eyeball-provenance audit. **Sequenced after M1-M3
    and before any F2 build**, since F2 builds on the path S-2 chose the

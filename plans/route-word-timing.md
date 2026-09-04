@@ -864,13 +864,142 @@ below.
 - **M5 (small) — check whether the "slightly rushed" sweeps are
   `cue_align.MAX_WORD_DUR_S` (1.5 s) truncating sustained notes.** If
   so it is a one-constant fix rather than a design problem.
+  ***CLOSED 2026-09-04: REFUTED*** — the constant does not move; see the
+  M5 entry at the end of this log. The "rushed" class stays unexplained
+  and now bears on M1's labelling rule.
 - **M6 — re-read S-2's genius arm against the S-C reframe.** Added
-  2026-09-04 by the eyeball-provenance audit below; see that entry for
-  the evidence and the sequencing constraint (after M1-M3, before any
-  F2 build).
+  2026-09-04 by the eyeball-provenance audit, which lives in
+  `plans/shared-aligner-form.md`; see that entry for the evidence and the
+  sequencing constraint (after M1-M3, before any F2 build).
 
 **Held, not commissioned:** STOP items 3 (outlier denominator) and 4
 (MAD-threshold population). If the eyeball entry's analysis 1 survives
 M3, both dissolve rather than resolve — a statistic that reads the
 wrong thing is dropped, not tuned. STOP item 6 (arm (iv) rebuild) stays
 deferred behind R-4.
+
+### 2026-09-04 — M5 run and ruled (Ken) — `MAX_WORD_DUR_S` refuted as the cause of the "rushed" sweeps
+
+**(Executor tables, then Ken's ruling on them in the same turn. M5 was
+commissioned as a single sentence in the R-1 ruling above, so it carried
+no pre-registered read-off rule. Ken ruled directly rather than spending a
+judge round — see `plans/PROGRAM.md` §"When a result goes to Fable".)**
+
+**The hypothesis.** Arm (i) caps every warped provider word sweep at
+`cue_align.MAX_WORD_DUR_S = 1.5 s` (scratchpad `p2b_render.py:59`; the
+constant is `pikaraoke/lib/cue_align.py:80`). If that cap were truncating
+sustained notes, it would explain the "slightly rushed but still singable"
+defect Ken reported on More Than That and Like I Love You, and the repair
+would be one constant. Note `ytasr.MAX_WORD_DUR_S = 2.0` is an unrelated
+knob on the joint route; a grep hits both.
+
+**Artifacts** — scratchpad `afed60c3-…/scratchpad/m5/`: `m5_probe.py` +
+`m5_truncation.txt`, `m5b_probe.py` + `m5b_coverage.txt`, `m5c_probe.py` +
+`m5c_events.txt`. All three are CPU-only, reading `p2b/verify_fit.json`
+for each song's fitted slope and the provider sidecars from
+`lyrics/*.timing.json`.
+
+**Table 1 — truncation rate, all 16 cohort songs.** Fraction of provider
+words whose *warped* duration exceeds the 1.5 s cap, with duration
+percentiles. Sorted by rate.
+
+```
+song                                words  trunc% med_dur  p90dur  maxdur
+Backstreet Boys - Incomplete (Offi    101    8.9%    0.26    1.49   30.20
+The Lion King - Can You Feel The L    188    5.9%    0.17    1.23   14.41
+Idina Menzel - Let It Go (from Fro    276    5.1%    0.21    0.93    8.01
+Ed Sheeran - Best Part Of Me (feat    265    3.8%    0.35    0.94    3.03
+Seasons of Love (HD)---UvyHuse6buY    255    3.5%    0.03    0.78    4.57
+Jodi Benson - Part of Your World (    246    2.4%    0.19    0.76    9.95
+'Popular' - Wicked 20th Anniversar    328    2.1%    0.15    0.70    7.31
+Justin Timberlake - Mirrors (Offic    996    1.4%    0.13    0.48    3.49
+'Free' _ Official Lyric Video _ So    381    1.3%    0.14    0.48    5.44
+Justin Timberlake - Like I Love Yo    593    1.2%    0.12    0.43    3.44
+Backstreet Boys - More Than That--    282    1.1%    0.23    0.75    1.68
+Beauty and the Beast (1991) - Bell    623    0.6%    0.16    0.52    1.84
+Pocahontas - Colors of the Wind (B    312    0.6%    0.26    0.73    3.08
+Jessie J - Domino (Official Video)    402    0.0%    0.17    0.52    1.33
+Justin Timberlake - Rock Your Body    604    0.0%    0.17    0.31    0.72
+Justin Timberlake - Selfish (Offic    485    0.0%    0.19    0.50    1.41
+```
+
+**Table 2 — sweep coverage, the 10 eyeballed songs.** Fraction of each
+provider line's span covered by its capped word sweeps, and the median
+tail gap between the last word's end and the line end. *Provenance note:
+this probe was written by the executor in service of interpreting Table 1,
+and it joins probe output to Ken's eyeball labels — that is judge work
+done at the executor's desk. It is recorded because it exists, not because
+it was commissioned.*
+
+```
+label     song                           lines  med_cov mean_cov med_tail
+bad       'Popular' - Wicked 20th Annive    61     0.63     0.61     0.00
+bad       Ed Sheeran - Best Part Of Me (    39     0.83     0.82     0.00
+bad       Jessie J - Domino (Official Vi    65     0.61     0.62     0.00
+bad       Seasons of Love (HD)---UvyHuse    43     0.39     0.41     0.00
+clean     'Free' _ Official Lyric Video     46     0.81     0.79     0.00
+clean     Beauty and the Beast (1991) -    116     0.82     0.81     0.00
+clean     Jodi Benson - Part of Your Wor    56     0.69     0.68     0.00
+clean     Pocahontas - Colors of the Win    37     0.78     0.75     0.00
+singable  Backstreet Boys - More Than Th    40     0.70     0.70     0.00
+singable  Justin Timberlake - Like I Lov    81     0.82     0.81     0.00
+```
+
+**Table 3 — truncation events against the watched clips.** Tables 1 and 2
+are whole-song aggregates and cannot say whether a capped word ever played
+while Ken was looking, or how much sweep it lost. This one emits a row per
+capped word in media time and intersects it with the clip windows recorded
+in the R-1 eyeball entry above. `capd` = capped words in the song,
+`in_clip` = those inside a watched window, cuts in seconds of lost sweep.
+
+```
+song                          capd in_clip max_cut sum_cut   worst cuts in clip (word @ media_t -Ns)
+clean    Colors of the Wind      2       1    1.35    1.35   know @23s -1.3s
+clean    Belle                   4       0    0.00    0.00   --
+clean    Free                    5       1    0.76    0.76   free, @72s -0.8s
+clean    Part of Your World      6       2    1.01    1.14   more @51s -1.0s; deal @48s -0.1s
+singable More Than That          3       1    0.08    0.08   in @125s -0.1s
+singable Like I Love You         7       3    0.24    0.29   chance @144s -0.2s; baby @98s -0.0s; you @120s -0.0s
+bad      Best Part of Me        10       3    1.53    3.35   you, @206s -1.5s; Lately @212s -1.2s; Baby, @200s -0.6s
+bad      Popular                 7       4    5.81   11.88   And @154s -5.8s; me! @199s -3.1s; clandestinely @177s -2.5s
+bad      Domino                  0       0    0.00    0.00   --
+bad      Seasons of Love         9       0    0.00    0.00   --
+```
+
+**Ruling (Ken) — M5 = REFUTED. `MAX_WORD_DUR_S` is not the cause, and it
+does not move.** The evidence does not merely fail to support the
+hypothesis, it points the other way, and Table 3 is what settles it. Inside
+the windows Ken actually watched, the two songs he called rushed lost
+**0.08 s** and **0.24 s** of sweep at worst. The songs he called *clean*
+absorbed **1.35 s** (Colors of the Wind, the song he called perfect),
+**1.01 s** and **0.76 s** in the windows he was watching, and he reported
+nothing. A mechanism that produces a visible defect at 0.08 s while
+passing unnoticed at 1.35 s is not the mechanism. The comparison carries
+its own control, which is why it did not go to a judge.
+
+**Table 1 alone could not have ruled this.** It is a whole-song rate, and
+it left Like I Love You live: 7 capped words against a 3.44 s maximum
+means some word loses ~1.9 s of sweep, which is a fair reading of "just a
+few that seemed rushed". Only the per-event view shows those seven are
+mostly outside the clip and the in-clip ones cost 0.24 s at most. Recorded
+because the same shape of error — a rate standing in for the thing you
+care about — is exactly what put R-4 in a STOP.
+
+**What M5 does *not* close.** The "rushed" class remains unexplained. It
+is a **sub-line** defect and, per the blind-spot note in the R-1 eyeball
+entry above, no statistic in the 2b table can see it. Sweep coverage
+(Table 2) does not separate the labels either: clean spans 0.69-0.82,
+singable 0.70-0.82. No further probe is commissioned on it here.
+
+**Consequence for M1 (flagged, not decided).** More Than That and Like I
+Love You are 2 of the 10 validation labels M1 must reproduce. M5 removes
+the render-artifact explanation for their "singable" grade, so whatever
+"rushed" is, it is a property of the pairing or the fit — the same family
+M1 is relabelling. M1's labelling rule has to state what it does with them
+rather than inheriting "singable" unexamined.
+
+**Observation, not interpreted.** Popular's cap truncates "And" at 154 s
+by 5.81 s, inside the section Ken flagged at 2:30 as "a slow crawl", and
+Popular carries the largest in-clip cut total in the cohort (11.88 s
+across 4 words). Whether that is coincidence or the same underlying edit
+mismatch is M4's question, not M5's.
