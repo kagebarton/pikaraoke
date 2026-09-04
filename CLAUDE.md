@@ -42,7 +42,14 @@ Before calling a change done, review your own diff on three axes:
 - **Simplicity** — simplest thing that works; no dead code, duplicate logic, speculative abstraction, or unrequested scope; reuse helpers; single source of truth
 - **Robustness** — see Error Handling; plus no races/TOCTOU, safe edge/metachar inputs, cross-platform paths via `get_temp_directory()`
 
-Run `/code-review` on commits that add or rewrite logic; skip pure delete/move/rename.
+`/code-review` is never launched unprompted. On commits that add or rewrite logic (skip pure delete/move/rename): if the change is simple enough to verify in one read-through, say the self-review above covers it; if it's complex — multi-file, new algorithm, core pipeline/concurrency — track it as pending and flag at the next clean boundary that a review is due. Run it only when asked. When running it, use exactly 3 finder angles, one per axis above, not the tool's default spread. `/code-review ultra` is user-triggered only, never launched for any reason.
+
+## Communication
+
+- Plain language. Lead with the consequence — what is decided, blocked, or the user's call. Keep a number only when the number *is* the finding. Explain a mechanism by what it does, not what it is called.
+- Vocabulary from `plans/` (gate letters, phase and rung numbers, route and probe names) is shared language — use it directly. Code-level detail is out by default: no recomputed arithmetic, per-song tables, constant names, or metric decompositions. That lives in the plan's Results log; the user asks when he wants it.
+- Chat tone only. Plan entries keep raw tables, full provenance, and no verdicts (`plans/PROGRAM.md`). Simplify the relay, never the record.
+- Flag good moments to `/compact`: after a commit with its plan-log row written, and at phase/GATE boundaries. Never mid-commit. Same checkpoints as the pending-review flag above.
 
 ## Commits
 
