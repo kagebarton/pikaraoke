@@ -7,56 +7,51 @@ routing picture, the sequencing, and the shared ground rules. **It owns no
 probes and no verdicts** — those live in the lane files, one per timing
 source.
 
-## The two pictures, and why they differ
+**Read Part 1 and Part 2 as two different things.** Part 1 is what the
+code does today; Part 2 is what the locked rulings specify it should do.
+They are not the same shape — today's matcher has two routes, the target
+has four — and reading a plan's rung vocabulary as if it described shipped
+behaviour is the main way these documents mislead. Where a lane file says
+"licensed but unbuilt", Part 1 is where its songs actually go.
 
-The single most useful thing to hold in your head: **the ladder below is
-the target, not the code.** The shipped matcher has *two* routes; the
-ladder has three rungs. Confusing the two is the main way these plans
-mislead.
+## Part 1 — As shipped today
 
-### What ships today
+What the code does right now. Nothing here is aspirational; every box is
+reachable on the current branch.
 
-`LyricAlignStage.run` (`pikaraoke/pipeline/stages/lyric_align.py`):
+### Routing
+
+`LyricAlignStage.run` (`pikaraoke/pipeline/stages/lyric_align.py`). The
+entire routing decision is one `if cue_spans:` at line 145:
 
 ```
                     ┌─ lyrics_path is None ──────────────► TRANSCRIBE mode
-                    │                                      (no sheet at all;
-                    │                                       whisper writes the
-                    │                                       lines it hears)
+                    │                                      no sheet at all;
+                    │                                      whisper writes the
+                    │                                      lines it hears
    song ────────────┤
                     │                    ┌─ cue_spans ────► CUE-ALIGN  (SRT)
-                    └─ sheet exists ─────┤   non-empty      route-srt.md
+                    └─ sheet exists ─────┤   non-empty      whisper slice_align
+                                         │                  route-srt.md
                                          │
                                          └─ else ─────────► JOINT DP
+                                                            whisper + transcribe
+                                                            + ytasr
                                                             route-no-timing.md
 ```
 
-That is the entire routing decision: one `if cue_spans:` at
-`lyric_align.py:145`. A song with LRCLIB line timing but no SRT takes the
-**joint DP branch** — LRCLIB enters only as a gated post-pass *fill*
-(`lrclib_fill.plan_fills`, applied at `lyric_align.py:257`), never as a
-routing tier.
+**Two routes, not three.** A song with LRCLIB line timing but no SRT
+takes the **joint branch** — LRCLIB enters only as a gated post-pass
+*fill* (`lrclib_fill.plan_fills`, applied at `lyric_align.py:257`), never
+as a routing tier. Rung 2b of the ladder has zero production miles.
 
-### What the ladder targets
-
-| Rung | Source | Route | State |
-| --- | --- | --- | --- |
-| 1 | word timing (Musixmatch richsync) | verify, then render the provider's own words | **NO-GO as it stands** — `route-word-timing.md` |
-| 2a | uploader SRT | cue-align, cues trusted as-is | **shipped** — `route-srt.md` |
-| 2b | line timing (LRCLIB / MXM-line / NetEase) | same driver, cues **warped** first | **licensed, unbuilt (F2)** — `route-line-timing.md` |
-| 3 | nothing usable | joint DP on the Genius sheet | **shipped**, being refit — `route-no-timing.md` |
-
-The gap between the pictures is exactly rung 2b. Until F2 is built, rung
-2b's population sits in rung 3.
-
-## Demotion gates — what actually rejects a fuzzy source
+### Demotion gates in force
 
 Two different things in these plans are called a "gate", and mixing them
 up costs hours:
 
 - **GATE C / O / R / S / P / L** — decision points in *this program*. Ken
-  rules on them. They fire once, in a session, and get written into a
-  Results log.
+  rules on them. They fire once, in a session, and land in a Results log.
 - **The thresholds below** — *runtime* code, firing per song, deciding
   whether a source is trusted, demoted, or dropped.
 
@@ -81,6 +76,104 @@ floor — but was the right song, correctly timed (the low score was an
 SRT-segmentation artifact), while 5 of 14 sidecars that passed the floor
 time a different recording or edit. M1 and M2 exist to replace it with
 labels derived from timing truth.
+
+## Part 2 — Target
+
+What the locked rulings specify. Source of truth is **Appendix A** (route
+contract) and **Appendix D** (aligner + post-pass policy) in
+`plans/ctc-sync-engine.md`; both are locked. This section is a reading of
+those, not a second spec — if the two disagree, the appendices win.
+
+### Target routing
+
+Appendix A's precedence, first match wins. Routing is decided in
+`LyricAlignStage` from artifacts `lyrics_fetch` sets; `lyrics_fetch` never
+routes, it only resolves sources.
+
+```
+  1  lyrics_origin == "srt" ─────────────────► SRT CUE-ALIGN
+                                               whisper (S-2 SRT arm)
+                                               snap ON
+                                               ── shipped, unchanged ──
+
+  2  genius + kind=="word" + GATE R = GO ────► WORD ROUTE (F1)
+     │                                         renders PROVIDER text
+     │                                         ┌──────────────────────┐
+     │                                         │ UNREACHABLE TODAY    │
+     │                                         │ GATE R ≠ GO (R-1)    │
+     │                                         └──────────────────────┘
+     └─ verify FAIL ──┐
+                      ▼
+  3  genius + any line source ────────────────► LINE ROUTE (F2)
+     (sidecar line, word-route demotion,        warped scaffold
+      or lyrics/<stem>.lrc)                     CTC (S-2 genius arm)
+     │                                          snap OFF
+     │                                          ── NOT BUILT ──
+     └─ warp-gate failure ──┐                   ⚠ aligner under M6 re-read
+                            ▼
+  4  otherwise ────────────────────────────────► JOINT MATCHER
+                                                unchanged from today
+                                                whisper; CTC pending J1
+```
+
+**Display text:** the word route renders provider text; every other route
+renders the Genius sheet, as today. Scaffolds map provider cues *onto*
+sheet lines, so the line route never changes what the singer reads.
+
+**Failure containment:** every fetch/verify/warp/score failure degrades
+one route, never fails the song. With the network down, a song processes
+exactly as it does today.
+
+### What changes vs. shipped
+
+| | Shipped | Target |
+| --- | --- | --- |
+| Routes | 2 (+transcribe) | 4 (+transcribe) |
+| Line timing, no SRT | joint DP; LRCLIB as post-pass fill | **own route** (F2), warped scaffold |
+| Word timing | nothing — sidecar unused for routing | own route (F1) — *gated off* |
+| Scaffold aligner | n/a | CTC (⚠ under M6) |
+| Evidence veto | joint route | joint route only (unchanged) |
+| LRCLIB fill | joint route | joint route only; slated for deletion in refit Phase 1.1 |
+
+### Target demotion gates
+
+Three of the four are settled. The fourth is the program's blocker.
+
+| Gate | Decides | Status |
+| --- | --- | --- |
+| `map_rate` at fetch (`WRONG_SONG_MAP_RATE`) | whether a sidecar is admitted at all | **under repair** — M1/M2 replace the text proxy with timing-truth labels |
+| **Word-route verify (Appendix C)** | **precedence 2 vs demotion to 3** | **UNDEFINED — this is R-4** |
+| Warp gate (`WARP_MIN_ANCHORS` 5 / `WARP_MAD_GATE_S` 2.0 s) | precedence 3 vs fall to 4 | locked; S-3 = warp failure resolves to route 4 |
+| Snap policy (Appendix D) | post-pass per route | locked: OFF on CTC-timed routes, ON on whisper-timed; "re-enable exception: none" |
+
+**The Appendix C hole is why rung 1 does not exist.** The procedure was
+pre-locked in 2026-07-18 and was supposed to have its constants filled in
+at GATE R. Executed verbatim it produced **zero** discriminative
+statistics against a required two, and the clamp set could not fail both
+controls — so no verify gate could be assembled. R-1 is therefore a
+*gate-driven* NO-GO, not a mechanism-driven one: the mechanism eyeballed
+GO-grade on 6 of 10 songs. M1–M5 re-specify the cohorts and controls that
+the procedure needs; if M3 passes, precedence 2 becomes reachable and the
+target above is the shipped picture.
+
+### Open decisions that could still move the target
+
+- **R-4 / M1–M5** — the verify criterion. Decides whether precedence 2
+  ever fires. Until then, word sidecars demote to the line pool.
+- **M6** — S-2's genius arm is the one *unwitnessed selection* in the
+  live set. If it flips, precedence 3's aligner changes from CTC to
+  whisper, which also flips its snap policy. **Blocks F2.**
+- **GATE J1/J2** — CTC in the joint matcher, and whether edge snap
+  retires on CTC-won lines. Changes precedence 4's aligner and Appendix
+  D's snap exception.
+- **GATE L** — non-Latin form. Adds a per-line romanizer inside F2's
+  aligner; additive, blocks nothing.
+- **R-3** — SRT-first *stands*, but Appendix A flags that a later ruling
+  could reorder precedence 1 against 2.
+
+Not open, do not re-litigate: engine branch E1–E4 is **OFF** (GATE O =
+O-GRAY); no section-level DP (GATE P); densify rejected (S-3); CTC
+rejected on the SRT path (S-2, SRT arm).
 
 ## Which file owns what
 
