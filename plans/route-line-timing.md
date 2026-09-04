@@ -1333,3 +1333,114 @@ and, per the ratified rule, cannot flip or confirm the selection on their own.
 
 No further probe is commissioned by this entry, and nothing here touches a
 shipped route.
+
+### 2026-09-04 — M6-d eyeball (Ken) — observations recorded, no ruling taken
+
+**(Executor recording Ken's viewing as data. The pre-registered pair is Be Our
+Guest and Hakuna Matata; the three follow-up songs were selected by criteria
+stated to Ken in-session **before** he watched but not committed to version
+control first — recorded here as the weaker provenance it is. No verdict on
+S-2 is taken in this entry.)**
+
+#### The pre-registered pair — neither can answer the question as posed
+
+- **Be Our Guest.** Both arms overlap at the location. Whisper sweeps "Course
+  by course, one by one" properly; the collision is prior lines that "didn't
+  place". Scrolling further back, Ken reads whisper as handling the massive
+  overlaps *better* than CTC, though both are "fairly chaotic".
+- **Hakuna Matata.** The location is a **spoken dialogue section absent from
+  the lyric sheet**, so both arms are placing lyric lines onto non-lyric audio.
+  The pre-registered question — does CTC drop or clip a second voice — cannot
+  be asked there at all. This is a finding about the corpus, not a null result.
+
+The pre-registered read-off is therefore **not answerable on its own pair**.
+
+#### Why, structurally — overlap never arises between two aligned lines
+
+Source of every line in every overlapping adjacent pair, both arms, all 17
+songs:
+
+```
+arm W: 142 pairs with positive overlap    arm C: 62 pairs
+   fill + fill            82                 fill + fill            56
+   cue_align + fill       46                 cue_align + fill        6
+   cue_align + realign     9                 cue_align + cue_align   0
+   fill + realign          5
+   cue_align + cue_align   0
+```
+
+**Zero overlaps in either arm arise between two normally-aligned lines.** Every
+one involves a line the aligner failed on, which then fell back to re-pacing
+from the cue (`cue_align_fill`) or to re-alignment (`cue_align_line`). Sorting
+the corpus by fallback count reproduces the overlap ranking: Free, Colors of
+the Wind and Best Part of Me have zero fallbacks and zero overlaps; Bloodstream
+and Defying Gravity have the most of both. On this corpus
+`cue_align_song.max_line_overlap` tracks **fallback prevalence**, not
+simultaneity. Recorded as measured; what it implies for S-2's two overlap-based
+criteria is Ken's.
+
+#### The three follow-up songs
+
+Selection criteria, stated before viewing: a control with zero fallback lines
+in both arms (Free); the song where the arms differ most (Defying Gravity, 42
+whisper fallbacks against 2); the song where the metric says CTC is *worse*
+(Man Out of You, 2.43 → 2.64).
+
+- **Free (control).** Both arms struggle on the long-note phrases from 2:00.
+  Whisper **drops the second half of lines**; CTC **comes in correctly but
+  rushes the sweep significantly**. The control does discriminate — and it
+  isolates a difference S-2 never measured, since neither arm has a single
+  fallback line here.
+- **Defying Gravity.** CTC opens with a dump of the sheet's dialogue and keeps
+  doing so through the song, usually resyncing quickly. That is what is
+  happening at the trouble spot. Whisper's trouble spot is the same dialogue.
+  Timing where each gets it right is "roughly similar".
+- **Man Out of You.** The trouble spot is a square-bracket attribution that
+  survived parsing, present in both arms. "Roughly similar."
+
+#### Two of the three trouble spots are a known unfixed artifact, not an aligner difference
+
+Confirmed against the stored sheets:
+
+```
+Man Out of You   sheet line 18  'Now I really wish that I knew how to swim!'
+                 sheet line 19  '[SHANG &'          <- whisper worst overlap is (18, 19)
+                 sheet line 20  'SOLDIERS'
+Defying Gravity  sheet line 81  'Get her!'
+                 sheet line 82  '[CITIZENS OF OZ &' <- CTC worst overlap is (86, 82)
+                 sheet line 83  'ELPHABA'
+```
+
+Both fragments reach both arms' rendered `.ass`. **So neither of those two
+comparisons was testing the aligners** — both arms were handed a non-lyric line
+and both placed it somewhere.
+
+**Why the existing mechanism misses them.** `genius_lyrics.parse_lyric_lines`
+has two bracket defences and **both require a closing `]`**:
+`_HEADER_RE = ^\s*\[[^\]]*\]\s*$` drops a line that is entirely a *closed*
+bracket, and `_BRACKET_CONTENT_RE = \[[^\]]*\]` strips *closed* bracket spans
+inline. Genius wraps long attributions across two lines, so `[SHANG &` is
+unterminated: it matches neither pattern, `_HAS_LETTER_RE` then sees "SHANG",
+and the line is kept as a lyric.
+
+This is not new. The 2026-07-19 GATE S corpus scan in this file already
+recorded it — "5/17 stored genius sheets carry wrap dirt (15 lines)",
+explicitly naming Man Out of You (`[SHANG &`/`SOLDIERS`) and Defying Gravity
+(`[CITIZENS OF OZ &`/`ELPHABA`, "confirmed rendering at 3:28 in its scaffold
+output"). CTC's worst overlap in this run is at **3:28.56**. It was
+dispositioned then as a fix-item rather than an eyeball veto and **has not been
+built**. It remains open.
+
+The other class Ken saw on Defying Gravity is different and has no mechanism:
+**spoken dialogue present in the Genius sheet as ordinary un-bracketed text**.
+Nothing textual distinguishes it from lyrics, and no filter was ever specified
+for it.
+
+#### Ken's forming read, recorded as not yet a ruling
+
+"I am beginning to question whether CTC adds anything helpful other than
+tighter word timing, which edge snap helps eliminate the most obvious negatives
+of anyways." Recorded verbatim. It is not entered as the M6 read-off. Note it
+touches GATE J2, which owns whether edge snap retires on CTC-timed routes — if
+edge snap is what neutralizes whisper's loose endings, then J2's question and
+M6's are coupled in a way neither entry currently states.
