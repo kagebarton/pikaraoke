@@ -45,7 +45,7 @@ targets that population without gutting the clean tail.
   gate-reading queue.
 - Probe *outputs* (emission `.pt` caches, per-line score tables,
   corpus CSVs) live in the session scratchpad, **never committed**
-  (mirror of `timing-source-pillars.md` ground rules). The two CTC
+  (mirror of `PROGRAM.md` ground rules). The two CTC
   probe *drivers* are the exception Ken carved out: committed with
   this plan as `scripts/phase1b_score_oracle.py` (MMS_FA
   model/emission/align recipe) and `scripts/sb_ctc_adapter.py`
@@ -59,7 +59,7 @@ targets that population without gutting the clean tail.
   stop and alert at every GATE.
 - **Cross-plan sequencing (Ken, 2026-09-01):** this plan's Phase 4
   (GATE P) and Phase 2a (GATE J1/J2) are steps 1 and 3 of the
-  measurement block in `plans/timing-source-pillars.md`, "Remaining
+  measurement block in `plans/PROGRAM.md`, "Remaining
   execution order" — Phase 4 runs first of everything on either plan
   (cheapest, no GPU, and a material GATE P commissions a section-level
   DP that breaks the 1:1 `line_objects` contract). Phase 1's code
@@ -541,6 +541,6 @@ telemetry already committed (`feat(joint): monotone-discard + inversion
 telemetry`), which stays in as a standing instrument. No section-level
 DP plan is commissioned; the 1:1 `line_objects` contract is not
 disturbed. The measurement block advances to step 2, Phase 2b / GATE R
-in `plans/timing-source-pillars.md`. Recorded as a lever this probe
+in `plans/PROGRAM.md`. Recorded as a lever this probe
 points at, not commissioned here: upstream lyric-version/length
 matching for the drift-signature songs.

@@ -5,7 +5,7 @@ Model: Claude Fable 5
 ## Role of this file
 
 The build half of the 2026-07-18 evidence/build split: successor to
-`plans/timing-source-pillars.md`'s production phases. **That file owns
+`plans/PROGRAM.md`'s sequencing and the lane files' probes. **That file owns
 probes, comparisons, and GATE rulings; this file owns all production
 implementation.** Every build phase below names the evidence-plan GATE
 that licenses it; no build phase starts before its license exists

@@ -155,4 +155,5 @@ OOV-skipped numeral opener. GATE C verdicts (Ken eyeball): **C-1 YES**
 **C-2 YES** for the aligner (Girl in the Bubble essentially perfect on
 the wet stem), C-3 sectional desync on version-mismatch songs confirmed
 (windowing is the anticipated fix). Full read + recorded observations:
-`plans/timing-source-pillars.md` → Results log, GATE C entry.
+`plans/shared-aligner-form.md` → Results log, GATE C entry (was
+`plans/timing-source-pillars.md` before the lane split).
