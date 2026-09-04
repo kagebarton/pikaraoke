@@ -99,8 +99,10 @@ routes, it only resolves sources.
   2  genius + kind=="word" + GATE R = GO ────► WORD ROUTE (F1)
      │                                         renders PROVIDER text
      │                                         ┌──────────────────────┐
-     │                                         │ UNREACHABLE TODAY    │
-     │                                         │ GATE R ≠ GO (R-1)    │
+     │                                         │ CLOSED 2026-09-04    │
+     │                                         │ R-4 retired the gate │
+     │                                         │ struck by the        │
+     │                                         │ consolidation pass   │
      │                                         └──────────────────────┘
      └─ verify FAIL ──┐
                       ▼
@@ -141,26 +143,33 @@ Three of the four are settled. The fourth is the program's blocker.
 
 | Gate | Decides | Status |
 | --- | --- | --- |
-| `map_rate` at fetch (`WRONG_SONG_MAP_RATE`) | whether a sidecar is admitted at all | **under repair** — M1/M2 replace the text proxy with timing-truth labels |
-| **Word-route verify (Appendix C)** | **precedence 2 vs demotion to 3** | **UNDEFINED — this is R-4** |
+| `map_rate` at fetch (`WRONG_SONG_MAP_RATE`) | whether a sidecar is admitted at all | **adequate for wrong-song** (M2: 32/32 cross-paired controls collapse at the text-pairing floor); wrong-*edit* is a routing-time warp-gate question |
+| ~~Word-route verify (Appendix C)~~ | ~~precedence 2 vs demotion to 3~~ | **RETIRED 2026-09-04 (R-4 closed)** — no per-song gate is constructible from this evidence family; demotion to 3 is permanent |
 | Warp gate (`WARP_MIN_ANCHORS` 5 / `WARP_MAD_GATE_S` 2.0 s) | precedence 3 vs fall to 4 | locked; S-3 = warp failure resolves to route 4 |
 | Snap policy (Appendix D) | post-pass per route | locked: OFF on CTC-timed routes, ON on whisper-timed; "re-enable exception: none" |
 
-**The Appendix C hole is why rung 1 does not exist.** The procedure was
-pre-locked in 2026-07-18 and was supposed to have its constants filled in
-at GATE R. Executed verbatim it produced **zero** discriminative
-statistics against a required two, and the clamp set could not fail both
-controls — so no verify gate could be assembled. R-1 is therefore a
-*gate-driven* NO-GO, not a mechanism-driven one: the mechanism eyeballed
-GO-grade on 6 of 10 songs. M1–M5 re-specify the cohorts and controls that
-the procedure needs; if M3 passes, precedence 2 becomes reachable and the
-target above is the shipped picture.
+**The Appendix C hole is why rung 1 does not exist — and as of
+2026-09-04 it is why rung 1 is closed.** The procedure was pre-locked in
+2026-07-18 and was supposed to have its constants filled in at GATE R.
+Executed verbatim it produced **zero** discriminative statistics against a
+required two. M1–M3 re-specified the cohorts and controls and it still
+separates nothing: M1's purpose-built independent labeller did not
+reproduce Ken's labels, M2's 32 controls all collapse before reaching the
+residual family, and M3 closed by inspection. **R-4 is closed and the
+per-song gate is retired**; the demotion to rung 3 is permanent. The
+finding is narrow — *no per-song admission gate is constructible from this
+evidence family*, not "richsync word timing is unusable", since 6 of 10
+songs eyeballed usable and one beat production. Word sweeps re-enter, if
+ever, as a **per-line** choice inside F2 (R-5's arm (i) vs (iv)), which is
+a new mechanism on rung 2b rather than rung 1 returning. Detail in
+`plans/route-word-timing.md`.
 
 ### Open decisions that could still move the target
 
-- **R-4 / M1–M4** — the verify criterion. Decides whether precedence 2
-  ever fires. Until then, word sidecars demote to the line pool. (M5
-  closed 2026-09-04, refuted; it touched no route.)
+- ~~**R-4 / M1–M4** — the verify criterion.~~ **CLOSED 2026-09-04**:
+  the per-song gate is retired, precedence 2 never fires, and the
+  demotion to the line pool is permanent. M5 refuted, M3 closed by
+  inspection, M4 re-homed to F2's warp gate and held.
 - **M6** — S-2's genius arm is the one *unwitnessed selection* in the
   live set. If it flips, precedence 3's aligner changes from CTC to
   whisper, which also flips its snap policy. **Blocks F2.**
@@ -182,7 +191,7 @@ rejected on the SRT path (S-2, SRT arm).
 | --- | --- |
 | `PROGRAM.md` | this map, sequencing, ground rules, model switching |
 | `GLOSSARY.md` | ASS/CTC/MMS_FA/emission/melisma/richsync — read before guessing at an acronym |
-| `route-word-timing.md` | rung 1; GATE R, R-1 ruling, M1-M5 |
+| `route-word-timing.md` | rung 1 (**CLOSED 2026-09-04**); GATE R, R-1 ruling, M1-M5, the R-4 closure |
 | `route-srt.md` | rung 2a; the shipped cue-align route, S-C |
 | `route-line-timing.md` | rung 2b; GATE S scaffold arms, GATE L, S-E, M6 |
 | `route-no-timing.md` | rung 3; the joint catch-all refit, GATE P/J1/J2 |
@@ -223,9 +232,12 @@ Order — cheapest and highest overturn-risk first:
    and R-3 settled (provider text as-is; SRT-first). **R-4 remains
    open** — STOP → Ken. R-5 no award. Detail in
    `plans/route-word-timing.md`.
-3. **M1-M5** — the R-4 re-specification, commissioned with the R-1
-   ruling. All offline, no GPU, data already on disk. M1 relabel by
-   timing truth; M2 build real negative controls by cross-pairing;
+3. ~~**M1-M5** — the R-4 re-specification~~ — **CLOSED 2026-09-04.**
+   M1 ran and was NOT VALIDATED (no separation at the primary
+   tolerance); M2 ran, 32/32 controls collapsing at the text-pairing
+   floor; M3 closed by inspection; **R-4 closed and rung 1 closed with
+   it**. M4 re-homes to F2's warp gate and is held. Original scope:
+   M1 relabel by timing truth; M2 cross-paired negative controls;
    M3 re-run Appendix C on M1 labels + M2 controls; M4 per-section
    pairing-coverage detector; ~~M5 check whether rushed sweeps are
    `cue_align.MAX_WORD_DUR_S` truncating sustained notes~~ — **CLOSED
@@ -233,10 +245,13 @@ Order — cheapest and highest overturn-risk first:
    in-clip sweep truncations than the two he called rushed, so the
    constant stays at 1.5 s. The "rushed" class is still unexplained and
    feeds M1's labelling rule.
-4. **M6** — re-read S-2's genius arm against the S-C reframe. Added
-   2026-09-04 by the eyeball-provenance audit. **Sequenced after M1-M3
-   and before any F2 build**, since F2 builds on the path S-2 chose the
-   aligner for. See `plans/route-line-timing.md`.
+4. **M6 — NEXT.** Re-read S-2's genius arm against the S-C reframe.
+   Added 2026-09-04 by the eyeball-provenance audit. Its "after M1-M3"
+   precondition is **satisfied as of 2026-09-04**; it remains **before
+   any F2 build**, since F2 builds on the path S-2 chose the aligner
+   for. Needs GPU plus Ken's eyeball on two songs. Commissioning detail
+   in `plans/shared-aligner-form.md`; lane file
+   `plans/route-line-timing.md`.
 5. **Joint plan Phase 2a → GATE J1/J2** (GPU, scratchpad). J2 feeds
    Appendix D's snap policy, which currently records "re-enable
    exception: none".

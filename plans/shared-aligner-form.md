@@ -753,7 +753,8 @@ songs). Sequenced after M1-M3, which are pure offline analysis, but
 **before any F2 build starts**. Two supporting measurements, both
 cheap: recompute the S-2 overlap deltas as same-location comparisons
 rather than per-song maxes, and record whether each song's worst pair
-moved between arms.
+moved between arms. *Precondition satisfied 2026-09-04: M1-M3 are
+closed (R-4 closed with them), so M6 is the next spend.*
 
 **Not commissioned.** GATE O is second-tier rather than dismissed: its
 read was AUC, but its labels were Ken's eyeballed desync ranges, and

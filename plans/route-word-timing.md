@@ -848,22 +848,27 @@ below.
   stream, replacing the text-map_rate labels. Ken's 10 eyeball labels
   are the validation set; a labeller that reproduces them can be
   trusted on the remaining 6 and on future songs. Produces the evidence
-  for STOP item 2. *Specification ratified 2026-09-04; see the
-  pre-registration entry at the end of this log.*
+  for STOP item 2. *Specification ratified 2026-09-04.* ***CLOSED
+  2026-09-04: NOT VALIDATED*** — no separation at the primary tolerance,
+  and no second attempt (see the R-4 closure at the end of this log).*
 - **M2 — build real negative controls** by cross-pairing sidecars
   against other songs' media. Guaranteed wrong-song, no fetches, and
   many rather than 2 — which also retires the n=2 fragility behind
   every threshold. Produces the evidence for STOP item 1. *Specification
-  ratified 2026-09-04; see the pre-registration entry at the end of this
-  log.*
-- **M3 — re-run Appendix C's general rule** on M1's labels with M2's
-  controls. Tests whether zero-evidence fraction becomes
-  discriminative, and tests the eyeball entry's analysis 1 by checking
-  whether the residual statistics stay non-discriminative once the
-  labels are corrected.
+  ratified 2026-09-04.* ***CLOSED 2026-09-04*** — 32/32 collapse at the
+  text-pairing floor; nothing reaches the residual family. Positive
+  finding: this validates `WRONG_SONG_MAP_RATE` for wrong-song.
+- ~~**M3 — re-run Appendix C's general rule** on M1's labels with M2's
+  controls.~~ ***CLOSED 2026-09-04 by inspection, not run*** — zero of
+  the three general-rule statistics separate Ken's labels, and M3 had
+  neither a validated labeller nor a control that reaches a fit. The
+  eyeball entry's analysis 1 is upheld: the residual statistics measure
+  the pairing, not the render.
 - **M4 — per-section pairing-coverage detector** for the
   edit/structure-mismatch class (STOP item 5). Domino and Popular are
   the known positives, the four clean songs the known negatives.
+  *Re-homed 2026-09-04 to F2's warp gate — its rung-1 consumer is
+  closed. Still held; its positives do not decay.*
 - **M5 (small) — check whether the "slightly rushed" sweeps are
   `cue_align.MAX_WORD_DUR_S` (1.5 s) truncating sustained notes.** If
   so it is a one-constant fix rather than a design problem.
@@ -1203,3 +1208,315 @@ Appendix C here.
 
 M3, M4 and M6 read-off rules; any gate threshold (Appendix C owns those);
 any change to `MAX_WORD_DUR_S`, arm (i), or the shipped routes.
+
+### 2026-09-04 — M1 + M2 run — raw tables, no read-off beyond the pre-registered ones
+
+**(Executor. The pre-registration above was ratified and committed
+(`739d3f2`) before either probe was written, so every rule applied below
+was fixed in version control while the numbers did not exist. M1's
+validation test and M2's `floor_caught` headline are pre-registered and are
+reported as computed; the one comparison that was *not* commissioned is
+flagged where it appears. Ken rules — per `plans/PROGRAM.md` §"When a result
+goes to Fable", neither outcome is ambiguous enough to spend a judge round.)**
+
+**Artifacts** — session scratchpad: `m1/m1_probe.py`, `m1/m1_labels.txt`,
+`m1/m1_rows.json`, `m1/m1_srt_check.py`, `m1/m1_srt_check.txt`;
+`m2/m2_probe.py`, `m2/m2_table.txt`, `m2/m2_controls.json`,
+`m2/m2_emis.py`, `m2/m2_emission.txt`, `m2/m2_emission.json`.
+
+**One spec ambiguity resolved during M1, disclosed.** The pre-registration
+says a line's reference is "the earliest transcribe word **aligned** to any
+of its tokens", and separately that lines with none are `unref`. Under
+substitution semantics `unref` would be almost unreachable (NW scores a
+mismatch -1 against -2 for two gaps, so it substitutes rather than gaps).
+The `unref` clause is what settles it: "aligned" was implemented as an
+*identical* matched token. Resolved from the spec's own internal evidence,
+not from the numbers, which did not exist yet.
+
+#### M1 — table
+
+`ref_cov` = provider lines that got a reference onset; `@T` = fraction of
+those landing within T seconds of it, under the song's own arm-(i) warp.
+
+```
+song                     ken   lines  n_ref ref_cov     @0.3     @0.5     @0.8
+------------------------------------------------------------------------------
+Free                     U        46     46   1.000    0.783    0.913    0.957
+Belle                    U       116    105   0.905    0.733    0.857    0.952
+Colors of the Wind       U        37     37   1.000    0.676    0.811    0.946
+Part of Your World       U        56     56   1.000    0.500    0.679    0.857
+More Than That           U        40     40   1.000    0.500    0.625    0.875
+Mirrors                  --      125     90   0.720    0.411    0.611    0.778
+Seasons of Love          B        43     25   0.581    0.400    0.520    0.520
+Popular                  B        61     57   0.934    0.298    0.509    0.702
+Selfish                  --       61     60   0.984    0.300    0.483    0.633
+Incomplete               --       19     17   0.895    0.235    0.412    0.529
+Like I Love You          U        81     81   1.000    0.235    0.407    0.691
+Domino                   B        65     53   0.815    0.245    0.340    0.396
+Best Part of Me          B        39     36   0.923    0.194    0.194    0.389
+Let It Go                --       40     40   1.000    0.100    0.125    0.125
+Can You Feel the Love    --       35     35   1.000    0.057    0.114    0.114
+Rock Your Body           --      107    104   0.972    0.038    0.087    0.192
+```
+
+**Pre-registered validation read-off, at the primary tolerance only.**
+
+```
+worst usable : Like I Love You   0.407
+best broken  : Seasons of Love   0.520
+separated    : False
+overlap      : Seasons of Love 0.520, Popular 0.509  (both >= worst usable)
+```
+
+**M1 = NOT VALIDATED.** Per the ratified rule this is a STOP -> Ken: no
+threshold is derived, the 6 un-eyeballed songs receive no labels, and the
+labeller is not adjusted and re-run. The robustness columns are reported as
+declared and do not change this: a labeller that separated only at 0.3 or
+0.8 would still be recorded as not validated, and neither does.
+
+#### M1 — SRT spot-check (the 3 of Ken's 10 with an uploader SRT)
+
+Commissioned by the pre-registration to expose residual repeat
+mis-latching. Same labeller, same warp, same tolerances; only the reference
+changes. An SRT gives one start per *cue*, so a token matched mid-cue yields
+that cue's start — coarser than word-level, and it reads early where a
+provider line spans two cues.
+
+```
+song                   ken   n_ref ref_cov     @0.3     @0.5     @0.8  reference
+--------------------------------------------------------------------------------
+Part of Your World     U        56   1.000    0.321    0.518    0.661  uploader SRT
+                                56   1.000    0.500    0.679    0.857  transcribe (primary)
+More Than That         U        40   1.000    0.450    0.600    0.850  uploader SRT
+                                40   1.000    0.500    0.625    0.875  transcribe (primary)
+Like I Love You        U        81   1.000    0.247    0.395    0.654  uploader SRT
+                                81   1.000    0.235    0.407    0.691  transcribe (primary)
+```
+
+Like I Love You — the song that breaks the separation — reads 0.395 against
+an independent reference and 0.407 against the transcribe stream.
+
+#### M2 — table
+
+32 controls, shifts {1, 8} over the video_id ordering. 0 title collisions.
+The self-test passed first: recomputing k=0 reproduced all 9 transcribe-family
+fields of `p2b/verify_fit.json` on all 16 songs to 1e-9, which is what
+licenses the reimplemented statistics.
+
+**Pre-registered headline.**
+
+```
+caught by the n_pairs floor (<5) : 32 / 32
+of those, nofit (n_pairs < 2)    : 30
+surviving to a fit               : 0
+```
+
+The only two controls that paired at all:
+
+```
+sidecar                media                   k npairs pairfrc    slope status
+Justin Timberlake - Ro Jessie J - Domino (Off  1      2   0.019  11.3386 floor_caught
+Jessie J - Domino (Off Ed Sheeran - Best Part  8      2   0.031   0.0145 floor_caught
+```
+
+The remaining 30 pair 0 or 1 line and take the default warp. Full table in
+`m2/m2_table.txt`.
+
+**Recorded as the pre-registration required:** the `n_pairs` floor alone
+catches all 32, so the residual family (`residual_mad`, `res_p50/p90`, the
+per-line outlier rule) has **no surviving negative example** to be tested
+against. Stated as a fact about the verify design; not interpreted here.
+
+#### M2 — emission family (second pass, cached emissions, no forward passes)
+
+Applied by the exclusion rule's own stated reason: it drops `nofit` controls
+"because those values do not exist", and for this family they do — a nofit
+control keeps the default warp, which places song A's provider spans on song
+B's audio at face-value provider times. 31 of 32 scored (the 32nd scored 0
+lines). Extremes shown; full table in `m2/m2_emission.txt`.
+
+```
+sidecar                media                   k scored   med_mean    med_min
+Justin Timberlake - Ro Jessie J - Domino (Off  1     12     0.3807     0.0870
+The Lion King - Can Yo Pocahontas - Colors of  1     34     0.2244     0.0007
+The Lion King - Can Yo Idina Menzel - Let It   8     34     0.1392     0.0026
+...
+Justin Timberlake - Mi Ed Sheeran - Best Part  1     71     0.0218     0.0003
+Backstreet Boys - More Seasons of Love (HD)--  8     36     0.0197     0.0020
+Jessie J - Domino (Off Seasons of Love (HD)--  1     61     0.0121     0.0019
+control median: 0.0752
+```
+
+*Not commissioned by M2 — flagged.* The probe also printed a PASS-vs-CONTROL
+comparison on `emis_median_line_mean` (worst PASS = Seasons of Love 0.0336;
+best control = Rock Your Body/Domino 0.3807; separated = False). That is
+Appendix C's general rule, which belongs to **M3**, run early at the
+executor's desk. It is recorded because it exists, not because it was
+commissioned, and M3 is not bound by it.
+
+#### What is Ken's
+
+M1 is a pre-registered STOP. M3 as commissioned assumes M1's labels and M2's
+controls; it now has neither a validated labeller nor a control that survives
+the `n_pairs` floor. Whether M3 proceeds, changes shape, or waits is Ken's
+call, as is whether the M1 labeller gets a second, separately pre-registered
+attempt. No further probe is commissioned by this entry, and nothing here
+touches a shipped route: word sidecars continue to demote to the line pool
+exactly as R-1 ruled.
+
+### 2026-09-04 — R-4 closed and rung 1 closed (Ken) — the per-song verify gate is retired
+
+**(Ken's ruling, taken on the M1 + M2 tables above and a Fable read-off
+commissioned for *how to proceed*, not to re-rule either measurement. This
+closes R-4, M3 and the word route as a per-song route. No code changes —
+Appendix A already specifies the demotion, and rung 1 never shipped.)**
+
+#### The ruling
+
+**R-4 = CLOSED. The Appendix C per-song verify gate is retired as measured
+and non-viable.** The evidence family has now been tried three ways — GATE
+R with the 2b cohorts, Ken's 10 labels against every statistic in the
+record, and M1's purpose-built independent reference — and separates
+nothing. The failure is structural, not threshold placement.
+
+**Rung 1 is CLOSED, and the wording is deliberately narrow.** The finding
+is *not* "Musixmatch per-word timings cannot be verified". Six of ten were
+usable on Ken's own eyeball and one beat production; the mechanism is GO.
+The finding is that **no per-song admission gate can be built for them from
+this evidence family** — global fit, transcribe pairing, emission scores,
+line-onset placement. A route that needs a human to watch each song is not
+a route, so precedence 2 is closed: whole-song admission, provider text on
+screen, and precedence above the line route all go.
+
+**What is retired is the route, not the data.** The sidecar is still
+fetched and still admitted at `WRONG_SONG_MAP_RATE`; its line starts join
+F2's line-source pool (Appendix A) and its `ts`/`te` still set scaffold
+ends (Appendix D, "Richsync ends"). The narrow wording is load-bearing: the
+broad one would later license dropping the sidecar fetch entirely, which
+this evidence does not support.
+
+**Reversal condition, re-worded.** The old condition — "a re-specified
+Appendix C that passes" — is void. Rung 1 does not return. Any future
+word-sweep work is a **new mechanism on rung 2b**: for a sheet line F2 has
+already placed, choose that line's word timings between richsync-warped
+words and CTC words. That is a per-line choice with a same-line reference,
+which is why it is better posed than anything Appendix C attempted, and it
+is R-5's arm (i) vs arm (iv) question. It cannot be asked until F2 exists
+and requires its own pre-registration.
+
+#### M3 — closed by inspection, not run
+
+M3 as commissioned ("re-run Appendix C's general rule on M1's labels with
+M2's controls") has neither a validated labeller nor a control that reaches
+a fit. Its headline is determined by tables already in this log: **zero of
+Appendix C's three general-rule statistics** (`pair_fraction`,
+zero-evidence fraction, emission family) separate Ken's labels, and the
+spoilers are spread across four different usable songs and four different
+broken ones. Two songs settle the shape of it: Popular (broken) and Like I
+Love You (usable) are indistinguishable by line-onset placement at every
+tolerance — 0.298/0.509/0.702 against 0.235/0.407/0.691. What differs is
+*where* the damage sits, which no per-song summary can encode by
+construction.
+
+**M1 gets no second attempt.** The one mechanism-justified revision —
+counting unreferenced lines as unplaced — is computable from the table
+above and still fails (Like I Love You 0.407 against Popular 0.475). Every
+other revision is selected by which named song it moves.
+
+#### Correction on the record — the slope clamp
+
+An executor verification pass of the judge's separation table reported that
+`slope` separated Ken's labels 4-of-4. **That was wrong and is withdrawn.**
+It applied a window of PASS ± 0.005, but Appendix C's bullet is
+*widen-only*: "default window [0.97, 1.03]; **widened** only as far as
+needed to cover PASS plus 0.005 margin". Ken's usable six span
+[0.9804, 1.0039], entirely inside the default, so no widening fires and the
+window stays [0.97, 1.03].
+
+```
+Can You Feel the Love    --        0.8733  REJECTED
+Seasons of Love          broken    0.9542  REJECTED
+Part of Your World       usable    0.9804  admitted
+Incomplete               control   0.9915  admitted
+Colors of the Wind       usable    0.9977  admitted
+Mirrors                  --        0.9991  admitted
+Like I Love You          usable    1.0001  admitted
+Belle                    usable    1.0013  admitted
+Free                     usable    1.0015  admitted
+More Than That           usable    1.0039  admitted
+Selfish                  --        1.0072  admitted
+Popular                  broken    1.0117  admitted
+Domino                   broken    1.0159  admitted
+Best Part of Me          broken    1.0179  admitted
+Rock Your Body           --        1.0266  admitted
+Let It Go                --        3.4482  REJECTED
+```
+
+Corrected row: **slope's default window rejects one of four broken songs
+and admits Rock Your Body**, whose M1 placement is the cohort's worst at
+0.087. It does not separate. It also admits Incomplete, the one genuine
+wrong-song control.
+
+Two further points that keep this from being reopened. `slope` is a
+**clamp** with its own construction, never one of the general-rule
+statistics whose count the "fewer than 2 discriminative → STOP" test reads;
+the count was zero of three throughout. And the separation had no mechanism
+on the side where it appeared: the high-side margin between worst usable
+and best broken is **0.0078**, under one percent of tempo, while Part of
+Your World sits two percent off unity at 0.9804 and Ken called it clean.
+Domino's 1.0159 and Best Part of Me's 1.0179 come from Theil-Sen fits on 14
+and 12 pairs with `res_max` of 143.5 s and 119.0 s — contaminated fits
+whose excess could have landed either side of unity.
+
+**What slope is actually good at, and why it argues for the demotion.** It
+detects the gross wrong-recording class — Let It Go 3.45, Can You Feel the
+Love Tonight 0.87. F2's own warp gate catches those same two at MAD 5.80
+and 4.48. The demotion path is therefore already protected against the
+class slope detects, which is an argument for making the demotion permanent
+rather than for a rung-1 gate.
+
+#### M2's positive finding — `WRONG_SONG_MAP_RATE` is not under repair
+
+32 of 32 cross-paired sidecars collapse at the text-pairing floor. That
+**validates** the fetch-time gate for the purpose its name states: a
+genuinely wrong song does not survive text matching. The mislabeling GATE R
+found is a different class — same song, wrong recording or wrong edit — and
+no fetch-time text statistic can see it. `plans/PROGRAM.md`'s demotion-gate
+table moves from "under repair" to "adequate for wrong-song; wrong-edit is
+a routing-time warp-gate question".
+
+#### Consequences for the rest of the measurement program
+
+- **M4** (per-section pairing-coverage detector) **re-homes to F2's warp
+  gate** and stays held. Its consumer is no longer a rung-1 gate; the warp
+  gate catches Let It Go and Can You Feel the Love Tonight but not Domino,
+  Popular or Rock Your Body, which is the hole M4 addresses. Its positives
+  and negatives do not decay, so it is held rather than spent.
+- **STOP items 3 and 4** (outlier denominator, MAD-threshold population)
+  **dissolve**, as the R-1 ruling anticipated: a discredited statistic is
+  dropped, not tuned.
+- **STOP item 6** (arm (iv) rebuild) re-homes to R-5 inside F2 and stays
+  deferred.
+- **Appendix C becomes record rather than spec.** Its emission-eligibility
+  bullet goes with it.
+- **M6 is next**, its "after M1-M3" precondition now satisfied.
+- **The Selfish discrepancy stays open and recorded**: the M1 NW reference
+  scores it 0.483 where the GATE R diagnosis recorded "10 of 15 pairs
+  within 0.13 s, correctly timed". It bears on any future use of that
+  reference and is not resolved here.
+
+#### What the evidence will not support
+
+Stated so a later reader does not re-litigate: any song-level admission
+gate for richsync word timing, at any threshold, from any statistic in this
+record; a claim that a better line-onset reference would fix M1 (Popular
+and Like I Love You are indistinguishable at all three tolerances); a claim
+that the emission family separates at song level; a claim that M2's
+controls tested the residual family (none reached a fit); and a per-line
+gate's *effect* before F2 exists.
+
+**Nothing shipped changes.** The shipped matcher has two routes and never
+consulted the word sidecar for routing. The floor here is "no change", not
+"regression". The structural edits this ruling licenses — striking
+precedence 2 from Appendix A, reducing the target ladder to three routes —
+belong to the single design-consolidation pass, not to this entry.

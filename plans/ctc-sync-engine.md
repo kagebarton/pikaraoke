@@ -416,7 +416,11 @@ timing resolved):
    R-3 ruling may change this later; not in this plan.)
 2. genius-origin, `kind == "word"`, GATE R = GO → word route (engine
    E2 / fallback F1). Verify or score-gate FAIL → the sidecar's line
-   starts join the line-source pool.
+   starts join the line-source pool. **CLOSED 2026-09-04 (R-4): the
+   verify gate is retired, so this branch never fires and every word
+   sidecar takes the line-source path below. Struck by the
+   design-consolidation pass; annotated here so precedence numbering
+   stays stable until then.**
 3. genius-origin, any line source (sidecar line, word-route demotion,
    or E1 `lyrics/<stem>.lrc`) → line route (engine E2 / fallback F2,
    per its license). Warp-gate failure → the S-3 branch.
@@ -546,7 +550,16 @@ no-timing route / SRT as today).
   sidecar's job, not the query surface's. Full ruling: evidence plan
   Results log, Phase 3 setup entry.
 
-## Appendix C — word-route verification criterion (LOCKED as decision procedure, Fable, 2026-07-18)
+## Appendix C — word-route verification criterion (RECORD, not spec — retired by Ken 2026-09-04)
+
+> **RETIRED 2026-09-04 (R-4 closed).** No per-song admission gate is
+> constructible from this evidence family. Tried three ways — GATE R with
+> the 2b cohorts, Ken's 10 eyeball labels against every statistic in the
+> record, and M1's purpose-built independent reference — it separates
+> nothing. Rung 1 is closed with it; the demotion Appendix A specifies is
+> permanent. The emission-eligibility bullet below goes with it. Kept
+> verbatim as the record of what was tried. Ruling and tables in
+> `plans/route-word-timing.md`.
 
 Fable pre-locks the *procedure*; at GATE R the judge executes it
 verbatim and records the resulting constants back into this section.
@@ -601,9 +614,16 @@ bad ⇒ the R-1 NO-GO path (demote to line source).
 *R-1 status (Ken, 2026-09-03): **NO-GO as the route stands** — the
 demote-to-line-source path is the live one. Gate-driven only: the
 render mechanism itself is GO on eyeball evidence (6 of 10 songs
-usable, one better than production). Reverses on a re-specified
-Appendix C that passes; no code changes on the ruling, since Appendix A
+usable, one better than production). ~~Reverses on a re-specified
+Appendix C that passes~~; no code changes on the ruling, since Appendix A
 already specifies the demotion.*
+
+*R-1 superseded (Ken, 2026-09-04): **rung 1 is CLOSED**, not merely
+NO-GO. R-4 retired the per-song gate, so precedence 2 can never fire and
+the reversal condition above is void. The mechanism finding stands
+unchanged — this closes the route, not the timings. Word sweeps re-enter,
+if ever, as a per-line choice inside F2 (R-5's arm (i) vs (iv)) under a
+new pre-registration: a new mechanism on rung 2b, not rung 1 returning.*
 
 *R-5 status (Ken, 2026-09-01): arm (iv) runs.* The evidence plan's
 Phase 2b step 3(iv) gated the arm on "GATE O = O-1", written when (iv)
