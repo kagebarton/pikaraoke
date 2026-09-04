@@ -34,18 +34,18 @@ Ken, 2026-07-18):
 
 Evidence base, all in this repo:
 
-- `plans/musixmatch-coverage-probe.md` + `plans/musixmatch-coverage-improvement.md`
+- `plans/completed/musixmatch-coverage-probe.md` + `plans/completed/musixmatch-coverage-improvement.md`
   (executed): reference-pick + title-only + NetEase = 24/33 corpus songs
   with real timing (genius-origin segment: 16/17; word-level: 8 of those).
   `scripts/musixmatch_coverage_improve.py` is the working fetch prototype.
-- `plans/ctc-forced-align-eyeball.md` (**executed 2026-07-18** — GATE C
+- `plans/completed/ctc-forced-align-eyeball.md` (**executed 2026-07-18** — GATE C
   verdicts in the Results log below).
 - `pathed_align` commit `835ba2c7` (never merged): LRC-scaffold windowed
   alignment — warp + densify + union-anchor machinery, corpus-validated
   (re-pace 40%→20%, worst-overlap 4.1s→2.2s over 10 songs).
 - The hardened matcher/cue-align on this branch (`musix_ctc`, =
   `fable_matcher_refine` tip): phases 0–6 of
-  `plans/matcher-accuracy-hardening.md` closed.
+  `plans/completed/matcher-accuracy-hardening.md` closed.
 
 ## Decisions already made by Ken (2026-07-18 session — do not re-litigate)
 
@@ -88,7 +88,7 @@ Evidence base, all in this repo:
   (measurement infrastructure, committed like the matcher plan's Phase 0).
   Result tables paste into this file under `## Results log`.
 - Corpus: the 33 bundles in `pikaraoke-songs/alignment_debug/`. The
-  coverage table in `plans/musixmatch-coverage-improvement.md` §Results is
+  coverage table in `plans/completed/musixmatch-coverage-improvement.md` §Results is
   the routing ground truth for which song lands in which tier.
 - Musixmatch politeness (relearn nothing): one shared provider instance,
   `CALL_SLEEP_S=2.5` / `SONG_SLEEP_S=4.0`, single 20s-backoff retry on
@@ -99,7 +99,7 @@ Evidence base, all in this repo:
 
 ## Model switching
 
-Same three roles as `plans/matcher-accuracy-hardening.md` §"Model
+Same three roles as `plans/completed/matcher-accuracy-hardening.md` §"Model
 switching", binding here identically:
 
 - **Design** — Fable, completed 2026-07-18 (**Fable unavailable from
@@ -123,7 +123,7 @@ after data.
 | Phase | Design | Implement/run | Judge |
 | --- | --- | --- | --- |
 | 0 (port + baselines) | locked below | Sonnet 5 | — (infrastructure) |
-| 1 (CTC probe, GATE C) | `plans/ctc-forced-align-eyeball.md` | executed 2026-07-18 | done — see Results log |
+| 1 (CTC probe, GATE C) | `plans/completed/ctc-forced-align-eyeball.md` | executed 2026-07-18 | done — see Results log |
 | 1b (score oracle, GATE O) | locked below | Sonnet 5 | Opus + Ken |
 | 2 (richsync probe, GATE R) | 2a/2b below; Appendix C locks at the GATE | Sonnet 5 | Opus + Ken eyeball |
 | 3 (scaffold probe, GATE S) | below; Appendices D/E lock at the GATE | Sonnet 5 | Opus; escalate if arms conflict |
@@ -198,7 +198,7 @@ a driver rewrite. Read sources with `git show pathed_align:<path>`.
 
 ## Phase 1 — CTC forced-align eyeball (GATE C) — EXECUTED
 
-Executed 2026-07-18 per `plans/ctc-forced-align-eyeball.md`; that file
+Executed 2026-07-18 per `plans/completed/ctc-forced-align-eyeball.md`; that file
 carries the run summary pointer, this file's Results log carries the
 GATE C verdicts (C-1 YES, C-2 YES-for-the-aligner, C-3 calibration +
 constraints). S-B, S-B2 and S-C arms unblocked.
@@ -416,7 +416,7 @@ demotion — see Results log), offline against its existing bundle:
    (i) richsync-direct — provider text, timings warped by the fitted
    slope/offset, word sweeps capped at `MAX_WORD_DUR_S`; build
    `line_objects` and call `generate_ass` per the recipe already written
-   in `plans/ctc-forced-align-eyeball.md` §"Line grouping → ASS"
+   in `plans/completed/ctc-forced-align-eyeball.md` §"Line grouping → ASS"
    (default `PipelineConfig`);
    (ii) current production output (already on disk);
    (iii) for the 7 srt-origin songs, the existing cue-align output — this
@@ -832,7 +832,7 @@ corpus run + eyeball, not pytest). Import-smoke clean; pre-commit
 HEAD): `replay_ytasr_third_source.py /home/ken/pikaraoke-songs --alpha
 2.0 --beta 2.0` (production's own `PipelineConfig` defaults). 17/17
 genius-origin songs replayed, matches the 07-16 Environment-note
-composite table in `plans/matcher-accuracy-hardening.md` (matcher logic
+composite table in `plans/completed/matcher-accuracy-hardening.md` (matcher logic
 unchanged since — 5b/Phase 6 touched only `cue_align.py`/docs) to
 within the documented live-LRCLIB-fetch MAD jitter (e.g. Domino
 0.43s/7a -> 0.39s/7a here; the 07-16 note already characterizes this as
@@ -870,7 +870,7 @@ tree is unchanged since") rather than re-run — `cue_align.py`'s SRT-path
 logic (`segment_by_gaps`/`align_song`/`repace_bad_lines`) is untouched
 by this session's port (additive-only, new functions never called by
 the SRT path), so the 5b-validated state
-(`plans/matcher-accuracy-hardening.md`, "Phase 5b implement +
+(`plans/completed/matcher-accuracy-hardening.md`, "Phase 5b implement +
 validation") still holds exactly: **16/16 SRT songs, 0/16 drift**
 (`gapL`/`instL` both zero every song), 0 lines placed->hidden, flag
 table identical to the 07-16 Phase-0-baseline table there except 5
@@ -1396,7 +1396,7 @@ scaffold arm after S-B runs.
 
 ### 2026-07-18 — Phase 1 (CTC eyeball) run + GATE C
 
-Run (Ken, scratchpad probe per `plans/ctc-forced-align-eyeball.md`;
+Run (Ken, scratchpad probe per `plans/completed/ctc-forced-align-eyeball.md`;
 source of numbers: `pikaraoke-songs/ctc_review/SUMMARY.md`): **33/33
 songs aligned on plain vocal stems, zero failures, zero degenerate
 flags.** Only flagged row: Seasons of Love "late start 43.16s" —
@@ -1501,7 +1501,7 @@ Emissions, line-scores, and rescue-scores caches also live in the
 scratchpad, not the repo.
 
 **Step 1–2 (emission recompute + primary score).** Re-ran the eyeball
-probe's chunked ~20 s recipe (`plans/ctc-forced-align-eyeball.md` §"CTC
+probe's chunked ~20 s recipe (`plans/completed/ctc-forced-align-eyeball.md` §"CTC
 recipe" — that script itself was never on disk, run by Ken directly
 from a scratchpad copy) over all 33 corpus songs: MMS_FA emission
 cached per song, forced aligner re-run over `align_lines` to recover
@@ -1915,7 +1915,14 @@ S-B 72/936 = 7.7 %).
   **PASS.**
 
 All three metrics strictly better plus the cap holds → the rule
-selects CTC for the non-SRT scaffold path. (The SRT switch, S-C vs
+selects CTC for the non-SRT scaffold path.
+
+*Caution (added 2026-09-04 by the eyeball-provenance audit; see that
+entry): two of the four criteria above are overlap-based, and the day
+after this read-off Ken's S-C eyeball reframed what a falling overlap
+number means. This entry has not been re-read against that reframe —
+M6 does so. Do not treat the S-2 genius-arm selection as settled on the
+strength of this entry alone.* (The SRT switch, S-C vs
 the 5b baseline, has not run and stays open — separate decision,
 extra caution per the rule.) Notable inside the comparison: CTC
 removed six of the seven Mode-2 align-displacement overlaps outright
@@ -2807,12 +2814,101 @@ below.
 - **M5 (small) — check whether the "slightly rushed" sweeps are
   `cue_align.MAX_WORD_DUR_S` (1.5 s) truncating sustained notes.** If
   so it is a one-constant fix rather than a design problem.
+- **M6 — re-read S-2's genius arm against the S-C reframe.** Added
+  2026-09-04 by the eyeball-provenance audit below; see that entry for
+  the evidence and the sequencing constraint (after M1-M3, before any
+  F2 build).
 
 **Held, not commissioned:** STOP items 3 (outlier denominator) and 4
 (MAD-threshold population). If the eyeball entry's analysis 1 survives
 M3, both dissolve rather than resolve — a statistic that reads the
 wrong thing is dropped, not tuned. STOP item 6 (arm (iv) rebuild) stays
 deferred behind R-4.
+
+### 2026-09-04 — Eyeball-provenance audit of the in-progress plans (Ken-directed) — S-2's genius arm flagged; M6 commissioned
+
+**(Executor audit at Ken's direction, prompted by R-1: the eyeball
+overturned two things the statistics implied, so which other live
+rulings rest on unwitnessed proxy statistics? Read-only; no ruling is
+reversed here.)**
+
+**Organizing principle used.** A NO-GO that preserves the status quo is
+cheap to be wrong about — the cost is a forgone opportunity. A GO that
+*selects a mechanism* is expensive to be wrong about, because
+everything downstream is built on it. Sorting the live rulings that
+way leaves exactly one unwitnessed selection.
+
+| ruling | evidence behind it | class |
+| --- | --- | --- |
+| GATE C (CTC usable at all) | Ken's eyeball, 33/33 | witnessed |
+| S-1 (scaffold route GO) | Ken's eyeball on the nine regressions | witnessed |
+| S-2 SRT arm / S-C (whisper retained) | Ken's eyeball — which *flipped* the metric reading | witnessed |
+| R-1 (word route) | Ken's eyeball, 10 songs, 2026-09-03 | witnessed |
+| **S-2 genius arm (CTC selected)** | **aggregate metrics only; 2 of 4 criteria now suspect** | **unwitnessed selection** |
+| GATE O / O′ (engine branch OFF) | AUC — but computed against Ken's own eyeballed desync ranges | labels grounded; outcome conservative |
+| GATE P (no section-level DP) | telemetry tables, no eyeball | conservative; Fable recorded its own upper-bound caveat |
+| S-3 (densify NO-GO) | metrics only | conservative — rejected new machinery |
+
+**The finding — S-2's genius arm was never re-read against Ken's own
+S-C reframe.** On 2026-07-19 S-2 selected CTC for the non-SRT scaffold
+path on four criteria, two of them overlap-based (mean worst-overlap
+0.47 s vs 1.61 s, and the "no song > 1.0 s worse" cap). On 2026-07-20
+Ken's S-C eyeball produced a reframe recorded in this log: *an overlap
+dropping to 0.0 s under CTC is not unambiguously a fix if CTC's failure
+mode on overlapping voices is to under-report rather than mis-time
+them.* That reframe was applied only to the SRT arm's read-off, but it
+is a claim about what the metric measures, so it is path-independent.
+The genius arm has never been re-read against it. Three strands:
+
+1. **The metric mechanically rewards clipping.**
+   `cue_align_song.max_line_overlap` is `prev_end - cur_start` over
+   time-sorted placed lines. Ken confirmed CTC produces tighter word
+   endings; tighter endings shrink `prev_end`, so measured overlap
+   falls. On a genuine two-voice passage that is not a correction — it
+   is the second singer's tail being dropped.
+2. **The showcase wins are ensemble numbers.** S-2's own entry
+   highlights "CTC removed six of the seven Mode-2 align-displacement
+   overlaps outright (Domino 4.6 → 0.0, **Be Our Guest 3.0 → 0.3,
+   Hakuna 2.8 → 0.0**)". Be Our Guest and Hakuna Matata are ensemble
+   Disney numbers — precisely where under-reporting is most likely.
+3. **Both caveats were already documented on another path, before S-2
+   was read.** `plans/completed/matcher-accuracy-hardening.md`
+   establishes that source SRTs author genuine two-voice passages as
+   stacked cue pairs with identical spans, giving each song "a
+   computable maximum authored simultaneity" — explicitly "a reference
+   the overlap metric ignores" — and warns that the statistic is a
+   per-song max whose *location can move between runs*, so a delta
+   "was never a same-location comparison". S-2's deltas are per-song
+   maxes across two runs. Neither caveat was carried into the S-2
+   read-off.
+
+**Stakes.** S-2 is what selected the aligner for the genius-origin
+scaffold path, and F2 builds on that path. If CTC is the wrong choice
+there, an F2 built on CTC is regret — and F2 is otherwise the
+zero-regret build that may be pulled forward at any point in the
+measurement block. This audit does not claim S-2 is wrong; it records
+that the evidence for it is weaker than the entry reads, and that the
+weakness was knowable from material already in the repo.
+
+**M6 commissioned (added to the R-1 ruling's M1-M5 block).**
+*Re-read S-2's genius arm against the S-C reframe.* Re-render the
+whisper arm on the genius scaffold corpus — the `.scaffold.ass` files
+on disk are a single 2026-07-19 run, so only one arm survives — then
+Ken eyeballs whisper vs CTC on **Be Our Guest** and **Hakuna Matata**,
+the two ensemble songs carrying the largest overlap "wins". Needs GPU
+plus the emission cache (already regenerated on the Windows box for 16
+songs). Sequenced after M1-M3, which are pure offline analysis, but
+**before any F2 build starts**. Two supporting measurements, both
+cheap: recompute the S-2 overlap deltas as same-location comparisons
+rather than per-song maxes, and record whether each song's worst pair
+moved between arms.
+
+**Not commissioned.** GATE O is second-tier rather than dismissed: its
+read was AUC, but its labels were Ken's eyeballed desync ranges, and
+its outcome kept the simpler architecture, so a revisit can only add
+complexity and costs GPU. GATE P and S-3 are conservative NO-GOs whose
+cost of error is a forgone opportunity. Ken's call if any of these
+should be reopened later.
 
 ## Appendices A–D — moved to `plans/ctc-sync-engine.md`
 

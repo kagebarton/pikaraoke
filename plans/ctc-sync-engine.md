@@ -42,7 +42,10 @@ advisory demote-only corroboration signal at Ken's discretion;
 Appendix E's gate band stays unfilled.*
 
 *Status (2026-07-19, later): GATE S is complete — S-2 = CTC selected
-for the genius-origin scaffold path, S-1 = GO on the S-B arm (Ken
+for the genius-origin scaffold path (**under re-read as of 2026-09-04
+— M6**; the selection leaned on two overlap-based criteria that Ken's
+next-day S-C eyeball reframed, and it must resolve before an F2 build
+starts, since F2 builds on this path), S-1 = GO on the S-B arm (Ken
 ruled the two open conjuncts), S-3 = joint-matcher routing for
 warp-rejected songs (Ken accepted the coverage trade). **F2 is now
 licensed** (S-1 GO + S-5 scaffold-first); F1 still awaits GATE R
