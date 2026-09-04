@@ -30,7 +30,8 @@ provenance audit in `plans/shared-aligner-form.md`.
 though the word route itself is NO-GO.
 
 **Open work:** M6 (blocks F2), S-E (Phase 3's unrun optional arm), and
-GATE L below.
+GATE L below. *M6's read-off rules were pre-registered and ratified
+2026-09-04 — see the entry at the end of this log.*
 
 ## Phase 3 — scaffold + engine corpus probe (GATE S)
 
@@ -980,3 +981,146 @@ resolves to route 4), snap re-enable exception = none (no named
 flag class the snap fixes appears in the S-arm tables; the S-B
 drift flags are degenerate-anchor artifacts). Appendix E's gate
 band stays unfilled (engine off).
+
+### 2026-09-04 — M6 pre-registration (RATIFIED by Ken, before either arm ran)
+
+**(Executor. Ratified by Ken 2026-09-04 and committed before the probe was written. M6 was commissioned by the eyeball-provenance audit in
+`plans/shared-aligner-form.md` with its read-off rules explicitly left
+unwritten — `plans/route-word-timing.md` records M6 under "Not pre-registered
+by this entry". This entry writes them, before the probe is written, following
+the M1/M2 pattern Ken ratified: the criterion goes into version control while
+the numbers do not exist. Nothing here changes a shipped route.)**
+
+#### What M6 decides
+
+Whether **S-2's selection of CTC for the genius-origin scaffold path stands**.
+It is the one *unwitnessed selection* in the live ruling set, two of its four
+criteria are overlap-based, and Ken's next-day S-C eyeball reframed what a
+falling overlap number means. F2 builds on this path, so M6 gates F2.
+
+Three outcomes are named now: **STANDS**, **FLIPS to whisper**, **NO AWARD →
+Ken**.
+
+#### Four pre-run findings that change the commissioned shape
+
+Recorded before running, which is what a pre-registration is for.
+
+1. **Per-line data from neither 2026-07-19 arm survives, so both arms must be
+   re-run.** `scaffold_align_corpus.py` computes `max_line_overlap` on
+   in-memory `line_objects` and prints the table; only the `.ass` is written.
+   The `.ass` carries a render-time lead-in (a constant `{\k80}` = 0.80 s
+   first chunk on every Dialogue) plus a variable tail hold, so the metric is
+   not recoverable from it — computing max-overlap directly on the survivors'
+   Dialogue spans reproduces neither recorded table (Be Our Guest 1.31 s
+   against S-A 3.00 and S-B 0.30; 0 of 17 songs land within 0.15 s of either).
+   The commissioning assumed only the whisper arm needed re-rendering. Both
+   supporting measurements it asks for are per-line, so both arms are needed.
+   *Artifact: `m6/arm_id.py`.*
+
+2. **The survivor's arm is identified by circumstance, not by content.** The
+   17 `karaoke/*.scaffold.ass` are stamped 2026-07-19 18:18-18:19, four
+   minutes after commit `1d5a1a0` landed the `--slice-align-module` hook that
+   makes a CTC arm possible at all, and all 17 wrote inside about 90 s — too
+   fast for whisper's per-slice `align_refine`, consistent with CTC slicing
+   cached emissions. That points at S-B but does not prove it. **Verified, not
+   assumed:** arm C re-runs one song first and its `.ass` is diffed against the
+   preserved survivor. All 17 survivors are already copied to
+   `m6/survivor_2026-07-19/`; the runs clobber `karaoke/*.scaffold.ass`.
+
+3. **No uploader SRT exists anywhere on this corpus, by construction.** The
+   harness selects songs whose `lyrics.source_kind != "srt"`; all 18
+   candidates report `youtube_srt_present = False`, and every `.srt` on disk
+   has a `.srt.generated` sibling marking it as PiKaraoke's own output. So the
+   "computable maximum authored simultaneity" that
+   `plans/completed/matcher-accuracy-hardening.md` establishes — the reference
+   the audit cites as the one the overlap metric ignores — **is not available
+   on this corpus**. Nothing independent of the two arms can say whether a
+   given overlap is a real two-voice passage. That is why Ken's eyeball is the
+   arbiter here and not a tiebreak.
+
+4. **The corpus has drifted: 18 genius-origin songs today against 17 on
+   2026-07-19** ("Stay Gold (Official Music Video) from The Outsiders" is
+   new). M6 runs **the recorded 17 and excludes Stay Gold**, so the recomputed
+   means stay comparable with the S-A/S-B tables. Girl in the Bubble stays out
+   of the in-scope statistics exactly as S-2 had it (`scf=0`): rendered and
+   reported, not counted.
+
+#### What gets run
+
+Two arms over the same 17 songs, one machine, one code state
+(`joint_catchall_refit` at the ratifying commit), identical
+`--timing sidecar --pad 0.75`:
+
+- **Arm W (whisper)** — default backend, the S-A instrument.
+- **Arm C (CTC)** — `--slice-align-module scripts/sb_ctc_adapter.py`, the S-B
+  instrument. 7 of the 17 emissions are cached; 10 are fresh whole-song
+  forward passes.
+
+One harness change, the smallest that makes the commissioned measurements
+computable: a `--dump-json` flag on `scaffold_align_corpus.py` writing each
+song's `line_objects` alongside the `.ass`. No change to the alignment path.
+Each arm's `.ass` renders are archived per-arm before the other arm runs.
+
+#### The measurements, fixed now
+
+- **M6-a — same-location overlap.** For every adjacent pair
+  `(prev_id, cur_id)` occurring in both arms' time-sorted placed lines, report
+  `ovl_W` and `ovl_C`. Per song: each arm's worst overlap *and its location*,
+  the other arm's overlap **at that same location**, and whether the two worst
+  locations coincide. This is the comparison S-2 never made — its deltas are
+  per-song maxes across two runs.
+- **M6-b — worst-pair movement.** Per song,
+  `moved = worst_pair_W != worst_pair_C`, reported as a raw count over the
+  in-scope 16. No threshold.
+- **M6-c — the clipping decomposition (the discriminator).** At each shared
+  location the difference decomposes exactly:
+  `ovl_W - ovl_C = (end_W(prev) - end_C(prev)) - (start_W(cur) - start_C(cur))`.
+  Every CTC overlap win is therefore attributable to **earlier line ends** —
+  the clipping signature the audit predicts — or to **later next-line starts**,
+  a genuine placement fix. Both components reported per location. No
+  threshold, no verdict.
+- **M6-d — Ken's eyeball, the arbiter.** Be Our Guest and Hakuna Matata, both
+  arms, same clips — the two ensemble songs carrying the largest overlap
+  "wins" (3.0 -> 0.3 and 2.8 -> 0.0). The question is fixed now so that no
+  render can select it afterwards: *at the location of the whisper arm's worst
+  overlap, does the CTC render (i) time both voices correctly, (ii) drop or
+  clip the second voice, or (iii) neither — whisper is simply wrong there and
+  CTC is right for an unrelated reason?* Plus a free judgment on which render
+  he would rather sing to.
+
+#### Read-off rule
+
+- **STANDS** if Ken returns (i) or (iii) on **both** songs — CTC's showcase
+  overlap wins are not clipping, and the two overlap-based criteria S-2 leaned
+  on were reading what they claimed to read.
+- **FLIPS to whisper** if Ken returns (ii) on **both** songs — the two showcase
+  wins are under-reporting, and the criteria that produced the selection
+  rewarded exactly the artifact the S-C reframe named.
+- **Split (one (ii), one not) → NO AWARD → Ken.** Not resolved by the
+  supporting measurements.
+- **M6-a/b/c cannot flip or confirm the selection on their own.** They are
+  evidence for Ken's reading, never a tiebreak that overrides it. Stated
+  explicitly so a large M6-c number is not later read as a verdict — the whole
+  reason M6 exists is that a metric was read as a verdict once already.
+
+#### Reproduction check — declared, and it can suspend the read-off
+
+Arm C's per-song `ovl` is compared against the recorded S-B table, arm W's
+against the recorded S-A re-run table. Non-reproduction is **reported as
+found**. If arm C does not reproduce S-B within 0.2 s on the two eyeball
+songs, **the M6 read-off is suspended and goes to Ken**: what is being re-read
+would then not be what was recorded, and no eyeball on a different render can
+settle a claim about the recorded one.
+
+#### One-shot
+
+No adjust-and-re-run. If a song crashes it is reported as failed and excluded,
+not retried with different settings. The robustness columns declared now — all
+16 in-scope per-song tables, the recomputed mean worst-overlap per arm, the
+reproduction deltas — are robustness only and can never become primary.
+
+#### Not pre-registered by this entry
+
+Any change to the aligner, `cue_align`, snap policy, or the F2 build; GATE
+J1/J2's separate CTC-in-the-joint-matcher question; the S-C vs 5b SRT switch,
+which stays open; S-E and GATE L.
