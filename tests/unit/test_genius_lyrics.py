@@ -59,6 +59,43 @@ class TestParseLyricLines:
         result = parse_lyric_lines(text)
         assert [r["text"] for r in result] == ["Hello", "World"]
 
+    def test_wrapped_bracket_attribution_dropped(self):
+        """Genius splits a bracket attribution across physical lines, so
+        neither bracket defence (both need a closing ']') fires and the
+        fragments render as sung lyrics. Rejoining restores the header."""
+        text = "Now I really wish that I knew how to swim!\n[SHANG & \nSOLDIERS\n]\nBe a man\n"
+        result = parse_lyric_lines(text)
+        assert [r["text"] for r in result] == [
+            "Now I really wish that I knew how to swim!",
+            "Be a man",
+        ]
+
+    def test_wrapped_paren_line_rejoined(self):
+        """A paren wrap is a real lyric split mid-line, not dirt — it
+        rejoins rather than dropping, and the leftover ')' line goes away."""
+        text = "(\nBe a man\n) We must be swift as the coursing river\n"
+        result = parse_lyric_lines(text)
+        assert [r["text"] for r in result] == ["(Be a man) We must be swift as the coursing river"]
+        assert result[0]["align_text"] == "Be a man We must be swift as the coursing river"
+
+    def test_wrapped_paren_fragment_rejoined(self):
+        """The wrap replaced nothing, so fragments concatenate with no
+        separator: 'Between you and I (' + 'I' + ')' is one lyric line."""
+        text = "Right here for this moment\nBetween you and I (\nI\n)\nEverything is happenin'\n"
+        result = parse_lyric_lines(text)
+        assert [r["text"] for r in result] == [
+            "Right here for this moment",
+            "Between you and I (I)",
+            "Everything is happenin'",
+        ]
+
+    def test_stray_open_delimiter_bounded_by_stanza(self):
+        """A delimiter that never closes must not swallow the rest of the
+        song — a blank line ends the stanza and the join."""
+        text = "Ooh (yeah\nStill this stanza\n\nNext stanza\n"
+        result = parse_lyric_lines(text)
+        assert [r["text"] for r in result] == ["Ooh (yeahStill this stanza", "Next stanza"]
+
     def test_inline_html_and_notes_stripped(self):
         """Defensive: HTML tags / musical notes / stage-direction
         brackets shouldn't reach align or display."""
