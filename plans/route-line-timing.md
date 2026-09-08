@@ -2770,3 +2770,141 @@ whichever way the ruling goes.
 
 No gate changed. No verdict on S-1, on the S-3 extension, or on S-2. S-1
 remains suspended and remains Ken's.
+
+### 2026-09-08 — Second Fable judge round: how to buy the S-2 robustness (Ken commissioned; recommendation and executor verification recorded, no verdict)
+
+**(Ken chose "buy the robustness" over ruling on the fired guard, then
+commissioned a round on the design. Read-only round. Recorded as given, with
+the executor's independent check of every load-bearing count. Nothing has been
+built and no rule has changed: the sitting still needs a new pre-registration,
+and two design choices in it are Ken's.)**
+
+#### The recommendation, as given
+
+**Buy the two-arm sitting, but only in the form that costs about what the
+one-arm sitting would have cost:** one pass per look with all three versions
+of a line on screen at once as three karaoke rows in sealed random order, not
+three sequential passes over three files. Score with the ratified pairwise
+statistics computed twice from the same observation (arm C vs joint, arm W vs
+joint) and read off with M7-b's rule verbatim — margin of 3 required in
+**both** arms. Selection: keep the fixed arm-C look-list whole and add arm W's
+top three under the identical selector, additive only.
+
+Reasoning offered for the shape: sequential passes cost roughly three times
+the window time for a robustness statement the arithmetic already suggests
+will be satisfied, because **the guard fired on medians and the medians are
+noise, while the tails the selector actually picks are arm-robust**. A
+three-way *statistic* would be new and unpre-registered, and would invite
+reading arm C against arm W as S-2 evidence, which both M7-b and the fallback
+forbid; a three-row *presentation* scored pairwise avoids that.
+
+**Two things the round says Ken should settle before spending the time.**
+
+1. **The ratified song-win rule is nearly one-sided on this population.** A
+   song is won by the scaffold on `A >= 0 and B >= 0` with one positive, by
+   the joint route symmetrically. Seven of the nine readable songs carry
+   exclusive lines, and the ten were chosen dirt-free, so `B < 0` on those
+   songs requires filler or cram. The joint route can therefore win only the
+   two songs with no exclusive lines, plus any song whose exclusive lines all
+   score zero. "Fails re-derivation" is close to unreachable and NO AWARD is
+   the modal outcome. The round notes this was knowable from the pre-work's
+   population table, which predates the ratified entry, so naming it now is
+   not a data-driven adjustment; it calls it a design flaw of the ratified
+   rule. Two legitimate responses, **Ken's choice**: keep the song-win rule as
+   primary with the one-sidedness disclosed, or re-pre-register the two
+   clauses as separate primary reads (a sign read on `A` across the nine, a
+   sign read on `B` across the seven with exclusive lines, margin 3, both arms
+   each) and demote the song-win rule to a declared secondary column. The
+   round leans to the split and states the counter-argument itself: changing a
+   ratified primary in the same entry that retires a fired guard is the
+   pattern the discipline exists to prevent.
+2. **Whether a scaffold win on nine dirt-free affine songs would change his
+   S-1 ruling at all.** If library-level economics dominate, the S-1 product
+   of this sitting is moot and only its dual-use product remains.
+
+**The dual-use argument for spending the time at all.** The thirty exclusive
+lines in the readable nine are the "fetched timing as one joint-matcher
+candidate" question in miniature: lines the joint matcher could not place from
+audio evidence, which the scaffold placed from the sidecar. Scored "sung lyric
+shown when sung", sidecar-timed candidates would have filled the joint route's
+holes; scored "wrong time" or "filler", they would not. So the sitting informs
+the next build whether or not the route survives.
+
+**What the round says the sitting still cannot deliver:** anything on S-2 (the
+arm-vs-arm difference stays declared robustness); anything on the STRUCTURAL
+class, which is where the route is dangerous; F2's economics, since it
+measures the per-song delta on the easy set and M7-a already bounds the
+fraction of the library that is sound; and nothing on the gate question, which
+is a code fact and prior.
+
+**Blinding, as recommended.** One file per song, three rows, row-to-version
+assignment a per-song random permutation from a seed recorded in the
+pre-registration commit, written to a sealed file not opened until the scores
+are committed. Rows differ only in vertical position. Filenames and the mpv
+command line carry no arm or route identifier. **And a declared blind-check
+column**, because the round holds that the timing itself is a tell that cannot
+be removed without changing what is being judged: after each song Ken writes
+which row he believes is which, and agreement with the sealed mapping is
+reported. If he is mostly right, the record says blinding was cosmetic and the
+finding rests on the observational form of the question ("which row lights
+when the singer starts this line") rather than on a blind Ken cannot have.
+
+**Fallback presentation, pre-registered rather than chosen mid-sitting:** if
+the stacked display is unreadable on the Popular dry run, revert to sequential
+viewing of three files per song under the same sealed permutation, same
+questions, three passes.
+
+#### Executor verification
+
+Reproduced independently (`m6/fb_verify.py` -> `m6/fb_verify.txt`), from the
+same inputs the selector used. Every quantity below is a selection input or a
+presentation fact, both outside the scored population.
+
+- **Union counts, exact match.** Over the ten: arm C 29, arm W 30,
+  intersection 23, union 36. Over the readable nine: 26 -> 33, i.e. **+7
+  shared looks**, and the round named all seven correctly (Free 38, Be Our
+  Guest 67, Best Part Of Me 33, Domino 60, Colors of the Wind 9 and 21, Next
+  Ten Minutes 45). Exclusive 30. **Read looks 63 against 56 arm-C-only.**
+  Popular contributes 14, unread.
+- **Window time, exact match** on the arm-C list: 538 s (9.0 min) over the
+  readable nine. One correction: the union adds 85 s, not "roughly a minute" —
+  623 s (10.4 min) per pass.
+- **The tails are arm-robust.** Over the readable nine's 33 union looks the two
+  arms agree in sign on **29** and both exceed the selector's own threshold on
+  **28**. The round quoted 30 of 36, which is the same statistic over all ten;
+  both are true, and the nine is the read population.
+- **Seven of the nine readable songs carry exclusive lines**, and the two that
+  do not are Be Our Guest and Colors of the Wind. The one-sidedness argument
+  therefore stands as a reading of the ratified rule.
+- **Style block identical across all three row sources**, checked on Belle,
+  Seasons of Love and Domino: the production render and both arm renders share
+  a byte-identical header. So there is no style tell to remove.
+- **The timing tell is real**, direction confirmed on the same three songs:
+  arm C's median karaoke sweep is 14-18 cs against 30-38 cs for arm W and
+  32-44 cs for the production render, with roughly twice the adjacent-tag
+  count. The round's exact percentages were a different statistic from mine,
+  but the conclusion holds and the blind-check column is warranted.
+- **The excluded render.** The `karaoke/<stem>.scaffold.ass` in the songs
+  directory is stamped 2026-09-04 12:56:34, before either arm run began, so it
+  is neither arm's output and must not be used as a row source. Confirmed; its
+  provenance is still unestablished.
+
+**One claim corrected.** The round described Popular's five front looks as
+"five lines pinned at 0.000 s". In arm C exactly one line starts at 0.000; the
+five are crammed into the first 2.8 s, consecutive and near-zero width. Both
+descriptions point at the same front cram, and Part 1's own front-clamp count
+for Popular is 1, so the corrected figure is the consistent one. The earlier
+record's "5 at 0.0" was arm W, a different arm.
+
+**Flagged unverified by the round, and still unverified.** Whether libass and
+mpv render three stacked karaoke rows correctly under explicit positioning.
+This is the single largest risk in the recommendation: the whole
+cost-neutrality argument rests on it, and if it fails the sitting reverts to
+three passes.
+
+#### Standing
+
+No gate changed. No verdict on S-1, S-2 or S-3. The fired guard has been
+neither re-scored nor re-specified. The sitting has no ratified rules yet: the
+new pre-registration is owed once Ken settles the song-win-versus-split-reads
+question, and it must be ratified before any file is generated.
