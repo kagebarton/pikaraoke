@@ -17,7 +17,8 @@ musical-note glyphs, ``[stage directions]``, and SRT's 2-line wraps;
 Speaker diarization from bracket headers was removed: Genius lyrics are
 now fetched with ``remove_section_headers=True``, so no header parsing
 is required upstream. Any stray bracket-only lines that still slip
-through are silently skipped here.
+through are silently skipped here — including the ones Genius wraps
+across several physical lines, which are rejoined before parsing.
 
 Also contains :func:`clean_genius_query` — a light query cleaner for the
 ``/lyrics_search`` route that preserves parenthetical and bracketed
@@ -38,6 +39,48 @@ _PAREN_CONTENT_RE = re.compile(r"\([^)]*\)")
 _MUSICAL_NOTE_RE = re.compile(r"[♪♫♬♩]")
 _HAS_LETTER_RE = re.compile(r"[^\W\d_]")  # any Unicode letter (keeps non-Latin lyrics)
 _CURLY_QUOTES_TABLE = str.maketrans({"‘": "'", "’": "'", "“": '"', "”": '"'})
+
+
+def _has_unclosed_bracket(text: str) -> bool:
+    """True if ``text`` leaves a ``[`` or ``(`` open."""
+    return text.count("[") > text.count("]") or text.count("(") > text.count(")")
+
+
+def _join_wrapped_lines(lyrics_text: str) -> list[str]:
+    """Undo Genius's mid-line wraps.
+
+    Genius splits one lyric line across several physical lines around an
+    annotated or styled span, breaking the line at the span's edges::
+
+        [SHANG &            ->  [SHANG & SOLDIERS]
+        SOLDIERS
+        ]
+        (                   ->  (Be a man) We must be swift as the coursing river
+        Be a man
+        ) We must be swift as the coursing river
+
+    An unclosed ``[`` or ``(`` marks the break: the logical line continues
+    until the delimiter balances. Fragments are concatenated with no
+    separator — the wrap replaced nothing, and the source carries the real
+    word spacing (``"[SHANG & "``). A blank line ends a stanza and bounds
+    the join, so a genuinely stray delimiter can swallow at most its own
+    stanza rather than the rest of the song.
+
+    Without this the fragments reach the matcher as lyrics: both bracket
+    defences (``_HEADER_RE`` and ``_BRACKET_CONTENT_RE``) require a closing
+    ``]``, so ``[SHANG &`` is kept and rendered as a sung line.
+    """
+    lines = lyrics_text.split("\n")
+    joined: list[str] = []
+    i = 0
+    while i < len(lines):
+        run = lines[i]
+        i += 1
+        while _has_unclosed_bracket(run) and i < len(lines) and lines[i].strip():
+            run += lines[i]
+            i += 1
+        joined.append(run)
+    return joined
 
 
 def normalize_lyric_line(text: str) -> str:
@@ -76,6 +119,9 @@ def clean_srt_line(text: str) -> str:
 def parse_lyric_lines(lyrics_text: str) -> list[dict]:
     """Split lyrics into per-line ``{text, align_text}`` dicts.
 
+    - Genius's mid-line wraps are rejoined first (see
+      :func:`_join_wrapped_lines`), so a split ``[SHANG & / SOLDIERS / ]``
+      attribution is seen as the bracket-only line it is.
     - Blank lines and bracket-only lines are dropped.
     - Each line is passed through :func:`normalize_lyric_line` (drops
       HTML, musical notes, inline ``[stage directions]``, curly-quote
@@ -90,7 +136,7 @@ def parse_lyric_lines(lyrics_text: str) -> list[dict]:
       would otherwise become empty matcher lines).
     """
     result: list[dict] = []
-    for line in lyrics_text.split("\n"):
+    for line in _join_wrapped_lines(lyrics_text):
         stripped = line.strip()
         if not stripped:
             continue
