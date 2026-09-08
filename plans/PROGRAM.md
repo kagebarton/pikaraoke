@@ -144,7 +144,7 @@ Three of the four are settled. The fourth is the program's blocker.
 
 | Gate | Decides | Status |
 | --- | --- | --- |
-| `map_rate` at fetch (`WRONG_SONG_MAP_RATE`) | whether a sidecar is admitted at all | **adequate for wrong-song** (M2: 32/32 cross-paired controls collapse at the text-pairing floor); wrong-*edit* is a routing-time warp-gate question |
+| `map_rate` at fetch (`WRONG_SONG_MAP_RATE`) | whether a sidecar is admitted at all | **adequate for wrong-song** (M2: 32/32 cross-paired controls collapse at the text-pairing floor); wrong-*edit* is a routing-time warp-gate question — **now asked directly by M7-a** (`route-line-timing.md`) |
 | ~~Word-route verify (Appendix C)~~ | ~~precedence 2 vs demotion to 3~~ | **RETIRED 2026-09-04 (R-4 closed)** — no per-song gate is constructible from this evidence family; demotion to 3 is permanent |
 | Warp gate (`WARP_MIN_ANCHORS` 5 / `WARP_MAD_GATE_S` 2.0 s) | precedence 3 vs fall to 4 | locked; S-3 = warp failure resolves to route 4 |
 | Snap policy (Appendix D) | post-pass per route | locked: OFF on CTC-timed routes, ON on whisper-timed; "re-enable exception: none" |
@@ -176,11 +176,13 @@ a new mechanism on rung 2b rather than rung 1 returning. Detail in
   longer stands as a finding**: both metric conjuncts are scored by each
   route's own fallback class, and both conjuncts Ken ruled lean on the
   same coverage property. **F2's licence is suspended pending
-  re-derivation, not revoked.** Three items are Ken's and open —
-  re-affirm or withdraw S-1; and whether the S-3 principle extends to
-  warp-*accepted* songs (the cram appears there too, and this is
-  **prior** to the aligner question since both arms produce it). The
-  third — whether the lyric-parser fix sits inside measure-first — was
+  re-derivation, not revoked.** Two items remain Ken's and open. First,
+  **S-1 itself** — and as of 2026-09-08 the choice is no longer confined
+  to re-affirming or withdrawing on M6's evidence, because **M7 is a
+  ratified path to re-derive it**. Second, **whether the S-3 principle
+  extends to warp-*accepted* songs** (the cram appears there too, and
+  this is **prior** to the aligner question since both arms produce it).
+  A third — whether the lyric-parser fix sits inside measure-first — was
   **ruled inside and built 2026-09-08** (`2516ca8`).
   Detail and the verdict-doc path in `plans/route-line-timing.md`.
 - **M6 / S-2's genius arm** — the *unwitnessed selection*. M6 ran; its
@@ -206,7 +208,7 @@ rejected on the SRT path (S-2, SRT arm).
 | `GLOSSARY.md` | ASS/CTC/MMS_FA/emission/melisma/richsync — read before guessing at an acronym |
 | `route-word-timing.md` | rung 1 (**CLOSED 2026-09-04**); GATE R, R-1 ruling, M1-M5, the R-4 closure |
 | `route-srt.md` | rung 2a; the shipped cue-align route, S-C |
-| `route-line-timing.md` | rung 2b; GATE S scaffold arms, GATE L, S-E, M6 |
+| `route-line-timing.md` | rung 2b; GATE S scaffold arms, GATE L, S-E, M6, M7 |
 | `route-no-timing.md` | rung 3; the joint catch-all refit, GATE P/J1/J2 |
 | `shared-aligner-form.md` | GATE C, GATE O, Phase 0 harness, ruling-provenance audit |
 | `ctc-sync-engine.md` | build phases + locked appendices; each licensed by a GATE above |
@@ -269,10 +271,20 @@ Order — cheapest and highest overturn-risk first:
       letters removed corpus-wide are the two attributions. Of the ten
       songs cleared for step 2, only **Free** needs regenerated bundles.
       A whitespace-wrap residual on Paradise is left unfixed by choice.
-   2. **One pre-registered eyeball — joint vs arm C**, the comparison
-      that has never been witnessed on a warp-accepted song. **An
-      eyeball, not a GPU run**: production `.ass` and `armC.ass` already
-      exist for all 17 songs.
+   2. **M7 — re-derive S-1 against a route-independent reference.**
+      **Approach RATIFIED by Ken 2026-09-08; read-off rules not yet
+      pre-registered, nothing run.** `timing_fetch` writes
+      `lyrics/<stem>.timing.json` at add time and **no router consumes
+      it**, so it is independent of both routes: 16 of 17 corpus songs
+      carry one, all 10 of the cleared eyeball cohort, 7 of those
+      word-level. **M7-a** first asks whether it tracks *our* recording
+      (against `subtitles/<stem>.srt`, 26-song cohort) — this is the
+      wrong-*edit* question the demotion-gate table left open. **M7-b**
+      scores both routes on the lines it covers. **M7-c** is the
+      eyeball, narrowed to the residual it does not cover. If M7-a
+      fails, the fallback is a shared-lines-only comparison plus a
+      signed judgment on each route's exclusive lines. Detail in
+      `plans/route-line-timing.md`.
    3. **Ken rules S-1 and the S-3 extension.**
    4. **M6-d re-posed**, if the route survives.
    5. **F2.**

@@ -1686,3 +1686,123 @@ song's bundles regenerated, not the cohort.
 shapes: the wrapped attribution, the wrapped paren line, the wrapped fragment,
 and the stanza bound on a delimiter that never closes. Full suite 1516 pass /
 4 fail — the 4 are the box's pre-existing Windows failures, unrelated.
+
+### 2026-09-08 — M7 commissioned (RATIFIED by Ken): re-derive S-1 against a route-independent timing reference
+
+**(Ken ratified the approach, not yet a read-off. Pre-registration of M7's
+rules is owed before any number is looked at — see "Still owed" below.
+Availability figures from scratchpad `m6/refcheck.py`; cohort counts
+re-derived at the same session. Nothing has been run.)**
+
+#### What this is for
+
+The S-1 re-read left the GO standing as a ruling that cannot be re-derived,
+because both of its metric conjuncts are scored by each route's own fallback
+class. The scaffold route places **every** sheet line (no drop branch exists in
+`cue_align.py` — a bad line is re-aligned or re-paced, never dropped), so it
+cannot lose on coverage; the joint route hides the lines it could not place,
+so those lines cannot overlap and it cannot lose on overlap. Every aggregate
+comparison between the two is decided by the contract rather than the timing.
+M7 exists to replace that with a comparison neither route can win by
+construction.
+
+#### The enabling fact — there is an unread timing reference on disk
+
+`timing_fetch.ensure_timing` writes `lyrics/<stem>.timing.json` at add time
+(Musixmatch richsync/subtitle, NetEase fallback), selected reference-free by
+text map-rate. `lyrics_fetch.py` stashes it as `ctx.artifacts["synced_timing"]`
+above the confidence bar — and **no router consumes it**; the stage's own
+docstring records that it "is inert until one does". Grep confirms the only
+two mentions of `synced_timing` in the tree are the write and the docstring.
+
+So it is independent of both routes under comparison: neither the warp
+scaffold nor the joint matcher has ever read it. That independence, not its
+quality, is what makes it usable here.
+
+#### Availability — raw
+
+```
+song                     source      map_rate  kind   in eyeball ten
+Colors of the Wind       musixmatch  0.946     word   TEN
+Next Ten Minutes         musixmatch  0.930     line   TEN
+Seasons of Love          musixmatch  0.912     word   TEN
+Domino                   musixmatch  0.910     word   TEN
+Best Part of Me          musixmatch  0.868     word   TEN
+Belle                    musixmatch  0.855     word   TEN
+HUNTR/X                  musixmatch  0.811     line   -
+Free                     musixmatch  0.805     word   TEN
+Paradise                 netease     0.785     line   -
+Man Out of You           musixmatch  0.745     word   -
+Bloodstream              musixmatch  0.703     line   -
+Be Our Guest             musixmatch  0.688     line   TEN
+Defying Gravity          musixmatch  0.685     line   -
+Hakuna Matata            netease     0.625     line   -
+Popular                  musixmatch  0.629     word   TEN
+In Summer                netease     0.581     line   TEN
+Girl in the Bubble       MISSING                      -
+
+16 of 17 corpus songs carry a sidecar; all 16 are above WRONG_SONG_MAP_RATE.
+All 10 of the cleared eyeball cohort carry one; 7 of those 10 are word-level.
+Validation cohort (uploader .srt AND timing sidecar, library-wide): 26 songs.
+```
+
+#### M7-a — does the reference track *our* recording?
+
+The gate on everything else. These are movie clips, live cuts and
+20th-anniversary re-records; the reference is fetched against title/artist and
+is very likely timed to a studio release. `map_rate` scores *text* mapping, and
+PROGRAM.md's demotion-gate table already records that it is adequate for
+wrong-*song* only (M2, 32/32 controls) with wrong-*edit* left open as "a
+routing-time warp-gate question". M7-a is that question, asked at last.
+
+Method: compare each sidecar against the song's own `subtitles/<stem>.srt` cue
+times. Both YouTube uploader captions and YouTube ASR captions are timed to
+**our** video, which is the property M7-a needs; provenance of each `.srt`
+(uploader vs auto) is confirmed at setup, and either serves. Cohort 26 songs.
+
+If the reference drifts against captions, M7 stops here and the fallback below
+runs instead.
+
+#### M7-b — score both routes against the reference
+
+On the lines the reference covers, both routes have committed to a timing for
+the same line and neither is credited for its own fallback class. The scaffold's
+extra lines stop being a free coverage win and become checkable — the reference
+either places a line there or it does not. The joint route's hidden lines stop
+being a free overlap win and become a measurable loss wherever the reference
+says something was sung there.
+
+Pairing key is the line id: both routes parse the same sheet through
+`parse_lyric_lines`, so index *i* denotes the same line on both sides —
+**provided both sides were parsed post-`2516ca8`.** Of the ten eyeball songs
+only Free changed under the parser fix, so nine pair against existing artifacts
+and Free needs regenerated bundles.
+
+#### M7-c — eyeball only the residual
+
+Map rates run 0.58-0.95, so roughly a third of sheet lines will have no
+reference line. That remainder is where the dialogue and the wrap residue live
+and it needs Ken's eyes — but as a bounded set against a known question, not as
+a general impression of a whole song.
+
+#### Fallback if M7-a fails
+
+Compare the two routes only on lines **both** rendered, and treat the lines
+only one route renders as a separate signed judgment: real lyrics wrongly
+hidden counts against the joint route, dirt or crammed filler counts against
+the scaffold. Both signs have already been observed once (Man Out of You's nine
+chants; Bloodstream's cram). This is fair but remains a proxy — it removes the
+rigging without supplying a reference.
+
+#### Still owed before M7 runs
+
+Pre-registered read-off rules, one-shot, committed before any number is looked
+at — the discipline that caught M6's arm-identity problem before it cost a run.
+M7-a's pass/fail bar and M7-b's comparison statistic both need fixing in
+version control first. **Ken has ratified the approach only.**
+
+#### Sequencing
+
+M7 replaces "one pre-registered eyeball" as step 2 of the post-M6 order; M7-c
+is that eyeball, narrowed. S-1 and the S-3 extension remain Ken's and are
+unchanged by this entry.
