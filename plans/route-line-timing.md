@@ -2011,3 +2011,103 @@ The S-3 extension (still Ken's, and prior to the aligner question); M6-d;
 any change to `cue_align`, the joint matcher, snap policy, or the F2 build;
 GATE J1/J2; S-E and GATE L. M7 re-derives S-1 or it does not — it does not
 license F2 by itself.
+
+### 2026-09-08 — M7-a run (raw). Pre-registered stop rule fires; no read-off taken
+
+**(Executor. Rules ratified and committed at `d75499b` before any timing was
+compared. One-shot, as pre-registered: nothing was re-run with different
+settings. Probes `m6/m7a.py`, `m6/m7a_diag.py`, `m6/m7a_attrib.py`; artifacts
+`m6/m7a.txt`, `m6/m7a_rows.json`, `m6/m7a_attrib.txt`, `m6/m7a_attrib.json`.
+No route output was read — M7-a compares the sidecar against a caption
+reference only.)**
+
+#### M7-a certification table
+
+`*` = GATE S corpus song. `n` = matched anchors, `offset` = median residual
+(s), `within` = share of anchors inside 1.0 s of that offset, `drift` = last
+third minus first third (s), `mad` robustness only. CERTIFIED iff `n >= 8`,
+`within >= 0.90`, `|drift| <= 2.0`.
+
+```
+C cert  ref      kind    n  offset  within  drift   mad  song
+* NO    asr      line   45   72.97   0.178  51.37  6.54  'Defying Gravity' - Wicked 20th Anniv
+* NO    asr      word   59    7.10   0.610  -1.20  0.77  'Popular' - Wicked 20th Anniversary
+* NO    asr      line   53    3.30   0.830   0.13  0.19  Be Our Guest [UHD]
+* YES   asr      word   40    7.73   0.950  -0.02  0.31  Belle [UHD]
+* NO    asr      word   33    0.51   0.788  -0.34  0.36  Ed Sheeran - Best Part Of Me
+* NO    asr      line   32    9.59   0.656   9.21  0.41  Ed Sheeran & Rudimental - Bloodstream
+* NO    asr      word   38  -31.52   0.474 -13.01  1.18  Mulan - I'll Make a Man Out of You
+* YES   asr      word   37    5.94   0.973   0.11  0.10  Pocahontas - Colors of the Wind
+* NO    asr      word    4  -18.21   0.500  35.22  6.82  Seasons of Love (HD)
+* NO    asr      line   12   -8.95   0.333 -29.82 42.09  The Lion King - Hakuna Matata
+  YES   uploader word   36  -13.59   0.917   0.12  0.14  Backstreet Boys - More Than That
+  NO    uploader word   33  -38.53   0.212 -42.78  7.90  Idina Menzel - Let It Go
+  NO    uploader word   38    1.19   0.658   2.01  0.59  Jodi Benson - Part of Your World
+  NO    uploader word   73    3.74   0.808  -0.05  0.43  Justin Timberlake - Like I Love You
+  YES   uploader word  106    0.04   0.906  -0.11  0.23  Justin Timberlake - Mirrors
+  NO    uploader word  101   -0.42   0.683 -28.37  0.49  Justin Timberlake - Rock Your Body
+  NO    uploader word   28   25.97   0.071  13.11  6.08  The Lion King - Can You Feel The Love
+
+corpus songs with a reference: 10
+corpus certified            : 2
+library certified           : 4
+```
+
+#### Failure attribution (added after the run; does not alter any figure above)
+
+The pre-registered statistic cannot distinguish three causes of a `NO`, so
+each row was attributed afterwards. `ceil` = order-free token overlap between
+sidecar and reference (how much shared content exists at all), `cov` = what
+the monotonic anchoring actually matched, `gap = ceil - cov`. A large gap
+means the anchoring missed an alignment that was there; a low ceiling means
+there was little to align. `refdur`/`siddur` are the reference's and
+sidecar's own covered spans in seconds.
+
+```
+C cert  ref         ceil    cov    gap  refdur  siddur  cause
+* NO    asr         0.41   0.38   0.03     231     344  EDIT     Defying Gravity
+* NO    asr         0.86   0.86   0.00     207     193  EDIT     Popular
+* NO    asr         0.58   0.50   0.08     210     189  EDIT     Be Our Guest
+* YES   asr         0.40   0.39   0.02     295     273  OK       Belle
+* NO    asr         0.69   0.61   0.08     218     215  EDIT     Best Part Of Me
+* NO    asr         0.40   0.36   0.04     228     260  EDIT     Bloodstream
+* NO    asr         0.79   0.75   0.04     232     171  EDIT     Man Out of You
+* YES   asr         0.96   0.96   0.00     201     175  OK       Colors of the Wind
+* NO    asr         0.04   0.03   0.02      60     187  SPARSE   Seasons of Love
+* NO    asr         0.78   0.26   0.52     243     167  MATCHER  Hakuna Matata
+  YES   uploader    0.93   0.93   0.00     211     207  OK       More Than That
+  NO    uploader    1.00   0.99   0.00     201     117  EDIT     Let It Go
+  NO    uploader    0.97   0.97   0.00     171     157  EDIT     Part of Your World
+  NO    uploader    0.95   0.95   0.00     268     264  EDIT     Like I Love You
+  YES   uploader    0.98   0.98   0.00     457     453  OK       Mirrors
+  NO    uploader    0.95   0.95   0.00     286     250  EDIT     Rock Your Body
+  NO    uploader    0.94   0.94   0.00     165     197  EDIT     Can You Feel The Love
+
+corpus OK 2 | EDIT 6 | MATCHER 1 | SPARSE 1
+```
+
+**One anchoring instrument failure, on Hakuna Matata** (`ceil` 0.78 against
+`cov` 0.26). The monotonic block matcher mis-pairs heavily repeated sections —
+the exact failure `map_lines_to_cues`' own docstring records for exact-block
+matching, which is why that function is fuzzy per-line. **Seasons of Love's
+caption file is degenerate**: 26 ASR words covering 60 s of a 187 s song, 4%
+token overlap, so nothing about the sidecar is testable there. Both are
+recorded as found; neither was re-run.
+
+**Every other row's anchoring reached the available ceiling** (`gap <= 0.08`).
+On the seven uploader-caption songs the text agreement is 0.93-1.00 and the
+anchoring achieves it, yet five of the seven still fail certification — Let It
+Go at `ceil` 1.00 pairs perfect text against a 117 s sidecar span for a 201 s
+video. Those failures are not an artifact of the matcher.
+
+#### Stop rule
+
+Pre-registered: *"If fewer than 6 corpus songs certify, M7-b is not run and
+the fallback in the commissioning entry runs instead."* Corpus certified is
+**2**. The two attributable-to-instrument songs (Hakuna Matata, Seasons of
+Love) could not lift the count past **4** even if both were repaired and both
+then certified, so the rule's outcome does not depend on either.
+
+No read-off is taken here and no verdict on S-1 is recorded. The fallback,
+`route-line-timing.md`'s commissioning entry, is a shared-lines-only
+comparison plus a signed judgment on each route's exclusive lines.

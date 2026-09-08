@@ -144,7 +144,7 @@ Three of the four are settled. The fourth is the program's blocker.
 
 | Gate | Decides | Status |
 | --- | --- | --- |
-| `map_rate` at fetch (`WRONG_SONG_MAP_RATE`) | whether a sidecar is admitted at all | **adequate for wrong-song** (M2: 32/32 cross-paired controls collapse at the text-pairing floor); wrong-*edit* is a routing-time warp-gate question — **now asked directly by M7-a** (`route-line-timing.md`) |
+| `map_rate` at fetch (`WRONG_SONG_MAP_RATE`) | whether a sidecar is admitted at all | **adequate for wrong-song** (M2: 32/32 cross-paired controls collapse at the text-pairing floor). **Wrong-*edit*: M7-a asked it directly 2026-09-08 and the evidence says `map_rate` does not catch it** — all 17 cohort sidecars cleared the floor, yet only 4 track our recording; on Let It Go the text agrees 1.00 against a sidecar spanning 117 s of a 201 s video. Raw tables in `route-line-timing.md`. **Ruling is Ken's; no gate has been changed.** |
 | ~~Word-route verify (Appendix C)~~ | ~~precedence 2 vs demotion to 3~~ | **RETIRED 2026-09-04 (R-4 closed)** — no per-song gate is constructible from this evidence family; demotion to 3 is permanent |
 | Warp gate (`WARP_MIN_ANCHORS` 5 / `WARP_MAD_GATE_S` 2.0 s) | precedence 3 vs fall to 4 | locked; S-3 = warp failure resolves to route 4 |
 | Snap policy (Appendix D) | post-pass per route | locked: OFF on CTC-timed routes, ON on whisper-timed; "re-enable exception: none" |
@@ -275,7 +275,11 @@ Order — cheapest and highest overturn-risk first:
       **Defying Gravity and Man Out of You**.
       A whitespace-wrap residual on Paradise is left unfixed by choice.
    2. **M7 — re-derive S-1 against a route-independent reference.**
-      **Approach and read-off rules both RATIFIED by Ken 2026-09-08.**
+      **Approach and read-off rules both RATIFIED by Ken 2026-09-08.
+      M7-a RAN 2026-09-08: 2 of 10 corpus songs certify, so the
+      pre-registered stop rule fires and M7-b is not run — the fallback
+      replaces it. Raw tables in `route-line-timing.md`; no read-off
+      taken, S-1 still open.**
       `timing_fetch` writes `lyrics/<stem>.timing.json` at add time and
       **no router consumes it**, so it is independent of both routes.
       **M7-a** first asks whether it tracks *our* recording, against a
