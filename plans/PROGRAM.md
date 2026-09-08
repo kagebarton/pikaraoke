@@ -177,9 +177,10 @@ a new mechanism on rung 2b rather than rung 1 returning. Detail in
   route's own fallback class, and both conjuncts Ken ruled lean on the
   same coverage property. **F2's licence is suspended pending
   re-derivation, not revoked.** Two items remain Ken's and open. First,
-  **S-1 itself** — and as of 2026-09-08 the choice is no longer confined
-  to re-affirming or withdrawing on M6's evidence, because **M7 is a
-  ratified path to re-derive it**. Second, **whether the S-3 principle
+  **S-1 itself** — M7 was a ratified path to re-derive it, but **M7-a's
+  stop rule fired 2026-09-08 and closed that path**, so the choice is
+  back to re-affirming or withdrawing, now with the fallback and with
+  two new structural facts on file (step 4.2). Second, **whether the S-3 principle
   extends to warp-*accepted* songs** (the cram appears there too, and
   this is **prior** to the aligner question since both arms produce it).
   A third — whether the lyric-parser fix sits inside measure-first — was
@@ -301,6 +302,28 @@ Order — cheapest and highest overturn-risk first:
       caption is on a non-corpus song, because the corpus was selected
       for having no SRT source. Detail and the read-off rules in
       `plans/route-line-timing.md`.
+
+      **Fallback pre-work 2026-09-08 (structural only, no rules drafted,
+      no statistic computed).** Sizing the population first: the joint
+      route's hidden lines are its *wordless* ones — `absent_line_ids`
+      is empty on all 17 songs and unplaced lines are interpolated
+      without words, which the ASS writer then skips — so the scaffold
+      renders every sheet line, joint-only lines are 0 everywhere, and
+      the exclusive set is 157 lines in scope, 41 inside the cleared
+      ten. Both of the fallback's example signs live in that one set.
+      Second, **the scaffold arm's own scaffold source is the sidecar
+      M7-a just impeached** (`--timing sidecar` default, reading
+      `lyrics/<stem>.timing.json`): of the 6 corpus songs M7-a
+      attributed to a genuine edit difference, the warp gate rejected
+      **1** and accepted **5**. The affine warp absorbs offset and rate
+      by construction but cannot express a cut verse or an added
+      repeat, and which shape those 5 are is **not** established — the
+      cross-tab is two recorded tables, not a measurement.
+      `synced_timing` is inert in the shipped pipeline, so no shipped
+      route is touched; what is touched is the arm M6 and S-1's
+      evidence were produced on, and F2's designed scaffold source.
+      **What the fallback should measure, given that, is Ken's; no
+      gate has been changed and no verdict on S-1 is recorded.**
    3. **Ken rules S-1 and the S-3 extension.**
    4. **M6-d re-posed**, if the route survives.
    5. **F2.**

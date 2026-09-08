@@ -2111,3 +2111,118 @@ then certified, so the rule's outcome does not depend on either.
 No read-off is taken here and no verdict on S-1 is recorded. The fallback,
 `route-line-timing.md`'s commissioning entry, is a shared-lines-only
 comparison plus a signed judgment on each route's exclusive lines.
+
+### 2026-09-08 — M7 fallback, pre-work (raw). Two structural findings; no rules drafted, no verdict
+
+**(Executor. Structural only — nothing here scores a timing and no comparison
+statistic was computed. Probes `m6/fb_avail.py`, `m6/fb_hidden.py`,
+`m6/fb_render.py`, `m6/fb_pop.py`; artifacts `m6/fb_avail.txt`,
+`m6/fb_hidden.txt`, `m6/fb_render.txt`, `m6/fb_pop.txt`. Sources: the 17
+scaffold arm dumps from M6 (`m6/armW`, `m6/armC`, 2026-09-04) and the shipped
+joint route's bundles in `alignment_debug/` (2026-07-16). Both sides predate
+`2516ca8`, so line ids pair consistently on all 17 songs, Free included.)**
+
+The fallback is "a shared-lines-only comparison plus a signed judgment on each
+route's exclusive lines". Sizing that population first turned up two facts
+that bear on what the fallback can be, so they are recorded before any rule is
+written.
+
+#### Finding 1 — what "rendered" means, and where the joint route's hidden lines are
+
+`_write_ass` skips any line object with no words (`lyric_align.py:1121`,
+`if not words: continue`), so a line carries a subtitle event iff it has
+words. `scaffold_align_corpus.py` already scores it that way
+(`placed = sum(1 for o in line_objects if o["words"])`).
+
+On the joint side the hidden set is **not** `absent_line_ids` — that list is
+**empty on all 17 songs**. Lines the matcher does not place are handed to
+`_interpolate_missing` and tagged `interp`; they receive a start and end but no
+words, so `output_line_timings` has a row for every sheet line while the ASS
+has an event only for the placed ones. On 12 songs the wordless set is exactly
+`interpolated_line_ids`; on 5 (Popular, Belle, Bloodstream, HUNTR/X, Seasons of
+Love) it is larger by 1-6 lines, so a few *selected* lines also end wordless.
+
+On the scaffold side **no placed line is wordless on any song** — `SOURCE_FILL`
+paces words across the window — so the scaffold renders every sheet line.
+
+Population, therefore: `scfOnly` is the joint route's hidden set, and
+`joint-only` is **0 on every song**.
+
+```
+   song                        sheet  scfRnd  jntRnd  shared scfOnly
+   Defying Gravity                89      89      51      51      38
+T  Free                           41      41      40      40       1
+T  Popular                        62      62      51      51      11
+T  Be Our Guest                   77      77      77      77       0
+T  Belle                         110     110     101     101       9
+T  Best Part Of Me                38      38      37      37       1
+   Bloodstream                    74      74      47      47      27
+   This Is What It Sounds Like     53      53      32      32      21
+T  Domino                         67      67      63      63       4
+T  In Summer                      31      31      29      29       2
+   Man Out of You                 47      47      36      36      11
+   Paradise                       65      65      53      53      12
+T  Colors of the Wind             37      37      37      37       0
+T  Seasons of Love                34      34      25      25       9
+   Hakuna Matata                  40      40      33      33       7
+T  Next Ten Minutes               71      71      67      67       4
+x  Girl in the Bubble             36      36      29      29       7
+
+T = one of the ten cleared for eyeball work; x = out of scope (M6 convention)
+in-scope totals: sheet 936  shared 779  scaffold-only 157
+scaffold-only lines within the ten: 41
+joint-only lines, every song: 0
+```
+
+Both of the commissioning entry's example signs live in this one set: Man Out
+of You's nine chants (real lyric the joint route hid) and Bloodstream's cram
+(filler the scaffold placed) are both scaffold-only lines. The set is
+one-sided in membership and two-sided in sign, which is what the fallback
+asked for. Within the cleared ten it is 41 lines.
+
+#### Finding 2 — the scaffold arm's scaffold source is the sidecar M7-a just measured
+
+`scaffold_align_corpus.py` defaults to `--timing sidecar`, and
+`scaffold_align_song.sidecar_scaffold_cues` reads
+`lyrics/<stem>.timing.json` — the same file M7-a certified against a caption
+reference. Both M6 arms ran on that default.
+
+Cross-tabbing the two recorded tables — M7-a's attribution and the per-song
+warp path from the 2026-09-04 amendment entry — over the 10 corpus songs that
+have a reference:
+
+```
+song                 M7-a        warp path (arm W)
+Defying Gravity      EDIT        densify-fallback (MAD gate, both models fail)
+Popular              EDIT        affine-ok (slope 1.0074, intercept -8.075)
+Be Our Guest         EDIT        affine-ok (slope 1.0017, intercept -3.430)
+Best Part Of Me      EDIT        affine-ok (slope 1.0002, intercept -0.643)
+Bloodstream          EDIT        affine-ok (slope 0.9939, intercept -9.496)
+Man Out of You       EDIT        affine-ok (slope 0.9881, intercept 32.285)
+Belle                OK          affine-ok (slope 1.0009, intercept -7.867)
+Colors of the Wind   OK          affine-ok (slope 0.9991, intercept -6.286)
+Seasons of Love      SPARSE      affine-ok (slope 0.9542, intercept  1.227)
+Hakuna Matata        MATCHER     affine-ok (slope 1.0078, intercept  8.717)
+
+6 EDIT: warp gate rejected 1, accepted 5.
+2 OK: accepted (correctly).
+2 instrument-attributable, uninformative about the sidecar either way.
+```
+
+The affine warp absorbs an offset and a rate difference by construction, which
+is what the large intercepts are. M7-a's EDIT failures are not all of that
+shape — the recorded residuals include drift of 9-51 s and, on the uploader
+rows, sidecar spans far short of the video — and an affine fit cannot express a
+cut verse or an added repeat. Whether the accepted-EDIT songs are the affine
+kind or the structural kind is **not** established by anything above; it is a
+cross-tab of two tables, not a measurement.
+
+Bearing: `synced_timing` is inert in the shipped pipeline, so this touches no
+shipped route. It touches the scaffold arm that M6 and S-1's evidence were
+produced on, and the fetch-pillar sidecar is F2's designed scaffold source.
+
+#### Nothing ruled
+
+No fallback read-off rules are drafted by this entry, no statistic was
+computed, and no verdict on S-1 is recorded. What the fallback should measure,
+given Finding 2, is Ken's.
