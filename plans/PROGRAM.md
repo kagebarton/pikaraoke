@@ -275,8 +275,7 @@ Order — cheapest and highest overturn-risk first:
       **Defying Gravity and Man Out of You**.
       A whitespace-wrap residual on Paradise is left unfixed by choice.
    2. **M7 — re-derive S-1 against a route-independent reference.**
-      **Approach RATIFIED by Ken 2026-09-08. Read-off rules DRAFTED
-      2026-09-08 and awaiting ratification; nothing run.**
+      **Approach and read-off rules both RATIFIED by Ken 2026-09-08.**
       `timing_fetch` writes `lyrics/<stem>.timing.json` at add time and
       **no router consumes it**, so it is independent of both routes.
       **M7-a** first asks whether it tracks *our* recording, against a

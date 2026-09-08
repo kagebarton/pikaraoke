@@ -1812,9 +1812,10 @@ M7 replaces "one pre-registered eyeball" as step 2 of the post-M6 order; M7-c
 is that eyeball, narrowed. S-1 and the S-3 extension remain Ken's and are
 unchanged by this entry.
 
-### 2026-09-08 — M7 pre-registration (DRAFT for Ken — read-off rules fixed before any number exists)
+### 2026-09-08 — M7 pre-registration (RATIFIED by Ken — read-off rules fixed before any number exists)
 
-**(Executor. The M7 commissioning entry above records the approach Ken
+**(Executor. RATIFIED by Ken 2026-09-08, unchanged from the draft he read.
+The M7 commissioning entry above records the approach Ken
 ratified and states that read-off rules were owed. This entry writes them,
 before the probe is written, following the M1/M2/M6 pattern: the criterion
 goes into version control while the numbers do not exist. Nothing here
