@@ -180,9 +180,13 @@ a new mechanism on rung 2b rather than rung 1 returning. Detail in
   **S-1 itself** — M7 was a ratified path to re-derive it, but **M7-a's
   stop rule fired 2026-09-08 and closed that path**, so the choice is
   back to re-affirming or withdrawing, now with the fallback and with
-  two new structural facts on file (step 4.2). Second, **whether the S-3 principle
-  extends to warp-*accepted* songs** (the cram appears there too, and
-  this is **prior** to the aligner question since both arms produce it).
+  two new structural facts on file (step 4.2). Second, the S-3 extension —
+  posed as **whether the principle extends to warp-*accepted* songs**,
+  but **reframed 2026-09-08**: the gate's fit population excludes
+  exactly the lines a wrong-edit source adds, so it never implemented
+  the distinction that ruling assumed. That makes it a code fact,
+  rulable without any measurement and **prior** to both the fallback
+  and the aligner question.
   A third — whether the lyric-parser fix sits inside measure-first — was
   **ruled inside and built 2026-09-08** (`2516ca8`).
   Detail and the verdict-doc path in `plans/route-line-timing.md`.
@@ -322,8 +326,40 @@ Order — cheapest and highest overturn-risk first:
       `synced_timing` is inert in the shipped pipeline, so no shipped
       route is touched; what is touched is the arm M6 and S-1's
       evidence were produced on, and F2's designed scaffold source.
-      **What the fallback should measure, given that, is Ken's; no
-      gate has been changed and no verdict on S-1 is recorded.**
+      **Fable judge round 2026-09-08, commissioned by Ken, path
+      accepted.** It identified the mechanism: the cram is the
+      **duration clamp**, and the gate cannot see the condition that
+      produces it — the fit population is built only from lines that
+      both the source and the audio place, so a section the video never
+      sings never enters the check meant to catch it, and every line
+      warping past the end is pinned to one timestamp and re-paced at
+      the floor. Executor verified the code claims and found the same
+      clamp firing at the front as well. **This reframes the open S-3
+      item: it is not "does the principle extend to warp-accepted
+      songs" but "the gate does not implement the principle Ken
+      ruled" — a code fact, rulable without any measurement and prior
+      to the fallback.** The round's other unruled findings: the
+      fetch stage already holds a duration signal it uses only as a
+      map-rate tie-break (verified); the fallback's two motivating
+      examples both sit outside its bounded eyeball and one no longer
+      exists post-`2516ca8`; the cleared ten is the easy set for both
+      routes; and if S-1 falls, the evidence points at the fetched
+      timing entering the **joint matcher as one per-line candidate**
+      rather than at a per-song route — a J1-adjacent build the
+      program has never priced.
+
+      **Stratified fallback pre-registration DRAFT 2026-09-08 —
+      awaiting Ken's ratification.** A GPU-free shape diagnostic labels
+      each song REJECTED / STRUCTURAL / AFFINE from the arm's own
+      inputs; the shared-line and exclusive-line read-off is then taken
+      **per stratum**, the AFFINE stratum reading on S-1 and the
+      STRUCTURAL stratum labelled S-3-extension evidence instead. The
+      arithmetic only *selects* what Ken looks at — there is no
+      reference, so the eye scores. Bounded at 71 looks in one sitting.
+      Declared limit: the sitting is one arm, so unlike M7-b this
+      cannot show the conclusion survives either resolution of S-2.
+      Rules in `plans/route-line-timing.md`. **No gate has been
+      changed and no verdict on S-1 is recorded.**
    3. **Ken rules S-1 and the S-3 extension.**
    4. **M6-d re-posed**, if the route survives.
    5. **F2.**

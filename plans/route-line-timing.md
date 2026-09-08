@@ -2226,3 +2226,272 @@ produced on, and the fetch-pillar sidecar is F2's designed scaffold source.
 No fallback read-off rules are drafted by this entry, no statistic was
 computed, and no verdict on S-1 is recorded. What the fallback should measure,
 given Finding 2, is Ken's.
+
+### 2026-09-08 — Fable judge round on the path forward (Ken commissioned; recommendation recorded, no verdict)
+
+**(Judge round, read-only, one billed pass, commissioned by Ken after the
+fallback pre-work. The round recommends a path; the ruling on S-1, and on the
+gate question it raises, stays Ken's. The executor verified its load-bearing
+code claims against source and artifacts before recording — see "verified"
+below — and found one instance the round did not report.)**
+
+#### Recommendation, as given
+
+Run the fallback, but pre-register it as a **stratified** comparison: a
+GPU-free warp-fit shape diagnostic that labels each song's scaffold from the
+arm's own inputs, then the shared/exclusive read-off taken **per stratum**,
+with the eyeball bounded by a pre-registered selector. Option A with option C
+folded in as a declared stratification column rather than a separate step.
+Options B (re-run with the scaffold source disabled or swapped) and D (finding
+2 alone is sufficient) were rejected; the reasons are recorded under "what the
+round says the program has wrong".
+
+#### The mechanism it identified
+
+The cram is the **duration clamp**, and the gate cannot see the condition that
+produces it.
+
+`warp_scaffold_cues` builds its fit population as
+`common = [(scaffold[lid][0], anchors[lid][0]) for lid in scaffold if lid in
+anchors]` (`cue_align.py:408`) — only lines that both the fetched scaffold and
+the audio anchors place. A section the video never sings has no anchor, so it
+never enters the check that is supposed to catch it. Acceptance is
+`median(abs(residual)) <= WARP_MAD_GATE_S` (2.0 s) over that population, and
+Theil-Sen supplies the fit, so both the fit and the gate are medians: the gate
+rejects when more than half the *sung* lines are off, which is not the same
+question as whether the source describes a different edit. Its docstring says
+"above this MAD only when it is a structurally different recording"; that is
+not what the code does.
+
+Every scaffold line that warps past the end of the video is then pinned by
+`starts[lid] = min(max(0.0, slope * scaffold[lid][0] + intercept), duration)`
+(`cue_align.py:441`), stacks on one timestamp, yields a zero-width cue, fails
+its align and is re-paced at the floor. The floor named by the S-1 re-read is
+the symptom; the clamp is the cause.
+
+#### Verified by the executor before recording
+
+```
+claim                                                     result
+common = scaffold ∩ anchors only (cue_align.py:408)       confirmed verbatim
+gate = median(|residual|) <= WARP_MAD_GATE_S = 2.0        confirmed
+duration clamp at cue_align.py:441                        confirmed verbatim
+WARP_MIN_ANCHORS = 5                                      confirmed
+arm W Bloodstream: 38 lines share one start (246.70)      confirmed
+arm W HUNTR/X:     20 lines share one start (159.76)      confirmed
+arm W Belle:       no stacked start                       confirmed
+diagnostic needs no GPU and no audio decode               confirmed: align_lines,
+  transcribe_words and media_duration_s all come from the bundle, ASR from the
+  .json3 on disk, scaffold from the sidecar; the ffmpeg/wav path in run_song is
+  a duration fallback only
+m6/debug17 is byte-identical to the 17 production bundles  confirmed (17/17)
+duration match is only a map_rate tie-break at fetch       confirmed: best_by_reference
+  sorts on key = (rate, dur_key) with dur_key = -abs(track_length - media_dur), so a
+  source describing a different-length recording is preferred whenever its text maps
+  better; track_length is carried into the sidecar, so the signal is on disk already
+```
+
+**One instance the round did not report.** The same expression clamps at the
+front: `max(0.0, ...)`. Arm W Popular has **5 lines pinned to 0.0**. The
+mechanism bites at both ends, so the diagnostic below tests both.
+
+#### What the round says the program has wrong
+
+Recorded as given, unruled:
+
+1. "Which shape those 5 are is not established" is half true. Two corpus crams
+   are resolved by the above (sidecar longer than video, clamped, invisible to
+   the gate); Man Out of You is the other direction and resolvable from the
+   recorded tables (a first-to-last-third step far larger than the fitted slope
+   over that span can produce). Popular, Be Our Guest and Best Part of Me are
+   genuinely open and look affine.
+2. **"Warp-accepted" never meant "same edit", so S-3's scope was drawn on a
+   meaning the code does not implement.** The open extension question is not
+   "does the principle extend to warp-accepted songs" but "the gate does not
+   implement the principle Ken already ruled" — a code fact, rulable without
+   the fallback and **prior** to it.
+3. The fetch pillar's premise is false for this library, and the signal that
+   says so was already fetched — **verified above**. Bearing on S-1's
+   economics: F2's value is (delta on sound songs) x (fraction sound), and the
+   pre-work bounds the second factor low.
+4. The fallback's two motivating signs are both outside its bounded eyeball,
+   and one no longer exists: post-`2516ca8` Man Out of You's nine chants are
+   prefixes of the following lines, not lines. The 41-line set tests the class,
+   not the named instances.
+5. The cleared ten is the easy set for both routes — it was cleared as
+   "warp-accepted + dirt-free", which after (2) means "dirt-free". Do not
+   expand it; Man Out of You now qualifies on the criterion but its bundles are
+   stale, so it is recorded as the known blind spot.
+6. Out of remit, passed on as given: if S-1 falls, M7-a's evidence points at
+   the fetched timing entering the **joint matcher as one per-line candidate
+   among others** — where a wrong-edit line simply loses — rather than at a
+   per-song route with a per-song gate. That is a J1-adjacent build, not F2,
+   and nothing in the program has priced it.
+
+#### Not ruled
+
+The round recommends; it does not rule. S-1, the gate question in (2), and
+whether to accept this path are Ken's. No gate has been changed.
+
+### 2026-09-08 — M7 fallback pre-registration, stratified (DRAFT — awaiting Ken's ratification)
+
+**(Rules fixed before any number exists, per the discipline that has governed
+every read-off in this lane. Ken accepted the judge round's path; these are the
+rules that path needs. Nothing below has been run: the diagnostic has not been
+computed, no stratum membership is known, and no arithmetic has been taken.
+One-shot, as before.)**
+
+#### Why stratified
+
+The fallback compares the two routes without a reference. The pre-work
+established that the scaffold arm's own scaffold source misdescribes the edit
+on part of the corpus, and the judge round established that the gate cannot see
+the worst of that by construction. An unstratified comparison would therefore
+average "the route on a sound input" against "the route on a broken input" and
+call the result the route's licence. Stratifying separates the two readings:
+within sound scaffolds the comparison is about the route; within leaked ones it
+is about the input, and belongs to the S-3 extension rather than to S-1.
+
+#### Part 1 — warp-fit shape diagnostic (no GPU, all 17 songs)
+
+Recompute what the arm computed, by **calling the same functions, not
+reimplementing them**: `scaffold_align_song.sidecar_scaffold_cues`,
+`ytasr.parse_json3` / `cue_spans_for_lines` / `normalize_words`,
+`cue_align.merge_cue_spans`, and `cue_align._theil_sen`. Inputs are
+`m6/debug17` (byte-identical to the production bundles, so `align_lines`,
+`transcribe_words` and `media_duration_s` all come from there), the `.json3`
+ASR on disk, and `lyrics/<stem>.timing.json`.
+
+**Reproduction check, declared, and able to suspend the read-off.** The
+recomputed slope and intercept must match `m6/armW_run.log` to the logged
+precision on every warp-applied song. A song that fails to reproduce is
+reported and excluded. If more than two fail, the diagnostic is suspended and
+nothing below is read.
+
+Per song, from the accepted fit:
+
+- `n_clamp_end` — scaffold lines whose warped start is `>= duration` **before**
+  the clamp. This is the cram, counted exactly, and it is what the gate cannot
+  see.
+- `n_clamp_zero` — scaffold lines whose warped start is `<= 0.0` before the
+  clamp. The same failure at the front.
+- `off_run` — the longest contiguous run, by line id, of `common` lines whose
+  post-fit residual exceeds `WARP_MAD_GATE_S`. This is the other direction:
+  content the video has and the source does not.
+- `share_within_gate` — share of `common` lines within `WARP_MAD_GATE_S` of the
+  fit. **Robustness only.**
+- `len_ratio` — |source track length − media duration| / media duration.
+  **Robustness only**, and reported because it is the signal the fetch stage
+  already holds.
+
+**Strata, fixed here:**
+
+- **REJECTED** — the warp never applied the source (`densify-fallback` or
+  `densify-fallback (no scaffold)`). Reported; read in neither stratum.
+- **STRUCTURAL** — `n_clamp_end >= 3` or `n_clamp_zero >= 3` or `off_run >= 4`.
+- **AFFINE** — everything else.
+
+Constants, each with the failure mode it names:
+
+- **3 clamped lines.** A boundary rounding artifact can pin at most the final
+  (or first) cue, so three is the smallest stack that cannot be one, and is
+  already a visible stack on screen. Too low and a song with one overhanging
+  cue is called structural; too high and a short tail cram is called affine.
+- **A 4-line run.** The shortest run that spans a whole lyric section rather
+  than a few mis-anchored lines. Too low and ordinary anchor noise over a
+  repeated section reads as structure; too high and a displaced verse reads as
+  affine.
+- **`WARP_MAD_GATE_S` is deliberately reused here**, unlike M7-a's refusal to
+  borrow `PRIOR_MAX_MAD_S`. That refusal was right because the constant had
+  been swept for a different question; this one is the gate's own per-line
+  tolerance, and the question is precisely what the gate does not see, so the
+  diagnostic must be on the gate's own scale.
+
+#### Part 2 — arithmetic on the cleared ten (no GPU)
+
+Population: the ten cleared for eyeball work, on the pre-`2516ca8` artifacts
+both sides already share, so line ids pair. Both arms computed. The six
+out-of-set songs get Part 1 and this arithmetic as a **declared out-of-set
+column**, never an eyeball and never a read.
+
+- **Shared lines** (both routes render): `delta = start_scaffold -
+  start_joint`. Per song report median `delta`, share `|delta| <= 0.5 s`, and
+  the count over 2.0 s.
+- **Exclusive lines**: all of them within the ten — 41, by the pre-work's
+  count, which is fixed by the artifacts and not by anything measured here.
+
+**The arithmetic selects; the eye scores.** No reference exists on shared
+lines, so `delta` cannot say which route is right and is never read as a
+score. Its only job is to choose what Ken looks at.
+
+**Selector, fixed now so no render can choose it afterwards:** per song, the
+three shared lines with the largest `|delta|`, ties to the lower line id, and
+only lines with `|delta| > 0.5 s` qualify — a song where the routes agree
+contributes fewer than three, or none. Ceiling: 30 shared looks + 41 exclusive
+= **71**.
+
+#### Part 3 — the eyeball and the read-off
+
+The sitting is on **arm C** (`.ass` over the video, against the production
+`.ass`), whose provenance is checked against the 2026-07-16 bundle before the
+sitting starts — the M6 arm-identity lesson. Two fixed questions:
+
+- **Shared, disagreeing line:** *which route shows this line when it is sung?*
+  -> scaffold / joint / both wrong / cannot tell.
+- **Exclusive line:** *what is this?* -> sung lyric shown when sung / sung
+  lyric at the wrong time / not a lyric (dirt, dialogue) / filler or cram /
+  cannot tell.
+
+Per song:
+
+- `A` = (#scaffold) - (#joint). "Both wrong" and "cannot tell" score zero.
+- `B` = (#lyric shown when sung) - (#not a lyric + #filler or cram). "Wrong
+  time" and "cannot tell" score **zero**: a real lyric placed wrongly is a
+  failure of both contracts — the joint route hid it and the scaffold
+  misplaced it — and must not decide between them.
+- The **scaffold wins the song** if `A >= 0` and `B >= 0` and at least one is
+  positive; the **joint wins** symmetrically; otherwise the song is NO AWARD
+  and counts for neither.
+
+**Read across songs by sign, within stratum, never by mean.** With `w_s` and
+`w_j` the song wins in a stratum:
+
+- **AFFINE stratum** — `w_s - w_j >= 3` supports S-1 on sound scaffolds;
+  `w_j - w_s >= 3` is against it; otherwise **NO AWARD -> Ken**.
+- **STRUCTURAL stratum** — the identical statistic is **S-3-extension
+  evidence, not S-1 evidence**, and is labelled that way wherever it is
+  reported.
+- A stratum with fewer than **4** songs is reported and **not read**.
+
+A margin of 3 rather than a bare majority, matching M7-b: at these stratum
+sizes a one-song lead is noise, and this read-off has an eyeball where M7-b
+would have had a reference, so it should be no less stringent.
+
+**Declared limit on S-2, stated before the run.** Both conjuncts need eyes and
+the sitting is on arm C only, so this read-off **cannot** show that its
+conclusion survives either resolution of S-2 — unlike M7-b, which required its
+margin in both arms. Guard: arm W's shared-line arithmetic is computed for
+every read song, and if its median `delta` disagrees in sign with arm C's on
+**3 or more** of them, the read-off is suspended and goes to Ken.
+
+**Robustness only, never primary:** `share_within_gate`, `len_ratio`, raw
+clamp counts, the pooled-ten read across strata, per-song `delta`
+distributions, the out-of-set six, and the arm-vs-arm difference. As in M7-b,
+**the arm-vs-arm difference can never rule on S-2.**
+
+#### One-shot
+
+No adjust-and-re-run. A song that fails to reproduce, parse or score is
+reported as failed and excluded, not retried with different settings. Every
+robustness column declared above stays robustness and can never be promoted.
+
+#### Not pre-registered by this entry
+
+The gate question the judge round raised (that `common` excludes exactly the
+lines a wrong-edit source adds, so the gate does not implement the S-3
+principle) — that is a code fact, rulable without this measurement and prior
+to it; S-2 and M6-d; any change to `cue_align`, the warp gate, the joint
+matcher, snap policy, or the F2 build; the fetch-time duration check; the
+"fetched timing as a joint-matcher candidate" idea; GATE J1/J2; S-E and GATE
+L. This measurement re-derives S-1 on sound scaffolds or it does not — it does
+not license F2 by itself.
