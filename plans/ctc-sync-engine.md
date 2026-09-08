@@ -161,8 +161,8 @@ corpus:
 | E3 parallel corpus A/B | E2 complete |
 | E4 cutover + deletions | GATE X (defined in E3) |
 | E5 closeout | E4 (or F2 on the fallback branch) |
-| F1 word route (fallback) | GATE R = GO and S-5 = scaffold-first |
-| F2 scaffold route (fallback) | GATE S S-1 = GO and S-5 = scaffold-first |
+| ~~F1 word route (fallback)~~ | ~~GATE R = GO and S-5 = scaffold-first~~ **CLOSED 2026-09-04** (R-4 retired the gate; rung 1 closed) |
+| ~~F2 scaffold route (fallback)~~ | ~~GATE S S-1 = GO and S-5 = scaffold-first~~ **WITHDRAWN 2026-09-08** (S-1 withdrawn by Ken; never built) |
 
 ## Ground rules
 
@@ -354,9 +354,15 @@ line-list + route diff vs the 2b renders (match modulo snap); Ken
 spot-eyeballs 2–3. Commit: `feat(pipeline): richsync verify + direct
 ASS route`.
 
-### F2 — line route: scaffold cue-align (license: GATE S S-1 GO)
+### F2 — line route: scaffold cue-align — WITHDRAWN 2026-09-08 (S-1 withdrawn)
 
-Execute per **Appendix D (locked at GATE S)**:
+**Not built and not to be built.** Ken ceased work on the line route on
+2026-09-08; see `plans/route-line-timing.md`'s closing entry. Fetched
+line timing reaches production only through the joint route's gated
+fill (`plans/route-no-timing.md`, Phase 5). The steps below are the
+record of the design that was licensed on 2026-07-19 and lapsed.
+
+*Was:* Execute per **Appendix D (locked at GATE S)**:
 
 1. `LyricAlignStage` routing: genius-origin + line timing available
    (sidecar `kind=="line"`, E1 `.lrc`, or F1 demotion) → anchors from
@@ -386,6 +392,11 @@ scaffold cue-align route`.
 ## Results log
 
 (build-side results; probe results live in the evidence plan)
+
+- **2026-09-08** — F2 withdrawn (S-1 withdrawn by Ken; work on the line
+  route ceased). No build-side result; recorded so the licensing table's
+  strike-through has a dated source. See `plans/route-line-timing.md`'s
+  closing entry.
 
 ---
 
@@ -423,7 +434,11 @@ timing resolved):
    stays stable until then.**
 3. genius-origin, any line source (sidecar line, word-route demotion,
    or E1 `lyrics/<stem>.lrc`) → line route (engine E2 / fallback F2,
-   per its license). Warp-gate failure → the S-3 branch.
+   per its license). Warp-gate failure → the S-3 branch. **WITHDRAWN
+   2026-09-08 (S-1 withdrawn by Ken): this branch never fires; every
+   line source falls to 4, where it may enter only as the gated fill.
+   Struck by the design-consolidation pass; annotated here so
+   precedence numbering stays stable until then.**
 4. otherwise → engine no-timing route (engine branch) / joint matcher
    (fallback branch, unchanged).
 
@@ -439,7 +454,9 @@ Evidence veto runs only on the joint-matcher route (fallback branch).
 LRCLIB E1 fill runs only on the joint-matcher route (scaffold/engine
 routes place every line by construction; word-route lines aren't sheet
 lids — executor: verify the fill call site is joint-route-gated and
-add the gate if it is not).
+add the gate if it is not). **The fill is kept (refit Phase 1.1
+cancelled 2026-09-08) and is the designed entry point for fetched
+timing — `plans/route-no-timing.md`, Phase 5.**
 
 **Failure containment:** every fetch/verify/warp/score failure degrades
 one route, never fails the song. A song that would have processed

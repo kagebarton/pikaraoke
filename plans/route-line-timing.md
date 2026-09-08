@@ -8,30 +8,28 @@ as a **warped scaffold** (`warp_scaffold_cues`) driving the same windowed
 aligner the SRT route uses. Uploader-SRT cues are the trusted-as-is half
 of rung 2 and live in `plans/route-srt.md`.
 
-**Status: licensed, NOT YET BUILT.** GATE S ruled S-1 = GO, S-2 = CTC as
-the section aligner for this path, S-5 = scaffold-first. The production
-build is **F2** in `plans/ctc-sync-engine.md` — a carve-out that is
-zero-regret to build at any point. Until F2 lands, a song with line
-timing but no SRT still routes to the joint matcher
-(`plans/route-no-timing.md`); LRCLIB participates only as the gated
-post-pass fill, never as a routing tier.
+**Status: CLOSED 2026-09-08 (Ken) — S-1 withdrawn, work ceased, F2
+never built.** A song with line timing but no SRT routes to the joint
+matcher (`plans/route-no-timing.md`), permanently; fetched line timing
+reaches production only through that route's gated fill, which is to be
+widened from LRCLIB to the sidecar sources there (its Phase 5). The
+closing entry at the end of this log records the Fable assessment, the
+ruling, and what survives. Nothing in this file is open: M6-d is moot,
+the S-3 extension is moot, S-E is not run, and GATE L (Phase 4 below)
+is re-homed to the joint route's aligner.
 
-**Blocking caveat added 2026-09-04 — do not start F2 without reading
-this.** S-2's genius arm (the ruling that selected CTC for this path) is
-the one **unwitnessed selection** in the live ruling set: it rested on
-four criteria, two of them overlap-based, and Ken's next-day S-C eyeball
-reframed what a falling overlap number means — CTC may be under-reporting
-a second voice rather than mis-timing it. **M6** re-reads that arm and is
-sequenced after M1-M3 but *before* any F2 build. See the eyeball-
-provenance audit in `plans/shared-aligner-form.md`.
+**Do not re-open this route with a per-song gate.** Two facts on record
+here are the reason it closed: the fetched sidecar tracks our recording
+on 4 of 17 songs (M7-a), and no per-song test constructible from what is
+on disk separates the sound ones from the wrong-edit ones (the warp gate
+accepted 5 of 6; the shape diagnostic catches 2 of those; the duration
+signal that catches Domino also rejects Colors of the Wind). Where the
+source is right the timing is good — that is why it survives as a
+per-line fill source, where a wrong-edit line loses on its own.
 
-**Also inherits the demoted word sidecars** from
-`plans/route-word-timing.md`: their `ts`/`te` improve scaffold ends even
-though the word route itself is NO-GO.
-
-**Open work:** M6 (blocks F2), S-E (Phase 3's unrun optional arm), and
-GATE L below. *M6's read-off rules were pre-registered and ratified
-2026-09-04 — see the entry at the end of this log.*
+*Kept as the record of GATE S, M6, M7 and the stratified fallback. The
+status block that stood from 2026-07-19 to 2026-09-08 is superseded by
+the entries below and is not restated here.*
 
 ## Phase 3 — scaffold + engine corpus probe (GATE S)
 
@@ -166,6 +164,11 @@ replays.
 
 
 ## Phase 4 — non-Latin alignment form (GATE L)
+
+> **Re-homed 2026-09-08.** The line route is closed, so the romanizer
+> attaches to the joint route's aligner (whichever GATE J1 selects) and
+> is tracked from `plans/route-no-timing.md`. The arms below stand as
+> written; only their host changed. Still blocked on the Mandarin corpus.
 
 Commissioned by Ken 2026-09-01. Rung 2 (the line route) silently drops
 every line it cannot romanize: `sb_ctc_adapter.make_slice_align` builds
@@ -2908,3 +2911,175 @@ No gate changed. No verdict on S-1, S-2 or S-3. The fired guard has been
 neither re-scored nor re-specified. The sitting has no ratified rules yet: the
 new pre-registration is owed once Ken settles the song-win-versus-split-reads
 question, and it must be ratified before any file is generated.
+
+### 2026-09-08 — Route CLOSED (Ken) — S-1 withdrawn, work ceased; S-3 extension and M6-d moot; the Fable assessment recorded as given
+
+**(Judge session, read-only, no code, no plan edits until this entry.
+Commissioned by Ken's question rather than by a GATE: "given the difficulty
+and the ambiguity we are having in validating the line timing scaffold
+route, do you recommend continuing to work on it? is it likely to perform
+much better than the joint route? would our efforts be better off
+implementing the planned improvements for the joint route?" Fable read the
+Build-session transcript since 2026-09-04, this log from M6 through the
+second judge round, `PROGRAM.md`, `route-no-timing.md`, and the warp gate,
+fill and fetch code. Transcript:
+`C:/Users/TsangK/.claude/projects/c--temp-Github-pikaraoke/2e78ce4d-ba7c-4695-9899-733d01031abe.jsonl`.
+Ken ruled in the same session; the ruling and the docs it changes are
+listed at the end.)**
+
+#### The assessment, as given
+
+**Recommendation: stop working the line route as a separate per-song
+route. Do not spend the stacked-row sitting on S-1. Move to the joint
+route's planned improvements, and bring the line route's one real asset,
+fetched line timing, back as a per-line source inside the joint matcher
+rather than as a route with its own gate.**
+
+Why it will not perform much better than the joint route:
+
+- Where the sidecar is right, the timing is good. The R-1 eyeball found 6
+  of 10 usable and Colors of the Wind beating production; M7-a's certified
+  songs sit within a fraction of a second. The mechanism was never in
+  doubt.
+- It is right for a minority of songs: M7-a certified 4 of 17 library-wide
+  and 2 of 10 in the corpus, with a different edit of the song as the
+  dominant failure.
+- Nothing can tell the two apart. R-4 produced zero discriminative
+  statistics for word timing. The warp gate accepted 5 of the 6
+  edit-mismatched corpus songs, for the verified reason that its fit
+  population never sees the sections the video does not sing and the
+  duration clamp crams them instead of rejecting the source.
+- On a wrong source this route is worse than the joint route, because it
+  has no drop branch: every sheet line renders somewhere. The joint route
+  hides what it cannot place. Ken's M6-d observations said the same: both
+  scaffold arms chaotic on Be Our Guest, wrong lines through Hakuna
+  Matata's dialogue, production's dialogue suppression better.
+- Net value is the gain on sound songs times the fraction sound, minus the
+  damage on unsound songs the gate lets through; with the gate as it
+  stands the damage term wins. That is structural, not bad luck.
+
+Why the validation kept stalling: every comparison was decided by the two
+routes' contracts rather than by timing, and every gate tried was
+per-song. Per-song verification failed at R-4 and at the warp gate. The
+second judge round had already said what the stacked-row sitting could
+not deliver (nothing on S-2, nothing on the STRUCTURAL class, nothing on
+F2's economics) and that its song-win rule was nearly one-sided, so the
+modal outcome was NO AWARD. What remained was the sitting, its
+pre-registration and libass test, an S-1 ruling, M6-d re-posed for S-2, a
+gate redesign M4 was parked for, the F2 build and GATE V2 — two or three
+more billed read-offs for a route with zero production miles.
+
+What to do instead, as given: (1) joint plan Phase 1.1 — **corrected in
+the same session, see below: do not delete the fill**; (2) Phase 2a then
+GATE J1/J2, the one remaining item in either plan that is a genuine
+mechanism selection, with NO-GO an acceptable outcome that costs one
+probe; (3) design the sidecar-as-source build once J1 has picked the
+aligner — the joint matcher already sums align, transcribe and ytasr
+candidates into one pool, a wrong-edit line loses to audio evidence, a
+right line fills a hole, no per-song gate, no F2, no S-1; (4) Phase 3
+knob re-tune and GATE T. The joint route ships today, so every step lands
+for every non-SRT song, a larger population than songs with a sound
+sidecar. Two rulings were Ken's with no Fable needed: the S-3 extension
+as a code fact, and S-1 withdrawn or parked with the route re-scoped to
+"line timing as a joint-matcher witness".
+
+#### The LRCLIB fill: why refit Phase 1.1 existed, and why it is cancelled
+
+Ken asked for the rationale. As written in `route-no-timing.md`: under the
+target ladder a song with LRCLIB line timing would take its own route, so
+anything still arriving at the joint catch-all with an `.lrc` had by
+construction failed or lacked that route, making the `.lrc` a
+wrong-version text and the fill harmful. Persistence stayed because the
+`.lrc` is the held-out tuning reference and was F2's line source.
+
+That rationale is conditional on F2 existing. With the line route
+withdrawn, the fill is the only door through which line timing reaches
+production, and it is the shipped precursor of the recommended design:
+matcher-unplaced lines only, cue time plus a constant offset, per-song
+offset-consistency and unity-slope gates, per-line collision rejection, a
+placed line never moved, 16 good / 0 bad on the 17-song corpus after
+Ken's GATE L2 eyeball (`plans/completed/lrclib-fill-absence-study.md`;
+history: ruled out of production 2026-07-01, re-opened 2026-07-06 for two
+narrow uses, the absence-evidence use descoped, warped fill times
+rejected at GATE L2 so the fit is a gate only, DP-candidate use still
+banned for circularity with the tuning reference). **Phase 1.1 is
+cancelled; the fill is kept and is to be widened to the sidecar sources
+(`route-no-timing.md`, Phase 5).** Two caveats carried: the fill's gate
+shares the warp gate's blind spot (it fits on placed lines only) but the
+damage is capped because it never overrides a placed line; and entering
+the DP as a candidate rather than a post-pass is a ruling Ken would have
+to re-open.
+
+#### The S-3 extension: analysis recorded, ruling moot
+
+Ken asked for help deciding it before ruling on the route. Recorded so
+nobody re-derives it.
+
+What was on file: S-3 as ruled 2026-07-19 says the cram is the
+unacceptable harm and hiding lines the lesser one, and was never built (a
+warp failure still densifies in the harness). The cram also appears on
+songs the gate accepts (Bloodstream 38 lines on one timestamp, HUNTR/X
+20, Popular pinned at the front). The first judge round found the
+mechanism and the executor verified it: the gate fits only lines both
+source and audio place, it is a median so rejects only when more than
+half the sung lines are off, and lines warping past either end are
+clamped and stack — "warp-accepted" never meant "same edit". The shape
+diagnostic labelled 3 of 17 STRUCTURAL and the gate accepted all three;
+of the 6 songs M7-a attributed to a different edit the gate rejected 1
+and the diagnostic would catch 2 of the other 5 (Be Our Guest, Best Part
+of Me, Man Out of You and Domino are wrong edits that look affine). The
+duration signal is not clean either: a threshold tight enough to catch
+Domino also rejects Colors of the Wind. The measurement path was closed
+(one STRUCTURAL song in the cleared ten, below the floor).
+
+Options put to Ken: (1) affirm the principle, record the code fact, build
+nothing — recommended; (2) affirm and promote the diagnostic's clamp and
+off-run tests into the warp gate — safe, partial, only worth it if F2 is
+built; (3) decline the extension — contradicts S-3's own rationale; (4)
+let it lapse with the route, into which (1) collapses if S-1 is
+withdrawn. The recommendation's core: a clean per-song structure test is
+not constructible from what is on disk, which is the conclusion R-4
+reached for word timing, and the strongest argument for timing entering
+per line and losing per line.
+
+**Ruling (Ken, 2026-09-08): moot.** "yes, I am going to cease work on the
+scaffold route so this decision should be moot." The principle survives
+as a design constraint on the fill: never fill past the media ends, never
+over an audio-placed line.
+
+#### Ruling (Ken, 2026-09-08)
+
+**Work on the scaffold/line route ceases. S-1 is withdrawn. F2 is not
+built. The S-3 extension and M6-d are moot. The stacked-row sitting is
+not run. A new session starts on the joint matcher.**
+
+What survives, and where:
+
+- The fetched sidecar (`lyrics/<stem>.timing.json`) stays written at add
+  time and stays inert in routing. Its designed future is a second source
+  for the joint route's gated fill — `route-no-timing.md`, Phase 5,
+  design owed after GATE J1.
+- The fallback's fixed look-list (`m6/fb_looks.json`, Build-session
+  scratchpad) and both arm dumps stay as optional evidence for Phase 5:
+  the 30 scaffold-only lines on the nine readable songs are that
+  question in miniature. Viewing them needs no pre-registration change.
+- M7-a's certification table is the library-economics bound (4 of 17
+  sound) that any future per-song proposal must beat.
+- The lyric-parser fix (`2516ca8`) stands on its own; it is
+  route-independent.
+- GATE L (Phase 4 above) re-homes to the joint route's aligner.
+- The warp gate's blind spot and the shape diagnostic stay on record
+  here as the reason no per-song admission test is to be reused.
+
+Docs changed by this ruling, one commit: this file's status block and
+this entry; `PROGRAM.md` (header, Part 2 target routing and tables, open
+decisions, execution order, ownership table); `route-no-timing.md`
+(START HERE block, context, phase order, 1.1 cancelled, 1.2 done, Phase 5
+added, out-of-scope, Results log); `ctc-sync-engine.md` (licensing table,
+F2, Appendix A precedence 3 and fill sentence, Results log);
+`shared-aligner-form.md` (M6-d moot). **No code changed. No constant
+moved. No GATE J1/J2 rule changed.**
+
+Not decided by this ruling: GATE J1/J2; whether the sidecar may enter the
+DP as a candidate (the ban stands until Ken re-opens it); Phase 5's
+design and gate; the Mandarin corpus for GATE L.

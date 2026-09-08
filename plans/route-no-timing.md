@@ -2,16 +2,30 @@
 
 Model: Claude Sonnet 5 (executor). Plan drafted by Claude Fable 5.
 
+> **START HERE — the live build lane as of 2026-09-08.** Ken ceased work
+> on the line route (S-1 withdrawn; `plans/route-line-timing.md` closing
+> entry), so every song without an uploader SRT lands here permanently
+> and this plan is the only build lane left. State of the phases:
+> **1.1 CANCELLED** (keep the LRCLIB fill — see the note there),
+> **1.2 DONE** (`2516ca8`), **4 CLOSED** (GATE P NO-GO), **2a NEXT**
+> (GPU; ends at the J1/J2 STOP), then 2b → GATE V → 3 → GATE T, then
+> **Phase 5** (new: line timing as a fill source), then GATE L when the
+> Mandarin corpus exists. Sequencing lives in `plans/PROGRAM.md`.
+
 ## Context
 
 Routing (per `complete-matcher-wiring.md` + the engine plans' ladder)
-makes the joint matcher the bottom catch-all: songs with no YT SRT
-(cue-align route) and no matching LRCLIB/syncedlyrics timing (scaffold
-warp route), plus S-3 warp-rejects. Expected population: Genius-only
-sheets — live/remix version mismatches (extra audio in the video,
-extra text in the sheet, possibly out-of-order sections) — and a clean
-tail of songs that merely lack synced-lyrics coverage. The refit
-targets that population without gutting the clean tail.
+makes the joint matcher the bottom catch-all: every song with no YT
+SRT (cue-align route). *As drafted this excluded songs with matching
+LRCLIB/syncedlyrics timing, which were to take a scaffold warp route;
+that route was withdrawn 2026-09-08, so those songs stay here and their
+timing enters only through the gated fill.* Expected population:
+Genius-only sheets — live/remix version mismatches (extra audio in the
+video, extra text in the sheet, possibly out-of-order sections) — and a
+clean tail of songs that merely lack synced-lyrics coverage, plus the
+songs whose fetched timing describes a different edit (M7-a: most of
+them). The refit targets that population without gutting the clean
+tail.
 
 ### Inherited rulings (not re-litigated here)
 
@@ -40,9 +54,10 @@ targets that population without gutting the clean tail.
 
 - Branch: `joint_catchall_refit` off the `timing_pillars` tip. Never
   commit to `master`.
-- Phase order: 1 → 4 → 2a → **STOP** (GATES J1/J2) → 2b → GATE V →
-  3 → GATE T. Phase 4 before 2a because it is cheap and fills the
-  gate-reading queue.
+- Phase order: ~~1 → 4 →~~ 2a → **STOP** (GATES J1/J2) → 2b → GATE V →
+  3 → GATE T → 5. *(2026-09-08: 1.1 cancelled, 1.2 done, 4 closed at
+  GATE P; Phase 5 added.)* Phase 4 ran before 2a because it was cheap
+  and filled the gate-reading queue.
 - Probe *outputs* (emission `.pt` caches, per-line score tables,
   corpus CSVs) live in the session scratchpad, **never committed**
   (mirror of `PROGRAM.md` ground rules). The two CTC
@@ -85,13 +100,24 @@ targets that population without gutting the clean tail.
 
 ## Phase 1 — dead weight + input hardening
 
-### 1.1 Delete the LRCLIB fill path
+### 1.1 ~~Delete the LRCLIB fill path~~ — CANCELLED 2026-09-08 (Ken)
 
-The catch-all route only receives songs whose LRCLIB match was
-rejected or absent; a `lyrics/<stem>.lrc` found here is a
-wrong-version text, and filling from it is harmful. **Scope: the fill
-machinery only.** LRC *persistence* stays — the `.lrc` variant is the
-held-out tuning reference (Phase 3) and future scaffold-route data.
+**Do not delete the fill.** The rationale below was conditional on the
+line route existing: only then would an `.lrc` reaching this route be,
+by construction, a rejected or wrong-version source. With that route
+withdrawn, the fill is the *only* door through which fetched line
+timing reaches production, and it is the shipped precursor of Phase 5:
+line timing fills the holes the audio could not place, the audio owns
+every line it did place, a wrong-edit source is bounded to the lines it
+fills, and its eyeballed record is 16 good / 0 bad on the 17-song
+corpus (`plans/completed/lrclib-fill-absence-study.md`, GATE L2). The
+steps below are kept as the record of what would have been removed.
+
+*Original rationale:* The catch-all route only receives songs whose
+LRCLIB match was rejected or absent; a `lyrics/<stem>.lrc` found here
+is a wrong-version text, and filling from it is harmful. **Scope: the
+fill machinery only.** LRC *persistence* stays — the `.lrc` variant is
+the held-out tuning reference (Phase 3) and future scaffold-route data.
 
 1. `pikaraoke/pipeline/stages/lyric_align.py`: delete the fill
    planning block (the `fills`/`capture_lrclib_ref` section between
@@ -121,7 +147,17 @@ held-out tuning reference (Phase 3) and future scaffold-route data.
 
 Commit: `refactor(joint): drop LRCLIB fill from the catch-all route`.
 
-### 1.2 Harden `parse_lyric_lines` against wrapped-bracket dirt
+### 1.2 Harden `parse_lyric_lines` against wrapped-bracket dirt — DONE 2026-09-08 (`2516ca8`)
+
+**Built with a different mechanism than specified below:** Genius wraps
+one logical line across physical lines at the edges of an annotated
+span, so the fix rejoins on an unclosed `[` or `(` bounded by the
+stanza blank line rather than by a 3-line count, and the existing
+bracket defences then fire. Corpus table (5 of 17 sheets change; the
+only letters removed are the two attributions) is in
+`plans/route-line-timing.md`, entry "Lyric-parser wrap fix". GATE 1 was
+Ken's ruling that the fix sits inside measure-first. Spec kept as
+record.
 
 GATE S production fix-item: 5/17 sheets carry section headers wrapped
 across physical lines (`[SHANG &` ⏎ `SOLDIERS]`, `[CITIZENS OF OZ &`
@@ -366,12 +402,64 @@ regresses materially vs current defaults (clean tail still lands on
 this route). Config-default change lands as one commit with the gate
 reference.
 
+## Phase 5 — line timing as a fill source (design owed; after GATE J1)
+
+Added 2026-09-08 when Ken closed the line route. This is where the line
+route's one surviving asset lands: **where the fetched sidecar is right,
+its timing is good** (R-1 eyeball: 6 of 10 usable, one better than
+production; M7-a: the sound ones certify within a fraction of a second),
+but it is right for a minority of songs (4 of 17) and **no per-song
+test separates the sound from the wrong-edit** (R-4; the warp gate's
+verified blind spot; the fallback's shape diagnostic; the duration
+signal). So the timing must enter **per line and lose per line**, and
+the shipped mechanism that already does exactly that is the gated fill
+(`pikaraoke/lib/lrclib_fill.py`): matcher-unplaced lines only, cue time
+plus a constant offset, per-song offset-consistency and unity-slope
+gates, per-line collision rejection, a placed line never moved, an
+eyeballed 16 good / 0 bad record.
+
+**Scope (to be designed once J1 has picked the aligner, not before):**
+
+1. Widen `plan_fills`' source from `lyrics/<stem>.lrc` to the fetch
+   pillar's sidecar `lyrics/<stem>.timing.json` (`kind` word or line;
+   word sidecars contribute their line `ts`/`te`), under the **same
+   gates and the same fill-only contract**. Source precedence when both
+   exist is a design question; do not answer it by intuition.
+2. Never fill past the media ends, never over an audio-placed line —
+   the two ways the withdrawn route crammed.
+3. Capture: fill source and per-song gate outcome into the debug
+   bundle, so the eyeball can be attributed.
+4. Offline first: the replay harness on the 17-song corpus plus the
+   16-song word cohort, then Ken eyeballs the filled lines. Raw tables
+   to the Results log; no verdicts.
+
+**What this phase must not do without Ken re-opening a ruling:** make
+the sidecar a **DP candidate** (a witness the matcher scores against
+transcribe/ytasr/energy). LRCLIB is banned from the DP because it is
+the held-out tuning reference (`matcher-accuracy-hardening.md`); the
+sidecar is not that reference, so the circularity argument may not
+apply to it, but the ban is written source-agnostic and both Fable
+rounds of 2026-09-08 named the candidate form as the un-priced next
+build. Flag it at the design pass; do not assume it.
+
+**Cheap evidence already on disk, optional:** the stratified fallback's
+fixed look-list (`m6/fb_looks.json` in the Build-session scratchpad)
+holds 30 lines the scaffold rendered and the joint route hid on nine
+dirt-free songs. Scored "sung lyric shown when sung", they are what
+this phase would fill; scored "wrong time" or "filler", they are what
+its gates must reject. Viewing them needs no pre-registration change.
+
+**Gate:** Ken; letter assigned when the design is written. Hard
+criterion, inherited from GATE L2: no filled line may be a cram, a
+duplicate, or off-sheet dialogue on the eyeballed set.
+
 ## Out of scope
 
 - Section-level DP build (gated behind GATE P, own plan).
-- S-C SRT aligner switch and scaffold-route work
-  (`ctc-sync-engine.md` owns them; `ctc_align.py` is written so the
-  S-C switch can consume it — one CTC implementation, two consumers).
+- S-C SRT aligner switch (`route-srt.md` / `ctc-sync-engine.md` own
+  it; `ctc_align.py` is written so the S-C switch can consume it — one
+  CTC implementation, two consumers). Scaffold-route work is not out of
+  scope but **closed** (2026-09-08); its one surviving idea is Phase 5.
 - De-reverb retry retirement (engine-plan Appendix D; joint still
   consumes transcribe as a witness).
 - Windowed re-align emission-slice re-decode (follow-up iff J1 GO
@@ -544,3 +632,15 @@ disturbed. The measurement block advances to step 2, Phase 2b / GATE R
 in `plans/PROGRAM.md`. Recorded as a lever this probe
 points at, not commissioned here: upstream lyric-version/length
 matching for the drift-signature songs.
+
+### 2026-09-08 — Program redirect (Ken) — the line route is closed; this lane is the live build; 1.1 cancelled, 1.2 done, Phase 5 added
+
+Ken ceased work on the scaffold/line route on 2026-09-08 after a Fable
+assessment (recorded in full as the closing entry of
+`plans/route-line-timing.md`). Consequences for this plan, all recorded
+in the sections above: Phase 1.1 is cancelled and the LRCLIB fill stays
+(its deletion rationale was conditional on the line route); Phase 1.2
+was built as `2516ca8`; Phase 2a → GATE J1/J2 is the program's next
+spend; Phase 5 (line timing as a fill source) is added, design owed
+after J1; GATE L is re-homed here from the line route. No code changed
+in this commit. Nothing about GATE J1's read-off rules changed.

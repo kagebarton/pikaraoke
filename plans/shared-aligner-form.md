@@ -762,3 +762,11 @@ its outcome kept the simpler architecture, so a revisit can only add
 complexity and costs GPU. GATE P and S-3 are conservative NO-GOs whose
 cost of error is a forgone opportunity. Ken's call if any of these
 should be reopened later.
+
+**2026-09-08 — M6-d MOOT; the audit's "S-2 genius arm" flag closes with the
+route.** Ken ceased work on the line route (S-1 withdrawn; closing entry of
+`plans/route-line-timing.md`), so the unwitnessed selection this audit
+flagged no longer selects anything. The M6 raw tables and Ken's M6-d
+observations stay on record there. The audit's "not commissioned" list is
+unchanged: GATE O second-tier, GATE P and S-3 conservative NO-GOs, all
+Ken's to reopen.

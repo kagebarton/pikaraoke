@@ -9,10 +9,13 @@ source.
 
 **Read Part 1 and Part 2 as two different things.** Part 1 is what the
 code does today; Part 2 is what the locked rulings specify it should do.
-They are not the same shape — today's matcher has two routes, the target
-has four — and reading a plan's rung vocabulary as if it described shipped
-behaviour is the main way these documents mislead. Where a lane file says
-"licensed but unbuilt", Part 1 is where its songs actually go.
+They were not the same shape — today's matcher has two routes and the
+target had four — until 2026-09-08, when Ken ceased work on the line
+route and the target collapsed back onto the shipped two routes plus a
+widened fill (Part 2). Reading a plan's rung vocabulary as if it
+described shipped behaviour is still the main way these documents
+mislead. **A new session starts on `route-no-timing.md`** — see
+"Remaining execution order".
 
 ## Part 1 — As shipped today
 
@@ -111,17 +114,25 @@ routes, it only resolves sources.
       or lyrics/<stem>.lrc)                     CTC (S-2 genius arm)
      │                                          snap OFF
      │                                          ── NOT BUILT ──
-     └─ warp-gate failure ──┐                   ⚠ ROUTE LICENCE SUSPENDED
-                            │                     (S-1 re-read 2026-09-04)
+     └─ warp-gate failure ──┐                   ✗ WITHDRAWN 2026-09-08 (Ken)
+                            │                     work ceased; falls to 4
                             ▼
   4  otherwise ────────────────────────────────► JOINT MATCHER
                                                 unchanged from today
                                                 whisper; CTC pending J1
 ```
 
-**Display text:** the word route renders provider text; every other route
-renders the Genius sheet, as today. Scaffolds map provider cues *onto*
-sheet lines, so the line route never changes what the singer reads.
+**Target as of 2026-09-08 (Ken): routes 1 and 4 only.** Route 2 closed
+2026-09-04 (R-4) and route 3 was withdrawn 2026-09-08 — S-1 withdrawn,
+work ceased, F2 never built. Fetched timing (word or line sidecar,
+`.lrc`) reaches production through one door: the joint route's gated
+fill, today LRCLIB-only, to be widened to the sidecar sources
+(`route-no-timing.md`, Phase 5). Per-song admission gates on fetched
+timing are retired twice over (R-4; the warp gate's verified blind
+spot), so timing enters per line and loses per line.
+
+**Display text:** every route renders the Genius sheet, as today. (The
+word route would have rendered provider text; it is closed.)
 
 **Failure containment:** every fetch/verify/warp/score failure degrades
 one route, never fails the song. With the network down, a song processes
@@ -131,22 +142,24 @@ exactly as it does today.
 
 | | Shipped | Target |
 | --- | --- | --- |
-| Routes | 2 (+transcribe) | 4 (+transcribe) |
-| Line timing, no SRT | joint DP; LRCLIB as post-pass fill | **own route** (F2), warped scaffold |
-| Word timing | nothing — sidecar unused for routing | own route (F1) — *gated off* |
-| Scaffold aligner | n/a | CTC (⚠ M6-d open; route licence suspended) |
+| Routes | 2 (+transcribe) | **2** (+transcribe) — F1 closed 2026-09-04, F2 withdrawn 2026-09-08 |
+| Line timing, no SRT | joint DP; LRCLIB as post-pass fill | joint DP; fill widened to the fetched sidecar (Phase 5, design owed) |
+| Word timing | nothing — sidecar unused for routing | same door: sidecar line `ts`/`te` as a fill source, never a route |
+| Scaffold aligner | n/a | n/a — route withdrawn; M6-d moot |
 | Evidence veto | joint route | joint route only (unchanged) |
-| LRCLIB fill | joint route | joint route only; slated for deletion in refit Phase 1.1 |
+| LRCLIB fill | joint route | joint route; **kept** — refit Phase 1.1 cancelled 2026-09-08 |
 
 ### Target demotion gates
 
-Three of the four are settled. The fourth is the program's blocker.
+Snap policy is settled; the word-route verify is retired; the warp gate
+is moot as of 2026-09-08; `map_rate` stays as the fetch-time wrong-song
+check only.
 
 | Gate | Decides | Status |
 | --- | --- | --- |
 | `map_rate` at fetch (`WRONG_SONG_MAP_RATE`) | whether a sidecar is admitted at all | **adequate for wrong-song** (M2: 32/32 cross-paired controls collapse at the text-pairing floor). **Wrong-*edit*: M7-a asked it directly 2026-09-08 and the evidence says `map_rate` does not catch it** — all 17 cohort sidecars cleared the floor, yet only 4 track our recording; on Let It Go the text agrees 1.00 against a sidecar spanning 117 s of a 201 s video. Raw tables in `route-line-timing.md`. **Ruling is Ken's; no gate has been changed.** |
 | ~~Word-route verify (Appendix C)~~ | ~~precedence 2 vs demotion to 3~~ | **RETIRED 2026-09-04 (R-4 closed)** — no per-song gate is constructible from this evidence family; demotion to 3 is permanent |
-| Warp gate (`WARP_MIN_ANCHORS` 5 / `WARP_MAD_GATE_S` 2.0 s) | precedence 3 vs fall to 4 | locked; S-3 = warp failure resolves to route 4 |
+| Warp gate (`WARP_MIN_ANCHORS` 5 / `WARP_MAD_GATE_S` 2.0 s) | precedence 3 vs fall to 4 | **moot 2026-09-08** — route withdrawn. Its verified blind spot (fit population excludes unsung sections; duration clamp crams) is on record in `route-line-timing.md`; do not reuse it as a per-song admission test |
 | Snap policy (Appendix D) | post-pass per route | locked: OFF on CTC-timed routes, ON on whisper-timed; "re-enable exception: none" |
 
 **The Appendix C hole is why rung 1 does not exist — and as of
@@ -171,39 +184,36 @@ a new mechanism on rung 2b rather than rung 1 returning. Detail in
   the per-song gate is retired, precedence 2 never fires, and the
   demotion to the line pool is permanent. M5 refuted, M3 closed by
   inspection, M4 re-homed to F2's warp gate and held.
-- **S-1 — the route's own licence, re-read 2026-09-04 (Fable judge
-  round) and now the live question.** Its GO **stands as a ruling and no
-  longer stands as a finding**: both metric conjuncts are scored by each
-  route's own fallback class, and both conjuncts Ken ruled lean on the
-  same coverage property. **F2's licence is suspended pending
-  re-derivation, not revoked.** Two items remain Ken's and open. First,
-  **S-1 itself** — M7 was a ratified path to re-derive it, but **M7-a's
-  stop rule fired 2026-09-08 and closed that path**, so the choice is
-  back to re-affirming or withdrawing, now with the fallback and with
-  two new structural facts on file (step 4.2). Second, the S-3 extension —
-  posed as **whether the principle extends to warp-*accepted* songs**,
-  but **reframed 2026-09-08**: the gate's fit population excludes
-  exactly the lines a wrong-edit source adds, so it never implemented
-  the distinction that ruling assumed. That makes it a code fact,
-  rulable without any measurement and **prior** to both the fallback
-  and the aligner question.
-  A third — whether the lyric-parser fix sits inside measure-first — was
-  **ruled inside and built 2026-09-08** (`2516ca8`).
-  Detail and the verdict-doc path in `plans/route-line-timing.md`.
-- **M6 / S-2's genius arm** — the *unwitnessed selection*. M6 ran; its
-  commissioned pair could not answer its own question, so **M6-d stays
-  open and is sequenced after S-1**, being moot if the licence falls.
+- ~~**S-1 — the route's own licence.**~~ **WITHDRAWN 2026-09-08 (Ken):
+  work on the line route has ceased.** The GO had stood as a ruling but
+  not as a finding since the 2026-09-04 re-read; M7-a's stop rule closed
+  the reference path; the stratified fallback stopped at its own sign
+  guard; and a Fable assessment on 2026-09-08 found that no per-song
+  admission test for a wrong-edit source is constructible from what is
+  on disk (M7-a: 4 of 17 sound; the warp gate accepted 5 of 6 wrong-edit
+  songs; the shape diagnostic catches 2 of those 5; the duration signal
+  that would catch Domino also rejects Colors of the Wind). Ken ruled
+  the route not worth the remaining spend. The S-3 extension is **moot**
+  with the route; the principle it would have affirmed is recorded in
+  `route-line-timing.md`'s closing entry so nobody re-derives it. The
+  lyric-parser fix (`2516ca8`) stands on its own as route-independent.
+- ~~**M6 / S-2's genius arm**~~ — **MOOT 2026-09-08**: the aligner
+  selection for a withdrawn route. The M6 raw tables and Ken's M6-d
+  observations stay on record in `route-line-timing.md`.
 - **GATE J1/J2** — CTC in the joint matcher, and whether edge snap
   retires on CTC-won lines. Changes precedence 4's aligner and Appendix
   D's snap exception.
-- **GATE L** — non-Latin form. Adds a per-line romanizer inside F2's
-  aligner; additive, blocks nothing.
+- **GATE L** — non-Latin form. Re-homed 2026-09-08 to the joint route's
+  aligner (whichever J1 selects), since F2 is withdrawn; additive, blocks
+  nothing but the Mandarin corpus.
 - **R-3** — SRT-first *stands*, but Appendix A flags that a later ruling
   could reorder precedence 1 against 2.
 
 Not open, do not re-litigate: engine branch E1–E4 is **OFF** (GATE O =
 O-GRAY); no section-level DP (GATE P); densify rejected (S-3); CTC
-rejected on the SRT path (S-2, SRT arm).
+rejected on the SRT path (S-2, SRT arm); the line route itself (S-1
+withdrawn 2026-09-08 — re-open only with a per-line design, never with a
+per-song gate).
 
 ## Which file owns what
 
@@ -213,8 +223,8 @@ rejected on the SRT path (S-2, SRT arm).
 | `GLOSSARY.md` | ASS/CTC/MMS_FA/emission/melisma/richsync — read before guessing at an acronym |
 | `route-word-timing.md` | rung 1 (**CLOSED 2026-09-04**); GATE R, R-1 ruling, M1-M5, the R-4 closure |
 | `route-srt.md` | rung 2a; the shipped cue-align route, S-C |
-| `route-line-timing.md` | rung 2b; GATE S scaffold arms, GATE L, S-E, M6, M7 |
-| `route-no-timing.md` | rung 3; the joint catch-all refit, GATE P/J1/J2 |
+| `route-line-timing.md` | rung 2b (**CLOSED 2026-09-08** — S-1 withdrawn); GATE S scaffold arms, M6, M7, the fallback; GATE L re-homed to rung 3 |
+| `route-no-timing.md` | rung 3 — **the live build lane**; the joint catch-all refit, GATE P/J1/J2, Phase 5 (line timing as a fill source), GATE L |
 | `shared-aligner-form.md` | GATE C, GATE O, Phase 0 harness, ruling-provenance audit |
 | `ctc-sync-engine.md` | build phases + locked appendices; each licensed by a GATE above |
 | `completed/` | closed plans, kept for their Results logs |
@@ -232,6 +242,12 @@ holds the pre-port scaffold-warp history; its machinery is now ported into
 shipped `cue_align.py`, so it is not dead-end history.
 
 ## Remaining execution order (Ken, 2026-09-01) — measure first, lock once
+
+> **START HERE (2026-09-08).** The line route is closed (step 4). The
+> next spend is the **joint plan, Phase 2a → GATE J1/J2** (step 5), in
+> `plans/route-no-timing.md`. Its Phase 1.1 is cancelled and 1.2 is
+> done; after J1, Phase 5 there (line timing as a fill source) is the
+> design that inherits everything the line route learned.
 
 Ken's sequencing ruling: run the remaining measurement program to
 completion, then consolidate the build design once, rather than amending
@@ -266,9 +282,10 @@ Order — cheapest and highest overturn-risk first:
    constant stays at 1.5 s. The "rushed" class is still unexplained and
    feeds M1's labelling rule.
 4. ~~**M6**~~ — **ran 2026-09-04; both arms reproduce, and it escalated
-   past its own question to S-1.** M6-d could not be read off its
-   commissioned pair. The order that replaces this step, from the S-1
-   re-read:
+   past its own question to S-1. The whole step CLOSED 2026-09-08: S-1
+   withdrawn (sub-item 3).** M6-d could not be read off its commissioned
+   pair. The order that replaced this step, from the S-1 re-read, kept
+   as the record of how it closed:
    1. ~~**Lyric-parser fix** (wrap dirt)~~ — **DONE 2026-09-08**
       (`2516ca8`). Cause was Genius wrapping one logical line across
       physical lines, not unterminated brackets; rejoining makes the
@@ -368,12 +385,20 @@ Order — cheapest and highest overturn-risk first:
       read-off is suspended before the eyeball and goes to Ken. The
       look-list is fixed and saved; the sitting has not been run.
       **No gate has been changed and no verdict on S-1 is recorded.**
-   3. **Ken rules S-1 and the S-3 extension.**
-   4. **M6-d re-posed**, if the route survives.
-   5. **F2.**
-5. **Joint plan Phase 2a → GATE J1/J2** (GPU, scratchpad). J2 feeds
-   Appendix D's snap policy, which currently records "re-enable
-   exception: none".
+   3. ~~**Ken rules S-1 and the S-3 extension.**~~ **RULED 2026-09-08:
+      S-1 WITHDRAWN, work on the line route ceased; the S-3 extension
+      is moot.** Fable's assessment and the ruling are the closing entry
+      of `route-line-timing.md`. The stacked-row sitting is not run; its
+      fixed look-list stays on disk as optional evidence for Phase 5 of
+      the joint plan (the 30 scaffold-only lines are that question in
+      miniature) and needs no pre-registration change to be viewed.
+   4. ~~**M6-d re-posed**, if the route survives.~~ MOOT.
+   5. ~~**F2.**~~ WITHDRAWN, never built.
+5. **Joint plan Phase 2a → GATE J1/J2** (GPU, scratchpad) — **NEXT
+   SPEND as of 2026-09-08.** J2 feeds Appendix D's snap policy, which
+   currently records "re-enable exception: none". Then 2b on a J1 GO,
+   GATE V, Phase 3 → GATE T, and **Phase 5 (line timing as a fill
+   source)**, whose design is owed once J1 has picked the aligner.
 6. **S-E** (Phase 3's unrun optional arm; offline, no GPU align). Cheap
    add-on: informs the deletion inventory and tests Ken's GATE C
    observation.
@@ -383,9 +408,9 @@ Order — cheapest and highest overturn-risk first:
 Then **one design-consolidation pass**: re-lock the build plan's
 Appendices C, D and E with the real constants in a single revision.
 
-**Carve-out — VOID as of 2026-09-04 (S-1 re-read).** F2's licence is
-suspended pending Ken's re-derivation of S-1, so F2 is no longer a
-build that can be pulled forward; the paragraph below is kept as the
+**Carve-out — VOID as of 2026-09-04 (S-1 re-read); F2 WITHDRAWN
+2026-09-08.** F2's licence was suspended pending Ken's re-derivation of
+S-1 and then withdrawn with the route, so F2 is not a build at all; the paragraph below is kept as the
 record of why it was thought zero-regret. The caveat named M6 as the
 only coupling, and M6 turned out to reach the route's own licence
 rather than just its aligner.
