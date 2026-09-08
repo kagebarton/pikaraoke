@@ -119,7 +119,8 @@ routes, it only resolves sources.
                             ▼
   4  otherwise ────────────────────────────────► JOINT MATCHER
                                                 unchanged from today
-                                                whisper; CTC pending J1
+                                                whisper (GATE J1
+                                                NO-GO 2026-09-08)
 ```
 
 **Target as of 2026-09-08 (Ken): routes 1 and 4 only.** Route 2 closed
@@ -146,6 +147,7 @@ exactly as it does today.
 | Line timing, no SRT | joint DP; LRCLIB as post-pass fill | joint DP; fill widened to the fetched sidecar (Phase 5, design owed) |
 | Word timing | nothing — sidecar unused for routing | same door: sidecar line `ts`/`te` as a fill source, never a route |
 | Scaffold aligner | n/a | n/a — route withdrawn; M6-d moot |
+| Joint aligner | whisper align | **whisper align — unchanged** (GATE J1 NO-GO 2026-09-08; CTC not adopted) |
 | Evidence veto | joint route | joint route only (unchanged) |
 | LRCLIB fill | joint route | joint route; **kept** — refit Phase 1.1 cancelled 2026-09-08 |
 
@@ -160,7 +162,7 @@ check only.
 | `map_rate` at fetch (`WRONG_SONG_MAP_RATE`) | whether a sidecar is admitted at all | **adequate for wrong-song** (M2: 32/32 cross-paired controls collapse at the text-pairing floor). **Wrong-*edit*: M7-a asked it directly 2026-09-08 and the evidence says `map_rate` does not catch it** — all 17 cohort sidecars cleared the floor, yet only 4 track our recording; on Let It Go the text agrees 1.00 against a sidecar spanning 117 s of a 201 s video. Raw tables in `route-line-timing.md`. **Ruling is Ken's; no gate has been changed.** |
 | ~~Word-route verify (Appendix C)~~ | ~~precedence 2 vs demotion to 3~~ | **RETIRED 2026-09-04 (R-4 closed)** — no per-song gate is constructible from this evidence family; demotion to 3 is permanent |
 | Warp gate (`WARP_MIN_ANCHORS` 5 / `WARP_MAD_GATE_S` 2.0 s) | precedence 3 vs fall to 4 | **moot 2026-09-08** — route withdrawn. Its verified blind spot (fit population excludes unsung sections; duration clamp crams) is on record in `route-line-timing.md`; do not reuse it as a per-song admission test |
-| Snap policy (Appendix D) | post-pass per route | locked: OFF on CTC-timed routes, ON on whisper-timed; "re-enable exception: none" |
+| Snap policy (Appendix D) | post-pass per route | locked: OFF on CTC-timed routes, ON on whisper-timed; "re-enable exception: none". **Unchanged by GATE J2 (2026-09-08): neither population cleared, and with J1 NO-GO no CTC-timed route survives, so the carve-out is inert until one does.** Ken owes one ruling before Appendices C/D/E re-lock — J2's burden and D's burden point opposite ways |
 
 **The Appendix C hole is why rung 1 does not exist — and as of
 2026-09-04 it is why rung 1 is closed.** The procedure was pre-locked in
@@ -200,18 +202,34 @@ a new mechanism on rung 2b rather than rung 1 returning. Detail in
 - ~~**M6 / S-2's genius arm**~~ — **MOOT 2026-09-08**: the aligner
   selection for a withdrawn route. The M6 raw tables and Ken's M6-d
   observations stay on record in `route-line-timing.md`.
-- **GATE J1/J2** — CTC in the joint matcher, and whether edge snap
-  retires on CTC-won lines. Changes precedence 4's aligner and Appendix
-  D's snap exception.
+- ~~**GATE J1/J2**~~ — **BOTH READ OFF 2026-09-08 (Fable), NO-GO.**
+  Phase 2a ran the offline A/B; CTC is not adopted in the joint
+  matcher, so precedence 4's aligner stays whisper, Phase 2b is skipped
+  entirely and GATE V never fires. J2 cleared neither CTC-won nor
+  transcribe/ytasr-won lines, so **Appendix D's snap exception does not
+  move.** The mechanism on record: whisper fails on unsung sheet text
+  by collapsing to zero width, which the align-pace guard reads,
+  while CTC cannot abstain and instead crams or smears those tokens —
+  invisible to that guard. Detail and the eyeball list in
+  `route-no-timing.md`. **One item stays open and is Ken's:** J2's
+  burden ("retire iff ~zero") points opposite to Appendix D's ("OFF
+  unless a named fix"), and that must be settled before Appendices
+  C/D/E are re-locked.
 - **GATE L** — non-Latin form. Re-homed 2026-09-08 to the joint route's
-  aligner (whichever J1 selects), since F2 is withdrawn; additive, blocks
-  nothing but the Mandarin corpus.
+  aligner, which J1 settled the same day as **whisper**; additive,
+  blocks nothing but the Mandarin corpus. Note the read-off's rider:
+  with whisper retained, the romanized-form question loses its MMS_FA
+  motivation for this route and is worth re-posing when the corpus
+  exists.
 - **R-3** — SRT-first *stands*, but Appendix A flags that a later ruling
   could reorder precedence 1 against 2.
 
 Not open, do not re-litigate: engine branch E1–E4 is **OFF** (GATE O =
 O-GRAY); no section-level DP (GATE P); densify rejected (S-3); CTC
-rejected on the SRT path (S-2, SRT arm); the line route itself (S-1
+rejected on the SRT path (S-2, SRT arm); **CTC in the joint matcher
+(GATE J1 NO-GO 2026-09-08 — the S-3 rider is unexercised, not
+withdrawn; a re-attempt needs an abstention mechanism pre-registered
+before it runs, never the same probe again)**; the line route itself (S-1
 withdrawn 2026-09-08 — re-open only with a per-line design, never with a
 per-song gate).
 
@@ -243,11 +261,13 @@ shipped `cue_align.py`, so it is not dead-end history.
 
 ## Remaining execution order (Ken, 2026-09-01) — measure first, lock once
 
-> **START HERE (2026-09-08).** The line route is closed (step 4). The
-> next spend is the **joint plan, Phase 2a → GATE J1/J2** (step 5), in
-> `plans/route-no-timing.md`. Its Phase 1.1 is cancelled and 1.2 is
-> done; after J1, Phase 5 there (line timing as a fill source) is the
-> design that inherits everything the line route learned.
+> **START HERE (2026-09-08, updated after the J1/J2 read-off).** The
+> line route is closed (step 4) and **GATE J1 came back NO-GO**, so
+> whisper stays the joint aligner and Phase 2b never gets built. The
+> next spend is **Phase 3 → GATE T** in `plans/route-no-timing.md`,
+> tuning the whisper matcher on the catch-all population. After it,
+> Phase 5 there (line timing as a fill source) is the design that
+> inherits everything the line route learned.
 
 Ken's sequencing ruling: run the remaining measurement program to
 completion, then consolidate the build design once, rather than amending
@@ -394,11 +414,14 @@ Order — cheapest and highest overturn-risk first:
       miniature) and needs no pre-registration change to be viewed.
    4. ~~**M6-d re-posed**, if the route survives.~~ MOOT.
    5. ~~**F2.**~~ WITHDRAWN, never built.
-5. **Joint plan Phase 2a → GATE J1/J2** (GPU, scratchpad) — **NEXT
-   SPEND as of 2026-09-08.** J2 feeds Appendix D's snap policy, which
-   currently records "re-enable exception: none". Then 2b on a J1 GO,
-   GATE V, Phase 3 → GATE T, and **Phase 5 (line timing as a fill
-   source)**, whose design is owed once J1 has picked the aligner.
+5. ~~**Joint plan Phase 2a → GATE J1/J2**~~ — **RAN AND CLOSED
+   2026-09-08. J1 NO-GO, J2 cleared nothing.** Whisper stays the joint
+   aligner; Appendix D unchanged ("re-enable exception: none" stands).
+   **2b and GATE V are struck.** What remains of this step: **Phase 3 →
+   GATE T on the whisper matcher — the program's next spend** — then
+   **Phase 5 (line timing as a fill source)**, whose design is now owed
+   against whisper. Raw tables and the read-off in
+   `route-no-timing.md`.
 6. **S-E** (Phase 3's unrun optional arm; offline, no GPU align). Cheap
    add-on: informs the deletion inventory and tests Ken's GATE C
    observation.

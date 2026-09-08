@@ -7,10 +7,13 @@ Model: Claude Sonnet 5 (executor). Plan drafted by Claude Fable 5.
 > entry), so every song without an uploader SRT lands here permanently
 > and this plan is the only build lane left. State of the phases:
 > **1.1 CANCELLED** (keep the LRCLIB fill — see the note there),
-> **1.2 DONE** (`2516ca8`), **4 CLOSED** (GATE P NO-GO), **2a NEXT**
-> (GPU; ends at the J1/J2 STOP), then 2b → GATE V → 3 → GATE T, then
-> **Phase 5** (new: line timing as a fill source), then GATE L when the
-> Mandarin corpus exists. Sequencing lives in `plans/PROGRAM.md`.
+> **1.2 DONE** (`2516ca8`), **4 CLOSED** (GATE P NO-GO), **2a RAN
+> 2026-09-08 and GATE J1 is NO-GO** — whisper stays the joint aligner,
+> so **2b and GATE V are skipped entirely** and **GATE J2 cleared
+> nothing** (Appendix D unchanged). **Phase 3 → GATE T is NEXT**, on
+> the whisper matcher, then **Phase 5** (line timing as a fill source),
+> then GATE L when the Mandarin corpus exists. Sequencing lives in
+> `plans/PROGRAM.md`.
 
 ## Context
 
@@ -54,10 +57,11 @@ tail.
 
 - Branch: `joint_catchall_refit` off the `timing_pillars` tip. Never
   commit to `master`.
-- Phase order: ~~1 → 4 →~~ 2a → **STOP** (GATES J1/J2) → 2b → GATE V →
+- Phase order: ~~1 → 4 → 2a → **STOP** (GATES J1/J2) → 2b → GATE V →~~
   3 → GATE T → 5. *(2026-09-08: 1.1 cancelled, 1.2 done, 4 closed at
-  GATE P; Phase 5 added.)* Phase 4 ran before 2a because it was cheap
-  and filled the gate-reading queue.
+  GATE P; Phase 5 added; 2a ran and GATE J1 came back NO-GO, so 2b and
+  GATE V are struck and **Phase 3 is the head of the queue**.)* Phase 4
+  ran before 2a because it was cheap and filled the gate-reading queue.
 - Probe *outputs* (emission `.pt` caches, per-line score tables,
   corpus CSVs) live in the session scratchpad, **never committed**
   (mirror of `PROGRAM.md` ground rules). The two CTC
@@ -319,12 +323,32 @@ on the dirty cohort. NO-GO → skip 2b entirely; Phase 3 tunes the
 whisper-align matcher instead. The 2b pace-guard constant is also set
 at this read-off from the pace telemetry.
 
+*Status (2026-09-08): **NO-GO** — read off by Fable, recorded in the
+Results log below. Whisper stays the joint aligner. Phase 2b is
+skipped entirely and GATE V never fires; Phase 3 sweeps the whisper
+matcher instead. The 2b pace-guard constant is moot and, per the same
+read-off, not selectable from this telemetry anyway. The S-3 rider is
+unexercised, not withdrawn.*
+
 **GATE J2** (feeds engine-plan Appendix D): retire edge snap on
 CTC-won joint lines iff the H-snap deltas are ~zero/negative. Snap
 stays for transcribe/ytasr-won lines unless the same table clears
 them too.
 
+*Status (2026-09-08): **neither population cleared** — read off by
+Fable, recorded below. Appendix D does not move. Two cautions carried
+forward: the criterion is partly tautological against the snap's
+minimum shift, and J2's burden ("retire iff ~zero") points opposite to
+Appendix D's ("OFF unless a named fix"). That conflict is Ken's and
+must be settled before Appendices C/D/E are re-locked.*
+
 ## Phase 2b — production integration (only on GATE J1 GO)
+
+> **SKIPPED 2026-09-08 — GATE J1 NO-GO.** Never built; GATE V never
+> fires. Kept as the record of what a GO would have commissioned. Its
+> step 3 ("set the CTC-calibrated constant chosen at GATE J1") is
+> additionally recorded as *not executable* from the Phase 2a
+> telemetry — see the read-off.
 
 Replacement path + gated cutover, never in-place (house rule).
 
@@ -379,8 +403,9 @@ single call site in `lyric_align.run`.
 ## Phase 3 — knob re-tune on the catch-all population
 
 Strictly after GATE J1 (tune the surviving matcher). Base:
-`replay_ytasr_third_source.py` sweep mode, CTC or whisper align words
-per the J1 outcome.
+`replay_ytasr_third_source.py` sweep mode. **The surviving matcher is
+the whisper one (GATE J1 NO-GO, 2026-09-08), so this phase sweeps
+whisper align words. It is the program's next spend.**
 
 1. Sweep `alpha × beta` ∈ {1.0, 1.5, 2.0, 2.5, 3.0} × {1.0, 2.0,
    3.0} at fixed `margin_s`/`max_edit_ratio`; cohort = all
@@ -644,3 +669,361 @@ was built as `2516ca8`; Phase 2a → GATE J1/J2 is the program's next
 spend; Phase 5 (line timing as a fill source) is added, design owed
 after J1; GATE L is re-homed here from the line route. No code changed
 in this commit. Nothing about GATE J1's read-off rules changed.
+
+### 2026-09-08 — Phase 2a (CTC-in-joint offline A/B), Windows box — raw tables, no read-off
+
+Ran by a scratchpad driver on the `replay_ytasr_third_source.py`
+chassis, extended per this plan's Harness section. Cohort: **all 18
+genius-origin bundles** in the library (34 total; the other 16 are
+uploader-SRT songs that run the cue-align route). No song was skipped
+and no song raised. Output is the tables below; **GATE J1 and GATE J2
+are Ken's/Fable's read-off — none is taken here.**
+
+**Arms.** Both arms differ in exactly one input, the align word
+stream; transcribe stream, ytasr stream, spans and knobs are the
+bundle's throughout. All 18 bundles carry identical recorded knobs
+(alpha 2.0, beta 2.0, margin 0.3, max_edit_ratio 0.75, lookahead 3,
+anchor_fallback on), so no sweep was run and the arms are compared at
+the shipped defaults.
+
+- **Arm A** — the bundle's captured whisper `words` (refine output).
+- **Arm B** — full-song MMS_FA forced align of the bundle's
+  `align_lines` flat token stream, one timed word per surviving token.
+  Recipe imported from the committed `phase1b_score_oracle.py`
+  (model / `get_emission` / align) with `sb_ctc_adapter.py`'s dual
+  bookkeeping, so an OOV token drops from the tokenizer input but every
+  surviving token keeps its raw text and `_line_align_ranges` re-derives
+  the line mapping by text exactly as it does for whisper. Stem:
+  dereverb where cached, else wet vocal — **17 of 18 ran on the wet
+  vocal**, only *Wicked — For Good* had a dereverb cache. Emission cache
+  keyed by stem *and* stem kind so a wet emission cannot serve a
+  dereverb request.
+
+**Fidelity limits, both this plan's own rulings, applying to both
+arms equally:** the evidence veto is not replayable offline and is
+skipped in both arms; the windowed re-align spans replay from their
+captured whisper span words in both arms, because emission-slice
+re-decode inside the re-align is out of scope for Phase 2a. Span
+boundaries and the suspect set were chosen from the original pass-1 and
+do not move here.
+
+**Reference.** Held-out LRCLIB, resolved by the chassis's existing
+three tiers (bundle `.lrc`, then the flat `lrclib/<stem>` cache, then a
+live search). It is scoring-only and never enters either matcher. The
+`bail` column carries the LRCLIB scorer's own reliability flag; two
+songs are flagged in one arm only (*HUNTR_X* in A, *Seasons of Love* in
+B), so those two rows are not arm-comparable at all.
+
+**Companion column (flagged for Ken, not pre-registered).** The
+H-resync table's `*_raw` columns are the pre-registered metric. The
+`*_corr` columns repeat it with that arm's own median offset from the
+same LRCLIB fit subtracted, and inherit that fit's bail flag. Both are
+kept in the record. *(The J1/J2 read-off below recommends keeping the
+companion, labelled and never promoted: it is the only column that
+measures the hypothesis' quantity against a reference with a constant
+lead, and it is what exposed the Paradise region.)*
+
+**Environment.** Windows dev box (uv `.venv`, RTX A2000), library
+`d:/shared/pikaraoke-songs`, synced with the Linux box by Ken this
+session. No production code was changed or read differently by this
+run: the pace figures are recomputed harness-side from the production
+`_line_align_ranges` over each arm's own token stream, which is the
+same quantity `_build_align_candidates` tests. The run is
+deterministic — it was executed twice (the second time only to add the
+`bail` column to the rendering) and reproduced every figure.
+
+**Artifacts** (session scratchpad, not committed, per this plan's
+ground rules): `phase2a_out/main.csv`, `pace.csv`, `hsnap.csv`,
+`hresync.csv`, `traces.csv` (per-line offset traces for Defying
+Gravity, Hakuna Matata and Man Out of You), `report.txt`, and the
+driver `phase2a_ctc_joint_ab.py`.
+
+**Main: per song x arm**
+
+bail: the LRCLIB scorer's own reliability flag on that row's fit -- 'wide' = residual spread past its bail-out, 'few' = too few anchors carried a cue. A flagged mad_s/off_s is not comparable across arms; a row flagged in one arm only is not comparable at all.
+
+```
+song                                         arm  plc algn trns ytsr intp   off_s   mad_s  bail  fit  ovl  cand pace!
+---------------------------------------------------------------------------------------------------------------------
+'Defying Gravity' - Wicked 20th Anniversary    A   51   21   16   14   38 -75.791   7.121  wide   34    1    89    41
+'Defying Gravity' - Wicked 20th Anniversary    B   51   20   15   16   38 -76.170   7.500  wide   34    1    89     2
+'Free' _ Official Lyric Video _ Sony Animati   A   40    6   34    0    1  -0.130   0.197         16    2    41    24
+'Free' _ Official Lyric Video _ Sony Animati   B   41   23   18    0    0   0.055   0.157         16    1    41     0
+'Popular' - Wicked 20th Anniversary Edition    A   52   41    3    8   10 -16.590   1.599  wide   28    2    62     7
+'Popular' - Wicked 20th Anniversary Edition    B   51   19    9   23   11 -16.160   1.616  wide   28    2    62     0
+Beauty and the Beast (1991) - Be Our Guest [   A   77   57   10   10    0  -3.241   0.161         49    0    77     0
+Beauty and the Beast (1991) - Be Our Guest [   B   77   47    9   21    0  -3.030   0.150         49    1    77     0
+Beauty and the Beast (1991) - Belle [UHD]---   A  101   73   15   13    9  -4.550   0.390         55    2   110     1
+Beauty and the Beast (1991) - Belle [UHD]---   B  101   59   24   18    9  -4.416   0.463         52    2   110     0
+Ed Sheeran - Best Part Of Me (feat. YEBBA) (   A   37   13    6   18    1  -0.690   0.790  wide   25    0    38     1
+Ed Sheeran - Best Part Of Me (feat. YEBBA) (   B   37   12    7   18    1  -0.540   0.770  wide   24    0    38     0
+Ed Sheeran & Rudimental­ - Bloodstream [Offi   A   48   26   12   10   26 -11.090   0.600         11    1    74    17
+Ed Sheeran & Rudimental­ - Bloodstream [Offi   B   47   14   14   19   27 -10.110   0.420         11    6    74     0
+HUNTR_X 'This Is What It Sounds Like' (Music   A   33   30    3    0   20  -0.270   1.605  wide   18    1    43     8
+HUNTR_X 'This Is What It Sounds Like' (Music   B   32   15   17    0   21  -0.093   0.553         17    0    53     1
+Jessie J - Domino (Official Video)---UJtB55M   A   63   53   10    0    4  -1.614   0.432          7    2    66     1
+Jessie J - Domino (Official Video)---UJtB55M   B   61   50   11    0    6  -0.356   0.200          7    2    67     0
+Josh Gad - In Summer (From 'Frozen'_Sing-Alo   A   29   26    3    0    2  -0.745   0.220         14    2    31     0
+Josh Gad - In Summer (From 'Frozen'_Sing-Alo   B   29   17   12    0    2  -0.485   0.135         14    1    31     0
+Mulan _ I'll Make a Man Out of You _ @disney   A   36    3    8   25   11  32.565   1.006  wide   22    0    47    23
+Mulan _ I'll Make a Man Out of You _ @disney   B   42   14    5   23    5  32.295   0.974  wide   22    0    47     2
+NSYNC - Paradise                               A   53   13   40    0   12  24.045   0.270         10    1    65    27
+NSYNC - Paradise                               B   56   27   29    0    9  23.920   0.300         10    1    65     2
+Pocahontas - Colors of the Wind (Blu-ray 108   A   37    2   14   21    0  -6.090   0.190         31    0    37    19
+Pocahontas - Colors of the Wind (Blu-ray 108   B   37    3   12   22    0  -6.030   0.120         31    0    37     0
+Seasons of Love (HD)---UvyHuse6buY             A   25   15   10    0    9  18.580   0.520          5    0    29     3
+Seasons of Love (HD)---UvyHuse6buY             B   26   18    8    0    8  18.754   0.961  wide    5    1    34     0
+Stay Gold (Official Music Video) from The Ou   A   38   37    1    0    0  -0.094   0.048         19    0    38     0
+Stay Gold (Official Music Video) from The Ou   B   38   27   11    0    0  -0.041   0.093         19    0    38     0
+The Lion King - Hakuna Matata Music Video I    A   33   12    6   15    7   9.165   0.415          8    2    40     2
+The Lion King - Hakuna Matata Music Video I    B   33   12    6   15    7   9.165   0.414          8    1    40     0
+The Next Ten Minutes Lyrics---0j8kL24ph8U      A   67   44   23    0    4   0.757   0.456         52    0    71    10
+The Next Ten Minutes Lyrics---0j8kL24ph8U      B   70   33   37    0    1   1.130   0.270         51    1    71     0
+Wicked - For Good  (2025) 4K - The Girl in t   A   29   10    5   14    7 -23.148   0.388         15    0    30    15
+Wicked - For Good  (2025) 4K - The Girl in t   B   33   12    6   15    3 -22.986   0.116         15    0    36     0
+```
+
+**Pace distribution, per arm (s/token; guard fires below 0.06)**
+
+```
+  arm A: n=988 p5=0.000 p25=0.206 med=0.395 p75=0.590 p95=1.273 min=0.0000 guard_fires=199
+  arm B: n=1010 p5=0.110 p25=0.294 med=0.408 p75=0.578 p95=1.522 min=0.0200 guard_fires=7
+```
+
+**H-snap: Arm B, |edge delta| the snap would still apply**
+
+```
+group                            n   median      p90  %>150ms
+align-won onset                422    0.000    0.000      9.2
+align-won end                  422    0.000    0.519     22.5
+transcribe/ytasr-won onset     440    0.000    0.400     20.9
+transcribe/ytasr-won end       440    0.000    0.740     32.3
+```
+
+**H-resync: mean |placement start - reference start| after dark regions**
+
+`*_corr` subtracts that arm's median offset from the same LRCLIB fit as the main table, so where that row is bail-flagged there, the correction inherits the flag.
+
+```
+song                                         region  nf   A_raw   B_raw  A_corr  B_corr
+'Defying Gravity' - Wicked 20th Annivers       0-20   3  68.753  68.753   7.038   7.417
+'Defying Gravity' - Wicked 20th Annivers      32-33   3  72.514  72.809   3.277   3.361
+'Defying Gravity' - Wicked 20th Annivers      45-46   3  78.164  78.330   2.373   2.160
+'Defying Gravity' - Wicked 20th Annivers      56-64   3 122.271 122.251  46.480  46.081
+'Popular' - Wicked 20th Anniversary Edit        0-4   3  11.278  11.278   5.312   4.882
+'Popular' - Wicked 20th Anniversary Edit      51-54   3  35.378  35.485  18.788  19.325
+'Popular' - Wicked 20th Anniversary Edit      59-60   1  40.020  40.020  23.430  23.860
+Beauty and the Beast (1991) - Be Our Gue      62-72   3   3.277   2.843   0.396   0.187
+Beauty and the Beast (1991) - Belle [UHD      80-87   3   6.110   6.110   1.560   1.694
+Beauty and the Beast (1991) - Belle [UHD      93-95   3   5.225   5.225   0.675   0.809
+Beauty and the Beast (1991) - Belle [UHD      97-99   3   4.773   4.064   0.417   0.821
+Ed Sheeran & Rudimental­ - Bloodstream [        0-1   3  11.225  10.653   0.135   0.543
+Ed Sheeran & Rudimental­ - Bloodstream [      27-30   3  50.880  51.550  39.790  41.440
+Ed Sheeran & Rudimental­ - Bloodstream [      43-50   1       -       -       -       -
+Ed Sheeran & Rudimental­ - Bloodstream [      57-63   1       -       -       -       -
+Jessie J - Domino (Official Video)---UJt      41-48   3   0.821   0.821   1.659   0.740
+Josh Gad - In Summer (From 'Frozen'_Sing        5-6   3   0.783   0.689   0.485   0.270
+Mulan _ I'll Make a Man Out of You _ @di      19-21   3  30.095  31.295   2.470   1.000
+NSYNC - Paradise                                0-1   3  23.987  22.984   0.525  15.510
+NSYNC - Paradise                              21-22   3  23.797  24.102   0.382   0.182
+NSYNC - Paradise                              51-52   3  23.355  23.355   0.690   0.565
+Seasons of Love (HD)---UvyHuse6buY            25-26   3  15.086  12.950   3.494   5.804
+The Next Ten Minutes Lyrics---0j8kL24ph8      63-66   3   1.350   1.320   0.593   0.190
+Wicked - For Good  (2025) 4K - The Girl       32-33   2  21.922  22.442   1.226   0.544
+```
+
+### 2026-09-08 — GATE J1/J2 read-off (Fable) — J1 NO-GO, J2 clears nothing; whisper stays the joint aligner
+
+**(Fable executing the J1/J2 read-off against the Phase 2a tables above,
+plus per-song re-cuts of the CSVs and bundles. Commissioned by Ken and
+recorded here at his instruction. Read-only round: nothing in the repo,
+the plan or the artifacts was modified by the judge.)**
+
+Fable first verified the harness against this plan's Harness section —
+the arms differ in exactly the align word stream, pace is recomputed
+from the production `_line_align_ranges`, H-snap runs the production
+`snap_line_edges`, and H-resync's dark regions are read off Arm A as
+specified — and found it faithful. Where the results mislead, the
+finding is against the pre-registration, not the run.
+
+#### GATE J1 — NO-GO. The plan's NO-GO branch is selected.
+
+**Phase 2b is skipped entirely, GATE V never fires, and Phase 3 sweeps
+alpha × beta on whisper align words.** Phase 5 is designed with whisper
+as the joint aligner. GATE L re-homes to whisper. Appendix D does not
+move. **The verdict is independent of Ken's eyeball**: the criterion is
+a conjunction, and the eyeball cannot rescue a conjunction whose first
+two terms already fail.
+
+*Conjunct 1 — "wins or ties everywhere material": fails.* The LRCLIB
+scorer disowned its fit on six songs, two of them in one arm only, so
+12 songs are MAD-comparable; on those, Arm B is better on 7, worse on
+3, tied on 2. Not "everywhere" — though whether the three losses are
+*material* turns on a tie band **the plan never fixed** (ambiguity
+flagged, not resolved; it does not decide the gate). The structural
+column does decide it: **consecutive-line overlaps rose 16 → 20**, and
+Bloodstream went 1 → 6 with its worst overlap 6.7 s → 13.45 s. GATE C's
+C-3 entry had already recorded that song visibly cramming its missing
+second hook; Phase 2a reproduced the cram inside the DP. Arm B places
+13 more lines and drops interp 161 → 148, but under "hidden beats
+wrong" that is a win only if the new lines are right, which this table
+does not establish.
+
+*Conjunct 2 — "H-resync shows the claimed recovery": fails.* Of the 24
+regions, 2 are unscorable and 9 sit on bail-flagged songs; the 13 that
+remain split B 5 / A 3 / tie 5 — parity, not recovery. **Defying
+Gravity, the song the hypothesis was written for, is line-for-line
+identical in both arms across all four of its dark regions.** CTC
+removed whisper's zero-pace collapse signature there, and the DP still
+produced the same 38 interp lines, because those regions are sheet text
+the video never sings: forced alignment cannot re-sync to audio that is
+not there.
+
+*A finding against the pre-registration itself.* On this reference
+population the pre-registered `*_raw` metric does not measure the
+hypothesis. It is the absolute sum of the reference's constant lead and
+the resync error, so wherever that lead dominates it ranks the arms by
+*signed* error — an arm can "win" by being wrong in the other
+direction. Only three songs have a lead small enough for `*_raw` to
+mean what the Harness intended.
+
+#### The 2b pace-guard constant
+
+**Moot on NO-GO, and unselectable anyway.** The plan pre-registers no
+selection rule — "set at this read-off from the pace telemetry" is an
+instruction to choose, not a procedure — which under the model-switching
+rule is an uncovered case and therefore Ken's. What the telemetry does
+license: **the shipped whisper guard is well placed; change nothing.**
+Arm A's distribution is bimodal with a trough exactly where the
+constant sits.
+
+**A pace constant cannot be calibrated for CTC at all.** The aligner
+gives every token at least one frame, so a full cram lands just under
+the honest-fast-singing band instead of at zero, with no trough between
+them. Phase 2b step 3 as written ("set the CTC-calibrated constant
+chosen at GATE J1") is **not executable from this telemetry**; a CTC
+re-attempt needs an abstention mechanism, not a constant. Fable also
+notes there is no *maximum*-pace guard on align candidates, and Arm B's
+first line of Man Out of You absorbs the whole intro.
+
+#### GATE J2 — CTC-won lines NOT cleared; transcribe/ytasr-won NOT cleared. Appendix D unchanged.
+
+**The criterion is partly tautological and partly impossible on this
+table.** Both snaps carry a minimum shift, so a line either moves past
+that floor or does not move at all — "median ~zero" holds automatically
+whenever fewer than half the lines fire, and "negative" cannot occur on
+absolute deltas. Only the fire rate is informative.
+
+Even on the cleanest available population — the lines CTC placed in
+pass-1, outside any replayed span — **the end snap would still move one
+line in six**. That is not "~zero", so the snap is not retired on
+CTC-won joint lines. Transcribe/ytasr-won lines fire far more and are
+not cleared either.
+
+**The "align-won" group is not a clean CTC-timed population**: about
+two fifths of it sits inside a replayed span interior where the merge
+may have substituted captured *whisper* words — this plan's own
+fidelity limit, symmetric between arms but **asymmetric in meaning for
+J2**. Those in-span lines fire at rates indistinguishable from the
+whisper/caption-timed group, and the harness did not record which lines
+the merge replaced, so the record cannot separate leakage from
+hard-region difficulty.
+
+**Why Appendix D should not move regardless.** A fire is a *move*, not
+a *fix*. GATE C recorded CTC edge timing as already better than the
+snap's; if that holds, a 1-in-6 end fire rate on CTC lines is harm at
+that rate, not repair. H-snap carries no correctness reference, so it
+can neither confirm nor refute GATE C, and Appendix D's locked position
+stands untouched by this evidence.
+
+#### An unresolved conflict between two pre-registered rules (Ken)
+
+**GATE J2 puts the burden on retirement** ("retire iff ~zero");
+**Appendix D puts it on the snap** ("OFF unless a named flag class is
+demonstrably fixed"). On this table J2's rule keeps the snap ON for
+CTC-won joint lines and Appendix D's rule keeps it OFF. Moot today —
+J1 NO-GO means there are no CTC-won joint lines in production — but the
+two rules point opposite directions and this must be settled **before
+Appendices C/D/E are re-locked** in the design-consolidation pass.
+
+#### What Ken's eyeball still settles (not contingent for J1)
+
+Each look settles a mechanism claim that shapes Phase 3 and any future
+CTC re-attempt. Arm B renders would have to be produced first; the
+harness did not write them.
+
+| Song | Look at | Question |
+| --- | --- | --- |
+| Man Out of You | Arm B line 0; the newly placed lines | Does line 0 sweep the whole intro (boundary absorption)? Are the new lines sung lyric shown when sung? |
+| Bloodstream | Arm B's six overlapping lines | Is the cram visible, and is it the missing second hook GATE C named? |
+| Paradise | Arm B's first referenced lines after the intro | Is a line displayed during the intro? |
+| HUNTR/X | The drift region, both arms | The scorer disowned A but not B; the eye is the only comparator |
+| Seasons of Love | The "525,600" chorus lines | B's fit went wide and every dropped token is that numeral — does the chorus visibly degrade? |
+| For Good, Free | Whole song, both arms | B's clearest wins — visible, or scorer artifacts? |
+| Stay Gold | Whole song | Clean tail; GATE T's hard criterion in miniature |
+
+Defying Gravity and Hakuna Matata need no look: the arms are
+near-identical.
+
+#### What the plan did not anticipate
+
+1. **CTC's failure mode is illegible to the guard that protects this
+   route.** Whisper fails on unsung sheet text by collapsing to zero
+   width, and the guard reads that signature. CTC cannot abstain: it
+   compresses unsung tokens into a few frames each, which blends into
+   honest fast singing, or smears the boundary line across the unsung
+   audio. GATE C saw this on Bloodstream; Phase 2a built no defence.
+   **This undercuts the S-3 rider's premise** that CTC is the tool for
+   the version-mismatch class — an aligner that cannot say "not here"
+   is poorly matched to a population defined by text the audio lacks.
+   Any re-attempt must pre-register an abstention mechanism before
+   running.
+2. **GATE C's two hard constraints for a production CTC adapter were
+   not in the 2a recipe.** Nearly all OOV-dropped tokens corpus-wide
+   are the classes C-3 named — numerals and hangul — and Seasons of
+   Love's one-arm-only wide flag sits on the numeral song. A re-run
+   needs spoken-form expansion and a non-Latin fallback. With whisper
+   retained, **GATE L's romanized-form question loses its MMS_FA
+   motivation for this route** and is worth re-posing when the Mandarin
+   corpus exists.
+3. **The `*_corr` companion column.** Fable's recommendation: **keep it
+   in the record, labelled non-pre-registered supporting evidence,
+   never promoted.** It is the only column that measures the
+   hypothesis' quantity against a reference with a constant lead, and
+   it is what exposed the Paradise region. If H-resync is ever re-run,
+   pre-register an offset-corrected form *before* the run.
+4. **H-snap pre-registration gaps** for any future run: record per-line
+   merge provenance, add an Arm A H-snap as the whisper baseline (none
+   exists, so "does CTC need the snap less than whisper" is
+   unanswerable from this table), and state a fire-rate threshold
+   instead of "~zero".
+5. **The arms were compared at knobs tuned on whisper align words.**
+   That is the pre-registered design and does not change the verdict,
+   but a re-attempt should ride with a Phase 3-style sweep rather than
+   shipped defaults, or it re-runs the same handicap.
+6. **MAD's reach.** Its fit uses well-corroborated anchor lines, so it
+   measures precision on the *easy* lines, not the dark regions CTC was
+   meant to fix, and on four comparable songs it rests on fewer than a
+   dozen anchors. Directional, not decisive; the verdict does not rest
+   on it.
+7. **Neither fidelity limit can flip J1.** The skipped veto is
+   symmetric and only demotes zero-evidence align lines over near
+   silence, so it cannot improve either arm's anchored MAD nor remove
+   Bloodstream's overlaps, which sit over sung audio. The captured-span
+   replay makes Arm B "CTC pass-1 plus whisper re-align" — which is
+   also 2b's own production design — and the decisive failures are
+   pass-1 placements or regions identical in both arms. Phase 2a's
+   design cannot answer the span question; only the *exposure* is cheap
+   to compute, not the answer.
+
+#### Sequencing after this ruling
+
+`PROGRAM.md` step 5 resolves to the NO-GO branch: **Phase 3 (whisper) →
+GATE T → Phase 5 design → GATE L.** The emission-slice re-decode
+follow-up and the `s_tx_roll5` advisory demote stay out of scope. **The
+S-3 rider is a licence, not a mandate; it is not withdrawn by this,
+merely unexercised on this evidence.** A J1′ re-attempt — abstention
+mechanism, numeral and non-Latin handling, provenance-recorded H-snap
+with an Arm A baseline, offset-safe H-resync, knobs swept rather than
+fixed — is named here as the option the evidence points at, **not
+commissioned.**
