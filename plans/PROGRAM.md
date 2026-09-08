@@ -269,21 +269,34 @@ Order — cheapest and highest overturn-risk first:
       physical lines, not unterminated brackets; rejoining makes the
       existing bracket defences fire. 5 of 17 songs change and the only
       letters removed corpus-wide are the two attributions. Of the ten
-      songs cleared for step 2, only **Free** needs regenerated bundles.
+      songs cleared for step 2, only **Free** needs regenerated bundles
+      — but Free has no route-independent reference, so for M7 that
+      regeneration is moot; the two songs M7 actually needs re-run are
+      **Defying Gravity and Man Out of You**.
       A whitespace-wrap residual on Paradise is left unfixed by choice.
    2. **M7 — re-derive S-1 against a route-independent reference.**
-      **Approach RATIFIED by Ken 2026-09-08; read-off rules not yet
-      pre-registered, nothing run.** `timing_fetch` writes
-      `lyrics/<stem>.timing.json` at add time and **no router consumes
-      it**, so it is independent of both routes: 16 of 17 corpus songs
-      carry one, all 10 of the cleared eyeball cohort, 7 of those
-      word-level. **M7-a** first asks whether it tracks *our* recording
-      (against `subtitles/<stem>.srt`, 26-song cohort) — this is the
-      wrong-*edit* question the demotion-gate table left open. **M7-b**
-      scores both routes on the lines it covers. **M7-c** is the
-      eyeball, narrowed to the residual it does not cover. If M7-a
-      fails, the fallback is a shared-lines-only comparison plus a
-      signed judgment on each route's exclusive lines. Detail in
+      **Approach RATIFIED by Ken 2026-09-08. Read-off rules DRAFTED
+      2026-09-08 and awaiting ratification; nothing run.**
+      `timing_fetch` writes `lyrics/<stem>.timing.json` at add time and
+      **no router consumes it**, so it is independent of both routes.
+      **M7-a** first asks whether it tracks *our* recording, against a
+      caption reference timed to our video — this is the wrong-*edit*
+      question the demotion-gate table left open — and certifies each
+      song individually. **M7-b** scores both routes on the lines the
+      certified reference covers, counting a hidden line as a miss and
+      giving a filled line no credit for merely existing, so neither
+      contract can win by construction. **M7-c** is the eyeball,
+      narrowed to the residual. If too few songs certify, the fallback
+      is a shared-lines-only comparison plus a signed judgment on each
+      route's exclusive lines.
+
+      The pre-registration corrects the commissioning entry's cohort:
+      **18 of the 34 `.srt` are PiKaraoke's own output** (they carry a
+      `.srt.generated` marker), so the usable reference cohort is **17
+      library-wide, 10 in the corpus, 6 in the cleared eyeball ten** —
+      not 26. Every corpus reference is YouTube ASR; every uploader
+      caption is on a non-corpus song, because the corpus was selected
+      for having no SRT source. Detail and the read-off rules in
       `plans/route-line-timing.md`.
    3. **Ken rules S-1 and the S-3 extension.**
    4. **M6-d re-posed**, if the route survives.
