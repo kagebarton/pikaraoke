@@ -177,10 +177,11 @@ a new mechanism on rung 2b rather than rung 1 returning. Detail in
   route's own fallback class, and both conjuncts Ken ruled lean on the
   same coverage property. **F2's licence is suspended pending
   re-derivation, not revoked.** Three items are Ken's and open —
-  re-affirm or withdraw S-1; whether the S-3 principle extends to
+  re-affirm or withdraw S-1; and whether the S-3 principle extends to
   warp-*accepted* songs (the cram appears there too, and this is
-  **prior** to the aligner question since both arms produce it); and
-  whether the lyric-parser fix sits inside or outside measure-first.
+  **prior** to the aligner question since both arms produce it). The
+  third — whether the lyric-parser fix sits inside measure-first — was
+  **ruled inside and built 2026-09-08** (`2516ca8`).
   Detail and the verdict-doc path in `plans/route-line-timing.md`.
 - **M6 / S-2's genius arm** — the *unwitnessed selection*. M6 ran; its
   commissioned pair could not answer its own question, so **M6-d stays
@@ -261,9 +262,13 @@ Order — cheapest and highest overturn-risk first:
    past its own question to S-1.** M6-d could not be read off its
    commissioned pair. The order that replaces this step, from the S-1
    re-read:
-   1. **Lyric-parser fix** (wrap dirt) — gates any further eyeball; it
-      has already contaminated two. Scope is wider than the recorded
-      fix-item. Ken rules whether it sits inside measure-first.
+   1. ~~**Lyric-parser fix** (wrap dirt)~~ — **DONE 2026-09-08**
+      (`2516ca8`). Cause was Genius wrapping one logical line across
+      physical lines, not unterminated brackets; rejoining makes the
+      existing bracket defences fire. 5 of 17 songs change and the only
+      letters removed corpus-wide are the two attributions. Of the ten
+      songs cleared for step 2, only **Free** needs regenerated bundles.
+      A whitespace-wrap residual on Paradise is left unfixed by choice.
    2. **One pre-registered eyeball — joint vs arm C**, the comparison
       that has never been witnessed on a warp-accepted song. **An
       eyeball, not a GPU run**: production `.ass` and `armC.ass` already

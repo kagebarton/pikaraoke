@@ -1548,7 +1548,9 @@ chant that is itself a fill; Be Our Guest's 0.31 is align-over-fill.
    window rather than densify. Applying the principle there is a new ruling,
    and it is **prior to the aligner question**, because both arms produce the
    identical cram.
-3. **Whether the parser fix sits inside or outside measure-first.** It is
+3. ~~**Whether the parser fix sits inside or outside measure-first.**~~
+   **CLOSED 2026-09-08 — Ken ruled it inside; built, see the entry at the
+   end of this file.** It is
    production code in `genius_lyrics.py`, route-independent, a bug fix — but
    "no remaining probe needs production code" was measure-first's license.
    Harden-vs-refetch was already ruled; only scope and timing are open.
@@ -1577,3 +1579,110 @@ extension -> M6-d re-posed if the route survives -> F2.**
 answer its own question, and it is moot if the license falls. Two facts for a
 re-pose: 106 of arm W's 118 fallbacks are the per-line rescue failing on a ~3 s
 window, and M6-c's clean-subset sign is +6.32 s.
+
+### 2026-09-08 — Lyric-parser wrap fix (Ken ruled it inside measure-first; S-1 item 3 CLOSED)
+
+**(Ken's ruling on open item 3 of the S-1 re-read: "proceed with the fix" —
+the fix sits **inside** measure-first. Items 1 and 2 remain open. Commit
+`2516ca8`; corpus evidence in scratchpad `m6/wrapscan.txt`, `m6/wrapdiff.txt`,
+and the probes that produced them.)**
+
+#### The cause is one thing, and it is not "unterminated brackets"
+
+The recorded fix-item described the class as unterminated brackets. The raw
+Genius sheets show a single upstream mechanism instead: **Genius breaks one
+logical lyric line across several physical lines at the edges of an annotated
+or styled span.** The bracket case is one instance of it:
+
+```
+Man Out of You  L25 '[SHANG & '       Defying Gravity  L102 '[CITIZENS OF OZ & '
+                L26 'SOLDIERS'                         L103 'ELPHABA'
+                L27 ']'                                L104 ']'
+
+Man Out of You  L28 '('               Paradise         L20 'Between you and I ('
+                L29 'Be a man'                         L21 'I'
+                L30 ') We must be swift...'            L22 ')'
+```
+
+So the same wrap produces both the attribution dirt Ken saw **and** lines
+that begin with a stray `)`. The two are not separable: the `)` belongs to the
+`(Be a man)` span. `_HEADER_RE` and `_BRACKET_CONTENT_RE` both require a
+closing `]`, which is why neither fired.
+
+Full scan of the 17 frozen sheets, by class:
+
+```
+UNBAL (physical line leaves '[' or '(' open)   30
+TRAIL (physical line ends with whitespace)      4   (2 of them also UNBAL)
+LEAD  (physical line starts with whitespace)    1
+songs carrying any of it: 5 of 17
+```
+
+#### The fix
+
+`_join_wrapped_lines` in `genius_lyrics.py`: while a line leaves `[` or `(`
+open, absorb following non-blank lines until it balances. Fragments are
+concatenated with **no separator** — the wrap replaced nothing, and the source
+carries the real word spacing (`'[SHANG & '`). A stanza blank line bounds the
+join, so a genuinely stray delimiter can swallow at most its own stanza.
+
+This repairs the input rather than adding a filter: `[SHANG & SOLDIERS]` then
+becomes the bracket-only line `_HEADER_RE` was already written to drop, and
+`(Be a man) We must be swift as the coursing river` is exactly the shape the
+parser's paren contract documents.
+
+#### Corpus effect — raw
+
+Every one of the 17 bundles' recorded `lyrics.lines` reproduces the pre-fix
+parse exactly (17/17), so the before/after diff is against the arms' own input.
+
+```
+song                        lines            letters
+Defying Gravity             89 -> 86         1879 -> 1860   (-19)
+Man Out of You              47 -> 36         1059 -> 1046   (-13)
+Free                        41 -> 40         identical
+HUNTR/X                     53 -> 52         identical
+Paradise                    65 -> 64         identical
+other 12 songs              unchanged        identical
+```
+
+**The only letters removed corpus-wide are the two attributions**: -19 is
+`CITIZENSOFOZ` + `ELPHABA`, -13 is `SHANG` + `SOLDIERS`. Every other line-count
+drop is regrouping, not loss. 13 broken lines are repaired — 9 of them Man Out
+of You's `) We must be swift as the coursing river` class, which becomes
+`(Be a man) We must be swift as the coursing river`.
+
+**Note the rendering change this carries on Man Out of You**: the 9 `Be a man`
+chants no longer stand as their own karaoke lines, they lead the line they
+belong to. That is the Genius sheet's own structure; the `.lrc` for that song
+times them separately. Recorded, not ruled.
+
+#### Residual — the whitespace-wrap class, not fixed
+
+```
+Paradise  L10 'Oh, '  + "we've been down a long, long road now..."
+Paradise  L26 'lik'   + 'e' + ' (Ohh)'
+HUNTR/X   L16 "Show me what's underneath, " + "I'll find your harmony<glued>"
+```
+
+Two junk lines survive on Paradise (`Oh,` and `e`). The delimiter signal does
+not reach them, and the whitespace signal does not close the case either:
+`lik` has no trailing space and `e` has no leading space, so a trailing/leading
+whitespace rule would still leave two fragments, while adding a heuristic that
+can merge two genuine lyric lines on sheets outside this corpus. Left unfixed
+deliberately; extending it is available if Ken wants it.
+
+#### What this costs the pending eyeball
+
+The 5 changed songs' stored bundles are now stale. Of the ten warp-accepted
+songs cleared for the pre-registered joint-vs-arm-C eyeball, **only Free is
+affected** — Man Out of You, Defying Gravity and Paradise are not in that ten,
+and HUNTR/X is shown separately as the cram item. So the eyeball needs one
+song's bundles regenerated, not the cohort.
+
+#### Tests
+
+4 new cases in `tests/unit/test_genius_lyrics.py`, keyed to the real corpus
+shapes: the wrapped attribution, the wrapped paren line, the wrapped fragment,
+and the stanza bound on a delimiter that never closes. Full suite 1516 pass /
+4 fail — the 4 are the box's pre-existing Windows failures, unrelated.
