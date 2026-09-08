@@ -2333,9 +2333,10 @@ Recorded as given, unruled:
 The round recommends; it does not rule. S-1, the gate question in (2), and
 whether to accept this path are Ken's. No gate has been changed.
 
-### 2026-09-08 — M7 fallback pre-registration, stratified (DRAFT — awaiting Ken's ratification)
+### 2026-09-08 — M7 fallback pre-registration, stratified (RATIFIED by Ken — rules fixed before any number existed)
 
-**(Rules fixed before any number exists, per the discipline that has governed
+**(Ratified unchanged by Ken on 2026-09-08, before the diagnostic was
+computed. Rules fixed before any number exists, per the discipline that has governed
 every read-off in this lane. Ken accepted the judge round's path; these are the
 rules that path needs. Nothing below has been run: the diagnostic has not been
 computed, no stratum membership is known, and no arithmetic has been taken.
@@ -2521,3 +2522,251 @@ matcher, snap policy, or the F2 build; the fetch-time duration check; the
 "fetched timing as a joint-matcher candidate" idea; GATE J1/J2; S-E and GATE
 L. This measurement re-derives S-1 on sound scaffolds or it does not — it does
 not license F2 by itself.
+
+### 2026-09-08 — M7 fallback, Parts 1-2 run (raw). Reproduction clean; the declared sign guard fires; no eyeball taken, no read-off
+
+**(Executed against the entry above, ratified unchanged by Ken before any
+number existed. One-shot, as pre-registered. Nothing below is a verdict; the
+guard's consequence is Ken's, not the executor's.)**
+
+**Provenance.** `m6/fb_part1.py` -> `m6/fb_part1.txt`, `m6/fb_part1.json`;
+`m6/fb_part2.py` -> `m6/fb_part2.txt`, `m6/fb_looks.json`. Inputs as
+pre-registered: `m6/debug17` bundles, `subtitles/<stem>.en.asr.json3`,
+`lyrics/<stem>.timing.json`, and the pre-`2516ca8` arm dumps `m6/armC` and
+`m6/armW`. No GPU, no alignment, no render. Part 1 calls the arm's own
+functions rather than reimplementing them: `sidecar_scaffold_cues`,
+`ytasr.parse_json3` / `cue_spans_for_lines` / `normalize_words`,
+`merge_cue_spans`, `_theil_sen`, and the gate constants as imported.
+
+**Two harness facts, recorded because they touch the reproduction claim.**
+
+1. Seven of the seventeen bundles carry a null `media_duration_s`, so arm W
+   itself fell back to the converted vocal stem's own length
+   (`scaffold_align_song.run_song`: `duration = bundle.get("media_duration_s")
+   or wav_dur`). Since `duration` is the clamp bound the diagnostic counts
+   against, the fallback is reproduced the same way -- same ffmpeg conversion,
+   same wav-header read -- rather than approximated from a container probe.
+   Per-song provenance is in `fb_part1.json` (`dur_src`).
+2. The first execution reported one reproduction failure, on the no-scaffold
+   song. It was a defect in the comparison string in the harness, not in the
+   recomputation: the recomputed warp decision was already identical to the
+   log, but the harness built its label without the log's `warp path=` prefix
+   on that one branch. The label was corrected and Part 1 re-run. This is
+   recorded rather than quietly fixed because the pre-registration forbids
+   adjust-and-re-run: no rule, threshold, stratum boundary or input changed,
+   the affected song is REJECTED under either spelling and is read in no
+   stratum, and no shape column was recomputed.
+
+#### Part 1 — reproduction check
+
+All 17 warp decisions reproduce exactly, to the logged precision, against
+`m6/armW_run.log`: 14 `affine-ok` with matching slope and intercept, 1
+`offset-rescue` with matching offset, 2 `densify-fallback`. **Failures: 0**
+(declared suspension threshold: more than 2). The diagnostic is therefore not
+suspended.
+
+```
+warp path=densify-fallback                                 'Defying Gravity' - Wicked 20th Anniversary Edition
+warp path=affine-ok (slope=0.9974, intercept=-0.009)       'Free' _ Official Lyric Video _ Sony Animation
+warp path=affine-ok (slope=1.0074, intercept=-8.075)       'Popular' - Wicked 20th Anniversary Edition
+warp path=affine-ok (slope=1.0017, intercept=-3.430)       Beauty and the Beast (1991) - Be Our Guest [UHD]
+warp path=affine-ok (slope=1.0009, intercept=-7.867)       Beauty and the Beast (1991) - Belle [UHD]
+warp path=affine-ok (slope=1.0002, intercept=-0.643)       Ed Sheeran - Best Part Of Me (feat. YEBBA)
+warp path=affine-ok (slope=0.9939, intercept=-9.496)       Ed Sheeran & Rudimental - Bloodstream
+warp path=affine-ok (slope=1.0147, intercept=-0.497)       HUNTR/X 'This Is What It Sounds Like'
+warp path=affine-ok (slope=1.0124, intercept=-0.441)       Jessie J - Domino (Official Video)
+warp path=affine-ok (slope=0.9975, intercept=-0.724)       Josh Gad - In Summer (From 'Frozen')
+warp path=affine-ok (slope=0.9881, intercept=32.285)       Mulan _ I'll Make a Man Out of You
+warp path=offset-rescue (offset=24.241)                    NSYNC - Paradise
+warp path=affine-ok (slope=0.9991, intercept=-6.286)       Pocahontas - Colors of the Wind
+warp path=affine-ok (slope=0.9542, intercept=1.227)        Seasons of Love (HD)
+warp path=affine-ok (slope=1.0078, intercept=8.717)        The Lion King - Hakuna Matata
+warp path=affine-ok (slope=1.0005, intercept=0.967)        The Next Ten Minutes Lyrics
+warp path=densify-fallback (no scaffold)                   Wicked - For Good (2025) - The Girl in the Bubble
+```
+
+#### Part 1 — shape table, all 17 (primary: clampEnd, clampZero, offRun; withinGate and lenRatio are declared robustness only)
+
+```
+stratum      clampEnd clampZero offRun  nCommon nScaf nAnch nLines withinGate lenRatio  dur      song
+AFFINE              0         0      0       21    33    28     41      1.000    0.0211  192.052 'Free' _ Official Lyric Video
+AFFINE              0         0      1       43    53    61     77      0.977    0.0376  217.803 Be Our Guest [UHD]
+AFFINE              0         0      0       72    94    85    110      1.000    0.0288  297.424 Belle [UHD]
+AFFINE              0         0      2       14    33    16     38      0.786    0.0182  247.501 Best Part Of Me
+AFFINE              0         0      1       12    61    14     67      0.917    0.1481  234.777 Jessie J - Domino
+AFFINE              0         0      0       16    18    24     31      1.000         -  113.035 In Summer
+AFFINE              0         0      2       20    35    22     47      0.900    0.1615  240.907 Man Out of You
+AFFINE              0         0      3        9    51    12     65      0.667         -  305.017 NSYNC - Paradise
+AFFINE              0         0      1       34    35    35     37      0.971    0.1345  202.733 Colors of the Wind
+AFFINE              0         0      1       12    31    13     34      0.833    0.0673  194.885 Seasons of Love
+AFFINE              0         0      1       16    25    19     40      0.875         -  248.036 Hakuna Matata
+AFFINE              0         0      1       58    66    63     71      0.983    0.0065  454.043 The Next Ten Minutes
+REJECTED            -         -      -       39    61    43     89          -         -  257.231 Defying Gravity
+REJECTED            -         -      -        -     0    23     36          -         -  194.119 Girl in the Bubble
+STRUCTURAL          0         1      4       33    39    44     62      0.879    0.0459  211.302 'Popular'
+STRUCTURAL         18         0      1       22    52    23     74      0.864    0.5999  246.898 Bloodstream
+STRUCTURAL         15         0      1       13    43    15     53      0.923    0.5100  160.264 This Is What It Sounds Like
+```
+
+Strata over all 17: AFFINE 12, STRUCTURAL 3, REJECTED 2.
+
+#### Part 2 — shared-line arithmetic on the cleared ten
+
+`delta = start_scaffold - start_joint`, per the pre-registered population
+(scaffold-rendered = both arms emit words; joint-rendered = the bundle's
+`output_line_timings` carries `n_words`). Both arms computed. **`delta` has no
+reference behind it and is not read as a score.**
+
+```
+stratum      song                 nShared      medC  shrC<=.5    C>2.0 |      medW  shrW<=.5    W>2.0
+AFFINE       Be Our Guest              77    +0.294     0.740       11 |    +0.010     0.740        9
+AFFINE       Belle                    101    +0.149     0.792        3 |    -0.010     0.832        2
+AFFINE       Best Part Of Me           37    +0.198     0.676        1 |    +0.018     0.649        2
+AFFINE       Colors of the Wind        37    +0.049     0.946        1 |    -0.442     0.568        1
+AFFINE       Domino                    63   -13.928     0.238       43 |   -13.404     0.317       37
+AFFINE       Free                      40    +0.126     0.900        1 |    -0.030     0.875        1
+AFFINE       In Summer                 29    +0.117     0.655        4 |    -0.226     0.621        4
+AFFINE       Next Ten Minutes          67    +0.155     0.746        6 |    -0.080     0.522        4
+AFFINE       Seasons of Love           25    +0.077     0.440       11 |    -0.005     0.640        6
+STRUCTURAL   Popular                   51    +0.212     0.588        7 |    +0.001     0.588        8
+```
+
+**Stratum sizes within the cleared ten:** AFFINE 9 (Be Our Guest, Belle, Best
+Part Of Me, Colors of the Wind, Domino, Free, In Summer, Next Ten Minutes,
+Seasons of Love); STRUCTURAL 1 (Popular); REJECTED 0. The STRUCTURAL stratum
+is below the pre-registered 4-song floor, so it is reported and **not read** --
+the S-3-extension reading the pre-registration provided for is not available
+from this corpus.
+
+#### Part 2 — the declared sign guard against S-2
+
+Pre-registered as: *"arm W's shared-line arithmetic is computed for every read
+song, and if its median `delta` disagrees in sign with arm C's on 3 or more of
+them, the read-off is suspended and goes to Ken."* Read songs are the AFFINE
+nine.
+
+```
+same  Be Our Guest         C=+0.294  W=+0.010
+DIFF  Belle                C=+0.149  W=-0.010
+same  Best Part Of Me      C=+0.198  W=+0.018
+DIFF  Colors of the Wind   C=+0.049  W=-0.442
+same  Domino               C=-13.928  W=-13.404
+DIFF  Free                 C=+0.126  W=-0.030
+DIFF  In Summer            C=+0.117  W=-0.226
+DIFF  Next Ten Minutes     C=+0.155  W=-0.080
+DIFF  Seasons of Love      C=+0.077  W=-0.005
+```
+
+**Sign disagreements: 6 of 9, against a threshold of 3. The guard fires.** It
+is computable before the sitting, and it has been computed before the sitting,
+so it stops the eyeball as well as the read-off: no section has been watched
+and no score exists. Per the pre-registration this goes to Ken and the
+executor takes no verdict on it.
+
+Recorded as raw fact and not as argument: on 5 of the 6 disagreeing songs both
+medians are inside +/-0.5 s of zero, so the sign is being read off a quantity
+smaller than the gate's own per-line tolerance; on Colors of the Wind arm W's
+median is -0.442 s against arm C's +0.049 s. The guard as ratified counts signs
+and does not carry a deadband. Whether that makes it a guard against S-2 or a
+guard against noise is a rule question, and rule questions are Ken's.
+
+#### Part 2 — the look-list (selector output, fixed before any render)
+
+Selector as pre-registered: per song the three shared lines with the largest
+`|delta|`, ties to the lower line id, only `|delta| > 0.5 s` qualifying, plus
+every exclusive line. Taken on **arm C**, because arm C is the arm the sitting
+watches; arm W's arithmetic is the guard above. **70 looks** against the
+pre-registered ceiling of 71 (Colors of the Wind contributes two shared looks,
+not three -- only two of its shared lines clear 0.5 s). Windows are
+`[min(start) - 3 s, max(end)]` over both routes for a shared look and
+`[start - 3 s, end]` for an exclusive one; identical in both versions of a
+song, per the marker constraint.
+
+```
+idx  song                 stratum     kind         lid  winStart    winEnd
+1    Be Our Guest         AFFINE      shared        68   174.190   187.961
+2    Be Our Guest         AFFINE      shared        69   177.120   189.143
+3    Be Our Guest         AFFINE      shared        70   181.150   190.824
+4    Belle                AFFINE      shared         0    12.710    21.960
+5    Belle                AFFINE      shared         4    31.319    41.075
+6    Belle                AFFINE      shared        53   165.700   175.940
+7    Belle                AFFINE      exclusive     81   250.179   253.359
+8    Belle                AFFINE      exclusive     86   252.781   256.682
+9    Belle                AFFINE      exclusive     87   253.702   257.103
+10   Belle                AFFINE      exclusive     89   254.643   257.863
+11   Belle                AFFINE      exclusive     93   256.365   259.785
+12   Belle                AFFINE      exclusive     94   256.785   259.966
+13   Belle                AFFINE      exclusive     95   256.966   261.447
+14   Belle                AFFINE      exclusive     98   259.568   262.809
+15   Belle                AFFINE      exclusive     99   259.809   263.529
+16   Best Part Of Me      AFFINE      shared         3    27.490    34.800
+17   Best Part Of Me      AFFINE      shared        29   167.467   180.700
+18   Best Part Of Me      AFFINE      exclusive     32   188.837   192.718
+19   Best Part Of Me      AFFINE      shared        34   202.375   216.320
+20   Colors of the Wind   AFFINE      shared         2     2.340     7.600
+21   Colors of the Wind   AFFINE      shared        36   174.840   201.940
+22   Domino               AFFINE      exclusive     12    40.476    44.976
+23   Domino               AFFINE      exclusive     16    50.553    54.314
+24   Domino               AFFINE      exclusive     58   168.412   172.133
+25   Domino               AFFINE      shared        63   179.554   215.406
+26   Domino               AFFINE      shared        64   183.977   219.723
+27   Domino               AFFINE      shared        65   185.419   221.326
+28   Domino               AFFINE      exclusive     66   191.934   197.545
+29   Free                 AFFINE      shared        19    81.800    88.518
+30   Free                 AFFINE      exclusive     35   143.182   147.463
+31   Free                 AFFINE      shared        36   148.340   167.860
+32   Free                 AFFINE      shared        37   163.860   171.253
+33   In Summer            AFFINE      exclusive      0     0.000     0.721
+34   In Summer            AFFINE      shared         5     8.672    15.710
+35   In Summer            AFFINE      shared         8    18.740    26.834
+36   In Summer            AFFINE      exclusive     16    50.716    55.738
+37   In Summer            AFFINE      shared        30    98.640   107.080
+38   Next Ten Minutes     AFFINE      exclusive      7    44.498    48.179
+39   Next Ten Minutes     AFFINE      shared        26   133.380   146.420
+40   Next Ten Minutes     AFFINE      shared        50   261.360   274.221
+41   Next Ten Minutes     AFFINE      shared        51   266.980   278.586
+42   Next Ten Minutes     AFFINE      exclusive     63   328.657   332.178
+43   Next Ten Minutes     AFFINE      exclusive     64   331.298   335.659
+44   Next Ten Minutes     AFFINE      exclusive     65   335.906   339.366
+45   Popular              STRUCTURAL  exclusive      0     0.000     0.120
+46   Popular              STRUCTURAL  exclusive      1     0.000     1.442
+47   Popular              STRUCTURAL  exclusive      2     0.000     2.102
+48   Popular              STRUCTURAL  exclusive      3     0.000     2.202
+49   Popular              STRUCTURAL  exclusive      4     0.000     2.783
+50   Popular              STRUCTURAL  exclusive     35    97.097   100.558
+51   Popular              STRUCTURAL  exclusive     37   102.922   107.864
+52   Popular              STRUCTURAL  exclusive     51   147.519   152.041
+53   Popular              STRUCTURAL  exclusive     52   149.061   152.542
+54   Popular              STRUCTURAL  exclusive     53   149.542   153.102
+55   Popular              STRUCTURAL  exclusive     54   150.182   153.923
+56   Popular              STRUCTURAL  shared        59   159.570   187.181
+57   Popular              STRUCTURAL  shared        60   166.170   193.366
+58   Popular              STRUCTURAL  shared        61   167.430   197.212
+59   Seasons of Love      AFFINE      shared         0    19.661    46.592
+60   Seasons of Love      AFFINE      shared         1    25.997    52.425
+61   Seasons of Love      AFFINE      shared         3    32.854    62.440
+62   Seasons of Love      AFFINE      exclusive     14   113.843   118.204
+63   Seasons of Love      AFFINE      exclusive     16   125.262   128.842
+64   Seasons of Love      AFFINE      exclusive     26   163.113   167.294
+65   Seasons of Love      AFFINE      exclusive     28   165.856   169.296
+66   Seasons of Love      AFFINE      exclusive     29   166.356   170.617
+67   Seasons of Love      AFFINE      exclusive     30   167.976   175.520
+68   Seasons of Love      AFFINE      exclusive     31   172.741   177.983
+69   Seasons of Love      AFFINE      exclusive     32   180.373   184.494
+70   Seasons of Love      AFFINE      exclusive     33   181.975   188.238
+```
+
+Looks per song: Be Our Guest 3, Belle 12, Best Part Of Me 4, Colors of the
+Wind 2, Domino 7, Free 4, In Summer 5, Next Ten Minutes 7, Popular 14, Seasons
+of Love 12.
+
+#### Stop
+
+The pre-registered guard fired before any section was watched. The banner
+generator is **not** built: it exists to present this look-list, and whether
+this look-list gets watched at all is now Ken's ruling. The look-list is fixed
+and saved (`m6/fb_looks.json`), so nothing about it can move afterwards
+whichever way the ruling goes.
+
+No gate changed. No verdict on S-1, on the S-3 extension, or on S-2. S-1
+remains suspended and remains Ken's.

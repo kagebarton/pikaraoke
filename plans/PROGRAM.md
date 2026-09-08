@@ -348,8 +348,9 @@ Order — cheapest and highest overturn-risk first:
       rather than at a per-song route — a J1-adjacent build the
       program has never priced.
 
-      **Stratified fallback pre-registration DRAFT 2026-09-08 —
-      awaiting Ken's ratification.** A GPU-free shape diagnostic labels
+      **Stratified fallback pre-registration RATIFIED 2026-09-08; RAN
+      and STOPPED the same day at its declared sign guard.** A GPU-free
+      shape diagnostic labels
       each song REJECTED / STRUCTURAL / AFFINE from the arm's own
       inputs; the shared-line and exclusive-line read-off is then taken
       **per stratum**, the AFFINE stratum reading on S-1 and the
@@ -358,8 +359,15 @@ Order — cheapest and highest overturn-risk first:
       reference, so the eye scores. Bounded at 71 looks in one sitting.
       Declared limit: the sitting is one arm, so unlike M7-b this
       cannot show the conclusion survives either resolution of S-2.
-      Rules in `plans/route-line-timing.md`. **No gate has been
-      changed and no verdict on S-1 is recorded.**
+      Rules in `plans/route-line-timing.md`. Parts 1 and 2 ran: the
+      diagnostic reproduced arm W on all 17, and within the cleared ten
+      only one song is STRUCTURAL, so that stratum falls under the
+      declared 4-song floor and cannot be read. **The guard against S-2
+      then fired** — the two arms' per-song medians differ in sign on 6
+      of the 9 readable songs against a threshold of 3 — so the
+      read-off is suspended before the eyeball and goes to Ken. The
+      look-list is fixed and saved; the sitting has not been run.
+      **No gate has been changed and no verdict on S-1 is recorded.**
    3. **Ken rules S-1 and the S-3 extension.**
    4. **M6-d re-posed**, if the route survives.
    5. **F2.**
