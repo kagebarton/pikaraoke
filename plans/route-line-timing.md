@@ -1371,10 +1371,10 @@ arm W: 142 pairs with positive overlap    arm C: 62 pairs
 
 **Zero overlaps in either arm arise between two normally-aligned lines.** Every
 one involves a line the aligner failed on, which then fell back to re-pacing
-from the cue (`cue_align_fill`) or to re-alignment (`cue_align_line`). Sorting
-the corpus by fallback count reproduces the overlap ranking: Free, Colors of
-the Wind and Best Part of Me have zero fallbacks and zero overlaps; Bloodstream
-and Defying Gravity have the most of both. On this corpus
+from the cue (`cue_align_fill`) or to re-alignment (`cue_align_line`). Overlap arises
+*only* at fallback lines; **magnitude does not track fallback count** (arm C:
+Bloodstream 38 fallbacks -> 0.50 s, Man Out of You 3 -> 2.64 s). Corrected
+2026-09-04 by the S-1 re-read below, which withdrew a stronger ranking claim. On this corpus
 `cue_align_song.max_line_overlap` tracks **fallback prevalence**, not
 simultaneity. Recorded as measured; what it implies for S-2's two overlap-based
 criteria is Ken's.
@@ -1444,3 +1444,136 @@ of anyways." Recorded verbatim. It is not entered as the M6 read-off. Note it
 touches GATE J2, which owns whether edge snap retires on CTC-timed routes — if
 edge snap is what neutralizes whisper's loose endings, then J2's question and
 M6's are coupled in a way neither entry currently states.
+
+### 2026-09-04 — S-1 re-read after M6 (Fable judge round) — GO stands as a ruling, not as a finding; F2's license suspended pending Ken
+
+**(Judge round at Ken's escalation, read-only; nothing was written to the repo
+by the judge. Verdict doc saved verbatim: scratchpad `m6/m6_s1_readoff.md`.
+The executor spot-verified the two load-bearing new claims — the cram and the
+clean-subset clipping sign — and both reproduce exactly. Three items below are
+Ken's and are open.)**
+
+#### The read-off
+
+**S-1's GO stands as a ruling and no longer stands as a finding.** Nothing in
+M6 shows the scaffold route is *worse* than the joint route — the two arms were
+never compared against the joint render. What M6 removes is the evidence that
+it is *better*. Both metric conjuncts are scored, by construction, by each
+route's own fallback class (fills here, hidden lines there), and both of the
+conjuncts Ken ruled lean on the same property. **F2's license (S-1 GO + S-5) is
+suspended pending re-derivation, not revoked.**
+
+#### The finding that carries it — the cram is on warp-*accepted* songs
+
+```
+Bloodstream  lines 36-73 : n=38  span 246.40 -> 246.90 s  (0.50 s total)
+HUNTR/X      lines 33-52 : n=20  span 159.76 -> 160.26 s  (0.50 s total)
+             every line exactly 0.50 s; all cue_align_fill; both arms
+```
+
+`_repace_line`'s `t1 = t0 + 0.5` floor. Both songs take the **affine-ok** warp
+path — this is not the MAD-gate reject class S-3 was scoped to. The overlap
+metric reads 0.5 s *because every line is 0.5 s long*, so the corpus's
+"best-improved" song is one where the back half is unreadable.
+
+Every other non-zero arm-C overlap is also a fallback artifact: Defying
+Gravity's 2.61 is the `[CITIZENS OF OZ &` fragment (drop lines 82-83 and it is
+0.00); Paradise's 1.03 is line 21, text `e`, a Genius wrap of "lik|e" (drop it
+and it is 0.00); Man Out of You's 2.64 is an aligned line over a "Be a man"
+chant that is itself a fill; Be Our Guest's 0.31 is align-over-fill.
+
+#### Conjunct by conjunct
+
+- **Mean worst-overlap strictly lower — disturbed.** The arithmetic passes and
+  reproduces, but the pass is carried entirely by Bloodstream, i.e. by the cram
+  above. Excluding that song the conjunct fails by 3.5x. This is PROGRAM.md's
+  "the pre-registered rule does not cover the case observed": it passes as a
+  read-off and does not as evidence, and which governs is **STOP -> Ken**.
+- **Rendered-line coverage no lower — intact as arithmetic, ill-posed as a
+  criterion.** It scores two *contracts* against each other and counts dirt and
+  lyrics alike on both sides. The scaffold cannot lose it (`hid = 0` by
+  construction) and the joint route cannot win it. A criterion one side wins by
+  construction restates which contract was chosen; it does not measure
+  improvement. The version that could discriminate — "the extra rendered lines
+  are sung lyrics, placed where they are sung" — needs a reference this corpus
+  lacks and neither route computes.
+- **Flag count — Ken's ruling, and M6 bears on its argument.** The numbers
+  reproduce. The ratified reading rested on "the scaffold structurally cannot
+  exhibit the baseline's flag class since it renders everything", which is the
+  coverage property again. Note the two S-B drift flags **are** the two cram
+  songs: the flag sees the cram, and the mapping is what treats two crams as
+  better than eight coverage shortfalls.
+- **Per-song cap — Ken's rulings; one moot, one imprecise.** Defying Gravity's
+  accepted cause is right about the cue window but the number is specifically
+  the bracket fragment; moot in production, since S-3 routes that song to the
+  joint matcher. Man Out of You was accepted with the bracket line in view, so
+  M6 adds no new artifact — it adds that the number is an align-over-fill pair,
+  the same class as every other overlap in the corpus.
+
+#### Corrections to the record
+
+- **The joint route's suppression is incidental, not a lyrics test.** The
+  contract that hides the two bracket fragments also hid **9 real "Be a man"
+  chants** on Man Out of You and **36 non-fragment lines** on Defying Gravity
+  (the opening exchange, "I hope you're happy" x8, "Glinda, come with me").
+  The M6-d entry above states only the half that suppressed dirt.
+- **The clipping decomposition must not be read as refuting the audit.** M6-c's
+  aggregate is a population artifact: 29 of 39 win-locations have a fill as the
+  whisper-side previous line. On the 10 locations where the previous line is
+  cleanly aligned in *both* arms, the end delta is **+6.32 s** — the audit's
+  predicted sign. Equally consistent with whisper over-holding; the verdict is
+  M6-d's, not this entry's.
+- **The overlap/fallback relation is a necessary condition, not a ranking.**
+  Corrected in the M6-d entry above: overlap arises *only* at fallback lines,
+  but magnitude does not track fallback count.
+- **Arm W's 118 `align_refine` exceptions are not a defect in the arm** —
+  documented stable_whisper behaviour when `remove_instant_words=True` and
+  alignment fails. 106 of 118 are the ~3 s per-line rescue window. Arm W
+  reproduces S-A exactly, so this held on Linux in July. No re-run owed.
+- **The judge withdraws its own 2026-07-19 characterisation** of Man Out of
+  You's 2.6 s as "a genuine two-voice overlap": the second line is a fill.
+  Ken's ear may still be right about the audio; the metric was not measuring it.
+- The wrap-dirt class is **wider than the recorded fix-item**. Beyond the two
+  unterminated brackets, Paradise carries `I` and `e` as sheet lines (wraps of
+  "Between you and I (" and "lik|e"), and `e` is the whole of CTC's Paradise
+  overlap. The fix-item as written covers unterminated brackets only, so it
+  would miss those and the plain-text second halves `SOLDIERS` / `ELPHABA`.
+
+#### What is Ken's — three open items
+
+1. **Re-affirm or withdraw S-1**, knowing the GO cannot be re-derived from the
+   S-1 rule on this evidence.
+2. **Whether the S-3 principle extends past its scope.** The *phenomenon*
+   extends — the cram appears on warp-accepted songs, from a degenerate section
+   window rather than densify. Applying the principle there is a new ruling,
+   and it is **prior to the aligner question**, because both arms produce the
+   identical cram.
+3. **Whether the parser fix sits inside or outside measure-first.** It is
+   production code in `genius_lyrics.py`, route-independent, a bug fix — but
+   "no remaining probe needs production code" was measure-first's license.
+   Harden-vs-refetch was already ruled; only scope and timing are open.
+
+#### The minimum for F2 to stay licensed, and the sequencing that follows
+
+What would have to be true: on the songs F2 would actually take — genius
+origin, line source, warp-accepted — the scaffold render is at least as
+singable as the joint render on the lines both render, and the lines only the
+scaffold renders are sung lyrics, not fragments, dialogue or crams.
+
+**No witnessed scaffold-vs-joint comparison on a warp-accepted song exists.**
+The nine-regression eyeball was the whisper arm; the Man Out of You acceptance
+was the S-B render alone; M6-d was whisper vs CTC. Production `.ass` and
+`armC.ass` exist for all 17 songs, so the missing evidence is **an eyeball, not
+a GPU run**: joint vs arm C, pre-registered, on the warp-accepted songs the
+dirt scan clears — Free, Colors of the Wind, Best Part of Me, Belle, In Summer,
+Seasons of Love, Next Ten Minutes, Popular, Domino, Be Our Guest. **Not**
+Hakuna Matata (off-sheet dialogue). Bloodstream and HUNTR/X are shown
+separately as the cram item.
+
+Order: **parser fix -> one pre-registered eyeball -> Ken rules S-1 and the S-3
+extension -> M6-d re-posed if the route survives -> F2.**
+
+**M6-d stays open and is sequenced after this.** Its commissioned pair cannot
+answer its own question, and it is moot if the license falls. Two facts for a
+re-pose: 106 of arm W's 118 fallbacks are the per-line rescue failing on a ~3 s
+window, and M6-c's clean-subset sign is +6.32 s.

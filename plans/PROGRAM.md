@@ -111,7 +111,8 @@ routes, it only resolves sources.
       or lyrics/<stem>.lrc)                     CTC (S-2 genius arm)
      │                                          snap OFF
      │                                          ── NOT BUILT ──
-     └─ warp-gate failure ──┐                   ⚠ aligner under M6 re-read
+     └─ warp-gate failure ──┐                   ⚠ ROUTE LICENCE SUSPENDED
+                            │                     (S-1 re-read 2026-09-04)
                             ▼
   4  otherwise ────────────────────────────────► JOINT MATCHER
                                                 unchanged from today
@@ -133,7 +134,7 @@ exactly as it does today.
 | Routes | 2 (+transcribe) | 4 (+transcribe) |
 | Line timing, no SRT | joint DP; LRCLIB as post-pass fill | **own route** (F2), warped scaffold |
 | Word timing | nothing — sidecar unused for routing | own route (F1) — *gated off* |
-| Scaffold aligner | n/a | CTC (⚠ under M6) |
+| Scaffold aligner | n/a | CTC (⚠ M6-d open; route licence suspended) |
 | Evidence veto | joint route | joint route only (unchanged) |
 | LRCLIB fill | joint route | joint route only; slated for deletion in refit Phase 1.1 |
 
@@ -170,9 +171,20 @@ a new mechanism on rung 2b rather than rung 1 returning. Detail in
   the per-song gate is retired, precedence 2 never fires, and the
   demotion to the line pool is permanent. M5 refuted, M3 closed by
   inspection, M4 re-homed to F2's warp gate and held.
-- **M6** — S-2's genius arm is the one *unwitnessed selection* in the
-  live set. If it flips, precedence 3's aligner changes from CTC to
-  whisper, which also flips its snap policy. **Blocks F2.**
+- **S-1 — the route's own licence, re-read 2026-09-04 (Fable judge
+  round) and now the live question.** Its GO **stands as a ruling and no
+  longer stands as a finding**: both metric conjuncts are scored by each
+  route's own fallback class, and both conjuncts Ken ruled lean on the
+  same coverage property. **F2's licence is suspended pending
+  re-derivation, not revoked.** Three items are Ken's and open —
+  re-affirm or withdraw S-1; whether the S-3 principle extends to
+  warp-*accepted* songs (the cram appears there too, and this is
+  **prior** to the aligner question since both arms produce it); and
+  whether the lyric-parser fix sits inside or outside measure-first.
+  Detail and the verdict-doc path in `plans/route-line-timing.md`.
+- **M6 / S-2's genius arm** — the *unwitnessed selection*. M6 ran; its
+  commissioned pair could not answer its own question, so **M6-d stays
+  open and is sequenced after S-1**, being moot if the licence falls.
 - **GATE J1/J2** — CTC in the joint matcher, and whether edge snap
   retires on CTC-won lines. Changes precedence 4's aligner and Appendix
   D's snap exception.
@@ -245,13 +257,20 @@ Order — cheapest and highest overturn-risk first:
    in-clip sweep truncations than the two he called rushed, so the
    constant stays at 1.5 s. The "rushed" class is still unexplained and
    feeds M1's labelling rule.
-4. **M6 — NEXT.** Re-read S-2's genius arm against the S-C reframe.
-   Added 2026-09-04 by the eyeball-provenance audit. Its "after M1-M3"
-   precondition is **satisfied as of 2026-09-04**; it remains **before
-   any F2 build**, since F2 builds on the path S-2 chose the aligner
-   for. Needs GPU plus Ken's eyeball on two songs. Commissioning detail
-   in `plans/shared-aligner-form.md`; lane file
-   `plans/route-line-timing.md`.
+4. ~~**M6**~~ — **ran 2026-09-04; both arms reproduce, and it escalated
+   past its own question to S-1.** M6-d could not be read off its
+   commissioned pair. The order that replaces this step, from the S-1
+   re-read:
+   1. **Lyric-parser fix** (wrap dirt) — gates any further eyeball; it
+      has already contaminated two. Scope is wider than the recorded
+      fix-item. Ken rules whether it sits inside measure-first.
+   2. **One pre-registered eyeball — joint vs arm C**, the comparison
+      that has never been witnessed on a warp-accepted song. **An
+      eyeball, not a GPU run**: production `.ass` and `armC.ass` already
+      exist for all 17 songs.
+   3. **Ken rules S-1 and the S-3 extension.**
+   4. **M6-d re-posed**, if the route survives.
+   5. **F2.**
 5. **Joint plan Phase 2a → GATE J1/J2** (GPU, scratchpad). J2 feeds
    Appendix D's snap policy, which currently records "re-enable
    exception: none".
@@ -264,8 +283,15 @@ Order — cheapest and highest overturn-risk first:
 Then **one design-consolidation pass**: re-lock the build plan's
 Appendices C, D and E with the real constants in a single revision.
 
-**Carve-out — F2 is a zero-regret build at any point in this sequence,
-with one caveat added 2026-09-04.** Checked against every pending
+**Carve-out — VOID as of 2026-09-04 (S-1 re-read).** F2's licence is
+suspended pending Ken's re-derivation of S-1, so F2 is no longer a
+build that can be pulled forward; the paragraph below is kept as the
+record of why it was thought zero-regret. The caveat named M6 as the
+only coupling, and M6 turned out to reach the route's own licence
+rather than just its aligner.
+
+*Superseded text:* **F2 is a zero-regret build at any point in this
+sequence, with one caveat added 2026-09-04.** Checked against every pending
 outcome: an R-1 NO-GO only sends more songs into F2's line-source pool
 (Appendix A already specifies that demotion); GATE P and GATE J1 are
 rung-3 questions; GATE L is an additive per-line romanizer inside F2's
