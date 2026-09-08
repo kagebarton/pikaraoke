@@ -2442,6 +2442,32 @@ sitting starts — the M6 arm-identity lesson. Two fixed questions:
   lyric at the wrong time / not a lyric (dirt, dialogue) / filler or cram /
   cannot tell.
 
+**Presentation — an on-screen marker (Ken's request, 2026-09-08).** The
+selected sections are lopsided across the ten, so seeking to 71 timestamps is
+worse than watching the heavy songs through. Each song's subtitle file is
+copied with a banner track added at the top of the frame, lit from a few
+seconds before each selected section until its end, carrying that section's
+fixed question. mpv already loads the subtitle file as a sidecar
+(`m6/eyeball.ps1`), so this needs no re-render and no GPU, and the karaoke
+line's own position is untouched. The existing seek-to-timestamp path stays
+for songs with only one or two selections.
+
+Three constraints, because presentation must not become selection:
+
+- The banner is **generated mechanically from the Part 2 selector output, in
+  one pass, before the sitting**. It is never hand-placed and never revised
+  after any section has been watched — otherwise it is a second, unregistered
+  chance to choose what gets looked at.
+- It carries **only** the section's fixed question and an index into the
+  look-list. Never the `delta` that selected the line, never a rank, never a
+  route name, never a stratum label.
+- It is **byte-identical across the two versions of a song**. A banner that
+  differed would tell Ken which route he is watching and would bias the shared
+  question, which turns on not knowing.
+
+The marker changes no rule above and no figure below; it is a viewing aid over
+an already-fixed set.
+
 Per song:
 
 - `A` = (#scaffold) - (#joint). "Both wrong" and "cannot tell" score zero.
