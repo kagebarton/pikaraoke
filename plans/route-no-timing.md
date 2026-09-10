@@ -13,9 +13,9 @@ Model: Claude Sonnet 5 (executor). Plan drafted by Claude Fable 5.
 > nothing** (Appendix D unchanged). **3 RAN 2026-09-10 and GATE T is
 > READ the same day: the alpha/beta knobs are inert on this corpus and
 > stay at their shipped 2.0/2.0 — no config default moved and no commit
-> carries a knob change.** One sub-question is open and Ken's: the ytasr
-> candidate ratio at 0.45 (free on the metrics, two lines of one song,
-> and not a config knob today). **Phase 5 is the live head of the
+> carries a knob change.** The one production change out of the phase is
+> the **ytasr candidate ratio at 0.45** (`ytasr.CANDIDATE_MAX_EDIT_RATIO`,
+> eyeballed and shipped the same day). **Phase 5 is the live head of the
 > queue** (line timing as a fill source, scope amended 2026-09-10 to a
 > per-gap gate), then **Phase 6** (CTC post-selection interior
 > refinement, design owed), then GATE L when the Mandarin corpus exists.
@@ -441,11 +441,11 @@ no commit carries a knob change.** The grid is inert on this corpus (7
 placed lines move across all 15 points, and every song above 90%
 coverage is identical at every point), so the hard criterion cannot
 fail and the clean-tail roster flagged below turned out **not** to be a
-prerequisite. One sub-question stays open and is Ken's: the ytasr
-candidate ratio at 0.45, free on every metric but resting on two lines
-of one song. Read-off by Claude Opus 5 at Ken's request (Fable credits
-short), ruling by Ken — see the read-off entry in the Results log. The
-run record follows.*
+prerequisite. **One production change came out of the phase**: the ytasr
+candidate ratio ships at 0.45, eyeballed by Ken on the two lines it adds
+and recorded in the read-off. Read-off by Claude Opus 5 at Ken's request
+(Fable credits short), ruling by Ken — see the read-off entry in the
+Results log. The run record follows.*
 
 *Run status: All four steps executed
 on all 18 genius-origin bundles; raw tables in the Results log below.
@@ -1926,17 +1926,44 @@ selection chain — the ratio does not only admit ytasr lines.
    **no commit carries a knob change** — the gate's "config-default
    change lands as one commit" clause resolves to no commit. Ken took
    this 2026-09-10 on the assessment above.
-2. **Open, and Ken's: the ytasr candidate ratio.** 0.45 is free on the
-   metrics but needs one look at the two timestamps above before it
-   ships. It is also **not a config knob today** —
-   `ytasr.CANDIDATE_MAX_EDIT_RATIO` is a module constant, so adopting it
-   means either editing the constant or promoting it, which is a
-   separate small decision. Doing nothing is a complete answer: it is
-   two lines on one song.
+2. ~~**Open, and Ken's: the ytasr candidate ratio.**~~ **CLOSED
+   2026-09-10 — Ken eyeballed both timestamps, the singing matches at
+   each, and `ytasr.CANDIDATE_MAX_EDIT_RATIO` ships at 0.45.** This is
+   the one production change to come out of Phase 3. It was held to the
+   burden the read-off named: free on the metrics *and* the two lines it
+   adds confirmed correct by ear, because the harness cannot separate a
+   correct new line from a wrong one that merely fails to crawl or
+   overlap. **0.55 is not adopted** — the same sweep priced it as buying
+   two further lines at the cost of a crawl line and a 0.7 s overlap.
+
+   **Where the value lives, decided with it:** the module constant is
+   edited in place rather than promoted to `PipelineConfig`. It has no
+   per-song behaviour, nothing reads it at runtime, and a config knob
+   nobody sets is the speculative flexibility the house rules refuse.
+   The four joint knobs that *are* in config got there because the
+   sweeps needed them per run; this one is overridden module-side by the
+   drivers that sweep it, which is sufficient.
+
+   **Flagged, not fixed:** the ratio is **not recorded in the bundle's
+   `joint_stats.knobs`** the way `margin_s` / `max_edit_ratio` /
+   `lookahead` / `anchor_fallback` are, so a bundle does not say which
+   ratio produced it and a replay cannot reconstruct that from the
+   artifact. Phase 3 hit this — the sweep had to override a constant the
+   bundles are silent about. Adding it to the recorded knobs is a small,
+   genuinely useful reproducibility fix and is **not** done here; it
+   touches the stats dict that replay drivers consume, so it wants its
+   own change.
+
+   **Takes effect on new alignment runs only.** Existing bundles and
+   rendered karaoke files are unchanged; songs already in the library
+   keep their current timing until re-run through
+   `regen_alignment_bundles.py`. No regeneration was performed.
 
 #### Consequences
 
-Phase 3 closes with no production change. The program advances to
+Phase 3 closes with **one** production change — the ytasr candidate
+ratio at 0.45 (ruling 2 above, shipped the same day); the matcher knobs
+themselves do not move. The program advances to
 **Phase 5** (line timing as a fill source, per-gap gate design owed),
 which this read-off's Finding 1 argues is where the remaining quality
 is: the knobs cannot reach the unplaced population, and Phase 5's fill

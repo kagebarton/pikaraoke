@@ -233,13 +233,19 @@ a new mechanism on rung 2b rather than rung 1 returning. Detail in
   which also retired the clean-tail-roster prerequisite the run entry
   had flagged. **Provenance: assessment by Claude Opus 5 at Ken's
   request (Fable credits short), ruling by Ken — not a Fable round.**
-  **Still open and Ken's: the ytasr candidate ratio.** 0.45 is strictly
-  dominant on the tables (+2 placed, nothing regressed anywhere) but the
-  whole effect is two lines on one song, the harness cannot tell a
-  correct new line from a wrong one that happens not to crawl or
-  overlap, and `ytasr.CANDIDATE_MAX_EDIT_RATIO` is a module constant
-  rather than a config knob — so adopting it is a second small
-  decision. Doing nothing is a complete answer.
+  **The ytasr candidate ratio closed the same day and is the phase's one
+  production change:** `ytasr.CANDIDATE_MAX_EDIT_RATIO` ships at **0.45**
+  (was 0.34). It is strictly dominant on the tables (+2 placed, nothing
+  regressed on any song on any hard metric) *and* Ken eyeballed the two
+  lines it adds — both required, because the harness cannot tell a
+  correct new line from a wrong one that merely fails to crawl or
+  overlap. 0.55 was measured and rejected: two more lines, but a crawl
+  line and a 0.7 s overlap with them. The value stays a module constant
+  rather than moving to `PipelineConfig` — nothing sets it per song, and
+  the drivers that sweep it override it module-side. **Flagged, not
+  fixed:** the ratio is absent from the bundle's recorded
+  `joint_stats.knobs`, so a bundle cannot say which ratio produced it;
+  adding it wants its own change.
 - **Phase 5's gate form** — NEW 2026-09-10, Ken's. A Fable round found
   that widening the fill's source to the sidecar **under the shipped
   per-song gate** is where the 16/0 record gets tested and can fail:
@@ -349,10 +355,10 @@ shipped `cue_align.py`, so it is not dead-end history.
 > **START HERE (2026-09-10, updated after GATE T was read).** The
 > line route is closed (step 4) and **GATE J1 came back NO-GO**, so
 > whisper stays the joint aligner and Phase 2b never gets built.
-> **Phase 3 ran and GATE T was read the same day: the matcher knobs are
-> inert on this corpus and stay at their shipped values — no production
-> change came out of it.** The one leftover is Ken's call on the ytasr
-> candidate ratio (see the open decisions above).
+> **Phase 3 ran and GATE T was read and closed the same day: the matcher
+> knobs are inert on this corpus and stay at their shipped values. One
+> production change came out of it — the ytasr candidate ratio at 0.45,
+> eyeballed and shipped.**
 > **The next spend is Phase 5** in `plans/route-no-timing.md` —
 > line timing as a fill source, and the design that
 > inherits everything the line route learned — **its scope was amended
@@ -514,16 +520,16 @@ Order — cheapest and highest overturn-risk first:
    2026-09-08. J1 NO-GO, J2 cleared nothing.** Whisper stays the joint
    aligner; Appendix D unchanged ("re-enable exception: none" stands).
    **2b and GATE V are struck.** **This step is now CLOSED: Phase 3 ran
-   2026-09-10 and GATE T was read the same day — the knobs are inert on
-   this corpus and stay at their shipped values, so the phase ends with
-   no production change at all.** Raw tables and both read-offs in
-   `route-no-timing.md`. What remains of the step is **Phase 5 (line
-   timing as a fill source)**, whose design is owed against whisper and
-   is the program's next spend. Two things carried out of GATE T: Ken
-   still owes a call on the ytasr candidate ratio (open decisions
-   above), and the read-off's own recommendation is that the remaining
-   Fable budget goes to **Phase 5's per-gap gate**, not to knob work —
-   the knobs cannot reach the unplaced population that Phase 5 targets.
+   2026-09-10 and GATE T was read and closed the same day — the matcher
+   knobs are inert on this corpus and stay at their shipped values; the
+   phase's one production change is the ytasr candidate ratio at 0.45.**
+   Raw tables and both read-offs in `route-no-timing.md`. What remains
+   of the step is **Phase 5 (line timing as a fill source)**, whose
+   design is owed against whisper and is the program's next spend. The
+   read-off's own recommendation, recorded as recommendation not ruling:
+   the remaining Fable budget goes to **Phase 5's per-gap gate**, not to
+   knob work — the knobs cannot reach the unplaced population that
+   Phase 5 targets.
 6. ~~**S-E**~~ — **not run.** This is the *line* route's Phase 3
    optional arm, not the joint plan's Phase 3, and it closed with that
    route: `route-line-timing.md`'s status block records "S-E is not

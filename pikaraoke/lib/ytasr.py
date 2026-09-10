@@ -60,15 +60,22 @@ LAST_WORD_HOLD_S = 0.3
 MAX_WORD_DUR_S = 2.0
 
 # Per-line fuzzy-match tolerance against ASR mis-hears, shared by every
-# consumer of the ASR stream (the joint DP's ytasr candidates and the post-hoc
-# prior's cue spans). Looser than the matcher's default (0.25) because ASR
-# over backing music garbles more than whisper — but far stricter than the
-# transcribe-candidate knob (0.75): a transcribe candidate's garble is
+# consumer of the ASR stream (the joint DP's ytasr candidates and
+# :func:`cue_spans_for_lines`). Looser than the matcher's default (0.25)
+# because ASR over backing music garbles more than whisper — but far stricter
+# than the transcribe-candidate knob (0.75): a transcribe candidate's garble is
 # cross-checked word-by-word inside its window, while the ASR text is a ytasr
 # candidate's *only* evidence for existing, so it must earn its way in
-# lexically. Wrong mappings that survive are caught downstream (DP score
-# arbitration; the prior's anchor-MAD gate).
-CANDIDATE_MAX_EDIT_RATIO = 0.34
+# lexically. Wrong mappings that survive are caught downstream by the DP's
+# score arbitration.
+#
+# Raised 0.34 -> 0.45 at GATE T (2026-09-10). Swept against held-out LRCLIB
+# over the 18-song genius corpus: 0.45 placed two more lines and regressed no
+# song on placement, crawl or overlap, and both new lines were eyeballed
+# correct. 0.55 was measured in the same sweep and is not free — it buys two
+# further lines but brings a crawl line and a 0.7 s overlap. Tables in
+# plans/route-no-timing.md.
+CANDIDATE_MAX_EDIT_RATIO = 0.45
 
 
 def parse_json3(text: str) -> tuple[list[dict], float]:
