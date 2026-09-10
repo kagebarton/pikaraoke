@@ -53,8 +53,9 @@ as a routing tier. Rung 2b of the ladder has zero production miles.
 Two different things in these plans are called a "gate", and mixing them
 up costs hours:
 
-- **GATE C / O / R / S / P / L** — decision points in *this program*. Ken
-  rules on them. They fire once, in a session, and land in a Results log.
+- **GATE C / O / R / S / P / L / G** — decision points in *this
+  program*. Ken rules on them. They fire once, in a session, and land in
+  a Results log.
 - **The thresholds below** — *runtime* code, firing per song, deciding
   whether a source is trusted, demoted, or dropped.
 
@@ -222,6 +223,13 @@ a new mechanism on rung 2b rather than rung 1 returning. Detail in
   with whisper retained, the romanized-form question loses its MMS_FA
   motivation for this route and is worth re-posing when the corpus
   exists.
+- **GATE G** — Phase 5's fill gate, letter assigned 2026-09-10 when
+  Opus wrote the design. Open, and the only gate the program is now
+  walking toward. Reads six offline cells (cue source × gate form)
+  against a pre-registered rule whose bar is inherited from GATE L2
+  (`bad_surviving = 0`, and the 16 existing good fills survive
+  unchanged); Opus reads off, **Ken rules and owns the eyeball**. Full
+  pre-registration in `route-no-timing.md` §"Phase 5".
 - **R-3** — SRT-first *stands*, but Appendix A flags that a later ruling
   could reorder precedence 1 against 2.
 - ~~**GATE T**~~ — **READ 2026-09-10. The `alpha`/`beta` knobs stay at
@@ -333,7 +341,7 @@ competitor already in the bundles.
 | `route-word-timing.md` | rung 1 (**CLOSED 2026-09-04**); GATE R, R-1 ruling, M1-M5, the R-4 closure |
 | `route-srt.md` | rung 2a; the shipped cue-align route, S-C |
 | `route-line-timing.md` | rung 2b (**CLOSED 2026-09-08** — S-1 withdrawn); GATE S scaffold arms, M6, M7, the fallback; GATE L re-homed to rung 3 |
-| `route-no-timing.md` | rung 3 — **the live build lane**; the joint catch-all refit, GATE P/J1/J2, Phase 5 (line timing as a fill source), GATE L |
+| `route-no-timing.md` | rung 3 — **the live build lane**; the joint catch-all refit, GATE P/J1/J2/T, Phase 5 + **GATE G** (line timing as a fill source, designed 2026-09-10), Phase 6, GATE L |
 | `shared-aligner-form.md` | GATE C, GATE O, Phase 0 harness, ruling-provenance audit |
 | `ctc-sync-engine.md` | build phases + locked appendices; each licensed by a GATE above |
 | `completed/` | closed plans, kept for their Results logs |
@@ -359,17 +367,22 @@ shipped `cue_align.py`, so it is not dead-end history.
 > knobs are inert on this corpus and stay at their shipped values. One
 > production change came out of it — the ytasr candidate ratio at 0.45,
 > eyeballed and shipped.**
-> **The next spend is Phase 5** in `plans/route-no-timing.md` —
-> line timing as a fill source, and the design that
-> inherits everything the line route learned — **its scope was amended
-> 2026-09-10 to a per-gap gate**, because the shipped fill's per-song
-> gate carries the warp gate's blind spot on the population Phase 5
-> widens it to. **Phase 6** (CTC post-selection *interior* refinement)
-> was added the same day as design owed; GATE T no longer gates it, but
-> it stays **after Phase 5** on value — it refines word boundaries
-> inside lines already placed, which is polish next to the ~150 sheet
-> lines that never render. It is not GATE J1's question and does not
-> re-open it. Gate letters for both are still Ken's.
+> **Phase 5 is designed and ready to build.** The design pass ran
+> 2026-09-10 (Opus) and pre-registered the mechanism, the constants, the
+> six offline cells, the tables and the read-off as **GATE G**; what is
+> owed now is an **executor session** to build the widened fill and run
+> the cells, then Ken's eyeball. Its per-gap gate exists because the
+> shipped fill's per-song gate carries the warp gate's blind spot on
+> exactly the population Phase 5 widens it to. The design pass's disk
+> proxy also relocated where the phase's value sits: **the global
+> per-song gate, not the per-gap gate, is what currently withholds the
+> unreached lines** — raw tables in `route-no-timing.md`. **Phase 6**
+> (CTC post-selection *interior* refinement) was added the same day as
+> design owed; GATE T no longer gates it, but it stays **after Phase 5**
+> on value — it refines word boundaries inside lines already placed,
+> which is polish next to the ~150 sheet lines that never render. It is
+> not GATE J1's question and does not re-open it. Phase 6's gate letter
+> is still open.
 
 Ken's sequencing ruling: run the remaining measurement program to
 completion, then consolidate the build design once, rather than amending
@@ -524,12 +537,13 @@ Order — cheapest and highest overturn-risk first:
    knobs are inert on this corpus and stay at their shipped values; the
    phase's one production change is the ytasr candidate ratio at 0.45.**
    Raw tables and both read-offs in `route-no-timing.md`. What remains
-   of the step is **Phase 5 (line timing as a fill source)**, whose
-   design is owed against whisper and is the program's next spend. The
-   read-off's own recommendation, recorded as recommendation not ruling:
-   the next design spend goes to **Phase 5's per-gap gate**, not to
-   knob work — the knobs cannot reach the unplaced population that
-   Phase 5 targets.
+   of the step is **Phase 5 (line timing as a fill source)**, and that
+   recommendation was taken: the design pass ran 2026-09-10 against
+   whisper and pre-registered **GATE G**. The step now owes an executor
+   build + offline run, not a design. The read-off's own recommendation,
+   recorded as recommendation not ruling: the next design spend goes to
+   **Phase 5's per-gap gate**, not to knob work — the knobs cannot
+   reach the unplaced population that Phase 5 targets.
 6. ~~**S-E**~~ — **not run.** This is the *line* route's Phase 3
    optional arm, not the joint plan's Phase 3, and it closed with that
    route: `route-line-timing.md`'s status block records "S-E is not

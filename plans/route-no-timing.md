@@ -16,10 +16,13 @@ Model: Claude Sonnet 5 (executor). Plan drafted by Claude Fable 5.
 > carries a knob change.** The one production change out of the phase is
 > the **ytasr candidate ratio at 0.45** (`ytasr.CANDIDATE_MAX_EDIT_RATIO`,
 > eyeballed and shipped the same day). **Phase 5 is the live head of the
-> queue** (line timing as a fill source, scope amended 2026-09-10 to a
-> per-gap gate), then **Phase 6** (CTC post-selection interior
-> refinement, design owed), then GATE L when the Mandarin corpus exists.
-> Sequencing lives in `plans/PROGRAM.md`.
+> queue and is now DESIGNED — the design pass ran 2026-09-10 (Opus) and
+> pre-registered the mechanism, the constants, six offline cells, the
+> tables and the read-off as GATE G. What is owed is an executor session
+> to build it and run the cells, then Ken's eyeball.** Then **Phase 6**
+> (CTC post-selection interior refinement, design owed), then GATE L
+> when the Mandarin corpus exists. Sequencing lives in
+> `plans/PROGRAM.md`.
 
 ## Context
 
@@ -68,7 +71,8 @@ tail.
   GATE P; Phase 5 added; 2a ran and GATE J1 came back NO-GO, so 2b and
   GATE V are struck and Phase 3 became the head of the queue. 2026-09-10:
   **Phase 3 ran and GATE T was read the same day — knobs unchanged, no
-  commit. Phase 5 is the head of the queue**.)* Phase 4
+  commit. Phase 5 is the head of the queue, designed the same day and
+  gated as GATE G**.)* Phase 4
   ran before 2a because it was cheap and filled the gate-reading queue.
 - Probe *outputs* (emission `.pt` caches, per-line score tables,
   corpus CSVs) live in the session scratchpad, **never committed**
@@ -468,7 +472,7 @@ kept because it was the executor's flag at hand-off and the correction
 belongs beside it. Assigning the 14 is still Ken's if Phase 5 wants
 them.*
 
-## Phase 5 — line timing as a fill source (design owed; after GATE J1)
+## Phase 5 — line timing as a fill source (designed 2026-09-10; GATE G)
 
 Added 2026-09-08 when Ken closed the line route. This is where the line
 route's one surviving asset lands: **where the fetched sidecar is right,
@@ -531,8 +535,10 @@ eyeballed 16 good / 0 bad record.
    bundle, so the eyeball can be attributed.
 5. Offline first: the replay harness on the 17-song corpus plus the
    16-song word cohort, **two arms — global gate as shipped vs the
-   per-gap gate of item 2** — then Ken eyeballs the filled lines. Raw
-   tables to the Results log; no verdicts. Pre-register before the
+   per-gap gate of item 2** — then Ken eyeballs the filled lines.
+   *(Superseded by the design below: three settings on the gate axis,
+   not two. Same run, one added cell.)* Raw tables to the Results log;
+   no verdicts. Pre-register before the
    run: the tolerance, the anchor definition (reuse `plan_fills`'), and
    GATE L2's bar — `bad_surviving = 0` on the eyeball, and **the 16
    existing good fills must survive unchanged**. Read off additional
@@ -543,6 +549,214 @@ eyeballed 16 good / 0 bad record.
    of LRCLIB", since Musixmatch and LRCLIB may share provenance for a
    given song, so a sidecar scored against held-out LRC can be
    correlated without being circular by name.
+
+### Design — pre-registered (Opus, 2026-09-10). Gate letter: **GATE G.**
+
+Everything in this section is fixed before the run. The executor
+implements it, runs it, reports the tables, and stops. No constant here
+moves during execution; a case the read-off does not cover is a
+**STOP → Ken**. Design-time evidence for the numbers is the Results-log
+entry of 2026-09-10 ("Phase 5 design pass"), which is a **proxy** read
+off bundles on disk, not a measurement of this gate.
+
+**1. Cue sources.** Both reduce to the same `{line_id: (start, end)}`
+mapping, so this is a provider swap, not a rewrite.
+
+- *LRCLIB* — as shipped (`lrclib.cue_spans_for_lines` on the `.lrc`).
+- *Sidecar* — `lyrics/<stem>.timing.json`, admitted iff
+  `kind ∈ {word, line}` **and** `map_rate ≥ 0.5`
+  (`timing_fetch.WRONG_SONG_MAP_RATE`, the bar the fetch stage already
+  applies before it stashes an artifact — **no new constant**). Word
+  bodies contribute each entry's line `ts`/`te`.
+  `scripts/scaffold_align_song.py:sidecar_scaffold_cues` already builds
+  this mapping for either kind and is the reference implementation;
+  reuse it rather than writing a second parser.
+
+`plan_fills` therefore takes the **mapping**, not `synced_text`. That is
+the whole of item 1's widening.
+
+**2. Anchors — unchanged.** `windowed_realign.analyze_pass1`'s anchors
+as `plan_fills` already computes them (`ANCHOR_MIN_TOKENS` 4 tokens,
+line text unique in the sheet, transcribe corroboration ≥
+`ANCHOR_MIN_RATIO` 0.75), restricted to those that also carry a cue in
+the source under test. No new anchor definition.
+
+**3. The per-gap gate.** For an unplaced candidate line `L` with cue
+start `c(L)`:
+
+- Bracketing anchors: `A_lo` = last anchor-with-cue before `L`, `A_hi` =
+  first after. **Either missing → refuse (`no_bracket`).** This is
+  "never extrapolate past the anchor envelope"; it is what refuses a
+  fill dangling off the last anchor, and it generalises "never fill past
+  the media ends".
+- `gap_audio = A_hi.start − A_lo.start`,
+  `gap_cue = c(A_hi) − c(A_lo)`.
+  **Refuse (`gap_disagree`) if `|gap_audio − gap_cue| > FILL_GAP_TOL_S`.**
+- Otherwise place at **slope 1** with
+  `local_offset = ((A_lo.start − c(A_lo)) + (A_hi.start − c(A_hi))) / 2`
+  — the mean of the two bracketing residuals, which minimises worst-case
+  error across the bracket and needs no fit. `t0 = c(L) + local_offset`,
+  `t1 = c_end(L) + local_offset`, then `_fill_line`'s existing pace caps
+  (`MAX_FILL_WORD_DUR_S`, `MIN_FILL_DUR_S`) unchanged.
+- **Refuse (`outside_envelope`)** if the constructed span is not wholly
+  inside `[A_lo.start, A_hi.end]`.
+
+**4. Every shipped per-line gate still applies, unchanged**: negative
+start, collision against placed spans at `COLLISION_TOL_S`, energy
+`PASS`, never over a placed line, fill-only (a placed line is never
+moved). The per-gap gate only ever **removes** fills relative to the
+same source under the global gate — which is what makes "the 16 must
+survive" a one-sided read.
+
+**5. The tolerance.** `FILL_GAP_TOL_S = 2.0` seconds, **absolute, not a
+slope ratio** (a ratio on a short gap with normal anchor error rejects
+everything). Two reasons it is 2.0 and not a fitted number: it reuses
+the scale already in this module (`WARP_MAD_GATE_S = 2.0`), and the
+design-pass proxy found the choice barely matters — across the whole
+range 1.0–3.0 s the survivor count moves on **6 of the 20 song-source
+pairs that have any candidate**, by 1–4 lines, because bracket
+disagreements on this corpus are either sub-second or many seconds. The executor reports the {1.0, 1.5, 2.0, 3.0} sensitivity as a
+**diagnostic column**; the shipped value does not move without Ken.
+
+**6. Source precedence** (item 1 left this open, correctly, as not to be
+answered by intuition). With a per-line gate it stops being a global
+choice:
+
+- *Per-gap cells* — **per line**: consider every source that has a cue
+  for `L` and clears the gate; if more than one qualifies, take the
+  smaller `|gap_audio − gap_cue|`; exact tie → LRCLIB (the incumbent
+  with the 16/0 record). No new constant, and the tie-break is the same
+  quantity the gate already measures.
+- *Global-only cells* — **per song**, since no per-line statistic
+  exists there: the source with the lower arm-A MAD; tie → LRCLIB.
+
+**7. Provenance.** `source` becomes `lrclib_fill` **or** `sidecar_fill`.
+Any consumer asking "is this a fill" must test the set, never the
+literal string — flagged because Phase 6 pre-registers "skip fill
+lines". The per-line stats record gains `source` and the gate fields
+(`bracket_lo`, `bracket_hi`, `gap_audio`, `gap_cue`, `gap_delta`,
+`local_offset`) so every fill is attributable in the bundle (item 4).
+
+#### The cells
+
+Two axes, six cells, one offline run — replay-only, no GPU. `A0` is the
+shipped path. *(This supersedes item 5's "two arms": same experiment,
+one more setting on the gate axis, because the proxy says the global
+gate — not the per-gap gate — is what currently withholds the prize.)*
+
+| cell | cue source | gate |
+| --- | --- | --- |
+| **A0** | LRCLIB | global (shipped) — the reproduction cell |
+| **A1** | LRCLIB + sidecar | global — **the named risk cell** |
+| **A2** | LRCLIB | global ∧ per-gap |
+| **A3** | LRCLIB + sidecar | global ∧ per-gap — **the proposal** |
+| **A4** | LRCLIB | per-gap only |
+| **A5** | LRCLIB + sidecar | per-gap only |
+
+**A4/A5 drop a shipped gate**, so they are measured and reported, never
+adopted inside this gate — retiring the global fit is Ken's ruling
+alone. They are in the run because they cost nothing and because the
+proxy suggests that is where the unreached lines live.
+
+#### Corpus, and three provisioning traps that void the run if missed
+
+The 18 genius-origin bundles under the library root (Windows box:
+`D:/shared/pikaraoke-songs`), on the `replay_ytasr_third_source.py`
+chassis at the shipped knobs (`joint_alpha` 2.0 / `joint_beta` 2.0 /
+`ytasr.CANDIDATE_MAX_EDIT_RATIO` 0.45).
+
+- **The fill needs audio.** `_energy_check` needs the envelope, and the
+  replay chassis deliberately never touches audio. Decode it per song
+  with `onset_snap.decode_env_db` off the stem this plan's ground rules
+  name — `dereverb/` when present, else `vocal/` (CPU, no GPU). A cell
+  run with `env = None` fills nothing and is not a result.
+- **The LRC tier matters.** Only one song has a `.lrc` beside it on the
+  Windows box; the rest are in the flat `lrclib/<stem>` cache, which is
+  the harness's tier 2 (`_load_lrclib_reference`) and not the
+  production resolver. Use the harness's resolution order and **record
+  which tier supplied each song**, or A0 will not reproduce production.
+- **Domino's LRCLIB variant is on neither tier on this box**, and Domino
+  carries 1 of the 16 good fills. Provision it (the harness's tier-3
+  live fetch already does this) before the run. If it cannot be
+  re-fetched, the roster check runs on **15 of 16 with Domino named** —
+  that is an artifact-provisioning fact, not a behaviour change, and not
+  a STOP.
+
+#### Tables the executor reports (tables only, no verdicts)
+
+1. Per song × cell: eligible / bail reason, candidate count, fill count,
+   filled lids, and the histogram of per-line refusal reasons
+   (`no_bracket`, `gap_disagree`, `outside_envelope`, `negative_start`,
+   `collision`, `energy`).
+2. **The 16-good roster** (`plans/completed/lrclib-fill-absence-study.md`
+   — Belle 5, Girl in the Bubble 5, Next Ten Minutes 3, NSYNC 2,
+   Domino 1): present / absent / moved per cell, times to 3 dp.
+3. Every fill in the union of cells that A0 does not already produce:
+   song, lid, text, source, cells, `t0`/`t1`, bracket lids, `gap_audio`,
+   `gap_cue`, `gap_delta`, collision, energy.
+4. Tolerance sensitivity at {1.0, 1.5, 2.0, 3.0} — fill counts per song
+   per cell, diagnostic only.
+5. **Bloodstream's unplaced block**, called out separately: which cells
+   fill it, at what `gap_delta`. Named risk case.
+6. **Whether Bloodstream clears the global gates with real anchors.**
+   The 2026-09-10 Fable round records that it does; the design-pass
+   proxy (pseudo-anchors) says arm B bails `wide_spread`. Real anchors
+   settle it — report the arm-A/arm-B numbers per source, do not
+   reconcile the two claims in prose.
+
+Eyeball packet: per song, a diff `.ass` rendering only the fills that
+differ from A0, plus a text list of line/time/source. Ken returns
+good / bad / unsure per fill.
+
+#### The read-off (pre-registered; executed by Opus, ruled by Ken)
+
+**Validity first.** If **A0 does not reproduce the 16-good roster**
+(15 with Domino named, per the trap above), the harness is not faithful
+to production and the whole read is **void → STOP → Ken**. Nothing below
+is read.
+
+A cell **PASSES** iff all three hold:
+
+- every roster fill it should carry is present with identical times;
+- `bad_surviving = 0` on Ken's eyeball of that cell's fills — GATE L2's
+  bar, inherited; and
+- no fill lands inside Bloodstream's unplaced block unless Ken calls
+  that fill good.
+
+Then, in order:
+
+1. **PASS(A3) and not PASS(A1)** → adopt the widened source **with** the
+   per-gap gate. This is the phase's hypothesis and its expected shape.
+2. **PASS(A3) and PASS(A1)** → the per-gap gate cost nothing, so adopt
+   A3 anyway — *unless* A3 loses a good fill that A1 has, which is a
+   live trade → **STOP → Ken**.
+3. **PASS(A1) and not PASS(A3)** → the per-gap gate dropped good fills
+   and the global gate alone was clean. Report; adopting A1 is Ken's
+   ruling, since A1 is the cell this phase exists to distrust.
+4. **Neither A1 nor A3 passes** → the widening does not ship and the
+   LRCLIB-only fill stays exactly as it is. Then, separately: if
+   PASS(A2) and A2 ≠ A0 and A2 loses no good fill, the per-gap gate
+   ships on the LRCLIB source alone.
+5. **A4/A5** are reported for the record in every branch. Adopting
+   either retires the global fit and is Ken's alone.
+6. **A cell with fewer than 5 fills that A0 does not already produce is
+   reported, not read** — there is nothing to see (mirrors Phase 6's
+   under-8-looks rule). If that empties branches 1–3, say so plainly:
+   the corpus did not exercise the question.
+7. **Anything not covered above → STOP → Ken.**
+
+**Compliance with the scoring rider (item 5).** Nothing in this read-off
+scores a sidecar fill against the held-out LRC. The bar is Ken's eyeball
+plus the roster check; LRCLIB appears here only as a *cue source* the
+fill already ships with, never as a reference the widened source is
+graded against.
+
+#### Not in this phase
+
+No matcher change; no DP candidacy (see the paragraph below, unchanged);
+no new fetch — every sidecar this phase reads is already on disk; no
+change to `source` semantics beyond the second fill tag; no knob
+re-tune (GATE T closed that).
 
 **What this phase must not do without Ken re-opening a ruling:** make
 the sidecar a **DP candidate** (a witness the matcher scores against
@@ -576,9 +790,11 @@ dirt-free songs. Scored "sung lyric shown when sung", they are what
 this phase would fill; scored "wrong time" or "filler", they are what
 its gates must reject. Viewing them needs no pre-registration change.
 
-**Gate:** Ken; letter assigned when the design is written. Hard
-criterion, inherited from GATE L2: no filled line may be a cram, a
-duplicate, or off-sheet dialogue on the eyeballed set.
+**GATE G** (letter assigned 2026-09-10 with the design). Read off by
+Opus against the pre-registered rules above; **Ken rules**, and the
+eyeball is his. Hard criterion, inherited from GATE L2: no filled line
+may be a cram, a duplicate, or off-sheet dialogue on the eyeballed
+set.
 
 ## Phase 6 — CTC post-selection interior refinement (design owed; after GATE T)
 
@@ -1981,3 +2197,173 @@ spend the next design pass, not a ruling: **Phase 5's per-gap gate,
 not this gate** — GATE T the data answered by itself, whereas the per-gap
 gate is a live design question with a named failure mode (Bloodstream).
 
+### 2026-09-10 — Phase 5 design pass (Opus) — disk proxy tables, no gate read
+
+Design-time measurement taken to fix Phase 5's constants instead of
+intuiting them. **Read-only**: three throwaway scripts in the session
+scratchpad over `D:/shared/pikaraoke-songs`; no repo file, production
+path or artifact was touched, nothing was run through the matcher, and
+**no gate was read**. The design it grounds is in Phase 5 above.
+
+**What the proxy is, and what it therefore cannot settle.** The real
+gate brackets an unplaced line with `analyze_pass1` anchors —
+corroborated placed lines. Deriving those needs a matcher replay, which
+is executor work, so this pass substituted **every placed line in
+`output_line_timings` as a pseudo-anchor**. Pseudo-anchors include
+misplaced lines, so every dispersion number below is an **upper bound**
+on the real anchor jitter, and any song shown bailing a global gate may
+well clear it on real anchors. Line starts are post-snap; energy and
+collision were not simulated. Cue mappings are the shipped ones
+(`lrclib.cue_spans_for_lines`, `sidecar_scaffold_cues`).
+
+#### Reach — the 18 genius-origin bundles
+
+All 18 are `method_used = joint`. 164 lines carry no words. Sidecars
+admitted at the shipped bar (`kind ∈ {word, line}`, `map_rate ≥ 0.5`).
+
+| | songs | unplaced lines |
+| --- | --- | --- |
+| genius-origin bundles | 18 | 164 |
+| with unplaced lines | 15 | 164 |
+| ... and a usable sidecar | 14 | 157 |
+| ... and any LRCLIB variant on the box | 9 | — |
+| ... sidecar but no LRCLIB at all | 6 | 84 |
+
+Unplaced lines that actually **map to a cue** (the true candidate
+population, text-matched): **81 from sidecars across 12 songs**, 46 from
+LRCLIB across 8. The rest are repeats, ad-libs and section headers that
+map to nothing in either source.
+
+| stem (trunc) | n | unplaced | sidecar kind | map_rate | source | LRC |
+| --- | --- | --- | --- | --- | --- | --- |
+| Defying Gravity | 89 | 38 | line | 0.685 | musixmatch | — |
+| Bloodstream | 74 | 27 | line | 0.703 | musixmatch | cache |
+| HUNTR/X This Is What It Sounds Like | 53 | 21 | line | 0.811 | musixmatch | — |
+| NSYNC Paradise | 65 | 12 | line | 0.785 | netease | cache |
+| Popular | 62 | 11 | word | 0.629 | musixmatch | — |
+| Mulan Make a Man Out of You | 47 | 11 | word | 0.745 | musixmatch | cache |
+| Belle | 110 | 9 | word | 0.855 | musixmatch | cache |
+| Seasons of Love | 34 | 9 | word | 0.912 | musixmatch | — |
+| Hakuna Matata | 40 | 7 | line | 0.625 | netease | cache |
+| Girl in the Bubble | 36 | 7 | — | — | — | cache |
+| Domino | 67 | 4 | word | 0.910 | musixmatch | **—** |
+| Next Ten Minutes | 71 | 4 | line | 0.930 | musixmatch | cache |
+| In Summer | 31 | 2 | line | 0.581 | netease | cache |
+| Free | 41 | 1 | word | 0.805 | musixmatch | — |
+| Best Part Of Me | 38 | 1 | word | 0.868 | musixmatch | cache |
+| Be Our Guest | 77 | 0 | line | 0.688 | musixmatch | cache |
+| Colors of the Wind | 37 | 0 | word | 0.946 | musixmatch | cache |
+| Stay Gold | 38 | 0 | word | 0.711 | musixmatch | beside |
+
+Two provisioning facts, recorded because they bite the executor before
+any measurement does: only **Stay Gold** has a `.lrc` beside it on this
+box (the other 26 are in the flat `lrclib/` harness cache), and
+**Domino's LRCLIB variant is on neither tier** although Domino carries
+1 of the 16 good fills.
+
+#### Bracket disagreement `|gap_audio − gap_cue|`, sidecar sources
+
+659 consecutive pseudo-anchor pairs, all sidecar-carrying songs:
+
+| q50 | q75 | q90 | q95 | q99 | max |
+| --- | --- | --- | --- | --- | --- |
+| 0.302 | 0.872 | 2.153 | 3.992 | 19.697 | 90.480 |
+
+Histogram (seconds, count): 0–0.25 **294**, 0.25–0.5 **125**, 0.5–0.75
+**57**, 0.75–1.0 **36**, 1.0–1.5 **54**, 1.5–2.0 **22**, 2.0–3.0 **24**,
+3.0–4.0 **14**, 4.0–5.0 **7**, 5.0–7.5 **6**, 7.5–10 **6**, 10–15 **4**,
+15–20 **3**, 20–30 **2**, 30+ **5**.
+
+Pooled over all pairs the shape is monotone decreasing with a heavy
+tail — **no trough is visible at this granularity**, which is the one
+place the proxy does not reproduce the mechanism's stated rationale.
+The separation the design relies on shows up instead in the per-song
+survivor counts below, where the tolerance is nearly inert across
+1.0–3.0 s.
+
+Per song, sidecar unless marked: median / p90 / max, and pairs over 1 s
+/ 2 s / 5 s.
+
+| stem | pairs | med | p90 | max | >1 | >2 | >5 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Bloodstream | 35 | 1.51 | 12.86 | 83.75 | 19 | 14 | 8 |
+| Bloodstream (LRC) | 27 | 0.67 | 13.28 | 42.59 | 12 | 9 | 7 |
+| Hakuna Matata | 23 | 0.19 | 1.16 | 90.48 | 3 | 2 | 2 |
+| Hakuna Matata (LRC) | 16 | 0.44 | 31.19 | 50.30 | 6 | 4 | 4 |
+| Defying Gravity | 43 | 0.60 | 2.68 | 31.33 | 15 | 7 | 3 |
+| NSYNC Paradise | 45 | 0.30 | 1.61 | 40.67 | 9 | 4 | 2 |
+| Seasons of Love | 23 | 0.29 | 3.89 | 21.75 | 7 | 5 | 1 |
+| Popular | 37 | 0.43 | 3.62 | 18.21 | 13 | 5 | 3 |
+| Belle (LRC) | 81 | 0.49 | 2.05 | 14.65 | 18 | 9 | 2 |
+| Belle | 86 | 0.20 | 0.88 | 2.83 | 8 | 1 | 0 |
+| Be Our Guest | 52 | 0.41 | 1.72 | 8.66 | 13 | 5 | 1 |
+| Next Ten Minutes | 61 | 0.28 | 1.48 | 8.30 | 10 | 6 | 3 |
+| Domino | 56 | 0.83 | 3.30 | 8.22 | 23 | 11 | 3 |
+| Best Part Of Me (LRC) | 34 | 0.33 | 2.29 | 6.96 | 6 | 4 | 1 |
+| HUNTR/X | 27 | 0.18 | 0.65 | 4.18 | 2 | 2 | 0 |
+| Free | 32 | 0.10 | 0.51 | 3.31 | 2 | 2 | 0 |
+| Best Part Of Me | 32 | 0.55 | 2.02 | 3.20 | 7 | 4 | 0 |
+| Mulan (LRC) | 32 | 0.27 | 2.21 | 3.23 | 6 | 4 | 0 |
+| Mulan | 31 | 0.24 | 1.17 | 2.52 | 5 | 2 | 0 |
+| remainder — In Summer / Colors / Stay Gold (sidecar); Be Our Guest / In Summer / Colors / Stay Gold / Paradise / Next Ten / Girl in the Bubble (LRC) | — | ≤0.44 | ≤1.53 | ≤23.76 | — | — | — |
+
+#### Global gate on pseudo-anchors, and per-gap survivors by tolerance
+
+`global` = arm A (`PRIOR_MIN_ANCHORS` 4, `PRIOR_MAX_MAD_S` 0.75) ∧ arm B
+Theil-Sen (`WARP_MIN_ANCHORS` 5, `WARP_MAD_GATE_S` 2.0,
+`FILL_MAX_SLOPE_DEV` 0.01). `cand` = unplaced lines with a cue.
+Survivors = candidates whose bracketing pair agrees within the
+tolerance, before collision and energy.
+
+| stem | source | offset | madA | slope | madB | global | cand | 1.0 / 1.5 / 2.0 / 3.0 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Defying Gravity | sidecar | −76.98 | 9.26 | 0.788 | 6.28 | A wide_spread | 17 | 0/0/0/0 |
+| Bloodstream | sidecar | −10.10 | 0.72 | 0.825 | 4.65 | B wide_spread | 16 | 0/0/0/0 |
+| Bloodstream | LRC | −10.67 | 0.68 | 0.856 | 4.82 | B wide_spread | 9 | 0/0/0/0 |
+| HUNTR/X | sidecar | 1.43 | 0.72 | 1.0198 | 0.47 | slope_dev | 15 | 0/0/0/0 |
+| Belle | sidecar | −7.77 | 0.16 | 1.0010 | 0.15 | PASS | 7 | 7/7/7/7 |
+| Belle | LRC | −4.53 | 0.42 | 0.9988 | 0.44 | PASS | 8 | 8/8/8/8 |
+| NSYNC Paradise | sidecar | 24.05 | 0.12 | 0.9993 | 0.12 | PASS | 5 | 4/4/4/4 |
+| NSYNC Paradise | LRC | 24.07 | 0.17 | 0.9984 | 0.18 | PASS | 6 | 2/4/4/5 |
+| Next Ten Minutes | sidecar | 1.15 | 0.22 | 0.9999 | 0.23 | PASS | 4 | 4/4/4/4 |
+| Next Ten Minutes | LRC | 1.16 | 0.22 | 0.9999 | 0.26 | PASS | 4 | 4/4/4/4 |
+| Girl in the Bubble | LRC | −22.87 | 0.23 | 1.0024 | 0.21 | PASS | 7 | 2/4/5/5 |
+| Mulan | sidecar | 30.96 | 1.01 | 0.9628 | 0.33 | A wide_spread | 3 | 1/2/2/3 |
+| Mulan | LRC | 31.62 | 1.86 | 0.9572 | 0.12 | A wide_spread | 9 | 4/5/5/8 |
+| Seasons of Love | sidecar | −4.07 | 1.90 | 0.9494 | 0.40 | A wide_spread | 7 | 1/2/2/2 |
+| Domino | sidecar | 14.34 | 6.04 | 1.1640 | 2.91 | A wide_spread | 4 | 2/2/2/2 |
+| Popular | sidecar | −7.52 | 0.77 | 1.0038 | 0.69 | A wide_spread | 1 | 0/0/0/0 |
+| Hakuna Matata | sidecar | 9.26 | 0.10 | 1.0035 | 0.11 | PASS | 1 | 0/0/0/0 |
+| Hakuna Matata | LRC | 9.13 | 0.21 | 0.9953 | 0.26 | PASS | 2 | 0/0/0/0 |
+| In Summer | sidecar | −0.84 | 0.28 | 0.9947 | 0.13 | PASS | 1 | 1/1/1/1 |
+| In Summer | LRC | −0.51 | 0.10 | 0.9978 | 0.09 | PASS | 0 | 0/0/0/0 |
+| Best Part Of Me | sidecar | −0.37 | 0.44 | 0.9964 | 0.35 | PASS | 0 | 0/0/0/0 |
+| Best Part Of Me | LRC | −0.62 | 0.72 | 0.9808 | 0.46 | slope_dev | 1 | 0/0/0/1 |
+| Free (sidecar); Be Our Guest / Colors / Stay Gold (each source) | — | — | ≤0.32 | — | ≤0.34 | PASS | 0 | 0/0/0/0 |
+
+One cross-check on the proxy itself, and only one is available. The
+study excluded Best Part Of Me at **2.1%** slope deviation against its
+LRCLIB variant; pseudo-anchors on the same variant give **1.92%**, still
+excluded. The study's other excluded song, Seasons of Love at 4.2%, has
+**no LRCLIB variant on this box** — its 5.06% above is the *sidecar*
+fit and is not the same measurement, and its bail reason here is arm A,
+not the slope. One agreement is not a validation of the method.
+
+Three readings the executor's real-anchor run must confirm or overturn,
+recorded here as the proxy's output and nothing more:
+
+- **The tolerance is nearly inert.** Of the 20 song-source pairs that
+  have any candidate, the survivor count moves across the whole
+  1.0–3.0 s range on **6** — Mulan (both sources), Paradise LRC, Girl in
+  the Bubble, Seasons, Best Part Of Me LRC — and by 1–4 lines. The other
+  14 are identical at every tolerance.
+- **The global gate, not the per-gap gate, is what withholds the
+  prize.** The four songs holding the most cue-mapped candidates —
+  Defying Gravity 17, Bloodstream 16, HUNTR/X 15, Seasons 7 — all bail a
+  global arm here, and the per-gap gate independently refuses all of Defying
+  Gravity, Bloodstream and HUNTR/X at every tolerance.
+- **Bloodstream bails arm B here** (madB 4.65 sidecar / 4.82 LRC, slope
+  0.83/0.86), against the 2026-09-10 Fable round's record that it clears
+  both global gates. Pseudo-anchors inflate arm B, so this is exactly
+  the kind of claim the proxy cannot settle — table 6 of the design
+  settles it on real anchors.
