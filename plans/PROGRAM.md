@@ -211,10 +211,11 @@ a new mechanism on rung 2b rather than rung 1 returning. Detail in
   by collapsing to zero width, which the align-pace guard reads,
   while CTC cannot abstain and instead crams or smears those tokens —
   invisible to that guard. Detail and the eyeball list in
-  `route-no-timing.md`. **One item stays open and is Ken's:** J2's
+  `route-no-timing.md`. ~~**One item stays open and is Ken's:** J2's
   burden ("retire iff ~zero") points opposite to Appendix D's ("OFF
   unless a named fix"), and that must be settled before Appendices
-  C/D/E are re-locked.
+  C/D/E are re-locked.~~ **RESOLVED 2026-09-10 (Ken) — by scope, not
+  by burden.** See the entry below.
 - **GATE L** — non-Latin form. Re-homed 2026-09-08 to the joint route's
   aligner, which J1 settled the same day as **whisper**; additive,
   blocks nothing but the Mandarin corpus. Note the read-off's rider:
@@ -246,14 +247,37 @@ a new mechanism on rung 2b rather than rung 1 returning. Detail in
   chain — a DP candidate has a drop branch by construction), and that
   per-line detection is harder than per-song (it is easier; the
   sidecar simply carries no audio evidence for it to adjudicate).
-- **Phase 6's letter and its endpoint form** — NEW 2026-09-10, Ken's.
-  Interior-only is the pre-registered default and keeps J2 moot. The
-  **endpoint** form is *blocked* on the J2-vs-Appendix-D item below,
-  not merely complicated by it.
-- **J2 vs Appendix D now has a second consumer.** The open item
-  recorded under GATE J1/J2 above (J2's "retire iff ~zero" points
-  opposite to Appendix D's "OFF unless a named fix") gates Phase 6's
-  endpoint form as well as the appendix re-lock.
+- **Phase 6's letter** — NEW 2026-09-10, Ken's. Interior-only is the
+  pre-registered default. Its **endpoint** form is not merely blocked
+  but incoherent under the snap ruling below: if the snap permanently
+  owns line edges, endpoint refinement is a second mechanism fighting
+  it over the same values. Letter still unassigned.
+
+~~**J2 vs Appendix D.**~~ **RESOLVED 2026-09-10 — Ken's ruling: the
+edge snap stays.** The two rules were never in genuine conflict; they
+have different *scopes*. Appendix D disables the snap **on CTC-timed
+routes** (and in the same clause says whisper-timed routes keep it).
+**Phase 6 does not create a CTC-timed route** — whisper places every
+line and CTC only adjusts word boundaries inside the subset that passes
+the disagreement band, so the OFF clause never reaches the joint lane
+and the whisper-timed clause does. Ken's reasoning, which is the part
+to keep: **a post-pass that does not cover the whole song cannot retire
+a mechanism that does.** The snap is still needed for align-won lines,
+interpolated lines, filled lines, band-rejected lines, every song CTC
+never runs on, and the whole SRT route.
+
+Consequences: (1) **the snap owns line edges, always, unchanged**, and
+CTC owns word boundaries strictly inside a line — the two never touch
+the same numbers, so **no per-line snap exception is needed anywhere**;
+(2) Appendix D's locked snap clause **does not move** and never had to;
+(3) J2 is moot on this lane *permanently*, not just "today" as the
+read-off put it, because nothing on the roadmap restores whole-song CTC
+coverage here; (4) Appendices C/D/E are no longer gated on this item —
+though the re-lock still has to happen and Appendix D's **other**
+locked decisions (the de-reverb retry retirement among them) are
+untouched by this ruling. **The OFF clause is dormant, not wrong:** it
+wakes up if any route is ever genuinely CTC-timed end to end. None
+exists and none is planned (CTC was rejected on the SRT path at S-2).
 
 Not open, do not re-litigate: engine branch E1–E4 is **OFF** (GATE O =
 O-GRAY); no section-level DP (GATE P); densify rejected (S-3); CTC

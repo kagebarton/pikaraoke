@@ -699,6 +699,22 @@ Data-independent decisions, locked now:
   flag tables show a specific, named flag class the snap demonstrably
   fixes, recorded at GATE S. Whisper-timed routes keep the snap
   unchanged.
+  > **Scope annotation (Ken, 2026-09-10) — the locked text above does
+  > not move.** The apparent conflict with GATE J2's opposite burden
+  > was a scope mismatch, not a disagreement. This clause governs
+  > **CTC-timed routes**; the joint catch-all is a *whisper-timed*
+  > route and is governed by the last sentence, so the snap stays
+  > there. `route-no-timing.md` Phase 6 (CTC post-selection *interior*
+  > refinement) does **not** make it a CTC-timed route — whisper places
+  > every line and CTC only adjusts word boundaries inside the subset
+  > that clears its disagreement band. Ken's reasoning: a post-pass
+  > that does not cover the whole song cannot retire a mechanism that
+  > does. Consequence for the design-consolidation pass: **this clause
+  > is dormant, not wrong** — no CTC-timed route exists or is planned
+  > (CTC was rejected on the SRT path at S-2), and it wakes if one is
+  > ever built. The C/D/E re-lock is no longer gated on the J2 item;
+  > every other decision in this appendix, the de-reverb retirement
+  > included, is untouched by this annotation.
 - **De-reverb:** the existing transcribe-side de-reverb gate is
   untouched on every route in both branches (it feeds anchors and
   verify). The CTC aligner itself never triggers de-reverb.

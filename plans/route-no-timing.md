@@ -599,13 +599,23 @@ the selected span on a transcribe-won line runs up to three ASR words
 wider than the line's audio at the edges (the `find_candidates` slack),
 `_build_line_object` starts the line at the first *matched* word, and
 CTC constrained to the raw window would smear token 0 back over them.
-Interior boundaries are largely immune. Interior-only also keeps GATE
-J2 moot and Appendix D untouched — the snap never sees CTC timing.
-**The endpoint form is blocked**, not merely complicated, on the open
-Ken item (J2's "retire iff ~zero" vs Appendix D's "OFF unless a named
-fix"); if ever taken it is a separate phase, and its ceiling is
-measurable against the 16 uploader SRTs, which are human-timed line
-edges on our own clock.
+Interior boundaries are largely immune.
+
+**Ken's snap ruling (2026-09-10) makes interior-only the *coherent*
+default, not merely the cautious one.** The edge snap stays and **owns
+line edges** on every line of this route — a post-pass that does not
+cover the whole song cannot retire a mechanism that does (full ruling
+in the Results log entry of that date, and in `plans/PROGRAM.md`). So
+the division of labour is fixed: **the snap owns edges, this phase owns
+word boundaries strictly inside a line.** The two never touch the same
+values, which is why no per-line snap exception is needed and why the
+after-the-snap ordering below is right rather than merely safe. It also
+retires the endpoint form on its own terms — with the snap permanently
+owning edges, endpoint refinement would be a second mechanism fighting
+it over the same numbers, not a blocked-but-attractive option. Recorded
+for completeness: were it ever revisited, its ceiling is measurable
+against the 16 uploader SRTs, which are human-timed line edges on our
+own clock.
 
 **Measurement.** Endpoints have a reference (those cues); **interiors
 have none on this corpus** — held-out LRC is line-start only, richsync
@@ -1155,7 +1165,9 @@ that rate, not repair. H-snap carries no correctness reference, so it
 can neither confirm nor refute GATE C, and Appendix D's locked position
 stands untouched by this evidence.
 
-#### An unresolved conflict between two pre-registered rules (Ken)
+#### ~~An unresolved conflict between two pre-registered rules (Ken)~~ — RESOLVED 2026-09-10 (Ken)
+
+*Recorded as it stood, then the ruling.*
 
 **GATE J2 puts the burden on retirement** ("retire iff ~zero");
 **Appendix D puts it on the snap** ("OFF unless a named flag class is
@@ -1164,6 +1176,30 @@ CTC-won joint lines and Appendix D's rule keeps it OFF. Moot today —
 J1 NO-GO means there are no CTC-won joint lines in production — but the
 two rules point opposite directions and this must be settled **before
 Appendices C/D/E are re-locked** in the design-consolidation pass.
+
+**RULING (Ken, 2026-09-10): the edge snap stays. Resolved by scope,
+not by picking a burden.** The rules were never in genuine conflict.
+Appendix D's clause disables the snap **on CTC-timed routes** — and in
+the same clause keeps it on whisper-timed ones. **Phase 6 does not
+create a CTC-timed route**: whisper places every line and CTC only
+adjusts word boundaries inside the subset that clears the disagreement
+band, so Appendix D's OFF clause never reaches this lane and its
+whisper-timed clause does. Ken's reasoning, which is the durable part:
+**a post-pass that does not cover the whole song cannot retire a
+mechanism that does** — the snap is still needed for align-won lines,
+interpolated lines, filled lines, band-rejected lines, every song CTC
+never runs on, and the entire SRT route.
+
+Consequences: the snap **owns line edges, always**, and CTC owns word
+boundaries strictly inside a line, so the two never touch the same
+values and **no per-line snap exception is needed**; Appendix D's
+locked snap clause **does not move**; J2 is moot on this lane
+*permanently*, not merely "today" as written above, since nothing on
+the roadmap restores whole-song CTC coverage here; and Appendices
+C/D/E are no longer gated on this item, though the re-lock still has
+to happen and Appendix D's other locked decisions are untouched. The
+OFF clause is **dormant, not wrong** — it wakes if a route is ever
+genuinely CTC-timed end to end, and none exists or is planned.
 
 #### What Ken's eyeball still settles (not contingent for J1)
 
@@ -1346,7 +1382,7 @@ as the round's own findings:
 No code changed. Phase 5's scope gains a per-gap gate (item 2) and a
 two-arm probe; Phase 6 is added as design owed; the START HERE block
 and `plans/PROGRAM.md` are updated to match. Open and Ken's: whether to
-re-open the DP ban at all (round 1 says no, and the ban is his), the
-gate letters for Phases 5 and 6, and the standing J2-vs-Appendix-D item
-— which now has a second consumer, since Phase 6's endpoint form is
-blocked on it.
+re-open the DP ban at all (round 1 says no, and the ban is his) and the
+gate letters for Phases 5 and 6. *(The J2-vs-Appendix-D item was also
+open at the time of this commit; Ken resolved it the same day — see the
+ruling appended to the GATE J1/J2 read-off above.)*
