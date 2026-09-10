@@ -223,15 +223,60 @@ a new mechanism on rung 2b rather than rung 1 returning. Detail in
   exists.
 - **R-3** — SRT-first *stands*, but Appendix A flags that a later ruling
   could reorder precedence 1 against 2.
+- **Phase 5's gate form** — NEW 2026-09-10, Ken's. A Fable round found
+  that widening the fill's source to the sidecar **under the shipped
+  per-song gate** is where the 16/0 record gets tested and can fail:
+  a global offset+slope fit never sees the unsung sections, and the
+  "never overrides a placed line" cap does not cover a run of
+  *unplaced* lines after a structural discrepancy on a song that passes
+  the gate. Proposed instead: gate per *gap* between bracketing
+  corroborated anchors, in absolute seconds, never extrapolating past
+  the anchor envelope. Design owed, probe two-armed against the shipped
+  gate, letter unassigned. Detail in `route-no-timing.md` Phase 5
+  item 2.
+- **The DP ban** — assessed 2026-09-10, **still Ken's and unchanged**.
+  The same round priced sidecar-as-DP-candidate as structurally dead
+  (redundant with the transcribe candidate that already exists where a
+  line is sung; wins only by being wider, which displaces an
+  audio-placed line; stripped by the second pass as uncorroborated;
+  the agreement-term variant tips repeated-text disambiguation toward
+  the sidecar's edit). Two arguments previously offered for the ban are
+  **withdrawn as wrong** and should not be re-used: that the DP would
+  show a confidently-wrong line (it scores zero and never enters the
+  chain — a DP candidate has a drop branch by construction), and that
+  per-line detection is harder than per-song (it is easier; the
+  sidecar simply carries no audio evidence for it to adjudicate).
+- **Phase 6's letter and its endpoint form** — NEW 2026-09-10, Ken's.
+  Interior-only is the pre-registered default and keeps J2 moot. The
+  **endpoint** form is *blocked* on the J2-vs-Appendix-D item below,
+  not merely complicated by it.
+- **J2 vs Appendix D now has a second consumer.** The open item
+  recorded under GATE J1/J2 above (J2's "retire iff ~zero" points
+  opposite to Appendix D's "OFF unless a named fix") gates Phase 6's
+  endpoint form as well as the appendix re-lock.
 
 Not open, do not re-litigate: engine branch E1–E4 is **OFF** (GATE O =
 O-GRAY); no section-level DP (GATE P); densify rejected (S-3); CTC
 rejected on the SRT path (S-2, SRT arm); **CTC in the joint matcher
 (GATE J1 NO-GO 2026-09-08 — the S-3 rider is unexercised, not
 withdrawn; a re-attempt needs an abstention mechanism pre-registered
-before it runs, never the same probe again)**; the line route itself (S-1
+before it runs, never the same probe again)**; **CTC as a fourth DP
+peer** (2026-09-10 — same abstention defect as J1, plus the joint
+score being monotone in candidate width, so CTC's tighter windows lose
+clean lines to coarser sources; advisory, tie-break and width-only
+variants assessed and rejected with it); the line route itself (S-1
 withdrawn 2026-09-08 — re-open only with a per-line design, never with a
 per-song gate).
+
+**Scope rider on the J1 NO-GO (2026-09-10).** J1 settled CTC as a
+*witness that decides where a line goes*. It did not settle CTC as a
+**post-selection timing refinement** on spans the matcher has already
+placed — a different question, because abstention is a selection
+problem and a slice cannot smear outside its window. That form is
+`route-no-timing.md` Phase 6, design owed. Citing J1 against it is a
+misreading; the live objections to it are S-C's within-window ensemble
+failure, the absence of an interior reference, and a zero-model
+competitor already in the bundles.
 
 ## Which file owns what
 
@@ -261,13 +306,19 @@ shipped `cue_align.py`, so it is not dead-end history.
 
 ## Remaining execution order (Ken, 2026-09-01) — measure first, lock once
 
-> **START HERE (2026-09-08, updated after the J1/J2 read-off).** The
+> **START HERE (2026-09-10, updated after the two Fable rounds).** The
 > line route is closed (step 4) and **GATE J1 came back NO-GO**, so
 > whisper stays the joint aligner and Phase 2b never gets built. The
 > next spend is **Phase 3 → GATE T** in `plans/route-no-timing.md`,
 > tuning the whisper matcher on the catch-all population. After it,
 > Phase 5 there (line timing as a fill source) is the design that
-> inherits everything the line route learned.
+> inherits everything the line route learned — **its scope was amended
+> 2026-09-10 to a per-gap gate**, because the shipped fill's per-song
+> gate carries the warp gate's blind spot on the population Phase 5
+> widens it to. **Phase 6** (CTC post-selection *interior* refinement)
+> was added the same day as design owed, sequenced **after GATE T** —
+> it is not GATE J1's question and does not re-open it. Both are
+> assessments, not rulings; gate letters are Ken's.
 
 Ken's sequencing ruling: run the remaining measurement program to
 completion, then consolidate the build design once, rather than amending

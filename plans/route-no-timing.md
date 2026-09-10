@@ -2,7 +2,7 @@
 
 Model: Claude Sonnet 5 (executor). Plan drafted by Claude Fable 5.
 
-> **START HERE — the live build lane as of 2026-09-08.** Ken ceased work
+> **START HERE — the live build lane as of 2026-09-10.** Ken ceased work
 > on the line route (S-1 withdrawn; `plans/route-line-timing.md` closing
 > entry), so every song without an uploader SRT lands here permanently
 > and this plan is the only build lane left. State of the phases:
@@ -11,8 +11,10 @@ Model: Claude Sonnet 5 (executor). Plan drafted by Claude Fable 5.
 > 2026-09-08 and GATE J1 is NO-GO** — whisper stays the joint aligner,
 > so **2b and GATE V are skipped entirely** and **GATE J2 cleared
 > nothing** (Appendix D unchanged). **Phase 3 → GATE T is NEXT**, on
-> the whisper matcher, then **Phase 5** (line timing as a fill source),
-> then GATE L when the Mandarin corpus exists. Sequencing lives in
+> the whisper matcher, then **Phase 5** (line timing as a fill source,
+> scope amended 2026-09-10 to a per-gap gate), then **Phase 6** (CTC
+> post-selection interior refinement, design owed, after GATE T), then
+> GATE L when the Mandarin corpus exists. Sequencing lives in
 > `plans/PROGRAM.md`.
 
 ## Context
@@ -447,16 +449,61 @@ eyeballed 16 good / 0 bad record.
 
 1. Widen `plan_fills`' source from `lyrics/<stem>.lrc` to the fetch
    pillar's sidecar `lyrics/<stem>.timing.json` (`kind` word or line;
-   word sidecars contribute their line `ts`/`te`), under the **same
-   gates and the same fill-only contract**. Source precedence when both
-   exist is a design question; do not answer it by intuition.
-2. Never fill past the media ends, never over an audio-placed line —
+   word sidecars contribute their line `ts`/`te`), under the
+   fill-only contract. Source precedence when both exist is a design
+   question; do not answer it by intuition. **Not under the same
+   gates** — see 2 below.
+2. **Per-gap gate (Fable, 2026-09-10; design owed, not ratified).**
+   The shipped fill's eligibility is a *per-song* offset+slope fit,
+   which carries the warp gate's verified blind spot: a global fit's
+   population never sees the unsung sections, so a cut section is
+   invisible to it. Today the damage is capped by never overriding a
+   placed line, but that cap does not cover the one case this phase
+   creates — a run of *unplaced* lines after a structural discrepancy
+   on a song that passes the global gate. Collision only checks placed
+   spans, so where the matcher hid the region there is nothing to
+   collide with and the fill can land a cut section's lines over audio
+   singing something else. Named candidate on the numbers already on
+   file: Bloodstream (clears both global gates, STRUCTURAL by the
+   fallback's shape diagnostic, EDIT by M7-a, seven-line unplaced
+   block; its arm-A MAD is not on file). Widening the source to a
+   population M7-a says is majority wrong-edit, under the gate that
+   earned 16/0 on a population it was validated on, is where that
+   record gets tested and can fail.
+   **The proposed form:** gate each unplaced line on its *bracketing
+   corroborated anchors* (the ones `plan_fills` already computes) —
+   fill only if the audio gap and the sidecar gap agree in length
+   within a tolerance, place at the local offset (slope 1), and never
+   extrapolate past the anchor envelope, which generalises "never fill
+   past the media ends" and is what refuses Domino. Rationale: a cut
+   verse or an added repeat is a multi-second gap disagreement while
+   anchor jitter is sub-second — a trough, unlike the per-song signals
+   that failed. Tolerance in **absolute seconds, not a slope ratio**
+   (a ratio on a short gap with normal anchor error rejects
+   everything). Substituted content of equal length (Da-dum) still
+   passes; nothing timing-based catches that and the fill study said
+   so. Relation to the shape diagnostic: same quantity, undiluted —
+   that diagnostic caught 2 of 5 because one cut is diluted across a
+   whole-song fit. That is a testable difference in resolving power,
+   not a relabel; it is what the probe in item 5 measures.
+3. Never fill past the media ends, never over an audio-placed line —
    the two ways the withdrawn route crammed.
-3. Capture: fill source and per-song gate outcome into the debug
+4. Capture: fill source and per-song gate outcome into the debug
    bundle, so the eyeball can be attributed.
-4. Offline first: the replay harness on the 17-song corpus plus the
-   16-song word cohort, then Ken eyeballs the filled lines. Raw tables
-   to the Results log; no verdicts.
+5. Offline first: the replay harness on the 17-song corpus plus the
+   16-song word cohort, **two arms — global gate as shipped vs the
+   per-gap gate of item 2** — then Ken eyeballs the filled lines. Raw
+   tables to the Results log; no verdicts. Pre-register before the
+   run: the tolerance, the anchor definition (reuse `plan_fills`'), and
+   GATE L2's bar — `bad_surviving = 0` on the eyeball, and **the 16
+   existing good fills must survive unchanged**. Read off additional
+   fills on the 13 non-certified songs plus Ken's verdict on each.
+   **Scoring rider (Fable, 2026-09-10):** score sidecar work against
+   the M7-a caption reference or structural metrics plus eyeball,
+   never against the held-out LRC — "not LRCLIB" is not "independent
+   of LRCLIB", since Musixmatch and LRCLIB may share provenance for a
+   given song, so a sidecar scored against held-out LRC can be
+   correlated without being circular by name.
 
 **What this phase must not do without Ken re-opening a ruling:** make
 the sidecar a **DP candidate** (a witness the matcher scores against
@@ -465,7 +512,23 @@ the held-out tuning reference (`matcher-accuracy-hardening.md`); the
 sidecar is not that reference, so the circularity argument may not
 apply to it, but the ban is written source-agnostic and both Fable
 rounds of 2026-09-08 named the candidate form as the un-priced next
-build. Flag it at the design pass; do not assume it.
+build. Flag it at the design pass; do not assume it. **Priced
+2026-09-10 (Fable) — assessment only, the ban and any ruling remain
+Ken's; detail in the Results log entry of that date.** The short form:
+the candidate is *downstream* of the per-song offset fit rather than an
+alternative to it (raw sidecar windows land in the wrong second on most
+songs even when the edit is right); where the line is sung a transcribe
+candidate already exists at the same spot on the same evidence, so the
+sidecar adds a window and no evidence, and out-scores that candidate
+only by being **wider** — a smear that displaces an audio-placed line;
+uncorroborated sidecar windows score zero and never enter the DP chain,
+so the form is inert rather than harmful there; the second pass strips
+sidecar-won lines as uncorroborated anyway, so making them stick means
+letting a wrong-edit source define span boundaries; and the
+agreement-*term* variant tips repeated-text disambiguation toward the
+sidecar's edit, helping the minority of sound songs and hurting the
+majority, on exactly the class GATE P found the monotonic DP currently
+gets right.
 
 **Cheap evidence already on disk, optional:** the stratified fallback's
 fixed look-list (`m6/fb_looks.json` in the Build-session scratchpad)
@@ -477,6 +540,162 @@ its gates must reject. Viewing them needs no pre-registration change.
 **Gate:** Ken; letter assigned when the design is written. Hard
 criterion, inherited from GATE L2: no filled line may be a cram, a
 duplicate, or off-sheet dialogue on the eyeballed set.
+
+## Phase 6 — CTC post-selection interior refinement (design owed; after GATE T)
+
+Added 2026-09-10 on Ken's question, assessed by Fable the same day.
+**Assessment only; no gate letter, no ruling, nothing built.**
+
+**This is not GATE J1's question and must not be read as re-opening
+it.** J1 tested CTC as the *aligner* — a candidate source that decides
+where a line goes. This form runs strictly *after* selection: the
+matcher places the line on audio corroboration, and CTC is asked only
+where the word boundaries fall inside a span that is already decided.
+The two J1 failure modes are global (boundary-line smear across unsung
+audio; cram at collapse points) and a slice constrained to a selected
+window cannot reach audio outside it. `sb_ctc_adapter.make_slice_align`
+already implements this contract against the cached per-song emission,
+so it is one decode per song and near-free per line.
+
+**The population it targets.** Not align-won lines. On transcribe-won
+and ytasr-won lines the rendered words are the ASR stream's own words
+mapped onto sheet tokens with unmatched runs interpolated
+(`_materialise_line_objects` → `_build_line_object`,
+`candidate_match.py:226-271`) — the sheet tokens were never directly
+timed against audio and there is no 1:1 guarantee. Those are roughly
+half the placed lines in Arm A and fire the snap 21–32% vs 9–22% for
+align-won. The interpolated runs inside align-won lines
+(`_fill_unmatched_runs`) are the same gap in miniature.
+
+**Prior evidence not to re-derive: S-C already ran the hard half.**
+CTC was run constrained to a window with correct text (uploader cues,
+16 songs, 2026-07-20, `route-srt.md:139-204`) and Ken's eyeball
+rejected it for a failure that lives *inside* a correct window —
+tighter word timing but worse on genuinely overlapping voices, which
+whisper separates better (Mirrors; and the reframe that a CTC overlap
+reading 0.0 may be under-reporting a second voice). Windowing does not
+remove that mode. On this corpus it lives on the Disney ensemble
+numbers and the wet-vocal songs GATE O's `s_tx` false-flagged.
+
+**The gate form.** "Adopt only where CTC agrees with the matcher" is
+self-defeating — it adopts where nothing changes and rejects where the
+value is. It has to be a **bounded-disagreement band**. Granularity,
+corrected by Fable against the executor's first reading: **detect per
+token, act per line.** A dropped sheet token takes one frame, and no
+honest sung syllable is that short — a 3–4x separation; it is
+*line-level averaging* that erased the trough in J1 (a partial cram
+averages back into the honest band). So the cram case is answered by
+the one CTC abstention signal in this program that has a trough. What
+survives is the inverse — extra *audio* inside the span forcing a
+sheet token to widen, where wide tokens are also honest holds (no
+trough, but harm bounded to one boundary moving by an interjection's
+length on a line whose incumbent error is the same order) — plus the
+S-C ensemble mode, which is displacement into the other voice's
+phonemes and is what the band and the eyeball are for.
+
+**Interior-only is the default to pre-register.** Endpoint refinement
+is smear-prone *by construction* on exactly the population it targets:
+the selected span on a transcribe-won line runs up to three ASR words
+wider than the line's audio at the edges (the `find_candidates` slack),
+`_build_line_object` starts the line at the first *matched* word, and
+CTC constrained to the raw window would smear token 0 back over them.
+Interior boundaries are largely immune. Interior-only also keeps GATE
+J2 moot and Appendix D untouched — the snap never sees CTC timing.
+**The endpoint form is blocked**, not merely complicated, on the open
+Ken item (J2's "retire iff ~zero" vs Appendix D's "OFF unless a named
+fix"); if ever taken it is a separate phase, and its ceiling is
+measurable against the 16 uploader SRTs, which are human-timed line
+edges on our own clock.
+
+**Measurement.** Endpoints have a reference (those cues); **interiors
+have none on this corpus** — held-out LRC is line-start only, richsync
+intra-line proportions are foreign-clock and too thin to gate on
+(sanity column at most, under the provenance rider above), and
+structural metrics do not move under a pass that never changes
+selection. The eye is the reference. Free screening statistic, not a
+gate: on the ytasr-having songs, transcribe-won lines have a second
+same-clock word witness, so "does refinement reduce median |word −
+ytasr| on transcribe-won lines" costs nothing and is the matcher's own
+epistemology.
+
+**Pipeline position.** After the snap, before the fill splice,
+`source` untouched. The veto has already run and keys on `source` plus
+`evidence` — leave both alone; running after the snap makes the snapped
+span the constraint window and stops the snap overwriting a refined
+first interior boundary (`onset_snap.py:237-248` edits an interior
+boundary when it carries duration forward). Skip `interp`, veto and
+fill lines — a fill was never audio-placed. Stamp refinement
+provenance in its own field and in `joint_stats`, never in `source`,
+which encodes selection.
+
+**Costs, in the order they bite.** (1) *The problem is unmeasured* —
+the evidence that these interiors are poor is edge-snap fire rates
+(edges) and a docstring. (2) *A zero-model competitor exists in the
+bundles today*: on a transcribe-won line whose whisper align range did
+not collapse and agrees, whisper's refined per-word timings are already
+present — one conditional in `_materialise_line_objects`. CTC's
+marginal population is then only the lines whisper *falsely* abstained
+on with transcribe corroborating. Note the ambiguity to design around:
+`_range_agreement` returns 1.0 for any window containing a collapsed
+instant, so agreement alone does not distinguish the abstention case —
+the pace guard must be consulted too. (3) MMS_FA in production — a
+second model and CUDA co-residency with the whisper worker; GATE C's
+C-3 constraints degrade gracefully here (OOV numeral interpolates as
+today, hangul skips the line) rather than breaking lines as they did
+for the aligner form. (4) `output_line_timings` carries line
+start/end/n_words only, so **per-word timings are not in the bundle**
+and the replay harness cannot see this pass's effect without adding
+them; a run-affecting change to rendered word timing is a milestone
+bump by the v8 precedent, i.e. a full-library regen.
+
+**Probe order, with kill rules (pre-register, then run):**
+
+1. **Population split, no GPU** (bundles): transcribe/ytasr-won lines
+   partitioned into whisper-agrees (non-collapsed range, agreement ≥ τ,
+   τ declared) vs whisper-abstained. Read-off: the zero-model form's
+   reach and CTC's marginal population size. **Dies here** if
+   whisper-agrees covers most of the population — the zero-model form
+   ships and CTC is not needed.
+2. **Baseline eyeball, 20 blind looks** at *current* transcribe/
+   ytasr-won interiors, worse/same/fine, kill threshold N declared
+   first. **Dies here** if Ken cannot see a problem in current output.
+3. **Disk disagreement distributions, no eyeball.** Per-boundary and
+   per-line |CTC − incumbent| on (a) the 16 SRT songs' S-C artifacts vs
+   the whisper cue-align output — correct window, correct text, so
+   disagreement cannot be selection error — and (b) the 18 joint
+   bundles, CTC sliced to each placed line's final span vs the bundle's
+   own words. Fixed quantiles plus a pre-declared bimodality statistic.
+   **Dies here** if (a) is unimodal with a fat tail: even with perfect
+   windows, |Δ| cannot separate correction from failure. If bimodal,
+   the band is declared from (a)'s trough and (b)'s excess tail mass is
+   the selection-error contribution. Also report the per-token cram
+   floor's fire rate (floor declared, e.g. 0.05 s) and the ytasr
+   screening statistic. Emission caches: one forward pass per song on a
+   miss; the S-C caches may not survive on the Windows box.
+4. **Bounded blind eyeball.** Diff `.ass` per song (only refined lines
+   rendered or coloured) so Ken watches changed lines, not whole songs.
+   Strata declared from step 3 *before any look*: per-line median |Δ|
+   bands, "cram-flagged" as its own stratum, and every refined line on
+   the ensemble songs. ~10 per stratum, ~50–60 looks, bounded like
+   M7's 71. **Blind A/B per look**, current vs refined in randomised
+   order with a sealed key — Ken's prior is that CTC is tighter and an
+   unblinded look will confirm it. Three-class verdict (better / same /
+   worse), "same" counts as not-worse. Read off per stratum at GATE
+   L2's bar: adopt a band iff `worse = 0` in that stratum, and the
+   band boundary is **the highest stratum that clears**, never a number
+   fitted to the looks. A stratum with fewer than 8 looks is reported,
+   not read.
+
+Fixed before any run: interior-only; detect per token, act per line;
+after snap, before fill; `source` untouched; τ, the band strata, the
+cram floor, the look counts and the kill rules. Executor reports
+tables; no verdict.
+
+**Sequencing:** after GATE T, **not parallel** — the alpha/beta/ratio
+knobs decide which lines are transcribe/ytasr-won, which is this
+phase's population, so pricing it earlier prices the wrong population.
+
+**Gate:** Ken; letter assigned when the design is written.
 
 ## Out of scope
 
@@ -1027,3 +1246,107 @@ mechanism, numeral and non-Latin handling, provenance-recorded H-snap
 with an Arm A baseline, offset-safe H-resync, knobs swept rather than
 fixed — is named here as the option the evidence points at, **not
 commissioned.**
+
+### 2026-09-10 — Two Fable rounds (sidecar-as-DP-candidate; CTC post-selection refinement) — assessments, no read-off
+
+Commissioned by Ken after he asked whether the joint matcher could be
+improved by the full complement of timings now nominally available to
+it — whisper align, CTC forced align, whisper transcribe, YTASR,
+syncedlyrics word timings, syncedlyrics line timings — and whether the
+syncedlyrics ones would confuse it given video/lyrics mismatches. Both
+rounds were **read-only**; nothing was built, run, or measured. **No
+gate letters assigned and no ruling taken — these are advisory
+assessments and every verdict below is Ken's to make or refuse.** The
+executor's framing that each round attacked is recorded with it, since
+in both cases part of it was wrong and the correction is the finding.
+
+**Standing position restated so this entry is not misread:** three of
+the six sources (whisper transcribe, whisper align, YTASR) are already
+DP peers; CTC as aligner is settled by GATE J1 NO-GO; the two
+syncedlyrics sources are foreign-clock. So the complement contains no
+unused audio witness.
+
+#### Round 1 — sidecar as a DP candidate
+
+Verdict *offered* (not ruled): structurally dead as a DP change, **for
+reasons different from the executor's**. The mechanism is recorded in
+Phase 5's "must not do" paragraph above. The two corrections that
+matter, because the argument will otherwise be re-derived and found
+wrong:
+
+1. The executor argued that a sidecar candidate would convert a hidden
+   line into a confidently-shown wrong one — the failure that closed
+   the line route. **That is wrong.** An uncorroborated sidecar window
+   scores zero and never enters the DP chain. A DP candidate has a drop
+   branch by construction; the line route's lack of one was a *route*
+   property, not a candidate-form property.
+2. The executor argued that per-line wrong-edit detection is harder
+   than the per-song detection that already failed four ways. **The
+   direction is backwards.** Per-line "sung here" detection is *easier*
+   — that is why the joint route wins. But it is detection of *audio
+   evidence*, and the sidecar carries none, so the sharper test has
+   nothing to adjudicate in the sidecar's favour. The correction does
+   not rescue the DP form; it points at the per-gap fill gate, where
+   per-line-ish detection does have work to do — hence Phase 5 item 2.
+
+Also recorded: CTC as a *fourth peer* (rather than J1's substitution)
+stays dead, with a second reason J1 did not name — **the joint score is
+monotone non-decreasing in candidate width**, so between two candidates
+for the same line at the same place the wider wins; whisper smears and
+CTC does not, so a CTC peer would lose clean lines to coarser sources.
+The executor's "unfilterable" was an overstatement (a crammed candidate
+is roughly half-filterable depending on nearby transcribe words, which
+is worse to reason about than either extreme); direction of the
+conclusion unchanged. Softer peer forms assessed and rejected:
+advisory/demote-only (nothing says which of two smears is right),
+tie-break-only (ties already resolve to align, which is right on the
+clean tail), width-only (survives in principle, but CTC's width is
+wrong exactly where a width prior would bite).
+
+If Ken wants the number rather than the argument, the round supplied a
+replay-only pre-registration (sidecar spans as a fourth source, shifted
+by the fill's arm-A offset; read-off on *redundant* / *phantom* /
+*displacing* selections, N and M fixed by Ken; scored against the M7-a
+caption reference, never held-out LRC). Fable's stated prior is that
+those three classes cover ≈100% of selections, i.e. arithmetically
+decisive without a judge round.
+
+#### Round 2 — CTC post-selection interior refinement
+
+Ken's question: use CTC's word timings only where they agree with the
+matcher's output. Assessment: **does not die on mechanism**; full
+detail, corrections and probe order are in Phase 6 above. Recorded here
+as the round's own findings:
+
+- The form escapes J1 for a reason the executor stated incompletely,
+  and the closest existing evidence was not cited: **S-C already ran
+  CTC constrained to a window with correct text and Ken's eyeball
+  rejected it for a failure that lives inside a correct window**
+  (overlapping voices). Windowing does not remove that mode.
+- **The trough is not J1's pace finding in a different hat** — that was
+  line-level *mean* pace, where a partial cram averages back into the
+  honest band. Per *token*, a dropped sheet token takes one frame and
+  no honest syllable is that short. So: detect per token, act per line
+  — the executor's per-line-detection preference was backwards.
+- **The measurement problem is the sharp one.** Interiors have no
+  reference on this corpus but Ken's eye; endpoints have one (the 16
+  uploader cues) but drag in GATE J2. Hence interior-only, and hence
+  the blind A/B protocol.
+- **A zero-model competitor exists in the bundles today** and should be
+  priced first, along with 20 blind looks at current output to
+  establish that the problem exists at all.
+- Width monotonicity (round 1) does **not** apply to a refinement — it
+  is a selection-score property. Its sibling does: the window slack
+  that made width matter in selection is what makes endpoint
+  refinement smear-prone.
+- Sequencing corrected: **after GATE T, not parallel.**
+
+#### Consequences recorded in this commit
+
+No code changed. Phase 5's scope gains a per-gap gate (item 2) and a
+two-arm probe; Phase 6 is added as design owed; the START HERE block
+and `plans/PROGRAM.md` are updated to match. Open and Ken's: whether to
+re-open the DP ban at all (round 1 says no, and the ban is his), the
+gate letters for Phases 5 and 6, and the standing J2-vs-Appendix-D item
+— which now has a second consumer, since Phase 6's endpoint form is
+blocked on it.
