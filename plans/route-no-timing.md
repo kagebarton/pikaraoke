@@ -10,12 +10,15 @@ Model: Claude Sonnet 5 (executor). Plan drafted by Claude Fable 5.
 > **1.2 DONE** (`2516ca8`), **4 CLOSED** (GATE P NO-GO), **2a RAN
 > 2026-09-08 and GATE J1 is NO-GO** — whisper stays the joint aligner,
 > so **2b and GATE V are skipped entirely** and **GATE J2 cleared
-> nothing** (Appendix D unchanged). **3 RAN 2026-09-10 on the whisper
-> matcher — raw tables in the Results log, and GATE T is OPEN: no combo
-> was picked and no read-off taken.** Ken reads it. After it, **Phase 5**
-> (line timing as a fill source, scope amended 2026-09-10 to a per-gap
-> gate), then **Phase 6** (CTC post-selection interior refinement, design
-> owed, after GATE T), then GATE L when the Mandarin corpus exists.
+> nothing** (Appendix D unchanged). **3 RAN 2026-09-10 and GATE T is
+> READ the same day: the alpha/beta knobs are inert on this corpus and
+> stay at their shipped 2.0/2.0 — no config default moved and no commit
+> carries a knob change.** One sub-question is open and Ken's: the ytasr
+> candidate ratio at 0.45 (free on the metrics, two lines of one song,
+> and not a config knob today). **Phase 5 is the live head of the
+> queue** (line timing as a fill source, scope amended 2026-09-10 to a
+> per-gap gate), then **Phase 6** (CTC post-selection interior
+> refinement, design owed), then GATE L when the Mandarin corpus exists.
 > Sequencing lives in `plans/PROGRAM.md`.
 
 ## Context
@@ -61,10 +64,11 @@ tail.
 - Branch: `joint_catchall_refit` off the `timing_pillars` tip. Never
   commit to `master`.
 - Phase order: ~~1 → 4 → 2a → **STOP** (GATES J1/J2) → 2b → GATE V →~~
-  ~~3~~ → GATE T → 5. *(2026-09-08: 1.1 cancelled, 1.2 done, 4 closed at
+  ~~3 → GATE T~~ → 5. *(2026-09-08: 1.1 cancelled, 1.2 done, 4 closed at
   GATE P; Phase 5 added; 2a ran and GATE J1 came back NO-GO, so 2b and
   GATE V are struck and Phase 3 became the head of the queue. 2026-09-10:
-  **Phase 3 ran; GATE T is the head of the queue and is Ken's**.)* Phase 4
+  **Phase 3 ran and GATE T was read the same day — knobs unchanged, no
+  commit. Phase 5 is the head of the queue**.)* Phase 4
   ran before 2a because it was cheap and filled the gate-reading queue.
 - Probe *outputs* (emission `.pt` caches, per-line score tables,
   corpus CSVs) live in the session scratchpad, **never committed**
@@ -431,7 +435,19 @@ regresses materially vs current defaults (clean tail still lands on
 this route). Config-default change lands as one commit with the gate
 reference.
 
-*Status (2026-09-10): **RAN; GATE T is OPEN.** All four steps executed
+*Status (2026-09-10): **RAN, and GATE T is READ — the knobs stay at the
+shipped `joint_alpha` 2.0 / `joint_beta` 2.0, no config default moves,
+no commit carries a knob change.** The grid is inert on this corpus (7
+placed lines move across all 15 points, and every song above 90%
+coverage is identical at every point), so the hard criterion cannot
+fail and the clean-tail roster flagged below turned out **not** to be a
+prerequisite. One sub-question stays open and is Ken's: the ytasr
+candidate ratio at 0.45, free on every metric but resting on two lines
+of one song. Read-off by Claude Opus 5 at Ken's request (Fable credits
+short), ruling by Ken — see the read-off entry in the Results log. The
+run record follows.*
+
+*Run status: All four steps executed
 on all 18 genius-origin bundles; raw tables in the Results log below.
 Two deviations, both recorded there: step 2's "best 3 grid points" was
 run as **the full grid at each of the three ratios** on the
@@ -439,12 +455,17 @@ ytasr-carrying subset, which is strictly more data and avoids the
 executor picking the three points; and the tables are the **full
 per-song x per-combo grid** rather than the chassis' one-best-combo-per-song
 output, whose `min()` tie-break is the recorded sweep-reading trap. No
-combo is selected here and no config default is changed. **One input
+combo is selected here and no config default is changed. ~~**One input
 GATE T's hard criterion needs does not exist yet: the clean-tail roster
-has never been written down as a list** — the record names Stay Gold and
-In Summer as clean tail and Bloodstream and HUNTR/X as version-drift,
-leaving 14 songs unclassified. Assigning them is Ken's, not the
-executor's.*
+has never been written down as a list**~~ — the record names Stay Gold
+and In Summer as clean tail and Bloodstream and HUNTR/X as
+version-drift, leaving 14 songs unclassified. **Superseded by the
+read-off: the roster is not a prerequisite for this gate**, because no
+song that could plausibly be called clean tail moves anywhere in the
+grid, so the criterion is satisfied by every combo. The struck claim is
+kept because it was the executor's flag at hand-off and the correction
+belongs beside it. Assigning the 14 is still Ken's if Phase 5 wants
+them.*
 
 ## Phase 5 — line timing as a fill source (design owed; after GATE J1)
 
@@ -1820,3 +1841,109 @@ Pocahontas - Colors of the Wind (Blu-ray 108     718    1078    1424
 The Lion King - Hakuna Matata Music Video I      326     429     725
 Wicked - For Good  (2025) 4K - The Girl in t     183     292     434
 ```
+
+### 2026-09-10 — GATE T read-off (Claude Opus 5, at Ken's request) — knobs stay at shipped defaults; the ytasr ratio is the one open sub-question
+
+**Provenance, recorded because it departs from the standing rule.**
+Gate read-offs go to Fable (`PROGRAM.md` ground rules:
+executor reports tables, judge reads them). Ken is short on Fable
+credits and asked the executor model to read the evidence and propose
+next steps instead; he then took the ruling in 1 below. So: **assessment
+by Claude Opus 5, ruling by Ken.** It is not a Fable round and should
+not be cited as one. The tables it reads are the Phase 3 entry above,
+unchanged.
+
+#### Finding 1 — the alpha x beta knobs are inert on this corpus
+
+Across all 15 grid points and all 18 songs the total movement is **7
+placed lines on 4 songs** (Defying Gravity 47-51, Popular 51-52, Hakuna
+Matata 32-33, Seasons of Love 24-25). Crawl moves on 4 songs, overlap on
+4. **All nine songs above 90% coverage are identical in placed count and
+crawl at every point in the grid** — Be Our Guest, Colors of the Wind,
+Stay Gold, Free, Best Part Of Me, In Summer, Domino, The Next Ten
+Minutes, Belle. Paradise, Man Out of You and HUNTR/X are invariant too.
+The songs that move are the low-coverage ones.
+
+**13 of the 14 non-baseline grid points regress at least one song** on
+placed, crawl or overlap. The exception is alpha 3.0 / beta 3.0, an
+exact structural wash that moves MAD by under 50 ms on three songs and
+nothing on the other fifteen.
+
+The largest MAD spreads available are Hakuna Matata (0.42-0.86) and
+Bloodstream (0.40-0.64), whose fits rest on **8 and 11 anchors** — inside
+the thin-fit band the Phase 3 header flags. Not a basis for a default.
+
+#### Finding 2 — the hard criterion cannot fail, so the missing roster does not block
+
+GATE T's hard criterion is that no clean-tail song regresses materially
+vs current defaults. **No song that could plausibly be called clean tail
+moves at any grid point at all** (Finding 1). The criterion is therefore
+satisfied by every combo, and the clean-tail roster the Phase 3 entry
+flagged as missing is **not a prerequisite for this gate**. That flag
+was over-stated; it would bind only if some point traded clean-tail
+quality for dirty-tail coverage, and none does. The roster may still be
+wanted for Phase 5, which does touch the unplaced population.
+
+#### Finding 3 — one strictly dominant move exists, on the ytasr axis
+
+Ratio 0.34 → **0.45** at the shipped `alpha`/`beta`: **+2 placed, no
+crawl change, no overlap change, no song regressed on any hard metric.**
+The 8 songs with no ASR track are untouched by construction. Ratio 0.55
+is not free — +4 placed but a crawl line on For Good and a 0.7 s overlap
+on Hakuna Matata.
+
+The whole corpus-level effect is one song. Diffed line by line at the
+shipped knob point (`phase3_forgood_diff.py`), For Good gains exactly
+two lines, loses none, and shifts or re-sources none:
+
+```
+line  8   29.64- 34.29  [align]   'She spins such beautiful stories'
+line 35  175.36-181.90  [ytasr]   'For her bubble to pop?'
+```
+
+Worth noting the mechanism: **loosening an ytasr threshold let a
+whisper-align candidate win line 8**, through the knock-on in the
+selection chain — the ratio does not only admit ytasr lines.
+
+#### What this read-off does NOT claim
+
+- **Nothing about the dirty tail.** MAD fits on well-corroborated anchor
+  lines, so it measures precision on the easy ones; the structural
+  columns count lines without judging them. No eyeball has been taken.
+- **Nothing about whether the 2 gained lines are right.** The harness
+  cannot separate a correctly-placed new line from a wrongly-placed one
+  that happens not to crawl or overlap. That is the open item in 2 below.
+- **Nothing generalisable about the ratio.** The signal is n=1. "Free on
+  this corpus" is not "an improvement".
+- **Nothing about the defects the knobs cannot reach.** Bloodstream's
+  6.7 s overlap is identical at all 45 measured points, and roughly 150
+  sheet lines corpus-wide never get words at any of them.
+
+#### Ken's ruling
+
+1. **GATE T closed on the alpha/beta half: the knobs stay at the shipped
+   `joint_alpha` 2.0 / `joint_beta` 2.0.** No config default moves and
+   **no commit carries a knob change** — the gate's "config-default
+   change lands as one commit" clause resolves to no commit. Ken took
+   this 2026-09-10 on the assessment above.
+2. **Open, and Ken's: the ytasr candidate ratio.** 0.45 is free on the
+   metrics but needs one look at the two timestamps above before it
+   ships. It is also **not a config knob today** —
+   `ytasr.CANDIDATE_MAX_EDIT_RATIO` is a module constant, so adopting it
+   means either editing the constant or promoting it, which is a
+   separate small decision. Doing nothing is a complete answer: it is
+   two lines on one song.
+
+#### Consequences
+
+Phase 3 closes with no production change. The program advances to
+**Phase 5** (line timing as a fill source, per-gap gate design owed),
+which this read-off's Finding 1 argues is where the remaining quality
+is: the knobs cannot reach the unplaced population, and Phase 5's fill
+is aimed at exactly it. **Phase 6 stays after Phase 5** — it refines word
+boundaries inside lines already placed, which is polish next to lines
+that never render. Recorded as the executor's recommendation on where to
+spend the remaining Fable budget, not a ruling: **Phase 5's per-gap gate,
+not this gate** — GATE T the data answered by itself, whereas the per-gap
+gate is a live design question with a named failure mode (Bloodstream).
+

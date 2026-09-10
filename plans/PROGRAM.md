@@ -224,18 +224,22 @@ a new mechanism on rung 2b rather than rung 1 returning. Detail in
   exists.
 - **R-3** — SRT-first *stands*, but Appendix A flags that a later ruling
   could reorder precedence 1 against 2.
-- **GATE T** — NEW 2026-09-10, Ken's, and the one open item with its
-  measurement already on the table. Phase 3 ran the full `alpha` x
-  `beta` grid plus a ytasr candidate-ratio arm on all 18 genius-origin
-  bundles; the raw per-song x per-combo tables are in
-  `route-no-timing.md`'s Results log and **no combo was selected**. Two
-  things the gate reader needs that the tables do not supply: the
-  **clean-tail roster** its hard criterion is written against (4 of 18
-  songs are classified anywhere in the record, 14 are not), and a call
-  on whether the ytasr ratio moves with the knobs or stays at its
-  shipped 0.34 — the probe ran it as a co-primary axis, so the answer
-  is one read-off, not two. A knob change ships as one commit citing
-  the gate; no default has moved.
+- ~~**GATE T**~~ — **READ 2026-09-10. The `alpha`/`beta` knobs stay at
+  their shipped 2.0 / 2.0; no config default moved and no commit
+  carries a knob change.** Phase 3's grid is inert on this corpus: 7
+  placed lines move across all 15 points, every song above 90% coverage
+  is identical at every point, and 13 of the 14 non-baseline points
+  regress at least one song. The hard criterion therefore cannot fail,
+  which also retired the clean-tail-roster prerequisite the run entry
+  had flagged. **Provenance: assessment by Claude Opus 5 at Ken's
+  request (Fable credits short), ruling by Ken — not a Fable round.**
+  **Still open and Ken's: the ytasr candidate ratio.** 0.45 is strictly
+  dominant on the tables (+2 placed, nothing regressed anywhere) but the
+  whole effect is two lines on one song, the harness cannot tell a
+  correct new line from a wrong one that happens not to crawl or
+  overlap, and `ytasr.CANDIDATE_MAX_EDIT_RATIO` is a module constant
+  rather than a config knob — so adopting it is a second small
+  decision. Doing nothing is a complete answer.
 - **Phase 5's gate form** — NEW 2026-09-10, Ken's. A Fable round found
   that widening the fill's source to the sidecar **under the shipped
   per-song gate** is where the 16/0 record gets tested and can fail:
@@ -342,20 +346,24 @@ shipped `cue_align.py`, so it is not dead-end history.
 
 ## Remaining execution order (Ken, 2026-09-01) — measure first, lock once
 
-> **START HERE (2026-09-10, updated after Phase 3 ran).** The
+> **START HERE (2026-09-10, updated after GATE T was read).** The
 > line route is closed (step 4) and **GATE J1 came back NO-GO**, so
 > whisper stays the joint aligner and Phase 2b never gets built.
-> **Phase 3 ran 2026-09-10 on the whisper matcher; GATE T is OPEN and
-> is the next thing on the program — Ken's read-off, raw tables in
-> `plans/route-no-timing.md`, no combo picked and no default changed.**
-> After it, Phase 5 there (line timing as a fill source) is the design that
+> **Phase 3 ran and GATE T was read the same day: the matcher knobs are
+> inert on this corpus and stay at their shipped values — no production
+> change came out of it.** The one leftover is Ken's call on the ytasr
+> candidate ratio (see the open decisions above).
+> **The next spend is Phase 5** in `plans/route-no-timing.md` —
+> line timing as a fill source, and the design that
 > inherits everything the line route learned — **its scope was amended
 > 2026-09-10 to a per-gap gate**, because the shipped fill's per-song
 > gate carries the warp gate's blind spot on the population Phase 5
 > widens it to. **Phase 6** (CTC post-selection *interior* refinement)
-> was added the same day as design owed, sequenced **after GATE T** —
-> it is not GATE J1's question and does not re-open it. Both are
-> assessments, not rulings; gate letters are Ken's.
+> was added the same day as design owed; GATE T no longer gates it, but
+> it stays **after Phase 5** on value — it refines word boundaries
+> inside lines already placed, which is polish next to the ~150 sheet
+> lines that never render. It is not GATE J1's question and does not
+> re-open it. Gate letters for both are still Ken's.
 
 Ken's sequencing ruling: run the remaining measurement program to
 completion, then consolidate the build design once, rather than amending
@@ -505,16 +513,17 @@ Order — cheapest and highest overturn-risk first:
 5. ~~**Joint plan Phase 2a → GATE J1/J2**~~ — **RAN AND CLOSED
    2026-09-08. J1 NO-GO, J2 cleared nothing.** Whisper stays the joint
    aligner; Appendix D unchanged ("re-enable exception: none" stands).
-   **2b and GATE V are struck.** What remains of this step: **Phase 3
-   RAN 2026-09-10 and GATE T is OPEN — Ken's read-off, the program's
-   next move** — then **Phase 5 (line timing as a fill source)**, whose
-   design is now owed against whisper. Raw tables and the read-offs in
-   `route-no-timing.md`. Phase 3's run is offline replay only: no
-   production code was changed and no config default moved, so nothing
-   ships until GATE T is read. **Flagged with the tables: GATE T's hard
-   criterion names a clean-tail cohort that has never been written down
-   as a roster** — 4 of the 18 songs are classified in the record, 14
-   are not.
+   **2b and GATE V are struck.** **This step is now CLOSED: Phase 3 ran
+   2026-09-10 and GATE T was read the same day — the knobs are inert on
+   this corpus and stay at their shipped values, so the phase ends with
+   no production change at all.** Raw tables and both read-offs in
+   `route-no-timing.md`. What remains of the step is **Phase 5 (line
+   timing as a fill source)**, whose design is owed against whisper and
+   is the program's next spend. Two things carried out of GATE T: Ken
+   still owes a call on the ytasr candidate ratio (open decisions
+   above), and the read-off's own recommendation is that the remaining
+   Fable budget goes to **Phase 5's per-gap gate**, not to knob work —
+   the knobs cannot reach the unplaced population that Phase 5 targets.
 6. ~~**S-E**~~ — **not run.** This is the *line* route's Phase 3
    optional arm, not the joint plan's Phase 3, and it closed with that
    route: `route-line-timing.md`'s status block records "S-E is not
