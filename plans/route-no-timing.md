@@ -10,12 +10,13 @@ Model: Claude Sonnet 5 (executor). Plan drafted by Claude Fable 5.
 > **1.2 DONE** (`2516ca8`), **4 CLOSED** (GATE P NO-GO), **2a RAN
 > 2026-09-08 and GATE J1 is NO-GO** — whisper stays the joint aligner,
 > so **2b and GATE V are skipped entirely** and **GATE J2 cleared
-> nothing** (Appendix D unchanged). **Phase 3 → GATE T is NEXT**, on
-> the whisper matcher, then **Phase 5** (line timing as a fill source,
-> scope amended 2026-09-10 to a per-gap gate), then **Phase 6** (CTC
-> post-selection interior refinement, design owed, after GATE T), then
-> GATE L when the Mandarin corpus exists. Sequencing lives in
-> `plans/PROGRAM.md`.
+> nothing** (Appendix D unchanged). **3 RAN 2026-09-10 on the whisper
+> matcher — raw tables in the Results log, and GATE T is OPEN: no combo
+> was picked and no read-off taken.** Ken reads it. After it, **Phase 5**
+> (line timing as a fill source, scope amended 2026-09-10 to a per-gap
+> gate), then **Phase 6** (CTC post-selection interior refinement, design
+> owed, after GATE T), then GATE L when the Mandarin corpus exists.
+> Sequencing lives in `plans/PROGRAM.md`.
 
 ## Context
 
@@ -60,9 +61,10 @@ tail.
 - Branch: `joint_catchall_refit` off the `timing_pillars` tip. Never
   commit to `master`.
 - Phase order: ~~1 → 4 → 2a → **STOP** (GATES J1/J2) → 2b → GATE V →~~
-  3 → GATE T → 5. *(2026-09-08: 1.1 cancelled, 1.2 done, 4 closed at
+  ~~3~~ → GATE T → 5. *(2026-09-08: 1.1 cancelled, 1.2 done, 4 closed at
   GATE P; Phase 5 added; 2a ran and GATE J1 came back NO-GO, so 2b and
-  GATE V are struck and **Phase 3 is the head of the queue**.)* Phase 4
+  GATE V are struck and Phase 3 became the head of the queue. 2026-09-10:
+  **Phase 3 ran; GATE T is the head of the queue and is Ken's**.)* Phase 4
   ran before 2a because it was cheap and filled the gate-reading queue.
 - Probe *outputs* (emission `.pt` caches, per-line score tables,
   corpus CSVs) live in the session scratchpad, **never committed**
@@ -428,6 +430,21 @@ whisper align words. It is the program's next spend.**
 regresses materially vs current defaults (clean tail still lands on
 this route). Config-default change lands as one commit with the gate
 reference.
+
+*Status (2026-09-10): **RAN; GATE T is OPEN.** All four steps executed
+on all 18 genius-origin bundles; raw tables in the Results log below.
+Two deviations, both recorded there: step 2's "best 3 grid points" was
+run as **the full grid at each of the three ratios** on the
+ytasr-carrying subset, which is strictly more data and avoids the
+executor picking the three points; and the tables are the **full
+per-song x per-combo grid** rather than the chassis' one-best-combo-per-song
+output, whose `min()` tie-break is the recorded sweep-reading trap. No
+combo is selected here and no config default is changed. **One input
+GATE T's hard criterion needs does not exist yet: the clean-tail roster
+has never been written down as a list** — the record names Stay Gold and
+In Summer as clean tail and Bloodstream and HUNTR/X as version-drift,
+leaving 14 songs unclassified. Assigning them is Ken's, not the
+executor's.*
 
 ## Phase 5 — line timing as a fill source (design owed; after GATE J1)
 
@@ -1386,3 +1403,420 @@ re-open the DP ban at all (round 1 says no, and the ban is his) and the
 gate letters for Phases 5 and 6. *(The J2-vs-Appendix-D item was also
 open at the time of this commit; Ken resolved it the same day — see the
 ruling appended to the GATE J1/J2 read-off above.)*
+
+### 2026-09-10 — Phase 3 (knob re-tune sweep), Windows box — raw tables, no read-off
+
+Ran by a scratchpad driver on the `replay_ytasr_third_source.py`
+chassis. Cohort: **all 18 genius-origin bundles** in the library (34
+total; the other 16 are uploader-SRT songs on the cue-align route). No
+song was skipped and none raised. Output is the tables below; **GATE T
+is Ken's read-off — none is taken here.**
+
+**What was swept.** `alpha` x `beta` over {1.0, 1.5, 2.0, 2.5, 3.0} x
+{1.0, 2.0, 3.0}, the grid this plan's Phase 3 item 1 pre-registers.
+Every other knob is held at each bundle's own recorded value, and all
+18 bundles record the same four: `margin_s` 0.3, `max_edit_ratio` 0.75,
+`lookahead` 3, `anchor_fallback` on. The shipped default point
+(`alpha` 2.0, `beta` 2.0) is inside the grid, so the baseline is a grid
+cell rather than a separate run. The aligner is whisper throughout —
+GATE J1 NO-GO, so there is no CTC arm in this phase.
+
+**Why the full grid is dumped rather than the chassis' sweep mode.**
+The chassis reports one best combo per song, chosen by `min()` over
+(fewest crawl lines, then lowest MAD). That tie-breaks to the lowest
+`alpha` whenever the metrics tie, which they do constantly — the
+recorded sweep-reading trap. This driver evaluates every cell and
+selects nothing; the per-song x per-combo grid is the record.
+
+**Part 2 (ytasr co-primary probe).** Item 2 pre-registers three
+`ytasr.CANDIDATE_MAX_EDIT_RATIO` values at "the best 3 grid points".
+The full grid was run at each of {0.34 (shipped), 0.45, 0.55} instead,
+on the 10 ytasr-carrying bundles — strictly more data than the
+pre-registration asks for, and it removes the executor judgment that
+picking three points would have required. The constant is overridden
+module-side (`ytasr.CANDIDATE_MAX_EDIT_RATIO`), which is the only
+handle it has today; it is not a config knob.
+
+**Reference.** Held-out LRCLIB, resolved by the chassis' existing three
+tiers (bundle `.lrc`, then the flat `lrclib/<stem>` cache, then a live
+search), scoring-only, never fed to a matcher. It is resolved once per
+song and reused across all 15 cells, so no cell is scored against a
+different reference than its neighbours.
+
+**Pre-registered caveat (item 3), carried into the table header.**
+Held-out LRC exists only for LRCLIB-covered songs. At the shipped point
+**13 of 18 songs carry an unflagged MAD**; 5 are flagged `wide` (the
+scorer's own residual-spread bail-out) and none `few`. The anchor count
+behind a fit ranges from 5 (Seasons of Love) to 55 (Belle) — five songs
+fit on fewer than a dozen anchors. The `*` in the MAD matrices marks a
+flagged cell; **three songs flip flag state across the grid** (Best
+Part Of Me, Man Out of You, Hakuna Matata), which is why the flag is
+per cell and not a per-song column. The truly-dirty tail is judged by
+the structural columns plus Ken's eyeball, per the same item.
+
+**Comparability limits of the aggregate columns.** `med_mad` is the
+median over that combo's *unflagged* rows only, so its population
+changes between combos (13 or 14 of 18 in part 1, 5 to 7 of 10 in the
+ratio arm) and the medians are not strictly like-for-like down the
+column. `mad_better` / `mad_worse` / `plc_delta` count against the
+shipped point (`alpha` 2.0, `beta` 2.0); in the ratio arm they count
+against the shipped point *at the shipped ratio*, so those columns read
+against production rather than against each ratio's own centre. A pair
+where either side is flagged is not counted in better/worse at all.
+
+**Source flags.** `3src` = the bundle carries a gate-passing YTASR
+track and the candidate scan matched lines; `2src` = no YTASR track.
+**8 of 18 are 2src and 10 are 3src; no song came out `asr0`** (a
+gate-passing track matching no line) at any of the three ratios. For a
+2src song `beta` is a no-op by construction, so the alpha axis was run
+once and the row replicated across the beta columns — the flat beta
+rows on those 8 songs are replication, not measurement. Their alpha
+axis is real.
+
+**Cross-check against Phase 2a.** The shipped-point row reproduces the
+2026-09-08 Arm A table exactly on every column the two share — placed,
+align/transcribe/ytasr-won, interp, offset, MAD and its bail flag — on
+**all 18 songs**. Arm A was a different driver at the same knobs, so
+this is an independent re-derivation of the production baseline, not a
+re-read of a cached number.
+
+**Determinism.** Defying Gravity's 15 cells were produced twice in
+separate processes (a timing probe before the corpus run, and the
+corpus run itself) and every value in every shared column matched.
+
+**Environment.** Windows dev box (uv `.venv`), library
+`d:/shared/pikaraoke-songs`. Offline throughout — no whisper, no GPU,
+no re-decode; the replay consumes the bundles' captured word streams.
+Runtime 1251 s for part 1 (18 songs x 15 cells) and about the same
+again per extra ratio. Production code was neither changed nor
+imported differently: the matcher, the span replay and the scorer are
+the shipped ones.
+
+**Fidelity limits, inherited from the chassis and unchanged here:** the
+evidence veto is not replayable offline and is skipped; edge snap is
+not replayed (it needs stem audio this harness never touches), so these
+are pre-snap numbers throughout; windowed-realign span boundaries and
+the suspect set were chosen by the original pass-1 and do not move with
+the knobs.
+
+**Flagged for the gate reader, not resolved here.** GATE T's hard
+criterion is that no clean-tail song regresses materially vs current
+defaults, and **the clean-tail roster has never been written down as a
+list**. What the record names: Stay Gold and In Summer as clean tail
+(GATE P read-off, 2026-09-01), Bloodstream and HUNTR/X as the two
+lyric-version-drift songs (same entry), and Stay Gold as "GATE T's hard
+criterion in miniature" (GATE J1/J2 read-off eyeball table). The other
+14 songs are unclassified. Nothing here assigns them.
+
+**Artifacts** (session scratchpad, not committed, per this plan's
+ground rules): `phase3_out/grid.csv` (190 rows, part 1),
+`phase3_out/ratio.csv` (450 rows, part 2), `phase3_out/report.txt`,
+`phase3_run.log`, and the driver `phase3_knob_sweep.py`.
+
+#### Part 1 — the alpha x beta grid at the shipped ytasr ratio
+
+**Baseline: shipped defaults (alpha 2.0, beta 2.0) per song**
+
+```
+song                                          src  plc   /n algn trns ytsr intp wdls abst crwl    ovl    off_s   mad_s  bail  fit ycand
+------------------------------------------------------------------------------------------------------------------------------------
+'Defying Gravity' - Wicked 20th Anniversary  3src   51   89   21   16   14   38    0    0    3    0.2  -75.791   7.121  wide   34   271
+'Free' _ Official Lyric Video _ Sony Animati 2src   40   41    6   34    0    1    0    0    1    1.0   -0.130   0.197         16     0
+'Popular' - Wicked 20th Anniversary Edition  3src   52   62   41    3    8   10    0    0    3    0.1  -16.590   1.599  wide   28   414
+Beauty and the Beast (1991) - Be Our Guest [ 3src   77   77   57   10   10    0    0    0    0    0.0   -3.241   0.161         49   434
+Beauty and the Beast (1991) - Belle [UHD]--- 3src  101  110   73   15   13    9    0    0    1    0.0   -4.550   0.390         55   369
+Ed Sheeran - Best Part Of Me (feat. YEBBA) ( 3src   37   38   13    6   18    1    0    0    2    0.0   -0.690   0.790  wide   25   275
+Ed Sheeran & Rudimental­ - Bloodstream [Offi 3src   48   74   26   12   10   26    0    0    1    6.7  -11.090   0.600         11   649
+HUNTR_X 'This Is What It Sounds Like' (Music 2src   33   53   30    3    0   20    0    0    0    0.0   -0.270   1.605  wide   18     0
+Jessie J - Domino (Official Video)---UJtB55M 2src   63   67   53   10    0    4    0    0    0    0.1   -1.614   0.432          7     0
+Josh Gad - In Summer (From 'Frozen'_Sing-Alo 2src   29   31   26    3    0    2    0    0    2    0.0   -0.745   0.220         14     0
+Mulan _ I'll Make a Man Out of You _ @disney 3src   36   47    3    8   25   11    0    0    0    0.0   32.565   1.006  wide   22   552
+NSYNC - Paradise                             2src   53   65   13   40    0   12    0    0    2    0.7   24.045   0.270         10     0
+Pocahontas - Colors of the Wind (Blu-ray 108 3src   37   37    2   14   21    0    0    0    2    0.0   -6.090   0.190         31   718
+Seasons of Love (HD)---UvyHuse6buY           2src   25   34   15   10    0    9    0    0    3    0.0   18.580   0.520          5     0
+Stay Gold (Official Music Video) from The Ou 2src   38   38   37    1    0    0    0    0    1    0.0   -0.094   0.048         19     0
+The Lion King - Hakuna Matata Music Video I  3src   33   40   12    6   15    7    0    0    3    0.1    9.165   0.415          8   326
+The Next Ten Minutes Lyrics---0j8kL24ph8U    2src   67   71   44   23    0    4    0    0    2    0.0    0.757   0.456         52     0
+Wicked - For Good  (2025) 4K - The Girl in t 3src   29   36   10    5   14    7    0    0    2    0.0  -23.148   0.388         15   183
+```
+
+**Corpus aggregate per combo -- ratio 0.34 (shipped)**
+
+```
+alpha  beta  placed  crawl  ovl>0  med_mad  mad_scored  mad_better  mad_worse  plc_delta
+------------------------------------------------------------------------------------------------
+  1.0   1.0     847     28      9    0.361          14           1          0         -2
+  1.0   2.0     847     29      9    0.310          13           4          0         -2
+  1.0   3.0     842     25      9    0.320          14           5          0         -7
+  1.5   1.0     848     29      9    0.402          14           0          2         -1
+  1.5   2.0     848     29      9    0.330          13           2          0         -1
+  1.5   3.0     847     29      9    0.320          14           5          0         -2
+  2.0   1.0     849     29     10    0.399          14           0          2         +0
+  2.0   2.0     849     28     10    0.388          13           0          0         +0
+  2.0   3.0     849     29     10    0.375          14           2          2         +0
+  2.5   1.0     849     29     10    0.384          14           1          3         +0
+  2.5   2.0     849     29     10    0.360          13           1          1         +0
+  2.5   3.0     849     29     10    0.310          13           2          1         +0
+  3.0   1.0     849     29     10    0.360          13           2          2         +0
+  3.0   2.0     849     29     10    0.360          13           1          1         +0
+  3.0   3.0     849     28     10    0.340          13           2          1         +0
+```
+
+**MAD vs held-out LRCLIB (s)**
+
+```
+song                                          src  a1b1   a1b2   a1b3  a1.5b1  a1.5b2  a1.5b3   a2b1   a2b2   a2b3  a2.5b1  a2.5b2  a2.5b3   a3b1   a3b2   a3b3 
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+'Defying Gravity' - Wicked 20th Anniversary  3src  7.12*  7.12*  7.12*  7.12*  7.12*  7.12*  7.12*  7.12*  7.12*  7.32*  7.12*  7.12*  7.32*  7.12*  5.66*
+'Free' _ Official Lyric Video _ Sony Animati 2src  0.20   0.20   0.20   0.20   0.20   0.20   0.20   0.20   0.20   0.20   0.20   0.20   0.20   0.20   0.20 
+'Popular' - Wicked 20th Anniversary Edition  3src  1.60*  1.63*  1.63*  1.60*  1.60*  1.63*  1.60*  1.60*  1.63*  1.60*  1.60*  1.60*  1.60*  1.60*  1.60*
+Beauty and the Beast (1991) - Be Our Guest [ 3src  0.16   0.15   0.14   0.18   0.15   0.15   0.18   0.16   0.15   0.18   0.16   0.16   0.18   0.18   0.16 
+Beauty and the Beast (1991) - Belle [UHD]--- 3src  0.39   0.31   0.31   0.39   0.39   0.31   0.39   0.39   0.39   0.36   0.36   0.31   0.36   0.36   0.36 
+Ed Sheeran - Best Part Of Me (feat. YEBBA) ( 3src  0.79*  0.79*  0.72   0.79*  0.79*  0.72   0.79*  0.79*  0.72   0.93*  0.79*  0.79*  0.93*  0.79*  0.79*
+Ed Sheeran & Rudimental­ - Bloodstream [Offi 3src  0.60   0.40   0.45   0.60   0.60   0.40   0.60   0.60   0.64   0.60   0.60   0.60   0.45   0.60   0.60 
+HUNTR_X 'This Is What It Sounds Like' (Music 2src  1.60*  1.60*  1.60*  1.60*  1.60*  1.60*  1.60*  1.60*  1.60*  1.60*  1.60*  1.60*  1.60*  1.60*  1.60*
+Jessie J - Domino (Official Video)---UJtB55M 2src  0.43   0.43   0.43   0.43   0.43   0.43   0.43   0.43   0.43   0.43   0.43   0.43   0.43   0.43   0.43 
+Josh Gad - In Summer (From 'Frozen'_Sing-Alo 2src  0.22   0.22   0.22   0.22   0.22   0.22   0.22   0.22   0.22   0.22   0.22   0.22   0.22   0.22   0.22 
+Mulan _ I'll Make a Man Out of You _ @disney 3src  0.74   1.01*  1.01*  0.74   1.01*  1.01*  0.74   1.01*  1.01*  0.74   1.01*  1.01*  0.74   1.01*  1.01*
+NSYNC - Paradise                             2src  0.27   0.27   0.27   0.27   0.27   0.27   0.27   0.27   0.27   0.27   0.27   0.27   0.27   0.27   0.27 
+Pocahontas - Colors of the Wind (Blu-ray 108 3src  0.19   0.19   0.16   0.19   0.19   0.16   0.19   0.19   0.21   0.19   0.19   0.21   0.19   0.19   0.21 
+Seasons of Love (HD)---UvyHuse6buY           2src  0.52   0.52   0.52   0.52   0.52   0.52   0.52   0.52   0.52   0.52   0.52   0.52   0.52   0.52   0.52 
+Stay Gold (Official Music Video) from The Ou 2src  0.05   0.05   0.05   0.05   0.05   0.05   0.05   0.05   0.05   0.05   0.05   0.05   0.05   0.05   0.05 
+The Lion King - Hakuna Matata Music Video I  3src  0.41   0.41   0.41   0.41   0.41   0.41   0.41   0.41   0.41   0.67   0.41   0.41   0.85*  0.41   0.41 
+The Next Ten Minutes Lyrics---0j8kL24ph8U    2src  0.46   0.46   0.46   0.46   0.46   0.46   0.46   0.46   0.46   0.46   0.46   0.46   0.46   0.46   0.46 
+Wicked - For Good  (2025) 4K - The Girl in t 3src  0.33   0.33   0.33   0.49   0.33   0.33   0.41   0.39   0.36   0.41   0.41   0.36   0.40   0.39   0.34 
+```
+
+**Crawl lines**
+
+```
+song                                          src  a1b1   a1b2   a1b3  a1.5b1  a1.5b2  a1.5b3   a2b1   a2b2   a2b3  a2.5b1  a2.5b2  a2.5b3   a3b1   a3b2   a3b3 
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+'Defying Gravity' - Wicked 20th Anniversary  3src     3      3      1      3      3      3      3      3      3      3      3      3      3      3      3 
+'Free' _ Official Lyric Video _ Sony Animati 2src     1      1      1      1      1      1      1      1      1      1      1      1      1      1      1 
+'Popular' - Wicked 20th Anniversary Edition  3src     3      3      2      3      3      3      3      3      3      3      3      3      3      3      3 
+Beauty and the Beast (1991) - Be Our Guest [ 3src     0      0      0      0      0      0      0      0      0      0      0      0      0      0      0 
+Beauty and the Beast (1991) - Belle [UHD]--- 3src     1      1      1      1      1      1      1      1      1      1      1      1      1      1      1 
+Ed Sheeran - Best Part Of Me (feat. YEBBA) ( 3src     2      2      2      2      2      2      2      2      2      2      2      2      2      2      2 
+Ed Sheeran & Rudimental­ - Bloodstream [Offi 3src     1      2      2      1      2      2      1      1      2      1      1      2      1      1      1 
+HUNTR_X 'This Is What It Sounds Like' (Music 2src     0      0      0      0      0      0      0      0      0      0      0      0      0      0      0 
+Jessie J - Domino (Official Video)---UJtB55M 2src     0      0      0      0      0      0      0      0      0      0      0      0      0      0      0 
+Josh Gad - In Summer (From 'Frozen'_Sing-Alo 2src     2      2      2      2      2      2      2      2      2      2      2      2      2      2      2 
+Mulan _ I'll Make a Man Out of You _ @disney 3src     0      0      0      0      0      0      0      0      0      0      0      0      0      0      0 
+NSYNC - Paradise                             2src     2      2      2      2      2      2      2      2      2      2      2      2      2      2      2 
+Pocahontas - Colors of the Wind (Blu-ray 108 3src     2      2      2      2      2      2      2      2      2      2      2      2      2      2      2 
+Seasons of Love (HD)---UvyHuse6buY           2src     3      3      3      3      3      3      3      3      3      3      3      3      3      3      3 
+Stay Gold (Official Music Video) from The Ou 2src     1      1      1      1      1      1      1      1      1      1      1      1      1      1      1 
+The Lion King - Hakuna Matata Music Video I  3src     3      3      2      4      3      3      4      3      3      4      4      3      4      4      3 
+The Next Ten Minutes Lyrics---0j8kL24ph8U    2src     2      2      2      2      2      2      2      2      2      2      2      2      2      2      2 
+Wicked - For Good  (2025) 4K - The Girl in t 3src     2      2      2      2      2      2      2      2      2      2      2      2      2      2      2 
+```
+
+**Placed lines**
+
+```
+song                                          src  a1b1   a1b2   a1b3  a1.5b1  a1.5b2  a1.5b3   a2b1   a2b2   a2b3  a2.5b1  a2.5b2  a2.5b3   a3b1   a3b2   a3b3 
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+'Defying Gravity' - Wicked 20th Anniversary  3src    51     51     47     51     51     51     51     51     51     51     51     51     51     51     51 
+'Free' _ Official Lyric Video _ Sony Animati 2src    40     40     40     40     40     40     40     40     40     40     40     40     40     40     40 
+'Popular' - Wicked 20th Anniversary Edition  3src    51     51     51     52     52     51     52     52     52     52     52     52     52     52     52 
+Beauty and the Beast (1991) - Be Our Guest [ 3src    77     77     77     77     77     77     77     77     77     77     77     77     77     77     77 
+Beauty and the Beast (1991) - Belle [UHD]--- 3src   101    101    101    101    101    101    101    101    101    101    101    101    101    101    101 
+Ed Sheeran - Best Part Of Me (feat. YEBBA) ( 3src    37     37     37     37     37     37     37     37     37     37     37     37     37     37     37 
+Ed Sheeran & Rudimental­ - Bloodstream [Offi 3src    48     48     48     48     48     48     48     48     48     48     48     48     48     48     48 
+HUNTR_X 'This Is What It Sounds Like' (Music 2src    33     33     33     33     33     33     33     33     33     33     33     33     33     33     33 
+Jessie J - Domino (Official Video)---UJtB55M 2src    63     63     63     63     63     63     63     63     63     63     63     63     63     63     63 
+Josh Gad - In Summer (From 'Frozen'_Sing-Alo 2src    29     29     29     29     29     29     29     29     29     29     29     29     29     29     29 
+Mulan _ I'll Make a Man Out of You _ @disney 3src    36     36     36     36     36     36     36     36     36     36     36     36     36     36     36 
+NSYNC - Paradise                             2src    53     53     53     53     53     53     53     53     53     53     53     53     53     53     53 
+Pocahontas - Colors of the Wind (Blu-ray 108 3src    37     37     37     37     37     37     37     37     37     37     37     37     37     37     37 
+Seasons of Love (HD)---UvyHuse6buY           2src    24     24     24     24     24     24     25     25     25     25     25     25     25     25     25 
+Stay Gold (Official Music Video) from The Ou 2src    38     38     38     38     38     38     38     38     38     38     38     38     38     38     38 
+The Lion King - Hakuna Matata Music Video I  3src    33     33     32     33     33     33     33     33     33     33     33     33     33     33     33 
+The Next Ten Minutes Lyrics---0j8kL24ph8U    2src    67     67     67     67     67     67     67     67     67     67     67     67     67     67     67 
+Wicked - For Good  (2025) 4K - The Girl in t 3src    29     29     29     29     29     29     29     29     29     29     29     29     29     29     29 
+```
+
+**Max consecutive-line overlap (s)**
+
+```
+song                                          src  a1b1   a1b2   a1b3  a1.5b1  a1.5b2  a1.5b3   a2b1   a2b2   a2b3  a2.5b1  a2.5b2  a2.5b3   a3b1   a3b2   a3b3 
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+'Defying Gravity' - Wicked 20th Anniversary  3src   0.0    0.0    0.0    0.0    0.0    0.0    0.2    0.2    0.2    0.2    0.2    0.2    0.2    0.2    0.2 
+'Free' _ Official Lyric Video _ Sony Animati 2src   1.0    1.0    1.0    1.0    1.0    1.0    1.0    1.0    1.0    1.0    1.0    1.0    1.0    1.0    1.0 
+'Popular' - Wicked 20th Anniversary Edition  3src   0.3    0.1    0.1    0.1    0.1    0.1    0.1    0.1    0.1    0.1    0.1    0.1    0.1    0.1    0.1 
+Beauty and the Beast (1991) - Be Our Guest [ 3src   0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0 
+Beauty and the Beast (1991) - Belle [UHD]--- 3src   0.1    0.1    0.1    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0 
+Ed Sheeran - Best Part Of Me (feat. YEBBA) ( 3src   0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0 
+Ed Sheeran & Rudimental­ - Bloodstream [Offi 3src   6.7    6.7    6.7    6.7    6.7    6.7    6.7    6.7    6.7    6.7    6.7    6.7    6.7    6.7    6.7 
+HUNTR_X 'This Is What It Sounds Like' (Music 2src   0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0 
+Jessie J - Domino (Official Video)---UJtB55M 2src   0.0    0.0    0.0    0.0    0.0    0.0    0.1    0.1    0.1    0.1    0.1    0.1    0.1    0.1    0.1 
+Josh Gad - In Summer (From 'Frozen'_Sing-Alo 2src   0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0 
+Mulan _ I'll Make a Man Out of You _ @disney 3src   0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0 
+NSYNC - Paradise                             2src   0.7    0.7    0.7    0.7    0.7    0.7    0.7    0.7    0.7    0.7    0.7    0.7    0.7    0.7    0.7 
+Pocahontas - Colors of the Wind (Blu-ray 108 3src   0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0 
+Seasons of Love (HD)---UvyHuse6buY           2src   0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0 
+Stay Gold (Official Music Video) from The Ou 2src   0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0 
+The Lion King - Hakuna Matata Music Video I  3src   0.1    0.1    0.1    0.1    0.1    1.0    0.1    0.1    0.1    0.1    0.1    0.1    0.1    0.1    0.1 
+The Next Ten Minutes Lyrics---0j8kL24ph8U    2src   0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0 
+Wicked - For Good  (2025) 4K - The Girl in t 3src   0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0    0.0 
+```
+
+#### Part 2 — ytasr candidate-ratio arm (10 ytasr-carrying songs)
+
+The ratio-0.34 tables are the part-1 numbers restricted to these 10
+songs and are not repeated; the aggregate is, because its columns are
+re-based on this subset. Candidate counts are constant across the grid
+and are collapsed into one table at the end.
+
+**Corpus aggregate per combo -- ytasr ratio 0.34 (deltas vs shipped a2.0/b2.0/r0.34)**
+
+```
+alpha  beta  placed  crawl  ovl>0  med_mad  mad_scored  mad_better  mad_worse  plc_delta
+------------------------------------------------------------------------------------------------
+  1.0   1.0     500     17      4    0.390           7           1          0         -1
+  1.0   2.0     500     18      4    0.320           6           4          0         -1
+  1.0   3.0     495     14      4    0.330           7           5          0         -6
+  1.5   1.0     501     18      4    0.415           7           0          2         +0
+  1.5   2.0     501     18      4    0.360           6           2          0         +0
+  1.5   3.0     500     18      4    0.330           7           5          0         -1
+  2.0   1.0     501     18      5    0.408           7           0          2         +0
+  2.0   2.0     501     17      5    0.389           6           0          0         +0
+  2.0   3.0     501     18      5    0.390           7           2          2         +0
+  2.5   1.0     501     18      5    0.408           7           1          3         +0
+  2.5   2.0     501     18      5    0.384           6           1          1         +0
+  2.5   3.0     501     18      5    0.335           6           2          1         +0
+  3.0   1.0     501     18      5    0.380           6           2          2         +0
+  3.0   2.0     501     18      5    0.374           6           1          1         +0
+  3.0   3.0     501     17      5    0.350           6           2          1         +0
+```
+
+**Corpus aggregate per combo -- ytasr ratio 0.45 (deltas vs shipped a2.0/b2.0/r0.34)**
+
+```
+alpha  beta  placed  crawl  ovl>0  med_mad  mad_scored  mad_better  mad_worse  plc_delta
+------------------------------------------------------------------------------------------------
+  1.0   1.0     502     17      4    0.321           6           2          0         +1
+  1.0   2.0     500     18      4    0.320           6           5          0         -1
+  1.0   3.0     494     14      4    0.320           6           5          0         -7
+  1.5   1.0     503     18      4    0.362           6           1          2         +2
+  1.5   2.0     503     18      4    0.320           6           3          0         +2
+  1.5   3.0     502     18      4    0.355           6           4          1         +1
+  2.0   1.0     503     18      5    0.359           6           1          2         +2
+  2.0   2.0     503     17      5    0.349           6           1          0         +2
+  2.0   3.0     503     18      5    0.335           6           3          2         +2
+  2.5   1.0     503     18      4    0.359           6           1          3         +2
+  2.5   2.0     503     18      5    0.337           6           1          1         +2
+  2.5   3.0     503     18      5    0.312           6           2          1         +2
+  3.0   1.0     503     18      4    0.310           5           1          2         +2
+  3.0   2.0     503     18      5    0.327           6           1          1         +2
+  3.0   3.0     503     17      5    0.302           6           2          1         +2
+```
+
+**Corpus aggregate per combo -- ytasr ratio 0.55 (deltas vs shipped a2.0/b2.0/r0.34)**
+
+```
+alpha  beta  placed  crawl  ovl>0  med_mad  mad_scored  mad_better  mad_worse  plc_delta
+------------------------------------------------------------------------------------------------
+  1.0   1.0     504     18      4    0.362           6           1          2         +3
+  1.0   2.0     502     19      4    0.355           6           4          1         +1
+  1.0   3.0     496     15      3    0.362           6           4          1         -5
+  1.5   1.0     505     19      4    0.362           6           1          2         +4
+  1.5   2.0     505     19      4    0.361           6           1          2         +4
+  1.5   3.0     504     19      4    0.355           6           4          1         +3
+  2.0   1.0     505     19      5    0.359           6           1          2         +4
+  2.0   2.0     505     18      5    0.359           6           1          2         +4
+  2.0   3.0     505     19      5    0.359           6           1          4         +4
+  2.5   1.0     505     19      4    0.359           6           1          2         +4
+  2.5   2.0     505     18      5    0.337           6           1          2         +4
+  2.5   3.0     505     19      5    0.337           6           1          3         +4
+  3.0   1.0     505     19      4    0.355           6           1          3         +4
+  3.0   2.0     505     19      5    0.327           6           1          1         +4
+  3.0   3.0     505     18      5    0.327           6           1          2         +4
+```
+
+**MAD -- ytasr ratio 0.45**
+
+```
+song                                          src  a1b1   a1b2   a1b3  a1.5b1  a1.5b2  a1.5b3   a2b1   a2b2   a2b3  a2.5b1  a2.5b2  a2.5b3   a3b1   a3b2   a3b3 
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+'Defying Gravity' - Wicked 20th Anniversary  3src  7.12*  7.12*  7.12*  7.12*  7.12*  7.12*  7.12*  7.12*  7.12*  7.32*  7.12*  7.12*  7.32*  7.12*  5.66*
+'Popular' - Wicked 20th Anniversary Edition  3src  1.60*  1.63*  1.63*  1.60*  1.60*  1.63*  1.60*  1.60*  1.63*  1.60*  1.60*  1.60*  1.60*  1.60*  1.60*
+Beauty and the Beast (1991) - Be Our Guest [ 3src  0.16   0.15   0.14   0.18   0.15   0.15   0.18   0.16   0.15   0.18   0.16   0.16   0.18   0.18   0.16 
+Beauty and the Beast (1991) - Belle [UHD]--- 3src  0.31   0.31   0.31   0.31   0.31   0.31   0.31   0.31   0.31   0.31   0.27   0.27   0.31   0.27   0.27 
+Ed Sheeran - Best Part Of Me (feat. YEBBA) ( 3src  0.83*  0.86*  0.86*  0.83*  0.86*  0.86*  0.83*  0.83*  0.86*  0.83*  0.83*  0.86*  0.83*  0.83*  0.86*
+Ed Sheeran & Rudimental­ - Bloodstream [Offi 3src  0.60   0.40   0.45   0.60   0.60   0.40   0.60   0.60   0.64   0.60   0.60   0.60   0.60   0.60   0.60 
+Mulan _ I'll Make a Man Out of You _ @disney 3src  1.01*  1.01*  0.98*  1.01*  1.01*  0.98*  1.01*  1.01*  0.98*  1.01*  1.01*  0.98*  1.01*  1.01*  0.98*
+Pocahontas - Colors of the Wind (Blu-ray 108 3src  0.19   0.18   0.16   0.19   0.19   0.16   0.19   0.19   0.21   0.19   0.19   0.21   0.19   0.19   0.21 
+The Lion King - Hakuna Matata Music Video I  3src  0.41   0.41   0.41   0.41   0.41   0.41   0.41   0.41   0.41   0.67   0.41   0.41   0.85*  0.41   0.41 
+Wicked - For Good  (2025) 4K - The Girl in t 3src  0.33   0.33   0.33   0.49   0.33   0.41   0.41   0.39   0.36   0.41   0.41   0.36   0.40   0.39   0.34 
+```
+
+**Crawl -- ytasr ratio 0.45**
+
+```
+song                                          src  a1b1   a1b2   a1b3  a1.5b1  a1.5b2  a1.5b3   a2b1   a2b2   a2b3  a2.5b1  a2.5b2  a2.5b3   a3b1   a3b2   a3b3 
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+'Defying Gravity' - Wicked 20th Anniversary  3src     3      3      1      3      3      3      3      3      3      3      3      3      3      3      3 
+'Popular' - Wicked 20th Anniversary Edition  3src     3      3      2      3      3      3      3      3      3      3      3      3      3      3      3 
+Beauty and the Beast (1991) - Be Our Guest [ 3src     0      0      0      0      0      0      0      0      0      0      0      0      0      0      0 
+Beauty and the Beast (1991) - Belle [UHD]--- 3src     1      1      1      1      1      1      1      1      1      1      1      1      1      1      1 
+Ed Sheeran - Best Part Of Me (feat. YEBBA) ( 3src     2      2      2      2      2      2      2      2      2      2      2      2      2      2      2 
+Ed Sheeran & Rudimental­ - Bloodstream [Offi 3src     1      2      2      1      2      2      1      1      2      1      1      2      1      1      1 
+Mulan _ I'll Make a Man Out of You _ @disney 3src     0      0      0      0      0      0      0      0      0      0      0      0      0      0      0 
+Pocahontas - Colors of the Wind (Blu-ray 108 3src     2      2      2      2      2      2      2      2      2      2      2      2      2      2      2 
+The Lion King - Hakuna Matata Music Video I  3src     3      3      2      4      3      3      4      3      3      4      4      3      4      4      3 
+Wicked - For Good  (2025) 4K - The Girl in t 3src     2      2      2      2      2      2      2      2      2      2      2      2      2      2      2 
+```
+
+**MAD -- ytasr ratio 0.55**
+
+```
+song                                          src  a1b1   a1b2   a1b3  a1.5b1  a1.5b2  a1.5b3   a2b1   a2b2   a2b3  a2.5b1  a2.5b2  a2.5b3   a3b1   a3b2   a3b3 
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+'Defying Gravity' - Wicked 20th Anniversary  3src  7.12*  7.12*  7.12*  7.12*  7.12*  7.12*  7.12*  7.12*  7.12*  7.32*  7.12*  7.12*  7.32*  7.12*  5.66*
+'Popular' - Wicked 20th Anniversary Edition  3src  1.60*  1.68*  1.68*  1.60*  1.62*  1.68*  1.60*  1.60*  1.68*  1.60*  1.60*  1.62*  1.60*  1.60*  1.60*
+Beauty and the Beast (1991) - Be Our Guest [ 3src  0.17   0.15   0.15   0.18   0.17   0.15   0.18   0.17   0.19   0.18   0.17   0.17   0.18   0.18   0.17 
+Beauty and the Beast (1991) - Belle [UHD]--- 3src  0.31   0.31   0.31   0.31   0.31   0.31   0.31   0.31   0.31   0.31   0.27   0.27   0.31   0.27   0.27 
+Ed Sheeran - Best Part Of Me (feat. YEBBA) ( 3src  0.83*  0.83*  0.83*  1.07*  0.83*  0.83*  1.07*  0.83*  0.83*  1.07*  1.07*  0.83*  1.07*  1.07*  0.83*
+Ed Sheeran & Rudimental­ - Bloodstream [Offi 3src  0.60   0.40   0.45   0.60   0.60   0.40   0.60   0.60   0.64   0.60   0.60   0.60   0.60   0.60   0.60 
+Mulan _ I'll Make a Man Out of You _ @disney 3src  0.80*  0.80*  0.93*  0.80*  0.80*  0.93*  0.80*  0.80*  0.93*  0.80*  0.80*  0.93*  0.80*  0.80*  0.93*
+Pocahontas - Colors of the Wind (Blu-ray 108 3src  0.19   0.18   0.16   0.19   0.19   0.16   0.19   0.19   0.21   0.19   0.19   0.21   0.19   0.19   0.21 
+The Lion King - Hakuna Matata Music Video I  3src  0.41   0.41   0.41   0.41   0.41   0.41   0.41   0.41   0.41   0.41   0.41   0.41   0.55   0.41   0.41 
+Wicked - For Good  (2025) 4K - The Girl in t 3src  0.49   0.41   0.46   0.49   0.41   0.49   0.41   0.41   0.41   0.41   0.41   0.41   0.40   0.39   0.39 
+```
+
+**Crawl -- ytasr ratio 0.55**
+
+```
+song                                          src  a1b1   a1b2   a1b3  a1.5b1  a1.5b2  a1.5b3   a2b1   a2b2   a2b3  a2.5b1  a2.5b2  a2.5b3   a3b1   a3b2   a3b3 
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+'Defying Gravity' - Wicked 20th Anniversary  3src     3      3      1      3      3      3      3      3      3      3      3      3      3      3      3 
+'Popular' - Wicked 20th Anniversary Edition  3src     3      3      2      3      3      3      3      3      3      3      3      3      3      3      3 
+Beauty and the Beast (1991) - Be Our Guest [ 3src     0      0      0      0      0      0      0      0      0      0      0      0      0      0      0 
+Beauty and the Beast (1991) - Belle [UHD]--- 3src     1      1      1      1      1      1      1      1      1      1      1      1      1      1      1 
+Ed Sheeran - Best Part Of Me (feat. YEBBA) ( 3src     2      2      2      2      2      2      2      2      2      2      2      2      2      2      2 
+Ed Sheeran & Rudimental­ - Bloodstream [Offi 3src     1      2      2      1      2      2      1      1      2      1      1      2      1      1      1 
+Mulan _ I'll Make a Man Out of You _ @disney 3src     0      0      0      0      0      0      0      0      0      0      0      0      0      0      0 
+Pocahontas - Colors of the Wind (Blu-ray 108 3src     2      2      2      2      2      2      2      2      2      2      2      2      2      2      2 
+The Lion King - Hakuna Matata Music Video I  3src     3      3      2      4      3      3      4      3      3      4      3      3      4      4      3 
+Wicked - For Good  (2025) 4K - The Girl in t 3src     3      3      3      3      3      3      3      3      3      3      3      3      3      3      3 
+```
+
+**ytasr candidates admitted, per song x ratio** (constant across the
+alpha x beta grid, so shown once)
+
+```
+song                                           r0.34   r0.45   r0.55
+--------------------------------------------------------------------
+Beauty and the Beast (1991) - Be Our Guest [     434     608     953
+Beauty and the Beast (1991) - Belle [UHD]---     369     576     743
+'Defying Gravity' - Wicked 20th Anniversary      271     375     573
+Ed Sheeran - Best Part Of Me (feat. YEBBA) (     275     506     717
+Ed Sheeran & Rudimental­ - Bloodstream [Offi     649    1154    1681
+Mulan _ I'll Make a Man Out of You _ @disney     552     939    1313
+Pocahontas - Colors of the Wind (Blu-ray 108     718    1078    1424
+'Popular' - Wicked 20th Anniversary Edition      414     615     810
+The Lion King - Hakuna Matata Music Video I      326     429     725
+Wicked - For Good  (2025) 4K - The Girl in t     183     292     434
+```

@@ -224,6 +224,18 @@ a new mechanism on rung 2b rather than rung 1 returning. Detail in
   exists.
 - **R-3** — SRT-first *stands*, but Appendix A flags that a later ruling
   could reorder precedence 1 against 2.
+- **GATE T** — NEW 2026-09-10, Ken's, and the one open item with its
+  measurement already on the table. Phase 3 ran the full `alpha` x
+  `beta` grid plus a ytasr candidate-ratio arm on all 18 genius-origin
+  bundles; the raw per-song x per-combo tables are in
+  `route-no-timing.md`'s Results log and **no combo was selected**. Two
+  things the gate reader needs that the tables do not supply: the
+  **clean-tail roster** its hard criterion is written against (4 of 18
+  songs are classified anywhere in the record, 14 are not), and a call
+  on whether the ytasr ratio moves with the knobs or stays at its
+  shipped 0.34 — the probe ran it as a co-primary axis, so the answer
+  is one read-off, not two. A knob change ships as one commit citing
+  the gate; no default has moved.
 - **Phase 5's gate form** — NEW 2026-09-10, Ken's. A Fable round found
   that widening the fill's source to the sidecar **under the shipped
   per-song gate** is where the 16/0 record gets tested and can fail:
@@ -330,12 +342,13 @@ shipped `cue_align.py`, so it is not dead-end history.
 
 ## Remaining execution order (Ken, 2026-09-01) — measure first, lock once
 
-> **START HERE (2026-09-10, updated after the two Fable rounds).** The
+> **START HERE (2026-09-10, updated after Phase 3 ran).** The
 > line route is closed (step 4) and **GATE J1 came back NO-GO**, so
-> whisper stays the joint aligner and Phase 2b never gets built. The
-> next spend is **Phase 3 → GATE T** in `plans/route-no-timing.md`,
-> tuning the whisper matcher on the catch-all population. After it,
-> Phase 5 there (line timing as a fill source) is the design that
+> whisper stays the joint aligner and Phase 2b never gets built.
+> **Phase 3 ran 2026-09-10 on the whisper matcher; GATE T is OPEN and
+> is the next thing on the program — Ken's read-off, raw tables in
+> `plans/route-no-timing.md`, no combo picked and no default changed.**
+> After it, Phase 5 there (line timing as a fill source) is the design that
 > inherits everything the line route learned — **its scope was amended
 > 2026-09-10 to a per-gap gate**, because the shipped fill's per-song
 > gate carries the warp gate's blind spot on the population Phase 5
@@ -492,14 +505,23 @@ Order — cheapest and highest overturn-risk first:
 5. ~~**Joint plan Phase 2a → GATE J1/J2**~~ — **RAN AND CLOSED
    2026-09-08. J1 NO-GO, J2 cleared nothing.** Whisper stays the joint
    aligner; Appendix D unchanged ("re-enable exception: none" stands).
-   **2b and GATE V are struck.** What remains of this step: **Phase 3 →
-   GATE T on the whisper matcher — the program's next spend** — then
-   **Phase 5 (line timing as a fill source)**, whose design is now owed
-   against whisper. Raw tables and the read-off in
-   `route-no-timing.md`.
-6. **S-E** (Phase 3's unrun optional arm; offline, no GPU align). Cheap
-   add-on: informs the deletion inventory and tests Ken's GATE C
-   observation.
+   **2b and GATE V are struck.** What remains of this step: **Phase 3
+   RAN 2026-09-10 and GATE T is OPEN — Ken's read-off, the program's
+   next move** — then **Phase 5 (line timing as a fill source)**, whose
+   design is now owed against whisper. Raw tables and the read-offs in
+   `route-no-timing.md`. Phase 3's run is offline replay only: no
+   production code was changed and no config default moved, so nothing
+   ships until GATE T is read. **Flagged with the tables: GATE T's hard
+   criterion names a clean-tail cohort that has never been written down
+   as a roster** — 4 of the 18 songs are classified in the record, 14
+   are not.
+6. ~~**S-E**~~ — **not run.** This is the *line* route's Phase 3
+   optional arm, not the joint plan's Phase 3, and it closed with that
+   route: `route-line-timing.md`'s status block records "S-E is not
+   run" among what Ken's 2026-09-08 closure settled. Struck here
+   2026-09-10 as bookkeeping on that ruling, not a new decision. Its
+   original scope: an offline, no-GPU-align arm informing the deletion
+   inventory and testing Ken's GATE C observation.
 7. **Phase 4 → GATE L** — whenever the Mandarin corpus exists. Blocks
    nothing and nothing blocks it but the corpus.
 
