@@ -797,7 +797,7 @@ class TestEndToEndYtasrWins:
     def test_ytasr_scan_uses_own_stricter_ratio(self):
         # A half-garbled ASR rendering ("a b y z" for "a b c d") clears the
         # transcribe knob (0.75 allows 3 errors on 4 tokens) but not ytasr's
-        # own CANDIDATE_MAX_EDIT_RATIO (0.34 allows 1): the ytasr scan must
+        # own CANDIDATE_MAX_EDIT_RATIO (0.45 allows 1): the ytasr scan must
         # use the latter, so ASR text this weak generates no candidate at
         # all, no matter how loose the transcribe knob is set.
         lines = ["a b c d"]
