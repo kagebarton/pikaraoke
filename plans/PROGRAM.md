@@ -1,4 +1,4 @@
-Model: Claude Fable 5 (design, locked 2026-07-18); judge Opus; executor Sonnet 5
+Model: Claude Opus 5 (design + judge); executor Sonnet 5 (design locked 2026-07-18 by Claude Fable 5; role passed to Opus 2026-09-10)
 
 # Timing-route program — the map
 
@@ -527,7 +527,7 @@ Order — cheapest and highest overturn-risk first:
    of the step is **Phase 5 (line timing as a fill source)**, whose
    design is owed against whisper and is the program's next spend. The
    read-off's own recommendation, recorded as recommendation not ruling:
-   the remaining Fable budget goes to **Phase 5's per-gap gate**, not to
+   the next design spend goes to **Phase 5's per-gap gate**, not to
    knob work — the knobs cannot reach the unplaced population that
    Phase 5 targets.
 6. ~~**S-E**~~ — **not run.** This is the *line* route's Phase 3
@@ -616,45 +616,49 @@ number on it comes from harnesses.
 
 ## Model switching
 
-Same three roles as `plans/completed/matcher-accuracy-hardening.md` §"Model
-switching", binding here identically:
+Three roles, binding on this file and on every plan it maps.
+**Revised 2026-09-10 (Ken): Opus owns design and verdicts; Fable leaves
+the routine loop.** This section is now self-contained — it no longer
+binds by reference to `plans/completed/matcher-accuracy-hardening.md`
+§"Model switching", which stays as written because it is the record of
+how the completed work was judged, not live policy.
 
-- **Design** — Fable, completed 2026-07-18 (**succession locked
-  2026-07-19**; Fable is available again and has read off GATE P and
-  GATE R, but see the escalation rule below): this document and the build
-  plan's Appendices A–E are locked, with every formerly
-  lock-at-GATE item converted to a pre-registered decision procedure.
-  At each GATE the judge *executes* the relevant procedure verbatim
-  and records the resulting constants; no model on any tier invents a
-  threshold or extends a procedure — an uncovered case is a STOP →
-  Ken.
+- **Design** — Opus. The 2026-07-18 design (this document and the build
+  plan's Appendices A–E) is locked, with every formerly lock-at-GATE
+  item converted to a pre-registered decision procedure, and Opus owns
+  design work from here — including the open items: Phase 5's per-gap
+  gate and Phase 6. At each GATE the judge *executes* the relevant
+  procedure verbatim and records the resulting constants; no model on
+  any tier invents a threshold or extends a procedure — an uncovered
+  case is a STOP → Ken.
 - **Implement / prototype / run** — Sonnet 5. Output at a GATE is a
-  table, never a verdict.
-- **Judge results** — Opus, executing the pre-registered read-off
-  rules below; escalations that previously said "to Fable" go to Ken.
+  table, never a verdict. **Unchanged: a Sonnet session stops when the
+  artifacts exist** and asks Ken to `/model` to Opus; it does not read
+  its own result.
+- **Judge results** — Opus, executing the pre-registered read-off rules
+  below. Opus renders the verdict on every result, GATEs included.
 
-### When a result goes to Fable (Ken, 2026-09-04)
+### When a result goes to Fable (revised by Ken, 2026-09-10)
 
-Fable is billed per use, so a judge round is spent, not free. Escalate
-**only** when at least one of these holds:
+One trigger, and it is Opus's own uncertainty. When Opus cannot resolve
+a read against the pre-registered rule — the findings admit more than
+one reading it cannot choose between, or something surfaced during the
+run that it cannot price — it says so plainly and **suggests** Ken
+escalate to Fable. That is a recommendation to Ken, never a switch Opus
+takes itself, and it is the only path to Fable.
 
-- **Ambiguity in the findings** — they admit more than one reading, or
-  the pre-registered rule does not cover the case actually observed.
-- **Significant new complexity surfaced during the run** that could
-  change the verdict: a mechanism nobody priced, a control that turns
-  out to be broken, an artifact that invalidates an arm.
-- **The read-off is a GATE** whose outcome selects a mechanism or
-  licenses a build phase. These are escalated on principle, not on
-  difficulty.
+Two rules from the 2026-09-04 version are retired:
 
-Otherwise the executor reports its tables and **Ken rules directly**. A
-result that is arithmetically decisive — a refutation that carries its
-own control, a threshold missed by an order of magnitude — does not need
-a judge round to confirm ten numbers.
+- **GATEs no longer escalate on principle.** A GATE Opus can read, Opus
+  reads. Difficulty is the only thing that routes a read-off now.
+- **The direct-to-Ken shortcut is gone.** Every result gets an Opus
+  round, including arithmetically decisive ones — the round no longer
+  costs a billed pass, so there is nothing to save by skipping it.
 
-This changes *who* reads, not the executor's boundary. Judge separation
-still binds: the executor reports paths and raw tables and does not write
-the verdict. It hands them to Ken instead of to Fable.
+Judge separation is unchanged and still binds: the executor reports
+paths and raw tables and does not write the verdict; Ken rules on top
+of every verdict Opus renders. Ken asking directly for an opinion is
+not an escalation.
 
 Executor discipline: the matcher plan's §"Executor discipline (Sonnet 5,
 added 2026-07-12)" applies verbatim — specs are contracts, mismatches are
@@ -667,7 +671,7 @@ after data.
 | 1 (CTC probe, GATE C) | `plans/completed/ctc-forced-align-eyeball.md` | executed 2026-07-18 | done — see Results log |
 | 1b (score oracle, GATE O) | locked below | Sonnet 5 | Opus + Ken |
 | 2 (richsync probe, GATE R) | 2a/2b below; Appendix C locks at the GATE | Sonnet 5 | Opus + Ken eyeball |
-| 3 (scaffold probe, GATE S) | below; Appendices D/E lock at the GATE | Sonnet 5 | Opus; escalate if arms conflict |
+| 3 (scaffold probe, GATE S) | below; Appendices D/E lock at the GATE | Sonnet 5 | Opus (suggests Fable only if the conflicting arms leave it unsure) |
 | 4 (non-Latin form, GATE L) | below; Appendix D's carve-out amends at L-3 | Sonnet 5 | Opus + Ken eyeball |
 
 Phase dependencies: 1b, 2, 3 can interleave; 1b should complete before

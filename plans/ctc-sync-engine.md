@@ -184,15 +184,16 @@ cut from it) as consolidated squash commits — the matcher era as one
 or two commits, then one per build-plan phase. Never re-fork
 production work from `dev`.
 
-**Design-role succession (Fable unavailable from 2026-07-19):** all
+**Design-role succession (Opus owns design from 2026-09-10):** all
 design content in this file is now either locked outright or expressed
 as a pre-registered decision procedure (Appendices C/D/E, GATE X, the
 E4 order). "Locking" an appendix at a GATE now means *executing its
 procedure verbatim and recording the resulting constants* — Opus does
 this as the judge role. No model, on any tier, invents a threshold or
 extends a procedure: a case a procedure does not cover is a STOP →
-Ken. Sonnet 5 implements; Opus judges and records; escalations that
-previously said "to Fable" now go to Ken.
+Ken. Sonnet 5 implements and stops at the artifacts; Opus designs,
+judges and records, and suggests Fable to Ken only when Opus is itself
+unsure (`PROGRAM.md` §"Model switching").
 
 ## Phase E0 — production pillar: timing fetch in `lyrics_fetch`
 

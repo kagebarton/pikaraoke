@@ -82,8 +82,9 @@ tail.
   drivers (Phase 4's telemetry replay, Phase 2a's A/B harness) stay
   scratchpad unless a later ruling promotes them the same way. Raw
   tables are appended to this plan's Results log via docs commits —
-  tables only, **no verdicts**. Gates are read off by Ken/Fable;
-  stop and alert at every GATE.
+  tables only, **no verdicts**. Gates are read off by Opus, Ken rules
+  (`PROGRAM.md` §"Model switching", revised 2026-09-10); stop and alert
+  at every GATE.
 - **Cross-plan sequencing (Ken, 2026-09-01):** this plan's Phase 4
   (GATE P) and Phase 2a (GATE J1/J2) are steps 1 and 3 of the
   measurement block in `plans/PROGRAM.md`, "Remaining
@@ -1853,6 +1854,12 @@ by Claude Opus 5, ruling by Ken.** It is not a Fable round and should
 not be cited as one. The tables it reads are the Phase 3 entry above,
 unchanged.
 
+*(Added 2026-09-10, after the fact: the standing rule this entry says it
+departs from was revised the same day — Opus is now the judge for every
+read-off, GATEs included, so this routing became the norm rather than an
+exception. The entry above is left as written. See `PROGRAM.md`
+§"Model switching".)*
+
 #### Finding 1 — the alpha x beta knobs are inert on this corpus
 
 Across all 15 grid points and all 18 songs the total movement is **7
@@ -1970,7 +1977,7 @@ is: the knobs cannot reach the unplaced population, and Phase 5's fill
 is aimed at exactly it. **Phase 6 stays after Phase 5** — it refines word
 boundaries inside lines already placed, which is polish next to lines
 that never render. Recorded as the executor's recommendation on where to
-spend the remaining Fable budget, not a ruling: **Phase 5's per-gap gate,
+spend the next design pass, not a ruling: **Phase 5's per-gap gate,
 not this gate** — GATE T the data answered by itself, whereas the per-gap
 gate is a live design question with a named failure mode (Bloodstream).
 

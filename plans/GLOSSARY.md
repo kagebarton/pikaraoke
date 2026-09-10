@@ -228,11 +228,13 @@ alphabetical. Cross-references are written as `→ <term>`.
   Results-log number comes from a command actually run in that session;
   pre-registered protocols/thresholds never move after seeing data;
   "unchanged" claims require a real diff; GATEs/MODEL BREAKs are hard stops.
-- **Fable / Opus / Sonnet (roles)** — the three model roles in the plans'
-  "Model switching": **Design** (Fable, locked; Opus drafts if Fable
-  unavailable), **Implement/run** (Sonnet 5), **Judge results** (Opus,
-  escalate to Fable on ambiguity). Escalations that previously said "to
-  Fable" now go to Ken (Fable became unavailable 2026-07-19).
+- **Opus / Sonnet / Fable (roles)** — the model roles in the plans'
+  "Model switching", revised 2026-09-10: **Design** and **Judge results**
+  are both **Opus**, which renders the verdict on every result including
+  GATEs; **Implement/run** is **Sonnet 5**, which stops when the artifacts
+  exist and hands off to Opus. **Fable** is out of the routine loop — Opus
+  *suggests* it to Ken only when Opus is itself unsure, and Ken decides.
+  Canonical text: `plans/PROGRAM.md` §"Model switching".
 - **Fork rule** — new behavior goes in new files; smallest possible touch
   to existing modules. Keeps changes reviewable and avoids circular
   imports (e.g. `joint_match` may not import `cue_align`; `token_align`
