@@ -652,9 +652,8 @@ how the completed work was judged, not live policy.
   design work from here — the live open item being **Phase 6** (Phase
   5's per-gap gate closed at GATE G 2026-09-11). At each GATE the judge
   *executes* the relevant procedure verbatim and records the resulting
-  constants; no model on
-  any tier invents a threshold or extends a procedure — an uncovered
-  case is a STOP → Ken.
+  constants; no model on any tier invents a threshold or extends a
+  procedure — an uncovered case is a STOP → Ken.
 - **Implement / prototype / run** — Sonnet 5. Output at a GATE is a
   table, never a verdict. **Unchanged: a Sonnet session stops when the
   artifacts exist** and asks Ken to `/model` to Opus; it does not read
