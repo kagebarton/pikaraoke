@@ -16,10 +16,14 @@ Model: Claude Sonnet 5 (executor). Plan drafted by Claude Fable 5.
 > carries a knob change.** The one production change out of the phase is
 > the **ytasr candidate ratio at 0.45** (`ytasr.CANDIDATE_MAX_EDIT_RATIO`,
 > eyeballed and shipped the same day). **Phase 5 is the live head of the
-> queue and is now DESIGNED — the design pass ran 2026-09-10 (Opus) and
-> pre-registered the mechanism, the constants, six offline cells, the
-> tables and the read-off as GATE G. What is owed is an executor session
-> to build it and run the cells, then Ken's eyeball.** Then **Phase 6**
+> queue — designed 2026-09-10 (Opus) and now BUILT AND RUN 2026-09-11
+> (Sonnet): the six cells ran on the 18-song corpus, raw tables are in
+> the Results log, and the eyeball packet is in the session scratchpad.
+> GATE G is unread — what is owed is Ken's eyeball of the packet and
+> Opus's read-off against the pre-registered rules (flag: A0 reproduces
+> 12 of the 16 roster fills, not 16; the Results log entry traces the
+> other 4 to a knob-drift cause, not a mechanism defect, but the
+> read-off should see it before ruling on validity).** Then **Phase 6**
 > (CTC post-selection interior refinement, design owed), then GATE L
 > when the Mandarin corpus exists. Sequencing lives in
 > `plans/PROGRAM.md`.
@@ -2367,3 +2371,337 @@ recorded here as the proxy's output and nothing more:
   both global gates. Pseudo-anchors inflate arm B, so this is exactly
   the kind of claim the proxy cannot settle — table 6 of the design
   settles it on real anchors.
+
+### 2026-09-11 — Phase 5 executor run (Sonnet) — six-cell tables, no gate read
+
+Built and ran the design exactly as pre-registered: cue-source swap,
+per-gap gate, source precedence, all six cells, on the 18 genius-origin
+bundles at the shipped chassis point (`joint_alpha` 2.0 / `joint_beta`
+2.0, `ytasr.CANDIDATE_MAX_EDIT_RATIO` 0.45). No knob moved, no case
+redesigned. **No gate read; the read-off below is Opus's / Ken's, not
+this entry's.**
+
+**Mechanism note, flagged for the read-off rather than decided here.**
+The design's item 3 defines "the per-gap gate" as one mechanism —
+refusal conditions *and* the slope-1/local-offset placement together.
+Wherever a cell's gate column includes per-gap (A2/A3/A4/A5), fills
+below are placed at that local offset, not the global constant offset;
+A0/A1 place at the global constant offset, exactly as shipped. The
+alternative reading (per-gap as a pure filter over global-offset
+placement) would leave A2/A3 never exercising item 3's own placement
+formula at all — flagged, not assumed past that.
+
+**Validity note, factual, ahead of the roster table.** A0 (the shipped
+`lrclib_fill.plan_fills`, called unmodified — verified byte-identical
+against the shipped per-candidate loop on a held-out check before this
+run) reproduces **12 of the 16** roster fills exactly; NSYNC and Next
+Ten Minutes are 100%, Domino 1/1. The 4 discrepancies are both in
+songs captured 2026-07-16, and trace to one already-shipped, already-
+approved cause: **GATE T's ytasr candidate-ratio change (0.34→0.45,
+2026-09-10)**, which this run correctly replays at (the executor brief
+names it explicitly), but which post-dates these bundles' capture by
+almost two months:
+
+- **Girl in the Bubble** (lids 8, 35 of 8/15/32/33/35): both are now
+  placed directly by the matcher, not unplaced — so they are no longer
+  fill candidates at all. Arguably a strict improvement upstream of
+  Phase 5, not a loss.
+- **Belle** (lids 81, 86, 94 of 81/86/89/93/94, plus a new line 95):
+  all five remain unplaced candidates, but the collision landscape
+  around them shifted — line 95 no longer collides with a placed span
+  and 94 now does. A swap, not a disappearance.
+
+This is a property of replaying 2-month-old bundles at today's shipped
+knobs — the same exposure Phase 3's own knob sweep carried on this
+chassis — not a Phase 5 mechanism defect; both explanations were
+traced to placement/collision facts in this run's own `line_objects`,
+not asserted. Whether "reproduces the roster" should read against the
+frozen historical roster or against what current shipped production
+now does with these two lines is the read-off's call.
+
+**Artifacts** (session scratchpad, not committed, per this plan's
+ground rules): `phase5_out/results.json` (full per-song, per-cell
+records), `phase5_out/tables.md` (source of the tables below),
+`phase5_out/eyeball/` (per-song diff `.ass` + `.txt`, one pair per
+song with a fill beyond A0: Belle, Best Part Of Me, In Summer, NSYNC
+Paradise), and the drivers `phase5_mechanism.py` / `phase5_run.py` /
+`phase5_tables.py`.
+
+#### Table 0 — corpus provisioning (the three provisioning traps)
+
+| stem (trunc) | n_lines | n_unplaced | lrc_tier | n_lrc_cues | sidecar_kind | map_rate | admitted | n_sidecar_cues | env_stem |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 'Defying Gravity' - Wicked 20th Annivers | 89 | 38 | live_fetch | 77 | line | 0.685 | yes | 61 | vocal |
+| 'Free' _ Official Lyric Video _ Sony Ani | 41 | 1 | live_fetch | 36 | word | 0.805 | yes | 33 | vocal |
+| 'Popular' - Wicked 20th Anniversary Edit | 62 | 10 | live_fetch | 42 | word | 0.629 | yes | 39 | vocal |
+| Beauty and the Beast (1991) - Be Our Gue | 77 | 0 | flat_cache | 68 | line | 0.688 | yes | 53 | dereverb |
+| Beauty and the Beast (1991) - Belle [UHD | 110 | 9 | flat_cache | 90 | word | 0.855 | yes | 94 | dereverb |
+| Ed Sheeran - Best Part Of Me (feat. YEBB | 38 | 1 | flat_cache | 36 | word | 0.868 | yes | 33 | dereverb |
+| Ed Sheeran & Rudimental­ - Bloodstream [ | 74 | 26 | flat_cache | 37 | line | 0.703 | yes | 52 | dereverb |
+| HUNTR_X 'This Is What It Sounds Like' (M | 53 | 20 | live_fetch | 43 | line | 0.811 | yes | 43 | vocal |
+| Jessie J - Domino (Official Video)---UJt | 67 | 4 | live_fetch | 61 | word | 0.91 | yes | 61 | vocal |
+| Josh Gad - In Summer (From 'Frozen'_Sing | 31 | 2 | flat_cache | 15 | line | 0.581 | yes | 18 | dereverb |
+| Mulan _ I'll Make a Man Out of You _ @di | 47 | 11 | flat_cache | 42 | word | 0.745 | yes | 35 | dereverb |
+| NSYNC - Paradise | 65 | 12 | flat_cache | 48 | line | 0.785 | yes | 51 | dereverb |
+| Pocahontas - Colors of the Wind (Blu-ray | 37 | 0 | flat_cache | 35 | word | 0.946 | yes | 35 | dereverb |
+| Seasons of Love (HD)---UvyHuse6buY | 34 | 9 | live_fetch | 21 | word | 0.912 | yes | 31 | vocal |
+| Stay Gold (Official Music Video) from Th | 38 | 0 | bundle | 27 | word | 0.711 | yes | 27 | vocal |
+| The Lion King - Hakuna Matata Music Vide | 40 | 7 | flat_cache | 19 | line | 0.625 | yes | 25 | dereverb |
+| The Next Ten Minutes Lyrics---0j8kL24ph8 | 71 | 4 | flat_cache | 66 | line | 0.93 | yes | 66 | dereverb |
+| Wicked - For Good  (2025) 4K - The Girl  | 36 | 5 | flat_cache | 36 | - | - | no | 0 | dereverb |
+
+Trap 1 (audio envelope): all 18 decoded (11 off `dereverb/`, 7 off
+`vocal/`); no song ran with `env=None`. Trap 2 (LRC tier): only Stay
+Gold is tier 1 (`bundle`, a `.lrc` beside it); 11 are tier 2
+(`flat_cache`); 6 needed tier 3 (`live_fetch`) — Defying Gravity,
+Free, Popular, HUNTR/X, Domino, Seasons of Love. Trap 3 (Domino):
+tier-3 live fetch succeeded (`duration=232s`, matching the absence
+study's record) — the roster check below runs on **16 of 16**, not
+15.
+
+#### Table 1 — per song x cell
+
+| stem (trunc) | cell | eligible | reason | n_candidates | n_fills | filled_lids | no_bracket | gap_disagree | outside_envelope | negative_start | collision | energy |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 'Defying Gravity' - Wicked 20th Annivers | A0 | no | arm_a_bail | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| 'Defying Gravity' - Wicked 20th Annivers | A1 | no | arm_a_bail | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| 'Defying Gravity' - Wicked 20th Annivers | A2 | no | arm_a_bail | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| 'Defying Gravity' - Wicked 20th Annivers | A3 | no | no_mapping_or_global_fail | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| 'Defying Gravity' - Wicked 20th Annivers | A4 | yes | - | 30 | 0 | - | 17 | 13 | 0 | 0 | 0 | 0 |
+| 'Defying Gravity' - Wicked 20th Annivers | A5 | yes | - | 30 | 0 | - | 17 | 13 | 0 | 0 | 0 | 0 |
+| 'Free' _ Official Lyric Video _ Sony Ani | A0 | yes | - | 1 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| 'Free' _ Official Lyric Video _ Sony Ani | A1 | yes | - | 1 | 0 | - | 0 | 0 | 0 | 0 | 1 | 0 |
+| 'Free' _ Official Lyric Video _ Sony Ani | A2 | yes | - | 1 | 0 | - | 0 | 0 | 0 | 0 | 1 | 0 |
+| 'Free' _ Official Lyric Video _ Sony Ani | A3 | yes | - | 1 | 0 | - | 0 | 0 | 0 | 0 | 1 | 0 |
+| 'Free' _ Official Lyric Video _ Sony Ani | A4 | yes | - | 1 | 0 | - | 0 | 0 | 0 | 0 | 1 | 0 |
+| 'Free' _ Official Lyric Video _ Sony Ani | A5 | yes | - | 1 | 0 | - | 0 | 0 | 0 | 0 | 1 | 0 |
+| 'Popular' - Wicked 20th Anniversary Edit | A0 | no | arm_a_bail | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| 'Popular' - Wicked 20th Anniversary Edit | A1 | no | slope_dev | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| 'Popular' - Wicked 20th Anniversary Edit | A2 | no | arm_a_bail | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| 'Popular' - Wicked 20th Anniversary Edit | A3 | no | no_mapping_or_global_fail | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| 'Popular' - Wicked 20th Anniversary Edit | A4 | yes | - | 4 | 0 | - | 3 | 1 | 0 | 0 | 0 | 0 |
+| 'Popular' - Wicked 20th Anniversary Edit | A5 | yes | - | 4 | 0 | - | 3 | 1 | 0 | 0 | 0 | 0 |
+| Beauty and the Beast (1991) - Be Our Gue | A0 | yes | - | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Beauty and the Beast (1991) - Be Our Gue | A1 | yes | - | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Beauty and the Beast (1991) - Be Our Gue | A2 | yes | - | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Beauty and the Beast (1991) - Be Our Gue | A3 | yes | - | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Beauty and the Beast (1991) - Be Our Gue | A4 | yes | - | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Beauty and the Beast (1991) - Be Our Gue | A5 | yes | - | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Beauty and the Beast (1991) - Belle [UHD | A0 | yes | - | 8 | 3 | 89,93,95 | 0 | 0 | 0 | 0 | 0 | 0 |
+| Beauty and the Beast (1991) - Belle [UHD | A1 | yes | - | 7 | 7 | 81,86,87,89,93,94,95 | 0 | 0 | 0 | 0 | 0 | 0 |
+| Beauty and the Beast (1991) - Belle [UHD | A2 | yes | - | 8 | 5 | 86,89,93,94,95 | 0 | 0 | 0 | 0 | 3 | 0 |
+| Beauty and the Beast (1991) - Belle [UHD | A3 | yes | - | 8 | 7 | 81,86,87,89,93,94,95 | 0 | 0 | 0 | 0 | 1 | 0 |
+| Beauty and the Beast (1991) - Belle [UHD | A4 | yes | - | 8 | 5 | 86,89,93,94,95 | 0 | 0 | 0 | 0 | 3 | 0 |
+| Beauty and the Beast (1991) - Belle [UHD | A5 | yes | - | 8 | 7 | 81,86,87,89,93,94,95 | 0 | 0 | 0 | 0 | 1 | 0 |
+| Ed Sheeran - Best Part Of Me (feat. YEBB | A0 | no | arm_a_bail | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Ed Sheeran - Best Part Of Me (feat. YEBB | A1 | yes | - | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Ed Sheeran - Best Part Of Me (feat. YEBB | A2 | no | arm_a_bail | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Ed Sheeran - Best Part Of Me (feat. YEBB | A3 | yes | - | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Ed Sheeran - Best Part Of Me (feat. YEBB | A4 | yes | - | 1 | 1 | 32 | 0 | 0 | 0 | 0 | 0 | 0 |
+| Ed Sheeran - Best Part Of Me (feat. YEBB | A5 | yes | - | 1 | 1 | 32 | 0 | 0 | 0 | 0 | 0 | 0 |
+| Ed Sheeran & Rudimental­ - Bloodstream [ | A0 | no | slope_dev | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Ed Sheeran & Rudimental­ - Bloodstream [ | A1 | yes | - | 16 | 0 | - | 0 | 0 | 0 | 0 | 4 | 12 |
+| Ed Sheeran & Rudimental­ - Bloodstream [ | A2 | no | slope_dev | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Ed Sheeran & Rudimental­ - Bloodstream [ | A3 | yes | - | 16 | 0 | - | 16 | 0 | 0 | 0 | 0 | 0 |
+| Ed Sheeran & Rudimental­ - Bloodstream [ | A4 | yes | - | 9 | 0 | - | 9 | 0 | 0 | 0 | 0 | 0 |
+| Ed Sheeran & Rudimental­ - Bloodstream [ | A5 | yes | - | 17 | 0 | - | 17 | 0 | 0 | 0 | 0 | 0 |
+| HUNTR_X 'This Is What It Sounds Like' (M | A0 | no | arm_a_bail | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| HUNTR_X 'This Is What It Sounds Like' (M | A1 | no | arm_a_bail | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| HUNTR_X 'This Is What It Sounds Like' (M | A2 | no | arm_a_bail | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| HUNTR_X 'This Is What It Sounds Like' (M | A3 | no | no_mapping_or_global_fail | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| HUNTR_X 'This Is What It Sounds Like' (M | A4 | yes | - | 15 | 0 | - | 15 | 0 | 0 | 0 | 0 | 0 |
+| HUNTR_X 'This Is What It Sounds Like' (M | A5 | yes | - | 15 | 0 | - | 15 | 0 | 0 | 0 | 0 | 0 |
+| Jessie J - Domino (Official Video)---UJt | A0 | yes | - | 4 | 1 | 66 | 0 | 0 | 0 | 0 | 0 | 0 |
+| Jessie J - Domino (Official Video)---UJt | A1 | yes | - | 4 | 1 | 66 | 0 | 0 | 0 | 0 | 3 | 0 |
+| Jessie J - Domino (Official Video)---UJt | A2 | yes | - | 4 | 0 | - | 2 | 2 | 0 | 0 | 0 | 0 |
+| Jessie J - Domino (Official Video)---UJt | A3 | yes | - | 4 | 0 | - | 2 | 2 | 0 | 0 | 0 | 0 |
+| Jessie J - Domino (Official Video)---UJt | A4 | yes | - | 4 | 0 | - | 2 | 2 | 0 | 0 | 0 | 0 |
+| Jessie J - Domino (Official Video)---UJt | A5 | yes | - | 4 | 0 | - | 2 | 2 | 0 | 0 | 0 | 0 |
+| Josh Gad - In Summer (From 'Frozen'_Sing | A0 | no | slope_dev | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Josh Gad - In Summer (From 'Frozen'_Sing | A1 | no | slope_dev | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Josh Gad - In Summer (From 'Frozen'_Sing | A2 | no | slope_dev | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Josh Gad - In Summer (From 'Frozen'_Sing | A3 | yes | - | 1 | 1 | 16 | 0 | 0 | 0 | 0 | 0 | 0 |
+| Josh Gad - In Summer (From 'Frozen'_Sing | A4 | yes | - | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Josh Gad - In Summer (From 'Frozen'_Sing | A5 | yes | - | 1 | 1 | 16 | 0 | 0 | 0 | 0 | 0 | 0 |
+| Mulan _ I'll Make a Man Out of You _ @di | A0 | no | arm_a_bail | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Mulan _ I'll Make a Man Out of You _ @di | A1 | no | slope_dev | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Mulan _ I'll Make a Man Out of You _ @di | A2 | no | arm_a_bail | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Mulan _ I'll Make a Man Out of You _ @di | A3 | no | no_mapping_or_global_fail | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Mulan _ I'll Make a Man Out of You _ @di | A4 | yes | - | 9 | 0 | - | 2 | 4 | 0 | 0 | 3 | 0 |
+| Mulan _ I'll Make a Man Out of You _ @di | A5 | yes | - | 9 | 0 | - | 2 | 4 | 0 | 0 | 3 | 0 |
+| NSYNC - Paradise | A0 | yes | - | 6 | 2 | 1,39 | 0 | 0 | 0 | 0 | 0 | 0 |
+| NSYNC - Paradise | A1 | yes | - | 5 | 1 | 39 | 0 | 0 | 0 | 0 | 4 | 0 |
+| NSYNC - Paradise | A2 | yes | - | 6 | 1 | 39 | 4 | 0 | 0 | 0 | 1 | 0 |
+| NSYNC - Paradise | A3 | yes | - | 7 | 2 | 39,42 | 4 | 0 | 0 | 0 | 1 | 0 |
+| NSYNC - Paradise | A4 | yes | - | 6 | 1 | 39 | 4 | 0 | 0 | 0 | 1 | 0 |
+| NSYNC - Paradise | A5 | yes | - | 7 | 2 | 39,42 | 4 | 0 | 0 | 0 | 1 | 0 |
+| Pocahontas - Colors of the Wind (Blu-ray | A0 | yes | - | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Pocahontas - Colors of the Wind (Blu-ray | A1 | yes | - | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Pocahontas - Colors of the Wind (Blu-ray | A2 | yes | - | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Pocahontas - Colors of the Wind (Blu-ray | A3 | yes | - | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Pocahontas - Colors of the Wind (Blu-ray | A4 | yes | - | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Pocahontas - Colors of the Wind (Blu-ray | A5 | yes | - | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Seasons of Love (HD)---UvyHuse6buY | A0 | no | slope_dev | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Seasons of Love (HD)---UvyHuse6buY | A1 | no | slope_dev | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Seasons of Love (HD)---UvyHuse6buY | A2 | no | slope_dev | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Seasons of Love (HD)---UvyHuse6buY | A3 | no | no_mapping_or_global_fail | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Seasons of Love (HD)---UvyHuse6buY | A4 | yes | - | 6 | 0 | - | 6 | 0 | 0 | 0 | 0 | 0 |
+| Seasons of Love (HD)---UvyHuse6buY | A5 | yes | - | 8 | 0 | - | 6 | 2 | 0 | 0 | 0 | 0 |
+| Stay Gold (Official Music Video) from Th | A0 | yes | - | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Stay Gold (Official Music Video) from Th | A1 | yes | - | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Stay Gold (Official Music Video) from Th | A2 | yes | - | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Stay Gold (Official Music Video) from Th | A3 | yes | - | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Stay Gold (Official Music Video) from Th | A4 | yes | - | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| Stay Gold (Official Music Video) from Th | A5 | yes | - | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| The Lion King - Hakuna Matata Music Vide | A0 | no | slope_dev | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| The Lion King - Hakuna Matata Music Vide | A1 | yes | - | 1 | 0 | - | 0 | 0 | 0 | 0 | 0 | 1 |
+| The Lion King - Hakuna Matata Music Vide | A2 | no | slope_dev | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 |
+| The Lion King - Hakuna Matata Music Vide | A3 | yes | - | 1 | 0 | - | 1 | 0 | 0 | 0 | 0 | 0 |
+| The Lion King - Hakuna Matata Music Vide | A4 | yes | - | 2 | 0 | - | 2 | 0 | 0 | 0 | 0 | 0 |
+| The Lion King - Hakuna Matata Music Vide | A5 | yes | - | 2 | 0 | - | 2 | 0 | 0 | 0 | 0 | 0 |
+| The Next Ten Minutes Lyrics---0j8kL24ph8 | A0 | yes | - | 4 | 3 | 63,64,65 | 0 | 0 | 0 | 0 | 0 | 0 |
+| The Next Ten Minutes Lyrics---0j8kL24ph8 | A1 | yes | - | 4 | 3 | 63,64,65 | 0 | 0 | 0 | 0 | 0 | 1 |
+| The Next Ten Minutes Lyrics---0j8kL24ph8 | A2 | yes | - | 4 | 3 | 63,64,65 | 0 | 0 | 0 | 0 | 0 | 1 |
+| The Next Ten Minutes Lyrics---0j8kL24ph8 | A3 | yes | - | 4 | 3 | 63,64,65 | 0 | 0 | 0 | 0 | 0 | 1 |
+| The Next Ten Minutes Lyrics---0j8kL24ph8 | A4 | yes | - | 4 | 3 | 63,64,65 | 0 | 0 | 0 | 0 | 0 | 1 |
+| The Next Ten Minutes Lyrics---0j8kL24ph8 | A5 | yes | - | 4 | 3 | 63,64,65 | 0 | 0 | 0 | 0 | 0 | 1 |
+| Wicked - For Good  (2025) 4K - The Girl  | A0 | yes | - | 5 | 3 | 15,32,33 | 0 | 0 | 0 | 1 | 0 | 0 |
+| Wicked - For Good  (2025) 4K - The Girl  | A1 | yes | - | 5 | 3 | 15,32,33 | 0 | 0 | 0 | 1 | 1 | 0 |
+| Wicked - For Good  (2025) 4K - The Girl  | A2 | yes | - | 5 | 0 | - | 3 | 0 | 0 | 0 | 2 | 0 |
+| Wicked - For Good  (2025) 4K - The Girl  | A3 | yes | - | 5 | 0 | - | 3 | 0 | 0 | 0 | 2 | 0 |
+| Wicked - For Good  (2025) 4K - The Girl  | A4 | yes | - | 5 | 0 | - | 3 | 0 | 0 | 0 | 2 | 0 |
+| Wicked - For Good  (2025) 4K - The Girl  | A5 | yes | - | 5 | 0 | - | 3 | 0 | 0 | 0 | 2 | 0 |
+
+#### Table 2 — the 16-good roster (Belle 5, Girl in the Bubble 5, Next Ten Minutes 3, NSYNC 2, Domino 1)
+
+`present` = identical to A0's own time in this run; `moved` shows the
+differing time; `absent` = not in that cell's filled lids. Baseline is
+this run's own A0, not the historical study (see the validity note
+above).
+
+| stem (trunc) | lid | A0 time | A0 | A1 | A2 | A3 | A4 | A5 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Beauty and the Beast (1991) - Belle [UHD | 81 | ABSENT-IN-A0 | absent | moved(252.260-252.459) | absent | moved(252.400-252.599) | absent | moved(252.400-252.599) |
+| Beauty and the Beast (1991) - Belle [UHD | 86 | ABSENT-IN-A0 | absent | moved(255.390-255.505) | moved(255.865-256.625) | moved(255.531-255.645) | moved(255.865-256.625) | moved(255.531-255.645) |
+| Beauty and the Beast (1991) - Belle [UHD | 89 | 259.550-259.720 | present | moved(257.168-257.250) | moved(259.045-259.215) | moved(257.308-257.390) | moved(259.045-259.215) | moved(257.308-257.390) |
+| Beauty and the Beast (1991) - Belle [UHD | 93 | 260.890-261.690 | present | moved(259.613-259.728) | moved(260.525-261.325) | moved(259.729-259.844) | moved(260.525-261.325) | moved(259.729-259.844) |
+| Beauty and the Beast (1991) - Belle [UHD | 94 | ABSENT-IN-A0 | absent | moved(260.315-260.413) | moved(261.325-261.665) | moved(260.431-260.529) | moved(261.325-261.665) | moved(260.431-260.529) |
+| Jessie J - Domino (Official Video)---UJt | 66 | 222.316-226.316 | present | present | absent | absent | absent | absent |
+| NSYNC - Paradise | 1 | 40.785-41.985 | present | absent | absent | absent | absent | absent |
+| NSYNC - Paradise | 39 | 183.245-185.345 | present | moved(183.222-185.322) | moved(183.155-185.255) | moved(183.149-185.249) | moved(183.155-185.255) | moved(183.149-185.249) |
+| The Next Ten Minutes Lyrics---0j8kL24ph8 | 63 | 330.777-332.177 | present | present | moved(331.173-332.573) | moved(331.173-332.573) | moved(331.173-332.573) | moved(331.173-332.573) |
+| The Next Ten Minutes Lyrics---0j8kL24ph8 | 64 | 334.127-335.527 | present | present | moved(334.523-335.923) | moved(334.523-335.923) | moved(334.523-335.923) | moved(334.523-335.923) |
+| The Next Ten Minutes Lyrics---0j8kL24ph8 | 65 | 337.167-338.567 | present | present | moved(337.563-338.963) | moved(337.563-338.963) | moved(337.563-338.963) | moved(337.563-338.963) |
+| Wicked - For Good  (2025) 4K - The Girl  | 8 | ABSENT-IN-A0 | absent | absent | absent | absent | absent | absent |
+| Wicked - For Good  (2025) 4K - The Girl  | 15 | 65.362-68.162 | present | present | absent | absent | absent | absent |
+| Wicked - For Good  (2025) 4K - The Girl  | 32 | 143.272-146.072 | present | present | absent | absent | absent | absent |
+| Wicked - For Good  (2025) 4K - The Girl  | 33 | 148.662-151.462 | present | present | absent | absent | absent | absent |
+| Wicked - For Good  (2025) 4K - The Girl  | 35 | ABSENT-IN-A0 | absent | absent | absent | absent | absent | absent |
+
+Note: lid 81/86/89/93/94 are ABSENT-IN-A0 or present per the validity
+note above (81/86/94 are unplaced candidates in this run but do not
+survive A0's collision check — see line 95 below); lid 8/35 are
+ABSENT-IN-A0 because this run's matcher places them directly (no
+longer unplaced at all).
+
+#### Table 3 — fills beyond A0 (union of A1..A5 minus A0)
+
+| stem (trunc) | lid | text | source | cells | t0 | t1 | bracket_lo | bracket_hi | gap_audio | gap_cue | gap_delta | collision | energy |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Beauty and the Beast (1991) - Belle [UHD | 81 | Bonjour | sidecar_fill | A1 | 252.260 | 252.459 | - | - | - | - | - | False | PASS |
+| Beauty and the Beast (1991) - Belle [UHD | 81 | Bonjour | sidecar_fill | A3,A5 | 252.400 | 252.599 | 76 | 92 | 25.58 | 25.437 | 0.143 | False | PASS |
+| Beauty and the Beast (1991) - Belle [UHD | 86 | What lovely grapes | lrclib_fill | A2,A4 | 255.865 | 256.625 | 79 | 92 | 14.5 | 15.51 | -1.01 | False | PASS |
+| Beauty and the Beast (1991) - Belle [UHD | 86 | What lovely grapes | sidecar_fill | A1 | 255.390 | 255.505 | - | - | - | - | - | False | PASS |
+| Beauty and the Beast (1991) - Belle [UHD | 86 | What lovely grapes | sidecar_fill | A3,A5 | 255.531 | 255.645 | 76 | 92 | 25.58 | 25.437 | 0.143 | False | PASS |
+| Beauty and the Beast (1991) - Belle [UHD | 87 | Some cheese | sidecar_fill | A1 | 256.133 | 256.718 | - | - | - | - | - | False | PASS |
+| Beauty and the Beast (1991) - Belle [UHD | 87 | Some cheese | sidecar_fill | A3,A5 | 256.274 | 256.858 | 76 | 92 | 25.58 | 25.437 | 0.143 | False | PASS |
+| Beauty and the Beast (1991) - Belle [UHD | 94 | Those fish | lrclib_fill | A2,A4 | 261.325 | 261.665 | 92 | 103 | 15.26 | 13.97 | 1.29 | False | PASS |
+| Beauty and the Beast (1991) - Belle [UHD | 94 | Those fish | sidecar_fill | A1 | 260.315 | 260.413 | - | - | - | - | - | False | PASS |
+| Beauty and the Beast (1991) - Belle [UHD | 94 | Those fish | sidecar_fill | A3,A5 | 260.431 | 260.529 | 92 | 101 | 7.74 | 7.932 | -0.192 | False | PASS |
+| Ed Sheeran - Best Part Of Me (feat. YEBB | 32 | Da-dum, da-dum, da-dum, da-dum | lrclib_fill | A4,A5 | 190.323 | 193.124 | 29 | 34 | 33.873 | 35.08 | -1.207 | False | PASS |
+| Josh Gad - In Summer (From 'Frozen'_Sing | 16 | Bad-dah, da-doo, uh-bah-bah-bah-bah-bah- | sidecar_fill | A3,A5 | 53.905 | 56.005 | 15 | 17 | 8.39 | 9.44 | -1.05 | False | PASS |
+| NSYNC - Paradise | 42 | Paradise | sidecar_fill | A3,A5 | 192.749 | 193.663 | 38 | 44 | 24.28 | 24.484 | -0.204 | False | PASS |
+
+#### Table 4 — tolerance sensitivity (diagnostic only, fill counts per song per cell)
+
+Cell A2:
+
+| stem (trunc) | tol=1.0 | tol=1.5 | tol=2.0 | tol=3.0 |
+| --- | --- | --- | --- | --- |
+| Beauty and the Beast (1991) - Belle [UHD | 0 | 5 | 5 | 5 |
+| NSYNC - Paradise | 1 | 1 | 1 | 1 |
+| The Next Ten Minutes Lyrics---0j8kL24ph8 | 3 | 3 | 3 | 3 |
+
+Cell A3:
+
+| stem (trunc) | tol=1.0 | tol=1.5 | tol=2.0 | tol=3.0 |
+| --- | --- | --- | --- | --- |
+| Beauty and the Beast (1991) - Belle [UHD | 7 | 7 | 7 | 7 |
+| Josh Gad - In Summer (From 'Frozen'_Sing | 0 | 1 | 1 | 1 |
+| NSYNC - Paradise | 2 | 2 | 2 | 2 |
+| The Next Ten Minutes Lyrics---0j8kL24ph8 | 3 | 3 | 3 | 3 |
+
+Cell A4:
+
+| stem (trunc) | tol=1.0 | tol=1.5 | tol=2.0 | tol=3.0 |
+| --- | --- | --- | --- | --- |
+| Beauty and the Beast (1991) - Belle [UHD | 0 | 5 | 5 | 5 |
+| Ed Sheeran - Best Part Of Me (feat. YEBB | 0 | 1 | 1 | 1 |
+| NSYNC - Paradise | 1 | 1 | 1 | 1 |
+| The Next Ten Minutes Lyrics---0j8kL24ph8 | 3 | 3 | 3 | 3 |
+
+Cell A5:
+
+| stem (trunc) | tol=1.0 | tol=1.5 | tol=2.0 | tol=3.0 |
+| --- | --- | --- | --- | --- |
+| Beauty and the Beast (1991) - Belle [UHD | 7 | 7 | 7 | 7 |
+| Ed Sheeran - Best Part Of Me (feat. YEBB | 0 | 1 | 1 | 1 |
+| Josh Gad - In Summer (From 'Frozen'_Sing | 0 | 1 | 1 | 1 |
+| NSYNC - Paradise | 2 | 2 | 2 | 2 |
+| Seasons of Love (HD)---UvyHuse6buY | 0 | 0 | 0 | 2 |
+| The Next Ten Minutes Lyrics---0j8kL24ph8 | 3 | 3 | 3 | 3 |
+
+All other songs are flat at 0 across the whole grid (omitted). Matches
+the design pass's own reading that the tolerance is nearly inert on
+this corpus.
+
+#### Table 5 — Bloodstream's unplaced block (lids 44-50)
+
+| lid | A0 | A1 | A2 | A3 | A4 | A5 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 44 | not_a_candidate | refused:energy | not_a_candidate | refused:no_bracket | refused:no_bracket | refused:no_bracket |
+| 45 | not_a_candidate | refused:energy | not_a_candidate | refused:no_bracket | refused:no_bracket | refused:no_bracket |
+| 46 | not_a_candidate | refused:energy | not_a_candidate | refused:no_bracket | refused:no_bracket | refused:no_bracket |
+| 47 | not_a_candidate | refused:energy | not_a_candidate | refused:no_bracket | refused:no_bracket | refused:no_bracket |
+| 48 | not_a_candidate | refused:energy | not_a_candidate | refused:no_bracket | refused:no_bracket | refused:no_bracket |
+| 49 | not_a_candidate | refused:energy | not_a_candidate | refused:no_bracket | refused:no_bracket | refused:no_bracket |
+| 50 | not_a_candidate | not_a_candidate | not_a_candidate | not_a_candidate | not_a_candidate | not_a_candidate |
+
+`not_a_candidate` = no cue in that cell's source(s) at all (lid 50 has
+no cue in either source; the other six have a cue only in the
+sidecar, so A0/A2 — LRCLIB-only — never see them as candidates).
+A1 reaches all six via the sidecar (its song-level pick, table 6) but
+every one refuses on the shipped energy check (`void`) before collision
+is even reached. Every per-gap cell refuses all six on `no_bracket` —
+lids 44-49 fall in a stretch with no corroborated, cue-carrying anchor
+on either side.
+
+#### Table 6 — Bloodstream global arm-A/B per source (real anchors)
+
+| source | n_cues | armA_n_anchors | armA_bail | armA_offset_s | armA_mad_s | armB(slope) | global |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| lrclib | 37 | 11 | PASS | -11.09 | 0.6 | PASS slope=1.0144 mad=0.286 | ineligible(slope_dev) |
+| sidecar | 52 | 11 | PASS | -10.23 | 0.28 | PASS slope=1.0036 mad=0.382 | eligible |
+
+Settles the two conflicting prior claims without reconciling them in
+prose, per the design: on real anchors, arm B's own `wide_spread` check
+(`WARP_MAD_GATE_S` 2.0) **passes** for both sources (mad 0.286/0.382,
+nowhere near the design-pass proxy's inflated 4.65/4.82) — so the
+2026-09-10 Fable round's "clears both global gates" is closer than the
+proxy's "arm B wide_spread". But LRCLIB's slope (1.0144) sits outside
+`FILL_MAX_SLOPE_DEV` (0.01) of unity, so the combined `_eligibility`
+check still bails, on `slope_dev` rather than either prior claim's
+reason. Sidecar's slope (1.0036) clears it, which is why A1 (table 1)
+is eligible for Bloodstream at the song level even though A0 is not —
+and why table 5 shows the block reaching the energy check at all under
+A1.
