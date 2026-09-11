@@ -15,17 +15,16 @@ Model: Claude Sonnet 5 (executor). Plan drafted by Claude Fable 5.
 > stay at their shipped 2.0/2.0 — no config default moved and no commit
 > carries a knob change.** The one production change out of the phase is
 > the **ytasr candidate ratio at 0.45** (`ytasr.CANDIDATE_MAX_EDIT_RATIO`,
-> eyeballed and shipped the same day). **Phase 5 is the live head of the
-> queue — designed 2026-09-10 (Opus) and now BUILT AND RUN 2026-09-11
-> (Sonnet): the six cells ran on the 18-song corpus, raw tables are in
-> the Results log, and the eyeball packet is in the session scratchpad.
-> GATE G is unread — what is owed is Ken's eyeball of the packet and
-> Opus's read-off against the pre-registered rules (flag: A0 reproduces
-> 12 of the 16 roster fills, not 16; the Results log entry traces the
-> other 4 to a knob-drift cause, not a mechanism defect, but the
-> read-off should see it before ruling on validity).** Then **Phase 6**
-> (CTC post-selection interior refinement, design owed), then GATE L
-> when the Mandarin corpus exists. Sequencing lives in
+> eyeballed and shipped the same day). **5 CLOSED 2026-09-11 — GATE G is
+> NO-GO**: the six cells ran, the read-off went against them, and the
+> gated fill stays exactly as shipped (LRCLIB source, per-song gate). The
+> fetch sidecar does not become a fill source and the per-gap gate does
+> not ship. **Phase 5 ends with no production change, and the per-gap
+> question must not be re-opened by amending that section** — the gate
+> was unwinnable as pre-registered and a re-attempt needs a fresh design
+> pass and a fresh letter. **Phase 6 is now the head of the queue**
+> (CTC post-selection interior refinement, design owed — Opus), then
+> GATE L when the Mandarin corpus exists. Sequencing lives in
 > `plans/PROGRAM.md`.
 
 ## Context
@@ -476,7 +475,7 @@ kept because it was the executor's flag at hand-off and the correction
 belongs beside it. Assigning the 14 is still Ken's if Phase 5 wants
 them.*
 
-## Phase 5 — line timing as a fill source (designed 2026-09-10; GATE G)
+## Phase 5 — line timing as a fill source (CLOSED 2026-09-11; GATE G NO-GO)
 
 Added 2026-09-08 when Ken closed the line route. This is where the line
 route's one surviving asset lands: **where the fetched sidecar is right,
@@ -799,6 +798,19 @@ Opus against the pre-registered rules above; **Ken rules**, and the
 eyeball is his. Hard criterion, inherited from GATE L2: no filled line
 may be a cram, a duplicate, or off-sheet dialogue on the eyeballed
 set.
+
+**CLOSED 2026-09-11 — NO-GO. Read off by Opus, ratified by Ken; full
+entry in the Results log.** The fill is not widened to the sidecar and
+the per-gap gate does not ship, alone or as a guard. **Phase 5 ends with
+no production change.** Two defects in the pre-registration made the
+gate unwinnable as written: the envelope rule was specified to refuse
+Domino while Domino is one of the 16 fills that had to survive, and item
+4's "the per-gap gate only ever removes fills" is false — item 3 also
+places, so the per-gap cells move fills and can collide where the
+shipped path does not. **Do not re-open the per-gap question by amending
+this section**; a re-attempt needs a survival bar that does not contain
+its own counterexample, which is a fresh design pass and a fresh gate
+letter. The eyeball was never reached and the packet was never ruled on.
 
 ## Phase 6 — CTC post-selection interior refinement (design owed; after GATE T)
 
@@ -2705,3 +2717,191 @@ reason. Sidecar's slope (1.0036) clears it, which is why A1 (table 1)
 is eligible for Bloodstream at the song level even though A0 is not —
 and why table 5 shows the block reaching the energy check at all under
 A1.
+
+### 2026-09-11 — GATE G read-off (Opus) — NO-GO; ratified by Ken
+
+Read against the pre-registered rules of the 2026-09-10 design section,
+on the executor's tables of the same day plus `phase5_out/results.json`
+and the four eyeball pairs. No cell was re-run and no table recomputed;
+the checks below that go past the tables are reads of artifacts already
+on disk. **Ken ratified the validity ruling and the outcome 2026-09-11.**
+
+#### Validity — PROCEED, roster re-baselined (not void)
+
+Two corrections to the executor's validity note first, both factual:
+
+- **A0 reproduces 11 of the 16 roster fills, not 12.** Five roster lids
+  are absent from A0: Belle 81/86/94 and Girl in the Bubble 8/35. The
+  entry's own prose lists all five and sums them as four.
+- **The single traced cause covers only two of the five.** GATE T's
+  ytasr candidate-ratio change explains Girl in the Bubble; it does not
+  explain Belle.
+
+Girl in the Bubble 8 and 35 — **verified against the record**. GATE T's
+Finding 3 diffed the ratio change line by line and names exactly `line
+8` (29.64–34.29, align) and `line 35` (175.36–181.90, ytasr) as the two
+lines For Good gains at 0.45. Ken eyeballed both and shipped the ratio
+2026-09-10. This run's `line_objects_placed` for that song contains both
+lids, so they are matcher placements now and not fill candidates at all.
+
+Belle 81/86/94 — **not the ratio.** GATE T's own finding is that the
+ratio's whole corpus-level effect is one song. The two other candidate
+causes were checked and ruled out:
+
+- the bundle is unchanged across the 2026-07-16 regen — identical placed
+  set (101/110), identical `selected_source` vector, one 20 ms end shift
+  on lid 105 (`regen_backup_20260716T204310Z` vs current);
+- the flat-cache LRC for Belle is untouched since 2026-06-11.
+
+What did change is the fill/anchor code path. The absence study ran
+**2026-07-12** on a standalone prototype; `windowed_realign` took two
+corroboration changes on **07-13** (`6a73386`) and **07-14** (`72a93d0`),
+and `pikaraoke/lib/lrclib_fill.py` did not exist until **07-17**
+(`6a8153d`, hardened `e355024`). The signature is in the arm-A fit —
+the study recorded **39 anchors at −5.79 s**, this run has **55 anchors
+at −4.54 s**. A 1.25 s shift in fill placement is what flips Belle's
+collision outcomes: 81/86/94 now collide, 95 no longer does. *No single
+commit was isolated by counterfactual; what is established is that the
+cause is neither the ratio nor the bundle.*
+
+**Ruling.** The validity clause tests whether the harness is faithful to
+production. It is: A0 is shipped `plan_fills`, called unmodified, on
+current bundles at current knobs, and reproduces what production does
+**today**. What has moved is the reference — the 16-good roster is a
+2026-07-12 measurement taken against code that has since been reviewed,
+shipped, and in the Girl in the Bubble case eyeballed by Ken personally.
+Voiding on a stale reference would discard a valid run. **Proceed, with
+this run's A0 (12 fills) as the operative baseline.**
+
+#### Mechanism note — the executor's reading is correct
+
+Item 3 defines the per-gap gate as refusal conditions *and* slope-1
+placement at the local offset, in one mechanism; its third bullet
+("Otherwise place at slope 1 with `local_offset` = …") is unconditional
+and the filter-only reading would make it dead text. The recorded
+`local_offset` values match the formula against the per-song fits. Table
+3's `t0`/`t1` are trustworthy as reported.
+
+#### Two design defects, both pre-registered 2026-09-10 (Opus)
+
+**D1 — the envelope rule and the survival bar are mutually
+unsatisfiable.** Scope item 2, carried into design item 3, states the
+envelope rule "is what refuses Domino". Scope item 5 and the PASS
+criterion require that the 16 existing good fills survive unchanged, and
+**Domino 66 is one of the 16**. No cell carrying the per-gap gate could
+ever have passed, independent of any data. The run shows it firing as
+specified: Domino 66 refuses on `no_bracket` in A2–A5.
+
+**D2 — item 4's "only ever removes" claim is false.** Item 4 asserts the
+per-gap gate only removes fills relative to the same source under the
+global gate, "which is what makes 'the 16 must survive' a one-sided
+read." Because item 3 also *places*, the per-gap cells move fills, and a
+moved fill can newly collide: Girl in the Bubble lid 15 is clean at A0's
+global offset (−23.148) and collides at the local offset (−24.16). The
+per-gap cells are **not** subsets of the global cells and the roster
+check is two-sided.
+
+#### Criterion (i) — roster/A0 survival per cell
+
+Baseline is this run's A0: Belle 89/93/95, Domino 66, NSYNC 1/39, Next
+Ten 63/64/65, Girl in the Bubble 15/32/33 (12 fills).
+
+| cell | A0 fills lost | A0 fills moved |
+| --- | --- | --- |
+| A1 | NSYNC 1 | Belle 89 (−2.38 s), 93 (−1.28 s, 800→115 ms), 95 (−1.13 s), NSYNC 39 (−23 ms) |
+| A2 | Domino 66, NSYNC 1, Girl 15/32/33 | Belle 89/93/95 (−0.37 to −0.51 s), NSYNC 39 (−90 ms), Next Ten 63/64/65 (+396 ms) |
+| A3 | Domino 66, NSYNC 1, Girl 15/32/33 | Belle 89 (−2.24 s), 93 (−1.16 s), 95 (−1.02 s), NSYNC 39 (−96 ms), Next Ten 63/64/65 (+396 ms) |
+| A4 | as A2 | as A2 |
+| A5 | as A3 | as A3 |
+
+Refusal reasons for the losses: NSYNC 1 `no_bracket` (first line, no
+anchor before it) in A2–A5 and `collision` in A1; Domino 66
+`no_bracket` (near the end, no anchor after it); Girl in the Bubble 15
+`collision` at the local offset, 32/33 `no_bracket`.
+
+**Every cell fails criterion (i), on losses as well as on moves** — so
+the result does not depend on whether "present with identical times" is
+read strictly or leniently.
+
+#### Criterion (iii) — Bloodstream: satisfied by every cell
+
+No cell fills any of lids 44–50. A1 reaches all six through the sidecar
+and every one refuses on the **shipped energy check**; every per-gap
+cell refuses on `no_bracket`. The named risk case did not fire, and what
+held it was the existing gate, not the new one.
+
+#### Criterion (ii) — the eyeball: not reached
+
+Criterion (i) fails for every cell before quality is assessed. The
+13-fill packet was checked row-for-row against `results.json` and is
+exactly table 3 — 7 distinct lids across 4 songs (Belle 81/86/87/94,
+Best Part Of Me 32, In Summer 16, NSYNC 42), 13 rows because some lids
+appear at two times under different sources. It is complete against its
+own spec. It is **not** the full set of timing changes: it omits the 7
+A0 fills that move and the 5 that disappear. No eyeball verdict on it
+would change any branch below.
+
+#### The branch walk
+
+1. **Does not fire** — PASS(A3) is false.
+2. **Does not fire** — PASS(A3) is false.
+3. **Does not fire** — PASS(A1) is false.
+4. **FIRES. Neither A1 nor A3 passes → the widening does not ship and
+   the LRCLIB-only fill stays exactly as it is.** The separate
+   sub-clause requires PASS(A2) *and* "A2 loses no good fill"; A2 fails
+   both, losing five. **The per-gap gate does not ship on the LRCLIB
+   source alone either.**
+5. **A4/A5 reported.** A4 adds Belle 86/94 and Best Part Of Me 32; A5
+   adds Belle 81/86/87/94, Best Part Of Me 32, In Summer 16 and NSYNC
+   42. Both drop the global fit and both lose the same five good fills.
+   Adopting either remains Ken's alone; nothing in these numbers argues
+   for it.
+6. **Fires on A1 (4 fills beyond A0), A2 (2) and A4 (3)** — under the
+   5-fill line, reported not read. A3 (6) and A5 (7) clear it. Stated
+   plainly as the rule requires: **even with criterion (i) waived, this
+   corpus did not exercise the A1 question** — the named risk cell
+   produced four new fills, all on one song.
+7. **Two STOP → Ken items**, both raised and both ruled the same day:
+   the validity question above, and defects D1/D2 — this gate was
+   unwinnable as written, which is a design failure and not a verdict
+   of the corpus against the mechanism.
+
+#### Rulings (Ken, 2026-09-11)
+
+1. **Validity ruling ratified.** The run is valid; the 16-good roster is
+   superseded as a live reference by this run's A0.
+2. **GATE G is NO-GO.** The fill's source is **not** widened to the
+   fetch sidecar. `pikaraoke/lib/lrclib_fill.py` is unchanged: LRCLIB
+   cue source, per-song offset+slope gate, as shipped.
+3. **The per-gap gate does not ship**, neither as a guard on the widened
+   source nor standing alone on LRCLIB.
+4. **No production change comes out of Phase 5.** No commit carries a
+   mechanism, constant or config change. The drivers
+   (`phase5_mechanism.py` / `phase5_run.py` / `phase5_tables.py`) stay
+   in the session scratchpad and are not committed.
+
+#### What this read-off does NOT claim
+
+- It does not claim the per-gap idea is wrong. D1 means the gate was
+  measured against a bar it was specified to violate, so the corpus
+  never got to answer whether bracketing anchors separate sound timing
+  from wrong-edit timing. Re-opening it needs a survival bar that does
+  not contain its own counterexample — a new design pass and a new gate
+  letter, not an amendment to this one.
+- It does not claim the sidecar is a bad cue source. A1's four new fills
+  are below the design's own "nothing to see" line; the widening was
+  refused on roster survival, never on fill quality.
+- It does not re-price the DP-candidate form. That ban is untouched.
+
+#### Loose ends recorded, not actioned
+
+- **The 16/0 record no longer describes production.** Today's shipped
+  fill produces Belle 95, which no eyeball has ever seen, and does not
+  produce Belle 81/86/94. Re-taking the roster on current code is its
+  own small job; it is not GATE G's and it is not blocking.
+- **Table 1's A0 rows under-report refusals** — the collision and energy
+  columns read 0 where the per-line records carry them (Belle 5
+  collisions, Domino 3, NSYNC 4, Next Ten 1 energy bail); the
+  `negative_start` column is populated. A1–A5 rows are consistent. A
+  reporting gap in `phase5_tables.py`, not in the run; the underlying
+  records in `results.json` are complete.

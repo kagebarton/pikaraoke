@@ -128,8 +128,10 @@ routes, it only resolves sources.
 2026-09-04 (R-4) and route 3 was withdrawn 2026-09-08 — S-1 withdrawn,
 work ceased, F2 never built. Fetched timing (word or line sidecar,
 `.lrc`) reaches production through one door: the joint route's gated
-fill, today LRCLIB-only, to be widened to the sidecar sources
-(`route-no-timing.md`, Phase 5). Per-song admission gates on fetched
+fill, which stays **LRCLIB-only** — the widening to the sidecar sources
+was refused 2026-09-11 (`route-no-timing.md`, Phase 5, GATE G NO-GO), so
+that door is open for LRCLIB and shut for the fetch sidecar. Per-song
+admission gates on fetched
 timing are retired twice over (R-4; the warp gate's verified blind
 spot), so timing enters per line and loses per line.
 
@@ -145,8 +147,8 @@ exactly as it does today.
 | | Shipped | Target |
 | --- | --- | --- |
 | Routes | 2 (+transcribe) | **2** (+transcribe) — F1 closed 2026-09-04, F2 withdrawn 2026-09-08 |
-| Line timing, no SRT | joint DP; LRCLIB as post-pass fill | joint DP; fill widened to the fetched sidecar (Phase 5, design owed) |
-| Word timing | nothing — sidecar unused for routing | same door: sidecar line `ts`/`te` as a fill source, never a route |
+| Line timing, no SRT | joint DP; LRCLIB as post-pass fill | **same — unchanged** (GATE G NO-GO 2026-09-11; fill not widened, per-song gate kept) |
+| Word timing | nothing — sidecar unused for routing | **nothing — unchanged** (the fill-source door was tried and refused at GATE G) |
 | Scaffold aligner | n/a | n/a — route withdrawn; M6-d moot |
 | Joint aligner | whisper align | **whisper align — unchanged** (GATE J1 NO-GO 2026-09-08; CTC not adopted) |
 | Evidence veto | joint route | joint route only (unchanged) |
@@ -223,13 +225,20 @@ a new mechanism on rung 2b rather than rung 1 returning. Detail in
   with whisper retained, the romanized-form question loses its MMS_FA
   motivation for this route and is worth re-posing when the corpus
   exists.
-- **GATE G** — Phase 5's fill gate, letter assigned 2026-09-10 when
-  Opus wrote the design. Open, and the only gate the program is now
-  walking toward. Reads six offline cells (cue source × gate form)
-  against a pre-registered rule whose bar is inherited from GATE L2
-  (`bad_surviving = 0`, and the 16 existing good fills survive
-  unchanged); Opus reads off, **Ken rules and owns the eyeball**. Full
-  pre-registration in `route-no-timing.md` §"Phase 5".
+- ~~**GATE G**~~ — **READ AND CLOSED 2026-09-11: NO-GO.** The gated
+  fill is **not** widened to the fetch sidecar and the per-gap gate does
+  not ship, neither as a guard on the widened source nor alone on
+  LRCLIB. **Phase 5 ended with no production change.** Every cell lost
+  or moved fills the shipped path already produces, so the bar failed
+  before quality was reached and the eyeball was never used. Two defects
+  in the pre-registration made it unwinnable as written — the envelope
+  rule was specified to refuse Domino while Domino is one of the 16
+  fills that had to survive, and the claim that the per-gap gate "only
+  ever removes" fills is false, since it also re-places them. **Do not
+  re-open by amending Phase 5**; a re-attempt needs a survival bar that
+  does not contain its own counterexample, which is a fresh design pass
+  and a fresh letter. Read off by Opus, **ratified by Ken**; full entry
+  in `route-no-timing.md`.
 - **R-3** — SRT-first *stands*, but Appendix A flags that a later ruling
   could reorder precedence 1 against 2.
 - ~~**GATE T**~~ — **READ 2026-09-10. The `alpha`/`beta` knobs stay at
@@ -254,17 +263,17 @@ a new mechanism on rung 2b rather than rung 1 returning. Detail in
   fixed:** the ratio is absent from the bundle's recorded
   `joint_stats.knobs`, so a bundle cannot say which ratio produced it;
   adding it wants its own change.
-- **Phase 5's gate form** — NEW 2026-09-10, Ken's. A Fable round found
-  that widening the fill's source to the sidecar **under the shipped
-  per-song gate** is where the 16/0 record gets tested and can fail:
-  a global offset+slope fit never sees the unsung sections, and the
-  "never overrides a placed line" cap does not cover a run of
-  *unplaced* lines after a structural discrepancy on a song that passes
-  the gate. Proposed instead: gate per *gap* between bracketing
-  corroborated anchors, in absolute seconds, never extrapolating past
-  the anchor envelope. Design owed, probe two-armed against the shipped
-  gate, letter unassigned. Detail in `route-no-timing.md` Phase 5
-  item 2.
+- ~~**Phase 5's gate form**~~ — **SETTLED 2026-09-11 at GATE G: the
+  per-gap gate does not ship and the fill keeps its per-song gate.**
+  The question was real — a global offset+slope fit never sees the
+  unsung sections, and the "never overrides a placed line" cap does not
+  cover a run of *unplaced* lines after a structural discrepancy on a
+  song that passes the gate — but the probe could not answer it,
+  because the pre-registered survival bar contained a counterexample to
+  its own mechanism. **What the run did settle:** the sidecar widening
+  is refused, and Bloodstream (the named risk case) was held by the
+  shipped energy check in every cell, not by anything new. Detail in
+  `route-no-timing.md` Phase 5 and its GATE G entry.
 - **The DP ban** — assessed 2026-09-10, **still Ken's and unchanged**.
   The same round priced sidecar-as-DP-candidate as structurally dead
   (redundant with the transcribe candidate that already exists where a
@@ -341,7 +350,7 @@ competitor already in the bundles.
 | `route-word-timing.md` | rung 1 (**CLOSED 2026-09-04**); GATE R, R-1 ruling, M1-M5, the R-4 closure |
 | `route-srt.md` | rung 2a; the shipped cue-align route, S-C |
 | `route-line-timing.md` | rung 2b (**CLOSED 2026-09-08** — S-1 withdrawn); GATE S scaffold arms, M6, M7, the fallback; GATE L re-homed to rung 3 |
-| `route-no-timing.md` | rung 3 — **the live build lane**; the joint catch-all refit, GATE P/J1/J2/T, Phase 5 + **GATE G** (line timing as a fill source, designed 2026-09-10), Phase 6, GATE L |
+| `route-no-timing.md` | rung 3 — **the live build lane**; the joint catch-all refit, GATE P/J1/J2/T, Phase 5 + **GATE G** (CLOSED 2026-09-11, NO-GO — fill not widened), **Phase 6 (head of the queue, design owed)**, GATE L |
 | `shared-aligner-form.md` | GATE C, GATE O, Phase 0 harness, ruling-provenance audit |
 | `ctc-sync-engine.md` | build phases + locked appendices; each licensed by a GATE above |
 | `completed/` | closed plans, kept for their Results logs |
@@ -367,16 +376,16 @@ shipped `cue_align.py`, so it is not dead-end history.
 > knobs are inert on this corpus and stay at their shipped values. One
 > production change came out of it — the ytasr candidate ratio at 0.45,
 > eyeballed and shipped.**
-> **Phase 5 is designed and ready to build.** The design pass ran
-> 2026-09-10 (Opus) and pre-registered the mechanism, the constants, the
-> six offline cells, the tables and the read-off as **GATE G**; what is
-> owed now is an **executor session** to build the widened fill and run
-> the cells, then Ken's eyeball. Its per-gap gate exists because the
-> shipped fill's per-song gate carries the warp gate's blind spot on
-> exactly the population Phase 5 widens it to. The design pass's disk
-> proxy also relocated where the phase's value sits: **the global
-> per-song gate, not the per-gap gate, is what currently withholds the
-> unreached lines** — raw tables in `route-no-timing.md`. **Phase 6**
+> **Phase 5 is CLOSED 2026-09-11 — GATE G is NO-GO.** It was designed
+> 2026-09-10 (Opus), built and run 2026-09-11 (Sonnet), read off and
+> ratified the same day. The gated fill stays exactly as shipped: LRCLIB
+> cue source, per-song gate. The fetch sidecar does not become a fill
+> source, the per-gap gate does not ship, and **the phase ends with no
+> production change**. The gate was unwinnable as pre-registered (two
+> design defects, recorded at the gate), so this is not the corpus
+> ruling against the per-gap idea — but **do not re-open it by amending
+> Phase 5**: that needs a fresh design pass and a fresh letter.
+> **Phase 6 is now the head of the queue.** **Phase 6**
 > (CTC post-selection *interior* refinement) was added the same day as
 > design owed; GATE T no longer gates it, but it stays **after Phase 5**
 > on value — it refines word boundaries inside lines already placed,
@@ -537,13 +546,13 @@ Order — cheapest and highest overturn-risk first:
    knobs are inert on this corpus and stay at their shipped values; the
    phase's one production change is the ytasr candidate ratio at 0.45.**
    Raw tables and both read-offs in `route-no-timing.md`. What remains
-   of the step is **Phase 5 (line timing as a fill source)**, and that
-   recommendation was taken: the design pass ran 2026-09-10 against
-   whisper and pre-registered **GATE G**. The step now owes an executor
-   build + offline run, not a design. The read-off's own recommendation,
-   recorded as recommendation not ruling: the next design spend goes to
-   **Phase 5's per-gap gate**, not to knob work — the knobs cannot
-   reach the unplaced population that Phase 5 targets.
+   of the step was **Phase 5 (line timing as a fill source)**, and that
+   recommendation was taken: designed 2026-09-10, built and run
+   2026-09-11, **GATE G read and ratified NO-GO the same day**. The fill
+   is unchanged and the step is now closed entirely. Phase 3's
+   recommendation that the next spend go to the unplaced population
+   **was tried and did not land** — the ~150 sheet lines that never get
+   words are still unreached, and no mechanism on file reaches them.
 6. ~~**S-E**~~ — **not run.** This is the *line* route's Phase 3
    optional arm, not the joint plan's Phase 3, and it closed with that
    route: `route-line-timing.md`'s status block records "S-E is not
@@ -640,9 +649,10 @@ how the completed work was judged, not live policy.
 - **Design** — Opus. The 2026-07-18 design (this document and the build
   plan's Appendices A–E) is locked, with every formerly lock-at-GATE
   item converted to a pre-registered decision procedure, and Opus owns
-  design work from here — including the open items: Phase 5's per-gap
-  gate and Phase 6. At each GATE the judge *executes* the relevant
-  procedure verbatim and records the resulting constants; no model on
+  design work from here — the live open item being **Phase 6** (Phase
+  5's per-gap gate closed at GATE G 2026-09-11). At each GATE the judge
+  *executes* the relevant procedure verbatim and records the resulting
+  constants; no model on
   any tier invents a threshold or extends a procedure — an uncovered
   case is a STOP → Ken.
 - **Implement / prototype / run** — Sonnet 5. Output at a GATE is a
