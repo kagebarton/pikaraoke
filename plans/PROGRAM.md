@@ -65,7 +65,7 @@ up costs hours:
 | `cue_spans` empty? | `lyric_align._load_lyrics` | — | **The route fork itself** — SRT vs joint |
 | `WORD_SEG_MIN_FRAC` | `ytasr` | 0.5 | Line-level/manual captions posing as word-level ASR |
 | `MIN_CAPTION_WPM` | `ytasr` | 15.0 | `[Music]` degeneracy. Unknown duration → reject outright |
-| `CANDIDATE_MAX_EDIT_RATIO` | `ytasr` | 0.34 | A per-line ASR candidate too garbled to admit |
+| `CANDIDATE_MAX_EDIT_RATIO` | `ytasr` | 0.45 | A per-line ASR candidate too garbled to admit (0.34 → 0.45 at GATE T, 2026-09-10) |
 | **`WRONG_SONG_MAP_RATE`** | **`timing_fetch`** | **0.5** | **The wrong-song floor for Musixmatch/NetEase sidecars** |
 | `_MAP_MIN_RATIO` | `lrclib` | 0.85 | A per-line text mapping too weak to use |
 | `FILL_MAX_SLOPE_DEV` | `lrclib_fill` | 0.01 | Song not fill-eligible unless its Theil-Sen slope is within 1% of unity |
@@ -131,9 +131,9 @@ work ceased, F2 never built. Fetched timing (word or line sidecar,
 fill, which stays **LRCLIB-only** — the widening to the sidecar sources
 was refused 2026-09-11 (`route-no-timing.md`, Phase 5, GATE G NO-GO), so
 that door is open for LRCLIB and shut for the fetch sidecar. Per-song
-admission gates on fetched
-timing are retired twice over (R-4; the warp gate's verified blind
-spot), so timing enters per line and loses per line.
+admission gates on fetched timing are retired twice over (R-4; the warp
+gate's verified blind spot), so timing enters per line and loses per
+line.
 
 **Display text:** every route renders the Genius sheet, as today. (The
 word route would have rendered provider text; it is closed.)
@@ -236,9 +236,13 @@ a new mechanism on rung 2b rather than rung 1 returning. Detail in
   fills that had to survive, and the claim that the per-gap gate "only
   ever removes" fills is false, since it also re-places them. **Do not
   re-open by amending Phase 5**; a re-attempt needs a survival bar that
-  does not contain its own counterexample, which is a fresh design pass
-  and a fresh letter. Read off by Opus, **ratified by Ken**; full entry
-  in `route-no-timing.md`.
+  does not contain its own counterexample — a fresh design pass and a
+  fresh letter — **and it must argue it would do better than a wash**,
+  because Ken eyeballed every fill the per-gap cells move and called the
+  placement no better than the shipped one. That settles the read-off's
+  one residual uncertainty, so **no Fable round is owed on this gate**.
+  Read off by Opus, **ratified by Ken**; full entry in
+  `route-no-timing.md`.
 - **R-3** — SRT-first *stands*, but Appendix A flags that a later ruling
   could reorder precedence 1 against 2.
 - ~~**GATE T**~~ — **READ 2026-09-10. The `alpha`/`beta` knobs stay at
@@ -271,9 +275,11 @@ a new mechanism on rung 2b rather than rung 1 returning. Detail in
   song that passes the gate — but the probe could not answer it,
   because the pre-registered survival bar contained a counterexample to
   its own mechanism. **What the run did settle:** the sidecar widening
-  is refused, and Bloodstream (the named risk case) was held by the
-  shipped energy check in every cell, not by anything new. Detail in
-  `route-no-timing.md` Phase 5 and its GATE G entry.
+  is refused; Bloodstream (the named risk case) was held by the shipped
+  energy check in every cell, not by anything new; and on Ken's eyeball
+  the per-gap placement is **a wash** against the shipped one wherever
+  the two differ, so the mechanism bought nothing even where it applied.
+  Detail in `route-no-timing.md` Phase 5 and its GATE G entry.
 - **The DP ban** — assessed 2026-09-10, **still Ken's and unchanged**.
   The same round priced sidecar-as-DP-candidate as structurally dead
   (redundant with the transcribe candidate that already exists where a

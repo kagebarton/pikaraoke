@@ -810,7 +810,12 @@ places, so the per-gap cells move fills and can collide where the
 shipped path does not. **Do not re-open the per-gap question by amending
 this section**; a re-attempt needs a survival bar that does not contain
 its own counterexample, which is a fresh design pass and a fresh gate
-letter. The eyeball was never reached and the packet was never ruled on.
+letter — **and it must argue it would do better than a wash.** The
+packet's new fills were never ruled on, but the read-off's one residual
+uncertainty was tested: Ken eyeballed every fill the per-gap cells move
+and called the placement no better than the shipped one. **So the NO-GO
+rests on the mechanism buying nothing, not only on the defective bar,
+and no Fable round is owed on this gate.** See the read-off's addendum.
 
 ## Phase 6 — CTC post-selection interior refinement (design owed; after GATE T)
 
@@ -2905,3 +2910,40 @@ would change any branch below.
   `negative_start` column is populated. A1–A5 rows are consistent. A
   reporting gap in `phase5_tables.py`, not in the run; the underlying
   records in `results.json` are complete.
+
+#### Addendum 2026-09-11 — the moved fills were eyeballed after all; Ken: a wash
+
+The read-off above closed without the eyeball, and flagged one residual
+uncertainty: the per-gap gate's whole claim is that a *local* offset
+places better than the global one, so a re-placed roster fill might be
+the mechanism succeeding while the survival bar scored it as failure.
+That was the one question Opus could not resolve from the tables, and
+the one place a Fable round was going to be suggested.
+
+It was tested directly instead. Every fill the per-gap cells move was
+rendered against the shipped placement — Belle 89/93/95, NSYNC Paradise
+39, Next Ten Minutes 63/64/65, each line shown at the shipped time, the
+per-gap time and (Belle) the per-gap-plus-sidecar time simultaneously,
+so the comparison is one look rather than a remembered timestamp.
+Comparison renders live beside the production ones as
+`karaoke/<stem>.moved.ass`; they are inert unless loaded as a subtitle
+track, and no production `<stem>.ass` was touched.
+
+**Ken's verdict: a wash — the changes are too small to be worth the
+added complexity.** The per-gap placement is neither better nor worse
+than the shipped global offset on the lines where the two differ.
+
+**Consequence.** The survival bar did not hide a result. GATE G's NO-GO
+now rests on the mechanism buying nothing, not only on a bar that
+contained its own counterexample, and **no Fable round is owed**. The
+two design defects recorded above stand as defects — they are why the
+run could not have produced a clean pass — but correcting them would
+not have changed the outcome, because the fills the gate would have
+saved are indistinguishable from the ones already shipping.
+
+**Weight, stated honestly:** the eyeball covers seven lines on three
+songs, which is thin. It is not evidence that local-offset placement is
+worthless in general. It is evidence that on this corpus the per-gap
+gate produced almost no new fills *and* no better placement of the
+existing ones — so a re-attempt must argue it would do better than a
+wash, not merely that the bar was wrong.
