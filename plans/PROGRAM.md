@@ -373,7 +373,7 @@ where it can retire the second model before a GPU runs.
 | `route-word-timing.md` | rung 1 (**CLOSED 2026-09-04**); GATE R, R-1 ruling, M1-M5, the R-4 closure |
 | `route-srt.md` | rung 2a; the shipped cue-align route, S-C |
 | `route-line-timing.md` | rung 2b (**CLOSED 2026-09-08** — S-1 withdrawn); GATE S scaffold arms, M6, M7, the fallback; GATE L re-homed to rung 3 |
-| `route-no-timing.md` | rung 3 — **the live build lane**; the joint catch-all refit, GATE P/J1/J2/T, Phase 5 + **GATE G** (CLOSED 2026-09-11, NO-GO — fill not widened), **Phase 7 (RAN + READ 2026-09-14 — unplaced population is ~half unreachable; rest undetermined)**, **Phase 6 + GATE W (DESIGNED 2026-09-14, nothing run yet)**, GATE L |
+| `route-no-timing.md` | rung 3 — **the live build lane**; the joint catch-all refit, GATE P/J1/J2/T, Phase 5 + **GATE G** (CLOSED 2026-09-11, NO-GO — fill not widened), **Phase 7 (RAN + READ 2026-09-14 — unplaced population is ~half unreachable) + Phase 7b (DESIGNED 2026-09-14, runs next — settles the rest)**, **Phase 6 + GATE W (DESIGNED 2026-09-14, nothing run yet)**, GATE L |
 | `shared-aligner-form.md` | GATE C, GATE O, Phase 0 harness, ruling-provenance audit |
 | `ctc-sync-engine.md` | build phases + locked appendices; each licensed by a GATE above |
 | `completed/` | closed plans, kept for their Results logs |
@@ -586,13 +586,19 @@ Order — cheapest and highest overturn-risk first:
    evidence leans toward the latter (the concentrations sit on the
    songs GATE P already diagnosed as repeat pile-up). **So: stop
    quoting ~150 as the unreached population, and do not spend a
-   design pass there until the cheap follow-up specified in the
-   read-off has run.** Detail, the resolved STOP and two recorded
+   design pass there until the cheap follow-up has run — Ken
+   commissioned it the same day as **Phase 7b**, which runs before
+   GATE W and asks whether each of those 80 is sung in the gap
+   where its line belongs or only at another occurrence of the same
+   repeated text. Bands for the recommendation are declared in the
+   design, before the data.** Detail, the resolved STOP and two recorded
    design defects are in `route-no-timing.md`'s Results log.
-   **Live now: Phase 6 → GATE W** (designed 2026-09-14) — interior
-   word boundaries on lines already placed. Phase 7 was run first
-   precisely to test whether something better existed to aim at; it
-   did not find one, so GATE W is the work that is left.
+   **Order now: Phase 7b, then Phase 6 → GATE W** (designed
+   2026-09-14) — interior word boundaries on lines already placed.
+   Phase 7 was run first precisely to test whether something better
+   existed to aim at; it halved the candidate population without
+   finding one, and 7b decides whether what is left is a target at
+   all. If it is not, GATE W is the work that remains.
 6. ~~**S-E**~~ — **not run.** This is the *line* route's Phase 3
    optional arm, not the joint plan's Phase 3, and it closed with that
    route: `route-line-timing.md`'s status block records "S-E is not

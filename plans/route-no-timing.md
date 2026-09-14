@@ -43,9 +43,14 @@ Model: Claude Sonnet 5 (executor). Plan drafted by Claude Fable 5.
 > the same bad premise sat in the read-off rule, which is withdrawn.
 > **Stop quoting ~150 as the unreached population.** One cheap
 > no-GPU follow-up would close the remainder; it is specified in the
-> read-off and **not commissioned**. **Nothing blocks GATE W step 1.**
-> Then GATE L when the Mandarin corpus exists. Sequencing lives in
-> `plans/PROGRAM.md`.
+> read-off, and **Ken commissioned it the same day as Phase 7b** — he
+> wants the unplaced matter settled before GATE W. **Phase 7b is
+> DESIGNED and is the next thing to run**: it asks, for each of those
+> 80, whether the found text sits in the gap where the line belongs or
+> only at another occurrence, with the recommendation bands declared
+> before the data. Still stats only, no gate, no GPU. **Then GATE W
+> step 1**, then GATE L when the Mandarin corpus exists. Sequencing
+> lives in `plans/PROGRAM.md`.
 
 ## Context
 
@@ -1501,6 +1506,146 @@ is mostly audio that does not sing those words and the program should
 stop treating it as the obvious next target. **No mechanism is
 proposed at this step** — proposing one is the design pass this probe
 exists to decide on.
+
+### Phase 7b — where the found text actually sits (designed 2026-09-14; stats only, no gate)
+
+Commissioned by Ken 2026-09-14, immediately after the Phase 7 read-off
+and **before GATE W step 1**, to settle the unplaced matter rather than
+leave it undetermined.
+
+Phase 7 established that of 150 unplaced lines, 70 are text found in no
+transcription of the audio — closed — and **80 are found somewhere,
+position unknown.** It could not say whether those 80 are sung *where
+the line belongs* or only at *another occurrence of the same repeated
+text*, and that is the whole routing question. This pass answers it.
+
+**Population: exactly Phase 7's U-2 and U-3 lines** — the 80. U-1 lines
+have no candidate to locate, and U-0 is empty corpus-wide. Same 18
+joint-matcher captures, same candidate pool (main + anchor + ytasr, best
+by score), **same driver**, so the classification carried forward is
+identical by construction and not a re-derivation.
+
+**Still stats only. No gate letter, nothing ships, no GPU, no audio.**
+Its output routes the next design pass; that routing is Ken's.
+
+#### The bracket — what "where the line belongs" means
+
+An unplaced line has no position of its own, but it has placed
+neighbours, and the monotonic DP's own contract says it must sit
+between them. So for each unplaced line take its nearest **placed**
+predecessor and successor by line id, and define the bracket as
+`[prev_placed.end, next_placed.start]` from the bundle's own
+`output_line_timings`.
+
+A run of consecutive unplaced lines **shares one bracket**; that is
+correct and must not be worked around.
+
+Per line, classify the **best-scoring** candidate window:
+
+- **P-in** — the window overlaps the bracket at all. The text is sung
+  in the gap where this line belongs. **This is the genuine-miss
+  class: something is there and the matcher did not take it.**
+- **P-out** — the window lies entirely outside the bracket. The only
+  occurrence of this text is elsewhere in the song. **Unreachable at
+  position, and the DP refusing it is correct**, which is the
+  mechanism GATE P described.
+- **P-edge** — no placed predecessor, or no placed successor (the run
+  reaches a song boundary). The bracket is open on one side. **Report
+  separately and never force into P-in or P-out**; an open bracket
+  makes P-in trivially true and would inflate the answer.
+
+#### Second measure, physical and independent: bracket capacity
+
+Per **bracket** (not per line): its duration, the number of unplaced
+lines sharing it, and the derived **seconds per unplaced line**.
+
+This is the check the block-structure discriminator failed to be. A
+bracket holding seven unplaced lines in four seconds cannot be singing
+seven lines, whatever any candidate scan says — and unlike run-length,
+repeated text does not confound it, because it is a physical
+constraint rather than a textual signature.
+
+**Declared before the data:** a bracket under **0.6 s per unplaced
+line** is flagged `overpacked`. That is faster than any sung line in
+this corpus and the number is fixed here, not fitted later. Flagged
+brackets are **reported, not reclassified** — a P-in line inside an
+overpacked bracket is still counted P-in, and the flag is what tells
+the reader the count is soft.
+
+**Its one caveat, stated now:** the bracket is only as good as the two
+placed lines bounding it. If the matcher placed a neighbour wrongly,
+the bracket is wrong. That is a different defect from the one being
+measured, and it is why this is a second signal and not the primary.
+
+#### Third measure, free: sheet duplication
+
+For each of the 80, is the line's normalised text duplicated elsewhere
+in its own sheet (shipped tokeniser, exact normalised match)? This is
+what settled the two named blocks at the Phase 7 read-off, and it costs
+one pass over text already in the bundle.
+
+It bears on **P-out**, not P-in: a P-out line whose text is duplicated
+is the wrong-occurrence case outright. A P-in line is reachable whether
+or not its text repeats — some occurrence *is* sung in the bracket — so
+duplication never subtracts from P-in. Reported as a cross-tab so that
+claim is visible rather than asserted.
+
+#### Tables
+
+1. **Per song:** n in population, P-in / P-out / P-edge.
+2. **Pooled**, same columns, with the 8 no-caption songs broken out as
+   in Phase 7.
+3. **Per bracket** (every bracket containing at least one unplaced
+   line): song, line-id span, duration, n unplaced, seconds per
+   unplaced line, `overpacked` flag, n P-in.
+4. **Cross-tab:** P-class × (sheet-duplicated / unique).
+5. **The P-in lines, listed in full** — song, line id, sheet text,
+   bracket duration, whether overpacked, whether duplicated. There
+   should be few enough to list; if there are more than 80 something is
+   wrong. **This table is the deliverable** — it is the candidate
+   population for any future mechanism, and Ken may want to look at
+   some of them.
+6. **The two known blocks again** (Bloodstream 44–50, HUNTR/X 40–52),
+   broken out. **Pre-registered expectation, declared now: they should
+   come back predominantly P-out.** They are verbatim repeated text and
+   the read-off verified it off the sheets. **If they come back P-in,
+   the bracket method is wrong and that is a STOP → Ken** — same role
+   the GATE P clause played in Phase 7, but this time resting on a
+   premise the data has already confirmed rather than one inferred
+   from a conclusion.
+
+#### Read-off — what Opus will recommend, declared before the data
+
+The decision is Ken's. What is fixed here is what I will recommend at
+what count, so the recommendation cannot be fitted afterwards. Read on
+**P-in excluding P-edge**, pooled:
+
+- **Under 20 lines** — recommend the unplaced matter is **closed**.
+  A population that small does not justify a design pass from any
+  model, and GATE W is the work that is left.
+- **20 to 50** — recommend a **bounded eyeball first, not a design
+  pass**: sample the P-in lines, confirm they are actually singable in
+  their brackets, and only then decide. The count alone would not
+  establish the lines are real.
+- **Over 50** — there is a real population and a design pass is
+  justified. That is the point at which spending Fable credits on it
+  makes sense.
+
+`P-edge` is reported and excluded from the count in all three cases,
+because an open bracket makes P-in vacuous.
+
+**Also read, and it can override the count downward:** the share of
+P-in lines sitting in `overpacked` brackets. If most of them do, the
+count is an artifact of brackets too narrow to hold the lines and the
+recommendation drops one band.
+
+#### Discipline
+
+Bundles only, no GPU, no audio, no inference. Driver in the session
+scratchpad, **not committed**; reuse Phase 7's classification code so
+the population is identical. No production file touched. The executor
+reports the six tables and **stops** — no verdict, no tally against the
+bands above, no interpretation. Then Ken `/model`s to Opus.
 
 ## Out of scope
 
@@ -3935,8 +4080,10 @@ remaining half is not yet shown to be a prize at all.**
 
 #### 9. Loose ends recorded, not actioned
 
-- The follow-up in 7(3) is specified but **not commissioned** — that is
-  Ken's call, and it needs no new design pass, only the instruction.
+- ~~The follow-up in 7(3) is specified but **not commissioned**~~ —
+  **COMMISSIONED by Ken the same day, ahead of GATE W step 1.** It is
+  pre-registered as **Phase 7b** above, with its bands declared before
+  the data.
 - `U-3-own` is 1 line corpus-wide. Whatever it is, it is not a
   population.
 - U-0 is 0 everywhere; the empty-line caveat never fired.
