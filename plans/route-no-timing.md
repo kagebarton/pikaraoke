@@ -29,8 +29,9 @@ Model: Claude Sonnet 5 (executor). Plan drafted by Claude Fable 5.
 > fall inside a span already decided. Pre-registered as four steps,
 > each with a kill rule that can end the phase — **the first two are
 > cheap and either can stop it before a GPU runs**, which is
-> deliberate. Nothing is built or run yet: **Sonnet 5 implements and
-> runs step 1, reports the table, and stops.**
+> deliberate. **Step 1 RAN 2026-09-14** (no GPU, no audio, bundles
+> only): population-split tables are in the Results log, raw counts
+> only. Opus reads W-1a/b/c next.
 > **Phase 7 RAN and was READ 2026-09-14 — it is done, and it halved
 > the prize.** Of the 150 unplaced lines corpus-wide, **47% are text
 > that appears in no transcription of the audio at all** — closed
@@ -53,9 +54,10 @@ Model: Claude Sonnet 5 (executor). Plan drafted by Claude Fable 5.
 > that claim is now false and is struck wherever it appears. If ever
 > reopened, the lever is upstream (a lyrics sheet matching the
 > recording), named at GATE P — not anything inside the matcher.
-> **GATE W step 1 is the next action, and it is now the better target
-> on evidence rather than merely what is left.** Then GATE L when the
-> Mandarin corpus exists. Sequencing lives in `plans/PROGRAM.md`.
+> **GATE W step 1 RAN 2026-09-14** and it is now the better target on
+> evidence rather than merely what is left — tables in the Results log,
+> **Opus reads W-1a/b/c next.** Then GATE L when the Mandarin corpus
+> exists. Sequencing lives in `plans/PROGRAM.md`.
 
 ## Context
 
@@ -4543,3 +4545,134 @@ Three consequences:
   scan — plus importing `phase7_run.py` rather than copying it, are why
   this run's population is identical to Phase 7's by construction
   rather than by claim. Recorded as the practice that paid, twice now.
+
+### 2026-09-14 — Phase 6 / GATE W step 1 executor run (Sonnet) — population split tables, no verdict
+
+Ran W-1 exactly as pre-registered: no GPU, no audio, bundles only.
+Driver lives in the session scratchpad (`phase6_w1_population_split.py`),
+not committed.
+
+Cohort: the 18 joint-matcher captures in
+`D:/shared/pikaraoke-songs/alignment_debug/` (bundles whose `joint_stats`
+carries `pass1_line_timings`); the other 16 are cue-route and were
+skipped. Pooled `n_lines` across the 18 is 1010, matching Phase 7's own
+denominator exactly.
+
+Per line, `joint_stats.selected_source[line_id]` gives the winning
+source (indexed by line id, length `n_lines`). For each line in the
+target population (`transcribe`/`ytasr`) and, as context, each
+`align`-won line, `_line_align_ranges` was recomputed from the bundle's
+own `lyrics.align_lines` and `words` — not persisted in the bundle — to
+classify whisper's belief per the pre-registered rule: range absent →
+`abstain_none`; paced below `_MIN_ALIGN_PACE_S` (0.06) → `abstain_crammed`;
+else `_range_agreement(output_t0, output_t1, align_range) >= tau` →
+`agrees`, else `disagrees`, where `(output_t0, output_t1)` is the line's
+own `output_line_timings` span.
+
+**Validity checks, before any table.** For all 18 bundles, the
+align/transcribe/ytasr counts recomputed from `selected_source` were
+asserted equal to the bundle's own recorded `joint_stats.align_won` /
+`transcribe_won` / `ytasr_won` — hard, in code — and all 18 passed.
+Separately, every align-won line's recomputed range came back present
+and paced on every song (`abstain_none = abstain_crammed = 0` throughout
+Table W-1.3) — the shipped code only guarantees that if this recompute
+reads the same inputs the matcher itself used to build its align
+candidates.
+
+#### Table W-1.1 — target population (transcribe+ytasr-won), class split at tau=0.5
+
+| stem (trunc) | n_lines | n_placed | n_target | target_share_of_placed | abstain_none | abstain_crammed | agrees | disagrees |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 'Defying Gravity' - Wicked 20th Annivers | 89 | 51 | 29 | 56.9% | 0 | 15 | 12 | 2 |
+| 'Free' _ Official Lyric Video _ Sony Ani | 41 | 40 | 40 | 100.0% | 0 | 23 | 0 | 17 |
+| 'Popular' - Wicked 20th Anniversary Edit | 62 | 53 | 11 | 20.8% | 0 | 0 | 11 | 0 |
+| Beauty and the Beast (1991) - Be Our Gue | 77 | 77 | 21 | 27.3% | 0 | 0 | 21 | 0 |
+| Beauty and the Beast (1991) - Belle [UHD | 110 | 102 | 28 | 27.5% | 0 | 0 | 28 | 0 |
+| Ed Sheeran - Best Part Of Me (feat. YEBB | 38 | 37 | 24 | 64.9% | 0 | 1 | 20 | 3 |
+| Ed Sheeran & Rudimental­ - Bloodstream [ | 74 | 53 | 21 | 39.6% | 0 | 2 | 18 | 1 |
+| HUNTR_X 'This Is What It Sounds Like' (M | 53 | 35 | 3 | 8.6% | 0 | 0 | 3 | 0 |
+| Jessie J - Domino (Official Video)---UJt | 67 | 63 | 12 | 19.0% | 0 | 1 | 6 | 5 |
+| Josh Gad - In Summer (From 'Frozen'_Sing | 31 | 29 | 3 | 10.3% | 0 | 0 | 3 | 0 |
+| Mulan _ I'll Make a Man Out of You _ @di | 47 | 36 | 36 | 100.0% | 0 | 15 | 0 | 21 |
+| NSYNC - Paradise | 65 | 53 | 52 | 98.1% | 0 | 22 | 0 | 30 |
+| Pocahontas - Colors of the Wind (Blu-ray | 37 | 37 | 35 | 94.6% | 0 | 19 | 5 | 11 |
+| Seasons of Love (HD)---UvyHuse6buY | 34 | 27 | 10 | 37.0% | 0 | 1 | 9 | 0 |
+| Stay Gold (Official Music Video) from Th | 38 | 38 | 1 | 2.6% | 0 | 0 | 1 | 0 |
+| The Lion King - Hakuna Matata Music Vide | 40 | 33 | 23 | 69.7% | 0 | 1 | 17 | 5 |
+| The Next Ten Minutes Lyrics---0j8kL24ph8 | 71 | 67 | 23 | 34.3% | 0 | 7 | 13 | 3 |
+| Wicked - For Good  (2025) 4K - The Girl  | 36 | 29 | 21 | 72.4% | 3 | 12 | 5 | 1 |
+| POOLED | 1010 | 860 | 393 | 45.7% | 3 | 119 | 172 | 99 |
+
+#### Table W-1.2 — tau sensitivity, target population agrees/disagrees at tau in {0.3, 0.5, 0.7}
+
+| stem (trunc) | n_paced_present | agrees@0.3 | disagrees@0.3 | agrees@0.5 | disagrees@0.5 | agrees@0.7 | disagrees@0.7 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 'Defying Gravity' - Wicked 20th Annivers | 14 | 13 | 1 | 12 | 2 | 12 | 2 |
+| 'Free' _ Official Lyric Video _ Sony Ani | 17 | 0 | 17 | 0 | 17 | 0 | 17 |
+| 'Popular' - Wicked 20th Anniversary Edit | 11 | 11 | 0 | 11 | 0 | 11 | 0 |
+| Beauty and the Beast (1991) - Be Our Gue | 21 | 21 | 0 | 21 | 0 | 20 | 1 |
+| Beauty and the Beast (1991) - Belle [UHD | 28 | 28 | 0 | 28 | 0 | 26 | 2 |
+| Ed Sheeran - Best Part Of Me (feat. YEBB | 23 | 20 | 3 | 20 | 3 | 18 | 5 |
+| Ed Sheeran & Rudimental­ - Bloodstream [ | 19 | 18 | 1 | 18 | 1 | 14 | 5 |
+| HUNTR_X 'This Is What It Sounds Like' (M | 3 | 3 | 0 | 3 | 0 | 3 | 0 |
+| Jessie J - Domino (Official Video)---UJt | 11 | 7 | 4 | 6 | 5 | 6 | 5 |
+| Josh Gad - In Summer (From 'Frozen'_Sing | 3 | 3 | 0 | 3 | 0 | 3 | 0 |
+| Mulan _ I'll Make a Man Out of You _ @di | 21 | 0 | 21 | 0 | 21 | 0 | 21 |
+| NSYNC - Paradise | 30 | 0 | 30 | 0 | 30 | 0 | 30 |
+| Pocahontas - Colors of the Wind (Blu-ray | 16 | 5 | 11 | 5 | 11 | 5 | 11 |
+| Seasons of Love (HD)---UvyHuse6buY | 9 | 9 | 0 | 9 | 0 | 8 | 1 |
+| Stay Gold (Official Music Video) from Th | 1 | 1 | 0 | 1 | 0 | 1 | 0 |
+| The Lion King - Hakuna Matata Music Vide | 22 | 17 | 5 | 17 | 5 | 12 | 10 |
+| The Next Ten Minutes Lyrics---0j8kL24ph8 | 16 | 14 | 2 | 13 | 3 | 11 | 5 |
+| Wicked - For Good  (2025) 4K - The Girl  | 6 | 6 | 0 | 5 | 1 | 5 | 1 |
+| POOLED | 271 | 176 | 95 | 172 | 99 | 155 | 116 |
+
+#### Table W-1.3 — align-won lines, same four classes, as context, tau=0.5
+
+| stem (trunc) | n_align_won | abstain_none | abstain_crammed | agrees | disagrees |
+| --- | --- | --- | --- | --- | --- |
+| 'Defying Gravity' - Wicked 20th Annivers | 22 | 0 | 0 | 21 | 1 |
+| 'Free' _ Official Lyric Video _ Sony Ani | 0 | 0 | 0 | 0 | 0 |
+| 'Popular' - Wicked 20th Anniversary Edit | 42 | 0 | 0 | 40 | 2 |
+| Beauty and the Beast (1991) - Be Our Gue | 56 | 0 | 0 | 56 | 0 |
+| Beauty and the Beast (1991) - Belle [UHD | 74 | 0 | 0 | 73 | 1 |
+| Ed Sheeran - Best Part Of Me (feat. YEBB | 13 | 0 | 0 | 13 | 0 |
+| Ed Sheeran & Rudimental­ - Bloodstream [ | 32 | 0 | 0 | 30 | 2 |
+| HUNTR_X 'This Is What It Sounds Like' (M | 32 | 0 | 0 | 32 | 0 |
+| Jessie J - Domino (Official Video)---UJt | 51 | 0 | 0 | 48 | 3 |
+| Josh Gad - In Summer (From 'Frozen'_Sing | 26 | 0 | 0 | 25 | 1 |
+| Mulan _ I'll Make a Man Out of You _ @di | 0 | 0 | 0 | 0 | 0 |
+| NSYNC - Paradise | 1 | 0 | 0 | 0 | 1 |
+| Pocahontas - Colors of the Wind (Blu-ray | 2 | 0 | 0 | 2 | 0 |
+| Seasons of Love (HD)---UvyHuse6buY | 17 | 0 | 0 | 17 | 0 |
+| Stay Gold (Official Music Video) from Th | 37 | 0 | 0 | 37 | 0 |
+| The Lion King - Hakuna Matata Music Vide | 10 | 0 | 0 | 10 | 0 |
+| The Next Ten Minutes Lyrics---0j8kL24ph8 | 44 | 0 | 0 | 42 | 2 |
+| Wicked - For Good  (2025) 4K - The Girl  | 8 | 0 | 0 | 8 | 0 |
+| POOLED | 467 | 0 | 0 | 454 | 13 |
+
+#### Table W-1.4 — align-won lines carrying at least one interpolated run (`_fill_unmatched_runs`)
+
+| stem (trunc) | n_align_won | n_with_interp_run | share |
+| --- | --- | --- | --- |
+| 'Defying Gravity' - Wicked 20th Annivers | 22 | 0 | 0.0% |
+| 'Free' _ Official Lyric Video _ Sony Ani | 0 | 0 | - |
+| 'Popular' - Wicked 20th Anniversary Edit | 42 | 0 | 0.0% |
+| Beauty and the Beast (1991) - Be Our Gue | 56 | 0 | 0.0% |
+| Beauty and the Beast (1991) - Belle [UHD | 74 | 0 | 0.0% |
+| Ed Sheeran - Best Part Of Me (feat. YEBB | 13 | 0 | 0.0% |
+| Ed Sheeran & Rudimental­ - Bloodstream [ | 32 | 0 | 0.0% |
+| HUNTR_X 'This Is What It Sounds Like' (M | 32 | 1 | 3.1% |
+| Jessie J - Domino (Official Video)---UJt | 51 | 1 | 2.0% |
+| Josh Gad - In Summer (From 'Frozen'_Sing | 26 | 0 | 0.0% |
+| Mulan _ I'll Make a Man Out of You _ @di | 0 | 0 | - |
+| NSYNC - Paradise | 1 | 0 | 0.0% |
+| Pocahontas - Colors of the Wind (Blu-ray | 2 | 0 | 0.0% |
+| Seasons of Love (HD)---UvyHuse6buY | 17 | 0 | 0.0% |
+| Stay Gold (Official Music Video) from Th | 37 | 0 | 0.0% |
+| The Lion King - Hakuna Matata Music Vide | 10 | 0 | 0.0% |
+| The Next Ten Minutes Lyrics---0j8kL24ph8 | 44 | 0 | 0.0% |
+| Wicked - For Good  (2025) 4K - The Girl  | 8 | 0 | 0.0% |
+| POOLED | 467 | 2 | 0.4% |
+
+**Next:** Opus reads W-1a/b/c (the kill rules) against these tables.
