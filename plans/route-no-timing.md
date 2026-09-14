@@ -4093,3 +4093,241 @@ remaining half is not yet shown to be a prize at all.**
   equals each bundle's own recorded scan counts) are the reason the
   tables can be read at all after a failed validation clause. Recorded
   as the practice that paid.
+
+### 2026-09-14 — Phase 7b executor run (Sonnet) — found-text-location tables; the P-in trigger never fires, but HUNTR/X returns predominantly P-edge, a case the rule doesn't cover
+
+Ran the probe designed above (§"Phase 7b", this file) over the same 18
+joint-matcher captures, restricted to exactly Phase 7's U-2 and U-3 rows
+(80 lines — matches the Phase 7 read-off's own count above exactly). No
+GPU, no audio, no inference. Driver + tables generator live in the
+session scratchpad (`phase7b_run.py`, `phase7b_tables.py`), not
+committed; `phase7b_run.py` imports `phase7_run.py` directly and calls
+its `process_song` for the population and class/sub assignment
+unchanged (not re-derived), then calls its exact `_scan` a second time
+with identical arguments to recover, per line, the best-scoring
+candidate window's time span — the one fact `process_song` computes
+internally but only keeps for `U-3` rows.
+
+**Three checks came free, all silent (exit code 0, no assertion
+fired).** `pass1_line_timings` has exactly `n_lines` entries on all 18
+bundles (the assumption the bracket math rests on). The independently
+recomputed `has_ytasr` agrees with `phase7_run`'s own result on all 18.
+And every one of the 80 U-2/U-3 rows resolved a non-`None` candidate
+window on the second `_scan` call — hard-asserted in code — meaning the
+window-recovery pass found the same candidates the classification pass
+did, for every row, not just most of them.
+
+**Validation case (route-no-timing.md:1608–1615): the declared STOP
+trigger did not fire. One case the rule doesn't address did occur.**
+The pre-registered text is specific: "they should come back
+predominantly P-out... If they come back P-in, the bracket method is
+wrong and that is a STOP → Ken." Raw result, restricted to the named
+lids that are actually in the Phase 7b population (U-2/U-3):
+
+- **Bloodstream** (lids 44–50, all 7 in population): **0 P-in / 7
+  P-out / 0 P-edge.** Matches the declared expectation exactly.
+- **HUNTR/X** (lids 40–52; 40 and 42 are placed, not in the unplaced
+  population at all; 50 is U-1, not in Phase 7b's U-2/U-3 population;
+  10 of the 13 named lids remain): **0 P-in / 1 P-out / 9 P-edge.**
+
+Neither song produced a P-in — the one outcome the design names as a
+STOP. But HUNTR/X did not come back "predominantly P-out" either; it
+came back predominantly `P-edge`. Verified, not inferred: HUNTR/X's
+`n_lines` is 53 (Phase 7's own Table 1, this file), so line id 52 is
+the song's last line. The run of unplaced lines from 43–52 (Table 3
+below) reaches that boundary, so it has no placed successor to close a
+bracket against — `P-edge` by the design's own definition ("no placed
+predecessor, or no placed successor (the run reaches a song
+boundary)"), not a scan failure and not a `P-in`. The design's text
+declares what P-in and P-out each mean for this validation case; it is
+silent on what a predominantly-`P-edge` result means for it.
+
+**What this executor is not doing:** deciding whether a tail-of-song
+`P-edge` run corroborates or undermines the repeat-pileup diagnosis,
+deciding whether HUNTR/X should count as passing or failing the
+validation case in the absence of a `P-in`, or tallying the pooled
+P-in count (2, Table 5) against the read-off bands declared in the
+design. Those are exactly Opus's read-off and Ken's call. All six
+tables are reported below as designed, regardless of this question.
+
+#### Table 1 — per song
+
+| song | ytasr | n_pop (U-2+U-3) | P-in | P-out | P-edge |
+| --- | --- | --- | --- | --- | --- |
+| 'Defying Gravity' - Wicked 20th Anniversary Edition _ WICKED the Musical---AoON1CyhQAM | Y | 7 | 0 | 2 | 5 |
+| 'Free' _ Official Lyric Video _ Sony Animation---fjOeJssZX_Q | N | 1 | 0 | 1 | 0 |
+| 'Popular' - Wicked 20th Anniversary Edition _ WICKED the Musical---22QYya-LGDY | Y | 4 | 0 | 4 | 0 |
+| Beauty and the Beast (1991) - Be Our Guest [UHD]---MiraOCjABn8 | Y | 0 | 0 | 0 | 0 |
+| Beauty and the Beast (1991) - Belle [UHD]---otxTf5hZ0Yw | Y | 1 | 0 | 1 | 0 |
+| Ed Sheeran - Best Part Of Me (feat. YEBBA) (Live At Abbey Road)---wGyh_53ecgg | Y | 0 | 0 | 0 | 0 |
+| Ed Sheeran & Rudimental­ - Bloodstream [Official Music Video­ YTMAs]---Orq_75kFi8I | Y | 20 | 0 | 20 | 0 |
+| HUNTR_X 'This Is What It Sounds Like' (Music Video) _ KPop Demon Hunters _ Netflix Philippines---hI-y5anGcUA | N | 14 | 0 | 5 | 9 |
+| Jessie J - Domino (Official Video)---UJtB55MaoD0 | N | 1 | 0 | 0 | 1 |
+| Josh Gad - In Summer (From 'Frozen'_Sing-Along)---9tcaM06eGrY | N | 0 | 0 | 0 | 0 |
+| Mulan _ I'll Make a Man Out of You _ @disneykids---vGfJeW_CcFY | Y | 9 | 0 | 9 | 0 |
+| NSYNC - Paradise | N | 5 | 1 | 4 | 0 |
+| Pocahontas - Colors of the Wind (Blu-ray 1080p HD)---9ThO76peOw0 | Y | 0 | 0 | 0 | 0 |
+| Seasons of Love (HD)---UvyHuse6buY | N | 6 | 0 | 0 | 6 |
+| Stay Gold (Official Music Video) from The Outsiders – A New Broadway Musical.---XzbHPqULtdA | N | 0 | 0 | 0 | 0 |
+| The Lion King - Hakuna Matata Music Video I 4K Ultra HD---fwLxDUQBdEg | Y | 5 | 0 | 1 | 4 |
+| The Next Ten Minutes Lyrics---0j8kL24ph8U | N | 3 | 0 | 3 | 0 |
+| Wicked - For Good  (2025) 4K - The Girl in the Bubble (7_8) _ Movieclips---wzSeub9W4QQ | Y | 4 | 1 | 2 | 1 |
+
+#### Table 2 — pooled corpus totals
+
+| group | n_songs | n_pop (U-2+U-3) | P-in | P-out | P-edge |
+| --- | --- | --- | --- | --- | --- |
+| ytasr songs | 10 | 50 | 1 | 39 | 10 |
+| no-ytasr songs | 8 | 30 | 1 | 13 | 16 |
+
+#### Table 3 — per bracket
+
+| song | line-id span | bracket duration (s) | n unplaced | s/unplaced line | overpacked | n P-in |
+| --- | --- | --- | --- | --- | --- | --- |
+| 'Defying Gravity' - Wicked 20th Anniversary Edition _ WICKED the Musical---AoON1CyhQAM | 0-20 | - | 21 | - | - | 0 |
+| 'Defying Gravity' - Wicked 20th Anniversary Edition _ WICKED the Musical---AoON1CyhQAM | 32-33 | 0.00 | 2 | 0.00 | Y | 0 |
+| 'Defying Gravity' - Wicked 20th Anniversary Edition _ WICKED the Musical---AoON1CyhQAM | 45-46 | 3.19 | 2 | 1.59 | N | 0 |
+| 'Defying Gravity' - Wicked 20th Anniversary Edition _ WICKED the Musical---AoON1CyhQAM | 56-64 | 3.92 | 9 | 0.44 | Y | 0 |
+| 'Defying Gravity' - Wicked 20th Anniversary Edition _ WICKED the Musical---AoON1CyhQAM | 80 | 0.00 | 1 | 0.00 | Y | 0 |
+| 'Defying Gravity' - Wicked 20th Anniversary Edition _ WICKED the Musical---AoON1CyhQAM | 82-84 | 0.86 | 3 | 0.29 | Y | 0 |
+| 'Free' _ Official Lyric Video _ Sony Animation---fjOeJssZX_Q | 35 | 6.80 | 1 | 6.80 | N | 0 |
+| 'Popular' - Wicked 20th Anniversary Edition _ WICKED the Musical---22QYya-LGDY | 1-4 | 0.74 | 4 | 0.18 | Y | 0 |
+| 'Popular' - Wicked 20th Anniversary Edition _ WICKED the Musical---22QYya-LGDY | 35 | 0.70 | 1 | 0.70 | N | 0 |
+| 'Popular' - Wicked 20th Anniversary Edition _ WICKED the Musical---22QYya-LGDY | 37 | 3.38 | 1 | 3.38 | N | 0 |
+| 'Popular' - Wicked 20th Anniversary Edition _ WICKED the Musical---22QYya-LGDY | 52-54 | 0.00 | 3 | 0.00 | Y | 0 |
+| Beauty and the Beast (1991) - Belle [UHD]---otxTf5hZ0Yw | 86-87 | 0.96 | 2 | 0.48 | Y | 0 |
+| Beauty and the Beast (1991) - Belle [UHD]---otxTf5hZ0Yw | 89 | 0.50 | 1 | 0.50 | Y | 0 |
+| Beauty and the Beast (1991) - Belle [UHD]---otxTf5hZ0Yw | 93-95 | 1.60 | 3 | 0.53 | Y | 0 |
+| Beauty and the Beast (1991) - Belle [UHD]---otxTf5hZ0Yw | 98-99 | 0.26 | 2 | 0.13 | Y | 0 |
+| Ed Sheeran - Best Part Of Me (feat. YEBBA) (Live At Abbey Road)---wGyh_53ecgg | 32 | 9.68 | 1 | 9.68 | N | 0 |
+| Ed Sheeran & Rudimental­ - Bloodstream [Official Music Video­ YTMAs]---Orq_75kFi8I | 27-30 | 0.90 | 4 | 0.23 | Y | 0 |
+| Ed Sheeran & Rudimental­ - Bloodstream [Official Music Video­ YTMAs]---Orq_75kFi8I | 37 | 6.52 | 1 | 6.52 | N | 0 |
+| Ed Sheeran & Rudimental­ - Bloodstream [Official Music Video­ YTMAs]---Orq_75kFi8I | 43-50 | 0.00 | 8 | 0.00 | Y | 0 |
+| Ed Sheeran & Rudimental­ - Bloodstream [Official Music Video­ YTMAs]---Orq_75kFi8I | 53 | 0.18 | 1 | 0.18 | Y | 0 |
+| Ed Sheeran & Rudimental­ - Bloodstream [Official Music Video­ YTMAs]---Orq_75kFi8I | 55 | 1.90 | 1 | 1.90 | N | 0 |
+| Ed Sheeran & Rudimental­ - Bloodstream [Official Music Video­ YTMAs]---Orq_75kFi8I | 59 | 0.58 | 1 | 0.58 | Y | 0 |
+| Ed Sheeran & Rudimental­ - Bloodstream [Official Music Video­ YTMAs]---Orq_75kFi8I | 63 | 4.26 | 1 | 4.26 | N | 0 |
+| Ed Sheeran & Rudimental­ - Bloodstream [Official Music Video­ YTMAs]---Orq_75kFi8I | 68-71 | 0.28 | 4 | 0.07 | Y | 0 |
+| HUNTR_X 'This Is What It Sounds Like' (Music Video) _ KPop Demon Hunters _ Netflix Philippines---hI-y5anGcUA | 33-39 | 0.28 | 7 | 0.04 | Y | 0 |
+| HUNTR_X 'This Is What It Sounds Like' (Music Video) _ KPop Demon Hunters _ Netflix Philippines---hI-y5anGcUA | 41 | 0.00 | 1 | 0.00 | Y | 0 |
+| HUNTR_X 'This Is What It Sounds Like' (Music Video) _ KPop Demon Hunters _ Netflix Philippines---hI-y5anGcUA | 43-52 | - | 10 | - | - | 0 |
+| Jessie J - Domino (Official Video)---UJtB55MaoD0 | 12 | 1.54 | 1 | 1.54 | N | 0 |
+| Jessie J - Domino (Official Video)---UJtB55MaoD0 | 16 | 1.78 | 1 | 1.78 | N | 0 |
+| Jessie J - Domino (Official Video)---UJtB55MaoD0 | 58 | 2.95 | 1 | 2.95 | N | 0 |
+| Jessie J - Domino (Official Video)---UJtB55MaoD0 | 66 | - | 1 | - | - | 0 |
+| Josh Gad - In Summer (From 'Frozen'_Sing-Along)---9tcaM06eGrY | 0 | - | 1 | - | - | 0 |
+| Josh Gad - In Summer (From 'Frozen'_Sing-Along)---9tcaM06eGrY | 16 | 4.65 | 1 | 4.65 | N | 0 |
+| Mulan _ I'll Make a Man Out of You _ @disneykids---vGfJeW_CcFY | 19-21 | 0.00 | 3 | 0.00 | Y | 0 |
+| Mulan _ I'll Make a Man Out of You _ @disneykids---vGfJeW_CcFY | 23 | 0.00 | 1 | 0.00 | Y | 0 |
+| Mulan _ I'll Make a Man Out of You _ @disneykids---vGfJeW_CcFY | 25 | 0.00 | 1 | 0.00 | Y | 0 |
+| Mulan _ I'll Make a Man Out of You _ @disneykids---vGfJeW_CcFY | 33 | 1.81 | 1 | 1.81 | N | 0 |
+| Mulan _ I'll Make a Man Out of You _ @disneykids---vGfJeW_CcFY | 35 | 0.50 | 1 | 0.50 | Y | 0 |
+| Mulan _ I'll Make a Man Out of You _ @disneykids---vGfJeW_CcFY | 37 | 1.02 | 1 | 1.02 | N | 0 |
+| Mulan _ I'll Make a Man Out of You _ @disneykids---vGfJeW_CcFY | 40 | 0.66 | 1 | 0.66 | N | 0 |
+| Mulan _ I'll Make a Man Out of You _ @disneykids---vGfJeW_CcFY | 42 | 0.90 | 1 | 0.90 | N | 0 |
+| Mulan _ I'll Make a Man Out of You _ @disneykids---vGfJeW_CcFY | 44 | 1.84 | 1 | 1.84 | N | 0 |
+| NSYNC - Paradise | 1 | 49.10 | 1 | 49.10 | N | 0 |
+| NSYNC - Paradise | 17 | 1.96 | 1 | 1.96 | N | 0 |
+| NSYNC - Paradise | 21-22 | 1.56 | 2 | 0.78 | N | 0 |
+| NSYNC - Paradise | 26 | 0.72 | 1 | 0.72 | N | 1 |
+| NSYNC - Paradise | 39 | 6.02 | 1 | 6.02 | N | 0 |
+| NSYNC - Paradise | 42 | 3.95 | 1 | 3.95 | N | 0 |
+| NSYNC - Paradise | 51-52 | 0.00 | 2 | 0.00 | Y | 0 |
+| NSYNC - Paradise | 59 | 0.24 | 1 | 0.24 | Y | 0 |
+| NSYNC - Paradise | 63-64 | - | 2 | - | - | 0 |
+| Seasons of Love (HD)---UvyHuse6buY | 16 | 5.72 | 1 | 5.72 | N | 0 |
+| Seasons of Love (HD)---UvyHuse6buY | 28-33 | - | 6 | - | - | 0 |
+| The Lion King - Hakuna Matata Music Video I 4K Ultra HD---fwLxDUQBdEg | 30 | 26.08 | 1 | 26.08 | N | 0 |
+| The Lion King - Hakuna Matata Music Video I 4K Ultra HD---fwLxDUQBdEg | 34-39 | - | 6 | - | - | 0 |
+| The Next Ten Minutes Lyrics---0j8kL24ph8U | 7 | 22.50 | 1 | 22.50 | N | 0 |
+| The Next Ten Minutes Lyrics---0j8kL24ph8U | 63-65 | 0.08 | 3 | 0.03 | Y | 0 |
+| Wicked - For Good  (2025) 4K - The Girl in the Bubble (7_8) _ Movieclips---wzSeub9W4QQ | 0 | - | 1 | - | - | 0 |
+| Wicked - For Good  (2025) 4K - The Girl in the Bubble (7_8) _ Movieclips---wzSeub9W4QQ | 8 | 7.14 | 1 | 7.14 | N | 1 |
+| Wicked - For Good  (2025) 4K - The Girl in the Bubble (7_8) _ Movieclips---wzSeub9W4QQ | 15 | 3.36 | 1 | 3.36 | N | 0 |
+| Wicked - For Good  (2025) 4K - The Girl in the Bubble (7_8) _ Movieclips---wzSeub9W4QQ | 18 | 2.64 | 1 | 2.64 | N | 0 |
+| Wicked - For Good  (2025) 4K - The Girl in the Bubble (7_8) _ Movieclips---wzSeub9W4QQ | 32-33 | 30.48 | 2 | 15.24 | N | 0 |
+| Wicked - For Good  (2025) 4K - The Girl in the Bubble (7_8) _ Movieclips---wzSeub9W4QQ | 35 | - | 1 | - | - | 0 |
+
+#### Table 4 — cross-tab: P-class × (sheet-duplicated / unique)
+
+| P-class | sheet-duplicated | unique |
+| --- | --- | --- |
+| P-in | 0 | 2 |
+| P-out | 36 | 16 |
+| P-edge | 12 | 14 |
+
+#### Table 5 — the P-in lines, listed in full (the deliverable)
+
+| song | line_id | sheet text | bracket duration (s) | overpacked | duplicated |
+| --- | --- | --- | --- | --- | --- |
+| NSYNC - Paradise | 26 | Right here next to you (Right here next to you) | 0.72 | N | N |
+| Wicked - For Good  (2025) 4K - The Girl in the Bubble (7_8) _ Movieclips---wzSeub9W4QQ | 8 | She spins such beautiful stories | 7.14 | N | N |
+
+2 P-in lines total (population is 80; this is a subset by construction).
+
+#### Table 6 — the known cases (bracket-method validation)
+
+**Ed Sheeran & Rudimental­ - Bloodstream [Official Music Video­ YTMAs]---Orq_75kFi8I** — named lids [44, 45, 46, 47, 48, 49, 50]
+
+| line_id | P-class | duplicated | Phase 7 class |
+| --- | --- | --- | --- |
+| 44 | P-out | Y | U-2 |
+| 45 | P-out | Y | U-2 |
+| 46 | P-out | Y | U-2 |
+| 47 | P-out | Y | U-2 |
+| 48 | P-out | Y | U-2 |
+| 49 | P-out | Y | U-2 |
+| 50 | P-out | Y | U-3 |
+
+0 P-in / 7 P-out / 0 P-edge out of 7 named lines in the Phase 7b population (7 named total).
+
+**HUNTR_X 'This Is What It Sounds Like' (Music Video) _ KPop Demon Hunters _ Netflix Philippines---hI-y5anGcUA** — named lids [40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52]
+
+| line_id | P-class | duplicated | Phase 7 class |
+| --- | --- | --- | --- |
+| 40 | not in Phase 7b population (U-0/U-1/placed) | - | - |
+| 41 | P-out | Y | U-3 |
+| 42 | not in Phase 7b population (U-0/U-1/placed) | - | - |
+| 43 | P-edge | Y | U-3 |
+| 44 | P-edge | Y | U-3 |
+| 45 | P-edge | Y | U-3 |
+| 46 | P-edge | Y | U-3 |
+| 47 | P-edge | Y | U-3 |
+| 48 | P-edge | N | U-3 |
+| 49 | P-edge | N | U-3 |
+| 50 | not in Phase 7b population (U-0/U-1/placed) | - | - |
+| 51 | P-edge | N | U-3 |
+| 52 | P-edge | N | U-3 |
+
+0 P-in / 1 P-out / 9 P-edge out of 10 named lines in the Phase 7b population (13 named total).
+
+**Reading notes, mechanical, ahead of the read-off:**
+
+- The population (80) and every row's `cls`/`sub` in the tables above
+  is `phase7_run.py`'s own output object, read unchanged — this run
+  adds only `pclass`, `bracket_duration`, `overpacked`, and
+  `duplicated` on top of it.
+- `overpacked` (< 0.6 s/unplaced line, declared in the design, not
+  fitted here) fires on several near-zero-duration brackets (e.g.
+  Bloodstream 43–50 at 0.00 s for 8 lines, Mulan 19–21/23/25 at 0.00 s):
+  two placed lines with essentially no time gap between them, holding
+  a multi-line unplaced run. Reported per the design, not
+  reclassified — every line in those brackets above is still counted
+  by its own P-class.
+- `P-edge` lines still had their candidate window computed and
+  hard-checked non-`None` (same discipline as `P-in`/`P-out`), but the
+  window was not used for classification, per the design's "never
+  force into P-in or P-out."
+- Sheet duplication (Table 4) is keyed over the full sheet (every line,
+  placed or not), not just the 80-line population, since a duplicate
+  can sit on a line the DP did place.
+
+**Artifacts:** driver, tables generator and raw per-song JSON in the
+session scratchpad, not committed: `phase7b_run.py`, `phase7b_tables.py`
+(imports `phase7_run.py` directly rather than copying it),
+`phase7b_out/results.json`, `phase7b_out/tables.md`,
+`phase7b_out/run.log`.
+
+**Next:** stop. Ask Ken to `/model` to Opus for the read-off — starting
+with the HUNTR/X `P-edge` question above, which this run's own brief
+routes to Ken/Opus, not the executor.
