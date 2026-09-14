@@ -43,14 +43,19 @@ Model: Claude Sonnet 5 (executor). Plan drafted by Claude Fable 5.
 > the same bad premise sat in the read-off rule, which is withdrawn.
 > **Stop quoting ~150 as the unreached population.** One cheap
 > no-GPU follow-up would close the remainder; it is specified in the
-> read-off, and **Ken commissioned it the same day as Phase 7b** — he
-> wants the unplaced matter settled before GATE W. **Phase 7b is
-> DESIGNED and is the next thing to run**: it asks, for each of those
-> 80, whether the found text sits in the gap where the line belongs or
-> only at another occurrence, with the recommendation bands declared
-> before the data. Still stats only, no gate, no GPU. **Then GATE W
-> step 1**, then GATE L when the Mandarin corpus exists. Sequencing
-> lives in `plans/PROGRAM.md`.
+> read-off. **Phase 7b RAN and was READ 2026-09-14: the unplaced matter
+> is CLOSED.** Of those 80, essentially all are text sung *somewhere
+> other than where the sheet puts them* — which the matcher is correct
+> to refuse. **Two lines corpus-wide are found in the gap where they
+> belong**, against the pre-declared band of 20. **Stop treating the
+> unplaced population as a target: it is measured and it is empty.**
+> The program said twice that this was where the remaining quality sat;
+> that claim is now false and is struck wherever it appears. If ever
+> reopened, the lever is upstream (a lyrics sheet matching the
+> recording), named at GATE P — not anything inside the matcher.
+> **GATE W step 1 is the next action, and it is now the better target
+> on evidence rather than merely what is left.** Then GATE L when the
+> Mandarin corpus exists. Sequencing lives in `plans/PROGRAM.md`.
 
 ## Context
 
@@ -1607,7 +1612,13 @@ claim is visible rather than asserted.
    some of them.
 6. **The two known blocks again** (Bloodstream 44–50, HUNTR/X 40–52),
    broken out. **Pre-registered expectation, declared now: they should
-   come back predominantly P-out.** They are verbatim repeated text and
+   come back predominantly P-out.** *(**Defect, found 2026-09-14 at the
+   read-off:** the expectation and the trigger are not the same clause.
+   The trigger below keys on P-in and held; the expectation left a third
+   outcome — a P-edge majority — unnamed, and HUNTR/X returned exactly
+   that. It should have read "must not come back P-in; a P-edge majority
+   is reported, not read." Ruled a clean pass on the trigger; see the
+   read-off.)* They are verbatim repeated text and
    the read-off verified it off the sheets. **If they come back P-in,
    the bracket method is wrong and that is a STOP → Ken** — same role
    the GATE P clause played in Phase 7, but this time resting on a
@@ -2875,10 +2886,16 @@ themselves do not move. The program advances to
 **Phase 5** (line timing as a fill source, per-gap gate design owed),
 which this read-off's Finding 1 argues is where the remaining quality
 is: the knobs cannot reach the unplaced population, and Phase 5's fill
-is aimed at exactly it. **Phase 6 stays after Phase 5** — it refines word
-boundaries inside lines already placed, which is polish next to lines
-that never render. Recorded as the executor's recommendation on where to
-spend the next design pass, not a ruling: **Phase 5's per-gap gate,
+is aimed at exactly it. ~~**Phase 6 stays after Phase 5** — it refines
+word boundaries inside lines already placed, which is polish next to
+lines that never render.~~ *(**Finding 1's premise is MEASURED AND
+FALSE as of 2026-09-14** — Phase 7 and 7b found that the unplaced
+population holds about two winnable lines corpus-wide, so "where the
+remaining quality is" was wrong and the polish comparison it set up
+does not hold. Left standing as the record of what was believed when
+Phase 5 was commissioned; see the Phase 7b read-off.)* Recorded as the
+executor's recommendation on where to spend the next design pass, not a
+ruling: **Phase 5's per-gap gate,
 not this gate** — GATE T the data answered by itself, whereas the per-gap
 gate is a live design question with a named failure mode (Bloodstream).
 
@@ -4331,3 +4348,198 @@ session scratchpad, not committed: `phase7b_run.py`, `phase7b_tables.py`
 **Next:** stop. Ask Ken to `/model` to Opus for the read-off — starting
 with the HUNTR/X `P-edge` question above, which this run's own brief
 routes to Ken/Opus, not the executor.
+
+### 2026-09-14 — Phase 7b read-off (Opus) — validation passes on its trigger; the unplaced matter is CLOSED at 2 in-bracket lines
+
+Read against the executor's run above (commit `4e0b81e`), the Phase 7
+read-off, and Phase 7b's own pre-registration. Read-only: nothing
+re-run, no table recomputed. One figure was recomputed from the raw
+records purely to test a bound and is marked where it appears.
+
+#### 1. The validation case: passes on its trigger, with a defect in my wording
+
+The pre-registered rule has two parts and they are not the same part.
+The **expectation** was "predominantly P-out." The **trigger** was
+narrower and explicit: "**If they come back P-in, the bracket method is
+wrong and that is a STOP → Ken.**"
+
+**The trigger did not fire. Neither song produced a single P-in.**
+Bloodstream matched the expectation exactly (7/7 P-out). HUNTR/X came
+back 0 P-in / 1 P-out / 9 P-edge.
+
+**Ruled: this is a clean pass of the check's intent.** The failure the
+check exists to catch is the bracket method claiming *this line is sung
+right where it belongs* about lines independently verified as repeated
+text sung elsewhere. That claim is P-in, and there is none of it —
+across 17 named lines on two songs, zero. HUNTR/X's P-edge is not the
+method asserting something false; it is the method **declining to
+answer**, which is the design's own instruction ("never force into P-in
+or P-out; an open bracket makes P-in trivially true and would inflate
+the answer"). **P-edge is the conservative direction.** Had the method
+been broken permissively — brackets so wide everything falls inside —
+those nine lines would have been P-in. They are the opposite.
+
+The executor's explanation is verified, not inferred: HUNTR/X's
+`n_lines` is 53 (Phase 7's Table 1), so line 52 is the song's last
+line, and the unplaced run 43–52 reaches it with no placed successor to
+close a bracket against. That is `P-edge` by definition.
+
+**The defect is mine and it is in the rule's wording.** The expectation
+clause should have read "must not come back P-in; a P-edge majority is
+reported, not read," which is what the design's own P-edge instruction
+already implied everywhere else. Writing an expectation ("predominantly
+P-out") that the trigger did not key on left a third outcome unnamed.
+This is the third specification defect in this short sequence — the
+GATE P clause's premise, the withdrawn `reachable = U-2 + U-3` rule,
+and now this. The pattern is consistent and worth naming: **each one
+came from stating a rule in terms of the result I expected instead of
+the failure I was guarding against.** The trigger, written as a
+failure, held every time.
+
+#### 2. A real limit of the method, distinct from the wording defect
+
+Recorded because it is not a defect and will matter if this question is
+ever reopened. **26 of the 80 lines (33%) are unclassifiable by the
+bracket method**, and they are systematically the song-head and
+song-tail runs. A bracket needs a placed line on both sides, and
+boundary runs have one side missing by construction.
+
+The blindness is not randomly placed. **A song's head and tail are
+exactly where sheet-versus-recording mismatch concentrates** — intros
+the video cuts, outros that fade, extra choruses, credits text. So the
+instrument is blind precisely where one of the main causes lives.
+
+**A one-sided test is available and was not specified.** Every P-edge
+line's candidate window was computed and hard-checked non-`None`; it
+was simply not used. For a tail run, asking whether that window falls
+after the last placed line's end — and for a head run, before the first
+placed line's start — is a well-defined one-sided bracket that would
+classify most of the 26. **It is not commissioned**, for the reason in
+section 3: the answer cannot change the decision.
+
+#### 3. Why the P-edge gap does not qualify the tables — a bound, not an argument
+
+The reading below counts P-in excluding P-edge, so a third of the
+population sits outside it. That is only safe if no plausible
+resolution of those 26 crosses a band boundary. It does not, and this
+is checkable rather than assertable:
+
+- Table 4 splits P-edge into **12 sheet-duplicated and 14 unique**
+  (confirmed against the raw per-line records). The duplicated twelve
+  are the wrong-occurrence case outright — same evidence that settled
+  both named blocks.
+- **Adverse case: assume every one of the 14 unique-text P-edge lines
+  is a genuine miss.** Total becomes 2 + 14 = **16**, still inside the
+  declared "under 20 → closed" band.
+- To reach the next band would require counting *all* 26 — including
+  the nine HUNTR/X lines independently verified as verbatim duplicates
+  of earlier sheet lines. That assumption is contradicted by the data,
+  not merely unlikely.
+
+**So the recommendation is invariant to the gap.** That is why the
+one-sided test in section 2 stays uncommissioned: it would refine a
+number that cannot cross its own threshold. Two probes have already
+been spent on this question; a third that cannot change the answer is
+not worth Ken's time or the machine's.
+
+#### 4. The reading, against the bands declared before the data
+
+**Pooled P-in excluding P-edge: 2.** (Population 80: P-in 2, P-out 52,
+P-edge 26 — reconciles exactly with Phase 7's own 80.)
+
+The design fixed three bands at line ~1623 before any data existed.
+Executing the one that applies, verbatim:
+
+> **Under 20 lines** — recommend the unplaced matter is **closed**. A
+> population that small does not justify a design pass from any model,
+> and GATE W is the work that is left.
+
+**The overpacked override does not apply.** The design allows the
+recommendation to drop one band if most P-in lines sit in overpacked
+brackets; Table 5 shows neither of the two is flagged. It could only
+have moved the reading downward in any case, and it is already at the
+bottom band.
+
+#### 5. The two lines, looked at rather than counted
+
+Both are unique sheet text and neither is flagged overpacked. They are
+worth naming because two is small enough to inspect, and because they
+do not carry equal weight:
+
+- **The Girl in the Bubble, line 8** — "She spins such beautiful
+  stories" — in a 7.14 s bracket. Ample room, unique text, found inside
+  the gap where it belongs. **This looks like a genuine miss.**
+- **NSYNC Paradise, line 26** — "Right here next to you (Right here
+  next to you)" — in a **0.72 s** bracket. It clears the overpacked
+  flag only because that flag is seconds *per line* and this bracket
+  holds one line; against the line's own length it is roughly ten words
+  in three-quarters of a second. It sits just inside the matcher's own
+  pace floor, so it is not impossible — but it is marginal, and the
+  flag not firing is a limitation of the measure rather than a clean
+  bill.
+
+**Recorded as a measure's limit, not a defect:** `overpacked` is
+seconds per unplaced line and takes no account of how long the lines
+are. A short bracket holding one long line passes. It did its job here
+(it fired on the near-zero-duration brackets it was built for) but a
+per-token form would be sharper if this instrument is ever reused.
+
+**So the honest count is one clear miss and one marginal one, corpus-wide,
+against 1010 lines.**
+
+#### 6. Recommendation to Ken
+
+**The unplaced-lines matter is closed. I recommend spending nothing
+further on it — no design pass, no Fable credits, no third probe.**
+
+The arc, in one line each: the program twice called the ~150 unreached
+lines its next target; Phase 7 showed 47% of them are words the audio
+never sings; Phase 7b shows that of the remainder, essentially all are
+text sung somewhere *other* than where the sheet puts them, which the
+matcher is correct to refuse. **What survives as a mechanism's
+opportunity is two lines.**
+
+Three consequences:
+
+1. **Retire the claim from the program's own framing.** Phase 3 and
+   GATE T both recorded "the unplaced population is where the remaining
+   quality sits." That is now measured and false, and the plan files
+   should stop repeating it — done in this commit.
+2. **GATE W is not merely what is left; it is now the better target on
+   evidence.** It was sequenced with the honest caveat that it is
+   polish. The comparison it was being judged against has evaporated:
+   polish on lines that render beats a design pass aimed at two lines.
+3. **If the question is ever reopened**, the lever is upstream and was
+   named at GATE P, not here: get a lyrics sheet that matches the
+   recording. Every mechanism inside the matcher has now been shown to
+   be aiming at text the recording does not contain in the place the
+   sheet puts it. That is a fetch-and-selection problem, not an
+   alignment one.
+
+#### 7. What this read-off does NOT claim
+
+- **Not** that the matcher places everything it should. It claims the
+  *unplaced* population holds ~2 winnable lines on this corpus.
+- **Not** that the 26 P-edge lines are unreachable. They are
+  unclassified; the bound in section 3 is why that does not matter for
+  this decision, not a finding that they are empty.
+- **Not** that Phase 7b measured quality. No line was rendered, watched
+  or scored; "P-in" means text found in the right gap, not timed well.
+- **Not** generalisable beyond these 18 songs. A corpus with cleaner
+  sheets would have a different split, and this says nothing about what
+  a future library looks like.
+- **Not** a verdict on any mechanism. None was proposed, per the design.
+
+#### 8. Loose ends recorded, not actioned
+
+- The one-sided boundary test (section 2) is specified and
+  **deliberately not commissioned**. If the unplaced question is ever
+  reopened, it is the cheapest thing to run first.
+- `overpacked` should be per token rather than per line if reused
+  (section 5).
+- The executor's three free checks — `pass1_line_timings` length on all
+  18, independent `has_ytasr` agreement, and a hard assertion that
+  every one of the 80 rows resolved a candidate window on the second
+  scan — plus importing `phase7_run.py` rather than copying it, are why
+  this run's population is identical to Phase 7's by construction
+  rather than by claim. Recorded as the practice that paid, twice now.

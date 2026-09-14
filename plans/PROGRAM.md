@@ -373,7 +373,7 @@ where it can retire the second model before a GPU runs.
 | `route-word-timing.md` | rung 1 (**CLOSED 2026-09-04**); GATE R, R-1 ruling, M1-M5, the R-4 closure |
 | `route-srt.md` | rung 2a; the shipped cue-align route, S-C |
 | `route-line-timing.md` | rung 2b (**CLOSED 2026-09-08** — S-1 withdrawn); GATE S scaffold arms, M6, M7, the fallback; GATE L re-homed to rung 3 |
-| `route-no-timing.md` | rung 3 — **the live build lane**; the joint catch-all refit, GATE P/J1/J2/T, Phase 5 + **GATE G** (CLOSED 2026-09-11, NO-GO — fill not widened), **Phase 7 (RAN + READ 2026-09-14 — unplaced population is ~half unreachable) + Phase 7b (DESIGNED 2026-09-14, runs next — settles the rest)**, **Phase 6 + GATE W (DESIGNED 2026-09-14, nothing run yet)**, GATE L |
+| `route-no-timing.md` | rung 3 — **the live build lane**; the joint catch-all refit, GATE P/J1/J2/T, Phase 5 + **GATE G** (CLOSED 2026-09-11, NO-GO — fill not widened), **Phase 7 + 7b (RAN + READ 2026-09-14 — the unplaced population is CLOSED: ~2 winnable lines corpus-wide)**, **Phase 6 + GATE W (DESIGNED 2026-09-14, nothing run yet)**, GATE L |
 | `shared-aligner-form.md` | GATE C, GATE O, Phase 0 harness, ruling-provenance audit |
 | `ctc-sync-engine.md` | build phases + locked appendices; each licensed by a GATE above |
 | `completed/` | closed plans, kept for their Results logs |
@@ -412,9 +412,12 @@ shipped `cue_align.py`, so it is not dead-end history.
 > (CTC post-selection *interior* refinement) was added the same day as
 > design owed; GATE T no longer gates it, but it stays **after Phase 5**
 > on value — it refines word boundaries inside lines already placed,
-> which is polish next to the ~150 sheet lines that never render. It is
-> not GATE J1's question and does not re-open it. Phase 6's gate letter
-> is still open.
+> ~~which is polish next to the ~150 sheet lines that never render~~.
+> **That comparison is dead as of 2026-09-14: Phase 7 + 7b measured
+> the unreached population and it holds about two winnable lines, so
+> GATE W is the better target on evidence, not merely what is left.**
+> It is not GATE J1's question and does not re-open it. **Phase 6's
+> gate letter is GATE W (assigned 2026-09-14).**
 
 Ken's sequencing ruling: run the remaining measurement program to
 completion, then consolidate the build design once, rather than amending
@@ -585,20 +588,23 @@ Order — cheapest and highest overturn-risk first:
    only at another occurrence of the same repeated text*, and the
    evidence leans toward the latter (the concentrations sit on the
    songs GATE P already diagnosed as repeat pile-up). **So: stop
-   quoting ~150 as the unreached population, and do not spend a
-   design pass there until the cheap follow-up has run — Ken
-   commissioned it the same day as **Phase 7b**, which runs before
-   GATE W and asks whether each of those 80 is sung in the gap
-   where its line belongs or only at another occurrence of the same
-   repeated text. Bands for the recommendation are declared in the
-   design, before the data.** Detail, the resolved STOP and two recorded
+   quoting ~150 as the unreached population.** Ken commissioned the
+   follow-up the same day as **Phase 7b**, and **it ran and was read
+   2026-09-14: the matter is CLOSED.** Of the 80, essentially all
+   are text sung *somewhere other than where the sheet puts them*,
+   which the matcher is correct to refuse; **two lines corpus-wide**
+   are found in the gap where they belong, against a band of 20
+   declared before the data. **Spend nothing further there — no
+   design pass, no Fable credits, no third probe.** If ever
+   reopened, the lever is upstream and was named at GATE P: a
+   lyrics sheet that matches the recording. Nothing inside the
+   matcher reaches this. Detail, the resolved STOP and two recorded
    design defects are in `route-no-timing.md`'s Results log.
-   **Order now: Phase 7b, then Phase 6 → GATE W** (designed
-   2026-09-14) — interior word boundaries on lines already placed.
-   Phase 7 was run first precisely to test whether something better
-   existed to aim at; it halved the candidate population without
-   finding one, and 7b decides whether what is left is a target at
-   all. If it is not, GATE W is the work that remains.
+   **Live now: Phase 6 → GATE W** (designed 2026-09-14) — interior
+   word boundaries on lines already placed. Phase 7 and 7b ran first
+   precisely to test whether something better existed to aim at.
+   **They found there is not**, which promotes GATE W from "what is
+   left" to the best available target on measured evidence.
 6. ~~**S-E**~~ — **not run.** This is the *line* route's Phase 3
    optional arm, not the joint plan's Phase 3, and it closed with that
    route: `route-line-timing.md`'s status block records "S-E is not
