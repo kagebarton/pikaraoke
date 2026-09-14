@@ -22,10 +22,16 @@ Model: Claude Sonnet 5 (executor). Plan drafted by Claude Fable 5.
 > not ship. **Phase 5 ends with no production change, and the per-gap
 > question must not be re-opened by amending that section** — the gate
 > was unwinnable as pre-registered and a re-attempt needs a fresh design
-> pass and a fresh letter. **Phase 6 is now the head of the queue**
-> (CTC post-selection interior refinement, design owed — Opus), then
-> GATE L when the Mandarin corpus exists. Sequencing lives in
-> `plans/PROGRAM.md`.
+> pass and a fresh letter. **Phase 6 is the head of the queue and was
+> DESIGNED 2026-09-14 (Opus) — its gate is GATE W.** CTC
+> post-selection *interior* refinement: the matcher still decides
+> where a line goes, and this only asks where the word boundaries
+> fall inside a span already decided. Pre-registered as four steps,
+> each with a kill rule that can end the phase — **the first two are
+> cheap and either can stop it before a GPU runs**, which is
+> deliberate. Nothing is built or run yet: **Sonnet 5 implements and
+> runs step 1, reports the table, and stops.** Then GATE L when the
+> Mandarin corpus exists. Sequencing lives in `plans/PROGRAM.md`.
 
 ## Context
 
@@ -817,7 +823,7 @@ and called the placement no better than the shipped one. **So the NO-GO
 rests on the mechanism buying nothing, not only on the defective bar,
 and no Fable round is owed on this gate.** See the read-off's addendum.
 
-## Phase 6 — CTC post-selection interior refinement (design owed; after GATE T)
+## Phase 6 — CTC post-selection interior refinement (designed 2026-09-14; GATE W)
 
 Added 2026-09-10 on Ken's question, assessed by Fable the same day.
 **Assessment only; no gate letter, no ruling, nothing built.**
@@ -934,7 +940,10 @@ and the replay harness cannot see this pass's effect without adding
 them; a run-affecting change to rendered word timing is a milestone
 bump by the v8 precedent, i.e. a full-library regen.
 
-**Probe order, with kill rules (pre-register, then run):**
+**Probe order, with kill rules (pre-register, then run).** *(The
+Fable round's sketch. Pre-registered in full by the design below,
+which governs where the two differ — notably step 3's snap replay
+and its fidelity guard, and step 2's control looks.)*
 
 1. **Population split, no GPU** (bundles): transcribe/ytasr-won lines
    partitioned into whisper-agrees (non-collapsed range, agreement ≥ τ,
@@ -981,7 +990,345 @@ tables; no verdict.
 knobs decide which lines are transcribe/ytasr-won, which is this
 phase's population, so pricing it earlier prices the wrong population.
 
-**Gate:** Ken; letter assigned when the design is written.
+**Gate:** Ken. **Letter assigned 2026-09-14: GATE W.** The design
+follows.
+
+### Design — pre-registered (Opus, 2026-09-14). Gate letter: **GATE W.**
+
+Everything in this section is fixed before the run. The executor
+implements it, runs it, reports the tables, and stops. No constant here
+moves during execution; a case the read-off does not cover is a
+**STOP → Ken**. The assessment's probe order above is the Fable round's
+sketch and stands as its record; where the two differ in detail, this
+section governs.
+
+**Written against GATE G's two defects so they cannot recur here.**
+G's survival bar named a song the mechanism was specified to refuse —
+the bar contained its own counterexample — and G's item 4 claimed the
+gate "only ever removes" when item 3 also placed. Both are answered
+below rather than assumed away. The bar here is `worse = 0` per
+stratum on a blind A/B, and nothing in the mechanism forces a `worse`;
+the strata the band *refuses* are looked at too, so a band in the wrong
+place surfaces as calibration evidence instead of as a failure. And it
+is stated plainly rather than left implied: **this pass moves
+boundaries.** It can move one the wrong way, invert two, or shorten a
+token below what the renderer wants — each has a declared refusal in
+W-6.
+
+#### The seam, verified
+
+`pikaraoke/pipeline/stages/lyric_align.py:246-256` runs
+`veto_uncorroborated_lines` → `snap_line_edges` → `apply_fills` →
+`_generate_ass`. The refinement goes **between the snap and the fill**,
+exactly as the assessment fixed. Two facts this verification adds:
+
+- The RMS envelope `env` is already decoded at this seam and shared by
+  the veto, the snap and the fill. The new per-song cost is the MMS_FA
+  emission forward pass alone, not a decode.
+- `apply_fills` already runs after the snap, so fill lines are never
+  snapped and never refined — "skip fill lines" needs no new guard.
+
+#### W-1. Step 1 — population split. No GPU, no audio, bundles only.
+
+Cohort: the 18 joint-matcher bundles (the ones whose `joint_stats`
+carries `pass1_line_timings`; the other 16 in `alignment_debug/` are
+cue-route captures and are not this phase's population).
+
+For each line, `joint_stats.selected_source[line_id]` gives
+`align` / `transcribe` / `ytasr` / `interp` — it is indexed **by line
+id**, length `n_lines`. Target population: `transcribe` and `ytasr`.
+
+Recompute `_line_align_ranges(line_tokens, words)` from the bundle's
+own `lyrics.lines` and `words`. Whisper's belief about each target
+line falls in exactly one class:
+
+- **abstain_none** — the range is `None` (the aligner matched no word
+  to any of the line's tokens).
+- **abstain_crammed** — range present but
+  `(t1 - t0) / n_tokens < 0.06` (`joint_match._MIN_ALIGN_PACE_S`). This
+  class exists because `_range_agreement` returns **1.0** for a
+  collapsed reference instant, so agreement alone cannot see the
+  aligner's give-up signature. The pace guard must be consulted first;
+  this is the ambiguity the Fable round flagged, now pinned to the
+  constant.
+- **agrees** — range present, paced, and
+  `_range_agreement(t0_line, t1_line, ar) >= 0.5`, where the line span
+  is the bundle's `output_line_timings` entry.
+- **disagrees** — range present, paced, agreement below 0.5.
+
+τ = **0.5**: at that value more than half of whisper's belief about the
+line lies inside the span the matcher chose, so the two are describing
+the same stretch of audio. Below it they are competing *placements*,
+which is a selection question and out of this phase's scope. The split
+is additionally **reported** at τ ∈ {0.3, 0.5, 0.7} as a sensitivity
+column; the kill rules read **τ = 0.5 only**.
+
+Tables: per song and pooled — the four class counts over the target
+population; the same four over align-won lines as context; the count of
+align-won lines carrying at least one interpolated run (`_fill_
+unmatched_runs`, the same gap in miniature, out of scope here and
+counted so a later pass can price it); target lines as a share of all
+placed lines.
+
+**Kill rules, read at τ = 0.5, pooled over all 18 songs:**
+
+- **W-1a — ceiling floor.** If transcribe-won plus ytasr-won placed
+  lines are **under 15%** of all placed lines, **STOP → Ken**: the
+  phase's ceiling is too small to justify a GPU probe and an eyeball
+  sitting, whatever the mechanism does.
+- **W-1b — the zero-model form wins.** If **agrees ≥ 70%** of the
+  target population, **CTC is not commissioned.** Those lines already
+  have whisper's own per-word timings available at
+  `_materialise_line_objects` (`align_ranges` is computed for every
+  line at `joint_match.py:167`, not only for align candidates), so the
+  change is one conditional and no second model. The phase continues in
+  that form through steps 2 and 4 only, with step 4 collapsing to a
+  single stratum of every changed line, up to 50 looks.
+- **W-1c — the zero-model form is moot.** If **agrees < 10%**, drop the
+  zero-model arm and proceed with CTC alone.
+- Between 10% and 70%, both arms proceed and step 4 carries the
+  zero-model form as its own stratum (S6).
+
+#### W-2. Step 2 — baseline eyeball. 28 looks. Ken at the screen.
+
+The question this step answers is whether the problem exists at all.
+Nothing is refined yet; Ken looks at **current shipped output**.
+
+Sample at `seed = 20260914`, drawn across every song with the
+population: **10 whisper-agrees** target lines, **10 whisper-abstained**
+target lines (`abstain_none` and `abstain_crammed` pooled), and
+**8 align-won lines as unlabelled controls**. Shuffled; Ken is not told
+which class a look belongs to.
+
+Render one diff `.ass` per song at `karaoke/<stem>.baseline.ass`,
+carrying only the sampled lines. The shipped `<stem>.ass` is never
+touched, and the file is inert unless loaded as a subtitle track.
+
+Per look, one question: **does the word sweep track the singing inside
+the line** — `fine` / `slightly off` / `clearly off`. Line placement
+and line edges are explicitly *not* being judged; the snap owns edges
+and selection owns placement.
+
+**Kill rules:**
+
+- **W-2a — the problem is not visible.** If, over the 20 target looks,
+  `clearly off ≤ 2` **and** `slightly off ≤ 6`, **STOP: the phase ends
+  and no mechanism is commissioned.** Refining a defect this faint is
+  not worth the S-C overlapping-voices risk that the mechanism carries.
+- **W-2b — the problem is not this population's.** If the controls'
+  `clearly off` rate is within 0.20 of the target looks' rate, **STOP →
+  Ken**: align-won interiors are as loose as the ones this phase
+  targets, so the phase is aimed wrong and the framing has to be
+  re-posed before anything is built. This control is why the step is 28
+  looks rather than the assessment's 20 — without it the step cannot
+  distinguish "these interiors are bad" from "all interiors are a bit
+  loose," and that distinction decides whether the phase points at
+  anything.
+
+#### W-3. Step 3 — disagreement distributions. GPU, no eyeball.
+
+CTC is `scripts/sb_ctc_adapter.make_slice_align` over the cached
+per-song MMS_FA emission (`phase1b_score_oracle.get_emission`, cached
+under `get_temp_directory()/ctc_probe/emissions`). One forward pass per
+song on a cache miss, then near-free slicing by frame index. The S-C
+caches may not survive on the Windows box; a miss is a cost, not a
+blocker. Audio is **the same stem the snap ran on** (dereverb where
+present, else the vocal stem).
+
+An **interior boundary** is the boundary between token *k* and token
+*k+1* for k = 0 … n−2. Token 0's start and token n−1's end are excluded
+throughout — the snap owns them (Ken, 2026-09-10).
+
+**Arm (a) — correct window, correct text.** The 16 uploader-cue songs.
+Per cue span, `slice_align(t0, t1, cue_text)` against the shipped
+cue-route incumbent for the same span. Disagreement here cannot be
+selection error, which is what makes this the load-bearing arm.
+*Guard:* the executor first confirms a per-word incumbent is available
+for those spans; if the capture carries only line timings, re-derive
+the incumbent by replaying the cue-route path over the same spans. If
+neither is available, **STOP → Ken** — arm (a) is not substitutable.
+
+**Arm (b) — the 18 joint bundles.** Replay each bundle through the
+shipped matcher to final line objects, **including the edge snap**.
+This is a correction to the assessment, and it is load-bearing:
+`scripts/replay_ytasr_third_source.py` deliberately does *not* replay
+the snap because it never touches audio, and its own docstring records
+that the bundle's post-snap `output_line_timings` is therefore a sanity
+column only. Step 3 already needs the stem for the emission, so the
+snap replays here via `snap_line_edges(line_objects, snap_stem,
+env=env)`. Without it the constraint window is wrong on precisely the
+lines the snap moved — 21–32% of this population.
+
+**Fidelity guard, before any CTC runs.** The replay's per-line
+`line_id`/`start`/`end`/`n_words` must match the bundle's recorded
+`output_line_timings` **exactly, on every line, on all 18 songs.** Any
+mismatch is a **STOP → Ken**. GATE G was read on a harness that
+reproduced only part of its own reference and the discrepancy surfaced
+at the read rather than at the run; this guard is why that cannot
+recur silently.
+
+Then, for every placed line whose source is `transcribe` or `ytasr` and
+which is not a fill, an `interp` placeholder, or vetoed:
+`slice_align` over the line's final span with the line's sheet text,
+and per-interior-boundary |Δ| against the replayed incumbent.
+
+**Reported per arm, per song and pooled:**
+
+- interior-boundary |Δ| at p50 / p75 / p90 / p95 / max
+- per-line median |Δ| at the same quantiles
+- the bimodality read below
+- **cram-floor fire rate** — refined tokens whose CTC width is under
+  **0.05 s**, and the share of lines carrying at least one. No honest
+  sung syllable is that short; this is the one CTC abstention signal in
+  this program with a trough, and it is read **per token, acted on per
+  line** (a line with any crammed token is refused outright). Line-level
+  averaging is what erased the trough at J1.
+- **monotonicity violations** — lines whose refined boundaries are not
+  non-decreasing, or where a refined token falls below
+  `onset_snap.MIN_WORD_DUR_S` (0.1 s)
+- **OOV** — tokens normalising to empty, which the tokenizer drops so
+  CTC returns no span for them; reported per token and per line
+- **ytasr screening statistic, reported and never read** — on the
+  ytasr-carrying songs, median |word start − nearest ytasr word start|
+  on transcribe-won lines, before and after refinement. Free, on our
+  own clock, and it is the matcher's own epistemology.
+
+**Bimodality test, declared now.** On `log10(|Δ| + 0.001)` over arm
+(a)'s interior boundaries: Gaussian KDE at Scott's-rule bandwidth on a
+512-point grid spanning the data. **Bimodal iff** some local minimum
+has density **≤ 0.6×** the lower of its two flanking local maxima
+**and** each mode's basin holds **≥ 15%** of the mass. The **band
+boundary B** is that minimum's |Δ| in seconds, rounded to two decimals,
+and it is frozen there.
+
+**Kill rule:**
+
+- **W-3a.** If arm (a) is **not bimodal** by that test, **GATE W is
+  NO-GO and the phase ends.** With a correct window and correct text,
+  |Δ| does not separate correction from failure — no band can be
+  declared, and step 4 would have nothing to stratify.
+- If bimodal, B is declared and arm (b)'s mass beyond arm (a)'s
+  corresponding tail is **reported as the selection-error contribution,
+  not read.**
+
+#### W-4. Step 4 — bounded blind A/B. ~60 looks. Ken at the screen.
+
+Strata fixed from step 3's tables **before any look**, using per-line
+median |Δ| and the frozen B:
+
+- **S1** — 0 < median ≤ B/2
+- **S2** — B/2 < median ≤ B
+- **S3** — median > B: *refused by the band*, looked at anyway
+- **S4** — cram-flagged lines: *refused by the floor*, looked at anyway
+- **S5** — every refined line on the ensemble songs, whatever the band
+- **S6** — the zero-model form's changed lines (only when step 1 put
+  `agrees` in [10%, 70%))
+
+**The ensemble list is fixed here, not by the executor:** Belle, Be Our
+Guest, Seasons of Love, Hakuna Matata, Defying Gravity, The Girl in the
+Bubble — the joint-cohort songs with *sustained simultaneous* voices.
+The Next Ten Minutes and I'll Make a Man Out of You were considered and
+excluded as sequential duet and call-and-response rather than
+simultaneous, recorded so the list reads as a rule and not as a fit.
+Note what S-C does **not** give us: its four eyeball songs (Mirrors,
+ZAYN's Whole New World, Part of Your World, Bye Bye Bye) are all
+cue-route songs and none is in this cohort. S-C is a warning about a
+*mechanism*, not a list of songs that carries over.
+
+10 looks per stratum at `seed = 20260914`, ~60 total, bounded like
+M7's 71. Render one diff `.ass` per song at `karaoke/<stem>.refine.ass`
+carrying only the sitting's lines, current and refined as two variants
+in **randomised A/B order with a sealed key** written to the scratchpad
+before the sitting and not opened until every verdict is recorded.
+Ken's prior is that CTC is tighter, so an unblinded look would confirm
+itself.
+
+Verdict per look: **better / same / worse**, on the interior word sweep
+only. `same` counts as not-worse.
+
+#### W-5. Read-off rules (GATE W), pre-registered
+
+1. **Validity first.** If step 3's fidelity guard was waived, or any
+   stratum's looks were drawn after B was known to the sampler, the
+   read is void.
+2. A stratum with **fewer than 8 looks is reported, not read.**
+3. A stratum **clears** iff `worse = 0` in it.
+4. **The adopted band is the higher of S1, S2 that clears.** If **S1
+   does not clear, GATE W is NO-GO** — the mechanism is not better than
+   the incumbent even where the two disagree least, and nothing weaker
+   will be.
+5. **S3 and S4 are read for calibration only.** If either clears, that
+   is recorded as evidence the band or the cram floor is conservative.
+   **It does not widen either.** A band fitted to the looks is the
+   forbidden move; the band comes from step 3's trough or not at all.
+6. **S5 is a veto, not a stratum.** If `worse > 0` on the ensemble
+   songs, refinement is **refused on every song in the fixed list
+   above**, whatever S1 and S2 did. This is the S-C failure mode and
+   windowing does not remove it.
+7. **S6 reads independently.** The zero-model form clears iff
+   `worse = 0` in it, and **it can ship when the CTC form does not** —
+   different mechanism, no second model, no new failure mode.
+8. Anything these rules do not cover is a **STOP → Ken**.
+
+#### W-6. What ships if a band clears
+
+Refinement applies to a line iff **all** hold: source is `transcribe`
+or `ytasr`; it is not a fill, `interp` or vetoed line; its per-line
+median |Δ| is at or under the adopted band; it carries no crammed
+token; its song is not vetoed by rule 6. Then:
+
+- **Interior boundaries only.** Token 0's start and the last token's
+  end keep their snapped values, untouched.
+- **OOV runs keep their incumbent timing**, and the boundaries at a run's
+  edges are not refined — CTC has no opinion on a token it never
+  received. Non-OOV tokens either side still refine at their other
+  boundaries. This is GATE C's C-3 constraint degrading gracefully:
+  a numeral interpolates as it does today, hangul simply skips.
+- **Monotonicity is a per-line refusal.** If the refined boundaries are
+  not non-decreasing, or any refined token would fall below
+  `onset_snap.MIN_WORD_DUR_S`, the whole line keeps its incumbent
+  timing. Detect per token, act per line.
+- **`source` is untouched.** Provenance goes in its own field on the
+  line object and in `joint_stats.interior_refine`. `source` encodes
+  selection and the evidence veto keys on it.
+
+#### W-7. Price, stated before the spend, not discovered after
+
+- Rendered word timing changes, so by the **v8 precedent this is a
+  schema milestone bump and a full-library regen.** That is the real
+  cost of this phase and it is owed whichever form ships.
+- MMS_FA becomes a production dependency co-resident with the whisper
+  worker (**CTC form only** — the zero-model form adds no model, which
+  is exactly why W-1b prices it first).
+- The capture gains `joint_stats.interior_refine`: per-song counts and
+  per-line median |Δ|, **not** per-word timings. Enough to audit the
+  pass without inflating every bundle. `output_line_timings` keeps its
+  present shape.
+
+#### W-8. Out of scope for GATE W
+
+- **Endpoint refinement.** The snap owns line edges and this pass never
+  touches them. Were it ever revisited, its ceiling is measurable
+  against the 16 uploader SRTs — recorded, not commissioned.
+- **Align-won lines' interpolated runs.** Counted at step 1, not
+  refined. A later pass can price them; this one stays narrow, which is
+  the GATE G lesson.
+- **Anything touching selection.** If a refinement changes which line
+  renders, that is a bug and not a result.
+- **GATE J1 is not re-opened.** This runs strictly after selection,
+  inside a window already decided on audio corroboration, and a slice
+  cannot reach audio outside its window.
+
+#### W-9. Order, stops, and who reads what
+
+1 → **STOP** → 2 → **STOP** → 3 → **STOP** → 4 → **GATE W**.
+
+Steps 1 and 3 are unattended; steps 2 and 4 need Ken at the screen and
+are the scheduled items. Each step's tables go to the Results log with
+**no verdict** (executor discipline, `PROGRAM.md` §"Model switching").
+After each step Opus reads **that step's declared kill rule only** —
+arithmetic against a pre-registered bar, not a verdict on the phase.
+**GATE W is read once, after step 4**, by Opus, and Ken rules on it.
 
 ## Out of scope
 
@@ -2947,3 +3294,82 @@ worthless in general. It is evidence that on this corpus the per-gap
 gate produced almost no new fills *and* no better placement of the
 existing ones — so a re-attempt must argue it would do better than a
 wash, not merely that the bar was wrong.
+
+### 2026-09-14 — Phase 6 design pass (Opus) — pre-registration written, gate letter GATE W assigned; nothing run
+
+Ken asked for the design. No probe ran, no measurement was taken, no
+number below came from data — the design block sits in Phase 6 above
+and this entry records only what was verified against shipped code and
+the two decisions that changed the assessment's probe order.
+
+**Verified against the tree at `joint_catchall_refit`** (read-only; all
+claims the design leans on, checked rather than inherited):
+
+| Claim | Where | Holds |
+| --- | --- | --- |
+| Seam is veto → snap → **here** → fill → generate | `lyric_align.py:246-256` | yes |
+| `env` already decoded and shared at that seam | same | yes — new cost is the emission only |
+| `apply_fills` runs after the snap | `lyric_align.py:256-257` | yes — fills are never snapped or refined |
+| `align_ranges` computed for every line, not only align candidates | `joint_match.py:167` | yes — the zero-model form has reach |
+| `_range_agreement` returns 1.0 on a collapsed reference instant | `joint_match.py:657-677` | yes |
+| the pace guard that distinguishes it | `_MIN_ALIGN_PACE_S = 0.06`, `joint_match.py:88` | yes |
+| `selected_source` is per line id, values align/transcribe/ytasr/interp | bundle `joint_stats` | yes, length `n_lines` |
+| `output_line_timings` carries line start/end/n_words only | `alignment_capture.py:206-223` | yes |
+| `make_slice_align` caches one emission per song, slices by frame | `scripts/sb_ctc_adapter.py:51-98` | yes |
+| emission cache under `get_temp_directory()` | `phase1b_score_oracle.py:47-48` | yes |
+| `MIN_WORD_DUR_S` for the monotonicity refusal | `onset_snap.py:59` = 0.1 | yes |
+
+**Cohort, counted from disk, no measurement:** `alignment_debug/` holds
+34 captures — **18 joint-matcher** (their `joint_stats` carries
+`pass1_line_timings`) and **16 cue-route**. That is the split the
+assessment assumed and it reproduces. All 34 songs have a vocal stem;
+24 also have a dereverb stem. Eleven songs carry a `.en.asr.json3`.
+
+**Two corrections to the assessment's probe order, both load-bearing.**
+
+1. **Step 3 arm (b) must replay the edge snap.** The existing replay
+   harness (`scripts/replay_ytasr_third_source.py`) deliberately does
+   *not* — its own docstring records that it never touches the vocal
+   stem, so the bundle's post-snap `output_line_timings` is a sanity
+   column only. But this phase is pre-registered to run *after* the
+   snap and to use the snapped span as its constraint window, so a
+   snap-free replay hands CTC the wrong window on exactly the lines the
+   snap moved (21–32% of this population). Step 3 already needs the
+   stem for the emission, so the snap replays there at no extra decode.
+   With it comes a **fidelity guard**: the replay must reproduce the
+   recorded `output_line_timings` exactly on every line of all 18 songs
+   before any CTC runs, else STOP. GATE G was read on a harness that
+   reproduced only part of its own reference and the discrepancy
+   surfaced at the read rather than at the run.
+2. **Step 2 gains control looks.** The assessment's 20 looks at current
+   output cannot distinguish "these interiors are bad" from "all
+   interiors are a bit loose," and that distinction decides whether the
+   phase is aimed at anything. Eight unlabelled align-won lines join
+   the sitting (28 looks), with a declared STOP if they score as badly
+   as the target population.
+
+**One thing S-C does not give this phase.** Its four eyeball songs
+(Mirrors, ZAYN's Whole New World, Part of Your World, Bye Bye Bye) are
+all cue-route songs and **none is in the joint 18**, so the
+overlapping-voices warning carries as a statement about the mechanism
+and not as a song list. The ensemble stratum's list is therefore fixed
+in the design from this cohort on a stated rule (sustained simultaneous
+voices), with the two considered-and-excluded songs named so the list
+reads as a rule rather than a fit.
+
+**Also fixed in the design, and recorded here because they are the
+places a later reader will ask "who chose that":** τ = 0.5 for whisper
+agreement; the 15% population floor that can stop the phase at step 1
+before any GPU spend; the 70% / 10% zero-model thresholds; the cram
+floor at 0.05 s; the bimodality test (KDE on log|Δ|, Scott bandwidth,
+trough at ≤ 0.6× the lower flanking mode with ≥ 15% mass each side);
+`seed = 20260914`; the strata, the look counts and the read-off rules.
+All pre-registered, none of them fitted to anything — no data exists.
+
+**Explicitly not done here:** step 1 was **not** run, though it is
+GPU-free and its inputs are all present. Running it during the design
+pass would have set its kill thresholds with the answer in view, which
+is the move this program forbids. The executor runs it.
+
+**Next:** Sonnet 5 implements and runs step 1, reports the table, and
+stops. Opus reads W-1a/b/c only.

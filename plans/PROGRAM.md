@@ -243,6 +243,19 @@ a new mechanism on rung 2b rather than rung 1 returning. Detail in
   one residual uncertainty, so **no Fable round is owed on this gate**.
   Read off by Opus, **ratified by Ken**; full entry in
   `route-no-timing.md`.
+- **GATE W** — **OPEN, designed 2026-09-14 (Opus), nothing run.**
+  Phase 6's gate: does refining word boundaries *inside* an already
+  placed line beat what ships today. Four pre-registered steps, each
+  with a kill rule, and **the two cheapest come first on purpose** —
+  step 1 prices a zero-model competitor already sitting in the
+  bundles and can retire the second model outright, step 2 asks Ken
+  whether the defect is visible at all and can end the phase before
+  a GPU runs. What it cannot do: change which line renders, touch
+  line edges (the snap owns those, Ken 2026-09-10), or re-open GATE
+  J1 — this runs strictly after selection. Price if it ships,
+  stated before the spend: a milestone bump and a full-library
+  regen, since rendered word timing changes. Design in
+  `route-no-timing.md` Phase 6.
 - **R-3** — SRT-first *stands*, but Appendix A flags that a later ruling
   could reorder precedence 1 against 2.
 - ~~**GATE T**~~ — **READ 2026-09-10. The `alpha`/`beta` knobs stay at
@@ -342,10 +355,14 @@ per-song gate).
 **post-selection timing refinement** on spans the matcher has already
 placed — a different question, because abstention is a selection
 problem and a slice cannot smear outside its window. That form is
-`route-no-timing.md` Phase 6, design owed. Citing J1 against it is a
-misreading; the live objections to it are S-C's within-window ensemble
-failure, the absence of an interior reference, and a zero-model
-competitor already in the bundles.
+`route-no-timing.md` Phase 6, **designed 2026-09-14 and gated as
+GATE W**. Citing J1 against it is a misreading; the live objections to
+it are S-C's within-window ensemble failure, the absence of an interior
+reference, and a zero-model competitor already in the bundles — and
+the design answers each rather than arguing past it: the ensemble
+songs are a veto stratum, the eye is named as the only interior
+reference there is, and the zero-model competitor is priced at step 1
+where it can retire the second model before a GPU runs.
 
 ## Which file owns what
 
@@ -356,7 +373,7 @@ competitor already in the bundles.
 | `route-word-timing.md` | rung 1 (**CLOSED 2026-09-04**); GATE R, R-1 ruling, M1-M5, the R-4 closure |
 | `route-srt.md` | rung 2a; the shipped cue-align route, S-C |
 | `route-line-timing.md` | rung 2b (**CLOSED 2026-09-08** — S-1 withdrawn); GATE S scaffold arms, M6, M7, the fallback; GATE L re-homed to rung 3 |
-| `route-no-timing.md` | rung 3 — **the live build lane**; the joint catch-all refit, GATE P/J1/J2/T, Phase 5 + **GATE G** (CLOSED 2026-09-11, NO-GO — fill not widened), **Phase 6 (head of the queue, design owed)**, GATE L |
+| `route-no-timing.md` | rung 3 — **the live build lane**; the joint catch-all refit, GATE P/J1/J2/T, Phase 5 + **GATE G** (CLOSED 2026-09-11, NO-GO — fill not widened), **Phase 6 + GATE W (DESIGNED 2026-09-14, head of the queue — nothing run yet)**, GATE L |
 | `shared-aligner-form.md` | GATE C, GATE O, Phase 0 harness, ruling-provenance audit |
 | `ctc-sync-engine.md` | build phases + locked appendices; each licensed by a GATE above |
 | `completed/` | closed plans, kept for their Results logs |
@@ -559,6 +576,11 @@ Order — cheapest and highest overturn-risk first:
    recommendation that the next spend go to the unplaced population
    **was tried and did not land** — the ~150 sheet lines that never get
    words are still unreached, and no mechanism on file reaches them.
+   **What is live instead is Phase 6 → GATE W** (designed
+   2026-09-14): interior word boundaries on lines already placed.
+   Polish next to the unreached lines, and the design says so — it
+   is sequenced here because it is what there is, not because it is
+   where the value is.
 6. ~~**S-E**~~ — **not run.** This is the *line* route's Phase 3
    optional arm, not the joint plan's Phase 3, and it closed with that
    route: `route-line-timing.md`'s status block records "S-E is not
@@ -655,8 +677,10 @@ how the completed work was judged, not live policy.
 - **Design** — Opus. The 2026-07-18 design (this document and the build
   plan's Appendices A–E) is locked, with every formerly lock-at-GATE
   item converted to a pre-registered decision procedure, and Opus owns
-  design work from here — the live open item being **Phase 6** (Phase
-  5's per-gap gate closed at GATE G 2026-09-11). At each GATE the judge
+  design work from here. **Phase 6 was designed 2026-09-14 and gated
+  as GATE W**, so no design item is open; the live work is execution
+  — Sonnet 5 runs GATE W's step 1 and stops. Phase 5's per-gap gate
+  closed at GATE G 2026-09-11. At each GATE the judge
   *executes* the relevant procedure verbatim and records the resulting
   constants; no model on any tier invents a threshold or extends a
   procedure — an uncovered case is a STOP → Ken.
