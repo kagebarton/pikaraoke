@@ -3526,3 +3526,189 @@ is the move this program forbids. The executor runs it.
 
 **Next:** Sonnet 5 implements and runs step 1, reports the table, and
 stops. Opus reads W-1a/b/c only.
+
+### 2026-09-14 — Phase 7 executor run (Sonnet) — unplaced-population tables, GATE P validation case failed: STOP → Ken
+
+Ran the probe designed above (§"Phase 7", this file) over the 18
+joint-matcher captures in `D:/shared/pikaraoke-songs/alignment_debug/`
+(bundles whose `joint_stats` carries `pass1_line_timings`; 16 cue-route
+captures skipped). No GPU, no audio, no inference: the driver replays
+only `pikaraoke.lib.candidate_match.find_candidates` /
+`find_anchor_candidates` over each bundle's own captured
+`transcribe_words` and parsed ytasr caption words, at the bundle's own
+recorded `joint_max_edit_ratio` for whisper and the current shipped
+`ytasr.CANDIDATE_MAX_EDIT_RATIO` (0.45) for captions — never unified,
+per the design. Population (unplaced lines) is read directly from each
+bundle's own captured `selected_source` / `absent_line_ids`, not
+recomputed. Driver + tables generator live in the session scratchpad
+(`phase7_run.py`, `phase7_tables.py`), not committed.
+
+**Three cross-checks the design didn't ask for but that came free, all
+consistent.** Eight of the 18 songs carry no adopted caption, matching
+the design's own pre-stated count exactly (§"The population" above).
+Pooled `n_lines` across the 18 is 610 + 400 = 1010, matching Phase 4's
+own denominator ("211/1010 lines," 2026-09-01 entry above) exactly. And
+the whisper-side replay (`n_main_candidates` / `n_anchor_candidates`) is
+asserted equal to each bundle's own recorded count in code, hard —
+the run completed with no assertion failures across all 18 songs, so
+this replay is the shipped scan, not an approximation. (The ytasr-side
+candidate count is not cross-checked the same way: GATE T raised
+`ytasr.CANDIDATE_MAX_EDIT_RATIO` 0.34→0.45 after these bundles were
+captured, and this probe is pinned to the current constant per the
+design's own "shipped code" framing — a divergence from each bundle's
+recorded `n_ytasr_candidates` is expected and does not affect per-line
+set membership, which is all the classification uses.)
+
+**GATE P validation case: fails by the letter of the pre-registered
+rule. STOP, not resolved here.** Table 5 below is the one place the
+design pre-registered a check against something already established:
+"If those blocks do not come back predominantly U-1, the method is
+wrong and that is a STOP → Ken." The raw result:
+
+- Bloodstream (lids 44–50): 0/7 U-1. Six lines U-2, one U-3
+  (cross-attraction).
+- HUNTR/X (lids 40–52): 1/11 U-1 (two of the thirteen named lids are
+  actually placed, not in the population at all). Ten of the remaining
+  eleven are U-3 (cross-attraction).
+
+That is the opposite of "predominantly U-1." Before this is read as a
+plain failure, the GATE P read-off already on record above (2026-09-01
+entry, "GATE P read-off (Fable)") is worth reading against it: that
+entry's own diagnosis of these exact two blocks is repeat
+cross-attraction, not silence — "Bloodstream lines repeatedly at
+133.84/160.39/222.92 s," "HUNTR/X lines 33/35/37 all at 54.54 s," and
+explicitly: "Their unplaced blocks (Bloodstream 44–50, HUNTR/X 40–52)
+are sheets that do not match the audio version — the lever there is
+upstream lyric-version/length matching per the repeat-pileup diagnosis,
+not DP ordering." This phase's own classification text names the
+identical mechanism for its U-3-cross sub-split: "cross-attraction /
+repeat pile-up, already diagnosed at GATE P." Both entries are naming
+the same phenomenon on the same two songs.
+
+**What this executor is not doing:** deciding whether the pre-registered
+validation rule's premise (that a lyric-version-drift block should read
+as U-1) was correct, deciding whether U-3-cross should count as a pass
+for a repeat-heavy drift block, or amending the rule. That is exactly
+the "looks wrong → STOP, not an amendment" case from this run's own
+brief. The five tables below are reported as designed regardless of
+this outcome — Table 5 carries the full per-line detail behind both
+counts above.
+
+#### Table 1 — per song
+
+| song | n_lines | n_placed | n_unplaced | ytasr | U-0 | U-1@shipped | U-1@0.6 | U-2 | U-3(cross) | U-3(own) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 'Defying Gravity' - Wicked 20th Anniversary Edition _ WICKED the Musical---AoON1CyhQAM | 89 | 51 | 38 | Y | 0 | 31 | 36 | 7 | 0 | 0 |
+| 'Free' _ Official Lyric Video _ Sony Animation---fjOeJssZX_Q | 41 | 40 | 1 | N | 0 | 0 | 0 | n/a (no ytasr) | 1 | 0 |
+| 'Popular' - Wicked 20th Anniversary Edition _ WICKED the Musical---22QYya-LGDY | 62 | 53 | 9 | Y | 0 | 5 | 7 | 2 | 2 | 0 |
+| Beauty and the Beast (1991) - Be Our Guest [UHD]---MiraOCjABn8 | 77 | 77 | 0 | Y | 0 | 0 | 0 | 0 | 0 | 0 |
+| Beauty and the Beast (1991) - Belle [UHD]---otxTf5hZ0Yw | 110 | 102 | 8 | Y | 0 | 7 | 7 | 1 | 0 | 0 |
+| Ed Sheeran - Best Part Of Me (feat. YEBBA) (Live At Abbey Road)---wGyh_53ecgg | 38 | 37 | 1 | Y | 0 | 1 | 1 | 0 | 0 | 0 |
+| Ed Sheeran & Rudimental­ - Bloodstream [Official Music Video­ YTMAs]---Orq_75kFi8I | 74 | 53 | 21 | Y | 0 | 1 | 2 | 12 | 8 | 0 |
+| HUNTR_X 'This Is What It Sounds Like' (Music Video) _ KPop Demon Hunters _ Netflix Philippines---hI-y5anGcUA | 53 | 35 | 18 | N | 0 | 4 | 5 | n/a (no ytasr) | 14 | 0 |
+| Jessie J - Domino (Official Video)---UJtB55MaoD0 | 67 | 63 | 4 | N | 0 | 3 | 3 | n/a (no ytasr) | 1 | 0 |
+| Josh Gad - In Summer (From 'Frozen'_Sing-Along)---9tcaM06eGrY | 31 | 29 | 2 | N | 0 | 2 | 2 | n/a (no ytasr) | 0 | 0 |
+| Mulan _ I'll Make a Man Out of You _ @disneykids---vGfJeW_CcFY | 47 | 36 | 11 | Y | 0 | 2 | 2 | 0 | 9 | 0 |
+| NSYNC - Paradise | 65 | 53 | 12 | N | 0 | 7 | 8 | n/a (no ytasr) | 4 | 1 |
+| Pocahontas - Colors of the Wind (Blu-ray 1080p HD)---9ThO76peOw0 | 37 | 37 | 0 | Y | 0 | 0 | 0 | 0 | 0 | 0 |
+| Seasons of Love (HD)---UvyHuse6buY | 34 | 27 | 7 | N | 0 | 1 | 3 | n/a (no ytasr) | 6 | 0 |
+| Stay Gold (Official Music Video) from The Outsiders – A New Broadway Musical.---XzbHPqULtdA | 38 | 38 | 0 | N | 0 | 0 | 0 | n/a (no ytasr) | 0 | 0 |
+| The Lion King - Hakuna Matata Music Video I 4K Ultra HD---fwLxDUQBdEg | 40 | 33 | 7 | Y | 0 | 2 | 2 | 0 | 5 | 0 |
+| The Next Ten Minutes Lyrics---0j8kL24ph8U | 71 | 67 | 4 | N | 0 | 1 | 1 | n/a (no ytasr) | 3 | 0 |
+| Wicked - For Good  (2025) 4K - The Girl in the Bubble (7_8) _ Movieclips---wzSeub9W4QQ | 36 | 29 | 7 | Y | 0 | 3 | 2 | 2 | 2 | 0 |
+
+#### Table 2 — pooled corpus totals
+
+| group | n_songs | n_lines | n_unplaced | U-0 | U-1@shipped | U-1@0.6 | U-2 | U-3(cross) | U-3(own) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ytasr songs | 10 | 610 | 102 | 0 | 52 | 59 | 24 | 26 | 0 |
+| no-ytasr songs | 8 | 400 | 48 | 0 | 18 | 22 | n/a (structural: no second source) | 29 | 1 |
+
+#### Table 3 — unplaced run-length distribution, per song
+
+| song | n_unplaced | run-length histogram (len x count) | lines in runs>=3 | lines in runs 1-2 |
+| --- | --- | --- | --- | --- |
+| 'Defying Gravity' - Wicked 20th Anniversary Edition _ WICKED the Musical---AoON1CyhQAM | 38 | 1x1, 2x2, 3x1, 9x1, 21x1 | 33 | 5 |
+| 'Free' _ Official Lyric Video _ Sony Animation---fjOeJssZX_Q | 1 | 1x1 | 0 | 1 |
+| 'Popular' - Wicked 20th Anniversary Edition _ WICKED the Musical---22QYya-LGDY | 9 | 1x2, 3x1, 4x1 | 7 | 2 |
+| Beauty and the Beast (1991) - Be Our Guest [UHD]---MiraOCjABn8 | 0 | - | 0 | 0 |
+| Beauty and the Beast (1991) - Belle [UHD]---otxTf5hZ0Yw | 8 | 1x1, 2x2, 3x1 | 3 | 5 |
+| Ed Sheeran - Best Part Of Me (feat. YEBBA) (Live At Abbey Road)---wGyh_53ecgg | 1 | 1x1 | 0 | 1 |
+| Ed Sheeran & Rudimental­ - Bloodstream [Official Music Video­ YTMAs]---Orq_75kFi8I | 21 | 1x5, 4x2, 8x1 | 16 | 5 |
+| HUNTR_X 'This Is What It Sounds Like' (Music Video) _ KPop Demon Hunters _ Netflix Philippines---hI-y5anGcUA | 18 | 1x1, 7x1, 10x1 | 17 | 1 |
+| Jessie J - Domino (Official Video)---UJtB55MaoD0 | 4 | 1x4 | 0 | 4 |
+| Josh Gad - In Summer (From 'Frozen'_Sing-Along)---9tcaM06eGrY | 2 | 1x2 | 0 | 2 |
+| Mulan _ I'll Make a Man Out of You _ @disneykids---vGfJeW_CcFY | 11 | 1x8, 3x1 | 3 | 8 |
+| NSYNC - Paradise | 12 | 1x6, 2x3 | 0 | 12 |
+| Pocahontas - Colors of the Wind (Blu-ray 1080p HD)---9ThO76peOw0 | 0 | - | 0 | 0 |
+| Seasons of Love (HD)---UvyHuse6buY | 7 | 1x1, 6x1 | 6 | 1 |
+| Stay Gold (Official Music Video) from The Outsiders – A New Broadway Musical.---XzbHPqULtdA | 0 | - | 0 | 0 |
+| The Lion King - Hakuna Matata Music Video I 4K Ultra HD---fwLxDUQBdEg | 7 | 1x1, 6x1 | 6 | 1 |
+| The Next Ten Minutes Lyrics---0j8kL24ph8U | 4 | 1x1, 3x1 | 3 | 1 |
+| Wicked - For Good  (2025) 4K - The Girl in the Bubble (7_8) _ Movieclips---wzSeub9W4QQ | 7 | 1x5, 2x1 | 0 | 7 |
+
+#### Table 4 — cross-tab: U-class × (in a 3+ run / not)
+
+| U-class | in run of 3+ | not in run of 3+ |
+| --- | --- | --- |
+| U-1 | 41 | 29 |
+| U-2 | 17 | 7 |
+| U-3-cross | 36 | 19 |
+| U-3-own | 0 | 1 |
+
+#### Table 5 — the known cases (GATE P validation)
+
+**Ed Sheeran & Rudimental­ - Bloodstream [Official Music Video­ YTMAs]---Orq_75kFi8I** — named lids [44, 45, 46, 47, 48, 49, 50]
+
+| line_id | class | sub |
+| --- | --- | --- |
+| 44 | U-2 | - |
+| 45 | U-2 | - |
+| 46 | U-2 | - |
+| 47 | U-2 | - |
+| 48 | U-2 | - |
+| 49 | U-2 | - |
+| 50 | U-3 | cross_attraction |
+
+0/7 named lines that are in the unplaced population classify U-1 (7 named total, 0 of them placed anyway).
+
+**HUNTR_X 'This Is What It Sounds Like' (Music Video) _ KPop Demon Hunters _ Netflix Philippines---hI-y5anGcUA** — named lids [40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52]
+
+| line_id | class | sub |
+| --- | --- | --- |
+| 40 | placed (not in unplaced population) | - |
+| 41 | U-3 | cross_attraction |
+| 42 | placed (not in unplaced population) | - |
+| 43 | U-3 | cross_attraction |
+| 44 | U-3 | cross_attraction |
+| 45 | U-3 | cross_attraction |
+| 46 | U-3 | cross_attraction |
+| 47 | U-3 | cross_attraction |
+| 48 | U-3 | cross_attraction |
+| 49 | U-3 | cross_attraction |
+| 50 | U-1 | - |
+| 51 | U-3 | cross_attraction |
+| 52 | U-3 | cross_attraction |
+
+1/11 named lines that are in the unplaced population classify U-1 (13 named total, 2 of them placed anyway).
+
+**Reading notes, mechanical, ahead of the read-off:**
+
+- U-0 (line tokenises empty) is 0 across every song in this run — the
+  "not a miss" caveat doesn't change any total here.
+- U-2 is structurally impossible on the 8 no-ytasr songs (shown `n/a`),
+  not merely absent; their U-1/U-3 counts are pooled in a separate row
+  (Table 2) rather than folded into the two-source totals, per the
+  design.
+- The sensitivity column (`U-1@0.6`) reruns both the whisper and ytasr
+  scans at a looser 0.6 edit ratio; it is reported, not read as a
+  range — it exists only to show whether the U-1 count is fragile to
+  that one threshold.
+
+**Artifacts:** driver, tables generator and raw per-song JSON in the
+session scratchpad, not committed: `phase7_run.py`, `phase7_tables.py`,
+`phase7_out/results.json`, `phase7_out/tables.md`, `phase7_out/run.log`.
+
+**Next:** stop. Ask Ken to `/model` to Opus for the read-off — starting
+with the GATE P validation question above, which this run's own brief
+routes to Ken/Opus, not the executor.
