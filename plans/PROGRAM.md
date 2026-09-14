@@ -373,7 +373,7 @@ where it can retire the second model before a GPU runs.
 | `route-word-timing.md` | rung 1 (**CLOSED 2026-09-04**); GATE R, R-1 ruling, M1-M5, the R-4 closure |
 | `route-srt.md` | rung 2a; the shipped cue-align route, S-C |
 | `route-line-timing.md` | rung 2b (**CLOSED 2026-09-08** — S-1 withdrawn); GATE S scaffold arms, M6, M7, the fallback; GATE L re-homed to rung 3 |
-| `route-no-timing.md` | rung 3 — **the live build lane**; the joint catch-all refit, GATE P/J1/J2/T, Phase 5 + **GATE G** (CLOSED 2026-09-11, NO-GO — fill not widened), **Phase 6 + GATE W (DESIGNED 2026-09-14, head of the queue — nothing run yet)**, GATE L |
+| `route-no-timing.md` | rung 3 — **the live build lane**; the joint catch-all refit, GATE P/J1/J2/T, Phase 5 + **GATE G** (CLOSED 2026-09-11, NO-GO — fill not widened), **Phase 7 (DESIGNED 2026-09-14, runs first — stats only, no gate)**, **Phase 6 + GATE W (DESIGNED 2026-09-14, nothing run yet)**, GATE L |
 | `shared-aligner-form.md` | GATE C, GATE O, Phase 0 harness, ruling-provenance audit |
 | `ctc-sync-engine.md` | build phases + locked appendices; each licensed by a GATE above |
 | `completed/` | closed plans, kept for their Results logs |
@@ -576,11 +576,21 @@ Order — cheapest and highest overturn-risk first:
    recommendation that the next spend go to the unplaced population
    **was tried and did not land** — the ~150 sheet lines that never get
    words are still unreached, and no mechanism on file reaches them.
-   **What is live instead is Phase 6 → GATE W** (designed
-   2026-09-14): interior word boundaries on lines already placed.
-   Polish next to the unreached lines, and the design says so — it
-   is sequenced here because it is what there is, not because it is
-   where the value is.
+   **Two things are live, in this order (Ken, 2026-09-14).**
+   **Phase 7 first** — the unplaced population, diagnosed. Stats
+   only, no gate, no GPU: it reads out a per-line fact the matcher
+   already computes and discards (does the audio's own
+   transcription contain this line's words *anywhere*) and splits
+   the unreached lines into unreachable-because-not-sung versus
+   genuinely missed. Twice now the program has called this
+   population the next target; Phase 5 attempted it and failed, so
+   before a second design pass goes there, this prices it. **Its
+   answer routes that pass and the routing is Ken's, not a gate.**
+   **Then Phase 6 → GATE W** (designed 2026-09-14): interior word
+   boundaries on lines already placed. Polish next to the unreached
+   lines, and its design says so — it is sequenced here because it
+   is what there is, not because it is where the value is. Phase 7
+   is what tests whether that stays true.
 6. ~~**S-E**~~ — **not run.** This is the *line* route's Phase 3
    optional arm, not the joint plan's Phase 3, and it closed with that
    route: `route-line-timing.md`'s status block records "S-E is not

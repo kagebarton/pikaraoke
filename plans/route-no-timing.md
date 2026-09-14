@@ -30,8 +30,15 @@ Model: Claude Sonnet 5 (executor). Plan drafted by Claude Fable 5.
 > each with a kill rule that can end the phase — **the first two are
 > cheap and either can stop it before a GPU runs**, which is
 > deliberate. Nothing is built or run yet: **Sonnet 5 implements and
-> runs step 1, reports the table, and stops.** Then GATE L when the
-> Mandarin corpus exists. Sequencing lives in `plans/PROGRAM.md`.
+> runs step 1, reports the table, and stops** — **but not first.**
+> **Phase 7 goes first (Ken, 2026-09-14): the unplaced population,
+> diagnosed.** Stats only, no gate, no GPU, bundles only. The program
+> has twice called the sheet lines that never render the place the
+> remaining quality sits, and Phase 5 attempted them and failed; before
+> a second design pass is spent there, this asks how much of that
+> population is reachable at all. Its answer routes the next design
+> pass and that routing is Ken's. Then GATE W step 1, then GATE L when
+> the Mandarin corpus exists. Sequencing lives in `plans/PROGRAM.md`.
 
 ## Context
 
@@ -1329,6 +1336,152 @@ are the scheduled items. Each step's tables go to the Results log with
 After each step Opus reads **that step's declared kill rule only** —
 arithmetic against a pre-registered bar, not a verdict on the phase.
 **GATE W is read once, after step 4**, by Opus, and Ken rules on it.
+
+## Phase 7 — the unplaced population, diagnosed (designed 2026-09-14; stats only, no gate)
+
+Added 2026-09-14 on Ken's call, and **sequenced ahead of Phase 6's
+first step.** The program has now said twice that the sheet lines which
+never render are where the remaining quality sits — Phase 3's read-off
+said it, and GATE T's entry recorded it as the executor's
+recommendation on where the next design pass should go. One attempt was
+made at them (Phase 5) and it failed. Before a second design pass is
+spent on that population — Opus's or Fable's — this probe asks the
+question nobody has asked: **how much of it is reachable at all.**
+
+**Why this is not a gate.** Nothing ships from it, no threshold is
+under test, and no mechanism is being accepted or refused. Its output
+routes the *next design pass*, and that routing is Ken's call. The
+executor reports tables; Opus reads them; Ken decides where the spend
+goes. No gate letter is assigned and none should be.
+
+**Why it is worth running before GATE W.** GATE W refines lines that
+are already placed — polish, by its own design's admission. This probe
+prices the population that is not placed at all. If that population
+turns out to be mostly unreachable, the program stops treating it as
+the obvious next target and Phase 6 is simply the work that is left.
+If a real share of it is reachable, there is a live design question
+that has never been posed, and it outranks polish. Either answer
+changes what the next pass is spent on, which is why it comes first.
+
+### The discriminator — shipped code, no invented metric
+
+The joint matcher already computes what this probe needs and then
+throws it away. Before the DP runs
+(`joint_match.match_words_to_lines_joint_with_stats`) it scans the
+audio's own transcription for every sheet line:
+
+- `find_candidates(transcribe_norms, line_norms, max_edit_ratio=<the
+  run's `joint_max_edit_ratio`>)` — the main scan over whisper's
+  unconstrained transcription of the whole song.
+- `find_anchor_candidates(...)` over exactly the lines that scan left
+  empty — the relaxed fallback, for lines whisper heard too badly for
+  the edit-ratio threshold.
+- on songs carrying a ytasr track, `find_candidates(ytasr_norms,
+  line_norms, max_edit_ratio=ytasr.CANDIDATE_MAX_EDIT_RATIO)` — a
+  **second, independent transcription** of the same audio, at ytasr's
+  own stricter ratio and **not** the joint knob. Do not unify the two
+  ratios; the ASR text is a ytasr candidate's only evidence for
+  existing. The bundle stores only a *pointer* to the caption
+  (`lyrics.ytasr.asr_file`), not the words — load and parse them with
+  the shipped `ytasr.parse_json3` / `normalize_words`, exactly as
+  `scripts/replay_ytasr_third_source.py` already does.
+
+The matcher keeps only the aggregate counts. **The per-line fact — did
+any scan find this line's words anywhere in the audio — is exactly the
+question "is this line sung," and it is already being answered and
+discarded.** This probe reads it out. That is the whole mechanism: no
+new metric, no threshold of mine, nothing to validate.
+
+### The population
+
+Every sheet line the matcher did not place: `selected_source[line_id]
+== "interp"`, plus anything in `absent_line_ids`. Both are in
+`joint_stats`. Cohort: the **18 joint-matcher captures** (the ones
+whose `joint_stats` carries `pass1_line_timings`; the other 16 in
+`alignment_debug/` are cue-route and not this population).
+
+### Classification, per unplaced line
+
+- **U-1 — no candidate anywhere.** Neither the main scan nor the
+  relaxed anchor fallback finds the line in whisper's transcription,
+  **and** on ytasr-carrying songs the ytasr scan finds nothing either.
+  Two independent transcriptions of the audio contain nothing
+  resembling this line, anywhere in the song. **Read as: not sung —
+  unreachable by any aligner, on any source, ever.** A mechanism cannot
+  place a verse the recording does not contain.
+- **U-2 — one source only.** Candidates exist in one transcription and
+  not the other. **Read as: a transcription failure, not an absence.**
+  Reachable, and reachable with sources already on the machine.
+- **U-3 — candidate lost.** Candidates exist in both (or in the only
+  transcription available) and the line still went unplaced: the DP had
+  something and dropped it. **Reachable; the open question is why.**
+  Sub-split, again from shipped structure — does the line's
+  highest-scoring candidate window overlap a window the DP *did*
+  select (cross-attraction / repeat pile-up, already diagnosed at
+  GATE P) or not (lost on its own score)?
+- **U-0 — no tokens.** A sheet line that tokenises empty. Bookkeeping
+  only; it is not a miss and must not be counted as one.
+
+On songs with **no** ytasr track, U-1 and U-2 cannot be separated by
+two sources. Those lines are classed on whisper alone and **reported in
+their own column**, never pooled into the two-source counts. Eight of
+the eighteen carry no adopted caption and are in this state; saying so
+in the table is the difference between a finding and an artifact.
+
+### Second discriminator, independent: block structure
+
+For each song, the run-length distribution of consecutive unplaced line
+ids. **Runs of 3+ are the version-drift signature** — a cut or added
+section — and isolated singles are per-line misses. Reported *alongside*
+the classification and never merged into it. If the two discriminators
+agree, the read is solid. **If they disagree, that disagreement is the
+finding** and it goes to Ken rather than being resolved by the
+executor.
+
+### Tables
+
+1. **Per song:** `n_lines`, `n_placed`, `n_unplaced`, U-0/U-1/U-2/U-3
+   counts, the U-3 sub-split, and a `ytasr` yes/no column.
+2. **Pooled corpus totals** for the same, with the no-ytasr songs
+   broken out separately as above.
+3. **Per song:** the unplaced run-length distribution, and unplaced
+   lines sitting in a run of 3+ versus runs of 1–2.
+4. **Cross-tab:** U-class × (in a 3+ run / not).
+5. **The known cases, broken out.** GATE P's read named Bloodstream
+   (lids 44–50) and HUNTR/X (lids 40–52) as sheets that do not match
+   the audio version. Report those two songs' classifications
+   separately, so the known answer checks the method instead of being
+   assumed by it. **If those blocks do not come back predominantly
+   U-1, the method is wrong and that is a STOP → Ken** — it is the one
+   place this probe can be validated against something already
+   established.
+
+### Sensitivity
+
+U-1 is the load-bearing class and its size must not rest on one
+threshold. Report it at the run's own `joint_max_edit_ratio` **and** at
+a looser **0.6**, as two columns. Declared now, before any data. It is
+**reported, not read as a range** — the classification is the shipped
+setting's; the second column exists so a reader can see whether the
+answer is fragile.
+
+### Discipline
+
+No GPU, no audio, no inference — bundles only. Driver lives in the
+session scratchpad and is **not committed**. No production file is
+touched and nothing is regenerated. The executor reports the tables and
+**stops**: no verdict, no tallies against any bar, no interpretation of
+which class means what. The classes are mechanical; the reading is
+Opus's and the routing decision is Ken's.
+
+**Read-off, such as it is.** Opus reports the reachable share
+(U-2 + U-3) against the unreachable one (U-1), says whether the two
+discriminators agree, and gives Ken one recommendation: whether the
+unplaced population holds a design question worth a pass, or whether it
+is mostly audio that does not sing those words and the program should
+stop treating it as the obvious next target. **No mechanism is
+proposed at this step** — proposing one is the design pass this probe
+exists to decide on.
 
 ## Out of scope
 
