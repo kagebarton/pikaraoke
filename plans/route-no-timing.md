@@ -30,15 +30,22 @@ Model: Claude Sonnet 5 (executor). Plan drafted by Claude Fable 5.
 > each with a kill rule that can end the phase — **the first two are
 > cheap and either can stop it before a GPU runs**, which is
 > deliberate. Nothing is built or run yet: **Sonnet 5 implements and
-> runs step 1, reports the table, and stops** — **but not first.**
-> **Phase 7 goes first (Ken, 2026-09-14): the unplaced population,
-> diagnosed.** Stats only, no gate, no GPU, bundles only. The program
-> has twice called the sheet lines that never render the place the
-> remaining quality sits, and Phase 5 attempted them and failed; before
-> a second design pass is spent there, this asks how much of that
-> population is reachable at all. Its answer routes the next design
-> pass and that routing is Ken's. Then GATE W step 1, then GATE L when
-> the Mandarin corpus exists. Sequencing lives in `plans/PROGRAM.md`.
+> runs step 1, reports the table, and stops.**
+> **Phase 7 RAN and was READ 2026-09-14 — it is done, and it halved
+> the prize.** Of the 150 unplaced lines corpus-wide, **47% are text
+> that appears in no transcription of the audio at all** — closed
+> permanently, unreachable by any aligner. The other 80 are present
+> somewhere in the audio but **the probe cannot say whether they are
+> present at their own position or only at another occurrence of the
+> same repeated text**, which is the distinction the routing question
+> needs. Its pre-registered validation clause fired a STOP; that was
+> ruled — **the clause's premise was wrong, not the method** — and
+> the same bad premise sat in the read-off rule, which is withdrawn.
+> **Stop quoting ~150 as the unreached population.** One cheap
+> no-GPU follow-up would close the remainder; it is specified in the
+> read-off and **not commissioned**. **Nothing blocks GATE W step 1.**
+> Then GATE L when the Mandarin corpus exists. Sequencing lives in
+> `plans/PROGRAM.md`.
 
 ## Context
 
@@ -1451,16 +1458,24 @@ executor.
    (lids 44–50) and HUNTR/X (lids 40–52) as sheets that do not match
    the audio version. Report those two songs' classifications
    separately, so the known answer checks the method instead of being
-   assumed by it. **If those blocks do not come back predominantly
-   U-1, the method is wrong and that is a STOP → Ken** — it is the one
-   place this probe can be validated against something already
-   established.
+   assumed by it. ~~**If those blocks do not come back predominantly
+   U-1, the method is wrong and that is a STOP → Ken**~~ — **the STOP
+   fired 2026-09-14 and was ruled: the clause's premise is wrong, not
+   the method.** A drift block made of *repeated* text is still sung
+   elsewhere in the song, so a whole-song scan finds it; both named
+   blocks are verbatim duplicates of earlier sheet lines. See the
+   read-off in the Results log. The tables stand.
 
 ### Sensitivity
 
 U-1 is the load-bearing class and its size must not rest on one
 threshold. Report it at the run's own `joint_max_edit_ratio` **and** at
-a looser **0.6**, as two columns. Declared now, before any data. It is
+a looser **0.6**, as two columns. *(**Defect, found 2026-09-14 at the
+read-off:** the shipped whisper ratio is 0.75, so 0.6 is **stricter**,
+not looser, on the load-bearing source — the column tests the opposite
+direction from the one declared. Kept as written because it is what
+ran; the loosening direction is untested. Nothing in the read-off
+depends on it.)* Declared now, before any data. It is
 **reported, not read as a range** — the classification is the shipped
 setting's; the second column exists so a reader can see whether the
 answer is fragile.
@@ -1474,8 +1489,12 @@ touched and nothing is regenerated. The executor reports the tables and
 which class means what. The classes are mechanical; the reading is
 Opus's and the routing decision is Ken's.
 
-**Read-off, such as it is.** Opus reports the reachable share
-(U-2 + U-3) against the unreachable one (U-1), says whether the two
+**Read-off, such as it is.** ~~Opus reports the reachable share
+(U-2 + U-3) against the unreachable one (U-1)~~ — **this rule is
+WITHDRAWN 2026-09-14 as unsound**: it assumes a candidate found
+*anywhere* means the line is reachable at *its own position*, which
+the run's own data disproves. What the tables support instead is in
+the read-off entry. Opus says whether the two
 discriminators agree, and gives Ken one recommendation: whether the
 unplaced population holds a design question worth a pass, or whether it
 is mostly audio that does not sing those words and the program should
@@ -3712,3 +3731,218 @@ session scratchpad, not committed: `phase7_run.py`, `phase7_tables.py`,
 **Next:** stop. Ask Ken to `/model` to Opus for the read-off — starting
 with the GATE P validation question above, which this run's own brief
 routes to Ken/Opus, not the executor.
+
+### 2026-09-14 — Phase 7 read-off (Opus) — STOP resolved: the validation clause's premise was wrong, not the method. Tables stand; the pre-registered reachable-share rule is WITHDRAWN as sharing the same defect
+
+Read against the executor's run above (commit `762f875`), the GATE P
+read-off of 2026-09-01, and the Phase 7 design. Read-only: nothing was
+re-run, no table recomputed. Two facts below were **verified from disk
+rather than accepted** — they are marked where they appear.
+
+#### 1. The STOP: ruled resolved. The clause was wrong, the discriminator was right.
+
+Phase 7's validation clause required Bloodstream (lids 44–50) and
+HUNTR/X (lids 40–52) to come back "predominantly U-1" or "the method is
+wrong." They came back 0/7 and 1/11. By the letter, the method fails.
+
+**It does not fail. The clause's premise does.** The premise was that a
+lyric-version-drift block presents as *no candidate anywhere*. That
+holds only when the drifted lines carry text unique to the song. It
+collapses when the drifted block is **repeated text**, because the
+words are still sung — at a different occurrence — and a whole-song
+scan finds them there.
+
+**Verified, not inferred.** The two named blocks were read out of the
+bundles' own sheets and normalised with the shipped tokeniser:
+
+- **Bloodstream 44–49 is one couplet repeated.** "All the voices in my
+  mind" at lids 38/40/42/44/46/48 and "Callin' out across the line" at
+  39/41/43/45/47/49 — *six* occurrences each in the sheet. Lid 50 is a
+  further duplicate. Every line in the named block is verbatim
+  duplicate text.
+- **HUNTR/X 41–47 each duplicate an earlier line** (41→9, 42→10/26,
+  43→11/27, 44→28, 45→29, 46→30, 47→31). Of 48–52, the three
+  Korean-carrying lines are not sheet-duplicates but their English
+  halves are, and 51/52 are near-duplicates of each other sharing a
+  hook line with many others. Lid 50 — the one line in either block
+  that is genuinely mostly non-English — is the single U-1.
+
+So the audio sings that couplet *some* number of times and the sheet
+lists it six; the surplus goes unplaced, and a scan finds its text at
+the earlier occurrences. **That is the mechanism producing 0/7 and
+1/11, and it is the mechanism GATE P named.** Both entries describe the
+same phenomenon; there was never a conflict between them, only a
+conflict between GATE P and a premise I attached to it.
+
+**GATE P is not overturned and is not corrected.** Its entry already
+carried the evidence that candidates exist for these lines — "Bloodstream
+lines repeatedly at 133.84/160.39/222.92 s," "many distinct lines
+collide on a *single* argmax timestamp." Its conclusion ("a section-level
+DP cannot place a section the audio does not contain") remains right for
+what it decided. The defect is entirely in Phase 7's clause, which read
+GATE P's conclusion without its evidence.
+
+**Consequence: the five tables stand and are read below.** No table is
+amended, no number moves, and the executor's handling was correct in
+every respect — including the refusal to resolve this itself.
+
+#### 2. The same premise is in the read-off rule, so that rule is withdrawn
+
+This is the more consequential half, and it follows from the identical
+error. The design's read-off instruction was "report the reachable
+share (U-2 + U-3) against the unreachable one (U-1)." That equation
+assumes **a candidate found anywhere means the line is reachable at its
+own position.** The Bloodstream block is a direct counterexample: six
+lines with candidates, none reachable, and the matcher refusing them is
+the monotonic DP working exactly as GATE P said it should.
+
+**`reachable = U-2 + U-3` is withdrawn as unsound.** It is not an
+amendment to fit the data — it is the removal of a rule that rests on a
+premise the same run disproved. Nothing replaces it by fiat; what the
+tables *do* support is in section 4.
+
+A second, independent reason U-3 cannot carry that reading: `sub =
+cross_attraction` was specified as "the best-scoring candidate window
+overlaps a span the DP selected," which is a fact about collision and
+carries no information about *where* the window sits relative to the
+line's own neighbours. The driver implements the spec faithfully
+(verified in source); the spec never asked the question the routing
+decision needs.
+
+#### 3. U-2 is also not clean, for a different reason
+
+Recorded because it bounds section 4 and was not anticipated in the
+design. The two scans run at deliberately different standards — the
+run's own `joint_max_edit_ratio` (**0.75**, verified identical across
+all 18 bundles) for whisper, `ytasr.CANDIDATE_MAX_EDIT_RATIO` (0.45)
+for captions. The design was right to refuse to unify them: they are
+different evidence standards. But it makes "found in one source, not
+the other" conflate *only one transcription heard it* with *the
+stricter scan did not clear its own bar on text the looser one
+admitted*. Bloodstream 44–49 sitting in U-2 while being six-times
+repeated text is that conflation visible.
+
+#### 4. What the tables actually establish
+
+Pooled across the 18 songs, **150 unplaced lines** — which reconciles
+exactly with the "~150 sheet lines that never get words" the program
+has quoted since GATE T, and with Phase 4's 1010-line denominator.
+
+| | lines | share | reading |
+| --- | --- | --- | --- |
+| **U-1** — text found in *no* transcription | **70** | 47% | **Closed. Unreachable by any aligner.** |
+| U-2 + U-3 — text found *somewhere* | 80 | 53% | **Present in the audio; position unknown.** |
+
+**The one thing this probe cleanly separates is "text absent from the
+audio" from "text present somewhere in it," and that split is roughly
+half and half.** The 70 are closed: two independent transcriptions of
+the same audio, each at its own standard, plus the relaxed anchor
+fallback, found nothing resembling those lines anywhere in the song. No
+mechanism reaches them — this is the class the phase was built to size,
+and it is sized.
+
+**It does not separate "present at this line's position" from "present
+at another occurrence,"** and that is precisely the distinction the
+routing question turns on. All 80 of the remainder are in that
+undetermined state.
+
+Two riders on the 70, in opposite directions and roughly cancelling:
+
+- **18 of the 70 come from the 8 songs with no adopted caption**, where
+  U-2 is structurally impossible and a caption-only line necessarily
+  lands in U-1. That is an over-count of unknown size; the solid
+  two-source figure is **52 of 102**.
+- **U-1 is if anything under-counted at the margins**, because a line
+  must fail a 0.75-ratio whole-song scan *and* the relaxed anchor
+  fallback *and* (on 10 songs) an independent caption scan to reach it.
+
+#### 5. The second discriminator: flat, and that is itself the finding
+
+Block structure was designed as an independent check, with "if the two
+discriminators disagree, that disagreement is the finding" written in
+before the run. They disagree — not by pointing opposite ways, but by
+**failing to separate at all**: lines in runs of 3+ are 59% of U-1, 71%
+of U-2, 65% of U-3-cross. Essentially flat.
+
+The reason is retrospectively obvious and should be recorded so nobody
+re-derives it: **an unsung final chorus is a block of repeated text.**
+Block structure cannot distinguish a section the audio never sings from
+a repeat the audio does fewer times than the sheet lists. The
+discriminator is not broken; it answers a question that turns out not
+to be the discriminating one on this corpus.
+
+#### 6. A defect in the design, mine, recorded
+
+The sensitivity column was declared as "a looser **0.6**." Against a
+shipped whisper ratio of **0.75**, 0.6 is *stricter* — the column tests
+the opposite direction from the one declared, on the load-bearing
+source. It is loosening only for captions (0.45 → 0.6). This is why
+U-1 *rises* to 81 at "0.6" instead of falling: the column is measuring
+what a tighter look does.
+
+The column is still informative — tightening the whisper scan moves ~11
+lines into U-1 — but **the declared direction was never tested.** No
+result above depends on it: U-1's robustness rests on the shipped scan
+already being very permissive at 0.75 plus the anchor fallback on top
+of exactly the zero-candidate lines. Stated plainly rather than papered
+over: the loosening direction is untested and I specified it wrong.
+
+#### 7. Recommendation to Ken — routing, which is his call
+
+**The prize is at most half what the program has been assuming, and the
+remaining half is not yet shown to be a prize at all.**
+
+1. **Stop quoting ~150 as the unreached population.** Forty-seven
+   percent of it is audio that does not contain those words. That
+   portion is permanently closed and no design pass, from any model,
+   reaches it.
+2. **Do not spend a design pass — Opus's or Fable's — on the unplaced
+   population yet.** The question "is there a mechanism here" cannot be
+   answered from these tables, because the 80 remaining lines are
+   undetermined between *the matcher missed a line that is sung here*
+   and *the only occurrence of this text is elsewhere and the DP
+   correctly refused it*. On the evidence available the second is the
+   better bet: the largest concentrations sit on songs GATE P already
+   diagnosed as repeat pile-up, and the two blocks examined in detail
+   were **entirely** repeated text.
+3. **One cheap measurement closes it**, and it should run before any
+   design spend. For each of the 80, does the best-scoring candidate
+   window fall between the line's nearest *placed* neighbours, or
+   outside them at a different occurrence? Everything it needs is
+   already captured — candidate windows, placed spans, sheet text — so
+   it is another no-GPU, no-audio pass of the same driver. A cheap
+   companion on the same pass: whether the line's text is duplicated
+   elsewhere in its own sheet, which is what settled the two named
+   blocks here.
+4. **GATE W is unblocked either way.** Phase 7 was sequenced first to
+   test whether polish was the right next target. It has not shown the
+   unplaced population to be the better target; it has halved it and
+   left the rest undetermined. **Nothing here argues against starting
+   GATE W step 1**, and if the follow-up in (3) is run, it can run
+   alongside — they share no resource.
+
+#### 8. What this read-off does NOT claim
+
+- **Not** that the unplaced population holds nothing. It holds at most
+  80 lines and possibly far fewer; that is a bound, not a zero.
+- **Not** that U-3-cross lines are unreachable. They are *undetermined*.
+  The evidence leans unreachable; it does not establish it.
+- **Not** that GATE P was wrong about anything. It was right; Phase 7's
+  clause misquoted its conclusion by dropping its evidence.
+- **Not** a verdict on any mechanism. None was proposed, per the design.
+- **Not** dependent on the sensitivity column, which measured the wrong
+  direction (section 6).
+
+#### 9. Loose ends recorded, not actioned
+
+- The follow-up in 7(3) is specified but **not commissioned** — that is
+  Ken's call, and it needs no new design pass, only the instruction.
+- `U-3-own` is 1 line corpus-wide. Whatever it is, it is not a
+  population.
+- U-0 is 0 everywhere; the empty-line caveat never fired.
+- The executor's three free cross-checks (the 8 no-caption songs
+  matching the design's pre-stated count, the 1010-line denominator
+  matching Phase 4, and the hard assertion that the whisper-side replay
+  equals each bundle's own recorded scan counts) are the reason the
+  tables can be read at all after a failed validation clause. Recorded
+  as the practice that paid.
