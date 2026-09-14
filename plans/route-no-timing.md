@@ -29,9 +29,12 @@ Model: Claude Sonnet 5 (executor). Plan drafted by Claude Fable 5.
 > fall inside a span already decided. Pre-registered as four steps,
 > each with a kill rule that can end the phase — **the first two are
 > cheap and either can stop it before a GPU runs**, which is
-> deliberate. **Step 1 RAN 2026-09-14** (no GPU, no audio, bundles
-> only): population-split tables are in the Results log, raw counts
-> only. Opus reads W-1a/b/c next.
+> deliberate. **Step 1 RAN and was READ 2026-09-14: no kill rule
+> fired.** Target lines are 45.7% of placed (floor 15%) and whisper
+> agrees on 43.8% of them, inside the 10–70% band — so **both arms
+> proceed**: the zero-model form is not retired, CTC is not ruled out,
+> and step 4 carries S6. **Step 2 is next: Ken's 28-look baseline
+> eyeball**, which can still end the phase before a GPU runs.
 > **Phase 7 RAN and was READ 2026-09-14 — it is done, and it halved
 > the prize.** Of the 150 unplaced lines corpus-wide, **47% are text
 > that appears in no transcription of the audio at all** — closed
@@ -54,9 +57,9 @@ Model: Claude Sonnet 5 (executor). Plan drafted by Claude Fable 5.
 > that claim is now false and is struck wherever it appears. If ever
 > reopened, the lever is upstream (a lyrics sheet matching the
 > recording), named at GATE P — not anything inside the matcher.
-> **GATE W step 1 RAN 2026-09-14** and it is now the better target on
-> evidence rather than merely what is left — tables in the Results log,
-> **Opus reads W-1a/b/c next.** Then GATE L when the Mandarin corpus
+> **GATE W is now the better target on evidence rather than merely what
+> is left.** Its step 1 was READ 2026-09-14 (both arms proceed); **step
+> 2, Ken's baseline eyeball, is next.** Then GATE L when the Mandarin corpus
 > exists. Sequencing lives in `plans/PROGRAM.md`.
 
 ## Context
@@ -4676,3 +4679,135 @@ candidates.
 | POOLED | 467 | 2 | 0.4% |
 
 **Next:** Opus reads W-1a/b/c (the kill rules) against these tables.
+
+### 2026-09-14 — Phase 6 / GATE W step 1 read-off (Opus) — no kill rule fires; both arms proceed, step 4 carries S6
+
+Read against the executor's run above (commit `5cf65b8`) and W-1's
+pre-registration. Read-only: nothing re-run, no table recomputed. The
+shares quoted below are ratios of pooled cells already in Tables W-1.1
+and W-1.2; one input question was settled by reading shipped code. Both
+are marked where they appear.
+
+#### 1. Validity, before the read
+
+Checked row by row against the tables themselves:
+
+- On every row, align-won (W-1.3) plus target (W-1.1) equals `n_placed`,
+  and W-1.1's four classes sum to `n_target`.
+- W-1.2's τ = 0.5 columns equal W-1.1's `agrees` / `disagrees` on every
+  row, and `agrees` is non-increasing in τ on every row, as a threshold
+  on one number must be.
+- **The W-1a denominator is independently anchored.** `n_lines −
+  n_placed` = 1010 − 860 = 150, which is Phase 7's unplaced population
+  exactly, measured by a different driver. `n_placed` counts what this
+  program has always called placed.
+- The executor's hard assertion that per-song source counts equal each
+  bundle's recorded `align_won` / `transcribe_won` / `ytasr_won` stands
+  as the population check.
+
+**One input departs from the design's wording, and the executor is
+right.** W-1 says to recompute from "the bundle's own `lyrics.lines` and
+`words`"; the executor used `lyrics.align_lines`. Checked in shipped
+code: the matcher tokenises `align_lines` (`joint_match.py:164`) and
+hands those tokens to `_line_align_ranges` against the refined align
+words (`joint_match.py:167`), and the bundle's `words` is that refined
+stream (`words_source = "refine"`, `lyric_align.py:162`). The design's
+own call, `_line_align_ranges(line_tokens, words)`, names tokens that
+exist only as that tokenisation. Display `lines` keeps parentheticals
+that `align_lines` strips, so using it would have tokenised text the
+aligner never received. **`lyrics.lines` in W-1 is a wording slip in the
+design; the executor implemented its intent.** Consistent with that, 0
+of 467 align-won lines came back abstained. W-1's text is left as
+written — this round does not amend the design — and the slip is
+recorded here.
+
+#### 2. W-1a — ceiling floor: does not fire
+
+Pooled W-1.1: **393 target lines of 860 placed, 45.7%**, against a floor
+of 15%. The phase's ceiling is large enough to justify the later steps.
+
+#### 3. W-1b and W-1c: neither fires
+
+Pooled W-1.1 at τ = 0.5: **agrees 172 of the 393-line target population,
+43.8%** (ratio of pooled cells).
+
+- W-1b needs ≥ 70%. **Does not fire.** CTC is not ruled out.
+- W-1c needs < 10%. **Does not fire.** The zero-model arm is not dropped.
+
+**The one place the rule text admits a second reading is the
+denominator, and it does not move the result.** The literal denominator
+is the target population, 393: W-1 defines that population as the
+transcribe- and ytasr-won lines and counts all four classes over it.
+Reading it instead as "agrees among lines whisper did not abstain on"
+gives 172 of 271, **63.5%**, still inside [10%, 70%). Both readings land
+in the same band, so this is not an uncovered case and not a STOP.
+
+**τ sensitivity — reported, not read** (the rules read τ = 0.5 only).
+Recorded because it bounds how much the ruling leans on τ: across
+τ ∈ {0.3, 0.5, 0.7} and both denominators, the `agrees` share runs from
+39.4% (155/393 at 0.7) to 64.9% (176/271 at 0.3). No column reaches
+either edge. **The ruling does not rest on the choice of τ.**
+
+#### 4. Ruling: the between-band default
+
+Executing the clause that applies, verbatim:
+
+> Between 10% and 70%, both arms proceed and step 4 carries the
+> zero-model form as its own stratum (S6).
+
+Concretely:
+
+1. **CTC stays commissioned for step 3**, behind step 2's kill rules
+   exactly as sequenced. Nothing here lets it run before W-2 is read.
+2. **The zero-model arm stays.** Step 4 does **not** collapse to W-1b's
+   single stratum.
+3. **S6's precondition is met and is now fixed.** Step 1 put `agrees` in
+   [10%, 70%), so S6 is one of step 4's strata and reads independently
+   under W-5 rule 7.
+
+#### 5. What step 2 carries
+
+**Step 2 runs as pre-registered, unchanged by this read-off.** What it
+inherits is its sampling frame, which this run fixed at τ = 0.5:
+
+- **whisper-agrees pool: 172 target lines** (W-1.1 `agrees`)
+- **whisper-abstained pool: 122 target lines** (`abstain_none` 3 +
+  `abstain_crammed` 119, pooled as W-2 specifies)
+- **control pool: 467 align-won lines** (W-1.3)
+
+The **99 `disagrees` lines are in no W-2 pool.** That is the design, not
+an omission: at τ = 0.5 they are competing placements, which W-1 put
+outside this phase's scope.
+
+The per-line labels behind these pools are not persisted; the driver
+sits uncommitted in the executor session's scratchpad. The step 2
+executor regenerates them by the same procedure (§1's inputs, pace guard
+before agreement, spans from `output_line_timings`). **The frame step 2
+draws from is the one whose pooled counts are 3 / 119 / 172 / 99 over
+the target and 467 align-won.** A regeneration that does not reproduce
+them is a different population — a case this design does not cover, so
+a STOP → Ken under its standing rule.
+
+#### 6. Recorded, not read
+
+- **Non-agreement is concentrated in a few songs.** 'Free', Mulan, NSYNC
+  Paradise and Colors of the Wind are nearly all-target songs (target ≥
+  94.6% of placed). Together they carry 79 of the 119 crammed, 79 of the
+  99 disagrees, and 5 of the 172 agrees; the first three have zero
+  agrees at every τ. The kill rules are pooled by pre-registration and
+  no rule reads per song, so nothing is drawn from this for any step.
+- Context: align-won lines agree with their own span on 454 of 467
+  (W-1.3), and 2 of 467 carry an interpolated run (W-1.4). That count is
+  kept for a later pass, as W-1 intended, and is not priced here.
+
+#### 7. What this read-off does NOT claim
+
+- **Not** that the interior-timing defect exists. That is step 2's
+  question, and W-2a can still end the phase before a GPU runs.
+- **Not** that `agrees` lines are well timed. `agrees` says more than
+  half of whisper's belief about a line sits inside the span the matcher
+  chose; it says nothing about whether either source's word boundaries
+  inside that span are right.
+- **Not** a verdict on either mechanism. Both are only still eligible.
+- **Not** an amendment. W-1 through W-6 stand as written; §1's wording
+  slip is recorded, not edited in.
