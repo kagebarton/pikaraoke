@@ -88,7 +88,7 @@ Two sibling plans execute alongside this one and are not phases here:
   whose F2 criterion 4 reads its E2 verdict. Phase 4.5's G2 labels also read
   E2 (secondary corroboration; 4.5a degrades to manual-gold-only without
   it), so prefer it before 4.5a when feasible. Untracked on disk by design.
-- `plans/completed/edge-snap-coverage-accuracy.md`: independent parallel track on its
+- `plans/edge-snap-coverage-accuracy.md`: independent parallel track on its
   own branch (`edge_snap_refine` off `89d28c46`), runnable at any point — the
   replay harness here excludes edge-snap, so this plan's corpus numbers are
   insulated from it. The only coupling is a small

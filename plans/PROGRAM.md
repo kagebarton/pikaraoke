@@ -400,6 +400,7 @@ future interior-refinement design.
 | `route-no-timing.md` | rung 3 — **the live build lane**; the joint catch-all refit, GATE P/J1/J2/T, Phase 5 + **GATE G** (CLOSED 2026-09-11, NO-GO — fill not widened), **Phase 7 + 7b (RAN + READ 2026-09-14 — the unplaced population is CLOSED: ~2 winnable lines corpus-wide)**, **Phase 6 + GATE W (CLOSED 2026-09-15 at step 2, Ken — a wash; no production change)**, GATE L |
 | `shared-aligner-form.md` | GATE C, GATE O, Phase 0 harness, ruling-provenance audit |
 | `ctc-sync-engine.md` | build phases + locked appendices; each licensed by a GATE above |
+| `edge-snap-coverage-accuracy.md` | the edge snap post-pass track, **not a routing lane**: onset silence gate, one-word lines, stem-end and end-reference fixes, interior run edges — **live, not started** (never executed since 2026-07-12, misfiled in `completed/` 2026-09-04, refreshed by Opus 2026-09-15; Phases 0-5 executable, Phase 6 held for pinning and a Part 2 ruling) |
 | `completed/` | closed plans, kept for their Results logs |
 
 Rule of thumb: **a probe belongs to a lane if its outcome changes what
@@ -444,7 +445,9 @@ shipped `cue_align.py`, so it is not dead-end history.
 > gate letter is GATE W (assigned 2026-09-14).** **Phase 6 CLOSED
 > 2026-09-15 (Ken) at GATE W step 2 — a wash, no production change.
 > No measurement phase is live now: what remains is GATE L (blocked on
-> the Mandarin corpus) and the design-consolidation pass.**
+> the Mandarin corpus) and the design-consolidation pass.** Outside the
+> routing program, the edge snap track (`edge-snap-coverage-accuracy.md`)
+> is live as of 2026-09-15: refreshed, not started.
 
 Ken's sequencing ruling: run the remaining measurement program to
 completion, then consolidate the build design once, rather than amending
