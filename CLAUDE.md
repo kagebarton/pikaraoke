@@ -50,6 +50,7 @@ Before calling a change done, review your own diff on three axes:
 - Vocabulary from `plans/` (gate letters, phase and rung numbers, route and probe names) is shared language — use it directly. Code-level detail is out by default: no recomputed arithmetic, per-song tables, constant names, or metric decompositions. That lives in the plan's Results log; the user asks when he wants it.
 - Chat tone only. Plan entries keep raw tables, full provenance, and no verdicts (`plans/PROGRAM.md`). Simplify the relay, never the record.
 - Flag good moments to `/compact`: after a commit with its plan-log row written, and at phase/GATE boundaries. Never mid-commit. Same checkpoints as the pending-review flag above.
+- When a session hands off to another model (e.g. asking the user to `/model` switch, such as Sonnet handing a GATE read to Opus, or Opus escalating to Fable), give a concrete handoff prompt for the next session to use — don't just say "hand this off." Point at the artifacts/state it needs and skip instructions to redo already-finished work.
 
 ## Commits
 
