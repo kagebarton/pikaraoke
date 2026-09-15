@@ -152,7 +152,9 @@ def _detect_rise(env: np.ndarray, t0: float, t1: float, ref_db: float) -> float 
     tail collapses back into the gap.
     """
     a = max(EDGE_FRAMES, int(t0 / HOP_S))
-    b = min(len(env) - EDGE_FRAMES, int(t1 / HOP_S))
+    b_word2 = int(t1 / HOP_S)
+    b_env = len(env) - EDGE_FRAMES
+    b = min(b_word2, b_env)
     sustain_frames = int(SUSTAIN_S / HOP_S)
     for i in range(a, b):
         pre = env[i - EDGE_FRAMES : i].mean()
@@ -167,7 +169,13 @@ def _detect_rise(env: np.ndarray, t0: float, t1: float, ref_db: float) -> float 
         # A rise within the sustain window of word 2 is already
         # continuous with it; the median over that sliver would only
         # measure the attack itself.
-        if b - i < sustain_frames or float(np.median(env[i:b])) >= ref_db - SUSTAIN_NEAR_DB:
+        if b - i < sustain_frames:
+            # Continuity with word 2 is trustworthy; the envelope running
+            # out is not — onsets near the stem end are unreliable.
+            if b_word2 <= b_env:
+                return i * HOP_S
+            continue
+        if float(np.median(env[i:b])) >= ref_db - SUSTAIN_NEAR_DB:
             return i * HOP_S
     return None
 

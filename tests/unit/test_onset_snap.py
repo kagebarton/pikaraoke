@@ -203,6 +203,20 @@ class TestSnapLineOnsets:
 
         assert out[0]["words"][0]["start"] == pytest.approx(2.25, abs=0.05)
 
+    def test_rise_truncated_by_stem_end_rejected(self, use_env):
+        # The envelope ends at 5.0s (len(env)=200, b_env=197). Word 2 starts
+        # at 4.95 (b_word2=198 > b_env), so the window is env-truncated, not
+        # word-2-proximate. The soft tier accepts frame 187, one hop before
+        # the 4.7s step, where b - i = 10 < sustain_frames = 16 -- the trust
+        # branch fires, but b_word2 > b_env means it must not trust it.
+        use_env(_env(5.0, [(4.7, 5.0, -20.0)]))
+        obj = _line((3.0, 4.6), (4.95, 5.4))
+
+        out, stats = snap_line_onsets([obj], "vocal.wav")
+
+        assert out[0] is obj
+        assert stats["n_no_rise"] == 1
+
     def test_on_time_word_before_pause_untouched(self, use_env):
         # Back-to-back lines leave no quiet before word 1. An on-time
         # staccato word followed by an intra-line pause must not get

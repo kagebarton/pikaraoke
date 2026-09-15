@@ -1812,3 +1812,70 @@ coverage stats_lines=68 invariant_violations=0 onset_fired=688 n_undetectable=15
    not read `n_undetectable`.
 4. `/code-review` on the Phase 0-2 commits stays pending until the Phase 5
    checkpoint. Phase 2 alone is simple enough that self-review covers it.
+
+### Phase 3
+
+`edge_p2_*.txt` (Phase 2's scratchpad files) still resolved; their `total`
+lines matched the ones pasted under Phase 2 exactly. No re-run. Phase 3
+diffs below are against those files.
+
+**Change.** `_detect_rise`: `b` split into `b_word2 = int(t1 / HOP_S)` and
+`b_env = len(env) - EDGE_FRAMES`. The trust branch (`b - i < sustain_frames`)
+now returns only when `b_word2 <= b_env`, else `continue`s the scan instead
+of trusting a rise whose remaining room was the envelope running out.
+Matches the plan's diff verbatim. New test
+`test_rise_truncated_by_stem_end_rejected` added to `TestSnapLineOnsets` at
+the plan's stated construction; `test_soft_rise_just_before_word2_accepted`
+(the intended-trust case this change must not break) still passes,
+unchanged.
+
+**Suite.**
+
+Invocation: `uv run --no-sync python -m pytest tests/unit -q`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p3_suite.txt`
+
+```
+FAILED tests/unit/test_genius.py::TestSidecarIO::test_write_overwrites_existing
+FAILED tests/unit/test_pipeline_stem_worker.py::TestStemWorkerSeparate::test_ok_returns_stem_paths_and_sends_job
+FAILED tests/unit/test_pipeline_stem_worker.py::TestStemWorkerSeparate::test_model_override_travels_in_job_tuple
+FAILED tests/unit/test_whisper_worker.py::TestStart::test_start_raises_worker_died_on_pipe_close
+4 failed, 1519 passed, 2 skipped in 37.56s
+```
+
+Only the known four; 1519 = 1518 + the one new test.
+
+**Replay harness.**
+
+Invocation: `uv run --no-sync python scripts/edge_snap_replay.py --folder D:/shared/pikaraoke-songs`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p3_replay.txt`
+Diff: `diff edge_p2_replay.txt edge_p3_replay.txt > edge_p3_replay.diff`, at
+`C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p3_replay.diff`
+
+Diff: empty.
+
+**Coverage harness.**
+
+Invocation: `uv run --no-sync python scripts/edge_snap_ass.py --folder D:/shared/pikaraoke-songs`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p3_coverage.txt`
+Diff: `diff edge_p2_coverage.txt edge_p3_coverage.txt > edge_p3_coverage.diff`, at
+`C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p3_coverage.diff`
+
+Diff: empty.
+
+**Against the plan's recorded expectation** ("a handful of onset records
+near song ends disappear, mainly on the replay harness"): both diffs came
+back empty. Population probe (read-only; reuses
+`edge_snap_replay._replay_song` / `onset_snap_ass.parse_ass_lines` and
+`onset_snap`'s own `ref is None` / `ref < MIN_REF_DB` / `MIN_WORD_DUR_S`
+gates unmodified, up to the point `snap_line_onsets` would call
+`_detect_rise`): among every multi-word line in both corpora that reaches
+`_detect_rise`, `b_word2 = int(w2s / HOP_S)` compared against
+`b_env = len(env) - EDGE_FRAMES`.
+
+Script (replay, 18 songs): `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\probe_p3_population.py`
+Output: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\probe_p3_population.txt`: `n_env_limited_candidates=0`
+
+Script (coverage, 34 songs): `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\probe_p3_coverage.py`
+Output: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\probe_p3_coverage_out.txt`: `n_env_limited_candidates=0`
+
+Suite: known failures only. Commit: (this entry rides with it).
