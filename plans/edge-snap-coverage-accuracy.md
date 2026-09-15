@@ -21,9 +21,17 @@ closed review doc. Designed and validated (corpus scan plus a 17-song
 reference study) in a prior session. The doc is written so it can be
 executed phase by phase without re-deriving the analysis.
 
-All `onset_snap.py`, test and harness line anchors below were re-verified
-against `0871216` on 2026-09-15 and hold. If the file has drifted, re-anchor
-by symbol name, not line number.
+**Line anchors.** The `onset_snap.py` and test line numbers in Phases 2-5
+are at `385c881` (after Phase 1), refreshed 2026-09-15; see the Refresh
+record. Each phase's own edit shifts the numbers later phases cite, so a
+cited number is a locator only. The quoted code or named symbol is the
+anchor.
+
+- A number that is off while the quoted code matches, uniquely, in the named
+  function is expected drift, not a STOP. Log the actual line in the Results
+  log and proceed.
+- Quoted code that is absent, changed, or found in more than one place is a
+  STOP.
 
 ## Standing rulings this plan works inside
 
@@ -77,8 +85,8 @@ is the thing being repaired.
 - **Public signatures** of `snap_line_onsets`, `snap_line_ends` and
   `snap_line_edges` must not change. Callers:
   - `lyric_align.py:252`
-  - `scripts/onset_snap_ass.py:76`, `scripts/end_snap_ass.py:33` and
-    `scripts/edge_snap_ass.py:41,49`
+  - `scripts/onset_snap_ass.py:77`, `scripts/end_snap_ass.py:33`,
+    `scripts/edge_snap_ass.py:93,105` and `scripts/edge_snap_replay.py:77`
   - `tests/unit/test_lyric_align.py:597-599,738`, which monkeypatch it
 - **`_sung_level_ref` has a second caller.** `lrclib_fill.py:279` computes
   a song-wide reference over every placed word.
@@ -221,7 +229,8 @@ these from the capture bundles on 2026-09-15, read-only.
   - **STOP on any mismatch** between a stated anchor, constant, expected
     value or worked example and the code or corpus. Report the exact
     mismatch. Never bridge it with your own design, and never tune a
-    constant the phase does not name.
+    constant the phase does not name. A shifted line number whose quoted
+    code still matches is not a mismatch (see **Line anchors** at the top).
   - **Your mechanical gates:**
     - the suite result against the known-failure set
     - Phase 0's fidelity guard
@@ -441,8 +450,8 @@ data-driven and give Phase 7 its GO/NO-GO numbers.
 **End path** (`snap_line_ends`):
 
 - Add `n_below_min_shift`, incremented in the `new_end - w_end <
-  MIN_SHIFT_S` rejection at `onset_snap.py:342-344`.
-- Leave `n_fired` where it is (`326`). Its meaning stays "clip evidence
+  MIN_SHIFT_S` rejection at `onset_snap.py:352-354`.
+- Leave `n_fired += 1` where it is (`336`). Its meaning stays "clip evidence
   present".
 - State the resulting invariant in a comment:
   `n_fired == n_extended + n_below_min_shift`.
@@ -453,7 +462,7 @@ data-driven and give Phase 7 its GO/NO-GO numbers.
   shows smear evidence and reaches rise detection.
 - `n_no_rise`: `_detect_rise` returned None.
 - `n_below_min_shift`: the `new_start - w1s < MIN_SHIFT_S` rejection at
-  `233-235`.
+  `238-240`.
 - `n_undetectable`: among fired lines, those where the step detector
   cannot qualify a rise.
   - The condition is `ref - p20 < STEP_DB`.
@@ -595,7 +604,7 @@ own span.
 
 **4b. Onset path** (`snap_line_onsets`):
 
-- Replace the `len(words) < 2` gate (`194-196`) with `if not words:`, plus
+- Replace the `len(words) < 2` gate (`195-197`) with `if not words:`, plus
   `n_single_word` counting (now "seen", not "skipped").
 - Generalize the bound:
 
@@ -604,10 +613,10 @@ own span.
   ```
 
 - Use `bound` everywhere `w2s` is used today:
-  - the narrow-window skip (`199`)
-  - the `_detect_rise` call (`227`)
-  - the clamp (`232`, `bound - MIN_WORD_DUR_S`)
-- For a single-word line the end-carry branch at `240-243` is unreachable,
+  - the narrow-window skip (`200`)
+  - the `_detect_rise` call (`232`)
+  - the clamp (`237`, `bound - MIN_WORD_DUR_S`)
+- For a single-word line the end-carry branch at `245-248` is unreachable,
   because the clamp keeps `new_start <= w1e - MIN_WORD_DUR_S`. No
   special-casing is needed: the existing `[{**words[0], ...}] + words[1:]`
   construction is already correct for a 1-element list.
@@ -622,7 +631,7 @@ continuity check now demands that the voice hold to the *claimed end*.
 
 **4c. End path** (`snap_line_ends`):
 
-- Replace the `len(words) < 2` gate (`292-294`) with `if not words:`, plus
+- Replace the `len(words) < 2` gate (`302-304`) with `if not words:`, plus
   the counter.
 - Nothing else changes. The bound search, the `MIN_REF_DB` gate, clip
   evidence and the release trace never reference word 2.
@@ -630,8 +639,8 @@ continuity check now demands that the voice hold to the *claimed end*.
   single-word line's reference at end-snap time is computed over the
   already-snapped (cleaner) span.
 
-**4d. Tests.** Rework the two `test_short_lines_skipped` tests (`196`,
-`343`).
+**4d. Tests.** Rework the two `test_short_lines_skipped` tests (`210`,
+`357`).
 
 - Keep the empty-words object as `test_empty_words_skipped` in each class.
 - The one-word cases move to the new tests below.
@@ -658,7 +667,7 @@ continuity check now demands that the voice hold to the *claimed end*.
    - Call `snap_line_onsets` and `snap_line_ends` separately on the same
      input. For each, assert untouched and `n_low_ref == 1`.
 5. `test_single_word_both_edges` (in `TestSnapLineEdges`, injecting the
-   envelope like `:372`):
+   envelope like `test_single_decode_fixes_both_edges`, `:386`):
    - `_env(10.0, [(3.5, 6.5, -20.0)])`, line `_line((2.0, 4.5))`.
    - The onset pass snaps the start to **3.425**.
    - The end pass then re-derives the ref over the snapped span, sees clip
@@ -698,7 +707,8 @@ short words, the tail-only median misstates the sung level.
   `words[1:]` as today.
 - The `len(words) == 1` percentile path from Phase 4 is independent of
   `end`.
-- `snap_line_ends` passes `end=True` at `:310`. The onset call and
+- `snap_line_ends` passes `end=True` at its `_sung_level_ref` call (`:320`).
+  The onset call and
   `lrclib_fill.py:279` keep the default.
 - Rewrite the docstring: "both snaps gate on this same reference" is no
   longer the contract.
@@ -810,7 +820,7 @@ RUN_GAP_S = 0.5
   - Bound, when the next run is in the same line: the next run's
     first-word start minus `NEXT_LINE_GAP_S`.
   - Bound, for the line's final run: the existing next-line scan
-    (`297-302`).
+    (`307-312`).
   - The two-pass onsets-then-ends order already guarantees that a run's
     end bound sees the next run's *snapped* start.
 - Stats: snap and extend records gain `"word_idx"`, and both stats dicts
@@ -960,6 +970,80 @@ literally, and `snaprefresh/check_examples.py` runs every construction.
     from production's recorded snap.
 11. **Executor/judge split.** Updated to current practice: the executor
     records raw evidence, and Opus reads at the checkpoint.
+
+### 2026-09-15 — Opus anchor refresh against `385c881` (Phase 2 pre-flight STOP)
+
+The Phase 2 executor stopped before writing code. All three Phase 2
+`onset_snap.py` anchors pointed at unrelated lines. Cause: Phase 1's own
+edit (`15f4806`), which the 2026-09-15 refresh against `0871216` predates.
+
+`git diff 0871216 385c881 -- pikaraoke/lib/onset_snap.py` accounts for the
+whole shift. It has three hunks, all inside `snap_line_onsets`:
+
+- `n_low_ref = 0`: +1 from line 191.
+- The `MIN_REF_DB` gate: +4 more from line 208, so +5 from there.
+- The stats dict expanded to 6 lines: +5 more, so +10 from there to the end
+  of the file.
+
+`_sung_level_ref` and `_detect_rise` sit above every hunk and did not move.
+`test_onset_snap.py` gained the 14-line `test_line_in_silence_untouched` at
+`:196`, which moves every test below it by +14.
+
+Each anchor below was read off `git show 385c881:<file>`. The code was
+matched by quote, not inferred from the offset.
+
+| Phase | Anchor (quoted code / symbol) | `0871216` | `385c881` |
+|---|---|---|---|
+| 2 | end `new_end - w_end < MIN_SHIFT_S` rejection | 342-344 | 352-354 |
+| 2 | end `n_fired += 1` | 326 | 336 |
+| 2 | onset `new_start - w1s < MIN_SHIFT_S` rejection | 233-235 | 238-240 |
+| 3 | `_detect_rise` trust branch `if b - i < sustain_frames or ...` | 170 | 170 |
+| 3 | `test_soft_rise_just_before_word2_accepted` | 173 | 173 |
+| 4a | `_sung_level_ref` | 127-141 | 127-141 |
+| 4b | onset `if len(words) < 2:` gate | 194-196 | 195-197 |
+| 4b | narrow-window skip `if w2s - w1s < MIN_WORD_DUR_S:` | 199 | 200 |
+| 4b | `onset = _detect_rise(env, w1s, w2s, ref)` | 227 | 232 |
+| 4b | clamp `new_start = min(max(...), w2s - MIN_WORD_DUR_S)` | 232 | 237 |
+| 4b | end-carry `if w1e >= new_start + MIN_WORD_DUR_S:` ... `else:` | 240-243 | 245-248 |
+| 4c | end `if len(words) < 2:` gate | 292-294 | 302-304 |
+| 4d | `TestSnapLineOnsets.test_short_lines_skipped` | 196 | 210 |
+| 4d | `TestSnapLineEnds.test_short_lines_skipped` | 343 | 357 |
+| 4d | `test_single_decode_fixes_both_edges` (envelope injection) | 372 | 386 |
+| 5 | `snap_line_ends` `ref = _sung_level_ref(env, words)` | 310 | 320 |
+| 6 | end next-line bound scan `bound = len(env) * HOP_S` ... `break` | 297-302 | 307-312 |
+
+The Context section's caller list was also stale. Phase 0 rewrote
+`edge_snap_ass.py`, added `edge_snap_replay.py` as a new caller, and added
+one line to `onset_snap_ass.py`'s skip list. The refreshed callers:
+
+| Caller | `0871216` | `385c881` |
+|---|---|---|
+| `scripts/onset_snap_ass.py` `snap_line_onsets(` | 76 | 77 |
+| `scripts/end_snap_ass.py` `snap_line_ends(` | 33 | 33 |
+| `scripts/edge_snap_ass.py` `snap_line_onsets(` / `snap_line_ends(` | 41, 49 | 93, 105 |
+| `scripts/edge_snap_replay.py` `snap_line_edges(` | (new) | 77 |
+
+`git diff --stat 0871216 385c881` touches no other code file, so the
+`lyric_align.py`, `lrclib_fill.py` and `test_lyric_align.py` anchors hold.
+Phase 1's own anchors are historical now that Phase 1 has landed.
+
+**Rule change.** Phases 2-4 each shift the numbers later phases cite, so
+another refresh would go stale at the next commit. The anchor rule at the
+top of the plan now says:
+
+- the quoted code is the anchor and the number is a locator;
+- a shifted number whose quoted code matches uniquely is logged and is not
+  a STOP;
+- absent, changed or ambiguous code is still a STOP.
+
+The executor's STOP was correct under the old wording, which called the
+anchors verified. The previous intro sentence ("re-anchor by symbol name")
+contradicted the STOP-on-anchor-mismatch rule, and this change resolves
+that.
+
+No design, constant, expected value or gate changed. The Phase 2
+carry-forward gate (the `edge_p1_*` totals match the Phase 1 log) is
+separate from this refresh and was reported clean by the executor.
 
 ## Results log
 
