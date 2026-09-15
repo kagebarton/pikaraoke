@@ -960,3 +960,125 @@ literally, and `snaprefresh/check_examples.py` runs every construction.
 
 (Per phase: invocation, artifact absolute paths, harness `total` lines and
 diffs pasted verbatim. No verdicts; Opus reads at the checkpoint.)
+
+### Phase 0
+
+Branch `edge_snap_refine` created from `joint_catchall_refit` at `90ccdb0`.
+Commits: `24df69a` (0a), plus 0b's commit (this Results-log entry rides
+with it).
+
+**0c.1 Unit suite.**
+
+Invocation: `uv run --no-sync python -m pytest tests/unit -q`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p0_suite.txt`
+
+```
+FAILED tests/unit/test_genius.py::TestSidecarIO::test_write_overwrites_existing
+FAILED tests/unit/test_pipeline_stem_worker.py::TestStemWorkerSeparate::test_ok_returns_stem_paths_and_sends_job
+FAILED tests/unit/test_pipeline_stem_worker.py::TestStemWorkerSeparate::test_model_override_travels_in_job_tuple
+FAILED tests/unit/test_whisper_worker.py::TestStart::test_start_raises_worker_died_on_pipe_close
+4 failed, 1516 passed, 2 skipped in 35.69s
+```
+
+Matches the known-failure set exactly.
+
+**0c.2 Guard.**
+
+Invocation: `uv run --no-sync python scripts/edge_snap_replay.py --folder D:/shared/pikaraoke-songs --guard`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p0_guard.txt`
+Exit code: 1
+
+```
+'Defying Gravity' - Wicked 20th Anniversary Edition _ WICKED the Musical---AoON1CyhQAM
+  GUARD FAIL end_extends first_line_id=35
+'Free' _ Official Lyric Video _ Sony Animation---fjOeJssZX_Q
+  GUARD PASS
+'Popular' - Wicked 20th Anniversary Edition _ WICKED the Musical---22QYya-LGDY
+  GUARD PASS
+Beauty and the Beast (1991) - Be Our Guest [UHD]---MiraOCjABn8
+  GUARD PASS
+Beauty and the Beast (1991) - Belle [UHD]---otxTf5hZ0Yw
+  GUARD FAIL onset_snaps first_line_id=33
+Ed Sheeran - Best Part Of Me (feat. YEBBA) (Live At Abbey Road)---wGyh_53ecgg
+  GUARD FAIL onset_snaps first_line_id=22
+Ed Sheeran & Rudimental­ - Bloodstream [Official Music Video­ YTMAs]---Orq_75kFi8I
+  GUARD FAIL onset_snaps first_line_id=11
+HUNTR_X 'This Is What It Sounds Like' (Music Video) _ KPop Demon Hunters _ Netflix Philippines---hI-y5anGcUA
+  GUARD PASS
+Jessie J - Domino (Official Video)---UJtB55MaoD0
+  GUARD PASS
+Josh Gad - In Summer (From 'Frozen'_Sing-Along)---9tcaM06eGrY
+  GUARD PASS
+Mulan _ I'll Make a Man Out of You _ @disneykids---vGfJeW_CcFY
+  GUARD FAIL end_extends first_line_id=8
+NSYNC - Paradise
+  GUARD PASS
+Pocahontas - Colors of the Wind (Blu-ray 1080p HD)---9ThO76peOw0
+  GUARD PASS
+Seasons of Love (HD)---UvyHuse6buY
+  GUARD PASS
+Stay Gold (Official Music Video) from The Outsiders – A New Broadway Musical.---XzbHPqULtdA
+  GUARD PASS
+The Lion King - Hakuna Matata Music Video I 4K Ultra HD---fwLxDUQBdEg
+  GUARD FAIL output_timings first_line_id=16
+The Next Ten Minutes Lyrics---0j8kL24ph8U
+  GUARD PASS
+Wicked - For Good  (2025) 4K - The Girl in the Bubble (7_8) _ Movieclips---wzSeub9W4QQ
+  GUARD FAIL end_stats:n_low_ref first_line_id=n/a
+```
+
+11/18 GUARD PASS, 7/18 GUARD FAIL. Per Process, this is a STOP -> Opus;
+no song excluded, no tolerance loosened, nothing in the replay patched.
+
+Supporting facts gathered while checking this wasn't a harness bug
+before recording it as a STOP (raw evidence, not a verdict):
+
+- This bundle's `captured_at` is `2026-07-16T20:58:17+00:00`; `fcefcce`
+  (2026-09-01, the commit named in Process) postdates it, and two more
+  months of `joint_catchall_refit` commits sit between capture and
+  `90ccdb0`.
+- The pre-existing, unmodified `scripts/replay_ytasr_third_source.py`,
+  run standalone at the corpus's fixed `alpha=2.0 beta=2.0` with no
+  edge-snap code involved at all, already shows recorded-vs-replayed
+  differences on several of the same songs (e.g. "Defying Gravity"
+  `crawl(rec>new) 4->3`; other songs' rows print `0->0`/`1->1`
+  identical, so the drift is song-specific, not universal).
+- On the one de-reverb-adopted song (`Wicked - For Good`), whose
+  `end_stats:n_low_ref` guard check fails here: `snap_stem_path`
+  resolved to the `dereverb/` file (confirmed to exist), and both the
+  onset `snaps` list (6/6) and the end `extends` list (6/6) matched the
+  recorded bundle byte-for-byte, including every `shift_s`/`extend_s`
+  value. Only `n_low_ref` (2 recorded vs 3 replayed) differed -- a
+  single line crossing the `MIN_REF_DB` threshold, consistent with
+  small matcher-drift movement in that line's word timings rather than
+  a stem- or veto-level bug.
+
+**0c.3 Baseline runs.**
+
+Replay harness.
+Invocation: `uv run --no-sync python scripts/edge_snap_replay.py --folder D:/shared/pikaraoke-songs`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p0_replay.txt`
+
+```
+total songs=18
+total onset n_lines=1010 n_snapped=192
+total end n_extended=237 n_fired=341 n_lines=1010 n_low_ref=7
+```
+
+Coverage harness.
+Invocation: `uv run --no-sync python scripts/edge_snap_ass.py --folder D:/shared/pikaraoke-songs`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p0_coverage.txt`
+
+```
+total songs=34
+total onset n_lines=1823 n_snapped=3
+total end n_extended=15 n_fired=364 n_lines=1823 n_low_ref=10
+```
+
+Note on artifact durability: these paths are this session's scratchpad
+(`...\d51ed6ab-8aef-45a0-b94e-f5d57771998a\...`), which is
+session-scoped per the harness's own environment contract. Phase 0's
+Process section directs artifacts to "the session scratchpad" by name,
+so this follows the plan as written; flagging it so whichever session
+runs Phase 1 knows to re-derive or re-locate these files first if it is
+not this same session.

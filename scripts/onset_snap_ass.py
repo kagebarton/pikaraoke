@@ -35,6 +35,7 @@ SKIP_SUFFIXES = (
     ".onsetsnap",
     ".endsnap",
     ".edgesnap",
+    ".edgereplay",
     ".fullmix",
 )
 
