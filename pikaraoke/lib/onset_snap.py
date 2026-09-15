@@ -188,6 +188,7 @@ def snap_line_onsets(
             return line_objects, {"bailed": "decode_failed"}
 
     snaps: list[dict] = []
+    n_low_ref = 0
     out: list[dict] = []
     for obj in line_objects:
         words = obj.get("words") or []
@@ -202,6 +203,10 @@ def snap_line_onsets(
 
         ref = _sung_level_ref(env, words)
         if ref is None:
+            out.append(obj)
+            continue
+        if ref < MIN_REF_DB:
+            n_low_ref += 1
             out.append(obj)
             continue
 
@@ -248,7 +253,12 @@ def snap_line_onsets(
         out.append(new_obj)
         snaps.append({"line_id": obj.get("line_id"), "shift_s": round(new_start - w1s, 3)})
 
-    stats = {"n_lines": len(line_objects), "n_snapped": len(snaps), "snaps": snaps}
+    stats = {
+        "n_lines": len(line_objects),
+        "n_snapped": len(snaps),
+        "n_low_ref": n_low_ref,
+        "snaps": snaps,
+    }
     if snaps:
         logger.info(
             "onset snap: %d/%d line starts moved forward (max %+.2fs)",

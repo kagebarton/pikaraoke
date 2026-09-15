@@ -1181,3 +1181,278 @@ change and nothing else. The replay harness is exact; no harness bug.
    stays pending to the Phase 5 checkpoint, alongside the snap changes.
 
 Phase 0 is closed. Phase 1 is unblocked.
+
+### Phase 1
+
+New session; the prior session's `edge_p0_*` scratch files were not
+assumed valid. Re-ran both 0c.3 baseline invocations unmodified on
+`0d79165` (same harness code as `7005b74`) into
+`...\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\p1_reverify\`.
+Both `total` lines matched the ones logged under 0c.3 exactly, and a full
+`diff` against the original `edge_p0_replay.txt` / `edge_p0_coverage.txt`
+in that same session's `edge_snap/` folder came back empty. Gate passed;
+Phase 1 diffs below are against the original `edge_p0_*` files.
+
+**Change.** `snap_line_onsets`: low-reference gate inserted after the
+`ref is None` check and before the on-time guard, `n_low_ref` initialized
+alongside `snaps` and added to the onset stats dict. Matches the plan's
+diff verbatim. New test `test_line_in_silence_untouched` added to
+`TestSnapLineOnsets` in `tests/unit/test_onset_snap.py`, mirroring the
+end-side test at the plan's stated construction.
+
+**Suite.**
+
+Invocation: `uv run --no-sync python -m pytest tests/unit -q`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p1_suite.txt`
+
+```
+FAILED tests/unit/test_genius.py::TestSidecarIO::test_write_overwrites_existing
+FAILED tests/unit/test_pipeline_stem_worker.py::TestStemWorkerSeparate::test_ok_returns_stem_paths_and_sends_job
+FAILED tests/unit/test_pipeline_stem_worker.py::TestStemWorkerSeparate::test_model_override_travels_in_job_tuple
+FAILED tests/unit/test_whisper_worker.py::TestStart::test_start_raises_worker_died_on_pipe_close
+4 failed, 1517 passed, 2 skipped in 36.21s
+```
+
+Only the known failures; 1517 = 1516 + the one new test.
+
+**Replay harness.**
+
+Invocation: `uv run --no-sync python scripts/edge_snap_replay.py --folder D:/shared/pikaraoke-songs`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p1_replay.txt`
+Diff: `diff edge_p0_replay.txt edge_p1_replay.txt > edge_p1_replay.diff`, at
+`C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p1_replay.diff`
+
+```
+21c21
+<   stats onset n_lines=89 n_snapped=2
+---
+>   stats onset n_lines=89 n_low_ref=1 n_snapped=2
+41c41
+<   stats onset n_lines=41 n_snapped=10
+---
+>   stats onset n_lines=41 n_low_ref=0 n_snapped=10
+64c64
+<   stats onset n_lines=62 n_snapped=11
+---
+>   stats onset n_lines=62 n_low_ref=1 n_snapped=11
+88c88
+<   stats onset n_lines=77 n_snapped=9
+---
+>   stats onset n_lines=77 n_low_ref=1 n_snapped=9
+134c134
+<   stats onset n_lines=110 n_snapped=18
+---
+>   stats onset n_lines=110 n_low_ref=0 n_snapped=18
+156c156
+<   stats onset n_lines=38 n_snapped=13
+---
+>   stats onset n_lines=38 n_low_ref=1 n_snapped=13
+177c177
+<   stats onset n_lines=74 n_snapped=10
+---
+>   stats onset n_lines=74 n_low_ref=0 n_snapped=10
+194c194
+<   stats onset n_lines=53 n_snapped=12
+---
+>   stats onset n_lines=53 n_low_ref=0 n_snapped=12
+237c237
+<   stats onset n_lines=67 n_snapped=17
+---
+>   stats onset n_lines=67 n_low_ref=0 n_snapped=17
+261c261
+<   stats onset n_lines=31 n_snapped=14
+---
+>   stats onset n_lines=31 n_low_ref=1 n_snapped=14
+281c281
+<   stats onset n_lines=47 n_snapped=0
+---
+>   stats onset n_lines=47 n_low_ref=0 n_snapped=0
+328c328
+<   stats onset n_lines=65 n_snapped=16
+---
+>   stats onset n_lines=65 n_low_ref=0 n_snapped=16
+359c359
+<   stats onset n_lines=37 n_snapped=12
+---
+>   stats onset n_lines=37 n_low_ref=1 n_snapped=12
+379c379
+<   stats onset n_lines=34 n_snapped=3
+---
+>   stats onset n_lines=34 n_low_ref=0 n_snapped=3
+402c402
+<   stats onset n_lines=38 n_snapped=11
+---
+>   stats onset n_lines=38 n_low_ref=0 n_snapped=11
+418c418
+<   stats onset n_lines=40 n_snapped=4
+---
+>   stats onset n_lines=40 n_low_ref=2 n_snapped=4
+467c467
+<   stats onset n_lines=71 n_snapped=24
+---
+>   stats onset n_lines=71 n_low_ref=1 n_snapped=24
+471d470
+<   rec onset L19 +0.150
+482c481
+<   stats onset n_lines=36 n_snapped=6
+---
+>   stats onset n_lines=36 n_low_ref=4 n_snapped=5
+485c484
+< total onset n_lines=1010 n_snapped=192
+---
+> total onset n_lines=1010 n_low_ref=13 n_snapped=191
+```
+
+**Coverage harness.**
+
+Invocation: `uv run --no-sync python scripts/edge_snap_ass.py --folder D:/shared/pikaraoke-songs`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p1_coverage.txt`
+Diff: `diff edge_p0_coverage.txt edge_p1_coverage.txt > edge_p1_coverage.diff`, at
+`C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p1_coverage.diff`
+
+```
+3c3
+<   stats onset n_lines=60 n_snapped=1
+---
+>   stats onset n_lines=60 n_low_ref=2 n_snapped=1
+7c7
+<   stats onset n_lines=51 n_snapped=0
+---
+>   stats onset n_lines=51 n_low_ref=1 n_snapped=0
+10c10
+<   stats onset n_lines=40 n_snapped=0
+---
+>   stats onset n_lines=40 n_low_ref=0 n_snapped=0
+14c14
+<   stats onset n_lines=51 n_snapped=0
+---
+>   stats onset n_lines=51 n_low_ref=1 n_snapped=0
+19c19
+<   stats onset n_lines=56 n_snapped=0
+---
+>   stats onset n_lines=56 n_low_ref=0 n_snapped=0
+24c24
+<   stats onset n_lines=27 n_snapped=0
+---
+>   stats onset n_lines=27 n_low_ref=0 n_snapped=0
+28c28
+<   stats onset n_lines=39 n_snapped=0
+---
+>   stats onset n_lines=39 n_low_ref=0 n_snapped=0
+31c31
+<   stats onset n_lines=77 n_snapped=0
+---
+>   stats onset n_lines=77 n_low_ref=1 n_snapped=0
+34c34
+<   stats onset n_lines=101 n_snapped=0
+---
+>   stats onset n_lines=101 n_low_ref=0 n_snapped=0
+37c37
+<   stats onset n_lines=37 n_snapped=0
+---
+>   stats onset n_lines=37 n_low_ref=1 n_snapped=0
+41c41
+<   stats onset n_lines=38 n_snapped=0
+---
+>   stats onset n_lines=38 n_low_ref=0 n_snapped=0
+45c45
+<   stats onset n_lines=47 n_snapped=0
+---
+>   stats onset n_lines=47 n_low_ref=0 n_snapped=0
+48c48
+<   stats onset n_lines=32 n_snapped=0
+---
+>   stats onset n_lines=32 n_low_ref=0 n_snapped=0
+51c51
+<   stats onset n_lines=47 n_snapped=0
+---
+>   stats onset n_lines=47 n_low_ref=0 n_snapped=0
+55c55
+<   stats onset n_lines=63 n_snapped=0
+---
+>   stats onset n_lines=63 n_low_ref=0 n_snapped=0
+59c59
+<   stats onset n_lines=54 n_snapped=0
+---
+>   stats onset n_lines=54 n_low_ref=2 n_snapped=0
+62c62
+<   stats onset n_lines=29 n_snapped=0
+---
+>   stats onset n_lines=29 n_low_ref=1 n_snapped=0
+65c65
+<   stats onset n_lines=84 n_snapped=0
+---
+>   stats onset n_lines=84 n_low_ref=1 n_snapped=0
+73c73
+<   stats onset n_lines=120 n_snapped=1
+---
+>   stats onset n_lines=120 n_low_ref=0 n_snapped=1
+77c77
+<   stats onset n_lines=103 n_snapped=0
+---
+>   stats onset n_lines=103 n_low_ref=2 n_snapped=0
+81c81
+<   stats onset n_lines=79 n_snapped=1
+---
+>   stats onset n_lines=79 n_low_ref=0 n_snapped=1
+86c86
+<   stats onset n_lines=54 n_snapped=0
+---
+>   stats onset n_lines=54 n_low_ref=0 n_snapped=0
+90c90
+<   stats onset n_lines=36 n_snapped=0
+---
+>   stats onset n_lines=36 n_low_ref=0 n_snapped=0
+93c93
+<   stats onset n_lines=49 n_snapped=0
+---
+>   stats onset n_lines=49 n_low_ref=0 n_snapped=0
+97c97
+<   stats onset n_lines=75 n_snapped=0
+---
+>   stats onset n_lines=75 n_low_ref=0 n_snapped=0
+102c102
+<   stats onset n_lines=53 n_snapped=0
+---
+>   stats onset n_lines=53 n_low_ref=0 n_snapped=0
+107c107
+<   stats onset n_lines=37 n_snapped=0
+---
+>   stats onset n_lines=37 n_low_ref=1 n_snapped=0
+111c111
+<   stats onset n_lines=25 n_snapped=0
+---
+>   stats onset n_lines=25 n_low_ref=0 n_snapped=0
+114c114
+<   stats onset n_lines=38 n_snapped=0
+---
+>   stats onset n_lines=38 n_low_ref=0 n_snapped=0
+118c118
+<   stats onset n_lines=32 n_snapped=0
+---
+>   stats onset n_lines=32 n_low_ref=0 n_snapped=0
+123c123
+<   stats onset n_lines=33 n_snapped=0
+---
+>   stats onset n_lines=33 n_low_ref=2 n_snapped=0
+127c127
+<   stats onset n_lines=67 n_snapped=0
+---
+>   stats onset n_lines=67 n_low_ref=1 n_snapped=0
+130c130
+<   stats onset n_lines=29 n_snapped=0
+---
+>   stats onset n_lines=29 n_low_ref=3 n_snapped=0
+133c133
+<   stats onset n_lines=60 n_snapped=0
+---
+>   stats onset n_lines=60 n_low_ref=0 n_snapped=0
+136c136
+< total onset n_lines=1823 n_snapped=3
+---
+> total onset n_lines=1823 n_low_ref=19 n_snapped=3
+```
+
+No gate failure: suite matches the known-failure set, both diffs are
+`n_low_ref`-counter noise plus exactly one vanished onset record
+(replay harness, `L19`). Commit: (this entry rides with it).
