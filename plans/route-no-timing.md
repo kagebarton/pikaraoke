@@ -22,8 +22,11 @@ Model: Claude Sonnet 5 (executor). Plan drafted by Claude Fable 5.
 > not ship. **Phase 5 ends with no production change, and the per-gap
 > question must not be re-opened by amending that section** — the gate
 > was unwinnable as pre-registered and a re-attempt needs a fresh design
-> pass and a fresh letter. **Phase 6 is the head of the queue and was
-> DESIGNED 2026-09-14 (Opus) — its gate is GATE W.** CTC
+> pass and a fresh letter. **Phase 6 is CLOSED 2026-09-15 (Ken) at
+> GATE W step 2 — no production change, no GPU pass spent.** Ken read
+> the step 2 result as a wash and did not re-pose the framing; a
+> re-attempt needs a fresh design and letter. It was DESIGNED
+> 2026-09-14 (Opus) as GATE W. CTC
 > post-selection *interior* refinement: the matcher still decides
 > where a line goes, and this only asks where the word boundaries
 > fall inside a span already decided. Pre-registered as four steps,
@@ -37,9 +40,8 @@ Model: Claude Sonnet 5 (executor). Plan drafted by Claude Fable 5.
 > W-2a did not fire, W-2b did — STOP → Ken.** Ken rated 28 blind looks
 > of current shipped output. Target looks were clearly off 3 of 20 and
 > the controls 0 of 8, a gap inside the 0.20 at which W-2b says the
-> phase may be aimed wrong. **Step 3 is held; nothing is built or run
-> until Ken re-poses the framing.** The phase is not ended — that was
-> W-2a's outcome, and it missed by one look.
+> phase may be aimed wrong. Ken ruled the result a wash and closed
+> the phase rather than re-pose it; steps 3–6 never run.
 > **Phase 7 RAN and was READ 2026-09-14 — it is done, and it halved
 > the prize.** Of the 150 unplaced lines corpus-wide, **47% are text
 > that appears in no transcription of the audio at all** — closed
@@ -62,11 +64,9 @@ Model: Claude Sonnet 5 (executor). Plan drafted by Claude Fable 5.
 > that claim is now false and is struck wherever it appears. If ever
 > reopened, the lever is upstream (a lyrics sheet matching the
 > recording), named at GATE P — not anything inside the matcher.
-> **GATE W is now the better target on evidence rather than merely what
-> is left.** Its step 1 was READ 2026-09-14 (both arms proceed); **step
-> 2 was READ 2026-09-15 and W-2b fired: Phase 6 is at STOP → Ken, step 3
-> held pending his re-posing.** Then GATE L when the
-> Mandarin corpus exists. Sequencing lives in `plans/PROGRAM.md`.
+> **With Phase 6 closed, no measurement phase is live on this lane.**
+> What remains is GATE L when the Mandarin corpus exists, then the
+> design-consolidation pass. Sequencing lives in `plans/PROGRAM.md`.
 
 ## Context
 
@@ -858,7 +858,7 @@ and called the placement no better than the shipped one. **So the NO-GO
 rests on the mechanism buying nothing, not only on the defective bar,
 and no Fable round is owed on this gate.** See the read-off's addendum.
 
-## Phase 6 — CTC post-selection interior refinement (designed 2026-09-14; GATE W)
+## Phase 6 — CTC post-selection interior refinement (designed 2026-09-14; CLOSED 2026-09-15 at GATE W step 2, Ken)
 
 Added 2026-09-10 on Ken's question, assessed by Fable the same day.
 **Assessment only; no gate letter, no ruling, nothing built.**
@@ -5051,3 +5051,25 @@ Concretely:
 - **Not** a proposal for the re-posed framing. That is Ken's.
 - **Not** an amendment. W-2 through W-6 stand as written, and §1's
   mapping field is recorded, not edited in.
+
+### 2026-09-15 — Phase 6 / GATE W CLOSED (Ken) — no framing re-posed, no mechanism commissioned
+
+Ken's ruling on the W-2b STOP above, in his words: "seems like a wash to
+me, let's leave it then, saves an additional gpu pass."
+
+- **Phase 6 is CLOSED at step 2, and GATE W is closed with it.** No
+  framing is re-posed. Steps 3–6 never run; no GPU pass is spent.
+- **No production change.** Word boundaries inside a placed line stay as
+  the joint matcher and the edge snap ship them today. Neither CTC nor
+  the zero-model form is adopted. The snap ruling of 2026-09-10 is
+  unaffected: the snap still owns line edges.
+- **What the closure rests on:** Ken's read of the step 2 evidence as a
+  wash. It does not rest on a kill rule ending the phase, because W-2a
+  did not fire. The step 1 and step 2 tables and read-offs stay as the
+  record.
+- **Re-opening** needs a fresh design pass and a fresh gate letter.
+  Amending W-2 to re-run this sitting does not qualify. By the same
+  standard GATE G set, any re-attempt must argue it would do better than
+  a wash.
+- The `.baseline.ass` files in `karaoke/` are inert comparison renders.
+  They are left where the executor wrote them.

@@ -151,6 +151,7 @@ exactly as it does today.
 | Word timing | nothing — sidecar unused for routing | **nothing — unchanged** (the fill-source door was tried and refused at GATE G) |
 | Scaffold aligner | n/a | n/a — route withdrawn; M6-d moot |
 | Joint aligner | whisper align | **whisper align — unchanged** (GATE J1 NO-GO 2026-09-08; CTC not adopted) |
+| Word boundaries inside a placed line | joint matcher's words | **same — unchanged** (GATE W closed 2026-09-15, Ken: interior refinement not adopted) |
 | Evidence veto | joint route | joint route only (unchanged) |
 | LRCLIB fill | joint route | joint route; **kept** — refit Phase 1.1 cancelled 2026-09-08 |
 
@@ -243,12 +244,16 @@ a new mechanism on rung 2b rather than rung 1 returning. Detail in
   one residual uncertainty, so **no Fable round is owed on this gate**.
   Read off by Opus, **ratified by Ken**; full entry in
   `route-no-timing.md`.
-- **GATE W** — **OPEN, at STOP → Ken. Designed 2026-09-14 (Opus); step 1
+- ~~**GATE W**~~ — **CLOSED 2026-09-15 (Ken) at step 2: no production
+  change, no GPU pass spent.** Designed 2026-09-14 (Opus); step 1
   RAN and was READ the same day — no kill rule fired, both arms proceed.
   Step 2 RAN and was READ 2026-09-15 — W-2a did not fire, W-2b did:
   Ken's blind looks found target interiors clearly off 3 of 20 against
-  the align-won controls' 0 of 8, a gap inside W-2b's 0.20. Step 3 is
-  held until Ken re-poses the framing; the phase is not ended.**
+  the align-won controls' 0 of 8, a gap inside W-2b's 0.20. **Ken called
+  it a wash and closed the phase rather than re-pose it.** Word
+  boundaries inside a line stay as shipped; neither CTC nor the
+  zero-model form is adopted. A re-attempt needs a fresh design and
+  letter, and must argue it beats a wash.
   Phase 6's gate: does refining word boundaries *inside* an already
   placed line beat what ships today. Four pre-registered steps, each
   with a kill rule, and **the two cheapest come first on purpose** —
@@ -260,8 +265,8 @@ a new mechanism on rung 2b rather than rung 1 returning. Detail in
   whether the defect is visible at all and can end the phase before
   a GPU runs (**it did not end it, but its control check fired**:
   the gap between target and control looks was too small to
-  say the phase points at its own population, so the design hands the
-  framing back to Ken). What it cannot do: change which line renders, touch
+  say the phase points at its own population, so the design handed the
+  framing back to Ken, who closed it). What it cannot do: change which line renders, touch
   line edges (the snap owns those, Ken 2026-09-10), or re-open GATE
   J1 — this runs strictly after selection. Price if it ships,
   stated before the spend: a milestone bump and a full-library
@@ -320,7 +325,8 @@ a new mechanism on rung 2b rather than rung 1 returning. Detail in
   pre-registered default. Its **endpoint** form is not merely blocked
   but incoherent under the snap ruling below: if the snap permanently
   owns line edges, endpoint refinement is a second mechanism fighting
-  it over the same values. Letter still unassigned.
+  it over the same values. ~~Letter still unassigned.~~ **Assigned GATE
+  W 2026-09-14; closed 2026-09-15 (Ken) — see GATE W above.**
 
 ~~**J2 vs Appendix D.**~~ **RESOLVED 2026-09-10 — Ken's ruling: the
 edge snap stays.** The two rules were never in genuine conflict; they
@@ -337,7 +343,9 @@ never runs on, and the whole SRT route.
 
 Consequences: (1) **the snap owns line edges, always, unchanged**, and
 CTC owns word boundaries strictly inside a line — the two never touch
-the same numbers, so **no per-line snap exception is needed anywhere**;
+the same numbers, so **no per-line snap exception is needed anywhere**
+(Phase 6 closed 2026-09-15 without shipping, so nothing adjusts
+interior boundaries today; the snap half of this stands unchanged);
 (2) Appendix D's locked snap clause **does not move** and never had to;
 (3) J2 is moot on this lane *permanently*, not just "today" as the
 read-off put it, because nothing on the roadmap restores whole-song CTC
@@ -375,7 +383,10 @@ songs are a veto stratum, the eye is named as the only interior
 reference there is, and the zero-model competitor is priced at step 1
 where it could retire the second model before a GPU runs. **Priced
 2026-09-14, and it does not:** it covers under half the target lines,
-so it proceeds alongside CTC rather than replacing it.
+so it proceeds alongside CTC rather than replacing it. **Phase 6 then
+closed 2026-09-15 at step 2 (Ken: a wash), so neither form ships.**
+This rider still stands as the reason J1 must not be cited against a
+future interior-refinement design.
 
 ## Which file owns what
 
@@ -386,7 +397,7 @@ so it proceeds alongside CTC rather than replacing it.
 | `route-word-timing.md` | rung 1 (**CLOSED 2026-09-04**); GATE R, R-1 ruling, M1-M5, the R-4 closure |
 | `route-srt.md` | rung 2a; the shipped cue-align route, S-C |
 | `route-line-timing.md` | rung 2b (**CLOSED 2026-09-08** — S-1 withdrawn); GATE S scaffold arms, M6, M7, the fallback; GATE L re-homed to rung 3 |
-| `route-no-timing.md` | rung 3 — **the live build lane**; the joint catch-all refit, GATE P/J1/J2/T, Phase 5 + **GATE G** (CLOSED 2026-09-11, NO-GO — fill not widened), **Phase 7 + 7b (RAN + READ 2026-09-14 — the unplaced population is CLOSED: ~2 winnable lines corpus-wide)**, **Phase 6 + GATE W (DESIGNED 2026-09-14; step 1 RAN + READ, both arms proceed; step 2 RAN + READ 2026-09-15, W-2b fired — STOP → Ken, step 3 held)**, GATE L |
+| `route-no-timing.md` | rung 3 — **the live build lane**; the joint catch-all refit, GATE P/J1/J2/T, Phase 5 + **GATE G** (CLOSED 2026-09-11, NO-GO — fill not widened), **Phase 7 + 7b (RAN + READ 2026-09-14 — the unplaced population is CLOSED: ~2 winnable lines corpus-wide)**, **Phase 6 + GATE W (CLOSED 2026-09-15 at step 2, Ken — a wash; no production change)**, GATE L |
 | `shared-aligner-form.md` | GATE C, GATE O, Phase 0 harness, ruling-provenance audit |
 | `ctc-sync-engine.md` | build phases + locked appendices; each licensed by a GATE above |
 | `completed/` | closed plans, kept for their Results logs |
@@ -421,7 +432,7 @@ shipped `cue_align.py`, so it is not dead-end history.
 > design defects, recorded at the gate), so this is not the corpus
 > ruling against the per-gap idea — but **do not re-open it by amending
 > Phase 5**: that needs a fresh design pass and a fresh letter.
-> **Phase 6 is now the head of the queue.** **Phase 6**
+> ~~**Phase 6 is now the head of the queue.**~~ **Phase 6**
 > (CTC post-selection *interior* refinement) was added the same day as
 > design owed; GATE T no longer gates it, but it stays **after Phase 5**
 > on value — it refines word boundaries inside lines already placed,
@@ -430,9 +441,10 @@ shipped `cue_align.py`, so it is not dead-end history.
 > the unreached population and it holds about two winnable lines, so
 > GATE W is the better target on evidence, not merely what is left.**
 > It is not GATE J1's question and does not re-open it. **Phase 6's
-> gate letter is GATE W (assigned 2026-09-14).** **As of 2026-09-15
-> GATE W is at STOP → Ken:** step 2's W-2b fired, and nothing further
-> runs until Ken re-poses the framing.
+> gate letter is GATE W (assigned 2026-09-14).** **Phase 6 CLOSED
+> 2026-09-15 (Ken) at GATE W step 2 — a wash, no production change.
+> No measurement phase is live now: what remains is GATE L (blocked on
+> the Mandarin corpus) and the design-consolidation pass.**
 
 Ken's sequencing ruling: run the remaining measurement program to
 completion, then consolidate the build design once, rather than amending
@@ -615,14 +627,14 @@ Order — cheapest and highest overturn-risk first:
    lyrics sheet that matches the recording. Nothing inside the
    matcher reaches this. Detail, the resolved STOP and two recorded
    design defects are in `route-no-timing.md`'s Results log.
-   **Live now: Phase 6 → GATE W** (designed 2026-09-14) — interior
+   ~~**Live now: Phase 6 → GATE W**~~ (designed 2026-09-14) — interior
    word boundaries on lines already placed. Phase 7 and 7b ran first
    precisely to test whether something better existed to aim at.
-   **They found there is not**, which promotes GATE W from "what is
+   **They found there is not**, which promoted GATE W from "what is
    left" to the best available target on measured evidence. **Step 1
    was read 2026-09-14: no kill rule fired, both arms proceed. Step 2
-   was read 2026-09-15: W-2b fired, STOP → Ken. Step 3 is held; the
-   next action is Ken re-posing the framing, not a run.**
+   was read 2026-09-15: W-2b fired, STOP → Ken. Ken closed Phase 6 the
+   same day as a wash: no GPU pass, no production change.**
 6. ~~**S-E**~~ — **not run.** This is the *line* route's Phase 3
    optional arm, not the joint plan's Phase 3, and it closed with that
    route: `route-line-timing.md`'s status block records "S-E is not
@@ -720,9 +732,9 @@ how the completed work was judged, not live policy.
   plan's Appendices A–E) is locked, with every formerly lock-at-GATE
   item converted to a pre-registered decision procedure, and Opus owns
   design work from here. **Phase 6 was designed 2026-09-14 and gated
-  as GATE W**, and GATE W's steps 1 and 2 are read. Step 2's W-2b fired, so
-  **the open item is Ken's**: re-posing Phase 6's framing before
-  anything further is built or run. Phase 5's per-gap gate
+  as GATE W**, and closed by Ken 2026-09-15 at step 2. **The one design item
+  left is the consolidation pass** (re-lock Appendices C/D/E); GATE L
+  waits on its corpus. Phase 5's per-gap gate
   closed at GATE G 2026-09-11. At each GATE the judge
   *executes* the relevant procedure verbatim and records the resulting
   constants; no model on any tier invents a threshold or extends a
