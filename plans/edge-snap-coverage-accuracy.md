@@ -879,6 +879,12 @@ produces a script under `scripts/` plus a Results-log entry, read by Opus.
 `required_step = max(5.0, min(STEP_DB, 0.6 * (ref - p20(window))))`. Diff
 which new snaps appear, and eyeball before proposing production adoption.
 
+*Phase 2 read-off note (Opus, 2026-09-15):* `n_undetectable` overcounts. At
+least 24 of its 50 replay lines did find a rise, so it is not the "cannot
+qualify" population. Size and trigger 7b on lines that are both
+undetectable and `n_no_rise`, bounded above by `n_no_rise`, on the replay
+harness. Re-pin this when Phase 7 is pinned. See "### Phase 2 read-off".
+
 **7c. Sub-frame attack refinement (review #5).**
 
 - Replace `SNAP_MARGIN_S` with a real attack locator:
@@ -1717,3 +1723,92 @@ replay onset 21 / end 21.
 
 Suite: known failures only. Both record-view diffs: empty. Commit: (this
 entry rides with it).
+
+### Phase 2 read-off (Opus, 2026-09-15)
+
+**Checked against the record.**
+
+- `git show 1d90960 -- pikaraoke/lib/onset_snap.py tests/unit/test_onset_snap.py`,
+  against the Phase 2 block (anchors per `7ba3bc8`):
+  - Onset: `n_single_word` inside the `len(words) < 2` gate, only when
+    `len(words) == 1`. `n_fired` sits after the on-time guard's `continue`,
+    before `_detect_rise`. The `n_undetectable` `lo`/`hi`/`p20` block is the
+    plan's text verbatim, count-and-continue. `n_no_rise` is in the
+    `onset is None` branch and `n_below_min_shift` in the
+    `new_start - w1s < MIN_SHIFT_S` branch. The invariant comment and the
+    five stats keys are present.
+  - End: `n_below_min_shift` in the `new_end - w_end < MIN_SHIFT_S` branch,
+    `n_fired += 1` unmoved, `n_single_word` at the gate, invariant comment
+    and two stats keys present.
+  - All three Phase 2 anchors matched their `7ba3bc8` line numbers at
+    `385c881`; no drift to log.
+  - The `n_undetectable` block adds only reads. `lo <= len(env) - 1` and
+    `hi >= lo + 1` keep `env[lo:hi]` non-empty for any non-empty `env`, and
+    an empty `env` never reaches it (`_sung_level_ref` returns None first).
+  - Tests: the four changes match the Phase 2 block's constructions and
+    assertions. `uv run --no-sync python -m pytest tests/unit/test_onset_snap.py -q`
+    at `1d90960`: `33 passed`.
+- Both `edge_p1_*.txt` and `edge_p2_*.txt` re-read. Record views (Process
+  "Record view" filter), P1 vs P2: empty for both harnesses. Every
+  pre-existing total key (`n_lines`, `n_low_ref`, `n_snapped`, `n_extended`,
+  end `n_fired`) is equal between P1 and P2 in both harnesses.
+- Invariants on the pasted totals:
+
+| harness | path | invariant | values | holds |
+|---|---|---|---|---|
+| replay | onset | `n_fired == n_snapped + n_no_rise + n_below_min_shift` | 344 = 191 + 28 + 125 | yes |
+| replay | end | `n_fired == n_extended + n_below_min_shift` | 341 = 237 + 104 | yes |
+| coverage | onset | `n_fired == n_snapped + n_no_rise + n_below_min_shift` | 688 = 3 + 62 + 623 | yes |
+| coverage | end | `n_fired == n_extended + n_below_min_shift` | 364 = 15 + 349 | yes |
+
+- Per song, so offsetting errors can't hide in the totals. Script
+  `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\4d761251-d0b5-493b-a519-1f8202696d9f\scratchpad\p2judge\invariants.py`
+  over the executor's `edge_p2_*.txt` `  stats ` lines. Output
+  (`...\p2judge\invariants.txt`):
+
+```
+replay stats_lines=36 invariant_violations=0 onset_fired=344 n_undetectable=50 n_no_rise=28 sum_over_songs_max0(n_undetectable-n_no_rise)=24
+coverage stats_lines=68 invariant_violations=0 onset_fired=688 n_undetectable=152 n_no_rise=62 sum_over_songs_max0(n_undetectable-n_no_rise)=93
+```
+
+- Population gate: `n_single_word` coverage 61/61, replay 21/21, equal to
+  pre-registration.
+
+**Finding.**
+
+1. Phase 2 is exactly the spec'd change. Both gates pass, both invariants
+   hold per song, and no behaviour moved.
+2. **`n_undetectable` does not measure what 7b's trigger reads it as.** The
+   Phase 2 block calls it "lines where the step detector cannot qualify a
+   rise", but `ref - p20 < STEP_DB` only says the window's quiet floor sits
+   within 10 dB of the sung level. A rise can still qualify when the step
+   lands above the reference. The record shows this directly: summed over
+   songs, at least 24 of 50 replay lines and 93 of 152 coverage lines
+   counted as undetectable are in excess of that song's `n_no_rise`, i.e.
+   they did find a rise. The proxy is a plan design error (Opus refresh),
+   not an executor error: the code is the plan's text verbatim.
+3. Consequence for 7b's trigger ("`n_undetectable` > 5% of fired lines"):
+   read literally it fires at 50/344 replay and 152/688 coverage, but most
+   of that is lines the detector already handles. The population a lower
+   step floor could add snaps to is bounded by `n_no_rise` (28 replay,
+   62 coverage). That bound alone is also above 5% of fired lines, so the
+   literal outcome does not flip; the size 7b quotes must not come from
+   `n_undetectable`. The coverage harness's fired count is dominated by
+   already-snapped shipped lines (623 below `MIN_SHIFT_S`), so 7b sizes on
+   the replay harness.
+4. Minor: no unit test asserts `n_undetectable`. Its test construction
+   would give 1 (`ref - p20` = 9 < 10). Carried to the Phase 5 review; not a
+   gate.
+
+**Ruling.**
+
+1. Phase 2 is accepted as committed (`1d90960`). No re-run, no change.
+2. **Phase 3 is unblocked.** Diff it against the executor's `edge_p2_*`
+   files above if they still resolve. Otherwise re-run both harnesses on
+   `1d90960` first; both `total` lines must match those pasted in
+   "### Phase 2" exactly, else STOP → Opus.
+3. 7b is annotated in place (see its "Phase 2 read-off note"). Its trigger
+   and sizing are re-pinned when Phase 7 is pinned, not now. Phases 3-5 do
+   not read `n_undetectable`.
+4. `/code-review` on the Phase 0-2 commits stays pending until the Phase 5
+   checkpoint. Phase 2 alone is simple enough that self-review covers it.
