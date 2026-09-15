@@ -1456,3 +1456,97 @@ Diff: `diff edge_p0_coverage.txt edge_p1_coverage.txt > edge_p1_coverage.diff`, 
 No gate failure: suite matches the known-failure set, both diffs are
 `n_low_ref`-counter noise plus exactly one vanished onset record
 (replay harness, `L19`). Commit: (this entry rides with it).
+
+### Phase 1 read-off (Opus, 2026-09-15)
+
+**Checked against the record.**
+
+- `git show 15f4806 -- pikaraoke/lib/onset_snap.py tests/unit/test_onset_snap.py`:
+  the gate, its placement (after `ref is None`, before the on-time guard),
+  the counter and the stats key match the Phase 1 block verbatim. The test
+  uses the stated construction and asserts untouched, `n_low_ref == 1`,
+  `n_snapped == 0`.
+- Both pasted diffs were regenerated from the executor's artifacts with
+  `diff edge_p0_X.txt edge_p1_X.txt | cmp - edge_p1_X.diff`: identical, for
+  both harnesses.
+- Record views (Process "Record view" filter), P0 vs P1:
+  - replay: `437d436 <   rec onset L19 +0.150` and nothing else
+  - coverage: empty
+- `total end` lines are unchanged in both harnesses.
+- The vanished record belongs to
+  `Wicked - For Good  (2025) 4K - The Girl in the Bubble (7_8) _ Movieclips---wzSeub9W4QQ`,
+  the one de-reverb-adopted song. Its P0 end records are
+  `L5 L6 L20 L22 L28 L29`: there is no `L18` end record in P0 or P1.
+
+**Probe on the vanished record.** Script
+`C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\4d761251-d0b5-493b-a519-1f8202696d9f\scratchpad\p1judge\probe_l19.py`
+calls `edge_snap_replay._replay_song` on that bundle (checked-out code at
+`15f4806`, shipped ytasr ratio). It prints each multi-word line's
+`_sung_level_ref` against the snap stem, and the envelope across L19.
+Output:
+`C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\4d761251-d0b5-493b-a519-1f8202696d9f\scratchpad\p1judge\probe_l19.txt`.
+
+Stem: `...---wzSeub9W4QQ---dereverb.m4a`. Lines with ref < `MIN_REF_DB`:
+`L4 -120.0`, `L19 -50.0`, `L31 -59.3`, `L35 -57.2`.
+
+| word (L19, "It's hard to unsee what you've seen") | start-end | median dB | max dB |
+|---|---|---|---|
+| It's | 81.200-81.520 | -53.5 | -38.7 |
+| hard | 81.520-82.400 | -62.8 | -38.8 |
+| to | 82.400-82.720 | -48.8 | -33.2 |
+| unsee | 82.720-84.080 | -47.0 | -24.0 |
+| what | 84.080-84.400 | -45.2 | -29.1 |
+| you've | 84.400-84.640 | -48.8 | -39.5 |
+| seen | 84.640-86.640 | -71.1 | -24.6 |
+
+Envelope excerpt at word 1: 81.200 -60.4, 81.375 -54.3, 81.400 -48.0,
+81.425 -40.6, 81.450 -38.7, holding -39 to -42 through 81.800. The P0 snap
+put word 1 at 81.35, i.e. the rise at 81.40 minus the snap margin.
+
+**Finding.**
+
+1. Both recorded expectations hold.
+   - Onset records vanished only on a line whose reference is below
+     `MIN_REF_DB`: one record, L19 at -50.0.
+   - The "end record may change on the line before" clause did not trigger
+     anywhere. L18 has no end record in either run, and no end record or
+     end total moved.
+2. The other 12 replay and 19 coverage `n_low_ref` lines produced no
+   record change: the gate claimed lines that the guard or detector already
+   left alone.
+3. **The one lost record was a correct snap on a correctly placed line.**
+   This is not the "misplaced over near-silence" case that `MIN_REF_DB`'s
+   comment describes.
+   - Every L19 word has voiced peaks between -24 and -40 dB.
+   - The reference sits at -50 because the de-reverbed stem drops to
+     -65..-120 dB between the words of a sparse, speech-like delivery. Word
+     spans that straddle those gaps drag the median below the floor.
+   - The snap it cost was +0.150, exactly `MIN_SHIFT_S`.
+   - The end path has applied the same gate on the same reference since
+     before Phase 1. L19 never reaches it there: its bound check at
+     `onset_snap.py:313` exits first, because L20 starts at 86.80, giving
+     a bound of 86.70, only 0.06s past L19's end at 86.64.
+4. The cost is one record at jitter level on one song. That is no reason to
+   STOP or retune: the plan names no constant to tune here, and Phase 1
+   gives the onset path the gate the end path already had.
+
+**Ruling.**
+
+1. Phase 1 is accepted as committed (`15f4806`). No re-run, no change.
+2. **Phase 2 is unblocked.**
+   - Diff it against the executor's `edge_p1_*` files above if they still
+     resolve.
+   - Otherwise re-run both harnesses on `15f4806` first. Both `total` lines
+     must match those pasted in "### Phase 1" exactly, else STOP → Opus.
+3. **Carry to the Phase 4 read, not a gate.** A floor-level reference also
+   comes from gap-heavy delivery on the de-reverbed stem, not only from
+   misplacement. When Phase 4's single-word reference is read, check the
+   `Wicked - For Good` one-word lines by hand before treating `n_low_ref`
+   rejections there as misplaced lines.
+4. `/code-review` on the Phase 0-1 commits stays pending until the Phase 5
+   checkpoint.
+
+**Process note.** The Phase 1 entry's closing line ("counter noise") and
+the commit body ("Both harnesses confirm") characterise the diff. Process
+asks for none. The record itself is complete and verbatim, so nothing is
+re-run for it.
