@@ -193,6 +193,20 @@ class TestSnapLineOnsets:
         assert out[0] is obj
         assert stats["n_snapped"] == 0
 
+    def test_line_in_silence_untouched(self, use_env):
+        # Without the gate the on-time guard's start check (-60 >= ref-8)
+        # is False here, so it would NOT catch this line, and the 12dB
+        # bump at 2.5s would pass the rise detector and snap to 2.45 --
+        # this construction actually discriminates the new gate.
+        use_env(_env(8.0, [(2.5, 3.0, -48.0), (3.2, 4.0, -50.0)]))
+        obj = _line((2.0, 3.0), (3.2, 3.5), (3.6, 4.0))
+
+        out, stats = snap_line_onsets([obj], "vocal.wav")
+
+        assert out[0] is obj
+        assert stats["n_low_ref"] == 1
+        assert stats["n_snapped"] == 0
+
     def test_short_lines_skipped(self, use_env):
         use_env(_env(5.0, [(2.2, 4.5, -28.0)]))
         one_word = _line((1.2, 1.4))
