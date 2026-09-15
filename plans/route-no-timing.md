@@ -33,8 +33,9 @@ Model: Claude Sonnet 5 (executor). Plan drafted by Claude Fable 5.
 > fired.** Target lines are 45.7% of placed (floor 15%) and whisper
 > agrees on 43.8% of them, inside the 10–70% band — so **both arms
 > proceed**: the zero-model form is not retired, CTC is not ruled out,
-> and step 4 carries S6. **Step 2 is next: Ken's 28-look baseline
-> eyeball**, which can still end the phase before a GPU runs.
+> and step 4 carries S6. **Step 2 RAN 2026-09-15**: Ken rated 28
+> blind looks against current shipped output; tables are in the
+> Results log, no verdict yet. **Opus reads W-2a/b next.**
 > **Phase 7 RAN and was READ 2026-09-14 — it is done, and it halved
 > the prize.** Of the 150 unplaced lines corpus-wide, **47% are text
 > that appears in no transcription of the audio at all** — closed
@@ -59,8 +60,8 @@ Model: Claude Sonnet 5 (executor). Plan drafted by Claude Fable 5.
 > recording), named at GATE P — not anything inside the matcher.
 > **GATE W is now the better target on evidence rather than merely what
 > is left.** Its step 1 was READ 2026-09-14 (both arms proceed); **step
-> 2, Ken's baseline eyeball, is next.** Then GATE L when the Mandarin corpus
-> exists. Sequencing lives in `plans/PROGRAM.md`.
+> 2 RAN 2026-09-15 and Opus reads W-2a/b next.** Then GATE L when the
+> Mandarin corpus exists. Sequencing lives in `plans/PROGRAM.md`.
 
 ## Context
 
@@ -4811,3 +4812,103 @@ a STOP → Ken under its standing rule.
 - **Not** a verdict on either mechanism. Both are only still eligible.
 - **Not** an amendment. W-1 through W-6 stand as written; §1's wording
   slip is recorded, not edited in.
+
+### 2026-09-15 — Phase 6 / GATE W step 2 executor run (Sonnet) — baseline eyeball tables, no verdict
+
+Ran W-2 exactly as pre-registered: current shipped output only, nothing
+refined. Driver, frames, sample and key live in the session scratchpad
+under `phase6_w2/` (`phase6_w2_driver.py`, `frames.json`, `sample.json`,
+`key.json`), not committed.
+
+Rebuilt step 1's per-line labels from the same 18 bundles, same
+recompute (tokens from `lyrics.align_lines`, pace guard before
+`_range_agreement`, tau = 0.5), and hard-gated the pooled counts against
+step 1's committed tables before any draw: all matched exactly
+(`abstain_none` 3, `abstain_crammed` 119, `agrees` 172, `disagrees` 99;
+`align_won` 467), and the per-song `align_won`/`transcribe_won`/
+`ytasr_won` assertions against each bundle's own `joint_stats` passed on
+all 18.
+
+Drew at `seed = 20260914`: `rng.sample` of 10 from the 172 `agrees`
+target lines, then 10 from the 122 pooled `abstain_none` +
+`abstain_crammed` target lines, then 8 from the 467 align-won lines —
+each frame pre-sorted by (stem, line_id) — concatenated in that order
+and `rng.shuffle`d into the 28 numbered looks. The 99 `disagrees` lines
+are in no frame, per W-1's scope.
+
+**Mapping check.** Every sampled line was required to map onto exactly
+one Dialogue event in the shipped `<stem>.ass`, on both the render-time
+timing transform (`PipelineConfig.line_lead_in_cs`/`line_lead_out_cs`,
+`lyric_align._seconds_to_ass_time`) and matching text. On the first
+pass, comparing against `bundle["lyrics"]["lines"]` (display text), 3 of
+28 looks failed on text alone — timing matched exactly and uniquely in
+all 3. Diagnosis, checked read-only against shipped code (Opus, at
+Ken's request, general-purpose subagent): `generate_ass` builds every
+rendered word from the raw half of `_tokenise_lines(align_lines)`
+tokens and never reads `lyrics.lines`, which feeds only the `.srt`; the
+3 failures all carried parenthetical backing-vocal punctuation that
+`lines` keeps and the tokeniser drops. Checked corpus-wide, not just
+the 3: on the 18-bundle population, comparing against the `align_lines`
+token reconstruction instead matches all 846 shipped events exactly, so
+the switch carries no regression risk inside this phase's population.
+**The mapping check's text side compares against the `align_lines`
+token reconstruction, not `lyrics.lines`** — same shape as step 1's
+read-off correcting the design's tokenisation field, on a stronger
+basis (the renderer's own input, not an inference about it). Not a
+STOP: no line's identity was ever ambiguous, only the driver's choice
+of comparison field. Re-run clean: all 28 looks mapped unambiguously.
+
+Rendered beside each shipped file as `karaoke/<stem>.baseline.ass`,
+sampled lines only, verbatim from production, for the 15 songs with at
+least one look: Belle, Stay Gold, Free, Popular, Hakuna Matata, Colors
+of the Wind, Bloodstream, Best Part Of Me, NSYNC Paradise, Mulan,
+Defying Gravity, Be Our Guest, Next Ten Minutes, In Summer, For Good.
+No shipped `<stem>.ass` was touched.
+
+Ken rated all 28 looks blind (song, timestamp, line text only — no
+class, no source) against one question: does the word-sweep track the
+singing inside the line.
+
+#### Table W-2.1 — per look: class and Ken's verdict
+
+| look | stem | line_id | class | verdict |
+| --- | --- | --- | --- | --- |
+| 1 | Beauty and the Beast (1991) - Belle [UHD]---otxTf5hZ0Yw | 79 | control | slightly off |
+| 2 | Stay Gold (Official Music Video) from The Outsiders – A New Broadway Musical.---XzbHPqULtdA | 2 | control | fine |
+| 3 | 'Free' _ Official Lyric Video _ Sony Animation---fjOeJssZX_Q | 34 | abstained (crammed) | fine |
+| 4 | 'Popular' - Wicked 20th Anniversary Edition _ WICKED the Musical---22QYya-LGDY | 49 | control | fine |
+| 5 | Stay Gold (Official Music Video) from The Outsiders – A New Broadway Musical.---XzbHPqULtdA | 27 | control | slightly off |
+| 6 | Stay Gold (Official Music Video) from The Outsiders – A New Broadway Musical.---XzbHPqULtdA | 34 | control | slightly off |
+| 7 | The Lion King - Hakuna Matata Music Video I 4K Ultra HD---fwLxDUQBdEg | 14 | agrees | fine |
+| 8 | Pocahontas - Colors of the Wind (Blu-ray 1080p HD)---9ThO76peOw0 | 16 | abstained (crammed) | fine |
+| 9 | Ed Sheeran & Rudimental­ - Bloodstream [Official Music Video­ YTMAs]---Orq_75kFi8I | 42 | agrees | fine |
+| 10 | Ed Sheeran - Best Part Of Me (feat. YEBBA) (Live At Abbey Road)---wGyh_53ecgg | 23 | agrees | slightly off |
+| 11 | NSYNC - Paradise | 16 | abstained (crammed) | fine |
+| 12 | Ed Sheeran - Best Part Of Me (feat. YEBBA) (Live At Abbey Road)---wGyh_53ecgg | 3 | agrees | clearly off |
+| 13 | Mulan _ I'll Make a Man Out of You _ @disneykids---vGfJeW_CcFY | 11 | abstained (crammed) | clearly off |
+| 14 | 'Defying Gravity' - Wicked 20th Anniversary Edition _ WICKED the Musical---AoON1CyhQAM | 29 | abstained (crammed) | fine |
+| 15 | Beauty and the Beast (1991) - Be Our Guest [UHD]---MiraOCjABn8 | 72 | control | fine |
+| 16 | Ed Sheeran - Best Part Of Me (feat. YEBBA) (Live At Abbey Road)---wGyh_53ecgg | 24 | agrees | clearly off |
+| 17 | The Next Ten Minutes Lyrics---0j8kL24ph8U | 42 | abstained (crammed) | fine |
+| 18 | Stay Gold (Official Music Video) from The Outsiders – A New Broadway Musical.---XzbHPqULtdA | 35 | control | fine |
+| 19 | 'Defying Gravity' - Wicked 20th Anniversary Edition _ WICKED the Musical---AoON1CyhQAM | 38 | agrees | fine |
+| 20 | Josh Gad - In Summer (From 'Frozen'_Sing-Along)---9tcaM06eGrY | 15 | agrees | fine |
+| 21 | Beauty and the Beast (1991) - Be Our Guest [UHD]---MiraOCjABn8 | 30 | control | fine |
+| 22 | The Next Ten Minutes Lyrics---0j8kL24ph8U | 32 | agrees | fine |
+| 23 | 'Free' _ Official Lyric Video _ Sony Animation---fjOeJssZX_Q | 9 | abstained (crammed) | fine |
+| 24 | NSYNC - Paradise | 20 | abstained (crammed) | fine |
+| 25 | The Next Ten Minutes Lyrics---0j8kL24ph8U | 51 | agrees | slightly off |
+| 26 | Wicked - For Good  (2025) 4K - The Girl in the Bubble (7_8) _ Movieclips---wzSeub9W4QQ | 10 | abstained (crammed) | fine |
+| 27 | Pocahontas - Colors of the Wind (Blu-ray 1080p HD)---9ThO76peOw0 | 12 | abstained (crammed) | fine |
+| 28 | Wicked - For Good  (2025) 4K - The Girl in the Bubble (7_8) _ Movieclips---wzSeub9W4QQ | 7 | agrees | slightly off |
+
+#### Table W-2.2 — verdict counts by class, pooled target
+
+| class | n | fine | slightly off | clearly off |
+| --- | --- | --- | --- | --- |
+| agrees | 10 | 5 | 3 | 2 |
+| abstained | 10 | 9 | 0 | 1 |
+| target (agrees + abstained, pooled) | 20 | 14 | 3 | 3 |
+| controls | 8 | 5 | 3 | 0 |
+
+**Next:** Opus reads W-2a/b against these tables.
