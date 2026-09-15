@@ -572,6 +572,11 @@ The envelope ends at 5.0s, so `len(env) = 200` and `b_env = 197`.
 Recorded expectation, for the Opus read: a handful of onset records near
 song ends disappear, mainly on the replay harness.
 
+*Phase 3 read-off note (Opus, 2026-09-15):* this expectation was unsized and
+did not hold: both diffs were empty. The branch needs the bound inside the
+stem's final 75 ms, and no line on either corpus comes within 3.45 s (12.8 s
+for single-word lines at Phase 4's bound). See "### Phase 3 read-off".
+
 Commit: `fix(onset-snap): reject rises truncated by the stem end`
 
 ## Phase 4 — Single-word line support (the headline coverage gap)
@@ -734,6 +739,10 @@ short words, the tail-only median misstates the sung level.
 Recorded expectation, for the Opus read: a small number of end-extend
 changes, concentrated on lines with a long first word, mainly on the replay
 harness.
+
+*Phase 3 read-off note (Opus, 2026-09-15):* carried from 2026-07 unsized,
+like Phase 3's, which did not hold. For the read only: a contrary diff is not
+a STOP.
 
 Commit:
 `fix(end-snap): include a substantial word 1 in the end-path sung reference`
@@ -1879,3 +1888,97 @@ Script (coverage, 34 songs): `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-
 Output: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\probe_p3_coverage_out.txt`: `n_env_limited_candidates=0`
 
 Suite: known failures only. Commit: (this entry rides with it).
+
+### Phase 3 read-off (Opus, 2026-09-15)
+
+**Checked against the record.**
+
+- `git show 1e05ceb -- pikaraoke/lib/onset_snap.py tests/unit/test_onset_snap.py`:
+  the `_detect_rise` hunk is the plan's diff verbatim (`b_word2`, `b_env`,
+  `b = min(b_word2, b_env)`, trust branch returns only on
+  `b_word2 <= b_env`, else `continue`; the median branch is unchanged). The
+  new test is the plan's construction verbatim. No other code changed.
+- Diff files: `edge_p3_replay.diff` and `edge_p3_coverage.diff` are 0 bytes.
+  They diff the full outputs, `total` lines included, so the P3 totals equal
+  the P2 totals pasted under "### Phase 2".
+- Snap tests at `1e05ceb`: `34 passed` (`uv run --no-sync python -m pytest
+  tests/unit/test_onset_snap.py -q`).
+- **Positive control** (the empty harness diffs make the unit test the only
+  evidence the change is live). Scratch worktree at `1d90960` with the
+  `1e05ceb` test file copied in, run with `PYTHONPATH` set to the worktree
+  (module path printed from the worktree, confirming the old code loaded):
+
+  ```
+  E       AssertionError: assert {'end': 5.4, 'start': 4.625, 'words': [{'end': 4.95, 'start': 4.625, 'word': 'w0'}, {'end': 5.4, 'start': 4.95, 'word': 'w1'}]} is {'end': 5.4, 'start': 3.0, 'words': [{'end': 4.6, 'start': 3.0, 'word': 'w0'}, {'end': 5.4, 'start': 4.95, 'word': 'w1'}]}
+  FAILED tests/unit/test_onset_snap.py::TestSnapLineOnsets::test_rise_truncated_by_stem_end_rejected
+  1 failed, 1 passed, 32 deselected in 0.81s
+  ```
+
+  Pre-change the line snaps to 4.625, as the plan recorded; the paired
+  `test_soft_rise_just_before_word2_accepted` passes on both commits.
+  Worktree removed afterwards.
+
+**The executor's probe.** Its condition, `int(w2s / HOP_S) > len(env) -
+EDGE_FRAMES`, is the exact term that separates the old and new code paths:
+when `b_word2 <= b_env`, `b` and both branches are unchanged. So "zero such
+lines" and "empty diff" are the same fact, and the probe logic is sound. It
+prints no denominator, though (songs iterated, lines examined), so a zero from
+it cannot be told apart from an empty loop. Independent re-check with
+denominators and no line filters (a superset of the lines that reach
+`_detect_rise`). `margin = b_env - int(bound / HOP_S)`, and the changed branch
+needs `margin < 0`. Multi-word bound is word 2's start (Phase 3 as shipped);
+single-word bound is word 1's end (the bound Phase 4 will pass).
+
+Script: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\4d761251-d0b5-493b-a519-1f8202696d9f\scratchpad\p3judge\margins.py`
+Output: `...\p3judge\margins.txt`
+
+```
+coverage songs=34 multi_lines=1762 multi_min_margin_s=3.45 multi_neg=0 single_lines=61 single_min_margin_s=12.80 single_neg=0 min_tail_after_last_word_s=0.16
+replay songs=18 multi_lines=827 multi_min_margin_s=3.85 multi_neg=0 single_lines=21 single_min_margin_s=31.88 single_neg=0 min_tail_after_last_word_s=0.14
+```
+
+Song counts match both harnesses; single-word counts match Phase 2's
+`n_single_word` gate (61 / 21).
+
+**Findings.**
+
+1. Phase 3 is the exact specified change and it is live (positive control).
+   The empty diffs are correct, not a harness or implementation fault.
+2. **The recorded expectation was wrong, and the error is the plan's.** It
+   came from the 2026-07 text ("expect a handful of snaps near song ends to
+   disappear") and the 2026-09-15 refresh carried it forward without sizing
+   it. The changed branch does not fire "near the end of a song". It fires
+   only when the bound lands inside the final `EDGE_FRAMES` hops (75 ms) of
+   the stem, which requires a line's word 2 to *start* in that sliver. The
+   closest word 2 on either corpus starts 3.45 s before the stem end. Songs
+   end on an outro or trailing audio, and a line's *last* word (at best
+   0.14 s from the end) is never its word 2 unless the line is two words that
+   both land in the last 75 ms.
+3. **The Phase 3 motivation does not hold on this corpus either.** The plan
+   says Phase 4 "will feed this branch more cases near the stem end". With
+   Phase 4's bound (word 1's claimed end), the closest single-word line is
+   12.8 s clear. So the guard stays inert through Phase 4 here. It is kept:
+   the unit test shows it rejects a real false snap when a stem ends
+   mid-phrase (a truncated or clipped stem), it is a few lines, and it
+   changes nothing on this corpus.
+4. Probes that report a zero must print their denominators. Not a gate; a
+   note for the executor prompt.
+5. Phase 5's recorded expectation ("a small number of end-extend changes,
+   concentrated on lines with a long first word") was carried from 2026-07
+   the same way and is equally unsized. It remains for-the-read only; a
+   contrary diff there is not a STOP.
+
+**Ruling.**
+
+1. Phase 3 is accepted as committed (`1e05ceb`). No re-run, no change.
+2. **Phase 4 is unblocked.** Diff it against the executor's `edge_p3_*`
+   files above if they still resolve. Otherwise re-run both harnesses on
+   `1e05ceb` first; both `total` lines must match those pasted in
+   "### Phase 2" exactly (P3 equals P2), else STOP → Opus. The
+   `--multi-word-only` re-run on `1e05ceb` is already part of Phase 4's own
+   Verify.
+3. The Phase 1 read-off's hand-check (the de-reverbed song's one-word lines
+   before reading `n_low_ref` rejections as misplacement) still applies at
+   the Phase 4 read.
+4. `/code-review` on the Phase 0-3 commits stays pending until the Phase 5
+   checkpoint. Phase 3 alone is simple enough that self-review covers it.
