@@ -92,12 +92,31 @@ class TestSnapLineOnsets:
         assert stats["n_snapped"] == 0
 
     def test_no_rise_untouched(self, use_env):
+        # Flat -50dB: the reference is -50, below MIN_REF_DB, so the
+        # low-ref gate claims this line before rise detection is reached.
         use_env(np.full(200, -50.0))
         obj = _line((1.2, 1.4), (2.5, 2.7), (3.0, 4.0))
 
         out, stats = snap_line_onsets([obj], "vocal.wav")
 
         assert out[0] is obj
+        assert stats["n_low_ref"] == 1
+        assert stats["n_fired"] == 0
+        assert stats["n_snapped"] == 0
+
+    def test_step_below_threshold_counts_no_rise(self, use_env):
+        # The guard fails (-41 < ref-8 = -40) so the line fires, but the
+        # only step in the search window is -41 -> -32, 9dB < STEP_DB: no
+        # rise qualifies.
+        use_env(_env(5.0, [(0.5, 2.5, -41.0), (2.5, 4.5, -32.0)]))
+        obj = _line((1.2, 1.4), (2.5, 2.7), (3.0, 4.0))
+
+        out, stats = snap_line_onsets([obj], "vocal.wav")
+
+        assert out[0] is obj
+        assert stats["n_fired"] == 1
+        assert stats["n_no_rise"] == 1
+        assert stats["n_below_min_shift"] == 0
         assert stats["n_snapped"] == 0
 
     def test_shift_below_jitter_threshold_untouched(self, use_env):
@@ -107,6 +126,9 @@ class TestSnapLineOnsets:
         out, stats = snap_line_onsets([obj], "vocal.wav")
 
         assert out[0] is obj
+        assert stats["n_fired"] == 1
+        assert stats["n_below_min_shift"] == 1
+        assert stats["n_no_rise"] == 0
         assert stats["n_snapped"] == 0
 
     def test_gap_artifact_below_sung_level_rejected(self, use_env):
@@ -286,6 +308,8 @@ class TestSnapLineEnds:
         out, stats = snap_line_ends([obj], "vocal.wav")
 
         assert out[0] is obj
+        assert stats["n_fired"] == 1
+        assert stats["n_below_min_shift"] == 1
         assert stats["n_extended"] == 0
 
     def test_tremolo_dip_ridden_over(self, use_env):

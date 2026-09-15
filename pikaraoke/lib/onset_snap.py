@@ -189,10 +189,13 @@ def snap_line_onsets(
 
     snaps: list[dict] = []
     n_low_ref = 0
+    n_fired = n_no_rise = n_below_min_shift = n_undetectable = n_single_word = 0
     out: list[dict] = []
     for obj in line_objects:
         words = obj.get("words") or []
         if len(words) < 2:
+            if len(words) == 1:
+                n_single_word += 1
             out.append(obj)
             continue
         w1s, w1e = words[0]["start"], words[0]["end"]
@@ -229,13 +232,22 @@ def snap_line_onsets(
             out.append(obj)
             continue
 
+        n_fired += 1
+        lo = min(int(w1s / HOP_S), len(env) - 1)
+        hi = min(max(int(w2s / HOP_S), lo + 1), len(env))
+        p20 = float(np.percentile(env[lo:hi], 20))
+        if ref - p20 < STEP_DB:
+            n_undetectable += 1
+
         onset = _detect_rise(env, w1s, w2s, ref)
         if onset is None:
+            n_no_rise += 1
             out.append(obj)
             continue
 
         new_start = min(max(onset - SNAP_MARGIN_S, w1s), w2s - MIN_WORD_DUR_S)
         if new_start - w1s < MIN_SHIFT_S:
+            n_below_min_shift += 1
             out.append(obj)
             continue
 
@@ -253,10 +265,16 @@ def snap_line_onsets(
         out.append(new_obj)
         snaps.append({"line_id": obj.get("line_id"), "shift_s": round(new_start - w1s, 3)})
 
+    # Invariant: n_fired == n_snapped + n_no_rise + n_below_min_shift.
     stats = {
         "n_lines": len(line_objects),
         "n_snapped": len(snaps),
         "n_low_ref": n_low_ref,
+        "n_fired": n_fired,
+        "n_no_rise": n_no_rise,
+        "n_below_min_shift": n_below_min_shift,
+        "n_undetectable": n_undetectable,
+        "n_single_word": n_single_word,
         "snaps": snaps,
     }
     if snaps:
@@ -295,11 +313,13 @@ def snap_line_ends(
 
     release_frames = int(RELEASE_SUSTAIN_S / HOP_S)
     extends: list[dict] = []
-    n_fired = n_low_ref = 0
+    n_fired = n_low_ref = n_below_min_shift = n_single_word = 0
     out: list[dict] = []
     for idx, obj in enumerate(line_objects):
         words = obj.get("words") or []
         if len(words) < 2:
+            if len(words) == 1:
+                n_single_word += 1
             out.append(obj)
             continue
         w_end = words[-1]["end"]
@@ -350,6 +370,7 @@ def snap_line_ends(
                 new_end = i * HOP_S
                 break
         if new_end - w_end < MIN_SHIFT_S:
+            n_below_min_shift += 1
             out.append(obj)
             continue
 
@@ -367,11 +388,14 @@ def snap_line_ends(
             }
         )
 
+    # Invariant: n_fired == n_extended + n_below_min_shift.
     stats = {
         "n_lines": len(line_objects),
         "n_low_ref": n_low_ref,
         "n_fired": n_fired,
+        "n_below_min_shift": n_below_min_shift,
         "n_extended": len(extends),
+        "n_single_word": n_single_word,
         "extends": extends,
     }
     if extends:
