@@ -1634,3 +1634,86 @@ put word 1 at 81.35, i.e. the rise at 81.40 minus the snap margin.
 the commit body ("Both harnesses confirm") characterise the diff. Process
 asks for none. The record itself is complete and verbatim, so nothing is
 re-run for it.
+
+### Phase 2
+
+`edge_p1_*.txt` (Phase 1's scratchpad files) still resolved; their
+`total onset` lines matched the ones pasted under Phase 1 exactly. No
+re-run. Phase 2 diffs below are against those files.
+
+**Change.** `snap_line_onsets`: `n_fired`, `n_no_rise`, `n_below_min_shift`,
+`n_undetectable`, `n_single_word` added. `n_fired` and the `n_undetectable`
+diagnostic (`ref - p20 < STEP_DB`, `p20` the 20th percentile of
+`env[lo:hi]` over `[w1s, w2s]`) are computed once the on-time guard passes,
+before `_detect_rise`. `n_no_rise` increments at the `onset is None`
+branch, `n_below_min_shift` at the `new_start - w1s < MIN_SHIFT_S` branch,
+`n_single_word` at the `len(words) < 2` gate when `len(words) == 1`.
+Comment added: `n_fired == n_snapped + n_no_rise + n_below_min_shift`.
+
+`snap_line_ends`: `n_below_min_shift` and `n_single_word` added; the
+existing `n_fired` untouched. `n_below_min_shift` increments at the
+`new_end - w_end < MIN_SHIFT_S` branch, `n_single_word` at the
+`len(words) < 2` gate. Comment added:
+`n_fired == n_extended + n_below_min_shift`.
+
+Tests: `test_no_rise_untouched` now asserts `n_low_ref == 1`,
+`n_fired == 0` (its flat -50dB construction is claimed by the Phase 1 gate
+before rise detection, per the plan's Refresh record correction 5). New
+`test_step_below_threshold_counts_no_rise` added to `TestSnapLineOnsets` at
+the plan's stated construction. `test_shift_below_jitter_threshold_untouched`
+and `test_sub_jitter_extension_untouched` extended with the stated stats
+assertions.
+
+**Suite.**
+
+Invocation: `uv run --no-sync python -m pytest tests/unit -q`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p2_suite.txt`
+
+```
+FAILED tests/unit/test_genius.py::TestSidecarIO::test_write_overwrites_existing
+FAILED tests/unit/test_pipeline_stem_worker.py::TestStemWorkerSeparate::test_ok_returns_stem_paths_and_sends_job
+FAILED tests/unit/test_pipeline_stem_worker.py::TestStemWorkerSeparate::test_model_override_travels_in_job_tuple
+FAILED tests/unit/test_whisper_worker.py::TestStart::test_start_raises_worker_died_on_pipe_close
+4 failed, 1518 passed, 2 skipped in 33.45s
+```
+
+Only the known four; 1518 = 1517 + the one new test.
+
+**Replay harness.**
+
+Invocation: `uv run --no-sync python scripts/edge_snap_replay.py --folder D:/shared/pikaraoke-songs`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p2_replay.txt`
+Diff: `diff edge_p1_replay.txt edge_p2_replay.txt > edge_p2_replay.diff`, at
+`C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p2_replay.diff`
+
+Record view (Process "Record view" filter) against `edge_p1_replay.txt`:
+empty.
+
+```
+total songs=18
+total onset n_below_min_shift=125 n_fired=344 n_lines=1010 n_low_ref=13 n_no_rise=28 n_single_word=21 n_snapped=191 n_undetectable=50
+total end n_below_min_shift=104 n_extended=237 n_fired=341 n_lines=1010 n_low_ref=7 n_single_word=21
+```
+
+**Coverage harness.**
+
+Invocation: `uv run --no-sync python scripts/edge_snap_ass.py --folder D:/shared/pikaraoke-songs`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p2_coverage.txt`
+Diff: `diff edge_p1_coverage.txt edge_p2_coverage.txt > edge_p2_coverage.diff`, at
+`C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p2_coverage.diff`
+
+Record view (Process "Record view" filter) against `edge_p1_coverage.txt`:
+empty.
+
+```
+total songs=34
+total onset n_below_min_shift=623 n_fired=688 n_lines=1823 n_low_ref=19 n_no_rise=62 n_single_word=61 n_snapped=3 n_undetectable=152
+total end n_below_min_shift=349 n_extended=15 n_fired=364 n_lines=1823 n_low_ref=10 n_single_word=61
+```
+
+**Population gate.** `n_single_word`, pre-registered: coverage onset 61 /
+end 61, replay onset 21 / end 21. Observed: coverage onset 61 / end 61,
+replay onset 21 / end 21.
+
+Suite: known failures only. Both record-view diffs: empty. Commit: (this
+entry rides with it).
