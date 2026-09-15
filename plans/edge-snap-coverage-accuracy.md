@@ -365,6 +365,11 @@ No unit tests; the guard is the test. Commit:
    - Do not exclude songs, loosen tolerances, or patch the replay.
    - The matcher changed after the bundles were captured (`fcefcce`,
      2026-09-01), which is exactly what the guard exists to catch.
+     **Corrected at the Phase 0 read-off:** `fcefcce` is telemetry-only.
+     The behaviour change since capture is `ad51a86` (GATE T, ytasr
+     candidate edit ratio 0.34 -> 0.45). Every corpus bundle predates it,
+     so the guard reproduces the bundles only at 0.34. See "Phase 0
+     read-off" in the Results log for the probe.
 3. **Baseline runs:**
    - replay harness → `edge_p0_replay.txt`
    - coverage harness → `edge_p0_coverage.txt`
@@ -1082,3 +1087,97 @@ Process section directs artifacts to "the session scratchpad" by name,
 so this follows the plan as written; flagging it so whichever session
 runs Phase 1 knows to re-derive or re-locate these files first if it is
 not this same session.
+
+### Phase 0 read-off (Opus, 2026-09-15)
+
+Read-only judge round on the 0c.2 guard STOP. No harness, snap or matcher
+code touched.
+
+**Correction to Process.** 0c.2 names `fcefcce` as the post-capture
+matcher change. `fcefcce` adds telemetry only ("Zero behaviour change: no
+placement reads these"). The behaviour change between the bundles'
+capture (2026-07-16/22) and `90ccdb0` in the replayed path
+(`joint_match`, `candidate_match`, `windowed_realign`, `ytasr`,
+`token_align`, `evidence_veto`, `onset_snap`, the chassis script) is
+`ad51a86` (2026-09-10, GATE T): `ytasr.CANDIDATE_MAX_EDIT_RATIO` 0.34 ->
+0.45. The bundle does not record this ratio (flagged in `ad51a86`'s own
+message). `joint_match` reads it module-side at call time. Three July
+commits also touch those files after the earliest capture (`443ecad`
+`ytasr.py`, `6a8153d` `windowed_realign.py` + chassis, `0d9f03e`
+chassis); the probe below shows they do not move the replay.
+
+**Probe.** Rerun the unmodified 0c.2 guard with only that constant set
+back to its capture-time value, module-side, as the GATE T sweep drivers
+do. Scratch script (not committed), run from the repo root on `7005b74`:
+
+```python
+import json, sys
+from pathlib import Path
+sys.path.insert(0, str(Path.cwd() / "scripts"))
+from pikaraoke.lib import ytasr
+ytasr.CANDIDATE_MAX_EDIT_RATIO = float(sys.argv[1])
+print(f"CANDIDATE_MAX_EDIT_RATIO={ytasr.CANDIDATE_MAX_EDIT_RATIO}")
+folder = Path("D:/shared/pikaraoke-songs")
+for p in sorted((folder / "alignment_debug").glob("*.json")):
+    b = json.loads(p.read_text(encoding="utf-8"))
+    if (b.get("pipeline_decisions") or {}).get("method_used") == "joint":
+        print("captured_at", b.get("captured_at"), p.stem[:50])
+import edge_snap_replay
+sys.argv = ["edge_snap_replay.py", "--folder", str(folder), "--guard"]
+raise SystemExit(edge_snap_replay.main())
+```
+
+Invocation: `PYTHONUTF8=1 PYTHONIOENCODING=utf-8 uv run --no-sync python <scratchpad>/p0judge/guard_at_ratio.py 0.34`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\4d761251-d0b5-493b-a519-1f8202696d9f\scratchpad\p0judge\guard_034.txt`
+Exit code: 0
+
+```
+CANDIDATE_MAX_EDIT_RATIO=0.34
+captured_at 2026-07-16T20:58:17+00:00 'Defying Gravity' - Wicked 20th Anniversary Editio
+captured_at 2026-07-16T20:59:11+00:00 'Free' _ Official Lyric Video _ Sony Animation---f
+captured_at 2026-07-16T21:00:54+00:00 'Popular' - Wicked 20th Anniversary Edition _ WICK
+captured_at 2026-07-16T21:08:14+00:00 Beauty and the Beast (1991) - Be Our Guest [UHD]--
+captured_at 2026-07-16T21:10:19+00:00 Beauty and the Beast (1991) - Belle [UHD]---otxTf5
+captured_at 2026-07-16T21:11:42+00:00 Ed Sheeran - Best Part Of Me (feat. YEBBA) (Live A
+captured_at 2026-07-16T21:15:44+00:00 Ed Sheeran & Rudimental­ - Bloodstream [Official M
+captured_at 2026-07-16T21:16:39+00:00 HUNTR_X 'This Is What It Sounds Like' (Music Video
+captured_at 2026-07-16T21:19:58+00:00 Jessie J - Domino (Official Video)---UJtB55MaoD0
+captured_at 2026-07-16T21:21:57+00:00 Josh Gad - In Summer (From 'Frozen'_Sing-Along)---
+captured_at 2026-07-16T21:33:56+00:00 Mulan _ I'll Make a Man Out of You _ @disneykids--
+captured_at 2026-07-16T21:38:08+00:00 NSYNC - Paradise
+captured_at 2026-07-16T21:39:50+00:00 Pocahontas - Colors of the Wind (Blu-ray 1080p HD)
+captured_at 2026-07-16T21:41:06+00:00 Seasons of Love (HD)---UvyHuse6buY
+captured_at 2026-07-22T18:02:11+00:00 Stay Gold (Official Music Video) from The Outsider
+captured_at 2026-07-16T21:43:25+00:00 The Lion King - Hakuna Matata Music Video I 4K Ult
+captured_at 2026-07-16T21:45:43+00:00 The Next Ten Minutes Lyrics---0j8kL24ph8U
+captured_at 2026-07-16T21:46:54+00:00 Wicked - For Good  (2025) 4K - The Girl in the Bub
+```
+
+Guard lines: all 18 songs print `  GUARD PASS` (same song order as 0c.2).
+
+**Finding.** At the capture-time ratio the replay reproduces every joint
+bundle exactly: veto, onset and end snap records, every recorded stats
+key, and output timings. The 7 failures in 0c.2 are the GATE T ratio
+change and nothing else. The replay harness is exact; no harness bug.
+
+**Ruling (Opus).**
+
+1. **Phases 1-5 proceed on the shipped ratio (0.45).** That is today's
+   production matcher, so the phases measure the snap on the input it
+   will actually receive. The probe proves every other part of the replay
+   against recorded production. Every phase diff compares two runs at the
+   same ratio, so the diffs mean what the plan says. The 0c.3 baselines
+   were run at 0.45 and stand as the P0 baseline.
+2. **No recapture, no guard narrowing, no per-song dig.** A recapture
+   needs a GPU pass and would prove nothing the probe did not. Do not
+   patch the harness to pin 0.34; the guard is a Phase 0 gate and has
+   passed.
+3. **Artifacts from another session.** If the `edge_p0_*` files above do
+   not resolve, the Phase 1 session re-runs the two 0c.3 baseline
+   invocations on `7005b74` first. Mechanical gate: both `total` lines
+   must equal the ones pasted in 0c.3 exactly, else STOP -> Opus. Then
+   diff Phase 1 against those fresh files.
+4. **Pending review.** The `/code-review` on `24df69a` and `7005b74`
+   stays pending to the Phase 5 checkpoint, alongside the snap changes.
+
+Phase 0 is closed. Phase 1 is unblocked.
