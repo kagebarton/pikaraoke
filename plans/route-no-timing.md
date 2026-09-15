@@ -33,9 +33,13 @@ Model: Claude Sonnet 5 (executor). Plan drafted by Claude Fable 5.
 > fired.** Target lines are 45.7% of placed (floor 15%) and whisper
 > agrees on 43.8% of them, inside the 10–70% band — so **both arms
 > proceed**: the zero-model form is not retired, CTC is not ruled out,
-> and step 4 carries S6. **Step 2 RAN 2026-09-15**: Ken rated 28
-> blind looks against current shipped output; tables are in the
-> Results log, no verdict yet. **Opus reads W-2a/b next.**
+> and step 4 carries S6. **Step 2 RAN and was READ 2026-09-15:
+> W-2a did not fire, W-2b did — STOP → Ken.** Ken rated 28 blind looks
+> of current shipped output. Target looks were clearly off 3 of 20 and
+> the controls 0 of 8, a gap inside the 0.20 at which W-2b says the
+> phase may be aimed wrong. **Step 3 is held; nothing is built or run
+> until Ken re-poses the framing.** The phase is not ended — that was
+> W-2a's outcome, and it missed by one look.
 > **Phase 7 RAN and was READ 2026-09-14 — it is done, and it halved
 > the prize.** Of the 150 unplaced lines corpus-wide, **47% are text
 > that appears in no transcription of the audio at all** — closed
@@ -60,7 +64,8 @@ Model: Claude Sonnet 5 (executor). Plan drafted by Claude Fable 5.
 > recording), named at GATE P — not anything inside the matcher.
 > **GATE W is now the better target on evidence rather than merely what
 > is left.** Its step 1 was READ 2026-09-14 (both arms proceed); **step
-> 2 RAN 2026-09-15 and Opus reads W-2a/b next.** Then GATE L when the
+> 2 was READ 2026-09-15 and W-2b fired: Phase 6 is at STOP → Ken, step 3
+> held pending his re-posing.** Then GATE L when the
 > Mandarin corpus exists. Sequencing lives in `plans/PROGRAM.md`.
 
 ## Context
@@ -4912,3 +4917,137 @@ singing inside the line.
 | controls | 8 | 5 | 3 | 0 |
 
 **Next:** Opus reads W-2a/b against these tables.
+
+### 2026-09-15 — Phase 6 / GATE W step 2 read-off (Opus) — W-2a does not fire; W-2b fires: STOP → Ken, step 3 held
+
+Read against the executor's run above (commit `ae58550`) and W-2's
+pre-registration. Read-only: nothing re-run, no look re-rated, the key
+not re-opened. The rates quoted below are ratios of cells already in
+Table W-2.2, and are marked where they appear.
+
+#### 1. Validity, before the read
+
+- **W-2.2 recounted from W-2.1, look by look, and it matches.**
+  - `agrees`: fine 5 (looks 7, 9, 19, 20, 22), slightly off 3 (10, 25,
+    28), clearly off 2 (12, 16).
+  - abstained: fine 9, slightly off 0, clearly off 1 (13).
+  - controls: fine 5, slightly off 3 (1, 5, 6), clearly off 0.
+  - Pooled target: 14 / 3 / 3.
+  - Looks 1–28 each appear once, and every verdict is one of W-2's three
+    categories.
+- **Sample composition is W-2's.** It holds 10 `agrees`, 10 abstained
+  and 8 controls. All 10 abstained draws are `abstain_crammed`, so none
+  of the 3 `abstain_none` lines was drawn. W-2 pools the two
+  sub-classes, so this is inside the design, and it is unremarkable at
+  3 of 122.
+- **The frame is step 1's.** The regenerated labels reproduced 3 / 119
+  / 172 / 99 and 467 before any draw. The per-song source assertions
+  also passed. Those are the conditions step 1's read-off §5 set.
+- **Blinding held.** Ken rated on song, timestamp and line text only.
+
+**The mapping check's text field changed mid-run, and the executor is
+right.** This is not a departure from W-2, which specifies no mapping
+check. The check was a guard, added in the executor prompt, that each
+look lands on the line it names. Its first comparison field, display
+`lyrics.lines`, is not what the renderer draws. `generate_ass`
+(`lyric_align.py:1088`) builds every event from the line object's
+`words` and nothing else. The executor matched all 846 shipped events
+corpus-wide against the `align_lines` reconstruction, which is direct
+evidence on the renderer's own output. Timing matched uniquely on all
+28 looks in both passes, and the draw is fixed by seed and frame. **The
+field switch changed no look's identity.** It is the same slip as step
+1's §1, in a guard rather than a design input. It stands.
+
+#### 2. W-2a — the problem is not visible: does not fire
+
+Pooled W-2.2, 20 target looks: **clearly off 3, slightly off 3.** W-2a
+needs `clearly off ≤ 2` **and** `slightly off ≤ 6`. The second holds and
+the first fails (3 > 2). Both are required, so **W-2a does not fire.**
+The phase does not end at this rule.
+
+#### 3. W-2b — the problem is not this population's: fires
+
+Clearly-off rates (ratios of W-2.2 cells):
+
+- target looks: 3 of 20 = **0.15**
+- controls: 0 of 8 = **0.00**
+
+The gap is **0.15, within 0.20. W-2b fires.** This is not an edge case.
+Whether "within" is read as ≤ or <, 0.15 is inside it; the two readings
+part only at exactly 0.20.
+
+**The phrase "the target looks' rate" admits a second reading, and it
+does not move the result.** W-2a defines the target looks as the 20
+pooled, and W-2b uses the same phrase, so pooled is the literal reading.
+Reading it per class instead:
+
+- abstained: 1 of 10 = 0.10, a gap of 0.10, which fires.
+- `agrees`: 2 of 10 = 0.20, a gap of exactly 0.20, which sits on the
+  edge.
+
+No reading yields "neither fires" cleanly, so this is not an uncovered
+case.
+
+**Direction: recorded; the rule does not read it.** W-2b's condition is
+a distance between two rates. Its stated reason is that "align-won
+interiors are as loose as the ones this phase targets". Here the
+clearly-off gap runs the other way: target 0.15, controls 0.00. On
+slightly off, the controls are higher, at 3 of 8 against 3 of 20. The
+rule fires on its condition, and its outcome is STOP → Ken whether or
+not the stated reason matches. **An uncovered case would reach the same
+STOP → Ken**, so no judgment call is taken here. What the direction
+means is Ken's to weigh under the rule.
+
+#### 4. Ruling: W-2b — STOP → Ken
+
+Executing the clause that applies, verbatim:
+
+> If the controls' `clearly off` rate is within 0.20 of the target
+> looks' rate, **STOP → Ken**: align-won interiors are as loose as the
+> ones this phase targets, so the phase is aimed wrong and the framing
+> has to be re-posed before anything is built.
+
+Concretely:
+
+1. **Phase 6 halts at step 2, and step 3 does not run.** Step 1's
+   read-off left CTC commissioned "behind step 2's kill rules". One of
+   those rules has fired, so the commission is held.
+2. **The phase is not ended by this read-off.** Ending it is W-2a's
+   outcome, and W-2a did not fire. Ken decides whether the phase
+   continues, in what framing, or ends. Nothing here pre-empts that.
+3. **W-3 through W-6 are untouched.** Their text stands. Whether they
+   run, and against what framing, follows Ken's re-posing.
+
+#### 5. Recorded, not read
+
+- **The outcome sits one look from a different rule.**
+  - If one of the 3 target clearly-off looks had been rated anything
+    else, target clearly off would be 2 and slightly off at most 4. W-2a
+    would then fire, and the phase would end.
+  - If one more target look had been clearly off (4 of 20), the W-2b
+    gap would sit exactly on 0.20.
+  - With the controls at 0 clearly off, the gap clears 0.20 only at 5 or
+    more target clearly-off looks of 20.
+  - These are arithmetic on the rules as registered, not a reading of
+    their power.
+- **The target's clearly-off looks come from two songs.**
+  - Both `agrees` clearly-off looks are Ed Sheeran – Best Part Of Me
+    (looks 12 and 16). Its third look, 10, is slightly off.
+  - The abstained clearly-off look is Mulan (look 13).
+  - The controls' 3 slightly-off looks are Stay Gold (5, 6) and Belle
+    (1).
+  - The rules are pooled, and no rule reads per song.
+- **The two target classes rated differently.** Abstained came back
+  fine on 9 of 10, `agrees` on 5 of 10. W-2 pools them for both rules,
+  so nothing is drawn from the difference.
+
+#### 6. What this read-off does NOT claim
+
+- **Not** that the interior-timing defect is absent. W-2a did not fire.
+- **Not** that align-won interiors are as loose as target interiors.
+  That is W-2b's stated reason. The rule fires on distance, and the
+  observed clearly-off gap runs the other way (§3).
+- **Not** a verdict on CTC or the zero-model form. Neither was run.
+- **Not** a proposal for the re-posed framing. That is Ken's.
+- **Not** an amendment. W-2 through W-6 stand as written, and §1's
+  mapping field is recorded, not edited in.
