@@ -789,7 +789,14 @@ Results log filled in (invocations, paths, totals, diffs) and asks Ken to
 >    - "Lines without interior gaps byte-identical" needs a mechanical
 >      input filter like Phase 4's `--multi-word-only`, for the same
 >      bound-coupling reason.
->    - The 388-word count is Linux; re-measure it on this corpus.
+>    - ~~The 388-word count is Linux; re-measure it on this corpus.~~
+>      **MEASURED 2026-09-17 — see "### Phase 6 interior-gap count" in the
+>      Results log.** 148 split sites on the replay read (18 joint songs),
+>      406 on the shipped corpus (34 songs) -- the same order as the Linux
+>      388. 15-19% of lines, every song in both populations. The phase is
+>      NOT small, so it cannot be closed on size; what remains unmeasured
+>      is how many of those sites the snap would actually *move*, which
+>      needs the detector run against run edges.
 >    - The coverage harness's ASS round-trip drift matters inside
 >      multi-word lines, so the replay harness is the exact read here.
 >
@@ -3410,10 +3417,122 @@ the phase:
   from the Phases 0-5 checkpoint applies, and the row rewrite goes to Ken
   with the count in hand.
 
-Measuring it is read-only, cheap, and does not execute the phase. It has not
-been run; it is the natural next step if Ken wants Phase 6 decided.
+Measuring it is read-only, cheap, and does not execute the phase. **RUN
+2026-09-17 at Ken's instruction -- see "### Phase 6 interior-gap count"
+below. It came back large (148 replay / 406 shipped, 15-19% of lines), so
+the first branch above does not fire and the phase is not closed on size.**
 
 **Unchanged by this ruling.** 7a is a *pitch/voicing* study, not a loudness
 one -- it is the alternative to the envelope, not an instance of it -- so
 the ruling does not touch it. It also does not touch `Domino`'s finding:
 the interior defect there is real and now simply has no owner in this plan.
+
+### Phase 6 interior-gap count (Opus, 2026-09-17)
+
+The measurement the scope ruling asked for, run at `ca4b46c` on
+`edge_snap_refine` at Ken's instruction. Read-only: the two harness
+populations are enumerated and their interior word gaps counted. No
+detector runs, no envelope is read, nothing is written and no production
+path is touched. Scratchpad: `p5judge/gapcount.py`, `p5judge/gapcount2.py`.
+
+**Method.** A *split site* is an index `k` with `words[k]["start"] -
+words[k-1]["end"] >= 0.5`, i.e. exactly `_split_runs`'s condition as Phase 6
+specifies it. Each site is one extra run, and contributes at most two
+candidate words: the previous run's last word (an end candidate) and the
+next run's first word (an onset candidate).
+
+- *Replay* population: joint bundles only, post-veto pre-snap line objects
+  from `_replay_song(..., multi_word_only=False)`. This is the exact read
+  per open item 4 -- no ASS round trip.
+- *Coverage* population: the 34 shipped `.ass` via `parse_ass_lines`.
+  Approximate (already-snapped timings, ASS centisecond resolution), but it
+  is the closest analogue to the plan's 388, which counted a whole shipped
+  corpus.
+
+| | replay (joint) | coverage (shipped `.ass`) |
+|---|---:|---:|
+| songs | 18 | 34 |
+| lines | 848 | 1823 |
+| multi-word lines | 827 | 1762 |
+| words | 5534 | 11223 |
+| interior gaps of any size | 824 | 2306 |
+| **split sites (gap >= 0.5 s)** | **148** | **406** |
+| lines carrying at least one | 129 (15.2%) | 340 (18.7%) |
+| ... as % of multi-word lines | 15.6% | 19.3% |
+| songs carrying at least one | 18 / 18 | 34 / 34 |
+| candidate words (2 per site) | 296 | 812 |
+| runs per split line (2/3/4/5) | 114/12/2/1 | 288/40/10/2 |
+
+Gap width, all interior gaps (both populations, p50 = 0.26 s, p75 = 0.42 s):
+
+| threshold | replay | coverage |
+|---|---:|---:|
+| >= 0.30 s | 381 | 1094 |
+| >= 0.40 s | 228 | 649 |
+| >= 0.50 s | 148 | 406 |
+| >= 0.75 s | 77 | 190 |
+| >= 1.00 s | 48 | 104 |
+| >= 1.50 s | 26 | 48 |
+
+Split sites by band:
+
+| band | replay | coverage |
+|---|---:|---:|
+| 0.50-0.75 s | 71 (48.0%) | 216 (53.2%) |
+| 0.75-1.00 s | 29 (19.6%) | 86 (21.2%) |
+| 1.00-2.00 s | 30 (20.3%) | 84 (20.7%) |
+| 2.00-3.00 s | 5 (3.4%) | 7 (1.7%) |
+| >= 3.00 s | 13 (8.8%) | 13 (3.2%) |
+
+Widest sites (replay; coverage's list is the same songs and sites to within
+ASS rounding):
+
+| gap | t | word | line dur | before \| after | song |
+|---:|---:|---|---:|---|---|
+| 18.12 s | 183.52 | 5/7 | 24.10 s | `the colors of` \| `the wind` | Colors of the Wind |
+| 9.46 s | 85.52 | 6/7 | 16.14 s | `when it kicks` \| `in` | Bloodstream |
+| 7.26 s | 136.78 | 3/4 | 11.00 s | `My friend, stay` \| `gold` | Stay Gold |
+| 7.10 s | 205.50 | 1/5 | 11.72 s | `Lately,` \| `everything's making se` | Best Part Of Me |
+| 6.56 s | 95.52 | 9/10 | 14.00 s | `colors of the` \| `wind?` | Colors of the Wind |
+| 6.44 s | 111.80 | 12/13 | 11.10 s | `here by your` \| `side` | This Is What It Sounds Like |
+| 4.84 s | 8.10 | 4/6 | 11.81 s | `matata, what a` \| `wonderful phrase` | Hakuna Matata |
+| 4.60 s | 24.36 | 2/3 | 10.00 s | `You don't` \| `know` | Colors of the Wind |
+
+**What it says.**
+
+1. **The count is not small, and the plan's Linux figure holds up here.**
+   406 split sites over the 34-song shipped corpus against the plan's 388
+   over the Linux corpus -- the same order, measured independently. One line
+   in six or seven carries a genuine interior pause, and *every* song in
+   both populations carries at least one. The "there are usually no long
+   pauses" premise is right about the median line (p50 gap 0.26 s) and wrong
+   about the corpus: the exception is common enough that Phase 6 cannot be
+   dismissed on size. This contradicts the expectation stated in the scope
+   ruling's relay.
+2. **These are sites, not defects.** Nothing here says the snap would move
+   any of them. The phase's own stated expectation is the opposite -- that
+   interior candidates die on `MIN_SHIFT_S` at a higher rate than line
+   edges, because whisper's interior timestamps are better than its line
+   edges. The 148/406 are an upper bound on what Phase 6 could touch, and
+   the number that would actually decide the phase is how many of them move
+   -- which cannot be read off the structure and needs the detector run
+   against run edges.
+3. **Half the sites sit in the narrowest band.** 48-53% are 0.50-0.75 s.
+   That is the band where the envelope has least to work with: a release,
+   a reverb tail and a re-attack inside three quarters of a second, judged
+   by the same reference the detector lessons warn is poisonable.
+4. **The widest sites are not all musical.** The 18.12 s gap splits a 24 s
+   "line" of `Colors of the Wind`, and several others are 1-word-then-pause
+   shapes. Some of these are the matcher spreading a line across a repeat or
+   an instrumental, not a singer holding a rest -- so a slice of the
+   population is a matcher artifact that Phase 6 would silently re-time
+   rather than flag.
+5. **The blind spot scales with this count.** The Phase 5 eyeball confirmed
+   twice, on the end side, that the snap cannot tell lead from backing.
+   Every split site is an additional place for that to fire, positioned
+   *inside* a line -- which is where Ken heard the `Domino` defect and where
+   nothing in the pipeline is watching.
+
+Open item 4's first half is answered by this entry. The gate mechanism
+(the `--multi-word-only`-style input filter, and the replay harness as the
+exact read) is unchanged and still stands as written.
