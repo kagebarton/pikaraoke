@@ -776,11 +776,15 @@ Results log filled in (invocations, paths, totals, diffs) and asks Ken to
 >      span drags the reference down until reverb tails pass for singing.
 >    - It is diluted by the rest of the line, but not absent.
 >    - Decide the reference before building.
-> 3. **Ownership.** Moving interior run-edge word boundaries changes
->    `PROGRAM.md` Part 2's "Word boundaries inside a placed line" row
->    (joint matcher's words, unchanged since GATE W closed). Ken rules on
->    that. If he approves, the row is rewritten in the same turn the phase
->    lands.
+> 3. **Ownership. ANSWERED 2026-09-17 — see "### Phase 6 scope ruling" in
+>    the Results log.** Ken: loudness is not a usable timing indicator
+>    *inside* a line, because lines rarely contain long pauses. That kills
+>    the general form and leaves only the narrow one this phase already
+>    specifies (runs separated by a real gap ≥ `RUN_GAP_S`, where the
+>    envelope does have something to see). `PROGRAM.md` Part 2's "Word
+>    boundaries inside a placed line" row is NOT reopened for the general
+>    case; whether the narrow case justifies rewriting it at all is a live
+>    question, and rests on the re-measured interior-gap count in item 4.
 > 4. **Gate and sizing.**
 >    - "Lines without interior gaps byte-identical" needs a mechanical
 >      input filter like Phase 4's `--multi-word-only`, for the same
@@ -3374,3 +3378,42 @@ and is worth keeping: of the 34 bundles only `Wicked - For Good` carries a
 `joint_stats.dereverb` block at all (`yield_wpm` 18.2 -> retry 30.3,
 succeeded), because de-reverb triggers on low aligner word yield rather than
 on detected reverb. Neither fact bears on this line.
+
+### Phase 6 scope ruling (Ken, 2026-09-17)
+
+Ken, on the interior-ownership question the Phase 5 eyeball raised: *"it's
+very unlikely that loudness will be a good timing indicator inside a line as
+there are usually no long pauses in it; no need to explore that."*
+
+**What it settles.** The general form of interior refinement -- moving word
+boundaries *within* continuous singing, which is what would be needed to fix
+`Domino` -- is ruled out on mechanism, not on cost. The envelope can only
+locate an edge where the level actually falls and rises; inside a sung line
+it does not. `PROGRAM.md` Part 2's "Word boundaries inside a placed line"
+row stays at "joint matcher's words" and is **not reopened**; it already
+reads that way from GATE W (2026-09-15, interior refinement not adopted),
+so no `PROGRAM.md` edit falls out of this.
+
+**What it leaves.** Phase 6 as written never proposed the general form. It
+splits a line at gaps `>= RUN_GAP_S` (0.5 s) and snaps only the edges of the
+resulting runs -- which is precisely the "long pause" case where the ruling
+says the envelope *does* have something to see. The ruling therefore sizes
+Phase 6 rather than killing it, and sharpens the question to a single
+number: **how many lines on this corpus actually carry an interior gap of at
+least 0.5 s?** The plan's 388-word figure is from the 2026-07 Linux corpus
+and has never been re-measured here (open item 4). That count now decides
+the phase:
+
+- If it is small, Phase 6 is not worth rewriting a row Ken closed two days
+  earlier, and the plan effectively ends at the merge.
+- If it is large, the phase proceeds in its narrow form, the reference rule
+  from the Phases 0-5 checkpoint applies, and the row rewrite goes to Ken
+  with the count in hand.
+
+Measuring it is read-only, cheap, and does not execute the phase. It has not
+been run; it is the natural next step if Ken wants Phase 6 decided.
+
+**Unchanged by this ruling.** 7a is a *pitch/voicing* study, not a loudness
+one -- it is the alternative to the envelope, not an instance of it -- so
+the ruling does not touch it. It also does not touch `Domino`'s finding:
+the interior defect there is real and now simply has no owner in this plan.
