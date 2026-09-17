@@ -2370,3 +2370,195 @@ Wicked - For Good  (2025) 4K - The Girl in the Bubble (7_8) _ Movieclips---wzSeu
 ```
 
 Suite: known failures only. Commit: (this entry rides with it).
+
+### Phase 4 read-off (Opus, 2026-09-17)
+
+**Checked against the record.** Code read at `aab7358` against the Phase 4
+spec text: 4a (`SINGLE_WORD_REF_PCT = 80.0`, the `len(words) == 1`
+percentile branch with the same index construction and bounds filter),
+4b (`if not words:`, the counter moved to "seen", `bound` at the narrow-
+window skip / `_detect_rise` call / clamp / end-carry fallback), 4c
+(`if not words:` plus the counter, nothing else), 4d (five new tests, the
+two `test_short_lines_skipped` renamed and their one-word cases removed).
+All present, nothing else changed. The `len(words) >= 2` branch of
+`_sung_level_ref` is byte-identical, so `lrclib_fill.py`'s caller is
+untouched.
+
+Tests re-run by the judge at `aab7358`:
+`uv run --no-sync python -m pytest tests/unit/test_onset_snap.py
+tests/unit/test_lrclib_fill.py -q` -> `67 passed` (39 + 28), matching the
+executor's split. The commit touches three files only; `pyproject.toml`
+and `uv.lock` left unstaged.
+
+**Gate, stronger than the plan required.** The plan's gate is the
+`--multi-word-only` *record views* byte-identical at P3 and P4. They are
+(both `.diff`s 0 bytes). The `  stats `/`total ` lines, which the record
+view strips, were also compared and are identical in both harnesses — so
+no multi-word counter moved either, not just no multi-word record. That
+matches the code reading: for `len(words) >= 2`, `bound` is
+`words[1]["start"]`, which is what `w2s` was.
+
+**Both unfiltered diffs are strictly additive.** Zero `<` record lines in
+either harness: no P3 record was removed, and none changed value (a changed
+value would appear as a `<`/`>` pair). Every delta is a new record.
+
+| | replay | coverage |
+| --- | --- | --- |
+| added `rec onset [1w]` | 2 | 8 |
+| added `rec end [1w]` | 8 | 28 |
+| added multi-word records | 0 | 1 (end) |
+| removed or changed records | 0 | 0 |
+
+Totals reconcile exactly against those counts: coverage onset `n_fired`
++20 = +8 snapped +1 no_rise +11 below_min_shift; coverage end `n_fired`
++31 = +29 extended +2 below_min_shift; replay onset +6 = +2 +0 +4; replay
+end +8 = +8 +0. Both documented invariants hold at `total` level in all
+four files (judge re-check; the executor's audit covers per-song).
+`n_lines` is unchanged (1823 / 1010) and `n_single_word` is unchanged at
+61 / 21 across the counter's redefinition from "skipped" to "seen" — every
+one-word line was skipped before and is seen now, so the number must not
+move, and it does not.
+
+**The one collateral multi-word record is explained and correct.**
+Coverage, Ariana Grande / John Legend "Beauty and the Beast":
+`rec end 3:16.53 -> 3:16.75 (+0.22s) to_bound  ... Beauty and the...`
+appears because the following one-word `Beast` line's onset moved from
+196.63 to 196.85, widening the previous line's bound. The previous line's
+voice traces to 196.75 and `Beast` now starts at 196.85: the two records
+are consistent with each other, not competing for the same audio.
+
+**Independent quality audit of the new records.** The snap's own gates use
+a line-local reference, so re-reading the records with that reference would
+be circular. Scored instead against song-wide envelope percentiles:
+`level = (median(region) - p10_song) / (p95_song - p10_song)`, where 1.0 is
+the song's loud anchor and 0.0 its floor. An end extension should land on
+LOUD audio; an onset snap's vacated span should be QUIET.
+
+Script: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\4d761251-d0b5-493b-a519-1f8202696d9f\scratchpad\p4judge\audit.py`
+
+```
+== coverage (songs=34) ==
+  end-extension region loudness   : n=28 min=0.35 p25=0.91 median=0.96 max=1.04
+  onset vacated region loudness   : n=8 min=-0.06 p25=0.03 median=0.36 max=0.81
+  onset kept region loudness      : n=8 min=0.34 p25=0.83 median=0.93 max=1.01
+  low_ref claimed-span loudness   : n=6 min=0.00 p25=0.00 median=0.07 max=0.30
+== replay (songs=18) ==
+  end-extension region loudness   : n=8 min=0.35 p25=0.84 median=0.86 max=1.04
+  onset vacated region loudness   : n=2 min=0.04 p25=0.06 median=0.07 max=0.11
+  onset kept region loudness      : n=2 min=0.34 p25=0.42 median=0.50 max=0.67
+  low_ref claimed-span loudness   : n=1 min=0.19 p25=0.19 median=0.19 max=0.19
+```
+
+Every end extension lands on audio well above the floor. Per-snap context
+for the onset snaps whose vacated span is not quiet (script
+`...\p4judge\context.py`):
+
+```
+  [1w] 'Unexpectedly' claimed 40.91-42.41 -> start 41.23 (+0.32s)
+        vacated level=0.60  kept level=0.92
+        prev line ends 40.91 (gap +0.00s), prev text: 'Then somebody bends'
+  [1w] 'Oh' claimed 96.48-97.70 -> start 97.23 (+0.75s)
+        vacated level=0.72  kept level=0.95
+        prev line ends 90.47 (gap +6.01s), prev text: 'Oh'
+  [1w] 'Beast' claimed 196.63-198.13 -> start 196.85 (+0.22s)
+        vacated level=0.81  kept level=0.94
+        prev line ends 196.53 (gap +0.10s), prev text: 'Beauty and the...'
+```
+
+Two of the three are back-to-back lines where the loud vacated audio is the
+*previous* line's own voice, i.e. the claimed start was smeared back into
+it — the target defect, snapped correctly. The third (`Oh` at 96.48; this
+song is a duet) has no previous line within 6 s, so its vacated span is
+audio at 0.72 of the loud anchor with a >= `STEP_DB` rise on top of it at
+97.23. The envelope cannot say whether that is a harmony under the lead's
+entry or the lead itself. One line, corpus-wide.
+
+Final one-word span durations, both harnesses (script
+`...\p4judge\spans.py`): coverage 32 one-word lines moved, 5 now shorter;
+replay 9 moved, 2 now shorter.
+
+```
+   1.98s ->  0.10s  'Nope!'  Josh Gad - In Summer
+   1.22s ->  0.54s  'Drums'  Justin Timberlake - Like I Love You
+   0.92s ->  0.58s  'Bonjour'  Beauty and the Beast (1991) - Belle
+   1.40s ->  0.80s  'Street'  Jodi Benson - Part of Your World
+   0.49s ->  0.91s  'Ooh-ooh-ooh-ooh'  Jessie J - Domino
+```
+
+**Findings.**
+
+1. Phase 4 is the specified change, and it is the headline coverage
+   landing: 46 new records across the two harnesses, all on lines the
+   `len(words) < 2` gates used to drop.
+2. Nothing regressed. Both diffs are strictly additive, the multi-word
+   gate holds on stats as well as records, and the only multi-word record
+   that moved is the documented bound-widening collateral, verified
+   consistent with the one-word snap that caused it.
+3. **New interaction, recorded for Phase 7 and not a gate.** A one-word
+   line's onset clamp is `bound - MIN_WORD_DUR_S` with `bound` its *own*
+   claimed end, so a large forward snap can squeeze the line to the 0.1 s
+   floor. The end path then re-derives its reference over that squeezed
+   span, which can fall under `MIN_REF_DB` and block the extension that
+   would have restored the duration. It happened exactly once: `Nope!`
+   (In Summer), 1.98 s -> 0.10 s, in both harnesses, with the end path
+   newly reporting `n_low_ref` on that song. Net still an improvement — the
+   wipe was 1.98 s starting 1.88 s early, and `generate_ass` pads the event
+   by `line_lead_in_cs=80` / `line_lead_out_cs=20`, so the line is still on
+   screen ~1.1 s — but a minimum one-word display duration is a real
+   Phase 7 question.
+4. The duet `Oh` above is the documented multi-singer blind spot reaching
+   the one-word population for the first time. Expected, sized at one line,
+   no action.
+5. Docstring drift introduced by widening `_detect_rise`'s `t1`: its
+   docstring still reads "hold through to ``t1`` (word 2's start)" and its
+   local is still `b_word2`, but `t1` is word 1's claimed end on a one-word
+   line; and `snap_line_ends`' inline comment still asserts "the shared
+   words-2..n reference applies unchanged", which a one-word line no longer
+   obeys. Cosmetic, fold into Phase 5.
+
+**Flagged item 1 — the fifth `w2s` site. Confirmed, with one correction to
+the record.** The escalation was right, and was right to be logged rather
+than folded in silently. `bound` replaces `w2s` as a *variable*: after 4b
+the assignment `w2s = words[1]["start"]` is gone, so leaving the
+`n_undetectable` window's `hi = min(max(int(w2s / HOP_S), lo + 1),
+len(env))` as literal `w2s` is a `NameError` on **every** line that reaches
+`n_fired`, not only on a single-word line as the entry states. The
+substitution is the plan's own stated rule applied to an occurrence the
+frozen text could not have enumerated (Phase 2 added it after `385c881`),
+`bound` is the only in-scope end of that search window, and the site is
+diagnostic-only — `n_undetectable` drives no behaviour, and the Phase 2
+read-off already ruled it overcounts and moved 7b's sizing to `n_no_rise`.
+No design judgement was exercised beyond the stated rule.
+
+**Flagged item 2 — the Phase 1 hand-check. Satisfied; do not move it to
+another song.** The check as written is vacuous here: the de-reverb-adopted
+song carries `n_single_word=0` in both harnesses and its replay block is
+byte-identical between P3 and P4, so there is no one-word population on it
+to inspect. Its *substance* — a floor-level reference can come from a
+sparse, speech-like delivery and not only from a misplaced line — is
+answerable on the population Phase 4 actually created, and is discharged:
+every one-word line rejected at `MIN_REF_DB` has a claimed span at or below
+0.30 of its own song's loud anchor (coverage n=6, median 0.07, max 0.30;
+replay n=1 at 0.19), i.e. genuinely quiet, not sung-but-sparse. Moving the
+hand-check to a different de-reverbed song is not possible (one corpus song
+adopted a de-reverbed stem) and is not needed. Note also that a `n_low_ref`
+rejection on a one-word line is a no-op against Phase 3, where the line was
+skipped at the gate: it can cost coverage, never correctness.
+
+**Ruling.**
+
+1. Phase 4 is accepted as committed (`aab7358`). No re-run, no change.
+2. Flagged item 1 confirmed; the "crash on a single-word line" wording is
+   corrected above to "on every line". Flagged item 2 satisfied and closed.
+3. **Phase 5 is unblocked.** Diff against the executor's `edge_p4_*` files
+   if they still resolve; otherwise re-run both harnesses on `aab7358`
+   first and match the Phase 4 `total` lines above exactly, else STOP ->
+   Opus. Phase 5's recorded expectation is unsized (Phase 3 read-off,
+   finding 5): a contrary diff is for the read, not a STOP.
+4. Fold finding 5's docstring drift into the Phase 5 commit, which already
+   rewrites `_sung_level_ref`'s docstring.
+5. Findings 3 and 4 carry to Phase 7 as sizing questions, not gates.
+6. `/code-review` on the Phase 0-4 commits runs at the Phase 5 checkpoint,
+   as scheduled. Phase 4 is the commit in this set that needs it: a new
+   reference path plus a bound generalization across two functions is past
+   what self-review covers.
