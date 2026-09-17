@@ -131,19 +131,23 @@ def decode_env_db(vocal_path: str | Path, label: str) -> np.ndarray | None:
         return None
 
 
-def _sung_level_ref(env: np.ndarray, words: list[dict]) -> float | None:
+def _sung_level_ref(env: np.ndarray, words: list[dict], end: bool = False) -> float | None:
     """Sung-level reference for the line, or None if its span is empty.
 
-    For 2+ words: the median envelope level over the spans of words 2..n.
-    Word 1's own span is excluded on purpose: when it was stretched across
-    a preceding gap, including it drags the reference down until reverb
-    tails pass for singing. Both snaps gate on this same reference, so a
-    change here must hold for both.
+    For 2+ words: the median envelope level over the spans of words 2..n,
+    plus word 1's own span when ``end`` is true and word 1 is longer than
+    :data:`MIN_WORD_DUR_S`. Word 1 is excluded by default: when its start
+    was stretched across a preceding gap, including it drags the reference
+    down until reverb tails pass for singing. The end path runs after
+    onsets have already repaired that start, so a substantial word 1 is
+    safe to include there — and on a line that is mostly one long held
+    note plus short trailing words, leaving it out misstates the sung
+    level.
 
     For a single word: the :data:`SINGLE_WORD_REF_PCT` percentile over its
     own claimed span, since there are no words 2..n. Smeared gap frames are
     low outliers, so with enough of the span genuinely sung the percentile
-    still lands at the sung level.
+    still lands at the sung level. Independent of ``end``.
     """
     if len(words) == 1:
         w = words[0]
@@ -152,8 +156,11 @@ def _sung_level_ref(env: np.ndarray, words: list[dict]) -> float | None:
         if len(span_idx) == 0:
             return None
         return float(np.percentile(env[span_idx], SINGLE_WORD_REF_PCT))
+    ref_words = words[1:]
+    if end and words[0]["end"] - words[0]["start"] > MIN_WORD_DUR_S:
+        ref_words = [words[0]] + ref_words
     span_idx = np.concatenate(
-        [np.arange(int(w["start"] / HOP_S), int(w["end"] / HOP_S) + 1) for w in words[1:]]
+        [np.arange(int(w["start"] / HOP_S), int(w["end"] / HOP_S) + 1) for w in ref_words]
     )
     span_idx = span_idx[(span_idx >= 0) & (span_idx < len(env))]
     if len(span_idx) == 0:
@@ -166,15 +173,16 @@ def _detect_rise(env: np.ndarray, t0: float, t1: float, ref_db: float) -> float 
 
     A rise qualifies either by landing near the sung level outright, or
     by landing softly (:data:`SOFT_NEAR_DB`) and then sustaining near
-    that level for :data:`SUSTAIN_S`. Either way the voice must then
-    hold through to ``t1`` (word 2's start): word 1's true onset begins
-    the voiced run that word 2 continues, while a bump in a noisy reverb
-    tail collapses back into the gap.
+    that level for :data:`SUSTAIN_S`. Either way the voice must then hold
+    through to ``t1`` (word 2's start, or word 1's own claimed end on a
+    one-word line): word 1's true onset begins a voiced run that
+    continues at least that far, while a bump in a noisy reverb tail
+    collapses back into the gap.
     """
     a = max(EDGE_FRAMES, int(t0 / HOP_S))
-    b_word2 = int(t1 / HOP_S)
+    b_bound = int(t1 / HOP_S)
     b_env = len(env) - EDGE_FRAMES
-    b = min(b_word2, b_env)
+    b = min(b_bound, b_env)
     sustain_frames = int(SUSTAIN_S / HOP_S)
     for i in range(a, b):
         pre = env[i - EDGE_FRAMES : i].mean()
@@ -186,13 +194,13 @@ def _detect_rise(env: np.ndarray, t0: float, t1: float, ref_db: float) -> float 
             and env[i : i + sustain_frames].mean() >= ref_db - SUSTAIN_NEAR_DB
         ):
             continue
-        # A rise within the sustain window of word 2 is already
+        # A rise within the sustain window of the bound is already
         # continuous with it; the median over that sliver would only
         # measure the attack itself.
         if b - i < sustain_frames:
-            # Continuity with word 2 is trustworthy; the envelope running
-            # out is not — onsets near the stem end are unreliable.
-            if b_word2 <= b_env:
+            # Continuity with the bound is trustworthy; the envelope
+            # running out is not — onsets near the stem end are unreliable.
+            if b_bound <= b_env:
                 return i * HOP_S
             continue
         if float(np.median(env[i:b])) >= ref_db - SUSTAIN_NEAR_DB:
@@ -374,10 +382,13 @@ def snap_line_ends(
             out.append(obj)
             continue
 
-        # The last word's claimed span is genuinely sung either way — a
-        # clipped span is a subset of the true one — so the shared
-        # words-2..n reference applies unchanged.
-        ref = _sung_level_ref(env, words)
+        # end=True: onsets already ran, so a substantial word 1 no longer
+        # needs excluding to protect the reference from onset smear, and
+        # including it fixes lines that are mostly one held note plus
+        # short trailing words. The last word's own claimed span is
+        # genuinely sung either way — a clipped span is a subset of the
+        # true one — so referencing it is fair regardless.
+        ref = _sung_level_ref(env, words, end=True)
         if ref is None:
             out.append(obj)
             continue

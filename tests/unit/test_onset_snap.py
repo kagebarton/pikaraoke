@@ -205,10 +205,10 @@ class TestSnapLineOnsets:
 
     def test_rise_truncated_by_stem_end_rejected(self, use_env):
         # The envelope ends at 5.0s (len(env)=200, b_env=197). Word 2 starts
-        # at 4.95 (b_word2=198 > b_env), so the window is env-truncated, not
+        # at 4.95 (b_bound=198 > b_env), so the window is env-truncated, not
         # word-2-proximate. The soft tier accepts frame 187, one hop before
         # the 4.7s step, where b - i = 10 < sustain_frames = 16 -- the trust
-        # branch fires, but b_word2 > b_env means it must not trust it.
+        # branch fires, but b_bound > b_env means it must not trust it.
         use_env(_env(5.0, [(4.7, 5.0, -20.0)]))
         obj = _line((3.0, 4.6), (4.95, 5.4))
 
@@ -445,6 +445,21 @@ class TestSnapLineEnds:
         assert out[0]["words"][-1]["end"] == pytest.approx(5.875, abs=0.01)
         assert stats["n_fired"] == 1
         assert stats["n_extended"] == 1
+
+    def test_end_ref_includes_long_word1(self, use_env):
+        # Word 1 is a long held note (1.0-3.0 at -20dB); words 2-3 are
+        # short trailing words in a quieter patch (-34dB). Excluding word
+        # 1 would put the reference at -34 and read the claimed end as
+        # still clipped; including it puts the reference at -20 (word 1's
+        # 81 frames dominate the median) and reads the end as already
+        # released -- 14dB below the line's true sung level.
+        use_env(_env(10.0, [(1.0, 3.0, -20.0), (3.2, 5.5, -34.0)]))
+        obj = _line((1.0, 3.0), (3.2, 3.4), (3.6, 4.0))
+
+        out, stats = snap_line_ends([obj], "vocal.wav")
+
+        assert out[0] is obj
+        assert stats["n_fired"] == 0
 
     def test_decode_failure_bails(self, monkeypatch):
         def boom(path):
