@@ -2562,3 +2562,47 @@ skipped at the gate: it can cost coverage, never correctness.
    as scheduled. Phase 4 is the commit in this set that needs it: a new
    reference path plus a bound generalization across two functions is past
    what self-review covers.
+
+### Phase 4 eyeball session (Ken, 2026-09-17)
+
+The two lines the read-off could not settle from the envelope were checked
+by ear. Setup note: the `.edgesnap.ass` files then on disk were from the
+`--multi-word-only` run and had one-word lines *deleted* (18 of 22 files;
+e.g. Speechless carried 46 Dialogue lines against the shipped file's 49).
+The coverage harness was re-run unfiltered at `aab7358` and reproduces
+`edge_p4_coverage.txt` byte-for-byte. Re-run output:
+`C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\4d761251-d0b5-493b-a519-1f8202696d9f\scratchpad\p4judge\rerun_coverage.txt`
+
+**1. Ariana Grande / John Legend "Beauty and the Beast", the lone `Oh`
+(96.48 -> 97.23, +0.75 s).** Ken: *"beauty and the beast is fine"*.
+
+The snap is correct. **Finding 4 closes.** The vacated span at 0.72 of the
+song's loud anchor with no previous line within 6 s was a harmony sitting
+under the lead's entry, not the lead. The multi-singer blind spot did not
+fire on the one-word population's only candidate for it.
+
+**2. Josh Gad "In Summer", `Nope!` (2.48-4.46 claimed, snapped to
+4.36-4.46).** Ken: *"summer is late but right duration with edge snap, and
+early, long, but ends in right spot in production"*.
+
+Both versions end in the same place — the end path rejected this line at
+`MIN_REF_DB` over its squeezed span, so the claimed end never moved — and
+that shared end is the one Ken reads as correct. The whole difference is
+the start: production's is early and the wipe runs long; Phase 4's has the
+right duration but arrives late.
+
+**Finding 3 is confirmed and sharpened.** The defect is not only the
+duration collapse the read-off recorded. The onset search *overshot*: it
+placed the start later than the word. Note the asymmetry this exposes —
+on this line whisper's claimed **end** was trustworthy and its claimed
+**start** was not, which is the opposite of what the one-word bound
+assumes when it searches all the way to the claimed end and then clamps
+against it.
+
+**What this changes.** Neither verdict disturbs the Phase 4 ruling or the
+Phase 5 go. Finding 4 is closed as verified-correct. Finding 3 keeps its
+Phase 7 home but is now a sized, heard defect rather than a suspected one,
+and the shape of a fix is visible: reject a one-word snap that would
+collapse the line, rather than clamping it into a sliver. That leaves
+production's early-but-correctly-ended behaviour, which by this reading is
+the better of the two wrong answers.
