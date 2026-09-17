@@ -2606,3 +2606,395 @@ and the shape of a fix is visible: reject a one-word snap that would
 collapse the line, rather than clamping it into a sliver. That leaves
 production's early-but-correctly-ended behaviour, which by this reading is
 the better of the two wrong answers.
+
+### Phase 5
+
+`edge_p4_*.txt` (Phase 4's scratchpad files) still resolved; their `total`
+lines matched the ones pasted under the Phase 4 read-off exactly. No
+re-run against those totals was needed. Phase 5 diffs below are against
+those files.
+
+**Change.**
+
+- `_sung_level_ref` gains `end: bool = False`. For `len(words) >= 2`, the
+  reference is still the median over `words[1:]`, with `words[0]` joining
+  it when `end` is true and `words[0]["end"] - words[0]["start"] >
+  MIN_WORD_DUR_S`. The `len(words) == 1` percentile path is unchanged and
+  independent of `end`, per the plan.
+- `snap_line_ends`'s call becomes `_sung_level_ref(env, words, end=True)`.
+  `snap_line_onsets`'s call and `lrclib_fill.py:279` keep the default,
+  unmodified.
+- Docstring rewrite on `_sung_level_ref`: the "both snaps gate on this
+  same reference" sentence is gone, replaced with the default/`end=True`
+  split above.
+
+**Comment tidy-up folded in (Phase 4 read-off finding 5, ruling item 4).**
+`_detect_rise`'s docstring said "hold through to `t1` (word 2's start)"
+and its local was `b_word2`; both predate Phase 4's generalization of `t1`
+to word 1's own claimed end on a one-word line. Docstring reworded to name
+both cases; `b_word2` renamed `b_bound` throughout the function (its two
+inline comments' "word 2" wording generalized to "the bound" the same
+way); the test file's one comment naming `b_word2`
+(`test_rise_truncated_by_stem_end_rejected`) updated to match. Separately,
+`snap_line_ends`'s inline comment above the `_sung_level_ref` call said
+"the shared words-2..n reference applies unchanged" — no longer true now
+that `end=True` can pull word 1 in — rewritten to state why `end=True` is
+safe here (onsets already ran) alongside the pre-existing point it still
+needed (the last word's own span is fair to reference even where it
+dominates `words[1:]`). No behavior change from any edit in this
+paragraph.
+
+**Test:** `test_end_ref_includes_long_word1` added to `TestSnapLineEnds`,
+at the plan's stated construction and values.
+
+**Suite.**
+
+Invocation: `uv run --no-sync python -m pytest tests/unit -q`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p5_suite.txt`
+
+```
+FAILED tests/unit/test_genius.py::TestSidecarIO::test_write_overwrites_existing
+FAILED tests/unit/test_pipeline_stem_worker.py::TestStemWorkerSeparate::test_ok_returns_stem_paths_and_sends_job
+FAILED tests/unit/test_pipeline_stem_worker.py::TestStemWorkerSeparate::test_model_override_travels_in_job_tuple
+FAILED tests/unit/test_whisper_worker.py::TestStart::test_start_raises_worker_died_on_pipe_close
+4 failed, 1525 passed, 2 skipped in 37.23s
+```
+
+Only the known four; 1525 = 1524 + 1 new test.
+
+Invocation: `uv run --no-sync python -m pytest tests/unit/test_onset_snap.py tests/unit/test_lrclib_fill.py -q`
+-> `68 passed` (40 + 28), matching the split (39 -> 40 in `test_onset_snap.py`).
+
+**Supplementary check (not in the plan's Verify list): per-line invariant
+audit,** same script and invariants as Phase 4's.
+
+Script: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\check_invariants.py`
+
+```
+edge_p5_coverage.txt: onset_lines_checked=35 end_lines_checked=35 violations=0
+edge_p5_replay.txt: onset_lines_checked=19 end_lines_checked=19 violations=0
+```
+
+**Replay harness.**
+
+Invocation: `uv run --no-sync python scripts/edge_snap_replay.py --folder D:/shared/pikaraoke-songs`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p5_replay.txt`
+Diff: `diff edge_p4_replay.txt edge_p5_replay.txt > edge_p5_replay.diff`, at
+`C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p5_replay.diff`
+(171 lines).
+
+```
+9,11c9,11
+<   rec end L40 +0.440
+<   rec end L41 +0.351
+<   rec end L42 +0.445
+---
+>   rec end L40 +0.390
+>   rec end L41 +0.376
+>   rec end L42 +0.470
+40c40
+<   rec end L31 +2.320
+---
+>   rec end L31 +2.345
+43c43
+<   stats end n_below_min_shift=4 n_extended=7 n_fired=11 n_lines=41 n_low_ref=0 n_single_word=0
+---
+>   stats end n_below_min_shift=3 n_extended=7 n_fired=10 n_lines=41 n_low_ref=0 n_single_word=0
+81a82
+>   rec end L34 +0.150
+83c84
+<   rec end L39 +0.685
+---
+>   rec end L39 +0.710
+91c92
+<   stats end n_below_min_shift=1 n_extended=12 n_fired=13 n_lines=77 n_low_ref=1 n_single_word=0
+---
+>   stats end n_below_min_shift=0 n_extended=13 n_fired=13 n_lines=77 n_low_ref=1 n_single_word=0
+112,113c113,114
+<   rec end L1 +0.880
+<   rec end L2 +0.385
+---
+>   rec end L1 +0.930
+>   rec end L2 +0.410
+125c126
+<   rec end L49 +0.445
+---
+>   rec end L49 +0.345
+154c155
+<   rec end L14 +1.995
+---
+>   rec end L14 +1.970
+161c162
+<   stats end n_below_min_shift=11 n_extended=6 n_fired=17 n_lines=38 n_low_ref=1 n_single_word=0
+---
+>   stats end n_below_min_shift=11 n_extended=6 n_fired=17 n_lines=38 n_low_ref=0 n_single_word=0
+174c175
+<   rec end L7 +0.205
+---
+>   rec end L7 +0.230
+220c221
+<   rec end L3 +0.325
+---
+>   rec end L3 +0.350
+224c225
+<   rec end L19 +0.205
+---
+>   rec end L19 +0.230
+228c229,230
+<   rec end L28 +0.519
+---
+>   rec end L28 +0.544
+>   rec end L31 +0.154
+244c246
+<   stats end n_below_min_shift=10 n_extended=24 n_fired=34 n_lines=67 n_low_ref=0 n_single_word=4
+---
+>   stats end n_below_min_shift=9 n_extended=25 n_fired=34 n_lines=67 n_low_ref=0 n_single_word=4
+267c269
+<   rec end L30 +3.295
+---
+>   rec end L30 +3.320
+269c271
+<   stats end n_below_min_shift=8 n_extended=7 n_fired=15 n_lines=31 n_low_ref=1 n_single_word=1
+---
+>   stats end n_below_min_shift=7 n_extended=7 n_fired=14 n_lines=31 n_low_ref=1 n_single_word=1
+271c273
+<   rec end L0 +0.615
+---
+>   rec end L0 +0.640
+274c276
+<   rec end L8 +0.816
+---
+>   rec end L8 +0.841
+279c281
+<   rec end L31 +0.950
+---
+>   rec end L31 +0.975
+287c289
+<   rec end L46 +1.170
+---
+>   rec end L46 +1.145
+312c314
+<   rec end L13 +0.530
+---
+>   rec end L13 +0.505
+326c328
+<   rec end L35 +0.265
+---
+>   rec end L35 +0.315
+328c330
+<   rec end L37 +0.295
+---
+>   rec end L37 +0.345
+334c336
+<   rec end L47 +1.020
+---
+>   rec end L47 +0.995
+364c366
+<   rec end L28 +0.305
+---
+>   rec end L28 +0.280
+368c370
+<   rec end L32 +0.255
+---
+>   rec end L32 +0.280
+370c372
+<   stats end n_below_min_shift=8 n_extended=16 n_fired=24 n_lines=37 n_low_ref=1 n_single_word=0
+---
+>   stats end n_below_min_shift=8 n_extended=16 n_fired=24 n_lines=37 n_low_ref=0 n_single_word=0
+382c384
+<   rec end L11 +1.940
+---
+>   rec end L11 +1.990
+385c387
+<   rec end L15 +5.820
+---
+>   rec end L15 +5.795
+408c410
+<   rec end L20 +0.209
+---
+>   rec end L20 +0.234
+413c415
+<   stats end n_below_min_shift=10 n_extended=9 n_fired=19 n_lines=38 n_low_ref=0 n_single_word=0
+---
+>   stats end n_below_min_shift=9 n_extended=9 n_fired=18 n_lines=38 n_low_ref=0 n_single_word=0
+420c422
+<   rec end L5 +0.350
+---
+>   rec end L5 +0.375
+423d424
+<   rec end L14 +0.210 to_bound
+426c427
+<   rec end L28 +1.105
+---
+>   rec end L28 +1.130
+429c430
+<   stats end n_below_min_shift=4 n_extended=9 n_fired=13 n_lines=40 n_low_ref=0 n_single_word=2
+---
+>   stats end n_below_min_shift=4 n_extended=8 n_fired=12 n_lines=40 n_low_ref=0 n_single_word=2
+461c462
+<   rec end L40 +0.295
+---
+>   rec end L40 +0.320
+471c472
+<   rec end L62 +5.100
+---
+>   rec end L62 +5.600
+478c479
+<   stats end n_below_min_shift=15 n_extended=22 n_fired=37 n_lines=71 n_low_ref=1 n_single_word=1
+---
+>   stats end n_below_min_shift=14 n_extended=22 n_fired=36 n_lines=71 n_low_ref=2 n_single_word=1
+490c491
+<   rec end L29 +0.630
+---
+>   rec end L29 +0.655
+492c493
+<   stats end n_below_min_shift=6 n_extended=6 n_fired=12 n_lines=36 n_low_ref=3 n_single_word=0
+---
+>   stats end n_below_min_shift=6 n_extended=6 n_fired=12 n_lines=36 n_low_ref=4 n_single_word=0
+495c496
+< total end n_below_min_shift=104 n_extended=245 n_fired=349 n_lines=1010 n_low_ref=8 n_single_word=21
+---
+> total end n_below_min_shift=98 n_extended=246 n_fired=344 n_lines=1010 n_low_ref=8 n_single_word=21
+```
+
+**Coverage harness.**
+
+Invocation: `uv run --no-sync python scripts/edge_snap_ass.py --folder D:/shared/pikaraoke-songs`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p5_coverage.txt`
+Diff: `diff edge_p4_coverage.txt edge_p5_coverage.txt > edge_p5_coverage.diff`, at
+`C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p5_coverage.diff`
+(123 lines).
+
+```
+2a3,6
+>   rec end 2:49.14 -> 2:49.54 (+0.40s) to_bound  ... Because I knew you
+>   rec end 2:57.20 -> 2:57.52 (+0.32s) to_bound  ... just to clear the air
+>   rec end 4:03.90 -> 4:04.05 (+0.15s)  ... Because I knew you
+>   rec end 4:18.70 -> 4:22.98 (+4.28s)  ... For good
+4c8
+<   stats end n_below_min_shift=16 n_extended=0 n_fired=16 n_lines=60 n_low_ref=2 n_single_word=0
+---
+>   stats end n_below_min_shift=12 n_extended=4 n_fired=16 n_lines=60 n_low_ref=1 n_single_word=0
+9c13
+<   stats end n_below_min_shift=6 n_extended=1 n_fired=7 n_lines=51 n_low_ref=0 n_single_word=3
+---
+>   stats end n_below_min_shift=7 n_extended=1 n_fired=8 n_lines=51 n_low_ref=0 n_single_word=3
+13c17
+<   stats end n_below_min_shift=4 n_extended=0 n_fired=4 n_lines=40 n_low_ref=0 n_single_word=0
+---
+>   stats end n_below_min_shift=3 n_extended=0 n_fired=3 n_lines=40 n_low_ref=0 n_single_word=0
+35d38
+<   rec end 3:16.53 -> 3:16.75 (+0.22s) to_bound  ... Beauty and the...
+41c44
+<   stats end n_below_min_shift=12 n_extended=15 n_fired=27 n_lines=56 n_low_ref=0 n_single_word=21
+---
+>   stats end n_below_min_shift=10 n_extended=14 n_fired=24 n_lines=56 n_low_ref=0 n_single_word=21
+52c55
+<   stats end n_below_min_shift=0 n_extended=0 n_fired=0 n_lines=39 n_low_ref=0 n_single_word=0
+---
+>   stats end n_below_min_shift=1 n_extended=0 n_fired=1 n_lines=39 n_low_ref=0 n_single_word=0
+64c67
+<   stats end n_below_min_shift=8 n_extended=0 n_fired=8 n_lines=37 n_low_ref=1 n_single_word=0
+---
+>   stats end n_below_min_shift=8 n_extended=0 n_fired=8 n_lines=37 n_low_ref=0 n_single_word=0
+68c71
+<   stats end n_below_min_shift=15 n_extended=1 n_fired=16 n_lines=38 n_low_ref=0 n_single_word=0
+---
+>   stats end n_below_min_shift=16 n_extended=1 n_fired=17 n_lines=38 n_low_ref=0 n_single_word=0
+81a85
+>   rec end 1:53.99 -> 1:54.15 (+0.16s)  ... Don't you know?
+83c87
+<   rec end 3:41.90 -> 3:45.25 (+3.35s)  ... the moonlight In the moonlight
+---
+>   rec end 3:41.90 -> 3:44.08 (+2.17s)  ... the moonlight In the moonlight
+85c89
+<   stats end n_below_min_shift=15 n_extended=2 n_fired=17 n_lines=63 n_low_ref=0 n_single_word=4
+---
+>   stats end n_below_min_shift=14 n_extended=3 n_fired=17 n_lines=63 n_low_ref=0 n_single_word=4
+90c94
+<   stats end n_below_min_shift=15 n_extended=0 n_fired=15 n_lines=54 n_low_ref=1 n_single_word=5
+---
+>   stats end n_below_min_shift=13 n_extended=0 n_fired=13 n_lines=54 n_low_ref=1 n_single_word=5
+95c99
+<   stats end n_below_min_shift=10 n_extended=0 n_fired=10 n_lines=29 n_low_ref=1 n_single_word=1
+---
+>   stats end n_below_min_shift=9 n_extended=0 n_fired=9 n_lines=29 n_low_ref=1 n_single_word=1
+100c104
+<   stats end n_below_min_shift=15 n_extended=0 n_fired=15 n_lines=84 n_low_ref=1 n_single_word=2
+---
+>   stats end n_below_min_shift=15 n_extended=0 n_fired=15 n_lines=84 n_low_ref=0 n_single_word=2
+106d109
+<   rec end 4:35.30 -> 4:35.45 (+0.15s) to_bound  ... like you're my mirror, oh-oh
+109c112
+<   stats end n_below_min_shift=12 n_extended=4 n_fired=16 n_lines=120 n_low_ref=0 n_single_word=0
+---
+>   stats end n_below_min_shift=12 n_extended=3 n_fired=15 n_lines=120 n_low_ref=0 n_single_word=0
+115a119
+>   rec end 1:03.06 -> 1:03.23 (+0.17s)  ... bad for my mental, but
+117c121
+<   stats end n_below_min_shift=16 n_extended=0 n_fired=16 n_lines=79 n_low_ref=0 n_single_word=0
+---
+>   stats end n_below_min_shift=15 n_extended=1 n_fired=16 n_lines=79 n_low_ref=0 n_single_word=0
+119a124
+>   rec end 1:40.12 -> 1:40.28 (+0.15s)  ... It's crystal clear
+124c129
+<   stats end n_below_min_shift=9 n_extended=3 n_fired=12 n_lines=54 n_low_ref=2 n_single_word=4
+---
+>   stats end n_below_min_shift=9 n_extended=4 n_fired=13 n_lines=54 n_low_ref=2 n_single_word=4
+137c142
+<   rec end 0:22.37 -> 0:23.05 (+0.68s)  ... Bye bye
+---
+>   rec end 2:23.39 -> 2:24.05 (+0.66s)  ... you that I've had enough
+139c144
+<   stats end n_below_min_shift=9 n_extended=1 n_fired=10 n_lines=75 n_low_ref=0 n_single_word=0
+---
+>   stats end n_below_min_shift=11 n_extended=1 n_fired=12 n_lines=75 n_low_ref=0 n_single_word=0
+144d148
+<   rec end 4:01.22 -> 4:01.38 (+0.15s)  ... 'Cause I waited
+147c151
+<   stats end n_below_min_shift=10 n_extended=4 n_fired=14 n_lines=53 n_low_ref=0 n_single_word=4
+---
+>   stats end n_below_min_shift=11 n_extended=3 n_fired=14 n_lines=53 n_low_ref=0 n_single_word=4
+152c156
+<   stats end n_below_min_shift=18 n_extended=1 n_fired=19 n_lines=37 n_low_ref=1 n_single_word=0
+---
+>   stats end n_below_min_shift=18 n_extended=1 n_fired=19 n_lines=37 n_low_ref=0 n_single_word=0
+159c163
+<   stats end n_below_min_shift=17 n_extended=0 n_fired=17 n_lines=38 n_low_ref=0 n_single_word=0
+---
+>   stats end n_below_min_shift=16 n_extended=0 n_fired=16 n_lines=38 n_low_ref=0 n_single_word=0
+160a165
+>   rec end 0:56.74 -> 0:57.50 (+0.76s)  ... With all its living things
+163c168
+<   stats end n_below_min_shift=7 n_extended=1 n_fired=8 n_lines=32 n_low_ref=0 n_single_word=0
+---
+>   stats end n_below_min_shift=6 n_extended=2 n_fired=8 n_lines=32 n_low_ref=0 n_single_word=0
+166c171
+<   rec end 3:30.79 -> 3:32.60 (+1.81s)  ... It's our problem-free philosophy
+---
+>   rec end 3:30.79 -> 3:32.62 (+1.83s)  ... It's our problem-free philosophy
+168c173
+<   stats end n_below_min_shift=6 n_extended=1 n_fired=7 n_lines=33 n_low_ref=0 n_single_word=2
+---
+>   stats end n_below_min_shift=7 n_extended=1 n_fired=8 n_lines=33 n_low_ref=0 n_single_word=2
+172c177
+<   stats end n_below_min_shift=25 n_extended=0 n_fired=25 n_lines=67 n_low_ref=1 n_single_word=1
+---
+>   stats end n_below_min_shift=23 n_extended=0 n_fired=23 n_lines=67 n_low_ref=3 n_single_word=1
+175c180
+<   stats end n_below_min_shift=8 n_extended=0 n_fired=8 n_lines=29 n_low_ref=2 n_single_word=0
+---
+>   stats end n_below_min_shift=8 n_extended=0 n_fired=8 n_lines=29 n_low_ref=3 n_single_word=0
+181c186
+< total end n_below_min_shift=351 n_extended=44 n_fired=395 n_lines=1823 n_low_ref=15 n_single_word=61
+---
+> total end n_below_min_shift=342 n_extended=49 n_fired=391 n_lines=1823 n_low_ref=14 n_single_word=61
+```
+
+**Against the plan's recorded expectation** ("a small number of
+end-extend changes, concentrated on lines with a long first word, mainly
+on the replay harness") and the Phase 4 ruling's carry-forward note
+("Phase 5's recorded expectation is unsized... a contrary diff is for the
+read, not a STOP"): both diffs are pasted above for the read.
+
+Suite: known failures only. Commit: (this entry rides with it).
