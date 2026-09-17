@@ -1982,3 +1982,391 @@ Song counts match both harnesses; single-word counts match Phase 2's
    the Phase 4 read.
 4. `/code-review` on the Phase 0-3 commits stays pending until the Phase 5
    checkpoint. Phase 3 alone is simple enough that self-review covers it.
+
+### Phase 4
+
+`edge_p3_*.txt` (Phase 3's scratchpad files) still resolved; used directly
+as the P3 baseline per the Phase 3 read-off's ruling 2 ("diff it against
+the executor's `edge_p3_*` files above if they still resolve"). No re-run
+against Phase 2 totals was needed.
+
+**Change.**
+
+- 4a `_sung_level_ref`: new module constant `SINGLE_WORD_REF_PCT = 80.0`.
+  When `len(words) == 1`, returns the 80th percentile over word 1's own
+  claimed span (same index construction and bounds filter as the existing
+  path); the `len(words) >= 2` path is untouched.
+- 4b `snap_line_onsets`: the `len(words) < 2` gate replaced with
+  `if not words:`; `n_single_word` now counts every one-word line seen
+  (previously only those skipped). `w2s` eliminated in favour of
+  `bound = words[1]["start"] if len(words) >= 2 else words[0]["end"]`,
+  used at the narrow-window skip, the `_detect_rise` call and the clamp
+  (the three sites the plan names), plus the end-carry branch's fallback
+  bound (the plan's fourth, discussed site: "no special-casing needed").
+- 4c `snap_line_ends`: the `len(words) < 2` gate replaced the same way;
+  nothing else changed (`words[-1]` already generalizes to a one-word
+  list; confirmed by reading the function, no other line references word
+  2).
+- Docstrings updated on `_sung_level_ref`, `snap_line_onsets` (the
+  known-limitation note: `_detect_rise`'s continuity check now demands the
+  voice hold to the claimed end for a single-word line) and
+  `snap_line_ends` (the ordering-dividend note).
+
+**Flagged for the read (not a STOP): a fifth `w2s` site the plan doesn't
+name.** Phase 4's text is frozen at `385c881`, before Phase 2 landed.
+Phase 2 added a `w2s` reference that the plan's "use `bound` everywhere
+`w2s` is used today" list does not enumerate: the `n_undetectable`
+diagnostic's `hi = min(max(int(w2s / HOP_S), lo + 1), len(env))`. Since
+`bound` replaces `w2s` as a variable (the assignment
+`w2s = words[1]["start"]` no longer exists), leaving this occurrence as
+literal `w2s` would crash on a single-word line before ever reaching it.
+Applied the plan's own stated generalization rule to this occurrence too,
+rather than leaving it or inventing an alternative. No design judgement
+beyond that stated rule was exercised.
+
+**Suite.**
+
+Invocation: `uv run --no-sync python -m pytest tests/unit -q`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p4_suite.txt`
+
+```
+FAILED tests/unit/test_genius.py::TestSidecarIO::test_write_overwrites_existing
+FAILED tests/unit/test_pipeline_stem_worker.py::TestStemWorkerSeparate::test_ok_returns_stem_paths_and_sends_job
+FAILED tests/unit/test_pipeline_stem_worker.py::TestStemWorkerSeparate::test_model_override_travels_in_job_tuple
+FAILED tests/unit/test_whisper_worker.py::TestStart::test_start_raises_worker_died_on_pipe_close
+4 failed, 1524 passed, 2 skipped in 32.60s
+```
+
+Only the known four; 1524 = 1519 + 5 new tests. `tests/unit/test_onset_snap.py`
+alone (`uv run --no-sync python -m pytest tests/unit/test_onset_snap.py -q`):
+34 -> 39 passed. `tests/unit/test_lrclib_fill.py` (the other
+`_sung_level_ref` caller, run separately): 28 passed.
+
+New tests: `test_single_word_smeared_start_snaps`,
+`test_single_word_on_time_untouched`, `test_single_word_in_silence_untouched`
+(`TestSnapLineOnsets`); `test_single_word_clipped_end_extends`
+(`TestSnapLineEnds`); `test_single_word_both_edges` (`TestSnapLineEdges`).
+Both `test_short_lines_skipped` renamed to `test_empty_words_skipped`, the
+one-word case removed per the plan (moved to the new tests).
+
+**Supplementary check (not in the plan's Verify list): per-line invariant
+audit.** Read-only, reparses the harnesses' own printed `stats`/`total`
+lines; no new logic beyond arithmetic already implied by the two
+Phase-2-documented invariants. Checks both invariants
+(`n_fired == n_snapped + n_no_rise + n_below_min_shift` onset;
+`n_fired == n_extended + n_below_min_shift` end) on every per-song line of
+both Phase 4 outputs, not just the totals.
+
+Script: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\check_invariants.py`
+
+```
+edge_p4_coverage.txt: onset_lines_checked=35 end_lines_checked=35 violations=0
+edge_p4_replay.txt: onset_lines_checked=19 end_lines_checked=19 violations=0
+```
+
+**Replay harness (unfiltered).**
+
+Invocation: `uv run --no-sync python scripts/edge_snap_replay.py --folder D:/shared/pikaraoke-songs`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p4_replay.txt`
+Diff: `diff edge_p3_replay.txt edge_p4_replay.txt > edge_p4_replay.diff`, at
+`C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p4_replay.diff`
+
+```
+20a21
+>   rec end [1w] L88 +4.450
+22c23
+<   stats end n_below_min_shift=2 n_extended=17 n_fired=19 n_lines=89 n_low_ref=0 n_single_word=3
+---
+>   stats end n_below_min_shift=2 n_extended=18 n_fired=20 n_lines=89 n_low_ref=0 n_single_word=3
+56a58
+>   rec end [1w] L16 +0.285
+64,65c66,67
+<   stats onset n_below_min_shift=6 n_fired=18 n_lines=62 n_low_ref=1 n_no_rise=1 n_single_word=2 n_snapped=11 n_undetectable=2
+<   stats end n_below_min_shift=6 n_extended=9 n_fired=15 n_lines=62 n_low_ref=0 n_single_word=2
+---
+>   stats onset n_below_min_shift=7 n_fired=19 n_lines=62 n_low_ref=1 n_no_rise=1 n_single_word=2 n_snapped=11 n_undetectable=2
+>   stats end n_below_min_shift=6 n_extended=10 n_fired=16 n_lines=62 n_low_ref=0 n_single_word=2
+96a99
+>   rec onset [1w] L22 +0.495
+117a121
+>   rec end [1w] L22 +0.150
+134,135c138,139
+<   stats onset n_below_min_shift=13 n_fired=34 n_lines=110 n_low_ref=0 n_no_rise=3 n_single_word=3 n_snapped=18 n_undetectable=4
+<   stats end n_below_min_shift=4 n_extended=25 n_fired=29 n_lines=110 n_low_ref=0 n_single_word=3
+---
+>   stats onset n_below_min_shift=14 n_fired=36 n_lines=110 n_low_ref=0 n_no_rise=3 n_single_word=3 n_snapped=19 n_undetectable=4
+>   stats end n_below_min_shift=4 n_extended=26 n_fired=30 n_lines=110 n_low_ref=0 n_single_word=3
+168a173
+>   rec end [1w] L0 +0.390
+178c183
+<   stats end n_below_min_shift=4 n_extended=8 n_fired=12 n_lines=74 n_low_ref=0 n_single_word=1
+---
+>   stats end n_below_min_shift=4 n_extended=9 n_fired=13 n_lines=74 n_low_ref=0 n_single_word=1
+223a229
+>   rec end [1w] L33 +0.409
+237,238c243,244
+<   stats onset n_below_min_shift=11 n_fired=30 n_lines=67 n_low_ref=0 n_no_rise=2 n_single_word=4 n_snapped=17 n_undetectable=5
+<   stats end n_below_min_shift=10 n_extended=23 n_fired=33 n_lines=67 n_low_ref=0 n_single_word=4
+---
+>   stats onset n_below_min_shift=12 n_fired=31 n_lines=67 n_low_ref=0 n_no_rise=2 n_single_word=4 n_snapped=17 n_undetectable=5
+>   stats end n_below_min_shift=10 n_extended=24 n_fired=34 n_lines=67 n_low_ref=0 n_single_word=4
+239a246
+>   rec onset [1w] L2 +1.880
+261,262c268,269
+<   stats onset n_below_min_shift=3 n_fired=17 n_lines=31 n_low_ref=1 n_no_rise=0 n_single_word=1 n_snapped=14 n_undetectable=0
+<   stats end n_below_min_shift=8 n_extended=7 n_fired=15 n_lines=31 n_low_ref=0 n_single_word=1
+---
+>   stats onset n_below_min_shift=3 n_fired=18 n_lines=31 n_low_ref=1 n_no_rise=0 n_single_word=1 n_snapped=15 n_undetectable=0
+>   stats end n_below_min_shift=8 n_extended=7 n_fired=15 n_lines=31 n_low_ref=1 n_single_word=1
+299a307
+>   rec end [1w] L0 +2.450
+309a318
+>   rec end [1w] L23 +1.455
+328,329c337,339
+<   stats onset n_below_min_shift=7 n_fired=26 n_lines=65 n_low_ref=0 n_no_rise=3 n_single_word=4 n_snapped=16 n_undetectable=3
+<   stats end n_below_min_shift=6 n_extended=28 n_fired=34 n_lines=65 n_low_ref=0 n_single_word=4
+---
+>   rec end [1w] L62 +1.355
+>   stats onset n_below_min_shift=8 n_fired=27 n_lines=65 n_low_ref=0 n_no_rise=3 n_single_word=4 n_snapped=16 n_undetectable=3
+>   stats end n_below_min_shift=6 n_extended=31 n_fired=37 n_lines=65 n_low_ref=0 n_single_word=4
+418c428
+<   stats onset n_below_min_shift=4 n_fired=8 n_lines=40 n_low_ref=2 n_no_rise=0 n_single_word=2 n_snapped=4 n_undetectable=0
+---
+>   stats onset n_below_min_shift=4 n_fired=8 n_lines=40 n_low_ref=3 n_no_rise=0 n_single_word=2 n_snapped=4 n_undetectable=0
+484,485c494,495
+< total onset n_below_min_shift=125 n_fired=344 n_lines=1010 n_low_ref=13 n_no_rise=28 n_single_word=21 n_snapped=191 n_undetectable=50
+< total end n_below_min_shift=104 n_extended=237 n_fired=341 n_lines=1010 n_low_ref=7 n_single_word=21
+---
+> total onset n_below_min_shift=129 n_fired=350 n_lines=1010 n_low_ref=14 n_no_rise=28 n_single_word=21 n_snapped=193 n_undetectable=50
+> total end n_below_min_shift=104 n_extended=245 n_fired=349 n_lines=1010 n_low_ref=8 n_single_word=21
+```
+
+**Coverage harness (unfiltered).**
+
+Invocation: `uv run --no-sync python scripts/edge_snap_ass.py --folder D:/shared/pikaraoke-songs`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p4_coverage.txt`
+Diff: `diff edge_p3_coverage.txt edge_p4_coverage.txt > edge_p4_coverage.diff`, at
+`C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p4_coverage.diff`
+
+```
+6a7
+>   rec end [1w] 3:45.25 -> 3:49.70 (+4.45s)  ... Down!
+8c9,10
+<   stats end n_below_min_shift=6 n_extended=0 n_fired=6 n_lines=51 n_low_ref=0 n_single_word=3
+---
+>   stats end n_below_min_shift=6 n_extended=1 n_fired=7 n_lines=51 n_low_ref=0 n_single_word=3
+>   wrote 'Defying Gravity' - Wicked 20th Anniversary Edition _ WICKED the Musical---AoON1CyhQAM.edgesnap.ass
+12a15
+>   rec end [1w] 0:47.54 -> 0:47.83 (+0.28s)  ... Popular
+14,15c17,18
+<   stats onset n_below_min_shift=17 n_fired=18 n_lines=51 n_low_ref=1 n_no_rise=1 n_single_word=2 n_snapped=0 n_undetectable=1
+<   stats end n_below_min_shift=8 n_extended=1 n_fired=9 n_lines=51 n_low_ref=0 n_single_word=2
+---
+>   stats onset n_below_min_shift=18 n_fired=19 n_lines=51 n_low_ref=1 n_no_rise=1 n_single_word=2 n_snapped=0 n_undetectable=1
+>   stats end n_below_min_shift=8 n_extended=2 n_fired=10 n_lines=51 n_low_ref=0 n_single_word=2
+17a21,32
+>   rec onset [1w] 0:40.91 -> 0:41.23 (+0.32s)  Unexpectedly ...
+>   rec onset [1w] 1:36.48 -> 1:37.23 (+0.75s)  Oh ...
+>   rec onset [1w] 1:52.87 -> 1:53.08 (+0.21s)  Oh ...
+>   rec onset [1w] 3:16.63 -> 3:16.85 (+0.22s)  Beast ...
+>   rec end [1w] 1:30.47 -> 1:33.68 (+3.21s)  ... Oh
+>   rec end [1w] 1:37.70 -> 1:39.53 (+1.82s)  ... Oh
+>   rec end [1w] 1:46.30 -> 1:51.40 (+5.10s)  ... Oh
+>   rec end [1w] 1:54.37 -> 1:56.07 (+1.70s) to_bound  ... Oh
+>   rec end [1w] 1:59.57 -> 1:59.96 (+0.39s) to_bound  ... Oh
+>   rec end [1w] 2:05.49 -> 2:06.02 (+0.53s) to_bound  ... Yeah
+>   rec end [1w] 2:32.02 -> 2:33.18 (+1.16s)  ... Oh
+>   rec end [1w] 2:43.56 -> 2:46.08 (+2.52s) to_bound  ... Oh
+19,20c34,41
+<   stats onset n_below_min_shift=15 n_fired=16 n_lines=56 n_low_ref=0 n_no_rise=1 n_single_word=21 n_snapped=0 n_undetectable=8
+<   stats end n_below_min_shift=12 n_extended=1 n_fired=13 n_lines=56 n_low_ref=0 n_single_word=21
+---
+>   rec end [1w] 3:05.84 -> 3:06.06 (+0.22s) to_bound  ... Mmm-mmm
+>   rec end 3:16.53 -> 3:16.75 (+0.22s) to_bound  ... Beauty and the...
+>   rec end [1w] 3:18.13 -> 3:20.12 (+2.00s)  ... Beast
+>   rec end [1w] 3:22.55 -> 3:24.80 (+2.25s) to_bound  ... Oh
+>   rec end [1w] 3:26.40 -> 3:26.95 (+0.55s)  ... Oh
+>   rec end [1w] 3:47.59 -> 3:51.25 (+3.66s)  ... Beast
+>   stats onset n_below_min_shift=18 n_fired=23 n_lines=56 n_low_ref=0 n_no_rise=1 n_single_word=21 n_snapped=4 n_undetectable=10
+>   stats end n_below_min_shift=12 n_extended=15 n_fired=27 n_lines=56 n_low_ref=0 n_single_word=21
+24,25c45,48
+<   stats onset n_below_min_shift=5 n_fired=7 n_lines=27 n_low_ref=0 n_no_rise=2 n_single_word=2 n_snapped=0 n_undetectable=2
+<   stats end n_below_min_shift=10 n_extended=1 n_fired=11 n_lines=27 n_low_ref=0 n_single_word=2
+---
+>   rec end [1w] 2:55.63 -> 3:00.15 (+4.52s)  ... Alone
+>   rec end [1w] 3:41.16 -> 3:43.58 (+2.42s)  ... Incomplete
+>   stats onset n_below_min_shift=6 n_fired=8 n_lines=27 n_low_ref=0 n_no_rise=2 n_single_word=2 n_snapped=0 n_undetectable=3
+>   stats end n_below_min_shift=10 n_extended=3 n_fired=13 n_lines=27 n_low_ref=0 n_single_word=2
+34,35c57,61
+<   stats onset n_below_min_shift=32 n_fired=34 n_lines=101 n_low_ref=0 n_no_rise=2 n_single_word=3 n_snapped=0 n_undetectable=6
+<   stats end n_below_min_shift=9 n_extended=0 n_fired=9 n_lines=101 n_low_ref=0 n_single_word=3
+---
+>   rec onset [1w] 1:20.98 -> 1:21.48 (+0.50s)  Bonjour ...
+>   rec end [1w] 1:21.90 -> 1:22.05 (+0.15s)  ... Bonjour
+>   stats onset n_below_min_shift=33 n_fired=36 n_lines=101 n_low_ref=0 n_no_rise=2 n_single_word=3 n_snapped=1 n_undetectable=6
+>   stats end n_below_min_shift=9 n_extended=1 n_fired=10 n_lines=101 n_low_ref=0 n_single_word=3
+>   wrote Beauty and the Beast (1991) - Belle [UHD]---otxTf5hZ0Yw.edgesnap.ass
+44a71
+>   rec end [1w] 0:02.56 -> 0:02.95 (+0.39s)  ... Na-na-na-na
+46c73,74
+<   stats end n_below_min_shift=3 n_extended=0 n_fired=3 n_lines=47 n_low_ref=0 n_single_word=1
+---
+>   stats end n_below_min_shift=3 n_extended=1 n_fired=4 n_lines=47 n_low_ref=0 n_single_word=1
+>   wrote Ed Sheeran & Rudimental­ - Bloodstream [Official Music Video­ YTMAs]---Orq_75kFi8I.edgesnap.ass
+53a82
+>   rec end [1w] 1:58.11 -> 1:58.53 (+0.41s)  ... Ooh-ooh-ooh-ooh
+55,56c84,85
+<   stats onset n_below_min_shift=27 n_fired=29 n_lines=63 n_low_ref=0 n_no_rise=2 n_single_word=4 n_snapped=0 n_undetectable=11
+<   stats end n_below_min_shift=15 n_extended=1 n_fired=16 n_lines=63 n_low_ref=0 n_single_word=4
+---
+>   stats onset n_below_min_shift=28 n_fired=30 n_lines=63 n_low_ref=0 n_no_rise=2 n_single_word=4 n_snapped=0 n_undetectable=11
+>   stats end n_below_min_shift=15 n_extended=2 n_fired=17 n_lines=63 n_low_ref=0 n_single_word=4
+59,60c88,91
+<   stats onset n_below_min_shift=28 n_fired=30 n_lines=54 n_low_ref=2 n_no_rise=2 n_single_word=5 n_snapped=0 n_undetectable=6
+<   stats end n_below_min_shift=15 n_extended=0 n_fired=15 n_lines=54 n_low_ref=0 n_single_word=5
+---
+>   rec onset [1w] 1:22.43 -> 1:23.03 (+0.60s)  Street ...
+>   stats onset n_below_min_shift=29 n_fired=33 n_lines=54 n_low_ref=3 n_no_rise=3 n_single_word=5 n_snapped=1 n_undetectable=7
+>   stats end n_below_min_shift=15 n_extended=0 n_fired=15 n_lines=54 n_low_ref=1 n_single_word=5
+>   wrote Jodi Benson - Part of Your World (From 'The Little Mermaid')---SXKlJuO07eM.edgesnap.ass
+62,63c93,96
+<   stats onset n_below_min_shift=17 n_fired=17 n_lines=29 n_low_ref=1 n_no_rise=0 n_single_word=1 n_snapped=0 n_undetectable=1
+<   stats end n_below_min_shift=10 n_extended=0 n_fired=10 n_lines=29 n_low_ref=0 n_single_word=1
+---
+>   rec onset [1w] 0:02.48 -> 0:04.36 (+1.88s)  Nope! ...
+>   stats onset n_below_min_shift=17 n_fired=18 n_lines=29 n_low_ref=1 n_no_rise=0 n_single_word=1 n_snapped=1 n_undetectable=1
+>   stats end n_below_min_shift=10 n_extended=0 n_fired=10 n_lines=29 n_low_ref=1 n_single_word=1
+>   wrote Josh Gad - In Summer (From 'Frozen'_Sing-Along)---9tcaM06eGrY.edgesnap.ass
+65,66c98,101
+<   stats onset n_below_min_shift=35 n_fired=37 n_lines=84 n_low_ref=1 n_no_rise=2 n_single_word=2 n_snapped=0 n_undetectable=5
+<   stats end n_below_min_shift=13 n_extended=0 n_fired=13 n_lines=84 n_low_ref=1 n_single_word=2
+---
+>   rec onset [1w] 4:00.67 -> 4:01.35 (+0.68s)  Drums ...
+>   stats onset n_below_min_shift=35 n_fired=38 n_lines=84 n_low_ref=1 n_no_rise=2 n_single_word=2 n_snapped=1 n_undetectable=5
+>   stats end n_below_min_shift=15 n_extended=0 n_fired=15 n_lines=84 n_low_ref=1 n_single_word=2
+>   wrote Justin Timberlake - Like I Love You (Official Video)---FQ3slUz7Jo8.edgesnap.ass
+77,78c112,113
+<   stats onset n_below_min_shift=39 n_fired=40 n_lines=103 n_low_ref=2 n_no_rise=1 n_single_word=2 n_snapped=0 n_undetectable=1
+<   stats end n_below_min_shift=23 n_extended=0 n_fired=23 n_lines=103 n_low_ref=1 n_single_word=2
+---
+>   stats onset n_below_min_shift=40 n_fired=41 n_lines=103 n_low_ref=3 n_no_rise=1 n_single_word=2 n_snapped=0 n_undetectable=1
+>   stats end n_below_min_shift=23 n_extended=0 n_fired=23 n_lines=103 n_low_ref=2 n_single_word=2
+84a120,121
+>   rec end [1w] 1:53.15 -> 1:53.30 (+0.15s)  ... Indescribable
+>   rec end [1w] 1:55.70 -> 1:56.18 (+0.47s)  ... Feeling
+86,87c123,124
+<   stats onset n_below_min_shift=16 n_fired=17 n_lines=54 n_low_ref=0 n_no_rise=1 n_single_word=4 n_snapped=0 n_undetectable=4
+<   stats end n_below_min_shift=9 n_extended=1 n_fired=10 n_lines=54 n_low_ref=0 n_single_word=4
+---
+>   stats onset n_below_min_shift=16 n_fired=17 n_lines=54 n_low_ref=1 n_no_rise=1 n_single_word=4 n_snapped=0 n_undetectable=4
+>   stats end n_below_min_shift=9 n_extended=3 n_fired=12 n_lines=54 n_low_ref=2 n_single_word=4
+93,94c130,135
+<   stats onset n_below_min_shift=14 n_fired=14 n_lines=49 n_low_ref=0 n_no_rise=0 n_single_word=3 n_snapped=0 n_undetectable=4
+<   stats end n_below_min_shift=11 n_extended=0 n_fired=11 n_lines=49 n_low_ref=0 n_single_word=3
+---
+>   rec end [1w] 1:57.30 -> 1:57.52 (+0.22s) to_bound  ... Speechless!
+>   rec end [1w] 2:45.48 -> 2:47.10 (+1.62s) to_bound  ... Speechless!
+>   rec end [1w] 3:04.22 -> 3:10.18 (+5.96s)  ... Speechless!
+>   stats onset n_below_min_shift=15 n_fired=15 n_lines=49 n_low_ref=0 n_no_rise=0 n_single_word=3 n_snapped=0 n_undetectable=5
+>   stats end n_below_min_shift=11 n_extended=3 n_fired=14 n_lines=49 n_low_ref=0 n_single_word=3
+>   wrote Naomi Scott - Speechless (from Aladdin) (Official Video)---mw5VIEIvuMI.edgesnap.ass
+100a142,143
+>   rec end [1w] 0:01.50 -> 0:03.95 (+2.45s)  ... Ooh
+>   rec end [1w] 2:00.42 -> 2:01.88 (+1.46s)  ... Paradise
+102,103c145,147
+<   stats onset n_below_min_shift=22 n_fired=25 n_lines=53 n_low_ref=0 n_no_rise=3 n_single_word=4 n_snapped=0 n_undetectable=7
+<   stats end n_below_min_shift=10 n_extended=1 n_fired=11 n_lines=53 n_low_ref=0 n_single_word=4
+---
+>   rec end [1w] 4:24.06 -> 4:25.43 (+1.36s)  ... Paradise
+>   stats onset n_below_min_shift=23 n_fired=26 n_lines=53 n_low_ref=0 n_no_rise=3 n_single_word=4 n_snapped=0 n_undetectable=7
+>   stats end n_below_min_shift=10 n_extended=4 n_fired=14 n_lines=53 n_low_ref=0 n_single_word=4
+123c167
+<   stats onset n_below_min_shift=8 n_fired=8 n_lines=33 n_low_ref=2 n_no_rise=0 n_single_word=2 n_snapped=0 n_undetectable=1
+---
+>   stats onset n_below_min_shift=8 n_fired=8 n_lines=33 n_low_ref=3 n_no_rise=0 n_single_word=2 n_snapped=0 n_undetectable=1
+133c177
+<   stats onset n_below_min_shift=8 n_fired=10 n_lines=60 n_low_ref=0 n_no_rise=2 n_single_word=1 n_snapped=0 n_undetectable=5
+---
+>   stats onset n_below_min_shift=8 n_fired=10 n_lines=60 n_low_ref=1 n_no_rise=2 n_single_word=1 n_snapped=0 n_undetectable=5
+136,137c180,181
+< total onset n_below_min_shift=623 n_fired=688 n_lines=1823 n_low_ref=19 n_no_rise=62 n_single_word=61 n_snapped=3 n_undetectable=152
+< total end n_below_min_shift=349 n_extended=15 n_fired=364 n_lines=1823 n_low_ref=10 n_single_word=61
+---
+> total onset n_below_min_shift=634 n_fired=708 n_lines=1823 n_low_ref=24 n_no_rise=63 n_single_word=61 n_snapped=11 n_undetectable=157
+> total end n_below_min_shift=351 n_extended=44 n_fired=395 n_lines=1823 n_low_ref=15 n_single_word=61
+```
+
+**`--multi-word-only` gate (Phase 3 code vs Phase 4 code).**
+
+Phase 3 code re-run method: `git stash push` (shelved the uncommitted
+Phase 4 edit together with the pre-existing `pyproject.toml`/`uv.lock`
+edits), confirmed `pikaraoke/lib/onset_snap.py` had no
+`SINGLE_WORD_REF_PCT` (Phase 3 content), ran both harnesses with
+`--multi-word-only`, then `git stash pop` and confirmed via `git status`
+and `grep` that the Phase 4 edit was restored.
+
+Replay, Phase 3 code. Invocation:
+`uv run --no-sync python scripts/edge_snap_replay.py --folder D:/shared/pikaraoke-songs --multi-word-only`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p3_mwo_replay.txt`
+
+Coverage, Phase 3 code. Invocation:
+`uv run --no-sync python scripts/edge_snap_ass.py --folder D:/shared/pikaraoke-songs --multi-word-only`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p3_mwo_coverage.txt`
+
+Replay, Phase 4 code. Invocation:
+`uv run --no-sync python scripts/edge_snap_replay.py --folder D:/shared/pikaraoke-songs --multi-word-only`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p4_mwo_replay.txt`
+
+Coverage, Phase 4 code. Invocation:
+`uv run --no-sync python scripts/edge_snap_ass.py --folder D:/shared/pikaraoke-songs --multi-word-only`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p4_mwo_coverage.txt`
+
+Gate, record views (`  stats `, `  wrote `, `total ` lines stripped):
+`diff edge_p3_mwo_replay.rv.txt edge_p4_mwo_replay.rv.txt` -> empty (0
+bytes). `diff edge_p3_mwo_coverage.rv.txt edge_p4_mwo_coverage.rv.txt` ->
+empty (0 bytes). Record-view files:
+`C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p3_mwo_replay.rv.txt`,
+`...edge_p4_mwo_replay.rv.txt`, `...edge_p3_mwo_coverage.rv.txt`,
+`...edge_p4_mwo_coverage.rv.txt` (same folder). Diff artifacts (both 0
+bytes): `...\edge_snap\edge_p4_mwo_replay.diff`,
+`...\edge_snap\edge_p4_mwo_coverage.diff`.
+
+`n_single_word=0` in every `--multi-word-only` stats line on both
+harnesses (the filter's own population, by construction).
+
+**Phase 1 hand-check** (the de-reverb-adopted song,
+`Wicked - For Good ... Movieclips---wzSeub9W4QQ`): both harnesses print
+`n_single_word=0` for this song's block, unchanged between P3 and P4
+(coverage `n_lines=29`; replay `n_lines=36`). The replay harness's
+per-song record block for this song is byte-for-byte identical between
+`edge_p3_replay.txt` and `edge_p4_replay.txt` (11 records, same shifts,
+same stats). Both blocks, P3 and P4 (identical):
+
+Coverage:
+
+```
+Wicked - For Good  (2025) 4K - The Girl in the Bubble (7_8) _ Movieclips---wzSeub9W4QQ
+  stats onset n_below_min_shift=8 n_fired=9 n_lines=29 n_low_ref=3 n_no_rise=1 n_single_word=0 n_snapped=0 n_undetectable=0
+  stats end n_below_min_shift=8 n_extended=0 n_fired=8 n_lines=29 n_low_ref=2 n_single_word=0
+```
+
+Replay:
+
+```
+Wicked - For Good  (2025) 4K - The Girl in the Bubble (7_8) _ Movieclips---wzSeub9W4QQ
+  rec onset L7 +1.250
+  rec onset L22 +0.770
+  rec onset L25 +0.618
+  rec onset L28 +0.710
+  rec onset L29 +0.245
+  rec end L5 +0.645
+  rec end L6 +0.250
+  rec end L20 +0.680
+  rec end L22 +0.160 to_bound
+  rec end L28 +1.145
+  rec end L29 +0.630
+  stats onset n_below_min_shift=4 n_fired=9 n_lines=36 n_low_ref=4 n_no_rise=0 n_single_word=0 n_snapped=5 n_undetectable=0
+  stats end n_below_min_shift=6 n_extended=6 n_fired=12 n_lines=36 n_low_ref=3 n_single_word=0
+```
+
+Suite: known failures only. Commit: (this entry rides with it).

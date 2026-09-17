@@ -243,15 +243,50 @@ class TestSnapLineOnsets:
         assert stats["n_low_ref"] == 1
         assert stats["n_snapped"] == 0
 
-    def test_short_lines_skipped(self, use_env):
+    def test_empty_words_skipped(self, use_env):
         use_env(_env(5.0, [(2.2, 4.5, -28.0)]))
-        one_word = _line((1.2, 1.4))
         empty = {"words": [], "start": None, "end": None}
 
-        out, stats = snap_line_onsets([one_word, empty], "vocal.wav")
+        out, stats = snap_line_onsets([empty], "vocal.wav")
 
-        assert out == [one_word, empty]
+        assert out == [empty]
         assert stats["n_snapped"] == 0
+
+    def test_single_word_smeared_start_snaps(self, use_env):
+        # A single-word line's reference comes from its own claimed span
+        # (80th percentile): 60 of 121 frames are the sung patch, enough
+        # for the percentile to land at sung level and reject on-time.
+        use_env(_env(8.0, [(3.5, 5.0, -20.0)]))
+        obj = _line((2.0, 5.0))
+
+        out, stats = snap_line_onsets([obj], "vocal.wav")
+
+        assert out[0]["words"][0]["start"] == pytest.approx(3.425, abs=0.01)
+        assert out[0]["words"][0]["end"] == pytest.approx(5.0, abs=0.01)
+        assert stats["n_snapped"] == 1
+
+    def test_single_word_on_time_untouched(self, use_env):
+        use_env(_env(8.0, [(2.0, 4.0, -20.0)]))
+        obj = _line((2.0, 4.0))
+
+        out, stats = snap_line_onsets([obj], "vocal.wav")
+
+        assert out[0] is obj
+        assert stats["n_fired"] == 0
+
+    def test_single_word_in_silence_untouched(self, use_env):
+        # pct80 over a wholly-unsung span sits at the floor, below
+        # MIN_REF_DB, on both the onset and end paths.
+        use_env(_env(12.0, [(1.0, 4.0, -28.0)]))
+        obj = _line((6.0, 7.0))
+
+        out, stats = snap_line_onsets([obj], "vocal.wav")
+        assert out[0] is obj
+        assert stats["n_low_ref"] == 1
+
+        out, stats = snap_line_ends([obj], "vocal.wav")
+        assert out[0] is obj
+        assert stats["n_low_ref"] == 1
 
     @pytest.mark.parametrize(
         "exc",
@@ -392,15 +427,24 @@ class TestSnapLineEnds:
         assert out[0] is doubled
         assert stats["n_fired"] == 0
 
-    def test_short_lines_skipped(self, use_env):
+    def test_empty_words_skipped(self, use_env):
         use_env(_env(8.0, [(1.0, 4.0, -28.0)]))
-        one_word = _line((1.2, 1.4))
         empty = {"words": [], "start": None, "end": None}
 
-        out, stats = snap_line_ends([one_word, empty], "vocal.wav")
+        out, stats = snap_line_ends([empty], "vocal.wav")
 
-        assert out == [one_word, empty]
+        assert out == [empty]
         assert stats["n_extended"] == 0
+
+    def test_single_word_clipped_end_extends(self, use_env):
+        use_env(_env(10.0, [(2.0, 6.0, -20.0)]))
+        obj = _line((2.0, 3.0))
+
+        out, stats = snap_line_ends([obj], "vocal.wav")
+
+        assert out[0]["words"][-1]["end"] == pytest.approx(5.875, abs=0.01)
+        assert stats["n_fired"] == 1
+        assert stats["n_extended"] == 1
 
     def test_decode_failure_bails(self, monkeypatch):
         def boom(path):
@@ -438,6 +482,22 @@ class TestSnapLineEdges:
         assert len(calls) == 1
         assert out[0]["words"][0]["start"] == pytest.approx(2.15, abs=0.05)
         assert out[0]["words"][-1]["end"] == pytest.approx(4.4, abs=0.1)
+        assert stats["onset"]["n_snapped"] == 1
+        assert stats["end"]["n_extended"] == 1
+
+    def test_single_word_both_edges(self, monkeypatch):
+        # The held-"Oooh" showcase: both edges derived from the envelope,
+        # with no words 2..n on either pass.
+        def fake_env(path):
+            return _env(10.0, [(3.5, 6.5, -20.0)])
+
+        monkeypatch.setattr(onset_snap, "rms_envelope_db", fake_env)
+        obj = _line((2.0, 4.5))
+
+        out, stats = snap_line_edges([obj], "vocal.wav")
+
+        assert out[0]["words"][0]["start"] == pytest.approx(3.425, abs=0.01)
+        assert out[0]["words"][-1]["end"] == pytest.approx(6.375, abs=0.01)
         assert stats["onset"]["n_snapped"] == 1
         assert stats["end"]["n_extended"] == 1
 
