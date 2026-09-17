@@ -3287,3 +3287,90 @@ expansion a detector whose worst-known failure has been measured first, and
 would not waste the pinning pass if the ownership answer is no. The plan as
 written runs 6 first; this is a recommendation to swap them, and it is Ken's
 call either way.
+
+### Phase 5 eyeball session (Ken, 2026-09-17)
+
+All four eyeball items were checked by ear at the renders listed above.
+Ken: *"wicked is good, 1st one in bye bye bye is good, second one went long
+mistaking an oooohhh for a note extension"*; *"domino has an 'in the
+moonlight' echo that starts DURING the line, the line ends correctly but the
+intraline timing is off as a result"*; and, correcting a hypothesis formed
+in this session, *"the echo is actually sung, not a reverb artifact"*.
+
+**1. `#OutOfOz - 'For Good'`, final line 4:18.70 (+4.28 s).** Correct.
+**Finding 6 is confirmed.** The `MIN_REF_DB` rescue is the phase's largest
+behavioural change and it is right: the tail-only median sat below the
+floor, the whole song's end path was switched off, and including word 1
+re-enabled it. The held note does run that long.
+
+**2. `NSYNC - Bye Bye Bye`, 0:22.37 `Bye bye` (0.68 s extension lost).**
+Correct as lost. **Finding 7's largest item closes as verified-correct.**
+Phase 4 was over-extending here; the raised reference stopping the clip
+evidence is the stated mechanism working, on the one line where it mattered
+most. The remaining three of finding 7 (0.15-0.22 s, including the
+`Beauty and the Beast` `to_bound` record of finding 8) were not heard and
+stay unverified; this verdict leans them correct without settling them.
+
+**3. `NSYNC - Bye Bye Bye`, 2:23.39 (+0.66 s gained).** **Wrong.** The
+extension rode a sustained backing `oooohhh`, not the lead's note
+continuing. The trace kept the envelope above its release threshold on
+another voice.
+
+**4. `Jessie J - Domino`, 3:41.90 `In the moonlight` (3:45.25 -> 3:44.08).**
+The **end is correct** -- Phase 5's shortening is right and Phase 4's was
+long. The line's **interior** word timings are wrong, pulled by a *sung*
+echo of the line that begins while the lead is still on it. That is not the
+snap's doing: the snap does not move interior boundaries, and those are the
+joint matcher's words.
+
+**What this changes.**
+
+**A. The Phase 5 ruling stands unchanged.** Three of four verdicts confirm
+the change -- the biggest gain, the biggest loss and the only shortening are
+all correct. Acceptance, `/code-review` status and the merge call are
+untouched.
+
+**B. Both wrong cases are one root cause: the multi-singer blind spot, now
+heard on the end side.** The vocal stem carries every vocal -- lead, backing,
+doubled and echo parts -- and neither the snap's envelope nor the joint
+matcher can tell which is the lead. Item 3's `oooohhh` holds the release
+test open; item 4's sung echo drags interior words. Phase 4's eyeball closed
+the blind spot's only *onset* candidate as a false alarm; this eyeball opens
+it on the *end* side with two confirmed instances. Phase 5 did not create the
+blind spot, but finding 4's mostly-downward reference gives it more
+opportunities to fire.
+
+**C. Correction against this read-off's own evidence, not against the
+executor.** The disagreement audit scored disputed spans against song-wide
+loudness percentiles. A sung backing part is loud. So "the gained span lands
+on loud audio" separates an extension onto *silence or noise floor* -- which
+is what Phase 4 needed and what the technique is sound for -- from nothing
+else, and is **blind to an extension onto another voice**. Of the nine gained
+extensions, two were heard: one correct, one wrong. The finding-6 and
+finding-7 level scores should be read as "not extended into silence", not as
+"correct". No conclusion in the read-off is retracted, but the nine gains
+rest on thinner evidence than the numbers implied.
+
+**D. Phase 6: the 7a-before-6 recommendation is materially strengthened, and
+is no longer only a sequencing preference.** Two reasons, both new here.
+First, the blind spot now has heard instances rather than zero, and Phase 6
+multiplies exactly the mechanism that produced them -- more traces and more
+releases, on shorter runs. Second, **Domino is the strongest case *for*
+interior ownership (item 3) and simultaneously the case against answering it
+blind**: the interior is visibly wrong while the snap's own edges are right,
+which is the argument for handing the interior to the snap -- but the snap
+would read an envelope containing the same sung echo that fooled the
+aligner, with no lead/backing discrimination of its own. Interior ownership
+does not obviously fix the case that motivates it, and could reproduce the
+error with the plan's blessing. Sizing that discrimination gap is therefore
+a substantive input to item 3, not just a scheduling nicety. **The ownership
+call remains Ken's; Phase 6 remains NOT PINNED.**
+
+**E. Ruled out -- do not chase.** De-reverb is not a remedy for the Domino
+line: the echo is a sung production element and is in the vocal stem by
+design. Recorded because this session formed the opposite hypothesis and
+checked the corpus before Ken corrected it. The check itself stands as fact
+and is worth keeping: of the 34 bundles only `Wicked - For Good` carries a
+`joint_stats.dereverb` block at all (`yield_wpm` 18.2 -> retry 30.3,
+succeeded), because de-reverb triggers on low aligner word yield rather than
+on detected reverb. Neither fact bears on this line.
