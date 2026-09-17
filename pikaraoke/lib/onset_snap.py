@@ -75,6 +75,13 @@ NEXT_LINE_GAP_S = 0.1
 # floor can catch it; such lines are an upstream misplacement problem.
 MIN_REF_DB = -45.0
 
+# Single-word lines have no words 2..n to reference. A high percentile of
+# the word's own claimed span works instead: smeared gap frames are LOW
+# outliers, so with >= ~20% of the span genuinely sung the percentile lands
+# at the sung level; a span lying wholly in a gap yields a floor-level
+# reference that MIN_REF_DB rejects. Validated at 35/36 usable on corpus.
+SINGLE_WORD_REF_PCT = 80.0
+
 
 def rms_envelope_db(audio_path: str | Path) -> np.ndarray:
     """dB RMS envelope of ``audio_path`` (any ffmpeg-readable format).
@@ -125,13 +132,26 @@ def decode_env_db(vocal_path: str | Path, label: str) -> np.ndarray | None:
 
 
 def _sung_level_ref(env: np.ndarray, words: list[dict]) -> float | None:
-    """Median envelope level over the spans of words 2..n, or None if empty.
+    """Sung-level reference for the line, or None if its span is empty.
 
+    For 2+ words: the median envelope level over the spans of words 2..n.
     Word 1's own span is excluded on purpose: when it was stretched across
     a preceding gap, including it drags the reference down until reverb
     tails pass for singing. Both snaps gate on this same reference, so a
     change here must hold for both.
+
+    For a single word: the :data:`SINGLE_WORD_REF_PCT` percentile over its
+    own claimed span, since there are no words 2..n. Smeared gap frames are
+    low outliers, so with enough of the span genuinely sung the percentile
+    still lands at the sung level.
     """
+    if len(words) == 1:
+        w = words[0]
+        span_idx = np.arange(int(w["start"] / HOP_S), int(w["end"] / HOP_S) + 1)
+        span_idx = span_idx[(span_idx >= 0) & (span_idx < len(env))]
+        if len(span_idx) == 0:
+            return None
+        return float(np.percentile(env[span_idx], SINGLE_WORD_REF_PCT))
     span_idx = np.concatenate(
         [np.arange(int(w["start"] / HOP_S), int(w["end"] / HOP_S) + 1) for w in words[1:]]
     )
@@ -185,6 +205,14 @@ def snap_line_onsets(
 ) -> tuple[list[dict], dict]:
     """Snap each line's first word to the detected vocal onset.
 
+    A single-word line is searched up to its own claimed end rather than
+    word 2's start (see ``bound`` below), so :func:`_detect_rise`'s
+    continuity check demands the voice hold all the way to that claimed
+    end. For a held note this is correct: whisper clips the end early, so
+    the claimed end sits inside the true run. A staccato word with a
+    wildly long claimed span won't snap — the safe direction, since the
+    line is merely left untouched rather than moved to a false onset.
+
     Returns ``(line_objects, stats)``. Lines are replaced by copies only
     when moved; on decode failure the input is returned unchanged and
     ``stats["bailed"]`` names the reason. ``env`` reuses a precomputed
@@ -201,14 +229,14 @@ def snap_line_onsets(
     out: list[dict] = []
     for obj in line_objects:
         words = obj.get("words") or []
-        if len(words) < 2:
-            if len(words) == 1:
-                n_single_word += 1
+        if not words:
             out.append(obj)
             continue
+        if len(words) == 1:
+            n_single_word += 1
         w1s, w1e = words[0]["start"], words[0]["end"]
-        w2s = words[1]["start"]
-        if w2s - w1s < MIN_WORD_DUR_S:
+        bound = words[1]["start"] if len(words) >= 2 else words[0]["end"]
+        if bound - w1s < MIN_WORD_DUR_S:
             out.append(obj)
             continue
 
@@ -242,18 +270,18 @@ def snap_line_onsets(
 
         n_fired += 1
         lo = min(int(w1s / HOP_S), len(env) - 1)
-        hi = min(max(int(w2s / HOP_S), lo + 1), len(env))
+        hi = min(max(int(bound / HOP_S), lo + 1), len(env))
         p20 = float(np.percentile(env[lo:hi], 20))
         if ref - p20 < STEP_DB:
             n_undetectable += 1
 
-        onset = _detect_rise(env, w1s, w2s, ref)
+        onset = _detect_rise(env, w1s, bound, ref)
         if onset is None:
             n_no_rise += 1
             out.append(obj)
             continue
 
-        new_start = min(max(onset - SNAP_MARGIN_S, w1s), w2s - MIN_WORD_DUR_S)
+        new_start = min(max(onset - SNAP_MARGIN_S, w1s), bound - MIN_WORD_DUR_S)
         if new_start - w1s < MIN_SHIFT_S:
             n_below_min_shift += 1
             out.append(obj)
@@ -265,7 +293,7 @@ def snap_line_onsets(
         if w1e >= new_start + MIN_WORD_DUR_S:
             new_end = w1e
         else:
-            new_end = min(max(new_start + (w1e - w1s), new_start + MIN_WORD_DUR_S), w2s)
+            new_end = min(max(new_start + (w1e - w1s), new_start + MIN_WORD_DUR_S), bound)
 
         new_obj = dict(obj)
         new_obj["words"] = [{**words[0], "start": new_start, "end": new_end}] + words[1:]
@@ -311,6 +339,10 @@ def snap_line_ends(
     forward-only and bounded by the next line's first word, so a
     correctly ended line is never made worse.
 
+    A single-word line's reference comes from its own claimed span (see
+    :func:`_sung_level_ref`). Because onsets run first, that span is
+    already the snapped, cleaner one by the time this reference is taken.
+
     Returns ``(line_objects, stats)`` with the same copy, bail, and
     ``env`` reuse semantics as :func:`snap_line_onsets`.
     """
@@ -325,11 +357,11 @@ def snap_line_ends(
     out: list[dict] = []
     for idx, obj in enumerate(line_objects):
         words = obj.get("words") or []
-        if len(words) < 2:
-            if len(words) == 1:
-                n_single_word += 1
+        if not words:
             out.append(obj)
             continue
+        if len(words) == 1:
+            n_single_word += 1
         w_end = words[-1]["end"]
 
         bound = len(env) * HOP_S
