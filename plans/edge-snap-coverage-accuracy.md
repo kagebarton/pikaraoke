@@ -2998,3 +2998,292 @@ on the replay harness") and the Phase 4 ruling's carry-forward note
 read, not a STOP"): both diffs are pasted above for the read.
 
 Suite: known failures only. Commit: (this entry rides with it).
+
+### Phase 5 read-off + Phases 0-5 checkpoint (Opus, 2026-09-17)
+
+**Checked against the record.** Code read at `7a41c6e` against the Phase 5
+spec text. `_sung_level_ref(env, words, end=False)` present; the `len(words)
+>= 2` path adds `words[0]` to `ref_words` when `end` and
+`words[0]["end"] - words[0]["start"] > MIN_WORD_DUR_S`, otherwise slices
+`words[1:]` as before; the `len(words) == 1` percentile path returns before
+`ref_words` is built, so it is independent of `end` as specified;
+`snap_line_ends` passes `end=True`; the docstring's "both snaps gate on this
+same reference" sentence is gone. The folded-in tidy-up (finding 5, ruling
+item 4) is wording and rename only. Callers enumerated:
+`onset_snap.py:251` (onset) and `lrclib_fill.py:279` both keep the default,
+so both are untouched. Three files in the commit; `pyproject.toml` and
+`uv.lock` left unstaged.
+
+Tests re-run by the judge at `7a41c6e`:
+`uv run --no-sync python -m pytest tests/unit/test_onset_snap.py
+tests/unit/test_lrclib_fill.py -q` -> `68 passed` (40 + 28), matching the
+executor's split.
+
+**The onset side is provably untouched, independently confirmed.** Grepping
+both harness outputs down to their onset lines and diffing P4 against P5
+gives zero differences in both harnesses — records, per-song stats and
+totals alike. Every changed line in both diffs carries ` end `. The onset
+`total` lines are identical in both harnesses (replay
+`n_snapped=193 n_fired=350`, coverage `n_snapped=11 n_fired=708`).
+
+**Totals and invariants.** The end invariant `n_fired == n_extended +
+n_below_min_shift` holds at `total` in all four files: replay P4 245+104=349,
+P5 246+98=344; coverage P4 44+351=395, P5 49+342=391. `n_lines` (1010 /
+1823) and `n_single_word` (21 / 61) unchanged.
+
+| | replay | coverage |
+| --- | --- | --- |
+| `n_fired` | 349 -> 344 (-5) | 395 -> 391 (-4) |
+| `n_extended` | 245 -> 246 (+1) | 44 -> 49 (+5) |
+| `n_below_min_shift` | 104 -> 98 (-6) | 351 -> 342 (-9) |
+| `n_low_ref` | 8 -> 8 | 15 -> 14 |
+
+**Replay render regenerated at Phase 5 code, and it reproduces the record.**
+`uv run --no-sync python scripts/edge_snap_replay.py --folder
+D:/shared/pikaraoke-songs --write-ass`; stripping its `  wrote ` lines
+reproduces `edge_p5_replay.txt` exactly (CRLF aside). 18
+`.edgereplay.ass` written. Output:
+`C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\4d761251-d0b5-493b-a519-1f8202696d9f\scratchpad\p5judge\replay_writeass.txt`
+
+**Per-line disagreement audit.** Counter deltas do not say which lines
+changed or whether the new answer is better, and re-reading the records with
+the snap's own line-local reference would be circular. Instead the end path
+was run twice over identical input at each phase's behaviour -- P5 as
+committed, and P4 reproduced by monkeypatching the module's
+`_sung_level_ref` to drop `end` -- and every line where the two disagree was
+scored on the DISPUTED span against song-wide envelope percentiles,
+`level = (median - p10_song) / (p95_song - p10_song)`, 1.0 = the song's loud
+anchor.
+
+Scripts: `...\p5judge\audit5.py`, `...\p5judge\audit5b.py`
+
+```
+== coverage (songs=34) ==
+  LOST    : n=4   disputed-span level min=0.53 median=0.84 max=0.90
+  GAINED  : n=9   disputed-span level min=0.64 median=0.85 max=0.97
+  SHORTER : n=1   disputed-span level 0.89
+  LONGER  : n=1   (0.025s)
+== replay (songs=18) ==
+  LOST    : n=1   disputed-span level 0.93
+  GAINED  : n=2   disputed-span level 0.91 / 0.73
+  SHORTER : n=8   LONGER: n=24   (one +0.50s; all other 31 <= 0.100s)
+```
+
+The audit reconciles exactly with the harness: coverage
+`n_extended` +5 = 9 gained - 4 lost; replay +1 = 2 - 1. That is the
+cross-check that the P4 replica is faithful.
+
+Every disagreement of `|delta| >= 0.15s`:
+
+```
+  GAINED  +4.28s nw=2 disputed=0.85 w1=0.85 last=0.66 | ref -53.3 -> -41.5 'For good'  #OutOfOz - 'For Good'
+  GAINED  +0.76s nw=5 disputed=0.64 w1=0.65 last=0.74 | ref -34.1 -> -35.1 'all its living things'  Lion King - Can You Feel
+  GAINED  +0.66s nw=9 disputed=0.95 w1=0.87 last=0.97 | ref -23.3 -> -23.9 'that I've had enough'  NSYNC - Bye Bye Bye
+  GAINED  +0.40s nw=4 disputed=0.74 w1=0.74 last=0.83 | ref -34.7 -> -35.2 'Because I knew you'  #OutOfOz - 'For Good'
+  GAINED  +0.32s nw=6 disputed=0.79 w1=0.87 last=0.94 | ref -27.4 -> -30.3 'to clear the air'  #OutOfOz - 'For Good'
+  GAINED  +0.17s nw=6 disputed=0.88 w1=0.46 last=0.89 | ref -22.4 -> -22.7 'for my mental, but'  JT - Selfish
+  GAINED  +0.16s nw=3 disputed=0.91 w1=0.84 last=1.02 | ref -19.0 -> -20.0 'Don't you know?'  Jessie J - Domino
+  GAINED  +0.16s nw=3 disputed=0.97 w1=0.83 last=0.99 | ref -18.1 -> -24.1 'It's crystal clear'  A Whole New World
+  GAINED  +0.15s nw=4 disputed=0.82 w1=0.84 last=0.87 | ref -32.1 -> -32.5 'Because I knew you'  #OutOfOz - 'For Good'
+  LOST    -0.68s nw=2 disputed=0.90 w1=1.01 last=0.92 | ref -27.8 -> -21.5 'Bye bye'  NSYNC - Bye Bye Bye
+  LOST    -0.22s nw=3 disputed=0.81 w1=0.95 last=0.82 | ref -32.9 -> -27.5 'Beauty and the...'  Ariana Grande / John Legend
+  LOST    -0.15s nw=3 disputed=0.88 w1=0.99 last=0.85 | ref -16.8 -> -15.2 ''Cause I waited'  NSYNC - Paradise
+  LOST    -0.15s nw=7 disputed=0.53 w1=0.89 last=0.83 | ref -24.1 -> -23.7 'you're my mirror, oh-oh'  JT - Mirrors
+  SHORTER -1.17s nw=8 disputed=0.89 w1=0.93 last=0.91 | ref -23.1 -> -22.4 'moonlight In the moonlight'  Jessie J - Domino
+  [replay] LOST -0.21s nw=3 disputed=0.93 w1=0.93 last=0.73 | ref -41.2 -> -31.6 'He was ashamed'  Lion King - Hakuna Matata
+  [replay] LONGER +0.50s nw=3 disputed=0.77 w1=0.75 last=0.97 | ref -27.7 -> -38.8 'Until I do'  The Next Ten Minutes
+```
+
+**Reference-shift census.** The phase's stated mechanism is that word 1 is a
+long HELD note, so including it RAISES the reference and stops
+over-extension. Measured over every multi-word line the end path evaluates
+(script `...\p5judge\refshift.py`):
+
+```
+== coverage ==                                == replay ==
+  multi-word lines reaching the ref: 1762       827
+  word 1 long enough to be included: 1624 (92%) 774 (94%)
+  reference UP  :  451  median +0.4 dB          242  median +0.4 dB
+  reference DOWN:  880  median -0.4 dB          402  median -0.4 dB
+  reference flat:  293                          130
+  |shift| >= 2 dB: 146   >= 5 dB: 31            90 / 26
+  word 1's share of the ref frames: med 0.16    med 0.15
+    p90 0.40                                      p90 0.43
+  MIN_REF_DB rescued: 7   newly rejected: 4     4 / 2
+```
+
+(The rescued/rejected counts are reference-level; they do not map one-to-one
+onto the `n_low_ref` counter, which the harness only reaches after the
+`bound - w_end < MIN_SHIFT_S` early-out.)
+
+**Findings.**
+
+1. **Phase 5 is the specified change**, the onset path and `lrclib_fill.py`
+   are provably untouched, the tidy-up is wording and rename only, and the
+   new test encodes the plan's worked values.
+2. **The plan's recorded expectation is wrong in both of its terms, and the
+   Phase 3 read-off's note already covered that.** It expected the changes
+   "concentrated on lines with a long first word, mainly on the replay
+   harness". Replay is jitter -- 31 of its 33 value changes are <= 0.100 s,
+   one line moves +0.50 s, and the net is one extension. The substance is on
+   coverage: 9 gained, 4 lost, 1 shortened. Not a STOP, per that note.
+3. **The gate is near-vacuous, and the commit subject oversells it.**
+   `words[0]["end"] - words[0]["start"] > MIN_WORD_DUR_S` is "longer than
+   100 ms", which admits word 1 on 92-94% of multi-word lines. "A
+   substantial word 1" in the subject and docstring reads as a selective
+   filter; in practice the change is "include word 1 in the end reference".
+   The plan specified this threshold, so this is the plan's wording, not an
+   executor deviation -- but a later phase reading "substantial" would be
+   misled. Recorded, not a STOP.
+4. **The dominant direction is the inverse of the stated mechanism**, about
+   2:1 down. Because the reference is a median over FRAMES, a long word 1
+   that is *quieter* than the trailing words pulls it down, and that is the
+   commoner shape. The justification still holds in both directions --
+   excluding word 1 exists to defend against onset smear, onsets have
+   already run, and using more of the line is the better estimator -- but the
+   phase is not doing mainly what its text says it does.
+5. **The residual poisoning risk is real and bounded.** Onsets running first
+   only repairs word 1 on lines where the onset snap actually fired; on a
+   line it skipped, a still-smeared word 1 now drags the end reference down,
+   which is the exact failure the default exclusion exists to prevent. What
+   bounds it is that the reference is a median and word 1 is a median 0.16
+   frame share, so 293 lines do not move at all and only 31 of 1624 shift
+   >= 5 dB. The visible suspect is `JT - Selfish` (word 1 at 0.46 of the
+   loud anchor against a 0.89 tail), and it moved the reference 0.3 dB and
+   the end 0.17 s. Sized, not gating.
+6. **The intended mechanism does fire, and its clearest win is a
+   `MIN_REF_DB` rescue.** On `#OutOfOz - 'For Good'` the tail-only median sat
+   at -53.3 dB, below the -45 floor, so the whole song's end path was
+   switched off; including word 1 lifts it to -41.5 and the song gains four
+   extensions, among them a 4.28 s final held note at 4:18.70 whose span
+   sits at 0.85 of the song's loud anchor. That single line is the largest
+   behavioural change in the phase.
+7. **The four lost extensions cannot be settled from the envelope.** Their
+   disputed spans are loud (0.53-0.90), so the song-wide test cannot call
+   them false positives the way it could in Phase 4. All four are lines
+   where word 1 is louder than the tail (w1 0.89-1.01), so the reference
+   rose and the clip evidence stopped firing -- the mechanism working as
+   designed, on lines where we cannot yet say the design is right. Three are
+   0.15-0.22 s; one, `Bye bye` at 0:22.37 in NSYNC, is 0.68 s. These are
+   eyeball items.
+8. **The `Beauty and the Beast` `to_bound` record the Phase 4 read-off
+   explained is gone, and its going is consistent.** Phase 4 recorded it as
+   collateral: the following one-word `Beast` onset moved to 196.85, which
+   widened this line's bound and let it extend 196.53 -> 196.75. At Phase 5
+   the raised reference stops it firing at all. The Phase 4 explanation is
+   not invalidated -- it explained why the record *appeared*, and that
+   remains true of Phase 4's code. It is one of the four in finding 7 and
+   rides with them to the eyeball.
+9. **`MIN_WORD_DUR_S` is now doing two unrelated jobs.** It is the onset
+   path's clamp floor and, as of this phase, the end path's "is word 1 worth
+   referencing" threshold. The two meanings can diverge under any future
+   tuning of either. A review note, not a defect.
+
+**Ruling.**
+
+1. **Phase 5 is accepted as committed (`7a41c6e`).** No re-run, no change.
+   The change is the spec, the onset path and the LRCLIB caller are
+   provably untouched, the invariants hold, and the audit reconciles with
+   the harness totals.
+2. Findings 3, 4, 5 and 9 are recorded against the code, not against the
+   executor: each traces to the plan's own frozen text, which the executor
+   applied exactly. They are inputs to `/code-review`, not rework.
+3. **Finding 7 is the open question of this phase** and is deliberately left
+   to the eyeball rather than ruled from the envelope. It cannot regress
+   correctness silently: an extension that does not happen leaves the
+   production timing, so the cost is coverage, not a wrong edge.
+4. **`/code-review` is due now**, on the five Phase 1-5 code commits:
+   `15f4806`, `1d90960`, `1e05ceb`, `aab7358`, `7a41c6e`. Ken launches it;
+   it is never launched unprompted. Three finder angles, one per CLAUDE.md
+   axis. Findings 3, 4, 5 and 9 above are the judge's standing input to it.
+5. **Phase 6 is NOT PINNED, and is blocked on Ken, not on Opus.** See the
+   checkpoint entry below.
+6. Merging Phases 0-5 is Ken's call and is not gated on Phase 6.
+
+### Phases 0-5 checkpoint -- eyeball list and Phase 6 ruling (Opus, 2026-09-17)
+
+**Stale-render warning, same class as Phase 4's trap.** 21 of the 22
+`.edgesnap.ass` files on disk are from the executor's Phase 5 coverage run.
+The 22nd, `The Next Ten Minutes Lyrics---0j8kL24ph8U.edgesnap.ass`, is from
+an earlier phase: that song has `n_snapped=0 n_extended=0` in the coverage
+harness at both P4 and P5, so the harness never rewrote it. **Do not open
+that file for this eyeball.** The same song IS worth hearing, via its
+`.edgereplay.ass`, which is current.
+
+**Eyeball list.** Renders: `karaoke/<stem>.edgesnap.ass` (coverage, Phase 5)
+and `karaoke/<stem>.edgereplay.ass` (replay, written at `7a41c6e`). Play with
+`mpv "<video>" --sub-file="karaoke/<stem>.<tag>.ass"`.
+
+Ordered by what the read could not settle, not by size.
+
+1. **`#OutOfOz - 'For Good'`, `.edgesnap.ass`** -- the phase's headline.
+   Listen to the final line at **4:18.70**: the wipe now runs 4.28 s longer.
+   Three smaller gains on the same song at 2:49.14, 2:57.20 and 4:03.90.
+   Question: does the last note hold that long, or is the wipe now sitting
+   on a tail? This song had its end path switched off entirely before Phase
+   5, so everything end-side on it is new.
+2. **`NSYNC - Bye Bye Bye`, `.edgesnap.ass`** -- one loss and one gain in one
+   file. **0:22.37** (`Bye bye`): Phase 4 extended it 0.68 s, Phase 5 does
+   not. Question: does "bye" still sound after 0:22.4? If yes, Phase 5 cut
+   it short. **2:23.39** (`...that I've had enough`): a new 0.66 s
+   extension, the opposite direction. Nothing crowds either -- the next line
+   is 4.9 s away from the first.
+3. **`Jessie J - Domino`, `.edgesnap.ass`** -- the one shortening.
+   **3:41.90** (`In the moonlight`): Phase 4 ran to 3:45.25, Phase 5 stops at
+   3:44.08. Both land on loud audio, so the envelope cannot say which is
+   right. Question: where does the held note actually release? Also a small
+   new extension at 1:53.99.
+4. *(optional, lowest stakes)* **`The Next Ten Minutes`, `.edgereplay.ass`**
+   -- the only replay change worth hearing, `Until I do`, 0.50 s longer,
+   on the largest downward reference shift in the corpus (-11 dB). This is
+   finding 5's mechanism at its most extreme. Nothing follows for 7.8 s.
+
+Items 1-3 cover the biggest gain, the biggest loss and the biggest
+shortening, and between them every coverage song where anything substantive
+moved except `JT - Mirrors` and `NSYNC - Paradise` (0.15 s each, below what
+an ear will separate).
+
+**Phase 6 ruling: NOT PINNED. Blocked on Ken's ownership call, not on
+Opus.** Of the four open items on the phase:
+
+- **Item 3 (ownership) is Ken's and must be answered first.** Moving
+  interior word boundaries rewrites `PROGRAM.md` Part 2's "Word boundaries
+  inside a placed line" row, which has read "joint matcher's words" since
+  GATE W closed. Opus cannot pre-empt that. If the answer is no, the phase
+  dies and items 1, 2 and 4 are wasted work -- which is why the pinning pass
+  should not start before it.
+- **Item 2 (interior-run reference) is settled here, by Phase 5's
+  measurement.** Phase 6's "compute ref once (unchanged semantics)" is no
+  longer well defined, because Phase 5 created two references. The rule the
+  two phases together imply: *the reference excludes spans whose claimed
+  extent may be wrongly WIDE, and includes spans that may be wrongly
+  NARROW.* Onset pass -- exclude every run's first word, since each is a
+  repair candidate that may be smeared across its preceding gap; that is
+  Phase 5's exclusion generalized from one word to one per run. End pass --
+  exclude nothing, which is what `end=True` now means and why the last
+  word's own clipped span is already fair to reference. Phase 5's census
+  sizes the risk this rule manages: a single word is a median 0.16 frame
+  share of a line-level median, but on a line split into runs the runs are
+  shorter, so each run-first word is a larger share and the poisoning
+  concern in item 2 gets *worse*, not better, as runs multiply. Pin the
+  reference this way or the phase inherits finding 5 amplified.
+- **Item 4 (gate and sizing) is settled here in mechanism.** The filter is
+  Phase 4's `--multi-word-only` pattern applied to interior gaps, and the
+  gate is the filtered record views byte-identical -- with the Phase 4
+  strengthening kept: compare the `stats`/`total` lines too, which Phase 4
+  showed costs nothing and catches counter movement a record view hides.
+  The replay harness is the exact read. The 388-word count is Linux and must
+  be re-measured before it is quoted.
+- **Item 1 (worked test values) stays open on purpose.** It is the bulk of
+  the pinning work and it is downstream of item 3.
+
+**Sequencing recommendation, for Ken, not a ruling.** Phase 6 is the biggest
+coverage multiplier, and it multiplies the detector as it currently stands --
+including the harmony blind spot, which is 202 `to_bound` records in
+production on this corpus and is what Phase 7a exists to size. Phases 4 and 5
+have both now produced exactly one line each that the envelope could not
+adjudicate and that needed Ken's ear. Running 7a before 6 would give the
+expansion a detector whose worst-known failure has been measured first, and
+would not waste the pinning pass if the ownership answer is no. The plan as
+written runs 6 first; this is a recommendation to swap them, and it is Ken's
+call either way.
