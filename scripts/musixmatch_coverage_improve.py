@@ -18,8 +18,8 @@ confident word-level hit (``BASELINE`` below); the other 7 are skipped on
 purpose (see the plan's "Baseline" section).
 
 ``--save-bodies`` (Phase 2a of ``plans/timing-source-pillars.md``) is a
-second, independent mode: re-runs ``pikaraoke.lib.timing_fetch`` (the E0
-production pillar -- this script no longer carries its own writer, just the
+second, independent mode: re-runs ``scripts/timing_fetch.py`` (formerly the
+E0 production pillar -- this script carries no writer of its own, just the
 batch loop + politeness) over the 17 word-level-confident corpus songs and
 persists each to the real production sidecar
 (``lyrics/<stem>.timing.json`` beside the song), so Phase 2b's probe and the
@@ -34,7 +34,7 @@ Run from the repo root::
     python scripts/musixmatch_coverage_improve.py --save-bodies
     python scripts/musixmatch_coverage_improve.py --save-line-bodies
 
-``syncedlyrics`` is a runtime dependency (``pikaraoke/lib/timing_fetch.py``).
+Needs ``syncedlyrics`` (``scripts/timing_fetch.py``).
 """
 
 from __future__ import annotations
@@ -50,12 +50,13 @@ from pathlib import Path
 
 # Allow running as ``python scripts/musixmatch_coverage_improve.py`` from repo root.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import syncedlyrics  # noqa: E402
+import timing_fetch  # noqa: E402
 from syncedlyrics.providers import Musixmatch  # noqa: E402
 from syncedlyrics.utils import format_time, get_cache_path  # noqa: E402
 
-from pikaraoke.lib import timing_fetch  # noqa: E402
 from pikaraoke.lib.lrclib import (  # noqa: E402
     clean_key,
     map_lines_to_cues,

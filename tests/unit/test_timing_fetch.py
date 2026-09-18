@@ -1,9 +1,18 @@
-"""Unit tests for pikaraoke.lib.timing_fetch — synced-timing fetch pillar."""
+"""Unit tests for scripts/timing_fetch.py — the Musixmatch/NetEase probe fetch."""
 
+import importlib.util
 import json
+import sys
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from pikaraoke.lib import timing_fetch
+# scripts/ is not a package — load the module straight from its file,
+# registered in sys.modules so patch() can target it by name.
+_SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "timing_fetch.py"
+_spec = importlib.util.spec_from_file_location("timing_fetch", _SCRIPT)
+timing_fetch = importlib.util.module_from_spec(_spec)
+sys.modules["timing_fetch"] = timing_fetch
+_spec.loader.exec_module(timing_fetch)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -60,8 +69,8 @@ class TestMmGet:
         assert result is None
         assert client._get.call_count == 1
 
-    @patch("pikaraoke.lib.timing_fetch.time.sleep")
-    @patch("pikaraoke.lib.timing_fetch.TOKEN_PATH")
+    @patch("timing_fetch.time.sleep")
+    @patch("timing_fetch.TOKEN_PATH")
     def test_401_backs_off_and_retries_once(self, mock_token_path, _sleep):
         client = MagicMock()
         client.token = "stale"
@@ -79,7 +88,7 @@ class TestMmGet:
 
 
 class TestCandidateLyrics:
-    @patch("pikaraoke.lib.timing_fetch._mm_get")
+    @patch("timing_fetch._mm_get")
     def test_richsync_present_returns_word_kind(self, mock_get):
         entries = [{"ts": 0.0, "te": 1.0, "l": [{"c": "hi", "o": 0.0}]}]
         mock_get.return_value = {"message": {"body": _richsync_body(entries)}}
@@ -87,8 +96,8 @@ class TestCandidateLyrics:
         assert kind == "word"
         assert body == entries
 
-    @patch("pikaraoke.lib.timing_fetch.time.sleep")
-    @patch("pikaraoke.lib.timing_fetch._mm_get")
+    @patch("timing_fetch.time.sleep")
+    @patch("timing_fetch._mm_get")
     def test_richsync_absent_falls_to_subtitle(self, mock_get, _sleep):
         mock_get.side_effect = [
             {"message": {"body": {}}},
@@ -98,8 +107,8 @@ class TestCandidateLyrics:
         assert kind == "line"
         assert body == "[00:01.00]hi\n"
 
-    @patch("pikaraoke.lib.timing_fetch.time.sleep")
-    @patch("pikaraoke.lib.timing_fetch._mm_get")
+    @patch("timing_fetch.time.sleep")
+    @patch("timing_fetch._mm_get")
     def test_neither_returns_none_kind(self, mock_get, _sleep):
         mock_get.side_effect = [None, None]
         kind, body = timing_fetch.candidate_lyrics(MagicMock(), 1)
@@ -113,9 +122,9 @@ class TestCandidateLyrics:
 
 
 class TestBestByReference:
-    @patch("pikaraoke.lib.timing_fetch.time.sleep")
-    @patch("pikaraoke.lib.timing_fetch.candidate_lyrics")
-    @patch("pikaraoke.lib.timing_fetch._mm_get")
+    @patch("timing_fetch.time.sleep")
+    @patch("timing_fetch.candidate_lyrics")
+    @patch("timing_fetch._mm_get")
     def test_skips_instrumental_and_no_lyrics_candidates(self, mock_get, mock_cand, _sleep):
         mock_get.return_value = {
             "message": {
@@ -132,9 +141,9 @@ class TestBestByReference:
         assert row["track_id"] == 3
         mock_cand.assert_called_once_with(mock_cand.call_args[0][0], 3)
 
-    @patch("pikaraoke.lib.timing_fetch.time.sleep")
-    @patch("pikaraoke.lib.timing_fetch.candidate_lyrics")
-    @patch("pikaraoke.lib.timing_fetch._mm_get")
+    @patch("timing_fetch.time.sleep")
+    @patch("timing_fetch.candidate_lyrics")
+    @patch("timing_fetch._mm_get")
     def test_picks_best_map_rate_then_duration(self, mock_get, mock_cand, _sleep):
         mock_get.return_value = {
             "message": {
@@ -153,7 +162,7 @@ class TestBestByReference:
         assert row["track_id"] == 2
         assert row["map_rate"] == 1.0
 
-    @patch("pikaraoke.lib.timing_fetch._mm_get")
+    @patch("timing_fetch._mm_get")
     def test_no_search_results_returns_none(self, mock_get):
         mock_get.return_value = None
         assert timing_fetch.best_by_reference(MagicMock(), "term", ["hi"], None) is None
@@ -165,8 +174,8 @@ class TestBestByReference:
 
 
 class TestReferencePick:
-    @patch("pikaraoke.lib.timing_fetch.time.sleep")
-    @patch("pikaraoke.lib.timing_fetch.best_by_reference")
+    @patch("timing_fetch.time.sleep")
+    @patch("timing_fetch.best_by_reference")
     def test_confident_full_query_skips_title_only(self, mock_best, _sleep):
         mock_best.return_value = {
             "track_id": 1,
@@ -181,8 +190,8 @@ class TestReferencePick:
         assert result["variant"] == "full"
         assert mock_best.call_count == 1  # title-only never called
 
-    @patch("pikaraoke.lib.timing_fetch.time.sleep")
-    @patch("pikaraoke.lib.timing_fetch.best_by_reference")
+    @patch("timing_fetch.time.sleep")
+    @patch("timing_fetch.best_by_reference")
     def test_unconfident_full_query_tries_title_only(self, mock_best, _sleep):
         full_row = {
             "track_id": 1,
@@ -200,8 +209,8 @@ class TestReferencePick:
         assert result["map_rate"] == 0.8
         assert mock_best.call_count == 2
 
-    @patch("pikaraoke.lib.timing_fetch.time.sleep")
-    @patch("pikaraoke.lib.timing_fetch.best_by_reference")
+    @patch("timing_fetch.time.sleep")
+    @patch("timing_fetch.best_by_reference")
     def test_title_only_worse_keeps_full(self, mock_best, _sleep):
         full_row = {
             "track_id": 1,
@@ -218,16 +227,16 @@ class TestReferencePick:
         assert result["variant"] == "full"
         assert result["map_rate"] == 0.3
 
-    @patch("pikaraoke.lib.timing_fetch.time.sleep")
-    @patch("pikaraoke.lib.timing_fetch.best_by_reference")
+    @patch("timing_fetch.time.sleep")
+    @patch("timing_fetch.best_by_reference")
     def test_empty_artist_never_retries_title_only(self, mock_best, _sleep):
         mock_best.return_value = None
         result = timing_fetch.reference_pick(MagicMock(), "Song", "", ["hi"], 200.0)
         assert result is None
         assert mock_best.call_count == 1
 
-    @patch("pikaraoke.lib.timing_fetch.time.sleep")
-    @patch("pikaraoke.lib.timing_fetch.best_by_reference")
+    @patch("timing_fetch.time.sleep")
+    @patch("timing_fetch.best_by_reference")
     def test_nothing_found_returns_none(self, mock_best, _sleep):
         mock_best.return_value = None
         result = timing_fetch.reference_pick(MagicMock(), "Song", "Artist", ["hi"], 200.0)
@@ -240,7 +249,7 @@ class TestReferencePick:
 
 
 class TestNeteaseFallback:
-    @patch("pikaraoke.lib.timing_fetch.syncedlyrics.search")
+    @patch("timing_fetch.syncedlyrics.search")
     def test_returns_line_kind_on_hit(self, mock_search):
         mock_search.return_value = "[00:01.00]hi there\n"
         row = timing_fetch._netease_fallback("term", ["hi there"])
@@ -248,13 +257,13 @@ class TestNeteaseFallback:
         assert row["variant"] == "netease"
         assert row["map_rate"] == 1.0
 
-    @patch("pikaraoke.lib.timing_fetch.syncedlyrics.search")
+    @patch("timing_fetch.syncedlyrics.search")
     def test_no_hit_returns_none(self, mock_search):
         mock_search.return_value = None
         assert timing_fetch._netease_fallback("term", ["hi"]) is None
 
-    @patch("pikaraoke.lib.timing_fetch.syncedlyrics.search")
-    @patch("pikaraoke.lib.timing_fetch.reference_pick")
+    @patch("timing_fetch.syncedlyrics.search")
+    @patch("timing_fetch.reference_pick")
     def test_fetch_builds_sidecar_only_when_musixmatch_empty_or_zero(self, mock_pick, mock_search):
         # Musixmatch found something non-zero: NetEase must not be consulted.
         mock_pick.return_value = {
@@ -302,7 +311,7 @@ class TestEnsureTiming:
             ),
             encoding="utf-8",
         )
-        with patch("pikaraoke.lib.timing_fetch._fetch_and_build_sidecar") as mock_fetch:
+        with patch("timing_fetch._fetch_and_build_sidecar") as mock_fetch:
             result = timing_fetch.ensure_timing(song_path, "Song", "Artist", ["hi"], 200.0)
         mock_fetch.assert_not_called()
         assert result == {
@@ -333,7 +342,7 @@ class TestEnsureTiming:
             ),
             encoding="utf-8",
         )
-        with patch("pikaraoke.lib.timing_fetch._fetch_and_build_sidecar") as mock_fetch:
+        with patch("timing_fetch._fetch_and_build_sidecar") as mock_fetch:
             result = timing_fetch.ensure_timing(song_path, "Song", "Artist", ["hi"], 200.0)
         mock_fetch.assert_not_called()
         assert result is None
@@ -344,7 +353,7 @@ class TestEnsureTiming:
         path = self._sidecar_path(song_path)
         path.parent.mkdir()
         path.write_text("{ not valid json", encoding="utf-8")
-        with patch("pikaraoke.lib.timing_fetch._fetch_and_build_sidecar") as mock_fetch:
+        with patch("timing_fetch._fetch_and_build_sidecar") as mock_fetch:
             mock_fetch.return_value = {
                 "schema_version": 1,
                 "fetched_at": "x",
@@ -366,7 +375,7 @@ class TestEnsureTiming:
         path = self._sidecar_path(song_path)
         path.parent.mkdir()
         path.write_text(json.dumps({"kind": "line", "map_rate": 0.9}), encoding="utf-8")
-        with patch("pikaraoke.lib.timing_fetch._fetch_and_build_sidecar") as mock_fetch:
+        with patch("timing_fetch._fetch_and_build_sidecar") as mock_fetch:
             mock_fetch.return_value = timing_fetch._empty_sidecar("Song Artist")
             timing_fetch.ensure_timing(song_path, "Song", "Artist", ["hi"], 200.0)
         mock_fetch.assert_called_once()
@@ -374,7 +383,7 @@ class TestEnsureTiming:
     def test_miss_still_writes_none_sidecar(self, tmp_path):
         song_path = tmp_path / "Song---dQw4w9WgXcQ.mp4"
         song_path.touch()
-        with patch("pikaraoke.lib.timing_fetch._fetch_and_build_sidecar") as mock_fetch:
+        with patch("timing_fetch._fetch_and_build_sidecar") as mock_fetch:
             mock_fetch.return_value = timing_fetch._empty_sidecar("Song Artist")
             result = timing_fetch.ensure_timing(song_path, "Song", "Artist", ["hi"], 200.0)
         assert result is None
@@ -385,7 +394,7 @@ class TestEnsureTiming:
     def test_low_confidence_pick_persisted_but_not_stashed(self, tmp_path):
         song_path = tmp_path / "Song---dQw4w9WgXcQ.mp4"
         song_path.touch()
-        with patch("pikaraoke.lib.timing_fetch._fetch_and_build_sidecar") as mock_fetch:
+        with patch("timing_fetch._fetch_and_build_sidecar") as mock_fetch:
             mock_fetch.return_value = {
                 "schema_version": 1,
                 "fetched_at": "x",
@@ -404,7 +413,7 @@ class TestEnsureTiming:
     def test_never_raises_on_fetch_exception(self, tmp_path):
         song_path = tmp_path / "Song---dQw4w9WgXcQ.mp4"
         song_path.touch()
-        with patch("pikaraoke.lib.timing_fetch._fetch_and_build_sidecar") as mock_fetch:
+        with patch("timing_fetch._fetch_and_build_sidecar") as mock_fetch:
             mock_fetch.side_effect = RuntimeError("network exploded")
             result = timing_fetch.ensure_timing(song_path, "Song", "Artist", ["hi"], 200.0)
         assert result is None
@@ -418,7 +427,7 @@ class TestEnsureTiming:
         Genius strings instead."""
         song_path = tmp_path / "Song---dQw4w9WgXcQ.mp4"
         song_path.touch()
-        with patch("pikaraoke.lib.timing_fetch._fetch_and_build_sidecar") as mock_fetch:
+        with patch("timing_fetch._fetch_and_build_sidecar") as mock_fetch:
             mock_fetch.return_value = timing_fetch._empty_sidecar("Bloodstream Ed Sheeran")
             timing_fetch.ensure_timing(
                 song_path,
@@ -432,7 +441,7 @@ class TestEnsureTiming:
     def test_exception_path_records_cleaned_term(self, tmp_path):
         song_path = tmp_path / "Song---dQw4w9WgXcQ.mp4"
         song_path.touch()
-        with patch("pikaraoke.lib.timing_fetch._fetch_and_build_sidecar") as mock_fetch:
+        with patch("timing_fetch._fetch_and_build_sidecar") as mock_fetch:
             mock_fetch.side_effect = RuntimeError("boom")
             timing_fetch.ensure_timing(
                 song_path,

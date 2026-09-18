@@ -1,7 +1,9 @@
-"""Synced-timing fetch pillar: Musixmatch richsync/line + NetEase fallback.
+"""Synced-timing fetch: Musixmatch richsync/line + NetEase fallback.
 
-The timing-source pillars router's fetch pillar (``plans/ctc-sync-engine.md``
-Appendix A/B). Unlike LRCLIB (``pikaraoke.lib.lrclib``, used as a *fill*
+Probe-side helper for ``scripts/musixmatch_coverage_improve.py``. It was the
+production fetch pillar (``plans/completed/ctc-sync-engine.md`` Appendix B)
+until the routes that would have read its sidecars closed; the pipeline no
+longer calls it. Unlike LRCLIB (``pikaraoke.lib.lrclib``, used as a *fill*
 source), Musixmatch richsync is word-level timing that can drive a line
 directly, and Musixmatch/NetEase line timing is a denser, same-recording-rate
 scaffold than LRCLIB's community submissions. Selection is reference-free,
@@ -47,9 +49,9 @@ SIDECAR_SCHEMA_VERSION = 1
 # Pacing that survived a full 33-song corpus run without a persistent
 # lockout (plans/musixmatch-coverage-improvement.md) -- see that plan's
 # Robustness section before tightening either value. SONG_SLEEP_S (the
-# between-*songs* pause) is deliberately absent here: fetch happens once
-# per song at add time, so only the between-*call* pacing below applies;
-# a batch tool iterating many songs adds its own SONG_SLEEP_S.
+# between-*songs* pause) is deliberately absent here: only the
+# between-*call* pacing below applies per song; the batch tool iterating
+# many songs adds its own SONG_SLEEP_S.
 CALL_SLEEP_S = 2.5
 BACKOFF_SLEEP_S = 20.0
 
