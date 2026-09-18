@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from pikaraoke.lib import lrclib, timing_fetch, youtube_dl, ytasr
+from pikaraoke.lib import lrclib, youtube_dl, ytasr
 from pikaraoke.lib.ffmpeg import probe_duration
 from pikaraoke.lib.genius import (
     GeniusClient,
@@ -95,7 +95,6 @@ class LyricsFetchStage(BaseStage):
                 self._resolve_ytasr(ctx)
                 if self._config.lrclib_fill:
                     self._resolve_lrclib(ctx, song)
-                self._resolve_timing(ctx, song)
                 return
             except GeniusUnavailable as e:
                 logger.warning("Genius fetch failed for %s: %s — falling back", yt_id, e)
@@ -172,10 +171,9 @@ class LyricsFetchStage(BaseStage):
     def _media_duration(self, ctx: StageContext) -> float | None:
         """Media duration, probed once and cached in ctx.artifacts.
 
-        _resolve_lrclib and _resolve_timing both need it; probing is an ffprobe
-        subprocess, so the first resolver to miss the cache probes and stashes
-        it for the rest (a Genius song with no on-disk ASR caption -- where
-        _resolve_ytasr never probes -- otherwise probes twice).
+        Reuses _resolve_ytasr's probe when it ran (probing is an ffprobe
+        subprocess); otherwise probes here and stashes the result, which the
+        debug bundle also records.
         """
         media_dur = ctx.artifacts.get("media_duration_s")
         if media_dur is None:
@@ -204,39 +202,6 @@ class LyricsFetchStage(BaseStage):
                 logger.info("LRCLIB: no synced variant found — fill unavailable")
         except Exception:
             logger.exception("LRCLIB: resolve failed — fill unavailable")
-
-    def _resolve_timing(self, ctx: StageContext, song: GeniusSong) -> None:
-        """Fetch synced word/line timing for the timing-source-pillars router
-        (``plans/ctc-sync-engine.md``).
-
-        Genius-origin only (called from Branch a). Resolves
-        ``lyrics/<stem>.timing.json`` via :func:`timing_fetch.ensure_timing`
-        -- reused on disk, else fetched, scored and persisted. Stashes
-        ``ctx.artifacts["synced_timing"]`` (Appendix A's schema) only above
-        the confidence bar; a miss or low-confidence hit still writes a
-        sidecar (so a re-add never re-queries) but leaves no stash -- no
-        router consumes it yet, so this stage is inert until one does.
-        Never raises.
-        """
-        try:
-            sheet_lines = [item["text"] for item in parse_lyric_lines(song.text)]
-            media_dur = self._media_duration(ctx)
-            artifact = timing_fetch.ensure_timing(
-                ctx.song_path, song.title, song.artist, sheet_lines, media_dur
-            )
-            if artifact is not None:
-                ctx.artifacts["synced_timing"] = artifact
-                logger.info(
-                    "Timing fetch: %s %s timing (map_rate=%.2f, %s)",
-                    artifact["source"],
-                    artifact["kind"],
-                    artifact["map_rate"],
-                    artifact["path"].name,
-                )
-            else:
-                logger.info("Timing fetch: no confident synced timing found")
-        except Exception:
-            logger.exception("Timing fetch: resolve failed")
 
     @staticmethod
     def _extract_yt_id(song_path: Path) -> str | None:
