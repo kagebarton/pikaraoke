@@ -168,7 +168,9 @@ def _sung_level_ref(env: np.ndarray, words: list[dict], end: bool = False) -> fl
     return float(np.median(env[span_idx]))
 
 
-def _detect_rise(env: np.ndarray, t0: float, t1: float, ref_db: float) -> float | None:
+def _detect_rise(
+    env: np.ndarray, t0: float, t1: float, ref_db: float, trust_bound: bool
+) -> float | None:
     """Time of the first qualifying energy rise in ``[t0, t1]``, else None.
 
     A rise qualifies either by landing near the sung level outright, or
@@ -178,6 +180,11 @@ def _detect_rise(env: np.ndarray, t0: float, t1: float, ref_db: float) -> float 
     one-word line): word 1's true onset begins a voiced run that
     continues at least that far, while a bump in a noisy reverb tail
     collapses back into the gap.
+
+    A rise within :data:`SUSTAIN_S` of ``t1`` is accepted as already
+    continuous with it only when ``trust_bound`` is true, i.e. ``t1`` is
+    word 2's start. On a one-word line ``t1`` is the word's own claimed
+    end, the timing being doubted, so such a rise is rejected.
     """
     a = max(EDGE_FRAMES, int(t0 / HOP_S))
     b_bound = int(t1 / HOP_S)
@@ -198,9 +205,11 @@ def _detect_rise(env: np.ndarray, t0: float, t1: float, ref_db: float) -> float 
         # continuous with it; the median over that sliver would only
         # measure the attack itself.
         if b - i < sustain_frames:
-            # Continuity with the bound is trustworthy; the envelope
-            # running out is not — onsets near the stem end are unreliable.
-            if b_bound <= b_env:
+            # Continuity with the bound is trustworthy only when the
+            # bound is independent evidence and lies inside the envelope:
+            # onsets near the stem end are unreliable, and a one-word
+            # line's bound is its own claimed end.
+            if trust_bound and b_bound <= b_env:
                 return i * HOP_S
             continue
         if float(np.median(env[i:b])) >= ref_db - SUSTAIN_NEAR_DB:
@@ -214,12 +223,15 @@ def snap_line_onsets(
     """Snap each line's first word to the detected vocal onset.
 
     A single-word line is searched up to its own claimed end rather than
-    word 2's start (see ``bound`` below), so :func:`_detect_rise`'s
-    continuity check demands the voice hold all the way to that claimed
-    end. For a held note this is correct: whisper clips the end early, so
-    the claimed end sits inside the true run. A staccato word with a
-    wildly long claimed span won't snap — the safe direction, since the
-    line is merely left untouched rather than moved to a false onset.
+    word 2's start (see ``bound`` below). That end is not independent
+    evidence, so every rise must pass :func:`_detect_rise`'s continuity
+    check over at least :data:`SUSTAIN_S` before it. For a held note this
+    is correct: whisper clips the end early, so the claimed end sits
+    inside the true run. A staccato word with a wildly long claimed span
+    won't snap, and neither will one claimed shorter than about
+    ``SUSTAIN_S + SNAP_MARGIN_S + MIN_SHIFT_S`` — the safe direction,
+    since the line is merely left untouched rather than moved to a false
+    onset.
 
     Returns ``(line_objects, stats)``. Lines are replaced by copies only
     when moved; on decode failure the input is returned unchanged and
@@ -283,7 +295,7 @@ def snap_line_onsets(
         if ref - p20 < STEP_DB:
             n_undetectable += 1
 
-        onset = _detect_rise(env, w1s, bound, ref)
+        onset = _detect_rise(env, w1s, bound, ref, trust_bound=len(words) >= 2)
         if onset is None:
             n_no_rise += 1
             out.append(obj)

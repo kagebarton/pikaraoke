@@ -3949,3 +3949,168 @@ column says where a rise would be accepted, not that one was.)
 **Review status.** `/code-review` on the Phase 1-5 commits is DONE. Phase
 5.1 is a one-function change that self-review can cover in one
 read-through, so it does not need a second review.
+
+### Phase 5.1
+
+Executed per "## Phase 5.1 — No continuity shortcut on one-word lines
+(review fix)" above. Before editing: `git diff 7a41c6e HEAD -- pikaraoke/
+tests/ scripts/` was empty, confirming HEAD's code was Phase 5's.
+
+**Change.** `_detect_rise` gained a required `trust_bound: bool`
+parameter; the trust branch's `if b_bound <= b_env:` became `if
+trust_bound and b_bound <= b_env:`, with the comment above it replaced as
+specified; the call in `snap_line_onsets` became `_detect_rise(env, w1s,
+bound, ref, trust_bound=len(words) >= 2)`; both docstrings updated as
+specified. No other lines changed.
+
+**Test:** `test_single_word_rise_near_own_end_rejected` added to
+`TestSnapLineOnsets`, directly after `test_single_word_in_silence_untouched`.
+
+**Suite.**
+
+Invocation: `uv run --no-sync python -m pytest tests/unit -q`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p51_suite.txt`
+
+```
+4 failed, 1526 passed, 2 skipped in 35.18s
+```
+
+Only the known four; 1526 = 1525 + 1 new test.
+
+Invocation: `uv run --no-sync python -m pytest tests/unit/test_onset_snap.py tests/unit/test_lrclib_fill.py -q`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p51_suite_narrow.txt`
+-> `69 passed`.
+
+**Multi-word-only, before editing (Phase 5 code).**
+
+Invocation: `uv run --no-sync python scripts/edge_snap_replay.py --folder D:/shared/pikaraoke-songs --multi-word-only`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p5_mwo_replay.txt`
+
+Invocation: `uv run --no-sync python scripts/edge_snap_ass.py --folder D:/shared/pikaraoke-songs --multi-word-only`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p5_mwo_coverage.txt`
+
+**Multi-word-only, post-edit (Phase 5.1 code).**
+
+Invocation: `uv run --no-sync python scripts/edge_snap_replay.py --folder D:/shared/pikaraoke-songs --multi-word-only`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p51_mwo_replay.txt`
+
+Invocation: `uv run --no-sync python scripts/edge_snap_ass.py --folder D:/shared/pikaraoke-songs --multi-word-only`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p51_mwo_coverage.txt`
+
+**Gate 1.** `diff edge_p5_mwo_replay.txt edge_p51_mwo_replay.txt` and
+`diff edge_p5_mwo_coverage.txt edge_p51_mwo_coverage.txt`: both empty (0
+bytes), including every `stats` and `total` line. Four total blocks:
+
+```
+edge_p5_mwo_replay.txt:
+total songs=18
+total onset n_below_min_shift=125 n_fired=344 n_lines=989 n_low_ref=13 n_no_rise=28 n_single_word=0 n_snapped=191 n_undetectable=50
+total end n_below_min_shift=99 n_extended=244 n_fired=343 n_lines=989 n_low_ref=8 n_single_word=0
+
+edge_p51_mwo_replay.txt:
+total songs=18
+total onset n_below_min_shift=125 n_fired=344 n_lines=989 n_low_ref=13 n_no_rise=28 n_single_word=0 n_snapped=191 n_undetectable=50
+total end n_below_min_shift=99 n_extended=244 n_fired=343 n_lines=989 n_low_ref=8 n_single_word=0
+
+edge_p5_mwo_coverage.txt:
+total songs=34
+total onset n_below_min_shift=623 n_fired=688 n_lines=1762 n_low_ref=19 n_no_rise=62 n_single_word=0 n_snapped=3 n_undetectable=152
+total end n_below_min_shift=343 n_extended=40 n_fired=383 n_lines=1762 n_low_ref=12 n_single_word=0
+
+edge_p51_mwo_coverage.txt:
+total songs=34
+total onset n_below_min_shift=623 n_fired=688 n_lines=1762 n_low_ref=19 n_no_rise=62 n_single_word=0 n_snapped=3 n_undetectable=152
+total end n_below_min_shift=343 n_extended=40 n_fired=383 n_lines=1762 n_low_ref=12 n_single_word=0
+```
+
+**Unfiltered, post-edit (Phase 5.1 code).**
+
+Invocation: `uv run --no-sync python scripts/edge_snap_replay.py --folder D:/shared/pikaraoke-songs`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p51_replay.txt`
+Diff: `diff --strip-trailing-cr edge_p5_replay.txt edge_p51_replay.txt >
+edge_p51_replay.diff`, at
+`C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p51_replay.diff`
+
+```
+100d99
+<   rec onset [1w] L22 +0.495
+122c121
+<   rec end [1w] L22 +0.150
+---
+>   rec end [1w] L22 +0.200
+139c138
+<   stats onset n_below_min_shift=14 n_fired=36 n_lines=110 n_low_ref=0 n_no_rise=3 n_single_word=3 n_snapped=19 n_undetectable=4
+---
+>   stats onset n_below_min_shift=13 n_fired=36 n_lines=110 n_low_ref=0 n_no_rise=5 n_single_word=3 n_snapped=18 n_undetectable=4
+248d246
+<   rec onset [1w] L2 +1.880
+262a261
+>   rec end [1w] L2 +0.300 to_bound
+270,271c269,270
+<   stats onset n_below_min_shift=3 n_fired=18 n_lines=31 n_low_ref=1 n_no_rise=0 n_single_word=1 n_snapped=15 n_undetectable=0
+<   stats end n_below_min_shift=7 n_extended=7 n_fired=14 n_lines=31 n_low_ref=1 n_single_word=1
+---
+>   stats onset n_below_min_shift=3 n_fired=18 n_lines=31 n_low_ref=1 n_no_rise=1 n_single_word=1 n_snapped=14 n_undetectable=0
+>   stats end n_below_min_shift=7 n_extended=8 n_fired=15 n_lines=31 n_low_ref=0 n_single_word=1
+340c339
+<   stats onset n_below_min_shift=8 n_fired=27 n_lines=65 n_low_ref=0 n_no_rise=3 n_single_word=4 n_snapped=16 n_undetectable=3
+---
+>   stats onset n_below_min_shift=7 n_fired=27 n_lines=65 n_low_ref=0 n_no_rise=4 n_single_word=4 n_snapped=16 n_undetectable=3
+495,496c494,495
+< total onset n_below_min_shift=129 n_fired=350 n_lines=1010 n_low_ref=14 n_no_rise=28 n_single_word=21 n_snapped=193 n_undetectable=50
+< total end n_below_min_shift=98 n_extended=246 n_fired=344 n_lines=1010 n_low_ref=8 n_single_word=21
+---
+> total onset n_below_min_shift=127 n_fired=350 n_lines=1010 n_low_ref=14 n_no_rise=32 n_single_word=21 n_snapped=191 n_undetectable=50
+> total end n_below_min_shift=98 n_extended=247 n_fired=345 n_lines=1010 n_low_ref=7 n_single_word=21
+```
+
+Invocation: `uv run --no-sync python scripts/edge_snap_ass.py --folder D:/shared/pikaraoke-songs`
+Artifact: `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p51_coverage.txt`
+Diff: `diff --strip-trailing-cr edge_p5_coverage.txt edge_p51_coverage.txt >
+edge_p51_coverage.diff`, at
+`C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\edge_p51_coverage.diff`
+
+```
+43c43
+<   stats onset n_below_min_shift=18 n_fired=23 n_lines=56 n_low_ref=0 n_no_rise=1 n_single_word=21 n_snapped=4 n_undetectable=10
+---
+>   stats onset n_below_min_shift=16 n_fired=23 n_lines=56 n_low_ref=0 n_no_rise=3 n_single_word=21 n_snapped=4 n_undetectable=10
+60,62c60,61
+<   rec onset [1w] 1:20.98 -> 1:21.48 (+0.50s)  Bonjour ...
+<   rec end [1w] 1:21.90 -> 1:22.05 (+0.15s)  ... Bonjour
+<   stats onset n_below_min_shift=33 n_fired=36 n_lines=101 n_low_ref=0 n_no_rise=2 n_single_word=3 n_snapped=1 n_undetectable=6
+---
+>   rec end [1w] 1:21.90 -> 1:22.10 (+0.20s)  ... Bonjour
+>   stats onset n_below_min_shift=32 n_fired=36 n_lines=101 n_low_ref=0 n_no_rise=4 n_single_word=3 n_snapped=0 n_undetectable=6
+97,99c96,98
+<   rec onset [1w] 0:02.48 -> 0:04.36 (+1.88s)  Nope! ...
+<   stats onset n_below_min_shift=17 n_fired=18 n_lines=29 n_low_ref=1 n_no_rise=0 n_single_word=1 n_snapped=1 n_undetectable=1
+<   stats end n_below_min_shift=9 n_extended=0 n_fired=9 n_lines=29 n_low_ref=1 n_single_word=1
+---
+>   rec end [1w] 0:04.46 -> 0:04.76 (+0.30s) to_bound  ... Nope!
+>   stats onset n_below_min_shift=17 n_fired=18 n_lines=29 n_low_ref=1 n_no_rise=1 n_single_word=1 n_snapped=0 n_undetectable=1
+>   stats end n_below_min_shift=9 n_extended=1 n_fired=10 n_lines=29 n_low_ref=0 n_single_word=1
+115c114
+<   stats onset n_below_min_shift=40 n_fired=41 n_lines=103 n_low_ref=3 n_no_rise=1 n_single_word=2 n_snapped=0 n_undetectable=1
+---
+>   stats onset n_below_min_shift=39 n_fired=41 n_lines=103 n_low_ref=3 n_no_rise=2 n_single_word=2 n_snapped=0 n_undetectable=1
+150c149
+<   stats onset n_below_min_shift=23 n_fired=26 n_lines=53 n_low_ref=0 n_no_rise=3 n_single_word=4 n_snapped=0 n_undetectable=7
+---
+>   stats onset n_below_min_shift=22 n_fired=26 n_lines=53 n_low_ref=0 n_no_rise=4 n_single_word=4 n_snapped=0 n_undetectable=7
+185,186c184,185
+< total onset n_below_min_shift=634 n_fired=708 n_lines=1823 n_low_ref=24 n_no_rise=63 n_single_word=61 n_snapped=11 n_undetectable=157
+< total end n_below_min_shift=342 n_extended=49 n_fired=391 n_lines=1823 n_low_ref=14 n_single_word=61
+---
+> total onset n_below_min_shift=629 n_fired=708 n_lines=1823 n_low_ref=24 n_no_rise=70 n_single_word=61 n_snapped=9 n_undetectable=157
+> total end n_below_min_shift=342 n_extended=50 n_fired=392 n_lines=1823 n_low_ref=13 n_single_word=61
+```
+
+**Gate 2.** `diff edge_p51_replay.diff <expected>` and `diff
+edge_p51_coverage.diff <expected>`: both empty (0 bytes), against
+`C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\4d761251-d0b5-493b-a519-1f8202696d9f\scratchpad\review\p51_expected_replay.diff`
+and
+`C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\4d761251-d0b5-493b-a519-1f8202696d9f\scratchpad\review\p51_expected_coverage.diff`,
+which still resolved.
+
+Commit: `fix(onset-snap): no continuity shortcut on one-word lines`
