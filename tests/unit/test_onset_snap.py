@@ -288,6 +288,18 @@ class TestSnapLineOnsets:
         assert out[0] is obj
         assert stats["n_low_ref"] == 1
 
+    def test_single_word_rise_near_own_end_rejected(self, use_env):
+        # A 150 ms bump near the end of a 0.5 s one-word span sets its own
+        # pct80 reference and rises within SUSTAIN_S of the claimed end.
+        # That end is the timing being doubted, so the rise gets no
+        # continuity shortcut and the line is left alone.
+        use_env(_env(5.0, [(2.3, 2.45, -20.0)]))
+        obj = _line((2.0, 2.5))
+        out, stats = snap_line_onsets([obj], "vocals.wav")
+        assert out[0] is obj
+        assert stats["n_fired"] == 1
+        assert stats["n_no_rise"] == 1
+
     @pytest.mark.parametrize(
         "exc",
         [
