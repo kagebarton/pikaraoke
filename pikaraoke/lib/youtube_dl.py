@@ -123,7 +123,9 @@ def upgrade_youtubedl() -> str:
 
     upgrade_success = False
     if "pip" in output.lower():
-        pip_cmd = [sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp"]
+        # [default] carries yt-dlp-ejs (YouTube's JS challenge solver), which each
+        # yt-dlp release pins to an exact version; upgrading bare yt-dlp leaves it stale.
+        pip_cmd = [sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp[default]"]
 
         # Outside a venv, pip requires --break-system-packages on modern Python
         if sys.prefix == sys.base_prefix:

@@ -350,6 +350,7 @@ class TestUpgradeYoutubedl:
             second_call_args = mock_check.call_args_list[1][0][0]
             assert "-m" in second_call_args
             assert "pip" in second_call_args
+            assert "yt-dlp[default]" in second_call_args
             assert "--break-system-packages" not in second_call_args
 
     def test_pip_upgrade_adds_break_system_packages_for_system_install(self):
