@@ -86,7 +86,7 @@ constraints). S-B, S-B2 and S-C arms unblocked.
 
 ## Phase 1b — emission score oracle probe (GATE O)
 
-Keystone for the engine architecture in `plans/ctc-sync-engine.md`:
+Keystone for the engine architecture in `plans/completed/ctc-sync-engine.md`:
 does the CTC emission separate synced from desynced lines? Offline
 scratchpad; GPU needed only for emission forward passes (seconds per
 song). Honest precedent, stated up front: whisper align-word

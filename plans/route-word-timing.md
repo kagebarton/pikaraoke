@@ -134,7 +134,7 @@ demotion — see Results log), offline against its existing bundle:
   effect deferred to follow-on scope per the search-scope decision; the
   ruling is recorded here regardless).
 - R-4: **the Appendix C decision procedure executed** (Opus, verbatim
-  from `plans/ctc-sync-engine.md` Appendix C — the general PASS/CONTROL
+  from `plans/completed/ctc-sync-engine.md` Appendix C — the general PASS/CONTROL
   threshold rule, the clamps, the emission-family adoption rule) and
   the resulting constants recorded into that appendix. Stage wiring is
   already locked there. The assembled gate must fail both controls
@@ -1520,3 +1520,5 @@ consulted the word sidecar for routing. The floor here is "no change", not
 "regression". The structural edits this ruling licenses — striking
 precedence 2 from Appendix A, reducing the target ladder to three routes —
 belong to the single design-consolidation pass, not to this entry.
+*(Done 2026-09-18: the pass closed the whole build plan as record, and
+`PROGRAM.md` Part 2 now states the two-route target directly.)*

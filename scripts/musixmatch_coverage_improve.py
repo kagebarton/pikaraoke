@@ -168,7 +168,7 @@ QUERY_DRIFT_RULING = (
     "2026-07-19 Fable Decision C: reference_pick's locked early-exit returned "
     "a confident full-query richsync candidate (word/0.745) without "
     "re-querying the title-only variant that won a2's recorded line/0.851 "
-    "(plans/ctc-sync-engine.md Appendix B addenda) -- provider drift, not a "
+    "(plans/completed/ctc-sync-engine.md Appendix B addenda) -- provider drift, not a "
     "ranking defect; word/0.745 stands, song exits the line-bodies cohort "
     "(plans/timing-source-pillars.md Results log, Phase 3 setup STOP entry)."
 )
@@ -176,7 +176,7 @@ QUERY_DRIFT_RULING = (
 # Provenance recorded on Bloodstream's sidecar for the kind exemption.
 BLOODSTREAM_KIND_RULING = (
     "2026-07-19 Fable ruling: no kind term in the Appendix B selection key "
-    "(plans/ctc-sync-engine.md Appendix B addenda); Bloodstream demotes to "
+    "(plans/completed/ctc-sync-engine.md Appendix B addenda); Bloodstream demotes to "
     "the line-source pool (plans/timing-source-pillars.md Results log, "
     "Phase 2a STOP entry)."
 )

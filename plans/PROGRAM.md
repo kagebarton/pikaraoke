@@ -17,6 +17,14 @@ described shipped behaviour is still the main way these documents
 mislead. **A new session starts on `route-no-timing.md`** — see
 "Remaining execution order".
 
+**Update 2026-09-18: the design-consolidation pass ran** (see
+"Design-consolidation pass" under "Remaining execution order").
+- The build plan is closed into `completed/`, and Part 2 is now its own
+  source of truth.
+- The inert synced-timing fetch is out of the pipeline.
+- No measurement phase and no design item is live on the routing
+  program. GATE L waits on its corpus.
+
 ## Part 1 — As shipped today
 
 What the code does right now. Nothing here is aspirational; every box is
@@ -66,10 +74,10 @@ up costs hours:
 | `WORD_SEG_MIN_FRAC` | `ytasr` | 0.5 | Line-level/manual captions posing as word-level ASR |
 | `MIN_CAPTION_WPM` | `ytasr` | 15.0 | `[Music]` degeneracy. Unknown duration → reject outright |
 | `CANDIDATE_MAX_EDIT_RATIO` | `ytasr` | 0.45 | A per-line ASR candidate too garbled to admit (0.34 → 0.45 at GATE T, 2026-09-10) |
-| **`WRONG_SONG_MAP_RATE`** | **`timing_fetch`** | **0.5** | **The wrong-song floor for Musixmatch/NetEase sidecars** |
+| ~~`WRONG_SONG_MAP_RATE`~~ | ~~`timing_fetch`~~ | ~~0.5~~ | ~~The wrong-song floor for Musixmatch/NetEase sidecars~~ — **out of production 2026-09-18** (`efd3559`): the fetch no longer runs in the pipeline; the module is `scripts/timing_fetch.py` |
 | `_MAP_MIN_RATIO` | `lrclib` | 0.85 | A per-line text mapping too weak to use |
 | `FILL_MAX_SLOPE_DEV` | `lrclib_fill` | 0.01 | Song not fill-eligible unless its Theil-Sen slope is within 1% of unity |
-| `WARP_MIN_ANCHORS` / `WARP_MAD_GATE_S` | `lrclib_fill`, `cue_align` | 5 / 2.0 s | A slope estimate with too few anchors or too much residual |
+| `WARP_MIN_ANCHORS` / `WARP_MAD_GATE_S` | `lrclib_fill` (`cue_align`'s copy moved to `scripts/scaffold_warp.py` 2026-09-18, `28a118d`) | 5 / 2.0 s | A slope estimate with too few anchors or too much residual |
 | `COLLISION_TOL_S` | `lrclib_fill` | 0.2 | A fill landing on top of an already-placed line |
 | `MIN_REF_DB` | `evidence_veto` ← `onset_snap` | −45.0 dB | A line placed in silence |
 
@@ -79,14 +87,18 @@ mislabels in both directions: Selfish's sidecar scored 0.38 — below the
 floor — but was the right song, correctly timed (the low score was an
 SRT-segmentation artifact), while 5 of 14 sidecars that passed the floor
 time a different recording or edit. M1 and M2 exist to replace it with
-labels derived from timing truth.
+labels derived from timing truth. **Moot 2026-09-18:** no shipped code
+applies it now that the fetch is out of the pipeline.
 
 ## Part 2 — Target
 
-What the locked rulings specify. Source of truth is **Appendix A** (route
+What the locked rulings specify. ~~Source of truth is **Appendix A** (route
 contract) and **Appendix D** (aligner + post-pass policy) in
-`plans/ctc-sync-engine.md`; both are locked. This section is a reading of
-those, not a second spec — if the two disagree, the appendices win.
+`plans/completed/ctc-sync-engine.md`; both are locked. This section is a reading of
+those, not a second spec — if the two disagree, the appendices win.~~
+**Since the 2026-09-18 consolidation pass, this section is the source of
+truth.** The build plan is closed, so its Appendices A and D survive only
+as record. Every live ruling they held is carried below.
 
 ### Target routing
 
@@ -149,6 +161,9 @@ exactly as it does today.
 | Routes | 2 (+transcribe) | **2** (+transcribe) — F1 closed 2026-09-04, F2 withdrawn 2026-09-08 |
 | Line timing, no SRT | joint DP; LRCLIB as post-pass fill | **same — unchanged** (GATE G NO-GO 2026-09-11; fill not widened, per-song gate kept) |
 | Word timing | nothing — sidecar unused for routing | **nothing — unchanged** (the fill-source door was tried and refused at GATE G) |
+| Synced-timing fetch (Musixmatch/NetEase sidecar) | **none** — taken out of the pipeline 2026-09-18 (`efd3559`); it ran at add time and nothing read its output | **none** (Ken, 2026-09-18, consolidation pass). Probes fetch on demand via `scripts/timing_fetch.py` |
+| De-reverb retry | transcribe-side gate, every route | **same — unchanged** (its retirement was a build-plan E4 review; E4 never runs) |
+| Non-Latin lines | whisper path, as every line | **same** — GATE L (`route-no-timing.md`) is the only open question, re-posed against whisper |
 | Scaffold aligner | n/a | n/a — route withdrawn; M6-d moot |
 | Joint aligner | whisper align | **whisper align — unchanged** (GATE J1 NO-GO 2026-09-08; CTC not adopted) |
 | Word boundaries inside a placed line | joint matcher's words | **same — unchanged** (GATE W closed 2026-09-15, Ken: interior refinement not adopted) |
@@ -163,10 +178,10 @@ check only.
 
 | Gate | Decides | Status |
 | --- | --- | --- |
-| `map_rate` at fetch (`WRONG_SONG_MAP_RATE`) | whether a sidecar is admitted at all | **adequate for wrong-song** (M2: 32/32 cross-paired controls collapse at the text-pairing floor). **Wrong-*edit*: M7-a asked it directly 2026-09-08 and the evidence says `map_rate` does not catch it** — all 17 cohort sidecars cleared the floor, yet only 4 track our recording; on Let It Go the text agrees 1.00 against a sidecar spanning 117 s of a 201 s video. Raw tables in `route-line-timing.md`. **Ruling is Ken's; no gate has been changed.** |
+| `map_rate` at fetch (`WRONG_SONG_MAP_RATE`) | whether a sidecar is admitted at all | **adequate for wrong-song** (M2: 32/32 cross-paired controls collapse at the text-pairing floor). **Wrong-*edit*: M7-a asked it directly 2026-09-08 and the evidence says `map_rate` does not catch it** — all 17 cohort sidecars cleared the floor, yet only 4 track our recording; on Let It Go the text agrees 1.00 against a sidecar spanning 117 s of a 201 s video. Raw tables in `route-line-timing.md`. **Ruling is Ken's; no gate has been changed.** **Moot 2026-09-18:** nothing fetches a sidecar in production any more. |
 | ~~Word-route verify (Appendix C)~~ | ~~precedence 2 vs demotion to 3~~ | **RETIRED 2026-09-04 (R-4 closed)** — no per-song gate is constructible from this evidence family; demotion to 3 is permanent |
 | Warp gate (`WARP_MIN_ANCHORS` 5 / `WARP_MAD_GATE_S` 2.0 s) | precedence 3 vs fall to 4 | **moot 2026-09-08** — route withdrawn. Its verified blind spot (fit population excludes unsung sections; duration clamp crams) is on record in `route-line-timing.md`; do not reuse it as a per-song admission test |
-| Snap policy (Appendix D) | post-pass per route | locked: OFF on CTC-timed routes, ON on whisper-timed; "re-enable exception: none". **Unchanged by GATE J2 (2026-09-08): neither population cleared, and with J1 NO-GO no CTC-timed route survives, so the carve-out is inert until one does.** Ken owes one ruling before Appendices C/D/E re-lock — J2's burden and D's burden point opposite ways |
+| Snap policy (Appendix D) | post-pass per route | locked: OFF on CTC-timed routes, ON on whisper-timed; "re-enable exception: none". **Unchanged by GATE J2 (2026-09-08): neither population cleared, and with J1 NO-GO no CTC-timed route survives, so the carve-out is inert until one does.** ~~Ken owes one ruling before Appendices C/D/E re-lock — J2's burden and D's burden point opposite ways~~ **Ruled 2026-09-10 (Ken, `f3d7f91`): a scope mismatch, not a conflict; the snap stays on every shipped route. The OFF clause is dormant, and the 2026-09-18 consolidation pass closed the appendix as record** |
 
 **The Appendix C hole is why rung 1 does not exist — and as of
 2026-09-04 it is why rung 1 is closed.** The procedure was pre-locked in
@@ -399,8 +414,8 @@ future interior-refinement design.
 | `route-line-timing.md` | rung 2b (**CLOSED 2026-09-08** — S-1 withdrawn); GATE S scaffold arms, M6, M7, the fallback; GATE L re-homed to rung 3 |
 | `route-no-timing.md` | rung 3 — **the live build lane**; the joint catch-all refit, GATE P/J1/J2/T, Phase 5 + **GATE G** (CLOSED 2026-09-11, NO-GO — fill not widened), **Phase 7 + 7b (RAN + READ 2026-09-14 — the unplaced population is CLOSED: ~2 winnable lines corpus-wide)**, **Phase 6 + GATE W (CLOSED 2026-09-15 at step 2, Ken — a wash; no production change)**, GATE L |
 | `shared-aligner-form.md` | GATE C, GATE O, Phase 0 harness, ruling-provenance audit |
-| `ctc-sync-engine.md` | build phases + locked appendices; each licensed by a GATE above |
-| `edge-snap-coverage-accuracy.md` | the edge snap post-pass track, **not a routing lane**: onset silence gate, one-word lines, stem-end and end-reference fixes, interior run edges — **live, not started** (never executed since 2026-07-12, misfiled in `completed/` 2026-09-04, refreshed by Opus 2026-09-15; Phases 0-5 executable, Phase 6 held for pinning and a Part 2 ruling) |
+| `completed/ctc-sync-engine.md` | build phases + appendices — **CLOSED 2026-09-18** by the consolidation pass: nothing left to build; only E0 was ever built, and it is out of the pipeline |
+| `edge-snap-coverage-accuracy.md` | the edge snap post-pass track, **not a routing lane**: onset silence gate, one-word lines, stem-end and end-reference fixes, interior run edges — **Phases 0-5 and 5.1 accepted 2026-09-18**; production code goes to Ken's user-test branch before `master`. Phase 6 NOT PINNED (Ken's call); Phase 7 studies gated |
 | `completed/` | closed plans, kept for their Results logs |
 
 Rule of thumb: **a probe belongs to a lane if its outcome changes what
@@ -412,8 +427,19 @@ architecture for every source, it is cross-cutting and belongs in
 
 `master` (upstream) → `fable_matcher_refine` (= `musix_ctc`) →
 `timing_pillars` → **`joint_catchall_refit`** (current). `pathed_align`
-holds the pre-port scaffold-warp history; its machinery is now ported into
-shipped `cue_align.py`, so it is not dead-end history.
+holds the pre-port scaffold-warp history; its machinery ~~is now ported into
+shipped `cue_align.py`, so it is not dead-end history~~ moved out of
+`cue_align.py` to `scripts/scaffold_warp.py` on 2026-09-18, because the
+production path never called it.
+
+**Since 2026-09-15:** `joint_catchall_refit` → **`edge_snap_refine`**
+(the edge snap track plus the consolidation pass). Production lands on
+`master` by Ken's 2026-09-18 ruling:
+- the development commits are replayed in order, with `plans/` and the
+  probe scripts filtered out, not squashed;
+- the replay goes to a test branch first, for Ken to user-test before
+  `master`;
+- the full history stays on `edge_snap_refine`.
 
 ## Remaining execution order (Ken, 2026-09-01) — measure first, lock once
 
@@ -445,9 +471,11 @@ shipped `cue_align.py`, so it is not dead-end history.
 > gate letter is GATE W (assigned 2026-09-14).** **Phase 6 CLOSED
 > 2026-09-15 (Ken) at GATE W step 2 — a wash, no production change.
 > No measurement phase is live now: what remains is GATE L (blocked on
-> the Mandarin corpus) and the design-consolidation pass.** Outside the
-> routing program, the edge snap track (`edge-snap-coverage-accuracy.md`)
-> is live as of 2026-09-15: refreshed, not started.
+> the Mandarin corpus) and the design-consolidation pass.** **The
+> consolidation pass ran 2026-09-18 (see below), so only GATE L is left.**
+> Outside the routing program, the edge snap track
+> (`edge-snap-coverage-accuracy.md`) ~~is live as of 2026-09-15: refreshed,
+> not started~~ has Phases 0-5.1 accepted as of 2026-09-18.
 
 Ken's sequencing ruling: run the remaining measurement program to
 completion, then consolidate the build design once, rather than amending
@@ -650,6 +678,57 @@ Order — cheapest and highest overturn-risk first:
 
 Then **one design-consolidation pass**: re-lock the build plan's
 Appendices C, D and E with the real constants in a single revision.
+**DONE 2026-09-18 — see the entry below.**
+
+### Design-consolidation pass (Opus, 2026-09-18; commissioned by Ken)
+
+**Outcome: there was nothing left to re-lock, so the build plan closed.**
+Each appendix governed a build that will not happen:
+- C, the word-route verify, was retired at R-4.
+- D's scaffold route was withdrawn at S-1, and its CTC-timed post-pass
+  policy has no route to apply to.
+- E's engine was OFF from GATE O, and CTC then lost both aligner seats
+  (S-C, GATE J1).
+
+Filling constants into procedures that cannot fire would be bookkeeping
+with no reader. `ctc-sync-engine.md` moves to `completed/` with a closing
+block that says what became of each part, and Part 2 above becomes the
+source of truth.
+
+**What the pass carried forward** (all already shipped behaviour; Part 2
+now says so directly):
+- **Routes 1 and 4 only:** SRT → cue-align, otherwise the joint matcher.
+  Appendix A's precedences 2 and 3 never fire.
+- **Snap ON on both shipped routes**, since both are whisper-timed. D's
+  OFF-on-CTC clause is dormant, per Ken's 2026-09-10 scope ruling.
+- **De-reverb unchanged on every route.** Its retirement lived only in
+  E4's deletion review.
+- **Non-Latin lines take the whisper path.** GATE L stays in
+  `route-no-timing.md`, already re-posed against whisper at J1. D's
+  non-Latin bullet and E's alignment-form amendment go with the closed
+  plan.
+- **The build plan's deletion inventory is void.** Veto, windowed
+  realign, the joint DP, the snap, de-reverb and the LRCLIB fill all
+  stay.
+
+**What the pass removed from production (Ken, 2026-09-18):**
+- **The synced-timing fetch (E0, `efd3559`).** It ran on every Genius
+  song at add time, with several 2.5 s politeness pauses and 20 s on a
+  401. It wrote a sidecar nothing read: its intended readers were the
+  word route (closed), the line route (withdrawn) and the fill widening
+  (GATE G NO-GO). The module moved to `scripts/timing_fetch.py`, where
+  the Musixmatch batch probe still uses it.
+- **The line-route warp helpers (`28a118d`).** They moved from
+  `cue_align` to `scripts/scaffold_warp.py`. The production SRT path
+  never reached them, and `cue_align`'s Theil-Sen copy duplicated the
+  one the LRCLIB fill ships.
+
+Neither change moves any song's timing output.
+
+**Open item left by the pass (Ken's):** `pyproject.toml` and
+`requirements.txt` still declare `syncedlyrics` as a runtime dependency.
+Only probe scripts import it now. The edit is held because
+`pyproject.toml` carries someone else's uncommitted changes.
 
 **Carve-out — VOID as of 2026-09-04 (S-1 re-read); F2 WITHDRAWN
 2026-09-08.** F2's licence was suspended pending Ken's re-derivation of
@@ -684,7 +763,7 @@ number on it comes from harnesses.
   songs, that ruling is **recorded as follow-on scope**, not implemented
   in this plan.
 - **Evidence/build split** (this revision): probes and verdicts here;
-  production implementation in `plans/ctc-sync-engine.md`, built as a
+  production implementation in `plans/completed/ctc-sync-engine.md`, built as a
   replacement path beside the existing matcher with a gated cutover,
   not as in-place modification.
 
@@ -735,8 +814,10 @@ how the completed work was judged, not live policy.
   plan's Appendices A–E) is locked, with every formerly lock-at-GATE
   item converted to a pre-registered decision procedure, and Opus owns
   design work from here. **Phase 6 was designed 2026-09-14 and gated
-  as GATE W**, and closed by Ken 2026-09-15 at step 2. **The one design item
-  left is the consolidation pass** (re-lock Appendices C/D/E); GATE L
+  as GATE W**, and closed by Ken 2026-09-15 at step 2. ~~**The one design item
+  left is the consolidation pass** (re-lock Appendices C/D/E)~~ **The
+  consolidation pass ran 2026-09-18 and closed the build plan; no design
+  item is left**; GATE L
   waits on its corpus. Phase 5's per-gap gate
   closed at GATE G 2026-09-11. At each GATE the judge
   *executes* the relevant procedure verbatim and records the resulting
@@ -790,7 +871,7 @@ Phase dependencies: 1b, 2, 3 can interleave; 1b should complete before
 Phase 4 (GATE L) depends on nothing but its own Mandarin corpus (Ken's
 action) and blocks nothing; "Remaining execution order" below sequences
 it against the joint plan's probes.
-Build phases in `plans/ctc-sync-engine.md` consume these GATEs per its
+Build phases in `plans/completed/ctc-sync-engine.md` consume these GATEs per its
 licensing table; its E0 (fetch pillar) is architecture-neutral and may
 start immediately — the sidecar format both it and Phase 2a share is
 locked in that file's Appendix B (if E0 lands first, 2a's script

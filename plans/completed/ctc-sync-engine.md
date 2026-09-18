@@ -2,6 +2,49 @@ Model: Claude Fable 5
 
 # CTC sync engine — production build plan
 
+> **CLOSED 2026-09-18 by the design-consolidation pass (Opus; Ken
+> commissioned the pass and ruled the timing fetch out).** Nothing in this
+> plan remains to build, so its appendices were closed as record rather
+> than re-locked with constants. The text below is unchanged.
+>
+> - **Engine branch (E1-E5):** never built. Ken ruled the engine OFF
+>   2026-07-19 (GATE O = O-GRAY). CTC then lost the SRT aligner at S-C
+>   (2026-07-20) and the joint aligner at GATE J1 (2026-09-08).
+> - **F1 (word route):** closed 2026-09-04 (R-4). **F2 (line route):**
+>   withdrawn 2026-09-08 (S-1).
+> - **E0 (timing fetch):** the one phase built. It fetched a sidecar that
+>   nothing read. **Taken out of the pipeline 2026-09-18 (Ken, `efd3559`).**
+>   The module survives as `scripts/timing_fetch.py` for the Musixmatch
+>   batch probe, so Appendix B now governs a probe script, not production.
+>   The line-route warp helpers this plan ported into `cue_align` (Reuse
+>   inventory) moved to `scripts/scaffold_warp.py` the same day
+>   (`28a118d`). The production SRT path never called them.
+> - **Appendix A:** precedences 2 and 3 never fire. The contract as
+>   shipped is 1 (SRT → cue-align) and 4 (joint matcher), and the
+>   `synced_timing` artifact is no longer produced.
+> - **Appendix C:** already record (retired 2026-09-04).
+> - **Appendix D:**
+>   - Snap OFF on CTC-timed routes stays **dormant**: no such route exists
+>     or is planned, and both shipped routes are whisper-timed and snapped.
+>   - De-reverb stays exactly as shipped on every route. Its retirement
+>     was an E4 deletion review, and E4 never runs.
+>   - The non-Latin bullet governs nothing shipped. GATE L lives in
+>     `plans/route-no-timing.md`, already re-posed against whisper.
+>   - Richsync ends, `slice_align` wiring and line-source pool selection
+>     died with F2.
+>   - The S-constants are record.
+> - **Appendix E:** died with the engine, including GATE L's pluggable
+>   alignment-form amendment.
+> - **Deletion targets:** void. Veto, windowed realign, the joint DP, the
+>   snap, de-reverb and the LRCLIB fill all stay.
+> - **History strategy (below):** superseded by Ken on 2026-09-18.
+>   Production lands on `master` as a replay of its development commits
+>   with plans and probe scripts filtered out, not as squash commits, and
+>   goes to a test branch first for Ken to user-test.
+>
+> `plans/PROGRAM.md` Part 2 is now the source of truth for the target;
+> see its "Design-consolidation pass" entry.
+
 ## Role of this file
 
 The build half of the 2026-07-18 evidence/build split: successor to

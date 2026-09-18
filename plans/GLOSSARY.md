@@ -161,7 +161,7 @@ alphabetical. Cross-references are written as `→ <term>`.
   line placements maximizing total score. The "transition-cost DP" Phase 6
   considers would add a penalty for implausible gaps between adjacent
   placements.
-- **Engine branch (E1–E5)** — the build path under `plans/ctc-sync-engine.md`
+- **Engine branch (E1–E5)** — the build path under `plans/completed/ctc-sync-engine.md`
   where a single CTC sync engine (emission oracle + score gate + guided
   windowed CTC) backs every non-SRT route. Licensed by GATE O = O-1
   (or O-1′) **and** GATE S S-5 = engine. Currently OFF (S-5 =

@@ -144,7 +144,7 @@ veto everywhere and rules anything a rule leaves open):
   unacceptable for karaoke). Scope: warp-failed = MAD-gate reject
   only. See the GATE S final-rulings entry.*
 - S-4: **Appendix D/E constants recorded** (Opus, in
-  `plans/ctc-sync-engine.md` — both are already locked as
+  `plans/completed/ctc-sync-engine.md` — both are already locked as
   design/procedure; this step only fills measured constants such as
   the snap re-enable exception and the gate band).
 - S-5: **architecture ruling** — engine branch iff GATE O ∈ {O-1, or

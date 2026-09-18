@@ -21,6 +21,13 @@ Sonnet 5. Originally designed 2026-07-12 (Opus 4.8, executor Sonnet 5).
 > **Update 2026-09-18 (later):** Phase 5.1 is done and accepted (see its
 > read-off). **Next is Ken's merge call on `edge_snap_refine`**, with
 > nothing blocking it. Phase 6 is still NOT PINNED.
+>
+> **Merge call (Ken, 2026-09-18):** only production code goes to
+> `master`. It goes as a replay of the development commits with `plans/`
+> and the probe scripts filtered out, not a squash, and lands on a test
+> branch first for Ken to user-test before `master`. This plan and its
+> harnesses stay on `edge_snap_refine` as history. The initial
+> implementation is complete. Phases 6 and 7 remain optional and unstarted.
 
 Execution plan for extending the edge snap (`pikaraoke/lib/onset_snap.py`)
 to more cases (single-word lines, interior run edges) and improving its

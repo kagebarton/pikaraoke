@@ -67,6 +67,8 @@ Model: Claude Sonnet 5 (executor). Plan drafted by Claude Fable 5.
 > **With Phase 6 closed, no measurement phase is live on this lane.**
 > What remains is GATE L when the Mandarin corpus exists, then the
 > design-consolidation pass. Sequencing lives in `plans/PROGRAM.md`.
+> **The consolidation pass ran 2026-09-18** and closed the build plan
+> (`PROGRAM.md`, "Design-consolidation pass"), so only GATE L is left.
 
 ## Context
 
