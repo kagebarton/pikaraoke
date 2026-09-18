@@ -38,7 +38,15 @@ _BRACKET_CONTENT_RE = re.compile(r"\[[^\]]*\]")
 _PAREN_CONTENT_RE = re.compile(r"\([^)]*\)")
 _MUSICAL_NOTE_RE = re.compile(r"[♪♫♬♩]")
 _HAS_LETTER_RE = re.compile(r"[^\W\d_]")  # any Unicode letter (keeps non-Latin lyrics)
-_CURLY_QUOTES_TABLE = str.maketrans({"‘": "'", "’": "'", "“": '"', "”": '"'})
+_QUOTES_TABLE = str.maketrans(
+    {
+        "‘": "'",
+        "’": "'",
+        "“": '"',
+        "”": '"',
+        "′": "'",  # prime: some captions type it for an apostrophe (I′M)
+    }
+)
 
 
 def _has_unclosed_bracket(text: str) -> bool:
@@ -88,16 +96,17 @@ def normalize_lyric_line(text: str) -> str:
 
     Collapses SRT's 2-line wraps to single spaces, strips HTML tags
     (``<i>``, ``<b>``…), strips ``[stage direction]`` content, removes
-    musical-note glyphs (``♪`` / ``♫``), and normalizes curly quotes to
-    ASCII. Does NOT touch parens — Genius parens carry sung backing
-    vocals (see :func:`parse_lyric_lines`); SRT parens are stage
-    directions and should be cleaned via :func:`clean_srt_line` instead.
+    musical-note glyphs (``♪`` / ``♫``), and normalizes curly quotes
+    and apostrophe-primes to ASCII. Does NOT touch parens — Genius
+    parens carry sung backing vocals (see :func:`parse_lyric_lines`);
+    SRT parens are stage directions and should be cleaned via
+    :func:`clean_srt_line` instead.
     """
     text = text.replace("\n", " ")
     text = _HTML_TAG_RE.sub("", text)
     text = _BRACKET_CONTENT_RE.sub("", text)
     text = _MUSICAL_NOTE_RE.sub("", text)
-    text = text.translate(_CURLY_QUOTES_TABLE)
+    text = text.translate(_QUOTES_TABLE)
     return " ".join(text.split())
 
 
