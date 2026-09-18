@@ -12,6 +12,11 @@ Sonnet 5. Originally designed 2026-07-12 (Opus 4.8, executor Sonnet 5).
 > record" section lists every correction and why it was made.
 > **Phases 0-5 are executable as written. Phase 6 is not: STOP at the
 > Phase 5 checkpoint** (see Phase 6).
+>
+> **Update 2026-09-18:** Phases 0-5 are done and accepted, and the Phase
+> 1-5 `/code-review` has run. **Next is Phase 5.1, the review fix, which is
+> executable.** It runs before Ken's merge call. Phase 6 is still NOT
+> PINNED.
 
 Execution plan for extending the edge snap (`pikaraoke/lib/onset_snap.py`)
 to more cases (single-word lines, interior run edges) and improving its
@@ -634,6 +639,13 @@ continuity check now demands that the voice hold to the *claimed end*.
 - A staccato word with a wildly long claimed span won't snap. That is the
   safe direction.
 
+*Code-review note (Opus, 2026-09-17):* this held only for long spans.
+Within `SUSTAIN_S` of the bound, `_detect_rise`'s trust branch skips the
+continuity check entirely. On a one-word line that bound is the word's own
+claimed end, so the check never ran across the last 0.4 s of the span. It
+caused the `Nope!` overshoot, and Phase 5.1 fixes it. See "### Phases 1-5
+code review".
+
 **4c. End path** (`snap_line_ends`):
 
 - Replace the `len(words) < 2` gate (`302-304`) with `if not words:`, plus
@@ -760,6 +772,266 @@ Results log filled in (invocations, paths, totals, diffs) and asks Ken to
    launches it.
 4. **Ken rules on merging.** Nothing past this point runs until Opus has
    pinned Phase 6.
+
+## Phase 5.1 — No continuity shortcut on one-word lines (review fix)
+
+> **Added 2026-09-18 by Opus from the Phases 1-5 `/code-review`.** See
+> "### Phases 1-5 code review" in the Results log. It fixes a Phase 4
+> defect, so it runs **before** Ken's merge call. It does not touch Phase
+> 6's NOT PINNED status. Executable as written. Every value below was
+> verified by running this change on a scratch copy at `43621fe`.
+
+**Defect.** `_detect_rise` has a trust branch (`onset_snap.py:200-205` at
+`7a41c6e`). It accepts a rise within `SUSTAIN_S` of the bound without
+running the continuity median, on the grounds that the rise is already
+continuous with the bound.
+
+- That holds when the bound is word 2's start, which is independent
+  evidence.
+- Phase 4 made a one-word line's bound the word's *own* claimed end, which
+  is the timing under suspicion. Its reference is a percentile of that same
+  claimed span. So a one-word rise near its claimed end is accepted on no
+  evidence at all.
+- The scan returns the first rise that qualifies, so a properly checked
+  earlier rise that fails leaves the unchecked late one as the survivor.
+  The branch is biased toward late snaps.
+- Both one-word onset snaps on the replay population take this branch. One
+  is `Nope!` (In Summer, +1.88 s), which Ken heard as an overshoot at the
+  Phase 4 eyeball.
+
+**Change.** All edits are in `pikaraoke/lib/onset_snap.py`. Nothing else
+moves.
+
+1. `_detect_rise` gains a required `trust_bound: bool` parameter, with no
+   default. It has one caller.
+
+   ```python
+   def _detect_rise(
+       env: np.ndarray, t0: float, t1: float, ref_db: float, trust_bound: bool
+   ) -> float | None:
+   ```
+
+2. The trust branch requires it. Inside `if b - i < sustain_frames:`,
+   replace the two-line comment and the `if` with the lines below. The
+   three-line comment *above* `if b - i < sustain_frames:` stays.
+
+   ```python
+           if b - i < sustain_frames:
+               # Continuity with the bound is trustworthy only when the
+               # bound is independent evidence and lies inside the envelope:
+               # onsets near the stem end are unreliable, and a one-word
+               # line's bound is its own claimed end.
+               if trust_bound and b_bound <= b_env:
+                   return i * HOP_S
+               continue
+   ```
+
+3. The call in `snap_line_onsets`:
+
+   ```python
+           onset = _detect_rise(env, w1s, bound, ref, trust_bound=len(words) >= 2)
+   ```
+
+4. Docstrings.
+   - `_detect_rise`: append this paragraph after the existing one.
+
+     ```
+     A rise within :data:`SUSTAIN_S` of ``t1`` is accepted as already
+     continuous with it only when ``trust_bound`` is true, i.e. ``t1`` is
+     word 2's start. On a one-word line ``t1`` is the word's own claimed
+     end, the timing being doubted, so such a rise is rejected.
+     ```
+
+   - `snap_line_onsets`: its first paragraph says the continuity check
+     "demands the voice hold all the way to that claimed end". That was not
+     true within `SUSTAIN_S` of the end. Replace the whole paragraph (from
+     "A single-word line is searched" to "a false onset.") with:
+
+     ```
+     A single-word line is searched up to its own claimed end rather than
+     word 2's start (see ``bound`` below). That end is not independent
+     evidence, so every rise must pass :func:`_detect_rise`'s continuity
+     check over at least :data:`SUSTAIN_S` before it. For a held note this
+     is correct: whisper clips the end early, so the claimed end sits
+     inside the true run. A staccato word with a wildly long claimed span
+     won't snap, and neither will one claimed shorter than about
+     ``SUSTAIN_S + SNAP_MARGIN_S + MIN_SHIFT_S`` — the safe direction,
+     since the line is merely left untouched rather than moved to a false
+     onset.
+     ```
+
+The multi-word path cannot change: `trust_bound` is true on every line
+with two or more words, which is exactly today's behaviour.
+
+**Test:** `test_single_word_rise_near_own_end_rejected` in
+`TestSnapLineOnsets`, placed directly after
+`test_single_word_in_silence_untouched`.
+
+```python
+    def test_single_word_rise_near_own_end_rejected(self, use_env):
+        # A 150 ms bump near the end of a 0.5 s one-word span sets its own
+        # pct80 reference and rises within SUSTAIN_S of the claimed end.
+        # That end is the timing being doubted, so the rise gets no
+        # continuity shortcut and the line is left alone.
+        use_env(_env(5.0, [(2.3, 2.45, -20.0)]))
+        obj = _line((2.0, 2.5))
+        out, stats = snap_line_onsets([obj], "vocals.wav")
+        assert out[0] is obj
+        assert stats["n_fired"] == 1
+        assert stats["n_no_rise"] == 1
+```
+
+- **Pre-change:** the start snaps to **2.225**, the end stays at 2.5, and
+  `n_snapped == 1` (verified).
+- **Post-change:** untouched, with `n_fired == 1` and `n_no_rise == 1`
+  (verified).
+- `test_soft_rise_just_before_word2_accepted` must still pass unchanged. It
+  pins the multi-word trust branch, which this change keeps. Verified: all
+  68 tests in `test_onset_snap.py` and `test_lrclib_fill.py` pass on the
+  patched copy, before the new test is added.
+
+**Verify.** Run the steps in this order. The last coverage run rewrites the
+`.edgesnap.ass` renders on disk. The unfiltered run must come last, so the
+renders don't lose their one-word lines (the Phase 4 eyeball trap).
+
+1. **Before editing:** `git diff 7a41c6e HEAD -- pikaraoke/ tests/
+   scripts/` must be empty, so HEAD's code is Phase 5's. Non-empty is a
+   STOP.
+2. **Before editing:** run both harnesses with `--multi-word-only` →
+   `edge_p5_mwo_replay.txt`, `edge_p5_mwo_coverage.txt`.
+3. Make the change and add the test.
+4. **Suite:** only the known four failures, and **1526 passed** (Phase 5's
+   1525 + 1). Then run `test_onset_snap.py` + `test_lrclib_fill.py` alone
+   and expect **69 passed**.
+5. Run both harnesses with `--multi-word-only` → `edge_p51_mwo_*.txt`.
+6. Run both harnesses unfiltered → `edge_p51_replay.txt`,
+   `edge_p51_coverage.txt`. Diff each against Phase 5's unfiltered file
+   (paths under "### Phase 5" in the Results log) with `diff
+   --strip-trailing-cr`. If the Phase 5 files no longer resolve, STOP →
+   Opus.
+
+**Gates.** Any failure is a STOP.
+
+- **Gate 1:** for each harness, `edge_p5_mwo_*` and `edge_p51_mwo_*` are
+  byte-identical as whole files, including every `stats` and `total` line.
+  The change is inert on lines with two or more words.
+- **Gate 2:** each unfiltered diff equals the pre-registered diff below,
+  line for line. Check it mechanically, not by eye:
+  `diff edge_p51_<harness>.diff <expected>` must be empty. The expected
+  files were made with the same `diff --strip-trailing-cr` command against
+  Phase 5's own files:
+  - `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\4d761251-d0b5-493b-a519-1f8202696d9f\scratchpad\review\p51_expected_replay.diff`
+  - `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\4d761251-d0b5-493b-a519-1f8202696d9f\scratchpad\review\p51_expected_coverage.diff`
+  - If the expected files no longer resolve, compare against the text
+    below instead.
+
+**Pre-registered diffs.** Opus ran the scratch copy on 2026-09-18. First it
+checked the scratch copy against Phase 5's files: at current code, both
+unfiltered runs were byte-identical to `edge_p5_replay.txt` and
+`edge_p5_coverage.txt`. The Gate 1 pair was byte-identical too.
+
+Replay (`diff --strip-trailing-cr edge_p5_replay.txt edge_p51_replay.txt`):
+
+```
+100d99
+<   rec onset [1w] L22 +0.495
+122c121
+<   rec end [1w] L22 +0.150
+---
+>   rec end [1w] L22 +0.200
+139c138
+<   stats onset n_below_min_shift=14 n_fired=36 n_lines=110 n_low_ref=0 n_no_rise=3 n_single_word=3 n_snapped=19 n_undetectable=4
+---
+>   stats onset n_below_min_shift=13 n_fired=36 n_lines=110 n_low_ref=0 n_no_rise=5 n_single_word=3 n_snapped=18 n_undetectable=4
+248d246
+<   rec onset [1w] L2 +1.880
+262a261
+>   rec end [1w] L2 +0.300 to_bound
+270,271c269,270
+<   stats onset n_below_min_shift=3 n_fired=18 n_lines=31 n_low_ref=1 n_no_rise=0 n_single_word=1 n_snapped=15 n_undetectable=0
+<   stats end n_below_min_shift=7 n_extended=7 n_fired=14 n_lines=31 n_low_ref=1 n_single_word=1
+---
+>   stats onset n_below_min_shift=3 n_fired=18 n_lines=31 n_low_ref=1 n_no_rise=1 n_single_word=1 n_snapped=14 n_undetectable=0
+>   stats end n_below_min_shift=7 n_extended=8 n_fired=15 n_lines=31 n_low_ref=0 n_single_word=1
+340c339
+<   stats onset n_below_min_shift=8 n_fired=27 n_lines=65 n_low_ref=0 n_no_rise=3 n_single_word=4 n_snapped=16 n_undetectable=3
+---
+>   stats onset n_below_min_shift=7 n_fired=27 n_lines=65 n_low_ref=0 n_no_rise=4 n_single_word=4 n_snapped=16 n_undetectable=3
+495,496c494,495
+< total onset n_below_min_shift=129 n_fired=350 n_lines=1010 n_low_ref=14 n_no_rise=28 n_single_word=21 n_snapped=193 n_undetectable=50
+< total end n_below_min_shift=98 n_extended=246 n_fired=344 n_lines=1010 n_low_ref=8 n_single_word=21
+---
+> total onset n_below_min_shift=127 n_fired=350 n_lines=1010 n_low_ref=14 n_no_rise=32 n_single_word=21 n_snapped=191 n_undetectable=50
+> total end n_below_min_shift=98 n_extended=247 n_fired=345 n_lines=1010 n_low_ref=7 n_single_word=21
+```
+
+Coverage (`diff --strip-trailing-cr edge_p5_coverage.txt edge_p51_coverage.txt`):
+
+```
+43c43
+<   stats onset n_below_min_shift=18 n_fired=23 n_lines=56 n_low_ref=0 n_no_rise=1 n_single_word=21 n_snapped=4 n_undetectable=10
+---
+>   stats onset n_below_min_shift=16 n_fired=23 n_lines=56 n_low_ref=0 n_no_rise=3 n_single_word=21 n_snapped=4 n_undetectable=10
+60,62c60,61
+<   rec onset [1w] 1:20.98 -> 1:21.48 (+0.50s)  Bonjour ...
+<   rec end [1w] 1:21.90 -> 1:22.05 (+0.15s)  ... Bonjour
+<   stats onset n_below_min_shift=33 n_fired=36 n_lines=101 n_low_ref=0 n_no_rise=2 n_single_word=3 n_snapped=1 n_undetectable=6
+---
+>   rec end [1w] 1:21.90 -> 1:22.10 (+0.20s)  ... Bonjour
+>   stats onset n_below_min_shift=32 n_fired=36 n_lines=101 n_low_ref=0 n_no_rise=4 n_single_word=3 n_snapped=0 n_undetectable=6
+97,99c96,98
+<   rec onset [1w] 0:02.48 -> 0:04.36 (+1.88s)  Nope! ...
+<   stats onset n_below_min_shift=17 n_fired=18 n_lines=29 n_low_ref=1 n_no_rise=0 n_single_word=1 n_snapped=1 n_undetectable=1
+<   stats end n_below_min_shift=9 n_extended=0 n_fired=9 n_lines=29 n_low_ref=1 n_single_word=1
+---
+>   rec end [1w] 0:04.46 -> 0:04.76 (+0.30s) to_bound  ... Nope!
+>   stats onset n_below_min_shift=17 n_fired=18 n_lines=29 n_low_ref=1 n_no_rise=1 n_single_word=1 n_snapped=0 n_undetectable=1
+>   stats end n_below_min_shift=9 n_extended=1 n_fired=10 n_lines=29 n_low_ref=0 n_single_word=1
+115c114
+<   stats onset n_below_min_shift=40 n_fired=41 n_lines=103 n_low_ref=3 n_no_rise=1 n_single_word=2 n_snapped=0 n_undetectable=1
+---
+>   stats onset n_below_min_shift=39 n_fired=41 n_lines=103 n_low_ref=3 n_no_rise=2 n_single_word=2 n_snapped=0 n_undetectable=1
+150c149
+<   stats onset n_below_min_shift=23 n_fired=26 n_lines=53 n_low_ref=0 n_no_rise=3 n_single_word=4 n_snapped=0 n_undetectable=7
+---
+>   stats onset n_below_min_shift=22 n_fired=26 n_lines=53 n_low_ref=0 n_no_rise=4 n_single_word=4 n_snapped=0 n_undetectable=7
+185,186c184,185
+< total onset n_below_min_shift=634 n_fired=708 n_lines=1823 n_low_ref=24 n_no_rise=63 n_single_word=61 n_snapped=11 n_undetectable=157
+< total end n_below_min_shift=342 n_extended=49 n_fired=391 n_lines=1823 n_low_ref=14 n_single_word=61
+---
+> total onset n_below_min_shift=629 n_fired=708 n_lines=1823 n_low_ref=24 n_no_rise=70 n_single_word=61 n_snapped=9 n_undetectable=157
+> total end n_below_min_shift=342 n_extended=50 n_fired=392 n_lines=1823 n_low_ref=13 n_single_word=61
+```
+
+What the diffs contain. This is for the Opus read; none of it is a gate
+beyond Gate 2's exact match.
+
+- **Both one-word onset snaps go**, in both harnesses: `Bonjour` (Belle)
+  and `Nope!` (In Summer). These are the two trust-branch snaps from the
+  review.
+- **Counters only, no record.** A trust-branch rise that was too small to
+  snap anyway moves from `n_below_min_shift` to `n_no_rise`. That is two
+  one-word lines on replay (Belle, Paradise) and five on coverage (Ariana
+  Grande/John Legend Beauty and the Beast ×2, Belle, JT Rock Your Body,
+  Paradise).
+- **Two end-side consequences**, both because the start no longer moves:
+  - `Bonjour`'s end extension grows from +0.15 s to +0.20 s. Its end
+    reference is now taken over the whole claimed span.
+  - **`Nope!` gains a new end extension of +0.30 s `to_bound`** (4.46 →
+    4.76), in both harnesses. Before, the onset squeezed its span to
+    0.10 s, which put the end reference under `MIN_REF_DB` (Phase 4
+    read-off, finding 3). That no longer happens, so Phase 4's one-word
+    end path now reaches this line for the first time.
+  - **Ken judged production's end for this line (4.46) correct at the
+    Phase 4 eyeball.** So this record is an eyeball item for the read. It
+    is either the melisma join into the next line that the `to_bound` path
+    is designed for, or the blind spot. The Phase 5.1 coverage run's
+    `.edgesnap.ass` for In Summer is the render to play.
+
+**Results log:** the invocations, all six artifact paths, both diffs and
+the four `total` blocks, verbatim. No verdicts.
+
+Commit: `fix(onset-snap): no continuity shortcut on one-word lines`
 
 ## Phase 6 — Run-edge generalization (interior gaps)
 
@@ -3536,3 +3808,144 @@ ASS rounding):
 Open item 4's first half is answered by this entry. The gate mechanism
 (the `--multi-word-only`-style input filter, and the replay harness as the
 exact read) is unchanged and still stands as written.
+
+### Phases 1-5 code review (Opus, 2026-09-17)
+
+The `/code-review` the Phases 0-5 checkpoint scheduled, launched at Ken's
+instruction on `edge_snap_refine` at `43621fe`. Read-only: nothing in the
+repo or the corpus was written.
+
+**Scope.** The five code commits `15f4806`, `1d90960`, `1e05ceb`,
+`aab7358`, `7a41c6e`. All five touch one file, `pikaraoke/lib/onset_snap.py`
+(+112/-27 over `15f4806~1..HEAD`). Combined diff:
+`C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\4d761251-d0b5-493b-a519-1f8202696d9f\scratchpad\review\combined.diff`
+
+**Method.** Three finder agents in parallel, one per CLAUDE.md self-review
+axis (correctness, simplicity, robustness). Each was told to verify its own
+candidates and return each as CONFIRMED or PLAUSIBLE with quoted lines.
+Opus then re-checked the ones that decide anything, using two scripts in
+the same scratchpad folder: `review/verify.py` (synthetic constructions,
+plus one-word durations on the replay population) and `review/verify2.py`
+(what each one-word line actually does at HEAD code, replay population).
+
+**Candidates.**
+
+| # | axis | location (at `7a41c6e`) | claim | finder | Opus |
+|---|---|---|---|---|---|
+| 1 | correctness, robustness | `_detect_rise` trust branch, `:200-205` | on a one-word line, a rise within `SUSTAIN_S` of the bound skips the continuity check, and the bound is the word's own claimed end | CONFIRMED (both) | **CONFIRMED**, mechanism restated below |
+| 2 | robustness | `_detect_rise`, `:206` | when the stem end truncates the window, a rise earlier than the trust window is judged by a median over the truncated window | CONFIRMED | not actioned: Phase 3 scoped its fix to the trust branch, and nothing on either corpus comes within 3.45 s of the stem end (Phase 3 read-off) |
+| 3 | correctness, robustness | `n_undetectable` window, `:280` | `lo` is clamped above but not below, so a negative `w1s` gives an empty slice and `np.percentile` raises `IndexError` | PLAUSIBLE / CONFIRMED | mechanism CONFIRMED, **unreachable**: no timing source produces a negative word start before the snap, and LRCLIB fills are spliced in after it. The Phase 2 entry's "non-empty for any non-empty `env`" holds only for `w1s >= 0`. Not scheduled |
+| 4 | robustness | `snap_line_ends`, one-word lines | the end path has no `MIN_WORD_DUR_S` guard, so a very short one-word line gets a reference of a few frames, and clip evidence against it is close to a tautology | CONFIRMED | mechanism CONFIRMED (table B), **unreachable on this corpus**: the shortest one-word claimed span is 0.188 s. Not scheduled |
+| 5 | simplicity | `n_undetectable`, `:279-284` | a dead measurement probe | CONFIRMED | dropped: it still has a stated consumer, 7b's sizing bound (Phase 7 text and the Phase 2 read-off note). It belongs to the 7b pinning |
+| 6 | simplicity | `n_single_word`, `:243-244`, `:371-372` | counted on both paths, always equal, read by nothing outside the file | CONFIRMED | CONFIRMED, trivial. Tidy when the file is next opened |
+| 7 | simplicity | `:270-273` vs `:403-404` | "near sung level at this claimed edge" is written twice, with the sense inverted | CONFIRMED | PLAUSIBLE: a real single-source point, small. Not scheduled |
+| 8 | simplicity | `_sung_level_ref`, `:152-168` | the span math is duplicated between the one-word and multi-word branches | PLAUSIBLE | dropped: the dedup swaps `np.median` for `np.percentile(..., 50)`, which puts the replay guard's byte-exactness at risk to save about 5 lines |
+| 9 | simplicity | `snap_line_ends`, `:385-390` | the call-site comment restates the callee's docstring | CONFIRMED | CONFIRMED, cosmetic |
+| 10 | simplicity | end-path `n_below_min_shift` | derivable as `n_fired - n_extended` | PLAUSIBLE | dropped: the plan chose it deliberately ("Do not do" list) |
+
+**A. Synthetic, candidate 1** (`verify.py`). One-word line 10.0-10.7, a
+-25 dB bump at 10.350-10.525 on a -48 floor, and the real entry at 11.5
+(outside the span).
+
+```
+  ref (80th pct of own span) = -25.00 dB   <- set by the artifact
+  _detect_rise -> 10.3
+  snapped: 1  new start = 10.250
+  skipped continuity median over env[412:427] = -25.00 dB  vs gate -37.00 dB -> would have PASSED
+  control (claimed span 1.2 s, median runs): snapped = 0
+```
+
+This is the share of the snappable onset range that falls inside the trust
+window, by claimed duration. It is analytic: the snap must clear
+`MIN_SHIFT_S` after `SNAP_MARGIN_S`, and the trust window is the last
+`SUSTAIN_S`.
+
+```
+  D= 0.4s: 100.0%    D= 0.6s: 100.0%    D= 0.8s:  63.6%
+  D= 1.2s:  36.8%    D= 2.0s:  20.0%    D= 3.0s:  12.7%
+```
+
+**B. Synthetic, candidate 4** (`verify.py`). A one-word line at 5.0 on a
+-40 dB patch 4.9-5.2, with the next line at 600.0.
+
+```
+  zero-duration : ref= -40.00 dB  extended=1  new end = 599.90  (was 5.00, next line at 600.00)
+  60 ms         : ref= -40.00 dB  extended=1  new end = 599.90  (was 5.06, next line at 600.00)
+```
+
+**C. Corpus, candidate 1** (`verify2.py`, replay population, HEAD code).
+Columns: `contin.` is `EXEMPT` when `_detect_rise`'s returned rise sits in
+the trust window, and `checked` when the median ran. Blank means no rise
+was returned.
+
+```
+   dur onset shift  contin.  end ext  bound  word / song
+ 0.188           -   EXEMPT        -         'Ooh-ooh-ooh-ooh' / Jessie J - Domino (Official Vi
+ 0.280           -                 -         'Unlimited' / 'Defying Gravity' - Wicked 20t
+ 0.360           -   EXEMPT        -         'Bonjour' / Beauty and the Beast (1991) -
+ 0.380           -                 -         'Pardon' / Beauty and the Beast (1991) -
+ 0.400           -   EXEMPT        -         'Oh,' / NSYNC - Paradise
+ 0.488           -             +0.41     no  'Ooh-ooh-ooh-ooh' / Jessie J - Domino (Official Vi
+ 0.563           -                 -         'Ooh-ooh-ooh-ooh' / Jessie J - Domino (Official Vi
+ 0.700           -             +0.39     no  'Na-na-na-na' / Ed Sheeran & Rudimental­ - Blo
+ 0.740           -  checked        -         'Popular' / 'Popular' - Wicked 20th Annive
+ 0.920       +0.49   EXEMPT    +0.15     no  'Bonjour' / Beauty and the Beast (1991) -
+ 1.000           -             +2.45     no  'Ooh' / NSYNC - Paradise
+ 1.000           -                 -         'Thanks!' / The Lion King - Hakuna Matata
+ 1.500           -  checked        -         'Ooh-ooh-ooh-ooh' / Jessie J - Domino (Official Vi
+ 1.520           -  checked    +1.46     no  'Paradise' / NSYNC - Paradise
+ 1.580           -             +1.35     no  'Paradise' / NSYNC - Paradise
+ 1.980       +1.88   EXEMPT        -         'Nope!' / Josh Gad - In Summer (From 'Fr
+ 2.040           -                 -         'Oh' / 'Defying Gravity' - Wicked 20t
+ 2.160           -   EXEMPT    +0.28     no  'Popular' / 'Popular' - Wicked 20th Annive
+ 2.320           -  checked        -         'Philosophy' / The Lion King - Hakuna Matata
+ 3.700           -  checked    +4.45     no  'Down!' / 'Defying Gravity' - Wicked 20t
+ 5.620           -  checked        -         'Forever' / The Next Ten Minutes Lyrics---
+
+one-word lines: 21   onset snapped: 2   of those, continuity check EXEMPT: 2
+end extended: 8   to_bound: 0
+extend sizes: min=+0.15 max=+4.45
+```
+
+(`verify2.py` calls `_detect_rise` directly on every one-word line whose
+reference exists. A row marked `EXEMPT` with no shift therefore has a rise
+that the snap never used. Either the line never reached detection (the
+on-time guard or `MIN_REF_DB`), or the rise died on `MIN_SHIFT_S`. The
+column says where a rise would be accepted, not that one was.)
+
+**Findings.**
+
+1. **Candidate 1 is the one finding that changes anything, but not by the
+   mechanism the finders gave.** Both traced it as "the skipped median
+   would have rejected". It would not: in their construction and in A,
+   the median over the same sliver passes. The actual defect is that on a
+   one-word line the three things the rise is judged against all come from
+   the timing under suspicion: the bound, the continuity window up to it,
+   and the reference (a percentile of the same claimed span). Inside the
+   last `SUSTAIN_S` the trust branch then accepts the rise with no check
+   at all. A's control shows the difference. The same bump under a longer
+   claimed span is rejected, because the median then runs over enough of
+   the span to see the voice collapse.
+2. **It explains the Phase 4 eyeball's `Nope!` overshoot.** Both one-word
+   onset snaps on the replay population take the trust branch (C). One is
+   `Nope!` (+1.88 s, rise within 0.05 s of the claimed end), the line Ken
+   heard as late. The branch is biased toward late snaps. `_detect_rise`
+   returns the first rise that qualifies, so earlier candidates that run
+   the median and fail leave the unchecked late one as the survivor.
+3. **Phase 4's safety argument held only for long spans.** The limitation
+   note (Phase 4 text, 4b) and `snap_line_onsets`' docstring both say the
+   continuity check demands the voice hold to the claimed end. Within
+   `SUSTAIN_S` of it no check runs, and for a one-word line under about
+   0.6 s that is the whole snappable range. The Phase 4 acceptance stands
+   for what it measured, but this argument in it was wrong.
+4. **The fix is Phase 5.1** (above Phase 6 in the plan). Ken's instruction
+   was *"write it up for the executor"*, following Opus's recommendation to
+   fix candidate 1 narrowly. The diff it must produce is pre-sized there.
+   Pre-sizing found one consequence that needs Ken's ear. With its onset
+   left alone, `Nope!`'s end now extends +0.30 s `to_bound`, off the end
+   Ken judged correct. Candidates 3, 4, 6, 7 and 9 are recorded and not
+   scheduled. Scheduling any of them is Ken's call.
+
+**Review status.** `/code-review` on the Phase 1-5 commits is DONE. Phase
+5.1 is a one-function change that self-review can cover in one
+read-through, so it does not need a second review.
