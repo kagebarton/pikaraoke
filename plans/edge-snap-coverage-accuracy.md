@@ -17,6 +17,10 @@ Sonnet 5. Originally designed 2026-07-12 (Opus 4.8, executor Sonnet 5).
 > 1-5 `/code-review` has run. **Next is Phase 5.1, the review fix, which is
 > executable.** It runs before Ken's merge call. Phase 6 is still NOT
 > PINNED.
+>
+> **Update 2026-09-18 (later):** Phase 5.1 is done and accepted (see its
+> read-off). **Next is Ken's merge call on `edge_snap_refine`**, with
+> nothing blocking it. Phase 6 is still NOT PINNED.
 
 Execution plan for extending the edge snap (`pikaraoke/lib/onset_snap.py`)
 to more cases (single-word lines, interior run edges) and improving its
@@ -4114,3 +4118,119 @@ and
 which still resolved.
 
 Commit: `fix(onset-snap): no continuity shortcut on one-word lines`
+
+### Phase 5.1 read-off (Opus, 2026-09-18)
+
+**Checked against the record.** Executor artifacts are under
+`C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\d51ed6ab-8aef-45a0-b94e-f5d57771998a\scratchpad\edge_snap\`.
+Pre-registered files are under
+`C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\4d761251-d0b5-493b-a519-1f8202696d9f\scratchpad\review\`.
+
+- **Code.** `git show 63c324d -- pikaraoke/ tests/` matches the spec's
+  Changes 1-4 and its test verbatim. `git diff 0ae93be 63c324d --stat --
+  pikaraoke tests scripts` shows two files, `+35 -11`. The commit's plan
+  hunk is insertions only.
+- **Gate 1**, re-checked with `cmp` on whole files: `edge_p5_mwo_replay.txt`
+  vs `edge_p51_mwo_replay.txt` and `edge_p5_mwo_coverage.txt` vs
+  `edge_p51_mwo_coverage.txt` are both byte-identical.
+- **Gate 2**, re-checked three ways. All three are empty or identical for
+  both harnesses.
+  - `diff --strip-trailing-cr edge_p51_<h>.diff p51_expected_<h>.diff`.
+  - `cmp` on the same pair, as raw bytes.
+  - The diff recomputed from the executor's own `edge_p5_<h>.txt` and
+    `edge_p51_<h>.txt`, then diffed against `p51_expected_<h>.diff`. So the
+    diff files are the harness outputs' diffs, not copies of the expected
+    files.
+- **Against Opus's pre-sizing scratch copy.** `edge_p51_mwo_*` are
+  byte-identical to `p51_patch_mwo_*`. The record views (no `stats`,
+  `wrote` or `total` lines) of `edge_p51_{replay,coverage}.txt` are
+  identical to `p51_patch_{replay,coverage}.txt`.
+- **Suite.** The four `FAILED` IDs in `edge_p51_suite.txt` are the same four
+  as in `edge_p5_suite.txt`. The narrow run was re-run at `63c324d`:
+  `uv run --no-sync python -m pytest tests/unit/test_onset_snap.py
+  tests/unit/test_lrclib_fill.py -q` gives `69 passed`. The code tree is
+  clean.
+- **One-word records**, counted by `grep` on the executor's files:
+
+  ```
+  edge_p5_coverage.txt  onset1w=8 end1w=28 end1w_to_bound=8
+  edge_p51_coverage.txt onset1w=6 end1w=29 end1w_to_bound=9
+  edge_p5_replay.txt    onset1w=2 end1w=8  end1w_to_bound=0
+  edge_p51_replay.txt   onset1w=0 end1w=9  end1w_to_bound=1
+  ```
+
+  The heard-correct `Oh` (Ariana Grande/John Legend Beauty and the Beast,
+  `1:36.48 -> 1:37.23 (+0.75s)`, Phase 4 eyeball item 1) is line 26 of both
+  `edge_p5_coverage.txt` and `edge_p51_coverage.txt`.
+- **The render.** In Summer's `.edgesnap.ass` in
+  `D:/shared/pikaraoke-songs/karaoke/` is stamped 09:41, the same minute as
+  `edge_p51_coverage.txt`, which was the last (unfiltered) run. Its first
+  four events, next to the shipped `.ass`:
+
+  ```
+  shipped   Dialogue: 0,0:00:01.68,0:00:04.66,...{\k80}{\kf198}Nope!
+  edgesnap  Dialogue: 0,0:00:01.68,0:00:04.96,...{\k80}{\kf228}Nope!
+  shipped   Dialogue: 0,0:00:04.06,0:00:07.32,...{\k80}{\kf10}But ...
+  edgesnap  Dialogue: 0,0:00:04.05,0:00:07.47,...{\k80}{\kf10}But ...
+  ```
+
+  - The `Nope!` wipe runs 2.48 -> 4.46 shipped and 2.48 -> 4.76 in the
+    render.
+  - `But` starts wiping at 4.86 shipped and 4.85 in the render.
+  - The other event-window differences on these lines (the first line's end
+    2.68 vs 2.76, and `But`'s end) have no snap record. They come from the
+    coverage harness's ASS re-render, not from Phase 5.1.
+
+**Findings.**
+
+1. **Phase 5.1 is exactly the specified change, and it is live.** Both
+   unfiltered diffs are non-empty and equal the pre-registered diffs line
+   for line. Gate 1 shows that multi-word lines do not move. The
+   pre-registered "What the diffs contain" reading therefore stands as
+   written.
+2. **The fix removed the one-word snap Ken heard as wrong and kept the one
+   he heard as right.**
+   - `Nope!` is gone. It was the Phase 4 eyeball's overshoot.
+   - `Oh` at 1:36.48 survives. It was the Phase 4 eyeball's verified-correct
+     snap, and it passes the continuity median without the shortcut.
+   - One-word onset snaps go from 2 to 0 on replay and from 8 to 6 on
+     coverage. The six survivors all passed the full check.
+3. **`Nope!` on the branch now has production's start, with its end moved
+   0.30 s later.**
+   - With the onset left alone, the end path reaches the line for the
+     first time. It stops at the next-line cap, 0.09 s before `But` wipes.
+   - Ken heard production's start as early and production's end (4.46) as
+     right. On this line the branch now differs from production only in
+     the end, by +0.30 s.
+   - `to_bound` means the envelope never dropped before the cap. Two
+     readings fit: `Nope!` really is held, or the next line's speech starts
+     before its claimed start and the wipe rides it. The envelope cannot
+     tell these apart. This is the same "lands on loud audio" blindness as
+     the Phase 5 eyeball's backing-vocal extension, here on the same voice.
+4. **Finding 3 is not new in kind, so its answer cannot flip the merge.**
+   - `to_bound` extensions already ship on multi-word lines.
+   - The one-word end path, accepted at the Phase 4 read-off and eyeball,
+     already had eight `to_bound` records on coverage before this phase.
+   - `Nope!` is one more data point for the end-side blind spot, not a new
+     failure.
+5. **No review is pending on the branch.** Phase 5.1 was specced as covered
+   by self-review, and the Phases 1-5 `/code-review` is DONE.
+
+**Ruling.**
+
+1. Phase 5.1 is accepted as committed (`63c324d`). No re-run and no change.
+2. **Nothing on the judge side blocks the merge of `edge_snap_refine`. The
+   merge is Ken's call.**
+   - Phase 6 (NOT PINNED), the Phase 7 gated studies, and review candidates
+     3, 4, 6, 7 and 9 (recorded, not scheduled) do not depend on it.
+3. **The `Nope!` listen is optional and does not gate the merge.**
+   - If taken, play the first 5 s of In Summer's current `.edgesnap.ass`
+     against the shipped `.ass`. The only difference that matters is where
+     the `Nope!` wipe finishes. The on-disk renders are Phase 5.1's.
+   - Record the answer as an eyeball entry.
+     - Right: the one-word `to_bound` join holds on dialogue.
+     - Late: a second heard instance of the end-side blind spot, and the
+       first on the same voice. It files with the Phase 7 end-side items,
+       with no code change.
+4. **At merge:** the plan-index row for this plan in `PROGRAM.md` still
+   reads "live, not started" and needs updating.
