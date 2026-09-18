@@ -45,3 +45,30 @@ class TestCueSpansFromSrt:
         texts, spans = cue_spans_from_srt(srt_text)
         assert texts == ["Hello world"]
         assert spans == [(2.5, 4.0)]
+
+    @staticmethod
+    def _srt(*cues: str) -> str:
+        return "\n".join(
+            f"{i}\n00:00:{i:02d},000 --> 00:00:{i:02d},900\n{cue}\n"
+            for i, cue in enumerate(cues, start=1)
+        )
+
+    def test_all_caps_file_is_recased(self):
+        texts, _ = cue_spans_from_srt(
+            self._srt(
+                "♪ I′M GOING UNDER,\nAND THIS TIME ♪",
+                "'TIL I COME BACK AROUND",
+                "WAIT. NOW I KNOW",
+            )
+        )
+        assert texts == [
+            "I'm going under, and this time",
+            "'Til I come back around",
+            "Wait. Now I know",
+        ]
+
+    def test_shouted_line_in_a_normal_file_stays_as_written(self):
+        texts, _ = cue_spans_from_srt(
+            self._srt("I'm going under", "and this time", "I fear there's no one", "HEY!")
+        )
+        assert texts == ["I'm going under", "and this time", "I fear there's no one", "HEY!"]

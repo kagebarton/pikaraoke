@@ -4,7 +4,8 @@ Shared helpers for working with uploader-synced SRT cue times:
 
 - :func:`cue_spans_from_srt` returns each cleaned cue's text and its
   ``(start, end)`` span, positionally identical to the lyric lines the
-  matcher consumes — the SRT cue-align path's line->time input.
+  matcher consumes — the SRT cue-align path's line->time input. A caption
+  file typed in capitals comes back in sentence case.
 - :func:`offset_mad_against_cues` fits the robust median display lead of a
   set of audio placements against a cue reference, with a MAD bail-out when
   the anchors are too few or too spread to trust a single constant offset.
@@ -12,11 +13,23 @@ Shared helpers for working with uploader-synced SRT cue times:
   reference offline (the alpha/beta tuning harness).
 """
 
+import re
 from statistics import median
 
 import srt
 
 from pikaraoke.lib.genius_lyrics import clean_srt_line
+
+# A caption file this share of capitals (or more) was typed in all caps and is
+# recased. Decided per file, so one shouted line in a normally cased file stays
+# as written. In the library the all-caps file is 100% capitals and every other
+# file is under 10%.
+_ALL_CAPS_MIN_SHARE = 0.9
+
+_PRONOUN_I_RE = re.compile(r"\bi\b")
+# Line start or a mid-line sentence end, then the first letter after any
+# leading punctuation (so "'til" becomes "'Til").
+_SENTENCE_START_RE = re.compile(r"(^|[.!?]\s+)(\W*)([^\W\d_])")
 
 # Fewer trusted anchors than this and the offset median is not robust;
 # bail out and change nothing.
@@ -36,7 +49,9 @@ def cue_spans_from_srt(srt_text: str) -> tuple[list[str], list[tuple[float, floa
     Applies the same per-cue cleanup as the lyric-align stage's SRT
     load (clean + drop empty), so the returned texts are positionally
     identical to the lyric lines the matcher consumed — the spans are
-    the timing that load step throws away.
+    the timing that load step throws away. A file typed in capitals is
+    recased here too: on the cue route the aligner's text is the
+    karaoke's word text, so display case can't be fixed downstream.
     """
     texts: list[str] = []
     spans: list[tuple[float, float]] = []
@@ -45,7 +60,25 @@ def cue_spans_from_srt(srt_text: str) -> tuple[list[str], list[tuple[float, floa
         if cleaned:
             texts.append(cleaned)
             spans.append((sub.start.total_seconds(), sub.end.total_seconds()))
+    if _is_all_caps(texts):
+        texts = [_recase_line(text) for text in texts]
     return texts, spans
+
+
+def _is_all_caps(texts: list[str]) -> bool:
+    cased = [c for text in texts for c in text if c.isupper() or c.islower()]
+    return bool(cased) and sum(c.isupper() for c in cased) / len(cased) >= _ALL_CAPS_MIN_SHARE
+
+
+def _recase_line(text: str) -> str:
+    """Sentence case for a line typed in capitals.
+
+    Capitalizes "I" (and I'm, I'll...) and the first letter of the line and
+    of any sentence inside it. Names can't be told apart from ordinary words
+    and come out lowercase.
+    """
+    text = _PRONOUN_I_RE.sub("I", text.lower())
+    return _SENTENCE_START_RE.sub(lambda m: m.group(1) + m.group(2) + m.group(3).upper(), text)
 
 
 def offset_mad_against_cues(

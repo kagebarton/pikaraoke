@@ -142,6 +142,9 @@ class TestNormalizeLyricLine:
         assert normalize_lyric_line("I don’t know") == "I don't know"
         assert normalize_lyric_line("“hello”") == '"hello"'
 
+    def test_normalizes_prime_used_as_apostrophe(self):
+        assert normalize_lyric_line("I′M GOING UNDER") == "I'M GOING UNDER"
+
     def test_preserves_parens(self):
         """Parens are source-dependent: Genius parens are sung backing
         vocals (kept). clean_srt_line strips them separately."""
