@@ -729,6 +729,9 @@ Neither change moves any song's timing output.
 `requirements.txt` still declare `syncedlyrics` as a runtime dependency.
 Only probe scripts import it now. The edit is held because
 `pyproject.toml` carries someone else's uncommitted changes.
+**Resolved 2026-09-18 (`1f98dab`):** the uncommitted edits turned out to
+be Ken's own manual yt-dlp bump. `syncedlyrics` moved to the dev
+dependencies, and the stale lockfile was regenerated, keeping that bump.
 
 **Carve-out — VOID as of 2026-09-04 (S-1 re-read); F2 WITHDRAWN
 2026-09-08.** F2's licence was suspended pending Ken's re-derivation of
