@@ -3,10 +3,10 @@
 
 Tier-2 counterpart to ``cue_align_song.py`` for songs with no uploader SRT: no
 1:1 cue source exists, so one is *built* from audio-clock anchors (YouTube ASR
-+ whisper-transcribe, unioned via :func:`cue_align.merge_cue_spans`) and,
++ whisper-transcribe, unioned via :func:`scaffold_warp.merge_cue_spans`) and,
 where available, densified/warped against an external line-timing scaffold
 (``--timing sidecar`` for the Appendix B fetch-pillar sidecar, ``--timing lrc``
-for a live LRCLIB fetch) via :func:`cue_align.warp_scaffold_cues`. The dense
+for a live LRCLIB fetch) via :func:`scaffold_warp.warp_scaffold_cues`. The dense
 cue list then drives the same production :func:`cue_align.align_song` the SRT
 path uses.
 
@@ -42,13 +42,10 @@ from cue_align_song import (  # noqa: E402
     find_vocal,
     report,
 )
+from scaffold_warp import merge_cue_spans, warp_scaffold_cues  # noqa: E402
 
 from pikaraoke.lib import lrclib, ytasr  # noqa: E402
-from pikaraoke.lib.cue_align import (  # noqa: E402
-    align_song,
-    merge_cue_spans,
-    warp_scaffold_cues,
-)
+from pikaraoke.lib.cue_align import align_song  # noqa: E402
 from pikaraoke.lib.get_platform import get_temp_directory  # noqa: E402
 from pikaraoke.pipeline.config import PipelineConfig  # noqa: E402
 from pikaraoke.pipeline.stages.lyric_align import LyricAlignStage  # noqa: E402
