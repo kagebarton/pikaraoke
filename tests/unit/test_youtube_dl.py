@@ -13,6 +13,7 @@ from pikaraoke.lib.youtube_dl import (
     build_ytdl_download_command,
     download_auto_en_subs,
     download_manual_en_subs,
+    get_preview_info,
     get_youtube_id_from_url,
     get_youtubedl_version,
     upgrade_youtubedl,
@@ -387,6 +388,19 @@ class TestUpgradeYoutubedl:
             result = upgrade_youtubedl()
             assert result == "2024.01.01"
             mock_version.assert_called_once_with()
+
+
+class TestGetPreviewInfo:
+    def test_asks_mweb_for_the_combined_format_and_reads_captions(self):
+        # The default client serves only split streams; without mweb the
+        # format-18 selector fails and the preview is lost.
+        stdout = b'https://example.test/v.mp4\n{"en-abc": [], "fr": []}\n'
+        with patch(
+            "subprocess.run", return_value=MagicMock(returncode=0, stdout=stdout, stderr=b"")
+        ) as mock_run:
+            assert get_preview_info("https://youtu.be/x") == ("https://example.test/v.mp4", True)
+        cmd = mock_run.call_args[0][0]
+        assert cmd[cmd.index("--extractor-args") + 1] == "youtube:player_client=default,mweb"
 
 
 class TestSelectEnSrt:
