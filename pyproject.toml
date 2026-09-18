@@ -38,7 +38,6 @@ dependencies = [
     # and the ABI stays consistent with torch.
     "torchaudio>=2.2",
     "lyricsgenius>=3.0",
-    "syncedlyrics>=1.0.1", # pikaraoke/lib/timing_fetch.py (Musixmatch/NetEase synced-timing fetch)
 ]
 
 [project.optional-dependencies]
@@ -46,6 +45,7 @@ dev = [
   "pre-commit>=3.7.1",
   "pytest>=9.0.2",
   "pytest-cov>=7.0.0",
+  "syncedlyrics>=1.0.1", # scripts/timing_fetch.py only, not imported by the app
 ]
 
 [dependency-groups]
@@ -53,6 +53,7 @@ dev = [
     "pre-commit>=4.5.0",
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
+    "syncedlyrics>=1.0.1", # scripts/timing_fetch.py only, not imported by the app
 ]
 
 [project.scripts]
