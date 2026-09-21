@@ -89,12 +89,27 @@ class TestParseLyricLines:
             "Everything is happenin'",
         ]
 
-    def test_stray_open_delimiter_bounded_by_stanza(self):
-        """A delimiter that never closes must not swallow the rest of the
-        song — a blank line ends the stanza and the join."""
+    def test_stray_open_delimiter_leaves_its_neighbours_alone(self):
+        """A delimiter that never closes is not a wrap: the join is
+        discarded and every line is emitted as written."""
         text = "Ooh (yeah\nStill this stanza\n\nNext stanza\n"
         result = parse_lyric_lines(text)
-        assert [r["text"] for r in result] == ["Ooh (yeahStill this stanza", "Next stanza"]
+        assert [r["text"] for r in result] == ["Ooh (yeah", "Still this stanza", "Next stanza"]
+
+    def test_reparsing_a_parsed_sheet_is_a_no_op(self):
+        """The regen tool feeds a stored sheet back through here, and a
+        parsed sheet has no blank lines to bound a runaway join. One stray
+        '(' used to swallow the rest of the song (NSYNC - Paradise)."""
+        text = "Right here for this moment\nBetween you and I (\nI\n)\nEverything is happenin'\n"
+        once = [r["text"] for r in parse_lyric_lines(text)]
+        twice = [r["text"] for r in parse_lyric_lines("\n".join(once))]
+        assert twice == once
+
+    def test_reparsing_a_sheet_with_a_stray_delimiter_is_a_no_op(self):
+        """The damaging case: the ')' fragment is already gone, so the
+        '(' can never balance however far the join reaches."""
+        stored = ["Between you and I (", "I", "Everything is happenin'", "And it's just what"]
+        assert [r["text"] for r in parse_lyric_lines("\n".join(stored))] == stored
 
     def test_inline_html_and_notes_stripped(self):
         """Defensive: HTML tags / musical notes / stage-direction

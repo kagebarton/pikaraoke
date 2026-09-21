@@ -50,6 +50,11 @@ _QUOTES_TABLE = str.maketrans(
 )
 
 
+# Genius breaks a wrapped line at the edges of one annotated span, so the
+# fragments that follow it are few ("[SHANG & " / "SOLDIERS" / "]").
+_MAX_WRAP_FRAGMENTS = 3
+
+
 def _has_unclosed_bracket(text: str) -> bool:
     """True if ``text`` leaves a ``[`` or ``(`` open."""
     return text.count("[") > text.count("]") or text.count("(") > text.count(")")
@@ -71,9 +76,16 @@ def _join_wrapped_lines(lyrics_text: str) -> list[str]:
     An unclosed ``[`` or ``(`` marks the break: the logical line continues
     until the delimiter balances. Fragments are concatenated with no
     separator — the wrap replaced nothing, and the source carries the real
-    word spacing (``"[SHANG & "``). A blank line ends a stanza and bounds
-    the join, so a genuinely stray delimiter can swallow at most its own
-    stanza rather than the rest of the song.
+    word spacing (``"[SHANG & "``).
+
+    A join is only kept when the delimiter actually balances within
+    ``_MAX_WRAP_FRAGMENTS`` following lines; otherwise the line is emitted
+    as written and its neighbours get their own turn. A stray ``(`` is
+    therefore inert. Blank lines alone can't bound the damage, because
+    this output is re-parsed: the regen tool feeds a stored sheet back
+    through here, and a parsed sheet has no blank lines left in it — one
+    stray delimiter then swallowed an entire song (NSYNC - Paradise,
+    65 lines to 17). Balancing makes parsing a parsed sheet a no-op.
 
     Without this the fragments reach the matcher as lyrics: both bracket
     defences (``_HEADER_RE`` and ``_BRACKET_CONTENT_RE``) require a closing
@@ -84,11 +96,21 @@ def _join_wrapped_lines(lyrics_text: str) -> list[str]:
     i = 0
     while i < len(lines):
         run = lines[i]
-        i += 1
-        while _has_unclosed_bracket(run) and i < len(lines) and lines[i].strip():
-            run += lines[i]
+        end = i + 1
+        while (
+            _has_unclosed_bracket(run)
+            and end - i <= _MAX_WRAP_FRAGMENTS
+            and end < len(lines)
+            and lines[end].strip()
+        ):
+            run += lines[end]
+            end += 1
+        if _has_unclosed_bracket(run):
+            joined.append(lines[i])
             i += 1
+            continue
         joined.append(run)
+        i = end
     return joined
 
 
