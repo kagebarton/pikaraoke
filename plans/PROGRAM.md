@@ -169,6 +169,7 @@ exactly as it does today.
 | Word boundaries inside a placed line | joint matcher's words | **same — unchanged** (GATE W closed 2026-09-15, Ken: interior refinement not adopted) |
 | Evidence veto | joint route | joint route only (unchanged) |
 | LRCLIB fill | joint route | joint route; **kept** — refit Phase 1.1 cancelled 2026-09-08 |
+| Lyric text into the aligner | source text as fetched — an all-caps caption stays in capitals; Cyrillic watermark lookalikes (from Genius, and some captions) and primes pass through to whisper | **normalized at ingest** (Ken, 2026-09-21; `5f81ac0`..`587fe1a`, copied from `dev`): an all-caps caption is recased to sentence case; watermark lookalikes are folded, line-aware so real Cyrillic is untouched; primes read as apostrophes. **On the SRT route the caption text is both the aligner's input and the karaoke's word text, so any display edit is a timing change.** Recasing Someone You Loved moved 27 of 63 lines by >0.15 s, against 2 of 63 for a plain rerun of the old code; every line placed by the aligner in both. Ken eyeballed it and ruled the recased timing tighter |
 
 ### Target demotion gates
 
