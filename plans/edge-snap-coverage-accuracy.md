@@ -5004,3 +5004,114 @@ Hakuna Matata        L0  w4/6 gap=4.84 +0.675  matata, what a wonderful
    Phase 6's end half would reuse the envelope already decoded, so the
    cost reason does not carry over. Whether the ear verdict carries over is
    for Ken; this probe does not answer it.
+
+### Phase 6 end-half eyeball renders (Opus, 2026-09-21)
+
+Ken asked to hear the end half. The start half is not rendered; the probe
+entry above explains why. Scratchpad (session `f15a212e`):
+`p6probe/p6_render.py`, artifact `p6probe/p6_render.txt`.
+
+**Renders.** There are two files per song, both written by today's
+`generate_ass` from the same replayed line objects (post-veto, pre-snap):
+
+- `karaoke/<stem>.p6base.ass`: production's snap as it is today.
+- `karaoke/<stem>.p6ends.ass`: production's onsets unchanged, with the end
+  pass split into runs, so words before an interior pause get extended.
+
+Two properties are asserted per song, and both pass:
+
+- base equals production's `snap_line_edges` word timings exactly;
+- the variant differs from base only at the ends of interior run-last
+  words.
+
+So each pair differs only at the listed extensions. Line starts, line ends
+and every other word are identical. Play with
+`mpv "<folder>/<stem>.mp4" --sub-file="<folder>/karaoke/<stem>.<tag>.ass"`.
+
+**Songs, chosen mechanically:** the top 5 by interior end extensions on
+the probe's replay read. Bloodstream is skipped because Ken ruled on
+2026-09-21 that it uses a different lyric version. **Listed lines**
+(marked `*`) are, per song, the two largest extensions in 0.5-0.75 s
+pauses plus the largest in a wider pause, topped up from the rest when a
+category is short.
+
+```
+Sara Bareilles - She Used To Be Mine (Official Video)---53GIADHxVzM
+  interior extensions=16 to_next_word=11
+    0:08.24 -> 0:08.67 (+0.43s, pause 0.53s) to next word  It's not simple | to
+    0:08.94 -> 0:09.37 (+0.42s, pause 0.52s) to next word  It's not simple to | say
+    0:14.96 -> 0:15.37 (+0.41s, pause 0.51s) to next word  most days I don't | recognize
+    0:34.80 -> 0:34.98 (+0.18s, pause 1.55s)  I'm not anything | like
+    0:52.48 -> 0:52.70 (+0.22s, pause 0.58s)  She's imperfect, | but
+    1:02.82 -> 1:03.24 (+0.42s, pause 0.52s) to next word  She is hard | on
+    1:13.58 -> 1:15.02 (+1.44s, pause 1.54s) to next word  She is messy, | but
+    1:28.02 -> 1:28.71 (+0.69s, pause 0.79s) to next word  And baked in a | beautiful
+    1:45.80 -> 1:46.24 (+0.44s, pause 0.54s) to next word  Sometimes | life
+    2:08.16 -> 2:08.57 (+0.41s, pause 0.51s) to next word  If I'm | honest,
+    2:30.22 -> 2:30.69 (+0.46s, pause 0.56s) to next word  Who'll get | hurt
+    3:07.00 -> 3:07.20 (+0.20s, pause 0.84s)  That's been gone, | but
+  * 3:22.75 -> 3:26.73 (+3.97s, pause 8.51s)  She | is
+  * 3:33.10 -> 3:33.62 (+0.52s, pause 0.62s) to next word  She is messy, | but
+    3:37.92 -> 3:38.08 (+0.16s, pause 1.86s)  She is lonely | most
+  * 3:46.46 -> 3:46.94 (+0.49s, pause 0.59s) to next word  And baked in a | beautiful
+The Next Ten Minutes Lyrics---0j8kL24ph8U
+  interior extensions=10 to_next_word=8
+    0:36.38 -> 0:36.83 (+0.45s, pause 0.55s) to next word  you been inside the | museum?
+  * 1:12.42 -> 1:13.06 (+0.64s, pause 0.73s) to next word  For the next ten | minutes?
+    2:00.84 -> 2:01.76 (+0.92s, pause 1.02s) to next word  And the next ten | minutes
+    2:14.48 -> 2:14.95 (+0.47s, pause 1.02s)  Ask you | for
+  * 2:15.64 -> 2:16.28 (+0.64s, pause 0.74s) to next word  Ask you for | more
+  * 3:45.57 -> 3:47.40 (+1.83s, pause 1.93s) to next word  But why, | Jamie,
+    3:47.60 -> 3:48.76 (+1.16s, pause 1.26s) to next word  But why, Jamie, | why?
+    4:46.94 -> 4:47.38 (+0.44s, pause 0.54s) to next word  'Til there's no | one
+    5:13.76 -> 5:14.17 (+0.40s, pause 0.50s) to next word  I will never be | alive
+    5:25.79 -> 5:26.05 (+0.26s, pause 1.80s)  Until | I
+Stay Gold (Official Music Video) from The Outsiders – A New Broadway Musical.---XzbHPqULtdA
+  interior extensions=9 to_next_word=7
+    0:56.18 -> 0:56.48 (+0.30s, pause 0.64s)  I've seen the sunrise | coming
+    1:03.28 -> 1:03.95 (+0.67s, pause 0.77s) to next word  Finding beauty | in
+    1:43.32 -> 1:43.74 (+0.42s, pause 0.52s) to next word  You see the world, | finding
+  * 2:11.82 -> 2:12.26 (+0.44s, pause 0.54s) to next word  I've found the beauty | in
+  * 2:16.78 -> 2:17.62 (+0.85s, pause 7.26s)  My friend, stay | gold
+    2:24.40 -> 2:24.83 (+0.43s, pause 0.53s) to next word  Looking | back
+  * 3:05.94 -> 3:06.39 (+0.46s, pause 0.56s) to next word  love lives on no | matter
+    3:06.68 -> 3:07.09 (+0.41s, pause 0.51s) to next word  lives on no matter | where
+    3:40.36 -> 3:41.08 (+0.72s, pause 0.82s) to next word  Finding beauty | in
+'Defying Gravity' - Wicked 20th Anniversary Edition _ WICKED the Musical---AoON1CyhQAM
+  interior extensions=8 to_next_word=6
+  * 1:36.76 -> 1:38.55 (+1.79s, pause 2.20s)  you can't pull me | down
+  * 1:52.79 -> 1:54.45 (+1.66s, pause 1.76s) to next word  team there's ever been, | Glinda
+  * 2:06.13 -> 2:06.53 (+0.40s, pause 0.50s) to next word  Just you | and
+    2:25.45 -> 2:26.42 (+0.97s, pause 1.07s) to next word  They'll never bring us | down
+    2:48.37 -> 2:49.17 (+0.80s, pause 0.90s) to next word  At least, I'm flying | free
+    3:00.03 -> 3:00.86 (+0.83s, pause 0.93s) to next word  Tell them how | I
+    3:26.09 -> 3:26.38 (+0.29s, pause 0.94s)  Is ever gonna bring | me
+    3:37.91 -> 3:38.63 (+0.72s, pause 0.82s) to next word  Bring me | down
+Ed Sheeran - Best Part Of Me (feat. YEBBA) (Live At Abbey Road)---wGyh_53ecgg
+  interior extensions=8 to_next_word=5
+    0:37.15 -> 0:38.25 (+1.10s, pause 1.20s) to next word  My eyes | are
+  * 1:22.86 -> 1:23.43 (+0.57s, pause 0.67s) to next word  Baby, | the
+    1:34.88 -> 1:35.35 (+0.47s, pause 1.31s)  And lately, | everything's
+    2:46.14 -> 2:46.97 (+0.83s, pause 0.93s) to next word  best part of me | is
+    3:03.64 -> 3:04.47 (+0.83s, pause 0.93s) to next word  I'm so in love | with
+    3:17.60 -> 3:18.93 (+1.33s, pause 2.18s)  Baby, | the
+  * 3:25.50 -> 3:30.80 (+5.30s, pause 7.10s)  Lately, | everything's
+  * 3:42.78 -> 3:43.18 (+0.40s, pause 0.50s) to next word  Baby, | I'm
+```
+
+The times are replay times. The `p6base` wipe for the extended word ends
+at the left-hand time, and the `p6ends` wipe runs on to the right-hand
+time. The Best Part Of Me 1:22.86 site ("Baby, | the") is the one where
+the probe's full run also moved the *next* word's start. That start move
+is not in these renders.
+
+Labels, if Ken gives them per line:
+
+- **E**: the voice holds through the pause, and the stretched wipe is
+  right.
+- **B**: the voice stops near the old end, and the stretched wipe rides a
+  breath, a reverb tail or a backing voice.
+- **U**: can't tell.
+
+The 10 `.p6base`/`.p6ends` files are study renders. They get deleted from
+the library after the session, as with 7a.
