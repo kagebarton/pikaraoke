@@ -39,15 +39,29 @@ class TestNormalizeToken:
 class TestFoldHomoglyphs:
     def test_folds_watermark_letters_keeping_case(self):
         assert fold_homoglyphs("Givеs") == "Gives"
-        # An all-caps caption watermarks with the uppercase lookalikes.
+        # An all-caps caption watermarks with the uppercase lookalikes,
+        # including ones with no lowercase twin (U+0412 for B).
         assert fold_homoglyphs("СОLD") == "COLD"
+        assert fold_homoglyphs("ВE MINE") == "BE MINE"
+
+    def test_folds_a_one_letter_word(self):
+        """ "I" and "a" carry no ASCII letter of their own, and an
+        apostrophe ends a word, so these arrive as bare lookalike runs."""
+        assert fold_homoglyphs("І'm going under") == "I'm going under"
+        assert fold_homoglyphs("it'ѕ over") == "it's over"
+        assert fold_homoglyphs("а little bit") == "a little bit"
 
     def test_leaves_accents_alone(self):
         """Unlike ``fold_to_ascii``: this output is sung and displayed."""
         assert fold_homoglyphs("soufflé") == "soufflé"
 
+    def test_leaves_a_foreign_word_in_a_bilingual_line_alone(self):
+        """A word mixing real Cyrillic with lookalikes is a foreign word,
+        even though the line around it is Latin."""
+        assert fold_homoglyphs("say мир to me") == "say мир to me"
+
     def test_leaves_real_cyrillic_lyrics_alone(self):
-        """A word with no Latin letter is a real word, not a watermark."""
+        """A line with no Latin letter is a real lyric, not a watermark."""
         assert fold_homoglyphs("Привет мир") == ("Привет мир")
 
 
