@@ -1108,6 +1108,8 @@ Commit: `fix(onset-snap): no continuity shortcut on one-word lines`
 This is the biggest coverage multiplier. 388 interior words (Linux corpus)
 follow an intra-line gap ≥ 0.5s and show the same artifacts, because the
 ASS writer re-anchors the karaoke fill at every inter-word gap.
+(Correction 2026-09-21: only on lines with no 10-cs-floored word before the
+gap; see "### Writer 10-cs floor -- sized, eyeballed, closed".)
 
 The change reframes both snaps from "line edge" to "run edge":
 
@@ -4664,4 +4666,109 @@ and none are recorded here.
    its tests stay on this branch as history.
 
 Not ruled in this session: the writer's 10-cs floor (read-off ruling 5)
-is still unowned.
+is still unowned. (Closed later the same day; see "### Writer 10-cs floor
+-- sized, eyeballed, closed (Ken, 2026-09-21)".)
+
+### Writer 10-cs floor -- sized, eyeballed, closed (Ken, 2026-09-21)
+
+Read-off ruling 5's item. Production code untouched throughout; every
+render below was a scratch file, and all are deleted.
+
+**Mechanism** (`pikaraoke/pipeline/stages/lyric_align.py`, `generate_ass`):
+
+```python
+word_dur_cs = max(10, round((word_end - word_start) * 100))
+gap_cs = max(0, round((word_start - prev_end) * 100))
+...
+prev_end = word_end
+```
+
+The gap tag is computed from the unfloored `prev_end`, so a floored word's
+overshoot is never taken back: every later word in the line, including
+words after an inter-word gap, fills late by the carried overshoot. The
+event end comes from the unfloored last word, so enough overshoot runs
+the fill past the event end. **Correction to the Phase 6 design text**
+("the ASS writer re-anchors the karaoke fill at every inter-word gap"):
+that holds only on lines with no floored word before the gap.
+
+**Size, shipped library.** Script
+`C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\296345e3-2f9b-49d2-a079-122ea409448c\scratchpad\ass_drift.py`,
+over `d:/shared/pikaraoke-songs/karaoke/<stem>.ass` only (study variants
+excluded). Fill end = event start + sum of `\k`/`\kf` tags; expected =
+event end - `line_lead_out_cs` (20).
+
+```
+songs=48 lines=2636 words=16089 kf10_words=1626
+lines wiping >=5cs late=612 (songs 48)
+lines whose fill runs past event end=46 (songs 19)
+```
+
+**Floor vs rounding, replayed words.** Script `writer_drift.py` (same
+scratchpad), the 38 bundles in `d:/shared/pikaraoke-songs/alignment_debug/`
+filtered to `method_used == "joint"`, pre-snap replayed words
+(`_replay_output`, no audio). Drift = simulated fill end - true last-word
+end, cs.
+
+```
+lines=899 words=5846 overlapping_word_pairs=0
+words under 10cs by true length: {'0-2': 239, '6-9': 49, '3-5': 24}
+current writer drift: {'>=30': 8, '>=20': 12, '>=10': 86, '>=5': 91, '>=2': 28, '<2': 674}
+floor removed only  : {'>=30': 0, '>=20': 0, '>=10': 0, '>=5': 0, '>=2': 0, '<2': 899}
+```
+
+**Which words carry it.** Script `drift_split.py` (same scratchpad, same
+population). Per line, overshoot summed separately over near-zero words
+(true length 0-2 cs) and short words (3-9 cs):
+
+```
+lines 899 {'drift <0.1s': 739, 'near-zero words': 157, 'mixed': 2, 'genuine-short only': 1}
+('Ed Sheeran & Rudimental - Blo', 178.4, 'All:4 the:4 voices:44 in:56 my:22 mind:36 Tell:47 me:47 when:47 it:47 kicks:47 in:47')
+```
+
+**A/B renders for the eyeball.** Script `writerfix_render.py` (same
+scratchpad): each song replayed through `edge_snap_replay._replay_song`
+(veto + snap at this checkout; production code identical to `dev`
+8fcb612), written twice from the same line objects: today's writer
+(`.writercur.ass`) and the floor removed (`.writerfix.ass`, the one-line
+patch exec'd from the function's own source). Lines whose fill ends
+>= 0.15 s earlier under the fix:
+
+```
+Domino:           1:48.22 0.16 | 2:43.95 0.30 cut | 3:39.02 0.58 cut
+Defying Gravity:  3:29.66 0.18 | 3:38.04 0.50 cut
+Bloodstream:      2:46.68 0.20 | 2:49.51 0.20 | 2:53.50 0.38 cut | 3:14.04 0.20 cut
+                  3:24.34 0.70 cut | 3:26.60 0.16
+Hakuna Matata:    1:39.43 0.20 | 2:55.23 0.20 | 3:28.85 0.20 | 3:35.75 0.50 cut
+```
+
+("cut" = today's fill runs past the event end.)
+
+**Side finding, for the schema-bump decision.** The planned control
+(replay through today's writer == shipped `.ass`, byte for byte) failed
+on all four songs. Line diff run on two of them (scratch `ctl_diff.py`):
+Domino 5 of 63 lines differ, Hakuna Matata 4 of 33; every differing line
+keeps its last word's text, and the four lines printed differ only in the
+event end and the last word's fill length. So the shipped files on these
+songs (schema-8 bundles) predate `dev`'s snap changes.
+
+**Ken's report, verbatim:** "all of the lines in that list are lines that
+have underlying timing problems, domino has an "in the moonlight" echo
+that doesn't get timed at all by whisper, that line in defying gravity is
+lyric dialog that's not in the video, bloodstream's using a different
+version of the lyrics altogether". On the recommendation to drop the fix:
+"agreed".
+
+**Ruling (Ken).**
+
+1. **The floor stays; nothing changes in production.** It only bites on
+   words the aligner gave no time, so removing it corrects no well-timed
+   line. It would only change how already-broken lines display.
+2. **The cause is upstream and stays unowned here:** lyric-sheet words
+   that are not sung in the audio (dialogue not in the video, a different
+   lyric version), and Domino's sung echo (the Phase 5 eyeball's interior
+   defect).
+3. Do not re-propose removing the floor without a well-timed line it
+   makes late.
+4. The schema bump does not wait on this item.
+5. The 8 `.writercur`/`.writerfix` renders and the 5 `.voicing.ass`
+   renders from 7a are deleted from the library.
