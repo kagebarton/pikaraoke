@@ -4,6 +4,7 @@ from pikaraoke.lib.token_align import (
     _match_simple,
     _normalize_token,
     _walk_align,
+    fold_homoglyphs,
     match_words_to_tokens,
 )
 
@@ -33,6 +34,21 @@ class TestNormalizeToken:
 
     def test_empty(self):
         assert _normalize_token("!") == ""
+
+
+class TestFoldHomoglyphs:
+    def test_folds_watermark_letters_keeping_case(self):
+        assert fold_homoglyphs("Givеs") == "Gives"
+        # An all-caps caption watermarks with the uppercase lookalikes.
+        assert fold_homoglyphs("СОLD") == "COLD"
+
+    def test_leaves_accents_alone(self):
+        """Unlike ``fold_to_ascii``: this output is sung and displayed."""
+        assert fold_homoglyphs("soufflé") == "soufflé"
+
+    def test_leaves_real_cyrillic_lyrics_alone(self):
+        """A word with no Latin letter is a real word, not a watermark."""
+        assert fold_homoglyphs("Привет мир") == ("Привет мир")
 
 
 # ---------------------------------------------------------------------------

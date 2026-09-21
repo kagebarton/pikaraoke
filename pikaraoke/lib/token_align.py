@@ -35,7 +35,36 @@ _STRIP_NONWORD_RE = re.compile(r"[^\w]", re.UNICODE)
 # Cyrillic lookalikes of Latin letters. Lyric sites watermark fetched
 # text with these ("wеre" with U+0435), which silently breaks token
 # equality against whisper output.
-_CONFUSABLES = str.maketrans("аеіоруѕсхј", "aeiopyscxj")
+_CONFUSABLE_PAIRS = dict(zip("аеіоруѕсхј", "aeiopyscxj"))
+_CONFUSABLES = str.maketrans(_CONFUSABLE_PAIRS)
+_CASED_CONFUSABLES = str.maketrans(
+    {**_CONFUSABLE_PAIRS, **{k.upper(): v.upper() for k, v in _CONFUSABLE_PAIRS.items()}}
+)
+_LETTER_RUN_RE = re.compile(r"[^\W\d_]+", re.UNICODE)
+_ASCII_LETTER_RE = re.compile(r"[A-Za-z]")
+
+
+def fold_homoglyphs(text: str) -> str:
+    """Replace Cyrillic watermark letters with their Latin twins, keeping case.
+
+    For lyric text on its way to the aligner and the screen, where
+    :func:`fold_to_ascii` would be too destructive — a watermark must not
+    reach whisper as a foreign token, but the accents of a genuinely
+    non-English lyric must survive.
+
+    Only words that already hold an ASCII letter are folded. A watermark
+    is one lookalike hidden in a Latin word ("wеre"); a word with no Latin
+    letter in it is real Cyrillic, and folding a Russian lyric letter by
+    letter would corrupt both the display and the aligner's input.
+    """
+
+    def fold_word(match: re.Match[str]) -> str:
+        word = match.group(0)
+        if not _ASCII_LETTER_RE.search(word):
+            return word
+        return word.translate(_CASED_CONFUSABLES)
+
+    return _LETTER_RUN_RE.sub(fold_word, text)
 
 
 def fold_to_ascii(text: str) -> str:
@@ -43,7 +72,9 @@ def fold_to_ascii(text: str) -> str:
 
     Whisper writes accented words unaccented ("souffle" for "soufflé"),
     so both comparison sides are folded before matching. Expects
-    lowercased input (the confusable table is lowercase-only).
+    lowercased input (the confusable table is lowercase-only). Lyric text
+    is already homoglyph-folded at ingest, but whisper and LRCLIB text is
+    not, so the folding stays here too.
     """
     text = unicodedata.normalize("NFKD", text.translate(_CONFUSABLES))
     return "".join(ch for ch in text if not unicodedata.combining(ch))
