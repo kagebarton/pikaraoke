@@ -80,12 +80,16 @@ def _join_wrapped_lines(lyrics_text: str) -> list[str]:
 
     A join is only kept when the delimiter actually balances within
     ``_MAX_WRAP_FRAGMENTS`` following lines; otherwise the line is emitted
-    as written and its neighbours get their own turn. A stray ``(`` is
-    therefore inert. Blank lines alone can't bound the damage, because
-    this output is re-parsed: the regen tool feeds a stored sheet back
-    through here, and a parsed sheet has no blank lines left in it — one
-    stray delimiter then swallowed an entire song (NSYNC - Paradise,
-    65 lines to 17). Balancing makes parsing a parsed sheet a no-op.
+    as written and its neighbours get their own turn. That bounds a stray
+    ``(``: it used to read on to the end of its stanza, which swallowed an
+    entire song when a stored sheet was replayed with no blank lines in it
+    (NSYNC - Paradise, 65 lines to 17). It does not make this idempotent —
+    balance is only a count, so a stray ``(`` can still be satisfied by an
+    unrelated ``)`` a line or two below and fuse two real lyric lines. The
+    replay writers therefore separate stored lines with a blank line
+    (``regen_alignment_bundles``, ``backfill_artifacts``), which is what
+    keeps a parsed sheet stable; the bound here is the second line of
+    defence, for raw lyrics text.
 
     Without this the fragments reach the matcher as lyrics: both bracket
     defences (``_HEADER_RE`` and ``_BRACKET_CONTENT_RE``) require a closing

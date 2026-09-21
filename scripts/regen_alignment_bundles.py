@@ -595,7 +595,10 @@ def _prepare_lyrics(job: SongJob, genius: GeniusClient, lyrics_dir: Path, config
     if plan.kind == "seed":
         if plan.lyrics_lines is not None:
             lyrics_path = lyrics_dir / f"{song.stem}.txt"
-            lyrics_path.write_text("\n".join(plan.lyrics_lines), encoding="utf-8")
+            # Blank-line separated: these lines are already parsed, and a
+            # blank line stops the pipeline's wrap-join from reading one
+            # stored line into the next (see `_join_wrapped_lines`).
+            lyrics_path.write_text("\n\n".join(plan.lyrics_lines), encoding="utf-8")
         else:
             lyrics_path = plan.lyrics_path
         return lyrics_path, SeedArtifactsStage(plan.seed)
