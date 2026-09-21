@@ -72,3 +72,11 @@ class TestCueSpansFromSrt:
             self._srt("I'm going under", "and this time", "I fear there's no one", "HEY!")
         )
         assert texts == ["I'm going under", "and this time", "I fear there's no one", "HEY!"]
+
+    def test_caseless_script_is_not_recased_by_its_acronyms(self):
+        """A caseless script has no lower case to dilute the share, so
+        counting only cased letters made a handful of Latin acronyms read
+        as a fully capitalized file."""
+        cues = ["DJ 放音乐", "走吧 OK", "你是我的 MVP"]
+        texts, _ = cue_spans_from_srt(self._srt(*cues))
+        assert texts == cues
