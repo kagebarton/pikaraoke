@@ -302,7 +302,9 @@ def resolve_lyrics_path(job: SongJob, genius: GeniusClient, lyrics_dir: Path) ->
             print(f"  ! bundle read failed ({e}); transcribing instead")
             return None
         out = lyrics_dir / f"{job.song_path.stem}.txt"
-        out.write_text("\n".join(align_lines), encoding="utf-8")
+        # Blank-line separated: already-parsed lines, so a blank line stops
+        # the pipeline's wrap-join reading one into the next.
+        out.write_text("\n\n".join(align_lines), encoding="utf-8")
         return out
 
     return None

@@ -96,20 +96,20 @@ class TestParseLyricLines:
         result = parse_lyric_lines(text)
         assert [r["text"] for r in result] == ["Ooh (yeah", "Still this stanza", "Next stanza"]
 
-    def test_reparsing_a_parsed_sheet_is_a_no_op(self):
-        """The regen tool feeds a stored sheet back through here, and a
-        parsed sheet has no blank lines to bound a runaway join. One stray
-        '(' used to swallow the rest of the song (NSYNC - Paradise)."""
-        text = "Right here for this moment\nBetween you and I (\nI\n)\nEverything is happenin'\n"
-        once = [r["text"] for r in parse_lyric_lines(text)]
-        twice = [r["text"] for r in parse_lyric_lines("\n".join(once))]
-        assert twice == once
-
-    def test_reparsing_a_sheet_with_a_stray_delimiter_is_a_no_op(self):
-        """The damaging case: the ')' fragment is already gone, so the
-        '(' can never balance however far the join reaches."""
+    def test_stray_delimiter_cannot_swallow_a_stored_sheet(self):
+        """The regen tool replays a stored sheet, which has no blank lines
+        to bound a join. A '(' whose closing fragment was already dropped
+        used to read on to the end of the song (NSYNC - Paradise)."""
         stored = ["Between you and I (", "I", "Everything is happenin'", "And it's just what"]
         assert [r["text"] for r in parse_lyric_lines("\n".join(stored))] == stored
+
+    def test_blank_separated_replay_keeps_a_stray_delimiter_inert(self):
+        """How the replay writers pass a stored sheet back: a stray '('
+        cannot reach an unrelated ')' below it, which a bare join still
+        would (balance is only a count)."""
+        stored = ["No one mourns the wicked (", "Wicked", "Ooh) ahh", "No one cries"]
+        assert [r["text"] for r in parse_lyric_lines("\n".join(stored))] != stored
+        assert [r["text"] for r in parse_lyric_lines("\n\n".join(stored))] == stored
 
     def test_inline_html_and_notes_stripped(self):
         """Defensive: HTML tags / musical notes / stage-direction
