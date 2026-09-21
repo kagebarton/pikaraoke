@@ -36,6 +36,12 @@ Sonnet 5. Originally designed 2026-07-12 (Opus 4.8, executor Sonnet 5).
 > **Update 2026-09-21 (later):** the 7a executor round is done (see
 > "### Phase 7a" in the Results log). **Next: the Opus read-off, then Ken's
 > ear on the 15-line eyeball list.**
+>
+> **Update 2026-09-21 (read-off):** Opus has read the 7a round (see
+> "### Phase 7a read-off"). The listening list is fit for Ken's ear as
+> rendered, and nothing was re-run. GO is out of reach on the fraction, so
+> the best available outcome is Ken's sizing call. **Next: Ken's L/H/U
+> labels on the 15 lines, read against the label rulings in the read-off.**
 
 Execution plan for extending the edge snap (`pikaraoke/lib/onset_snap.py`)
 to more cases (single-word lines, interior run edges) and improving its
@@ -4436,3 +4442,191 @@ is a verdict.
   Then label the line **L** (the lead's note ends near `voicing_end`, and
   the shipped wipe rides something else), **H** (the lead holds to
   `shipped_end`) or **U** (can't tell).
+
+### Phase 7a read-off (Opus, 2026-09-21)
+
+**Checked against the record. Nothing was re-run.** Executor artifacts are
+under
+`C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\296345e3-2f9b-49d2-a079-122ea409448c\scratchpad\edge_snap\`.
+The judge's read-only scripts are under
+`C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\bd084589-9100-4592-a7cc-aff0dcc95953\scratchpad\`:
+`recount_p7a.py`, `diff_renders_p7a.py`, `disp_jitter_p7a.py`,
+`belle_tie_p7a.py` and `edge_tie_p7a.py`.
+
+- **Script against the pin** (`0a3a838`, read in full, with its imports at
+  the same commit):
+  - Population, window rebuild, the 2 ms bound check and the stem choice
+    (`snap_stem_path`) are as pinned.
+  - The ffmpeg decode is `rms_envelope_db`'s command, argument for
+    argument.
+  - `librosa.pyin` gets `fmin=65`, `fmax=1100`, `frame_length=1024`,
+    `hop_length=400` (`int(HOP_S * ENVELOPE_SR)`) and `center=True`, with
+    the rest left default. It runs over `[claimed_end − 1.0, bound + 0.5]`,
+    clamped. Frame times are frame centres.
+  - The trace is as pinned: the anchor, the 1.5 st follow from the last
+    on-contour frame, the 8-frame break that may confirm in the tail pad,
+    and `no_break` when no break starts before `bound`. `kind` is a strict
+    majority, so a 4/4 split is `jump`.
+  - `n_earlier` and `n_agree` split at `MIN_SHIFT_S` (0.15 at `0a3a838`).
+    The histogram bins have the pinned edges.
+  - The eyeball picks, each song's top 3, and the render clamp
+    `max(break, claimed_end, last word start + MIN_WORD_DUR_S)` over every
+    earlier record in the song are as pinned.
+  - Departures, none material:
+    - A bound-check failure is counted and printed rather than halting.
+      The pin calls it a STOP. `n_bound_fail=0`.
+    - Song and route print on the song's header line, not on each `rec`
+      row.
+    - Two breaks (Belle L12 and L85) start on the frame whose centre sits
+      1e-14 s after the rebuilt `claimed_end`. The bundle stores `extend_s`
+      to the centisecond, so `claimed_end` is known only to about ±5 ms, and
+      "at" versus "after" is float noise inside that rounding. The executed
+      reading stands. Reading those frames as "at" could only push those
+      breaks later. That cannot move the fraction arm. On the list, a later
+      L85 break could give its slot to Belle L17. If both records stopped
+      counting as earlier, Belle would lose a three-way tie at 5 to
+      `Defying Gravity` and Adele on name order.
+- **Tests.** `tests/unit/test_voicing_release_study.py` covers the trace on
+  synthetic f0 arrays (steady, major-third swap, unvoiced, short dropout,
+  glide, no anchor, break at the bound), the window rebuild past a wordless
+  line, the bound-check flag and the bin edges. The suite's four `FAILED`
+  IDs are the same four as in `edge_p51_suite.txt`.
+- **Totals, recounted from the 233 `rec` rows** (`recount_p7a.py`):
+  - The five population totals (`n_suspects`, `n_no_anchor`, `n_no_break`,
+    `n_agree`, `n_earlier`) and all five histogram lines reproduce
+    exactly. No `BOUND FAIL` line is printed.
+  - 38 song headers, and each header's `to_bound=` count equals its rows.
+    36 songs have records. Stay Gold and the Wicked For Good Movieclips
+    have none.
+  - `ce + ext = bound` within print rounding on every row. Every break lies
+    strictly between `ce` and `bound`.
+  - One row prints `delta=-0.15` (Selfish L7). The totals need it on the
+    earlier side, and it is there.
+- **Eyeball list, recomputed from the rows.** The five songs and their
+  three lines each reproduce. There are two ties, and both resolve by the
+  rule:
+  - Fifth place is a tie at 5 between `'Defying Gravity' - ...` and
+    `Adele - Someone Like You ...`. The file stem starts with an apostrophe,
+    which sorts first. That is the rule as written (the song name is the
+    stem everywhere in the harnesses). Adele is next down.
+  - Belle's third line: L17 and L53 both print `-0.23`. Rebuilt from the
+    bundle on the pYIN frame grid (`belle_tie_p7a.py`), L53 is −0.235 and
+    L17 is −0.230, so L53 is the right pick.
+- **Renders** (`diff_renders_p7a.py`, `disp_jitter_p7a.py`):
+  - All five `.voicing.ass` are stamped 11:34, the study's minute. Each
+    has the shipped file's header, event count and word text.
+  - In each song exactly the earlier records' lines (8/7/7/6/5) have a
+    moved end, with none extra and none missing. Each new wipe end equals
+    the clamp above within 1 cs. Every other word start and end moved by
+    at most 1 cs.
+  - Paradise's bundle and shipped `.ass` were both rewritten today at
+    10:31, a reprocess before the pin (11:25). They come from one run
+    (`n_text_mismatch=0`). The other four are 2026-07 captures.
+  - All five `<stem>.mp4` files exist, so the executor's `mpv` commands
+    resolve.
+- **A writer effect shows in the renders.** It is not a study defect.
+  - `generate_ass` floors each word's fill at 10 cs and advances its
+    karaoke cursor by the floored length. The event end comes from the
+    unfloored word end. So a line with sub-10-cs words wipes late, by up to
+    0.1 s per floored word, and its wipe can run past the event end.
+  - On three listed lines the shipped wipe ends after the list's
+    `shipped_end` (the bundle bound): Paradise L26 at 2:15.09, not 2:14.90;
+    Defying Gravity L81 at 3:37.16, not 3:37.07; and A Whole New World L46
+    at 3:05.49, not 3:05.39. That is small against those lines' gaps.
+  - The round trip rebuilds each event end from the drifted cursor. So in
+    the renders, unmoved lines with floored words stay on screen up to
+    ~0.5 s longer. Their wipes do not move, and event starts move at most
+    1 cs.
+  - **In production, outside 7a:** in the shipped files, lines with three
+    or more floored words disappear before their last word finishes
+    filling. Examples are Domino's "... In the moonlight" (3:39-3:42), cut
+    0.38 s early, and Defying Gravity's "... got to bring her" (3:38-3:40),
+    cut 0.30 s early. The floor has been in the writer since the April
+    pipeline port (`67d1a29`). No plan records it.
+
+**Findings.**
+
+1. **The 7a round is correct and complete.** The script implements the pin.
+   The printed totals are the rows' totals. The eyeball list is the
+   mechanical list. The renders change exactly the lines they claim and
+   nothing that matters to the listen.
+2. **The fraction arm is already decided.** `n_earlier` is under half of
+   `n_suspects` (73 < 116.5). **GO cannot fire, whatever the ear says.** The
+   possible outcomes are NO-GO, Ken's sizing call, or inconclusive (widen).
+3. **On about a third of the disagreements, voicing says "don't extend",
+   not "end here".** In 23 of the 73 earlier records the break starts
+   within 0.05 s of `claimed_end`, and so do 6 of the 15 listed lines. The
+   render clamps back to `claimed_end`, so on those lines the A/B is
+   really "was the RMS extension wrong at all". An L there is still an L
+   under the pinned definition, because the lead stops where voicing says.
+4. **The trace has a failure mode the pin did not pre-register.** The pin
+   named one known limit: a small voice swap followed as a glide, which
+   gives a false `no_break`. The opposite error is also possible. A fast
+   leap or run within the lead's own last syllable (a melisma) moves more
+   than 1.5 st per frame and reads as a `jump` break while the lead is
+   still singing. The unit tests don't exercise it, and nothing short of
+   the ear sees it. H is exactly the label that counts it.
+5. **The list leans toward the largest disagreements, by design.** Its
+   median gap is about twice the population's, and 39 of the 73 earlier
+   records are under 0.5 s. A clean ear result therefore speaks most
+   strongly for the big ones. Five listed lines have gaps under 0.4 s
+   (Belle L53, Domino L54 and L64, A Whole New World L29 and L34). Those
+   are likely U by ear.
+6. **Two listed anchors look suspect by pitch.** Neither is a script fault,
+   and both are things to listen for.
+   - Defying Gravity L78 ("... bring me down!") anchors at 157 Hz. That is
+     far below a female lead's closing belt, so the trace may have started
+     on an ensemble voice.
+   - Defying Gravity L81 ("Get her!") anchors at 79 Hz, near the tracker's
+     65 Hz floor. It is a short ensemble shout.
+   - Belle L85 ("You call this bacon?") is a short line in a dense crowd
+     passage. Its break is at the claimed end.
+
+**Ruling.**
+
+1. The 7a executor round is accepted as committed (`0a3a838`, `a4df3a5`).
+   No re-run and no change.
+2. **The listening list is fit for Ken's ear as rendered.**
+3. **How to read the labels.** Where the pinned text leaves a gap, these
+   rulings take the reading that is stricter on voicing. Ken can override.
+   - **H** also covers a lead that is audibly still singing clearly past
+     `voicing_end`, holding or moving, even if it stops before the shipped
+     end. Voicing then cut a real note, which is what H exists to count.
+   - **L** needs both halves: the lead stops near `voicing_end`, *and*
+     what the shipped wipe covers after that is something else (another
+     voice, the next line coming in, a tail). "Near" means closer to
+     `voicing_end` than to the shipped end.
+   - **U** is the honest label when the difference can't be heard. Don't
+     force a call on the short-gap lines.
+   - Label only the listed line's own wipe end. Ignore neighbouring lines
+     that linger in the render. On three lines, ignore that the shipped
+     wipe ends 0.1-0.2 s after the list's `shipped_end`.
+   - Paradise L37's text has a doubled final `I`. That is a lyric-text
+     matter, not 7a's. Label the timing only.
+4. **What the pass condition needs from the labels.** At most 7 U, so
+   L + H ≥ 8. Then H must be no more than a third of L + H:
+
+   ```
+   L+H   8  9  10  11  12  13  14  15
+   max H 2  3   3   3   4   4   4   5
+   ```
+
+   - Within those limits → **Ken's sizing call.** A voicing rule would be
+     right where it acts, and it would act on 73 of the 233 `to_bound`
+     extensions. Findings 3 and 5 are the two things to weigh there.
+   - More H than that → **NO-GO.** Voicing is not a safe release marker
+     here. The end-side blind spot keeps no owner from 7a.
+   - L + H < 8 → **inconclusive, and the list widens by the same rule.**
+     The next songs down, with their top 3 earlier lines from the `rec`
+     rows, are:
+     - Adele - Someone Like You (L26, L33, L16)
+     - Justin Timberlake - Mirrors (L88, L106, L81)
+     - Mulan (L43, L34, L39)
+
+     Mirrors and Mulan tie at 4, and name order puts Mirrors first. Their
+     renders need the script re-run with `--song <name>` per song. That
+     needs no code change, because each window is computed on its own.
+5. **Unowned, and Ken's call:** the writer's 10-cs floor. It makes wipes
+   run late on lines with very short words and cuts some lines' last word
+   short (see "A writer effect" above). It is in production now. It is not
+   7a's and not the edge snap's.
