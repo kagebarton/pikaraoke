@@ -25,6 +25,26 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+# v10: edge-snap coverage/accuracy pass (plans/edge-snap-coverage-accuracy.md
+#     Phases 1-5.1) plus lyric-text normalization ahead of the aligner. A
+#     milestone bump (run-affecting) -- no field renamed or removed, but
+#     output_line_timings move, so regen treats v9 bundles as stale:
+#   - the snap now gates onsets on a floor-level reference too, rejects rises
+#     truncated by the stem end, carries one-word lines through both edges
+#     (own-span percentile reference), includes a substantial word 1 in the
+#     end-path reference, and drops the continuity shortcut on one-word
+#     onsets.
+#   - SRT captions typed in all caps are recased (caption text is both the
+#     aligner input and the karaoke word text), lyric-site watermark letters
+#     are folded, and a Genius wrap join is kept only when its delimiter
+#     balances.
+#     Additive fields that shipped with the snap phases (no bump of their
+#     own): joint_stats.edge_snap.onset gains n_low_ref, n_fired, n_no_rise,
+#     n_below_min_shift, n_undetectable, n_single_word (invariant n_fired ==
+#     n_snapped + n_no_rise + n_below_min_shift); joint_stats.edge_snap.end
+#     gains n_below_min_shift and n_single_word (invariant n_fired ==
+#     n_extended + n_below_min_shift). A one-word line's records are not
+#     tagged; join line_id against output_line_timings[].n_words.
 # v9: LRCLIB gated fill (E1) shipped to production -- plans/
 #     lrclib-fill-absence-study.md Phase L4 verdict, wired by plans/
 #     lrclib-fill-production-wiring.md. A milestone bump (run-affecting on
@@ -130,7 +150,7 @@ logger = logging.getLogger(__name__)
 # v2: added tiling per-unit fields (units, zero_candidate_unit_ids,
 #     anchor_recovered_unit_ids, selected_windows replacing window_widths).
 # v1: initial.
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 
 def build_bundle(

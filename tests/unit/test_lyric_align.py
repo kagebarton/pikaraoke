@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from pikaraoke.lib.alignment_capture import output_line_timings
+from pikaraoke.lib.alignment_capture import SCHEMA_VERSION, output_line_timings
 from pikaraoke.lib.joint_match import match_words_to_lines_joint_with_stats
 from pikaraoke.lib.srt_provenance import is_generated, mark_generated
 from pikaraoke.lib.windowed_realign import merge_spans, replay_span
@@ -753,7 +753,7 @@ class TestLrclibFillWiring:
         assert fill_stats["filled_lids"] == [5]
         assert bundle["lyrics"]["lrclib"]["lrc_file"] == f"lyrics/{ctx.song_path.stem}.lrc"
         assert bundle["config"]["lrclib_fill"] is True
-        assert bundle["schema_version"] == 9
+        assert bundle["schema_version"] == SCHEMA_VERSION
 
         ass_path = ctx.song_path.parent / "karaoke" / f"{ctx.song_path.stem}.ass"
         dialogues = [
