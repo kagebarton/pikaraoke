@@ -42,6 +42,12 @@ Sonnet 5. Originally designed 2026-07-12 (Opus 4.8, executor Sonnet 5).
 > rendered, and nothing was re-run. GO is out of reach on the fraction, so
 > the best available outcome is Ken's sizing call. **Next: Ken's L/H/U
 > labels on the 15 lines, read against the label rulings in the read-off.**
+>
+> **7a CLOSED (Ken, 2026-09-21), after his eyeball session.** Most listed
+> lines sound the same either way, and the few that differ differ by only a
+> little, so a voicing rule is not worth its processing time. There is no
+> widened list, no design and no production change. See "### Phase 7a
+> eyeball session". Phase 6 is still NOT PINNED, and 7b-7d stay gated.
 
 Execution plan for extending the edge snap (`pikaraoke/lib/onset_snap.py`)
 to more cases (single-word lines, interior run edges) and improving its
@@ -1288,6 +1294,9 @@ on 2026-09-21. This is a study only. It changes no production code.
   `edge_snap/edge_p7a_study.txt` in the session scratchpad.
 - **Executor discipline as for Phases 0-5.** Raw output, no verdicts. The
   read-off is a separate Opus round, and the ear is Ken's.
+
+**7a CLOSED 2026-09-21 (Ken): not worth the processing time; no production
+change.** See "### Phase 7a eyeball session (Ken, 2026-09-21)".
 
 **7b. Adaptive step floor.** Only if Phase 2's `n_undetectable` is material
 (rule of thumb: > 5% of fired lines). Prototype in the harness:
@@ -4630,3 +4639,29 @@ The judge's read-only scripts are under
    run late on lines with very short words and cuts some lines' last word
    short (see "A writer effect" above). It is in production now. It is not
    7a's and not the edge snap's.
+
+### Phase 7a eyeball session (Ken, 2026-09-21)
+
+Ken played the 15 listed lines with the shipped `.ass` and with the
+`.voicing.ass` render. His report, verbatim: "most lines aren't
+distinguishable between the 2, and the few that are are short so this
+isn't worth the extra processing time". He gave no per-line L/H/U labels,
+and none are recorded here.
+
+**Ruling (Ken).**
+
+1. **7a is CLOSED.** No voicing rule is designed or built. It would add a
+   pitch track over every `to_bound` window of every song, and the ear
+   finds no difference on most lines and only short differences on the
+   rest.
+2. **The list is not widened.** Under the pinned gate, mostly-U labels
+   leave L+H under 8, which is inconclusive and would widen the list to
+   Adele, Mirrors and Mulan. Ken's cost call closes the phase instead.
+3. **The end-side multi-singer blind spot keeps no owner.** Extensions
+   that ride a backing voice to the bound (the Phase 5 eyeball case) stay
+   as shipped.
+4. Nothing changes in production. `scripts/voicing_release_study.py` and
+   its tests stay on this branch as history.
+
+Not ruled in this session: the writer's 10-cs floor (read-off ruling 5)
+is still unowned.

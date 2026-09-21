@@ -416,7 +416,7 @@ future interior-refinement design.
 | `route-no-timing.md` | rung 3 — **the live build lane**; the joint catch-all refit, GATE P/J1/J2/T, Phase 5 + **GATE G** (CLOSED 2026-09-11, NO-GO — fill not widened), **Phase 7 + 7b (RAN + READ 2026-09-14 — the unplaced population is CLOSED: ~2 winnable lines corpus-wide)**, **Phase 6 + GATE W (CLOSED 2026-09-15 at step 2, Ken — a wash; no production change)**, GATE L |
 | `shared-aligner-form.md` | GATE C, GATE O, Phase 0 harness, ruling-provenance audit |
 | `completed/ctc-sync-engine.md` | build phases + appendices — **CLOSED 2026-09-18** by the consolidation pass: nothing left to build; only E0 was ever built, and it is out of the pipeline |
-| `edge-snap-coverage-accuracy.md` | the edge snap post-pass track, **not a routing lane**: onset silence gate, one-word lines, stem-end and end-reference fixes, interior run edges — **Phases 0-5 and 5.1 accepted 2026-09-18**; production code goes to Ken's user-test branch before `master`. Phase 6 NOT PINNED (Ken's call); Phase 7 studies gated |
+| `edge-snap-coverage-accuracy.md` | the edge snap post-pass track, **not a routing lane**: onset silence gate, one-word lines, stem-end and end-reference fixes, interior run edges — **Phases 0-5 and 5.1 accepted 2026-09-18**; production code goes to Ken's user-test branch before `master`. Phase 6 NOT PINNED (Ken's call); **Phase 7a CLOSED 2026-09-21 (Ken): the voicing trace isn't worth its processing time, no production change**; 7b-7d gated |
 | `completed/` | closed plans, kept for their Results logs |
 
 Rule of thumb: **a probe belongs to a lane if its outcome changes what
