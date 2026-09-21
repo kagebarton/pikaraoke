@@ -66,8 +66,15 @@ def cue_spans_from_srt(srt_text: str) -> tuple[list[str], list[tuple[float, floa
 
 
 def _is_all_caps(texts: list[str]) -> bool:
-    cased = [c for text in texts for c in text if c.isupper() or c.islower()]
-    return bool(cased) and sum(c.isupper() for c in cased) / len(cased) >= _ALL_CAPS_MIN_SHARE
+    """True when the file is typed in capitals.
+
+    The share is taken over *every* letter, not only the cased ones. A
+    caseless script has no lower case to dilute it, so counting only cased
+    letters let a Mandarin caption's handful of Latin acronyms (DJ, KTV)
+    read as a 100% capitalized file and get "recased" to lower case.
+    """
+    letters = [c for text in texts for c in text if c.isalpha()]
+    return bool(letters) and sum(c.isupper() for c in letters) / len(letters) >= _ALL_CAPS_MIN_SHARE
 
 
 def _recase_line(text: str) -> str:
