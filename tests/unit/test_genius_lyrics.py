@@ -145,6 +145,18 @@ class TestNormalizeLyricLine:
     def test_normalizes_prime_used_as_apostrophe(self):
         assert normalize_lyric_line("I′M GOING UNDER") == "I'M GOING UNDER"
 
+    def test_folds_cyrillic_watermark_letters(self):
+        """Lyric-site watermark (U+0435 for "e"): the aligner reads this
+        text, so the lookalike must not survive to reach whisper."""
+        assert normalize_lyric_line("As it did when we wеre young") == (
+            "As it did when we were young"
+        )
+        assert normalize_lyric_line("Givеs the real world a try") == "Gives the real world a try"
+
+    def test_keeps_accents_of_non_english_lyrics(self):
+        """Only lookalikes are folded here — a real accent is sung text."""
+        assert normalize_lyric_line("Je t'aimerai à jamais") == "Je t'aimerai à jamais"
+
     def test_preserves_parens(self):
         """Parens are source-dependent: Genius parens are sung backing
         vocals (kept). clean_srt_line strips them separately."""

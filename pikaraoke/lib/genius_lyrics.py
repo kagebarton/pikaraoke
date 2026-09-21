@@ -30,6 +30,7 @@ from __future__ import annotations
 import re
 
 from pikaraoke.lib.metadata_parser import EMOJI_PATTERN, NOISE_PATTERN
+from pikaraoke.lib.token_align import fold_homoglyphs
 
 _HEADER_RE = re.compile(r"^\s*\[[^\]]*\]\s*$")
 
@@ -96,8 +97,11 @@ def normalize_lyric_line(text: str) -> str:
 
     Collapses SRT's 2-line wraps to single spaces, strips HTML tags
     (``<i>``, ``<b>``…), strips ``[stage direction]`` content, removes
-    musical-note glyphs (``♪`` / ``♫``), and normalizes curly quotes
-    and apostrophe-primes to ASCII. Does NOT touch parens — Genius
+    musical-note glyphs (``♪`` / ``♫``), normalizes curly quotes
+    and apostrophe-primes to ASCII, and folds the Cyrillic lookalike
+    letters lyric sites watermark with — this text is both the aligner's
+    input and the karaoke's display, so a watermark left in reaches
+    whisper as a foreign token. Does NOT touch parens — Genius
     parens carry sung backing vocals (see :func:`parse_lyric_lines`);
     SRT parens are stage directions and should be cleaned via
     :func:`clean_srt_line` instead.
@@ -106,7 +110,7 @@ def normalize_lyric_line(text: str) -> str:
     text = _HTML_TAG_RE.sub("", text)
     text = _BRACKET_CONTENT_RE.sub("", text)
     text = _MUSICAL_NOTE_RE.sub("", text)
-    text = text.translate(_QUOTES_TABLE)
+    text = fold_homoglyphs(text.translate(_QUOTES_TABLE))
     return " ".join(text.split())
 
 
