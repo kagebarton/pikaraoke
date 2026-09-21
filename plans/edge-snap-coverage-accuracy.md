@@ -28,6 +28,10 @@ Sonnet 5. Originally designed 2026-07-12 (Opus 4.8, executor Sonnet 5).
 > branch first for Ken to user-test before `master`. This plan and its
 > harnesses stay on `edge_snap_refine` as history. The initial
 > implementation is complete. Phases 6 and 7 remain optional and unstarted.
+>
+> **Update 2026-09-21:** Ken took the 7a-before-6 recommendation. **7a is
+> pinned and executable** (see "7a pinned" in Phase 7). Phase 6 is still
+> NOT PINNED.
 
 Execution plan for extending the edge snap (`pikaraoke/lib/onset_snap.py`)
 to more cases (single-word lines, interior run edges) and improving its
@@ -1175,7 +1179,105 @@ produces a script under `scripts/` plus a Results-log entry, read by Opus.
 - **Report** the distribution of (voicing break − RMS end), and eyeball 5
   songs.
 - **GO gate:** voicing finds an earlier, plausible release for ≥ half the
-  suspects, and the eyeballs agree.
+  suspects, and the eyeballs agree. *(Superseded by the pinned gate below.)*
+
+**7a pinned (Opus, 2026-09-21). Executable as written.** Ken asked for 7a
+on 2026-09-21. This is a study only. It changes no production code.
+
+- **Population.** Every `to_bound` record in `joint_stats.edge_snap.end.extends`
+  across `d:/shared/pikaraoke-songs/alignment_debug/*.json`, both routes.
+  - On 2026-09-21 that is **233 records in 38 bundles**. The 202 above was
+    34 bundles; four songs have been added since. A different count is a
+    STOP.
+  - Each record comes from whatever snap code captured its bundle: 33
+    bundles are 2026-07 captures (before Phase 1), 5 are September
+    recaptures. The study asks what the audio does past a claimed end,
+    which does not depend on which code version made the extension.
+- **Window per record**, rebuilt from the bundle with no re-snap:
+  - `bound` = the line's `output_line_timings` end. A `to_bound` end *is*
+    the bound.
+  - `claimed_end` = `bound − extend_s`.
+  - Fidelity check: `bound` equals the next worded line's recorded start
+    minus `NEXT_LINE_GAP_S`, within 2 ms. Pre-checked at 233/233 (no record
+    is on a song's last line). Any failure is a STOP.
+  - Stem: `edge_snap_ass.snap_stem_path`, production's aligned stem.
+- **Pitch track.** `librosa.pyin` (librosa 0.11.0, already in the venv).
+  YIN is the autocorrelation-family tracker the study line names, and
+  pYIN adds the per-frame voicing decision the trace needs.
+  - Input: the same 16 kHz mono PCM decode as `rms_envelope_db`.
+  - Arguments: `fmin=65`, `fmax=1100` (C2 to C#6), `frame_length=1024`,
+    `hop_length=400` (= `HOP_S`), `center=True`, the rest default.
+  - Run on `[claimed_end − 1.0 s, bound + 0.5 s]`, clamped to the audio.
+    The lead-in lets the voicing model settle before the anchor; the tail
+    lets a break near the bound confirm.
+- **Trace constants** (study-local, not production):
+  - `ANCHOR_S = 0.1`. The anchor is the last voiced frame whose centre lies
+    in `[claimed_end − ANCHOR_S, claimed_end]`. None → `no_anchor`.
+  - `JUMP_ST = 1.5`. A voiced frame stays on the contour when its f0 is
+    within 1.5 semitones of the last on-contour frame, and the contour
+    then follows it.
+    - Vibrato and sung glides move less than a semitone per 25 ms frame.
+    - A swap between voices is instantaneous, and one straddling analysis
+      frame splits it into at most two steps. So a major-third swap (4 st)
+      shows as two ~2 st steps and breaks.
+    - **Known limit, pre-registered:** a swap of a minor third or less can
+      be followed as if it were a glide.
+  - `BREAK_FRAMES = 8` (0.2 s, the RMS trace's own `RELEASE_SUSTAIN_S`).
+    The contour breaks at the first frame after `claimed_end` that starts
+    8 consecutive off-contour frames (unvoiced, or voiced but jumped). One
+    on-contour frame resets the run. The run may confirm past `bound`, in
+    the tail pad.
+  - `kind` = `unvoiced` if most of the 8 break frames are unvoiced, else
+    `jump`.
+  - No break starting before `bound` → `no_break`.
+- **Per-record row:** song, route, line id, `claimed_end`, `bound`,
+  `extend_s`, anchor f0, break time or category, `delta = break − bound`,
+  kind, and the line's last words from the shipped `.ass`.
+- **Printed totals.** The script prints these, and the Results log quotes
+  them verbatim with nothing derived past them.
+  - `n_suspects`, `n_no_anchor`, `n_no_break`, `n_agree` (break within
+    0.15 s of `bound`), `n_earlier` (`delta ≤ −0.15 s`: voicing and RMS
+    disagree by more than the snap's own `MIN_SHIFT_S` jitter floor).
+  - A `delta` histogram over anchored records, overall and split by route
+    and by kind: `no_break`, `(−0.15, 0]`, `(−0.5, −0.15]`, `(−1, −0.5]`,
+    `(−2, −1]`, `≤ −2`.
+- **Eyeball list, chosen mechanically.**
+  - The 5 songs with the most `n_earlier` records (ties by song name). In
+    each, up to 3 earlier records with the largest `bound − break`. At
+    most 15 lines.
+  - For those 5 songs the script writes `karaoke/<stem>.voicing.ass`. It
+    parses the shipped `.ass` (`onset_snap_ass.parse_ass_lines`) and ends
+    every earlier record's last word at its break, never before
+    `claimed_end` and never shorter than `MIN_WORD_DUR_S`. It then
+    regenerates the file with `generate_ass`. A/B it against the shipped
+    `.ass`. The round trip moves words inside lines by up to a centisecond
+    (coverage-harness limit (ii)); only the listed line ends matter.
+  - Ken labels each listed line:
+    - **L**: the lead's note ends at or near the voicing break, and the
+      shipped wipe rides something else (a backing voice, the next line,
+      noise).
+    - **H**: the lead holds to the shipped wipe end, so voicing cut a real
+      note.
+    - **U**: can't tell.
+- **GO gate, replacing the one above.** "≥ half the suspects" measures how
+  common disagreement is, not whether voicing is right. A production rule
+  would only act where the two disagree, so the ear decides correctness
+  and the fraction decides size.
+  - Ear says voicing is wrong (H > 1/3 of L+H) → **NO-GO**, whatever the
+    fraction.
+  - Ear agrees (L ≥ 2/3 of L+H, with L+H ≥ 8) and `n_earlier ≥ ½
+    n_suspects` → **GO** to design a production change, which goes to Ken
+    before any code.
+  - Ear agrees and `n_earlier < ½ n_suspects` → Ken's sizing call. The
+    rule is precise but touches fewer lines.
+  - L+H < 8 → inconclusive. STOP; the judge widens the list by the same
+    rule (next songs down).
+- **Commits:** this pin first, then `scripts/voicing_release_study.py`
+  with `tests/unit/test_voicing_release_study.py` (the trace on synthetic
+  f0 arrays), then the Results-log entry. Artifact:
+  `edge_snap/edge_p7a_study.txt` in the session scratchpad.
+- **Executor discipline as for Phases 0-5.** Raw output, no verdicts. The
+  read-off is a separate Opus round, and the ear is Ken's.
 
 **7b. Adaptive step floor.** Only if Phase 2's `n_undetectable` is material
 (rule of thumb: > 5% of fired lines). Prototype in the harness:
