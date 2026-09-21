@@ -32,6 +32,10 @@ Sonnet 5. Originally designed 2026-07-12 (Opus 4.8, executor Sonnet 5).
 > **Update 2026-09-21:** Ken took the 7a-before-6 recommendation. **7a is
 > pinned and executable** (see "7a pinned" in Phase 7). Phase 6 is still
 > NOT PINNED.
+>
+> **Update 2026-09-21 (later):** the 7a executor round is done (see
+> "### Phase 7a" in the Results log). **Next: the Opus read-off, then Ken's
+> ear on the 15-line eyeball list.**
 
 Execution plan for extending the edge snap (`pikaraoke/lib/onset_snap.py`)
 to more cases (single-word lines, interior run edges) and improving its
@@ -4343,3 +4347,92 @@ Pre-registered files are under
        with no code change.
 4. **At merge:** the plan-index row for this plan in `PROGRAM.md` still
    reads "live, not started" and needs updating.
+
+### Phase 7a (Opus, executor round, 2026-09-21)
+
+**Executor round only.** Opus pinned the spec (`e989e9c`), wrote the script
+(`0a3a838`) and ran it in the same session. Under the judge-separation rule
+the read-off is a separate Opus round, and the ear is Ken's. Nothing below
+is a verdict.
+
+- **Code.** `0a3a838` on `edge_snap_refine`, run from a worktree at
+  `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\296345e3-2f9b-49d2-a079-122ea409448c\scratchpad\wt_esr` (Ken's `dev` checkout was not touched).
+  `git diff --stat dev 0a3a838 -- pikaraoke/` is empty, so the production
+  code is the same as on `dev`.
+- **Invocation** (repo root, main venv, worktree first on the path):
+
+  ```
+  PYTHONPATH=<worktree> PYTHONUTF8=1 PYTHONIOENCODING=utf-8 uv run --no-sync python <worktree>/scripts/voicing_release_study.py --folder d:/shared/pikaraoke-songs > edge_p7a_study.txt 2> edge_p7a_study.stderr.txt
+  ```
+
+  Exit 0. The stderr file is empty.
+- **Artifacts** in `C:\Users\TsangK\AppData\Local\Temp\claude\c--temp-Github-pikaraoke\296345e3-2f9b-49d2-a079-122ea409448c\scratchpad\edge_snap`:
+  - `edge_p7a_study.txt`: 302 lines, 233 `rec` rows.
+  - `edge_p7a_study.stderr.txt`: empty.
+  - `edge_p7a_suite.txt`: the unit suite.
+  - The five renders, `d:/shared/pikaraoke-songs/karaoke/<stem>.voicing.ass`,
+    are all stamped 11:34, the same minute as `edge_p7a_study.txt`.
+- **Suite:** `4 failed, 1550 passed, 2 skipped`. The four are the known
+  Windows-only set.
+- **Mechanical gates:** `n_suspects=233` matches the pinned count and
+  `n_bound_fail=0`. No STOP.
+- **Printed totals, verbatim:**
+
+  ```
+  total n_suspects=233 n_bound_fail=0 n_no_anchor=28 n_no_break=103 n_agree=29 n_earlier=73 n_text_mismatch=0
+  hist all no_break=103 (-0.15,0]=29 (-0.5,-0.15]=39 (-1,-0.5]=18 (-2,-1]=9 <=-2=7
+  hist route=cue_align no_break=69 (-0.15,0]=16 (-0.5,-0.15]=19 (-1,-0.5]=6 (-2,-1]=5 <=-2=3
+  hist route=joint no_break=34 (-0.15,0]=13 (-0.5,-0.15]=20 (-1,-0.5]=12 (-2,-1]=4 <=-2=4
+  hist kind=unvoiced (-0.15,0]=13 (-0.5,-0.15]=19 (-1,-0.5]=10 (-2,-1]=2 <=-2=3
+  hist kind=jump (-0.15,0]=16 (-0.5,-0.15]=20 (-1,-0.5]=8 (-2,-1]=7 <=-2=4
+  ```
+
+- **Eyeball list, verbatim:**
+
+  ```
+  eyeball NSYNC - Paradise  n_earlier=8
+    L37 line=2:57.57 ce=2:59.94 voicing_end=3:00.97 shipped_end=3:05.79 kind=jump  Between you and I I
+    L26 line=2:10.50 ce=2:12.34 voicing_end=2:12.37 shipped_end=2:14.90 kind=jump  Ooh, oh Right here next to you
+    L43 line=3:21.72 ce=3:25.70 voicing_end=3:26.25 shipped_end=3:27.58 kind=jump  Just look at us, we're right here where we belong
+    wrote NSYNC - Paradise.voicing.ass
+  eyeball Beauty and the Beast (1991) - Belle [UHD]---otxTf5hZ0Yw  n_earlier=7
+    L85 line=4:14.77 ce=4:15.75 voicing_end=4:15.75 shipped_end=4:16.58 kind=jump  You call this bacon?
+    L18 line=1:09.66 ce=1:12.25 voicing_end=1:12.65 shipped_end=1:13.44 kind=unvoiced  Dazed and distracted, can't you tell?
+    L53 line=2:48.70 ce=2:55.68 voicing_end=2:55.71 shipped_end=2:55.94 kind=unvoiced  Now, it's no wonder that her name means, "Beauty"
+    wrote Beauty and the Beast (1991) - Belle [UHD]---otxTf5hZ0Yw.voicing.ass
+  eyeball Jessie J - Domino (Official Video)---UJtB55MaoD0  n_earlier=7
+    L62 line=3:28.35 ce=3:31.33 voicing_end=3:31.35 shipped_end=3:31.95 kind=jump  Take me down like I'm a domino
+    L64 line=3:35.75 ce=3:39.31 voicing_end=3:39.38 shipped_end=3:39.72 kind=unvoiced  When we touch, don't ever let me go
+    L54 line=3:00.50 ce=3:05.12 voicing_end=3:05.19 shipped_end=3:05.50 kind=jump  Yeah Ooh, baby, baby, got me feelin' so right
+    wrote Jessie J - Domino (Official Video)---UJtB55MaoD0.voicing.ass
+  eyeball ZAYN, Zhavia Ward - A Whole New World (End Title) (From 'Aladdin')---rg_zwK_sSEY  n_earlier=6
+    L46 line=3:03.33 ce=3:04.40 voicing_end=3:04.60 shipped_end=3:05.39 kind=unvoiced  Every moment red-letter
+    L29 line=1:56.16 ce=1:58.55 voicing_end=1:58.58 shipped_end=1:58.97 kind=unvoiced  I'm like a shooting star
+    L34 line=2:07.55 ce=2:12.37 voicing_end=2:13.00 shipped_end=2:13.38 kind=unvoiced  With new horizons to pursue
+    wrote ZAYN, Zhavia Ward - A Whole New World (End Title) (From 'Aladdin')---rg_zwK_sSEY.voicing.ass
+  eyeball 'Defying Gravity' - Wicked 20th Anniversary Edition _ WICKED the Musical---AoON1CyhQAM  n_earlier=5
+    L44 line=1:33.24 ce=1:40.96 voicing_end=1:41.61 shipped_end=1:43.02 kind=unvoiced  And you can't pull me down
+    L78 line=3:22.72 ce=3:29.19 voicing_end=3:29.24 shipped_end=3:30.37 kind=jump  Is ever gonna bring me down!
+    L81 line=3:34.63 ce=3:36.47 voicing_end=3:36.50 shipped_end=3:37.07 kind=unvoiced  Get her!
+    wrote 'Defying Gravity' - Wicked 20th Anniversary Edition _ WICKED the Musical---AoON1CyhQAM.voicing.ass
+  ```
+
+- **Render check, one listed line** (Paradise L37, shipped `.ass` then
+  `.voicing.ass`):
+
+  ```
+  Dialogue: 0,0:02:56.77,0:03:05.98,Karaoke,,0,0,0,,{\k80}{\kf41}Between {\kf76}you {\kf26}and {\kf94}I {\kf585}I
+  Dialogue: 0,0:02:56.77,0:03:01.16,Karaoke,,0,0,0,,{\k80}{\kf41}Between {\kf76}you {\kf26}and {\kf94}I {\kf103}I
+  ```
+
+- **For Ken's ear** (the pinned labels). For each listed line, play the
+  song from a few seconds before `line=`, once with each subtitle file:
+
+  ```
+  mpv "d:/shared/pikaraoke-songs/<stem>.mp4" --sub-file="d:/shared/pikaraoke-songs/karaoke/<stem>.voicing.ass"
+  mpv "d:/shared/pikaraoke-songs/<stem>.mp4" --sub-file="d:/shared/pikaraoke-songs/karaoke/<stem>.ass"
+  ```
+
+  Then label the line **L** (the lead's note ends near `voicing_end`, and
+  the shipped wipe rides something else), **H** (the lead holds to
+  `shipped_end`) or **U** (can't tell).
