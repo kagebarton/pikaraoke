@@ -48,6 +48,13 @@ Sonnet 5. Originally designed 2026-07-12 (Opus 4.8, executor Sonnet 5).
 > little, so a voicing rule is not worth its processing time. There is no
 > widened list, no design and no production change. See "### Phase 7a
 > eyeball session". Phase 6 is still NOT PINNED, and 7b-7d stay gated.
+>
+> **Update 2026-09-21 (Phase 6 probe):** at Ken's request, a read-only
+> probe ran the checked-out detector on run edges (see "### Phase 6
+> run-edge sizing probe"). The onset half moves almost nothing, and as
+> designed it removes more line-start snaps than it adds. The end half is
+> large but is mostly the wipe stretched across short pauses. **Next: Ken's
+> call on Phase 6**, which is still NOT PINNED.
 
 Execution plan for extending the edge snap (`pikaraoke/lib/onset_snap.py`)
 to more cases (single-word lines, interior run edges) and improving its
@@ -1100,6 +1107,10 @@ Commit: `fix(onset-snap): no continuity shortcut on one-word lines`
 >      NOT small, so it cannot be closed on size; what remains unmeasured
 >      is how many of those sites the snap would actually *move*, which
 >      needs the detector run against run edges.
+>    - **PROBED 2026-09-21 — see "### Phase 6 run-edge sizing probe".**
+>      On replay, 5 of 169 interior starts move, and 103 of 169 interior
+>      ends extend, 79 of them to the bound. The design's rules remove 8
+>      of today's line-start snaps and add none.
 >    - The coverage harness's ASS round-trip drift matters inside
 >      multi-word lines, so the replay harness is the exact read here.
 >
@@ -4772,3 +4783,224 @@ version of the lyrics altogether". On the recommendation to drop the fix:
 4. The schema bump does not wait on this item.
 5. The 8 `.writercur`/`.writerfix` renders and the 5 `.voicing.ass`
    renders from 7a are deleted from the library.
+
+### Phase 6 run-edge sizing probe (Opus, 2026-09-21)
+
+Ken asked for this after 7a closed. It answers the question the interior-gap
+count left open: of the split sites, how many would the snap actually move?
+It is read-only. No production code changes, nothing is written to the
+library, and Phase 6 is not executed. Run at `16d8f07` on `edge_snap_refine`.
+Scratchpad (session `f15a212e`): `p6probe/run_edge_probe.py`, artifact
+`p6probe/p6_probe.txt`; `p6probe/lost_onsets.py`, artifact
+`p6probe/lost_onsets.txt`.
+
+**Method.** The probe reimplements the per-line onset and end logic as
+per-run logic. It calls the checked-out `_detect_rise` and
+`_sung_level_ref` and the module's own constants. It follows the Phase 6
+design text, plus the Phases 0-5 checkpoint's reference rule:
+
+- Runs: split at `words[k].start - words[k-1].end >= 0.5` (`RUN_GAP_S`).
+- Onset reference: the line median excluding every run's first word. When
+  that leaves nothing (every run is one word), fall back to the candidate's
+  own-span P80 (Phase 4's rule), counted as `ref_fallback`.
+- Onset bound: the next word's start inside the run. For a one-word run,
+  the word's own end with `trust_bound=False` (Phase 4's rule).
+- End reference: `_sung_level_ref(..., end=True)` over the line's
+  post-onset words, computed once per line.
+- End bound: the next run's post-onset first-word start minus
+  `NEXT_LINE_GAP_S`. The line-final run keeps the next-line scan.
+- Order: all onsets, then all ends, as in production.
+- **Self-check.** With splitting disabled (`run_gap = inf`), the probe must
+  reproduce production's `snap_line_edges` word timings exactly, along with
+  `n_snapped`, `n_fired`, `n_no_rise`, `n_below_min_shift`, `n_low_ref` and
+  `n_undetectable` (onset), and `n_extended`, `n_fired`,
+  `n_below_min_shift` and `n_low_ref` (end). **57/57 pass** (19 replay,
+  38 coverage).
+- Populations:
+  - *replay*: joint bundles, post-veto and pre-snap
+    (`_replay_output` + `veto_uncorroborated_lines`). This is the exact
+    read.
+  - *coverage*: every bundle with a shipped `.ass`, via `parse_ass_lines`.
+    Production never snaps interior runs, so interior outcomes here are
+    first-application reads. ASS round-trip drift applies (limit (ii)).
+    Line-edge side effects are not reported for this population.
+- "Line-edge side effects" compares each line's word-0 onset and last-word
+  end between the split run and the no-split run (which equals production,
+  by the self-check).
+
+**Totals, verbatim:**
+
+```
+==== replay ====
+songs=19 selfcheck_fail=0 lines=1055 split_lines=144 sites=169
+onset candidates=169 below_min_shift=16 low_ref=4 no_rise=17 on_time=108 short=19 snapped=5
+end candidates=169 below_min_shift=15 extended=103 low_ref=6 released=45
+onset_band (gap band: moved/candidates)
+  0.5-0.75: 1/84
+  0.75-1: 0/30
+  1-2: 3/36
+  2-3: 1/5
+  >=3: 0/14
+end_band (gap band: moved/candidates)
+  0.5-0.75: 56/84
+  0.75-1: 17/30
+  1-2: 18/36
+  2-3: 2/5
+  >=3: 10/14
+onset_shift (moved, by amount) 0.15-0.3=2 0.3-0.5=0 0.5-1=3 1-2=0 >=2=0
+end_shift (moved, by amount) 0.15-0.3=8 0.3-0.5=49 0.5-1=32 1-2=10 >=2=4
+end_to_bound=79 by gap band: 0.5-0.75=53 0.75-1=15 1-2=11 2-3=0 >=3=0
+onset by run length: one:below_min_shift=2 one:low_ref=3 one:no_rise=13 one:on_time=50 one:short=4 one:snapped=2 multi:below_min_shift=14 multi:low_ref=1 multi:no_rise=4 multi:on_time=58 multi:short=15 multi:snapped=3
+onset ref_fallback: below_min_shift=1 on_time=6
+line-edge side effects (kind, change, line type)=count:
+  ('end', 'amount', 'split_line')=3
+  ('end', 'outcome_only', 'no_split_line')=2
+  ('end', 'outcome_only', 'split_line')=1
+  ('onset', 'lost', 'split_line')=8
+  ('onset', 'outcome_only', 'split_line')=5
+
+==== coverage ====
+songs=38 selfcheck_fail=0 lines=2057 split_lines=382 sites=463
+onset candidates=463 below_min_shift=26 low_ref=7 no_rise=35 on_time=340 short=41 snapped=14
+end candidates=463 below_min_shift=38 extended=313 low_ref=8 released=104
+onset_band (gap band: moved/candidates)
+  0.5-0.75: 6/249
+  0.75-1: 3/99
+  1-2: 4/93
+  2-3: 1/8
+  >=3: 0/14
+end_band (gap band: moved/candidates)
+  0.5-0.75: 176/249
+  0.75-1: 69/99
+  1-2: 54/93
+  2-3: 4/8
+  >=3: 10/14
+onset_shift (moved, by amount) 0.15-0.3=6 0.3-0.5=0 0.5-1=7 1-2=1 >=2=0
+end_shift (moved, by amount) 0.15-0.3=19 0.3-0.5=137 0.5-1=119 1-2=32 >=2=6
+end_to_bound=258 by gap band: 0.5-0.75=162 0.75-1=58 1-2=38 2-3=0 >=3=0
+onset by run length: one:below_min_shift=5 one:low_ref=4 one:no_rise=26 one:on_time=157 one:short=7 one:snapped=3 multi:below_min_shift=21 multi:low_ref=3 multi:no_rise=9 multi:on_time=183 multi:short=34 multi:snapped=11
+onset ref_fallback: below_min_shift=1 no_rise=1 on_time=19
+```
+
+`outcome_only` means neither run moved the edge, but the reason differs
+(for example `no_room` vs `released`). No word timing changes on any line
+without a split site.
+
+**Per song, replay** (sites / interior onsets moved / interior ends
+extended / of those, to the bound):
+
+| song | sites | onsets | ends | to bound |
+|---|---:|---:|---:|---:|
+| Defying Gravity | 8 | 1 | 8 | 6 |
+| Free | 3 | 0 | 3 | 3 |
+| Popular | 8 | 0 | 2 | 1 |
+| Be Our Guest | 9 | 0 | 6 | 6 |
+| Belle | 9 | 0 | 7 | 7 |
+| Best Part Of Me | 11 | 1 | 8 | 4 |
+| Bloodstream | 17 | 0 | 12 | 8 |
+| This Is What It Sounds Like | 7 | 0 | 4 | 4 |
+| Domino | 4 | 0 | 1 | 1 |
+| In Summer | 5 | 0 | 2 | 2 |
+| I'll Make a Man Out of You | 2 | 0 | 2 | 2 |
+| Paradise | 2 | 0 | 1 | 1 |
+| Colors of the Wind | 3 | 0 | 2 | 0 |
+| She Used To Be Mine | 20 | 1 | 16 | 11 |
+| Seasons of Love | 7 | 0 | 3 | 3 |
+| Stay Gold | 18 | 0 | 9 | 7 |
+| Hakuna Matata | 6 | 1 | 2 | 0 |
+| The Next Ten Minutes | 21 | 1 | 10 | 8 |
+| For Good (2025) | 9 | 0 | 5 | 5 |
+
+**The 5 interior onsets moved, replay:**
+
+```
+Defying Gravity      L44 w6/6 t=1:38.96 gap=2.20 +0.765 [1run]  pull me down
+Best Part Of Me      L14 w2/8 t=1:23.53 gap=0.67 +0.900  Baby, the best
+She Used To Be Mine  L45 w4/9 t=3:53.03 gap=1.03 +0.670  is gone, but she
+Hakuna Matata        L3  w4/4 t=0:29.98 gap=1.39 +0.245 [1run]  our problem-free philosophy
+The Next Ten Minutes L62 w2/3 t=5:27.59 gap=1.80 +0.260  Until I do
+```
+
+**The 8 lost line-start snaps, replay** (`lost_onsets.txt`: pre-snap word
+1, word 2's start, and where production's snap puts word 1 today):
+
+```
+Belle L2:       w1 27.61-28.14  w2.start 28.98   gap 0.84  prod w1 -> 27.80-28.14  (lands 1.18s before w2)
+Best Part L34:  w1 204.34-205.50 w2.start 212.61 gap 7.10  prod w1 -> 205.38-205.50 (lands 7.23s before w2)
+Bloodstr L5:    w1 18.84-18.94  w2.start 20.72   gap 1.78  prod w1 -> 20.00-20.10  (lands 0.72s before w2)
+Domino L2:      w1 12.36-13.04  w2.start 13.90   gap 0.86  prod w1 -> 13.28-13.90  (lands 0.63s before w2)
+Domino L27:     w1 95.66-96.34  w2.start 96.85   gap 0.51  prod w1 -> 96.65-96.85  (lands 0.20s before w2)
+In Summer L19:  w1 63.43-64.43  w2.start 64.67   gap 0.24  prod w1 -> 63.68-64.43  (lands 0.99s before w2)
+Next Ten L2:    w1 25.28-26.42  w2.start 27.44   gap 1.02  prod w1 -> 26.73-27.44  (lands 0.71s before w2)
+Next Ten L35:   w1 192.76-192.87 w2.start 193.44 gap 0.57  prod w1 -> 193.15-193.26 (lands 0.29s before w2)
+```
+
+In seven of these, word 1 is itself followed by a split gap. It becomes a
+one-word run, so its bound shrinks to its own claimed end and the one-word
+continuity rule rejects the rise. In Summer L19 has no gap after word 1. It
+loses its snap to the reference rule instead: excluding the line's other
+run-first words raises the reference until word 1 passes the on-time guard.
+No line-start snap is gained.
+
+**Interior end extensions at gaps >= 2 s, replay** (none reach the bound):
+
+```
+Defying Gravity      L44 w5/6 gap=2.20 +1.791  can't pull me down
+Best Part Of Me      L33 w1/8 gap=2.18 +1.325  Baby, the
+Best Part Of Me      L34 w1/5 gap=7.10 +5.296  Lately, everything's
+Bloodstream          L14 w1/5 gap=4.05 +0.505  This is
+Bloodstream          L19 w6/7 gap=9.46 +0.405  when it kicks in
+Bloodstream          L36 w1/7 gap=3.45 +0.535  Well, tell
+Bloodstream          L38 w1/6 gap=3.78 +2.895  All the
+Colors of the Wind   L6  w2/3 gap=4.60 +2.166  You don't know
+Colors of the Wind   L19 w9/10 gap=6.56 +0.280  colors of the wind?
+She Used To Be Mine  L41 w1/6 gap=8.51 +3.971  She is
+Stay Gold            L21 w3/4 gap=7.26 +0.849  My friend, stay gold
+Hakuna Matata        L0  w4/6 gap=4.84 +0.675  matata, what a wonderful
+```
+
+**What it says.**
+
+1. **The onset half barely exists, and as designed it nets negative.**
+   Interior starts after a pause move on 5 of 169 replay sites (14 of 463
+   coverage). Two times in three the word after the pause already passes
+   the detector's own on-time test. This matches the phase's stated
+   expectation that whisper's interior timestamps are better than its line
+   edges. But the design's bound rule (never search across the gap) and the
+   checkpoint's reference rule together remove 8 line-start snaps that
+   production makes today, six of them by close to a second or more, and
+   add none. None of the 8 has been individually heard, so the envelope
+   cannot say whether production or the split run is right. The design
+   rule is unconditional, though, so any build of this phase inherits the
+   trade.
+2. **The end half is large, and most of it fills the pause.** 103 of 169
+   interior ends extend on replay (313 of 463 coverage). 79 of the 103 run
+   all the way to the next run's start (258 of 313), and 53 of those sit in
+   the narrowest band, 0.5-0.75 s. There the release search has almost no
+   room. With the bound 0.1 s short of the next word and a full 0.2 s
+   window required, a release has to be seen within the first 0.2-0.45 s
+   of the pause, so reaching the bound there mostly means "no release seen
+   in a tiny window". Every fired site did pass the clip gate: the voice is
+   still sounding at whisper's claimed end. So *some* extension has
+   evidence behind it. How far is exactly what the narrow band cannot tell.
+3. **At the widest gaps the extensions ride seconds of audio.** At the 12
+   sites of 2 s or more, the extension stops at a found release rather than
+   the bound, but it can be long: +5.3 s on Best Part Of Me's
+   7.1 s "Lately," gap, +4.0 s on She Used To Be Mine, +2.9 s and +2.2 s
+   elsewhere. These are the sites the interior-gap count flagged as partly
+   matcher spreading across a repeat or instrumental. A multi-second wipe
+   there re-times a matcher artifact instead of flagging it, and a found
+   "release" several seconds out is also what a backing vocal would
+   produce.
+4. **The gate mechanism holds up.** No line without a split site changes
+   timing; the two `no_split_line` entries are reason-label changes only.
+   Once the checkpoint's filter removes split lines, the Phase 6
+   byte-identical gate is reachable on timings.
+5. **Relation to 7a.** The end half is the same kind of change 7a just
+   put in front of Ken's ear: where a sung word's wipe stops, moved by
+   tenths of a second up to about a second, with the RMS trace running to
+   the bound when it sees no release. 7a closed because the ear found most
+   such differences indistinguishable. 7a's cost was a pitch track, and
+   Phase 6's end half would reuse the envelope already decoded, so the
+   cost reason does not carry over. Whether the ear verdict carries over is
+   for Ken; this probe does not answer it.
