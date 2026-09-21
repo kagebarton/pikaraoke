@@ -34,12 +34,15 @@ _STRIP_NONWORD_RE = re.compile(r"[^\w]", re.UNICODE)
 
 # Cyrillic lookalikes of Latin letters. Lyric sites watermark fetched
 # text with these ("wеre" with U+0435), which silently breaks token
-# equality against whisper output.
-_CONFUSABLE_PAIRS = dict(zip("аеіоруѕсхј", "aeiopyscxj"))
+# equality against whisper output. Capitals are listed separately: some
+# Cyrillic letters pass for Latin only in upper case (В/B, Н/H), and
+# folding their lower case (в, н) would be wrong.
+_CONFUSABLE_PAIRS = {
+    **dict(zip("аеіоруѕсхј", "aeiopyscxj")),
+    **dict(zip("АЕІОРУЅСХЈ", "AEIOPYSCXJ")),
+    **dict(zip("ВНМКТ", "BHMKT")),
+}
 _CONFUSABLES = str.maketrans(_CONFUSABLE_PAIRS)
-_CASED_CONFUSABLES = str.maketrans(
-    {**_CONFUSABLE_PAIRS, **{k.upper(): v.upper() for k, v in _CONFUSABLE_PAIRS.items()}}
-)
 _LETTER_RUN_RE = re.compile(r"[^\W\d_]+", re.UNICODE)
 _ASCII_LETTER_RE = re.compile(r"[A-Za-z]")
 
@@ -52,17 +55,23 @@ def fold_homoglyphs(text: str) -> str:
     reach whisper as a foreign token, but the accents of a genuinely
     non-English lyric must survive.
 
-    Only words that already hold an ASCII letter are folded. A watermark
-    is one lookalike hidden in a Latin word ("wеre"); a word with no Latin
-    letter in it is real Cyrillic, and folding a Russian lyric letter by
-    letter would corrupt both the display and the aligner's input.
+    A line with no ASCII letter at all is real Cyrillic and is left alone,
+    or a Russian lyric would be corrupted letter by letter. Within a Latin
+    line, a word is folded when it holds an ASCII letter ("wеre") or when
+    every letter it has is a lookalike — English's one-letter words, "I"
+    and "a", are both lookalikes and carry no ASCII letter of their own,
+    and an apostrophe ends a word, so "І'm" and "it'ѕ" reach here as bare
+    lookalike runs. A word mixing real Cyrillic with lookalikes is a
+    foreign word in a bilingual line, and keeps its spelling.
     """
+    if not _ASCII_LETTER_RE.search(text):
+        return text
 
     def fold_word(match: re.Match[str]) -> str:
         word = match.group(0)
-        if not _ASCII_LETTER_RE.search(word):
-            return word
-        return word.translate(_CASED_CONFUSABLES)
+        if _ASCII_LETTER_RE.search(word) or all(ch in _CONFUSABLE_PAIRS for ch in word):
+            return word.translate(_CONFUSABLES)
+        return word
 
     return _LETTER_RUN_RE.sub(fold_word, text)
 
@@ -71,9 +80,8 @@ def fold_to_ascii(text: str) -> str:
     """Fold homoglyphs and diacritics to plain ASCII letters.
 
     Whisper writes accented words unaccented ("souffle" for "soufflé"),
-    so both comparison sides are folded before matching. Expects
-    lowercased input (the confusable table is lowercase-only). Lyric text
-    is already homoglyph-folded at ingest, but whisper and LRCLIB text is
+    so both comparison sides are folded before matching. Lyric text is
+    already homoglyph-folded at ingest, but whisper and LRCLIB text is
     not, so the folding stays here too.
     """
     text = unicodedata.normalize("NFKD", text.translate(_CONFUSABLES))
