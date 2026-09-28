@@ -278,6 +278,22 @@ or anything outside the scratch folder changes during the real run.
 
 ### Baseline
 
+2026-09-28, worktree `wt_libtools` at `66e7b6d` (`library_tools`, off `dev`
+`6bc19aa`). Fresh `uv sync` (first sync in this worktree; one transient
+`uv-trampoline` access-denied retry, unrelated to the repo) plus a manual copy
+of `.venv/Scripts/libmpv-2.dll` from the main checkout (hand-placed, not a
+dependency — memory `project_dev_environment_map`). Confirmed `pikaraoke`
+imports from the worktree, not the main checkout.
+
+`uv run --no-sync python -m pytest tests/unit -q`: **4 failed, 1487 passed, 2
+skipped**. The 4 failures are exactly the known Windows set (memory
+`project_windows_dev_box`): `test_genius.py::TestSidecarIO::test_write_overwrites_existing`,
+`test_pipeline_stem_worker.py::TestStemWorkerSeparate::test_ok_returns_stem_paths_and_sends_job`,
+`test_pipeline_stem_worker.py::TestStemWorkerSeparate::test_model_override_travels_in_job_tuple`,
+`test_whisper_worker.py::TestStart::test_start_raises_worker_died_on_pipe_close`.
+No new failures. Baseline for every phase below: 4 known-failed + new tests
+passed.
+
 ### Phase 1
 
 ### Phase 2
