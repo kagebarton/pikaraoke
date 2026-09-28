@@ -334,4 +334,28 @@ python scripts/regen_alignment_bundles.py --song <YouTube-ID-or-part-of-name> --
 
 ### Phase 2
 
+Code `2fdcf08`. Same `select_songs`, wired the same way as Phase 1 (bad
+pattern -> stderr + exit 2), but `scan_folder`'s selection path stays
+inside the existing missing-artifact gate instead of overriding it: a
+selected song with nothing missing is reported
+(`<name>: nothing missing (use regen --song to reprocess)`) and left out of
+`jobs`, never force-queued. `_list_videos` is duplicated from regen rather
+than shared, per Decision 3 (no wider shared module beyond `select_songs`).
+Anchor `def scan_folder(folder: Path)` at `6bc19aa` L96 matched exactly.
+
+Tests: `tests/unit/test_backfill_artifacts.py` (new, first ever for this
+script) — 2, kept small per the plan: selection scoping, nothing-missing
+not queued. Full suite: **4 known-failed, 1499 passed, 2 skipped** (1497 +
+2 new, no regressions). `pre-commit` clean on the first pass.
+
+Verify: dry run on the real library, `--song hLQl3WQQoQ0 --dry-run` ->
+correctly reported "nothing missing" (that song is already fully
+backfilled) and queued 0 songs; a full unscoped `--dry-run` confirmed the
+whole library currently has nothing missing, so the "queued row" path
+couldn't be shown against real data — it's covered by the tmp_path tests
+instead. Read-only throughout, no STOP condition (Phase 2 has none).
+
+`scripts/README.md` backfill section gained the `--song` usage line and
+its "not force queued" distinction from regen's `--song`.
+
 ### Phase 3
