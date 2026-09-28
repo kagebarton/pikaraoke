@@ -141,6 +141,65 @@ python scripts/regen_alignment_bundles.py --song <YouTube-ID-or-part-of-name> --
 Reuses the song's recorded lyric source (add `--reset` to re-resolve it
 from scratch instead).
 
+## add_songs.py
+
+Downloads YouTube videos or playlists into the library and runs the
+pipeline on them, without the app UI.
+
+### Usage
+
+```bash
+python scripts/add_songs.py URL [URL ...] [--folder PATH] [--dry-run] [--yes]
+```
+
+Default `folder` = `get_default_dl_dir()`, as in the other tools. A
+`watch?v=X&list=Y` link downloads only `X`; paste the playlist page link
+to get the whole list. `--dry-run` prints the report and exits.
+
+### Flow
+
+1. **Classify** each URL as a video or a playlist (`song_select.py`'s
+   sibling, `classify_url`/`resolve_urls` in this file), expanding
+   playlists via `yt-dlp --flat-playlist`.
+2. **Dedupe** the resulting ids and skip any already in `--folder` (a
+   video file whose `extract_youtube_id` matches).
+3. **Report** a table (id, source URL, new/already) and confirm, unless
+   `--yes`.
+4. **Download** the new ids serially through a real `DownloadManager` —
+   the same code path the app UI uses, so the uploader caption and the
+   YTASR `.en.asr.json3` are fetched exactly as they would be from the
+   app. The tool never writes the app's library database: `SongManager`
+   is built with an in-memory `KaraokeDatabase(":memory:")`, and only its
+   `songs.find_by_id` is used.
+5. **Hand off to `regen_alignment_bundles`:** each downloaded song becomes
+   a `SongJob` with no bundle, which resolves to a `fetch` plan (every
+   download has a YouTube id), then runs through `resolve_and_run` —
+   caption fetch with the words-per-minute gate, the Genius prompt for
+   any song without a usable caption, and the pipeline. No backup is
+   needed; a freshly downloaded song has no prior outputs to lose.
+
+Downloads run unattended, then any Genius prompts come in one batch, then
+the pipeline runs unattended — the help text (`--help`) says so, so you
+know when to be at the keyboard.
+
+**After it finishes:** the app doesn't know about the new songs until its
+next library sync (startup, or the admin "sync library" action) — the
+tool prints a reminder.
+
+### Not the app's yt-dlp settings
+
+The app's `youtubedl_proxy` and `additional_ytdl_args` are command-line
+flags to the app, not preferences, so this tool doesn't read them; only
+`high_quality` (a real preference) applies. `blocked_processing_words`
+filtering is also out of scope.
+
+### Run it while the app is idle
+
+This tool and the running app can both drive a GPU pipeline; running two
+at once measures 3-11x slower (VRAM isn't the limiter — WDDM context
+switching is), so the help text says to run this while the app is idle.
+Not enforced in code.
+
 ## Architecture notes
 
 ### Why a separate script, not a Flask route?
