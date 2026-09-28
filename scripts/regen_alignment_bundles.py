@@ -862,6 +862,15 @@ def _make_genius() -> GeniusClient:
     return _genius_singleton
 
 
+def warn_if_no_genius_token(genius: GeniusClient) -> None:
+    """Print a warning when no Genius API token is configured."""
+    if not genius._token:
+        print(
+            "WARNING: no genius_token in preferences; Genius searches will "
+            "return no hits. Use [t] (transcribe) or [s] (local SRT) only.\n"
+        )
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -904,6 +913,27 @@ def parse_args() -> argparse.Namespace:
         help="Skip the post-report confirmation prompt.",
     )
     return p.parse_args()
+
+
+def resolve_and_run(jobs: list[SongJob], config: PipelineConfig, genius: GeniusClient) -> int:
+    """Resolve caption fetches and Genius prompts, then run the pipeline.
+
+    Returns the process exit code: 0 on success (including nothing left to
+    run after prompts), 1 if any job failed.
+    """
+    # Download captions before prompting so a fetch failure falls through to the
+    # Genius prompt (and a success skips it).
+    execute_fetches(jobs)
+    execute_lrclib_backfill(jobs, config)
+
+    prompt_jobs(jobs, genius)
+    if not any(j.plan and j.plan.kind != "skip" for j in jobs):
+        print("No songs left after prompts.")
+        return 0
+
+    succeeded, failed, skipped = run_jobs(jobs, config, genius)
+    print(f"\nDone. succeeded={succeeded} failed={failed} skipped={skipped}")
+    return 0 if failed == 0 else 1
 
 
 def main() -> int:
@@ -951,11 +981,7 @@ def main() -> int:
     config = PipelineConfig()
     config.intermediate_dir = get_temp_directory()
     genius = _make_genius()
-    if not genius._token:
-        print(
-            "WARNING: no genius_token in preferences; Genius searches will "
-            "return no hits. Use [t] (transcribe) or [s] (local SRT) only.\n"
-        )
+    warn_if_no_genius_token(genius)
 
     stems = [p.stem for p in selected] if selected is not None else None
 
@@ -972,19 +998,7 @@ def main() -> int:
         clear_output_folders(folder, stems=stems)
         print("Cleared subtitles/karaoke/lyrics (reset); the pipeline rebuilds them.\n")
 
-    # Download captions before prompting so a fetch failure falls through to the
-    # Genius prompt (and a success skips it).
-    execute_fetches(jobs)
-    execute_lrclib_backfill(jobs, config)
-
-    prompt_jobs(jobs, genius)
-    if not any(j.plan and j.plan.kind != "skip" for j in jobs):
-        print("No songs left after prompts.")
-        return 0
-
-    succeeded, failed, skipped = run_jobs(jobs, config, genius)
-    print(f"\nDone. succeeded={succeeded} failed={failed} skipped={skipped}")
-    return 0 if failed == 0 else 1
+    return resolve_and_run(jobs, config, genius)
 
 
 if __name__ == "__main__":
