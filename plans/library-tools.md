@@ -2,9 +2,10 @@
 
 Model: Claude Opus 5.5 (design, 2026-09-28); executor Claude Sonnet 5.
 
-> **Status (2026-09-28): PINNED, not started.** Phases 1-3 are executable in
-> order. There is no GATE and nothing here measures timing. After Phase 3,
-> flag that a `/code-review` is due (CLAUDE.md, Self-Review). Do not run it.
+> **Status (2026-09-28): Phases 1-3 EXECUTED** (Sonnet 5), Results log below.
+> Code commits `6cc2b29`, `2fdcf08`, `c8fe156`, `788b10c` reach `dev` by
+> cherry-pick, in that order. A `/code-review` is due and has not been run
+> (CLAUDE.md, Self-Review). There is no GATE and nothing here measures timing.
 
 ## Why
 
@@ -359,3 +360,106 @@ instead. Read-only throughout, no STOP condition (Phase 2 has none).
 its "not force queued" distinction from regen's `--song`.
 
 ### Phase 3
+
+Commits: 3b refactor `c8fe156`; tool, tests and README `788b10c`.
+
+**3a (STOP gate).** `from flask_babel import _; print(_("Downloaded: %s") % "x")`
+outside any app printed `Downloaded: x`. No STOP.
+
+**3b.** `resolve_and_run(jobs, config, genius) -> int` and
+`warn_if_no_genius_token(genius)` split out of regen's `main()`; the 39 existing
+regen tests passed unchanged.
+
+**3c/3d.** `scripts/add_songs.py` (mode 100755, like its sibling CLIs) and
+`tests/unit/test_add_songs.py` (10 tests: classify 5, expand 1, expansion
+failure 1, dedupe 2, handoff 1). Full suite: **4 known-failed, 1509 passed, 2
+skipped** (1499 + 10). `pre-commit` clean.
+
+Implementation notes:
+
+- `classify_url` calls `get_youtube_id_from_url` only for URLs containing `v=`
+  or `u.be/`. That helper logs `ERROR ... Error parsing youtube id from url` for
+  any URL it can't parse, and Stage 1 printed that line first for a playlist
+  link. The caption assertion in `test_bare_playlist_url` fails with the guard
+  disabled (checked) and passes with it.
+- `main()` reuses regen's underscore-named `_list_videos` and `_make_genius`
+  (Decision 3, direct import).
+- Limit: a link with an extra parameter between `v=` and `list=`
+  (`watch?v=X&t=30s&list=Y`) is read as a playlist. `watch?v=X&list=Y&t=30s` is a
+  video, and `watch?v=X&t=30s` with no list is reported unrecognised (the app's
+  own helper cannot parse it either).
+
+**3e real runs (scratch folders only).** Playlist `PLWPORwgk3oWc`, 4 entries
+(from Ken).
+
+Run A, in two stages. The drivers (`verify_stage1.py`, `verify_stage2.py`, in the
+session scratchpad, not committed) reproduce `main()`'s download block and stop
+before the interactive prompt; `classify_url`, `resolve_urls`, `print_report`,
+the real `DownloadManager`, `execute_fetches` and `run_jobs` were the real code.
+
+- Stage 1: `Songs found: 4`. Downloads: 3 succeeded, 1 failed (`Z3x9i7njCCo`,
+  yt-dlp `HTTP Error 403: Forbidden`). `song_downloaded` fired 3 times for 3
+  successes, so no STOP. Captions: `6q0JnftlH-I` fetched a manual caption and got
+  a seed-srt plan; `1QYBiNRu1ok` and `6oQZFjJDI7s` had none, so both went to
+  the Genius prompt. The ASR fetch for `6q0JnftlH-I` returned `HTTP Error 429` and
+  left a stray partial `subtitles/<stem>.en.json3` (26,649 B); upstream
+  `download_auto_en_subs` does not clean up when yt-dlp exits non-zero. Not
+  touched, not copied to the library.
+- Genius prompt: the Bash tool cannot type into a live prompt, so the driver
+  injected the `Plan(kind="sidecar", genius_id=...)` that `_prompt_one` returns
+  for a numbered pick. The default query for `1QYBiNRu1ok` was `'Seven ' Performance`:
+  `clean_search_query` strips parenthesised text, and `EMOJI_PATTERN`
+  (`\U000024C2-\U0001F251` in `metadata_parser.py`) also removes all Hangul and
+  Japanese text (checked: `EMOJI_PATTERN.sub("", "정국") == ""`). The 6 hits
+  were wrong. Variants (`Jung Kook Seven`, `Jungkook Seven`, `jung kook seven`,
+  `Seven Jungkook Latto`) returned 0 hits after filtering: the raw API gave 20
+  hits, all `Genius ... Translations` pages, which `search()` drops by design.
+  Ken supplied `genius.com/Jung-kook-and-latto-seven-clean-ver-lyrics`; it
+  resolved to id 9283569 by matching `result["url"]` in the raw hits for a query
+  containing "Clean Ver" (a direct page fetch returns 403). For `6oQZFjJDI7s`
+  Ken picked hit 1, id 1259925.
+- Stage 2 (`run_jobs`): `succeeded=3 failed=0 skipped=0`, 1433 s. LRCLIB
+  returned 503 for `6oQZFjJDI7s`.
+
+| id | video | .srt | .srt.generated | .en.asr.json3 | vocal + nonvocal | .ass | bundle | .lrc |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `1QYBiNRu1ok` Seven | yes | yes | yes | yes | yes | yes | yes | yes |
+| `6q0JnftlH-I` Standing Next to You | yes | yes (uploader caption) | no | no (429) | yes | yes | yes | no |
+| `6oQZFjJDI7s` The Next Ten Minutes | yes | yes | yes | no (no error logged) | yes | yes | yes | no (503) |
+| `Z3x9i7njCCo` 3D | download failed | | | | | | | |
+
+Run B, the file's own `main()`: `add_songs.py "https://www.youtube.com/watch?v=Z3x9i7njCCo"
+--folder <fresh scratch> --yes`, stdin `\nt\n` in case a prompt appeared. The
+403 did not recur. A manual caption was fetched, so no prompt fired.
+`Downloaded: 1 Failed: 0 Processed: 1`, exit 0, sync-library reminder printed.
+Artifacts: video, `.srt` (uploader caption), `.en.asr.json3`, both stems, `.ass`,
+bundle. Run B is the only run that executed `main()`'s download-to-handoff
+branch itself. The interactive Genius prompt inside `main()` and the
+confirmation prompt were not exercised live in any run.
+
+Safety checks after Run A and again after Run B: real app DB
+`%APPDATA%\pikaraoke\pikaraoke.db` sha256 `5c9dec18...bedab` and mtime
+`1779911392` identical to before; real `config.ini` sha256 `e264ca26...0cb8`
+identical; no file in the real library carried any of the four ids. Files
+modified in the real library during the runs (`karaoke/*.p6base.ass`,
+`*.p6ends.ass`) are Ken's concurrent work (Ken's statement), not produced by this
+branch. `lyric_choices/` sidecars in the shared temp dir come from regen's
+existing sidecar path.
+
+**Promotion into the library (Ken's request after Run A).** 3 songs
+(`1QYBiNRu1ok`, `6q0JnftlH-I`, `6oQZFjJDI7s`), 22 files (7 + 9 + 6), additive
+(every destination checked absent first), companions first and the video last,
+sha256 of every copy equal to its source (0 mismatches). The stray `.en.json3`
+was not copied. Run B's song (`Z3x9i7njCCo`) was not promoted. Afterwards
+`add_songs.py <playlist> --folder D:/shared/pikaraoke-songs --dry-run` (real
+CLI, read-only) reported 3 x `already in library` and 1 x `new`
+(`Z3x9i7njCCo`). The app DB was not written, so the songs appear at the next
+library sync.
+
+**Left in place.** Worktree `wt_libtools` with its `models/` junction (remove the
+junction with `cmd //c rmdir` before any `git worktree remove`); scratch folders
+`add_songs_verify` and `add_songs_verify2` in the session scratchpad.
+
+**Flags.** A `/code-review` is due (multi-file new tool plus the regen refactor);
+not run, per CLAUDE.md. This is a `/compact` point (code committed, plan-log
+row written).
