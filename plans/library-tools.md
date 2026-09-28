@@ -296,6 +296,42 @@ passed.
 
 ### Phase 1
 
+Code `6cc2b29` (docs-only prep `263ab88` before it). Built `scripts/song_select.py`
+(`select_songs`) and wired `--song` into `regen_alignment_bundles.py`: scoped
+scan (`stale_reason="selected"`), scoped `backup_text_folders`/
+`clear_output_folders` via a shared `_owns_file` ownership rule (longer
+sibling stem, e.g. `Song.live`, wins its own files over `Song`), and the
+`Selection:` report line. Anchors at `6bc19aa` all lined up exactly with no
+drift.
+
+Tests: `tests/unit/test_song_select.py` (6, new) +
+`tests/unit/test_regen_alignment_bundles.py` (+4: selection scan,
+scoped-backup x2, scoped-wipe). Full suite:
+**4 known-failed, 1497 passed, 2 skipped** (1487 + 10 new, no regressions).
+`pre-commit` clean (black reformatted once, cosmetic only — reviewed the
+diff, reran the targeted tests).
+
+Verify: dry run on the real library (`D:/shared/pikaraoke-songs`) with
+`--song hLQl3WQQoQ0 --dry-run` showed exactly one row, plan `reuse srt (from
+video)`. Real run on a scratch copy (Adele "Someone Like You" selected +
+"Free" by Sony Animation as the untouched control, full per-song artifact
+sets copied from the real library) with `--song hLQl3WQQoQ0 --yes`: hit the
+known `models/` worktree trap on the first attempt (whisper worker died,
+before any job ran — confirmed via hash diff that nothing real changed) and
+was recovered by the documented `models/` junction. On the successful rerun:
+backup held exactly Adele's 4 files (nothing of Free's); Adele's `.ass` and
+`alignment_debug/*.json` hashes changed (rewritten); every other file,
+including all of Free's, hashed identical before/after. No STOP triggered.
+
+`scripts/README.md` gained a `regen_alignment_bundles.py` section (it had
+none before this) with `--song` usage and the eyeball one-liner.
+
+**For Ken — eyeball-session one-liner** (replaces the old scratch driver):
+
+```bash
+python scripts/regen_alignment_bundles.py --song <YouTube-ID-or-part-of-name> --yes
+```
+
 ### Phase 2
 
 ### Phase 3
