@@ -3,9 +3,10 @@
 Model: Claude Opus 5.5 (design, 2026-09-28); executor Claude Sonnet 5.
 
 > **Status (2026-09-28): Phases 1-3 EXECUTED** (Sonnet 5), Results log below.
-> Code commits `6cc2b29`, `2fdcf08`, `c8fe156`, `788b10c` reach `dev` by
-> cherry-pick, in that order. A `/code-review` is due and has not been run
-> (CLAUDE.md, Self-Review). There is no GATE and nothing here measures timing.
+> `/code-review` DONE the same day (Opus 5.5, 3 angles). Its fixes are
+> **Phase 3.1, NOT STARTED**. Don't cherry-pick anything to `dev` until 3.1 is
+> done; then all code commits (`6cc2b29`, `2fdcf08`, `c8fe156`, `788b10c`, then
+> 3.1's) go in branch order. There is no GATE and nothing here measures timing.
 
 ## Why
 
@@ -236,7 +237,7 @@ The flow is: downloads run unattended, then all Genius prompts come in one
 batch, then the pipeline runs unattended. Say this in the help text so Ken
 knows when to be at the keyboard.
 
-**Accepted cost:** `execute_fetches` asks yt-dlp for the manual caption again
+**Accepted cost (SUPERSEDED by Phase 3.1, fix A):** `execute_fetches` asks yt-dlp for the manual caption again
 right after the download fetched it. That's one small call per song, and it
 applies the words-per-minute gate the live app lacks. Don't optimise it away.
 
@@ -274,6 +275,377 @@ run the tool while the app is idle. Don't enforce it.
 
 **STOP if:** 3a fails, a download succeeds but `song_downloaded` never fires,
 or anything outside the scratch folder changes during the real run.
+
+## Phase 3.1: fixes from the code review
+
+Source: Opus 5.5 ran `/code-review` on 2026-09-28 at `a3fd9c4` with three
+finders (correctness, simplicity, robustness). Opus checked every finding
+against the code, and ran the link cases through `classify_url`. The fix
+designs below are Opus decisions, and the executor doesn't reopen them.
+Decisions 1-5 still hold.
+
+Anchors are at `a3fd9c4`. The quoted code is the anchor; a line number only
+helps you find it.
+
+Make commits A-G in order. Each one carries its own tests, ends at the baseline
+plus its new tests, and passes `pre-commit`. The fixes (A-F) come before the
+cleanup (G), so the fixes still land if G is cut.
+
+### A. Check the caption the download already saved
+
+This is a gap in the Phase 3 design, not an execution error.
+
+**The problem:**
+- The download saves the uploader caption (`build_ytdl_download_command`:
+  `--write-subs --sub-langs en.* --convert-subs srt`).
+- `DownloadManager._move_downloaded_subtitle` then moves it to
+  `subtitles/<stem>.srt` and clears its generated marker.
+- `execute_fetches` downloads the same caption again to `<stem>.en.srt`.
+  `download_manual_en_subs` uses the download's subtitle options, so it gets
+  the same file.
+- When the words-per-minute gate rejects the caption, it deletes only that
+  second copy (`srt_path.unlink(missing_ok=True)`).
+
+The rejected caption therefore stays on disk as a real `<stem>.srt`, and three
+things follow:
+- If the Genius fetch fails at run time, `LyricsFetchStage` falls through to its
+  SRT branch and aligns the dialog caption as the lyrics.
+- `[s]` at the prompt adopts it.
+- The pipeline never writes its own SRT, because `_should_write_srt` sees a
+  real caption.
+
+The 3 songs already promoted into the library are unaffected: one passed the
+gate, and the other two had no caption.
+
+**The fix:**
+
+1. **In regen, split the gate out of `execute_fetches`**
+   (`def execute_fetches(jobs: list[SongJob]) -> None:`, L475) into a new
+   function:
+
+   ```python
+   def adopt_caption(job: SongJob, srt_path: Path) -> None:
+   ```
+
+   - It takes the `fallback` computation and everything from
+     `wpm = _caption_wpm(srt_path, job)` to the end of the loop body.
+   - On reject, it unlinks `srt_path` and sets `job.plan = fallback`.
+   - On accept, it promotes the caption to `<stem>.srt`, clears the marker and
+     sets the seed plan. Skip the `os.replace` when `srt_path` already is
+     `<stem>.srt`.
+   - `execute_fetches` keeps the download and the `result is None` branch, and
+     calls `adopt_caption(job, Path(result))`.
+   - The behaviour of `execute_fetches` does not change, so its existing tests
+     must pass unchanged.
+2. **In add_songs' `handoff`:** after `resolve_plan`, call
+   `rab.adopt_caption(job, caption)` for each job where
+   `rab._find_local_srt(job.song_path)` returns a caption.
+   - A job with no caption on disk keeps its `fetch` plan, so regen asks
+     YouTube once more. That covers a caption request that failed during the
+     download.
+   - `_find_local_srt` already skips a generated SRT. That matters for fix D's
+     resumed songs.
+3. **Tests**, in the existing `TestExecuteFetches` style (real SRT fixtures
+   with a known word count):
+   - `adopt_caption` with a sparse caption deletes it and sets the fallback.
+   - `adopt_caption` with a dense caption already at `<stem>.srt` keeps it and
+     sets a seed plan.
+   - `handoff` with a caption on disk leaves no `fetch` plan.
+   - `handoff` with no caption on disk keeps the `fetch` plan.
+4. **README:** the downloaded caption goes through the same words-per-minute
+   gate, and there's no second caption fetch for a song that has one.
+
+Commit: `fix(add_songs): gate the caption the download saved instead of fetching it again`.
+
+### B. Read links with the URL parser
+
+**The problem** (reproduced): `classify_url` (L68) relies on
+`get_youtube_id_from_url`, which cuts the ID at `?` but not at `&`.
+- **Rejected as unrecognised, although the app accepts them:**
+  - `watch?v=X&pp=…` (search results)
+  - `music.youtube.com/watch?v=X&si=…`
+  - `watch?v=X&t=30s`
+  - `watch?feature=shared&v=X`
+- **Read as the whole playlist:**
+  - `watch?v=X&t=30s&list=Y`
+  - `watch?v=X&pp=…&list=RDX&start_radio=1` (a search click that opened a
+    Mix)
+
+  With `--yes`, either link downloads and processes the whole list, although
+  the help text promises only X.
+
+**The fix:** rewrite `classify_url` on `urllib.parse`. It checks these in
+order:
+1. **Host:** `urlparse(url).hostname`, lowercased, must be `youtu.be` or end
+   with `youtube.com`. Otherwise the link is unrecognised.
+2. **Video:** for `youtu.be`, take the first path segment as the ID; for any
+   other host, take the `v` query parameter (`parse_qs`). If the ID matches
+   `[A-Za-z0-9_-]{11}`, it's a video, even when the link also carries `list=`.
+3. **Playlist:** otherwise, a `list` query parameter makes it a playlist. Pass
+   the URL through unchanged.
+4. Otherwise the link is unrecognised.
+
+The new version no longer calls `get_youtube_id_from_url`, so remove the
+`"v=" in stripped or "u.be/" in stripped` guard and the `&list=` stripping.
+Shorts and embed links stay unrecognised; nobody asked for them.
+
+**Tests:** keep the 5 existing classify cases, and add:
+- each link above, with its expected result
+- `watch?list=Y&v=X` gives video X
+- `m.youtube.com/watch?v=X` gives video X
+- a non-YouTube host with `?v=<11 chars>` is unrecognised
+
+**Help text and README:** "A link to one video downloads only that video, even
+when it carries `list=`. Paste the playlist page link (`playlist?list=`) to get
+the whole list."
+
+Commit: `fix(add_songs): read video and playlist links with the URL parser`.
+
+### C. Failures reach the summary and the exit code
+
+**The problems:**
+- **Pipeline result dropped:** `handoff` discards `rab.resolve_and_run`'s
+  return code (it calls `rab.resolve_and_run(jobs, config, genius)` and then
+  `return jobs`). `main` then prints `Processed: len(jobs)` and exits 0, even
+  when every song failed or was skipped at the prompt.
+- **Missing file counted as downloaded:** a download that returns 0 without
+  firing `song_downloaded` (because `find_by_id` found no file) is counted as
+  downloaded. It is never processed and never named.
+- **Unreadable links look like "nothing to do":** a playlist that fails to
+  expand, or an unrecognised URL, ends in "Nothing new to download." with
+  exit 0.
+- **No timeout:** `expand_playlist` calls `subprocess.check_output(cmd)` with
+  no timeout.
+
+**The fix:**
+- **`handoff`:** return the code from `rab.resolve_and_run(...)`. Drop
+  `Processed:` from the summary; regen's
+  `Done. succeeded=… failed=… skipped=…` line already reports the pipeline.
+- **Download loop:** count a download as successful only if `song_downloaded`
+  fired during that call (compare `len(new_songs)` before and after). If the
+  return code is 0 but no event fired, print
+  `FAILED: <id> (yt-dlp finished but no file with that id is in the folder)`
+  and count it as failed.
+- **`resolve_urls`:** also return how many URLs couldn't be read, whether
+  unrecognised or failed to expand.
+- **`expand_playlist`:** pass `timeout=300`. Catch `subprocess.TimeoutExpired`
+  alongside `CalledProcessError` and report it the same way.
+- **Exit code:** 1 if any URL couldn't be read, any download failed, or the
+  pipeline returned non-zero; otherwise 0.
+  - This holds under `--dry-run` too.
+  - It also holds on the "Nothing new to download" path, whose message then
+    says how many URLs couldn't be read.
+
+**Tests.** Drive `main()` by monkeypatching `sys.argv`, and use a fake
+`DownloadManager` that emits `song_downloaded` through the real `EventSystem`
+it's given. Patch `handoff` as each test needs, and make sure nothing touches
+the real config or library. Cover:
+- a pipeline failure (`handoff` returns 1) gives exit 1
+- return code 0 with no event is counted as failed and gives exit 1
+- one unreadable URL with nothing to download gives exit 1
+- a `TimeoutExpired` from expansion is reported, and the other URLs continue
+
+Commit: `fix(add_songs): report pipeline, download and link failures in the exit code`.
+
+### D. An interrupted run can be resumed
+
+**The problem:**
+- The download loop has no guard around each download. The app's
+  `_process_queue` wraps `_execute_download` in `try/except Exception` and
+  logs the error.
+- So an exception, Ctrl+C, or EOF at a Genius prompt kills the run, and the
+  videos it already downloaded never reach the pipeline.
+- A rerun then lists those videos as `already in library` and says "Nothing
+  new to download."
+
+**The fix:**
+- **Guard each download** the way the app does. Wrap each `_execute_download`
+  call in `except Exception:`, then call
+  `logger.exception("Download failed: %s", entry.id)`, print `FAILED: <id>`,
+  count it as failed and continue. This is the app's own boundary, and Ctrl+C
+  still stops the tool.
+- **Map IDs to files:** replace `existing_ids` with a dict from ID to file.
+  Build it from every song file the app recognises
+  (`SongList.VALID_EXTENSIONS` from `pikaraoke.lib.song_list`), so an `.mp3`
+  or `.zip` with that ID also counts as `already in library`.
+- **Add a third status, `in library, not processed`:** a video file (one in
+  `rab._list_videos`, since regen only processes videos) with no bundle
+  (`rab._read_bundle(folder, stem) is None`). Such a song:
+  - isn't downloaded again
+  - joins the handoff after the new downloads
+  - counts in the confirm prompt: "Proceed with N download(s) and M
+    unprocessed song(s)?"
+- Keep the "Nothing new to download" early exit only for runs with nothing to
+  download and nothing unprocessed. Size the report's status column from the
+  longest status.
+
+**Tests:**
+- A folder video with no bundle gets `in library, not processed`, and its path
+  is handed off without a download.
+- A folder video with a bundle gets `already in library` and is not handed off.
+- An `.mp3` with the ID gets `already in library`.
+- An exception from one download is counted as failed, and the next download
+  still runs.
+
+Commit: `fix(add_songs): survive a failed download and resume songs a stopped run left unprocessed`.
+
+### E. `--song`: an exact match wins
+
+**The problems:**
+- **No priority for exact matches.** `Hello.mp4` can't be selected when
+  `Adele - Hello.mp4` is also in the library, because `--song Hello` is
+  ambiguous.
+- **Dead ID branch.** The exact-ID check in `_matches` never matters: the ID
+  is always part of the file name, so the substring check already matches it.
+- **Dead `sys.path.insert` in `song_select.py`.** The module has no
+  `__main__`, and it can only be imported once the repo root is already on the
+  path.
+
+**The fix, in `select_songs`:** for each pattern, first collect exact matches.
+A match is exact when the pattern equals the video's YouTube ID, or equals its
+stem or file name case-insensitively.
+- If there are any exact matches, use them. Otherwise fall back to the
+  case-insensitive substring match.
+- The rule that each pattern must match exactly one song is unchanged.
+- Delete the `sys.path.insert`, its comment and the `sys` import.
+- Change the help text in both scripts to: "a YouTube ID, the file name, or
+  part of it; an exact match wins".
+
+**Tests:**
+- `Hello` and `hello` both select `Hello.mp4` when `Adele - Hello.mp4` is also
+  in the library.
+- An exact ID wins over a file whose title contains that string.
+- Rename `test_result_is_deduped_and_in_input_order` (L41) to
+  `test_result_is_in_input_order`, because it has no repeated pattern.
+
+Commit: `fix(song_select): an exact ID or file name wins over a partial match`.
+
+### F. Regen: `--song --reset` shows reset, ownership counts every song file, and the wiring is tested
+
+**The problems:**
+- **Reset is hidden in the report.** With `--song --reset`, `print_report`
+  (L384) prints the `Selection:` line as `selected songs`. It hides that reset
+  is on, right before the confirm prompt for a wipe.
+- **The text still describes whole folders.** These all describe whole-folder
+  behaviour:
+  - the module docstring: the usage line, and "Before overwriting outputs,
+    the … folders are copied"
+  - the `--reset` help: "wipe subtitles/karaoke/lyrics after the backup"
+  - `main`'s "Cleared subtitles/karaoke/lyrics (reset)" message
+
+  Backfill's docstring usage line also lacks `--song`.
+- **Ownership only sees videos.** `_all_stems` (L717) builds the set of song
+  names from video files only (`_list_videos`), but the app also treats
+  `.mp3` and `.zip` files as songs. Fixture: `Mr.mp4` plus
+  `Mr. Brightside---<id>.mp3`. Running `--song Mr --reset` wiped the mp3
+  song's `.srt`, `.srt.generated`, `.en.srt`, `.ass` and lyrics.
+- **The wiring is untested.** No test covers `main()` passing the selected
+  songs to the backup and the wipe. The safety rule is tested only on the
+  helpers.
+
+**The fix:**
+- Print `Selection: selected songs (reset)` when both flags are given.
+- Add `[--song PATTERN ...]` to the docstring usage line, with one sentence:
+  with `--song`, the backup and the reset touch only the selected songs'
+  files. Add the same clause to the `--reset` help.
+- When scoped, the "Cleared" and "Backed up" messages say "for the selected
+  songs".
+- Add `[--song PATTERN ...]` to backfill's usage line.
+- `_all_stems` uses every song file the app recognises
+  (`SongList.VALID_EXTENSIONS`). Selection still lists videos only.
+- **Test:** run regen `main()` with `sys.argv` set to
+  `[<tmp library>, "--song", <id>, "--reset", "--yes"]`. Patch
+  `resolve_and_run`, plus whatever `main` builds before calling it.
+  - Assert that only the selected song's files were backed up and wiped.
+  - Include a longer-stem sibling and an `.mp3` sibling, and assert both are
+    untouched.
+
+Commit: `fix(regen): --song --reset says so, and file ownership counts every song file`.
+
+**Known limit, no code change.** `_select_en_srt`
+(`pikaraoke/lib/youtube_dl.py` L301, called by `download_manual_en_subs`)
+treats every `<stem>.*.srt` as an English variant and deletes the extras. That
+includes a longer-stem sibling's caption, such as `Song.live.srt` when the
+selected song is `Song`.
+- With `--song`, the backup is scoped and no longer covers that sibling.
+- It needs one song's name to be another's name plus a dot. The library has no
+  such pair (checked 2026-09-28).
+- The fix would be under `pikaraoke/` (Decision 5), so it stays out. Note it in
+  the Results log.
+
+### G. Cleanup (simplicity), one commit
+
+- **Reset keep rules in one place.**
+  - Add a table: `KEEP_ON_RESET = {"subtitles": ASR_JSON3_SUFFIX, "lyrics": ".lrc"}`.
+  - Merge `_clear_except_suffix` (L818) and `_clear_selected` (L831) into one
+    helper that takes the suffix to keep and an optional ownership filter.
+  - The unscoped reset still removes the whole `karaoke/` folder; an existing
+    test asserts that.
+  - The merged helper logs a failed delete as a warning instead of passing
+    `ignore_errors=True`.
+- **Ownership as "the longest stem that claims a file owns it."**
+  - Replace `_owns_file` with `_owner(name, all_stems) -> str | None`. It
+    returns the longest stem `s` for which `name == s` or
+    `name.startswith(s + ".")`.
+  - Both call sites become `_owner(e.name, all_stems) in stems`.
+  - This is equivalent to the current rule: two claiming stems of the same
+    length must be the same string.
+- **Process setup in one place.**
+  - Move the `PYTORCH_CUDA_ALLOC_CONF` default and the logging setup out of
+    regen's `main()` into `def setup_process() -> None:` in regen. Both
+    `main()`s call it.
+  - `resolve_and_run(jobs)` builds the `PipelineConfig` (with
+    `intermediate_dir`), calls `_make_genius()` and prints the no-token warning
+    itself. `warn_if_no_genius_token` goes back inline.
+  - add_songs drops those lines and its `GeniusClient` and `PipelineConfig`
+    imports.
+  - The no-token warning then prints after the backup message instead of
+    before it, which is fine. Adjust F's `main()` test so it patches only
+    `resolve_and_run`.
+- **README, `add_songs` section.**
+  - Drop step 1's parenthetical ("`song_select.py`'s sibling, … in this
+    file"). It is wrong.
+  - Two passages repeat `--help`: the "Downloads run unattended…" paragraph and
+    "Run it while the app is idle". Replace them with one line pointing at
+    `--help`.
+  - Step 4 keeps the reasons (same download path as the app; never writes the
+    app DB) and drops the internals (`KaraokeDatabase(":memory:")`,
+    `find_by_id`, the `SongJob` details).
+- **Tests:** the two near-identical `_setup` library fixtures in
+  `test_regen_alignment_bundles.py` (`TestBackupTextFoldersScoped` L355,
+  `TestClearOutputFoldersScoped` L458) become one module-level helper.
+
+Commit: `refactor(scripts): one home for reset keep rules, file ownership and process setup`.
+
+### Verify, then relay
+
+- **Unit suite:** the full suite ends at the baseline plus the new tests.
+- **Link check** (real CLI, into an empty scratch folder, read-only): run
+  `add_songs.py <link> --folder <scratch> --dry-run` for each link shape in B.
+  The Mix-style link must report exactly one entry.
+- **Real run** into a scratch folder, never the library:
+  - One video that has a manual caption. `Z3x9i7njCCo` from Run B had one.
+  - The log must show no "Fetching video captions" line.
+  - The song's plan must be its downloaded caption.
+  - The artifacts must match Run B's.
+  - Then delete that song's bundle and rerun the same command with
+    `--dry-run`. It must report `in library, not processed`.
+- **Safety check:** the app DB and `config.ini` hashes are unchanged, as in 3e.
+- **Record and relay:** write a Results log row per commit, then relay to Ken.
+  - Flag that a `/code-review` of the 3.1 commits is due. Don't run it.
+  - Flag a `/compact` point.
+  - Tell Ken the interactive prompts inside `main()` (confirm and Genius) have
+    still not run live, so his first real use is that check.
+
+**STOP if:**
+- `execute_fetches`' existing tests change outcome after the split in A
+- any fix seems to need a change under `pikaraoke/` (Decision 5)
+- anything outside the scratch folder changes during the real run
+
+**Landing** is Ken's call: cherry-pick every code commit to `dev` in branch
+order. Once `--song` is on `dev`, it replaces the one-song driver recipe in
+memory `regen-reprocessing-workflow`, and the session that lands it updates
+that memory.
 
 ## Results log
 
@@ -463,3 +835,12 @@ junction with `cmd //c rmdir` before any `git worktree remove`); scratch folders
 **Flags.** A `/code-review` is due (multi-file new tool plus the regen refactor);
 not run, per CLAUDE.md. This is a `/compact` point (code committed, plan-log
 row written).
+
+### Code review
+
+2026-09-28, Opus 5.5, `/code-review` at `a3fd9c4`: three finders (correctness,
+simplicity, robustness), every finding checked by Opus. Read-only; nothing on
+the branch changed. The findings and their fixes are Phase 3.1 above. A
+read-only library check the same day found no `.mp3`/`.zip` songs and no pair
+of stems where one is the other plus a dot, so F's ownership fix and its known
+limit are latent in this library.
