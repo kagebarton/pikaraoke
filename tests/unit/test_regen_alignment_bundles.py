@@ -102,6 +102,19 @@ class TestScanFolder:
         assert jobs == []
 
 
+class TestScanFolderSelection:
+    def test_selected_current_song_included_unselected_stale_excluded(self, tmp_path):
+        _touch_video(tmp_path, "current")
+        _touch_video(tmp_path, "stale")
+        _write_bundle(tmp_path, "current", {"schema_version": SCHEMA_VERSION})
+        _write_bundle(tmp_path, "stale", {"schema_version": SCHEMA_VERSION - 1})
+
+        jobs = regen.scan_folder(tmp_path, include_all=False, songs=[tmp_path / "current.mp4"])
+
+        assert [j.song_path.stem for j in jobs] == ["current"]
+        assert jobs[0].stale_reason == "selected"
+
+
 # ---------------------------------------------------------------------------
 # resolve_plan (default) — reuse, else fetch/prompt
 # ---------------------------------------------------------------------------
@@ -334,6 +347,62 @@ class TestExecuteFetches:
 
 
 # ---------------------------------------------------------------------------
+# backup_text_folders — scoped backup for --song
+# ---------------------------------------------------------------------------
+
+
+class TestBackupTextFoldersScoped:
+    def _setup(self, tmp_path):
+        # "Song.live" is a real library video too, so it must win ownership
+        # of its own files over the shorter "Song" stem.
+        _touch_video(tmp_path, "Song")
+        _touch_video(tmp_path, "Song.live")
+        _touch_video(tmp_path, "Other")
+
+        subs = tmp_path / "subtitles"
+        subs.mkdir()
+        (subs / "Song.srt").write_text("song", encoding="utf-8")
+        (subs / "Song.srt.generated").write_text("marker", encoding="utf-8")
+        (subs / "Song.live.srt").write_text("live", encoding="utf-8")
+        (subs / "Other.srt").write_text("other", encoding="utf-8")
+
+        karaoke = tmp_path / "karaoke"
+        karaoke.mkdir()
+        (karaoke / "Song.ass").write_text("song ass", encoding="utf-8")
+        (karaoke / "Other.ass").write_text("other ass", encoding="utf-8")
+
+        debug = tmp_path / "alignment_debug"
+        debug.mkdir()
+        (debug / "Song.json").write_text("{}", encoding="utf-8")
+        (debug / "Other.json").write_text("{}", encoding="utf-8")
+
+    def test_copies_only_selected_songs_files(self, tmp_path):
+        self._setup(tmp_path)
+
+        backup = regen.backup_text_folders(tmp_path, stems=["Song"])
+
+        assert backup is not None
+        assert (backup / "subtitles" / "Song.srt").exists()
+        assert (backup / "subtitles" / "Song.srt.generated").exists()
+        assert (backup / "karaoke" / "Song.ass").exists()
+        assert (backup / "alignment_debug" / "Song.json").exists()
+        # The longer-stem sibling and the other song are never claimed.
+        assert not (backup / "subtitles" / "Song.live.srt").exists()
+        assert not (backup / "subtitles" / "Other.srt").exists()
+        assert not (backup / "karaoke" / "Other.ass").exists()
+        assert not (backup / "alignment_debug" / "Other.json").exists()
+
+    def test_unscoped_backup_is_unchanged(self, tmp_path):
+        self._setup(tmp_path)
+
+        backup = regen.backup_text_folders(tmp_path)
+
+        assert (backup / "subtitles" / "Song.live.srt").exists()
+        assert (backup / "subtitles" / "Other.srt").exists()
+        assert (backup / "karaoke" / "Other.ass").exists()
+
+
+# ---------------------------------------------------------------------------
 # clear_output_folders — reset wipes the regenerable outputs (after backup)
 # ---------------------------------------------------------------------------
 
@@ -383,6 +452,51 @@ class TestClearOutputFolders:
 
     def test_missing_folders_is_noop(self, tmp_path):
         regen.clear_output_folders(tmp_path)  # does not raise
+
+
+class TestClearOutputFoldersScoped:
+    def _setup(self, tmp_path):
+        _touch_video(tmp_path, "Song")
+        _touch_video(tmp_path, "Song.live")
+        _touch_video(tmp_path, "Other")
+
+        subs = tmp_path / "subtitles"
+        subs.mkdir()
+        (subs / "Song.srt").write_text("song", encoding="utf-8")
+        (subs / f"Song{regen.ASR_JSON3_SUFFIX}").write_text("{}", encoding="utf-8")
+        (subs / "Song.live.srt").write_text("live", encoding="utf-8")
+        (subs / "Other.srt").write_text("other", encoding="utf-8")
+
+        karaoke = tmp_path / "karaoke"
+        karaoke.mkdir()
+        (karaoke / "Song.ass").write_text("song ass", encoding="utf-8")
+        (karaoke / "Other.ass").write_text("other ass", encoding="utf-8")
+
+        lyrics = tmp_path / "lyrics"
+        lyrics.mkdir()
+        (lyrics / "Song.txt").write_text("stale reuse", encoding="utf-8")
+        (lyrics / "Song.lrc").write_text("[00:01.00]hi\n", encoding="utf-8")
+        (lyrics / "Other.txt").write_text("other reuse", encoding="utf-8")
+
+    def test_removes_only_selected_songs_regenerable_files(self, tmp_path):
+        self._setup(tmp_path)
+
+        regen.clear_output_folders(tmp_path, stems=["Song"])
+
+        # Selected song's regenerable output is gone.
+        assert not (tmp_path / "subtitles" / "Song.srt").exists()
+        assert not (tmp_path / "karaoke" / "Song.ass").exists()
+        assert not (tmp_path / "lyrics" / "Song.txt").exists()
+        # Non-regenerable inputs for the selected song survive.
+        assert (tmp_path / "subtitles" / f"Song{regen.ASR_JSON3_SUFFIX}").exists()
+        assert (tmp_path / "lyrics" / "Song.lrc").exists()
+        # The longer-stem sibling and every other song's files are untouched.
+        assert (tmp_path / "subtitles" / "Song.live.srt").exists()
+        assert (tmp_path / "subtitles" / "Other.srt").exists()
+        assert (tmp_path / "karaoke" / "Other.ass").exists()
+        assert (tmp_path / "lyrics" / "Other.txt").exists()
+        # Never a whole-folder wipe: the folders themselves survive.
+        assert (tmp_path / "karaoke").is_dir()
 
 
 # ---------------------------------------------------------------------------

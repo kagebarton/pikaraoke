@@ -101,6 +101,7 @@ from pikaraoke.pipeline.stages.lyrics_fetch import LyricsFetchStage  # noqa: E40
 from pikaraoke.pipeline.stages.stem_separation import StemSeparationStage  # noqa: E402
 from pikaraoke.pipeline.workers.stem_worker import StemWorker  # noqa: E402
 from pikaraoke.pipeline.workers.whisper_worker import WhisperWorker  # noqa: E402
+from scripts.song_select import select_songs  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -192,16 +193,26 @@ def _read_bundle(folder: Path, stem: str) -> dict | None:
         return None
 
 
-def scan_folder(folder: Path, include_all: bool) -> list[SongJob]:
+def _list_videos(folder: Path) -> list[Path]:
+    """Every video file directly in ``folder``, sorted."""
+    return sorted(p for p in folder.iterdir() if p.is_file() and p.suffix.lower() in VIDEO_EXTS)
+
+
+def scan_folder(folder: Path, include_all: bool, songs: list[Path] | None = None) -> list[SongJob]:
     """Return jobs for the videos in scope.
 
     Default: bundle missing or ``schema_version < SCHEMA_VERSION``.
     ``include_all``: every video, regardless of bundle state.
+    ``songs``: only these videos (from :func:`select_songs`), regardless of
+    bundle state or ``include_all`` -- each job gets ``stale_reason="selected"``.
     """
+    if songs is not None:
+        return [
+            SongJob(song_path=p, bundle=_read_bundle(folder, p.stem), stale_reason="selected")
+            for p in songs
+        ]
     jobs: list[SongJob] = []
-    for path in sorted(folder.iterdir()):
-        if not path.is_file() or path.suffix.lower() not in VIDEO_EXTS:
-            continue
+    for path in _list_videos(folder):
         bundle = _read_bundle(folder, path.stem)
         if include_all:
             reason = "all"
@@ -370,8 +381,13 @@ def _caption_wpm(srt_path: Path, job: SongJob) -> float | None:
 # ---------------------------------------------------------------------------
 
 
-def print_report(jobs: list[SongJob], folder: Path, reset: bool) -> None:
-    scope = "all songs (reset)" if reset else "missing/stale bundles"
+def print_report(jobs: list[SongJob], folder: Path, reset: bool, selected: bool = False) -> None:
+    if selected:
+        scope = "selected songs"
+    elif reset:
+        scope = "all songs (reset)"
+    else:
+        scope = "missing/stale bundles"
     print(f"\nScanned: {folder}")
     print(f"Selection: {scope}")
     print(f"Songs to regenerate: {len(jobs)}\n")
@@ -698,25 +714,67 @@ OUTPUT_DIRS = ("subtitles", "karaoke", "lyrics")
 BACKUP_DIRS = OUTPUT_DIRS + ("alignment_debug",)
 
 
-def backup_text_folders(folder: Path) -> Path | None:
+def _all_stems(folder: Path) -> set[str]:
+    """Every video's stem in ``folder``, regardless of selection or staleness."""
+    return {p.stem for p in _list_videos(folder)}
+
+
+def _owns_file(name: str, stem: str, all_stems: set[str]) -> bool:
+    """True when a folder entry named ``name`` belongs to the song ``stem``.
+
+    ``name`` must equal ``stem`` or start with ``stem + "."`` (catching
+    ``<stem>.srt.generated``); a longer stem that also claims ``name`` (e.g.
+    ``Song.live`` owning ``Song.live.srt``) wins instead, so ``Song`` never
+    claims a file that belongs to ``Song.live``.
+    """
+    if name != stem and not name.startswith(stem + "."):
+        return False
+    return not any(
+        other != stem and len(other) > len(stem) and (name == other or name.startswith(other + "."))
+        for other in all_stems
+    )
+
+
+def backup_text_folders(folder: Path, stems: list[str] | None = None) -> Path | None:
     """Snapshot the regenerable output folders into ``regen_backup_<UTC>/``.
 
-    Returns the backup root, or None when none of the folders exist.
+    ``stems``: copy only those songs' own files (see :func:`_owns_file`) from
+    each folder instead of the whole folder.
+
+    Returns the backup root, or None when nothing was copied.
     """
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     backup_root = folder / f"regen_backup_{ts}"
     copied: list[str] = []
+
+    if stems is None:
+        for sub in BACKUP_DIRS:
+            src = folder / sub
+            if src.is_dir():
+                shutil.copytree(src, backup_root / sub)
+                copied.append(sub)
+        return backup_root if copied else None
+
+    all_stems = _all_stems(folder)
     for sub in BACKUP_DIRS:
         src = folder / sub
-        if src.is_dir():
-            shutil.copytree(src, backup_root / sub)
-            copied.append(sub)
-    if not copied:
-        return None
-    return backup_root
+        if not src.is_dir():
+            continue
+        entries = [e for e in src.iterdir() if any(_owns_file(e.name, s, all_stems) for s in stems)]
+        if not entries:
+            continue
+        dest = backup_root / sub
+        dest.mkdir(parents=True, exist_ok=True)
+        for e in entries:
+            if e.is_dir():
+                shutil.copytree(e, dest / e.name)
+            else:
+                shutil.copy2(e, dest / e.name)
+        copied.append(sub)
+    return backup_root if copied else None
 
 
-def clear_output_folders(folder: Path) -> None:
+def clear_output_folders(folder: Path, stems: list[str] | None = None) -> None:
     """Delete the regenerable output folders (reset mode, after the backup).
 
     The pipeline rebuilds subtitles/karaoke/lyrics for every song reset
@@ -734,14 +792,27 @@ def clear_output_folders(folder: Path) -> None:
       fill). Wiping them would force a re-fetch of every genius song's
       variant on the next run for no benefit -- ``ensure_lrc`` already
       reuses an on-disk file unconditionally.
+
+    ``stems``: scope the wipe to those songs' own files (see
+    :func:`_owns_file`) instead of clearing whole folders -- the folders
+    themselves are never removed and every other song's files are untouched.
     """
+    if stems is None:
+        for sub in OUTPUT_DIRS:
+            if sub == "subtitles":
+                _clear_except_suffix(folder / sub, ASR_JSON3_SUFFIX)
+            elif sub == "lyrics":
+                _clear_except_suffix(folder / sub, ".lrc")
+            else:
+                shutil.rmtree(folder / sub, ignore_errors=True)
+        return
+
+    all_stems = _all_stems(folder)
     for sub in OUTPUT_DIRS:
-        if sub == "subtitles":
-            _clear_except_suffix(folder / sub, ASR_JSON3_SUFFIX)
-        elif sub == "lyrics":
-            _clear_except_suffix(folder / sub, ".lrc")
-        else:
-            shutil.rmtree(folder / sub, ignore_errors=True)
+        keep_suffix = (
+            ASR_JSON3_SUFFIX if sub == "subtitles" else ".lrc" if sub == "lyrics" else None
+        )
+        _clear_selected(folder / sub, stems, all_stems, keep_suffix)
 
 
 def _clear_except_suffix(dir_path: Path, suffix: str) -> None:
@@ -750,6 +821,23 @@ def _clear_except_suffix(dir_path: Path, suffix: str) -> None:
         return
     for entry in list(dir_path.iterdir()):
         if entry.is_file() and entry.name.endswith(suffix):
+            continue
+        if entry.is_dir():
+            shutil.rmtree(entry, ignore_errors=True)
+        else:
+            entry.unlink(missing_ok=True)
+
+
+def _clear_selected(
+    dir_path: Path, stems: list[str], all_stems: set[str], keep_suffix: str | None
+) -> None:
+    """Remove ``stems``' own entries from ``dir_path`` (never the folder itself)."""
+    if not dir_path.is_dir():
+        return
+    for entry in list(dir_path.iterdir()):
+        if keep_suffix and entry.is_file() and entry.name.endswith(keep_suffix):
+            continue
+        if not any(_owns_file(entry.name, s, all_stems) for s in stems):
             continue
         if entry.is_dir():
             shutil.rmtree(entry, ignore_errors=True)
@@ -798,6 +886,14 @@ def parse_args() -> argparse.Namespace:
         "reuses their recorded source.",
     )
     p.add_argument(
+        "--song",
+        action="append",
+        metavar="PATTERN",
+        help="Limit to one song: a YouTube ID or part of the file name. "
+        "Repeatable. Each pattern must match exactly one song. Selected "
+        "songs run even if their bundle is current.",
+    )
+    p.add_argument(
         "--dry-run",
         action="store_true",
         help="Print the report and exit without backing up, prompting or running.",
@@ -828,10 +924,18 @@ def main() -> int:
         print(f"Folder not found: {folder}", file=sys.stderr)
         return 2
 
-    jobs = scan_folder(folder, args.reset)
+    selected: list[Path] | None = None
+    if args.song:
+        try:
+            selected = select_songs(_list_videos(folder), args.song)
+        except ValueError as e:
+            print(str(e), file=sys.stderr)
+            return 2
+
+    jobs = scan_folder(folder, args.reset, songs=selected)
     for job in jobs:
         job.plan = resolve_plan(job, reset=args.reset)
-    print_report(jobs, folder, args.reset)
+    print_report(jobs, folder, args.reset, selected=selected is not None)
     if not jobs:
         return 0
 
@@ -853,8 +957,10 @@ def main() -> int:
             "return no hits. Use [t] (transcribe) or [s] (local SRT) only.\n"
         )
 
+    stems = [p.stem for p in selected] if selected is not None else None
+
     # Back up before any destructive step (folder wipe, caption download, regen).
-    backup = backup_text_folders(folder)
+    backup = backup_text_folders(folder, stems=stems)
     if backup is not None:
         print(f"Backed up subtitles/karaoke/lyrics/alignment_debug to: {backup}\n")
     else:
@@ -863,7 +969,7 @@ def main() -> int:
     # Reset rebuilds every output, so wipe the folders up front — no stale
     # caption or transcript survives to be mistaken for current.
     if args.reset:
-        clear_output_folders(folder)
+        clear_output_folders(folder, stems=stems)
         print("Cleared subtitles/karaoke/lyrics (reset); the pipeline rebuilds them.\n")
 
     # Download captions before prompting so a fetch failure falls through to the

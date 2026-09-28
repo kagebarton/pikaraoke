@@ -102,6 +102,37 @@ align path reuse the cached separator output instead of re-running
 Tradeoff: whisper sees AAC-decoded audio rather than the raw separator
 WAV. Acceptable for alignment (whisper resamples to 16k mono anyway).
 
+## regen_alignment_bundles.py
+
+Re-runs the lyric-alignment stage over library songs so
+`alignment_debug/<stem>.json` reflects the current matcher and schema.
+Default mode touches only songs whose bundle is missing or older than the
+current schema, reusing each one's recorded lyric source; `--reset`
+re-resolves every song's lyric source from scratch. See the module
+docstring for the full default/`--reset` flow.
+
+### Usage
+
+```bash
+python scripts/regen_alignment_bundles.py [folder] [--reset] [--song PATTERN]... [--dry-run] [--yes]
+```
+
+`--song PATTERN` (repeatable) limits the run to one or more songs, named by
+YouTube ID or a case-insensitive part of the file name
+(`scripts/song_select.py`). Each pattern must match exactly one song. A
+selected song runs even if its bundle is already current, and both the
+pre-run backup and (with `--reset`) the output wipe are scoped to the
+selected songs only — every other song's files are untouched.
+
+**Eyeball session — reprocess one song on current code:**
+
+```bash
+python scripts/regen_alignment_bundles.py --song <YouTube-ID-or-part-of-name> --yes
+```
+
+Reuses the song's recorded lyric source (add `--reset` to re-resolve it
+from scratch instead).
+
 ## Architecture notes
 
 ### Why a separate script, not a Flask route?
