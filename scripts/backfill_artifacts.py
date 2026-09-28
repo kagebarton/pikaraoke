@@ -69,6 +69,7 @@ from pikaraoke.pipeline.stages.lyric_align import LyricAlignStage  # noqa: E402
 from pikaraoke.pipeline.stages.stem_separation import StemSeparationStage  # noqa: E402
 from pikaraoke.pipeline.workers.stem_worker import StemWorker  # noqa: E402
 from pikaraoke.pipeline.workers.whisper_worker import WhisperWorker  # noqa: E402
+from scripts.song_select import select_songs  # noqa: E402
 
 VIDEO_EXTS = {".mp4", ".mkv", ".avi", ".webm", ".mov"}
 
@@ -93,12 +94,21 @@ class SongJob:
 # ---------------------------------------------------------------------------
 
 
-def scan_folder(folder: Path) -> list[SongJob]:
-    """Return a list of jobs, one per video file with any missing artifact."""
+def _list_videos(folder: Path) -> list[Path]:
+    """Every video file directly in ``folder``, sorted."""
+    return sorted(p for p in folder.iterdir() if p.is_file() and p.suffix.lower() in VIDEO_EXTS)
+
+
+def scan_folder(folder: Path, songs: list[Path] | None = None) -> list[SongJob]:
+    """Return a job per video with any missing artifact.
+
+    Default (``songs=None``): every video in ``folder``. ``songs``: only
+    these videos (from :func:`select_songs`) -- a selected song with
+    nothing missing is still not queued (see ``main`` for its report line).
+    """
+    videos = songs if songs is not None else _list_videos(folder)
     jobs: list[SongJob] = []
-    for path in sorted(folder.iterdir()):
-        if not path.is_file() or path.suffix.lower() not in VIDEO_EXTS:
-            continue
+    for path in videos:
         missing = _missing_artifacts(path)
         if missing:
             jobs.append(SongJob(song_path=path, missing=missing))
@@ -421,6 +431,14 @@ def parse_args() -> argparse.Namespace:
         help=f"Song folder to scan (default: {default_folder})",
     )
     p.add_argument(
+        "--song",
+        action="append",
+        metavar="PATTERN",
+        help="Limit to one song: a YouTube ID or part of the file name. "
+        "Repeatable. Each pattern must match exactly one song. A selected "
+        "song with nothing missing is reported and not queued.",
+    )
+    p.add_argument(
         "--dry-run",
         action="store_true",
         help="Print the report and exit without prompting or running.",
@@ -462,7 +480,21 @@ def main() -> int:
         print(f"Folder not found: {folder}", file=sys.stderr)
         return 2
 
-    jobs = scan_folder(folder)
+    selected: list[Path] | None = None
+    if args.song:
+        try:
+            selected = select_songs(_list_videos(folder), args.song)
+        except ValueError as e:
+            print(str(e), file=sys.stderr)
+            return 2
+
+    jobs = scan_folder(folder, songs=selected)
+    if selected is not None:
+        queued = {j.song_path for j in jobs}
+        for path in selected:
+            if path not in queued:
+                print(f"{path.name}: nothing missing (use regen --song to reprocess)")
+
     print_report(jobs, folder)
     if not jobs:
         return 0

@@ -12,7 +12,7 @@ same pipeline stages as the running app.
 ### Usage
 
 ```bash
-python scripts/backfill_artifacts.py [folder] [--dry-run] [--yes] \
+python scripts/backfill_artifacts.py [folder] [--song PATTERN]... [--dry-run] [--yes] \
     [--use-bundle-lyrics]
 ```
 
@@ -23,6 +23,14 @@ post-report confirmation prompt. Alignment uses the joint matcher
 `--use-bundle-lyrics` reuses cleaned `lyrics.align_lines` from a saved
 `alignment_debug/<stem>.json` bundle instead of prompting Genius (see
 "Lyrics resolution" below); songs without a bundle still prompt.
+
+`--song PATTERN` (repeatable) limits the scan to one or more songs, named
+by YouTube ID or a case-insensitive part of the file name
+(`scripts/song_select.py`, shared with `regen_alignment_bundles.py`). Each
+pattern must match exactly one song. Unlike regen's `--song`, this does
+**not** force a run: a selected song with nothing missing is reported as
+`<name>: nothing missing (use regen --song to reprocess)` and skipped —
+backfill only ever fills in what's absent.
 
 ### Flow
 
