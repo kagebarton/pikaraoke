@@ -25,6 +25,20 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+# v11: interior-pause end repair (plans/edge-snap-coverage-accuracy.md
+#     Phase 6). A milestone bump (run-affecting) -- no field renamed or
+#     removed, but output_line_timings move, so regen treats v10 bundles as
+#     stale:
+#   - the end snap repairs every voiced run in a line, not only the
+#     line-final one. A word before an intra-line pause is clipped the same
+#     way a line-final word is, and a pause is the one place inside a line
+#     where the envelope can see a release. An interior run extends toward
+#     the next run's first word; only the last run extends toward the next
+#     line's.
+#     Additive fields (no bump of their own): joint_stats.edge_snap.end
+#     gains n_runs, and its extend records gain word_idx (the run-final word
+#     the record belongs to). The n_fired == n_extended + n_below_min_shift
+#     invariant now counts per run, not per line.
 # v10: edge-snap coverage/accuracy pass (plans/edge-snap-coverage-accuracy.md
 #     Phases 1-5.1) plus lyric-text normalization ahead of the aligner. A
 #     milestone bump (run-affecting) -- no field renamed or removed, but
@@ -150,7 +164,7 @@ logger = logging.getLogger(__name__)
 # v2: added tiling per-unit fields (units, zero_candidate_unit_ids,
 #     anchor_recovered_unit_ids, selected_windows replacing window_widths).
 # v1: initial.
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 
 def build_bundle(
