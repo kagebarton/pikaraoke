@@ -412,10 +412,12 @@ def snap_line_ends(
                 line_bound = nxt_words[0]["start"] - NEXT_LINE_GAP_S
                 break
 
-        # An interior run stops short of the next run's first word, which
-        # onsets have already snapped. Runs with no room to extend are
-        # dropped before the reference is taken, so n_low_ref keeps
-        # counting the lines this pass could otherwise have repaired.
+        # An interior run stops short of the next run's first word — a raw
+        # whisper start, since onsets only ever move a line's first word;
+        # only the last run stops short of the next line's, which onsets
+        # have already snapped. Runs with no room to extend are dropped
+        # before the reference is taken, so n_low_ref keeps counting the
+        # lines this pass could otherwise have repaired.
         bounds = {
             j: (words[j + 1]["start"] - NEXT_LINE_GAP_S if j + 1 < len(words) else line_bound)
             for j in run_ends
