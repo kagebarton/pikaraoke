@@ -4,10 +4,9 @@ Model: Claude Opus 5.5 (design, 2026-09-28); executor Claude Sonnet 5 (through
 Phase 3.1 commit C), Claude Sonnet 5.5 (commit D on).
 
 > **Status (2026-10-19): Phase 3.1 IN PROGRESS** (Sonnet 5 for A-C, Sonnet 5.5
-> for D on): commits A-D of G done (`c096631`, `975175b`, `6ecb41d`, `e81607b`;
-> plan-log rows alongside each). Left: E (`--song` exact match), F (`--song
-> --reset` reporting + file ownership), G (cleanup), then the plan's "Verify,
-> then relay" pass.
+> for D on): commits A-E of G done (`c096631`, `975175b`, `6ecb41d`, `e81607b`,
+> `db2d193`; plan-log rows alongside each). Left: F (`--song --reset` reporting
+> + file ownership), G (cleanup), then the plan's "Verify, then relay" pass.
 > Don't cherry-pick anything to `dev` until 3.1 is done; then all code commits
 > (`6cc2b29`, `2fdcf08`, `c8fe156`, `788b10c`, then 3.1's) go in branch order.
 > There is no GATE and nothing here measures timing.
@@ -971,5 +970,26 @@ reformatted the test file (black, cosmetic only); second pass clean.
 Not exercised: the interactive confirm prompt and a real `DownloadManager`
 raising mid-download (a stand-in raises `RuntimeError`).
 
-Left: commits E-G (`--song` exact-match priority, `--song --reset` reporting +
-file ownership, cleanup).
+**Commit E** (`db2d193`): `select_songs` collects, per pattern, the videos
+whose YouTube ID equals the pattern, or whose stem or file name equals it
+case-insensitively; those are the hits when there are any, else the
+case-insensitive substring match is used as before. The one-song-per-pattern
+rule is unchanged (a pattern with two exact matches, e.g. `Hello.mp4` +
+`Hello.mkv`, still raises). `_matches` is replaced by `_is_exact_match` (the ID
+test is now doing real work, since it picks the exact tier). The
+`sys.path.insert`, its comment and the `sys` import are gone from
+`song_select.py`, along with the now-unneeded `# noqa: E402` on its one
+remaining import. `--song` help in regen and backfill reads "a YouTube ID, the
+file name, or part of it; an exact match wins", and `scripts/README.md`'s two
+`--song` paragraphs say so too.
+
+Tests: `test_result_is_deduped_and_in_input_order` renamed
+`test_result_is_in_input_order`; 4 new in `TestSelectSongs` (`Hello` and `hello`
+both pick `Hello.mp4` over `Adele - Hello.mp4`; the file name `hello.mp4` does
+too; an exact ID wins over a title containing that string; two exact matches
+still raise). The first three fail against the old `song_select.py` (checked by
+swapping the old file back in) and the fourth passes on both. Full suite: **4
+known-failed, 1542 passed, 2 skipped** (1538 + 4 new, no regressions).
+`pre-commit` clean on the first pass.
+
+Left: commits F-G (`--song --reset` reporting + file ownership, cleanup).
