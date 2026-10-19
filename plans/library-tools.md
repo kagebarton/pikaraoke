@@ -4,14 +4,15 @@ Model: Claude Opus 5.5 (design, 2026-09-28; Phase 3.2 design 2026-10-19);
 executor Claude Sonnet 5 (through Phase 3.1 commit C), Claude Sonnet 5.5
 (commit D on).
 
-> **Status (2026-10-19): Phase 3.2 NEXT** (executor Sonnet 5.5). Phase 3.1 is
-> done (commits A-G `c096631`, `975175b`, `6ecb41d`, `e81607b`, `db2d193`,
-> `f6490e1`, `73dada4`, plus its Verify pass). The `/code-review` of the 3.1
-> commits ran the same day (Opus 5.5, see the Results log), and Ken ruled that
-> all of its findings are fixed in one pass: Phase 3.2, commits A-C. After 3.2
-> comes landing, which is Ken's call: all code commits (`6cc2b29`, `2fdcf08`,
-> `c8fe156`, `788b10c`, then 3.1's, then 3.2's) go to `dev` by cherry-pick in
-> branch order.
+> **Status (2026-10-19): Phase 3.2 DONE** (executor Sonnet 5.5): commits A-C
+> `965776f`, `84e0f2f`, `75454c1`, plus its Verify pass (see the Results log).
+> Phase 3.1 is done (commits A-G `c096631`, `975175b`, `6ecb41d`, `e81607b`,
+> `db2d193`, `f6490e1`, `73dada4`, plus its Verify pass). The `/code-review` of
+> the 3.1 commits ran the same day (Opus 5.5, see the Results log), and Ken
+> ruled that all of its findings are fixed in one pass: Phase 3.2. Landing is
+> next, which is Ken's call: all code commits (`6cc2b29`, `2fdcf08`, `c8fe156`,
+> `788b10c`, then 3.1's, then 3.2's) go to `dev` by cherry-pick in branch
+> order.
 > There is no GATE and nothing here measures timing.
 
 ## Why
@@ -1386,3 +1387,117 @@ Ken's flagged areas, checked with no finding:
 
 Ken's ruling (2026-10-19): fix 1 as designed ("has a bundle or a karaoke file"),
 and fix all the others in the same pass. That pass is Phase 3.2.
+
+### Phase 3.2
+
+**Worktree state (2026-10-19, before any edit).** Branch tip `8c149a0`, `git
+status` clean, `pikaraoke` imports from the worktree. The `.venv` was not
+intact, the same pattern as the 3.1 recovery note: a RECORD-versus-disk check
+found missing files in 129 of the 130 installed dists (file counts present
+here against the main checkout's venv: torch 2,018 of 11,761; numpy 307 of
+1,041; yt_dlp 211 of 1,154; babel 23 of 1,108). The folder mtimes are
+2026-10-19 11:33-11:34, after the 3.1 Verify pass ended (11:12). `models/` is
+still a junction to the main checkout's `models/`, and `libmpv-2.dll` is in
+`.venv/Scripts`.
+
+The first full run read **10 failed, 1548 passed, 2 skipped**: the four known
+failures plus six route-render tests (`test_files_routes` x3,
+`test_info_routes`, `test_search_render` x2) that return 500 with
+`UnknownLocaleError: unknown locale 'en'`, because `babel/locale-data` was
+empty. Repaired that one package only, from the uv cache with no network:
+`uv pip install --python .venv/Scripts/python.exe --offline
+--reinstall-package babel babel==2.17.0` (1,068 locale files back). The other
+damaged packages were left alone: the unit suite passes without them and the
+Verify check only classifies a link. Full suite after the repair: **4
+known-failed, 1554 passed, 2 skipped**, the plan's baseline exactly.
+
+**Commit A** (`965776f`): `_library_status` calls a video `in library, not
+processed` only when neither `alignment_debug/<stem>.json` nor
+`karaoke/<stem>.ass` is a file (`Path.is_file()` on both), so the
+`rab._read_bundle` call is gone from `add_songs`. The docstring says why the
+karaoke file counts. README step 2 and step 5's last sentence reworded as
+designed.
+
+Tests: two new in `TestResolveUrlsDedupe` (a video with a karaoke file and no
+bundle; a video with `not json` in its bundle and no karaoke file; both
+`already in library`). Both were run against the old `_library_status` first
+and failed (`2 failed, 6 passed`); the four existing tests pass unchanged.
+`_add_bundle` gained a `text` parameter (default `"{}"`) and a new
+`_add_karaoke_file` helper. Full suite: **4 known-failed, 1556 passed, 2
+skipped** (1554 + 2). `pre-commit` clean on the first pass.
+
+**Commit B** (`84e0f2f`): `regen.main()` wraps `clear_output_folders(folder,
+stems=stems)` in `try` / `except OSError`; the handler prints the designed
+`Reset stopped: ...` message to stderr and returns 1, so `resolve_and_run` is
+not called. `_remove` and `clear_output_folders` docstrings say which failure
+does what. `_remove` itself is unchanged.
+
+Tests: `TestRemove` gained a file whose `unlink` raises `PermissionError`
+(patched on `Path.unlink` for that one path) and propagates; `TestMainSongReset`
+gained the `main()` case (`clear_output_folders` patched to raise
+`PermissionError(13, "in use", ...)`, `resolve_and_run` a `MagicMock`; asserts
+return 1, not called, stderr holds `Reset stopped` and `in use`). The `main()`
+test failed against the old code (raw `PermissionError` out of `main()`);
+the `_remove` test passes against both, as intended, since it pins today's
+behaviour. The stderr check uses `in use` and not the path because `str()` of
+the error escapes backslashes on Windows. Full suite: **4 known-failed, 1558
+passed, 2 skipped** (1556 + 2). `pre-commit` clean on the first pass.
+
+**Commit C** (`75454c1`): regen gained `_claims(stem, name)` and
+`_owned_by_any(name, stems, all_stems)`; `_owner` uses `_claims`, and the
+`entries` list in `backup_text_folders` and `selected` in
+`clear_output_folders` use `_owned_by_any`. `add_songs`: the module docstring
+paragraph replaced as designed; the comment above `_YOUTUBE_ID_RE` deleted and
+its reason moved into `classify_url`'s docstring; `library_files` sorts once
+with `key=lambda p: (p.suffix.lower() in rab.VIDEO_EXTS, p)`. `adopt_caption`'s
+inline comment lost its first sentence.
+
+Tests: `TestOwnedByAny` (3 new: an entry of a selected stem; `Song.live.srt`
+with `["Song"]` and library `{"Song", "Song.live"}` is not owned; an unclaimed
+name is rejected, with `_owner` patched to raise so the test fails if the full
+scan runs). `TestMain` gained one autouse fixture that no-ops
+`add_songs.rab.setup_process` and builds a real `PreferenceManager` on an
+absolute path under `tmp_path_factory.mktemp("prefs")`; no tests added to it
+and its existing tests pass unchanged. Leak check, `TestMain` run in-process
+from an unset `PYTORCH_CUDA_ALLOC_CONF`: the test file at `75454c1^` leaves it
+set in `os.environ`, the new one does not (root logger handlers 0 -> 0 either
+way, because `logging.basicConfig` does nothing while pytest's own handler is
+attached). Full suite: **4 known-failed, 1561 passed, 2 skipped** (1558 + 3).
+`pre-commit` clean on the first pass.
+
+**Verify pass** (2026-10-19, Sonnet 5.5, worktree at `75454c1`, `uv run
+--no-sync` from the worktree root; `pikaraoke` and `scripts/add_songs.py`
+confirmed to import from the worktree).
+
+Unit suite after C: **4 known-failed, 1561 passed, 2 skipped** (the four are
+the known Windows set; 1554 baseline + 2 + 2 + 3 = 1561).
+
+Status check, the real CLI with `--dry-run`, a fresh scratch folder
+(`verify_status` in the session scratchpad, never the library), an empty
+`Title---Z3x9i7njCCo.mp4`, link `watch?v=Z3x9i7njCCo`, exit 0 both times:
+
+| Folder state | Status reported |
+|---|---|
+| `.mp4` and empty `karaoke/Title---Z3x9i7njCCo.ass` | `already in library` |
+| `.ass` deleted, `.mp4` only | `in library, not processed` |
+
+Safety: `%APPDATA%\pikaraoke\pikaraoke.db` sha256 `5c9dec18...bedab` and
+`config.ini` sha256 `e264ca26...0cb8` identical before and after (and equal to
+3.1's values); the db, `-wal` and `-shm` files kept their sizes and mtimes
+(`-wal` 1,334,912 B, Sep 28 15:06); `%APPDATA%\pikaraoke\tmp` unchanged
+(`lyric_choices` only, mtime Oct 19 11:12); the main checkout is still on
+`dev` with a clean status; the worktree is clean after the three commits.
+
+Not exercised: the interactive prompts inside `main()` (confirm and Genius)
+still have not run live, and no real download or pipeline run was needed for
+this phase.
+
+No STOP fired: `execute_fetches`' tests were not touched, no existing test
+changed outcome, nothing needed a change under `pikaraoke/`, and nothing
+outside the scratch folder changed.
+
+Left: nothing in Phase 3.2. Landing on `dev` is Ken's call: cherry-pick every
+code commit in branch order (`6cc2b29`, `2fdcf08`, `c8fe156`, `788b10c`,
+`c096631`, `975175b`, `6ecb41d`, `e81607b`, `db2d193`, `f6490e1`, `73dada4`,
+`965776f`, `84e0f2f`, `75454c1`); the session that lands `--song` then
+retires the one-song driver recipe in memory `regen-reprocessing-workflow`.
