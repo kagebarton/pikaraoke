@@ -12,6 +12,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
+
 from pikaraoke.lib.alignment_capture import SCHEMA_VERSION
 from pikaraoke.pipeline.config import PipelineConfig
 
@@ -558,6 +560,23 @@ class TestRemove:
     def test_missing_path_is_a_noop(self, tmp_path):
         regen._remove(tmp_path / "nope")  # does not raise
 
+    def test_file_that_cannot_be_removed_raises(self, tmp_path, monkeypatch):
+        # A file that survives a reset could be mistaken for a current caption,
+        # so unlike a tree it stops the reset instead of being warned about.
+        file = tmp_path / "locked.srt"
+        file.write_text("x", encoding="utf-8")
+        real_unlink = Path.unlink
+
+        def unlink(self, missing_ok=False):
+            if self == file:
+                raise PermissionError(13, "in use", str(self))
+            real_unlink(self, missing_ok=missing_ok)
+
+        monkeypatch.setattr(Path, "unlink", unlink)
+
+        with pytest.raises(OSError):
+            regen._remove(file)
+
     def test_tree_that_cannot_be_removed_is_warned_about(self, tmp_path, monkeypatch, caplog):
         tree = tmp_path / "tree"
         tree.mkdir()
@@ -678,6 +697,32 @@ class TestMainSongReset:
         out = capsys.readouterr().out
         assert "Selection: selected songs (reset)" in out
         assert "for the selected songs" in out
+
+    def test_a_reset_that_cannot_remove_a_file_stops_with_a_message(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        self._setup_library(tmp_path)
+        monkeypatch.setenv("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["regen", str(tmp_path), "--song", "Mr", "--reset", "--yes"],
+        )
+        locked = tmp_path / "subtitles" / "Mr.srt"
+        monkeypatch.setattr(
+            regen,
+            "clear_output_folders",
+            MagicMock(side_effect=PermissionError(13, "in use", str(locked))),
+        )
+        mock_run = MagicMock(return_value=0)
+        monkeypatch.setattr(regen, "resolve_and_run", mock_run)
+
+        assert regen.main() == 1
+
+        mock_run.assert_not_called()
+        err = capsys.readouterr().err
+        assert "Reset stopped" in err
+        assert "in use" in err
 
 
 class TestResolveAndRunSetup:
