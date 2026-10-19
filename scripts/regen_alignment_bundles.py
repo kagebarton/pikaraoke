@@ -49,6 +49,7 @@ import os
 import shutil
 import sys
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -743,26 +744,22 @@ def _all_stems(folder: Path) -> set[str]:
     }
 
 
-def _owns_file(name: str, stem: str, all_stems: set[str]) -> bool:
-    """True when a folder entry named ``name`` belongs to the song ``stem``.
+def _owner(name: str, all_stems: set[str]) -> str | None:
+    """The song stem a folder entry named ``name`` belongs to, or None.
 
-    ``name`` must equal ``stem`` or start with ``stem + "."`` (catching
-    ``<stem>.srt.generated``); a longer stem that also claims ``name`` (e.g.
-    ``Song.live`` owning ``Song.live.srt``) wins instead, so ``Song`` never
+    A stem claims ``name`` when ``name`` equals it or starts with
+    ``stem + "."`` (catching ``<stem>.srt.generated``). The longest claiming
+    stem owns it, so ``Song.live`` owns ``Song.live.srt`` and ``Song`` never
     claims a file that belongs to ``Song.live``.
     """
-    if name != stem and not name.startswith(stem + "."):
-        return False
-    return not any(
-        other != stem and len(other) > len(stem) and (name == other or name.startswith(other + "."))
-        for other in all_stems
-    )
+    claimants = [s for s in all_stems if name == s or name.startswith(s + ".")]
+    return max(claimants, key=len, default=None)
 
 
 def backup_text_folders(folder: Path, stems: list[str] | None = None) -> Path | None:
     """Snapshot the regenerable output folders into ``regen_backup_<UTC>/``.
 
-    ``stems``: copy only those songs' own files (see :func:`_owns_file`) from
+    ``stems``: copy only those songs' own files (see :func:`_owner`) from
     each folder instead of the whole folder.
 
     Returns the backup root, or None when nothing was copied.
@@ -784,7 +781,7 @@ def backup_text_folders(folder: Path, stems: list[str] | None = None) -> Path | 
         src = folder / sub
         if not src.is_dir():
             continue
-        entries = [e for e in src.iterdir() if any(_owns_file(e.name, s, all_stems) for s in stems)]
+        entries = [e for e in src.iterdir() if _owner(e.name, all_stems) in stems]
         if not entries:
             continue
         dest = backup_root / sub
@@ -798,75 +795,69 @@ def backup_text_folders(folder: Path, stems: list[str] | None = None) -> Path | 
     return backup_root if copied else None
 
 
+# Non-regenerable inputs a reset keeps inside the folders it otherwise wipes --
+# fetched once and reused, not outputs the pipeline rebuilds:
+#
+# - ``subtitles/<stem>.en.asr.json3`` YouTube-ASR captions (fetched by the
+#   download manager on first add). Wiping them would silently drop the joint
+#   matcher's third source from every genius song on the next run.
+# - ``lyrics/<stem>.lrc`` LRCLIB variants (fetched by
+#   :func:`execute_lrclib_backfill` / ``LyricsFetchStage``, per E1's gated
+#   fill). Wiping them would force a re-fetch of every genius song's variant on
+#   the next run for no benefit -- ``ensure_lrc`` already reuses an on-disk
+#   file unconditionally.
+KEEP_ON_RESET = {"subtitles": ASR_JSON3_SUFFIX, "lyrics": ".lrc"}
+
+
 def clear_output_folders(folder: Path, stems: list[str] | None = None) -> None:
     """Delete the regenerable output folders (reset mode, after the backup).
 
     The pipeline rebuilds subtitles/karaoke/lyrics for every song reset
     reprocesses, so wiping them first guarantees no stale file (e.g. an old
     generated SRT) survives. Stems and bundles live elsewhere and are untouched.
+    :data:`KEEP_ON_RESET` names what survives inside ``subtitles/`` and
+    ``lyrics/``.
 
-    Two exceptions -- both non-regenerable inputs fetched once and reused,
-    not outputs the pipeline rebuilds:
-
-    - ``subtitles/<stem>.en.asr.json3`` YouTube-ASR captions (fetched by the
-      download manager on first add). Wiping them would silently drop the
-      joint matcher's third source from every genius song on the next run.
-    - ``lyrics/<stem>.lrc`` LRCLIB variants (fetched by
-      :func:`execute_lrclib_backfill` / ``LyricsFetchStage``, per E1's gated
-      fill). Wiping them would force a re-fetch of every genius song's
-      variant on the next run for no benefit -- ``ensure_lrc`` already
-      reuses an on-disk file unconditionally.
-
-    ``stems``: scope the wipe to those songs' own files (see
-    :func:`_owns_file`) instead of clearing whole folders -- the folders
-    themselves are never removed and every other song's files are untouched.
+    ``stems``: scope the wipe to those songs' own files (see :func:`_owner`)
+    instead of clearing whole folders -- the folders themselves are never
+    removed and every other song's files are untouched.
     """
-    if stems is None:
-        for sub in OUTPUT_DIRS:
-            if sub == "subtitles":
-                _clear_except_suffix(folder / sub, ASR_JSON3_SUFFIX)
-            elif sub == "lyrics":
-                _clear_except_suffix(folder / sub, ".lrc")
-            else:
-                shutil.rmtree(folder / sub, ignore_errors=True)
-        return
+    all_stems = _all_stems(folder) if stems is not None else set()
 
-    all_stems = _all_stems(folder)
+    def selected(name: str) -> bool:
+        return stems is None or _owner(name, all_stems) in stems
+
     for sub in OUTPUT_DIRS:
-        keep_suffix = (
-            ASR_JSON3_SUFFIX if sub == "subtitles" else ".lrc" if sub == "lyrics" else None
-        )
-        _clear_selected(folder / sub, stems, all_stems, keep_suffix)
-
-
-def _clear_except_suffix(dir_path: Path, suffix: str) -> None:
-    """Remove everything in ``dir_path`` except files ending in ``suffix``."""
-    if not dir_path.is_dir():
-        return
-    for entry in list(dir_path.iterdir()):
-        if entry.is_file() and entry.name.endswith(suffix):
-            continue
-        if entry.is_dir():
-            shutil.rmtree(entry, ignore_errors=True)
+        keep_suffix = KEEP_ON_RESET.get(sub)
+        if stems is None and keep_suffix is None:
+            _remove(folder / sub)
         else:
-            entry.unlink(missing_ok=True)
+            _clear_dir(folder / sub, keep_suffix, selected)
 
 
-def _clear_selected(
-    dir_path: Path, stems: list[str], all_stems: set[str], keep_suffix: str | None
-) -> None:
-    """Remove ``stems``' own entries from ``dir_path`` (never the folder itself)."""
+def _clear_dir(dir_path: Path, keep_suffix: str | None, selected: Callable[[str], bool]) -> None:
+    """Remove the ``selected`` entries of ``dir_path`` (never the folder itself).
+
+    Files ending in ``keep_suffix`` are kept.
+    """
     if not dir_path.is_dir():
         return
     for entry in list(dir_path.iterdir()):
         if keep_suffix and entry.is_file() and entry.name.endswith(keep_suffix):
             continue
-        if not any(_owns_file(entry.name, s, all_stems) for s in stems):
-            continue
-        if entry.is_dir():
-            shutil.rmtree(entry, ignore_errors=True)
-        else:
-            entry.unlink(missing_ok=True)
+        if selected(entry.name):
+            _remove(entry)
+
+
+def _remove(path: Path) -> None:
+    """Delete a file or a directory tree; a tree that can't be fully removed is warned about."""
+    if not path.is_dir():
+        path.unlink(missing_ok=True)
+        return
+    try:
+        shutil.rmtree(path)
+    except OSError as e:
+        logger.warning("Could not fully remove %s: %s", path, e)
 
 
 # ---------------------------------------------------------------------------
@@ -886,18 +877,23 @@ def _make_genius() -> GeniusClient:
     return _genius_singleton
 
 
-def warn_if_no_genius_token(genius: GeniusClient) -> None:
-    """Print a warning when no Genius API token is configured."""
-    if not genius._token:
-        print(
-            "WARNING: no genius_token in preferences; Genius searches will "
-            "return no hits. Use [t] (transcribe) or [s] (local SRT) only.\n"
-        )
-
-
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
+
+def setup_process() -> None:
+    """Process-wide setup both CLIs' ``main()`` run first: allocator env, logging."""
+    # Match processing_manager: reduce CUDA allocator fragmentation so the
+    # separator and whisper models can coexist on a single GPU.
+    os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
+    logging.getLogger("pikaraoke.pipeline.stages.lyric_align").setLevel(logging.INFO)
 
 
 def parse_args() -> argparse.Namespace:
@@ -940,12 +936,22 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def resolve_and_run(jobs: list[SongJob], config: PipelineConfig, genius: GeniusClient) -> int:
+def resolve_and_run(jobs: list[SongJob]) -> int:
     """Resolve caption fetches and Genius prompts, then run the pipeline.
 
-    Returns the process exit code: 0 on success (including nothing left to
-    run after prompts), 1 if any job failed.
+    Builds the pipeline config and the Genius client itself, so both CLIs
+    share one setup. Returns the process exit code: 0 on success (including
+    nothing left to run after prompts), 1 if any job failed.
     """
+    config = PipelineConfig()
+    config.intermediate_dir = get_temp_directory()
+    genius = _make_genius()
+    if not genius._token:
+        print(
+            "WARNING: no genius_token in preferences; Genius searches will "
+            "return no hits. Use [t] (transcribe) or [s] (local SRT) only.\n"
+        )
+
     # Download captions before prompting so a fetch failure falls through to the
     # Genius prompt (and a success skips it).
     execute_fetches(jobs)
@@ -962,16 +968,7 @@ def resolve_and_run(jobs: list[SongJob], config: PipelineConfig, genius: GeniusC
 
 
 def main() -> int:
-    # Match processing_manager: reduce CUDA allocator fragmentation so the
-    # separator and whisper models can coexist on a single GPU.
-    os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
-
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        datefmt="%H:%M:%S",
-    )
-    logging.getLogger("pikaraoke.pipeline.stages.lyric_align").setLevel(logging.INFO)
+    setup_process()
 
     args = parse_args()
     folder = Path(args.folder).expanduser().resolve()
@@ -1003,11 +1000,6 @@ def main() -> int:
             print("Aborted.")
             return 0
 
-    config = PipelineConfig()
-    config.intermediate_dir = get_temp_directory()
-    genius = _make_genius()
-    warn_if_no_genius_token(genius)
-
     stems = [p.stem for p in selected] if selected is not None else None
     scope_note = " for the selected songs" if stems is not None else ""
 
@@ -1026,7 +1018,7 @@ def main() -> int:
             f"Cleared subtitles/karaoke/lyrics{scope_note} (reset); the pipeline rebuilds them.\n"
         )
 
-    return resolve_and_run(jobs, config, genius)
+    return resolve_and_run(jobs)
 
 
 if __name__ == "__main__":

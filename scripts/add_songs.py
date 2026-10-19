@@ -34,7 +34,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from pikaraoke.lib.download_manager import DownloadManager  # noqa: E402
 from pikaraoke.lib.events import EventSystem  # noqa: E402
-from pikaraoke.lib.genius import GeniusClient  # noqa: E402
 from pikaraoke.lib.get_platform import (  # noqa: E402
     get_default_dl_dir,
     get_platform,
@@ -46,7 +45,6 @@ from pikaraoke.lib.preference_manager import PreferenceManager  # noqa: E402
 from pikaraoke.lib.song_list import SongList  # noqa: E402
 from pikaraoke.lib.song_manager import SongManager  # noqa: E402
 from pikaraoke.lib.youtube_dl import _impersonate_args, yt_dlp_cmd  # noqa: E402
-from pikaraoke.pipeline.config import PipelineConfig  # noqa: E402
 from scripts import regen_alignment_bundles as rab  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -200,7 +198,7 @@ def print_report(entries: list[UrlEntry]) -> None:
 # ---------------------------------------------------------------------------
 
 
-def handoff(song_paths: list[str], config: PipelineConfig, genius: GeniusClient) -> int:
+def handoff(song_paths: list[str]) -> int:
     """Build a no-bundle job per song and hand them to regen's run path.
 
     Every job starts with ``bundle=None`` (a fresh download, or a video a
@@ -215,7 +213,7 @@ def handoff(song_paths: list[str], config: PipelineConfig, genius: GeniusClient)
         caption = rab._find_local_srt(job.song_path)
         if caption is not None:
             rab.adopt_caption(job, caption)
-    return rab.resolve_and_run(jobs, config, genius)
+    return rab.resolve_and_run(jobs)
 
 
 # ---------------------------------------------------------------------------
@@ -262,16 +260,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
-    # Match processing_manager/regen: reduce CUDA allocator fragmentation so
-    # the separator and whisper models can coexist on a single GPU.
-    os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
-
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        datefmt="%H:%M:%S",
-    )
-    logging.getLogger("pikaraoke.pipeline.stages.lyric_align").setLevel(logging.INFO)
+    rab.setup_process()
 
     args = parse_args()
     folder = Path(args.folder).expanduser().resolve()
@@ -346,11 +335,7 @@ def main() -> int:
     pipeline_rc = 0
     to_process = new_songs + [str(p) for p in unprocessed]
     if to_process:
-        config = PipelineConfig()
-        config.intermediate_dir = get_temp_directory()
-        genius = rab._make_genius()
-        rab.warn_if_no_genius_token(genius)
-        pipeline_rc = handoff(to_process, config, genius)
+        pipeline_rc = handoff(to_process)
 
     print(f"\nDownloaded: {downloaded} Failed: {failed}")
     if downloaded:

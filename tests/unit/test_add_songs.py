@@ -234,17 +234,15 @@ class TestHandoff:
         mock_run = MagicMock(return_value=0)
         monkeypatch.setattr(add_songs.rab, "resolve_and_run", mock_run)
         song_path = str(tmp_path / f"Title---{VID_A}.mp4")
-        config = MagicMock()
-        genius = MagicMock()
 
-        rc = add_songs.handoff([song_path], config, genius)
+        rc = add_songs.handoff([song_path])
 
         assert rc == 0
         jobs = mock_run.call_args.args[0]
         assert len(jobs) == 1
         assert jobs[0].bundle is None
         assert jobs[0].plan.kind == "fetch"
-        mock_run.assert_called_once_with(jobs, config, genius)
+        mock_run.assert_called_once_with(jobs)
 
     def test_caption_on_disk_is_gated_instead_of_refetched(self, tmp_path, monkeypatch):
         mock_run = MagicMock(return_value=0)
@@ -256,10 +254,8 @@ class TestHandoff:
         (subs / f"Title---{VID_A}.srt").write_text(
             "1\n00:00:01,000 --> 00:00:04,000\nla\n", encoding="utf-8"
         )
-        config = MagicMock()
-        genius = MagicMock()
 
-        rc = add_songs.handoff([str(song_path)], config, genius)
+        rc = add_songs.handoff([str(song_path)])
 
         assert rc == 0
         jobs = mock_run.call_args.args[0]
@@ -271,7 +267,7 @@ class TestHandoff:
         monkeypatch.setattr(add_songs.rab, "resolve_and_run", MagicMock(return_value=1))
         song_path = str(tmp_path / f"Title---{VID_A}.mp4")
 
-        rc = add_songs.handoff([song_path], MagicMock(), MagicMock())
+        rc = add_songs.handoff([song_path])
 
         assert rc == 1
 
@@ -324,7 +320,6 @@ class TestMain:
         monkeypatch.setattr(
             add_songs, "DownloadManager", _fake_download_manager_class({VID_A: (0, True)}, tmp_path)
         )
-        monkeypatch.setattr(add_songs.rab, "_make_genius", lambda: MagicMock())
         mock_handoff = MagicMock(return_value=0)
         monkeypatch.setattr(add_songs, "handoff", mock_handoff)
 
@@ -346,7 +341,6 @@ class TestMain:
         monkeypatch.setattr(
             add_songs, "DownloadManager", _fake_download_manager_class({VID_A: (0, True)}, tmp_path)
         )
-        monkeypatch.setattr(add_songs.rab, "_make_genius", lambda: MagicMock())
         monkeypatch.setattr(add_songs, "handoff", MagicMock(return_value=1))
 
         assert add_songs.main() == 1
@@ -395,7 +389,6 @@ class TestMain:
             "DownloadManager",
             _fake_download_manager_class({VID_A: RuntimeError("boom"), VID_B: (0, True)}, tmp_path),
         )
-        monkeypatch.setattr(add_songs.rab, "_make_genius", lambda: MagicMock())
         mock_handoff = MagicMock(return_value=0)
         monkeypatch.setattr(add_songs, "handoff", mock_handoff)
 
@@ -424,7 +417,6 @@ class TestMain:
         monkeypatch.setattr(
             add_songs, "DownloadManager", _fake_download_manager_class({}, tmp_path)
         )
-        monkeypatch.setattr(add_songs.rab, "_make_genius", lambda: MagicMock())
         mock_handoff = MagicMock(return_value=0)
         monkeypatch.setattr(add_songs, "handoff", mock_handoff)
 
@@ -452,7 +444,6 @@ class TestMain:
         monkeypatch.setattr(
             add_songs, "DownloadManager", _fake_download_manager_class({VID_A: (0, True)}, tmp_path)
         )
-        monkeypatch.setattr(add_songs.rab, "_make_genius", lambda: MagicMock())
         mock_handoff = MagicMock(return_value=0)
         monkeypatch.setattr(add_songs, "handoff", mock_handoff)
 
