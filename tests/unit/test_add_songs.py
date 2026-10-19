@@ -10,6 +10,8 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
+
 # scripts/ is not a package — load the module straight from its file. It must
 # be registered in sys.modules before exec so @dataclass can resolve its own
 # module by __module__.
@@ -333,6 +335,17 @@ def _fake_download_manager_class(plan: dict, folder: Path):
 
 
 class TestMain:
+    @pytest.fixture(autouse=True)
+    def _isolated_from_the_machine(self, monkeypatch, tmp_path_factory):
+        """Keep ``main()`` from leaking process state or touching the user's config."""
+        # setup_process sets the allocator env var and configures logging.
+        monkeypatch.setattr(add_songs.rab, "setup_process", lambda: None)
+        # An absolute path skips the legacy ./config.ini migration. It stays out of
+        # tmp_path, which is the test's library folder.
+        config_path = str(tmp_path_factory.mktemp("prefs") / "config.ini")
+        real_preferences = add_songs.PreferenceManager
+        monkeypatch.setattr(add_songs, "PreferenceManager", lambda: real_preferences(config_path))
+
     def test_happy_path_download_and_pipeline_succeed(self, tmp_path, monkeypatch):
         monkeypatch.setattr(
             sys,

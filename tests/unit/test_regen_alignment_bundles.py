@@ -543,6 +543,22 @@ class TestOwner:
         assert regen._owner("Unknown.srt", self.STEMS) is None
 
 
+class TestOwnedByAny:
+    def test_entry_of_a_selected_stem(self):
+        assert regen._owned_by_any("Song.srt", ["Song"], {"Song", "Other"})
+
+    def test_longer_stem_sibling_is_not_owned_by_the_shorter_selection(self):
+        assert not regen._owned_by_any("Song.live.srt", ["Song"], {"Song", "Song.live"})
+
+    def test_unclaimed_name_is_rejected_without_scanning_the_library(self, monkeypatch):
+        def scan(name, all_stems):
+            raise AssertionError("full ownership scan for a name no selected stem claims")
+
+        monkeypatch.setattr(regen, "_owner", scan)
+
+        assert not regen._owned_by_any("Unknown.srt", ["Song"], {"Song", "Other"})
+
+
 class TestRemove:
     def test_removes_a_file_and_a_tree(self, tmp_path):
         file = tmp_path / "a.txt"
