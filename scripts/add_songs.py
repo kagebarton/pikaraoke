@@ -130,10 +130,16 @@ def library_files(folder: Path) -> dict[str, Path]:
 def _library_status(path: Path) -> str:
     """Status for an id that already has a file in the library.
 
-    A video with no bundle is a song an earlier run downloaded but never
-    processed. Anything else is done: it has a bundle, or isn't a video.
+    A video with neither an alignment bundle nor a karaoke file is a song an
+    earlier run downloaded but never processed. The pipeline writes a bundle
+    only when the song had lyrics, so a transcribed song has the karaoke file
+    alone and counts as processed too. Anything else is done, or isn't a video.
     """
-    if path.suffix.lower() in rab.VIDEO_EXTS and rab._read_bundle(path.parent, path.stem) is None:
+    outputs = (
+        path.parent / "alignment_debug" / f"{path.stem}.json",
+        path.parent / "karaoke" / f"{path.stem}.ass",
+    )
+    if path.suffix.lower() in rab.VIDEO_EXTS and not any(p.is_file() for p in outputs):
         return "in library, not processed"
     return "already in library"
 
