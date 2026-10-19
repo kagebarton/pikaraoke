@@ -879,6 +879,29 @@ new, no regressions). `pre-commit` clean on the first pass.
 `scripts/README.md`'s `add_songs` flow step 5 now says the already-saved
 caption is gated in place, not fetched a second time.
 
-Left: commits B-G (link parsing, failure reporting/exit code, resumability,
-`--song` exact-match priority, `--song --reset` reporting + file ownership,
-cleanup).
+**Commit B** (`975175b`): `classify_url` rewritten on `urllib.parse` (host
+check first, then a `youtu.be` link's id is its first path segment and any
+other host's is its `v` query parameter via `parse_qs`, matched against the
+YouTube id shape regardless of where `v=` falls in the query string).
+`get_youtube_id_from_url` is no longer called or imported. A schemeless link
+(no `://`) gets `https://` prepended before parsing, so a pasted link missing
+its scheme still classifies (not asked for by the plan, but a real regression
+the rewrite would otherwise have introduced — the old string-slicing version
+didn't need a scheme). Host check is a dot-boundary suffix match
+(`== "youtube.com"` or `.endswith(".youtube.com")`), not the plan's literal
+"ends with youtube.com", so `notyoutube.com` is correctly unrecognised —
+checked against all 9 link shapes the plan and its problem list name (`pp=`,
+`music.youtube.com`, `t=`, a param before `v=`, a param between `v=` and
+`list=`, a Mix link, `list=` before `v=`, `m.youtube.com`, a non-YouTube host
+with a `v` param) before writing any code, via a standalone dry run, then
+again as tests.
+
+Tests: `TestClassifyUrl` keeps its 5 existing cases + 9 new (one per link
+shape above). Full suite: **4 known-failed, 1521 passed, 2 skipped** (1512 +
+9 new, no regressions). `pre-commit` clean on the first pass.
+
+Help text (`--help`) and `scripts/README.md`'s Usage section restated as the
+general rule instead of one example shape.
+
+Left: commits C-G (failure reporting/exit code, resumability, `--song`
+exact-match priority, `--song --reset` reporting + file ownership, cleanup).
