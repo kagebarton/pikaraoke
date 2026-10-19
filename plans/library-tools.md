@@ -2,10 +2,13 @@
 
 Model: Claude Opus 5.5 (design, 2026-09-28); executor Claude Sonnet 5.
 
-> **Status (2026-10-19): Phase 3.1 IN PROGRESS** (Sonnet 5): commit A of G
-> done. Don't cherry-pick anything to `dev` until 3.1 is done; then all code
-> commits (`6cc2b29`, `2fdcf08`, `c8fe156`, `788b10c`, then 3.1's) go in
-> branch order. There is no GATE and nothing here measures timing.
+> **Status (2026-10-19): Phase 3.1 IN PROGRESS** (Sonnet 5): commits A-C of G
+> done (`c096631`, `975175b`, `6ecb41d`; plan-log rows alongside each). Left:
+> D (resumability), E (`--song` exact match), F (`--song --reset` reporting +
+> file ownership), G (cleanup), then the plan's "Verify, then relay" pass.
+> Don't cherry-pick anything to `dev` until 3.1 is done; then all code commits
+> (`6cc2b29`, `2fdcf08`, `c8fe156`, `788b10c`, then 3.1's) go in branch order.
+> There is no GATE and nothing here measures timing.
 
 ## Why
 
@@ -903,5 +906,27 @@ shape above). Full suite: **4 known-failed, 1521 passed, 2 skipped** (1512 +
 Help text (`--help`) and `scripts/README.md`'s Usage section restated as the
 general rule instead of one example shape.
 
-Left: commits C-G (failure reporting/exit code, resumability, `--song`
-exact-match priority, `--song --reset` reporting + file ownership, cleanup).
+**Commit C** (`6ecb41d`): `handoff` returns regen's exit code (was: discarded
+it, returned the job list). `resolve_urls` returns `(entries, unreadable)`
+instead of just `entries` -- every existing call site updated. The download
+loop counts a download successful only when `song_downloaded` actually fired
+during that call (`len(new_songs)` before/after), printing why when a
+return-code-0 download leaves no file. `expand_playlist` passes
+`timeout=300`; `TimeoutExpired` is caught and reported alongside
+`CalledProcessError`. `main()`'s exit code is 1 on any unreadable URL, failed
+download, or non-zero pipeline result -- checked under `--dry-run` and on the
+"Nothing new to download" path too. `Processed:` dropped from the summary
+(regen's own `Done.` line already reports the pipeline).
+
+Tests: drove `main()` end to end for the first time (`TestMain`, 5 new, via a
+scripted `DownloadManager` stand-in that emits `song_downloaded` through the
+real `EventSystem` `main()` builds, per the plan's own instruction) + 3 more
+on `resolve_urls`/`handoff` directly (timeout reported, an unrecognised URL
+counts as unreadable, `handoff` returns the pipeline code) + 1 existing test's
+mocked `check_output` fixed for the new `timeout` kwarg. Full suite: **4
+known-failed, 1529 passed, 2 skipped** (1521 + 8 new, no regressions).
+`pre-commit`'s first pass reformatted one long `FAILED:` print across two
+lines (black, cosmetic only -- reviewed the diff, reran the targeted tests).
+
+Left: commits D-G (resumability, `--song` exact-match priority, `--song
+--reset` reporting + file ownership, cleanup).
