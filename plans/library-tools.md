@@ -3,12 +3,13 @@
 Model: Claude Opus 5.5 (design, 2026-09-28); executor Claude Sonnet 5 (through
 Phase 3.1 commit C), Claude Sonnet 5.5 (commit D on).
 
-> **Status (2026-10-19): Phase 3.1 IN PROGRESS** (Sonnet 5 for A-C, Sonnet 5.5
-> for D on): commits A-G of G done (`c096631`, `975175b`, `6ecb41d`, `e81607b`,
-> `db2d193`, `f6490e1`, `73dada4`; plan-log rows alongside each). Left: the
-> plan's "Verify, then relay" pass.
-> Don't cherry-pick anything to `dev` until 3.1 is done; then all code commits
-> (`6cc2b29`, `2fdcf08`, `c8fe156`, `788b10c`, then 3.1's) go in branch order.
+> **Status (2026-10-19): Phase 3.1 DONE, awaiting Ken** (Sonnet 5 for A-C,
+> Sonnet 5.5 for D on): commits A-G done (`c096631`, `975175b`, `6ecb41d`,
+> `e81607b`, `db2d193`, `f6490e1`, `73dada4`; plan-log rows alongside each) and
+> the "Verify, then relay" pass run (see the Results log). Left: a
+> `/code-review` of the 3.1 commits (due, not run), then landing, which is Ken's
+> call: all code commits (`6cc2b29`, `2fdcf08`, `c8fe156`, `788b10c`, then 3.1's)
+> go to `dev` by cherry-pick in branch order.
 > There is no GATE and nothing here measures timing.
 
 ## Why
@@ -1075,4 +1076,79 @@ wins, a prefix without a dot isn't a claim, unclaimed entry -> `None`),
 1554 passed, 2 skipped** (1545 + 9 new, no regressions). `pre-commit` clean on
 the first pass.
 
-Left: the plan's "Verify, then relay" pass.
+**Verify pass** (2026-10-19, Sonnet 5.5, worktree at `970f241`, all runs from
+the repo root with `uv run --no-sync`; scratch folders `verify_links` and
+`verify_run` in the session scratchpad, never the library).
+
+Unit suite after G: **4 known-failed, 1554 passed, 2 skipped** (Phase 3's end
+state 1509 + 45 new across A-G).
+
+Link check, the real CLI, `--dry-run`, an empty scratch folder, one run per
+link, id `dQw4w9WgXcQ`: all 11 shapes below report `Songs found: 1`, `new`,
+exit 0 (`watch?v=X`, `watch?v=X&list=PLxxxx`, `youtu.be/X?si=`, `&pp=`,
+`music.youtube.com`, `&t=30s`, `watch?feature=shared&v=X`, `&t=30s&list=Y`, the
+Mix link `&pp=abc&list=RDX&start_radio=1`, `watch?list=Y&v=X`,
+`m.youtube.com`). `notyoutube.com/watch?v=X` prints `unrecognised`, `Songs
+found: 0`, exit 1. The scratch folder was still empty afterwards. The status
+column's dash rule is 6 wide for `new` (commit D).
+
+Real run, `add_songs.py "https://www.youtube.com/watch?v=Z3x9i7njCCo" --folder
+verify_run --yes`, stdin `\nt\n`, three invocations on the same folder:
+1. 11:02-11:04: downloaded the video and both captions, gated the uploader
+   caption, reached `run_jobs`, no Genius prompt; `whisper_worker.start()` then
+   raised `TimeoutError: Whisper worker did not become ready in time` (the
+   constant is 60 s; the model had not loaded in that time). Exit 1.
+2. Same command: the report said `in library, not processed` (a video, no
+   bundle), nothing was downloaded, the song was handed to the run path. The
+   Whisper model loaded in 12.0 s this time. Then
+   `UnicodeEncodeError: 'charmap' codec can't encode ...` in
+   `run_jobs`' own `print(f"[i/n] {song.name} -- {label}")` (stdout piped to a
+   file is cp1252 here; the title is Korean). Not a line these commits touch.
+   Exit 1.
+3. Same command with `PYTHONUTF8=1`: `in library, not processed`, then
+   `[1/1] ... -- fetched srt (from video)`, `OK`, `Done. succeeded=1 failed=0
+   skipped=0`, `Downloaded: 0 Failed: 0`, exit 0. Whisper loaded in 11.7 s; the
+   pipeline took ~5.5 min (11:07:26-11:12:44). The line `Fetching video
+   captions` appears **0 times in all three logs**.
+
+Artifacts in `verify_run` after invocation 3: video, `subtitles/<stem>.srt`
+(uploader caption; no `.srt.generated`), `subtitles/<stem>.en.asr.json3`,
+`vocal/`, `nonvocal/`, `karaoke/<stem>.ass`, `alignment_debug/<stem>.json`,
+the same set as Run B. Byte sizes of six of them equal the real library's copy
+of the same song (video 31,369,791; vocal 7,642,256; nonvocal 9,582,312; `.ass`
+12,469; `.srt` 5,744; `.en.asr.json3` 49,812). The scratch bundle's size was
+not recorded before the next step deleted it (the library's is 23,832 B).
+
+Bundle delete then `--dry-run` (same command): before the delete the song
+reported `already in library`; after deleting
+`verify_run/alignment_debug/<stem>.json` it reported `in library, not
+processed`. Exit 0 both times.
+
+Safety: app DB `%APPDATA%\pikaraoke\pikaraoke.db` sha256 `5c9dec18...bedab`,
+mtime `1779911392`, and `config.ini` sha256 `e264ca26...0cb8` identical before
+and after (and equal to Run A/B's values). The real library
+(`D:/shared/pikaraoke-songs`) already holds seven files for `Z3x9i7njCCo`
+(video, both captions, both stems, `.ass`, bundle), all with mtimes
+2026-09-28 15:02-15:07; none changed during these runs (the plan's Run B entry
+says that song was not promoted at the time; someone has since copied it, not
+this session). `%APPDATA%\pikaraoke\tmp` holds only `lyric_choices` (Sep 28)
+after the runs; the pipeline's own temp dir was removed. `git status` in the
+worktree: clean.
+
+Not exercised: the confirm prompt (`--yes`) and the Genius prompt (a usable
+caption existed, so none fired) inside `main()`.
+
+Observations, not changes: a run that only resumes unprocessed songs prints
+`Downloaded: 0 Failed: 0` and no sync-library reminder (the reminder is gated on
+`downloaded`); the Whisper 60 s load timeout was hit once on a cold start and
+not again; a piped stdout on Windows crashes regen's progress line for titles
+outside cp1252 (not new, not in scope).
+
+No STOP fired (A's existing tests did not change outcome; nothing needed a
+change under `pikaraoke/`; nothing outside the scratch folder changed).
+
+Left: nothing in Phase 3.1. A `/code-review` of the 3.1 commits is due, not run.
+Landing on `dev` is Ken's call: cherry-pick every code commit in branch order
+(`6cc2b29`, `2fdcf08`, `c8fe156`, `788b10c`, `c096631`, `975175b`, `6ecb41d`,
+`e81607b`, `db2d193`, `f6490e1`, `73dada4`); the session that lands `--song`
+then retires the one-song driver recipe in memory `regen-reprocessing-workflow`.
