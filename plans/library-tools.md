@@ -4,9 +4,9 @@ Model: Claude Opus 5.5 (design, 2026-09-28); executor Claude Sonnet 5 (through
 Phase 3.1 commit C), Claude Sonnet 5.5 (commit D on).
 
 > **Status (2026-10-19): Phase 3.1 IN PROGRESS** (Sonnet 5 for A-C, Sonnet 5.5
-> for D on): commits A-E of G done (`c096631`, `975175b`, `6ecb41d`, `e81607b`,
-> `db2d193`; plan-log rows alongside each). Left: F (`--song --reset` reporting
-> + file ownership), G (cleanup), then the plan's "Verify, then relay" pass.
+> for D on): commits A-F of G done (`c096631`, `975175b`, `6ecb41d`, `e81607b`,
+> `db2d193`, `f6490e1`; plan-log rows alongside each). Left: G (cleanup), then
+> the plan's "Verify, then relay" pass.
 > Don't cherry-pick anything to `dev` until 3.1 is done; then all code commits
 > (`6cc2b29`, `2fdcf08`, `c8fe156`, `788b10c`, then 3.1's) go in branch order.
 > There is no GATE and nothing here measures timing.
@@ -992,4 +992,39 @@ swapping the old file back in) and the fourth passes on both. Full suite: **4
 known-failed, 1542 passed, 2 skipped** (1538 + 4 new, no regressions).
 `pre-commit` clean on the first pass.
 
-Left: commits F-G (`--song --reset` reporting + file ownership, cleanup).
+**Commit F** (`f6490e1`): `print_report` prints `Selection: selected songs
+(reset)` when `--song` and `--reset` are both given. The module docstring has
+the `[--song PATTERN]...` usage and one paragraph saying the backup and the
+`--reset` wipe touch only the selected songs' files; the `--reset` help has
+the same clause; `main()`'s `Backed up ...`, `No ... folders to back up` and
+`Cleared ...` lines say `for the selected songs` when scoped. Backfill's
+docstring usage line has `--song`, and its `[--folder PATH]` is now `[folder]`
+(`folder` is a positional argument in its `parse_args`; the old text was wrong,
+not asked for by the plan, fixed on the line already being edited).
+`_all_stems` now builds from every file whose suffix is in
+`SongList.VALID_EXTENSIONS` (it no longer goes through `_list_videos`);
+selection and `scan_folder` still list videos only.
+
+Tests: `TestPrintReportScope` (2: selected + reset says `(reset)`; selected
+alone doesn't) and `TestMainSongReset` (1, drives `regen.main()` with `argv`
+`[<tmp library>, "--song", "Mr", "--reset", "--yes"]`, patching `_make_genius`
+and `resolve_and_run`). Fixture: videos `Mr`, `Mr.live`, `Other`, plus
+`Mr. Brightside---abcdefghijk.mp3`, each with a `.srt` / `.srt.generated` /
+`.ass` / `.txt` / bundle. Asserts the run path is handed only `Mr.mp4`; the
+backup holds `Mr`'s files and none of the three siblings'; `Mr`'s regenerable
+files are wiped and its bundle survives; every sibling's files survive. Against
+the old video-only `_all_stems` the test fails on exactly the `.mp3` sibling's
+`.srt` being backed up (checked by swapping the old line back in). Full suite:
+**4 known-failed, 1545 passed, 2 skipped** (1542 + 3 new, no regressions).
+`pre-commit` clean on the first pass.
+
+Known limit, no code change (per the plan): `_select_en_srt`
+(`pikaraoke/lib/youtube_dl.py`, called by `download_manual_en_subs`) treats
+every `<stem>.*.srt` as an English variant and deletes the extras, which
+includes a longer-stem sibling's caption (`Song.live.srt` when the selected
+song is `Song`). With `--song` the backup is scoped and no longer covers that
+sibling. It needs one song's name to be another's name plus a dot; the plan
+recorded the library as having no such pair (checked 2026-09-28) and this
+session did not re-check. The fix would be under `pikaraoke/` (Decision 5).
+
+Left: commit G (cleanup), then the plan's "Verify, then relay" pass.
