@@ -7,27 +7,26 @@ whole library.
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
-# Allow running as ``python scripts/song_select.py`` from repo root.
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from pikaraoke.lib.metadata_parser import extract_youtube_id  # noqa: E402
+from pikaraoke.lib.metadata_parser import extract_youtube_id
 
 
 def select_songs(videos: list[Path], patterns: list[str]) -> list[Path]:
     """Resolve ``patterns`` to videos, deduped and in ``videos`` order.
 
-    A pattern matches a video when it equals the video's YouTube ID or is a
-    case-insensitive substring of the video's filename. Each pattern must
-    match exactly one video; a pattern matching zero or several raises
+    A pattern's exact matches win: it equals the video's YouTube ID, or its
+    stem or file name case-insensitively. Only when it has none does it fall
+    back to a case-insensitive substring of the file name. Each pattern must
+    pick exactly one video; a pattern matching zero or several raises
     ``ValueError`` naming the pattern (and, for several, the matching files
     so the user can retype with the ID).
     """
     matched: set[Path] = set()
     for pattern in patterns:
-        hits = [v for v in videos if _matches(v, pattern)]
+        hits = [v for v in videos if _is_exact_match(v, pattern)] or [
+            v for v in videos if pattern.lower() in v.name.lower()
+        ]
         if not hits:
             raise ValueError(f"No song matches {pattern!r}")
         if len(hits) > 1:
@@ -37,7 +36,8 @@ def select_songs(videos: list[Path], patterns: list[str]) -> list[Path]:
     return [v for v in videos if v in matched]
 
 
-def _matches(video: Path, pattern: str) -> bool:
-    if extract_youtube_id(str(video)) == pattern:
-        return True
-    return pattern.lower() in video.name.lower()
+def _is_exact_match(video: Path, pattern: str) -> bool:
+    return extract_youtube_id(str(video)) == pattern or pattern.lower() in (
+        video.stem.lower(),
+        video.name.lower(),
+    )

@@ -910,9 +910,9 @@ def parse_args() -> argparse.Namespace:
         "--song",
         action="append",
         metavar="PATTERN",
-        help="Limit to one song: a YouTube ID or part of the file name. "
-        "Repeatable. Each pattern must match exactly one song. Selected "
-        "songs run even if their bundle is current.",
+        help="Limit to one song: a YouTube ID, the file name, or part of it; "
+        "an exact match wins. Repeatable. Each pattern must match exactly one "
+        "song. Selected songs run even if their bundle is current.",
     )
     p.add_argument(
         "--dry-run",

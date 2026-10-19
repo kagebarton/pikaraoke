@@ -38,7 +38,28 @@ class TestSelectSongs:
         result = select_songs(videos, ["dQw4w9WgXcQ", "song"])
         assert result == videos[:1]
 
-    def test_result_is_deduped_and_in_input_order(self):
+    def test_result_is_in_input_order(self):
         videos = _videos("A---dQw4w9WgXcQ.mp4", "B---abcdefghijk.mp4", "C---zzzzzzzzzzz.mp4")
         result = select_songs(videos, ["zzzzzzzzzzz", "dQw4w9WgXcQ"])
         assert result == [videos[0], videos[2]]
+
+    # An exact ID or file name wins over a partial match; only when nothing
+    # matches exactly does the substring fallback (and its ambiguity) apply.
+
+    def test_exact_stem_wins_over_a_longer_title_containing_it(self):
+        videos = _videos("Hello.mp4", "Adele - Hello.mp4")
+        assert select_songs(videos, ["Hello"]) == videos[:1]
+        assert select_songs(videos, ["hello"]) == videos[:1]
+
+    def test_exact_file_name_wins_over_a_longer_title_containing_it(self):
+        videos = _videos("Hello.mp4", "Adele - Hello.mp4")
+        assert select_songs(videos, ["hello.mp4"]) == videos[:1]
+
+    def test_exact_id_wins_over_a_title_containing_that_string(self):
+        videos = _videos("Song---dQw4w9WgXcQ.mp4", "About dQw4w9WgXcQ---abcdefghijk.mp4")
+        assert select_songs(videos, ["dQw4w9WgXcQ"]) == videos[:1]
+
+    def test_two_exact_matches_still_raise(self):
+        videos = _videos("Hello.mp4", "Hello.mkv", "Adele - Hello.mp4")
+        with pytest.raises(ValueError, match="matches multiple songs"):
+            select_songs(videos, ["Hello"])
