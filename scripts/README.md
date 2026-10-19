@@ -152,9 +152,10 @@ pipeline on them, without the app UI.
 python scripts/add_songs.py URL [URL ...] [--folder PATH] [--dry-run] [--yes]
 ```
 
-Default `folder` = `get_default_dl_dir()`, as in the other tools. A
-`watch?v=X&list=Y` link downloads only `X`; paste the playlist page link
-to get the whole list. `--dry-run` prints the report and exits.
+Default `folder` = `get_default_dl_dir()`, as in the other tools. A link to
+one video downloads only that video, even when it carries `list=`; paste
+the playlist page link (`playlist?list=`) to get the whole list.
+`--dry-run` prints the report and exits.
 
 ### Flow
 

@@ -22,10 +22,12 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 # Allow running as ``python scripts/add_songs.py`` from repo root.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -42,11 +44,7 @@ from pikaraoke.lib.karaoke_database import KaraokeDatabase  # noqa: E402
 from pikaraoke.lib.metadata_parser import extract_youtube_id  # noqa: E402
 from pikaraoke.lib.preference_manager import PreferenceManager  # noqa: E402
 from pikaraoke.lib.song_manager import SongManager  # noqa: E402
-from pikaraoke.lib.youtube_dl import (  # noqa: E402
-    _impersonate_args,
-    get_youtube_id_from_url,
-    yt_dlp_cmd,
-)
+from pikaraoke.lib.youtube_dl import _impersonate_args, yt_dlp_cmd  # noqa: E402
 from pikaraoke.pipeline.config import PipelineConfig  # noqa: E402
 from scripts import regen_alignment_bundles as rab  # noqa: E402
 
@@ -65,22 +63,37 @@ class UrlEntry:
     status: str  # "new" | "already in library"
 
 
+# A link to one video downloads only that video, even when it carries
+# list= (a search-result click or a Mix can attach one to a plain video
+# link); the playlist page link (playlist?list=) is what gets the whole list.
+_YOUTUBE_ID_RE = re.compile(r"[A-Za-z0-9_-]{11}")
+
+
 def classify_url(url: str) -> tuple[str, str] | None:
     """Classify ``url`` as ``("video", id)`` or ``("playlist", url)``.
 
-    Strips ``&list=...`` the way ``DownloadManager.queue_download`` does
-    before extracting the id, so ``watch?v=X&list=Y`` and
-    ``youtu.be/X?si=...`` are videos, matching the app. Returns ``None``
-    for a URL that is neither.
+    Checks the host first (``youtu.be``, or ``youtube.com`` / any of its
+    subdomains, case insensitive) -- any other host is unrecognised. A
+    ``youtu.be`` link's id is its first path segment; any other host's is its
+    ``v`` query parameter. An id matching the YouTube id shape is a video,
+    even when the link also carries ``list=``. Otherwise a ``list`` query
+    parameter makes it a playlist, passed through unchanged. Returns ``None``
+    for anything else (including shorts and embed links -- nobody asked for
+    those).
     """
-    stripped = url.split("&list=")[0] if "&list=" in url else url
-    # get_youtube_id_from_url logs an error on any URL it can't parse, so only
-    # probe it for the formats it documents (watch?v=, ?v=, youtu.be/).
-    if "v=" in stripped or "u.be/" in stripped:
-        video_id = get_youtube_id_from_url(stripped)
-        if video_id and len(video_id) == 11:
-            return ("video", video_id)
-    if "list=" in url:
+    parsed = urlparse(url if "://" in url else f"https://{url}")
+    host = (parsed.hostname or "").lower()
+    if host != "youtu.be" and host != "youtube.com" and not host.endswith(".youtube.com"):
+        return None
+
+    query = parse_qs(parsed.query)
+    if host == "youtu.be":
+        video_id = parsed.path.lstrip("/").split("/", 1)[0]
+    else:
+        video_id = query.get("v", [None])[0]
+    if video_id and _YOUTUBE_ID_RE.fullmatch(video_id):
+        return ("video", video_id)
+    if "list" in query:
         return ("playlist", url)
     return None
 
@@ -187,9 +200,9 @@ def parse_args() -> argparse.Namespace:
         "urls",
         nargs="+",
         metavar="URL",
-        help="YouTube video or playlist URL(s). A watch?v=X&list=Y link "
-        "downloads only X; paste the playlist page link to get the whole "
-        "list.",
+        help="YouTube video or playlist URL(s). A link to one video "
+        "downloads only that video, even when it carries list=; paste the "
+        "playlist page link (playlist?list=) to get the whole list.",
     )
     p.add_argument(
         "--folder",

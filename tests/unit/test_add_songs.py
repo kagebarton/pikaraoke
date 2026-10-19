@@ -45,12 +45,50 @@ class TestClassifyUrl:
     def test_bare_playlist_url(self, caplog):
         url = "https://www.youtube.com/playlist?list=PLxxxx"
         assert add_songs.classify_url(url) == ("playlist", url)
-        # A playlist is not a parse failure: the app's id helper must not be
-        # probed (it logs an ERROR for any URL it can't parse).
         assert not caplog.records
 
     def test_garbage_is_unrecognised(self):
         assert add_songs.classify_url("not a url") is None
+
+    # A real URL parser (urllib.parse), not a cut-at-? id helper: every shape
+    # below carries a v= id and must give the video, regardless of what else
+    # is on the query string or where v= falls in it.
+
+    def test_search_result_param_gives_video(self):
+        url = f"https://www.youtube.com/watch?v={VID_A}&pp=abcXYZ"
+        assert add_songs.classify_url(url) == ("video", VID_A)
+
+    def test_music_subdomain_gives_video(self):
+        url = f"https://music.youtube.com/watch?v={VID_A}&si=abcXYZ"
+        assert add_songs.classify_url(url) == ("video", VID_A)
+
+    def test_timestamp_param_gives_video(self):
+        url = f"https://www.youtube.com/watch?v={VID_A}&t=30s"
+        assert add_songs.classify_url(url) == ("video", VID_A)
+
+    def test_param_before_v_gives_video(self):
+        url = f"https://www.youtube.com/watch?feature=shared&v={VID_A}"
+        assert add_songs.classify_url(url) == ("video", VID_A)
+
+    def test_param_between_v_and_list_gives_only_the_video(self):
+        url = f"https://www.youtube.com/watch?v={VID_A}&t=30s&list=Y"
+        assert add_songs.classify_url(url) == ("video", VID_A)
+
+    def test_mix_link_gives_only_the_video(self):
+        url = f"https://www.youtube.com/watch?v={VID_A}&pp=abc&list=RDX&start_radio=1"
+        assert add_songs.classify_url(url) == ("video", VID_A)
+
+    def test_list_before_v_gives_video(self):
+        url = f"https://www.youtube.com/watch?list=Y&v={VID_A}"
+        assert add_songs.classify_url(url) == ("video", VID_A)
+
+    def test_mobile_subdomain_gives_video(self):
+        url = f"https://m.youtube.com/watch?v={VID_A}"
+        assert add_songs.classify_url(url) == ("video", VID_A)
+
+    def test_non_youtube_host_with_v_param_is_unrecognised(self):
+        url = f"https://notyoutube.com/watch?v={VID_A}"
+        assert add_songs.classify_url(url) is None
 
 
 # ---------------------------------------------------------------------------
