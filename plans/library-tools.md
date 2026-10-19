@@ -1,11 +1,13 @@
 # Library tools: pick single songs, add songs from YouTube links
 
-Model: Claude Opus 5.5 (design, 2026-09-28); executor Claude Sonnet 5.
+Model: Claude Opus 5.5 (design, 2026-09-28); executor Claude Sonnet 5 (through
+Phase 3.1 commit C), Claude Sonnet 5.5 (commit D on).
 
-> **Status (2026-10-19): Phase 3.1 IN PROGRESS** (Sonnet 5): commits A-C of G
-> done (`c096631`, `975175b`, `6ecb41d`; plan-log rows alongside each). Left:
-> D (resumability), E (`--song` exact match), F (`--song --reset` reporting +
-> file ownership), G (cleanup), then the plan's "Verify, then relay" pass.
+> **Status (2026-10-19): Phase 3.1 IN PROGRESS** (Sonnet 5 for A-C, Sonnet 5.5
+> for D on): commits A-D of G done (`c096631`, `975175b`, `6ecb41d`, `e81607b`;
+> plan-log rows alongside each). Left: E (`--song` exact match), F (`--song
+> --reset` reporting + file ownership), G (cleanup), then the plan's "Verify,
+> then relay" pass.
 > Don't cherry-pick anything to `dev` until 3.1 is done; then all code commits
 > (`6cc2b29`, `2fdcf08`, `c8fe156`, `788b10c`, then 3.1's) go in branch order.
 > There is no GATE and nothing here measures timing.
@@ -928,5 +930,46 @@ known-failed, 1529 passed, 2 skipped** (1521 + 8 new, no regressions).
 `pre-commit`'s first pass reformatted one long `FAILED:` print across two
 lines (black, cosmetic only -- reviewed the diff, reran the targeted tests).
 
-Left: commits D-G (resumability, `--song` exact-match priority, `--song
---reset` reporting + file ownership, cleanup).
+**Commit D** (`e81607b`, Sonnet 5.5 session): each `_execute_download` call is
+wrapped in `except Exception:` (`logger.exception("Download failed: %s", id)`),
+and the exception sets `rc = 1` so it takes the same `FAILED: <id>` / count /
+continue branch a non-zero return already did (one failure path, not two).
+`existing_ids` (a set of ids from `rab._list_videos`) is replaced by
+`library_files(folder) -> dict[str, Path]`, built from every file whose suffix
+is in `SongList.VALID_EXTENSIONS`; when a video and another file share an id
+the video is the one kept (the plan didn't say; regen only processes videos,
+so the video has to be the entry that can come back `in library, not
+processed`). `resolve_urls`'s second parameter is now `library` (that dict)
+instead of `existing_ids`, with a new `_library_status(path)` returning
+`in library, not processed` for a video (`rab.VIDEO_EXTS`) whose
+`rab._read_bundle(folder, stem)` is `None` (which includes a bundle that
+exists but doesn't parse), else `already in library`. `main()` builds
+`unprocessed` (the library paths of those entries), keeps the "Nothing new to
+download" exit for runs with neither list, prompts `Proceed with N download(s)
+and M unprocessed song(s)? [y/N]`, and hands off
+`new_songs + unprocessed` (downloads first). The report's dash rule is sized
+from `max(len("status"), longest status)` instead of a fixed 18.
+`scripts/README.md` flow steps 2, 3, 4 and 5 and the "no backup is needed"
+sentence updated for the above.
+
+Tests: `TestResolveUrlsDedupe`'s one `existing_ids={VID_A}` case became four
+(video with a bundle -> `already in library`; video without one -> `in library,
+not processed`; `.mp3` with the id -> `already in library`; video wins over an
+`.mp3` sharing its id, asserted on `library_files` directly). `TestMain` gained
+5: an exception in one download is counted failed and the next still runs (exit
+1, handoff gets only the second song's path, `Downloaded: 1 Failed: 1`); an
+unprocessed video is handed off with no download (the fake `DownloadManager`
+now fails the test on any id not in its script); unprocessed videos follow the
+new downloads in the handoff order; a processed video isn't handed off
+(`Nothing new to download.`); the confirm prompt text for 1 download + 1
+unprocessed. New `TestPrintReport` (1): the dash rule is as wide as the longest
+status. Full suite: **4 known-failed, 1538 passed, 2 skipped** (1529 + 9 new, no
+regressions; run once before a last simplification of the failure path, which
+the add_songs + regen files then re-passed, 78). `pre-commit`'s first pass
+reformatted the test file (black, cosmetic only); second pass clean.
+
+Not exercised: the interactive confirm prompt and a real `DownloadManager`
+raising mid-download (a stand-in raises `RuntimeError`).
+
+Left: commits E-G (`--song` exact-match priority, `--song --reset` reporting +
+file ownership, cleanup).
