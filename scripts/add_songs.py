@@ -102,25 +102,29 @@ def expand_playlist(url: str) -> list[str]:
     """Return every video id in a YouTube playlist, via yt-dlp --flat-playlist.
 
     Modelled on ``youtube_dl.get_search_results``. May raise
-    ``subprocess.CalledProcessError``.
+    ``subprocess.CalledProcessError`` or ``subprocess.TimeoutExpired``.
     """
     cmd = yt_dlp_cmd + ["--flat-playlist", "--print", "id"] + _impersonate_args() + [url]
-    output = subprocess.check_output(cmd).decode("utf-8", "ignore")
+    output = subprocess.check_output(cmd, timeout=300).decode("utf-8", "ignore")
     return [line.strip() for line in output.splitlines() if line.strip()]
 
 
-def resolve_urls(urls: list[str], existing_ids: set[str]) -> list[UrlEntry]:
+def resolve_urls(urls: list[str], existing_ids: set[str]) -> tuple[list[UrlEntry], int]:
     """Classify and expand ``urls`` into deduped entries, in first-seen order.
 
     Prints one line and continues for a URL that can't be classified, or a
-    playlist whose expansion fails.
+    playlist whose expansion fails or times out. Returns the entries and how
+    many URLs could not be read at all -- not a per-video count, since one bad
+    playlist link can account for many missing songs.
     """
     seen: set[str] = set()
     entries: list[UrlEntry] = []
+    unreadable = 0
     for url in urls:
         classified = classify_url(url)
         if classified is None:
             print(f"  unrecognised: {url}")
+            unreadable += 1
             continue
         kind, value = classified
         if kind == "video":
@@ -130,6 +134,11 @@ def resolve_urls(urls: list[str], existing_ids: set[str]) -> list[UrlEntry]:
                 ids = expand_playlist(value)
             except subprocess.CalledProcessError as e:
                 print(f"  failed to expand playlist: {value} ({e})")
+                unreadable += 1
+                continue
+            except subprocess.TimeoutExpired:
+                print(f"  timed out expanding playlist: {value}")
+                unreadable += 1
                 continue
         for vid in ids:
             if vid in seen:
@@ -137,7 +146,7 @@ def resolve_urls(urls: list[str], existing_ids: set[str]) -> list[UrlEntry]:
             seen.add(vid)
             status = "already in library" if vid in existing_ids else "new"
             entries.append(UrlEntry(id=vid, source=url, status=status))
-    return entries
+    return entries, unreadable
 
 
 def print_report(entries: list[UrlEntry]) -> None:
@@ -158,16 +167,14 @@ def print_report(entries: list[UrlEntry]) -> None:
 # ---------------------------------------------------------------------------
 
 
-def handoff(
-    song_paths: list[str], config: PipelineConfig, genius: GeniusClient
-) -> list[rab.SongJob]:
+def handoff(song_paths: list[str], config: PipelineConfig, genius: GeniusClient) -> int:
     """Build a fresh-download job per song and hand them to regen's run path.
 
     Every job starts with ``bundle=None`` (a fresh download has no prior
     bundle to reuse), which gives it a ``fetch`` plan -- the video was just
     downloaded, so it always has a YouTube id. A caption the download already
     saved is gated in place (:func:`rab.adopt_caption`) instead of being
-    fetched again.
+    fetched again. Returns regen's own exit code.
     """
     jobs = [rab.SongJob(Path(p), None, "new") for p in song_paths]
     for job in jobs:
@@ -175,8 +182,7 @@ def handoff(
         caption = rab._find_local_srt(job.song_path)
         if caption is not None:
             rab.adopt_caption(job, caption)
-    rab.resolve_and_run(jobs, config, genius)
-    return jobs
+    return rab.resolve_and_run(jobs, config, genius)
 
 
 # ---------------------------------------------------------------------------
@@ -243,15 +249,17 @@ def main() -> int:
     existing_ids = {extract_youtube_id(str(p)) for p in rab._list_videos(folder)}
     existing_ids.discard(None)
 
-    entries = resolve_urls(args.urls, existing_ids)
+    entries, unreadable = resolve_urls(args.urls, existing_ids)
     print_report(entries)
     to_download = [e for e in entries if e.status == "new"]
 
     if args.dry_run:
-        return 0
+        return 0 if unreadable == 0 else 1
     if not to_download:
         print("Nothing new to download.")
-        return 0
+        if unreadable:
+            print(f"{unreadable} link(s) could not be read.")
+        return 0 if unreadable == 0 else 1
 
     if not args.yes:
         reply = input(f"Proceed with {len(to_download)} download(s)? [y/N] ").strip().lower()
@@ -277,29 +285,35 @@ def main() -> int:
     for entry in to_download:
         watch_url = f"https://www.youtube.com/watch?v={entry.id}"
         print(f"\nDownloading {entry.id} ({entry.source})...")
+        before = len(new_songs)
         rc = dm._execute_download(watch_url, False, "add_songs", None)
-        if rc == 0:
-            downloaded += 1
-        else:
+        if rc != 0:
             failed += 1
             print(f"  FAILED: {entry.id}")
+            continue
+        if len(new_songs) == before:
+            failed += 1
+            print(
+                f"  FAILED: {entry.id} (yt-dlp finished but no file with that id is in the folder)"
+            )
+            continue
+        downloaded += 1
 
-    processed = 0
+    pipeline_rc = 0
     if new_songs:
         config = PipelineConfig()
         config.intermediate_dir = get_temp_directory()
         genius = rab._make_genius()
         rab.warn_if_no_genius_token(genius)
-        jobs = handoff(new_songs, config, genius)
-        processed = len(jobs)
+        pipeline_rc = handoff(new_songs, config, genius)
 
-    print(f"\nDownloaded: {downloaded} Failed: {failed} Processed: {processed}")
+    print(f"\nDownloaded: {downloaded} Failed: {failed}")
     if downloaded:
         print(
             "In the app, run sync library from the admin page (or restart "
             "it) to see the new songs."
         )
-    return 0 if failed == 0 else 1
+    return 0 if (unreadable == 0 and failed == 0 and pipeline_rc == 0) else 1
 
 
 if __name__ == "__main__":
