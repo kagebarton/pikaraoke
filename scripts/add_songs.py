@@ -43,6 +43,7 @@ from pikaraoke.lib.get_platform import (  # noqa: E402
 from pikaraoke.lib.karaoke_database import KaraokeDatabase  # noqa: E402
 from pikaraoke.lib.metadata_parser import extract_youtube_id  # noqa: E402
 from pikaraoke.lib.preference_manager import PreferenceManager  # noqa: E402
+from pikaraoke.lib.song_list import SongList  # noqa: E402
 from pikaraoke.lib.song_manager import SongManager  # noqa: E402
 from pikaraoke.lib.youtube_dl import _impersonate_args, yt_dlp_cmd  # noqa: E402
 from pikaraoke.pipeline.config import PipelineConfig  # noqa: E402
@@ -60,7 +61,7 @@ logger = logging.getLogger(__name__)
 class UrlEntry:
     id: str
     source: str
-    status: str  # "new" | "already in library"
+    status: str  # "new" | "already in library" | "in library, not processed"
 
 
 # A link to one video downloads only that video, even when it carries
@@ -109,13 +110,44 @@ def expand_playlist(url: str) -> list[str]:
     return [line.strip() for line in output.splitlines() if line.strip()]
 
 
-def resolve_urls(urls: list[str], existing_ids: set[str]) -> tuple[list[UrlEntry], int]:
+def library_files(folder: Path) -> dict[str, Path]:
+    """Map each YouTube id in ``folder`` to its song file.
+
+    Counts every file type the app recognises (an ``.mp3`` or ``.zip`` with an
+    id is in the library too). When a video and another file share an id, the
+    video wins -- it is the one regen can process.
+    """
+    files = sorted(
+        p for p in folder.iterdir() if p.is_file() and p.suffix.lower() in SongList.VALID_EXTENSIONS
+    )
+    files.sort(key=lambda p: p.suffix.lower() in rab.VIDEO_EXTS)  # videos last, so they win
+    library: dict[str, Path] = {}
+    for path in files:
+        video_id = extract_youtube_id(str(path))
+        if video_id:
+            library[video_id] = path
+    return library
+
+
+def _library_status(path: Path) -> str:
+    """Status for an id that already has a file in the library.
+
+    A video with no bundle is a song an earlier run downloaded but never
+    processed. Anything else is done: it has a bundle, or isn't a video.
+    """
+    if path.suffix.lower() in rab.VIDEO_EXTS and rab._read_bundle(path.parent, path.stem) is None:
+        return "in library, not processed"
+    return "already in library"
+
+
+def resolve_urls(urls: list[str], library: dict[str, Path]) -> tuple[list[UrlEntry], int]:
     """Classify and expand ``urls`` into deduped entries, in first-seen order.
 
-    Prints one line and continues for a URL that can't be classified, or a
-    playlist whose expansion fails or times out. Returns the entries and how
-    many URLs could not be read at all -- not a per-video count, since one bad
-    playlist link can account for many missing songs.
+    ``library`` is :func:`library_files` of the target folder. Prints one line
+    and continues for a URL that can't be classified, or a playlist whose
+    expansion fails or times out. Returns the entries and how many URLs could
+    not be read at all -- not a per-video count, since one bad playlist link
+    can account for many missing songs.
     """
     seen: set[str] = set()
     entries: list[UrlEntry] = []
@@ -144,7 +176,7 @@ def resolve_urls(urls: list[str], existing_ids: set[str]) -> tuple[list[UrlEntry
             if vid in seen:
                 continue
             seen.add(vid)
-            status = "already in library" if vid in existing_ids else "new"
+            status = _library_status(library[vid]) if vid in library else "new"
             entries.append(UrlEntry(id=vid, source=url, status=status))
     return entries, unreadable
 
@@ -155,8 +187,9 @@ def print_report(entries: list[UrlEntry]) -> None:
         return
     id_width = max(len(e.id) for e in entries)
     source_width = max(len(e.source) for e in entries)
+    status_width = max(len("status"), *(len(e.status) for e in entries))
     print(f"{'id':<{id_width}}  {'source':<{source_width}}  status")
-    print(f"{'-' * id_width}  {'-' * source_width}  {'-' * 18}")
+    print(f"{'-' * id_width}  {'-' * source_width}  {'-' * status_width}")
     for e in entries:
         print(f"{e.id:<{id_width}}  {e.source:<{source_width}}  {e.status}")
     print()
@@ -168,13 +201,13 @@ def print_report(entries: list[UrlEntry]) -> None:
 
 
 def handoff(song_paths: list[str], config: PipelineConfig, genius: GeniusClient) -> int:
-    """Build a fresh-download job per song and hand them to regen's run path.
+    """Build a no-bundle job per song and hand them to regen's run path.
 
-    Every job starts with ``bundle=None`` (a fresh download has no prior
-    bundle to reuse), which gives it a ``fetch`` plan -- the video was just
-    downloaded, so it always has a YouTube id. A caption the download already
-    saved is gated in place (:func:`rab.adopt_caption`) instead of being
-    fetched again. Returns regen's own exit code.
+    Every job starts with ``bundle=None`` (a fresh download, or a video a
+    stopped run left unprocessed, has no prior bundle to reuse), which gives
+    it a ``fetch`` plan -- it always has a YouTube id. A caption the download
+    already saved is gated in place (:func:`rab.adopt_caption`) instead of
+    being fetched again. Returns regen's own exit code.
     """
     jobs = [rab.SongJob(Path(p), None, "new") for p in song_paths]
     for job in jobs:
@@ -246,23 +279,30 @@ def main() -> int:
         print(f"Folder not found: {folder}", file=sys.stderr)
         return 2
 
-    existing_ids = {extract_youtube_id(str(p)) for p in rab._list_videos(folder)}
-    existing_ids.discard(None)
+    library = library_files(folder)
 
-    entries, unreadable = resolve_urls(args.urls, existing_ids)
+    entries, unreadable = resolve_urls(args.urls, library)
     print_report(entries)
     to_download = [e for e in entries if e.status == "new"]
+    unprocessed = [library[e.id] for e in entries if e.status == "in library, not processed"]
 
     if args.dry_run:
         return 0 if unreadable == 0 else 1
-    if not to_download:
+    if not to_download and not unprocessed:
         print("Nothing new to download.")
         if unreadable:
             print(f"{unreadable} link(s) could not be read.")
         return 0 if unreadable == 0 else 1
 
     if not args.yes:
-        reply = input(f"Proceed with {len(to_download)} download(s)? [y/N] ").strip().lower()
+        reply = (
+            input(
+                f"Proceed with {len(to_download)} download(s) and "
+                f"{len(unprocessed)} unprocessed song(s)? [y/N] "
+            )
+            .strip()
+            .lower()
+        )
         if reply not in ("y", "yes"):
             print("Aborted.")
             return 0
@@ -286,7 +326,11 @@ def main() -> int:
         watch_url = f"https://www.youtube.com/watch?v={entry.id}"
         print(f"\nDownloading {entry.id} ({entry.source})...")
         before = len(new_songs)
-        rc = dm._execute_download(watch_url, False, "add_songs", None)
+        try:
+            rc = dm._execute_download(watch_url, False, "add_songs", None)
+        except Exception:  # the app's own per-download boundary; Ctrl+C still stops the tool
+            logger.exception("Download failed: %s", entry.id)
+            rc = 1
         if rc != 0:
             failed += 1
             print(f"  FAILED: {entry.id}")
@@ -300,12 +344,13 @@ def main() -> int:
         downloaded += 1
 
     pipeline_rc = 0
-    if new_songs:
+    to_process = new_songs + [str(p) for p in unprocessed]
+    if to_process:
         config = PipelineConfig()
         config.intermediate_dir = get_temp_directory()
         genius = rab._make_genius()
         rab.warn_if_no_genius_token(genius)
-        pipeline_rc = handoff(new_songs, config, genius)
+        pipeline_rc = handoff(to_process, config, genius)
 
     print(f"\nDownloaded: {downloaded} Failed: {failed}")
     if downloaded:

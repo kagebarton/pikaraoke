@@ -163,24 +163,28 @@ the playlist page link (`playlist?list=`) to get the whole list.
    sibling, `classify_url`/`resolve_urls` in this file), expanding
    playlists via `yt-dlp --flat-playlist`.
 2. **Dedupe** the resulting ids and skip any already in `--folder` (a
-   video file whose `extract_youtube_id` matches).
-3. **Report** a table (id, source URL, new/already) and confirm, unless
-   `--yes`.
+   song file of any type the app recognises whose `extract_youtube_id`
+   matches). A video with no alignment bundle is one an earlier run
+   downloaded but never processed: it isn't downloaded again, but it is
+   handed off in step 5.
+3. **Report** a table (id, source URL, `new` / `already in library` /
+   `in library, not processed`) and confirm, unless `--yes`.
 4. **Download** the new ids serially through a real `DownloadManager` —
    the same code path the app UI uses, so the uploader caption and the
    YTASR `.en.asr.json3` are fetched exactly as they would be from the
-   app. The tool never writes the app's library database: `SongManager`
-   is built with an in-memory `KaraokeDatabase(":memory:")`, and only its
-   `songs.find_by_id` is used.
-5. **Hand off to `regen_alignment_bundles`:** each downloaded song becomes
-   a `SongJob` with no bundle, which resolves to a `fetch` plan (every
-   download has a YouTube id). The caption the download already saved
+   app. A download that raises is logged, counted as failed, and the next
+   one still runs (Ctrl+C still stops the tool). The tool never writes
+   the app's library database: `SongManager` is built with an in-memory
+   `KaraokeDatabase(":memory:")`, and only its `songs.find_by_id` is used.
+5. **Hand off to `regen_alignment_bundles`:** each downloaded song, then
+   each unprocessed one, becomes a `SongJob` with no bundle, which
+   resolves to a `fetch` plan (every song has a YouTube id). The caption the download already saved
    (the download manager files it to `subtitles/<stem>.srt` before
    `add_songs` ever sees it) goes through the same words-per-minute gate
    right there — there's no second fetch for a song that already has
    one. Then `resolve_and_run` runs: the Genius prompt for any song
    without a usable caption, and the pipeline. No backup is needed; a
-   freshly downloaded song has no prior outputs to lose.
+   song with no bundle has no finished outputs to lose.
 
 Downloads run unattended, then any Genius prompts come in one batch, then
 the pipeline runs unattended — the help text (`--help`) says so, so you

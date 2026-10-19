@@ -123,7 +123,7 @@ class TestResolveUrlsExpansionFailure:
             "https://www.youtube.com/playlist?list=good",
         ]
 
-        entries, unreadable = add_songs.resolve_urls(urls, existing_ids=set())
+        entries, unreadable = add_songs.resolve_urls(urls, library={})
 
         assert [e.id for e in entries] == [VID_B]
         assert unreadable == 1
@@ -141,7 +141,7 @@ class TestResolveUrlsExpansionFailure:
             "https://www.youtube.com/playlist?list=good",
         ]
 
-        entries, unreadable = add_songs.resolve_urls(urls, existing_ids=set())
+        entries, unreadable = add_songs.resolve_urls(urls, library={})
 
         assert [e.id for e in entries] == [VID_B]
         assert unreadable == 1
@@ -153,20 +153,54 @@ class TestResolveUrlsExpansionFailure:
 # ---------------------------------------------------------------------------
 
 
-class TestResolveUrlsDedupe:
-    def test_id_already_in_library_is_marked_status(self):
-        url = f"https://www.youtube.com/watch?v={VID_A}"
+def _add_bundle(folder: Path, stem: str) -> None:
+    (folder / "alignment_debug").mkdir(exist_ok=True)
+    (folder / "alignment_debug" / f"{stem}.json").write_text("{}", encoding="utf-8")
 
-        entries, unreadable = add_songs.resolve_urls([url], existing_ids={VID_A})
+
+class TestResolveUrlsDedupe:
+    def test_video_with_a_bundle_is_already_in_library(self, tmp_path):
+        url = f"https://www.youtube.com/watch?v={VID_A}"
+        video = tmp_path / f"Title---{VID_A}.mp4"
+        video.touch()
+        _add_bundle(tmp_path, video.stem)
+
+        entries, unreadable = add_songs.resolve_urls([url], add_songs.library_files(tmp_path))
 
         assert entries == [add_songs.UrlEntry(id=VID_A, source=url, status="already in library")]
         assert unreadable == 0
+
+    def test_video_without_a_bundle_is_in_library_not_processed(self, tmp_path):
+        url = f"https://www.youtube.com/watch?v={VID_A}"
+        (tmp_path / f"Title---{VID_A}.mp4").touch()
+
+        entries, unreadable = add_songs.resolve_urls([url], add_songs.library_files(tmp_path))
+
+        assert entries == [
+            add_songs.UrlEntry(id=VID_A, source=url, status="in library, not processed")
+        ]
+        assert unreadable == 0
+
+    def test_mp3_with_the_id_is_already_in_library(self, tmp_path):
+        url = f"https://www.youtube.com/watch?v={VID_A}"
+        (tmp_path / f"Title---{VID_A}.mp3").touch()
+
+        entries, _ = add_songs.resolve_urls([url], add_songs.library_files(tmp_path))
+
+        assert [e.status for e in entries] == ["already in library"]
+
+    def test_video_wins_over_an_mp3_sharing_its_id(self, tmp_path):
+        video = tmp_path / f"Title---{VID_A}.mp4"
+        video.touch()
+        (tmp_path / f"Title---{VID_A}.mp3").touch()
+
+        assert add_songs.library_files(tmp_path) == {VID_A: video}
 
     def test_id_repeated_across_urls_appears_once(self):
         url1 = f"https://www.youtube.com/watch?v={VID_A}"
         url2 = f"https://youtu.be/{VID_A}"
 
-        entries, unreadable = add_songs.resolve_urls([url1, url2], existing_ids=set())
+        entries, unreadable = add_songs.resolve_urls([url1, url2], library={})
 
         assert len(entries) == 1
         assert entries[0].id == VID_A
@@ -174,10 +208,20 @@ class TestResolveUrlsDedupe:
         assert unreadable == 0
 
     def test_unrecognised_url_counts_as_unreadable(self):
-        entries, unreadable = add_songs.resolve_urls(["not a url"], existing_ids=set())
+        entries, unreadable = add_songs.resolve_urls(["not a url"], library={})
 
         assert entries == []
         assert unreadable == 1
+
+
+class TestPrintReport:
+    def test_status_column_is_sized_from_the_longest_status(self, capsys):
+        entries = [add_songs.UrlEntry(VID_A, "src", "in library, not processed")]
+
+        add_songs.print_report(entries)
+
+        rule = next(l for l in capsys.readouterr().out.splitlines() if l.startswith("-"))
+        assert rule.endswith("  " + "-" * len("in library, not processed"))
 
 
 # ---------------------------------------------------------------------------
@@ -243,7 +287,8 @@ def _fake_download_manager_class(plan: dict, folder: Path):
     Emits ``song_downloaded`` through the real ``EventSystem`` it's given
     (``events`` kwarg), so ``main()``'s event-driven success/failure counting
     runs for real; only the download itself (and the app DB/library it would
-    otherwise touch) is faked.
+    otherwise touch) is faked. A plan value that is an exception is raised
+    instead; an id missing from ``plan`` fails the test if it is downloaded.
     """
 
     class FakeDownloadManager:
@@ -252,6 +297,9 @@ def _fake_download_manager_class(plan: dict, folder: Path):
 
         def _execute_download(self, video_url, enqueue, user, title):
             vid = video_url.rsplit("v=", 1)[-1]
+            assert vid in plan, f"unexpected download of {vid}"
+            if isinstance(plan[vid], Exception):
+                raise plan[vid]
             rc, fires = plan[vid]
             if fires:
                 self._events.emit("song_downloaded", str(folder / f"Title---{vid}.mp4"))
@@ -326,6 +374,134 @@ class TestMain:
         assert add_songs.main() == 1
         mock_handoff.assert_not_called()
         assert "no file with that id is in the folder" in capsys.readouterr().out
+
+    def test_exception_in_one_download_is_counted_failed_and_the_next_still_runs(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "add_songs.py",
+                f"https://www.youtube.com/watch?v={VID_A}",
+                f"https://www.youtube.com/watch?v={VID_B}",
+                "--folder",
+                str(tmp_path),
+                "--yes",
+            ],
+        )
+        monkeypatch.setattr(
+            add_songs,
+            "DownloadManager",
+            _fake_download_manager_class({VID_A: RuntimeError("boom"), VID_B: (0, True)}, tmp_path),
+        )
+        monkeypatch.setattr(add_songs.rab, "_make_genius", lambda: MagicMock())
+        mock_handoff = MagicMock(return_value=0)
+        monkeypatch.setattr(add_songs, "handoff", mock_handoff)
+
+        assert add_songs.main() == 1
+        assert mock_handoff.call_args.args[0] == [str(tmp_path / f"Title---{VID_B}.mp4")]
+        out = capsys.readouterr().out
+        assert f"FAILED: {VID_A}" in out
+        assert "Downloaded: 1 Failed: 1" in out
+
+    def test_unprocessed_video_is_handed_off_without_a_download(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        video = tmp_path / f"Title---{VID_A}.mp4"
+        video.touch()
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "add_songs.py",
+                f"https://www.youtube.com/watch?v={VID_A}",
+                "--folder",
+                str(tmp_path),
+                "--yes",
+            ],
+        )
+        monkeypatch.setattr(
+            add_songs, "DownloadManager", _fake_download_manager_class({}, tmp_path)
+        )
+        monkeypatch.setattr(add_songs.rab, "_make_genius", lambda: MagicMock())
+        mock_handoff = MagicMock(return_value=0)
+        monkeypatch.setattr(add_songs, "handoff", mock_handoff)
+
+        assert add_songs.main() == 0
+        assert mock_handoff.call_args.args[0] == [str(video)]
+        assert "in library, not processed" in capsys.readouterr().out
+
+    def test_unprocessed_videos_follow_the_new_downloads_in_the_handoff(
+        self, tmp_path, monkeypatch
+    ):
+        video = tmp_path / f"Title---{VID_B}.mp4"
+        video.touch()
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "add_songs.py",
+                f"https://www.youtube.com/watch?v={VID_B}",
+                f"https://www.youtube.com/watch?v={VID_A}",
+                "--folder",
+                str(tmp_path),
+                "--yes",
+            ],
+        )
+        monkeypatch.setattr(
+            add_songs, "DownloadManager", _fake_download_manager_class({VID_A: (0, True)}, tmp_path)
+        )
+        monkeypatch.setattr(add_songs.rab, "_make_genius", lambda: MagicMock())
+        mock_handoff = MagicMock(return_value=0)
+        monkeypatch.setattr(add_songs, "handoff", mock_handoff)
+
+        assert add_songs.main() == 0
+        assert mock_handoff.call_args.args[0] == [
+            str(tmp_path / f"Title---{VID_A}.mp4"),
+            str(video),
+        ]
+
+    def test_processed_video_is_not_handed_off(self, tmp_path, monkeypatch, capsys):
+        video = tmp_path / f"Title---{VID_A}.mp4"
+        video.touch()
+        _add_bundle(tmp_path, video.stem)
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "add_songs.py",
+                f"https://www.youtube.com/watch?v={VID_A}",
+                "--folder",
+                str(tmp_path),
+                "--yes",
+            ],
+        )
+        mock_handoff = MagicMock()
+        monkeypatch.setattr(add_songs, "handoff", mock_handoff)
+
+        assert add_songs.main() == 0
+        mock_handoff.assert_not_called()
+        assert "Nothing new to download." in capsys.readouterr().out
+
+    def test_confirm_prompt_counts_downloads_and_unprocessed_songs(self, tmp_path, monkeypatch):
+        (tmp_path / f"Title---{VID_B}.mp4").touch()
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "add_songs.py",
+                f"https://www.youtube.com/watch?v={VID_A}",
+                f"https://www.youtube.com/watch?v={VID_B}",
+                "--folder",
+                str(tmp_path),
+            ],
+        )
+        prompts = []
+        monkeypatch.setattr("builtins.input", lambda prompt: prompts.append(prompt) or "n")
+
+        assert add_songs.main() == 0
+        assert prompts == ["Proceed with 1 download(s) and 1 unprocessed song(s)? [y/N] "]
 
     def test_one_unreadable_url_with_nothing_to_download_gives_exit_1(self, tmp_path, monkeypatch):
         monkeypatch.setattr(
