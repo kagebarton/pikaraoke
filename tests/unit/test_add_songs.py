@@ -153,9 +153,14 @@ class TestResolveUrlsExpansionFailure:
 # ---------------------------------------------------------------------------
 
 
-def _add_bundle(folder: Path, stem: str) -> None:
+def _add_bundle(folder: Path, stem: str, text: str = "{}") -> None:
     (folder / "alignment_debug").mkdir(exist_ok=True)
-    (folder / "alignment_debug" / f"{stem}.json").write_text("{}", encoding="utf-8")
+    (folder / "alignment_debug" / f"{stem}.json").write_text(text, encoding="utf-8")
+
+
+def _add_karaoke_file(folder: Path, stem: str) -> None:
+    (folder / "karaoke").mkdir(exist_ok=True)
+    (folder / "karaoke" / f"{stem}.ass").touch()
 
 
 class TestResolveUrlsDedupe:
@@ -180,6 +185,29 @@ class TestResolveUrlsDedupe:
             add_songs.UrlEntry(id=VID_A, source=url, status="in library, not processed")
         ]
         assert unreadable == 0
+
+    def test_video_with_a_karaoke_file_and_no_bundle_is_already_in_library(self, tmp_path):
+        # A song that ran with no lyrics (transcribed) gets a karaoke file but no bundle.
+        url = f"https://www.youtube.com/watch?v={VID_A}"
+        video = tmp_path / f"Title---{VID_A}.mp4"
+        video.touch()
+        _add_karaoke_file(tmp_path, video.stem)
+
+        entries, _ = add_songs.resolve_urls([url], add_songs.library_files(tmp_path))
+
+        assert [e.status for e in entries] == ["already in library"]
+
+    def test_video_with_an_unreadable_bundle_and_no_karaoke_file_is_already_in_library(
+        self, tmp_path
+    ):
+        url = f"https://www.youtube.com/watch?v={VID_A}"
+        video = tmp_path / f"Title---{VID_A}.mp4"
+        video.touch()
+        _add_bundle(tmp_path, video.stem, text="not json")
+
+        entries, _ = add_songs.resolve_urls([url], add_songs.library_files(tmp_path))
+
+        assert [e.status for e in entries] == ["already in library"]
 
     def test_mp3_with_the_id_is_already_in_library(self, tmp_path):
         url = f"https://www.youtube.com/watch?v={VID_A}"

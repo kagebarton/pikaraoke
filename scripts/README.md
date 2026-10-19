@@ -166,9 +166,9 @@ the playlist page link (`playlist?list=`) to get the whole list.
    `yt-dlp --flat-playlist`.
 2. **Dedupe** the resulting ids and skip any already in `--folder` (a
    song file of any type the app recognises whose `extract_youtube_id`
-   matches). A video with no alignment bundle is one an earlier run
-   downloaded but never processed: it isn't downloaded again, but it is
-   handed off in step 5.
+   matches). A video with neither an alignment bundle nor a karaoke file
+   is one an earlier run downloaded but never processed: it isn't
+   downloaded again, but it is handed off in step 5.
 3. **Report** a table (id, source URL, `new` / `already in library` /
    `in library, not processed`) and confirm, unless `--yes`.
 4. **Download** the new ids serially through a real `DownloadManager` —
@@ -184,8 +184,8 @@ the playlist page link (`playlist?list=`) to get the whole list.
    goes through the same words-per-minute gate right there — there's no
    second fetch for a song that already has one. Then regen runs: the
    Genius prompt for any song without a usable caption, and the
-   pipeline. No backup is needed; a song with no bundle has no finished
-   outputs to lose.
+   pipeline. No backup is needed; a song handed off has no bundle and no
+   karaoke file, so it has no finished outputs to lose.
 
 `--help` says when to be at the keyboard (the Genius prompts, not the
 downloads or the pipeline) and why to run it while the app is idle.
