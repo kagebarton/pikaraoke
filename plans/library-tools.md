@@ -4,9 +4,9 @@ Model: Claude Opus 5.5 (design, 2026-09-28); executor Claude Sonnet 5 (through
 Phase 3.1 commit C), Claude Sonnet 5.5 (commit D on).
 
 > **Status (2026-10-19): Phase 3.1 IN PROGRESS** (Sonnet 5 for A-C, Sonnet 5.5
-> for D on): commits A-F of G done (`c096631`, `975175b`, `6ecb41d`, `e81607b`,
-> `db2d193`, `f6490e1`; plan-log rows alongside each). Left: G (cleanup), then
-> the plan's "Verify, then relay" pass.
+> for D on): commits A-G of G done (`c096631`, `975175b`, `6ecb41d`, `e81607b`,
+> `db2d193`, `f6490e1`, `73dada4`; plan-log rows alongside each). Left: the
+> plan's "Verify, then relay" pass.
 > Don't cherry-pick anything to `dev` until 3.1 is done; then all code commits
 > (`6cc2b29`, `2fdcf08`, `c8fe156`, `788b10c`, then 3.1's) go in branch order.
 > There is no GATE and nothing here measures timing.
@@ -1027,4 +1027,52 @@ sibling. It needs one song's name to be another's name plus a dot; the plan
 recorded the library as having no such pair (checked 2026-09-28) and this
 session did not re-check. The fix would be under `pikaraoke/` (Decision 5).
 
-Left: commit G (cleanup), then the plan's "Verify, then relay" pass.
+**Commit G** (`73dada4`): `KEEP_ON_RESET = {"subtitles": ASR_JSON3_SUFFIX,
+"lyrics": ".lrc"}` replaces the two inline branches; `_clear_except_suffix` and
+`_clear_selected` are one `_clear_dir(dir_path, keep_suffix, selected)` (where
+`selected(name)` is always true unscoped, else `_owner(name, all_stems) in
+stems`) plus a `_remove(path)` helper. The unscoped reset still removes
+`karaoke/` whole (`KEEP_ON_RESET` has no entry for it; the existing test still
+passes). A failed `shutil.rmtree` is now a `logger.warning` ("Could not fully
+remove ...") instead of `ignore_errors=True`; a failed file `unlink` still
+raises as before (the plan named only the `ignore_errors` path).
+`_owns_file(name, stem, all_stems)` is replaced by `_owner(name, all_stems) ->
+str | None` (longest claiming stem); both call sites are `_owner(e.name,
+all_stems) in stems`. Checked against the old function on 200,000 random
+stem sets and names (a throwaway script outside the repo): they agree on every
+case. `setup_process()` (allocator env default + logging) is in regen, called
+by regen's and `add_songs`'s `main()`; backfill keeps its own copy (not in the
+plan). `resolve_and_run(jobs)` now builds the `PipelineConfig` (with
+`intermediate_dir`), calls `_make_genius()` and prints the no-token warning
+itself; `warn_if_no_genius_token` is gone; `add_songs.handoff(song_paths)` lost
+its `config` and `genius` parameters and `add_songs` dropped its `GeniusClient`
+and `PipelineConfig` imports. As the plan said, the no-token warning now prints
+after the backup message; the config and Genius client are also now built
+after the backup and the reset wipe rather than before them (so a failure
+constructing either would now come after the wipe; nothing in this session
+triggered one).
+
+README (`add_songs` section): step 1's parenthetical dropped; step 4 no longer
+names `KaraokeDatabase(":memory:")` or `find_by_id`; step 5 no longer names
+`SongJob`, the `fetch` plan or `resolve_and_run`; the "Downloads run
+unattended" paragraph and the "Run it while the app is idle" section became one
+line pointing at `--help` (so the README no longer carries the 3-11x
+measurement; the memory `concurrent-gpu-inference-rejected` and the `--help`
+epilog still say it).
+
+Tests: `TestBackupTextFoldersScoped._setup` and
+`TestClearOutputFoldersScoped._setup` became one module-level
+`_scoped_library(folder)` (the superset of the two: ASR json3, `.lrc`,
+`.srt.generated`, bundles); their assertions are unchanged and still pass.
+`TestMainSongReset` and the `add_songs` `TestMain` tests no longer patch
+`_make_genius`; `TestHandoff` calls `handoff(paths)` and asserts
+`resolve_and_run` got `(jobs)`. New: `TestOwner` (4: own stem, longest stem
+wins, a prefix without a dot isn't a claim, unclaimed entry -> `None`),
+`TestRemove` (3: file and tree removed, missing path is a no-op, a tree whose
+`rmtree` raises `OSError` is warned about, not raised), `TestResolveAndRunSetup`
+(2: warns with no token; passes `run_jobs` a config with
+`intermediate_dir` set and the Genius client). Full suite: **4 known-failed,
+1554 passed, 2 skipped** (1545 + 9 new, no regressions). `pre-commit` clean on
+the first pass.
+
+Left: the plan's "Verify, then relay" pass.
