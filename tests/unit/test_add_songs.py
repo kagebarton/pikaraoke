@@ -100,7 +100,9 @@ class TestExpandPlaylist:
     def test_parses_ids_and_skips_blank_lines(self, monkeypatch):
         output = f"{VID_A}\n{VID_B}\n\nzzzzzzzzzzz\n"
         monkeypatch.setattr(
-            add_songs.subprocess, "check_output", lambda cmd: output.encode("utf-8")
+            add_songs.subprocess,
+            "check_output",
+            lambda cmd, timeout=None: output.encode("utf-8"),
         )
 
         ids = add_songs.expand_playlist("https://www.youtube.com/playlist?list=Y")
@@ -121,10 +123,29 @@ class TestResolveUrlsExpansionFailure:
             "https://www.youtube.com/playlist?list=good",
         ]
 
-        entries = add_songs.resolve_urls(urls, existing_ids=set())
+        entries, unreadable = add_songs.resolve_urls(urls, existing_ids=set())
 
         assert [e.id for e in entries] == [VID_B]
+        assert unreadable == 1
         assert "failed to expand playlist" in capsys.readouterr().out
+
+    def test_timeout_is_reported_and_other_urls_continue(self, monkeypatch, capsys):
+        def fake_expand(url):
+            if "slow" in url:
+                raise subprocess.TimeoutExpired(cmd="yt-dlp", timeout=300)
+            return [VID_B]
+
+        monkeypatch.setattr(add_songs, "expand_playlist", fake_expand)
+        urls = [
+            "https://www.youtube.com/playlist?list=slow",
+            "https://www.youtube.com/playlist?list=good",
+        ]
+
+        entries, unreadable = add_songs.resolve_urls(urls, existing_ids=set())
+
+        assert [e.id for e in entries] == [VID_B]
+        assert unreadable == 1
+        assert "timed out expanding playlist" in capsys.readouterr().out
 
 
 # ---------------------------------------------------------------------------
@@ -136,19 +157,27 @@ class TestResolveUrlsDedupe:
     def test_id_already_in_library_is_marked_status(self):
         url = f"https://www.youtube.com/watch?v={VID_A}"
 
-        entries = add_songs.resolve_urls([url], existing_ids={VID_A})
+        entries, unreadable = add_songs.resolve_urls([url], existing_ids={VID_A})
 
         assert entries == [add_songs.UrlEntry(id=VID_A, source=url, status="already in library")]
+        assert unreadable == 0
 
     def test_id_repeated_across_urls_appears_once(self):
         url1 = f"https://www.youtube.com/watch?v={VID_A}"
         url2 = f"https://youtu.be/{VID_A}"
 
-        entries = add_songs.resolve_urls([url1, url2], existing_ids=set())
+        entries, unreadable = add_songs.resolve_urls([url1, url2], existing_ids=set())
 
         assert len(entries) == 1
         assert entries[0].id == VID_A
         assert entries[0].status == "new"
+        assert unreadable == 0
+
+    def test_unrecognised_url_counts_as_unreadable(self):
+        entries, unreadable = add_songs.resolve_urls(["not a url"], existing_ids=set())
+
+        assert entries == []
+        assert unreadable == 1
 
 
 # ---------------------------------------------------------------------------
@@ -158,21 +187,23 @@ class TestResolveUrlsDedupe:
 
 class TestHandoff:
     def test_no_caption_on_disk_keeps_fetch_plan(self, tmp_path, monkeypatch):
-        mock_run = MagicMock()
+        mock_run = MagicMock(return_value=0)
         monkeypatch.setattr(add_songs.rab, "resolve_and_run", mock_run)
         song_path = str(tmp_path / f"Title---{VID_A}.mp4")
         config = MagicMock()
         genius = MagicMock()
 
-        jobs = add_songs.handoff([song_path], config, genius)
+        rc = add_songs.handoff([song_path], config, genius)
 
+        assert rc == 0
+        jobs = mock_run.call_args.args[0]
         assert len(jobs) == 1
         assert jobs[0].bundle is None
         assert jobs[0].plan.kind == "fetch"
         mock_run.assert_called_once_with(jobs, config, genius)
 
     def test_caption_on_disk_is_gated_instead_of_refetched(self, tmp_path, monkeypatch):
-        mock_run = MagicMock()
+        mock_run = MagicMock(return_value=0)
         monkeypatch.setattr(add_songs.rab, "resolve_and_run", mock_run)
         monkeypatch.setattr(add_songs.rab, "probe_duration", lambda p: None)  # skip wpm gate
         song_path = tmp_path / f"Title---{VID_A}.mp4"
@@ -184,9 +215,128 @@ class TestHandoff:
         config = MagicMock()
         genius = MagicMock()
 
-        jobs = add_songs.handoff([str(song_path)], config, genius)
+        rc = add_songs.handoff([str(song_path)], config, genius)
 
+        assert rc == 0
+        jobs = mock_run.call_args.args[0]
         assert len(jobs) == 1
         assert jobs[0].plan.kind == "seed"
         assert jobs[0].plan.seed.get("lyrics_origin") == "srt"
-        mock_run.assert_called_once_with(jobs, config, genius)
+
+    def test_returns_the_pipeline_exit_code(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(add_songs.rab, "resolve_and_run", MagicMock(return_value=1))
+        song_path = str(tmp_path / f"Title---{VID_A}.mp4")
+
+        rc = add_songs.handoff([song_path], MagicMock(), MagicMock())
+
+        assert rc == 1
+
+
+# ---------------------------------------------------------------------------
+# main() -- exit code reflects link, download and pipeline failures
+# ---------------------------------------------------------------------------
+
+
+def _fake_download_manager_class(plan: dict, folder: Path):
+    """A DownloadManager stand-in driven by a scripted ``id -> (rc, fires)`` map.
+
+    Emits ``song_downloaded`` through the real ``EventSystem`` it's given
+    (``events`` kwarg), so ``main()``'s event-driven success/failure counting
+    runs for real; only the download itself (and the app DB/library it would
+    otherwise touch) is faked.
+    """
+
+    class FakeDownloadManager:
+        def __init__(self, *, events, **_kwargs):
+            self._events = events
+
+        def _execute_download(self, video_url, enqueue, user, title):
+            vid = video_url.rsplit("v=", 1)[-1]
+            rc, fires = plan[vid]
+            if fires:
+                self._events.emit("song_downloaded", str(folder / f"Title---{vid}.mp4"))
+            return rc
+
+    return FakeDownloadManager
+
+
+class TestMain:
+    def test_happy_path_download_and_pipeline_succeed(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "add_songs.py",
+                f"https://www.youtube.com/watch?v={VID_A}",
+                "--folder",
+                str(tmp_path),
+                "--yes",
+            ],
+        )
+        monkeypatch.setattr(
+            add_songs, "DownloadManager", _fake_download_manager_class({VID_A: (0, True)}, tmp_path)
+        )
+        monkeypatch.setattr(add_songs.rab, "_make_genius", lambda: MagicMock())
+        mock_handoff = MagicMock(return_value=0)
+        monkeypatch.setattr(add_songs, "handoff", mock_handoff)
+
+        assert add_songs.main() == 0
+        mock_handoff.assert_called_once()
+
+    def test_pipeline_failure_gives_exit_1(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "add_songs.py",
+                f"https://www.youtube.com/watch?v={VID_A}",
+                "--folder",
+                str(tmp_path),
+                "--yes",
+            ],
+        )
+        monkeypatch.setattr(
+            add_songs, "DownloadManager", _fake_download_manager_class({VID_A: (0, True)}, tmp_path)
+        )
+        monkeypatch.setattr(add_songs.rab, "_make_genius", lambda: MagicMock())
+        monkeypatch.setattr(add_songs, "handoff", MagicMock(return_value=1))
+
+        assert add_songs.main() == 1
+
+    def test_download_with_no_event_counts_as_failed(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "add_songs.py",
+                f"https://www.youtube.com/watch?v={VID_A}",
+                "--folder",
+                str(tmp_path),
+                "--yes",
+            ],
+        )
+        monkeypatch.setattr(
+            add_songs,
+            "DownloadManager",
+            _fake_download_manager_class({VID_A: (0, False)}, tmp_path),
+        )
+        mock_handoff = MagicMock()
+        monkeypatch.setattr(add_songs, "handoff", mock_handoff)
+
+        assert add_songs.main() == 1
+        mock_handoff.assert_not_called()
+        assert "no file with that id is in the folder" in capsys.readouterr().out
+
+    def test_one_unreadable_url_with_nothing_to_download_gives_exit_1(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            sys, "argv", ["add_songs.py", "not a url", "--folder", str(tmp_path), "--yes"]
+        )
+
+        assert add_songs.main() == 1
+
+    def test_dry_run_with_unreadable_url_gives_exit_1(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            sys, "argv", ["add_songs.py", "not a url", "--folder", str(tmp_path), "--dry-run"]
+        )
+
+        assert add_songs.main() == 1
