@@ -25,8 +25,10 @@ post-report confirmation prompt. Alignment uses the joint matcher
 "Lyrics resolution" below); songs without a bundle still prompt.
 
 `--song PATTERN` (repeatable) limits the scan to one or more songs, named
-by YouTube ID or a case-insensitive part of the file name
-(`scripts/song_select.py`, shared with `regen_alignment_bundles.py`). Each
+by YouTube ID, file name, or a case-insensitive part of it
+(`scripts/song_select.py`, shared with `regen_alignment_bundles.py`); an
+exact ID or file name wins over a partial match, so `Hello` selects
+`Hello.mp4` even when `Adele - Hello.mp4` is also in the library. Each
 pattern must match exactly one song. Unlike regen's `--song`, this does
 **not** force a run: a selected song with nothing missing is reported as
 `<name>: nothing missing (use regen --song to reprocess)` and skipped —
@@ -126,8 +128,9 @@ python scripts/regen_alignment_bundles.py [folder] [--reset] [--song PATTERN]...
 ```
 
 `--song PATTERN` (repeatable) limits the run to one or more songs, named by
-YouTube ID or a case-insensitive part of the file name
-(`scripts/song_select.py`). Each pattern must match exactly one song. A
+YouTube ID, file name, or a case-insensitive part of it
+(`scripts/song_select.py`); an exact ID or file name wins over a partial
+match. Each pattern must match exactly one song. A
 selected song runs even if its bundle is already current, and both the
 pre-run backup and (with `--reset`) the output wipe are scoped to the
 selected songs only — every other song's files are untouched.
