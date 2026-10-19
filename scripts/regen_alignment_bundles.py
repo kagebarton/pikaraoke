@@ -816,7 +816,7 @@ def clear_output_folders(folder: Path, stems: list[str] | None = None) -> None:
     reprocesses, so wiping them first guarantees no stale file (e.g. an old
     generated SRT) survives. Stems and bundles live elsewhere and are untouched.
     :data:`KEEP_ON_RESET` names what survives inside ``subtitles/`` and
-    ``lyrics/``.
+    ``lyrics/``. A file it can't remove raises ``OSError``.
 
     ``stems``: scope the wipe to those songs' own files (see :func:`_owner`)
     instead of clearing whole folders -- the folders themselves are never
@@ -850,7 +850,11 @@ def _clear_dir(dir_path: Path, keep_suffix: str | None, selected: Callable[[str]
 
 
 def _remove(path: Path) -> None:
-    """Delete a file or a directory tree; a tree that can't be fully removed is warned about."""
+    """Delete a file or a directory tree.
+
+    A file that can't be removed raises, so a reset never goes on past a stale
+    caption. A tree that can't be fully removed is warned about.
+    """
     if not path.is_dir():
         path.unlink(missing_ok=True)
         return
@@ -1013,7 +1017,16 @@ def main() -> int:
     # Reset rebuilds every output, so wipe the folders up front — no stale
     # caption or transcript survives to be mistaken for current.
     if args.reset:
-        clear_output_folders(folder, stems=stems)
+        try:
+            clear_output_folders(folder, stems=stems)
+        except OSError as e:
+            print(
+                f"Reset stopped: {e}. Nothing was processed. Close whatever has the "
+                "file open (the app, a player) and rerun; the backup above holds the "
+                "files as they were.",
+                file=sys.stderr,
+            )
+            return 1
         print(
             f"Cleared subtitles/karaoke/lyrics{scope_note} (reset); the pipeline rebuilds them.\n"
         )
