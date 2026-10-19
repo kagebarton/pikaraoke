@@ -119,7 +119,7 @@ class TestResolveUrlsDedupe:
 
 
 class TestHandoff:
-    def test_builds_job_with_no_bundle_and_fetch_plan(self, tmp_path, monkeypatch):
+    def test_no_caption_on_disk_keeps_fetch_plan(self, tmp_path, monkeypatch):
         mock_run = MagicMock()
         monkeypatch.setattr(add_songs.rab, "resolve_and_run", mock_run)
         song_path = str(tmp_path / f"Title---{VID_A}.mp4")
@@ -131,4 +131,24 @@ class TestHandoff:
         assert len(jobs) == 1
         assert jobs[0].bundle is None
         assert jobs[0].plan.kind == "fetch"
+        mock_run.assert_called_once_with(jobs, config, genius)
+
+    def test_caption_on_disk_is_gated_instead_of_refetched(self, tmp_path, monkeypatch):
+        mock_run = MagicMock()
+        monkeypatch.setattr(add_songs.rab, "resolve_and_run", mock_run)
+        monkeypatch.setattr(add_songs.rab, "probe_duration", lambda p: None)  # skip wpm gate
+        song_path = tmp_path / f"Title---{VID_A}.mp4"
+        subs = tmp_path / "subtitles"
+        subs.mkdir()
+        (subs / f"Title---{VID_A}.srt").write_text(
+            "1\n00:00:01,000 --> 00:00:04,000\nla\n", encoding="utf-8"
+        )
+        config = MagicMock()
+        genius = MagicMock()
+
+        jobs = add_songs.handoff([str(song_path)], config, genius)
+
+        assert len(jobs) == 1
+        assert jobs[0].plan.kind == "seed"
+        assert jobs[0].plan.seed.get("lyrics_origin") == "srt"
         mock_run.assert_called_once_with(jobs, config, genius)

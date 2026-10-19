@@ -472,16 +472,48 @@ def _prompt_one(song: Path, genius: GeniusClient) -> Plan:
 # ---------------------------------------------------------------------------
 
 
+def adopt_caption(job: SongJob, srt_path: Path) -> None:
+    """Gate an on-disk caption and set the job's plan from it.
+
+    Applies the words-per-minute gate (``MIN_CAPTION_WPM``): too sparse to be
+    lyrics discards ``srt_path`` and reverts the job to its fallback (a Genius
+    prompt). Dense enough promotes it to the playback-matched
+    ``subtitles/<stem>.srt`` -- the same normalization
+    ``download_manager._move_downloaded_subtitle`` applies in the live app,
+    skipped when ``srt_path`` already is that file -- and sets a seed-srt plan.
+    """
+    song = job.song_path
+    fallback = job.plan.fallback or Plan(kind="prompt", label="fetch failed -> genius")
+    wpm = _caption_wpm(srt_path, job)
+    if wpm is not None and wpm < MIN_CAPTION_WPM:
+        logger.info("Fetched caption for %s too sparse (%.0f wpm); discarding", song.name, wpm)
+        srt_path.unlink(missing_ok=True)
+        job.plan = fallback
+        return
+    # Promote yt-dlp's <stem>.en.srt to the playback-matched <stem>.srt — the
+    # same normalization download_manager._move_downloaded_subtitle applies in
+    # the live app. Playback (_find_subtitles) and the pipeline's
+    # _should_write_srt both key on subtitles/<stem>.srt.
+    playback_srt = srt_path.with_name(f"{song.stem}.srt")
+    if srt_path != playback_srt:
+        os.replace(srt_path, playback_srt)
+    clear_generated_marker(playback_srt)
+    job.plan = Plan(
+        kind="seed",
+        lyrics_path=playback_srt,
+        seed={"lyrics_origin": "srt"},
+        label="fetched srt (from video)",
+    )
+
+
 def execute_fetches(jobs: list[SongJob]) -> None:
     """Resolve every ``kind == "fetch"`` job by downloading the video caption.
 
     For each fetch-marked song this downloads YouTube's manual English caption
-    into ``subtitles/<stem>.en.srt`` (one network call per song). The caption is
-    adopted as a seed-srt reuse only when it exists and is dense enough to be
-    lyrics (``MIN_CAPTION_WPM``); an adopted caption is promoted to the
-    playback-matched ``subtitles/<stem>.srt``. Otherwise the song reverts to its
-    fallback (a Genius prompt). Runs on a real pass only, after the backup, so a
-    discarded download never clobbers a backed-up caption.
+    into ``subtitles/<stem>.en.srt`` (one network call per song) and hands it to
+    :func:`adopt_caption` for the length gate and promotion. Runs on a real pass
+    only, after the backup, so a discarded download never clobbers a backed-up
+    caption.
     """
     targets = [j for j in jobs if j.plan and j.plan.kind == "fetch"]
     if not targets:
@@ -489,34 +521,14 @@ def execute_fetches(jobs: list[SongJob]) -> None:
     print(f"Fetching video captions for {len(targets)} song(s) via yt-dlp...")
     for job in targets:
         song = job.song_path
-        fallback = job.plan.fallback or Plan(kind="prompt", label="fetch failed -> genius")
         yt_id = extract_youtube_id(str(song))
         url = f"https://www.youtube.com/watch?v={yt_id}"
         result = download_manual_en_subs(url, str(song.parent / "subtitles"), song.stem)
         if result is None:
             logger.info("No downloadable caption for %s; will prompt", song.name)
-            job.plan = fallback
+            job.plan = job.plan.fallback or Plan(kind="prompt", label="fetch failed -> genius")
             continue
-        srt_path = Path(result)
-        wpm = _caption_wpm(srt_path, job)
-        if wpm is not None and wpm < MIN_CAPTION_WPM:
-            logger.info("Fetched caption for %s too sparse (%.0f wpm); discarding", song.name, wpm)
-            srt_path.unlink(missing_ok=True)
-            job.plan = fallback
-            continue
-        # Promote yt-dlp's <stem>.en.srt to the playback-matched <stem>.srt — the
-        # same normalization download_manager._move_downloaded_subtitle applies in
-        # the live app. Playback (_find_subtitles) and the pipeline's
-        # _should_write_srt both key on subtitles/<stem>.srt.
-        playback_srt = srt_path.with_name(f"{song.stem}.srt")
-        os.replace(srt_path, playback_srt)
-        clear_generated_marker(playback_srt)
-        job.plan = Plan(
-            kind="seed",
-            lyrics_path=playback_srt,
-            seed={"lyrics_origin": "srt"},
-            label="fetched srt (from video)",
-        )
+        adopt_caption(job, Path(result))
 
 
 # ---------------------------------------------------------------------------

@@ -152,11 +152,16 @@ def handoff(
 
     Every job starts with ``bundle=None`` (a fresh download has no prior
     bundle to reuse), which gives it a ``fetch`` plan -- the video was just
-    downloaded, so it always has a YouTube id.
+    downloaded, so it always has a YouTube id. A caption the download already
+    saved is gated in place (:func:`rab.adopt_caption`) instead of being
+    fetched again.
     """
     jobs = [rab.SongJob(Path(p), None, "new") for p in song_paths]
     for job in jobs:
         job.plan = rab.resolve_plan(job, reset=False)
+        caption = rab._find_local_srt(job.song_path)
+        if caption is not None:
+            rab.adopt_caption(job, caption)
     rab.resolve_and_run(jobs, config, genius)
     return jobs
 

@@ -289,6 +289,37 @@ def _gap_bundle(media_duration_s: float | None = None) -> dict:
     return bundle
 
 
+class TestAdoptCaption:
+    def _fetch_job(self, tmp_path, bundle=None):
+        job = _job(tmp_path, YT_STEM, bundle)
+        job.plan = regen.resolve_plan(job, reset=False)
+        assert job.plan.kind == "fetch"
+        return job
+
+    def test_sparse_caption_deleted_and_falls_back(self, tmp_path):
+        job = self._fetch_job(tmp_path, _gap_bundle(media_duration_s=60.0))
+        fallback = job.plan.fallback
+        srt = _make_srt(tmp_path, f"{YT_STEM}.en", n_words=3)  # 3 wpm over 60s
+
+        regen.adopt_caption(job, srt)
+
+        assert job.plan is fallback
+        assert not srt.exists()
+
+    def test_dense_caption_already_at_stem_srt_kept_and_seeded(self, tmp_path):
+        job = self._fetch_job(tmp_path, _gap_bundle(media_duration_s=60.0))
+        # Already at the playback-matched name (what _find_local_srt hands
+        # add_songs' handoff after the download manager's own move) -- no
+        # os.replace needed, and the file must survive untouched.
+        srt = _make_srt(tmp_path, YT_STEM, n_words=60)  # 60 wpm over 60s
+
+        regen.adopt_caption(job, srt)
+
+        assert _is_srt_plan(job.plan)
+        assert job.plan.lyrics_path == srt
+        assert srt.exists()
+
+
 class TestExecuteFetches:
     def _fetch_job(self, tmp_path, bundle=None):
         job = _job(tmp_path, YT_STEM, bundle)
