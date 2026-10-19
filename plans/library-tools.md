@@ -2,11 +2,10 @@
 
 Model: Claude Opus 5.5 (design, 2026-09-28); executor Claude Sonnet 5.
 
-> **Status (2026-09-28): Phases 1-3 EXECUTED** (Sonnet 5), Results log below.
-> `/code-review` DONE the same day (Opus 5.5, 3 angles). Its fixes are
-> **Phase 3.1, NOT STARTED**. Don't cherry-pick anything to `dev` until 3.1 is
-> done; then all code commits (`6cc2b29`, `2fdcf08`, `c8fe156`, `788b10c`, then
-> 3.1's) go in branch order. There is no GATE and nothing here measures timing.
+> **Status (2026-10-19): Phase 3.1 IN PROGRESS** (Sonnet 5): commit A of G
+> done. Don't cherry-pick anything to `dev` until 3.1 is done; then all code
+> commits (`6cc2b29`, `2fdcf08`, `c8fe156`, `788b10c`, then 3.1's) go in
+> branch order. There is no GATE and nothing here measures timing.
 
 ## Why
 
@@ -844,3 +843,42 @@ the branch changed. The findings and their fixes are Phase 3.1 above. A
 read-only library check the same day found no `.mp3`/`.zip` songs and no pair
 of stems where one is the other plus a dot, so F's ownership fix and its known
 limit are latent in this library.
+
+### Phase 3.1
+
+**Worktree recovery (2026-10-19, before any commit).** The `wt_libtools`
+worktree named in "Where things live" had its tracked files and its `.venv`
+site-packages gutted between sessions (directories and `__pycache__` survived,
+every regular file under them didn't; same pattern in both the git working
+tree and `.venv/Lib/site-packages`) — consistent with an external temp-cleanup
+sweep over the scratchpad path, not anything this session or the Sep 28 one
+did. `git reset --hard HEAD` restored the tracked files (branch tip
+unchanged, nothing uncommitted to lose); the `models` junction had to be
+recreated (`cmd /c mklink /J`, per "Where things live"); `.venv` was deleted
+and rebuilt with `uv sync` (first sync since recovery) plus the usual
+hand-copied `libmpv-2.dll`. Confirmed `pikaraoke` imports from the worktree,
+not the main checkout, before trusting anything. Full suite after recovery,
+before any 3.1 edit: **4 known-failed, 1509 passed, 2 skipped** — matches
+Phase 3's end state exactly, so the recovery is a full match, not a near-miss.
+
+**Commit A** (`c096631`): `adopt_caption(job, srt_path)` split out of
+`execute_fetches` in regen (gate + promotion only; `execute_fetches`'s own
+behavior and its existing tests are unchanged, verified by running them
+unmodified). `add_songs`' `handoff` calls it on a caption `_find_local_srt`
+finds on disk, before `resolve_and_run`, instead of letting regen re-fetch it.
+Anchors at `a3fd9c4` (`execute_fetches` L475, `_find_local_srt` L234) matched
+exactly, no drift from the worktree recovery.
+
+Tests: `TestAdoptCaption` (regen, 2 new: sparse caption deleted + fallback;
+dense caption already at `<stem>.srt` kept + seeded, exercising the
+skip-the-os.replace branch) + `TestHandoff` (add_songs, +1: a caption on disk
+is gated, not re-fetched; the existing no-caption test renamed to say what it
+now covers). Full suite: **4 known-failed, 1512 passed, 2 skipped** (1509 + 3
+new, no regressions). `pre-commit` clean on the first pass.
+
+`scripts/README.md`'s `add_songs` flow step 5 now says the already-saved
+caption is gated in place, not fetched a second time.
+
+Left: commits B-G (link parsing, failure reporting/exit code, resumability,
+`--song` exact-match priority, `--song --reset` reporting + file ownership,
+cleanup).
