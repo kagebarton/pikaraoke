@@ -162,9 +162,8 @@ the playlist page link (`playlist?list=`) to get the whole list.
 
 ### Flow
 
-1. **Classify** each URL as a video or a playlist (`song_select.py`'s
-   sibling, `classify_url`/`resolve_urls` in this file), expanding
-   playlists via `yt-dlp --flat-playlist`.
+1. **Classify** each URL as a video or a playlist, expanding playlists via
+   `yt-dlp --flat-playlist`.
 2. **Dedupe** the resulting ids and skip any already in `--folder` (a
    song file of any type the app recognises whose `extract_youtube_id`
    matches). A video with no alignment bundle is one an earlier run
@@ -177,21 +176,19 @@ the playlist page link (`playlist?list=`) to get the whole list.
    YTASR `.en.asr.json3` are fetched exactly as they would be from the
    app. A download that raises is logged, counted as failed, and the next
    one still runs (Ctrl+C still stops the tool). The tool never writes
-   the app's library database: `SongManager` is built with an in-memory
-   `KaraokeDatabase(":memory:")`, and only its `songs.find_by_id` is used.
+   the app's library database.
 5. **Hand off to `regen_alignment_bundles`:** each downloaded song, then
-   each unprocessed one, becomes a `SongJob` with no bundle, which
-   resolves to a `fetch` plan (every song has a YouTube id). The caption the download already saved
-   (the download manager files it to `subtitles/<stem>.srt` before
-   `add_songs` ever sees it) goes through the same words-per-minute gate
-   right there — there's no second fetch for a song that already has
-   one. Then `resolve_and_run` runs: the Genius prompt for any song
-   without a usable caption, and the pipeline. No backup is needed; a
-   song with no bundle has no finished outputs to lose.
+   each unprocessed one, goes through regen's run path with no prior
+   bundle. The caption the download already saved (the download manager
+   files it to `subtitles/<stem>.srt` before `add_songs` ever sees it)
+   goes through the same words-per-minute gate right there — there's no
+   second fetch for a song that already has one. Then regen runs: the
+   Genius prompt for any song without a usable caption, and the
+   pipeline. No backup is needed; a song with no bundle has no finished
+   outputs to lose.
 
-Downloads run unattended, then any Genius prompts come in one batch, then
-the pipeline runs unattended — the help text (`--help`) says so, so you
-know when to be at the keyboard.
+`--help` says when to be at the keyboard (the Genius prompts, not the
+downloads or the pipeline) and why to run it while the app is idle.
 
 **After it finishes:** the app doesn't know about the new songs until its
 next library sync (startup, or the admin "sync library" action) — the
@@ -203,13 +200,6 @@ The app's `youtubedl_proxy` and `additional_ytdl_args` are command-line
 flags to the app, not preferences, so this tool doesn't read them; only
 `high_quality` (a real preference) applies. `blocked_processing_words`
 filtering is also out of scope.
-
-### Run it while the app is idle
-
-This tool and the running app can both drive a GPU pipeline; running two
-at once measures 3-11x slower (VRAM isn't the limiter — WDDM context
-switching is), so the help text says to run this while the app is idle.
-Not enforced in code.
 
 ## Architecture notes
 

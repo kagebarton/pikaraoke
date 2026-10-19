@@ -60,6 +60,40 @@ def _is_srt_plan(plan) -> bool:
     return plan.kind == "seed" and plan.seed.get("lyrics_origin") == "srt"
 
 
+def _scoped_library(folder: Path) -> None:
+    """A library for the ``--song`` scoping tests: ``Song``, ``Song.live``, ``Other``.
+
+    ``Song.live`` is a real library video too, so it must win ownership of its
+    own files over the shorter ``Song`` stem.
+    """
+    for stem in ("Song", "Song.live", "Other"):
+        _touch_video(folder, stem)
+
+    subs = folder / "subtitles"
+    subs.mkdir()
+    (subs / "Song.srt").write_text("song", encoding="utf-8")
+    (subs / "Song.srt.generated").write_text("marker", encoding="utf-8")
+    (subs / f"Song{regen.ASR_JSON3_SUFFIX}").write_text("{}", encoding="utf-8")
+    (subs / "Song.live.srt").write_text("live", encoding="utf-8")
+    (subs / "Other.srt").write_text("other", encoding="utf-8")
+
+    karaoke = folder / "karaoke"
+    karaoke.mkdir()
+    (karaoke / "Song.ass").write_text("song ass", encoding="utf-8")
+    (karaoke / "Other.ass").write_text("other ass", encoding="utf-8")
+
+    lyrics = folder / "lyrics"
+    lyrics.mkdir()
+    (lyrics / "Song.txt").write_text("stale reuse", encoding="utf-8")
+    (lyrics / "Song.lrc").write_text("[00:01.00]hi\n", encoding="utf-8")
+    (lyrics / "Other.txt").write_text("other reuse", encoding="utf-8")
+
+    debug = folder / "alignment_debug"
+    debug.mkdir()
+    (debug / "Song.json").write_text("{}", encoding="utf-8")
+    (debug / "Other.json").write_text("{}", encoding="utf-8")
+
+
 # A stem with a real 11-char YouTube id, so extract_youtube_id picks it up.
 YT_STEM = "Song---dQw4w9WgXcQ"
 
@@ -383,32 +417,8 @@ class TestExecuteFetches:
 
 
 class TestBackupTextFoldersScoped:
-    def _setup(self, tmp_path):
-        # "Song.live" is a real library video too, so it must win ownership
-        # of its own files over the shorter "Song" stem.
-        _touch_video(tmp_path, "Song")
-        _touch_video(tmp_path, "Song.live")
-        _touch_video(tmp_path, "Other")
-
-        subs = tmp_path / "subtitles"
-        subs.mkdir()
-        (subs / "Song.srt").write_text("song", encoding="utf-8")
-        (subs / "Song.srt.generated").write_text("marker", encoding="utf-8")
-        (subs / "Song.live.srt").write_text("live", encoding="utf-8")
-        (subs / "Other.srt").write_text("other", encoding="utf-8")
-
-        karaoke = tmp_path / "karaoke"
-        karaoke.mkdir()
-        (karaoke / "Song.ass").write_text("song ass", encoding="utf-8")
-        (karaoke / "Other.ass").write_text("other ass", encoding="utf-8")
-
-        debug = tmp_path / "alignment_debug"
-        debug.mkdir()
-        (debug / "Song.json").write_text("{}", encoding="utf-8")
-        (debug / "Other.json").write_text("{}", encoding="utf-8")
-
     def test_copies_only_selected_songs_files(self, tmp_path):
-        self._setup(tmp_path)
+        _scoped_library(tmp_path)
 
         backup = regen.backup_text_folders(tmp_path, stems=["Song"])
 
@@ -424,7 +434,7 @@ class TestBackupTextFoldersScoped:
         assert not (backup / "alignment_debug" / "Other.json").exists()
 
     def test_unscoped_backup_is_unchanged(self, tmp_path):
-        self._setup(tmp_path)
+        _scoped_library(tmp_path)
 
         backup = regen.backup_text_folders(tmp_path)
 
@@ -486,31 +496,8 @@ class TestClearOutputFolders:
 
 
 class TestClearOutputFoldersScoped:
-    def _setup(self, tmp_path):
-        _touch_video(tmp_path, "Song")
-        _touch_video(tmp_path, "Song.live")
-        _touch_video(tmp_path, "Other")
-
-        subs = tmp_path / "subtitles"
-        subs.mkdir()
-        (subs / "Song.srt").write_text("song", encoding="utf-8")
-        (subs / f"Song{regen.ASR_JSON3_SUFFIX}").write_text("{}", encoding="utf-8")
-        (subs / "Song.live.srt").write_text("live", encoding="utf-8")
-        (subs / "Other.srt").write_text("other", encoding="utf-8")
-
-        karaoke = tmp_path / "karaoke"
-        karaoke.mkdir()
-        (karaoke / "Song.ass").write_text("song ass", encoding="utf-8")
-        (karaoke / "Other.ass").write_text("other ass", encoding="utf-8")
-
-        lyrics = tmp_path / "lyrics"
-        lyrics.mkdir()
-        (lyrics / "Song.txt").write_text("stale reuse", encoding="utf-8")
-        (lyrics / "Song.lrc").write_text("[00:01.00]hi\n", encoding="utf-8")
-        (lyrics / "Other.txt").write_text("other reuse", encoding="utf-8")
-
     def test_removes_only_selected_songs_regenerable_files(self, tmp_path):
-        self._setup(tmp_path)
+        _scoped_library(tmp_path)
 
         regen.clear_output_folders(tmp_path, stems=["Song"])
 
@@ -528,6 +515,62 @@ class TestClearOutputFoldersScoped:
         assert (tmp_path / "lyrics" / "Other.txt").exists()
         # Never a whole-folder wipe: the folders themselves survive.
         assert (tmp_path / "karaoke").is_dir()
+
+
+# ---------------------------------------------------------------------------
+# _owner / _remove — the shared ownership rule and the delete helper
+# ---------------------------------------------------------------------------
+
+
+class TestOwner:
+    STEMS = {"Song", "Song.live", "Other"}
+
+    def test_entry_belongs_to_its_stem(self):
+        assert regen._owner("Song.srt", self.STEMS) == "Song"
+        assert regen._owner("Song.srt.generated", self.STEMS) == "Song"
+        assert regen._owner("Song", self.STEMS) == "Song"
+
+    def test_longest_claiming_stem_wins(self):
+        assert regen._owner("Song.live.srt", self.STEMS) == "Song.live"
+        assert regen._owner("Song.live", self.STEMS) == "Song.live"
+
+    def test_a_prefix_without_a_dot_is_not_a_claim(self):
+        assert regen._owner("Songs.srt", self.STEMS) is None
+
+    def test_unclaimed_entry_has_no_owner(self):
+        assert regen._owner("Unknown.srt", self.STEMS) is None
+
+
+class TestRemove:
+    def test_removes_a_file_and_a_tree(self, tmp_path):
+        file = tmp_path / "a.txt"
+        file.write_text("x", encoding="utf-8")
+        tree = tmp_path / "tree"
+        (tree / "sub").mkdir(parents=True)
+        (tree / "sub" / "b.txt").write_text("y", encoding="utf-8")
+
+        regen._remove(file)
+        regen._remove(tree)
+
+        assert not file.exists()
+        assert not tree.exists()
+
+    def test_missing_path_is_a_noop(self, tmp_path):
+        regen._remove(tmp_path / "nope")  # does not raise
+
+    def test_tree_that_cannot_be_removed_is_warned_about(self, tmp_path, monkeypatch, caplog):
+        tree = tmp_path / "tree"
+        tree.mkdir()
+
+        def boom(path):
+            raise OSError("locked")
+
+        monkeypatch.setattr(regen.shutil, "rmtree", boom)
+
+        regen._remove(tree)  # does not raise
+
+        assert "Could not fully remove" in caplog.text
+        assert "locked" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -589,7 +632,6 @@ class TestMainSongReset:
             "argv",
             ["regen", str(tmp_path), "--song", "Mr", "--reset", "--yes"],
         )
-        monkeypatch.setattr(regen, "_make_genius", lambda: MagicMock())
         mock_run = MagicMock(return_value=0)
         monkeypatch.setattr(regen, "resolve_and_run", mock_run)
 
@@ -636,6 +678,38 @@ class TestMainSongReset:
         out = capsys.readouterr().out
         assert "Selection: selected songs (reset)" in out
         assert "for the selected songs" in out
+
+
+class TestResolveAndRunSetup:
+    """``resolve_and_run`` builds its own config and Genius client, so both CLIs share it."""
+
+    def test_warns_when_no_genius_token(self, monkeypatch, capsys):
+        monkeypatch.setattr(regen, "_make_genius", lambda: SimpleNamespace(_token=""))
+        monkeypatch.setattr(regen, "execute_fetches", lambda jobs: None)
+        monkeypatch.setattr(regen, "execute_lrclib_backfill", lambda jobs, config: None)
+        monkeypatch.setattr(regen, "prompt_jobs", lambda jobs, genius: None)
+
+        assert regen.resolve_and_run([]) == 0
+
+        assert "no genius_token in preferences" in capsys.readouterr().out
+
+    def test_hands_the_run_a_config_and_the_genius_client(self, tmp_path, monkeypatch):
+        genius = SimpleNamespace(_token="tok")
+        monkeypatch.setattr(regen, "_make_genius", lambda: genius)
+        monkeypatch.setattr(regen, "get_temp_directory", lambda: str(tmp_path))
+        monkeypatch.setattr(regen, "execute_fetches", lambda jobs: None)
+        monkeypatch.setattr(regen, "execute_lrclib_backfill", lambda jobs, config: None)
+        monkeypatch.setattr(regen, "prompt_jobs", lambda jobs, genius: None)
+        job = _job(tmp_path, "s", None)
+        job.plan = regen.Plan(kind="fetch", label="x")
+        mock_run = MagicMock(return_value=(1, 0, 0))
+        monkeypatch.setattr(regen, "run_jobs", mock_run)
+
+        assert regen.resolve_and_run([job]) == 0
+
+        _, config, passed_genius = mock_run.call_args.args
+        assert config.intermediate_dir == str(tmp_path)
+        assert passed_genius is genius
 
 
 # ---------------------------------------------------------------------------
