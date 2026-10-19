@@ -173,10 +173,13 @@ to get the whole list. `--dry-run` prints the report and exits.
    `songs.find_by_id` is used.
 5. **Hand off to `regen_alignment_bundles`:** each downloaded song becomes
    a `SongJob` with no bundle, which resolves to a `fetch` plan (every
-   download has a YouTube id), then runs through `resolve_and_run` —
-   caption fetch with the words-per-minute gate, the Genius prompt for
-   any song without a usable caption, and the pipeline. No backup is
-   needed; a freshly downloaded song has no prior outputs to lose.
+   download has a YouTube id). The caption the download already saved
+   (the download manager files it to `subtitles/<stem>.srt` before
+   `add_songs` ever sees it) goes through the same words-per-minute gate
+   right there — there's no second fetch for a song that already has
+   one. Then `resolve_and_run` runs: the Genius prompt for any song
+   without a usable caption, and the pipeline. No backup is needed; a
+   freshly downloaded song has no prior outputs to lose.
 
 Downloads run unattended, then any Genius prompts come in one batch, then
 the pipeline runs unattended — the help text (`--help`) says so, so you
