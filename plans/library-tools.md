@@ -1,15 +1,17 @@
 # Library tools: pick single songs, add songs from YouTube links
 
-Model: Claude Opus 5.5 (design, 2026-09-28); executor Claude Sonnet 5 (through
-Phase 3.1 commit C), Claude Sonnet 5.5 (commit D on).
+Model: Claude Opus 5.5 (design, 2026-09-28; Phase 3.2 design 2026-10-19);
+executor Claude Sonnet 5 (through Phase 3.1 commit C), Claude Sonnet 5.5
+(commit D on).
 
-> **Status (2026-10-19): Phase 3.1 DONE, awaiting Ken** (Sonnet 5 for A-C,
-> Sonnet 5.5 for D on): commits A-G done (`c096631`, `975175b`, `6ecb41d`,
-> `e81607b`, `db2d193`, `f6490e1`, `73dada4`; plan-log rows alongside each) and
-> the "Verify, then relay" pass run (see the Results log). Left: a
-> `/code-review` of the 3.1 commits (due, not run), then landing, which is Ken's
-> call: all code commits (`6cc2b29`, `2fdcf08`, `c8fe156`, `788b10c`, then 3.1's)
-> go to `dev` by cherry-pick in branch order.
+> **Status (2026-10-19): Phase 3.2 NEXT** (executor Sonnet 5.5). Phase 3.1 is
+> done (commits A-G `c096631`, `975175b`, `6ecb41d`, `e81607b`, `db2d193`,
+> `f6490e1`, `73dada4`, plus its Verify pass). The `/code-review` of the 3.1
+> commits ran the same day (Opus 5.5, see the Results log), and Ken ruled that
+> all of its findings are fixed in one pass: Phase 3.2, commits A-C. After 3.2
+> comes landing, which is Ken's call: all code commits (`6cc2b29`, `2fdcf08`,
+> `c8fe156`, `788b10c`, then 3.1's, then 3.2's) go to `dev` by cherry-pick in
+> branch order.
 > There is no GATE and nothing here measures timing.
 
 ## Why
@@ -651,6 +653,200 @@ order. Once `--song` is on `dev`, it replaces the one-song driver recipe in
 memory `regen-reprocessing-workflow`, and the session that lands it updates
 that memory.
 
+## Phase 3.2: fixes from the second code review
+
+Source: Opus 5.5 ran `/code-review` on 2026-10-19 at `8730fff` over the 3.1
+code commits (`d9c86a2..73dada4`), with three finders (correctness,
+simplicity, robustness), and checked every finding against the code. Ken
+ruled on 2026-10-19: fix 1 the way it is designed below, and fix all the
+others in the same pass. These designs are Opus decisions, and the executor
+doesn't reopen them. Decisions 1-5 and the 3.1 designs A-G still hold.
+
+Anchors are at `8730fff` (the code is the same as at `73dada4`). The quoted
+code is the anchor; a line number only helps you find it.
+
+**Baseline** at `8730fff`: **4 known-failed, 1554 passed, 2 skipped** (3.1's
+end state). Make commits A-C in order. Each one carries its own tests, ends at
+the baseline plus its new tests, and passes `pre-commit`. Plan-log rows go in
+their own commits, as before.
+
+### A. A song with a karaoke file counts as processed
+
+**The problem:**
+- 3.1 D's `_library_status` (`scripts/add_songs.py` L131) calls a video with
+  no bundle `in library, not processed`, and hands it to the pipeline again.
+- The pipeline writes a bundle only when the song had lyrics:
+  `if self._config.capture_alignment_debug and lyrics_path is not None:` in
+  `pikaraoke/pipeline/stages/lyric_align.py` L289. It writes the karaoke file
+  (`karaoke/<stem>.ass`, L264-276) either way.
+- So a song that already ran without lyrics (transcribed, or no lyrics
+  found) comes back as unprocessed on every rerun of its playlist. It then
+  gets a Genius prompt and a full GPU pipeline run, which overwrites its
+  karaoke file with no backup.
+- README step 5 says "a song with no bundle has no finished outputs to lose".
+  That is wrong for exactly these songs.
+
+**The fix:**
+1. **`_library_status`:** a video is `in library, not processed` only when it
+   has **neither** `alignment_debug/<stem>.json` **nor** `karaoke/<stem>.ass`,
+   checked with `Path.is_file()` on both. Anything else is
+   `already in library`. Drop the `rab._read_bundle` call: the question is
+   whether the file exists, not what it says.
+   - Intended behaviour change: a bundle that exists but doesn't parse now
+     counts as processed. Regen already warns about an unreadable bundle and
+     ignores it when it reprocesses the song.
+   - A song skipped at the Genius prompt has neither file, so it still comes
+     back as unprocessed. That is intended: it was never processed.
+   - Docstring: say why the karaoke file counts. The pipeline writes a bundle
+     only when the song had lyrics, so a transcribed song has the karaoke file
+     alone.
+2. **README** (`scripts/README.md`, `add_songs` flow):
+   - Step 2: "A video with no alignment bundle is one an earlier run downloaded
+     but never processed" becomes "A video with neither an alignment bundle
+     nor a karaoke file is one an earlier run downloaded but never processed".
+   - Step 5's last sentence becomes: "No backup is needed; a song handed off
+     has no bundle and no karaoke file, so it has no finished outputs to
+     lose."
+
+**Tests** (`TestResolveUrlsDedupe`, existing style):
+- A video with `karaoke/<stem>.ass` and no bundle is `already in library`.
+  Check that this test fails against the old `_library_status`.
+- A video with an unreadable bundle (`alignment_debug/<stem>.json` holding
+  `not json`) and no karaoke file is `already in library`.
+- The existing four tests (video with a bundle, video with neither file,
+  `.mp3`, video wins over `.mp3`) pass unchanged.
+
+Commit: `fix(add_songs): a song with a karaoke file counts as processed`.
+
+### B. A reset that hits a locked file stops with a message, not a traceback
+
+**The problem:**
+- `_remove` (`regen_alignment_bundles.py` L855) raises when a single file
+  can't be deleted (`path.unlink(missing_ok=True)`). On Windows that happens
+  when another process holds the file open.
+- `regen.main()` calls `clear_output_folders` after the backup with no guard,
+  so the reset dies with a traceback partway through the wipe.
+
+**Decided: keep the stop.** Raising on a file is right. The reset exists so
+that "no stale caption or transcript survives to be mistaken for current"
+(`main()`'s own comment). A locked `subtitles/<stem>.srt` that survived while
+its `.srt.generated` marker was deleted would look like a real caption to
+`_find_local_srt`. A tree that can't be fully removed is still only warned
+about, as in 3.1 G: only the unscoped `karaoke/` goes through `rmtree`, and the
+pipeline overwrites every `.ass` it rebuilds. What is wrong today is the
+traceback, and that nothing tells Ken what to do.
+
+**The fix:**
+1. In `regen.main()`, wrap `clear_output_folders(folder, stems=stems)` in
+   `try` / `except OSError as e:`. On error, print to stderr:
+   `Reset stopped: {e}. Nothing was processed. Close whatever has the file open
+   (the app, a player) and rerun; the backup above holds the files as they
+   were.` Then return 1. `resolve_and_run` is not called.
+2. Docstrings say which failure does what:
+   - `_remove`: a file that can't be removed raises, so a reset never goes on
+     past a stale caption. A tree is warned about.
+   - `clear_output_folders`: one line, a file it can't remove raises
+     `OSError`.
+
+**Tests:**
+- `TestRemove`: a file whose `unlink` raises `OSError` propagates (patch
+  `Path.unlink` for that path). This pins the asymmetry so a later cleanup
+  doesn't "fix" it.
+- `TestMainSongReset` style, driving `regen.main()` with `--song Mr --reset
+  --yes`: patch `regen.clear_output_folders` to raise
+  `PermissionError(13, "in use", "<path>")`, and `regen.resolve_and_run` with a
+  `MagicMock`. Assert that `main()` returns 1, `resolve_and_run` is not called,
+  and stderr holds `Reset stopped`. Reuse that class's `_setup_library` and its
+  `PYTORCH_CUDA_ALLOC_CONF` `setenv`.
+
+Commit: `fix(regen): a reset that cannot remove a file stops with a message`.
+
+### C. Cleanup (simplicity and test hygiene), one commit
+
+- **Ownership: the cheap test first.** `_owner(name, all_stems)` checks every
+  stem in the library for every folder entry. 3.1's `_owns_file` gave up early
+  on names no selected stem claims. Results are identical; only the speed
+  changed.
+  - Add `def _claims(stem: str, name: str) -> bool:` (`name == stem or
+    name.startswith(stem + ".")`). `_owner` uses it.
+  - Add
+    `def _owned_by_any(name: str, stems: Collection[str], all_stems: set[str]) -> bool:`.
+    It returns False unless some stem in `stems` claims `name`, and then
+    returns `_owner(name, all_stems) in stems`. This gives the same answer as
+    `_owner(...) in stems` (the owner always claims the name) while only
+    claimed names pay for the full scan.
+  - Both call sites use it: the `entries` list in `backup_text_folders`, and
+    `selected` in `clear_output_folders`.
+  - Tests (`TestOwner` or a new sibling class): `Song.srt` is owned by any of
+    `["Song"]`; `Song.live.srt` with `["Song"]` and library
+    `{"Song", "Song.live"}` is not; an unclaimed name is not. The existing
+    scoped backup and wipe tests pass unchanged.
+- **`TestMain` (`tests/unit/test_add_songs.py` L307) is isolated from the
+  machine.** Add one autouse fixture to the class that:
+  - patches `add_songs.rab.setup_process` to a no-op, so neither the allocator
+    env var nor `logging.basicConfig` leaks into the rest of the session, and
+  - patches `add_songs.PreferenceManager` to build a **real**
+    `PreferenceManager` on an absolute path under
+    `tmp_path_factory.mktemp("prefs")`. CLAUDE.md requires a real instance. An
+    absolute path also skips `_migrate_legacy_config`, which would otherwise
+    move a `./config.ini` from the current folder. Keep the config out of
+    `tmp_path`, which is the test's library folder.
+  - No new tests. The existing `TestMain` tests pass unchanged.
+- **`add_songs` module docstring** (L2-9): replace the paragraph after the
+  first line with:
+
+  > Classifies each URL as a video or a playlist (expanding playlists via
+  > yt-dlp) and downloads the IDs not yet in the folder through the app's own
+  > ``DownloadManager`` (so the uploader caption and YTASR caption are fetched
+  > exactly as the live app would). It then hands the new songs, plus any
+  > video already in the folder that was never processed, to
+  > ``regen_alignment_bundles``'s run path: the words-per-minute gate on the
+  > caption the download saved, the Genius prompt, and the pipeline.
+
+- **Comments:**
+  - `adopt_caption` (regen L496-499): delete the inline comment's first
+    sentence ("Promote yt-dlp's <stem>.en.srt ... in the live app."). The
+    docstring already says it. Keep the sentence about playback and
+    `_should_write_srt` keying on `subtitles/<stem>.srt`.
+  - The comment above `_YOUTUBE_ID_RE` (`add_songs.py` L65-67) describes
+    `classify_url`, not the regex. Delete it, and move its reason into
+    `classify_url`'s docstring. The sentence "An id matching the YouTube id
+    shape is a video, even when the link also carries ``list=``." gains: "(a
+    search result or a Mix attaches one to a plain video link; the playlist
+    page link, ``playlist?list=``, is what gets the whole list)".
+- **`library_files`** (`add_songs.py` L119): one `sorted(...)` with
+  `key=lambda p: (p.suffix.lower() in rab.VIDEO_EXTS, p)`, in place of
+  `sorted` and then `.sort`. Keep the "videos last, so they win" comment. The
+  existing video-wins test passes unchanged.
+
+Commit: `refactor(scripts): cheaper ownership check, isolated add_songs main tests, docstring fixes`.
+
+### Verify, then relay
+
+- **Unit suite:** the full suite ends at the baseline plus the new tests.
+- **Status check** (real CLI, `--dry-run`, no network beyond classifying the
+  link, a fresh scratch folder, never the library):
+  - Put an empty `Title---Z3x9i7njCCo.mp4` and an empty
+    `karaoke/Title---Z3x9i7njCCo.ass` in the folder. Run
+    `add_songs.py "https://www.youtube.com/watch?v=Z3x9i7njCCo" --folder <scratch> --dry-run`.
+    It must report `already in library`.
+  - Delete the `.ass` and rerun. It must report `in library, not processed`.
+  - (3.1's Verify check "delete the bundle, then expect `not processed`" no
+    longer holds on its own: a processed song also keeps its `.ass`.)
+- **Safety check:** the app DB and `config.ini` hashes are unchanged, as in
+  3.1.
+- **Record and relay:** write a Results log row per commit plus the verify
+  pass, then relay to Ken.
+  - The change is small enough that the self-review covers it. Say so; don't
+    flag another `/code-review`.
+  - Flag a `/compact` point.
+  - Landing is next and is Ken's call.
+
+**STOP if:**
+- any fix seems to need a change under `pikaraoke/` (Decision 5)
+- an existing test changes outcome, other than one this section names
+- anything outside the scratch folder changes during the status check
+
 ## Results log
 
 ### Baseline
@@ -1152,3 +1348,41 @@ Landing on `dev` is Ken's call: cherry-pick every code commit in branch order
 (`6cc2b29`, `2fdcf08`, `c8fe156`, `788b10c`, `c096631`, `975175b`, `6ecb41d`,
 `e81607b`, `db2d193`, `f6490e1`, `73dada4`); the session that lands `--song`
 then retires the one-song driver recipe in memory `regen-reprocessing-workflow`.
+
+### Code review (3.1)
+
+2026-10-19, Opus 5.5, `/code-review` at `8730fff` over `d9c86a2..73dada4 --
+scripts tests`: three finders (correctness, simplicity, robustness), 10
+findings returned, each checked by Opus against the code. Read-only; nothing
+on the branch changed.
+
+Checked and kept (all fixed in Phase 3.2):
+
+| # | Where (at `8730fff`) | What the code does | 3.2 |
+|---|---|---|---|
+| 1 | `add_songs.py` `_library_status` L131 | no bundle means `not processed`; `lyric_align.py` L289 writes a bundle only when `lyrics_path is not None`, while the `.ass` is written either way | A |
+| 2 | regen `_owner` L747, both call sites | every folder entry is checked against every library stem (`_owns_file` returned early on a name the stem didn't claim) | C |
+| 3 | regen `_remove` L855 / `main()` | a file `unlink` that fails raises out of `main()` after the backup and a partial wipe, with a traceback | B |
+| 4 | `test_add_songs.py` `TestMain` L307 | runs the real `setup_process()` (no `setenv`) and `PreferenceManager()` on the default path | C |
+| 5 | `add_songs.py` module docstring L4-9 | still says it skips every id in the folder and fetches the caption again | C |
+| 6 | `adopt_caption` inline comment; comment above `_YOUTUBE_ID_RE`; `library_files` double sort; `_library_status` parses the bundle JSON for an existence check | duplicate or misplaced text, redundant work | A, C |
+
+Checked and dropped:
+- A sparse caption at `subtitles/<stem>.srt` is deleted by `adopt_caption`.
+  That is 3.1 A's specified fix.
+- The broad `except Exception` around `_execute_download`. That is 3.1 D's
+  specified boundary, and it logs with a traceback.
+- A malformed `v=` plus `list=` becoming a playlist. That is 3.1 B's
+  specified rule.
+
+Ken's flagged areas, checked with no finding:
+- G's config and Genius construction now runs after the wipe. The caption
+  fetch, the prompts and `run_jobs` already ran after it, and the backup comes
+  first.
+- `_owner` matches `_owns_file` for every possible name, not only on the
+  sampled domain: two claiming stems of the same length are the same string.
+- C's exit code and the event-based success check.
+- A's `srt_path == playback_srt` branch: no path gates a caption twice.
+
+Ken's ruling (2026-10-19): fix 1 as designed ("has a bundle or a karaoke file"),
+and fix all the others in the same pass. That pass is Phase 3.2.
