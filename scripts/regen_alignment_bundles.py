@@ -49,7 +49,7 @@ import os
 import shutil
 import sys
 import tempfile
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -495,10 +495,8 @@ def adopt_caption(job: SongJob, srt_path: Path) -> None:
         srt_path.unlink(missing_ok=True)
         job.plan = fallback
         return
-    # Promote yt-dlp's <stem>.en.srt to the playback-matched <stem>.srt — the
-    # same normalization download_manager._move_downloaded_subtitle applies in
-    # the live app. Playback (_find_subtitles) and the pipeline's
-    # _should_write_srt both key on subtitles/<stem>.srt.
+    # Playback (_find_subtitles) and the pipeline's _should_write_srt both key
+    # on subtitles/<stem>.srt.
     playback_srt = srt_path.with_name(f"{song.stem}.srt")
     if srt_path != playback_srt:
         os.replace(srt_path, playback_srt)
@@ -744,16 +742,33 @@ def _all_stems(folder: Path) -> set[str]:
     }
 
 
+def _claims(stem: str, name: str) -> bool:
+    """Whether ``stem`` claims the folder entry ``name``.
+
+    ``name`` equals the stem or starts with ``stem + "."`` (catching
+    ``<stem>.srt.generated``).
+    """
+    return name == stem or name.startswith(stem + ".")
+
+
 def _owner(name: str, all_stems: set[str]) -> str | None:
     """The song stem a folder entry named ``name`` belongs to, or None.
 
-    A stem claims ``name`` when ``name`` equals it or starts with
-    ``stem + "."`` (catching ``<stem>.srt.generated``). The longest claiming
-    stem owns it, so ``Song.live`` owns ``Song.live.srt`` and ``Song`` never
-    claims a file that belongs to ``Song.live``.
+    The longest claiming stem owns it, so ``Song.live`` owns ``Song.live.srt``
+    and ``Song`` never claims a file that belongs to ``Song.live``.
     """
-    claimants = [s for s in all_stems if name == s or name.startswith(s + ".")]
+    claimants = [s for s in all_stems if _claims(s, name)]
     return max(claimants, key=len, default=None)
+
+
+def _owned_by_any(name: str, stems: Collection[str], all_stems: set[str]) -> bool:
+    """Whether ``name`` belongs to one of ``stems``.
+
+    The same answer as ``_owner(name, all_stems) in stems``, since the owner
+    always claims ``name``, but a name no selected stem claims is rejected
+    without scanning every stem in the library.
+    """
+    return any(_claims(s, name) for s in stems) and _owner(name, all_stems) in stems
 
 
 def backup_text_folders(folder: Path, stems: list[str] | None = None) -> Path | None:
@@ -781,7 +796,7 @@ def backup_text_folders(folder: Path, stems: list[str] | None = None) -> Path | 
         src = folder / sub
         if not src.is_dir():
             continue
-        entries = [e for e in src.iterdir() if _owner(e.name, all_stems) in stems]
+        entries = [e for e in src.iterdir() if _owned_by_any(e.name, stems, all_stems)]
         if not entries:
             continue
         dest = backup_root / sub
@@ -825,7 +840,7 @@ def clear_output_folders(folder: Path, stems: list[str] | None = None) -> None:
     all_stems = _all_stems(folder) if stems is not None else set()
 
     def selected(name: str) -> bool:
-        return stems is None or _owner(name, all_stems) in stems
+        return stems is None or _owned_by_any(name, stems, all_stems)
 
     for sub in OUTPUT_DIRS:
         keep_suffix = KEEP_ON_RESET.get(sub)

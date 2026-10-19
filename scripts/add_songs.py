@@ -2,11 +2,12 @@
 """Download YouTube videos or playlists into the library and run the pipeline.
 
 Classifies each URL as a video or a playlist (expanding playlists via
-yt-dlp), skips IDs already in the folder, downloads the new ones through
-the app's own ``DownloadManager`` (so the uploader caption and YTASR
-caption are fetched exactly as the live app would), then hands the new
-songs to ``regen_alignment_bundles``'s run path: caption fetch with the
-words-per-minute gate, the Genius prompt, and the pipeline.
+yt-dlp) and downloads the IDs not yet in the folder through the app's own
+``DownloadManager`` (so the uploader caption and YTASR caption are fetched
+exactly as the live app would). It then hands the new songs, plus any
+video already in the folder that was never processed, to
+``regen_alignment_bundles``'s run path: the words-per-minute gate on the
+caption the download saved, the Genius prompt, and the pipeline.
 
 The tool never writes the app's library database -- the app picks up the
 new files on its next library sync (startup, or the admin "sync library"
@@ -62,9 +63,6 @@ class UrlEntry:
     status: str  # "new" | "already in library" | "in library, not processed"
 
 
-# A link to one video downloads only that video, even when it carries
-# list= (a search-result click or a Mix can attach one to a plain video
-# link); the playlist page link (playlist?list=) is what gets the whole list.
 _YOUTUBE_ID_RE = re.compile(r"[A-Za-z0-9_-]{11}")
 
 
@@ -75,10 +73,12 @@ def classify_url(url: str) -> tuple[str, str] | None:
     subdomains, case insensitive) -- any other host is unrecognised. A
     ``youtu.be`` link's id is its first path segment; any other host's is its
     ``v`` query parameter. An id matching the YouTube id shape is a video,
-    even when the link also carries ``list=``. Otherwise a ``list`` query
-    parameter makes it a playlist, passed through unchanged. Returns ``None``
-    for anything else (including shorts and embed links -- nobody asked for
-    those).
+    even when the link also carries ``list=`` (a search result or a Mix
+    attaches one to a plain video link; the playlist page link,
+    ``playlist?list=``, is what gets the whole list). Otherwise a ``list``
+    query parameter makes it a playlist, passed through unchanged. Returns
+    ``None`` for anything else (including shorts and embed links -- nobody
+    asked for those).
     """
     parsed = urlparse(url if "://" in url else f"https://{url}")
     host = (parsed.hostname or "").lower()
@@ -116,9 +116,13 @@ def library_files(folder: Path) -> dict[str, Path]:
     video wins -- it is the one regen can process.
     """
     files = sorted(
-        p for p in folder.iterdir() if p.is_file() and p.suffix.lower() in SongList.VALID_EXTENSIONS
+        (
+            p
+            for p in folder.iterdir()
+            if p.is_file() and p.suffix.lower() in SongList.VALID_EXTENSIONS
+        ),
+        key=lambda p: (p.suffix.lower() in rab.VIDEO_EXTS, p),  # videos last, so they win
     )
-    files.sort(key=lambda p: p.suffix.lower() in rab.VIDEO_EXTS)  # videos last, so they win
     library: dict[str, Path] = {}
     for path in files:
         video_id = extract_youtube_id(str(path))
