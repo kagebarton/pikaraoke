@@ -531,6 +531,114 @@ class TestClearOutputFoldersScoped:
 
 
 # ---------------------------------------------------------------------------
+# print_report / main — --song --reset wiring
+# ---------------------------------------------------------------------------
+
+
+class TestPrintReportScope:
+    def test_selected_with_reset_says_reset(self, tmp_path, capsys):
+        regen.print_report([], tmp_path, reset=True, selected=True)
+
+        assert "Selection: selected songs (reset)" in capsys.readouterr().out
+
+    def test_selected_without_reset_does_not(self, tmp_path, capsys):
+        regen.print_report([], tmp_path, reset=False, selected=True)
+
+        out = capsys.readouterr().out
+        assert "Selection: selected songs\n" in out
+        assert "(reset)" not in out
+
+
+class TestMainSongReset:
+    """``--song <x> --reset`` backs up and wipes only the selected song's files.
+
+    The helpers' scoping is tested above; this drives ``main()`` so the wiring
+    between selection, backup and wipe is covered too. Siblings that must stay
+    untouched: a longer-stem video (``Mr.live``), an ``.mp3`` whose stem also
+    starts with ``Mr.`` (the app plays it, regen never processes it) and an
+    unrelated video.
+    """
+
+    SELECTED = "Mr"
+    UNTOUCHED = ("Mr.live", "Mr. Brightside---abcdefghijk", "Other")
+
+    def _setup_library(self, tmp_path):
+        _touch_video(tmp_path, "Mr")
+        _touch_video(tmp_path, "Mr.live")
+        _touch_video(tmp_path, "Other")
+        (tmp_path / "Mr. Brightside---abcdefghijk.mp3").touch()
+        for sub, ext in (
+            ("subtitles", ".srt"),
+            ("subtitles", ".srt.generated"),
+            ("karaoke", ".ass"),
+            ("lyrics", ".txt"),
+            ("alignment_debug", ".json"),
+        ):
+            (tmp_path / sub).mkdir(exist_ok=True)
+            for stem in (self.SELECTED, *self.UNTOUCHED):
+                content = "{}" if ext == ".json" else stem
+                (tmp_path / sub / f"{stem}{ext}").write_text(content, encoding="utf-8")
+
+    def test_only_the_selected_songs_files_are_backed_up_and_wiped(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        self._setup_library(tmp_path)
+        monkeypatch.setenv("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["regen", str(tmp_path), "--song", "Mr", "--reset", "--yes"],
+        )
+        monkeypatch.setattr(regen, "_make_genius", lambda: MagicMock())
+        mock_run = MagicMock(return_value=0)
+        monkeypatch.setattr(regen, "resolve_and_run", mock_run)
+
+        assert regen.main() == 0
+
+        # Only the selected song is handed to the run path.
+        jobs = mock_run.call_args.args[0]
+        assert [j.song_path.name for j in jobs] == ["Mr.mp4"]
+
+        # Backed up: the selected song's files, and nothing of the siblings'.
+        (backup,) = tmp_path.glob("regen_backup_*")
+        for sub, ext in (
+            ("subtitles", ".srt"),
+            ("subtitles", ".srt.generated"),
+            ("karaoke", ".ass"),
+            ("lyrics", ".txt"),
+            ("alignment_debug", ".json"),
+        ):
+            assert (backup / sub / f"Mr{ext}").exists()
+            for stem in self.UNTOUCHED:
+                assert not (backup / sub / f"{stem}{ext}").exists()
+
+        # Wiped: the selected song's regenerable outputs (never its bundle).
+        for sub, ext in (
+            ("subtitles", ".srt"),
+            ("subtitles", ".srt.generated"),
+            ("karaoke", ".ass"),
+            ("lyrics", ".txt"),
+        ):
+            assert not (tmp_path / sub / f"Mr{ext}").exists()
+        assert (tmp_path / "alignment_debug" / "Mr.json").exists()
+
+        # Untouched: every sibling's files, in every folder.
+        for sub, ext in (
+            ("subtitles", ".srt"),
+            ("subtitles", ".srt.generated"),
+            ("karaoke", ".ass"),
+            ("lyrics", ".txt"),
+            ("alignment_debug", ".json"),
+        ):
+            for stem in self.UNTOUCHED:
+                assert (tmp_path / sub / f"{stem}{ext}").exists()
+
+        out = capsys.readouterr().out
+        assert "Selection: selected songs (reset)" in out
+        assert "for the selected songs" in out
+
+
+# ---------------------------------------------------------------------------
 # execute_lrclib_backfill — LRCLIB variants for genius reuse plans (E1)
 # ---------------------------------------------------------------------------
 

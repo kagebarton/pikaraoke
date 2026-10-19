@@ -32,9 +32,12 @@ track is sent to the Genius prompt instead of aligned as lyrics.
 Before overwriting outputs, the ``subtitles/``, ``karaoke/``, ``lyrics/`` and
 ``alignment_debug/`` folders are copied once into ``<folder>/regen_backup_<UTC>/``.
 
+With ``--song``, only the selected songs run, and the backup and the ``--reset``
+wipe touch only those songs' own files.
+
 Run from the repo root::
 
-    python scripts/regen_alignment_bundles.py [folder] [--reset] [--dry-run] [--yes]
+    python scripts/regen_alignment_bundles.py [folder] [--reset] [--song PATTERN]... [--dry-run] [--yes]
 """
 
 from __future__ import annotations
@@ -75,6 +78,7 @@ from pikaraoke.lib.metadata_parser import (  # noqa: E402
     youtube_id_suffix,
 )
 from pikaraoke.lib.preference_manager import PreferenceManager  # noqa: E402
+from pikaraoke.lib.song_list import SongList  # noqa: E402
 from pikaraoke.lib.srt_cues import cue_spans_from_srt  # noqa: E402
 from pikaraoke.lib.srt_provenance import (  # noqa: E402
     clear_generated_marker,
@@ -383,7 +387,7 @@ def _caption_wpm(srt_path: Path, job: SongJob) -> float | None:
 
 def print_report(jobs: list[SongJob], folder: Path, reset: bool, selected: bool = False) -> None:
     if selected:
-        scope = "selected songs"
+        scope = "selected songs (reset)" if reset else "selected songs"
     elif reset:
         scope = "all songs (reset)"
     else:
@@ -727,8 +731,16 @@ BACKUP_DIRS = OUTPUT_DIRS + ("alignment_debug",)
 
 
 def _all_stems(folder: Path) -> set[str]:
-    """Every video's stem in ``folder``, regardless of selection or staleness."""
-    return {p.stem for p in _list_videos(folder)}
+    """Every song file's stem in ``folder``, regardless of selection or staleness.
+
+    Counts every file type the app plays (``.mp3`` and ``.zip`` too, not just
+    videos), so a song regen never processes still owns its own files.
+    """
+    return {
+        p.stem
+        for p in folder.iterdir()
+        if p.is_file() and p.suffix.lower() in SongList.VALID_EXTENSIONS
+    }
 
 
 def _owns_file(name: str, stem: str, all_stems: set[str]) -> bool:
@@ -903,8 +915,9 @@ def parse_args() -> argparse.Namespace:
         help="Rebuild every song's lyric source from scratch (ignore the "
         "recorded provenance): wipe subtitles/karaoke/lyrics after the backup, "
         "download each video's manual English caption, and prompt for a Genius "
-        "pick when none exists. Default touches only missing/stale bundles and "
-        "reuses their recorded source.",
+        "pick when none exists. With --song, the backup and the wipe touch only "
+        "the selected songs' files. Default touches only missing/stale bundles "
+        "and reuses their recorded source.",
     )
     p.add_argument(
         "--song",
@@ -996,19 +1009,22 @@ def main() -> int:
     warn_if_no_genius_token(genius)
 
     stems = [p.stem for p in selected] if selected is not None else None
+    scope_note = " for the selected songs" if stems is not None else ""
 
     # Back up before any destructive step (folder wipe, caption download, regen).
     backup = backup_text_folders(folder, stems=stems)
     if backup is not None:
-        print(f"Backed up subtitles/karaoke/lyrics/alignment_debug to: {backup}\n")
+        print(f"Backed up subtitles/karaoke/lyrics/alignment_debug{scope_note} to: {backup}\n")
     else:
-        print("No subtitles/karaoke/lyrics/alignment_debug folders to back up.\n")
+        print(f"No subtitles/karaoke/lyrics/alignment_debug folders to back up{scope_note}.\n")
 
     # Reset rebuilds every output, so wipe the folders up front — no stale
     # caption or transcript survives to be mistaken for current.
     if args.reset:
         clear_output_folders(folder, stems=stems)
-        print("Cleared subtitles/karaoke/lyrics (reset); the pipeline rebuilds them.\n")
+        print(
+            f"Cleared subtitles/karaoke/lyrics{scope_note} (reset); the pipeline rebuilds them.\n"
+        )
 
     return resolve_and_run(jobs, config, genius)
 

@@ -21,7 +21,7 @@ already exist on disk the cached vocal m4a is decoded back to WAV
 
 Run from the repo root::
 
-    python scripts/backfill_artifacts.py [--folder PATH] [--dry-run] [--yes]
+    python scripts/backfill_artifacts.py [folder] [--song PATTERN]... [--dry-run] [--yes]
 """
 
 from __future__ import annotations
