@@ -121,13 +121,21 @@ class PipelineOrchestrator:
     # Asynchronous execution + cancellation
     # ------------------------------------------------------------------
 
-    def run_one_async(self, song_path: Path, lyrics_path: Optional[Path] = None) -> CancelToken:
+    def run_one_async(
+        self,
+        song_path: Path,
+        lyrics_path: Optional[Path] = None,
+        stages: Optional[Sequence[PipelineStage]] = None,
+    ) -> CancelToken:
         """Start the pipeline on a background thread; return its CancelToken.
 
         Each call creates a FRESH CancelToken and a FRESH threading.Event —
         never reused across jobs.  The driver uses the returned token to
         observe phase and call cancel_active().  Workers must already be
         started.
+
+        ``stages`` replaces the orchestrator's own stage list for this one
+        job (a regeneration builds its stages around the lyrics already chosen).
         """
         self._validate_inputs(song_path, lyrics_path)
 
@@ -140,7 +148,7 @@ class PipelineOrchestrator:
 
         def _thread_target():
             try:
-                ctx = self._run_pipeline(song_path, lyrics_path, self._cancel_token)
+                ctx = self._run_pipeline(song_path, lyrics_path, self._cancel_token, stages)
                 self._result["ctx"] = ctx
             except Exception as exc:
                 self._result["exception"] = exc
@@ -201,6 +209,7 @@ class PipelineOrchestrator:
         song_path: Path,
         lyrics_path: Optional[Path],
         cancel_token: CancelToken,
+        stages: Optional[Sequence[PipelineStage]] = None,
     ) -> StageContext:
         tmp_parent = self._config.intermediate_dir or None
         tmp_dir = Path(tempfile.mkdtemp(prefix="pipeline_", dir=tmp_parent))
@@ -215,7 +224,7 @@ class PipelineOrchestrator:
         ctx.artifacts["lyrics_path"] = lyrics_path
 
         try:
-            for stage in self._stages:
+            for stage in stages if stages is not None else self._stages:
                 cancel_token.check_cancelled()  # cancel between stages
                 logger.info(f"[pipeline] ▶ {stage.name}")
                 stage.run(ctx)
