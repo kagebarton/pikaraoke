@@ -1,0 +1,671 @@
+"""Library regen core: plans, caption gate, backup/wipe and per-song pipeline prep.
+
+Shared by the CLI (``scripts/regen_alignment_bundles.py``) and the web UI, so a
+song is planned, backed up and prepared the same way from either.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import shutil
+from collections.abc import Callable, Collection
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
+
+import srt
+
+from pikaraoke.lib import lrclib
+from pikaraoke.lib.alignment_capture import SCHEMA_VERSION
+from pikaraoke.lib.ffmpeg import probe_duration
+from pikaraoke.lib.genius import GeniusClient, GeniusUnavailable, write_choice
+from pikaraoke.lib.genius_lyrics import parse_lyric_lines
+from pikaraoke.lib.metadata_parser import (
+    clean_search_query,
+    extract_youtube_id,
+    youtube_id_suffix,
+)
+from pikaraoke.lib.song_list import SongList
+from pikaraoke.lib.srt_cues import cue_spans_from_srt
+from pikaraoke.lib.srt_provenance import clear_generated_marker, is_generated
+from pikaraoke.lib.youtube_dl import ASR_JSON3_SUFFIX, download_manual_en_subs
+from pikaraoke.pipeline.config import PipelineConfig
+from pikaraoke.pipeline.context import StageContext
+from pikaraoke.pipeline.stages.base import BaseStage
+from pikaraoke.pipeline.stages.ffmpeg_extract import FFmpegExtractStage
+from pikaraoke.pipeline.stages.ffmpeg_transcode import FFmpegTranscodeStage
+from pikaraoke.pipeline.stages.load_vocal import LoadVocalFromM4aStage
+from pikaraoke.pipeline.stages.loudnorm_analyze import LoudnormAnalyzeStage
+from pikaraoke.pipeline.stages.lyric_align import LyricAlignStage
+from pikaraoke.pipeline.stages.lyrics_fetch import LyricsFetchStage
+from pikaraoke.pipeline.stages.stem_separation import StemSeparationStage
+
+logger = logging.getLogger(__name__)
+
+VIDEO_EXTS = {".mp4", ".mkv", ".avi", ".webm", ".mov"}
+
+# A fetched caption whose cleaned words-per-minute of song falls below this is
+# treated as not-really-lyrics (e.g. a dialog-only track) and sent to the
+# Genius prompt instead. Applies only to captions pulled fresh from yt-dlp; a
+# caption already trusted by an srt-origin bundle is reused as-is.
+MIN_CAPTION_WPM = 15.0
+
+
+# ---------------------------------------------------------------------------
+# Seed stage
+# ---------------------------------------------------------------------------
+
+
+class SeedArtifactsStage(BaseStage):
+    """Pre-populate ``ctx.artifacts`` for a bundle replay.
+
+    The orchestrator seeds only ``lyrics_path``; the reused lyric origin,
+    the YTASR reference and the source duration come from the previous
+    bundle and are injected here so ``LyricAlignStage`` reproduces the
+    prior run without re-driving ``LyricsFetchStage``.
+    """
+
+    name = "seed_artifacts"
+
+    def __init__(self, seed: dict) -> None:
+        self._seed = seed
+
+    def run(self, ctx: StageContext) -> None:
+        ctx.artifacts.update(self._seed)
+
+
+# ---------------------------------------------------------------------------
+# Plans
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class Plan:
+    """How to drive one song's pipeline.
+
+    ``kind``:
+      * ``seed``       -> reuse from the bundle: feed ``lyrics_path`` (a
+        local .srt) or ``lyrics_lines`` (written to a temp .txt) and inject
+        ``seed`` via :class:`SeedArtifactsStage`.
+      * ``sidecar``    -> a fresh Genius selection: write the choice sidecar
+        and run :class:`LyricsFetchStage` (re-fetches lyrics + resolves YTASR).
+      * ``fetch``      -> placeholder for a song whose video caption may be
+        downloadable: the run phase tries yt-dlp and, on success + length gate,
+        becomes a seed-srt plan, else reverts to :attr:`fallback`.
+      * ``transcribe`` -> no lyrics; transcription mode (writes no bundle).
+      * ``skip``       -> drop the song.
+      * ``prompt``     -> placeholder until the interactive pass resolves it.
+    """
+
+    kind: str
+    lyrics_path: Path | None = None
+    lyrics_lines: list[str] | None = None
+    seed: dict = field(default_factory=dict)
+    genius_id: int | None = None
+    label: str = ""
+    fallback: "Plan | None" = None
+
+
+@dataclass
+class SongJob:
+    song_path: Path
+    bundle: dict | None
+    stale_reason: str
+    plan: Plan | None = None
+
+
+# ---------------------------------------------------------------------------
+# Scan + select
+# ---------------------------------------------------------------------------
+
+
+def read_bundle(folder: Path, stem: str) -> dict | None:
+    path = folder / "alignment_debug" / f"{stem}.json"
+    if not path.is_file():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        logger.warning("Ignoring unreadable bundle %s: %s", path, e)
+        return None
+
+
+def list_videos(folder: Path) -> list[Path]:
+    """Every video file directly in ``folder``, sorted."""
+    return sorted(p for p in folder.iterdir() if p.is_file() and p.suffix.lower() in VIDEO_EXTS)
+
+
+def scan_folder(folder: Path, include_all: bool, songs: list[Path] | None = None) -> list[SongJob]:
+    """Return jobs for the videos in scope.
+
+    Default: bundle missing or ``schema_version < SCHEMA_VERSION``.
+    ``include_all``: every video, regardless of bundle state.
+    ``songs``: only these videos (from :func:`select_songs`), regardless of
+    bundle state or ``include_all`` -- each job gets ``stale_reason="selected"``.
+    """
+    if songs is not None:
+        return [
+            SongJob(song_path=p, bundle=read_bundle(folder, p.stem), stale_reason="selected")
+            for p in songs
+        ]
+    jobs: list[SongJob] = []
+    for path in list_videos(folder):
+        bundle = read_bundle(folder, path.stem)
+        if include_all:
+            reason = "all"
+        elif bundle is None:
+            reason = "missing"
+        elif bundle.get("schema_version", 0) < SCHEMA_VERSION:
+            reason = f"v{bundle.get('schema_version', 0)}"
+        else:
+            continue  # current bundle — nothing to do
+        jobs.append(SongJob(song_path=path, bundle=bundle, stale_reason=reason))
+    return jobs
+
+
+# ---------------------------------------------------------------------------
+# Resolve a lyric plan (no prompting, no network)
+# ---------------------------------------------------------------------------
+
+
+def find_local_srt(song: Path) -> Path | None:
+    """Return ``subtitles/<stem>.en.srt`` then ``<stem>.srt``, or None."""
+    subs = song.parent / "subtitles"
+    for name in (f"{song.stem}.en.srt", f"{song.stem}.srt"):
+        candidate = subs / name
+        if candidate.is_file() and not is_generated(candidate):
+            return candidate
+    return None
+
+
+def resolve_plan(job: SongJob, *, reset: bool) -> Plan:
+    """Plan one song's lyric source (pure, no I/O writes, no network).
+
+    In the default mode this trusts the previous bundle: a song with recorded
+    provenance is reused (see :func:`reuse_plan`), and only a song without a
+    reusable source falls through to download-or-prompt. ``reset`` discards the
+    recorded provenance entirely and re-resolves every song from scratch.
+
+    The download-or-prompt fallback is deferred to the run phase: a song with a
+    YouTube id becomes a ``fetch`` placeholder (resolved by :func:`fetch_caption`),
+    otherwise a Genius ``prompt``.
+    """
+    if not reset:
+        reuse = reuse_plan(job)
+        if reuse is not None:
+            return reuse
+    return _fetch_or_prompt_plan(job.song_path)
+
+
+def reuse_plan(job: SongJob) -> Plan | None:
+    """Reuse plan from the previous bundle, or None when nothing is reusable.
+
+    A song is reused only when its provenance is recorded — the regenerated
+    schema needs that metadata anyway, so reusing bare lines with unknown
+    provenance is pointless:
+
+      * ``origin == "srt"`` + an on-disk caption -> reuse it.
+      * recorded Genius identity (``lyrics.genius``) + lines -> reuse the
+        bundled lyrics, replaying the YTASR 3rd source when the persisted
+        ``.asr.json3`` is on disk.
+
+    The on-disk SRT is never trusted for a non-srt origin:
+    ``ground_truth_refs.youtube_srt_present`` is unreliable — the pipeline
+    writes its own generated SRT to ``subtitles/<stem>.srt`` and a
+    genius/transcribe run with no real caption flags the field off its own
+    output.
+    """
+    bundle = job.bundle
+    song = job.song_path
+    if bundle is None:
+        return None
+
+    lyrics = bundle.get("lyrics") or {}
+    origin = lyrics.get("origin")
+
+    if origin == "srt":
+        srt = find_local_srt(song)
+        if srt is not None:
+            return Plan(
+                kind="seed",
+                lyrics_path=srt,
+                seed={"lyrics_origin": "srt"},
+                label="reuse srt (from video)",
+            )
+        return None
+
+    # Non-srt origin: reuse only when the identity metadata the schema needs
+    # is present (Genius id/title/artist).
+    genius = lyrics.get("genius")
+    lines = lyrics.get("lines") or lyrics.get("align_lines") or []
+    if not (genius and lines):
+        return None
+
+    seed: dict = {"lyrics_origin": "genius", "genius": genius}
+    media = bundle.get("media_duration_s")
+    if media is not None:
+        seed["media_duration_s"] = media
+    label = "reuse genius"
+    ytasr = lyrics.get("ytasr")
+    if ytasr:
+        asr_rel = ytasr.get("asr_file")
+        if asr_rel and (song.parent / asr_rel).is_file():
+            seed["ytasr"] = ytasr
+            label = "reuse genius+ytasr"
+        else:
+            label = "reuse genius (ytasr json3 missing; two-source)"
+    return Plan(kind="seed", lyrics_lines=list(lines), seed=seed, label=label)
+
+
+def _fetch_or_prompt_plan(song: Path) -> Plan:
+    """Download-the-video-caption-or-Genius-prompt plan for a song.
+
+    A song with a YouTube id becomes a ``fetch`` placeholder whose
+    :attr:`Plan.fallback` is the Genius prompt; one without an id goes straight
+    to the prompt.
+    """
+    if extract_youtube_id(str(song)):
+        return Plan(
+            kind="fetch",
+            fallback=Plan(kind="prompt", label="genius"),
+            label="check youtube caption -> srt or genius",
+        )
+    return Plan(kind="prompt", label="genius (no youtube id)")
+
+
+def default_query(song: Path) -> str:
+    """Strip the YouTube ID suffix and tidy the title for a search query."""
+    suffix = youtube_id_suffix(str(song))
+    title = song.stem[: -len(suffix)] if suffix else song.stem
+    cleaned = clean_search_query(title)
+    return cleaned or title
+
+
+# ---------------------------------------------------------------------------
+# Caption length gate
+# ---------------------------------------------------------------------------
+
+
+def _srt_word_count(srt_path: Path) -> int | None:
+    """Cleaned-cue word count for an SRT, or None if it can't be parsed.
+
+    Counts the same cleaned cue text the matcher consumes, so a dialog-only
+    caption (few sung words) scores low.
+    """
+    try:
+        raw = srt_path.read_text(encoding="utf-8")
+        texts, _ = cue_spans_from_srt(raw)
+    except (OSError, srt.SRTParseError) as e:
+        logger.warning("Cannot read SRT %s: %s", srt_path, e)
+        return None
+    return sum(len(t.split()) for t in texts)
+
+
+def media_duration(job: SongJob) -> float | None:
+    """Song duration in seconds: the bundle value, else an ffprobe fallback."""
+    recorded = (job.bundle or {}).get("media_duration_s")
+    if isinstance(recorded, (int, float)) and recorded > 0:
+        return float(recorded)
+    return probe_duration(job.song_path)
+
+
+def caption_wpm(srt_path: Path, job: SongJob) -> float | None:
+    """Words per minute of song for ``srt_path``, or None if not measurable."""
+    words = _srt_word_count(srt_path)
+    if words is None:
+        return None
+    duration = media_duration(job)
+    if not duration:
+        logger.warning("No duration for %s; skipping length check", job.song_path.name)
+        return None
+    return words / (duration / 60.0)
+
+
+# ---------------------------------------------------------------------------
+# Download a video's manual English caption (real run only)
+# ---------------------------------------------------------------------------
+
+
+def adopt_caption(job: SongJob, srt_path: Path) -> None:
+    """Gate an on-disk caption and set the job's plan from it.
+
+    Applies the words-per-minute gate (``MIN_CAPTION_WPM``): too sparse to be
+    lyrics discards ``srt_path`` and reverts the job to its fallback (a Genius
+    prompt). Dense enough promotes it to the playback-matched
+    ``subtitles/<stem>.srt`` -- the same normalization
+    ``download_manager._move_downloaded_subtitle`` applies in the live app,
+    skipped when ``srt_path`` already is that file -- and sets a seed-srt plan.
+    """
+    song = job.song_path
+    fallback = job.plan.fallback or Plan(kind="prompt", label="fetch failed -> genius")
+    wpm = caption_wpm(srt_path, job)
+    if wpm is not None and wpm < MIN_CAPTION_WPM:
+        logger.info("Fetched caption for %s too sparse (%.0f wpm); discarding", song.name, wpm)
+        srt_path.unlink(missing_ok=True)
+        job.plan = fallback
+        return
+    # Playback (_find_subtitles) and the pipeline's _should_write_srt both key
+    # on subtitles/<stem>.srt.
+    playback_srt = srt_path.with_name(f"{song.stem}.srt")
+    if srt_path != playback_srt:
+        os.replace(srt_path, playback_srt)
+    clear_generated_marker(playback_srt)
+    job.plan = Plan(
+        kind="seed",
+        lyrics_path=playback_srt,
+        seed={"lyrics_origin": "srt"},
+        label="fetched srt (from video)",
+    )
+
+
+def fetch_caption(job: SongJob) -> None:
+    """Resolve a ``fetch`` job by downloading the video's manual English caption.
+
+    Downloads into ``subtitles/<stem>.en.srt`` (one network call) and hands it
+    to :func:`adopt_caption` for the length gate and promotion; with no
+    downloadable caption the job reverts to its plan's fallback. Runs on a real
+    pass only, after the backup, so a discarded download never clobbers a
+    backed-up caption.
+    """
+    song = job.song_path
+    yt_id = extract_youtube_id(str(song))
+    url = f"https://www.youtube.com/watch?v={yt_id}"
+    result = download_manual_en_subs(url, str(song.parent / "subtitles"), song.stem)
+    if result is None:
+        logger.info("No downloadable caption for %s; will prompt", song.name)
+        job.plan = job.plan.fallback or Plan(kind="prompt", label="fetch failed -> genius")
+        return
+    adopt_caption(job, Path(result))
+
+
+# ---------------------------------------------------------------------------
+# LRCLIB variants for genius reuse plans (E1 gated fill)
+# ---------------------------------------------------------------------------
+
+
+def backfill_lrc(job: SongJob, config: PipelineConfig) -> None:
+    """Resolve ``lyrics/<stem>.lrc`` for one genius reuse plan; never raises.
+
+    Reuse plans (``kind == "seed"``, ``lyrics_origin == "genius"``) replay
+    via :class:`SeedArtifactsStage` and bypass ``LyricsFetchStage``
+    entirely, so without this leg an existing song never gains a ``.lrc``.
+    Sidecar plans (a fresh Genius selection) get the resolve when they
+    run — from ``LyricsFetchStage`` itself, or from :func:`prepare_lyrics`
+    for a song with no YouTube id (which bypasses the stage) — one call
+    site per plan kind; ``ensure_lrc``'s on-disk check would make a
+    duplicate call harmless, but there is no need to make one.
+
+    A failure is logged and swallowed: a missing variant must not stop the
+    song or the batch it belongs to.
+    """
+    if not config.lrclib_fill:
+        return
+    try:
+        genius = job.plan.seed["genius"]
+        lrclib.ensure_lrc(
+            job.song_path,
+            genius["title"],
+            genius["artist"],
+            job.plan.lyrics_lines,
+            media_duration(job),
+        )
+    except Exception:
+        logger.exception("LRCLIB backfill failed for %s; continuing", job.song_path.name)
+
+
+# ---------------------------------------------------------------------------
+# Per-song pipeline prep
+# ---------------------------------------------------------------------------
+
+
+def _stems_present(song: Path) -> bool:
+    vocal = song.parent / "vocal" / f"{song.stem}---vocal.m4a"
+    nonvocal = song.parent / "nonvocal" / f"{song.stem}---nonvocal.m4a"
+    return vocal.is_file() and nonvocal.is_file()
+
+
+def _dereverb_cache(song: Path) -> Path:
+    return song.parent / "dereverb" / f"{song.stem}---dereverb.m4a"
+
+
+def build_stages(song: Path, lyric_stage, whisper, config: PipelineConfig, stem_worker):
+    """Stem reuse/generation + the optional lyric stage + lyric-align.
+
+    ``LyricAlignStage`` gets the stem worker so its de-reverb retry (and the
+    de-reverb cache) is live — backfill omits it.
+    """
+    stages: list = []
+    if _stems_present(song):
+        stages.append(LoadVocalFromM4aStage())
+    else:
+        # Fresh stems: drop any stale de-reverb cache derived from an old vocal.
+        _dereverb_cache(song).unlink(missing_ok=True)
+        stages.append(FFmpegExtractStage(config))
+        stages.append(LoudnormAnalyzeStage(config))
+        stages.append(StemSeparationStage(stem_worker))
+        stages.append(FFmpegTranscodeStage(config))
+    if lyric_stage is not None:
+        stages.append(lyric_stage)
+    stages.append(LyricAlignStage(whisper, config, stem_worker))
+    return stages
+
+
+def prepare_lyrics(job: SongJob, genius: GeniusClient, lyrics_dir: Path, config: PipelineConfig):
+    """Resolve a job's plan to ``(lyrics_path, lyric_stage)`` for the run.
+
+    Writes the temp .txt for reused Genius lyrics and the choice sidecar for
+    a fresh Genius selection. A Genius pick on a song without a YouTube id
+    can't use the sidecar, so it degrades to explicit lyrics with no YTASR
+    3rd source (logged).
+    """
+    plan = job.plan
+    song = job.song_path
+
+    if plan.kind == "seed":
+        if plan.lyrics_lines is not None:
+            lyrics_path = lyrics_dir / f"{song.stem}.txt"
+            # Blank-line separated: these lines are already parsed, and a
+            # blank line stops the pipeline's wrap-join from reading one
+            # stored line into the next (see `_join_wrapped_lines`).
+            lyrics_path.write_text("\n\n".join(plan.lyrics_lines), encoding="utf-8")
+        else:
+            lyrics_path = plan.lyrics_path
+        return lyrics_path, SeedArtifactsStage(plan.seed)
+
+    if plan.kind == "sidecar":
+        yt_id = extract_youtube_id(str(song))
+        if yt_id:
+            write_choice(yt_id, {"genius_id": plan.genius_id})
+            return None, LyricsFetchStage(genius, config)
+        # No YouTube id — sidecar can't be keyed. Fetch the text directly.
+        try:
+            gsong = genius.fetch_song(plan.genius_id)
+        except GeniusUnavailable as e:
+            logger.warning("Genius fetch failed (%s); transcribing instead", e)
+            return None, None
+        lyrics_path = lyrics_dir / f"{song.stem}.txt"
+        lyrics_path.write_text(gsong.text, encoding="utf-8")
+        logger.warning("No YouTube id for %s; YTASR 3rd source unavailable", song.name)
+        if config.lrclib_fill:
+            # This path bypasses LyricsFetchStage (and its LRCLIB leg), so
+            # resolve the variant here, where the Genius identity first exists.
+            try:
+                sheet_lines = [item["text"] for item in parse_lyric_lines(gsong.text)]
+                lrclib.ensure_lrc(song, gsong.title, gsong.artist, sheet_lines, media_duration(job))
+            except Exception:
+                logger.exception("LRCLIB resolve failed for %s; continuing", song.name)
+        seed = {
+            "lyrics_origin": "genius",
+            "genius": {"id": plan.genius_id, "title": gsong.title, "artist": gsong.artist},
+        }
+        return lyrics_path, SeedArtifactsStage(seed)
+
+    # transcribe: no lyrics, no lyric stage.
+    return None, None
+
+
+# ---------------------------------------------------------------------------
+# Backup
+# ---------------------------------------------------------------------------
+
+
+# The regenerable per-song output folders: wiped up front in reset mode (the
+# pipeline rebuilds them, so nothing stale lingers).
+OUTPUT_DIRS = ("subtitles", "karaoke", "lyrics")
+
+# Folders backed up before any run. Includes alignment_debug (the bundles the
+# regen overwrites) in addition to OUTPUT_DIRS, but alignment_debug is never
+# cleared in reset mode: a failed regen should leave the prior bundle in place
+# rather than lose it outright.
+BACKUP_DIRS = OUTPUT_DIRS + ("alignment_debug",)
+
+
+def _all_stems(folder: Path) -> set[str]:
+    """Every song file's stem in ``folder``, regardless of selection or staleness.
+
+    Counts every file type the app plays (``.mp3`` and ``.zip`` too, not just
+    videos), so a song regen never processes still owns its own files.
+    """
+    return {
+        p.stem
+        for p in folder.iterdir()
+        if p.is_file() and p.suffix.lower() in SongList.VALID_EXTENSIONS
+    }
+
+
+def _claims(stem: str, name: str) -> bool:
+    """Whether ``stem`` claims the folder entry ``name``.
+
+    ``name`` equals the stem or starts with ``stem + "."`` (catching
+    ``<stem>.srt.generated``).
+    """
+    return name == stem or name.startswith(stem + ".")
+
+
+def _owner(name: str, all_stems: set[str]) -> str | None:
+    """The song stem a folder entry named ``name`` belongs to, or None.
+
+    The longest claiming stem owns it, so ``Song.live`` owns ``Song.live.srt``
+    and ``Song`` never claims a file that belongs to ``Song.live``.
+    """
+    claimants = [s for s in all_stems if _claims(s, name)]
+    return max(claimants, key=len, default=None)
+
+
+def _owned_by_any(name: str, stems: Collection[str], all_stems: set[str]) -> bool:
+    """Whether ``name`` belongs to one of ``stems``.
+
+    The same answer as ``_owner(name, all_stems) in stems``, since the owner
+    always claims ``name``, but a name no selected stem claims is rejected
+    without scanning every stem in the library.
+    """
+    return any(_claims(s, name) for s in stems) and _owner(name, all_stems) in stems
+
+
+def backup_text_folders(folder: Path, stems: list[str] | None = None) -> Path | None:
+    """Snapshot the regenerable output folders into ``regen_backup_<UTC>/``.
+
+    ``stems``: copy only those songs' own files (see :func:`_owner`) from
+    each folder instead of the whole folder.
+
+    Returns the backup root, or None when nothing was copied.
+    """
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    backup_root = folder / f"regen_backup_{ts}"
+    copied: list[str] = []
+
+    if stems is None:
+        for sub in BACKUP_DIRS:
+            src = folder / sub
+            if src.is_dir():
+                shutil.copytree(src, backup_root / sub)
+                copied.append(sub)
+        return backup_root if copied else None
+
+    all_stems = _all_stems(folder)
+    for sub in BACKUP_DIRS:
+        src = folder / sub
+        if not src.is_dir():
+            continue
+        entries = [e for e in src.iterdir() if _owned_by_any(e.name, stems, all_stems)]
+        if not entries:
+            continue
+        dest = backup_root / sub
+        dest.mkdir(parents=True, exist_ok=True)
+        for e in entries:
+            if e.is_dir():
+                shutil.copytree(e, dest / e.name)
+            else:
+                shutil.copy2(e, dest / e.name)
+        copied.append(sub)
+    return backup_root if copied else None
+
+
+# Non-regenerable inputs a reset keeps inside the folders it otherwise wipes --
+# fetched once and reused, not outputs the pipeline rebuilds:
+#
+# - ``subtitles/<stem>.en.asr.json3`` YouTube-ASR captions (fetched by the
+#   download manager on first add). Wiping them would silently drop the joint
+#   matcher's third source from every genius song on the next run.
+# - ``lyrics/<stem>.lrc`` LRCLIB variants (fetched by :func:`backfill_lrc` /
+#   ``LyricsFetchStage``, per E1's gated fill). Wiping them would force a
+#   re-fetch of every genius song's variant on the next run for no benefit --
+#   ``ensure_lrc`` already reuses an on-disk file unconditionally.
+KEEP_ON_RESET = {"subtitles": ASR_JSON3_SUFFIX, "lyrics": ".lrc"}
+
+
+def clear_output_folders(folder: Path, stems: list[str] | None = None) -> None:
+    """Delete the regenerable output folders (reset mode, after the backup).
+
+    The pipeline rebuilds subtitles/karaoke/lyrics for every song reset
+    reprocesses, so wiping them first guarantees no stale file (e.g. an old
+    generated SRT) survives. Stems and bundles live elsewhere and are untouched.
+    :data:`KEEP_ON_RESET` names what survives inside ``subtitles/`` and
+    ``lyrics/``. A file it can't remove raises ``OSError``.
+
+    ``stems``: scope the wipe to those songs' own files (see :func:`_owner`)
+    instead of clearing whole folders -- the folders themselves are never
+    removed and every other song's files are untouched.
+    """
+    all_stems = _all_stems(folder) if stems is not None else set()
+
+    def selected(name: str) -> bool:
+        return stems is None or _owned_by_any(name, stems, all_stems)
+
+    for sub in OUTPUT_DIRS:
+        keep_suffix = KEEP_ON_RESET.get(sub)
+        if stems is None and keep_suffix is None:
+            _remove(folder / sub)
+        else:
+            _clear_dir(folder / sub, keep_suffix, selected)
+
+
+def _clear_dir(dir_path: Path, keep_suffix: str | None, selected: Callable[[str], bool]) -> None:
+    """Remove the ``selected`` entries of ``dir_path`` (never the folder itself).
+
+    Files ending in ``keep_suffix`` are kept.
+    """
+    if not dir_path.is_dir():
+        return
+    for entry in list(dir_path.iterdir()):
+        if keep_suffix and entry.is_file() and entry.name.endswith(keep_suffix):
+            continue
+        if selected(entry.name):
+            _remove(entry)
+
+
+def _remove(path: Path) -> None:
+    """Delete a file or a directory tree.
+
+    A file that can't be removed raises, so a reset never goes on past a stale
+    caption. A tree that can't be fully removed is warned about.
+    """
+    if not path.is_dir():
+        path.unlink(missing_ok=True)
+        return
+    try:
+        shutil.rmtree(path)
+    except OSError as e:
+        logger.warning("Could not fully remove %s: %s", path, e)

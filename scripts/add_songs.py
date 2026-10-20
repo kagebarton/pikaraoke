@@ -23,12 +23,10 @@ from __future__ import annotations
 import argparse
 import logging
 import os
-import re
 import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
 
 # Allow running as ``python scripts/add_songs.py`` from repo root.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -41,18 +39,27 @@ from pikaraoke.lib.get_platform import (  # noqa: E402
     get_temp_directory,
 )
 from pikaraoke.lib.karaoke_database import KaraokeDatabase  # noqa: E402
-from pikaraoke.lib.metadata_parser import extract_youtube_id  # noqa: E402
+from pikaraoke.lib.library_links import (  # noqa: E402
+    classify_url,
+    expand_playlist,
+    file_status,
+    library_files,
+)
+from pikaraoke.lib.library_regen import (  # noqa: E402
+    SongJob,
+    adopt_caption,
+    find_local_srt,
+    resolve_plan,
+)
 from pikaraoke.lib.preference_manager import PreferenceManager  # noqa: E402
-from pikaraoke.lib.song_list import SongList  # noqa: E402
 from pikaraoke.lib.song_manager import SongManager  # noqa: E402
-from pikaraoke.lib.youtube_dl import _impersonate_args, yt_dlp_cmd  # noqa: E402
 from scripts import regen_alignment_bundles as rab  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Classify + expand + dedupe
+# Dedupe
 # ---------------------------------------------------------------------------
 
 
@@ -61,91 +68,6 @@ class UrlEntry:
     id: str
     source: str
     status: str  # "new" | "already in library" | "in library, not processed"
-
-
-_YOUTUBE_ID_RE = re.compile(r"[A-Za-z0-9_-]{11}")
-
-
-def classify_url(url: str) -> tuple[str, str] | None:
-    """Classify ``url`` as ``("video", id)`` or ``("playlist", url)``.
-
-    Checks the host first (``youtu.be``, or ``youtube.com`` / any of its
-    subdomains, case insensitive) -- any other host is unrecognised. A
-    ``youtu.be`` link's id is its first path segment; any other host's is its
-    ``v`` query parameter. An id matching the YouTube id shape is a video,
-    even when the link also carries ``list=`` (a search result or a Mix
-    attaches one to a plain video link; the playlist page link,
-    ``playlist?list=``, is what gets the whole list). Otherwise a ``list``
-    query parameter makes it a playlist, passed through unchanged. Returns
-    ``None`` for anything else (including shorts and embed links -- nobody
-    asked for those).
-    """
-    parsed = urlparse(url if "://" in url else f"https://{url}")
-    host = (parsed.hostname or "").lower()
-    if host != "youtu.be" and host != "youtube.com" and not host.endswith(".youtube.com"):
-        return None
-
-    query = parse_qs(parsed.query)
-    if host == "youtu.be":
-        video_id = parsed.path.lstrip("/").split("/", 1)[0]
-    else:
-        video_id = query.get("v", [None])[0]
-    if video_id and _YOUTUBE_ID_RE.fullmatch(video_id):
-        return ("video", video_id)
-    if "list" in query:
-        return ("playlist", url)
-    return None
-
-
-def expand_playlist(url: str) -> list[str]:
-    """Return every video id in a YouTube playlist, via yt-dlp --flat-playlist.
-
-    Modelled on ``youtube_dl.get_search_results``. May raise
-    ``subprocess.CalledProcessError`` or ``subprocess.TimeoutExpired``.
-    """
-    cmd = yt_dlp_cmd + ["--flat-playlist", "--print", "id"] + _impersonate_args() + [url]
-    output = subprocess.check_output(cmd, timeout=300).decode("utf-8", "ignore")
-    return [line.strip() for line in output.splitlines() if line.strip()]
-
-
-def library_files(folder: Path) -> dict[str, Path]:
-    """Map each YouTube id in ``folder`` to its song file.
-
-    Counts every file type the app recognises (an ``.mp3`` or ``.zip`` with an
-    id is in the library too). When a video and another file share an id, the
-    video wins -- it is the one regen can process.
-    """
-    files = sorted(
-        (
-            p
-            for p in folder.iterdir()
-            if p.is_file() and p.suffix.lower() in SongList.VALID_EXTENSIONS
-        ),
-        key=lambda p: (p.suffix.lower() in rab.VIDEO_EXTS, p),  # videos last, so they win
-    )
-    library: dict[str, Path] = {}
-    for path in files:
-        video_id = extract_youtube_id(str(path))
-        if video_id:
-            library[video_id] = path
-    return library
-
-
-def _library_status(path: Path) -> str:
-    """Status for an id that already has a file in the library.
-
-    A video with neither an alignment bundle nor a karaoke file is a song an
-    earlier run downloaded but never processed. The pipeline writes a bundle
-    only when the song had lyrics, so a transcribed song has the karaoke file
-    alone and counts as processed too. Anything else is done, or isn't a video.
-    """
-    outputs = (
-        path.parent / "alignment_debug" / f"{path.stem}.json",
-        path.parent / "karaoke" / f"{path.stem}.ass",
-    )
-    if path.suffix.lower() in rab.VIDEO_EXTS and not any(p.is_file() for p in outputs):
-        return "in library, not processed"
-    return "already in library"
 
 
 def resolve_urls(urls: list[str], library: dict[str, Path]) -> tuple[list[UrlEntry], int]:
@@ -184,7 +106,7 @@ def resolve_urls(urls: list[str], library: dict[str, Path]) -> tuple[list[UrlEnt
             if vid in seen:
                 continue
             seen.add(vid)
-            status = _library_status(library[vid]) if vid in library else "new"
+            status = file_status(library[vid]) if vid in library else "new"
             entries.append(UrlEntry(id=vid, source=url, status=status))
     return entries, unreadable
 
@@ -214,15 +136,15 @@ def handoff(song_paths: list[str]) -> int:
     Every job starts with ``bundle=None`` (a fresh download, or a video a
     stopped run left unprocessed, has no prior bundle to reuse), which gives
     it a ``fetch`` plan -- it always has a YouTube id. A caption the download
-    already saved is gated in place (:func:`rab.adopt_caption`) instead of
+    already saved is gated in place (:func:`adopt_caption`) instead of
     being fetched again. Returns regen's own exit code.
     """
-    jobs = [rab.SongJob(Path(p), None, "new") for p in song_paths]
+    jobs = [SongJob(Path(p), None, "new") for p in song_paths]
     for job in jobs:
-        job.plan = rab.resolve_plan(job, reset=False)
-        caption = rab._find_local_srt(job.song_path)
+        job.plan = resolve_plan(job, reset=False)
+        caption = find_local_srt(job.song_path)
         if caption is not None:
-            rab.adopt_caption(job, caption)
+            adopt_caption(job, caption)
     return rab.resolve_and_run(jobs)
 
 
