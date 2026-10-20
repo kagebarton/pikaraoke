@@ -75,6 +75,11 @@ NEXT_LINE_GAP_S = 0.1
 # floor can catch it; such lines are an upstream misplacement problem.
 MIN_REF_DB = -45.0
 
+# Intra-line gaps at least this long end a voiced run. The word before
+# such a gap is clipped the same way a line-final word is, and a pause is
+# the one place inside a line where the envelope can see a release.
+RUN_GAP_S = 0.5
+
 # Single-word lines have no words 2..n to reference. A high percentile of
 # the word's own claimed span works instead: smeared gap frames are LOW
 # outliers, so with >= ~20% of the span genuinely sung the percentile lands
@@ -343,21 +348,36 @@ def snap_line_onsets(
     return out, stats
 
 
+def _run_last_indices(words: list[dict]) -> list[int]:
+    """Indices of the words that end a voiced run.
+
+    Every word followed by a gap of at least :data:`RUN_GAP_S`, plus the
+    line's last word. Whisper clips a held word before an intra-line pause
+    for the same reason it clips a line-final one, and the pause is where
+    the envelope can see the release, so both get the same repair. A line
+    with no such gap yields just its last word.
+    """
+    return [
+        k for k in range(len(words) - 1) if words[k + 1]["start"] - words[k]["end"] >= RUN_GAP_S
+    ] + [len(words) - 1]
+
+
 def snap_line_ends(
     line_objects: list[dict], vocal_path: str | Path, env: np.ndarray | None = None
 ) -> tuple[list[dict], dict]:
-    """Extend each line's clipped last word to the vocal release.
+    """Extend each clipped run-final word to the vocal release.
 
-    Mirror of :func:`snap_line_onsets` for line ends: whisper truncates a
-    held line-final word because nothing anchors its end once the phonetic
-    content stops, so the karaoke fill finishes while the note still
-    sounds. For each line whose last word is still near the line's sung
-    level at its claimed end (evidence of clipping), the end is pushed
-    forward to the first sustained fall below that level. Gated this way
-    the detector never models a hold duration — it traces the voiced run
-    the word is already inside until the run ends. Extensions are
-    forward-only and bounded by the next line's first word, so a
-    correctly ended line is never made worse.
+    Mirror of :func:`snap_line_onsets` for ends: whisper truncates a held
+    word because nothing anchors its end once the phonetic content stops,
+    so the karaoke fill finishes while the note still sounds. For each
+    word that ends a voiced run (see :func:`_run_last_indices`) and is
+    still near the line's sung level at its claimed end (evidence of
+    clipping), the end is pushed forward to the first sustained fall below
+    that level. Gated this way the detector never models a hold duration —
+    it traces the voiced run the word is already inside until the run
+    ends. Extensions are forward-only and bounded by the next run's first
+    word, or by the next line's, so a correctly ended word is never made
+    worse.
 
     A single-word line's reference comes from its own claimed span (see
     :func:`_sung_level_ref`). Because onsets run first, that span is
@@ -373,7 +393,7 @@ def snap_line_ends(
 
     release_frames = int(RELEASE_SUSTAIN_S / HOP_S)
     extends: list[dict] = []
-    n_fired = n_low_ref = n_below_min_shift = n_single_word = 0
+    n_fired = n_low_ref = n_below_min_shift = n_single_word = n_runs = 0
     out: list[dict] = []
     for idx, obj in enumerate(line_objects):
         words = obj.get("words") or []
@@ -382,22 +402,35 @@ def snap_line_ends(
             continue
         if len(words) == 1:
             n_single_word += 1
-        w_end = words[-1]["end"]
+        run_ends = _run_last_indices(words)
+        n_runs += len(run_ends)
 
-        bound = len(env) * HOP_S
+        line_bound = len(env) * HOP_S
         for nxt in line_objects[idx + 1 :]:
             nxt_words = nxt.get("words") or []
             if nxt_words:
-                bound = nxt_words[0]["start"] - NEXT_LINE_GAP_S
+                line_bound = nxt_words[0]["start"] - NEXT_LINE_GAP_S
                 break
-        if bound - w_end < MIN_SHIFT_S:
+
+        # An interior run stops short of the next run's first word — a raw
+        # whisper start, since onsets only ever move a line's first word;
+        # only the last run stops short of the next line's, which onsets
+        # have already snapped. Runs with no room to extend are dropped
+        # before the reference is taken, so n_low_ref keeps counting the
+        # lines this pass could otherwise have repaired.
+        bounds = {
+            j: (words[j + 1]["start"] - NEXT_LINE_GAP_S if j + 1 < len(words) else line_bound)
+            for j in run_ends
+        }
+        candidates = [j for j in run_ends if bounds[j] - words[j]["end"] >= MIN_SHIFT_S]
+        if not candidates:
             out.append(obj)
             continue
 
         # end=True: onsets already ran, so a substantial word 1 no longer
         # needs excluding to protect the reference from onset smear, and
         # including it fixes lines that are mostly one held note plus
-        # short trailing words. The last word's own claimed span is
+        # short trailing words. A run-final word's own claimed span is
         # genuinely sung either way — a clipped span is a subset of the
         # true one — so referencing it is fair regardless.
         ref = _sung_level_ref(env, words, end=True)
@@ -409,51 +442,62 @@ def snap_line_ends(
             out.append(obj)
             continue
 
-        # Clip evidence: the voice must still be near sung level at the
-        # claimed end. If it has already fallen away the end is plausibly
-        # right, so a correctly ended staccato word is never touched.
-        e = min(max(int(w_end / HOP_S), 0), max(len(env) - EDGE_FRAMES, 0))
-        if env[e : e + EDGE_FRAMES].mean() < ref - NEAR_SUNG_DB:
+        new_words = list(words)
+        for j in candidates:
+            w_end = words[j]["end"]
+            bound = bounds[j]
+
+            # Clip evidence: the voice must still be near sung level at
+            # the claimed end. If it has already fallen away the end is
+            # plausibly right, so a correctly ended staccato word is never
+            # touched.
+            e = min(max(int(w_end / HOP_S), 0), max(len(env) - EDGE_FRAMES, 0))
+            if env[e : e + EDGE_FRAMES].mean() < ref - NEAR_SUNG_DB:
+                continue
+            n_fired += 1
+
+            # Trace the voiced run to its release: the first point where
+            # the level stays below the sung reference for
+            # RELEASE_SUSTAIN_S. A tremolo dip recovers within a couple
+            # frames and does not qualify. Only full-length windows count
+            # — near the bound or the envelope end a truncated window
+            # would let a single quiet frame (or the next run's audio)
+            # pass for a sustained fall. No release before the bound means
+            # the voice runs on into it (a melisma): extend to the bound.
+            b = min(int(bound / HOP_S), len(env))
+            new_end = bound
+            for i in range(e, b - release_frames + 1):
+                if env[i : i + release_frames].mean() < ref - SUSTAIN_NEAR_DB:
+                    new_end = i * HOP_S
+                    break
+            if new_end - w_end < MIN_SHIFT_S:
+                n_below_min_shift += 1
+                continue
+
+            new_words[j] = {**words[j], "end": new_end}
+            extends.append(
+                {
+                    "line_id": obj.get("line_id"),
+                    "word_idx": j,
+                    "extend_s": round(new_end - w_end, 3),
+                    # No release found before the bound — the
+                    # harmony/melisma blind-spot suspects.
+                    "to_bound": new_end == bound,
+                }
+            )
+
+        if new_words == words:
             out.append(obj)
             continue
-        n_fired += 1
-
-        # Trace the voiced run to its release: the first point where the
-        # level stays below the sung reference for RELEASE_SUSTAIN_S. A
-        # tremolo dip recovers within a couple frames and does not
-        # qualify. Only full-length windows count — near the bound or the
-        # envelope end a truncated window would let a single quiet frame
-        # (or the next line's audio) pass for a sustained fall. No release
-        # before the bound means the voice runs into the next line (a
-        # melisma): extend to the bound.
-        b = min(int(bound / HOP_S), len(env))
-        new_end = bound
-        for i in range(e, b - release_frames + 1):
-            if env[i : i + release_frames].mean() < ref - SUSTAIN_NEAR_DB:
-                new_end = i * HOP_S
-                break
-        if new_end - w_end < MIN_SHIFT_S:
-            n_below_min_shift += 1
-            out.append(obj)
-            continue
-
         new_obj = dict(obj)
-        new_obj["words"] = words[:-1] + [{**words[-1], "end": new_end}]
-        new_obj["end"] = new_end
+        new_obj["words"] = new_words
+        new_obj["end"] = new_words[-1]["end"]
         out.append(new_obj)
-        extends.append(
-            {
-                "line_id": obj.get("line_id"),
-                "extend_s": round(new_end - w_end, 3),
-                # No release found before the bound — the harmony/melisma
-                # blind-spot suspects.
-                "to_bound": new_end == bound,
-            }
-        )
 
-    # Invariant: n_fired == n_extended + n_below_min_shift.
+    # Invariant: n_fired == n_extended + n_below_min_shift, per run.
     stats = {
         "n_lines": len(line_objects),
+        "n_runs": n_runs,
         "n_low_ref": n_low_ref,
         "n_fired": n_fired,
         "n_below_min_shift": n_below_min_shift,
@@ -463,9 +507,9 @@ def snap_line_ends(
     }
     if extends:
         logger.info(
-            "end snap: %d/%d line ends extended (max %+.2fs)",
+            "end snap: %d/%d run ends extended (max %+.2fs)",
             len(extends),
-            len(line_objects),
+            n_runs,
             max(s["extend_s"] for s in extends),
         )
     return out, stats

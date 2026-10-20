@@ -80,3 +80,13 @@ Avoid modifying upstream files. New features go in new files. If upstream must c
 - Don't add unrequested features, error handling for impossible states, or speculative abstractions
 - Never commit debug prints or commented code
 - Temp files: use `get_temp_directory()` from `get_platform.py`, never hardcode paths or `tempfile.gettempdir()`
+
+## graphify
+
+When `graphify-out/graph.json` exists (local, uncommitted, code-only), it is a call/import graph of the code. It is precise for named symbols and weak for prose questions, so use it alongside search, not before it:
+
+- **Callers, callees, impact:** `graphify explain "<symbol>"` and `graphify affected "<symbol>"` — exact, including which tests cover a function. Prefer these to grepping for call sites.
+- **`query`:** pass code-name words (`"transpose pitch semitones"`), never a sentence — it matches words against symbol names, so prose seeds on test helpers.
+- **`path`:** name both ends as `file::symbol` and end on a function, not a class. A hop marked `uses [INFERRED]` means the real call chain is not in the graph (calls through a returned object or `self.<attr>` are not resolved) — search instead.
+- **Use search for:** module-level constants (not in the graph), strings, and anything the graph misses.
+- After changing code, run `graphify update .` (local, no API cost).

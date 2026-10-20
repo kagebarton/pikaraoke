@@ -350,6 +350,52 @@ class TestSnapLineEnds:
         assert stats["extends"][0]["extend_s"] == pytest.approx(1.4, abs=0.1)
         assert stats["extends"][0]["to_bound"] is False
 
+    def test_interior_clipped_end_extends_to_release(self, use_env):
+        # A 1.5s pause splits the line after word 2. That word is still at
+        # sung level at its claimed 2.5s, so it is clipped exactly as a
+        # line-final word would be, and traces to the fall at 3.0s. The
+        # release window is an average, so it qualifies half a window
+        # early, as it does for a line-final word.
+        use_env(_env(8.0, [(1.0, 3.0, -28.0), (4.0, 5.0, -28.0)]))
+        obj = _line((1.0, 1.3), (1.5, 2.5), (4.0, 4.5), (4.7, 5.0), line_id=3)
+
+        out, stats = snap_line_ends([obj], "vocal.wav")
+
+        assert out[0]["words"][1]["end"] == pytest.approx(2.9, abs=0.03)
+        assert [out[0]["words"][i] for i in (0, 2, 3)] == [obj["words"][i] for i in (0, 2, 3)]
+        assert out[0]["end"] == 5.0
+        assert stats["n_runs"] == 2
+        assert stats["n_fired"] == 1
+        assert stats["n_extended"] == 1
+        assert stats["extends"][0]["word_idx"] == 1
+        assert stats["extends"][0]["to_bound"] is False
+
+    def test_interior_end_bounded_by_next_run(self, use_env):
+        # The voice never falls inside the pause, so the interior end
+        # stops NEXT_LINE_GAP_S short of the next run's first word rather
+        # than running into it.
+        use_env(_env(8.0, [(1.0, 5.0, -28.0)]))
+        obj = _line((1.0, 1.3), (1.5, 2.5), (4.0, 4.5), (4.7, 5.0))
+
+        out, stats = snap_line_ends([obj], "vocal.wav")
+
+        assert out[0]["words"][1]["end"] == pytest.approx(3.9, abs=0.03)
+        assert out[0]["words"][2]["start"] == 4.0
+        assert stats["extends"][0]["to_bound"] is True
+
+    def test_sub_threshold_gap_stays_one_run(self, use_env):
+        # 0.4s is below RUN_GAP_S, so word 2 does not end a run and its
+        # clipped-looking end is left alone. The same shape with a 0.5s
+        # gap extends (test_interior_clipped_end_extends_to_release).
+        use_env(_env(8.0, [(1.0, 3.4, -28.0)]))
+        obj = _line((1.0, 1.3), (1.5, 2.5), (2.9, 3.4))
+
+        out, stats = snap_line_ends([obj], "vocal.wav")
+
+        assert out[0] is obj
+        assert stats["n_runs"] == 1
+        assert stats["n_fired"] == 0
+
     def test_correct_end_untouched(self, use_env):
         # Voice falls exactly at the claimed end: no clip evidence.
         use_env(_env(8.0, [(1.0, 2.5, -28.0)]))
