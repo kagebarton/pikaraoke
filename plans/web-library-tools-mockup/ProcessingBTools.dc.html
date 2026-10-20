@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Processing B, library tools tab</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&amp;display=swap">
+<style>
+body{margin:0;background:#1f2424}
+a{color:#1abc9c}a:hover{color:#1dd2af}
+.scr{font-family:Lato,-apple-system,"Segoe UI",sans-serif;font-size:15px;line-height:1.4;color:#fff;background:#1f2424}
+.nav{background:#375a7f;border-radius:6px;display:flex;align-items:center;justify-content:space-between;padding:0 6px 0 14px;min-height:48px;font-weight:700}
+.sec{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#a9b6b8;margin:22px 0 8px}
+.card{background:#343c3d;border-radius:8px;overflow:hidden}
+.muted{color:#a9b6b8;font-size:13px}
+.pill{display:inline-flex;align-items:center;font-size:12px;font-weight:700;border-radius:999px;padding:3px 9px;white-space:nowrap}
+.wait{background:#3f4848;color:#e4e8e9}.fail{background:#5a1f1a;color:#ffb8ad}.pick{background:#5c4708;color:#ffe08a}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:0 14px;border-radius:6px;border:1px solid #5e6d6f;background:#282f2f;color:#fff;font:inherit;font-size:14px;font-weight:700;text-decoration:none;cursor:pointer;box-sizing:border-box;white-space:nowrap}
+.btn:hover{color:#fff}
+.pri{background:#375a7f;border-color:#375a7f}
+.tab{flex:1;min-height:44px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#a9b6b8;text-decoration:none;border-bottom:3px solid transparent}
+.tab.on{color:#fff;border-bottom-color:#1abc9c}
+.act{display:flex;gap:10px;align-items:center;padding:12px;border-top:1px solid #45504f}
+.act:first-child{border-top:0}
+.input{background:#fff;color:#1f2424;border:1px solid #5e6d6f;border-radius:6px;min-height:44px;padding:0 12px;font:inherit;font-size:16px;box-sizing:border-box;width:100%}
+.link{display:flex;align-items:center;justify-content:space-between;min-height:48px;padding:0 12px;border-top:1px solid #45504f;color:#fff;text-decoration:none}
+.link:first-child{border-top:0}
+</style>
+</helmet>
+<div class="scr" style="width: 390px; min-height: 1000px; box-sizing: border-box; padding: 12px 16px 32px">
+<nav class="nav" aria-label="Main">
+<span>PiKaraoke</span>
+<button class="btn" style="background: transparent; border: 0; min-width: 44px; padding: 0" aria-label="Menu"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></button>
+</nav>
+<h1 style="font-size: 28px; font-weight: 400; color: #f2f2f2; margin: 18px 0 8px">Processing</h1>
+
+<div style="display: flex; border-bottom: 1px solid #45504f" role="tablist">
+<a class="tab" href="ProcessingB.dc.html" role="tab" aria-selected="false">Jobs</a>
+<a class="tab on" href="#" role="tab" aria-selected="true">Library tools</a>
+</div>
+
+<div class="sec">Library</div>
+<div class="card">
+<a class="link" href="#"><span>Behind current version</span><span class="pill pick">5</span></a>
+<a class="link" href="#"><span>Looks poor (15%+ lines guessed)</span><span class="pill fail">8</span></a>
+<a class="link" href="#"><span>No lyrics (transcribed)</span><span class="pill wait">0</span></a>
+<a class="link" href="#"><span>All songs</span><span class="pill wait">46</span></a>
+</div>
+<p class="muted" style="margin: 6px 2px 0">Each list opens the songs; tap one for its Song Info.</p>
+
+<div class="sec">Regenerate</div>
+<div class="card">
+<div class="act"><div style="flex: 1"><div style="font-weight: 700">Update stale songs</div><div class="muted">The 5 on an older version. Keeps their picks.</div></div><button class="btn pri">Preview 5</button></div>
+<div class="act"><div style="flex: 1"><div style="font-weight: 700">Reprocess all</div><div class="muted">Every song on current code. Keeps picks.</div></div><button class="btn">Preview 46</button></div>
+<div class="act"><div style="flex: 1"><div style="font-weight: 700">Reset all</div><div class="muted">Start over: re-check captions, pick Genius where needed.</div></div><a class="btn" href="RegenPreview.dc.html">Preview 46</a></div>
+</div>
+<p class="muted" style="margin: 6px 2px 0">Regen jobs wait behind new downloads. Each song's lyric files are backed up first.</p>
+
+<div class="sec">Add playlist</div>
+<div class="card" style="padding: 14px; display: flex; flex-direction: column; gap: 10px">
+<label for="pl" class="muted">YouTube playlist link</label>
+<input id="pl" class="input" type="url" placeholder="https://www.youtube.com/playlist?list=…">
+<a class="btn pri" href="Playlist.dc.html" style="align-self: flex-start">Check playlist</a>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1000}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

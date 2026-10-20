@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Processing, variant B</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&amp;display=swap">
+<style>
+body{margin:0;background:#1f2424}
+a{color:#1abc9c}a:hover{color:#1dd2af}
+.scr{font-family:Lato,-apple-system,"Segoe UI",sans-serif;font-size:15px;line-height:1.4;color:#fff;background:#1f2424}
+.nav{background:#375a7f;border-radius:6px;display:flex;align-items:center;justify-content:space-between;padding:0 6px 0 14px;min-height:48px;font-weight:700}
+.card{background:#343c3d;border-radius:8px;overflow:hidden}
+.row{display:flex;gap:10px;align-items:center;padding:0 12px;min-height:56px;border-top:1px solid #45504f}
+.row:first-child{border-top:0}
+.ttl{font-weight:700;color:#fff;text-decoration:none;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.muted{color:#a9b6b8;font-size:13px}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;border-radius:999px;padding:3px 9px;white-space:nowrap}
+.run{background:#1d3f5c;color:#a9d8f7}.wait{background:#3f4848;color:#e4e8e9}.done{background:#1f4a33;color:#8ff0b8}.fail{background:#5a1f1a;color:#ffb8ad}.pick{background:#5c4708;color:#ffe08a}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:0 14px;border-radius:6px;border:1px solid #5e6d6f;background:#282f2f;color:#fff;font:inherit;font-size:14px;font-weight:700;text-decoration:none;cursor:pointer;box-sizing:border-box;white-space:nowrap}
+.pri{background:#375a7f;border-color:#375a7f}
+.chip{display:inline-flex;align-items:center;min-height:36px;padding:0 12px;border-radius:999px;border:1px solid #5e6d6f;background:transparent;color:#dbdee0;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.chip.on{background:#dbdee0;color:#1f2424;border-color:#dbdee0}
+.tab{flex:1;min-height:44px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#a9b6b8;text-decoration:none;border-bottom:3px solid transparent}
+.tab.on{color:#fff;border-bottom-color:#1abc9c}
+.err{color:#ffb8ad;font-size:13px}
+</style>
+</helmet>
+<div class="scr" style="width: 390px; min-height: 1180px; box-sizing: border-box; padding: 12px 16px 32px">
+<nav class="nav" aria-label="Main">
+<span>PiKaraoke</span>
+<button class="btn" style="background: transparent; border: 0; min-width: 44px; padding: 0" aria-label="Menu"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></button>
+</nav>
+<h1 style="font-size: 28px; font-weight: 400; color: #f2f2f2; margin: 18px 0 8px">Processing</h1>
+
+<div style="display: flex; border-bottom: 1px solid #45504f" role="tablist">
+<a class="tab on" href="#" role="tab" aria-selected="true">Jobs</a>
+<a class="tab" href="#" role="tab" aria-selected="false">Library tools</a>
+</div>
+
+<div style="display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0 12px">
+<button class="chip on">All 11</button>
+<button class="chip">Active 5</button>
+<button class="chip">Attention 3</button>
+<button class="chip">Finished 3</button>
+</div>
+
+<div style="background: #282f2f; border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px">
+<div style="display: flex; justify-content: space-between; align-items: center"><span style="font-weight: 700">Now: Eminem - Lose Yourself</span><span class="pill run">Regen</span></div>
+<div style="display: flex; gap: 4px" aria-label="Step 2 of 2">
+<div style="flex: 1; height: 6px; border-radius: 3px; background: #3298dc"></div>
+<div style="flex: 1; height: 6px; border-radius: 3px; background: #3298dc; opacity: .55"></div>
+</div>
+<span class="muted">Aligning lyrics · step 2 of 2 · 1 min 12 s</span>
+</div>
+
+<div class="card">
+<div class="row"><span class="muted" style="width: 22px">1</span><div style="flex: 1; min-width: 0"><span class="ttl">How Far I'll Go</span><span class="muted">Download · by Mia</span></div><span class="pill wait">Downloading</span></div>
+<div class="row"><span class="muted" style="width: 22px">2</span><div style="flex: 1; min-width: 0"><span class="ttl">Bohemian Rhapsody</span><span class="muted">Regen</span></div><span class="pill wait">Waiting</span></div>
+<div class="row"><span class="muted" style="width: 22px">3</span><div style="flex: 1; min-width: 0"><span class="ttl">I Will Always Love You</span><span class="muted">Regen</span></div><span class="pill wait">Waiting</span></div>
+<div class="row"><span class="muted" style="width: 22px">4</span><div style="flex: 1; min-width: 0"><span class="ttl">龍捲風 Tornado</span><span class="muted">Regen</span></div><span class="pill wait">Waiting</span></div>
+<div style="border-top: 1px solid #45504f; background: #2c3434; padding: 12px; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; gap: 10px; align-items: center"><span style="width: 22px"></span><div style="flex: 1; min-width: 0"><span class="ttl">晴天 Sunny Day</span><span class="muted">Regen · 10 min ago</span></div><span class="pill fail">Failed</span></div>
+<span class="err">Lyric alignment failed: whisper worker exited with code 1 while aligning. See the app log for the full trace.</span>
+<div style="display: flex; gap: 8px"><button class="btn pri">Retry</button><button class="btn">Song info</button><button class="btn">Remove</button></div>
+</div>
+<div class="row"><span style="width: 22px"></span><div style="flex: 1; min-width: 0"><span class="ttl">Speechless</span><span class="muted">Earlier session · stopped</span></div><span class="pill pick">Unfinished</span></div>
+<div class="row"><span style="width: 22px"></span><div style="flex: 1; min-width: 0"><span class="ttl">Into the Unknown</span><span class="muted">Playlist · caption too sparse</span></div><span class="pill pick">Needs a pick</span></div>
+<div class="row"><span style="width: 22px"></span><div style="flex: 1; min-width: 0"><span class="ttl">Let It Go</span><span class="muted">YouTube captions · 4 min ago</span></div><span class="pill done">Done</span></div>
+<div class="row"><span style="width: 22px"></span><div style="flex: 1; min-width: 0"><span class="ttl">'Defying Gravity'</span><span class="muted" style="color: #ffd166">Genius · 38 of 89 lines guessed</span></div><span class="pill done">Done</span></div>
+<div class="row"><span style="width: 22px"></span><div style="flex: 1; min-width: 0"><span class="ttl">'Free'</span><span class="muted">Genius · 12 min ago</span></div><span class="pill done">Done</span></div>
+</div>
+<p class="muted" style="margin: 10px 2px">Tap a row to open its details and actions.</p>
+<button class="btn" style="width: 100%">Clear 3 finished</button>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1180}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

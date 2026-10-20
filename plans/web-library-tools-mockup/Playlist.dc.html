@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Add playlist preview</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&amp;display=swap">
+<style>
+body{margin:0;background:#1f2424}
+a{color:#1abc9c}a:hover{color:#1dd2af}
+.scr{font-family:Lato,-apple-system,"Segoe UI",sans-serif;font-size:15px;line-height:1.4;color:#fff;background:#1f2424}
+.nav{background:#375a7f;border-radius:6px;display:flex;align-items:center;justify-content:space-between;padding:0 6px 0 14px;min-height:48px;font-weight:700}
+.sec{display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#a9b6b8;margin:22px 0 8px}
+.card{background:#343c3d;border-radius:8px;overflow:hidden}
+.row{display:flex;gap:12px;align-items:center;padding:8px 12px;min-height:44px;border-top:1px solid #45504f}
+.row:first-child{border-top:0}
+.row input{width:20px;height:20px;accent-color:#1abc9c;margin:0;flex:none}
+.ttl{font-weight:700;color:#fff;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.muted{color:#a9b6b8;font-size:13px}
+.pill{display:inline-flex;align-items:center;font-size:12px;font-weight:700;border-radius:999px;padding:3px 9px;white-space:nowrap}
+.wait{background:#3f4848;color:#e4e8e9}.done{background:#1f4a33;color:#8ff0b8}.pick{background:#5c4708;color:#ffe08a}.new{background:#1d3f5c;color:#a9d8f7}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:0 14px;border-radius:6px;border:1px solid #5e6d6f;background:#282f2f;color:#fff;font:inherit;font-size:14px;font-weight:700;text-decoration:none;cursor:pointer;box-sizing:border-box;white-space:nowrap}
+.pri{background:#375a7f;border-color:#375a7f}
+.input{background:#fff;color:#1f2424;border:1px solid #5e6d6f;border-radius:6px;min-height:44px;padding:0 12px;font:inherit;font-size:16px;box-sizing:border-box;width:100%}
+.step{display:flex;gap:10px;align-items:flex-start}
+.num{flex:none;width:24px;height:24px;border-radius:50%;background:#45504f;color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center}
+</style>
+</helmet>
+<div class="scr" style="width: 390px; min-height: 1180px; box-sizing: border-box; padding: 12px 16px 32px">
+<nav class="nav" aria-label="Main">
+<span>PiKaraoke</span>
+<button class="btn" style="background: transparent; border: 0; min-width: 44px; padding: 0" aria-label="Menu"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></button>
+</nav>
+<a href="Main.dc.html" style="display: inline-flex; align-items: center; gap: 4px; min-height: 44px; font-size: 14px; margin-top: 6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>Processing</a>
+<h1 style="font-size: 28px; font-weight: 400; color: #f2f2f2; margin: 4px 0 10px">Add playlist</h1>
+<input class="input" type="url" value="https://www.youtube.com/playlist?list=PL…" aria-label="YouTube playlist link">
+
+<div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px">
+<span class="pill wait">[Playlist name] · 9 videos</span>
+<span class="pill new">4 new</span>
+<span class="pill pick">1 not processed</span>
+<span class="pill done">4 in library</span>
+</div>
+
+<div class="sec"><span>New: will download (4)</span></div>
+<div class="card">
+<label class="row"><input type="checkbox" checked><div style="flex: 1; min-width: 0"><span class="ttl">Auli'i Cravalho - How Far I'll Go</span></div></label>
+<label class="row"><input type="checkbox" checked><div style="flex: 1; min-width: 0"><span class="ttl">Idina Menzel - Into the Unknown</span></div></label>
+<label class="row"><input type="checkbox" checked><div style="flex: 1; min-width: 0"><span class="ttl">Lin-Manuel Miranda - We Don't Talk About Bruno</span></div></label>
+<label class="row"><input type="checkbox"><div style="flex: 1; min-width: 0"><span class="ttl">Frozen - Behind the Scenes Interview</span><span class="muted">Left out</span></div></label>
+</div>
+
+<div class="sec"><span>In library, not processed (1)</span></div>
+<div class="card">
+<div class="row"><div style="flex: 1; min-width: 0"><span class="ttl">Naomi Scott - Speechless</span><span class="muted">Downloaded earlier but never finished. Will be processed.</span></div></div>
+</div>
+
+<div class="sec"><span>Already in library (4)</span></div>
+<div class="card">
+<div class="row"><div style="flex: 1; min-width: 0"><span class="ttl">Idina Menzel - Let It Go</span></div><span class="pill done">Skip</span></div>
+<div class="row"><div style="flex: 1; min-width: 0"><span class="ttl">Jodi Benson - Part of Your World</span></div><span class="pill done">Skip</span></div>
+<a href="#" style="display: flex; align-items: center; justify-content: center; min-height: 44px; border-top: 1px solid #45504f; font-weight: 700; text-decoration: none">Show 2 more</a>
+</div>
+
+<div class="card" style="padding: 14px; margin-top: 22px; display: flex; flex-direction: column; gap: 10px; background: #282f2f">
+<div class="step"><span class="num">1</span><span class="muted">Videos download one at a time, behind any songs guests are adding.</span></div>
+<div class="step"><span class="num">2</span><span class="muted">A song whose YouTube caption is real lyrics is processed right away.</span></div>
+<div class="step"><span class="num">3</span><span class="muted">The rest wait under "Needs attention" on the Processing page until you pick their lyrics.</span></div>
+</div>
+<button class="btn pri" style="width: 100%; margin-top: 14px">Download 3 and process 1</button>
+<a class="btn" href="Main.dc.html" style="width: 100%; margin-top: 10px">Cancel</a>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1180}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

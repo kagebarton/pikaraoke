@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Reset all preview</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&amp;display=swap">
+<style>
+body{margin:0;background:#1f2424}
+a{color:#1abc9c}a:hover{color:#1dd2af}
+.scr{font-family:Lato,-apple-system,"Segoe UI",sans-serif;font-size:15px;line-height:1.4;color:#fff;background:#1f2424}
+.nav{background:#375a7f;border-radius:6px;display:flex;align-items:center;justify-content:space-between;padding:0 6px 0 14px;min-height:48px;font-weight:700}
+.sec{display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#a9b6b8;margin:22px 0 8px}
+.card{background:#343c3d;border-radius:8px;overflow:hidden}
+.row{display:flex;gap:10px;align-items:center;padding:10px 12px;border-top:1px solid #45504f}
+.row:first-child{border-top:0}
+.ttl{font-weight:700;color:#fff;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.muted{color:#a9b6b8;font-size:13px}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;border-radius:999px;padding:3px 9px;white-space:nowrap}
+.wait{background:#3f4848;color:#e4e8e9}.done{background:#1f4a33;color:#8ff0b8}.fail{background:#5a1f1a;color:#ffb8ad}.pick{background:#5c4708;color:#ffe08a}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:0 14px;border-radius:6px;border:1px solid #5e6d6f;background:#282f2f;color:#fff;font:inherit;font-size:14px;font-weight:700;text-decoration:none;cursor:pointer;box-sizing:border-box;white-space:nowrap}
+.btn:hover{color:#fff}
+.pri{background:#375a7f;border-color:#375a7f}
+.warn{color:#ffd166;font-size:13px}
+.more{display:flex;align-items:center;justify-content:center;min-height:44px;border-top:1px solid #45504f;font-size:14px;font-weight:700;color:#1abc9c;text-decoration:none}
+</style>
+</helmet>
+<div class="scr" style="width: 390px; min-height: 1380px; box-sizing: border-box; padding: 12px 16px 32px">
+<nav class="nav" aria-label="Main">
+<span>PiKaraoke</span>
+<button class="btn" style="background: transparent; border: 0; min-width: 44px; padding: 0" aria-label="Menu"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></button>
+</nav>
+<a href="Main.dc.html" style="display: inline-flex; align-items: center; gap: 4px; min-height: 44px; font-size: 14px; margin-top: 6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>Processing</a>
+<h1 style="font-size: 28px; font-weight: 400; color: #f2f2f2; margin: 4px 0 6px">Reset all songs</h1>
+<p class="muted" style="margin: 0">Every song's lyric source is chosen again from scratch. Vocals are reused; only lyrics and timing are redone.</p>
+
+<div style="background: #282f2f; border-radius: 8px; padding: 12px; margin-top: 14px; display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; justify-content: space-between"><span style="font-weight: 700">YouTube captions checked</span><span class="pill done">46 of 46</span></div>
+<div style="height: 6px; border-radius: 3px; background: #2ecc71"></div>
+<span class="muted">Each caption was fetched and tested for being real lyrics.</span>
+</div>
+
+<div class="sec"><span>Needs a Genius pick (22)</span></div>
+<div class="card">
+<div class="row"><div style="flex: 1; min-width: 0"><span class="ttl">'Defying Gravity' - Wicked</span><span class="muted">Now: Genius, Defying Gravity · Kristin Chenoweth</span><div class="warn">Looks poor: 38 of 89 lines guessed</div></div></div>
+<div class="row"><div style="flex: 1; min-width: 0"><span class="ttl">HUNTR/X - This Is What It Sounds Like</span><span class="muted">Now: Genius, What It Sounds Like · HUNTR/X</span><div class="warn">Looks poor: 21 of 53 lines guessed</div></div></div>
+<div class="row"><div style="flex: 1; min-width: 0"><span class="ttl">Ed Sheeran &amp; Rudimental - Bloodstream</span><span class="muted">Now: Genius, Bloodstream · Ed Sheeran</span><div class="warn">Looks poor: 27 of 74 lines guessed</div></div></div>
+<div class="row"><div style="flex: 1; min-width: 0"><span class="ttl">NSYNC - Paradise</span><span class="muted">Now: Genius, Paradise · Justin Timberlake</span><div class="muted">No YouTube ID: Genius or transcribe only</div></div></div>
+<div class="row"><div style="flex: 1; min-width: 0"><span class="ttl">Sara Bareilles - She Used To Be Mine</span><span class="muted">Now: Genius, She Used to Be Mine · Sara Bareilles</span></div></div>
+<a class="more" href="#">Show 17 more</a>
+</div>
+
+<div class="sec"><span>Uses its YouTube caption (24)</span></div>
+<div class="card">
+<div class="row"><div style="flex: 1; min-width: 0"><span class="ttl">Adele - Someone Like You</span></div><span class="pill done">Caption OK</span></div>
+<div class="row"><div style="flex: 1; min-width: 0"><span class="ttl">Idina Menzel - Let It Go</span></div><span class="pill done">Caption OK</span></div>
+<div class="row"><div style="flex: 1; min-width: 0"><span class="ttl">Queen - Bohemian Rhapsody</span></div><span class="pill done">Caption OK</span></div>
+<a class="more" href="#">Show 21 more</a>
+</div>
+
+<div class="sec"><span>No lyrics (0)</span></div>
+<p class="muted" style="margin: 0">No song is set to transcribe without lyrics.</p>
+
+<div style="background: #282f2f; border-radius: 8px; padding: 12px; margin-top: 22px; display: flex; flex-direction: column; gap: 10px">
+<span class="muted">Before anything runs, each song's lyric files are copied to a backup folder in the library. Your picks are saved as you go, so you can leave and come back.</span>
+<a class="btn pri" href="PickPassA.dc.html" style="width: 100%">Start picks (0 of 22 done)</a>
+<span class="muted" style="text-align: center">Songs are queued only after the last pick.</span>
+<a class="btn" href="Main.dc.html" style="width: 100%">Cancel reset</a>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1380}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

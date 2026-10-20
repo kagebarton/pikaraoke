@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Repair lyrics, LRCLIB</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&amp;display=swap">
+<style>
+body{margin:0;background:#1f2424}
+a{color:#1abc9c}a:hover{color:#1dd2af}
+.scr{font-family:Lato,-apple-system,"Segoe UI",sans-serif;font-size:15px;line-height:1.4;color:#fff;background:#1f2424}
+.nav{background:#375a7f;border-radius:6px;display:flex;align-items:center;justify-content:space-between;padding:0 6px 0 14px;min-height:48px;font-weight:700}
+.sec{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#a9b6b8;margin:20px 0 8px}
+.muted{color:#a9b6b8;font-size:13px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:0 14px;border-radius:6px;border:1px solid #5e6d6f;background:#282f2f;color:#fff;font:inherit;font-size:14px;font-weight:700;text-decoration:none;cursor:pointer;box-sizing:border-box;white-space:nowrap}
+.btn:hover{color:#fff}
+.pri{background:#375a7f;border-color:#375a7f}
+.input{background:#fff;color:#1f2424;border:1px solid #5e6d6f;border-radius:6px;min-height:44px;padding:0 12px;font:inherit;font-size:16px;box-sizing:border-box;width:100%}
+.opt{display:flex;gap:12px;align-items:flex-start;padding:12px;border-top:1px solid #45504f;cursor:pointer}
+.opt:first-child{border-top:0}
+.opt input{width:20px;height:20px;accent-color:#1abc9c;margin:2px 0 0;flex:none}
+.opt.sel{background:#2c4a44}
+.cur{font-size:11px;font-weight:700;border:1px solid #6b7b7d;color:#dbdee0;border-radius:4px;padding:1px 6px}
+.best{font-size:11px;font-weight:700;background:#1abc9c;color:#0f1a17;border-radius:4px;padding:1px 6px}
+.fit{display:flex;gap:14px;font-size:13px;margin-top:4px}
+.good{color:#8ff0b8}.bad{color:#ffd166}
+</style>
+</helmet>
+<div class="scr" style="width: 390px; min-height: 1240px; box-sizing: border-box; padding: 12px 16px 32px">
+<nav class="nav" aria-label="Main">
+<span>PiKaraoke</span>
+<button class="btn" style="background: transparent; border: 0; min-width: 44px; padding: 0" aria-label="Menu"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></button>
+</nav>
+<a href="RepairGenius.dc.html" style="display: inline-flex; align-items: center; gap: 4px; min-height: 44px; font-size: 14px; margin-top: 6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>Step 1</a>
+<span class="muted" style="display: block">Step 2 of 2</span>
+<h1 style="font-size: 24px; font-weight: 400; color: #f2f2f2; margin: 0 0 2px">LRCLIB match</h1>
+<span class="muted">Genius pick: Defying Gravity · Idina Menzel. LRCLIB supplies line timing that helps fill guessed lines.</span>
+
+<div class="sec">Search LRCLIB</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+<div><label for="t" class="muted">Title</label><input id="t" class="input" type="text" value="Defying Gravity" style="margin-top: 4px"></div>
+<div><label for="a" class="muted">Artist</label><input id="a" class="input" type="text" value="Idina Menzel" style="margin-top: 4px"></div>
+</div>
+<button class="btn pri" style="width: 100%; margin-top: 8px">Search</button>
+
+<div class="sec" style="display: flex; justify-content: space-between"><span>Results</span><span style="text-transform: none; letter-spacing: 0; font-weight: 400">video is 4:17</span></div>
+<div style="border: 1px solid #45504f; border-radius: 8px; overflow: hidden; background: #343c3d">
+<label class="opt sel"><input type="radio" name="l" checked><span style="flex: 1"><span style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap"><b>Defying Gravity</b><span class="best">best fit</span></span><span class="muted">Idina Menzel &amp; Kristin Chenoweth · [album]</span><span class="fit"><span class="good">[length] · within a few s</span><span class="good">matches [n] of 89 lines</span></span></span></label>
+<label class="opt"><input type="radio" name="l"><span style="flex: 1"><span style="display: flex; gap: 6px; align-items: center"><b>Defying Gravity</b><span class="cur">current</span></span><span class="muted">Kristin Chenoweth &amp; Idina Menzel · Wicked: Original Broadway Cast</span><span class="fit"><span class="bad">5:54 · 97 s longer</span><span>matches [n] of 89 lines</span></span></span></label>
+<label class="opt"><input type="radio" name="l"><span style="flex: 1"><b>Defying Gravity</b><br><span class="muted">Cynthia Erivo &amp; Ariana Grande · [album]</span><span class="fit"><span class="bad">[length] · [difference]</span><span>matches [n] of 89 lines</span></span></span></label>
+<label class="opt"><input type="radio" name="l"><span style="flex: 1"><b>None</b><br><span class="muted">Skip LRCLIB. Guessed lines stay guessed.</span></span></label>
+</div>
+<a href="#" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 14px">Preview selected timing</a>
+
+<div style="background: #282f2f; border-radius: 8px; padding: 12px; margin-top: 8px" class="muted">Regenerating backs up this song's lyric files, then queues it. It runs behind new downloads, and waits if the song is playing.</div>
+<div style="display: flex; gap: 10px; margin-top: 14px">
+<a class="btn" href="RepairGenius.dc.html" style="flex: 1">Back</a>
+<button class="btn pri" style="flex: 2">Regenerate song</button>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1240}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

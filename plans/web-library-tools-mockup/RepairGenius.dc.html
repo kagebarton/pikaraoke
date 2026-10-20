@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Repair lyrics, source and Genius</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&amp;display=swap">
+<style>
+body{margin:0;background:#1f2424}
+a{color:#1abc9c}a:hover{color:#1dd2af}
+.scr{font-family:Lato,-apple-system,"Segoe UI",sans-serif;font-size:15px;line-height:1.4;color:#fff;background:#1f2424}
+.nav{background:#375a7f;border-radius:6px;display:flex;align-items:center;justify-content:space-between;padding:0 6px 0 14px;min-height:48px;font-weight:700}
+.sec{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#a9b6b8;margin:20px 0 8px}
+.muted{color:#a9b6b8;font-size:13px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:0 14px;border-radius:6px;border:1px solid #5e6d6f;background:#282f2f;color:#fff;font:inherit;font-size:14px;font-weight:700;text-decoration:none;cursor:pointer;box-sizing:border-box;white-space:nowrap}
+.btn:hover{color:#fff}
+.pri{background:#375a7f;border-color:#375a7f}
+.src{display:flex;gap:12px;align-items:flex-start;padding:12px;border-radius:8px;background:#343c3d;border:2px solid transparent;cursor:pointer}
+.src input{width:20px;height:20px;accent-color:#1abc9c;margin:2px 0 0;flex:none}
+.src.sel{border-color:#1abc9c}
+.src.off{opacity:.6;cursor:not-allowed}
+.input{background:#fff;color:#1f2424;border:1px solid #5e6d6f;border-radius:6px;min-height:44px;padding:0 12px;font:inherit;font-size:16px;box-sizing:border-box;width:100%}
+.opt{display:flex;gap:12px;align-items:center;min-height:56px;padding:0 12px;border-top:1px solid #45504f;cursor:pointer}
+.opt:first-child{border-top:0}
+.opt input{width:20px;height:20px;accent-color:#1abc9c;margin:0}
+.opt.sel{background:#2c4a44}
+.cur{font-size:11px;font-weight:700;border:1px solid #6b7b7d;color:#dbdee0;border-radius:4px;padding:1px 6px}
+</style>
+</helmet>
+<div class="scr" style="width: 390px; min-height: 1120px; box-sizing: border-box; padding: 12px 16px 32px">
+<nav class="nav" aria-label="Main">
+<span>PiKaraoke</span>
+<button class="btn" style="background: transparent; border: 0; min-width: 44px; padding: 0" aria-label="Menu"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></button>
+</nav>
+<a href="SongInfoA.dc.html" style="display: inline-flex; align-items: center; gap: 4px; min-height: 44px; font-size: 14px; margin-top: 6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>Song info</a>
+<span class="muted" style="display: block">Step 1 of 2</span>
+<h1 style="font-size: 24px; font-weight: 400; color: #f2f2f2; margin: 0 0 2px">Repair lyrics</h1>
+<span class="muted">'Defying Gravity' - Wicked 20th Anniversary Edition</span>
+
+<div class="sec">Lyric source</div>
+<div style="display: flex; flex-direction: column; gap: 8px" role="radiogroup" aria-label="Lyric source">
+<label class="src off"><input type="radio" name="s" disabled><span><b>YouTube caption</b><br><span class="muted">This video has no English caption.</span></span></label>
+<label class="src sel"><input type="radio" name="s" checked><span><b>Genius lyrics</b> <span class="cur">current</span><br><span class="muted">Search and pick, then choose an LRCLIB match.</span></span></label>
+<label class="src"><input type="radio" name="s"><span><b>No lyrics (transcribe)</b><br><span class="muted">Words come from what the singer is heard singing.</span></span></label>
+</div>
+
+<div class="sec">Genius search</div>
+<label for="q" class="muted">Type the song title and artist</label>
+<div style="display: flex; gap: 8px; margin-top: 6px">
+<input id="q" class="input" type="search" value="defying gravity idina menzel">
+<button class="btn pri" style="min-width: 44px; padding: 0" aria-label="Search Genius"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg></button>
+</div>
+<div style="border: 1px solid #45504f; border-radius: 8px; overflow: hidden; background: #343c3d; margin-top: 10px">
+<label class="opt"><input type="radio" name="g"><span style="flex: 1"><span style="font-weight: 700; display: block">Defying Gravity</span><span class="muted">Kristin Chenoweth</span></span><span class="cur">current</span></label>
+<label class="opt sel"><input type="radio" name="g" checked><span style="flex: 1"><span style="font-weight: 700; display: block">Defying Gravity</span><span class="muted">Idina Menzel</span></span></label>
+<label class="opt"><input type="radio" name="g"><span style="flex: 1"><span style="font-weight: 700; display: block">Defying Gravity</span><span class="muted">Cynthia Erivo &amp; Ariana Grande</span></span></label>
+<label class="opt"><input type="radio" name="g"><span style="flex: 1"><span style="font-weight: 700; display: block">Defying Gravity (Glee Cast Version)</span><span class="muted">Glee Cast</span></span></label>
+</div>
+<a href="#" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 14px">Preview these lyrics</a>
+
+<div style="display: flex; gap: 10px; margin-top: 10px">
+<a class="btn" href="SongInfoA.dc.html" style="flex: 1">Cancel</a>
+<a class="btn pri" href="RepairLrclib.dc.html" style="flex: 2">Next: LRCLIB match</a>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1120}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Song Info B, history tab</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&amp;display=swap">
+<style>
+body{margin:0;background:#1f2424}
+a{color:#1abc9c}a:hover{color:#1dd2af}
+.scr{font-family:Lato,-apple-system,"Segoe UI",sans-serif;font-size:15px;line-height:1.4;color:#fff;background:#1f2424}
+.nav{background:#375a7f;border-radius:6px;display:flex;align-items:center;justify-content:space-between;padding:0 6px 0 14px;min-height:48px;font-weight:700}
+.card{background:#343c3d;border-radius:8px;overflow:hidden}
+.muted{color:#a9b6b8;font-size:13px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:0 14px;border-radius:6px;border:1px solid #5e6d6f;background:#282f2f;color:#fff;font:inherit;font-size:14px;font-weight:700;text-decoration:none;cursor:pointer;box-sizing:border-box;white-space:nowrap}
+.pri{background:#375a7f;border-color:#375a7f}
+.tab{flex:1;min-height:44px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#a9b6b8;text-decoration:none;border-bottom:3px solid transparent}
+.tab.on{color:#fff;border-bottom-color:#1abc9c}
+.tile{background:#343c3d;border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:2px;min-height:86px;box-sizing:border-box}
+.tv{font-size:20px;font-weight:700}
+.ver{padding:12px;border-top:1px solid #45504f;display:flex;flex-direction:column;gap:4px}
+.ver:first-child{border-top:0}
+.pill{display:inline-flex;align-items:center;font-size:12px;font-weight:700;border-radius:999px;padding:3px 9px;white-space:nowrap}
+.done{background:#1f4a33;color:#8ff0b8}.wait{background:#3f4848;color:#e4e8e9}
+.kv{display:flex;gap:8px;font-size:13px}
+.k{width:62px;flex:none;color:#a9b6b8}
+.chg{color:#a9d8f7}
+code{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:#dbdee0;word-break:break-all}
+</style>
+</helmet>
+<div class="scr" style="width: 390px; min-height: 1120px; box-sizing: border-box; padding: 12px 16px 32px">
+<nav class="nav" aria-label="Main">
+<span>PiKaraoke</span>
+<button class="btn" style="background: transparent; border: 0; min-width: 44px; padding: 0" aria-label="Menu"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></button>
+</nav>
+
+<div style="display: flex; gap: 12px; align-items: center; margin-top: 16px">
+<div style="width: 96px; height: 54px; flex: none; border-radius: 6px; background: #343c3d; border: 1px solid #5e6d6f; display: flex; align-items: center; justify-content: center" class="muted">[thumbnail]</div>
+<div style="min-width: 0">
+<div style="font-weight: 700; font-size: 17px">'Defying Gravity'</div>
+<div class="muted">Wicked 20th Anniversary Edition · 4:17</div>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 14px">
+<div class="tile"><span class="muted">Lyrics</span><span class="tv">Genius</span><span class="muted">up to date</span></div>
+<div class="tile" style="outline: 2px solid #f1b70e; outline-offset: -2px"><span class="muted">Timed</span><span class="tv" style="color: #ffd166">57%</span><span class="muted">38 guessed</span></div>
+<div class="tile" style="outline: 2px solid #f1b70e; outline-offset: -2px"><span class="muted">LRCLIB</span><span class="tv" style="color: #ffd166">Not used</span><span class="muted">97 s longer</span></div>
+</div>
+
+<div style="display: flex; border-bottom: 1px solid #45504f; margin-top: 14px" role="tablist">
+<a class="tab" href="SongInfoB.dc.html" role="tab" aria-selected="false">Picks</a>
+<a class="tab" href="SongInfoBAlign.dc.html" role="tab" aria-selected="false">Alignment</a>
+<a class="tab on" href="#" role="tab" aria-selected="true">History</a>
+</div>
+
+<div class="card" style="margin-top: 12px">
+<div class="ver">
+<div style="display: flex; justify-content: space-between; align-items: center"><span style="font-weight: 700">19 Oct 2026</span><span class="pill done">Current</span></div>
+<div class="kv"><span class="k">Picks</span><span>Genius · Kristin Chenoweth; LRCLIB 5:54</span></div>
+<div class="kv"><span class="k">Timed</span><span>51 of 89 lines</span></div>
+<div class="kv"><span class="k">Version</span><span>v11</span></div>
+</div>
+<div class="ver">
+<div style="display: flex; justify-content: space-between; align-items: center"><span style="font-weight: 700">21 Sep 2026</span><span class="pill wait">Backup</span></div>
+<div class="kv"><span class="k">Picks</span><span>Genius · Kristin Chenoweth; <span class="chg">LRCLIB 5:54 added</span></span></div>
+<div class="kv"><span class="k">Timed</span><span>51 of 89 lines</span></div>
+<div class="kv"><span class="k">Version</span><span>v10</span></div>
+<div class="kv"><span class="k">Folder</span><code>regen_backup_20261019T175506Z</code></div>
+</div>
+<div class="ver">
+<div style="display: flex; justify-content: space-between; align-items: center"><span style="font-weight: 700">16 Jul 2026</span><span class="pill wait">Backup</span></div>
+<div class="kv"><span class="k">Picks</span><span>Genius · Kristin Chenoweth; no LRCLIB</span></div>
+<div class="kv"><span class="k">Timed</span><span>51 of 89 lines</span></div>
+<div class="kv"><span class="k">Version</span><span>v8</span></div>
+<div class="kv"><span class="k">Folder</span><code>regen_backup_20260921T170629Z</code></div>
+</div>
+</div>
+<p class="muted" style="margin: 10px 2px 0">A version saved in several backups is listed once, under its newest folder.</p>
+
+<div style="display: flex; gap: 8px; margin-top: 18px; padding-top: 14px; border-top: 1px solid #45504f">
+<a class="btn pri" href="RepairGenius.dc.html" style="flex: 1">Repair lyrics</a>
+<button class="btn" style="flex: 1">Regenerate</button>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1120}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

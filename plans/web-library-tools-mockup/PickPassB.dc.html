@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pick pass, list</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&amp;display=swap">
+<style>
+body{margin:0;background:#1f2424}
+a{color:#1abc9c}a:hover{color:#1dd2af}
+.scr{font-family:Lato,-apple-system,"Segoe UI",sans-serif;font-size:15px;line-height:1.4;color:#fff;background:#1f2424}
+.nav{background:#375a7f;border-radius:6px;display:flex;align-items:center;justify-content:space-between;padding:0 6px 0 14px;min-height:48px;font-weight:700}
+.card{background:#343c3d;border-radius:8px;overflow:hidden}
+.row{display:flex;gap:10px;align-items:center;padding:8px 12px;min-height:44px;border-top:1px solid #45504f}
+.row:first-child{border-top:0}
+.ttl{font-weight:700;color:#fff;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.muted{color:#a9b6b8;font-size:13px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:0 14px;border-radius:6px;border:1px solid #5e6d6f;background:#282f2f;color:#fff;font:inherit;font-size:14px;font-weight:700;text-decoration:none;cursor:pointer;box-sizing:border-box;white-space:nowrap}
+.pri{background:#375a7f;border-color:#375a7f}
+.small{min-height:36px;padding:0 10px;font-size:13px}
+.input{background:#fff;color:#1f2424;border:1px solid #5e6d6f;border-radius:6px;min-height:44px;padding:0 12px;font:inherit;font-size:16px;box-sizing:border-box;width:100%}
+.opt{display:flex;gap:12px;align-items:center;min-height:52px;padding:0 12px;border-top:1px solid #45504f;cursor:pointer}
+.opt:first-child{border-top:0}
+.opt input{width:20px;height:20px;accent-color:#1abc9c;margin:0}
+.ok{color:#8ff0b8}
+.chip{display:inline-flex;align-items:center;min-height:36px;padding:0 12px;border-radius:999px;border:1px solid #5e6d6f;background:transparent;color:#dbdee0;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.chip.on{background:#dbdee0;color:#1f2424;border-color:#dbdee0}
+</style>
+</helmet>
+<div class="scr" style="width: 390px; min-height: 1240px; box-sizing: border-box; padding: 12px 16px 32px">
+<nav class="nav" aria-label="Main">
+<span>PiKaraoke</span>
+<button class="btn" style="background: transparent; border: 0; min-width: 44px; padding: 0" aria-label="Menu"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></button>
+</nav>
+<h1 style="font-size: 26px; font-weight: 400; color: #f2f2f2; margin: 16px 0 2px">Reset all: picks</h1>
+<span class="muted">2 of 22 picked · saved as you go</span>
+<div style="height: 6px; border-radius: 3px; background: #45504f; margin: 8px 0 12px"><div style="width: 9%; height: 6px; border-radius: 3px; background: #1abc9c"></div></div>
+
+<div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px">
+<button class="chip on">To pick 20</button>
+<button class="chip">Picked 2</button>
+<button class="chip">Looks poor 7</button>
+</div>
+
+<div class="card">
+<div class="row">
+<span class="ok"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg></span>
+<div style="flex: 1; min-width: 0"><span class="ttl">'Defying Gravity' - Wicked</span><span class="muted">Genius: Defying Gravity · Idina Menzel</span></div>
+<button class="btn small">Change</button>
+</div>
+<div class="row">
+<span class="ok"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg></span>
+<div style="flex: 1; min-width: 0"><span class="ttl">HUNTR/X - What It Sounds Like</span><span class="muted">Kept current pick</span></div>
+<button class="btn small">Change</button>
+</div>
+
+<div style="border-top: 1px solid #45504f; background: #2c3434; padding: 12px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; justify-content: space-between; gap: 8px"><span class="ttl">'Popular' - Wicked</span><button class="btn small" aria-label="Collapse">Close</button></div>
+<span class="muted">Now: Genius, Popular · Kristin Chenoweth · 11 of 62 lines guessed</span>
+<div style="display: flex; gap: 8px">
+<input class="input" type="search" value="Popular Wicked" aria-label="Genius search">
+<button class="btn" style="min-width: 44px; padding: 0" aria-label="Search Genius"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg></button>
+</div>
+<div style="border: 1px solid #45504f; border-radius: 6px; overflow: hidden; background: #343c3d">
+<label class="opt"><input type="radio" name="p" checked><span style="flex: 1"><b>Popular</b> <span class="muted">Kristin Chenoweth (current)</span></span></label>
+<label class="opt"><input type="radio" name="p"><span style="flex: 1"><b>Popular</b> <span class="muted">Ariana Grande</span></span></label>
+<label class="opt"><input type="radio" name="p"><span style="flex: 1"><b>Popular (Reprise)</b> <span class="muted">Kristin Chenoweth</span></span></label>
+</div>
+<div style="display: flex; gap: 8px"><button class="btn" style="flex: 1">Transcribe</button><button class="btn" style="flex: 1">Skip song</button><button class="btn pri" style="flex: 1">Use pick</button></div>
+</div>
+
+<div class="row"><span style="width: 18px"></span><div style="flex: 1; min-width: 0"><span class="ttl">Ed Sheeran &amp; Rudimental - Bloodstream</span><span class="muted">Now: Bloodstream · Ed Sheeran</span></div><button class="btn small">Keep</button></div>
+<div class="row"><span style="width: 18px"></span><div style="flex: 1; min-width: 0"><span class="ttl">Mulan - I'll Make a Man Out of You</span><span class="muted">Now: I'll Make a Man Out of You · Donny Osmond</span></div><button class="btn small">Keep</button></div>
+<div class="row"><span style="width: 18px"></span><div style="flex: 1; min-width: 0"><span class="ttl">Seasons of Love (HD)</span><span class="muted">Now: Seasons of Love · Cast of Rent</span></div><button class="btn small">Keep</button></div>
+<div class="row"><span style="width: 18px"></span><div style="flex: 1; min-width: 0"><span class="ttl">The Lion King - Hakuna Matata</span><span class="muted">Now: Hakuna Matata · Nathan Lane</span></div><button class="btn small">Keep</button></div>
+<div class="row"><span style="width: 18px"></span><div style="flex: 1; min-width: 0"><span class="ttl">NSYNC - Paradise</span><span class="muted">Now: Paradise · Justin Timberlake</span></div><button class="btn small">Keep</button></div>
+<a href="#" style="display: flex; align-items: center; justify-content: center; min-height: 44px; border-top: 1px solid #45504f; font-weight: 700; text-decoration: none">Show 14 more</a>
+</div>
+
+<button class="btn" style="width: 100%; margin-top: 14px">Keep current pick for all 19 not yet picked</button>
+<button class="btn pri" style="width: 100%; margin-top: 10px" disabled>Queue 46 songs (20 still to pick)</button>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1240}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>
