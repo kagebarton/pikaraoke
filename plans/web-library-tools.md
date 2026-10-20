@@ -2,7 +2,7 @@
 
 Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 
-> **Status (2026-10-20): Phase 0 done; Phase 1 is next.** Branch
+> **Status (2026-10-20): Phases 0-1 done; Phase 2 is next.** Branch
 > `web_library_tools`, off `library_tools` at `0bfa02a`; `dev` merged as
 > `c34d889`. There is no GATE and nothing here measures timing. Landing is
 > Ken's call (see Landing).
@@ -1373,6 +1373,47 @@ Executed 2026-10-20 by Sonnet 5.5.
   touches those three folders.
 
 ### Phase 1
+
+Executed 2026-10-20 by Sonnet 5.5. Code commit `870e34f`.
+
+- **Suite:** 4 failed, 1564 passed, 2 skipped = 1570, the same as the baseline;
+  the four failures are the baseline's four (ids unchanged). No tests were added
+  or removed; they moved.
+- **Test split:** `test_library_regen.py` (scan, plans, `adopt_caption`,
+  `fetch_caption`, backup, wipe, ownership, `prepare_lyrics`),
+  `test_library_links.py` (`classify_url`, `expand_playlist`, `library_files`);
+  `test_regen_alignment_bundles.py` keeps the report, `main()` wiring,
+  `resolve_and_run` setup and the `execute_lrclib_backfill` batch tests;
+  `test_add_songs.py` keeps expansion failures, dedupe, report, handoff and `main()`.
+  The old `TestExecuteFetches` became `TestFetchCaption` (calls `fetch_caption`).
+- **Helpers:** `fetch_caption` and `backfill_lrc` follow the plan's table.
+  `backfill_lrc` checks `config.lrclib_fill` itself (the plan's signature takes
+  `config`; Phase 3 calls it from the web path). The script's
+  `execute_lrclib_backfill` keeps its own early `lrclib_fill` return, so its
+  "Backfilling..." line is still skipped when the knob is off; the CLI cannot
+  turn the knob off, so the two checks only differ for a direct caller.
+- **Dry runs on the real library** (`regen_alignment_bundles.py D:/Shared/pikaraoke-songs --dry-run`),
+  output files in the executor's scratchpad (`dry_*_{default,reset}.txt`):
+
+  | Script | default | `--reset` |
+  |---|---|---|
+  | pre-move script at `0381917` (schema 11) | 7 songs | 48 songs |
+  | moved script at `870e34f` | 7 songs, byte-identical to the pre-move run | 48 songs, byte-identical |
+  | `library_tools` worktree `0bfa02a` (schema 10) | 2 songs | 48 songs, byte-identical |
+
+  The plan's literal comparison (against the `library_tools` worktree) differs in
+  default mode only because that branch has no schema 11 (the `dev` merge in
+  `c34d889` brought it): it lists the 2 no-bundle songs, this branch also lists
+  the 5 v10 songs. The pre-move script on this branch is the like-for-like control.
+  `add_songs.py <video-in-library> <new-id> "not a url" --folder <real library> --dry-run`:
+  output byte-identical before and after, exit 1 both times (the unreadable URL).
+  `--help` prints for both scripts.
+- **pre-commit** (`--all-files`): isort, black and pycln reformatted my files only
+  (re-staged). The run also edited `pikaraoke/lib/args.py` (an unused `import os`,
+  upstream, not mine) and mdformat rewrote both plan files; all three were
+  reverted with `git checkout` and are not in the commit. Pylint passed.
+- **Import smoke:** `library_regen`, `library_links` and both scripts import.
+- The real library manifest was not touched (dry runs only read).
 
 ### Phase 2
 
