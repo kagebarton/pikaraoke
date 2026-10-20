@@ -69,6 +69,7 @@ from pikaraoke.lib.library_regen import (  # noqa: E402
     default_query,
     fetch_caption,
     find_local_srt,
+    finish_regen_job,
     list_videos,
     prepare_lyrics,
     resolve_plan,
@@ -236,6 +237,7 @@ def run_jobs(
             orch = PipelineOrchestrator(stages, stem_worker, whisper_worker, config)
             try:
                 orch.run_one(song, lyrics_path)
+                finish_regen_job(job)
                 print(f"  OK: {song.name}")
                 succeeded += 1
             except Exception as e:

@@ -859,3 +859,173 @@ class TestApplyLrclibChoice:
         lr.prepare_lyrics(job, MagicMock(), tmp_path, PipelineConfig())
 
         assert not lrc.exists()
+
+
+# ---------------------------------------------------------------------------
+# prepare_regen_job / finish_regen_job -- the per-song work of a queued regen
+# ---------------------------------------------------------------------------
+
+
+class TestPrepareRegenJob:
+    GENIUS_BUNDLE = {
+        "lyrics": {
+            "origin": "genius",
+            "lines": ["hello", "world"],
+            "genius": {"id": 9, "title": "H", "artist": "W"},
+        },
+        "media_duration_s": 200.0,
+    }
+
+    def _regen(self, tmp_path, plan, *, reset=False, bundle=None):
+        _touch_video(tmp_path, YT_STEM)
+        job = _job(tmp_path, YT_STEM, bundle)
+        job.plan = plan
+        return lr.RegenJob(song=job, reset=reset, label="Repair")
+
+    def _prepare(self, regen, tmp_path):
+        lyrics_dir = tmp_path / "work"
+        lyrics_dir.mkdir(exist_ok=True)
+        return lr.prepare_regen_job(regen, MagicMock(), PipelineConfig(), lyrics_dir)
+
+    def test_reset_wipes_outputs_but_keeps_captions_and_lrc(self, tmp_path):
+        regen = self._regen(tmp_path, lr.Plan(kind="transcribe"), reset=True)
+        subs = tmp_path / "subtitles"
+        subs.mkdir()
+        asr = subs / f"{YT_STEM}{ASR_JSON3_SUFFIX}"
+        asr.write_text("{}", encoding="utf-8")
+        (subs / f"{YT_STEM}.srt").write_text("old", encoding="utf-8")
+        lyrics = tmp_path / "lyrics"
+        lyrics.mkdir()
+        lrc = lyrics / f"{YT_STEM}.lrc"
+        lrc.write_text("[00:01.00]hi\n", encoding="utf-8")
+        (lyrics / f"{YT_STEM}.txt").write_text("old", encoding="utf-8")
+
+        self._prepare(regen, tmp_path)
+
+        assert asr.exists() and lrc.exists()
+        assert not (subs / f"{YT_STEM}.srt").exists()
+        assert not (lyrics / f"{YT_STEM}.txt").exists()
+
+    def test_no_reset_leaves_the_outputs(self, tmp_path):
+        regen = self._regen(tmp_path, lr.Plan(kind="transcribe"))
+        subs = tmp_path / "subtitles"
+        subs.mkdir()
+        srt = subs / f"{YT_STEM}.srt"
+        srt.write_text("old", encoding="utf-8")
+
+        self._prepare(regen, tmp_path)
+
+        assert srt.exists()
+
+    def test_a_file_in_use_becomes_a_regen_error_and_nothing_else_runs(self, tmp_path, monkeypatch):
+        regen = self._regen(tmp_path, lr.Plan(kind="sidecar", genius_id=1), reset=True)
+        monkeypatch.setattr(
+            lr, "clear_output_folders", MagicMock(side_effect=PermissionError("locked"))
+        )
+        write_choice = MagicMock()
+        monkeypatch.setattr(lr, "write_choice", write_choice)
+
+        with pytest.raises(lr.RegenError, match="in use.*Close the player and retry"):
+            self._prepare(regen, tmp_path)
+
+        write_choice.assert_not_called()
+
+    def test_a_fetch_plan_that_passes_goes_on_as_the_caption(self, tmp_path, monkeypatch):
+        regen = self._regen(tmp_path, lr._fetch_or_prompt_plan(tmp_path / f"{YT_STEM}.mp4"))
+        srt = _make_srt(tmp_path, YT_STEM, n_words=60)
+
+        def fetch(job):
+            job.plan = lr.Plan(kind="seed", lyrics_path=srt, seed={"lyrics_origin": "srt"})
+
+        monkeypatch.setattr(lr, "fetch_caption", fetch)
+
+        lyrics_path, stage = self._prepare(regen, tmp_path)
+
+        assert lyrics_path == srt
+        assert isinstance(stage, lr.SeedArtifactsStage)
+
+    def test_a_fetch_plan_that_fails_the_gate_raises_a_regen_error(self, tmp_path, monkeypatch):
+        regen = self._regen(tmp_path, lr._fetch_or_prompt_plan(tmp_path / f"{YT_STEM}.mp4"))
+
+        def fetch(job):
+            job.plan = job.plan.fallback
+
+        monkeypatch.setattr(lr, "fetch_caption", fetch)
+        prepare_lyrics = MagicMock()
+        monkeypatch.setattr(lr, "prepare_lyrics", prepare_lyrics)
+
+        with pytest.raises(lr.RegenError, match="Repair lyrics on Song Info"):
+            self._prepare(regen, tmp_path)
+
+        prepare_lyrics.assert_not_called()
+
+    def test_a_reused_genius_pick_backfills_the_lrc(self, tmp_path, monkeypatch):
+        job = _job(tmp_path, YT_STEM, self.GENIUS_BUNDLE)
+        plan = lr.reuse_plan(job)
+        regen = self._regen(tmp_path, plan, bundle=self.GENIUS_BUNDLE)
+        ensure = MagicMock(return_value=None)
+        monkeypatch.setattr(lr.lrclib, "ensure_lrc", ensure)
+
+        lyrics_path, stage = self._prepare(regen, tmp_path)
+
+        ensure.assert_called_once_with(regen.song.song_path, "H", "W", ["hello", "world"], 200.0)
+        assert lyrics_path.read_text(encoding="utf-8") == "hello\n\nworld"
+        assert isinstance(stage, lr.SeedArtifactsStage)
+
+    def test_a_reused_caption_does_not_backfill(self, tmp_path, monkeypatch):
+        srt = _make_srt(tmp_path, YT_STEM, n_words=60)
+        plan = lr.Plan(kind="seed", lyrics_path=srt, seed={"lyrics_origin": "srt"})
+        regen = self._regen(tmp_path, plan)
+        ensure = MagicMock()
+        monkeypatch.setattr(lr.lrclib, "ensure_lrc", ensure)
+
+        self._prepare(regen, tmp_path)
+
+        ensure.assert_not_called()
+
+    def test_the_lrclib_choice_is_applied(self, tmp_path, monkeypatch):
+        plan = lr.Plan(kind="sidecar", genius_id=9, lrclib_skip=True)
+        regen = self._regen(tmp_path, plan)
+        monkeypatch.setattr(lr, "write_choice", MagicMock())
+
+        self._prepare(regen, tmp_path)
+
+        assert lr.lrclib.is_skip_marker(tmp_path / "lyrics" / f"{YT_STEM}.lrc")
+
+    def test_a_transcribe_plan_has_no_lyrics_and_no_stage(self, tmp_path):
+        regen = self._regen(tmp_path, lr.Plan(kind="transcribe"))
+
+        assert self._prepare(regen, tmp_path) == (None, None)
+
+
+class TestFinishRegenJob:
+    def _job_with_bundle(self, tmp_path, plan):
+        _touch_video(tmp_path, YT_STEM)
+        _write_bundle(tmp_path, YT_STEM, {"schema_version": 10})
+        job = _job(tmp_path, YT_STEM, {"schema_version": 10})
+        job.plan = plan
+        return job, tmp_path / "alignment_debug" / f"{YT_STEM}.json"
+
+    def test_a_transcribe_plan_removes_the_old_bundle(self, tmp_path):
+        job, bundle = self._job_with_bundle(tmp_path, lr.Plan(kind="transcribe"))
+
+        lr.finish_regen_job(job)
+
+        assert not bundle.exists()
+
+    def test_a_transcribe_plan_without_a_bundle_is_fine(self, tmp_path):
+        job, bundle = self._job_with_bundle(tmp_path, lr.Plan(kind="transcribe"))
+        bundle.unlink()
+
+        lr.finish_regen_job(job)  # does not raise
+
+    def test_other_plans_leave_the_bundle(self, tmp_path):
+        for plan in (
+            lr.Plan(kind="seed", seed={"lyrics_origin": "genius"}),
+            lr.Plan(kind="sidecar", genius_id=9),
+        ):
+            job, bundle = self._job_with_bundle(tmp_path, plan)
+
+            lr.finish_regen_job(job)
+
+            assert bundle.exists()
