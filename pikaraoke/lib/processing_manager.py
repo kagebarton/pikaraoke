@@ -9,11 +9,16 @@ with phase-targeted cancellation.
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import os
 import queue
+import shutil
+import tempfile
 import threading
-from dataclasses import dataclass
+import time
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
 
 PIPELINE_THREAD_PREFIX = "pikaraoke-pipeline"
@@ -21,6 +26,12 @@ PIPELINE_THREAD_PREFIX = "pikaraoke-pipeline"
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.genius import GeniusClient
 from pikaraoke.lib.get_platform import get_temp_directory, is_windows
+from pikaraoke.lib.library_regen import (
+    RegenJob,
+    build_stages,
+    finish_regen_job,
+    prepare_regen_job,
+)
 from pikaraoke.lib.preference_manager import PreferenceManager
 from pikaraoke.lib.process_terminal import ProcessTerminal
 from pikaraoke.lib.song_manager import SongManager
@@ -161,6 +172,8 @@ class _ActiveJob:
     song_path: str
     cancel_token: CancelToken  # from orchestrator.run_one_async()
     cancelling: bool = False  # vestigial: set but not read; signals intent
+    kind: str = "download"  # which lane the job came from: "download" | "regen"
+    started_at: float = field(default_factory=time.monotonic)
 
 
 # ---------------------------------------------------------------------------
@@ -187,6 +200,7 @@ class ProcessingManager:
         genius_client: GeniusClient | None = None,
         temp_dir: str = "",
         log_level: int = logging.INFO,
+        is_playing: Callable[[str], bool] | None = None,
     ) -> None:
         self._events = events
         self._preferences = preferences
@@ -194,6 +208,9 @@ class ProcessingManager:
         self._genius = genius_client  # may be None before start() is called
         self._temp_dir = temp_dir
         self._log_level = log_level
+        # Cheap and non-blocking: called under _state_lock to hold back a regen
+        # job for the song that is playing.
+        self._is_playing = is_playing or (lambda _song_path: False)
 
         # Built in start()
         self._config: PipelineConfig
@@ -208,8 +225,9 @@ class ProcessingManager:
 
         # Queue and cancellation bookkeeping
         self._pending_queue: queue.Queue[str | None] = queue.Queue()
-        self.pending_jobs: list[str] = []  # public, derived
-        self._cancelled_paths: set[str] = set()
+        self.pending_jobs: list[str] = []  # public, derived (download and regen lanes)
+        self._regen_jobs: list[RegenJob] = []  # runs only when the download lane is empty
+        self._cancelled_paths: set[str] = set()  # download lane only
         self._active: _ActiveJob | None = None
         self._state_lock = threading.Lock()
 
@@ -221,8 +239,13 @@ class ProcessingManager:
     # ------------------------------------------------------------------
 
     def start(self) -> None:
-        """Start PTY, workers, orchestrator thread, subscribe to events."""
-        self._events.on("song_downloaded", self.enqueue)
+        """Start PTY, workers, orchestrator thread, subscribe to events.
+
+        ``song_downloaded`` is not subscribed here: karaoke.py wires
+        :meth:`enqueue` after the PipelineTracker, so the tracker sees a
+        download's song path before ``processing_queued`` is emitted.
+        """
+        self._events.on("song_deleted", self._on_song_deleted)
 
         # Reduce CUDA allocator fragmentation so stem and whisper models can
         # coexist with mpv's graphics context on a single GPU.
@@ -310,20 +333,23 @@ class ProcessingManager:
         if self._process_terminal is not None:
             self._process_terminal.stop()
 
+    def is_blocked(self, song_path: str) -> bool:
+        """Whether the title matches the blocked-words preference."""
+        blocked_str = self._preferences.get_or_default("blocked_processing_words")
+        if not blocked_str:
+            return False
+        name = Path(song_path).stem.lower()
+        blocked = [w.strip().lower() for w in blocked_str.split(",") if w.strip()]
+        return any(w in name for w in blocked)
+
     def enqueue(self, song_path: str) -> None:
         """Add a song to the processing queue."""
-        blocked_str = self._preferences.get_or_default("blocked_processing_words")
-        if blocked_str:
-            name = Path(song_path).stem.lower()
-            blocked = [w.strip().lower() for w in blocked_str.split(",") if w.strip()]
-            if any(w in name for w in blocked):
-                logger.info(
-                    f"Skipping pipeline (title matches blocked word): {Path(song_path).name}"
-                )
-                if self._song_manager is not None:
-                    self._song_manager.set_pipeline_state(song_path, "skipped")
-                self._events.emit("processing_skipped", song_path)
-                return
+        if self.is_blocked(song_path):
+            logger.info(f"Skipping pipeline (title matches blocked word): {Path(song_path).name}")
+            if self._song_manager is not None:
+                self._song_manager.set_pipeline_state(song_path, "skipped")
+            self._events.emit("processing_skipped", song_path)
+            return
 
         with self._state_lock:
             self.pending_jobs.append(song_path)
@@ -335,23 +361,64 @@ class ProcessingManager:
             logging.warning(f"Failed to enqueue: {Path(song_path).name}")
             return
         logging.info(f"Queued for pipeline: {Path(song_path).name}")
+        self._events.emit("processing_queued", song_path)
+
+    def enqueue_regen(self, regen: RegenJob) -> bool:
+        """Queue a regen job behind the download lane.
+
+        Returns False, queueing nothing, when the song is already running or
+        waiting in either lane.
+        """
+        song_path = str(regen.song.song_path)
+        with self._state_lock:
+            running = self._active is not None and self._active.song_path == song_path
+            if running or song_path in self.pending_jobs:
+                return False
+            self._regen_jobs.append(regen)
+            self.pending_jobs.append(song_path)
+        logging.info(f"Queued for regen ({regen.label}): {Path(song_path).name}")
+        self._events.emit(
+            "regen_queued", {"song_path": song_path, "label": regen.label, "job": regen}
+        )
+        return True
 
     def cancel_pending(self, song_path: str) -> None:
         """Remove a song from the pending processing queue.
 
-        Only a job that has not yet become active is recorded in
-        ``_cancelled_paths`` (consumed by ``_run_loop`` when it dequeues the path
-        to skip it). Recording an already-active path would leak the entry
-        forever — the loop never re-dequeues an active job — and would then
-        silently skip a later re-enqueue of the same path at the dequeue guard.
+        A path waiting in the regen lane is dropped from it and recorded
+        nowhere else. Otherwise, only a job that has not yet become active is
+        recorded in ``_cancelled_paths`` (consumed by ``_run_loop`` when it
+        dequeues the path to skip it): that set belongs to the download queue,
+        and an entry for a regen path would leak and later swallow a real
+        download of that song. Recording an already-active path would leak the
+        entry forever — the loop never re-dequeues an active job — and would
+        then silently skip a later re-enqueue of the same path at the dequeue
+        guard.
         """
         with self._state_lock:
             is_active = self._active is not None and self._active.song_path == song_path
+            was_regen = self._drop_regen_jobs(song_path)
             if song_path in self.pending_jobs:
                 self.pending_jobs.remove(song_path)
-            if not is_active:
+            if not is_active and not was_regen:
                 self._cancelled_paths.add(song_path)
         logging.info(f"Cancelled pending job: {Path(song_path).name}")
+
+    def _drop_regen_jobs(self, song_path: str) -> bool:
+        """Remove ``song_path``'s regen jobs from the lane; True if there were any.
+
+        Caller holds ``_state_lock`` and removes the path from ``pending_jobs``.
+        """
+        kept = [r for r in self._regen_jobs if str(r.song.song_path) != song_path]
+        dropped = len(kept) < len(self._regen_jobs)
+        self._regen_jobs[:] = kept
+        return dropped
+
+    def _on_song_deleted(self, song_path: str) -> None:
+        """A deleted song's queued regen job has nothing left to run on."""
+        with self._state_lock:
+            if self._drop_regen_jobs(song_path):
+                self.pending_jobs[:] = [p for p in self.pending_jobs if p != song_path]
 
     def cancel_active(self, song_path: str) -> None:
         """Cancel the currently active processing job.
@@ -375,6 +442,13 @@ class ProcessingManager:
         """Return the path of the currently active processing job, or None."""
         with self._state_lock:
             return self._active.song_path if self._active else None
+
+    def get_active_elapsed_s(self) -> float | None:
+        """Seconds the active job has been running, or None when idle."""
+        with self._state_lock:
+            if self._active is None:
+                return None
+            return time.monotonic() - self._active.started_at
 
     def get_active_phase(self) -> str | None:
         """Return the current pipeline phase of the active job, or None.
@@ -412,6 +486,11 @@ class ProcessingManager:
             try:
                 song_path = self._pending_queue.get(timeout=0.5)
             except queue.Empty:
+                # A download always goes first; a regen job runs only when the
+                # download lane is empty.
+                regen = self._take_regen_job()
+                if regen is not None:
+                    self._run_job(str(regen.song.song_path), lambda: self._process_regen(regen))
                 continue
             if song_path is None:
                 return  # shutdown sentinel
@@ -422,30 +501,46 @@ class ProcessingManager:
                     self.pending_jobs[:] = [p for p in self.pending_jobs if p != song_path]
                     continue
 
-            try:
-                self._process_song(song_path)
-            finally:
-                # In-place mutation preserves identity for external readers
-                with self._state_lock:
-                    self.pending_jobs[:] = [p for p in self.pending_jobs if p != song_path]
-                    self._active = None
+            self._run_job(song_path, lambda: self._process_song(song_path))
 
-                # Eager restart: a cancel, crash, or failed/timed-out initial
-                # load can leave a worker down; bring it back before the next
-                # job. is_alive() is False after a load timeout too (kill()
-                # clears the process handle), so this also recovers a worker
-                # that never finished its startup model load. Restarting whisper
-                # reloads its model and briefly blocks the loop, acceptable here.
-                if not self._stem_worker.is_alive():
-                    try:
-                        self._stem_worker.start()
-                    except Exception as e:
-                        logging.error(f"Failed to restart stem worker: {e}")
-                if not self._whisper_worker.is_alive():
-                    try:
-                        self._whisper_worker.start()
-                    except Exception as e:
-                        logging.error(f"Failed to restart whisper worker: {e}")
+    def _take_regen_job(self) -> RegenJob | None:
+        """Pop the first queued regen job whose song isn't playing.
+
+        A job for the playing song stays queued and is retried on the loop's
+        next pass.
+        """
+        with self._state_lock:
+            for i, regen in enumerate(self._regen_jobs):
+                if not self._is_playing(str(regen.song.song_path)):
+                    return self._regen_jobs.pop(i)
+        return None
+
+    def _run_job(self, song_path: str, process: Callable[[], None]) -> None:
+        """Run one job of either lane, then clean up after it."""
+        try:
+            process()
+        finally:
+            # In-place mutation preserves identity for external readers
+            with self._state_lock:
+                self.pending_jobs[:] = [p for p in self.pending_jobs if p != song_path]
+                self._active = None
+
+            # Eager restart: a cancel, crash, or failed/timed-out initial
+            # load can leave a worker down; bring it back before the next
+            # job. is_alive() is False after a load timeout too (kill()
+            # clears the process handle), so this also recovers a worker
+            # that never finished its startup model load. Restarting whisper
+            # reloads its model and briefly blocks the loop, acceptable here.
+            if not self._stem_worker.is_alive():
+                try:
+                    self._stem_worker.start()
+                except Exception as e:
+                    logging.error(f"Failed to restart stem worker: {e}")
+            if not self._whisper_worker.is_alive():
+                try:
+                    self._whisper_worker.start()
+                except Exception as e:
+                    logging.error(f"Failed to restart whisper worker: {e}")
 
     # ------------------------------------------------------------------
     # Single-job processing
@@ -463,14 +558,80 @@ class ProcessingManager:
                 return
 
         logging.info(f"Processing started: {Path(song_path).name}", extra=LIFECYCLE_EXTRA)
+        self._launch_and_report(
+            song_path, lambda: self._orchestrator.run_one_async(Path(song_path))
+        )
+
+    def _process_regen(self, regen: RegenJob) -> None:
+        """Run one regen job: prepare its files, then drive the pipeline over them.
+
+        A job that can't start (a ``RegenError``, or any failure while
+        preparing) is reported as a processing error; the song's
+        ``pipeline_state`` is left alone either way.
+        """
+        job = regen.song
+        song_path = str(job.song_path)
+        logging.info(f"Regen started ({regen.label}): {job.song_path.name}", extra=LIFECYCLE_EXTRA)
+        # Holds the reused-lyrics .txt for the run; the orchestrator validates
+        # that the path exists, so it must outlive the job.
+        lyrics_dir = Path(
+            tempfile.mkdtemp(prefix="regen_lyrics_", dir=self._config.intermediate_dir or None)
+        )
+        try:
+            # The CLI sets the same flag: keep the de-reverb stem for the next run.
+            config = dataclasses.replace(self._config, cache_dereverb_stem=True)
+            try:
+                lyrics_path, lyric_stage = prepare_regen_job(
+                    regen, self._genius, config, lyrics_dir
+                )
+            except Exception as e:  # a RegenError, or any file/network failure while preparing
+                self._report_failure(song_path, e, regen)
+                return
+            stages = [
+                PreparePtyStage(self._pty_slave_fd),
+                *build_stages(
+                    job.song_path, lyric_stage, self._whisper_worker, config, self._stem_worker
+                ),
+            ]
+            self._launch_and_report(
+                song_path,
+                lambda: self._orchestrator.run_one_async(job.song_path, lyrics_path, stages),
+                regen=regen,
+            )
+        finally:
+            shutil.rmtree(lyrics_dir, ignore_errors=True)
+
+    def _launch_and_report(
+        self,
+        song_path: str,
+        launch: Callable[[], CancelToken],
+        regen: RegenJob | None = None,
+    ) -> None:
+        """Launch a pipeline run, wait for it, and report how it ended.
+
+        ``regen`` is None for a download. A failed download marks the song
+        ``failed``; a failed regen leaves ``pipeline_state`` alone, because
+        ``_do_enqueue`` refuses ``failed`` songs and a failed regen of a
+        playable song must not make it unqueueable.
+        """
         # Launch and register the active job under one lock hold: a cancel_active()
         # landing between the launch and the _active assignment would otherwise be
         # dropped as "non-active" and the job would run to completion uncancellable.
         # run_one_async() only spawns a background thread and returns, so it does
-        # not block or re-enter _state_lock.
-        with self._state_lock:
-            token = self._orchestrator.run_one_async(Path(song_path))
-            self._active = _ActiveJob(song_path=song_path, cancel_token=token)
+        # not block or re-enter _state_lock. It validates its inputs on this
+        # thread, so a song file that is gone raises here, before any pipeline
+        # thread exists.
+        try:
+            with self._state_lock:
+                token = launch()
+                self._active = _ActiveJob(
+                    song_path=song_path,
+                    cancel_token=token,
+                    kind="download" if regen is None else "regen",
+                )
+        except Exception as e:
+            self._report_failure(song_path, e, regen)
+            return
 
         try:
             ctx = self._orchestrator.join()
@@ -481,12 +642,7 @@ class ProcessingManager:
             logging.info(f"Processing cancelled: {Path(song_path).name}", extra=LIFECYCLE_EXTRA)
             return
         except Exception as e:
-            if self._song_manager is not None:
-                self._song_manager.set_pipeline_state(song_path, "failed")
-            logging.error(
-                f"Processing failed for {Path(song_path).name}: {e}", extra=LIFECYCLE_EXTRA
-            )
-            self._events.emit("processing_error", {"song_path": song_path, "error": str(e)})
+            self._report_failure(song_path, e, regen)
             return
 
         # Persist loudnorm offset and ready state
@@ -499,8 +655,22 @@ class ProcessingManager:
                     logging.warning(f"Failed to persist loudnorm offset for {song_path}: {e}")
             self._song_manager.set_pipeline_state(song_path, "ready")
 
+        if regen is not None:
+            try:
+                finish_regen_job(regen.song)
+            except OSError as e:
+                logging.warning(f"Could not drop the old bundle of {song_path}: {e}")
+
         self._events.emit(
             "processing_complete",
             {"song_path": song_path, "lyric_method": ctx.artifacts.get("lyric_method")},
         )
         logging.info(f"Processing complete: {Path(song_path).name}", extra=LIFECYCLE_EXTRA)
+
+    def _report_failure(self, song_path: str, error: Exception, regen: RegenJob | None) -> None:
+        if regen is None and self._song_manager is not None:
+            self._song_manager.set_pipeline_state(song_path, "failed")
+        logging.error(
+            f"Processing failed for {Path(song_path).name}: {error}", extra=LIFECYCLE_EXTRA
+        )
+        self._events.emit("processing_error", {"song_path": song_path, "error": str(error)})
