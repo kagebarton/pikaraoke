@@ -793,8 +793,12 @@ def prepare_regen_job(
             ) from e
 
     if job.plan.kind == "fetch":
+        fetch_plan = job.plan
         fetch_caption(job)
         if job.plan.kind != "seed":
+            # Put the fetch plan back: a retry must fetch again, not run the
+            # fallback plan, which prepare_lyrics would treat as transcribe.
+            job.plan = fetch_plan
             raise RegenError(
                 "The YouTube caption no longer passes the lyrics check. "
                 "Use Repair lyrics on Song Info to pick lyrics."

@@ -959,6 +959,18 @@ class TestPrepareRegenJob:
 
         prepare_lyrics.assert_not_called()
 
+    def test_a_failed_fetch_leaves_the_job_ready_to_retry(self, tmp_path, monkeypatch):
+        fetch_plan = lr._fetch_or_prompt_plan(tmp_path / f"{YT_STEM}.mp4")
+        regen = self._regen(tmp_path, fetch_plan)
+        monkeypatch.setattr(
+            lr, "fetch_caption", lambda job: setattr(job, "plan", job.plan.fallback)
+        )
+
+        with pytest.raises(lr.RegenError):
+            self._prepare(regen, tmp_path)
+
+        assert regen.song.plan is fetch_plan
+
     def test_a_reused_genius_pick_backfills_the_lrc(self, tmp_path, monkeypatch):
         job = _job(tmp_path, YT_STEM, self.GENIUS_BUNDLE)
         plan = lr.reuse_plan(job)
