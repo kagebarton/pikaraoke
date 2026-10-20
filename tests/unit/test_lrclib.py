@@ -11,6 +11,7 @@ from pikaraoke.lib.lrclib import (
     normalize_line,
     parse_lrc_lines,
 )
+from pikaraoke.lib.lrclib_fill import plan_fills
 
 _SYNCED_AB = "[00:01.00]hello world\n[00:05.00]goodbye world\n"
 
@@ -63,6 +64,95 @@ class TestSearch:
         resp.json.return_value = {"message": "not found"}
         mock_get.return_value = resp
         assert lrclib.search("T", "A") == []
+
+
+class TestGetRecord:
+    @patch("pikaraoke.lib.lrclib.time.sleep")
+    @patch("pikaraoke.lib.lrclib.requests.get")
+    def test_returns_the_record_json(self, mock_get, _sleep):
+        record = {"id": 5, "trackName": "T", "syncedLyrics": _SYNCED_AB}
+        resp = MagicMock()
+        resp.json.return_value = record
+        mock_get.return_value = resp
+
+        assert lrclib.get_record(5) == record
+        assert mock_get.call_args.args[0] == "https://lrclib.net/api/get/5"
+        assert mock_get.call_args.kwargs["headers"] == {"User-Agent": lrclib.USER_AGENT}
+
+    @patch("pikaraoke.lib.lrclib.requests.get")
+    def test_http_error_returns_none(self, mock_get):
+        resp = MagicMock()
+        resp.raise_for_status.side_effect = requests.HTTPError("503")
+        mock_get.return_value = resp
+
+        assert lrclib.get_record(5) is None
+
+    @patch("pikaraoke.lib.lrclib.requests.get")
+    def test_bad_json_returns_none(self, mock_get):
+        resp = MagicMock()
+        resp.json.side_effect = ValueError("not json")
+        mock_get.return_value = resp
+
+        assert lrclib.get_record(5) is None
+
+    @patch("pikaraoke.lib.lrclib.requests.get", side_effect=requests.RequestException("boom"))
+    def test_network_error_returns_none(self, _get):
+        assert lrclib.get_record(5) is None
+
+    @patch("pikaraoke.lib.lrclib.time.sleep")
+    @patch("pikaraoke.lib.lrclib.requests.get")
+    def test_a_response_that_is_not_an_object_returns_none(self, mock_get, _sleep):
+        resp = MagicMock()
+        resp.json.return_value = ["not", "a", "record"]
+        mock_get.return_value = resp
+
+        assert lrclib.get_record(5) is None
+
+
+class TestSkipMarker:
+    def test_marker_is_told_apart_from_a_real_lrc(self, tmp_path):
+        marker = tmp_path / "lyrics" / "Marker.lrc"
+        real = tmp_path / "lyrics" / "Real.lrc"
+        lrclib.write_skip_marker(marker)
+        lrclib.write_lrc(real, {"id": 1, "trackName": "T", "syncedLyrics": _SYNCED_AB})
+
+        assert lrclib.is_skip_marker(marker)
+        assert not lrclib.is_skip_marker(real)
+        assert not lrclib.is_skip_marker(tmp_path / "lyrics" / "Missing.lrc")
+        assert not marker.with_name(marker.name + ".tmp").exists()
+
+    def test_ensure_lrc_returns_the_marker_without_searching(self, tmp_path):
+        song_path = tmp_path / "Song---dQw4w9WgXcQ.mp4"
+        marker = song_path.parent / "lyrics" / f"{song_path.stem}.lrc"
+        lrclib.write_skip_marker(marker)
+
+        with patch("pikaraoke.lib.lrclib.search") as mock_search:
+            result = ensure_lrc(song_path, "T", "A", ["hello world"], 120.0)
+
+        assert result == marker
+        mock_search.assert_not_called()
+
+    def test_the_fill_finds_no_cues_in_the_marker(self, tmp_path):
+        marker = tmp_path / "Song.lrc"
+        lrclib.write_skip_marker(marker)
+        synced_text, meta = lrclib.read_lrc(marker)
+        line_objects = [{"line_id": 0, "words": [], "start": None, "end": None, "source": "absent"}]
+
+        fills, stats = plan_fills(
+            line_objects,
+            ["hello world"],
+            ["hello world"],
+            [],
+            synced_text,
+            None,
+            margin_s=0.3,
+            max_edit_ratio=0.75,
+        )
+
+        assert meta == {}
+        assert fills == []
+        assert stats["eligible"] is False
+        assert stats["reason"] == "no_mapping"
 
 
 class TestSelectCandidate:
