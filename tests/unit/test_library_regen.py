@@ -681,3 +681,98 @@ class TestBackfillLrc:
         lr.backfill_lrc(job, PipelineConfig())
 
         assert "LRCLIB backfill failed" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# apply_lrclib_choice — lyrics/<stem>.lrc is the LRCLIB choice
+# ---------------------------------------------------------------------------
+
+
+class TestApplyLrclibChoice:
+    GENIUS_BUNDLE = {
+        "lyrics": {"origin": "genius", "genius": {"id": 9, "title": "H", "artist": "W"}}
+    }
+    RECORD = {"id": 42, "trackName": "T", "syncedLyrics": "[00:01.00]hello\n"}
+
+    def _job_with_lrc(self, tmp_path, plan, bundle=None):
+        job = _job(tmp_path, YT_STEM, bundle)
+        job.plan = plan
+        lrc = tmp_path / "lyrics" / f"{YT_STEM}.lrc"
+        lrc.parent.mkdir(exist_ok=True)
+        lrc.write_text("[lrclib_id:1]\n[00:01.00]old song\n", encoding="utf-8")
+        return job, lrc
+
+    def test_a_different_genius_id_drops_the_old_match(self, tmp_path):
+        job, lrc = self._job_with_lrc(
+            tmp_path, lr.Plan(kind="sidecar", genius_id=10), self.GENIUS_BUNDLE
+        )
+
+        lr.apply_lrclib_choice(job)
+
+        assert not lrc.exists()
+
+    def test_the_same_genius_id_keeps_the_match(self, tmp_path):
+        job, lrc = self._job_with_lrc(
+            tmp_path, lr.Plan(kind="sidecar", genius_id=9), self.GENIUS_BUNDLE
+        )
+
+        lr.apply_lrclib_choice(job)
+
+        assert lrc.exists()
+
+    def test_a_bundle_without_a_genius_id_drops_the_match(self, tmp_path):
+        job, lrc = self._job_with_lrc(tmp_path, lr.Plan(kind="sidecar", genius_id=9), None)
+
+        lr.apply_lrclib_choice(job)
+
+        assert not lrc.exists()
+
+    def test_a_chosen_record_replaces_the_file(self, tmp_path):
+        job, lrc = self._job_with_lrc(tmp_path, lr.Plan(kind="sidecar", genius_id=9))
+        job.plan.lrclib_record = self.RECORD
+
+        lr.apply_lrclib_choice(job)
+
+        assert "[lrclib_id:42]" in lrc.read_text(encoding="utf-8")
+
+    def test_skip_writes_the_marker(self, tmp_path):
+        job, lrc = self._job_with_lrc(tmp_path, lr.Plan(kind="sidecar", genius_id=9))
+        job.plan.lrclib_skip = True
+
+        lr.apply_lrclib_choice(job)
+
+        assert lr.lrclib.is_skip_marker(lrc)
+
+    def test_skip_wins_over_a_record_and_over_the_id_rule(self, tmp_path):
+        job, lrc = self._job_with_lrc(
+            tmp_path, lr.Plan(kind="sidecar", genius_id=10), self.GENIUS_BUNDLE
+        )
+        job.plan.lrclib_skip = True
+        job.plan.lrclib_record = self.RECORD
+
+        lr.apply_lrclib_choice(job)
+
+        assert lr.lrclib.is_skip_marker(lrc)
+
+    def test_seed_and_transcribe_plans_leave_the_file_alone(self, tmp_path):
+        for plan in (
+            lr.Plan(kind="seed", seed={"lyrics_origin": "genius"}),
+            lr.Plan(kind="transcribe"),
+        ):
+            job, lrc = self._job_with_lrc(tmp_path, plan, self.GENIUS_BUNDLE)
+
+            lr.apply_lrclib_choice(job)
+
+            assert lrc.read_text(encoding="utf-8").startswith("[lrclib_id:1]")
+
+    def test_prepare_lyrics_applies_the_choice_before_the_stage_can_reuse_the_file(
+        self, tmp_path, monkeypatch
+    ):
+        job, lrc = self._job_with_lrc(
+            tmp_path, lr.Plan(kind="sidecar", genius_id=10), self.GENIUS_BUNDLE
+        )
+        monkeypatch.setattr(lr, "write_choice", MagicMock())
+
+        lr.prepare_lyrics(job, MagicMock(), tmp_path, PipelineConfig())
+
+        assert not lrc.exists()

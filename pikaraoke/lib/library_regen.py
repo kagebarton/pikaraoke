@@ -97,6 +97,9 @@ class Plan:
       * ``transcribe`` -> no lyrics; transcription mode (writes no bundle).
       * ``skip``       -> drop the song.
       * ``prompt``     -> placeholder until the interactive pass resolves it.
+
+    ``lrclib_record`` / ``lrclib_skip`` carry an admin's LRCLIB choice (a
+    chosen record, or no match at all); see :func:`apply_lrclib_choice`.
     """
 
     kind: str
@@ -106,6 +109,8 @@ class Plan:
     genius_id: int | None = None
     label: str = ""
     fallback: "Plan | None" = None
+    lrclib_record: dict | None = None
+    lrclib_skip: bool = False
 
 
 @dataclass
@@ -452,14 +457,40 @@ def build_stages(song: Path, lyric_stage, whisper, config: PipelineConfig, stem_
     return stages
 
 
+def apply_lrclib_choice(job: SongJob) -> None:
+    """Make ``lyrics/<stem>.lrc`` say which LRCLIB match the run should use.
+
+    ``ensure_lrc`` reuses any ``.lrc`` on disk and a reset keeps it, so the
+    file is the choice:
+
+      * ``lrclib_skip`` -> a skip marker (no fetch; the fill finds no cues);
+      * ``lrclib_record`` -> that record;
+      * a ``sidecar`` plan for a different Genius song than the bundle
+        recorded -> no file, so the automatic fetch runs for the new song
+        instead of reusing the old song's match;
+      * anything else leaves the file alone.
+    """
+    plan = job.plan
+    lrc = job.song_path.parent / "lyrics" / f"{job.song_path.stem}.lrc"
+    if plan.lrclib_skip:
+        lrclib.write_skip_marker(lrc)
+    elif plan.lrclib_record is not None:
+        lrclib.write_lrc(lrc, plan.lrclib_record)
+    elif plan.kind == "sidecar":
+        recorded = (((job.bundle or {}).get("lyrics") or {}).get("genius") or {}).get("id")
+        if plan.genius_id != recorded:
+            lrc.unlink(missing_ok=True)
+
+
 def prepare_lyrics(job: SongJob, genius: GeniusClient, lyrics_dir: Path, config: PipelineConfig):
     """Resolve a job's plan to ``(lyrics_path, lyric_stage)`` for the run.
 
-    Writes the temp .txt for reused Genius lyrics and the choice sidecar for
-    a fresh Genius selection. A Genius pick on a song without a YouTube id
-    can't use the sidecar, so it degrades to explicit lyrics with no YTASR
-    3rd source (logged).
+    Applies the LRCLIB choice first, then writes the temp .txt for reused
+    Genius lyrics and the choice sidecar for a fresh Genius selection. A
+    Genius pick on a song without a YouTube id can't use the sidecar, so it
+    degrades to explicit lyrics with no YTASR 3rd source (logged).
     """
+    apply_lrclib_choice(job)
     plan = job.plan
     song = job.song_path
 
