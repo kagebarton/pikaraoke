@@ -142,6 +142,21 @@ class TestStageOrdering:
         orch.run(song)
         assert log == ["a", "b", "c"]
 
+    def test_a_given_stage_list_runs_instead_of_the_fixed_one(self, song):
+        log = []
+        orch = _make_orch([RecordingStage("fixed", log)])
+        orch.start()
+        try:
+            orch.run_one_async(
+                song, stages=[RecordingStage("given-1", log), RecordingStage("given-2", log)]
+            )
+            orch.join(timeout=5)
+            orch.run_one_async(song)  # the next job goes back to the fixed list
+            orch.join(timeout=5)
+        finally:
+            orch.stop()
+        assert log == ["given-1", "given-2", "fixed"]
+
     def test_workers_started_before_first_stage(self, song):
         seen = {}
 
