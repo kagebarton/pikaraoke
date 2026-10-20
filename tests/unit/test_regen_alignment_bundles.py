@@ -7,12 +7,13 @@ the LRCLIB backfill batch.
 """
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from pikaraoke.lib import lrclib
+from pikaraoke.lib import library_regen, lrclib
 from pikaraoke.pipeline.config import PipelineConfig
 
 # scripts/ is not a package — load the module straight from its file. It must
@@ -290,3 +291,60 @@ class TestExecuteLrclibBackfill:
         regen.execute_lrclib_backfill([bad, good], PipelineConfig())
 
         assert mock.call_count == 2  # the OSError on "bad" didn't stop "good"
+
+
+# ---------------------------------------------------------------------------
+# --song --reset with a different Genius pick
+# ---------------------------------------------------------------------------
+
+
+class TestResetWithNewGeniusPick:
+    """``--song X --reset`` that picks another Genius song used to keep the old
+    song's ``.lrc``: a reset keeps ``.lrc`` files and ``ensure_lrc`` reuses any
+    file on disk, so the new song ran against the old song's LRCLIB timing."""
+
+    def test_the_old_lrc_is_gone_when_the_pipeline_runs(self, tmp_path, monkeypatch):
+        _touch_video(tmp_path, YT_STEM)
+        (tmp_path / "alignment_debug").mkdir()
+        bundle = {
+            "lyrics": {"origin": "genius", "genius": {"id": 9, "title": "Old", "artist": "A"}}
+        }
+        (tmp_path / "alignment_debug" / f"{YT_STEM}.json").write_text(
+            json.dumps(bundle), encoding="utf-8"
+        )
+        lrc = tmp_path / "lyrics" / f"{YT_STEM}.lrc"
+        lrc.parent.mkdir()
+        lrc.write_text("[lrclib_id:1]\n[00:01.00]old song\n", encoding="utf-8")
+        temp_dir = tmp_path / "tmp"
+        temp_dir.mkdir()
+
+        hit = SimpleNamespace(id=10, title="New", artist="B")
+        genius = SimpleNamespace(_token="tok", search=lambda query, limit: [hit])
+        monkeypatch.setattr(regen, "_make_genius", lambda: genius)
+        monkeypatch.setattr(regen, "get_temp_directory", lambda: str(temp_dir))
+        monkeypatch.setattr(library_regen, "download_manual_en_subs", lambda url, dest, stem: None)
+        monkeypatch.setattr(library_regen, "write_choice", MagicMock())
+        answers = iter(["", "1"])  # the default query, then the first hit
+        monkeypatch.setattr("builtins.input", lambda prompt: next(answers))
+
+        seen = {}
+
+        class FakeOrchestrator:
+            def __init__(self, *args):
+                pass
+
+            def run_one(self, song, lyrics_path):
+                seen["lrc_exists"] = lrc.exists()
+
+        monkeypatch.setattr(regen, "PipelineOrchestrator", FakeOrchestrator)
+        monkeypatch.setattr(regen, "StemWorker", MagicMock())
+        monkeypatch.setattr(regen, "WhisperWorker", MagicMock())
+        monkeypatch.setattr(regen, "build_stages", lambda *args: [])
+        monkeypatch.setenv("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+        monkeypatch.setattr(
+            sys, "argv", ["regen", str(tmp_path), "--song", "dQw4w9WgXcQ", "--reset", "--yes"]
+        )
+
+        assert regen.main() == 0
+
+        assert seen == {"lrc_exists": False}
