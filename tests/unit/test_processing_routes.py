@@ -13,6 +13,7 @@ if not hasattr(werkzeug, "__version__"):
 
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.pipeline_tracker import PipelineItem, PipelineTracker
+from pikaraoke.lib.processing_manager import ProcessingManager
 from pikaraoke.routes.processing import processing_bp
 
 ROUTE_PREFIX = "pikaraoke.routes.processing"
@@ -27,6 +28,7 @@ def _make_tracker():
     mock_pm.get_active_job.return_value = None
     mock_pm.get_active_phase.return_value = None
     mock_pm.pending_jobs = []
+    mock_pm.get_active_elapsed_s.return_value = None
     mock_qm = MagicMock()
     mock_sm = MagicMock()
     return PipelineTracker(
@@ -715,3 +717,268 @@ class TestProcessingPhase:
         tracker._on_change = lambda: calls.append(1)
         tracker._on_pipeline_stage_changed()
         assert len(calls) == 1
+
+
+# ---------------------------------------------------------------------------
+# Regen and process rows
+# ---------------------------------------------------------------------------
+
+LIB_PATH = "/songs/Library Song---abcdefghijk.mp4"
+
+
+def _queue_regen(tracker, path=LIB_PATH, label="Repair"):
+    """Announce a regen job the way ProcessingManager.enqueue_regen does."""
+    job = MagicMock(name="regen job")
+    tracker._events.emit("regen_queued", {"song_path": path, "label": label, "job": job})
+    item = next(i for i in tracker._items if i.kind == "regen" and i.song_path == path)
+    return item, job
+
+
+def _announce_processing(tracker, path=LIB_PATH):
+    tracker._events.emit("processing_queued", path)
+    return next(i for i in tracker._items if i.kind == "process" and i.song_path == path)
+
+
+def _finished(tracker, kind="regen", status="complete", path=LIB_PATH):
+    """A regen / process row that has finished with ``status``."""
+    if kind == "regen":
+        item, _ = _queue_regen(tracker, path)
+    else:
+        item = _announce_processing(tracker, path)
+    item.processing_status = status
+    return item
+
+
+class TestRegenRows:
+    def test_a_regen_row_is_hidden_from_guests(self):
+        tracker = _make_tracker()
+        _queue_regen(tracker)
+
+        assert tracker.get_status(admin=False, user="Alice") == []
+
+    def test_an_admin_sees_the_regen_row_with_its_kind_and_label(self):
+        tracker = _make_tracker()
+        item, _ = _queue_regen(tracker, label="Reprocess")
+        tracker._processing_manager.pending_jobs = [LIB_PATH]
+
+        [row] = tracker.get_status(admin=True, user="Alice")
+
+        assert (row["kind"], row["label"], row["title"]) == ("regen", "Reprocess", "Library Song")
+        assert row["song_path"] == LIB_PATH
+        assert row["processing_status"] == "pending"
+        assert row["actions"] == ["cancel"]
+
+    def test_queueing_a_regen_replaces_the_finished_rows_of_that_song(self):
+        tracker = _make_tracker()
+        _finished(tracker, "regen", "error")
+        other = _finished(tracker, "regen", "complete", path="/songs/Other---xyz789.mp4")
+
+        item, _ = _queue_regen(tracker)
+
+        assert tracker._items == [other, item]
+
+    def test_cancelling_a_pending_regen_row_never_deletes_the_song(self):
+        tracker = _make_tracker()
+        item, _ = _queue_regen(tracker)
+        tracker._processing_manager.pending_jobs = [LIB_PATH]
+        tracker.get_status(admin=True)  # derives "pending"
+
+        assert tracker.cancel(item.id) is True
+
+        tracker._processing_manager.cancel_pending.assert_called_once_with(LIB_PATH)
+        tracker._song_manager.delete.assert_not_called()
+        assert tracker._items == []
+
+    def test_cancelling_an_active_regen_row_never_deletes_the_song(self):
+        tracker = _make_tracker()
+        item, _ = _queue_regen(tracker)
+        tracker._processing_manager.get_active_job.return_value = LIB_PATH
+        tracker.get_status(admin=True)  # derives "active"
+
+        assert tracker.cancel(item.id) is True
+        tracker._events.emit("processing_cancelled", LIB_PATH)  # the run wound down
+
+        tracker._processing_manager.cancel_active.assert_called_once_with(LIB_PATH)
+        tracker._song_manager.delete.assert_not_called()
+        assert tracker._items == []
+
+    def test_cancelling_a_pending_download_still_deletes_its_song(self):
+        tracker = _make_tracker()
+        item = PipelineItem(title="New", url="https://example.com", user="Alice")
+        item.download_status = "complete"
+        item.song_path = "/songs/New---aaa111.mp4"
+        tracker._items.append(item)
+        tracker._processing_manager.pending_jobs = [item.song_path]
+        tracker.get_status(admin=True)
+
+        assert tracker.cancel(item.id) is True
+
+        tracker._song_manager.delete.assert_called_once_with("/songs/New---aaa111.mp4")
+
+    def test_cancelling_an_active_download_still_deletes_its_song(self):
+        tracker = _make_tracker()
+        item = PipelineItem(title="New", url="https://example.com", user="Alice")
+        item.download_status = "complete"
+        item.song_path = "/songs/New---aaa111.mp4"
+        tracker._items.append(item)
+        tracker._processing_manager.get_active_job.return_value = item.song_path
+        tracker.get_status(admin=True)
+        tracker.cancel(item.id)
+
+        tracker._events.emit("processing_cancelled", item.song_path)
+
+        tracker._song_manager.delete.assert_called_once_with("/songs/New---aaa111.mp4")
+
+
+class TestProcessRows:
+    def test_a_song_with_no_row_gets_a_process_row(self):
+        tracker = _make_tracker()
+
+        item = _announce_processing(tracker)
+
+        assert (item.label, item.title, item.download_status) == (
+            "Process",
+            "Library Song",
+            "complete",
+        )
+        assert item.user == ""
+
+    def test_a_download_with_a_live_row_adds_no_row(self):
+        tracker = _make_tracker()
+        item = PipelineItem(
+            title="New", url="https://www.youtube.com/watch?v=aaa11111111", user="Alice"
+        )
+        item.song_path = "/songs/New---aaa11111111.mp4"
+        item.download_status = "complete"
+        tracker._items.append(item)
+
+        tracker._events.emit("processing_queued", item.song_path)
+
+        assert tracker._items == [item]
+
+    def test_a_new_process_row_replaces_the_finished_rows_of_that_song(self):
+        tracker = _make_tracker()
+        _finished(tracker, "regen", "error")
+
+        item = _announce_processing(tracker)
+
+        assert tracker._items == [item]
+
+    def test_the_download_row_is_found_when_the_tracker_hears_song_downloaded_first(self):
+        # karaoke.py subscribes ProcessingManager.enqueue after the tracker so
+        # the tracker's handler runs first and the item has its song path.
+        events = EventSystem()
+        pm = ProcessingManager(events=events, preferences=MagicMock(get_or_default=lambda k: ""))
+        tracker = PipelineTracker(
+            download_manager=MagicMock(active_url=None),
+            processing_manager=pm,
+            queue_manager=MagicMock(),
+            song_manager=MagicMock(),
+            events=events,
+        )
+        events.on("song_downloaded", pm.enqueue)
+        events.emit(
+            "download_queued",
+            {
+                "title": "New",
+                "video_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                "user": "Alice",
+            },
+        )
+
+        events.emit("song_downloaded", "/songs/New---dQw4w9WgXcQ.mp4")
+
+        [item] = tracker._items
+        assert (item.kind, item.song_path) == ("download", "/songs/New---dQw4w9WgXcQ.mp4")
+
+
+class TestRowsThatFinish:
+    def test_events_update_the_first_unfinished_row_for_the_song(self):
+        tracker = _make_tracker()
+        old = _finished(tracker, "process", "complete")
+        live = PipelineItem(title="Again", url="", user="")
+        live.song_path = LIB_PATH
+        tracker._items.append(live)
+
+        tracker._events.emit("processing_error", {"song_path": LIB_PATH, "error": "boom"})
+
+        assert (old.processing_status, old.error_message) == ("complete", None)
+        assert (live.processing_status, live.error_message) == ("error", "boom")
+
+    def test_complete_and_error_stamp_the_time_they_finished(self):
+        tracker = _make_tracker()
+        done = _announce_processing(tracker, "/songs/A---aaa111.mp4")
+        failed = _announce_processing(tracker, "/songs/B---bbb222.mp4")
+        assert done.finished_at is None
+
+        tracker._events.emit(
+            "processing_complete", {"song_path": done.song_path, "lyric_method": None}
+        )
+        tracker._events.emit("processing_error", {"song_path": failed.song_path, "error": "x"})
+
+        assert done.finished_at is not None and failed.finished_at is not None
+        rows = {r["id"]: r for r in tracker.get_status(admin=True)}
+        assert 0 <= rows[done.id]["finished_ago_s"] < 5
+        assert rows[failed.id]["finished_ago_s"] is not None
+
+    def test_a_running_row_has_no_finished_time_and_carries_the_elapsed_time(self):
+        tracker = _make_tracker()
+        item, _ = _queue_regen(tracker)
+        tracker._processing_manager.get_active_job.return_value = LIB_PATH
+        tracker._processing_manager.get_active_elapsed_s.return_value = 12.5
+
+        [row] = tracker.get_status(admin=True)
+
+        assert row["finished_ago_s"] is None
+        assert row["elapsed_s"] == 12.5
+
+    def test_only_the_running_row_gets_the_elapsed_time(self):
+        tracker = _make_tracker()
+        _queue_regen(tracker, "/songs/A---aaa111.mp4")
+        _queue_regen(tracker, "/songs/B---bbb222.mp4")
+        tracker._processing_manager.get_active_job.return_value = "/songs/A---aaa111.mp4"
+        tracker._processing_manager.pending_jobs = [
+            "/songs/A---aaa111.mp4",
+            "/songs/B---bbb222.mp4",
+        ]
+        tracker._processing_manager.get_active_elapsed_s.return_value = 3.0
+
+        rows = {r["song_path"]: r for r in tracker.get_status(admin=True)}
+
+        assert rows["/songs/A---aaa111.mp4"]["elapsed_s"] == 3.0
+        assert rows["/songs/B---bbb222.mp4"]["elapsed_s"] is None
+
+
+class TestRowActions:
+    @pytest.mark.parametrize("kind", ["regen", "process"])
+    def test_remove_is_not_offered_for_a_row_that_is_not_a_download(self, kind):
+        tracker = _make_tracker()
+        item = _finished(tracker, kind, "complete")
+
+        [row] = tracker.get_status(admin=True)
+
+        assert "remove" not in row["actions"]
+        assert "enqueue" not in row["actions"]
+        assert tracker.remove(item.id) is False
+        assert tracker._items == [item]
+        tracker._song_manager.delete.assert_not_called()
+
+    def test_a_download_still_offers_remove(self):
+        tracker = _make_tracker()
+        item = PipelineItem(title="Done", url="", user="Alice")
+        item.download_status = item.processing_status = "complete"
+        item.song_path = "/songs/Done---ddd444.mp4"
+        tracker._items.append(item)
+
+        [row] = tracker.get_status(admin=True, user="Alice")
+
+        assert "remove" in row["actions"]
+
+    def test_a_guest_without_a_name_cannot_operate_a_process_row(self):
+        tracker = _make_tracker()
+        _announce_processing(tracker)
+        tracker._processing_manager.pending_jobs = [LIB_PATH]
+
+        [row] = tracker.get_status(admin=False, user="")
+
+        assert row["actions"] == []

@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 import uuid
 from typing import Any
 
 from pikaraoke.lib.download_manager import DownloadManager
 from pikaraoke.lib.events import EventSystem
+from pikaraoke.lib.library_regen import RegenJob
 from pikaraoke.lib.metadata_parser import youtube_id_suffix
 from pikaraoke.lib.processing_manager import ProcessingManager
 from pikaraoke.lib.queue_manager import QueueManager
@@ -27,19 +29,31 @@ def _video_id_from_path(path: str) -> str | None:
 
 
 class PipelineItem:
-    """Represents a single song moving through the download/processing pipeline."""
+    """Represents a single song moving through the download/processing pipeline.
+
+    ``kind`` is ``download`` (a song fetched through the app; cancelling or
+    removing it deletes the song), ``regen`` (a library tool regenerating a
+    song already in the library) or ``process`` (processing of a song already
+    in the library). Regen and process rows never delete files.
+    """
 
     def __init__(
         self,
         title: str,
         url: str,
         user: str,
+        kind: str = "download",
+        label: str | None = None,
     ) -> None:
         self.id: str = str(uuid.uuid4())
         self.title: str = title
         self.song_path: str | None = None
         self.url: str = url
         self.user: str = user
+        self.kind: str = kind  # download | regen | process
+        self.label: str | None = label  # the row's kind word, e.g. "Repair"
+        self.regen_job: RegenJob | None = None  # kept so a failed regen can be retried
+        self.finished_at: float | None = None  # time.time() at complete / error
         self.download_status: str = "pending"  # pending | active | complete | error
         self.processing_status: str = (
             "waiting"  # waiting | pending | active | complete | error | cancelling
@@ -51,6 +65,11 @@ class PipelineItem:
         # (e.g. "genius+joint", "srt+joint", "transcribe"). Surfaced in the
         # processing-page label so the lyric source is visible at a glance.
         self.lyric_method: str | None = None
+
+    @property
+    def is_terminal(self) -> bool:
+        """Finished one way or the other: nothing more will happen to this row."""
+        return self.download_status == "error" or self.processing_status in ("complete", "error")
 
 
 class PipelineTracker:
@@ -84,6 +103,8 @@ class PipelineTracker:
         self._events.on("download_queued", self._on_download_queued)
         self._events.on("song_downloaded", self._on_song_downloaded)
         self._events.on("download_error", self._on_download_error)
+        self._events.on("regen_queued", self._on_regen_queued)
+        self._events.on("processing_queued", self._on_processing_queued)
         self._events.on("processing_complete", self._on_processing_complete)
         self._events.on("processing_cancelled", self._on_processing_cancelled)
         self._events.on("processing_error", self._on_processing_error)
@@ -100,6 +121,8 @@ class PipelineTracker:
         to re-derive which buttons to show — auth logic lives here, in
         one place.
 
+        Library-tool (``regen``) rows are left out for non-admins.
+
         Args:
             admin: Whether the requesting user is an admin.
             user: The requesting user's identifier (from cookie).
@@ -107,11 +130,14 @@ class PipelineTracker:
         with self._lock:
             active_job = self._processing_manager.get_active_job()
             active_phase = self._processing_manager.get_active_phase()
+            active_elapsed_s = self._processing_manager.get_active_elapsed_s()
             pending_jobs = list(self._processing_manager.pending_jobs)
             active_url = self._download_manager.active_url
 
             results = []
             for item in self._items:
+                if item.kind == "regen" and not admin:
+                    continue
                 if active_url == item.url and item.download_status == "pending":
                     item.download_status = "active"
 
@@ -143,15 +169,18 @@ class PipelineTracker:
                         item.processing_status = "complete"
                     item.processing_phase = None
 
-                results.append(self._item_to_dict(item, admin, user))
+                elapsed_s = active_elapsed_s if item.processing_status == "active" else None
+                results.append(self._item_to_dict(item, admin, user, elapsed_s))
 
             return results
 
     def cancel(self, item_id: str) -> bool:
         """Cancel an in-progress download or processing job.
 
-        Cancelling a processing job (pending or active) also deletes the
-        downloaded song file from the library so the user starts clean.
+        Cancelling a processing job (pending or active) of a ``download`` item
+        also deletes the downloaded song file from the library so the user
+        starts clean. A ``regen`` or ``process`` item is a song already in the
+        library: its file is never touched.
         File I/O is done outside the lock to avoid blocking get_status().
         """
         song_to_delete: str | None = None
@@ -182,13 +211,15 @@ class PipelineTracker:
                 notify = True
             elif item.song_path and item.processing_status == "pending":
                 logging.info(
-                    "Cancel: removing pending processing job for '%s'; "
-                    "song file will be deleted so the next attempt starts clean: %s",
+                    "Cancel: removing pending processing job for '%s' (%s): %s",
                     item.title,
+                    item.kind,
                     item.song_path,
                 )
                 self._processing_manager.cancel_pending(item.song_path)
-                song_to_delete = item.song_path
+                if item.kind == "download":
+                    # The next attempt starts clean.
+                    song_to_delete = item.song_path
                 self._remove_item(item_id)
                 notify = True
             elif item.song_path and item.processing_status == "active":
@@ -243,6 +274,9 @@ class PipelineTracker:
     def remove(self, item_id: str) -> bool:
         """Remove an item from the tracker and delete its file from disk.
 
+        Only ``download`` items: a ``regen`` or ``process`` row is a song
+        already in the library, and removing it must not delete the song.
+
         If the item is not in a terminal state (complete/error), routes
         through cancel() first so active processing is cleanly wound down
         instead of being orphaned.
@@ -257,7 +291,7 @@ class PipelineTracker:
             removed = False
             with self._lock:
                 item = self._find_item(item_id)
-                if item is None:
+                if item is None or item.kind != "download":
                     return False
                 if item.cancelling:
                     return False
@@ -318,17 +352,57 @@ class PipelineTracker:
                     break
         self._notify_change()
 
+    def _on_regen_queued(self, data: dict[str, Any]) -> None:
+        """A library tool queued a regen job: show it as a ``regen`` row."""
+        song_path = data["song_path"]
+        item = PipelineItem(
+            title=SongManager.filename_from_path(song_path),
+            url="",
+            user="",
+            kind="regen",
+            label=data["label"],
+        )
+        item.song_path = song_path
+        item.download_status = "complete"
+        item.regen_job = data["job"]
+        with self._lock:
+            self._drop_terminal_items(song_path)
+            self._items.append(item)
+        self._notify_change()
+
+    def _on_processing_queued(self, song_path: str) -> None:
+        """A song was queued for processing: a song with no live row gets a ``process`` row.
+
+        A download already has its row (the tracker hears ``song_downloaded``
+        first), and a retried item is back in flight, so neither adds one.
+        """
+        with self._lock:
+            if self._find_unfinished(song_path) is not None:
+                return
+            self._drop_terminal_items(song_path)
+            item = PipelineItem(
+                title=SongManager.filename_from_path(song_path),
+                url="",
+                user="",
+                kind="process",
+                label="Process",
+            )
+            item.song_path = song_path
+            item.download_status = "complete"
+            self._items.append(item)
+        self._notify_change()
+
     def _on_processing_complete(self, data: dict[str, Any]) -> None:
         song_path = data["song_path"]
         lyric_method = data.get("lyric_method")
         with self._lock:
-            for item in self._items:
-                if item.song_path == song_path:
-                    item.processing_status = "complete"
-                    item.processing_phase = None
-                    if lyric_method is not None:
-                        item.lyric_method = lyric_method
-                    break
+            item = self._find_unfinished(song_path)
+            if item is not None:
+                item.processing_status = "complete"
+                item.processing_phase = None
+                item.finished_at = time.time()
+                if lyric_method is not None:
+                    item.lyric_method = lyric_method
         self._notify_change()
 
     def _on_processing_cancelled(self, song_path: str) -> None:
@@ -337,7 +411,8 @@ class PipelineTracker:
             for item in self._items:
                 if item.song_path == song_path and item.cancelling:
                     self._items.remove(item)
-                    should_delete = True
+                    # Only a download's file is the tracker's to delete.
+                    should_delete = item.kind == "download"
                     break
         # File I/O outside the lock — song_manager.delete() does DB + disk ops
         # that must not block get_status() callers waiting on _lock.
@@ -348,12 +423,12 @@ class PipelineTracker:
     def _on_processing_error(self, data: dict[str, Any]) -> None:
         song_path = data.get("song_path", "")
         with self._lock:
-            for item in self._items:
-                if item.song_path == song_path:
-                    item.processing_status = "error"
-                    item.processing_phase = None
-                    item.error_message = data.get("error", "Unknown error")
-                    break
+            item = self._find_unfinished(song_path)
+            if item is not None:
+                item.processing_status = "error"
+                item.processing_phase = None
+                item.error_message = data.get("error", "Unknown error")
+                item.finished_at = time.time()
         self._notify_change()
 
     def _on_song_deleted(self, song_path: str) -> None:
@@ -402,6 +477,19 @@ class PipelineTracker:
                 return item
         return None
 
+    def _find_unfinished(self, song_path: str) -> PipelineItem | None:
+        """The first row for ``song_path`` that hasn't finished (caller holds _lock)."""
+        for item in self._items:
+            if item.song_path == song_path and not item.is_terminal:
+                return item
+        return None
+
+    def _drop_terminal_items(self, song_path: str) -> None:
+        """Drop finished rows for ``song_path`` so a new run starts a fresh row (caller holds _lock)."""
+        self._items = [
+            item for item in self._items if item.song_path != song_path or not item.is_terminal
+        ]
+
     def _remove_item(self, item_id: str) -> bool:
         initial_len = len(self._items)
         self._items = [item for item in self._items if item.id != item_id]
@@ -412,8 +500,11 @@ class PipelineTracker:
         item: PipelineItem,
         admin: bool = False,
         user: str | None = None,
+        elapsed_s: float | None = None,
     ) -> dict[str, Any]:
-        is_owner = user is not None and item.user == user
+        is_download = item.kind == "download"
+        # A regen or process row has no singer: only an admin operates it.
+        is_owner = is_download and user is not None and item.user == user
         can_operate = admin or is_owner
 
         # --- Compute allowed actions (auth lives here, not in the client) ---
@@ -429,17 +520,22 @@ class PipelineTracker:
                 if can_operate:
                     actions.append("cancel")
 
-            # Remove: available on terminal items (admin only)
-            if item.download_status in ("complete", "error") or item.processing_status in (
-                "complete",
-                "error",
+            # Remove: available on terminal items (admin only). It deletes the
+            # song, so only a downloaded one offers it.
+            if (
+                admin
+                and is_download
+                and (
+                    item.download_status in ("complete", "error")
+                    or item.processing_status in ("complete", "error")
+                )
             ):
-                if admin:
-                    actions.append("remove")
+                actions.append("remove")
 
             # Enqueue: available when both stages are complete and song exists
             if (
-                item.download_status == "complete"
+                is_download
+                and item.download_status == "complete"
                 and item.processing_status == "complete"
                 and item.song_path
             ):
@@ -451,10 +547,16 @@ class PipelineTracker:
             "song_path": item.song_path,
             "url": item.url,
             "user": item.user,
+            "kind": item.kind,
+            "label": item.label,
             "download_status": item.download_status,
             "processing_status": item.processing_status,
             "processing_phase": item.processing_phase,
             "error_message": item.error_message,
             "actions": actions,
             "lyric_method": item.lyric_method,
+            "finished_ago_s": (
+                time.time() - item.finished_at if item.finished_at is not None else None
+            ),
+            "elapsed_s": elapsed_s,
         }
