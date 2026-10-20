@@ -720,7 +720,7 @@ class TestProcessingPhase:
 
 
 # ---------------------------------------------------------------------------
-# Regen and process rows
+# Regen and process rows, and the retry / dismiss / clear-finished actions
 # ---------------------------------------------------------------------------
 
 LIB_PATH = "/songs/Library Song---abcdefghijk.mp4"
@@ -958,6 +958,7 @@ class TestRowActions:
         [row] = tracker.get_status(admin=True)
 
         assert "remove" not in row["actions"]
+        assert "dismiss" in row["actions"]
         assert "enqueue" not in row["actions"]
         assert tracker.remove(item.id) is False
         assert tracker._items == [item]
@@ -972,7 +973,19 @@ class TestRowActions:
 
         [row] = tracker.get_status(admin=True, user="Alice")
 
-        assert "remove" in row["actions"]
+        assert "remove" in row["actions"] and "dismiss" in row["actions"]
+
+    def test_guests_are_offered_none_of_the_new_actions(self):
+        tracker = _make_tracker()
+        item = PipelineItem(title="Done", url="", user="Alice")
+        item.download_status = "complete"
+        item.processing_status = "error"
+        item.song_path = "/songs/Done---ddd444.mp4"
+        tracker._items.append(item)
+
+        [row] = tracker.get_status(admin=False, user="Alice")
+
+        assert "dismiss" not in row["actions"] and "retry" not in row["actions"]
 
     def test_a_guest_without_a_name_cannot_operate_a_process_row(self):
         tracker = _make_tracker()
@@ -982,3 +995,255 @@ class TestRowActions:
         [row] = tracker.get_status(admin=False, user="")
 
         assert row["actions"] == []
+
+    def test_retry_is_offered_only_for_a_failed_row_with_a_song_path(self):
+        tracker = _make_tracker()
+        failed = _finished(tracker, "process", "error", path="/songs/A---aaa111.mp4")
+        ok = _finished(tracker, "process", "complete", path="/songs/B---bbb222.mp4")
+
+        rows = {r["id"]: r for r in tracker.get_status(admin=True)}
+
+        assert "retry" in rows[failed.id]["actions"]
+        assert "retry" not in rows[ok.id]["actions"]
+
+
+class TestDismiss:
+    @pytest.mark.parametrize("kind", ["regen", "process"])
+    @pytest.mark.parametrize("status", ["complete", "error"])
+    def test_drops_a_finished_row_without_touching_files(self, kind, status):
+        tracker = _make_tracker()
+        item = _finished(tracker, kind, status)
+
+        assert tracker.dismiss(item.id) is True
+
+        assert tracker._items == []
+        tracker._song_manager.delete.assert_not_called()
+
+    def test_a_download_row_is_dropped_too_but_its_song_stays(self):
+        tracker = _make_tracker()
+        item = PipelineItem(title="Done", url="", user="Alice")
+        item.download_status = item.processing_status = "complete"
+        item.song_path = "/songs/Done---ddd444.mp4"
+        tracker._items.append(item)
+
+        assert tracker.dismiss(item.id) is True
+
+        tracker._song_manager.delete.assert_not_called()
+
+    def test_refuses_a_row_still_in_flight(self):
+        tracker = _make_tracker()
+        item, _ = _queue_regen(tracker)
+
+        assert tracker.dismiss(item.id) is False
+        assert tracker._items == [item]
+
+    def test_unknown_id(self):
+        assert _make_tracker().dismiss("nope") is False
+
+    def test_notifies_a_change(self):
+        tracker = _make_tracker()
+        calls = []
+        tracker._on_change = lambda: calls.append(1)
+        item = _finished(tracker, "regen", "complete")
+        calls.clear()
+
+        tracker.dismiss(item.id)
+
+        assert calls == [1]
+
+
+class TestRetry:
+    def test_a_failed_regen_queues_its_job_again(self):
+        tracker = _make_tracker()
+        item, job = _queue_regen(tracker)
+        item.processing_status = "error"
+        tracker._processing_manager.enqueue_regen.return_value = True
+
+        assert tracker.retry(item.id) is True
+
+        tracker._processing_manager.enqueue_regen.assert_called_once_with(job)
+        tracker._processing_manager.enqueue.assert_not_called()
+        tracker._song_manager.delete.assert_not_called()
+
+    def test_a_retried_regen_comes_back_as_a_fresh_row(self):
+        # With the real manager: enqueue_regen announces the job and the tracker
+        # swaps the failed row for a new one.
+        events = EventSystem()
+        pm = ProcessingManager(events=events, preferences=MagicMock())
+        tracker = PipelineTracker(
+            download_manager=MagicMock(active_url=None),
+            processing_manager=pm,
+            queue_manager=MagicMock(),
+            song_manager=MagicMock(),
+            events=events,
+        )
+        regen = MagicMock()
+        regen.song.song_path = LIB_PATH
+        regen.label = "Repair"
+        pm.enqueue_regen(regen)
+        [failed] = tracker._items
+        pm.pending_jobs.clear()
+        pm._regen_jobs.clear()
+        events.emit("processing_error", {"song_path": LIB_PATH, "error": "boom"})
+        assert failed.processing_status == "error"
+
+        assert tracker.retry(failed.id) is True
+
+        [fresh] = tracker._items
+        assert fresh is not failed
+        assert (fresh.kind, fresh.processing_status, fresh.regen_job) == ("regen", "waiting", regen)
+
+    def test_a_failed_process_row_goes_back_to_waiting_and_is_queued(self):
+        tracker = _make_tracker()
+        item = _finished(tracker, "process", "error")
+        item.error_message = "boom"
+        item.finished_at = 1.0
+
+        assert tracker.retry(item.id) is True
+
+        assert (item.processing_status, item.error_message, item.finished_at) == (
+            "waiting",
+            None,
+            None,
+        )
+        tracker._processing_manager.enqueue.assert_called_once_with(LIB_PATH)
+        tracker._processing_manager.enqueue_regen.assert_not_called()
+        tracker._song_manager.delete.assert_not_called()
+
+    def test_a_failed_download_goes_back_to_waiting_and_is_queued(self):
+        tracker = _make_tracker()
+        item = PipelineItem(title="New", url="https://example.com", user="Alice")
+        item.download_status = "complete"
+        item.processing_status = "error"
+        item.error_message = "boom"
+        item.song_path = "/songs/New---aaa111.mp4"
+        tracker._items.append(item)
+
+        assert tracker.retry(item.id) is True
+
+        assert (item.kind, item.processing_status, item.error_message) == (
+            "download",
+            "waiting",
+            None,
+        )
+        tracker._processing_manager.enqueue.assert_called_once_with("/songs/New---aaa111.mp4")
+
+    def test_refuses_what_has_not_failed_or_has_no_song(self):
+        tracker = _make_tracker()
+        running, _ = _queue_regen(tracker)
+        no_song = PipelineItem(title="x", url="https://example.com", user="Alice")
+        no_song.processing_status = "error"
+        tracker._items.append(no_song)
+
+        assert tracker.retry(running.id) is False
+        assert tracker.retry(no_song.id) is False
+        assert tracker.retry("nope") is False
+        tracker._processing_manager.enqueue.assert_not_called()
+        tracker._processing_manager.enqueue_regen.assert_not_called()
+
+    def test_a_regen_row_that_lost_its_job_is_not_retried_as_processing(self):
+        tracker = _make_tracker()
+        item, _ = _queue_regen(tracker)
+        item.processing_status = "error"
+        item.regen_job = None
+
+        assert tracker.retry(item.id) is False
+        tracker._processing_manager.enqueue.assert_not_called()
+
+    def test_a_regen_the_manager_refuses_reports_false(self):
+        tracker = _make_tracker()
+        item, _ = _queue_regen(tracker)
+        item.processing_status = "error"
+        tracker._processing_manager.enqueue_regen.return_value = False
+
+        assert tracker.retry(item.id) is False
+
+
+class TestClearFinished:
+    def test_drops_every_completed_row_and_counts_them(self):
+        tracker = _make_tracker()
+        _finished(tracker, "regen", "complete", path="/songs/A---aaa111.mp4")
+        _finished(tracker, "process", "complete", path="/songs/B---bbb222.mp4")
+        done = PipelineItem(title="Done", url="", user="Alice")
+        done.download_status = done.processing_status = "complete"
+        done.song_path = "/songs/Done---ddd444.mp4"
+        tracker._items.append(done)
+        failed = _finished(tracker, "process", "error", path="/songs/C---ccc333.mp4")
+        running, _ = _queue_regen(tracker, "/songs/D---ddd111.mp4")
+
+        assert tracker.clear_finished() == 3
+
+        assert tracker._items == [failed, running]
+        tracker._song_manager.delete.assert_not_called()
+
+    def test_nothing_to_clear(self):
+        tracker = _make_tracker()
+        calls = []
+        tracker._on_change = lambda: calls.append(1)
+
+        assert tracker.clear_finished() == 0
+        assert calls == []
+
+
+# ---------------------------------------------------------------------------
+# Routes: retry / dismiss / clear_finished (admin only)
+# ---------------------------------------------------------------------------
+
+
+class TestNewAdminEndpoints:
+    @pytest.mark.parametrize(
+        "url",
+        ["/processing/some-id/retry", "/processing/some-id/dismiss", "/processing/clear_finished"],
+    )
+    @patch(f"{ROUTE_PREFIX}._", side_effect=lambda x: x)
+    @patch(f"{ROUTE_PREFIX}.is_admin", return_value=False)
+    @patch(f"{ROUTE_PREFIX}.get_karaoke_instance")
+    def test_non_admin_gets_403(self, mock_get_instance, mock_is_admin, mock_gettext, client, url):
+        mock_karaoke = MagicMock()
+        mock_get_instance.return_value = mock_karaoke
+
+        response = client.post(url)
+
+        assert response.status_code == 403
+        assert json.loads(response.data)["success"] is False
+        mock_karaoke.pipeline_tracker.retry.assert_not_called()
+        mock_karaoke.pipeline_tracker.dismiss.assert_not_called()
+        mock_karaoke.pipeline_tracker.clear_finished.assert_not_called()
+
+    @patch(f"{ROUTE_PREFIX}._", side_effect=lambda x: x)
+    @patch(f"{ROUTE_PREFIX}.is_admin", return_value=True)
+    @patch(f"{ROUTE_PREFIX}.get_karaoke_instance")
+    def test_admin_can_retry(self, mock_get_instance, mock_is_admin, mock_gettext, client):
+        mock_karaoke = MagicMock()
+        mock_karaoke.pipeline_tracker.retry.return_value = True
+        mock_get_instance.return_value = mock_karaoke
+
+        response = client.post("/processing/abc/retry")
+
+        assert json.loads(response.data) == {"success": True}
+        mock_karaoke.pipeline_tracker.retry.assert_called_once_with("abc")
+
+    @patch(f"{ROUTE_PREFIX}._", side_effect=lambda x: x)
+    @patch(f"{ROUTE_PREFIX}.is_admin", return_value=True)
+    @patch(f"{ROUTE_PREFIX}.get_karaoke_instance")
+    def test_admin_can_dismiss(self, mock_get_instance, mock_is_admin, mock_gettext, client):
+        mock_karaoke = MagicMock()
+        mock_karaoke.pipeline_tracker.dismiss.return_value = False
+        mock_get_instance.return_value = mock_karaoke
+
+        response = client.post("/processing/abc/dismiss")
+
+        assert json.loads(response.data) == {"success": False}
+        mock_karaoke.pipeline_tracker.dismiss.assert_called_once_with("abc")
+
+    @patch(f"{ROUTE_PREFIX}._", side_effect=lambda x: x)
+    @patch(f"{ROUTE_PREFIX}.is_admin", return_value=True)
+    @patch(f"{ROUTE_PREFIX}.get_karaoke_instance")
+    def test_admin_can_clear_finished(self, mock_get_instance, mock_is_admin, mock_gettext, client):
+        mock_karaoke = MagicMock()
+        mock_karaoke.pipeline_tracker.clear_finished.return_value = 4
+        mock_get_instance.return_value = mock_karaoke
+
+        response = client.post("/processing/clear_finished")
+
+        assert json.loads(response.data) == {"success": True, "count": 4}

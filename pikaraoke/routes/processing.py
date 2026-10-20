@@ -92,3 +92,32 @@ def remove_item(item_id):
     k = get_karaoke_instance()
     success = k.pipeline_tracker.remove(item_id)
     return jsonify({"success": success})
+
+
+@processing_bp.route("/processing/<item_id>/retry", methods=["POST"])
+def retry_item(item_id):
+    """Run a failed item again (admin only)."""
+    if not is_admin():
+        return jsonify({"success": False, "error": _("Admin only")}), 403
+    k = get_karaoke_instance()
+    success = k.pipeline_tracker.retry(item_id)
+    return jsonify({"success": success})
+
+
+@processing_bp.route("/processing/<item_id>/dismiss", methods=["POST"])
+def dismiss_item(item_id):
+    """Drop a finished row from the list; never touches files (admin only)."""
+    if not is_admin():
+        return jsonify({"success": False, "error": _("Admin only")}), 403
+    k = get_karaoke_instance()
+    success = k.pipeline_tracker.dismiss(item_id)
+    return jsonify({"success": success})
+
+
+@processing_bp.route("/processing/clear_finished", methods=["POST"])
+def clear_finished():
+    """Drop every completed row; never touches files (admin only)."""
+    if not is_admin():
+        return jsonify({"success": False, "error": _("Admin only")}), 403
+    k = get_karaoke_instance()
+    return jsonify({"success": True, "count": k.pipeline_tracker.clear_finished()})
