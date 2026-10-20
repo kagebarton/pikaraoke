@@ -398,3 +398,96 @@ Artifacts:
 Open for Ken: pick or hand-edit one sheet per pilot song into
 `zh_probe/sheets/<video id>.txt` (repeats written out, credit lines and section
 headers removed, non-Chinese lines kept as sung). Phase 1 is blocked on that.
+
+### 2026-10-20 — Phase 0b narrowing aid: whisper transcript vs each candidate (Sonnet 5.5)
+
+Ken asked whether transcribing the vocal stems could narrow the candidate
+texts. Nothing here picks a sheet; the pick is still Ken's. New code in
+`scripts/zh_probe/`: `phase0b_transcribe.py` (GPU), `phase0b_score.py` (CPU,
+re-runnable, includes the `CONFIRMED` sheet once saved). The candidate-text
+helpers moved from `phase0c_vocab.py` into `corpus.py`; `phase0c_vocab.py`
+re-run afterwards gave byte-identical `phase0c_vocab.json` and `.txt`.
+
+Method. Whisper `large-v3-turbo.pt` on the full `vocal/` stem (16 kHz mono),
+`language` = the song's label, `condition_on_previous_text=False`, app idle.
+Each candidate (credit lines such as `词：`/`曲：` dropped first) and the
+transcript are reduced to Han characters, converted to Simplified one character
+at a time, with 著/着 and 妳/你 folded. `lcs` is the longest common subsequence
+of the two strings; recall = lcs / transcript Han, precision = lcs / candidate
+Han, f1 their harmonic mean. `diff` is the character count a candidate differs
+by from the top row (difflib). Identical texts share a row (first file shown).
+
+| # | segments | whisper wall s | transcript Han |
+|---|---|---|---|
+| 1 | 59 | 23 | 415 |
+| 2 | 66 | 13 | 466 |
+| 9 | 39 | 8 | 269 |
+| 11 | 43 | 41 | 317 |
+
+On #11 the first two segments (0.0-21.4 s) are non-Chinese text and add no Han
+characters. Visible in the transcripts: homophone errors, Mandarin spellings
+for the Cantonese songs, and a short last segment on #1 (210.5 s).
+
+#1 晴天:
+
+| text | source | f1 | recall | prec | lcs | han | credit lines dropped | diff |
+|---|---|---|---|---|---|---|---|---|
+| lrclib_24316052 | lrclib 晴天 / 周杰倫, 270.0 s | 0.799 | 0.860 | 0.745 | 357 | 479 | 1 | 0 |
+| genius_6347511 | genius 晴天 (Sunny Day) | 0.798 | 0.858 | 0.746 | 356 | 477 | 0 | 2 |
+| lrclib_20129676 | lrclib 晴天 / 周杰伦, 269.0 s | 0.797 | 0.858 | 0.745 | 356 | 478 | 0 | 2 |
+| lrclib_21669952 | lrclib 晴天 / 周杰倫, 葉惠美 | 0.796 | 0.860 | 0.741 | 357 | 482 | 2 | 8 |
+| lrclib_21715222 | lrclib 晴天 / 周杰倫, 叶惠美 | 0.789 | 0.860 | 0.729 | 357 | 490 | 2 | 16 |
+| netease_186016 | netease 186016 | 0.770 | 0.860 | 0.697 | 357 | 512 | 5 | 38 |
+| lrclib_30010752 | lrclib Sunny Day (Live), 250.0 s | 0.731 | 0.684 | 0.785 | 284 | 362 | 0 | 120 |
+| genius_6666632 | genius 晴天 / Andy Luidje (Ft. 周杰倫) | 0.726 | 0.680 | 0.779 | 282 | 362 | 0 | 117 |
+
+#2 龍捲風:
+
+| text | source | f1 | recall | prec | lcs | han | credit lines dropped | diff |
+|---|---|---|---|---|---|---|---|---|
+| lrclib_17422839 | lrclib 龙卷风 / 周杰伦, The One演唱会 CD2 | 0.899 | 0.908 | 0.891 | 423 | 475 | 0 | 0 |
+| lrclib_13116435 | lrclib 龍捲風 / 周杰倫, JAY | 0.898 | 0.908 | 0.889 | 423 | 476 | 0 | 1 |
+| lrclib_24807575 | lrclib Tornado / Jay Chou, Jay | 0.898 | 0.908 | 0.889 | 423 | 476 | 0 | 3 |
+| lrclib_18801737 | lrclib 龍捲風 / 周杰倫, 魔天倫世界巡迴演唱會 | 0.897 | 0.906 | 0.888 | 422 | 475 | 0 | 1 |
+| lrclib_23725471 | lrclib 龙卷风 / 周杰伦, 254.0 s | 0.893 | 0.908 | 0.879 | 423 | 481 | 4 | 6 |
+| lrclib_16478482 | lrclib 龍捲風 Tornado / Jay Chou | 0.881 | 0.906 | 0.858 | 422 | 492 | 0 | 18 |
+| genius_7581612 | genius 龍捲風 (Tornado) / 五月天 (Ft. 周杰倫) | 0.834 | 0.843 | 0.826 | 393 | 476 | 0 | 81 |
+| netease_186160 | netease 186160 | 0.831 | 0.908 | 0.766 | 423 | 552 | 6 | 77 |
+| genius_425304 | genius 龍捲風 (Tornado) / 周杰倫 | 0.623 | 0.481 | 0.885 | 224 | 253 | 0 | 222 |
+| lrclib_30295911 | lrclib Big Ben + Secret Sign + Rainbow + Tornado (Live) | 0.345 | 0.333 | 0.358 | 155 | 433 | 0 | 649 |
+| netease_3319986894 | netease Tornado / 短腿柯基 | 0.000 | 0.000 | 0.000 | 0 | 0 | 0 | 475 |
+
+#9 明年今日:
+
+| text | source | f1 | recall | prec | lcs | han | credit lines dropped | diff |
+|---|---|---|---|---|---|---|---|---|
+| genius_5401147 | genius 明年今日 (Next Year Today) | 0.826 | 0.859 | 0.797 | 231 | 290 | 0 | 0 |
+| lrclib_19120435 | lrclib 明年今日, DUO演唱会 | 0.826 | 0.859 | 0.797 | 231 | 290 | 0 | 0 |
+| netease_65952 | netease 65952 | 0.826 | 0.859 | 0.797 | 231 | 290 | 5 | 0 |
+| lrclib_17464933 | lrclib 明年今日, 48首選, 205.2 s | 0.825 | 0.851 | 0.801 | 229 | 286 | 0 | 4 |
+
+#11 海闊天空:
+
+| text | source | f1 | recall | prec | lcs | han | credit lines dropped | diff |
+|---|---|---|---|---|---|---|---|---|
+| genius_4642002 | genius 海闊天空 (Boundless Oceans, Vast Skies) | 0.804 | 0.839 | 0.771 | 266 | 345 | 0 | 0 |
+| lrclib_33352647 | lrclib 海阔天空 / Beyond, 华纳廿三周年纪念精选系列 | 0.804 | 0.839 | 0.771 | 266 | 345 | 0 | 7 |
+| lrclib_18238243 | lrclib 海闊天空 / Beyond, 326.0 s | 0.769 | 0.779 | 0.760 | 247 | 325 | 0 | 24 |
+| netease_1357375695 | netease 海阔天空 / Beyond | 0.769 | 0.779 | 0.760 | 247 | 325 | 3 | 25 |
+
+Artifacts:
+
+- `zh_probe/phase0/transcripts/<video id>.json` (segments with times) and `.txt`
+- `zh_probe/phase0/phase0b_score.json`, `phase0b_score.txt` (the tables above)
+- `zh_probe/phase0/phase0b_diffs.txt`: for every candidate within 0.05 f1 of the
+  top row, each place it differs from the top row (2 characters of context), the
+  start-end time of the transcript segment that place aligns to (the last matched
+  character before it when whisper wrote nothing there, so approximate), and
+  whether each variant, with its context, appears in whisper's text within one
+  segment either side. A difference shared by several candidates is one line.
+  The first version of this file tested the whole transcript instead of one
+  segment either side, which a phrase sung several times satisfies from another
+  place in the song; it was replaced the same day.
+
+Whisper's transcript is not the sung text, so these numbers rank resemblance to
+what whisper heard and nothing more. The open item for Ken is unchanged.
