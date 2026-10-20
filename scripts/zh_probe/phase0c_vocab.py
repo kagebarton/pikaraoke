@@ -12,7 +12,6 @@ Run: uv run --with pypinyin --with jieba --with ToJyutping \
 from __future__ import annotations
 
 import json
-import re
 import sys
 from collections import Counter
 from pathlib import Path
@@ -24,11 +23,9 @@ from ToJyutping import get_jyutping_list
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from corpus import PILOT, PROBE_ROOT, Song  # noqa: E402
+from corpus import PILOT, PROBE_ROOT, Song, candidate_texts, han_chars  # noqa: E402
 
 OUT_DIR = PROBE_ROOT / "phase0"
-RAW_DIR = OUT_DIR / "sheets_raw"
-CONFIRMED_DIR = PROBE_ROOT / "sheets"
 
 # Arm H candidates by language label.
 H_MODELS = {
@@ -41,30 +38,8 @@ H_MODELS = {
     ],
 }
 
-HAN_RE = re.compile("[㐀-䶿一-鿿豈-﫿\U00020000-\U0002fa1f]")
 PINYIN_FAIL = "<no-reading>"
-LRC_STAMP_RE = re.compile(r"\[\d+:\d+(?:[.:]\d+)?\]")
 T2S, S2T = OpenCC("t2s"), OpenCC("s2t")
-
-
-def candidate_texts(song: Song) -> dict[str, str]:
-    """Distinct texts for a song, keyed by the first file that carries each."""
-    texts: dict[str, tuple[str, str]] = {}
-    folder = RAW_DIR / song.video_id
-    for path in sorted(folder.glob("*.txt")) + sorted(folder.glob("netease_*.lrc")):
-        if path.name == "sources.txt":
-            continue
-        text = LRC_STAMP_RE.sub("", path.read_text(encoding="utf-8"))
-        texts.setdefault(re.sub(r"\s+", "", text), (path.name, text))
-    confirmed = CONFIRMED_DIR / f"{song.video_id}.txt"
-    out = {name: text for name, text in texts.values()}
-    if confirmed.exists():
-        out = {"CONFIRMED": confirmed.read_text(encoding="utf-8"), **out}
-    return out
-
-
-def han_chars(text: str) -> list[str]:
-    return HAN_RE.findall(text)
 
 
 def load_vocab(repo: str) -> tuple[set[str], int]:

@@ -23,16 +23,14 @@ import requests
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from corpus import PILOT, PROBE_ROOT, Song  # noqa: E402
+from corpus import LRC_STAMP_RE, PILOT, RAW_DIR, Song  # noqa: E402
 
 from pikaraoke.lib import lrclib  # noqa: E402
 from pikaraoke.lib.genius import GeniusClient, GeniusUnavailable  # noqa: E402
 
 logger = logging.getLogger("zh_probe.fetch_sheets")
 
-OUT_ROOT = PROBE_ROOT / "phase0" / "sheets_raw"
 GENIUS_FETCH_LIMIT = 4
-LRC_STAMP_RE = re.compile(r"\[\d+:\d+(?:[.:]\d+)?\]")
 LRCLIB_ATTEMPTS = 3
 NETEASE_LYRIC_URL = "https://music.163.com/api/song/lyric"
 
@@ -180,7 +178,7 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     client = GeniusClient(genius_token())
     for song in PILOT:
-        out = OUT_ROOT / song.video_id
+        out = RAW_DIR / song.video_id
         out.mkdir(parents=True, exist_ok=True)
         rows = fetch_genius(song, out, client) + fetch_lrclib(song, out) + fetch_netease(song, out)
         write(
