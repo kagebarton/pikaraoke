@@ -14,6 +14,12 @@ executor Claude Sonnet 5 (through Phase 3.1 commit C), Claude Sonnet 5.5
 > `788b10c`, then 3.1's, then 3.2's) go to `dev` by cherry-pick in branch
 > order.
 > There is no GATE and nothing here measures timing.
+> **2026-10-20:** Ken's real-world run of `add_songs` on a 6-song playlist
+> (prompts live, then a rerun) is in the Results log.
+> **Landing RULED by Ken 2026-10-20: deferred.** This branch does not land on
+> its own. It waits for the plan (being written in another session) that
+> moves these tools, and others, into the web UI; when that plan is done,
+> both land on `dev` together. The cherry-pick list above still holds.
 
 ## Why
 
@@ -1501,3 +1507,115 @@ code commit in branch order (`6cc2b29`, `2fdcf08`, `c8fe156`, `788b10c`,
 `c096631`, `975175b`, `6ecb41d`, `e81607b`, `db2d193`, `f6490e1`, `73dada4`,
 `965776f`, `84e0f2f`, `75454c1`); the session that lands `--song` then
 retires the one-song driver recipe in memory `regen-reprocessing-workflow`.
+
+### Real-world run (Ken at the keyboard, 2026-10-20)
+
+Ken asked for a real-world run before landing. Driver Claude Opus 5.5; Ken ran
+every command and answered every prompt. The corpus regen had exited and no
+other GPU job ran. Worktree at `3b62430`; the `.venv` passed an import smoke
+(`pikaraoke` from the worktree, `torch 2.6.0+cu124` with CUDA,
+`audio_separator`, `stable_whisper 2.19.1`, `yt_dlp`, `lyricsgenius`) and
+`uv sync --locked --dry-run` reported no changes, so it was not rebuilt.
+yt-dlp `2026.08.19` in both the worktree and the main checkout, which is the
+latest stable on PyPI (only `.dev0` builds are newer).
+
+Command, from the worktree root in PowerShell with `PYTHONUTF8=1`, no `--yes`:
+
+```
+uv run --no-sync python -P scripts/add_songs.py "https://www.youtube.com/playlist?list=PLWPORwgk3oWc" --folder "D:\shared\libtools-test-20261020"
+```
+
+The scratch folder was new and seeded by hand with Adele's `.mp4` and
+`karaoke/<stem>.ass` copied from `d:/shared/pikaraoke-songs`, so the
+`already in library` row could fire; nothing else was in it.
+
+Caption check before the run (`yt-dlp -J`, no download):
+
+| id | manual subs | auto langs | `-orig` auto |
+|---|---|---|---|
+| `xFYQQPAOz7Y` Eminem, Lose Yourself | none | 0 | none |
+| `fJ9rUzIMcZQ` Queen, Bohemian Rhapsody | 18 incl. `en` | 18 | none |
+| `hLQl3WQQoQ0` Adele, Someone Like You | `en-nP7-2PuUl7o` | 157 | `en-orig` |
+| `DYptgVvkVLQ` Jay Chou, 晴天 | none | 0 | none |
+| `RPWDeLqsN0g` Jay Chou, 龍捲風 | `en` | 1 | none |
+| `3JWTaaS7LdU` Whitney Houston, I Will Always Love You | `en-nP7-2PuUl7o` | 1 | none |
+
+`RPWDeLqsN0g`'s `en` track, downloaded to the session scratchpad, is an English
+translation ("Love is like a gust of wind, / here one moment, gone the next").
+
+Genius search probe (the run's `GeniusClient`, read-only):
+
+| query | hit 1 | other hits |
+|---|---|---|
+| `Jay Chou Sunny Day-` (the default for `DYptgVvkVLQ`) | 晴天 (Sunny Day) - 周杰倫 (Jay Chou), id 6347511 | none |
+| `Jay Chou Tornado-` | 龍捲風 (Tornado) - 周杰倫 (Jay Chou), id 425304 | Mayday cover ft. Jay Chou, id 7581612 |
+| `周杰倫 晴天` | id 6347511 | 晴天 - Andy Luidje ft. Jay Chou, id 6666632 |
+| `Jay Chou Qing Tian`, `Jay Chou Long Juan Feng` | no hits | |
+
+Ids 6347511 and 425304 return Traditional Chinese lyrics (42 and 26 lines).
+
+Dry run with `--dry-run`: `Songs found: 6`; `hLQl3WQQoQ0` `already in library`,
+the other five `new`. The report table's columns are `id`, `source` (the
+playlist URL on every row) and `status`; no title column.
+
+Real run: the confirm prompt was answered `y`; Genius prompts fired for
+`xFYQQPAOz7Y` and `DYptgVvkVLQ`. One warning during the downloads, from the
+auto-caption fetch for `fJ9rUzIMcZQ` (`download_auto_en_subs`, `--sub-langs
+en.*`): `No subtitle format found matching "json3" for language en, using vtt`
+then `Unable to download video subtitles for 'en-ar': HTTP Error 429: Too Many
+Requests`. The video download continued; later downloads had no errors.
+During `3JWTaaS7LdU`'s cue-align, three `Whisper align_refine failed`
+tracebacks (`stable_whisper/alignment.py` line 212, `set_result_language` on a
+`None` result: `AttributeError: 'NoneType' object has no attribute
+'language'`), each followed by `lyric_align` `slice-align failed, degrading`:
+`section lines 30-30`, `line 30`, `line 51`. Downloads 09:54-09:57, pipeline
+done 10:37.
+
+Outputs per song (bundles are `schema_version` 10, since the branch's base
+`6bc19aa` is before `dev`'s `67d1c1f` / `50da4b0` / `e5c683e`):
+
+| id | origin | Genius id | method | lines | lines with words | `.ass` Dialogue | interpolated | LRCLIB `.lrc` | `lrclib_fill` |
+|---|---|---|---|---|---|---|---|---|---|
+| `xFYQQPAOz7Y` | genius | 207 | joint | 87 | 86 | 86 | 1 | yes | eligible, 53 cues mapped |
+| `fJ9rUzIMcZQ` | srt | | cue_align | 65 | 65 | 65 | 0 | no | |
+| `DYptgVvkVLQ` | genius | 6347511 | joint | 42 | 18 | 18 | 20 | yes | `no_mapping`, 0 cues |
+| `RPWDeLqsN0g` | srt | | cue_align | 55 | 55 | 55 | 0 | no | |
+| `3JWTaaS7LdU` | srt | | cue_align | 60 | 60 | 60 | 0 | no | |
+
+`xFYQQPAOz7Y`: `align_won` 59, `transcribe_won` 27. `DYptgVvkVLQ`: `align_won`
+22, `transcribe_won` 0, 86 words; its `.ass` starts at line 5 (`Re-sol-sol-...`),
+and its `\kf` tags span space-separated phrases. `RPWDeLqsN0g`'s `.ass` text is
+the English translation. `3JWTaaS7LdU` lines 30 (`You ooh`, 126.86-129.10) and
+51 (`Ooh I`, 228.72-230.56) are present with 2 words each.
+`n_ytasr_words` 0 on both joint songs.
+
+Rerun of the same command (Ken): every row `already in library`, nothing
+downloaded.
+
+Safety: `%APPDATA%\pikaraoke\pikaraoke.db` sha256 `5c9dec18...bedab` and
+`config.ini` sha256 `e264ca26...0cb8`, the 3.2 values; db, `-wal`, `-shm`
+sizes and mtimes as 3.2 recorded. `%APPDATA%\pikaraoke\tmp\lyric_choices`
+mtime 10:13 (empty after the run). `d:/shared/pikaraoke-songs` not written;
+the main checkout still on `dev`, clean.
+
+Observed outside the branch's code (nothing here changed `pikaraoke/`):
+
+- `download_auto_en_subs`' `en.*` matches every `en-<src>` translated
+  auto-track, which is what drew the 429; on a non-zero exit it returns `None`
+  without running `_select_asr_track` on what did arrive.
+- A manual `en` track that is a translation passes the caption gate
+  (`MIN_CAPTION_WPM` counts words, not language); no Genius prompt for it.
+- Mandarin on the joint path: 24 of 42 lines absent from the `.ass`,
+  `transcribe_won` 0, `lrclib_fill` `no_mapping` with an `.lrc` present.
+- `stable_whisper.align` raises on its own failed-alignment `None` instead of
+  returning it; the stage's degrade path catches it.
+- In the branch's code: the `--folder` default is `get_default_dl_dir`'s
+  `C:\Users\TsangK\pikaraoke-songs` (absent on this box), while `config.ini`
+  holds `download_path = D:\Shared\pikaraoke-songs`; `add_songs` already
+  builds a `PreferenceManager` (for the Genius token) but does not read
+  `download_path`. Also in the branch's code: the report has no title column.
+- The default Genius query drops CJK (`EMOJI_PATTERN` spans
+  `U+24C2-U+1F251`); here the titles' English words carried the search.
+
+Not exercised: `regen --song --reset` on real data; `backfill --song`'s queued
+path.
