@@ -593,13 +593,13 @@ class TestRemove:
 
 
 # ---------------------------------------------------------------------------
-# _prepare_lyrics — LRCLIB resolve for the no-YouTube-id Genius fallback
+# prepare_lyrics — LRCLIB resolve for the no-YouTube-id Genius fallback
 # ---------------------------------------------------------------------------
 
 
 class TestPrepareLyricsNoIdSidecar:
     """A Genius pick on a song without a YouTube id bypasses
-    LyricsFetchStage (and its LRCLIB leg), so _prepare_lyrics resolves the
+    LyricsFetchStage (and its LRCLIB leg), so prepare_lyrics resolves the
     variant itself — knob-gated and never fatal to the song's run."""
 
     def _run(self, tmp_path, monkeypatch, config, resolve_error=None):
@@ -635,3 +635,49 @@ class TestPrepareLyricsNoIdSidecar:
         ensure.assert_called_once()
         assert lyrics_path is not None
         assert stage is not None
+
+
+# ---------------------------------------------------------------------------
+# backfill_lrc — one song's LRCLIB variant for a genius reuse plan
+# ---------------------------------------------------------------------------
+
+
+class TestBackfillLrc:
+    def _reuse_job(self, tmp_path):
+        bundle = {
+            "lyrics": {
+                "origin": "genius",
+                "lines": ["hello", "world"],
+                "genius": {"id": 9, "title": "H", "artist": "W"},
+            },
+            "media_duration_s": 200.0,
+        }
+        job = _job(tmp_path, "s", bundle)
+        job.plan = lr.resolve_plan(job, reset=False)
+        return job
+
+    def test_resolves_the_variant_from_the_recorded_identity(self, tmp_path, monkeypatch):
+        job = self._reuse_job(tmp_path)
+        ensure = MagicMock(return_value=None)
+        monkeypatch.setattr(lr.lrclib, "ensure_lrc", ensure)
+
+        lr.backfill_lrc(job, PipelineConfig())
+
+        ensure.assert_called_once_with(job.song_path, "H", "W", ["hello", "world"], 200.0)
+
+    def test_knob_off_skips_the_fetch(self, tmp_path, monkeypatch):
+        job = self._reuse_job(tmp_path)
+        ensure = MagicMock()
+        monkeypatch.setattr(lr.lrclib, "ensure_lrc", ensure)
+
+        lr.backfill_lrc(job, PipelineConfig(lrclib_fill=False))
+
+        ensure.assert_not_called()
+
+    def test_a_failure_is_logged_and_does_not_raise(self, tmp_path, monkeypatch, caplog):
+        job = self._reuse_job(tmp_path)
+        monkeypatch.setattr(lr.lrclib, "ensure_lrc", MagicMock(side_effect=OSError("disk full")))
+
+        lr.backfill_lrc(job, PipelineConfig())
+
+        assert "LRCLIB backfill failed" in caplog.text
