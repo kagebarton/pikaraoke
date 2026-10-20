@@ -397,6 +397,89 @@ class TestFetchCaption:
         assert not srt.exists()
 
 
+class TestCheckCaption:
+    """``check_caption`` measures a throwaway download and leaves nothing behind."""
+
+    @pytest.fixture
+    def scratch_root(self, tmp_path, monkeypatch):
+        root = tmp_path / "pk_tmp"
+        root.mkdir()
+        monkeypatch.setattr(lr, "get_temp_directory", lambda: str(root))
+        return root
+
+    def _check(self, tmp_path, scratch_root, monkeypatch, n_words: int | None, duration=60.0):
+        """Run ``check_caption`` with a download of ``n_words`` (None: no caption)."""
+
+        def fake_dl(url, dest, stem):
+            assert dest.startswith(str(scratch_root))
+            if n_words is None:
+                return None
+            srt = Path(dest) / f"{stem}.en.srt"
+            words = " ".join(["la"] * n_words)
+            srt.write_text(f"1\n00:00:01,000 --> 00:00:04,000\n{words}\n", encoding="utf-8")
+            return str(srt)
+
+        monkeypatch.setattr(lr, "download_manual_en_subs", fake_dl)
+        monkeypatch.setattr(lr, "probe_duration", lambda p: None)
+        job = _job(tmp_path, YT_STEM, _gap_bundle(media_duration_s=duration))
+
+        result = lr.check_caption(job)
+
+        assert list(scratch_root.iterdir()) == []
+        assert not (tmp_path / "subtitles").exists()
+        return result
+
+    def test_no_caption(self, tmp_path, scratch_root, monkeypatch):
+        result = self._check(tmp_path, scratch_root, monkeypatch, n_words=None)
+        assert result == lr.CaptionCheck(found=False, wpm=None, passed=False)
+
+    def test_sparse_caption_fails_the_gate(self, tmp_path, scratch_root, monkeypatch):
+        result = self._check(tmp_path, scratch_root, monkeypatch, n_words=3)  # 3 wpm over 60s
+        assert result == lr.CaptionCheck(found=True, wpm=3.0, passed=False)
+
+    def test_dense_caption_passes_the_gate(self, tmp_path, scratch_root, monkeypatch):
+        result = self._check(tmp_path, scratch_root, monkeypatch, n_words=60)  # 60 wpm
+        assert result == lr.CaptionCheck(found=True, wpm=60.0, passed=True)
+
+    def test_unmeasurable_caption_passes_the_gate(self, tmp_path, scratch_root, monkeypatch):
+        result = self._check(tmp_path, scratch_root, monkeypatch, n_words=3, duration=None)
+        assert result == lr.CaptionCheck(found=True, wpm=None, passed=True)
+
+    def test_downloads_the_video_by_its_youtube_id(self, tmp_path, scratch_root, monkeypatch):
+        urls = []
+        monkeypatch.setattr(lr, "download_manual_en_subs", lambda url, dest, stem: urls.append(url))
+        lr.check_caption(_job(tmp_path, YT_STEM, None))
+        assert urls == ["https://www.youtube.com/watch?v=dQw4w9WgXcQ"]
+
+
+class TestGateOnDiskCaption:
+    def _job_without_plan(self, tmp_path):
+        return _job(tmp_path, YT_STEM, _gap_bundle(media_duration_s=60.0))
+
+    def test_no_caption_on_disk_leaves_the_plan_alone(self, tmp_path):
+        job = self._job_without_plan(tmp_path)
+
+        assert lr.gate_on_disk_caption(job) is False
+        assert job.plan is None
+
+    def test_sparse_caption_is_deleted(self, tmp_path):
+        job = self._job_without_plan(tmp_path)
+        srt = _make_srt(tmp_path, YT_STEM, n_words=3)  # 3 wpm over 60s
+
+        assert lr.gate_on_disk_caption(job) is False
+        assert not srt.exists()
+        assert job.plan.kind == "prompt"
+
+    def test_dense_caption_is_kept_and_seeded(self, tmp_path):
+        job = self._job_without_plan(tmp_path)
+        srt = _make_srt(tmp_path, YT_STEM, n_words=60)  # 60 wpm
+
+        assert lr.gate_on_disk_caption(job) is True
+        assert srt.exists()
+        assert _is_srt_plan(job.plan)
+        assert job.plan.lyrics_path == srt
+
+
 # ---------------------------------------------------------------------------
 # backup_text_folders — scoped backup for --song
 # ---------------------------------------------------------------------------

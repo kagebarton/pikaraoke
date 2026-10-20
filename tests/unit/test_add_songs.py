@@ -52,6 +52,24 @@ class TestResolveUrlsExpansionFailure:
         assert unreadable == 1
         assert "failed to expand playlist" in capsys.readouterr().out
 
+    def test_unreadable_output_is_reported_and_other_urls_continue(self, monkeypatch, capsys):
+        def fake_expand(url):
+            if "garbled" in url:
+                raise ValueError("Expecting value: line 1 column 1 (char 0)")
+            return [VID_B]
+
+        monkeypatch.setattr(add_songs, "expand_playlist", fake_expand)
+        urls = [
+            "https://www.youtube.com/playlist?list=garbled",
+            "https://www.youtube.com/playlist?list=good",
+        ]
+
+        entries, unreadable = add_songs.resolve_urls(urls, library={})
+
+        assert [e.id for e in entries] == [VID_B]
+        assert unreadable == 1
+        assert "failed to expand playlist" in capsys.readouterr().out
+
     def test_timeout_is_reported_and_other_urls_continue(self, monkeypatch, capsys):
         def fake_expand(url):
             if "slow" in url:

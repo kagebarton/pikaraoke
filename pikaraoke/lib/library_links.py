@@ -6,8 +6,10 @@ the result with the files already in the library.
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -50,15 +52,39 @@ def classify_url(url: str) -> tuple[str, str] | None:
     return None
 
 
-def expand_playlist(url: str) -> list[str]:
-    """Return every video id in a YouTube playlist, via yt-dlp --flat-playlist.
+@dataclass(frozen=True)
+class PlaylistVideo:
+    id: str
+    title: str
+
+
+@dataclass(frozen=True)
+class Playlist:
+    title: str
+    videos: list[PlaylistVideo]
+
+
+def read_playlist(url: str) -> Playlist:
+    """Read a YouTube playlist's title and videos, via yt-dlp --flat-playlist -J.
 
     Modelled on ``youtube_dl.get_search_results``. May raise
-    ``subprocess.CalledProcessError`` or ``subprocess.TimeoutExpired``.
+    ``subprocess.CalledProcessError``, ``subprocess.TimeoutExpired`` or
+    ``ValueError`` (yt-dlp's output was not JSON).
     """
-    cmd = yt_dlp_cmd + ["--flat-playlist", "--print", "id"] + _impersonate_args() + [url]
+    cmd = yt_dlp_cmd + ["--flat-playlist", "-J"] + _impersonate_args() + [url]
     output = subprocess.check_output(cmd, timeout=300).decode("utf-8", "ignore")
-    return [line.strip() for line in output.splitlines() if line.strip()]
+    info = json.loads(output)
+    videos = [
+        PlaylistVideo(id=entry["id"], title=entry.get("title") or entry["id"])
+        for entry in info.get("entries") or []
+        if entry and entry.get("id")
+    ]
+    return Playlist(title=info.get("title") or "", videos=videos)
+
+
+def expand_playlist(url: str) -> list[str]:
+    """Return every video id in a YouTube playlist."""
+    return [video.id for video in read_playlist(url).videos]
 
 
 def library_files(folder: Path) -> dict[str, Path]:

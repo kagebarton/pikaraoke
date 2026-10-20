@@ -3,6 +3,10 @@
 Subprocess (yt-dlp) is mocked; nothing here touches the network.
 """
 
+import json
+
+import pytest
+
 from pikaraoke.lib import library_links
 
 VID_A = "dQw4w9WgXcQ"
@@ -81,18 +85,94 @@ class TestClassifyUrl:
 # ---------------------------------------------------------------------------
 
 
+def mock_yt_dlp(monkeypatch, output: str) -> list[list[str]]:
+    """Make the yt-dlp call return ``output``; returns the commands it was given."""
+    commands: list[list[str]] = []
+
+    def fake_check_output(cmd, timeout=None):
+        commands.append(cmd)
+        return output.encode("utf-8")
+
+    monkeypatch.setattr(library_links.subprocess, "check_output", fake_check_output)
+    return commands
+
+
+class TestReadPlaylist:
+    def test_parses_the_title_ids_and_titles(self, monkeypatch):
+        commands = mock_yt_dlp(
+            monkeypatch,
+            json.dumps(
+                {
+                    "title": "Karaoke Night",
+                    "entries": [
+                        {"id": VID_A, "title": "First Song"},
+                        {"id": VID_B, "title": "Second Song"},
+                    ],
+                }
+            ),
+        )
+
+        playlist = library_links.read_playlist("https://www.youtube.com/playlist?list=Y")
+
+        assert playlist == library_links.Playlist(
+            title="Karaoke Night",
+            videos=[
+                library_links.PlaylistVideo(id=VID_A, title="First Song"),
+                library_links.PlaylistVideo(id=VID_B, title="Second Song"),
+            ],
+        )
+        assert "--flat-playlist" in commands[0] and "-J" in commands[0]
+        assert commands[0][-1] == "https://www.youtube.com/playlist?list=Y"
+
+    def test_skips_entries_without_an_id(self, monkeypatch):
+        mock_yt_dlp(
+            monkeypatch,
+            json.dumps(
+                {
+                    "title": "Mixed",
+                    "entries": [
+                        {"title": "Gone"},
+                        None,
+                        {"id": "", "title": "Blank"},
+                        {"id": VID_A},
+                    ],
+                }
+            ),
+        )
+
+        playlist = library_links.read_playlist("https://www.youtube.com/playlist?list=Y")
+
+        assert playlist.videos == [library_links.PlaylistVideo(id=VID_A, title=VID_A)]
+
+    def test_a_playlist_with_no_entries_is_empty(self, monkeypatch):
+        mock_yt_dlp(monkeypatch, json.dumps({"title": "Empty"}))
+
+        playlist = library_links.read_playlist("https://www.youtube.com/playlist?list=Y")
+
+        assert playlist == library_links.Playlist(title="Empty", videos=[])
+
+    def test_output_that_is_not_json_raises_value_error(self, monkeypatch):
+        mock_yt_dlp(monkeypatch, "WARNING: not json")
+
+        with pytest.raises(ValueError):
+            library_links.read_playlist("https://www.youtube.com/playlist?list=Y")
+
+
 class TestExpandPlaylist:
-    def test_parses_ids_and_skips_blank_lines(self, monkeypatch):
-        output = f"{VID_A}\n{VID_B}\n\nzzzzzzzzzzz\n"
-        monkeypatch.setattr(
-            library_links.subprocess,
-            "check_output",
-            lambda cmd, timeout=None: output.encode("utf-8"),
+    def test_returns_the_ids_only(self, monkeypatch):
+        mock_yt_dlp(
+            monkeypatch,
+            json.dumps(
+                {
+                    "title": "T",
+                    "entries": [{"id": VID_A, "title": "A"}, {"title": "no id"}, {"id": VID_B}],
+                }
+            ),
         )
 
         ids = library_links.expand_playlist("https://www.youtube.com/playlist?list=Y")
 
-        assert ids == [VID_A, VID_B, "zzzzzzzzzzz"]
+        assert ids == [VID_A, VID_B]
 
 
 class TestLibraryFiles:
