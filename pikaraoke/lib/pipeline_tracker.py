@@ -275,7 +275,7 @@ class PipelineTracker:
         """Remove an item from the tracker and delete its file from disk.
 
         Only ``download`` items: a ``regen`` or ``process`` row is a song
-        already in the library, and removing it must not delete the song.
+        already in the library (use :meth:`dismiss` to drop the row).
 
         If the item is not in a terminal state (complete/error), routes
         through cancel() first so active processing is cleanly wound down
@@ -316,6 +316,56 @@ class PipelineTracker:
                 return True
 
         return False
+
+    def dismiss(self, item_id: str) -> bool:
+        """Drop a finished row from the list. Never touches files."""
+        with self._lock:
+            item = self._find_item(item_id)
+            if item is None or not item.is_terminal:
+                return False
+            removed = self._remove_item(item_id)
+        if removed:
+            self._notify_change()
+        return removed
+
+    def retry(self, item_id: str) -> bool:
+        """Run a failed item again.
+
+        A ``regen`` item queues its job again as a new row; any other item
+        goes back to ``waiting`` with its error cleared and is queued for
+        processing. False when the item isn't a failed one with a song path,
+        or the song is already queued.
+        """
+        with self._lock:
+            item = self._find_item(item_id)
+            if item is None or item.processing_status != "error" or item.song_path is None:
+                return False
+            if item.kind == "regen" and item.regen_job is None:
+                return False
+            song_path = item.song_path
+            regen_job = item.regen_job if item.kind == "regen" else None
+            if regen_job is None:
+                item.processing_status = "waiting"
+                item.processing_phase = None
+                item.error_message = None
+                item.finished_at = None
+
+        # Outside the lock: queueing emits events that this tracker handles.
+        if regen_job is not None:
+            return self._processing_manager.enqueue_regen(regen_job)
+        self._processing_manager.enqueue(song_path)
+        self._notify_change()
+        return True
+
+    def clear_finished(self) -> int:
+        """Drop every completed row; returns how many went. Never touches files."""
+        with self._lock:
+            before = len(self._items)
+            self._items = [item for item in self._items if item.processing_status != "complete"]
+            cleared = before - len(self._items)
+        if cleared:
+            self._notify_change()
+        return cleared
 
     # -- Event handlers -----------------------------------------------------
 
@@ -520,17 +570,19 @@ class PipelineTracker:
                 if can_operate:
                     actions.append("cancel")
 
-            # Remove: available on terminal items (admin only). It deletes the
-            # song, so only a downloaded one offers it.
-            if (
-                admin
-                and is_download
-                and (
+            if admin:
+                # Remove deletes the song, so only a downloaded one offers it.
+                if is_download and (
                     item.download_status in ("complete", "error")
                     or item.processing_status in ("complete", "error")
-                )
-            ):
-                actions.append("remove")
+                ):
+                    actions.append("remove")
+                # Dismiss drops a finished row and touches no file.
+                if item.is_terminal:
+                    actions.append("dismiss")
+                # Retry: processing failed on a song that is in the library.
+                if item.processing_status == "error" and item.song_path:
+                    actions.append("retry")
 
             # Enqueue: available when both stages are complete and song exists
             if (
