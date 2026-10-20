@@ -8,8 +8,7 @@ and what it costs. This is a measurement, not a build: nothing here
 changes `pikaraoke/`. Whether and how to wire a winner into the pipeline
 is decided after GATE Z2, from what this probe finds.
 
-**Status: DRAFT 2026-10-20.** Not yet started. Phase 0 needs Ken's song
-picks (below).
+**Status: DRAFT 2026-10-20.** Not yet started; Phase 0 is next.
 
 ## Why now, and what this replaces
 
@@ -60,7 +59,7 @@ Cantonese. When GATE Z2 is read, GATE L closes with a pointer here.
   heuristics tuned for the shipped routes.
 - **Inputs from the library, read-only.** Each song's video and its
   `vocal/` stem (stem separation is language-independent). Songs enter
-  the library the normal way (web UI or `add_songs`); the app's own
+  the library through `add_songs` (Phase 0a); the app's own
   lyric outputs for them are ignored.
 - **Outputs** go to `d:/shared/pikaraoke-songs/zh_probe/` (same
   precedent as `lrclib_study/`), one folder per phase, never into the
@@ -110,7 +109,8 @@ The same-melody pairs (7/9, 8/10) are the only controlled comparison in
 the corpus: same singer, same tune, different language, so a difference
 between them points at the language, not the song.
 
-**Pilot subset** (Phase 1): #1, #2, #9, #11. Ken adds #9 and #11 first.
+**Pilot subset** (Phase 1): #1, #2, #9, #11. #1 and #2 are already in
+the library; Phase 0a adds #9 and #11.
 
 ## Arms
 
@@ -157,9 +157,18 @@ arm behaves on a mismatched sheet is a later question, not this one.
 
 ### Phase 0 — corpus, sheets, models
 
-- **0a. Corpus in.** Ken adds the songs (pilot four first). Executor
-  records per song: id, language label, duration, whether a `vocal/`
-  stem exists.
+- **0a. Corpus in.** The executor adds the songs it needs (the pilot's
+  #9 and #11 first) with `scripts/add_songs.py` from the
+  `library_tools` branch, run from a worktree of that branch with
+  `--folder d:/shared/pikaraoke-songs --yes` (the tool's default
+  folder is wrong on this box), while the app is idle. Any Genius
+  prompt is answered by piping `t` (transcribe) on stdin, one blank
+  query line plus `t` per song, e.g. `printf '\nt\n\nt\n' |`: the
+  pipeline only has to run so the `vocal/` stem exists, and its lyric
+  output is ignored. A worktree's fresh `.venv` lacks `libmpv-2.dll`;
+  copy it from the main checkout's `.venv\Scripts\` first. The
+  executor then records per song: id, language label, duration,
+  whether a `vocal/` stem exists.
 - **0b. Sheet per song.** Executor fetches every text source it can
   (Genius, LRCLIB, NetEase via `syncedlyrics`) and saves each raw, side
   by side, one file per song. It also records whether NetEase offers
