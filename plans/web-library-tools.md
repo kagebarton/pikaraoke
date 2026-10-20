@@ -2,7 +2,7 @@
 
 Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 
-> **Status (2026-10-20): Phases 0-1 done; Phase 2 is next.** Branch
+> **Status (2026-10-20): Phases 0-2 done; Phase 3 is next.** Branch
 > `web_library_tools`, off `library_tools` at `0bfa02a`; `dev` merged as
 > `c34d889`. There is no GATE and nothing here measures timing. Landing is
 > Ken's call (see Landing).
@@ -1416,6 +1416,67 @@ Executed 2026-10-20 by Sonnet 5.5. Code commit `870e34f`.
 - The real library manifest was not touched (dry runs only read).
 
 ### Phase 2
+
+Executed 2026-10-20 by Sonnet 5.5. Code commits: 2A `dd011af`, `9857986`
+(tests only), `b50595a`; 2B `1ead8a8`; 2C `fb13913`.
+
+- **Suite** (`uv run --no-sync python -P -m pytest tests/unit -q`, 36.8 s):
+  **4 failed, 1626 passed, 2 skipped** = 1632 (baseline 1570 + 62 new tests). The
+  four failures are the baseline's four (ids unchanged, `diff` of the two
+  `FAILED` lists empty). New tests: 2A 20 (`TestGetRecord` 5, `TestSkipMarker` 3,
+  `TestBackfillLrc` 3, `TestApplyLrclibChoice` 8, the CLI re-pick test 1), 2B 29
+  (`test_library_status.py`), 2C 13 (`TestCheckCaption` 5, `TestGateOnDiskCaption`
+  3, `TestReadPlaylist` 4, one `resolve_urls` ValueError test; the old
+  `TestExpandPlaylist` test was replaced, not added).
+- **2A, the re-pick defect:** `apply_lrclib_choice` is the first step of
+  `prepare_lyrics`. A `sidecar` plan whose Genius id differs from the bundle's
+  recorded id (or whose bundle has none) deletes `lyrics/<stem>.lrc`. Both the
+  CLI-driven test (`regen.main()` with `--song <id> --reset --yes`, asserting the
+  `.lrc` is gone when `run_one` runs) and the `prepare_lyrics` test fail with
+  the fix disabled and pass with it. Touched test files: 108 passed.
+- **2A, live `get_record(34563601)`:** first call a 503, second succeeded
+  (`get_record` has no retry): `trackName` "Defying Gravity", `artistName`
+  "Kristin Chenoweth & Idina Menzel", `albumName` "Wicked: Original Broadway
+  Cast", `duration` 354.0, `syncedLyrics` 93 lines.
+- **2B, live over `D:/Shared/pikaraoke-songs`** (`library_statuses`, read-only):
+  `overview_counts` = **behind 5, poor 8, no_lyrics 2, all 48**. Categories:
+  current 41, behind 5, no_lyrics 2. `lrclib_state`: n/a 26, rejected 10, used
+  12, none 0, skipped 0. `method`: cue_align 24, joint 22, none 2. Behind =
+  `xFYQQPAOz7Y`, `fJ9rUzIMcZQ`, `3JWTaaS7LdU`, `DYptgVvkVLQ`, `RPWDeLqsN0g` (all v10);
+  no_lyrics = `qu_FSptjRic`, `8NJVNkzhJM4`. Poor (timed/lines): Defying Gravity
+  51/89, Popular 51/62, Bloodstream 47/74, HUNTR/X This Is What It Sounds Like
+  32/53, Mulan 36/47, Seasons of Love 25/34, Hakuna Matata 33/40, Jay Chou Sunny
+  Day 18/42.
+- **2B, `song_history` for `AoON1CyhQAM`:** 3 entries, newest first:
+  `2026-10-19T18:03:52+00:00` v11 51/89 (current bundle, Genius 105865, LRCLIB
+  34563601); `2026-09-21T17:13:07+00:00` v10 51/89 (`regen_backup_20261019T175506Z`,
+  same ids); `2026-07-16T20:58:17+00:00` v8 51/89 (`regen_backup_20260921T170629Z`,
+  Genius 105865, no LRCLIB). Matches the plan's expectation.
+- **2B, one change after writing the module:** `SongStatus.poor` returns False
+  when `lines_with_words` is missing (it divided by None before). A test covers
+  it. With the threshold `>=` changed to `>` and the history dedupe removed, three
+  tests failed; restored.
+- **2C, live `check_caption`** (job built from the real library's bundle):
+  `fJ9rUzIMcZQ` -> `CaptionCheck(found=True, wpm=63.42, passed=True)`;
+  `xFYQQPAOz7Y` -> `CaptionCheck(found=False, wpm=None, passed=False)`. A
+  before/after listing of the whole library (2605 files, size and mtime) was
+  identical, and no `caption_check_*` folder was left in
+  `C:\Users\TsangK\AppData\Roaming\pikaraoke\tmp`. With the `rmtree` removed four
+  `check_caption` tests failed; restored.
+- **2C, live `read_playlist`** on
+  `https://www.youtube.com/playlist?list=PLRxQryWW8Yw1hcJrE_Aip8wJCPeSh2Ahe`
+  (found by a yt-dlp playlist search; title "Musisi Karaoke BEST 10 | Popular
+  Karaoke Songs"): 17 videos, each with an id and title; `expand_playlist` on the
+  same URL returned the same 17 ids. The count was compared with the
+  `playlist_count` yt-dlp reports from the same page (17), not by opening the
+  page in a browser. The title says 10; the playlist holds 17.
+- **Real library after all live checks:** `manifest.py compare` against the
+  Phase 0 manifest: 2605 / 2605, 0 added, 0 removed, 0 changed.
+- **pre-commit** (`--all-files`): black reformatted my test files only
+  (re-staged). The run also edited `pikaraoke/lib/args.py` (upstream unused
+  `import os`) and rewrote both plan files via mdformat; reverted with
+  `git checkout` each time and not in any commit. Pylint passed. Import smoke:
+  `library_regen`, `library_links`, `library_status` and both scripts import.
 
 ### Phase 3
 
