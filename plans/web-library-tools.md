@@ -2,7 +2,7 @@
 
 Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 
-> **Status (2026-10-20): Phases 0-2 done; Phase 3 is next.** Branch
+> **Status (2026-10-20): Phases 0-3 done; Phase 4 is next.** Branch
 > `web_library_tools`, off `library_tools` at `0bfa02a`; `dev` merged as
 > `c34d889`. There is no GATE and nothing here measures timing. Landing is
 > Ken's call (see Landing).
@@ -1479,6 +1479,101 @@ Executed 2026-10-20 by Sonnet 5.5. Code commits: 2A `dd011af`, `9857986`
   `library_regen`, `library_links`, `library_status` and both scripts import.
 
 ### Phase 3
+
+Executed 2026-10-20 by Sonnet 5.5. Code commits: 3a `30f7c84`; 3b `b871285`,
+then a fix `b2d8857`; 3c and 3d `1b48a39`; the three actions `289a942`.
+
+- **Suite** (`uv run --no-sync python -P -m pytest tests/unit -q`, 41.1 s):
+  **4 failed, 1715 passed, 2 skipped** = 1721 (Phase 2's 1632 + 89 new tests).
+  The four failures are the baseline's four (ids unchanged). New tests by
+  commit: 3a 1 (`TestStageOrdering`); 3b 15 (`TestPrepareRegenJob` 10,
+  `TestFinishRegenJob` 3, CLI `TestRunJobsFinishesEachSong` 2); processing
+  manager 29 (`TestIsBlocked` 3, `TestProcessingQueuedEvent` 2,
+  `TestEnqueueRegen` 5, `TestRegenLaneOrder` 3, `TestSongDeletedDropsRegenJobs`
+  2, `TestProcessRegen` 8, `TestLaunchFailures` 2, `TestActiveJobTiming` 3,
+  `TestStart` gained 1) and tracker rows 19 (`TestRegenRows` 7, `TestProcessRows`
+  4, `TestRowsThatFinish` 4, `TestRowActions` 4), both in `1b48a39`; actions 25
+  (`TestDismiss` 8, `TestRetry` 7, `TestClearFinished` 2, `TestNewAdminEndpoints`
+  6, 2 more in `TestRowActions`). `PipelineTracker` has no test file of its own;
+  its tests live in `test_processing_routes.py`, where the existing ones are.
+- **One transient failure** in an intermediate run (not in either full-suite
+  run): `test_library_regen.py::TestApplyLrclibChoice::test_skip_wins_over_a_record_and_over_the_id_rule`
+  raised `PermissionError [WinError 5]` from `os.replace` of
+  `lyrics/<stem>.lrc.tmp` (the 2A atomic write). Three reruns of the touched
+  test files (130 tests) passed.
+- **Mutation checks** (each reverted afterwards): 3b, finish removes the
+  bundle for non-transcribe plans (3 tests failed), backfill for a reused
+  Genius pick off (1), reset ignored (2). Manager: regen path recorded in
+  `_cancelled_paths` (1), playing song not held back (1), a failed regen marks
+  `failed` (3), `song_deleted` not dropping regen jobs (1), launch failure not
+  caught (the loop dies; 1 test failed). Tracker: a cancelled active regen
+  deletes the song (1), a cancelled pending regen deletes it (1), regen rows
+  shown to guests (1), events hit finished rows (2), `processing_queued` always
+  adds a row (2), `remove` allowed for any kind (2). The retry fix (below) with
+  the line removed: 1 failed.
+- **Differences from the plan's text:**
+  - `3b` is its own commit (`feat(regen): prepare and finish a queued regen job
+    in the shared core`), with the CLI's one-line `finish_regen_job` call. The
+    plan names three commits; there are five code commits.
+  - `_launch_and_report(song_path, launch, regen=None)` takes the `RegenJob`
+    (None for a download) instead of a separate `mark_failed` flag; the two were
+    the same fact. A launch exception is handled for both kinds; a download's
+    launch failure marks `failed`, a regen's does not. `finish_regen_job` is
+    wrapped for `OSError` (logged), because an exception there would end the
+    run loop.
+  - `b2d8857`: found while writing Retry. A regen whose caption fetch failed
+    left the job on its fallback `prompt` plan, which `prepare_lyrics` treats as
+    transcribe, so a retry would have transcribed the song. `prepare_regen_job`
+    now puts the `fetch` plan back before raising.
+  - Tracker actions: `enqueue` (to the singing queue) is offered for `download`
+    rows only; for `regen` and `process` rows only an admin can `cancel` (they
+    have no singer, and an unnamed guest cookie matched the empty `user`).
+    `dismiss` is offered to admins on any finished row, `remove` on finished
+    `download` rows, `retry` on a row in `error` with a song path.
+  - `process` rows are shown to guests (only `regen` rows are hidden, as the
+    plan's text says).
+  - Row titles use `SongManager.filename_from_path` (the static method), not an
+    instance call.
+- **Isolated app run** (Ground rules checked first: nothing listening on 5555
+  or 5556, no python or mpv process, GPU idle at 1218 MiB). Scratchpad
+  `appdata\pikaraoke\config.ini` is a copy of Ken's, with `download_path` edited
+  to `D:/shared/weblib-test`; its `admin_password` is empty, so every request is
+  an admin. Command: `APPDATA=<scratchpad>\appdata`, `PYTHONUTF8=1`,
+  `uv run --no-sync python -P -m pikaraoke.app --download-path D:/shared/weblib-test --port 5556`
+  from the worktree root. Log: `Library updated: 7 added`.
+  - `GET /processing` HTTP 200 (27,997 bytes); `GET /processing/status` `[]`.
+  - `POST /download` `{"song_url": ".../watch?v=aF8voKa_3Us", "song_added_by":
+    "Tester", "song_title": "Traditional - Happy Birthday (Karaoke Version)",
+    "queue": false}` (57 s video). Status rows over time, from
+    `poll_status.py`: 2 s download `active`; 12 s download `complete`, processing
+    `pending`; 28 s `active` / `stem_separation`, `elapsed_s` 3.8; 129 s
+    `transcode`; 134 s `transcribe`; 169 s `complete`, `lyric_method`
+    `transcribe`, actions `remove`, `dismiss`, `enqueue`. One row throughout,
+    `kind` `download`; no `process` row appeared. Log: `Queued for pipeline`,
+    `Processing started`, `Processing complete`; no traceback.
+  - On that finished row: `POST .../retry` `{"success":false}`; `.../dismiss`
+    `{"success":true}`, then the rows were `[]` and the song file was still in
+    the scratch folder; `POST /processing/clear_finished` `{"count":0,"success":true}`.
+  - Stopped with `taskkill /T` on the listener's pid (3 processes). Afterwards
+    nothing listened on 5556 and no python or mpv process remained.
+  - The scratch library now also holds the Happy Birthday video and its files
+    (a transcribe run writes no bundle). Nothing queued a regen job, as the
+    plan says; the regen lane has only run in the unit tests.
+- **Real-library manifest:** `manifest.py compare` against the Phase 0 manifest:
+  `manifest=2605 now=2616 added=11 removed=0 changed=1`. All 12 are under
+  `zh_probe/phase0/`: added `phase0b_diffs.txt`, `phase0b_score.json`,
+  `phase0b_score.txt` and eight `transcripts/<id>.json|.txt`; changed
+  `phase0c_vocab.json`. Their mtimes are 13:33 to 13:40; the `chinese_karaoke`
+  worktree has commits at 13:44 ("whisper transcript narrows the Phase 0b lyric
+  candidates", "log the Phase 0b transcript-narrowing results"). This session's
+  app run started at 13:55 and wrote to the scratch folder and the scratchpad
+  `appdata` only. Nothing outside `zh_probe/` differs. Output:
+  `...\66751cff-eade-4c4e-a440-a5ea44850245\scratchpad\manifest_compare_phase3.txt`.
+- **pre-commit:** run per commit with `--files <changed files>` instead of
+  `--all-files`, so `args.py` and the plan files were not touched. Black and
+  isort reformatted my own files (re-staged); pylint passed. Import smoke:
+  `pipeline_tracker`, `processing_manager`, `karaoke`, `routes.processing`,
+  `library_regen` and `scripts.regen_alignment_bundles` import.
 
 ### Phase 4
 
