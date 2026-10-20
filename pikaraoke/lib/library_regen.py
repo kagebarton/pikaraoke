@@ -749,3 +749,70 @@ def _remove(path: Path) -> None:
         shutil.rmtree(path)
     except OSError as e:
         logger.warning("Could not fully remove %s: %s", path, e)
+
+
+# ---------------------------------------------------------------------------
+# A regen job for the app's processing queue
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class RegenJob:
+    """One song's regeneration, queued behind downloads in the processing queue.
+
+    ``reset`` wipes the song's regenerable outputs first; ``label`` is the row's
+    kind word (Update, Reprocess, Reset, Repair, Regenerate).
+    """
+
+    song: SongJob
+    reset: bool
+    label: str
+
+
+class RegenError(Exception):
+    """A regen job can't start; the message is for the admin."""
+
+
+def prepare_regen_job(
+    regen: RegenJob, genius: GeniusClient, config: PipelineConfig, lyrics_dir: Path
+) -> tuple[Path | None, BaseStage | None]:
+    """The per-song file work before a regen run, in the order the CLI does it.
+
+    Returns ``(lyrics_path, lyric_stage)`` for the run, as :func:`prepare_lyrics`
+    does. Raises :class:`RegenError` when the job can't start.
+    """
+    job = regen.song
+    song = job.song_path
+
+    if regen.reset:
+        try:
+            clear_output_folders(song.parent, stems=[song.stem])
+        except OSError as e:
+            raise RegenError(
+                f"A file of this song is in use: {e}. Close the player and retry."
+            ) from e
+
+    if job.plan.kind == "fetch":
+        fetch_caption(job)
+        if job.plan.kind != "seed":
+            raise RegenError(
+                "The YouTube caption no longer passes the lyrics check. "
+                "Use Repair lyrics on Song Info to pick lyrics."
+            )
+
+    if job.plan.kind == "seed" and job.plan.seed.get("lyrics_origin") == "genius":
+        backfill_lrc(job, config)
+
+    return prepare_lyrics(job, genius, lyrics_dir, config)
+
+
+def finish_regen_job(job: SongJob) -> None:
+    """After a successful run: a transcribe plan removes the song's old bundle.
+
+    A transcribe run writes no bundle, so the old one would stay: Song Info
+    would show the old lyrics, and the next reuse run would bring them back.
+    The backup holds the removed bundle.
+    """
+    if job.plan.kind == "transcribe":
+        bundle = job.song_path.parent / "alignment_debug" / f"{job.song_path.stem}.json"
+        bundle.unlink(missing_ok=True)

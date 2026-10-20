@@ -348,3 +348,51 @@ class TestResetWithNewGeniusPick:
         assert regen.main() == 0
 
         assert seen == {"lrc_exists": False}
+
+
+# ---------------------------------------------------------------------------
+# A transcribe run drops the old bundle
+# ---------------------------------------------------------------------------
+
+
+class TestRunJobsFinishesEachSong:
+    """A transcribe run writes no bundle, so the old one must go once the run
+    succeeds (``finish_regen_job``); a failed run keeps it."""
+
+    def _run(self, tmp_path, monkeypatch, run_error):
+        _touch_video(tmp_path, "Song")
+        (tmp_path / "alignment_debug").mkdir()
+        bundle = tmp_path / "alignment_debug" / "Song.json"
+        bundle.write_text("{}", encoding="utf-8")
+        job = _job(tmp_path, "Song", {})
+        job.plan = regen.Plan(kind="transcribe")
+
+        class FakeOrchestrator:
+            def __init__(self, *args):
+                pass
+
+            def run_one(self, song, lyrics_path):
+                if run_error:
+                    raise run_error
+
+        monkeypatch.setattr(regen, "PipelineOrchestrator", FakeOrchestrator)
+        monkeypatch.setattr(regen, "StemWorker", MagicMock())
+        monkeypatch.setattr(regen, "WhisperWorker", MagicMock())
+        monkeypatch.setattr(regen, "build_stages", lambda *args: [])
+        config = PipelineConfig()
+        config.intermediate_dir = str(tmp_path)
+
+        counts = regen.run_jobs([job], config, MagicMock())
+        return counts, bundle
+
+    def test_a_successful_transcribe_removes_the_old_bundle(self, tmp_path, monkeypatch):
+        counts, bundle = self._run(tmp_path, monkeypatch, None)
+
+        assert counts == (1, 0, 0)
+        assert not bundle.exists()
+
+    def test_a_failed_transcribe_keeps_the_old_bundle(self, tmp_path, monkeypatch):
+        counts, bundle = self._run(tmp_path, monkeypatch, RuntimeError("boom"))
+
+        assert counts == (0, 1, 0)
+        assert bundle.exists()
