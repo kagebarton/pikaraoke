@@ -177,6 +177,7 @@ def map_lines_to_cues(bundle_lines: list[str], cue_texts: list[str]) -> dict[int
 
 
 SEARCH_URL = "https://lrclib.net/api/search"
+GET_URL = "https://lrclib.net/api/get/{id}"
 USER_AGENT = "pikaraoke (https://github.com/vicwomg/pikaraoke)"
 _REQUEST_TIMEOUT_S = 30.0
 # Politeness delay after a live query, per LRCLIB's API guidelines.
@@ -195,6 +196,10 @@ _TRAILING_PAREN_RE = re.compile(r"\s*[(\[][^)\]]*[)\]]\s*$")
 # tag name to the LRCLIB record field it carries.
 _TAG_TO_FIELD = {"ti": "trackName", "ar": "artistName", "al": "albumName", "lrclib_id": "id"}
 _ID_TAG_RE = re.compile(r"^\[(\w+):(.*)\]$")
+
+# The one header tag of a skip marker: a header-only .lrc recording that the
+# admin chose no LRCLIB match (see :func:`write_skip_marker`).
+SKIP_TAG = "lrclib_skipped"
 
 _RECORD_FIELDS = ("id", "trackName", "artistName", "albumName", "duration")
 
@@ -242,6 +247,23 @@ def search(track_name: str, artist_name: str, *, timeout: float = _REQUEST_TIMEO
         return []
     time.sleep(_POLITE_SLEEP_S)
     return records if isinstance(records, list) else []
+
+
+def get_record(record_id: int, *, timeout: float = _REQUEST_TIMEOUT_S) -> dict | None:
+    """``GET /api/get/{id}``: one record with its synced lyrics, or None on any failure."""
+    try:
+        resp = requests.get(
+            GET_URL.format(id=record_id),
+            headers={"User-Agent": USER_AGENT},
+            timeout=timeout,
+        )
+        resp.raise_for_status()
+        record = resp.json()
+    except (requests.RequestException, ValueError) as e:
+        logger.warning("LRCLIB get failed for id %s: %s", record_id, e)
+        return None
+    time.sleep(_POLITE_SLEEP_S)
+    return record if isinstance(record, dict) else None
 
 
 def select_candidate(records: list[dict], sheet: list[str], media_dur: float | None) -> dict | None:
@@ -309,7 +331,28 @@ def write_lrc(path: Path, record: dict) -> None:
         header.append(f"[lrclib_id:{record['id']}]")
 
     body = record.get("syncedLyrics") or ""
-    text = "".join(f"{line}\n" for line in header) + body
+    _write_text_atomic(path, "".join(f"{line}\n" for line in header) + body)
+
+
+def write_skip_marker(path: Path) -> None:
+    """Record that the admin chose no LRCLIB match (a header-only .lrc).
+
+    ``ensure_lrc`` reuses any file on disk, so the marker stops the automatic
+    fetch; it has no stamped lines, so the fill finds no cues.
+    """
+    _write_text_atomic(path, f"[{SKIP_TAG}:1]\n")
+
+
+def is_skip_marker(path: Path) -> bool:
+    """Whether ``path`` is a marker written by :func:`write_skip_marker`."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    return any(line.strip().startswith(f"[{SKIP_TAG}:") for line in text.splitlines())
+
+
+def _write_text_atomic(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     # Sibling tmp + rename: an interrupted write must never leave a truncated
     # .lrc for ensure_lrc's is_file() check to trust as a cache forever.
@@ -380,7 +423,8 @@ def ensure_lrc(
     Returns the path when a variant is available, ``None`` otherwise.
     Persists only successful selections -- a failed or empty search leaves
     no file, so the next call retries instead of baking in a transient
-    failure.
+    failure. A skip marker counts as a file on disk, so it is returned as is
+    and nothing is searched.
     """
     path = song_path.parent / "lyrics" / f"{song_path.stem}.lrc"
     if path.is_file():
