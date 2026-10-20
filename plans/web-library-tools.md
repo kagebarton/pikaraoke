@@ -2,9 +2,10 @@
 
 Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 
-> **Status (2026-10-20): DESIGNED, not started.** Phase 0 is next. Branch
-> `web_library_tools`, off `library_tools` at `0bfa02a`. There is no GATE and
-> nothing here measures timing. Landing is Ken's call (see Landing).
+> **Status (2026-10-20): Phase 0 done; Phase 1 is next.** Branch
+> `web_library_tools`, off `library_tools` at `0bfa02a`; `dev` merged as
+> `c34d889`. There is no GATE and nothing here measures timing. Landing is
+> Ken's call (see Landing).
 
 ## Why
 
@@ -1316,6 +1317,60 @@ Ken's call, after Phase 9 and his checks: cherry-pick the landing list onto
 ## Results log
 
 ### Baseline (Phase 0)
+
+Executed 2026-10-20 by Sonnet 5.5.
+
+- **Worktree:** `web_library_tools` already had one, the design session's
+  `...\e06fcfcd-448b-4e95-82bf-396f179bc1c9\scratchpad\wt_weblib` (clean at
+  `4eb98c0`); no new one was added. It had no `.venv`: `uv sync` (51 s) built it;
+  `libmpv-2.dll` copied from the main checkout's `.venv\Scripts`; `models`
+  junction made to the main checkout's `models`.
+  `uv run --no-sync python -P -c "import pikaraoke; print(pikaraoke.__file__)"`
+  prints `...\wt_weblib\pikaraoke\__init__.py`.
+- **Merge:** `git merge --no-ff dev` clean, `c34d889` (4 files: `CLAUDE.md`,
+  `alignment_capture.py`, `onset_snap.py`, `test_onset_snap.py`).
+- **Baseline** (`uv run --no-sync python -P -m pytest tests/unit -q`, 118.6 s):
+  **4 failed, 1564 passed, 2 skipped** (1570 collected). The four failures are
+  the known set: `test_genius.py::TestSidecarIO::test_write_overwrites_existing`,
+  `test_pipeline_stem_worker.py::TestStemWorkerSeparate::test_ok_returns_stem_paths_and_sends_job`,
+  `test_pipeline_stem_worker.py::TestStemWorkerSeparate::test_model_override_travels_in_job_tuple`,
+  `test_whisper_worker.py::TestStart::test_start_raises_worker_died_on_pipe_close`.
+- **Real-library manifest:** 2605 files, 3,104,569,762 bytes, written by a stdlib
+  script (`manifest.py write`) to
+  `...\66751cff-eade-4c4e-a440-a5ea44850245\scratchpad\real_library_manifest.json`;
+  `manifest.py compare` after the scratch copy: 0 added, 0 removed, 0 changed.
+  Nothing was listening on 5555 or 5556 and no python process was running.
+- **Real-library survey** (48 videos): behind (v10) = `xFYQQPAOz7Y`, `fJ9rUzIMcZQ`,
+  `3JWTaaS7LdU`, `DYptgVvkVLQ`, `RPWDeLqsN0g`; no bundle but a karaoke file =
+  `qu_FSptjRic`, `8NJVNkzhJM4`; the other 41 are v11.
+- **Scratch library** `D:/shared/weblib-test/` (did not exist before), 76 files,
+  288 MB. Seven songs:
+
+  | Song | Role | Files copied (video / vocal / nonvocal / dereverb / subtitles / karaoke / lyrics / alignment_debug) |
+  |---|---|---|
+  | `xFYQQPAOz7Y` Eminem, Lose Yourself | Genius, v10 | 1 / 1 / 1 / 0 / 2 / 1 / 1 / 1 |
+  | `fJ9rUzIMcZQ` Queen, Bohemian Rhapsody | caption, v10 | 1 / 1 / 1 / 0 / 2 / 1 / 0 / 1 |
+  | `DYptgVvkVLQ` Jay Chou, Sunny Day | Genius, v10, Mandarin, 18 of 42 timed | 1 / 1 / 1 / 1 / 2 / 1 / 1 / 1 |
+  | `AoON1CyhQAM` Defying Gravity | Genius, v11, 51 of 89 timed | 1 / 1 / 1 / 0 / 3 / 7 / 2 / 1 |
+  | `8NJVNkzhJM4` Eason Chan, Ming Nin Gam Yat | no bundle, karaoke file | 1 / 1 / 1 / 0 / 2 / 1 / 0 / 0 |
+  | `1OwfYjemrYw` Backstreet Boys, More Than That | caption, v11 (my pick) | 1 / 1 / 1 / 1 / 1 / 4 / 1 / 1 |
+  | Josh Gad, In Summer (from `9tcaM06eGrY`, renamed) | Genius, v11, no YouTube ID | 1 / 1 / 1 / 1 / 2 / 5 / 2 / 1 |
+
+  Folder totals: root videos 7, `vocal` 7, `nonvocal` 7, `dereverb` 3,
+  `subtitles` 14, `karaoke` 20, `lyrics` 7, `alignment_debug` 6. History data:
+  `Defying Gravity`'s bundle copied from each of the 5 `regen_backup_*` folders
+  (1 file each: `20260921T170629Z`, `20260921T181132Z`, `20260921T183151Z`,
+  `20261019T175506Z`, `20261019T212308Z`).
+  The no-ID copy has `---9tcaM06eGrY` dropped from all 14 of its filenames;
+  `extract_youtube_id` returns None for it. Its bundle was not edited.
+- **Deviation from the plan's text:** the `_owner` rule (name equals the stem or
+  starts with `stem + "."`) claims nothing in `vocal/`, `nonvocal/` and
+  `dereverb/`, whose files are named `<stem>---vocal.m4a`,
+  `<stem>---nonvocal.m4a`, `<stem>---vocal-dereverb.wav`. Applied literally the
+  copy would have left every song without stems and a regen would have re-run
+  separation. The copy script claims `stem + "---"` names as well (longest stem
+  still wins). The backup/wipe code keeps the plan's rule because it never
+  touches those three folders.
 
 ### Phase 1
 
