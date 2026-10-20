@@ -94,7 +94,7 @@ def resolve_urls(urls: list[str], library: dict[str, Path]) -> tuple[list[UrlEnt
         else:
             try:
                 ids = expand_playlist(value)
-            except subprocess.CalledProcessError as e:
+            except (subprocess.CalledProcessError, ValueError) as e:
                 print(f"  failed to expand playlist: {value} ({e})")
                 unreadable += 1
                 continue

@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import shutil
+import tempfile
 from collections.abc import Callable, Collection
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -22,6 +23,7 @@ from pikaraoke.lib.alignment_capture import SCHEMA_VERSION
 from pikaraoke.lib.ffmpeg import probe_duration
 from pikaraoke.lib.genius import GeniusClient, GeniusUnavailable, write_choice
 from pikaraoke.lib.genius_lyrics import parse_lyric_lines
+from pikaraoke.lib.get_platform import get_temp_directory
 from pikaraoke.lib.metadata_parser import (
     clean_search_query,
     extract_youtube_id,
@@ -328,8 +330,13 @@ def caption_wpm(srt_path: Path, job: SongJob) -> float | None:
     return words / (duration / 60.0)
 
 
+def _caption_passes(wpm: float | None) -> bool:
+    """The length gate. A caption whose length can't be measured passes."""
+    return wpm is None or wpm >= MIN_CAPTION_WPM
+
+
 # ---------------------------------------------------------------------------
-# Download a video's manual English caption (real run only)
+# A video's manual English caption: gate it, fetch it, or just check it
 # ---------------------------------------------------------------------------
 
 
@@ -346,7 +353,7 @@ def adopt_caption(job: SongJob, srt_path: Path) -> None:
     song = job.song_path
     fallback = job.plan.fallback or Plan(kind="prompt", label="fetch failed -> genius")
     wpm = caption_wpm(srt_path, job)
-    if wpm is not None and wpm < MIN_CAPTION_WPM:
+    if not _caption_passes(wpm):
         logger.info("Fetched caption for %s too sparse (%.0f wpm); discarding", song.name, wpm)
         srt_path.unlink(missing_ok=True)
         job.plan = fallback
@@ -375,14 +382,56 @@ def fetch_caption(job: SongJob) -> None:
     backed-up caption.
     """
     song = job.song_path
-    yt_id = extract_youtube_id(str(song))
-    url = f"https://www.youtube.com/watch?v={yt_id}"
-    result = download_manual_en_subs(url, str(song.parent / "subtitles"), song.stem)
+    result = download_manual_en_subs(_watch_url(song), str(song.parent / "subtitles"), song.stem)
     if result is None:
         logger.info("No downloadable caption for %s; will prompt", song.name)
         job.plan = job.plan.fallback or Plan(kind="prompt", label="fetch failed -> genius")
         return
     adopt_caption(job, Path(result))
+
+
+def _watch_url(song: Path) -> str:
+    return f"https://www.youtube.com/watch?v={extract_youtube_id(str(song))}"
+
+
+@dataclass(frozen=True)
+class CaptionCheck:
+    found: bool  # YouTube has a manual English caption
+    wpm: float | None  # None when the caption's length can't be measured
+    passed: bool  # would the length gate keep it
+
+
+def check_caption(job: SongJob) -> CaptionCheck:
+    """Download the manual English caption into a throwaway folder and measure it.
+
+    Nothing in the library is written, so a preview can run before the backup.
+    The song must have a YouTube id.
+    """
+    song = job.song_path
+    scratch = Path(tempfile.mkdtemp(prefix="caption_check_", dir=get_temp_directory()))
+    try:
+        result = download_manual_en_subs(_watch_url(song), str(scratch), song.stem)
+        if result is None:
+            return CaptionCheck(found=False, wpm=None, passed=False)
+        wpm = caption_wpm(Path(result), job)
+        return CaptionCheck(found=True, wpm=wpm, passed=_caption_passes(wpm))
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+
+
+def gate_on_disk_caption(job: SongJob) -> bool:
+    """Gate the caption a download already saved (no network).
+
+    True when the song now has a seed-srt plan. A caption too sparse to be
+    lyrics is deleted, as :func:`adopt_caption` does; with no caption on disk
+    the plan is left alone.
+    """
+    srt_path = find_local_srt(job.song_path)
+    if srt_path is None:
+        return False
+    job.plan = _fetch_or_prompt_plan(job.song_path)
+    adopt_caption(job, srt_path)
+    return job.plan.kind == "seed"
 
 
 # ---------------------------------------------------------------------------
