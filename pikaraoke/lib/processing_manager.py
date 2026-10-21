@@ -23,6 +23,7 @@ from pathlib import Path
 
 PIPELINE_THREAD_PREFIX = "pikaraoke-pipeline"
 
+from pikaraoke.lib import lrclib
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.genius import GeniusClient
 from pikaraoke.lib.get_platform import get_temp_directory, is_windows
@@ -31,6 +32,7 @@ from pikaraoke.lib.library_regen import (
     build_stages,
     finish_regen_job,
     prepare_regen_job,
+    put_back_lrc,
 )
 from pikaraoke.lib.preference_manager import PreferenceManager
 from pikaraoke.lib.process_terminal import ProcessTerminal
@@ -614,14 +616,21 @@ class ProcessingManager:
         A job that can't start (a ``RegenError``, or any failure while
         preparing) raises; :meth:`_run_job` reports it as a processing error
         and the song's ``pipeline_state`` is left alone either way.
+
+        Anything but a successful run (an error, or a cancel during setup or
+        during the run) puts the song's ``lyrics/<stem>.lrc`` back as it was:
+        the old bundle stays, so the LRCLIB choice must stay with it.
         """
         job = regen.song
         logging.info(f"Regen started ({regen.label}): {job.song_path.name}", extra=LIFECYCLE_EXTRA)
+        # Taken before anything is changed; a file that can't be read fails the job here.
+        lrc_before = lrclib.snapshot_lrc(lrclib.lrc_path(job.song_path))
         # Holds the reused-lyrics .txt for the run; the orchestrator validates
         # that the path exists, so it must outlive the job.
         lyrics_dir = Path(
             tempfile.mkdtemp(prefix="regen_lyrics_", dir=self._config.intermediate_dir or None)
         )
+        succeeded = False
         try:
             # The CLI sets the same flag: keep the de-reverb stem for the next run.
             config = dataclasses.replace(self._config, cache_dereverb_stem=True)
@@ -632,13 +641,15 @@ class ProcessingManager:
                     job.song_path, lyric_stage, self._whisper_worker, config, self._stem_worker
                 ),
             ]
-            self._launch_and_report(
+            succeeded = self._launch_and_report(
                 song_path,
                 lambda: self._orchestrator.run_one_async(job.song_path, lyrics_path, stages),
                 regen=regen,
             )
         finally:
             shutil.rmtree(lyrics_dir, ignore_errors=True)
+            if not succeeded:
+                put_back_lrc(job.song_path, lrc_before)
 
     def _launch_and_report(
         self,

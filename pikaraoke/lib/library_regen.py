@@ -541,6 +541,21 @@ def apply_lrclib_choice(job: SongJob) -> None:
             lrc.unlink(missing_ok=True)
 
 
+def put_back_lrc(song: Path, snapshot: str | None) -> None:
+    """Restore ``lyrics/<stem>.lrc`` to ``snapshot`` after a regen that didn't finish.
+
+    The choice rewrites or deletes the file before the run (D3) and the run can
+    write a new one, while a failed run leaves the old bundle in place: the
+    admin's earlier skip or pick would be gone, or the new song's match would
+    sit next to the old song's bundle. Never raises, so it can't hide the
+    job's own error.
+    """
+    try:
+        lrclib.restore_lrc(lrclib.lrc_path(song), snapshot)
+    except OSError as e:
+        logger.warning("Could not put back the LRCLIB file of %s: %s", song.name, e)
+
+
 def prepare_lyrics(job: SongJob, genius: GeniusClient, lyrics_dir: Path, config: PipelineConfig):
     """Resolve a job's plan to ``(lyrics_path, lyric_stage)`` for the run.
 

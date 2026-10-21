@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
+from pikaraoke.lib import lrclib
 from pikaraoke.lib import processing_manager as pm
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.library_regen import Plan, RegenError, RegenJob, SongJob
@@ -1235,10 +1236,13 @@ class TestCancelWhilePreparing:
             preparing=threading.Event(),
             release=threading.Event(),
             setup_error=None,
+            setup_effect=None,
         )
         scene.path = str(scene.regen.song.song_path)
 
         def held_in_setup(regen, genius, config, lyrics_dir):
+            if scene.setup_effect is not None:
+                scene.setup_effect()
             scene.preparing.set()
             assert scene.release.wait(timeout=5)
             if scene.setup_error is not None:
@@ -1318,6 +1322,25 @@ class TestCancelWhilePreparing:
             scene.mgr.enqueue(scene.path)
 
         _drive_loop(scene.mgr, ran, during=cancel_then_process_again)
+
+    def test_a_cancel_while_preparing_puts_the_lrc_back(self, events, scene):
+        lrc = lrclib.lrc_path(scene.regen.song.song_path)
+        lrc.parent.mkdir()
+        lrc.write_text("[lrclib_id:1]\n[00:01.00]old\n", encoding="utf-8")
+        scene.setup_effect = lrc.unlink  # a new Genius id drops the .lrc
+        cancelled = threading.Event()
+        events.on("processing_cancelled", lambda path: cancelled.set())
+
+        def cancel_while_preparing():
+            assert scene.preparing.wait(timeout=5)
+            row = scene.tracker.get_status(admin=True)[0]
+            assert scene.tracker.cancel(row["id"])
+            assert not lrc.exists()
+            scene.release.set()
+
+        _drive_loop(scene.mgr, cancelled, during=cancel_while_preparing)
+
+        assert lrc.read_text(encoding="utf-8") == "[lrclib_id:1]\n[00:01.00]old\n"
 
     def test_a_setup_error_after_a_cancel_leaves_a_plain_error_row(self, events, scene):
         errored = threading.Event()
@@ -1451,6 +1474,123 @@ class TestLibrarySpelling:
         assert [c["song_path"] for c in completed] == [song.library]
         # File work still goes by the Path.
         assert mock_orchestrator.run_one_async.call_args.args[0] == song.regen.song.song_path
+
+
+class TestLrcPutBackWhenTheRegenDoesNotFinish:
+    """The LRCLIB choice is ``lyrics/<stem>.lrc`` (D3): setup rewrites or deletes
+    it and the run can write a new one, while a regen that doesn't finish leaves
+    the old bundle, so the file has to go back with it."""
+
+    OLD = "[ti:Old]\n[lrclib_id:1]\n[00:01.00]old\n"
+    NEW = "[ti:New]\n[lrclib_id:2]\n[00:01.00]new\n"
+
+    def _regen_with_lrc(self, tmp_path, before):
+        regen = _regen_job(tmp_path, kind="sidecar")
+        lrc = lrclib.lrc_path(regen.song.song_path)
+        if before is not None:
+            lrc.parent.mkdir(exist_ok=True)
+            lrc.write_text(before, encoding="utf-8")
+        return regen, lrc
+
+    def _run(self, events, preferences, orchestrator, tmp_path, regen):
+        mgr = _runnable_manager(events, preferences, orchestrator, tmp_path, MagicMock())
+        song_path = str(regen.song.song_path)
+        mgr._run_job(song_path, lambda: mgr._process_regen(regen, song_path), regen)
+
+    def test_a_new_genius_pick_whose_run_fails_gets_the_old_lrc_back(
+        self, events, preferences, mock_orchestrator, tmp_path, prepared
+    ):
+        regen, lrc = self._regen_with_lrc(tmp_path, self.OLD)
+
+        def drop_for_the_new_song(regen_job, genius, config, lyrics_dir):
+            lrc.unlink()
+            return None, None
+
+        prepared.side_effect = drop_for_the_new_song
+        mock_orchestrator.join.side_effect = RuntimeError("whisper fell over")
+
+        self._run(events, preferences, mock_orchestrator, tmp_path, regen)
+
+        assert lrc.read_text(encoding="utf-8") == self.OLD
+
+    def test_a_skip_marker_comes_back_when_the_re_pick_is_cancelled_during_the_run(
+        self, events, preferences, mock_orchestrator, tmp_path, prepared
+    ):
+        regen, lrc = self._regen_with_lrc(tmp_path, None)
+        lrclib.write_skip_marker(lrc)
+
+        def drop_for_the_new_song(regen_job, genius, config, lyrics_dir):
+            lrc.unlink()
+            return None, None
+
+        prepared.side_effect = drop_for_the_new_song
+        mock_orchestrator.join.side_effect = PipelineCancelled()
+
+        self._run(events, preferences, mock_orchestrator, tmp_path, regen)
+
+        assert lrclib.is_skip_marker(lrc)
+
+    def test_an_lrc_written_by_a_run_that_then_fails_is_removed(
+        self, events, preferences, mock_orchestrator, tmp_path, prepared
+    ):
+        regen, lrc = self._regen_with_lrc(tmp_path, None)
+
+        def run_that_writes_then_fails():
+            lrc.parent.mkdir(exist_ok=True)
+            lrc.write_text(self.NEW, encoding="utf-8")
+            raise RuntimeError("alignment failed")
+
+        mock_orchestrator.join.side_effect = run_that_writes_then_fails
+
+        self._run(events, preferences, mock_orchestrator, tmp_path, regen)
+
+        assert not lrc.exists()
+
+    def test_a_successful_run_keeps_the_new_file(
+        self, events, preferences, mock_orchestrator, tmp_path, prepared
+    ):
+        regen, lrc = self._regen_with_lrc(tmp_path, self.OLD)
+
+        def rewrite_for_the_new_pick(regen_job, genius, config, lyrics_dir):
+            lrc.write_text(self.NEW, encoding="utf-8")
+            return None, None
+
+        prepared.side_effect = rewrite_for_the_new_pick
+        ctx = MagicMock(spec=StageContext)
+        ctx.artifacts = {}
+        mock_orchestrator.join.return_value = ctx
+
+        self._run(events, preferences, mock_orchestrator, tmp_path, regen)
+
+        assert lrc.read_text(encoding="utf-8") == self.NEW
+
+    def test_a_failed_restore_does_not_hide_the_jobs_own_error(
+        self, events, preferences, mock_orchestrator, tmp_path, prepared, monkeypatch
+    ):
+        regen, _ = self._regen_with_lrc(tmp_path, self.OLD)
+        mock_orchestrator.join.side_effect = RuntimeError("whisper fell over")
+        monkeypatch.setattr(lrclib, "restore_lrc", MagicMock(side_effect=PermissionError("locked")))
+        errors = []
+        events.on("processing_error", errors.append)
+
+        self._run(events, preferences, mock_orchestrator, tmp_path, regen)
+
+        assert [e["error"] for e in errors] == ["whisper fell over"]
+
+    def test_an_lrc_that_cannot_be_read_fails_the_job_before_anything_changes(
+        self, events, preferences, mock_orchestrator, tmp_path, prepared, monkeypatch
+    ):
+        regen, _ = self._regen_with_lrc(tmp_path, self.OLD)
+        monkeypatch.setattr(
+            lrclib, "snapshot_lrc", MagicMock(side_effect=PermissionError("locked"))
+        )
+        errors = []
+        events.on("processing_error", errors.append)
+
+        self._run(events, preferences, mock_orchestrator, tmp_path, regen)
+
+        assert [e["error"] for e in errors] == ["locked"]
+        prepared.assert_not_called()
 
 
 class TestActiveJobTiming:

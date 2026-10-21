@@ -1048,6 +1048,28 @@ class TestPrepareRegenJob:
         assert self._prepare(regen, tmp_path) == (None, None)
 
 
+class TestPutBackLrc:
+    def test_it_restores_the_snapshot(self, tmp_path):
+        song = tmp_path / f"{YT_STEM}.mp4"
+        lrc = lr.lrclib.lrc_path(song)
+        lr.lrclib.write_skip_marker(lrc)
+        snapshot = lr.lrclib.snapshot_lrc(lrc)
+        lrc.unlink()
+
+        lr.put_back_lrc(song, snapshot)
+
+        assert lr.lrclib.is_skip_marker(lrc)
+
+    def test_a_failed_restore_is_logged_and_does_not_raise(self, tmp_path, monkeypatch, caplog):
+        monkeypatch.setattr(
+            lr.lrclib, "restore_lrc", MagicMock(side_effect=PermissionError("locked"))
+        )
+
+        lr.put_back_lrc(tmp_path / f"{YT_STEM}.mp4", "[lrclib_skipped:1]\n")
+
+        assert "Could not put back the LRCLIB file" in caplog.text
+
+
 class TestFinishRegenJob:
     """The run says whether it transcribed (``lyric_method``); only then is the
     old bundle stale, because a transcribe run writes no bundle."""

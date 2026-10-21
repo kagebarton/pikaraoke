@@ -361,7 +361,9 @@ class TestRunJobsFinishesEachSong:
     succeeds (``finish_regen_job``, told by the run's ``lyric_method``); a failed
     run keeps it."""
 
-    def _run(self, tmp_path, monkeypatch, run_error, lyric_method="transcribe", plan=None):
+    def _run(
+        self, tmp_path, monkeypatch, run_error, lyric_method="transcribe", plan=None, prepare=None
+    ):
         _touch_video(tmp_path, "Song")
         (tmp_path / "alignment_debug").mkdir()
         bundle = tmp_path / "alignment_debug" / "Song.json"
@@ -382,7 +384,7 @@ class TestRunJobsFinishesEachSong:
         monkeypatch.setattr(regen, "StemWorker", MagicMock())
         monkeypatch.setattr(regen, "WhisperWorker", MagicMock())
         monkeypatch.setattr(regen, "build_stages", lambda *args: [])
-        monkeypatch.setattr(regen, "prepare_lyrics", lambda *args: (None, None))
+        monkeypatch.setattr(regen, "prepare_lyrics", prepare or (lambda *args: (None, None)))
         config = PipelineConfig()
         config.intermediate_dir = str(tmp_path)
 
@@ -410,6 +412,36 @@ class TestRunJobsFinishesEachSong:
 
         assert counts == (1, 0, 0)
         assert bundle.exists()
+
+    def test_a_failed_song_gets_its_lrc_back(self, tmp_path, monkeypatch):
+        lrc = tmp_path / "lyrics" / "Song.lrc"
+        lrc.parent.mkdir()
+        lrc.write_text("[lrclib_id:1]\n[00:01.00]old\n", encoding="utf-8")
+
+        def drop_for_the_new_song(job, genius, lyrics_dir, config):
+            lrc.unlink()
+            return None, None
+
+        counts, _ = self._run(
+            tmp_path, monkeypatch, RuntimeError("boom"), prepare=drop_for_the_new_song
+        )
+
+        assert counts == (0, 1, 0)
+        assert lrc.read_text(encoding="utf-8") == "[lrclib_id:1]\n[00:01.00]old\n"
+
+    def test_a_successful_song_keeps_its_new_lrc(self, tmp_path, monkeypatch):
+        lrc = tmp_path / "lyrics" / "Song.lrc"
+        lrc.parent.mkdir()
+        lrc.write_text("[lrclib_id:1]\n", encoding="utf-8")
+
+        def rewrite_for_the_new_pick(job, genius, lyrics_dir, config):
+            lrc.write_text("[lrclib_id:2]\n", encoding="utf-8")
+            return None, None
+
+        counts, _ = self._run(tmp_path, monkeypatch, None, prepare=rewrite_for_the_new_pick)
+
+        assert counts == (1, 0, 0)
+        assert lrc.read_text(encoding="utf-8") == "[lrclib_id:2]\n"
 
     def test_a_failed_transcribe_keeps_the_old_bundle(self, tmp_path, monkeypatch):
         counts, bundle = self._run(tmp_path, monkeypatch, RuntimeError("boom"))

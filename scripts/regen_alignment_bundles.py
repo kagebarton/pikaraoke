@@ -53,6 +53,7 @@ from pathlib import Path
 # Allow running as ``python scripts/regen_alignment_bundles.py`` from repo root.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from pikaraoke.lib import lrclib  # noqa: E402
 from pikaraoke.lib.genius import GeniusClient  # noqa: E402
 from pikaraoke.lib.get_platform import (  # noqa: E402
     get_default_dl_dir,
@@ -73,6 +74,7 @@ from pikaraoke.lib.library_regen import (  # noqa: E402
     is_genius_reuse,
     list_videos,
     prepare_lyrics,
+    put_back_lrc,
     resolve_plan,
     scan_folder,
 )
@@ -229,6 +231,7 @@ def run_jobs(
         for i, job in enumerate(runnable, 1):
             song = job.song_path
             print(f"\n[{i}/{len(runnable)}] {song.name} — {job.plan.label}")
+            lrc_before = lrclib.snapshot_lrc(lrclib.lrc_path(song))
             lyrics_path, lyric_stage = prepare_lyrics(job, genius, lyrics_dir, config)
             stages = build_stages(song, lyric_stage, whisper_worker, config, stem_worker)
             orch = PipelineOrchestrator(stages, stem_worker, whisper_worker, config)
@@ -239,6 +242,7 @@ def run_jobs(
                 succeeded += 1
             except Exception as e:
                 print(f"  FAILED: {song.name}: {e}")
+                put_back_lrc(song, lrc_before)
                 failed += 1
     finally:
         shutil.rmtree(lyrics_dir, ignore_errors=True)
