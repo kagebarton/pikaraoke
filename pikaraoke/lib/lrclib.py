@@ -352,6 +352,26 @@ def is_skip_marker(path: Path) -> bool:
     return any(line.strip().startswith(f"[{SKIP_TAG}:") for line in text.splitlines())
 
 
+def snapshot_lrc(path: Path) -> str | None:
+    """The text of ``path``, or None when there is no such file.
+
+    Any other OSError raises: a regen takes this before it changes anything,
+    so a file it can't read fails the job while there is nothing to undo yet.
+    """
+    try:
+        return path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+
+
+def restore_lrc(path: Path, snapshot: str | None) -> None:
+    """Put ``path`` back as :func:`snapshot_lrc` found it (None: no file)."""
+    if snapshot is None:
+        path.unlink(missing_ok=True)
+    else:
+        _write_text_atomic(path, snapshot)
+
+
 def _write_text_atomic(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     # Sibling tmp + rename: an interrupted write must never leave a truncated

@@ -2,6 +2,7 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
 import requests
 
 from pikaraoke.lib import lrclib
@@ -107,6 +108,50 @@ class TestGetRecord:
         mock_get.return_value = resp
 
         assert lrclib.get_record(5) is None
+
+
+class TestSnapshotRestore:
+    def test_a_missing_file_has_no_snapshot_and_restores_to_no_file(self, tmp_path):
+        lrc = tmp_path / "lyrics" / "Song.lrc"
+        snapshot = lrclib.snapshot_lrc(lrc)
+        assert snapshot is None
+
+        lrclib.write_skip_marker(lrc)  # a run changed it
+        lrclib.restore_lrc(lrc, snapshot)
+
+        assert not lrc.exists()
+        lrclib.restore_lrc(lrc, None)  # nothing to delete is fine
+
+    def test_a_skip_marker_comes_back(self, tmp_path):
+        lrc = tmp_path / "lyrics" / "Song.lrc"
+        lrclib.write_skip_marker(lrc)
+        snapshot = lrclib.snapshot_lrc(lrc)
+
+        lrc.unlink()  # a new Genius id drops it
+        lrclib.restore_lrc(lrc, snapshot)
+
+        assert lrclib.is_skip_marker(lrc)
+        assert not lrc.with_name(lrc.name + ".tmp").exists()
+
+    def test_a_record_comes_back_with_its_provenance(self, tmp_path):
+        lrc = tmp_path / "lyrics" / "Song.lrc"
+        record = {"id": 7, "trackName": "T", "artistName": "A", "syncedLyrics": _SYNCED_AB}
+        lrclib.write_lrc(lrc, record)
+        snapshot = lrclib.snapshot_lrc(lrc)
+        before = lrclib.read_lrc(lrc)
+
+        lrclib.write_lrc(lrc, {"id": 8, "trackName": "Other", "syncedLyrics": "[00:02.00]new\n"})
+        lrclib.restore_lrc(lrc, snapshot)
+
+        assert lrclib.read_lrc(lrc) == before
+        assert lrclib.read_lrc(lrc)[1]["id"] == 7
+
+    def test_a_file_that_cannot_be_read_raises(self, tmp_path):
+        lrc = tmp_path / "Song.lrc"
+        lrc.mkdir()  # a directory where the file should be
+
+        with pytest.raises(OSError):
+            lrclib.snapshot_lrc(lrc)
 
 
 class TestSkipMarker:
