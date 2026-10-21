@@ -170,8 +170,11 @@ class PreparePtyStage(BaseStage):
 @dataclass
 class _ActiveJob:
     song_path: str
-    cancel_token: CancelToken  # from orchestrator.run_one_async()
-    cancelling: bool = False  # vestigial: set but not read; signals intent
+    # From orchestrator.run_one_async(); None while a regen job prepares, before
+    # its run starts (the orchestrator's token then belongs to the previous job).
+    cancel_token: CancelToken | None
+    # A cancel arrived. A regen still preparing reads it to skip its run.
+    cancelling: bool = False
     kind: str = "download"  # which lane the job came from: "download" | "regen"
     started_at: float = field(default_factory=time.monotonic)
 
@@ -435,6 +438,11 @@ class ProcessingManager:
                 logging.warning(f"Cancel requested for non-active job: {Path(song_path).name}")
                 return
             active.cancelling = True
+            if active.cancel_token is None:
+                # A regen still preparing: _launch_and_report sees the flag and
+                # skips the run. The orchestrator's token is the previous job's.
+                logging.info(f"Cancelling active job before its run: {Path(song_path).name}")
+                return
             logging.info(f"Cancelling active job: {Path(song_path).name}")
             self._orchestrator.cancel_active()
 
@@ -460,7 +468,8 @@ class ProcessingManager:
         with self._state_lock:
             if self._active is None:
                 return None
-            phase = self._active.cancel_token.get_phase()
+            token = self._active.cancel_token
+            phase = token.get_phase() if token is not None else None
             return phase.value if phase is not None else None
 
     # ------------------------------------------------------------------
@@ -509,11 +518,15 @@ class ProcessingManager:
         """Pop the first queued regen job whose song isn't playing.
 
         A job for the playing song stays queued and is retried on the loop's
-        next pass.
+        next pass. The job counts as the active one from the moment it is
+        taken, so it can be cancelled while it prepares; it has no cancel
+        token until its run launches.
         """
         with self._state_lock:
             for i, regen in enumerate(self._regen_jobs):
-                if not self._is_playing(str(regen.song.song_path)):
+                song_path = str(regen.song.song_path)
+                if not self._is_playing(song_path):
+                    self._active = _ActiveJob(song_path=song_path, cancel_token=None, kind="regen")
                     return self._regen_jobs.pop(i)
         return None
 
@@ -622,27 +635,33 @@ class ProcessingManager:
         it unqueueable.
         """
         # Launch and register the active job under one lock hold: a cancel_active()
-        # landing between the launch and the _active assignment would otherwise be
-        # dropped as "non-active" and the job would run to completion uncancellable.
+        # landing between the launch and the token assignment would otherwise be
+        # dropped and the job would run to completion uncancellable.
         # run_one_async() only spawns a background thread and returns, so it does
         # not block or re-enter _state_lock. It validates its inputs on this
         # thread, so a song file that is gone raises here, before any pipeline
         # thread exists.
         with self._state_lock:
-            token = launch()
-            self._active = _ActiveJob(
-                song_path=song_path,
-                cancel_token=token,
-                kind="download" if regen is None else "regen",
-            )
+            active = self._active
+            cancelled_in_setup = active is not None and active.cancelling
+            if not cancelled_in_setup:
+                token = launch()
+                if active is None:  # a download; a regen was registered when taken
+                    self._active = _ActiveJob(
+                        song_path=song_path,
+                        cancel_token=token,
+                        kind="download" if regen is None else "regen",
+                    )
+                else:
+                    active.cancel_token = token
+        if cancelled_in_setup:
+            self._report_cancelled(song_path)
+            return False
 
         try:
             ctx = self._orchestrator.join()
         except PipelineCancelled:
-            # Leave state as 'pending' — user-initiated cancel, not a system
-            # failure. The stale-pending badge surfaces it on next page load.
-            self._events.emit("processing_cancelled", song_path)
-            logging.info(f"Processing cancelled: {Path(song_path).name}", extra=LIFECYCLE_EXTRA)
+            self._report_cancelled(song_path)
             return False
 
         # Persist loudnorm offset and ready state
@@ -667,6 +686,12 @@ class ProcessingManager:
         )
         logging.info(f"Processing complete: {Path(song_path).name}", extra=LIFECYCLE_EXTRA)
         return True
+
+    def _report_cancelled(self, song_path: str) -> None:
+        # Leave state as 'pending' — user-initiated cancel, not a system
+        # failure. The stale-pending badge surfaces it on next page load.
+        self._events.emit("processing_cancelled", song_path)
+        logging.info(f"Processing cancelled: {Path(song_path).name}", extra=LIFECYCLE_EXTRA)
 
     def _report_failure(self, song_path: str, error: Exception, regen: RegenJob | None) -> None:
         if regen is None and self._song_manager is not None:
