@@ -414,6 +414,15 @@ def _length_to_seconds(length: str) -> float | None:
         return None
 
 
+def lrc_path(song: Path) -> Path:
+    """Where ``song``'s LRCLIB choice lives.
+
+    The file is the choice (see :func:`ensure_lrc`), so everything that writes
+    or reads it must get the path from here.
+    """
+    return song.parent / "lyrics" / f"{song.stem}.lrc"
+
+
 def ensure_lrc(
     song_path: Path, title: str, artist: str, sheet_lines: list[str], media_dur: float | None
 ) -> Path | None:
@@ -426,7 +435,7 @@ def ensure_lrc(
     failure. A skip marker counts as a file on disk, so it is returned as is
     and nothing is searched.
     """
-    path = song_path.parent / "lyrics" / f"{song_path.stem}.lrc"
+    path = lrc_path(song_path)
     if path.is_file():
         return path
     records = search(title, artist)
