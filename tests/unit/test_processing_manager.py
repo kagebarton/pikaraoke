@@ -1362,6 +1362,45 @@ class TestCancelWhilePreparing:
         assert "cancel" not in row["actions"]
 
 
+class TestAFailedRowWhileTheJobCleansUp:
+    """``processing_error`` goes out before the loop stops naming the job as the
+    active one; a status read and a cancel landing in between must leave the
+    row as an error that can be retried."""
+
+    def test_the_row_stays_an_error_and_a_cancel_is_refused(
+        self, events, preferences, mock_orchestrator, tmp_path, prepared
+    ):
+        prepared.side_effect = RegenError("no captions")
+        mgr = _runnable_manager(events, preferences, mock_orchestrator, tmp_path, MagicMock())
+        tracker = PipelineTracker(MagicMock(), mgr, MagicMock(), MagicMock(), events)
+        in_window, release, done = threading.Event(), threading.Event(), threading.Event()
+
+        def hold(_data):  # runs after the tracker's own handler
+            in_window.set()
+            assert release.wait(timeout=5)
+            done.set()
+
+        events.on("processing_error", hold)
+        mgr.enqueue_regen(_regen_job(tmp_path))
+        seen = {}
+
+        def read_and_cancel_in_the_window():
+            assert in_window.wait(timeout=5)
+            seen["active"] = mgr.get_active_job()
+            row = tracker.get_status(admin=True)[0]
+            seen["status"] = row["processing_status"]
+            seen["cancel_accepted"] = tracker.cancel(row["id"])
+            release.set()
+
+        _drive_loop(mgr, done, during=read_and_cancel_in_the_window)
+
+        assert seen["active"] is not None  # the window is real
+        assert (seen["status"], seen["cancel_accepted"]) == ("error", False)
+        (row,) = tracker.get_status(admin=True)
+        assert row["processing_status"] == "error"
+        assert "retry" in row["actions"]
+
+
 class TestCancelActiveBeforeTheRun:
     def test_it_flags_the_job_and_leaves_the_orchestrator_alone(self, manager):
         manager._orchestrator = MagicMock()

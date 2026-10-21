@@ -148,6 +148,12 @@ class PipelineTracker:
                     results.append(self._item_to_dict(item, admin, user))
                     continue
 
+                # A row its complete or error event finished keeps that status:
+                # the manager names the job as running until it has cleaned up.
+                if item.finished_at is not None:
+                    results.append(self._item_to_dict(item, admin, user))
+                    continue
+
                 # Derive processing status
                 if item.song_path is None:
                     # Download not yet complete — show error if download failed
