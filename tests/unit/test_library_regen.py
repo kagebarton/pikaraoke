@@ -1049,33 +1049,31 @@ class TestPrepareRegenJob:
 
 
 class TestFinishRegenJob:
-    def _job_with_bundle(self, tmp_path, plan):
-        _touch_video(tmp_path, YT_STEM)
+    """The run says whether it transcribed (``lyric_method``); only then is the
+    old bundle stale, because a transcribe run writes no bundle."""
+
+    def _song_with_bundle(self, tmp_path):
+        song = _touch_video(tmp_path, YT_STEM)
         _write_bundle(tmp_path, YT_STEM, {"schema_version": 10})
-        job = _job(tmp_path, YT_STEM, {"schema_version": 10})
-        job.plan = plan
-        return job, tmp_path / "alignment_debug" / f"{YT_STEM}.json"
+        return song, tmp_path / "alignment_debug" / f"{YT_STEM}.json"
 
-    def test_a_transcribe_plan_removes_the_old_bundle(self, tmp_path):
-        job, bundle = self._job_with_bundle(tmp_path, lr.Plan(kind="transcribe"))
+    def test_a_run_that_transcribed_removes_the_old_bundle(self, tmp_path):
+        song, bundle = self._song_with_bundle(tmp_path)
 
-        lr.finish_regen_job(job)
+        lr.finish_regen_job(song, "transcribe")
 
         assert not bundle.exists()
 
-    def test_a_transcribe_plan_without_a_bundle_is_fine(self, tmp_path):
-        job, bundle = self._job_with_bundle(tmp_path, lr.Plan(kind="transcribe"))
+    def test_a_run_that_transcribed_without_a_bundle_is_fine(self, tmp_path):
+        song, bundle = self._song_with_bundle(tmp_path)
         bundle.unlink()
 
-        lr.finish_regen_job(job)  # does not raise
+        lr.finish_regen_job(song, "transcribe")  # does not raise
 
-    def test_other_plans_leave_the_bundle(self, tmp_path):
-        for plan in (
-            lr.Plan(kind="seed", seed={"lyrics_origin": "genius"}),
-            lr.Plan(kind="sidecar", genius_id=9),
-        ):
-            job, bundle = self._job_with_bundle(tmp_path, plan)
+    def test_a_run_with_lyrics_or_no_report_leaves_the_bundle(self, tmp_path):
+        song, bundle = self._song_with_bundle(tmp_path)
 
-            lr.finish_regen_job(job)
+        for method in ("genius+joint", "srt+cue_align", None):
+            lr.finish_regen_job(song, method)
 
             assert bundle.exists()

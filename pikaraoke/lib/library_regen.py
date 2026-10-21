@@ -821,12 +821,16 @@ def prepare_regen_job(
     return prepare_lyrics(job, genius, lyrics_dir, config)
 
 
-def finish_regen_job(job: SongJob) -> None:
-    """After a successful run: a transcribe plan removes the song's old bundle.
+def finish_regen_job(song: Path, lyric_method: str | None) -> None:
+    """After a successful run: one that transcribed removes the song's old bundle.
 
-    A transcribe run writes no bundle, so the old one would stay: Song Info
-    would show the old lyrics, and the next reuse run would bring them back.
-    The backup holds the removed bundle.
+    ``lyric_method`` is the run's ``ctx.artifacts["lyric_method"]``.
+    ``LyricAlignStage`` sets it to ``transcribe`` exactly when it had no lyrics,
+    which is exactly when it writes no bundle. A transcribe *plan* is not the
+    test: a Genius pick also ends up transcribing when Genius is unavailable.
+    The old bundle would otherwise stay: Song Info would show the old lyrics,
+    and the next reuse run would bring them back. The backup holds the removed
+    bundle.
     """
-    if job.plan.kind == "transcribe":
-        bundle_path(job.song_path.parent, job.song_path.stem).unlink(missing_ok=True)
+    if lyric_method == "transcribe":
+        bundle_path(song.parent, song.stem).unlink(missing_ok=True)

@@ -697,7 +697,7 @@ class ProcessingManager:
 
         if regen is not None:
             try:
-                finish_regen_job(regen.song)
+                finish_regen_job(regen.song.song_path, ctx.artifacts.get("lyric_method"))
             except OSError as e:
                 logging.warning(f"Could not drop the old bundle of {song_path}: {e}")
 
