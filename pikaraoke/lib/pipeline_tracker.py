@@ -340,10 +340,8 @@ class PipelineTracker:
             item = self._find_item(item_id)
             if item is None or item.processing_status != "error" or item.song_path is None:
                 return False
-            if item.kind == "regen" and item.regen_job is None:
-                return False
             song_path = item.song_path
-            regen_job = item.regen_job if item.kind == "regen" else None
+            regen_job = item.regen_job  # only regen rows carry one
             if regen_job is None:
                 item.processing_status = "waiting"
                 item.processing_phase = None

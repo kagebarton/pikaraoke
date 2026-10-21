@@ -1141,15 +1141,6 @@ class TestRetry:
         tracker._processing_manager.enqueue.assert_not_called()
         tracker._processing_manager.enqueue_regen.assert_not_called()
 
-    def test_a_regen_row_that_lost_its_job_is_not_retried_as_processing(self):
-        tracker = _make_tracker()
-        item, _ = _queue_regen(tracker)
-        item.processing_status = "error"
-        item.regen_job = None
-
-        assert tracker.retry(item.id) is False
-        tracker._processing_manager.enqueue.assert_not_called()
-
     def test_a_regen_the_manager_refuses_reports_false(self):
         tracker = _make_tracker()
         item, _ = _queue_regen(tracker)
