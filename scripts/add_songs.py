@@ -47,8 +47,7 @@ from pikaraoke.lib.library_links import (  # noqa: E402
 )
 from pikaraoke.lib.library_regen import (  # noqa: E402
     SongJob,
-    adopt_caption,
-    find_local_srt,
+    gate_on_disk_caption,
     resolve_plan,
 )
 from pikaraoke.lib.preference_manager import PreferenceManager  # noqa: E402
@@ -136,15 +135,13 @@ def handoff(song_paths: list[str]) -> int:
     Every job starts with ``bundle=None`` (a fresh download, or a video a
     stopped run left unprocessed, has no prior bundle to reuse), which gives
     it a ``fetch`` plan -- it always has a YouTube id. A caption the download
-    already saved is gated in place (:func:`adopt_caption`) instead of
+    already saved is gated in place (:func:`gate_on_disk_caption`) instead of
     being fetched again. Returns regen's own exit code.
     """
     jobs = [SongJob(Path(p), None, "new") for p in song_paths]
     for job in jobs:
         job.plan = resolve_plan(job, reset=False)
-        caption = find_local_srt(job.song_path)
-        if caption is not None:
-            adopt_caption(job, caption)
+        gate_on_disk_caption(job)
     return rab.resolve_and_run(jobs)
 
 

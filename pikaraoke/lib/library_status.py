@@ -120,7 +120,7 @@ def _lrclib_state(song: Path, origin: str | None, lyrics: dict, fill: dict) -> s
     the bundle says what the last run did with it."""
     if origin != "genius":
         return "n/a"
-    if lrclib.is_skip_marker(song.parent / "lyrics" / f"{song.stem}.lrc"):
+    if lrclib.is_skip_marker(lrclib.lrc_path(song)):
         return "skipped"
     if fill.get("eligible"):
         return "used"

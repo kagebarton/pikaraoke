@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from pikaraoke.lib.library_regen import VIDEO_EXTS
+from pikaraoke.lib.library_regen import VIDEO_EXTS, bundle_path
 from pikaraoke.lib.metadata_parser import extract_youtube_id
 from pikaraoke.lib.song_list import SongList
 from pikaraoke.lib.youtube_dl import _impersonate_args, yt_dlp_cmd
@@ -119,7 +119,7 @@ def file_status(path: Path) -> str:
     alone and counts as processed too. Anything else is done, or isn't a video.
     """
     outputs = (
-        path.parent / "alignment_debug" / f"{path.stem}.json",
+        bundle_path(path.parent, path.stem),
         path.parent / "karaoke" / f"{path.stem}.ass",
     )
     if path.suffix.lower() in VIDEO_EXTS and not any(p.is_file() for p in outputs):

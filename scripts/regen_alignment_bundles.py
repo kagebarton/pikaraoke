@@ -70,6 +70,7 @@ from pikaraoke.lib.library_regen import (  # noqa: E402
     fetch_caption,
     find_local_srt,
     finish_regen_job,
+    is_genius_reuse,
     list_videos,
     prepare_lyrics,
     resolve_plan,
@@ -188,11 +189,7 @@ def execute_lrclib_backfill(jobs: list[SongJob], config: PipelineConfig) -> None
     """Resolve ``lyrics/<stem>.lrc`` for every genius reuse plan (see :func:`backfill_lrc`)."""
     if not config.lrclib_fill:
         return
-    targets = [
-        j
-        for j in jobs
-        if j.plan and j.plan.kind == "seed" and j.plan.seed.get("lyrics_origin") == "genius"
-    ]
+    targets = [j for j in jobs if is_genius_reuse(j.plan)]
     if not targets:
         return
     print(f"Backfilling LRCLIB variants for {len(targets)} genius-origin song(s)...")

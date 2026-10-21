@@ -123,13 +123,23 @@ class SongJob:
     plan: Plan | None = None
 
 
+def is_genius_reuse(plan: Plan | None) -> bool:
+    """Whether ``plan`` replays the Genius lyrics a bundle already holds."""
+    return plan is not None and plan.kind == "seed" and plan.seed.get("lyrics_origin") == "genius"
+
+
 # ---------------------------------------------------------------------------
 # Scan + select
 # ---------------------------------------------------------------------------
 
 
+def bundle_path(folder: Path, stem: str) -> Path:
+    """Where the song ``stem`` in ``folder`` keeps its alignment bundle."""
+    return folder / "alignment_debug" / f"{stem}.json"
+
+
 def read_bundle(folder: Path, stem: str) -> dict | None:
-    path = folder / "alignment_debug" / f"{stem}.json"
+    path = bundle_path(folder, stem)
     if not path.is_file():
         return None
     try:
@@ -520,7 +530,7 @@ def apply_lrclib_choice(job: SongJob) -> None:
       * anything else leaves the file alone.
     """
     plan = job.plan
-    lrc = job.song_path.parent / "lyrics" / f"{job.song_path.stem}.lrc"
+    lrc = lrclib.lrc_path(job.song_path)
     if plan.lrclib_skip:
         lrclib.write_skip_marker(lrc)
     elif plan.lrclib_record is not None:
@@ -804,7 +814,7 @@ def prepare_regen_job(
                 "Use Repair lyrics on Song Info to pick lyrics."
             )
 
-    if job.plan.kind == "seed" and job.plan.seed.get("lyrics_origin") == "genius":
+    if is_genius_reuse(job.plan):
         backfill_lrc(job, config)
 
     return prepare_lyrics(job, genius, lyrics_dir, config)
@@ -818,5 +828,4 @@ def finish_regen_job(job: SongJob) -> None:
     The backup holds the removed bundle.
     """
     if job.plan.kind == "transcribe":
-        bundle = job.song_path.parent / "alignment_debug" / f"{job.song_path.stem}.json"
-        bundle.unlink(missing_ok=True)
+        bundle_path(job.song_path.parent, job.song_path.stem).unlink(missing_ok=True)
