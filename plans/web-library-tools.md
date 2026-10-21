@@ -3,7 +3,8 @@
 Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 
 > **Status (2026-10-20): Phases 0-3.1 done (3.1 = fixes from the Phase
-> 1-3 code review, 3.1g included); Phase 4 is next.** Ken approved D2's
+> 1-3 code review, 3.1g included), and the review of 3.1b-3.1d is done
+> with its two fix commits (Results log, Phase 3.1); Phase 4 is next.** Ken approved D2's
 > Phase 3.1 bullet on 2026-10-20. Branch
 > `web_library_tools`, off `library_tools` at `0bfa02a`; `dev` merged as
 > `c34d889`. There is no GATE and nothing here measures timing. Landing is
@@ -2034,6 +2035,67 @@ so 3.1g ran.
   `library_status`, `library_links`, `processing_manager`, `pipeline_tracker`,
   `karaoke` and `scripts.regen_alignment_bundles` import.
 - **3.1i:** nothing changed, as the step says.
+
+#### Review of 3.1b-3.1d, and its fixes
+
+Reviewed 2026-10-20 by Opus 5.5 (Ken asked), read-only, on
+`e8006da..b6301da` (code only) with HEAD at `6317056`. Three finder agents,
+one per axis (correctness, simplicity, robustness), with the verdicts checked
+in the session. Ken then asked for findings 1-3 to be fixed in the same session.
+
+| # | Axis | Verdict | Where (at `6317056`) | Finding |
+|---|---|---|---|---|
+| 1 | robustness | CONFIRMED (probe, real manager + tracker) | `processing_manager.py:563-571`, `pipeline_tracker.py:159-168`, `:225-236` | `_run_job` emits `processing_error` before its `finally` clears `_active` and `pending_jobs`. A `get_status` in that moment re-derives the error row as `active`; the next read makes it `complete` for good. A cancel in the moment leaves the row `cancelling` with no actions until restart (3.1c's tracker change covers only a cancel before the event). Retry in the moment is refused. Run errors in both lanes had it before; 3.1c added regen setup failures. The moment lasts as long as the tracker's `_notify_change` push. |
+| 2 | simplicity | CONFIRMED (assert in the branch failed 6 tests, all direct callers) | `processing_manager.py:681-686` | `_launch_and_report`'s `_ActiveJob(kind="download" if regen is None else "regen")` for a regen runs only in tests that skip `_take_regen_job`; production always arrives registered. Its comment contradicts it. |
+| 3 | simplicity | CONFIRMED | `processing_manager.py:663-667` | `_launch_and_report`'s docstring states the failed-regen `pipeline_state` rule, which since 3.1b lives in `_report_failure` (no docstring). |
+| 4 | simplicity | CONFIRMED / PLAUSIBLE | `test_processing_manager.py:1104-1108`, `:1113-1121`, `:1192-1218`, `:1365-1375` | A stub repeating the `mock_orchestrator` fixture and a hand stub repeating `prepared`; `TestLaunchAndReportResult` and `TestCancelActiveBeforeTheRun` repeat checks behaviour tests already make, through private state. |
+
+Additions to known items (recorded, not changed):
+- The unguarded `set_pipeline_state("failed")`: with the database failing for
+  both the read and the write, the loop still dies (probe: loop dead, the
+  second download left pending). 3.1b's test fakes only the read failing.
+- An error after a successful regen: besides the `.lrc` put-back, a run that
+  transcribed keeps the old bundle, because `finish_regen_job` is skipped.
+  Needs a database write to fail; Retry repairs it.
+- `_library_spelling` costs about 7.4 ms per call at 2000 songs on this box
+  (every call scans on Ken's root); the plan accepted a linear scan.
+
+Checked clean: `PipelineCancelled` comes only from `join()` and is caught;
+cancel during setup at each point (before, during, after the launch, after
+`join`) with one event each and the temp lyrics folder removed; the previous
+job's token never touched; lock order (`_is_playing` reads an attribute with
+no lock); `SongList` iteration is a snapshot under its lock; Windows spellings
+(`/` vs `\`, letter case) resolve to the library's string, which matches the
+playing check, the database rows and the tracker row; the 3.1c/3.1d tests drive
+the real loop, tracker and `SongList`.
+
+Fixes (Ken: 1-3, and the redundant stubs of 4 with 2; the two private-state
+test groups and the known-item additions left alone):
+- `4165281` `fix(processing): a finished row keeps its status while the job
+  cleans up`: `get_status` returns a row with `finished_at` set as its event
+  left it (Retry clears `finished_at`). Tests: 2 parametrized + 1 in
+  `test_processing_routes.py::TestRowsThatFinish` (mocked manager naming the
+  job), 1 in `test_processing_manager.py::TestAFailedRowWhileTheJobCleansUp`
+  (real loop and tracker, a handler after the tracker's holding the moment open:
+  read, then cancel). Without the fix all 4 fail; with it they pass.
+- `bc308ba` `refactor(processing): regen tests take the job the way the loop
+  does`: the launch creates `_ActiveJob` only for a download; `_run_regen(mgr,
+  regen)` (queue, take, run) replaces the three direct `_process_regen` calls;
+  the `pipeline_state` rule moves to `_report_failure`'s docstring; `_run_job`'s
+  docstring says an error while reporting still escapes; the two redundant
+  stubs go. Mutation: `_take_regen_job` not registering the job fails 7 tests
+  in the file.
+- Suite (`uv run --no-sync python -P -m pytest -q`): **4 failed, 1760 passed,
+  2 skipped** (1756 + 4 new; the baseline's four). pre-commit with `--files`
+  (Black reformatted the new tests once per commit), import smoke for
+  `pipeline_tracker`, `processing_manager`, `karaoke`.
+- Environment: the first full run had 6 more failures (`files`, `info`,
+  `search` render tests, `babel.core.UnknownLocaleError: unknown locale 'en'`).
+  The worktree venv's `babel/locale-data` was empty; every package folder in the
+  venv had a 21:34 timestamp, during the review's finder runs (cause not found;
+  the session's own commands all used `--no-sync`). Repaired with `uv pip install
+  --python .venv/Scripts/python.exe --reinstall --no-deps --offline
+  babel==2.17.0` (1068 locale files back); then the run above.
 
 ### Phase 4
 
