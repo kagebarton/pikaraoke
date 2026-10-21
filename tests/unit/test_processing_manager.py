@@ -568,53 +568,55 @@ class TestProcessSongCancellation:
 
 
 class TestProcessSongError:
-    def test_error_emits_processing_error(self, events, preferences, mock_orchestrator):
+    """An error raises out of the job; the loop's ``_run_job`` reports it."""
+
+    def test_error_emits_processing_error(self, events, preferences, mock_orchestrator, tmp_path):
         mock_orchestrator.join.side_effect = RuntimeError("ffmpeg exploded")
 
         sm = MagicMock()
         sm.get_pipeline_state.return_value = "pending"
-        mgr = ProcessingManager(events=events, preferences=preferences, song_manager=sm)
-        mgr._orchestrator = mock_orchestrator
+        mgr = _runnable_manager(events, preferences, mock_orchestrator, tmp_path, sm)
 
         received = []
         events.on("processing_error", received.append)
-        mgr._process_song("/songs/Song---abc123.mp4")
+        _run_download(mgr, "/songs/Song---abc123.mp4")
 
         assert len(received) == 1
         assert received[0]["song_path"] == "/songs/Song---abc123.mp4"
         assert "ffmpeg exploded" in received[0]["error"]
 
-    def test_error_sets_pipeline_state_failed(self, events, preferences, mock_orchestrator):
+    def test_error_sets_pipeline_state_failed(
+        self, events, preferences, mock_orchestrator, tmp_path
+    ):
         mock_orchestrator.join.side_effect = RuntimeError("bad")
 
         sm = MagicMock()
         sm.get_pipeline_state.return_value = "pending"
-        mgr = ProcessingManager(events=events, preferences=preferences, song_manager=sm)
-        mgr._orchestrator = mock_orchestrator
-        mgr._process_song("/songs/Song---abc123.mp4")
+        mgr = _runnable_manager(events, preferences, mock_orchestrator, tmp_path, sm)
+        _run_download(mgr, "/songs/Song---abc123.mp4")
 
         sm.set_pipeline_state.assert_called_once_with("/songs/Song---abc123.mp4", "failed")
 
-    def test_error_does_not_emit_complete(self, events, preferences, mock_orchestrator):
+    def test_error_does_not_emit_complete(self, events, preferences, mock_orchestrator, tmp_path):
         mock_orchestrator.join.side_effect = RuntimeError("bad")
 
         sm = MagicMock()
         sm.get_pipeline_state.return_value = "pending"
-        mgr = ProcessingManager(events=events, preferences=preferences, song_manager=sm)
-        mgr._orchestrator = mock_orchestrator
+        mgr = _runnable_manager(events, preferences, mock_orchestrator, tmp_path, sm)
 
         received = []
         events.on("processing_complete", received.append)
-        mgr._process_song("/songs/Song---abc123.mp4")
+        _run_download(mgr, "/songs/Song---abc123.mp4")
 
         assert received == []
 
-    def test_error_no_song_manager_does_not_raise(self, events, preferences, mock_orchestrator):
+    def test_error_no_song_manager_does_not_raise(
+        self, events, preferences, mock_orchestrator, tmp_path
+    ):
         mock_orchestrator.join.side_effect = RuntimeError("bad")
-        mgr = ProcessingManager(events=events, preferences=preferences, song_manager=None)
-        mgr._orchestrator = mock_orchestrator
+        mgr = _runnable_manager(events, preferences, mock_orchestrator, tmp_path)
         # Should complete without AttributeError
-        mgr._process_song("/songs/Song---abc123.mp4")
+        _run_download(mgr, "/songs/Song---abc123.mp4")
 
 
 # ---------------------------------------------------------------------------
@@ -649,6 +651,11 @@ def _runnable_manager(
     mgr._pty_slave_fd = None
     mgr._genius = MagicMock()
     return mgr
+
+
+def _run_download(mgr, song_path: str) -> None:
+    """Run one download the way the loop does, so a failure is reported."""
+    mgr._run_job(song_path, lambda: mgr._process_song(song_path))
 
 
 @pytest.fixture
@@ -850,7 +857,7 @@ class TestSongDeletedDropsRegenJobs:
 class TestProcessRegen:
     def _run(self, events, preferences, orchestrator, tmp_path, regen, song_manager=None):
         mgr = _runnable_manager(events, preferences, orchestrator, tmp_path, song_manager)
-        mgr._process_regen(regen)
+        mgr._run_job(str(regen.song.song_path), lambda: mgr._process_regen(regen), regen)
         return mgr
 
     def test_launches_the_pipeline_with_its_own_stage_list(
@@ -1040,6 +1047,133 @@ class TestLaunchFailures:
         assert [e["song_path"] for e in errors] == [str(gone.song.song_path)]
         # The failed regen left its song's state alone; the next one set ready.
         sm.set_pipeline_state.assert_called_once_with(str(nxt.song.song_path), "ready")
+
+
+class TestSetupFailures:
+    """An error while setting a job up fails that job; it must not end the run
+    loop, or every later job stays pending until a restart."""
+
+    def _two_regen_jobs(self, mgr, tmp_path):
+        broken = _regen_job(tmp_path, "Broken", stem="Broken---aaa111")
+        nxt = _regen_job(tmp_path, "Next", stem="Next---bbb222")
+        mgr.enqueue_regen(broken)
+        mgr.enqueue_regen(nxt)
+        return broken, nxt
+
+    def _finishing_ctx(self, mock_orchestrator):
+        ctx = MagicMock(spec=StageContext)
+        ctx.artifacts = {}
+        mock_orchestrator.join.return_value = ctx
+        mock_orchestrator.run_one_async.return_value = CancelToken(event=threading.Event())
+
+    def test_build_stages_failing_fails_the_regen_and_the_loop_runs_the_next(
+        self, events, preferences, mock_orchestrator, tmp_path, monkeypatch
+    ):
+        # build_stages deletes the old de-reverb file, which is a PermissionError
+        # on Windows while the file is open.
+        self._finishing_ctx(mock_orchestrator)
+        monkeypatch.setattr(pm, "prepare_regen_job", MagicMock(return_value=(None, None)))
+        monkeypatch.setattr(
+            pm,
+            "build_stages",
+            MagicMock(side_effect=[PermissionError("dereverb file in use"), ["lyric-align"]]),
+        )
+        sm = MagicMock()
+        mgr = _runnable_manager(events, preferences, mock_orchestrator, tmp_path, sm)
+        errors, done = [], threading.Event()
+        events.on("processing_error", errors.append)
+        events.on("processing_complete", lambda data: done.set())
+        broken, nxt = self._two_regen_jobs(mgr, tmp_path)
+
+        _drive_loop(mgr, done)
+
+        assert errors == [
+            {"song_path": str(broken.song.song_path), "error": "dereverb file in use"}
+        ]
+        sm.set_pipeline_state.assert_called_once_with(str(nxt.song.song_path), "ready")
+        assert mgr.pending_jobs == []
+        assert mgr.get_active_job() is None
+
+    def test_mkdtemp_failing_fails_the_regen_and_the_loop_runs_the_next(
+        self, events, preferences, mock_orchestrator, tmp_path, prepared, monkeypatch
+    ):
+        self._finishing_ctx(mock_orchestrator)
+        real_mkdtemp = pm.tempfile.mkdtemp
+        calls = []
+
+        def flaky_mkdtemp(*args, **kwargs):
+            calls.append(1)
+            if len(calls) == 1:
+                raise OSError("no space left on device")
+            return real_mkdtemp(*args, **kwargs)
+
+        monkeypatch.setattr(pm.tempfile, "mkdtemp", flaky_mkdtemp)
+        sm = MagicMock()
+        mgr = _runnable_manager(events, preferences, mock_orchestrator, tmp_path, sm)
+        errors, done = [], threading.Event()
+        events.on("processing_error", errors.append)
+        events.on("processing_complete", lambda data: done.set())
+        broken, nxt = self._two_regen_jobs(mgr, tmp_path)
+
+        _drive_loop(mgr, done)
+
+        assert errors == [
+            {"song_path": str(broken.song.song_path), "error": "no space left on device"}
+        ]
+        mock_orchestrator.run_one_async.assert_called_once()  # only the next job ran
+        sm.set_pipeline_state.assert_called_once_with(str(nxt.song.song_path), "ready")
+
+    def test_a_download_whose_state_lookup_fails_is_marked_failed_and_the_loop_goes_on(
+        self, events, preferences, mock_orchestrator, tmp_path
+    ):
+        self._finishing_ctx(mock_orchestrator)
+        sm = MagicMock()
+        sm.get_pipeline_state.side_effect = [RuntimeError("database is locked"), "pending"]
+        mgr = _runnable_manager(events, preferences, mock_orchestrator, tmp_path, sm)
+        errors, done = [], threading.Event()
+        events.on("processing_error", errors.append)
+        events.on("processing_complete", lambda data: done.set())
+
+        def queue_both():
+            mgr.enqueue("/songs/Locked---aaa111.mp4")
+            mgr.enqueue("/songs/Next---bbb222.mp4")
+
+        _drive_loop(mgr, done, during=queue_both)
+
+        assert errors == [
+            {"song_path": "/songs/Locked---aaa111.mp4", "error": "database is locked"}
+        ]
+        sm.set_pipeline_state.assert_any_call("/songs/Locked---aaa111.mp4", "failed")
+        sm.set_pipeline_state.assert_any_call("/songs/Next---bbb222.mp4", "ready")
+        assert mgr.pending_jobs == []
+
+
+class TestLaunchAndReportResult:
+    def test_reports_true_when_the_run_succeeded(
+        self, events, preferences, mock_orchestrator, tmp_path
+    ):
+        ctx = MagicMock(spec=StageContext)
+        ctx.artifacts = {}
+        mock_orchestrator.join.return_value = ctx
+        mgr = _runnable_manager(events, preferences, mock_orchestrator, tmp_path)
+
+        result = mgr._launch_and_report(
+            "/songs/A---abc.mp4", lambda: CancelToken(threading.Event())
+        )
+
+        assert result is True
+
+    def test_reports_false_when_the_run_was_cancelled(
+        self, events, preferences, mock_orchestrator, tmp_path
+    ):
+        mock_orchestrator.join.side_effect = PipelineCancelled()
+        mgr = _runnable_manager(events, preferences, mock_orchestrator, tmp_path)
+
+        result = mgr._launch_and_report(
+            "/songs/A---abc.mp4", lambda: CancelToken(threading.Event())
+        )
+
+        assert result is False
 
 
 class TestActiveJobTiming:

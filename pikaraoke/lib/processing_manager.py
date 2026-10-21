@@ -490,7 +490,9 @@ class ProcessingManager:
                 # download lane is empty.
                 regen = self._take_regen_job()
                 if regen is not None:
-                    self._run_job(str(regen.song.song_path), lambda: self._process_regen(regen))
+                    self._run_job(
+                        str(regen.song.song_path), lambda: self._process_regen(regen), regen
+                    )
                 continue
             if song_path is None:
                 return  # shutdown sentinel
@@ -515,10 +517,19 @@ class ProcessingManager:
                     return self._regen_jobs.pop(i)
         return None
 
-    def _run_job(self, song_path: str, process: Callable[[], None]) -> None:
-        """Run one job of either lane, then clean up after it."""
+    def _run_job(
+        self, song_path: str, process: Callable[[], None], regen: RegenJob | None = None
+    ) -> None:
+        """Run one job of either lane, then clean up after it.
+
+        The one place where an error from a job becomes ``processing_error``,
+        so an error anywhere in setting up or running a job fails that job
+        and never ends the loop. ``regen`` is None for a download.
+        """
         try:
             process()
+        except Exception as e:
+            self._report_failure(song_path, e, regen)
         finally:
             # In-place mutation preserves identity for external readers
             with self._state_lock:
@@ -566,8 +577,8 @@ class ProcessingManager:
         """Run one regen job: prepare its files, then drive the pipeline over them.
 
         A job that can't start (a ``RegenError``, or any failure while
-        preparing) is reported as a processing error; the song's
-        ``pipeline_state`` is left alone either way.
+        preparing) raises; :meth:`_run_job` reports it as a processing error
+        and the song's ``pipeline_state`` is left alone either way.
         """
         job = regen.song
         song_path = str(job.song_path)
@@ -580,13 +591,7 @@ class ProcessingManager:
         try:
             # The CLI sets the same flag: keep the de-reverb stem for the next run.
             config = dataclasses.replace(self._config, cache_dereverb_stem=True)
-            try:
-                lyrics_path, lyric_stage = prepare_regen_job(
-                    regen, self._genius, config, lyrics_dir
-                )
-            except Exception as e:  # a RegenError, or any file/network failure while preparing
-                self._report_failure(song_path, e, regen)
-                return
+            lyrics_path, lyric_stage = prepare_regen_job(regen, self._genius, config, lyrics_dir)
             stages = [
                 PreparePtyStage(self._pty_slave_fd),
                 *build_stages(
@@ -606,13 +611,15 @@ class ProcessingManager:
         song_path: str,
         launch: Callable[[], CancelToken],
         regen: RegenJob | None = None,
-    ) -> None:
+    ) -> bool:
         """Launch a pipeline run, wait for it, and report how it ended.
 
-        ``regen`` is None for a download. A failed download marks the song
-        ``failed``; a failed regen leaves ``pipeline_state`` alone, because
-        ``_do_enqueue`` refuses ``failed`` songs and a failed regen of a
-        playable song must not make it unqueueable.
+        Returns True when the run succeeded and False when it was cancelled.
+        An error raises, and :meth:`_run_job` reports it. ``regen`` is None for
+        a download. A failed download marks the song ``failed``; a failed regen
+        leaves ``pipeline_state`` alone, because ``_do_enqueue`` refuses
+        ``failed`` songs and a failed regen of a playable song must not make
+        it unqueueable.
         """
         # Launch and register the active job under one lock hold: a cancel_active()
         # landing between the launch and the _active assignment would otherwise be
@@ -621,17 +628,13 @@ class ProcessingManager:
         # not block or re-enter _state_lock. It validates its inputs on this
         # thread, so a song file that is gone raises here, before any pipeline
         # thread exists.
-        try:
-            with self._state_lock:
-                token = launch()
-                self._active = _ActiveJob(
-                    song_path=song_path,
-                    cancel_token=token,
-                    kind="download" if regen is None else "regen",
-                )
-        except Exception as e:
-            self._report_failure(song_path, e, regen)
-            return
+        with self._state_lock:
+            token = launch()
+            self._active = _ActiveJob(
+                song_path=song_path,
+                cancel_token=token,
+                kind="download" if regen is None else "regen",
+            )
 
         try:
             ctx = self._orchestrator.join()
@@ -640,10 +643,7 @@ class ProcessingManager:
             # failure. The stale-pending badge surfaces it on next page load.
             self._events.emit("processing_cancelled", song_path)
             logging.info(f"Processing cancelled: {Path(song_path).name}", extra=LIFECYCLE_EXTRA)
-            return
-        except Exception as e:
-            self._report_failure(song_path, e, regen)
-            return
+            return False
 
         # Persist loudnorm offset and ready state
         offset = ctx.artifacts.get("loudnorm_target_offset")
@@ -666,6 +666,7 @@ class ProcessingManager:
             {"song_path": song_path, "lyric_method": ctx.artifacts.get("lyric_method")},
         )
         logging.info(f"Processing complete: {Path(song_path).name}", extra=LIFECYCLE_EXTRA)
+        return True
 
     def _report_failure(self, song_path: str, error: Exception, regen: RegenJob | None) -> None:
         if regen is None and self._song_manager is not None:
