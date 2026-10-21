@@ -2,7 +2,9 @@
 
 Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 
-> **Status (2026-10-20): Phases 0-3 done; Phase 4 is next.** Branch
+> **Status (2026-10-20): Phases 0-3 done; Phase 3.1 (fixes from the Phase
+> 1-3 code review) is next, then Phase 4.** Ken approved D2's Phase 3.1
+> bullet on 2026-10-20, so step 3.1g runs. Branch
 > `web_library_tools`, off `library_tools` at `0bfa02a`; `dev` merged as
 > `c34d889`. There is no GATE and nothing here measures timing. Landing is
 > Ken's call (see Landing).
@@ -137,6 +139,13 @@ Any other change under `pikaraoke/` is a STOP (CLAUDE.md, Fork Maintenance).
   failed regen of a playable song must not make it unqueueable. Events are
   the same as for downloads (`processing_complete`, `processing_error`,
   `processing_cancelled`).
+- *(Phase 3.1, approved by Ken 2026-10-20)* A regen that doesn't finish (it fails, or
+  is cancelled during setup or during the run) also puts
+  `lyrics/<stem>.lrc` back as it was when the job started. The old bundle
+  stays in that case, so the LRCLIB choice must stay with it. Without this,
+  a cancelled Genius re-pick loses the admin's skip or picked match (D3
+  deletes or rewrites the file before the run), or leaves the new song's
+  match next to the old song's bundle. The CLI does the same.
 - Cancelling or removing a regen row never deletes the song file (today a
   cancelled or removed *download* deletes its file, and that stays).
 - Queued regen jobs do not survive an app restart, the same as today's
@@ -820,6 +829,354 @@ Commits: `feat(pipeline): an orchestrator run can take its own stage list`;
 **Review due:** this phase changes the core queue and its concurrency. When
 you relay, say a `/code-review` is due at this boundary. Don't run it unless
 Ken asks.
+
+## Phase 3.1: fixes from the Phase 1-3 code review
+
+Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
+
+A read-only `/code-review` of `0381917..1428f47` (2026-10-20) found the
+defects below. Each step names the defect it fixes, so you don't need the
+review itself. Same worktree, same ground rules, same "Every phase ends the
+same way". Before starting, confirm the worktree is clean at `1428f47` plus
+this plan commit.
+
+Every file touched here is in D1. `pikaraoke/pipeline/stages/lyric_align.py`
+is **not**, so leave it alone even where a fix would be tidier there
+(3.1a, 3.1h). Do the steps in order. Later steps use 3.1a's helpers, and
+3.1c and 3.1d both change `_take_regen_job`.
+
+### 3.1a. Tidy first (no behaviour change)
+
+These make the fixes below land in one place each.
+
+- `lrclib.lrc_path(song: Path) -> Path`: `song.parent / "lyrics" /
+  f"{song.stem}.lrc"`. Use it in `ensure_lrc`,
+  `library_regen.apply_lrclib_choice` and `library_status._lrclib_state`.
+  Under D3 that file *is* the admin's LRCLIB choice, so the code that writes
+  it and the code that reads it must not spell the path separately.
+- `library_regen.bundle_path(folder: Path, stem: str) -> Path`:
+  `folder / "alignment_debug" / f"{stem}.json"`. Use it in `read_bundle`,
+  `finish_regen_job` and `library_links.file_status` (`library_links`
+  already imports `library_regen`).
+- `library_regen.is_genius_reuse(plan: Plan | None) -> bool`: a `seed` plan
+  with `lyrics_origin == "genius"`. Use it in `prepare_regen_job` and in the
+  script's `execute_lrclib_backfill`, which today repeats the test.
+- `scripts/add_songs.py` `handoff`: keep the `resolve_plan` line, and
+  replace the `find_local_srt` / `adopt_caption` lines with
+  `gate_on_disk_caption(job)`. It is the same step, and D6's after-download
+  check uses it too, so the CLI and the app can't drift apart.
+- `PipelineTracker.retry`: delete the `item.kind == "regen" and
+  item.regen_job is None` check. It can't be true, because `_on_regen_queued`
+  always sets the job. `regen_job = item.regen_job` is enough, since only
+  regen rows carry one.
+
+The existing tests must pass unchanged. No new tests (the helpers are
+one-liners).
+
+Commits: `refactor(library): one place each for the .lrc and bundle paths,
+the Genius-reuse rule and the on-disk caption gate`;
+`refactor(processing): drop a retry check that can't fire`.
+
+### 3.1b. An error while setting up a job no longer stops the queue
+
+**Defect:** `_process_regen` catches errors only from `prepare_regen_job`
+and the launch. `tempfile.mkdtemp` and `build_stages` can also raise: the
+latter deletes the old de-reverb file, which gives a PermissionError on
+Windows while the file is open. Such an error goes through `_run_job`'s
+`finally` and out of `_run_loop`, which has no `except`, so the processing
+thread dies. Every later job then stays "pending" until a restart, and the
+failed row shows "complete".
+
+- `_run_job(song_path, process, regen: RegenJob | None = None)` gains
+  `except Exception as e: self._report_failure(song_path, e, regen)` before
+  its `finally`. This becomes the one place where a job's error becomes
+  `processing_error` (and `failed`, for a download only, as today).
+- Remove the three catches that now repeat it, each of which only reports
+  and returns:
+  - around `prepare_regen_job` in `_process_regen`;
+  - around the launch in `_launch_and_report`;
+  - the generic `except Exception` after `join()` in `_launch_and_report`.
+
+  Keep `except PipelineCancelled`.
+- `_launch_and_report` returns `True` when the run succeeded and `False`
+  when it was cancelled (3.1c and 3.1g use this). Update its docstring and
+  `_process_regen`'s.
+- Leave alone: an event handler that raises inside `_report_failure` still
+  ends the loop (`EventSystem` lets handler errors through). That was true
+  before this branch.
+
+Tests (`test_processing_manager.py`). Each of these emits `processing_error`
+with the error's message, leaves `pipeline_state` alone for a regen, and the
+loop then runs the next queued job:
+- `build_stages` raises PermissionError;
+- `tempfile.mkdtemp` raises OSError;
+- a download whose `get_pipeline_state` raises (this one marks `failed`).
+
+`TestLaunchFailures` and `TestProcessRegen` stay green.
+
+Commit: `fix(processing): an error while setting up a job no longer stops
+the queue`.
+
+### 3.1c. Cancelling a regen while it prepares stops it before the run
+
+**Defect:** `_take_regen_job` pops the job from the lane, but `_active` is
+set only at launch. During `prepare_regen_job` (the caption fetch, the
+Genius and LRCLIB calls) the job is in neither place, and the row shows
+"pending" with a Cancel button. That Cancel puts the path into
+`_cancelled_paths`, which is the download lane's set, and the regen keeps
+running. A later Process or Retry of that song is then silently skipped,
+and its row shows "complete".
+
+- `_ActiveJob.cancel_token: CancelToken | None`. It is None while a regen
+  job prepares. `cancelling` is now read, so fix its "vestigial" comment.
+- `_take_regen_job` sets `self._active = _ActiveJob(song_path=<the job's
+  path>, cancel_token=None, kind="regen")` in the same lock hold as the pop.
+  From the moment a job leaves the lane it counts as running, for
+  `get_active_job`, for `enqueue_regen`'s refusal, and for the tracker,
+  which shows it active with no phase.
+- `get_active_phase`: None when the token is None.
+- `cancel_active`: when the active job matches and its token is None, set
+  `cancelling = True`, log, and return. Don't call the orchestrator: its
+  token belongs to the previous job.
+- `_launch_and_report`, under the lock:
+  - if `_active` is set and `cancelling`, don't launch. After releasing the
+    lock, emit `processing_cancelled` with the lifecycle log line, and
+    return `False`;
+  - otherwise launch. A download creates its `_ActiveJob` as today. A regen
+    sets the token on the existing one, so `started_at` keeps counting from
+    when the job was taken.
+- So a cancel during setup takes effect when setup ends, before any
+  pipeline stage runs. A reset's wipe has already happened by then, which is
+  D2's accepted case: the files are in the backup.
+- If setup fails after the cancel was asked for, the job ends as an error.
+  `PipelineTracker._on_processing_error` and `_on_processing_complete` clear
+  `cancelling` on the row they finish. Otherwise `get_status` would show
+  that row as "cancelling" forever: the flag overrides every other status.
+
+Tests:
+- With `prepare_regen_job` blocked on a `threading.Event`, `get_active_job()`
+  is the song and the phase is None.
+- `tracker.get_status()` then `tracker.cancel(row)` marks the row
+  cancelling. Releasing the event then launches no pipeline (no
+  `run_one_async` call), emits `processing_cancelled`, removes the row,
+  never calls `song_manager.delete`, and leaves `_cancelled_paths` empty.
+- A later `enqueue(path)` of that song runs.
+- A cancel during setup followed by a `RegenError` leaves an error row that
+  isn't cancelling and offers `retry` and `dismiss`.
+
+Commit: `fix(processing): cancelling a regen while it prepares stops it
+before the run`.
+
+### 3.1d. Regen jobs use the library's own spelling of the song path
+
+**Defect:** the regen side compares `str(regen.song.song_path)` with path
+strings from the song manager, which come from `os.walk` plus
+`os.path.join` and keep whatever separators the library root was given.
+With Ken's Windows root `d:/shared/pikaraoke-songs`, the library says
+`d:/shared/pikaraoke-songs\X.mp4` and `str(Path(...))` says
+`d:\shared\pikaraoke-songs\X.mp4`. Then:
+- the "don't regen the playing song" check misses, so a Reset can wipe the
+  playing song;
+- the duplicate check and the `song_deleted` drop miss;
+- `set_pipeline_state` / `set_loudnorm_offset` match no database row.
+
+Phases 4-7 build jobs from `Path`s (7a's come from `list_videos`), so fix
+it once, in the manager.
+
+- `ProcessingManager._library_spelling(path: Path) -> str`:
+  - `str(path)` when it is in `song_manager.songs`;
+  - else the first entry `s` of `song_manager.songs` with `Path(s) == path`;
+  - else `str(path)`, which also covers having no song manager.
+
+  The scan is linear, which is fine at this library's size.
+- `enqueue_regen` works out the spelling once and keeps it with the job:
+  `_regen_jobs: list[tuple[str, RegenJob]]`. Every place that now uses
+  `str(regen.song.song_path)` uses the stored spelling: the running and
+  pending checks, `pending_jobs`, `regen_queued`'s `song_path`,
+  `_drop_regen_jobs`, `_take_regen_job` (the `is_playing` call and
+  `_active`), the loop's `_run_job` call, and `_process_regen` (pass it in).
+  File work still uses `regen.song.song_path`.
+- The tracker needs no change. `retry` hands the job back to
+  `enqueue_regen`, which works the spelling out again.
+
+Tests: a song manager whose `songs` holds the song spelled with a doubled
+separator (`<tmp>` + `"//X---dQw4w9WgXcQ.mp4"`, the same file under `Path`
+equality on every OS), and a `RegenJob` built from the plain `Path`. Then:
+- `regen_queued` carries the library spelling, and so does `is_playing`;
+- `song_deleted` with that spelling drops the job;
+- a successful run calls `set_pipeline_state` with it.
+
+Commit: `fix(processing): regen jobs use the library's own spelling of the
+song path`.
+
+### 3.1e. A retried regen starts from the plan it was queued with
+
+**Defect:** `prepare_regen_job` changes the queued job's plan in place, and
+the tracker keeps that same job for Retry. A Reset with a `fetch` plan (and
+6a's "Repair from caption") fetches `subtitles/<stem>.srt` and turns the
+plan into "use that .srt". If the pipeline then fails, Retry's reset wipe
+deletes that `.srt` first, and the launch fails with "Lyrics file not
+found" on every retry. `b2d8857` fixed only the case where the fetch itself
+fails.
+
+- `prepare_regen_job` works on a copy: `job = dataclasses.replace(regen.song)`
+  at the top, and everything after uses the copy. `fetch_caption`,
+  `adopt_caption` and `prepare_lyrics` replace `job.plan` rather than
+  editing it, so a shallow copy is enough. The queued `RegenJob` is never
+  changed. Say so in the docstring.
+- Remove `b2d8857`'s put-back (`fetch_plan` and its restore). The copy
+  makes it unnecessary.
+
+Tests (`TestPrepareRegenJob`):
+- After a reset `fetch` job whose caption passes, the queued job's plan is
+  still `fetch`.
+- Preparing the same job a second time wipes and fetches again (the
+  download mock is called twice) and returns an `.srt` that exists.
+- `b2d8857`'s retry test stays green.
+
+Commit: `fix(regen): a retried regen starts from the plan it was queued
+with`.
+
+### 3.1f. The old bundle goes whenever the run transcribed
+
+**Defect:** `finish_regen_job` removes the old bundle only for a
+`transcribe` *plan*. A Genius pick (a `sidecar` plan) can also end up
+transcribing when Genius is unavailable, either in `prepare_lyrics` for a
+song without a YouTube id or in `LyricsFetchStage`. That run writes no
+bundle, but the plan still says `sidecar`, so the old bundle stays. Song
+Info then shows the old lyrics, and the next reuse run brings them back.
+
+- `finish_regen_job(song: Path, lyric_method: str | None)` removes the
+  bundle when `lyric_method == "transcribe"`. That is what `LyricAlignStage`
+  sets exactly when it had no lyrics, which is exactly when it writes no
+  bundle.
+- Callers pass the run's `ctx.artifacts.get("lyric_method")`:
+  - the manager in `_launch_and_report`;
+  - the CLI's `run_jobs`: `ctx = orch.run_one(...)`, since `run_one`
+    returns the context.
+
+Tests:
+- `TestFinishRegenJob`: `"transcribe"` removes the bundle;
+  `"genius+joint"` and None keep it.
+- The manager: a `sidecar` regen whose run reports `"transcribe"` removes
+  the bundle.
+- The CLI: update `TestRunJobsFinishesEachSong`.
+
+Commit: `fix(regen): drop the old bundle whenever the run transcribed`.
+
+### 3.1g. A regen that doesn't finish puts the song's LRCLIB file back
+
+**STOP unless the status block says Ken approved D2's Phase 3.1 bullet.**
+That bullet adds a rule to D2. If it isn't approved, skip to 3.1h and say
+so in the relay.
+
+**Defect:** D3 deletes or rewrites `lyrics/<stem>.lrc` before the run (a
+skip marker, a picked record, or a delete for a new Genius id), and
+`LyricsFetchStage` can write a new one during the run. A cancelled or
+failed run leaves the old bundle in place, so one of two things follows:
+- the admin's earlier skip or pick is gone, and the next reuse run fetches
+  the automatic match;
+- or the new song's match sits next to the old song's bundle.
+
+This happens in the app and in the CLI (`--song X --reset`).
+
+- `lrclib.snapshot_lrc(path: Path) -> str | None`: the file's text, or None
+  when there is no file. Any other `OSError` raises, so the job fails before
+  anything is changed.
+- `lrclib.restore_lrc(path: Path, snapshot: str | None) -> None`: None
+  deletes the file (`missing_ok`). Text is written back with the same
+  sibling-tmp atomic write as `write_lrc`.
+- `_process_regen`: take the snapshot (`lrclib.lrc_path(song)`) before
+  anything else. Every end other than success restores it: an error
+  anywhere, or a cancel during setup or during the run (`_launch_and_report`
+  returned False). If the restore itself raises `OSError`, log a warning;
+  it must not hide the job's own error.
+- The CLI's `run_jobs`: take the snapshot before `prepare_lyrics`, and
+  restore it in the `except` branch. A `prepare_lyrics` error still aborts
+  the CLI, as it does today; leave that alone.
+
+Tests:
+- `lrclib`: the snapshot/restore round trip for a missing file, a skip
+  marker and a record.
+- The manager:
+  - a Genius re-pick to a new id whose run fails gets the old `.lrc` text
+    back;
+  - a skip marker followed by a re-pick that is cancelled during the run
+    gets the marker back;
+  - with no `.lrc` before, a run that writes one (the mocked run writes the
+    file) and then fails leaves no file;
+  - success keeps the new file.
+- The CLI: a failing song gets its `.lrc` back.
+
+Commit: `fix(regen): a regen that doesn't finish puts the song's LRCLIB file
+back`.
+
+### 3.1h. Three small fixes
+
+- **A skip marker isn't an LRCLIB match.** The pipeline records a skip
+  marker as an LRCLIB reference with no id (`{"lrc_file": ...}`), so
+  `SongStatus.lrclib` and every history entry show a match the admin
+  rejected. In `library_status`, count an LRCLIB reference only when it has
+  an `id`, through one helper used for `SongStatus.lrclib`,
+  `HistoryEntry.lrclib` and `_lrclib_state`'s `rejected` test. (The writer
+  is in `lyric_align.py`, which D1 doesn't list.) Tests: a bundle with
+  `lyrics.lrclib == {"lrc_file": ...}` gives `lrclib` None in both, and
+  `none` rather than `rejected` when there is no marker.
+- **The caption error message.** `fetch_caption` falls back the same way
+  for "no caption", "download failed" (a YouTube 403) and "too sparse", so
+  the current message ("no longer passes the lyrics check") is wrong for
+  two of the three. In Phase 6's Repair from caption, it would send the
+  admin to the screen they are already on. New text: "No usable YouTube
+  caption: none could be downloaded, or it is too short to be lyrics. Try
+  again later, or pick lyrics with Repair lyrics on Song Info." Update the
+  test that checks the text.
+- **A playlist link can't be read as a yt-dlp option.** `classify_url`
+  accepts a link without a scheme, so `--exec=x.youtube.com?list=1` reaches
+  yt-dlp as an option. In `read_playlist`, put `"--"` before the URL. Test:
+  the command ends with `["--", url]`.
+
+Commit: `fix(library): a skipped LRCLIB match isn't shown as one, a clearer
+caption error, playlist links can't pass as options`.
+
+### 3.1i. Not fixed, and why (record only; don't change)
+
+- **Two timing gaps in which a fast failure can show as "complete".** One is
+  `regen_queued`, which is sent after the job is takeable. The other is a
+  status read between the tracker's `song_downloaded` handler and `enqueue`.
+  Each needs a thread switch inside a window of microseconds, and closing
+  them means reworking the event order.
+- **The two lanes don't check each other for duplicates.** This needs a
+  re-download of a song while its regen waits, and `enqueue` is upstream's
+  download path.
+- **The tracker's `cancel` acts on the status from the last `get_status`.**
+  A row cancelled right after its job was taken drops the row and lets the
+  job run on. This was already true for downloads before this branch.
+- **The finished-row conditions of `remove`, the remove button and
+  `is_terminal` differ.** The first two are upstream's and were there
+  before this branch.
+- **Small items:**
+  - `_ActiveJob.kind` has no reader, but 3c names it;
+  - `get_record` repeats `search`'s request code, and the tracker builds a
+    library row in two places: two copies each, and CLAUDE.md refactors at
+    the third;
+  - `prepare_regen_job` accepts `prompt` and `skip` plans, but no planned
+    caller builds them.
+
+### 3.1j. Verify
+
+- The full suite at baseline plus the new tests. pre-commit per commit with
+  `--files` (as in Phase 3), and the import smoke.
+- The CLI still runs: `uv run --no-sync python -P
+  scripts/regen_alignment_bundles.py --help` and `scripts/add_songs.py
+  --help`.
+- The isolated app (Ground rules first): the Processing page loads and a
+  search download still processes. 3.1b and 3.1c touch the download path.
+  Nothing queues regen jobs from the UI yet.
+- The real-library manifest compare (ignore `zh_probe/`).
+
+**Review due:** 3.1b-3.1d change the processing loop and its locking again.
+Say so in the relay: a short `/code-review` of those three commits. Don't
+run it unless Ken asks.
 
 ## Phase 4: Song Info, song lists, Regenerate
 
@@ -1574,6 +1931,8 @@ then a fix `b2d8857`; 3c and 3d `1b48a39`; the three actions `289a942`.
   isort reformatted my own files (re-staged); pylint passed. Import smoke:
   `pipeline_tracker`, `processing_manager`, `karaoke`, `routes.processing`,
   `library_regen` and `scripts.regen_alignment_bundles` import.
+
+### Phase 3.1
 
 ### Phase 4
 
