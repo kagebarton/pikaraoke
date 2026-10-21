@@ -12,7 +12,7 @@ import os
 import shutil
 import tempfile
 from collections.abc import Callable, Collection
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -790,8 +790,13 @@ def prepare_regen_job(
 
     Returns ``(lyrics_path, lyric_stage)`` for the run, as :func:`prepare_lyrics`
     does. Raises :class:`RegenError` when the job can't start.
+
+    Works on a copy of the song job and never changes the queued one: the
+    caption fetch turns a ``fetch`` plan into "use the .srt just fetched", and
+    a retry of the queued job must start from ``fetch`` again, because its
+    reset wipe deletes that .srt first.
     """
-    job = regen.song
+    job = replace(regen.song)
     song = job.song_path
 
     if regen.reset:
@@ -803,12 +808,8 @@ def prepare_regen_job(
             ) from e
 
     if job.plan.kind == "fetch":
-        fetch_plan = job.plan
         fetch_caption(job)
         if job.plan.kind != "seed":
-            # Put the fetch plan back: a retry must fetch again, not run the
-            # fallback plan, which prepare_lyrics would treat as transcribe.
-            job.plan = fetch_plan
             raise RegenError(
                 "The YouTube caption no longer passes the lyrics check. "
                 "Use Repair lyrics on Song Info to pick lyrics."
