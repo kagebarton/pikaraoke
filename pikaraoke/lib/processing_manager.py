@@ -229,7 +229,9 @@ class ProcessingManager:
         # Queue and cancellation bookkeeping
         self._pending_queue: queue.Queue[str | None] = queue.Queue()
         self.pending_jobs: list[str] = []  # public, derived (download and regen lanes)
-        self._regen_jobs: list[RegenJob] = []  # runs only when the download lane is empty
+        # Runs only when the download lane is empty. Each job is kept with its
+        # song path as the library spells it (see _library_spelling).
+        self._regen_jobs: list[tuple[str, RegenJob]] = []
         self._cancelled_paths: set[str] = set()  # download lane only
         self._active: _ActiveJob | None = None
         self._state_lock = threading.Lock()
@@ -366,18 +368,35 @@ class ProcessingManager:
         logging.info(f"Queued for pipeline: {Path(song_path).name}")
         self._events.emit("processing_queued", song_path)
 
+    def _library_spelling(self, path: Path) -> str:
+        """``path`` spelled the way the song manager spells it.
+
+        The library's paths come from ``os.walk`` plus ``os.path.join``, so they
+        keep whatever separators the library root was given
+        (``d:/songs\\X.mp4``), which ``str(Path(...))`` does not. The playing
+        check, the duplicate check, ``song_deleted`` and the database rows all
+        key on the library's own string, so a regen job must use it too.
+        """
+        plain = str(path)
+        if self._song_manager is None:
+            return plain
+        songs = self._song_manager.songs
+        if plain in songs:
+            return plain
+        return next((s for s in songs if Path(s) == path), plain)
+
     def enqueue_regen(self, regen: RegenJob) -> bool:
         """Queue a regen job behind the download lane.
 
         Returns False, queueing nothing, when the song is already running or
         waiting in either lane.
         """
-        song_path = str(regen.song.song_path)
+        song_path = self._library_spelling(regen.song.song_path)
         with self._state_lock:
             running = self._active is not None and self._active.song_path == song_path
             if running or song_path in self.pending_jobs:
                 return False
-            self._regen_jobs.append(regen)
+            self._regen_jobs.append((song_path, regen))
             self.pending_jobs.append(song_path)
         logging.info(f"Queued for regen ({regen.label}): {Path(song_path).name}")
         self._events.emit(
@@ -412,7 +431,7 @@ class ProcessingManager:
 
         Caller holds ``_state_lock`` and removes the path from ``pending_jobs``.
         """
-        kept = [r for r in self._regen_jobs if str(r.song.song_path) != song_path]
+        kept = [(path, regen) for path, regen in self._regen_jobs if path != song_path]
         dropped = len(kept) < len(self._regen_jobs)
         self._regen_jobs[:] = kept
         return dropped
@@ -497,11 +516,10 @@ class ProcessingManager:
             except queue.Empty:
                 # A download always goes first; a regen job runs only when the
                 # download lane is empty.
-                regen = self._take_regen_job()
-                if regen is not None:
-                    self._run_job(
-                        str(regen.song.song_path), lambda: self._process_regen(regen), regen
-                    )
+                taken = self._take_regen_job()
+                if taken is not None:
+                    song_path, regen = taken
+                    self._run_job(song_path, lambda: self._process_regen(regen, song_path), regen)
                 continue
             if song_path is None:
                 return  # shutdown sentinel
@@ -514,8 +532,10 @@ class ProcessingManager:
 
             self._run_job(song_path, lambda: self._process_song(song_path))
 
-    def _take_regen_job(self) -> RegenJob | None:
+    def _take_regen_job(self) -> tuple[str, RegenJob] | None:
         """Pop the first queued regen job whose song isn't playing.
+
+        Returns the job with its song path as the library spells it.
 
         A job for the playing song stays queued and is retried on the loop's
         next pass. The job counts as the active one from the moment it is
@@ -523,8 +543,7 @@ class ProcessingManager:
         token until its run launches.
         """
         with self._state_lock:
-            for i, regen in enumerate(self._regen_jobs):
-                song_path = str(regen.song.song_path)
+            for i, (song_path, _) in enumerate(self._regen_jobs):
                 if not self._is_playing(song_path):
                     self._active = _ActiveJob(song_path=song_path, cancel_token=None, kind="regen")
                     return self._regen_jobs.pop(i)
@@ -586,15 +605,17 @@ class ProcessingManager:
             song_path, lambda: self._orchestrator.run_one_async(Path(song_path))
         )
 
-    def _process_regen(self, regen: RegenJob) -> None:
+    def _process_regen(self, regen: RegenJob, song_path: str) -> None:
         """Run one regen job: prepare its files, then drive the pipeline over them.
+
+        ``song_path`` is the song as the library spells it, for events and the
+        database; the file work uses ``regen.song.song_path``.
 
         A job that can't start (a ``RegenError``, or any failure while
         preparing) raises; :meth:`_run_job` reports it as a processing error
         and the song's ``pipeline_state`` is left alone either way.
         """
         job = regen.song
-        song_path = str(job.song_path)
         logging.info(f"Regen started ({regen.label}): {job.song_path.name}", extra=LIFECYCLE_EXTRA)
         # Holds the reused-lyrics .txt for the run; the orchestrator validates
         # that the path exists, so it must outlive the job.
