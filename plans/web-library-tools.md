@@ -2,9 +2,9 @@
 
 Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 
-> **Status (2026-10-20): Phases 0-3 done; Phase 3.1 (fixes from the Phase
-> 1-3 code review) is next, then Phase 4.** Ken approved D2's Phase 3.1
-> bullet on 2026-10-20, so step 3.1g runs. Branch
+> **Status (2026-10-20): Phases 0-3.1 done (3.1 = fixes from the Phase
+> 1-3 code review, 3.1g included); Phase 4 is next.** Ken approved D2's
+> Phase 3.1 bullet on 2026-10-20. Branch
 > `web_library_tools`, off `library_tools` at `0bfa02a`; `dev` merged as
 > `c34d889`. There is no GATE and nothing here measures timing. Landing is
 > Ken's call (see Landing).
@@ -1933,6 +1933,107 @@ then a fix `b2d8857`; 3c and 3d `1b48a39`; the three actions `289a942`.
   `library_regen` and `scripts.regen_alignment_bundles` import.
 
 ### Phase 3.1
+
+Executed 2026-10-20 by Sonnet 5.5, starting from `af318ff` (clean, `1428f47`
+plus the plan commit). Code commits: 3.1a `b5c4637`, `e8006da`; 3.1b `86de4f7`;
+3.1c `26cf3b3`; 3.1d `b6301da`; 3.1e `5b67bff`; 3.1f `25ace83`; 3.1g `b849bb7`;
+3.1h `2bc909d`. The status block carried Ken's approval of D2's Phase 3.1 bullet,
+so 3.1g ran.
+
+- **Suite** (`uv run --no-sync python -P -m pytest tests/unit -q`, 42.4 s at
+  `2bc909d`): **4 failed, 1756 passed, 2 skipped** = 1762 (Phase 3's 1715 passed
+  + 42 new - 1 deleted). The four failures are the baseline's four (ids
+  unchanged). Net per commit: 3.1a -1, 3.1b +5, 3.1c +5, 3.1d +7, 3.1e +2, 3.1f
+  +4 (the `finish_regen_job` tests were rewritten, not added), 3.1g +15, 3.1h +4.
+  New tests: `TestSetupFailures` 3 and `TestLaunchAndReportResult` 2 (3.1b);
+  `TestCancelWhilePreparing` 4 and `TestCancelActiveBeforeTheRun` 1 (3.1c);
+  `TestLibrarySpelling` 7 (3.1d); 2 in `TestPrepareRegenJob` (3.1e); 3.1f: 2 in
+  `TestProcessRegen`, 2 in `TestRunJobsFinishesEachSong`; 3.1g: `TestSnapshotRestore`
+  4, `TestPutBackLrc` 2, `TestLrcPutBackWhenTheRegenDoesNotFinish` 6, one more in
+  `TestCancelWhilePreparing`, 2 in `TestRunJobsFinishesEachSong`; 3.1h: 3 in
+  `test_library_status.py`, 1 in `test_library_links.py`. The deleted test is
+  `test_processing_routes.py::TestRetry::test_a_regen_row_that_lost_its_job_is_not_retried_as_processing`.
+- **Mutation checks** (each reverted afterwards; failures counted in the new or
+  touched test files). 3.1b: the old manager code against the 5 new tests, 5
+  failed. 3.1c: `cancelling` kept after an error 1; setup cancel ignored at launch
+  2; taking a job does not register it 4; `cancel_active` calls the orchestrator
+  for a token-less job 2. 3.1d: spelling always the plain string 6; the
+  `song_deleted` drop compares the plain path 1; `is_playing` called with the plain
+  path 1. 3.1e: the 2 new tests against the old code, 2 failed. 3.1f: bundle
+  removed for any non-None method 3; manager passes None 2; CLI passes None 2.
+  3.1g: manager never puts the `.lrc` back 4; a cancel counted as success 3; CLI
+  never puts it back 1; `put_back_lrc` lets an `OSError` through 2; restore always
+  deletes 7. 3.1h: the 6 new or changed tests against the old source, 6 failed.
+- **Differences from the plan's text:**
+  - 3.1a: the plan says the existing tests pass unchanged. The deleted test above
+    forced a regen row with no job, the state the deleted check guarded, so it
+    went with the check.
+  - 3.1b: with the inner catches gone, an error raises out of `_process_song` /
+    `_process_regen` and `_run_job` reports it. The existing tests that called
+    those two directly and expected the error event (`TestProcessSongError` 4,
+    the `_run` helper of `TestProcessRegen`) now go through `_run_job`, as the
+    loop does. `TestLaunchFailures` needed no change.
+  - 3.1c: `_launch_and_report` shares `_report_cancelled` (the event and the log
+    line) between its two cancel branches. If `_active` is None when a regen
+    launches (a direct caller, as the tests are), it creates the `_ActiveJob`
+    itself with `kind` taken from the job. `TestActiveJobTiming::test_a_job_records_which_lane_it_came_from`
+    now takes the regen through `_take_regen_job` and `_run_job`.
+  - 3.1d: `_take_regen_job` returns `(song_path, regen)` and `_process_regen` takes
+    `song_path` as a second argument; `TestRegenLaneOrder` and
+    `TestSongDeletedDropsRegenJobs` were adjusted to the tuple.
+  - 3.1g: added `library_regen.put_back_lrc(song, snapshot)`, which restores and
+    logs an `OSError`; both the manager and the CLI call it, so the "must not hide
+    the job's own error" rule is written once. The plan named only `snapshot_lrc`
+    and `restore_lrc`.
+  - 3.1h: four existing status tests stood for a real LRCLIB record with
+    `{"lrc_file": ...}` alone; they now carry `"id": 5`.
+- **Seen while doing 3.1g, not changed:** an error raised after a successful run
+  (the `set_pipeline_state("ready")` write, or an event handler) leaves the run
+  counted as unfinished, so the old `.lrc` goes back next to the new bundle.
+  `snapshot_lrc` reads text, so on Windows a restored LF-only file comes back with
+  CRLF (the text is the same). `_report_failure` for a download still calls
+  `set_pipeline_state("failed")` unguarded, as before this branch.
+- **Isolated app run** (Ground rules checked first: nothing listening on 5555 or
+  5556; GPU 1035 MiB, 0 %; the only process matching `python` was `TPython.exe`
+  pid 4624, which has no path or command line and is not a pikaraoke process).
+  The scratch library's six files for the Happy Birthday song (video, `.ass`,
+  vocal, nonvocal, `.srt`, `.srt.generated`) were removed first (76 files left).
+  Same command and config copy as the Phase 3 row. Log: `Scan: found 7 song(s) on
+  disk`, `Library updated: 1 removed`, library path `D:/shared/weblib-test`.
+  - `GET /processing` HTTP 200, 27,997 bytes (as in Phase 3); `GET
+    /processing/status` `[]`.
+  - A first `POST /download` with a form body returned HTTP 422 (the route takes
+    JSON); nothing queued and the 360 s poll ended on `[]`. With a JSON body (the
+    Phase 3 payload) it returned `{"status":"ok"}`. Rows from `poll_status.py`: 2 s
+    download `active`; 28 s download `complete`, processing `loudnorm`; 33 s
+    `stem_separation`; 53 s `transcode`; 58 s `transcribe`; 83 s `complete`,
+    `lyric_method` `transcribe`, actions `remove`, `dismiss`, `enqueue`. One row,
+    `kind` `download`, throughout; its `song_path` is
+    `D:/shared/weblib-test\Traditional - Happy Birthday (Karaoke Version)---aF8voKa_3Us.mp4`
+    (the library's own separators). Log: `Queued for pipeline`, `Processing
+    started`, `Processing complete`; no traceback. The scratch library is back to
+    82 files.
+  - Stopped with `taskkill /T` on the listener's pid 34884 (3 processes); the
+    background shell reported exit 1 because of that. Afterwards nothing listened on
+    5555 or 5556 and no python or mpv process remained.
+  - Nothing queued a regen job; the regen lane has only run in the unit tests.
+- **Other live checks:** `scripts/regen_alignment_bundles.py --help` and
+  `scripts/add_songs.py --help` both exit 0. Read-only over
+  `D:/Shared/pikaraoke-songs` with the 3.1h rule: `lrclib_state` n/a 26, rejected
+  10, used 12 (the Phase 2 counts); 0 current bundles hold an LRCLIB reference with
+  no `id`; `overview_counts` behind 5, poor 8, no_lyrics 2, all 48. `read_playlist`
+  with the `--` on the Phase 2 playlist returned 17 videos, and `expand_playlist`
+  the same ids.
+- **Real-library manifest:** `manifest.py compare` against the Phase 0 manifest:
+  `manifest=2605 now=2616 added=11 removed=0 changed=1`, all 12 under
+  `zh_probe/phase0/` (the same set as the Phase 3 row); nothing else differs.
+  Output: `...\66751cff-eade-4c4e-a440-a5ea44850245\scratchpad\manifest_compare_phase31.txt`.
+- **pre-commit:** per commit with `--files`, not `--all-files`. Black or isort
+  reformatted my own files on 3.1c, 3.1d and 3.1g (re-staged and rerun until
+  clean); the other commits passed first time. Pylint passed. Import smoke per commit: `lrclib`, `library_regen`,
+  `library_status`, `library_links`, `processing_manager`, `pipeline_tracker`,
+  `karaoke` and `scripts.regen_alignment_bundles` import.
+- **3.1i:** nothing changed, as the step says.
 
 ### Phase 4
 
