@@ -233,8 +233,8 @@ def run_jobs(
             stages = build_stages(song, lyric_stage, whisper_worker, config, stem_worker)
             orch = PipelineOrchestrator(stages, stem_worker, whisper_worker, config)
             try:
-                orch.run_one(song, lyrics_path)
-                finish_regen_job(job)
+                ctx = orch.run_one(song, lyrics_path)
+                finish_regen_job(song, ctx.artifacts.get("lyric_method"))
                 print(f"  OK: {song.name}")
                 succeeded += 1
             except Exception as e:

@@ -335,6 +335,7 @@ class TestResetWithNewGeniusPick:
 
             def run_one(self, song, lyrics_path):
                 seen["lrc_exists"] = lrc.exists()
+                return SimpleNamespace(artifacts={"lyric_method": "genius+joint"})
 
         monkeypatch.setattr(regen, "PipelineOrchestrator", FakeOrchestrator)
         monkeypatch.setattr(regen, "StemWorker", MagicMock())
@@ -357,15 +358,16 @@ class TestResetWithNewGeniusPick:
 
 class TestRunJobsFinishesEachSong:
     """A transcribe run writes no bundle, so the old one must go once the run
-    succeeds (``finish_regen_job``); a failed run keeps it."""
+    succeeds (``finish_regen_job``, told by the run's ``lyric_method``); a failed
+    run keeps it."""
 
-    def _run(self, tmp_path, monkeypatch, run_error):
+    def _run(self, tmp_path, monkeypatch, run_error, lyric_method="transcribe", plan=None):
         _touch_video(tmp_path, "Song")
         (tmp_path / "alignment_debug").mkdir()
         bundle = tmp_path / "alignment_debug" / "Song.json"
         bundle.write_text("{}", encoding="utf-8")
         job = _job(tmp_path, "Song", {})
-        job.plan = regen.Plan(kind="transcribe")
+        job.plan = plan or regen.Plan(kind="transcribe")
 
         class FakeOrchestrator:
             def __init__(self, *args):
@@ -374,11 +376,13 @@ class TestRunJobsFinishesEachSong:
             def run_one(self, song, lyrics_path):
                 if run_error:
                     raise run_error
+                return SimpleNamespace(artifacts={"lyric_method": lyric_method})
 
         monkeypatch.setattr(regen, "PipelineOrchestrator", FakeOrchestrator)
         monkeypatch.setattr(regen, "StemWorker", MagicMock())
         monkeypatch.setattr(regen, "WhisperWorker", MagicMock())
         monkeypatch.setattr(regen, "build_stages", lambda *args: [])
+        monkeypatch.setattr(regen, "prepare_lyrics", lambda *args: (None, None))
         config = PipelineConfig()
         config.intermediate_dir = str(tmp_path)
 
@@ -390,6 +394,22 @@ class TestRunJobsFinishesEachSong:
 
         assert counts == (1, 0, 0)
         assert not bundle.exists()
+
+    def test_a_genius_pick_that_ended_up_transcribing_removes_it_too(self, tmp_path, monkeypatch):
+        plan = regen.Plan(kind="sidecar", genius_id=9)
+
+        counts, bundle = self._run(tmp_path, monkeypatch, None, "transcribe", plan)
+
+        assert counts == (1, 0, 0)
+        assert not bundle.exists()
+
+    def test_a_run_with_lyrics_keeps_the_old_bundle(self, tmp_path, monkeypatch):
+        plan = regen.Plan(kind="sidecar", genius_id=9)
+
+        counts, bundle = self._run(tmp_path, monkeypatch, None, "genius+joint", plan)
+
+        assert counts == (1, 0, 0)
+        assert bundle.exists()
 
     def test_a_failed_transcribe_keeps_the_old_bundle(self, tmp_path, monkeypatch):
         counts, bundle = self._run(tmp_path, monkeypatch, RuntimeError("boom"))

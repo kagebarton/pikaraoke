@@ -916,8 +916,40 @@ class TestProcessRegen:
 
         sm.set_pipeline_state.assert_called_once_with(path, "ready")
         sm.set_loudnorm_offset.assert_called_once_with(path, -2.5)
-        finish.assert_called_once_with(regen.song)
+        finish.assert_called_once_with(regen.song.song_path, "genius+joint")
         assert done == [{"song_path": path, "lyric_method": "genius+joint"}]
+
+    def test_a_genius_pick_that_ends_up_transcribing_drops_the_old_bundle(
+        self, events, preferences, mock_orchestrator, tmp_path, prepared
+    ):
+        # The plan says sidecar, but Genius was unavailable and the run
+        # transcribed: it wrote no bundle, so the old one has to go.
+        regen = _regen_job(tmp_path, kind="sidecar")
+        bundle = tmp_path / "alignment_debug" / f"{regen.song.song_path.stem}.json"
+        bundle.parent.mkdir()
+        bundle.write_text("{}", encoding="utf-8")
+        ctx = MagicMock(spec=StageContext)
+        ctx.artifacts = {"lyric_method": "transcribe"}
+        mock_orchestrator.join.return_value = ctx
+
+        self._run(events, preferences, mock_orchestrator, tmp_path, regen)
+
+        assert not bundle.exists()
+
+    def test_a_run_with_lyrics_keeps_the_old_bundle_whatever_the_plan(
+        self, events, preferences, mock_orchestrator, tmp_path, prepared
+    ):
+        regen = _regen_job(tmp_path, kind="transcribe")
+        bundle = tmp_path / "alignment_debug" / f"{regen.song.song_path.stem}.json"
+        bundle.parent.mkdir()
+        bundle.write_text("{}", encoding="utf-8")
+        ctx = MagicMock(spec=StageContext)
+        ctx.artifacts = {"lyric_method": "genius+joint"}
+        mock_orchestrator.join.return_value = ctx
+
+        self._run(events, preferences, mock_orchestrator, tmp_path, regen)
+
+        assert bundle.exists()
 
     def test_a_failed_regen_leaves_pipeline_state_as_it_was(
         self, events, preferences, mock_orchestrator, tmp_path, prepared, monkeypatch
