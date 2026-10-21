@@ -948,6 +948,44 @@ class TestRowsThatFinish:
         assert rows["/songs/A---aaa111.mp4"]["elapsed_s"] == 3.0
         assert rows["/songs/B---bbb222.mp4"]["elapsed_s"] is None
 
+    @pytest.mark.parametrize(
+        "event, data, status",
+        [
+            ("processing_error", {"song_path": LIB_PATH, "error": "boom"}, "error"),
+            ("processing_complete", {"song_path": LIB_PATH, "lyric_method": None}, "complete"),
+        ],
+    )
+    def test_a_finished_row_keeps_its_status_while_the_manager_cleans_up(self, event, data, status):
+        # The manager reports how a job ended before it stops naming the job as
+        # running; a read in between must not turn the row back into "active".
+        tracker = _make_tracker()
+        _queue_regen(tracker)
+        tracker._events.emit(event, data)
+        tracker._processing_manager.get_active_job.return_value = LIB_PATH
+        tracker._processing_manager.pending_jobs = [LIB_PATH]
+
+        [during] = tracker.get_status(admin=True)
+        tracker._processing_manager.get_active_job.return_value = None
+        tracker._processing_manager.pending_jobs = []
+        [after] = tracker.get_status(admin=True)
+
+        assert during["processing_status"] == status
+        assert after["processing_status"] == status
+
+    def test_a_cancel_while_the_manager_cleans_up_after_an_error_is_refused(self):
+        tracker = _make_tracker()
+        item, _ = _queue_regen(tracker)
+        tracker._events.emit("processing_error", {"song_path": LIB_PATH, "error": "boom"})
+        tracker._processing_manager.get_active_job.return_value = LIB_PATH
+        tracker.get_status(admin=True)
+
+        assert tracker.cancel(item.id) is False
+        tracker._processing_manager.cancel_active.assert_not_called()
+        tracker._processing_manager.get_active_job.return_value = None
+        [row] = tracker.get_status(admin=True)
+        assert row["processing_status"] == "error"
+        assert "retry" in row["actions"]
+
 
 class TestRowActions:
     @pytest.mark.parametrize("kind", ["regen", "process"])
