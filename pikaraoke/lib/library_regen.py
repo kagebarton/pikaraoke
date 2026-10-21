@@ -826,8 +826,9 @@ def prepare_regen_job(
         fetch_caption(job)
         if job.plan.kind != "seed":
             raise RegenError(
-                "The YouTube caption no longer passes the lyrics check. "
-                "Use Repair lyrics on Song Info to pick lyrics."
+                "No usable YouTube caption: none could be downloaded, or it is too "
+                "short to be lyrics. Try again later, or pick lyrics with Repair "
+                "lyrics on Song Info."
             )
 
     if is_genius_reuse(job.plan):

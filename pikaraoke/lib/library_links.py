@@ -71,7 +71,9 @@ def read_playlist(url: str) -> Playlist:
     ``subprocess.CalledProcessError``, ``subprocess.TimeoutExpired`` or
     ``ValueError`` (yt-dlp's output was not JSON).
     """
-    cmd = yt_dlp_cmd + ["--flat-playlist", "-J"] + _impersonate_args() + [url]
+    # "--" so that a link that looks like an option (classify_url accepts a
+    # scheme-less link such as "--exec=x.youtube.com?list=1") stays a URL.
+    cmd = yt_dlp_cmd + ["--flat-playlist", "-J"] + _impersonate_args() + ["--", url]
     output = subprocess.check_output(cmd, timeout=300).decode("utf-8", "ignore")
     info = json.loads(output)
     videos = [

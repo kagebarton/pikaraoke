@@ -93,7 +93,7 @@ def song_status(song: Path) -> SongStatus:
         schema_version=version,
         origin=origin,
         genius=lyrics.get("genius") or None,
-        lrclib=lyrics.get("lrclib") or None,
+        lrclib=_lrclib_match(lyrics),
         lrclib_state=state,
         lrclib_reason=fill.get("reason") if state == "rejected" else None,
         lrclib_filled=len(fill.get("filled_lids") or []),
@@ -115,6 +115,16 @@ def song_status(song: Path) -> SongStatus:
     )
 
 
+def _lrclib_match(lyrics: dict) -> dict | None:
+    """The LRCLIB record the bundle's run used, or None.
+
+    The pipeline also records a skip marker as an LRCLIB reference (``lrc_file``
+    alone, no ``id``). That is a match the admin rejected, not one.
+    """
+    ref = lyrics.get("lrclib")
+    return ref if ref and ref.get("id") is not None else None
+
+
 def _lrclib_state(song: Path, origin: str | None, lyrics: dict, fill: dict) -> str:
     """How LRCLIB figures in a Genius song: the disk says what the admin chose now,
     the bundle says what the last run did with it."""
@@ -124,7 +134,7 @@ def _lrclib_state(song: Path, origin: str | None, lyrics: dict, fill: dict) -> s
         return "skipped"
     if fill.get("eligible"):
         return "used"
-    if lyrics.get("lrclib"):
+    if _lrclib_match(lyrics):
         return "rejected"
     return "none"
 
@@ -183,7 +193,7 @@ def song_history(song: Path) -> list[HistoryEntry]:
                 captured_at=captured_at,
                 schema_version=bundle.get("schema_version"),
                 genius=lyrics.get("genius") or None,
-                lrclib=lyrics.get("lrclib") or None,
+                lrclib=_lrclib_match(lyrics),
                 line_count=summary.get("line_count"),
                 lines_timed=summary.get("lines_with_words"),
                 backup=backup,
