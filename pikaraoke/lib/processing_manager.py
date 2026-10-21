@@ -558,7 +558,8 @@ class ProcessingManager:
 
         The one place where an error from a job becomes ``processing_error``,
         so an error anywhere in setting up or running a job fails that job
-        and never ends the loop. ``regen`` is None for a download.
+        instead of ending the loop. An error while reporting it (the ``failed``
+        write, an event handler) still escapes. ``regen`` is None for a download.
         """
         try:
             process()
@@ -661,10 +662,7 @@ class ProcessingManager:
 
         Returns True when the run succeeded and False when it was cancelled.
         An error raises, and :meth:`_run_job` reports it. ``regen`` is None for
-        a download. A failed download marks the song ``failed``; a failed regen
-        leaves ``pipeline_state`` alone, because ``_do_enqueue`` refuses
-        ``failed`` songs and a failed regen of a playable song must not make
-        it unqueueable.
+        a download.
         """
         # Launch and register the active job under one lock hold: a cancel_active()
         # landing between the launch and the token assignment would otherwise be
@@ -679,11 +677,7 @@ class ProcessingManager:
             if not cancelled_in_setup:
                 token = launch()
                 if active is None:  # a download; a regen was registered when taken
-                    self._active = _ActiveJob(
-                        song_path=song_path,
-                        cancel_token=token,
-                        kind="download" if regen is None else "regen",
-                    )
+                    self._active = _ActiveJob(song_path=song_path, cancel_token=token)
                 else:
                     active.cancel_token = token
         if cancelled_in_setup:
@@ -726,6 +720,13 @@ class ProcessingManager:
         logging.info(f"Processing cancelled: {Path(song_path).name}", extra=LIFECYCLE_EXTRA)
 
     def _report_failure(self, song_path: str, error: Exception, regen: RegenJob | None) -> None:
+        """Report a job that failed.
+
+        A failed download marks the song ``failed``; a failed regen leaves
+        ``pipeline_state`` alone, because ``_do_enqueue`` refuses ``failed``
+        songs and a failed regen of a playable song must not make it
+        unqueueable.
+        """
         if regen is None and self._song_manager is not None:
             self._song_manager.set_pipeline_state(song_path, "failed")
         logging.error(
