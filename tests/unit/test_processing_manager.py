@@ -1,6 +1,7 @@
 """Unit tests for ProcessingManager (thin adapter over PipelineOrchestrator)."""
 
 import threading
+from types import SimpleNamespace
 from unittest.mock import MagicMock, call, patch
 
 import pytest
@@ -8,6 +9,7 @@ import pytest
 from pikaraoke.lib import processing_manager as pm
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.library_regen import Plan, RegenError, RegenJob, SongJob
+from pikaraoke.lib.pipeline_tracker import PipelineTracker
 from pikaraoke.lib.processing_manager import (
     PreparePtyStage,
     ProcessingManager,
@@ -1176,6 +1178,142 @@ class TestLaunchAndReportResult:
         assert result is False
 
 
+class TestCancelWhilePreparing:
+    """A regen job counts as the active job from the moment it is taken, so a
+    cancel during its setup (the caption fetch, the Genius and LRCLIB calls)
+    stops it before the pipeline runs."""
+
+    @pytest.fixture
+    def scene(self, events, preferences, mock_orchestrator, tmp_path, monkeypatch):
+        """A real manager and tracker with one regen job held inside its setup."""
+        sm = MagicMock()
+        mgr = _runnable_manager(events, preferences, mock_orchestrator, tmp_path, sm)
+        tracker = PipelineTracker(MagicMock(), mgr, MagicMock(), sm, events)
+        scene = SimpleNamespace(
+            mgr=mgr,
+            tracker=tracker,
+            sm=sm,
+            regen=_regen_job(tmp_path),
+            preparing=threading.Event(),
+            release=threading.Event(),
+            setup_error=None,
+        )
+        scene.path = str(scene.regen.song.song_path)
+
+        def held_in_setup(regen, genius, config, lyrics_dir):
+            scene.preparing.set()
+            assert scene.release.wait(timeout=5)
+            if scene.setup_error is not None:
+                raise scene.setup_error
+            return None, None
+
+        monkeypatch.setattr(pm, "prepare_regen_job", held_in_setup)
+        monkeypatch.setattr(pm, "build_stages", MagicMock(return_value=["lyric-align"]))
+        ctx = MagicMock(spec=StageContext)
+        ctx.artifacts = {}
+        mock_orchestrator.join.return_value = ctx
+        mgr.enqueue_regen(scene.regen)
+        return scene
+
+    def test_the_job_is_the_active_one_with_no_phase_while_it_prepares(
+        self, events, scene, mock_orchestrator
+    ):
+        finished = threading.Event()
+        events.on("processing_complete", lambda data: finished.set())
+        seen = {}
+
+        def look_while_preparing():
+            assert scene.preparing.wait(timeout=5)
+            seen["job"] = scene.mgr.get_active_job()
+            seen["phase"] = scene.mgr.get_active_phase()
+            seen["row"] = scene.tracker.get_status(admin=True)[0]
+            seen["requeue"] = scene.mgr.enqueue_regen(scene.regen)
+            scene.release.set()
+
+        _drive_loop(scene.mgr, finished, during=look_while_preparing)
+
+        assert seen["job"] == scene.path
+        assert seen["phase"] is None
+        assert seen["row"]["processing_status"] == "active"
+        assert seen["row"]["processing_phase"] is None
+        assert seen["requeue"] is False
+        # Not cancelled, so the run launched on the existing job.
+        mock_orchestrator.run_one_async.assert_called_once()
+
+    def test_a_cancel_while_preparing_stops_the_job_before_any_stage_runs(
+        self, events, scene, mock_orchestrator
+    ):
+        cancelled = threading.Event()
+        events.on("processing_cancelled", lambda path: cancelled.set())
+        seen = {}
+
+        def cancel_while_preparing():
+            assert scene.preparing.wait(timeout=5)
+            row = scene.tracker.get_status(admin=True)[0]
+            seen["cancel_accepted"] = scene.tracker.cancel(row["id"])
+            seen["status"] = scene.tracker.get_status(admin=True)[0]["processing_status"]
+            scene.release.set()
+
+        _drive_loop(scene.mgr, cancelled, during=cancel_while_preparing)
+
+        assert seen == {"cancel_accepted": True, "status": "cancelling"}
+        mock_orchestrator.run_one_async.assert_not_called()
+        mock_orchestrator.cancel_active.assert_not_called()
+        assert scene.tracker.get_status(admin=True) == []
+        scene.sm.delete.assert_not_called()
+        scene.sm.set_pipeline_state.assert_not_called()
+        assert scene.mgr._cancelled_paths == set()
+        assert scene.mgr.pending_jobs == []
+        assert scene.mgr.get_active_job() is None
+
+    def test_a_later_process_of_that_song_runs(self, events, scene, monkeypatch):
+        cancelled, ran = threading.Event(), threading.Event()
+        events.on("processing_cancelled", lambda path: cancelled.set())
+        monkeypatch.setattr(scene.mgr, "_process_song", lambda song_path: ran.set())
+
+        def cancel_then_process_again():
+            assert scene.preparing.wait(timeout=5)
+            row = scene.tracker.get_status(admin=True)[0]
+            assert scene.tracker.cancel(row["id"])
+            scene.release.set()
+            assert cancelled.wait(timeout=5)
+            scene.mgr.enqueue(scene.path)
+
+        _drive_loop(scene.mgr, ran, during=cancel_then_process_again)
+
+    def test_a_setup_error_after_a_cancel_leaves_a_plain_error_row(self, events, scene):
+        errored = threading.Event()
+        events.on("processing_error", lambda data: errored.set())
+        scene.setup_error = RegenError("The YouTube caption has gone.")
+
+        def cancel_while_preparing():
+            assert scene.preparing.wait(timeout=5)
+            row = scene.tracker.get_status(admin=True)[0]
+            assert scene.tracker.cancel(row["id"])
+            scene.release.set()
+
+        _drive_loop(scene.mgr, errored, during=cancel_while_preparing)
+
+        (row,) = scene.tracker.get_status(admin=True)
+        assert row["processing_status"] == "error"
+        assert row["error_message"] == "The YouTube caption has gone."
+        assert "retry" in row["actions"] and "dismiss" in row["actions"]
+        assert "cancel" not in row["actions"]
+
+
+class TestCancelActiveBeforeTheRun:
+    def test_it_flags_the_job_and_leaves_the_orchestrator_alone(self, manager):
+        manager._orchestrator = MagicMock()
+        manager._active = _ActiveJob(
+            song_path="/songs/A---abc.mp4", cancel_token=None, kind="regen"
+        )
+
+        manager.cancel_active("/songs/A---abc.mp4")
+
+        assert manager._active.cancelling is True
+        manager._orchestrator.cancel_active.assert_not_called()
+
+
 class TestActiveJobTiming:
     def test_no_elapsed_time_when_idle(self, manager):
         assert manager.get_active_elapsed_s() is None
@@ -1200,7 +1338,10 @@ class TestActiveJobTiming:
             return ctx
 
         mock_orchestrator.join.side_effect = capture
-        mgr._process_song("/songs/A---abc.mp4")
-        mgr._process_regen(_regen_job(tmp_path))
+        _run_download(mgr, "/songs/A---abc.mp4")
+        regen = _regen_job(tmp_path)
+        mgr.enqueue_regen(regen)
+        taken = mgr._take_regen_job()
+        mgr._run_job(str(regen.song.song_path), lambda: mgr._process_regen(taken), taken)
 
         assert seen == ["download", "regen"]

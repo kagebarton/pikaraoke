@@ -448,6 +448,7 @@ class PipelineTracker:
             if item is not None:
                 item.processing_status = "complete"
                 item.processing_phase = None
+                item.cancelling = False  # a cancel that came too late
                 item.finished_at = time.time()
                 if lyric_method is not None:
                     item.lyric_method = lyric_method
@@ -475,6 +476,7 @@ class PipelineTracker:
             if item is not None:
                 item.processing_status = "error"
                 item.processing_phase = None
+                item.cancelling = False  # get_status shows a cancelling row as nothing else
                 item.error_message = data.get("error", "Unknown error")
                 item.finished_at = time.time()
         self._notify_change()
