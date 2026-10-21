@@ -122,7 +122,14 @@ class TestReadPlaylist:
             ],
         )
         assert "--flat-playlist" in commands[0] and "-J" in commands[0]
-        assert commands[0][-1] == "https://www.youtube.com/playlist?list=Y"
+        assert commands[0][-2:] == ["--", "https://www.youtube.com/playlist?list=Y"]
+
+    def test_a_link_that_looks_like_an_option_stays_a_url(self, monkeypatch):
+        commands = mock_yt_dlp(monkeypatch, json.dumps({"title": "T", "entries": []}))
+
+        library_links.read_playlist("--exec=x.youtube.com?list=1")
+
+        assert commands[0][-2:] == ["--", "--exec=x.youtube.com?list=1"]
 
     def test_skips_entries_without_an_id(self, monkeypatch):
         mock_yt_dlp(

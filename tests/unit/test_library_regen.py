@@ -954,7 +954,11 @@ class TestPrepareRegenJob:
         prepare_lyrics = MagicMock()
         monkeypatch.setattr(lr, "prepare_lyrics", prepare_lyrics)
 
-        with pytest.raises(lr.RegenError, match="Repair lyrics on Song Info"):
+        with pytest.raises(
+            lr.RegenError,
+            match="No usable YouTube caption: none could be downloaded, or it is too short.*"
+            "Try again later, or pick lyrics with Repair lyrics on Song Info",
+        ):
             self._prepare(regen, tmp_path)
 
         prepare_lyrics.assert_not_called()

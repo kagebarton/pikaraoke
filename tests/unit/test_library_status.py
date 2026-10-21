@@ -138,7 +138,7 @@ class TestLrclibState:
     def test_used_when_the_fill_was_eligible(self, tmp_path):
         video = self.genius_bundle(
             tmp_path,
-            lrclib_meta={"lrc_file": "x.lrc", "trackName": "T"},
+            lrclib_meta={"lrc_file": "x.lrc", "trackName": "T", "id": 5},
             fill={"eligible": True, "filled_lids": [3, 4]},
         )
         status = library_status.song_status(video)
@@ -150,7 +150,7 @@ class TestLrclibState:
     def test_rejected_carries_the_reason(self, tmp_path):
         video = self.genius_bundle(
             tmp_path,
-            lrclib_meta={"lrc_file": "x.lrc"},
+            lrclib_meta={"lrc_file": "x.lrc", "id": 5},
             fill={"eligible": False, "reason": "duration_mismatch"},
         )
         status = library_status.song_status(video)
@@ -168,11 +168,29 @@ class TestLrclibState:
         assert library_status.song_status(video).lrclib_state == "skipped"
 
     def test_a_real_lrc_on_disk_is_not_a_skip(self, tmp_path):
-        video = self.genius_bundle(tmp_path, lrclib_meta={"lrc_file": "x.lrc"})
+        video = self.genius_bundle(tmp_path, lrclib_meta={"lrc_file": "x.lrc", "id": 5})
         lrc = tmp_path / "lyrics" / f"{video.stem}.lrc"
         lrc.parent.mkdir()
         lrc.write_text("[00:01.00]hello\n", encoding="utf-8")
         assert library_status.song_status(video).lrclib_state == "rejected"
+
+    def test_a_marker_reference_is_not_a_match(self, tmp_path):
+        # The pipeline records a skip marker as {"lrc_file": ...} with no id.
+        video = self.genius_bundle(tmp_path, lrclib_meta={"lrc_file": "lyrics/x.lrc"})
+
+        status = library_status.song_status(video)
+
+        assert status.lrclib is None
+        assert status.lrclib_state == "none"  # not "rejected": nothing was rejected
+
+    def test_a_marker_reference_with_the_marker_on_disk_is_skipped_with_no_match(self, tmp_path):
+        video = self.genius_bundle(tmp_path, lrclib_meta={"lrc_file": "lyrics/x.lrc"})
+        lrclib.write_skip_marker(tmp_path / "lyrics" / f"{video.stem}.lrc")
+
+        status = library_status.song_status(video)
+
+        assert status.lrclib is None
+        assert status.lrclib_state == "skipped"
 
     def test_not_applicable_to_a_caption_song(self, tmp_path):
         video = make_video(tmp_path)
@@ -247,6 +265,19 @@ class TestHistory:
         assert entry.genius == {"id": 7}
         assert entry.lrclib == {"id": 9}
         assert (entry.line_count, entry.lines_timed) == (10, 8)
+
+    def test_a_marker_reference_is_not_listed_as_a_match(self, tmp_path):
+        video = make_video(tmp_path)
+        write_bundle(
+            tmp_path,
+            video.stem,
+            captured_at="2026-10-03T00:00:00Z",
+            lyrics={"genius": {"id": 7}, "lrclib": {"lrc_file": "lyrics/x.lrc"}},
+        )
+
+        [entry] = library_status.song_history(video)
+
+        assert entry.lrclib is None
 
     def test_newest_first_with_the_current_bundle_on_top(self, tmp_path):
         video = make_video(tmp_path)
