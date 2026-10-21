@@ -971,6 +971,44 @@ class TestPrepareRegenJob:
 
         assert regen.song.plan is fetch_plan
 
+    def _real_fetch(self, tmp_path, monkeypatch):
+        """The real ``fetch_caption`` over a stubbed download; returns the download mock."""
+        monkeypatch.setattr(lr, "probe_duration", lambda p: None)  # skip the wpm gate
+        srt = tmp_path / "subtitles" / f"{YT_STEM}.en.srt"
+
+        def download(url, dest, stem):
+            Path(dest).mkdir(parents=True, exist_ok=True)
+            words = " ".join(["la"] * 60)
+            srt.write_text(f"1\n00:00:01,000 --> 00:00:04,000\n{words}\n", encoding="utf-8")
+            return str(srt)
+
+        mock = MagicMock(side_effect=download)
+        monkeypatch.setattr(lr, "download_manual_en_subs", mock)
+        return mock
+
+    def test_the_queued_job_keeps_its_fetch_plan_after_a_fetch(self, tmp_path, monkeypatch):
+        fetch_plan = lr._fetch_or_prompt_plan(tmp_path / f"{YT_STEM}.mp4")
+        regen = self._regen(tmp_path, fetch_plan, reset=True)
+        self._real_fetch(tmp_path, monkeypatch)
+
+        lyrics_path, _ = self._prepare(regen, tmp_path)
+
+        assert lyrics_path == tmp_path / "subtitles" / f"{YT_STEM}.srt"
+        assert regen.song.plan is fetch_plan
+
+    def test_preparing_the_same_job_again_wipes_and_fetches_again(self, tmp_path, monkeypatch):
+        fetch_plan = lr._fetch_or_prompt_plan(tmp_path / f"{YT_STEM}.mp4")
+        regen = self._regen(tmp_path, fetch_plan, reset=True)
+        download = self._real_fetch(tmp_path, monkeypatch)
+
+        first, _ = self._prepare(regen, tmp_path)
+        assert first.exists()
+        # A retry: the reset wipe deletes the .srt the first run fetched.
+        second, _ = self._prepare(regen, tmp_path)
+
+        assert download.call_count == 2
+        assert second.exists()
+
     def test_a_reused_genius_pick_backfills_the_lrc(self, tmp_path, monkeypatch):
         job = _job(tmp_path, YT_STEM, self.GENIUS_BUNDLE)
         plan = lr.reuse_plan(job)
