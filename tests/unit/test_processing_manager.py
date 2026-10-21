@@ -663,6 +663,13 @@ def _run_download(mgr, song_path: str) -> None:
     mgr._run_job(song_path, lambda: mgr._process_song(song_path))
 
 
+def _run_regen(mgr, regen: RegenJob) -> None:
+    """Run one regen job the way the loop does: queued, taken, then run."""
+    assert mgr.enqueue_regen(regen)
+    song_path, taken = mgr._take_regen_job()
+    mgr._run_job(song_path, lambda: mgr._process_regen(taken, song_path), taken)
+
+
 @pytest.fixture
 def prepared(monkeypatch):
     """prepare_regen_job and build_stages stubbed out; yields the prepare mock."""
@@ -865,8 +872,7 @@ class TestSongDeletedDropsRegenJobs:
 class TestProcessRegen:
     def _run(self, events, preferences, orchestrator, tmp_path, regen, song_manager=None):
         mgr = _runnable_manager(events, preferences, orchestrator, tmp_path, song_manager)
-        song_path = str(regen.song.song_path)
-        mgr._run_job(song_path, lambda: mgr._process_regen(regen, song_path), regen)
+        _run_regen(mgr, regen)
         return mgr
 
     def test_launches_the_pipeline_with_its_own_stage_list(
@@ -1105,15 +1111,13 @@ class TestSetupFailures:
         ctx = MagicMock(spec=StageContext)
         ctx.artifacts = {}
         mock_orchestrator.join.return_value = ctx
-        mock_orchestrator.run_one_async.return_value = CancelToken(event=threading.Event())
 
     def test_build_stages_failing_fails_the_regen_and_the_loop_runs_the_next(
-        self, events, preferences, mock_orchestrator, tmp_path, monkeypatch
+        self, events, preferences, mock_orchestrator, tmp_path, prepared, monkeypatch
     ):
         # build_stages deletes the old de-reverb file, which is a PermissionError
         # on Windows while the file is open.
         self._finishing_ctx(mock_orchestrator)
-        monkeypatch.setattr(pm, "prepare_regen_job", MagicMock(return_value=(None, None)))
         monkeypatch.setattr(
             pm,
             "build_stages",
@@ -1532,9 +1536,9 @@ class TestLrcPutBackWhenTheRegenDoesNotFinish:
         return regen, lrc
 
     def _run(self, events, preferences, orchestrator, tmp_path, regen):
-        mgr = _runnable_manager(events, preferences, orchestrator, tmp_path, MagicMock())
-        song_path = str(regen.song.song_path)
-        mgr._run_job(song_path, lambda: mgr._process_regen(regen, song_path), regen)
+        _run_regen(
+            _runnable_manager(events, preferences, orchestrator, tmp_path, MagicMock()), regen
+        )
 
     def test_a_new_genius_pick_whose_run_fails_gets_the_old_lrc_back(
         self, events, preferences, mock_orchestrator, tmp_path, prepared
@@ -1657,9 +1661,6 @@ class TestActiveJobTiming:
 
         mock_orchestrator.join.side_effect = capture
         _run_download(mgr, "/songs/A---abc.mp4")
-        regen = _regen_job(tmp_path)
-        mgr.enqueue_regen(regen)
-        song_path, taken = mgr._take_regen_job()
-        mgr._run_job(song_path, lambda: mgr._process_regen(taken, song_path), taken)
+        _run_regen(mgr, _regen_job(tmp_path))
 
         assert seen == ["download", "regen"]
