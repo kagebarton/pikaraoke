@@ -47,10 +47,7 @@ def processing_attention():
     if not is_admin():
         return jsonify([])
     k = get_karaoke_instance()
-    tracked = {
-        item["song_path"] for item in k.pipeline_tracker.get_status(admin=True) if item["song_path"]
-    }
-    return jsonify(k.library_tools.attention_rows(tracked))
+    return jsonify(k.library_tools.attention_rows(k.pipeline_tracker.tracked_paths()))
 
 
 @processing_bp.route("/processing/song/retry", methods=["POST"])

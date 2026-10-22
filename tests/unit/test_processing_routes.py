@@ -1013,6 +1013,15 @@ class TestRowActions:
 
         assert "remove" in row["actions"] and "dismiss" in row["actions"]
 
+    def test_a_download_that_failed_before_it_had_a_file_offers_no_remove(self):
+        tracker = _make_tracker()
+        _download_row(tracker, "Bad link", url="https://x/bad")
+        tracker._events.emit("download_error", {"url": "https://x/bad", "error": "nope"})
+
+        [row] = tracker.get_status(admin=True)
+
+        assert "remove" not in row["actions"] and "dismiss" in row["actions"]
+
     def test_guests_are_offered_none_of_the_new_actions(self):
         tracker = _make_tracker()
         item = PipelineItem(title="Done", url="", user="Alice")
@@ -1224,6 +1233,16 @@ class TestClearFinished:
 
         assert tracker.clear_finished() == 0
         assert calls == []
+
+
+class TestTrackedPaths:
+    def test_holds_the_song_of_every_row_finished_or_not(self):
+        tracker = _make_tracker()
+        _finished(tracker, "process", "complete", path="/songs/A---aaa111.mp4")
+        _queue_regen(tracker, "/songs/D---ddd111.mp4")
+        _download_row(tracker, "Not downloaded yet", url="https://x/1")
+
+        assert tracker.tracked_paths() == {"/songs/A---aaa111.mp4", "/songs/D---ddd111.mp4"}
 
 
 # ---------------------------------------------------------------------------

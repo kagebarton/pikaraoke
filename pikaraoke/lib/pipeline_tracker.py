@@ -75,7 +75,7 @@ class PipelineItem:
     @property
     def is_terminal(self) -> bool:
         """Finished one way or the other: nothing more will happen to this row."""
-        return self.download_status == "error" or self.processing_status in ("complete", "error")
+        return self.processing_status in ("complete", "error")
 
 
 class PipelineTracker:
@@ -175,11 +175,8 @@ class PipelineTracker:
             return
 
         if item.song_path is None:
-            # Download not yet complete — show error if download failed
-            if item.download_status == "error":
-                item.processing_status = "error"
-            else:
-                item.processing_status = "waiting"
+            # Download not yet complete (a failed one has finished above)
+            item.processing_status = "waiting"
             item.processing_phase = None
         elif active_job == item.song_path:
             item.processing_status = "active"
@@ -214,7 +211,7 @@ class PipelineTracker:
         """
 
         def group_of(item: PipelineItem) -> str:
-            if item.download_status == "error" or item.processing_status == "error":
+            if item.processing_status == "error":
                 return "attention"
             return "finished" if item.processing_status == "complete" else "active"
 
@@ -436,6 +433,11 @@ class PipelineTracker:
         self._processing_manager.enqueue(song_path)
         self._notify_change()
         return True
+
+    def tracked_paths(self) -> set[str]:
+        """Song paths that have a row, finished or not."""
+        with self._lock:
+            return {item.song_path for item in self._items if item.song_path}
 
     def clear_finished(self) -> int:
         """Drop every completed row; returns how many went. Never touches files."""
@@ -672,11 +674,8 @@ class PipelineTracker:
                     actions.append("cancel")
 
             if admin:
-                # Remove deletes the song, so only a downloaded one offers it.
-                if is_download and (
-                    item.download_status in ("complete", "error")
-                    or item.processing_status in ("complete", "error")
-                ):
+                # Remove deletes the song, so only a download that has a file offers it.
+                if is_download and item.song_path:
                     actions.append("remove")
                 # Dismiss drops a finished row and touches no file.
                 if item.is_terminal:
