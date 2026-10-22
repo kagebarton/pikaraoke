@@ -70,9 +70,15 @@ class Version:
     folder: str | None
 
 
-def _library_song(k, song: object) -> bool:
-    """Whether ``song`` is a path in the library: the routes' guard on client input."""
-    return isinstance(song, str) and song in k.song_manager.songs
+def library_song(k, song: object) -> str | None:
+    """``song`` when it is a path in the library, else None: the routes' guard on client input."""
+    return song if isinstance(song, str) and song in k.song_manager.songs else None
+
+
+def posted_song(k) -> str | None:
+    """The library song the request's JSON body names as ``song``, else None."""
+    body = request.get_json(silent=True)
+    return library_song(k, body.get("song") if isinstance(body, dict) else None)
 
 
 def _mmss(seconds: float) -> str:
@@ -321,8 +327,8 @@ def song_info():
     if not is_admin():
         flash(_("You don't have permission to view song info"), "is-danger")
         return redirect(url_for("files.browse"))
-    song = request.args.get("song")
-    if not _library_song(k, song):
+    song = library_song(k, request.args.get("song"))
+    if song is None:
         abort(400)
 
     tools = k.library_tools
@@ -356,9 +362,8 @@ def regenerate():
     if not is_admin():
         return jsonify({"success": False, "error": _("Admin only")}), 403
     k = get_karaoke_instance()
-    body = request.get_json(silent=True)
-    song = body.get("song") if isinstance(body, dict) else None
-    if not _library_song(k, song):
+    song = posted_song(k)
+    if song is None:
         return jsonify({"success": False, "error": _("Not a song in the library")}), 400
     try:
         k.library_tools.regenerate(song)

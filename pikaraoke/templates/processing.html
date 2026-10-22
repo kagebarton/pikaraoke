@@ -75,7 +75,7 @@
     <div class="pr-sec"><span>{% trans %}Library{% endtrans %}</span></div>
     <div class="pr-card">
       <a class="pr-link no-spa" href="{{ url_for('library.songs') }}?list=behind"><span>{% trans %}Behind current version{% endtrans %}</span><span class="tag is-warning is-light" data-count="behind">…</span></a>
-      <a class="pr-link no-spa" href="{{ url_for('library.songs') }}?list=poor"><span>{% trans %}Looks poor (15%+ lines guessed){% endtrans %}</span><span class="tag is-danger is-light" data-count="poor">…</span></a>
+      <a class="pr-link no-spa" href="{{ url_for('library.songs') }}?list=poor"><span>{% trans share=poor_share %}Looks poor ({{ share }}%+ lines guessed){% endtrans %}</span><span class="tag is-danger is-light" data-count="poor">…</span></a>
       <a class="pr-link no-spa" href="{{ url_for('library.songs') }}?list=no_lyrics"><span>{% trans %}No lyrics (transcribed){% endtrans %}</span><span class="tag is-light" data-count="no_lyrics">…</span></a>
       <a class="pr-link no-spa" href="{{ url_for('library.songs') }}?list=all"><span>{% trans %}All songs{% endtrans %}</span><span class="tag is-light" data-count="all">…</span></a>
     </div>

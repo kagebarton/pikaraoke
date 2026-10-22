@@ -140,6 +140,12 @@ class TestProcessingPage:
 
         assert "Looks poor (15%+ lines guessed)" in body
 
+    def test_the_poor_list_label_follows_the_rule(self, env):
+        with patch(f"{ROUTE_PREFIX}.POOR_GUESSED_SHARE", 0.2):
+            body = get(env, "/processing", admin=True).get_data(as_text=True)
+
+        assert "Looks poor (20%+ lines guessed)" in body
+
 
 class TestStatusJson:
     @staticmethod

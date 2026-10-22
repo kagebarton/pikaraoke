@@ -10,6 +10,8 @@ from flask import jsonify, render_template, request
 from flask_smorest import Blueprint
 
 from pikaraoke.lib.current_app import get_karaoke_instance, is_admin
+from pikaraoke.lib.library_status import POOR_GUESSED_SHARE
+from pikaraoke.routes.song_info import posted_song
 
 _ = flask_babel.gettext
 
@@ -27,6 +29,7 @@ def processing():
         or "PiKaraoke",
         title="Processing",
         admin=is_admin(),
+        poor_share=round(POOR_GUESSED_SHARE * 100),
     )
 
 
@@ -56,9 +59,8 @@ def retry_song():
     if not is_admin():
         return jsonify({"success": False, "error": _("Admin only")}), 403
     k = get_karaoke_instance()
-    body = request.get_json(silent=True)
-    song = body.get("song") if isinstance(body, dict) else None
-    if not isinstance(song, str) or song not in k.song_manager.songs:
+    song = posted_song(k)
+    if song is None:
         return jsonify({"success": False, "error": _("Not a song in the library")}), 400
     if k.library_tools.is_busy(song):
         return (
