@@ -50,6 +50,18 @@ BUSY_MESSAGE = "This song has a regen waiting or running."
 # final queue scrape the page once.
 GENIUS_CACHE_SIZE = 20
 
+# LRCLIB records the repair page's searches listed (a search lists up to about
+# 20), so a repair queues the picked one without asking LRCLIB again.
+LRCLIB_CACHE_SIZE = 100
+
+
+def _remember(cache: dict, key: object, value: object, size: int) -> None:
+    """Store ``value`` as the newest entry of ``cache``, dropping the oldest past ``size``."""
+    cache.pop(key, None)
+    cache[key] = value
+    while len(cache) > size:
+        del cache[next(iter(cache))]
+
 
 class LibraryTools:
     def __init__(
@@ -65,6 +77,8 @@ class LibraryTools:
         self._genius = genius_client
         self._genius_songs: dict[int, GeniusSong] = {}
         self._genius_lock = threading.Lock()
+        self._lrclib_records: dict[int, dict] = {}
+        self._lrclib_lock = threading.Lock()
 
     @staticmethod
     def is_video(song_path: str) -> bool:
@@ -164,9 +178,7 @@ class LibraryTools:
             return song
         song = self._genius.fetch_song(genius_id)
         with self._genius_lock:
-            self._genius_songs[genius_id] = song
-            while len(self._genius_songs) > GENIUS_CACHE_SIZE:
-                del self._genius_songs[next(iter(self._genius_songs))]
+            _remember(self._genius_songs, genius_id, song, GENIUS_CACHE_SIZE)
         return song
 
     def caption_check(self, song_path: str) -> CaptionCheck:
@@ -186,12 +198,18 @@ class LibraryTools:
         Each candidate says how many of the Genius lyrics' lines it maps to, how
         far its length is from the video's, whether the selection rule would
         pick it (``best``) and whether it is the match on disk (``current``).
-        Raises :class:`~pikaraoke.lib.genius.GeniusUnavailable` when the Genius
-        lyrics can't be fetched.
+        The listed records are remembered for :meth:`repair`. Raises
+        :class:`~pikaraoke.lib.genius.GeniusUnavailable` when the Genius lyrics
+        can't be fetched.
         """
         sheet = [item["text"] for item in parse_lyric_lines(self.genius_song(genius_id).text)]
         video_s = media_duration(self._song_job(song_path))
         records = [r for r in lrclib.search(title, artist) if r.get("syncedLyrics")]
+        with self._lrclib_lock:
+            for record in records:
+                # Only an integer id can come back in a repair request.
+                if isinstance(record.get("id"), int):
+                    _remember(self._lrclib_records, record["id"], record, LRCLIB_CACHE_SIZE)
         best = lrclib.select_candidate(records, sheet, video_s)
         current_id = self._lrc_record_id(Path(song_path))
         candidates = []
@@ -263,7 +281,11 @@ class LibraryTools:
         if lrclib_skip:
             plan.lrclib_skip = True
         elif lrclib_id is not None:
-            record = lrclib.get_record(lrclib_id)
+            # The record a search listed; after a restart, LRCLIB's copy.
+            with self._lrclib_lock:
+                record = self._lrclib_records.get(lrclib_id)
+            if record is None:
+                record = lrclib.get_record(lrclib_id)
             if record is None:
                 raise RegenError("LRCLIB didn't return that match. Try again.")
             if not record.get("syncedLyrics"):
