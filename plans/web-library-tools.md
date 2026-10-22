@@ -2,10 +2,11 @@
 
 Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 
-> **Status (2026-10-20): Phases 0-3.1 done (3.1 = fixes from the Phase
-> 1-3 code review, 3.1g included), and the review of 3.1b-3.1d is done
-> with its two fix commits (Results log, Phase 3.1); Phase 4 is next.** Ken approved D2's
-> Phase 3.1 bullet on 2026-10-20. Branch
+> **Status (2026-10-22): Phases 0-4 done (3.1 = fixes from the Phase
+> 1-3 code review, 3.1g included; the review of 3.1b-3.1d is done with its
+> two fix commits; Phase 4's code is `7f5853e` and `55cfdbb`, see the
+> Results log). Phase 5 is next, after Ken's checks for Phase 4.** Ken
+> approved D2's Phase 3.1 bullet on 2026-10-20. Branch
 > `web_library_tools`, off `library_tools` at `0bfa02a`; `dev` merged as
 > `c34d889`. There is no GATE and nothing here measures timing. Landing is
 > Ken's call (see Landing).
@@ -2098,6 +2099,135 @@ test groups and the known-item additions left alone):
   babel==2.17.0` (1068 locale files back); then the run above.
 
 ### Phase 4
+
+Executed 2026-10-22 by Sonnet 5.5, starting from `9231bc2` (clean). Code
+commits: `7f5853e` (the veto fix below), `55cfdbb` (the feature).
+
+- **Suite** (`PYTHONIOENCODING=utf-8 uv run --no-sync python -P -m pytest -q`,
+  122.4 s at `55cfdbb`): **4 failed, 1816 passed, 2 skipped** = 1822 (the
+  baseline's 1760 + 56 new). The four failures are the baseline's four (ids
+  unchanged). New tests: `test_library_tools.py` 14 (`TestSongsInList` 4,
+  `TestIsBusy` 2, `TestRegenerate` 8); `test_library_routes.py` 37
+  (`TestSongInfoAccess` 2, `TestSongInfoPage` 15, `TestSongInfoHistory` 4,
+  `TestRegenerateRoute` 9 incl. 4 parametrized bodies, `TestOverviewRoute` 2,
+  `TestSongListsRoute` 5); `test_library_status.py` +2 (veto);
+  `test_files_routes.py` +3 (the info link for an admin and not for a guest, the
+  Edit page link). The existing `test_files_routes.py` fixture gained
+  `song_info.song_info` in its stub endpoints.
+- **Environment:** the worktree venv's `babel/locale-data` was empty again at the
+  start (first run: `UnknownLocaleError: unknown locale 'en'`, 1 failed in 3.8 s
+  with `-x`). Repaired with the command in the task (`uv pip install --python
+  .venv/Scripts/python.exe --reinstall --no-deps --offline babel==2.17.0`; 1068
+  locale files); then the 1760 / 4 / 2 baseline reproduced before any change.
+- **Mutation checks** (each reverted afterwards; failures counted in the new or
+  touched test files). `library_status`: veto ignored 2. `library_tools`: list rows
+  use the plain `Path` spelling 1; backup the whole folder 2; `is_busy` ignores
+  waiting jobs 3; `regenerate` never checks busy 2. Routes: library check accepts
+  any string 1, then 2 after the regenerate outside-path test was given a real
+  bundle (it passed before, because a bundle-less song is refused anyway); no admin
+  guard on regenerate 1; no admin guard on the page 1; list name unchecked 1; bar
+  widths rounded 1; an LRCLIB record without a length labelled "no LRCLIB" 1.
+- **Differences from the plan's text:**
+  - 4a: `LibraryTools(processing_manager, song_manager, download_path)`. The plan names
+    the events, Genius client and download manager as well; nothing in this slice
+    reads them, so they are not stored. Later phases add them with their first use.
+  - 4a: `songs_in_list(name)` returns `(path, status)` rows with the library's own
+    spelling of each path (a dict from `Path` to the library string, built once; a
+    video on disk that the library has not picked up is left out), because the
+    routes' membership test is exact and the library keeps `d:/songs\X.mp4`-style
+    strings. `SONG_LISTS` (name to rule) moved into `library_status` so
+    `overview_counts` and the lists share one rule. `can_regenerate(song)` is the
+    page's "would `regenerate` accept it" (busy or not); a backup that raises
+    `OSError` becomes a `RegenError` with the message.
+  - `7f5853e` (not in the plan, a fix to Phase 2B): `timed_by["aligner"]` is
+    `align_won - evidence_veto.n_vetoed`. A real bundle (`DYptgVvkVLQ`, 22 aligner
+    wins, `n_vetoed` 4, 18 timed lines of 42) otherwise made the bar run to 110%.
+    Read-only over the real library's 22 joint bundles: `aligner - veto + transcription
+    + captions + LRCLIB fills` equals `lines_with_words` on 17; on 5 it is 1 or 2
+    higher (`22QYya-LGDY`, `otxTf5hZ0Yw`, `Orq_75kFi8I`, `hI-y5anGcUA`,
+    `UvyHuse6buY`). Cause of those 1-2 lines not found. The bar follows the plan
+    (each width is its count over the line count, no fixing), so on those songs it
+    runs 1-2 lines past 100% and the container clips the right end.
+  - 4c: segments and legend entries with a count of 0 are left out (the board's
+    legend has no LRCLIB fill entry). A song with no bundle has no Alignment tab
+    (nothing to show). The History rows mark what a version changed from the next
+    older one (the board's "LRCLIB 5:54 added"); the same marker says "changed" when
+    the LRCLIB match differs, and highlights the Genius part when its id differs
+    (new wording: "changed"). A bundle with no Genius identity is listed as "YouTube
+    captions". The route sentence for a Genius song with auto-captions follows the
+    board ("the lyric aligner, a transcription and YouTube's auto-captions.").
+  - 4e: the Song Info links carry `no-spa` (the SPA navigation intercepts every
+    internal link and re-runs the page's scripts); the admin cell in `files.html`
+    gained `white-space: nowrap` so the two icons stay on one line.
+  - Page and list titles are mine, since the plan gives none: "Songs behind the
+    current version", "Songs that look poor", "Songs with no lyrics", "All songs"; an
+    empty list says "No songs in this list."; the busy note's link text is
+    "Processing".
+- **Isolated app run** (Ground rules first: nothing on 5555 or 5556, no python or
+  mpv process other than `TPython.exe` pid 15952, which is not pikaraoke; GPU 1122
+  MiB, 4 %). Config and `APPDATA` as in the Phase 3 row. The library path in the log
+  is `D:/shared/weblib-test`; `Scan: found 8 song(s) on disk`. Before the run the
+  scratch library was hashed (82 files, sha256).
+  - Song Info for each of the 8 scratch songs, tiles as rendered (Lyrics | Timed |
+    LRCLIB): Defying Gravity `Genius, up to date | 57%, 38 guessed | Not used, 97 s
+    longer` (Timed and LRCLIB outlined amber); Backstreet Boys `YouTube captions, up
+    to date | 100%, 0 guessed | -, Genius songs only`; Eason Chan `No lyrics | - | -`;
+    Eminem `Genius, behind (v10) | 99%, 1 guessed | Used, fills 0 lines`; Jay Chou
+    `Genius, behind (v10) | 43%, 24 guessed | Not used, 19 s shorter` (both amber);
+    Josh Gad `Genius, up to date | 94%, 2 guessed | Not used, lines didn't line up`;
+    Queen `YouTube captions, behind (v10) | 100%, 0 guessed | -`; Happy Birthday `No
+    lyrics | - | -`. `/library/overview` `{"all":8,"behind":3,"no_lyrics":2,"poor":2}`
+    (the Phase 2B counts for this folder). Eminem's "Used, fills 0 lines" is
+    `eligible` true with an empty `filled_lids`.
+  - Defying Gravity's History tab lists three versions: 19 Oct 2026 Current v11
+    (`Genius · Kristin Chenoweth; LRCLIB 5:54`, 51 of 89 lines), 21 Sep 2026 Backup
+    v10 under `regen_backup_20261019T175506Z` (`LRCLIB 5:54 added`), 16 Jul 2026
+    Backup v8 under `regen_backup_20260921T170629Z` (`no LRCLIB`).
+  - **Regenerate `xFYQQPAOz7Y`:** `POST /song_info/regenerate` at 10:11:40 returned
+    `{"success":true}`; a second POST while it ran returned HTTP 400 `{"error":"This
+    song has a regen waiting or running.","success":false}`. `/processing/status`
+    row: `kind` `regen`, `label` `Regenerate`, `download_status` `complete`,
+    `processing_phase` `transcribe` at 2 s (`elapsed_s` 7.4), `align` at 63 s,
+    `processing_status` `complete` at 246 s of polling, `lyric_method` `genius+joint`,
+    actions `cancel` while running and `dismiss` after. Log: `Queued for regen
+    (Regenerate)` 10:11:42, `Regen started` 10:11:42, `Processing complete` 10:15:51
+    (4 min 9 s from the POST); no traceback.
+  - After the run: bundle `schema_version` 11, `captured_at` 2026-10-22T14:15:51Z;
+    Eminem's Song Info `Genius, up to date | 98%, 2 guessed | Used, fills 0 lines`
+    (85 of 87 lines timed: aligner 60, transcription 25; before: 86 of 87, aligner
+    59, transcription 27); `behind` count 3 to 2. The backup folder
+    `regen_backup_20261022T141142Z` holds 5 files, all of that song:
+    `alignment_debug/<stem>.json`, `karaoke/<stem>.ass`, `lyrics/<stem>.lrc`,
+    `subtitles/<stem>.srt`, `subtitles/<stem>.srt.generated`. Hash diff of the scratch
+    library (script `hashlib_tree.py`, before 82 files, after 87): added 5 (those),
+    removed 0, changed 3 (its bundle, `.ass` and `.srt`); the other 69 files of the
+    other songs are byte-identical. Its History tab: Current 22 Oct 2026 v11 (85 of
+    87 lines) over Backup 20 Oct 2026 v10 (86 of 87) under the new folder, no change
+    markers.
+  - Layout was looked at in headless Edge at 390 px (a 390 px iframe, since Edge's
+    window will not go below 500 px), tabs Picks, Alignment, History for Defying
+    Gravity and Eminem, Alignment for Backstreet Boys, Picks for Eason Chan, the
+    poor list and Browse; the screenshots are in
+    `...\c192729b-188a-40ca-8bf1-a9cba38de26f\scratchpad\shot_*.png`. In those the
+    icon font did not load (the page was opened from `file://`), so the Browse
+    icons are boxes and the icons were not checked; the first two headless runs hung
+    and were killed by their profile folder (only those processes). Not live-checked:
+    `white-space: nowrap` on the Browse admin cell and the `_lrclib_label` helper
+    (both added after the run; covered by unit tests only).
+  - Stopped with `taskkill /F /T` on the listener's pid (twice, once for a restart
+    that picked up a template change); afterwards nothing listened on 5555 or 5556
+    and no python or mpv process remained (the background shells reported exit 1
+    because of that).
+- **Real-library manifest:** `manifest.py compare` against the Phase 0 manifest:
+  `manifest=2605 now=2616 added=11 removed=0 changed=1`, the same 12 files under
+  `zh_probe/phase0/` as the Phase 3 and 3.1 rows; nothing else differs. Output:
+  `...\c192729b-188a-40ca-8bf1-a9cba38de26f\scratchpad\manifest_compare_phase4.txt`.
+  The real library was only read (status scans for the veto check).
+- **pre-commit:** `--files <changed files>` per commit (and once before staging),
+  all hooks passed, Black made no change. Import smoke: `library_status`,
+  `library_tools`, `routes.song_info`, `routes.library`, `karaoke`. A stash of the
+  feature work let `7f5853e` be tested alone (37 passed in `test_library_status.py`
+  plus `test_files_routes.py`) before it was committed.
 
 ### Phase 5
 
