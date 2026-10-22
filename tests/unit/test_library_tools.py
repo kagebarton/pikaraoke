@@ -622,3 +622,71 @@ class TestLrclibCandidates:
 
         with pytest.raises(GeniusUnavailable):
             tools.lrclib_candidates(str(song), 99, "t", "a")
+
+
+class TestRepairUsesTheListedRecord:
+    """LRCLIB's get-by-id can be down while its search works (Phase 6's live run)."""
+
+    @pytest.fixture
+    def song(self, tmp_path):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        genius_bundle(tmp_path, video.stem, media_duration_s=257.0)
+        return video
+
+    @pytest.fixture
+    def fetched(self, monkeypatch):
+        """The ids LRCLIB's get-by-id was asked for; it returns a record for each."""
+        fetched = []
+
+        def get_record(record_id):
+            fetched.append(record_id)
+            return {**RECORD, "id": record_id, "trackName": "fetched"}
+
+        monkeypatch.setattr(lrclib, "get_record", get_record)
+        return fetched
+
+    def listed(self, tools, song, monkeypatch, *ids):
+        records = [{**RECORD, "id": record_id} for record_id in ids]
+        monkeypatch.setattr(lrclib, "search", lambda track, artist: records)
+        tools.lrclib_candidates(str(song), 7, "t", "a")
+        return records
+
+    def queued_record(self, tools, processing, song, lrclib_id):
+        tools.repair(str(song), "genius", genius_id=7, lrclib_id=lrclib_id)
+        return processing.enqueue_regen.call_args.args[0].song.plan.lrclib_record
+
+    def test_a_repair_after_a_search_queues_the_listed_record(self, tmp_path, song, monkeypatch):
+        monkeypatch.setattr(lrclib, "get_record", MagicMock(side_effect=AssertionError("fetched")))
+        tools, processing = make_tools(tmp_path, [str(song)], genius=FakeGenius({7: GENIUS_SONG}))
+        _, listed = self.listed(tools, song, monkeypatch, 4, 5)
+
+        assert self.queued_record(tools, processing, song, 5) is listed
+
+    def test_without_a_search_a_repair_still_asks_lrclib(self, tmp_path, song, fetched):
+        tools, processing = make_tools(tmp_path, [str(song)], genius=FakeGenius({7: GENIUS_SONG}))
+
+        record = self.queued_record(tools, processing, song, 5)
+
+        assert fetched == [5]
+        assert (record["id"], record["trackName"]) == (5, "fetched")
+
+    def test_a_record_without_an_id_is_not_remembered(self, tmp_path, song, monkeypatch, fetched):
+        tools, processing = make_tools(tmp_path, [str(song)], genius=FakeGenius({7: GENIUS_SONG}))
+        no_id = {k: v for k, v in RECORD.items() if k != "id"}
+        monkeypatch.setattr(lrclib, "search", lambda track, artist: [no_id])
+        tools.lrclib_candidates(str(song), 7, "t", "a")
+
+        self.queued_record(tools, processing, song, 5)
+
+        assert fetched == [5]
+
+    def test_only_the_last_few_listed_are_kept(self, tmp_path, song, monkeypatch, fetched):
+        monkeypatch.setattr("pikaraoke.lib.library_tools.LRCLIB_CACHE_SIZE", 2)
+        tools, processing = make_tools(tmp_path, [str(song)], genius=FakeGenius({7: GENIUS_SONG}))
+        for ids in ((1, 2), (1,), (3,)):  # listed again, 1 counts as newer than 2
+            self.listed(tools, song, monkeypatch, *ids)
+
+        for record_id in (1, 3, 2):
+            self.queued_record(tools, processing, song, record_id)
+
+        assert fetched == [2]
