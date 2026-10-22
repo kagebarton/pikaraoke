@@ -611,11 +611,12 @@ class PipelineTracker:
         manager and fail a job that had just succeeded.
         """
         try:
+            # poor and guessed do arithmetic on the bundle's counts, so they stay inside too
             status = song_status(Path(song_path))
+            return (status.guessed, status.line_count) if status.poor else None
         except (OSError, ValueError, TypeError, AttributeError) as e:
             logging.warning("Could not read the bundle of %s: %s", song_path, e)
             return None
-        return (status.guessed, status.line_count) if status.poor else None
 
     def _delete_song(self, song_path: str) -> None:
         """Delete song file from library. Must be called outside _lock."""

@@ -1491,6 +1491,19 @@ class TestPoorSongNumbers:
         assert row["processing_status"] == "complete"
         assert (row["guessed"], row["line_count"]) == (None, None)
 
+    def test_a_bundle_with_a_count_that_is_not_a_number_does_not_fail_the_finished_job(
+        self, tmp_path
+    ):
+        tracker = _make_tracker()
+        path = self.song_with_bundle(tmp_path, line_count=20, lines_with_words="12")
+        _announce_processing(tracker, path)
+
+        tracker._events.emit("processing_complete", {"song_path": path, "lyric_method": None})
+        [row] = tracker.get_status(admin=True)
+
+        assert row["processing_status"] == "complete"
+        assert (row["guessed"], row["line_count"]) == (None, None)
+
     def test_a_song_with_no_bundle_carries_no_numbers(self):
         tracker = _make_tracker()
         _announce_processing(tracker)
