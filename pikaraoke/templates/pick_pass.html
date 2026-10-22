@@ -1,0 +1,362 @@
+{% extends 'base.html' %}
+
+{% block styles %}
+<style>
+  .pp-muted { color: var(--dark-text-muted); font-size: 13px; }
+  .pp-back { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; font-size: 14px; color: var(--dark-link); }
+  .pp-bar { height: 6px; border-radius: 3px; background: var(--dark-border); margin: 8px 0 12px; overflow: hidden; }
+  .pp-bar > div { height: 6px; background: var(--dark-link); }
+  .pp-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .pp-chip { display: inline-flex; align-items: center; gap: 5px; min-height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--dark-border); background: transparent; color: var(--dark-text-primary); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .pp-chip.is-on { background: #dbdee0; color: #1f2424; border-color: #dbdee0; }
+  .pp-card { background: var(--dark-bg-tertiary); border-radius: 8px; overflow: hidden; }
+  .pp-item + .pp-item { border-top: 1px solid var(--dark-border); }
+  .pp-row { display: flex; align-items: center; gap: 4px; padding-right: 8px; }
+  .pp-line { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 6px 4px 6px 12px; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .pp-icon { flex: none; width: 18px; color: var(--dark-success); }
+  .pp-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .pp-title { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pp-sub { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; word-break: break-word; }
+  .pp-act { flex: none; min-width: 64px; min-height: 44px; font-weight: 700; }
+  .pp-picker { background: var(--dark-bg-secondary); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .pp-picker-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-weight: 700; }
+  .pp-search { display: flex; gap: 8px; }
+  .pp-search .input { min-height: 44px; }
+  .pp-search .button { min-width: 44px; min-height: 44px; }
+  .pp-hits { border: 1px solid var(--dark-border); border-radius: 6px; overflow: hidden; background: var(--dark-bg-tertiary); }
+  .pp-hit { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; min-height: 52px; box-sizing: border-box; border-top: 1px solid var(--dark-border); cursor: pointer; }
+  .pp-hit:first-child { border-top: 0; }
+  .pp-hit.is-selected { background: #2c4a44; }
+  .pp-hit input { width: 20px; height: 20px; accent-color: var(--dark-link); margin: 2px 0 0; flex: none; }
+  .pp-hit-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; word-break: break-word; }
+  .pp-hit-body .pp-muted { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+  .pp-empty { padding: 12px; color: var(--dark-text-muted); font-size: 13px; }
+  .pp-tag { font-size: 11px; font-weight: 700; border: 1px solid var(--dark-border-light); color: var(--dark-text-light); border-radius: 4px; padding: 1px 6px; margin-left: 6px; white-space: nowrap; }
+  .pp-warn { color: var(--dark-warning); }
+  .pp-buttons { display: flex; gap: 8px; }
+  .pp-buttons .button { flex: 1; min-height: 44px; font-weight: 700; }
+  .pp-foot { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+  .pp-foot .button { width: 100%; min-height: 44px; font-weight: 700; }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  $(function () {
+    var URLS = {
+      pick: {{ url_for('library.run_pick') | tojson }},
+      keepAll: {{ url_for('library.run_keep_all') | tojson }},
+      queue: {{ url_for('library.run_queue') | tojson }},
+      geniusSearch: {{ url_for('search.lyrics_search') | tojson }},
+      jobs: {{ (url_for('processing.processing') ~ '#jobs') | tojson }}
+    };
+    var T = {
+      progress: {{ _('%(k)s of %(n)s picked · saved as you go', k='{k}', n='{n}') | tojson }},
+      toPick: {{ _('To pick') | tojson }},
+      picked: {{ _('Picked') | tojson }},
+      poor: {{ _('Looks poor') | tojson }},
+      nothing: {{ _('No songs in this list.') | tojson }},
+      keep: {{ _('Keep') | tojson }},
+      change: {{ _('Change') | tojson }},
+      close: {{ _('Close') | tojson }},
+      pickedGenius: {{ _('Genius: %(title)s · %(artist)s', title='{title}', artist='{artist}') | tojson }},
+      keptPick: {{ _('Kept current pick') | tojson }},
+      pickedTranscribe: {{ _('Transcribe') | tojson }},
+      pickedSkip: {{ _('Skipped: left out of this run') | tojson }},
+      poorNote: {{ _('%(guessed)s of %(n)s lines guessed', guessed='{guessed}', n='{n}') | tojson }},
+      searchLabel: {{ _('Genius search') | tojson }},
+      searching: {{ _('Searching…') | tojson }},
+      noGenius: {{ _('No Genius results.') | tojson }},
+      searchFailed: {{ _('Search failed. Try again.') | tojson }},
+      current: {{ _('current') | tojson }},
+      transcribe: {{ _('Transcribe') | tojson }},
+      skip: {{ _('Skip song') | tojson }},
+      usePick: {{ _('Use pick') | tojson }},
+      keepAll: {{ _('Keep current pick for all %(n)s not yet picked', n='{n}') | tojson }},
+      queueOne: {{ _('Queue %(n)s song', n='{n}') | tojson }},
+      queueMany: {{ _('Queue %(n)s songs', n='{n}') | tojson }},
+      queueLeft: {{ _('%(label)s (%(n)s still to pick)', label='{label}', n='{n}') | tojson }},
+      saveFailed: {{ _('Could not save that pick.') | tojson }},
+      queueFailed: {{ _('Could not queue the run.') | tojson }}
+    };
+
+    var state = {
+      run: {{ run | tojson }},
+      filter: 'topick',  // 'topick' | 'picked' | 'poor'
+      open: null,        // the song whose picker is showing
+      sending: false,
+      seq: 0             // Genius searches: only the latest answer counts
+    };
+    // What the open picker holds: the search text, its results and the selected hit.
+    var picker = { query: '', hits: null, message: null, selected: null };
+
+    function fill(template, vars) {
+      return template.replace(/\{(\w+)\}/g, function (m, name) {
+        return vars[name] != null ? vars[name] : m;
+      });
+    }
+
+    function el(tag, className, text) {
+      var node = $('<' + tag + '>');
+      if (className) node.addClass(className);
+      if (text != null) node.text(text);
+      return node;
+    }
+
+    function errorOf(xhr, fallback) {
+      try { return JSON.parse(xhr.responseText).error || fallback; } catch (err) { return fallback; }
+    }
+
+    function deciding() {
+      return $.grep(state.run.songs, function (song) { return song.needs_pick; });
+    }
+
+    function findSong(path) {
+      return $.grep(state.run.songs, function (song) { return song.song === path; })[0];
+    }
+
+    /* ------------------------------------------------------------ rendering */
+
+    function pickText(pick) {
+      if (pick.kind === 'keep') return T.keptPick;
+      if (pick.kind === 'genius') return fill(T.pickedGenius, { title: pick.title, artist: pick.artist });
+      return pick.kind === 'transcribe' ? T.pickedTranscribe : T.pickedSkip;
+    }
+
+    function visibleSongs() {
+      return $.grep(deciding(), function (song) {
+        if (state.filter === 'picked') return song.pick !== null;
+        if (state.filter === 'poor') return song.poor;
+        return song.pick === null;
+      });
+    }
+
+    function renderHeader() {
+      var run = state.run;
+      var all = deciding();
+      var left = run.to_pick - run.picked;
+      $('#pp-progress').text(fill(T.progress, { k: run.picked, n: run.to_pick }));
+      $('#pp-bar > div').css('width', (run.to_pick ? 100 * run.picked / run.to_pick : 0) + '%');
+      var counts = {
+        topick: left,
+        picked: run.picked,
+        poor: $.grep(all, function (song) { return song.poor; }).length
+      };
+      $('.pp-chip').each(function () {
+        var name = $(this).attr('data-filter');
+        $(this).toggleClass('is-on', name === state.filter).find('.pp-chip-n').text(counts[name]);
+      });
+    }
+
+    function renderFooter() {
+      var run = state.run;
+      var left = run.to_pick - run.picked;
+      var keepable = $.grep(deciding(), function (song) {
+        return song.pick === null && song.genius_id !== null;
+      }).length;
+      $('#pp-keep-all').text(fill(T.keepAll, { n: keepable })).prop('disabled', keepable === 0 || state.sending);
+      var label = fill(run.queueable === 1 ? T.queueOne : T.queueMany, { n: run.queueable });
+      $('#pp-queue').text(left > 0 ? fill(T.queueLeft, { label: label, n: left }) : label)
+        .prop('disabled', left > 0 || run.queueable === 0 || run.checking || state.sending);
+    }
+
+    function songItem(song) {
+      var open = state.open === song.song;
+      var sub = song.pick ? pickText(song.pick) : song.now;
+      var icon = el('span', 'pp-icon', song.pick ? '✓' : '');
+      var line = el('button', 'pp-line').attr('type', 'button').attr('aria-expanded', open).append(
+        icon,
+        el('span', 'pp-main').append(
+          el('span', 'pp-title', song.title).attr('title', song.title),
+          el('span', 'pp-muted pp-sub', sub)
+        )
+      );
+      line.on('click', function () { toggle(song); });
+      var row = el('div', 'pp-row').append(line);
+      if (song.pick) {
+        row.append(el('button', 'button pp-act', T.change).attr('type', 'button').on('click', function () { toggle(song, true); }));
+      } else if (song.genius_id !== null) {
+        row.append(el('button', 'button pp-act', T.keep).attr('type', 'button').on('click', function () {
+          savePick(song, { kind: 'keep' });
+        }));
+      }
+      var item = el('div', 'pp-item').append(row);
+      if (open) item.append(pickerBox(song));
+      return item;
+    }
+
+    function pickerBox(song) {
+      var box = el('div', 'pp-picker');
+      var top = el('div', 'pp-picker-top').append(
+        el('span', null, song.title).css({ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }),
+        el('button', 'button is-small', T.close).attr('type', 'button').on('click', function () { toggle(song); })
+      );
+      var now = song.now;
+      if (song.poor) now += ' · ' + fill(T.poorNote, { guessed: song.guessed, n: song.line_count });
+      var input = $('<input class="input" type="search" autocomplete="off">').val(picker.query)
+        .attr('aria-label', T.searchLabel);
+      input.on('input', function () { picker.query = $(this).val(); });
+      input.on('keydown', function (e) {
+        if (e.which === 13) { e.preventDefault(); searchGenius(song); }
+      });
+      var search = $('<button type="button" class="button is-primary"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg></button>')
+        .attr('aria-label', T.searchLabel);
+      search.on('click', function () { searchGenius(song); });
+      var use = el('button', 'button is-primary', T.usePick).attr('type', 'button').prop('disabled', picker.selected === null);
+      use.on('click', function () {
+        savePick(song, {
+          kind: 'genius', genius_id: picker.selected.id, title: picker.selected.title, artist: picker.selected.artist
+        });
+      });
+      var buttons = el('div', 'pp-buttons').append(
+        el('button', 'button', T.transcribe).attr('type', 'button').on('click', function () { savePick(song, { kind: 'transcribe' }); }),
+        el('button', 'button', T.skip).attr('type', 'button').on('click', function () { savePick(song, { kind: 'skip' }); }),
+        use
+      );
+      return box.append(top, el('span', 'pp-muted', now), el('div', 'pp-search').append(input, search), hitList(song), buttons);
+    }
+
+    function hitList(song) {
+      var list = el('div', 'pp-hits');
+      if (picker.hits === null && picker.message === null) return list.addClass('is-hidden');
+      if (picker.message !== null) list.append(el('div', 'pp-empty', picker.message));
+      $.each(picker.hits || [], function (i, hit) {
+        var selected = picker.selected !== null && picker.selected.id === hit.id;
+        var title = el('span', null, hit.title);
+        if (hit.id === song.genius_id) title.append(el('span', 'pp-tag', T.current));
+        var label = el('label', 'pp-hit' + (selected ? ' is-selected' : '')).append(
+          $('<input type="radio" name="genius">').val(hit.id).prop('checked', selected),
+          el('span', 'pp-hit-body').append(title, el('span', 'pp-muted', hit.artist))
+        );
+        label.find('input').on('change', function () {
+          picker.selected = hit;
+          render();
+        });
+        list.append(label);
+      });
+      return list;
+    }
+
+    function render() {
+      renderHeader();
+      var list = $('#pp-list').empty();
+      var songs = visibleSongs();
+      $.each(songs, function (i, song) { list.append(songItem(song)); });
+      $('#pp-empty').toggleClass('is-hidden', songs.length > 0);
+      list.toggleClass('is-hidden', songs.length === 0);
+      renderFooter();
+    }
+
+    /* -------------------------------------------------------------- actions */
+
+    function toggle(song, search) {
+      if (state.open === song.song && !search) {
+        state.open = null;
+      } else {
+        state.open = song.song;
+        picker = { query: song.query, hits: null, message: null, selected: null };
+      }
+      render();
+      if (state.open === song.song && picker.hits === null) searchGenius(song);
+    }
+
+    function searchGenius(song) {
+      var query = $.trim(picker.query);
+      if (!query) return;
+      var seq = ++state.seq;
+      picker.hits = null;
+      picker.selected = null;
+      picker.message = T.searching;
+      render();
+      $.getJSON(URLS.geniusSearch, { q: query }).done(function (hits) {
+        if (seq !== state.seq || state.open !== song.song) return;
+        picker.hits = hits;
+        picker.message = hits.length ? null : T.noGenius;
+        render();
+      }).fail(function () {
+        if (seq !== state.seq || state.open !== song.song) return;
+        picker.message = T.searchFailed;
+        render();
+      });
+    }
+
+    function savePick(song, pick) {
+      if (state.sending) return;
+      state.sending = true;
+      render();
+      $.ajax({
+        url: URLS.pick,
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ song: song.song, pick: pick })
+      }).done(function (answer) {
+        state.run = answer.run;
+        state.open = null;
+      }).fail(function (xhr) {
+        showNotification(errorOf(xhr, T.saveFailed), 'is-danger');
+      }).always(function () {
+        state.sending = false;
+        render();
+      });
+    }
+
+    $('.pp-chip').on('click', function () {
+      state.filter = $(this).attr('data-filter');
+      state.open = null;
+      render();
+    });
+
+    $('#pp-keep-all').on('click', function () {
+      state.sending = true;
+      render();
+      $.ajax({ url: URLS.keepAll, method: 'POST' }).done(function (answer) {
+        state.run = answer.run;
+        state.open = null;
+      }).fail(function (xhr) {
+        showNotification(errorOf(xhr, T.saveFailed), 'is-danger');
+      }).always(function () {
+        state.sending = false;
+        render();
+      });
+    });
+
+    $('#pp-queue').on('click', function () {
+      state.sending = true;
+      render();
+      $.ajax({ url: URLS.queue, method: 'POST' }).done(function () {
+        window.location.href = URLS.jobs;
+      }).fail(function (xhr) {
+        showNotification(errorOf(xhr, T.queueFailed), 'is-danger');
+        state.sending = false;
+        render();
+      });
+    });
+
+    render();
+  });
+</script>
+{% endblock %}
+
+{% block header %}
+<h1>{% block title %}{% trans run=title %}{{ run }}: picks{% endtrans %}{% endblock %}</h1>
+{% endblock %}
+
+{% block content %}
+<a class="pp-back no-spa" href="{{ url_for('library.run_preview') }}">&lsaquo; {{ title }}</a>
+<span id="pp-progress" class="pp-muted" style="display: block"></span>
+<div id="pp-bar" class="pp-bar"><div></div></div>
+
+<div class="pp-chips" role="group">
+  <button type="button" class="pp-chip" data-filter="topick">{% trans %}To pick{% endtrans %} <span class="pp-chip-n">0</span></button>
+  <button type="button" class="pp-chip" data-filter="picked">{% trans %}Picked{% endtrans %} <span class="pp-chip-n">0</span></button>
+  <button type="button" class="pp-chip" data-filter="poor">{% trans %}Looks poor{% endtrans %} <span class="pp-chip-n">0</span></button>
+</div>
+
+<div id="pp-list" class="pp-card"></div>
+<p id="pp-empty" class="pp-muted has-text-centered is-hidden">{% trans %}No songs in this list.{% endtrans %}</p>
+
+<div class="pp-foot">
+  <button type="button" id="pp-keep-all" class="button" disabled></button>
+  <button type="button" id="pp-queue" class="button is-primary" disabled></button>
+</div>
+{% endblock %}

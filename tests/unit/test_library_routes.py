@@ -1,4 +1,4 @@
-"""Route and render tests for Song Info, regenerate, repair and the library song lists.
+"""Route and render tests for Song Info, regenerate, repair, the library song lists and bulk runs.
 
 A Flask app with the two blueprints and the real templates, over a ``tmp_path``
 library with real bundles and a real ``LibraryTools``; only the processing
@@ -7,6 +7,7 @@ manager is a mock, so a queued job is whatever ``enqueue_regen`` was handed.
 
 import json
 import os
+import threading
 from pathlib import Path
 from unittest.mock import MagicMock
 from urllib.parse import quote
@@ -975,3 +976,346 @@ class TestRepairRoute:
         assert response.status_code == 400
         assert "waiting or running" in response.get_json()["error"]
         env.processing.enqueue_regen.assert_not_called()
+
+
+# --- bulk runs -------------------------------------------------------------
+
+PASS = CaptionCheck(found=True, wpm=40.0, passed=True)
+NO_CAPTION = CaptionCheck(found=False, wpm=None, passed=False)
+
+
+def run_library(env) -> dict[str, str]:
+    """Three songs a run sorts three ways; returns their library paths by name.
+
+    behind    an older genius bundle with its lines: a source to replay
+    unlined   an older bundle with a Genius id and no lines: nothing to replay, can keep
+    no_id     no bundle and no YouTube id: needs a pick
+    """
+    behind = env.add_song(
+        "Behind---bbbbbbbbbbb.mp4",
+        {
+            "schema_version": SCHEMA_VERSION - 1,
+            "lyrics": {"origin": "genius", "genius": GENIUS, "lines": ["one"]},
+        },
+    )
+    unlined = env.add_song(
+        "Unlined---ccccccccccc.mp4",
+        {"schema_version": SCHEMA_VERSION - 1, "lyrics": {"origin": "genius", "genius": GENIUS}},
+    )
+    no_id = env.add_song("No Id Song.mp4")
+    return {"behind": behind, "unlined": unlined, "no_id": no_id}
+
+
+def finish_checks(env) -> None:
+    checker = env.k.library_tools._checker
+    if checker is not None:
+        checker.join(10)
+        assert not checker.is_alive()
+
+
+@pytest.fixture
+def run(env, monkeypatch):
+    """The library of run_library with a reprocess open and its checks done (no captions)."""
+    monkeypatch.setattr("pikaraoke.lib.library_tools.check_caption", lambda job: NO_CAPTION)
+    paths = run_library(env)
+    assert env.client.post("/library/run", json={"mode": "all"}).status_code == 200
+    finish_checks(env)
+    return paths
+
+
+def hold_captions(monkeypatch) -> threading.Event:
+    """Patch the caption check to wait for the returned event, then find no caption."""
+    release = threading.Event()
+
+    def check(job):
+        release.wait(10)
+        return NO_CAPTION
+
+    monkeypatch.setattr("pikaraoke.lib.library_tools.check_caption", check)
+    return release
+
+
+def post_run(env, action, **body):
+    return env.client.post(f"/library/run/{action}", json=body)
+
+
+def page_script(html: str) -> str:
+    """The run page's own script block."""
+    start = html.rindex("<script>", 0, html.index("var URLS"))
+    return html[start : html.index("</script>", start)]
+
+
+class TestRunAccess:
+    @pytest.mark.parametrize(
+        "method, path",
+        [
+            ("post", "/library/run"),
+            ("get", "/library/run/status"),
+            ("post", "/library/run/pick"),
+            ("post", "/library/run/keep_all"),
+            ("post", "/library/run/queue"),
+            ("post", "/library/run/discard"),
+        ],
+    )
+    def test_a_guest_cannot_use_the_json_routes(self, env, run, method, path):
+        env.admin = False
+
+        response = getattr(env.client, method)(path, json={"mode": "all"})
+
+        assert response.status_code == 403
+        assert response.get_json()["success"] is False
+        env.processing.enqueue_regen.assert_not_called()
+        assert env.k.library_tools.run_view() is not None
+
+    @pytest.mark.parametrize("path", ["/library/run", "/library/run/picks"])
+    def test_a_guest_is_sent_back_to_the_browser_from_the_pages(self, env, run, path):
+        env.admin = False
+
+        response = env.client.get(path)
+
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/__stub/files.browse")
+
+
+class TestOpenRunRoute:
+    @pytest.fixture(autouse=True)
+    def captions(self, monkeypatch):
+        monkeypatch.setattr("pikaraoke.lib.library_tools.check_caption", lambda job: NO_CAPTION)
+
+    def test_opens_a_run_that_the_status_then_describes(self, env):
+        paths = run_library(env)
+
+        response = env.client.post("/library/run", json={"mode": "all"})
+        finish_checks(env)
+
+        assert response.get_json() == {"success": True}
+        status = env.client.get("/library/run/status").get_json()
+        assert status["open"] is True and status["mode"] == "all"
+        assert {s["title"] for s in status["songs"]} == {
+            SongManager.filename_from_path(path) for path in paths.values()
+        }
+
+    def test_the_status_puts_each_songs_source_in_words(self, env):
+        run_library(env)
+        env.client.post("/library/run", json={"mode": "all"})
+        finish_checks(env)
+
+        songs = env.client.get("/library/run/status").get_json()["songs"]
+
+        assert {s["now"] for s in songs} == {
+            "Now: Genius, Defying Gravity · Kristin Chenoweth",
+            "Not processed yet",
+        }
+
+    def test_the_status_without_a_run(self, env):
+        assert env.client.get("/library/run/status").get_json() == {"open": False}
+
+    @pytest.mark.parametrize("body", [None, [], {}, {"mode": None}, {"mode": 3}, {"mode": ["all"]}])
+    def test_a_missing_or_malformed_mode_is_rejected(self, env, body):
+        run_library(env)
+
+        response = env.client.post("/library/run", json=body)
+
+        assert response.status_code == 400
+        assert env.k.library_tools.run_view() is None
+
+    def test_an_unknown_mode_is_rejected(self, env):
+        run_library(env)
+
+        response = env.client.post("/library/run", json={"mode": "everything"})
+
+        assert response.status_code == 400
+        assert "Unknown run" in response.get_json()["error"]
+
+    def test_a_second_run_is_refused(self, env):
+        run_library(env)
+        env.client.post("/library/run", json={"mode": "all"})
+        finish_checks(env)
+
+        response = env.client.post("/library/run", json={"mode": "reset"})
+
+        assert response.status_code == 400
+        assert "already open" in response.get_json()["error"]
+
+    def test_a_run_with_no_songs_is_refused(self, env):
+        response = env.client.post("/library/run", json={"mode": "stale"})
+
+        assert response.status_code == 400
+        assert "no songs" in response.get_json()["error"]
+
+
+class TestRunPages:
+    def test_the_preview_embeds_the_run_under_its_title(self, env, run):
+        html = text(env.client.get("/library/run"))
+
+        assert "<h1>Reprocess all songs</h1>" in html
+        assert "Every song is redone on the current code" in html
+        assert '"group": "needs_pick"' in html
+        assert SongManager.filename_from_path(run["no_id"]) in html
+
+    @pytest.mark.parametrize(
+        "mode, title",
+        [("stale", "Update stale songs"), ("reset", "Reset all songs")],
+    )
+    def test_each_mode_has_its_title(self, env, monkeypatch, mode, title):
+        monkeypatch.setattr("pikaraoke.lib.library_tools.check_caption", lambda job: NO_CAPTION)
+        run_library(env)
+        env.client.post("/library/run", json={"mode": mode})
+        finish_checks(env)
+
+        assert f"<h1>{title}</h1>" in text(env.client.get("/library/run"))
+
+    @pytest.mark.parametrize("path", ["/library/run", "/library/run/picks"])
+    def test_without_a_run_both_go_to_the_tools_tab(self, env, path):
+        response = env.client.get(path)
+
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/__stub/processing.processing#tools")
+
+    def test_the_pick_page_is_the_previews_while_captions_are_checked(self, env, monkeypatch):
+        release = hold_captions(monkeypatch)
+        run_library(env)
+        env.client.post("/library/run", json={"mode": "reset"})
+
+        response = env.client.get("/library/run/picks")
+        release.set()
+        finish_checks(env)
+
+        assert response.status_code == 302
+        assert response.headers["Location"] == "/library/run"
+
+    def test_the_pick_page_shows_the_songs_that_need_a_pick(self, env, run):
+        response = env.client.get("/library/run/picks")
+        html = text(response)
+
+        assert response.status_code == 200
+        assert "<h1>Reprocess all songs: picks</h1>" in html
+        assert SongManager.filename_from_path(run["no_id"]) in html
+        assert '"needs_pick": true' in html
+
+    @pytest.mark.parametrize("page", ["library_run", "pick_pass"])
+    def test_text_from_songs_and_genius_goes_in_as_text_never_as_markup(self, env, run, page):
+        route = "/library/run" if page == "library_run" else "/library/run/picks"
+        code = page_script(text(env.client.get(route)))
+
+        assert ".html(" not in code
+        assert ".innerHTML" not in code
+
+    def test_the_preview_polls_only_while_captions_are_being_checked(self, env, run):
+        code = page_script(text(env.client.get("/library/run")))
+
+        assert "if (!state.run.checking) return;" in code
+
+    def test_the_pick_page_drops_a_genius_search_that_a_newer_one_replaced(self, env, run):
+        code = page_script(text(env.client.get("/library/run/picks")))
+
+        assert code.count("seq !== state.seq") == 2  # the answer and the failure
+
+
+class TestRunPickRoutes:
+    def test_a_pick_is_saved_and_the_run_comes_back(self, env, run):
+        response = post_run(env, "pick", song=run["no_id"], pick={"kind": "skip"})
+
+        answer = response.get_json()
+        assert answer["success"] is True
+        picked = {s["song"]: s["pick"] for s in answer["run"]["songs"]}
+        assert picked[run["no_id"]] == {"kind": "skip"}
+        assert (answer["run"]["to_pick"], answer["run"]["picked"]) == (2, 1)
+
+    def test_a_genius_hit_is_saved_with_its_title_and_artist(self, env, run):
+        pick = {"kind": "genius", "genius_id": 9, "title": "Song", "artist": "Artist"}
+
+        response = post_run(env, "pick", song=run["no_id"], pick=pick)
+
+        assert response.status_code == 200
+        songs = {s["song"]: s for s in response.get_json()["run"]["songs"]}
+        assert songs[run["no_id"]]["pick"] == pick
+        assert songs[run["no_id"]]["group"] == "genius"
+
+    @pytest.mark.parametrize("body", [{}, {"song": None}, {"song": ["a"]}, {"song": 3}])
+    def test_a_missing_or_malformed_song_is_rejected(self, env, run, body):
+        assert env.client.post("/library/run/pick", json=body).status_code == 400
+
+    @pytest.mark.parametrize("pick", [None, "skip", {"kind": "nap"}, {"kind": "genius"}])
+    def test_a_malformed_pick_is_rejected(self, env, run, pick):
+        response = post_run(env, "pick", song=run["no_id"], pick=pick)
+
+        assert response.status_code == 400
+        songs = {s["song"]: s for s in env.client.get("/library/run/status").get_json()["songs"]}
+        assert songs[run["no_id"]]["pick"] is None
+
+    def test_a_song_outside_the_run_is_rejected(self, env, run):
+        response = post_run(env, "pick", song="/elsewhere/a.mp4", pick={"kind": "skip"})
+
+        assert response.status_code == 400
+        assert "isn't in this run" in response.get_json()["error"]
+
+    def test_a_song_that_needs_no_pick_is_rejected(self, env, run):
+        response = post_run(env, "pick", song=run["behind"], pick={"kind": "skip"})
+
+        assert response.status_code == 400
+        assert "doesn't need a pick" in response.get_json()["error"]
+
+    def test_keep_all_keeps_what_can_be_kept_and_says_how_many(self, env, run):
+        response = post_run(env, "keep_all")
+
+        answer = response.get_json()
+        assert (answer["success"], answer["kept"]) == (True, 1)
+        songs = {s["song"]: s for s in answer["run"]["songs"]}
+        assert songs[run["unlined"]]["pick"]["kind"] == "keep"
+        assert songs[run["no_id"]]["pick"] is None
+
+    def test_keep_all_without_a_run_is_refused(self, env):
+        response = post_run(env, "keep_all")
+
+        assert response.status_code == 400
+        assert "No run is open" in response.get_json()["error"]
+
+    def test_discard_closes_the_run(self, env, run):
+        assert post_run(env, "discard").get_json() == {"success": True}
+
+        assert env.client.get("/library/run/status").get_json() == {"open": False}
+
+
+class TestRunQueueRoute:
+    @staticmethod
+    def pick_everything(env, run):
+        post_run(env, "pick", song=run["unlined"], pick={"kind": "keep"})
+        post_run(env, "pick", song=run["no_id"], pick={"kind": "transcribe"})
+
+    def flashes(self, env) -> list:
+        with env.client.session_transaction() as session:
+            return session.get("_flashes", [])
+
+    def test_queues_every_song_and_leaves_a_note_for_the_processing_page(self, env, run):
+        self.pick_everything(env, run)
+
+        response = post_run(env, "queue")
+
+        answer = response.get_json()
+        assert (answer["success"], answer["queued"], answer["busy"]) == (True, 3, 0)
+        assert env.processing.enqueue_regen.call_count == 3
+        [(category, message)] = self.flashes(env)
+        assert category == "is-success"
+        assert message == f"Queued 3 songs. Backup: {answer['backup']}."
+        assert env.client.get("/library/run/status").get_json() == {"open": False}
+
+    def test_the_note_says_how_many_were_left_out_as_busy(self, env, run):
+        self.pick_everything(env, run)
+        env.processing.pending_jobs = [run["behind"]]
+
+        post_run(env, "queue")
+
+        [(_category, message)] = self.flashes(env)
+        assert message.startswith(
+            "Queued 2 songs. 1 song was left out: it is already waiting or running."
+        )
+
+    def test_it_refuses_while_a_song_still_needs_a_pick(self, env, run):
+        response = post_run(env, "queue")
+
+        assert response.status_code == 400
+        assert "Pick lyrics for every song" in response.get_json()["error"]
+        env.processing.enqueue_regen.assert_not_called()
+        assert not self.flashes(env)
+        assert env.client.get("/library/run/status").get_json()["open"] is True

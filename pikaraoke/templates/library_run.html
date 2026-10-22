@@ -1,0 +1,264 @@
+{% extends 'base.html' %}
+
+{% block styles %}
+<style>
+  .lr-muted { color: var(--dark-text-muted); font-size: 13px; }
+  .lr-back { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; font-size: 14px; color: var(--dark-link); }
+  .lr-box { background: var(--dark-bg-secondary); border-radius: 8px; padding: 12px; margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .lr-box-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-weight: 700; }
+  .lr-bar { height: 6px; border-radius: 3px; background: var(--dark-border); overflow: hidden; }
+  .lr-bar > div { height: 6px; background: var(--dark-success); }
+  .lr-sec { margin: 22px 0 8px; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dark-text-muted); }
+  .lr-card { background: var(--dark-bg-tertiary); border-radius: 8px; overflow: hidden; }
+  .lr-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-top: 1px solid var(--dark-border); }
+  .lr-row:first-child { border-top: 0; }
+  .lr-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .lr-title { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lr-sub { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; word-break: break-word; }
+  .lr-warn { color: var(--dark-warning); font-size: 13px; }
+  .lr-more { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 44px; background: none; border: 0; border-top: 1px solid var(--dark-border); color: var(--dark-link); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+  .lr-actions { display: flex; flex-direction: column; gap: 10px; }
+  .lr-actions .button { width: 100%; min-height: 44px; font-weight: 700; }
+  .lr-confirm { display: flex; flex-direction: column; gap: 8px; }
+  .lr-confirm .lr-buttons { display: flex; gap: 8px; }
+  .lr-confirm .button { flex: 1; min-height: 44px; font-weight: 700; }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  $(function () {
+    var URLS = {
+      status: {{ url_for('library.run_status') | tojson }},
+      queue: {{ url_for('library.run_queue') | tojson }},
+      discard: {{ url_for('library.run_discard') | tojson }},
+      picks: {{ url_for('library.run_picks') | tojson }},
+      tools: {{ (url_for('processing.processing') ~ '#tools') | tojson }},
+      jobs: {{ (url_for('processing.processing') ~ '#jobs') | tojson }}
+    };
+    var T = {
+      groups: {
+        checking: {{ _('Checking captions') | tojson }},
+        needs_pick: {{ _('Needs a pick') | tojson }},
+        genius: {{ _('Picked: Genius') | tojson }},
+        caption: {{ _('Uses its YouTube caption') | tojson }},
+        reuse: {{ _('Keeps its lyric pick') | tojson }},
+        transcribe: {{ _('No lyrics (transcribe)') | tojson }},
+        skip: {{ _('Skipped') | tojson }}
+      },
+      waitingCheck: {{ _('Waiting for the caption check.') | tojson }},
+      captionOk: {{ _('Caption OK') | tojson }},
+      poor: {{ _('Looks poor: %(guessed)s of %(n)s lines guessed', guessed='{guessed}', n='{n}') | tojson }},
+      noYoutubeId: {{ _('No YouTube ID: Genius or transcribe only') | tojson }},
+      pickedGenius: {{ _('Genius: %(title)s · %(artist)s', title='{title}', artist='{artist}') | tojson }},
+      keptPick: {{ _('Keeps its current Genius pick') | tojson }},
+      pickedTranscribe: {{ _('Transcribe, your pick') | tojson }},
+      willTranscribe: {{ _('Transcribes again.') | tojson }},
+      skipped: {{ _('Left out of this run.') | tojson }},
+      showMore: {{ _('Show %(n)s more', n='{n}') | tojson }},
+      showFewer: {{ _('Show fewer') | tojson }},
+      checked: {{ _('YouTube captions checked') | tojson }},
+      checkedCount: {{ _('%(k)s of %(n)s', k='{k}', n='{n}') | tojson }},
+      checkingNow: {{ _('Checking captions…') | tojson }},
+      startPicks: {{ _('Start picks (%(k)s of %(n)s done)', k='{k}', n='{n}') | tojson }},
+      queueOne: {{ _('Queue %(n)s song', n='{n}') | tojson }},
+      queueMany: {{ _('Queue %(n)s songs', n='{n}') | tojson }},
+      cancel: {{ _('Cancel') | tojson }},
+      confirmDiscard: {{ _('Discard this run and its picks?') | tojson }},
+      discard: {{ _('Discard run') | tojson }},
+      keep: {{ _('Keep it') | tojson }},
+      queueFailed: {{ _('Could not queue the run.') | tojson }},
+      discardFailed: {{ _('Could not discard the run.') | tojson }}
+    };
+
+    var GROUPS = ['checking', 'needs_pick', 'genius', 'caption', 'reuse', 'transcribe', 'skip'];
+    var COLLAPSE_AFTER = 5;
+    var POLL_MS = 2000;
+
+    var state = {
+      run: {{ run | tojson }},
+      expanded: {},      // group -> true while "Show more" is open
+      discarding: false, // the in-place confirm is showing
+      sending: false
+    };
+
+    function fill(template, vars) {
+      return template.replace(/\{(\w+)\}/g, function (m, name) {
+        return vars[name] != null ? vars[name] : m;
+      });
+    }
+
+    function el(tag, className, text) {
+      var node = $('<' + tag + '>');
+      if (className) node.addClass(className);
+      if (text != null) node.text(text);
+      return node;
+    }
+
+    function errorOf(xhr, fallback) {
+      try { return JSON.parse(xhr.responseText).error || fallback; } catch (err) { return fallback; }
+    }
+
+    /* ------------------------------------------------------------- rendering */
+
+    function pickText(song) {
+      var pick = song.pick;
+      if (pick.kind === 'keep') return T.keptPick;
+      if (pick.kind === 'genius') return fill(T.pickedGenius, { title: pick.title, artist: pick.artist });
+      return pick.kind === 'transcribe' ? T.pickedTranscribe : T.skipped;
+    }
+
+    function subText(song, group) {
+      if (group === 'checking') return T.waitingCheck;
+      if (group === 'genius' || group === 'skip' || (group === 'transcribe' && song.pick)) {
+        return pickText(song);
+      }
+      if (group === 'transcribe') return song.now + ' ' + T.willTranscribe;
+      return song.now;
+    }
+
+    function songRow(song, group) {
+      var main = el('div', 'lr-main').append(
+        el('span', 'lr-title', song.title).attr('title', song.title),
+        el('span', 'lr-muted lr-sub', subText(song, group))
+      );
+      if (song.poor) {
+        main.append(el('span', 'lr-warn', fill(T.poor, { guessed: song.guessed, n: song.line_count })));
+      }
+      if (group === 'needs_pick' && !song.has_youtube_id) {
+        main.append(el('span', 'lr-muted', T.noYoutubeId));
+      }
+      var row = el('div', 'lr-row').append(main);
+      if (group === 'caption') row.append(el('span', 'tag is-success is-light is-rounded', T.captionOk));
+      return row;
+    }
+
+    function groupSection(group, songs) {
+      var open = !!state.expanded[group];
+      var shown = open ? songs : songs.slice(0, COLLAPSE_AFTER);
+      var card = el('div', 'lr-card');
+      $.each(shown, function (i, song) { card.append(songRow(song, group)); });
+      if (songs.length > COLLAPSE_AFTER) {
+        var more = el('button', 'lr-more', open ? T.showFewer : fill(T.showMore, { n: songs.length - COLLAPSE_AFTER }))
+          .attr('type', 'button');
+        more.on('click', function () { state.expanded[group] = !open; render(); });
+        card.append(more);
+      }
+      return $('<div>').append(el('div', 'lr-sec', T.groups[group] + ' (' + songs.length + ')'), card);
+    }
+
+    function renderCheckBox(run) {
+      var box = $('#lr-check').toggleClass('is-hidden', run.to_check === 0);
+      var counts = fill(T.checkedCount, { k: run.checked, n: run.to_check });
+      box.find('.lr-box-count').text(run.checking ? T.checkingNow + ' ' + counts : counts)
+        .toggleClass('is-info', run.checking).toggleClass('is-success', !run.checking);
+      box.find('.lr-bar > div').css('width', (run.to_check ? 100 * run.checked / run.to_check : 0) + '%');
+    }
+
+    function renderActions(run) {
+      var go = $('#lr-go');
+      if (run.checking) {
+        go.text(T.checkingNow).prop('disabled', true);
+      } else if (run.to_pick > 0) {
+        go.text(fill(T.startPicks, { k: run.picked, n: run.to_pick })).prop('disabled', false);
+      } else {
+        go.text(fill(run.queueable === 1 ? T.queueOne : T.queueMany, { n: run.queueable }))
+          .prop('disabled', run.queueable === 0 || state.sending);
+      }
+      $('#lr-after-picks').toggleClass('is-hidden', !(run.to_pick > 0));
+      $('#lr-cancel').toggleClass('is-hidden', state.discarding);
+      $('#lr-confirm').toggleClass('is-hidden', !state.discarding);
+    }
+
+    function render() {
+      var run = state.run;
+      renderCheckBox(run);
+      var groups = $('#lr-groups').empty();
+      $.each(GROUPS, function (i, group) {
+        var songs = $.grep(run.songs, function (song) { return song.group === group; });
+        if (songs.length) groups.append(groupSection(group, songs));
+      });
+      renderActions(run);
+    }
+
+    /* --------------------------------------------------------------- polling */
+
+    function poll() {
+      if (!state.run.checking) return;
+      setTimeout(function () {
+        if (!document.getElementById('lr-root')) return; // left the page
+        $.getJSON(URLS.status).done(function (run) {
+          if (!run.open) { window.location.href = URLS.tools; return; }
+          state.run = run;
+          render();
+          poll();
+        }).fail(poll);
+      }, POLL_MS);
+    }
+
+    /* --------------------------------------------------------------- actions */
+
+    $('#lr-go').on('click', function () {
+      if (state.run.to_pick > 0) {
+        window.location.href = URLS.picks;
+        return;
+      }
+      state.sending = true;
+      render();
+      $.ajax({ url: URLS.queue, method: 'POST' }).done(function () {
+        window.location.href = URLS.jobs;
+      }).fail(function (xhr) {
+        showNotification(errorOf(xhr, T.queueFailed), 'is-danger');
+        state.sending = false;
+        render();
+      });
+    });
+
+    $('#lr-cancel').on('click', function () { state.discarding = true; render(); });
+    $('#lr-keep').on('click', function () { state.discarding = false; render(); });
+    $('#lr-discard').on('click', function () {
+      $.ajax({ url: URLS.discard, method: 'POST' }).done(function () {
+        window.location.href = URLS.tools;
+      }).fail(function (xhr) {
+        showNotification(errorOf(xhr, T.discardFailed), 'is-danger');
+      });
+    });
+
+    render();
+    poll();
+  });
+</script>
+{% endblock %}
+
+{% block header %}
+<h1>{% block title %}{{ title }}{% endblock %}</h1>
+{% endblock %}
+
+{% block content %}
+<div id="lr-root">
+  <a class="lr-back no-spa" href="{{ url_for('processing.processing') }}#tools">&lsaquo; {% trans %}Processing{% endtrans %}</a>
+  <p class="lr-muted" style="margin: 0">{{ explanation }}</p>
+
+  <div id="lr-check" class="lr-box is-hidden">
+    <div class="lr-box-top"><span>{% trans %}YouTube captions checked{% endtrans %}</span><span class="tag is-rounded lr-box-count"></span></div>
+    <div class="lr-bar"><div></div></div>
+    <span class="lr-muted">{% trans %}Each caption is fetched and tested for being real lyrics.{% endtrans %}</span>
+  </div>
+
+  <div id="lr-groups"></div>
+
+  <div class="lr-box lr-actions" style="margin-top: 22px">
+    <span class="lr-muted">{% trans %}Before anything runs, each song's lyric files are copied to a backup folder in the library. Your picks are saved as you go, so you can leave and come back.{% endtrans %}</span>
+    <button type="button" id="lr-go" class="button is-primary" disabled></button>
+    <span id="lr-after-picks" class="lr-muted has-text-centered is-hidden">{% trans %}Songs are queued only after the last pick.{% endtrans %}</span>
+    <button type="button" id="lr-cancel" class="button">{% trans %}Cancel{% endtrans %}</button>
+    <div id="lr-confirm" class="lr-confirm is-hidden">
+      <span>{% trans %}Discard this run and its picks?{% endtrans %}</span>
+      <div class="lr-buttons">
+        <button type="button" id="lr-discard" class="button is-danger">{% trans %}Discard run{% endtrans %}</button>
+        <button type="button" id="lr-keep" class="button">{% trans %}Keep it{% endtrans %}</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
