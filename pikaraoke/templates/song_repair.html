@@ -48,7 +48,6 @@
     var CURRENT_SOURCE = {{ current_source | tojson }};
     var CURRENT_GENIUS_ID = {{ current_genius_id | tojson }};
     var HAS_YOUTUBE_ID = {{ has_youtube_id | tojson }};
-    var NOTED_S = {{ length_gap_noted_s | tojson }};
     var URLS = {
       captionCheck: {{ url_for('song_info.caption_check') | tojson }},
       geniusSearch: {{ url_for('search.lyrics_search') | tojson }},
@@ -74,10 +73,6 @@
       hidePreview: {{ _('Hide preview') | tojson }},
       loading: {{ _('Loading…') | tojson }},
       geniusPick: {{ _('Genius pick: %(title)s · %(artist)s.', title='{title}', artist='{artist}') | tojson }},
-      videoIs: {{ _('video is %(length)s', length='{length}') | tojson }},
-      withinFew: {{ _('within a few s') | tojson }},
-      longer: {{ _('%(n)s s longer', n='{n}') | tojson }},
-      shorter: {{ _('%(n)s s shorter', n='{n}') | tojson }},
       matches: {{ _('matches %(n)s of %(m)s lines', n='{n}', m='{m}') | tojson }},
       noLrclib: {{ _('No synced matches found. If LRCLIB is busy, try again in a moment.') | tojson }},
       none: {{ _('None') | tojson }},
@@ -92,7 +87,7 @@
       genius: null,      // the picked Genius result {id, title, artist}
       lrclib: null,      // 'none' | the picked candidate's id
       candidates: [],    // LRCLIB's matches for the picked Genius song
-      videoSeconds: null,
+      videoLength: null, // "video is m:ss", from the LRCLIB search
       geniusSeq: 0,
       lrclibSeq: 0,
       sending: false
@@ -102,11 +97,6 @@
       return template.replace(/\{(\w+)\}/g, function (m, name) {
         return vars[name] != null ? vars[name] : m;
       });
-    }
-
-    function mmss(seconds) {
-      var whole = Math.round(seconds);
-      return Math.floor(whole / 60) + ':' + ('0' + (whole % 60)).slice(-2);
     }
 
     function el(tag, className, text) {
@@ -208,7 +198,7 @@
         state.lrclibSeq++;
         state.candidates = [];
         state.lrclib = null;
-        state.videoSeconds = null;
+        state.videoLength = null;
         $('#genius-results .rp-opt').removeClass('is-selected');
         label.addClass('is-selected');
         closePreview('genius');
@@ -269,7 +259,7 @@
       var seq = ++state.lrclibSeq;
       state.lrclib = null;
       state.candidates = [];
-      state.videoSeconds = null;
+      state.videoLength = null;
       closePreview('lrclib');
       renderLrclib(T.searching);
       $.getJSON(URLS.lrclibSearch, {
@@ -277,7 +267,7 @@
       }).done(function (found) {
         if (seq !== state.lrclibSeq) return;
         state.candidates = found.candidates;
-        state.videoSeconds = found.video_duration_s;
+        state.videoLength = found.video_length;
         var best = $.grep(found.candidates, function (c) { return c.best; })[0];
         state.lrclib = best ? best.id : null;
         renderLrclib(found.candidates.length ? null : T.noLrclib);
@@ -288,16 +278,8 @@
     }
 
     function fitLine(candidate) {
-      var diff = candidate.duration_diff_s;
-      var parts = [];
-      if (candidate.duration != null) parts.push(mmss(candidate.duration));
-      var near = diff != null && Math.abs(diff) < NOTED_S;
-      if (diff != null) {
-        if (near) parts.push(T.withinFew);
-        else parts.push(fill(diff > 0 ? T.longer : T.shorter, { n: Math.abs(diff) }));
-      }
-      var tone = diff == null ? '' : (near ? 'rp-good' : 'rp-bad');
-      return el('span', tone, parts.join(' · '));
+      var tone = candidate.fit_near == null ? '' : (candidate.fit_near ? 'rp-good' : 'rp-bad');
+      return el('span', tone, candidate.fit);
     }
 
     function lrclibOption(candidate) {
@@ -341,8 +323,7 @@
       if (message) list.append(el('div', 'rp-empty', message));
       $.each(state.candidates, function (i, candidate) { list.append(lrclibOption(candidate)); });
       list.append(noneOption());
-      $('#video-length').text(
-        state.videoSeconds != null ? fill(T.videoIs, { length: mmss(state.videoSeconds) }) : '');
+      $('#video-length').text(state.videoLength || '');
       showTimingPreview();
       refreshStep2();
     }
@@ -419,7 +400,7 @@
 {% endblock %}
 
 {% block content %}
-<section id="step-1" class="rp-step">
+<section id="step-1">
   <a class="rp-back no-spa" href="{{ url_for('song_info.song_info', song=song) }}">&lsaquo; {% trans %}Song info{% endtrans %}</a>
   <span class="rp-muted" style="display: block">{% trans %}Step 1 of 2{% endtrans %}</span>
   <div class="rp-name">{{ name }}</div>
@@ -461,7 +442,7 @@
   </div>
 </section>
 
-<section id="step-2" class="rp-step is-hidden">
+<section id="step-2" class="is-hidden">
   <button type="button" class="rp-back js-back">&lsaquo; {% trans %}Step 1{% endtrans %}</button>
   <span class="rp-muted" style="display: block">{% trans %}Step 2 of 2{% endtrans %}</span>
   <h2 class="rp-title">{% trans %}LRCLIB match{% endtrans %}</h2>

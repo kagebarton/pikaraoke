@@ -13,7 +13,7 @@ from flask_smorest import Blueprint
 from pikaraoke.lib.current_app import get_karaoke_instance, get_site_name, is_admin
 from pikaraoke.lib.genius import GeniusUnavailable
 from pikaraoke.lib.library_regen import RegenError
-from pikaraoke.lib.library_status import HistoryEntry, SongStatus
+from pikaraoke.lib.library_status import HistoryEntry, SongStatus, length_gap_s
 
 logger = logging.getLogger(__name__)
 
@@ -103,17 +103,29 @@ def _mmss(seconds: float) -> str:
 
 
 def _length_gap_s(status: SongStatus) -> int | None:
-    """How many seconds longer the LRCLIB match is than the video (negative: shorter)."""
-    match_s = (status.lrclib or {}).get("duration")
-    if match_s is None or status.media_duration_s is None:
-        return None
-    return round(match_s - status.media_duration_s)
+    """How many seconds longer the bundle's LRCLIB match is than the video (negative: shorter)."""
+    return length_gap_s((status.lrclib or {}).get("duration"), status.media_duration_s)
 
 
 def _gap_text(gap_s: int) -> str:
     if gap_s >= 0:
         return _("%(n)d s longer") % {"n": gap_s}
     return _("%(n)d s shorter") % {"n": -gap_s}
+
+
+def _candidate_fit(candidate: dict) -> tuple[str, bool | None]:
+    """An LRCLIB candidate's length line on the repair page, and whether it is near the video's.
+
+    Near is None when the gap is unknown.
+    """
+    parts = []
+    if isinstance(candidate.get("duration"), (int, float)):
+        parts.append(_mmss(candidate["duration"]))
+    gap = candidate["duration_diff_s"]
+    near = None if gap is None else abs(gap) < _LENGTH_GAP_NOTED_S
+    if near is not None:
+        parts.append(_("within a few s") if near else _gap_text(gap))
+    return " · ".join(parts), near
 
 
 def _rejected_texts(reason: str | None) -> tuple[str, str]:
@@ -421,7 +433,6 @@ def repair_page():
         has_youtube_id=status.youtube_id is not None,
         current_source=_current_source(status),
         current_genius_id=(status.genius or {}).get("id"),
-        length_gap_noted_s=_LENGTH_GAP_NOTED_S,
     )
 
 
@@ -476,6 +487,12 @@ def lrclib_search():
     except GeniusUnavailable as e:
         logger.warning("LRCLIB search for %s: Genius lyrics unavailable: %s", song, e)
         return _error(_("Genius didn't return that song's lyrics. Try again."), 502)
+    for candidate in found["candidates"]:
+        candidate["fit"], candidate["fit_near"] = _candidate_fit(candidate)
+    video_s = found["video_duration_s"]
+    found["video_length"] = (
+        _("video is %(length)s") % {"length": _mmss(video_s)} if video_s is not None else None
+    )
     return jsonify(found)
 
 
