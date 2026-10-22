@@ -269,7 +269,7 @@ function isRunning(row) {
 function statusOf(row) {
   if (row.db) return row.state === 'failed' ? ['failed', T.failed] : ['unfinished', T.unfinished];
   if (row.processing_status === 'cancelling') return ['cancelling', T.cancelling];
-  if (row.download_status === 'error' || row.processing_status === 'error') return ['failed', T.failed];
+  if (row.processing_status === 'error') return ['failed', T.failed];
   if (row.processing_status === 'complete') return ['done', T.done];
   if (row.download_status === 'active') return ['running', T.downloading];
   if (row.processing_status === 'active') return ['running', T.processing];
@@ -386,8 +386,7 @@ function actionsHtml(row) {
   }
   if (has('enqueue')) html += button('enqueue', key, T.addToQueue);
   if (has('cancel')) html += button('cancel', key, T.cancel);
-  // A download that failed before it produced a file has no song to delete.
-  if ((has('remove') && row.song_path) || has('delete')) {
+  if (has('remove') || has('delete')) {
     html += button('delete', key, T.deleteSong, 'is-danger is-outlined');
   }
   if (has('dismiss')) html += button('dismiss', key, T.dismiss);
