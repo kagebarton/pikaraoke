@@ -1604,7 +1604,9 @@ def library_env():
     karaoke.processing_manager = MagicMock()
     karaoke.processing_manager.get_active_job.return_value = None
     karaoke.processing_manager.pending_jobs = []
-    karaoke.library_tools = LibraryTools(karaoke.processing_manager, song_manager, "/songs")
+    karaoke.library_tools = LibraryTools(
+        karaoke.processing_manager, song_manager, "/songs", MagicMock()
+    )
     return karaoke, paths
 
 

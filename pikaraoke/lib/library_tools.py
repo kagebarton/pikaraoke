@@ -1,24 +1,32 @@
 """The app service behind the web library tools.
 
 Song Info and the song lists read bundles through :mod:`library_status`;
-regenerate queues a job in the processing manager. Song paths here are the
-library's own strings (``song_manager.songs``), which is what the processing
-queue, the playing check and the database key on.
+regenerate and repair queue a job in the processing manager. Song paths here
+are the library's own strings (``song_manager.songs``), which is what the
+processing queue, the playing check and the database key on.
 """
 
 from __future__ import annotations
 
 import logging
+import threading
 from pathlib import Path
 
+from pikaraoke.lib import lrclib
+from pikaraoke.lib.genius import GeniusClient, GeniusSong, GeniusUnavailable
+from pikaraoke.lib.genius_lyrics import parse_lyric_lines
 from pikaraoke.lib.library_regen import (
     VIDEO_EXTS,
+    CaptionCheck,
     Plan,
     RegenError,
     RegenJob,
     SongJob,
     backup_text_folders,
+    check_caption,
+    media_duration,
     read_bundle,
+    resolve_plan,
     reuse_plan,
 )
 from pikaraoke.lib.library_status import (
@@ -37,6 +45,10 @@ logger = logging.getLogger(__name__)
 
 BUSY_MESSAGE = "This song has a regen waiting or running."
 
+# Fetched Genius songs kept, so a repair's preview, its LRCLIB step and the
+# final queue scrape the page once.
+GENIUS_CACHE_SIZE = 20
+
 
 class LibraryTools:
     def __init__(
@@ -44,10 +56,14 @@ class LibraryTools:
         processing_manager: ProcessingManager,
         song_manager: SongManager,
         download_path: str,
+        genius_client: GeniusClient,
     ) -> None:
         self._processing = processing_manager
         self._song_manager = song_manager
         self._folder = Path(download_path)
+        self._genius = genius_client
+        self._genius_songs: dict[int, GeniusSong] = {}
+        self._genius_lock = threading.Lock()
 
     @staticmethod
     def is_video(song_path: str) -> bool:
@@ -133,28 +149,174 @@ class LibraryTools:
         job = self._regen_job(song_path)
         if job is None:
             raise RegenError("Pick lyrics with Repair lyrics first.")
+        self._queue(job, reset=False, label="Regenerate")
+
+    def genius_song(self, genius_id: int) -> GeniusSong:
+        """A Genius song's lyrics and canonical title and artist, from the last few fetched.
+
+        Raises :class:`~pikaraoke.lib.genius.GeniusUnavailable` when Genius
+        can't return it.
+        """
+        with self._genius_lock:
+            song = self._genius_songs.get(genius_id)
+        if song is not None:
+            return song
+        song = self._genius.fetch_song(genius_id)
+        with self._genius_lock:
+            self._genius_songs[genius_id] = song
+            while len(self._genius_songs) > GENIUS_CACHE_SIZE:
+                del self._genius_songs[next(iter(self._genius_songs))]
+        return song
+
+    def caption_check(self, song_path: str) -> CaptionCheck:
+        """Whether the video's YouTube caption could serve as the lyrics.
+
+        One yt-dlp call; nothing in the library is written.
+        """
+        if not self.is_video(song_path):
+            raise RegenError("Lyrics tools work on video songs only.")
+        job = self._song_job(song_path)
+        self._caption_plan(job)
+        return check_caption(job)
+
+    def lrclib_candidates(self, song_path: str, genius_id: int, title: str, artist: str) -> dict:
+        """LRCLIB's synced matches for the admin's search terms, scored against a Genius song.
+
+        Each candidate says how many of the Genius lyrics' lines it maps to, how
+        far its length is from the video's, whether the selection rule would
+        pick it (``best``) and whether it is the match on disk (``current``).
+        Raises :class:`~pikaraoke.lib.genius.GeniusUnavailable` when the Genius
+        lyrics can't be fetched.
+        """
+        sheet = [item["text"] for item in parse_lyric_lines(self.genius_song(genius_id).text)]
+        video_s = media_duration(self._song_job(song_path))
+        records = [r for r in lrclib.search(title, artist) if r.get("syncedLyrics")]
+        best = lrclib.select_candidate(records, sheet, video_s)
+        current_id = self._lrc_record_id(Path(song_path))
+        candidates = []
+        for record in records:
+            cue_texts, _ = lrclib.parse_lrc_lines(record["syncedLyrics"])
+            candidates.append(
+                {
+                    **lrclib.record_meta(record),
+                    "duration_diff_s": self._length_diff_s(record.get("duration"), video_s),
+                    "mapped": len(lrclib.map_lines_to_cues(sheet, cue_texts)),
+                    "sheet_lines": len(sheet),
+                    "best": record is best,
+                    "current": current_id is not None and record.get("id") == current_id,
+                    "syncedLyrics": record["syncedLyrics"],
+                }
+            )
+        return {"video_duration_s": video_s, "candidates": candidates}
+
+    def repair(
+        self,
+        song_path: str,
+        source: str,
+        genius_id: int | None = None,
+        lrclib_id: int | None = None,
+        lrclib_skip: bool = False,
+    ) -> None:
+        """Queue a regen that replaces the song's lyric pick.
+
+        ``source`` is ``caption`` (the video's YouTube caption), ``genius`` (the
+        Genius song ``genius_id``) or ``transcribe``. For Genius the LRCLIB
+        match is the record ``lrclib_id``, or none at all with ``lrclib_skip``
+        (which wins over an id); with neither, the automatic rule applies. The
+        song's files are backed up first, and the run wipes its old outputs.
+        Raises :class:`RegenError`, with a message for the admin, when the song
+        can't be queued; nothing has changed on disk by then.
+        """
+        if not self.is_video(song_path):
+            raise RegenError("Lyrics tools work on video songs only.")
+        if self.is_busy(song_path):
+            raise RegenError(BUSY_MESSAGE)
+        job = self._song_job(song_path)
+        if source == "caption":
+            job.plan = self._caption_plan(job)
+        elif source == "genius":
+            job.plan = self._genius_plan(genius_id, lrclib_id, lrclib_skip)
+        elif source == "transcribe":
+            job.plan = self._transcribe_plan()
+        else:
+            raise RegenError("Unknown lyric source.")
+        self._queue(job, reset=True, label="Repair")
+
+    @staticmethod
+    def _caption_plan(job: SongJob) -> Plan:
+        """The plan that fetches the video's caption; only a song with a YouTube ID has one."""
+        plan = resolve_plan(job, reset=True)
+        if plan.kind != "fetch":
+            raise RegenError("This song has no YouTube ID.")
+        return plan
+
+    def _genius_plan(self, genius_id: int | None, lrclib_id: int | None, lrclib_skip: bool) -> Plan:
+        if genius_id is None:
+            raise RegenError("Pick a Genius song first.")
+        try:
+            self.genius_song(genius_id)
+        except GeniusUnavailable as e:
+            logger.warning("Genius pick %s refused: %s", genius_id, e)
+            raise RegenError("Genius didn't return that song's lyrics. Try again.") from e
+        plan = Plan(kind="sidecar", genius_id=genius_id, label="genius pick")
+        if lrclib_skip:
+            plan.lrclib_skip = True
+        elif lrclib_id is not None:
+            record = lrclib.get_record(lrclib_id)
+            if record is None:
+                raise RegenError("LRCLIB didn't return that match. Try again.")
+            if not record.get("syncedLyrics"):
+                raise RegenError("That LRCLIB match has no synced lyrics.")
+            plan.lrclib_record = record
+        return plan
+
+    def _queue(self, job: SongJob, *, reset: bool, label: str) -> None:
+        """Back up the song's files, then queue its regen job."""
         song = job.song_path
         try:
             backup_text_folders(song.parent, stems=[song.stem])
         except OSError as e:
-            logger.error("Backup before regenerating %s failed: %s", song.name, e)
+            logger.error("Backup before queueing %s failed: %s", song.name, e)
             raise RegenError(f"Could not back up this song's lyric files: {e}") from e
-        if not self._processing.enqueue_regen(RegenJob(job, reset=False, label="Regenerate")):
+        if not self._processing.enqueue_regen(RegenJob(job, reset=reset, label=label)):
             raise RegenError(BUSY_MESSAGE)
 
     @staticmethod
-    def _regen_job(song_path: str) -> SongJob | None:
+    def _song_job(song_path: str) -> SongJob:
+        """The song's job with its bundle read and no plan yet."""
+        song = Path(song_path)
+        return SongJob(
+            song_path=song, bundle=read_bundle(song.parent, song.stem), stale_reason="selected"
+        )
+
+    @staticmethod
+    def _transcribe_plan() -> Plan:
+        return Plan(kind="transcribe", label="no lyrics -> transcribe")
+
+    def _regen_job(self, song_path: str) -> SongJob | None:
         """The song's job with the plan a plain regenerate uses, or None without one.
 
         A song with a recorded pick reuses it; one whose only output is a
         transcription (no bundle, a karaoke file) transcribes again.
         """
-        song = Path(song_path)
-        job = SongJob(
-            song_path=song, bundle=read_bundle(song.parent, song.stem), stale_reason="selected"
-        )
-        if song_status(song).category == "no_lyrics":
-            job.plan = Plan(kind="transcribe", label="no lyrics -> transcribe")
+        job = self._song_job(song_path)
+        if song_status(job.song_path).category == "no_lyrics":
+            job.plan = self._transcribe_plan()
         else:
             job.plan = reuse_plan(job)
         return job if job.plan is not None else None
+
+    @staticmethod
+    def _lrc_record_id(song: Path) -> int | str | None:
+        """The LRCLIB id the song's ``.lrc`` on disk records (a skip marker has none)."""
+        try:
+            return lrclib.read_lrc(lrclib.lrc_path(song))[1].get("id")
+        except (OSError, UnicodeDecodeError):
+            return None
+
+    @staticmethod
+    def _length_diff_s(match_s: object, video_s: float | None) -> int | None:
+        """How many seconds longer the LRCLIB match is than the video (negative: shorter)."""
+        if not isinstance(match_s, (int, float)) or video_s is None:
+            return None
+        return round(match_s - video_s)
