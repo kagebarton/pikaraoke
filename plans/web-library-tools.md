@@ -2,10 +2,11 @@
 
 Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 
-> **Status (2026-10-22): Phases 0-4 done (3.1 = fixes from the Phase
+> **Status (2026-10-22): Phases 0-5 done (3.1 = fixes from the Phase
 > 1-3 code review, 3.1g included; the review of 3.1b-3.1d is done with its
-> two fix commits; Phase 4's code is `7f5853e` and `55cfdbb`, see the
-> Results log). Phase 5 is next, after Ken's checks for Phase 4.** Ken
+> two fix commits; Phase 4's code is `7f5853e` and `55cfdbb`, Phase 5's is
+> `641600a`, see the Results log). Phase 6 is next, after Ken's checks for
+> Phase 5.** Ken
 > approved D2's Phase 3.1 bullet on 2026-10-20. Branch
 > `web_library_tools`, off `library_tools` at `0bfa02a`; `dev` merged as
 > `c34d889`. There is no GATE and nothing here measures timing. Landing is
@@ -2230,6 +2231,193 @@ commits: `7f5853e` (the veto fix below), `55cfdbb` (the feature).
   plus `test_files_routes.py`) before it was committed.
 
 ### Phase 5
+
+Executed 2026-10-22 by Sonnet 5.5, starting from `232aa9b` (clean). Code commit:
+`641600a` (one commit: the server and the page, as the plan names it).
+
+- **Suite** (`PYTHONIOENCODING=utf-8 uv run --no-sync python -P -m pytest -q`,
+  127.4 s at `641600a`): **4 failed, 1855 passed, 2 skipped** (1861 tests; passed =
+  Phase 4's 1816 + 39 new). The four failures are the baseline's four (ids
+  unchanged). New tests: `test_processing_page.py` 10 (`TestProcessingPage` 8,
+  `TestStatusJson` 2); `test_processing_routes.py` +24 net (`TestDisplayOrder` 6,
+  `TestPoorSongNumbers` 5, `TestAttentionRoute` 3, `TestRetrySongRoute` 9 incl. 5
+  and 2 parametrized, and 1 net in `TestRowActions`: the guest-process-row test was
+  replaced by two); `test_library_tools.py` 4 (`TestAttentionRows`);
+  `test_karaoke_database.py` 1. One existing assertion changed: a regen row's
+  admin `actions` is now `["cancel", "song_info"]`.
+- **Mutation checks** (each reverted afterwards, files restored as bytes; failures
+  counted in the touched test files; 25 mutations, each caught): tracker: process
+  rows ranked with the regen lane 1, the running job not ranked first 2, the active
+  download not ranked before waiting downloads 1, finished rows oldest first 1,
+  the running row also gets a position 2, guests see process rows 2 (routes and
+  page tests), `song_info` offered to guests 1, a download error not stamped
+  finished 1, a download error leaving `processing_status` alone 2, poor numbers
+  shown to guests 1, numbers kept for songs that are not poor 1, a bundle that
+  cannot be read fails the finished job 1, `mine` always false 1. Tools: attention
+  rows keep songs the tracker shows 2, keep busy songs 1, keep songs outside the
+  library 1, failed after unfinished 2. Routes: attention list given to guests 1,
+  retry without the admin guard 1, retry accepts any string 1, retry ignores a busy
+  song 2. Database: the `states` argument ignored 1. Page: guests get the admin
+  URLs 1, the library card shown to guests 1, `window.confirm` back 1.
+- **Environment:** no `UnknownLocaleError` this time (the babel locale data was
+  intact). The scratch library had changed since Phase 4: Ken had run his own
+  Phase 4 checks (a regen of Queen at 10:39, folder
+  `regen_backup_20261022T143904Z`, Queen's bundle `captured_at`
+  `2026-10-22T14:43:45Z`, v11), so 91 files and `behind` was 1 (Jay Chou) at the
+  start.
+- **Differences from the plan's text:**
+  - 5a ordering: songs waiting for processing run in this order: `download` and
+    `process` rows (the download lane, in queue order), then `regen` rows (the regen
+    lane). The plan says `download` rows before `regen` and `process` rows. A
+    `process` row is queued with `ProcessingManager.enqueue`, which is the download
+    lane, and the loop takes that lane first.
+  - 5a position: every active row except the running job is numbered from 1,
+    including the download in progress (the board numbers it).
+  - 5a guests: `get_status` leaves out `process` rows for non-admins as well as
+    `regen` rows (5b: a guest never sees a regen or library row). The old test that
+    a nameless guest cannot operate a process row became one that guests do not see
+    it.
+  - 5a rows: tracker rows gain `song_info` in `actions` for admins when the row
+    has a song path (the plan lists it for attention rows only; the expanded row's
+    Song info button follows the server's actions), and a `mine` flag (the row is
+    the caller's own download) for the guest page's YOU tag.
+  - 5a poor songs: `guessed` and `line_count` are read from the bundle once, in the
+    `processing_complete` handler (`PipelineTracker._poor_lines`), not at every
+    status read. The read catches `OSError`, `ValueError`, `TypeError` and
+    `AttributeError` and logs a warning: an exception from a handler reaches
+    `_run_job` and would mark a song that had just finished as failed.
+  - 5a failed downloads: `_on_download_error` now also sets `processing_status` to
+    `error` and stamps `finished_at`, so the row sorts by when it failed, shows "N
+    min ago", and `remove` works before any status read (before, `remove` on a
+    fresh download error returned False until a status read had derived the state).
+  - 5a retry: `POST /processing/song/retry` refuses a song that is not in the
+    library (400) and one already waiting or running (400 `This song is already
+    waiting or running.`) before it calls `processing_manager.enqueue`, which has
+    no duplicate guard.
+  - 5a attention rows: failed songs come before unfinished ones, each by display
+    name; a DB row for a path that is not in the library is left out.
+  - 5b: the running job is shown in the Now box only (the board does not repeat it
+    in the list, and counts it under Active); the box taps open to Song info and
+    Cancel, because the running job has no other row to act on. A failed download
+    with no file offers Dismiss only (no "Delete song"). A guest's cancel confirms
+    inside the row too. The Now box and rows show the kind word: `Download`, `Regen`
+    (box tag) and the job's label (row subline).
+  - 5b: the page script is handed no admin-only URL when the viewer is a guest.
+  - Wording is mine where the plan gives none: "Didn't finish processing" and
+    "Processing failed" (database rows), "Cancel this job?" with "Cancel job" and
+    "Keep", "Delete this song from the library?" with "Delete song" and "Keep",
+    "Ready to sing", "just now", "N min/h/d ago", "N of M lines guessed", the tag
+    words Downloading / Waiting / Processing / Cancelling / Failed / Unfinished /
+    Done. "Looks poor (15%+ lines guessed)" is the board's. The `.pot` is not
+    regenerated.
+- **Defects found by looking, fixed before the commit:** (1) a database row on the
+  Attention list could not be expanded or acted on (the page keyed it `db:<path>`
+  but the existence check used the raw entry, so the expansion was pruned on every
+  draw); found in the live DOM, not by the first synthetic render, where I read the
+  screenshot wrongly. (2) The Library card label showed `15%%+` (a `%` in a `trans`
+  block with no variables is not unescaped). (3) The filter chips wrapped at 390 px
+  (padding 12 to 10 px, gap 8 to 6 px). (4) The running job's clock jumped back on
+  every row tap (it was reset from the last fetched value on each draw). (5) A
+  `.pr-chip` highlight appeared to stay on "All" in the screenshots: headless Edge
+  does not advance CSS transitions in virtual time; the DOM and computed styles were
+  right, the harness now sets `transition: none`.
+- **Isolated app runs** (Ground rules first each time: nothing on 5555 or 5556, no
+  python or mpv process, GPU 913 to 1218 MiB at 3 to 33 % from desktop programs
+  only). Scratch config and `APPDATA` as in the Phase 3 row. Run A (`app_run_phase5.log`):
+  the scratch library was hashed first (91 files, `scratch_before_p5.json`), the six
+  Happy Birthday files were removed so it could be downloaded again (as in 3.1),
+  and a 2 KB file `Throwaway - Delete Me---zzzzzzzzzzz.mp4` was added; log `Scan:
+  found 8 song(s) on disk`, added 1, deleted 1. The throwaway's `pipeline_state`
+  was set to `pending` with sqlite3 on the scratch DB. `/processing/status` `[]`,
+  `/processing/attention` one row (`Throwaway - Delete Me`, `unfinished`, actions
+  `retry`, `song_info`, `delete`), `/library/overview` `{"all":8,"behind":1,"no_lyrics":1,"poor":2}`.
+  - Jobs (poller `live5.py poll`, one snapshot per change): 11:31:12 `POST
+    /song_info/regenerate` Jay Chou (success); 11:31:28 the same for Josh Gad, whose
+    video was then renamed to `.away`; 11:32:31 `POST /download` Happy Birthday
+    (`song_added_by` `Tester`). Rows at 63 s: Jay Chou `regen` `active` position
+    null (`processing_phase` `transcribe`), Happy Birthday `download` `active`
+    position 1, Josh Gad `regen` `pending` position 2; at 93 s the download was
+    `complete` / `pending` and still position 1 ahead of Josh Gad; Jay Chou reached
+    `align` by 186 s. Jay Chou finished 11:39:03 (7 min 51 s from the POST): group
+    `finished`, `lyric_method` `genius+joint`, `guessed` 26, `line_count` 42, actions
+    `dismiss`, `song_info`. The download then processed 11:39:03 to 11:40:12
+    (`extract`, `loudnorm`, `stem_separation`, `transcode`, `transcribe`), actions
+    `cancel`, `remove`, `song_info`, then `remove`, `dismiss`, `song_info`,
+    `enqueue`. Josh Gad's job started 11:40:12 and failed 11:40:14: `Song file not
+    found: D:\shared\weblib-test\Josh Gad - In Summer (From 'Frozen'_Sing-Along).mp4`,
+    group `attention`, actions `dismiss`, `retry`, `song_info`; the video was
+    renamed back at once. Josh Gad's `pipeline_state` stayed `skipped`.
+  - `POST /processing/clear_finished` `{"count":2,"success":true}`; both songs'
+    files stayed. Happy Birthday set to `failed` in the DB: `/processing/attention`
+    listed it (`failed`) before the throwaway (`unfinished`); `POST
+    /processing/song/retry` `{"success":true}`; a second POST at once HTTP 400
+    `{"error":"This song is already waiting or running.","success":false}`. The row
+    was `kind` `process` (`active`, `transcribe`, then `complete`, actions `dismiss`,
+    `song_info`), log 11:54:38 to 11:55:44, state `ready` afterwards; attention was
+    `[]` while it ran. `GET /files/delete?song=<throwaway>&referrer=/processing`
+    returned 200 after its redirect, the file was gone, attention `[]`.
+  - Log: no traceback; the only `ERROR` lines are the yt-dlp pip upgrade (the known
+    uv gotcha) and Josh Gad's failure. Stopped with `taskkill /F /T` on the
+    listener's pid 11548.
+  - Run A's code did not yet have three late edits: the `_poor_lines` guard, the
+    attention-row mapping fix and the Delete-button condition. Run B
+    (`app_run_phase5b.log`) had the first two, run C (`app_run_phase5c.log`) all
+    three. The poor-song numbers on a finished row were therefore seen live on the
+    unguarded version only. One last edit came after run C: the page no longer
+    sets a `key` field on an attention row that nothing read.
+  - Run B, with a throwaway admin password put in the scratch config copy (set, then
+    emptied; never written down): Josh Gad's video renamed away, then `POST
+    /song_info/regenerate` as admin (success; it failed at 12:01:30 with the same
+    message; `backup_text_folders` copied nothing because the video was already
+    renamed, and no folder appeared), then the video renamed back; and a `POST
+    /download` as guest Alice (`user` cookie, no admin cookie) of `watch?v=zzzzzzzzzzz`
+    (does not exist). Guest requests: `/processing/attention` `[]`; `/library/overview`
+    403; `/library/songs?list=all` and `/song_info` 302 to `/browse`; `POST
+    /song_info/regenerate`, `/processing/song/retry`, `/processing/clear_finished`
+    403; `/processing` 200, 33,892 bytes, no tab, chip, library link or admin URL,
+    the guest sections and intro sentence present; `/processing/status` one row: Alice's
+    failed download, group `attention`, `mine` true, `actions` `[]`. Its `error_message`
+    still holds the raw yt-dlp text (the page shows the plain sentence). Admin
+    requests: `/processing/attention` one row (Eason Chan, `unfinished`, set `pending`
+    for this run and set back to `skipped`), `/library/overview`
+    `{"all":8,"behind":0,"no_lyrics":2,"poor":2}`, status rows: the failed download
+    (actions `remove`, `dismiss`) and Josh Gad's failed regen (`dismiss`, `retry`,
+    `song_info`); `/processing` 200, 35,789 bytes with both tabs, the chips and the
+    library links.
+  - Layout was looked at in headless Edge at 390 px (a 390 px iframe): with rows from a
+    real tracker and mocked managers (`...\p5shots\*.png`), and with the live JSON of
+    runs A and B drawn through the live app's own page (`...\p5live\final_*.png`: admin
+    Jobs, expanded rows with the failed regen, the failed download and an Attention
+    row with its delete confirm, the running job with its Cancel, a finished poor
+    song, the Library tools tab, the guest page). The Library tools counts in those
+    screenshots are a fixed stub; the live counts are the `/library/overview` values
+    above. The Browse and Song info pages were not part of this phase's layout.
+  - After: the scratch library hashed again (106 files, `scratch_final_p5.json`):
+    added 15 (`regen_backup_20261022T153112Z`, Jay Chou's 5 files;
+    `regen_backup_20261022T153128Z`, Josh Gad's 10 files), removed 0, changed 3
+    (Jay Chou's bundle, `.ass` and `.srt`), 88 identical, which includes all six
+    re-created Happy Birthday files. Scratch DB: throwaway row gone, Happy Birthday and
+    Jay Chou `ready`, Eason Chan and Josh Gad `skipped`; scratch config
+    `admin_password` empty. Nothing listens on 5555 or 5556 and no python or mpv
+    process remains; headless Edge was killed by its profile folder only.
+- **Real-library manifest:** `manifest.py compare` against the Phase 0 manifest:
+  `manifest=2605 now=2616 added=11 removed=0 changed=1`, the same 12 files under
+  `zh_probe/phase0/` as the Phase 3, 3.1 and 4 rows; nothing else differs. Output:
+  `...\c192729b-188a-40ca-8bf1-a9cba38de26f\scratchpad\manifest_compare_phase5.txt`.
+  The real library was not touched.
+- **pre-commit:** `--files <changed files>`; Black reformatted four of my files on the
+  first run (re-run clean), every hook passed on the last run. Import smoke:
+  `pipeline_tracker`, `library_tools`, `karaoke_database`, `song_manager`,
+  `routes.processing`, `karaoke`.
+- **Seen, not changed:** `POST /processing/song/retry` checks the song is idle and then
+  queues it; two requests in the same instant could both pass (`ProcessingManager.enqueue`
+  has no duplicate guard, as before). The status JSON gives a guest the raw
+  `error_message` of any download row (the old page showed it too; the new page shows
+  fixed sentences). A row can show as Done for an instant between `song_downloaded` and
+  `processing_queued` (the status derivation, unchanged). The page script has no
+  automated test: the checks above are the unit tests on the markup and JSON, the
+  headless renders and the live DOM. Jay Chou is now at v11, so no scratch song is
+  behind; Song Info regenerates any video song.
 
 ### Phase 6
 
