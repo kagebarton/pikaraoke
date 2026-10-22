@@ -3,6 +3,7 @@
 import os
 import sqlite3
 import threading
+from collections.abc import Iterable
 
 from pikaraoke.lib.get_platform import get_data_directory
 
@@ -230,6 +231,19 @@ class KaraokeDatabase:
                 if row and row[0] is not None:
                     result[path] = row[0]
             return result
+
+    def get_paths_by_pipeline_state(self, states: Iterable[str]) -> list[str]:
+        """Return the file_path of every song whose pipeline_state is one of ``states``."""
+        states = tuple(states)
+        if not states:
+            return []
+        placeholders = ",".join("?" * len(states))
+        with self._lock:
+            rows = self._conn.execute(
+                f"SELECT file_path FROM songs WHERE pipeline_state IN ({placeholders})",
+                states,
+            ).fetchall()
+        return [row[0] for row in rows]
 
     # ------------------------------------------------------------------
     # Metadata (app-level key-value store)

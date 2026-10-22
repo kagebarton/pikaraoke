@@ -86,6 +86,36 @@ class LibraryTools:
             or song_path in self._processing.pending_jobs
         )
 
+    def attention_rows(self, tracked: set[str]) -> list[dict]:
+        """Songs the database says never finished processing, for the Attention list.
+
+        The database remembers what the tracker (memory only) forgets: a song
+        left half-processed by an earlier session, or failed and then dismissed
+        from the Jobs list. A song with a tracker row, or one waiting or
+        running, is already shown there. Failed songs come first, each group
+        by display name.
+        """
+        rows = []
+        for db_state, state in (("failed", "failed"), ("pending", "unfinished")):
+            paths = self._song_manager.get_paths_by_pipeline_state([db_state])
+            titled = [
+                (self._song_manager.filename_from_path(path), path)
+                for path in paths
+                if path in self._song_manager.songs
+                and path not in tracked
+                and not self.is_busy(path)
+            ]
+            rows += [
+                {
+                    "song_path": path,
+                    "title": title,
+                    "state": state,
+                    "actions": ["retry", "song_info", "delete"],
+                }
+                for title, path in sorted(titled, key=lambda pair: pair[0].lower())
+            ]
+        return rows
+
     def can_regenerate(self, song_path: str) -> bool:
         """Whether :meth:`regenerate` has lyrics to work from (busy or not)."""
         return self.is_video(song_path) and self._regen_job(song_path) is not None

@@ -1,525 +1,718 @@
 {% extends 'base.html' %}
 
+{% block styles %}
+<style>
+  .pr-muted { color: var(--dark-text-muted); font-size: 13px; }
+  .pr-warn { color: var(--dark-warning); }
+  .pr-tabs { margin-bottom: 12px; }
+  .pr-tabs ul { margin: 0; list-style: none; }
+  .pr-tabs li + li { margin-top: 0; }
+  .pr-tabs a { min-height: 44px; font-weight: 700; }
+  .pr-tabs li.is-active a { color: var(--dark-text-primary); border-bottom-color: var(--dark-link); }
+  .pr-chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 14px 0 12px; }
+  .pr-chip { display: inline-flex; align-items: center; gap: 5px; min-height: 36px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--dark-border); background: transparent; color: var(--dark-text-primary); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .pr-chip.is-on { background: #dbdee0; color: #1f2424; border-color: #dbdee0; }
+  .pr-now { background: var(--dark-bg-secondary); border-radius: 8px; margin-bottom: 12px; overflow: hidden; }
+  .pr-now .pr-line { flex-direction: column; align-items: stretch; gap: 6px; padding: 10px 12px; }
+  .pr-now-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .pr-now-title { font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pr-card { background: var(--dark-bg-tertiary); border-radius: 8px; overflow: hidden; }
+  .pr-row + .pr-row { border-top: 1px solid var(--dark-border); }
+  .pr-line { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 56px; padding: 0 12px; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .pr-pos { width: 22px; flex: none; color: var(--dark-text-muted); font-size: 13px; }
+  .pr-main { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 6px 0; }
+  .pr-title { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pr-tag { flex: none; display: inline-flex; align-items: center; gap: 5px; }
+  .pr-detail { background: var(--dark-bg-secondary); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .pr-error { color: #ffb8ad; font-size: 13px; white-space: pre-wrap; word-break: break-word; max-height: 16.8em; overflow-y: auto; }
+  .pr-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pr-buttons .button { min-height: 44px; font-weight: 700; }
+  .pr-confirm { display: flex; flex-direction: column; gap: 8px; }
+  .pr-sec { display: flex; align-items: center; justify-content: space-between; margin: 22px 0 8px; font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--dark-text-muted); }
+  .pr-grow { padding: 12px; display: flex; gap: 10px; align-items: flex-start; }
+  .pr-gicon { flex: none; width: 18px; padding-top: 3px; text-align: center; color: var(--dark-text-muted); }
+  .pr-gmain { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+  .pr-gbtn { flex: none; min-width: 44px; min-height: 44px; padding: 0; }
+  .pr-gtags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .pr-you { font-size: 11px; font-weight: 700; background: var(--dark-link); color: #0f1a17; border-radius: 4px; padding: 1px 6px; }
+  .pr-link { display: flex; align-items: center; justify-content: space-between; min-height: 48px; padding: 0 12px; color: inherit; }
+  .pr-link + .pr-link { border-top: 1px solid var(--dark-border); }
+  .pr-spin { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(169, 216, 247, 0.3); border-top-color: #a9d8f7; border-radius: 50%; animation: pr-spin 2s linear infinite; }
+  @keyframes pr-spin { to { transform: rotate(360deg); } }
+</style>
+{% endblock %}
+
 {% block header %}
-<h1 class>{% block title %}{% trans %}Processing{% endtrans %}{% endblock %}</h1>
+<h1>{% block title %}{% trans %}Processing{% endtrans %}{% endblock %}</h1>
 {% endblock %}
 
 {% block content %}
+<div id="pr-root">
+  {% if admin %}
+  <div class="tabs is-fullwidth pr-tabs" role="tablist">
+    <ul>
+      <li class="is-active" data-tab="jobs"><a href="#jobs" role="tab" aria-selected="true">{% trans %}Jobs{% endtrans %}</a></li>
+      <li data-tab="tools"><a href="#tools" role="tab" aria-selected="false">{% trans %}Library tools{% endtrans %}</a></li>
+    </ul>
+  </div>
 
-<table class="table is-striped is-fullwidth" id="pipeline-table">
-  <thead>
-    <tr>
-      <th>{% trans %}Title{% endtrans %}</th>
-      <th class="col-icon-download"><span class="state-box"><i class="icon icon-down-big"></i></span></th>
-      <th class="col-icon-process"><span class="state-box"><i class="icon icon-music"></i></span></th>
-      <th class="col-icon-queue"></th>
-      <th class="col-icon-cancel"></th>
-    </tr>
-  </thead>
-  <tbody id="pipeline-body">
-  </tbody>
-</table>
+  <div class="pr-panel" id="pr-jobs">
+    <div class="pr-chips" role="group">
+      <button type="button" class="pr-chip is-on" data-filter="all">{% trans %}All{% endtrans %} <span class="pr-chip-n">0</span></button>
+      <button type="button" class="pr-chip" data-filter="active">{% trans %}Active{% endtrans %} <span class="pr-chip-n">0</span></button>
+      <button type="button" class="pr-chip" data-filter="attention">{% trans %}Attention{% endtrans %} <span class="pr-chip-n">0</span></button>
+      <button type="button" class="pr-chip" data-filter="finished">{% trans %}Finished{% endtrans %} <span class="pr-chip-n">0</span></button>
+    </div>
+    <div id="pr-now" class="pr-now is-hidden"></div>
+    <div id="pr-rows" class="pr-card is-hidden"></div>
+    <p id="pr-empty" class="has-text-warning has-text-centered is-hidden">{% trans %}No songs in the processing pipeline.{% endtrans %}</p>
+    <p id="pr-empty-list" class="pr-muted has-text-centered is-hidden">{% trans %}No songs in this list.{% endtrans %}</p>
+    <p id="pr-hint" class="pr-muted mt-2 is-hidden">{% trans %}Tap a row to open its details and actions.{% endtrans %}</p>
+    <button type="button" id="pr-clear" class="button is-fullwidth mt-3 is-hidden"></button>
+  </div>
 
-<p id="pipeline-empty" class="has-text-warning has-text-centered" style="display: none;">
-  {% trans %}No songs in the processing pipeline.{% endtrans %}
-</p>
-
+  <div class="pr-panel is-hidden" id="pr-tools">
+    <div class="pr-sec"><span>{% trans %}Library{% endtrans %}</span></div>
+    <div class="pr-card">
+      <a class="pr-link no-spa" href="{{ url_for('library.songs') }}?list=behind"><span>{% trans %}Behind current version{% endtrans %}</span><span class="tag is-warning is-light" data-count="behind">…</span></a>
+      <a class="pr-link no-spa" href="{{ url_for('library.songs') }}?list=poor"><span>{% trans %}Looks poor (15%+ lines guessed){% endtrans %}</span><span class="tag is-danger is-light" data-count="poor">…</span></a>
+      <a class="pr-link no-spa" href="{{ url_for('library.songs') }}?list=no_lyrics"><span>{% trans %}No lyrics (transcribed){% endtrans %}</span><span class="tag is-light" data-count="no_lyrics">…</span></a>
+      <a class="pr-link no-spa" href="{{ url_for('library.songs') }}?list=all"><span>{% trans %}All songs{% endtrans %}</span><span class="tag is-light" data-count="all">…</span></a>
+    </div>
+    <p class="pr-muted mt-2">{% trans %}Each list opens the songs; tap one for its Song Info.{% endtrans %}</p>
+  </div>
+  {% else %}
+  <p class="pr-muted">{% trans %}Songs being downloaded and prepared for karaoke.{% endtrans %}</p>
+  <p id="pr-empty" class="has-text-warning has-text-centered is-hidden mt-4">{% trans %}No songs in the processing pipeline.{% endtrans %}</p>
+  <section id="pr-sec-active" class="is-hidden">
+    <div class="pr-sec"><span>{% trans %}Getting ready{% endtrans %} (<span class="pr-sec-n"></span>)</span></div>
+    <div class="pr-card"></div>
+  </section>
+  <section id="pr-sec-finished" class="is-hidden">
+    <div class="pr-sec"><span>{% trans %}Ready{% endtrans %} (<span class="pr-sec-n"></span>)</span></div>
+    <div class="pr-card"></div>
+  </section>
+  <section id="pr-sec-attention" class="is-hidden">
+    <div class="pr-sec"><span>{% trans %}Problems{% endtrans %} (<span class="pr-sec-n"></span>)</span></div>
+    <div class="pr-card"></div>
+  </section>
+  {% endif %}
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-// Translations for processing page confirm prompts, injected via window.i18n
-// (see base.html:22-32 and spa-navigation.js:138-140 for the same pattern)
-window.i18n = window.i18n || {};
-// {# MSG: Confirmation dialog when cancelling a pipeline item. SONG_TITLE is replaced with the item title #}
-window.i18n.confirmCancelPipeline = "{{ _('Are you sure you want to cancel SONG_TITLE?') }}";
-// {# MSG: Confirmation dialog when removing a pipeline item. SONG_TITLE is replaced with the item title #}
-window.i18n.confirmRemovePipeline = "{{ _('Are you sure you want to remove SONG_TITLE?') }}";
-
-(function() {
+(function () {
 'use strict';
 
-// isAdmin is used only to choose the correct cancel URL (admin vs user route).
-// Button visibility is now driven by the server-computed `actions` array.
 var isAdmin = {{ admin | tojson }};
 
-var pollInterval = 10000; // 10 second fallback (push is primary)
-var pollTimer = null;
+var T = {
+  now: {{ _('Now') | tojson }},
+  kindDownload: {{ _('Download') | tojson }},
+  kindRegen: {{ _('Regen') | tojson }},
+  kindProcess: {{ _('Process') | tojson }},
+  labels: {
+    Update: {{ _('Update') | tojson }},
+    Reprocess: {{ _('Reprocess') | tojson }},
+    Reset: {{ _('Reset') | tojson }},
+    Repair: {{ _('Repair') | tojson }},
+    Regenerate: {{ _('Regenerate') | tojson }},
+    Process: {{ _('Process') | tojson }}
+  },
+  downloading: {{ _('Downloading') | tojson }},
+  waiting: {{ _('Waiting') | tojson }},
+  processing: {{ _('Processing') | tojson }},
+  cancelling: {{ _('Cancelling') | tojson }},
+  failed: {{ _('Failed') | tojson }},
+  unfinished: {{ _('Unfinished') | tojson }},
+  done: {{ _('Done') | tojson }},
+  phases: {
+    extract: {{ _('extracting') | tojson }},
+    loudnorm: {{ _('analyzing') | tojson }},
+    stem_separation: {{ _('separating') | tojson }},
+    transcode: {{ _('transcoding') | tojson }},
+    align: {{ _('aligning lyrics') | tojson }},
+    transcribe: {{ _('transcribing lyrics') | tojson }}
+  },
+  by: {{ _('by %(user)s', user='{user}') | tojson }},
+  addedBy: {{ _('added by %(user)s', user='{user}') | tojson }},
+  you: {{ _('YOU') | tojson }},
+  justNow: {{ _('just now') | tojson }},
+  minAgo: {{ _('%(n)s min ago', n='{n}') | tojson }},
+  hourAgo: {{ _('%(n)s h ago', n='{n}') | tojson }},
+  dayAgo: {{ _('%(n)s d ago', n='{n}') | tojson }},
+  elapsedS: {{ _('%(s)s s', s='{s}') | tojson }},
+  elapsedM: {{ _('%(m)s min %(s)s s', m='{m}', s='{s}') | tojson }},
+  elapsedH: {{ _('%(h)s h %(m)s min', h='{h}', m='{m}') | tojson }},
+  guessed: {{ _('%(guessed)s of %(n)s lines guessed', guessed='{guessed}', n='{n}') | tojson }},
+  lyricCaptions: {{ _('YouTube captions') | tojson }},
+  lyricGenius: {{ _('Genius') | tojson }},
+  lyricNone: {{ _('No lyrics') | tojson }},
+  lyricFile: {{ _('Lyrics file') | tojson }},
+  dbUnfinished: {{ _("Didn't finish processing") | tojson }},
+  dbFailed: {{ _('Processing failed') | tojson }},
+  retry: {{ _('Retry') | tojson }},
+  songInfo: {{ _('Song info') | tojson }},
+  addToQueue: {{ _('Add to queue') | tojson }},
+  cancel: {{ _('Cancel') | tojson }},
+  deleteSong: {{ _('Delete song') | tojson }},
+  dismiss: {{ _('Dismiss') | tojson }},
+  keep: {{ _('Keep') | tojson }},
+  confirmCancel: {{ _('Cancel this job?') | tojson }},
+  confirmCancelYes: {{ _('Cancel job') | tojson }},
+  confirmDelete: {{ _('Delete this song from the library?') | tojson }},
+  clearFinished: {{ _('Clear %(n)s finished', n='{n}') | tojson }},
+  readyToSing: {{ _('Ready to sing') | tojson }},
+  downloadFailed: {{ _('The download failed. Try another video of this song.') | tojson }},
+  processingFailed: {{ _("This song couldn't be prepared. The host can retry it.") | tojson }},
+  actionFailed: {{ _('That did not work.') | tojson }}
+};
 
-  /* ------------------------------------------------------------------
-     State icon — CSS-spinner-based, replaces old stepClass/pulse system.
-     isCancellingContext turns a completed icon red so the whole row reads
-     as cancelled, not just the cancelling spinner column.
-     ------------------------------------------------------------------ */
+var URLS = {
+  status: {{ url_for('processing.processing_status') | tojson }},
+  userCancel: {{ url_for('processing.user_cancel_item') | tojson }},
+  enqueue: {{ url_for('processing.enqueue_item', item_id='ITEM_ID') | tojson }}{% if admin %},
+  attention: {{ url_for('processing.processing_attention') | tojson }},
+  overview: {{ url_for('library.overview') | tojson }},
+  clearFinished: {{ url_for('processing.clear_finished') | tojson }},
+  retrySong: {{ url_for('processing.retry_song') | tojson }},
+  songInfo: {{ url_for('song_info.song_info') | tojson }},
+  deleteFile: {{ url_for('files.delete_file') | tojson }},
+  cancel: {{ url_for('processing.cancel_item', item_id='ITEM_ID') | tojson }},
+  remove: {{ url_for('processing.remove_item', item_id='ITEM_ID') | tojson }},
+  retry: {{ url_for('processing.retry_item', item_id='ITEM_ID') | tojson }},
+  dismiss: {{ url_for('processing.dismiss_item', item_id='ITEM_ID') | tojson }}{% endif %}
+};
 
-  function stateIcon(status, isCancellingContext) {
-    var inner = '';
-    // waiting: treat same as pending (clock icon)
-    if (status === 'pending' || status === 'waiting') inner = '<i class="icon icon-clock"></i>';
-    else if (status === 'active') inner = '<span class="spinner-css"></span>';
-    else if (status === 'complete') inner = '<i class="icon icon-ok ' + (isCancellingContext ? 'icon-state-cancelling' : 'icon-state-ok') + '"></i>';
-    else if (status === 'error') inner = '<i class="icon icon-cancel-circled-1 icon-state-error"></i>';
-    else if (status === 'cancelling') inner = '<span class="spinner-css cancelling"></span>';
-    else return '';
-    return '<span class="state-box">' + inner + '</span>';
-  }
+var POLL_MS = 10000; // fallback poll; the pipeline_updated push is the primary update
 
-/* ------------------------------------------------------------------
-Queue cell — green + icon (matches files.html/queue.html convention)
------------------------------------------------------------------- */
+// One timer set per page, so an SPA revisit does not stack a second one.
+var page = window.processingPage = window.processingPage || {};
+clearTimeout(page.poll);
+clearTimeout(page.soon);
+clearInterval(page.tick);
 
-function queueCell(item) {
-  if (item.actions && item.actions.indexOf('enqueue') !== -1) {
-    var label = "{% trans %}Queue{% endtrans %}";
-    return '<span class="state-box"><a href="#" class="pipeline-action-btn pipeline-enqueue-btn" data-id="' + item.id + '" title="' + label + '" aria-label="' + label + '">'
-      + '<i class="icon icon-list-add icon-action-queue"></i></a></span>';
-  }
-  return '';
+var state = {
+  items: [],       // tracker rows, in the server's display order
+  attention: [],   // songs the database says never finished
+  filter: 'all',
+  expanded: {},    // row key -> true
+  confirming: {},  // row key -> 'cancel' | 'delete'
+  nowBase: null    // {s, at}: elapsed seconds of the running job when last fetched
+};
+
+/* ---------------------------------------------------------------- helpers */
+
+function esc(value) {
+  return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
 }
 
-/* ------------------------------------------------------------------
-Cancel/Remove cell — driven by server-computed actions list.
-The server decides which actions are allowed based on auth + state;
-the client just renders the corresponding button, eliminating the
-cancel-vs-remove branch-ordering bug class entirely.
------------------------------------------------------------------- */
-
-function cancelCell(item) {
-  if (!item.actions) return '';
-  if (item.actions.indexOf('cancel') !== -1) {
-    var label = "{% trans %}Cancel{% endtrans %}";
-    return '<span class="state-box"><a href="#" class="pipeline-action-btn pipeline-cancel-btn" data-id="' + item.id + '" title="' + label + '" aria-label="' + label + '">'
-      + '<i class="icon icon-cancel-circled-1 icon-action-cancel"></i></a></span>';
-  }
-  if (item.actions.indexOf('remove') !== -1) {
-    var label = "{% trans %}Remove{% endtrans %}";
-    return '<span class="state-box"><a href="#" class="pipeline-action-btn pipeline-remove-btn" data-id="' + item.id + '" title="' + label + '" aria-label="' + label + '">'
-      + '<i class="icon icon-trash-empty icon-action-remove"></i></a></span>';
-  }
-  return '';
+function fill(template, vars) {
+  return template.replace(/\{(\w+)\}/g, function (m, name) {
+    return vars[name] != null ? vars[name] : m;
+  });
 }
 
-  /* ------------------------------------------------------------------
-     Progress label — replaces download progress percentage
-     ------------------------------------------------------------------ */
-
-function progressLabel(item) {
-  if (item.download_status === 'cancelling' || item.processing_status === 'cancelling')
-    return '{% trans %}cancelling{% endtrans %}';
-  if (item.download_status === 'active')
-    return '{% trans %}downloading{% endtrans %}';
-  if (item.processing_status === 'active' && item.processing_phase) {
-    switch (item.processing_phase) {
-      case 'extract':       return '{% trans %}extracting{% endtrans %}';
-      case 'loudnorm':      return '{% trans %}analyzing{% endtrans %}';
-      case 'stem_separation': return '{% trans %}separating{% endtrans %}';
-      case 'transcode':     return '{% trans %}transcoding{% endtrans %}';
-            case 'align': return '{% trans %}aligning lyrics{% endtrans %}';
-            case 'transcribe': return '{% trans %}transcribing lyrics{% endtrans %}';
-            default: return '{% trans %}processing{% endtrans %}';
-    }
-  }
-  if (item.processing_status === 'active')
-    return '{% trans %}processing{% endtrans %}';
-  if (item.processing_status === 'complete' && item.lyric_method)
-    return item.lyric_method;
-  return '';
+function upperFirst(text) {
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
 }
 
-  /* ------------------------------------------------------------------
-     Render a single row
-     ------------------------------------------------------------------ */
+function urlFor(template, id) {
+  return template.replace('ITEM_ID', encodeURIComponent(id));
+}
 
-  function renderRow(item) {
-    var label = progressLabel(item);
-    var isCancelling = item.download_status === 'cancelling' || item.processing_status === 'cancelling';
-    // genius+tiling is the empirically worst-quality combo — flag it
-    // visually so a glance at the page surfaces likely-bad rows.
-    var isBadLyricMethod = item.processing_status === 'complete' && item.lyric_method === 'genius+tiling';
-    var labelClass = 'progress-label';
-    if (isCancelling) labelClass += ' cancelling';
-    else if (isBadLyricMethod) labelClass += ' warn';
-    var labelHtml = label
-      ? '<span class="' + labelClass + '">' + label + '</span>'
-      : '';
+function fmtElapsed(seconds) {
+  var s = Math.max(0, Math.floor(seconds));
+  var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  if (h) return fill(T.elapsedH, { h: h, m: m });
+  if (m) return fill(T.elapsedM, { m: m, s: s % 60 });
+  return fill(T.elapsedS, { s: s });
+}
 
-    var titleHtml = '<td class="col-title">';
-    titleHtml += '<div class="title-row">';
-    titleHtml += '<span class="is-truncated" title="' + escapeHtml(item.title) + '">' + escapeHtml(item.title) + '</span>';
-    titleHtml += labelHtml;
-    titleHtml += '</div>';
+function fmtAgo(seconds) {
+  if (seconds == null) return '';
+  if (seconds < 60) return T.justNow;
+  if (seconds < 3600) return fill(T.minAgo, { n: Math.floor(seconds / 60) });
+  if (seconds < 86400) return fill(T.hourAgo, { n: Math.floor(seconds / 3600) });
+  return fill(T.dayAgo, { n: Math.floor(seconds / 86400) });
+}
 
-    // Error message — show for both download errors and processing/separation errors
-    if (item.error_message && (item.download_status === 'error' || item.processing_status === 'error')) {
-      titleHtml += '<span class="is-size-7 has-text-danger" title="' + escapeHtml(item.error_message) + '">'
-        + escapeHtml(item.error_message.substring(0, 80)) + '</span>';
-    }
+function lyricLabel(method) {
+  if (!method) return '';
+  if (method.indexOf('srt') === 0) return T.lyricCaptions;
+  if (method.indexOf('genius') === 0) return T.lyricGenius;
+  if (method === 'transcribe' || method.indexOf('none') === 0) return T.lyricNone;
+  if (method.indexOf('override') === 0) return T.lyricFile;
+  return method;
+}
 
-    titleHtml += '</td>';
+function kindWord(row) {
+  if (row.kind === 'download') return T.kindDownload;
+  return T.labels[row.label] || row.label || '';
+}
 
-  // State key for keyed row updates — includes every field that changes the
-  // rendered row so unchanged rows are preserved (avoiding spinner jitter).
-  // actions array is included so button changes trigger re-renders.
-	var actionsKey = (item.actions || []).sort().join(',');
-	var stateKey = item.download_status + '|' + item.processing_status
-	+ '|' + (item.processing_phase || '') + '|' + (item.song_path || '') + '|' + (item.error_message || '')
-	+ '|' + actionsKey + '|' + (item.lyric_method || '');
+function phaseWord(row) {
+  if (row.processing_status === 'cancelling') return T.cancelling;
+  if (row.download_status === 'active') return T.downloading;
+  return T.phases[row.processing_phase] || T.processing;
+}
 
-    return '<tr data-id="' + item.id + '" data-state-key="' + escapeHtml(stateKey) + '" data-proc-status="' + item.processing_status + '">'
-      + titleHtml
-      + '<td class="col-icon-download">' + stateIcon(item.download_status, isCancelling) + '</td>'
-      + '<td class="col-icon-process">' + stateIcon(item.processing_status, isCancelling) + '</td>'
-      + '<td class="col-icon-queue">' + queueCell(item) + '</td>'
-      + '<td class="col-icon-cancel">' + cancelCell(item) + '</td>'
-      + '</tr>';
+function isRunning(row) {
+  return !row.db && row.group === 'active' &&
+    (row.processing_status === 'active' || row.processing_status === 'cancelling');
+}
+
+// [style, words] for a row's status tag
+function statusOf(row) {
+  if (row.db) return row.state === 'failed' ? ['failed', T.failed] : ['unfinished', T.unfinished];
+  if (row.processing_status === 'cancelling') return ['cancelling', T.cancelling];
+  if (row.download_status === 'error' || row.processing_status === 'error') return ['failed', T.failed];
+  if (row.processing_status === 'complete') return ['done', T.done];
+  if (row.download_status === 'active') return ['running', T.downloading];
+  if (row.processing_status === 'active') return ['running', T.processing];
+  return ['waiting', T.waiting];
+}
+
+var TAG_CLASS = {
+  running: 'is-info is-light',
+  waiting: 'is-light',
+  done: 'is-success is-light',
+  failed: 'is-danger is-light',
+  unfinished: 'is-warning is-light',
+  cancelling: 'is-danger is-light'
+};
+
+function tagHtml(row) {
+  var status = statusOf(row);
+  var spinner = status[0] === 'running' || status[0] === 'cancelling' ? '<span class="pr-spin"></span>' : '';
+  return '<span class="tag is-rounded pr-tag ' + TAG_CLASS[status[0]] + '">' + spinner + esc(status[1]) + '</span>';
+}
+
+function rowKey(row) {
+  return row.db ? 'db:' + row.song_path : row.id;
+}
+
+function allRows() {
+  return state.items.concat(state.attention);
+}
+
+function findRow(key) {
+  var rows = allRows();
+  for (var i = 0; i < rows.length; i++) {
+    if (rowKey(rows[i]) === key) return rows[i];
   }
+  return null;
+}
 
-  /* ------------------------------------------------------------------
-     Keyed row updates — compare data-state-key instead of replacing
-     the entire tbody innerHTML, so CSS-animated spinners don't restart.
-     ------------------------------------------------------------------ */
+function attentionRow(entry) {
+  return $.extend({ db: true, group: 'attention' }, entry);
+}
 
-function renderItems(items) {
-  var seen = {};
-  var $body = $('#pipeline-body');
-  items.slice().reverse().forEach(function(item) {
-    seen[item.id] = true;
-    var $existing = $body.find('tr[data-id="' + item.id + '"]');
-    var currKey = item.download_status + '|' + item.processing_status
-    + '|' + (item.processing_phase || '') + '|' + (item.song_path || '') + '|' + (item.error_message || '')
-    + '|' + (item.actions || []).sort().join(',') + '|' + (item.lyric_method || '');
-    if ($existing.length === 0) {
-      $body.append(renderRow(item));
-    } else if ($existing.attr('data-state-key') !== currKey) {
-      $existing.replaceWith(renderRow(item));
+/* ------------------------------------------------------- keyed DOM update */
+
+// Rebuild only the rows whose state key changed, so unchanged rows (and their
+// spinners) are left alone, and keep the rows in `entries` order.
+function syncList($container, entries) {
+  var el = $container[0];
+  var keep = {};
+  entries.forEach(function (entry, i) {
+    keep[entry.key] = true;
+    var node = null;
+    for (var child = el.firstElementChild; child; child = child.nextElementSibling) {
+      if (child.getAttribute('data-key') === entry.key) { node = child; break; }
     }
+    if (!node || node.getAttribute('data-state') !== entry.state) {
+      var holder = document.createElement('div');
+      holder.innerHTML = '<div class="pr-row" data-key="' + esc(entry.key) + '" data-state="' + esc(entry.state) +
+        '">' + entry.html + '</div>';
+      var fresh = holder.firstElementChild;
+      if (node) el.replaceChild(fresh, node); else el.appendChild(fresh);
+      node = fresh;
+    }
+    var at = el.children[i];
+    if (at !== node) el.insertBefore(node, at || null);
+  });
+  Array.prototype.slice.call(el.children).forEach(function (child) {
+    if (!keep[child.getAttribute('data-key')]) el.removeChild(child);
+  });
+}
+
+/* ------------------------------------------------------------ admin view */
+
+function subline(row) {
+  var parts = [];
+  if (row.db) {
+    return esc(row.state === 'failed' ? T.dbFailed : T.dbUnfinished);
+  }
+  parts.push(esc(kindWord(row)));
+  if (row.kind === 'download' && row.user) parts.push(esc(fill(T.by, { user: row.user })));
+  if (row.group !== 'active' && row.finished_ago_s != null) parts.push(esc(fmtAgo(row.finished_ago_s)));
+  if (row.processing_status === 'complete') {
+    var lyrics = lyricLabel(row.lyric_method);
+    if (lyrics) parts.push(esc(lyrics));
+    if (row.guessed != null) {
+      parts.push('<span class="pr-warn">' + esc(fill(T.guessed, { guessed: row.guessed, n: row.line_count })) + '</span>');
+    }
+  }
+  return parts.join(' · ');
+}
+
+function button(act, key, label, cssClass) {
+  return '<button type="button" class="button pr-act ' + (cssClass || '') + '" data-act="' + act +
+    '" data-key="' + esc(key) + '">' + esc(label) + '</button>';
+}
+
+function actionsHtml(row) {
+  var key = rowKey(row);
+  var confirming = state.confirming[key];
+  if (confirming === 'cancel') {
+    return '<div class="pr-confirm"><span>' + esc(T.confirmCancel) + '</span><div class="pr-buttons">' +
+      button('confirm-cancel', key, T.confirmCancelYes, 'is-danger') + button('keep', key, T.keep) + '</div></div>';
+  }
+  if (confirming === 'delete') {
+    return '<div class="pr-confirm"><span>' + esc(T.confirmDelete) + '</span><div class="pr-buttons">' +
+      button('confirm-delete', key, T.deleteSong, 'is-danger') + button('keep', key, T.keep) + '</div></div>';
+  }
+  var allowed = row.actions || [];
+  var has = function (name) { return allowed.indexOf(name) !== -1; };
+  var html = '';
+  if (has('retry')) html += button('retry', key, T.retry, 'is-link');
+  if (has('song_info') && row.song_path) {
+    html += '<a class="button no-spa" href="' + esc(URLS.songInfo + '?song=' + encodeURIComponent(row.song_path)) +
+      '">' + esc(T.songInfo) + '</a>';
+  }
+  if (has('enqueue')) html += button('enqueue', key, T.addToQueue);
+  if (has('cancel')) html += button('cancel', key, T.cancel);
+  // A download that failed before it produced a file has no song to delete.
+  if ((has('remove') && row.song_path) || has('delete')) {
+    html += button('delete', key, T.deleteSong, 'is-danger is-outlined');
+  }
+  if (has('dismiss')) html += button('dismiss', key, T.dismiss);
+  return '<div class="pr-buttons">' + html + '</div>';
+}
+
+function detailHtml(row) {
+  var error = row.error_message ? '<div class="pr-error">' + esc(row.error_message) + '</div>' : '';
+  return '<div class="pr-detail">' + error + actionsHtml(row) + '</div>';
+}
+
+function stateKeyOf(row, extra) {
+  var key = rowKey(row);
+  return [
+    row.group, row.position, row.download_status, row.processing_status, row.processing_phase,
+    row.song_path, row.error_message, (row.actions || []).join(','), row.lyric_method, row.guessed,
+    row.state, row.finished_ago_s == null ? '' : fmtAgo(row.finished_ago_s),
+    state.expanded[key] ? 1 : 0, state.confirming[key] || '', extra || ''
+  ].join('|');
+}
+
+function adminRow(row) {
+  var key = rowKey(row);
+  var open = !!state.expanded[key];
+  var html = '<button type="button" class="pr-line" data-key="' + esc(key) + '" aria-expanded="' + open + '">' +
+    '<span class="pr-pos">' + (row.position != null ? row.position : '') + '</span>' +
+    '<span class="pr-main"><span class="pr-title" title="' + esc(row.title) + '">' + esc(row.title) + '</span>' +
+    '<span class="pr-muted">' + subline(row) + '</span></span>' + tagHtml(row) + '</button>' +
+    (open ? detailHtml(row) : '');
+  return { key: key, state: stateKeyOf(row), html: html };
+}
+
+function nowBox(row) {
+  var key = rowKey(row);
+  var open = !!state.expanded[key];
+  var kind = row.kind === 'download' ? T.kindDownload : (row.kind === 'regen' ? T.kindRegen : T.kindProcess);
+  var html = '<button type="button" class="pr-line" data-key="' + esc(key) + '" aria-expanded="' + open + '">' +
+    '<span class="pr-now-top"><span class="pr-now-title">' + esc(T.now + ': ' + row.title) + '</span>' +
+    '<span class="tag is-rounded is-info is-light pr-tag">' + esc(kind) + '</span></span>' +
+    '<span class="pr-muted">' + esc(upperFirst(phaseWord(row))) + ' · <span id="pr-now-elapsed"></span></span>' +
+    '</button>' + (open ? detailHtml(row) : '');
+  return { key: key, state: stateKeyOf(row, phaseWord(row)), html: html };
+}
+
+function renderAdmin() {
+  var rows = state.items;
+  var active = rows.filter(function (r) { return r.group === 'active'; });
+  var attention = rows.filter(function (r) { return r.group === 'attention'; })
+    .concat(state.attention);
+  var finished = rows.filter(function (r) { return r.group === 'finished'; });
+  var running = active.length && isRunning(active[0]) ? active[0] : null;
+
+  var groups = { all: active.concat(attention, finished), active: active, attention: attention, finished: finished };
+  $('.pr-chip').each(function () {
+    var name = $(this).attr('data-filter');
+    $(this).toggleClass('is-on', name === state.filter).find('.pr-chip-n').text(groups[name].length);
   });
 
-  // Rows whose items are gone from the payload: rows that were showing the
-  // 'cancelling' spinner get a fade-out so the UX matches a user-initiated
-  // cancel. All other disappeared rows are removed instantly.
-  $body.find('tr').each(function() {
-    var $tr = $(this);
-    var id = $tr.attr('data-id');
-    if (!id || seen[id]) return;
-    if ($tr.attr('data-proc-status') === 'cancelling') {
-      fadeAndRemove($tr);
-    } else {
-      $tr.remove();
-    }
-  });
+  var listed = groups[state.filter].filter(function (r) { return r !== running; });
+  var showNow = running && (state.filter === 'all' || state.filter === 'active');
 
-  if (items.length === 0) {
-    $('#pipeline-empty').show();
-    $('#pipeline-table').hide();
+  var $now = $('#pr-now');
+  if (showNow) {
+    var box = nowBox(running);
+    if ($now.attr('data-state') !== box.state) {
+      $now.html(box.html).attr('data-state', box.state);
+    }
+    $now.removeClass('is-hidden');
   } else {
-    $('#pipeline-empty').hide();
-    $('#pipeline-table').show();
+    $now.addClass('is-hidden').attr('data-state', '').empty();
   }
+  tickElapsed();
+
+  syncList($('#pr-rows'), listed.map(adminRow));
+  var total = groups.all.length;
+  $('#pr-rows').toggleClass('is-hidden', !listed.length);
+  $('#pr-empty').toggleClass('is-hidden', total > 0);
+  $('#pr-empty-list').toggleClass('is-hidden', !(total > 0 && !listed.length && !showNow));
+  $('#pr-hint').toggleClass('is-hidden', !(listed.length || showNow));
+
+  var nFinished = finished.length;
+  $('#pr-clear').toggleClass('is-hidden', nFinished === 0).text(fill(T.clearFinished, { n: nFinished }));
 }
 
-  /* ------------------------------------------------------------------
-     Optimistic-UI fade
-     ------------------------------------------------------------------ */
-
-  function fadeAndRemove($row) {
-    $row.addClass('is-fading').fadeOut(1000, function() { $(this).remove(); });
-  }
-
-/* ------------------------------------------------------------------
-AJAX helpers — fetchStatus is now triggered by Socket.IO push
-(pipeline_updated) with a 10s fallback poll for reconnect / missed-event
-drift, instead of the old 1s poll that raced with user actions.
------------------------------------------------------------------- */
-
-var fetchTimer = null;
-function fetchStatus(immediate) {
-  if (fetchTimer) { clearTimeout(fetchTimer); fetchTimer = null; }
-
-  var doFetch = function() {
-    if ($('#pipeline-table').length === 0) {
-      return; // Left the page
-    }
-    $.get('{{ url_for("processing.processing_status") }}', function(data) {
-      var items = JSON.parse(data);
-      renderItems(items);
-    });
-    // 10s fallback poll — covers reconnect / missed-event drift.
-    // Primary updates come from the `pipeline_updated` socket event.
-    if (pollTimer) { clearTimeout(pollTimer); }
-    pollTimer = setTimeout(fetchStatus, pollInterval);
-  };
-
-  if (immediate === true) {
-    doFetch();
-  } else {
-    fetchTimer = setTimeout(doFetch, 250);
-  }
+function tickElapsed() {
+  var el = document.getElementById('pr-now-elapsed');
+  if (!el) return;
+  el.textContent = state.nowBase ? fmtElapsed(state.nowBase.s + (Date.now() - state.nowBase.at) / 1000) : '';
 }
 
-  function enqueueItem(itemId) {
-    $.ajax({
-      url: '{{ url_for("processing.enqueue_item", item_id="ITEM_ID") }}'.replace('ITEM_ID', itemId),
-      type: 'POST'
-    }).done(function() {
-      fadeAndRemove($('tr[data-id="' + itemId + '"]'));
-      fetchStatus();
-    });
+/* ------------------------------------------------------------ guest view */
+
+function guestIcon(row) {
+  var status = statusOf(row)[0];
+  if (status === 'done') return '&#10003;';
+  if (status === 'failed') return '&#10007;';
+  if (status === 'running' || status === 'cancelling') return '<span class="pr-spin"></span>';
+  return '&#9719;';
+}
+
+function guestRow(row) {
+  var key = rowKey(row);
+  var who = row.mine ? '<span class="pr-you">' + esc(T.you) + '</span>'
+    : (row.user ? '<span class="pr-muted">' + esc(fill(T.addedBy, { user: row.user })) + '</span>' : '');
+  var note = '';
+  if (row.group === 'attention') {
+    note = row.download_status === 'error' ? T.downloadFailed : T.processingFailed;
+  } else if (row.group === 'finished') {
+    note = T.readyToSing + (row.finished_ago_s != null ? ' · ' + fmtAgo(row.finished_ago_s) : '');
   }
-
-  function removeItem(itemId) {
-    $.ajax({
-      url: '{{ url_for("processing.remove_item", item_id="ITEM_ID") }}'.replace('ITEM_ID', itemId),
-      type: 'POST'
-    }).done(function() {
-      fadeAndRemove($('tr[data-id="' + itemId + '"]'));
-      fetchStatus();
-    });
+  var allowed = row.actions || [];
+  var side = '';
+  if (allowed.indexOf('enqueue') !== -1) {
+    side = '<button type="button" class="button pr-act pr-gbtn" data-act="enqueue" data-key="' + esc(key) +
+      '" aria-label="' + esc(T.addToQueue) + '">+</button>';
+  } else if (allowed.indexOf('cancel') !== -1 && !state.confirming[key]) {
+    side = '<button type="button" class="button pr-act pr-gbtn" data-act="cancel" data-key="' + esc(key) +
+      '" aria-label="' + esc(T.cancel) + '">&times;</button>';
   }
+  var confirm = state.confirming[key] === 'cancel'
+    ? '<div class="pr-confirm"><span>' + esc(T.confirmCancel) + '</span><div class="pr-buttons">' +
+      button('confirm-cancel', key, T.confirmCancelYes, 'is-danger') + button('keep', key, T.keep) + '</div></div>'
+    : '';
+  var html = '<div class="pr-grow"><span class="pr-gicon">' + guestIcon(row) + '</span><div class="pr-gmain">' +
+    '<span class="pr-title" title="' + esc(row.title) + '">' + esc(row.title) + '</span>' +
+    '<div class="pr-gtags">' + tagHtml(row) + who + '</div>' +
+    (note ? '<span class="pr-muted">' + esc(note) + '</span>' : '') + confirm + '</div>' + side + '</div>';
+  return { key: key, state: stateKeyOf(row, row.mine ? 'mine' : ''), html: html };
+}
 
-  /* ------------------------------------------------------------------
-     Event delegation — action buttons with confirmation prompts
-     ------------------------------------------------------------------ */
-
-  // Remove any previously-registered handlers before rebinding. The SPA
-  // navigation in spa-navigation.js re-executes this inline script on every
-  // visit; without .off() the document-delegated handlers accumulate and a
-  // single click fires N AJAX calls / N confirm dialogs after N visits.
-  $(document).off('click.processing');
-
-// Cancel — confirm via window.confirm(), then branch fade on processing_status.
-// When download is active/pending, cancel() removes the item synchronously so
-// fading is safe. When separation is active, cancel() is async (item stays in
-// tracker with cancelling=True), so we skip the fade and let the push-driven
-// fetchStatus update the row to show the cancelling spinner.
-$(document).on('click.processing', '.pipeline-cancel-btn', function(e) {
-  e.preventDefault();
-  var id = $(this).data('id');
-  var $row = $('tr[data-id="' + id + '"]');
-  var title = $row.find('.is-truncated').text();
-  var msg = (window.i18n && window.i18n.confirmCancelPipeline)
-    ? window.i18n.confirmCancelPipeline.replace('SONG_TITLE', title)
-    : 'Are you sure you want to cancel "' + title + '"?';
-  if (!window.confirm(msg)) return;
-
-  var procStatus = $row.attr('data-proc-status');
-  var ajaxOpts = isAdmin
-    ? {
-      url: '{{ url_for("processing.cancel_item", item_id="ITEM_ID") }}'.replace('ITEM_ID', id),
-      type: 'POST'
-    }
-    : {
-      url: '{{ url_for("processing.user_cancel_item") }}',
-      type: 'POST',
-      data: { id: id }
-    };
-  $.ajax(ajaxOpts).done(function() {
-    if (procStatus !== 'active') {
-      // Synchronous cancel (download/pending) — item is already gone from
-      // the tracker; fade the row immediately.
-      fadeAndRemove($row);
-    }
-    // For active processing: no local fade — the push-driven fetchStatus
-    // will update the row to show the cancelling spinner, and a second
-    // push when the orchestrator finishes will trigger the fade via
-    // renderItems' cancelling-row detection.
-    fetchStatus();
-  }).fail(function() {
-    // 403 (stale cookie, ownership mismatch) or other failure — refresh
-    // so the user sees the item is still there.
-    fetchStatus();
+function renderGuest() {
+  var rows = state.items;
+  ['active', 'finished', 'attention'].forEach(function (group) {
+    var members = rows.filter(function (r) { return r.group === group; });
+    var $section = $('#pr-sec-' + group);
+    $section.toggleClass('is-hidden', members.length === 0);
+    $section.find('.pr-sec-n').text(members.length);
+    syncList($section.find('.pr-card'), members.map(guestRow));
   });
+  $('#pr-empty').toggleClass('is-hidden', rows.length > 0);
+}
+
+/* ------------------------------------------------------------ data flow */
+
+function render() {
+  var present = {};
+  allRows().forEach(function (row) { present[rowKey(row)] = true; });
+  [state.expanded, state.confirming].forEach(function (map) {
+    Object.keys(map).forEach(function (key) { if (!present[key]) delete map[key]; });
+  });
+  if (isAdmin) renderAdmin(); else renderGuest();
+}
+
+function fetchJson(url) {
+  return $.ajax({ url: url, dataType: 'json', cache: false });
+}
+
+function takeItems(items) {
+  state.items = items;
+  // The running job's clock counts on from this reading until the next one.
+  var running = items.filter(isRunning)[0];
+  state.nowBase = running && running.elapsed_s != null ? { s: running.elapsed_s, at: Date.now() } : null;
+}
+
+function refresh() {
+  clearTimeout(page.poll);
+  if (!document.getElementById('pr-root')) return; // left the page
+  fetchJson(URLS.status).done(function (items) {
+    if (!isAdmin) {
+      takeItems(items);
+      render();
+      return;
+    }
+    fetchJson(URLS.attention).done(function (attention) {
+      state.attention = attention.map(attentionRow);
+    }).always(function () {
+      takeItems(items);
+      render();
+    });
+  });
+  page.poll = setTimeout(refresh, POLL_MS);
+}
+
+function refreshSoon() {
+  clearTimeout(page.soon);
+  page.soon = setTimeout(refresh, 250);
+}
+
+function loadOverview() {
+  fetchJson(URLS.overview).done(function (counts) {
+    $('[data-count]').each(function () {
+      var n = counts[$(this).attr('data-count')];
+      $(this).text(n == null ? '…' : n);
+    });
+  });
+}
+
+function post(url, data) {
+  $.ajax({ url: url, type: 'POST', data: data }).done(function (response) {
+    var result = response;
+    if (typeof response === 'string') {
+      try { result = JSON.parse(response); } catch (err) { result = null; }
+    }
+    if (result && result.success === false) {
+      showNotification(result.error || T.actionFailed, 'is-danger');
+    }
+  }).fail(function (xhr) {
+    var message = '';
+    try { message = JSON.parse(xhr.responseText).error; } catch (err) {}
+    showNotification(message || T.actionFailed, 'is-danger');
+  }).always(refreshSoon);
+}
+
+function postJson(url, body) {
+  $.ajax({ url: url, type: 'POST', contentType: 'application/json', data: JSON.stringify(body) })
+    .fail(function (xhr) {
+      var message = '';
+      try { message = JSON.parse(xhr.responseText).error; } catch (err) {}
+      showNotification(message || T.actionFailed, 'is-danger');
+    }).always(refreshSoon);
+}
+
+function runAction(row, act) {
+  var key = rowKey(row);
+  switch (act) {
+    case 'cancel':
+    case 'delete':
+      state.confirming[key] = act;
+      state.expanded[key] = true;
+      render();
+      break;
+    case 'keep':
+      delete state.confirming[key];
+      render();
+      break;
+    case 'confirm-cancel':
+      delete state.confirming[key];
+      if (isAdmin) post(urlFor(URLS.cancel, row.id));
+      else post(URLS.userCancel, { id: row.id });
+      render();
+      break;
+    case 'confirm-delete':
+      if (row.db) {
+        window.location.href = URLS.deleteFile + '?song=' + encodeURIComponent(row.song_path) +
+          '&referrer=' + encodeURIComponent('/processing');
+      } else {
+        post(urlFor(URLS.remove, row.id));
+      }
+      break;
+    case 'retry':
+      if (row.db) postJson(URLS.retrySong, { song: row.song_path });
+      else post(urlFor(URLS.retry, row.id));
+      break;
+    case 'enqueue':
+      post(urlFor(URLS.enqueue, row.id));
+      break;
+    case 'dismiss':
+      post(urlFor(URLS.dismiss, row.id));
+      break;
+  }
+}
+
+/* --------------------------------------------------------------- events */
+
+// The SPA re-runs this script on every visit: drop the old handlers first.
+$(document).off('click.processing');
+
+$(document).on('click.processing', '.pr-line', function () {
+  var key = $(this).attr('data-key');
+  state.expanded[key] = !state.expanded[key];
+  if (!state.expanded[key]) delete state.confirming[key];
+  render();
 });
 
-  // Enqueue — no confirmation needed
-  $(document).on('click.processing', '.pipeline-enqueue-btn', function(e) {
-    e.preventDefault();
-    enqueueItem($(this).data('id'));
+$(document).on('click.processing', '.pr-act', function (e) {
+  e.preventDefault();
+  var row = findRow($(this).attr('data-key'));
+  if (row) runAction(row, $(this).attr('data-act'));
+});
+
+$(document).on('click.processing', '.pr-chip', function () {
+  state.filter = $(this).attr('data-filter');
+  render();
+});
+
+$(document).on('click.processing', '#pr-clear', function () {
+  post(URLS.clearFinished);
+});
+
+$(document).on('click.processing', '.pr-tabs li', function (e) {
+  e.preventDefault();
+  showTab($(this).attr('data-tab'));
+});
+
+function showTab(name) {
+  if (name !== 'jobs' && name !== 'tools') name = 'jobs';
+  $('.pr-tabs li').each(function () {
+    var on = $(this).attr('data-tab') === name;
+    $(this).toggleClass('is-active', on).find('a').attr('aria-selected', on);
   });
+  $('#pr-jobs').toggleClass('is-hidden', name !== 'jobs');
+  $('#pr-tools').toggleClass('is-hidden', name !== 'tools');
+  try { window.history.replaceState(window.history.state, '', '#' + name); } catch (err) {}
+  if (name === 'tools') loadOverview();
+}
 
-  // Remove — confirm via window.confirm() before acting
-  $(document).on('click.processing', '.pipeline-remove-btn', function(e) {
-    e.preventDefault();
-    var id = $(this).data('id');
-    var $row = $('tr[data-id="' + id + '"]');
-    var title = $row.find('.is-truncated').text();
-    var msg = (window.i18n && window.i18n.confirmRemovePipeline)
-      ? window.i18n.confirmRemovePipeline.replace('SONG_TITLE', title)
-      : 'Are you sure you want to remove "' + title + '"?';
-    if (!window.confirm(msg)) return;
-
-    removeItem(id);
-  });
-
-  /* ------------------------------------------------------------------
-     Utilities
-     ------------------------------------------------------------------ */
-
-  function escapeHtml(str) {
-    if (!str) return '';
-    var div = document.createElement('div');
-    div.appendChild(document.createTextNode(str));
-    return div.innerHTML;
-  }
-
-// Socket listeners — push-driven re-renders replace the old 1s poll.
-// `pipeline_updated` is emitted by the server after every tracker
-// mutation (new item, status change, removal, cancel). Detach prior
-// registrations — the SPA re-executes this script each visit.
+// Push updates replace the old 1 s poll; the SPA re-runs this script each visit,
+// so detach the previous registration first.
 if (typeof window.socket !== 'undefined') {
   window.socket.off('pipeline_updated');
-  window.socket.on('pipeline_updated', function() {
-    fetchStatus();
-  });
+  window.socket.on('pipeline_updated', refreshSoon);
 }
 
-  // Start polling
-  $(function() {
-    fetchStatus(true);
-  });
+page.tick = setInterval(function () {
+  if (!document.getElementById('pr-root')) {
+    clearInterval(page.tick);
+    return;
+  }
+  tickElapsed();
+}, 1000);
 
-  // Cleanup on page hide
-  window.addEventListener('beforeunload', function() {
-    if (pollTimer) {
-      clearTimeout(pollTimer);
-    }
-  });
+$(function () {
+  if (isAdmin) showTab(window.location.hash.replace('#', ''));
+  refresh();
+});
 })();
 </script>
-
-<style>
-/* ==========================================================================
-   CSS custom properties — Bulma 0.9.x doesn't define --bulma-* vars,
-   so we provide concrete values here matching the project theme.
-   ========================================================================== */
-:root {
-  --bulma-grey: #b5b5b5;
-  --bulma-grey-dark: #4a4a4a;
-  --bulma-danger: #f14668;
-  --bulma-success: #48c774;
-
-  /* Icon column sizes */
-  --icon-col-download: 1.75rem;
-  --icon-col-process: 1.75rem;
-  --icon-col-queue: 2rem;
-  --icon-col-cancel: 2rem;
-
-  /* Icon sizes */
-  --spinner-size: 0.975em;
-  --spinner-speed: 2s;
-  --spinner-y-offset: -0.06em;
-  --icon-size-clock: 1em;
-  --icon-size-ok: 1em;
-  --icon-size-error: 1.1em;
-  --icon-size-queue: 1.6em;
-  --icon-size-cancel: 1.6em;
-  --icon-size-header: 1.5em;
-
-  /* Icon colors — mostly grey; only cancelling spinner and action buttons carry color */
-  --icon-color-spinner: var(--bulma-grey);
-  --icon-color-spinner-dim: rgba(181, 181, 181, 0.3); /* 30% of --bulma-grey */
-  --icon-color-cancelling: var(--bulma-danger);
-  --icon-color-clock: var(--bulma-grey);
-  --icon-color-ok: var(--bulma-grey);
-  --icon-color-error: var(--bulma-grey);
-  --icon-color-queue: var(--bulma-success);
-  --icon-color-cancel: var(--bulma-danger);
-  --icon-color-remove: var(--bulma-danger);
-  --icon-color-header: inherit;
-
-  /* Text sizes */
-  --text-size-progress: 0.75rem;
-
-  /* Text colors */
-  --text-color-progress: var(--bulma-grey);
-  --text-color-cancelling: var(--bulma-danger);
-}
-
-/* Fixed-width icon columns */
-.col-icon-download { width: var(--icon-col-download); text-align: center; vertical-align: middle; padding: 0; }
-.col-icon-process { width: var(--icon-col-process); text-align: center; vertical-align: middle; padding: 0; }
-.col-icon-queue { width: var(--icon-col-queue); text-align: center; vertical-align: middle; padding: 0; }
-.col-icon-cancel { width: var(--icon-col-cancel); text-align: center; vertical-align: middle; padding: 0; }
-
-#pipeline-table th[class^="col-icon"] .icon { color: var(--icon-color-header) !important; font-size: var(--icon-size-header); }
-
-/* Title cell */
-.col-title { vertical-align: middle; }
-.title-row { display: flex; align-items: center; min-width: 0; }
-.title-row .is-truncated { flex: 1 1 auto; min-width: 0; }
-.progress-label { flex: 0 0 auto; margin-left: 0.5em; font-size: var(--text-size-progress); color: var(--text-color-progress); }
-.progress-label.cancelling { color: var(--icon-color-cancelling); }
-.progress-label.warn { color: var(--icon-color-cancelling); }
-
-/* Strip Bulma's cell padding for compact icon columns */
-#pipeline-table th, #pipeline-table td { padding: 0; vertical-align: middle; }
-#pipeline-table td:first-child { padding: 0.5em 0.25rem 0.5em 0; }
-
-/* Common wrapper for state icons — fills full cell width so content centers
-   against the same axis as the header icon above it. */
-.state-box {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  line-height: 1;
-}
-
-/* CSS-generated rotating spinner */
-.spinner-css {
-  display: inline-block;
-  width: var(--spinner-size);
-  height: var(--spinner-size);
-  border: calc(var(--spinner-size) * 0.13) solid var(--icon-color-spinner-dim);
-  border-top-color: var(--icon-color-spinner);
-  border-right-color: var(--icon-color-spinner);
-  border-radius: 50%;
-  animation: spin var(--spinner-speed) linear infinite;
-  margin-top: var(--spinner-y-offset);
-}
-
-/* Cancelling spinner — red/danger color */
-.spinner-css.cancelling {
-  border-top-color: var(--icon-color-cancelling);
-  border-right-color: var(--icon-color-cancelling);
-}
-
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-/* Fontello icons inside .state-box */
-.state-box > .icon,
-.state-box > a > .icon { line-height: 1; margin: 0; }
-.state-box > .icon.icon-clock,
-.state-box > a > .icon.icon-clock { font-size: var(--icon-size-clock); color: var(--icon-color-clock); }
-.state-box > .icon.icon-ok,
-.state-box > a > .icon.icon-ok { font-size: var(--icon-size-ok); }
-.state-box > .icon.icon-cancel-circled-1,
-.state-box > a > .icon.icon-cancel-circled-1.icon-state-error { font-size: var(--icon-size-error); }
-.state-box > a > .icon.icon-list-add.icon-action-queue { font-size: var(--icon-size-queue); }
-.state-box > a > .icon.icon-cancel-circled-1.icon-action-cancel,
-.state-box > a > .icon.icon-trash-empty { font-size: var(--icon-size-cancel); }
-
-/* State icon colors */
-.icon-state-ok { color: var(--icon-color-ok); }
-.icon-state-error { color: var(--icon-color-error); }
-.icon-state-cancelling { color: var(--icon-color-cancelling); }
-
-/* Action icons */
-.pipeline-action-btn { text-decoration: none; }
-.icon-action-queue { color: var(--icon-color-queue); }
-.icon-action-cancel { color: var(--icon-color-cancel); }
-.icon-action-remove { color: var(--icon-color-remove); }
-
-/* Truncated text */
-.is-truncated {
-  display: inline-block;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-</style>
 {% endblock %}

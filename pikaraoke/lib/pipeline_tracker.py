@@ -6,11 +6,13 @@ import logging
 import threading
 import time
 import uuid
+from pathlib import Path
 from typing import Any
 
 from pikaraoke.lib.download_manager import DownloadManager
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.library_regen import RegenJob
+from pikaraoke.lib.library_status import song_status
 from pikaraoke.lib.metadata_parser import youtube_id_suffix
 from pikaraoke.lib.processing_manager import ProcessingManager
 from pikaraoke.lib.queue_manager import QueueManager
@@ -65,6 +67,10 @@ class PipelineItem:
         # (e.g. "genius+joint", "srt+joint", "transcribe"). Surfaced in the
         # processing-page label so the lyric source is visible at a glance.
         self.lyric_method: str | None = None
+        # Set at completion when the song looks poor (see library_status): how
+        # many of its lines have no word timing. Shown to admins only.
+        self.guessed: int | None = None
+        self.line_count: int | None = None
 
     @property
     def is_terminal(self) -> bool:
@@ -113,15 +119,17 @@ class PipelineTracker:
         self._events.on("pipeline_stage_changed", self._on_pipeline_stage_changed)
 
     def get_status(self, admin: bool = False, user: str | None = None) -> list[dict[str, Any]]:
-        """Return enriched status for all pipeline items.
+        """Return enriched status for all pipeline items, in the order the page shows them.
 
         Derives processing status from ProcessingManager state and flips
         the active download status by reading DownloadManager.active_url.
         Includes an ``actions`` list per item so the client doesn't have
         to re-derive which buttons to show — auth logic lives here, in
-        one place.
+        one place. Each row also carries its ``group`` and, in the active
+        group, its queue ``position`` (see :meth:`_in_display_order`).
 
-        Library-tool (``regen``) rows are left out for non-admins.
+        Only ``download`` rows are shown to non-admins: regen and process
+        rows are library maintenance.
 
         Args:
             admin: Whether the requesting user is an admin.
@@ -134,51 +142,119 @@ class PipelineTracker:
             pending_jobs = list(self._processing_manager.pending_jobs)
             active_url = self._download_manager.active_url
 
-            results = []
+            rows = []
             for item in self._items:
-                if item.kind == "regen" and not admin:
+                if item.kind != "download" and not admin:
                     continue
                 if active_url == item.url and item.download_status == "pending":
                     item.download_status = "active"
+                self._derive_processing_status(item, active_job, active_phase, pending_jobs)
+                running = item.song_path is not None and item.song_path == active_job
+                elapsed_s = active_elapsed_s if running and item.finished_at is None else None
+                rows.append((item, self._item_to_dict(item, admin, user, elapsed_s)))
 
-                # Cancelling overrides all other processing status
-                if item.cancelling:
-                    item.processing_status = "cancelling"
-                    item.processing_phase = None
-                    results.append(self._item_to_dict(item, admin, user))
-                    continue
+            return self._in_display_order(rows, active_job, pending_jobs)
 
-                # A row its complete or error event finished keeps that status:
-                # the manager names the job as running until it has cleaned up.
-                if item.finished_at is not None:
-                    results.append(self._item_to_dict(item, admin, user))
-                    continue
+    @staticmethod
+    def _derive_processing_status(
+        item: PipelineItem,
+        active_job: str | None,
+        active_phase: str | None,
+        pending_jobs: list[str],
+    ) -> None:
+        """Set the item's processing status and phase from the manager's live state."""
+        # Cancelling overrides all other processing status
+        if item.cancelling:
+            item.processing_status = "cancelling"
+            item.processing_phase = None
+            return
 
-                # Derive processing status
-                if item.song_path is None:
-                    # Download not yet complete — show error if download failed
-                    if item.download_status == "error":
-                        item.processing_status = "error"
-                    else:
-                        item.processing_status = "waiting"
-                    item.processing_phase = None
-                elif active_job == item.song_path:
-                    item.processing_status = "active"
-                    item.processing_phase = active_phase
-                elif item.song_path in pending_jobs:
-                    item.processing_status = "pending"
-                    item.processing_phase = None
-                else:
-                    # Download complete and not in processing queues
-                    # Preserve "complete"/"error" already set by events
-                    if item.processing_status not in ("complete", "error"):
-                        item.processing_status = "complete"
-                    item.processing_phase = None
+        # A row its complete or error event finished keeps that status:
+        # the manager names the job as running until it has cleaned up.
+        if item.finished_at is not None:
+            return
 
-                elapsed_s = active_elapsed_s if item.processing_status == "active" else None
-                results.append(self._item_to_dict(item, admin, user, elapsed_s))
+        if item.song_path is None:
+            # Download not yet complete — show error if download failed
+            if item.download_status == "error":
+                item.processing_status = "error"
+            else:
+                item.processing_status = "waiting"
+            item.processing_phase = None
+        elif active_job == item.song_path:
+            item.processing_status = "active"
+            item.processing_phase = active_phase
+        elif item.song_path in pending_jobs:
+            item.processing_status = "pending"
+            item.processing_phase = None
+        else:
+            # Download complete and not in processing queues
+            # Preserve "complete"/"error" already set by events
+            if item.processing_status not in ("complete", "error"):
+                item.processing_status = "complete"
+            item.processing_phase = None
 
-            return results
+    @staticmethod
+    def _in_display_order(
+        rows: list[tuple[PipelineItem, dict[str, Any]]],
+        active_job: str | None,
+        pending_jobs: list[str],
+    ) -> list[dict[str, Any]]:
+        """Sort rows for display and stamp each with its ``group`` and ``position``.
+
+        Groups come in this order, each sorted as described:
+
+        - ``active``: the running job; the download in progress; downloads
+          waiting to start, in the order they were added; then songs waiting
+          for processing in the order the manager will run them (the download
+          lane, which holds downloads and process rows, before the regen lane).
+          Every active row but the running one gets a ``position`` from 1.
+        - ``attention``: downloads and jobs that failed, newest first.
+        - ``finished``: complete rows, newest first.
+        """
+
+        def group_of(item: PipelineItem) -> str:
+            if item.download_status == "error" or item.processing_status == "error":
+                return "attention"
+            return "finished" if item.processing_status == "complete" else "active"
+
+        def is_running(item: PipelineItem) -> bool:
+            return item.cancelling or (item.song_path is not None and item.song_path == active_job)
+
+        def active_rank(item: PipelineItem) -> tuple[int, int]:
+            """(step, queue order); equal ranks keep the order the rows were added."""
+            if is_running(item):
+                return 0, 0
+            if item.download_status == "active":
+                return 1, 0
+            if item.download_status == "pending":
+                return 2, 0
+            queued = pending_jobs.index(item.song_path) if item.song_path in pending_jobs else 0
+            return (4 if item.kind == "regen" else 3), queued
+
+        groups: dict[str, list[tuple[PipelineItem, dict[str, Any]]]] = {
+            "active": [],
+            "attention": [],
+            "finished": [],
+        }
+        for item, result in rows:
+            groups[group_of(item)].append((item, result))
+
+        ordered = []
+        for group, members in groups.items():
+            if group == "active":
+                members.sort(key=lambda member: active_rank(member[0]))
+            else:
+                members.sort(key=lambda member: -(member[0].finished_at or 0.0))
+            position = 0
+            for item, result in members:
+                result["group"] = group
+                result["position"] = None
+                if group == "active" and not is_running(item):
+                    position += 1
+                    result["position"] = position
+                ordered.append(result)
+        return ordered
 
     def cancel(self, item_id: str) -> bool:
         """Cancel an in-progress download or processing job.
@@ -402,7 +478,9 @@ class PipelineTracker:
             for item in self._items:
                 if item.url == url and item.download_status in ("pending", "active"):
                     item.download_status = "error"
+                    item.processing_status = "error"
                     item.error_message = data.get("error", "Unknown error")
+                    item.finished_at = time.time()
                     break
         self._notify_change()
 
@@ -449,6 +527,7 @@ class PipelineTracker:
     def _on_processing_complete(self, data: dict[str, Any]) -> None:
         song_path = data["song_path"]
         lyric_method = data.get("lyric_method")
+        poor = self._poor_lines(song_path)  # reads the new bundle; keep it outside the lock
         with self._lock:
             item = self._find_unfinished(song_path)
             if item is not None:
@@ -458,6 +537,8 @@ class PipelineTracker:
                 item.finished_at = time.time()
                 if lyric_method is not None:
                     item.lyric_method = lyric_method
+                if poor is not None:
+                    item.guessed, item.line_count = poor
         self._notify_change()
 
     def _on_processing_cancelled(self, song_path: str) -> None:
@@ -519,6 +600,20 @@ class PipelineTracker:
                 self._on_change()
             except Exception:
                 logging.debug("pipeline_tracker on_change callback failed", exc_info=True)
+
+    @staticmethod
+    def _poor_lines(song_path: str) -> tuple[int, int] | None:
+        """(guessed, line_count) when the finished song looks poor, else None.
+
+        Never raises: an exception from an event handler would reach the
+        manager and fail a job that had just succeeded.
+        """
+        try:
+            status = song_status(Path(song_path))
+        except (OSError, ValueError, TypeError, AttributeError) as e:
+            logging.warning("Could not read the bundle of %s: %s", song_path, e)
+            return None
+        return (status.guessed, status.line_count) if status.poor else None
 
     def _delete_song(self, song_path: str) -> None:
         """Delete song file from library. Must be called outside _lock."""
@@ -589,6 +684,8 @@ class PipelineTracker:
                 # Retry: processing failed on a song that is in the library.
                 if item.processing_status == "error" and item.song_path:
                     actions.append("retry")
+                if item.song_path:
+                    actions.append("song_info")
 
             # Enqueue: available when both stages are complete and song exists
             if (
@@ -613,6 +710,9 @@ class PipelineTracker:
             "error_message": item.error_message,
             "actions": actions,
             "lyric_method": item.lyric_method,
+            "mine": is_owner,
+            "guessed": item.guessed if admin else None,
+            "line_count": item.line_count if admin else None,
             "finished_ago_s": (
                 time.time() - item.finished_at if item.finished_at is not None else None
             ),

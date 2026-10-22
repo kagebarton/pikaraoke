@@ -41,6 +41,37 @@ def processing_status():
     return json.dumps(items)
 
 
+@processing_bp.route("/processing/attention")
+def processing_attention():
+    """Songs the database says never finished processing (admin only; guests get none)."""
+    if not is_admin():
+        return jsonify([])
+    k = get_karaoke_instance()
+    tracked = {
+        item["song_path"] for item in k.pipeline_tracker.get_status(admin=True) if item["song_path"]
+    }
+    return jsonify(k.library_tools.attention_rows(tracked))
+
+
+@processing_bp.route("/processing/song/retry", methods=["POST"])
+def retry_song():
+    """Process a library song that has no job row, such as one left unfinished (admin only)."""
+    if not is_admin():
+        return jsonify({"success": False, "error": _("Admin only")}), 403
+    k = get_karaoke_instance()
+    body = request.get_json(silent=True)
+    song = body.get("song") if isinstance(body, dict) else None
+    if not isinstance(song, str) or song not in k.song_manager.songs:
+        return jsonify({"success": False, "error": _("Not a song in the library")}), 400
+    if k.library_tools.is_busy(song):
+        return (
+            jsonify({"success": False, "error": _("This song is already waiting or running.")}),
+            400,
+        )
+    k.processing_manager.enqueue(song)
+    return jsonify({"success": True})
+
+
 @processing_bp.route("/processing/user/cancel", methods=["POST"])
 def user_cancel_item():
     """Let a user cancel their own pipeline item."""

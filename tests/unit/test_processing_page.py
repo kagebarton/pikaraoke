@@ -1,0 +1,171 @@
+"""Render tests for the Processing page: what an admin and a guest are handed.
+
+A Flask app with the real templates and the processing, library and song-info
+blueprints. The page's rows are drawn by its script from ``/processing/status``,
+so these tests look at the page's markup and at the JSON the script reads.
+"""
+
+import json
+import os
+from unittest.mock import MagicMock, patch
+from urllib.parse import quote
+
+import pytest
+import werkzeug
+from flask import Flask
+from flask_babel import Babel
+
+if not hasattr(werkzeug, "__version__"):
+    werkzeug.__version__ = "3.0.0"
+
+import pikaraoke
+from pikaraoke.lib.events import EventSystem
+from pikaraoke.lib.pipeline_tracker import PipelineTracker
+from pikaraoke.lib.song_manager import SongManager
+from pikaraoke.routes.library import library_bp
+from pikaraoke.routes.processing import processing_bp
+from pikaraoke.routes.song_info import song_info_bp
+
+ROUTE_PREFIX = "pikaraoke.routes.processing"
+
+# Endpoints base.html and the page's script resolve that these blueprints don't provide.
+_STUB_ENDPOINTS = ("home.home", "queue.queue", "search.search", "files.browse", "info.info")
+_STUB_RULES = {"files.delete_file": "/files/delete"}
+
+SONG = "/songs/Library Song---abcdefghijk.mp4"
+
+
+@pytest.fixture
+def env():
+    pkg_dir = os.path.dirname(pikaraoke.__file__)
+    app = Flask(
+        __name__,
+        template_folder=os.path.join(pkg_dir, "templates"),
+        static_folder=os.path.join(pkg_dir, "static"),
+    )
+    app.secret_key = "test"
+    for blueprint in (processing_bp, library_bp, song_info_bp):
+        app.register_blueprint(blueprint)
+    for endpoint in _STUB_ENDPOINTS:
+        app.add_url_rule(f"/__stub/{endpoint}", endpoint=endpoint, view_func=lambda *a, **k: "")
+    for endpoint, rule in _STUB_RULES.items():
+        app.add_url_rule(rule, endpoint=endpoint, view_func=lambda *a, **k: "")
+    Babel(app)
+    app.jinja_env.globals.update(
+        filename_from_path=SongManager.filename_from_path, url_escape=quote
+    )
+
+    processing = MagicMock()
+    processing.get_active_job.return_value = None
+    processing.get_active_phase.return_value = None
+    processing.get_active_elapsed_s.return_value = None
+    processing.pending_jobs = []
+    download = MagicMock()
+    download.active_url = None
+    tracker = PipelineTracker(
+        download_manager=download,
+        processing_manager=processing,
+        queue_manager=MagicMock(),
+        song_manager=MagicMock(),
+        events=EventSystem(),
+    )
+    karaoke = MagicMock()
+    karaoke.pipeline_tracker = tracker
+    karaoke.preferences.get.return_value = "PiKaraoke"
+    return app, karaoke
+
+
+def get(env, path, *, admin):
+    app, karaoke = env
+    with patch(f"{ROUTE_PREFIX}.get_karaoke_instance", return_value=karaoke), patch(
+        f"{ROUTE_PREFIX}.is_admin", return_value=admin
+    ):
+        return app.test_client().get(path)
+
+
+class TestProcessingPage:
+    def test_an_admin_gets_the_jobs_and_library_tools_tabs(self, env):
+        body = get(env, "/processing", admin=True).get_data(as_text=True)
+
+        assert 'data-tab="jobs"' in body and 'data-tab="tools"' in body
+        for chip in ("all", "active", "attention", "finished"):
+            assert f'data-filter="{chip}"' in body
+        assert 'id="pr-now"' in body and 'id="pr-clear"' in body
+
+    def test_the_library_tab_links_the_four_song_lists(self, env):
+        body = get(env, "/processing", admin=True).get_data(as_text=True)
+
+        for name in ("behind", "poor", "no_lyrics", "all"):
+            assert f'href="/library/songs?list={name}"' in body
+            assert f'data-count="{name}"' in body
+
+    def test_a_guest_gets_no_tabs_chips_or_library_links(self, env):
+        body = get(env, "/processing", admin=False).get_data(as_text=True)
+
+        assert "data-tab=" not in body and "data-filter=" not in body
+        assert 'id="pr-tools"' not in body and "/library/" not in body
+        assert "Library tools" not in body
+
+    def test_a_guest_gets_the_intro_and_three_headed_sections(self, env):
+        body = get(env, "/processing", admin=False).get_data(as_text=True)
+
+        assert "Songs being downloaded and prepared for karaoke." in body
+        for section in ("Getting ready", "Ready", "Problems"):
+            assert f"{section} (<span" in body
+        assert "Library maintenance" not in body
+
+    def test_a_guest_is_not_handed_the_admin_routes(self, env):
+        body = get(env, "/processing", admin=False).get_data(as_text=True)
+
+        for admin_only in ("/processing/attention", "/processing/song/retry", "/files/delete"):
+            assert admin_only not in body
+        assert "/processing/ITEM_ID/cancel" not in body
+        assert "/processing/user/cancel" in body
+
+    def test_the_page_script_has_no_window_confirm_and_no_tiling_code(self, env):
+        body = get(env, "/processing", admin=True).get_data(as_text=True)
+
+        assert "window.confirm" not in body
+        assert "tiling" not in body
+        assert "reverse()" not in body
+
+    def test_the_script_rebinds_its_handlers_and_socket_listener_for_the_spa(self, env):
+        body = get(env, "/processing", admin=True).get_data(as_text=True)
+
+        assert "$(document).off('click.processing')" in body
+        assert "window.socket.off('pipeline_updated')" in body
+
+    def test_the_poor_list_label_shows_one_percent_sign(self, env):
+        body = get(env, "/processing", admin=True).get_data(as_text=True)
+
+        assert "Looks poor (15%+ lines guessed)" in body
+
+
+class TestStatusJson:
+    @staticmethod
+    def queue_regen(karaoke, path=SONG):
+        karaoke.pipeline_tracker._events.emit(
+            "regen_queued", {"song_path": path, "label": "Regenerate", "job": MagicMock()}
+        )
+        karaoke.pipeline_tracker._processing_manager.pending_jobs = [path]
+
+    def test_an_admin_reads_the_regen_row_with_its_group_and_position(self, env):
+        _, karaoke = env
+        self.queue_regen(karaoke)
+
+        [row] = json.loads(get(env, "/processing/status", admin=True).get_data(as_text=True))
+
+        assert (row["kind"], row["label"], row["group"], row["position"]) == (
+            "regen",
+            "Regenerate",
+            "active",
+            1,
+        )
+
+    def test_a_guest_reads_no_regen_row(self, env):
+        _, karaoke = env
+        self.queue_regen(karaoke)
+
+        rows = json.loads(get(env, "/processing/status", admin=False).get_data(as_text=True))
+
+        assert rows == []
