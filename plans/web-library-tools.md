@@ -2,14 +2,15 @@
 
 Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 
-> **Status (2026-10-22): Phases 0-6 and 6.1 done (3.1 = fixes from the Phase
+> **Status (2026-10-22): Phases 0-7 and 6.1 done (3.1 = fixes from the Phase
 > 1-3 code review, 3.1g included; the review of 3.1b-3.1d is done with its
 > two fix commits; Phase 4's code is `7f5853e` and `55cfdbb`, Phase 5's is
-> `641600a`, Phase 6's is `8a3b585`, see the Results log). Phase 5.1 (the
-> fixes from the Phase 4-5 code review, as Ken ruled them) is done too, code
-> `874d49c`..`6caad6f`. Phase 6.1 (the fixes from the Phase 6 code review,
-> approved by Ken 2026-10-22) is done too, code `a14906a`..`febeb2c`. Ken's
-> checks for Phase 6 are next, then Phase 7.** Ken
+> `641600a`, Phase 6's is `8a3b585`, Phase 7's is `0541907` and `ecbde50`,
+> see the Results log). Phase 5.1 (the fixes from the Phase 4-5 code review,
+> as Ken ruled them) is done too, code `874d49c`..`6caad6f`. Phase 6.1 (the
+> fixes from the Phase 6 code review, approved by Ken 2026-10-22) is done
+> too, code `a14906a`..`febeb2c`. Ken's checks for Phase 7 are next, and a
+> `/code-review` of Phase 7 is due before Phase 8.** Ken
 > approved D2's Phase 3.1 bullet on 2026-10-20. Branch
 > `web_library_tools`, off `library_tools` at `0bfa02a`; `dev` merged as
 > `c34d889`. There is no GATE and nothing here measures timing. Landing is
@@ -3207,6 +3208,259 @@ Facts:
   no English caption." It is a design reference, and the section changes the template only.
 
 ### Phase 7
+
+Executed 2026-10-22 by Sonnet 5.5, starting from `8b6e4a4` (the Phase 6.1 record, clean). Two
+code commits (the plan allows the split):
+
+- `0541907` feat(library): bulk regen runs with a caption check and saved picks (5 files,
+  +1176/-5: `library_tools.py` +395, `karaoke.py` +2, `test_library_tools.py`, and the three
+  fixtures that build `LibraryTools`: `test_library_routes.Env`, `test_processing_routes`,
+  `test_library_tools.make_tools`).
+- `ecbde50` feat(library): pages for bulk runs: the Library tools card, the preview and the
+  pick pass (6 files, +1307/-6: `routes/library.py` +185, `library_run.html` new,
+  `pick_pass.html` new, `processing.html`, `test_library_routes.py`, `test_processing_page.py`).
+
+- **Suite** (`PYTHONIOENCODING=utf-8 uv run --no-sync python -P -m pytest -q`, 136.4 s at
+  `ecbde50`): **4 failed, 2067 passed, 2 skipped**; passed = 1959 + 108 new. The four failures
+  are the baseline's four (ids unchanged). New tests:
+  - `test_library_tools.py` 55: `TestOpenRun` 10 (the three modes against the D5 table with the
+    checks asked, parametrized; library-only songs; a second run refused; an unknown mode and an
+    empty run refused; the view's fields; each song's source today; a crashing check; the check
+    counts), `TestRunPicks` 17, `TestRunState` 14 (restart keeps checks and picks; a run left
+    mid-check resumes only its unchecked songs; a song gone from disk drops out; a pick the song
+    can no longer take is dropped; five unusable state files; a failed write is logged; discard,
+    and a closed run gets no more checks), `TestQueueRun` 14 (waits for checks and picks; the
+    plan and `reset` flag and label per mode; one whole-folder backup before the first job;
+    skipped, busy and turned-away songs; nothing to queue; a failed backup; a song that lost its
+    lyrics refused before the backup).
+  - `test_library_routes.py` 49: `TestRunAccess` 8, `TestOpenRunRoute` 12, `TestRunPages` 11,
+    `TestRunPickRoutes` 15, `TestRunQueueRoute` 3.
+  - `test_processing_page.py` 4: the three Preview buttons with their counts; the banner and
+    its in-place confirm; a guest gets no run controls; the tab is read from the URL at once.
+  - Existing tests changed only in their fixtures (the new fifth argument of `LibraryTools`).
+- **Mutation checks** (77; each reverted; failures counted over the touched test files; scripts
+  `...\c192729b-188a-40ca-8bf1-a9cba38de26f\scratchpad\mutate7.py` and `mutate7b.py`). Service,
+  52 checks, failures per check:
+
+  | Mutation | Failures |
+  |---|---|
+  | a song with no YouTube id is checked | 3 |
+  | a reset treated like the other modes | 5 |
+  | a transcribed song checked in a reprocess | 1 |
+  | a song with a source to replay is checked | 3 |
+  | a transcribed song in a reprocess not transcribed | 5 |
+  | a reset reuses a song's source | 4 |
+  | a reprocess never reuses | 15 |
+  | a passing caption needs a pick | 23 |
+  | a song with no YouTube id waits for a check | 16 |
+  | a pick ignored | 8 |
+  | keep goes to reuse | 2 |
+  | a song still being checked takes a pick | 1 |
+  | a song that needs no pick takes one | 1 |
+  | a song outside the run not refused | 1 |
+  | a bool is a Genius id | 1 |
+  | typed text not trimmed or capped | 1 |
+  | keep without a recorded Genius song accepted | 2 |
+  | keep_all overwrites a pick | 2 |
+  | keep_all keeps songs with no Genius song | 2 |
+  | keep_all counts every song it looks at | 2 |
+  | discard leaves the run in the file | 1 |
+  | queue without waiting for the checks | 1 |
+  | queue without waiting for the picks | 1 |
+  | busy songs queued anyway | 2 |
+  | busy songs not counted | 1 |
+  | nothing to queue goes on to back up | 2 |
+  | every job resets | 2 |
+  | no job resets | 1 |
+  | the wrong label | 1 |
+  | the backup covers some songs only | 2 |
+  | the run stays open | 1 |
+  | a turned-away song not counted | 1 |
+  | a skipped song queued | 4 |
+  | a song that lost its lyrics not refused | 1 |
+  | a caption song queues a reuse plan | 2 |
+  | a Genius pick queued as a fetch | 2 |
+  | a second run allowed | 1 |
+  | an update lists every song | 10 |
+  | an empty run opened | 1 |
+  | the checks not started | 28 |
+  | an unknown mode accepted | 1 |
+  | a result not saved | 1 |
+  | a check that crashes not caught | 1 |
+  | a restart doesn't resume | 1 |
+  | a song gone from disk stays | 1 |
+  | a pick not checked again on load | 1 |
+  | a saved check dropped | 2 |
+  | a failed write raises | 1 |
+  | skipped songs count as queueable | 1 |
+  | a picked song leaves the to-pick count | 2 |
+  | no song needs a pick | 1 |
+  | a discarded run's thread goes on | survived |
+
+  The survivor: the caption thread stopped in two places (before asking for a song, and
+  before storing its answer) and either alone stopped it, so breaking the first changed
+  nothing a test could see. The second check was removed (an answer for a closed run lands
+  on the orphaned run object and writes the current state again, which changes nothing), a
+  test now calls the thread's loop for a closed run while another run is open
+  (`test_a_run_that_is_no_longer_open_gets_no_more_checks`), and the mutation fails 2 tests.
+  Routes and pages, 25 checks, all caught: no admin guard on the open, status, pick, keep_all,
+  queue and discard routes (1 each); no guard on the pages 2; a page with no run not sent to
+  the tools tab 2; the pick page not waiting for the checks 1; a mode that isn't text 1; a
+  song that isn't text 1; the note without the busy songs 1, without the backup 1; each song's
+  source left raw 1; a Genius source read as captions 1; a pick answering without the run 2;
+  the preview polling when nothing is checked 1; a song title as markup 1; a Genius hit as
+  markup 1; a stale Genius answer used 1, a stale failure shown 1; the Preview buttons
+  starting enabled 1; the tab read after the SPA dropped the hash 1; Update's Preview showing
+  the wrong count 1; the banner without its in-place confirm 1.
+- **Differences from the plan's text:**
+  - `LibraryTools(processing_manager, song_manager, download_path, genius_client, state_path)`;
+    `karaoke.py` passes `Path(get_data_directory()) / "library_tools" / "state.json"` (D4).
+    The file holds `{"run": {mode, songs: {path: {check, pick}}}}` (the needs-a-pick list of
+    Phase 8 joins it); a run read back at start is rebuilt over the songs still on disk
+    (each song's status, and whether its bundle holds a source to replay, are read again).
+  - `run_view()` returns the songs as one flat list in name order, each with its `group`
+    (`checking`, `needs_pick`, `genius`, `caption`, `reuse`, `transcribe`, `skip`), instead of
+    a dict of groups. `genius` is the group of a song with a Genius pick or a keep; a song's
+    `needs_pick` says whether a pick decides it (true also once it has one), and the view
+    carries `to_pick`, `picked`, `to_check`, `checked`, `checking` and `queueable` (songs not
+    skipped). A song has `title`, `now` (in words, put there by the route), `query`
+    (`default_query`), `poor`, `guessed`, `line_count`, `has_youtube_id`, `genius_id` (in
+    place of `can_keep`: the pick page needs the id to tag the current hit; keep is offered
+    when it is not null), `caption` (the check) and `pick`.
+  - Songs of a run: `stale` is the songs with a bundle behind the current version
+    (`SONG_LISTS["behind"]`), the other modes every video the library holds. A song
+    with no bundle that isn't transcribed is "not processed" and sorts like any song with no
+    source to replay.
+  - `save_pick` takes a pick only for a song that needs one: any other song is refused ("That
+    song doesn't need a pick."), as is one whose caption is still being checked. A pick is
+    `{kind: genius, genius_id (an int, not a bool), title, artist}` (text trimmed to 200
+    characters), `keep` (stores the bundle's Genius id), `transcribe` or `skip`; anything else
+    is refused.
+  - `queue_run` refuses before the backup while captions are checked, a song needs a pick, a
+    reuse song has lost its bundle since the preview, or nothing would be queued (every song
+    skipped or already waiting; the plan says it clears the run and returns the counts); the
+    run stays open in each case. With songs to queue it takes the one whole-folder backup,
+    queues, closes the run and returns `{queued, busy, backup}` (the folder's name). A song
+    the queue turns away at the last moment counts as busy.
+  - A state file that can't be written is logged and the run goes on in memory (nothing in
+    the plan); an unreadable one is ignored at start.
+  - Routes: `GET /library/run/picks` goes to the preview while captions are being checked;
+    `POST .../pick` and `.../keep_all` answer with the run; `GET /library/run/status` answers
+    `{"open": false}` with no run (the Library tools tab and the preview read it); `POST
+    /library/run` rejects a mode that isn't text and a run with no songs.
+  - The pick page opens a row's Genius search by itself, with the song's cleaned title in the
+    box; a picked row shows Change, an unpicked one with a recorded Genius song shows Keep.
+  - `processing.html`: the page script reads its tab from the URL when it first runs. The
+    SPA's start-up (`spa-navigation.js`, upstream) rewrites the URL without its hash before the
+    page's ready handler ran, so `/processing#tools` always opened Jobs. Found by driving the
+    pages: Discard and "no run open" both go to `/processing#tools`.
+  - The Preview buttons start disabled and wait for the counts (a run with no songs can't open).
+- **Isolated app run** (Ground rules first, again before each start: nothing on 5555 or 5556, no
+  python, mpv or pikaraoke process besides `TPython.exe`, GPU 509 MiB 0 %). Config and `APPDATA`
+  as in the Phase 3 row (the scratch config has no admin password). The log says library
+  `D:\shared\weblib-test`, `Scan: found 8 song(s) on disk`. The scratch library was hashed first
+  (156 files, `scratch_before_p7.json`). It had no song behind, so three bundles (Eminem,
+  Josh Gad, Backstreet Boys) were made behind by editing `schema_version` 11 to 10 (the originals
+  kept for the restore). The pages were driven through headless Edge 155 over the DevTools
+  protocol (`cdp7.py`, a 390 px emulated window), screenshots in
+  `...\c192729b-188a-40ca-8bf1-a9cba38de26f\scratchpad\p7shots\`. App logs `app_run_phase7*.log`
+  in the same folder.
+  - Look-only pass, before the commit: Library tools tab, Reset all preview with its check
+    progress, the pick page with a picker open, the banner and both in-place discards (tab and
+    preview). Found and fixed before `ecbde50`: the hash loss above; the Preview buttons read
+    "Preview3" (no gap between the word and the count; the button now has a gap).
+  - The picker's own search for Defying Gravity returned "No Genius results.": the box holds
+    the song's cleaned title, `'Defying Gravity' - Wicked 20th Anniversary Edition WICKED the
+    Musical`, which Genius doesn't match. Typing `defying gravity idina menzel` listed 8 hits
+    with the bundle's 105865 tagged `current`.
+  - **1. Update stale songs** (the three made behind): Library tools tab showed `Preview 3`,
+    `Preview 8`, `Preview 8`. The preview listed "Keeps its lyric pick (3)" (Backstreet Boys,
+    Eminem, Josh Gad), no check box, `Queue 3 songs`. Queued 18:48:39; flash "Queued 3 songs.
+    Backup: regen_backup_20261022T224839Z."; Jobs tab rows labelled `Update`. Jobs, in the
+    order they ran: Backstreet Boys 18:49:02-18:52:31 (3 min 29 s), Eminem 18:52:31-18:55:49
+    (3 min 18 s), Josh Gad 18:55:49-18:57:35 (1 min 46 s). All three `complete`. The behind
+    count went 3 to 0 (`{"all":8,"behind":0,"no_lyrics":2,"poor":2}`); the bundles read v11 with
+    new `captured_at`, 87 lines / 85 timed, 31 / 29, 39 / 39 (as before).
+  - **2. Reset all.** Opened 18:58:30; the 7 caption checks (the song with no YouTube id isn't
+    checked) were done at 18:59:37. Preview: "Needs a pick (6)" (Defying Gravity, Eason Chan,
+    Eminem, Jay Chou, Josh Gad with "No YouTube ID: Genius or transcribe only", Happy Birthday;
+    Defying Gravity and Jay Chou with "Looks poor: 38 of 89 lines guessed" and "26 of 42") and
+    "Uses its YouTube caption (2)" (Backstreet Boys, Queen, each `Caption OK`), `Start picks
+    (0 of 6 done)`. Pick page: chips `To pick 6`, `Picked 0`, `Looks poor 2`, Keep on four rows
+    (not Eason Chan or Happy Birthday: no recorded Genius song), `Keep current pick for all 4
+    not yet picked`, `Queue 8 songs (6 still to pick)` disabled. Picks made: Keep for
+    Defying Gravity and Eminem; Josh Gad by Genius search `in summer josh gad` (hit "In
+    Summer", Josh Gad, 358333, tagged `current`; the list also had one hit whose artist field
+    is hundreds of names, clamped to two lines). `3 of 6 picked`; banner "Reset all is open: 3
+    of 6 picked." App stopped (`taskkill /F /T`) and started again: the banner, the preview
+    (`Start picks (3 of 6 done)`; "Needs a pick (3)", "Picked: Genius (3)", "Uses its YouTube
+    caption (2)") and the pick page (`3 of 6 picked`, the three picked rows with their picks and
+    Change) all came back. Then Keep for Jay Chou, Transcribe for Eason Chan, Skip song for
+    Happy Birthday: `6 of 6`, `Keep current pick for all 0 not yet picked` disabled, `Queue 7
+    songs`. The library was hashed before queueing (207 files,
+    `scratch_before_reset_p7.json`). Queued 19:01:02; flash "Queued 7 songs. Backup:
+    regen_backup_20261022T230102Z."; Jobs tab with the Now box and rows labelled `Reset`.
+    Jobs, in the order they ran: Defying Gravity 19:01:02-19:04:30 (3 min 28 s), Backstreet
+    Boys 19:04:30-19:08:04 (3 min 34 s), Eason Chan 19:08:04-19:09:29 (1 min 25 s), Eminem
+    19:09:29-19:12:54 (3 min 25 s), Jay Chou 19:12:54-19:16:23 (3 min 29 s), Josh Gad
+    19:16:23-19:18:15 (1 min 52 s), Queen 19:18:15-19:22:33 (4 min 18 s); 21 min 31 s from the
+    queue to the last job. All seven `complete`, no `error_message`.
+  - **After the Reset run** (hash `scratch_after_reset_p7.json`, `verify7.py`): the backup
+    folder holds 51 files and the library had 51 in `subtitles`, `karaoke`, `lyrics` and
+    `alignment_debug` when it was queued: 0 missing, 0 different, 0 extra. Library outside the
+    backup folders: before 78, after 61: added 0; removed 17 (13 `karaoke/*.ass` diagnostic
+    files: Defying Gravity's `armC`, `armW`, `baseline`, `edgereplay`, `edgesnap`, `scaffold`,
+    Backstreet Boys' `cuealign`, `cuealign.sb_ctc_adapter`, `richsync`, Josh Gad's `baseline`,
+    `edgereplay`, `edgesnap`, `scaffold`; 3 `lyrics/*.timing.json`; Queen's
+    `subtitles/*.en.vtt`); changed 10 (the 6 bundles; Defying Gravity's and Eason Chan's `.ass`
+    and `.srt`); identical 51, every `.lrc` among them. Happy Birthday (skipped): its 6 files
+    identical, `.ass` still 11:55:44. Every other song's karaoke file was rewritten within its
+    job's window and its bundle's `captured_at` is that job's end time. Songs after: Defying
+    Gravity v11 origin genius id 105865, 86 lines / 50 timed (89 / 51 before: the keep pick is
+    a sidecar plan, which fetches the Genius page again where the old bundle had replayed its
+    stored lines); Backstreet Boys 39 / 39, Queen 65 / 65 (captions, `.srt` and `.ass`
+    byte-identical to before), Eminem 87 / 85, Josh Gad 31 / 29, Jay Chou 42 / 16; Eason
+    Chan and Happy Birthday still "no lyrics". Overview `{"all":8,"behind":0,"no_lyrics":2,
+    "poor":2}`. `state.json` reads `{"run": null}` after queueing.
+  - The app was stopped with `taskkill /F /T` on the listener's pid after each part that needed
+    a restart and at the end; afterwards 5555 and 5556 were free and no python, mpv or
+    pikaraoke process remained.
+- **Restore** (`restore7.py`): the first backup's 51 files copied over the library, the 6
+  original bundles put back, 0 files removed. Hash after (`scratch_restored_p7.json`) against
+  before: before 156, after 258: added 102 (the two backup folders, 51 files each), removed 0,
+  changed 0, identical 156.
+- **Real-library manifest:** `manifest.py compare "D:/Shared/pikaraoke-songs"` against the
+  Phase 0 manifest: `manifest=2605 now=2616 added=11 removed=0 changed=1`, the same 12 files
+  under `zh_probe/phase0/` as the earlier rows; nothing else differs. Output:
+  `...\c192729b-188a-40ca-8bf1-a9cba38de26f\scratchpad\manifest_compare_phase7.txt`. The real
+  library was not read by the app or any tool of this phase.
+- **pre-commit:** `--files` with each commit's files (the first Black pass reformatted
+  `test_library_tools.py`; the second pass passed every hook, and again after the last edit).
+  Import smoke: `library_tools`, `karaoke`, `routes.library`, `app`.
+- **Seen, not changed:**
+  - A run's songs are what the files said when it opened (read again at a restart). A repair
+    or regenerate of a song while the run is open isn't reflected; queueing refuses a song
+    that was to reuse its lyrics and no longer can, and the admin opens the run again.
+  - Queued regen jobs don't survive an app restart (D2) and queueing closes the run, so a
+    restart with jobs waiting loses them and the run isn't there to open again from.
+  - A caption check that fails (timeout, HTTP 403) is the same as "no caption" and sends the
+    song to the pick list (6.1b's limit, in `download_manual_en_subs`).
+  - The pick box starts as `default_query`, which keeps trailing words of a long YouTube
+    title: Defying Gravity's search was empty until the box was edited.
+  - `/lyrics_search` (reused as the plan says, open to guests) returns hits with huge artist
+    strings; the row clamps them to two lines.
+  - The pick page doesn't poll and sends the admin to the preview while captions are checked;
+    a song whose caption is still unchecked can't take a pick.
+  - A run with every song skipped or busy can't be queued; the admin discards it.
+  - Update stale leaves out songs with no bundle (they aren't behind); Reprocess all and
+    Reset all include them.
+  - The queued note is the base template's flash, which fades after 3 s.
+  - `spa-navigation.js` rewrites a page's URL without its hash at start (upstream file, not
+    touched); only the Processing page reads its hash now.
+  - Page scripts have no automated test beyond the render tests (no markup insertion, the
+    polling rule, the stale-answer guard); their checks are those and the Edge run above.
+  - The mockup boards say "Cancel reset" and show the primary button blue; the page says
+    "Cancel" (the plan's word) and uses the theme's primary.
 
 ### Phase 8
 
