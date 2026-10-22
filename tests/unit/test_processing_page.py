@@ -135,6 +135,13 @@ class TestProcessingPage:
         assert "$(document).off('click.processing')" in body
         assert "window.socket.off('pipeline_updated')" in body
 
+    def test_a_confirm_closes_when_the_server_stops_offering_its_action(self, env):
+        body = get(env, "/processing", admin=True).get_data(as_text=True)
+
+        assert "pruneState(allRows());" in body
+        assert "if (state.confirming[key] && !offers(row, state.confirming[key]))" in body
+        assert "if (offers(row, 'delete'))" in body
+
     def test_the_poor_list_label_shows_one_percent_sign(self, env):
         body = get(env, "/processing", admin=True).get_data(as_text=True)
 
