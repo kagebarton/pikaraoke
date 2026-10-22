@@ -1,0 +1,504 @@
+"""Route and render tests for Song Info, regenerate and the library song lists.
+
+A Flask app with the two blueprints and the real templates, over a ``tmp_path``
+library with real bundles and a real ``LibraryTools``; only the processing
+manager is a mock, so a queued job is whatever ``enqueue_regen`` was handed.
+"""
+
+import json
+import os
+from pathlib import Path
+from unittest.mock import MagicMock
+from urllib.parse import quote
+
+import pytest
+import werkzeug
+from flask import Flask
+from flask_babel import Babel
+
+if not hasattr(werkzeug, "__version__"):
+    werkzeug.__version__ = "3.0.0"
+
+import pikaraoke
+from pikaraoke.lib import lrclib
+from pikaraoke.lib.alignment_capture import SCHEMA_VERSION
+from pikaraoke.lib.library_tools import LibraryTools
+from pikaraoke.lib.song_list import SongList
+from pikaraoke.lib.song_manager import SongManager
+from pikaraoke.routes.library import library_bp
+from pikaraoke.routes.song_info import song_info_bp
+
+# Endpoints base.html resolves via url_for that neither blueprint provides.
+_STUB_ENDPOINTS = (
+    "home.home",
+    "queue.queue",
+    "search.search",
+    "files.browse",
+    "info.info",
+    "processing.processing",
+)
+
+GENIUS = {"id": 7, "title": "Defying Gravity", "artist": "Kristin Chenoweth"}
+LRCLIB_MATCH = {
+    "id": 5,
+    "trackName": "Defying Gravity",
+    "artistName": "Chenoweth & Menzel",
+    "duration": 354.0,
+}
+
+
+def write_bundle(folder: Path, stem: str, root: Path | None = None, **fields) -> None:
+    bundle = {"schema_version": SCHEMA_VERSION, "captured_at": "2026-10-19T18:03:52+00:00"}
+    bundle.update(fields)
+    path = (root or folder) / "alignment_debug" / f"{stem}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(bundle), encoding="utf-8")
+
+
+def poor_genius_bundle(**overrides) -> dict:
+    """51 of 89 lines timed, LRCLIB's 5:54 match against a 4:17 video, fill refused."""
+    fields = {
+        "lyrics": {
+            "origin": "genius",
+            "genius": GENIUS,
+            "lrclib": LRCLIB_MATCH,
+            "ytasr": {"asr_file": "subtitles/x.en.asr.json3"},
+            "lines": ["one"],
+        },
+        "pipeline_decisions": {"method_used": "joint"},
+        "joint_stats": {
+            "align_won": 22,
+            "transcribe_won": 13,
+            "ytasr_won": 16,
+            "evidence_veto": {"n_vetoed": 0},
+            "lrclib_fill": {"eligible": False, "reason": "arm_a_bail", "filled_lids": []},
+        },
+        "output_summary": {"line_count": 89, "lines_with_words": 51},
+        "media_duration_s": 257.23,
+    }
+    fields.update(overrides)
+    return fields
+
+
+def caption_bundle() -> dict:
+    return {
+        "lyrics": {"origin": "srt"},
+        "pipeline_decisions": {"method_used": "cue_align"},
+        "output_summary": {"line_count": 39, "lines_with_words": 39},
+        "media_duration_s": 200.0,
+    }
+
+
+class Env:
+    """The app, its library folder and the knobs a test turns."""
+
+    def __init__(self, tmp_path: Path):
+        self.folder = tmp_path
+        self.admin = True
+        self.songs = SongList()
+        self.processing = MagicMock()
+        self.processing.get_active_job.return_value = None
+        self.processing.pending_jobs = []
+        self.processing.enqueue_regen.return_value = True
+
+        song_manager = MagicMock()
+        song_manager.songs = self.songs
+        song_manager.filename_from_path = SongManager.filename_from_path
+        self.k = MagicMock()
+        self.k.song_manager = song_manager
+        self.k.library_tools = LibraryTools(self.processing, song_manager, str(tmp_path))
+
+        pkg_dir = os.path.dirname(pikaraoke.__file__)
+        self.app = Flask(
+            __name__,
+            template_folder=os.path.join(pkg_dir, "templates"),
+            static_folder=os.path.join(pkg_dir, "static"),
+        )
+        self.app.secret_key = "test"
+        self.app.register_blueprint(song_info_bp)
+        self.app.register_blueprint(library_bp)
+        for endpoint in _STUB_ENDPOINTS:
+            self.app.add_url_rule(
+                f"/__stub/{endpoint}", endpoint=endpoint, view_func=lambda *a, **k: ""
+            )
+        Babel(self.app)
+        self.app.jinja_env.globals.update(
+            filename_from_path=SongManager.filename_from_path, url_escape=quote
+        )
+        self.client = self.app.test_client()
+
+    def add_song(self, name: str, bundle: dict | None = None) -> str:
+        """Put a video in the library (with a bundle when given); returns its path string."""
+        video = self.folder / name
+        video.write_bytes(b"")
+        self.songs.add(str(video))
+        if bundle is not None:
+            write_bundle(self.folder, video.stem, **bundle)
+        return str(video)
+
+    def page(self, song: str):
+        return self.client.get("/song_info", query_string={"song": song})
+
+    def regenerate(self, song):
+        return self.client.post("/song_info/regenerate", json={"song": song})
+
+
+@pytest.fixture
+def env(tmp_path, monkeypatch):
+    e = Env(tmp_path)
+    for module in ("song_info", "library"):
+        prefix = f"pikaraoke.routes.{module}"
+        monkeypatch.setattr(f"{prefix}.get_karaoke_instance", lambda: e.k)
+        monkeypatch.setattr(f"{prefix}.get_site_name", lambda: "PiKaraoke")
+        monkeypatch.setattr(f"{prefix}.is_admin", lambda: e.admin)
+    return e
+
+
+def text(response) -> str:
+    return response.get_data(as_text=True)
+
+
+class TestSongInfoAccess:
+    def test_a_guest_is_sent_back_to_the_browser(self, env):
+        song = env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())
+        env.admin = False
+
+        response = env.page(song)
+
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/__stub/files.browse")
+
+    def test_a_path_outside_the_library_is_rejected(self, env):
+        env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())
+        outside = env.folder / "elsewhere.mp4"
+        outside.write_bytes(b"")
+
+        assert env.page(str(outside)).status_code == 400
+        assert env.client.get("/song_info").status_code == 400
+
+
+class TestSongInfoPage:
+    def test_a_poor_genius_song_shows_its_tiles(self, env):
+        html = text(env.page(env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())))
+
+        assert "Genius" in html and "up to date" in html
+        assert "57%" in html and "38 guessed" in html
+        assert "Not used" in html and "97 s longer" in html
+        # Timed and LRCLIB are flagged; Lyrics is not.
+        assert html.count("si-tile is-warn") == 2
+        assert "mqdefault.jpg" in html and "aaaaaaaaaaa" in html
+        assert "4:17" in html
+
+    def test_picks_tab_lists_the_genius_and_lrclib_choices(self, env):
+        html = text(env.page(env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())))
+
+        assert "Genius lyrics" in html
+        assert "Defying Gravity" in html and "Kristin Chenoweth" in html
+        assert "https://genius.com/songs/7" in html
+        assert "Defying Gravity · Chenoweth &amp; Menzel · 5:54" in html
+        assert "YouTube auto-captions used" in html
+
+    def test_alignment_tab_counts_and_bar(self, env):
+        html = text(env.page(env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())))
+
+        assert "of 89 lines timed word by word" in html
+        assert "The other 38 are placed between their neighbours." in html
+        for legend in ("Lyric aligner 22", "Transcription 13", "YouTube captions 16", "Guessed 38"):
+            assert legend in html
+        assert "LRCLIB fill" not in html  # nothing was filled
+        # Each width is its count over the line count, unadjusted.
+        assert "width: 24.719%" in html and "width: 42.697%" in html
+
+    def test_alignment_tab_explains_the_lrclib_fit_and_the_route(self, env):
+        html = text(env.page(env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())))
+
+        assert "The match is 5:54; this video is 4:17 (97 s longer)." in html
+        assert "Not used: its line times didn&#39;t line up with this video." in html
+        assert "the lyric aligner, a transcription and YouTube&#39;s auto-captions." in html
+
+    def test_a_used_match_says_how_many_lines_it_filled(self, env):
+        bundle = poor_genius_bundle()
+        bundle["joint_stats"]["lrclib_fill"] = {"eligible": True, "filled_lids": [3, 9]}
+        html = text(env.page(env.add_song("A---aaaaaaaaaaa.mp4", bundle)))
+
+        assert "fills 2 lines" in html
+        assert "Used: it filled 2 lines." in html
+        assert "LRCLIB fill 2" in html
+        assert html.count("si-tile is-warn") == 1  # only Timed: LRCLIB worked
+
+    def test_a_skipped_match_is_the_admins_choice_on_disk(self, env):
+        song = env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())
+        lrclib.write_skip_marker(lrclib.lrc_path(Path(song)))
+        html = text(env.page(song))
+
+        assert "skipped by you" in html
+        assert "Skipped: you chose no match." in html
+        assert "The match is" not in html
+
+    def test_no_match_found(self, env):
+        bundle = poor_genius_bundle()
+        bundle["lyrics"] = {"origin": "genius", "genius": GENIUS, "lines": ["one"]}
+        bundle["joint_stats"]["lrclib_fill"] = {}
+        html = text(env.page(env.add_song("A---aaaaaaaaaaa.mp4", bundle)))
+
+        assert "no match found" in html
+        assert "No LRCLIB match was found." in html
+
+    def test_a_short_length_gap_names_the_reason_instead(self, env):
+        bundle = poor_genius_bundle(media_duration_s=352.0)
+        html = text(env.page(env.add_song("A---aaaaaaaaaaa.mp4", bundle)))
+
+        tiles = html.split('class="tabs is-fullwidth si-tabs"')[0].split("</style>")[-1]
+        assert "lines didn&#39;t line up" in tiles
+        assert "s longer" not in tiles
+        assert "(2 s longer)" in html  # the Alignment tab still gives the exact gap
+
+    def test_a_caption_song(self, env):
+        html = text(env.page(env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())))
+
+        assert "YouTube captions" in html
+        assert "Genius songs only" in html
+        assert "si-tile is-warn" not in html
+        assert "https://genius.com" not in html  # no Genius row
+        assert "Timed 39" in html and "Guessed" not in html
+        assert "timed against the caption" in html
+        assert "LRCLIB fit" not in html
+
+    def test_a_song_behind_says_which_version(self, env):
+        bundle = {**caption_bundle(), "schema_version": SCHEMA_VERSION - 1}
+        html = text(env.page(env.add_song("A---aaaaaaaaaaa.mp4", bundle)))
+
+        assert f"behind (v{SCHEMA_VERSION - 1})" in html
+
+    def test_a_transcribed_song_has_no_alignment_tab_but_can_regenerate(self, env):
+        song = env.add_song("A---aaaaaaaaaaa.mp4")
+        (env.folder / "karaoke").mkdir()
+        (env.folder / "karaoke" / "A---aaaaaaaaaaa.ass").write_text("", encoding="utf-8")
+        html = text(env.page(song))
+
+        assert "No lyrics" in html
+        assert 'data-tab="alignment"' not in html
+        assert 'id="regenerate"' in html
+
+    def test_an_unprocessed_song_has_nothing_to_regenerate_from(self, env):
+        html = text(env.page(env.add_song("A---aaaaaaaaaaa.mp4")))
+
+        assert "Not processed" in html
+        assert 'id="regenerate"' not in html
+
+    def test_a_song_that_is_not_a_video(self, env):
+        song = env.folder / "Track---aaaaaaaaaaa.mp3"
+        song.write_bytes(b"")
+        env.songs.add(str(song))
+        html = text(env.page(str(song)))
+
+        assert "Lyrics tools work on video songs only." in html
+        assert "si-tile" not in html.split("</style>")[-1]
+        assert 'id="regenerate"' not in html
+
+    def test_a_busy_song_has_its_button_disabled_and_a_way_to_the_queue(self, env):
+        song = env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())
+        env.processing.pending_jobs = [song]
+        html = text(env.page(song))
+
+        assert 'id="regenerate" class="button si-btn" disabled' in html
+        assert "This song has a regen waiting or running." in html
+        assert "/__stub/processing.processing" in html
+
+    def test_an_idle_song_can_regenerate(self, env):
+        html = text(env.page(env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())))
+
+        assert 'id="regenerate" class="button si-btn">' in html
+        assert "regen waiting or running" not in html
+
+
+class TestSongInfoHistory:
+    def song_with_backups(self, env) -> str:
+        stem = "A---aaaaaaaaaaa"
+        song = env.add_song(f"{stem}.mp4", poor_genius_bundle())
+        no_lrclib = poor_genius_bundle()
+        no_lrclib["lyrics"] = {"origin": "genius", "genius": GENIUS, "lines": ["one"]}
+        write_bundle(
+            env.folder,
+            stem,
+            root=env.folder / "regen_backup_20261019T175506Z",
+            schema_version=10,
+            captured_at="2026-09-21T10:00:00+00:00",
+            **poor_genius_bundle(),
+        )
+        write_bundle(
+            env.folder,
+            stem,
+            root=env.folder / "regen_backup_20260921T170629Z",
+            schema_version=8,
+            captured_at="2026-07-16T10:00:00+00:00",
+            **no_lrclib,
+        )
+        return song
+
+    def test_versions_are_listed_newest_first_each_under_its_folder(self, env):
+        html = text(env.page(self.song_with_backups(env)))
+        history = html.split('id="tab-history"')[1]
+
+        assert history.index("19 Oct 2026") < history.index("21 Sep 2026")
+        assert history.index("21 Sep 2026") < history.index("16 Jul 2026")
+        assert "regen_backup_20261019T175506Z" in history
+        assert "regen_backup_20260921T170629Z" in history
+        assert ">v11<" in history and ">v10<" in history and ">v8<" in history
+        assert "51 of 89 lines" in history
+        assert "A version saved in several backups is listed once" in history
+
+    def test_a_version_notes_what_it_added(self, env):
+        history = text(env.page(self.song_with_backups(env))).split('id="tab-history"')[1]
+
+        # v10 gained LRCLIB over v8; v11 and v10 hold the same picks.
+        assert "LRCLIB 5:54 added" in history
+        assert history.count("si-chg") == 1
+        assert "no LRCLIB" in history
+
+    def test_a_match_without_a_length_is_still_a_match(self, env):
+        bundle = poor_genius_bundle()
+        bundle["lyrics"]["lrclib"] = {"id": 5, "trackName": "Defying Gravity"}
+        history = text(env.page(env.add_song("A---aaaaaaaaaaa.mp4", bundle)))
+        history = history.split('id="tab-history"')[1]
+
+        assert "LRCLIB<" in history
+        assert "no LRCLIB" not in history
+
+    def test_no_backups_shows_the_empty_state(self, env):
+        history = text(env.page(env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())))
+        history = history.split('id="tab-history"')[1]
+
+        assert "19 Oct 2026" in history
+        assert "No earlier versions yet." in history
+
+
+class TestRegenerateRoute:
+    def test_a_guest_cannot(self, env):
+        song = env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())
+        env.admin = False
+
+        response = env.regenerate(song)
+
+        assert response.status_code == 403
+        assert response.get_json()["success"] is False
+        env.processing.enqueue_regen.assert_not_called()
+
+    @pytest.mark.parametrize("body", [{"song": None}, {"song": ["a"]}, {}, [1]])
+    def test_a_missing_or_malformed_song_is_rejected(self, env, body):
+        env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())
+
+        response = env.client.post("/song_info/regenerate", json=body)
+
+        assert response.status_code == 400
+        assert response.get_json()["success"] is False
+
+    def test_a_path_outside_the_library_is_rejected_and_nothing_is_backed_up(self, env):
+        env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())
+        outside = env.folder / "elsewhere.mp4"  # regenerable, but not in the library
+        outside.write_bytes(b"")
+        write_bundle(env.folder, outside.stem, **poor_genius_bundle())
+
+        assert env.regenerate(str(outside)).status_code == 400
+        env.processing.enqueue_regen.assert_not_called()
+        assert not list(env.folder.glob("regen_backup_*"))
+
+    def test_queues_one_job_and_backs_up_only_that_song(self, env):
+        mine = env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())
+        env.add_song("B---bbbbbbbbbbb.mp4", poor_genius_bundle())
+
+        response = env.regenerate(mine)
+
+        assert response.get_json() == {"success": True}
+        env.processing.enqueue_regen.assert_called_once()
+        regen = env.processing.enqueue_regen.call_args.args[0]
+        assert str(regen.song.song_path) == mine
+        assert regen.label == "Regenerate" and regen.reset is False
+        [backup] = env.folder.glob("regen_backup_*")
+        assert [p.name for p in (backup / "alignment_debug").iterdir()] == ["A---aaaaaaaaaaa.json"]
+
+    def test_a_busy_song_is_refused(self, env):
+        song = env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())
+        env.processing.get_active_job.return_value = song
+
+        response = env.regenerate(song)
+
+        assert response.status_code == 400
+        assert "waiting or running" in response.get_json()["error"]
+        env.processing.enqueue_regen.assert_not_called()
+
+    def test_a_song_with_no_pick_says_to_repair_it_first(self, env):
+        song = env.add_song("A---aaaaaaaaaaa.mp4")
+
+        response = env.regenerate(song)
+
+        assert response.status_code == 400
+        assert "Repair lyrics" in response.get_json()["error"]
+
+
+class TestOverviewRoute:
+    def test_counts(self, env):
+        env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())
+        env.add_song("B---bbbbbbbbbbb.mp4", poor_genius_bundle())
+        env.add_song("C---ccccccccccc.mp4")
+
+        counts = env.client.get("/library/overview").get_json()
+
+        assert counts == {"behind": 0, "poor": 1, "no_lyrics": 0, "all": 3}
+
+    def test_a_guest_gets_403_json(self, env):
+        env.admin = False
+
+        response = env.client.get("/library/overview")
+
+        assert response.status_code == 403
+        assert response.get_json()["success"] is False
+
+
+class TestSongListsRoute:
+    def test_each_row_links_to_song_info_with_its_subline(self, env):
+        env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())
+        env.add_song("B---bbbbbbbbbbb.mp4", caption_bundle())
+
+        poor = text(env.client.get("/library/songs?list=poor"))
+        assert "Songs that look poor" in poor
+        assert "38 of 89 lines guessed" in poor
+        assert '<span class="ls-name">A</span>' in poor  # the display name drops the id
+        assert "/song_info?song=" in poor and "aaaaaaaaaaa.mp4" in poor
+        assert "bbbbbbbbbbb" not in poor
+
+        everything = text(env.client.get("/library/songs?list=all"))
+        assert "Up to date" in everything
+        assert "aaaaaaaaaaa.mp4" in everything and "bbbbbbbbbbb.mp4" in everything
+
+    def test_sublines_for_the_other_lists(self, env):
+        env.add_song("A---aaaaaaaaaaa.mp4", {**caption_bundle(), "schema_version": 9})
+        song = env.add_song("B---bbbbbbbbbbb.mp4")
+        (env.folder / "karaoke").mkdir()
+        (env.folder / "karaoke" / "B---bbbbbbbbbbb.ass").write_text("", encoding="utf-8")
+        env.add_song("C---ccccccccccc.mp4")
+
+        assert "Version 9" in text(env.client.get("/library/songs?list=behind"))
+        assert "Transcribed" in text(env.client.get("/library/songs?list=no_lyrics"))
+        everything = text(env.client.get("/library/songs?list=all"))
+        assert "Behind (v9)" in everything
+        assert "No lyrics" in everything
+        assert "Not processed" in everything
+        assert Path(song).exists()
+
+    def test_an_empty_list_says_so(self, env):
+        env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())
+
+        assert "No songs in this list." in text(env.client.get("/library/songs?list=behind"))
+
+    def test_an_unknown_list_is_rejected(self, env):
+        assert env.client.get("/library/songs?list=bogus").status_code == 400
+        assert env.client.get("/library/songs").status_code == 400
+
+    def test_a_guest_is_sent_back_to_the_browser(self, env):
+        env.admin = False
+
+        response = env.client.get("/library/songs?list=all")
+
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/__stub/files.browse")

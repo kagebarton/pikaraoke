@@ -99,6 +99,10 @@
 </div>
 
 <hr>
+<a class="no-spa" href="{{ url_for('song_info.song_info') }}?song={{ url_escape(song.encode('utf-8', 'surrogateescape')) }}"><i class="icon icon-info-circled"></i>
+  {# MSG: Label on link which opens the page showing how the song's lyrics were made. #}
+  {%- trans %}Song info{% endtrans -%}
+</a>
 <a class="confirm-delete-file has-text-danger is-pulled-right"
   href="{{url_for('files.delete_file')}}?song={{url_escape(song)}}&referrer={{url_escape(referrer)}}"><i class="icon icon-trash-empty"></i>
   {# MSG: Label on button which deletes the current song. #}

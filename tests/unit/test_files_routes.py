@@ -56,6 +56,7 @@ def app():
         "processing.processing",
         "queue.enqueue",
         "batch_song_renamer.browse",
+        "song_info.song_info",
     ):
         test_app.add_url_rule(f"/__stub/{endpoint}", endpoint=endpoint, view_func=lambda: "")
 
@@ -136,3 +137,40 @@ def test_browse_empty_library_renders(mock_get, _site, _admin, client):
     resp = client.get("/browse")
 
     assert resp.status_code == 200
+
+
+@patch("pikaraoke.routes.files.is_admin", return_value=True)
+@patch("pikaraoke.routes.files.get_site_name", return_value="PiKaraoke")
+@patch("pikaraoke.routes.files.get_karaoke_instance")
+def test_browse_links_each_song_to_its_info_for_an_admin(mock_get, _site, _admin, client):
+    mock_get.return_value = _mock_karaoke(SONGS)
+
+    body = client.get("/browse").get_data(as_text=True)
+
+    assert body.count('title="Song info"') == len(SONGS)
+    assert "/__stub/song_info.song_info?song=" in body
+
+
+@patch("pikaraoke.routes.files.is_admin", return_value=False)
+@patch("pikaraoke.routes.files.get_site_name", return_value="PiKaraoke")
+@patch("pikaraoke.routes.files.get_karaoke_instance")
+def test_browse_has_no_song_info_link_for_a_guest(mock_get, _site, _admin, client):
+    mock_get.return_value = _mock_karaoke(SONGS)
+
+    assert "Song info" not in client.get("/browse").get_data(as_text=True)
+
+
+@patch("pikaraoke.routes.files.is_admin", return_value=True)
+@patch("pikaraoke.routes.files.get_site_name", return_value="PiKaraoke")
+@patch("pikaraoke.routes.files.get_karaoke_instance")
+def test_edit_page_links_to_the_song_info(mock_get, _site, _admin, client):
+    k = _mock_karaoke(SONGS)
+    k.queue_manager.is_song_in_queue.return_value = False
+    mock_get.return_value = k
+
+    resp = client.get("/files/edit", query_string={"song": SONGS[0]})
+
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "/__stub/song_info.song_info?song=" in body
+    assert "Song info" in body

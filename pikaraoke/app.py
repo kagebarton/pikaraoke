@@ -27,6 +27,7 @@ from pikaraoke.routes.files import files_bp
 from pikaraoke.routes.home import home_bp
 from pikaraoke.routes.images import images_bp
 from pikaraoke.routes.info import info_bp
+from pikaraoke.routes.library import library_bp
 from pikaraoke.routes.metadata_api import metadata_bp
 from pikaraoke.routes.now_playing import nowplaying_bp
 from pikaraoke.routes.preferences import preferences_bp
@@ -34,6 +35,7 @@ from pikaraoke.routes.processing import processing_bp
 from pikaraoke.routes.queue import queue_bp
 from pikaraoke.routes.search import search_bp
 from pikaraoke.routes.socket_events import setup_socket_events
+from pikaraoke.routes.song_info import song_info_bp
 
 _ = flask_babel.gettext
 
@@ -96,6 +98,8 @@ _internal_blueprints = [
     info_bp,
     batch_song_renamer_bp,
     processing_bp,
+    song_info_bp,
+    library_bp,
 ]
 
 for bp in _api_blueprints:

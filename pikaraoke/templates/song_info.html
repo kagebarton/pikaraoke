@@ -1,0 +1,208 @@
+{% extends 'base.html' %}
+
+{% block styles %}
+<style>
+  .si-head { display: flex; gap: 12px; align-items: center; }
+  .si-thumb { width: 96px; height: 54px; flex: none; border-radius: 6px; object-fit: cover; background: var(--dark-bg-tertiary); border: 1px solid var(--dark-border); }
+  .si-title { min-width: 0; }
+  .si-name { font-weight: 700; font-size: 17px; word-break: break-word; }
+  .si-muted { color: var(--dark-text-muted); font-size: 13px; }
+  .si-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+  .si-tile { background: var(--dark-bg-tertiary); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 2px; min-height: 86px; box-sizing: border-box; }
+  .si-tile.is-warn { outline: 2px solid var(--dark-warning); outline-offset: -2px; }
+  .si-tile.is-warn .si-value { color: var(--dark-warning); }
+  .si-value { font-size: 20px; font-weight: 700; line-height: 1.25; }
+  .si-tabs { margin-top: 14px; margin-bottom: 12px; }
+  .si-tabs ul { margin: 0; list-style: none; }
+  .si-tabs li + li { margin-top: 0; }
+  .si-tabs a { min-height: 44px; font-weight: 700; }
+  .si-tabs li.is-active a { color: var(--dark-text-primary); border-bottom-color: var(--dark-link); }
+  .si-card { background: var(--dark-bg-tertiary); border-radius: 8px; overflow: hidden; }
+  .si-row, .si-block { padding: 10px 12px; border-top: 1px solid var(--dark-border); }
+  .si-row:first-child, .si-block:first-child { border-top: 0; }
+  .si-row { display: flex; gap: 12px; align-items: center; min-height: 44px; }
+  .si-key { width: 80px; flex: none; color: var(--dark-text-muted); font-size: 13px; }
+  .si-val { flex: 1; min-width: 0; word-break: break-word; }
+  .si-ext { min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; }
+  .si-block { display: flex; flex-direction: column; gap: 4px; }
+  .si-big { font-size: 26px; font-weight: 700; }
+  .si-bar { display: flex; height: 14px; border-radius: 4px; overflow: hidden; margin-top: 6px; }
+  .si-legend { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; margin-top: 6px; font-size: 13px; }
+  .si-lg { display: flex; align-items: center; gap: 8px; }
+  .si-sw { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+  .si-warn { color: var(--dark-warning); font-size: 13px; }
+  .si-split { display: flex; justify-content: space-between; align-items: center; }
+  .si-kv { display: flex; gap: 8px; font-size: 13px; }
+  .si-k { width: 62px; flex: none; color: var(--dark-text-muted); }
+  .si-chg { color: #a9d8f7; }
+  .si-kv code { color: var(--dark-text-light); word-break: break-all; }
+  .si-actions { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--dark-border); display: flex; gap: 8px; }
+  .si-btn { flex: 1; min-height: 44px; font-weight: 700; }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  $(function () {
+    $('.si-tabs li').on('click', function (e) {
+      e.preventDefault();
+      $('.si-tabs li').removeClass('is-active').find('a').attr('aria-selected', 'false');
+      $(this).addClass('is-active').find('a').attr('aria-selected', 'true');
+      $('.si-panel').addClass('is-hidden');
+      $('#tab-' + $(this).data('tab')).removeClass('is-hidden');
+    });
+
+    $('#regenerate').on('click', function () {
+      var button = $(this);
+      button.prop('disabled', true);
+      $.ajax({
+        url: '{{ url_for("song_info.regenerate") }}',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ song: {{ song | tojson }} })
+      }).done(function () {
+        $('#regen-note').text({{ _('Queued. It runs after any new downloads.') | tojson }}).removeClass('is-hidden');
+      }).fail(function (xhr) {
+        var message = '';
+        try { message = JSON.parse(xhr.responseText).error; } catch (err) {}
+        showNotification(message || {{ _('Could not queue the regeneration.') | tojson }}, 'is-danger');
+        button.prop('disabled', false);
+      });
+    });
+  });
+</script>
+{% endblock %}
+
+{% block header %}
+{# MSG: Page title for the page showing how a song's lyrics were made. #}
+<h1>{% block title %}{% trans %}Song Info{% endtrans %}{% endblock %}</h1>
+{% endblock %}
+
+{% block content %}
+<div class="si-head">
+  {% if status.youtube_id %}
+  <img class="si-thumb" src="https://img.youtube.com/vi/{{ status.youtube_id }}/mqdefault.jpg" alt="">
+  {% endif %}
+  <div class="si-title">
+    <div class="si-name">{{ name }}</div>
+    {% if duration %}<div class="si-muted">{{ duration }}</div>{% endif %}
+  </div>
+</div>
+
+{% if not video %}
+<p class="mt-4">{% trans %}Lyrics tools work on video songs only.{% endtrans %}</p>
+{% else %}
+
+<div class="si-tiles">
+  {% for tile in tiles %}
+  <div class="si-tile{% if tile.warn %} is-warn{% endif %}">
+    <span class="si-muted">{{ tile.label }}</span>
+    <span class="si-value">{{ tile.value }}</span>
+    <span class="si-muted">{{ tile.sub }}</span>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="tabs is-fullwidth si-tabs" role="tablist">
+  <ul>
+    <li class="is-active" data-tab="picks"><a href="#" role="tab" aria-selected="true">{% trans %}Picks{% endtrans %}</a></li>
+    {% if alignment %}
+    <li data-tab="alignment"><a href="#" role="tab" aria-selected="false">{% trans %}Alignment{% endtrans %}</a></li>
+    {% endif %}
+    <li data-tab="history"><a href="#" role="tab" aria-selected="false">{% trans %}History{% endtrans %}</a></li>
+  </ul>
+</div>
+
+<div class="si-panel" id="tab-picks">
+  <div class="si-card">
+    <div class="si-row"><span class="si-key">{% trans %}Source{% endtrans %}</span><span class="si-val">{{ source }}</span></div>
+    {% if genius_song %}
+    <div class="si-row">
+      <span class="si-key">Genius</span>
+      <span class="si-val">
+        {% if status.genius %}<b>{{ status.genius.title }}</b> <span class="si-muted">{{ status.genius.artist }}</span>{% endif %}
+      </span>
+      {% if status.genius and status.genius.id %}
+      <a class="si-ext" href="https://genius.com/songs/{{ status.genius.id }}" target="_blank" rel="noopener" aria-label="{% trans %}View on Genius{% endtrans %}">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"></path></svg>
+      </a>
+      {% endif %}
+    </div>
+    <div class="si-row"><span class="si-key">LRCLIB</span><span class="si-val">{{ lrclib_pick }}</span></div>
+    <div class="si-row">
+      <span class="si-key">{% trans %}Captions{% endtrans %}</span>
+      <span class="si-val">{% if status.ytasr_used %}{% trans %}YouTube auto-captions used{% endtrans %}{% else %}{% trans %}not used{% endtrans %}{% endif %}</span>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if alignment %}
+<div class="si-panel is-hidden" id="tab-alignment">
+  <div class="si-card">
+    <div class="si-block">
+      <div><span class="si-big">{{ alignment.timed }}</span> {% trans lines=alignment.line_count %}of {{ lines }} lines timed word by word{% endtrans %}</div>
+      {% if alignment.guessed %}
+      <span class="si-muted">{% trans guessed=alignment.guessed %}The other {{ guessed }} are placed between their neighbours.{% endtrans %}</span>
+      {% endif %}
+      <div class="si-bar" role="img" aria-label="{% for s in alignment.segments %}{{ s.count }} {{ s.label|lower }}{% if not loop.last %}, {% endif %}{% endfor %}">
+        {% for s in alignment.segments %}<div style="width: {{ '%.3f'|format(s.percent) }}%; background: {{ s.color }}"></div>{% endfor %}
+      </div>
+      <div class="si-legend">
+        {% for s in alignment.segments %}
+        <span class="si-lg"><span class="si-sw" style="background: {{ s.color }}"></span>{{ s.label }} {{ s.count }}</span>
+        {% endfor %}
+      </div>
+    </div>
+    {% if alignment.fit_status %}
+    <div class="si-block">
+      <b>{% trans %}LRCLIB fit{% endtrans %}</b>
+      {% if alignment.fit %}<span class="si-muted">{{ alignment.fit }}</span>{% endif %}
+      <span class="{% if alignment.fit_warn %}si-warn{% else %}si-muted{% endif %}">{{ alignment.fit_status }}</span>
+    </div>
+    {% endif %}
+    {% if alignment.route %}
+    <div class="si-block">
+      <b>{% trans %}Route{% endtrans %}</b>
+      <span class="si-muted">{{ alignment.route }}</span>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<div class="si-panel is-hidden" id="tab-history">
+  {% if history %}
+  <div class="si-card">
+    {% for v in history %}
+    <div class="si-block">
+      <div class="si-split">
+        <b>{{ v.date }}</b>
+        {% if v.current %}<span class="tag is-success is-light">{% trans %}Current{% endtrans %}</span>{% else %}<span class="tag is-light">{% trans %}Backup{% endtrans %}</span>{% endif %}
+      </div>
+      <div class="si-kv"><span class="si-k">{% trans %}Picks{% endtrans %}</span><span><span{% if v.genius_changed %} class="si-chg"{% endif %}>{{ v.genius }}</span>{% if v.lrclib %}; <span{% if v.lrclib_changed %} class="si-chg"{% endif %}>{{ v.lrclib }}</span>{% endif %}</span></div>
+      <div class="si-kv"><span class="si-k">{% trans %}Timed{% endtrans %}</span><span>{{ v.timed }}</span></div>
+      <div class="si-kv"><span class="si-k">{% trans %}Version{% endtrans %}</span><span>{{ v.schema }}</span></div>
+      {% if v.folder %}<div class="si-kv"><span class="si-k">{% trans %}Folder{% endtrans %}</span><code>{{ v.folder }}</code></div>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if has_backups %}
+  <p class="si-muted mt-2">{% trans %}A version saved in several backups is listed once, under its newest folder.{% endtrans %}</p>
+  {% else %}
+  <p class="si-muted mt-2">{% trans %}No earlier versions yet. Versions appear here once a regen has backed this song up.{% endtrans %}</p>
+  {% endif %}
+</div>
+
+{% if can_regenerate %}
+<div class="si-actions">
+  <button type="button" id="regenerate" class="button si-btn"{% if busy %} disabled{% endif %}>{% trans %}Regenerate{% endtrans %}</button>
+</div>
+{% endif %}
+<p id="regen-note" class="si-muted mt-2{% if not busy %} is-hidden{% endif %}">
+  {% if busy %}{% trans %}This song has a regen waiting or running.{% endtrans %} <a class="no-spa" href="{{ url_for('processing.processing') }}">{% trans %}Processing{% endtrans %}</a>{% endif %}
+</p>
+
+{% endif %}
+{% endblock %}

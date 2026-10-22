@@ -6,6 +6,7 @@ writes, so it is safe to call on a library the app is playing from.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -151,13 +152,17 @@ def library_statuses(folder: Path) -> list[SongStatus]:
     return [song_status(video) for video in list_videos(folder)]
 
 
+# The song lists the web UI offers, by name; the overview counts are the same rules.
+SONG_LISTS: dict[str, Callable[[SongStatus], bool]] = {
+    "behind": lambda s: s.category == "behind",
+    "poor": lambda s: s.poor,
+    "no_lyrics": lambda s: s.category == "no_lyrics",
+    "all": lambda s: True,
+}
+
+
 def overview_counts(statuses: list[SongStatus]) -> dict[str, int]:
-    return {
-        "behind": sum(s.category == "behind" for s in statuses),
-        "poor": sum(s.poor for s in statuses),
-        "no_lyrics": sum(s.category == "no_lyrics" for s in statuses),
-        "all": len(statuses),
-    }
+    return {name: sum(map(in_list, statuses)) for name, in_list in SONG_LISTS.items()}
 
 
 @dataclass(frozen=True)
