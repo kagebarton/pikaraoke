@@ -5,8 +5,9 @@ Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 > **Status (2026-10-22): Phases 0-5 done (3.1 = fixes from the Phase
 > 1-3 code review, 3.1g included; the review of 3.1b-3.1d is done with its
 > two fix commits; Phase 4's code is `7f5853e` and `55cfdbb`, Phase 5's is
-> `641600a`, see the Results log). Phase 6 is next, after Ken's checks for
-> Phase 5.** Ken
+> `641600a`, see the Results log). The code review of Phases 4-5 is done;
+> Phase 5.1 (its fixes, as Ken ruled them on 2026-10-22) is next, then
+> Phase 6 after Ken's checks for Phase 5.** Ken
 > approved D2's Phase 3.1 bullet on 2026-10-20. Branch
 > `web_library_tools`, off `library_tools` at `0bfa02a`; `dev` merged as
 > `c34d889`. There is no GATE and nothing here measures timing. Landing is
@@ -1383,6 +1384,214 @@ Commit: `feat(processing): Jobs and Library tools tabs, grouped rows, unfinished
 
 Relay with Ken's check list.
 
+## Phase 5.1: fixes from the Phase 4-5 code review
+
+Model: Claude Opus 5.5 (review and design, 2026-10-22); executor Claude Opus
+5.5.
+
+A read-only `/code-review` of `9231bc2..641600a` (Phases 4 and 5; 2026-10-22;
+three angles: correctness, simplicity, robustness) found the defects below.
+Ken ruled on 2026-10-22 which ones get fixed. Each step names the defect it
+fixes. Same worktree, same ground rules, same "Every phase ends the same
+way". Before starting, confirm the worktree is clean at `9d28e85` plus this
+plan commit.
+
+Every file touched here is in D1. Do the steps in order: 5.1a changes the
+tracker's actions and the page's Delete test, and 5.1e builds on both.
+
+Probes (scratchpad of the review session
+`65fef55e-e098-476e-9ae8-e45f76710fac`): `probes\p1_status.py` shows 5.1b and
+5.1d, `probe_race.py` shows 5.1c. Before the fixes they print, in order:
+`song_status RAISES UnicodeDecodeError`, `overview RAISES UnicodeDecodeError`,
+`_poor_lines -> None`, `_poor_lines malformed RAISES TypeError`; and
+`read in window: [('download', 'complete', 'finished')]`, `admin after queue:
+[('process', '', 'active')]`, `alice after queue: []`.
+
+### 5.1a. Tidy first
+
+- **A failed download's two "error" fields.** Since Phase 5,
+  `_on_download_error` sets `processing_status` to `error` and stamps
+  `finished_at` along with `download_status`, so every test of
+  `download_status == "error"` next to `processing_status == "error"` is
+  redundant. Delete:
+  - in `_derive_processing_status`, the `download_status == "error"` branch
+    under `item.song_path is None` (a failed download has `finished_at` set
+    and has already returned), leaving `processing_status = "waiting"`;
+  - the `download_status == "error"` half of `PipelineItem.is_terminal` and
+    of `group_of` in `_in_display_order`;
+  - the `download_status === 'error'` half in the page's `statusOf`. The
+    guest row's test that tells a download failure from a processing failure
+    stays: it is the only reader of the difference.
+- **`remove` only where there is a song to delete.** `_item_to_dict` offers
+  `remove` on a download row with a song path, and on no other (a song path
+  is set by `song_downloaded`, which sets `download_status` to `complete` in
+  the same step, so this is the old condition minus the failed download with
+  no file). The page then shows Delete song for `remove` or `delete` alone;
+  drop its `row.song_path` filter and its comment. `PipelineTracker.remove`
+  itself is unchanged.
+- **One song check for the routes.** In `routes/song_info.py`, replace
+  `_library_song` with:
+  - `library_song(k, song: object) -> str | None`: `song` when it is a string
+    in `k.song_manager.songs`, else None;
+  - `posted_song(k) -> str | None`: `library_song` of the JSON body's
+    `"song"` (None for a body that isn't a JSON object).
+
+  `song_info` uses `library_song(k, request.args.get("song"))`; `regenerate`
+  and `processing.retry_song` use `posted_song(k)` (`routes/processing.py`
+  imports it). Phases 6-8 use the same two.
+- **The poor-list label from its rule.** `processing.html` hardcodes "Looks
+  poor (15%+ lines guessed)". The `/processing` route passes
+  `poor_share=round(library_status.POOR_GUESSED_SHARE * 100)`; the label is
+  `{% trans share=poor_share %}Looks poor ({{ share }}%%+ lines
+  guessed){% endtrans %}` (with a variable, Jinja's i18n block needs `%%`
+  for one `%`).
+- **The attention route asks for tracked paths only.**
+  `PipelineTracker.tracked_paths() -> set[str]`: the song paths of every row,
+  finished or not, read under the lock. `/processing/attention` uses it
+  instead of building the set from a whole `get_status(admin=True)`. The
+  route still makes two reads (the tracker, then the database); that stays.
+
+Tests:
+- a failed download with no file offers no `remove` (admin), one with a file
+  still does; existing tests that set `download_status = "error"` by hand
+  also set `processing_status`, as the event does;
+- `tracked_paths` holds a finished row's and a running row's paths and no
+  `None`;
+- the label follows the constant (patch it to 0.2: "Looks poor (20%+ lines
+  guessed)", one `%`);
+- the route tests for bad song bodies stay green unchanged.
+
+Commits: `refactor(processing): one error field per failed download, Delete
+only with a file, attention reads tracked paths`; `refactor(library): one
+song check for the routes, the poor label from its rule`.
+
+### 5.1b. A bundle with bad counts no longer fails a finished job
+
+**Defect:** `PipelineTracker._poor_lines` catches errors from `song_status`
+but evaluates `status.poor` after the `try`. `poor` does arithmetic on the
+bundle's counts, so a bundle with a non-number count (say `"5"`) raises
+`TypeError` out of the `processing_complete` handler. That reaches
+`_run_job`, which reports the job as failed and sets the song's database
+state to `failed`, after the pipeline had already set it to `ready`.
+
+- Move the `return` inside the `try`.
+
+Test: a `processing_complete` event for a song whose bundle has
+`lines_with_words: "5"` leaves the row `complete`, with no `guessed` or
+`line_count`, and raises nothing.
+
+Commit: `fix(processing): a bundle with bad counts no longer fails a
+finished job`.
+
+### 5.1c. A download keeps its row when a status read lands before the queue
+
+**Defect:** `song_downloaded` runs the tracker's handler (the row gets its
+song path) and then `ProcessingManager.enqueue`. A status read in between
+finds the song neither running nor waiting and calls the row `complete`,
+with no `finished_at`. That makes it terminal, so `processing_queued`
+doesn't find it as unfinished: it drops it and adds an ownerless `process`
+row. The guest loses their row (process rows are admin-only), and its
+`user` is gone. `PipelineTracker.retry` of a download row has the same
+window: it puts the row back to `waiting` and clears `finished_at`, then
+calls `enqueue` outside the lock.
+
+- `_on_processing_queued`: when `_find_unfinished` finds nothing, look for a
+  row of this song with `finished_at` None. Only a status read's guess can
+  make such a row complete, so it is this run's row: set its
+  `processing_status` back to `waiting` and add nothing. Otherwise drop the
+  finished rows and add a `process` row, as today. Update the docstring.
+- `_find_unfinished` keeps its meaning: a re-download of the same song has a
+  new row, which must win over an older one.
+
+Tests (real `EventSystem`, as `probe_race.py`):
+- `download_queued` for Alice, `song_downloaded`, a `get_status` read, then
+  the song added to `pending_jobs` and `processing_queued`: Alice's status
+  has one `download` row, `mine`, group `active`; the admin status has no
+  `process` row;
+- `retry` of a failed download row whose `enqueue` mock does a `get_status`
+  read before it adds the song to `pending_jobs` and emits
+  `processing_queued`: the same row comes back as `active` with its `user`.
+
+Commit: `fix(processing): a download keeps its row when a status read lands
+before the queue`.
+
+### 5.1d. A `.lrc` that isn't UTF-8 no longer breaks the library pages
+
+**Defect:** `lrclib.is_skip_marker` reads the file as UTF-8 and catches only
+`OSError`. A `.lrc` in another encoding (a hand-placed file) raises
+`UnicodeDecodeError` out of `song_status`, so `/library/overview`, every
+`/library/songs` list, and that song's Song Info and Regenerate return 500.
+
+- `is_skip_marker` returns False for a file that isn't UTF-8 too, and logs
+  a warning naming the file. Nothing new on screen: the song shows as it
+  would with any other non-marker `.lrc`.
+
+Tests: `is_skip_marker` of a cp1252 file is False; `song_status` of a
+Genius song with that file returns (its LRCLIB state is not `skipped`).
+
+Commit: `fix(library): a .lrc that isn't UTF-8 no longer breaks the library
+pages`.
+
+### 5.1e. Two page glitches
+
+- **An open confirm closes when its action goes.** The page draws a row's
+  confirm ("Cancel this job?", "Delete this song from the library?") before
+  it looks at `row.actions`, so a confirm stays open after the job has
+  ended, and its button posts an action the server no longer offers. In the
+  page script:
+  - `offers(row, act)`: whether the server's `actions` allow the confirm's
+    action (`cancel`: `cancel`; `delete`: `remove` or `delete`). Delete
+    song's button uses it too, so the two can't disagree;
+  - `pruneState(rows)`, called by `render` before drawing: what `render`
+    does today (forget the open and confirming state of rows that are
+    gone), plus close a confirm whose action the row no longer offers.
+- **YOU only for a named guest.** `mine` is true when the row's `user`
+  equals the caller's cookie, so a guest with no name sees YOU on every
+  other nameless guest's row. `mine` requires a non-empty user. The cancel
+  permission (`is_owner`) is upstream's and stays as it is.
+
+Tests: a `get_status(user="")` read of two nameless downloads gives `mine`
+false on both, and a named owner still gets true. The page script has no JS
+runner in the suite: add a page test in the existing style (the rendered
+script has `pruneState` and `offers`, and the Delete button's test goes
+through `offers`), and check the behaviour once with Deno on the page's own
+functions (a confirming `cancel` row whose actions become `["dismiss"]`
+loses its confirm; a confirming `delete` row with `remove` keeps it). Record
+that check in the Results row; it is not committed.
+
+Commit: `fix(processing): a confirm closes when its action goes, and YOU
+only marks a named guest's rows`.
+
+### 5.1f. Not fixed, and why (record only; don't change)
+
+Ken's ruling, 2026-10-22:
+- **Regen-lane positions while a queued song plays.** The numbers can be
+  off while a waiting regen's song is on screen; they correct themselves
+  when it moves on. The waiting numbers stay as they are.
+- **A song path with a lone surrogate makes the page's `encodeURIComponent`
+  throw.** No real filename on this library has one.
+- **A double Regenerate makes an extra backup folder.** Two requests in the
+  same instant both pass the busy check and both back up; the second
+  enqueue is refused.
+- **A stale in-flight request after an SPA revisit** can draw once into the
+  new page before the next refresh.
+- **The page tests read the script's text, and the page works out running
+  and status again from fields the server sends.** Both stay.
+- **A row can show as Done (or Ready to sing) for an instant** between
+  `song_downloaded` and `processing_queued`. 5.1c keeps the row; the flash
+  itself is the status derivation, recorded in 3.1i.
+
+### 5.1g. Verify
+
+- The full suite at baseline plus the new tests. pre-commit per commit with
+  `--files`, and the import smoke.
+- The two probes print the fixed outputs: `song_status`, `overview` and the
+  malformed `_poor_lines` return without raising; Alice keeps her
+  `download` row and there is no `process` row.
+- Mutation checks on each fix, as in Phase 5's row.
+- No app run: every change is covered by a unit test, a probe or the Deno
+  check.
+
 ## Phase 6: Repair lyrics
 
 ### 6a. `LibraryTools.repair`
@@ -2418,6 +2627,8 @@ Executed 2026-10-22 by Sonnet 5.5, starting from `232aa9b` (clean). Code commit:
   automated test: the checks above are the unit tests on the markup and JSON, the
   headless renders and the live DOM. Jay Chou is now at v11, so no scratch song is
   behind; Song Info regenerates any video song.
+
+### Phase 5.1
 
 ### Phase 6
 
