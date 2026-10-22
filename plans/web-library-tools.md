@@ -2,12 +2,12 @@
 
 Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 
-> **Status (2026-10-22): Phases 0-5 done (3.1 = fixes from the Phase
+> **Status (2026-10-22): Phases 0-6 done (3.1 = fixes from the Phase
 > 1-3 code review, 3.1g included; the review of 3.1b-3.1d is done with its
 > two fix commits; Phase 4's code is `7f5853e` and `55cfdbb`, Phase 5's is
-> `641600a`, see the Results log). Phase 5.1 (the fixes from the Phase 4-5
-> code review, as Ken ruled them) is done too, code `874d49c`..`6caad6f`.
-> Phase 6 is next, after Ken's checks for Phase 5.** Ken
+> `641600a`, Phase 6's is `8a3b585`, see the Results log). Phase 5.1 (the
+> fixes from the Phase 4-5 code review, as Ken ruled them) is done too, code
+> `874d49c`..`6caad6f`. Phase 7 is next, after Ken's checks for Phase 6.** Ken
 > approved D2's Phase 3.1 bullet on 2026-10-20. Branch
 > `web_library_tools`, off `library_tools` at `0bfa02a`; `dev` merged as
 > `c34d889`. There is no GATE and nothing here measures timing. Landing is
@@ -2709,6 +2709,189 @@ nameless guests left as upstream has it). Code commits, in order:
   `routes.song_info`, `karaoke`, `app`.
 
 ### Phase 6
+
+Executed 2026-10-22 by Sonnet 5.5, starting from `220ac2b` (the Phase 5.1 record, clean).
+Code commit: `8a3b585` feat(library): repair a song's lyrics with typed Genius and LRCLIB
+searches (8 files, +1583/-26: `karaoke.py`, `library_tools.py`, `routes/song_info.py`,
+`song_info.html`, `song_repair.html` new, `test_library_tools.py`, `test_library_routes.py`,
+`test_processing_routes.py`).
+
+- **Suite** (`PYTHONIOENCODING=utf-8 uv run --no-sync python -P -m pytest -q`, 125.9 s at
+  `8a3b585`): **4 failed, 1949 passed, 2 skipped**; passed = 5.1's 1865 + 84 new. The four
+  failures are the baseline's four (ids unchanged). New tests: `test_library_tools.py` 31
+  (`TestRepair` 15, `TestGeniusSong` 3, `TestCaptionCheck` 3, `TestLrclibCandidates` 10);
+  `test_library_routes.py` 53 (`TestRepairButton` 4, `TestRepairPage` 10,
+  `TestCaptionCheckRoute` 4, `TestGeniusLyricsRoute` 7, `TestLrclibSearchRoute` 7,
+  `TestRepairRoute` 21). Existing tests changed only in their fixtures: the three places that
+  build `LibraryTools` pass its new fourth argument (`test_library_tools.make_tools`,
+  `test_library_routes.Env`, `test_processing_routes`), and `search.lyrics_search` joined the
+  route tests' stub endpoints.
+- **Mutation checks** (35, each reverted, failures counted in the touched test files; script
+  `...\c192729b-188a-40ca-8bf1-a9cba38de26f\scratchpad\mutate6.py`). Caught: an LRCLIB id
+  beating skip 1; `repair` ignoring a busy song 2; the Genius pick not checked before queueing
+  1; a repair that doesn't wipe first 4; a missing LRCLIB record not refused 2; a record with
+  no synced lyrics accepted 1; the caption plan built for a song with no YouTube id 3; the
+  transcribe source queueing another plan 2; an unknown source queued as nothing 4; the Genius
+  cache never evicting 1; never caching 3; `best` never marked 2, marking the first candidate
+  2; `current` never marked 2, compared when both ids are None 3; records without synced
+  lyrics listed 1; a non-UTF-8 `.lrc` breaking the search 1; the length difference with the
+  wrong sign 2; `mapped` counting every cue 1; no admin guard on the repair POST 1, the
+  caption check 1, the Genius lyrics 1, the LRCLIB search 1, the repair page 1; the repair
+  page rendering for a non-video song 1; the LRCLIB search skipping the library check 1; bool
+  ids accepted 1; the skip flag of any type 1; the current source swapped between caption and
+  Genius 2; the length rule not handed to the page 1; the Genius 502 leaking the exception
+  text 1; Genius text put in with `.html()` 1; Repair enabled for a busy song on Song Info 1.
+  Survived: hard-coding `var NOTED_S = 5;` in the page (the route's constant is also 5, so
+  nothing differs; the other mutation of that line, a different value, is caught). The first
+  run had 36 checks with three survivors: that one, `current` for a record with no id (the
+  test records all had one) and `mapped` counting cues that don't map (every cue of the test
+  records mapped). The tests were extended (a record with no id; a cue the lyrics don't
+  have), and both mutations are caught afterwards. The two caption mutations became one after
+  the `_caption_plan` helper (below).
+- **Differences from the plan's text:**
+  - `LibraryTools(processing_manager, song_manager, download_path, genius_client)`;
+    `karaoke.py` passes `self.genius_client`. `genius_song(id)` (the last-20 cache, a dict
+    under a lock, oldest out), `caption_check(song)` and `lrclib_candidates(song, genius_id,
+    title, artist)` live there, so the routes only serialise and the tests need no Flask; the
+    plan describes the candidate fields at route level. Regenerate and Repair share one
+    `_queue(job, reset, label)` (backup that song, then `enqueue_regen`), and the YouTube-id
+    rule for a caption plan is one helper, `_caption_plan`, which `repair` and
+    `caption_check` both use (it is `resolve_plan(job, reset=True)` and requires `fetch`).
+  - Before the backup, a Genius repair fetches the pick (`genius_song`, cached, normally free
+    after the LRCLIB step) and refuses with "Genius didn't return that song's lyrics. Try
+    again." when it can't. Not in the plan: the run wipes the song's outputs first (D2), so a
+    bad id would otherwise fail after the wipe. A record whose `syncedLyrics` is empty is
+    refused too ("That LRCLIB match has no synced lyrics."); the page only offers records with
+    synced lyrics, a hand-made POST doesn't have to.
+  - `lrclib_skip` wins over `lrclib_id` (no `get_record` call), the same order as
+    `apply_lrclib_choice`. `repair` validates `source` itself ("Unknown lyric source."),
+    "Pick a Genius song first." for a Genius source with no id; the route checks the types of
+    `genius_id`, `lrclib_id` (int, not bool) and `lrclib_skip` (bool).
+  - `duration_diff_s` is signed like Song Info's gap (positive: the match is longer) and null
+    when either length is missing. Each candidate also carries `record_meta`'s fields. `best`
+    is the record `select_candidate` returns (same rule as the automatic pick); `current`
+    compares with the id the `.lrc` on disk records, so a skip marker or an unreadable file
+    marks none (the `.lrc` read follows 5.1d).
+  - Song Info: Repair lyrics is a `<button>` that sets `location` (not a link), so one
+    `disabled` covers both buttons, and a Regenerate click disables Repair until it fails.
+    It shows for every video song, also one with no pick (Regenerate still needs one).
+  - The repair page for a non-video song redirects to Song Info (the plan is silent); a guest
+    gets the same redirect with a flash as the other pages.
+  - Page details the boards don't settle: the song name is a quiet line under the page title;
+    step 2 has its own heading, "LRCLIB match"; the board's note about the backup also shows
+    under step 1 for the caption and transcribe sources (they queue from there); the
+    secondary line of a result row is clamped to two lines (see below); an empty Genius
+    result list reads "No Genius results."; an empty LRCLIB list reads "No synced matches
+    found. If LRCLIB is busy, try again in a moment."; the LRCLIB search needs a title (an
+    empty artist works, an artist alone finds nothing at LRCLIB). The length rule (a gap under
+    5 s reads "within a few s") is Song Info's `_LENGTH_GAP_NOTED_S`, handed to the page.
+- **Isolated app run** (Ground rules first: nothing on 5555 or 5556, no python or mpv process
+  besides `TPython.exe` pid 15952, which is not pikaraoke; GPU 1173 MiB, 0 %). Config and
+  `APPDATA` as in the Phase 3 row (the scratch config has no admin password). The log says
+  library `D:\shared\weblib-test`, `Scan: found 8 song(s) on disk`. The scratch library was
+  hashed before (114 files, `scratch_before_p6.json`). The pages were driven through headless
+  Edge 155 over the DevTools protocol (`cdp6.py`, a 390 px emulated window; clicks, typing,
+  reading the page), screenshots in `...\c192729b-188a-40ca-8bf1-a9cba38de26f\scratchpad\p6shots\`.
+  - Look-only pass: Song Info shows `Repair lyrics` and `Regenerate`. Repair page step 1 for
+    Defying Gravity: caption card disabled with "This video has no English caption." (the check
+    ran when the page opened), Genius selected and tagged `current`, "Next: LRCLIB match"
+    disabled. A Genius search for "defying gravity idina menzel" listed 8 hits, id 105865
+    tagged `current`.
+  - **B** (Defying Gravity `AoON1CyhQAM` to a different Genius hit with a picked LRCLIB
+    candidate): Genius id 3550231 ("Defying Gravity", Idina Menzel, 40 lines; the preview
+    started "Something has changed within me"). Step 2 with Title "Defying Gravity", Artist
+    "Idina Menzel": 20 candidates, each "matches 34 of 40 lines", the video 4:17, the best fit
+    preselected (id 28322312, 4:24, 7 s longer); the admin picked 28220808 (3:47, 30 s
+    shorter) and opened the timing preview. LRCLIB's `/api/get/28220808` answered 503 for the
+    first six POSTs (15:29:08, then five tries 15:30:42-15:31:02 by the script's retry): each
+    returned HTTP 400, the page showed the notification, no `regen_backup_*` folder was
+    created and nothing queued. `get` answered 200 again at 15:32:12; the POST at 15:32:59
+    queued `Repair`. Song Info then read "This song has a regen waiting or running.
+    Processing", both buttons disabled. The job finished 15:36:00 (3 min 1 s). After: `.lrc`
+    header `[ti:Defying Gravity] [ar:Idina Menzel / Idina Menzel] [al:Defying Gravity
+    (Single)] [length:03:47] [lrclib_id:28220808]`, 43 stamped lines; bundle schema 11,
+    `captured_at` 2026-10-22T19:36:00Z, `lyrics.genius` {id 3550231, "Defying Gravity",
+    "Idina Menzel"}, `lyrics.lrclib.id` 28220808, `lrclib_fill` `eligible` false, reason
+    `arm_a_bail`, 0 filled, 40 lines, 33 timed. The backup `regen_backup_20261022T193259Z`
+    holds 13 files, all of that song. (Song Info's tiles were not captured after B; the next
+    two rows are the ones recorded.)
+  - **E** (the no-YouTube-ID song, Josh Gad `In Summer`, to Genius with LRCLIB `None`): the
+    caption card was disabled; Genius 358333 (tagged `current`), LRCLIB None. 15:36:01-
+    15:37:48 (1 min 47 s). The log says "No YouTube id for Josh Gad - In Summer ...; YTASR 3rd
+    source unavailable". After: `.lrc` is `[lrclib_skipped:1]` (19 bytes); bundle genius id
+    358333, `lyrics.lrclib` without an id, `lrclib_fill` reason `no_mapping`, 31 lines, 29
+    timed (as before). Song Info: `Genius, up to date | 94%, 2 guessed | Skipped, skipped by
+    you`; Picks: Genius "In Summer" Josh Gad, LRCLIB Skipped, Captions not used. One Genius
+    hit for that search (id 6700027) lists hundreds of names as its artist (see below).
+  - **C** (Defying Gravity again, same Genius pick, LRCLIB `None`): 15:38:35-15:40:58 (2 min 23
+    s). After: `.lrc` `[lrclib_skipped:1]` (19 bytes); bundle `captured_at`
+    2026-10-22T19:40:58Z, genius id 3550231, `lyrics.lrclib` without an id, `lrclib_fill`
+    `eligible` false, reason `no_mapping`, 40 lines, 33 timed. Song Info: `Genius, up to date
+    | 82%, 7 guessed | Skipped, skipped by you`; Picks: Genius "Defying Gravity" Idina Menzel,
+    LRCLIB Skipped; Alignment: 33 of 40 timed (lyric aligner 7, transcription 9, YouTube
+    captions 18, guessed 7), LRCLIB fit "Skipped: you chose no match."; History: Current 22
+    Oct (Genius · Idina Menzel; no LRCLIB; 33 of 40, v11), Backup 22 Oct (LRCLIB 3:47
+    changed; 33 of 40), Backup 19 Oct (Genius · Kristin Chenoweth; LRCLIB 5:54; 51 of 89,
+    v11), Backup 21 Sep (LRCLIB 5:54 added; v10), Backup 16 Jul (no LRCLIB; v8).
+  - **D** (Regenerate from Song Info, reuse): "Queued. It runs after any new downloads.",
+    both buttons disabled. 15:41:52-15:44:10 (2 min 18 s). After: `.lrc` still the skip marker
+    (19 bytes), bundle genius id 3550231, `lrclib_fill` reason `no_mapping`, 40 lines, 33
+    timed, `captured_at` 2026-10-22T19:44:10Z.
+  - Queen (`fJ9rUzIMcZQ`) **caption** repair: the caption card enabled ("Use the video's
+    caption as the lyrics."), tagged `current` and preselected, button "Regenerate song";
+    queued while D ran, 15:44:11-15:48:22 (4 min 11 s). After: bundle origin `srt`, 65 lines,
+    65 timed (as before), `.srt` and `.ass` byte-identical to before (the fetched caption
+    equals the old one), the leftover `subtitles/*.en.vtt` gone (the reset wipe). Song Info:
+    `YouTube captions, up to date | 100%, 0 guessed | -, Genius songs only`.
+  - Eason Chan (`8NJVNkzhJM4`) **transcribe** repair: tagged `current`, caption card
+    disabled ("This video has no English caption."); 15:48:23-15:49:45 (1 min 22 s). After: no
+    bundle, `.ass` and `.srt` rewritten. Song Info: `No lyrics | - | -`.
+  - Hash diff after the runs (`hashdiff.py`): before 114, after 143: added 42 (the six backup
+    folders: 13, 10, 6, 6, 4, 3 files), removed 13 (the reset wipe's diagnostic files:
+    Defying Gravity's `armC`, `armW`, `baseline`, `edgereplay`, `edgesnap`, `scaffold` `.ass`
+    and `.timing.json`; Josh Gad's `baseline`, `edgereplay`, `edgesnap`, `scaffold` `.ass` and
+    `.timing.json`; Queen's `.en.vtt`), changed 9 (three bundles, Defying Gravity's `.ass`,
+    `.srt`, `.lrc`, Josh Gad's `.lrc`, Eason Chan's `.ass` and `.srt`). The four songs were
+    then put back from each one's first backup folder (30 files copied): the scratch library
+    is 114 identical files, 0 removed, 0 changed, plus the 42 backup files. Defying Gravity's
+    Song Info afterwards: `Genius, up to date | 57%, 38 guessed | Not used, 97 s longer`,
+    Picks Kristin Chenoweth and LRCLIB 5:54.
+  - Layout was looked at in the same Edge run. Found by looking and fixed before the commit:
+    the two preview boxes were `<pre>` and clipped sideways (Bulma's `pre` rules beat
+    `white-space: pre-wrap`), now `<div>`s (`scrollWidth > clientWidth` false for both in the
+    runs); and the Genius hit above made one row several screens tall, so a result row's
+    secondary line is clamped to two lines (the tallest row measured 114 px afterwards, no
+    sideways page overflow). The song name was a second large heading and is now a quiet line.
+  - Stopped with `taskkill /F /T` on the listener's pid (four times, for template changes and
+    at the end); afterwards 5555 and 5556 were free and no python or mpv process remained
+    besides `TPython.exe` (the background shells reported exit 1 because of that).
+- **Real-library manifest:** `manifest.py compare "D:/Shared/pikaraoke-songs"` against the
+  Phase 0 manifest: `manifest=2605 now=2616 added=11 removed=0 changed=1`, the same 12 files
+  under `zh_probe/phase0/` as the earlier rows; nothing else differs. Output:
+  `...\c192729b-188a-40ca-8bf1-a9cba38de26f\scratchpad\manifest_compare_phase6.txt`. The real
+  library was not read by the app or any tool of this phase.
+- **pre-commit:** `--files <the eight changed files>`; Black reformatted two test files the
+  first time, the second pass passed every hook, and again after the last edit. Import smoke:
+  `library_tools`, `routes.song_info`, `karaoke`, `app`.
+- **Seen, not changed:**
+  - A repair is a reset job: a failure after its wipe leaves the song without its karaoke
+    file until it is regenerated (D2). Everything that can be known before queueing refuses
+    before the backup and the wipe.
+  - Two simultaneous Repair POSTs for one song can both pass the busy check; the second
+    `enqueue_regen` refuses and both have made a backup folder (Regenerate behaves the same).
+  - A failed LRCLIB search (503, timeout) looks like "no results": `lrclib.search` returns
+    `[]` on any failure. LRCLIB's get-by-id was down for about two minutes during the run,
+    which the repair handled as above (HTTP 400, nothing written).
+  - Keeping the current Genius pick while changing only the LRCLIB match means searching
+    Genius and picking the hit tagged `current` (the plan has no one-tap keep here).
+  - `lrclib.search` cleans the typed terms with `clean_key` (trailing parentheses dropped), so
+    typing "(Live)" doesn't narrow the search.
+  - The History tab lists a skip marker's version as "no LRCLIB" (the bundle has no LRCLIB
+    id); the tile and Picks say Skipped (Phase 4's wording).
+  - `/lyrics_search`, which the page reuses as the plan says, is open to guests (the search
+    page's picker uses it).
+  - The page script has no automated test; its checks are the render tests (no `.html(`, the
+    handed-over values) and the Edge run above.
 
 ### Phase 7
 
