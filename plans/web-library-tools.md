@@ -7,7 +7,9 @@ Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 > two fix commits; Phase 4's code is `7f5853e` and `55cfdbb`, Phase 5's is
 > `641600a`, Phase 6's is `8a3b585`, see the Results log). Phase 5.1 (the
 > fixes from the Phase 4-5 code review, as Ken ruled them) is done too, code
-> `874d49c`..`6caad6f`. Phase 7 is next, after Ken's checks for Phase 6.** Ken
+> `874d49c`..`6caad6f`. Phase 6.1 (the fixes from the Phase 6 code review,
+> approved by Ken 2026-10-22) is next, then Ken's checks for Phase 6, then
+> Phase 7.** Ken
 > approved D2's Phase 3.1 bullet on 2026-10-20. Branch
 > `web_library_tools`, off `library_tools` at `0bfa02a`; `dev` merged as
 > `c34d889`. There is no GATE and nothing here measures timing. Landing is
@@ -1680,6 +1682,190 @@ Commit: `feat(library): repair a song's lyrics with typed Genius and LRCLIB sear
 
 Relay with Ken's check list.
 
+## Phase 6.1: fixes from the Phase 6 code review
+
+Model: Claude Opus 5.5 (review and design, 2026-10-22); executor Claude Opus
+5.5.
+
+A read-only `/code-review` of `220ac2b..8a3b585` (Phase 6's code; 2026-10-22;
+three angles: correctness, simplicity, robustness; the docs commit `9dd41c4`
+out of scope) found the defects below. Ken approved this section on
+2026-10-22, the new caption wording in 6.1b included. Each step names the
+defect it fixes. Same worktree, same ground rules, same "Every phase ends the
+same way". Before starting, confirm the worktree is clean at `9dd41c4` plus
+this plan commit.
+
+Every file touched here is in D1 (`library_status.py`, `library_tools.py`,
+`routes/song_info.py`, `song_repair.html` and tests). One code commit per
+step, each with its test. Do 6.1c before 6.1d: both change
+`library_tools.py`'s candidate list.
+
+The suite at `9dd41c4`: 4 failed (the baseline's four), 1949 passed, 2
+skipped.
+
+Probes (scratchpad of the review session
+`65fef55e-e098-476e-9ae8-e45f76710fac`, folder `p6review\`):
+
+- `test_dump_repair_page.py` renders the repair page for a Genius song
+  through `test_library_routes`'s `env` fixture and writes the HTML to
+  `$REPAIR_PAGE_OUT`. Run it from the worktree root with
+  `PYTHONPATH=tests/unit` and `--rootdir=.`.
+- `stale_lrclib.mjs` (Deno, `npm:jsdom@24.1.0`, the app's own
+  `static/jquery-3.7.1.min.js`) drives that page: Genius hit 7, Next, an
+  LRCLIB search held open, Back, hit 8, then the held answer arrives. Args:
+  `<page.html> <jquery.js> asis|fix`. Before the fix, `asis` prints `search
+  was for genius_id: 7`, `step 2 heading: Genius pick: Defying Gravity ·
+  Idina Menzel.`, hit 7's candidate listed as `best fit`, and `send enabled:
+  true`. `fix` patches the page in memory the way 6.1a does and prints only
+  the None option with `send enabled: false`. (Its last line, the POST body,
+  comes from jsdom's `trigger` running a handler on a disabled button; a
+  browser sends nothing.)
+- `probe_caption_fail.py <a scratch folder>` shows 6.1b: a yt-dlp timeout
+  and an HTTP 403 both print `CaptionCheck(found=False, wpm=None,
+  passed=False)`.
+
+### 6.1a. A new Genius pick drops an LRCLIB search still in flight
+
+`song_repair.html`: the Genius pick handler (`geniusOption`'s `change`)
+clears the LRCLIB list but leaves `state.lrclibSeq` alone, so a search sent
+for the previous pick still passes `seq !== state.lrclibSeq` when it
+answers. It then fills step 2 with the old pick's matches, scored against
+the old lyrics, with the old best fit preselected, under the new pick's
+heading; Regenerate song sends the new Genius id with that match.
+
+Fix: the handler also does `state.lrclibSeq++` (next to the reset of
+`state.candidates`). Nothing else changes.
+
+Test: a render test that the pick handler bumps `lrclibSeq` (the page tests
+read the script's text, 5.1f). The real check is the Deno probe: render the
+fixed page with `test_dump_repair_page.py` and run `stale_lrclib.mjs ...
+asis`; it must print what `fix` printed before. Record both runs in the
+Results row; the probe is not committed.
+
+Commit: `fix(library): a new Genius pick drops the LRCLIB search still
+loading`.
+
+### 6.1b. A caption check that failed no longer says the video has no caption
+
+`check_caption` gets `None` from `download_manual_en_subs` both when there is
+no manual English caption and when yt-dlp fails (timeout, YouTube 403), so
+the page says "This video has no English caption." about a video whose
+caption may be fine. Telling the two apart needs a change to
+`download_manual_en_subs`, whose file is not in D1, so this is a wording fix
+only.
+
+Fix: in `song_repair.html`, the `noCaption` text becomes "No usable English
+caption found. If YouTube is busy, reload the page to check again." (Ken,
+2026-10-22). The sparse-caption and "Could not check the caption." texts stay.
+
+Test: a render test that the page carries the new text and not the old one.
+
+Commit: `fix(library): the repair page doesn't claim a video has no caption
+when the check failed`.
+
+### 6.1c. One length rule, and the server writes the fit line
+
+Two defects of the same rule:
+
+- `LibraryTools._length_diff_s` repeats `song_info._length_gap_s` (the same
+  arithmetic and docstring).
+- The page script writes the fit wording again (`fitLine`: "N s longer",
+  "N s shorter", "within a few s", its own `mmss`), with the 5 s threshold
+  handed over as `NOTED_S`. Song Info renders its own fit text on the server.
+
+Fix:
+
+- `library_status.py`: a public `length_gap_s(match_s: object, video_s:
+  float | None) -> int | None`, the seconds by which the LRCLIB match is
+  longer than the video (negative: shorter), None when either length is
+  missing or the match's length isn't a number (the `isinstance` test of
+  `_length_diff_s`, since LRCLIB records come off the network).
+  `LibraryTools._length_diff_s` is deleted and `lrclib_candidates` calls it;
+  `song_info._length_gap_s(status)` calls it with the bundle's values (or is
+  replaced by direct calls, whichever reads better).
+- `routes/song_info.py`, the `lrclib_search` route: each candidate also gets
+  `fit` (text) and `fit_near` (bool), and the response gets `video_length`
+  (text, or None without a video length). `fit` joins with " · " the match's
+  length as m:ss (`_mmss`; left out without a length) and, with a gap, either
+  "within a few s" (under `_LENGTH_GAP_NOTED_S`) or `_gap_text(gap)`.
+  `fit_near` is true for a gap under the threshold and false otherwise, and
+  null without a gap. `video_length` is "video is m:ss". The wording is the
+  page's wording today, so nothing on screen changes. `duration_diff_s` and
+  `video_duration_s` stay in the JSON (they are the data the text is built
+  from); the page stops reading them.
+- `song_repair.html`: `fitLine` uses `candidate.fit` and `candidate.fit_near`
+  (the tone stays: near `rp-good`, far `rp-bad`, null none); `#video-length`
+  shows `found.video_length` (step 2 keeps it in state in place of
+  `videoSeconds`). Delete `NOTED_S`, `mmss`, and the `videoIs`, `withinFew`,
+  `longer` and `shorter` texts. `repair_page` stops passing
+  `length_gap_noted_s`. Also delete the unused `rp-step` class on the two
+  sections.
+
+Tests: `length_gap_s` (longer, shorter, a missing or non-numeric length);
+the route's `fit`, `fit_near` and `video_length` for a near, a far longer, a
+far shorter and a length-less match; `test_the_length_rule_comes_from_song_info`
+is replaced by a test that the route's text follows `_LENGTH_GAP_NOTED_S`
+(patch it, as the poor-share label test does); the existing
+`duration_diff_s` tests keep passing unchanged.
+
+Commit: `refactor(library): one length-gap rule, and the LRCLIB fit line comes
+from the server`.
+
+### 6.1d. A repair uses the LRCLIB record its search already listed
+
+A repair POST with `lrclib_id` fetches that record again through LRCLIB's
+get-by-id endpoint, which the search didn't use. In Phase 6's live run that
+endpoint answered 503 for about two minutes while search worked, and six
+POSTs were refused. The server already held the full record, synced lyrics
+included, when it listed the candidates.
+
+Fix, in `LibraryTools`:
+
+- `lrclib_candidates` remembers every record it lists, keyed by id (records
+  without an id are not remembered), in a dict capped at
+  `LRCLIB_CACHE_SIZE = 100` (a search returns up to about 20), oldest out,
+  under a lock: the Genius cache's shape. Move the eviction into one small
+  helper both caches call, so the rule exists once.
+- `_genius_plan`: with `lrclib_id`, take the remembered record, else
+  `lrclib.get_record` as today. The "LRCLIB didn't return that match" and "no
+  synced lyrics" refusals stay for the fetched record. The client never
+  supplies the record; it only names an id the server listed or can fetch.
+- A restart forgets the records; the fallback covers that.
+
+Tests: after a search, a repair queues the listed record with `get_record`
+patched to raise; without a search, a repair still calls `get_record`; the
+cache keeps only the last `LRCLIB_CACHE_SIZE` (patch it small, as the
+Genius cache test does); the Genius cache tests pass unchanged.
+
+Commit: `feat(library): a repair uses the LRCLIB record its search listed`.
+
+### 6.1e. Not fixed, and why (record only; don't change)
+
+- **A Genius outage reads as "No Genius results."** `/lyrics_search` returns
+  `[]` on any failure and with no token. It is shared with the search page,
+  and `routes/search.py` is not in D1.
+- **A `.lrc` left over after a repair switches a song away from Genius.** It
+  can't reach a run: the fill runs only on the joint route, a caption run
+  takes the cue-align route, and a transcribe run has no fill. Its one effect
+  is that a later Genius repair's step 2 tags that match `current`, which is
+  true of the file on disk.
+- **An empty LRCLIB title makes Search do nothing.** A hint would be new
+  wording.
+- **`caption_check` builds a caption plan only for its "no YouTube ID"
+  refusal,** and **the mapped count is worked out twice per record** (once
+  for the list, once inside `select_candidate`). The first keeps one
+  YouTube-ID rule, the second keeps "best" on the production rule.
+
+### 6.1f. Verify
+
+- The full suite at baseline plus the new tests. pre-commit per commit with
+  `--files`, and the import smoke.
+- The Deno probe on the fixed page prints the `fix` output (6.1a).
+- Mutation checks on each fix, as in Phase 6's row (6.1a's check is the
+  probe: with the bump removed, `asis` lists the stale match again).
+- No app run: every change is covered by a unit test, a render test or the
+  Deno probe, and 6.1c's text is the page's text today.
+
 ## Phase 7: bulk runs and the pick pass
 
 ### 7a. `LibraryTools` runs (D5)
@@ -2892,6 +3078,8 @@ searches (8 files, +1583/-26: `karaoke.py`, `library_tools.py`, `routes/song_inf
     page's picker uses it).
   - The page script has no automated test; its checks are the render tests (no `.html(`, the
     handed-over values) and the Edge run above.
+
+### Phase 6.1
 
 ### Phase 7
 
