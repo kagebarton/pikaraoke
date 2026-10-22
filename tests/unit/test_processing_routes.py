@@ -766,7 +766,7 @@ class TestRegenRows:
         assert (row["kind"], row["label"], row["title"]) == ("regen", "Reprocess", "Library Song")
         assert row["song_path"] == LIB_PATH
         assert row["processing_status"] == "pending"
-        assert row["actions"] == ["cancel"]
+        assert row["actions"] == ["cancel", "song_info"]
 
     def test_queueing_a_regen_replaces_the_finished_rows_of_that_song(self):
         tracker = _make_tracker()
@@ -1025,14 +1025,26 @@ class TestRowActions:
 
         assert "dismiss" not in row["actions"] and "retry" not in row["actions"]
 
-    def test_a_guest_without_a_name_cannot_operate_a_process_row(self):
+    def test_a_process_row_is_hidden_from_guests(self):
         tracker = _make_tracker()
         _announce_processing(tracker)
         tracker._processing_manager.pending_jobs = [LIB_PATH]
 
-        [row] = tracker.get_status(admin=False, user="")
+        assert tracker.get_status(admin=False, user="") == []
+        assert tracker.get_status(admin=False, user="Alice") == []
 
-        assert row["actions"] == []
+    def test_an_admin_is_offered_song_info_on_a_row_with_a_song_path_only(self):
+        tracker = _make_tracker()
+        in_library = _announce_processing(tracker)
+        waiting = PipelineItem(title="Waiting", url="https://example.com/v", user="Alice")
+        tracker._items.append(waiting)
+
+        rows = {r["id"]: r for r in tracker.get_status(admin=True)}
+        guest_rows = {r["id"]: r for r in tracker.get_status(admin=False, user="Alice")}
+
+        assert "song_info" in rows[in_library.id]["actions"]
+        assert "song_info" not in rows[waiting.id]["actions"]
+        assert "song_info" not in guest_rows[waiting.id]["actions"]
 
     def test_retry_is_offered_only_for_a_failed_row_with_a_song_path(self):
         tracker = _make_tracker()
@@ -1276,3 +1288,342 @@ class TestNewAdminEndpoints:
         response = client.post("/processing/clear_finished")
 
         assert json.loads(response.data) == {"success": True, "count": 4}
+
+
+# ---------------------------------------------------------------------------
+# Display order, groups and positions
+# ---------------------------------------------------------------------------
+
+
+def _download_row(tracker, title, url="", user="Alice", song_path=None, status="waiting"):
+    item = PipelineItem(title=title, url=url, user=user)
+    item.song_path = song_path
+    if song_path is not None:
+        item.download_status = "complete"
+    item.processing_status = status
+    tracker._items.append(item)
+    return item
+
+
+class TestDisplayOrder:
+    def test_active_rows_come_in_the_order_the_app_will_run_them(self):
+        tracker = _make_tracker()
+        running = _download_row(tracker, "Running", song_path="/songs/R---rrr.mp4")
+        # Added in a different order from the way they run.
+        regen, _ = _queue_regen(tracker, "/songs/G---ggg.mp4")
+        process = _announce_processing(tracker, "/songs/P---ppp.mp4")
+        waiting_dl = _download_row(tracker, "Waiting download", url="https://x/2")
+        queued_dl = _download_row(tracker, "Queued download", song_path="/songs/Q---qqq.mp4")
+        live_dl = _download_row(tracker, "Downloading", url="https://x/1")
+        tracker._download_manager.active_url = "https://x/1"
+        tracker._processing_manager.get_active_job.return_value = running.song_path
+        tracker._processing_manager.pending_jobs = [
+            running.song_path,
+            regen.song_path,
+            process.song_path,
+            queued_dl.song_path,
+        ]
+
+        rows = tracker.get_status(admin=True, user="Alice")
+
+        assert [r["id"] for r in rows] == [
+            running.id,
+            live_dl.id,
+            waiting_dl.id,
+            process.id,
+            queued_dl.id,
+            regen.id,
+        ]
+        assert {r["group"] for r in rows} == {"active"}
+        assert [r["position"] for r in rows] == [None, 1, 2, 3, 4, 5]
+
+    def test_groups_are_active_then_attention_then_finished_newest_first(self):
+        tracker = _make_tracker()
+        old_done = _finished(tracker, "regen", "complete", path="/songs/A---aaa.mp4")
+        new_done = _finished(tracker, "process", "complete", path="/songs/B---bbb.mp4")
+        old_failed = _finished(tracker, "regen", "error", path="/songs/C---ccc.mp4")
+        new_failed = _finished(tracker, "process", "error", path="/songs/D---ddd.mp4")
+        waiting = _download_row(tracker, "Waiting", url="https://x/1")
+        for item, age in ((old_done, 50), (new_done, 5), (old_failed, 40), (new_failed, 4)):
+            item.finished_at = 1000.0 - age
+
+        rows = tracker.get_status(admin=True)
+
+        assert [(r["id"], r["group"]) for r in rows] == [
+            (waiting.id, "active"),
+            (new_failed.id, "attention"),
+            (old_failed.id, "attention"),
+            (new_done.id, "finished"),
+            (old_done.id, "finished"),
+        ]
+        assert [r["position"] for r in rows] == [1, None, None, None, None]
+
+    def test_a_cancelling_row_is_the_running_one(self):
+        tracker = _make_tracker()
+        queued = _download_row(tracker, "Queued", song_path="/songs/Q---qqq.mp4")
+        cancelling = _download_row(tracker, "Cancelling", song_path="/songs/C---ccc.mp4")
+        cancelling.cancelling = True
+        tracker._processing_manager.get_active_job.return_value = cancelling.song_path
+        tracker._processing_manager.pending_jobs = [queued.song_path, cancelling.song_path]
+
+        rows = tracker.get_status(admin=True)
+
+        assert [r["id"] for r in rows] == [cancelling.id, queued.id]
+        assert rows[0]["processing_status"] == "cancelling" and rows[0]["position"] is None
+        assert rows[1]["position"] == 1
+
+    def test_a_failed_download_goes_to_attention_with_the_time_it_failed(self):
+        tracker = _make_tracker()
+        item = _download_row(tracker, "Bad link", url="https://x/bad")
+
+        tracker._events.emit("download_error", {"url": "https://x/bad", "error": "nope"})
+        [row] = tracker.get_status(admin=True)
+
+        assert (row["group"], row["processing_status"], row["error_message"]) == (
+            "attention",
+            "error",
+            "nope",
+        )
+        assert row["finished_ago_s"] is not None
+        assert "dismiss" in row["actions"]
+        assert tracker.dismiss(item.id) is True
+
+    def test_a_download_that_just_failed_can_be_removed_before_the_next_status_read(self):
+        tracker = _make_tracker()
+        item = _download_row(tracker, "Bad link", url="https://x/bad")
+        tracker._events.emit("download_error", {"url": "https://x/bad", "error": "nope"})
+
+        assert tracker.remove(item.id) is True
+        assert tracker._items == []
+
+    def test_every_row_says_whether_it_is_the_callers_own(self):
+        tracker = _make_tracker()
+        mine = _download_row(tracker, "Mine", url="https://x/1", user="Alice")
+        theirs = _download_row(tracker, "Theirs", url="https://x/2", user="Bob")
+
+        rows = {r["id"]: r for r in tracker.get_status(admin=False, user="Alice")}
+
+        assert rows[mine.id]["mine"] is True
+        assert rows[theirs.id]["mine"] is False
+
+
+class TestPoorSongNumbers:
+    @staticmethod
+    def song_with_bundle(tmp_path, line_count, lines_with_words):
+        video = tmp_path / "Song---abcdefghijk.mp4"
+        video.write_bytes(b"")
+        bundle = tmp_path / "alignment_debug" / f"{video.stem}.json"
+        bundle.parent.mkdir()
+        bundle.write_text(
+            json.dumps(
+                {
+                    "schema_version": 11,
+                    "output_summary": {
+                        "line_count": line_count,
+                        "lines_with_words": lines_with_words,
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        return str(video)
+
+    def test_an_admin_sees_how_many_lines_a_poor_song_guessed(self, tmp_path):
+        tracker = _make_tracker()
+        path = self.song_with_bundle(tmp_path, line_count=20, lines_with_words=12)
+        _announce_processing(tracker, path)
+
+        tracker._events.emit("processing_complete", {"song_path": path, "lyric_method": None})
+        [admin_row] = tracker.get_status(admin=True)
+
+        assert (admin_row["guessed"], admin_row["line_count"]) == (8, 20)
+
+    def test_a_guest_is_not_told(self, tmp_path):
+        tracker = _make_tracker()
+        path = self.song_with_bundle(tmp_path, line_count=20, lines_with_words=12)
+        item = _download_row(tracker, "Song", url="https://x/1", song_path=path)
+
+        tracker._events.emit("processing_complete", {"song_path": path, "lyric_method": None})
+        [guest_row] = tracker.get_status(admin=False, user="Alice")
+
+        assert item.guessed == 8
+        assert (guest_row["guessed"], guest_row["line_count"]) == (None, None)
+
+    def test_a_song_that_is_not_poor_carries_no_numbers(self, tmp_path):
+        tracker = _make_tracker()
+        path = self.song_with_bundle(tmp_path, line_count=20, lines_with_words=19)
+        _announce_processing(tracker, path)
+
+        tracker._events.emit("processing_complete", {"song_path": path, "lyric_method": None})
+        [row] = tracker.get_status(admin=True)
+
+        assert (row["guessed"], row["line_count"]) == (None, None)
+
+    def test_a_bundle_that_cannot_be_read_does_not_fail_the_finished_job(self, tmp_path):
+        tracker = _make_tracker()
+        path = self.song_with_bundle(tmp_path, line_count=20, lines_with_words=12)
+        bundle = tmp_path / "alignment_debug" / "Song---abcdefghijk.json"
+        bundle.write_text('{"output_summary": ["not", "a", "mapping"]}', encoding="utf-8")
+        _announce_processing(tracker, path)
+
+        tracker._events.emit("processing_complete", {"song_path": path, "lyric_method": None})
+        [row] = tracker.get_status(admin=True)
+
+        assert row["processing_status"] == "complete"
+        assert (row["guessed"], row["line_count"]) == (None, None)
+
+    def test_a_song_with_no_bundle_carries_no_numbers(self):
+        tracker = _make_tracker()
+        _announce_processing(tracker)
+
+        tracker._events.emit("processing_complete", {"song_path": LIB_PATH, "lyric_method": None})
+        [row] = tracker.get_status(admin=True)
+
+        assert (row["guessed"], row["line_count"]) == (None, None)
+
+
+# ---------------------------------------------------------------------------
+# Routes: attention list and retrying a song with no row
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def library_env():
+    """A real tracker and LibraryTools behind a mocked Karaoke, with a three-song library."""
+    from pikaraoke.lib.library_tools import LibraryTools
+    from pikaraoke.lib.song_list import SongList
+    from pikaraoke.lib.song_manager import SongManager
+
+    paths = [f"/songs/{name}---{name * 11}.mp4" for name in ("A", "B", "C")]
+    failed, unfinished = paths[0], paths[1]
+    library = SongList()
+    library.update(paths)
+    karaoke = MagicMock()
+    karaoke.pipeline_tracker = _make_tracker()
+    song_manager = MagicMock()
+    song_manager.songs = library
+    song_manager.filename_from_path = SongManager.filename_from_path
+    song_manager.get_paths_by_pipeline_state.side_effect = lambda states: [
+        path for path, state in ((failed, "failed"), (unfinished, "pending")) if state in states
+    ]
+    karaoke.song_manager = song_manager
+    karaoke.processing_manager = MagicMock()
+    karaoke.processing_manager.get_active_job.return_value = None
+    karaoke.processing_manager.pending_jobs = []
+    karaoke.library_tools = LibraryTools(karaoke.processing_manager, song_manager, "/songs")
+    return karaoke, paths
+
+
+class TestAttentionRoute:
+    @patch(f"{ROUTE_PREFIX}.is_admin", return_value=False)
+    @patch(f"{ROUTE_PREFIX}.get_karaoke_instance")
+    def test_guests_get_an_empty_list(self, mock_get_instance, mock_is_admin, client, library_env):
+        mock_get_instance.return_value = library_env[0]
+
+        response = client.get("/processing/attention")
+
+        assert response.status_code == 200
+        assert json.loads(response.data) == []
+
+    @patch(f"{ROUTE_PREFIX}.is_admin", return_value=True)
+    @patch(f"{ROUTE_PREFIX}.get_karaoke_instance")
+    def test_a_failed_song_with_no_tracker_row_is_listed(
+        self, mock_get_instance, mock_is_admin, client, library_env
+    ):
+        karaoke, paths = library_env
+        mock_get_instance.return_value = karaoke
+
+        rows = json.loads(client.get("/processing/attention").data)
+
+        assert [(r["song_path"], r["state"]) for r in rows] == [
+            (paths[0], "failed"),
+            (paths[1], "unfinished"),
+        ]
+        assert rows[0]["actions"] == ["retry", "song_info", "delete"]
+
+    @patch(f"{ROUTE_PREFIX}.is_admin", return_value=True)
+    @patch(f"{ROUTE_PREFIX}.get_karaoke_instance")
+    def test_a_song_the_tracker_already_shows_is_not_listed(
+        self, mock_get_instance, mock_is_admin, client, library_env
+    ):
+        karaoke, paths = library_env
+        mock_get_instance.return_value = karaoke
+        _finished(karaoke.pipeline_tracker, "process", "error", path=paths[0])
+
+        rows = json.loads(client.get("/processing/attention").data)
+
+        assert [r["song_path"] for r in rows] == [paths[1]]
+
+
+class TestRetrySongRoute:
+    @patch(f"{ROUTE_PREFIX}._", side_effect=lambda x: x)
+    @patch(f"{ROUTE_PREFIX}.is_admin", return_value=False)
+    @patch(f"{ROUTE_PREFIX}.get_karaoke_instance")
+    def test_a_guest_gets_403(
+        self, mock_get_instance, mock_is_admin, mock_gettext, client, library_env
+    ):
+        karaoke, paths = library_env
+        mock_get_instance.return_value = karaoke
+
+        response = client.post("/processing/song/retry", json={"song": paths[0]})
+
+        assert response.status_code == 403
+        karaoke.processing_manager.enqueue.assert_not_called()
+
+    @patch(f"{ROUTE_PREFIX}._", side_effect=lambda x: x)
+    @patch(f"{ROUTE_PREFIX}.is_admin", return_value=True)
+    @patch(f"{ROUTE_PREFIX}.get_karaoke_instance")
+    def test_an_admin_queues_the_song_for_processing(
+        self, mock_get_instance, mock_is_admin, mock_gettext, client, library_env
+    ):
+        karaoke, paths = library_env
+        mock_get_instance.return_value = karaoke
+
+        response = client.post("/processing/song/retry", json={"song": paths[0]})
+
+        assert json.loads(response.data) == {"success": True}
+        karaoke.processing_manager.enqueue.assert_called_once_with(paths[0])
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            {"song": "/songs/Elsewhere---ZZZZZZZZZZZ.mp4"},
+            {"song": ["/songs/A---AAAAAAAAAAA.mp4"]},
+            {"song": None},
+            {},
+            ["/songs/A---AAAAAAAAAAA.mp4"],
+        ],
+    )
+    @patch(f"{ROUTE_PREFIX}._", side_effect=lambda x: x)
+    @patch(f"{ROUTE_PREFIX}.is_admin", return_value=True)
+    @patch(f"{ROUTE_PREFIX}.get_karaoke_instance")
+    def test_a_song_outside_the_library_is_refused(
+        self, mock_get_instance, mock_is_admin, mock_gettext, client, library_env, body
+    ):
+        karaoke, _ = library_env
+        mock_get_instance.return_value = karaoke
+
+        response = client.post("/processing/song/retry", json=body)
+
+        assert response.status_code == 400
+        assert json.loads(response.data)["success"] is False
+        karaoke.processing_manager.enqueue.assert_not_called()
+
+    @pytest.mark.parametrize("where", ["running", "waiting"])
+    @patch(f"{ROUTE_PREFIX}._", side_effect=lambda x: x)
+    @patch(f"{ROUTE_PREFIX}.is_admin", return_value=True)
+    @patch(f"{ROUTE_PREFIX}.get_karaoke_instance")
+    def test_a_song_already_running_or_waiting_is_not_queued_twice(
+        self, mock_get_instance, mock_is_admin, mock_gettext, client, library_env, where
+    ):
+        karaoke, paths = library_env
+        mock_get_instance.return_value = karaoke
+        if where == "running":
+            karaoke.processing_manager.get_active_job.return_value = paths[0]
+        else:
+            karaoke.processing_manager.pending_jobs = [paths[0]]
+
+        response = client.post("/processing/song/retry", json={"song": paths[0]})
+
+        assert response.status_code == 400
+        karaoke.processing_manager.enqueue.assert_not_called()

@@ -125,6 +125,70 @@ class TestIsBusy:
         assert not tools.is_busy("b.mp4")
 
 
+class TestAttentionRows:
+    @staticmethod
+    def tools_with_states(tmp_path, states, songs=None, **kwargs):
+        """A LibraryTools whose database lists ``states`` (path -> pipeline_state)."""
+        library = songs if songs is not None else list(states)
+        tools, _ = make_tools(tmp_path, library, **kwargs)
+        tools._song_manager.get_paths_by_pipeline_state.side_effect = lambda wanted: [
+            path for path, state in states.items() if state in wanted
+        ]
+        return tools
+
+    def test_lists_failed_and_unfinished_songs_with_what_the_admin_can_do(self, tmp_path):
+        tools = self.tools_with_states(
+            tmp_path,
+            {
+                "/songs/Zed---zzzzzzzzzzz.mp4": "pending",
+                "/songs/Abe---aaaaaaaaaaa.mp4": "pending",
+                "/songs/Mid---mmmmmmmmmmm.mp4": "failed",
+                "/songs/Fine---fffffffffff.mp4": "ready",
+            },
+        )
+
+        rows = tools.attention_rows(set())
+
+        assert [(r["title"], r["state"]) for r in rows] == [
+            ("Mid", "failed"),
+            ("Abe", "unfinished"),
+            ("Zed", "unfinished"),
+        ]
+        assert rows[0]["song_path"] == "/songs/Mid---mmmmmmmmmmm.mp4"
+        assert rows[0]["actions"] == ["retry", "song_info", "delete"]
+
+    def test_a_song_with_a_tracker_row_is_left_out(self, tmp_path):
+        tools = self.tools_with_states(
+            tmp_path,
+            {"/songs/A---aaaaaaaaaaa.mp4": "failed", "/songs/B---bbbbbbbbbbb.mp4": "failed"},
+        )
+
+        rows = tools.attention_rows({"/songs/A---aaaaaaaaaaa.mp4"})
+
+        assert [r["song_path"] for r in rows] == ["/songs/B---bbbbbbbbbbb.mp4"]
+
+    def test_a_song_waiting_or_running_is_left_out(self, tmp_path):
+        tools = self.tools_with_states(
+            tmp_path,
+            {"/songs/A---aaaaaaaaaaa.mp4": "pending", "/songs/B---bbbbbbbbbbb.mp4": "pending"},
+            active="/songs/A---aaaaaaaaaaa.mp4",
+            pending=["/songs/B---bbbbbbbbbbb.mp4"],
+        )
+
+        assert tools.attention_rows(set()) == []
+
+    def test_a_database_row_for_a_song_not_in_the_library_is_left_out(self, tmp_path):
+        tools = self.tools_with_states(
+            tmp_path,
+            {"/songs/Gone---ggggggggggg.mp4": "failed", "/songs/Here---hhhhhhhhhhh.mp4": "failed"},
+            songs=["/songs/Here---hhhhhhhhhhh.mp4"],
+        )
+
+        rows = tools.attention_rows(set())
+
+        assert [r["title"] for r in rows] == ["Here"]
+
+
 class TestRegenerate:
     def test_queues_one_job_that_reuses_the_recorded_pick(self, tmp_path):
         [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")

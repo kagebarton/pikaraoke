@@ -260,6 +260,24 @@ class TestPipelineColumns:
         assert result["/songs/b.mp4"] == "pending"
         assert "/songs/missing.mp4" not in result
 
+    def test_get_paths_by_pipeline_state(self, db):
+        db.insert_songs(
+            [
+                _song("/songs/a.mp4", pipeline_state="ready"),
+                _song("/songs/b.mp4", pipeline_state="pending"),
+                _song("/songs/c.mp4", pipeline_state="failed"),
+                _song("/songs/d.mp4", pipeline_state="skipped"),
+            ]
+        )
+
+        assert db.get_paths_by_pipeline_state(["pending"]) == ["/songs/b.mp4"]
+        assert sorted(db.get_paths_by_pipeline_state(["pending", "failed"])) == [
+            "/songs/b.mp4",
+            "/songs/c.mp4",
+        ]
+        assert db.get_paths_by_pipeline_state([]) == []
+        assert db.get_paths_by_pipeline_state(iter(["failed"])) == ["/songs/c.mp4"]
+
 
 class TestV2Migration:
     """Verify the v1 → v2 migration path is correct and idempotent."""
