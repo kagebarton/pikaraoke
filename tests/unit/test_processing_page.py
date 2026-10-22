@@ -99,12 +99,43 @@ class TestProcessingPage:
             assert f'href="/library/songs?list={name}"' in body
             assert f'data-count="{name}"' in body
 
+    def test_the_library_tab_offers_the_three_bulk_runs_with_their_counts(self, env):
+        body = get(env, "/processing", admin=True).get_data(as_text=True)
+
+        for mode, count in (("stale", "behind"), ("all", "all"), ("reset", "all")):
+            button = body[body.index(f'data-mode="{mode}"') :].split("</button>")[0]
+            assert f'data-count="{count}"' in button and "disabled" in button
+        assert "Regen jobs wait behind new downloads." in body
+        assert "Each song's lyric files are backed up first." in body
+
+    def test_the_tab_is_read_from_the_url_before_the_spa_drops_the_hash(self, env):
+        """spa-navigation.js rewrites the URL without its hash when it starts, before the
+        page's ready handler runs, so a link to /processing#tools must be read at once."""
+        body = get(env, "/processing", admin=True).get_data(as_text=True)
+
+        assert "var firstTab = window.location.hash.replace('#', '');" in body
+        assert "showTab(firstTab)" in body
+        assert "showTab(window.location.hash" not in body
+
+    def test_the_library_tab_has_a_banner_for_an_open_run_with_an_in_place_discard(self, env):
+        body = get(env, "/processing", admin=True).get_data(as_text=True)
+
+        assert 'id="pr-run-banner"' in body and 'id="pr-run-continue"' in body
+        assert 'href="/library/run"' in body
+        assert 'id="pr-run-confirm"' in body and "Discard this run and its picks?" in body
+
     def test_a_guest_gets_no_tabs_chips_or_library_links(self, env):
         body = get(env, "/processing", admin=False).get_data(as_text=True)
 
         assert "data-tab=" not in body and "data-filter=" not in body
         assert 'id="pr-tools"' not in body and "/library/" not in body
         assert "Library tools" not in body
+
+    def test_a_guest_gets_no_run_controls(self, env):
+        body = get(env, "/processing", admin=False).get_data(as_text=True)
+
+        assert "data-mode=" not in body and 'id="pr-run-banner"' not in body
+        assert "/library/run" not in body
 
     def test_a_guest_gets_the_intro_and_three_headed_sections(self, env):
         body = get(env, "/processing", admin=False).get_data(as_text=True)

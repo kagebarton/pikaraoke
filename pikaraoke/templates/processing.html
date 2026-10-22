@@ -37,6 +37,12 @@
   .pr-you { font-size: 11px; font-weight: 700; background: var(--dark-link); color: #0f1a17; border-radius: 4px; padding: 1px 6px; }
   .pr-link { display: flex; align-items: center; justify-content: space-between; min-height: 48px; padding: 0 12px; color: inherit; }
   .pr-link + .pr-link { border-top: 1px solid var(--dark-border); }
+  .pr-run { display: flex; align-items: center; gap: 10px; padding: 12px; }
+  .pr-run + .pr-run { border-top: 1px solid var(--dark-border); }
+  .pr-run-text { flex: 1; min-width: 0; }
+  .pr-run-text b { display: block; }
+  .pr-run .button { flex: none; gap: 6px; min-height: 44px; font-weight: 700; }
+  .pr-banner { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
   .pr-spin { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(169, 216, 247, 0.3); border-top-color: #a9d8f7; border-radius: 50%; animation: pr-spin 2s linear infinite; }
   @keyframes pr-spin { to { transform: rotate(360deg); } }
 </style>
@@ -80,6 +86,37 @@
       <a class="pr-link no-spa" href="{{ url_for('library.songs') }}?list=all"><span>{% trans %}All songs{% endtrans %}</span><span class="tag is-light" data-count="all">…</span></a>
     </div>
     <p class="pr-muted mt-2">{% trans %}Each list opens the songs; tap one for its Song Info.{% endtrans %}</p>
+
+    <div class="pr-sec"><span>{% trans %}Regenerate{% endtrans %}</span></div>
+    <div id="pr-run-banner" class="pr-card pr-banner is-hidden">
+      <b id="pr-run-text"></b>
+      <div id="pr-run-buttons" class="pr-buttons">
+        <a id="pr-run-continue" class="button is-link no-spa" href="{{ url_for('library.run_preview') }}">{% trans %}Continue{% endtrans %}</a>
+        <button type="button" id="pr-run-discard" class="button">{% trans %}Discard{% endtrans %}</button>
+      </div>
+      <div id="pr-run-confirm" class="pr-confirm is-hidden">
+        <span>{% trans %}Discard this run and its picks?{% endtrans %}</span>
+        <div class="pr-buttons">
+          <button type="button" id="pr-run-discard-yes" class="button is-danger">{% trans %}Discard run{% endtrans %}</button>
+          <button type="button" id="pr-run-discard-no" class="button">{% trans %}Keep it{% endtrans %}</button>
+        </div>
+      </div>
+    </div>
+    <div id="pr-run-card" class="pr-card">
+      <div class="pr-run">
+        <div class="pr-run-text"><b>{% trans %}Update stale songs{% endtrans %}</b><span class="pr-muted">{% trans %}Songs on an older version. Keeps their picks.{% endtrans %}</span></div>
+        <button type="button" class="button is-link pr-run-open" data-mode="stale" disabled>{% trans %}Preview{% endtrans %} <span data-count="behind">…</span></button>
+      </div>
+      <div class="pr-run">
+        <div class="pr-run-text"><b>{% trans %}Reprocess all{% endtrans %}</b><span class="pr-muted">{% trans %}Every song on current code. Keeps picks.{% endtrans %}</span></div>
+        <button type="button" class="button pr-run-open" data-mode="all" disabled>{% trans %}Preview{% endtrans %} <span data-count="all">…</span></button>
+      </div>
+      <div class="pr-run">
+        <div class="pr-run-text"><b>{% trans %}Reset all{% endtrans %}</b><span class="pr-muted">{% trans %}Start over: re-check captions, pick Genius where needed.{% endtrans %}</span></div>
+        <button type="button" class="button pr-run-open" data-mode="reset" disabled>{% trans %}Preview{% endtrans %} <span data-count="all">…</span></button>
+      </div>
+    </div>
+    <p class="pr-muted mt-2">{% trans %}Regen jobs wait behind new downloads. Each song's lyric files are backed up first.{% endtrans %}</p>
   </div>
   {% else %}
   <p class="pr-muted">{% trans %}Songs being downloaded and prepared for karaoke.{% endtrans %}</p>
@@ -106,6 +143,9 @@
 'use strict';
 
 var isAdmin = {{ admin | tojson }};
+
+// The tab the URL names (#tools): the SPA's init drops the hash before the page is ready.
+var firstTab = window.location.hash.replace('#', '');
 
 var T = {
   now: {{ _('Now') | tojson }},
@@ -166,7 +206,16 @@ var T = {
   readyToSing: {{ _('Ready to sing') | tojson }},
   downloadFailed: {{ _('The download failed. Try another video of this song.') | tojson }},
   processingFailed: {{ _("This song couldn't be prepared. The host can retry it.") | tojson }},
-  actionFailed: {{ _('That did not work.') | tojson }}
+  actionFailed: {{ _('That did not work.') | tojson }},
+  runNames: {
+    stale: {{ _('Update stale songs') | tojson }},
+    all: {{ _('Reprocess all') | tojson }},
+    reset: {{ _('Reset all') | tojson }}
+  },
+  runPicks: {{ _('%(mode)s is open: %(k)s of %(n)s picked.', mode='{mode}', k='{k}', n='{n}') | tojson }},
+  runChecking: {{ _('%(mode)s is open: checking captions (%(k)s of %(n)s).', mode='{mode}', k='{k}', n='{n}') | tojson }},
+  runReady: {{ _('%(mode)s is open: ready to queue.', mode='{mode}') | tojson }},
+  runFailed: {{ _('Could not open the run.') | tojson }}
 };
 
 var URLS = {
@@ -175,6 +224,10 @@ var URLS = {
   enqueue: {{ url_for('processing.enqueue_item', item_id='ITEM_ID') | tojson }}{% if admin %},
   attention: {{ url_for('processing.processing_attention') | tojson }},
   overview: {{ url_for('library.overview') | tojson }},
+  runOpen: {{ url_for('library.open_run') | tojson }},
+  runPage: {{ url_for('library.run_preview') | tojson }},
+  runStatus: {{ url_for('library.run_status') | tojson }},
+  runDiscard: {{ url_for('library.run_discard') | tojson }},
   clearFinished: {{ url_for('processing.clear_finished') | tojson }},
   retrySong: {{ url_for('processing.retry_song') | tojson }},
   songInfo: {{ url_for('song_info.song_info') | tojson }},
@@ -199,7 +252,9 @@ var state = {
   filter: 'all',
   expanded: {},    // row key -> true
   confirming: {},  // row key -> 'cancel' | 'delete'
-  nowBase: null    // {s, at}: elapsed seconds of the running job when last fetched
+  nowBase: null,   // {s, at}: elapsed seconds of the running job when last fetched
+  run: null,       // the open bulk run, from the server, or null
+  discarding: false // the run's in-place discard confirm is showing
 };
 
 /* ---------------------------------------------------------------- helpers */
@@ -599,6 +654,31 @@ function loadOverview() {
       var n = counts[$(this).attr('data-count')];
       $(this).text(n == null ? '…' : n);
     });
+    // A run needs songs: its Preview button waits for the count.
+    $('.pr-run-open').each(function () {
+      $(this).prop('disabled', !counts[$(this).find('[data-count]').attr('data-count')]);
+    });
+  });
+}
+
+function renderRun() {
+  var run = state.run;
+  $('#pr-run-card').toggleClass('is-hidden', !!run);
+  $('#pr-run-banner').toggleClass('is-hidden', !run);
+  if (!run) return;
+  var vars = { mode: T.runNames[run.mode], k: run.picked, n: run.to_pick };
+  if (run.checking) vars = { mode: vars.mode, k: run.checked, n: run.to_check };
+  var text = run.checking ? T.runChecking : (run.to_pick > 0 ? T.runPicks : T.runReady);
+  $('#pr-run-text').text(fill(text, vars));
+  $('#pr-run-buttons').toggleClass('is-hidden', state.discarding);
+  $('#pr-run-confirm').toggleClass('is-hidden', !state.discarding);
+}
+
+function loadRun() {
+  fetchJson(URLS.runStatus).done(function (run) {
+    state.run = run.open ? run : null;
+    if (!state.run) state.discarding = false;
+    renderRun();
   });
 }
 
@@ -694,6 +774,40 @@ $(document).on('click.processing', '#pr-clear', function () {
   post(URLS.clearFinished);
 });
 
+$(document).on('click.processing', '.pr-run-open', function () {
+  var button = $(this).prop('disabled', true);
+  $.ajax({
+    url: URLS.runOpen,
+    type: 'POST',
+    contentType: 'application/json',
+    data: JSON.stringify({ mode: button.attr('data-mode') })
+  }).done(function () {
+    window.location.href = URLS.runPage;
+  }).fail(function (xhr) {
+    var message = '';
+    try { message = JSON.parse(xhr.responseText).error; } catch (err) {}
+    showNotification(message || T.runFailed, 'is-danger');
+    button.prop('disabled', false);
+  });
+});
+
+$(document).on('click.processing', '#pr-run-discard', function () {
+  state.discarding = true;
+  renderRun();
+});
+
+$(document).on('click.processing', '#pr-run-discard-no', function () {
+  state.discarding = false;
+  renderRun();
+});
+
+$(document).on('click.processing', '#pr-run-discard-yes', function () {
+  $.ajax({ url: URLS.runDiscard, type: 'POST' }).always(function () {
+    state.discarding = false;
+    loadRun();
+  });
+});
+
 $(document).on('click.processing', '.pr-tabs li', function (e) {
   e.preventDefault();
   showTab($(this).attr('data-tab'));
@@ -708,7 +822,10 @@ function showTab(name) {
   $('#pr-jobs').toggleClass('is-hidden', name !== 'jobs');
   $('#pr-tools').toggleClass('is-hidden', name !== 'tools');
   try { window.history.replaceState(window.history.state, '', '#' + name); } catch (err) {}
-  if (name === 'tools') loadOverview();
+  if (name === 'tools') {
+    loadOverview();
+    loadRun();
+  }
 }
 
 // Push updates replace the old 1 s poll; the SPA re-runs this script each visit,
@@ -727,7 +844,7 @@ page.tick = setInterval(function () {
 }, 1000);
 
 $(function () {
-  if (isAdmin) showTab(window.location.hash.replace('#', ''));
+  if (isAdmin) showTab(firstTab);
   refresh();
 });
 })();
