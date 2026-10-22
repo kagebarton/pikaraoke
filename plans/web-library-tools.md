@@ -2,14 +2,14 @@
 
 Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 
-> **Status (2026-10-22): Phases 0-6 done (3.1 = fixes from the Phase
+> **Status (2026-10-22): Phases 0-6 and 6.1 done (3.1 = fixes from the Phase
 > 1-3 code review, 3.1g included; the review of 3.1b-3.1d is done with its
 > two fix commits; Phase 4's code is `7f5853e` and `55cfdbb`, Phase 5's is
 > `641600a`, Phase 6's is `8a3b585`, see the Results log). Phase 5.1 (the
 > fixes from the Phase 4-5 code review, as Ken ruled them) is done too, code
 > `874d49c`..`6caad6f`. Phase 6.1 (the fixes from the Phase 6 code review,
-> approved by Ken 2026-10-22) is next, then Ken's checks for Phase 6, then
-> Phase 7.** Ken
+> approved by Ken 2026-10-22) is done too, code `a14906a`..`febeb2c`. Ken's
+> checks for Phase 6 are next, then Phase 7.** Ken
 > approved D2's Phase 3.1 bullet on 2026-10-20. Branch
 > `web_library_tools`, off `library_tools` at `0bfa02a`; `dev` merged as
 > `c34d889`. There is no GATE and nothing here measures timing. Landing is
@@ -3080,6 +3080,131 @@ searches (8 files, +1583/-26: `karaoke.py`, `library_tools.py`, `routes/song_inf
     handed-over values) and the Edge run above.
 
 ### Phase 6.1
+
+Executed 2026-10-22 by Opus 5.5, starting from `d6fa927` (the approved Phase 6.1 section,
+clean; the suite there is the `9dd41c4` one: 4 failed, 1949 passed, 2 skipped). Code commits,
+in the section's order:
+
+- `a14906a` fix(library): a new Genius pick drops the LRCLIB search still loading
+  (`song_repair.html`, `test_library_routes.py`; +9/-1)
+- `e414e43` fix(library): the repair page doesn't claim a video has no caption when the
+  check failed (`song_repair.html`, `test_library_routes.py`; +7/-1)
+- `7a4a30e` refactor(library): one length-gap rule, and the LRCLIB fit line comes from the
+  server (`library_status.py`, `library_tools.py`, `routes/song_info.py`, `song_repair.html`,
+  `test_library_routes.py`, `test_library_status.py`; +96/-48)
+- `febeb2c` feat(library): a repair uses the LRCLIB record its search listed
+  (`library_tools.py`, `test_library_tools.py`; +96/-6)
+
+Facts:
+
+- **Probes before the fix** (the review's scratchpad,
+  `...\65fef55e-e098-476e-9ae8-e45f76710fac\scratchpad\p6review\`; the page rendered at
+  `d6fa927` with `test_dump_repair_page.py` to `page_before.html`):
+  - `stale_lrclib.mjs page_before.html ... asis`: `search was for genius_id: 7`; `step 2
+    heading: Genius pick: Defying Gravity · Idina Menzel.`; listed `Defying Gravity best fit
+    Kristin Chenoweth 5:54 · 97 s longer matches 80 of 89 lines` and the None option; `send
+    enabled: true`; POST body `genius_id: 8, lrclib_id: 501`.
+  - The same with `fix`: listed only the None option, `send enabled: false`, POST body
+    `genius_id: 8, lrclib_id: null` (jsdom's `trigger` on the disabled button, as the section
+    says).
+  - `probe_caption_fail.py <scratch>\capfail`: `timeout -> CaptionCheck(found=False,
+    wpm=None, passed=False)` and `http 403 -> CaptionCheck(found=False, wpm=None,
+    passed=False)`, after yt-dlp's warnings "subtitle download timed out" and "HTTP Error
+    403: Forbidden".
+- **6.1a probe after the fix:** the page rendered at the fix (`page_after61a.html`) with
+  `stale_lrclib.mjs ... asis` prints `search was for genius_id: 7`, the same heading, listed
+  only `NoneSkip LRCLIB. Guessed lines stay guessed.`, `send enabled: false`, POST body
+  `lrclib_id: null`: the `fix` run's output above. Rerun on the page at `7a4a30e`
+  (`page_after61c.html`): the same first four lines.
+- **6.1c page check** (a new jsdom probe, `fit_line.mjs`, set up like `stale_lrclib.mjs`, with
+  an LRCLIB answer carrying the new fields; not committed), on the page at `7a4a30e`: `video
+  length: "video is 4:17"`; `fit: "4:19 · within a few s" class: "rp-good"`, `fit: "5:54 · 97
+  s longer" class: "rp-bad"`, `fit: "" class: ""`, each followed by `matches 3 of 4 lines`;
+  the best fit preselected. The old page's own text for the 97 s match was `5:54 · 97 s
+  longer` (the `asis` run above).
+- **Suite** (`PYTHONIOENCODING=utf-8 uv run --no-sync python -P -m pytest -q`):
+  - At `7a4a30e`: 4 failed, 1955 passed, 2 skipped (121.2 s).
+  - At `febeb2c`: **4 failed, 1959 passed, 2 skipped** (121.7 s); passed = 1949 + 10.
+  - The four failures are the baseline's four (ids unchanged).
+  - New tests:
+    - `TestRepairPage` 2: 6.1a's handler bumps `lrclibSeq`; 6.1b's text is present and the
+      old text absent.
+    - `TestLengthGap` 2 (`test_library_status.py`).
+    - `TestLrclibSearchRoute` 3, replacing `test_the_length_rule_comes_from_song_info`:
+      - `fit` and `fit_near` for a near, a far longer, a far shorter and a length-less
+        match, with `video_length`;
+      - no video length;
+      - the text follows a patched `_LENGTH_GAP_NOTED_S`.
+    - `TestRepairUsesTheListedRecord` 4 (`test_library_tools.py`):
+      - a listed record is queued with `get_record` raising;
+      - with no search, the repair asks `get_record`;
+      - a record without an id isn't remembered;
+      - the cap holds, with a record listed again counting as newer.
+  - The existing `duration_diff_s` and Genius cache tests are unchanged and pass.
+- **Mutation checks** (each reverted; failures counted over `test_library_routes.py`,
+  `test_library_status.py` and `test_library_tools.py`; script `p6review\mutate61.py`, inputs
+  `mut61c.json` and `mut61d.json`):
+  - 6.1a: the bump removed. The `TestRepairPage` test fails (1). The page rendered from it
+    (`page_mut61a.html`), run through `stale_lrclib.mjs ... asis`, lists the stale `Defying
+    Gravity best fit ... 5:54 · 97 s longer` again.
+  - 6.1b: the old wording put back: 1.
+  - 6.1c:
+
+    | Mutation | Failures |
+    |---|---|
+    | the gap's sign flipped | 7 |
+    | the gap taking a non-number | 1 |
+    | Song Info's gap returning None | 3 |
+    | the threshold hard-coded to 5 | 1 |
+    | near tested on the signed gap | 1 |
+    | near False without a gap | 2 |
+    | the match length left out | 3 |
+    | a far gap reading "within a few s" | 1 |
+    | no video length | 1 |
+
+    The page's tones swapped: `fit_line.mjs` prints `rp-bad` for the near match and
+    `rp-good` for the far one. The probe prints; it doesn't assert.
+  - 6.1d:
+
+    | Mutation | Failures |
+    |---|---|
+    | the search remembering nothing | 2 |
+    | the repair ignoring the remembered record | 2 |
+    | a record without an integer id keyed anyway | 4 |
+    | a stored-again entry keeping its old place | 1 |
+    | the caches never evicting | 2 |
+    | the LRCLIB cache sized by the Genius constant | 1 |
+    | the Genius cache sized by the LRCLIB constant | 1 |
+    | LRCLIB asked before the remembered record | 2 |
+
+  - None survived.
+- **Differences from the section's text:**
+  - 6.1c:
+    - `song_info._length_gap_s(status)` stays, as a one-line wrapper over `length_gap_s`
+      (its two callers pass the same bundle values).
+    - Song Info now treats a match length in the bundle that isn't a number as missing;
+      before, it raised.
+    - The match length in `fit` is shown only when it is a number (LRCLIB data), the same
+      guard as the gap's.
+    - A length-less match with no gap has `fit` `""` and `fit_near` null.
+    - The page keeps the server's text in `state.videoLength`, in place of `videoSeconds`.
+  - 6.1d:
+    - Only records whose id is an integer are remembered, since the repair POST accepts
+      only an integer id. That also covers "records without an id".
+    - `_remember(cache, key, value, size)` is a module function that both caches call under
+      their own lock.
+    - `_remember` re-inserts a key that is stored again, so "oldest out" is by when an entry
+      was last stored. The Genius cache only stores on a miss, so it behaves as before.
+    - The two refusals ("LRCLIB didn't return that match", "no synced lyrics") check
+      whichever record was found. A listed record always has synced lyrics.
+    - The plan holds the remembered dict itself; its one reader is `write_lrc`.
+- **pre-commit:** `--files` with each commit's changed files. All hooks passed on the first run
+  each time, with no reformatting. Import smoke: `library_status`, `library_tools`,
+  `routes.song_info`, `karaoke`, `app`.
+- **No app run** (6.1f). Nothing in this phase started the app, ran a pipeline or read a song
+  library, so the real-library manifest was not compared.
+- **Seen, not changed:** the mockup board `RepairGenius.dc.html` still shows "This video has
+  no English caption." It is a design reference, and the section changes the template only.
 
 ### Phase 7
 
