@@ -640,11 +640,6 @@ class TestRepairPage:
         assert "var HAS_YOUTUBE_ID = true" in with_id
         assert "var HAS_YOUTUBE_ID = false" in without
 
-    def test_the_length_rule_comes_from_song_info(self, env):
-        html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())))
-
-        assert "var NOTED_S = 5;" in html
-
     def test_a_caption_check_that_found_nothing_does_not_rule_out_a_failed_check(self, env):
         html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())))
 
@@ -807,6 +802,45 @@ class TestLrclibSearchRoute:
         assert (current["mapped"], best["mapped"], best["sheet_lines"]) == (2, 4, 4)
         assert current["duration_diff_s"] == 97
         assert best["syncedLyrics"] == self.records[1]["syncedLyrics"]
+
+    def test_each_match_says_how_its_length_fits_the_video(self, env, song):
+        no_length = lrclib_record(9, "Line one here")
+        no_length["duration"] = None
+        self.records = [
+            lrclib_record(6, "Line one here", duration=259.0),
+            lrclib_record(7, "Line one here", duration=354.0),
+            lrclib_record(8, "Line one here", duration=227.0),
+            no_length,
+        ]
+
+        body = self.search(env, song).get_json()
+
+        assert body["video_length"] == "video is 4:17"
+        assert [(c["fit"], c["fit_near"]) for c in body["candidates"]] == [
+            ("4:19 · within a few s", True),
+            ("5:54 · 97 s longer", False),
+            ("3:47 · 30 s shorter", False),
+            ("", None),
+        ]
+
+    def test_without_the_video_length_a_match_shows_only_its_own(self, env, song, monkeypatch):
+        unmeasured = env.add_song("B---bbbbbbbbbbb.mp4", poor_genius_bundle(media_duration_s=None))
+        monkeypatch.setattr("pikaraoke.lib.library_regen.probe_duration", lambda path: None)
+        self.records = [lrclib_record(6, "Line one here", duration=354.0)]
+
+        body = self.search(env, unmeasured).get_json()
+
+        assert body["video_length"] is None
+        [candidate] = body["candidates"]
+        assert (candidate["fit"], candidate["fit_near"]) == ("5:54", None)
+
+    def test_the_fit_text_follows_song_infos_length_rule(self, env, song, monkeypatch):
+        monkeypatch.setattr("pikaraoke.routes.song_info._LENGTH_GAP_NOTED_S", 100)
+        self.records = [lrclib_record(7, "Line one here", duration=354.0)]
+
+        [candidate] = self.search(env, song).get_json()["candidates"]
+
+        assert (candidate["fit"], candidate["fit_near"]) == ("5:54 · within a few s", True)
 
     def test_no_matches_is_an_empty_list(self, env, song):
         assert self.search(env, song).get_json()["candidates"] == []

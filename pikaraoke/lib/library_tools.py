@@ -33,6 +33,7 @@ from pikaraoke.lib.library_status import (
     SONG_LISTS,
     HistoryEntry,
     SongStatus,
+    length_gap_s,
     library_statuses,
     overview_counts,
     song_history,
@@ -199,7 +200,7 @@ class LibraryTools:
             candidates.append(
                 {
                     **lrclib.record_meta(record),
-                    "duration_diff_s": self._length_diff_s(record.get("duration"), video_s),
+                    "duration_diff_s": length_gap_s(record.get("duration"), video_s),
                     "mapped": len(lrclib.map_lines_to_cues(sheet, cue_texts)),
                     "sheet_lines": len(sheet),
                     "best": record is best,
@@ -313,10 +314,3 @@ class LibraryTools:
             return lrclib.read_lrc(lrclib.lrc_path(song))[1].get("id")
         except (OSError, UnicodeDecodeError):
             return None
-
-    @staticmethod
-    def _length_diff_s(match_s: object, video_s: float | None) -> int | None:
-        """How many seconds longer the LRCLIB match is than the video (negative: shorter)."""
-        if not isinstance(match_s, (int, float)) or video_s is None:
-            return None
-        return round(match_s - video_s)

@@ -251,6 +251,17 @@ class TestAsrAndDuration:
         assert not library_status.song_status(video).ytasr_used
 
 
+class TestLengthGap:
+    def test_a_longer_match_is_positive_and_a_shorter_one_negative(self):
+        assert library_status.length_gap_s(354.0, 257.23) == 97
+        assert library_status.length_gap_s(227, 257.23) == -30
+
+    def test_a_missing_or_non_numeric_length_has_no_gap(self):
+        assert library_status.length_gap_s(None, 257.23) is None
+        assert library_status.length_gap_s(354.0, None) is None
+        assert library_status.length_gap_s("354", 257.23) is None
+
+
 class TestOverview:
     def test_counts_cover_the_whole_folder(self, tmp_path):
         current = make_video(tmp_path, f"A---{VID}")

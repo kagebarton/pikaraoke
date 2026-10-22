@@ -147,6 +147,17 @@ def _lrclib_state(song: Path, origin: str | None, lyrics: dict, fill: dict) -> s
     return "none"
 
 
+def length_gap_s(match_s: object, video_s: float | None) -> int | None:
+    """How many seconds longer an LRCLIB match is than the video (negative: shorter).
+
+    None when either length is missing; LRCLIB records come off the network, so
+    a match length that isn't a number counts as missing.
+    """
+    if not isinstance(match_s, (int, float)) or video_s is None:
+        return None
+    return round(match_s - video_s)
+
+
 def library_statuses(folder: Path) -> list[SongStatus]:
     """Status of every video in ``folder``, in :func:`list_videos` order."""
     return [song_status(video) for video in list_videos(folder)]
