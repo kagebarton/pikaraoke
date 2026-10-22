@@ -645,6 +645,12 @@ class TestRepairPage:
 
         assert "var NOTED_S = 5;" in html
 
+    def test_a_caption_check_that_found_nothing_does_not_rule_out_a_failed_check(self, env):
+        html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())))
+
+        assert "No usable English caption found. If YouTube is busy, reload the page" in html
+        assert "This video has no English caption." not in html
+
     def test_a_new_genius_pick_drops_the_lrclib_search_still_loading(self, env):
         code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
         start = code.index("function geniusOption")
