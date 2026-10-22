@@ -509,21 +509,37 @@ class PipelineTracker:
 
         A download already has its row (the tracker hears ``song_downloaded``
         first), and a retried item is back in flight, so neither adds one.
+        A status read between those and this event finds the song neither
+        running nor waiting and calls its row complete; no complete event
+        stamped that row, so it goes back to waiting as this run's row.
         """
         with self._lock:
             if self._find_unfinished(song_path) is not None:
                 return
-            self._drop_terminal_items(song_path)
-            item = PipelineItem(
-                title=SongManager.filename_from_path(song_path),
-                url="",
-                user="",
-                kind="process",
-                label="Process",
+            called_complete = next(
+                (
+                    i
+                    for i in self._items
+                    if i.song_path == song_path
+                    and i.processing_status == "complete"
+                    and i.finished_at is None
+                ),
+                None,
             )
-            item.song_path = song_path
-            item.download_status = "complete"
-            self._items.append(item)
+            if called_complete is not None:
+                called_complete.processing_status = "waiting"
+            else:
+                self._drop_terminal_items(song_path)
+                item = PipelineItem(
+                    title=SongManager.filename_from_path(song_path),
+                    url="",
+                    user="",
+                    kind="process",
+                    label="Process",
+                )
+                item.song_path = song_path
+                item.download_status = "complete"
+                self._items.append(item)
         self._notify_change()
 
     def _on_processing_complete(self, data: dict[str, Any]) -> None:

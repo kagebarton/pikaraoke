@@ -1209,6 +1209,59 @@ class TestRetry:
         assert tracker.retry(item.id) is False
 
 
+class TestAStatusReadBeforeTheQueue:
+    """A status read between song_downloaded (or a retry) and processing_queued
+    finds the song neither running nor waiting and calls its row complete."""
+
+    URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    PATH = "/songs/Song---dQw4w9WgXcQ.mp4"
+
+    def test_a_download_keeps_its_row(self):
+        tracker = _make_tracker()
+        events = tracker._events
+        events.emit("download_queued", {"title": "Song", "video_url": self.URL, "user": "Alice"})
+        events.emit("song_downloaded", self.PATH)
+        tracker.get_status(user="Alice")
+        tracker._processing_manager.pending_jobs.append(self.PATH)
+        events.emit("processing_queued", self.PATH)
+        [item] = tracker._items
+
+        # In flight again before any read: a dismiss can't drop it.
+        assert tracker.dismiss(item.id) is False
+        [row] = tracker.get_status(user="Alice")
+
+        assert (row["kind"], row["group"], row["processing_status"], row["mine"]) == (
+            "download",
+            "active",
+            "pending",
+            True,
+        )
+        assert [r["kind"] for r in tracker.get_status(admin=True)] == ["download"]
+
+    def test_a_retried_download_keeps_its_row(self):
+        tracker = _make_tracker()
+        item = _download_row(tracker, "Song", url=self.URL, song_path=self.PATH)
+        tracker._events.emit("processing_error", {"song_path": self.PATH, "error": "boom"})
+        manager = tracker._processing_manager
+
+        def enqueue(path):
+            tracker.get_status(admin=True)
+            manager.pending_jobs.append(path)
+            tracker._events.emit("processing_queued", path)
+
+        manager.enqueue.side_effect = enqueue
+
+        assert tracker.retry(item.id) is True
+        [row] = tracker.get_status(admin=True)
+
+        assert (row["id"], row["user"], row["group"], row["processing_status"]) == (
+            item.id,
+            "Alice",
+            "active",
+            "pending",
+        )
+
+
 class TestClearFinished:
     def test_drops_every_completed_row_and_counts_them(self):
         tracker = _make_tracker()
