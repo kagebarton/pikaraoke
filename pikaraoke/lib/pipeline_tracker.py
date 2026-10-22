@@ -726,7 +726,7 @@ class PipelineTracker:
             "error_message": item.error_message,
             "actions": actions,
             "lyric_method": item.lyric_method,
-            "mine": is_owner,
+            "mine": is_owner and bool(user),  # a guest with no name owns no row
             "guessed": item.guessed if admin else None,
             "line_count": item.line_count if admin else None,
             "finished_ago_s": (

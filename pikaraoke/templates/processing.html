@@ -365,6 +365,14 @@ function button(act, key, label, cssClass) {
     '" data-key="' + esc(key) + '">' + esc(label) + '</button>';
 }
 
+// The server actions a row's confirm goes ahead with.
+var CONFIRM_NEEDS = { cancel: ['cancel'], delete: ['remove', 'delete'] };
+
+function offers(row, act) {
+  var allowed = row.actions || [];
+  return CONFIRM_NEEDS[act].some(function (name) { return allowed.indexOf(name) !== -1; });
+}
+
 function actionsHtml(row) {
   var key = rowKey(row);
   var confirming = state.confirming[key];
@@ -386,7 +394,7 @@ function actionsHtml(row) {
   }
   if (has('enqueue')) html += button('enqueue', key, T.addToQueue);
   if (has('cancel')) html += button('cancel', key, T.cancel);
-  if (has('remove') || has('delete')) {
+  if (offers(row, 'delete')) {
     html += button('delete', key, T.deleteSong, 'is-danger is-outlined');
   }
   if (has('dismiss')) html += button('dismiss', key, T.dismiss);
@@ -531,12 +539,22 @@ function renderGuest() {
 
 /* ------------------------------------------------------------ data flow */
 
-function render() {
+// Forget the open and confirming state of rows that are gone, and close a
+// confirm whose action the server no longer offers (its job ended, say).
+function pruneState(rows) {
   var present = {};
-  allRows().forEach(function (row) { present[rowKey(row)] = true; });
+  rows.forEach(function (row) {
+    var key = rowKey(row);
+    present[key] = true;
+    if (state.confirming[key] && !offers(row, state.confirming[key])) delete state.confirming[key];
+  });
   [state.expanded, state.confirming].forEach(function (map) {
     Object.keys(map).forEach(function (key) { if (!present[key]) delete map[key]; });
   });
+}
+
+function render() {
+  pruneState(allRows());
   if (isAdmin) renderAdmin(); else renderGuest();
 }
 

@@ -1478,6 +1478,15 @@ class TestDisplayOrder:
         assert rows[mine.id]["mine"] is True
         assert rows[theirs.id]["mine"] is False
 
+    def test_a_guest_with_no_name_owns_no_row(self):
+        tracker = _make_tracker()
+        _download_row(tracker, "One", url="https://x/1", user="")
+        _download_row(tracker, "Two", url="https://x/2", user="")
+
+        rows = tracker.get_status(admin=False, user="")
+
+        assert [r["mine"] for r in rows] == [False, False]
+
 
 class TestPoorSongNumbers:
     @staticmethod
