@@ -25,6 +25,7 @@ from pikaraoke.lib.get_platform import (
 )
 from pikaraoke.lib.karaoke_database import KaraokeDatabase
 from pikaraoke.lib.library_scanner import LibraryScanner, ScanResult
+from pikaraoke.lib.library_tools import LibraryTools
 from pikaraoke.lib.mpv_controller import MpvController
 from pikaraoke.lib.network import get_ip
 from pikaraoke.lib.overlay_manager import QueuedSong
@@ -63,6 +64,7 @@ class Karaoke:
     queue_manager: QueueManager
     playback_controller: PlaybackController
     pipeline_tracker: PipelineTracker
+    library_tools: LibraryTools
 
     now_playing_notification: str | None = None
     _volume: float  # backing field; access via .volume property
@@ -306,6 +308,12 @@ class Karaoke:
         # in registration order), so the item has its song path when the queue
         # emits processing_queued.
         self.events.on("song_downloaded", self.processing_manager.enqueue)
+
+        self.library_tools = LibraryTools(
+            processing_manager=self.processing_manager,
+            song_manager=self.song_manager,
+            download_path=self.download_path,
+        )
 
         # Wire overlay state provider so the MPV poll thread can render OSD overlays
         if self.mpv_controller.is_running:

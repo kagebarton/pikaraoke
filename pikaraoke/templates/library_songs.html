@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+
+{% block styles %}
+<style>
+  .ls-row { display: flex; flex-direction: column; justify-content: center; min-height: 44px; padding: 6px 0; }
+  .ls-name { word-break: break-word; }
+  .ls-sub { color: var(--dark-text-muted); font-size: 13px; }
+</style>
+{% endblock %}
+
+{% block header %}
+<h1>{% block title %}{{ title }}{% endblock %}</h1>
+{% endblock %}
+
+{% block content %}
+{% if rows %}
+{% for row in rows %}
+<a class="ls-row no-spa" href="{{ url_for('song_info.song_info') }}?song={{ url_escape(row.path.encode('utf-8', 'surrogateescape')) }}">
+  <span class="ls-name">{{ row.name }}</span>
+  <span class="ls-sub">{{ row.subline }}</span>
+</a>
+{% endfor %}
+{% else %}
+<p>{% trans %}No songs in this list.{% endtrans %}</p>
+{% endif %}
+{% endblock %}
