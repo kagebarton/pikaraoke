@@ -166,6 +166,12 @@ class TestSkipMarker:
         assert not lrclib.is_skip_marker(tmp_path / "lyrics" / "Missing.lrc")
         assert not marker.with_name(marker.name + ".tmp").exists()
 
+    def test_a_file_that_is_not_utf8_is_not_a_marker(self, tmp_path):
+        lrc = tmp_path / "Song.lrc"
+        lrc.write_bytes("[ti:Caf\xe9]\n[00:01.00]hello\n".encode("cp1252"))
+
+        assert not lrclib.is_skip_marker(lrc)
+
     def test_ensure_lrc_returns_the_marker_without_searching(self, tmp_path):
         song_path = tmp_path / "Song---dQw4w9WgXcQ.mp4"
         marker = song_path.parent / "lyrics" / f"{song_path.stem}.lrc"
