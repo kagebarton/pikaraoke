@@ -1,0 +1,487 @@
+{% extends 'base.html' %}
+
+{% block styles %}
+<style>
+  .rp-muted { color: var(--dark-text-muted); font-size: 13px; }
+  .rp-sec { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dark-text-muted); margin: 20px 0 8px; display: flex; justify-content: space-between; }
+  .rp-sec span + span { text-transform: none; letter-spacing: 0; font-weight: 400; }
+  .rp-back { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; font-size: 14px; background: none; border: 0; padding: 0; cursor: pointer; color: var(--dark-link); }
+  .rp-title { font-size: 20px; font-weight: 700; color: var(--dark-text-secondary); margin: 0 0 2px; }
+  .rp-name { color: var(--dark-text-light); word-break: break-word; }
+  .rp-sources { display: flex; flex-direction: column; gap: 8px; }
+  .rp-src { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border-radius: 8px; background: var(--dark-bg-tertiary); border: 2px solid transparent; cursor: pointer; }
+  .rp-src.is-selected { border-color: var(--dark-link); }
+  .rp-src.is-off { opacity: 0.6; cursor: not-allowed; }
+  .rp-src input, .rp-opt input { width: 20px; height: 20px; accent-color: var(--dark-link); margin: 2px 0 0; flex: none; }
+  .rp-tag { font-size: 11px; font-weight: 700; border: 1px solid var(--dark-border-light); color: var(--dark-text-light); border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
+  .rp-tag.is-best { background: var(--dark-link); border-color: var(--dark-link); color: var(--dark-bg-primary); }
+  .rp-search { display: flex; gap: 8px; margin-top: 6px; }
+  .rp-search .input { min-height: 44px; }
+  .rp-search .button { min-width: 44px; min-height: 44px; }
+  .rp-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .rp-list { border: 1px solid var(--dark-border); border-radius: 8px; overflow: hidden; background: var(--dark-bg-tertiary); margin-top: 10px; }
+  .rp-opt { display: flex; gap: 12px; align-items: flex-start; padding: 12px; min-height: 56px; border-top: 1px solid var(--dark-border); cursor: pointer; box-sizing: border-box; }
+  .rp-opt:first-child { border-top: 0; }
+  .rp-opt.is-selected { background: #2c4a44; }
+  .rp-opt-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .rp-opt-body .rp-muted { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; word-break: break-word; }
+  .rp-opt-head { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-weight: 700; word-break: break-word; }
+  .rp-fit { display: flex; gap: 14px; font-size: 13px; flex-wrap: wrap; }
+  .rp-good { color: var(--dark-success); }
+  .rp-bad { color: var(--dark-warning); }
+  .rp-empty { padding: 12px; color: var(--dark-text-muted); font-size: 13px; }
+  .rp-link { display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; background: none; border: 0; padding: 0; cursor: pointer; color: var(--dark-link); }
+  .rp-link:disabled { opacity: 0.5; cursor: not-allowed; }
+  .rp-preview { max-height: 240px; overflow: auto; white-space: pre-wrap; word-break: break-word; font-size: 13px; background: var(--dark-bg-secondary); border-radius: 8px; padding: 10px 12px; margin: 0 0 8px; color: var(--dark-text-light); }
+  .rp-note { background: var(--dark-bg-secondary); border-radius: 8px; padding: 12px; margin-top: 8px; }
+  .rp-buttons { display: flex; gap: 10px; margin-top: 14px; }
+  .rp-buttons .button { min-height: 44px; font-weight: 700; }
+  .rp-buttons .button:first-child { flex: 1; }
+  .rp-buttons .button:last-child { flex: 2; }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  $(function () {
+    var SONG = {{ song | tojson }};
+    var CURRENT_SOURCE = {{ current_source | tojson }};
+    var CURRENT_GENIUS_ID = {{ current_genius_id | tojson }};
+    var HAS_YOUTUBE_ID = {{ has_youtube_id | tojson }};
+    var NOTED_S = {{ length_gap_noted_s | tojson }};
+    var URLS = {
+      captionCheck: {{ url_for('song_info.caption_check') | tojson }},
+      geniusSearch: {{ url_for('search.lyrics_search') | tojson }},
+      geniusLyrics: {{ url_for('song_info.genius_lyrics') | tojson }},
+      lrclibSearch: {{ url_for('song_info.lrclib_search') | tojson }},
+      repair: {{ url_for('song_info.repair') | tojson }},
+      songInfo: {{ url_for('song_info.song_info', song=song) | tojson }}
+    };
+    var T = {
+      checking: {{ _('Checking the caption…') | tojson }},
+      noYoutubeId: {{ _('This song has no YouTube ID.') | tojson }},
+      noCaption: {{ _('This video has no English caption.') | tojson }},
+      sparseCaption: {{ _("This video's caption is too sparse to be lyrics.") | tojson }},
+      captionOk: {{ _("Use the video's caption as the lyrics.") | tojson }},
+      captionFailed: {{ _('Could not check the caption.') | tojson }},
+      current: {{ _('current') | tojson }},
+      bestFit: {{ _('best fit') | tojson }},
+      noGenius: {{ _('No Genius results.') | tojson }},
+      searchFailed: {{ _('Search failed. Try again.') | tojson }},
+      searching: {{ _('Searching…') | tojson }},
+      previewLyrics: {{ _('Preview these lyrics') | tojson }},
+      previewTiming: {{ _('Preview selected timing') | tojson }},
+      hidePreview: {{ _('Hide preview') | tojson }},
+      loading: {{ _('Loading…') | tojson }},
+      geniusPick: {{ _('Genius pick: %(title)s · %(artist)s.', title='{title}', artist='{artist}') | tojson }},
+      videoIs: {{ _('video is %(length)s', length='{length}') | tojson }},
+      withinFew: {{ _('within a few s') | tojson }},
+      longer: {{ _('%(n)s s longer', n='{n}') | tojson }},
+      shorter: {{ _('%(n)s s shorter', n='{n}') | tojson }},
+      matches: {{ _('matches %(n)s of %(m)s lines', n='{n}', m='{m}') | tojson }},
+      noLrclib: {{ _('No synced matches found. If LRCLIB is busy, try again in a moment.') | tojson }},
+      none: {{ _('None') | tojson }},
+      skipLrclib: {{ _('Skip LRCLIB. Guessed lines stay guessed.') | tojson }},
+      nextLrclib: {{ _('Next: LRCLIB match') | tojson }},
+      regenerate: {{ _('Regenerate song') | tojson }},
+      queueFailed: {{ _('Could not queue the regeneration.') | tojson }}
+    };
+
+    var state = {
+      source: null,      // 'caption' | 'genius' | 'transcribe'
+      genius: null,      // the picked Genius result {id, title, artist}
+      lrclib: null,      // 'none' | the picked candidate's id
+      candidates: [],    // LRCLIB's matches for the picked Genius song
+      videoSeconds: null,
+      geniusSeq: 0,
+      lrclibSeq: 0,
+      sending: false
+    };
+
+    function fill(template, vars) {
+      return template.replace(/\{(\w+)\}/g, function (m, name) {
+        return vars[name] != null ? vars[name] : m;
+      });
+    }
+
+    function mmss(seconds) {
+      var whole = Math.round(seconds);
+      return Math.floor(whole / 60) + ':' + ('0' + (whole % 60)).slice(-2);
+    }
+
+    function el(tag, className, text) {
+      var node = $('<' + tag + '>');
+      if (className) node.addClass(className);
+      if (text != null) node.text(text);
+      return node;
+    }
+
+    function errorOf(xhr, fallback) {
+      try { return JSON.parse(xhr.responseText).error || fallback; } catch (err) { return fallback; }
+    }
+
+    /* ------------------------------------------------------------ step 1 */
+
+    function sourceCard(source) {
+      return $('.rp-src[data-source="' + source + '"]');
+    }
+
+    function setSourceState(source, enabled, note) {
+      var card = sourceCard(source);
+      card.toggleClass('is-off', !enabled);
+      card.find('input').prop('disabled', !enabled);
+      if (note != null) card.find('.rp-src-note').text(note);
+    }
+
+    function startCaptionCheck() {
+      if (!HAS_YOUTUBE_ID) {
+        setSourceState('caption', false, T.noYoutubeId);
+        return;
+      }
+      setSourceState('caption', false, T.checking);
+      $.getJSON(URLS.captionCheck, { song: SONG }).done(function (check) {
+        if (!check.found) {
+          setSourceState('caption', false, T.noCaption);
+        } else if (!check.passed) {
+          setSourceState('caption', false, T.sparseCaption);
+        } else {
+          setSourceState('caption', true, T.captionOk);
+          if (CURRENT_SOURCE === 'caption' && !state.source) chooseSource('caption');
+        }
+      }).fail(function () {
+        setSourceState('caption', false, T.captionFailed);
+      });
+    }
+
+    function chooseSource(source) {
+      state.source = source;
+      $('.rp-src').removeClass('is-selected');
+      sourceCard(source).addClass('is-selected').find('input').prop('checked', true);
+      $('#genius-section').toggleClass('is-hidden', source !== 'genius');
+      $('#step1-note').toggleClass('is-hidden', source === 'genius');
+      $('#go').text(source === 'genius' ? T.nextLrclib : T.regenerate);
+      refreshStep1();
+    }
+
+    function refreshStep1() {
+      var complete = state.source === 'caption' || state.source === 'transcribe' ||
+        (state.source === 'genius' && state.genius !== null);
+      $('#go').prop('disabled', !complete || state.sending);
+      $('#genius-preview-toggle').prop('disabled', state.genius === null);
+    }
+
+    $('.rp-src input').on('change', function () {
+      chooseSource($(this).closest('.rp-src').data('source'));
+    });
+
+    function searchGenius() {
+      var query = $.trim($('#genius-q').val());
+      if (!query) return;
+      var seq = ++state.geniusSeq;
+      var list = $('#genius-results').empty().removeClass('is-hidden');
+      list.append(el('div', 'rp-empty', T.searching));
+      state.genius = null;
+      closePreview('genius');
+      refreshStep1();
+      $.getJSON(URLS.geniusSearch, { q: query }).done(function (hits) {
+        if (seq !== state.geniusSeq) return;
+        list.empty();
+        if (!hits.length) list.append(el('div', 'rp-empty', T.noGenius));
+        $.each(hits, function (i, hit) { list.append(geniusOption(hit)); });
+      }).fail(function () {
+        if (seq !== state.geniusSeq) return;
+        list.empty().append(el('div', 'rp-empty', T.searchFailed));
+      });
+    }
+
+    function geniusOption(hit) {
+      var label = el('label', 'rp-opt');
+      var input = $('<input type="radio" name="genius">').val(hit.id);
+      var body = el('span', 'rp-opt-body');
+      var head = el('span', 'rp-opt-head').append(el('span', null, hit.title));
+      if (hit.id === CURRENT_GENIUS_ID) head.append(el('span', 'rp-tag', T.current));
+      body.append(head, el('span', 'rp-muted', hit.artist));
+      label.append(input, body);
+      input.on('change', function () {
+        state.genius = hit;
+        // The LRCLIB matches were scored against the previous pick's lyrics.
+        state.candidates = [];
+        state.lrclib = null;
+        state.videoSeconds = null;
+        $('#genius-results .rp-opt').removeClass('is-selected');
+        label.addClass('is-selected');
+        closePreview('genius');
+        refreshStep1();
+      });
+      return label;
+    }
+
+    $('#genius-search').on('click', searchGenius);
+    $('#genius-q').on('keydown', function (e) {
+      if (e.which === 13) { e.preventDefault(); searchGenius(); }
+    });
+
+    function closePreview(which) {
+      $('#' + which + '-preview').addClass('is-hidden').empty();
+      $('#' + which + '-preview-toggle').text(which === 'genius' ? T.previewLyrics : T.previewTiming);
+    }
+
+    $('#genius-preview-toggle').on('click', function () {
+      var box = $('#genius-preview');
+      if (!box.hasClass('is-hidden')) { closePreview('genius'); return; }
+      var pick = state.genius;
+      box.removeClass('is-hidden').text(T.loading);
+      $(this).text(T.hidePreview);
+      $.getJSON(URLS.geniusLyrics, { id: pick.id }).done(function (song) {
+        if (state.genius === pick) box.text(song.text);
+      }).fail(function (xhr) {
+        if (state.genius === pick) box.text(errorOf(xhr, T.searchFailed));
+      });
+    });
+
+    $('#go').on('click', function () {
+      if (state.source === 'genius') {
+        showStep(2);
+      } else {
+        send({ source: state.source });
+      }
+    });
+
+    /* ------------------------------------------------------------ step 2 */
+
+    function showStep(n) {
+      $('#step-1').toggleClass('is-hidden', n !== 1);
+      $('#step-2').toggleClass('is-hidden', n !== 2);
+      if (n === 2) {
+        $('#genius-pick').text(fill(T.geniusPick, { title: state.genius.title, artist: state.genius.artist }));
+        renderLrclib();
+      }
+      window.scrollTo(0, 0);
+    }
+
+    $('.js-back').on('click', function () { showStep(1); });
+
+    function searchLrclib() {
+      var title = $.trim($('#lrclib-title').val());
+      var artist = $.trim($('#lrclib-artist').val());
+      if (!title) return;
+      var seq = ++state.lrclibSeq;
+      state.lrclib = null;
+      state.candidates = [];
+      state.videoSeconds = null;
+      closePreview('lrclib');
+      renderLrclib(T.searching);
+      $.getJSON(URLS.lrclibSearch, {
+        song: SONG, genius_id: state.genius.id, title: title, artist: artist
+      }).done(function (found) {
+        if (seq !== state.lrclibSeq) return;
+        state.candidates = found.candidates;
+        state.videoSeconds = found.video_duration_s;
+        var best = $.grep(found.candidates, function (c) { return c.best; })[0];
+        state.lrclib = best ? best.id : null;
+        renderLrclib(found.candidates.length ? null : T.noLrclib);
+      }).fail(function (xhr) {
+        if (seq !== state.lrclibSeq) return;
+        renderLrclib(errorOf(xhr, T.searchFailed));
+      });
+    }
+
+    function fitLine(candidate) {
+      var diff = candidate.duration_diff_s;
+      var parts = [];
+      if (candidate.duration != null) parts.push(mmss(candidate.duration));
+      var near = diff != null && Math.abs(diff) < NOTED_S;
+      if (diff != null) {
+        if (near) parts.push(T.withinFew);
+        else parts.push(fill(diff > 0 ? T.longer : T.shorter, { n: Math.abs(diff) }));
+      }
+      var tone = diff == null ? '' : (near ? 'rp-good' : 'rp-bad');
+      return el('span', tone, parts.join(' · '));
+    }
+
+    function lrclibOption(candidate) {
+      var label = el('label', 'rp-opt' + (state.lrclib === candidate.id ? ' is-selected' : ''));
+      var input = $('<input type="radio" name="lrclib">').val(candidate.id)
+        .prop('checked', state.lrclib === candidate.id);
+      var head = el('span', 'rp-opt-head').append(el('span', null, candidate.trackName));
+      if (candidate.best) head.append(el('span', 'rp-tag is-best', T.bestFit));
+      if (candidate.current) head.append(el('span', 'rp-tag', T.current));
+      var sub = $.grep([candidate.artistName, candidate.albumName], Boolean).join(' · ');
+      var fit = el('span', 'rp-fit').append(
+        fitLine(candidate),
+        el('span', null, fill(T.matches, { n: candidate.mapped, m: candidate.sheet_lines }))
+      );
+      label.append(input, el('span', 'rp-opt-body').append(head, el('span', 'rp-muted', sub), fit));
+      input.on('change', function () { selectLrclib(candidate.id); });
+      return label;
+    }
+
+    function noneOption() {
+      var label = el('label', 'rp-opt' + (state.lrclib === 'none' ? ' is-selected' : ''));
+      var input = $('<input type="radio" name="lrclib" value="none">')
+        .prop('checked', state.lrclib === 'none');
+      label.append(input, el('span', 'rp-opt-body').append(
+        el('span', 'rp-opt-head', T.none), el('span', 'rp-muted', T.skipLrclib)));
+      input.on('change', function () { selectLrclib('none'); });
+      return label;
+    }
+
+    function selectLrclib(choice) {
+      state.lrclib = choice;
+      $('#lrclib-results input').each(function () {
+        $(this).closest('.rp-opt').toggleClass('is-selected', $(this).prop('checked'));
+      });
+      showTimingPreview();
+      refreshStep2();
+    }
+
+    function renderLrclib(message) {
+      var list = $('#lrclib-results').empty();
+      if (message) list.append(el('div', 'rp-empty', message));
+      $.each(state.candidates, function (i, candidate) { list.append(lrclibOption(candidate)); });
+      list.append(noneOption());
+      $('#video-length').text(
+        state.videoSeconds != null ? fill(T.videoIs, { length: mmss(state.videoSeconds) }) : '');
+      showTimingPreview();
+      refreshStep2();
+    }
+
+    function pickedCandidate() {
+      return $.grep(state.candidates, function (c) { return c.id === state.lrclib; })[0];
+    }
+
+    function showTimingPreview() {
+      var box = $('#lrclib-preview');
+      if (box.hasClass('is-hidden')) return;
+      var candidate = pickedCandidate();
+      if (candidate) box.text(candidate.syncedLyrics); else closePreview('lrclib');
+    }
+
+    function refreshStep2() {
+      $('#lrclib-preview-toggle').prop('disabled', !pickedCandidate());
+      $('#send').prop('disabled', state.lrclib === null || state.sending);
+    }
+
+    $('#lrclib-search').on('click', searchLrclib);
+    $('#lrclib-title, #lrclib-artist').on('keydown', function (e) {
+      if (e.which === 13) { e.preventDefault(); searchLrclib(); }
+    });
+
+    $('#lrclib-preview-toggle').on('click', function () {
+      var box = $('#lrclib-preview');
+      if (!box.hasClass('is-hidden')) { closePreview('lrclib'); return; }
+      box.removeClass('is-hidden');
+      $(this).text(T.hidePreview);
+      showTimingPreview();
+    });
+
+    $('#send').on('click', function () {
+      var body = { source: 'genius', genius_id: state.genius.id };
+      if (state.lrclib === 'none') body.lrclib_skip = true;
+      else body.lrclib_id = state.lrclib;
+      send(body);
+    });
+
+    /* ---------------------------------------------------------- queueing */
+
+    function send(body) {
+      state.sending = true;
+      refreshStep1();
+      refreshStep2();
+      $.ajax({
+        url: URLS.repair,
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify($.extend({ song: SONG }, body))
+      }).done(function () {
+        window.location.href = URLS.songInfo;
+      }).fail(function (xhr) {
+        showNotification(errorOf(xhr, T.queueFailed), 'is-danger');
+        state.sending = false;
+        refreshStep1();
+        refreshStep2();
+      });
+    }
+
+    /* -------------------------------------------------------------- start */
+
+    startCaptionCheck();
+    if (CURRENT_SOURCE === 'genius' || CURRENT_SOURCE === 'transcribe') chooseSource(CURRENT_SOURCE);
+    refreshStep1();
+  });
+</script>
+{% endblock %}
+
+{% block header %}
+{# MSG: Title of the page where an admin replaces a song's lyric source. #}
+<h1>{% block title %}{% trans %}Repair lyrics{% endtrans %}{% endblock %}</h1>
+{% endblock %}
+
+{% block content %}
+<section id="step-1" class="rp-step">
+  <a class="rp-back no-spa" href="{{ url_for('song_info.song_info', song=song) }}">&lsaquo; {% trans %}Song info{% endtrans %}</a>
+  <span class="rp-muted" style="display: block">{% trans %}Step 1 of 2{% endtrans %}</span>
+  <div class="rp-name">{{ name }}</div>
+
+  <div class="rp-sec">{% trans %}Lyric source{% endtrans %}</div>
+  <div class="rp-sources" role="radiogroup" aria-label="{% trans %}Lyric source{% endtrans %}">
+    <label class="rp-src is-off" data-source="caption">
+      <input type="radio" name="source" disabled>
+      <span><b>{% trans %}YouTube caption{% endtrans %}</b>{% if current_source == 'caption' %} <span class="rp-tag">{% trans %}current{% endtrans %}</span>{% endif %}<br><span class="rp-muted rp-src-note"></span></span>
+    </label>
+    <label class="rp-src" data-source="genius">
+      <input type="radio" name="source">
+      <span><b>{% trans %}Genius lyrics{% endtrans %}</b>{% if current_source == 'genius' %} <span class="rp-tag">{% trans %}current{% endtrans %}</span>{% endif %}<br><span class="rp-muted">{% trans %}Search and pick, then choose an LRCLIB match.{% endtrans %}</span></span>
+    </label>
+    <label class="rp-src" data-source="transcribe">
+      <input type="radio" name="source">
+      <span><b>{% trans %}No lyrics (transcribe){% endtrans %}</b>{% if current_source == 'transcribe' %} <span class="rp-tag">{% trans %}current{% endtrans %}</span>{% endif %}<br><span class="rp-muted">{% trans %}Words come from what the singer is heard singing.{% endtrans %}</span></span>
+    </label>
+  </div>
+
+  <div id="genius-section" class="is-hidden">
+    <div class="rp-sec">{% trans %}Genius search{% endtrans %}</div>
+    <label for="genius-q" class="rp-muted">{% trans %}Type the song title and artist{% endtrans %}</label>
+    <div class="rp-search">
+      <input id="genius-q" class="input" type="search" autocomplete="off">
+      <button type="button" id="genius-search" class="button is-primary" aria-label="{% trans %}Search Genius{% endtrans %}">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg>
+      </button>
+    </div>
+    <div id="genius-results" class="rp-list is-hidden"></div>
+    <button type="button" id="genius-preview-toggle" class="rp-link" disabled>{% trans %}Preview these lyrics{% endtrans %}</button>
+    <div id="genius-preview" class="rp-preview is-hidden"></div>
+  </div>
+
+  <div id="step1-note" class="rp-note rp-muted is-hidden">{% trans %}Regenerating backs up this song's lyric files, then queues it. It runs behind new downloads, and waits if the song is playing.{% endtrans %}</div>
+  <div class="rp-buttons">
+    <a class="button no-spa" href="{{ url_for('song_info.song_info', song=song) }}">{% trans %}Cancel{% endtrans %}</a>
+    <button type="button" id="go" class="button is-primary" disabled>{% trans %}Regenerate song{% endtrans %}</button>
+  </div>
+</section>
+
+<section id="step-2" class="rp-step is-hidden">
+  <button type="button" class="rp-back js-back">&lsaquo; {% trans %}Step 1{% endtrans %}</button>
+  <span class="rp-muted" style="display: block">{% trans %}Step 2 of 2{% endtrans %}</span>
+  <h2 class="rp-title">{% trans %}LRCLIB match{% endtrans %}</h2>
+  <span id="genius-pick" class="rp-muted"></span>
+
+  <div class="rp-sec">{% trans %}Search LRCLIB{% endtrans %}</div>
+  <div class="rp-pair">
+    <div><label for="lrclib-title" class="rp-muted">{% trans %}Title{% endtrans %}</label><input id="lrclib-title" class="input" type="text" autocomplete="off" style="margin-top: 4px"></div>
+    <div><label for="lrclib-artist" class="rp-muted">{% trans %}Artist{% endtrans %}</label><input id="lrclib-artist" class="input" type="text" autocomplete="off" style="margin-top: 4px"></div>
+  </div>
+  <button type="button" id="lrclib-search" class="button is-primary" style="width: 100%; margin-top: 8px; min-height: 44px">{% trans %}Search{% endtrans %}</button>
+
+  <div class="rp-sec"><span>{% trans %}Results{% endtrans %}</span><span id="video-length"></span></div>
+  <div id="lrclib-results" class="rp-list" style="margin-top: 0"></div>
+  <button type="button" id="lrclib-preview-toggle" class="rp-link" disabled>{% trans %}Preview selected timing{% endtrans %}</button>
+  <div id="lrclib-preview" class="rp-preview is-hidden"></div>
+
+  <div class="rp-note rp-muted">{% trans %}Regenerating backs up this song's lyric files, then queues it. It runs behind new downloads, and waits if the song is playing.{% endtrans %}</div>
+  <div class="rp-buttons">
+    <button type="button" class="button js-back">{% trans %}Back{% endtrans %}</button>
+    <button type="button" id="send" class="button is-primary" disabled>{% trans %}Regenerate song{% endtrans %}</button>
+  </div>
+</section>
+{% endblock %}

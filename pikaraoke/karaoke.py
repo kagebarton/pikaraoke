@@ -313,6 +313,7 @@ class Karaoke:
             processing_manager=self.processing_manager,
             song_manager=self.song_manager,
             download_path=self.download_path,
+            genius_client=self.genius_client,
         )
 
         # Wire overlay state provider so the MPV poll thread can render OSD overlays

@@ -52,9 +52,14 @@
       $('#tab-' + $(this).data('tab')).removeClass('is-hidden');
     });
 
+    $('#repair').on('click', function () {
+      window.location.href = $(this).data('href');
+    });
+
     $('#regenerate').on('click', function () {
       var button = $(this);
       button.prop('disabled', true);
+      $('#repair').prop('disabled', true);
       $.ajax({
         url: '{{ url_for("song_info.regenerate") }}',
         method: 'POST',
@@ -67,6 +72,7 @@
         try { message = JSON.parse(xhr.responseText).error; } catch (err) {}
         showNotification(message || {{ _('Could not queue the regeneration.') | tojson }}, 'is-danger');
         button.prop('disabled', false);
+        $('#repair').prop('disabled', false);
       });
     });
   });
@@ -195,11 +201,13 @@
   {% endif %}
 </div>
 
-{% if can_regenerate %}
+{# The repair page is a full page load (not an SPA link): it has its own scripts. #}
 <div class="si-actions">
+  <button type="button" id="repair" class="button is-primary si-btn" data-href="{{ url_for('song_info.repair_page', song=song) }}"{% if busy %} disabled{% endif %}>{% trans %}Repair lyrics{% endtrans %}</button>
+  {% if can_regenerate %}
   <button type="button" id="regenerate" class="button si-btn"{% if busy %} disabled{% endif %}>{% trans %}Regenerate{% endtrans %}</button>
+  {% endif %}
 </div>
-{% endif %}
 <p id="regen-note" class="si-muted mt-2{% if not busy %} is-hidden{% endif %}">
   {% if busy %}{% trans %}This song has a regen waiting or running.{% endtrans %} <a class="no-spa" href="{{ url_for('processing.processing') }}">{% trans %}Processing{% endtrans %}</a>{% endif %}
 </p>

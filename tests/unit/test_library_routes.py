@@ -1,4 +1,4 @@
-"""Route and render tests for Song Info, regenerate and the library song lists.
+"""Route and render tests for Song Info, regenerate, repair and the library song lists.
 
 A Flask app with the two blueprints and the real templates, over a ``tmp_path``
 library with real bundles and a real ``LibraryTools``; only the processing
@@ -22,6 +22,8 @@ if not hasattr(werkzeug, "__version__"):
 import pikaraoke
 from pikaraoke.lib import lrclib
 from pikaraoke.lib.alignment_capture import SCHEMA_VERSION
+from pikaraoke.lib.genius import GeniusSong, GeniusUnavailable
+from pikaraoke.lib.library_regen import CaptionCheck
 from pikaraoke.lib.library_tools import LibraryTools
 from pikaraoke.lib.song_list import SongList
 from pikaraoke.lib.song_manager import SongManager
@@ -33,6 +35,7 @@ _STUB_ENDPOINTS = (
     "home.home",
     "queue.queue",
     "search.search",
+    "search.lyrics_search",
     "files.browse",
     "info.info",
     "processing.processing",
@@ -100,13 +103,16 @@ class Env:
         self.processing.get_active_job.return_value = None
         self.processing.pending_jobs = []
         self.processing.enqueue_regen.return_value = True
+        self.genius = MagicMock()
 
         song_manager = MagicMock()
         song_manager.songs = self.songs
         song_manager.filename_from_path = SongManager.filename_from_path
         self.k = MagicMock()
         self.k.song_manager = song_manager
-        self.k.library_tools = LibraryTools(self.processing, song_manager, str(tmp_path))
+        self.k.library_tools = LibraryTools(
+            self.processing, song_manager, str(tmp_path), self.genius
+        )
 
         pkg_dir = os.path.dirname(pikaraoke.__file__)
         self.app = Flask(
@@ -502,3 +508,419 @@ class TestSongListsRoute:
 
         assert response.status_code == 302
         assert response.headers["Location"].endswith("/__stub/files.browse")
+
+
+LYRICS = "Line one here\nLine two here\nLine three here\nLine four here"
+GENIUS_SONG = GeniusSong(text=LYRICS, title="Defying Gravity", artist="Idina Menzel")
+
+
+def synced(*lines: str) -> str:
+    return "".join(f"[00:{10 + 4 * i:02d}.00] {line}\n" for i, line in enumerate(lines))
+
+
+def lrclib_record(record_id: int, *lines: str, duration: float = 250.0) -> dict:
+    return {
+        "id": record_id,
+        "trackName": "Defying Gravity",
+        "artistName": "Idina Menzel",
+        "albumName": "Wicked",
+        "duration": duration,
+        "syncedLyrics": synced(*lines),
+    }
+
+
+def card(html: str, source: str) -> str:
+    """The markup of one lyric-source card on the repair page."""
+    start = html.index(f'data-source="{source}"')
+    return html[start : html.index("</label>", start)]
+
+
+def script(html: str) -> str:
+    """The repair page's own script block."""
+    start = html.rindex("<script>", 0, html.index("var SONG"))
+    return html[start : html.index("</script>", start)]
+
+
+class TestRepairButton:
+    def test_a_video_song_links_to_the_repair_page(self, env):
+        html = text(env.page(env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())))
+
+        assert 'id="repair"' in html
+        assert 'data-href="/song_info/repair?song=' in html
+        assert 'id="repair" class="button is-primary si-btn" data-href' in html
+        assert "disabled>Repair lyrics" not in html
+
+    def test_a_song_with_no_pick_can_still_be_repaired(self, env):
+        html = text(env.page(env.add_song("A---aaaaaaaaaaa.mp4")))
+
+        assert 'id="repair"' in html
+        assert 'id="regenerate"' not in html
+
+    def test_a_busy_song_has_it_disabled(self, env):
+        song = env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())
+        env.processing.pending_jobs = [song]
+
+        assert "disabled>Repair lyrics" in text(env.page(song))
+
+    def test_a_song_that_is_not_a_video_has_no_button(self, env):
+        song = env.folder / "Track---aaaaaaaaaaa.mp3"
+        song.write_bytes(b"")
+        env.songs.add(str(song))
+
+        assert 'id="repair"' not in text(env.page(str(song)))
+
+
+class TestRepairPage:
+    def page(self, env, song):
+        return env.client.get("/song_info/repair", query_string={"song": song})
+
+    def test_a_guest_is_sent_back_to_the_browser(self, env):
+        song = env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())
+        env.admin = False
+
+        response = self.page(env, song)
+
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/__stub/files.browse")
+
+    def test_a_path_outside_the_library_is_rejected(self, env):
+        env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())
+        outside = env.folder / "elsewhere.mp4"
+        outside.write_bytes(b"")
+
+        assert self.page(env, str(outside)).status_code == 400
+        assert env.client.get("/song_info/repair").status_code == 400
+
+    def test_a_song_that_is_not_a_video_goes_back_to_song_info(self, env):
+        song = env.folder / "Track---aaaaaaaaaaa.mp3"
+        song.write_bytes(b"")
+        env.songs.add(str(song))
+
+        response = self.page(env, str(song))
+
+        assert response.status_code == 302
+        assert response.headers["Location"].startswith("/song_info?song=")
+
+    def test_a_genius_song_is_current_on_the_genius_card(self, env):
+        html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())))
+
+        assert 'var CURRENT_SOURCE = "genius"' in html
+        assert "var CURRENT_GENIUS_ID = 7" in html
+        assert "rp-tag" in card(html, "genius")
+        assert "rp-tag" not in card(html, "caption")
+        assert "rp-tag" not in card(html, "transcribe")
+
+    def test_a_caption_song_is_current_on_the_caption_card(self, env):
+        html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())))
+
+        assert 'var CURRENT_SOURCE = "caption"' in html
+        assert "rp-tag" in card(html, "caption")
+        assert "rp-tag" not in card(html, "genius")
+
+    def test_a_transcribed_song_is_current_on_the_transcribe_card(self, env):
+        song = env.add_song("A---aaaaaaaaaaa.mp4")
+        (env.folder / "karaoke").mkdir()
+        (env.folder / "karaoke" / "A---aaaaaaaaaaa.ass").write_text("", encoding="utf-8")
+
+        html = text(self.page(env, song))
+
+        assert 'var CURRENT_SOURCE = "transcribe"' in html
+        assert "rp-tag" in card(html, "transcribe")
+
+    def test_an_unprocessed_song_has_no_current_source(self, env):
+        html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4")))
+
+        assert "var CURRENT_SOURCE = null" in html
+        assert all("rp-tag" not in card(html, s) for s in ("caption", "genius", "transcribe"))
+
+    def test_the_page_knows_whether_the_song_has_a_youtube_id(self, env):
+        with_id = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())))
+        without = text(self.page(env, env.add_song("No Id Song.mp4", caption_bundle())))
+
+        assert "var HAS_YOUTUBE_ID = true" in with_id
+        assert "var HAS_YOUTUBE_ID = false" in without
+
+    def test_the_length_rule_comes_from_song_info(self, env):
+        html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())))
+
+        assert "var NOTED_S = 5;" in html
+
+    def test_text_from_genius_and_lrclib_goes_in_as_text_never_as_markup(self, env):
+        code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
+
+        assert ".html(" not in code
+        assert ".innerHTML" not in code
+
+
+class TestCaptionCheckRoute:
+    def check(self, env, song):
+        return env.client.get("/song_info/caption_check", query_string={"song": song})
+
+    def test_a_guest_gets_403_json(self, env):
+        song = env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())
+        env.admin = False
+
+        response = self.check(env, song)
+
+        assert response.status_code == 403
+        assert response.get_json()["success"] is False
+
+    def test_a_path_outside_the_library_is_rejected(self, env):
+        outside = env.folder / "elsewhere---aaaaaaaaaaa.mp4"
+        outside.write_bytes(b"")
+
+        assert self.check(env, str(outside)).status_code == 400
+
+    def test_reports_what_the_caption_check_found(self, env, monkeypatch):
+        song = env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())
+        checked = MagicMock(return_value=CaptionCheck(found=True, wpm=12.5, passed=False))
+        monkeypatch.setattr("pikaraoke.lib.library_tools.check_caption", checked)
+
+        response = self.check(env, song)
+
+        assert response.get_json() == {"found": True, "passed": False, "wpm": 12.5}
+        checked.assert_called_once()
+
+    def test_a_song_with_no_youtube_id_is_a_400_with_the_reason(self, env, monkeypatch):
+        song = env.add_song("No Id Song.mp4", caption_bundle())
+        monkeypatch.setattr("pikaraoke.lib.library_tools.check_caption", MagicMock())
+
+        response = self.check(env, song)
+
+        assert response.status_code == 400
+        assert "no YouTube ID" in response.get_json()["error"]
+
+
+class TestGeniusLyricsRoute:
+    def lyrics(self, env, genius_id):
+        return env.client.get("/song_info/genius_lyrics", query_string={"id": genius_id})
+
+    def test_a_guest_gets_403_json(self, env):
+        env.admin = False
+
+        response = self.lyrics(env, 7)
+
+        assert response.status_code == 403
+        env.genius.fetch_song.assert_not_called()
+
+    @pytest.mark.parametrize("genius_id", ["", "abc", "7.5"])
+    def test_an_id_that_is_not_a_number_is_rejected(self, env, genius_id):
+        assert self.lyrics(env, genius_id).status_code == 400
+        assert env.client.get("/song_info/genius_lyrics").status_code == 400
+        env.genius.fetch_song.assert_not_called()
+
+    def test_returns_the_title_artist_and_text(self, env):
+        env.genius.fetch_song.return_value = GENIUS_SONG
+
+        response = self.lyrics(env, 7)
+
+        assert response.get_json() == {
+            "title": "Defying Gravity",
+            "artist": "Idina Menzel",
+            "text": LYRICS,
+        }
+
+    def test_a_second_request_for_the_same_song_does_not_scrape_again(self, env):
+        env.genius.fetch_song.return_value = GENIUS_SONG
+
+        self.lyrics(env, 7)
+        self.lyrics(env, 7)
+
+        env.genius.fetch_song.assert_called_once_with(7)
+
+    def test_a_song_genius_cannot_return_is_a_502_with_a_message(self, env):
+        env.genius.fetch_song.side_effect = GeniusUnavailable("token not configured")
+
+        response = self.lyrics(env, 7)
+
+        assert response.status_code == 502
+        body = response.get_json()
+        assert body["success"] is False
+        assert "Genius didn't return" in body["error"]
+        assert "token" not in body["error"]
+
+
+class TestLrclibSearchRoute:
+    @pytest.fixture
+    def song(self, env, monkeypatch):
+        env.genius.fetch_song.return_value = GENIUS_SONG
+        self.searches = []
+        self.records = []
+
+        def fake_search(track, artist):
+            self.searches.append((track, artist))
+            return self.records
+
+        monkeypatch.setattr(lrclib, "search", fake_search)
+        return env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())
+
+    def search(self, env, song, **params):
+        query = {"song": song, "genius_id": 7, "title": "defying gravity", "artist": "menzel"}
+        query.update(params)
+        return env.client.get("/song_info/lrclib_search", query_string=query)
+
+    def test_a_guest_gets_403_json(self, env, song):
+        env.admin = False
+
+        assert self.search(env, song).status_code == 403
+        assert self.searches == []
+
+    def test_a_path_outside_the_library_is_rejected(self, env, song):
+        outside = env.folder / "elsewhere.mp4"
+        outside.write_bytes(b"")
+
+        assert self.search(env, str(outside)).status_code == 400
+        assert self.searches == []
+
+    @pytest.mark.parametrize("genius_id", ["", "abc"])
+    def test_a_genius_id_that_is_not_a_number_is_rejected(self, env, song, genius_id):
+        assert self.search(env, song, genius_id=genius_id).status_code == 400
+        assert self.searches == []
+
+    def test_searches_for_the_typed_terms_and_marks_best_and_current(self, env, song):
+        lrclib.write_lrc(lrclib.lrc_path(Path(song)), lrclib_record(5, "Line one here"))
+        self.records = [
+            lrclib_record(5, "Line one here", "Line two here", duration=354.0),
+            lrclib_record(6, "Line one here", "Line two here", "Line three here", "Line four here"),
+        ]
+
+        body = self.search(env, song, title=" defying gravity ", artist="").get_json()
+
+        assert self.searches == [("defying gravity", "")]
+        assert body["video_duration_s"] == 257.23
+        current, best = body["candidates"]
+        assert (current["id"], current["best"], current["current"]) == (5, False, True)
+        assert (best["id"], best["best"], best["current"]) == (6, True, False)
+        assert (current["mapped"], best["mapped"], best["sheet_lines"]) == (2, 4, 4)
+        assert current["duration_diff_s"] == 97
+        assert best["syncedLyrics"] == self.records[1]["syncedLyrics"]
+
+    def test_no_matches_is_an_empty_list(self, env, song):
+        assert self.search(env, song).get_json()["candidates"] == []
+
+    def test_genius_lyrics_that_cannot_be_fetched_are_a_502(self, env, song):
+        env.genius.fetch_song.side_effect = GeniusUnavailable("down")
+
+        response = self.search(env, song)
+
+        assert response.status_code == 502
+        assert response.get_json()["success"] is False
+
+
+class TestRepairRoute:
+    @pytest.fixture
+    def song(self, env):
+        env.genius.fetch_song.return_value = GENIUS_SONG
+        return env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())
+
+    def repair(self, env, song, **body):
+        return env.client.post("/song_info/repair", json={"song": song, **body})
+
+    def queued(self, env):
+        env.processing.enqueue_regen.assert_called_once()
+        return env.processing.enqueue_regen.call_args.args[0]
+
+    def test_a_guest_cannot(self, env, song):
+        env.admin = False
+
+        response = self.repair(env, song, source="transcribe")
+
+        assert response.status_code == 403
+        env.processing.enqueue_regen.assert_not_called()
+
+    @pytest.mark.parametrize("body", [{"song": None}, {"song": ["a"]}, {}, [1]])
+    def test_a_missing_or_malformed_song_is_rejected(self, env, song, body):
+        assert env.client.post("/song_info/repair", json=body).status_code == 400
+        env.processing.enqueue_regen.assert_not_called()
+
+    def test_a_path_outside_the_library_is_rejected_and_nothing_is_backed_up(self, env, song):
+        outside = env.folder / "elsewhere.mp4"
+        outside.write_bytes(b"")
+        write_bundle(env.folder, outside.stem, **poor_genius_bundle())
+
+        assert self.repair(env, str(outside), source="transcribe").status_code == 400
+        env.processing.enqueue_regen.assert_not_called()
+        assert not list(env.folder.glob("regen_backup_*"))
+
+    def test_each_source_queues_its_plan_as_a_repair_that_wipes_first(self, env, song):
+        for source, kind in (("caption", "fetch"), ("transcribe", "transcribe")):
+            env.processing.enqueue_regen.reset_mock()
+
+            assert self.repair(env, song, source=source).get_json() == {"success": True}
+
+            regen = self.queued(env)
+            assert regen.song.plan.kind == kind
+            assert (regen.label, regen.reset) == ("Repair", True)
+            assert str(regen.song.song_path) == song
+
+    def test_a_genius_pick_queues_a_sidecar_plan_and_backs_up_only_that_song(self, env, song):
+        env.add_song("B---bbbbbbbbbbb.mp4", poor_genius_bundle())
+
+        response = self.repair(env, song, source="genius", genius_id=8)
+
+        assert response.get_json() == {"success": True}
+        plan = self.queued(env).song.plan
+        assert (plan.kind, plan.genius_id) == ("sidecar", 8)
+        [backup] = env.folder.glob("regen_backup_*")
+        assert [p.name for p in (backup / "alignment_debug").iterdir()] == ["A---aaaaaaaaaaa.json"]
+
+    def test_an_lrclib_id_queues_that_record(self, env, song, monkeypatch):
+        monkeypatch.setattr(lrclib, "get_record", lambda record_id: lrclib_record(record_id, "x"))
+
+        self.repair(env, song, source="genius", genius_id=8, lrclib_id=42)
+
+        assert self.queued(env).song.plan.lrclib_record["id"] == 42
+
+    def test_skipping_lrclib_queues_the_skip(self, env, song):
+        self.repair(env, song, source="genius", genius_id=8, lrclib_skip=True)
+
+        plan = self.queued(env).song.plan
+        assert plan.lrclib_skip is True and plan.lrclib_record is None
+
+    def test_a_match_lrclib_does_not_return_queues_nothing(self, env, song, monkeypatch):
+        monkeypatch.setattr(lrclib, "get_record", lambda record_id: None)
+
+        response = self.repair(env, song, source="genius", genius_id=8, lrclib_id=42)
+
+        assert response.status_code == 400
+        assert "LRCLIB didn't return that match" in response.get_json()["error"]
+        env.processing.enqueue_regen.assert_not_called()
+        assert not list(env.folder.glob("regen_backup_*"))
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            {"source": "genius", "genius_id": "8"},
+            {"source": "genius", "genius_id": True},
+            {"source": "genius", "genius_id": 8, "lrclib_id": 5.5},
+            {"source": "genius", "genius_id": 8, "lrclib_id": "5"},
+            {"source": "genius", "genius_id": 8, "lrclib_skip": "yes"},
+        ],
+    )
+    def test_ids_and_flags_of_the_wrong_type_are_rejected(self, env, song, body):
+        response = self.repair(env, song, **body)
+
+        assert response.status_code == 400
+        env.processing.enqueue_regen.assert_not_called()
+
+    @pytest.mark.parametrize("body", [{}, {"source": "lyrics-from-the-moon"}, {"source": None}])
+    def test_an_unknown_source_is_rejected(self, env, song, body):
+        response = self.repair(env, song, **body)
+
+        assert response.status_code == 400
+        assert "Unknown lyric source" in response.get_json()["error"]
+
+    def test_a_genius_pick_without_an_id_is_rejected(self, env, song):
+        response = self.repair(env, song, source="genius")
+
+        assert response.status_code == 400
+        assert "Pick a Genius song" in response.get_json()["error"]
+
+    def test_a_busy_song_is_refused(self, env, song):
+        env.processing.get_active_job.return_value = song
+
+        response = self.repair(env, song, source="transcribe")
+
+        assert response.status_code == 400
+        assert "waiting or running" in response.get_json()["error"]
+        env.processing.enqueue_regen.assert_not_called()
