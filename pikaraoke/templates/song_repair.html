@@ -204,7 +204,8 @@
       label.append(input, body);
       input.on('change', function () {
         state.genius = hit;
-        // The LRCLIB matches were scored against the previous pick's lyrics.
+        // The LRCLIB matches, and a search still loading, are for the previous pick's lyrics.
+        state.lrclibSeq++;
         state.candidates = [];
         state.lrclib = null;
         state.videoSeconds = null;

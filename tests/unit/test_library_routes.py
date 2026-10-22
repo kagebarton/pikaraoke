@@ -645,6 +645,13 @@ class TestRepairPage:
 
         assert "var NOTED_S = 5;" in html
 
+    def test_a_new_genius_pick_drops_the_lrclib_search_still_loading(self, env):
+        code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
+        start = code.index("function geniusOption")
+        handler = code[start : code.index("return label;", start)]
+
+        assert "state.lrclibSeq++;" in handler
+
     def test_text_from_genius_and_lrclib_goes_in_as_text_never_as_markup(self, env):
         code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
 
