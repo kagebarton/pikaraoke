@@ -118,6 +118,32 @@ class TestTimedBy:
         assert status.method == "joint"
         assert status.timed_by == {"aligner": 30, "transcription": 5, "captions": 2}
 
+    def test_lines_the_evidence_veto_dropped_are_not_the_aligners(self, tmp_path):
+        video = make_video(tmp_path)
+        write_bundle(
+            tmp_path,
+            video.stem,
+            pipeline_decisions={"method_used": "joint"},
+            joint_stats={
+                "align_won": 22,
+                "transcribe_won": 0,
+                "ytasr_won": 0,
+                "evidence_veto": {"n_vetoed": 4},
+            },
+            **summary(line_count=42, lines_timed=18),
+        )
+        assert library_status.song_status(video).timed_by["aligner"] == 18
+
+    def test_the_veto_cannot_take_the_aligner_below_zero(self, tmp_path):
+        video = make_video(tmp_path)
+        write_bundle(
+            tmp_path,
+            video.stem,
+            pipeline_decisions={"method_used": "joint"},
+            joint_stats={"align_won": 1, "evidence_veto": {"n_vetoed": 3}},
+        )
+        assert library_status.song_status(video).timed_by["aligner"] == 0
+
     def test_cue_align_song_has_no_split(self, tmp_path):
         video = make_video(tmp_path)
         write_bundle(tmp_path, video.stem, pipeline_decisions={"method_used": "cue_align"})

@@ -34,7 +34,7 @@ class SongStatus:
     method: str | None  # pipeline_decisions.method_used: "joint" | "cue_align"
     line_count: int | None  # output_summary.line_count
     lines_timed: int | None  # output_summary.lines_with_words
-    timed_by: dict | None  # joint only: lines won by aligner / transcription / captions
+    timed_by: dict | None  # joint only: lines kept from aligner / transcription / captions
     media_duration_s: float | None
     captured_at: str | None
 
@@ -101,18 +101,25 @@ def song_status(song: Path) -> SongStatus:
         method=method,
         line_count=summary.get("line_count"),
         lines_timed=summary.get("lines_with_words"),
-        timed_by=(
-            {
-                "aligner": joint.get("align_won", 0),
-                "transcription": joint.get("transcribe_won", 0),
-                "captions": joint.get("ytasr_won", 0),
-            }
-            if method == "joint"
-            else None
-        ),
+        timed_by=_timed_by(joint) if method == "joint" else None,
         media_duration_s=bundle.get("media_duration_s"),
         captured_at=bundle.get("captured_at"),
     )
+
+
+def _timed_by(joint: dict) -> dict:
+    """Lines each source placed, less the aligner lines the evidence veto then dropped.
+
+    Only aligner lines can be vetoed (they are the ones that can lack any
+    corroboration), and a vetoed line ends up guessed, so counting it as the
+    aligner's would put the sources above the timed lines.
+    """
+    vetoed = (joint.get("evidence_veto") or {}).get("n_vetoed", 0)
+    return {
+        "aligner": max(joint.get("align_won", 0) - vetoed, 0),
+        "transcription": joint.get("transcribe_won", 0),
+        "captions": joint.get("ytasr_won", 0),
+    }
 
 
 def _lrclib_match(lyrics: dict) -> dict | None:
