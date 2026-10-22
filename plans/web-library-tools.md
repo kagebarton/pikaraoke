@@ -5,9 +5,9 @@ Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 > **Status (2026-10-22): Phases 0-5 done (3.1 = fixes from the Phase
 > 1-3 code review, 3.1g included; the review of 3.1b-3.1d is done with its
 > two fix commits; Phase 4's code is `7f5853e` and `55cfdbb`, Phase 5's is
-> `641600a`, see the Results log). The code review of Phases 4-5 is done;
-> Phase 5.1 (its fixes, as Ken ruled them on 2026-10-22) is next, then
-> Phase 6 after Ken's checks for Phase 5.** Ken
+> `641600a`, see the Results log). Phase 5.1 (the fixes from the Phase 4-5
+> code review, as Ken ruled them) is done too, code `874d49c`..`6caad6f`.
+> Phase 6 is next, after Ken's checks for Phase 5.** Ken
 > approved D2's Phase 3.1 bullet on 2026-10-20. Branch
 > `web_library_tools`, off `library_tools` at `0bfa02a`; `dev` merged as
 > `c34d889`. There is no GATE and nothing here measures timing. Landing is
@@ -2629,6 +2629,84 @@ Executed 2026-10-22 by Sonnet 5.5, starting from `232aa9b` (clean). Code commit:
   behind; Song Info regenerates any video song.
 
 ### Phase 5.1
+
+Executed 2026-10-22 by Opus 5.5, starting from `5d44150` (the 5.1 plan commit, on
+`9d28e85`, clean). Ken gave the go on the section as written (the cancel permission of
+nameless guests left as upstream has it). Code commits, in order:
+
+| Step | Commit | Files |
+|---|---|---|
+| 5.1a | `874d49c` refactor(processing): one error field per failed download, Delete only with a file, attention reads tracked paths | `pipeline_tracker.py`, `routes/processing.py`, `processing.html`, `test_processing_routes.py` |
+| 5.1a | `8b8d34f` refactor(library): one song check for the routes, the poor label from its rule | `routes/song_info.py`, `routes/processing.py`, `processing.html`, `test_processing_page.py` |
+| 5.1b | `6f08c59` fix(processing): a bundle with bad counts no longer fails a finished job | `pipeline_tracker.py`, `test_processing_routes.py` |
+| 5.1c | `14c7c14` fix(processing): a download keeps its row when a status read lands before the queue | `pipeline_tracker.py`, `test_processing_routes.py` |
+| 5.1d | `b433e90` fix(library): a .lrc that isn't UTF-8 no longer breaks the library pages | `lrclib.py`, `test_lrclib.py`, `test_library_status.py` |
+| 5.1e | `6caad6f` fix(processing): a confirm closes when its action goes, and YOU only marks a named guest's rows | `pipeline_tracker.py`, `processing.html`, `test_processing_routes.py`, `test_processing_page.py` |
+
+- **Suite** (`PYTHONIOENCODING=utf-8 uv run --no-sync python -P -m pytest -q`, 121.6 s
+  at `6caad6f`): **4 failed, 1865 passed, 2 skipped**; passed = Phase 5's 1855 + 10
+  new. The four failures are the baseline's four (ids unchanged). New tests:
+  `test_processing_routes.py` 7 (`TestRowActions` 1: a download that failed before it
+  had a file offers no `remove`; `TestTrackedPaths` 1; `TestPoorSongNumbers` 1: a count
+  that is not a number; `TestAStatusReadBeforeTheQueue` 2: a download and a retried
+  download keep their row; `TestDisplayOrder` 1: a guest with no name owns no row);
+  `test_processing_page.py` 2 (the label follows `POOR_GUESSED_SHARE` patched to 0.2;
+  the confirm prune is in the script); `test_lrclib.py` 1; `test_library_status.py` 1.
+  No existing test changed.
+- **Probes** (scratchpad of session `65fef55e-e098-476e-9ae8-e45f76710fac`), run at
+  `9d28e85` before any change and again after each fix:
+  - `probes\p1_status.py`: before, `song_status RAISES UnicodeDecodeError`, `overview
+    RAISES UnicodeDecodeError`, `_poor_lines -> None` (it caught the decode error and
+    logged), `_poor_lines malformed RAISES TypeError`. After 5.1b, `_poor_lines
+    malformed -> None` with the warning logged. After 5.1d, `song_status -> none`,
+    `overview -> {'behind': 0, 'poor': 1, 'no_lyrics': 0, 'all': 1}`, `_poor_lines ->
+    (5, 10)`, each read logging `... is not UTF-8, so it is not a skip marker`.
+  - `probe_race.py`: before, `read in window: [('download', 'complete', 'finished')]`,
+    `admin after queue: [('process', '', 'active')]`, `alice after queue: []`. After
+    5.1c, the first line is unchanged (the read still calls the row complete for that
+    instant), `admin after queue: [('download', 'alice', 'active')]`, `alice after
+    queue: [('download', 'active')]`.
+- **Each new test fails on the code before its fix:** 5.1b's (1 failed with
+  `pipeline_tracker.py` at the parent commit), 5.1c's (both), 5.1d's (both, with
+  `lrclib.py` at the parent).
+- **Mutation checks** (each reverted, files restored from a scratch copy; failures in
+  the touched test files): `remove` offered again on a failed download with no file 1;
+  `tracked_paths` leaving out finished rows 1 (the attention route test);
+  `library_song` not checking the library 3 (routes); `posted_song` skipping
+  `library_song` 4; 5.1c without the reset to `waiting` 1 (the dismiss assertion; the
+  next status read alone re-derives `pending`, so only a call between the event and
+  that read sees the difference); 5.1c matching any unstamped row, not only a complete
+  one 1 (`TestProcessRows`, whose helper marks a row failed without the stamp);
+  `mine` without the name test 1. The label test failed on the first try of the
+  template (see below), which served as its check.
+- **Deno check of 5.1e** (not committed; `extract_confirm.py` renders `/processing` as
+  admin through the page test's app, takes `CONFIRM_NEEDS`, `rowKey`, `offers` and
+  `pruneState` from the page, and writes `confirm_check.js`; `deno run`): `PASS cancel
+  closes when cancel goes` (a `cancel` confirm on a row whose actions become `dismiss`,
+  `song_info`; the row stays expanded), `PASS delete stays while remove is offered`,
+  `PASS db row delete stays` (a database row with `delete`), `PASS cancel stays while
+  offered`, `PASS gone row forgotten`. With the prune line taken out of the generated
+  file, the first prints `FAIL`.
+- **Differences from the plan's text:**
+  - 5.1a label: the template has one `%` (`{{ share }}%+`), not `%%`. With a variable,
+    Jinja's `trans` block doubles a lone `%` itself and the newstyle gettext formats it
+    back; the plan's `%%` rendered as `15%%+`.
+  - 5.1c: `_on_processing_queued` takes back a row of the song that is `complete` with
+    no `finished_at`, not any row with no `finished_at`. Only a status read makes a row
+    complete without the stamp, and the narrower test is the ruling's own words.
+  - 5.1e: the Delete button's test went through `offers` in 5.1e, after 5.1a had made it
+    `has('remove') || has('delete')`.
+- **Seen, not changed:**
+  - A regen of a song whose `.lrc` is not UTF-8 fails at its start: the job's
+    `snapshot_lrc` reads the file as UTF-8 and the error becomes the job's error (an
+    Attention row with the decode message, no 500). The pipeline's own `read_lrc` reads
+    it the same way.
+  - The tests' `_finished` helper sets a row's status without stamping `finished_at`,
+    which real events always do.
+- **No app run:** every change is covered by a unit test, a probe or the Deno check.
+- **pre-commit:** `--files <changed files>` per commit, every hook passed first time.
+  Import smoke: `pipeline_tracker`, `lrclib`, `library_status`, `routes.processing`,
+  `routes.song_info`, `karaoke`, `app`.
 
 ### Phase 6
 
