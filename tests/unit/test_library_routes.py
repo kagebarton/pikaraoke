@@ -111,7 +111,11 @@ class Env:
         self.k = MagicMock()
         self.k.song_manager = song_manager
         self.k.library_tools = LibraryTools(
-            self.processing, song_manager, str(tmp_path), self.genius
+            self.processing,
+            song_manager,
+            str(tmp_path),
+            self.genius,
+            tmp_path / "library_tools_state.json",
         )
 
         pkg_dir = os.path.dirname(pikaraoke.__file__)

@@ -1,4 +1,4 @@
-"""Unit tests for pikaraoke/lib/library_tools.py -- song lists, regenerate and repair.
+"""Unit tests for pikaraoke/lib/library_tools.py -- song lists, regenerate, repair and bulk runs.
 
 The library is a real ``tmp_path`` folder with bundles; the processing manager is
 a mock, so a queued job is whatever ``enqueue_regen`` was handed. Genius is a
@@ -7,6 +7,7 @@ fake over a dict of songs, and LRCLIB's network calls are patched.
 
 import json
 import os
+import threading
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -51,7 +52,7 @@ def genius_bundle(folder: Path, stem: str, **fields) -> None:
     )
 
 
-def make_tools(folder: Path, songs: list[str], *, active=None, pending=(), genius=None):
+def make_tools(folder: Path, songs: list[str], *, active=None, pending=(), genius=None, state=None):
     """A LibraryTools over ``folder`` whose library holds ``songs``, and its processing mock."""
     library = SongList()
     library.update(songs)
@@ -62,7 +63,9 @@ def make_tools(folder: Path, songs: list[str], *, active=None, pending=(), geniu
     processing.get_active_job.return_value = active
     processing.pending_jobs = list(pending)
     processing.enqueue_regen.return_value = True
-    return LibraryTools(processing, song_manager, str(folder), genius or MagicMock()), processing
+    state = state or folder / "library_tools_state.json"
+    tools = LibraryTools(processing, song_manager, str(folder), genius or MagicMock(), state)
+    return tools, processing
 
 
 class TestSongsInList:
@@ -690,3 +693,765 @@ class TestRepairUsesTheListedRecord:
             self.queued_record(tools, processing, song, record_id)
 
         assert fetched == [2]
+
+
+# --- bulk runs -------------------------------------------------------------
+
+PASS = CaptionCheck(found=True, wpm=40.0, passed=True)
+SPARSE = CaptionCheck(found=True, wpm=3.0, passed=False)
+NO_CAPTION = CaptionCheck(found=False, wpm=None, passed=False)
+
+STEMS = {
+    "current": "Current---aaaaaaaaaaa",
+    "behind": "Behind---bbbbbbbbbbb",
+    "unlined": "Unlined---ccccccccccc",
+    "caption": "Caption---ddddddddddd",
+    "transcribed": "Transcribed---eeeeeeeeeee",
+    "unprocessed": "Unprocessed---fffffffffff",
+    "no_id": "No Id Song",
+}
+KEY_OF = {stem: key for key, stem in STEMS.items()}
+
+# Every song with a YouTube id gets an answer; the rest of a run never asks.
+RUN_ANSWERS = {
+    "current": PASS,
+    "behind": NO_CAPTION,
+    "unlined": PASS,
+    "caption": PASS,
+    "transcribed": SPARSE,
+    "unprocessed": SPARSE,
+}
+
+
+def bulk_library(folder: Path) -> dict[str, str]:
+    """One video for each state a run sorts songs by; returns the library's path of each.
+
+    current      genius bundle, up to date: has a lyric source to replay
+    behind       genius bundle, an older version: has one too
+    unlined      an older bundle with a Genius id but no lines: nothing to replay, can keep
+    caption      a YouTube-caption bundle with its caption file: has a source
+    transcribed  a karaoke file and no bundle: "no lyrics"
+    unprocessed  nothing yet, with a YouTube id
+    no_id        nothing yet, and no YouTube id
+    """
+    videos = {key: make_video(folder, stem) for key, stem in STEMS.items()}
+    genius_bundle(folder, videos["current"].stem)
+    genius_bundle(folder, videos["behind"].stem, schema_version=SCHEMA_VERSION - 1)
+    write_bundle(
+        folder,
+        videos["unlined"].stem,
+        schema_version=SCHEMA_VERSION - 1,
+        lyrics={"origin": "genius", "genius": GENIUS},
+    )
+    write_bundle(folder, videos["caption"].stem, lyrics={"origin": "srt"})
+    subtitles = folder / "subtitles"
+    subtitles.mkdir()
+    cue = "1\n00:00:01,000 --> 00:00:02,000\nhello\n\n"
+    (subtitles / f"{videos['caption'].stem}.en.srt").write_text(cue, encoding="utf-8")
+    (folder / "karaoke").mkdir()
+    (folder / "karaoke" / f"{videos['transcribed'].stem}.ass").write_text("", encoding="utf-8")
+    return {key: str(video) for key, video in videos.items()}
+
+
+def answer_captions(monkeypatch, answers: dict[str, CaptionCheck]) -> list[str]:
+    """Patch the caption check to answer by song key (no caption when unlisted).
+
+    Returns the list that fills with the stems asked about, in order.
+    """
+    by_stem = {STEMS[key]: check for key, check in answers.items()}
+    asked: list[str] = []
+
+    def check(job):
+        asked.append(job.song_path.stem)
+        return by_stem.get(job.song_path.stem, NO_CAPTION)
+
+    monkeypatch.setattr("pikaraoke.lib.library_tools.check_caption", check)
+    return asked
+
+
+def hold_captions(monkeypatch) -> threading.Event:
+    """Patch the caption check to wait for the returned event, then pass every song."""
+    release = threading.Event()
+
+    def check(job):
+        release.wait(10)
+        return PASS
+
+    monkeypatch.setattr("pikaraoke.lib.library_tools.check_caption", check)
+    return release
+
+
+def finish_checks(tools: LibraryTools) -> None:
+    if tools._checker is not None:
+        tools._checker.join(10)
+        assert not tools._checker.is_alive()
+
+
+def groups(tools: LibraryTools) -> dict[str, str]:
+    """The open run's song keys with their groups."""
+    return {KEY_OF[Path(s["song"]).stem]: s["group"] for s in tools.run_view()["songs"]}
+
+
+def open_run(tmp_path, monkeypatch, mode, answers=None):
+    """A bulk library with its run open and checked; returns (tools, processing, paths)."""
+    paths = bulk_library(tmp_path)
+    answer_captions(monkeypatch, answers or {})
+    tools, processing = make_tools(tmp_path, list(paths.values()))
+    tools.open_run(mode)
+    finish_checks(tools)
+    return tools, processing, paths
+
+
+def run_song(tools: LibraryTools, key: str) -> dict:
+    return next(s for s in tools.run_view()["songs"] if Path(s["song"]).stem == STEMS[key])
+
+
+class TestOpenRun:
+    @pytest.mark.parametrize(
+        "mode, checked, expected",
+        [
+            ("stale", {"unlined"}, {"behind": "reuse", "unlined": "caption"}),
+            (
+                "all",
+                {"unlined", "unprocessed"},
+                {
+                    "current": "reuse",
+                    "behind": "reuse",
+                    "unlined": "caption",
+                    "caption": "reuse",
+                    "transcribed": "transcribe",
+                    "unprocessed": "needs_pick",
+                    "no_id": "needs_pick",
+                },
+            ),
+            (
+                "reset",
+                {"current", "behind", "unlined", "caption", "transcribed", "unprocessed"},
+                {
+                    "current": "caption",
+                    "behind": "needs_pick",
+                    "unlined": "caption",
+                    "caption": "caption",
+                    "transcribed": "needs_pick",
+                    "unprocessed": "needs_pick",
+                    "no_id": "needs_pick",
+                },
+            ),
+        ],
+    )
+    def test_each_mode_checks_and_sorts_its_songs_by_the_plan_table(
+        self, tmp_path, monkeypatch, mode, checked, expected
+    ):
+        paths = bulk_library(tmp_path)
+        asked = answer_captions(monkeypatch, RUN_ANSWERS)
+        tools, _ = make_tools(tmp_path, list(paths.values()))
+
+        tools.open_run(mode)
+        finish_checks(tools)
+
+        assert sorted(KEY_OF[stem] for stem in asked) == sorted(checked)
+        assert groups(tools) == expected
+
+    def test_a_song_the_library_has_not_picked_up_is_not_in_the_run(self, tmp_path, monkeypatch):
+        paths = bulk_library(tmp_path)
+        answer_captions(monkeypatch, {})
+        tools, _ = make_tools(tmp_path, [paths["current"]])
+
+        tools.open_run("all")
+
+        assert [Path(s["song"]).stem for s in tools.run_view()["songs"]] == [STEMS["current"]]
+
+    def test_a_second_run_is_refused_while_one_is_open(self, tmp_path, monkeypatch):
+        tools, _, _ = open_run(tmp_path, monkeypatch, "all")
+
+        with pytest.raises(RegenError, match="already open"):
+            tools.open_run("reset")
+
+        assert tools.run_view()["mode"] == "all"
+
+    def test_an_unknown_mode_and_an_empty_run_are_refused(self, tmp_path):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        genius_bundle(tmp_path, video.stem)
+        tools, _ = make_tools(tmp_path, [str(video)])
+
+        with pytest.raises(RegenError, match="Unknown run"):
+            tools.open_run("everything")
+        with pytest.raises(RegenError, match="no songs"):
+            tools.open_run("stale")  # nothing is behind
+
+        assert tools.run_view() is None
+
+    def test_the_view_describes_each_song(self, tmp_path, monkeypatch):
+        [video] = make_videos(tmp_path, "Pop Song (Official Video)---aaaaaaaaaaa")
+        write_bundle(
+            tmp_path,
+            video.stem,
+            lyrics={"origin": "genius", "genius": GENIUS, "lines": ["one", "two"]},
+            output_summary={"line_count": 10, "lines_with_words": 5},
+        )
+        answer_captions(monkeypatch, {})
+        tools, _ = make_tools(tmp_path, [str(video)])
+        tools.open_run("all")
+
+        view = tools.run_view()
+
+        [song] = view["songs"]
+        assert song == {
+            "song": str(video),
+            "title": SongManager.filename_from_path(str(video)),
+            "group": "reuse",
+            "needs_pick": False,
+            "now": {"source": "genius", "title": "Song", "artist": "Artist"},
+            "query": "Pop Song",
+            "poor": True,
+            "guessed": 5,
+            "line_count": 10,
+            "has_youtube_id": True,
+            "genius_id": GENIUS["id"],
+            "caption": None,
+            "pick": None,
+        }
+        assert view["queueable"] == 1
+
+    def test_where_each_kind_of_song_stands_today_is_reported(self, tmp_path, monkeypatch):
+        tools, _, _ = open_run(tmp_path, monkeypatch, "all", RUN_ANSWERS)
+
+        now = {KEY_OF[Path(s["song"]).stem]: s["now"]["source"] for s in tools.run_view()["songs"]}
+
+        assert now == {
+            "current": "genius",
+            "behind": "genius",
+            "unlined": "genius",
+            "caption": "captions",
+            "transcribed": "transcribed",
+            "unprocessed": "unprocessed",
+            "no_id": "unprocessed",
+        }
+
+    def test_a_check_that_fails_counts_as_no_usable_caption(self, tmp_path, monkeypatch, caplog):
+        paths = bulk_library(tmp_path)
+        monkeypatch.setattr(
+            "pikaraoke.lib.library_tools.check_caption", MagicMock(side_effect=RuntimeError("x"))
+        )
+        tools, _ = make_tools(tmp_path, list(paths.values()))
+
+        tools.open_run("reset")
+        finish_checks(tools)
+
+        assert set(groups(tools).values()) == {"needs_pick"}
+        assert "Caption check of" in caplog.text
+
+    def test_the_view_counts_the_checks_as_they_finish(self, tmp_path, monkeypatch):
+        paths = bulk_library(tmp_path)
+        release = hold_captions(monkeypatch)
+        tools, _ = make_tools(tmp_path, list(paths.values()))
+
+        tools.open_run("reset")
+        waiting = tools.run_view()
+        release.set()
+        finish_checks(tools)
+        done = tools.run_view()
+
+        assert (waiting["checking"], waiting["to_check"], waiting["checked"]) == (True, 6, 0)
+        assert (done["checking"], done["to_check"], done["checked"]) == (False, 6, 6)
+
+
+class TestRunPicks:
+    @pytest.fixture
+    def run(self, tmp_path, monkeypatch):
+        """A reprocess where unlined, unprocessed and no_id need a pick."""
+        answers = {"unlined": NO_CAPTION, "unprocessed": SPARSE}
+        return open_run(tmp_path, monkeypatch, "all", answers)
+
+    def test_the_songs_that_need_a_pick_are_known_once_the_checks_are_done(self, run):
+        tools, _, _ = run
+
+        view = tools.run_view()
+
+        assert [s["needs_pick"] for s in view["songs"]].count(True) == 3
+        assert groups(tools)["unlined"] == "needs_pick"
+        assert (view["to_pick"], view["picked"]) == (3, 0)
+
+    def test_a_genius_pick_is_trimmed_and_moves_the_song_to_genius(self, run):
+        tools, _, paths = run
+        pick = {"kind": "genius", "genius_id": 9, "title": " Defying Gravity ", "artist": "x" * 500}
+
+        tools.save_pick(paths["no_id"], pick)
+
+        picked = run_song(tools, "no_id")
+        assert picked["group"] == "genius"
+        assert picked["needs_pick"]  # still a song the admin decided
+        assert picked["pick"] == {
+            "kind": "genius",
+            "genius_id": 9,
+            "title": "Defying Gravity",
+            "artist": "x" * 200,
+        }
+        view = tools.run_view()
+        assert (view["to_pick"], view["picked"]) == (3, 1)
+
+    def test_transcribe_and_skip_picks(self, run):
+        tools, _, paths = run
+
+        tools.save_pick(paths["no_id"], {"kind": "transcribe"})
+        tools.save_pick(paths["unprocessed"], {"kind": "skip"})
+
+        assert groups(tools)["no_id"] == "transcribe"
+        assert groups(tools)["unprocessed"] == "skip"
+        assert tools.run_view()["queueable"] == 6
+
+    def test_a_pick_can_be_changed(self, run):
+        tools, _, paths = run
+        tools.save_pick(paths["no_id"], {"kind": "skip"})
+
+        tools.save_pick(paths["no_id"], {"kind": "genius", "genius_id": 3})
+
+        assert run_song(tools, "no_id")["pick"]["genius_id"] == 3
+        assert tools.run_view()["picked"] == 1
+
+    def test_keep_replays_the_genius_song_the_bundle_records(self, run):
+        tools, _, paths = run
+
+        tools.save_pick(paths["unlined"], {"kind": "keep"})
+
+        assert run_song(tools, "unlined")["pick"] == {"kind": "keep", "genius_id": GENIUS["id"]}
+        assert groups(tools)["unlined"] == "genius"
+
+    def test_keep_is_refused_for_a_song_with_no_recorded_genius_song(self, run):
+        tools, _, paths = run
+
+        with pytest.raises(RegenError, match="no recorded Genius song"):
+            tools.save_pick(paths["no_id"], {"kind": "keep"})
+
+        assert run_song(tools, "no_id")["pick"] is None
+
+    @pytest.mark.parametrize(
+        "pick",
+        [
+            None,
+            "skip",
+            {"kind": "caption"},
+            {"kind": "genius"},
+            {"kind": "genius", "genius_id": "7"},
+            {"kind": "genius", "genius_id": True},
+        ],
+    )
+    def test_a_pick_that_is_not_one_is_refused(self, run, pick):
+        tools, _, paths = run
+
+        with pytest.raises(RegenError):
+            tools.save_pick(paths["no_id"], pick)
+
+        assert run_song(tools, "no_id")["pick"] is None
+
+    def test_a_song_that_does_not_need_a_pick_is_refused(self, run):
+        tools, _, paths = run
+
+        with pytest.raises(RegenError, match="doesn't need a pick"):
+            tools.save_pick(paths["current"], {"kind": "skip"})
+        with pytest.raises(RegenError, match="isn't in this run"):
+            tools.save_pick("/elsewhere/a.mp4", {"kind": "skip"})
+
+    def test_a_song_still_being_checked_waits(self, tmp_path, monkeypatch):
+        paths = bulk_library(tmp_path)
+        release = hold_captions(monkeypatch)
+        tools, _ = make_tools(tmp_path, list(paths.values()))
+        tools.open_run("reset")
+
+        with pytest.raises(RegenError, match="still being checked"):
+            tools.save_pick(paths["current"], {"kind": "skip"})
+
+        release.set()
+        finish_checks(tools)
+
+    def test_every_call_needs_an_open_run(self, tmp_path):
+        tools, _ = make_tools(tmp_path, [])
+
+        for call in (
+            lambda: tools.save_pick("a.mp4", {"kind": "skip"}),
+            tools.keep_all,
+            tools.queue_run,
+        ):
+            with pytest.raises(RegenError, match="No run is open"):
+                call()
+
+    def test_keep_all_keeps_every_unpicked_song_that_can(self, run):
+        tools, _, _ = run
+
+        kept = tools.keep_all()
+
+        assert kept == 1  # unlined: the others have no recorded Genius song
+        assert run_song(tools, "unlined")["pick"]["kind"] == "keep"
+        assert run_song(tools, "no_id")["pick"] is None
+        assert tools.keep_all() == 0
+
+    def test_keep_all_leaves_a_pick_the_admin_made(self, run):
+        tools, _, paths = run
+        tools.save_pick(paths["unlined"], {"kind": "transcribe"})
+
+        assert tools.keep_all() == 0
+
+        assert run_song(tools, "unlined")["pick"] == {"kind": "transcribe"}
+
+
+class TestRunState:
+    def test_picks_and_checks_survive_a_restart(self, tmp_path, monkeypatch):
+        answers = {"unlined": NO_CAPTION, "unprocessed": SPARSE}
+        tools, _, paths = open_run(tmp_path, monkeypatch, "all", answers)
+        tools.save_pick(paths["no_id"], {"kind": "genius", "genius_id": 9, "title": "T"})
+        before = tools.run_view()
+        monkeypatch.setattr(
+            "pikaraoke.lib.library_tools.check_caption", MagicMock(side_effect=AssertionError)
+        )
+
+        restarted, _ = make_tools(tmp_path, list(paths.values()))
+
+        assert restarted.run_view() == before
+        assert restarted._checker is None  # every check was already made
+
+    def test_a_run_left_mid_check_resumes_its_unchecked_songs(self, tmp_path, monkeypatch):
+        _, _, paths = open_run(tmp_path, monkeypatch, "reset", RUN_ANSWERS)
+        state_path = tmp_path / "library_tools_state.json"
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        for key in ("unlined", "caption"):
+            state["run"]["songs"][paths[key]]["check"] = None
+        state_path.write_text(json.dumps(state), encoding="utf-8")
+        asked = answer_captions(monkeypatch, RUN_ANSWERS)
+
+        restarted, _ = make_tools(tmp_path, list(paths.values()))
+        finish_checks(restarted)
+
+        assert sorted(asked) == sorted([STEMS["unlined"], STEMS["caption"]])
+        assert not restarted.run_view()["checking"]
+        saved = json.loads(state_path.read_text(encoding="utf-8"))
+        assert saved["run"]["songs"][paths["unlined"]]["check"]["passed"] is True
+
+    def test_a_song_gone_since_drops_out_of_the_run(self, tmp_path, monkeypatch):
+        _, _, paths = open_run(tmp_path, monkeypatch, "all")
+        Path(paths["no_id"]).unlink()
+
+        restarted, _ = make_tools(tmp_path, list(paths.values()))
+
+        stems = [Path(s["song"]).stem for s in restarted.run_view()["songs"]]
+        assert STEMS["no_id"] not in stems and len(stems) == 6
+
+    def test_a_pick_the_song_can_no_longer_take_is_dropped(self, tmp_path, monkeypatch):
+        tools, _, paths = open_run(tmp_path, monkeypatch, "all", {"unlined": NO_CAPTION})
+        tools.save_pick(paths["unlined"], {"kind": "keep"})
+        bundle = tmp_path / "alignment_debug" / f"{STEMS['unlined']}.json"
+        bundle.write_text(json.dumps({"schema_version": 1}), encoding="utf-8")
+
+        restarted, _ = make_tools(tmp_path, list(paths.values()))
+
+        assert run_song(restarted, "unlined")["pick"] is None
+
+    @pytest.mark.parametrize(
+        "content",
+        [
+            "not json",
+            "[1, 2]",
+            '{"run": 5}',
+            '{"run": {"mode": "x", "songs": {}}}',
+            '{"run": {"mode": "all", "songs": {}}}',
+        ],
+    )
+    def test_an_unusable_state_file_is_ignored(self, tmp_path, content):
+        (tmp_path / "library_tools_state.json").write_text(content, encoding="utf-8")
+
+        tools, _ = make_tools(tmp_path, [])
+
+        assert tools.run_view() is None
+
+    def test_a_write_that_fails_is_logged_and_the_run_goes_on(self, tmp_path, monkeypatch, caplog):
+        paths = bulk_library(tmp_path)
+        answer_captions(monkeypatch, {})
+        (tmp_path / "blocker").write_text("", encoding="utf-8")  # a file where a folder must go
+        tools, _ = make_tools(
+            tmp_path, list(paths.values()), state=tmp_path / "blocker" / "state.json"
+        )
+
+        tools.open_run("all")
+        finish_checks(tools)
+
+        assert tools.run_view() is not None
+        assert "Could not save the library tools state" in caplog.text
+
+    def test_the_state_is_written_in_one_piece(self, tmp_path, monkeypatch):
+        open_run(tmp_path, monkeypatch, "all")
+
+        saved = json.loads((tmp_path / "library_tools_state.json").read_text(encoding="utf-8"))
+        assert saved["run"]["mode"] == "all"
+        assert not list(tmp_path.glob("*.tmp"))
+
+    def test_discard_closes_the_run_for_good(self, tmp_path, monkeypatch):
+        tools, _, paths = open_run(tmp_path, monkeypatch, "all")
+
+        tools.discard_run()
+        tools.discard_run()  # nothing open: not an error
+
+        assert tools.run_view() is None
+        restarted, _ = make_tools(tmp_path, list(paths.values()))
+        assert restarted.run_view() is None
+
+    def test_discard_stops_the_checks_of_the_run_it_closed(self, tmp_path, monkeypatch):
+        paths = bulk_library(tmp_path)
+        started, release = threading.Event(), threading.Event()
+        calls: list[str] = []
+
+        def check(job):
+            calls.append(job.song_path.stem)
+            started.set()
+            release.wait(10)
+            return PASS
+
+        monkeypatch.setattr("pikaraoke.lib.library_tools.check_caption", check)
+        tools, _ = make_tools(tmp_path, list(paths.values()))
+        tools.open_run("reset")
+        old_checks = tools._checker
+        assert started.wait(10)
+
+        tools.discard_run()
+        tools.open_run("stale")  # a new run, with its own thread
+        release.set()
+        old_checks.join(10)
+        finish_checks(tools)
+
+        # The old run's thread finished the song it was on and asked for no more.
+        assert not old_checks.is_alive()
+        assert len(calls) == 1 + 1  # that song, then the new run's one song to check (unlined)
+
+    def test_a_run_that_is_no_longer_open_gets_no_more_checks(self, tmp_path, monkeypatch):
+        paths = bulk_library(tmp_path)
+        release = hold_captions(monkeypatch)
+        tools, _ = make_tools(tmp_path, list(paths.values()))
+        tools.open_run("reset")
+        closed = tools._run
+        tools.discard_run()
+        release.set()
+        finish_checks(tools)
+        asked = answer_captions(monkeypatch, {})
+        tools.open_run("stale")  # another run is open, with checks of its own
+        finish_checks(tools)
+        asked.clear()
+
+        tools._check_captions(closed)
+
+        assert asked == []
+
+
+class TestQueueRun:
+    @staticmethod
+    def jobs(processing) -> dict[str, RegenJob]:
+        return {
+            Path(call.args[0].song.song_path).stem: call.args[0]
+            for call in processing.enqueue_regen.call_args_list
+        }
+
+    def test_it_waits_for_the_captions(self, tmp_path, monkeypatch):
+        paths = bulk_library(tmp_path)
+        release = hold_captions(monkeypatch)
+        tools, processing = make_tools(tmp_path, list(paths.values()))
+        tools.open_run("reset")
+
+        with pytest.raises(RegenError, match="still being checked"):
+            tools.queue_run()
+
+        release.set()
+        finish_checks(tools)
+        processing.enqueue_regen.assert_not_called()
+        assert not list(tmp_path.glob("regen_backup_*"))
+        assert tools.run_view() is not None
+
+    def test_it_refuses_while_a_song_still_needs_a_pick(self, tmp_path, monkeypatch):
+        tools, processing, paths = open_run(tmp_path, monkeypatch, "all", RUN_ANSWERS)
+        tools.save_pick(paths["no_id"], {"kind": "skip"})  # unprocessed still needs one
+
+        with pytest.raises(RegenError, match="Pick lyrics"):
+            tools.queue_run()
+
+        processing.enqueue_regen.assert_not_called()
+        assert not list(tmp_path.glob("regen_backup_*"))
+
+    def test_a_reprocess_queues_each_songs_plan_without_a_reset(self, tmp_path, monkeypatch):
+        tools, processing, paths = open_run(tmp_path, monkeypatch, "all", RUN_ANSWERS)
+        tools.save_pick(paths["unprocessed"], {"kind": "genius", "genius_id": 9})
+        tools.save_pick(paths["no_id"], {"kind": "skip"})
+
+        result = tools.queue_run()
+
+        jobs = self.jobs(processing)
+        assert set(jobs) == {stem for key, stem in STEMS.items() if key != "no_id"}
+        assert {job.reset for job in jobs.values()} == {False}
+        assert {job.label for job in jobs.values()} == {"Reprocess"}
+        plans = {KEY_OF[stem]: job.song.plan for stem, job in jobs.items()}
+        assert {key: plan.kind for key, plan in plans.items()} == {
+            "current": "seed",
+            "behind": "seed",
+            "unlined": "fetch",  # its caption passed
+            "caption": "seed",
+            "transcribed": "transcribe",
+            "unprocessed": "sidecar",
+        }
+        assert plans["unprocessed"].genius_id == 9
+        assert plans["current"].seed["genius"] == GENIUS
+        assert (result["queued"], result["busy"]) == (6, 0)
+
+    def test_a_reset_queues_a_wiping_job_per_song(self, tmp_path, monkeypatch):
+        tools, processing, paths = open_run(tmp_path, monkeypatch, "reset", RUN_ANSWERS)
+        tools.save_pick(paths["behind"], {"kind": "keep"})
+        tools.save_pick(paths["transcribed"], {"kind": "transcribe"})
+        tools.save_pick(paths["unprocessed"], {"kind": "genius", "genius_id": 4})
+        tools.save_pick(paths["no_id"], {"kind": "genius", "genius_id": 5})
+
+        tools.queue_run()
+
+        jobs = self.jobs(processing)
+        assert len(jobs) == 7
+        assert {job.reset for job in jobs.values()} == {True}
+        assert {job.label for job in jobs.values()} == {"Reset"}
+        kinds = {KEY_OF[stem]: job.song.plan.kind for stem, job in jobs.items()}
+        assert kinds == {
+            "current": "fetch",
+            "behind": "sidecar",
+            "unlined": "fetch",
+            "caption": "fetch",
+            "transcribed": "transcribe",
+            "unprocessed": "sidecar",
+            "no_id": "sidecar",
+        }
+        assert jobs[STEMS["behind"]].song.plan.genius_id == GENIUS["id"]
+        assert jobs[STEMS["no_id"]].song.plan.genius_id == 5
+
+    def test_an_update_labels_its_jobs_and_leaves_current_songs_out(self, tmp_path, monkeypatch):
+        tools, processing, _ = open_run(tmp_path, monkeypatch, "stale", RUN_ANSWERS)
+
+        result = tools.queue_run()
+
+        jobs = self.jobs(processing)
+        assert set(jobs) == {STEMS["behind"], STEMS["unlined"]}
+        assert {job.label for job in jobs.values()} == {"Update"}
+        assert {job.reset for job in jobs.values()} == {False}
+        assert result["queued"] == 2
+
+    def test_one_backup_of_the_whole_library_comes_first(self, tmp_path, monkeypatch):
+        tools, processing, _ = open_run(tmp_path, monkeypatch, "stale", RUN_ANSWERS)
+        backups_at_enqueue = []
+        processing.enqueue_regen.side_effect = lambda regen: (
+            backups_at_enqueue.append(len(list(tmp_path.glob("regen_backup_*")))) or True
+        )
+
+        result = tools.queue_run()
+
+        [backup] = tmp_path.glob("regen_backup_*")
+        assert result["backup"] == backup.name
+        assert backups_at_enqueue == [1, 1]  # there before the first job was queued
+        saved = sorted(p.name for p in (backup / "alignment_debug").iterdir())
+        bundled = ("current", "behind", "unlined", "caption")
+        assert saved == sorted(f"{STEMS[key]}.json" for key in bundled)
+
+    def test_skipped_songs_are_dropped(self, tmp_path, monkeypatch):
+        tools, processing, paths = open_run(tmp_path, monkeypatch, "all", RUN_ANSWERS)
+        tools.save_pick(paths["unprocessed"], {"kind": "skip"})
+        tools.save_pick(paths["no_id"], {"kind": "genius", "genius_id": 2})
+
+        result = tools.queue_run()
+
+        assert STEMS["unprocessed"] not in self.jobs(processing)
+        assert result["queued"] == 6
+
+    def test_busy_songs_are_set_aside_and_counted(self, tmp_path, monkeypatch):
+        paths = bulk_library(tmp_path)
+        answer_captions(monkeypatch, RUN_ANSWERS)
+        tools, processing = make_tools(
+            tmp_path, list(paths.values()), active=paths["behind"], pending=[paths["unlined"]]
+        )
+        tools.open_run("all")
+        finish_checks(tools)
+        tools.save_pick(paths["unprocessed"], {"kind": "skip"})
+        tools.save_pick(paths["no_id"], {"kind": "skip"})
+
+        result = tools.queue_run()
+
+        assert (result["queued"], result["busy"]) == (3, 2)
+        assert set(self.jobs(processing)) == {
+            STEMS["current"],
+            STEMS["caption"],
+            STEMS["transcribed"],
+        }
+
+    def test_a_run_of_busy_songs_queues_nothing_and_stays_open(self, tmp_path, monkeypatch):
+        paths = bulk_library(tmp_path)
+        answer_captions(monkeypatch, RUN_ANSWERS)
+        tools, processing = make_tools(
+            tmp_path, list(paths.values()), active=paths["behind"], pending=[paths["unlined"]]
+        )
+        tools.open_run("stale")  # exactly those two
+        finish_checks(tools)
+
+        with pytest.raises(RegenError, match="Nothing to queue"):
+            tools.queue_run()
+
+        processing.enqueue_regen.assert_not_called()
+        assert not list(tmp_path.glob("regen_backup_*"))
+        assert tools.run_view() is not None
+
+    def test_a_run_of_skipped_songs_queues_nothing_and_stays_open(self, tmp_path, monkeypatch):
+        paths = bulk_library(tmp_path)
+        answer_captions(monkeypatch, {})  # unlined: no caption, so it needs a pick
+        tools, processing = make_tools(tmp_path, [paths["unlined"]])
+        tools.open_run("stale")
+        finish_checks(tools)
+        tools.save_pick(paths["unlined"], {"kind": "skip"})
+
+        with pytest.raises(RegenError, match="Nothing to queue"):
+            tools.queue_run()
+
+        processing.enqueue_regen.assert_not_called()
+        assert not list(tmp_path.glob("regen_backup_*"))
+        assert tools.run_view() is not None
+
+    def test_a_song_the_queue_turns_away_is_counted_busy(self, tmp_path, monkeypatch):
+        tools, processing, _ = open_run(tmp_path, monkeypatch, "stale", RUN_ANSWERS)
+        processing.enqueue_regen.side_effect = [True, False]
+
+        result = tools.queue_run()
+
+        assert (result["queued"], result["busy"]) == (1, 1)
+
+    def test_queueing_closes_the_run(self, tmp_path, monkeypatch):
+        tools, _, paths = open_run(tmp_path, monkeypatch, "stale", RUN_ANSWERS)
+
+        tools.queue_run()
+
+        assert tools.run_view() is None
+        restarted, _ = make_tools(tmp_path, list(paths.values()))
+        assert restarted.run_view() is None
+        with pytest.raises(RegenError, match="No run is open"):
+            tools.queue_run()
+
+    def test_a_failed_backup_queues_nothing_and_keeps_the_run(self, tmp_path, monkeypatch):
+        tools, processing, _ = open_run(tmp_path, monkeypatch, "stale", RUN_ANSWERS)
+
+        def disk_full(folder):
+            raise OSError("disk full")
+
+        monkeypatch.setattr("pikaraoke.lib.library_tools.backup_text_folders", disk_full)
+
+        with pytest.raises(RegenError, match="Could not back up"):
+            tools.queue_run()
+
+        processing.enqueue_regen.assert_not_called()
+        assert tools.run_view() is not None
+
+    def test_a_song_that_lost_its_lyrics_since_the_preview_is_refused_before_the_backup(
+        self, tmp_path, monkeypatch
+    ):
+        tools, processing, _ = open_run(tmp_path, monkeypatch, "stale", RUN_ANSWERS)
+        (tmp_path / "alignment_debug" / f"{STEMS['behind']}.json").unlink()
+
+        with pytest.raises(RegenError, match="no longer has lyrics to reuse"):
+            tools.queue_run()
+
+        processing.enqueue_regen.assert_not_called()
+        assert not list(tmp_path.glob("regen_backup_*"))
+        assert tools.run_view() is not None
