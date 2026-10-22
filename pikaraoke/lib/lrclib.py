@@ -349,6 +349,10 @@ def is_skip_marker(path: Path) -> bool:
         text = path.read_text(encoding="utf-8")
     except OSError:
         return False
+    except UnicodeDecodeError as e:
+        # A hand-placed file in another encoding; the marker is always UTF-8.
+        logger.warning("%s is not UTF-8, so it is not a skip marker: %s", path, e)
+        return False
     return any(line.strip().startswith(f"[{SKIP_TAG}:") for line in text.splitlines())
 
 
