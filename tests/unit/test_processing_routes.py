@@ -1,6 +1,7 @@
 """Tests for processing routes — ownership gating, admin-only endpoints, user cancel."""
 
 import json
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -1605,7 +1606,11 @@ def library_env():
     karaoke.processing_manager.get_active_job.return_value = None
     karaoke.processing_manager.pending_jobs = []
     karaoke.library_tools = LibraryTools(
-        karaoke.processing_manager, song_manager, "/songs", MagicMock()
+        karaoke.processing_manager,
+        song_manager,
+        "/songs",
+        MagicMock(),
+        Path("/songs/library_tools_state.json"),
     )
     return karaoke, paths
 

@@ -5,6 +5,7 @@ import os
 import subprocess
 import threading
 import time
+from pathlib import Path
 from typing import Any
 
 import qrcode
@@ -314,6 +315,7 @@ class Karaoke:
             song_manager=self.song_manager,
             download_path=self.download_path,
             genius_client=self.genius_client,
+            state_path=Path(get_data_directory()) / "library_tools" / "state.json",
         )
 
         # Wire overlay state provider so the MPV poll thread can render OSD overlays
