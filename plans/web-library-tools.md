@@ -3973,6 +3973,85 @@ for this row: `...\7793017c-e313-469d-b821-3298b30187fa\scratchpad\`. Six code c
     guard); discarding twice is harmless (the second finds no run).
   - A failed caption check could not be forced live; the unit tests cover it.
 
+### Phase 7 checks (Ken's live pass of Phases 4-7.1)
+
+Model: Claude Opus 5.5 (prep, log reading, restore); Ken clicked. 2026-10-23, HEAD `330e9fb`.
+
+- **Procedure:** the Claude Doc "Web library tools: check procedure (Phases 4-7.1)",
+  https://claude.ai/artifact/Lt67nBswVwNNZptZnYMq47 (Blocks A-E, every box checked). Guest view,
+  a regen waiting on a playing song, a restart mid-picks, a failed regen with Retry, Genius not
+  answering (7.1b) and Phase 8 not covered.
+- **Setup:** isolated app from the worktree on 5556 (`APPDATA` the session's scratch folder
+  `...\96b3d5a8-e290-4c0d-bd2a-57b2d05397dd\scratchpad\appdata`, a copy of Ken's config, no admin
+  password, `--download-path D:\shared\weblib-test`); `Scan: found 8 song(s) on disk`. Log
+  `...\96b3d5a8-...\scratchpad\app.log`. Scratch library hashed before (`weblib_start.json`, 258
+  files, digest `be5cc8bf7ad573c5`). EM, BSB and JG bundles set from `schema_version` 11 to 10
+  (`mark_behind.py`, originals in `bundle_originals\`). Ken's app on 5555 off throughout.
+- **Job timeline (app.log):**
+
+  | Time | Event |
+  | -------- | ------------------------------------------------------------------------------------ |
+  | 11:04:19 | DG Repair queued and started (Genius Idina Menzel, a non-best-fit LRCLIB match) |
+  | 11:05:17 | EM Regenerate queued |
+  | 11:06:48 | `zzzzzzzzzzz` direct download failed: `This video is unavailable` |
+  | 11:08:47 | DG Repair complete |
+  | 11:10:23 | NEW (`Baby Hotline - Jack Stauber---jbTj2M3vmts`) processing complete, ahead of EM |
+  | 11:10:24 | EM Regenerate started |
+  | 11:15:39 | EM complete |
+  | 11:21:26 | Update stale queued BSB and JG; BSB started |
+  | 11:23:06 | `LRCLIB search failed for 'defying gravity' / 'idinal menzel': 503` (C2's search) |
+  | 11:23:22 | DG second Repair queued (LRCLIB None) |
+  | 11:25:05 | BSB complete; JG started |
+  | 11:26:53 | JG complete; DG second Repair started |
+  | 11:29:19 | DG second Repair complete |
+  | 13:36:33 | Reset all queued 6 (DG, BSB, EC, EM, JG, Q; JC and HB skipped); DG started |
+  | 13:38:59 | DG complete; BSB started |
+  | 13:42:35 | BSB complete; EC started |
+  | 13:44:04 | EC complete; EM started |
+  | 13:47:37 | EM complete; JG started |
+  | 13:49:34 | JG complete; Q started |
+  | 13:54:03 | Q complete |
+
+  No `Regen failed` and no traceback in the log. Other ERROR lines: the yt-dlp self-upgrade at start
+  (expected under uv) and `yt-dlp preview info timed out` at 11:06:03 (the picker preview).
+- **Ken's findings:**
+  - A4 (procedure text): a search-page download also adds the song to the singing queue, so NEW
+    started playing at 11:06. The procedure was updated.
+  - B1 (procedure text): the procedure said spinners don't restart; the design has no spinners.
+    The procedure was updated.
+  - B2, the four lists: each Library card row opens `library_songs.html` as its own page (as 4d
+    specifies), and that page has no back button. Ken wants the lists to expand inline on the
+    Library tools tab.
+  - Feature request (during D7): the admin uploads their own lyric text file as the lyric source
+    for a Repair, Regenerate or Reset, so hand-checked lyrics can replace the Genius, caption or
+    transcribed text. Outside Phases 4-8; where it sits is Ken's call.
+  - C, D and E: no differences reported.
+- **Claude's findings from the log and the files:**
+  - With the LRCLIB skip marker in place, DG's second Repair (11:26:59) and its Reset (13:36:40) both
+    log `LRCLIB: variant available for fill (<the .lrc>)`. After the Reset the `.lrc` is the
+    20-byte `[lrclib_skipped:1]` marker, and the bundle's `joint_stats.lrclib_fill` reads
+    `n_cues_mapped 0`, `eligible false`, `reason no_mapping`, `fills []`. The line fires on the file
+    existing.
+  - Delete song (C3) left `alignment_debug/<NEW>.json`, `lyrics/<NEW>.lrc` and
+    `subtitles/<NEW>.srt.generated`. `SongManager._get_companion_files` lists only the `.srt`, the
+    vocal and nonvocal stems and the `.ass`; `rename` uses the same list. This branch's diff to
+    `song_manager.py` (5 added lines) does not touch either.
+  - After the pass, the library lacked Q's `subtitles/<Q>.en.vtt` and the probe-harness files of DG,
+    BSB and JG (`.armC.ass`, `.armW.ass`, `.baseline.ass`, `.edgereplay.ass`, `.edgesnap.ass`,
+    `.scaffold.ass`, `.cuealign*.ass`, `.richsync.ass`, `lyrics/*.timing.json`); each was in one of
+    this pass's backups. Q's Reset ran on its `.srt` (`cue-align: 65 cues -> 9 sections`) and
+    wrote no new `.en.vtt`.
+- **Restore:** the app stopped with `taskkill /F /T` on the listener's pid (7244); 5556 free. Scratch
+  library after the pass: 364 files. `restore_weblib.py` copied back the 27 files that were changed
+  or missing, each from a file with its start hash (this pass's backups or `bundle_originals\`),
+  removed NEW's three leftovers, and removed this pass's five backup folders
+  (`regen_backup_20261023T150419Z`, `...150517Z`, `...152126Z`, `...152322Z`, `...173633Z`; none in
+  the start map). Re-hash `weblib_after.json`: 258 files, digest `be5cc8bf7ad573c5`, byte-identical
+  to `weblib_start.json`.
+- **Real-library manifest:** `manifest.py compare "D:/Shared/pikaraoke-songs"` against the Phase 0
+  manifest: `manifest=2605 now=2616 added=11 removed=0 changed=1`, all 12 under `zh_probe/`, as in
+  the earlier rows. Output `...\96b3d5a8-...\scratchpad\manifest_compare_phase7check.txt`.
+
 ### Phase 8
 
 ### Phase 9
