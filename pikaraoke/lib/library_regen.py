@@ -825,9 +825,23 @@ def prepare_regen_job(
     caption fetch turns a ``fetch`` plan into "use the .srt just fetched", and
     a retry of the queued job must start from ``fetch`` again, because its
     reset wipe deletes that .srt first.
+
+    A Genius pick is fetched first, before anything is changed: when Genius
+    doesn't answer, the pipeline's fetch would fall back to a caption or
+    transcribe, and the run would replace the song's lyrics with that.
     """
     job = replace(regen.song)
     song = job.song_path
+
+    if job.plan.kind == "sidecar":
+        try:
+            genius.fetch_song(job.plan.genius_id)
+        except GeniusUnavailable as e:
+            logger.warning("Genius pick %s for %s refused: %s", job.plan.genius_id, song.name, e)
+            raise RegenError(
+                "Genius didn't return this song's lyrics, so nothing was changed. "
+                "Retry when Genius answers."
+            ) from e
 
     if regen.reset:
         try:
