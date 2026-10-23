@@ -1753,6 +1753,19 @@ class TestPlaylistAddRoute:
         [(_category, message)] = self.flashes(env)
         assert message == "Added 1 video to the download queue. 1 song sent to processing."
 
+    def test_a_song_whose_check_fails_does_not_fail_the_request(self, env, monkeypatch):
+        def fail(job):
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr("pikaraoke.lib.library_tools.gate_on_disk_caption", fail)
+        song = env.add_song("Old---ddddddddddd.mp4")
+
+        response = self.add(env, videos=[{"id": "ccccccccccc", "title": "One"}], unprocessed=[song])
+
+        assert response.status_code == 200
+        assert response.get_json() == {"success": True, "downloads": 1, "processing": 1}
+        env.processing.enqueue.assert_called_once_with(song)
+
     def test_a_selection_with_nothing_to_take_says_so(self, env):
         response = self.add(env, videos=[{"id": "short", "title": "x"}], unprocessed=[])
 

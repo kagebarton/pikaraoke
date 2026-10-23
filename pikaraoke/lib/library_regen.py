@@ -310,15 +310,17 @@ def default_query(song: Path) -> str:
 
 
 def _srt_word_count(srt_path: Path) -> int | None:
-    """Cleaned-cue word count for an SRT, or None if it can't be parsed.
+    """Cleaned-cue word count for an SRT, or None if it can't be read or parsed.
 
     Counts the same cleaned cue text the matcher consumes, so a dialog-only
-    caption (few sung words) scores low.
+    caption (few sung words) scores low. A caption that isn't UTF-8
+    (``UnicodeDecodeError``) or holds an out-of-range timestamp
+    (``OverflowError``) can't be measured, and the gate passes what it can't measure.
     """
     try:
         raw = srt_path.read_text(encoding="utf-8")
         texts, _ = cue_spans_from_srt(raw)
-    except (OSError, srt.SRTParseError) as e:
+    except (OSError, ValueError, OverflowError, srt.SRTParseError) as e:
         logger.warning("Cannot read SRT %s: %s", srt_path, e)
         return None
     return sum(len(t.split()) for t in texts)

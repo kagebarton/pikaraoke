@@ -473,6 +473,37 @@ class TestCheckCaption:
         assert urls == ["https://www.youtube.com/watch?v=dQw4w9WgXcQ"]
 
 
+@pytest.fixture(
+    params=[
+        "1\n00:00:01,000 --> 00:00:04,000\ncafé la la\n".encode("latin-1"),
+        b"1\n999999999999999:00:01,000 --> 999999999999999:00:04,000\nla la\n",
+        b"not an srt at all",
+    ],
+    ids=["not utf-8", "out-of-range timestamp", "not an srt"],
+)
+def unreadable_caption(request, tmp_path) -> Path:
+    """A caption on disk that can't be read or parsed, at the playback-matched name."""
+    subs = tmp_path / "subtitles"
+    subs.mkdir()
+    path = subs / f"{YT_STEM}.srt"
+    path.write_bytes(request.param)
+    return path
+
+
+class TestSrtWordCount:
+    def test_counts_the_cleaned_cue_words(self, tmp_path):
+        assert lr._srt_word_count(_make_srt(tmp_path, YT_STEM, n_words=7)) == 7
+
+    def test_a_caption_that_cannot_be_read_has_no_count(self, unreadable_caption, caplog):
+        with caplog.at_level("WARNING", logger=lr.logger.name):
+            assert lr._srt_word_count(unreadable_caption) is None
+
+        assert "Cannot read SRT" in caplog.text
+
+    def test_a_missing_caption_has_no_count(self, tmp_path):
+        assert lr._srt_word_count(tmp_path / "gone.srt") is None
+
+
 class TestGateOnDiskCaption:
     def _job_without_plan(self, tmp_path):
         return _job(tmp_path, YT_STEM, _gap_bundle(media_duration_s=60.0))
@@ -499,6 +530,14 @@ class TestGateOnDiskCaption:
         assert srt.exists()
         assert _is_srt_plan(job.plan)
         assert job.plan.lyrics_path == srt
+
+    def test_a_caption_that_cannot_be_read_passes_and_is_kept(self, tmp_path, unreadable_caption):
+        # It can't be measured, and it may be the admin's own file.
+        job = self._job_without_plan(tmp_path)
+
+        assert lr.gate_on_disk_caption(job) is True
+        assert unreadable_caption.exists()
+        assert job.plan.lyrics_path == unreadable_caption
 
 
 # ---------------------------------------------------------------------------

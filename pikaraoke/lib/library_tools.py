@@ -616,7 +616,11 @@ class LibraryTools:
         with self._state_lock:
             from_playlist = video_id in self._playlist_ids
             self._playlist_ids.discard(video_id)
-        reason = self._pick_reason(song_path, video_id)
+        try:
+            reason = self._pick_reason(song_path, video_id)
+        except Exception:  # the handler's boundary: a failed check must not lose the queue add
+            logger.exception("Lyrics check of %s failed; processing it", Path(song_path).name)
+            reason = None
         if reason is None:
             self._processing.enqueue(song_path)
             return
@@ -792,8 +796,8 @@ class LibraryTools:
     def _pick_reason(self, song_path: str, video_id: str | None) -> str | None:
         """Why this download needs a lyrics pick before processing, or None when it doesn't.
 
-        The gate deletes a caption too sparse to be lyrics. A song this can't
-        check goes to the pipeline as it did before.
+        The gate deletes a caption too sparse to be lyrics. A check that fails
+        raises; :meth:`on_song_downloaded` is where that is caught.
         """
         if (
             video_id is None
@@ -804,11 +808,7 @@ class LibraryTools:
             return None
         job = SongJob(Path(song_path), bundle=None, stale_reason="downloaded")
         had_caption = find_local_srt(job.song_path) is not None
-        try:
-            if gate_on_disk_caption(job):
-                return None
-        except OSError as e:
-            logger.warning("Could not check the caption of %s: %s", job.song_path.name, e)
+        if gate_on_disk_caption(job):
             return None
         return "sparse_caption" if had_caption else "no_caption"
 
