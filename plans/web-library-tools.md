@@ -15,9 +15,10 @@ Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 > 2026-10-23 and passed (record `01d9475`). Phase 7.2 (two fixes from
 > that check, ruled by Ken 2026-10-23) is done too, code `71d565e` and
 > `2c352b4`. Phase 8 (the after-download check and needs-a-pick list, the
-> pick page, and playlists) is executed, code `1a26b68` and `3d26811`;
-> a code review is due, then Ken's Phase 8 checks. Next: Phase 9, after
-> the review and Ken's say.** Ken
+> pick page, and playlists) is executed, code `1a26b68` and `3d26811`.
+> Its code review ran 2026-10-23; Phase 8.1 (its recommended fixes,
+> written up at Ken's request) is next, then Ken's Phase 8 checks, then
+> Phase 9.** Ken
 > approved D2's Phase 3.1 bullet on 2026-10-20. Branch
 > `web_library_tools`, off `library_tools` at `0bfa02a`; `dev` merged as
 > `c34d889`. There is no GATE and nothing here measures timing. Landing is
@@ -2505,6 +2506,353 @@ Commits: `feat(library): downloads without a pick get the caption check and a ne
 `feat(library): add a YouTube playlist from the Processing page`.
 
 **Review due** at this boundary. Say so in the relay.
+
+## Phase 8.1: fixes from the Phase 8 code review
+
+Model: Claude Opus 5.5 (review and design, 2026-10-23); executor Claude
+Sonnet 5.5.
+
+A read-only `/code-review` of `1a26b68` and `3d26811` (Phase 8's code;
+2026-10-23; three angles: correctness, simplicity, robustness; the docs
+commit `fd38a1b` out of scope) found the defects below. Ken asked on
+2026-10-23 for the review's recommended fixes to be written up: 8.1a-8.1e.
+The rest of what the review found is in 8.1f, not fixed, each with its
+reason.
+
+Each step names the defect it fixes. Same worktree, same ground rules, same
+"Every phase ends the same way". Before starting, confirm the worktree is
+clean at `fd38a1b` plus this plan commit.
+
+Files: all in D1 (`library_tools.py`, `library_regen.py`,
+`pipeline_tracker.py`, `routes/library.py`, `routes/processing.py`,
+`processing.html`, `playlist.html`, `scripts/add_songs.py`, and tests). No
+additions to D1. One code commit per step, each with its tests, in order:
+8.1a to 8.1e (8.1d moves the code 8.1a guards).
+
+The suite at `fd38a1b`: 4 failed (the baseline's four), 2243 passed, 2
+skipped. Rerun it first and use what it prints as the baseline.
+
+Probes (scratchpad of the review session
+`a85d9ebe-ab3e-44a5-b6f3-45382ebad848`; not committed; run from the worktree
+root with `uv run --no-sync python -P`):
+
+- `finder_correctness\probe_race.py` (no args): a status read during the
+  caption check, with the real tracker and `EventSystem`. At `fd38a1b` it
+  prints `read during gate: ['complete']`, then `after needs_pick: status
+  complete group finished actions ['remove', 'dismiss', 'song_info',
+  'enqueue']` (8.1b).
+- `finder_robustness\probe1.py <empty scratch folder>`: `LibraryTools` with
+  a real `EventSystem` and mocked managers. At `fd38a1b` it prints, among
+  the rest:
+  - `P1 raised UnicodeDecodeError ... | enqueue called: False | later
+    handler ran: False` (8.1a);
+  - `P2 second pick refused: That song already has a pick.` after a pending
+    cancel (8.1c);
+  - `P3 enqueue calls (busy song): 1` (8.1c).
+
+  `probe2.py` shows `srt.parse` raising `OverflowError` on an out-of-range
+  timestamp (8.1a).
+
+Record each probe's before (above) and after in the row.
+
+### 8.1a. A caption that can't be read no longer drops the download
+
+Defect: `on_song_downloaded` runs inside the download worker's
+`song_downloaded` dispatch, and `EventSystem.emit` doesn't guard its
+handlers. `_pick_reason` catches only `OSError` from
+`gate_on_disk_caption`, and `_srt_word_count` only `OSError` and
+`srt.SRTParseError`. A caption that isn't UTF-8 (`UnicodeDecodeError`, a
+`ValueError`) or that has an out-of-range timestamp (`OverflowError` from
+`srt.parse`) escapes. Then:
+
+- the song is neither queued nor listed;
+- `_execute_download` unwinds before `queue_manager.enqueue`, so a
+  "download and queue" never reaches the playback queue;
+- through `add_playlist`, the request answers 500 partway, after some
+  downloads were queued.
+
+The handler it replaced (`processing_manager.enqueue`) read no caption. The
+likeliest trigger is the playlist "not processed" path: older songs can
+carry hand-placed captions.
+
+Fix:
+
+- `library_regen.py` `_srt_word_count`: catch `(OSError, ValueError,
+  OverflowError, srt.SRTParseError)`. A caption that can't be read can't be
+  measured, and the gate already passes a caption it can't measure
+  (`_caption_passes`). Never delete it: it may be the admin's own file.
+- `library_tools.py` `on_song_downloaded`: the check (`_pick_reason`) runs
+  under `except Exception`, which logs with the traceback
+  (`logger.exception`, naming the song) and queues the song, as the app did
+  before Phase 8. Remove `_pick_reason`'s own `OSError` catch: the one
+  guard covers it. The `except Exception` is the handler's boundary, as
+  `_measure_caption`'s is for the checker thread (7.1a): anything that
+  escapes it loses the playback queue add too.
+
+Tests:
+
+- `_srt_word_count` on a latin-1 caption and on one with an out-of-range
+  timestamp returns None and logs; `gate_on_disk_caption` on such a caption
+  passes and keeps the file.
+- `on_song_downloaded` with `gate_on_disk_caption` patched to raise
+  `RuntimeError`: the song is queued, nothing is listed, and a second
+  `song_downloaded` handler registered after it still runs.
+- `add_playlist` with an unprocessed song whose check raises: the request
+  answers 200, and the next song in the list is still taken.
+
+Commit: `fix(library): a caption that can't be read no longer drops the
+download`.
+
+### 8.1b. A status read during the caption check no longer hides the pick
+
+Defect: the tracker gives a download's row its song path on
+`song_downloaded`; `LibraryTools` then runs the check. A status read in
+between (the 250 ms push refresh, the 10 s poll, another viewer) finds the
+song neither running nor waiting and derives the row `complete` with no
+`finished_at`. `_on_needs_pick` looks only for an unfinished row, finds
+none, and changes nothing:
+
+- the admin's row reads Done, in Finished, with no Pick lyrics;
+- `attention_rows` leaves the song out, because it has a row;
+- a guest sees Done and Enqueue for a song never processed.
+
+The window is short with no caption and longer with a sparse one (an
+ffprobe call first). `_on_processing_queued` already handles the same race
+(5.1c, `called_complete`); `_on_needs_pick` doesn't.
+
+Fix (`pipeline_tracker.py`):
+
+- Move `_on_processing_queued`'s `called_complete` lookup into a helper,
+  `_find_called_complete(song_path)` (caller holds `_lock`): the row for
+  the song derived `complete` with no `finished_at`.
+  `_on_processing_queued` uses it, unchanged in behaviour.
+- `_on_needs_pick`: when there is no unfinished row, it takes the row
+  `_find_called_complete` returns and sets it to `needs_pick` (phase None).
+  With neither, it changes nothing, as now.
+
+Tests (`test_processing_routes.py`, the tracker `TestNeedsPick` class, real
+`EventSystem`):
+
+- the probe's sequence: download queued, `song_downloaded`, a `get_status`
+  read, then `needs_pick`. The admin's row is `needs_pick`, in Attention,
+  with `pick`; the guest's row is `needs_pick` in Active;
+- a row stamped complete by `processing_complete` (it has `finished_at`)
+  is not touched by a later `needs_pick`;
+- the 5.1c tests pass unchanged.
+
+Commit: `fix(processing): a status read during the caption check no longer
+hides the pick`.
+
+### 8.1c. Whether a listed song is queued comes from the queue
+
+Defect: the Attention list asks the processing manager whether a listed
+song is busy, but the pick page and `pick_lyrics` use `_NeedsPick.picked`,
+which three handlers keep up (`_unpick`, `_on_processing_error`, the
+`processing_cancelled` subscription). The two disagree:
+
+- Cancelling a picked song's job while it waits (`tracker.cancel` →
+  `cancel_pending`) emits no event, so `picked` stays True. The pick page
+  shows "Picked · processing", its row opens no picker, and a pick answers
+  "That song already has a pick." until a restart. Attention offers Pick
+  lyrics meanwhile. This hits songs with no download row: songs listed
+  before a restart, and a playlist's unprocessed songs. A download row's
+  cancel deletes the song, so `song_deleted` clears it.
+- `pick_lyrics` doesn't check whether the song is already waiting or
+  running, and `ProcessingManager.enqueue` doesn't either. After a picked
+  song fails, Retry on its Jobs row plus a new pick queues it twice: two
+  full GPU runs. `routes/processing.retry_song` refuses a busy song; the
+  pick doesn't.
+
+Fix (`library_tools.py`): busy means `is_busy`, everywhere.
+
+- Replace `picked` with `picking: bool = False` (not saved): set under the
+  state lock when a pick starts, cleared in a `finally` once
+  `processing_manager.enqueue` has returned or the pick has failed. It only
+  stops a second request for the same song during those few
+  milliseconds. Once `enqueue` returns, the song is in `pending_jobs`, so
+  `is_busy` takes over.
+- `pick_lyrics`, under the state lock: no entry → "That song isn't waiting
+  for a pick." (as now); `picking` or `is_busy` → "That song is already
+  waiting or processing." (new text, replacing "That song already has a
+  pick."). `write_choice` and `enqueue` run outside the lock, as now.
+- `needs_pick_view`: a song is picked when `picking` or `is_busy`. `pick`
+  and the `picked` count follow from that.
+- Delete `_unpick`, `_on_processing_error` and the `processing_error` and
+  `processing_cancelled` subscriptions. A job that fails or is cancelled
+  leaves the song not busy, so it can be picked again (the Phase 8 row's
+  call 2, now covering a cancel while waiting too).
+- `attention_rows` already uses `is_busy`; it is unchanged.
+
+Tests (`test_library_tools.py`):
+
+- A song picked, then its job cancelled while waiting (`pending_jobs`
+  emptied, no event): the view shows it to pick, and a new pick is taken.
+- A song busy for any reason (a Retry, a regen): the view shows it as
+  picked, and a pick is refused with the new text, with no `enqueue` and
+  no `write_choice`.
+- A second pick while the first is between its check and `enqueue`
+  (`write_choice` patched to call `pick_lyrics` again for the same song):
+  the inner call is refused, and `enqueue` runs once.
+- A failed `write_choice` leaves the song pickable.
+- The existing pick, failure and restart tests, with `picked` read through
+  the view instead of the entry.
+
+Commit: `fix(library): whether a listed song is queued comes from the
+queue`.
+
+### 8.1d. The playlist page and its add agree on what will be processed
+
+Two defects:
+
+- `check_playlist` calls a song `not_processed` when it is in the library
+  and `file_status` says so. `_is_unprocessed`, which `add_playlist` uses,
+  also needs it idle and not listed. The page shows a busy or listed song
+  under "In library, not processed", counts it in "Process M", and the add
+  then drops it silently. The Phase 8 row shows this: a re-check gave
+  `not_processed: 4`, and adding them gave `processing: 0`.
+- `add_playlist` counts every unprocessed song it sends through the check
+  as "sent to processing", including the songs the check lists for a pick.
+  With the Phase 8 playlist (no manual captions), "2 songs sent to
+  processing." was flashed for two songs that went to Attention.
+
+Fix:
+
+- `library_tools.py`:
+  - Split `on_song_downloaded`: the handler takes the song's source from
+    `_playlist_ids` (as now) and calls `_check_download(song_path, source)
+    -> bool`. That holds today's body with 8.1a's guard, and returns True
+    when it queued the song, False when it listed it. `add_playlist` calls
+    `_check_download(song_path, "playlist")` directly and no longer adds
+    unprocessed songs' ids to `_playlist_ids`. The set is then only for
+    downloads that land later.
+  - `_is_unprocessed(song_path)` is the one rule. `check_playlist` uses it
+    for a song in the library that `file_status` calls not processed:
+    True → `not_processed`, False → a new status `waiting` (busy or
+    listed). A `waiting` video carries no `song`. Drop
+    `_is_unprocessed`'s `is_video` test: `file_status` returns
+    `NOT_PROCESSED` only for a video extension (`VIDEO_EXTS`), so it adds
+    nothing.
+  - `add_playlist` returns `{"downloads", "processing", "listed"}`:
+    `processing` counts songs `_check_download` queued, `listed` the ones
+    it listed.
+- `routes/library.py` `playlist_add`: the flash keeps its two parts for
+  `downloads` and `processing`, and adds a third for `listed`: "%(n)d song
+  needs a lyrics pick." / "%(n)d songs need a lyrics pick." (`ngettext`;
+  new text). The warning flash is shown only when all three are zero.
+- `playlist.html`: `waiting` videos get a section of their own after "In
+  library, not processed": "Already waiting (%(n)s)", with the note
+  "Queued for processing or waiting for a lyrics pick." (new text). No box,
+  no tag pill, and not counted in M.
+
+Tests:
+
+- `check_playlist`: a song in the library that is busy, and one that is
+  listed, come back `waiting` with no `song`; an idle unlisted one is
+  `not_processed`, as now.
+- `add_playlist`: one unprocessed song whose check queues and one whose
+  check lists give `processing: 1, listed: 1`. The listed one's entry has
+  source `playlist`, and `_playlist_ids` is empty afterwards.
+- `on_song_downloaded` for an id queued by `add_playlist` still lists with
+  source `playlist` (`TestPlaylistSource` unchanged).
+- Route: the flash for each mix of the three counts, and the warning only
+  at all zero.
+- Render: the `waiting` section text is in the script, and M is counted
+  from `not_processed` only.
+
+Commit: `fix(library): the playlist page and its add agree on what will be
+processed`.
+
+### 8.1e. Cleanup: the needs-a-pick words and "not processed" once each
+
+- The source and reason words ("Playlist", "Download", "no caption",
+  "caption too sparse") are in `routes/library.py` `_needs_pick_json` and
+  again in `processing.html`'s `T.sources`/`T.reasons`. A new reason added
+  to one fails differently in each: a `KeyError` in the route, the raw key
+  on the page.
+  - Word them once in `routes/library.py`, as `needs_pick_subline(source,
+    reason) -> str` ("<source> · <reason>"), used by `_needs_pick_json`.
+  - `routes/processing.py`'s attention route adds `subline` to each
+    `needs_pick` row from it.
+  - `processing.html`'s `subline` shows `row.subline` for such a row, and
+    `T.sources` and `T.reasons` go.
+- `scripts/add_songs.py` still writes `"in library, not processed"` itself
+  (line 205, and the comment at line 69), so 3d26811's "one definition"
+  isn't met. It imports `NOT_PROCESSED` from `library_links` and uses it at
+  both.
+
+Tests: the existing suite; the attention route's needs-pick row carries the
+worded `subline` (both sources, both reasons); the page script no longer
+holds `sources:` or `reasons:`; `add_songs`'s own tests pass unchanged.
+
+Commit: `refactor(library): the needs-a-pick words and "not processed" have
+one definition each`.
+
+### 8.1f. Not fixed, and why (record only; don't change)
+
+- **A listed song's saved path keeps the spelling it was saved with.** If
+  the library folder is given differently between starts (`D:\lib` vs
+  `D:\lib/`), a deleted song can stay listed, and a pick queues a path the
+  library doesn't know. The library scan compares paths as strings, so on
+  such a start the library itself re-spells every song (it reads them as
+  moved); every path-keyed record in the app shares this, and the run
+  handles it only at queue time. Not seen live.
+- **A playlist download that fails or is cancelled leaves its id in
+  `_playlist_ids`** until the session ends. A later plain download of the
+  same video is then listed with the source "Playlist". The label is the
+  only harm, and the set is tiny.
+- **Renaming a listed song leaves the old path listed**, and a pick of it
+  fails each time. This is the same gap as Delete song/Rename leaving
+  files behind, which Ken ruled 2026-10-23 goes to its own branch off
+  `dev` (D9).
+- **Starting the app on another library drops the first library's list**
+  for good, as 7.1c drops a run's songs from another library. Back on the
+  first library its songs show as plain Unfinished, and Retry processes
+  them without asking for a pick.
+- **Two playlist adds from two tabs at once can both queue the same
+  song.** The page's sending flag covers one tab. The result is a
+  duplicate job, not lost or changed files.
+- **Retry on a failed listed song runs it without its pick.** The lyrics
+  stage deletes the choice file when it uses it, so a job that failed
+  after that point retries from the caption or transcribes. Retry is the
+  admin's own choice; the pick page offers the pick again beside it.
+- **Simplicity items left as they are:** the int-not-bool Genius id check
+  is written three times (`_choice_for`, `_valid_pick`, `routes/song_info.py`),
+  two lines each; `playlist_add` checks the body is a dict before the tool
+  does; the watch URL is built in a third place, and the waiting-download
+  check compares URL strings; the playlist page keeps its own link box and
+  Check button (the Phase 8 row's call 5; Ken's Phase 8 check decides);
+  the route tests repeat five of the tool's playlist message cases.
+
+### 8.1g. Verify
+
+- The full suite against the baseline plus the new tests; pre-commit per
+  commit with `--files`; the import smoke (`library_regen`,
+  `library_tools`, `pipeline_tracker`, `routes.library`,
+  `routes.processing`, `karaoke`, `app`, and `scripts/add_songs.py --help`).
+- The three probes, after: `probe_race.py` prints `needs_pick` in group
+  attention with `pick`; `probe1.py` P1 queues the song and the later
+  handler runs, P2 takes the second pick, and P3 refuses the busy song's
+  pick with no `enqueue`. The probes call `_unpick` or read `picked`, so
+  adjust them to the 8.1c names and record the change.
+- Mutation checks, each must fail a test: 8.1a the guard removed, and the
+  word-count catch narrowed back; 8.1b the `_find_called_complete`
+  fallback removed from `_on_needs_pick`; 8.1c the `is_busy` test removed
+  from `pick_lyrics`, and `picking` never cleared; 8.1d `check_playlist`
+  back on `file_status` alone, and `listed` counted as `processing`.
+- One isolated app run, to look only: nothing is queued or downloaded.
+  Check the Ground rules first. Use `C:\temp\p8\appdata` (the short path);
+  hash the scratch library before and after, and the two must match.
+  - Before starting, write one needs-a-pick entry into that app data's
+    `library_tools\state.json` for a scratch-library video with a YouTube
+    id: `source` `playlist`, `reason` `no_caption`. Put the file back to
+    `{"run": null, "needs_pick": []}` after.
+  - Processing → Attention: its row reads "Playlist · no caption" (now the
+    server's words), with Pick lyrics, Song info and Delete song.
+  - Pick lyrics: the list shows it to pick. Don't pick: a pick would queue
+    a GPU run.
+  - Headless Edge at 390 px, as in the Phase 8 row, is fine.
+- The `### Phase 8.1` Results row (raw facts) and the status block, in
+  their own docs(plan) commit.
 
 ## Phase 9: docs, end to end, landing list
 
