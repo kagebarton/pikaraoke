@@ -170,17 +170,21 @@
       $('#lr-recheck').prop('disabled', state.sending);
     }
 
+    function picksLeft(run) {
+      return run.to_pick - run.picked > 0;
+    }
+
     function renderActions(run) {
       var go = $('#lr-go');
       if (run.checking) {
         go.text(T.checkingNow).prop('disabled', true);
-      } else if (run.to_pick > 0) {
+      } else if (picksLeft(run)) {
         go.text(fill(T.startPicks, { k: run.picked, n: run.to_pick })).prop('disabled', false);
       } else {
         go.text(fill(run.queueable === 1 ? T.queueOne : T.queueMany, { n: run.queueable }))
           .prop('disabled', run.queueable === 0 || state.sending);
       }
-      $('#lr-after-picks').toggleClass('is-hidden', !(run.to_pick > 0));
+      $('#lr-after-picks').toggleClass('is-hidden', !picksLeft(run));
       $('#lr-cancel').toggleClass('is-hidden', state.discarding);
       $('#lr-confirm').toggleClass('is-hidden', !state.discarding);
     }
@@ -215,7 +219,7 @@
     /* --------------------------------------------------------------- actions */
 
     $('#lr-go').on('click', function () {
-      if (state.run.to_pick > 0) {
+      if (picksLeft(state.run)) {
         window.location.href = URLS.picks;
         return;
       }

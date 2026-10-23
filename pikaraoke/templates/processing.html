@@ -668,7 +668,7 @@ function renderRun() {
   if (!run) return;
   var vars = { mode: T.runNames[run.mode], k: run.picked, n: run.to_pick };
   if (run.checking) vars = { mode: vars.mode, k: run.checked, n: run.to_check };
-  var text = run.checking ? T.runChecking : (run.to_pick > 0 ? T.runPicks : T.runReady);
+  var text = run.checking ? T.runChecking : (run.to_pick - run.picked > 0 ? T.runPicks : T.runReady);
   $('#pr-run-text').text(fill(text, vars));
   $('#pr-run-buttons').toggleClass('is-hidden', state.discarding);
   $('#pr-run-confirm').toggleClass('is-hidden', !state.discarding);
