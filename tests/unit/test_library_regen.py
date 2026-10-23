@@ -965,6 +965,8 @@ class TestPrepareRegenJob:
         lrc.write_text("[lrclib_id:5]\n[00:01.00]hi\n", encoding="utf-8")
         clear = MagicMock()
         monkeypatch.setattr(lr, "clear_output_folders", clear)
+        write_choice = MagicMock()  # a regression must not write a real sidecar
+        monkeypatch.setattr(lr, "write_choice", write_choice)
         genius = MagicMock()
         genius.fetch_song.side_effect = lr.GeniusUnavailable("503")
 
@@ -973,6 +975,7 @@ class TestPrepareRegenJob:
 
         genius.fetch_song.assert_called_once_with(1)
         clear.assert_not_called()
+        write_choice.assert_not_called()
         assert ass.read_text(encoding="utf-8") == "old"
         assert lrc.read_text(encoding="utf-8") == "[lrclib_id:5]\n[00:01.00]hi\n"
 
