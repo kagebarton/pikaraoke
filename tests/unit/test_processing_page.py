@@ -126,6 +126,14 @@ class TestProcessingPage:
         assert 'href="/library/run"' in body
         assert 'id="pr-run-confirm"' in body and "Discard this run and its picks?" in body
 
+    def test_the_library_tab_has_the_add_playlist_card_that_waits_for_a_link(self, env):
+        body = get(env, "/processing", admin=True).get_data(as_text=True)
+
+        assert 'id="pr-playlist-url"' in body and 'type="url"' in body
+        button = body[body.index('id="pr-playlist-check"') :].split("</button>")[0]
+        assert "disabled" in button and "Check playlist" in button
+        assert '"/library/playlist"' in body
+
     def test_a_row_waiting_for_a_pick_has_a_tag_and_a_way_to_the_pick_page(self, env):
         body = get(env, "/processing", admin=True).get_data(as_text=True)
 
@@ -138,7 +146,7 @@ class TestProcessingPage:
         body = get(env, "/processing", admin=False).get_data(as_text=True)
 
         assert "isAdmin ? ['needspick', T.needsPick] : ['waiting', T.waiting]" in body
-        assert "/library/picks" not in body
+        assert 'id="pr-playlist-url"' not in body and "/library/picks" not in body
 
     def test_the_page_takes_fill_from_the_shared_file(self, env):
         body = get(env, "/processing", admin=True).get_data(as_text=True)

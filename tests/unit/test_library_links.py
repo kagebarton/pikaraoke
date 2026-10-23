@@ -18,6 +18,29 @@ VID_B = "abcdefghijk"
 # ---------------------------------------------------------------------------
 
 
+class TestIsVideoId:
+    @pytest.mark.parametrize("value", [VID_A, VID_B, "a-b_c-d_e-f", "___________"])
+    def test_eleven_url_safe_characters_are_an_id(self, value):
+        assert library_links.is_video_id(value) is True
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "",
+            "short",
+            VID_A + "x",
+            "has space!!",
+            "ünicode-ünic",
+            VID_A + "\n",  # fullmatch: a trailing newline is not part of an id
+            None,
+            5,
+            ["dQw4w9WgXcQ"],
+        ],
+    )
+    def test_anything_else_is_not(self, value):
+        assert library_links.is_video_id(value) is False
+
+
 class TestClassifyUrl:
     def test_video_watch_url(self):
         url = f"https://www.youtube.com/watch?v={VID_A}"

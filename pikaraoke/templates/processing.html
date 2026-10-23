@@ -137,6 +137,13 @@
       </div>
     </div>
     <p class="pr-muted mt-2">{% trans %}Regen jobs wait behind new downloads. Each song's lyric files are backed up first.{% endtrans %}</p>
+
+    <div class="pr-sec"><span>{% trans %}Add playlist{% endtrans %}</span></div>
+    <div class="pr-card pr-banner">
+      <label for="pr-playlist-url" class="pr-muted">{% trans %}YouTube playlist link{% endtrans %}</label>
+      <input id="pr-playlist-url" class="input" type="url" autocomplete="off" placeholder="https://www.youtube.com/playlist?list=…">
+      <button type="button" id="pr-playlist-check" class="button is-link" disabled>{% trans %}Check playlist{% endtrans %}</button>
+    </div>
   </div>
   {% else %}
   <p class="pr-muted">{% trans %}Songs being downloaded and prepared for karaoke.{% endtrans %}</p>
@@ -266,6 +273,7 @@ var URLS = {
   clearFinished: {{ url_for('processing.clear_finished') | tojson }},
   retrySong: {{ url_for('processing.retry_song') | tojson }},
   picks: {{ url_for('library.picks_page') | tojson }},
+  playlistPage: {{ url_for('library.playlist_page') | tojson }},
   songInfo: {{ url_for('song_info.song_info') | tojson }},
   deleteFile: {{ url_for('files.delete_file') | tojson }},
   cancel: {{ url_for('processing.cancel_item', item_id='ITEM_ID') | tojson }},
@@ -867,6 +875,22 @@ $(document).on('click.processing', '.pr-run-open', function () {
     button.prop('disabled', false);
   });
 });
+
+// The playlist page reads the link and says what adding it would do.
+function checkPlaylist() {
+  var url = $.trim($('#pr-playlist-url').val());
+  if (url) window.location.href = URLS.playlistPage + '?url=' + encodeURIComponent(url);
+}
+
+$(document).on('input.processing', '#pr-playlist-url', function () {
+  $('#pr-playlist-check').prop('disabled', !$.trim($(this).val()));
+});
+
+$(document).on('keydown.processing', '#pr-playlist-url', function (e) {
+  if (e.which === 13) { e.preventDefault(); checkPlaylist(); }
+});
+
+$(document).on('click.processing', '#pr-playlist-check', checkPlaylist);
 
 $(document).on('click.processing', '.pr-link[data-list]', function () {
   var name = $(this).attr('data-list');

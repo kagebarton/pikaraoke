@@ -25,6 +25,7 @@ from pikaraoke.lib import lrclib
 from pikaraoke.lib.alignment_capture import SCHEMA_VERSION
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.genius import GeniusSong, GeniusUnavailable, read_choice
+from pikaraoke.lib.library_links import Playlist, PlaylistVideo
 from pikaraoke.lib.library_regen import CaptionCheck
 from pikaraoke.lib.library_tools import LibraryTools
 from pikaraoke.lib.song_list import SongList
@@ -1588,3 +1589,185 @@ class TestNeedsPickRoute:
         assert response.status_code == 400
         env.processing.enqueue.assert_not_called()
         assert env.k.library_tools.needs_pick_view()["picked"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Playlists
+# ---------------------------------------------------------------------------
+
+PLAYLIST_LINK = "https://www.youtube.com/playlist?list=PLabc"
+
+
+class TestPlaylistPage:
+    def test_a_guest_is_sent_back_to_the_browser(self, env):
+        env.admin = False
+
+        response = env.client.get("/library/playlist")
+
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/__stub/files.browse")
+
+    def test_the_page_opens_with_the_link_the_tools_tab_passed(self, env):
+        response = env.client.get("/library/playlist", query_string={"url": f" {PLAYLIST_LINK} "})
+        html = text(response)
+
+        assert response.status_code == 200
+        assert "<h1>Add playlist</h1>" in html
+        assert f'value="{PLAYLIST_LINK}"' in html
+        assert "/library/playlist/check" in html and "/library/playlist/add" in html
+
+    def test_a_link_goes_into_the_page_as_text_never_as_markup(self, env):
+        html = text(env.client.get("/library/playlist", query_string={"url": '"><b>x</b>'}))
+
+        assert "<b>x</b>" not in html
+        assert "&#34;&gt;&lt;b&gt;x&lt;/b&gt;" in html
+
+    def test_the_page_shows_the_three_steps_and_takes_its_helpers_from_the_shared_file(self, env):
+        html = text(env.client.get("/library/playlist"))
+        code = html[html.rindex("<script>", 0, html.index("var URLS")) :]
+        code = code[: code.index("</script>")]
+
+        assert "Videos download one at a time" in html
+        assert 'under "Attention" on the Processing page' in html
+        assert ".html(" not in code and ".innerHTML" not in code
+        assert_loads_shared_helpers(html, code)
+
+    def test_the_button_follows_the_boxes_and_is_disabled_at_zero(self, env):
+        html = text(env.client.get("/library/playlist"))
+
+        assert "var k = takenNew().length;" in html
+        assert "prop('disabled', (k + m) === 0 || state.sending)" in html
+        assert "Download %(k)s and process %(m)s" not in html  # the slots reach the page as {k}
+        assert "Download {k} and process {m}" in html
+
+
+class TestPlaylistCheckRoute:
+    @staticmethod
+    def read_as(monkeypatch, playlist):
+        monkeypatch.setattr("pikaraoke.lib.library_tools.read_playlist", lambda url: playlist)
+
+    def test_a_guest_cannot_check(self, env, monkeypatch):
+        env.admin = False
+        self.read_as(monkeypatch, Playlist("x", []))
+
+        response = env.client.post("/library/playlist/check", json={"url": PLAYLIST_LINK})
+
+        assert response.status_code == 403
+
+    def test_it_answers_with_each_videos_status(self, env, monkeypatch):
+        env.add_song("Have---bbbbbbbbbbb.mp4", poor_genius_bundle())
+        self.read_as(
+            monkeypatch,
+            Playlist(
+                "Hits", [PlaylistVideo("aaaaaaaaaaa", "New"), PlaylistVideo("bbbbbbbbbbb", "Have")]
+            ),
+        )
+
+        response = env.client.post("/library/playlist/check", json={"url": PLAYLIST_LINK})
+
+        playlist = response.get_json()["playlist"]
+        assert playlist["title"] == "Hits"
+        assert [(v["id"], v["status"]) for v in playlist["videos"]] == [
+            ("aaaaaaaaaaa", "new"),
+            ("bbbbbbbbbbb", "in_library"),
+        ]
+
+    @pytest.mark.parametrize(
+        "body, message",
+        [
+            ({"url": "https://youtu.be/dQw4w9WgXcQ"}, "Use the search page to add single videos."),
+            ({"url": "https://youtu.be/dQw4w9WgXcQ?list=PLabc"}, "Paste the playlist page link"),
+            ({"url": "not a link"}, "Paste a YouTube playlist link."),
+            ({}, "Paste a YouTube playlist link."),
+            ({"url": 5}, "Paste a YouTube playlist link."),
+        ],
+    )
+    def test_a_link_that_is_not_a_playlist_gets_its_message(self, env, body, message):
+        response = env.client.post("/library/playlist/check", json=body)
+
+        assert response.status_code == 400
+        assert message in response.get_json()["error"]
+
+    def test_a_body_that_is_not_json_gets_the_same_message(self, env):
+        response = env.client.post("/library/playlist/check", data="nope")
+
+        assert response.status_code == 400
+        assert "Paste a YouTube playlist link." in response.get_json()["error"]
+
+    def test_a_playlist_that_cannot_be_read_says_so(self, env, monkeypatch):
+        def fail(url):
+            raise ValueError("not json")
+
+        monkeypatch.setattr("pikaraoke.lib.library_tools.read_playlist", fail)
+
+        response = env.client.post("/library/playlist/check", json={"url": PLAYLIST_LINK})
+
+        assert response.status_code == 400
+        assert response.get_json()["error"] == "Couldn't read that playlist."
+
+
+class TestPlaylistAddRoute:
+    def flashes(self, env) -> list:
+        with env.client.session_transaction() as session:
+            return session.get("_flashes", [])
+
+    def add(self, env, **body):
+        return env.client.post("/library/playlist/add", json=body)
+
+    def test_a_guest_cannot_add(self, env):
+        env.admin = False
+
+        response = self.add(env, videos=[{"id": "aaaaaaaaaaa", "title": "x"}], unprocessed=[])
+
+        assert response.status_code == 403
+        env.downloads.queue_download.assert_not_called()
+
+    def test_the_chosen_videos_are_queued_and_a_note_is_left_for_the_processing_page(self, env):
+        response = self.add(
+            env,
+            videos=[{"id": "aaaaaaaaaaa", "title": "One"}, {"id": "bbbbbbbbbbb", "title": "Two"}],
+            unprocessed=[],
+        )
+
+        assert response.get_json() == {"success": True, "downloads": 2, "processing": 0}
+        assert env.downloads.queue_download.call_count == 2
+        [(category, message)] = self.flashes(env)
+        assert (category, message) == ("is-success", "Added 2 videos to the download queue.")
+
+    def test_the_note_counts_the_songs_sent_to_processing_too(self, env, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            "pikaraoke.lib.genius.get_temp_directory", lambda *a: str(tmp_path / "tmp")
+        )
+        monkeypatch.setattr("pikaraoke.lib.library_regen.probe_duration", lambda path: 60.0)
+        song = env.add_song("Old---ddddddddddd.mp4")  # downloaded earlier, never processed
+        subtitles = env.folder / "subtitles"
+        subtitles.mkdir()
+        (subtitles / "Old---ddddddddddd.srt").write_text(
+            "1\n00:00:01,000 --> 00:00:04,000\n" + " ".join(["la"] * 60) + "\n", encoding="utf-8"
+        )
+
+        response = self.add(env, videos=[{"id": "ccccccccccc", "title": "One"}], unprocessed=[song])
+
+        assert response.get_json() == {"success": True, "downloads": 1, "processing": 1}
+        env.processing.enqueue.assert_called_once_with(song)
+        [(_category, message)] = self.flashes(env)
+        assert message == "Added 1 video to the download queue. 1 song sent to processing."
+
+    def test_a_selection_with_nothing_to_take_says_so(self, env):
+        response = self.add(env, videos=[{"id": "short", "title": "x"}], unprocessed=[])
+
+        assert response.get_json()["downloads"] == 0
+        [(category, message)] = self.flashes(env)
+        assert category == "is-warning" and message.startswith("Nothing to add")
+
+    @pytest.mark.parametrize("body", [{}, {"videos": []}, {"videos": "a", "unprocessed": []}])
+    def test_a_request_that_is_not_two_lists_is_refused(self, env, body):
+        response = self.add(env, **body)
+
+        assert response.status_code == 400
+        assert not self.flashes(env)
+
+    def test_a_body_that_is_not_json_is_refused(self, env):
+        response = env.client.post("/library/playlist/add", data="nope")
+
+        assert response.status_code == 400
