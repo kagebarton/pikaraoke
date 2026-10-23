@@ -14,7 +14,10 @@ Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 > `d280722`..`1bc3c29`. Ken's checks for Phase 7 (covering 7.1) ran
 > 2026-10-23 and passed (record `01d9475`). Phase 7.2 (two fixes from
 > that check, ruled by Ken 2026-10-23) is done too, code `71d565e` and
-> `2c352b4`. Next: Phase 8, when Ken says so.** Ken
+> `2c352b4`. Phase 8 (the after-download check and needs-a-pick list, the
+> pick page, and playlists) is executed, code `1a26b68` and `3d26811`;
+> a code review is due, then Ken's Phase 8 checks. Next: Phase 9, after
+> the review and Ken's say.** Ken
 > approved D2's Phase 3.1 bullet on 2026-10-20. Branch
 > `web_library_tools`, off `library_tools` at `0bfa02a`; `dev` merged as
 > `c34d889`. There is no GATE and nothing here measures timing. Landing is
@@ -4304,5 +4307,167 @@ for this row: `...\5f459679-8ee1-4028-ade6-efafb3573f16\scratchpad\`. Two code c
 - **Differences from the plan's text:** none.
 
 ### Phase 8
+
+Executed 2026-10-23 by Sonnet 5.5 (session `7c41e33d`), starting from `0552146` (clean). Scratchpad for
+this row: `...\7c41e33d-b508-4b41-8c26-8efd77d9542a\scratchpad\`. Two code commits, in order:
+
+- `1a26b68` 8a+8b feat(library): downloads without a pick get the caption check and a needs-a-pick list
+  (11 files, +1056/-64: `karaoke.py`, `library_tools.py`, `pipeline_tracker.py`,
+  `processing_manager.py` (a docstring), `routes/library.py`, `pick_pass.html`, `processing.html`,
+  and four test files).
+- `3d26811` 8c feat(library): add a YouTube playlist from the Processing page (9 files, +971/-6:
+  `library_links.py`, `library_tools.py`, `routes/library.py`, `playlist.html` (new),
+  `processing.html`, and four test files).
+
+The tree was built whole, tested and run live, then split into the two commits by stripping the
+playlist parts for the first (script `strip_playlist.py`), so the first commit's tree was tested on
+its own (below).
+
+- **Baseline** (`uv run --no-sync python -P -m pytest tests/unit -q`, at `0552146`, 144.8 s): **4
+  failed, 2103 passed, 2 skipped**; the four are the baseline's four ids.
+- **Suite at `1a26b68`** (146.6 s): 4 failed, **2171 passed**, 2 skipped (+68). **At `3d26811`**
+  (149.6 s): 4 failed, **2243 passed**, 2 skipped (+72); the same four ids both times.
+- **New tests** (collected counts): `test_library_tools.py` `TestAfterDownloadCheck` 10,
+  `TestPickLyrics` 13, `TestWhenAListedSongLeaves` 5, `TestNeedsPickAcrossARestart` 13,
+  `TestNeedsPickView` 1, `TestPlaylistSource` 2, `TestCheckPlaylist` 15, `TestAddPlaylist` 19;
+  `test_library_routes.py` `TestPicksPage` 7, `TestNeedsPickRoute` 9, `TestPlaylistPage` 5,
+  `TestPlaylistCheckRoute` 9, `TestPlaylistAddRoute` 8; `test_processing_routes.py` `TestNeedsPick`
+  (tracker) 8; `test_library_links.py` `TestIsVideoId` 13; `test_processing_page.py` +3 (the Add
+  playlist card, the tag and link for a row waiting for a pick, the guest's waiting song).
+  Changed tests: `test_processing_page.py` `test_the_script_rebinds_its_handlers...` now expects
+  `$(document).off('.processing')` (was `'click.processing'`); the four `LibraryTools(...)` calls in
+  the test files take `events` and `download_manager`.
+- **Windows trap found by a test, not changed:** `genius.write_choice` renames its temp file onto
+  the choice file with `Path.rename`, which raises `FileExistsError` on Windows when the target
+  exists (the cause of the baseline's `test_write_overwrites_existing` failure). On Windows a pick for
+  a song whose choice file is still there answers "Could not save that pick."; the file is gone when
+  the lyrics stage has used it, so a re-pick after a failed job works. `genius.py` is not in D1, so it
+  is untouched; the re-pick test deletes the file first, as the pipeline does. Linux replaces it.
+- **8a, as built.** `LibraryTools(..., events, download_manager)`; `on_song_downloaded` is wired in
+  `karaoke.py` after the tracker in place of the processing manager's subscription (LibraryTools is
+  built just before it). Order of the checks: not a video, no YouTube id, blocked title, or a choice
+  file already there -> queue; else `gate_on_disk_caption`: passes -> queue; otherwise listed with
+  `no_caption` or `sparse_caption` (the sparse caption file is deleted by the gate), `source`
+  `playlist` when the id was queued by `add_playlist` (8c) and `download` otherwise. An `OSError`
+  from the gate queues the song as before. The list is `_NeedsPick` entries in `state.json` beside
+  the run (`{"run": ..., "needs_pick": [...]}`; `picked` is not saved). `processing_complete` and
+  `song_deleted` drop an entry. Tracker: `needs_pick` status kept like `complete`/`error`; actions
+  `["remove", "pick", "song_info"]` for an admin; `remove` deletes the song directly (no cancel).
+  `attention_rows` adds entries with no tracker row after the failed and unfinished rows, with
+  `reason`, `source`, actions `["pick", "song_info", "delete"]`; a listed song is left out of the
+  database's failed/unfinished rows.
+- **Calls the plan did not settle** (made here, for Ken to see):
+  1. A guest's row for a song waiting for a pick stays in **Getting ready** with a Waiting tag
+     (the admin's is in Attention): decision 16, nothing is wrong from the guest's side. In the
+     server's ordering it ranks after the queued jobs.
+  2. A listed song whose queued job fails (`processing_error`) or is cancelled
+     (`processing_cancelled`) can be picked again (`picked` cleared); the plan only had
+     `processing_complete` and `song_deleted` end an entry. Without it the row would read "Picked ·
+     processing" for good.
+  3. `_on_processing_queued` sets a `needs_pick` row back to `waiting` (a pick queued it), so a
+     Remove clicked before the next status read cannot reach a job that is already queued.
+  4. The pick page's list mode shows no Looks poor chip, no progress sentence about saving, and a
+     picked song's row does not open a picker.
+  5. The Add playlist page has a Check button beside the link box (the board shows none), and the
+     button reads "Download K", "Process M" or "Download K and process M" by what is selected.
+  6. Wording added: "Paste a YouTube playlist link." (a link that is not YouTube), "Nothing to add:
+     those songs are already in the library or waiting." (flash, `is-warning`), "Added N videos to
+     the download queue." and "N songs sent to processing." (flash, `is-success`). The board's step
+     3 says "Needs attention"; the page says "Attention", the name of the chip.
+- **8c, as built.** `check_playlist` and `add_playlist` as the plan describes; `add_playlist` also
+  leaves out a video already waiting or downloading (`download_manager.pending_downloads` and
+  `active_url`) and a duplicate id, caps a title at 200 characters, and takes an unprocessed song
+  only when it is in the library, a video, not busy, not already listed and still
+  `in library, not processed`. `library_links.is_video_id` and `NOT_PROCESSED` are new (D1 lists
+  `library_links.py`). Routes: `GET /library/playlist` (page, link from `?url=`),
+  `POST /library/playlist/check`, `POST /library/playlist/add`, all admin only.
+- **Isolated app run** (Ground rules checked first: nothing on 5555 or 5556, no python, mpv or
+  pikaraoke process, GPU 970 MiB; port 9333 held by two `msedge` processes from 2026-10-22, not
+  touched, the driver used 9334). The first start used the Phase 3 scratch `APPDATA`; its deep
+  path made **"Hello" fail in stem separation with `Error exporting audio file: [Errno 2] No such
+  file or directory`** (the output path was about 267 characters; "Someone Like You" would have
+  been about 262; Windows' 260 limit). The app was stopped with `taskkill /F /T`, its `APPDATA`
+  copied without `tmp` to **`C:\temp\p8\appdata`** (short path) and the app restarted there; every
+  later run used that. Library `D:\shared\weblib-test`, admin password empty, 258 files hashed
+  before (`scratch_before_p8.json`). Logs `app_run_phase8.log.err` (first start),
+  `app_run_phase8b.log.err`, `app_run_phase8c.log.err`; the only ERROR lines before the runs are the
+  yt-dlp self-upgrade. Headless Edge at 390 px (`cdp8.py`, port 9334, profile `edgeprofile8`;
+  steps `steps8a.py`, `steps8b.py`, `steps8c.py`, `steps8d.py`; output `drive8a.txt` to
+  `drive8d.txt`; screenshots in `p8shots\`: `01_attention_row`, `02_picks_list`, `03_picker_open`,
+  `04_picked`, `05_tools_playlist_card`, `06_playlist_checked`, `07_playlist_unchecked`,
+  `08_after_add`, `09_attention_after_restart`, `10_delete_confirm`).
+  - **A download with no manual caption (plain download box).** "Someone Like You - Adele
+    (Karaoke Songs With Lyrics)" (`rMSQwIp4Jg8`): log `needs a lyrics pick (no_caption)`; row
+    `proc=needs_pick`, group attention, actions `['remove', 'pick', 'song_info']`; page row "Download
+    · no caption", tag "Needs a pick", buttons Pick lyrics (`/library/picks`), Song info, Delete song.
+    The pick page: h1 "Pick lyrics", back link "‹ Processing" -> `/processing#jobs`, "0 of 1 picked",
+    chips To pick 1 / Picked 0 (no Looks poor), 0 footer buttons, the search box prefilled "Someone Like
+    You - Adele", picker buttons Transcribe and Use pick only; after selecting the Adele hit and Use
+    pick: "1 of 1 picked", To pick 0 / Picked 1, the Picked tab row "Picked · processing" with no
+    buttons, and tapping it opened no picker. The screenshots (390 px) were read by eye.
+  - **A download with a passing caption.** "ABBA - Mamma Mia" (`unfzfe8f9NI`, manual `en`): log
+    `Queued for pipeline` at once, `Lyrics: YouTube SRT`, never listed; its first run was cut off by
+    the restart above (an `Unfinished` row), **retried from that row: `lyric_method` `srt+cue_align`**,
+    `karaoke/...ass` and `alignment_debug/...json` written.
+  - **A search-picker download.** `POST /lyrics_select` `{"yt_id": "doWWkG2gPPE", "genius_id":
+    2332455}` then `/download` for "Hello - Adele": log `Queued for pipeline` with no listing,
+    `Lyrics: Genius — 'Hello' by 'Adele' (genius #2332455)`, `LRCLIB: variant available for fill`.
+    Its second run (the first was lost to the path limit above; the song was deleted from its
+    Attention row and downloaded again the same way) **failed in Whisper:**
+    `Whisper align_refine failed ... AttributeError: 'NoneType' object has no attribute 'language'`
+    (`stable_whisper` `align` returned nothing; the log before it: `transcribe yield 0.0 wpm`,
+    `Failed to transcribe audio. Result contains no text`, a de-reverb retry, then the align). "Someone
+    Like You" (picked on the new page, Genius #51294, LRCLIB variant found) failed the same way, and
+    "Shallow" (picked Transcribe) with `Whisper transcribe_refine failed ... IndexError: list index out
+    of range`. All three are Musisi "Karaoke Songs With Lyrics" videos; their `vocal.m4a` are 7.4 MB
+    (Hello), 235 KB (Someone Like You) and 214 KB (Shallow) for 3 to 5 minute songs. Not
+    investigated; the code that fails is `whisper_worker.py` after the lyrics stage, which this
+    phase does not touch.
+  - **A no-caption song with vocals, end to end.** "Ed Sheeran - Shape Of You [Official Lyric
+    Video]" (`_dK2tDK9grQ`, no manual caption): downloaded through the plain box, listed (`needs_pick`),
+    picked Genius #2949128 through `POST /library/needs_pick/pick` (`to_pick 4, picked 1`), processed:
+    **`lyric_method` `genius+joint`**, `lyrics/...lrc` written with `[lrclib_id:37713208]`, `karaoke`
+    and `alignment_debug` written; the song left the list on completion (`to_pick 3`).
+  - **A failed or cancelled job offers the pick again:** after the three Whisper failures the pick
+    list read `to_pick 3, picked 0` ("Someone Like You", "Shallow", "Wannabe"). A second pick of
+    "Shallow" while it was queued answered 400 `That song already has a pick.`
+  - **Playlist** `PLRxQryWW8Yw1hcJrE_Aip8wJCPeSh2Ahe` (the Phase 2C one, 17 videos, none with a
+    manual `en` caption: `probe_playlist.txt`). Library tools tab: the Check playlist button
+    disabled until a link is typed; the page then showed `Musisi Karaoke BEST 10 | Popular Karaoke
+    Songs · 17 videos`, `15 new`, `2 not processed` ("Someone Like You" and "Hello", both in progress
+    then), `0 in library`; sections "New: will download (15)" and "In library, not processed (2)" with
+    "Downloaded earlier but never finished. Will be processed."; button "Download 15 and process 2".
+    With 13 boxes unchecked ("Left out" shown on each): "Download 2 and process 2". Add -> `/processing#jobs`,
+    one toast "Added 2 videos to the download queue.", the two rows downloading `by Playlist`, then
+    `needs_pick` rows in Attention. A re-check: `{'new': 13, 'not_processed': 4}`; adding the four
+    unprocessed songs: `{'downloads': 0, 'processing': 0}` (two busy, two already listed). Links:
+    `watch?v=...` -> "This is a link to one video. Use the search page to add single videos.";
+    `watch?v=...&list=...` -> "This link opens one video in a playlist. Paste the playlist page
+    link (youtube.com/playlist?list=…) to add the whole list."; `hello` -> "Paste a YouTube playlist link."
+  - **Restart.** After each of two `taskkill` restarts (temp folder dropped as a clean exit does):
+    the Attention list held the listed songs once each, in order failed, unfinished, needs-pick,
+    with `source: playlist` on the two playlist songs, and "Someone Like You" (whose job had failed)
+    only as needs-pick, not also as failed; no pick survived (`picked 0`).
+  - **Delete.** "Wannabe" deleted from its Attention row (confirm in the row: "Delete this song from
+    the library?"): gone from Attention, from the pick list (`to_pick 2`) and from `state.json`.
+  - App stopped with `taskkill /F /T`; my headless Edge processes (profile `edgeprofile8`) stopped;
+    afterwards 5555, 5556 and 9334 free (9333 is the older Edge, not mine). Scratch library after:
+    258 before, 285 after, 27 added, 0 removed, 0 changed, 258 identical; the 27 added files deleted
+    (`restore_scratch.py`), re-hashed: **258 identical, added 0, removed 0, changed 0**.
+    `C:\temp\p8\appdata` reset: `state.json` `{"run": null, "needs_pick": []}`, `tmp` removed.
+  - Ken's real temp folder `%APPDATA%\pikaraoke\tmp\lyric_choices` held 0 files after the test runs.
+- **Real-library manifest:** `manifest.py compare "D:/Shared/pikaraoke-songs"` against the Phase 0
+  manifest: `manifest=2605 now=2616 added=11 removed=0 changed=1`, all under `zh_probe/`, as in the
+  earlier rows (`manifest_compare_phase8.txt`).
+- **pre-commit:** `--files` per code commit; at each, Black reformatted one file (the tests at the first
+  run of the full tree, `library_tools.py` once on the stripped tree), restaged, then every hook
+  passed. A strip script wrote CRLF once on Windows; the six files were converted back to LF before
+  the first commit (`git diff --check` clean). Import smoke: `karaoke`, `app`, `routes.library`,
+  `library_tools`, `library_links`. pre-commit was not run on this plan file (CLAUDE.md excludes
+  `plans/`; run once by mistake, the markdown hook reformatted the whole file and that was reverted).
+- **Differences from the plan's text:** the live playlist step downloaded 2 of the 17 videos (13 of
+  the 15 new ones left out) instead of "the rest", because each download is a full GPU run and the
+  videos have no captions; the "captioned songs process" case was shown with a direct download
+  (ABBA) because no video in that playlist has a manual caption. Review due (see the relay).
 
 ### Phase 9
