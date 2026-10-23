@@ -40,6 +40,7 @@ from pikaraoke.lib.get_platform import (  # noqa: E402
 )
 from pikaraoke.lib.karaoke_database import KaraokeDatabase  # noqa: E402
 from pikaraoke.lib.library_links import (  # noqa: E402
+    NOT_PROCESSED,
     classify_url,
     expand_playlist,
     file_status,
@@ -66,7 +67,7 @@ logger = logging.getLogger(__name__)
 class UrlEntry:
     id: str
     source: str
-    status: str  # "new" | "already in library" | "in library, not processed"
+    status: str  # "new" | "already in library" | NOT_PROCESSED
 
 
 def resolve_urls(urls: list[str], library: dict[str, Path]) -> tuple[list[UrlEntry], int]:
@@ -202,7 +203,7 @@ def main() -> int:
     entries, unreadable = resolve_urls(args.urls, library)
     print_report(entries)
     to_download = [e for e in entries if e.status == "new"]
-    unprocessed = [library[e.id] for e in entries if e.status == "in library, not processed"]
+    unprocessed = [library[e.id] for e in entries if e.status == NOT_PROCESSED]
 
     if args.dry_run:
         return 0 if unreadable == 0 else 1
