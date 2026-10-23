@@ -27,7 +27,12 @@ from pikaraoke.lib.genius import (
     write_choice,
 )
 from pikaraoke.lib.library_links import Playlist, PlaylistVideo
-from pikaraoke.lib.library_regen import CaptionCheck, RegenError, RegenJob
+from pikaraoke.lib.library_regen import (
+    CaptionCheck,
+    RegenError,
+    RegenJob,
+    gate_on_disk_caption,
+)
 from pikaraoke.lib.library_tools import (
     PLAYLIST_NOT_A_LINK,
     PLAYLIST_ONE_VIDEO,
@@ -1798,18 +1803,37 @@ class TestAfterDownloadCheck:
         download.processing.enqueue.assert_called_once_with(str(plain))
         assert listed(download.tools) == []
 
-    def test_a_caption_that_cannot_be_checked_is_queued_as_before(self, download, monkeypatch):
+    @pytest.mark.parametrize("error", [OSError("locked"), RuntimeError("boom")])
+    def test_a_check_that_fails_queues_the_song_as_before_and_later_handlers_still_run(
+        self, download, monkeypatch, caplog, error
+    ):
+        def fail(job):
+            raise error
+
+        monkeypatch.setattr("pikaraoke.lib.library_tools.gate_on_disk_caption", fail)
         write_caption(download.folder, STEM, words=3)
+        later = []
+        events = download.tools._events
+        events.on("song_downloaded", download.tools.on_song_downloaded)
+        events.on("song_downloaded", later.append)
 
-        def disk_error(job):
-            raise OSError("locked")
+        events.emit("song_downloaded", download.song)
 
-        monkeypatch.setattr("pikaraoke.lib.library_tools.gate_on_disk_caption", disk_error)
+        download.processing.enqueue.assert_called_once_with(download.song)
+        assert listed(download.tools) == []
+        assert later == [download.song]
+        assert f"Lyrics check of {Path(download.song).name} failed" in caplog.text
+
+    def test_a_caption_that_cannot_be_read_does_not_stop_the_download(self, download):
+        caption = download.folder / "subtitles" / f"{STEM}.srt"
+        caption.parent.mkdir()
+        caption.write_bytes("1\n00:00:01,000 --> 00:00:04,000\ncafé la la\n".encode("latin-1"))
 
         download.tools.on_song_downloaded(download.song)
 
         download.processing.enqueue.assert_called_once_with(download.song)
         assert listed(download.tools) == []
+        assert caption.exists()  # it may be the admin's own file
 
     def test_a_listed_song_is_not_called_unfinished(self, download):
         download.tools._song_manager.get_paths_by_pipeline_state.side_effect = lambda wanted: (
@@ -2316,6 +2340,23 @@ class TestAddPlaylist:
             "playlist",
             "no_caption",
         )
+
+    def test_a_check_that_fails_does_not_stop_the_songs_after_it(self, download, monkeypatch):
+        second = make_video(download.folder, "Second---aaaaaaaaaaa")
+        download.tools._song_manager.songs.update([download.song, str(second)])
+        check = gate_on_disk_caption
+
+        def fail_for_the_first(job):
+            if job.song_path == Path(download.song):
+                raise RuntimeError("boom")
+            return check(job)
+
+        monkeypatch.setattr("pikaraoke.lib.library_tools.gate_on_disk_caption", fail_for_the_first)
+
+        download.tools.add_playlist([], [download.song, str(second)])
+
+        download.processing.enqueue.assert_called_once_with(download.song)
+        assert [r["song_path"] for r in listed(download.tools)] == [str(second)]
 
     def test_a_song_that_is_busy_listed_processed_or_not_in_the_library_is_skipped(self, download):
         busy = make_video(download.folder, "Busy---bbbbbbbbbbb")
