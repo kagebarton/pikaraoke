@@ -196,14 +196,6 @@ var T = {
   unfinished: {{ _('Unfinished') | tojson }},
   needsPick: {{ _('Needs a pick') | tojson }},
   pickLyrics: {{ _('Pick lyrics') | tojson }},
-  sources: {
-    playlist: {{ _('Playlist') | tojson }},
-    download: {{ _('Download') | tojson }}
-  },
-  reasons: {
-    no_caption: {{ _('no caption') | tojson }},
-    sparse_caption: {{ _('caption too sparse') | tojson }}
-  },
   done: {{ _('Done') | tojson }},
   phases: {
     extract: {{ _('extracting') | tojson }},
@@ -448,9 +440,7 @@ function syncList($container, entries) {
 function subline(row) {
   var parts = [];
   if (row.db) {
-    if (row.state === 'needs_pick') {
-      return esc((T.sources[row.source] || row.source) + ' · ' + (T.reasons[row.reason] || row.reason));
-    }
+    if (row.state === 'needs_pick') return esc(row.subline);
     return esc(row.state === 'failed' ? T.dbFailed : T.dbUnfinished);
   }
   parts.push(esc(kindWord(row)));

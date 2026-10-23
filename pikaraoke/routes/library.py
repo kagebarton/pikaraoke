@@ -264,12 +264,17 @@ def run_discard():
     return jsonify({"success": True})
 
 
-def _needs_pick_json(view: dict) -> dict:
-    """The needs-a-pick list for the pick page: each song's source and reason in words."""
+def needs_pick_subline(source: str, reason: str) -> str:
+    """Where a song waiting for a lyrics pick came from and why it waits, in words."""
     sources = {"playlist": _("Playlist"), "download": _("Download")}
     reasons = {"no_caption": _("no caption"), "sparse_caption": _("caption too sparse")}
+    return f"{sources[source]} · {reasons[reason]}"
+
+
+def _needs_pick_json(view: dict) -> dict:
+    """The needs-a-pick list for the pick page: each song's source and reason in words."""
     for song in view["songs"]:
-        song["now"] = f"{sources[song['now']['source']]} · {reasons[song['now']['reason']]}"
+        song["now"] = needs_pick_subline(song["now"]["source"], song["now"]["reason"])
     return view
 
 

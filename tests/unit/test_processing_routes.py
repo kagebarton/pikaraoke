@@ -1788,6 +1788,42 @@ class TestAttentionRoute:
 
         assert [r["song_path"] for r in rows] == [paths[1]]
 
+    @pytest.mark.parametrize(
+        "source, reason, words",
+        [
+            ("playlist", "no_caption", "Playlist · no caption"),
+            ("playlist", "sparse_caption", "Playlist · caption too sparse"),
+            ("download", "no_caption", "Download · no caption"),
+            ("download", "sparse_caption", "Download · caption too sparse"),
+        ],
+    )
+    @patch("pikaraoke.routes.library._", side_effect=lambda x: x)
+    @patch(f"{ROUTE_PREFIX}.is_admin", return_value=True)
+    @patch(f"{ROUTE_PREFIX}.get_karaoke_instance")
+    def test_a_song_waiting_for_a_pick_carries_where_it_came_from_and_why_in_words(
+        self,
+        mock_get_instance,
+        mock_is_admin,
+        mock_gettext,
+        client,
+        library_env,
+        source,
+        reason,
+        words,
+    ):
+        from pikaraoke.lib.library_tools import _NeedsPick
+
+        karaoke, paths = library_env
+        mock_get_instance.return_value = karaoke
+        karaoke.library_tools._needs_pick[paths[2]] = _NeedsPick(paths[2], reason, source, 1.0)
+
+        rows = json.loads(client.get("/processing/attention").data)
+
+        [row] = [r for r in rows if r["state"] == "needs_pick"]
+        assert (row["song_path"], row["subline"]) == (paths[2], words)
+        assert row["actions"] == ["pick", "song_info", "delete"]
+        assert all("subline" not in r for r in rows if r["state"] != "needs_pick")
+
 
 class TestRetrySongRoute:
     @patch(f"{ROUTE_PREFIX}._", side_effect=lambda x: x)

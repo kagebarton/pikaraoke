@@ -11,6 +11,7 @@ from flask_smorest import Blueprint
 
 from pikaraoke.lib.current_app import get_karaoke_instance, is_admin
 from pikaraoke.lib.library_status import POOR_GUESSED_SHARE
+from pikaraoke.routes.library import needs_pick_subline
 from pikaraoke.routes.song_info import posted_song
 
 _ = flask_babel.gettext
@@ -46,11 +47,19 @@ def processing_status():
 
 @processing_bp.route("/processing/attention")
 def processing_attention():
-    """Songs the database says never finished processing (admin only; guests get none)."""
+    """Songs that need the admin and have no job row (admin only; guests get none).
+
+    A song waiting for a lyrics pick carries its ``subline``, the words for where it
+    came from and why it waits.
+    """
     if not is_admin():
         return jsonify([])
     k = get_karaoke_instance()
-    return jsonify(k.library_tools.attention_rows(k.pipeline_tracker.tracked_paths()))
+    rows = k.library_tools.attention_rows(k.pipeline_tracker.tracked_paths())
+    for row in rows:
+        if row["state"] == "needs_pick":
+            row["subline"] = needs_pick_subline(row["source"], row["reason"])
+    return jsonify(rows)
 
 
 @processing_bp.route("/processing/song/retry", methods=["POST"])
