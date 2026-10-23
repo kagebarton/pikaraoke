@@ -346,7 +346,7 @@ def playlist_add():
         )
     except RegenError as e:
         return _error(str(e), 400)
-    downloads, processing = result["downloads"], result["processing"]
+    downloads, processing, listed = result["downloads"], result["processing"], result["listed"]
     parts = []
     if downloads:
         parts.append(
@@ -364,6 +364,15 @@ def playlist_add():
                 "%(n)d songs sent to processing.",
                 processing,
                 n=processing,
+            )
+        )
+    if listed:
+        parts.append(
+            ngettext(
+                "%(n)d song needs a lyrics pick.",
+                "%(n)d songs need a lyrics pick.",
+                listed,
+                n=listed,
             )
         )
     if parts:

@@ -605,29 +605,39 @@ class LibraryTools:
     def on_song_downloaded(self, song_path: str) -> None:
         """Queue a fresh download for processing, or list it as needing a lyrics pick (D6).
 
-        A song needs no pick when the search page's picker already chose, when
-        the caption its download saved passes the length gate, or when its
-        title is blocked (the queue skips it). Wired after the pipeline
-        tracker, which hears the same event first and gives its row the song path.
+        Wired after the pipeline tracker, which hears the same event first and
+        gives its row the song path. A video queued from a playlist is listed
+        with that source.
         """
         video_id = extract_youtube_id(song_path)
         with self._state_lock:
-            from_playlist = video_id in self._playlist_ids
+            source = "playlist" if video_id in self._playlist_ids else "download"
             self._playlist_ids.discard(video_id)
+        self._check_download(song_path, source)
+
+    def _check_download(self, song_path: str, source: str) -> bool:
+        """Queue a song for processing, or list it as needing a lyrics pick; True when queued.
+
+        A song needs no pick when the search page's picker already chose, when
+        the caption it has passes the length gate, or when its title is blocked
+        (the queue skips it). This is the download handler's boundary: a check
+        that fails queues the song as the app did before the check existed.
+        """
+        video_id = extract_youtube_id(song_path)
         try:
             reason = self._pick_reason(song_path, video_id)
-        except Exception:  # the handler's boundary: a failed check must not lose the queue add
+        except Exception:  # a failed check must not lose the queue add
             logger.exception("Lyrics check of %s failed; processing it", Path(song_path).name)
             reason = None
         if reason is None:
             self._processing.enqueue(song_path)
-            return
-        source = "playlist" if from_playlist else "download"
+            return True
         with self._state_lock:
             self._needs_pick[song_path] = _NeedsPick(song_path, reason, source, time.time())
             self._save()
         logger.info("%s needs a lyrics pick (%s)", Path(song_path).name, reason)
         self._events.emit("needs_pick", song_path)
+        return False
 
     def pick_lyrics(self, song_path: str, pick: object) -> None:
         """Record the admin's lyrics pick for a listed song and queue it.
@@ -690,9 +700,11 @@ class LibraryTools:
 
         Returns ``{"title", "videos"}``; each video has its ``id``, ``title``
         and ``status``: ``new``, ``not_processed`` (downloaded earlier and never
-        processed; it carries its ``song`` path as the library spells it) or
-        ``in_library``. Raises :class:`RegenError`, with a message for the
-        admin, for a link that isn't a playlist and for one that can't be read.
+        processed; it carries its ``song`` path as the library spells it),
+        ``waiting`` (the same, but already queued for processing or listed for
+        a pick) or ``in_library``. Raises :class:`RegenError`, with a message
+        for the admin, for a link that isn't a playlist and for one that can't
+        be read.
         """
         url = url.strip() if isinstance(url, str) else ""
         link = classify_url(url)
@@ -720,7 +732,7 @@ class LibraryTools:
             if path is None:
                 status = "new"
             elif song is not None and file_status(path) == NOT_PROCESSED:
-                status = "not_processed"
+                status = "not_processed" if self._is_unprocessed(song) else "waiting"
             else:
                 status = "in_library"
             videos.append(
@@ -739,9 +751,10 @@ class LibraryTools:
         ``videos`` is a list of ``{"id", "title"}``; ``unprocessed`` is a list of
         library song paths. A video already in the library or already waiting
         to download is left out, and so is a song that is busy, listed for a
-        pick, or no longer unprocessed. Returns ``{"downloads", "processing"}``,
-        how many of each were taken up. Raises :class:`RegenError` for a
-        request that isn't lists.
+        pick, or no longer unprocessed. Returns ``{"downloads", "processing",
+        "listed"}``: the videos queued to download, the songs queued for
+        processing, and the songs the caption check listed for a lyrics pick.
+        Raises :class:`RegenError` for a request that isn't lists.
         """
         if not isinstance(videos, list) or not isinstance(unprocessed, list):
             raise RegenError("Not a playlist selection.")
@@ -761,24 +774,28 @@ class LibraryTools:
                 url, enqueue=False, user=PLAYLIST_USER, title=_pick_text(video.get("title")) or None
             )
             downloads += 1
-        processing = 0
+        processing = listed = 0
         for song_path in unprocessed:
-            if self._is_unprocessed(song_path):
-                with self._state_lock:
-                    self._playlist_ids.add(extract_youtube_id(song_path))
-                self.on_song_downloaded(song_path)
+            if not self._is_unprocessed(song_path):
+                continue
+            if self._check_download(song_path, "playlist"):
                 processing += 1
-        return {"downloads": downloads, "processing": processing}
+            else:
+                listed += 1
+        return {"downloads": downloads, "processing": processing, "listed": listed}
 
     def _is_unprocessed(self, song_path: object) -> bool:
-        """Whether a playlist's song can still be processed: in the library, idle and not done."""
+        """Whether a playlist's song is in the library, never processed, and free to take.
+
+        Free means neither queued for processing nor listed for a pick. The
+        playlist page and the add both use this one rule.
+        """
         if not isinstance(song_path, str) or song_path not in self._song_manager.songs:
             return False
         with self._state_lock:
             listed = song_path in self._needs_pick
         return (
-            self.is_video(song_path)
-            and not listed
+            not listed
             and not self.is_busy(song_path)
             and file_status(Path(song_path)) == NOT_PROCESSED
         )
