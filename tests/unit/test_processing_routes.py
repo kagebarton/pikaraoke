@@ -1673,6 +1673,40 @@ class TestNeedsPick:
 
         assert tracker._items == []
 
+    def test_a_status_read_during_the_caption_check_does_not_hide_the_pick(self):
+        tracker = _make_tracker()
+        events = tracker._events
+        url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        events.emit("download_queued", {"title": "Fresh", "video_url": url, "user": "Alice"})
+        path = "/songs/Fresh---dQw4w9WgXcQ.mp4"
+        events.emit("song_downloaded", path)
+        # The caption check runs now; a push refresh, the poll or another viewer reads the status.
+        [read] = tracker.get_status(admin=True)
+        assert read["processing_status"] == "complete"
+        events.emit("needs_pick", path)
+
+        [admin_row] = tracker.get_status(admin=True)
+        [guest_row] = tracker.get_status(admin=False, user="Alice")
+
+        assert (admin_row["processing_status"], admin_row["group"]) == ("needs_pick", "attention")
+        assert "pick" in admin_row["actions"]
+        assert (guest_row["processing_status"], guest_row["group"]) == ("needs_pick", "active")
+        assert "pick" not in guest_row["actions"]
+        [item] = tracker._items
+        assert item.finished_at is None
+
+    def test_a_row_a_complete_event_finished_is_left_alone(self):
+        tracker = _make_tracker()
+        item = _download_row(tracker, "Fresh Song", song_path=DOWNLOAD_PATH)
+        tracker._events.emit("processing_complete", {"song_path": DOWNLOAD_PATH})
+        finished_at = item.finished_at
+        assert finished_at is not None
+
+        tracker._events.emit("needs_pick", DOWNLOAD_PATH)
+
+        assert item.processing_status == "complete"
+        assert item.finished_at == finished_at
+
 
 # ---------------------------------------------------------------------------
 # Routes: attention list and retrying a song with no row

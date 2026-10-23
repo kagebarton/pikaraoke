@@ -530,16 +530,7 @@ class PipelineTracker:
                 if unfinished.processing_status == "needs_pick":
                     unfinished.processing_status = "waiting"
                 return
-            called_complete = next(
-                (
-                    i
-                    for i in self._items
-                    if i.song_path == song_path
-                    and i.processing_status == "complete"
-                    and i.finished_at is None
-                ),
-                None,
-            )
+            called_complete = self._find_called_complete(song_path)
             if called_complete is not None:
                 called_complete.processing_status = "waiting"
             else:
@@ -560,10 +551,12 @@ class PipelineTracker:
         """A download has no usable caption: its row waits for the admin to pick lyrics.
 
         A song with no row (an unprocessed one from a playlist, or one listed
-        before a restart) is shown by the Attention list instead.
+        before a restart) is shown by the Attention list instead. A status read
+        while the caption was checked finds the song neither running nor
+        waiting and calls its row complete; that row waits for the pick too.
         """
         with self._lock:
-            item = self._find_unfinished(song_path)
+            item = self._find_unfinished(song_path) or self._find_called_complete(song_path)
             if item is not None:
                 item.processing_status = "needs_pick"
                 item.processing_phase = None
@@ -678,6 +671,22 @@ class PipelineTracker:
         """The first row for ``song_path`` that hasn't finished (caller holds _lock)."""
         for item in self._items:
             if item.song_path == song_path and not item.is_terminal:
+                return item
+        return None
+
+    def _find_called_complete(self, song_path: str) -> PipelineItem | None:
+        """The row a status read called complete before any event finished it (caller holds _lock).
+
+        A read between a song landing and its job being queued, or listed for a
+        pick, finds the song neither running nor waiting. No complete event
+        stamped that row, so it has no ``finished_at``.
+        """
+        for item in self._items:
+            if (
+                item.song_path == song_path
+                and item.processing_status == "complete"
+                and item.finished_at is None
+            ):
                 return item
         return None
 
