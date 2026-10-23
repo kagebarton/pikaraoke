@@ -398,6 +398,33 @@ class TestBranchALrclib:
         mock_search.assert_not_called()
         assert lrc_path.read_text(encoding="utf-8") == "[00:01.00]cached\n"
 
+    @pytest.mark.parametrize(
+        "content, logged, not_logged",
+        [
+            ("[lrclib_skipped:1]\n", "skipped by the admin's choice", "available for fill"),
+            ("[00:01.00]cached\n", "available for fill", "skipped by the admin's choice"),
+        ],
+        ids=["skip_marker", "real_lrc"],
+    )
+    @patch("pikaraoke.pipeline.stages.lyrics_fetch.lrclib.search")
+    @patch("pikaraoke.lib.genius.get_temp_directory")
+    def test_log_names_a_skip_marker_as_a_skip(
+        self, mock_gtd, mock_search, tmp_path, caplog, content, logged, not_logged
+    ):
+        ctx, song_path = self._ctx(tmp_path, mock_gtd)
+        lrc_path = self._lrc_path(song_path)
+        lrc_path.parent.mkdir(parents=True)
+        lrc_path.write_text(content, encoding="utf-8")
+
+        with caplog.at_level("INFO", logger="pikaraoke.pipeline.stages.lyrics_fetch"):
+            LyricsFetchStage(self._genius(), PipelineConfig()).run(ctx)
+
+        lrclib_lines = [
+            r.getMessage() for r in caplog.records if r.getMessage().startswith("LRCLIB:")
+        ]
+        assert any(logged in line and lrc_path.name in line for line in lrclib_lines)
+        assert not any(not_logged in line for line in lrclib_lines)
+
     @patch("pikaraoke.pipeline.stages.lyrics_fetch.lrclib.search")
     @patch("pikaraoke.lib.genius.get_temp_directory")
     def test_search_failure_writes_no_file_and_completes(self, mock_gtd, mock_search, tmp_path):
