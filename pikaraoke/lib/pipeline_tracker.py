@@ -57,9 +57,9 @@ class PipelineItem:
         self.regen_job: RegenJob | None = None  # kept so a failed regen can be retried
         self.finished_at: float | None = None  # time.time() at complete / error
         self.download_status: str = "pending"  # pending | active | complete | error
-        self.processing_status: str = (
-            "waiting"  # waiting | pending | active | complete | error | cancelling
-        )
+        # waiting | pending | active | complete | error | cancelling | needs_pick
+        # (needs_pick: downloaded, and waiting for the admin to pick its lyrics)
+        self.processing_status: str = "waiting"
         self.processing_phase: str | None = None
         self.error_message: str | None = None
         self.cancelling: bool = False
@@ -111,6 +111,7 @@ class PipelineTracker:
         self._events.on("download_error", self._on_download_error)
         self._events.on("regen_queued", self._on_regen_queued)
         self._events.on("processing_queued", self._on_processing_queued)
+        self._events.on("needs_pick", self._on_needs_pick)
         self._events.on("processing_complete", self._on_processing_complete)
         self._events.on("processing_cancelled", self._on_processing_cancelled)
         self._events.on("processing_error", self._on_processing_error)
@@ -153,7 +154,7 @@ class PipelineTracker:
                 elapsed_s = active_elapsed_s if running and item.finished_at is None else None
                 rows.append((item, self._item_to_dict(item, admin, user, elapsed_s)))
 
-            return self._in_display_order(rows, active_job, pending_jobs)
+            return self._in_display_order(rows, active_job, pending_jobs, admin)
 
     @staticmethod
     def _derive_processing_status(
@@ -186,8 +187,8 @@ class PipelineTracker:
             item.processing_phase = None
         else:
             # Download complete and not in processing queues
-            # Preserve "complete"/"error" already set by events
-            if item.processing_status not in ("complete", "error"):
+            # Preserve "complete"/"error"/"needs_pick" already set by events
+            if item.processing_status not in ("complete", "error", "needs_pick"):
                 item.processing_status = "complete"
             item.processing_phase = None
 
@@ -196,6 +197,7 @@ class PipelineTracker:
         rows: list[tuple[PipelineItem, dict[str, Any]]],
         active_job: str | None,
         pending_jobs: list[str],
+        admin: bool,
     ) -> list[dict[str, Any]]:
         """Sort rows for display and stamp each with its ``group`` and ``position``.
 
@@ -205,13 +207,18 @@ class PipelineTracker:
           waiting to start, in the order they were added; then songs waiting
           for processing in the order the manager will run them (the download
           lane, which holds downloads and process rows, before the regen lane).
-          Every active row but the running one gets a ``position`` from 1.
-        - ``attention``: downloads and jobs that failed, newest first.
+          Every active row but the running one gets a ``position`` from 1. A
+          song waiting for a lyrics pick is here too, for a guest: nothing is
+          wrong, and the pick is the host's.
+        - ``attention``: downloads and jobs that failed, newest first; for an
+          admin, the songs waiting for a lyrics pick.
         - ``finished``: complete rows, newest first.
         """
 
         def group_of(item: PipelineItem) -> str:
-            if item.processing_status == "error":
+            if item.processing_status == "error" or (
+                admin and item.processing_status == "needs_pick"
+            ):
                 return "attention"
             return "finished" if item.processing_status == "complete" else "active"
 
@@ -226,6 +233,8 @@ class PipelineTracker:
                 return 1, 0
             if item.download_status == "pending":
                 return 2, 0
+            if item.processing_status == "needs_pick":  # a guest's row; not in any queue
+                return 5, 0
             queued = pending_jobs.index(item.song_path) if item.song_path in pending_jobs else 0
             return (4 if item.kind == "regen" else 3), queued
 
@@ -358,7 +367,8 @@ class PipelineTracker:
 
         If the item is not in a terminal state (complete/error), routes
         through cancel() first so active processing is cleanly wound down
-        instead of being orphaned.
+        instead of being orphaned. A song waiting for a lyrics pick has no
+        processing to wind down and is removed directly.
         """
         # Route non-terminal items through cancel() to avoid orphaning
         # active processing jobs (which would keep running after their
@@ -374,11 +384,11 @@ class PipelineTracker:
                     return False
                 if item.cancelling:
                     return False
-                if item.processing_status not in ("complete", "error"):
+                if item.processing_status not in ("complete", "error", "needs_pick"):
                     # Release lock before calling cancel(), which acquires it.
                     is_terminal = False
                 else:
-                    # Terminal item — safe to remove directly.
+                    # Nothing is processing — safe to remove directly.
                     song_to_delete = item.song_path
                     removed = self._remove_item(item_id)
                     is_terminal = True
@@ -508,13 +518,17 @@ class PipelineTracker:
         """A song was queued for processing: a song with no live row gets a ``process`` row.
 
         A download already has its row (the tracker hears ``song_downloaded``
-        first), and a retried item is back in flight, so neither adds one.
-        A status read between those and this event finds the song neither
-        running nor waiting and calls its row complete; no complete event
-        stamped that row, so it goes back to waiting as this run's row.
+        first), and a retried item is back in flight, so neither adds one. A
+        row that waited for a lyrics pick goes back to waiting: its pick
+        queued it. A status read between those and this event finds the song
+        neither running nor waiting and calls its row complete; no complete
+        event stamped that row, so it goes back to waiting as this run's row.
         """
         with self._lock:
-            if self._find_unfinished(song_path) is not None:
+            unfinished = self._find_unfinished(song_path)
+            if unfinished is not None:
+                if unfinished.processing_status == "needs_pick":
+                    unfinished.processing_status = "waiting"
                 return
             called_complete = next(
                 (
@@ -540,6 +554,19 @@ class PipelineTracker:
                 item.song_path = song_path
                 item.download_status = "complete"
                 self._items.append(item)
+        self._notify_change()
+
+    def _on_needs_pick(self, song_path: str) -> None:
+        """A download has no usable caption: its row waits for the admin to pick lyrics.
+
+        A song with no row (an unprocessed one from a playlist, or one listed
+        before a restart) is shown by the Attention list instead.
+        """
+        with self._lock:
+            item = self._find_unfinished(song_path)
+            if item is not None:
+                item.processing_status = "needs_pick"
+                item.processing_phase = None
         self._notify_change()
 
     def _on_processing_complete(self, data: dict[str, Any]) -> None:
@@ -700,6 +727,9 @@ class PipelineTracker:
                 # Retry: processing failed on a song that is in the library.
                 if item.processing_status == "error" and item.song_path:
                     actions.append("retry")
+                # Pick: the song has no usable caption; its lyrics need choosing.
+                if item.processing_status == "needs_pick":
+                    actions.append("pick")
                 if item.song_path:
                     actions.append("song_info")
 

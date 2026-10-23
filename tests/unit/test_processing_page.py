@@ -126,6 +126,20 @@ class TestProcessingPage:
         assert 'href="/library/run"' in body
         assert 'id="pr-run-confirm"' in body and "Discard this run and its picks?" in body
 
+    def test_a_row_waiting_for_a_pick_has_a_tag_and_a_way_to_the_pick_page(self, env):
+        body = get(env, "/processing", admin=True).get_data(as_text=True)
+
+        assert '"Needs a pick"' in body and '"Pick lyrics"' in body
+        assert '"/library/picks"' in body
+        assert "if (has('pick'))" in body
+        assert "needspick: 'is-warning is-light'" in body
+
+    def test_a_guests_song_waiting_for_a_pick_is_only_waiting(self, env):
+        body = get(env, "/processing", admin=False).get_data(as_text=True)
+
+        assert "isAdmin ? ['needspick', T.needsPick] : ['waiting', T.waiting]" in body
+        assert "/library/picks" not in body
+
     def test_the_page_takes_fill_from_the_shared_file(self, env):
         body = get(env, "/processing", admin=True).get_data(as_text=True)
 
@@ -178,7 +192,7 @@ class TestProcessingPage:
     def test_the_script_rebinds_its_handlers_and_socket_listener_for_the_spa(self, env):
         body = get(env, "/processing", admin=True).get_data(as_text=True)
 
-        assert "$(document).off('click.processing')" in body
+        assert "$(document).off('.processing')" in body
         assert "window.socket.off('pipeline_updated')" in body
 
     def test_a_confirm_closes_when_the_server_stops_offering_its_action(self, env):

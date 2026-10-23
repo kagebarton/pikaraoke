@@ -44,8 +44,11 @@
 <script src="{{ url_for('static', filename='library-pages.js') }}"></script>
 <script>
   $(function () {
+    // List mode: the songs downloaded without a usable caption. Each pick queues at once,
+    // so there is no Keep, Skip, Change or batch button.
+    var LIST = {{ (list_mode | default(false)) | tojson }};
     var URLS = {
-      pick: {{ url_for('library.run_pick') | tojson }},
+      pick: {{ (url_for('library.needs_pick_pick') if list_mode else url_for('library.run_pick')) | tojson }},
       keepAll: {{ url_for('library.run_keep_all') | tojson }},
       queue: {{ url_for('library.run_queue') | tojson }},
       geniusSearch: {{ url_for('search.lyrics_search') | tojson }},
@@ -53,6 +56,8 @@
     };
     var T = {
       progress: {{ _('%(k)s of %(n)s picked · saved as you go', k='{k}', n='{n}') | tojson }},
+      listProgress: {{ _('%(k)s of %(n)s picked', k='{k}', n='{n}') | tojson }},
+      pickedProcessing: {{ _('Picked · processing') | tojson }},
       toPick: {{ _('To pick') | tojson }},
       picked: {{ _('Picked') | tojson }},
       poor: {{ _('Looks poor') | tojson }},
@@ -108,6 +113,7 @@
     /* ------------------------------------------------------------ rendering */
 
     function pickText(pick) {
+      if (LIST) return T.pickedProcessing;
       if (pick.kind === 'keep') return T.keptPick;
       if (pick.kind === 'genius') return fill(T.pickedGenius, { title: pick.title, artist: pick.artist });
       return pick.kind === 'transcribe' ? T.pickedTranscribe : T.pickedSkip;
@@ -125,7 +131,7 @@
       var run = state.run;
       var all = deciding();
       var left = run.to_pick - run.picked;
-      $('#pp-progress').text(fill(T.progress, { k: run.picked, n: run.to_pick }));
+      $('#pp-progress').text(fill(LIST ? T.listProgress : T.progress, { k: run.picked, n: run.to_pick }));
       $('#pp-bar > div').css('width', (run.to_pick ? 100 * run.picked / run.to_pick : 0) + '%');
       var counts = {
         topick: left,
@@ -139,6 +145,7 @@
     }
 
     function renderFooter() {
+      if (LIST) return;
       var run = state.run;
       var left = run.to_pick - run.picked;
       var keepable = $.grep(deciding(), function (song) {
@@ -162,10 +169,13 @@
         main.append(el('span', 'pp-muted pp-warn', T.checkFailed));
       }
       var line = el('button', 'pp-line').attr('type', 'button').attr('aria-expanded', open).append(icon, main);
-      line.on('click', function () { toggle(song); });
+      // A listed song already picked is queued: there is nothing left to choose.
+      line.on('click', function () { if (!(LIST && song.pick)) toggle(song); });
       var row = el('div', 'pp-row').append(line);
       if (song.pick) {
-        row.append(el('button', 'button pp-act', T.change).attr('type', 'button').on('click', function () { toggle(song, true); }));
+        if (!LIST) {
+          row.append(el('button', 'button pp-act', T.change).attr('type', 'button').on('click', function () { toggle(song, true); }));
+        }
       } else if (song.genius_id !== null) {
         row.append(el('button', 'button pp-act', T.keep).attr('type', 'button').prop('disabled', state.sending).on('click', function () {
           savePick(song, { kind: 'keep' });
@@ -202,11 +212,13 @@
       });
       var buttons = el('div', 'pp-buttons').append(
         el('button', 'button', T.transcribe).attr('type', 'button').prop('disabled', state.sending)
-          .on('click', function () { savePick(song, { kind: 'transcribe' }); }),
-        el('button', 'button', T.skip).attr('type', 'button').prop('disabled', state.sending)
-          .on('click', function () { savePick(song, { kind: 'skip' }); }),
-        use
+          .on('click', function () { savePick(song, { kind: 'transcribe' }); })
       );
+      if (!LIST) {
+        buttons.append(el('button', 'button', T.skip).attr('type', 'button').prop('disabled', state.sending)
+          .on('click', function () { savePick(song, { kind: 'skip' }); }));
+      }
+      buttons.append(use);
       return box.append(top, el('span', 'pp-muted', now), el('div', 'pp-search').append(input, search), hitList(song), buttons);
     }
 
@@ -335,25 +347,33 @@
 {% endblock %}
 
 {% block header %}
-<h1>{% block title %}{% trans run=title %}{{ run }}: picks{% endtrans %}{% endblock %}</h1>
+<h1>{% block title %}{% if list_mode %}{{ title }}{% else %}{% trans run=title %}{{ run }}: picks{% endtrans %}{% endif %}{% endblock %}</h1>
 {% endblock %}
 
 {% block content %}
+{% if list_mode %}
+<a class="pp-back no-spa" href="{{ url_for('processing.processing') }}#jobs">&lsaquo; {% trans %}Processing{% endtrans %}</a>
+{% else %}
 <a class="pp-back no-spa" href="{{ url_for('library.run_preview') }}">&lsaquo; {{ title }}</a>
+{% endif %}
 <span id="pp-progress" class="pp-muted" style="display: block"></span>
 <div id="pp-bar" class="pp-bar"><div></div></div>
 
 <div class="pp-chips" role="group">
   <button type="button" class="pp-chip" data-filter="topick">{% trans %}To pick{% endtrans %} <span class="pp-chip-n">0</span></button>
   <button type="button" class="pp-chip" data-filter="picked">{% trans %}Picked{% endtrans %} <span class="pp-chip-n">0</span></button>
+  {% if not list_mode %}
   <button type="button" class="pp-chip" data-filter="poor">{% trans %}Looks poor{% endtrans %} <span class="pp-chip-n">0</span></button>
+  {% endif %}
 </div>
 
 <div id="pp-list" class="pp-card"></div>
 <p id="pp-empty" class="pp-muted has-text-centered is-hidden">{% trans %}No songs in this list.{% endtrans %}</p>
 
+{% if not list_mode %}
 <div class="pp-foot">
   <button type="button" id="pp-keep-all" class="button" disabled></button>
   <button type="button" id="pp-queue" class="button is-primary" disabled></button>
 </div>
+{% endif %}
 {% endblock %}

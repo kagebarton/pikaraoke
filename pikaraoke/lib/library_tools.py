@@ -12,11 +12,20 @@ import json
 import logging
 import os
 import threading
+import time
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
 from pikaraoke.lib import lrclib
-from pikaraoke.lib.genius import GeniusClient, GeniusSong, GeniusUnavailable
+from pikaraoke.lib.download_manager import DownloadManager
+from pikaraoke.lib.events import EventSystem
+from pikaraoke.lib.genius import (
+    GeniusClient,
+    GeniusSong,
+    GeniusUnavailable,
+    read_choice,
+    write_choice,
+)
 from pikaraoke.lib.genius_lyrics import parse_lyric_lines
 from pikaraoke.lib.library_regen import (
     VIDEO_EXTS,
@@ -28,6 +37,8 @@ from pikaraoke.lib.library_regen import (
     backup_text_folders,
     check_caption,
     default_query,
+    find_local_srt,
+    gate_on_disk_caption,
     media_duration,
     read_bundle,
     resolve_plan,
@@ -43,6 +54,7 @@ from pikaraoke.lib.library_status import (
     song_history,
     song_status,
 )
+from pikaraoke.lib.metadata_parser import extract_youtube_id
 from pikaraoke.lib.processing_manager import ProcessingManager
 from pikaraoke.lib.song_manager import SongManager
 
@@ -81,9 +93,26 @@ _PICK_TEXT_MAX = 200
 # row) is tried once more after this pause.
 CAPTION_RETRY_PAUSE_S = 30
 
+# Why a downloaded song waits for the admin to pick its lyrics, and where it came from (D6).
+NEEDS_PICK_REASONS = ("no_caption", "sparse_caption")
+NEEDS_PICK_SOURCES = ("playlist", "download")
+
 
 def _pick_text(value: object) -> str:
     return value.strip()[:_PICK_TEXT_MAX] if isinstance(value, str) else ""
+
+
+@dataclass
+class _NeedsPick:
+    """A downloaded song waiting for the admin to pick its lyrics (D6)."""
+
+    song: str  # the path as the library spells it
+    reason: str  # one of NEEDS_PICK_REASONS
+    source: str  # one of NEEDS_PICK_SOURCES
+    added_at: float  # time.time() when it was listed
+    # Chosen and queued this session. Not saved: the choice file is lost with the
+    # temp folder, so a restart lists the song again.
+    picked: bool = False
 
 
 @dataclass
@@ -166,21 +195,31 @@ class LibraryTools:
         download_path: str,
         genius_client: GeniusClient,
         state_path: Path,
+        events: EventSystem,
+        download_manager: DownloadManager,
     ) -> None:
         self._processing = processing_manager
         self._song_manager = song_manager
         self._folder = Path(download_path)
         self._genius = genius_client
+        self._events = events
+        self._download_manager = download_manager
         self._genius_songs: dict[int, GeniusSong] = {}
         self._genius_lock = threading.Lock()
         self._lrclib_records: dict[int, dict] = {}
         self._lrclib_lock = threading.Lock()
-        # The open run and its file, under one lock (D4).
+        # The open run, the needs-a-pick list and their file, under one lock (D4).
         self._state_path = state_path
         self._state_lock = threading.Lock()
         self._checker: threading.Thread | None = None
-        self._run = self._load_run()
+        state = self._read_state()
+        self._run = self._load_run(state)
+        self._needs_pick = self._load_needs_pick(state)
         self._start_checks()  # a run left mid-check picks up where it stopped
+        events.on("processing_complete", self._on_processing_complete)
+        events.on("processing_error", self._on_processing_error)
+        events.on("processing_cancelled", self._unpick)
+        events.on("song_deleted", self._forget_needs_pick)
 
     @staticmethod
     def is_video(song_path: str) -> bool:
@@ -220,14 +259,19 @@ class LibraryTools:
         )
 
     def attention_rows(self, tracked: set[str]) -> list[dict]:
-        """Songs the database says never finished processing, for the Attention list.
+        """Songs that need the admin and have no job row, for the Attention list.
 
         The database remembers what the tracker (memory only) forgets: a song
         left half-processed by an earlier session, or failed and then dismissed
         from the Jobs list. A song with a tracker row, or one waiting or
-        running, is already shown there. Failed songs come first, each group
-        by display name.
+        running, is already shown there. Failed songs come first, then the
+        unfinished ones (each group by display name), then the songs waiting
+        for a lyrics pick, oldest first. A song waiting for a pick is not
+        called unfinished: its row says what it waits for.
         """
+        with self._state_lock:
+            waiting = sorted(self._needs_pick.values(), key=lambda entry: entry.added_at)
+        listed = {entry.song for entry in waiting}
         rows = []
         for db_state, state in (("failed", "failed"), ("pending", "unfinished")):
             paths = self._song_manager.get_paths_by_pipeline_state([db_state])
@@ -236,6 +280,7 @@ class LibraryTools:
                 for path in paths
                 if path in self._song_manager.songs
                 and path not in tracked
+                and path not in listed
                 and not self.is_busy(path)
             ]
             rows += [
@@ -247,6 +292,18 @@ class LibraryTools:
                 }
                 for title, path in sorted(titled, key=lambda pair: pair[0].lower())
             ]
+        rows += [
+            {
+                "song_path": entry.song,
+                "title": self._song_manager.filename_from_path(entry.song),
+                "state": "needs_pick",
+                "reason": entry.reason,
+                "source": entry.source,
+                "actions": ["pick", "song_info", "delete"],
+            }
+            for entry in waiting
+            if entry.song not in tracked and not self.is_busy(entry.song)
+        ]
         return rows
 
     def can_regenerate(self, song_path: str) -> bool:
@@ -523,6 +580,130 @@ class LibraryTools:
             self._save()
         return {"queued": queued, "busy": busy, "backup": backup.name if backup else None}
 
+    def on_song_downloaded(self, song_path: str) -> None:
+        """Queue a fresh download for processing, or list it as needing a lyrics pick (D6).
+
+        A song needs no pick when the search page's picker already chose, when
+        the caption its download saved passes the length gate, or when its
+        title is blocked (the queue skips it). Wired after the pipeline
+        tracker, which hears the same event first and gives its row the song path.
+        """
+        reason = self._pick_reason(song_path, extract_youtube_id(song_path))
+        if reason is None:
+            self._processing.enqueue(song_path)
+            return
+        with self._state_lock:
+            self._needs_pick[song_path] = _NeedsPick(song_path, reason, "download", time.time())
+            self._save()
+        logger.info("%s needs a lyrics pick (%s)", Path(song_path).name, reason)
+        self._events.emit("needs_pick", song_path)
+
+    def pick_lyrics(self, song_path: str, pick: object) -> None:
+        """Record the admin's lyrics pick for a listed song and queue it.
+
+        ``pick`` is ``{"kind": "genius", "genius_id": id}`` or ``{"kind":
+        "transcribe"}``. It is written as the choice file the search page's
+        picker writes, so the pipeline's lyrics stage does the rest (LRCLIB
+        included). The song stays listed, as picked, until it finishes. Raises
+        :class:`RegenError`, with a message for the admin, when nothing was queued.
+        """
+        choice = self._choice_for(pick)
+        with self._state_lock:
+            entry = self._needs_pick.get(song_path)
+            if entry is None:
+                raise RegenError("That song isn't waiting for a pick.")
+            if entry.picked:
+                raise RegenError("That song already has a pick.")
+            entry.picked = True
+        try:
+            write_choice(extract_youtube_id(song_path), choice)
+        except OSError as e:
+            self._unpick(song_path)
+            logger.error("Could not save the lyrics pick for %s: %s", Path(song_path).name, e)
+            raise RegenError("Could not save that pick.") from e
+        self._processing.enqueue(song_path)
+
+    def needs_pick_view(self) -> dict:
+        """The needs-a-pick list for its page, shaped like :meth:`run_view` for the pick pass.
+
+        Songs are oldest first. ``now`` holds the song's ``source`` and
+        ``reason`` in raw parts for the route to put in words; a song already
+        picked carries a ``pick``.
+        """
+        with self._state_lock:
+            entries = sorted(self._needs_pick.values(), key=lambda entry: entry.added_at)
+            songs = [
+                {
+                    "song": entry.song,
+                    "title": self._song_manager.filename_from_path(entry.song),
+                    "needs_pick": True,
+                    "now": {"source": entry.source, "reason": entry.reason},
+                    "query": default_query(Path(entry.song)),
+                    "poor": False,
+                    "genius_id": None,  # no current pick to keep
+                    "caption": None,
+                    "pick": {"kind": "queued"} if entry.picked else None,
+                }
+                for entry in entries
+            ]
+            picked = sum(entry.picked for entry in entries)
+        return {"to_pick": len(songs), "picked": picked, "songs": songs}
+
+    @staticmethod
+    def _choice_for(pick: object) -> dict:
+        """The choice file's content for a pick, as the pipeline's lyrics stage reads it."""
+        kind = pick.get("kind") if isinstance(pick, dict) else None
+        if kind == "transcribe":
+            return {"mode": "raw"}
+        if kind == "genius":
+            genius_id = pick.get("genius_id")
+            if not isinstance(genius_id, int) or isinstance(genius_id, bool):
+                raise RegenError("Pick a Genius song first.")
+            return {"genius_id": genius_id}
+        raise RegenError("Unknown pick.")
+
+    def _pick_reason(self, song_path: str, video_id: str | None) -> str | None:
+        """Why this download needs a lyrics pick before processing, or None when it doesn't.
+
+        The gate deletes a caption too sparse to be lyrics. A song this can't
+        check goes to the pipeline as it did before.
+        """
+        if (
+            video_id is None
+            or not self.is_video(song_path)
+            or self._processing.is_blocked(song_path)
+            or read_choice(video_id) is not None
+        ):
+            return None
+        job = SongJob(Path(song_path), bundle=None, stale_reason="downloaded")
+        had_caption = find_local_srt(job.song_path) is not None
+        try:
+            if gate_on_disk_caption(job):
+                return None
+        except OSError as e:
+            logger.warning("Could not check the caption of %s: %s", job.song_path.name, e)
+            return None
+        return "sparse_caption" if had_caption else "no_caption"
+
+    def _forget_needs_pick(self, song_path: str) -> None:
+        """Drop a song from the needs-a-pick list: it was deleted or finished processing."""
+        with self._state_lock:
+            if self._needs_pick.pop(song_path, None) is not None:
+                self._save()
+
+    def _unpick(self, song_path: str) -> None:
+        """List a song for a pick again: the job queued for its pick ended without finishing."""
+        with self._state_lock:
+            entry = self._needs_pick.get(song_path)
+            if entry is not None:
+                entry.picked = False
+
+    def _on_processing_complete(self, data: dict) -> None:
+        self._forget_needs_pick(data["song_path"])
+
+    def _on_processing_error(self, data: dict) -> None:
+        self._unpick(data.get("song_path", ""))
+
     @staticmethod
     def _caption_plan(job: SongJob) -> Plan:
         """The plan that fetches the video's caption; only a song with a YouTube ID has one."""
@@ -729,31 +910,39 @@ class LibraryTools:
             logger.exception("Caption check of %s failed", Path(path).name)
             return asdict(CaptionCheck(found=False, wpm=None, passed=False, failed=True))
 
-    def _load_run(self) -> _Run | None:
+    def _read_state(self) -> dict:
+        """The state file's content; empty when there is none or it can't be read."""
+        try:
+            state = json.loads(self._state_path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return {}
+        except (OSError, ValueError) as e:
+            logger.warning("Ignoring unreadable library tools state %s: %s", self._state_path, e)
+            return {}
+        return state if isinstance(state, dict) else {}
+
+    def _in_library_folder(self, song_path: str) -> bool:
+        """Whether a saved song path is in this library (the app may start on another one)."""
+        folder = os.path.normcase(os.path.abspath(self._folder))
+        return os.path.normcase(os.path.abspath(Path(song_path).parent)) == folder
+
+    def _load_run(self, state: dict) -> _Run | None:
         """The run an earlier session left open, over this library's songs still on disk.
 
         A song of another library (the app started with another download path)
         is dropped: queueing it would back up this library and reset that one.
         """
-        try:
-            state = json.loads(self._state_path.read_text(encoding="utf-8"))
-        except FileNotFoundError:
-            return None
-        except (OSError, ValueError) as e:
-            logger.warning("Ignoring unreadable library tools state %s: %s", self._state_path, e)
-            return None
-        saved = state.get("run") if isinstance(state, dict) else None
+        saved = state.get("run")
         if (
             not isinstance(saved, dict)
             or saved.get("mode") not in RUN_LABELS
             or not isinstance(saved.get("songs"), dict)
         ):
             return None
-        folder = os.path.normcase(os.path.abspath(self._folder))
         entries = {}
         elsewhere = 0
         for path, kept in saved["songs"].items():
-            if os.path.normcase(os.path.abspath(Path(path).parent)) != folder:
+            if not self._in_library_folder(path):
                 elsewhere += 1
                 continue
             if not isinstance(kept, dict) or not Path(path).is_file():
@@ -773,12 +962,44 @@ class LibraryTools:
             )
         return _Run(saved["mode"], entries) if entries else None
 
-    def _save(self) -> None:
-        """Write the open run to the state file, atomically; the caller holds the state lock.
+    def _load_needs_pick(self, state: dict) -> dict[str, _NeedsPick]:
+        """The songs an earlier session left waiting for a pick, still in this library on disk."""
+        saved = state.get("needs_pick")
+        entries = {}
+        for item in saved if isinstance(saved, list) else []:
+            if not isinstance(item, dict):
+                continue
+            song, added_at = item.get("song"), item.get("added_at")
+            if (
+                isinstance(song, str)
+                and item.get("reason") in NEEDS_PICK_REASONS
+                and item.get("source") in NEEDS_PICK_SOURCES
+                and isinstance(added_at, (int, float))
+                and extract_youtube_id(song) is not None
+                and self._in_library_folder(song)
+                and Path(song).is_file()
+            ):
+                entries[song] = _NeedsPick(song, item["reason"], item["source"], float(added_at))
+        return entries
 
-        A write that fails is logged, and the run goes on in memory.
+    def _save(self) -> None:
+        """Write the open run and the needs-a-pick list to the state file, atomically.
+
+        The caller holds the state lock. A write that fails is logged, and
+        the run goes on in memory.
         """
-        state = {"run": self._run.to_json() if self._run is not None else None}
+        state = {
+            "run": self._run.to_json() if self._run is not None else None,
+            "needs_pick": [
+                {
+                    "song": entry.song,
+                    "reason": entry.reason,
+                    "source": entry.source,
+                    "added_at": entry.added_at,
+                }
+                for entry in self._needs_pick.values()
+            ],
+        }
         tmp = self._state_path.with_suffix(".tmp")
         try:
             self._state_path.parent.mkdir(parents=True, exist_ok=True)

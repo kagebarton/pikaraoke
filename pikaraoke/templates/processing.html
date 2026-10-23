@@ -187,6 +187,16 @@ var T = {
   cancelling: {{ _('Cancelling') | tojson }},
   failed: {{ _('Failed') | tojson }},
   unfinished: {{ _('Unfinished') | tojson }},
+  needsPick: {{ _('Needs a pick') | tojson }},
+  pickLyrics: {{ _('Pick lyrics') | tojson }},
+  sources: {
+    playlist: {{ _('Playlist') | tojson }},
+    download: {{ _('Download') | tojson }}
+  },
+  reasons: {
+    no_caption: {{ _('no caption') | tojson }},
+    sparse_caption: {{ _('caption too sparse') | tojson }}
+  },
   done: {{ _('Done') | tojson }},
   phases: {
     extract: {{ _('extracting') | tojson }},
@@ -255,6 +265,7 @@ var URLS = {
   runDiscard: {{ url_for('library.run_discard') | tojson }},
   clearFinished: {{ url_for('processing.clear_finished') | tojson }},
   retrySong: {{ url_for('processing.retry_song') | tojson }},
+  picks: {{ url_for('library.picks_page') | tojson }},
   songInfo: {{ url_for('song_info.song_info') | tojson }},
   deleteFile: {{ url_for('files.delete_file') | tojson }},
   cancel: {{ url_for('processing.cancel_item', item_id='ITEM_ID') | tojson }},
@@ -345,10 +356,15 @@ function isRunning(row) {
 
 // [style, words] for a row's status tag
 function statusOf(row) {
-  if (row.db) return row.state === 'failed' ? ['failed', T.failed] : ['unfinished', T.unfinished];
+  if (row.db) {
+    if (row.state === 'needs_pick') return ['needspick', T.needsPick];
+    return row.state === 'failed' ? ['failed', T.failed] : ['unfinished', T.unfinished];
+  }
   if (row.processing_status === 'cancelling') return ['cancelling', T.cancelling];
   if (row.processing_status === 'error') return ['failed', T.failed];
   if (row.processing_status === 'complete') return ['done', T.done];
+  // A guest's song waiting for a pick is only waiting: choosing lyrics is the host's job.
+  if (row.processing_status === 'needs_pick') return isAdmin ? ['needspick', T.needsPick] : ['waiting', T.waiting];
   if (row.download_status === 'active') return ['running', T.downloading];
   if (row.processing_status === 'active') return ['running', T.processing];
   return ['waiting', T.waiting];
@@ -360,6 +376,7 @@ var TAG_CLASS = {
   done: 'is-success is-light',
   failed: 'is-danger is-light',
   unfinished: 'is-warning is-light',
+  needspick: 'is-warning is-light',
   cancelling: 'is-danger is-light'
 };
 
@@ -423,6 +440,9 @@ function syncList($container, entries) {
 function subline(row) {
   var parts = [];
   if (row.db) {
+    if (row.state === 'needs_pick') {
+      return esc((T.sources[row.source] || row.source) + ' · ' + (T.reasons[row.reason] || row.reason));
+    }
     return esc(row.state === 'failed' ? T.dbFailed : T.dbUnfinished);
   }
   parts.push(esc(kindWord(row)));
@@ -466,6 +486,7 @@ function actionsHtml(row) {
   var has = function (name) { return allowed.indexOf(name) !== -1; };
   var html = '';
   if (has('retry')) html += button('retry', key, T.retry, 'is-link');
+  if (has('pick')) html += '<a class="button is-link no-spa" href="' + esc(URLS.picks) + '">' + esc(T.pickLyrics) + '</a>';
   if (has('song_info') && row.song_path) {
     html += '<a class="button no-spa" href="' + esc(URLS.songInfo + '?song=' + encodeURIComponent(row.song_path)) +
       '">' + esc(T.songInfo) + '</a>';
@@ -489,7 +510,7 @@ function stateKeyOf(row, extra) {
   return [
     row.group, row.position, row.download_status, row.processing_status, row.processing_phase,
     row.song_path, row.error_message, (row.actions || []).join(','), row.lyric_method, row.guessed,
-    row.state, row.finished_ago_s == null ? '' : fmtAgo(row.finished_ago_s),
+    row.state, row.reason, row.source, row.finished_ago_s == null ? '' : fmtAgo(row.finished_ago_s),
     state.expanded[key] ? 1 : 0, state.confirming[key] || '', extra || ''
   ].join('|');
 }
@@ -806,7 +827,7 @@ function runAction(row, act) {
 /* --------------------------------------------------------------- events */
 
 // The SPA re-runs this script on every visit: drop the old handlers first.
-$(document).off('click.processing');
+$(document).off('.processing');
 
 $(document).on('click.processing', '.pr-line', function () {
   var key = $(this).attr('data-key');

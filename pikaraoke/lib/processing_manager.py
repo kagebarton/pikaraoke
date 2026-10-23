@@ -249,8 +249,9 @@ class ProcessingManager:
         """Start PTY, workers, orchestrator thread, subscribe to events.
 
         ``song_downloaded`` is not subscribed here: karaoke.py wires
-        :meth:`enqueue` after the PipelineTracker, so the tracker sees a
-        download's song path before ``processing_queued`` is emitted.
+        ``LibraryTools.on_song_downloaded`` after the PipelineTracker, so the
+        tracker sees a download's song path before that handler calls
+        :meth:`enqueue` (``processing_queued``) or lists the song (``needs_pick``).
         """
         self._events.on("song_deleted", self._on_song_deleted)
 

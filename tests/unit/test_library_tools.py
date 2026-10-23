@@ -1,4 +1,5 @@
-"""Unit tests for pikaraoke/lib/library_tools.py -- song lists, regenerate, repair and bulk runs.
+"""Unit tests for pikaraoke/lib/library_tools.py -- song lists, regenerate, repair, bulk runs,
+the after-download check and playlists.
 
 The library is a real ``tmp_path`` folder with bundles; the processing manager is
 a mock, so a queued job is whatever ``enqueue_regen`` was handed. Genius is a
@@ -9,13 +10,21 @@ import json
 import os
 import threading
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
 
 from pikaraoke.lib import lrclib
 from pikaraoke.lib.alignment_capture import SCHEMA_VERSION
-from pikaraoke.lib.genius import GeniusSong, GeniusUnavailable
+from pikaraoke.lib.events import EventSystem
+from pikaraoke.lib.genius import (
+    GeniusSong,
+    GeniusUnavailable,
+    delete_choice,
+    read_choice,
+    write_choice,
+)
 from pikaraoke.lib.library_regen import CaptionCheck, RegenError, RegenJob
 from pikaraoke.lib.library_tools import LibraryTools
 from pikaraoke.lib.song_list import SongList
@@ -63,8 +72,20 @@ def make_tools(folder: Path, songs: list[str], *, active=None, pending=(), geniu
     processing.get_active_job.return_value = active
     processing.pending_jobs = list(pending)
     processing.enqueue_regen.return_value = True
+    processing.is_blocked.return_value = False
+    downloads = MagicMock()
+    downloads.pending_downloads = []
+    downloads.active_url = None
     state = state or folder / "library_tools_state.json"
-    tools = LibraryTools(processing, song_manager, str(folder), genius or MagicMock(), state)
+    tools = LibraryTools(
+        processing,
+        song_manager,
+        str(folder),
+        genius or MagicMock(),
+        state,
+        EventSystem(),
+        downloads,
+    )
     return tools, processing
 
 
@@ -1181,7 +1202,13 @@ class TestRunState:
         song_manager = MagicMock(songs=library, filename_from_path=SongManager.filename_from_path)
 
         restarted = LibraryTools(
-            MagicMock(), song_manager, folder, MagicMock(), tmp_path / "library_tools_state.json"
+            MagicMock(),
+            song_manager,
+            folder,
+            MagicMock(),
+            tmp_path / "library_tools_state.json",
+            EventSystem(),
+            MagicMock(),
         )
 
         assert len(restarted.run_view()["songs"]) == len(paths)
@@ -1665,3 +1692,373 @@ class TestQueueRun:
         processing.enqueue_regen.assert_not_called()
         assert not list(tmp_path.glob("regen_backup_*"))
         assert tools.run_view() is not None
+
+
+# ---------------------------------------------------------------------------
+# After a download: the caption check and the needs-a-pick list
+# ---------------------------------------------------------------------------
+
+VIDEO_ID = "dQw4w9WgXcQ"
+STEM = f"Song---{VIDEO_ID}"
+
+
+def write_caption(folder: Path, stem: str, words: int) -> Path:
+    subs = folder / "subtitles"
+    subs.mkdir(exist_ok=True)
+    caption = subs / f"{stem}.srt"
+    caption.write_text(
+        f"1\n00:00:01,000 --> 00:00:04,000\n{' '.join(['la'] * words)}\n", encoding="utf-8"
+    )
+    return caption
+
+
+@pytest.fixture
+def download(tmp_path, monkeypatch):
+    """A fresh download in a library of its own, with the app's real temp folder and ffprobe
+    kept out of it (the song is 60 s long)."""
+    monkeypatch.setattr("pikaraoke.lib.genius.get_temp_directory", lambda *a: str(tmp_path / "tmp"))
+    monkeypatch.setattr("pikaraoke.lib.library_regen.probe_duration", lambda path: 60.0)
+    folder = tmp_path / "library"
+    folder.mkdir()
+    video = make_video(folder, STEM)
+    tools, processing = make_tools(folder, [str(video)])
+    needs_pick = []
+    tools._events.on("needs_pick", needs_pick.append)
+    return SimpleNamespace(
+        tools=tools, processing=processing, folder=folder, song=str(video), events=needs_pick
+    )
+
+
+def listed(tools: LibraryTools) -> list[dict]:
+    """The needs-a-pick rows the Attention list would show."""
+    return [r for r in tools.attention_rows(set()) if r["state"] == "needs_pick"]
+
+
+class TestAfterDownloadCheck:
+    def test_a_song_the_picker_already_chose_for_is_queued(self, download):
+        write_choice(VIDEO_ID, {"genius_id": 7})
+
+        download.tools.on_song_downloaded(download.song)
+
+        download.processing.enqueue.assert_called_once_with(download.song)
+        assert listed(download.tools) == []
+
+    def test_a_caption_that_passes_the_length_gate_is_queued(self, download):
+        write_caption(download.folder, STEM, words=60)  # 60 words per minute
+
+        download.tools.on_song_downloaded(download.song)
+
+        download.processing.enqueue.assert_called_once_with(download.song)
+        assert listed(download.tools) == []
+
+    def test_a_sparse_caption_is_deleted_and_the_song_listed(self, download):
+        caption = write_caption(download.folder, STEM, words=3)
+
+        download.tools.on_song_downloaded(download.song)
+
+        assert not caption.exists()
+        download.processing.enqueue.assert_not_called()
+        [row] = listed(download.tools)
+        assert (row["song_path"], row["reason"], row["source"]) == (
+            download.song,
+            "sparse_caption",
+            "download",
+        )
+        assert download.events == [download.song]
+
+    def test_a_song_with_no_caption_is_listed(self, download):
+        download.tools.on_song_downloaded(download.song)
+
+        download.processing.enqueue.assert_not_called()
+        [row] = listed(download.tools)
+        assert row["reason"] == "no_caption"
+        assert download.events == [download.song]
+
+    def test_a_blocked_title_is_queued_for_the_queue_to_skip(self, download):
+        download.processing.is_blocked.return_value = True
+
+        download.tools.on_song_downloaded(download.song)
+
+        download.processing.enqueue.assert_called_once_with(download.song)
+        assert listed(download.tools) == []
+
+    def test_a_song_with_no_youtube_id_is_queued_as_before(self, download):
+        plain = make_video(download.folder, "Plain Song")
+
+        download.tools.on_song_downloaded(str(plain))
+
+        download.processing.enqueue.assert_called_once_with(str(plain))
+        assert listed(download.tools) == []
+
+    def test_a_caption_that_cannot_be_checked_is_queued_as_before(self, download, monkeypatch):
+        write_caption(download.folder, STEM, words=3)
+
+        def disk_error(job):
+            raise OSError("locked")
+
+        monkeypatch.setattr("pikaraoke.lib.library_tools.gate_on_disk_caption", disk_error)
+
+        download.tools.on_song_downloaded(download.song)
+
+        download.processing.enqueue.assert_called_once_with(download.song)
+        assert listed(download.tools) == []
+
+    def test_a_listed_song_is_not_called_unfinished(self, download):
+        download.tools._song_manager.get_paths_by_pipeline_state.side_effect = lambda wanted: (
+            [download.song] if "pending" in wanted else []
+        )
+        download.tools.on_song_downloaded(download.song)
+
+        rows = download.tools.attention_rows(set())
+
+        assert [r["state"] for r in rows] == ["needs_pick"]
+        assert rows[0]["title"] == "Song"
+        assert rows[0]["actions"] == ["pick", "song_info", "delete"]
+
+    def test_a_song_with_a_tracker_row_or_a_queued_job_is_left_to_that_row(self, download):
+        download.tools.on_song_downloaded(download.song)
+
+        assert download.tools.attention_rows({download.song}) == []
+        download.processing.pending_jobs = [download.song]
+        assert download.tools.attention_rows(set()) == []
+
+    def test_the_oldest_listed_song_comes_first(self, download, monkeypatch):
+        second = make_video(download.folder, "Second---aaaaaaaaaaa")
+        download.tools._song_manager.songs.update([str(second)])
+        times = iter([200.0, 100.0])
+        monkeypatch.setattr(
+            "pikaraoke.lib.library_tools.time", SimpleNamespace(time=lambda: next(times))
+        )
+        download.tools.on_song_downloaded(download.song)
+        download.tools.on_song_downloaded(str(second))
+
+        assert [r["song_path"] for r in listed(download.tools)] == [str(second), download.song]
+
+
+class TestPickLyrics:
+    def test_a_genius_pick_writes_the_choice_file_and_queues_the_song(self, download):
+        download.tools.on_song_downloaded(download.song)
+
+        download.tools.pick_lyrics(download.song, {"kind": "genius", "genius_id": 42})
+
+        assert read_choice(VIDEO_ID) == {"genius_id": 42, "yt_id": VIDEO_ID}
+        download.processing.enqueue.assert_called_once_with(download.song)
+
+    def test_transcribing_writes_the_raw_choice(self, download):
+        download.tools.on_song_downloaded(download.song)
+
+        download.tools.pick_lyrics(download.song, {"kind": "transcribe"})
+
+        assert read_choice(VIDEO_ID) == {"mode": "raw", "yt_id": VIDEO_ID}
+        download.processing.enqueue.assert_called_once_with(download.song)
+
+    def test_a_picked_song_stays_listed_as_picked(self, download):
+        download.tools.on_song_downloaded(download.song)
+
+        download.tools.pick_lyrics(download.song, {"kind": "transcribe"})
+
+        view = download.tools.needs_pick_view()
+        assert (view["to_pick"], view["picked"]) == (1, 1)
+        assert view["songs"][0]["pick"] is not None
+
+    def test_a_second_pick_is_refused(self, download):
+        download.tools.on_song_downloaded(download.song)
+        download.tools.pick_lyrics(download.song, {"kind": "transcribe"})
+
+        with pytest.raises(RegenError, match="already has a pick"):
+            download.tools.pick_lyrics(download.song, {"kind": "genius", "genius_id": 5})
+
+        download.processing.enqueue.assert_called_once()
+
+    def test_a_song_that_is_not_listed_is_refused(self, download):
+        with pytest.raises(RegenError, match="isn't waiting for a pick"):
+            download.tools.pick_lyrics(download.song, {"kind": "transcribe"})
+
+        download.processing.enqueue.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "pick",
+        [
+            None,
+            "transcribe",
+            {"kind": "skip"},
+            {"kind": "keep"},
+            {"kind": "genius"},
+            {"kind": "genius", "genius_id": "7"},
+            {"kind": "genius", "genius_id": True},
+        ],
+    )
+    def test_a_pick_that_is_not_a_genius_song_or_transcribe_changes_nothing(self, download, pick):
+        download.tools.on_song_downloaded(download.song)
+
+        with pytest.raises(RegenError):
+            download.tools.pick_lyrics(download.song, pick)
+
+        assert read_choice(VIDEO_ID) is None
+        download.processing.enqueue.assert_not_called()
+        assert download.tools.needs_pick_view()["picked"] == 0
+
+    def test_a_choice_file_that_cannot_be_written_leaves_the_song_to_pick_again(
+        self, download, monkeypatch
+    ):
+        download.tools.on_song_downloaded(download.song)
+
+        def disk_full(yt_id, payload):
+            raise OSError("disk full")
+
+        monkeypatch.setattr("pikaraoke.lib.library_tools.write_choice", disk_full)
+        with pytest.raises(RegenError, match="Could not save that pick"):
+            download.tools.pick_lyrics(download.song, {"kind": "transcribe"})
+
+        download.processing.enqueue.assert_not_called()
+        assert download.tools.needs_pick_view()["picked"] == 0
+
+
+class TestWhenAListedSongLeaves:
+    def test_finishing_processing_drops_the_song(self, download):
+        download.tools.on_song_downloaded(download.song)
+        download.tools.pick_lyrics(download.song, {"kind": "transcribe"})
+
+        download.tools._events.emit("processing_complete", {"song_path": download.song})
+
+        assert download.tools.needs_pick_view()["songs"] == []
+
+    def test_deleting_the_song_drops_it(self, download):
+        download.tools.on_song_downloaded(download.song)
+
+        download.tools._events.emit("song_deleted", download.song)
+
+        assert download.tools.needs_pick_view()["songs"] == []
+
+    def test_a_job_that_fails_offers_the_pick_again(self, download):
+        download.tools.on_song_downloaded(download.song)
+        download.tools.pick_lyrics(download.song, {"kind": "transcribe"})
+
+        delete_choice(VIDEO_ID)  # the lyrics stage uses the choice file up before the job fails
+        download.tools._events.emit(
+            "processing_error", {"song_path": download.song, "error": "boom"}
+        )
+
+        assert download.tools.needs_pick_view()["picked"] == 0
+        download.tools.pick_lyrics(download.song, {"kind": "transcribe"})
+        assert read_choice(VIDEO_ID) is not None
+
+    def test_a_job_that_is_cancelled_offers_the_pick_again(self, download):
+        download.tools.on_song_downloaded(download.song)
+        download.tools.pick_lyrics(download.song, {"kind": "transcribe"})
+
+        download.tools._events.emit("processing_cancelled", download.song)
+
+        assert download.tools.needs_pick_view()["picked"] == 0
+
+    def test_a_job_for_another_song_changes_nothing(self, download):
+        download.tools.on_song_downloaded(download.song)
+
+        download.tools._events.emit("processing_complete", {"song_path": "/elsewhere/x.mp4"})
+        download.tools._events.emit("processing_error", {"song_path": "/elsewhere/x.mp4"})
+        download.tools._events.emit("song_deleted", "/elsewhere/x.mp4")
+
+        assert len(download.tools.needs_pick_view()["songs"]) == 1
+
+
+def saved_entry(song: str, changes: dict) -> dict:
+    """A needs-a-pick entry as the state file holds it, with ``changes`` made to it."""
+    return {"song": song, "reason": "no_caption", "source": "download", "added_at": 1.0} | changes
+
+
+class TestNeedsPickAcrossARestart:
+    @staticmethod
+    def restart(download):
+        return make_tools(download.folder, list(download.tools._song_manager.songs))[0]
+
+    def test_a_listed_song_is_listed_again(self, download):
+        download.tools.on_song_downloaded(download.song)
+
+        [row] = listed(self.restart(download))
+
+        assert (row["song_path"], row["reason"], row["source"]) == (
+            download.song,
+            "no_caption",
+            "download",
+        )
+
+    def test_a_pick_is_not_remembered_because_its_choice_file_is_not(self, download):
+        download.tools.on_song_downloaded(download.song)
+        download.tools.pick_lyrics(download.song, {"kind": "transcribe"})
+
+        assert self.restart(download).needs_pick_view()["picked"] == 0
+
+    def test_a_song_whose_file_is_gone_is_dropped(self, download):
+        download.tools.on_song_downloaded(download.song)
+        Path(download.song).unlink()
+
+        assert self.restart(download).needs_pick_view()["songs"] == []
+
+    def test_a_song_of_another_library_is_dropped(self, download, tmp_path):
+        download.tools.on_song_downloaded(download.song)
+        elsewhere = tmp_path / "elsewhere"
+        elsewhere.mkdir()
+
+        restarted, _ = make_tools(elsewhere, [], state=download.folder / "library_tools_state.json")
+
+        assert restarted.needs_pick_view()["songs"] == []
+
+    def test_a_run_and_the_list_share_the_state_file(self, download, monkeypatch):
+        download.tools.on_song_downloaded(download.song)
+        monkeypatch.setattr("pikaraoke.lib.library_tools.check_caption", lambda job: NO_CAPTION)
+        download.tools.open_run("all")
+        finish_checks(download.tools)
+
+        restarted = self.restart(download)
+
+        assert restarted.run_view() is not None
+        assert len(restarted.needs_pick_view()["songs"]) == 1
+
+    @pytest.mark.parametrize(
+        "changes",
+        [
+            {"song": 5},
+            {"song": "/no/such/song---aaaaaaaaaaa.mp4"},
+            {"reason": "other"},
+            {"source": "other"},
+            {"added_at": "yesterday"},
+        ],
+    )
+    def test_an_unusable_entry_is_ignored(self, download, changes):
+        state = {"needs_pick": [saved_entry(download.song, changes)]}
+        (download.folder / "library_tools_state.json").write_text(
+            json.dumps(state), encoding="utf-8"
+        )
+
+        assert self.restart(download).needs_pick_view()["songs"] == []
+
+    @pytest.mark.parametrize("needs_pick", ["not a list", [5], [None]])
+    def test_a_list_that_is_not_entries_is_ignored(self, download, needs_pick):
+        state = {"needs_pick": needs_pick}
+        (download.folder / "library_tools_state.json").write_text(
+            json.dumps(state), encoding="utf-8"
+        )
+
+        assert self.restart(download).needs_pick_view()["songs"] == []
+
+
+class TestNeedsPickView:
+    def test_each_song_is_shaped_for_the_pick_page(self, download):
+        download.tools.on_song_downloaded(download.song)
+
+        view = download.tools.needs_pick_view()
+
+        assert (view["to_pick"], view["picked"]) == (1, 0)
+        assert view["songs"] == [
+            {
+                "song": download.song,
+                "title": "Song",
+                "needs_pick": True,
+                "now": {"source": "download", "reason": "no_caption"},
+                "query": "Song",
+                "poor": False,
+                "genius_id": None,
+                "caption": None,
+                "pick": None,
+            }
+        ]
