@@ -44,9 +44,11 @@
       pillLibrary: {{ _('%(n)s in library', n='{n}') | tojson }},
       secNew: {{ _('New: will download (%(n)s)', n='{n}') | tojson }},
       secUnprocessed: {{ _('In library, not processed (%(n)s)', n='{n}') | tojson }},
+      secWaiting: {{ _('Already waiting (%(n)s)', n='{n}') | tojson }},
       secLibrary: {{ _('Already in library (%(n)s)', n='{n}') | tojson }},
       leftOut: {{ _('Left out') | tojson }},
       unprocessedNote: {{ _('Downloaded earlier but never finished. Will be processed.') | tojson }},
+      waitingNote: {{ _('Queued for processing or waiting for a lyrics pick.') | tojson }},
       skip: {{ _('Skip') | tojson }},
       showMore: {{ _('Show %(n)s more', n='{n}') | tojson }},
       empty: {{ _('No videos in this playlist.') | tojson }},
@@ -111,6 +113,7 @@
     function renderLists() {
       var fresh = withStatus('new');
       var unprocessed = withStatus('not_processed');
+      var waiting = withStatus('waiting');
       var inLibrary = withStatus('in_library');
       var result = $('#pl-sections').empty();
       if (fresh.length) {
@@ -121,6 +124,12 @@
         result.append(section(fill(T.secUnprocessed, { n: unprocessed.length }),
           el('div', 'pl-card').append($.map(unprocessed, function (video) {
             return noteRow(video, T.unprocessedNote, null);
+          }))));
+      }
+      if (waiting.length) {
+        result.append(section(fill(T.secWaiting, { n: waiting.length }),
+          el('div', 'pl-card').append($.map(waiting, function (video) {
+            return noteRow(video, T.waitingNote, null);
           }))));
       }
       if (inLibrary.length) {

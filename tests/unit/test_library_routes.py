@@ -1636,6 +1636,15 @@ class TestPlaylistPage:
         assert ".html(" not in code and ".innerHTML" not in code
         assert_loads_shared_helpers(html, code)
 
+    def test_a_waiting_video_has_a_section_with_no_box_and_is_not_counted_to_process(self, env):
+        html = text(env.client.get("/library/playlist"))
+
+        assert "Already waiting ({n})" in html
+        assert "Queued for processing or waiting for a lyrics pick." in html
+        assert "return noteRow(video, T.waitingNote, null);" in html  # no box, no tag
+        assert "var m = withStatus('not_processed').length;" in html
+        assert "$.map(withStatus('not_processed'), function (video) { return video.song; })" in html
+
     def test_the_button_follows_the_boxes_and_is_disabled_at_zero(self, env):
         html = text(env.client.get("/library/playlist"))
 
@@ -1733,7 +1742,12 @@ class TestPlaylistAddRoute:
             unprocessed=[],
         )
 
-        assert response.get_json() == {"success": True, "downloads": 2, "processing": 0}
+        assert response.get_json() == {
+            "success": True,
+            "downloads": 2,
+            "processing": 0,
+            "listed": 0,
+        }
         assert env.downloads.queue_download.call_count == 2
         [(category, message)] = self.flashes(env)
         assert (category, message) == ("is-success", "Added 2 videos to the download queue.")
@@ -1752,10 +1766,39 @@ class TestPlaylistAddRoute:
 
         response = self.add(env, videos=[{"id": "ccccccccccc", "title": "One"}], unprocessed=[song])
 
-        assert response.get_json() == {"success": True, "downloads": 1, "processing": 1}
+        assert response.get_json() == {
+            "success": True,
+            "downloads": 1,
+            "processing": 1,
+            "listed": 0,
+        }
         env.processing.enqueue.assert_called_once_with(song)
         [(_category, message)] = self.flashes(env)
         assert message == "Added 1 video to the download queue. 1 song sent to processing."
+
+    @pytest.mark.parametrize(
+        "counts, message",
+        [
+            ((0, 0, 1), "1 song needs a lyrics pick."),
+            ((0, 0, 3), "3 songs need a lyrics pick."),
+            ((2, 0, 1), "Added 2 videos to the download queue. 1 song needs a lyrics pick."),
+            ((0, 1, 2), "1 song sent to processing. 2 songs need a lyrics pick."),
+            (
+                (1, 2, 3),
+                "Added 1 video to the download queue. 2 songs sent to processing. "
+                "3 songs need a lyrics pick.",
+            ),
+        ],
+    )
+    def test_the_note_says_what_each_kind_of_song_did(self, env, monkeypatch, counts, message):
+        downloads, processing, listed = counts
+        answer = {"downloads": downloads, "processing": processing, "listed": listed}
+        monkeypatch.setattr(env.k.library_tools, "add_playlist", lambda videos, unprocessed: answer)
+
+        response = self.add(env, videos=[], unprocessed=[])
+
+        assert response.get_json() == {"success": True, **answer}
+        assert self.flashes(env) == [("is-success", message)]
 
     def test_a_song_whose_check_fails_does_not_fail_the_request(self, env, monkeypatch):
         def fail(job):
@@ -1767,7 +1810,12 @@ class TestPlaylistAddRoute:
         response = self.add(env, videos=[{"id": "ccccccccccc", "title": "One"}], unprocessed=[song])
 
         assert response.status_code == 200
-        assert response.get_json() == {"success": True, "downloads": 1, "processing": 1}
+        assert response.get_json() == {
+            "success": True,
+            "downloads": 1,
+            "processing": 1,
+            "listed": 0,
+        }
         env.processing.enqueue.assert_called_once_with(song)
 
     def test_a_selection_with_nothing_to_take_says_so(self, env):

@@ -2244,6 +2244,27 @@ class TestCheckPlaylist:
 
         assert video["status"] == "in_library"
 
+    def test_a_song_already_queued_or_listed_is_waiting_not_unprocessed(
+        self, download, monkeypatch
+    ):
+        busy = make_video(download.folder, "Busy---bbbbbbbbbbb")
+        idle = make_video(download.folder, "Idle---ccccccccccc")
+        download.tools._song_manager.songs.update([download.song, str(busy), str(idle)])
+        download.processing.pending_jobs = [str(busy)]
+        download.tools.on_song_downloaded(download.song)  # no caption: listed for a pick
+        read_as(
+            monkeypatch,
+            playlist_of(("bbbbbbbbbbb", "Busy"), (VIDEO_ID, "Listed"), ("ccccccccccc", "Idle")),
+        )
+
+        videos = download.tools.check_playlist(PLAYLIST_URL)["videos"]
+
+        assert [(v["title"], v["status"], v["song"]) for v in videos] == [
+            ("Busy", "waiting", None),
+            ("Listed", "waiting", None),
+            ("Idle", "not_processed", str(idle)),
+        ]
+
     def test_a_video_listed_twice_is_listed_once(self, tmp_path, monkeypatch):
         tools, _ = make_tools(tmp_path, [])
         read_as(monkeypatch, playlist_of(("aaaaaaaaaaa", "Fresh"), ("aaaaaaaaaaa", "Fresh again")))
@@ -2314,7 +2335,7 @@ class TestAddPlaylist:
             [],
         )
 
-        assert result == {"downloads": 2, "processing": 0}
+        assert result == {"downloads": 2, "processing": 0, "listed": 0}
         assert [(c.args, c.kwargs) for c in self.queued(tools)] == [
             (
                 ("https://www.youtube.com/watch?v=aaaaaaaaaaa",),
@@ -2392,7 +2413,7 @@ class TestAddPlaylist:
 
         result = download.tools.add_playlist([], [download.song])
 
-        assert result == {"downloads": 0, "processing": 1}
+        assert result == {"downloads": 0, "processing": 1, "listed": 0}
         download.processing.enqueue.assert_called_once_with(download.song)
 
     def test_an_unprocessed_song_without_a_usable_caption_is_listed_from_the_playlist(
@@ -2407,6 +2428,19 @@ class TestAddPlaylist:
             "no_caption",
         )
 
+    def test_songs_the_check_queues_and_songs_it_lists_are_counted_apart(self, download):
+        captioned = make_video(download.folder, "Captioned---aaaaaaaaaaa")
+        write_caption(download.folder, captioned.stem, words=60)
+        download.tools._song_manager.songs.update([download.song, str(captioned)])
+
+        result = download.tools.add_playlist([], [download.song, str(captioned)])
+
+        assert result == {"downloads": 0, "processing": 1, "listed": 1}
+        download.processing.enqueue.assert_called_once_with(str(captioned))
+        [row] = listed(download.tools)
+        assert (row["song_path"], row["source"]) == (download.song, "playlist")
+        assert download.tools._playlist_ids == set()  # only for downloads that land later
+
     def test_a_check_that_fails_does_not_stop_the_songs_after_it(self, download, monkeypatch):
         second = make_video(download.folder, "Second---aaaaaaaaaaa")
         download.tools._song_manager.songs.update([download.song, str(second)])
@@ -2419,8 +2453,9 @@ class TestAddPlaylist:
 
         monkeypatch.setattr("pikaraoke.lib.library_tools.gate_on_disk_caption", fail_for_the_first)
 
-        download.tools.add_playlist([], [download.song, str(second)])
+        result = download.tools.add_playlist([], [download.song, str(second)])
 
+        assert result == {"downloads": 0, "processing": 1, "listed": 1}
         download.processing.enqueue.assert_called_once_with(download.song)
         assert [r["song_path"] for r in listed(download.tools)] == [str(second)]
 
@@ -2440,5 +2475,5 @@ class TestAddPlaylist:
             [], [str(busy), str(done), str(stranger), str(music), download.song, 5, None]
         )
 
-        assert result == {"downloads": 0, "processing": 0}
+        assert result == {"downloads": 0, "processing": 0, "listed": 0}
         download.processing.enqueue.assert_not_called()
