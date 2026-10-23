@@ -124,6 +124,11 @@ class TestProcessingPage:
         assert 'href="/library/run"' in body
         assert 'id="pr-run-confirm"' in body and "Discard this run and its picks?" in body
 
+    def test_the_banner_says_ready_to_queue_once_every_pick_is_made(self, env):
+        body = get(env, "/processing", admin=True).get_data(as_text=True)
+
+        assert "(run.to_pick - run.picked > 0 ? T.runPicks : T.runReady)" in body
+
     def test_a_guest_gets_no_tabs_chips_or_library_links(self, env):
         body = get(env, "/processing", admin=False).get_data(as_text=True)
 

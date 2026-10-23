@@ -1212,6 +1212,28 @@ class TestRunPages:
 
         assert code.count("seq !== state.seq") == 2  # the answer and the failure
 
+    def test_the_preview_goes_on_to_queue_once_no_pick_is_left(self, env, run):
+        code = page_script(text(env.client.get("/library/run")))
+
+        assert "return run.to_pick - run.picked > 0;" in code
+        assert code.count("picksLeft(") == 4  # its definition, the button, the note, the tap
+        assert "to_pick > 0" not in code
+
+    def test_the_pick_page_takes_no_other_pick_while_one_saves(self, env, run):
+        code = page_script(text(env.client.get("/library/run/picks")))
+
+        # Keep, Transcribe and Skip song; Use pick also waits for a selected hit.
+        assert code.count(".prop('disabled', state.sending)") == 3
+        assert ".prop('disabled', picker.selected === null || state.sending)" in code
+        # A save's answer closes only the picker it was made in.
+        assert "if (state.open === song.song) state.open = null;" in code
+
+    def test_the_pick_page_tags_the_admins_own_genius_pick(self, env, run):
+        code = page_script(text(env.client.get("/library/run/picks")))
+
+        assert "song.pick.kind === 'genius' && hit.id === song.pick.genius_id" in code
+        assert '"your pick"' in code
+
 
 class TestRunPickRoutes:
     def test_a_pick_is_saved_and_the_run_comes_back(self, env, run):
