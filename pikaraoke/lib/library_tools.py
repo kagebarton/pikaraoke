@@ -734,7 +734,11 @@ class LibraryTools:
             return asdict(CaptionCheck(found=False, wpm=None, passed=False, failed=True))
 
     def _load_run(self) -> _Run | None:
-        """The run an earlier session left open, over the songs still on disk."""
+        """The run an earlier session left open, over this library's songs still on disk.
+
+        A song of another library (the app started with another download path)
+        is dropped: queueing it would back up this library and reset that one.
+        """
         try:
             state = json.loads(self._state_path.read_text(encoding="utf-8"))
         except FileNotFoundError:
@@ -749,8 +753,13 @@ class LibraryTools:
             or not isinstance(saved.get("songs"), dict)
         ):
             return None
+        folder = os.path.normcase(os.path.abspath(self._folder))
         entries = {}
+        elsewhere = 0
         for path, kept in saved["songs"].items():
+            if os.path.normcase(os.path.abspath(Path(path).parent)) != folder:
+                elsewhere += 1
+                continue
             if not isinstance(kept, dict) or not Path(path).is_file():
                 continue
             entry = self._entry(path, song_status(Path(path)))
@@ -760,6 +769,12 @@ class LibraryTools:
             except RegenError:  # no pick, or one this song can no longer take
                 entry.pick = None
             entries[path] = entry
+        if elsewhere:
+            logger.warning(
+                "Dropped %d song(s) of the saved run that are not in the library %s",
+                elsewhere,
+                self._folder,
+            )
         return _Run(saved["mode"], entries) if entries else None
 
     def _save(self) -> None:
