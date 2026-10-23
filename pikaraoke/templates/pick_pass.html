@@ -64,6 +64,7 @@
       pickedTranscribe: {{ _('Transcribe') | tojson }},
       pickedSkip: {{ _('Skipped: left out of this run') | tojson }},
       poorNote: {{ _('%(guessed)s of %(n)s lines guessed', guessed='{guessed}', n='{n}') | tojson }},
+      checkFailed: {{ _("Caption check failed: YouTube didn't answer.") | tojson }},
       searchLabel: {{ _('Genius search') | tojson }},
       searching: {{ _('Searching…') | tojson }},
       noGenius: {{ _('No Genius results.') | tojson }},
@@ -164,13 +165,14 @@
       var open = state.open === song.song;
       var sub = song.pick ? pickText(song.pick) : song.now;
       var icon = el('span', 'pp-icon', song.pick ? '✓' : '');
-      var line = el('button', 'pp-line').attr('type', 'button').attr('aria-expanded', open).append(
-        icon,
-        el('span', 'pp-main').append(
-          el('span', 'pp-title', song.title).attr('title', song.title),
-          el('span', 'pp-muted pp-sub', sub)
-        )
+      var main = el('span', 'pp-main').append(
+        el('span', 'pp-title', song.title).attr('title', song.title),
+        el('span', 'pp-muted pp-sub', sub)
       );
+      if (!song.pick && song.caption && song.caption.failed) {
+        main.append(el('span', 'pp-muted pp-warn', T.checkFailed));
+      }
+      var line = el('button', 'pp-line').attr('type', 'button').attr('aria-expanded', open).append(icon, main);
       line.on('click', function () { toggle(song); });
       var row = el('div', 'pp-row').append(line);
       if (song.pick) {

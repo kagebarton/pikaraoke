@@ -12,7 +12,7 @@ import json
 import logging
 import os
 import threading
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from pikaraoke.lib import lrclib
@@ -77,6 +77,10 @@ _PICK_GROUPS = {"genius": "genius", "keep": "genius", "transcribe": "transcribe"
 # A typed Genius title or artist is shown back on the pick page; this much is plenty.
 _PICK_TEXT_MAX = 200
 
+# A caption check that couldn't run (YouTube refusing, often after many calls in a
+# row) is tried once more after this pause.
+CAPTION_RETRY_PAUSE_S = 30
+
 
 def _pick_text(value: object) -> str:
     return value.strip()[:_PICK_TEXT_MAX] if isinstance(value, str) else ""
@@ -86,7 +90,8 @@ def _pick_text(value: object) -> str:
 class _Entry:
     """One song of an open run: what its files said when the run opened, and the admin's say.
 
-    ``check`` is the caption check once measured: ``{found, passed, wpm}``. ``pick`` is
+    ``check`` is the caption check once measured: ``{found, passed, wpm, failed}``
+    (``failed``: it couldn't run; a state file from before has no such key). ``pick`` is
     ``{kind: genius | keep | transcribe | skip, genius_id?, title?, artist?}``.
     """
 
@@ -101,6 +106,11 @@ class _Entry:
         genius_id = (self.status.genius or {}).get("id")
         return genius_id if isinstance(genius_id, int) else None
 
+    @property
+    def check_failed(self) -> bool:
+        """Its caption check couldn't run and no pick decides it, so it can be checked again."""
+        return self.pick is None and bool((self.check or {}).get("failed"))
+
 
 @dataclass
 class _Run:
@@ -108,6 +118,8 @@ class _Run:
 
     mode: str
     entries: dict[str, _Entry]
+    # Set when the run is discarded or queued: a caption check's retry pause ends at once.
+    closed: threading.Event = field(default_factory=threading.Event)
 
     def needs_check(self, entry: _Entry) -> bool:
         """Whether the run measures this song's YouTube caption before choosing its source.
@@ -382,8 +394,9 @@ class LibraryTools:
         keep), ``caption``, ``reuse``, ``transcribe`` or ``skip``. A song with
         ``needs_pick`` true is one a pick decides, whether or not it has one
         yet; ``to_pick`` counts those songs and ``picked`` the ones already
-        picked. ``now`` is the lyric source the song has today, in raw parts
-        for the route to put in words.
+        picked. ``failed`` counts the songs with no pick whose caption check
+        couldn't run (:meth:`recheck_captions`). ``now`` is the lyric source the
+        song has today, in raw parts for the route to put in words.
         """
         with self._state_lock:
             run = self._run
@@ -399,6 +412,7 @@ class LibraryTools:
                 "checked": sum(e.check is not None for e in checkable),
                 "to_pick": len(deciding),
                 "picked": sum(e.pick is not None for e in deciding),
+                "failed": sum(e.check_failed for e in run.entries.values()),
                 "queueable": sum(s["group"] != "skip" for s in songs),
                 "songs": songs,
             }
@@ -445,10 +459,32 @@ class LibraryTools:
                 self._save()
             return kept
 
+    def recheck_captions(self) -> int:
+        """Check again every song with no pick whose caption check couldn't run.
+
+        Returns how many songs are checked again. Raises :class:`RegenError`
+        while captions are being checked, or when no such song is left.
+        """
+        with self._state_lock:
+            run = self._open_run()
+            # A checker still alive is about to end; a second one would check songs twice.
+            checker_alive = self._checker is not None and self._checker.is_alive()
+            if run.unchecked() is not None or checker_alive:
+                raise RegenError("Captions are still being checked.")
+            failed = [e for e in run.entries.values() if e.check_failed]
+            if not failed:
+                raise RegenError("No caption check failed.")
+            for entry in failed:
+                entry.check = None
+            self._save()
+            self._start_checks()
+            return len(failed)
+
     def discard_run(self) -> None:
         """Close the open run with its picks (a caption check in flight stops at its next song)."""
         with self._state_lock:
             if self._run is not None:
+                self._run.closed.set()
                 self._run = None
                 self._save()
 
@@ -486,6 +522,7 @@ class LibraryTools:
                     queued += 1
                 else:
                     busy += 1
+            run.closed.set()
             self._run = None
             self._save()
         return {"queued": queued, "busy": busy, "backup": backup.name if backup else None}
@@ -668,8 +705,11 @@ class LibraryTools:
     def _check_captions(self, run: _Run) -> None:
         """Measure ``run``'s captions one song at a time (a yt-dlp call each), saving after each.
 
-        Ends when none are left, or once ``run`` is no longer the open run (it
-        was discarded or queued): the song it was on is the last it measures.
+        A check that couldn't run is tried once more after
+        :data:`CAPTION_RETRY_PAUSE_S`, and the second answer is stored, whatever
+        it is. Ends when none are left, or once ``run`` is no longer the open
+        run (it was discarded or queued): the song it was on is the last it
+        measures, and a run closed during the pause gets nothing stored.
         """
         while True:
             with self._state_lock:
@@ -677,17 +717,21 @@ class LibraryTools:
             if path is None:
                 return
             check = self._measure_caption(path)
+            if check["failed"]:
+                if run.closed.wait(CAPTION_RETRY_PAUSE_S):
+                    return
+                check = self._measure_caption(path)
             with self._state_lock:
                 run.entries[path].check = check
                 self._save()
 
     def _measure_caption(self, path: str) -> dict:
-        """The song's caption check; one that can't run counts as no usable caption."""
+        """The song's caption check; one that crashes counts as a check that couldn't run."""
         try:
             return asdict(check_caption(self._song_job(path)))
         except Exception:
             logger.exception("Caption check of %s failed", Path(path).name)
-            return asdict(CaptionCheck(found=False, wpm=None, passed=False))
+            return asdict(CaptionCheck(found=False, wpm=None, passed=False, failed=True))
 
     def _load_run(self) -> _Run | None:
         """The run an earlier session left open, over the songs still on disk."""

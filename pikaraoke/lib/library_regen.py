@@ -32,7 +32,11 @@ from pikaraoke.lib.metadata_parser import (
 from pikaraoke.lib.song_list import SongList
 from pikaraoke.lib.srt_cues import cue_spans_from_srt
 from pikaraoke.lib.srt_provenance import clear_generated_marker, is_generated
-from pikaraoke.lib.youtube_dl import ASR_JSON3_SUFFIX, download_manual_en_subs
+from pikaraoke.lib.youtube_dl import (
+    ASR_JSON3_SUFFIX,
+    CaptionDownloadFailed,
+    download_manual_en_subs,
+)
 from pikaraoke.pipeline.config import PipelineConfig
 from pikaraoke.pipeline.context import StageContext
 from pikaraoke.pipeline.stages.base import BaseStage
@@ -392,7 +396,13 @@ def fetch_caption(job: SongJob) -> None:
     backed-up caption.
     """
     song = job.song_path
-    result = download_manual_en_subs(_watch_url(song), str(song.parent / "subtitles"), song.stem)
+    try:
+        result = download_manual_en_subs(
+            _watch_url(song), str(song.parent / "subtitles"), song.stem
+        )
+    except CaptionDownloadFailed as e:
+        logger.warning("Caption download failed for %s: %s", song.name, e)
+        result = None
     if result is None:
         logger.info("No downloadable caption for %s; will prompt", song.name)
         job.plan = job.plan.fallback or Plan(kind="prompt", label="fetch failed -> genius")
@@ -409,6 +419,7 @@ class CaptionCheck:
     found: bool  # YouTube has a manual English caption
     wpm: float | None  # None when the caption's length can't be measured
     passed: bool  # would the length gate keep it
+    failed: bool = False  # the check couldn't run, so found says nothing
 
 
 def check_caption(job: SongJob) -> CaptionCheck:
@@ -420,7 +431,11 @@ def check_caption(job: SongJob) -> CaptionCheck:
     song = job.song_path
     scratch = Path(tempfile.mkdtemp(prefix="caption_check_", dir=get_temp_directory()))
     try:
-        result = download_manual_en_subs(_watch_url(song), str(scratch), song.stem)
+        try:
+            result = download_manual_en_subs(_watch_url(song), str(scratch), song.stem)
+        except CaptionDownloadFailed as e:
+            logger.warning("Caption check of %s couldn't run: %s", song.name, e)
+            return CaptionCheck(found=False, wpm=None, passed=False, failed=True)
         if result is None:
             return CaptionCheck(found=False, wpm=None, passed=False)
         wpm = caption_wpm(Path(result), job)

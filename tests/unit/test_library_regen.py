@@ -378,6 +378,18 @@ class TestFetchCaption:
         assert job.plan is fallback
         assert job.plan.kind == "prompt"
 
+    def test_a_download_that_fails_reverts_to_fallback(self, tmp_path, monkeypatch, caplog):
+        job = self._fetch_job(tmp_path)
+        fallback = job.plan.fallback
+
+        def fail(url, dest, stem):
+            raise lr.CaptionDownloadFailed("HTTP Error 403")
+
+        monkeypatch.setattr(lr, "download_manual_en_subs", fail)
+        lr.fetch_caption(job)
+        assert job.plan is fallback
+        assert "HTTP Error 403" in caplog.text
+
     def test_too_sparse_discarded_and_reverts(self, tmp_path, monkeypatch):
         job = self._fetch_job(tmp_path, _gap_bundle(media_duration_s=60.0))
         fallback = job.plan.fallback
@@ -407,11 +419,13 @@ class TestCheckCaption:
         monkeypatch.setattr(lr, "get_temp_directory", lambda: str(root))
         return root
 
-    def _check(self, tmp_path, scratch_root, monkeypatch, n_words: int | None, duration=60.0):
-        """Run ``check_caption`` with a download of ``n_words`` (None: no caption)."""
+    def _check(self, tmp_path, scratch_root, monkeypatch, n_words: int | str | None, duration=60.0):
+        """Run ``check_caption`` with a download of ``n_words`` (None: no caption; "fail")."""
 
         def fake_dl(url, dest, stem):
             assert dest.startswith(str(scratch_root))
+            if n_words == "fail":
+                raise lr.CaptionDownloadFailed("timed out")
             if n_words is None:
                 return None
             srt = Path(dest) / f"{stem}.en.srt"
@@ -432,6 +446,13 @@ class TestCheckCaption:
     def test_no_caption(self, tmp_path, scratch_root, monkeypatch):
         result = self._check(tmp_path, scratch_root, monkeypatch, n_words=None)
         assert result == lr.CaptionCheck(found=False, wpm=None, passed=False)
+        assert result.failed is False
+
+    def test_a_download_that_fails_is_a_check_that_could_not_run(
+        self, tmp_path, scratch_root, monkeypatch
+    ):
+        result = self._check(tmp_path, scratch_root, monkeypatch, n_words="fail")
+        assert result == lr.CaptionCheck(found=False, wpm=None, passed=False, failed=True)
 
     def test_sparse_caption_fails_the_gate(self, tmp_path, scratch_root, monkeypatch):
         result = self._check(tmp_path, scratch_root, monkeypatch, n_words=3)  # 3 wpm over 60s

@@ -928,8 +928,11 @@ class TestOpenRun:
             "no_id": "unprocessed",
         }
 
-    def test_a_check_that_fails_counts_as_no_usable_caption(self, tmp_path, monkeypatch, caplog):
+    def test_a_check_that_crashes_counts_as_one_that_could_not_run(
+        self, tmp_path, monkeypatch, caplog
+    ):
         paths = bulk_library(tmp_path)
+        monkeypatch.setattr("pikaraoke.lib.library_tools.CAPTION_RETRY_PAUSE_S", 0)
         monkeypatch.setattr(
             "pikaraoke.lib.library_tools.check_caption", MagicMock(side_effect=RuntimeError("x"))
         )
@@ -939,6 +942,7 @@ class TestOpenRun:
         finish_checks(tools)
 
         assert set(groups(tools).values()) == {"needs_pick"}
+        assert tools.run_view()["failed"] == 6  # every song with a YouTube id
         assert "Caption check of" in caplog.text
 
     def test_the_view_counts_the_checks_as_they_finish(self, tmp_path, monkeypatch):
@@ -1237,6 +1241,165 @@ class TestRunState:
         tools._check_captions(closed)
 
         assert asked == []
+
+
+FAILED = CaptionCheck(found=False, wpm=None, passed=False, failed=True)
+
+
+def answer_in_turn(monkeypatch, answers: dict[str, list[CaptionCheck]]) -> list[str]:
+    """Patch the caption check to give each song its answers in turn (no caption after them).
+
+    Returns the list that fills with the stems asked about, in order.
+    """
+    left = {STEMS[key]: list(checks) for key, checks in answers.items()}
+    asked: list[str] = []
+
+    def check(job):
+        stem = job.song_path.stem
+        asked.append(stem)
+        return left[stem].pop(0) if left.get(stem) else NO_CAPTION
+
+    monkeypatch.setattr("pikaraoke.lib.library_tools.check_caption", check)
+    return asked
+
+
+class TestFailedCaptionChecks:
+    @pytest.fixture(autouse=True)
+    def no_pause(self, monkeypatch):
+        monkeypatch.setattr("pikaraoke.lib.library_tools.CAPTION_RETRY_PAUSE_S", 0)
+
+    @staticmethod
+    def stale_run(tmp_path, monkeypatch, answers):
+        """An update, whose one song to check is ``unlined``; returns (tools, asked, paths)."""
+        paths = bulk_library(tmp_path)
+        asked = answer_in_turn(monkeypatch, answers)
+        tools, _ = make_tools(tmp_path, list(paths.values()))
+        tools.open_run("stale")
+        finish_checks(tools)
+        return tools, asked, paths
+
+    def test_a_check_that_could_not_run_is_tried_once_more_then_stored_as_failed(
+        self, tmp_path, monkeypatch
+    ):
+        tools, asked, _ = self.stale_run(tmp_path, monkeypatch, {"unlined": [FAILED, FAILED]})
+
+        assert asked == [STEMS["unlined"]] * 2
+        song = run_song(tools, "unlined")
+        assert song["group"] == "needs_pick"
+        assert song["caption"]["failed"] is True
+        view = tools.run_view()
+        assert (view["checking"], view["failed"]) == (False, 1)
+
+    def test_a_pass_on_the_second_try_is_stored_as_a_pass(self, tmp_path, monkeypatch):
+        tools, asked, _ = self.stale_run(tmp_path, monkeypatch, {"unlined": [FAILED, PASS]})
+
+        assert asked == [STEMS["unlined"]] * 2
+        assert run_song(tools, "unlined")["group"] == "caption"
+        assert tools.run_view()["failed"] == 0
+
+    def test_a_check_that_found_no_caption_is_not_tried_again(self, tmp_path, monkeypatch):
+        tools, asked, _ = self.stale_run(tmp_path, monkeypatch, {"unlined": [NO_CAPTION]})
+
+        assert asked == [STEMS["unlined"]]
+        assert run_song(tools, "unlined")["caption"]["failed"] is False
+        assert tools.run_view()["failed"] == 0
+
+    def test_a_discard_during_the_pause_ends_the_checks_at_once_and_stores_nothing(
+        self, tmp_path, monkeypatch
+    ):
+        monkeypatch.setattr("pikaraoke.lib.library_tools.CAPTION_RETRY_PAUSE_S", 5)
+        paths = bulk_library(tmp_path)
+        asked = threading.Event()
+        calls: list[str] = []
+
+        def check(job):
+            calls.append(job.song_path.stem)
+            asked.set()
+            return FAILED
+
+        monkeypatch.setattr("pikaraoke.lib.library_tools.check_caption", check)
+        tools, _ = make_tools(tmp_path, list(paths.values()))
+        tools.open_run("stale")
+        checker, run = tools._checker, tools._run
+        assert asked.wait(10)
+
+        tools.discard_run()
+        checker.join(1)
+
+        assert not checker.is_alive()
+        assert calls == [STEMS["unlined"]]
+        assert run.entries[paths["unlined"]].check is None
+
+    def test_check_again_clears_only_the_failed_songs_without_a_pick(self, tmp_path, monkeypatch):
+        paths = bulk_library(tmp_path)
+        answers = {"current": [FAILED, FAILED], "behind": [FAILED, FAILED], "unlined": [PASS]}
+        asked = answer_in_turn(monkeypatch, answers)
+        tools, _ = make_tools(tmp_path, list(paths.values()))
+        tools.open_run("reset")
+        finish_checks(tools)
+        tools.save_pick(paths["behind"], {"kind": "transcribe"})
+        assert tools.run_view()["failed"] == 1
+        asked.clear()
+
+        assert tools.recheck_captions() == 1
+        finish_checks(tools)
+
+        assert asked == [STEMS["current"]]
+        assert run_song(tools, "current")["caption"]["failed"] is False  # no caption this time
+        assert run_song(tools, "behind")["caption"]["failed"] is True  # its pick decides it
+        assert run_song(tools, "unlined")["group"] == "caption"
+        assert tools.run_view()["failed"] == 0
+
+    def test_check_again_is_refused_while_captions_are_being_checked(self, tmp_path, monkeypatch):
+        paths = bulk_library(tmp_path)
+        release = hold_captions(monkeypatch)
+        tools, _ = make_tools(tmp_path, list(paths.values()))
+        tools.open_run("reset")
+
+        with pytest.raises(RegenError, match="still being checked"):
+            tools.recheck_captions()
+
+        release.set()
+        finish_checks(tools)
+
+    def test_check_again_is_refused_when_no_unpicked_check_failed(self, tmp_path, monkeypatch):
+        tools, _, paths = self.stale_run(tmp_path, monkeypatch, {"unlined": [FAILED, FAILED]})
+        tools.save_pick(paths["unlined"], {"kind": "skip"})
+
+        with pytest.raises(RegenError, match="No caption check failed"):
+            tools.recheck_captions()
+
+        assert run_song(tools, "unlined")["caption"]["failed"] is True
+
+    def test_a_failed_check_survives_a_restart_and_can_be_checked_again(
+        self, tmp_path, monkeypatch
+    ):
+        _, asked, paths = self.stale_run(tmp_path, monkeypatch, {"unlined": [FAILED, FAILED, PASS]})
+
+        restarted, _ = make_tools(tmp_path, list(paths.values()))
+
+        assert restarted._checker is None  # a failed check is a finished one
+        assert restarted.run_view()["failed"] == 1
+        assert restarted.recheck_captions() == 1
+        finish_checks(restarted)
+        assert run_song(restarted, "unlined")["group"] == "caption"
+        assert len(asked) == 3
+
+    def test_a_check_saved_before_failures_were_recorded_reads_as_finished(
+        self, tmp_path, monkeypatch
+    ):
+        _, _, paths = self.stale_run(tmp_path, monkeypatch, {"unlined": [NO_CAPTION]})
+        state_path = tmp_path / "library_tools_state.json"
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        del state["run"]["songs"][paths["unlined"]]["check"]["failed"]
+        state_path.write_text(json.dumps(state), encoding="utf-8")
+
+        restarted, _ = make_tools(tmp_path, list(paths.values()))
+
+        assert run_song(restarted, "unlined")["group"] == "needs_pick"
+        assert restarted.run_view()["failed"] == 0
+        with pytest.raises(RegenError, match="No caption check failed"):
+            restarted.recheck_captions()
 
 
 class TestQueueRun:
