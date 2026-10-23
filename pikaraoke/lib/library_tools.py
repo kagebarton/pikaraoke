@@ -12,7 +12,7 @@ import json
 import logging
 import os
 import threading
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
 from pikaraoke.lib import lrclib
@@ -124,14 +124,10 @@ class _Run:
     def needs_check(self, entry: _Entry) -> bool:
         """Whether the run measures this song's YouTube caption before choosing its source.
 
-        A song with a source to replay, and a transcribed song in a reprocess,
-        don't need one; a reset looks at every song's caption.
+        Exactly the songs that would wait in ``checking`` with no check made, so
+        the two rules can't drift apart and leave a song there for good.
         """
-        if not entry.status.youtube_id:
-            return False
-        if self.mode == "reset":
-            return True
-        return not entry.reusable and entry.status.category != "no_lyrics"
+        return self.undecided_group(replace(entry, check=None)) == "checking"
 
     def undecided_group(self, entry: _Entry) -> str:
         """Where the song stands before any pick; ``needs_pick`` is the group a pick decides."""
