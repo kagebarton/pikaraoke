@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from urllib.parse import quote
+
 import flask_babel
-from flask import abort, flash, jsonify, redirect, render_template, request, url_for
+from flask import flash, jsonify, redirect, render_template, request, url_for
 from flask_smorest import Blueprint
 
 from pikaraoke.lib.current_app import get_karaoke_instance, get_site_name, is_admin
@@ -14,15 +16,6 @@ _ = flask_babel.gettext
 ngettext = flask_babel.ngettext
 
 library_bp = Blueprint("library", __name__)
-
-
-def _list_title(name: str) -> str:
-    return {
-        "behind": _("Songs behind the current version"),
-        "poor": _("Songs that look poor"),
-        "no_lyrics": _("Songs with no lyrics"),
-        "all": _("All songs"),
-    }[name]
 
 
 def _subline(name: str, status: SongStatus) -> str:
@@ -54,28 +47,23 @@ def overview():
 
 @library_bp.route("/library/songs")
 def songs():
-    """The songs behind one of the overview counts, each linking to its Song Info."""
+    """The songs behind one of the overview counts, each with its Song Info link."""
     if not is_admin():
-        flash(_("You don't have permission to view the library tools"), "is-danger")
-        return redirect(url_for("files.browse"))
+        return _error(_("Admin only"), 403)
     name = request.args.get("list", "")
     if name not in SONG_LISTS:
-        abort(400)
+        return _error(_("Not a song list"), 400)
     k = get_karaoke_instance()
+    info = url_for("song_info.song_info")
     rows = [
         {
-            "path": path,
             "name": k.song_manager.filename_from_path(path),
             "subline": _subline(name, status),
+            "info_url": f"{info}?song={quote(path.encode('utf-8', 'surrogateescape'))}",
         }
         for path, status in k.library_tools.songs_in_list(name)
     ]
-    return render_template(
-        "library_songs.html",
-        site_title=get_site_name(),
-        title=_list_title(name),
-        rows=rows,
-    )
+    return jsonify({"success": True, "rows": rows})
 
 
 def _error(message: str, status: int):
