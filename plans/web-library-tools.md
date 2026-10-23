@@ -17,8 +17,8 @@ Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 > `2c352b4`. Phase 8 (the after-download check and needs-a-pick list, the
 > pick page, and playlists) is executed, code `1a26b68` and `3d26811`.
 > Its code review ran 2026-10-23; Phase 8.1 (its recommended fixes,
-> written up at Ken's request) is next, then Ken's Phase 8 checks, then
-> Phase 9.** Ken
+> written up at Ken's request) is executed too, code `14632ae`..`2ba0c3d`.
+> Ken's Phase 8 checks are next (they cover 8.1), then Phase 9.** Ken
 > approved D2's Phase 3.1 bullet on 2026-10-20. Branch
 > `web_library_tools`, off `library_tools` at `0bfa02a`; `dev` merged as
 > `c34d889`. There is no GATE and nothing here measures timing. Landing is
@@ -4817,5 +4817,160 @@ its own (below).
   the 15 new ones left out) instead of "the rest", because each download is a full GPU run and the
   videos have no captions; the "captioned songs process" case was shown with a direct download
   (ABBA) because no video in that playlist has a manual caption. Review due (see the relay).
+
+### Phase 8.1
+
+Executed 2026-10-23 by Sonnet 5.5 (session `7c41e33d`), starting from `babdca2` (clean; the plan
+commit on top of `fd38a1b`). Scratchpad for this row:
+`...\7c41e33d-b508-4b41-8c26-8efd77d9542a\scratchpad\p81\`. Five code commits, in order:
+
+- `14632ae` 8.1a fix(library): a caption that can't be read no longer drops the download (5 files,
+  +111/-16: `library_regen.py`, `library_tools.py`, `test_library_regen.py`,
+  `test_library_routes.py`, `test_library_tools.py`).
+- `9aae99d` 8.1b fix(processing): a status read during the caption check no longer hides the pick
+  (2 files, +55/-12: `pipeline_tracker.py`, `test_processing_routes.py`).
+- `59dd376` 8.1c fix(library): whether a listed song is queued comes from the queue (3 files,
+  +103/-32: `library_tools.py`, `test_library_routes.py`, `test_library_tools.py`).
+- `763d64e` 8.1d fix(library): the playlist page and its add agree on what will be processed (5
+  files, +150/-32: `library_tools.py`, `routes/library.py`, `playlist.html`, `test_library_routes.py`,
+  `test_library_tools.py`).
+- `2ba0c3d` 8.1e refactor(library): the needs-a-pick words and "not processed" have one definition
+  each (6 files, +67/-18: `routes/library.py`, `routes/processing.py`, `processing.html`,
+  `scripts/add_songs.py`, `test_processing_page.py`, `test_processing_routes.py`).
+
+- **Baseline** (`uv run --no-sync python -P -m pytest tests/unit -q -p no:cacheprovider`, at
+  `babdca2`, 141.6 s): **4 failed, 2243 passed, 2 skipped**; the baseline's four ids. Imports
+  checked to resolve to the worktree first.
+- **Suite after each commit** (same four failed ids every time, 2 skipped):
+
+  | Commit | Passed | Time | New tests |
+  |---|---|---|---|
+  | `14632ae` | 2255 | 150.3 s | +12 |
+  | `9aae99d` | 2257 | 147.4 s | +2 |
+  | `59dd376` | 2261 | 148.8 s | +4 |
+  | `763d64e` | 2269 | 147.8 s | +8 |
+  | `2ba0c3d` | 2274 | 149.4 s | +5 |
+
+- **Tests, by step.**
+  - 8.1a: `test_library_regen.py` `TestSrtWordCount` (new class: the count of a good caption; a
+    latin-1 caption, an out-of-range timestamp and a non-SRT each give None and log `Cannot read
+    SRT`; a missing file gives None), `TestGateOnDiskCaption` (+3: each of the three unreadable
+    captions passes and is kept, plan seed-srt); `test_library_tools.py` `TestAfterDownloadCheck`
+    (the old `..._cannot_be_checked_is_queued_as_before`, an `OSError` only, became one test over
+    `OSError` and `RuntimeError`: queued, nothing listed, a second `song_downloaded` handler
+    registered after it ran, the log names the song; +1 for a latin-1 caption: queued, nothing listed,
+    the file kept), `TestAddPlaylist` (+1: the first song's check raises, the second is still taken),
+    `test_library_routes.py` `TestPlaylistAddRoute` (+1: 200 and the song queued).
+  - 8.1b: `test_processing_routes.py` `TestNeedsPick` (+2): the probe's sequence with the real
+    `EventSystem` (admin row `needs_pick`, group `attention`, `pick` among the actions; the guest's
+    row `needs_pick`, group `active`, no `pick`; `finished_at` still None); a row stamped by
+    `processing_complete` is not touched by a later `needs_pick`. The 5.1c tests
+    (`TestAStatusReadBeforeTheQueue`) passed unchanged.
+  - 8.1c: the `download` fixture (`test_library_tools.py`) and `listed_song` (`test_library_routes.py`)
+    now make `processing.enqueue` append to `pending_jobs`, as the manager does. `TestPickLyrics`:
+    second pick refused with the new text; a song busy as waiting and as running shows as picked and
+    is refused with no `enqueue` and no choice file (2); a second pick from inside `write_choice` is
+    refused and `enqueue` runs once; a failed `write_choice` leaves the song pickable and a second
+    pick then queues it; an `enqueue` that raises leaves it pickable (+1, new).
+    `TestWhenAListedSongLeaves`: the cancel test became "a job cancelled while it waits offers the
+    pick again" (`pending_jobs` emptied, no event, view `picked 0`, a new Genius pick taken, `enqueue`
+    called twice); the failed-job test removes the song from `pending_jobs` before the
+    `processing_error` event. Net +4.
+  - 8.1d: `TestCheckPlaylist` +1 (a busy song and a listed song `waiting` with no `song`, an idle
+    unlisted one `not_processed`); `TestAddPlaylist` +1 (one song queued and one listed give
+    `processing 1, listed 1`; the listed one's entry has source `playlist`; `_playlist_ids` empty) and
+    the existing results now carry `listed`; `TestPlaylistAddRoute` +5 (the flash for 0/0/1, 0/0/3,
+    2/0/1, 0/1/2 and 1/2/3 downloads/processing/listed; the existing nothing-to-add test covers all zero);
+    `TestPlaylistPage` +1 (the `waiting` section text, no box or tag, M counted from `not_processed`
+    only). `TestPlaylistSource` unchanged and passing.
+  - 8.1e: `test_processing_page.py` +1 (the script shows `row.subline`; `sources:`, `reasons:`,
+    `T.sources`, `T.reasons` and `caption too sparse` are not in the page); `test_processing_routes.py`
+    `TestAttentionRoute` +4 (each source with each reason: the row's `subline`, actions, and no
+    `subline` on other rows; `pikaraoke.routes.library._` patched to the identity, as the file does
+    for its own route). `test_add_songs.py` unchanged and passing.
+- **As built (the plan left these open).**
+  - 8.1a: `_srt_word_count` catches `(OSError, ValueError, OverflowError, srt.SRTParseError)`.
+    `_pick_reason` has no catch of its own. The boundary logs with `logger.exception("Lyrics check of
+    %s failed; processing it", name)`; after 8.1d it is in `_check_download`.
+  - 8.1c: `_is_picked(entry)` is `entry.picking or self.is_busy(entry.song)` (caller holds the state
+    lock; `queue_run` already calls `is_busy` under it). `pick_lyrics` is `try: write_choice / except
+    OSError: raise RegenError / else: enqueue / finally: picking = False`. `_unpick`,
+    `_on_processing_error` and the `processing_error` and `processing_cancelled` subscriptions are gone.
+  - 8.1d: `check_playlist` calls `file_status` and then `_is_unprocessed` for a not-processed file, so
+    `file_status` runs twice for such a file. `on_song_downloaded` keeps the `_playlist_ids` lookup and
+    calls `_check_download(song_path, source)`. No pill for `waiting` on the page (the plan named none).
+  - 8.1e: `routes/processing.py` imports `needs_pick_subline` from `routes/library.py` (a first
+    import between two route modules). The attention rows still carry `reason` and `source` (the
+    page's change key uses them). The `add_songs.py` comment now reads `# "new" | "already in library"
+    | NOT_PROCESSED`.
+- **Windows behaviour not changed (8.1c's consequence).** A job cancelled while it waits leaves its
+  choice file; the pick that follows calls `write_choice`, which on Windows raises `FileExistsError`
+  (`Path.rename` onto an existing file; the baseline's `test_write_overwrites_existing`) and answers
+  "Could not save that pick." until the file is gone. Linux replaces it. `genius.py` is not in D1; the
+  cancel test deletes the file first and says why in a comment.
+- **Mutation checks** (each reverted from a copy; `git status` clean after). Test ids are the new
+  ones above.
+
+  | Step | Mutation | Result |
+  |---|---|---|
+  | 8.1a | the boundary removed (in `on_song_downloaded` at `14632ae`, again in `_check_download` at `2ba0c3d`) | 4 failed both times: the `OSError` and `RuntimeError` cases, the playlist "does not stop the songs after it", the route's 200 |
+  | 8.1a | `_srt_word_count`'s catch narrowed back to `(OSError, srt.SRTParseError)` | 4 failed: the not-UTF-8 and out-of-range cases in `TestSrtWordCount` and in `TestGateOnDiskCaption` |
+  | 8.1b | `_on_needs_pick` takes `_find_unfinished` only | 1 failed: the probe-sequence test |
+  | 8.1b | `_find_called_complete` ignores `finished_at` (extra) | 1 failed: the stamped-row test |
+  | 8.1c | `_is_picked` without `is_busy` | 5 failed: stays listed as picked, second pick refused, busy waiting, busy running, the route's pick-then-list |
+  | 8.1c | `picking` never cleared | 4 failed: failed write, failing `enqueue`, failed job, cancelled while waiting |
+  | 8.1d | `check_playlist` on `file_status` alone | 1 failed: waiting-not-unprocessed |
+  | 8.1d | `listed` counted as `processing` | 2 failed: the counted-apart test and the failing-check test |
+
+- **Probes** (review session `a85d9ebe`'s scratchpad; run from the worktree root with
+  `uv run --no-sync python -P`; outputs `race_before.txt`, `race_final.txt`, `probe1_before.txt`,
+  `probe1_final.txt`, `probe2_before.txt`). Before at `babdca2`, after at `2ba0c3d`:
+
+  | Probe | Before | After |
+  |---|---|---|
+  | `probe_race.py` | `read during gate: ['complete']`; `after needs_pick: status complete group finished actions ['remove', 'dismiss', 'song_info', 'enqueue']`; `guest: complete finished ['enqueue']` | `read during gate: ['complete']`; `after needs_pick: status needs_pick group attention actions ['remove', 'pick', 'song_info']`; `guest: needs_pick active []` |
+  | `probe1.py` P1 | `raised UnicodeDecodeError 'utf-8' codec can't decode byte 0xe9 in position 35 ... \| enqueue called: False \| later handler ran: False` | `no exception; enqueue calls [call(<the song>)]`, a `Cannot read SRT` warning logged (the later handler is asserted by the unit test; the probe prints it only on an exception) |
+  | P2 | `second pick refused: That song already has a pick.`; view `[{'kind': 'queued'}]` | `second pick accepted`; view `[None]` |
+  | P3 | view `[(..., None)]`; `enqueue calls (busy song): 1` | view `[(..., {'kind': 'queued'})]`; `pick refused: That song is already waiting or processing.`; `enqueue calls (busy song): 0` |
+  | `probe2.py` | `huge hours raised OverflowError`; `bom -> ['la la']`; `garbage raised SRTParseError` | the same (it calls `cue_spans_from_srt` directly); `_srt_word_count` on those inputs: huge hours None, latin-1 None, garbage None, a good caption 3 |
+
+  P4 and P5 (8.1f's items) print as before. The probes read neither `_unpick` nor `picked`, so no rename
+  was needed; the copy `probe1_adj.py` differs from the original in two ways: P3's pick is wrapped
+  in `try/except RegenError` and prints the refusal, and P3 clears the choice file first (P2's second
+  pick is now accepted and writes one; without that, P3's download was queued, not listed, in the first
+  adjusted run).
+- **pre-commit:** `--files` per commit. 8.1a, 8.1b and 8.1c passed at once; at 8.1d and 8.1e Black
+  reformatted files on the first run (restaged, then every hook passed). `scripts/add_songs.py` was CRLF
+  in the working copy (`git ls-files --eol`: `i/lf w/crlf`; `core.autocrlf` is `true` globally and
+  `input` in the repository's config); converted to LF in place before the 8.1e commit; its staged diff is
+  5 lines. `git diff --cached --check` clean at each commit. Import smoke at `2ba0c3d`:
+  `library_regen`, `library_tools`, `pipeline_tracker`, `routes.library`, `routes.processing`,
+  `karaoke`, `app`; `scripts/add_songs.py --help` prints its usage.
+- **Isolated app run** (look only). Ground rules checked first with `Get-NetTCPConnection` and
+  `Win32_Process`: nothing listening on 5555, 5556 or 9334, no `pikaraoke` process. `APPDATA`
+  `C:\temp\p8\appdata`, library `D:\shared\weblib-test`, port 5556. Scratch library hashed before
+  (`scratch_before_81.json`, 258 files). One entry written to `C:\temp\p8\appdata\pikaraoke\library_tools\
+  state.json`: song `D:\shared\weblib-test\Traditional - Happy Birthday (Karaoke Version)---aF8voKa_3Us.mp4`,
+  `source` `playlist`, `reason` `no_caption`. Log `app_run_81.log`: the app answered on 5556 after about 8
+  s; the only ERROR line is the yt-dlp self-upgrade. Headless Edge at 390 px (`cdp8.py`, port 9334,
+  profile `edgeprofile8`; steps `steps_81.py`; output `drive_81.txt`; screenshots `p8shots\81_01_attention_row`
+  and `81_02_pick_list`, read by eye). Nothing was picked, queued or downloaded.
+  - Processing: chips `All 1`, `Active 0`, `Attention 1`, `Finished 0`; the row reads `Traditional - Happy
+    Birthday`, `Playlist · no caption`, tag `Needs a pick`; expanded buttons `Pick lyrics -> /library/picks`,
+    `Song info -> /song_info?song=D%3A%5Cshared%5Cweblib-test%5C...`, `Delete song -> delete`.
+    `/processing/attention` returned `[{"state":"needs_pick","source":"playlist","reason":"no_caption",
+    "subline":"Playlist · no caption","actions":["pick","song_info","delete"]}]`.
+  - Pick lyrics: h1 `Pick lyrics`, `0 of 1 picked`, chips `To pick 1` and `Picked 0`, the song with
+    `Playlist · no caption`.
+  - App stopped (the `uv.exe` and its two `python.exe` with `--port 5556`); my eight headless Edge
+    processes (profile `edgeprofile8`) stopped; afterwards 5555, 5556 and 9334 free. `state.json` put back
+    to `{"run": null, "needs_pick": []}` (read back). Scratch library after (`scratch_after_81.json`):
+    before 258, after 258, added 0, removed 0, changed 0, identical 258 (`hashdiff_81.txt`).
+- **Real-library manifest:** `manifest.py compare "D:/Shared/pikaraoke-songs"` against the Phase 0
+  manifest: `manifest=2605 now=2616 added=11 removed=0 changed=1`, all under `zh_probe/`, as in the
+  earlier rows (`manifest_compare_81.txt`). `%APPDATA%\pikaraoke\tmp\lyric_choices` (Ken's real temp folder)
+  held 0 files.
+- **Differences from the plan's text:** the probe adjustments above; the 8.1a boundary mutation was
+  run twice (the code moved in 8.1d); the extra 8.1b mutation. Nothing else.
 
 ### Phase 9
