@@ -2,16 +2,17 @@
 
 Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 
-> **Status (2026-10-22): Phases 0-7 and 6.1 done (3.1 = fixes from the Phase
+> **Status (2026-10-23): Phases 0-7 and 6.1 done (3.1 = fixes from the Phase
 > 1-3 code review, 3.1g included; the review of 3.1b-3.1d is done with its
 > two fix commits; Phase 4's code is `7f5853e` and `55cfdbb`, Phase 5's is
 > `641600a`, Phase 6's is `8a3b585`, Phase 7's is `0541907` and `ecbde50`,
 > see the Results log). Phase 5.1 (the fixes from the Phase 4-5 code review,
 > as Ken ruled them) is done too, code `874d49c`..`6caad6f`. Phase 6.1 (the
 > fixes from the Phase 6 code review, approved by Ken 2026-10-22) is done
-> too, code `a14906a`..`febeb2c`. The `/code-review` of Phase 7 is done
-> (2026-10-23); Phase 7.1, its fixes as Ken ruled them, is next, then
-> Ken's checks for Phase 7 (they cover 7.1), then Phase 8.** Ken
+> too, code `a14906a`..`febeb2c`. Phase 7.1 (the fixes from the Phase 7
+> code review, as Ken ruled them 2026-10-23) is done too, code
+> `d280722`..`1bc3c29`. Next: Ken's checks for Phase 7 (they cover 7.1),
+> then Phase 8.** Ken
 > approved D2's Phase 3.1 bullet on 2026-10-20. Branch
 > `web_library_tools`, off `library_tools` at `0bfa02a`; `dev` merged as
 > `c34d889`. There is no GATE and nothing here measures timing. Landing is
@@ -3790,6 +3791,187 @@ code commits (the plan allows the split):
     "Cancel" (the plan's word) and uses the theme's primary.
 
 ### Phase 7.1
+
+Executed 2026-10-23 by Opus 5.5 (session `7793017c`), starting from `6c1f245` (clean). Scratchpad
+for this row: `...\7793017c-e313-469d-b821-3298b30187fa\scratchpad\`. Six code commits, in order:
+
+- `d280722` 7.1a fix(library): a caption check that couldn't run is tried again and can be checked
+  again (10 files, +393/-45: `youtube_dl.py`, `library_regen.py`, `library_tools.py`,
+  `routes/library.py`, `library_run.html`, `pick_pass.html`, four test files).
+- `05322ee` 7.1b fix(library): a regen job stops before any change when Genius doesn't return its
+  pick (3 files, +91/-2: `library_regen.py`, `test_library_regen.py`, `test_processing_manager.py`).
+- `84a8220` 7.1c fix(library): a run read back at start keeps only this library's songs (2 files,
+  +63/-1).
+- `fc0699b` 7.1d fix(library): the run pages once every pick is made and while a pick saves
+  (5 files, +47/-9: `library_run.html`, `pick_pass.html`, `processing.html`, two test files).
+- `2d83e70` 7.1e refactor(library): one caption-check rule, and the library pages share their
+  helpers (8 files, +80/-62; `static/library-pages.js` new, 23 lines).
+- `1bc3c29` test(library): the Genius-check test never writes a real choice sidecar (1 file, +3).
+  Found by the full suite: during 7.1b's mutation run ("the Genius check skipped"), the 7.1b test
+  for a Genius pick Genius doesn't return went on into `prepare_lyrics` and wrote a real
+  `%APPDATA%\pikaraoke\tmp\lyric_choices\dQw4w9WgXcQ.json` (`{"genius_id": 1}`, 09:51:37, Ken's real
+  app temp folder, not the scratch one). It made `test_lyrics_fetch.py::TestBranchCSrtFallback`'s
+  `test_srt_exists_sets_path` and `test_no_srt_sets_none` fail (6 failed, 2098 passed). The file
+  was deleted (the folder then held 0 files); the test now patches `write_choice` and asserts it
+  isn't called; the two mutations were run again (2 and 3 failures) and the folder stayed empty.
+
+- **7.1a live yt-dlp check** (network only, no app; `live_ytdlp.py`, which wraps
+  `subprocess.run` to record each call; output into `live_ytdlp_tmp\`). Before the fix, at
+  `6c1f245`:
+
+  | Video | Scratch song | Returned | yt-dlp exit | Last stderr line |
+  |---|---|---|---|---|
+  | `fJ9rUzIMcZQ` | Queen | path `probe.en.srt` | 0 | (empty) |
+  | `1OwfYjemrYw` | Backstreet Boys | path `probe.en.srt` | 0 | (empty) |
+  | `xFYQQPAOz7Y` | Eminem | None | 0 | (empty) |
+  | `DYptgVvkVLQ` | Jay Chou | None | 0 | (empty) |
+  | `8NJVNkzhJM4` | Eason Chan | None | 0 | (empty) |
+  | `aF8voKa_3Us` | Happy Birthday | None | 0 | (empty) |
+  | `AoON1CyhQAM` | Defying Gravity | None | 0 | (empty) |
+  | `aaaaaaaaaaa` | (none) | None | 1 | `ERROR: [youtube] aaaaaaaaaaa: This video is unavailable` |
+
+  After the fix (`fJ9rUzIMcZQ`, `xFYQQPAOz7Y`, `aaaaaaaaaaa`): a path (exit 0), None (exit 0),
+  raised `CaptionDownloadFailed: yt-dlp subtitle download failed for
+  https://www.youtube.com/watch?v=aaaaaaaaaaa: ERROR: [youtube] aaaaaaaaaaa: This video is
+  unavailable` (exit 1). The STOP condition did not occur.
+- **Suite** (`PYTHONIOENCODING=utf-8 uv run --no-sync python -P -m pytest -q`, 139.1 s at
+  `1bc3c29`): **4 failed, 2100 passed, 2 skipped**; passed = 2067 + 33 new. The four failures are
+  the baseline's four (ids unchanged). New tests by file: `test_youtube_dl.py` +1 (a
+  three-case parametrized test replaced the two "returns None" tests), `test_library_regen.py` +5,
+  `test_library_tools.py` +13 (`TestFailedCaptionChecks` 9; `TestRunState` 4, one of them
+  parametrized over two spellings), `test_library_routes.py` +11 (`TestRunAccess` one more route;
+  `TestRunRecheck` 4; three 7.1d render tests; three 7.1e render tests), `test_processing_page.py`
+  +2, `test_processing_manager.py` +1. Changed: `test_a_check_that_fails_counts_as_no_usable_caption`
+  became `test_a_check_that_crashes_counts_as_one_that_could_not_run` (pause patched to 0; the
+  view's `failed` is 6); the two run-page and the repair-page markup tests read
+  `static/library-pages.js` too.
+- **Mutation checks** (`mutate71.py <step>`; each reverted; failures counted over the listed test
+  files):
+
+  | Step | Mutation | Failures |
+  |---|---|---|
+  | 7.1a | no second try | 5 |
+  | 7.1a | the pause not ended by a discard (a fresh Event waited on) | 1 |
+  | 7.1a | a failed download stored as a finished check (`check_caption`) | 1 |
+  | 7.1a | a crashing check stored as a finished one (`_measure_caption`) | 1 |
+  | 7.1a | the recheck clearing picked songs | 2 |
+  | 7.1a | `failed` counts picked songs | 1 |
+  | 7.1a | `failed` always 0 | 5 |
+  | 7.1a | the recheck allowed while checking | 1 |
+  | 7.1a | the recheck doesn't start the checker | 3 |
+  | 7.1a | the download returns None on an error exit | 1 |
+  | 7.1a | the download returns None on a timeout | 1 |
+  | 7.1a | the download returns None without yt-dlp | 1 |
+  | 7.1a | `fetch_caption` lets the failure through | 1 |
+  | 7.1a | the recheck route not admin-only | 1 |
+  | 7.1a | the failed box shown while checking | 1 |
+  | 7.1a | no failed line on a preview row | 1 |
+  | 7.1a | no failed line on a pick row | 1 |
+  | 7.1b | the Genius check after the wipe | 2 |
+  | 7.1b | the Genius check skipped | 3 |
+  | 7.1c | the folder test removed | 2 |
+  | 7.1c | the folders compared as typed (no `normcase`/`abspath`) | 1 |
+  | 7.1d | the banner reads `to_pick > 0` | 1 |
+  | 7.1d | the preview reads `to_pick > 0` | 1 |
+  | 7.1d | Keep not disabled while a pick saves | 1 |
+  | 7.1d | a save's answer closes any picker | 1 |
+  | 7.1e | the derived rule inverted | 47 |
+  | 7.1e | the derived rule reads the stored check | 1 |
+
+  7.1d through the probes (`mutate71.py d-probes`: mutate, dump the pages, run both probes,
+  revert): picks left read as `to_pick > 0` → `3. all picked: go: Start picks (3 of 3 done) |
+  'queued only after the last pick' shown: true`, `3. tap go -> ["Not implemented: navigation
+  (except hash changes)"] | posts: 0`; Transcribe not disabled → `3. while saving, disabled:
+  Transcribe false Skip true Use pick true`; a save's answer closes any picker → `3. after the
+  save answer: picker open: 0`; no your-pick tag → `4. Change hits: [ "Defying
+  GravitycurrentKristin Chenoweth", "Defying GravityIdina Menzel" ]`.
+- **Probes** (copied from the review's `p7review\` to `p71\`, not committed). Changes to the
+  copies: `pick_probe.mjs`'s Transcribe tap during the save is a native `click()`, and it also
+  prints the three picker buttons' `disabled` during the save and whose picker is open after the
+  answer; `preview_probe.mjs` prints the URLs posted by the all-picked Go tap; after 7.1e
+  `run_pages.mjs` loads `static/library-pages.js` (next to the jQuery path) before the page
+  script. Pages dumped with `test_dump_run_pages.py` (`PYTHONPATH=tests/unit`, `--rootdir` the
+  probe folder; 2 passed) into `p71\pages_71d\` (at `fc0699b`) and `p71\pages_71e\` (at
+  `2d83e70`). Before (the plan's text, at `3b863af`) and after (both dumps print the same):
+  - `3. all picked: go: Start picks (3 of 3 done) | 'queued only after the last pick' shown:
+    true` and `3. tap go -> ["Not implemented: navigation (except hash changes)"] | posts: 0`
+    became `3. all picked: go: Queue 3 songs | 'queued only after the last pick' shown: false`
+    and `3. tap go -> [] | posts: 1 [ "/library/run/queue" ]`.
+  - `3. posts so far: 1` (Transcribe tapped through jQuery's `trigger`) and `3. after the save
+    answer: picker open: 0` became `3. while saving, disabled: Transcribe true Skip true Use pick
+    true`, `3. posts so far: 1` (a native tap), `3. after the save answer: picker open: 1 | ... |
+    picker for: No Id Song`, `3. No Id's search answer after that: picker open: 1`.
+  - `4. Change hits: [ "Defying GravitycurrentKristin Chenoweth", "Defying GravityIdina Menzel" ]`
+    became `[ "Defying GravitycurrentKristin Chenoweth", "Defying Gravityyour pickIdina Menzel" ]`.
+  - Unchanged from before: `6. queue posts after two taps: 2` (jQuery `trigger` on a disabled
+    button; `0. ... two native taps on Queue -> posts: 1`), `4. two taps on Discard run -> posts:
+    2` on the preview.
+- **7.1e helper copies:** `fill`, `el` and `errorOf` hashed alike (md5 of the indent-stripped
+  block `86161f58...` in `song_repair.html`, `library_run.html` and `pick_pass.html`; `fill`
+  `3d0c0da7...` in all four, `processing.html` included). No call to them before their
+  declaration's line in any of the four page scripts.
+- **Isolated app run** (Ground rules checked first and again before the start: nothing on 5555 or
+  5556, no python, mpv or pikaraoke process besides `TPython.exe`, GPU 1092 MiB 8 %). `APPDATA` the
+  Phase 3 session's scratch folder (`...\66751cff-...\scratchpad\appdata`; its config's
+  `download_path` is `D:/shared/weblib-test`, no admin password; `state.json` read `{"run":
+  null}` before). Log `app_run_phase71.log`: `Background library scan starting:
+  D:\shared\weblib-test`, `Scan: found 8 song(s) on disk`. Scratch library hashed before
+  (`scratch_before_p71.json`, 258 files). Headless Edge over DevTools at 390 px (`cdp71.py`, a copy
+  of the Phase 7 `cdp7.py`; steps `steps71.py`, then `steps71b.py` and `steps71d.py` resuming after
+  two step-file errors of mine, `steps71c.py` a debug of the second); output `drive71*.txt`,
+  screenshots `p71shots\01`-`10`. Nothing was queued; Queue, Regenerate, Next and Send were never
+  tapped.
+  - Library tools: `Preview 0`, `Preview 8`, `Preview 8`. Reset all: while checking `Checking
+    captions… 0 of 7`; checked `7 of 7`, status `failed 0`, `to_pick 6`; the failed box hidden; go
+    `Start picks (0 of 6 done)`, the after-picks note shown; "Needs a pick (6)", "Uses its YouTube
+    caption (2)" (Backstreet Boys, Queen, `Caption OK`).
+  - Pick page: `0 of 6 picked`. Josh Gad by Genius search `in summer josh gad` (hit `In Summer`,
+    `current`, Josh Gad) then Use pick; Change on it, the same search: `In Summer` tagged `current`
+    and `your pick`. Keep: Defying Gravity, Eminem, Jay Chou. Eason Chan → Transcribe, Happy
+    Birthday → Skip song. Then `6 of 6 picked`, `Queue 7 songs` enabled, `Keep current pick for all
+    0 not yet picked`.
+  - Preview with every pick made: go `Queue 7 songs` (enabled), the after-picks note hidden;
+    "Picked: Genius (4)", "Uses its YouTube caption (2)", "No lyrics (transcribe) (1)", "Skipped
+    (1)".
+  - Processing reached through the SPA (Home, then the nav link; the same document before and
+    after), Library tools tab: `libraryPages` an object, the banner `Reset all is open: ready to
+    queue.`, no window error. A full load of `/processing#tools` showed the same banner. Discard →
+    the in-place confirm → Discard run → `/library/run/status` `{"open": false}`.
+  - Song Info (Queen) → Repair lyrics (the button loads the page in full), and the repair URL
+    loaded directly: both times `libraryPages` an object, caption line `Use the video's caption as
+    the lyrics.` (choosable), Genius search `bohemian rhapsody queen` 8 hits (first `Bohemian
+    Rhapsody` Queen).
+  - App stopped with `taskkill /F /T` on the listener's pid; afterwards 5555 and 5556 free, no
+    python, mpv or pikaraoke process. Scratch library after (`scratch_after_p71.json`): before 258,
+    after 258, added 0, removed 0, changed 0, identical 258.
+- **Real-library manifest:** `manifest.py compare "D:/Shared/pikaraoke-songs"` against the Phase 0
+  manifest: `manifest=2605 now=2616 added=11 removed=0 changed=1`, the same 12 files under
+  `zh_probe/phase0/` as the earlier rows. Output `manifest_compare_phase71.txt`. The real library
+  was not read by the app or any tool of this phase.
+- **pre-commit:** `--files` with each commit's files; every hook passed, except Black reformatting
+  one test signature in `test_library_tools.py` at 7.1c (restaged, then passed). Import smoke:
+  `youtube_dl`, `library_regen`, `library_tools`, `routes.library`, `processing_manager`,
+  `karaoke`, `app`.
+- **Differences from the plan's text:**
+  - `recheck_captions` also refuses while the caption thread is still alive (it is between
+    storing its last answer and ending); a second thread would check the cleared songs twice.
+  - A song's failed check is told by `_Entry.check_failed` (a failed check and no pick), used by
+    `run_view`'s `failed` and by `recheck_captions`.
+  - `_load_run` counts a saved song of another folder before it tests the file exists, so the
+    log line counts every song of another library, gone or not; the line is `Dropped N song(s) of
+    the saved run that are not in the library <folder>`.
+  - The Check again box's button is 44 px tall (`.lr-failed .button`); the box's sentence and the
+    row line use the theme's warning colour, as the poor note does.
+  - The Genius check in `prepare_regen_job` logs `Genius pick <id> for <song> refused: <reason>`.
+- **Seen, not changed:**
+  - The pipeline's own Genius fetch, seconds after 7.1b's check, still falls back to a caption
+    or transcribes when it fails in that window (the plan's text).
+  - The repair page's caption line (6.1b's one wording) covers a failed check too (7.1f).
+  - The Processing page loads the run banner and the counts only when its Library tools tab is
+    shown; the nav link opens Jobs.
+  - The preview's Discard run takes two posts on two quick native taps (it has no sending
+    guard); discarding twice is harmless (the second finds no run).
+  - A failed caption check could not be forced live; the unit tests cover it.
 
 ### Phase 8
 
