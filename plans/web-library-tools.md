@@ -11,8 +11,9 @@ Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 > fixes from the Phase 6 code review, approved by Ken 2026-10-22) is done
 > too, code `a14906a`..`febeb2c`. Phase 7.1 (the fixes from the Phase 7
 > code review, as Ken ruled them 2026-10-23) is done too, code
-> `d280722`..`1bc3c29`. Next: Ken's checks for Phase 7 (they cover 7.1),
-> then Phase 8.** Ken
+> `d280722`..`1bc3c29`. Ken's checks for Phase 7 (covering 7.1) ran
+> 2026-10-23 and passed (record `01d9475`). Next: Phase 7.2 (two fixes
+> from that check, ruled by Ken 2026-10-23), then Phase 8.** Ken
 > approved D2's Phase 3.1 bullet on 2026-10-20. Branch
 > `web_library_tools`, off `library_tools` at `0bfa02a`; `dev` merged as
 > `c34d889`. There is no GATE and nothing here measures timing. Landing is
@@ -106,7 +107,7 @@ New:
 | `pikaraoke/lib/library_tools.py` | `LibraryTools`, the app service: single-song jobs, bulk runs, the needs-a-pick list, the after-download check, playlists, persisted state |
 | `pikaraoke/routes/song_info.py` | `song_info_bp`: Song Info, regenerate, repair and its search helpers |
 | `pikaraoke/routes/library.py` | `library_bp`: Library tools tab data, song lists, bulk runs, pick screens, playlists |
-| `pikaraoke/templates/song_info.html`, `song_repair.html`, `library_songs.html`, `library_run.html`, `pick_pass.html`, `playlist.html` | the new pages |
+| `pikaraoke/templates/song_info.html`, `song_repair.html`, `library_run.html`, `pick_pass.html`, `playlist.html` | the new pages (`library_songs.html`, Phase 4d, was deleted by 7.2a: its lists open inline on the Library tools tab) |
 | `pikaraoke/static/library-pages.js` | the page helpers the library pages share (Phase 7.1e; Ken, 2026-10-23) |
 
 Changed (fork-owned unless marked upstream):
@@ -119,6 +120,9 @@ Changed (fork-owned unless marked upstream):
 - `pikaraoke/lib/youtube_dl.py` (upstream file): the fork's own
   `download_manual_en_subs` raises when the download fails, and nothing
   else changes there (Phase 7.1a; Ken, 2026-10-23).
+- `pikaraoke/pipeline/stages/lyrics_fetch.py`: the one LRCLIB log call in
+  `_resolve_lrclib` names a skip marker as a skip (Phase 7.2b; Ken,
+  2026-10-23).
 - `pikaraoke/karaoke.py`: wiring.
 - Upstream, smallest possible change each: `pikaraoke/app.py` (import and
   register two blueprints), `pikaraoke/lib/karaoke_database.py` and
@@ -293,6 +297,21 @@ non-video songs (`.mp3`, CDG `.zip`: Song Info says the tools work on videos
 only); updating the translation catalogue (new strings use `{% trans %}` and
 `_()` like the existing pages, and the `.pot` is not regenerated); keeping the
 processing queue across restarts.
+
+From Ken's live check of Phases 4-7.1 (2026-10-23; Ken ruled where each
+goes):
+
+- **Uploading hand-checked lyrics** as the lyric source of a Repair,
+  Regenerate or Reset: a later plan of its own, after this branch lands on
+  `dev`. It builds on this branch's Repair page and pick pass, and needs its
+  own design first (what counts as the current pick, and how an uploaded
+  sheet survives a later Reset).
+- **Delete song and Rename leave the song's files behind**:
+  `SongManager._get_companion_files` (upstream) knows only the `.srt`, the
+  two stems and the `.ass`, so a delete leaves the bundle, the `.lrc` and
+  the `.srt.generated`, and a rename leaves them under the old name. That is
+  on `dev` today, from the Edit page, so it is fixed on its own small branch
+  off `dev`, not here.
 
 ## Where things live
 
@@ -1286,6 +1305,9 @@ with a subline per list: behind → "Version N"; poor → "N of M lines
 guessed"; no lyrics → "Transcribed"; all → "Up to date" / "Behind (vN)" /
 "No lyrics" / "Not processed".
 
+(Phase 7.2a replaces this page: the same rows open inline under the Library
+card, from a JSON answer of the same route.)
+
 ### 4e. Links (upstream templates, one link each)
 
 - `files.html`: in the admin cell beside the edit icon, an `icon-info-circled`
@@ -2276,6 +2298,134 @@ share their helpers`.
 - The `### Phase 7.1` Results row (raw facts) and the status block, in
   their own docs(plan) commit.
 
+## Phase 7.2: fixes from Ken's live check of Phases 4-7.1
+
+Model: Claude Opus 5.5 (design, 2026-10-23); executor Claude Sonnet 5.5.
+
+Ken's live pass on 2026-10-23 (the `### Phase 7 checks` Results row) passed
+every box. Ken ruled on 2026-10-23 that two of its findings are fixed on this
+branch before Phase 8:
+
+- the four Library card lists open inline on the Library tools tab, instead
+  of on their own page, which has no way back (7.2a);
+- the pipeline log stops saying an LRCLIB file is "available for fill" when
+  that file is the skip marker (7.2b).
+
+The pass's other two findings go elsewhere (D9): uploading hand-checked
+lyrics is a later plan, and Delete song / Rename leaving files behind is
+fixed off `dev`.
+
+Same worktree, same ground rules, same "Every phase ends the same way".
+Before starting, confirm the worktree is clean at `01d9475` plus this plan
+commit. One code commit per step, each with its tests: 7.2a, then 7.2b.
+
+Files: all in D1 except one addition that comes with this phase (Ken,
+2026-10-23): `pikaraoke/pipeline/stages/lyrics_fetch.py` (fork-owned), for
+the one log call in `_resolve_lrclib` and nothing else (7.2b).
+`library_songs.html` leaves D1 (7.2a deletes it).
+
+The suite at `01d9475`: the Phase 7.1 row's count (4 failed, the baseline's
+four; 2100 passed). Rerun it first and use what it prints as the baseline.
+
+### 7.2a. The four lists open inline on the Library tools tab
+
+Today each row of the Library card (`processing.html`, `#pr-tools`) is a
+link to `GET /library/songs?list=<name>`, which renders
+`library_songs.html` as a page of its own. That page has no back link.
+
+- **Server** (`routes/library.py`): `GET /library/songs?list=<name>` answers
+  JSON instead of a page, the way `/library/overview` does: a guest gets
+  403 `{"success": false, "error": ...}` (no redirect, no flash); an unknown
+  or missing list gets 400 through `_error`; otherwise
+  `{"success": true, "rows": [{"name", "subline", "info_url"}, ...]}`, in
+  `songs_in_list`'s order. `name` and `subline` are what the page shows
+  today (`filename_from_path`, `_subline`). `info_url` is the Song Info
+  link, built in Python the way the deleted template built it (the
+  `url_for('song_info.song_info')` path, `?song=`, and `quote` of the path
+  encoded with `utf-8` and `surrogateescape`), so the page never escapes a
+  path itself. Delete `_list_title` (nothing else uses it; the card row's
+  own label is the title), `library_songs.html`, and the route's
+  `render_template` and `get_site_name` imports if nothing else uses them.
+- **Page** (`processing.html`): each of the four `a.pr-link` rows becomes a
+  `<button type="button">` with `data-list="<name>"`, `aria-expanded`, the
+  same label and count tag, and a chevron that turns when open. Under each
+  sits an empty, hidden list box. Style the button like `.pr-link` (full
+  width, left-aligned, no border or background of its own, the inherited
+  font and colour), with a 48 px tap height as today.
+  - Tapping a closed row closes any other open list, opens this one with
+    "Loading…", and fetches its JSON. Tapping an open row closes it. One
+    list is open at a time, so a long All songs list never pushes the
+    Regenerate card far down.
+  - The answer fills the box: each song is a link (`no-spa`, as today) to
+    its `info_url`, showing the name and the muted subline, at least 44 px
+    tall. An empty answer shows "No songs in this list." A failed fetch
+    shows the server's `error`, or "Couldn't load this list." when there is
+    none.
+  - An answer that arrives after its list was closed, or after another
+    list was opened, is dropped: a sequence number bumped on every open and
+    close, as `song_repair.html`'s `lrclibSeq` does (6.1a).
+  - Build every row with jQuery `.text()` (or the shared `el` helper), never
+    an HTML string: song names are file names.
+  - Showing the Library tools tab closes any open list, so a list always
+    comes from a fresh fetch beside the counts that `loadOverview` just
+    fetched.
+  - The footnote under the card becomes "Tap a list to show its songs, then
+    a song for its Song Info."
+- **Tests:**
+  - `test_library_routes.py`: the list tests that read the page become JSON
+    tests: each list's rows and sublines (the current assertions, read from
+    `rows`); an empty list gives `rows: []`; an unknown or missing list is
+    400; a guest gets 403 JSON. A song whose name has a space, `&`, `#`, `%`
+    and a non-ASCII character (no `?`: Windows refuses it in a file name):
+    its `info_url`, requested with the test
+    client, opens that song's Song Info (200, the song's name in the page).
+  - `test_processing_page.py`: the admin page has four `data-list` buttons
+    and no `/library/songs` link.
+  - A Deno/jsdom probe of the Library tools tab, in the 7.1 style (the
+    rendered page, requests held): open a list and its rows appear; open a
+    second and the first closes; tap the open one and it closes; an answer
+    for a list that was closed in the meantime renders nothing; a name with
+    markup in it shows as text; an empty answer shows the empty text; a
+    failed answer shows the error.
+
+Commit: `feat(processing): the Library card's song lists open inline on the tab`.
+
+### 7.2b. The log names the LRCLIB skip as a skip
+
+`LyricsFetchStage._resolve_lrclib` logs `LRCLIB: variant available for fill
+(<file>)` whenever `ensure_lrc` returns a path. Since Phase 2A that path can
+be the skip marker, which `ensure_lrc` returns as is. The live pass logged
+that line for Defying Gravity's Repair with None and for its Reset, while
+the bundle showed no fill.
+
+- When the returned path is a skip marker (`lrclib.is_skip_marker`), log
+  `LRCLIB: skipped by the admin's choice (<file>), no fill` at info instead.
+  Every other branch and line stays as it is.
+- **Test** (`test_lyrics_fetch.py`, `caplog`): with a skip marker on disk the
+  skip line is logged and the "available" line isn't; with a real `.lrc` on
+  disk the "available" line is logged as before.
+
+Commit: `fix(lyrics): the log names an LRCLIB skip as a skip, not a fill source`.
+
+### 7.2c. Verify
+
+- The full suite against the baseline above plus the new tests; pre-commit
+  per commit with `--files`; the import smoke (`routes.library`,
+  `pipeline.stages.lyrics_fetch`, `karaoke`, `app`).
+- Mutation checks: 7.2a's dropped-answer counter removed, a second open
+  list not closing the first, and `info_url` built without `quote`; 7.2b's
+  marker test inverted. Each must fail a test or the probe.
+- One isolated app run, to look only: nothing is queued. Check the Ground
+  rules first. Hash the scratch library before and after; the two must
+  match. Headless Edge at 390 px, as in the Phase 7 row, is fine: on the
+  Library tools tab, open each of the four lists in turn (each list's row
+  count matches its count tag; Looks poor reads Defying Gravity "38 of 89
+  lines guessed" and Jay Chou "26 of 42 lines guessed"), open a song
+  from one, come back with the browser's back, and the tab is there with the
+  lists closed. Screenshot one open list.
+- The `### Phase 7.2` Results row (raw facts) and the status block, in their
+  own docs(plan) commit.
+
 ## Phase 8: after-download check, needs-a-pick list, playlists
 
 ### 8a. After-download check (D6)
@@ -2389,6 +2539,9 @@ Run the isolated app (the command in "Where things live"), open
 - **Phase 7:** Library tools → Reset all → preview → picks (leave the page
   halfway and come back) → queue → watch the Jobs tab. After 7.1: with
   every pick made, the preview and the banner offer to queue.
+- **Phase 7.2** (with Phase 8's check): Library tools → each of the four
+  lists opens under its row and closes again; a song opens Song Info, and
+  back returns to the tab.
 - **Phase 8:** a direct download with no caption → Attention → Pick lyrics.
   Add playlist with one box unchecked.
 
