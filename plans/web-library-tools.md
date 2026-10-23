@@ -12,8 +12,9 @@ Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 > too, code `a14906a`..`febeb2c`. Phase 7.1 (the fixes from the Phase 7
 > code review, as Ken ruled them 2026-10-23) is done too, code
 > `d280722`..`1bc3c29`. Ken's checks for Phase 7 (covering 7.1) ran
-> 2026-10-23 and passed (record `01d9475`). Next: Phase 7.2 (two fixes
-> from that check, ruled by Ken 2026-10-23), then Phase 8.** Ken
+> 2026-10-23 and passed (record `01d9475`). Phase 7.2 (two fixes from
+> that check, ruled by Ken 2026-10-23) is done too, code `71d565e` and
+> `2c352b4`. Next: Phase 8, when Ken says so.** Ken
 > approved D2's Phase 3.1 bullet on 2026-10-20. Branch
 > `web_library_tools`, off `library_tools` at `0bfa02a`; `dev` merged as
 > `c34d889`. There is no GATE and nothing here measures timing. Landing is
@@ -4204,6 +4205,103 @@ Model: Claude Opus 5.5 (prep, log reading, restore); Ken clicked. 2026-10-23, HE
 - **Real-library manifest:** `manifest.py compare "D:/Shared/pikaraoke-songs"` against the Phase 0
   manifest: `manifest=2605 now=2616 added=11 removed=0 changed=1`, all 12 under `zh_probe/`, as in
   the earlier rows. Output `...\96b3d5a8-...\scratchpad\manifest_compare_phase7check.txt`.
+
+### Phase 7.2
+
+Executed 2026-10-23 by Opus 5.5 (session `5f459679`), starting from `f67a970` (clean). Scratchpad
+for this row: `...\5f459679-8ee1-4028-ade6-efafb3573f16\scratchpad\`. Two code commits, in order:
+
+- `71d565e` 7.2a feat(processing): the Library card's song lists open inline on the tab (5 files,
+  +135/-83: `routes/library.py`, `processing.html`, `library_songs.html` deleted,
+  `test_library_routes.py`, `test_processing_page.py`).
+- `2c352b4` 7.2b fix(lyrics): the log names an LRCLIB skip as a skip, not a fill source (2 files,
+  +30/-1: `lyrics_fetch.py`, `test_lyrics_fetch.py`).
+
+- **Baseline** (`PYTHONIOENCODING=utf-8 uv run --no-sync python -P -m pytest -q`, at `f67a970`,
+  141.1 s): **4 failed, 2100 passed, 2 skipped**, the baseline's four ids. The run collected before
+  7.2a's first edit was saved (the old page-reading list tests passed).
+- **Suite at `2c352b4`** (142.7 s): **4 failed, 2103 passed, 2 skipped**; the same four ids; passed
+  = 2100 + 3. `test_library_routes.py` `TestSongListsRoute`: 5 tests became 6 (each row's `name`,
+  `subline`, `info_url`; the other lists' sublines; empty `rows: []`; unknown and missing list 400
+  JSON; guest 403 JSON; a song named `Rock & Roll #1 100% Café---aaaaaaaaaaa.mp4` whose `info_url`
+  opens its Song Info, 200, name in the page). `test_processing_page.py`: the four-links test
+  became "four `data-list` buttons, no `href="/library/songs`". `test_lyrics_fetch.py`
+  `TestBranchALrclib`: +1 test parametrized over a skip marker and a real `.lrc` (+2).
+- **Server** (`/library/songs`): `_list_title`, `abort` and the guest flash/redirect are gone;
+  `render_template` and `get_site_name` stay (the run pages use them). An unknown or missing list
+  answers `Not a song list` (400). Each row's `info_url` is `url_for("song_info.song_info")` +
+  `?song=` + `quote(path.encode("utf-8", "surrogateescape"))`.
+- **Page** (`processing.html`): four `<button type="button" class="pr-link" data-list=...
+  aria-expanded>`, each in a `.pr-list` with a hidden `.pr-songs` box; the count tag and an
+  `icon-angle-down` chevron (rotated 180° when `aria-expanded="true"`) in `.pr-link-end`. State
+  `openList` and `listSeq`; `closeLists` bumps `listSeq`, `openList` closes the others and bumps it
+  again, both answers (done, fail) drop on a stale `seq`. Rows are built with `libraryPages.el`
+  (called by its full name: `syncList` and `tickElapsed` hold a local `el`). `showTab('tools')`
+  calls `closeLists()` before `loadOverview()`. New strings: `Loading…`, `No songs in this list.`
+  (already in the Jobs panel), `Couldn't load this list.`, `Not a song list`, and the footnote.
+- **Deno/jsdom probe** (`p72\lists_probe.mjs` on `p72\run_pages.mjs`, a copy of the 7.1 harness;
+  page dumped by `p72\test_dump_processing.py` through `test_processing_page.py`'s fixture,
+  `PYTHONPATH=tests/unit`, `--rootdir p72`, into `p72\pages\processing_admin.html`). Output
+  `p72\probe_after.txt`:
+  - `0. buttons: 4`; `1. while loading: behind: expanded=true hidden=false text="Loading…"`.
+  - `1. answered`: two links `/song_info?song=%2Fa%20%26%20b.mp4`, `/song_info?song=%2Fplain.mp4`,
+    both `a.pr-song.no-spa`; the name `<b>Bold</b><script>window.pwned=1</script>` shown as text,
+    `<b> elements: 0`, `script elements: 0`, `pwned: undefined`.
+  - `2.` opening poor: behind `expanded=false hidden=true text=""`, poor `Loading…`.
+  - `3.` tapping poor again: all four `expanded=false hidden=true`; poor's answer after that
+    renders nothing (`text=""`).
+  - `4.` no_lyrics's answer after all was opened: no_lyrics `hidden=true text=""`, all still
+    `Loading…`.
+  - `5.` empty answer: `No songs in this list.`
+  - `6.` failed with `{"error": "Admin only"}`: `Admin only`, class `pr-error pr-songs-note`; failed
+    with an HTML body: `Couldn't load this list.`
+  - `7.` Jobs then Library tools: all four closed; no `songs?list` request left pending.
+- **Mutation checks** (`p72\mutate72.py <worktree> <step>`; each reverted; `git status` clean of
+  them after). Probe steps count output lines not in `probe_after.txt`:
+
+  | Step | Mutation | Result |
+  |---|---|---|
+  | 7.2a | the dropped-answer check removed (both `seq !== state.listSeq` lines) | probe: 2 lines (`poor: ... text="LATE POORx"`, `no_lyrics: ... text="LATE NO LYRICSx"`) |
+  | 7.2a | `openList` doesn't call `closeLists` | probe: 1 line (`no_lyrics: expanded=true hidden=false text="Loading…"` at step 4) |
+  | 7.2a | `info_url` built without `quote` | 2 failed (`test_each_row_has_its_name_subline_and_song_info_link`, `test_the_song_info_link_survives_a_name_with_url_characters`) |
+  | 7.2b | the marker test inverted | 2 failed (both parametrized cases) |
+
+  `%APPDATA%\pikaraoke\tmp\lyric_choices` (Ken's real temp folder) held 0 files after the 7.2b
+  runs.
+- **pre-commit:** `--files` per commit; every hook passed at 7.2a; at 7.2b Black reflowed one list
+  comprehension in the new test (restaged, then passed). Import smoke: `routes.library`,
+  `pipeline.stages.lyrics_fetch`, `karaoke`, `app`.
+- **Isolated app run** (Ground rules checked first and again before the start: nothing on 5555 or
+  5556, no python, mpv or pikaraoke process besides `TPython.exe` once the suite had ended, GPU
+  980 MiB). Port 9333 was held by two `msedge` processes started 2026-10-22 (not touched); the
+  driver used 9334. `APPDATA` the Phase 3 session's scratch folder (`...\66751cff-...\scratchpad\
+  appdata`, `download_path` `D:/shared/weblib-test`, admin password empty; `state.json` `{"run":
+  null}` before and after). Log `app_run_phase72.log`: `Background library scan starting:
+  D:\shared\weblib-test`, `Scan: found 8 song(s) on disk`; ERROR lines only the yt-dlp self-upgrade.
+  Scratch library hashed before (`scratch_before_p72.json`, 258 files; identical to Ken's check's
+  `weblib_after.json`: 258 identical). Headless Edge at 390 px (`cdp72.py`, a copy of `cdp71.py`,
+  port 9334, profile `edgeprofile72`; steps `steps72.py`; output `drive72.txt`; screenshots
+  `p72shots\01_tools_closed`, `02_poor_open`, `03_after_back`). Nothing was queued.
+  - Counts `behind=0`, `poor=2`, `no_lyrics=2`, `all=8`; all four closed; button heights 48 px; the
+    footnote `Tap a list to show its songs, then a song for its Song Info.`
+  - Behind: tag 0, `No songs in this list.` Looks poor: tag 2, rows 2, `'Defying Gravity' - Wicked
+    20th Anniversary Edition WICKED the Musical | 38 of 89 lines guessed`, `Jay Chou Sunny Day | 26
+    of 42 lines guessed`. No lyrics: tag 2, rows 2 (Eason Chan, Traditional - Happy Birthday,
+    `Transcribed`). All songs: tag 8, rows 8 (six `Up to date`, two `No lyrics`). After each open,
+    only that list `expanded=true/shown`; the chevron's transform `matrix(-1, 0, 0, -1, 0, 0)`; song
+    rows 56-81 px tall. Tapping the open All songs closed it.
+  - Defying Gravity from Looks poor (`no-spa`) loaded `/song_info?song=D%3A%5Cshared%5Cweblib-test
+    %5C%27Defying%20Gravity%27...---AoON1CyhQAM.mp4`, h1 `Song Info`. `history.back()`:
+    `/processing#tools`, navigation type `back_forward`, the Library tools tab active, all four
+    lists closed.
+  - App stopped with `taskkill /F /T` on the listener's pid (40580); the driver's leftover Edge on
+    9334 (profile `edgeprofile72`) stopped; afterwards 5555, 5556 and 9334 free. Scratch library
+    after (`scratch_after_p72.json`): before 258, after 258, added 0, removed 0, changed 0,
+    identical 258.
+- **Real-library manifest:** `manifest.py compare "D:/Shared/pikaraoke-songs"` against the Phase 0
+  manifest: `manifest=2605 now=2616 added=11 removed=0 changed=1`, all 12 under `zh_probe/`, as in
+  the earlier rows. Output `manifest_compare_phase72.txt`.
+- **Differences from the plan's text:** none.
 
 ### Phase 8
 
