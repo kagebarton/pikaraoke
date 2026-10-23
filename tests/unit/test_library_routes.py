@@ -1463,8 +1463,12 @@ class TestRunQueueRoute:
 
 @pytest.fixture
 def listed_song(env, tmp_path, monkeypatch):
-    """A fresh download with no caption, waiting for a pick (its choice file goes to tmp_path)."""
+    """A fresh download with no caption, waiting for a pick (its choice file goes to tmp_path).
+
+    A song handed to ``enqueue`` waits in ``pending_jobs``, as in the processing manager.
+    """
     monkeypatch.setattr("pikaraoke.lib.genius.get_temp_directory", lambda *a: str(tmp_path / "tmp"))
+    env.processing.enqueue.side_effect = lambda path: env.processing.pending_jobs.append(path)
     song = env.add_song("Fresh Song---aaaaaaaaaaa.mp4")
     env.k.library_tools.on_song_downloaded(song)
     return song

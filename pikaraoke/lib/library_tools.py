@@ -132,9 +132,9 @@ class _NeedsPick:
     reason: str  # one of NEEDS_PICK_REASONS
     source: str  # one of NEEDS_PICK_SOURCES
     added_at: float  # time.time() when it was listed
-    # Chosen and queued this session. Not saved: the choice file is lost with the
-    # temp folder, so a restart lists the song again.
-    picked: bool = False
+    # A pick is being saved and queued. Only those few milliseconds: once the song
+    # is queued the processing manager says so (``is_busy``). Not saved.
+    picking: bool = False
 
 
 @dataclass
@@ -241,8 +241,6 @@ class LibraryTools:
         self._needs_pick = self._load_needs_pick(state)
         self._start_checks()  # a run left mid-check picks up where it stopped
         events.on("processing_complete", self._on_processing_complete)
-        events.on("processing_error", self._on_processing_error)
-        events.on("processing_cancelled", self._unpick)
         events.on("song_deleted", self._forget_needs_pick)
 
     @staticmethod
@@ -637,24 +635,29 @@ class LibraryTools:
         ``pick`` is ``{"kind": "genius", "genius_id": id}`` or ``{"kind":
         "transcribe"}``. It is written as the choice file the search page's
         picker writes, so the pipeline's lyrics stage does the rest (LRCLIB
-        included). The song stays listed, as picked, until it finishes. Raises
-        :class:`RegenError`, with a message for the admin, when nothing was queued.
+        included). The song stays listed, as picked, while it waits or runs, and
+        is dropped when it finishes; if its job ends some other way it can be
+        picked again. Raises :class:`RegenError`, with a message for the admin,
+        when nothing was queued.
         """
         choice = self._choice_for(pick)
         with self._state_lock:
             entry = self._needs_pick.get(song_path)
             if entry is None:
                 raise RegenError("That song isn't waiting for a pick.")
-            if entry.picked:
-                raise RegenError("That song already has a pick.")
-            entry.picked = True
+            if self._is_picked(entry):
+                raise RegenError("That song is already waiting or processing.")
+            entry.picking = True
         try:
             write_choice(extract_youtube_id(song_path), choice)
         except OSError as e:
-            self._unpick(song_path)
             logger.error("Could not save the lyrics pick for %s: %s", Path(song_path).name, e)
             raise RegenError("Could not save that pick.") from e
-        self._processing.enqueue(song_path)
+        else:
+            self._processing.enqueue(song_path)
+        finally:
+            with self._state_lock:
+                entry.picking = False
 
     def needs_pick_view(self) -> dict:
         """The needs-a-pick list for its page, shaped like :meth:`run_view` for the pick pass.
@@ -675,11 +678,11 @@ class LibraryTools:
                     "poor": False,
                     "genius_id": None,  # no current pick to keep
                     "caption": None,
-                    "pick": {"kind": "queued"} if entry.picked else None,
+                    "pick": {"kind": "queued"} if self._is_picked(entry) else None,
                 }
                 for entry in entries
             ]
-            picked = sum(entry.picked for entry in entries)
+        picked = sum(song["pick"] is not None for song in songs)
         return {"to_pick": len(songs), "picked": picked, "songs": songs}
 
     def check_playlist(self, url: str) -> dict:
@@ -818,18 +821,16 @@ class LibraryTools:
             if self._needs_pick.pop(song_path, None) is not None:
                 self._save()
 
-    def _unpick(self, song_path: str) -> None:
-        """List a song for a pick again: the job queued for its pick ended without finishing."""
-        with self._state_lock:
-            entry = self._needs_pick.get(song_path)
-            if entry is not None:
-                entry.picked = False
+    def _is_picked(self, entry: _NeedsPick) -> bool:
+        """Whether the song's pick is being queued, or its job waits or runs.
+
+        The queue is the one source for that, so a job cancelled while it waits,
+        or failed, leaves the song to pick again. The caller holds the state lock.
+        """
+        return entry.picking or self.is_busy(entry.song)
 
     def _on_processing_complete(self, data: dict) -> None:
         self._forget_needs_pick(data["song_path"])
-
-    def _on_processing_error(self, data: dict) -> None:
-        self._unpick(data.get("song_path", ""))
 
     @staticmethod
     def _caption_plan(job: SongJob) -> Plan:

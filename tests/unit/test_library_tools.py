@@ -1728,13 +1728,15 @@ def write_caption(folder: Path, stem: str, words: int) -> Path:
 @pytest.fixture
 def download(tmp_path, monkeypatch):
     """A fresh download in a library of its own, with the app's real temp folder and ffprobe
-    kept out of it (the song is 60 s long)."""
+    kept out of it (the song is 60 s long). A song handed to ``enqueue`` waits in
+    ``pending_jobs``, as it does in the processing manager."""
     monkeypatch.setattr("pikaraoke.lib.genius.get_temp_directory", lambda *a: str(tmp_path / "tmp"))
     monkeypatch.setattr("pikaraoke.lib.library_regen.probe_duration", lambda path: 60.0)
     folder = tmp_path / "library"
     folder.mkdir()
     video = make_video(folder, STEM)
     tools, processing = make_tools(folder, [str(video)])
+    processing.enqueue.side_effect = lambda path: processing.pending_jobs.append(path)
     needs_pick = []
     tools._events.on("needs_pick", needs_pick.append)
     return SimpleNamespace(
@@ -1919,10 +1921,48 @@ class TestPickLyrics:
         download.tools.on_song_downloaded(download.song)
         download.tools.pick_lyrics(download.song, {"kind": "transcribe"})
 
-        with pytest.raises(RegenError, match="already has a pick"):
+        with pytest.raises(RegenError, match="already waiting or processing"):
             download.tools.pick_lyrics(download.song, {"kind": "genius", "genius_id": 5})
 
         download.processing.enqueue.assert_called_once()
+
+    @pytest.mark.parametrize("busy", ["waiting", "running"])
+    def test_a_song_busy_for_any_reason_shows_as_picked_and_is_not_queued_again(
+        self, download, busy
+    ):
+        download.tools.on_song_downloaded(download.song)
+        # A Retry on its Jobs row, or a regen, queued it without this list's pick.
+        if busy == "waiting":
+            download.processing.pending_jobs = [download.song]
+        else:
+            download.processing.get_active_job.return_value = download.song
+
+        view = download.tools.needs_pick_view()
+        assert (view["to_pick"], view["picked"]) == (1, 1)
+        with pytest.raises(RegenError, match="already waiting or processing"):
+            download.tools.pick_lyrics(download.song, {"kind": "transcribe"})
+
+        download.processing.enqueue.assert_not_called()
+        assert read_choice(VIDEO_ID) is None
+
+    def test_a_second_pick_while_the_first_is_being_saved_is_refused(self, download, monkeypatch):
+        download.tools.on_song_downloaded(download.song)
+        write = write_choice
+        inner = []
+
+        def write_then_pick_again(yt_id, payload):
+            with pytest.raises(RegenError, match="already waiting or processing") as raised:
+                download.tools.pick_lyrics(download.song, {"kind": "genius", "genius_id": 5})
+            inner.append(raised.value)
+            return write(yt_id, payload)
+
+        monkeypatch.setattr("pikaraoke.lib.library_tools.write_choice", write_then_pick_again)
+
+        download.tools.pick_lyrics(download.song, {"kind": "transcribe"})
+
+        assert len(inner) == 1
+        download.processing.enqueue.assert_called_once_with(download.song)
+        assert read_choice(VIDEO_ID) == {"mode": "raw", "yt_id": VIDEO_ID}
 
     def test_a_song_that_is_not_listed_is_refused(self, download):
         with pytest.raises(RegenError, match="isn't waiting for a pick"):
@@ -1956,15 +1996,31 @@ class TestPickLyrics:
         self, download, monkeypatch
     ):
         download.tools.on_song_downloaded(download.song)
+        write = write_choice
+        writes = []
 
-        def disk_full(yt_id, payload):
-            raise OSError("disk full")
+        def disk_full_once(yt_id, payload):
+            writes.append(yt_id)
+            if len(writes) == 1:
+                raise OSError("disk full")
+            return write(yt_id, payload)
 
-        monkeypatch.setattr("pikaraoke.lib.library_tools.write_choice", disk_full)
+        monkeypatch.setattr("pikaraoke.lib.library_tools.write_choice", disk_full_once)
         with pytest.raises(RegenError, match="Could not save that pick"):
             download.tools.pick_lyrics(download.song, {"kind": "transcribe"})
 
         download.processing.enqueue.assert_not_called()
+        assert download.tools.needs_pick_view()["picked"] == 0
+        download.tools.pick_lyrics(download.song, {"kind": "transcribe"})
+        download.processing.enqueue.assert_called_once_with(download.song)
+
+    def test_a_queue_that_fails_leaves_the_song_to_pick_again(self, download):
+        download.tools.on_song_downloaded(download.song)
+        download.processing.enqueue.side_effect = RuntimeError("queue closed")
+
+        with pytest.raises(RuntimeError):
+            download.tools.pick_lyrics(download.song, {"kind": "transcribe"})
+
         assert download.tools.needs_pick_view()["picked"] == 0
 
 
@@ -1989,6 +2045,7 @@ class TestWhenAListedSongLeaves:
         download.tools.pick_lyrics(download.song, {"kind": "transcribe"})
 
         delete_choice(VIDEO_ID)  # the lyrics stage uses the choice file up before the job fails
+        download.processing.pending_jobs.remove(download.song)  # the job ran, and failed
         download.tools._events.emit(
             "processing_error", {"song_path": download.song, "error": "boom"}
         )
@@ -1997,13 +2054,22 @@ class TestWhenAListedSongLeaves:
         download.tools.pick_lyrics(download.song, {"kind": "transcribe"})
         assert read_choice(VIDEO_ID) is not None
 
-    def test_a_job_that_is_cancelled_offers_the_pick_again(self, download):
+    def test_a_job_cancelled_while_it_waits_offers_the_pick_again(self, download):
         download.tools.on_song_downloaded(download.song)
         download.tools.pick_lyrics(download.song, {"kind": "transcribe"})
 
-        download.tools._events.emit("processing_cancelled", download.song)
+        # Cancelling a waiting job emits no event, and its choice file stays; Windows can't
+        # write over it (the baseline's test_write_overwrites_existing), so clear it as the
+        # lyrics stage would have.
+        download.processing.pending_jobs.remove(download.song)
+        delete_choice(VIDEO_ID)
 
-        assert download.tools.needs_pick_view()["picked"] == 0
+        view = download.tools.needs_pick_view()
+        assert (view["to_pick"], view["picked"]) == (1, 0)
+        assert view["songs"][0]["pick"] is None
+        download.tools.pick_lyrics(download.song, {"kind": "genius", "genius_id": 5})
+        assert read_choice(VIDEO_ID) == {"genius_id": 5, "yt_id": VIDEO_ID}
+        assert download.processing.enqueue.call_count == 2
 
     def test_a_job_for_another_song_changes_nothing(self, download):
         download.tools.on_song_downloaded(download.song)
