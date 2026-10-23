@@ -35,8 +35,16 @@
   .pr-gbtn { flex: none; min-width: 44px; min-height: 44px; padding: 0; }
   .pr-gtags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   .pr-you { font-size: 11px; font-weight: 700; background: var(--dark-link); color: #0f1a17; border-radius: 4px; padding: 1px 6px; }
-  .pr-link { display: flex; align-items: center; justify-content: space-between; min-height: 48px; padding: 0 12px; color: inherit; }
-  .pr-link + .pr-link { border-top: 1px solid var(--dark-border); }
+  .pr-link { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 48px; padding: 0 12px; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .pr-list + .pr-list { border-top: 1px solid var(--dark-border); }
+  .pr-link-end { flex: none; display: inline-flex; align-items: center; gap: 6px; }
+  .pr-chev { transition: transform .15s; }
+  .pr-link[aria-expanded="true"] .pr-chev { transform: rotate(180deg); }
+  .pr-songs { background: var(--dark-bg-secondary); padding: 4px 12px; }
+  .pr-song { display: flex; flex-direction: column; justify-content: center; min-height: 44px; padding: 6px 0; color: inherit; }
+  .pr-song + .pr-song { border-top: 1px solid var(--dark-border); }
+  .pr-song-name { word-break: break-word; }
+  .pr-songs-note { min-height: 44px; display: flex; align-items: center; }
   .pr-run { display: flex; align-items: center; gap: 10px; padding: 12px; }
   .pr-run + .pr-run { border-top: 1px solid var(--dark-border); }
   .pr-run-text { flex: 1; min-width: 0; }
@@ -80,12 +88,24 @@
   <div class="pr-panel is-hidden" id="pr-tools">
     <div class="pr-sec"><span>{% trans %}Library{% endtrans %}</span></div>
     <div class="pr-card">
-      <a class="pr-link no-spa" href="{{ url_for('library.songs') }}?list=behind"><span>{% trans %}Behind current version{% endtrans %}</span><span class="tag is-warning is-light" data-count="behind">…</span></a>
-      <a class="pr-link no-spa" href="{{ url_for('library.songs') }}?list=poor"><span>{% trans share=poor_share %}Looks poor ({{ share }}%+ lines guessed){% endtrans %}</span><span class="tag is-danger is-light" data-count="poor">…</span></a>
-      <a class="pr-link no-spa" href="{{ url_for('library.songs') }}?list=no_lyrics"><span>{% trans %}No lyrics (transcribed){% endtrans %}</span><span class="tag is-light" data-count="no_lyrics">…</span></a>
-      <a class="pr-link no-spa" href="{{ url_for('library.songs') }}?list=all"><span>{% trans %}All songs{% endtrans %}</span><span class="tag is-light" data-count="all">…</span></a>
+      <div class="pr-list">
+        <button type="button" class="pr-link" data-list="behind" aria-expanded="false"><span>{% trans %}Behind current version{% endtrans %}</span><span class="pr-link-end"><span class="tag is-warning is-light" data-count="behind">…</span><i class="icon icon-angle-down pr-chev" aria-hidden="true"></i></span></button>
+        <div class="pr-songs is-hidden"></div>
+      </div>
+      <div class="pr-list">
+        <button type="button" class="pr-link" data-list="poor" aria-expanded="false"><span>{% trans share=poor_share %}Looks poor ({{ share }}%+ lines guessed){% endtrans %}</span><span class="pr-link-end"><span class="tag is-danger is-light" data-count="poor">…</span><i class="icon icon-angle-down pr-chev" aria-hidden="true"></i></span></button>
+        <div class="pr-songs is-hidden"></div>
+      </div>
+      <div class="pr-list">
+        <button type="button" class="pr-link" data-list="no_lyrics" aria-expanded="false"><span>{% trans %}No lyrics (transcribed){% endtrans %}</span><span class="pr-link-end"><span class="tag is-light" data-count="no_lyrics">…</span><i class="icon icon-angle-down pr-chev" aria-hidden="true"></i></span></button>
+        <div class="pr-songs is-hidden"></div>
+      </div>
+      <div class="pr-list">
+        <button type="button" class="pr-link" data-list="all" aria-expanded="false"><span>{% trans %}All songs{% endtrans %}</span><span class="pr-link-end"><span class="tag is-light" data-count="all">…</span><i class="icon icon-angle-down pr-chev" aria-hidden="true"></i></span></button>
+        <div class="pr-songs is-hidden"></div>
+      </div>
     </div>
-    <p class="pr-muted mt-2">{% trans %}Each list opens the songs; tap one for its Song Info.{% endtrans %}</p>
+    <p class="pr-muted mt-2">{% trans %}Tap a list to show its songs, then a song for its Song Info.{% endtrans %}</p>
 
     <div class="pr-sec"><span>{% trans %}Regenerate{% endtrans %}</span></div>
     <div id="pr-run-banner" class="pr-card pr-banner is-hidden">
@@ -216,7 +236,10 @@ var T = {
   runPicks: {{ _('%(mode)s is open: %(k)s of %(n)s picked.', mode='{mode}', k='{k}', n='{n}') | tojson }},
   runChecking: {{ _('%(mode)s is open: checking captions (%(k)s of %(n)s).', mode='{mode}', k='{k}', n='{n}') | tojson }},
   runReady: {{ _('%(mode)s is open: ready to queue.', mode='{mode}') | tojson }},
-  runFailed: {{ _('Could not open the run.') | tojson }}
+  runFailed: {{ _('Could not open the run.') | tojson }},
+  listLoading: {{ _('Loading…') | tojson }},
+  listEmpty: {{ _('No songs in this list.') | tojson }},
+  listFailed: {{ _("Couldn't load this list.") | tojson }}
 };
 
 var URLS = {
@@ -225,6 +248,7 @@ var URLS = {
   enqueue: {{ url_for('processing.enqueue_item', item_id='ITEM_ID') | tojson }}{% if admin %},
   attention: {{ url_for('processing.processing_attention') | tojson }},
   overview: {{ url_for('library.overview') | tojson }},
+  songs: {{ url_for('library.songs') | tojson }},
   runOpen: {{ url_for('library.open_run') | tojson }},
   runPage: {{ url_for('library.run_preview') | tojson }},
   runStatus: {{ url_for('library.run_status') | tojson }},
@@ -255,7 +279,9 @@ var state = {
   confirming: {},  // row key -> 'cancel' | 'delete'
   nowBase: null,   // {s, at}: elapsed seconds of the running job when last fetched
   run: null,       // the open bulk run, from the server, or null
-  discarding: false // the run's in-place discard confirm is showing
+  discarding: false, // the run's in-place discard confirm is showing
+  openList: null,  // the Library card's open song list, or null
+  listSeq: 0       // bumped on every list open and close; a stale answer is dropped
 };
 
 /* ---------------------------------------------------------------- helpers */
@@ -658,6 +684,39 @@ function loadOverview() {
   });
 }
 
+function closeLists() {
+  state.listSeq++;
+  state.openList = null;
+  $('.pr-link[data-list]').attr('aria-expanded', 'false');
+  $('.pr-songs').addClass('is-hidden').empty();
+}
+
+// One list open at a time, so a long one never pushes the Regenerate card far down.
+function openList(name) {
+  closeLists();
+  var seq = ++state.listSeq;
+  state.openList = name;
+  var box = $('.pr-link[data-list="' + name + '"]').attr('aria-expanded', 'true').next('.pr-songs');
+  box.removeClass('is-hidden').append(libraryPages.el('p', 'pr-muted pr-songs-note', T.listLoading));
+  fetchJson(URLS.songs + '?list=' + encodeURIComponent(name)).done(function (answer) {
+    if (seq !== state.listSeq) return;
+    box.empty();
+    if (!answer.rows.length) {
+      box.append(libraryPages.el('p', 'pr-muted pr-songs-note', T.listEmpty));
+      return;
+    }
+    answer.rows.forEach(function (row) {
+      box.append(libraryPages.el('a', 'pr-song no-spa').attr('href', row.info_url).append(
+        libraryPages.el('span', 'pr-song-name', row.name),
+        libraryPages.el('span', 'pr-muted', row.subline)
+      ));
+    });
+  }).fail(function (xhr) {
+    if (seq !== state.listSeq) return;
+    box.empty().append(libraryPages.el('p', 'pr-error pr-songs-note', libraryPages.errorOf(xhr, T.listFailed)));
+  });
+}
+
 function renderRun() {
   var run = state.run;
   $('#pr-run-card').toggleClass('is-hidden', !!run);
@@ -788,6 +847,11 @@ $(document).on('click.processing', '.pr-run-open', function () {
   });
 });
 
+$(document).on('click.processing', '.pr-link[data-list]', function () {
+  var name = $(this).attr('data-list');
+  if (state.openList === name) closeLists(); else openList(name);
+});
+
 $(document).on('click.processing', '#pr-run-discard', function () {
   state.discarding = true;
   renderRun();
@@ -820,6 +884,7 @@ function showTab(name) {
   $('#pr-tools').toggleClass('is-hidden', name !== 'tools');
   try { window.history.replaceState(window.history.state, '', '#' + name); } catch (err) {}
   if (name === 'tools') {
+    closeLists(); // a list shown again is fetched fresh, beside the fresh counts
     loadOverview();
     loadRun();
   }

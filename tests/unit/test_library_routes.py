@@ -466,21 +466,30 @@ class TestOverviewRoute:
         assert response.get_json()["success"] is False
 
 
+def song_list(env, name: str) -> list[dict]:
+    response = env.client.get("/library/songs", query_string={"list": name})
+    assert response.status_code == 200
+    assert response.get_json()["success"] is True
+    return response.get_json()["rows"]
+
+
 class TestSongListsRoute:
-    def test_each_row_links_to_song_info_with_its_subline(self, env):
-        env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())
+    def test_each_row_has_its_name_subline_and_song_info_link(self, env):
+        song = env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())
         env.add_song("B---bbbbbbbbbbb.mp4", caption_bundle())
 
-        poor = text(env.client.get("/library/songs?list=poor"))
-        assert "Songs that look poor" in poor
-        assert "38 of 89 lines guessed" in poor
-        assert '<span class="ls-name">A</span>' in poor  # the display name drops the id
-        assert "/song_info?song=" in poor and "aaaaaaaaaaa.mp4" in poor
-        assert "bbbbbbbbbbb" not in poor
+        poor = song_list(env, "poor")
+        assert poor == [
+            {
+                "name": "A",  # the display name drops the id
+                "subline": "38 of 89 lines guessed",
+                "info_url": "/song_info?song=" + quote(song),
+            }
+        ]
 
-        everything = text(env.client.get("/library/songs?list=all"))
-        assert "Up to date" in everything
-        assert "aaaaaaaaaaa.mp4" in everything and "bbbbbbbbbbb.mp4" in everything
+        everything = song_list(env, "all")
+        assert [row["name"] for row in everything] == ["A", "B"]
+        assert everything[1]["subline"] == "Up to date"
 
     def test_sublines_for_the_other_lists(self, env):
         env.add_song("A---aaaaaaaaaaa.mp4", {**caption_bundle(), "schema_version": 9})
@@ -489,30 +498,44 @@ class TestSongListsRoute:
         (env.folder / "karaoke" / "B---bbbbbbbbbbb.ass").write_text("", encoding="utf-8")
         env.add_song("C---ccccccccccc.mp4")
 
-        assert "Version 9" in text(env.client.get("/library/songs?list=behind"))
-        assert "Transcribed" in text(env.client.get("/library/songs?list=no_lyrics"))
-        everything = text(env.client.get("/library/songs?list=all"))
-        assert "Behind (v9)" in everything
-        assert "No lyrics" in everything
-        assert "Not processed" in everything
+        assert [row["subline"] for row in song_list(env, "behind")] == ["Version 9"]
+        assert [row["subline"] for row in song_list(env, "no_lyrics")] == ["Transcribed"]
+        assert [row["subline"] for row in song_list(env, "all")] == [
+            "Behind (v9)",
+            "No lyrics",
+            "Not processed",
+        ]
         assert Path(song).exists()
 
-    def test_an_empty_list_says_so(self, env):
+    def test_an_empty_list_has_no_rows(self, env):
         env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())
 
-        assert "No songs in this list." in text(env.client.get("/library/songs?list=behind"))
+        assert song_list(env, "behind") == []
 
-    def test_an_unknown_list_is_rejected(self, env):
-        assert env.client.get("/library/songs?list=bogus").status_code == 400
-        assert env.client.get("/library/songs").status_code == 400
+    def test_an_unknown_or_missing_list_is_rejected(self, env):
+        for response in (
+            env.client.get("/library/songs?list=bogus"),
+            env.client.get("/library/songs"),
+        ):
+            assert response.status_code == 400
+            assert response.get_json()["success"] is False
 
-    def test_a_guest_is_sent_back_to_the_browser(self, env):
+    def test_a_guest_gets_403_json(self, env):
         env.admin = False
 
         response = env.client.get("/library/songs?list=all")
 
-        assert response.status_code == 302
-        assert response.headers["Location"].endswith("/__stub/files.browse")
+        assert response.status_code == 403
+        assert response.get_json()["success"] is False
+
+    def test_the_song_info_link_survives_a_name_with_url_characters(self, env):
+        env.add_song("Rock & Roll #1 100% Café---aaaaaaaaaaa.mp4", caption_bundle())
+
+        (row,) = song_list(env, "all")
+        page = env.client.get(row["info_url"])
+
+        assert page.status_code == 200
+        assert "Rock &amp; Roll #1 100% Café" in text(page)
 
 
 LYRICS = "Line one here\nLine two here\nLine three here\nLine four here"

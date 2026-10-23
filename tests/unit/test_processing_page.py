@@ -92,12 +92,14 @@ class TestProcessingPage:
             assert f'data-filter="{chip}"' in body
         assert 'id="pr-now"' in body and 'id="pr-clear"' in body
 
-    def test_the_library_tab_links_the_four_song_lists(self, env):
+    def test_the_library_tab_opens_the_four_song_lists_in_place(self, env):
         body = get(env, "/processing", admin=True).get_data(as_text=True)
 
         for name in ("behind", "poor", "no_lyrics", "all"):
-            assert f'href="/library/songs?list={name}"' in body
+            assert f'<button type="button" class="pr-link" data-list="{name}"' in body
             assert f'data-count="{name}"' in body
+        assert body.count('class="pr-link" data-list=') == 4
+        assert 'href="/library/songs' not in body
 
     def test_the_library_tab_offers_the_three_bulk_runs_with_their_counts(self, env):
         body = get(env, "/processing", admin=True).get_data(as_text=True)
