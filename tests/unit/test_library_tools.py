@@ -1139,6 +1139,53 @@ class TestRunState:
         stems = [Path(s["song"]).stem for s in restarted.run_view()["songs"]]
         assert STEMS["no_id"] not in stems and len(stems) == 6
 
+    def test_a_run_over_another_librarys_songs_is_not_restored(self, tmp_path, monkeypatch, caplog):
+        old, new = tmp_path / "old", tmp_path / "new"
+        old.mkdir()
+        new.mkdir()
+        _, _, paths = open_run(old, monkeypatch, "all")
+
+        # The same app data, started with another download path.
+        restarted, _ = make_tools(new, [], state=old / "library_tools_state.json")
+
+        assert restarted.run_view() is None
+        assert f"Dropped {len(paths)} song(s) of the saved run" in caplog.text
+
+    def test_a_run_keeps_only_this_librarys_songs(self, tmp_path, monkeypatch):
+        library, other = tmp_path / "library", tmp_path / "other"
+        library.mkdir()
+        other.mkdir()
+        _, _, paths = open_run(library, monkeypatch, "all")
+        state_path = library / "library_tools_state.json"
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        stranger = make_video(other, "Stranger---ggggggggggg")
+        state["run"]["songs"][str(stranger)] = {"check": None, "pick": None}
+        state_path.write_text(json.dumps(state), encoding="utf-8")
+
+        restarted, _ = make_tools(library, list(paths.values()))
+
+        assert {s["song"] for s in restarted.run_view()["songs"]} == set(paths.values())
+
+    @pytest.mark.parametrize("spelling", ["trailing separator", "dot-dot"])
+    def test_the_same_folder_spelled_another_way_keeps_the_run(
+        self, tmp_path, monkeypatch, spelling
+    ):
+        _, _, paths = open_run(tmp_path, monkeypatch, "all")
+        folder = (
+            str(tmp_path) + os.sep
+            if spelling == "trailing separator"
+            else os.path.join(str(tmp_path), "sub", "..")
+        )
+        library = SongList()
+        library.update(list(paths.values()))
+        song_manager = MagicMock(songs=library, filename_from_path=SongManager.filename_from_path)
+
+        restarted = LibraryTools(
+            MagicMock(), song_manager, folder, MagicMock(), tmp_path / "library_tools_state.json"
+        )
+
+        assert len(restarted.run_view()["songs"]) == len(paths)
+
     def test_a_pick_the_song_can_no_longer_take_is_dropped(self, tmp_path, monkeypatch):
         tools, _, paths = open_run(tmp_path, monkeypatch, "all", {"unlined": NO_CAPTION})
         tools.save_pick(paths["unlined"], {"kind": "keep"})
