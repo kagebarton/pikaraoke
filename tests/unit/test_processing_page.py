@@ -124,6 +124,14 @@ class TestProcessingPage:
         assert 'href="/library/run"' in body
         assert 'id="pr-run-confirm"' in body and "Discard this run and its picks?" in body
 
+    def test_the_page_takes_fill_from_the_shared_file(self, env):
+        body = get(env, "/processing", admin=True).get_data(as_text=True)
+
+        tag = '<script src="/static/library-pages.js"></script>'
+        assert tag in body and body.index(tag) < body.index("var isAdmin")
+        assert "function fill(" not in body
+        assert "var fill = libraryPages.fill;" in body
+
     def test_the_banner_says_ready_to_queue_once_every_pick_is_made(self, env):
         body = get(env, "/processing", admin=True).get_data(as_text=True)
 

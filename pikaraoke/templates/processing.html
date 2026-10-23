@@ -138,6 +138,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='library-pages.js') }}"></script>
 <script>
 (function () {
 'use strict';
@@ -265,11 +266,7 @@ function esc(value) {
   });
 }
 
-function fill(template, vars) {
-  return template.replace(/\{(\w+)\}/g, function (m, name) {
-    return vars[name] != null ? vars[name] : m;
-  });
-}
+var fill = libraryPages.fill;
 
 function upperFirst(text) {
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;

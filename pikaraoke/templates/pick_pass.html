@@ -41,6 +41,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='library-pages.js') }}"></script>
 <script>
   $(function () {
     var URLS = {
@@ -92,22 +93,9 @@
     // What the open picker holds: the search text, its results and the selected hit.
     var picker = { query: '', hits: null, message: null, selected: null };
 
-    function fill(template, vars) {
-      return template.replace(/\{(\w+)\}/g, function (m, name) {
-        return vars[name] != null ? vars[name] : m;
-      });
-    }
-
-    function el(tag, className, text) {
-      var node = $('<' + tag + '>');
-      if (className) node.addClass(className);
-      if (text != null) node.text(text);
-      return node;
-    }
-
-    function errorOf(xhr, fallback) {
-      try { return JSON.parse(xhr.responseText).error || fallback; } catch (err) { return fallback; }
-    }
+    var fill = libraryPages.fill;
+    var el = libraryPages.el;
+    var errorOf = libraryPages.errorOf;
 
     function deciding() {
       return $.grep(state.run.songs, function (song) { return song.needs_pick; });

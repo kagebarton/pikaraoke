@@ -540,6 +540,24 @@ def card(html: str, source: str) -> str:
     return html[start : html.index("</label>", start)]
 
 
+SHARED_JS = "/static/library-pages.js"
+
+
+def shared_script() -> str:
+    """The helpers the library pages load before their own script (``fill``, ``el``, ``errorOf``)."""
+    path = Path(pikaraoke.__file__).parent / "static" / "library-pages.js"
+    return path.read_text(encoding="utf-8")
+
+
+def assert_loads_shared_helpers(html: str, code: str) -> None:
+    """The page loads the shared helpers before its own script and doesn't define them again."""
+    tag = f'<script src="{SHARED_JS}"></script>'
+    assert tag in html and html.index(tag) < html.index(code)
+    for name in ("fill", "el", "errorOf"):
+        assert f"function {name}(" not in code
+        assert f"var {name} = libraryPages.{name};" in code
+
+
 def script(html: str) -> str:
     """The repair page's own script block."""
     start = html.rindex("<script>", 0, html.index("var SONG"))
@@ -660,9 +678,15 @@ class TestRepairPage:
 
     def test_text_from_genius_and_lrclib_goes_in_as_text_never_as_markup(self, env):
         code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
+        code += shared_script()
 
         assert ".html(" not in code
         assert ".innerHTML" not in code
+
+    def test_the_page_takes_its_helpers_from_the_shared_file(self, env):
+        html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())))
+
+        assert_loads_shared_helpers(html, script(html))
 
 
 class TestCaptionCheckRoute:
@@ -1197,10 +1221,16 @@ class TestRunPages:
     @pytest.mark.parametrize("page", ["library_run", "pick_pass"])
     def test_text_from_songs_and_genius_goes_in_as_text_never_as_markup(self, env, run, page):
         route = "/library/run" if page == "library_run" else "/library/run/picks"
-        code = page_script(text(env.client.get(route)))
+        code = page_script(text(env.client.get(route))) + shared_script()
 
         assert ".html(" not in code
         assert ".innerHTML" not in code
+
+    @pytest.mark.parametrize("route", ["/library/run", "/library/run/picks"])
+    def test_the_run_pages_take_their_helpers_from_the_shared_file(self, env, run, route):
+        html = text(env.client.get(route))
+
+        assert_loads_shared_helpers(html, page_script(html))
 
     def test_the_preview_polls_only_while_captions_are_being_checked(self, env, run):
         code = page_script(text(env.client.get("/library/run")))
