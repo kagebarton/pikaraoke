@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, PropertyMock, patch
 import pytest
 
 from pikaraoke.lib.youtube_dl import (
+    CaptionDownloadFailed,
     _select_asr_track,
     _select_en_srt,
     build_ytdl_download_command,
@@ -455,21 +456,20 @@ class TestDownloadManualEnSubs:
             result = download_manual_en_subs("https://yt/watch?v=x", str(dest), "Song")
         assert result is None
 
-    def test_nonzero_returncode_returns_none(self, tmp_path):
+    @pytest.mark.parametrize(
+        "run, reason",
+        [
+            ({"return_value": MagicMock(returncode=1, stdout=b"", stderr=b"boom")}, "boom"),
+            ({"side_effect": subprocess.TimeoutExpired("yt-dlp", 60)}, "timed out"),
+            ({"side_effect": FileNotFoundError("yt-dlp")}, "Could not run yt-dlp"),
+        ],
+        ids=["error exit", "timeout", "missing yt-dlp"],
+    )
+    def test_a_download_that_fails_raises_with_the_reason(self, tmp_path, run, reason):
         dest = tmp_path / "subtitles"
-        with _default_patches()[0], _default_patches()[1], patch(
-            "subprocess.run", return_value=MagicMock(returncode=1, stdout=b"", stderr=b"boom")
-        ):
-            result = download_manual_en_subs("https://yt/watch?v=x", str(dest), "Song")
-        assert result is None
-
-    def test_timeout_returns_none(self, tmp_path):
-        dest = tmp_path / "subtitles"
-        with _default_patches()[0], _default_patches()[1], patch(
-            "subprocess.run", side_effect=subprocess.TimeoutExpired("yt-dlp", 60)
-        ):
-            result = download_manual_en_subs("https://yt/watch?v=x", str(dest), "Song")
-        assert result is None
+        with _default_patches()[0], _default_patches()[1], patch("subprocess.run", **run):
+            with pytest.raises(CaptionDownloadFailed, match=reason):
+                download_manual_en_subs("https://yt/watch?v=x", str(dest), "Song")
 
 
 class TestSelectAsrTrack:

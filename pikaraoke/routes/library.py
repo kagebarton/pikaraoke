@@ -226,6 +226,19 @@ def run_keep_all():
     return jsonify({"success": True, "kept": kept, "run": _run_json(tools.run_view())})
 
 
+@library_bp.route("/library/run/recheck", methods=["POST"])
+def run_recheck():
+    """Check again the captions whose check couldn't run; answers with the run."""
+    if not is_admin():
+        return _error(_("Admin only"), 403)
+    tools = get_karaoke_instance().library_tools
+    try:
+        tools.recheck_captions()
+    except RegenError as e:
+        return _error(str(e), 400)
+    return jsonify({"success": True, "run": _run_json(tools.run_view())})
+
+
 @library_bp.route("/library/run/queue", methods=["POST"])
 def run_queue():
     """Queue the open run, and leave a note for the Processing page the admin lands on."""

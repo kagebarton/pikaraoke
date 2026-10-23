@@ -328,14 +328,21 @@ def _select_en_srt(dest_dir: str, stem: str) -> str | None:
     return str(canonical)
 
 
+class CaptionDownloadFailed(Exception):
+    """yt-dlp couldn't answer whether the video has a caption (timeout, not runnable, error)."""
+
+
 def download_manual_en_subs(video_url: str, dest_dir: str, stem: str) -> str | None:
     """Download YouTube's *manual* English caption as ``<dest_dir>/<stem>.en.srt``.
 
     Returns the SRT path when a manual English caption exists and was written;
-    returns ``None`` when there is no such caption or the download failed. Auto-
-    generated (ASR) captions are never fetched and no media is downloaded. The
-    subtitle options mirror :func:`build_ytdl_download_command`, so a fetched
-    caption is what a normal download would have saved alongside the video.
+    returns ``None`` when yt-dlp ran and found no such caption. Raises
+    :class:`CaptionDownloadFailed` when yt-dlp timed out, couldn't be run or
+    exited with an error, so a caller can tell "no caption" from "couldn't
+    ask". Auto-generated (ASR) captions are never fetched and no media is
+    downloaded. The subtitle options mirror :func:`build_ytdl_download_command`,
+    so a fetched caption is what a normal download would have saved alongside
+    the video.
     """
     os.makedirs(dest_dir, exist_ok=True)
     cmd = (
@@ -357,18 +364,15 @@ def download_manual_en_subs(video_url: str, dest_dir: str, stem: str) -> str | N
     logging.debug(f"yt-dlp subtitle download command: {' '.join(cmd)}")
     try:
         result = subprocess.run(cmd, capture_output=True, timeout=60)
-    except subprocess.TimeoutExpired:
-        logging.warning(f"yt-dlp subtitle download timed out for: {video_url}")
-        return None
+    except subprocess.TimeoutExpired as e:
+        raise CaptionDownloadFailed(f"yt-dlp subtitle download timed out for: {video_url}") from e
     except (FileNotFoundError, PermissionError) as e:
-        logging.error(f"Could not run yt-dlp: {e}")
-        return None
+        raise CaptionDownloadFailed(f"Could not run yt-dlp: {e}") from e
     if result.returncode != 0:
-        logging.warning(
+        raise CaptionDownloadFailed(
             f"yt-dlp subtitle download failed for {video_url}: "
             f"{result.stderr.decode('utf-8', 'ignore').strip()}"
         )
-        return None
     return _select_en_srt(dest_dir, stem)
 
 

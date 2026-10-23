@@ -1053,6 +1053,7 @@ class TestRunAccess:
             ("get", "/library/run/status"),
             ("post", "/library/run/pick"),
             ("post", "/library/run/keep_all"),
+            ("post", "/library/run/recheck"),
             ("post", "/library/run/queue"),
             ("post", "/library/run/discard"),
         ],
@@ -1275,6 +1276,56 @@ class TestRunPickRoutes:
         assert post_run(env, "discard").get_json() == {"success": True}
 
         assert env.client.get("/library/run/status").get_json() == {"open": False}
+
+
+FAILED = CaptionCheck(found=False, wpm=None, passed=False, failed=True)
+
+
+class TestRunRecheck:
+    @pytest.fixture
+    def failed_run(self, env, monkeypatch):
+        """A reset whose two caption checks (behind, unlined) couldn't run."""
+        monkeypatch.setattr("pikaraoke.lib.library_tools.CAPTION_RETRY_PAUSE_S", 0)
+        monkeypatch.setattr("pikaraoke.lib.library_tools.check_caption", lambda job: FAILED)
+        paths = run_library(env)
+        env.client.post("/library/run", json={"mode": "reset"})
+        finish_checks(env)
+        return paths
+
+    def test_check_again_checks_the_failed_songs_and_answers_with_the_run(
+        self, env, failed_run, monkeypatch
+    ):
+        assert env.client.get("/library/run/status").get_json()["failed"] == 2
+        monkeypatch.setattr("pikaraoke.lib.library_tools.check_caption", lambda job: PASS)
+
+        answer = post_run(env, "recheck").get_json()
+        finish_checks(env)
+
+        assert answer["success"] is True and answer["run"]["open"] is True
+        status = env.client.get("/library/run/status").get_json()
+        assert status["failed"] == 0
+        assert {s["song"]: s["group"] for s in status["songs"]}[failed_run["unlined"]] == "caption"
+
+    def test_a_refusal_is_a_400(self, env, run):
+        response = post_run(env, "recheck")
+
+        assert response.status_code == 400
+        assert "No caption check failed" in response.get_json()["error"]
+
+    def test_the_preview_offers_check_again_for_failed_checks(self, env, failed_run):
+        html = text(env.client.get("/library/run"))
+        code = page_script(html)
+
+        assert 'id="lr-failed"' in html and 'id="lr-recheck"' in html
+        assert "caption checks failed: YouTube didn\\u0027t answer." in code
+        assert "run.checking || !run.failed" in code
+        assert "song.caption && song.caption.failed" in code
+
+    def test_the_pick_page_marks_a_song_whose_check_failed(self, env, failed_run):
+        code = page_script(text(env.client.get("/library/run/picks")))
+
+        assert "Caption check failed: YouTube didn\\u0027t answer." in code
+        assert "song.caption && song.caption.failed" in code
 
 
 class TestRunQueueRoute:

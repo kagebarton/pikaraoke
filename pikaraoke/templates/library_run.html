@@ -16,6 +16,7 @@
   .lr-title { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .lr-sub { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; word-break: break-word; }
   .lr-warn { color: var(--dark-warning); font-size: 13px; }
+  .lr-failed .button { min-height: 44px; font-weight: 700; }
   .lr-more { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 44px; background: none; border: 0; border-top: 1px solid var(--dark-border); color: var(--dark-link); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
   .lr-actions { display: flex; flex-direction: column; gap: 10px; }
   .lr-actions .button { width: 100%; min-height: 44px; font-weight: 700; }
@@ -33,6 +34,7 @@
       queue: {{ url_for('library.run_queue') | tojson }},
       discard: {{ url_for('library.run_discard') | tojson }},
       picks: {{ url_for('library.run_picks') | tojson }},
+      recheck: {{ url_for('library.run_recheck') | tojson }},
       tools: {{ (url_for('processing.processing') ~ '#tools') | tojson }},
       jobs: {{ (url_for('processing.processing') ~ '#jobs') | tojson }}
     };
@@ -50,6 +52,10 @@
       captionOk: {{ _('Caption OK') | tojson }},
       poor: {{ _('Looks poor: %(guessed)s of %(n)s lines guessed', guessed='{guessed}', n='{n}') | tojson }},
       noYoutubeId: {{ _('No YouTube ID: Genius or transcribe only') | tojson }},
+      checkFailed: {{ _("Caption check failed: YouTube didn't answer.") | tojson }},
+      failedOne: {{ _("%(n)s caption check failed: YouTube didn't answer.", n='{n}') | tojson }},
+      failedMany: {{ _("%(n)s caption checks failed: YouTube didn't answer.", n='{n}') | tojson }},
+      recheckFailed: {{ _('Could not check the captions again.') | tojson }},
       pickedGenius: {{ _('Genius: %(title)s · %(artist)s', title='{title}', artist='{artist}') | tojson }},
       keptPick: {{ _('Keeps its current Genius pick') | tojson }},
       pickedTranscribe: {{ _('Transcribe, your pick') | tojson }},
@@ -128,6 +134,9 @@
       if (group === 'needs_pick' && !song.has_youtube_id) {
         main.append(el('span', 'lr-muted', T.noYoutubeId));
       }
+      if (group === 'needs_pick' && song.caption && song.caption.failed) {
+        main.append(el('span', 'lr-warn', T.checkFailed));
+      }
       var row = el('div', 'lr-row').append(main);
       if (group === 'caption') row.append(el('span', 'tag is-success is-light is-rounded', T.captionOk));
       return row;
@@ -155,6 +164,12 @@
       box.find('.lr-bar > div').css('width', (run.to_check ? 100 * run.checked / run.to_check : 0) + '%');
     }
 
+    function renderFailedBox(run) {
+      var box = $('#lr-failed').toggleClass('is-hidden', run.checking || !run.failed);
+      box.find('.lr-failed-text').text(fill(run.failed === 1 ? T.failedOne : T.failedMany, { n: run.failed }));
+      $('#lr-recheck').prop('disabled', state.sending);
+    }
+
     function renderActions(run) {
       var go = $('#lr-go');
       if (run.checking) {
@@ -173,6 +188,7 @@
     function render() {
       var run = state.run;
       renderCheckBox(run);
+      renderFailedBox(run);
       var groups = $('#lr-groups').empty();
       $.each(GROUPS, function (i, group) {
         var songs = $.grep(run.songs, function (song) { return song.group === group; });
@@ -214,6 +230,20 @@
       });
     });
 
+    $('#lr-recheck').on('click', function () {
+      state.sending = true;
+      render();
+      $.ajax({ url: URLS.recheck, method: 'POST' }).done(function (answer) {
+        state.run = answer.run;
+      }).fail(function (xhr) {
+        showNotification(errorOf(xhr, T.recheckFailed), 'is-danger');
+      }).always(function () {
+        state.sending = false;
+        render();
+        poll();
+      });
+    });
+
     $('#lr-cancel').on('click', function () { state.discarding = true; render(); });
     $('#lr-keep').on('click', function () { state.discarding = false; render(); });
     $('#lr-discard').on('click', function () {
@@ -243,6 +273,11 @@
     <div class="lr-box-top"><span>{% trans %}YouTube captions checked{% endtrans %}</span><span class="tag is-rounded lr-box-count"></span></div>
     <div class="lr-bar"><div></div></div>
     <span class="lr-muted">{% trans %}Each caption is fetched and tested for being real lyrics.{% endtrans %}</span>
+  </div>
+
+  <div id="lr-failed" class="lr-box lr-failed is-hidden">
+    <span class="lr-warn lr-failed-text"></span>
+    <button type="button" id="lr-recheck" class="button">{% trans %}Check again{% endtrans %}</button>
   </div>
 
   <div id="lr-groups"></div>
