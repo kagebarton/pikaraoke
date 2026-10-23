@@ -75,6 +75,11 @@ def _to_tools_tab():
     return redirect(url_for("processing.processing") + "#tools")
 
 
+def _not_admin_page():
+    flash(_("You don't have permission to view the library tools"), "is-danger")
+    return redirect(url_for("files.browse"))
+
+
 def _run_title(mode: str) -> str:
     return {
         "stale": _("Update stale songs"),
@@ -130,8 +135,7 @@ def _run_page(template: str, *, after_checks: bool = False):
     shows the progress.
     """
     if not is_admin():
-        flash(_("You don't have permission to view the library tools"), "is-danger")
-        return redirect(url_for("files.browse"))
+        return _not_admin_page()
     view = get_karaoke_instance().library_tools.run_view()
     if view is None:
         return _to_tools_tab()
@@ -258,3 +262,44 @@ def run_discard():
         return _error(_("Admin only"), 403)
     get_karaoke_instance().library_tools.discard_run()
     return jsonify({"success": True})
+
+
+def _needs_pick_json(view: dict) -> dict:
+    """The needs-a-pick list for the pick page: each song's source and reason in words."""
+    sources = {"playlist": _("Playlist"), "download": _("Download")}
+    reasons = {"no_caption": _("no caption"), "sparse_caption": _("caption too sparse")}
+    for song in view["songs"]:
+        song["now"] = f"{sources[song['now']['source']]} · {reasons[song['now']['reason']]}"
+    return view
+
+
+@library_bp.route("/library/picks")
+def picks_page():
+    """Songs downloaded without a usable caption, to pick lyrics for."""
+    if not is_admin():
+        return _not_admin_page()
+    view = get_karaoke_instance().library_tools.needs_pick_view()
+    return render_template(
+        "pick_pass.html",
+        site_title=get_site_name(),
+        title=_("Pick lyrics"),
+        list_mode=True,
+        run=_needs_pick_json(view),
+    )
+
+
+@library_bp.route("/library/needs_pick/pick", methods=["POST"])
+def needs_pick_pick():
+    """Pick lyrics for a listed song and queue it: ``{"song", "pick": {"kind": ...}}``."""
+    if not is_admin():
+        return _error(_("Admin only"), 403)
+    body = request.get_json(silent=True)
+    song = body.get("song") if isinstance(body, dict) else None
+    if not isinstance(song, str):
+        return _error(_("Not a song waiting for a pick"), 400)
+    tools = get_karaoke_instance().library_tools
+    try:
+        tools.pick_lyrics(song, body.get("pick"))
+    except RegenError as e:
+        return _error(str(e), 400)
+    return jsonify({"success": True, "run": _needs_pick_json(tools.needs_pick_view())})

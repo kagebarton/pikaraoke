@@ -23,7 +23,8 @@ if not hasattr(werkzeug, "__version__"):
 import pikaraoke
 from pikaraoke.lib import lrclib
 from pikaraoke.lib.alignment_capture import SCHEMA_VERSION
-from pikaraoke.lib.genius import GeniusSong, GeniusUnavailable
+from pikaraoke.lib.events import EventSystem
+from pikaraoke.lib.genius import GeniusSong, GeniusUnavailable, read_choice
 from pikaraoke.lib.library_regen import CaptionCheck
 from pikaraoke.lib.library_tools import LibraryTools
 from pikaraoke.lib.song_list import SongList
@@ -111,12 +112,19 @@ class Env:
         song_manager.filename_from_path = SongManager.filename_from_path
         self.k = MagicMock()
         self.k.song_manager = song_manager
+        self.processing.is_blocked.return_value = False
+        self.downloads = MagicMock()
+        self.downloads.pending_downloads = []
+        self.downloads.active_url = None
+        self.events = EventSystem()
         self.k.library_tools = LibraryTools(
             self.processing,
             song_manager,
             str(tmp_path),
             self.genius,
             tmp_path / "library_tools_state.json",
+            self.events,
+            self.downloads,
         )
 
         pkg_dir = os.path.dirname(pikaraoke.__file__)
@@ -1445,3 +1453,138 @@ class TestRunQueueRoute:
         env.processing.enqueue_regen.assert_not_called()
         assert not self.flashes(env)
         assert env.client.get("/library/run/status").get_json()["open"] is True
+
+
+# ---------------------------------------------------------------------------
+# Songs downloaded without a usable caption: the pick page and its route
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def listed_song(env, tmp_path, monkeypatch):
+    """A fresh download with no caption, waiting for a pick (its choice file goes to tmp_path)."""
+    monkeypatch.setattr("pikaraoke.lib.genius.get_temp_directory", lambda *a: str(tmp_path / "tmp"))
+    song = env.add_song("Fresh Song---aaaaaaaaaaa.mp4")
+    env.k.library_tools.on_song_downloaded(song)
+    return song
+
+
+def post_pick(env, **body):
+    return env.client.post("/library/needs_pick/pick", json=body)
+
+
+class TestPicksPage:
+    def test_a_guest_is_sent_back_to_the_browser(self, env, listed_song):
+        env.admin = False
+
+        response = env.client.get("/library/picks")
+
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/__stub/files.browse")
+
+    def test_the_page_lists_the_song_with_where_it_came_from_and_why_it_waits(
+        self, env, listed_song
+    ):
+        response = env.client.get("/library/picks")
+        html = text(response)
+
+        assert response.status_code == 200
+        assert "<h1>Pick lyrics</h1>" in html
+        assert "Fresh Song" in html
+        assert "Download \\u00b7 no caption" in html  # tojson escapes the dot
+        assert '"needs_pick": true' in html
+        assert 'href="/__stub/processing.processing#jobs"' in html
+
+    def test_it_is_the_pick_pass_without_the_run_controls(self, env, listed_song):
+        html = text(env.client.get("/library/picks"))
+
+        assert "var LIST = true;" in html
+        assert 'id="pp-keep-all"' not in html and 'id="pp-queue"' not in html
+        assert 'data-filter="poor"' not in html
+        assert 'data-filter="topick"' in html and 'data-filter="picked"' in html
+        assert "/library/needs_pick/pick" in html
+
+    def test_a_runs_pick_pass_keeps_its_controls(self, env, run):
+        html = text(env.client.get("/library/run/picks"))
+
+        assert "var LIST = false;" in html
+        assert 'id="pp-keep-all"' in html and 'id="pp-queue"' in html
+        assert 'data-filter="poor"' in html
+
+    def test_with_nothing_listed_the_page_says_so(self, env):
+        response = env.client.get("/library/picks")
+
+        assert response.status_code == 200
+        assert '"songs": []' in text(response)
+
+    def test_a_picked_song_cannot_be_opened_or_changed(self, env, listed_song):
+        code = page_script(text(env.client.get("/library/picks")))
+
+        assert "if (!(LIST && song.pick)) toggle(song);" in code
+        assert "if (!LIST) {" in code  # Change and Skip song are for a run only
+        assert "if (LIST) return T.pickedProcessing;" in code
+        assert "Picked \\u00b7 processing" in code
+
+    def test_text_from_songs_goes_in_as_text_never_as_markup(self, env, listed_song):
+        html = text(env.client.get("/library/picks"))
+        code = page_script(html) + shared_script()
+
+        assert ".html(" not in code and ".innerHTML" not in code
+        assert_loads_shared_helpers(html, page_script(html))
+
+
+class TestNeedsPickRoute:
+    def test_a_guest_cannot_pick(self, env, listed_song):
+        env.admin = False
+
+        response = post_pick(env, song=listed_song, pick={"kind": "transcribe"})
+
+        assert response.status_code == 403
+        assert response.get_json()["success"] is False
+        env.processing.enqueue.assert_not_called()
+
+    def test_a_pick_queues_the_song_and_the_list_comes_back_with_it_picked(self, env, listed_song):
+        response = post_pick(env, song=listed_song, pick={"kind": "genius", "genius_id": 42})
+
+        answer = response.get_json()
+        assert response.status_code == 200 and answer["success"] is True
+        assert (answer["run"]["to_pick"], answer["run"]["picked"]) == (1, 1)
+        assert answer["run"]["songs"][0]["now"] == "Download · no caption"
+        env.processing.enqueue.assert_called_once_with(listed_song)
+        assert read_choice("aaaaaaaaaaa") == {"genius_id": 42, "yt_id": "aaaaaaaaaaa"}
+
+    def test_transcribe_is_a_pick_too(self, env, listed_song):
+        response = post_pick(env, song=listed_song, pick={"kind": "transcribe"})
+
+        assert response.status_code == 200
+        assert read_choice("aaaaaaaaaaa") == {"mode": "raw", "yt_id": "aaaaaaaaaaa"}
+
+    @pytest.mark.parametrize("song", [None, 5, ["x"]])
+    def test_a_request_without_a_song_is_refused(self, env, listed_song, song):
+        response = post_pick(env, song=song, pick={"kind": "transcribe"})
+
+        assert response.status_code == 400
+        env.processing.enqueue.assert_not_called()
+
+    def test_a_body_that_is_not_json_is_refused(self, env, listed_song):
+        response = env.client.post("/library/needs_pick/pick", data="nope")
+
+        assert response.status_code == 400
+
+    def test_a_song_that_is_not_listed_is_refused_with_the_reason(self, env, listed_song):
+        other = env.add_song("Other---bbbbbbbbbbb.mp4")
+
+        response = post_pick(env, song=other, pick={"kind": "transcribe"})
+
+        assert response.status_code == 400
+        assert "isn't waiting for a pick" in response.get_json()["error"]
+        env.processing.enqueue.assert_not_called()
+
+    def test_a_pick_that_is_not_a_choice_is_refused_and_the_song_stays_to_pick(
+        self, env, listed_song
+    ):
+        response = post_pick(env, song=listed_song, pick={"kind": "skip"})
+
+        assert response.status_code == 400
+        env.processing.enqueue.assert_not_called()
+        assert env.k.library_tools.needs_pick_view()["picked"] == 0

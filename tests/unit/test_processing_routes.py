@@ -1578,6 +1578,103 @@ class TestPoorSongNumbers:
 
 
 # ---------------------------------------------------------------------------
+# A download waiting for the admin to pick its lyrics
+# ---------------------------------------------------------------------------
+
+DOWNLOAD_PATH = "/songs/Fresh Song---abcdefghijk.mp4"
+
+
+def _waiting_for_pick(tracker, path=DOWNLOAD_PATH):
+    """A download whose caption failed the check, the way the events leave its row."""
+    item = _download_row(tracker, "Fresh Song", url=f"https://x/{path}", song_path=path)
+    tracker._events.emit("needs_pick", path)
+    return item
+
+
+class TestNeedsPick:
+    def test_the_event_sets_the_rows_status_and_pushes_an_update(self):
+        tracker = _make_tracker()
+        tracker._on_change = MagicMock()
+        item = _download_row(tracker, "Fresh Song", song_path=DOWNLOAD_PATH)
+
+        tracker._events.emit("needs_pick", DOWNLOAD_PATH)
+
+        assert item.processing_status == "needs_pick"
+        tracker._on_change.assert_called()
+
+    def test_a_status_read_keeps_the_status_unless_the_song_is_queued(self):
+        tracker = _make_tracker()
+        _waiting_for_pick(tracker)
+
+        [row] = tracker.get_status(admin=True)
+        assert row["processing_status"] == "needs_pick"
+
+        tracker._processing_manager.pending_jobs = [DOWNLOAD_PATH]
+        [row] = tracker.get_status(admin=True)
+        assert row["processing_status"] == "pending"
+        tracker._processing_manager.pending_jobs = []
+        tracker._processing_manager.get_active_job.return_value = DOWNLOAD_PATH
+        [row] = tracker.get_status(admin=True)
+        assert row["processing_status"] == "active"
+
+    def test_the_pick_queues_the_same_row(self):
+        tracker = _make_tracker()
+        item = _waiting_for_pick(tracker)
+
+        tracker._events.emit("processing_queued", DOWNLOAD_PATH)
+
+        assert [i.id for i in tracker._items] == [item.id]
+        assert item.processing_status == "waiting"
+
+    def test_an_admin_finds_it_in_attention_with_a_way_to_pick(self):
+        tracker = _make_tracker()
+        _waiting_for_pick(tracker)
+
+        [row] = tracker.get_status(admin=True)
+
+        assert row["group"] == "attention"
+        assert row["actions"] == ["remove", "pick", "song_info"]
+
+    def test_a_guest_sees_only_a_waiting_song_not_a_problem(self):
+        tracker = _make_tracker()
+        queued = _download_row(tracker, "Queued", song_path="/songs/Q---qqq.mp4")
+        tracker._processing_manager.pending_jobs = [queued.song_path]
+        _waiting_for_pick(tracker)
+
+        rows = tracker.get_status(admin=False, user="Alice")
+
+        assert [(r["title"], r["group"]) for r in rows] == [
+            ("Queued", "active"),
+            ("Fresh Song", "active"),
+        ]
+        assert "pick" not in rows[1]["actions"]
+
+    def test_remove_deletes_the_song_without_a_cancel(self):
+        tracker = _make_tracker()
+        item = _waiting_for_pick(tracker)
+
+        assert tracker.remove(item.id) is True
+
+        tracker._song_manager.delete.assert_called_once_with(DOWNLOAD_PATH)
+        assert tracker._items == []
+
+    def test_finishing_marks_the_row_done(self):
+        tracker = _make_tracker()
+        item = _waiting_for_pick(tracker)
+
+        tracker._events.emit("processing_complete", {"song_path": DOWNLOAD_PATH})
+
+        assert item.processing_status == "complete"
+
+    def test_a_song_with_no_row_changes_nothing(self):
+        tracker = _make_tracker()
+
+        tracker._events.emit("needs_pick", DOWNLOAD_PATH)
+
+        assert tracker._items == []
+
+
+# ---------------------------------------------------------------------------
 # Routes: attention list and retrying a song with no row
 # ---------------------------------------------------------------------------
 
@@ -1611,6 +1708,8 @@ def library_env():
         "/songs",
         MagicMock(),
         Path("/songs/library_tools_state.json"),
+        EventSystem(),
+        MagicMock(),
     )
     return karaoke, paths
 

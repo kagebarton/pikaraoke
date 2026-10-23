@@ -305,18 +305,19 @@ class Karaoke:
             song_manager=self.song_manager,
             events=self.events,
         )
-        # After the tracker: its song_downloaded handler runs first (handlers run
-        # in registration order), so the item has its song path when the queue
-        # emits processing_queued.
-        self.events.on("song_downloaded", self.processing_manager.enqueue)
-
         self.library_tools = LibraryTools(
             processing_manager=self.processing_manager,
             song_manager=self.song_manager,
             download_path=self.download_path,
             genius_client=self.genius_client,
             state_path=Path(get_data_directory()) / "library_tools" / "state.json",
+            events=self.events,
+            download_manager=self.download_manager,
         )
+        # After the tracker: its song_downloaded handler runs first (handlers run
+        # in registration order), so the item has its song path when the queue
+        # emits processing_queued or needs_pick.
+        self.events.on("song_downloaded", self.library_tools.on_song_downloaded)
 
         # Wire overlay state provider so the MPV poll thread can render OSD overlays
         if self.mpv_controller.is_running:
