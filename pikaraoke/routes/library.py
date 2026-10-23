@@ -303,3 +303,71 @@ def needs_pick_pick():
     except RegenError as e:
         return _error(str(e), 400)
     return jsonify({"success": True, "run": _needs_pick_json(tools.needs_pick_view())})
+
+
+@library_bp.route("/library/playlist")
+def playlist_page():
+    """The Add playlist page; its script checks the link in the query."""
+    if not is_admin():
+        return _not_admin_page()
+    return render_template(
+        "playlist.html",
+        site_title=get_site_name(),
+        title=_("Add playlist"),
+        url=request.args.get("url", "").strip(),
+    )
+
+
+@library_bp.route("/library/playlist/check", methods=["POST"])
+def playlist_check():
+    """Read a playlist link and say what is new: ``{"url"}``."""
+    if not is_admin():
+        return _error(_("Admin only"), 403)
+    body = request.get_json(silent=True)
+    url = body.get("url") if isinstance(body, dict) else None
+    try:
+        playlist = get_karaoke_instance().library_tools.check_playlist(url)
+    except RegenError as e:
+        return _error(str(e), 400)
+    return jsonify({"success": True, "playlist": playlist})
+
+
+@library_bp.route("/library/playlist/add", methods=["POST"])
+def playlist_add():
+    """Download the chosen videos and process the chosen songs: ``{"videos", "unprocessed"}``."""
+    if not is_admin():
+        return _error(_("Admin only"), 403)
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return _error(_("Not a playlist selection"), 400)
+    try:
+        result = get_karaoke_instance().library_tools.add_playlist(
+            body.get("videos"), body.get("unprocessed")
+        )
+    except RegenError as e:
+        return _error(str(e), 400)
+    downloads, processing = result["downloads"], result["processing"]
+    parts = []
+    if downloads:
+        parts.append(
+            ngettext(
+                "Added %(n)d video to the download queue.",
+                "Added %(n)d videos to the download queue.",
+                downloads,
+                n=downloads,
+            )
+        )
+    if processing:
+        parts.append(
+            ngettext(
+                "%(n)d song sent to processing.",
+                "%(n)d songs sent to processing.",
+                processing,
+                n=processing,
+            )
+        )
+    if parts:
+        flash(" ".join(parts), "is-success")
+    else:
+        flash(_("Nothing to add: those songs are already in the library or waiting."), "is-warning")
+    return jsonify({"success": True, **result})

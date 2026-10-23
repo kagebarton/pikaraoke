@@ -11,10 +11,12 @@ from __future__ import annotations
 import json
 import logging
 import os
+import subprocess
 import threading
 import time
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 from pikaraoke.lib import lrclib
 from pikaraoke.lib.download_manager import DownloadManager
@@ -27,6 +29,14 @@ from pikaraoke.lib.genius import (
     write_choice,
 )
 from pikaraoke.lib.genius_lyrics import parse_lyric_lines
+from pikaraoke.lib.library_links import (
+    NOT_PROCESSED,
+    classify_url,
+    file_status,
+    is_video_id,
+    library_files,
+    read_playlist,
+)
 from pikaraoke.lib.library_regen import (
     VIDEO_EXTS,
     CaptionCheck,
@@ -96,6 +106,18 @@ CAPTION_RETRY_PAUSE_S = 30
 # Why a downloaded song waits for the admin to pick its lyrics, and where it came from (D6).
 NEEDS_PICK_REASONS = ("no_caption", "sparse_caption")
 NEEDS_PICK_SOURCES = ("playlist", "download")
+
+# What the playlist box says of a link it can't use (D13).
+PLAYLIST_NOT_A_LINK = "Paste a YouTube playlist link."
+PLAYLIST_ONE_VIDEO = "This is a link to one video. Use the search page to add single videos."
+PLAYLIST_VIDEO_IN_LIST = (
+    "This link opens one video in a playlist. "
+    "Paste the playlist page link (youtube.com/playlist?list=…) to add the whole list."
+)
+PLAYLIST_UNREADABLE = "Couldn't read that playlist."
+
+# Who a playlist's downloads are attributed to on the Processing page.
+PLAYLIST_USER = "Playlist"
 
 
 def _pick_text(value: object) -> str:
@@ -212,6 +234,8 @@ class LibraryTools:
         self._state_path = state_path
         self._state_lock = threading.Lock()
         self._checker: threading.Thread | None = None
+        # Video ids queued from a playlist, until their download lands.
+        self._playlist_ids: set[str] = set()
         state = self._read_state()
         self._run = self._load_run(state)
         self._needs_pick = self._load_needs_pick(state)
@@ -588,12 +612,17 @@ class LibraryTools:
         title is blocked (the queue skips it). Wired after the pipeline
         tracker, which hears the same event first and gives its row the song path.
         """
-        reason = self._pick_reason(song_path, extract_youtube_id(song_path))
+        video_id = extract_youtube_id(song_path)
+        with self._state_lock:
+            from_playlist = video_id in self._playlist_ids
+            self._playlist_ids.discard(video_id)
+        reason = self._pick_reason(song_path, video_id)
         if reason is None:
             self._processing.enqueue(song_path)
             return
+        source = "playlist" if from_playlist else "download"
         with self._state_lock:
-            self._needs_pick[song_path] = _NeedsPick(song_path, reason, "download", time.time())
+            self._needs_pick[song_path] = _NeedsPick(song_path, reason, source, time.time())
             self._save()
         logger.info("%s needs a lyrics pick (%s)", Path(song_path).name, reason)
         self._events.emit("needs_pick", song_path)
@@ -648,6 +677,104 @@ class LibraryTools:
             ]
             picked = sum(entry.picked for entry in entries)
         return {"to_pick": len(songs), "picked": picked, "songs": songs}
+
+    def check_playlist(self, url: str) -> dict:
+        """Read a YouTube playlist and compare it with the library (D13).
+
+        Returns ``{"title", "videos"}``; each video has its ``id``, ``title``
+        and ``status``: ``new``, ``not_processed`` (downloaded earlier and never
+        processed; it carries its ``song`` path as the library spells it) or
+        ``in_library``. Raises :class:`RegenError`, with a message for the
+        admin, for a link that isn't a playlist and for one that can't be read.
+        """
+        url = url.strip() if isinstance(url, str) else ""
+        link = classify_url(url)
+        if link is None:
+            raise RegenError(PLAYLIST_NOT_A_LINK)
+        kind, target = link
+        if kind == "video":
+            in_list = "list" in parse_qs(urlparse(url).query)
+            raise RegenError(PLAYLIST_VIDEO_IN_LIST if in_list else PLAYLIST_ONE_VIDEO)
+        try:
+            playlist = read_playlist(target)
+        except (subprocess.SubprocessError, OSError, ValueError) as e:
+            logger.warning("Could not read playlist %s: %s", target, e)
+            raise RegenError(PLAYLIST_UNREADABLE) from e
+        files = library_files(self._folder)
+        spelling = {Path(path): path for path in self._song_manager.songs}
+        videos = []
+        seen = set()
+        for video in playlist.videos:
+            if video.id in seen:
+                continue  # a playlist can hold a video twice
+            seen.add(video.id)
+            path = files.get(video.id)
+            song = spelling.get(path) if path is not None else None
+            if path is None:
+                status = "new"
+            elif song is not None and file_status(path) == NOT_PROCESSED:
+                status = "not_processed"
+            else:
+                status = "in_library"
+            videos.append(
+                {
+                    "id": video.id,
+                    "title": video.title,
+                    "status": status,
+                    "song": song if status == "not_processed" else None,
+                }
+            )
+        return {"title": playlist.title, "videos": videos}
+
+    def add_playlist(self, videos: object, unprocessed: object) -> dict:
+        """Download the chosen playlist videos and process the chosen unprocessed songs (D13).
+
+        ``videos`` is a list of ``{"id", "title"}``; ``unprocessed`` is a list of
+        library song paths. A video already in the library or already waiting
+        to download is left out, and so is a song that is busy, listed for a
+        pick, or no longer unprocessed. Returns ``{"downloads", "processing"}``,
+        how many of each were taken up. Raises :class:`RegenError` for a
+        request that isn't lists.
+        """
+        if not isinstance(videos, list) or not isinstance(unprocessed, list):
+            raise RegenError("Not a playlist selection.")
+        in_library = library_files(self._folder)
+        waiting = {job["video_url"] for job in list(self._download_manager.pending_downloads)}
+        waiting.add(self._download_manager.active_url)
+        downloads = 0
+        for video in videos:
+            video_id = video.get("id") if isinstance(video, dict) else None
+            url = f"https://www.youtube.com/watch?v={video_id}"
+            if not is_video_id(video_id) or video_id in in_library or url in waiting:
+                continue
+            waiting.add(url)
+            with self._state_lock:
+                self._playlist_ids.add(video_id)
+            self._download_manager.queue_download(
+                url, enqueue=False, user=PLAYLIST_USER, title=_pick_text(video.get("title")) or None
+            )
+            downloads += 1
+        processing = 0
+        for song_path in unprocessed:
+            if self._is_unprocessed(song_path):
+                with self._state_lock:
+                    self._playlist_ids.add(extract_youtube_id(song_path))
+                self.on_song_downloaded(song_path)
+                processing += 1
+        return {"downloads": downloads, "processing": processing}
+
+    def _is_unprocessed(self, song_path: object) -> bool:
+        """Whether a playlist's song can still be processed: in the library, idle and not done."""
+        if not isinstance(song_path, str) or song_path not in self._song_manager.songs:
+            return False
+        with self._state_lock:
+            listed = song_path in self._needs_pick
+        return (
+            self.is_video(song_path)
+            and not listed
+            and not self.is_busy(song_path)
+            and file_status(Path(song_path)) == NOT_PROCESSED
+        )
 
     @staticmethod
     def _choice_for(pick: object) -> dict:

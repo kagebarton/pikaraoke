@@ -20,6 +20,14 @@ from pikaraoke.lib.youtube_dl import _impersonate_args, yt_dlp_cmd
 
 _YOUTUBE_ID_RE = re.compile(r"[A-Za-z0-9_-]{11}")
 
+# What :func:`file_status` says of a video downloaded but never processed.
+NOT_PROCESSED = "in library, not processed"
+
+
+def is_video_id(value: object) -> bool:
+    """Whether ``value`` has the shape of a YouTube video id (11 URL-safe characters)."""
+    return isinstance(value, str) and _YOUTUBE_ID_RE.fullmatch(value) is not None
+
 
 def classify_url(url: str) -> tuple[str, str] | None:
     """Classify ``url`` as ``("video", id)`` or ``("playlist", url)``.
@@ -45,7 +53,7 @@ def classify_url(url: str) -> tuple[str, str] | None:
         video_id = parsed.path.lstrip("/").split("/", 1)[0]
     else:
         video_id = query.get("v", [None])[0]
-    if video_id and _YOUTUBE_ID_RE.fullmatch(video_id):
+    if is_video_id(video_id):
         return ("video", video_id)
     if "list" in query:
         return ("playlist", url)
@@ -125,5 +133,5 @@ def file_status(path: Path) -> str:
         path.parent / "karaoke" / f"{path.stem}.ass",
     )
     if path.suffix.lower() in VIDEO_EXTS and not any(p.is_file() for p in outputs):
-        return "in library, not processed"
+        return NOT_PROCESSED
     return "already in library"

@@ -1,0 +1,251 @@
+{% extends 'base.html' %}
+
+{% block styles %}
+<style>
+  .pl-muted { color: var(--dark-text-muted); font-size: 13px; }
+  .pl-back { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; font-size: 14px; color: var(--dark-link); }
+  .pl-search { display: flex; gap: 8px; }
+  .pl-search .input { min-height: 44px; }
+  .pl-search .button { min-height: 44px; min-width: 64px; font-weight: 700; }
+  .pl-pills { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  .pl-sec { margin: 22px 0 8px; font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--dark-text-muted); }
+  .pl-card { background: var(--dark-bg-tertiary); border-radius: 8px; overflow: hidden; }
+  .pl-row { display: flex; gap: 12px; align-items: center; padding: 8px 12px; min-height: 44px; margin: 0; }
+  .pl-row + .pl-row { border-top: 1px solid var(--dark-border); }
+  .pl-row input { width: 20px; height: 20px; accent-color: var(--dark-link); margin: 0; flex: none; }
+  .pl-row-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .pl-title { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pl-more { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 44px; border: 0; border-top: 1px solid var(--dark-border); background: none; color: inherit; font: inherit; font-weight: 700; cursor: pointer; }
+  .pl-steps { padding: 14px; margin-top: 22px; display: flex; flex-direction: column; gap: 10px; background: var(--dark-bg-secondary); }
+  .pl-step { display: flex; gap: 10px; align-items: flex-start; }
+  .pl-num { flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--dark-border); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
+  .pl-foot { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+  .pl-foot .button { width: 100%; min-height: 44px; font-weight: 700; }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='library-pages.js') }}"></script>
+<script>
+  $(function () {
+    var URLS = {
+      check: {{ url_for('library.playlist_check') | tojson }},
+      add: {{ url_for('library.playlist_add') | tojson }},
+      jobs: {{ (url_for('processing.processing') ~ '#jobs') | tojson }}
+    };
+    var T = {
+      reading: {{ _('Reading the playlist…') | tojson }},
+      checkFailed: {{ _('Could not check the playlist.') | tojson }},
+      addFailed: {{ _('Could not add the playlist.') | tojson }},
+      videoOne: {{ _('%(n)s video', n='{n}') | tojson }},
+      videoMany: {{ _('%(n)s videos', n='{n}') | tojson }},
+      pillNew: {{ _('%(n)s new', n='{n}') | tojson }},
+      pillUnprocessed: {{ _('%(n)s not processed', n='{n}') | tojson }},
+      pillLibrary: {{ _('%(n)s in library', n='{n}') | tojson }},
+      secNew: {{ _('New: will download (%(n)s)', n='{n}') | tojson }},
+      secUnprocessed: {{ _('In library, not processed (%(n)s)', n='{n}') | tojson }},
+      secLibrary: {{ _('Already in library (%(n)s)', n='{n}') | tojson }},
+      leftOut: {{ _('Left out') | tojson }},
+      unprocessedNote: {{ _('Downloaded earlier but never finished. Will be processed.') | tojson }},
+      skip: {{ _('Skip') | tojson }},
+      showMore: {{ _('Show %(n)s more', n='{n}') | tojson }},
+      empty: {{ _('No videos in this playlist.') | tojson }},
+      goBoth: {{ _('Download %(k)s and process %(m)s', k='{k}', m='{m}') | tojson }},
+      goDownload: {{ _('Download %(k)s', k='{k}') | tojson }},
+      goProcess: {{ _('Process %(m)s', m='{m}') | tojson }}
+    };
+    var LIBRARY_SHOWN = 5; // "Already in library" rows shown before "Show N more"
+
+    var state = {
+      playlist: null,    // {title, videos: [{id, title, status, song}]} once checked
+      left: {},          // id -> true for a new video the admin unchecked
+      showAll: false,    // the whole "Already in library" list is showing
+      sending: false,
+      seq: 0             // only the latest check's answer counts
+    };
+
+    var fill = libraryPages.fill;
+    var el = libraryPages.el;
+    var errorOf = libraryPages.errorOf;
+
+    function withStatus(status) {
+      return $.grep(state.playlist.videos, function (video) { return video.status === status; });
+    }
+
+    function takenNew() {
+      return $.grep(withStatus('new'), function (video) { return !state.left[video.id]; });
+    }
+
+    function videoCount(n) {
+      return fill(n === 1 ? T.videoOne : T.videoMany, { n: n });
+    }
+
+    function pill(style, text) {
+      return el('span', 'tag is-rounded ' + style, text);
+    }
+
+    function section(title, card) {
+      return [el('div', 'pl-sec', title), card];
+    }
+
+    function newRow(video) {
+      var box = $('<input type="checkbox">').prop('checked', !state.left[video.id]);
+      box.on('change', function () {
+        if (this.checked) delete state.left[video.id]; else state.left[video.id] = true;
+        render();
+      });
+      var body = el('div', 'pl-row-body').append(el('span', 'pl-title', video.title).attr('title', video.title));
+      if (state.left[video.id]) body.append(el('span', 'pl-muted', T.leftOut));
+      return el('label', 'pl-row').append(box, body);
+    }
+
+    function noteRow(video, note, tagText) {
+      var row = el('div', 'pl-row').append(
+        el('div', 'pl-row-body').append(el('span', 'pl-title', video.title).attr('title', video.title))
+      );
+      if (note) row.find('.pl-row-body').append(el('span', 'pl-muted', note));
+      if (tagText) row.append(pill('is-success is-light', tagText));
+      return row;
+    }
+
+    function renderLists() {
+      var fresh = withStatus('new');
+      var unprocessed = withStatus('not_processed');
+      var inLibrary = withStatus('in_library');
+      var result = $('#pl-sections').empty();
+      if (fresh.length) {
+        result.append(section(fill(T.secNew, { n: fresh.length }),
+          el('div', 'pl-card').append($.map(fresh, newRow))));
+      }
+      if (unprocessed.length) {
+        result.append(section(fill(T.secUnprocessed, { n: unprocessed.length }),
+          el('div', 'pl-card').append($.map(unprocessed, function (video) {
+            return noteRow(video, T.unprocessedNote, null);
+          }))));
+      }
+      if (inLibrary.length) {
+        var shown = state.showAll ? inLibrary : inLibrary.slice(0, LIBRARY_SHOWN);
+        var card = el('div', 'pl-card').append($.map(shown, function (video) {
+          return noteRow(video, null, T.skip);
+        }));
+        if (shown.length < inLibrary.length) {
+          card.append(el('button', 'pl-more', fill(T.showMore, { n: inLibrary.length - shown.length }))
+            .attr('type', 'button').on('click', function () { state.showAll = true; render(); }));
+        }
+        result.append(section(fill(T.secLibrary, { n: inLibrary.length }), card));
+      }
+      if (!state.playlist.videos.length) result.append(el('p', 'pl-muted', T.empty));
+    }
+
+    function render() {
+      var playlist = state.playlist;
+      $('#pl-result').toggleClass('is-hidden', playlist === null);
+      if (playlist === null) return;
+      var pills = $('#pl-pills').empty();
+      var title = playlist.title ? playlist.title + ' · ' : '';
+      pills.append(
+        pill('is-light', title + videoCount(playlist.videos.length)),
+        pill('is-info is-light', fill(T.pillNew, { n: withStatus('new').length })),
+        pill('is-warning is-light', fill(T.pillUnprocessed, { n: withStatus('not_processed').length })),
+        pill('is-success is-light', fill(T.pillLibrary, { n: withStatus('in_library').length }))
+      );
+      renderLists();
+      var k = takenNew().length;
+      var m = withStatus('not_processed').length;
+      var label = k && m ? fill(T.goBoth, { k: k, m: m }) : (k ? fill(T.goDownload, { k: k }) : fill(T.goProcess, { m: m }));
+      $('#pl-go').text(label).prop('disabled', (k + m) === 0 || state.sending);
+    }
+
+    function showMessage(text, isError) {
+      $('#pl-message').text(text || '').toggleClass('has-text-danger', !!isError).toggleClass('is-hidden', !text);
+    }
+
+    function check() {
+      var url = $.trim($('#pl-url').val());
+      if (!url) return;
+      var seq = ++state.seq;
+      state.playlist = null;
+      state.left = {};
+      state.showAll = false;
+      showMessage(T.reading, false);
+      $('#pl-check').prop('disabled', true);
+      render();
+      $.ajax({
+        url: URLS.check,
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ url: url })
+      }).done(function (answer) {
+        if (seq !== state.seq) return;
+        state.playlist = answer.playlist;
+        showMessage('', false);
+      }).fail(function (xhr) {
+        if (seq !== state.seq) return;
+        showMessage(errorOf(xhr, T.checkFailed), true);
+      }).always(function () {
+        if (seq !== state.seq) return;
+        $('#pl-check').prop('disabled', false);
+        render();
+      });
+    }
+
+    $('#pl-check').on('click', check);
+    $('#pl-url').on('keydown', function (e) {
+      if (e.which === 13) { e.preventDefault(); check(); }
+    });
+
+    $('#pl-go').on('click', function () {
+      if (state.sending) return;
+      state.sending = true;
+      render();
+      var videos = $.map(takenNew(), function (video) { return { id: video.id, title: video.title }; });
+      var unprocessed = $.map(withStatus('not_processed'), function (video) { return video.song; });
+      $.ajax({
+        url: URLS.add,
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ videos: videos, unprocessed: unprocessed })
+      }).done(function () {
+        window.location.href = URLS.jobs;
+      }).fail(function (xhr) {
+        showNotification(errorOf(xhr, T.addFailed), 'is-danger');
+        state.sending = false;
+        render();
+      });
+    });
+
+    render();
+    if ($.trim($('#pl-url').val())) check();
+  });
+</script>
+{% endblock %}
+
+{% block header %}
+<h1>{% block title %}{% trans %}Add playlist{% endtrans %}{% endblock %}</h1>
+{% endblock %}
+
+{% block content %}
+<a class="pl-back no-spa" href="{{ url_for('processing.processing') }}#tools">&lsaquo; {% trans %}Processing{% endtrans %}</a>
+
+<div class="pl-search">
+  <input id="pl-url" class="input" type="url" autocomplete="off" aria-label="{% trans %}YouTube playlist link{% endtrans %}" value="{{ url }}">
+  <button type="button" id="pl-check" class="button is-primary">{% trans %}Check{% endtrans %}</button>
+</div>
+<p id="pl-message" class="pl-muted mt-3 is-hidden"></p>
+
+<div id="pl-result" class="is-hidden">
+  <div id="pl-pills" class="pl-pills"></div>
+  <div id="pl-sections"></div>
+
+  <div class="pl-card pl-steps">
+    <div class="pl-step"><span class="pl-num">1</span><span class="pl-muted">{% trans %}Videos download one at a time, behind any songs guests are adding.{% endtrans %}</span></div>
+    <div class="pl-step"><span class="pl-num">2</span><span class="pl-muted">{% trans %}A song whose YouTube caption is real lyrics is processed right away.{% endtrans %}</span></div>
+    <div class="pl-step"><span class="pl-num">3</span><span class="pl-muted">{% trans %}The rest wait under "Attention" on the Processing page until you pick their lyrics.{% endtrans %}</span></div>
+  </div>
+
+  <div class="pl-foot">
+    <button type="button" id="pl-go" class="button is-primary" disabled></button>
+    <a class="button no-spa" href="{{ url_for('processing.processing') }}#tools">{% trans %}Cancel{% endtrans %}</a>
+  </div>
+</div>
+{% endblock %}

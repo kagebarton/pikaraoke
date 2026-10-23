@@ -8,6 +8,7 @@ fake over a dict of songs, and LRCLIB's network calls are patched.
 
 import json
 import os
+import subprocess
 import threading
 from pathlib import Path
 from types import SimpleNamespace
@@ -25,8 +26,15 @@ from pikaraoke.lib.genius import (
     read_choice,
     write_choice,
 )
+from pikaraoke.lib.library_links import Playlist, PlaylistVideo
 from pikaraoke.lib.library_regen import CaptionCheck, RegenError, RegenJob
-from pikaraoke.lib.library_tools import LibraryTools
+from pikaraoke.lib.library_tools import (
+    PLAYLIST_NOT_A_LINK,
+    PLAYLIST_ONE_VIDEO,
+    PLAYLIST_UNREADABLE,
+    PLAYLIST_VIDEO_IN_LIST,
+    LibraryTools,
+)
 from pikaraoke.lib.song_list import SongList
 from pikaraoke.lib.song_manager import SongManager
 
@@ -1835,6 +1843,28 @@ class TestAfterDownloadCheck:
         assert [r["song_path"] for r in listed(download.tools)] == [str(second), download.song]
 
 
+class TestPlaylistSource:
+    def test_a_song_queued_from_a_playlist_is_listed_as_one(self, download):
+        download.tools.add_playlist([{"id": "aaaaaaaaaaa", "title": "From the list"}], [])
+        arrived = make_video(download.folder, "From the list---aaaaaaaaaaa")
+
+        download.tools.on_song_downloaded(str(arrived))
+        download.tools.on_song_downloaded(download.song)
+
+        sources = {r["song_path"]: r["source"] for r in listed(download.tools)}
+        assert sources == {str(arrived): "playlist", download.song: "download"}
+
+    def test_the_playlist_mark_is_used_up_by_the_first_download(self, download):
+        download.tools.add_playlist([{"id": "aaaaaaaaaaa", "title": "From the list"}], [])
+        arrived = str(make_video(download.folder, "From the list---aaaaaaaaaaa"))
+        download.tools.on_song_downloaded(arrived)
+        download.tools._forget_needs_pick(arrived)
+
+        download.tools.on_song_downloaded(arrived)
+
+        assert [r["source"] for r in listed(download.tools)] == ["download"]
+
+
 class TestPickLyrics:
     def test_a_genius_pick_writes_the_choice_file_and_queues_the_song(self, download):
         download.tools.on_song_downloaded(download.song)
@@ -2062,3 +2092,246 @@ class TestNeedsPickView:
                 "pick": None,
             }
         ]
+
+
+# ---------------------------------------------------------------------------
+# Playlists
+# ---------------------------------------------------------------------------
+
+PLAYLIST_URL = "https://www.youtube.com/playlist?list=PLabc"
+
+
+def playlist_of(*videos: tuple[str, str], title: str = "A playlist") -> Playlist:
+    return Playlist(title=title, videos=[PlaylistVideo(id=i, title=t) for i, t in videos])
+
+
+def read_as(monkeypatch, playlist: Playlist) -> list[str]:
+    """Make the playlist box read ``playlist``; returns the links it was asked for."""
+    asked = []
+
+    def read(url):
+        asked.append(url)
+        return playlist
+
+    monkeypatch.setattr("pikaraoke.lib.library_tools.read_playlist", read)
+    return asked
+
+
+class TestCheckPlaylist:
+    def test_each_video_is_new_unprocessed_or_in_the_library(self, tmp_path, monkeypatch):
+        unprocessed = make_video(tmp_path, "Old---bbbbbbbbbbb")
+        processed = make_video(tmp_path, "Done---ccccccccccc")
+        genius_bundle(tmp_path, processed.stem)
+        tools, _ = make_tools(tmp_path, [str(unprocessed), str(processed)])
+        asked = read_as(
+            monkeypatch,
+            playlist_of(("aaaaaaaaaaa", "Fresh"), ("bbbbbbbbbbb", "Old"), ("ccccccccccc", "Done")),
+        )
+
+        result = tools.check_playlist(f"  {PLAYLIST_URL} ")
+
+        assert asked == [PLAYLIST_URL]
+        assert result["title"] == "A playlist"
+        assert result["videos"] == [
+            {"id": "aaaaaaaaaaa", "title": "Fresh", "status": "new", "song": None},
+            {
+                "id": "bbbbbbbbbbb",
+                "title": "Old",
+                "status": "not_processed",
+                "song": str(unprocessed),
+            },
+            {"id": "ccccccccccc", "title": "Done", "status": "in_library", "song": None},
+        ]
+
+    def test_an_unprocessed_video_the_library_has_not_picked_up_counts_as_in_the_library(
+        self, tmp_path, monkeypatch
+    ):
+        make_video(tmp_path, "Old---bbbbbbbbbbb")
+        tools, _ = make_tools(tmp_path, [])
+        read_as(monkeypatch, playlist_of(("bbbbbbbbbbb", "Old")))
+
+        [video] = tools.check_playlist(PLAYLIST_URL)["videos"]
+
+        assert video["status"] == "in_library"
+
+    def test_a_video_listed_twice_is_listed_once(self, tmp_path, monkeypatch):
+        tools, _ = make_tools(tmp_path, [])
+        read_as(monkeypatch, playlist_of(("aaaaaaaaaaa", "Fresh"), ("aaaaaaaaaaa", "Fresh again")))
+
+        videos = tools.check_playlist(PLAYLIST_URL)["videos"]
+
+        assert [v["title"] for v in videos] == ["Fresh"]
+
+    @pytest.mark.parametrize(
+        "url, message",
+        [
+            ("https://www.youtube.com/watch?v=dQw4w9WgXcQ", PLAYLIST_ONE_VIDEO),
+            ("https://youtu.be/dQw4w9WgXcQ", PLAYLIST_ONE_VIDEO),
+            ("https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLabc", PLAYLIST_VIDEO_IN_LIST),
+            ("youtu.be/dQw4w9WgXcQ?list=PLabc", PLAYLIST_VIDEO_IN_LIST),
+            ("https://example.com/playlist?list=PLabc", PLAYLIST_NOT_A_LINK),
+            ("not a link", PLAYLIST_NOT_A_LINK),
+            ("", PLAYLIST_NOT_A_LINK),
+            (None, PLAYLIST_NOT_A_LINK),
+        ],
+    )
+    def test_a_link_that_is_not_a_playlist_gets_a_message_and_no_read(
+        self, tmp_path, monkeypatch, url, message
+    ):
+        tools, _ = make_tools(tmp_path, [])
+        asked = read_as(monkeypatch, playlist_of())
+
+        with pytest.raises(RegenError) as raised:
+            tools.check_playlist(url)
+
+        assert str(raised.value) == message
+        assert asked == []
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            subprocess.CalledProcessError(1, "yt-dlp"),
+            subprocess.TimeoutExpired("yt-dlp", 300),
+            ValueError("not json"),
+            FileNotFoundError("yt-dlp"),
+        ],
+        ids=["exit code", "timeout", "not json", "no yt-dlp"],
+    )
+    def test_a_playlist_that_cannot_be_read_says_so(self, tmp_path, monkeypatch, error):
+        tools, _ = make_tools(tmp_path, [])
+
+        def fail(url):
+            raise error
+
+        monkeypatch.setattr("pikaraoke.lib.library_tools.read_playlist", fail)
+
+        with pytest.raises(RegenError) as raised:
+            tools.check_playlist(PLAYLIST_URL)
+
+        assert str(raised.value) == PLAYLIST_UNREADABLE
+
+
+class TestAddPlaylist:
+    @staticmethod
+    def queued(tools: LibraryTools) -> list:
+        return tools._download_manager.queue_download.call_args_list
+
+    def test_each_video_is_queued_as_a_playlist_download(self, tmp_path):
+        tools, _ = make_tools(tmp_path, [])
+
+        result = tools.add_playlist(
+            [{"id": "aaaaaaaaaaa", "title": "  First "}, {"id": "bbbbbbbbbbb", "title": "Second"}],
+            [],
+        )
+
+        assert result == {"downloads": 2, "processing": 0}
+        assert [(c.args, c.kwargs) for c in self.queued(tools)] == [
+            (
+                ("https://www.youtube.com/watch?v=aaaaaaaaaaa",),
+                {"enqueue": False, "user": "Playlist", "title": "First"},
+            ),
+            (
+                ("https://www.youtube.com/watch?v=bbbbbbbbbbb",),
+                {"enqueue": False, "user": "Playlist", "title": "Second"},
+            ),
+        ]
+
+    def test_a_missing_title_is_left_to_the_download_manager(self, tmp_path):
+        tools, _ = make_tools(tmp_path, [])
+
+        tools.add_playlist([{"id": "aaaaaaaaaaa"}, {"id": "bbbbbbbbbbb", "title": 5}], [])
+
+        assert [c.kwargs["title"] for c in self.queued(tools)] == [None, None]
+
+    def test_a_long_title_is_cut(self, tmp_path):
+        tools, _ = make_tools(tmp_path, [])
+
+        tools.add_playlist([{"id": "aaaaaaaaaaa", "title": "x" * 500}], [])
+
+        assert len(self.queued(tools)[0].kwargs["title"]) == 200
+
+    def test_a_video_already_in_the_library_is_skipped(self, tmp_path):
+        have = make_video(tmp_path, "Have---aaaaaaaaaaa")
+        tools, _ = make_tools(tmp_path, [str(have)])
+
+        result = tools.add_playlist(
+            [{"id": "aaaaaaaaaaa", "title": "Have"}, {"id": "bbbbbbbbbbb", "title": "New"}], []
+        )
+
+        assert result["downloads"] == 1
+        assert [c.args[0][-11:] for c in self.queued(tools)] == ["bbbbbbbbbbb"]
+
+    @pytest.mark.parametrize(
+        "video_id", [None, 5, "short", "twelve-chars", "bad id!!!!!!", "ünicode-ünic", ["a"]]
+    )
+    def test_an_id_that_is_not_eleven_url_safe_characters_is_skipped(self, tmp_path, video_id):
+        tools, _ = make_tools(tmp_path, [])
+
+        result = tools.add_playlist([{"id": video_id, "title": "x"}, "bad", None, 5], [])
+
+        assert result["downloads"] == 0
+        tools._download_manager.queue_download.assert_not_called()
+
+    def test_a_video_listed_twice_or_already_waiting_is_queued_once(self, tmp_path):
+        tools, _ = make_tools(tmp_path, [])
+        tools._download_manager.pending_downloads = [
+            {"video_url": "https://www.youtube.com/watch?v=bbbbbbbbbbb"}
+        ]
+        tools._download_manager.active_url = "https://www.youtube.com/watch?v=ccccccccccc"
+        videos = [
+            {"id": "aaaaaaaaaaa", "title": "A"},
+            {"id": "aaaaaaaaaaa", "title": "A"},
+            {"id": "bbbbbbbbbbb", "title": "B"},
+            {"id": "ccccccccccc", "title": "C"},
+        ]
+
+        result = tools.add_playlist(videos, [])
+
+        assert result["downloads"] == 1
+        assert [c.args[0][-11:] for c in self.queued(tools)] == ["aaaaaaaaaaa"]
+
+    @pytest.mark.parametrize("videos, unprocessed", [(None, []), ([], None), ("a", []), ({}, [])])
+    def test_a_request_that_is_not_two_lists_is_refused(self, tmp_path, videos, unprocessed):
+        tools, _ = make_tools(tmp_path, [])
+
+        with pytest.raises(RegenError, match="Not a playlist selection"):
+            tools.add_playlist(videos, unprocessed)
+
+    def test_an_unprocessed_song_goes_through_the_download_check(self, download):
+        write_caption(download.folder, STEM, words=60)
+
+        result = download.tools.add_playlist([], [download.song])
+
+        assert result == {"downloads": 0, "processing": 1}
+        download.processing.enqueue.assert_called_once_with(download.song)
+
+    def test_an_unprocessed_song_without_a_usable_caption_is_listed_from_the_playlist(
+        self, download
+    ):
+        download.tools.add_playlist([], [download.song])
+
+        [row] = listed(download.tools)
+        assert (row["song_path"], row["source"], row["reason"]) == (
+            download.song,
+            "playlist",
+            "no_caption",
+        )
+
+    def test_a_song_that_is_busy_listed_processed_or_not_in_the_library_is_skipped(self, download):
+        busy = make_video(download.folder, "Busy---bbbbbbbbbbb")
+        done = make_video(download.folder, "Done---ccccccccccc")
+        genius_bundle(download.folder, done.stem)
+        stranger = make_video(download.folder, "Stranger---ddddddddddd")  # not in the library
+        music = download.folder / "Tune---eeeeeeeeeee.mp3"
+        music.write_bytes(b"")
+        download.tools._song_manager.songs.update([str(busy), str(done), str(music)])
+        download.processing.pending_jobs = [str(busy)]
+        download.tools.on_song_downloaded(download.song)  # listed already
+        download.processing.enqueue.reset_mock()
+
+        result = download.tools.add_playlist(
+            [], [str(busy), str(done), str(stranger), str(music), download.song, 5, None]
+        )
+
+        assert result == {"downloads": 0, "processing": 0}
+        download.processing.enqueue.assert_not_called()
