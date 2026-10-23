@@ -903,10 +903,10 @@ class TestPrepareRegenJob:
         job.plan = plan
         return lr.RegenJob(song=job, reset=reset, label="Repair")
 
-    def _prepare(self, regen, tmp_path):
+    def _prepare(self, regen, tmp_path, genius=None):
         lyrics_dir = tmp_path / "work"
         lyrics_dir.mkdir(exist_ok=True)
-        return lr.prepare_regen_job(regen, MagicMock(), PipelineConfig(), lyrics_dir)
+        return lr.prepare_regen_job(regen, genius or MagicMock(), PipelineConfig(), lyrics_dir)
 
     def test_reset_wipes_outputs_but_keeps_captions_and_lrc(self, tmp_path):
         regen = self._regen(tmp_path, lr.Plan(kind="transcribe"), reset=True)
@@ -950,6 +950,51 @@ class TestPrepareRegenJob:
             self._prepare(regen, tmp_path)
 
         write_choice.assert_not_called()
+
+    def test_a_genius_pick_genius_does_not_return_fails_before_anything_changes(
+        self, tmp_path, monkeypatch
+    ):
+        regen = self._regen(tmp_path, lr.Plan(kind="sidecar", genius_id=1), reset=True)
+        karaoke = tmp_path / "karaoke"
+        karaoke.mkdir()
+        ass = karaoke / f"{YT_STEM}.ass"
+        ass.write_text("old", encoding="utf-8")
+        lyrics = tmp_path / "lyrics"
+        lyrics.mkdir()
+        lrc = lyrics / f"{YT_STEM}.lrc"
+        lrc.write_text("[lrclib_id:5]\n[00:01.00]hi\n", encoding="utf-8")
+        clear = MagicMock()
+        monkeypatch.setattr(lr, "clear_output_folders", clear)
+        genius = MagicMock()
+        genius.fetch_song.side_effect = lr.GeniusUnavailable("503")
+
+        with pytest.raises(lr.RegenError, match="Genius didn't return this song's lyrics, so"):
+            self._prepare(regen, tmp_path, genius)
+
+        genius.fetch_song.assert_called_once_with(1)
+        clear.assert_not_called()
+        assert ass.read_text(encoding="utf-8") == "old"
+        assert lrc.read_text(encoding="utf-8") == "[lrclib_id:5]\n[00:01.00]hi\n"
+
+    def test_a_genius_pick_genius_returns_prepares_as_before(self, tmp_path, monkeypatch):
+        regen = self._regen(tmp_path, lr.Plan(kind="sidecar", genius_id=1), reset=True)
+        write_choice = MagicMock()
+        monkeypatch.setattr(lr, "write_choice", write_choice)
+        genius = MagicMock()
+
+        lyrics_path, stage = self._prepare(regen, tmp_path, genius)
+
+        genius.fetch_song.assert_called_once_with(1)
+        write_choice.assert_called_once_with("dQw4w9WgXcQ", {"genius_id": 1})
+        assert lyrics_path is None
+        assert isinstance(stage, lr.LyricsFetchStage)
+
+    def test_a_plan_of_another_kind_does_not_ask_genius(self, tmp_path):
+        genius = MagicMock()
+
+        self._prepare(self._regen(tmp_path, lr.Plan(kind="transcribe")), tmp_path, genius)
+
+        genius.fetch_song.assert_not_called()
 
     def test_a_fetch_plan_that_passes_goes_on_as_the_caption(self, tmp_path, monkeypatch):
         regen = self._regen(tmp_path, lr._fetch_or_prompt_plan(tmp_path / f"{YT_STEM}.mp4"))

@@ -10,6 +10,7 @@ import pytest
 from pikaraoke.lib import lrclib
 from pikaraoke.lib import processing_manager as pm
 from pikaraoke.lib.events import EventSystem
+from pikaraoke.lib.genius import GeniusUnavailable
 from pikaraoke.lib.library_regen import Plan, RegenError, RegenJob, SongJob
 from pikaraoke.lib.pipeline_tracker import PipelineTracker
 from pikaraoke.lib.processing_manager import (
@@ -1111,6 +1112,35 @@ class TestSetupFailures:
         ctx = MagicMock(spec=StageContext)
         ctx.artifacts = {}
         mock_orchestrator.join.return_value = ctx
+
+    def test_a_genius_pick_genius_does_not_return_fails_and_the_loop_runs_the_next(
+        self, events, preferences, mock_orchestrator, tmp_path, monkeypatch
+    ):
+        self._finishing_ctx(mock_orchestrator)
+        monkeypatch.setattr(pm, "build_stages", MagicMock(return_value=["lyric-align"]))
+        sm = MagicMock()
+        mgr = _runnable_manager(events, preferences, mock_orchestrator, tmp_path, sm)
+        mgr._genius.fetch_song.side_effect = GeniusUnavailable("503")
+        picked = _regen_job(tmp_path, "Picked", stem="Picked---aaa111", kind="sidecar")
+        picked.song.plan.genius_id = 1
+        nxt = _regen_job(tmp_path, "Next", stem="Next---bbb222")
+        mgr.enqueue_regen(picked)
+        mgr.enqueue_regen(nxt)
+        errors, done = [], threading.Event()
+        events.on("processing_error", errors.append)
+        events.on("processing_complete", lambda data: done.set())
+
+        _drive_loop(mgr, done)
+
+        assert errors == [
+            {
+                "song_path": str(picked.song.song_path),
+                "error": "Genius didn't return this song's lyrics, so nothing was changed. "
+                "Retry when Genius answers.",
+            }
+        ]
+        assert mock_orchestrator.run_one_async.call_count == 1  # the next job only
+        sm.set_pipeline_state.assert_called_once_with(str(nxt.song.song_path), "ready")
 
     def test_build_stages_failing_fails_the_regen_and_the_loop_runs_the_next(
         self, events, preferences, mock_orchestrator, tmp_path, prepared, monkeypatch
