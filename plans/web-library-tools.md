@@ -2,7 +2,7 @@
 
 Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 
-> **Status (2026-10-23): Phases 0-7 and 6.1 done (3.1 = fixes from the Phase
+> **Status (2026-10-24): Phases 0-7 and 6.1 done (3.1 = fixes from the Phase
 > 1-3 code review, 3.1g included; the review of 3.1b-3.1d is done with its
 > two fix commits; Phase 4's code is `7f5853e` and `55cfdbb`, Phase 5's is
 > `641600a`, Phase 6's is `8a3b585`, Phase 7's is `0541907` and `ecbde50`,
@@ -18,11 +18,33 @@ Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 > pick page, and playlists) is executed, code `1a26b68` and `3d26811`.
 > Its code review ran 2026-10-23; Phase 8.1 (its recommended fixes,
 > written up at Ken's request) is executed too, code `14632ae`..`2ba0c3d`.
-> Ken's Phase 8 checks are next (they cover 8.1), then Phase 9.** Ken
-> approved D2's Phase 3.1 bullet on 2026-10-20. Branch
+> Phase 9 (the scripts README, the end-to-end runs and the landing list) is
+> executed too, code `235d58b`. Ken's checks are next: Phase 7.2's list check
+> and Phase 8's, which cover 8.1. Landing follows them (see Landing).**
+> Ken approved D2's Phase 3.1 bullet on 2026-10-20. Branch
 > `web_library_tools`, off `library_tools` at `0bfa02a`; `dev` merged as
 > `c34d889`. There is no GATE and nothing here measures timing. Landing is
 > Ken's call (see Landing).
+>
+> **Landing list** (68 commits, in cherry-pick order onto `dev`; no `docs(plan)`
+> commit, no merge). A dry run of all 68 on a throwaway worktree off `dev`
+> (`3a5a2eb`) applied with no conflict and left a tree identical to this
+> branch's outside `plans/`. A later fix from Ken's checks goes on the end.
+>
+> From `library_tools` (14):
+>
+> `6cc2b29`, `2fdcf08`, `c8fe156`, `788b10c`, `c096631`, `975175b`, `6ecb41d`, `e81607b`,
+> `db2d193`, `f6490e1`, `73dada4`, `965776f`, `84e0f2f`, `75454c1`
+>
+> From `web_library_tools` (54):
+>
+> `870e34f`, `dd011af`, `9857986`, `b50595a`, `1ead8a8`, `fb13913`, `30f7c84`, `b871285`,
+> `b2d8857`, `1b48a39`, `289a942`, `b5c4637`, `e8006da`, `86de4f7`, `26cf3b3`, `b6301da`,
+> `5b67bff`, `25ace83`, `b849bb7`, `2bc909d`, `4165281`, `bc308ba`, `7f5853e`, `55cfdbb`,
+> `641600a`, `874d49c`, `8b8d34f`, `6f08c59`, `14c7c14`, `b433e90`, `6caad6f`, `8a3b585`,
+> `a14906a`, `e414e43`, `7a4a30e`, `febeb2c`, `0541907`, `ecbde50`, `d280722`, `05322ee`,
+> `84a8220`, `fc0699b`, `2d83e70`, `1bc3c29`, `71d565e`, `2c352b4`, `1a26b68`, `3d26811`,
+> `14632ae`, `9aae99d`, `59dd376`, `763d64e`, `2ba0c3d`, `235d58b`
 
 ## Why
 
@@ -4974,3 +4996,63 @@ commit on top of `fd38a1b`). Scratchpad for this row:
   run twice (the code moved in 8.1d); the extra 8.1b mutation. Nothing else.
 
 ### Phase 9
+
+Executed 2026-10-24 by Sonnet 5.5 (session `7c41e33d`), starting from `6ad5890` (clean). Scratchpad
+for this row: `...\7c41e33d-b508-4b41-8c26-8efd77d9542a\scratchpad\p9\`. One code commit:
+
+- `235d58b` docs(scripts): the web UI shares the regen and add_songs core (1 file, +24/-6:
+  `scripts/README.md`). A new "Shared core and the web UI" section names `library_regen.py` and
+  `library_links.py` as the shared core, names the web controls that do the same jobs (Processing,
+  Library tools: Update stale songs, Reset all, Add playlist; Song Info: Regenerate, Repair lyrics),
+  names `library_tools.py` as the app service that queues them, and says the CLI runs its own GPU
+  workers and needs the app stopped. "Why a separate script, not a Flask route?" is now "Why a
+  script as well as the web UI?". No Python file changed in Phase 9 (`git diff 6ad5890..235d58b
+  --stat`: the README only).
+
+- **Full suite** (`uv run --no-sync python -P -m pytest tests/unit -q -p no:cacheprovider`, 147.5 s,
+  `suite_9.txt`): **4 failed, 2274 passed, 2 skipped**. The four failed ids are the baseline's:
+  `test_genius.py::TestSidecarIO::test_write_overwrites_existing`,
+  `test_pipeline_stem_worker.py::TestStemWorkerSeparate::test_ok_returns_stem_paths_and_sends_job`,
+  `test_pipeline_stem_worker.py::TestStemWorkerSeparate::test_model_override_travels_in_job_tuple`,
+  `test_whisper_worker.py::TestStart::test_start_raises_worker_died_on_pipe_close`. The first
+  one fails for the cause recorded under Phase 8.1: `write_choice` renames its temp file onto an
+  existing choice file, which raises `FileExistsError` on Windows. No change to `genius.py` was made.
+- **pre-commit** (`code_quality/.pre-commit-config.yaml`, `precommit_all_9.txt`): `--all-files` once.
+  Every hook passed except two. pycln removed `import os` from `pikaraoke/lib/args.py` (the file is
+  identical to `dev`'s, `git diff dev HEAD` empty, and the import is also in `dev`'s copy);
+  mdformat reformatted `plans/library-tools.md` and `plans/web-library-tools.md` (CLAUDE.md excludes
+  `plans/`). Both edits were reverted with `git checkout -- <file>`; `scripts/README.md` was not
+  changed by either hook. Then `--files scripts/README.md` (`precommit_files_9.txt`): mdformat,
+  trailing whitespace, large files, case, merge conflicts, BOM, line endings, shebang and master hooks
+  passed; the Python hooks had no files. `git diff --cached --stat` read before the commit.
+- **Import smoke:** not run for `235d58b` (no Python changed). Last run at `2ba0c3d` (Phase 8.1 row).
+- **Real-library manifest:** `manifest.py compare "D:/Shared/pikaraoke-songs"` against the Phase 0
+  manifest: `manifest=2605 now=2616 added=11 removed=0 changed=1`, all 12 under `zh_probe/phase0/`
+  (11 added, `phase0c_vocab.json` changed), the same as the earlier rows (`manifest_compare_9.txt`).
+  Phase 3.1's verify list says to ignore `zh_probe/`.
+- **Landing list** (written into the status block): `library_tools`' 14 code commits, from
+  `git log --reverse --no-merges dev..library_tools` without the `docs(plan)` ones, which match its
+  plan's status block (`6cc2b29`, `2fdcf08`, `c8fe156`, `788b10c`, then 3.1's seven, then 3.2's
+  three); then this branch's 54 from `git log --reverse --first-parent --no-merges 0bfa02a..HEAD`
+  without the `docs(plan)` ones, ending with `235d58b`. Lists in `landing_libtools.txt`,
+  `landing_web.txt` and `landing_all.txt`. At `6ad5890` this branch's log had 78 first-parent commits
+  above `0bfa02a`: 53 code, 24 `docs(plan)`, 1 merge (`c34d889`); `235d58b` is the 54th code commit.
+  No code commit touches `plans/` and no
+  `docs(plan)` commit touches anything else (checked per commit with `git show --name-only`).
+  **Dry run** (not asked for by the plan): `git worktree add --detach` off `dev` (`3a5a2eb`), `git
+  cherry-pick` of all 68 in list order: exit 0, 68 commits, no conflict (`landing_cherry.txt`); `git
+  diff --stat HEAD web_library_tools -- . ':!plans'`: 0 lines (`landing_treediff.txt`). The throwaway
+  worktree was removed (`git worktree list` has no entry for it). Ken's main checkout: `dev` at
+  `3a5a2eb`, clean, never touched.
+- **Left in place for Ken's checks:** the scratch library `D:/shared/weblib-test` (258 files;
+  re-hashed against `scratch_after_81.json`: before=258 after=258 added=0 removed=0 changed=0
+  identical=258, `hashdiff_9.txt`), the isolated `APPDATA` folder `C:\temp\p8\appdata` (`state.json`
+  under `pikaraoke\library_tools\` reads `{"run": null, "needs_pick": []}`), and this worktree. No
+  `pikaraoke` process is running and nothing listens on 5555, 5556 or 9334. (Ken's Firefox, PID 27012,
+  holds retrying connections to 5556.) Phase 9 started no app.
+- **Differences from the plan's text:** the worktree's `models` junction (to the main checkout's
+  `models`, made in Phase 0) was **not** removed. The regen and download-then-pick checks run the
+  pipeline from this worktree, and `pikaraoke/pipeline/config.py` and `stem_worker.py` look for
+  `models` next to the repository root, so without it those checks fail. It has to be removed before
+  `git worktree remove`; `cmd /c rmdir <worktree>\models` removes the link only. The dry-run
+  cherry-pick of the landing list is extra.
