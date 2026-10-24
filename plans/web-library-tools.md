@@ -19,8 +19,11 @@ Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 > Its code review ran 2026-10-23; Phase 8.1 (its recommended fixes,
 > written up at Ken's request) is executed too, code `14632ae`..`2ba0c3d`.
 > Phase 9 (the scripts README, the end-to-end runs and the landing list) is
-> executed too, code `235d58b`. Ken's checks are next: Phase 7.2's list check
-> and Phase 8's, which cover 8.1. Landing follows them (see Landing).**
+> executed too, code `235d58b`. The code review of 8.1c and 8.1d ran
+> 2026-10-24; Phase 8.2 (its recommended fixes, written up at Ken's request)
+> is next, for a Sonnet executor. Then Ken's checks: Phase 7.2's list check
+> and Phase 8's, which cover 8.1 and 8.2. Landing follows them (see
+> Landing).**
 > Ken approved D2's Phase 3.1 bullet on 2026-10-20. Branch
 > `web_library_tools`, off `library_tools` at `0bfa02a`; `dev` merged as
 > `c34d889`. There is no GATE and nothing here measures timing. Landing is
@@ -140,7 +143,10 @@ New:
 Changed (fork-owned unless marked upstream):
 
 - `pikaraoke/pipeline/orchestrator.py`: a per-job stage list.
-- `pikaraoke/lib/processing_manager.py`: the regen lane.
+- `pikaraoke/lib/processing_manager.py`: the regen lane; the cancel count
+  (Phase 8.2a).
+- `pikaraoke/lib/genius.py`: `write_choice` replaces an existing choice file
+  (Phase 8.2b; Ken, 2026-10-24).
 - `pikaraoke/lib/pipeline_tracker.py`: regen and reprocess rows, new actions, ordering.
 - `pikaraoke/routes/processing.py`, `pikaraoke/templates/processing.html` (rewritten).
 - `pikaraoke/lib/lrclib.py`: fetch one record, skip marker.
@@ -2874,6 +2880,234 @@ one definition each`.
     a GPU run.
   - Headless Edge at 390 px, as in the Phase 8 row, is fine.
 - The `### Phase 8.1` Results row (raw facts) and the status block, in
+  their own docs(plan) commit.
+
+## Phase 8.2: fixes from the Phase 8.1c-8.1d code review
+
+Model: Claude Opus 5.5 (review and design, 2026-10-24); executor Claude
+Sonnet 5.5.
+
+A read-only `/code-review` of `59dd376` (8.1c) and `763d64e` (8.1d)
+(2026-10-24; three angles: correctness, simplicity, robustness) found the
+defects below, each reproduced by a probe except the cleanups. Ken asked on
+2026-10-24 for the recommended fixes to be written up, and dropped one
+(8.2e). Phase 9 ran before this review, so 8.2's commits go on the end of
+the landing list.
+
+Each step names the defect it fixes. Same worktree, same ground rules, same
+"Every phase ends the same way". Before starting, confirm the worktree is
+clean at `17aee04` plus this plan commit.
+
+Files: `processing_manager.py`, `library_tools.py` and their tests are in
+D1. `genius.py` and `test_genius.py` are added to D1 for 8.2b (fork-owned;
+Ken, 2026-10-24). One code commit per step, each with its tests, in order:
+8.2a to 8.2d. 8.2a comes before 8.2b on purpose: 8.2b lets a Windows
+re-pick through, and without 8.2a that re-pick can queue a song twice.
+
+The suite at `17aee04`: 4 failed (the baseline's four), 2274 passed, 2
+skipped. Rerun it first and use what it prints as the baseline. After 8.2b
+it should be 3 failed: `test_genius.py::TestSidecarIO::test_write_overwrites_existing`
+now passes.
+
+Probe (scratchpad of the review session
+`a85d9ebe-ab3e-44a5-b6f3-45382ebad848`, folder `review_81cd`; not committed;
+run from the worktree root with `uv run --no-sync python -P
+<scratchpad>\review_81cd\probe_81cd.py <empty scratch folder>`). It drives
+the real `ProcessingManager` queue, cancel and run loop, with a stand-in for
+the pipeline run (no workers, no GPU, no app). Output at `17aee04`
+(`probe_81cd.out`):
+
+- [1] cancel while waiting, re-pick, another song between: after A
+  finishes, `pending=['Sb---bbbbbbbbbbb']` with X still in the queue, and
+  `Sx---xxxxxxxxxxx.pick=None`; `pick #3: accepted`; `jobs that ran: [A, B,
+  X, X]` (8.2a). The probe deletes the choice file before each re-pick, to
+  stand in for Linux's overwrite.
+- [2] a blocked word added after listing: `pick: accepted`, then `pending=[]`
+  and `pick=None` (still listed); `pick again: RegenError: Could not save that
+  pick.` (8.2c, and 8.2b on Windows).
+- [3] a job that fails in stems, then a re-pick: `pick #2: RegenError: Could
+  not save that pick.` (8.2b).
+- [4] two picks at once: one refused with "That song is already waiting or
+  processing.", one accepted (fine; unchanged by 8.2).
+- [5] the playlist page and add, a song cancelled while waiting and added
+  again: after A finishes the page shows `'y': 'not_processed'` while Y still
+  waits; `add #3: {'downloads': 0, 'processing': 1, 'listed': 0}`; `jobs that
+  ran: [A, B, Y, Y]` (8.2a, reached on Windows as shipped).
+
+Record its before (above) and after in the row.
+
+### 8.2a. A song queued again after a cancel while waiting is queued once
+
+Defect (`processing_manager.py`): a cancel while waiting takes the song's
+entry off `pending_jobs` and records the path in `_cancelled_paths`, but its
+copy stays in `_pending_queue`. When the run loop later takes that copy, it
+skips it and removes **every** entry for the path from `pending_jobs`. If the
+song was queued again in between, the new job's entry goes too: it still
+waits in the queue, but `is_busy` says False until its turn. With another
+song queued between the two copies, that lasts the other song's whole run.
+Meanwhile:
+
+- the pick page shows the song to pick, and a pick is accepted and queues it
+  again (8.1c made `is_busy` the only "picked");
+- the playlist page shows it `not_processed`, and an add queues it again
+  (8.1d);
+- the song is processed twice: two full GPU runs.
+
+A second form: cancel while waiting, queue again, cancel again before the
+first copy is taken. `_cancelled_paths` is a set, so it holds one entry; the
+loop skips the first copy and runs the second, which was cancelled.
+
+The strip-all predates this branch, but on `dev` nothing queues a cancelled
+song again, so only this branch's pick page and playlist add reach it.
+
+Fix (`processing_manager.py`):
+
+- `_cancelled_paths` becomes a `collections.Counter` (keep the name): how
+  many waiting copies of each path to skip. `cancel_pending` adds one where
+  it adds the path today (same conditions: not active, not a regen-lane
+  path; a path not yet queued is still recorded, as
+  `test_cancel_pending_not_in_queue_still_marks_cancelled` pins).
+- `_run_loop`: a dequeued path with a count above zero takes one off
+  (deleting the key at zero) and is skipped, and `pending_jobs` is **not**
+  touched. `cancel_pending` already removed that copy's entry, so the strip
+  only ever removed someone else's.
+- `_drop_regen_jobs`, `enqueue`, `enqueue_regen`, `_run_job` are unchanged.
+
+Tests (`test_processing_manager.py`, real `EventSystem`):
+
+- Run-loop sequence (a stand-in `_process_song` that waits on an event, as
+  the probe does, or by driving the dequeue directly if the file already
+  has a helper): A running; X queued; B queued; X cancelled while waiting; X
+  queued again. After A, X is still in `pending_jobs` while B runs, and X
+  runs once.
+- Cancel, queue, cancel, with A running: X runs zero times, and the counter
+  is empty afterwards.
+- The existing assertions that `_cancelled_paths == set()` become an empty
+  check (`not manager._cancelled_paths`); `in` checks read as before.
+
+Commit: `fix(processing): a song queued again after a cancel while waiting
+is queued once`.
+
+### 8.2b. A new lyrics choice replaces the old one on Windows too
+
+Defect (`genius.py` `write_choice`): the temp file is moved into place with
+`Path.rename`, which on Windows raises `FileExistsError` when a choice file
+for the song is already there (the baseline's
+`test_write_overwrites_existing`). A listed song's job leaves its choice
+file whenever it ends before the lyrics stage uses it, so its re-pick
+answers "Could not save that pick." until the temp folder is cleared:
+
+- cancelled while waiting (recorded under Phase 8.1's row);
+- failed, or cancelled while running, in extract, loudness, stems or
+  transcode. The lyrics stage runs after the stem stage, so this is most of
+  a job's run time (probe [3]).
+
+Two branch tests hide it by deleting the choice file by hand:
+`test_a_job_cancelled_while_it_waits_offers_the_pick_again` (with a comment
+saying why) and `test_a_job_that_fails_offers_the_pick_again` (as if the
+lyrics stage always runs before a failure).
+
+Fix:
+
+- `write_choice`: `Path(tmp_path).replace(target)` instead of `.rename`,
+  which overwrites on every platform. Update the comment to match. Nothing
+  else in `genius.py` changes.
+- `test_library_tools.py`: the cancel-while-waiting test drops its
+  `delete_choice` and comment, and its check that the new Genius pick is
+  the one on disk now proves the overwrite. The failed-job test drops its
+  `delete_choice`, so it is a failure before the lyrics stage. The re-pick
+  is a Genius pick, and the file holds it afterwards.
+
+Tests: the two above; `test_write_overwrites_existing` passes (3 failed in
+the suite from here).
+
+Commit: `fix(genius): a new lyrics choice replaces the old one on Windows
+too`.
+
+### 8.2c. A listed song whose title is now blocked leaves the list
+
+Defect (`library_tools.py`): a blocked title is never listed (the
+after-download check queues it for the queue to skip). But a word added to
+the blocked list after a song was listed makes its pick a no-op.
+`pick_lyrics` writes the choice and calls `enqueue`, which emits
+`processing_skipped` and queues nothing. The pick answers success, `is_busy`
+is False at once, and the song stays listed and pickable for good. Before
+8.1c it showed "queued" for good instead.
+
+Fix: `LibraryTools` subscribes `processing_skipped` to
+`_forget_needs_pick`, beside `processing_complete` and `song_deleted`. A
+skipped song leaves the list, as a blocked download is never on it. No new
+text; no blocked check in `pick_lyrics`. `enqueue` emits outside
+`LibraryTools`' lock, so the handler can take it. The choice file stays in
+the temp folder (8.2e).
+
+Tests (`test_library_tools.py`, real `EventSystem`): a listed song whose
+`enqueue` emits `processing_skipped` (the fixture's `enqueue` side effect):
+the pick returns, the view and `attention_rows` no longer have it, and the
+saved state doesn't either. `test_a_blocked_title_is_queued_for_the_queue_to_skip`
+passes unchanged.
+
+Commit: `fix(library): a listed song whose title is now blocked leaves the
+list`.
+
+### 8.2d. Cleanup: one "already waiting" rule, and a stale docstring
+
+- `check_playlist` calls `file_status` itself and then `_is_unprocessed`,
+  which checks library membership and `file_status` again. The rule the
+  page and the add are meant to share is half copied at the call site, and
+  the disk checks run twice per such video. Add `_is_taken(song_path) ->
+  bool`: listed for a pick, or `is_busy` (it takes the state lock for the
+  listed read itself, as `_is_unprocessed` does today). `_is_unprocessed`
+  is in the library, not `_is_taken`, and `NOT_PROCESSED`. `check_playlist`
+  keeps its one `file_status` call and picks `waiting` when `_is_taken`, else
+  `not_processed`.
+- `_pick_reason`'s docstring says `on_song_downloaded` catches what it
+  raises; since 8.1d it is `_check_download`.
+
+Tests: the existing `TestCheckPlaylist` and `TestAddPlaylist` pass unchanged.
+
+Commit: `refactor(library): one "already waiting" rule for the playlist page
+and its add`.
+
+### 8.2e. Not fixed, and why (record only; don't change)
+
+- **The playlist page's summary tags leave waiting songs out**, so new + not
+  processed + in library is less than the playlist's size when some are
+  waiting. Ken dropped the fix on 2026-10-24: the "Already waiting (n)"
+  section shows the count.
+- **A blocked song's choice file stays in the temp folder** after 8.2c. Its
+  song is marked skipped and is never processed, so nothing reads the file,
+  and it goes with the temp folder.
+- **A cancel that lands just as the loop takes the job** is pre-existing on
+  `dev` (found while writing 8.2a). That is between the dequeue and
+  `_launch_and_report` making the job active, with no workers involved yet.
+  The job runs anyway, and the recorded skip then swallows that song's next
+  download-lane queue. The window is the length of a pipeline-state read.
+  Not seen live.
+
+### 8.2f. Verify
+
+- The full suite against the baseline plus the new tests (3 failed from
+  8.2b); pre-commit per commit with `--files`; the import smoke
+  (`processing_manager`, `genius`, `library_tools`, `routes.library`,
+  `karaoke`, `app`).
+- The probe, after: [1] X stays in `pending_jobs` while B runs, `pick #3`
+  is refused with "That song is already waiting or processing.", and X runs
+  once; [2] after the pick the song is not listed, and the second pick
+  answers "That song isn't waiting for a pick."; [3] `pick #2: accepted`;
+  [4] unchanged; [5] the page shows `'y': 'waiting'` after A, `add #3` gives
+  `processing: 0`, and Y runs once. Run it unchanged (its `delete_choice`
+  calls are harmless after 8.2b).
+- Mutation checks, each must fail a test: 8.2a the run loop's skip strips
+  `pending_jobs` again, and the counter back to a set (`add`/`discard`);
+  8.2b `.rename` back (on Windows); 8.2c the `processing_skipped`
+  subscription removed.
+- No app run: nothing on a page changes.
+- Append 8.2's four code commits to the landing list in the status block,
+  and redo Phase 9's dry run (all of the list cherry-picked on a throwaway
+  worktree off `dev`, then the tree compared with this branch outside
+  `plans/`). Record both.
+- The `### Phase 8.2` Results row (raw facts) and the status block, in
   their own docs(plan) commit.
 
 ## Phase 9: docs, end to end, landing list
