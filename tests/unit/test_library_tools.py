@@ -2067,12 +2067,31 @@ class TestWhenAListedSongLeaves:
         assert read_choice(VIDEO_ID) == {"genius_id": 5, "yt_id": VIDEO_ID}
         assert download.processing.enqueue.call_count == 2
 
+    def test_a_pick_for_a_title_blocked_since_it_was_listed_takes_the_song_off_the_list(
+        self, download
+    ):
+        download.tools.on_song_downloaded(download.song)
+        # The queue skips a blocked title and says so; nothing will run for the pick.
+        download.processing.enqueue.side_effect = lambda path: download.tools._events.emit(
+            "processing_skipped", path
+        )
+
+        download.tools.pick_lyrics(download.song, {"kind": "transcribe"})
+
+        assert download.tools.needs_pick_view()["songs"] == []
+        assert listed(download.tools) == []
+        saved = json.loads(download.tools._state_path.read_text(encoding="utf-8"))
+        assert saved["needs_pick"] == []
+        with pytest.raises(RegenError, match="isn't waiting for a pick"):
+            download.tools.pick_lyrics(download.song, {"kind": "transcribe"})
+
     def test_a_job_for_another_song_changes_nothing(self, download):
         download.tools.on_song_downloaded(download.song)
 
         download.tools._events.emit("processing_complete", {"song_path": "/elsewhere/x.mp4"})
         download.tools._events.emit("processing_error", {"song_path": "/elsewhere/x.mp4"})
         download.tools._events.emit("song_deleted", "/elsewhere/x.mp4")
+        download.tools._events.emit("processing_skipped", "/elsewhere/x.mp4")
 
         assert len(download.tools.needs_pick_view()["songs"]) == 1
 

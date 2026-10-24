@@ -242,6 +242,7 @@ class LibraryTools:
         self._start_checks()  # a run left mid-check picks up where it stopped
         events.on("processing_complete", self._on_processing_complete)
         events.on("song_deleted", self._forget_needs_pick)
+        events.on("processing_skipped", self._forget_needs_pick)
 
     @staticmethod
     def is_video(song_path: str) -> bool:
@@ -833,7 +834,7 @@ class LibraryTools:
         return "sparse_caption" if had_caption else "no_caption"
 
     def _forget_needs_pick(self, song_path: str) -> None:
-        """Drop a song from the needs-a-pick list: it was deleted or finished processing."""
+        """Drop a song from the needs-a-pick list: deleted, finished processing, or skipped."""
         with self._state_lock:
             if self._needs_pick.pop(song_path, None) is not None:
                 self._save()
