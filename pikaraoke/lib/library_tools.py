@@ -733,7 +733,7 @@ class LibraryTools:
             if path is None:
                 status = "new"
             elif song is not None and file_status(path) == NOT_PROCESSED:
-                status = "not_processed" if self._is_unprocessed(song) else "waiting"
+                status = "waiting" if self._is_taken(song) else "not_processed"
             else:
                 status = "in_library"
             videos.append(
@@ -788,18 +788,21 @@ class LibraryTools:
     def _is_unprocessed(self, song_path: object) -> bool:
         """Whether a playlist's song is in the library, never processed, and free to take.
 
-        Free means neither queued for processing nor listed for a pick. The
-        playlist page and the add both use this one rule.
+        The add uses this; the playlist page applies the same rule, with its one
+        disk check, through :meth:`_is_taken`.
         """
-        if not isinstance(song_path, str) or song_path not in self._song_manager.songs:
-            return False
-        with self._state_lock:
-            listed = song_path in self._needs_pick
         return (
-            not listed
-            and not self.is_busy(song_path)
+            isinstance(song_path, str)
+            and song_path in self._song_manager.songs
+            and not self._is_taken(song_path)
             and file_status(Path(song_path)) == NOT_PROCESSED
         )
+
+    def _is_taken(self, song_path: str) -> bool:
+        """Whether a song is already listed for a pick, or queued or running for processing."""
+        with self._state_lock:
+            listed = song_path in self._needs_pick
+        return listed or self.is_busy(song_path)
 
     @staticmethod
     def _choice_for(pick: object) -> dict:
@@ -818,7 +821,7 @@ class LibraryTools:
         """Why this download needs a lyrics pick before processing, or None when it doesn't.
 
         The gate deletes a caption too sparse to be lyrics. A check that fails
-        raises; :meth:`on_song_downloaded` is where that is caught.
+        raises; :meth:`_check_download` is where that is caught.
         """
         if (
             video_id is None
