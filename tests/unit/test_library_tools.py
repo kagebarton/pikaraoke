@@ -22,7 +22,6 @@ from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.genius import (
     GeniusSong,
     GeniusUnavailable,
-    delete_choice,
     read_choice,
     write_choice,
 )
@@ -2044,25 +2043,22 @@ class TestWhenAListedSongLeaves:
         download.tools.on_song_downloaded(download.song)
         download.tools.pick_lyrics(download.song, {"kind": "transcribe"})
 
-        delete_choice(VIDEO_ID)  # the lyrics stage uses the choice file up before the job fails
+        # It failed before the lyrics stage, so its choice file is still there.
         download.processing.pending_jobs.remove(download.song)  # the job ran, and failed
         download.tools._events.emit(
             "processing_error", {"song_path": download.song, "error": "boom"}
         )
 
         assert download.tools.needs_pick_view()["picked"] == 0
-        download.tools.pick_lyrics(download.song, {"kind": "transcribe"})
-        assert read_choice(VIDEO_ID) is not None
+        download.tools.pick_lyrics(download.song, {"kind": "genius", "genius_id": 5})
+        assert read_choice(VIDEO_ID) == {"genius_id": 5, "yt_id": VIDEO_ID}
 
     def test_a_job_cancelled_while_it_waits_offers_the_pick_again(self, download):
         download.tools.on_song_downloaded(download.song)
         download.tools.pick_lyrics(download.song, {"kind": "transcribe"})
 
-        # Cancelling a waiting job emits no event, and its choice file stays; Windows can't
-        # write over it (the baseline's test_write_overwrites_existing), so clear it as the
-        # lyrics stage would have.
+        # Cancelling a waiting job emits no event, and its choice file stays.
         download.processing.pending_jobs.remove(download.song)
-        delete_choice(VIDEO_ID)
 
         view = download.tools.needs_pick_view()
         assert (view["to_pick"], view["picked"]) == (1, 0)
