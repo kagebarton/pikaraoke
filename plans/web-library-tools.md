@@ -21,16 +21,16 @@ Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 > Phase 9 (the scripts README, the end-to-end runs and the landing list) is
 > executed too, code `235d58b`. The code review of 8.1c and 8.1d ran
 > 2026-10-24; Phase 8.2 (its recommended fixes, written up at Ken's request)
-> is next, for a Sonnet executor. Then Ken's checks: Phase 7.2's list check
-> and Phase 8's, which cover 8.1 and 8.2. Landing follows them (see
-> Landing).**
+> is executed too, code `76f44e2`..`af07df4`. Ken's checks are next: Phase
+> 7.2's list check and Phase 8's, which cover 8.1 and 8.2. Landing follows
+> them (see Landing).**
 > Ken approved D2's Phase 3.1 bullet on 2026-10-20. Branch
 > `web_library_tools`, off `library_tools` at `0bfa02a`; `dev` merged as
 > `c34d889`. There is no GATE and nothing here measures timing. Landing is
 > Ken's call (see Landing).
 >
-> **Landing list** (68 commits, in cherry-pick order onto `dev`; no `docs(plan)`
-> commit, no merge). A dry run of all 68 on a throwaway worktree off `dev`
+> **Landing list** (72 commits, in cherry-pick order onto `dev`; no `docs(plan)`
+> commit, no merge). A dry run of all 72 on a throwaway worktree off `dev`
 > (`3a5a2eb`) applied with no conflict and left a tree identical to this
 > branch's outside `plans/`. A later fix from Ken's checks goes on the end.
 >
@@ -39,7 +39,7 @@ Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 > `6cc2b29`, `2fdcf08`, `c8fe156`, `788b10c`, `c096631`, `975175b`, `6ecb41d`, `e81607b`,
 > `db2d193`, `f6490e1`, `73dada4`, `965776f`, `84e0f2f`, `75454c1`
 >
-> From `web_library_tools` (54):
+> From `web_library_tools` (58):
 >
 > `870e34f`, `dd011af`, `9857986`, `b50595a`, `1ead8a8`, `fb13913`, `30f7c84`, `b871285`,
 > `b2d8857`, `1b48a39`, `289a942`, `b5c4637`, `e8006da`, `86de4f7`, `26cf3b3`, `b6301da`,
@@ -47,7 +47,8 @@ Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 > `641600a`, `874d49c`, `8b8d34f`, `6f08c59`, `14c7c14`, `b433e90`, `6caad6f`, `8a3b585`,
 > `a14906a`, `e414e43`, `7a4a30e`, `febeb2c`, `0541907`, `ecbde50`, `d280722`, `05322ee`,
 > `84a8220`, `fc0699b`, `2d83e70`, `1bc3c29`, `71d565e`, `2c352b4`, `1a26b68`, `3d26811`,
-> `14632ae`, `9aae99d`, `59dd376`, `763d64e`, `2ba0c3d`, `235d58b`
+> `14632ae`, `9aae99d`, `59dd376`, `763d64e`, `2ba0c3d`, `235d58b`, `76f44e2`, `9f33dba`,
+> `b5aa830`, `af07df4`
 
 ## Why
 
@@ -5228,6 +5229,126 @@ commit on top of `fd38a1b`). Scratchpad for this row:
   held 0 files.
 - **Differences from the plan's text:** the probe adjustments above; the 8.1a boundary mutation was
   run twice (the code moved in 8.1d); the extra 8.1b mutation. Nothing else.
+
+### Phase 8.2
+
+Executed 2026-10-24 by Sonnet 5.5 (session `7c41e33d`), starting from `591ce32` (clean; the plan
+commit on top of `17aee04`). Scratchpad for this row:
+`...\7c41e33d-b508-4b41-8c26-8efd77d9542a\scratchpad\p82\`. Four code commits, in order:
+
+- `76f44e2` 8.2a fix(processing): a song queued again after a cancel while waiting is queued once (2
+  files, +100/-14: `processing_manager.py`, `test_processing_manager.py`).
+- `9f33dba` 8.2b fix(genius): a new lyrics choice replaces the old one on Windows too (2 files,
+  +7/-10: `genius.py`, `test_library_tools.py`).
+- `b5aa830` 8.2c fix(library): a listed song whose title is now blocked leaves the list (2 files,
+  +21/-1: `library_tools.py`, `test_library_tools.py`).
+- `af07df4` 8.2d refactor(library): one "already waiting" rule for the playlist page and its add (1
+  file, +13/-10: `library_tools.py`).
+
+- **Baseline** (`uv run --no-sync python -P -m pytest tests/unit -q -p no:cacheprovider`, at
+  `591ce32`, 148.5 s, `suite_base.txt`): **4 failed, 2274 passed, 2 skipped**; the baseline's four
+  ids. Imports checked to resolve to the worktree first.
+- **Suite after the four commits** (same command, 145.8 s, `suite_82.txt`): **3 failed, 2279 passed,
+  2 skipped**. The three failed ids are the baseline's other three:
+  `test_pipeline_stem_worker.py::TestStemWorkerSeparate::test_ok_returns_stem_paths_and_sends_job`,
+  `test_pipeline_stem_worker.py::TestStemWorkerSeparate::test_model_override_travels_in_job_tuple`,
+  `test_whisper_worker.py::TestStart::test_start_raises_worker_died_on_pipe_close`.
+  `test_genius.py::TestSidecarIO::test_write_overwrites_existing` passes. 2279 = 2274 + 4 new tests
+  (3 in 8.2a, 1 in 8.2c) + the one that failed before. After each commit I ran the files it touches
+  and the ones that use them, not the whole suite: 8.2a `test_processing_manager.py`,
+  `test_library_tools.py`, `test_library_routes.py` (514 passed); 8.2b `test_genius.py`,
+  `test_genius_lyrics.py`, `test_library_tools.py`, `test_library_routes.py` (482 passed); 8.2c
+  `test_library_tools.py`, `test_library_routes.py`, `test_processing_manager.py` (515 passed); 8.2d
+  `test_library_tools.py`, `test_library_routes.py` (409 passed).
+- **Tests, by step.**
+  - 8.2a, `test_processing_manager.py`: `TestCancelPending.test_each_cancel_counts_one_waiting_copy`
+    (new: enqueue and cancel twice, the count for the path is 2). New class
+    `TestCancelledCopiesInTheLoop` (+2; real `EventSystem`, `_runnable_manager` and `_drive_loop`, a
+    stand-in `_process_song` that holds job A until released and records each job with the pending
+    list at that moment): A running, X queued, B queued, X cancelled, X queued again, then a last job
+    -> `ran == [A, B, X, last]`, pending while B ran `[B, X, last]`, counter empty, `pending_jobs`
+    empty; A running, X queued, cancelled, queued, cancelled, then the last job -> `ran == [A, last]`,
+    counter empty, `pending_jobs` empty. The three `_cancelled_paths == set()` assertions (`TestInit`,
+    the regen-path cancel test, the cancel-while-preparing test) became `not ..._cancelled_paths`.
+  - 8.2b, `test_library_tools.py` `TestWhenAListedSongLeaves`: both tests lost their
+    `delete_choice` call (the cancel test its explaining comment too). The failed-job test's comment now
+    says the job failed before the lyrics stage, and its re-pick is `{"kind": "genius", "genius_id":
+    5}`, read back as `{"genius_id": 5, "yt_id": "dQw4w9WgXcQ"}`. The cancel test's existing check of
+    the new Genius pick on disk now covers the overwrite. The `delete_choice` import went (unused).
+    `test_genius.py` was not edited.
+  - 8.2c, `TestWhenAListedSongLeaves` +1: a listed song whose `enqueue` emits `processing_skipped`
+    (the fixture's side effect replaced): the pick returns, `needs_pick_view()["songs"]` and
+    `listed(...)` are empty, the state file's `needs_pick` is `[]`, and a second pick raises "isn't
+    waiting for a pick". `test_a_job_for_another_song_changes_nothing` also emits `processing_skipped`
+    for another path (extra). `test_a_blocked_title_is_queued_for_the_queue_to_skip` passed unchanged.
+  - 8.2d: no test changed; `TestCheckPlaylist` and `TestAddPlaylist` pass unchanged.
+- **As built (the plan left these open).**
+  - 8.2a: `from collections import Counter`; `_cancelled_paths: Counter[str]` with a one-line comment
+    above it. The loop's block is `if song_path in self._cancelled_paths:` then take one off, `del` at
+    zero, `continue`, under a two-line comment saying the entry was already taken out by
+    `cancel_pending`. `cancel_pending`'s docstring says "counted ... one per cancel" in place of
+    "recorded".
+  - 8.2b: the comment above `Path(tmp_path).replace(target)` reads "replace is atomic when source and
+    dest are on the same filesystem, and it overwrites an existing choice on Windows too, where rename
+    raises". The docstring ("tmpfile + rename") is unchanged.
+  - 8.2c: `events.on("processing_skipped", self._forget_needs_pick)` after the `song_deleted` line;
+    `_forget_needs_pick`'s docstring reads "deleted, finished processing, or skipped".
+  - 8.2d: `_is_taken` as the plan gives it; `_is_unprocessed` is now one boolean chain (`isinstance`,
+    in the library, `not _is_taken`, `NOT_PROCESSED`) and its docstring says the add uses it and the
+    page applies the same rule, with its one disk check, through `_is_taken`. `check_playlist` reads
+    `"waiting" if self._is_taken(song) else "not_processed"`. `_pick_reason`'s docstring names
+    `_check_download`.
+- **Probe** (`probe_81cd.py` from review session `a85d9ebe`, unchanged, run from the worktree root
+  with `uv run --no-sync python -P <probe> <empty folder>`; outputs `probe_before.out` at `591ce32`
+  and `probe_after.out` at `af07df4`). Before is the same as the plan's quote of `probe_81cd.out`:
+
+  | Scenario | Before (`591ce32`) | After (`af07df4`) |
+  |---|---|---|
+  | [1] | after A: `pending=['Sb---bbbbbbbbbbb']`, `queue_size=1`, `Sx.pick=None`; `pick #3: accepted`; `jobs that ran: [A, B, X, X]` | after A: `pending=['Sb---bbbbbbbbbbb', 'Sx---xxxxxxxxxxx']`, `Sx.pick={'kind': 'queued'}`; `pick #3: RegenError: That song is already waiting or processing.`; `jobs that ran: [A, B, X]` |
+  | [2] | `pick: accepted`; after: `pending=[]`, `Sx.pick=None`; `pick again: RegenError: Could not save that pick.` | `pick: accepted`; after: `pending=[]`, `Sx.pick=not listed`; `pick again: RegenError: That song isn't waiting for a pick.` |
+  | [3] | `pick #2: RegenError: Could not save that pick.` (logged `[WinError 183] Cannot create a file when that file already exists`) | `pick #2: accepted` |
+  | [4] | `answers: ['RegenError: That song is already waiting or processing.', 'accepted']` | the same |
+  | [5] | after A: page `{'x': 'waiting', 'y': 'not_processed', 'b': 'waiting'}`, `add #3: {'downloads': 0, 'processing': 1, 'listed': 0} (M was 1)`; `jobs that ran: [A, B, Y, Y]` | after A: page `{'x': 'waiting', 'y': 'waiting', 'b': 'waiting'}`, `add #3: {'downloads': 0, 'processing': 0, 'listed': 0} (M was 0)`; `jobs that ran: [A, B, Y]` |
+
+  In [1] the "after A" line is the probe's `A done; loop skipped X's cancelled copy; B runs`; after
+  the change `queue_size=1` too, with X's new copy still in the queue.
+- **Mutation checks** (each applied to the working copy, the test files run, then `git checkout --
+  <file>`; `git status` clean after each):
+
+  | Step | Mutation | Result |
+  |---|---|---|
+  | 8.2a | the run loop's skip strips `pending_jobs` again | 1 failed: `TestCancelledCopiesInTheLoop::test_a_song_queued_again_stays_pending_and_runs_once` (`mut_8_2a_1.txt`) |
+  | 8.2a | `_cancelled_paths` back to a set (`add` in `cancel_pending`, `discard` in the loop, no strip) | 2 failed: `TestCancelPending::test_each_cancel_counts_one_waiting_copy`, `TestCancelledCopiesInTheLoop::test_a_song_cancelled_twice_while_waiting_does_not_run` (`mut_8_2a_2.txt`) |
+  | 8.2b | `Path(tmp_path).replace(target)` back to `.rename` | 3 failed: `test_genius.py::TestSidecarIO::test_write_overwrites_existing`, `TestWhenAListedSongLeaves::test_a_job_that_fails_offers_the_pick_again`, `TestWhenAListedSongLeaves::test_a_job_cancelled_while_it_waits_offers_the_pick_again` (`mut_8_2b.txt`) |
+  | 8.2c | the `processing_skipped` subscription removed | 1 failed: `TestWhenAListedSongLeaves::test_a_pick_for_a_title_blocked_since_it_was_listed_takes_the_song_off_the_list` (`mut_8_2c.txt`) |
+
+- **pre-commit:** `--config code_quality/.pre-commit-config.yaml --files <the commit's files>` per
+  commit. 8.2a, 8.2c and 8.2d passed at once. At 8.2b isort rewrote `test_library_tools.py` on the
+  first run (the genius import line, kept in its multi-line form); every hook passed on the second.
+  `git ls-files --eol` read `i/lf w/lf` for the touched files, `git diff --cached --stat` and the
+  source diff were read before each commit, and `git diff --check 591ce32..HEAD` is clean. Import
+  smoke before each commit, all resolving to the worktree: 8.2a and 8.2b `processing_manager`,
+  `genius`, `library_tools`, `routes.library`, `karaoke`, `app`; 8.2c `library_tools`,
+  `routes.library`, `karaoke`, `app`; 8.2d `library_tools`, `routes.library`.
+- **Landing list** (status block): the four code commits appended after `235d58b`, so 72 commits. The
+  web half was derived again with `git log --reverse --first-parent --no-merges 0bfa02a..HEAD` without
+  the `docs(plan)` commits: 58 hashes (`landing_web.txt`), and with `library_tools`' 14
+  (`landing_libtools.txt`) the first 68 are identical to Phase 9's list (`diff` empty) and to the
+  status block's text. No hash appears twice. None of 8.2's four touches `plans/`
+  (`git show --name-only`).
+  **Dry run, redone:** `git worktree add --detach` off `dev` (`3a5a2eb`), `git cherry-pick` of all 72
+  in list order: exit 0, 72 commits above `dev`, no conflict (`landing_cherry.txt`); `git diff --stat
+  HEAD web_library_tools -- . ':!plans'`: 0 lines (`landing_treediff.txt`). The throwaway worktree
+  was removed and pruned (no `dry_run` entry in `git worktree list`). Ken's main checkout: `dev` at
+  `3a5a2eb`, clean, never touched.
+- **Left as it was:** no app was started (the plan: nothing on a page changes), so the scratch library
+  `D:/shared/weblib-test`, the isolated `APPDATA` folder `C:\temp\p8\appdata` and the real library
+  were not opened, and the real-library manifest was not compared (8.2f does not ask for it). The
+  worktree's `models` junction is still in place (Phase 9's row). `%APPDATA%\pikaraoke` was not
+  touched.
+- **Differences from the plan's text:** after each commit I ran the affected test files, and the
+  whole suite once after 8.2d. The mutation of 8.2a was run as the two the plan names, separately.
+  Nothing else.
 
 ### Phase 9
 
