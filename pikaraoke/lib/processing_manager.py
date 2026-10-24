@@ -17,6 +17,7 @@ import shutil
 import tempfile
 import threading
 import time
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -234,7 +235,8 @@ class ProcessingManager:
         # Runs only when the download lane is empty. Each job is kept with its
         # song path as the library spells it (see _library_spelling).
         self._regen_jobs: list[tuple[str, RegenJob]] = []
-        self._cancelled_paths: set[str] = set()  # download lane only
+        # How many waiting copies of each path the loop is to skip; download lane only
+        self._cancelled_paths: Counter[str] = Counter()
         self._active: _ActiveJob | None = None
         self._state_lock = threading.Lock()
 
@@ -412,13 +414,13 @@ class ProcessingManager:
 
         A path waiting in the regen lane is dropped from it and recorded
         nowhere else. Otherwise, only a job that has not yet become active is
-        recorded in ``_cancelled_paths`` (consumed by ``_run_loop`` when it
-        dequeues the path to skip it): that set belongs to the download queue,
-        and an entry for a regen path would leak and later swallow a real
-        download of that song. Recording an already-active path would leak the
-        entry forever — the loop never re-dequeues an active job — and would
-        then silently skip a later re-enqueue of the same path at the dequeue
-        guard.
+        counted in ``_cancelled_paths`` (one per cancel, consumed by
+        ``_run_loop`` as it dequeues the path's copies to skip them): that
+        count belongs to the download queue, and an entry for a regen path
+        would leak and later swallow a real download of that song. Counting an
+        already-active path would leak the entry forever — the loop never
+        re-dequeues an active job — and would then silently skip a later
+        re-enqueue of the same path at the dequeue guard.
         """
         with self._state_lock:
             is_active = self._active is not None and self._active.song_path == song_path
@@ -426,7 +428,7 @@ class ProcessingManager:
             if song_path in self.pending_jobs:
                 self.pending_jobs.remove(song_path)
             if not is_active and not was_regen:
-                self._cancelled_paths.add(song_path)
+                self._cancelled_paths[song_path] += 1
         logging.info(f"Cancelled pending job: {Path(song_path).name}")
 
     def _drop_regen_jobs(self, song_path: str) -> bool:
@@ -529,8 +531,11 @@ class ProcessingManager:
 
             with self._state_lock:
                 if song_path in self._cancelled_paths:
-                    self._cancelled_paths.discard(song_path)
-                    self.pending_jobs[:] = [p for p in self.pending_jobs if p != song_path]
+                    # cancel_pending already took this copy's entry out of
+                    # pending_jobs; one left there belongs to a later enqueue.
+                    self._cancelled_paths[song_path] -= 1
+                    if not self._cancelled_paths[song_path]:
+                        del self._cancelled_paths[song_path]
                     continue
 
             self._run_job(song_path, lambda: self._process_song(song_path))

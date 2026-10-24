@@ -75,7 +75,7 @@ class TestInit:
         assert manager._active is None
 
     def test_cancelled_paths_empty(self, manager):
-        assert manager._cancelled_paths == set()
+        assert not manager._cancelled_paths
 
     def test_pending_queue_empty(self, manager):
         assert manager._pending_queue.qsize() == 0
@@ -218,6 +218,14 @@ class TestCancelPending:
         manager.enqueue(path)
         manager.cancel_pending(path)
         assert path in manager._cancelled_paths
+
+    def test_each_cancel_counts_one_waiting_copy(self, manager):
+        path = "/songs/Song---abc123.mp4"
+        manager.enqueue(path)
+        manager.cancel_pending(path)
+        manager.enqueue(path)
+        manager.cancel_pending(path)
+        assert manager._cancelled_paths[path] == 2
 
     def test_cancel_pending_not_in_queue_still_marks_cancelled(self, manager):
         """cancel_pending on a path not yet enqueued still adds to _cancelled_paths."""
@@ -841,7 +849,7 @@ class TestRegenLaneOrder:
 
         mgr.cancel_pending(path)
 
-        assert mgr._cancelled_paths == set()
+        assert not mgr._cancelled_paths
         assert mgr._regen_jobs == []
         assert mgr.pending_jobs == []
 
@@ -850,6 +858,79 @@ class TestRegenLaneOrder:
         monkeypatch.setattr(mgr, "_process_song", lambda song_path: ran.set())
         mgr.enqueue(path)
         _drive_loop(mgr, ran)
+
+
+class TestCancelledCopiesInTheLoop:
+    """A cancelled waiting copy stays in the queue; the loop skips it, one for one."""
+
+    @pytest.fixture
+    def scene(self, events, preferences, mock_orchestrator, tmp_path, monkeypatch):
+        """A runs until released; every job that runs is recorded with the pending list."""
+        mgr = _runnable_manager(events, preferences, mock_orchestrator, tmp_path)
+        scene = SimpleNamespace(
+            mgr=mgr,
+            a="/songs/A---aaaaaaaaaaa.mp4",
+            b="/songs/B---bbbbbbbbbbb.mp4",
+            x="/songs/X---xxxxxxxxxxx.mp4",
+            last="/songs/Last---lllllllllll.mp4",
+            a_running=threading.Event(),
+            release_a=threading.Event(),
+            finished=threading.Event(),
+            ran=[],
+            pending_while_running={},
+        )
+
+        def process(song_path):
+            scene.ran.append(song_path)
+            scene.pending_while_running[song_path] = list(mgr.pending_jobs)
+            if song_path == scene.a:
+                scene.a_running.set()
+                scene.release_a.wait(timeout=5)
+            if song_path == scene.last:
+                scene.finished.set()
+
+        monkeypatch.setattr(mgr, "_process_song", process)
+        return scene
+
+    def test_a_song_queued_again_stays_pending_and_runs_once(self, scene):
+        mgr = scene.mgr
+
+        def queue_cancel_and_queue_again():
+            mgr.enqueue(scene.a)
+            assert scene.a_running.wait(timeout=5)
+            mgr.enqueue(scene.x)
+            mgr.enqueue(scene.b)
+            mgr.cancel_pending(scene.x)
+            mgr.enqueue(scene.x)
+            mgr.enqueue(scene.last)
+            scene.release_a.set()
+
+        _drive_loop(mgr, scene.finished, during=queue_cancel_and_queue_again)
+
+        assert scene.ran == [scene.a, scene.b, scene.x, scene.last]
+        # The loop skipped X's cancelled copy; the new one was still pending as B ran.
+        assert scene.pending_while_running[scene.b] == [scene.b, scene.x, scene.last]
+        assert not mgr._cancelled_paths
+        assert mgr.pending_jobs == []
+
+    def test_a_song_cancelled_twice_while_waiting_does_not_run(self, scene):
+        mgr = scene.mgr
+
+        def queue_and_cancel_twice():
+            mgr.enqueue(scene.a)
+            assert scene.a_running.wait(timeout=5)
+            mgr.enqueue(scene.x)
+            mgr.cancel_pending(scene.x)
+            mgr.enqueue(scene.x)
+            mgr.cancel_pending(scene.x)
+            mgr.enqueue(scene.last)
+            scene.release_a.set()
+
+        _drive_loop(mgr, scene.finished, during=queue_and_cancel_twice)
+
+        assert scene.ran == [scene.a, scene.last]
+        assert not mgr._cancelled_paths
+        assert mgr.pending_jobs == []
 
 
 class TestSongDeletedDropsRegenJobs:
@@ -1338,7 +1419,7 @@ class TestCancelWhilePreparing:
         assert scene.tracker.get_status(admin=True) == []
         scene.sm.delete.assert_not_called()
         scene.sm.set_pipeline_state.assert_not_called()
-        assert scene.mgr._cancelled_paths == set()
+        assert not scene.mgr._cancelled_paths
         assert scene.mgr.pending_jobs == []
         assert scene.mgr.get_active_job() is None
 
