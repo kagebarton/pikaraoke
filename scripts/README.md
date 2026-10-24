@@ -3,6 +3,22 @@
 Standalone CLI tools that run from the repo root against a live PiKaraoke
 song library.
 
+## Shared core and the web UI
+
+`regen_alignment_bundles.py` and `add_songs.py` keep their command lines, but
+the work they share with the app lives in `pikaraoke/lib/`:
+
+- `library_regen.py` — regen plans, the caption gate, backup and wipe, and
+  per-song pipeline prep.
+- `library_links.py` — URL classification, playlist expansion, and whether a
+  video in the library has been processed.
+
+The web UI does the same jobs: Processing → Library tools (Update stale
+songs, Reset all, Add playlist) and a song's Song Info page (Regenerate,
+Repair lyrics). `pikaraoke/lib/library_tools.py` is the app service that
+queues them in the processing manager. The CLI runs its own GPU workers, so
+it still needs the app stopped.
+
 ## backfill_artifacts.py
 
 Scans the song folder for video files and generates any missing
@@ -203,13 +219,15 @@ filtering is also out of scope.
 
 ## Architecture notes
 
-### Why a separate script, not a Flask route?
+### Why a script as well as the web UI?
 
-This is a maintenance tool intended to run interactively against an
-idle library — typically with the main app stopped (to free GPU
-memory). It doesn't need PTY streaming, queue management, or any of
-the live-app machinery; it can talk to `stdin`/`stdout` directly and
-use `PipelineOrchestrator.run_one()` synchronously.
+Regen and add-songs have a web UI now (see "Shared core and the web UI"), and
+both run on the same core. The scripts stay for working on a library with the
+app stopped: they run their own workers (the app must be stopped to free GPU
+memory), talk to `stdin`/`stdout` directly, and use
+`PipelineOrchestrator.run_one()` synchronously, with no PTY streaming, queue
+management, or other live-app machinery. The web UI queues the same work in
+the app's processing manager instead.
 
 ### Reuse vs duplication
 
