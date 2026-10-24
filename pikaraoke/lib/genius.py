@@ -209,8 +209,9 @@ def write_choice(yt_id: str, payload: dict) -> Path:
 
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
-        # rename is atomic on POSIX when source and dest are on the same filesystem
-        Path(tmp_path).rename(target)
+        # replace is atomic when source and dest are on the same filesystem, and it
+        # overwrites an existing choice on Windows too, where rename raises
+        Path(tmp_path).replace(target)
     except Exception:
         # Clean up the temp file on failure
         try:
