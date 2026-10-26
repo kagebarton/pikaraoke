@@ -2,7 +2,7 @@
 
 Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 
-> **Status (2026-10-24): Phases 0-7 and 6.1 done (3.1 = fixes from the Phase
+> **Status (2026-10-26): Phases 0-7 and 6.1 done (3.1 = fixes from the Phase
 > 1-3 code review, 3.1g included; the review of 3.1b-3.1d is done with its
 > two fix commits; Phase 4's code is `7f5853e` and `55cfdbb`, Phase 5's is
 > `641600a`, Phase 6's is `8a3b585`, Phase 7's is `0541907` and `ecbde50`,
@@ -21,9 +21,9 @@ Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 > Phase 9 (the scripts README, the end-to-end runs and the landing list) is
 > executed too, code `235d58b`. The code review of 8.1c and 8.1d ran
 > 2026-10-24; Phase 8.2 (its recommended fixes, written up at Ken's request)
-> is executed too, code `76f44e2`..`af07df4`. Ken's checks are next: Phase
-> 7.2's list check and Phase 8's, which cover 8.1 and 8.2. Landing follows
-> them (see Landing).**
+> is executed too, code `76f44e2`..`af07df4`. Ken's checks of Phase 7.2 and
+> Phase 8 (covering 8.1 and 8.2) are done, with two open items he left as
+> they are (see the Results log). Landing is next (see Landing).**
 > Ken approved D2's Phase 3.1 bullet on 2026-10-20. Branch
 > `web_library_tools`, off `library_tools` at `0bfa02a`; `dev` merged as
 > `c34d889`. There is no GATE and nothing here measures timing. Landing is
@@ -32,7 +32,7 @@ Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 > **Landing list** (72 commits, in cherry-pick order onto `dev`; no `docs(plan)`
 > commit, no merge). A dry run of all 72 on a throwaway worktree off `dev`
 > (`3a5a2eb`) applied with no conflict and left a tree identical to this
-> branch's outside `plans/`. A later fix from Ken's checks goes on the end.
+> branch's outside `plans/`. Ken's checks added no commit to it.
 >
 > From `library_tools` (14):
 >
@@ -5411,3 +5411,54 @@ for this row: `...\7c41e33d-b508-4b41-8c26-8efd77d9542a\scratchpad\p9\`. One cod
   `models` next to the repository root, so without it those checks fail. It has to be removed before
   `git worktree remove`; `cmd /c rmdir <worktree>\models` removes the link only. The dry-run
   cherry-pick of the landing list is extra.
+
+### Phase 7.2 and Phase 8 checks (Ken's live pass, covering 8.1 and 8.2)
+
+Model: Claude Sonnet 5.5 (procedure, relay, this record); Ken ran the checks. Reported 2026-10-26,
+HEAD `1c860b4` (code `af07df4`).
+
+- **Procedure:** given in chat by session `7c41e33d` from "Ken's checks", the Phase 8 row's live list
+  and the 8.1g and 8.2 text (no Claude Doc). Check A (Phase 7.2, no GPU): each of the four Library
+  card lists opens under its row and its count matches the tag; a second open closes the first;
+  tapping the open one closes it; a song opens Song Info and the browser's back returns to the
+  Library tools tab with the lists closed. Check B (Phase 8, GPU, scratch library):
+  1. a plain-box download of `_dK2tDK9grQ` (no manual caption) lands in Attention as "Download · no
+     caption";
+  2. Pick lyrics, a Genius hit, Use pick: "Picked · processing", runs in Jobs, leaves the list;
+  3. Add playlist (2-4 videos), one box unchecked, Add goes to Jobs;
+  4. a re-check afterwards shows queued or listed songs under "Already waiting";
+  5. a search-page picker download processes without a check;
+  6. optional, 8.2's Windows case: pick a waiting listed song, cancel it while it waits, pick it
+     again.
+- **State before the run** (read by session `7c41e33d`, 2026-10-26): 5555, 5556 and 9334 not
+  listening; no `pikaraoke` process; isolated `APPDATA` `C:\temp\p8\appdata` with its `config.ini`
+  copy and `library_tools\state.json` reading `{"run": null, "needs_pick": []}`; scratch library
+  `D:\shared\weblib-test` 258 files; the worktree's `models` junction and `libmpv-2.dll` in place.
+  Start command as in "Where things live", with `--port 5556`.
+- **Ken's report:** "the checks came out fine other than the 2 open things we left". He gave no
+  per-box list, and the session did not see the app log, any screenshot, or the scratch library
+  after the run. The Phase 8 row's six open calls (including the Check button beside the playlist
+  link box, which 8.1f left for this check to decide) drew no objection in his report, so they
+  stand as built.
+- **The two open items** (Ken, 2026-10-26: leave both; the landing list is already long). Neither
+  is on the landing list and neither has a plan step.
+  1. **A playlist re-check while a video is still downloading shows it as `new`, checked and
+     counted in the button.** Read from the code, not run live to confirm: `check_playlist` takes a
+     video's status from `library_files` and the song manager, and neither holds a download in
+     flight. `add_playlist` skips a video that is `download_manager.active_url` or in
+     `pending_downloads`, comparing the exact string `https://www.youtube.com/watch?v=<id>` (the
+     form `queue_download` stores; `test_a_video_listed_twice_or_already_waiting_is_queued_once`), so
+     the Add does not queue it twice, and its toast counts fewer downloads than the button said. A
+     link in another form pasted into the direct box (`youtu.be/...`, `&t=...`) would not match
+     (8.1f's URL-string note). A fix would mark such a video `waiting` in `check_playlist` from the
+     same two lists.
+  2. **The search-page picker does not check the caption it offers.** Decision 18, a separate
+     prerequisite plan; `plans/` holds no file for it. `POST /lyrics_select` writes a choice
+     (`genius_id`, `raw` or `srt`) for every picker download, `_pick_reason` returns None for a
+     video that has a choice, and `search.html` offers "Use YouTube captions" (mode `srt`) without
+     looking at the caption. So nothing checks a sparse caption on that path. The direct-download
+     box and playlist downloads do get the check (D14). Decision 18's "lands on `dev` before this
+     plan" was not revisited.
+- **After the run, not done:** the scratch library re-hash and restore, the `state.json` reset, the
+  `models` junction removal. Landing is next: `dev` is still `3a5a2eb`, Ken's main checkout is
+  clean on `dev`, so the 72-commit dry run still applies.
