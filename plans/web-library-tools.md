@@ -23,23 +23,25 @@ Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 > 2026-10-24; Phase 8.2 (its recommended fixes, written up at Ken's request)
 > is executed too, code `76f44e2`..`af07df4`. Ken's checks of Phase 7.2 and
 > Phase 8 (covering 8.1 and 8.2) are done, with two open items he left as
-> they are (see the Results log). Landing is next (see Landing).**
+> they are (see the Results log). The first of them (a playlist re-check
+> showing a video still downloading as new) was then fixed at Ken's request
+> on 2026-10-26, code `8b0f9ac`. Landing is next (see Landing).**
 > Ken approved D2's Phase 3.1 bullet on 2026-10-20. Branch
 > `web_library_tools`, off `library_tools` at `0bfa02a`; `dev` merged as
 > `c34d889`. There is no GATE and nothing here measures timing. Landing is
 > Ken's call (see Landing).
 >
-> **Landing list** (72 commits, in cherry-pick order onto `dev`; no `docs(plan)`
-> commit, no merge). A dry run of all 72 on a throwaway worktree off `dev`
+> **Landing list** (73 commits, in cherry-pick order onto `dev`; no `docs(plan)`
+> commit, no merge). A dry run of all 73 on a throwaway worktree off `dev`
 > (`3a5a2eb`) applied with no conflict and left a tree identical to this
-> branch's outside `plans/`. Ken's checks added no commit to it.
+> branch's outside `plans/` (redone 2026-10-26 with `8b0f9ac` on the end).
 >
 > From `library_tools` (14):
 >
 > `6cc2b29`, `2fdcf08`, `c8fe156`, `788b10c`, `c096631`, `975175b`, `6ecb41d`, `e81607b`,
 > `db2d193`, `f6490e1`, `73dada4`, `965776f`, `84e0f2f`, `75454c1`
 >
-> From `web_library_tools` (58):
+> From `web_library_tools` (59):
 >
 > `870e34f`, `dd011af`, `9857986`, `b50595a`, `1ead8a8`, `fb13913`, `30f7c84`, `b871285`,
 > `b2d8857`, `1b48a39`, `289a942`, `b5c4637`, `e8006da`, `86de4f7`, `26cf3b3`, `b6301da`,
@@ -48,7 +50,7 @@ Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 > `a14906a`, `e414e43`, `7a4a30e`, `febeb2c`, `0541907`, `ecbde50`, `d280722`, `05322ee`,
 > `84a8220`, `fc0699b`, `2d83e70`, `1bc3c29`, `71d565e`, `2c352b4`, `1a26b68`, `3d26811`,
 > `14632ae`, `9aae99d`, `59dd376`, `763d64e`, `2ba0c3d`, `235d58b`, `76f44e2`, `9f33dba`,
-> `b5aa830`, `af07df4`
+> `b5aa830`, `af07df4`, `8b0f9ac`
 
 ## Why
 
@@ -5462,3 +5464,31 @@ HEAD `1c860b4` (code `af07df4`).
 - **After the run, not done:** the scratch library re-hash and restore, the `state.json` reset, the
   `models` junction removal. Landing is next: `dev` is still `3a5a2eb`, Ken's main checkout is
   clean on `dev`, so the 72-commit dry run still applies.
+
+### Open item 1 fixed (playlist re-check of a video still downloading)
+
+Model: Claude Opus 5.5. 2026-10-26, starting from `2d6a225` (clean). Asked for a list of the open
+items before landing, Ken had the one quick fix in this branch's own code done: open item 1 above.
+Open item 2 (decision 18) is unchanged.
+
+- **Code:** `8b0f9ac` fix(library): a playlist re-check shows a video still downloading as waiting
+  (`library_tools.py`, `playlist.html`, `test_library_tools.py`, `test_library_routes.py`;
+  +40/-10). `check_playlist` marks a video with no library file `waiting` when its watch link is in
+  the download manager's `pending_downloads` or is its `active_url`. A new `_downloading_urls()`
+  gives `check_playlist` and `add_playlist` the same set, and a module-level `_watch_url()` builds
+  the link in the form `queue_download` stores (one copy in this file; 8.1f's other copies stay).
+  The page's waiting note now reads "Downloading, queued for processing, or waiting for a lyrics
+  pick." A link pasted into the direct box in another form (8.1f's URL-string note) still doesn't
+  match.
+- **Tests:** new `test_a_video_still_downloading_is_waiting_not_new` (one queued, one active, one
+  new); the route test's note string updated. Mutation: the status line put back to `"new"` fails
+  the new test. Playlist tests 69 passed. Full suite run 1: 4 failed, 2279 passed, 2 skipped. The
+  extra failure was `test_library_regen.py::TestApplyLrclibChoice::test_skip_writes_the_marker`,
+  which passed alone, with its file plus `test_lrclib.py`, and in run 2. Run 2: 3 failed (the
+  known three), 2280 passed, 2 skipped. Pre-commit on the four files: Black reformatted the new
+  test, every hook passed.
+- **Landing list:** 73 commits (`8b0f9ac` on the end). Dry run: all 73 cherry-picked onto a
+  detached worktree off `dev` `3a5a2eb`, exit 0, `git diff HEAD web_library_tools` outside
+  `plans/` empty; worktree removed.
+- **No app run:** the scratch library, the isolated APPDATA and the `models` junction are as the
+  row above left them.
