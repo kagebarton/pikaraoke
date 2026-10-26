@@ -126,6 +126,29 @@ From the `library_tools` real-world run, 2026-10-20. Record: `library-tools.md`.
   YouTube, downloaded before the fetch existed (`0c5de67`, 2026-07-03), or lost
   to the 429. `dev` has no tool to re-fetch it; a fetched caption only takes
   effect at the song's next regen. Not ruled.
+  Probed 2026-10-26 with the fixed request (`en,en-orig`, json3, 5 s apart; output in
+  the session scratchpad, not the library), plus `--list-subs` on the empty ones:
+  - 2 have a word-timed ASR track now: `TZ0pXUb5jVU` (#OutOfOz For Good, file
+    date 2026-06-23, before the fetch existed; 280 words, frac 0.773) and
+    `6q0JnftlH-I` (Standing Next to You, 2026-09-28; 223 words, 0.805). Only the
+    second one could have been lost to the bug.
+  - 17 have no `en`/`en-orig` auto track (several list only machine
+    translations of the manual caption into other languages).
+  - 13 list an `en` auto track that is vtt-only and is the manual caption
+    mirrored back (line-level, `♪` marks; checked on `WVe80iZtlYU`), so nothing
+    json3 arrives: `WVe80iZtlYU 1OwfYjemrYw iWZmdoY1aTE 450p7goxZqg FQ3slUz7Jo8
+    uuZE_IRwLNI TSVHoHyErBQ je0roKRn3nY zABLecsR5UE Eo-KmOd3i7s fJ9rUzIMcZQ
+    3JWTaaS7LdU RPWDeLqsN0g`.
+  - `8NJVNkzhJM4` (Eason Chan): YouTube's only original auto track is `th-orig`
+    (Thai, misdetected); its `en` is a translation of that and drew HTTP 429.
+  - `NSYNC - Paradise` has no video id in its name.
+- **The auto-caption fetch leaves a stray `<stem>.en.vtt` in `subtitles/`** when
+  the `en` auto entry is vtt-only (yt-dlp falls back from json3 to vtt;
+  `_select_asr_track` only looks at `.json3`). Reproduced with the fixed
+  request on `WVe80iZtlYU`. All five `.en.vtt` files in
+  `d:/shared/pikaraoke-songs/subtitles` belong to songs in the 13 above, so this
+  is likely where they come from (the Reset `.vtt` entry above may be the same
+  file). Not ruled.
 - A manual English caption that is a translation (Jay Chou, 龍捲風) passes the
   caption gate: no language check, and no way to send it to Genius instead.
 - Mandarin on the joint route breaks (晴天: 24 of 42 lines absent, transcribe
