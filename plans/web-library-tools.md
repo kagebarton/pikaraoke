@@ -25,7 +25,8 @@ Model: Claude Opus 5.5 (design, 2026-10-20); executor Claude Sonnet 5.5.
 > Phase 8 (covering 8.1 and 8.2) are done, with two open items he left as
 > they are (see the Results log). The first of them (a playlist re-check
 > showing a video still downloading as new) was then fixed at Ken's request
-> on 2026-10-26, code `8b0f9ac`. Landing is next (see Landing).**
+> on 2026-10-26, code `8b0f9ac`. The landing list was cherry-picked onto
+> `dev` on 2026-10-26 (see Landing).**
 > Ken approved D2's Phase 3.1 bullet on 2026-10-20. Branch
 > `web_library_tools`, off `library_tools` at `0bfa02a`; `dev` merged as
 > `c34d889`. There is no GATE and nothing here measures timing. Landing is
@@ -3162,6 +3163,10 @@ Ken's call, after Phase 9 and his checks: cherry-pick the landing list onto
 `dev`, in order, then his singing session, as for the other branches (memory
 `feedback_master_landing`).
 
+Done 2026-10-26: all 73 commits are on `dev` (`c8686a3`..`6edd026`) and pushed to
+`origin/dev`. The singing session before the `master` fast-forward is still to come (see
+the Results log).
+
 ## Results log
 
 ### Baseline (Phase 0)
@@ -5492,3 +5497,33 @@ Open item 2 (decision 18) is unchanged.
   `plans/` empty; worktree removed.
 - **No app run:** the scratch library, the isolated APPDATA and the `models` junction are as the
   row above left them.
+
+### Landing on `dev`
+
+Model: Claude Sonnet 5.5. 2026-10-26, starting from this branch at `d7360d0` and `dev` at
+`e5082a1` (the open-issues commit over the dry-run base `3a5a2eb`). The app was not listening on
+5555 or 5556 and Ken's main checkout was clean.
+
+- **Calls Ken made for the landing:** cherry-pick straight onto `dev` in his main checkout; push
+  `dev` to `origin/dev` afterwards; land without the search-page picker's caption check (open item
+  2, decision 18's "lands on `dev` first" ordering not honoured); do the scratch cleanup right
+  after the landing rather than after his singing session.
+- **Cherry-pick:** the landing list read from the status block (73 hashes, no duplicate, none
+  already on `dev`, none touching `plans/`), `git cherry-pick` in list order: exit 0, no conflict,
+  73 commits `c8686a3`..`6edd026` above `e5082a1`. `git diff --stat HEAD web_library_tools -- .
+  ':!plans'`: empty. 50 files changed, +17363 -1622 against `e5082a1`.
+- **Suite on `dev`:** 3 failed (the known three: two `test_pipeline_stem_worker.py` path-separator
+  tests, `test_whisper_worker.py::test_start_raises_worker_died_on_pipe_close`), 2280 passed, 2
+  skipped. Same counts as run 2 at `8b0f9ac`.
+- **Push:** `3a5a2eb..6edd026  dev -> dev` on `origin`.
+- **Scratch library:** `D:/shared/weblib-test` held 282 files against the 258-file baseline
+  (`scratch_after_81.json`): 24 added, 0 removed, 0 changed. The 24 were the video and artifacts
+  of three songs from Ken's checks (Adele "Someone Like You", Baby Hotline, Ed Sheeran "Shape Of
+  You"). `restore_scratch.py` deleted exactly those; re-hash: 258 identical, 0 added, 0 removed, 0
+  changed. `library_tools\state.json` already read `{"run": null, "needs_pick": []}`. The isolated
+  APPDATA folder `C:\temp\p8\appdata` is left as it is.
+- **Worktree:** `models` junction removed with `cmd /c rmdir`, then the `wt_weblib` worktree
+  removed; the branch stays.
+- **Not done:** Ken's singing session, then the `master` fast-forward. Open items 1 and 2 of the
+  checks row: item 1 is on the landing list (`8b0f9ac`); item 2 is in `plans/open-issues.md` on
+  `dev`.
