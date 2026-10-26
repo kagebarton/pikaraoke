@@ -114,9 +114,18 @@ window; none was seen live. Record: web plan, the section named.
 
 From the `library_tools` real-world run, 2026-10-20. Record: `library-tools.md`.
 
-- `download_auto_en_subs` (`en.*`) pulls every translated `en-<src>` auto
+- ~~`download_auto_en_subs` (`en.*`) pulls every translated `en-<src>` auto
   track (drew an HTTP 429 on Queen) and discards a good track on a non-zero
-  exit.
+  exit.~~ Fixed 2026-10-26 (`28995d6`): asks for `en,en-orig` only, and keeps
+  what arrived on a failed run. Reproduced first on `6q0JnftlH-I`: `en.*` got
+  the 429 on its first translation (`en-zh`) even with 3 s between requests;
+  `en,en-orig` exited 0 with both tracks word-timed.
+- **Library songs may lack their word-timed caption because of the bug above.**
+  2026-10-26 count in `d:/shared/pikaraoke-songs`: 34 of 48 video songs have no
+  `subtitles/<stem>.en.asr.json3`. The cause per song is not known: no ASR on
+  YouTube, downloaded before the fetch existed (`0c5de67`, 2026-07-03), or lost
+  to the 429. `dev` has no tool to re-fetch it; a fetched caption only takes
+  effect at the song's next regen. Not ruled.
 - A manual English caption that is a translation (Jay Chou, 龍捲風) passes the
   caption gate: no language check, and no way to send it to Genius instead.
 - Mandarin on the joint route breaks (晴天: 24 of 42 lines absent, transcribe
