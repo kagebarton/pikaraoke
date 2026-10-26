@@ -124,6 +124,11 @@ def _pick_text(value: object) -> str:
     return value.strip()[:_PICK_TEXT_MAX] if isinstance(value, str) else ""
 
 
+def _watch_url(video_id: object) -> str:
+    """A video's link in the form ``queue_download`` stores, so waiting downloads compare equal."""
+    return f"https://www.youtube.com/watch?v={video_id}"
+
+
 @dataclass
 class _NeedsPick:
     """A downloaded song waiting for the admin to pick its lyrics (D6)."""
@@ -702,10 +707,10 @@ class LibraryTools:
         Returns ``{"title", "videos"}``; each video has its ``id``, ``title``
         and ``status``: ``new``, ``not_processed`` (downloaded earlier and never
         processed; it carries its ``song`` path as the library spells it),
-        ``waiting`` (the same, but already queued for processing or listed for
-        a pick) or ``in_library``. Raises :class:`RegenError`, with a message
-        for the admin, for a link that isn't a playlist and for one that can't
-        be read.
+        ``waiting`` (still downloading, or unprocessed but already queued for
+        processing or listed for a pick) or ``in_library``. Raises
+        :class:`RegenError`, with a message for the admin, for a link that isn't
+        a playlist and for one that can't be read.
         """
         url = url.strip() if isinstance(url, str) else ""
         link = classify_url(url)
@@ -722,6 +727,7 @@ class LibraryTools:
             raise RegenError(PLAYLIST_UNREADABLE) from e
         files = library_files(self._folder)
         spelling = {Path(path): path for path in self._song_manager.songs}
+        downloading = self._downloading_urls()
         videos = []
         seen = set()
         for video in playlist.videos:
@@ -731,7 +737,7 @@ class LibraryTools:
             path = files.get(video.id)
             song = spelling.get(path) if path is not None else None
             if path is None:
-                status = "new"
+                status = "waiting" if _watch_url(video.id) in downloading else "new"
             elif song is not None and file_status(path) == NOT_PROCESSED:
                 status = "waiting" if self._is_taken(song) else "not_processed"
             else:
@@ -760,12 +766,11 @@ class LibraryTools:
         if not isinstance(videos, list) or not isinstance(unprocessed, list):
             raise RegenError("Not a playlist selection.")
         in_library = library_files(self._folder)
-        waiting = {job["video_url"] for job in list(self._download_manager.pending_downloads)}
-        waiting.add(self._download_manager.active_url)
+        waiting = self._downloading_urls()
         downloads = 0
         for video in videos:
             video_id = video.get("id") if isinstance(video, dict) else None
-            url = f"https://www.youtube.com/watch?v={video_id}"
+            url = _watch_url(video_id)
             if not is_video_id(video_id) or video_id in in_library or url in waiting:
                 continue
             waiting.add(url)
@@ -784,6 +789,12 @@ class LibraryTools:
             else:
                 listed += 1
         return {"downloads": downloads, "processing": processing, "listed": listed}
+
+    def _downloading_urls(self) -> set[str]:
+        """The links waiting to download or downloading now, as ``queue_download`` stores them."""
+        urls = {job["video_url"] for job in list(self._download_manager.pending_downloads)}
+        urls.add(self._download_manager.active_url)
+        return urls
 
     def _is_unprocessed(self, song_path: object) -> bool:
         """Whether a playlist's song is in the library, never processed, and free to take.

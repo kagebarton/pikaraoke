@@ -1640,7 +1640,7 @@ class TestPlaylistPage:
         html = text(env.client.get("/library/playlist"))
 
         assert "Already waiting ({n})" in html
-        assert "Queued for processing or waiting for a lyrics pick." in html
+        assert "Downloading, queued for processing, or waiting for a lyrics pick." in html
         assert "return noteRow(video, T.waitingNote, null);" in html  # no box, no tag
         assert "var m = withStatus('not_processed').length;" in html
         assert "$.map(withStatus('not_processed'), function (video) { return video.song; })" in html

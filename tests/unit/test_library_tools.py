@@ -2280,6 +2280,27 @@ class TestCheckPlaylist:
             ("Idle", "not_processed", str(idle)),
         ]
 
+    def test_a_video_still_downloading_is_waiting_not_new(self, tmp_path, monkeypatch):
+        tools, _ = make_tools(tmp_path, [])
+        tools._download_manager.pending_downloads = [
+            {"video_url": "https://www.youtube.com/watch?v=bbbbbbbbbbb"}
+        ]
+        tools._download_manager.active_url = "https://www.youtube.com/watch?v=ccccccccccc"
+        read_as(
+            monkeypatch,
+            playlist_of(
+                ("aaaaaaaaaaa", "Fresh"), ("bbbbbbbbbbb", "Queued"), ("ccccccccccc", "Now")
+            ),
+        )
+
+        videos = tools.check_playlist(PLAYLIST_URL)["videos"]
+
+        assert [(v["title"], v["status"], v["song"]) for v in videos] == [
+            ("Fresh", "new", None),
+            ("Queued", "waiting", None),
+            ("Now", "waiting", None),
+        ]
+
     def test_a_video_listed_twice_is_listed_once(self, tmp_path, monkeypatch):
         tools, _ = make_tools(tmp_path, [])
         read_as(monkeypatch, playlist_of(("aaaaaaaaaaa", "Fresh"), ("aaaaaaaaaaa", "Fresh again")))
