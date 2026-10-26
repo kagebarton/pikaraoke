@@ -435,10 +435,10 @@ def download_auto_en_subs(video_url: str, dest_dir: str, stem: str) -> str | Non
     written as ``<dest_dir>/<stem>.en.asr.json3``. Returns that path, or ``None``
     when no real word-level ASR arrived. The ``en-<src>`` tracks are not
     requested: they are machine translations of other captions, not the ASR, and
-    YouTube answers them with HTTP 429, which aborts the run. A failed run still keeps any track that
-    arrived before the failure. No media and no manual captions are fetched;
-    json3 is kept un-converted because ``--convert-subs srt`` collapses the
-    per-word timing this prior depends on.
+    YouTube answers them with HTTP 429, which aborts the run. A failed run still
+    keeps any track that arrived before the failure. No media and no manual
+    captions are fetched; json3 is kept un-converted because ``--convert-subs
+    srt`` collapses the per-word timing this prior depends on.
     """
     os.makedirs(dest_dir, exist_ok=True)
     cmd = (
