@@ -131,7 +131,10 @@ From the `library_tools` real-world run, 2026-10-20. Record: `library-tools.md`.
   - 2 have a word-timed ASR track now: `TZ0pXUb5jVU` (#OutOfOz For Good, file
     date 2026-06-23, before the fetch existed; 280 words, frac 0.773) and
     `6q0JnftlH-I` (Standing Next to You, 2026-09-28; 223 words, 0.805). Only the
-    second one could have been lost to the bug.
+    second one could have been lost to the bug. Both bundles are `origin: srt`
+    (caption route), and `_resolve_ytasr` runs on the Genius route only, so a
+    regen with the track on disk would not use it; not copied in, not regenerated.
+    The bug has cost the library nothing that the pipeline uses today.
   - 17 have no `en`/`en-orig` auto track (several list only machine
     translations of the manual caption into other languages).
   - 13 list an `en` auto track that is vtt-only and is the manual caption
