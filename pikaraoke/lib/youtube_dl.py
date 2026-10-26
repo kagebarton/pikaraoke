@@ -430,12 +430,15 @@ def _select_asr_track(dest_dir: str, stem: str) -> str | None:
 def download_auto_en_subs(video_url: str, dest_dir: str, stem: str) -> str | None:
     """Download YouTube's *auto-generated* (ASR) English caption as json3.
 
-    Fetches every ``en*`` auto-caption track in word-level ``json3`` and selects
-    the real ASR track by content (:func:`_select_asr_track`), written as
-    ``<dest_dir>/<stem>.en.asr.json3``. Returns that path, or ``None`` when no
-    real word-level ASR exists or the download failed. No media and no manual
-    captions are fetched; json3 is kept un-converted because ``--convert-subs
-    srt`` collapses the per-word timing this prior depends on.
+    Fetches the ``en`` and ``en-orig`` auto-caption tracks in word-level ``json3``
+    and selects the real ASR track by content (:func:`_select_asr_track`),
+    written as ``<dest_dir>/<stem>.en.asr.json3``. Returns that path, or ``None``
+    when no real word-level ASR arrived. The ``en-<src>`` tracks are not
+    requested: they are machine translations of other captions, not the ASR, and
+    YouTube answers them with HTTP 429, which aborts the run. A failed run still keeps any track that
+    arrived before the failure. No media and no manual captions are fetched;
+    json3 is kept un-converted because ``--convert-subs srt`` collapses the
+    per-word timing this prior depends on.
     """
     os.makedirs(dest_dir, exist_ok=True)
     cmd = (
@@ -444,7 +447,7 @@ def download_auto_en_subs(video_url: str, dest_dir: str, stem: str) -> str | Non
             "--skip-download",
             "--write-auto-subs",
             "--sub-langs",
-            "en.*",
+            "en,en-orig",
             "--sub-format",
             "json3",
             "-o",
@@ -468,5 +471,4 @@ def download_auto_en_subs(video_url: str, dest_dir: str, stem: str) -> str | Non
             f"yt-dlp auto-sub download failed for {video_url}: "
             f"{result.stderr.decode('utf-8', 'ignore').strip()}"
         )
-        return None
     return _select_asr_track(dest_dir, stem)

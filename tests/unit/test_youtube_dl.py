@@ -531,6 +531,8 @@ class TestDownloadAutoEnSubs:
         assert result == str(dest / "Song.en.asr.json3")
         cmd = captured["cmd"]
         assert "--write-auto-subs" in cmd
+        # Not "en.*": the en-<src> machine translations draw HTTP 429 and aren't the ASR.
+        assert cmd[cmd.index("--sub-langs") + 1] == "en,en-orig"
         assert cmd[cmd.index("--sub-format") + 1] == "json3"
         # Never convert: that would collapse the per-word timing.
         assert "--convert-subs" not in cmd
@@ -549,13 +551,28 @@ class TestDownloadAutoEnSubs:
             result = download_auto_en_subs("https://yt/watch?v=x", str(dest), "Song")
         assert result is None
 
-    def test_nonzero_returncode_returns_none(self, tmp_path):
+    def test_nonzero_returncode_with_nothing_written_returns_none(self, tmp_path):
         dest = tmp_path / "subtitles"
         with _default_patches()[0], _default_patches()[1], patch(
             "subprocess.run", return_value=MagicMock(returncode=1, stdout=b"", stderr=b"boom")
         ):
             result = download_auto_en_subs("https://yt/watch?v=x", str(dest), "Song")
         assert result is None
+
+    def test_nonzero_returncode_keeps_a_track_that_arrived(self, tmp_path):
+        dest = tmp_path / "subtitles"
+
+        def fake_run(cmd, **kwargs):
+            dest.mkdir(parents=True, exist_ok=True)
+            (dest / "Song.en.json3").write_text(_ASR_WORD_JSON3, encoding="utf-8")
+            return MagicMock(returncode=1, stdout=b"", stderr=b"HTTP Error 429")
+
+        with _default_patches()[0], _default_patches()[1], patch(
+            "subprocess.run", side_effect=fake_run
+        ):
+            result = download_auto_en_subs("https://yt/watch?v=x", str(dest), "Song")
+        assert result == str(dest / "Song.en.asr.json3")
+        assert not (dest / "Song.en.json3").exists()
 
     def test_timeout_returns_none(self, tmp_path):
         dest = tmp_path / "subtitles"
