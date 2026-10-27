@@ -753,6 +753,10 @@ Commit: `fix(ui): escape song titles and singer names on the queue and home page
   slot leaves the queue.
 - [ ] (5.1f) Set the singer name to `<b>x</b>` and queue a song: the queue and
   home pages show the name as literal text, not bold.
+- [ ] (Review of 5.1, fix 7a) The Processing page draws every kind of row
+  (queued, running, done, error, waiting for a pick) and its filters as
+  before, and a download row queued by `<b>x</b>` reads "by <b>x</b>" as
+  literal text.
 
 ## Results log
 
