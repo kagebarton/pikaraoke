@@ -763,8 +763,16 @@ Commit: `fix(ui): escape song titles and singer names on the queue and home page
 | 2026-10-27 | `12d539c` | Phase 2: hold at the click, `QueueHold`, `download_cancelled`, `DownloadManager` off the queue; 2345 passed (+29) |
 | 2026-10-27 | `a94441d` | Phase 3: manual Add holds a song still processing or waiting for a pick; 2354 passed (+9) |
 | 2026-10-27 | `17a5844` | Phase 4: held-row tag and dimming, "Add to queue" label; 2354 passed (templates only, no test change) |
+| 2026-10-27 | `2538e62` | 5.1a: a held song's turn goes to its singer's later ready song; `upcoming` feeds both "up next" readers; 2359 passed (+5) |
+| 2026-10-27 | `71e9f7f` | 5.1b: one `RLock` for the queue and `QueueHold`; `queue_clear` locks only its assignment and emits outside it; the lock-order check passed (all five items); 2362 passed (+3) |
+| 2026-10-27 | `8660828` | 5.1c: the tracker emits `processing_cancelled` for a cancelled waiting job; 2364 passed (+2) |
+| 2026-10-27 | `8dda735` | 5.1d: `QueueHold.settle`, called by `_do_enqueue` after a hold; 2370 passed (+6) |
+| 2026-10-27 | `a295e92` | 5.1e: a crashed download emits `download_error` and a danger toast; a missing file sends the red toast, not the green one; `_execute_download(video_url, title)`; 2370 passed (+1 crash test, -1 dropped parametrization) |
+| 2026-10-27 | `e083e90` | 5.1f: `escapeHtml` in `base.html`, used on the queue and home pages; 2370 passed (templates only, no test change) |
 
 Final: full suite 2354 passed, 0 failed. `pre-commit --all-files` clean on this branch's files.
+
+Final after Phase 5.1: full suite 2370 passed, 0 failed. `pre-commit --all-files` clean on this phase's files (the same two unrelated files as before were rewritten and reverted; see below).
 
 ### Where the build departs from the text above
 
@@ -780,6 +788,18 @@ Final: full suite 2354 passed, 0 failed. `pre-commit --all-files` clean on this 
   `QueueHold.waiting_for` is as planned.
 - **Phase 2 duplicate toast** uses level `"warning"` (the plan gave no level).
 
+Phase 5.1:
+
+- **5.1b**: `queue_hold.py` had no "No lock (see the invariant)" wording to
+  delete; its module docstring is unchanged.
+- **5.1d**: in `test_queue_routes.py`, the held-song test's `enqueue` mock now
+  returns `[True, "Song added"]`, as the real method does, instead of `True`,
+  and its `success` assertion follows. The route reads `rc[0]` now, and a bare
+  `True` cannot be indexed. The race test calls `Babel(app)` because a real
+  `QueueManager` translates its messages inside a request.
+- **5.1e**: `from flask_babel import _` sits at the top of `_process_queue`,
+  not inside the `except` branch.
+
 ### Left for the review
 
 - `queue.html` puts `e.title` and `e.user` into the page unescaped. A held
@@ -791,3 +811,13 @@ Final: full suite 2354 passed, 0 failed. `pre-commit --all-files` clean on this 
 - `pre-commit --all-files` on `dev` rewrites `pikaraoke/lib/args.py` (an unused
   `os` import) and `plans/open-issues.md` (a re-wrapped list). Not from this
   branch; reverted, not committed.
+
+### Left for the review of Phase 5.1
+
+- `upcoming` takes the queue lock on every mpv tick (`on_tick`, then
+  `tick_overlays`, then `_get_queue_preview`), and `QueueHold`'s handlers emit
+  Socket.IO events while holding it. Neither takes another lock (the 5.1b
+  step 3 check), so they can only delay each other.
+- `pre-commit --all-files` also re-spaced the lists in this plan (`mdformat`;
+  CLAUDE.md excludes `plans/` from pre-commit). Reverted, with `args.py` and
+  `open-issues.md`.
