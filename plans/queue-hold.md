@@ -727,33 +727,33 @@ Commit: `fix(ui): escape song titles and singer names on the queue and home page
 
 ## Test plan (manual)
 
-- [ ] Ticked, search and download a new song while another song plays: it
+- [x] Ticked, search and download a new song while another song plays: it
   appears in the queue at once tagged "downloading", then "processing", and
   the queue plays past it.
-- [ ] When it finishes processing it plays from its slot, with the vocal
+- [x] When it finishes processing it plays from its slot, with the vocal
   slider and word timing.
-- [ ] Round-robin on, two singers: A's first song is held and A's second (a
+- [x] Round-robin on, two singers: A's first song is held and A's second (a
   library song) comes up first. A's library song plays in A's earlier turn and
   the held one moves back.
-- [ ] Unticked: the song downloads and processes but is not queued.
-- [ ] Remove a held song from the queue (as its singer and as admin): the
+- [x] Unticked: the song downloads and processes but is not queued.
+- [x] Remove a held song from the queue (as its singer and as admin): the
   download and processing carry on and the song lands in the library.
-- [ ] Cancel a held song's download on the Processing page: it leaves the
+- [x] Cancel a held song's download on the Processing page: it leaves the
   queue.
-- [ ] A download that needs a lyrics pick shows "waiting for lyrics" and plays
+- [x] A download that needs a lyrics pick shows "waiting for lyrics" and plays
   after the pick and processing.
-- [ ] Add a library song that is still processing via the file browser: it is
+- [x] Add a library song that is still processing via the file browser: it is
   held (no "song is pending" error).
-- [ ] (5.1a) Round-robin off: A's held song is first, B's song second, A's
+- [x] (5.1a) Round-robin off: A's held song is first, B's song second, A's
   library song third. A's library song plays first, the TV and home page name
   it as "up next" beforehand, and A's held song ends up third.
-- [ ] (5.1c) Add a song whose processing job is still waiting, then cancel
+- [x] (5.1c) Add a song whose processing job is still waiting, then cancel
   that job on the Processing page: the song leaves the queue.
-- [ ] (5.1e) Download a video whose download fails: a red toast, and its held
+- [x] (5.1e) Download a video whose download fails: a red toast, and its held
   slot leaves the queue.
-- [ ] (5.1f) Set the singer name to `<b>x</b>` and queue a song: the queue and
+- [x] (5.1f) Set the singer name to `<b>x</b>` and queue a song: the queue and
   home pages show the name as literal text, not bold.
-- [ ] (Review of 5.1, fix 7a) The Processing page draws every kind of row
+- [x] (Review of 5.1, fix 7a) The Processing page draws every kind of row
   (queued, running, done, error, waiting for a pick) and its filters as
   before, and a download row queued by `<b>x</b>` reads "by <b>x</b>" as
   literal text.
@@ -776,6 +776,7 @@ Commit: `fix(ui): escape song titles and singer names on the queue and home page
 | 2026-10-27 | `0cf6c6f` | 5.1 review fix 1 + 4: `settle` drops a held song with no state row (deleted), and on `pending` re-reads `waiting_for` and relabels; 2373 passed (+3) |
 | 2026-10-27 | `9aa92f0` | 5.1 review fix 3 + 7b: `_report_download_failure` sends the toast and `download_error` for all three failure paths; the catch-all logs the traceback and names an exception with no message by its type; 2374 passed (+1) |
 | 2026-10-27 | `e76d2ee` | 5.1 review fix 7a: the Processing page uses the shared `escapeHtml`, which now renders a missing value as empty text; 2374 passed (one page-test string updated) |
+| 2026-10-27 | `879cf32` | Ken's manual checks on the Windows box (port 5556, APPDATA `C:\temp\p8\appdata`, library `D:\shared\weblib-test`, admin password set for a guest window): all 13 boxes of the test plan pass. Two pre-existing issues found on the way, listed in `plans/open-issues.md` on `dev` (`e337415`): (1) the direct box sends the search results' tick, which is absent with no search on screen, so the first try at step 4 was downloaded but never queued (log: no "added to the queue" line); the run used a search first; (2) server notifications reach no screen since `367375cc` removed the browser splash, so every expected toast was read in the console log instead |
 
 Final: full suite 2354 passed, 0 failed. `pre-commit --all-files` clean on this branch's files.
 
