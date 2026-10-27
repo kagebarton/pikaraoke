@@ -1,5 +1,6 @@
 """Unit tests for QueueHold: a searched song's queue slot from the click until it is ready."""
 
+import threading
 from unittest.mock import MagicMock
 
 import pytest
@@ -246,6 +247,24 @@ class TestReadyItemsAreNeverTouched:
         assert item["waiting"] is None
         assert queue_events == []
         assert toasts == []
+
+
+class TestQueueLock:
+    def test_a_release_waits_for_the_queue_lock(self, hold, queue_manager, events):
+        item = hold_item(queue_manager, "processing")
+        finished = threading.Event()
+
+        def release():
+            events.emit("processing_complete", {"song_path": SONG, "lyric_method": None})
+            finished.set()
+
+        with queue_manager.lock:
+            threading.Thread(target=release, daemon=True).start()
+            assert not finished.wait(0.1)
+            assert item["waiting"] == "processing"
+
+        assert finished.wait(1)
+        assert item["waiting"] is None
 
 
 class TestDownloadFailed:

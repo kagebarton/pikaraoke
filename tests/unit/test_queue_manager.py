@@ -4,6 +4,8 @@ These tests verify the QueueManager class independently of the Karaoke class,
 ensuring queue logic is correct and maintainable.
 """
 
+import threading
+
 import pytest
 
 from pikaraoke.lib.events import EventSystem
@@ -503,6 +505,21 @@ class TestQueueManagerPopNext:
         assert song is None
         assert len(queue_manager.queue) == 2
 
+    def test_pop_next_waits_for_the_queue_lock(self, queue_manager):
+        """A worker thread holding the lock sees the queue change in one step."""
+        queue_manager.enqueue("/songs/song1---abc.mp4", "User1")
+        finished = threading.Event()
+
+        def pop():
+            queue_manager.pop_next()
+            finished.set()
+
+        with queue_manager.lock:
+            threading.Thread(target=pop, daemon=True).start()
+            assert not finished.wait(0.1)
+
+        assert finished.wait(1)
+
 
 class TestQueueManagerClear:
     """Test queue clearing."""
@@ -535,6 +552,28 @@ class TestQueueManagerClear:
         queue_manager.queue_clear()
 
         assert len(captured) == 1
+
+    def test_queue_clear_emits_skip_requested_after_releasing_the_lock(self, queue_manager):
+        """skip_requested takes the playback lock, so the queue lock must be free by then."""
+        lock_free = []
+
+        def probe():
+            acquired = queue_manager.lock.acquire(blocking=False)
+            if acquired:
+                queue_manager.lock.release()
+            lock_free.append(acquired)
+
+        def on_skip():
+            thread = threading.Thread(target=probe)
+            thread.start()
+            thread.join()
+
+        queue_manager._events.on("skip_requested", on_skip)
+        queue_manager.enqueue("/songs/song1---abc.mp4", "User1")
+
+        queue_manager.queue_clear()
+
+        assert lock_free == [True]
 
 
 class TestQueueManagerHasPlayableSong:
