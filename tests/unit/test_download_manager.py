@@ -170,14 +170,13 @@ class TestDownloadManagerExecuteDownload:
 
         # Mock Path.mkdir to avoid filesystem operations
         with patch("pathlib.Path.mkdir"):
-            rc = download_manager._execute_download(
-                "https://youtube.com/watch?v=abc123", False, "User", "Title"
-            )
+            rc = download_manager._execute_download("https://youtube.com/watch?v=abc123", "Title")
 
         assert rc == 0
         song_manager.songs.find_by_id.assert_called_once_with("/songs", "abc123")
         # add_if_valid is no longer called directly; a "song_downloaded" event is emitted instead
         assert any("Downloaded" in n for n in notifications)
+        assert not any("Error downloading" in n for n in notifications)
 
     @patch("flask_babel._", side_effect=lambda x: x)
     @patch("subprocess.Popen")
@@ -196,7 +195,7 @@ class TestDownloadManagerExecuteDownload:
         mock_process.returncode = 1
         mock_popen.return_value = mock_process
 
-        rc = download_manager._execute_download("url", False, "User", "Title")
+        rc = download_manager._execute_download("url", "Title")
 
         assert rc == 1
         # Should have "Error downloading" message with danger category
@@ -230,7 +229,7 @@ class TestDownloadManagerExecuteDownload:
         mock_process.returncode = 1
         mock_popen.return_value = mock_process
 
-        rc = download_manager._execute_download("url", False, "User", "Title")
+        rc = download_manager._execute_download("url", "Title")
 
         assert rc == 1
         assert not any(cat == "danger" for _msg, cat in notifications)
@@ -240,7 +239,6 @@ class TestDownloadManagerExecuteDownload:
     @patch("flask_babel._", side_effect=lambda x: x)
     @patch("subprocess.Popen")
     @patch("pikaraoke.lib.download_manager.build_ytdl_download_command")
-    @pytest.mark.parametrize("enqueue", [True, False])
     def test_execute_download_without_path_emits_download_error(
         self,
         mock_build_cmd,
@@ -249,13 +247,14 @@ class TestDownloadManagerExecuteDownload:
         download_manager,
         song_manager,
         events,
-        enqueue,
     ):
         """A successful download whose file can't be found ends the tracker row and any held slot."""
         errors = []
         events.on("download_error", errors.append)
         downloaded = []
         events.on("song_downloaded", downloaded.append)
+        toasts = []
+        events.on("notification", lambda msg, level="info": toasts.append((msg, level)))
 
         mock_build_cmd.return_value = ["yt-dlp", "url"]
 
@@ -268,10 +267,12 @@ class TestDownloadManagerExecuteDownload:
         song_manager.songs.find_by_id.return_value = None
 
         url = "https://youtube.com/watch?v=abc"
-        download_manager._execute_download(url, enqueue, "User", "Title")
+        download_manager._execute_download(url, "Title")
 
         assert errors == [{"url": url, "error": "Downloaded file not found"}]
         assert downloaded == []
+        assert ("Error downloading song: Title", "danger") in toasts
+        assert not any("Downloaded:" in msg for msg, _level in toasts)
 
 
 class TestDownloadManagerSpecialCharacters:
@@ -319,10 +320,7 @@ class TestDownloadManagerSpecialCharacters:
         # Mock Path.mkdir to avoid filesystem operations
         with patch("pathlib.Path.mkdir"):
             download_manager._execute_download(
-                f"https://youtube.com/watch?v={video_id}",
-                enqueue=True,
-                user="TestUser",
-                title="Test",
+                f"https://youtube.com/watch?v={video_id}", title="Test"
             )
 
         assert downloaded == [file_path]
@@ -348,9 +346,7 @@ class TestDownloadManagerSpecialCharacters:
         song_manager.songs.find_by_id.return_value = "/songs/Song---abc12345678.mp4"
 
         with patch("pathlib.Path.mkdir"):
-            download_manager._execute_download(
-                "https://youtube.com/watch?v=abc12345678", False, "User", "Title"
-            )
+            download_manager._execute_download("https://youtube.com/watch?v=abc12345678", "Title")
 
         _mock_asr_fetch.assert_called_once()
         url, subs_dir, stem = _mock_asr_fetch.call_args.args
@@ -588,7 +584,7 @@ class TestCancelPendingDownload:
         executed = []
         processed_keeper = threading.Event()
 
-        def fake_execute(video_url, enqueue, user, title):
+        def fake_execute(video_url, title):
             executed.append(video_url)
             if video_url == keep_url:
                 processed_keeper.set()
@@ -608,3 +604,20 @@ class TestCancelPendingDownload:
         assert cancel_url not in executed, "a recorded URL must be skipped, not downloaded"
         assert keep_url in executed
         assert cancel_url not in download_manager._cancelled_urls, "skip must discard (no leak)"
+
+    def test_a_crashing_download_says_so_and_ends_its_row(self, download_manager, events):
+        """An exception in the worker is a failed download: a danger toast and download_error,
+        so a held queue slot is freed."""
+        errors = []
+        events.on("download_error", errors.append)
+        toasts = []
+        events.on("notification", lambda msg, level="info": toasts.append((msg, level)))
+        url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+
+        with patch.object(download_manager, "_execute_download", side_effect=RuntimeError("boom")):
+            download_manager.start()
+            download_manager.queue_download(url, enqueue=True, user="Alice", title="Title")
+            download_manager.download_queue.join()
+
+        assert errors == [{"url": url, "error": "boom"}]
+        assert ("Error downloading song: Title", "danger") in toasts
