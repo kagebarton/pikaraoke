@@ -733,7 +733,8 @@ function checkCaption(duration) {
     return modal.classList.contains("is-active") && ytId === _activeYtId;
   }
   function searchInstead(note) {
-    $note.text(note);
+    if (note) $note.text(note);
+    else $note.addClass("is-hidden");
     searchLyricsForActiveVideo();
   }
 
@@ -747,8 +748,11 @@ function checkCaption(duration) {
         $note.addClass("is-hidden");
         _activeSrtAvailable = true;
         showSrtPrimary();
+      } else if (check.failed) {
+        searchInstead(CAPTION_NOTES.failed);
       } else {
-        searchInstead(check.found ? CAPTION_NOTES.sparse : CAPTION_NOTES.failed);
+        // No caption after all reads like a video without one: no note.
+        searchInstead(check.found ? CAPTION_NOTES.sparse : null);
       }
     },
     error: function () {
