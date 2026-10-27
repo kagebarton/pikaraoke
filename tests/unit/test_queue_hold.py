@@ -44,8 +44,17 @@ def song_manager():
 
 
 @pytest.fixture
-def hold(queue_manager, events, song_manager):
-    return QueueHold(queue_manager, events, MagicMock(), song_manager)
+def library_tools():
+    """A song still processing."""
+    tools = MagicMock()
+    tools.is_waiting_for_pick.return_value = False
+    tools.is_busy.return_value = True
+    return tools
+
+
+@pytest.fixture
+def hold(queue_manager, events, library_tools, song_manager):
+    return QueueHold(queue_manager, events, library_tools, song_manager)
 
 
 @pytest.fixture
@@ -293,6 +302,38 @@ class TestSettle:
         assert queue_manager.queue == [item]
         assert item["waiting"] == "processing"
         assert toasts == []
+
+    def test_a_song_deleted_meanwhile_is_removed(self, hold, queue_manager, song_manager):
+        hold_item(queue_manager, "processing")
+        song_manager.get_pipeline_state.return_value = None
+
+        hold.settle(SONG)
+
+        assert queue_manager.queue == []
+
+    def test_a_song_moved_to_a_pick_meanwhile_is_held_for_the_pick(
+        self, hold, queue_manager, song_manager, library_tools
+    ):
+        item = hold_item(queue_manager, "processing")
+        song_manager.get_pipeline_state.return_value = "pending"
+        library_tools.is_waiting_for_pick.return_value = True
+        library_tools.is_busy.return_value = False
+
+        hold.settle(SONG)
+
+        assert item["waiting"] == "pick"
+
+    def test_a_pending_song_nothing_will_finish_stays_held(
+        self, hold, queue_manager, song_manager, library_tools
+    ):
+        """Between a pick and its job's enqueue nothing claims the song; that is no reason to drop it."""
+        item = hold_item(queue_manager, "pick")
+        song_manager.get_pipeline_state.return_value = "pending"
+        library_tools.is_busy.return_value = False
+
+        hold.settle(SONG)
+
+        assert item["waiting"] == "pick"
 
 
 class TestQueueLock:

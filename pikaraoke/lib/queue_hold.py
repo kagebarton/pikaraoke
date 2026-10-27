@@ -58,16 +58,22 @@ class QueueHold:
         return None
 
     def settle(self, song_path: str) -> None:
-        """Release or drop a song a manual Add has just held, if its event came first.
+        """Bring a song a manual Add has just held up to date, if its event came first.
 
-        The Add reads the song's state and then holds it. Processing can finish
-        or fail in between, and its event then finds nothing to change.
+        The Add reads the song's state and then holds it. In between, the song can
+        be deleted, finish or fail processing, or move to a lyrics pick, and its
+        event then finds nothing to change.
         """
         state = self._song_manager.get_pipeline_state(song_path)
-        if state == "failed":
+        if state is None:
+            self._drop(song_path)
+        elif state == "failed":
             self._on_processing_error({"song_path": song_path})
         elif state != "pending":
             self._release(song_path)
+        elif waiting := self.waiting_for(song_path):
+            # Read outside the queue lock, which must stay a leaf.
+            self._set_waiting(song_path, waiting)
 
     def _held(self, file: str) -> dict[str, Any] | None:
         """The held item with this ``file``; a ready item is never returned."""
