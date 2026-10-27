@@ -17,13 +17,16 @@ Sources gathered on 2026-10-26:
 
 ## Decide at landing
 
-- **The search-page picker does not check the caption it offers** (decision 18).
+- ~~**The search-page picker does not check the caption it offers** (decision 18).
   "Use YouTube captions" writes an `srt` choice without looking at the caption,
   and a picker download skips the after-download check, so a sparse caption is
   not caught on that path (the direct box and playlists are checked). Decision
   18 said a separate plan lands on `dev` before `web_library_tools`; no plan
   file exists, and Ken left the item open on 2026-10-26 without revisiting the
-  order. Record: web plan, D9 and the "Phase 7.2 and Phase 8 checks" row, item 2.
+  order. Record: web plan, D9 and the "Phase 7.2 and Phase 8 checks" row, item 2.~~
+  Fixed 2026-10-27 on branch `search_caption_check` (`c3e567d`, `a4363cb`), not
+  yet on `dev`: the modal checks the caption before offering it, and a caption
+  choice gets the after-download gate. Record: `plans/search-caption-check.md`.
 
 ## Ruled: own branch or plan
 
