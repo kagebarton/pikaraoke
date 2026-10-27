@@ -17,13 +17,17 @@ Sources gathered on 2026-10-26:
 
 ## Decide at landing
 
-- **The search-page picker does not check the caption it offers** (decision 18).
+- ~~**The search-page picker does not check the caption it offers** (decision 18).
   "Use YouTube captions" writes an `srt` choice without looking at the caption,
   and a picker download skips the after-download check, so a sparse caption is
   not caught on that path (the direct box and playlists are checked). Decision
   18 said a separate plan lands on `dev` before `web_library_tools`; no plan
   file exists, and Ken left the item open on 2026-10-26 without revisiting the
-  order. Record: web plan, D9 and the "Phase 7.2 and Phase 8 checks" row, item 2.
+  order. Record: web plan, D9 and the "Phase 7.2 and Phase 8 checks" row, item 2.~~
+  Fixed 2026-10-27, on `dev` as `640a661`, `dadecd0` (with review fixes
+  `7b07fc8`, `f4aa97b`): the modal checks the caption before offering it, and a
+  caption choice gets the after-download gate. Record:
+  `plans/search-caption-check.md` on branch `search_caption_check`.
 
 ## Ruled: own branch or plan
 
@@ -83,8 +87,8 @@ that queued them is already closed; 7.1f).
   queued path. Record: `library-tools.md`.
 - **Simplicity leftovers:** `_ActiveJob.kind` is set and never read;
   `prepare_regen_job` accepts plan kinds no caller builds; the int-not-bool
-  Genius id check is written three times; the watch URL is built in more than
-  one module. Record: web plan, 3.1i and 8.1f.
+  Genius id check is written three times; ~~the watch URL is built in more than
+  one module~~ (one `library_regen.watch_url`, `f4aa97b`). Record: web plan, 3.1i and 8.1f.
 
 ## Library tools: rare races and timing windows (recorded, not fixed)
 
