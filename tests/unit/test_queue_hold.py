@@ -71,6 +71,28 @@ def hold_item(queue_manager, waiting, file=SONG, user="Alice"):
     return queue_manager.queue[-1]
 
 
+class TestWaitingFor:
+    @pytest.mark.parametrize(
+        "waiting_for_pick,busy,expected",
+        [(True, False, "pick"), (False, True, "processing"), (False, False, None)],
+    )
+    def test_names_what_the_song_is_waiting_on(
+        self, queue_manager, events, waiting_for_pick, busy, expected
+    ):
+        library_tools = MagicMock()
+        library_tools.is_waiting_for_pick.return_value = waiting_for_pick
+        library_tools.is_busy.return_value = busy
+
+        assert QueueHold(queue_manager, events, library_tools).waiting_for(SONG) == expected
+
+    def test_the_pick_is_checked_before_busy(self, queue_manager, events):
+        library_tools = MagicMock()
+        library_tools.is_waiting_for_pick.return_value = True
+        library_tools.is_busy.return_value = True
+
+        assert QueueHold(queue_manager, events, library_tools).waiting_for(SONG) == "pick"
+
+
 class TestDownloadQueued:
     def test_holds_a_slot_keyed_by_the_url(self, hold, queue_manager, events):
         click(events)

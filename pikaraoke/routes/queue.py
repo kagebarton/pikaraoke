@@ -183,9 +183,12 @@ def queue_edit(query):
 
 def _do_enqueue(song: str, user: str) -> str:
     k = get_karaoke_instance()
-    # Gate: reject songs whose pipeline_state is 'pending' or 'failed'
+    # Gate: a 'failed' song is refused. A 'pending' one takes a held slot while
+    # processing or a lyrics pick is going to finish it, and is refused when
+    # nothing will.
     state = k.song_manager.get_pipeline_state(song)
-    if state in ("pending", "failed"):
+    waiting = k.queue_hold.waiting_for(song) if state == "pending" else None
+    if state == "failed" or (state == "pending" and waiting is None):
         return (
             json.dumps(
                 {
@@ -196,7 +199,7 @@ def _do_enqueue(song: str, user: str) -> str:
             ),
             409,
         )
-    rc = k.queue_manager.enqueue(song, user)
+    rc = k.queue_manager.enqueue(song, user, waiting=waiting)
     broadcast_event("queue_update")
     song_title = k.song_manager.filename_from_path(song)
     return json.dumps({"song": song_title, "success": rc})

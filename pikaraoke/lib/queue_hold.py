@@ -43,6 +43,17 @@ class QueueHold:
         events.on("download_error", self._on_download_failed)
         events.on("download_cancelled", self._on_download_failed)
 
+    def waiting_for(self, song_path: str) -> str | None:
+        """What a library song that is not ready is still waiting on: "pick", "processing" or None.
+
+        None means nothing will finish it, so a manual Add must not hold a slot for it.
+        """
+        if self._library_tools.is_waiting_for_pick(song_path):
+            return "pick"
+        if self._library_tools.is_busy(song_path):
+            return "processing"
+        return None
+
     def _held(self, file: str) -> dict[str, Any] | None:
         """The held item with this ``file``; a ready item is never returned."""
         return next(
