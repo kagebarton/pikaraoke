@@ -13,6 +13,7 @@ from marshmallow import Schema, fields
 from pikaraoke.lib.current_app import get_karaoke_instance, get_site_name
 from pikaraoke.lib.genius import write_choice
 from pikaraoke.lib.genius_lyrics import clean_genius_query
+from pikaraoke.lib.library_regen import check_video_caption
 from pikaraoke.lib.youtube_dl import get_preview_info, get_search_results
 
 _ = flask_babel.gettext
@@ -92,11 +93,27 @@ def autocomplete(query):
 @search_bp.route("/preview")
 @search_bp.arguments(PreviewQuery, location="query")
 def preview(query):
-    """Get a direct stream URL and SRT availability for a YouTube video."""
-    stream_url, srt_available = get_preview_info(query["url"])
+    """Get a direct stream URL, SRT availability and duration for a YouTube video."""
+    stream_url, srt_available, duration = get_preview_info(query["url"])
     if stream_url is None:
         return jsonify({"error": "Could not fetch stream URL"}), 500
-    return jsonify({"stream_url": stream_url, "srt_available": srt_available})
+    return jsonify({"stream_url": stream_url, "srt_available": srt_available, "duration": duration})
+
+
+@search_bp.route("/caption_check")
+def caption_check():
+    """GET ``?yt_id=<id>&duration=<s>`` -> ``{found, passed, failed}``.
+
+    Whether the video's manual English caption is dense enough to be the
+    lyrics, so the picker offers "Use YouTube captions" only when it is. One
+    yt-dlp call; nothing is written. ``duration`` is the preview's YouTube
+    length; without it the caption can't be measured and passes.
+    """
+    yt_id = request.args.get("yt_id", "")
+    if not _YT_ID_RE.match(yt_id):
+        return jsonify({"error": "Invalid yt_id"}), 400
+    check = check_video_caption(yt_id, request.args.get("duration", type=float))
+    return jsonify({"found": check.found, "passed": check.passed, "failed": check.failed})
 
 
 @search_bp.route("/download", methods=["POST"])

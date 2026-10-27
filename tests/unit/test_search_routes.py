@@ -1,4 +1,4 @@
-"""Unit tests for search routes — /lyrics_search and /lyrics_select."""
+"""Unit tests for search routes: /lyrics_search, /lyrics_select, /preview and /caption_check."""
 
 import json
 from unittest.mock import MagicMock, patch
@@ -12,6 +12,7 @@ if not hasattr(werkzeug, "__version__"):
     werkzeug.__version__ = "3.0.0"
 
 from pikaraoke.lib.genius import GeniusClient, GeniusHit
+from pikaraoke.lib.library_regen import CaptionCheck
 from pikaraoke.routes.search import search_bp
 
 # ---------------------------------------------------------------------------
@@ -290,3 +291,51 @@ class TestLyricsSelect:
         assert resp.status_code == 204
         call_args = mock_write.call_args
         assert call_args[0][1]["genius_id"] == 12345
+
+
+# ---------------------------------------------------------------------------
+# /preview and /caption_check
+# ---------------------------------------------------------------------------
+
+
+@patch(
+    "pikaraoke.routes.search.get_preview_info", return_value=("https://example.test/v", True, 213.0)
+)
+def test_preview_returns_the_video_length(mock_info, client):
+    resp = client.get("/preview?url=https://youtu.be/dQw4w9WgXcQ")
+
+    assert resp.get_json() == {
+        "stream_url": "https://example.test/v",
+        "srt_available": True,
+        "duration": 213.0,
+    }
+
+
+class TestCaptionCheck:
+    """GET /caption_check → the picker's gate on the caption it would offer."""
+
+    @patch("pikaraoke.routes.search.check_video_caption")
+    def test_checks_the_video_against_the_previewed_length(self, mock_check, client):
+        mock_check.return_value = CaptionCheck(found=True, wpm=3.0, passed=False)
+
+        resp = client.get("/caption_check?yt_id=dQw4w9WgXcQ&duration=213.5")
+
+        mock_check.assert_called_once_with("dQw4w9WgXcQ", 213.5)
+        assert resp.get_json() == {"found": True, "passed": False, "failed": False}
+
+    @pytest.mark.parametrize("duration", ["", "NA"])
+    @patch("pikaraoke.routes.search.check_video_caption")
+    def test_a_missing_length_is_passed_on_as_none(self, mock_check, client, duration):
+        mock_check.return_value = CaptionCheck(found=False, wpm=None, passed=False, failed=True)
+
+        resp = client.get(f"/caption_check?yt_id=dQw4w9WgXcQ&duration={duration}")
+
+        mock_check.assert_called_once_with("dQw4w9WgXcQ", None)
+        assert resp.get_json() == {"found": False, "passed": False, "failed": True}
+
+    @patch("pikaraoke.routes.search.check_video_caption")
+    def test_invalid_yt_id_returns_400(self, mock_check, client):
+        resp = client.get("/caption_check?yt_id=../etc&duration=60")
+
+        assert resp.status_code == 400
+        mock_check.assert_not_called()

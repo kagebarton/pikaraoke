@@ -336,14 +336,19 @@ def media_duration(job: SongJob) -> float | None:
 
 def caption_wpm(srt_path: Path, job: SongJob) -> float | None:
     """Words per minute of song for ``srt_path``, or None if not measurable."""
+    return _wpm(srt_path, lambda: media_duration(job), job.song_path.name)
+
+
+def _wpm(srt_path: Path, duration: Callable[[], float | None], name: str) -> float | None:
+    """:func:`caption_wpm` against any length; ``duration`` is read only for a readable caption."""
     words = _srt_word_count(srt_path)
     if words is None:
         return None
-    duration = media_duration(job)
-    if not duration:
-        logger.warning("No duration for %s; skipping length check", job.song_path.name)
+    seconds = duration()
+    if not seconds:
+        logger.warning("No duration for %s; skipping length check", name)
         return None
-    return words / (duration / 60.0)
+    return words / (seconds / 60.0)
 
 
 def _caption_passes(wpm: float | None) -> bool:
@@ -400,7 +405,7 @@ def fetch_caption(job: SongJob) -> None:
     song = job.song_path
     try:
         result = download_manual_en_subs(
-            _watch_url(song), str(song.parent / "subtitles"), song.stem
+            _watch_url(extract_youtube_id(str(song))), str(song.parent / "subtitles"), song.stem
         )
     except CaptionDownloadFailed as e:
         logger.warning("Caption download failed for %s: %s", song.name, e)
@@ -412,8 +417,8 @@ def fetch_caption(job: SongJob) -> None:
     adopt_caption(job, Path(result))
 
 
-def _watch_url(song: Path) -> str:
-    return f"https://www.youtube.com/watch?v={extract_youtube_id(str(song))}"
+def _watch_url(video_id: str | None) -> str:
+    return f"https://www.youtube.com/watch?v={video_id}"
 
 
 @dataclass(frozen=True)
@@ -431,16 +436,31 @@ def check_caption(job: SongJob) -> CaptionCheck:
     The song must have a YouTube id.
     """
     song = job.song_path
+    video_id = extract_youtube_id(str(song))
+    return _check_caption(video_id, song.stem, lambda: media_duration(job), song.name)
+
+
+def check_video_caption(video_id: str, duration_s: float | None) -> CaptionCheck:
+    """:func:`check_caption` for a video not downloaded yet (the search page's picker).
+
+    ``duration_s`` is YouTube's length for the video, standing in for the file's.
+    """
+    return _check_caption(video_id, video_id, lambda: duration_s, video_id)
+
+
+def _check_caption(
+    video_id: str | None, stem: str, duration: Callable[[], float | None], name: str
+) -> CaptionCheck:
     scratch = Path(tempfile.mkdtemp(prefix="caption_check_", dir=get_temp_directory()))
     try:
         try:
-            result = download_manual_en_subs(_watch_url(song), str(scratch), song.stem)
+            result = download_manual_en_subs(_watch_url(video_id), str(scratch), stem)
         except CaptionDownloadFailed as e:
-            logger.warning("Caption check of %s couldn't run: %s", song.name, e)
+            logger.warning("Caption check of %s couldn't run: %s", name, e)
             return CaptionCheck(found=False, wpm=None, passed=False, failed=True)
         if result is None:
             return CaptionCheck(found=False, wpm=None, passed=False)
-        wpm = caption_wpm(Path(result), job)
+        wpm = _wpm(Path(result), duration, name)
         return CaptionCheck(found=True, wpm=wpm, passed=_caption_passes(wpm))
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
