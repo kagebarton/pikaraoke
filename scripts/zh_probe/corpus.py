@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
 
-LIBRARY = Path("d:/shared/pikaraoke-songs")
+# Both default to the Windows GPU box; the environment overrides let the CPU-only dev VM smoke-test
+# the probe against a scratch library.
+LIBRARY = Path(os.environ.get("ZH_PROBE_LIBRARY", "d:/shared/pikaraoke-songs"))
+WHISPER_PATH = Path(
+    os.environ.get("ZH_PROBE_WHISPER", "c:/temp/Github/pikaraoke/models/large-v3-turbo.pt")
+)
 PROBE_ROOT = LIBRARY / "zh_probe"
 RAW_DIR = PROBE_ROOT / "phase0" / "sheets_raw"
 CONFIRMED_DIR = PROBE_ROOT / "sheets"
