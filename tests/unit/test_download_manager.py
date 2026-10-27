@@ -621,3 +621,18 @@ class TestCancelPendingDownload:
 
         assert errors == [{"url": url, "error": "boom"}]
         assert ("Error downloading song: Title", "danger") in toasts
+
+    def test_a_crash_with_no_message_is_named_and_logged_with_its_traceback(
+        self, download_manager, events, caplog
+    ):
+        errors = []
+        events.on("download_error", errors.append)
+        url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+
+        with patch.object(download_manager, "_execute_download", side_effect=KeyError()):
+            download_manager.start()
+            download_manager.queue_download(url, enqueue=True, user="Alice", title="Title")
+            download_manager.download_queue.join()
+
+        assert errors == [{"url": url, "error": "KeyError"}]
+        assert any(record.exc_info for record in caplog.records)
