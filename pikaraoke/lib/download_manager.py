@@ -145,8 +145,6 @@ class DownloadManager:
         Runs indefinitely, blocking on queue.get() until items are available.
         Each download is processed completely before the next one starts.
         """
-        from flask_babel import _
-
         while True:
             # Capture queue reference before get() — cancel_pending_download may
             # replace self.download_queue mid-download; task_done() must be called
@@ -174,14 +172,10 @@ class DownloadManager:
             try:
                 self._execute_download(download_request["video_url"], download_request["title"])
             except Exception as e:
-                logging.error(f"Error processing download: {e}")
-                # MSG: Message shown after the download process is completed but the song is not found
-                self._events.emit(
-                    "notification",
-                    _("Error downloading song: ") + (download_request["title"] or video_url),
-                    "danger",
+                logging.exception("Error processing download")
+                self._report_download_failure(
+                    video_url, download_request["title"], str(e) or type(e).__name__
                 )
-                self._events.emit("download_error", {"url": video_url, "error": str(e)})
             finally:
                 self._is_downloading = False
                 self.active_url = None
@@ -241,15 +235,8 @@ class DownloadManager:
                 self._cancelling = False
                 logging.info("Download cancelled by user: %s", displayed_title)
             else:
-                # MSG: Message shown after the download process is completed but the song is not found
-                self._events.emit(
-                    "notification", _("Error downloading song: ") + displayed_title, "danger"
-                )
                 logging.error(f"yt-dlp stderr: {output}")
-                self._events.emit(
-                    "download_error",
-                    {"url": video_url, "error": output or "Unknown error"},
-                )
+                self._report_download_failure(video_url, title, output or "Unknown error")
         else:
             # After download, find the file path by ID
             song_path = None
@@ -271,16 +258,19 @@ class DownloadManager:
                 logging.warning(
                     f"Could not find downloaded song in {self._download_path} matching ID: {video_id}"
                 )
-                # MSG: Message shown after the download process is completed but the song is not found
-                self._events.emit(
-                    "notification", _("Error downloading song: ") + displayed_title, "danger"
-                )
-                self._events.emit(
-                    "download_error",
-                    {"url": video_url, "error": "Downloaded file not found"},
-                )
+                self._report_download_failure(video_url, title, "Downloaded file not found")
 
         return rc
+
+    def _report_download_failure(self, video_url: str, title: str | None, error: str) -> None:
+        """Tell the user a download failed and free whatever was waiting on it."""
+        from flask_babel import _
+
+        # MSG: Message shown when a song fails to download
+        self._events.emit(
+            "notification", _("Error downloading song: ") + (title or video_url), "danger"
+        )
+        self._events.emit("download_error", {"url": video_url, "error": error})
 
     def cancel_active_download(self, target_url: str | None = None) -> None:
         """Cancel the currently active download and clean up partial files.
