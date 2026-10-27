@@ -16,6 +16,7 @@ from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.library_tools import LibraryTools
 from pikaraoke.lib.metadata_parser import extract_youtube_id
 from pikaraoke.lib.queue_manager import QueueManager
+from pikaraoke.lib.song_manager import SongManager
 from pikaraoke.lib.youtube_dl import get_youtube_id_from_url
 
 
@@ -27,10 +28,12 @@ class QueueHold:
         queue_manager: QueueManager,
         events: EventSystem,
         library_tools: LibraryTools,
+        song_manager: SongManager,
     ) -> None:
         self._queue_manager = queue_manager
         self._events = events
         self._library_tools = library_tools
+        self._song_manager = song_manager
         events.on("download_queued", self._on_download_queued)
         events.on("song_downloaded", self._on_song_downloaded)
         events.on("needs_pick", self._on_needs_pick)
@@ -53,6 +56,18 @@ class QueueHold:
         if self._library_tools.is_busy(song_path):
             return "processing"
         return None
+
+    def settle(self, song_path: str) -> None:
+        """Release or drop a song a manual Add has just held, if its event came first.
+
+        The Add reads the song's state and then holds it. Processing can finish
+        or fail in between, and its event then finds nothing to change.
+        """
+        state = self._song_manager.get_pipeline_state(song_path)
+        if state == "failed":
+            self._on_processing_error({"song_path": song_path})
+        elif state != "pending":
+            self._release(song_path)
 
     def _held(self, file: str) -> dict[str, Any] | None:
         """The held item with this ``file``; a ready item is never returned."""

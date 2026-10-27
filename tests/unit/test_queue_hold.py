@@ -39,8 +39,13 @@ def queue_manager(preferences, events):
 
 
 @pytest.fixture
-def hold(queue_manager, events):
-    return QueueHold(queue_manager, events, MagicMock())
+def song_manager():
+    return MagicMock()
+
+
+@pytest.fixture
+def hold(queue_manager, events, song_manager):
+    return QueueHold(queue_manager, events, MagicMock(), song_manager)
 
 
 @pytest.fixture
@@ -84,14 +89,18 @@ class TestWaitingFor:
         library_tools.is_waiting_for_pick.return_value = waiting_for_pick
         library_tools.is_busy.return_value = busy
 
-        assert QueueHold(queue_manager, events, library_tools).waiting_for(SONG) == expected
+        hold = QueueHold(queue_manager, events, library_tools, MagicMock())
+
+        assert hold.waiting_for(SONG) == expected
 
     def test_the_pick_is_checked_before_busy(self, queue_manager, events):
         library_tools = MagicMock()
         library_tools.is_waiting_for_pick.return_value = True
         library_tools.is_busy.return_value = True
 
-        assert QueueHold(queue_manager, events, library_tools).waiting_for(SONG) == "pick"
+        hold = QueueHold(queue_manager, events, library_tools, MagicMock())
+
+        assert hold.waiting_for(SONG) == "pick"
 
 
 class TestDownloadQueued:
@@ -249,6 +258,43 @@ class TestReadyItemsAreNeverTouched:
         assert toasts == []
 
 
+class TestSettle:
+    """A manual Add holds a song after reading its state; settle re-reads it."""
+
+    @pytest.mark.parametrize("state", ["ready", "skipped"])
+    def test_a_song_that_finished_meanwhile_is_released(
+        self, state, hold, queue_manager, song_manager
+    ):
+        item = hold_item(queue_manager, "processing")
+        song_manager.get_pipeline_state.return_value = state
+
+        hold.settle(SONG)
+
+        assert item["waiting"] is None
+        song_manager.get_pipeline_state.assert_called_once_with(SONG)
+
+    def test_a_song_that_failed_meanwhile_is_removed_with_a_danger_toast(
+        self, hold, queue_manager, song_manager, toasts
+    ):
+        hold_item(queue_manager, "processing")
+        song_manager.get_pipeline_state.return_value = "failed"
+
+        hold.settle(SONG)
+
+        assert queue_manager.queue == []
+        assert toasts == [("New Song couldn't be processed and was taken off the queue", "danger")]
+
+    def test_a_song_still_pending_stays_held(self, hold, queue_manager, song_manager, toasts):
+        item = hold_item(queue_manager, "processing")
+        song_manager.get_pipeline_state.return_value = "pending"
+
+        hold.settle(SONG)
+
+        assert queue_manager.queue == [item]
+        assert item["waiting"] == "processing"
+        assert toasts == []
+
+
 class TestQueueLock:
     def test_a_release_waits_for_the_queue_lock(self, hold, queue_manager, events):
         item = hold_item(queue_manager, "processing")
@@ -294,7 +340,7 @@ class TestWiringOrder:
         self, queue_manager, events
     ):
         """LibraryTools emits processing events synchronously from its song_downloaded handler."""
-        QueueHold(queue_manager, events, MagicMock())
+        QueueHold(queue_manager, events, MagicMock(), MagicMock())
         events.on("song_downloaded", lambda path: events.emit("processing_skipped", path))
         click(events)
 

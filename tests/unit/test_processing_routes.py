@@ -898,7 +898,7 @@ class TestCancelAnnouncesWaitingJob:
             preferences=PreferenceManager(config_file_path=str(tmp_path / "config.ini")),
             events=tracker._events,
         )
-        QueueHold(queue_manager, tracker._events, MagicMock())
+        QueueHold(queue_manager, tracker._events, MagicMock(), MagicMock())
         item = _announce_processing(tracker)
         tracker._processing_manager.pending_jobs = [LIB_PATH]
         tracker.get_status(admin=True)  # derives "pending"

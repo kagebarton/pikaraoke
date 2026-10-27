@@ -319,6 +319,7 @@ class Karaoke:
             queue_manager=self.queue_manager,
             events=self.events,
             library_tools=self.library_tools,
+            song_manager=self.song_manager,
         )
         # After the tracker and the queue hold: their song_downloaded handlers run
         # first (handlers run in registration order), so the tracker row and the
