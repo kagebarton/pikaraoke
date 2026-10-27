@@ -694,6 +694,136 @@ class TestQueueManagerEnqueuePausedField:
         assert "paused" in queue_manager.queue[0]
 
 
+class TestQueueManagerHeldItems:
+    """Held items keep a slot without being playable; a singer's ready song takes their turn."""
+
+    @pytest.fixture(params=[True, False], ids=["round-robin", "plain"])
+    def qm(self, request, preferences, events):
+        preferences.set("enable_fair_queue", request.param)
+        return QueueManager(
+            preferences=preferences,
+            events=events,
+            get_now_playing_user=lambda: None,
+            filename_from_path=extract_title,
+            get_available_songs=lambda: [],
+        )
+
+    def test_every_new_item_has_waiting(self, queue_manager):
+        queue_manager.enqueue("/songs/a---aaa.mp4", "User1")
+        queue_manager.enqueue("https://youtu.be/x", "User1", waiting="download")
+
+        assert [item["waiting"] for item in queue_manager.queue] == [None, "download"]
+
+    def test_enqueue_uses_the_given_title(self, queue_manager):
+        queue_manager.enqueue("https://youtu.be/x", "User1", waiting="download", title="Given")
+
+        assert queue_manager.queue[0]["title"] == "Given"
+
+    def test_enqueue_derives_the_title_without_one(self, queue_manager):
+        queue_manager.enqueue("/songs/Derived---aaa.mp4", "User1")
+
+        assert queue_manager.queue[0]["title"] == "Derived"
+
+    def test_is_playable_needs_neither_pause_nor_hold(self):
+        assert QueueManager.is_playable({"paused": False, "waiting": None}) is True
+        assert QueueManager.is_playable({"paused": True, "waiting": None}) is False
+        assert QueueManager.is_playable({"paused": False, "waiting": "pick"}) is False
+        assert QueueManager.is_playable({"user": "U", "file": "f"}) is True
+
+    def test_pop_next_skips_a_held_item_and_leaves_it(self, qm):
+        qm.enqueue("https://youtu.be/x", "User1", waiting="download")
+        qm.enqueue("/songs/b---bbb.mp4", "User2")
+
+        song = qm.pop_next()
+
+        assert song["file"] == "/songs/b---bbb.mp4"
+        assert [item["file"] for item in qm.queue] == ["https://youtu.be/x"]
+
+    def test_pop_next_returns_none_when_only_held_items_remain(self, qm):
+        qm.enqueue("https://youtu.be/x", "User1", waiting="processing")
+
+        assert qm.pop_next() is None
+        assert len(qm.queue) == 1
+
+    def test_has_playable_song_ignores_held_items(self, qm):
+        qm.enqueue("https://youtu.be/x", "User1", waiting="download")
+        assert qm.has_playable_song() is False
+
+        qm.enqueue("/songs/b---bbb.mp4", "User2")
+        assert qm.has_playable_song() is True
+
+    def test_ready_song_takes_the_singers_earliest_held_turn(self, qm):
+        qm.enqueue("/songs/held---hhh.mp4", "User1", waiting="processing")
+        qm.enqueue("/songs/b1---bbb.mp4", "User2")
+        qm.enqueue("/songs/a2---aaa.mp4", "User1")
+
+        assert qm.pop_next()["file"] == "/songs/b1---bbb.mp4"
+        song = qm.pop_next()
+
+        assert song["file"] == "/songs/a2---aaa.mp4"
+        assert [item["file"] for item in qm.queue] == ["/songs/held---hhh.mp4"]
+
+    def test_held_song_moves_back_to_the_ready_songs_slot(self, preferences, events):
+        preferences.set("enable_fair_queue", False)
+        qm = QueueManager(
+            preferences=preferences,
+            events=events,
+            filename_from_path=extract_title,
+        )
+        qm.enqueue("/songs/held-a---aaa.mp4", "User1", waiting="processing")
+        qm.enqueue("/songs/held-b---bbb.mp4", "User2", waiting="processing")
+        qm.enqueue("/songs/a2---ccc.mp4", "User1")
+        qm.enqueue("/songs/c1---ddd.mp4", "User3")
+
+        song = qm.pop_next()
+
+        assert song["file"] == "/songs/a2---ccc.mp4"
+        assert [item["file"] for item in qm.queue] == [
+            "/songs/held-b---bbb.mp4",
+            "/songs/held-a---aaa.mp4",
+            "/songs/c1---ddd.mp4",
+        ]
+
+    def test_no_swap_for_another_singers_held_item(self, qm):
+        qm.enqueue("/songs/held---hhh.mp4", "User2", waiting="processing")
+        qm.enqueue("/songs/a1---aaa.mp4", "User1")
+
+        assert qm.pop_next()["file"] == "/songs/a1---aaa.mp4"
+        assert [item["file"] for item in qm.queue] == ["/songs/held---hhh.mp4"]
+
+    def test_no_swap_for_a_paused_held_item(self, preferences, events):
+        preferences.set("enable_fair_queue", False)
+        qm = QueueManager(preferences=preferences, events=events, filename_from_path=extract_title)
+        qm.enqueue("/songs/held---hhh.mp4", "User1", waiting="processing")
+        qm.enqueue("/songs/a2---aaa.mp4", "User1")
+        qm.queue[0]["paused"] = True
+
+        assert qm.pop_next()["file"] == "/songs/a2---aaa.mp4"
+        assert qm.queue[0]["file"] == "/songs/held---hhh.mp4"
+
+    def test_the_earliest_of_two_held_items_moves(self, preferences, events):
+        preferences.set("enable_fair_queue", False)
+        qm = QueueManager(preferences=preferences, events=events, filename_from_path=extract_title)
+        qm.enqueue("/songs/h1---111.mp4", "User1", waiting="processing")
+        qm.enqueue("/songs/h2---222.mp4", "User1", waiting="pick")
+        qm.enqueue("/songs/a3---333.mp4", "User1")
+
+        assert qm.pop_next()["file"] == "/songs/a3---333.mp4"
+        assert [item["file"] for item in qm.queue] == [
+            "/songs/h2---222.mp4",
+            "/songs/h1---111.mp4",
+        ]
+
+    def test_round_robin_counts_a_held_item_in_its_singers_round(self, preferences, events):
+        preferences.set("enable_fair_queue", True)
+        qm = QueueManager(preferences=preferences, events=events, filename_from_path=extract_title)
+        qm.enqueue("https://youtu.be/x", "UserA", waiting="download", title="Held")
+        qm.enqueue("/songs/a2---aaa.mp4", "UserA")
+        qm.enqueue("/songs/b1---bbb.mp4", "UserB")
+
+        assert [item["user"] for item in qm.queue] == ["UserA", "UserB", "UserA"]
+
+
 class TestQueueManagerRandom:
     """Test random song addition."""
 
