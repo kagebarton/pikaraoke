@@ -1748,6 +1748,21 @@ def listed(tools: LibraryTools) -> list[dict]:
     return [r for r in tools.attention_rows(set()) if r["state"] == "needs_pick"]
 
 
+class TestIsWaitingForPick:
+    def test_a_listed_song_waits_until_it_is_picked(self, download):
+        download.tools.on_song_downloaded(download.song)
+        assert download.tools.is_waiting_for_pick(download.song) is True
+
+        download.tools.pick_lyrics(download.song, {"kind": "transcribe"})
+
+        # still listed, as picked, while its job waits: that is processing
+        assert download.tools.is_waiting_for_pick(download.song) is False
+        assert download.tools.is_busy(download.song)
+
+    def test_a_song_that_is_not_listed_is_not_waiting(self, download):
+        assert download.tools.is_waiting_for_pick(download.song) is False
+
+
 class TestAfterDownloadCheck:
     @pytest.mark.parametrize("choice", [{"genius_id": 7}, {"mode": "raw"}])
     def test_a_song_the_picker_chose_lyrics_for_is_queued(self, download, choice):

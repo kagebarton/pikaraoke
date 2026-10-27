@@ -282,6 +282,16 @@ class LibraryTools:
             or song_path in self._processing.pending_jobs
         )
 
+    def is_waiting_for_pick(self, song_path: str) -> bool:
+        """Whether a song is listed for a lyrics pick that nobody has made yet.
+
+        A song stays listed, as picked, while its job waits or runs; that is
+        processing, not waiting for a pick.
+        """
+        with self._state_lock:
+            entry = self._needs_pick.get(song_path)
+            return entry is not None and not self._is_picked(entry)
+
     def attention_rows(self, tracked: set[str]) -> list[dict]:
         """Songs that need the admin and have no job row, for the Attention list.
 

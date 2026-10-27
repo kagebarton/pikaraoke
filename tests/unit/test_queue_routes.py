@@ -361,13 +361,15 @@ class TestUserQueueEndpoints:
 
 
 class TestEnqueuePipelineGate:
-    """Server-side gate: 'pending' and 'failed' songs must be rejected at /enqueue."""
+    """Server-side gate: a 'failed' song, or a 'pending' one nothing will finish, is rejected at
+    /enqueue; a 'pending' song still processing or waiting for a pick takes a held slot."""
 
     @patch("pikaraoke.routes.queue.broadcast_event")
     @patch("pikaraoke.routes.queue.get_karaoke_instance")
     def test_pending_song_rejected_with_409(self, mock_get_instance, mock_broadcast, client):
         mock_karaoke = MagicMock()
         mock_karaoke.song_manager.get_pipeline_state.return_value = "pending"
+        mock_karaoke.queue_hold.waiting_for.return_value = None
         mock_karaoke.song_manager.filename_from_path.return_value = "Test Song"
         mock_get_instance.return_value = mock_karaoke
 
@@ -379,6 +381,42 @@ class TestEnqueuePipelineGate:
         assert "pending" in data["error"]
         mock_karaoke.queue_manager.enqueue.assert_not_called()
         mock_broadcast.assert_not_called()
+
+    @pytest.mark.parametrize("waiting", ["processing", "pick"])
+    @patch("pikaraoke.routes.queue.broadcast_event")
+    @patch("pikaraoke.routes.queue.get_karaoke_instance")
+    def test_pending_song_still_in_the_pipeline_is_held(
+        self, mock_get_instance, mock_broadcast, client, waiting
+    ):
+        mock_karaoke = MagicMock()
+        mock_karaoke.song_manager.get_pipeline_state.return_value = "pending"
+        mock_karaoke.queue_hold.waiting_for.return_value = waiting
+        mock_karaoke.song_manager.filename_from_path.return_value = "Test Song"
+        mock_karaoke.queue_manager.enqueue.return_value = True
+        mock_get_instance.return_value = mock_karaoke
+
+        response = client.get("/enqueue?song=/songs/test.mp4&user=Alice")
+
+        assert response.status_code == 200
+        assert json.loads(response.data)["success"] is True
+        mock_karaoke.queue_hold.waiting_for.assert_called_once_with("/songs/test.mp4")
+        mock_karaoke.queue_manager.enqueue.assert_called_once_with(
+            "/songs/test.mp4", "Alice", waiting=waiting
+        )
+
+    @patch("pikaraoke.routes.queue.broadcast_event")
+    @patch("pikaraoke.routes.queue.get_karaoke_instance")
+    def test_failed_song_is_never_held(self, mock_get_instance, mock_broadcast, client):
+        mock_karaoke = MagicMock()
+        mock_karaoke.song_manager.get_pipeline_state.return_value = "failed"
+        mock_karaoke.queue_hold.waiting_for.return_value = "processing"
+        mock_karaoke.song_manager.filename_from_path.return_value = "Test Song"
+        mock_get_instance.return_value = mock_karaoke
+
+        response = client.get("/enqueue?song=/songs/test.mp4&user=Alice")
+
+        assert response.status_code == 409
+        mock_karaoke.queue_manager.enqueue.assert_not_called()
 
     @patch("pikaraoke.routes.queue.broadcast_event")
     @patch("pikaraoke.routes.queue.get_karaoke_instance")
@@ -410,7 +448,9 @@ class TestEnqueuePipelineGate:
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data["success"] is True
-        mock_karaoke.queue_manager.enqueue.assert_called_once()
+        mock_karaoke.queue_manager.enqueue.assert_called_once_with(
+            "/songs/test.mp4", "Alice", waiting=None
+        )
 
     @patch("pikaraoke.routes.queue.broadcast_event")
     @patch("pikaraoke.routes.queue.get_karaoke_instance")
