@@ -100,9 +100,16 @@ class QueueManager:
         semitones: int = 0,
         add_to_front: bool = False,
         log_action: bool = True,
+        waiting: str | None = None,
+        title: str | None = None,
     ) -> list[bool | str]:
-        """Add a song to the queue. Returns [success, message]."""
-        title = self._resolve_title(song_path)
+        """Add a song to the queue. Returns [success, message].
+
+        `waiting` holds the slot for a song that is not ready to play yet
+        ("download", "processing" or "pick"); see QueueHold. `title` overrides the
+        title derived from the path, for a held song whose path is still a URL.
+        """
+        title = title or self._resolve_title(song_path)
 
         if self.is_song_in_queue(song_path):
             logging.warning("Song is already in queue, will not add: " + song_path)
@@ -125,6 +132,7 @@ class QueueManager:
             "title": title,
             "semitones": semitones,
             "paused": False,
+            "waiting": waiting,
         }
         if add_to_front:
             # MSG: Message shown after the song is added to the top of the queue
@@ -238,25 +246,46 @@ class QueueManager:
             return False
         return self.reorder(index, len(self.queue) - 1)
 
-    def pop_next(self) -> dict[str, Any] | None:
-        """Remove and return the next non-paused song from the queue.
+    @staticmethod
+    def is_playable(item: dict[str, Any]) -> bool:
+        """Neither paused by its singer nor held for download or processing."""
+        return not item.get("paused", False) and not item.get("waiting")
 
-        Skips over paused songs (they remain in queue in place). Returns None
-        if the queue is empty or all remaining songs are paused.
+    def pop_next(self) -> dict[str, Any] | None:
+        """Remove and return the next playable song from the queue.
+
+        Skips over paused and held songs (they remain in queue in place). Returns
+        None if the queue is empty or no remaining song is playable.
+
+        When the song to play has an earlier held song by the same singer, the two
+        swap places and the earlier slot plays: turns belong to singers, so a
+        ready song takes the singer's earliest held turn and the held one moves back.
 
         Does not emit queue_update to avoid UI flicker during song transitions.
         The playback system emits now_playing events which trigger queue UI updates.
         """
         for idx, item in enumerate(self.queue):
-            if not item.get("paused", False):
+            if self.is_playable(item):
+                held_idx = self._earliest_held_turn(idx)
+                if held_idx is not None:
+                    self.queue[held_idx], self.queue[idx] = self.queue[idx], self.queue[held_idx]
+                    idx = held_idx
                 song = self.queue.pop(idx)
                 logging.info(f"Popped song from queue: {song['title']}")
                 return song
         return None
 
+    def _earliest_held_turn(self, idx: int) -> int | None:
+        """Index of the earliest unpaused held song by the same singer before idx."""
+        user = self.queue[idx]["user"]
+        for held_idx, held in enumerate(self.queue[:idx]):
+            if held["user"] == user and held.get("waiting") and not held.get("paused", False):
+                return held_idx
+        return None
+
     def has_playable_song(self) -> bool:
-        """True if the queue has at least one non-paused song."""
-        return any(not item.get("paused", False) for item in self.queue)
+        """True if the queue has at least one playable song."""
+        return any(self.is_playable(item) for item in self.queue)
 
     def toggle_pause_song(self, song_path: str) -> bool:
         """Toggle the paused flag on a single queued song. Used by admins. Returns False if not found."""
