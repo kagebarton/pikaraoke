@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import werkzeug
 from flask import Flask
+from flask_babel import Babel
 
 # Monkeypatch werkzeug.__version__ for Flask compatibility if missing
 if not hasattr(werkzeug, "__version__"):
@@ -11,6 +12,7 @@ if not hasattr(werkzeug, "__version__"):
 
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.preference_manager import PreferenceManager
+from pikaraoke.lib.queue_hold import QueueHold
 from pikaraoke.lib.queue_manager import QueueManager
 from pikaraoke.routes.queue import queue_bp
 
@@ -392,17 +394,62 @@ class TestEnqueuePipelineGate:
         mock_karaoke.song_manager.get_pipeline_state.return_value = "pending"
         mock_karaoke.queue_hold.waiting_for.return_value = waiting
         mock_karaoke.song_manager.filename_from_path.return_value = "Test Song"
-        mock_karaoke.queue_manager.enqueue.return_value = True
+        mock_karaoke.queue_manager.enqueue.return_value = [True, "Song added"]
         mock_get_instance.return_value = mock_karaoke
 
         response = client.get("/enqueue?song=/songs/test.mp4&user=Alice")
 
         assert response.status_code == 200
-        assert json.loads(response.data)["success"] is True
+        assert json.loads(response.data)["success"] == [True, "Song added"]
         mock_karaoke.queue_hold.waiting_for.assert_called_once_with("/songs/test.mp4")
         mock_karaoke.queue_manager.enqueue.assert_called_once_with(
             "/songs/test.mp4", "Alice", waiting=waiting
         )
+        mock_karaoke.queue_hold.settle.assert_called_once_with("/songs/test.mp4")
+
+    @patch("pikaraoke.routes.queue.broadcast_event")
+    @patch("pikaraoke.routes.queue.get_karaoke_instance")
+    def test_a_refused_hold_is_not_settled(self, mock_get_instance, mock_broadcast, client):
+        mock_karaoke = MagicMock()
+        mock_karaoke.song_manager.get_pipeline_state.return_value = "pending"
+        mock_karaoke.queue_hold.waiting_for.return_value = "processing"
+        mock_karaoke.song_manager.filename_from_path.return_value = "Test Song"
+        mock_karaoke.queue_manager.enqueue.return_value = [False, "Song is already in the queue"]
+        mock_get_instance.return_value = mock_karaoke
+
+        client.get("/enqueue?song=/songs/test.mp4&user=Alice")
+
+        mock_karaoke.queue_hold.settle.assert_not_called()
+
+    @patch("pikaraoke.routes.queue.broadcast_event")
+    @patch("pikaraoke.routes.queue.get_karaoke_instance")
+    def test_a_song_that_finishes_between_the_check_and_the_hold_is_released(
+        self, mock_get_instance, mock_broadcast, app, client, tmp_path
+    ):
+        """Processing finishes after the Add read "pending": its event found no held item."""
+        Babel(app)  # the real QueueManager translates its messages
+        events = EventSystem()
+        queue_manager = QueueManager(
+            preferences=PreferenceManager(config_file_path=str(tmp_path / "config.ini")),
+            events=events,
+        )
+        library_tools = MagicMock()
+        library_tools.is_waiting_for_pick.return_value = False
+        library_tools.is_busy.return_value = True
+        mock_karaoke = MagicMock()
+        mock_karaoke.song_manager.get_pipeline_state.side_effect = ["pending", "ready"]
+        mock_karaoke.song_manager.filename_from_path.return_value = "Test Song"
+        mock_karaoke.queue_manager = queue_manager
+        mock_karaoke.queue_hold = QueueHold(
+            queue_manager, events, library_tools, mock_karaoke.song_manager
+        )
+        mock_get_instance.return_value = mock_karaoke
+
+        response = client.get("/enqueue?song=/songs/test.mp4&user=Alice")
+
+        assert response.status_code == 200
+        [item] = queue_manager.queue
+        assert (item["file"], item["waiting"]) == ("/songs/test.mp4", None)
 
     @patch("pikaraoke.routes.queue.broadcast_event")
     @patch("pikaraoke.routes.queue.get_karaoke_instance")

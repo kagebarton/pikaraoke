@@ -200,6 +200,8 @@ def _do_enqueue(song: str, user: str) -> str:
             409,
         )
     rc = k.queue_manager.enqueue(song, user, waiting=waiting)
+    if waiting and rc[0]:
+        k.queue_hold.settle(song)
     broadcast_event("queue_update")
     song_title = k.song_manager.filename_from_path(song)
     return json.dumps({"song": song_title, "success": rc})
