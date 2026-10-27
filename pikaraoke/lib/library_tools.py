@@ -624,8 +624,9 @@ class LibraryTools:
     def _check_download(self, song_path: str, source: str) -> bool:
         """Queue a song for processing, or list it as needing a lyrics pick; True when queued.
 
-        A song needs no pick when the search page's picker already chose, when
-        the caption it has passes the length gate, or when its title is blocked
+        A song needs no pick when the search page's picker chose Genius lyrics
+        or transcription, when the caption it has passes the length gate (a
+        picker choice of the caption included), or when its title is blocked
         (the queue skips it). This is the download handler's boundary: a check
         that fails queues the song as the app did before the check existed.
         """
@@ -838,8 +839,10 @@ class LibraryTools:
             video_id is None
             or not self.is_video(song_path)
             or self._processing.is_blocked(song_path)
-            or read_choice(video_id) is not None
         ):
+            return None
+        choice = read_choice(video_id)
+        if choice is not None and choice.get("mode") != "srt":
             return None
         job = SongJob(Path(song_path), bundle=None, stale_reason="downloaded")
         had_caption = find_local_srt(job.song_path) is not None
