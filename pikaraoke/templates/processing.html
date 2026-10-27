@@ -297,12 +297,6 @@ var state = {
 
 /* ---------------------------------------------------------------- helpers */
 
-function esc(value) {
-  return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) {
-    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-  });
-}
-
 var fill = libraryPages.fill;
 
 function upperFirst(text) {
@@ -383,7 +377,7 @@ var TAG_CLASS = {
 function tagHtml(row) {
   var status = statusOf(row);
   var spinner = status[0] === 'running' || status[0] === 'cancelling' ? '<span class="pr-spin"></span>' : '';
-  return '<span class="tag is-rounded pr-tag ' + TAG_CLASS[status[0]] + '">' + spinner + esc(status[1]) + '</span>';
+  return '<span class="tag is-rounded pr-tag ' + TAG_CLASS[status[0]] + '">' + spinner + escapeHtml(status[1]) + '</span>';
 }
 
 function rowKey(row) {
@@ -421,7 +415,7 @@ function syncList($container, entries) {
     }
     if (!node || node.getAttribute('data-state') !== entry.state) {
       var holder = document.createElement('div');
-      holder.innerHTML = '<div class="pr-row" data-key="' + esc(entry.key) + '" data-state="' + esc(entry.state) +
+      holder.innerHTML = '<div class="pr-row" data-key="' + escapeHtml(entry.key) + '" data-state="' + escapeHtml(entry.state) +
         '">' + entry.html + '</div>';
       var fresh = holder.firstElementChild;
       if (node) el.replaceChild(fresh, node); else el.appendChild(fresh);
@@ -440,17 +434,17 @@ function syncList($container, entries) {
 function subline(row) {
   var parts = [];
   if (row.db) {
-    if (row.state === 'needs_pick') return esc(row.subline);
-    return esc(row.state === 'failed' ? T.dbFailed : T.dbUnfinished);
+    if (row.state === 'needs_pick') return escapeHtml(row.subline);
+    return escapeHtml(row.state === 'failed' ? T.dbFailed : T.dbUnfinished);
   }
-  parts.push(esc(kindWord(row)));
-  if (row.kind === 'download' && row.user) parts.push(esc(fill(T.by, { user: row.user })));
-  if (row.group !== 'active' && row.finished_ago_s != null) parts.push(esc(fmtAgo(row.finished_ago_s)));
+  parts.push(escapeHtml(kindWord(row)));
+  if (row.kind === 'download' && row.user) parts.push(escapeHtml(fill(T.by, { user: row.user })));
+  if (row.group !== 'active' && row.finished_ago_s != null) parts.push(escapeHtml(fmtAgo(row.finished_ago_s)));
   if (row.processing_status === 'complete') {
     var lyrics = lyricLabel(row.lyric_method);
-    if (lyrics) parts.push(esc(lyrics));
+    if (lyrics) parts.push(escapeHtml(lyrics));
     if (row.guessed != null) {
-      parts.push('<span class="pr-warn">' + esc(fill(T.guessed, { guessed: row.guessed, n: row.line_count })) + '</span>');
+      parts.push('<span class="pr-warn">' + escapeHtml(fill(T.guessed, { guessed: row.guessed, n: row.line_count })) + '</span>');
     }
   }
   return parts.join(' · ');
@@ -458,7 +452,7 @@ function subline(row) {
 
 function button(act, key, label, cssClass) {
   return '<button type="button" class="button pr-act ' + (cssClass || '') + '" data-act="' + act +
-    '" data-key="' + esc(key) + '">' + esc(label) + '</button>';
+    '" data-key="' + escapeHtml(key) + '">' + escapeHtml(label) + '</button>';
 }
 
 // The server actions a row's confirm goes ahead with.
@@ -473,21 +467,21 @@ function actionsHtml(row) {
   var key = rowKey(row);
   var confirming = state.confirming[key];
   if (confirming === 'cancel') {
-    return '<div class="pr-confirm"><span>' + esc(T.confirmCancel) + '</span><div class="pr-buttons">' +
+    return '<div class="pr-confirm"><span>' + escapeHtml(T.confirmCancel) + '</span><div class="pr-buttons">' +
       button('confirm-cancel', key, T.confirmCancelYes, 'is-danger') + button('keep', key, T.keep) + '</div></div>';
   }
   if (confirming === 'delete') {
-    return '<div class="pr-confirm"><span>' + esc(T.confirmDelete) + '</span><div class="pr-buttons">' +
+    return '<div class="pr-confirm"><span>' + escapeHtml(T.confirmDelete) + '</span><div class="pr-buttons">' +
       button('confirm-delete', key, T.deleteSong, 'is-danger') + button('keep', key, T.keep) + '</div></div>';
   }
   var allowed = row.actions || [];
   var has = function (name) { return allowed.indexOf(name) !== -1; };
   var html = '';
   if (has('retry')) html += button('retry', key, T.retry, 'is-link');
-  if (has('pick')) html += '<a class="button is-link no-spa" href="' + esc(URLS.picks) + '">' + esc(T.pickLyrics) + '</a>';
+  if (has('pick')) html += '<a class="button is-link no-spa" href="' + escapeHtml(URLS.picks) + '">' + escapeHtml(T.pickLyrics) + '</a>';
   if (has('song_info') && row.song_path) {
-    html += '<a class="button no-spa" href="' + esc(URLS.songInfo + '?song=' + encodeURIComponent(row.song_path)) +
-      '">' + esc(T.songInfo) + '</a>';
+    html += '<a class="button no-spa" href="' + escapeHtml(URLS.songInfo + '?song=' + encodeURIComponent(row.song_path)) +
+      '">' + escapeHtml(T.songInfo) + '</a>';
   }
   if (has('enqueue')) html += button('enqueue', key, T.addToQueue);
   if (has('cancel')) html += button('cancel', key, T.cancel);
@@ -499,7 +493,7 @@ function actionsHtml(row) {
 }
 
 function detailHtml(row) {
-  var error = row.error_message ? '<div class="pr-error">' + esc(row.error_message) + '</div>' : '';
+  var error = row.error_message ? '<div class="pr-error">' + escapeHtml(row.error_message) + '</div>' : '';
   return '<div class="pr-detail">' + error + actionsHtml(row) + '</div>';
 }
 
@@ -516,9 +510,9 @@ function stateKeyOf(row, extra) {
 function adminRow(row) {
   var key = rowKey(row);
   var open = !!state.expanded[key];
-  var html = '<button type="button" class="pr-line" data-key="' + esc(key) + '" aria-expanded="' + open + '">' +
+  var html = '<button type="button" class="pr-line" data-key="' + escapeHtml(key) + '" aria-expanded="' + open + '">' +
     '<span class="pr-pos">' + (row.position != null ? row.position : '') + '</span>' +
-    '<span class="pr-main"><span class="pr-title" title="' + esc(row.title) + '">' + esc(row.title) + '</span>' +
+    '<span class="pr-main"><span class="pr-title" title="' + escapeHtml(row.title) + '">' + escapeHtml(row.title) + '</span>' +
     '<span class="pr-muted">' + subline(row) + '</span></span>' + tagHtml(row) + '</button>' +
     (open ? detailHtml(row) : '');
   return { key: key, state: stateKeyOf(row), html: html };
@@ -528,10 +522,10 @@ function nowBox(row) {
   var key = rowKey(row);
   var open = !!state.expanded[key];
   var kind = row.kind === 'download' ? T.kindDownload : (row.kind === 'regen' ? T.kindRegen : T.kindProcess);
-  var html = '<button type="button" class="pr-line" data-key="' + esc(key) + '" aria-expanded="' + open + '">' +
-    '<span class="pr-now-top"><span class="pr-now-title">' + esc(T.now + ': ' + row.title) + '</span>' +
-    '<span class="tag is-rounded is-info is-light pr-tag">' + esc(kind) + '</span></span>' +
-    '<span class="pr-muted">' + esc(upperFirst(phaseWord(row))) + ' · <span id="pr-now-elapsed"></span></span>' +
+  var html = '<button type="button" class="pr-line" data-key="' + escapeHtml(key) + '" aria-expanded="' + open + '">' +
+    '<span class="pr-now-top"><span class="pr-now-title">' + escapeHtml(T.now + ': ' + row.title) + '</span>' +
+    '<span class="tag is-rounded is-info is-light pr-tag">' + escapeHtml(kind) + '</span></span>' +
+    '<span class="pr-muted">' + escapeHtml(upperFirst(phaseWord(row))) + ' · <span id="pr-now-elapsed"></span></span>' +
     '</button>' + (open ? detailHtml(row) : '');
   return { key: key, state: stateKeyOf(row, phaseWord(row)), html: html };
 }
@@ -594,8 +588,8 @@ function guestIcon(row) {
 
 function guestRow(row) {
   var key = rowKey(row);
-  var who = row.mine ? '<span class="pr-you">' + esc(T.you) + '</span>'
-    : (row.user ? '<span class="pr-muted">' + esc(fill(T.addedBy, { user: row.user })) + '</span>' : '');
+  var who = row.mine ? '<span class="pr-you">' + escapeHtml(T.you) + '</span>'
+    : (row.user ? '<span class="pr-muted">' + escapeHtml(fill(T.addedBy, { user: row.user })) + '</span>' : '');
   var note = '';
   if (row.group === 'attention') {
     note = row.download_status === 'error' ? T.downloadFailed : T.processingFailed;
@@ -605,20 +599,20 @@ function guestRow(row) {
   var allowed = row.actions || [];
   var side = '';
   if (allowed.indexOf('enqueue') !== -1) {
-    side = '<button type="button" class="button pr-act pr-gbtn" data-act="enqueue" data-key="' + esc(key) +
-      '" aria-label="' + esc(T.addToQueue) + '">+</button>';
+    side = '<button type="button" class="button pr-act pr-gbtn" data-act="enqueue" data-key="' + escapeHtml(key) +
+      '" aria-label="' + escapeHtml(T.addToQueue) + '">+</button>';
   } else if (allowed.indexOf('cancel') !== -1 && !state.confirming[key]) {
-    side = '<button type="button" class="button pr-act pr-gbtn" data-act="cancel" data-key="' + esc(key) +
-      '" aria-label="' + esc(T.cancel) + '">&times;</button>';
+    side = '<button type="button" class="button pr-act pr-gbtn" data-act="cancel" data-key="' + escapeHtml(key) +
+      '" aria-label="' + escapeHtml(T.cancel) + '">&times;</button>';
   }
   var confirm = state.confirming[key] === 'cancel'
-    ? '<div class="pr-confirm"><span>' + esc(T.confirmCancel) + '</span><div class="pr-buttons">' +
+    ? '<div class="pr-confirm"><span>' + escapeHtml(T.confirmCancel) + '</span><div class="pr-buttons">' +
       button('confirm-cancel', key, T.confirmCancelYes, 'is-danger') + button('keep', key, T.keep) + '</div></div>'
     : '';
   var html = '<div class="pr-grow"><span class="pr-gicon">' + guestIcon(row) + '</span><div class="pr-gmain">' +
-    '<span class="pr-title" title="' + esc(row.title) + '">' + esc(row.title) + '</span>' +
+    '<span class="pr-title" title="' + escapeHtml(row.title) + '">' + escapeHtml(row.title) + '</span>' +
     '<div class="pr-gtags">' + tagHtml(row) + who + '</div>' +
-    (note ? '<span class="pr-muted">' + esc(note) + '</span>' : '') + confirm + '</div>' + side + '</div>';
+    (note ? '<span class="pr-muted">' + escapeHtml(note) + '</span>' : '') + confirm + '</div>' + side + '</div>';
   return { key: key, state: stateKeyOf(row, row.mine ? 'mine' : ''), html: html };
 }
 
