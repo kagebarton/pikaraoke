@@ -46,13 +46,13 @@ in `plans/open-issues.md` under "Decide at landing". Branch
 
 ## Test plan (manual)
 
-- [ ] Search, open a video with a manual English caption: "Checking the
+- [x] Search, open a video with a manual English caption: "Checking the
   caption…" shows under the playing preview, then the captions-first view.
-- [ ] A video whose caption is sparse (e.g. lyrics on screen, caption only
+- [x] A video whose caption is sparse (e.g. lyrics on screen, caption only
   `[Music]`): the note, then the Genius list, and its dropdown has no
   "YouTube Captions".
-- [ ] A video with no manual caption: straight to the Genius list, no note.
-- [ ] Close the modal mid-check and open another video: the first answer
+- [x] A video with no manual caption: straight to the Genius list, no note.
+- [x] Close the modal mid-check and open another video: the first answer
   does not draw into the second.
 - [ ] Download through "Use YouTube captions": processes as before.
 
@@ -62,3 +62,4 @@ in `plans/open-issues.md` under "Decide at landing". Branch
 | --- | --- | --- |
 | 2026-10-27 | `c3e567d`, `a4363cb` | built (picker check; after-download backstop); full suite 2298 passed on the VM; live `check_video_caption` on `WVe80iZtlYU` (234 s, 51.8 wpm, pass) and `dQw4w9WgXcQ` (213 s, 99.2 wpm, pass) |
 | 2026-10-27 | `79f6ea3`, `b1a5801` | `/code-review` of `c3e567d`, `a4363cb` (3 angles): 10 candidates, 2 taken: a check that found no caption showed "Could not check the caption." (now no note), and `library_regen._watch_url` duplicated `library_tools._watch_url` (now one `library_regen.watch_url`); full suite 2298 passed. Ken kept the srt-choice-without-caption -> needs-a-pick change. Dropped: check failure hides captions (ruling 3); no download control while checking (follows ruling 1; server-bounded ~75 s); non-finite `duration` from a hand-made request; same-video reopen mid-check (needs two different answers); `except ValueError: pass` on "NA" and positional `--print` parse (match the function's existing idiom); folding the check into `/preview` (design, not defect) |
+| 2026-10-27 | `375e66d` | Ken's manual checks 1-4 on the VM: fine (sparse-caption video `447yaU_4DF8`, Kenny G - The Moment, 0.0 wpm). Check 5 (download through "Use YouTube captions") not run: full processing needs the GPU box, and the VM was busy with the `chinese_karaoke` run |
