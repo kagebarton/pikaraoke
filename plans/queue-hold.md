@@ -1,6 +1,8 @@
 # Queue hold: a searched song takes its queue slot at the click
 
 Model: Claude Opus 5.5 (2026-10-27), written for a Claude Sonnet executor.
+Phase 5.1 (review fixes) added 2026-10-27 by Claude Opus 5.5 after the
+`/code-review` of Phases 1-4.
 
 Branch `queue_hold`, off `dev` at `e9c7922`. It assumes `search_caption_check`
 has landed on `dev` first (Phase 0 checks).
@@ -21,10 +23,13 @@ never goes through that check.
 1. **The slot is taken at the click**, not when the download ends. The queue
    keeps playing ready songs past a held slot, and the held song plays from
    that slot once it is ready.
-2. **A singer's ready song takes their earliest held turn.** When the next song
-   to play has an earlier held song by the same singer, the two swap places:
-   the ready one plays and the held one moves back to its slot. This applies
-   with round-robin on or off.
+2. **A singer's ready song takes their earliest held turn.** When a held song's
+   turn comes up and its singer has a later ready song, the two swap places:
+   the ready one plays in that turn and the held one moves back to the ready
+   one's slot. This applies with round-robin on or off. (Wording corrected
+   2026-10-27. The first wording, "when the next song to play has an earlier
+   held song", led to Phase 1's swap, which never changes what plays; Phase
+   5.1a replaces it.)
 3. **Processing order is unchanged**: still first come, first served, with
    downloads ahead of regen jobs. Ordering processing by queue position was
    considered and left for later.
@@ -105,7 +110,7 @@ counts held items, which is correct because each one is a request.
 | `processing_complete` (`{song_path, ...}`) | release: `waiting = None` |
 | `processing_skipped` (`song_path`) | release |
 | `processing_error` (`{song_path, error}`) | delete the held item; notify the singer, `"danger"` |
-| `processing_cancelled` (`song_path`) | delete the held item, no toast |
+| `processing_cancelled` (`song_path`) | delete the held item, no toast (from Phase 5.1c it also fires when the tracker cancels a job that is still waiting) |
 | `song_deleted` (`song_path`) | delete the held item, no toast |
 | `download_error` (`{url, error}`) | delete the held item with `file == url`; no toast (`DownloadManager` already toasted) |
 | `download_cancelled` (`{url}`) (new) | delete the held item with `file == url`, no toast |
@@ -176,6 +181,9 @@ General rules for the executor:
    truthy, and not paused. If found, swap the two entries and pop at `j`
    instead. Extend the docstring by one sentence on why (turns belong to
    singers). Paused items never swap.
+   **Superseded by Phase 5.1a.** Every item before the first playable one is
+   already skipped, so this swap never changes which song plays; it only
+   reorders held songs among themselves. Plan error, not an executor one.
 4. `karaoke.py`: the two readers that filter on `paused` use
    `QueueManager.is_playable` instead:
    - `_get_queue_preview`, anchor `if not item.get("paused", False)` inside the
@@ -316,6 +324,342 @@ Commit: `feat(queue): show held songs in the queue; relabel the search checkbox`
    and threads, so per CLAUDE.md a `/code-review` is now pending. Say so and
    do not run it. Flag this as a good `/compact` point.
 
+### Phase 5.1: review fixes (after the `/code-review` of Phases 1-4)
+
+The review (2026-10-27, three finder angles) found seven defects, and Ken
+ruled that all seven are fixed. Each step below is one commit, with its tests
+in the same commit, in this order. The general rules above still apply. Run
+the full suite before each commit.
+
+| step | finding | fix |
+| --- | --- | --- |
+| 5.1a | the swap never changes what plays (ruling 2 not delivered) | a held song's turn goes to its singer's later ready song; "up next" uses the same selection |
+| 5.1b | no lock: a worker thread's scan can miss an item mid-move and lose its release | one queue lock (an `RLock`) taken by every queue change and by `QueueHold` |
+| 5.1c | cancelling a processing job that is still waiting announces nothing, so a held song is stuck | the tracker emits `processing_cancelled` for it |
+| 5.1d | a manual Add can hold a song after its release event has already fired | `QueueHold.settle` re-reads the state after the hold |
+| 5.1e | a download that crashes, or whose file is missing, leaves the slot held or removes it silently; `_execute_download` keeps dead parameters | crash: `download_error` plus a red toast; missing file: red toast instead of green; drop `enqueue`/`user` from `_execute_download` |
+| 5.1f | titles and singer names go into the page as raw HTML | one `escapeHtml` in `base.html`, used on the queue and home pages |
+| 5.1g | - | close out |
+
+#### 5.1a: a ready song plays in its singer's held turn (`queue_manager.py`, `karaoke.py`)
+
+1. In `QueueManager`, replace the body of `pop_next` and delete
+   `_earliest_held_turn`. Add `upcoming` and `_take_next`:
+
+   ```python
+   def pop_next(self) -> dict[str, Any] | None:
+       """Remove and return the next song to play from the queue.
+
+       Paused and held songs stay in place; see _take_next for how a held
+       song's turn is used. Returns None if no remaining song is playable.
+
+       Does not emit queue_update to avoid UI flicker during song transitions.
+       The playback system emits now_playing events which trigger queue UI updates.
+       """
+       song = self._take_next(self.queue)
+       if song is not None:
+           logging.info(f"Popped song from queue: {song['title']}")
+       return song
+
+   def upcoming(self, count: int) -> list[dict[str, Any]]:
+       """The next ``count`` songs in the order pop_next will play them, as the queue stands."""
+       remaining = list(self.queue)
+       songs: list[dict[str, Any]] = []
+       while len(songs) < count and (song := self._take_next(remaining)) is not None:
+           songs.append(song)
+       return songs
+
+   @staticmethod
+   def _take_next(queue: list[dict[str, Any]]) -> dict[str, Any] | None:
+       """Remove and return the song that plays next from ``queue``.
+
+       Turns are taken in queue order. A playable song plays in its own turn.
+       An unpaused held song's turn goes to its singer's first later playable
+       song, which swaps places with it: turns belong to singers, so the ready
+       song plays now and the held one moves back to its slot.
+       """
+       for turn, item in enumerate(queue):
+           if QueueManager.is_playable(item):
+               return queue.pop(turn)
+           if item.get("waiting") and not item.get("paused", False):
+               later = next(
+                   (
+                       idx
+                       for idx in range(turn + 1, len(queue))
+                       if queue[idx]["user"] == item["user"]
+                       and QueueManager.is_playable(queue[idx])
+                   ),
+                   None,
+               )
+               if later is not None:
+                   queue[turn], queue[later] = queue[later], queue[turn]
+                   return queue.pop(turn)
+       return None
+   ```
+
+2. `karaoke.py`: both up-next readers use `upcoming`, so "up next" names the
+   song that will actually play.
+   - `_get_queue_preview`: build the tuple from
+     `self.queue_manager.upcoming(5)` (anchor
+     `if QueueManager.is_playable(item)` inside the `QueuedSong(...)`
+     generator). The `[:5]` slice goes.
+   - `get_now_playing`: anchor
+     `next_song = next((item for item in queue if QueueManager.is_playable(item)), None)`.
+     Replace it with `upcoming = self.queue_manager.upcoming(1)` and
+     `next_song = upcoming[0] if upcoming else None`. Drop
+     `queue = self.queue_manager.queue` if nothing else uses it.
+3. Tests in `tests/unit/test_queue_manager.py`:
+   - **Rewrite** `test_ready_song_takes_the_singers_earliest_held_turn`, which
+     asserts the old behaviour. Queue `[held(User1), b1(User2), a2(User1)]`:
+     the first pop is `a2`, then the queue is `[b1, held]`.
+   - Round-robin on, as `test_round_robin_counts_a_held_item_in_its_singers_round`
+     builds it, plus a third singer: A's ready song plays first, and the held
+     one ends up in that song's old slot.
+   - A held song with no later ready song by its singer: the next singer's
+     song plays and the held song stays first.
+   - `upcoming(n)` on a mixed queue (two singers, one paused song, one held
+     song with a later ready song, one held song without) equals the songs that
+     repeated `pop_next` calls return on a copy, and leaves `queue` unchanged.
+   - `test_held_song_moves_back_to_the_ready_songs_slot`,
+     `test_the_earliest_of_two_held_items_moves`,
+     `test_no_swap_for_another_singers_held_item` and
+     `test_no_swap_for_a_paused_held_item` should pass unchanged. If one fails,
+     STOP and report it; do not edit it to pass.
+   - `tests/unit/test_karaoke_utils.py`, next to
+     `test_get_now_playing_with_queue`: with a held song by A first, then B's
+     song, then A's ready song, `up_next` is A's ready song.
+
+Commit: `fix(queue): a ready song plays in its singer's held turn`.
+
+#### 5.1b: one queue lock (`queue_manager.py`, `queue_hold.py`)
+
+1. `queue_manager.py`: in `__init__`, add `self.lock = threading.RLock()` with
+   a one-line comment saying that QueueHold changes items from worker threads.
+   Add a module-level decorator:
+
+   ```python
+   def _locked(method: Callable[..., Any]) -> Callable[..., Any]:
+       """Run a queue change under the queue lock.
+
+       QueueHold changes held items from the download and processing threads
+       while routes and the run loop change the queue.
+       """
+
+       @functools.wraps(method)
+       def locked(self: QueueManager, *args: Any, **kwargs: Any) -> Any:
+           with self.lock:
+               return method(self, *args, **kwargs)
+
+       return locked
+   ```
+
+   Put `@_locked` on exactly these methods: `enqueue`, `queue_clear`,
+   `reorder`, `move_to_top`, `move_to_bottom`, `pop_next`, `upcoming`,
+   `toggle_pause_song`, `toggle_pause_user`, `queue_edit`. Use one decorator
+   line each and do not re-indent the bodies; that keeps the upstream diff
+   small. `queue_add_random` changes the queue only through `enqueue`, and the
+   read-only methods stay unlocked.
+2. `queue_hold.py`: wrap the bodies of `_on_song_downloaded`, `_set_waiting`,
+   `_on_processing_error` and `_drop` in `with self._queue_manager.lock:`.
+   Each find-and-change is then one step for the other threads.
+   `_on_download_queued` needs nothing, because `enqueue` locks itself. Delete
+   the "No lock (see the invariant)" wording wherever it appears in
+   `queue_hold.py`. The module docstring's invariant stays, since the run loop
+   still relies on it.
+3. **Lock-order check (STOP if any fails).** Nothing that runs while the
+   queue lock is held may take another lock. Confirm each of these by reading
+   the code:
+   - the `get_now_playing_user` lambda in `karaoke.py` only reads an attribute;
+   - `Karaoke.get_now_playing` -> `PlaybackController.get_now_playing` takes
+     no lock;
+   - `update_now_playing_socket` and the `queue_update` lambda in `karaoke.py`
+     only emit over Socket.IO;
+   - inside its locked blocks, `QueueHold` calls only `QueueManager` methods
+     and `events.emit`.
+
+   Holders of `_playback_lock` may reach the queue lock (through the overlay
+   preview or a `now_playing_update`). That direction is fine as long as the
+   checks above hold.
+4. Tests:
+   - `test_queue_manager.py`: while the test holds `qm.lock`, a `pop_next`
+     started on another thread does not finish (`threading.Event`, wait 0.1 s);
+     once the lock is released it finishes (wait 1 s).
+   - `test_queue_hold.py`: the same pattern for a `processing_complete`
+     release.
+
+Commit: `fix(queue): one lock for the queue and the held items`.
+
+#### 5.1c: cancelling a waiting processing job frees its slot (`pipeline_tracker.py`)
+
+1. In `PipelineTracker.cancel()`, take the branch anchored at
+   `elif item.song_path and item.processing_status == "pending":`. Collect
+   `item.song_path` into a new local `cancelled_song` under the lock, beside
+   `cancelled_download_url`. After the lock, and after the `_delete_song` call,
+   emit `self._events.emit("processing_cancelled", cancelled_song)`. Update the
+   docstring sentence on what is done outside the lock so it covers both
+   cancel events.
+2. Why this is safe, so it is not re-checked: the only listeners are
+   `QueueHold._drop` and the tracker's own `_on_processing_cancelled`. The
+   tracker's handler matches only rows marked `cancelling`, and this row has
+   already been removed, so it only refreshes. A `download` row's song
+   deletion also fires `song_deleted`, and a second drop finds nothing.
+   `ProcessingManager.cancel_pending` must not emit it itself, because the
+   tracker calls it while holding `_lock` and the tracker's handler takes
+   `_lock`.
+3. Tests, next to the existing tracker cancel tests in
+   `tests/unit/test_processing_routes.py` (where `download_cancelled` is
+   tested): cancelling a waiting `process` row emits `processing_cancelled`
+   with its path. In `test_queue_hold.py` or the same file, with a real
+   `QueueHold` wired: a song held as `"processing"` (manual Add) leaves the
+   queue when its waiting job is cancelled.
+
+Commit: `fix(queue): cancelling a waiting job frees its held slot`.
+
+#### 5.1d: a manual Add that races processing settles (`queue_hold.py`, `routes/queue.py`, `karaoke.py`)
+
+1. `QueueHold.__init__` takes `song_manager: SongManager` (stored as
+   `self._song_manager`). Pass `song_manager=self.song_manager` in
+   `karaoke.py`, and update the test fixtures.
+2. Add:
+
+   ```python
+   def settle(self, song_path: str) -> None:
+       """Release or drop a song a manual Add has just held, if its event came first.
+
+       The Add reads the song's state and then holds it. Processing can finish
+       or fail in between, and its event then finds nothing to change.
+       """
+       state = self._song_manager.get_pipeline_state(song_path)
+       if state == "failed":
+           self._on_processing_error({"song_path": song_path})
+       elif state != "pending":
+           self._release(song_path)
+   ```
+
+3. `routes/queue.py::_do_enqueue`: right after
+   `rc = k.queue_manager.enqueue(song, user, waiting=waiting)`, add
+   `if waiting and rc[0]: k.queue_hold.settle(song)`.
+4. Do **not** make `settle` drop a `pending` song that nothing seems to be
+   finishing. During a pick (`picking` is set and the job is not yet queued),
+   a song is neither waiting for a pick nor busy, but it is about to be
+   processed.
+5. Tests:
+   - `test_queue_hold.py`: `settle` with the state `"ready"` releases, with
+     `"skipped"` releases, with `"failed"` removes the song and sends the
+     danger toast, and with `"pending"` leaves it held.
+   - `test_queue_routes.py`: a pending, busy song whose state reads
+     `"pending"` and then `"ready"` (`side_effect`) ends up in the queue
+     released.
+
+Commit: `fix(queue): a manual Add that races processing does not strand the song`.
+
+#### 5.1e: a failed download says so and frees its slot (`download_manager.py`)
+
+1. `_process_queue`: in the `except Exception as e:` branch after
+   `self._execute_download(...)`, keep the log line and add two lines: a
+   danger toast with the existing msgid, and the error event.
+
+   ```python
+   # MSG: Message shown after the download process is completed but the song is not found
+   self._events.emit(
+       "notification",
+       _("Error downloading song: ") + (download_request["title"] or video_url),
+       "danger",
+   )
+   self._events.emit("download_error", {"url": video_url, "error": str(e)})
+   ```
+
+   Import `_` locally, the way `queue_download` and `_execute_download` do
+   (`from flask_babel import _`). The tracker marks the row as an error and
+   QueueHold frees the slot. If the exception came after `song_downloaded`,
+   both find nothing to change.
+2. `_execute_download`'s success branch: move the
+   `_("Downloaded: %s")` success toast (and its `# MSG:` comment) inside
+   `if song_path:`, as its first statement. In the `else` branch, before the
+   `download_error` emit, send the danger toast
+   `_("Error downloading song: ") + displayed_title`, reusing that existing
+   msgid and its `# MSG:` comment. The QueueHold docstring "the download side
+   has told the user" is then true; leave it.
+3. Drop the dead `enqueue` and `user` parameters from `_execute_download`.
+   Its body has not read them since Phase 2. The signature becomes
+   `_execute_download(self, video_url: str, title: str | None) -> int`.
+   Remove their two `Args:` lines, then update every caller to the
+   two-argument form:
+   - `_process_queue`: pass `download_request["video_url"]` and
+     `download_request["title"]`. The request dict keeps `enqueue` and `user`,
+     because `download_queued` carries them.
+   - `scripts/add_songs.py`: `dm._execute_download(watch_url, None)`.
+   - `tests/unit/test_add_songs.py`: the stub
+     `def _execute_download(self, video_url, enqueue, user, title)`.
+   - `tests/unit/test_download_manager.py`: every direct call. This includes
+     `test_execute_download_without_path_emits_download_error`, whose
+     `enqueue` parametrization now tests nothing (drop the parametrization and
+     the fixture argument), and the `fake_execute(video_url, enqueue, user, title)`
+     stub.
+
+   `grep -rn "_execute_download" --include=*.py .` must then show only the
+   two-argument form. `queue_download` keeps its `enqueue` and `user`; it is
+   the public entry point and puts them on the event.
+4. Tests in `tests/unit/test_download_manager.py`:
+   - The file-not-found case: a danger toast and no `"Downloaded:"` toast.
+     Extend `test_execute_download_without_path_emits_download_error`.
+   - The found case: the success toast is still sent.
+   - A crash: patch `_execute_download` to raise, `start()` the worker,
+     `queue_download(...)`, then `download_queue.join()`. Assert
+     `download_error` with the URL and a danger toast.
+
+Commit: `fix(download): a failed download says so and frees its queue slot`.
+
+#### 5.1f: escape titles and names (`base.html`, `queue.html`, `home.html`)
+
+1. `base.html`: in the inline `<script>` beside `isEqual` and `debounce`, add
+
+   ```js
+   function escapeHtml(str) {
+     return String(str).replace(/[&<>"']/g, function (c) {
+       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+     });
+   }
+   ```
+
+2. Wrap each of these in `escapeHtml(...)`, and nothing else:
+   - `queue.html::generateQueueRow`: `e.user` (the `has-text-success` span)
+     and `e.title` (the two title spans).
+   - `queue.html`, the now-playing row: `np.now_playing_user` and
+     `np.now_playing` twice.
+   - `home.html`: in the now-playing template literal, `${np.now_playing}` and
+     `${np.now_playing_user}`; in the up-next one, `${np.up_next}` and
+     `${np.next_user}`.
+
+   Leave the `data-file`/`data-title` attributes alone, because
+   `escape()` (`encodeURIComponent`) already covers them. Leave the
+   `Cookies.get("user") === np.now_playing_user` comparison alone too.
+3. No new test. The existing render tests must pass.
+
+Commit: `fix(ui): escape song titles and singer names on the queue and home pages`.
+
+#### 5.1g: close out
+
+1. Run pre-commit and the full suite. Fix only what this phase introduced.
+2. Self-review the Phase 5.1 diff on the three axes. Check in particular that
+   `grep -n "_earliest_held_turn\|is_playable(item)" pikaraoke/karaoke.py pikaraoke/lib/queue_manager.py`
+   shows no leftover reader that bypasses `upcoming` or `_take_next`.
+3. Results log: one row per code commit with suite counts, plus any
+   departures under "Where the build departs". Commit it plan-only:
+   `docs(plan): record the queue hold review fixes`.
+4. **Stop and report.** Report paths, suite counts and the commit list. 5.1a
+   and 5.1b change the core queue's selection and threading, so a
+   `/code-review` of Phase 5.1 is pending. Say so and do not run it. This is a
+   `/compact` point.
+
+**Known and left (not part of 5.1):**
+- **A song held as `"processing"` can still be stranded if** a
+  `song_downloaded` handler after QueueHold's raises (LibraryTools already
+  catches its lyrics check), **or if** an admin cancels the running job in the
+  instant a manual Add lands.
+- A held search download keeps the browser-posted title after it lands,
+  instead of the filename-derived title other rows show.
+
 ## Behaviour changes worth knowing
 
 - **Two toasts at the click.** A queued search download shows "Download
@@ -351,6 +695,15 @@ Commit: `feat(queue): show held songs in the queue; relabel the search checkbox`
   after the pick and processing.
 - [ ] Add a library song that is still processing via the file browser: it is
   held (no "song is pending" error).
+- [ ] (5.1a) Round-robin off: A's held song is first, B's song second, A's
+  library song third. A's library song plays first, the TV and home page name
+  it as "up next" beforehand, and A's held song ends up third.
+- [ ] (5.1c) Add a song whose processing job is still waiting, then cancel
+  that job on the Processing page: the song leaves the queue.
+- [ ] (5.1e) Download a video whose download fails: a red toast, and its held
+  slot leaves the queue.
+- [ ] (5.1f) Set the singer name to `<b>x</b>` and queue a song: the queue and
+  home pages show the name as literal text, not bold.
 
 ## Results log
 
