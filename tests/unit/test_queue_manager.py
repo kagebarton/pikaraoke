@@ -757,11 +757,47 @@ class TestQueueManagerHeldItems:
         qm.enqueue("/songs/b1---bbb.mp4", "User2")
         qm.enqueue("/songs/a2---aaa.mp4", "User1")
 
-        assert qm.pop_next()["file"] == "/songs/b1---bbb.mp4"
         song = qm.pop_next()
 
         assert song["file"] == "/songs/a2---aaa.mp4"
-        assert [item["file"] for item in qm.queue] == ["/songs/held---hhh.mp4"]
+        assert [item["file"] for item in qm.queue] == [
+            "/songs/b1---bbb.mp4",
+            "/songs/held---hhh.mp4",
+        ]
+
+    def test_a_held_song_with_no_later_ready_song_of_its_singer_stays_first(self, qm):
+        qm.enqueue("/songs/held---hhh.mp4", "User1", waiting="processing")
+        qm.enqueue("/songs/b1---bbb.mp4", "User2")
+        qm.enqueue("/songs/b2---ccc.mp4", "User2")
+
+        assert qm.pop_next()["file"] == "/songs/b1---bbb.mp4"
+        assert [item["file"] for item in qm.queue] == [
+            "/songs/held---hhh.mp4",
+            "/songs/b2---ccc.mp4",
+        ]
+
+    def test_round_robin_plays_the_ready_song_and_the_held_one_takes_its_slot(
+        self, preferences, events
+    ):
+        preferences.set("enable_fair_queue", True)
+        qm = QueueManager(preferences=preferences, events=events, filename_from_path=extract_title)
+        qm.enqueue("/songs/held---hhh.mp4", "UserA", waiting="download")
+        qm.enqueue("/songs/a2---aaa.mp4", "UserA")
+        qm.enqueue("/songs/b1---bbb.mp4", "UserB")
+        qm.enqueue("/songs/c1---ccc.mp4", "UserC")
+        assert [item["file"] for item in qm.queue] == [
+            "/songs/held---hhh.mp4",
+            "/songs/b1---bbb.mp4",
+            "/songs/c1---ccc.mp4",
+            "/songs/a2---aaa.mp4",
+        ]
+
+        assert qm.pop_next()["file"] == "/songs/a2---aaa.mp4"
+        assert [item["file"] for item in qm.queue] == [
+            "/songs/b1---bbb.mp4",
+            "/songs/c1---ccc.mp4",
+            "/songs/held---hhh.mp4",
+        ]
 
     def test_held_song_moves_back_to_the_ready_songs_slot(self, preferences, events):
         preferences.set("enable_fair_queue", False)
@@ -822,6 +858,33 @@ class TestQueueManagerHeldItems:
         qm.enqueue("/songs/b1---bbb.mp4", "UserB")
 
         assert [item["user"] for item in qm.queue] == ["UserA", "UserB", "UserA"]
+
+    def test_upcoming_is_what_pop_next_will_play_and_changes_nothing(self, preferences, events):
+        preferences.set("enable_fair_queue", False)
+        qm = QueueManager(preferences=preferences, events=events, filename_from_path=extract_title)
+        qm.enqueue("/songs/ha1---111.mp4", "User1", waiting="processing")
+        qm.enqueue("/songs/pb1---222.mp4", "User2")
+        qm.enqueue("/songs/hc1---333.mp4", "User3", waiting="pick")
+        qm.enqueue("/songs/a2---444.mp4", "User1")
+        qm.enqueue("/songs/b2---555.mp4", "User2")
+        qm.enqueue("/songs/b3---666.mp4", "User2")
+        qm.queue[1]["paused"] = True
+        before = list(qm.queue)
+
+        upcoming = qm.upcoming(10)
+
+        assert qm.queue == before
+        assert all(a is b for a, b in zip(qm.queue, before))
+        assert [song["file"] for song in qm.upcoming(2)] == [s["file"] for s in upcoming[:2]]
+        popped = []
+        while (song := qm.pop_next()) is not None:
+            popped.append(song)
+        assert upcoming == popped
+        assert [song["file"] for song in popped] == [
+            "/songs/a2---444.mp4",
+            "/songs/b2---555.mp4",
+            "/songs/b3---666.mp4",
+        ]
 
 
 class TestQueueManagerRandom:

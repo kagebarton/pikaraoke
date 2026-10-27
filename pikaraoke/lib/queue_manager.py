@@ -252,35 +252,52 @@ class QueueManager:
         return not item.get("paused", False) and not item.get("waiting")
 
     def pop_next(self) -> dict[str, Any] | None:
-        """Remove and return the next playable song from the queue.
+        """Remove and return the next song to play from the queue.
 
-        Skips over paused and held songs (they remain in queue in place). Returns
-        None if the queue is empty or no remaining song is playable.
-
-        When the song to play has an earlier held song by the same singer, the two
-        swap places and the earlier slot plays: turns belong to singers, so a
-        ready song takes the singer's earliest held turn and the held one moves back.
+        Paused and held songs stay in place; see _take_next for how a held
+        song's turn is used. Returns None if no remaining song is playable.
 
         Does not emit queue_update to avoid UI flicker during song transitions.
         The playback system emits now_playing events which trigger queue UI updates.
         """
-        for idx, item in enumerate(self.queue):
-            if self.is_playable(item):
-                held_idx = self._earliest_held_turn(idx)
-                if held_idx is not None:
-                    self.queue[held_idx], self.queue[idx] = self.queue[idx], self.queue[held_idx]
-                    idx = held_idx
-                song = self.queue.pop(idx)
-                logging.info(f"Popped song from queue: {song['title']}")
-                return song
-        return None
+        song = self._take_next(self.queue)
+        if song is not None:
+            logging.info(f"Popped song from queue: {song['title']}")
+        return song
 
-    def _earliest_held_turn(self, idx: int) -> int | None:
-        """Index of the earliest unpaused held song by the same singer before idx."""
-        user = self.queue[idx]["user"]
-        for held_idx, held in enumerate(self.queue[:idx]):
-            if held["user"] == user and held.get("waiting") and not held.get("paused", False):
-                return held_idx
+    def upcoming(self, count: int) -> list[dict[str, Any]]:
+        """The next ``count`` songs in the order pop_next will play them, as the queue stands."""
+        remaining = list(self.queue)
+        songs: list[dict[str, Any]] = []
+        while len(songs) < count and (song := self._take_next(remaining)) is not None:
+            songs.append(song)
+        return songs
+
+    @staticmethod
+    def _take_next(queue: list[dict[str, Any]]) -> dict[str, Any] | None:
+        """Remove and return the song that plays next from ``queue``.
+
+        Turns are taken in queue order. A playable song plays in its own turn.
+        An unpaused held song's turn goes to its singer's first later playable
+        song, which swaps places with it: turns belong to singers, so the ready
+        song plays now and the held one moves back to its slot.
+        """
+        for turn, item in enumerate(queue):
+            if QueueManager.is_playable(item):
+                return queue.pop(turn)
+            if item.get("waiting") and not item.get("paused", False):
+                later = next(
+                    (
+                        idx
+                        for idx in range(turn + 1, len(queue))
+                        if queue[idx]["user"] == item["user"]
+                        and QueueManager.is_playable(queue[idx])
+                    ),
+                    None,
+                )
+                if later is not None:
+                    queue[turn], queue[later] = queue[later], queue[turn]
+                    return queue.pop(turn)
         return None
 
     def has_playable_song(self) -> bool:
