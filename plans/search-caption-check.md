@@ -29,8 +29,9 @@ in `plans/open-issues.md` under "Decide at landing". Branch
 - `search.html`: with `srt_available`, the modal runs the check. Pass -> the
   captions-first view, as before. Fail -> note + Genius search, and the
   "YouTube Captions" dropdown option stays out. Found-but-sparse gets the
-  sparse note; no answer, or no caption found after all, gets "Could not
-  check the caption." All three strings are the repair page's msgids.
+  sparse note; no answer gets "Could not check the caption."; a check that
+  ran and found no caption after all gets no note, like a video without
+  one. All three strings are the repair page's msgids.
 - Backstop: `_pick_reason` no longer skips a `{"mode": "srt"}` choice; it
   gets the same on-disk gate as a direct-box download, so a sparse caption
   is deleted and the song goes on the needs-a-pick list. A Genius or
@@ -60,3 +61,4 @@ in `plans/open-issues.md` under "Decide at landing". Branch
 | date | commit | what |
 | --- | --- | --- |
 | 2026-10-27 | `c3e567d`, `a4363cb` | built (picker check; after-download backstop); full suite 2298 passed on the VM; live `check_video_caption` on `WVe80iZtlYU` (234 s, 51.8 wpm, pass) and `dQw4w9WgXcQ` (213 s, 99.2 wpm, pass) |
+| 2026-10-27 | `79f6ea3`, `b1a5801` | `/code-review` of `c3e567d`, `a4363cb` (3 angles): 10 candidates, 2 taken: a check that found no caption showed "Could not check the caption." (now no note), and `library_regen._watch_url` duplicated `library_tools._watch_url` (now one `library_regen.watch_url`); full suite 2298 passed. Ken kept the srt-choice-without-caption -> needs-a-pick change. Dropped: check failure hides captions (ruling 3); no download control while checking (follows ruling 1; server-bounded ~75 s); non-finite `duration` from a hand-made request; same-video reopen mid-check (needs two different answers); `except ValueError: pass` on "NA" and positional `--print` parse (match the function's existing idiom); folding the check into `/preview` (design, not defect) |

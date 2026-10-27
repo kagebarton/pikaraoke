@@ -86,8 +86,9 @@ that queued them is already closed; 7.1f).
   queued path. Record: `library-tools.md`.
 - **Simplicity leftovers:** `_ActiveJob.kind` is set and never read;
   `prepare_regen_job` accepts plan kinds no caller builds; the int-not-bool
-  Genius id check is written three times; the watch URL is built in more than
-  one module. Record: web plan, 3.1i and 8.1f.
+  Genius id check is written three times; ~~the watch URL is built in more than
+  one module~~ (one `library_regen.watch_url` on branch `search_caption_check`,
+  not yet on `dev`). Record: web plan, 3.1i and 8.1f.
 
 ## Library tools: rare races and timing windows (recorded, not fixed)
 
