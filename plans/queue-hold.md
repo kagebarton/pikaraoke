@@ -769,6 +769,9 @@ Commit: `fix(ui): escape song titles and singer names on the queue and home page
 | 2026-10-27 | `8dda735` | 5.1d: `QueueHold.settle`, called by `_do_enqueue` after a hold; 2370 passed (+6) |
 | 2026-10-27 | `a295e92` | 5.1e: a crashed download emits `download_error` and a danger toast; a missing file sends the red toast, not the green one; `_execute_download(video_url, title)`; 2370 passed (+1 crash test, -1 dropped parametrization) |
 | 2026-10-27 | `e083e90` | 5.1f: `escapeHtml` in `base.html`, used on the queue and home pages; 2370 passed (templates only, no test change) |
+| 2026-10-27 | `0cf6c6f` | 5.1 review fix 1 + 4: `settle` drops a held song with no state row (deleted), and on `pending` re-reads `waiting_for` and relabels; 2373 passed (+3) |
+| 2026-10-27 | `9aa92f0` | 5.1 review fix 3 + 7b: `_report_download_failure` sends the toast and `download_error` for all three failure paths; the catch-all logs the traceback and names an exception with no message by its type; 2374 passed (+1) |
+| 2026-10-27 | `e76d2ee` | 5.1 review fix 7a: the Processing page uses the shared `escapeHtml`, which now renders a missing value as empty text; 2374 passed (one page-test string updated) |
 
 Final: full suite 2354 passed, 0 failed. `pre-commit --all-files` clean on this branch's files.
 
@@ -821,3 +824,42 @@ Phase 5.1:
 - `pre-commit --all-files` also re-spaced the lists in this plan (`mdformat`;
   CLAUDE.md excludes `plans/` from pre-commit). Reverted, with `args.py` and
   `open-issues.md`.
+
+### Review of Phase 5.1
+
+`/code-review` of `d3198cd..HEAD` (plans excluded), run 2026-10-27 by Claude
+Opus 5.5 with three finder angles (Correctness, Simplicity, Robustness). Findings
+after verification, in the numbering Ken ruled on:
+
+| # | file | finding | ruling |
+| --- | --- | --- | --- |
+| 1 | `queue_hold.py` `settle` | a song deleted between the Add's check and its hold has no state row; `settle` released it and the run loop tried to play a missing file | fixed, `0cf6c6f` |
+| 2 | `download_manager.py` `_process_queue` | a `song_downloaded` handler that raises after a good download reaches the new catch-all: green "Downloaded" toast, then red "Error downloading song"; tracker row unchanged (already complete), `_drop(url)` a no-op (item already holds the path) | left |
+| 3 | `download_manager.py` `_process_queue` | the catch-all logged `str(e)` only (no traceback); an exception with no message gave a blank error | fixed, `9aa92f0` |
+| 4 | `queue_hold.py` `settle` | a song moved to a lyrics pick between the Add's check and its hold stayed labelled "processing" until processing completed | fixed, `0cf6c6f` |
+| 5 | `pipeline_tracker.py` `cancel` | the new `processing_cancelled` emit lets the tracker's own handler remove another row for the same song that is mid-cancel (and delete a download's file); no path found that creates two rows for one song | left |
+| 6 | `queue_hold.py` `_drop` | a cancel drops the singer's held song with no toast (as an active cancel already did) | left (product call, not a defect) |
+| 7a | `base.html`, `processing.html` | two copies of the escape helper; `escapeHtml(null)` gave "null" | fixed, `e76d2ee` |
+| 7b | `download_manager.py` | the failure toast and `download_error` written out three times; the crash path reused a translator comment for a different case | fixed, `9aa92f0` |
+
+Overruled at verification: emit-after-unlock in every locked method (no handler
+under the queue lock takes another lock; traced); the fork-maintenance size of
+the `queue_manager.py` change (re-argues the settled 5.1 design); an active
+cancel during an Add strands the slot (already left by Ken's ruling).
+
+Both "Left for the review of Phase 5.1" flags were confirmed as delay only, with
+no lock cycle: under the queue lock the handlers send Socket.IO messages, read
+preferences (no lock), read plain fields on the playback controller and mpv, and
+re-enter `upcoming(1)`.
+
+Fix notes:
+
+- **`settle` on `pending`** reads `waiting_for` outside the queue lock (the lock
+  stays a leaf: `LibraryTools` has its own lock). An empty answer leaves the hold
+  as it is: between a pick and its job's enqueue nothing claims the song.
+- **5.1e departure superseded**: `_process_queue` no longer imports `_`; the
+  helper does, as `_execute_download` does.
+
+Final after the 5.1 review fixes: full suite 2374 passed, 0 failed.
+`pre-commit` clean on the changed files. The new `settle` and crash tests were
+each checked to fail without their fix.
