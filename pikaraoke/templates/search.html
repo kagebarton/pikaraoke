@@ -969,7 +969,7 @@ $(document).on("click.search", ".search_result_items_select", function () {
 	}
 
 	function restoreCheckboxStates() {
-		// Restore "Add to queue once downloaded" checkbox state
+		// Restore "Add to queue" checkbox state
 		var addToQueue = Cookies.get("add-to-queue-on-download");
 		if (addToQueue !== undefined) {
 			var shouldCheck = addToQueue === "true";
@@ -1052,8 +1052,8 @@ $(document).on("click.search", ".search_result_items_select", function () {
 					<div class="field" style="margin-top: 5px">
 						<label class="checkbox is-flex is-align-items-center">
 							<input type="checkbox" class="checkbox" checked id="add-to-queue-direct" />
-							{# MSG: Checkbox label which marks the song to be added to the queue after it finishes downloading.
-							#} {% trans %}Add to queue once downloaded{% endtrans %}
+							{# MSG: Checkbox label which marks the song to take a place in the queue while it downloads.
+							#} {% trans %}Add to queue{% endtrans %}
 						</label>
 					</div>
 					<div class="has-text-right" style="margin-top: 5px">
@@ -1094,8 +1094,8 @@ $(document).on("click.search", ".search_result_items_select", function () {
 		<div class="field">
 			<label class="checkbox is-flex is-align-items-center">
 				<input type="checkbox" checked id="add-to-queue-search" class="checkbox" />
-				{# MSG: Checkbox label which marks the song to be added to the queue after it finishes downloading. #} {%
-				trans %}Add to queue once downloaded{% endtrans %}
+				{# MSG: Checkbox label which marks the song to take a place in the queue while it downloads. #} {%
+				trans %}Add to queue{% endtrans %}
 			</label>
 		</div>
 		<ul id="search-results" class="search_result_items">

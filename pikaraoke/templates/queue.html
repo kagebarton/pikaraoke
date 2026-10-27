@@ -175,10 +175,20 @@ var currentUser = (typeof getUserCookie === 'function') ? getUserCookie() : null
   }
 
 
+// What a held song (e.waiting) is waiting for
+var WAITING_LABELS = {
+  download: '{{ _("downloading") }}',
+  processing: '{{ _("processing") }}',
+  pick: '{{ _("waiting for lyrics") }}'
+};
+
 // Generate queue row HTML
 function generateQueueRow(e, index) {
   var isPaused = !!e.paused;
-  var rowClass = isPaused ? ' class="row-paused"' : '';
+  var rowClasses = [];
+  if (isPaused) rowClasses.push('row-paused');
+  if (e.waiting) rowClasses.push('row-waiting');
+  var rowClass = rowClasses.length ? ' class="' + rowClasses.join(' ') + '"' : '';
   var html = '<tr data-index="' + index + '"' + rowClass + '>';
   html += '<td style="width: ' + COL_WIDTH.number + '; padding: 8px 8px; vertical-align: middle; text-align: center;">' + (index + 1) + '</td>';
 
@@ -196,6 +206,9 @@ function generateQueueRow(e, index) {
   html += '<span class="is-size-7 has-text-weight-bold is-hidden-tablet" style="width: 100%;">' + e.title + '</span>';
   if (isPaused) {
     html += '<span class="tag is-warning is-light ml-2">{{ _("paused") }}</span>';
+  }
+  if (e.waiting) {
+    html += '<span class="tag is-info is-light ml-2">' + WAITING_LABELS[e.waiting] + '</span>';
   }
   html += '</div></td>';
 
@@ -456,10 +469,12 @@ window.executeUserAction = function(action) {
 {% block content %}
 
 <style>
-.row-paused td { opacity: 0.5; }
-.row-paused .tag { opacity: 1; }
+.row-paused td, .row-waiting td { opacity: 0.5; }
+.row-paused .tag, .row-waiting .tag { opacity: 1; }
 .row-paused .queue-song-user-btn,
-.row-paused .queue-song-options-btn { opacity: 1; }
+.row-paused .queue-song-options-btn,
+.row-waiting .queue-song-user-btn,
+.row-waiting .queue-song-options-btn { opacity: 1; }
 </style>
 
 <table class="table is-striped" id="auto-refresh" style="margin-bottom: 30px">
