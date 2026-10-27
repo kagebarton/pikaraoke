@@ -334,7 +334,7 @@ the full suite before each commit.
 | step | finding | fix |
 | --- | --- | --- |
 | 5.1a | the swap never changes what plays (ruling 2 not delivered) | a held song's turn goes to its singer's later ready song; "up next" uses the same selection |
-| 5.1b | no lock: a worker thread's scan can miss an item mid-move and lose its release | one queue lock (an `RLock`) taken by every queue change and by `QueueHold` |
+| 5.1b | no lock: a worker thread's scan can miss an item mid-move and lose its release | one queue lock (an `RLock`) taken by every queue change and by `QueueHold`; `queue_clear` emits outside it |
 | 5.1c | cancelling a processing job that is still waiting announces nothing, so a held song is stuck | the tracker emits `processing_cancelled` for it |
 | 5.1d | a manual Add can hold a song after its release event has already fired | `QueueHold.settle` re-reads the state after the hold |
 | 5.1e | a download that crashes, or whose file is missing, leaves the slot held or removes it silently; `_execute_download` keeps dead parameters | crash: `download_error` plus a red toast; missing file: red toast instead of green; drop `enqueue`/`user` from `_execute_download` |
@@ -453,12 +453,30 @@ Commit: `fix(queue): a ready song plays in its singer's held turn`.
        return locked
    ```
 
-   Put `@_locked` on exactly these methods: `enqueue`, `queue_clear`,
-   `reorder`, `move_to_top`, `move_to_bottom`, `pop_next`, `upcoming`,
+   Put `@_locked` on exactly these methods: `enqueue`, `reorder`,
+   `move_to_top`, `move_to_bottom`, `pop_next`, `upcoming`,
    `toggle_pause_song`, `toggle_pause_user`, `queue_edit`. Use one decorator
    line each and do not re-indent the bodies; that keeps the upstream diff
    small. `queue_add_random` changes the queue only through `enqueue`, and the
    read-only methods stay unlocked.
+
+   `queue_clear` gets no decorator. Wrap only its `self.queue = []` line in
+   `with self.lock:`, keeping the `notification` emit before it and the
+   `queue_update`, `now_playing_update` and `skip_requested` emits after it,
+   in today's order. Reason: `skip_requested` runs `PlaybackController.skip`,
+   which takes `_playback_lock`. `play_file` holds `_playback_lock` while it
+   refreshes the overlay, and the refresh reads `upcoming`. Emitting
+   `skip_requested` under the queue lock would deadlock a Clear that lands
+   while a song is starting.
+
+   (Revised 2026-10-27 by Claude Opus 5.5. The first version decorated
+   `queue_clear` as a whole. The executor's step 3 check stopped on that
+   deadlock before any 5.1b code was written. Options considered: leave
+   `queue_clear` unlocked, which lets a `pop_next` that is mid-way through the
+   old list play a song from a cleared queue; make the preview readers
+   lock-free, which still leaves a Clear holding the queue lock for the
+   seconds `play_file` takes; emit `skip_requested` from a separate thread,
+   which adds a thread for no gain over locking only the assignment.)
 2. `queue_hold.py`: wrap the bodies of `_on_song_downloaded`, `_set_waiting`,
    `_on_processing_error` and `_drop` in `with self._queue_manager.lock:`.
    Each find-and-change is then one step for the other threads.
@@ -475,15 +493,46 @@ Commit: `fix(queue): a ready song plays in its singer's held turn`.
    - `update_now_playing_socket` and the `queue_update` lambda in `karaoke.py`
      only emit over Socket.IO;
    - inside its locked blocks, `QueueHold` calls only `QueueManager` methods
-     and `events.emit`.
+     and `events.emit`;
+   - no `@_locked` method emits `skip_requested` (only `queue_clear` emits it,
+     after its lock is released), and no handler of `notification`,
+     `queue_update` or `now_playing_update` takes `_playback_lock`.
 
-   Holders of `_playback_lock` may reach the queue lock (through the overlay
-   preview or a `now_playing_update`). That direction is fine as long as the
-   checks above hold.
+   Holders of `_playback_lock` (`play_file`, `skip`, the mpv song-end
+   callback) may reach the queue lock through the overlay preview or a
+   `now_playing_update`. That is the only allowed direction: nothing may hold
+   the queue lock and then wait for `_playback_lock`.
 4. Tests:
    - `test_queue_manager.py`: while the test holds `qm.lock`, a `pop_next`
      started on another thread does not finish (`threading.Event`, wait 0.1 s);
      once the lock is released it finishes (wait 1 s).
+   - `test_queue_manager.py`, in `TestQueueManagerClear`: `skip_requested`
+     fires with the queue lock free. The probe runs on another thread because
+     the lock lets its own holder take it again:
+
+     ```python
+     def test_queue_clear_emits_skip_requested_after_releasing_the_lock(self, queue_manager):
+         """skip_requested takes the playback lock, so the queue lock must be free by then."""
+         lock_free = []
+
+         def probe():
+             acquired = queue_manager.lock.acquire(blocking=False)
+             if acquired:
+                 queue_manager.lock.release()
+             lock_free.append(acquired)
+
+         def on_skip():
+             thread = threading.Thread(target=probe)
+             thread.start()
+             thread.join()
+
+         queue_manager._events.on("skip_requested", on_skip)
+         queue_manager.enqueue("/songs/song1---abc.mp4", "User1")
+
+         queue_manager.queue_clear()
+
+         assert lock_free == [True]
+     ```
    - `test_queue_hold.py`: the same pattern for a `processing_complete`
      release.
 
