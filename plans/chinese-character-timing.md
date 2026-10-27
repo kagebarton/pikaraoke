@@ -8,8 +8,9 @@ and what it costs. This is a measurement, not a build: nothing here
 changes `pikaraoke/`. Whether and how to wire a winner into the pipeline
 is decided after GATE Z2, from what this probe finds.
 
-**Status: DRAFT 2026-10-20.** Phase 0 executed 2026-10-20 (see Results
-log); waiting on Ken's confirmed sheets before Phase 1.
+**Status: DRAFT 2026-10-20.** Phase 0 executed 2026-10-20; the four pilot
+sheets confirmed 2026-10-27; Phase 1 runner built and smoke-tested on CPU,
+GPU run on Windows next (see Results log).
 
 ## Why now, and what this replaces
 
@@ -491,3 +492,75 @@ Artifacts:
 
 Whisper's transcript is not the sung text, so these numbers rank resemblance to
 what whisper heard and nothing more. The open item for Ken is unchanged.
+
+### 2026-10-27 — sheets confirmed; Phase 1 runner built (Sonnet 5.5), GPU run next
+
+**Sheets.** A Chinese-speaking friend of Ken's filled in a worksheet (claude.ai
+artifact `EqY8foQNriiDuW8pCnavYE`): per pilot song a starting sheet (its
+version A, raw files in `phase0/worksheet_labels.json`) plus listening
+questions at each place the candidates differ. Their pasted result is saved verbatim as
+`zh_probe/phase0/worksheet_result.txt`; the four confirmed sheets are
+`zh_probe/sheets/<video id>.txt`. Each is the friend's sheet text with only
+these edits, all ratified by Ken 2026-10-27: the friend's
+`(music break in video)` marker on #1 dropped (an instrumental break, not
+sung); and on #1 three places where their typed sheet disagreed with their own
+ticked listening answers: 3:01 second chorus `我還留著 yeah` -> `我還留著`,
+4:41 last chorus `我才能在你身邊` -> `我才能夠在你身邊` (they heard 够; the
+sheet is Traditional), 4:51 last chorus `但偏偏 風漸漸` -> `但偏偏 雨漸漸`.
+#2, #9 and #11 are the friend's text unchanged. On #11 the friend left the
+2:27 question unanswered; the sheet keeps 那 there, as in their 1:28 answer.
+
+| # | sheet lines | Han characters | Latin words |
+|---|---|---|---|
+| 1 | 40 | 450 | 17 (solfege, `Re-sol-sol-si-do-si-la` etc.) |
+| 2 | 24 | 477 | 2 (`Baby`) |
+| 9 | 22 | 290 | 0 |
+| 11 | 35 | 345 | 14 (`Oh no`, `Oh yeah`) |
+
+**Phase 1 runner.** `scripts/zh_probe/`: `sheet.py`, `track.py`, `arms.py`,
+`phase1_run.py` (GPU), `phase1_review.py` (CPU); `corpus.py` gained two
+environment overrides for the dev VM. Choices the judge should know about:
+
+- **Unit.** One per Han character and one per Latin word; spaces and
+  punctuation stay in the display text and are not timed. All arms time the
+  same units.
+- **Arm W.** `stable_whisper` `align`, `original_split=True` (one segment per
+  sheet line), every other option at its default. Whisper's words (a token each,
+  often several characters) are mapped back onto units; a word that spans
+  several units splits evenly and marks them `shared`.
+- **Arm R.** Pinyin: OpenCC `t2s`, `jieba` segmentation, `pypinyin` without
+  tones. Jyutping: `ToJyutping`, digits stripped. Latin words are used
+  lower-cased as written. MMS_FA via `torchaudio`.
+- **Arm H.** Three models, since the Cantonese pick was left open in Phase 0c:
+  `H` = `jonatasgrosman` zh-cn (Mandarin songs), `Hsk` = `scottykwok` and `Hal`
+  = `alvanlii` w2v-BERT (Cantonese songs). Each character looks up its own
+  token, then its other case, then OpenCC `t2s`, then `s2t`; a unit with no
+  token is placed evenly between its neighbours' onsets and marked
+  `interpolated`.
+- **CTC arms (R, H).** Per song, 30 s windows each shown 2 s of neighbouring
+  audio that is then dropped, log-probabilities concatenated, then
+  `torchaudio.functional.forced_align` on CPU. A unit runs from its first
+  token's first frame to its last token's end frame.
+- **`.ass`.** One event per sheet line, shown 1.5 s before its first character
+  until 0.5 s after its last. Each character sweeps from its start to the next
+  character's start; a line's last character from its start to its end, at
+  least 0.2 s. Same writer for every arm.
+- **stable-ts and Cantonese.** `stable-ts` 2.19.1 (`alignment.py`, the
+  `split_words_by_space` lines) splits words by character only for `zh`, `ja`,
+  `th`, `lo`, `my`; `yue` is missing, though whisper's own tokenizer lists it.
+  Smoke test on #9 without a workaround: 44 words for 290 characters, all 290
+  `shared`, 48 zero-length. Arm W therefore passes `align` a whisper `yue`
+  tokenizer whose `language_code` is set to `zh`, which is the only thing
+  stable-ts reads for that decision; the decoder still gets the `yue` token.
+  With it, #9: 266 words, 48 `shared`, 4 zero-length. Mandarin is unpatched.
+- **Output.** `zh_probe/phase1/<video id>/<arm>.{json,ass}` (JSON carries wall
+  time and peak VRAM, load and align separately), `review_<video id>.csv`,
+  `commands.txt` (mpv per song and arm, plus the app's existing `.ass` for #1
+  and #2), `runs.txt` (raw run table).
+
+Smoke test, not Phase 1 data: the dev VM has no GPU (torch 2.11, CPU fp32),
+so every arm was run end to end on CPU against a scratch library, W and R on
+#1 and #9, H on #1, Hsk and Hal on #9, plus the review script; nothing was
+written to `zh_probe/phase1/`. Not yet run on the A2000: peak VRAM of the CTC
+windows and of W's align on a 5-minute stem. The first W align on CUDA will
+include CUDA start-up (15 s in Phase 0c).
