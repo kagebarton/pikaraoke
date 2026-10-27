@@ -245,7 +245,7 @@ def main() -> int:
         print(f"\nDownloading {entry.id} ({entry.source})...")
         before = len(new_songs)
         try:
-            rc = dm._execute_download(watch_url, False, "add_songs", None)
+            rc = dm._execute_download(watch_url, None)
         except Exception:  # the app's own per-download boundary; Ctrl+C still stops the tool
             logger.exception("Download failed: %s", entry.id)
             rc = 1

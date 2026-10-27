@@ -145,6 +145,8 @@ class DownloadManager:
         Runs indefinitely, blocking on queue.get() until items are available.
         Each download is processed completely before the next one starts.
         """
+        from flask_babel import _
+
         while True:
             # Capture queue reference before get() — cancel_pending_download may
             # replace self.download_queue mid-download; task_done() must be called
@@ -170,32 +172,26 @@ class DownloadManager:
             self.active_url = video_url
 
             try:
-                self._execute_download(
-                    download_request["video_url"],
-                    download_request["enqueue"],
-                    download_request["user"],
-                    download_request["title"],
-                )
+                self._execute_download(download_request["video_url"], download_request["title"])
             except Exception as e:
                 logging.error(f"Error processing download: {e}")
+                # MSG: Message shown after the download process is completed but the song is not found
+                self._events.emit(
+                    "notification",
+                    _("Error downloading song: ") + (download_request["title"] or video_url),
+                    "danger",
+                )
+                self._events.emit("download_error", {"url": video_url, "error": str(e)})
             finally:
                 self._is_downloading = False
                 self.active_url = None
                 q.task_done()
 
-    def _execute_download(
-        self,
-        video_url: str,
-        enqueue: bool,
-        user: str,
-        title: str | None,
-    ) -> int:
+    def _execute_download(self, video_url: str, title: str | None) -> int:
         """Execute a video download.
 
         Args:
             video_url: YouTube video URL.
-            enqueue: Whether to hold a playback-queue slot for the song.
-            user: Username to attribute the download to.
             title: Display title (defaults to URL if not provided).
 
         Returns:
@@ -255,9 +251,6 @@ class DownloadManager:
                     {"url": video_url, "error": output or "Unknown error"},
                 )
         else:
-            # MSG: Message shown after the download is completed
-            self._events.emit("notification", _("Downloaded: %s") % displayed_title, "success")
-
             # After download, find the file path by ID
             song_path = None
             if video_id:
@@ -267,6 +260,8 @@ class DownloadManager:
                 logging.warning("No video ID available to find downloaded song")
 
             if song_path:
+                # MSG: Message shown after the download is completed
+                self._events.emit("notification", _("Downloaded: %s") % displayed_title, "success")
                 # Move subtitle into subtitles/ BEFORE emitting song_downloaded,
                 # so the processing pipeline can find it for alignment.
                 self._move_downloaded_subtitle(song_path)
@@ -275,6 +270,10 @@ class DownloadManager:
             else:
                 logging.warning(
                     f"Could not find downloaded song in {self._download_path} matching ID: {video_id}"
+                )
+                # MSG: Message shown after the download process is completed but the song is not found
+                self._events.emit(
+                    "notification", _("Error downloading song: ") + displayed_title, "danger"
                 )
                 self._events.emit(
                     "download_error",

@@ -253,7 +253,7 @@ def _fake_download_manager_class(plan: dict, folder: Path):
         def __init__(self, *, events, **_kwargs):
             self._events = events
 
-        def _execute_download(self, video_url, enqueue, user, title):
+        def _execute_download(self, video_url, title):
             vid = video_url.rsplit("v=", 1)[-1]
             assert vid in plan, f"unexpected download of {vid}"
             if isinstance(plan[vid], Exception):
