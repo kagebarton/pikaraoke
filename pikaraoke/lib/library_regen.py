@@ -405,7 +405,7 @@ def fetch_caption(job: SongJob) -> None:
     song = job.song_path
     try:
         result = download_manual_en_subs(
-            _watch_url(extract_youtube_id(str(song))), str(song.parent / "subtitles"), song.stem
+            watch_url(extract_youtube_id(str(song))), str(song.parent / "subtitles"), song.stem
         )
     except CaptionDownloadFailed as e:
         logger.warning("Caption download failed for %s: %s", song.name, e)
@@ -417,7 +417,8 @@ def fetch_caption(job: SongJob) -> None:
     adopt_caption(job, Path(result))
 
 
-def _watch_url(video_id: str | None) -> str:
+def watch_url(video_id: object) -> str:
+    """A video's link in the form ``queue_download`` stores, so waiting downloads compare equal."""
     return f"https://www.youtube.com/watch?v={video_id}"
 
 
@@ -454,7 +455,7 @@ def _check_caption(
     scratch = Path(tempfile.mkdtemp(prefix="caption_check_", dir=get_temp_directory()))
     try:
         try:
-            result = download_manual_en_subs(_watch_url(video_id), str(scratch), stem)
+            result = download_manual_en_subs(watch_url(video_id), str(scratch), stem)
         except CaptionDownloadFailed as e:
             logger.warning("Caption check of %s couldn't run: %s", name, e)
             return CaptionCheck(found=False, wpm=None, passed=False, failed=True)

@@ -53,6 +53,7 @@ from pikaraoke.lib.library_regen import (
     read_bundle,
     resolve_plan,
     reuse_plan,
+    watch_url,
 )
 from pikaraoke.lib.library_status import (
     SONG_LISTS,
@@ -122,11 +123,6 @@ PLAYLIST_USER = "Playlist"
 
 def _pick_text(value: object) -> str:
     return value.strip()[:_PICK_TEXT_MAX] if isinstance(value, str) else ""
-
-
-def _watch_url(video_id: object) -> str:
-    """A video's link in the form ``queue_download`` stores, so waiting downloads compare equal."""
-    return f"https://www.youtube.com/watch?v={video_id}"
 
 
 @dataclass
@@ -738,7 +734,7 @@ class LibraryTools:
             path = files.get(video.id)
             song = spelling.get(path) if path is not None else None
             if path is None:
-                status = "waiting" if _watch_url(video.id) in downloading else "new"
+                status = "waiting" if watch_url(video.id) in downloading else "new"
             elif song is not None and file_status(path) == NOT_PROCESSED:
                 status = "waiting" if self._is_taken(song) else "not_processed"
             else:
@@ -771,7 +767,7 @@ class LibraryTools:
         downloads = 0
         for video in videos:
             video_id = video.get("id") if isinstance(video, dict) else None
-            url = _watch_url(video_id)
+            url = watch_url(video_id)
             if not is_video_id(video_id) or video_id in in_library or url in waiting:
                 continue
             waiting.add(url)
