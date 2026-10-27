@@ -67,6 +67,8 @@
     }
 
     function connectSocket() {
+      // SPA navigation re-runs this script on every page change, and each io() opens another connection.
+      if (window.socket) return;
       window.socket = io();
       window.socket.on('connect', function() {
           console.log('Socket connected');

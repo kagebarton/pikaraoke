@@ -384,8 +384,7 @@ $(function () {
       console.log(window.socket);
       if (!window.socket.connected) {
         console.log("Reconnecting socket...");
-        window.socket = io();
-        window.socket.on("now_playing", (np) => handleNowPlaying(np));
+        window.socket.connect();
       }
     }
   };
