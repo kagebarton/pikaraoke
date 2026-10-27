@@ -919,13 +919,6 @@ function showTab(name) {
   }
 }
 
-// Push updates replace the old 1 s poll; the SPA re-runs this script each visit,
-// so detach the previous registration first.
-if (typeof window.socket !== 'undefined') {
-  window.socket.off('pipeline_updated');
-  window.socket.on('pipeline_updated', refreshSoon);
-}
-
 page.tick = setInterval(function () {
   if (!document.getElementById('pr-root')) {
     clearInterval(page.tick);
@@ -935,6 +928,10 @@ page.tick = setInterval(function () {
 }, 1000);
 
 $(function () {
+  // Push updates replace the old 1 s poll. The socket exists only from base.html's
+  // ready handler on, and the SPA re-runs this script each visit, so detach first.
+  window.socket.off('pipeline_updated');
+  window.socket.on('pipeline_updated', refreshSoon);
   if (isAdmin) showTab(firstTab);
   refresh();
 });
