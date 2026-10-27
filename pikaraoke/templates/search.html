@@ -608,9 +608,12 @@ $("#add-queue-link").trigger("click");
 // Flow:
 //   1. Modal opens → entire #lyrics-section hidden, preview probe runs.
 //   2. Probe responds:
-//      - srt_available=true  → show SRT-primary UI (download button +
-//        "More options" link to reveal Custom Search / Raw Transcription).
-//        No Genius search is performed.
+//      - srt_available=true  → check the caption is dense enough to be the
+//        lyrics (the same words-per-minute gate as a direct download):
+//        - passes → show SRT-primary UI (download button + "More options"
+//          link to reveal Custom Search / Raw Transcription). No Genius
+//          search is performed.
+//        - too sparse, or the check couldn't run → say so, then as below.
 //      - srt_available=false → run Genius search using the active title
 //        (falls back to the page's search term) and populate dropdown with
 //        Genius results + Custom Search + Raw Transcription.
@@ -618,9 +621,15 @@ $("#add-queue-link").trigger("click");
 var _activeYtTitle = "";
 var _activeYtId = "";
 var _activeSrtAvailable = false;
+var CAPTION_NOTES = {
+  checking: {{ _("Checking the caption…") | tojson }},
+  sparse: {{ _("This video's caption is too sparse to be lyrics.") | tojson }},
+  failed: {{ _("Could not check the caption.") | tojson }},
+};
 
 function resetLyricsSection() {
   $("#lyrics-section").addClass("is-hidden");
+  $("#lyrics-caption-note").addClass("is-hidden").text("");
   $("#lyrics-loading").addClass("is-hidden");
   $("#lyrics-results-label").addClass("is-hidden");
   $("#lyrics-select-wrap").addClass("is-hidden");
@@ -706,6 +715,49 @@ function runLyricsSearch(query, fallback) {
   });
 }
 
+function searchLyricsForActiveVideo() {
+  var searchTerm = sessionStorage.getItem("pikaraoke_search_term") || "";
+  runLyricsSearch(_activeYtTitle, searchTerm);
+}
+
+// Offer the video's caption only once it passes the length gate; a sparse
+// caption, or a check with no answer, goes to the Genius search with a note.
+function checkCaption(duration) {
+  var ytId = _activeYtId;
+  var modal = document.getElementById("modal-js-example");
+  var $note = $("#lyrics-caption-note");
+  $("#lyrics-section").removeClass("is-hidden");
+  $note.text(CAPTION_NOTES.checking).removeClass("is-hidden");
+
+  function stillShowing() {
+    return modal.classList.contains("is-active") && ytId === _activeYtId;
+  }
+  function searchInstead(note) {
+    $note.text(note);
+    searchLyricsForActiveVideo();
+  }
+
+  $.ajax({
+    url: "{{ url_for('search.caption_check') }}",
+    type: "get",
+    data: { yt_id: ytId, duration: duration },
+    success: function (check) {
+      if (!stillShowing()) return;
+      if (check.passed) {
+        $note.addClass("is-hidden");
+        _activeSrtAvailable = true;
+        showSrtPrimary();
+      } else {
+        searchInstead(check.found ? CAPTION_NOTES.sparse : CAPTION_NOTES.failed);
+      }
+    },
+    error: function () {
+      if (!stillShowing()) return;
+      searchInstead(CAPTION_NOTES.failed);
+    },
+  });
+}
+
 // Lyrics dropdown change handler
 $(document).on("change.search", "#lyrics-dropdown", function () {
   var val = $(this).val();
@@ -740,8 +792,7 @@ $(document).on("keydown.search", "#lyrics-custom-input", function (e) {
 $(document).on("click.search", "#lyrics-more-options-link", function (e) {
   e.preventDefault();
   $("#lyrics-srt-primary").addClass("is-hidden");
-  var searchTerm = sessionStorage.getItem("pikaraoke_search_term") || "";
-  runLyricsSearch(_activeYtTitle, searchTerm);
+  searchLyricsForActiveVideo();
 });
 
 // SRT-primary "Use YouTube captions" button: write srt-mode choice + download.
@@ -874,19 +925,16 @@ function openPreviewModal($li) {
         modalVideo.play().catch(function () {});
       }
       if (data.srt_available) {
-        _activeSrtAvailable = true;
-        showSrtPrimary();
+        checkCaption(data.duration);
       } else {
-        var searchTerm = sessionStorage.getItem("pikaraoke_search_term") || "";
-        runLyricsSearch(_activeYtTitle, searchTerm);
+        searchLyricsForActiveVideo();
       }
     },
     error: function () {
       // Preview probe failed — fall back to the Genius search flow so
       // the user still has a way to pick lyrics.
       if (!modal.classList.contains("is-active")) return;
-      var searchTerm = sessionStorage.getItem("pikaraoke_search_term") || "";
-      runLyricsSearch(_activeYtTitle, searchTerm);
+      searchLyricsForActiveVideo();
     },
   });
 }
@@ -1079,6 +1127,7 @@ $(document).on("click.search", ".search_result_items_select", function () {
           <video id="modal-video" controls playsinline muted preload="metadata"></video>
         </div>
         <div id="lyrics-section" class="is-hidden">
+          <p id="lyrics-caption-note" class="has-text-grey is-hidden"></p>
           <p id="lyrics-loading" class="has-text-grey is-hidden">Searching lyrics...</p>
           <div id="lyrics-srt-primary" class="is-hidden">
             <p id="lyrics-srt-note" class="has-text-grey" style="margin-bottom: 0.4rem;">

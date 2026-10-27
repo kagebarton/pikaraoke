@@ -395,13 +395,28 @@ class TestGetPreviewInfo:
     def test_asks_mweb_for_the_combined_format_and_reads_captions(self):
         # The default client serves only split streams; without mweb the
         # format-18 selector fails and the preview is lost.
-        stdout = b'https://example.test/v.mp4\n{"en-abc": [], "fr": []}\n'
+        stdout = b'https://example.test/v.mp4\n{"en-abc": [], "fr": []}\n213\n'
         with patch(
             "subprocess.run", return_value=MagicMock(returncode=0, stdout=stdout, stderr=b"")
         ) as mock_run:
-            assert get_preview_info("https://youtu.be/x") == ("https://example.test/v.mp4", True)
+            assert get_preview_info("https://youtu.be/x") == (
+                "https://example.test/v.mp4",
+                True,
+                213.0,
+            )
         cmd = mock_run.call_args[0][0]
         assert cmd[cmd.index("--extractor-args") + 1] == "youtube:player_client=default,mweb"
+
+    def test_a_video_with_no_length_has_no_duration(self):
+        stdout = b"https://example.test/v.mp4\nNA\nNA\n"
+        with patch(
+            "subprocess.run", return_value=MagicMock(returncode=0, stdout=stdout, stderr=b"")
+        ):
+            assert get_preview_info("https://youtu.be/x") == (
+                "https://example.test/v.mp4",
+                False,
+                None,
+            )
 
 
 class TestSelectEnSrt:

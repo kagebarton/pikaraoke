@@ -241,13 +241,15 @@ def get_search_results(query: str) -> list[list[str]]:
         raise
 
 
-def get_preview_info(video_url: str) -> tuple[str | None, bool]:
-    """Return ``(stream_url, has_en_captions)`` in a single yt-dlp call.
+def get_preview_info(video_url: str) -> tuple[str | None, bool, float | None]:
+    """Return ``(stream_url, has_en_captions, duration_s)`` in a single yt-dlp call.
 
     ``has_en_captions`` is ``True`` when manual English subtitles (any
     ``en*`` lang code) exist. Auto-generated captions are intentionally
     excluded so the flag predicts the download path, which fetches only
-    manual subs (``--write-subs``).
+    manual subs (``--write-subs``). ``duration_s`` is YouTube's length for the
+    video, which the search page's caption check measures against before a
+    download; ``None`` when YouTube gives none.
     """
     cmd = (
         yt_dlp_cmd
@@ -259,6 +261,8 @@ def get_preview_info(video_url: str) -> tuple[str | None, bool]:
             "url",
             "--print",
             "%(subtitles)j",
+            "--print",
+            "duration",
             # yt-dlp's default client (visionos as of 2026.08) offers only
             # split audio/video streams; mweb still serves the combined
             # format 18 a browser can preview.
@@ -276,7 +280,7 @@ def get_preview_info(video_url: str) -> tuple[str | None, bool]:
             logging.warning(
                 f"yt-dlp preview info failed for {video_url}: {result.stderr.decode('utf-8', 'ignore')}"
             )
-            return None, False
+            return None, False, None
         lines = [l for l in result.stdout.decode("utf-8", "ignore").splitlines() if l.strip()]
         stream_url = lines[0].strip() if lines else None
         has_en = False
@@ -289,13 +293,19 @@ def get_preview_info(video_url: str) -> tuple[str | None, bool]:
                         has_en = True
                 except json.JSONDecodeError:
                     pass
-        return stream_url, has_en
+        duration = None
+        if len(lines) > 2:
+            try:
+                duration = float(lines[2])
+            except ValueError:  # "NA" for a live stream
+                pass
+        return stream_url, has_en, duration
     except subprocess.TimeoutExpired:
         logging.error(f"yt-dlp preview info timed out for: {video_url}")
-        return None, False
+        return None, False, None
     except (FileNotFoundError, PermissionError) as e:
         logging.error(f"Could not run yt-dlp: {e}")
-        return None, False
+        return None, False, None
 
 
 def _select_en_srt(dest_dir: str, stem: str) -> str | None:
