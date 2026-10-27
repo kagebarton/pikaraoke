@@ -1749,13 +1749,34 @@ def listed(tools: LibraryTools) -> list[dict]:
 
 
 class TestAfterDownloadCheck:
-    def test_a_song_the_picker_already_chose_for_is_queued(self, download):
-        write_choice(VIDEO_ID, {"genius_id": 7})
+    @pytest.mark.parametrize("choice", [{"genius_id": 7}, {"mode": "raw"}])
+    def test_a_song_the_picker_chose_lyrics_for_is_queued(self, download, choice):
+        write_choice(VIDEO_ID, choice)
 
         download.tools.on_song_downloaded(download.song)
 
         download.processing.enqueue.assert_called_once_with(download.song)
         assert listed(download.tools) == []
+
+    def test_a_picker_caption_choice_that_passes_the_gate_is_queued(self, download):
+        write_choice(VIDEO_ID, {"mode": "srt"})
+        write_caption(download.folder, STEM, words=60)
+
+        download.tools.on_song_downloaded(download.song)
+
+        download.processing.enqueue.assert_called_once_with(download.song)
+        assert listed(download.tools) == []
+
+    def test_a_picker_caption_choice_still_gets_the_length_gate(self, download):
+        write_choice(VIDEO_ID, {"mode": "srt"})
+        caption = write_caption(download.folder, STEM, words=3)
+
+        download.tools.on_song_downloaded(download.song)
+
+        assert not caption.exists()
+        download.processing.enqueue.assert_not_called()
+        [row] = listed(download.tools)
+        assert row["reason"] == "sparse_caption"
 
     def test_a_caption_that_passes_the_length_gate_is_queued(self, download):
         write_caption(download.folder, STEM, words=60)  # 60 words per minute
