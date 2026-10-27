@@ -34,6 +34,7 @@ from pikaraoke.lib.pipeline_tracker import PipelineTracker
 from pikaraoke.lib.playback_controller import PlaybackController
 from pikaraoke.lib.preference_manager import PreferenceManager
 from pikaraoke.lib.processing_manager import ProcessingManager
+from pikaraoke.lib.queue_hold import QueueHold
 from pikaraoke.lib.queue_manager import QueueManager
 from pikaraoke.lib.song_manager import SongManager
 from pikaraoke.lib.youtube_dl import (
@@ -66,6 +67,7 @@ class Karaoke:
     playback_controller: PlaybackController
     pipeline_tracker: PipelineTracker
     library_tools: LibraryTools
+    queue_hold: QueueHold
 
     now_playing_notification: str | None = None
     _volume: float  # backing field; access via .volume property
@@ -276,7 +278,6 @@ class Karaoke:
             events=self.events,
             preferences=self.preferences,
             song_manager=self.song_manager,
-            queue_manager=self.queue_manager,
             download_path=self.download_path,
             youtubedl_proxy=self.youtubedl_proxy,
             additional_ytdl_args=self.additional_ytdl_args,
@@ -314,9 +315,15 @@ class Karaoke:
             events=self.events,
             download_manager=self.download_manager,
         )
-        # After the tracker: its song_downloaded handler runs first (handlers run
-        # in registration order), so the item has its song path when the queue
-        # emits processing_queued or needs_pick.
+        self.queue_hold = QueueHold(
+            queue_manager=self.queue_manager,
+            events=self.events,
+            library_tools=self.library_tools,
+        )
+        # After the tracker and the queue hold: their song_downloaded handlers run
+        # first (handlers run in registration order), so the tracker row and the
+        # held queue item have their song path when LibraryTools emits
+        # processing_queued, needs_pick or processing_skipped.
         self.events.on("song_downloaded", self.library_tools.on_song_downloaded)
 
         # Wire overlay state provider so the MPV poll thread can render OSD overlays

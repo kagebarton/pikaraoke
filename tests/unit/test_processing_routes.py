@@ -831,6 +831,49 @@ class TestRegenRows:
         tracker._song_manager.delete.assert_called_once_with("/songs/New---aaa111.mp4")
 
 
+class TestCancelAnnouncesDownload:
+    """Cancelling a download row emits ``download_cancelled`` so a held queue slot is freed."""
+
+    @pytest.mark.parametrize("status", ["pending", "active"])
+    def test_cancelling_a_download_emits_its_url(self, status):
+        tracker = _make_tracker()
+        item = PipelineItem(title="New", url="https://youtube.com/watch?v=aaa", user="Alice")
+        item.download_status = status
+        tracker._items.append(item)
+        cancelled = []
+        tracker._events.on("download_cancelled", cancelled.append)
+
+        assert tracker.cancel(item.id) is True
+
+        assert cancelled == [{"url": "https://youtube.com/watch?v=aaa"}]
+
+    def test_removing_a_pending_download_emits_its_url(self):
+        tracker = _make_tracker()
+        item = PipelineItem(title="New", url="https://youtube.com/watch?v=aaa", user="Alice")
+        tracker._items.append(item)
+        cancelled = []
+        tracker._events.on("download_cancelled", cancelled.append)
+
+        assert tracker.remove(item.id) is True
+
+        assert cancelled == [{"url": "https://youtube.com/watch?v=aaa"}]
+
+    def test_cancelling_processing_of_a_downloaded_song_emits_nothing(self):
+        tracker = _make_tracker()
+        item = PipelineItem(title="New", url="https://youtube.com/watch?v=aaa", user="Alice")
+        item.download_status = "complete"
+        item.song_path = "/songs/New---aaa11111111.mp4"
+        tracker._items.append(item)
+        tracker._processing_manager.pending_jobs = [item.song_path]
+        tracker.get_status(admin=True)
+        cancelled = []
+        tracker._events.on("download_cancelled", cancelled.append)
+
+        assert tracker.cancel(item.id) is True
+
+        assert cancelled == []
+
+
 class TestProcessRows:
     def test_a_song_with_no_row_gets_a_process_row(self):
         tracker = _make_tracker()

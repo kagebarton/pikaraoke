@@ -233,7 +233,6 @@ def main() -> int:
         events=events,
         preferences=preferences,
         song_manager=song_manager,
-        queue_manager=None,  # only consulted when enqueue=True, which we never pass
         download_path=str(folder),
         temp_dir=get_temp_directory(),
     )

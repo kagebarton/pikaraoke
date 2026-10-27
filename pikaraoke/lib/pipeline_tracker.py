@@ -269,9 +269,11 @@ class PipelineTracker:
         also deletes the downloaded song file from the library so the user
         starts clean. A ``regen`` or ``process`` item is a song already in the
         library: its file is never touched.
-        File I/O is done outside the lock to avoid blocking get_status().
+        File I/O and the ``download_cancelled`` emit (QueueHold frees the slot)
+        are done outside the lock to avoid blocking get_status().
         """
         song_to_delete: str | None = None
+        cancelled_download_url: str | None = None
         notify = False
         with self._lock:
             item = self._find_item(item_id)
@@ -288,6 +290,7 @@ class PipelineTracker:
                     "Cancel: aborting active download for '%s' (url=%s)", item.title, item.url
                 )
                 self._download_manager.cancel_active_download(item.url)
+                cancelled_download_url = item.url
                 self._remove_item(item_id)
                 notify = True
             elif item.download_status == "pending":
@@ -295,6 +298,7 @@ class PipelineTracker:
                     "Cancel: removing pending download for '%s' (url=%s)", item.title, item.url
                 )
                 self._download_manager.cancel_pending_download(item.url)
+                cancelled_download_url = item.url
                 self._remove_item(item_id)
                 notify = True
             elif item.song_path and item.processing_status == "pending":
@@ -337,6 +341,8 @@ class PipelineTracker:
         # that must not block get_status() callers waiting on _lock.
         if song_to_delete:
             self._delete_song(song_to_delete)
+        if cancelled_download_url:
+            self._events.emit("download_cancelled", {"url": cancelled_download_url})
         if notify:
             self._notify_change()
         return True
