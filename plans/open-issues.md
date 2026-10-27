@@ -166,6 +166,30 @@ From the `library_tools` real-world run, 2026-10-20. Record: `library-tools.md`.
 - `stable_whisper.align` raises on its own failed-alignment `None`; the stage
   recovers but logs a traceback.
 
+## Web pages (pre-existing on `dev`)
+
+Found 2026-10-27 during the `queue_hold` manual checks on the Windows box.
+Record: `plans/queue-hold.md` on branch `queue_hold`, the manual checks row.
+
+- **Server messages never reach a screen.** `Karaoke.send_notification` emits
+  the socket event `notification`, and its only listener was the browser splash
+  (`static/js/splash.js`), removed by `367375cc` (2026-06-03). Every
+  `events.emit("notification", ...)` since then shows only in the console log:
+  added to the queue, download starting or failed, couldn't be processed,
+  already in the queue, the per-user limit, library updated. Toasts the pages
+  do show come from their own request's answer. Also: nothing emits
+  `clear_notification` any more, so `now_playing_notification` stays set after
+  the first message and later ones are not even sent. `queue_hold` relies on
+  these messages for every case where it drops a held slot. Recommended: own
+  small branch off `dev` after `queue_hold` lands (pages listen and toast); not
+  ruled.
+- **The direct box ignores its own Add to queue tick.** `downloadSong` in
+  `search.html` sends `$("#add-to-queue-search").is(":checked")`, and that box
+  exists only when search results are on screen; with none, the download is
+  never queued. The two ticks are kept in sync, so reading
+  `#add-to-queue-direct` (always on the page) fixes it. Upstream code, also on
+  `master`. A one-line fix was offered on `queue_hold`; not ruled.
+
 ## Test suite (Windows box)
 
 - Three known failures: `test_pipeline_stem_worker.py` (two
