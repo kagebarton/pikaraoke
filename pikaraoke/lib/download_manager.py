@@ -13,7 +13,6 @@ from threading import Thread
 
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.preference_manager import PreferenceManager
-from pikaraoke.lib.queue_manager import QueueManager
 from pikaraoke.lib.song_manager import SongManager
 from pikaraoke.lib.srt_provenance import clear_generated_marker
 from pikaraoke.lib.youtube_dl import (
@@ -38,7 +37,6 @@ class DownloadManager:
         events: EventSystem,
         preferences: PreferenceManager,
         song_manager: SongManager,
-        queue_manager: QueueManager,
         download_path: str,
         youtubedl_proxy: str | None = None,
         additional_ytdl_args: str | None = None,
@@ -50,7 +48,6 @@ class DownloadManager:
             events: Event system for notifications and broadcasts.
             preferences: Configuration manager for persistent settings.
             song_manager: Manager for song library operations.
-            queue_manager: Manager for playback queue.
             download_path: Directory where downloads are saved.
             youtubedl_proxy: Optional proxy URL for yt-dlp.
             additional_ytdl_args: Optional additional arguments for yt-dlp.
@@ -59,7 +56,6 @@ class DownloadManager:
         self._events = events
         self._preferences = preferences
         self._song_manager = song_manager
-        self._queue_manager = queue_manager
         self._download_path = download_path
         self._youtubedl_proxy = youtubedl_proxy
         self._additional_ytdl_args = additional_ytdl_args
@@ -96,7 +92,7 @@ class DownloadManager:
 
         Args:
             video_url: YouTube video URL.
-            enqueue: Whether to add to playback queue after download.
+            enqueue: Whether to hold a playback-queue slot for the song.
             user: Username to attribute the download to.
             title: Display title (defaults to URL if not provided).
         """
@@ -198,7 +194,7 @@ class DownloadManager:
 
         Args:
             video_url: YouTube video URL.
-            enqueue: Whether to add to queue after download.
+            enqueue: Whether to hold a playback-queue slot for the song.
             user: Username to attribute the download to.
             title: Display title (defaults to URL if not provided).
 
@@ -259,14 +255,8 @@ class DownloadManager:
                     {"url": video_url, "error": output or "Unknown error"},
                 )
         else:
-            if enqueue:
-                # MSG: Message shown after the download is completed and queued
-                self._events.emit(
-                    "notification", _("Downloaded and queued: %s") % displayed_title, "success"
-                )
-            else:
-                # MSG: Message shown after the download is completed but not queued
-                self._events.emit("notification", _("Downloaded: %s") % displayed_title, "success")
+            # MSG: Message shown after the download is completed
+            self._events.emit("notification", _("Downloaded: %s") % displayed_title, "success")
 
             # After download, find the file path by ID
             song_path = None
@@ -286,15 +276,10 @@ class DownloadManager:
                 logging.warning(
                     f"Could not find downloaded song in {self._download_path} matching ID: {video_id}"
                 )
-
-            if enqueue:
-                if song_path:
-                    self._queue_manager.enqueue(song_path, user, log_action=False)
-                else:
-                    # MSG: Message shown after the download is completed but the adding to queue fails
-                    self._events.emit(
-                        "notification", _("Error queueing song: ") + displayed_title, "danger"
-                    )
+                self._events.emit(
+                    "download_error",
+                    {"url": video_url, "error": "Downloaded file not found"},
+                )
 
         return rc
 

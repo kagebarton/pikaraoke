@@ -44,19 +44,12 @@ def song_manager():
 
 
 @pytest.fixture
-def queue_manager():
-    """Create a mock QueueManager."""
-    return MagicMock()
-
-
-@pytest.fixture
-def download_manager(events, preferences, song_manager, queue_manager):
+def download_manager(events, preferences, song_manager):
     """Create a DownloadManager with real Events/Prefs and mocked managers."""
     return DownloadManager(
         events=events,
         preferences=preferences,
         song_manager=song_manager,
-        queue_manager=queue_manager,
         download_path="/songs",
         youtubedl_proxy=None,
         additional_ytdl_args=None,
@@ -189,40 +182,6 @@ class TestDownloadManagerExecuteDownload:
     @patch("flask_babel._", side_effect=lambda x: x)
     @patch("subprocess.Popen")
     @patch("pikaraoke.lib.download_manager.build_ytdl_download_command")
-    def test_execute_download_with_enqueue(
-        self,
-        mock_build_cmd,
-        mock_popen,
-        mock_gettext,
-        download_manager,
-        song_manager,
-        queue_manager,
-    ):
-        """Test download with enqueue adds to queue."""
-        mock_build_cmd.return_value = ["yt-dlp", "url"]
-
-        mock_process = MagicMock()
-        mock_process.communicate.return_value = ("Starting download...", None)
-        mock_process.returncode = 0
-        mock_popen.return_value = mock_process
-
-        # Mock find_by_id
-        song_manager.songs.find_by_id.return_value = "/songs/Song---abc.mp4"
-        song_manager.songs.add_if_valid.return_value = True
-
-        # Mock Path.mkdir to avoid filesystem operations
-        with patch("pathlib.Path.mkdir"):
-            download_manager._execute_download(
-                "https://youtube.com/watch?v=abc", True, "TestUser", "Title"
-            )
-
-        queue_manager.enqueue.assert_called_once_with(
-            "/songs/Song---abc.mp4", "TestUser", log_action=False
-        )
-
-    @patch("flask_babel._", side_effect=lambda x: x)
-    @patch("subprocess.Popen")
-    @patch("pikaraoke.lib.download_manager.build_ytdl_download_command")
     def test_execute_download_failure(
         self, mock_build_cmd, mock_popen, mock_gettext, download_manager, events
     ):
@@ -281,12 +240,22 @@ class TestDownloadManagerExecuteDownload:
     @patch("flask_babel._", side_effect=lambda x: x)
     @patch("subprocess.Popen")
     @patch("pikaraoke.lib.download_manager.build_ytdl_download_command")
-    def test_execute_download_enqueue_without_path(
-        self, mock_build_cmd, mock_popen, mock_gettext, download_manager, song_manager, events
+    @pytest.mark.parametrize("enqueue", [True, False])
+    def test_execute_download_without_path_emits_download_error(
+        self,
+        mock_build_cmd,
+        mock_popen,
+        mock_gettext,
+        download_manager,
+        song_manager,
+        events,
+        enqueue,
     ):
-        """Test enqueue fails gracefully when path can't be parsed."""
-        notifications = []
-        events.on("notification", lambda msg, cat="info": notifications.append((msg, cat)))
+        """A successful download whose file can't be found ends the tracker row and any held slot."""
+        errors = []
+        events.on("download_error", errors.append)
+        downloaded = []
+        events.on("song_downloaded", downloaded.append)
 
         mock_build_cmd.return_value = ["yt-dlp", "url"]
 
@@ -298,17 +267,18 @@ class TestDownloadManagerExecuteDownload:
         # Mock find_by_id to return None (file not found)
         song_manager.songs.find_by_id.return_value = None
 
-        download_manager._execute_download("https://youtube.com/watch?v=abc", True, "User", "Title")
+        url = "https://youtube.com/watch?v=abc"
+        download_manager._execute_download(url, enqueue, "User", "Title")
 
-        # Should log error about queueing
-        assert any("Error queueing" in msg and cat == "danger" for msg, cat in notifications)
+        assert errors == [{"url": url, "error": "Downloaded file not found"}]
+        assert downloaded == []
 
 
 class TestDownloadManagerSpecialCharacters:
     """Tests for handling special characters in downloaded filenames.
 
     These tests prevent regressions where special characters in song titles
-    (common in non-English songs) break the enqueue functionality.
+    (common in non-English songs) break the hand-off to the rest of the pipeline.
     See commit f399b57 for the original fix.
     """
 
@@ -324,7 +294,7 @@ class TestDownloadManagerSpecialCharacters:
     @patch("flask_babel._", side_effect=lambda x: x)
     @patch("subprocess.Popen")
     @patch("pikaraoke.lib.download_manager.build_ytdl_download_command")
-    def test_execute_download_special_characters_enqueue(
+    def test_execute_download_special_characters_emits_song_downloaded(
         self,
         mock_build_cmd,
         mock_popen,
@@ -333,9 +303,11 @@ class TestDownloadManagerSpecialCharacters:
         file_path,
         download_manager,
         song_manager,
-        queue_manager,
+        events,
     ):
-        """Test enqueue works with special characters in filename."""
+        """A special-character filename still reaches song_downloaded with the right path."""
+        downloaded = []
+        events.on("song_downloaded", downloaded.append)
         mock_build_cmd.return_value = ["yt-dlp", "url"]
         mock_process = MagicMock()
         mock_process.communicate.return_value = ("Done", None)
@@ -343,7 +315,6 @@ class TestDownloadManagerSpecialCharacters:
         mock_popen.return_value = mock_process
 
         song_manager.songs.find_by_id.return_value = file_path
-        song_manager.songs.add_if_valid.return_value = True
 
         # Mock Path.mkdir to avoid filesystem operations
         with patch("pathlib.Path.mkdir"):
@@ -354,7 +325,7 @@ class TestDownloadManagerSpecialCharacters:
                 title="Test",
             )
 
-        queue_manager.enqueue.assert_called_once_with(file_path, "TestUser", log_action=False)
+        assert downloaded == [file_path]
 
     @patch("flask_babel._", side_effect=lambda x: x)
     @patch("subprocess.Popen")
