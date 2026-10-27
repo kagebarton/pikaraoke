@@ -9,8 +9,9 @@ changes `pikaraoke/`. Whether and how to wire a winner into the pipeline
 is decided after GATE Z2, from what this probe finds.
 
 **Status: DRAFT 2026-10-20.** Phase 0 executed 2026-10-20; the four pilot
-sheets confirmed 2026-10-27; Phase 1 runner built and smoke-tested on CPU,
-GPU run on Windows next (see Results log).
+sheets confirmed 2026-10-27; Phase 1 runner built, GPU run done 2026-10-27
+(14 arm-song artifacts saved); Ken's listening and calls are next, then the
+GATE Z1 read (see Results log).
 
 ## Why now, and what this replaces
 
@@ -564,3 +565,73 @@ so every arm was run end to end on CPU against a scratch library, W and R on
 written to `zh_probe/phase1/`. Not yet run on the A2000: peak VRAM of the CTC
 windows and of W's align on a 5-minute stem. The first W align on CUDA will
 include CUDA start-up (15 s in Phase 0c).
+
+### 2026-10-27 — Phase 1 GPU run (Sonnet 5.5), artifacts saved, awaiting Ken's calls
+
+Ken ran `phase1_run.py` and then `phase1_review.py` on Windows (RTX A2000,
+6 GB; output on D:, read here over the RDP redirect). Code is `9a3823a`;
+nothing in `pikaraoke/` or the lock files changed. Every arm ran on every song
+of its languages (all 14 artifact pairs exist, so no arm-song failed). Arms W, R and H on #1 and #2;
+W, R, Hsk and Hal on #9 and #11: 14 artifact pairs.
+
+Saved under `zh_probe/phase1/`: `<video id>/<arm>.json` and `.ass` for each of
+the 14, `review_<video id>.csv` (4), `commands.txt`, `runs.txt` (the table
+below, verbatim columns). The `.ass` paths in `commands.txt` are Windows
+paths, as Ken ran the review script there.
+
+Mechanical check of the 14 JSONs (data validity only, not quality): unit
+counts equal the sheet's (467, 479, 290, 359) and every sheet line has units;
+in every file unit starts are non-decreasing and no unit ends before it starts.
+
+**Run table** (`runs.txt`; load and align are separate, MB are torch peak
+allocated / reserved around the call):
+
+| song | arm | align s | align peak MB | units | shared | interpolated | zero-duration | frames |
+|---|---|---|---|---|---|---|---|---|
+| #1 | W | 28.05 | 3763 / 4310 | 467 | 56 | 0 | 120 | |
+| #1 | R | 10.12 | 2069 / 2880 | 467 | 0 | 0 | 0 | 15914 |
+| #1 | H | 5.80 | 2081 / 2894 | 467 | 0 | 4 | 0 | 15914 |
+| #2 | W | 18.75 | 3763 / 4004 | 479 | 71 | 0 | 20 | |
+| #2 | R | 4.37 | 2069 / 2882 | 479 | 0 | 0 | 0 | 12711 |
+| #2 | H | 4.11 | 2081 / 2894 | 479 | 0 | 4 | 0 | 12711 |
+| #9 | W | 6.48 | 3763 / 4004 | 290 | 48 | 0 | 4 | |
+| #9 | R | 4.24 | 2069 / 2880 | 290 | 0 | 0 | 0 | 10250 |
+| #9 | Hsk | 3.53 | 2081 / 2894 | 290 | 0 | 2 | 0 | 10250 |
+| #9 | Hal | 10.76 | 3457 / 4088 | 290 | 0 | 3 | 0 | 5125 |
+| #11 | W | 9.04 | 3763 / 4004 | 359 | 58 | 0 | 8 | |
+| #11 | R | 4.86 | 2069 / 2880 | 359 | 0 | 0 | 0 | 15879 |
+| #11 | Hsk | 5.13 | 2081 / 2894 | 359 | 0 | 16 | 0 | 15879 |
+| #11 | Hal | 16.31 | 3457 / 4088 | 359 | 0 | 6 | 0 | 7940 |
+
+**Model load** (once per arm; the same figures repeat on each of its songs in
+`runs.txt`):
+
+| arm | model | load s | load peak MB (alloc / reserved) |
+|---|---|---|---|
+| W | large-v3-turbo.pt | 12.84 | 3159 / 3230 |
+| R | torchaudio MMS_FA | 5.38 | 1212 / 1224 |
+| H | jonatasgrosman zh-cn | 137.2 | 1226 / 1238 |
+| Hsk | scottykwok cantonese | 4.22 | 1226 / 1238 |
+| Hal | alvanlii w2v-BERT cantonese | 9.38 | 2329 / 2346 |
+
+The 137.2 s for H is the first model loaded by the run (arm order W, R, H, Hsk,
+Hal puts it third; not investigated, so not attributed). Align peaks are
+identical per arm across songs, as expected if one fixed-size window sets the
+peak (inference, not checked). Frame counts: 20 ms per frame for R, H and Hsk
+(#1: 15914 frames for the stem), 40 ms for Hal (half as many).
+
+**First start and last end per song and arm** (seconds in the stem; from the
+JSONs):
+
+| song | W | R | H / Hsk | Hal |
+|---|---|---|---|---|
+| #1 | 44.24 -> 274.14 | 43.98 -> 301.92 | 44.00 -> 301.56 | |
+| #2 | 28.50 -> 254.24 | 28.14 -> 254.22 | 28.06 -> 238.18 | |
+| #9 | 16.70 -> 181.88 | 16.64 -> 186.96 | 16.66 -> 181.68 | 16.56 -> 181.56 |
+| #11 | 19.00 -> 261.38 | 18.98 -> 313.84 | 19.02 -> 259.82 | 18.96 -> 259.68 |
+
+No verdicts here. Per `review_<video id>.csv`, Ken plays each arm with the
+`commands.txt` line, marks bad lines, and gives one overall call per song and
+arm (singable as is / singable with a few bad lines / not singable). Opus
+reads GATE Z1 from those calls. Both Cantonese H candidates were run, so the
+read also has to say which one stands for H in Phase 2 if H survives.
