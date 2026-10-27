@@ -14,7 +14,10 @@ if not hasattr(werkzeug, "__version__"):
 
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.pipeline_tracker import PipelineItem, PipelineTracker
+from pikaraoke.lib.preference_manager import PreferenceManager
 from pikaraoke.lib.processing_manager import ProcessingManager
+from pikaraoke.lib.queue_hold import QueueHold
+from pikaraoke.lib.queue_manager import QueueManager
 from pikaraoke.routes.processing import processing_bp
 
 ROUTE_PREFIX = "pikaraoke.routes.processing"
@@ -872,6 +875,38 @@ class TestCancelAnnouncesDownload:
         assert tracker.cancel(item.id) is True
 
         assert cancelled == []
+
+
+class TestCancelAnnouncesWaitingJob:
+    """Cancelling a processing job that is still waiting emits ``processing_cancelled``."""
+
+    def test_cancelling_a_waiting_process_row_emits_its_path(self):
+        tracker = _make_tracker()
+        item = _announce_processing(tracker)
+        tracker._processing_manager.pending_jobs = [LIB_PATH]
+        tracker.get_status(admin=True)  # derives "pending"
+        cancelled = []
+        tracker._events.on("processing_cancelled", cancelled.append)
+
+        assert tracker.cancel(item.id) is True
+
+        assert cancelled == [LIB_PATH]
+
+    def test_a_held_song_leaves_the_queue_when_its_waiting_job_is_cancelled(self, tmp_path):
+        tracker = _make_tracker()
+        queue_manager = QueueManager(
+            preferences=PreferenceManager(config_file_path=str(tmp_path / "config.ini")),
+            events=tracker._events,
+        )
+        QueueHold(queue_manager, tracker._events, MagicMock())
+        item = _announce_processing(tracker)
+        tracker._processing_manager.pending_jobs = [LIB_PATH]
+        tracker.get_status(admin=True)  # derives "pending"
+        queue_manager.enqueue(LIB_PATH, "Alice", waiting="processing", log_action=False)
+
+        assert tracker.cancel(item.id) is True
+
+        assert queue_manager.queue == []
 
 
 class TestProcessRows:
