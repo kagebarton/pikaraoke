@@ -107,6 +107,19 @@ class TestGetNowPlaying:
         assert result["up_next"] == "Next Song"
         assert result["next_user"] == "NextUser"
 
+    def test_get_now_playing_up_next_is_the_song_that_will_play(self, mock_karaoke):
+        """A held song's turn goes to its singer's ready song, and up next names that song."""
+        qm = mock_karaoke.queue_manager
+        qm.enqueue("/songs/Held Song---aaaaaaaaaaa.mp4", "UserA", waiting="processing")
+        qm.enqueue("/songs/B Song---bbbbbbbbbbb.mp4", "UserB")
+        qm.enqueue("/songs/A Ready---ccccccccccc.mp4", "UserA")
+
+        result = mock_karaoke.get_now_playing()
+
+        assert result["up_next"] == "A Ready"
+        assert result["next_user"] == "UserA"
+        assert qm.pop_next()["title"] == "A Ready"
+
 
 class TestResetNowPlaying:
     """Tests for the reset_now_playing method."""

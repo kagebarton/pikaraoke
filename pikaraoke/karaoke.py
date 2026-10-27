@@ -330,9 +330,8 @@ class Karaoke:
         if self.mpv_controller.is_running:
             self.playback_controller._get_queue_preview = lambda: tuple(
                 QueuedSong(title=item["title"], singer=item["user"])
-                for item in self.queue_manager.queue
-                if QueueManager.is_playable(item)
-            )[:5]
+                for item in self.queue_manager.upcoming(5)
+            )
             self.mpv_controller.set_overlay_state_provider(
                 self.playback_controller.build_overlay_state
             )
@@ -640,8 +639,8 @@ class Karaoke:
         Returns:
             Dictionary with now playing info, queue preview, and volume.
         """
-        queue = self.queue_manager.queue
-        next_song = next((item for item in queue if QueueManager.is_playable(item)), None)
+        upcoming = self.queue_manager.upcoming(1)
+        next_song = upcoming[0] if upcoming else None
 
         # Get playback state from PlaybackController
         playback_state = self.playback_controller.get_now_playing()
