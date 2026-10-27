@@ -100,6 +100,9 @@ window; none was seen live. Record: web plan, the section named.
 - The download and regen lanes don't check each other for duplicates (3.1i).
 - The tracker's cancel acts on the last status read; a row cancelled right
   after its job was taken drops the row and the job runs on (3.1i, pre-existing).
+  For a `download` row it also deletes the song file under the running job
+  (`PipelineTracker.cancel`'s pending branch; `cancel_pending` skips an active
+  path). Seen in code 2026-10-27, not live.
 - A cancel that lands just as the loop takes a job: the job runs, and the
   recorded skip swallows that song's next queue (8.2e, pre-existing on `dev`).
 - Two Regenerate or Repair requests at once both make a backup folder; two
