@@ -52,6 +52,12 @@
       return JSON.stringify(obj1) === JSON.stringify(obj2);
     }
 
+    function escapeHtml(str) {
+      return String(str).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+
     function debounce(func, wait) {
       let timeout;
       return function(...args) {
