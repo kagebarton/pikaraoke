@@ -145,7 +145,7 @@ class TestProcessingPage:
     def test_a_waiting_for_a_pick_row_shows_the_servers_words_not_its_own(self, env):
         body = get(env, "/processing", admin=True).get_data(as_text=True)
 
-        assert "if (row.state === 'needs_pick') return esc(row.subline);" in body
+        assert "if (row.state === 'needs_pick') return escapeHtml(row.subline);" in body
         # The source and reason words live in routes/library.py only.
         for gone in ("sources:", "reasons:", "T.sources", "T.reasons", "caption too sparse"):
             assert gone not in body
