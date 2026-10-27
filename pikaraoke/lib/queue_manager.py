@@ -6,14 +6,31 @@ and fair queue algorithm.
 
 from __future__ import annotations
 
+import functools
 import logging
 import random
+import threading
 from typing import Any, Callable
 
 from flask_babel import _
 
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.preference_manager import PreferenceManager
+
+
+def _locked(method: Callable[..., Any]) -> Callable[..., Any]:
+    """Run a queue change under the queue lock.
+
+    QueueHold changes held items from the download and processing threads
+    while routes and the run loop change the queue.
+    """
+
+    @functools.wraps(method)
+    def locked(self: QueueManager, *args: Any, **kwargs: Any) -> Any:
+        with self.lock:
+            return method(self, *args, **kwargs)
+
+    return locked
 
 
 class QueueManager:
@@ -28,6 +45,8 @@ class QueueManager:
         get_available_songs: Callable[[], Any] | None = None,
     ) -> None:
         self.queue: list[dict[str, Any]] = []
+        # QueueHold changes held items from worker threads, so queue changes take this lock
+        self.lock = threading.RLock()
         self._preferences = preferences
         self._events = events
         self._get_now_playing_user = get_now_playing_user
@@ -93,6 +112,7 @@ class QueueManager:
         # All songs are in rounds <= target_round, append to end
         return len(self.queue)
 
+    @_locked
     def enqueue(
         self,
         song_path: str,
@@ -201,11 +221,15 @@ class QueueManager:
         """Clear all songs from the queue and skip current song."""
         # MSG: Message shown after the queue is cleared
         self._events.emit("notification", _("Clear queue"), "danger")
-        self.queue = []
+        with self.lock:
+            self.queue = []
+        # skip_requested takes the playback lock, which play_file holds while it reads
+        # the queue, so the queue lock must be free before the events below
         self._events.emit("queue_update")
         self._events.emit("now_playing_update")
         self._events.emit("skip_requested")
 
+    @_locked
     def reorder(self, old_index: int, new_index: int) -> bool:
         """Move a song from old_index to new_index. Returns False if indices are invalid."""
         if not (0 <= old_index < len(self.queue) and 0 <= new_index < len(self.queue)):
@@ -224,6 +248,7 @@ class QueueManager:
         self._events.emit("now_playing_update")
         return True
 
+    @_locked
     def move_to_top(self, song_path: str) -> bool:
         """Move a song to the top of the queue (index 0). Returns False if not found or already at top."""
         index = self._find_song_index(song_path)
@@ -235,6 +260,7 @@ class QueueManager:
             return False
         return self.reorder(index, 0)
 
+    @_locked
     def move_to_bottom(self, song_path: str) -> bool:
         """Move a song to the bottom of the queue. Returns False if not found or already at bottom."""
         index = self._find_song_index(song_path)
@@ -251,6 +277,7 @@ class QueueManager:
         """Neither paused by its singer nor held for download or processing."""
         return not item.get("paused", False) and not item.get("waiting")
 
+    @_locked
     def pop_next(self) -> dict[str, Any] | None:
         """Remove and return the next song to play from the queue.
 
@@ -265,6 +292,7 @@ class QueueManager:
             logging.info(f"Popped song from queue: {song['title']}")
         return song
 
+    @_locked
     def upcoming(self, count: int) -> list[dict[str, Any]]:
         """The next ``count`` songs in the order pop_next will play them, as the queue stands."""
         remaining = list(self.queue)
@@ -304,6 +332,7 @@ class QueueManager:
         """True if the queue has at least one playable song."""
         return any(self.is_playable(item) for item in self.queue)
 
+    @_locked
     def toggle_pause_song(self, song_path: str) -> bool:
         """Toggle the paused flag on a single queued song. Used by admins. Returns False if not found."""
         index = self._find_song_index(song_path)
@@ -318,6 +347,7 @@ class QueueManager:
         self._events.emit("now_playing_update")
         return True
 
+    @_locked
     def toggle_pause_user(self, user: str) -> bool:
         """Toggle pause on all queued songs for a user (step-away mode).
 
@@ -339,6 +369,7 @@ class QueueManager:
         self._events.emit("now_playing_update")
         return True
 
+    @_locked
     def queue_edit(self, song_path: str, action: str) -> bool:
         """Move or remove a song in the queue. Action: 'up', 'down', or 'delete'."""
         index = self._find_song_index(song_path)

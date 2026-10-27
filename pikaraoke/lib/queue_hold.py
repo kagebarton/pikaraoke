@@ -85,11 +85,12 @@ class QueueHold:
         self._events.emit("now_playing_update")
 
     def _set_waiting(self, song_path: str, waiting: str | None) -> None:
-        item = self._held(song_path)
-        if item is None or item["waiting"] == waiting:
-            return
-        item["waiting"] = waiting
-        self._changed()
+        with self._queue_manager.lock:
+            item = self._held(song_path)
+            if item is None or item["waiting"] == waiting:
+                return
+            item["waiting"] = waiting
+            self._changed()
 
     def _remove(self, item: dict[str, Any]) -> None:
         self._queue_manager.queue_edit(item["file"], "delete")
@@ -105,19 +106,20 @@ class QueueHold:
             self._events.emit("notification", message, "warning")
 
     def _on_song_downloaded(self, song_path: str) -> None:
-        item = self._held_download(song_path)
-        if item is None:
-            return
-        if self._queue_manager.is_song_in_queue(song_path):
-            self._remove(item)
-            self._events.emit(
-                "notification", _("Already in the queue: %s") % item["title"], "warning"
-            )
-            return
-        # file first, then waiting: the item stays unplayable throughout
-        item["file"] = song_path
-        item["waiting"] = "processing"
-        self._changed()
+        with self._queue_manager.lock:
+            item = self._held_download(song_path)
+            if item is None:
+                return
+            if self._queue_manager.is_song_in_queue(song_path):
+                self._remove(item)
+                self._events.emit(
+                    "notification", _("Already in the queue: %s") % item["title"], "warning"
+                )
+                return
+            # file first, then waiting: the item stays unplayable throughout
+            item["file"] = song_path
+            item["waiting"] = "processing"
+            self._changed()
 
     def _on_needs_pick(self, song_path: str) -> None:
         self._set_waiting(song_path, "pick")
@@ -132,20 +134,22 @@ class QueueHold:
         self._set_waiting(song_path, None)
 
     def _on_processing_error(self, data: dict[str, Any]) -> None:
-        item = self._held(data["song_path"])
-        if item is None:
-            return
-        self._remove(item)
-        self._events.emit(
-            "notification",
-            _("%s couldn't be processed and was taken off the queue") % item["title"],
-            "danger",
-        )
+        with self._queue_manager.lock:
+            item = self._held(data["song_path"])
+            if item is None:
+                return
+            self._remove(item)
+            self._events.emit(
+                "notification",
+                _("%s couldn't be processed and was taken off the queue") % item["title"],
+                "danger",
+            )
 
     def _drop(self, song_path: str) -> None:
-        item = self._held(song_path)
-        if item is not None:
-            self._remove(item)
+        with self._queue_manager.lock:
+            item = self._held(song_path)
+            if item is not None:
+                self._remove(item)
 
     def _on_download_failed(self, data: dict[str, Any]) -> None:
         """A failed or cancelled download frees its slot; the download side has told the user."""
