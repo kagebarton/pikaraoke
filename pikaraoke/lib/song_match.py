@@ -20,7 +20,7 @@ MIN_PART_LENGTH = 4
 COMMON_PART_COUNT = 3
 
 _BRACKETED = re.compile(r"\([^)]*\)|\[[^\]]*\]")
-_SEPARATOR = re.compile(r"\s[-|｜–—_:]\s")
+_SEPARATOR = re.compile(r"\s[-|–—_:]\s")
 # A quote opens after a non-word character, closes with its own kind of mark before one, and
 # runs to the last closer, so the apostrophes of "Don't Stop Believin'" and "Rockin' Robin" do
 # not end it early.
@@ -34,8 +34,9 @@ class TitleParts:
     """The comparable pieces of one title."""
 
     parts: frozenset[str]
-    # Every non-empty normalized segment, short ones too (the kept quotes for a quoted title).
-    # Tells a different song by the same artist from a different upload of the same song.
+    # Every non-empty normalized segment, short ones too. Tells a different song by the same
+    # artist from a different upload of the same song. Read only beside a shared lead, so empty
+    # for a quoted title.
     segments: frozenset[str]
     # The first segment, normally the artist. A lead shared by two titles is ignored only when
     # each title has a segment the other lacks (two songs by one artist). Empty for a quoted
@@ -71,8 +72,10 @@ def _normalize(text: str) -> str:
 def _count_parts(titles: Iterable[TitleParts]) -> Counter[str]:
     """For each part, how many different sets of other parts it appears beside.
 
-    An artist sits beside a different song each time; a song seen again (another upload)
-    sits beside the same parts or none, so it stays below the common threshold.
+    In "Artist - Song" titles an artist sits beside a different song each time, while
+    another upload of a song sits beside the same artist, so the song stays below the
+    common threshold. Song-first covers ("Song - Singer") give the song a new partner
+    each time, so three of them make it common.
     """
     beside: dict[str, set[frozenset[str]]] = {}
     for title in titles:
@@ -88,12 +91,13 @@ def parse_title(title: str) -> TitleParts:
     Bracketed text is dropped: "(From 'Frozen')" names a film, not the song.
     A quote of 4+ characters outside brackets is the song name and the only part kept.
     """
-    segments = _SEPARATOR.split(_BRACKETED.sub(" ", title))
+    # NFKC first, so fullwidth separators ("｜", "－", "：") split like their ASCII forms.
+    segments = _SEPARATOR.split(_BRACKETED.sub(" ", unicodedata.normalize("NFKC", title)))
     quoted = [
         _normalize("".join(match)) for segment in segments for match in _QUOTED.findall(segment)
     ]
     if kept := frozenset(quote for quote in quoted if len(quote) >= MIN_PART_LENGTH):
-        return TitleParts(kept, kept, lead="")
+        return TitleParts(kept, frozenset(), lead="")
     normalized = [_normalize(segment) for segment in segments]
     parts = frozenset(part for part in normalized if len(part) >= MIN_PART_LENGTH)
     return TitleParts(parts, frozenset(filter(None, normalized)), lead=normalized[0])
