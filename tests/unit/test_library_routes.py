@@ -2038,6 +2038,37 @@ class TestPlaylistPage:
         assert "var m = withStatus('not_processed').length;" in html
         assert "$.map(withStatus('not_processed'), function (video) { return video.song; })" in html
 
+    def test_possible_duplicates_get_a_section_above_new_with_a_note_and_a_pill(self, env):
+        html = text(env.client.get("/library/playlist"))
+
+        assert "Possible duplicates ({n})" in html
+        assert "{n} possible duplicate" in html and "{n} possible duplicates" in html
+        assert html.index("if (state.playlist.groups.length) {") < html.index("if (fresh.length) {")
+        assert "fill(T.secSimilar" in html and "fill(T.secNew" in html
+        assert "if (similar) pills.append(pill('is-warning is-light'" in html
+        assert "'pl-tip-similar'" in html  # its note is the heading's (i)
+        assert '<template id="pl-tip-similar">' in html
+        assert "In library" in html  # the tag on a library copy's row, which has no box
+
+    def test_a_group_starts_unticked_but_for_its_first_video_unless_the_library_has_the_song(
+        self, env
+    ):
+        html = text(env.client.get("/library/playlist"))
+
+        assert "state.left = startUnticked(answer.playlist.groups);" in html
+        assert "if (group.songs.length || j > 0) left[id] = true;" in html
+        # Grouped videos leave "New" but keep its status, so the button counts them with the rest.
+        assert "var fresh = ungroupedNew();" in html
+        assert "return $.grep(withStatus('new'), function (video) { return !state.left" in html
+
+    def test_a_group_row_shows_the_channel_the_length_and_a_link_that_opens_youtube(self, env):
+        html = text(env.client.get("/library/playlist"))
+
+        assert "function videoDetails(video)" in html
+        assert "$.grep([video.channel, clock(video.duration)], Boolean)" in html
+        assert "'https://www.youtube.com/watch?v=' + video.id" in html
+        assert "target: '_blank', rel: 'noopener noreferrer'" in html
+
     def test_the_button_follows_the_boxes_and_is_disabled_at_zero(self, env):
         html = text(env.client.get("/library/playlist"))
 

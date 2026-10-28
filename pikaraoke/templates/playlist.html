@@ -16,6 +16,8 @@
   .pl-row input { width: 20px; height: 20px; accent-color: var(--dark-link); margin: 0; flex: none; }
   .pl-row-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
   .pl-title { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pl-groups { display: flex; flex-direction: column; gap: 10px; }
+  .pl-group-head { padding: 10px 12px 6px; font-weight: 700; text-transform: capitalize; border-bottom: 1px solid var(--dark-border); }
   .pl-more { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 44px; border: 0; border-top: 1px solid var(--dark-border); background: none; color: inherit; font: inherit; font-weight: 700; cursor: pointer; }
   .pl-foot { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
   .pl-foot .button { width: 100%; min-height: 44px; font-weight: 700; }
@@ -38,12 +40,16 @@
       videoOne: {{ _('%(n)s video', n='{n}') | tojson }},
       videoMany: {{ _('%(n)s videos', n='{n}') | tojson }},
       pillNew: {{ _('%(n)s new', n='{n}') | tojson }},
+      pillSimilarOne: {{ _('%(n)s possible duplicate', n='{n}') | tojson }},
+      pillSimilarMany: {{ _('%(n)s possible duplicates', n='{n}') | tojson }},
       pillUnprocessed: {{ _('%(n)s not processed', n='{n}') | tojson }},
       pillLibrary: {{ _('%(n)s in library', n='{n}') | tojson }},
+      secSimilar: {{ _('Possible duplicates (%(n)s)', n='{n}') | tojson }},
       secNew: {{ _('New: will download (%(n)s)', n='{n}') | tojson }},
       secUnprocessed: {{ _('In library, not processed (%(n)s)', n='{n}') | tojson }},
       secWaiting: {{ _('Already waiting (%(n)s)', n='{n}') | tojson }},
       secLibrary: {{ _('Already in library (%(n)s)', n='{n}') | tojson }},
+      inLibrary: {{ _('In library') | tojson }},
       leftOut: {{ _('Left out') | tojson }},
       skip: {{ _('Skip') | tojson }},
       showMore: {{ _('Show %(n)s more', n='{n}') | tojson }},
@@ -55,7 +61,7 @@
     var LIBRARY_SHOWN = 5; // "Already in library" rows shown before "Show N more"
 
     var state = {
-      playlist: null,    // {title, videos: [{id, title, status, song}]} once checked
+      playlist: null,    // {title, videos: [{id, title, channel, duration, status, song}], groups: [{part, videos, songs}]} once checked
       left: {},          // id -> true for a new video the admin unchecked
       showAll: false,    // the whole "Already in library" list is showing
       sending: false,
@@ -68,6 +74,44 @@
 
     function withStatus(status) {
       return $.grep(state.playlist.videos, function (video) { return video.status === status; });
+    }
+
+    // The new videos that sit in a possible-duplicates group, by id.
+    function groupedIds() {
+      var ids = {};
+      $.each(state.playlist.groups, function (i, group) {
+        $.each(group.videos, function (j, id) { ids[id] = true; });
+      });
+      return ids;
+    }
+
+    function ungroupedNew() {
+      var grouped = groupedIds();
+      return $.grep(withStatus('new'), function (video) { return !grouped[video.id]; });
+    }
+
+    function videoWithId(id) {
+      return $.grep(state.playlist.videos, function (video) { return video.id === id; })[0];
+    }
+
+    // A group that matches a library song starts with none of its videos ticked; any other
+    // group starts with only its first, since the rest are other uploads of the same song.
+    function startUnticked(groups) {
+      var left = {};
+      $.each(groups, function (i, group) {
+        $.each(group.videos, function (j, id) {
+          if (group.songs.length || j > 0) left[id] = true;
+        });
+      });
+      return left;
+    }
+
+    function clock(seconds) {
+      if (seconds == null) return '';
+      var two = function (n) { return (n < 10 ? '0' : '') + n; };
+      var h = Math.floor(seconds / 3600);
+      var m = Math.floor(seconds % 3600 / 60);
+      return (h ? h + ':' + two(m) : m) + ':' + two(seconds % 60);
     }
 
     function takenNew() {
@@ -89,13 +133,22 @@
       return [heading, card];
     }
 
-    function newRow(video) {
+    // Channel, length and a YouTube link: what tells one upload of a song from another.
+    function videoDetails(video) {
+      var facts = $.grep([video.channel, clock(video.duration)], Boolean);
+      var link = el('a', null, 'YouTube ↗')
+        .attr({ href: 'https://www.youtube.com/watch?v=' + video.id, target: '_blank', rel: 'noopener noreferrer' });
+      return el('span', 'pl-muted', facts.length ? facts.join(' · ') + ' · ' : '').append(link);
+    }
+
+    function newRow(video, withDetails) {
       var box = $('<input type="checkbox">').prop('checked', !state.left[video.id]);
       box.on('change', function () {
         if (this.checked) delete state.left[video.id]; else state.left[video.id] = true;
         render();
       });
       var body = el('div', 'pl-row-body').append(el('span', 'pl-title', video.title).attr('title', video.title));
+      if (withDetails) body.append(videoDetails(video));
       if (state.left[video.id]) body.append(el('span', 'pl-muted', T.leftOut));
       return el('label', 'pl-row').append(box, body);
     }
@@ -108,12 +161,26 @@
       return row;
     }
 
+    // The shared part heads the card; library copies are listed above the videos, with no box.
+    function groupCard(group) {
+      return el('div', 'pl-card').append(
+        el('div', 'pl-group-head', group.part),
+        $.map(group.songs, function (song) { return listedRow(song, T.inLibrary); }),
+        $.map(group.videos, function (id) { return newRow(videoWithId(id), true); })
+      );
+    }
+
     function renderLists() {
-      var fresh = withStatus('new');
+      var fresh = ungroupedNew();
       var unprocessed = withStatus('not_processed');
       var waiting = withStatus('waiting');
       var inLibrary = withStatus('in_library');
       var result = $('#pl-sections').empty();
+      if (state.playlist.groups.length) {
+        result.append(section(fill(T.secSimilar, { n: Object.keys(groupedIds()).length }),
+          el('div', 'pl-groups').append($.map(state.playlist.groups, groupCard)),
+          'pl-tip-similar'));
+      }
       if (fresh.length) {
         result.append(section(fill(T.secNew, { n: fresh.length }),
           el('div', 'pl-card').append($.map(fresh, newRow))));
@@ -148,9 +215,13 @@
       if (playlist === null) return;
       var pills = $('#pl-pills').empty();
       var title = playlist.title ? playlist.title + ' · ' : '';
+      var similar = Object.keys(groupedIds()).length;
       pills.append(
         pill('is-light', title + videoCount(playlist.videos.length)),
-        pill('is-info is-light', fill(T.pillNew, { n: withStatus('new').length })),
+        pill('is-info is-light', fill(T.pillNew, { n: ungroupedNew().length }))
+      );
+      if (similar) pills.append(pill('is-warning is-light', fill(similar === 1 ? T.pillSimilarOne : T.pillSimilarMany, { n: similar })));
+      pills.append(
         pill('is-warning is-light', fill(T.pillUnprocessed, { n: withStatus('not_processed').length })),
         pill('is-success is-light', fill(T.pillLibrary, { n: withStatus('in_library').length }))
       );
@@ -183,6 +254,7 @@
       }).done(function (answer) {
         if (seq !== state.seq) return;
         state.playlist = answer.playlist;
+        state.left = startUnticked(answer.playlist.groups);
         showMessage('', false);
       }).fail(function (xhr) {
         if (seq !== state.seq) return;
@@ -238,6 +310,7 @@
 <p id="pl-message" class="pl-muted mt-3 is-hidden"></p>
 
 <div id="pl-result" class="is-hidden">
+  <template id="pl-tip-similar">{% call info_tip() %}{% trans %}These look like the same song, judged by title only. A group that matches a song in the library starts with nothing ticked; any other group starts with only its first video. Tick the ones you still want.{% endtrans %}{% endcall %}</template>
   <template id="pl-tip-unprocessed">{% call info_tip() %}{% trans %}Downloaded earlier but never finished. Will be processed.{% endtrans %}{% endcall %}</template>
   <template id="pl-tip-waiting">{% call info_tip() %}{% trans %}Downloading, queued for processing, or waiting for a lyrics pick.{% endtrans %}{% endcall %}</template>
   <div id="pl-pills" class="pl-pills"></div>
