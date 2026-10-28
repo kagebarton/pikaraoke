@@ -33,11 +33,13 @@ from pikaraoke.lib.library_regen import (
     gate_on_disk_caption,
 )
 from pikaraoke.lib.library_tools import (
+    CUSTOM_SHEET_MAX_CHARS,
     PLAYLIST_NOT_A_LINK,
     PLAYLIST_ONE_VIDEO,
     PLAYLIST_UNREADABLE,
     PLAYLIST_VIDEO_IN_LIST,
     LibraryTools,
+    custom_sheet_lines,
 )
 from pikaraoke.lib.song_list import SongList
 from pikaraoke.lib.song_manager import SongManager
@@ -378,6 +380,7 @@ class FakeGenius:
 
 LYRICS = "Line one here\nLine two here\nLine three here\nLine four here"
 GENIUS_SONG = GeniusSong(text=LYRICS, title="Defying Gravity", artist="Idina Menzel")
+SHEET = LYRICS.split("\n")
 RECORD = {
     "id": 5,
     "trackName": "Defying Gravity",
@@ -447,6 +450,101 @@ class TestRepair:
         regen = self.repaired(tmp_path, song, "caption")
 
         assert regen.song.plan.kind == "fetch"
+
+    def test_a_custom_repair_queues_the_sheet_plan_with_the_normalized_text(self, tmp_path, song):
+        regen = self.repaired(tmp_path, song, "custom", text="[Verse]\r\nLine one\rLine two\n")
+
+        assert (regen.label, regen.reset) == ("Repair", True)
+        assert regen.song.song_path == song
+        plan = regen.song.plan
+        assert (plan.kind, plan.seed, plan.label) == (
+            "seed",
+            {"lyrics_origin": "custom"},
+            "custom sheet",
+        )
+        assert plan.lyrics_path == tmp_path / "lyrics" / f"{song.stem}.custom.txt"
+        assert plan.custom_text == "[Verse]\nLine one\nLine two\n"
+        assert (plan.lrclib_record, plan.lrclib_skip) == (None, False)
+
+    def test_a_custom_repair_writes_nothing_until_the_run(self, tmp_path, song):
+        self.repaired(tmp_path, song, "custom", text="Line one\n")
+
+        assert not (tmp_path / "lyrics").exists()
+
+    def test_a_custom_repair_backs_up_only_that_song(self, tmp_path, song):
+        other = make_video(tmp_path, "B---bbbbbbbbbbb")
+        genius_bundle(tmp_path, other.stem)
+        write_sheet(tmp_path, other.stem)
+
+        self.repaired(tmp_path, song, "custom", text="Line one\n")
+
+        [backup] = tmp_path.glob("regen_backup_*")
+        assert [p.name for p in (backup / "alignment_debug").iterdir()] == [f"{song.stem}.json"]
+        assert not (backup / "lyrics").exists()
+
+    def test_an_existing_sheet_is_in_the_backup(self, tmp_path, song):
+        write_sheet(tmp_path, song.stem, "the old words\n")
+
+        self.repaired(tmp_path, song, "custom", text="Line one\n")
+
+        [backup] = tmp_path.glob("regen_backup_*")
+        saved = (backup / "lyrics" / f"{song.stem}.custom.txt").read_text(encoding="utf-8")
+        assert saved == "the old words\n"
+
+    def test_a_picked_lrclib_match_rides_on_a_custom_repair(self, tmp_path, song, monkeypatch):
+        monkeypatch.setattr(lrclib, "get_record", lambda record_id: {**RECORD, "id": record_id})
+
+        regen = self.repaired(tmp_path, song, "custom", text="Line one\n", lrclib_id=5)
+
+        assert regen.song.plan.lrclib_record["id"] == 5
+        assert regen.song.plan.lrclib_skip is False
+
+    def test_skipping_lrclib_rides_on_a_custom_repair_and_fetches_nothing(
+        self, tmp_path, song, monkeypatch
+    ):
+        monkeypatch.setattr(lrclib, "get_record", MagicMock(side_effect=AssertionError("fetched")))
+
+        regen = self.repaired(
+            tmp_path, song, "custom", text="Line one\n", lrclib_id=5, lrclib_skip=True
+        )
+
+        assert regen.song.plan.lrclib_skip is True
+        assert regen.song.plan.lrclib_record is None
+
+    def test_a_custom_repair_asks_genius_for_nothing(self, tmp_path, song):
+        genius = FakeGenius({})
+
+        self.repaired(tmp_path, song, "custom", genius=genius, text="Line one\n")
+
+        assert genius.fetches == []
+
+    @pytest.mark.parametrize(
+        ("text", "kwargs", "message"),
+        [
+            ("", {}, "no lyric lines"),
+            ("   \n\n  ", {}, "no lyric lines"),
+            ("[Chorus]", {}, "no lyric lines"),
+            (None, {}, "must be text"),
+            (["Line one"], {}, "must be text"),
+            ("la " * CUSTOM_SHEET_MAX_CHARS, {}, "too long"),
+            ("Line one", {"lrclib_id": 5}, "LRCLIB didn't return"),
+        ],
+    )
+    def test_a_custom_repair_that_cannot_start_changes_nothing(
+        self, tmp_path, song, monkeypatch, text, kwargs, message
+    ):
+        """The run replaces the song's outputs, so every refusal comes before the backup."""
+        monkeypatch.setattr(lrclib, "get_record", lambda record_id: None)
+        write_sheet(tmp_path, song.stem, "the old words\n")
+        tools, processing = make_tools(tmp_path, [str(song)])
+
+        with pytest.raises(RegenError, match=message):
+            tools.repair(str(song), "custom", text=text, **kwargs)
+
+        processing.enqueue_regen.assert_not_called()
+        assert not list(tmp_path.glob("regen_backup_*"))
+        sheet = tmp_path / "lyrics" / f"{song.stem}.custom.txt"
+        assert sheet.read_text(encoding="utf-8") == "the old words\n"
 
     def test_a_transcribe_repair_queues_a_transcribe_plan(self, tmp_path, song):
         regen = self.repaired(tmp_path, song, "transcribe")
@@ -531,6 +629,46 @@ class TestRepair:
         with pytest.raises(RegenError, match="video songs only"):
             tools.repair(str(mp3), "transcribe")
         processing.enqueue_regen.assert_not_called()
+
+
+class TestCustomSheetLines:
+    def test_the_lines_are_what_the_song_will_display(self):
+        text = "[Verse 1]\nLine one here\n\n(Line two) here\n[Chorus]\nLine three here\n"
+
+        assert custom_sheet_lines(text) == ["Line one here", "(Line two) here", "Line three here"]
+
+    def test_any_line_end_style_is_one_line_break(self):
+        assert custom_sheet_lines("one a\r\ntwo b\rthree c\nfour d") == [
+            "one a",
+            "two b",
+            "three c",
+            "four d",
+        ]
+
+    @pytest.mark.parametrize(
+        ("text", "message"),
+        [
+            ("", "no lyric lines"),
+            ("  \n\t\n ", "no lyric lines"),
+            ("[Chorus]", "no lyric lines"),
+            ("[Verse 1]\n[Chorus]\n\n[Outro]", "no lyric lines"),
+            ("...\n♪ ♪", "no lyric lines"),
+            (None, "must be text"),
+            (123, "must be text"),
+            (["one", "two"], "must be text"),
+            (b"one", "must be text"),
+            ("la " * CUSTOM_SHEET_MAX_CHARS, "too long"),
+        ],
+    )
+    def test_a_sheet_that_cannot_be_used_is_refused_with_a_message(self, text, message):
+        with pytest.raises(RegenError, match=message):
+            custom_sheet_lines(text)
+
+    def test_a_sheet_of_exactly_the_cap_is_taken(self):
+        text = ("la" + "\n") * (CUSTOM_SHEET_MAX_CHARS // 3) + "x" * (CUSTOM_SHEET_MAX_CHARS % 3)
+
+        assert len(text) == CUSTOM_SHEET_MAX_CHARS
+        assert custom_sheet_lines(text)
 
 
 class TestGeniusSong:
@@ -641,7 +779,7 @@ class TestLrclibCandidates:
         ]
         tools, searches = self.tools(tmp_path, song, records, monkeypatch)
 
-        found = tools.lrclib_candidates(str(song), 7, "defying gravity", "idina menzel")
+        found = tools.lrclib_candidates(str(song), SHEET, "defying gravity", "idina menzel")
 
         assert searches == [("defying gravity", "idina menzel")]
         assert found["video_duration_s"] == 257.0
@@ -660,7 +798,7 @@ class TestLrclibCandidates:
         records = [{**RECORD, "id": 2, "duration": 254.0}, self.full(id=1, duration=300.0)]
         tools, _ = self.tools(tmp_path, song, records, monkeypatch)
 
-        found = tools.lrclib_candidates(str(song), 7, "t", "a")
+        found = tools.lrclib_candidates(str(song), SHEET, "t", "a")
 
         assert [(c["id"], c["best"]) for c in found["candidates"]] == [(2, False), (1, True)]
 
@@ -669,7 +807,7 @@ class TestLrclibCandidates:
         records = [self.full(id=1), self.full(id=2)]
         tools, _ = self.tools(tmp_path, song, records, monkeypatch)
 
-        found = tools.lrclib_candidates(str(song), 7, "t", "a")
+        found = tools.lrclib_candidates(str(song), SHEET, "t", "a")
 
         assert [(c["id"], c["current"]) for c in found["candidates"]] == [(1, False), (2, True)]
 
@@ -686,7 +824,7 @@ class TestLrclibCandidates:
         records = [self.full(id=1), {k: v for k, v in self.full().items() if k != "id"}]
         tools, _ = self.tools(tmp_path, song, records, monkeypatch)
 
-        found = tools.lrclib_candidates(str(song), 7, "t", "a")
+        found = tools.lrclib_candidates(str(song), SHEET, "t", "a")
 
         assert [c["current"] for c in found["candidates"]] == [False, False]
 
@@ -694,27 +832,43 @@ class TestLrclibCandidates:
         records = [{"id": 3, "trackName": "Plain only", "syncedLyrics": None}, self.full(id=1)]
         tools, _ = self.tools(tmp_path, song, records, monkeypatch)
 
-        found = tools.lrclib_candidates(str(song), 7, "t", "a")
+        found = tools.lrclib_candidates(str(song), SHEET, "t", "a")
 
         assert [c["id"] for c in found["candidates"]] == [1]
 
     def test_no_matches_is_an_empty_list(self, tmp_path, song, monkeypatch):
         tools, _ = self.tools(tmp_path, song, [], monkeypatch)
 
-        assert tools.lrclib_candidates(str(song), 7, "t", "a")["candidates"] == []
+        assert tools.lrclib_candidates(str(song), SHEET, "t", "a")["candidates"] == []
 
     def test_a_match_with_no_length_has_no_difference(self, tmp_path, song, monkeypatch):
         tools, _ = self.tools(tmp_path, song, [self.full(id=1, duration=None)], monkeypatch)
 
-        [candidate] = tools.lrclib_candidates(str(song), 7, "t", "a")["candidates"]
+        [candidate] = tools.lrclib_candidates(str(song), SHEET, "t", "a")["candidates"]
 
         assert candidate["duration_diff_s"] is None
+
+    def test_candidates_are_scored_against_whatever_lines_are_given(
+        self, tmp_path, song, monkeypatch
+    ):
+        records = [self.full(id=1)]
+        tools, _ = self.tools(tmp_path, song, records, monkeypatch)
+
+        found = tools.lrclib_candidates(str(song), ["Line one here", "Line two here"], "t", "a")
+
+        [candidate] = found["candidates"]
+        assert (candidate["mapped"], candidate["sheet_lines"]) == (2, 2)
+
+    def test_a_genius_songs_lines_are_the_ones_it_displays(self, tmp_path, song, monkeypatch):
+        tools, _ = self.tools(tmp_path, song, [], monkeypatch)
+
+        assert tools.genius_sheet_lines(7) == SHEET
 
     def test_genius_lyrics_that_cannot_be_fetched_raise(self, tmp_path, song, monkeypatch):
         tools, _ = self.tools(tmp_path, song, [self.full(id=1)], monkeypatch)
 
         with pytest.raises(GeniusUnavailable):
-            tools.lrclib_candidates(str(song), 99, "t", "a")
+            tools.genius_sheet_lines(99)
 
 
 class TestRepairUsesTheListedRecord:
@@ -741,7 +895,7 @@ class TestRepairUsesTheListedRecord:
     def listed(self, tools, song, monkeypatch, *ids):
         records = [{**RECORD, "id": record_id} for record_id in ids]
         monkeypatch.setattr(lrclib, "search", lambda track, artist: records)
-        tools.lrclib_candidates(str(song), 7, "t", "a")
+        tools.lrclib_candidates(str(song), SHEET, "t", "a")
         return records
 
     def queued_record(self, tools, processing, song, lrclib_id):
@@ -755,6 +909,17 @@ class TestRepairUsesTheListedRecord:
 
         assert self.queued_record(tools, processing, song, 5) is listed
 
+    def test_a_custom_repair_after_a_search_queues_the_listed_record_too(
+        self, tmp_path, song, monkeypatch
+    ):
+        monkeypatch.setattr(lrclib, "get_record", MagicMock(side_effect=AssertionError("fetched")))
+        tools, processing = make_tools(tmp_path, [str(song)])
+        _, listed = self.listed(tools, song, monkeypatch, 4, 5)
+
+        tools.repair(str(song), "custom", text="Line one\n", lrclib_id=5)
+
+        assert processing.enqueue_regen.call_args.args[0].song.plan.lrclib_record is listed
+
     def test_without_a_search_a_repair_still_asks_lrclib(self, tmp_path, song, fetched):
         tools, processing = make_tools(tmp_path, [str(song)], genius=FakeGenius({7: GENIUS_SONG}))
 
@@ -767,7 +932,7 @@ class TestRepairUsesTheListedRecord:
         tools, processing = make_tools(tmp_path, [str(song)], genius=FakeGenius({7: GENIUS_SONG}))
         no_id = {k: v for k, v in RECORD.items() if k != "id"}
         monkeypatch.setattr(lrclib, "search", lambda track, artist: [no_id])
-        tools.lrclib_candidates(str(song), 7, "t", "a")
+        tools.lrclib_candidates(str(song), SHEET, "t", "a")
 
         self.queued_record(tools, processing, song, 5)
 

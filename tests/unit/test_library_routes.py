@@ -666,6 +666,14 @@ class TestRepairPage:
         assert "rp-tag" not in card(html, "caption")
         assert "rp-tag" not in card(html, "transcribe")
 
+    def test_a_custom_lyrics_song_is_current_as_custom(self, env):
+        bundle = caption_bundle()
+        bundle["lyrics"] = {"origin": "custom", "lines": ["one"]}
+
+        html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", bundle)))
+
+        assert 'var CURRENT_SOURCE = "custom"' in html
+
     def test_a_caption_song_is_current_on_the_caption_card(self, env):
         html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())))
 
@@ -916,6 +924,92 @@ class TestLrclibSearchRoute:
         assert response.get_json()["success"] is False
 
 
+class TestLrclibSearchCustomRoute:
+    """The same search, scored against the lyrics the admin typed (posted, not in the URL)."""
+
+    SHEET = "[Verse]\r\nLine one here\r\nLine two here\r\n"
+
+    @pytest.fixture
+    def song(self, env, monkeypatch):
+        env.genius.fetch_song.side_effect = AssertionError("Genius was asked")
+        self.searches = []
+        self.records = []
+
+        def fake_search(track, artist):
+            self.searches.append((track, artist))
+            return self.records
+
+        monkeypatch.setattr(lrclib, "search", fake_search)
+        return env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())
+
+    def search(self, env, song, **body):
+        payload = {"song": song, "title": "defying gravity", "artist": "menzel", "text": self.SHEET}
+        payload.update(body)
+        return env.client.post("/song_info/lrclib_search", json=payload)
+
+    def test_a_guest_gets_403_json(self, env, song):
+        env.admin = False
+
+        assert self.search(env, song).status_code == 403
+        assert self.searches == []
+
+    @pytest.mark.parametrize("song_value", [None, ["a"], "/not/in/the/library.mp4"])
+    def test_a_song_outside_the_library_is_rejected(self, env, song, song_value):
+        assert self.search(env, song_value).status_code == 400
+        assert self.searches == []
+
+    @pytest.mark.parametrize(
+        ("text", "message"),
+        [
+            ("", "no lyric lines"),
+            ("  \n ", "no lyric lines"),
+            ("[Chorus]", "no lyric lines"),
+            (None, "must be text"),
+            (7, "must be text"),
+            ("la " * 100_001, "too long"),
+        ],
+    )
+    def test_a_sheet_that_cannot_be_used_is_refused_without_searching(
+        self, env, song, text, message
+    ):
+        response = self.search(env, song, text=text)
+
+        assert response.status_code == 400
+        assert message in response.get_json()["error"]
+        assert self.searches == []
+
+    def test_the_candidates_are_scored_against_the_posted_sheet(self, env, song):
+        lrclib.write_lrc(lrclib.lrc_path(Path(song)), lrclib_record(5, "Line one here"))
+        self.records = [
+            lrclib_record(5, "Line one here", "Words from nowhere", duration=354.0),
+            lrclib_record(6, "Line one here", "Line two here", "Line three here", "Line four here"),
+        ]
+
+        body = self.search(env, song, title=" defying gravity ", artist="").get_json()
+
+        assert self.searches == [("defying gravity", "")]
+        current, best = body["candidates"]
+        # the sheet is two lines (the [Verse] header doesn't count), not the Genius song's four
+        assert (current["mapped"], current["sheet_lines"]) == (1, 2)
+        assert (best["mapped"], best["sheet_lines"]) == (2, 2)
+        assert (current["id"], current["current"], best["id"], best["best"]) == (5, True, 6, True)
+
+    def test_the_matches_are_worded_as_the_genius_search_words_them(self, env, song):
+        self.records = [lrclib_record(7, "Line one here", duration=354.0)]
+
+        body = self.search(env, song).get_json()
+
+        assert body["video_length"] == "video is 4:17"
+        [candidate] = body["candidates"]
+        assert (candidate["fit"], candidate["fit_near"]) == ("5:54 · 97 s longer", False)
+
+    @pytest.mark.parametrize("terms", [{"title": None, "artist": ["x"]}, {"title": 5, "artist": 7}])
+    def test_terms_that_are_not_text_search_as_empty(self, env, song, terms):
+        self.search(env, song, **terms)
+
+        assert self.searches == [("", "")]
+
+
 class TestRepairRoute:
     @pytest.fixture
     def song(self, env):
@@ -1011,6 +1105,54 @@ class TestRepairRoute:
 
         assert response.status_code == 400
         env.processing.enqueue_regen.assert_not_called()
+
+    def test_a_custom_sheet_queues_the_sheet_plan_and_asks_genius_for_nothing(self, env, song):
+        env.genius.fetch_song.side_effect = AssertionError("Genius was asked")
+
+        response = self.repair(env, song, source="custom", text="Line one\r\nLine two\r")
+
+        assert response.get_json() == {"success": True}
+        regen = self.queued(env)
+        assert (regen.label, regen.reset) == ("Repair", True)
+        assert (regen.song.plan.kind, regen.song.plan.seed) == ("seed", {"lyrics_origin": "custom"})
+        assert regen.song.plan.custom_text == "Line one\nLine two\n"
+        [backup] = env.folder.glob("regen_backup_*")
+        assert [p.name for p in (backup / "alignment_debug").iterdir()] == ["A---aaaaaaaaaaa.json"]
+
+    def test_an_lrclib_choice_rides_on_a_custom_sheet(self, env, song, monkeypatch):
+        monkeypatch.setattr(lrclib, "get_record", lambda record_id: lrclib_record(record_id, "x"))
+
+        self.repair(env, song, source="custom", text="Line one", lrclib_id=42)
+
+        assert self.queued(env).song.plan.lrclib_record["id"] == 42
+
+    def test_skipping_lrclib_rides_on_a_custom_sheet(self, env, song):
+        self.repair(env, song, source="custom", text="Line one", lrclib_skip=True)
+
+        assert self.queued(env).song.plan.lrclib_skip is True
+
+    @pytest.mark.parametrize(
+        ("body", "message"),
+        [
+            ({"text": ""}, "no lyric lines"),
+            ({"text": "  \n\n"}, "no lyric lines"),
+            ({"text": "[Verse 1]"}, "no lyric lines"),
+            ({}, "must be text"),
+            ({"text": None}, "must be text"),
+            ({"text": 12}, "must be text"),
+            ({"text": ["Line one"]}, "must be text"),
+            ({"text": "la " * 100_001}, "too long"),
+        ],
+    )
+    def test_a_sheet_that_cannot_be_used_queues_nothing_and_backs_up_nothing(
+        self, env, song, body, message
+    ):
+        response = self.repair(env, song, source="custom", **body)
+
+        assert response.status_code == 400
+        assert message in response.get_json()["error"]
+        env.processing.enqueue_regen.assert_not_called()
+        assert not list(env.folder.glob("regen_backup_*"))
 
     @pytest.mark.parametrize("body", [{}, {"source": "lyrics-from-the-moon"}, {"source": None}])
     def test_an_unknown_source_is_rejected(self, env, song, body):

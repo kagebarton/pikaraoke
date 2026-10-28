@@ -14,6 +14,7 @@ from pikaraoke.lib.current_app import get_karaoke_instance, get_site_name, is_ad
 from pikaraoke.lib.genius import GeniusUnavailable
 from pikaraoke.lib.library_regen import RegenError
 from pikaraoke.lib.library_status import HistoryEntry, SongStatus, length_gap_s
+from pikaraoke.lib.library_tools import custom_sheet_lines
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +96,12 @@ def _int_arg(name: str) -> int | None:
         return int(request.args[name])
     except (KeyError, ValueError):
         return None
+
+
+def _typed(body: dict, key: str) -> str:
+    """The text a JSON body holds under ``key``, trimmed; anything else counts as empty."""
+    value = body.get(key)
+    return value.strip() if isinstance(value, str) else ""
 
 
 def _mmss(seconds: float) -> str:
@@ -406,6 +413,8 @@ def _current_source(status: SongStatus) -> str | None:
         return "caption"
     if status.origin == "genius":
         return "genius"
+    if status.origin == "custom":
+        return "custom"
     return "transcribe" if status.category == "no_lyrics" else None
 
 
@@ -468,6 +477,18 @@ def genius_lyrics():
     return jsonify({"title": song.title, "artist": song.artist, "text": song.text})
 
 
+def _lrclib_results(song: str, sheet: list[str], title: str, artist: str) -> dict:
+    """LRCLIB's matches for the typed terms, scored against ``sheet`` and worded for the page."""
+    found = get_karaoke_instance().library_tools.lrclib_candidates(song, sheet, title, artist)
+    for candidate in found["candidates"]:
+        candidate["fit"], candidate["fit_near"] = _candidate_fit(candidate)
+    video_s = found["video_duration_s"]
+    found["video_length"] = (
+        _("video is %(length)s") % {"length": _mmss(video_s)} if video_s is not None else None
+    )
+    return found
+
+
 @song_info_bp.route("/song_info/lrclib_search")
 def lrclib_search():
     """LRCLIB matches for the typed title and artist, scored against the Genius pick."""
@@ -483,22 +504,34 @@ def lrclib_search():
     title = request.args.get("title", "").strip()
     artist = request.args.get("artist", "").strip()
     try:
-        found = k.library_tools.lrclib_candidates(song, genius_id, title, artist)
+        sheet = k.library_tools.genius_sheet_lines(genius_id)
     except GeniusUnavailable as e:
         logger.warning("LRCLIB search for %s: Genius lyrics unavailable: %s", song, e)
         return _error(_("Genius didn't return that song's lyrics. Try again."), 502)
-    for candidate in found["candidates"]:
-        candidate["fit"], candidate["fit_near"] = _candidate_fit(candidate)
-    video_s = found["video_duration_s"]
-    found["video_length"] = (
-        _("video is %(length)s") % {"length": _mmss(video_s)} if video_s is not None else None
-    )
-    return jsonify(found)
+    return jsonify(_lrclib_results(song, sheet, title, artist))
+
+
+@song_info_bp.route("/song_info/lrclib_search", methods=["POST"])
+def lrclib_search_custom():
+    """LRCLIB matches scored against the admin's own lyrics, which are too long for a query string."""
+    if not is_admin():
+        return _error(_("Admin only"), 403)
+    k = get_karaoke_instance()
+    song = posted_song(k)
+    if song is None:
+        return _error(_("Not a song in the library"), 400)
+    body = request.get_json(silent=True)
+    try:
+        sheet = custom_sheet_lines(body.get("text"))
+    except RegenError as e:
+        return _error(str(e), 400)
+    title, artist = (_typed(body, key) for key in ("title", "artist"))
+    return jsonify(_lrclib_results(song, sheet, title, artist))
 
 
 @song_info_bp.route("/song_info/repair", methods=["POST"])
 def repair():
-    """Queue a regeneration with a new lyric source, and for Genius the LRCLIB match."""
+    """Queue a regeneration with a new lyric source, and for Genius or custom the LRCLIB match."""
     if not is_admin():
         return _error(_("Admin only"), 403)
     k = get_karaoke_instance()
@@ -520,6 +553,7 @@ def repair():
             genius_id=body.get("genius_id"),
             lrclib_id=body.get("lrclib_id"),
             lrclib_skip=skip,
+            text=body.get("text"),
         )
     except RegenError as e:
         return _error(str(e), 400)
