@@ -153,6 +153,172 @@ Page, built on `8b89c17`'s layout:
 
 Steps 2 and 3-4 are independent after step 1.
 
+## Addendum: review fixes (2026-10-28)
+
+Executor: Claude Sonnet 5.5. Same branch, `similar_song_flag`, on top of
+`141749f`.
+
+`/code-review` of `c543c02..141749f` returned 10 findings. Ken ruled on them
+the same day:
+
+- **Every video starts ticked**, in both kinds of group. A group is a warning,
+  never a default to skip.
+- **Fix the rules** for the misses (rules A-D below), written here first.
+- **Small fixes:** the `$.map` row bug and the search page's ID exclusion. The
+  quote and fullwidth-bar fixes are rules C and D.
+- **Not done:** caching the library index. Last.fm is still out.
+
+### Rules A-D (`song_match.py`)
+
+Prototyped in a copy of `song_match.py` (scratchpad
+`/tmp/claude-1000/-home-ken-projects-pikaraoke/b71840c8-bcb9-4da3-b950-cba2d727ff9e/scratchpad/addendum/song_match_new.py`;
+it may be gone, and this section is the source of truth). All 29 tests in
+`test_song_match.py` pass under A-D unchanged.
+
+**A. The lead rule ignores a shared lead only when the titles differ
+elsewhere.** A part that leads both titles is ignored only when *each* title
+has a segment the other lacks. Segments here are every non-empty normalized
+segment, short ones included. A segment that normalizes to nothing (pure
+noise: `Karaoke`, `Official Video`) doesn't count. This needs a new
+`TitleParts.segments: frozenset[str]` (for a quoted title, the kept quotes).
+
+```python
+and not (part == a.lead == b.lead and a.segments - b.segments and b.segments - a.segments)
+```
+
+Why short segments count: in `Snow Patrol - Run` the segment "run" is dropped
+from `parts` (under 4 chars). If it were also dropped from the comparison, the
+title would look like the bare artist and match every Snow Patrol song.
+
+**B. A part is common (artist or film) when it appears alongside 3+
+*different* other-part sets, not in 3+ titles.** For each title containing the
+part, take the set of that title's other parts. Skip the empty set and count
+the distinct sets. Keep the threshold, `COMMON_PART_COUNT = 3`. Keep the split
+from step 3:
+
+- title vs title counts over library + playlist, as a union of the sets, not a
+  sum of counts;
+- title vs library counts over the library only.
+
+```python
+def _count_parts(titles):
+    seen = {}
+    for title in titles:
+        for part in title.parts:
+            if others := title.parts - {part}:
+                seen.setdefault(part, set()).add(others)
+    return Counter({part: len(sets) for part, sets in seen.items()})
+# similar_groups: playlist_frequency = _count_parts([*library.titles.values(), *parsed])
+```
+
+B only ever makes a part *less* common than today, never more: identical
+uploads of one song collapse to one set, and a title holding the part alone
+adds nothing. So it can only add matches.
+
+**C. A quote closes only with its own kind of mark, runs to the last closer
+in its segment, and is ignored when shorter than 4 chars.**
+
+- Closers pair with openers: `'...'`, `"..."`, `‘...’`, `“...”`.
+- The match is greedy and found per separator segment, so it never crosses a
+  ` - `.
+- A quote that normalizes to under 4 chars is not a quote; the title is parsed
+  by segments.
+
+```python
+_QUOTED = re.compile(r"(?<!\w)(?:'(.+)'|\"(.+)\"|‘(.+)’|“(.+)”)(?!\w)")
+segments = _SEPARATOR.split(_BRACKETED.sub(" ", title))
+quoted = [_normalize("".join(m)) for seg in segments for m in _QUOTED.findall(seg)]
+quoted = [q for q in quoted if len(q) >= MIN_PART_LENGTH]
+```
+
+Timed on pathological titles (6000 chars of quotes and apostrophes): under
+3 ms each.
+
+**D. `_SEPARATOR` also splits on the fullwidth bar `｜` (U+FF5C)**, which
+`metadata_parser._split_query_parts` already handles.
+
+Comments and docstrings to update: `COMMON_PART_COUNT`, `TitleParts.lead`,
+`similar_groups` (frequency wording). Update the comment on
+`test_titles_meeting_the_same_library_song_group_though_the_playlist_hides_their_match`
+too: under B the two Mirrors uploads also match each other directly. Rename it
+if the name no longer holds.
+
+Prototype results (`old` = `141749f`). Each row is a test case for step 5.
+Library titles carry a `---ID` suffix in the test.
+
+| # | Case | Library | Title(s) | old | A-D |
+| --- | --- | --- | --- | --- | --- |
+| 1 | F3, no separator (A) | Bohemian Rhapsody | Bohemian Rhapsody (Official Video) | miss | match |
+| 2 | F3, noise segment (A) | Shape of You - Ed Sheeran | Shape of You \| Karaoke | miss | match |
+| 3 | A with a common artist | 3 Justin Timberlake songs + Mirrors - Justin Timberlake (Lyrics) | Mirrors - Justin Timberlake [HD] | 1 of 2 Mirrors | both Mirrors |
+| 4 | A guard: short song name | Snow Patrol - Chasing Cars | Snow Patrol - Run | none | none |
+| 5 | A: short song name, same song | Snow Patrol - Run | Snow Patrol - Run (Official Video) | miss | match |
+| 6 | A guard: two songs, one artist | Backstreet Boys - Incomplete | Backstreet Boys - Larger Than Life | none | none |
+| 7 | F4, playlist only (B) | — | Shape of You - Ed Sheeran; Ed Sheeran - Shape of You (Lyrics); Shape of You \| Karaoke | [0,1] on "ed sheeran" | [0,1,2] on "shape of you" |
+| 8 | B guard: artist-heavy playlist | — | Mirrors / Selfish / Rock Your Body - Justin Timberlake | none | none |
+| 9 | F6, double quote (C) | Guns N' Roses - Sweet Child O' Mine | Guns N' Roses "Sweet Child O' Mine" (Official) | miss | match |
+| 10 | F6, single quote (C) | Bobby Day - Rockin' Robin | Bobby Day 'Rockin' Robin' | miss | match |
+| 11 | C: `'n'` is not a quote | KISS - Rock 'n' Roll All Nite | Kiss 'Rock 'n' Roll All Nite' | miss (library title had no parts) | match |
+| 12 | C: curly quotes | — | parse `“Rockin’ Robin” - Bobby Day` | {rockin} | {rockin robin} |
+| 13 | F7 (D) | Ed Sheeran - Perfect | Perfect ｜ Ed Sheeran | miss | match |
+| 14 | No regression | the real 33-song library vs itself | — | AWNW x2, For Good x2 | same |
+| 15 | No regression | both A Whole New World copies | Aladdin - A Whole New World (Lyrics) (+ Disney - ... \| Karaoke) | both copies | same |
+
+Still unchanged, by design (log them; no more rules):
+
+- **F1 and F2, the same-artist ambiguity.** "Perfect - Ed Sheeran" vs
+  "Shape of You - Ed Sheeran" has the same structure as "Mena Massoud - A Whole
+  New World" vs "ZAYN - A Whole New World": a shared part, every other part
+  different. Titles alone can't tell an artist with several songs from a song
+  with several artists. The obvious fix for F1 was tried: count the playlist in
+  title-vs-library matches. It clears F1 but loses both rows of case 15 and
+  fails `test_a_title_groups_with_the_library_songs_it_looks_like`. Because
+  everything starts ticked, such a group is noise, not a dropped song, and its
+  heading names the artist.
+- `'Run' - Snow Patrol` (quote too short, so parsed by segments) matches Snow
+  Patrol's other songs: same family as F2.
+- A medley `'Song A' & 'Song B'` is one part (C is greedy).
+- `Let It Go - Frozen` vs `Let It Go - Idina Menzel`: both titles have a
+  segment the other lacks, so A still ignores the shared lead. Non-Latin
+  titles. The index is rebuilt on every request.
+
+### Playlist page (`playlist.html`)
+
+- Delete `startUnticked()` and its call. `check()` already resets
+  `state.left = {}` before the request, so nothing starts left out.
+- Rewrite the `pl-tip-similar` note: drop the sentences about what starts
+  ticked. Something like: "These look like the same song, judged by title
+  only. Untick any you don't want."
+- Line 186: `$.map(fresh, newRow)` passes the index as `withDetails`. Use
+  `$.map(fresh, function (video) { return newRow(video); })`, the same shape
+  as its neighbours.
+- `test_library_routes.py:2058` asserts the `startUnticked` call: delete that
+  assertion. Add one for the `$.map` fix in the file's style if it kills the
+  bug's mutant.
+
+### Search page (`routes/search.py`)
+
+`_library_copies` drops songs that a result matches by ID using the
+`find_by_id` path (`existing_path`). `find_by_id` sees only top-level
+`---ID.` files, so a library copy saved as `Title [ID].mp4`, or in a subfolder,
+shows in the note next to its own result. Instead, drop library songs whose
+`extract_youtube_id(path)` (`metadata_parser`) is the ID of any result (`r[2]`
+of the result row). Out of scope: the result row itself still uses
+`find_by_id` (upstream) and may offer a download for such a file. Test in
+`test_search_render.py`: a library file `Title [ID].mp4` and a result with
+that ID produce no note.
+
+### Order
+
+5. Rules A-D + the table's cases in `test_song_match.py`. Mutation-check each
+   rule (remove it, watch its test fail). One commit.
+6. Playlist page: all ticked, the note text, the `$.map` fix. One commit.
+7. Search ID exclusion + render test. One commit.
+
+Steps 6 and 7 are independent of 5 and of each other. Write a Results log row
+per commit. Translation catalogs stay untouched, as before. Step 5 rewrites
+matching logic: after step 7, flag a `/code-review` as due and don't run it.
+
 ## Results log
 
 | Step | Commit | Tests | Notes |
