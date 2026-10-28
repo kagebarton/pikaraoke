@@ -448,3 +448,18 @@ class TestRunJobsFinishesEachSong:
 
         assert counts == (0, 1, 0)
         assert bundle.exists()
+
+    def test_a_song_that_fails_before_its_run_fails_alone(self, tmp_path, monkeypatch):
+        """Preparing the lyrics is part of the song's try: the batch goes on, files put back."""
+        sheet = tmp_path / "lyrics" / "Song.custom.txt"
+        sheet.parent.mkdir()
+        sheet.write_bytes("Café\n".encode("cp1252"))  # snapshotting it must not raise
+
+        def drop_then_fail(job, genius, lyrics_dir, config):
+            sheet.unlink()
+            raise OSError("disk full")
+
+        counts, _ = self._run(tmp_path, monkeypatch, None, prepare=drop_then_fail)
+
+        assert counts == (0, 1, 0)
+        assert sheet.read_bytes() == "Café\n".encode("cp1252")
