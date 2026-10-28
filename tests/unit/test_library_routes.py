@@ -2050,16 +2050,21 @@ class TestPlaylistPage:
         assert '<template id="pl-tip-similar">' in html
         assert "In library" in html  # the tag on a library copy's row, which has no box
 
-    def test_a_group_starts_unticked_but_for_its_first_video_unless_the_library_has_the_song(
-        self, env
-    ):
+    def test_every_video_starts_ticked_and_grouped_ones_count_toward_the_button(self, env):
         html = text(env.client.get("/library/playlist"))
 
-        assert "state.left = startUnticked(answer.playlist.groups);" in html
-        assert "if (group.songs.length || j > 0) left[id] = true;" in html
+        # A group is a warning, not a default to skip: the check seeds nothing as left out.
+        checked = html.split(".done(function (answer) {")[1].split("}).fail(")[0]
+        assert "state.left" not in checked
         # Grouped videos leave "New" but keep its status, so the button counts them with the rest.
         assert "var fresh = ungroupedNew();" in html
         assert "return $.grep(withStatus('new'), function (video) { return !state.left" in html
+
+    def test_the_new_list_does_not_pass_the_index_as_the_details_flag(self, env):
+        html = text(env.client.get("/library/playlist"))
+
+        # $.map hands the callback (item, index); newRow's second argument is "withDetails".
+        assert "$.map(fresh, function (video) { return newRow(video); })" in html
 
     def test_a_group_row_shows_the_channel_the_length_and_a_link_that_opens_youtube(self, env):
         html = text(env.client.get("/library/playlist"))

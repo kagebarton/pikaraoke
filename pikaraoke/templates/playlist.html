@@ -94,18 +94,6 @@
       return $.grep(state.playlist.videos, function (video) { return video.id === id; })[0];
     }
 
-    // A group that matches a library song starts with none of its videos ticked; any other
-    // group starts with only its first, since the rest are other uploads of the same song.
-    function startUnticked(groups) {
-      var left = {};
-      $.each(groups, function (i, group) {
-        $.each(group.videos, function (j, id) {
-          if (group.songs.length || j > 0) left[id] = true;
-        });
-      });
-      return left;
-    }
-
     function clock(seconds) {
       if (seconds == null) return '';
       var two = function (n) { return (n < 10 ? '0' : '') + n; };
@@ -183,7 +171,7 @@
       }
       if (fresh.length) {
         result.append(section(fill(T.secNew, { n: fresh.length }),
-          el('div', 'pl-card').append($.map(fresh, newRow))));
+          el('div', 'pl-card').append($.map(fresh, function (video) { return newRow(video); }))));
       }
       if (unprocessed.length) {
         result.append(section(fill(T.secUnprocessed, { n: unprocessed.length }),
@@ -254,7 +242,6 @@
       }).done(function (answer) {
         if (seq !== state.seq) return;
         state.playlist = answer.playlist;
-        state.left = startUnticked(answer.playlist.groups);
         showMessage('', false);
       }).fail(function (xhr) {
         if (seq !== state.seq) return;
@@ -310,7 +297,7 @@
 <p id="pl-message" class="pl-muted mt-3 is-hidden"></p>
 
 <div id="pl-result" class="is-hidden">
-  <template id="pl-tip-similar">{% call info_tip() %}{% trans %}These look like the same song, judged by title only. A group that matches a song in the library starts with nothing ticked; any other group starts with only its first video. Tick the ones you still want.{% endtrans %}{% endcall %}</template>
+  <template id="pl-tip-similar">{% call info_tip() %}{% trans %}These look like the same song, judged by title only. Untick any you don't want.{% endtrans %}{% endcall %}</template>
   <template id="pl-tip-unprocessed">{% call info_tip() %}{% trans %}Downloaded earlier but never finished. Will be processed.{% endtrans %}{% endcall %}</template>
   <template id="pl-tip-waiting">{% call info_tip() %}{% trans %}Downloading, queued for processing, or waiting for a lyrics pick.{% endtrans %}{% endcall %}</template>
   <div id="pl-pills" class="pl-pills"></div>
