@@ -452,6 +452,22 @@ class TestRepair:
 
         assert regen.song.plan.kind == "fetch"
 
+    @pytest.mark.parametrize(
+        ("source", "kwargs", "replaces"),
+        [
+            ("caption", {}, True),
+            ("genius", {"genius_id": 7}, True),
+            ("transcribe", {}, True),
+            ("custom", {"text": "Line one\n"}, False),
+        ],
+    )
+    def test_only_a_repair_to_another_source_removes_the_sheet(
+        self, tmp_path, song, source, kwargs, replaces
+    ):
+        regen = self.repaired(tmp_path, song, source, **kwargs)
+
+        assert regen.song.replaces_custom is replaces
+
     def test_a_custom_repair_queues_the_sheet_plan_with_the_normalized_text(self, tmp_path, song):
         regen = self.repaired(tmp_path, song, "custom", text="[Verse]\r\nLine one\rLine two\n")
 
@@ -1347,6 +1363,26 @@ class TestRunsReplayCustomSheets:
             assert plan.kind == "seed"
             assert plan.lyrics_path == tmp_path / "lyrics" / f"{stem}.custom.txt"
             assert plan.seed == {"lyrics_origin": "custom"}
+
+    @pytest.mark.parametrize("mode", ["all", "reset"])
+    def test_a_sheet_saved_after_the_run_opened_wins_and_is_kept(
+        self, tmp_path, monkeypatch, library, mode
+    ):
+        """The plain song was grouped without a sheet; a custom repair since then wins."""
+        tools, processing, _ = self.opened(tmp_path, monkeypatch, library, mode)
+        if self.group_of(tools, self.PLAIN) == "needs_pick":
+            tools.save_pick(library[1], {"kind": "transcribe"})
+        write_sheet(tmp_path, self.PLAIN)
+
+        tools.queue_run()
+
+        [regen] = [
+            c.args[0]
+            for c in processing.enqueue_regen.call_args_list
+            if c.args[0].song.song_path.stem == self.PLAIN
+        ]
+        assert regen.song.plan.seed == {"lyrics_origin": "custom"}
+        assert regen.song.replaces_custom is False
 
     def test_the_run_says_where_a_custom_song_stands_today(self, tmp_path, monkeypatch, library):
         tools, _, _ = self.opened(tmp_path, monkeypatch, library, "reset")

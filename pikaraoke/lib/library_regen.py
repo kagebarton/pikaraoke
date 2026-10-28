@@ -124,10 +124,14 @@ class Plan:
 
 @dataclass
 class SongJob:
+    """One song's regen. ``replaces_custom`` marks an admin's repair to another
+    source, the one job that removes the song's custom lyric sheet."""
+
     song_path: Path
     bundle: dict | None
     stale_reason: str
     plan: Plan | None = None
+    replaces_custom: bool = False
 
 
 def is_genius_reuse(plan: Plan | None) -> bool:
@@ -237,8 +241,8 @@ def custom_sheet_plan(song: Path, text: str | None = None) -> Plan:
 def custom_plan(job: SongJob) -> Plan | None:
     """The plan that replays the song's custom lyric sheet, or None when it has none.
 
-    Every plan chosen without an explicit admin pick starts here, a reset
-    included: only a repair to another source removes the sheet.
+    Every plan chosen without a repair starts here, a reset included: the sheet
+    wins until a repair to another source removes it.
     """
     if not custom_sheet_path(job.song_path).is_file():
         return None
@@ -258,14 +262,8 @@ def resolve_plan(job: SongJob, *, reset: bool) -> Plan:
     YouTube id becomes a ``fetch`` placeholder (resolved by :func:`fetch_caption`),
     otherwise a Genius ``prompt``.
     """
-    custom = custom_plan(job)
-    if custom is not None:
-        return custom
-    if not reset:
-        reuse = reuse_plan(job)
-        if reuse is not None:
-            return reuse
-    return fetch_or_prompt_plan(job.song_path)
+    plan = custom_plan(job) if reset else reuse_plan(job)
+    return plan or fetch_or_prompt_plan(job.song_path)
 
 
 def reuse_plan(job: SongJob) -> Plan | None:
@@ -633,18 +631,17 @@ def apply_lrclib_choice(job: SongJob) -> None:
 
 
 def apply_custom_choice(job: SongJob) -> None:
-    """Make ``lyrics/<stem>.custom.txt`` match the plan: written, kept or removed.
+    """Make ``lyrics/<stem>.custom.txt`` match the job: written, kept or removed.
 
-    A plan that carries ``custom_text`` writes the admin's sheet. Any other plan
-    that isn't itself a custom one is an explicit repair to another source (every
-    automatic path resolves to :func:`custom_plan` first), so the sheet goes; the
-    backup taken before the run still holds it.
+    A plan that carries ``custom_text`` writes the admin's sheet, and a repair to
+    another source (:attr:`SongJob.replaces_custom`) removes it; the backup taken
+    before the run still holds it. Every other job keeps it, so a plan that
+    missed the sheet costs one run, never the admin's lyrics.
     """
-    plan = job.plan
     sheet = custom_sheet_path(job.song_path)
-    if plan.custom_text is not None:
-        lrclib.write_text_atomic(sheet, plan.custom_text)
-    elif not is_custom_plan(plan):
+    if job.plan.custom_text is not None:
+        lrclib.write_text_atomic(sheet, job.plan.custom_text)
+    elif job.replaces_custom:
         sheet.unlink(missing_ok=True)
 
 

@@ -1081,10 +1081,20 @@ class TestApplyCustomChoice:
     )
     def test_a_repair_to_another_source_deletes_the_sheet(self, tmp_path, plan):
         sheet = _write_sheet(tmp_path, YT_STEM)
+        job = self._job_with(tmp_path, plan)
+        job.replaces_custom = True
 
-        lr.apply_custom_choice(self._job_with(tmp_path, plan))
+        lr.apply_custom_choice(job)
 
         assert not sheet.exists()
+
+    def test_any_other_plan_keeps_the_sheet(self, tmp_path):
+        """A plan that missed the sheet (not a repair) must not cost the admin's lyrics."""
+        sheet = _write_sheet(tmp_path, YT_STEM, "kept\n")
+
+        lr.apply_custom_choice(self._job_with(tmp_path, lr.Plan(kind="transcribe")))
+
+        assert sheet.read_text(encoding="utf-8") == "kept\n"
 
     def test_no_sheet_and_no_custom_plan_is_a_no_op(self, tmp_path):
         lr.apply_custom_choice(self._job_with(tmp_path, lr.Plan(kind="transcribe")))
