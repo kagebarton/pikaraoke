@@ -1391,6 +1391,17 @@ class TestRunsReplayCustomSheets:
 
         assert now == {"source": "custom"}
 
+    def test_a_custom_bundle_whose_sheet_is_gone_is_not_custom_now(
+        self, tmp_path, monkeypatch, library
+    ):
+        (tmp_path / "lyrics" / f"{self.MINE}.custom.txt").unlink()
+        tools, _, _ = self.opened(tmp_path, monkeypatch, library, "reset")
+
+        song = next(s for s in tools.run_view()["songs"] if Path(s["song"]).stem == self.MINE)
+
+        assert song["now"] != {"source": "custom"}
+        assert song["group"] != "reuse"
+
     def test_a_song_with_a_sheet_is_not_one_that_needs_a_pick(self, tmp_path, monkeypatch, library):
         tools, _, _ = self.opened(tmp_path, monkeypatch, library, "reset")
 

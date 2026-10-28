@@ -327,12 +327,18 @@ def _lrclib_label(match: dict | None) -> str:
     return _("LRCLIB %(length)s") % {"length": _mmss(match["duration"])}
 
 
+def _pick(entry: HistoryEntry) -> tuple:
+    """What a version's lyric pick is: its source, and the Genius song or the custom words."""
+    if entry.origin == "custom":
+        return ("custom", entry.lines)
+    return (entry.origin, (entry.genius or {}).get("id"))
+
+
 def _versions(history: list[HistoryEntry]) -> list[Version]:
     """The History tab's rows; each notes what its picks changed from the next older version."""
     versions = []
     for i, entry in enumerate(history):
         older = history[i + 1] if i + 1 < len(history) else None
-        genius = (entry.genius or {}).get("id")
         lrclib_id = (entry.lrclib or {}).get("id")
         if entry.genius:
             genius_text = _("Genius · %(artist)s") % {"artist": entry.genius.get("artist", "")}
@@ -350,8 +356,7 @@ def _versions(history: list[HistoryEntry]) -> list[Version]:
                 date=_date(entry.captured_at),
                 current=entry.backup is None,
                 genius=genius_text,
-                genius_changed=older is not None
-                and (entry.origin, genius) != (older.origin, (older.genius or {}).get("id")),
+                genius_changed=older is not None and _pick(entry) != _pick(older),
                 lrclib=lrclib_text,
                 lrclib_changed=lrclib_changed,
                 timed=(
@@ -419,13 +424,13 @@ def regenerate():
 
 
 def _current_source(status: SongStatus) -> str | None:
-    """Which repair source the song's lyrics come from now, for the page's "current" tag."""
+    """Which repair source the song's next regenerate uses, for the page's "current" tag."""
+    if status.custom_sheet:
+        return "custom"
     if status.origin == "srt":
         return "caption"
     if status.origin == "genius":
         return "genius"
-    if status.origin == "custom":
-        return "custom"
     return "transcribe" if status.category == "no_lyrics" else None
 
 

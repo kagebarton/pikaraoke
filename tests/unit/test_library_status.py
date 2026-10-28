@@ -267,6 +267,28 @@ class TestLrclibState:
         assert library_status.song_status(video).lrclib_state == "skipped"
 
 
+class TestCustomSheet:
+    """The sheet on disk, not the bundle's origin, says a song's pick is custom."""
+
+    def test_only_a_sheet_on_disk_counts(self, tmp_path):
+        video = make_video(tmp_path)
+        write_bundle(tmp_path, video.stem, lyrics={"origin": "custom", "lines": ["one"]})
+        assert library_status.song_status(video).custom_sheet is False
+
+        sheet = tmp_path / "lyrics" / f"{video.stem}.custom.txt"
+        sheet.parent.mkdir()
+        sheet.write_text("one\n", encoding="utf-8")
+        status = library_status.song_status(video)
+        assert (status.origin, status.custom_sheet) == ("custom", True)
+
+    def test_a_sheet_counts_with_no_bundle_too(self, tmp_path):
+        video = make_video(tmp_path)
+        (tmp_path / "lyrics").mkdir()
+        (tmp_path / "lyrics" / f"{video.stem}.custom.txt").write_text("one\n", encoding="utf-8")
+
+        assert library_status.song_status(video).custom_sheet is True
+
+
 class TestAsrAndDuration:
     def test_ytasr_and_duration_come_from_the_bundle(self, tmp_path):
         video = make_video(tmp_path)

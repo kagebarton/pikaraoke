@@ -12,7 +12,7 @@ from pathlib import Path
 
 from pikaraoke.lib import lrclib
 from pikaraoke.lib.alignment_capture import SCHEMA_VERSION
-from pikaraoke.lib.library_regen import list_videos, read_bundle
+from pikaraoke.lib.library_regen import custom_sheet_path, list_videos, read_bundle
 from pikaraoke.lib.metadata_parser import extract_youtube_id
 
 # Ken, 2026-10-20: a song with 15% or more of its lines guessed "looks poor".
@@ -26,6 +26,7 @@ class SongStatus:
     category: str  # "current" | "behind" | "no_lyrics" | "not_processed"
     schema_version: int | None
     origin: str | None  # bundle lyrics.origin: "srt" | "genius" | "custom"
+    custom_sheet: bool  # a custom lyric sheet on disk: the song's pick, whatever the bundle says
     genius: dict | None  # lyrics.genius: {id, title, artist}
     lrclib: dict | None  # lyrics.lrclib: trackName, artistName, albumName, duration, id
     lrclib_state: str  # "used" | "rejected" | "none" | "skipped" | "n/a"
@@ -65,6 +66,7 @@ def song_status(song: Path) -> SongStatus:
             category=category,
             schema_version=None,
             origin=None,
+            custom_sheet=custom_sheet_path(song).is_file(),
             genius=None,
             lrclib=None,
             lrclib_state="n/a",
@@ -93,6 +95,7 @@ def song_status(song: Path) -> SongStatus:
         category="behind" if version < SCHEMA_VERSION else "current",
         schema_version=version,
         origin=origin,
+        custom_sheet=custom_sheet_path(song).is_file(),
         genius=lyrics.get("genius") or None,
         lrclib=_lrclib_match(lyrics),
         lrclib_state=state,
@@ -182,6 +185,7 @@ class HistoryEntry:
     schema_version: int | None
     origin: str | None  # the version's lyrics.origin
     genius: dict | None
+    lines: tuple[str, ...]  # lyrics.lines: what tells two custom versions apart
     lrclib: dict | None
     line_count: int | None
     lines_timed: int | None
@@ -218,6 +222,7 @@ def song_history(song: Path) -> list[HistoryEntry]:
                 schema_version=bundle.get("schema_version"),
                 origin=lyrics.get("origin"),
                 genius=lyrics.get("genius") or None,
+                lines=tuple(lyrics.get("lines") or ()),
                 lrclib=_lrclib_match(lyrics),
                 line_count=summary.get("line_count"),
                 lines_timed=summary.get("lines_with_words"),
