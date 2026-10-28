@@ -1387,9 +1387,9 @@ class TestRunsReplayCustomSheets:
     def test_the_run_says_where_a_custom_song_stands_today(self, tmp_path, monkeypatch, library):
         tools, _, _ = self.opened(tmp_path, monkeypatch, library, "reset")
 
-        now = next(s["now"] for s in tools.run_view()["songs"] if Path(s["song"]).stem == self.MINE)
+        now = {Path(s["song"]).stem: s["now"] for s in tools.run_view()["songs"]}
 
-        assert now == {"source": "custom"}
+        assert now[self.MINE] == now[self.SHEET_ONLY] == {"source": "custom"}
 
     def test_a_custom_bundle_whose_sheet_is_gone_is_not_custom_now(
         self, tmp_path, monkeypatch, library
