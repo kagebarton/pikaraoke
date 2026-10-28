@@ -182,7 +182,6 @@ class _Entry:
     reusable: bool  # its bundle holds a lyric source a regen can replay
     check: dict | None = None
     pick: dict | None = None
-    custom: bool = False  # it has a custom lyric sheet, which every run keeps
 
     @property
     def genius_id(self) -> int | None:
@@ -219,7 +218,7 @@ class _Run:
         A custom sheet is replayed in every mode, a reset included, so a song
         with one is never left for a pick.
         """
-        if entry.custom:
+        if entry.status.custom_sheet:
             return "reuse"
         if self.mode == "all" and entry.status.category == "no_lyrics":
             return "transcribe"
@@ -1045,10 +1044,7 @@ class LibraryTools:
         return self._run
 
     def _entry(self, path: str, status: SongStatus) -> _Entry:
-        job = self._song_job(path)
-        return _Entry(
-            status, reusable=reuse_plan(job) is not None, custom=custom_plan(job) is not None
-        )
+        return _Entry(status, reusable=reuse_plan(self._song_job(path)) is not None)
 
     def _song_view(self, run: _Run, path: str, entry: _Entry) -> dict:
         status = entry.status
@@ -1072,14 +1068,14 @@ class LibraryTools:
     def _now(status: SongStatus) -> dict:
         """The lyric source a song has today: ``source``, and for Genius its title and artist.
 
-        Custom means a sheet on disk, the record the run's groups go by.
+        Custom means a sheet on disk, the record the run's groups go by, bundle or not.
         """
+        if status.custom_sheet:
+            return {"source": "custom"}
         if status.category == "no_lyrics":
             return {"source": "transcribed"}
         if status.category == "not_processed":
             return {"source": "unprocessed"}
-        if status.custom_sheet:
-            return {"source": "custom"}
         if status.origin == "genius" and status.genius:
             return {
                 "source": "genius",

@@ -375,6 +375,7 @@ row. **Do not edit `processing.html`.**
 | 4 | `cb4c581` | full suite 2505 passed; pre-commit clean; 46 headless-browser checks of the real page passed (script kept out of the repo) | Done. Notes below. |
 | 5 | this commit | not applicable (documentation) | Hand-off below. |
 | Review | `9f4c404`, `e24226a`, `35d1ae6`, `4f72b73` (Opus 5.5, 2026-10-28) | full suite 2522 passed; pre-commit clean on the changed files | `/code-review` run over `6b02e63^..cb4c581`, three angles; 9 findings, 5 fixed at Ken's call. See "Code review" below. |
+| Review of fixes | this commit (Opus 5.5, 2026-10-28) | full suite 2522 passed; pre-commit clean on the changed files | `/code-review` over `9f4c404^..4f72b73`, three angles; 7 findings, F1-F2 fixed. See "Review of the fixes" below. |
 
 ### Phase 0 findings
 
@@ -672,3 +673,19 @@ finders reported them. Ken ruled: fix 1-5, record the rest.
 | 7 | simplicity | `_custom_repair_plan` runs `_sheet_text` twice (via `custom_sheet_lines`, then for the plan). | Not fixed; recorded in open-issues. |
 | 8 | simplicity | `routes/song_info._typed` repeats `library_tools._pick_text` without its length cap; the POST LRCLIB search sends title and artist uncapped. | Not fixed; recorded in open-issues. |
 | 9 | simplicity | The "custom wins" check was repeated in four places. | Folded into fix 1. |
+
+#### Review of the fixes
+
+`/code-review` over `9f4c404^..4f72b73`, run 2026-10-28 by Opus 5.5 on Ken's
+request, three finder angles. Each finding was checked against the code; Ken
+ruled: fix F1-F2, leave the rest.
+
+| # | Angle | Finding | Outcome |
+| - | ----- | ------- | ------- |
+| F1 | correctness | `_now` checked `no_lyrics` / `not_processed` before the sheet, so a song with a sheet and no bundle read "transcribed" or "unprocessed" while the run replayed its sheet and the repair page tagged it custom. | Fixed: the sheet check comes first. Test extended to the sheet-only song; fails without the fix. |
+| F2 | simplicity | `_Entry.custom` and `SongStatus.custom_sheet` held the same fact; `undecided_group` read one, `_now` the other, and the sheet was stat'ed twice per song at open. | Fixed: `_Entry.custom` removed, `undecided_group` reads `status.custom_sheet`. |
+| F3 | correctness | A song in `needs_pick` whose sheet is saved after the run opened still blocks queueing until picked, and the pick is then ignored for the sheet. | Left: the sheet winning is the intended rule; discarding and reopening the run clears the prompt. |
+| F4 | correctness | `_pick` compares custom versions by parsed `lyrics.lines`, so a parser change can mark an unedited sheet changed once, and edits only to dropped content compare equal. | Left: what is sung is what History tracks. |
+| F5 | robustness | CLI: Ctrl-C leaves a song's new lyric files; an error in `finish_regen_job` after a good run puts old lyric files back beside new outputs. | Left: both predate the fixes. |
+| F6 | robustness | `write_text_atomic` now writes LF on Windows for every `.lrc` and sheet. | Left: intended, recorded under fix 2 and in open-issues. |
+| F7 | simplicity | Duration probed at bundle write rather than at the seed. | Left: Ken's call (fix 3); no earlier consumer needs it. |
