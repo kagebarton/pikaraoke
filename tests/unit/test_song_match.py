@@ -75,6 +75,12 @@ def library() -> SongIndex:
     return SongIndex.from_songs(LIBRARY_PATHS)
 
 
+def found(title: str, *library_titles: str) -> list[str]:
+    """Which of ``library_titles`` (display names, saved with an ID) look like ``title``."""
+    names = {f"/songs/{name}---{i:011d}.mp4": name for i, name in enumerate(library_titles)}
+    return [names[path] for path in similar_songs(title, SongIndex.from_songs(names))]
+
+
 class TestSearchAgainstLibrary:
     @pytest.mark.parametrize(
         ("title", "expected"),
@@ -86,6 +92,7 @@ class TestSearchAgainstLibrary:
             ("Bloodstream - Ed Sheeran & Rudimental (Lyrics)", {"Bloodstream"}),
             ("Wicked - Defying Gravity (Lyric Video)", {"'Defying Gravity'"}),
             ("I'll Make a Man Out of You - Mulan", {"Mulan _"}),
+            ("Disney - A Whole New World | Karaoke", BOTH_WHOLE_NEW_WORLDS),
         ],
     )
     def test_finds_the_library_copy(self, library, title, expected):
@@ -130,6 +137,109 @@ class TestSharedPartRules:
         assert similar_songs("Don’t Stop Believin’ - Journey", journey) == [
             "/songs/Journey - Don't Stop Believin'---abcdefghijk.mp4"
         ]
+
+
+class TestSharedLead:
+    """A part leading both titles is an artist only when each title goes on to something else."""
+
+    @pytest.mark.parametrize(
+        ("title", "library_titles", "expected"),
+        [
+            pytest.param(
+                "Bohemian Rhapsody (Official Video)",
+                ["Bohemian Rhapsody"],
+                ["Bohemian Rhapsody"],
+                id="no-separator",
+            ),
+            pytest.param(
+                "Shape of You | Karaoke",
+                ["Shape of You - Ed Sheeran"],
+                ["Shape of You - Ed Sheeran"],
+                id="noise-segment",
+            ),
+            pytest.param(
+                "Mirrors - Justin Timberlake [HD]",
+                [
+                    "Justin Timberlake - Mirrors",
+                    "Justin Timberlake - Selfish",
+                    "Justin Timberlake - Like I Love You",
+                    "Mirrors - Justin Timberlake (Lyrics)",
+                ],
+                ["Justin Timberlake - Mirrors", "Mirrors - Justin Timberlake (Lyrics)"],
+                id="common-artist",
+            ),
+            pytest.param(
+                "Snow Patrol - Run (Official Video)",
+                ["Snow Patrol - Run"],
+                ["Snow Patrol - Run"],
+                id="short-song-name-same-song",
+            ),
+            pytest.param(
+                "Snow Patrol - Run",
+                ["Snow Patrol - Chasing Cars"],
+                [],
+                id="short-song-name-other-song",
+            ),
+            pytest.param(
+                "Backstreet Boys - Larger Than Life",
+                ["Backstreet Boys - Incomplete"],
+                [],
+                id="two-songs-one-artist",
+            ),
+        ],
+    )
+    def test_shared_lead(self, title, library_titles, expected):
+        assert found(title, *library_titles) == expected
+
+
+class TestQuotes:
+    @pytest.mark.parametrize(
+        ("title", "library_title"),
+        [
+            pytest.param(
+                "Guns N' Roses \"Sweet Child O' Mine\" (Official)",
+                "Guns N' Roses - Sweet Child O' Mine",
+                id="double-quote-around-an-apostrophe",
+            ),
+            pytest.param(
+                "Bobby Day 'Rockin' Robin'",
+                "Bobby Day - Rockin' Robin",
+                id="single-quote-around-an-apostrophe",
+            ),
+            pytest.param(
+                "Kiss 'Rock 'n' Roll All Nite'",
+                "KISS - Rock 'n' Roll All Nite",
+                id="n-is-not-a-quote",
+            ),
+        ],
+    )
+    def test_quote_runs_to_the_last_matching_closer(self, title, library_title):
+        assert found(title, library_title) == [library_title]
+
+    def test_a_quote_closes_only_with_its_own_kind_of_mark(self):
+        # The apostrophe of "'Til" has no closer; it must not pair with the double quote's.
+        assert parse_title('\'Til Tuesday "Voices Carry"').parts == {"voices carry"}
+
+    def test_curly_quotes_pair_with_each_other(self):
+        assert parse_title("“Rockin’ Robin” - Bobby Day").parts == {"rockin robin"}
+
+    def test_quote_shorter_than_a_part_is_parsed_by_segments(self):
+        # 'Run' would be the only part, and too short to match anything: the title would
+        # otherwise lose "snow patrol" and match nothing.
+        assert parse_title("'Run' - Snow Patrol").parts == {"snow patrol"}
+
+    def test_quotes_are_found_per_segment_not_across_a_separator(self):
+        # Matched over the whole title, the greedy quote would run from the first mark to the
+        # last and swallow the " - " between them.
+        assert parse_title("'Defying Gravity' - Wicked 'Popular'").parts == {
+            "defying gravity",
+            "popular",
+        }
+
+
+class TestSeparators:
+    def test_fullwidth_bar_splits_like_a_bar(self):
+        assert found("Perfect ｜ Ed Sheeran", "Ed Sheeran - Perfect") == ["Ed Sheeran - Perfect"]
 
 
 class TestParseTitle:
@@ -204,6 +314,50 @@ class TestSimilarGroups:
         assert title_groups(titles, library) == [[0], [1]]
         assert title_groups(titles, SongIndex.from_songs([])) == [[0, 1]]
 
+    def test_three_uploads_of_one_song_are_one_group(self):
+        # "shape of you" sits beside one other part in all three titles, so it is not an artist.
+        titles = [
+            "Shape of You - Ed Sheeran",
+            "Ed Sheeran - Shape of You (Lyrics)",
+            "Shape of You | Karaoke",
+        ]
+
+        [group] = similar_groups(titles, SongIndex.from_songs([]))
+
+        assert (group.titles, group.part) == ([0, 1, 2], "shape of you")
+
+    def test_a_title_holding_the_part_alone_does_not_make_it_common(self):
+        # Two different partners are fine; the bare third title adds no partner.
+        titles = [
+            "Shape of You - Ed Sheeran",
+            "Sing King - Shape of You",
+            "Shape of You (Official)",
+        ]
+        assert title_groups(titles, SongIndex.from_songs([])) == [[0, 1, 2]]
+
+    def test_uploads_that_only_meet_through_a_library_copy_group_with_it(self):
+        # Both lead with the song name and differ after it, so they do not match each other;
+        # the library copy (artist first) matches each.
+        titles = ["Shape of You - Ed Sheeran", "Shape of You - Sing King"]
+        library = SongIndex.from_songs(["/songs/Ed Sheeran - Shape of You---00000000000.mp4"])
+
+        assert title_groups(titles, SongIndex.from_songs([])) == []
+        assert similar_groups(titles, library) == [
+            SimilarGroup(
+                titles=[0, 1],
+                songs=["/songs/Ed Sheeran - Shape of You---00000000000.mp4"],
+                part="shape of you",
+            )
+        ]
+
+    def test_a_partner_in_both_library_and_playlist_counts_once(self):
+        # The library and the playlist both hold "shape of you" beside "sing king": two partners
+        # in all (with "pop hits"), not three, so the song stays rare and all three titles group.
+        library = SongIndex.from_songs(["/songs/Shape of You - Sing King---00000000000.mp4"])
+        titles = ["Shape of You - Pop Hits", "Shape of You", "Shape of You | Sing King"]
+
+        assert title_groups(titles, library) == [[0, 1, 2]]
+
     def test_a_pair_sharing_artist_and_song_is_headed_by_both(self):
         titles = ["Mirrors - Justin Timberlake", "Justin Timberlake - Mirrors [HD]"]
 
@@ -222,11 +376,9 @@ class TestSimilarGroups:
             )
         ]
 
-    def test_titles_meeting_the_same_library_song_group_though_the_playlist_hides_their_match(
-        self, library
-    ):
-        # The library holds "mirrors" once; two playlist uploads make three, past the
-        # playlist-wide limit, so these two only meet through the library copy.
+    def test_two_uploads_of_a_library_song_group_with_it(self, library):
+        # "mirrors" sits beside "justin timberlake" in all three titles, so it stays rare
+        # and the two uploads match each other as well as the library copy.
         titles = ["Mirrors - Justin Timberlake (Lyrics)", "Justin Timberlake - Mirrors [HD]"]
 
         assert similar_groups(titles, library) == [

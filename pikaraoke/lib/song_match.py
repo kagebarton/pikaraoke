@@ -16,14 +16,15 @@ from pikaraoke.lib.metadata_parser import NOISE_PATTERN
 from pikaraoke.lib.song_manager import SongManager
 
 MIN_PART_LENGTH = 4
-# A part found in this many titles names an artist or film, not a song.
+# A part seen beside this many different other parts names an artist or film, not a song.
 COMMON_PART_COUNT = 3
 
 _BRACKETED = re.compile(r"\([^)]*\)|\[[^\]]*\]")
-_SEPARATOR = re.compile(r"\s[-|–—_:]\s")
-# A quote opens after a non-word character and closes before one, so the
-# apostrophes of "Don't Stop Believin'" are not a quote.
-_QUOTED = re.compile(r"(?<!\w)['\"‘“](.+?)['\"’”](?!\w)")
+_SEPARATOR = re.compile(r"\s[-|｜–—_:]\s")
+# A quote opens after a non-word character, closes with its own kind of mark before one, and
+# runs to the last closer, so the apostrophes of "Don't Stop Believin'" and "Rockin' Robin" do
+# not end it early.
+_QUOTED = re.compile(r"(?<!\w)(?:'(.+)'|\"(.+)\"|‘(.+)’|“(.+)”)(?!\w)")
 # NOISE_PATTERN already covers official/video/lyrics/music/audio/hd.
 _STOP_WORDS = frozenset({"the", "a", "an", "4k", "uhd"})
 
@@ -33,15 +34,18 @@ class TitleParts:
     """The comparable pieces of one title."""
 
     parts: frozenset[str]
-    # The first segment, normally the artist: two titles that merely lead with
-    # the same name are two songs by one artist. Empty for a quoted title, whose
-    # quote is the song name.
+    # Every non-empty normalized segment, short ones too (the kept quotes for a quoted title).
+    # Tells a different song by the same artist from a different upload of the same song.
+    segments: frozenset[str]
+    # The first segment, normally the artist. A lead shared by two titles is ignored only when
+    # each title has a segment the other lacks (two songs by one artist). Empty for a quoted
+    # title, whose quote is the song name.
     lead: str
 
 
 @dataclass(frozen=True)
 class SongIndex:
-    """Library titles parsed once, with how many titles each part appears in."""
+    """Library titles parsed once, with how many different partners each part has."""
 
     titles: dict[str, TitleParts]
     frequency: Counter[str]
@@ -65,28 +69,42 @@ def _normalize(text: str) -> str:
 
 
 def _count_parts(titles: Iterable[TitleParts]) -> Counter[str]:
-    return Counter(part for title in titles for part in title.parts)
+    """For each part, how many different sets of other parts it appears beside.
+
+    An artist sits beside a different song each time; a song seen again (another upload)
+    sits beside the same parts or none, so it stays below the common threshold.
+    """
+    beside: dict[str, set[frozenset[str]]] = {}
+    for title in titles:
+        for part in title.parts:
+            if others := title.parts - {part}:
+                beside.setdefault(part, set()).add(others)
+    return Counter({part: len(sets) for part, sets in beside.items()})
 
 
 def parse_title(title: str) -> TitleParts:
     """Split a display title (no ID suffix) into its comparable parts.
 
     Bracketed text is dropped: "(From 'Frozen')" names a film, not the song.
-    A quote outside brackets is the song name and the only part kept.
+    A quote of 4+ characters outside brackets is the song name and the only part kept.
     """
-    bare = _BRACKETED.sub(" ", title)
-    quoted = _QUOTED.findall(bare)
-    segments = quoted or _SEPARATOR.split(bare)
+    segments = _SEPARATOR.split(_BRACKETED.sub(" ", title))
+    quoted = [
+        _normalize("".join(match)) for segment in segments for match in _QUOTED.findall(segment)
+    ]
+    if kept := frozenset(quote for quote in quoted if len(quote) >= MIN_PART_LENGTH):
+        return TitleParts(kept, kept, lead="")
     normalized = [_normalize(segment) for segment in segments]
     parts = frozenset(part for part in normalized if len(part) >= MIN_PART_LENGTH)
-    return TitleParts(parts, lead="" if quoted else normalized[0])
+    return TitleParts(parts, frozenset(filter(None, normalized)), lead=normalized[0])
 
 
 def _shared_parts(a: TitleParts, b: TitleParts, frequency: Counter[str]) -> set[str]:
     return {
         part
         for part in a.parts & b.parts
-        if frequency[part] < COMMON_PART_COUNT and not (part == a.lead == b.lead)
+        if frequency[part] < COMMON_PART_COUNT
+        and not (part == a.lead == b.lead and a.segments - b.segments and b.segments - a.segments)
     }
 
 
@@ -118,7 +136,8 @@ def similar_groups(titles: list[str], library: SongIndex) -> list[SimilarGroup]:
     counts the library alone, as in :func:`similar_songs`.
     """
     parsed = [parse_title(title) for title in titles]
-    playlist_frequency = library.frequency + _count_parts(parsed)
+    # One count over both lists: summing two counts would count a set of other parts twice.
+    playlist_frequency = _count_parts([*library.titles.values(), *parsed])
 
     # A node is a title's index (int) or a library song's path (str).
     matches: list[tuple[int | str, int | str, set[str]]] = []
