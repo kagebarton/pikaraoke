@@ -64,6 +64,8 @@ def classify_url(url: str) -> tuple[str, str] | None:
 class PlaylistVideo:
     id: str
     title: str
+    channel: str = ""
+    duration: int | None = None  # seconds
 
 
 @dataclass(frozen=True)
@@ -85,11 +87,20 @@ def read_playlist(url: str) -> Playlist:
     output = subprocess.check_output(cmd, timeout=300).decode("utf-8", "ignore")
     info = json.loads(output)
     videos = [
-        PlaylistVideo(id=entry["id"], title=entry.get("title") or entry["id"])
-        for entry in info.get("entries") or []
-        if entry and entry.get("id")
+        _playlist_video(entry) for entry in info.get("entries") or [] if entry and entry.get("id")
     ]
     return Playlist(title=info.get("title") or "", videos=videos)
+
+
+def _playlist_video(entry: dict) -> PlaylistVideo:
+    """A flat-playlist entry; its channel and length are there only when YouTube gave them."""
+    duration = entry.get("duration")
+    return PlaylistVideo(
+        id=entry["id"],
+        title=entry.get("title") or entry["id"],
+        channel=entry.get("channel") or entry.get("uploader") or "",
+        duration=int(duration) if isinstance(duration, (int, float)) else None,
+    )
 
 
 def expand_playlist(url: str) -> list[str]:
