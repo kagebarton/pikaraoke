@@ -294,7 +294,7 @@ class TestBranchAYtasr:
         LyricsFetchStage(self._genius(), PipelineConfig()).run(ctx)
         return ctx
 
-    @patch("pikaraoke.pipeline.stages.lyrics_fetch.probe_duration", return_value=120.0)
+    @patch("pikaraoke.lib.ytasr.probe_duration", return_value=120.0)
     @patch("pikaraoke.pipeline.stages.lyrics_fetch.ytasr.is_usable", return_value=True)
     @patch("pikaraoke.lib.genius.get_temp_directory")
     def test_adopts_on_disk_caption(self, mock_gtd, _usable, _probe, tmp_path):
@@ -307,7 +307,7 @@ class TestBranchAYtasr:
         assert ref["wpm"] == 2.0  # 4 words / (120 / 60) minutes
         assert ctx.artifacts["media_duration_s"] == 120.0
 
-    @patch("pikaraoke.pipeline.stages.lyrics_fetch.probe_duration", return_value=120.0)
+    @patch("pikaraoke.lib.ytasr.probe_duration", return_value=120.0)
     @patch("pikaraoke.lib.genius.get_temp_directory")
     def test_absent_caption_stashes_nothing(self, mock_gtd, _probe, tmp_path):
         # No download-time fetch here (reuse-on-disk only) → no artifact.
@@ -315,7 +315,7 @@ class TestBranchAYtasr:
         assert "ytasr" not in ctx.artifacts
         assert ctx.artifacts["lyrics_origin"] == "genius"
 
-    @patch("pikaraoke.pipeline.stages.lyrics_fetch.probe_duration", return_value=120.0)
+    @patch("pikaraoke.lib.ytasr.probe_duration", return_value=120.0)
     @patch("pikaraoke.pipeline.stages.lyrics_fetch.ytasr.is_usable", return_value=False)
     @patch("pikaraoke.lib.genius.get_temp_directory")
     def test_gated_out_caption_stashes_nothing(self, mock_gtd, _usable, _probe, tmp_path):
@@ -323,7 +323,7 @@ class TestBranchAYtasr:
         assert "ytasr" not in ctx.artifacts
         assert ctx.artifacts["lyrics_origin"] == "genius"
 
-    @patch("pikaraoke.pipeline.stages.lyrics_fetch.probe_duration", return_value=120.0)
+    @patch("pikaraoke.lib.ytasr.probe_duration", return_value=120.0)
     @patch("pikaraoke.lib.genius.get_temp_directory")
     def test_unparseable_caption_never_fails_stage(self, mock_gtd, _probe, tmp_path):
         ctx = self._run(tmp_path, mock_gtd, asr_text="{ not valid json")

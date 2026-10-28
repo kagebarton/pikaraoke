@@ -18,7 +18,7 @@ from pathlib import Path
 
 import srt
 
-from pikaraoke.lib import lrclib
+from pikaraoke.lib import lrclib, ytasr
 from pikaraoke.lib.alignment_capture import SCHEMA_VERSION
 from pikaraoke.lib.ffmpeg import probe_duration
 from pikaraoke.lib.genius import GeniusClient, GeniusUnavailable, write_choice
@@ -93,8 +93,8 @@ class Plan:
 
     ``kind``:
       * ``seed``       -> reuse from the bundle: feed ``lyrics_path`` (a
-        local .srt) or ``lyrics_lines`` (written to a temp .txt) and inject
-        ``seed`` via :class:`SeedArtifactsStage`.
+        local .srt, or the custom lyric sheet .txt) or ``lyrics_lines`` (written
+        to a temp .txt) and inject ``seed`` via :class:`SeedArtifactsStage`.
       * ``sidecar``    -> a fresh Genius selection: write the choice sidecar
         and run :class:`LyricsFetchStage` (re-fetches lyrics + resolves YTASR).
       * ``fetch``      -> placeholder for a song whose video caption may be
@@ -106,6 +106,8 @@ class Plan:
 
     ``lrclib_record`` / ``lrclib_skip`` carry an admin's LRCLIB choice (a
     chosen record, or no match at all); see :func:`apply_lrclib_choice`.
+    ``custom_text`` is a custom lyric sheet the admin just typed, which the run
+    writes before it reads it; see :func:`apply_custom_choice`.
     """
 
     kind: str
@@ -117,6 +119,7 @@ class Plan:
     fallback: "Plan | None" = None
     lrclib_record: dict | None = None
     lrclib_skip: bool = False
+    custom_text: str | None = None
 
 
 @dataclass
@@ -130,6 +133,11 @@ class SongJob:
 def is_genius_reuse(plan: Plan | None) -> bool:
     """Whether ``plan`` replays the Genius lyrics a bundle already holds."""
     return plan is not None and plan.kind == "seed" and plan.seed.get("lyrics_origin") == "genius"
+
+
+def is_custom_plan(plan: Plan | None) -> bool:
+    """Whether ``plan`` times the song from its custom lyric sheet."""
+    return plan is not None and plan.kind == "seed" and plan.seed.get("lyrics_origin") == "custom"
 
 
 # ---------------------------------------------------------------------------
@@ -201,10 +209,47 @@ def find_local_srt(song: Path) -> Path | None:
     return None
 
 
+# The admin's own lyrics for a song, kept in the library's ``lyrics/`` folder. The
+# file is the one record that the song uses them: a bundle's provenance is
+# ignored by a reset and a transcribe run deletes the bundle.
+CUSTOM_SHEET_SUFFIX = ".custom.txt"
+
+
+def custom_sheet_path(song: Path) -> Path:
+    """Where ``song``'s custom lyric sheet lives."""
+    return song.parent / "lyrics" / f"{song.stem}{CUSTOM_SHEET_SUFFIX}"
+
+
+def custom_sheet_plan(song: Path, text: str | None = None) -> Plan:
+    """The plan that times ``song`` from its custom sheet.
+
+    ``text`` is a sheet the admin just typed, for the run to write first.
+    """
+    return Plan(
+        kind="seed",
+        lyrics_path=custom_sheet_path(song),
+        seed={"lyrics_origin": "custom"},
+        custom_text=text,
+        label="custom sheet",
+    )
+
+
+def custom_plan(job: SongJob) -> Plan | None:
+    """The plan that replays the song's custom lyric sheet, or None when it has none.
+
+    Every plan chosen without an explicit admin pick starts here, a reset
+    included: only a repair to another source removes the sheet.
+    """
+    if not custom_sheet_path(job.song_path).is_file():
+        return None
+    return custom_sheet_plan(job.song_path)
+
+
 def resolve_plan(job: SongJob, *, reset: bool) -> Plan:
     """Plan one song's lyric source (pure, no I/O writes, no network).
 
-    In the default mode this trusts the previous bundle: a song with recorded
+    A custom lyric sheet wins over everything, ``reset`` included. Otherwise, in
+    the default mode this trusts the previous bundle: a song with recorded
     provenance is reused (see :func:`reuse_plan`), and only a song without a
     reusable source falls through to download-or-prompt. ``reset`` discards the
     recorded provenance entirely and re-resolves every song from scratch.
@@ -213,11 +258,14 @@ def resolve_plan(job: SongJob, *, reset: bool) -> Plan:
     YouTube id becomes a ``fetch`` placeholder (resolved by :func:`fetch_caption`),
     otherwise a Genius ``prompt``.
     """
+    custom = custom_plan(job)
+    if custom is not None:
+        return custom
     if not reset:
         reuse = reuse_plan(job)
         if reuse is not None:
             return reuse
-    return _fetch_or_prompt_plan(job.song_path)
+    return fetch_or_prompt_plan(job.song_path)
 
 
 def reuse_plan(job: SongJob) -> Plan | None:
@@ -227,6 +275,7 @@ def reuse_plan(job: SongJob) -> Plan | None:
     schema needs that metadata anyway, so reusing bare lines with unknown
     provenance is pointless:
 
+      * a custom lyric sheet on disk -> reuse it, whatever the bundle says.
       * ``origin == "srt"`` + an on-disk caption -> reuse it.
       * recorded Genius identity (``lyrics.genius``) + lines -> reuse the
         bundled lyrics, replaying the YTASR 3rd source when the persisted
@@ -238,6 +287,10 @@ def reuse_plan(job: SongJob) -> Plan | None:
     genius/transcribe run with no real caption flags the field off its own
     output.
     """
+    custom = custom_plan(job)
+    if custom is not None:
+        return custom
+
     bundle = job.bundle
     song = job.song_path
     if bundle is None:
@@ -280,7 +333,7 @@ def reuse_plan(job: SongJob) -> Plan | None:
     return Plan(kind="seed", lyrics_lines=list(lines), seed=seed, label=label)
 
 
-def _fetch_or_prompt_plan(song: Path) -> Plan:
+def fetch_or_prompt_plan(song: Path) -> Plan:
     """Download-the-video-caption-or-Genius-prompt plan for a song.
 
     A song with a YouTube id becomes a ``fetch`` placeholder whose
@@ -477,7 +530,7 @@ def gate_on_disk_caption(job: SongJob) -> bool:
     srt_path = find_local_srt(job.song_path)
     if srt_path is None:
         return False
-    job.plan = _fetch_or_prompt_plan(job.song_path)
+    job.plan = fetch_or_prompt_plan(job.song_path)
     adopt_caption(job, srt_path)
     return job.plan.kind == "seed"
 
@@ -579,34 +632,75 @@ def apply_lrclib_choice(job: SongJob) -> None:
             lrc.unlink(missing_ok=True)
 
 
-def put_back_lrc(song: Path, snapshot: str | None) -> None:
-    """Restore ``lyrics/<stem>.lrc`` to ``snapshot`` after a regen that didn't finish.
+def apply_custom_choice(job: SongJob) -> None:
+    """Make ``lyrics/<stem>.custom.txt`` match the plan: written, kept or removed.
 
-    The choice rewrites or deletes the file before the run (D3) and the run can
-    write a new one, while a failed run leaves the old bundle in place: the
-    admin's earlier skip or pick would be gone, or the new song's match would
-    sit next to the old song's bundle. Never raises, so it can't hide the
+    A plan that carries ``custom_text`` writes the admin's sheet. Any other plan
+    that isn't itself a custom one is an explicit repair to another source (every
+    automatic path resolves to :func:`custom_plan` first), so the sheet goes; the
+    backup taken before the run still holds it.
+    """
+    plan = job.plan
+    sheet = custom_sheet_path(job.song_path)
+    if plan.custom_text is not None:
+        lrclib.write_text_atomic(sheet, plan.custom_text)
+    elif not is_custom_plan(plan):
+        sheet.unlink(missing_ok=True)
+
+
+def snapshot_lyric_files(song: Path) -> dict[Path, str | None]:
+    """The text of the two files a regen rewrites or deletes: the ``.lrc`` and the
+    custom sheet (None: no such file). Taken before anything is changed."""
+    return {
+        path: lrclib.snapshot_file(path)
+        for path in (lrclib.lrc_path(song), custom_sheet_path(song))
+    }
+
+
+def put_back_lyric_files(snapshot: dict[Path, str | None]) -> None:
+    """Restore the files of :func:`snapshot_lyric_files` after a regen that didn't finish.
+
+    The choices rewrite or delete them before the run (D3) and the run can write
+    a new ``.lrc``, while a failed run leaves the old bundle in place: the
+    admin's earlier skip, pick or sheet would be gone, or the new song's match
+    would sit next to the old song's bundle. Never raises, so it can't hide the
     job's own error.
     """
-    try:
-        lrclib.restore_lrc(lrclib.lrc_path(song), snapshot)
-    except OSError as e:
-        logger.warning("Could not put back the LRCLIB file of %s: %s", song.name, e)
+    for path, text in snapshot.items():
+        try:
+            lrclib.restore_file(path, text)
+        except OSError as e:
+            logger.warning("Could not put back %s: %s", path.name, e)
+
+
+def _ytasr_seed(song: Path) -> dict:
+    """The seed artifacts a Genius run's lyrics stage sets from the on-disk caption."""
+    record, duration = ytasr.resolve_on_disk(song)
+    seed: dict = {}
+    if record is not None:
+        seed["ytasr"] = record
+    if duration is not None:
+        seed["media_duration_s"] = duration
+    return seed
 
 
 def prepare_lyrics(job: SongJob, genius: GeniusClient, lyrics_dir: Path, config: PipelineConfig):
     """Resolve a job's plan to ``(lyrics_path, lyric_stage)`` for the run.
 
-    Applies the LRCLIB choice first, then writes the temp .txt for reused
-    Genius lyrics and the choice sidecar for a fresh Genius selection. A
-    Genius pick on a song without a YouTube id can't use the sidecar, so it
-    degrades to explicit lyrics with no YTASR 3rd source (logged).
+    Applies the LRCLIB and custom-sheet choices first, then writes the temp .txt
+    for reused Genius lyrics and the choice sidecar for a fresh Genius
+    selection. A Genius pick on a song without a YouTube id can't use the
+    sidecar, so it degrades to explicit lyrics with no YTASR 3rd source (logged).
+    A custom sheet is read in place and takes the on-disk YouTube auto-caption as
+    a 3rd source, as a Genius song does, resolved afresh on every run.
     """
     apply_lrclib_choice(job)
+    apply_custom_choice(job)
     plan = job.plan
     song = job.song_path
 
     if plan.kind == "seed":
+        seed = plan.seed
         if plan.lyrics_lines is not None:
             lyrics_path = lyrics_dir / f"{song.stem}.txt"
             # Blank-line separated: these lines are already parsed, and a
@@ -615,7 +709,9 @@ def prepare_lyrics(job: SongJob, genius: GeniusClient, lyrics_dir: Path, config:
             lyrics_path.write_text("\n\n".join(plan.lyrics_lines), encoding="utf-8")
         else:
             lyrics_path = plan.lyrics_path
-        return lyrics_path, SeedArtifactsStage(plan.seed)
+        if is_custom_plan(plan):
+            seed = {**seed, **_ytasr_seed(song)}
+        return lyrics_path, SeedArtifactsStage(seed)
 
     if plan.kind == "sidecar":
         yt_id = extract_youtube_id(str(song))
@@ -756,7 +852,9 @@ def backup_text_folders(folder: Path, stems: list[str] | None = None) -> Path | 
 #   ``LyricsFetchStage``, per E1's gated fill). Wiping them would force a
 #   re-fetch of every genius song's variant on the next run for no benefit --
 #   ``ensure_lrc`` already reuses an on-disk file unconditionally.
-KEEP_ON_RESET = {"subtitles": ASR_JSON3_SUFFIX, "lyrics": ".lrc"}
+# - ``lyrics/<stem>.custom.txt`` an admin's own lyric sheet. It is hand-made, so
+#   a reset must not lose it; only a repair to another source removes it.
+KEEP_ON_RESET = {"subtitles": ASR_JSON3_SUFFIX, "lyrics": (".lrc", CUSTOM_SHEET_SUFFIX)}
 
 
 def clear_output_folders(folder: Path, stems: list[str] | None = None) -> None:
@@ -785,10 +883,12 @@ def clear_output_folders(folder: Path, stems: list[str] | None = None) -> None:
             _clear_dir(folder / sub, keep_suffix, selected)
 
 
-def _clear_dir(dir_path: Path, keep_suffix: str | None, selected: Callable[[str], bool]) -> None:
+def _clear_dir(
+    dir_path: Path, keep_suffix: str | tuple[str, ...] | None, selected: Callable[[str], bool]
+) -> None:
     """Remove the ``selected`` entries of ``dir_path`` (never the folder itself).
 
-    Files ending in ``keep_suffix`` are kept.
+    Files ending in ``keep_suffix`` (or in any one of a tuple of them) are kept.
     """
     if not dir_path.is_dir():
         return

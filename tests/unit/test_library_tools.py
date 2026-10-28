@@ -73,6 +73,13 @@ def genius_bundle(folder: Path, stem: str, **fields) -> None:
     )
 
 
+def write_sheet(folder: Path, stem: str, text: str = "one\ntwo\n") -> Path:
+    sheet = folder / "lyrics" / f"{stem}.custom.txt"
+    sheet.parent.mkdir(exist_ok=True)
+    sheet.write_text(text, encoding="utf-8")
+    return sheet
+
+
 def make_tools(folder: Path, songs: list[str], *, active=None, pending=(), genius=None, state=None):
     """A LibraryTools over ``folder`` whose library holds ``songs``, and its processing mock."""
     library = SongList()
@@ -269,6 +276,36 @@ class TestRegenerate:
         regen = processing.enqueue_regen.call_args.args[0]
         assert regen.song.plan.kind == "transcribe"
 
+    def test_a_custom_sheet_is_replayed_over_the_recorded_pick(self, tmp_path):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        genius_bundle(tmp_path, video.stem)
+        sheet = write_sheet(tmp_path, video.stem)
+        tools, processing = make_tools(tmp_path, [str(video)])
+
+        tools.regenerate(str(video))
+
+        plan = processing.enqueue_regen.call_args.args[0].song.plan
+        assert (plan.kind, plan.lyrics_path, plan.seed) == (
+            "seed",
+            sheet,
+            {"lyrics_origin": "custom"},
+        )
+
+    def test_a_custom_sheet_beats_the_transcription_shortcut(self, tmp_path):
+        """No bundle and a karaoke file reads as "only a transcription"; the sheet says otherwise."""
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        (tmp_path / "karaoke").mkdir()
+        (tmp_path / "karaoke" / f"{video.stem}.ass").write_text("", encoding="utf-8")
+        write_sheet(tmp_path, video.stem)
+        tools, processing = make_tools(tmp_path, [str(video)])
+
+        assert tools.can_regenerate(str(video))
+        tools.regenerate(str(video))
+
+        assert processing.enqueue_regen.call_args.args[0].song.plan.seed == {
+            "lyrics_origin": "custom"
+        }
+
     def test_a_song_with_no_pick_is_pointed_at_repair(self, tmp_path):
         [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
         tools, processing = make_tools(tmp_path, [str(video)])
@@ -403,6 +440,14 @@ class TestRepair:
         assert regen.song.plan.lrclib_skip is True
         assert regen.song.plan.lrclib_record is None
 
+    def test_a_caption_repair_of_a_custom_song_still_queues_a_fetch_plan(self, tmp_path, song):
+        """An explicit pick, so the sheet must not win here (it is deleted by the run)."""
+        write_sheet(tmp_path, song.stem)
+
+        regen = self.repaired(tmp_path, song, "caption")
+
+        assert regen.song.plan.kind == "fetch"
+
     def test_a_transcribe_repair_queues_a_transcribe_plan(self, tmp_path, song):
         regen = self.repaired(tmp_path, song, "transcribe")
 
@@ -529,6 +574,18 @@ class TestCaptionCheck:
 
         [job] = checked.call_args.args
         assert job.song_path == video
+
+    def test_a_custom_song_with_a_youtube_id_can_still_check_its_caption(
+        self, tmp_path, monkeypatch
+    ):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        write_sheet(tmp_path, video.stem)
+        checked = MagicMock(return_value=CaptionCheck(found=True, wpm=40.0, passed=True))
+        monkeypatch.setattr("pikaraoke.lib.library_tools.check_caption", checked)
+        tools, _ = make_tools(tmp_path, [str(video)])
+
+        assert tools.caption_check(str(video)).passed
+        checked.assert_called_once()
 
     def test_a_song_with_no_youtube_id_has_nothing_to_check(self, tmp_path, monkeypatch):
         [video] = make_videos(tmp_path, "No Id Song")

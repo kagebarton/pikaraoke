@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from pikaraoke.lib import lrclib, youtube_dl, ytasr
+from pikaraoke.lib import lrclib, ytasr
 from pikaraoke.lib.ffmpeg import probe_duration
 from pikaraoke.lib.genius import (
     GeniusClient,
@@ -137,36 +137,17 @@ class LyricsFetchStage(BaseStage):
     def _resolve_ytasr(self, ctx: StageContext) -> None:
         """Adopt an on-disk YouTube ASR caption as the joint matcher's 3rd source.
 
-        Genius-origin only (called from Branch a). Reuses the
-        ``subtitles/<stem>.en.asr.json3`` fetched at download time — the live
-        pipeline never fetches (Design Decision 3; the regen tool is the
-        on-demand download path). Parses + quality-gates it
-        (:func:`ytasr.is_usable`) and, on success, stashes
-        ``ctx.artifacts["ytasr"]`` (json3 path + word-count / wpm provenance)
-        for the align stage and the debug bundle. Absent or gated-out → no
-        stash → the matcher runs plain two-source. Never raises.
+        Genius-origin only (called from Branch a); :func:`ytasr.resolve_on_disk`
+        gates the caption. Stashes ``ctx.artifacts["ytasr"]`` (json3 path +
+        word-count / wpm provenance) for the align stage and the debug bundle,
+        and the probed duration the bundle also records. Absent or gated-out
+        -> no ``ytasr`` stash -> the matcher runs plain two-source.
         """
-        try:
-            rel = f"subtitles/{ctx.song_path.stem}{youtube_dl.ASR_JSON3_SUFFIX}"
-            asr_path = ctx.song_path.parent / rel
-            if not asr_path.is_file():
-                logger.info("YTASR: no on-disk ASR caption — aligning two-source")
-                return
-
-            media_dur = probe_duration(ctx.song_path)
-            if media_dur is not None:
-                ctx.artifacts["media_duration_s"] = media_dur
-
-            words, word_seg_frac = ytasr.parse_json3(asr_path.read_text(encoding="utf-8"))
-            if not ytasr.is_usable(words, word_seg_frac, media_dur):
-                logger.info("YTASR: on-disk caption failed the quality gate — aligning two-source")
-                return
-
-            wpm = round(len(words) / (media_dur / 60.0), 1) if media_dur else None
-            ctx.artifacts["ytasr"] = {"asr_file": rel, "n_words": len(words), "wpm": wpm}
-            logger.info("YTASR: adopted %d words (%s wpm) as the 3rd source", len(words), wpm)
-        except Exception:
-            logger.exception("YTASR: resolve failed — aligning two-source")
+        record, media_dur = ytasr.resolve_on_disk(ctx.song_path)
+        if media_dur is not None:
+            ctx.artifacts["media_duration_s"] = media_dur
+        if record is not None:
+            ctx.artifacts["ytasr"] = record
 
     def _media_duration(self, ctx: StageContext) -> float | None:
         """Media duration, probed once and cached in ctx.artifacts.

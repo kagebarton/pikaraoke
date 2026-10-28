@@ -24,7 +24,6 @@ from pathlib import Path
 
 PIPELINE_THREAD_PREFIX = "pikaraoke-pipeline"
 
-from pikaraoke.lib import lrclib
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.genius import GeniusClient
 from pikaraoke.lib.get_platform import get_temp_directory, is_windows
@@ -33,7 +32,8 @@ from pikaraoke.lib.library_regen import (
     build_stages,
     finish_regen_job,
     prepare_regen_job,
-    put_back_lrc,
+    put_back_lyric_files,
+    snapshot_lyric_files,
 )
 from pikaraoke.lib.preference_manager import PreferenceManager
 from pikaraoke.lib.process_terminal import ProcessTerminal
@@ -625,13 +625,14 @@ class ProcessingManager:
         and the song's ``pipeline_state`` is left alone either way.
 
         Anything but a successful run (an error, or a cancel during setup or
-        during the run) puts the song's ``lyrics/<stem>.lrc`` back as it was:
-        the old bundle stays, so the LRCLIB choice must stay with it.
+        during the run) puts the song's ``lyrics/<stem>.lrc`` and custom sheet
+        back as they were: the old bundle stays, so the LRCLIB choice and the
+        lyrics it was timed from must stay with it.
         """
         job = regen.song
         logging.info(f"Regen started ({regen.label}): {job.song_path.name}", extra=LIFECYCLE_EXTRA)
         # Taken before anything is changed; a file that can't be read fails the job here.
-        lrc_before = lrclib.snapshot_lrc(lrclib.lrc_path(job.song_path))
+        files_before = snapshot_lyric_files(job.song_path)
         # Holds the reused-lyrics .txt for the run; the orchestrator validates
         # that the path exists, so it must outlive the job.
         lyrics_dir = Path(
@@ -656,7 +657,7 @@ class ProcessingManager:
         finally:
             shutil.rmtree(lyrics_dir, ignore_errors=True)
             if not succeeded:
-                put_back_lrc(job.song_path, lrc_before)
+                put_back_lyric_files(files_before)
 
     def _launch_and_report(
         self,

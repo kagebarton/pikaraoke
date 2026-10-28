@@ -46,12 +46,13 @@ from pikaraoke.lib.library_regen import (
     SongJob,
     backup_text_folders,
     check_caption,
+    custom_plan,
     default_query,
+    fetch_or_prompt_plan,
     find_local_srt,
     gate_on_disk_caption,
     media_duration,
     read_bundle,
-    resolve_plan,
     reuse_plan,
     watch_url,
 )
@@ -151,6 +152,7 @@ class _Entry:
     reusable: bool  # its bundle holds a lyric source a regen can replay
     check: dict | None = None
     pick: dict | None = None
+    custom: bool = False  # it has a custom lyric sheet, which every run keeps
 
     @property
     def genius_id(self) -> int | None:
@@ -182,7 +184,13 @@ class _Run:
         return self.undecided_group(replace(entry, check=None)) == "checking"
 
     def undecided_group(self, entry: _Entry) -> str:
-        """Where the song stands before any pick; ``needs_pick`` is the group a pick decides."""
+        """Where the song stands before any pick; ``needs_pick`` is the group a pick decides.
+
+        A custom sheet is replayed in every mode, a reset included, so a song
+        with one is never left for a pick.
+        """
+        if entry.custom:
+            return "reuse"
         if self.mode == "all" and entry.status.category == "no_lyrics":
             return "transcribe"
         if self.mode != "reset" and entry.reusable:
@@ -876,7 +884,7 @@ class LibraryTools:
     @staticmethod
     def _caption_plan(job: SongJob) -> Plan:
         """The plan that fetches the video's caption; only a song with a YouTube ID has one."""
-        plan = resolve_plan(job, reset=True)
+        plan = fetch_or_prompt_plan(job.song_path)
         if plan.kind != "fetch":
             raise RegenError("This song has no YouTube ID.")
         return plan
@@ -931,14 +939,17 @@ class LibraryTools:
     def _regen_job(self, song_path: str) -> SongJob | None:
         """The song's job with the plan a plain regenerate uses, or None without one.
 
-        A song with a recorded pick reuses it; one whose only output is a
-        transcription (no bundle, a karaoke file) transcribes again.
+        A song with a custom sheet replays it, even with no bundle left; one with
+        a recorded pick reuses it; one whose only output is a transcription (no
+        bundle, a karaoke file) transcribes again.
         """
         job = self._song_job(song_path)
-        if song_status(job.song_path).category == "no_lyrics":
-            job.plan = self._transcribe_plan()
-        else:
-            job.plan = reuse_plan(job)
+        job.plan = custom_plan(job)
+        if job.plan is None:
+            if song_status(job.song_path).category == "no_lyrics":
+                job.plan = self._transcribe_plan()
+            else:
+                job.plan = reuse_plan(job)
         return job if job.plan is not None else None
 
     @staticmethod
@@ -956,7 +967,10 @@ class LibraryTools:
         return self._run
 
     def _entry(self, path: str, status: SongStatus) -> _Entry:
-        return _Entry(status, reusable=reuse_plan(self._song_job(path)) is not None)
+        job = self._song_job(path)
+        return _Entry(
+            status, reusable=reuse_plan(job) is not None, custom=custom_plan(job) is not None
+        )
 
     def _song_view(self, run: _Run, path: str, entry: _Entry) -> dict:
         status = entry.status

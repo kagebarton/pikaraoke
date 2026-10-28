@@ -1,6 +1,7 @@
 """Tests for the YouTube auto-caption (ASR) parse/gate/map helpers (lib/ytasr.py)."""
 
 import json
+from unittest.mock import patch
 
 from pikaraoke.lib import ytasr
 from pikaraoke.lib.token_align import _normalize_token
@@ -172,3 +173,55 @@ class TestCueSpansForLines:
     def test_none_when_nothing_maps(self):
         assert ytasr.cue_spans_for_lines([], ["anything"]) is None
         assert ytasr.cue_spans_for_lines(_words_from(["xyz"]), ["completely other words"]) is None
+
+
+class TestResolveOnDisk:
+    """The on-disk caption's gate, shared by the Genius lyrics stage and the custom-sheet run."""
+
+    SONG = "Song---dQw4w9WgXcQ.mp4"
+    REL = "subtitles/Song---dQw4w9WgXcQ.en.asr.json3"
+
+    def _song(self, tmp_path, caption_text=None):
+        song = tmp_path / self.SONG
+        song.touch()
+        if caption_text is not None:
+            (tmp_path / "subtitles").mkdir()
+            (tmp_path / self.REL).write_text(caption_text, encoding="utf-8")
+        return song
+
+    @staticmethod
+    def _caption(n_words):
+        segs = [_seg("w0")] + [_seg(f" w{i}", i * 400) for i in range(1, n_words)]
+        return _json3([{"tStartMs": 0, "segs": segs}])
+
+    def test_no_caption_on_disk_is_not_even_probed(self, tmp_path):
+        with patch("pikaraoke.lib.ytasr.probe_duration") as probe:
+            assert ytasr.resolve_on_disk(self._song(tmp_path)) == (None, None)
+        probe.assert_not_called()
+
+    def test_a_caption_that_passes_the_gate_comes_back_as_the_bundle_record(self, tmp_path):
+        song = self._song(tmp_path, self._caption(30))
+
+        with patch("pikaraoke.lib.ytasr.probe_duration", return_value=60.0):
+            record, duration = ytasr.resolve_on_disk(song)
+
+        assert record == {"asr_file": self.REL, "n_words": 30, "wpm": 30.0}
+        assert duration == 60.0
+
+    def test_a_caption_that_fails_the_gate_still_reports_the_duration(self, tmp_path):
+        song = self._song(tmp_path, self._caption(3))
+
+        with patch("pikaraoke.lib.ytasr.probe_duration", return_value=60.0):
+            assert ytasr.resolve_on_disk(song) == (None, 60.0)
+
+    def test_an_unknown_duration_rejects_the_caption(self, tmp_path):
+        song = self._song(tmp_path, self._caption(30))
+
+        with patch("pikaraoke.lib.ytasr.probe_duration", return_value=None):
+            assert ytasr.resolve_on_disk(song) == (None, None)
+
+    def test_an_unreadable_caption_never_raises_and_keeps_the_duration(self, tmp_path):
+        song = self._song(tmp_path, "{ not valid json")
+
+        with patch("pikaraoke.lib.ytasr.probe_duration", return_value=60.0):
+            assert ytasr.resolve_on_disk(song) == (None, 60.0)
