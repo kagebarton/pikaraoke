@@ -1,6 +1,8 @@
 {% extends 'base.html' %}
+{% from 'info_tip.html' import info_tip %}
 
 {% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='library-pages.css') }}">
 <style>
   .pr-muted { color: var(--dark-text-muted); font-size: 13px; }
   .pr-warn { color: var(--dark-warning); }
@@ -65,7 +67,7 @@
   {% if admin %}
   <div class="tabs is-fullwidth pr-tabs" role="tablist">
     <ul>
-      <li class="is-active" data-tab="jobs"><a href="#jobs" role="tab" aria-selected="true">{% trans %}Jobs{% endtrans %}</a></li>
+      <li id="pr-jobs-tab" class="is-active" data-tab="jobs"><a href="#jobs" role="tab" aria-selected="true">{% trans %}Jobs{% endtrans %}</a>{% call info_tip() %}{% trans %}Tap a row to open its details and actions.{% endtrans %}{% endcall %}</li>
       <li data-tab="tools"><a href="#tools" role="tab" aria-selected="false">{% trans %}Library tools{% endtrans %}</a></li>
     </ul>
   </div>
@@ -81,23 +83,26 @@
     <div id="pr-rows" class="pr-card is-hidden"></div>
     <p id="pr-empty" class="has-text-warning has-text-centered is-hidden">{% trans %}No songs in the processing pipeline.{% endtrans %}</p>
     <p id="pr-empty-list" class="pr-muted has-text-centered is-hidden">{% trans %}No songs in this list.{% endtrans %}</p>
-    <p id="pr-hint" class="pr-muted mt-2 is-hidden">{% trans %}Tap a row to open its details and actions.{% endtrans %}</p>
     <button type="button" id="pr-clear" class="button is-fullwidth mt-3 is-hidden"></button>
   </div>
 
   <div class="pr-panel is-hidden" id="pr-tools">
-    <div class="pr-sec"><span>{% trans %}Library{% endtrans %}</span></div>
+    <div class="pr-sec"><span>{% trans %}Library{% endtrans %} {% call info_tip() %}
+      <span class="info-tip-line">{% trans share=poor_share %}Looks poor: {{ share }}% or more of the song's lines were guessed.{% endtrans %}</span>
+      <span class="info-tip-line">{% trans %}No lyrics: the words come from what the singer is heard singing.{% endtrans %}</span>
+      <span class="info-tip-line">{% trans %}Tap a list to show its songs, then a song for its Song Info.{% endtrans %}</span>
+    {% endcall %}</span></div>
     <div class="pr-card">
       <div class="pr-list">
         <button type="button" class="pr-link" data-list="behind" aria-expanded="false"><span>{% trans %}Behind current version{% endtrans %}</span><span class="pr-link-end"><span class="tag is-warning is-light" data-count="behind">…</span><i class="icon icon-angle-down pr-chev" aria-hidden="true"></i></span></button>
         <div class="pr-songs is-hidden"></div>
       </div>
       <div class="pr-list">
-        <button type="button" class="pr-link" data-list="poor" aria-expanded="false"><span>{% trans share=poor_share %}Looks poor ({{ share }}%+ lines guessed){% endtrans %}</span><span class="pr-link-end"><span class="tag is-danger is-light" data-count="poor">…</span><i class="icon icon-angle-down pr-chev" aria-hidden="true"></i></span></button>
+        <button type="button" class="pr-link" data-list="poor" aria-expanded="false"><span>{% trans %}Looks poor{% endtrans %}</span><span class="pr-link-end"><span class="tag is-danger is-light" data-count="poor">…</span><i class="icon icon-angle-down pr-chev" aria-hidden="true"></i></span></button>
         <div class="pr-songs is-hidden"></div>
       </div>
       <div class="pr-list">
-        <button type="button" class="pr-link" data-list="no_lyrics" aria-expanded="false"><span>{% trans %}No lyrics (transcribed){% endtrans %}</span><span class="pr-link-end"><span class="tag is-light" data-count="no_lyrics">…</span><i class="icon icon-angle-down pr-chev" aria-hidden="true"></i></span></button>
+        <button type="button" class="pr-link" data-list="no_lyrics" aria-expanded="false"><span>{% trans %}No lyrics{% endtrans %}</span><span class="pr-link-end"><span class="tag is-light" data-count="no_lyrics">…</span><i class="icon icon-angle-down pr-chev" aria-hidden="true"></i></span></button>
         <div class="pr-songs is-hidden"></div>
       </div>
       <div class="pr-list">
@@ -105,9 +110,8 @@
         <div class="pr-songs is-hidden"></div>
       </div>
     </div>
-    <p class="pr-muted mt-2">{% trans %}Tap a list to show its songs, then a song for its Song Info.{% endtrans %}</p>
 
-    <div class="pr-sec"><span>{% trans %}Regenerate{% endtrans %}</span></div>
+    <div class="pr-sec"><span>{% trans %}Regenerate{% endtrans %} {% call info_tip() %}{% trans %}Regen jobs wait behind new downloads. Each song's lyric files are backed up first.{% endtrans %}{% endcall %}</span></div>
     <div id="pr-run-banner" class="pr-card pr-banner is-hidden">
       <b id="pr-run-text"></b>
       <div id="pr-run-buttons" class="pr-buttons">
@@ -124,19 +128,18 @@
     </div>
     <div id="pr-run-card" class="pr-card">
       <div class="pr-run">
-        <div class="pr-run-text"><b>{% trans %}Update stale songs{% endtrans %}</b><span class="pr-muted">{% trans %}Songs on an older version. Keeps their picks.{% endtrans %}</span></div>
+        <div class="pr-run-text"><b>{% trans %}Update stale songs{% endtrans %} {% call info_tip() %}{% trans %}Songs on an older version. Keeps their picks.{% endtrans %}{% endcall %}</b></div>
         <button type="button" class="button is-link pr-run-open" data-mode="stale" disabled>{% trans %}Preview{% endtrans %} <span data-count="behind">…</span></button>
       </div>
       <div class="pr-run">
-        <div class="pr-run-text"><b>{% trans %}Reprocess all{% endtrans %}</b><span class="pr-muted">{% trans %}Every song on current code. Keeps picks.{% endtrans %}</span></div>
+        <div class="pr-run-text"><b>{% trans %}Reprocess all{% endtrans %} {% call info_tip() %}{% trans %}Every song on current code. Keeps picks.{% endtrans %}{% endcall %}</b></div>
         <button type="button" class="button pr-run-open" data-mode="all" disabled>{% trans %}Preview{% endtrans %} <span data-count="all">…</span></button>
       </div>
       <div class="pr-run">
-        <div class="pr-run-text"><b>{% trans %}Reset all{% endtrans %}</b><span class="pr-muted">{% trans %}Start over: re-check captions, pick Genius where needed.{% endtrans %}</span></div>
+        <div class="pr-run-text"><b>{% trans %}Reset all{% endtrans %} {% call info_tip() %}{% trans %}Start over: re-check captions, pick Genius where needed.{% endtrans %}{% endcall %}</b></div>
         <button type="button" class="button pr-run-open" data-mode="reset" disabled>{% trans %}Preview{% endtrans %} <span data-count="all">…</span></button>
       </div>
     </div>
-    <p class="pr-muted mt-2">{% trans %}Regen jobs wait behind new downloads. Each song's lyric files are backed up first.{% endtrans %}</p>
 
     <div class="pr-sec"><span>{% trans %}Add playlist{% endtrans %}</span></div>
     <div class="pr-card pr-banner">
@@ -562,9 +565,9 @@ function renderAdmin() {
   syncList($('#pr-rows'), listed.map(adminRow));
   var total = groups.all.length;
   $('#pr-rows').toggleClass('is-hidden', !listed.length);
+  $('#pr-jobs-tab').toggleClass('has-tip', !!(listed.length || showNow));
   $('#pr-empty').toggleClass('is-hidden', total > 0);
   $('#pr-empty-list').toggleClass('is-hidden', !(total > 0 && !listed.length && !showNow));
-  $('#pr-hint').toggleClass('is-hidden', !(listed.length || showNow));
 
   var nFinished = finished.length;
   $('#pr-clear').toggleClass('is-hidden', nFinished === 0).text(fill(T.clearFinished, { n: nFinished }));

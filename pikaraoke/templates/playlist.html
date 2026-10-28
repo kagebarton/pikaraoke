@@ -1,9 +1,10 @@
 {% extends 'base.html' %}
+{% from 'info_tip.html' import info_tip %}
 
 {% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='library-pages.css') }}">
 <style>
   .pl-muted { color: var(--dark-text-muted); font-size: 13px; }
-  .pl-back { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; font-size: 14px; color: var(--dark-link); }
   .pl-search { display: flex; gap: 8px; }
   .pl-search .input { min-height: 44px; }
   .pl-search .button { min-height: 44px; min-width: 64px; font-weight: 700; }
@@ -16,9 +17,6 @@
   .pl-row-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
   .pl-title { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pl-more { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 44px; border: 0; border-top: 1px solid var(--dark-border); background: none; color: inherit; font: inherit; font-weight: 700; cursor: pointer; }
-  .pl-steps { padding: 14px; margin-top: 22px; display: flex; flex-direction: column; gap: 10px; background: var(--dark-bg-secondary); }
-  .pl-step { display: flex; gap: 10px; align-items: flex-start; }
-  .pl-num { flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--dark-border); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
   .pl-foot { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
   .pl-foot .button { width: 100%; min-height: 44px; font-weight: 700; }
 </style>
@@ -47,8 +45,6 @@
       secWaiting: {{ _('Already waiting (%(n)s)', n='{n}') | tojson }},
       secLibrary: {{ _('Already in library (%(n)s)', n='{n}') | tojson }},
       leftOut: {{ _('Left out') | tojson }},
-      unprocessedNote: {{ _('Downloaded earlier but never finished. Will be processed.') | tojson }},
-      waitingNote: {{ _('Downloading, queued for processing, or waiting for a lyrics pick.') | tojson }},
       skip: {{ _('Skip') | tojson }},
       showMore: {{ _('Show %(n)s more', n='{n}') | tojson }},
       empty: {{ _('No videos in this playlist.') | tojson }},
@@ -86,8 +82,11 @@
       return el('span', 'tag is-rounded ' + style, text);
     }
 
-    function section(title, card) {
-      return [el('div', 'pl-sec', title), card];
+    // tipId: the <template> holding the heading's (i) note, if it has one.
+    function section(title, card, tipId) {
+      var heading = el('div', 'pl-sec', title);
+      if (tipId) heading.append(' ', document.getElementById(tipId).content.cloneNode(true));
+      return [heading, card];
     }
 
     function newRow(video) {
@@ -101,11 +100,10 @@
       return el('label', 'pl-row').append(box, body);
     }
 
-    function noteRow(video, note, tagText) {
+    function listedRow(video, tagText) {
       var row = el('div', 'pl-row').append(
         el('div', 'pl-row-body').append(el('span', 'pl-title', video.title).attr('title', video.title))
       );
-      if (note) row.find('.pl-row-body').append(el('span', 'pl-muted', note));
       if (tagText) row.append(pill('is-success is-light', tagText));
       return row;
     }
@@ -122,20 +120,18 @@
       }
       if (unprocessed.length) {
         result.append(section(fill(T.secUnprocessed, { n: unprocessed.length }),
-          el('div', 'pl-card').append($.map(unprocessed, function (video) {
-            return noteRow(video, T.unprocessedNote, null);
-          }))));
+          el('div', 'pl-card').append($.map(unprocessed, function (video) { return listedRow(video); })),
+          'pl-tip-unprocessed'));
       }
       if (waiting.length) {
         result.append(section(fill(T.secWaiting, { n: waiting.length }),
-          el('div', 'pl-card').append($.map(waiting, function (video) {
-            return noteRow(video, T.waitingNote, null);
-          }))));
+          el('div', 'pl-card').append($.map(waiting, function (video) { return listedRow(video); })),
+          'pl-tip-waiting'));
       }
       if (inLibrary.length) {
         var shown = state.showAll ? inLibrary : inLibrary.slice(0, LIBRARY_SHOWN);
         var card = el('div', 'pl-card').append($.map(shown, function (video) {
-          return noteRow(video, null, T.skip);
+          return listedRow(video, T.skip);
         }));
         if (shown.length < inLibrary.length) {
           card.append(el('button', 'pl-more', fill(T.showMore, { n: inLibrary.length - shown.length }))
@@ -230,12 +226,11 @@
 {% endblock %}
 
 {% block header %}
+<a class="page-back no-spa" href="{{ url_for('processing.processing') }}#tools">&lsaquo; {% trans %}Processing{% endtrans %}</a>
 <h1>{% block title %}{% trans %}Add playlist{% endtrans %}{% endblock %}</h1>
 {% endblock %}
 
 {% block content %}
-<a class="pl-back no-spa" href="{{ url_for('processing.processing') }}#tools">&lsaquo; {% trans %}Processing{% endtrans %}</a>
-
 <div class="pl-search">
   <input id="pl-url" class="input" type="url" autocomplete="off" aria-label="{% trans %}YouTube playlist link{% endtrans %}" value="{{ url }}">
   <button type="button" id="pl-check" class="button is-primary">{% trans %}Check{% endtrans %}</button>
@@ -243,17 +238,20 @@
 <p id="pl-message" class="pl-muted mt-3 is-hidden"></p>
 
 <div id="pl-result" class="is-hidden">
+  <template id="pl-tip-unprocessed">{% call info_tip() %}{% trans %}Downloaded earlier but never finished. Will be processed.{% endtrans %}{% endcall %}</template>
+  <template id="pl-tip-waiting">{% call info_tip() %}{% trans %}Downloading, queued for processing, or waiting for a lyrics pick.{% endtrans %}{% endcall %}</template>
   <div id="pl-pills" class="pl-pills"></div>
   <div id="pl-sections"></div>
 
-  <div class="pl-card pl-steps">
-    <div class="pl-step"><span class="pl-num">1</span><span class="pl-muted">{% trans %}Videos download one at a time, behind any songs guests are adding.{% endtrans %}</span></div>
-    <div class="pl-step"><span class="pl-num">2</span><span class="pl-muted">{% trans %}A song whose YouTube caption is real lyrics is processed right away.{% endtrans %}</span></div>
-    <div class="pl-step"><span class="pl-num">3</span><span class="pl-muted">{% trans %}The rest wait under "Attention" on the Processing page until you pick their lyrics.{% endtrans %}</span></div>
-  </div>
-
   <div class="pl-foot">
-    <button type="button" id="pl-go" class="button is-primary" disabled></button>
+    <div class="go-row">
+      <button type="button" id="pl-go" class="button is-primary" disabled></button>
+      {% call info_tip() %}
+        <span class="info-tip-line">{% trans %}1. Videos download one at a time, behind any songs guests are adding.{% endtrans %}</span>
+        <span class="info-tip-line">{% trans %}2. A song whose YouTube caption is real lyrics is processed right away.{% endtrans %}</span>
+        <span class="info-tip-line">{% trans %}3. The rest wait under "Attention" on the Processing page until you pick their lyrics.{% endtrans %}</span>
+      {% endcall %}
+    </div>
     <a class="button no-spa" href="{{ url_for('processing.processing') }}#tools">{% trans %}Cancel{% endtrans %}</a>
   </div>
 </div>

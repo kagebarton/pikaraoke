@@ -1,6 +1,8 @@
 {% extends 'base.html' %}
+{% from 'info_tip.html' import info_tip %}
 
 {% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='library-pages.css') }}">
 <style>
   .si-head { display: flex; gap: 12px; align-items: center; }
   .si-thumb { width: 96px; height: 54px; flex: none; border-radius: 6px; object-fit: cover; background: var(--dark-bg-tertiary); border: 1px solid var(--dark-border); }
@@ -42,9 +44,11 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='library-pages.js') }}"></script>
 <script>
   $(function () {
     $('.si-tabs li').on('click', function (e) {
+      if ($(e.target).closest('.info-tip').length) return;
       e.preventDefault();
       $('.si-tabs li').removeClass('is-active').find('a').attr('aria-selected', 'false');
       $(this).addClass('is-active').find('a').attr('aria-selected', 'true');
@@ -81,6 +85,7 @@
 
 {% block header %}
 {# MSG: Page title for the page showing how a song's lyrics were made. #}
+<a class="page-back no-spa" href="{{ url_for('files.browse') }}">&lsaquo; {% trans %}Browse{% endtrans %}</a>
 <h1>{% block title %}{% trans %}Song Info{% endtrans %}{% endblock %}</h1>
 {% endblock %}
 
@@ -115,7 +120,7 @@
     {% if alignment %}
     <li data-tab="alignment"><a href="#" role="tab" aria-selected="false">{% trans %}Alignment{% endtrans %}</a></li>
     {% endif %}
-    <li data-tab="history"><a href="#" role="tab" aria-selected="false">{% trans %}History{% endtrans %}</a></li>
+    <li data-tab="history"{% if has_backups %} class="has-tip"{% endif %}><a href="#" role="tab" aria-selected="false">{% trans %}History{% endtrans %}</a>{% if has_backups %}{% call info_tip() %}{% trans %}A version saved in several backups is listed once, under its newest folder.{% endtrans %}{% endcall %}{% endif %}</li>
   </ul>
 </div>
 
@@ -194,9 +199,7 @@
     {% endfor %}
   </div>
   {% endif %}
-  {% if has_backups %}
-  <p class="si-muted mt-2">{% trans %}A version saved in several backups is listed once, under its newest folder.{% endtrans %}</p>
-  {% else %}
+  {% if not has_backups %}
   <p class="si-muted mt-2">{% trans %}No earlier versions yet. Versions appear here once a regen has backed this song up.{% endtrans %}</p>
   {% endif %}
 </div>

@@ -1,9 +1,10 @@
 {% extends 'base.html' %}
+{% from 'info_tip.html' import info_tip %}
 
 {% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='library-pages.css') }}">
 <style>
   .lr-muted { color: var(--dark-text-muted); font-size: 13px; }
-  .lr-back { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; font-size: 14px; color: var(--dark-link); }
   .lr-box { background: var(--dark-bg-secondary); border-radius: 8px; padding: 12px; margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
   .lr-box-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-weight: 700; }
   .lr-bar { height: 6px; border-radius: 3px; background: var(--dark-border); overflow: hidden; }
@@ -253,18 +254,15 @@
 {% endblock %}
 
 {% block header %}
-<h1>{% block title %}{{ title }}{% endblock %}</h1>
+<a class="page-back no-spa" href="{{ url_for('processing.processing') }}#tools">&lsaquo; {% trans %}Processing{% endtrans %}</a>
+<h1>{% block title %}{{ title }}{% endblock %} {% call info_tip() %}{{ explanation }}{% endcall %}</h1>
 {% endblock %}
 
 {% block content %}
 <div id="lr-root">
-  <a class="lr-back no-spa" href="{{ url_for('processing.processing') }}#tools">&lsaquo; {% trans %}Processing{% endtrans %}</a>
-  <p class="lr-muted" style="margin: 0">{{ explanation }}</p>
-
   <div id="lr-check" class="lr-box is-hidden">
-    <div class="lr-box-top"><span>{% trans %}YouTube captions checked{% endtrans %}</span><span class="tag is-rounded lr-box-count"></span></div>
+    <div class="lr-box-top"><span>{% trans %}YouTube captions checked{% endtrans %} {% call info_tip() %}{% trans %}Each caption is fetched and tested for being real lyrics.{% endtrans %}{% endcall %}</span><span class="tag is-rounded lr-box-count"></span></div>
     <div class="lr-bar"><div></div></div>
-    <span class="lr-muted">{% trans %}Each caption is fetched and tested for being real lyrics.{% endtrans %}</span>
   </div>
 
   <div id="lr-failed" class="lr-box lr-failed is-hidden">
@@ -275,9 +273,14 @@
   <div id="lr-groups"></div>
 
   <div class="lr-box lr-actions" style="margin-top: 22px">
-    <span class="lr-muted">{% trans %}Before anything runs, each song's lyric files are copied to a backup folder in the library. Your picks are saved as you go, so you can leave and come back.{% endtrans %}</span>
-    <button type="button" id="lr-go" class="button is-primary" disabled></button>
-    <span id="lr-after-picks" class="lr-muted has-text-centered is-hidden">{% trans %}Songs are queued only after the last pick.{% endtrans %}</span>
+    <div class="go-row">
+      <button type="button" id="lr-go" class="button is-primary" disabled></button>
+      {% call info_tip() %}
+        <span id="lr-after-picks" class="info-tip-line is-hidden">{% trans %}Songs are queued only after the last pick.{% endtrans %}</span>
+        <span class="info-tip-line">{% trans %}Before anything runs, each song's lyric files are copied to a backup folder in the library.{% endtrans %}</span>
+        <span class="info-tip-line">{% trans %}Your picks are saved as you go, so you can leave and come back.{% endtrans %}</span>
+      {% endcall %}
+    </div>
     <button type="button" id="lr-cancel" class="button">{% trans %}Cancel{% endtrans %}</button>
     <div id="lr-confirm" class="lr-confirm is-hidden">
       <span>{% trans %}Discard this run and its picks?{% endtrans %}</span>

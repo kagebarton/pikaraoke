@@ -92,6 +92,13 @@ class TestProcessingPage:
             assert f'data-filter="{chip}"' in body
         assert 'id="pr-now"' in body and 'id="pr-clear"' in body
 
+    def test_the_jobs_tab_note_shows_only_when_there_are_rows_to_tap(self, env):
+        body = get(env, "/processing", admin=True).get_data(as_text=True)
+
+        assert '<li id="pr-jobs-tab" class="is-active" data-tab="jobs">' in body
+        assert "Tap a row to open its details and actions." in body
+        assert "$('#pr-jobs-tab').toggleClass('has-tip', !!(listed.length || showNow));" in body
+
     def test_the_library_tab_opens_the_four_song_lists_in_place(self, env):
         body = get(env, "/processing", admin=True).get_data(as_text=True)
 
@@ -221,13 +228,13 @@ class TestProcessingPage:
     def test_the_poor_list_label_shows_one_percent_sign(self, env):
         body = get(env, "/processing", admin=True).get_data(as_text=True)
 
-        assert "Looks poor (15%+ lines guessed)" in body
+        assert "Looks poor: 15% or more" in body
 
     def test_the_poor_list_label_follows_the_rule(self, env):
         with patch(f"{ROUTE_PREFIX}.POOR_GUESSED_SHARE", 0.2):
             body = get(env, "/processing", admin=True).get_data(as_text=True)
 
-        assert "Looks poor (20%+ lines guessed)" in body
+        assert "Looks poor: 20% or more" in body
 
 
 class TestStatusJson:

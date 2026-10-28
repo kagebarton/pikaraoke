@@ -1,11 +1,15 @@
 {% extends 'base.html' %}
+{% from 'info_tip.html' import info_tip %}
 
 {% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='library-pages.css') }}">
 <style>
   .rp-muted { color: var(--dark-text-muted); font-size: 13px; }
   .rp-sec { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dark-text-muted); margin: 20px 0 8px; display: flex; justify-content: space-between; }
   .rp-sec span + span { text-transform: none; letter-spacing: 0; font-weight: 400; }
-  .rp-back { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; font-size: 14px; background: none; border: 0; padding: 0; cursor: pointer; color: var(--dark-link); }
+  /* An option's description shows once it is chosen, or while it is off, saying why. */
+  .rp-src-desc { display: block; }
+  .rp-src:not(.is-selected):not(.is-off) .rp-src-desc { display: none; }
   .rp-title { font-size: 20px; font-weight: 700; color: var(--dark-text-secondary); margin: 0 0 2px; }
   .rp-name { color: var(--dark-text-light); word-break: break-word; }
   .rp-sources { display: flex; flex-direction: column; gap: 8px; }
@@ -33,11 +37,10 @@
   .rp-link { display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; background: none; border: 0; padding: 0; cursor: pointer; color: var(--dark-link); }
   .rp-link:disabled { opacity: 0.5; cursor: not-allowed; }
   .rp-preview { max-height: 240px; overflow: auto; white-space: pre-wrap; word-break: break-word; font-size: 13px; background: var(--dark-bg-secondary); border-radius: 8px; padding: 10px 12px; margin: 0 0 8px; color: var(--dark-text-light); }
-  .rp-note { background: var(--dark-bg-secondary); border-radius: 8px; padding: 12px; margin-top: 8px; }
-  .rp-buttons { display: flex; gap: 10px; margin-top: 14px; }
+  .go-row.rp-buttons { gap: 10px; margin-top: 14px; }
+  .go-row.rp-buttons .info-tip-btn { margin: 0 -6px; }
   .rp-buttons .button { min-height: 44px; font-weight: 700; }
-  .rp-buttons .button:first-child { flex: 1; }
-  .rp-buttons .button:last-child { flex: 2; }
+  .rp-buttons .button.is-primary { flex: 2; }
 </style>
 {% endblock %}
 
@@ -231,6 +234,8 @@
     function showStep(n) {
       $('#step-1').toggleClass('is-hidden', n !== 1);
       $('#step-2').toggleClass('is-hidden', n !== 2);
+      $('#back-info').toggleClass('is-hidden', n !== 1);
+      $('#back-step1').toggleClass('is-hidden', n !== 2);
       if (n === 2) {
         $('#genius-pick').text(fill(T.geniusPick, { title: state.genius.title, artist: state.genius.artist }));
         renderLrclib();
@@ -384,12 +389,13 @@
 
 {% block header %}
 {# MSG: Title of the page where an admin replaces a song's lyric source. #}
+<a id="back-info" class="page-back no-spa" href="{{ url_for('song_info.song_info', song=song) }}">&lsaquo; {% trans %}Song info{% endtrans %}</a>
+<button type="button" id="back-step1" class="page-back js-back is-hidden">&lsaquo; {% trans %}Step 1{% endtrans %}</button>
 <h1>{% block title %}{% trans %}Repair lyrics{% endtrans %}{% endblock %}</h1>
 {% endblock %}
 
 {% block content %}
 <section id="step-1">
-  <a class="rp-back no-spa" href="{{ url_for('song_info.song_info', song=song) }}">&lsaquo; {% trans %}Song info{% endtrans %}</a>
   <span class="rp-muted" style="display: block">{% trans %}Step 1 of 2{% endtrans %}</span>
   <div class="rp-name">{{ name }}</div>
 
@@ -397,15 +403,15 @@
   <div class="rp-sources" role="radiogroup" aria-label="{% trans %}Lyric source{% endtrans %}">
     <label class="rp-src is-off" data-source="caption">
       <input type="radio" name="source" disabled>
-      <span><b>{% trans %}YouTube caption{% endtrans %}</b>{% if current_source == 'caption' %} <span class="rp-tag">{% trans %}current{% endtrans %}</span>{% endif %}<br><span class="rp-muted rp-src-note"></span></span>
+      <span><b>{% trans %}YouTube caption{% endtrans %}</b>{% if current_source == 'caption' %} <span class="rp-tag">{% trans %}current{% endtrans %}</span>{% endif %}<span class="rp-muted rp-src-note rp-src-desc"></span></span>
     </label>
     <label class="rp-src" data-source="genius">
       <input type="radio" name="source">
-      <span><b>{% trans %}Genius lyrics{% endtrans %}</b>{% if current_source == 'genius' %} <span class="rp-tag">{% trans %}current{% endtrans %}</span>{% endif %}<br><span class="rp-muted">{% trans %}Search and pick, then choose an LRCLIB match.{% endtrans %}</span></span>
+      <span><b>{% trans %}Genius lyrics{% endtrans %}</b>{% if current_source == 'genius' %} <span class="rp-tag">{% trans %}current{% endtrans %}</span>{% endif %}<span class="rp-muted rp-src-desc">{% trans %}Search and pick, then choose an LRCLIB match.{% endtrans %}</span></span>
     </label>
     <label class="rp-src" data-source="transcribe">
       <input type="radio" name="source">
-      <span><b>{% trans %}No lyrics (transcribe){% endtrans %}</b>{% if current_source == 'transcribe' %} <span class="rp-tag">{% trans %}current{% endtrans %}</span>{% endif %}<br><span class="rp-muted">{% trans %}Words come from what the singer is heard singing.{% endtrans %}</span></span>
+      <span><b>{% trans %}No lyrics (transcribe){% endtrans %}</b>{% if current_source == 'transcribe' %} <span class="rp-tag">{% trans %}current{% endtrans %}</span>{% endif %}<span class="rp-muted rp-src-desc">{% trans %}Words come from what the singer is heard singing.{% endtrans %}</span></span>
     </label>
   </div>
 
@@ -423,15 +429,14 @@
     <div id="genius-preview" class="rp-preview is-hidden"></div>
   </div>
 
-  <div id="step1-note" class="rp-note rp-muted is-hidden">{% trans %}Regenerating backs up this song's lyric files, then queues it. It runs behind new downloads, and waits if the song is playing.{% endtrans %}</div>
-  <div class="rp-buttons">
+  <div class="go-row rp-buttons">
     <a class="button no-spa" href="{{ url_for('song_info.song_info', song=song) }}">{% trans %}Cancel{% endtrans %}</a>
     <button type="button" id="go" class="button is-primary" disabled>{% trans %}Regenerate song{% endtrans %}</button>
+    <span id="step1-note" class="is-hidden">{% call info_tip() %}{% trans %}Regenerating backs up this song's lyric files, then queues it. It runs behind new downloads, and waits if the song is playing.{% endtrans %}{% endcall %}</span>
   </div>
 </section>
 
 <section id="step-2" class="is-hidden">
-  <button type="button" class="rp-back js-back">&lsaquo; {% trans %}Step 1{% endtrans %}</button>
   <span class="rp-muted" style="display: block">{% trans %}Step 2 of 2{% endtrans %}</span>
   <h2 class="rp-title">{% trans %}LRCLIB match{% endtrans %}</h2>
   <span id="genius-pick" class="rp-muted"></span>
@@ -448,10 +453,10 @@
   <button type="button" id="lrclib-preview-toggle" class="rp-link" disabled>{% trans %}Preview selected timing{% endtrans %}</button>
   <div id="lrclib-preview" class="rp-preview is-hidden"></div>
 
-  <div class="rp-note rp-muted">{% trans %}Regenerating backs up this song's lyric files, then queues it. It runs behind new downloads, and waits if the song is playing.{% endtrans %}</div>
-  <div class="rp-buttons">
+  <div class="go-row rp-buttons">
     <button type="button" class="button js-back">{% trans %}Back{% endtrans %}</button>
     <button type="button" id="send" class="button is-primary" disabled>{% trans %}Regenerate song{% endtrans %}</button>
+    {% call info_tip() %}{% trans %}Regenerating backs up this song's lyric files, then queues it. It runs behind new downloads, and waits if the song is playing.{% endtrans %}{% endcall %}
   </div>
 </section>
 {% endblock %}

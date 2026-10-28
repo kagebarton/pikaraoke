@@ -366,7 +366,8 @@ class TestSongInfoHistory:
         assert "regen_backup_20260921T170629Z" in history
         assert ">v11<" in history and ">v10<" in history and ">v8<" in history
         assert "51 of 89 lines" in history
-        assert "A version saved in several backups is listed once" in history
+        tabs = html.split('id="tab-history"')[0]
+        assert "A version saved in several backups is listed once" in tabs  # the History tab's (i)
 
     def test_a_version_notes_what_it_added(self, env):
         history = text(env.page(self.song_with_backups(env))).split('id="tab-history"')[1]
@@ -1205,7 +1206,8 @@ class TestRunPages:
     def test_the_preview_embeds_the_run_under_its_title(self, env, run):
         html = text(env.client.get("/library/run"))
 
-        assert "<h1>Reprocess all songs</h1>" in html
+        assert "<h1>Reprocess all songs " in html
+        assert html.index('class="page-back') < html.index("<h1>")  # the back link sits above
         assert "Every song is redone on the current code" in html
         assert '"group": "needs_pick"' in html
         assert SongManager.filename_from_path(run["no_id"]) in html
@@ -1220,7 +1222,7 @@ class TestRunPages:
         env.client.post("/library/run", json={"mode": mode})
         finish_checks(env)
 
-        assert f"<h1>{title}</h1>" in text(env.client.get("/library/run"))
+        assert f"<h1>{title} " in text(env.client.get("/library/run"))
 
     @pytest.mark.parametrize("path", ["/library/run", "/library/run/picks"])
     def test_without_a_run_both_go_to_the_tools_tab(self, env, path):
@@ -1278,7 +1280,8 @@ class TestRunPages:
         code = page_script(text(env.client.get("/library/run")))
 
         assert "return run.to_pick - run.picked > 0;" in code
-        assert code.count("picksLeft(") == 4  # its definition, the button, the note, the tap
+        assert code.count("picksLeft(") == 4  # its definition, the button, its note, the tap
+        assert "$('#lr-after-picks').toggleClass('is-hidden', !picksLeft(run));" in code
         assert "to_pick > 0" not in code
 
     def test_the_pick_page_takes_no_other_pick_while_one_saves(self, env, run):
@@ -1641,7 +1644,10 @@ class TestPlaylistPage:
 
         assert "Already waiting ({n})" in html
         assert "Downloading, queued for processing, or waiting for a lyrics pick." in html
-        assert "return noteRow(video, T.waitingNote, null);" in html  # no box, no tag
+        assert (
+            "$.map(waiting, function (video) { return listedRow(video); })" in html
+        )  # no box, no tag
+        assert "'pl-tip-waiting'" in html  # its note is the heading's (i)
         assert "var m = withStatus('not_processed').length;" in html
         assert "$.map(withStatus('not_processed'), function (video) { return video.song; })" in html
 

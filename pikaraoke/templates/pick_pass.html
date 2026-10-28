@@ -1,9 +1,9 @@
 {% extends 'base.html' %}
 
 {% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='library-pages.css') }}">
 <style>
   .pp-muted { color: var(--dark-text-muted); font-size: 13px; }
-  .pp-back { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; font-size: 14px; color: var(--dark-link); }
   .pp-bar { height: 6px; border-radius: 3px; background: var(--dark-border); margin: 8px 0 12px; overflow: hidden; }
   .pp-bar > div { height: 6px; background: var(--dark-link); }
   .pp-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
@@ -347,15 +347,15 @@
 {% endblock %}
 
 {% block header %}
+{% if list_mode %}
+<a class="page-back no-spa" href="{{ url_for('processing.processing') }}#jobs">&lsaquo; {% trans %}Processing{% endtrans %}</a>
+{% else %}
+<a class="page-back no-spa" href="{{ url_for('library.run_preview') }}">&lsaquo; {{ title }}</a>
+{% endif %}
 <h1>{% block title %}{% if list_mode %}{{ title }}{% else %}{% trans run=title %}{{ run }}: picks{% endtrans %}{% endif %}{% endblock %}</h1>
 {% endblock %}
 
 {% block content %}
-{% if list_mode %}
-<a class="pp-back no-spa" href="{{ url_for('processing.processing') }}#jobs">&lsaquo; {% trans %}Processing{% endtrans %}</a>
-{% else %}
-<a class="pp-back no-spa" href="{{ url_for('library.run_preview') }}">&lsaquo; {{ title }}</a>
-{% endif %}
 <span id="pp-progress" class="pp-muted" style="display: block"></span>
 <div id="pp-bar" class="pp-bar"><div></div></div>
 

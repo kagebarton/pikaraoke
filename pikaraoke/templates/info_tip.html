@@ -1,0 +1,5 @@
+{# An (i) button whose note (the call block) shows on hover or tap. library-pages.js opens
+   and places the note; library-pages.css styles it. Several lines: one .info-tip-line each. #}
+{% macro info_tip() -%}
+<span class="info-tip"><button type="button" class="info-tip-btn" aria-label="{{ _('More info') }}" aria-expanded="false"><i class="icon icon-info-circled-1" aria-hidden="true"></i></button><span class="info-tip-text" role="tooltip">{{ caller() }}</span></span>
+{%- endmacro %}

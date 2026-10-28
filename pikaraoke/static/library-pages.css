@@ -1,0 +1,26 @@
+/* What the library pages share: the (i) note and the back link above a page title. */
+
+/* The note is placed against the window (library-pages.js), so no card can clip it. */
+.info-tip { display: inline-flex; vertical-align: middle; }
+.info-tip-btn { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; margin: -8px -4px; padding: 0; background: none; border: 0; color: var(--dark-text-muted); font-size: 16px; line-height: 1; cursor: pointer; }
+.info-tip-btn:hover, .info-tip-btn[aria-expanded="true"] { color: var(--dark-link); }
+.info-tip-text { display: none; position: fixed; z-index: 40; width: max-content; max-width: min(300px, calc(100vw - 16px)); box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--dark-border-light); border-radius: 8px; background: var(--dark-bg-primary); color: var(--dark-text-light); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45); font-size: 13px; font-weight: 400; line-height: 1.45; letter-spacing: normal; text-transform: none; text-align: left; white-space: normal; }
+.info-tip.is-open .info-tip-text { display: block; }
+.info-tip-line { display: block; }
+/* Spaced from the last shown line before it: a page may hide one (is-hidden). */
+.info-tip-line:not(.is-hidden) ~ .info-tip-line { margin-top: 6px; }
+
+/* A button row ending in an (i): the (i) gets a full 44px tap area. */
+.go-row { display: flex; align-items: center; gap: 4px; }
+.go-row > .button { flex: 1; }
+.go-row .info-tip-btn { width: 44px; height: 44px; margin: 0; }
+
+/* A tab with an (i): the tab's underline goes on the whole tab, not only its link. Without
+   has-tip the tab is a plain one and its (i) is hidden. */
+.tabs li:not(.has-tip) > .info-tip { display: none; }
+.tabs li.has-tip { display: flex; justify-content: center; align-items: center; border-bottom: 1px solid transparent; margin-bottom: -1px; }
+.tabs li.has-tip.is-active { border-bottom-color: var(--dark-link); }
+.tabs li.has-tip a { flex: none; border-bottom: 0; margin-bottom: 0; padding-right: 0.25em; }
+
+/* Snug above the title; its tap area reaches into the space around it, adding no height. */
+.page-back { display: flex; width: fit-content; align-items: center; gap: 4px; padding: 12px 0; margin: -12px 0 -8px; background: none; border: 0; color: var(--dark-link); font: inherit; font-size: 13px; font-weight: 400; line-height: 20px; cursor: pointer; }
