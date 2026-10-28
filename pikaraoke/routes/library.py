@@ -99,7 +99,8 @@ def _run_explanation(mode: str) -> str:
             "Vocals are reused; only lyrics and timing are redone."
         ),
         "reset": _(
-            "Every song's lyric source is chosen again from scratch. "
+            "Every song's lyric source is chosen again from scratch, except songs with "
+            "custom lyrics, which keep them. "
             "Vocals are reused; only lyrics and timing are redone."
         ),
     }[mode]
@@ -112,6 +113,8 @@ def _now_text(now: dict) -> str:
             "title": now["title"],
             "artist": now["artist"],
         }
+    if now["source"] == "custom":
+        return _("Now: custom lyrics")
     if now["source"] == "captions":
         return _("Now: YouTube captions")
     if now["source"] == "transcribed":

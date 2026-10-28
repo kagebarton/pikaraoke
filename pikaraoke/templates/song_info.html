@@ -127,7 +127,7 @@
 <div class="si-panel" id="tab-picks">
   <div class="si-card">
     <div class="si-row"><span class="si-key">{% trans %}Source{% endtrans %}</span><span class="si-val">{{ source }}</span></div>
-    {% if genius_song %}
+    {% if status.origin == 'genius' %}
     <div class="si-row">
       <span class="si-key">Genius</span>
       <span class="si-val">
@@ -139,6 +139,8 @@
       </a>
       {% endif %}
     </div>
+    {% endif %}
+    {% if status.lrclib_state != 'n/a' %}
     <div class="si-row"><span class="si-key">LRCLIB</span><span class="si-val">{{ lrclib_pick }}</span></div>
     <div class="si-row">
       <span class="si-key">{% trans %}Captions{% endtrans %}</span>

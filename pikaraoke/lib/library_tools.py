@@ -1049,6 +1049,8 @@ class LibraryTools:
             return {"source": "transcribed"}
         if status.category == "not_processed":
             return {"source": "unprocessed"}
+        if status.origin == "custom":
+            return {"source": "custom"}
         if status.origin == "genius" and status.genius:
             return {
                 "source": "genius",

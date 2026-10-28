@@ -231,6 +231,41 @@ class TestLrclibState:
         write_bundle(tmp_path, video.stem, lyrics={"origin": "srt"})
         assert library_status.song_status(video).lrclib_state == "n/a"
 
+    def custom_bundle(self, tmp_path, *, lrclib_meta=None, fill=None) -> Path:
+        video = make_video(tmp_path)
+        lyrics = {"origin": "custom", "lines": ["one", "two"]}
+        if lrclib_meta is not None:
+            lyrics["lrclib"] = lrclib_meta
+        write_bundle(tmp_path, video.stem, lyrics=lyrics, joint_stats={"lrclib_fill": fill or {}})
+        return video
+
+    def test_a_custom_song_has_the_same_states_as_a_genius_one(self, tmp_path):
+        for name in ("used", "rejected", "none"):
+            (tmp_path / name).mkdir()
+        used = self.custom_bundle(
+            tmp_path / "used",
+            lrclib_meta={"lrc_file": "x.lrc", "id": 5},
+            fill={"eligible": True, "filled_lids": [3]},
+        )
+        rejected = self.custom_bundle(
+            tmp_path / "rejected",
+            lrclib_meta={"lrc_file": "x.lrc", "id": 5},
+            fill={"eligible": False, "reason": "no_mapping"},
+        )
+        none = self.custom_bundle(tmp_path / "none")
+
+        states = [library_status.song_status(v) for v in (used, rejected, none)]
+
+        assert [s.origin for s in states] == ["custom"] * 3
+        assert [s.lrclib_state for s in states] == ["used", "rejected", "none"]
+        assert (states[0].lrclib_filled, states[1].lrclib_reason) == (1, "no_mapping")
+
+    def test_a_custom_song_can_have_its_lrclib_match_skipped(self, tmp_path):
+        video = self.custom_bundle(tmp_path, lrclib_meta={"lrc_file": "x.lrc"})
+        lrclib.write_skip_marker(tmp_path / "lyrics" / f"{video.stem}.lrc")
+
+        assert library_status.song_status(video).lrclib_state == "skipped"
+
 
 class TestAsrAndDuration:
     def test_ytasr_and_duration_come_from_the_bundle(self, tmp_path):
@@ -307,9 +342,24 @@ class TestHistory:
         [entry] = library_status.song_history(video)
         assert entry.backup is None
         assert entry.captured_at == "2026-10-03T00:00:00Z"
+        assert entry.origin is None  # this bundle names none
         assert entry.genius == {"id": 7}
         assert entry.lrclib == {"id": 9}
         assert (entry.line_count, entry.lines_timed) == (10, 8)
+
+    def test_each_version_carries_the_origin_of_its_lyrics(self, tmp_path):
+        video = make_video(tmp_path)
+        write_bundle(
+            tmp_path, video.stem, captured_at="2026-10-03T00:00:00Z", lyrics={"origin": "custom"}
+        )
+        write_bundle(
+            tmp_path / "regen_backup_20261001T000000Z",
+            video.stem,
+            captured_at="2026-09-01T00:00:00Z",
+            lyrics={"origin": "srt"},
+        )
+
+        assert [e.origin for e in library_status.song_history(video)] == ["custom", "srt"]
 
     def test_a_marker_reference_is_not_listed_as_a_match(self, tmp_path):
         video = make_video(tmp_path)
