@@ -45,6 +45,7 @@ from tqdm import tqdm
 from pikaraoke.lib import alignment_capture, lrclib, lrclib_fill, ytasr
 from pikaraoke.lib.cue_align import align_song
 from pikaraoke.lib.evidence_veto import veto_uncorroborated_lines
+from pikaraoke.lib.ffmpeg import probe_duration
 from pikaraoke.lib.genius_lyrics import parse_lyric_lines
 from pikaraoke.lib.joint_match import match_words_to_lines_joint_with_stats
 from pikaraoke.lib.onset_snap import decode_env_db, snap_line_edges
@@ -406,7 +407,9 @@ class LyricAlignStage(BaseStage):
                 output_summary=alignment_capture.summarize_line_objects(line_objects),
                 output_line_timings=alignment_capture.output_line_timings(line_objects),
                 ground_truth_refs=ground_truth_refs,
-                media_duration_s=ctx.artifacts.get("media_duration_s"),
+                # Every route records the video's length; only some probe it earlier.
+                media_duration_s=ctx.artifacts.get("media_duration_s")
+                or probe_duration(ctx.song_path),
             )
             path = alignment_capture.write_bundle(ctx.song_path, bundle)
             logger.info(f"[{self.name}] Alignment-debug capture written: {path}")

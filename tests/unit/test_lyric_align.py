@@ -175,6 +175,12 @@ class TestGenerateAss:
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def _no_ffprobe(monkeypatch):
+    """The bundle write probes the video's length when no earlier stage did."""
+    monkeypatch.setattr("pikaraoke.pipeline.stages.lyric_align.probe_duration", lambda _path: None)
+
+
 def _make_stage_and_ctx(tmp_path, *, dereverb_yield_wpm=0.0):
     from pikaraoke.pipeline.context import StageContext
 
@@ -881,6 +887,41 @@ class TestCaptureGeniusIdentity:
         debug = ctx.song_path.parent / "alignment_debug" / f"{ctx.song_path.stem}.json"
         bundle = json.loads(debug.read_text(encoding="utf-8"))
         assert "genius" not in bundle["lyrics"]
+
+
+class TestCaptureMediaDuration:
+    """Every route's bundle records the video's length, probed here when no
+    earlier stage (the Genius route's LRCLIB or YTASR step) already did."""
+
+    def _bundle(self, ctx) -> dict:
+        debug = ctx.song_path.parent / "alignment_debug" / f"{ctx.song_path.stem}.json"
+        return json.loads(debug.read_text(encoding="utf-8"))
+
+    def test_probed_when_no_stage_recorded_it(self, tmp_path, monkeypatch):
+        stage, ctx, _ = _make_stage_and_ctx(tmp_path)
+        ctx.artifacts["lyrics_origin"] = "custom"
+        probed = []
+        monkeypatch.setattr(
+            "pikaraoke.pipeline.stages.lyric_align.probe_duration",
+            lambda path: probed.append(path) or 212.5,
+        )
+
+        stage.run(ctx)
+
+        assert self._bundle(ctx)["media_duration_s"] == 212.5
+        assert probed == [ctx.song_path]
+
+    def test_an_earlier_probe_is_reused(self, tmp_path, monkeypatch):
+        stage, ctx, _ = _make_stage_and_ctx(tmp_path)
+        ctx.artifacts["media_duration_s"] = 190.0
+        monkeypatch.setattr(
+            "pikaraoke.pipeline.stages.lyric_align.probe_duration",
+            MagicMock(side_effect=AssertionError("probed twice")),
+        )
+
+        stage.run(ctx)
+
+        assert self._bundle(ctx)["media_duration_s"] == 190.0
 
 
 class TestYoutubeSrtProvenance:
