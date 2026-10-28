@@ -356,33 +356,39 @@ def is_skip_marker(path: Path) -> bool:
     return any(line.strip().startswith(f"[{SKIP_TAG}:") for line in text.splitlines())
 
 
-def snapshot_file(path: Path) -> str | None:
-    """The text of ``path``, or None when there is no such file.
+def snapshot_file(path: Path) -> bytes | None:
+    """The bytes of ``path``, or None when there is no such file.
 
-    Any other OSError raises: a regen takes this before it changes anything,
-    so a file it can't read fails the job while there is nothing to undo yet.
+    Bytes, not text: a hand-placed file in another encoding must not fail the
+    run, and it comes back exactly as it was, line ends included. Any other
+    OSError raises: a regen takes this before it changes anything, so a file it
+    can't read fails the job while there is nothing to undo yet.
     """
     try:
-        return path.read_text(encoding="utf-8")
+        return path.read_bytes()
     except FileNotFoundError:
         return None
 
 
-def restore_file(path: Path, snapshot: str | None) -> None:
+def restore_file(path: Path, snapshot: bytes | None) -> None:
     """Put ``path`` back as :func:`snapshot_file` found it (None: no file)."""
     if snapshot is None:
         path.unlink(missing_ok=True)
     else:
-        write_text_atomic(path, snapshot)
+        _write_atomic(path, snapshot)
 
 
 def write_text_atomic(path: Path, text: str) -> None:
+    _write_atomic(path, text.encode("utf-8"))
+
+
+def _write_atomic(path: Path, data: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     # Sibling tmp + rename: an interrupted write must never leave a truncated
     # file for a reader to trust (an .lrc ensure_lrc's is_file() check would
     # keep as a cache forever, or a half-written custom sheet).
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
+    tmp.write_bytes(data)
     tmp.replace(path)
 
 

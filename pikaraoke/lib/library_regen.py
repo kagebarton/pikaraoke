@@ -645,8 +645,8 @@ def apply_custom_choice(job: SongJob) -> None:
         sheet.unlink(missing_ok=True)
 
 
-def snapshot_lyric_files(song: Path) -> dict[Path, str | None]:
-    """The text of the two files a regen rewrites or deletes: the ``.lrc`` and the
+def snapshot_lyric_files(song: Path) -> dict[Path, bytes | None]:
+    """The bytes of the two files a regen rewrites or deletes: the ``.lrc`` and the
     custom sheet (None: no such file). Taken before anything is changed."""
     return {
         path: lrclib.snapshot_file(path)
@@ -654,7 +654,7 @@ def snapshot_lyric_files(song: Path) -> dict[Path, str | None]:
     }
 
 
-def put_back_lyric_files(snapshot: dict[Path, str | None]) -> None:
+def put_back_lyric_files(snapshot: dict[Path, bytes | None]) -> None:
     """Restore the files of :func:`snapshot_lyric_files` after a regen that didn't finish.
 
     The choices rewrite or delete them before the run (D3) and the run can write
@@ -663,9 +663,9 @@ def put_back_lyric_files(snapshot: dict[Path, str | None]) -> None:
     would sit next to the old song's bundle. Never raises, so it can't hide the
     job's own error.
     """
-    for path, text in snapshot.items():
+    for path, data in snapshot.items():
         try:
-            lrclib.restore_file(path, text)
+            lrclib.restore_file(path, data)
         except OSError as e:
             logger.warning("Could not put back %s: %s", path.name, e)
 

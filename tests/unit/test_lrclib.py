@@ -146,6 +146,18 @@ class TestSnapshotRestore:
         assert lrclib.read_lrc(lrc) == before
         assert lrclib.read_lrc(lrc)[1]["id"] == 7
 
+    def test_a_file_in_another_encoding_comes_back_byte_for_byte(self, tmp_path):
+        sheet = tmp_path / "lyrics" / "Song.custom.txt"
+        sheet.parent.mkdir()
+        original = "Café line\r\nnext\r\n".encode("cp1252")
+        sheet.write_bytes(original)
+        snapshot = lrclib.snapshot_file(sheet)
+
+        sheet.unlink()
+        lrclib.restore_file(sheet, snapshot)
+
+        assert sheet.read_bytes() == original
+
     def test_a_file_that_cannot_be_read_raises(self, tmp_path):
         lrc = tmp_path / "Song.lrc"
         lrc.mkdir()  # a directory where the file should be

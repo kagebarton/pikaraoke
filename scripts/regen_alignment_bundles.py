@@ -231,18 +231,21 @@ def run_jobs(
         for i, job in enumerate(runnable, 1):
             song = job.song_path
             print(f"\n[{i}/{len(runnable)}] {song.name} — {job.plan.label}")
-            files_before = snapshot_lyric_files(song)
-            lyrics_path, lyric_stage = prepare_lyrics(job, genius, lyrics_dir, config)
-            stages = build_stages(song, lyric_stage, whisper_worker, config, stem_worker)
-            orch = PipelineOrchestrator(stages, stem_worker, whisper_worker, config)
+            files_before = None
             try:
+                # Inside the try: one song whose files can't be read fails alone.
+                files_before = snapshot_lyric_files(song)
+                lyrics_path, lyric_stage = prepare_lyrics(job, genius, lyrics_dir, config)
+                stages = build_stages(song, lyric_stage, whisper_worker, config, stem_worker)
+                orch = PipelineOrchestrator(stages, stem_worker, whisper_worker, config)
                 ctx = orch.run_one(song, lyrics_path)
                 finish_regen_job(song, ctx.artifacts.get("lyric_method"))
                 print(f"  OK: {song.name}")
                 succeeded += 1
             except Exception as e:
                 print(f"  FAILED: {song.name}: {e}")
-                put_back_lyric_files(files_before)
+                if files_before is not None:
+                    put_back_lyric_files(files_before)
                 failed += 1
     finally:
         shutil.rmtree(lyrics_dir, ignore_errors=True)
