@@ -123,7 +123,7 @@ class TestMainSongReset:
         assert [j.song_path.name for j in jobs] == ["Mr.mp4"]
 
         # Backed up: the selected song's files, and nothing of the siblings'.
-        (backup,) = tmp_path.glob("regen_backup_*")
+        (backup,) = tmp_path.glob("regen_backups/*")
         for sub, ext in (
             ("subtitles", ".srt"),
             ("subtitles", ".srt.generated"),

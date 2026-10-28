@@ -403,7 +403,7 @@ class TestSongInfoHistory:
         write_bundle(
             env.folder,
             stem,
-            root=env.folder / "regen_backup_20261019T175506Z",
+            root=env.folder / "regen_backups" / "20261019T175506Z",
             schema_version=10,
             captured_at="2026-09-21T10:00:00+00:00",
             **poor_genius_bundle(),
@@ -411,7 +411,7 @@ class TestSongInfoHistory:
         write_bundle(
             env.folder,
             stem,
-            root=env.folder / "regen_backup_20260921T170629Z",
+            root=env.folder / "regen_backups" / "20260921T170629Z",
             schema_version=8,
             captured_at="2026-07-16T10:00:00+00:00",
             **no_lrclib,
@@ -424,8 +424,8 @@ class TestSongInfoHistory:
 
         assert history.index("19 Oct 2026") < history.index("21 Sep 2026")
         assert history.index("21 Sep 2026") < history.index("16 Jul 2026")
-        assert "regen_backup_20261019T175506Z" in history
-        assert "regen_backup_20260921T170629Z" in history
+        assert "20261019T175506Z" in history
+        assert "20260921T170629Z" in history
         assert ">v11<" in history and ">v10<" in history and ">v8<" in history
         assert "51 of 89 lines" in history
         tabs = html.split('id="tab-history"')[0]
@@ -445,7 +445,7 @@ class TestSongInfoHistory:
         write_bundle(
             env.folder,
             stem,
-            root=env.folder / "regen_backup_20261019T175506Z",
+            root=env.folder / "regen_backups" / "20261019T175506Z",
             schema_version=10,
             captured_at="2026-09-21T10:00:00+00:00",
             **poor_genius_bundle(),
@@ -465,7 +465,7 @@ class TestSongInfoHistory:
         write_bundle(
             env.folder,
             stem,
-            root=env.folder / "regen_backup_20261019T175506Z",
+            root=env.folder / "regen_backups" / "20261019T175506Z",
             schema_version=10,
             captured_at="2026-09-21T10:00:00+00:00",
             **caption_bundle(),
@@ -484,7 +484,7 @@ class TestSongInfoHistory:
         write_bundle(
             env.folder,
             stem,
-            root=env.folder / "regen_backup_20261019T175506Z",
+            root=env.folder / "regen_backups" / "20261019T175506Z",
             captured_at="2026-09-21T10:00:00+00:00",
             **older,
         )
@@ -537,7 +537,7 @@ class TestRegenerateRoute:
 
         assert env.regenerate(str(outside)).status_code == 400
         env.processing.enqueue_regen.assert_not_called()
-        assert not list(env.folder.glob("regen_backup_*"))
+        assert not list(env.folder.glob("regen_backups/*"))
 
     def test_queues_one_job_and_backs_up_only_that_song(self, env):
         mine = env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())
@@ -550,7 +550,7 @@ class TestRegenerateRoute:
         regen = env.processing.enqueue_regen.call_args.args[0]
         assert str(regen.song.song_path) == mine
         assert regen.label == "Regenerate" and regen.reset is False
-        [backup] = env.folder.glob("regen_backup_*")
+        [backup] = env.folder.glob("regen_backups/*")
         assert [p.name for p in (backup / "alignment_debug").iterdir()] == ["A---aaaaaaaaaaa.json"]
 
     def test_a_busy_song_is_refused(self, env):
@@ -1266,7 +1266,7 @@ class TestRepairRoute:
 
         assert self.repair(env, str(outside), source="transcribe").status_code == 400
         env.processing.enqueue_regen.assert_not_called()
-        assert not list(env.folder.glob("regen_backup_*"))
+        assert not list(env.folder.glob("regen_backups/*"))
 
     def test_each_source_queues_its_plan_as_a_repair_that_wipes_first(self, env, song):
         for source, kind in (("caption", "fetch"), ("transcribe", "transcribe")):
@@ -1287,7 +1287,7 @@ class TestRepairRoute:
         assert response.get_json() == {"success": True}
         plan = self.queued(env).song.plan
         assert (plan.kind, plan.genius_id) == ("sidecar", 8)
-        [backup] = env.folder.glob("regen_backup_*")
+        [backup] = env.folder.glob("regen_backups/*")
         assert [p.name for p in (backup / "alignment_debug").iterdir()] == ["A---aaaaaaaaaaa.json"]
 
     def test_an_lrclib_id_queues_that_record(self, env, song, monkeypatch):
@@ -1311,7 +1311,7 @@ class TestRepairRoute:
         assert response.status_code == 400
         assert "LRCLIB didn't return that match" in response.get_json()["error"]
         env.processing.enqueue_regen.assert_not_called()
-        assert not list(env.folder.glob("regen_backup_*"))
+        assert not list(env.folder.glob("regen_backups/*"))
 
     @pytest.mark.parametrize(
         "body",
@@ -1339,7 +1339,7 @@ class TestRepairRoute:
         assert (regen.label, regen.reset) == ("Repair", True)
         assert (regen.song.plan.kind, regen.song.plan.seed) == ("seed", {"lyrics_origin": "custom"})
         assert regen.song.plan.custom_text == "Line one\nLine two\n"
-        [backup] = env.folder.glob("regen_backup_*")
+        [backup] = env.folder.glob("regen_backups/*")
         assert [p.name for p in (backup / "alignment_debug").iterdir()] == ["A---aaaaaaaaaaa.json"]
 
     def test_an_lrclib_choice_rides_on_a_custom_sheet(self, env, song, monkeypatch):
@@ -1375,7 +1375,7 @@ class TestRepairRoute:
         assert response.status_code == 400
         assert message in response.get_json()["error"]
         env.processing.enqueue_regen.assert_not_called()
-        assert not list(env.folder.glob("regen_backup_*"))
+        assert not list(env.folder.glob("regen_backups/*"))
 
     @pytest.mark.parametrize("body", [{}, {"source": "lyrics-from-the-moon"}, {"source": None}])
     def test_an_unknown_source_is_rejected(self, env, song, body):

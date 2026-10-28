@@ -375,7 +375,7 @@ class TestHistory:
             tmp_path, video.stem, captured_at="2026-10-03T00:00:00Z", lyrics={"origin": "custom"}
         )
         write_bundle(
-            tmp_path / "regen_backup_20261001T000000Z",
+            tmp_path / "regen_backups" / "20261001T000000Z",
             video.stem,
             captured_at="2026-09-01T00:00:00Z",
             lyrics={"origin": "srt"},
@@ -400,12 +400,12 @@ class TestHistory:
         video = make_video(tmp_path)
         write_bundle(tmp_path, video.stem, captured_at="2026-10-03T00:00:00Z")
         write_bundle(
-            tmp_path / "regen_backup_20261001T000000Z",
+            tmp_path / "regen_backups" / "20261001T000000Z",
             video.stem,
             captured_at="2026-09-01T00:00:00Z",
         )
         write_bundle(
-            tmp_path / "regen_backup_20261002T000000Z",
+            tmp_path / "regen_backups" / "20261002T000000Z",
             video.stem,
             captured_at="2026-09-20T00:00:00Z",
         )
@@ -419,26 +419,28 @@ class TestHistory:
         ]
         assert [e.backup for e in entries] == [
             None,
-            "regen_backup_20261002T000000Z",
-            "regen_backup_20261001T000000Z",
+            "20261002T000000Z",
+            "20261001T000000Z",
         ]
 
     def test_a_version_copied_into_two_backups_is_listed_once_under_the_newer(self, tmp_path):
         video = make_video(tmp_path)
         write_bundle(tmp_path, video.stem, captured_at="2026-10-03T00:00:00Z")
-        for name in ("regen_backup_20261001T000000Z", "regen_backup_20261002T000000Z"):
-            write_bundle(tmp_path / name, video.stem, captured_at="2026-09-01T00:00:00Z")
+        for name in ("20261001T000000Z", "20261002T000000Z"):
+            write_bundle(
+                tmp_path / "regen_backups" / name, video.stem, captured_at="2026-09-01T00:00:00Z"
+            )
 
         entries = library_status.song_history(video)
 
         assert [e.captured_at for e in entries] == ["2026-10-03T00:00:00Z", "2026-09-01T00:00:00Z"]
-        assert entries[1].backup == "regen_backup_20261002T000000Z"
+        assert entries[1].backup == "20261002T000000Z"
 
     def test_the_current_bundle_unchanged_since_a_backup_is_listed_once(self, tmp_path):
         video = make_video(tmp_path)
         write_bundle(tmp_path, video.stem, captured_at="2026-10-03T00:00:00Z")
         write_bundle(
-            tmp_path / "regen_backup_20261002T000000Z",
+            tmp_path / "regen_backups" / "20261002T000000Z",
             video.stem,
             captured_at="2026-10-03T00:00:00Z",
         )
@@ -450,8 +452,8 @@ class TestHistory:
     def test_backups_without_this_song_or_a_timestamp_are_skipped(self, tmp_path):
         video = make_video(tmp_path)
         write_bundle(tmp_path, video.stem, captured_at="2026-10-03T00:00:00Z")
-        write_bundle(tmp_path / "regen_backup_20261001T000000Z", "Other---aaaaaaaaaaa")
-        old = tmp_path / "regen_backup_20261002T000000Z" / "alignment_debug"
+        write_bundle(tmp_path / "regen_backups" / "20261001T000000Z", "Other---aaaaaaaaaaa")
+        old = tmp_path / "regen_backups" / "20261002T000000Z" / "alignment_debug"
         old.mkdir(parents=True)
         (old / f"{video.stem}.json").write_text('{"schema_version": 5}', encoding="utf-8")
 

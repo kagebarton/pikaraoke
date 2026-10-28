@@ -12,7 +12,12 @@ from pathlib import Path
 
 from pikaraoke.lib import lrclib
 from pikaraoke.lib.alignment_capture import SCHEMA_VERSION
-from pikaraoke.lib.library_regen import custom_sheet_path, list_videos, read_bundle
+from pikaraoke.lib.library_regen import (
+    BACKUP_ROOT,
+    custom_sheet_path,
+    list_videos,
+    read_bundle,
+)
 from pikaraoke.lib.metadata_parser import extract_youtube_id
 
 # Ken, 2026-10-20: a song with 15% or more of its lines guessed "looks poor".
@@ -195,14 +200,16 @@ class HistoryEntry:
 def song_history(song: Path) -> list[HistoryEntry]:
     """Every distinct version of the song's bundle, newest first.
 
-    The current bundle, then each ``regen_backup_*`` folder newest first. A
+    The current bundle, then each ``regen_backups/`` folder newest first. A
     version saved in several backups is listed once, under the newest folder
     that holds it.
     """
     folder = song.parent
     sources: list[tuple[str | None, Path]] = [(None, folder)]
     backups = sorted(
-        (d for d in folder.glob("regen_backup_*") if d.is_dir()), key=lambda d: d.name, reverse=True
+        (d for d in (folder / BACKUP_ROOT).glob("*") if d.is_dir()),
+        key=lambda d: d.name,
+        reverse=True,
     )
     sources += [(d.name, d) for d in backups]
 

@@ -757,6 +757,9 @@ OUTPUT_DIRS = ("subtitles", "karaoke", "lyrics")
 # rather than lose it outright.
 BACKUP_DIRS = OUTPUT_DIRS + ("alignment_debug",)
 
+# Every backup is a ``<UTC>`` subfolder of this one, keeping the library root tidy.
+BACKUP_ROOT = "regen_backups"
+
 
 def _all_stems(folder: Path) -> set[str]:
     """Every song file's stem in ``folder``, regardless of selection or staleness.
@@ -801,7 +804,7 @@ def _owned_by_any(name: str, stems: Collection[str], all_stems: set[str]) -> boo
 
 
 def backup_text_folders(folder: Path, stems: list[str] | None = None) -> Path | None:
-    """Snapshot the regenerable output folders into ``regen_backup_<UTC>/``.
+    """Snapshot the regenerable output folders into ``regen_backups/<UTC>/``.
 
     ``stems``: copy only those songs' own files (see :func:`_owner`) from
     each folder instead of the whole folder.
@@ -809,7 +812,7 @@ def backup_text_folders(folder: Path, stems: list[str] | None = None) -> Path | 
     Returns the backup root, or None when nothing was copied.
     """
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    backup_root = folder / f"regen_backup_{ts}"
+    backup_root = folder / BACKUP_ROOT / ts
     copied: list[str] = []
 
     if stems is None:

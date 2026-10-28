@@ -263,7 +263,7 @@ class TestRegenerate:
 
         tools.regenerate(str(mine))
 
-        [backup] = tmp_path.glob("regen_backup_*")
+        [backup] = tmp_path.glob("regen_backups/*")
         saved = sorted(p.name for p in (backup / "alignment_debug").iterdir())
         assert saved == [f"{mine.stem}.json"]
 
@@ -317,7 +317,7 @@ class TestRegenerate:
         with pytest.raises(RegenError, match="Repair lyrics"):
             tools.regenerate(str(video))
         processing.enqueue_regen.assert_not_called()
-        assert not list(tmp_path.glob("regen_backup_*"))
+        assert not list(tmp_path.glob("regen_backups/*"))
 
     def test_a_busy_song_is_refused_before_any_backup(self, tmp_path):
         [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
@@ -328,7 +328,7 @@ class TestRegenerate:
             tools.regenerate(str(video))
 
         processing.enqueue_regen.assert_not_called()
-        assert not list(tmp_path.glob("regen_backup_*"))
+        assert not list(tmp_path.glob("regen_backups/*"))
 
     def test_a_song_the_queue_refuses_is_reported_busy(self, tmp_path):
         """is_busy and enqueue_regen can disagree if a job lands between them."""
@@ -495,7 +495,7 @@ class TestRepair:
 
         self.repaired(tmp_path, song, "custom", text="Line one\n")
 
-        [backup] = tmp_path.glob("regen_backup_*")
+        [backup] = tmp_path.glob("regen_backups/*")
         assert [p.name for p in (backup / "alignment_debug").iterdir()] == [f"{song.stem}.json"]
         assert not (backup / "lyrics").exists()
 
@@ -504,7 +504,7 @@ class TestRepair:
 
         self.repaired(tmp_path, song, "custom", text="Line one\n")
 
-        [backup] = tmp_path.glob("regen_backup_*")
+        [backup] = tmp_path.glob("regen_backups/*")
         saved = (backup / "lyrics" / f"{song.stem}.custom.txt").read_text(encoding="utf-8")
         assert saved == "the old words\n"
 
@@ -559,7 +559,7 @@ class TestRepair:
             tools.repair(str(song), "custom", text=text, **kwargs)
 
         processing.enqueue_regen.assert_not_called()
-        assert not list(tmp_path.glob("regen_backup_*"))
+        assert not list(tmp_path.glob("regen_backups/*"))
         sheet = tmp_path / "lyrics" / f"{song.stem}.custom.txt"
         assert sheet.read_text(encoding="utf-8") == "the old words\n"
 
@@ -575,7 +575,7 @@ class TestRepair:
 
         self.repaired(tmp_path, song, "transcribe")
 
-        [backup] = tmp_path.glob("regen_backup_*")
+        [backup] = tmp_path.glob("regen_backups/*")
         assert [p.name for p in (backup / "alignment_debug").iterdir()] == [f"{song.stem}.json"]
 
     @pytest.mark.parametrize(
@@ -598,7 +598,7 @@ class TestRepair:
             tools.repair(str(song), **kwargs)
 
         processing.enqueue_regen.assert_not_called()
-        assert not list(tmp_path.glob("regen_backup_*"))
+        assert not list(tmp_path.glob("regen_backups/*"))
 
     def test_a_match_with_no_synced_lyrics_is_refused(self, tmp_path, song, monkeypatch):
         monkeypatch.setattr(lrclib, "get_record", lambda record_id: {"id": record_id})
@@ -617,7 +617,7 @@ class TestRepair:
             tools.repair(str(video), "caption")
 
         processing.enqueue_regen.assert_not_called()
-        assert not list(tmp_path.glob("regen_backup_*"))
+        assert not list(tmp_path.glob("regen_backups/*"))
 
     def test_a_busy_song_is_refused_before_anything_is_fetched(self, tmp_path, song, monkeypatch):
         monkeypatch.setattr(lrclib, "get_record", MagicMock(side_effect=AssertionError("fetched")))
@@ -629,7 +629,7 @@ class TestRepair:
 
         assert genius.fetches == []
         processing.enqueue_regen.assert_not_called()
-        assert not list(tmp_path.glob("regen_backup_*"))
+        assert not list(tmp_path.glob("regen_backups/*"))
 
     def test_a_song_the_queue_refuses_is_reported_busy(self, tmp_path, song):
         tools, processing = make_tools(tmp_path, [str(song)])
@@ -1924,7 +1924,7 @@ class TestQueueRun:
         release.set()
         finish_checks(tools)
         processing.enqueue_regen.assert_not_called()
-        assert not list(tmp_path.glob("regen_backup_*"))
+        assert not list(tmp_path.glob("regen_backups/*"))
         assert tools.run_view() is not None
 
     def test_it_refuses_while_a_song_still_needs_a_pick(self, tmp_path, monkeypatch):
@@ -1935,7 +1935,7 @@ class TestQueueRun:
             tools.queue_run()
 
         processing.enqueue_regen.assert_not_called()
-        assert not list(tmp_path.glob("regen_backup_*"))
+        assert not list(tmp_path.glob("regen_backups/*"))
 
     def test_a_reprocess_queues_each_songs_plan_without_a_reset(self, tmp_path, monkeypatch):
         tools, processing, paths = open_run(tmp_path, monkeypatch, "all", RUN_ANSWERS)
@@ -2002,12 +2002,12 @@ class TestQueueRun:
         tools, processing, _ = open_run(tmp_path, monkeypatch, "stale", RUN_ANSWERS)
         backups_at_enqueue = []
         processing.enqueue_regen.side_effect = lambda regen: (
-            backups_at_enqueue.append(len(list(tmp_path.glob("regen_backup_*")))) or True
+            backups_at_enqueue.append(len(list(tmp_path.glob("regen_backups/*")))) or True
         )
 
         result = tools.queue_run()
 
-        [backup] = tmp_path.glob("regen_backup_*")
+        [backup] = tmp_path.glob("regen_backups/*")
         assert result["backup"] == backup.name
         assert backups_at_enqueue == [1, 1]  # there before the first job was queued
         saved = sorted(p.name for p in (backup / "alignment_debug").iterdir())
@@ -2057,7 +2057,7 @@ class TestQueueRun:
             tools.queue_run()
 
         processing.enqueue_regen.assert_not_called()
-        assert not list(tmp_path.glob("regen_backup_*"))
+        assert not list(tmp_path.glob("regen_backups/*"))
         assert tools.run_view() is not None
 
     def test_a_run_of_skipped_songs_queues_nothing_and_stays_open(self, tmp_path, monkeypatch):
@@ -2072,7 +2072,7 @@ class TestQueueRun:
             tools.queue_run()
 
         processing.enqueue_regen.assert_not_called()
-        assert not list(tmp_path.glob("regen_backup_*"))
+        assert not list(tmp_path.glob("regen_backups/*"))
         assert tools.run_view() is not None
 
     def test_a_song_the_queue_turns_away_is_counted_busy(self, tmp_path, monkeypatch):
@@ -2118,7 +2118,7 @@ class TestQueueRun:
             tools.queue_run()
 
         processing.enqueue_regen.assert_not_called()
-        assert not list(tmp_path.glob("regen_backup_*"))
+        assert not list(tmp_path.glob("regen_backups/*"))
         assert tools.run_view() is not None
 
 
