@@ -33,15 +33,21 @@ Sources gathered on 2026-10-26:
 
 - **Delete song and Rename leave the song's files behind.** Upstream's
   `SongManager._get_companion_files` knows only the `.srt`, the two stems and
-  the `.ass`, so a delete leaves the bundle, the `.lrc` and the
-  `.srt.generated`, and a rename leaves them under the old name. On `dev` today.
+  the `.ass`, so a delete leaves the bundle, the `.lrc`, a custom lyric sheet
+  (`lyrics/<stem>.custom.txt`, added by `custom_lyrics`) and the `.srt.generated`,
+  and a rename leaves them under the old name. On `dev` today.
   Also: a renamed song on the needs-a-pick list stays listed under its old path,
   and a pick of it fails each time. Ken, 2026-10-23: small branch off `dev`.
   Record: web plan, D9 and 8.1f.
-- **Upload hand-checked lyrics** as the lyric source of a Repair, Regenerate or
+- ~~**Upload hand-checked lyrics** as the lyric source of a Repair, Regenerate or
   Reset. Ken, 2026-10-23: a later plan of its own, after `web_library_tools`
   lands; needs its own design (what counts as the current pick, how an uploaded
-  sheet survives a later Reset). Record: web plan, D9.
+  sheet survives a later Reset). Record: web plan, D9.~~
+  Done 2026-10-28 on branch `custom_lyrics` (not merged to `dev` yet),
+  `6b02e63`..`cb4c581`: Repair takes typed, pasted or opened plain-text lyrics as a
+  custom sheet that every later run replays and only a Repair to another source
+  removes. Timed uploads (`.lrc`, `.srt`) were left out. Record:
+  `plans/custom-lyrics-sheet.md`.
 
 ## Out of scope by design (web plan D9)
 

@@ -369,6 +369,11 @@ row. **Do not edit `processing.html`.**
 | Phase | Commit | Tests | Notes |
 | ----- | ------ | ----- | ----- |
 | 0 | none (no code; the plan file is first committed with Phase 1) | baseline, 8 affected test files (`test_library_regen`, `_tools`, `_status`, `_routes`, `test_lrclib`, `test_lyrics_fetch`, `test_ytasr`, `test_processing_manager`): 753 passed | Passed, branch `custom_lyrics` cut from `dev` at `8b89c17`. See "Phase 0 findings" below. |
+| 1 | `6b02e63` | 811 passed across the 9 affected files (Phase 0's 8 + `test_regen_alignment_bundles`); pre-commit clean on the changed files | Done as written. Details below under "Phase 1 notes". |
+| 2 | `35badb7` | 867 passed across the same 9 files; pre-commit clean | Done as written. Notes below. |
+| 3 | `0c2eba6` | 885 passed across the same 9 files; pre-commit clean | Done as written. Notes below. |
+| 4 | `cb4c581` | full suite 2505 passed; pre-commit clean; 46 headless-browser checks of the real page passed (script kept out of the repo) | Done. Notes below. |
+| 5 | this commit | not applicable (documentation) | Hand-off below. |
 
 ### Phase 0 findings
 
@@ -443,7 +448,6 @@ Looked up and recorded:
   `<other stem>.custom` makes `_owner` give `<other stem>.custom.txt` to that
   song, not to `<other stem>`. The same limit already holds for every suffix
   file (`Song.en.srt` against a song named `Song.en`); no fix here.
-| 1 | `6b02e63` | 811 passed across the 9 affected files (Phase 0's 8 + `test_regen_alignment_bundles`); pre-commit clean on the changed files | Done as written. Details below under "Phase 1 notes". |
 
 ### Phase 1 notes
 
@@ -471,7 +475,6 @@ Looked up and recorded:
 - Seen, not changed: on Windows `write_text` writes the sheet with CRLF line
   ends and a restored sheet likewise (the open-issues "restored `.lrc` comes
   back with CRLF" entry); every reader uses `read_text`, so it parses the same.
-| 2 | `35badb7` | 867 passed across the same 9 files; pre-commit clean | Done as written. Notes below. |
 
 ### Phase 2 notes
 
@@ -489,7 +492,6 @@ Looked up and recorded:
 - Title and Artist in the POST body count as empty unless they are strings.
 - `_current_source` returns `"custom"`; the page's script says so, and Phase 4
   gives it a card to mark.
-| 3 | `0c2eba6` | 885 passed across the same 9 files; pre-commit clean | Done as written. Notes below. |
 
 ### Phase 3 notes
 
@@ -517,3 +519,134 @@ Looked up and recorded:
   says `origin: custom` with the sheet deleted by hand is treated as an ordinary
   song (a Reset re-resolves it), while its "Now:" line still reads "custom
   lyrics" from the bundle. Accurate on both counts.
+
+### Phase 4 notes
+
+- The page's server inputs come from one `LibraryTools.custom_start(song)`:
+  `text` (the sheet on disk, else the bundle's `lyrics.lines` joined by `\n`, else
+  empty; an unreadable sheet is logged and falls back to the lines), and the search
+  `title` / `artist` (the bundle's Genius song, else `default_query(song)` and no
+  artist). The route puts them in `custom_prefill` and `custom_terms`; Jinja
+  escapes the box's content, and `tojson` the terms.
+- **Step 2 carries no line count** ("Custom lyrics.", not "Custom lyrics, N
+  lines"). The plan allowed omitting N: the server drops `[Chorus]`-style headers,
+  so a count of typed rows disagrees with the "matches X of Y lines" shown beside
+  it as soon as a pasted sheet has a header.
+- **Title/Artist prefill is for custom only**, as Phase 0 found (Genius has none).
+  It fills only when both boxes are empty, so a visit back from step 2 doesn't
+  overwrite what the admin typed.
+- Found by self-review and fixed in this commit: matches listed for one source's
+  lyrics stayed on screen after switching to the other source (custom <-> Genius).
+  `chooseSource` now drops them; the browser check fails without that line.
+- `dropLrclibMatches()` is the extracted reset (Genius pick, custom edit, source
+  switch). The existing route test that grepped the Genius handler for
+  `state.lrclibSeq++` now checks the handler calls the helper and the helper bumps
+  the sequence.
+- The browser check used the unit tests' `Env` (real `LibraryTools` over a tmp
+  library; processing manager, Genius and LRCLIB faked) behind a real werkzeug
+  server, driven by headless Chromium: prefill in all three cases, edit, Open file
+  (UTF-8 with `[Chorus]` and blank lines, no request made), Next, the prefilled
+  search, the POST body, the Send body, the stale-match drop, a header-only sheet
+  refused with the server's message and nothing queued, a custom song opening on
+  its own card, and the other sources unchanged. No JS errors.
+
+### Phase 5 hand-off
+
+**What was checked for real, and how.** The GPU was free (7 MiB used), so the real
+pipeline ran on a scratch copy of one library song (Bloodstream: video, both
+stems, its auto-caption; `~/pikaraoke-songs` was only read from and nothing in it
+changed). The web app itself (the processing manager's thread and the live
+Processing page) was **not** run; the driver mirrors `ProcessingManager._run_regen`
+step for step instead.
+
+- Custom Repair (the web's Repair -> Custom lyrics, with a `[Verse 1]` header,
+  blank stanza breaks and one word changed): finished in 136 s; the sheet is on
+  disk verbatim; bundle `origin: custom`, `source_kind: txt`, the header dropped and
+  all 74 lines kept; the changed word is in the bundle and on the `.ass`; the
+  auto-caption was adopted as the 3rd source; `method_used: joint`;
+  `lyric_method: custom+joint`; the backup holds the previous Genius bundle; Song
+  Info's status reads custom with the auto-caption used. Timing summary identical to
+  the Genius run of the same lines (47 of 74 timed, same first and last line).
+- Reset through the real CLI (`regen_alignment_bundles.py <folder> --song <id>
+  --reset --yes`): plan "custom sheet", finished, still custom, the changed word
+  survived, the sheet was in its backup.
+- Regenerate (the plan `reuse_plan` gives): finished, still custom, same word.
+- A failed custom Repair (new text written, then the run forced to fail): the old
+  sheet came back and the old bundle stayed custom.
+- A Repair to transcribe, standing in for "another source": the sheet was deleted,
+  the newest backup still holds it, the old bundle was removed, and a later plan
+  for the song is no longer custom. **A Repair to Genius itself was not run** (it
+  needs a live Genius answer); it takes the same deletion path, which is unit-tested
+  for the sidecar plan.
+
+**Manual checks left for Ken** (the plan's six; what is already covered is noted):
+
+1. Repair a Genius song -> Custom lyrics: the box is prefilled with its current
+   lines. Fix one word, pick an LRCLIB match, then Regenerate. Song Info shows
+   "Custom lyrics", the LRCLIB tile, and the fixed word on playback. *(Page and
+   pipeline each checked above; the live app end to end, and playback, are not.)*
+2. Open file: load a `.txt` with blank lines and `[Chorus]` headers. The run drops
+   the headers and keeps every lyric line. *(Browser load and a real run with
+   headers checked; a file picked in the real app is not.)*
+3. Reset that song with the CLI (`regen --song <it> --reset`); it is still custom,
+   the fixed word survives, and `lyrics/<stem>.custom.txt` is still there. Then
+   Regenerate it from Song Info: same result. *(Both checked on the scratch song,
+   through the CLI and the driver; Song Info's button not.)*
+4. Repair it to Genius: the sheet is gone afterwards and `regen_backup_*/lyrics/`
+   holds it. *(Checked with a transcribe Repair; Genius not run.)*
+5. Force a failed custom Repair (cancel it mid-run, or make the song file
+   unreadable): the old sheet, or no sheet, is back exactly as before. *(A forced
+   failure checked; a real cancel from the Processing page is not.)*
+6. Paste only `[Verse 1]`, then Regenerate: refused with a message, and nothing
+   queued. *(Checked in the browser and by route tests; the message shows as a
+   notification on the Send step.)*
+
+**Self-review (CLAUDE.md axes) of the whole branch.**
+
+- *Correctness:* the sheet wins `resolve_plan`, `reuse_plan`, `_regen_job` and the
+  bulk run's grouping; a caption Repair no longer routes through `resolve_plan`; a
+  failed or cancelled run restores the `.lrc` and the sheet together; the seed is
+  rebuilt, not edited, so a retried queued job isn't touched. One defect found
+  and fixed during Phase 4 (stale matches across a source switch).
+- *Simplicity:* one constructor for the custom plan, one validation rule, one
+  snapshot/put-back pair, one "does LRCLIB apply" rule (`lrclib_state`); the
+  `genius_song` template flag and `put_back_lrc` are gone, not left beside their
+  replacements. Beyond the plan's list: the Reset explanation sentence,
+  `custom_start`, and the history `(origin, id)` comparison, each explained above.
+- *Robustness:* every refusal (not text, over 100,000 characters, no lyric lines)
+  comes before the backup and the queue; the file helpers never raise on restore;
+  the box is escaped as text, the search terms by `tojson`; a bundle claiming
+  `custom` with no sheet on disk is treated as an ordinary song.
+
+**`/code-review` is PENDING, not run** (multi-file core-pipeline work: the plan
+resolution, the failure restore and the LRCLIB scoring). When asked, use exactly
+three finder angles: correctness, simplicity, robustness. Range:
+`6b02e63`..`cb4c581` plus this commit's two plan files.
+
+**Seen, not changed:**
+
+- `lyric_method` `custom+joint` shows raw on the Processing row
+  (`processing.html`'s `lyricLabel` knows only srt, genius, none and override); the
+  rule was not to edit that page.
+- **The prefill joins the bundle's lines with a single `\n`** (as the plan says),
+  but the replay writers separate stored lines with a blank line because a stray
+  `(` or `[` in one line can pair with a closer a line or two below and fuse two
+  lyric lines (`_join_wrapped_lines`). An admin who sends a prefilled sheet
+  unedited, for a song with such a stray, would get the fused line the replay
+  writers avoid. Typed or pasted sheets carry the same hazard by design. Safe
+  alternative if Ken wants it: join the prefill with a blank line (the box looks
+  double-spaced).
+- Genius's step 2 has no Title/Artist prefill (the admin types both); only custom
+  has one now. Left as the other agent's flow.
+- A fresh **download** of a song that already has a sheet with the same stem runs
+  the normal fetch path and ignores it (out of scope in the plan).
+- A song whose stem is literally `<other stem>.custom` makes `_owner` give
+  `<other stem>.custom.txt` to that song (Phase 0).
+- On Windows a written or restored sheet gets CRLF line ends (the open-issues
+  `.lrc` entry); every reader uses `read_text`, so it parses the same.
+- A run opened before a custom Repair, or a pick saved before it, can still queue
+  a non-custom plan for that song; the deletion rule then removes the sheet and the
+  backup holds it (the open-issues "a run doesn't see a Repair made while it is
+  open" entry, now with one more consequence).
+- A step-2 line count, Timed uploads (`.lrc`, `.srt`) and a preview of the parsed
+  lines are out of scope, as the plan says.
