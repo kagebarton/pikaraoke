@@ -98,6 +98,13 @@ def custom_bundle(**overrides) -> dict:
     return bundle
 
 
+def write_sheet(folder: Path, stem: str, text: str = "one\n") -> Path:
+    sheet = folder / "lyrics" / f"{stem}.custom.txt"
+    sheet.parent.mkdir(exist_ok=True)
+    sheet.write_text(text, encoding="utf-8")
+    return sheet
+
+
 def caption_bundle() -> dict:
     return {
         "lyrics": {"origin": "srt"},
@@ -468,6 +475,23 @@ class TestSongInfoHistory:
         assert history.index("Custom lyrics") < history.index("YouTube captions")
         assert 'class="si-chg">Custom lyrics' in history
 
+    @pytest.mark.parametrize(("older_lines", "changed"), [(["one"], False), (["won"], True)])
+    def test_an_edited_custom_sheet_is_a_change_of_pick(self, env, older_lines, changed):
+        stem = "A---aaaaaaaaaaa"
+        song = env.add_song(f"{stem}.mp4", custom_bundle())
+        older = custom_bundle()
+        older["lyrics"]["lines"] = older_lines
+        write_bundle(
+            env.folder,
+            stem,
+            root=env.folder / "regen_backup_20261019T175506Z",
+            captured_at="2026-09-21T10:00:00+00:00",
+            **older,
+        )
+        history = text(env.page(song)).split('id="tab-history"')[1]
+
+        assert ('class="si-chg">Custom lyrics' in history) is changed
+
     def test_a_match_without_a_length_is_still_a_match(self, env):
         bundle = poor_genius_bundle()
         bundle["lyrics"]["lrclib"] = {"id": 5, "trackName": "Defying Gravity"}
@@ -760,10 +784,21 @@ class TestRepairPage:
     def test_a_custom_lyrics_song_is_current_as_custom(self, env):
         bundle = caption_bundle()
         bundle["lyrics"] = {"origin": "custom", "lines": ["one"]}
+        song = env.add_song("A---aaaaaaaaaaa.mp4", bundle)
+        write_sheet(env.folder, "A---aaaaaaaaaaa")
 
-        html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", bundle)))
+        html = text(self.page(env, song))
 
         assert 'var CURRENT_SOURCE = "custom"' in html
+
+    def test_the_sheet_on_disk_decides_custom_not_the_bundle(self, env):
+        """The next regenerate goes by the sheet: gone, nothing is current; left behind, custom is."""
+        gone = env.add_song("A---aaaaaaaaaaa.mp4", custom_bundle())
+        left = env.add_song("B---bbbbbbbbbbb.mp4", poor_genius_bundle())
+        write_sheet(env.folder, "B---bbbbbbbbbbb")
+
+        assert "var CURRENT_SOURCE = null" in text(self.page(env, gone))
+        assert 'var CURRENT_SOURCE = "custom"' in text(self.page(env, left))
 
     def test_a_caption_song_is_current_on_the_caption_card(self, env):
         html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())))
@@ -835,7 +870,10 @@ class TestRepairPage:
         assert "rp-tag" not in card(html, "custom")
 
     def test_a_custom_lyrics_song_is_current_on_the_custom_card(self, env):
-        html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", custom_bundle())))
+        song = env.add_song("A---aaaaaaaaaaa.mp4", custom_bundle())
+        write_sheet(env.folder, "A---aaaaaaaaaaa")
+
+        html = text(self.page(env, song))
 
         assert "rp-tag" in card(html, "custom")
         assert all("rp-tag" not in card(html, s) for s in ("caption", "genius", "transcribe"))
