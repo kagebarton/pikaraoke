@@ -238,8 +238,10 @@ class TestQuotes:
 
 
 class TestSeparators:
-    def test_fullwidth_bar_splits_like_a_bar(self):
-        assert found("Perfect ｜ Ed Sheeran", "Ed Sheeran - Perfect") == ["Ed Sheeran - Perfect"]
+    @pytest.mark.parametrize("separator", ["｜", "－", "："], ids=["bar", "hyphen", "colon"])
+    def test_fullwidth_separator_splits_like_its_ascii_form(self, separator):
+        title = f"Perfect {separator} Ed Sheeran"
+        assert found(title, "Ed Sheeran - Perfect") == ["Ed Sheeran - Perfect"]
 
 
 class TestParseTitle:
