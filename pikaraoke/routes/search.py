@@ -15,6 +15,7 @@ from pikaraoke.lib.current_app import get_karaoke_instance, get_site_name
 from pikaraoke.lib.genius import write_choice
 from pikaraoke.lib.genius_lyrics import clean_genius_query
 from pikaraoke.lib.library_regen import check_video_caption
+from pikaraoke.lib.metadata_parser import extract_youtube_id
 from pikaraoke.lib.song_match import SongIndex, similar_songs
 from pikaraoke.lib.youtube_dl import get_preview_info, get_search_results
 
@@ -53,16 +54,17 @@ class DownloadBody(Schema):
 def _library_copies(songs: Iterable[str], search_results: list[tuple]) -> list[str]:
     """Library songs that look like a result found under another YouTube ID.
 
-    A song a result already matches by ID is left out: that row says "Add to
-    Queue" itself.
+    A song that carries a result's own ID is left out: that row says "Add to
+    Queue" itself. The ID is read from the file name, not looked up with
+    ``find_by_id``, which misses ``Title [ID].mp4`` files and subfolders.
     """
     library = SongIndex.from_songs(songs)
-    matched_by_id = {existing_path for *_, existing_path in search_results}
+    result_ids = {result[2] for result in search_results}
     copies = dict.fromkeys(
         path
         for title, *_ in search_results
         for path in similar_songs(title, library)
-        if path not in matched_by_id
+        if extract_youtube_id(path) not in result_ids
     )
     return list(copies)[:MAX_SIMILAR_SONGS]
 

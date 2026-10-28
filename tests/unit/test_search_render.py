@@ -174,6 +174,23 @@ def test_no_note_for_a_song_a_result_already_matches_by_id(mock_get, client):
     assert f'data-file-path="{_MIRRORS}"' in body  # the row's own button
 
 
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/songs/Justin Timberlake - Mirrors (Official Video) [uuZE_IRwLNI].mp4",
+        "/songs/Pop/Justin Timberlake - Mirrors (Official Video)---uuZE_IRwLNI.mp4",
+    ],
+    ids=["bracketed-id", "subfolder"],
+)
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_no_note_for_a_file_find_by_id_misses(mock_get, client, path):
+    """find_by_id sees only top-level ---ID files; the note must still skip this result's file."""
+    results = [_result("Justin Timberlake - Mirrors (Lyrics)", "uuZE_IRwLNI")]
+    k = _karaoke_with_library([path])  # find_by_id finds nothing
+
+    assert "Already in the library:" not in _search_body(client, mock_get, results, k)
+
+
 @patch("pikaraoke.routes.search.get_karaoke_instance")
 def test_note_lists_at_most_three_library_copies(mock_get, client):
     titles = ["Rainbow Road", "Silver Lining", "Golden Hour", "Midnight Train"]
