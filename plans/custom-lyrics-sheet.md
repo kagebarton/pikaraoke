@@ -471,3 +471,21 @@ Looked up and recorded:
 - Seen, not changed: on Windows `write_text` writes the sheet with CRLF line
   ends and a restored sheet likewise (the open-issues "restored `.lrc` comes
   back with CRLF" entry); every reader uses `read_text`, so it parses the same.
+| 2 | `35badb7` | 867 passed across the same 9 files; pre-commit clean | Done as written. Notes below. |
+
+### Phase 2 notes
+
+- `custom_sheet_lines(text)` is in `library_tools.py` as specified. Its
+  line-end normalization lives in a private `_sheet_text(text)` (type check, cap,
+  `\r\n` / `\r` -> `\n`); the repair needs the normalized text as well as the
+  lines, so `_custom_repair_plan` calls both rather than widening the return type.
+  The cap is `CUSTOM_SHEET_MAX_CHARS = 100_000`, checked on the raw text.
+- `lrclib_candidates(song, sheet, title, artist)` no longer touches Genius. The
+  GET route gets the lines from a new `LibraryTools.genius_sheet_lines(id)` (the
+  line the old method had inline) and still answers 502 when Genius is down; the
+  POST is a second view on the same URL (`lrclib_search_custom`), and
+  flask-smorest merges both into one OpenAPI path (checked). Both share
+  `_lrclib_results` for the fit text and video length.
+- Title and Artist in the POST body count as empty unless they are strings.
+- `_current_source` returns `"custom"`; the page's script says so, and Phase 4
+  gives it a card to mark.

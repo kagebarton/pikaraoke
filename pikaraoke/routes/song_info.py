@@ -155,6 +155,8 @@ def _rejected_texts(reason: str | None) -> tuple[str, str]:
 def _source_name(status: SongStatus) -> str:
     if status.origin == "genius":
         return _("Genius")
+    if status.origin == "custom":
+        return _("Custom lyrics")
     if status.origin == "srt":
         return _("YouTube captions")
     if status.category == "no_lyrics":
@@ -188,8 +190,8 @@ def _timed_tile(status: SongStatus) -> Tile:
 
 def _lrclib_tile(status: SongStatus) -> Tile:
     label = "LRCLIB"
-    if status.origin != "genius":
-        return Tile(label, "—", _("Genius songs only"))
+    if status.lrclib_state == "n/a":
+        return Tile(label, "—", _("Genius or custom lyrics only"))
     state = status.lrclib_state
     if state == "used":
         n = status.lrclib_filled
@@ -247,7 +249,7 @@ def _alignment(status: SongStatus) -> Alignment | None:
 
     fit = fit_status = None
     fit_warn = False
-    if status.origin == "genius":
+    if status.lrclib_state != "n/a":
         fit, fit_status, fit_warn = _lrclib_fit(status)
 
     return Alignment(
@@ -293,6 +295,13 @@ def _route_text(status: SongStatus) -> str | None:
     if status.method == "cue_align":
         return _("Lyrics from the YouTube caption, timed against the caption's own line times.")
     if status.method == "joint":
+        if status.origin == "custom":
+            if status.ytasr_used:
+                return _(
+                    "Custom lyrics, timed by combining the lyric aligner, a transcription "
+                    "and YouTube's auto-captions."
+                )
+            return _("Custom lyrics, timed by combining the lyric aligner and a transcription.")
         if status.ytasr_used:
             return _(
                 "Genius lyrics, timed by combining the lyric aligner, a transcription "
@@ -328,6 +337,8 @@ def _versions(history: list[HistoryEntry]) -> list[Version]:
         if entry.genius:
             genius_text = _("Genius · %(artist)s") % {"artist": entry.genius.get("artist", "")}
             lrclib_text = _lrclib_label(entry.lrclib)
+        elif entry.origin == "custom":
+            genius_text, lrclib_text = _("Custom lyrics"), _lrclib_label(entry.lrclib)
         else:
             genius_text, lrclib_text = _("YouTube captions"), None
         older_lrclib = (older.lrclib or {}).get("id") if older else lrclib_id
@@ -339,7 +350,8 @@ def _versions(history: list[HistoryEntry]) -> list[Version]:
                 date=_date(entry.captured_at),
                 current=entry.backup is None,
                 genius=genius_text,
-                genius_changed=older is not None and genius != (older.genius or {}).get("id"),
+                genius_changed=older is not None
+                and (entry.origin, genius) != (older.origin, (older.genius or {}).get("id")),
                 lrclib=lrclib_text,
                 lrclib_changed=lrclib_changed,
                 timed=(
@@ -381,7 +393,6 @@ def song_info():
         video=video,
         tiles=_tiles(status),
         source=_("Genius lyrics") if status.origin == "genius" else _source_name(status),
-        genius_song=status.origin == "genius",
         lrclib_pick=_lrclib_pick(status),
         alignment=_alignment(status),
         history=history,

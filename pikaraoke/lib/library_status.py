@@ -25,7 +25,7 @@ class SongStatus:
     youtube_id: str | None
     category: str  # "current" | "behind" | "no_lyrics" | "not_processed"
     schema_version: int | None
-    origin: str | None  # bundle lyrics.origin: "srt" | "genius"
+    origin: str | None  # bundle lyrics.origin: "srt" | "genius" | "custom"
     genius: dict | None  # lyrics.genius: {id, title, artist}
     lrclib: dict | None  # lyrics.lrclib: trackName, artistName, albumName, duration, id
     lrclib_state: str  # "used" | "rejected" | "none" | "skipped" | "n/a"
@@ -134,9 +134,9 @@ def _lrclib_match(lyrics: dict) -> dict | None:
 
 
 def _lrclib_state(song: Path, origin: str | None, lyrics: dict, fill: dict) -> str:
-    """How LRCLIB figures in a Genius song: the disk says what the admin chose now,
-    the bundle says what the last run did with it."""
-    if origin != "genius":
+    """How LRCLIB figures in a song timed from a lyric sheet (Genius or custom): the
+    disk says what the admin chose now, the bundle says what the last run did with it."""
+    if origin not in ("genius", "custom"):
         return "n/a"
     if lrclib.is_skip_marker(lrclib.lrc_path(song)):
         return "skipped"
@@ -180,6 +180,7 @@ def overview_counts(statuses: list[SongStatus]) -> dict[str, int]:
 class HistoryEntry:
     captured_at: str
     schema_version: int | None
+    origin: str | None  # the version's lyrics.origin
     genius: dict | None
     lrclib: dict | None
     line_count: int | None
@@ -215,6 +216,7 @@ def song_history(song: Path) -> list[HistoryEntry]:
             HistoryEntry(
                 captured_at=captured_at,
                 schema_version=bundle.get("schema_version"),
+                origin=lyrics.get("origin"),
                 genius=lyrics.get("genius") or None,
                 lrclib=_lrclib_match(lyrics),
                 line_count=summary.get("line_count"),

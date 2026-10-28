@@ -86,6 +86,18 @@ def poor_genius_bundle(**overrides) -> dict:
     return fields
 
 
+def custom_bundle(**overrides) -> dict:
+    """The poor Genius song's numbers, with the admin's own lyrics as its source."""
+    bundle = poor_genius_bundle(**overrides)
+    bundle["lyrics"] = {
+        "origin": "custom",
+        "lrclib": LRCLIB_MATCH,
+        "ytasr": {"asr_file": "subtitles/x.en.asr.json3"},
+        "lines": ["one"],
+    }
+    return bundle
+
+
 def caption_bundle() -> dict:
     return {
         "lyrics": {"origin": "srt"},
@@ -277,12 +289,55 @@ class TestSongInfoPage:
         html = text(env.page(env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())))
 
         assert "YouTube captions" in html
-        assert "Genius songs only" in html
+        assert "Genius or custom lyrics only" in html
         assert "si-tile is-warn" not in html
         assert "https://genius.com" not in html  # no Genius row
         assert "Timed 39" in html and "Guessed" not in html
         assert "timed against the caption" in html
         assert "LRCLIB fit" not in html
+
+    def test_a_custom_song_is_named_on_the_tile_the_source_row_and_the_route(self, env):
+        html = text(env.page(env.add_song("A---aaaaaaaaaaa.mp4", custom_bundle())))
+
+        tiles = html.split('class="tabs is-fullwidth si-tabs"')[0].split("</style>")[-1]
+        assert "Custom lyrics" in tiles
+        picks = html.split('id="tab-picks"')[1].split('id="tab-alignment"')[0]
+        assert '<span class="si-val">Custom lyrics</span>' in picks
+        assert (
+            "Custom lyrics, timed by combining the lyric aligner, a transcription and "
+            "YouTube&#39;s auto-captions." in html
+        )
+        assert "Genius lyrics" not in html
+        assert "YouTube captions" in html  # only the Alignment tab's segment label
+
+    def test_a_custom_song_without_auto_captions_says_so_in_its_route(self, env):
+        bundle = custom_bundle()
+        del bundle["lyrics"]["ytasr"]
+        html = text(env.page(env.add_song("A---aaaaaaaaaaa.mp4", bundle)))
+
+        assert "Custom lyrics, timed by combining the lyric aligner and a transcription." in html
+        assert "not used" in html
+
+    def test_a_custom_song_has_the_lrclib_tile_row_and_fit_but_no_genius_row(self, env):
+        html = text(env.page(env.add_song("A---aaaaaaaaaaa.mp4", custom_bundle())))
+
+        assert "Genius or custom lyrics only" not in html
+        assert "Not used" in html and "97 s longer" in html  # the LRCLIB tile
+        assert html.count("si-tile is-warn") == 2
+        assert "Defying Gravity · Chenoweth &amp; Menzel · 5:54" in html  # the LRCLIB pick row
+        assert "YouTube auto-captions used" in html
+        assert "The match is 5:54; this video is 4:17 (97 s longer)." in html
+        assert "Not used: its line times didn&#39;t line up with this video." in html
+        assert '<span class="si-key">Genius</span>' not in html
+        assert "https://genius.com" not in html
+
+    def test_a_custom_song_with_a_skipped_match_shows_it_skipped(self, env):
+        song = env.add_song("A---aaaaaaaaaaa.mp4", custom_bundle())
+        lrclib.write_skip_marker(lrclib.lrc_path(Path(song)))
+        html = text(env.page(song))
+
+        assert "skipped by you" in html
+        assert "Skipped: you chose no match." in html
 
     def test_a_song_behind_says_which_version(self, env):
         bundle = {**caption_bundle(), "schema_version": SCHEMA_VERSION - 1}
@@ -376,6 +431,42 @@ class TestSongInfoHistory:
         assert "LRCLIB 5:54 added" in history
         assert history.count("si-chg") == 1
         assert "no LRCLIB" in history
+
+    def test_a_custom_version_is_named_as_such_and_keeps_its_lrclib_label(self, env):
+        stem = "A---aaaaaaaaaaa"
+        song = env.add_song(f"{stem}.mp4", custom_bundle())
+        write_bundle(
+            env.folder,
+            stem,
+            root=env.folder / "regen_backup_20261019T175506Z",
+            schema_version=10,
+            captured_at="2026-09-21T10:00:00+00:00",
+            **poor_genius_bundle(),
+        )
+        history = text(env.page(song)).split('id="tab-history"')[1]
+
+        assert "Custom lyrics" in history
+        assert "Genius · Kristin Chenoweth" in history
+        assert history.count("LRCLIB 5:54") == 2
+        assert "YouTube captions" not in history
+        # Genius -> custom is a change of pick, and the LRCLIB match is the same.
+        assert history.count("si-chg") == 1
+
+    def test_a_caption_version_before_a_custom_one_is_a_change_too(self, env):
+        stem = "A---aaaaaaaaaaa"
+        song = env.add_song(f"{stem}.mp4", custom_bundle())
+        write_bundle(
+            env.folder,
+            stem,
+            root=env.folder / "regen_backup_20261019T175506Z",
+            schema_version=10,
+            captured_at="2026-09-21T10:00:00+00:00",
+            **caption_bundle(),
+        )
+        history = text(env.page(song)).split('id="tab-history"')[1]
+
+        assert history.index("Custom lyrics") < history.index("YouTube captions")
+        assert 'class="si-chg">Custom lyrics' in history
 
     def test_a_match_without_a_length_is_still_a_match(self, env):
         bundle = poor_genius_bundle()
@@ -1306,6 +1397,28 @@ class TestOpenRunRoute:
             "Now: Genius, Defying Gravity · Kristin Chenoweth",
             "Not processed yet",
         }
+
+    def test_the_status_says_a_custom_song_has_custom_lyrics(self, env):
+        env.add_song("Mine---aaaaaaaaaaa.mp4", custom_bundle())
+        sheet = env.folder / "lyrics" / "Mine---aaaaaaaaaaa.custom.txt"
+        sheet.parent.mkdir()
+        sheet.write_text("one\n", encoding="utf-8")
+        env.client.post("/library/run", json={"mode": "reset"})
+        finish_checks(env)
+
+        [song] = env.client.get("/library/run/status").get_json()["songs"]
+
+        assert song["now"] == "Now: custom lyrics"
+        assert song["group"] == "reuse"
+
+    def test_the_reset_run_says_custom_lyrics_keep_theirs(self, env):
+        env.add_song("Mine---aaaaaaaaaaa.mp4", custom_bundle())  # not custom by itself: no sheet
+        env.client.post("/library/run", json={"mode": "reset"})
+        finish_checks(env)
+
+        html = text(env.client.get("/library/run"))
+
+        assert "except songs with custom lyrics, which keep them" in html
 
     def test_the_status_without_a_run(self, env):
         assert env.client.get("/library/run/status").get_json() == {"open": False}
