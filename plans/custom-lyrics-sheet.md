@@ -374,6 +374,7 @@ row. **Do not edit `processing.html`.**
 | 3 | `0c2eba6` | 885 passed across the same 9 files; pre-commit clean | Done as written. Notes below. |
 | 4 | `cb4c581` | full suite 2505 passed; pre-commit clean; 46 headless-browser checks of the real page passed (script kept out of the repo) | Done. Notes below. |
 | 5 | this commit | not applicable (documentation) | Hand-off below. |
+| Review | `9f4c404`, `e24226a`, `35d1ae6`, `4f72b73` (Opus 5.5, 2026-10-28) | full suite 2522 passed; pre-commit clean on the changed files | `/code-review` run over `6b02e63^..cb4c581`, three angles; 9 findings, 5 fixed at Ken's call. See "Code review" below. |
 
 ### Phase 0 findings
 
@@ -642,11 +643,32 @@ three finder angles: correctness, simplicity, robustness. Range:
   the normal fetch path and ignores it (out of scope in the plan).
 - A song whose stem is literally `<other stem>.custom` makes `_owner` give
   `<other stem>.custom.txt` to that song (Phase 0).
-- On Windows a written or restored sheet gets CRLF line ends (the open-issues
-  `.lrc` entry); every reader uses `read_text`, so it parses the same.
-- A run opened before a custom Repair, or a pick saved before it, can still queue
+- ~~On Windows a written or restored sheet gets CRLF line ends (the open-issues
+  `.lrc` entry); every reader uses `read_text`, so it parses the same.~~ Changed
+  in `e24226a`: files are written as UTF-8 bytes and restored byte for byte.
+- ~~A run opened before a custom Repair, or a pick saved before it, can still queue
   a non-custom plan for that song; the deletion rule then removes the sheet and the
   backup holds it (the open-issues "a run doesn't see a Repair made while it is
-  open" entry, now with one more consequence).
+  open" entry, now with one more consequence).~~ Fixed in `9f4c404` (review
+  finding 1).
 - A step-2 line count, Timed uploads (`.lrc`, `.srt`) and a preview of the parsed
   lines are out of scope, as the plan says.
+
+### Code review
+
+`/code-review` over `6b02e63^..cb4c581`, run 2026-10-28 by Opus 5.5 on Ken's
+request, exactly three finder angles (correctness, simplicity, robustness).
+Finding 1 was confirmed against the code before fixing; the rest are as the
+finders reported them. Ken ruled: fix 1-5, record the rest.
+
+| # | Angle | Finding | Outcome |
+| - | ----- | ------- | ------- |
+| 1 | correctness | A bulk run fixed `_Entry.custom` at open and `_run_job` built its caption, transcribe or Genius plan without looking for a sheet; `apply_custom_choice` deleted any sheet that wasn't on a custom plan, so a custom Repair made while a run was open was deleted when the run queued (also a saved pick reloaded after a restart). | Fixed `9f4c404`: `_run_job` takes `custom_plan` first; deletion is now explicit, `SongJob.replaces_custom`, set only by `repair()` for a non-custom source, so a missed check costs a run, not the sheet. `resolve_plan` and `_regen_job` lean on `reuse_plan`'s own sheet check (the precedence-repetition simplicity finding, folded in). Test fails without the `_run_job` check (reset mode). |
+| 2 | robustness | `snapshot_file` read UTF-8 text: a hand-placed sheet in another encoding raised `UnicodeDecodeError` and failed every regen of the song at its start, a Repair away from the sheet included; in the CLI the snapshot and `prepare_lyrics` sat outside the per-song try and stopped the batch. | Fixed `e24226a`: snapshots are bytes, restored byte for byte (`_write_atomic`; `write_text_atomic` now writes UTF-8 bytes, so no CRLF translation on Windows); CLI per-song try covers snapshot and prep. A custom replay of such a sheet still fails at read, with the old files put back. |
+| 3 | correctness | A custom plan got `media_duration_s` only from `_ytasr_seed` (probe only with an ASR json3 on disk); caption-route bundles never had it. | Fixed `35d1ae6` per Ken (measure from the video for every route): the bundle write in `LyricAlignStage` probes when no earlier stage did. Older bundles gain it at their next run. |
+| 4 | correctness | History compared versions by `(origin, genius_id)`, so two custom versions with different words read as unchanged. | Fixed `4f72b73`: `HistoryEntry.lines`, and `_pick` compares a custom version by its lines. |
+| 5 | correctness | The repair page's current tag and the bulk run's "Now: custom lyrics" read the bundle's origin; every run reads the sheet on disk. | Fixed `4f72b73`: `SongStatus.custom_sheet`, read by `_current_source` and `_now`. Lyrics tile, route text and History still describe the bundle's version. `_lrclib_state` left on the bundle origin (it reports the last run). |
+| 6 | robustness | Rename orphans the sheet; delete leaves it behind to win the next regen of a same-named re-download. | Not fixed: the existing open-issues Delete/Rename entry already lists the sheet; the cost is added there. |
+| 7 | simplicity | `_custom_repair_plan` runs `_sheet_text` twice (via `custom_sheet_lines`, then for the plan). | Not fixed; recorded in open-issues. |
+| 8 | simplicity | `routes/song_info._typed` repeats `library_tools._pick_text` without its length cap; the POST LRCLIB search sends title and artist uncapped. | Not fixed; recorded in open-issues. |
+| 9 | simplicity | The "custom wins" check was repeated in four places. | Folded into fix 1. |

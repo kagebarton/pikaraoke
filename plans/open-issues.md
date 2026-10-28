@@ -35,8 +35,10 @@ Sources gathered on 2026-10-26:
   `SongManager._get_companion_files` knows only the `.srt`, the two stems and
   the `.ass`, so a delete leaves the bundle, the `.lrc`, a custom lyric sheet
   (`lyrics/<stem>.custom.txt`, added by `custom_lyrics`) and the `.srt.generated`,
-  and a rename leaves them under the old name. On `dev` today.
-  Also: a renamed song on the needs-a-pick list stays listed under its old path,
+  and a rename leaves them under the old name. On `dev` today. The sheet costs
+  more than the rest: a rename silently drops the song's custom lyrics, and a
+  re-download under the same name goes back to the old sheet at its next regen
+  (`custom_lyrics` code review, row 6). Also: a renamed song on the needs-a-pick list stays listed under its old path,
   and a pick of it fails each time. Ken, 2026-10-23: small branch off `dev`.
   Record: web plan, D9 and 8.1f.
 - ~~**Upload hand-checked lyrics** as the lyric source of a Repair, Regenerate or
@@ -79,12 +81,18 @@ that queued them is already closed; 7.1f).
   stage deletes the choice file when it reads it). Retry is the admin's choice;
   the pick page offers the pick beside it. Record: web plan, 8.1f.
 - **A failed regen restores the old `.lrc` even after a successful run** when
-  the error comes after it (the `ready` state write or an event handler); on
-  Windows the restored file comes back with CRLF line ends. Record: web plan,
-  Phase 3.1 row.
-- **A regen of a song whose `.lrc` is not UTF-8 fails at its start**, with the
-  decode error shown on the job (no page breaks). Record: web plan, Phase 5.1
-  row.
+  the error comes after it (the `ready` state write or an event handler);
+  ~~on Windows the restored file comes back with CRLF line ends~~ (restored byte
+  for byte since `e24226a` on `custom_lyrics`). Record: web plan, Phase 3.1 row.
+- ~~**A regen of a song whose `.lrc` is not UTF-8 fails at its start**, with the
+  decode error shown on the job (no page breaks).~~ The start-of-run snapshot
+  reads bytes since `e24226a` on `custom_lyrics`; whether the rest of the run
+  reads such a file is not checked. Record: web plan, Phase 5.1 row.
+- **Custom-sheet review leftovers** (on `custom_lyrics`): `_custom_repair_plan`
+  normalizes the sheet text twice; `routes/song_info._typed` repeats
+  `library_tools._pick_text` without its length cap, so the POST LRCLIB search
+  sends title and artist uncapped. Record: `plans/custom-lyrics-sheet.md`, Code
+  review rows 7-8.
 - **`add_songs --folder` defaults to `~\pikaraoke-songs`** (`get_default_dl_dir`)
   instead of `config.ini`'s `download_path`; `regen_alignment_bundles.py` on
   `dev` has the same default. The status report has no title column. Record:
