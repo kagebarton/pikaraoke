@@ -443,3 +443,31 @@ Looked up and recorded:
   `<other stem>.custom` makes `_owner` give `<other stem>.custom.txt` to that
   song, not to `<other stem>`. The same limit already holds for every suffix
   file (`Song.en.srt` against a song named `Song.en`); no fix here.
+| 1 | `6b02e63` | 811 passed across the 9 affected files (Phase 0's 8 + `test_regen_alignment_bundles`); pre-commit clean on the changed files | Done as written. Details below under "Phase 1 notes". |
+
+### Phase 1 notes
+
+- Renames: `lrclib.snapshot_lrc` / `restore_lrc` / `_write_text_atomic` ->
+  `snapshot_file` / `restore_file` / `write_text_atomic`. The `.lrc` put-back is
+  now one pair in `library_regen`: `snapshot_lyric_files(song)` (both files, taken
+  before anything changes) and `put_back_lyric_files(snapshot)` (never raises,
+  one warning per failed file, the second file is still restored). This replaces
+  `put_back_lrc`; `processing_manager` and `scripts/regen_alignment_bundles.py`
+  call the new pair, and neither imports `lrclib` any more.
+- `fetch_or_prompt_plan` is public (callers: `resolve_plan`,
+  `gate_on_disk_caption`, `LibraryTools._caption_plan`).
+- `ytasr.resolve_on_disk` reads `ASR_JSON3_SUFFIX` with a function-level import:
+  `youtube_dl` already imports `ytasr`, so a top-level import would be circular
+  (both import orders checked). The constant did not move. On a parse failure it
+  still returns the probed duration, as the stage's old code left it stashed.
+- `custom_sheet_plan(song, text=None)` is the one place the custom `Plan` is
+  built; `custom_plan(job)` calls it when the sheet exists, and Phase 2's repair
+  calls it with the typed text. `is_custom_plan(plan)` is the matching test.
+- `prepare_lyrics` builds a new seed (`{**plan.seed, **ytasr_seed}`) instead of
+  editing `plan.seed`: `prepare_regen_job` works on a shallow copy of the song
+  job, so editing the plan would change the queued job's.
+- `lyric_method` for a custom run is `custom+joint`; the Processing page shows
+  that raw (see Phase 0). Not changed.
+- Seen, not changed: on Windows `write_text` writes the sheet with CRLF line
+  ends and a restored sheet likewise (the open-issues "restored `.lrc` comes
+  back with CRLF" entry); every reader uses `read_text`, so it parses the same.

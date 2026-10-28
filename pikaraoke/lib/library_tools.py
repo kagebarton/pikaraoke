@@ -47,6 +47,7 @@ from pikaraoke.lib.library_regen import (
     backup_text_folders,
     check_caption,
     custom_plan,
+    custom_sheet_plan,
     default_query,
     fetch_or_prompt_plan,
     find_local_srt,
@@ -101,6 +102,9 @@ _PICK_GROUPS = {"genius": "genius", "keep": "genius", "transcribe": "transcribe"
 # A typed Genius title or artist is shown back on the pick page; this much is plenty.
 _PICK_TEXT_MAX = 200
 
+# The longest custom lyric sheet a repair takes; a song's lyrics are a few thousand characters.
+CUSTOM_SHEET_MAX_CHARS = 100_000
+
 # A caption check that couldn't run (YouTube refusing, often after many calls in a
 # row) is tried once more after this pause.
 CAPTION_RETRY_PAUSE_S = 30
@@ -124,6 +128,31 @@ PLAYLIST_USER = "Playlist"
 
 def _pick_text(value: object) -> str:
     return value.strip()[:_PICK_TEXT_MAX] if isinstance(value, str) else ""
+
+
+def _sheet_text(text: object) -> str:
+    """An admin's typed lyrics with ``\\n`` line ends; a sheet that can't be one raises."""
+    if not isinstance(text, str):
+        raise RegenError("The lyrics must be text.")
+    if len(text) > CUSTOM_SHEET_MAX_CHARS:
+        raise RegenError(f"The lyrics are too long (over {CUSTOM_SHEET_MAX_CHARS:,} characters).")
+    return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def custom_sheet_lines(text: object) -> list[str]:
+    """The lyric lines of an admin's typed sheet, as they display.
+
+    The one rule for the repair and for the LRCLIB search that scores against the
+    sheet. Raises :class:`RegenError`, with a message for the admin, for a sheet
+    that is not text, is too long, or has no lyric lines (blank, or only
+    ``[Chorus]``-style headers).
+    """
+    lines = [item["text"] for item in parse_lyric_lines(_sheet_text(text))]
+    if not lines:
+        raise RegenError(
+            "There are no lyric lines to use. Section headers such as [Chorus] don't count."
+        )
+    return lines
 
 
 @dataclass
@@ -393,17 +422,23 @@ class LibraryTools:
         self._caption_plan(job)
         return check_caption(job)
 
-    def lrclib_candidates(self, song_path: str, genius_id: int, title: str, artist: str) -> dict:
-        """LRCLIB's synced matches for the admin's search terms, scored against a Genius song.
+    def genius_sheet_lines(self, genius_id: int) -> list[str]:
+        """A Genius song's lyric lines, as they display, for scoring an LRCLIB search.
 
-        Each candidate says how many of the Genius lyrics' lines it maps to, how
-        far its length is from the video's, whether the selection rule would
-        pick it (``best``) and whether it is the match on disk (``current``).
-        The listed records are remembered for :meth:`repair`. Raises
-        :class:`~pikaraoke.lib.genius.GeniusUnavailable` when the Genius lyrics
-        can't be fetched.
+        Raises :class:`~pikaraoke.lib.genius.GeniusUnavailable` when Genius can't
+        return the song.
         """
-        sheet = [item["text"] for item in parse_lyric_lines(self.genius_song(genius_id).text)]
+        return [item["text"] for item in parse_lyric_lines(self.genius_song(genius_id).text)]
+
+    def lrclib_candidates(self, song_path: str, sheet: list[str], title: str, artist: str) -> dict:
+        """LRCLIB's synced matches for the admin's search terms, scored against ``sheet``.
+
+        ``sheet`` is the song's lyric lines: a Genius song's (:meth:`genius_sheet_lines`)
+        or the admin's own (:func:`custom_sheet_lines`). Each candidate says how many
+        of them it maps to, how far its length is from the video's, whether the
+        selection rule would pick it (``best``) and whether it is the match on
+        disk (``current``). The listed records are remembered for :meth:`repair`.
+        """
         video_s = media_duration(self._song_job(song_path))
         records = [r for r in lrclib.search(title, artist) if r.get("syncedLyrics")]
         with self._lrclib_lock:
@@ -436,16 +471,19 @@ class LibraryTools:
         genius_id: int | None = None,
         lrclib_id: int | None = None,
         lrclib_skip: bool = False,
+        text: object = None,
     ) -> None:
         """Queue a regen that replaces the song's lyric pick.
 
         ``source`` is ``caption`` (the video's YouTube caption), ``genius`` (the
-        Genius song ``genius_id``) or ``transcribe``. For Genius the LRCLIB
-        match is the record ``lrclib_id``, or none at all with ``lrclib_skip``
-        (which wins over an id); with neither, the automatic rule applies. The
-        song's files are backed up first, and the run wipes its old outputs.
-        Raises :class:`RegenError`, with a message for the admin, when the song
-        can't be queued; nothing has changed on disk by then.
+        Genius song ``genius_id``), ``custom`` (the admin's own lyrics, ``text``;
+        the run saves them as the song's sheet) or ``transcribe``. For Genius
+        and custom the LRCLIB match is the record ``lrclib_id``, or none at all
+        with ``lrclib_skip`` (which wins over an id); with neither, the
+        automatic rule applies. The song's files are backed up first, and the
+        run wipes its old outputs. Raises :class:`RegenError`, with a message
+        for the admin, when the song can't be queued; nothing has changed on
+        disk by then.
         """
         if not self.is_video(song_path):
             raise RegenError("Lyrics tools work on video songs only.")
@@ -456,6 +494,8 @@ class LibraryTools:
             job.plan = self._caption_plan(job)
         elif source == "genius":
             job.plan = self._genius_plan(genius_id, lrclib_id, lrclib_skip)
+        elif source == "custom":
+            job.plan = self._custom_repair_plan(job.song_path, text, lrclib_id, lrclib_skip)
         elif source == "transcribe":
             job.plan = self._transcribe_plan()
         else:
@@ -898,6 +938,19 @@ class LibraryTools:
             logger.warning("Genius pick %s refused: %s", genius_id, e)
             raise RegenError("Genius didn't return that song's lyrics. Try again.") from e
         plan = Plan(kind="sidecar", genius_id=genius_id, label="genius pick")
+        self._apply_lrclib_pick(plan, lrclib_id, lrclib_skip)
+        return plan
+
+    def _custom_repair_plan(
+        self, song: Path, text: object, lrclib_id: int | None, lrclib_skip: bool
+    ) -> Plan:
+        custom_sheet_lines(text)  # refuses an unusable sheet before anything is fetched
+        plan = custom_sheet_plan(song, _sheet_text(text))
+        self._apply_lrclib_pick(plan, lrclib_id, lrclib_skip)
+        return plan
+
+    def _apply_lrclib_pick(self, plan: Plan, lrclib_id: int | None, lrclib_skip: bool) -> None:
+        """Put the admin's LRCLIB choice on ``plan``: no match, or the record ``lrclib_id``."""
         if lrclib_skip:
             plan.lrclib_skip = True
         elif lrclib_id is not None:
@@ -911,7 +964,6 @@ class LibraryTools:
             if not record.get("syncedLyrics"):
                 raise RegenError("That LRCLIB match has no synced lyrics.")
             plan.lrclib_record = record
-        return plan
 
     def _queue(self, job: SongJob, *, reset: bool, label: str) -> None:
         """Back up the song's files, then queue its regen job."""
