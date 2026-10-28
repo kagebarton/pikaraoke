@@ -444,6 +444,7 @@ def repair_page():
         return redirect(url_for("song_info.song_info", song=song))
 
     status = tools.status(song)
+    start = tools.custom_start(song)
     return render_template(
         "song_repair.html",
         site_title=get_site_name(),
@@ -453,6 +454,8 @@ def repair_page():
         has_youtube_id=status.youtube_id is not None,
         current_source=_current_source(status),
         current_genius_id=(status.genius or {}).get("id"),
+        custom_prefill=start["text"],
+        custom_terms={"title": start["title"], "artist": start["artist"]},
     )
 
 

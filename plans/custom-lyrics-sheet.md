@@ -489,3 +489,31 @@ Looked up and recorded:
 - Title and Artist in the POST body count as empty unless they are strings.
 - `_current_source` returns `"custom"`; the page's script says so, and Phase 4
   gives it a card to mark.
+| 3 | `0c2eba6` | 885 passed across the same 9 files; pre-commit clean | Done as written. Notes below. |
+
+### Phase 3 notes
+
+- The Phase 0 site list is covered as follows. `library_status._lrclib_state`
+  (genius or custom); `HistoryEntry.origin`; `_source_name`, `_lrclib_tile`,
+  `_alignment`, `_route_text` (both YTASR variants), `_versions`; `song_info()`
+  and `song_info.html`; `_current_source` (Phase 2); `library_tools._now` and
+  `_Run.undecided_group` / `_Entry.custom` / `_entry`; `routes/library._now_text`.
+  `_caption_plan`, `repair` and `lrclib_candidates` were Phases 1 and 2. Not
+  touched on purpose: `_PICK_GROUPS`, `_valid_pick`, `_choice_for`, `keep_all` and
+  the two run templates' `genius` (pick kind / group, not an origin).
+- `genius_song` is gone from the template context. The page asks
+  `library_status` whether LRCLIB applies (`status.lrclib_state != "n/a"`, in
+  `_lrclib_tile`, `_alignment` and `song_info.html`) so "which sources have
+  LRCLIB" is one rule, in `_lrclib_state`. The Genius row shows for
+  `status.origin == 'genius'` only; the LRCLIB and Captions rows show for both.
+- History: `genius_changed` now compares `(origin, genius id)`, not the id alone.
+  Without the origin, captions -> custom (both id-less) would not be marked as a
+  change. A Genius -> Genius pick with the same id is still unmarked.
+- Added beyond the list: the Reset run's explanation says songs with custom
+  lyrics keep them (`routes/library._run_explanation`). Without it the page tells
+  the admin every song's source is chosen again, which is no longer true. One
+  sentence, no layout change; the translation catalogue is not regenerated.
+- A song counts as custom in a run only if the sheet file exists. A bundle that
+  says `origin: custom` with the sheet deleted by hand is treated as an ordinary
+  song (a Reset re-resolves it), while its "Now:" line still reads "custom
+  lyrics" from the bundle. Accurate on both counts.

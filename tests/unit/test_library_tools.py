@@ -672,6 +672,55 @@ class TestCustomSheetLines:
         assert custom_sheet_lines(text)
 
 
+class TestCustomStart:
+    """What the repair page's custom-lyrics box and its LRCLIB search start with."""
+
+    @pytest.fixture
+    def song(self, tmp_path):
+        [video] = make_videos(tmp_path, "Some Song (Official Video)---aaaaaaaaaaa")
+        return video
+
+    def start(self, tmp_path, song):
+        tools, _ = make_tools(tmp_path, [str(song)])
+        return tools.custom_start(str(song))
+
+    def test_the_sheet_on_disk_comes_first(self, tmp_path, song):
+        genius_bundle(tmp_path, song.stem)
+        write_sheet(tmp_path, song.stem, "my own words\n")
+
+        assert self.start(tmp_path, song)["text"] == "my own words\n"
+
+    def test_without_a_sheet_it_is_the_lines_of_the_current_lyrics(self, tmp_path, song):
+        genius_bundle(tmp_path, song.stem)
+
+        assert self.start(tmp_path, song)["text"] == "one\ntwo"
+
+    def test_with_nothing_it_is_empty(self, tmp_path, song):
+        assert self.start(tmp_path, song)["text"] == ""
+
+    def test_a_sheet_that_cannot_be_read_falls_back_to_the_bundle_and_says_so(
+        self, tmp_path, song, caplog
+    ):
+        genius_bundle(tmp_path, song.stem)
+        sheet = write_sheet(tmp_path, song.stem)
+        sheet.write_bytes("caf\xe9\n".encode("latin-1"))
+
+        assert self.start(tmp_path, song)["text"] == "one\ntwo"
+        assert "Could not read the custom lyric sheet" in caplog.text
+
+    def test_the_search_starts_from_the_genius_song_the_bundle_records(self, tmp_path, song):
+        genius_bundle(tmp_path, song.stem)
+
+        start = self.start(tmp_path, song)
+
+        assert (start["title"], start["artist"]) == (GENIUS["title"], GENIUS["artist"])
+
+    def test_without_one_it_starts_from_the_file_name_and_no_artist(self, tmp_path, song):
+        start = self.start(tmp_path, song)
+
+        assert (start["title"], start["artist"]) == ("Some Song", "")
+
+
 class TestGeniusSong:
     def test_a_song_is_fetched_once_for_the_preview_the_search_and_the_queue(self, tmp_path):
         genius = FakeGenius({7: GENIUS_SONG})

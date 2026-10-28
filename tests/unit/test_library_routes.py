@@ -805,8 +805,102 @@ class TestRepairPage:
         code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
         start = code.index("function geniusOption")
         handler = code[start : code.index("return label;", start)]
+        drop = code[code.index("function dropLrclibMatches") :]
+        drop = drop[: drop.index("\n    }\n")]
 
-        assert "state.lrclibSeq++;" in handler
+        assert "dropLrclibMatches();" in handler
+        assert "state.lrclibSeq++;" in drop and "state.candidates = [];" in drop
+
+    def test_switching_source_drops_the_matches_scored_against_the_other_sources_lyrics(self, env):
+        code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
+        start = code.index("function chooseSource")
+        handler = code[start : code.index("refreshStep1();", start)]
+
+        assert "if (state.source !== source) dropLrclibMatches();" in handler
+        assert handler.index("dropLrclibMatches();") < handler.index("state.source = source;")
+
+    def test_editing_the_custom_lyrics_drops_the_matches_scored_against_the_old_ones(self, env):
+        code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
+        start = code.index("$('#custom-text').on('input'")
+        handler = code[start : code.index("});", start)]
+
+        assert "dropLrclibMatches();" in handler and "refreshStep1();" in handler
+
+    def test_the_custom_card_follows_the_genius_card_and_says_what_it_takes(self, env):
+        html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())))
+
+        assert html.index('data-source="genius"') < html.index('data-source="custom"')
+        assert html.index('data-source="custom"') < html.index('data-source="transcribe"')
+        assert "Type or paste the lyrics, or open a .txt file." in card(html, "custom")
+        assert "rp-tag" not in card(html, "custom")
+
+    def test_a_custom_lyrics_song_is_current_on_the_custom_card(self, env):
+        html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", custom_bundle())))
+
+        assert "rp-tag" in card(html, "custom")
+        assert all("rp-tag" not in card(html, s) for s in ("caption", "genius", "transcribe"))
+
+    def box(self, html: str) -> str:
+        """The text the custom-lyrics box starts with, as the page's markup holds it."""
+        start = html.index('<textarea id="custom-text"')
+        start = html.index(">", start) + 1
+        return html[start : html.index("</textarea>", start)]
+
+    def test_the_box_starts_with_the_sheet_on_disk_escaped_as_text(self, env):
+        song = env.add_song("A---aaaaaaaaaaa.mp4", custom_bundle())
+        sheet = env.folder / "lyrics" / "A---aaaaaaaaaaa.custom.txt"
+        sheet.parent.mkdir()
+        sheet.write_text("Tom & Jerry <3 </textarea><b>x</b>\nsecond\n", encoding="utf-8")
+
+        html = text(self.page(env, song))
+
+        assert self.box(html) == (
+            "Tom &amp; Jerry &lt;3 &lt;/textarea&gt;&lt;b&gt;x&lt;/b&gt;\nsecond\n"
+        )
+
+    def test_without_a_sheet_the_box_starts_with_the_lines_of_the_current_lyrics(self, env):
+        bundle = poor_genius_bundle()
+        bundle["lyrics"]["lines"] = ["Line one", "Line two & three"]
+
+        html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", bundle)))
+
+        assert self.box(html) == "Line one\nLine two &amp; three"
+
+    def test_with_nothing_yet_the_box_starts_empty(self, env):
+        html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4")))
+
+        assert self.box(html) == ""
+
+    def test_the_lrclib_search_of_a_custom_song_starts_from_what_the_page_knows(self, env):
+        genius = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())))
+        plain = text(self.page(env, env.add_song("Some Song (Official Video)---bbbbbbbbbbb.mp4")))
+
+        assert 'var CUSTOM_TERMS = {"artist": "Kristin Chenoweth", "title": "Defying Gravity"}' in (
+            genius
+        )
+        assert 'var CUSTOM_TERMS = {"artist": "", "title": "Some Song"}' in plain
+
+    def test_a_custom_pick_is_searched_with_a_post_and_sent_with_its_text(self, env):
+        code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
+        search = code[code.index("function lrclibRequest") : code.index("function searchLrclib")]
+        send = code[
+            code.index("$('#send').on('click'") : code.index("/* ---", code.index("$('#send')"))
+        ]
+
+        assert "method: 'POST'" in search and "text: customText()" in search
+        assert "$.getJSON(URLS.lrclibSearch, {" in search  # Genius keeps its GET
+        assert "{ source: 'custom', text: customText() }" in send
+
+    def test_an_opened_file_is_read_in_the_browser_as_utf8_and_not_uploaded(self, env):
+        code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
+        start = code.index("$('#custom-file').on('change'")
+        handler = code[start : code.index("\n    });", start)]
+        html = text(self.page(env, env.add_song("B---bbbbbbbbbbb.mp4", caption_bundle())))
+
+        assert "readAsText(file, 'UTF-8')" in handler
+        assert "$('#custom-text').val(reader.result)" in handler
+        assert "$.ajax" not in handler and "FormData" not in code
+        assert 'accept=".txt,text/plain"' in html
 
     def test_text_from_genius_and_lrclib_goes_in_as_text_never_as_markup(self, env):
         code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))

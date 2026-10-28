@@ -36,6 +36,7 @@
   .rp-empty { padding: 12px; color: var(--dark-text-muted); font-size: 13px; }
   .rp-link { display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; background: none; border: 0; padding: 0; cursor: pointer; color: var(--dark-link); }
   .rp-link:disabled { opacity: 0.5; cursor: not-allowed; }
+  .rp-text { display: block; width: 100%; min-height: 260px; margin-top: 6px; padding: 10px 12px; box-sizing: border-box; resize: vertical; font: inherit; font-size: 14px; line-height: 1.4; border-radius: 8px; border: 1px solid var(--dark-border); background: var(--dark-bg-secondary); color: var(--dark-text-light); }
   .rp-preview { max-height: 240px; overflow: auto; white-space: pre-wrap; word-break: break-word; font-size: 13px; background: var(--dark-bg-secondary); border-radius: 8px; padding: 10px 12px; margin: 0 0 8px; color: var(--dark-text-light); }
   .go-row.rp-buttons { gap: 10px; margin-top: 14px; }
   .go-row.rp-buttons .info-tip-btn { margin: 0 -6px; }
@@ -51,6 +52,7 @@
     var SONG = {{ song | tojson }};
     var CURRENT_SOURCE = {{ current_source | tojson }};
     var CURRENT_GENIUS_ID = {{ current_genius_id | tojson }};
+    var CUSTOM_TERMS = {{ custom_terms | tojson }};  // where a custom song's LRCLIB search starts
     var HAS_YOUTUBE_ID = {{ has_youtube_id | tojson }};
     var URLS = {
       captionCheck: {{ url_for('song_info.caption_check') | tojson }},
@@ -74,6 +76,8 @@
       searching: {{ _('Searching…') | tojson }},
       previewLyrics: {{ _('Preview these lyrics') | tojson }},
       previewTiming: {{ _('Preview selected timing') | tojson }},
+      customPick: {{ _('Custom lyrics.') | tojson }},
+      fileFailed: {{ _('Could not read that file.') | tojson }},
       hidePreview: {{ _('Hide preview') | tojson }},
       loading: {{ _('Loading…') | tojson }},
       geniusPick: {{ _('Genius pick: %(title)s · %(artist)s.', title='{title}', artist='{artist}') | tojson }},
@@ -87,7 +91,7 @@
     };
 
     var state = {
-      source: null,      // 'caption' | 'genius' | 'transcribe'
+      source: null,      // 'caption' | 'genius' | 'custom' | 'transcribe'
       genius: null,      // the picked Genius result {id, title, artist}
       lrclib: null,      // 'none' | the picked candidate's id
       candidates: [],    // LRCLIB's matches for the picked Genius song
@@ -134,21 +138,42 @@
       });
     }
 
+    // Genius and custom lyrics go on to step 2, the LRCLIB match; the other sources queue at once.
+    function hasLrclibStep() {
+      return state.source === 'genius' || state.source === 'custom';
+    }
+
+    function customText() {
+      return $('#custom-text').val();
+    }
+
     function chooseSource(source) {
+      // Matches listed for the other source's lyrics don't belong to this one.
+      if (state.source !== source) dropLrclibMatches();
       state.source = source;
       $('.rp-src').removeClass('is-selected');
       sourceCard(source).addClass('is-selected').find('input').prop('checked', true);
       $('#genius-section').toggleClass('is-hidden', source !== 'genius');
-      $('#step1-note').toggleClass('is-hidden', source === 'genius');
-      $('#go').text(source === 'genius' ? T.nextLrclib : T.regenerate);
+      $('#custom-section').toggleClass('is-hidden', source !== 'custom');
+      $('#step1-note').toggleClass('is-hidden', hasLrclibStep());
+      $('#go').text(hasLrclibStep() ? T.nextLrclib : T.regenerate);
       refreshStep1();
     }
 
     function refreshStep1() {
       var complete = state.source === 'caption' || state.source === 'transcribe' ||
-        (state.source === 'genius' && state.genius !== null);
+        (state.source === 'genius' && state.genius !== null) ||
+        (state.source === 'custom' && $.trim(customText()) !== '');  // the server checks the lyrics
       $('#go').prop('disabled', !complete || state.sending);
       $('#genius-preview-toggle').prop('disabled', state.genius === null);
+    }
+
+    // The LRCLIB matches, and a search still loading, are for the previous pick's lyrics.
+    function dropLrclibMatches() {
+      state.lrclibSeq++;
+      state.candidates = [];
+      state.lrclib = null;
+      state.videoLength = null;
     }
 
     $('.rp-src input').on('change', function () {
@@ -185,11 +210,7 @@
       label.append(input, body);
       input.on('change', function () {
         state.genius = hit;
-        // The LRCLIB matches, and a search still loading, are for the previous pick's lyrics.
-        state.lrclibSeq++;
-        state.candidates = [];
-        state.lrclib = null;
-        state.videoLength = null;
+        dropLrclibMatches();
         $('#genius-results .rp-opt').removeClass('is-selected');
         label.addClass('is-selected');
         closePreview('genius');
@@ -197,6 +218,24 @@
       });
       return label;
     }
+
+    $('#custom-text').on('input', function () {
+      dropLrclibMatches();
+      refreshStep1();
+    });
+
+    $('#custom-open').on('click', function () { $('#custom-file')[0].click(); });
+
+    // The file is read here in the browser, as UTF-8, into the box; nothing is uploaded.
+    $('#custom-file').on('change', function () {
+      var file = this.files[0];
+      this.value = '';  // so the same file can be opened again
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function () { $('#custom-text').val(reader.result).trigger('input'); };
+      reader.onerror = function () { showNotification(T.fileFailed, 'is-danger'); };
+      reader.readAsText(file, 'UTF-8');
+    });
 
     $('#genius-search').on('click', searchGenius);
     $('#genius-q').on('keydown', function (e) {
@@ -222,7 +261,7 @@
     });
 
     $('#go').on('click', function () {
-      if (state.source === 'genius') {
+      if (hasLrclibStep()) {
         showStep(2);
       } else {
         send({ source: state.source });
@@ -237,13 +276,45 @@
       $('#back-info').toggleClass('is-hidden', n !== 1);
       $('#back-step1').toggleClass('is-hidden', n !== 2);
       if (n === 2) {
-        $('#genius-pick').text(fill(T.geniusPick, { title: state.genius.title, artist: state.genius.artist }));
+        if (state.source === 'custom') {
+          // No line count here: the server drops [Chorus]-style headers, so a count of the
+          // typed rows would disagree with the "of N lines" the matches show.
+          $('#genius-pick').text(T.customPick);
+          startCustomSearch();
+        } else {
+          $('#genius-pick').text(fill(T.geniusPick, { title: state.genius.title, artist: state.genius.artist }));
+        }
         renderLrclib();
       }
       window.scrollTo(0, 0);
     }
 
     $('.js-back').on('click', function () { showStep(1); });
+
+    // A custom song has no Genius pick to name the song, so the search starts from what the
+    // page knows (the bundle's Genius title and artist, else the file name); a box the
+    // admin already typed in is left alone.
+    function startCustomSearch() {
+      if ($('#lrclib-title').val() || $('#lrclib-artist').val()) return;
+      $('#lrclib-title').val(CUSTOM_TERMS.title);
+      $('#lrclib-artist').val(CUSTOM_TERMS.artist);
+    }
+
+    // The matches are scored against the lyrics: a Genius song's, by id, or the typed ones, posted.
+    function lrclibRequest(title, artist) {
+      if (state.source === 'custom') {
+        return $.ajax({
+          url: URLS.lrclibSearch,
+          method: 'POST',
+          contentType: 'application/json',
+          dataType: 'json',
+          data: JSON.stringify({ song: SONG, title: title, artist: artist, text: customText() })
+        });
+      }
+      return $.getJSON(URLS.lrclibSearch, {
+        song: SONG, genius_id: state.genius.id, title: title, artist: artist
+      });
+    }
 
     function searchLrclib() {
       var title = $.trim($('#lrclib-title').val());
@@ -255,9 +326,7 @@
       state.videoLength = null;
       closePreview('lrclib');
       renderLrclib(T.searching);
-      $.getJSON(URLS.lrclibSearch, {
-        song: SONG, genius_id: state.genius.id, title: title, artist: artist
-      }).done(function (found) {
+      lrclibRequest(title, artist).done(function (found) {
         if (seq !== state.lrclibSeq) return;
         state.candidates = found.candidates;
         state.videoLength = found.video_length;
@@ -351,7 +420,9 @@
     });
 
     $('#send').on('click', function () {
-      var body = { source: 'genius', genius_id: state.genius.id };
+      var body = state.source === 'custom'
+        ? { source: 'custom', text: customText() }
+        : { source: 'genius', genius_id: state.genius.id };
       if (state.lrclib === 'none') body.lrclib_skip = true;
       else body.lrclib_id = state.lrclib;
       send(body);
@@ -381,7 +452,9 @@
     /* -------------------------------------------------------------- start */
 
     startCaptionCheck();
-    if (CURRENT_SOURCE === 'genius' || CURRENT_SOURCE === 'transcribe') chooseSource(CURRENT_SOURCE);
+    if (CURRENT_SOURCE === 'genius' || CURRENT_SOURCE === 'custom' || CURRENT_SOURCE === 'transcribe') {
+      chooseSource(CURRENT_SOURCE);
+    }
     refreshStep1();
   });
 </script>
@@ -409,6 +482,10 @@
       <input type="radio" name="source">
       <span><b>{% trans %}Genius lyrics{% endtrans %}</b>{% if current_source == 'genius' %} <span class="rp-tag">{% trans %}current{% endtrans %}</span>{% endif %}<span class="rp-muted rp-src-desc">{% trans %}Search and pick, then choose an LRCLIB match.{% endtrans %}</span></span>
     </label>
+    <label class="rp-src" data-source="custom">
+      <input type="radio" name="source">
+      <span><b>{% trans %}Custom lyrics{% endtrans %}</b>{% if current_source == 'custom' %} <span class="rp-tag">{% trans %}current{% endtrans %}</span>{% endif %}<span class="rp-muted rp-src-desc">{% trans %}Type or paste the lyrics, or open a .txt file.{% endtrans %}</span></span>
+    </label>
     <label class="rp-src" data-source="transcribe">
       <input type="radio" name="source">
       <span><b>{% trans %}No lyrics (transcribe){% endtrans %}</b>{% if current_source == 'transcribe' %} <span class="rp-tag">{% trans %}current{% endtrans %}</span>{% endif %}<span class="rp-muted rp-src-desc">{% trans %}Words come from what the singer is heard singing.{% endtrans %}</span></span>
@@ -427,6 +504,14 @@
     <div id="genius-results" class="rp-list is-hidden"></div>
     <button type="button" id="genius-preview-toggle" class="rp-link" disabled>{% trans %}Preview these lyrics{% endtrans %}</button>
     <div id="genius-preview" class="rp-preview is-hidden"></div>
+  </div>
+
+  <div id="custom-section" class="is-hidden">
+    <div class="rp-sec">{% trans %}Custom lyrics{% endtrans %}</div>
+    <label for="custom-text" class="rp-muted">{% trans %}One line of lyrics per row. Section headers like [Chorus] are ignored.{% endtrans %}</label>
+    <textarea id="custom-text" class="rp-text" spellcheck="false" autocomplete="off">{{ custom_prefill }}</textarea>
+    <button type="button" id="custom-open" class="rp-link">{% trans %}Open file{% endtrans %}</button>
+    <input type="file" id="custom-file" class="is-hidden" accept=".txt,text/plain">
   </div>
 
   <div class="go-row rp-buttons">

@@ -47,6 +47,7 @@ from pikaraoke.lib.library_regen import (
     backup_text_folders,
     check_caption,
     custom_plan,
+    custom_sheet_path,
     custom_sheet_plan,
     default_query,
     fetch_or_prompt_plan,
@@ -421,6 +422,33 @@ class LibraryTools:
         job = self._song_job(song_path)
         self._caption_plan(job)
         return check_caption(job)
+
+    def custom_start(self, song_path: str) -> dict:
+        """What the repair page's custom-lyrics box and LRCLIB search start with.
+
+        ``text``: the song's custom sheet if it has one, else the lines of its
+        current lyrics, else nothing. ``title`` and ``artist``: the Genius song the
+        bundle records, else the song's file name as a title.
+        """
+        job = self._song_job(song_path)
+        lyrics = (job.bundle or {}).get("lyrics") or {}
+        genius = lyrics.get("genius") or {}
+        return {
+            "text": self._sheet_on_disk(job.song_path) or "\n".join(lyrics.get("lines") or []),
+            "title": genius.get("title") or default_query(job.song_path),
+            "artist": genius.get("artist") or "",
+        }
+
+    @staticmethod
+    def _sheet_on_disk(song: Path) -> str:
+        """The song's custom sheet, or "" when it has none or it can't be read."""
+        try:
+            return custom_sheet_path(song).read_text(encoding="utf-8")
+        except FileNotFoundError:
+            return ""
+        except (OSError, UnicodeDecodeError) as e:
+            logger.warning("Could not read the custom lyric sheet of %s: %s", song.name, e)
+            return ""
 
     def genius_sheet_lines(self, genius_id: int) -> list[str]:
         """A Genius song's lyric lines, as they display, for scoring an LRCLIB search.
