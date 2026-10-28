@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterable
 
 import flask_babel
 from flask import current_app, jsonify, render_template, request, url_for
@@ -14,11 +15,15 @@ from pikaraoke.lib.current_app import get_karaoke_instance, get_site_name
 from pikaraoke.lib.genius import write_choice
 from pikaraoke.lib.genius_lyrics import clean_genius_query
 from pikaraoke.lib.library_regen import check_video_caption
+from pikaraoke.lib.song_match import SongIndex, similar_songs
 from pikaraoke.lib.youtube_dl import get_preview_info, get_search_results
 
 _ = flask_babel.gettext
 
 search_bp = Blueprint("search", __name__)
+
+# The search page's one note lists library copies, so a long list would bury the results.
+MAX_SIMILAR_SONGS = 3
 
 # YouTube ID validation: exactly 11 chars of the allowed character set
 _YT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
@@ -45,6 +50,23 @@ class DownloadBody(Schema):
     )
 
 
+def _library_copies(songs: Iterable[str], search_results: list[tuple]) -> list[str]:
+    """Library songs that look like a result found under another YouTube ID.
+
+    A song a result already matches by ID is left out: that row says "Add to
+    Queue" itself.
+    """
+    library = SongIndex.from_songs(songs)
+    matched_by_id = {existing_path for *_, existing_path in search_results}
+    copies = dict.fromkeys(
+        path
+        for title, *_ in search_results
+        for path in similar_songs(title, library)
+        if path not in matched_by_id
+    )
+    return list(copies)[:MAX_SIMILAR_SONGS]
+
+
 @search_bp.route("/search", methods=["GET"])
 def search():
     """YouTube search page."""
@@ -56,15 +78,18 @@ def search():
         search_results = [
             (*r, k.song_manager.songs.find_by_id(k.download_path, r[2])) for r in raw_results
         ]
+        library_copies = _library_copies(k.song_manager.songs, search_results)
     else:
         search_string = None
         search_results = None
+        library_copies = []
     return render_template(
         "search.html",
         site_title=site_name,
         title="Search",
         songs=k.song_manager.songs,
         search_results=search_results,
+        similar_songs=library_copies,
         search_string=search_string,
         genius_client=k.genius_client,
     )

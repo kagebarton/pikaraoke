@@ -92,6 +92,18 @@
 		flex-shrink: 0;
 	}
 
+	/* Library copy of a searched song, noted once above the results */
+	.similar-song {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		margin-top: 0.5rem;
+	}
+	.similar-song > strong {
+		flex: 1;
+		min-width: 0;
+	}
+
 	#search-results .img-wrapper:hover img {
 		opacity: 0.7;
 		box-shadow: 0px 0px 3px 1px #878787;
@@ -603,6 +615,9 @@ $("#add-queue-link").trigger("click");
 		$(document).on("click.search", ".search_result_items_enqueue", function () {
 			enqueueLocalSong($(this).closest("li").attr("data-file-path"), this);
 		});
+		$(document).on("click.search", ".similar-song-enqueue", function () {
+			enqueueLocalSong($(this).attr("data-file-path"), this);
+		});
 // ── Lyrics picker state & functions ──────────────────────────────────────
 //
 // Flow:
@@ -1091,6 +1106,17 @@ $(document).on("click.search", ".search_result_items_select", function () {
 			<small><i>'{{search_string}}'</i></small>
 			{%- endtrans %}
 		</label>
+		{% if similar_songs %}
+		<div class="notification is-info is-light similar-songs">
+			Already in the library:
+			{% for path in similar_songs %}
+			<div class="similar-song">
+				<strong>{{ filename_from_path(path) }}</strong>
+				<button class="button is-success is-small similar-song-enqueue" data-file-path="{{ path }}">Add to Queue</button>
+			</div>
+			{% endfor %}
+		</div>
+		{% endif %}
 		<div class="field">
 			<label class="checkbox is-flex is-align-items-center">
 				<input type="checkbox" checked id="add-to-queue-search" class="checkbox" />
