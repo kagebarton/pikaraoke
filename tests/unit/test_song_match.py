@@ -10,9 +10,10 @@ import pytest
 
 from pikaraoke.lib.song_manager import SongManager
 from pikaraoke.lib.song_match import (
+    SimilarGroup,
     SongIndex,
-    group_similar,
     parse_title,
+    similar_groups,
     similar_songs,
 )
 
@@ -157,15 +158,20 @@ class TestParseTitle:
         assert parse_title("U2 - One").parts == frozenset()
 
 
-class TestGroupSimilar:
-    def test_library_pairs_are_found_and_defying_gravity_is_not_popular(self, library):
-        names = [SongManager.filename_from_path(path, tidy=False) for path in LIBRARY_PATHS]
-        groups = group_similar(names, SongIndex.from_songs([]))
+def title_groups(titles: list[str], library: SongIndex) -> list[list[int]]:
+    return [group.titles for group in similar_groups(titles, library)]
 
-        found = [{LIBRARY_PATHS[i] for i in group} for group in groups]
+
+class TestSimilarGroups:
+    def test_library_pairs_are_found_and_defying_gravity_is_not_popular(self):
+        names = [SongManager.filename_from_path(path, tidy=False) for path in LIBRARY_PATHS]
+        groups = similar_groups(names, SongIndex.from_songs([]))
+
+        found = [{LIBRARY_PATHS[i] for i in group.titles} for group in groups]
         assert sorted(found, key=sorted) == sorted(
             [library_paths(BOTH_WHOLE_NEW_WORLDS), library_paths(BOTH_FOR_GOODS)], key=sorted
         )
+        assert sorted(group.part for group in groups) == ["for good", "whole new world"]
 
     def test_uploads_of_one_song_group_and_the_rest_are_omitted(self):
         titles = [
@@ -173,7 +179,7 @@ class TestGroupSimilar:
             "Mirrors - Justin Timberlake",
             "Ed Sheeran - Shape of You [Official Video]",
         ]
-        assert group_similar(titles, SongIndex.from_songs([])) == [[0, 2]]
+        assert title_groups(titles, SongIndex.from_songs([])) == [[0, 2]]
 
     def test_a_chain_of_matches_is_one_group(self):
         titles = [
@@ -181,7 +187,7 @@ class TestGroupSimilar:
             "Delta Song | Epsilon Tune",
             "Epsilon Tune | Zeta Thing",
         ]
-        assert group_similar(titles, SongIndex.from_songs([])) == [[0, 1, 2]]
+        assert title_groups(titles, SongIndex.from_songs([])) == [[0, 1, 2]]
 
     def test_an_artist_heavy_in_the_playlist_does_not_glue_its_songs(self):
         titles = [
@@ -189,10 +195,42 @@ class TestGroupSimilar:
             "Selfish - Justin Timberlake",
             "Rock Your Body - Justin Timberlake",
         ]
-        assert group_similar(titles, SongIndex.from_songs([])) == []
+        assert title_groups(titles, SongIndex.from_songs([])) == []
 
     def test_library_titles_count_toward_a_parts_frequency(self, library):
-        # "Justin Timberlake" is already in 4 library titles, so two more cannot group on it.
+        # "Justin Timberlake" is already in 4 library titles, so two more cannot group on it:
+        # each only meets its own library song.
         titles = ["Mirrors - Justin Timberlake", "Selfish - Justin Timberlake"]
-        assert group_similar(titles, library) == []
-        assert group_similar(titles, SongIndex.from_songs([])) == [[0, 1]]
+        assert title_groups(titles, library) == [[0], [1]]
+        assert title_groups(titles, SongIndex.from_songs([])) == [[0, 1]]
+
+    def test_a_pair_sharing_artist_and_song_is_headed_by_both(self):
+        titles = ["Mirrors - Justin Timberlake", "Justin Timberlake - Mirrors [HD]"]
+
+        [group] = similar_groups(titles, SongIndex.from_songs([]))
+
+        assert group.part == "justin timberlake / mirrors"
+
+    def test_a_title_groups_with_the_library_songs_it_looks_like(self, library):
+        titles = ["Aladdin - A Whole New World (Lyrics)", "Ed Sheeran - Shape of You"]
+
+        assert similar_groups(titles, library) == [
+            SimilarGroup(
+                titles=[0],
+                songs=[library_path("Mena Massoud"), library_path("ZAYN")],
+                part="whole new world",
+            )
+        ]
+
+    def test_titles_meeting_the_same_library_song_group_though_the_playlist_hides_their_match(
+        self, library
+    ):
+        # The library holds "mirrors" once; two playlist uploads make three, past the
+        # playlist-wide limit, so these two only meet through the library copy.
+        titles = ["Mirrors - Justin Timberlake (Lyrics)", "Justin Timberlake - Mirrors [HD]"]
+
+        assert similar_groups(titles, library) == [
+            SimilarGroup(
+                titles=[0, 1], songs=[library_path("Timberlake - Mirrors")], part="mirrors"
+            )
+        ]

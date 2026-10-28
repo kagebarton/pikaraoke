@@ -100,29 +100,66 @@ def similar_songs(title: str, library: SongIndex) -> list[str]:
     ]
 
 
-def group_similar(titles: list[str], library: SongIndex) -> list[list[int]]:
-    """Group indexes of ``titles`` that look alike; titles matching nothing are omitted.
+@dataclass(frozen=True)
+class SimilarGroup:
+    """Titles that look like each other, with the library songs they look like."""
 
-    A part's frequency counts the library and ``titles`` together, so an artist
-    heavy in the playlist does not glue its songs into one group.
+    titles: list[int]  # indexes into the titles given, in order
+    songs: list[str]  # library song paths
+    part: str  # the shared part(s) most matches agree on, to head the group
+
+
+def similar_groups(titles: list[str], library: SongIndex) -> list[SimilarGroup]:
+    """Group ``titles`` that look like each other or like the same library songs.
+
+    Titles that match nothing are omitted. Between titles a part's frequency
+    counts the library and ``titles`` together, so an artist heavy in the
+    playlist does not glue its songs into one group; against the library it
+    counts the library alone, as in :func:`similar_songs`.
     """
     parsed = [parse_title(title) for title in titles]
-    frequency = library.frequency + _count_parts(parsed)
+    playlist_frequency = library.frequency + _count_parts(parsed)
 
-    root = list(range(len(parsed)))
-
-    def find(i: int) -> int:
-        while root[i] != i:
-            root[i] = root[root[i]]
-            i = root[i]
-        return i
-
-    for i, first in enumerate(parsed):
+    # A node is a title's index (int) or a library song's path (str).
+    matches: list[tuple[int | str, int | str, set[str]]] = []
+    for i, title in enumerate(parsed):
         for j in range(i + 1, len(parsed)):
-            if _shared_parts(first, parsed[j], frequency):
-                root[find(j)] = find(i)
+            if shared := _shared_parts(title, parsed[j], playlist_frequency):
+                matches.append((i, j, shared))
+        for path, song in library.titles.items():
+            if shared := _shared_parts(title, song, library.frequency):
+                matches.append((i, path, shared))
 
-    groups: dict[int, list[int]] = {}
-    for i in range(len(parsed)):
-        groups.setdefault(find(i), []).append(i)
-    return [members for members in groups.values() if len(members) > 1]
+    root: dict[int | str, int | str] = {}
+
+    def find(node: int | str) -> int | str:
+        root.setdefault(node, node)
+        while root[node] != node:
+            root[node] = root[root[node]]
+            node = root[node]
+        return node
+
+    for first, second, _ in matches:
+        root[find(second)] = find(first)
+
+    matches_by_group: dict[int | str, list] = {}
+    for match in matches:
+        matches_by_group.setdefault(find(match[0]), []).append(match)
+
+    groups = []
+    for group_matches in matches_by_group.values():
+        nodes = dict.fromkeys(
+            node for first, second, _ in group_matches for node in (first, second)
+        )
+        part_counts = Counter(part for *_, shared in group_matches for part in shared)
+        top_count = max(part_counts.values())
+        # Tied parts (a pair sharing artist and song) are all named: a set has no order to pick by.
+        top_parts = sorted(part for part, count in part_counts.items() if count == top_count)
+        groups.append(
+            SimilarGroup(
+                titles=sorted(node for node in nodes if isinstance(node, int)),
+                songs=[node for node in nodes if isinstance(node, str)],
+                part=" / ".join(top_parts),
+            )
+        )
+    return sorted(groups, key=lambda group: group.titles[0])

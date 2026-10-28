@@ -71,6 +71,7 @@ from pikaraoke.lib.library_status import (
 from pikaraoke.lib.metadata_parser import extract_youtube_id
 from pikaraoke.lib.processing_manager import ProcessingManager
 from pikaraoke.lib.song_manager import SongManager
+from pikaraoke.lib.song_match import SongIndex, similar_groups
 
 logger = logging.getLogger(__name__)
 
@@ -787,13 +788,16 @@ class LibraryTools:
     def check_playlist(self, url: str) -> dict:
         """Read a YouTube playlist and compare it with the library (D13).
 
-        Returns ``{"title", "videos"}``; each video has its ``id``, ``title``
+        Returns ``{"title", "videos", "groups"}``; each video has its ``id``,
+        ``title``, ``channel`` and ``duration`` (seconds; either may be missing)
         and ``status``: ``new``, ``not_processed`` (downloaded earlier and never
         processed; it carries its ``song`` path as the library spells it),
         ``waiting`` (still downloading, or unprocessed but already queued for
-        processing or listed for a pick) or ``in_library``. Raises
-        :class:`RegenError`, with a message for the admin, for a link that isn't
-        a playlist and for one that can't be read.
+        processing or listed for a pick) or ``in_library``. ``groups`` lists the
+        new videos that look like each other or like a library song (see
+        :meth:`_similar_groups`). Raises :class:`RegenError`, with a message for
+        the admin, for a link that isn't a playlist and for one that can't be
+        read.
         """
         url = url.strip() if isinstance(url, str) else ""
         link = classify_url(url)
@@ -829,11 +833,40 @@ class LibraryTools:
                 {
                     "id": video.id,
                     "title": video.title,
+                    "channel": video.channel,
+                    "duration": video.duration,
                     "status": status,
                     "song": song if status == "not_processed" else None,
                 }
             )
-        return {"title": playlist.title, "videos": videos}
+        return {
+            "title": playlist.title,
+            "videos": videos,
+            "groups": self._similar_groups(videos),
+        }
+
+    def _similar_groups(self, videos: list[dict]) -> list[dict]:
+        """Groups of new videos that look like each other or like a song already in the library.
+
+        Each group has the shared ``part`` that heads it, its new video ``videos``
+        (ids, in playlist order) and the library ``songs`` it resembles (``song``
+        path and ``title``). Only new videos are grouped; a video already in the
+        library shows up as one of the ``songs`` instead. Title-only, so it
+        flags and never decides.
+        """
+        new = [video for video in videos if video["status"] == "new"]
+        library = SongIndex.from_songs(self._song_manager.songs)
+        return [
+            {
+                "part": group.part,
+                "videos": [new[i]["id"] for i in group.titles],
+                "songs": [
+                    {"song": path, "title": self._song_manager.filename_from_path(path)}
+                    for path in group.songs
+                ],
+            }
+            for group in similar_groups([video["title"] for video in new], library)
+        ]
 
     def add_playlist(self, videos: object, unprocessed: object) -> dict:
         """Download the chosen playlist videos and process the chosen unprocessed songs (D13).

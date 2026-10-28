@@ -147,6 +147,29 @@ class TestReadPlaylist:
         assert "--flat-playlist" in commands[0] and "-J" in commands[0]
         assert commands[0][-2:] == ["--", "https://www.youtube.com/playlist?list=Y"]
 
+    def test_reads_each_videos_channel_and_length_when_given(self, monkeypatch):
+        mock_yt_dlp(
+            monkeypatch,
+            json.dumps(
+                {
+                    "title": "Detailed",
+                    "entries": [
+                        {"id": VID_A, "title": "A", "channel": "Chan", "duration": 213.0},
+                        {"id": VID_B, "title": "B", "uploader": "Uploader", "duration": "3:33"},
+                        {"id": "ccccccccccc", "title": "C", "channel": None, "duration": None},
+                    ],
+                }
+            ),
+        )
+
+        videos = library_links.read_playlist("https://www.youtube.com/playlist?list=Y").videos
+
+        assert [(v.channel, v.duration) for v in videos] == [
+            ("Chan", 213),
+            ("Uploader", None),  # a length that isn't a number is no length
+            ("", None),
+        ]
+
     def test_a_link_that_looks_like_an_option_stays_a_url(self, monkeypatch):
         commands = mock_yt_dlp(monkeypatch, json.dumps({"title": "T", "entries": []}))
 

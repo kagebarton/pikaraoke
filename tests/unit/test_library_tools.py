@@ -2662,6 +2662,10 @@ def playlist_of(*videos: tuple[str, str], title: str = "A playlist") -> Playlist
     return Playlist(title=title, videos=[PlaylistVideo(id=i, title=t) for i, t in videos])
 
 
+# What a video from a playlist that gave no channel or length carries.
+NO_DETAILS = {"channel": "", "duration": None}
+
+
 def read_as(monkeypatch, playlist: Playlist) -> list[str]:
     """Make the playlist box read ``playlist``; returns the links it was asked for."""
     asked = []
@@ -2690,15 +2694,41 @@ class TestCheckPlaylist:
         assert asked == [PLAYLIST_URL]
         assert result["title"] == "A playlist"
         assert result["videos"] == [
-            {"id": "aaaaaaaaaaa", "title": "Fresh", "status": "new", "song": None},
+            {**NO_DETAILS, "id": "aaaaaaaaaaa", "title": "Fresh", "status": "new", "song": None},
             {
+                **NO_DETAILS,
                 "id": "bbbbbbbbbbb",
                 "title": "Old",
                 "status": "not_processed",
                 "song": str(unprocessed),
             },
-            {"id": "ccccccccccc", "title": "Done", "status": "in_library", "song": None},
+            {
+                **NO_DETAILS,
+                "id": "ccccccccccc",
+                "title": "Done",
+                "status": "in_library",
+                "song": None,
+            },
         ]
+        assert result["groups"] == []
+
+    def test_a_video_carries_the_channel_and_length_the_playlist_gave(self, tmp_path, monkeypatch):
+        tools, _ = make_tools(tmp_path, [])
+        read_as(
+            monkeypatch,
+            Playlist(
+                "P",
+                [
+                    PlaylistVideo("aaaaaaaaaaa", "Given", channel="Some Channel", duration=213),
+                    PlaylistVideo("bbbbbbbbbbb", "Not given"),
+                ],
+            ),
+        )
+
+        given, not_given = tools.check_playlist(PLAYLIST_URL)["videos"]
+
+        assert (given["channel"], given["duration"]) == ("Some Channel", 213)
+        assert (not_given["channel"], not_given["duration"]) == ("", None)
 
     def test_an_unprocessed_video_the_library_has_not_picked_up_counts_as_in_the_library(
         self, tmp_path, monkeypatch
@@ -2760,6 +2790,72 @@ class TestCheckPlaylist:
         videos = tools.check_playlist(PLAYLIST_URL)["videos"]
 
         assert [v["title"] for v in videos] == ["Fresh"]
+
+    def test_new_videos_that_look_alike_are_grouped(self, tmp_path, monkeypatch):
+        tools, _ = make_tools(tmp_path, [])
+        read_as(
+            monkeypatch,
+            playlist_of(
+                ("aaaaaaaaaaa", "Shape of You - Ed Sheeran (Lyrics)"),
+                ("bbbbbbbbbbb", "Mirrors - Justin Timberlake"),
+                ("ccccccccccc", "Ed Sheeran - Shape of You [Official Video]"),
+            ),
+        )
+
+        result = tools.check_playlist(PLAYLIST_URL)
+
+        assert result["groups"] == [
+            {
+                "part": "ed sheeran / shape of you",
+                "videos": ["aaaaaaaaaaa", "ccccccccccc"],
+                "songs": [],
+            }
+        ]
+        assert [v["status"] for v in result["videos"]] == ["new", "new", "new"]  # nothing hidden
+
+    def test_a_new_video_is_grouped_with_the_library_song_it_looks_like(
+        self, tmp_path, monkeypatch
+    ):
+        have = make_video(tmp_path, "Justin Timberlake - Mirrors---uuZE_IRwLNI")
+        genius_bundle(tmp_path, have.stem)
+        tools, _ = make_tools(tmp_path, [str(have)])
+        read_as(monkeypatch, playlist_of(("aaaaaaaaaaa", "Mirrors - Justin Timberlake (Lyrics)")))
+
+        [group] = tools.check_playlist(PLAYLIST_URL)["groups"]
+
+        assert group["videos"] == ["aaaaaaaaaaa"]
+        assert group["songs"] == [{"song": str(have), "title": "Justin Timberlake - Mirrors"}]
+
+    def test_a_video_already_in_the_library_is_not_a_group_member(self, tmp_path, monkeypatch):
+        """Its twin is grouped with the library copy; the copy is not grouped with itself."""
+        have = make_video(tmp_path, "Justin Timberlake - Mirrors---bbbbbbbbbbb")
+        genius_bundle(tmp_path, have.stem)
+        tools, _ = make_tools(tmp_path, [str(have)])
+        read_as(
+            monkeypatch,
+            playlist_of(
+                ("aaaaaaaaaaa", "Mirrors - Justin Timberlake (Lyrics)"),
+                ("bbbbbbbbbbb", "Justin Timberlake - Mirrors [HD]"),
+            ),
+        )
+
+        result = tools.check_playlist(PLAYLIST_URL)
+
+        assert [(g["videos"], [s["song"] for s in g["songs"]]) for g in result["groups"]] == [
+            (["aaaaaaaaaaa"], [str(have)])
+        ]
+
+    def test_videos_that_look_like_nothing_form_no_group(self, tmp_path, monkeypatch):
+        have = make_video(tmp_path, "Justin Timberlake - Mirrors---uuZE_IRwLNI")
+        tools, _ = make_tools(tmp_path, [str(have)])
+        read_as(
+            monkeypatch,
+            playlist_of(
+                ("aaaaaaaaaaa", "Queen - Bohemian Rhapsody"), ("bbbbbbbbbbb", "ABBA - SOS")
+            ),
+        )
+
+        assert tools.check_playlist(PLAYLIST_URL)["groups"] == []
 
     @pytest.mark.parametrize(
         "url, message",
