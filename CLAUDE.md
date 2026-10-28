@@ -67,6 +67,13 @@ At a commit with its plan-log row written, or a phase/GATE boundary (never mid-c
 - Group by feature, not file—each commit coherent and self-contained. Tests ride with the code they exercise.
 - Before committing: compile/import-smoke the changed code and read `git diff --cached` against what you intended.
 
+## Branches and Archive Tags
+
+- Features run on their own branch. Landing copies the code commits onto `dev` one by one, in order, with their messages: no merges, no squash, no plan-only commits, and `plans/<feature>.md` edits stripped from mixed commits. Among plans, `dev` carries only `plans/open-issues.md`.
+- A finished branch is retired as an annotated tag, never deleted bare, because it is the only home of its plan docs: `git tag -a archive/<branch> <branch> -m "Archived <date>: <why>"`, push the tag, check `git ls-remote origin 'refs/tags/archive/*^{}'` matches, then delete the branch locally and on origin. Research branches that never landed retire the same way.
+- The tag keeps the branch name, so an old `on <branch>` reference resolves as `archive/<branch>`. Repoint live references in `plans/open-issues.md` when retiring.
+- Read old plans with `git show archive/<branch>:plans/<file>.md`; search all of them with `git grep <term> $(git tag -l 'archive/*') -- plans/`.
+
 ## Environment
 
 Conda env `pik` (not uv). Run tests: `/home/ken/miniconda3/envs/pik/bin/python -m pytest`. Run pre-commit on the files you changed: `pre-commit run --config code_quality/.pre-commit-config.yaml --files <files>` (`--all-files` rewrites untouched upstream Python via pycln/isort). Tools: Black (100 char), isort, pycln, pylint, mdformat. Never commit to `master` directly.
