@@ -47,6 +47,13 @@ def _make_srt(folder: Path, stem: str, n_words: int = 1) -> Path:
     return srt
 
 
+def _write_sheet(folder: Path, stem: str, text: str = "la la la\nsecond line\n") -> Path:
+    sheet = folder / "lyrics" / f"{stem}.custom.txt"
+    sheet.parent.mkdir(exist_ok=True)
+    sheet.write_text(text, encoding="utf-8")
+    return sheet
+
+
 def _is_srt_plan(plan) -> bool:
     """True for a seed plan that feeds a local SRT as the lyric source."""
     return plan.kind == "seed" and plan.seed.get("lyrics_origin") == "srt"
@@ -294,6 +301,53 @@ class TestResolvePlanReset:
     def test_reset_no_id_prompts(self, tmp_path):
         plan = lr.resolve_plan(_job(tmp_path, "plain", {"lyrics": {"origin": "srt"}}), reset=True)
         assert plan.kind == "prompt"
+
+
+class TestCustomSheetWinsEveryPlan:
+    """A custom lyric sheet on disk is the song's pick, whatever the bundle says
+    and whether or not the run is a reset."""
+
+    GENIUS_BUNDLE = {
+        "lyrics": {
+            "origin": "genius",
+            "lines": ["hi"],
+            "genius": {"id": 9, "title": "H", "artist": "W"},
+        },
+    }
+
+    @pytest.mark.parametrize("reset", [False, True])
+    def test_resolve_plan_returns_the_custom_plan(self, tmp_path, reset):
+        sheet = _write_sheet(tmp_path, YT_STEM)
+
+        plan = lr.resolve_plan(_job(tmp_path, YT_STEM, self.GENIUS_BUNDLE), reset=reset)
+
+        assert plan.kind == "seed"
+        assert plan.lyrics_path == sheet
+        assert plan.seed == {"lyrics_origin": "custom"}
+        assert plan.custom_text is None  # the sheet is already on disk
+        assert lr.is_custom_plan(plan)
+
+    def test_reuse_plan_prefers_it_over_a_reusable_bundle(self, tmp_path):
+        _write_sheet(tmp_path, YT_STEM)
+
+        plan = lr.reuse_plan(_job(tmp_path, YT_STEM, self.GENIUS_BUNDLE))
+
+        assert lr.is_custom_plan(plan)
+
+    def test_reuse_plan_finds_it_with_no_bundle_at_all(self, tmp_path):
+        _write_sheet(tmp_path, YT_STEM)
+
+        assert lr.is_custom_plan(lr.reuse_plan(_job(tmp_path, YT_STEM, None)))
+
+    def test_without_a_sheet_resolution_is_unchanged(self, tmp_path):
+        assert lr.custom_plan(_job(tmp_path, YT_STEM, None)) is None
+        assert lr.resolve_plan(_job(tmp_path, YT_STEM, None), reset=True).kind == "fetch"
+        assert lr.reuse_plan(_job(tmp_path, YT_STEM, None)) is None
+
+    def test_another_songs_sheet_is_not_this_songs(self, tmp_path):
+        _write_sheet(tmp_path, "Song.live")
+
+        assert lr.custom_plan(_job(tmp_path, "Song", None)) is None
 
 
 # ---------------------------------------------------------------------------
@@ -659,6 +713,17 @@ class TestClearOutputFolders:
         assert lrc.exists()
         assert not (lyrics / f"{YT_STEM}.txt").exists()
 
+    def test_preserves_custom_sheets_wipes_the_rest(self, tmp_path):
+        # An admin's own lyric sheet is hand-made: a reset must not lose it.
+        sheet = _write_sheet(tmp_path, YT_STEM)
+        stale = sheet.with_name(f"{YT_STEM}.txt")
+        stale.write_text("stale reuse txt", encoding="utf-8")
+
+        lr.clear_output_folders(tmp_path)
+
+        assert sheet.exists()
+        assert not stale.exists()
+
     def test_missing_folders_is_noop(self, tmp_path):
         lr.clear_output_folders(tmp_path)  # does not raise
 
@@ -683,6 +748,17 @@ class TestClearOutputFoldersScoped:
         assert (tmp_path / "lyrics" / "Other.txt").exists()
         # Never a whole-folder wipe: the folders themselves survive.
         assert (tmp_path / "karaoke").is_dir()
+
+    def test_keeps_the_selected_songs_sheet_and_leaves_the_others(self, tmp_path):
+        _scoped_library(tmp_path)
+        mine = _write_sheet(tmp_path, "Song")
+        sibling = _write_sheet(tmp_path, "Song.live")
+        other = _write_sheet(tmp_path, "Other")
+
+        lr.clear_output_folders(tmp_path, stems=["Song"])
+
+        assert mine.exists() and sibling.exists() and other.exists()
+        assert not (tmp_path / "lyrics" / "Song.txt").exists()
 
 
 # ---------------------------------------------------------------------------
@@ -965,6 +1041,141 @@ class TestApplyLrclibChoice:
 # ---------------------------------------------------------------------------
 
 
+class TestApplyCustomChoice:
+    def _job_with(self, tmp_path, plan):
+        job = _job(tmp_path, YT_STEM, None)
+        job.plan = plan
+        return job
+
+    def test_a_custom_repair_writes_the_sheet(self, tmp_path):
+        job = self._job_with(tmp_path, lr.custom_sheet_plan(tmp_path / f"{YT_STEM}.mp4", "a\nb\n"))
+
+        lr.apply_custom_choice(job)
+
+        assert lr.custom_sheet_path(job.song_path).read_text(encoding="utf-8") == "a\nb\n"
+
+    def test_a_custom_repair_replaces_an_older_sheet(self, tmp_path):
+        _write_sheet(tmp_path, YT_STEM, "old words\n")
+        job = self._job_with(tmp_path, lr.custom_sheet_plan(tmp_path / f"{YT_STEM}.mp4", "new\n"))
+
+        lr.apply_custom_choice(job)
+
+        assert lr.custom_sheet_path(job.song_path).read_text(encoding="utf-8") == "new\n"
+
+    def test_replaying_the_sheet_leaves_it_alone(self, tmp_path):
+        sheet = _write_sheet(tmp_path, YT_STEM, "kept\n")
+        job = self._job_with(tmp_path, lr.custom_plan(_job(tmp_path, YT_STEM, None)))
+
+        lr.apply_custom_choice(job)
+
+        assert sheet.read_text(encoding="utf-8") == "kept\n"
+
+    @pytest.mark.parametrize(
+        "plan",
+        [
+            lr.Plan(kind="seed", seed={"lyrics_origin": "srt"}, label="fetched srt"),
+            lr.Plan(kind="sidecar", genius_id=5, label="genius pick"),
+            lr.Plan(kind="transcribe"),
+        ],
+        ids=["caption", "genius", "transcribe"],
+    )
+    def test_a_repair_to_another_source_deletes_the_sheet(self, tmp_path, plan):
+        sheet = _write_sheet(tmp_path, YT_STEM)
+
+        lr.apply_custom_choice(self._job_with(tmp_path, plan))
+
+        assert not sheet.exists()
+
+    def test_no_sheet_and_no_custom_plan_is_a_no_op(self, tmp_path):
+        lr.apply_custom_choice(self._job_with(tmp_path, lr.Plan(kind="transcribe")))
+
+        assert not (tmp_path / "lyrics").exists()
+
+
+class TestPrepareLyricsCustom:
+    """A custom sheet is read in place and gets the on-disk auto-caption as a 3rd
+    source exactly when it passes the gate."""
+
+    def _asr(self, tmp_path, n_words: int) -> Path:
+        subs = tmp_path / "subtitles"
+        subs.mkdir(exist_ok=True)
+        segs = [
+            {"utf8": "w0"} if i == 0 else {"utf8": f" w{i}", "tOffsetMs": i * 400}
+            for i in range(n_words)
+        ]
+        asr = subs / f"{YT_STEM}{ASR_JSON3_SUFFIX}"
+        asr.write_text(json.dumps({"events": [{"tStartMs": 0, "segs": segs}]}), encoding="utf-8")
+        return asr
+
+    def _prepare(self, tmp_path, monkeypatch, plan):
+        monkeypatch.setattr(lr.ytasr, "probe_duration", MagicMock(return_value=60.0))
+        job = _job(tmp_path, YT_STEM, None)
+        job.plan = plan
+        work = tmp_path / "work"
+        work.mkdir(exist_ok=True)
+        return job, lr.prepare_lyrics(job, MagicMock(), work, PipelineConfig())
+
+    def test_the_sheet_is_the_lyrics_file_and_the_origin_is_custom(self, tmp_path, monkeypatch):
+        sheet = _write_sheet(tmp_path, YT_STEM)
+
+        _, (lyrics_path, stage) = self._prepare(
+            tmp_path, monkeypatch, lr.custom_plan(_job(tmp_path, YT_STEM, None))
+        )
+
+        assert lyrics_path == sheet
+        assert stage._seed["lyrics_origin"] == "custom"
+
+    def test_a_typed_sheet_is_written_before_it_is_read(self, tmp_path, monkeypatch):
+        plan = lr.custom_sheet_plan(tmp_path / f"{YT_STEM}.mp4", "typed line\n")
+
+        _, (lyrics_path, _stage) = self._prepare(tmp_path, monkeypatch, plan)
+
+        assert lyrics_path.read_text(encoding="utf-8") == "typed line\n"
+
+    def test_the_seed_carries_a_caption_that_passes_the_gate(self, tmp_path, monkeypatch):
+        _write_sheet(tmp_path, YT_STEM)
+        self._asr(tmp_path, n_words=30)  # 30 words in 60 s: above the wpm floor
+        plan = lr.custom_plan(_job(tmp_path, YT_STEM, None))
+
+        _, (_path, stage) = self._prepare(tmp_path, monkeypatch, plan)
+
+        assert stage._seed["ytasr"] == {
+            "asr_file": f"subtitles/{YT_STEM}{ASR_JSON3_SUFFIX}",
+            "n_words": 30,
+            "wpm": 30.0,
+        }
+        assert stage._seed["media_duration_s"] == 60.0
+        assert "ytasr" not in plan.seed  # the queued plan is not edited
+
+    def test_the_seed_omits_a_caption_that_fails_the_gate(self, tmp_path, monkeypatch):
+        _write_sheet(tmp_path, YT_STEM)
+        self._asr(tmp_path, n_words=3)  # 3 words in 60 s: below the wpm floor
+
+        _, (_path, stage) = self._prepare(
+            tmp_path, monkeypatch, lr.custom_plan(_job(tmp_path, YT_STEM, None))
+        )
+
+        assert "ytasr" not in stage._seed
+        assert stage._seed["media_duration_s"] == 60.0
+
+    def test_the_seed_has_no_caption_when_none_is_on_disk(self, tmp_path, monkeypatch):
+        _write_sheet(tmp_path, YT_STEM)
+
+        _, (_path, stage) = self._prepare(
+            tmp_path, monkeypatch, lr.custom_plan(_job(tmp_path, YT_STEM, None))
+        )
+
+        assert stage._seed == {"lyrics_origin": "custom"}
+
+    def test_another_origins_seed_is_not_given_a_caption(self, tmp_path, monkeypatch):
+        self._asr(tmp_path, n_words=30)
+        plan = lr.Plan(kind="seed", lyrics_lines=["hi"], seed={"lyrics_origin": "genius"})
+
+        _, (_path, stage) = self._prepare(tmp_path, monkeypatch, plan)
+
+        assert stage._seed == {"lyrics_origin": "genius"}
+
+
 class TestPrepareRegenJob:
     GENIUS_BUNDLE = {
         "lyrics": {
@@ -1004,6 +1215,19 @@ class TestPrepareRegenJob:
         assert asr.exists() and lrc.exists()
         assert not (subs / f"{YT_STEM}.srt").exists()
         assert not (lyrics / f"{YT_STEM}.txt").exists()
+
+    def test_a_reset_replays_the_custom_sheet_it_kept(self, tmp_path):
+        sheet = _write_sheet(tmp_path, YT_STEM, "my own words\n")
+        _touch_video(tmp_path, YT_STEM)
+        job = _job(tmp_path, YT_STEM, None)
+        job.plan = lr.resolve_plan(job, reset=True)
+        regen = lr.RegenJob(song=job, reset=True, label="Reset")
+
+        lyrics_path, stage = self._prepare(regen, tmp_path)
+
+        assert lyrics_path == sheet
+        assert sheet.read_text(encoding="utf-8") == "my own words\n"
+        assert stage._seed["lyrics_origin"] == "custom"
 
     def test_no_reset_leaves_the_outputs(self, tmp_path):
         regen = self._regen(tmp_path, lr.Plan(kind="transcribe"))
@@ -1078,7 +1302,7 @@ class TestPrepareRegenJob:
         genius.fetch_song.assert_not_called()
 
     def test_a_fetch_plan_that_passes_goes_on_as_the_caption(self, tmp_path, monkeypatch):
-        regen = self._regen(tmp_path, lr._fetch_or_prompt_plan(tmp_path / f"{YT_STEM}.mp4"))
+        regen = self._regen(tmp_path, lr.fetch_or_prompt_plan(tmp_path / f"{YT_STEM}.mp4"))
         srt = _make_srt(tmp_path, YT_STEM, n_words=60)
 
         def fetch(job):
@@ -1092,7 +1316,7 @@ class TestPrepareRegenJob:
         assert isinstance(stage, lr.SeedArtifactsStage)
 
     def test_a_fetch_plan_that_fails_the_gate_raises_a_regen_error(self, tmp_path, monkeypatch):
-        regen = self._regen(tmp_path, lr._fetch_or_prompt_plan(tmp_path / f"{YT_STEM}.mp4"))
+        regen = self._regen(tmp_path, lr.fetch_or_prompt_plan(tmp_path / f"{YT_STEM}.mp4"))
 
         def fetch(job):
             job.plan = job.plan.fallback
@@ -1111,7 +1335,7 @@ class TestPrepareRegenJob:
         prepare_lyrics.assert_not_called()
 
     def test_a_failed_fetch_leaves_the_job_ready_to_retry(self, tmp_path, monkeypatch):
-        fetch_plan = lr._fetch_or_prompt_plan(tmp_path / f"{YT_STEM}.mp4")
+        fetch_plan = lr.fetch_or_prompt_plan(tmp_path / f"{YT_STEM}.mp4")
         regen = self._regen(tmp_path, fetch_plan)
         monkeypatch.setattr(
             lr, "fetch_caption", lambda job: setattr(job, "plan", job.plan.fallback)
@@ -1138,7 +1362,7 @@ class TestPrepareRegenJob:
         return mock
 
     def test_the_queued_job_keeps_its_fetch_plan_after_a_fetch(self, tmp_path, monkeypatch):
-        fetch_plan = lr._fetch_or_prompt_plan(tmp_path / f"{YT_STEM}.mp4")
+        fetch_plan = lr.fetch_or_prompt_plan(tmp_path / f"{YT_STEM}.mp4")
         regen = self._regen(tmp_path, fetch_plan, reset=True)
         self._real_fetch(tmp_path, monkeypatch)
 
@@ -1148,7 +1372,7 @@ class TestPrepareRegenJob:
         assert regen.song.plan is fetch_plan
 
     def test_preparing_the_same_job_again_wipes_and_fetches_again(self, tmp_path, monkeypatch):
-        fetch_plan = lr._fetch_or_prompt_plan(tmp_path / f"{YT_STEM}.mp4")
+        fetch_plan = lr.fetch_or_prompt_plan(tmp_path / f"{YT_STEM}.mp4")
         regen = self._regen(tmp_path, fetch_plan, reset=True)
         download = self._real_fetch(tmp_path, monkeypatch)
 
@@ -1199,26 +1423,75 @@ class TestPrepareRegenJob:
         assert self._prepare(regen, tmp_path) == (None, None)
 
 
-class TestPutBackLrc:
-    def test_it_restores_the_snapshot(self, tmp_path):
+class TestPutBackLyricFiles:
+    def test_it_restores_a_skip_marker_the_run_deleted(self, tmp_path):
         song = tmp_path / f"{YT_STEM}.mp4"
         lrc = lr.lrclib.lrc_path(song)
         lr.lrclib.write_skip_marker(lrc)
-        snapshot = lr.lrclib.snapshot_lrc(lrc)
+        snapshot = lr.snapshot_lyric_files(song)
         lrc.unlink()
 
-        lr.put_back_lrc(song, snapshot)
+        lr.put_back_lyric_files(snapshot)
 
         assert lr.lrclib.is_skip_marker(lrc)
 
+    def test_it_restores_a_sheet_the_run_deleted(self, tmp_path):
+        song = _touch_video(tmp_path, YT_STEM)
+        sheet = _write_sheet(tmp_path, YT_STEM, "my own words\n")
+        snapshot = lr.snapshot_lyric_files(song)
+        sheet.unlink()  # a repair to another source removed it
+
+        lr.put_back_lyric_files(snapshot)
+
+        assert sheet.read_text(encoding="utf-8") == "my own words\n"
+
+    def test_it_restores_a_sheet_the_run_overwrote(self, tmp_path):
+        song = _touch_video(tmp_path, YT_STEM)
+        sheet = _write_sheet(tmp_path, YT_STEM, "my own words\n")
+        snapshot = lr.snapshot_lyric_files(song)
+        sheet.write_text("typed in the repair box\n", encoding="utf-8")
+
+        lr.put_back_lyric_files(snapshot)
+
+        assert sheet.read_text(encoding="utf-8") == "my own words\n"
+
+    def test_it_removes_a_sheet_that_did_not_exist_before(self, tmp_path):
+        song = _touch_video(tmp_path, YT_STEM)
+        snapshot = lr.snapshot_lyric_files(song)
+        sheet = _write_sheet(tmp_path, YT_STEM)
+
+        lr.put_back_lyric_files(snapshot)
+
+        assert not sheet.exists()
+
     def test_a_failed_restore_is_logged_and_does_not_raise(self, tmp_path, monkeypatch, caplog):
+        song = _touch_video(tmp_path, YT_STEM)
+        snapshot = lr.snapshot_lyric_files(song)
         monkeypatch.setattr(
-            lr.lrclib, "restore_lrc", MagicMock(side_effect=PermissionError("locked"))
+            lr.lrclib, "restore_file", MagicMock(side_effect=PermissionError("locked"))
         )
 
-        lr.put_back_lrc(tmp_path / f"{YT_STEM}.mp4", "[lrclib_skipped:1]\n")
+        lr.put_back_lyric_files(snapshot)
 
-        assert "Could not put back the LRCLIB file" in caplog.text
+        assert "Could not put back" in caplog.text
+
+    def test_one_file_that_cannot_be_restored_does_not_stop_the_other(self, tmp_path, monkeypatch):
+        song = _touch_video(tmp_path, YT_STEM)
+        sheet = _write_sheet(tmp_path, YT_STEM, "my own words\n")
+        snapshot = lr.snapshot_lyric_files(song)
+        sheet.write_text("changed\n", encoding="utf-8")
+        real_restore = lr.lrclib.restore_file
+
+        def restore(path, text):
+            if path.suffix == ".lrc":
+                raise PermissionError("locked")
+            real_restore(path, text)
+
+        monkeypatch.setattr(lr.lrclib, "restore_file", restore)
+
+        lr.put_back_lyric_files(snapshot)
+
+        assert sheet.read_text(encoding="utf-8") == "my own words\n"
 
 
 class TestFinishRegenJob:

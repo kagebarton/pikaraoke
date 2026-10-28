@@ -30,8 +30,10 @@ from __future__ import annotations
 
 import json
 import logging
+from pathlib import Path
 
 from pikaraoke.lib.candidate_match import best_candidate_per_line, find_candidates
+from pikaraoke.lib.ffmpeg import probe_duration
 from pikaraoke.lib.genius_lyrics import clean_srt_line
 from pikaraoke.lib.token_align import _normalize_token
 
@@ -146,6 +148,42 @@ def is_usable(words: list[dict], word_seg_frac: float, media_dur: float | None) 
     if not media_dur or media_dur <= 0:
         return False
     return len(words) / (media_dur / 60.0) >= MIN_CAPTION_WPM
+
+
+def resolve_on_disk(song_path: Path) -> tuple[dict | None, float | None]:
+    """Adopt the song's on-disk YouTube ASR caption as the joint matcher's 3rd source.
+
+    Reuses the ``subtitles/<stem>.en.asr.json3`` fetched at download time: the
+    live pipeline never fetches (the regen tool is the on-demand download path).
+    Parses and quality-gates it (:func:`is_usable`). Returns ``(record, duration)``:
+    ``record`` is the bundle's ``ytasr`` entry (json3 path with word-count and wpm
+    provenance), None when there is no caption or it is gated out (the matcher
+    then runs plain two-source); ``duration`` is the probed song length, None when
+    no caption is on disk or it couldn't be probed. Never raises.
+    """
+    # youtube_dl imports this module; read its suffix when called, not at import.
+    from pikaraoke.lib.youtube_dl import ASR_JSON3_SUFFIX
+
+    media_dur: float | None = None
+    try:
+        rel = f"subtitles/{song_path.stem}{ASR_JSON3_SUFFIX}"
+        asr_path = song_path.parent / rel
+        if not asr_path.is_file():
+            logger.info("YTASR: no on-disk ASR caption — aligning two-source")
+            return None, None
+
+        media_dur = probe_duration(song_path)
+        words, word_seg_frac = parse_json3(asr_path.read_text(encoding="utf-8"))
+        if not is_usable(words, word_seg_frac, media_dur):
+            logger.info("YTASR: on-disk caption failed the quality gate — aligning two-source")
+            return None, media_dur
+
+        wpm = round(len(words) / (media_dur / 60.0), 1) if media_dur else None
+        logger.info("YTASR: adopted %d words (%s wpm) as the 3rd source", len(words), wpm)
+        return {"asr_file": rel, "n_words": len(words), "wpm": wpm}, media_dur
+    except Exception:
+        logger.exception("YTASR: resolve failed — aligning two-source")
+        return None, media_dur
 
 
 def normalize_words(words: list[dict]) -> list[dict]:

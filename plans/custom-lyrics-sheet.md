@@ -1,0 +1,445 @@
+Model: Claude Opus 5.5 (author, 2026-10-28). Executor: Claude Sonnet 5.5.
+
+# Custom lyric sheets
+
+## Goal
+
+The admin types, pastes or loads their own lyrics on **Repair lyrics** and the
+song is timed from them. The sheet is hand-crafted, so it outlives every later
+run: Regenerate, Repair to the same source, a bulk Update, Reprocess or **Reset**
+all use it again. Only a Repair to another source (caption, Genius, transcribe)
+removes it.
+
+Closes the open-issues entry "Upload hand-checked lyrics" (`plans/open-issues.md`,
+"Ruled: own branch or plan").
+
+## Decisions (Ken, 2026-10-28)
+
+1. **Input: edit box, prefilled.** A new "Custom lyrics" source on Repair opens a
+   text box holding the song's current lyrics (or blank). The admin edits or
+   pastes; an "Open file" button loads a `.txt` into the box (read in the
+   browser, nothing uploaded on its own).
+2. **Helpers: both, as for Genius.** The YouTube auto-caption (YTASR third
+   source) is used whenever its json3 is on disk and passes the quality gate.
+   Repair shows the LRCLIB step after the sheet, with matches scored against
+   the custom sheet.
+3. **Leaving custom: Repair to another source.** A successful run from any
+   non-custom plan deletes the sheet. The backup taken before the run still
+   holds it. No separate "Remove" button.
+4. **Survives Reset.** Settled by Ken before the questions: custom sheets are
+   hand-crafted.
+5. **Sequencing: wait for the other agent.** Another agent has uncommitted edits
+   to `song_repair.html`, `song_info.html`, `library_run.html`, `processing.html`
+   and `library-pages.{js,css}` in the main working tree. Start only after that
+   work is committed to `dev` (Phase 0 checks it).
+
+## Design
+
+### Where the sheet lives
+
+`<library>/lyrics/<stem>.custom.txt`, UTF-8, the admin's text verbatim with line
+ends normalized to `\n`. The file on disk is the single source of truth for
+"this song uses custom lyrics". The bundle only records `lyrics.origin:
+"custom"` so the pages can say so.
+
+Not stored in the bundle because a Reset ignores bundle provenance
+(`resolve_plan(reset=True)`) and a transcribe result deletes the bundle
+(`finish_regen_job`).
+
+Reset keeps it: `KEEP_ON_RESET` (`library_regen.py`) already keeps `lyrics/*.lrc`
+for the same reason. The backup before every run (`BACKUP_DIRS` includes
+`lyrics`) copies it.
+
+### Plan resolution: the sheet wins
+
+One function, `custom_plan(job) -> Plan | None`, in `library_regen.py`. It
+returns a plan when the sheet exists:
+
+```python
+Plan(kind="seed", lyrics_path=<sheet>, seed={"lyrics_origin": "custom"}, label="custom sheet")
+```
+
+Every path that picks a song's plan without an explicit admin choice consults
+it first:
+
+- `resolve_plan`: before the `reset` branch, so Reset uses the sheet. The CLI
+  (`scripts/regen_alignment_bundles.py`) gets this for free.
+- `reuse_plan`: first line, so Regenerate and bulk "reuse" use it.
+- `LibraryTools._regen_job`: check custom **before** the `no_lyrics` →
+  transcribe shortcut.
+- `LibraryTools._caption_plan` calls `resolve_plan(job, reset=True)` and expects
+  `fetch`. With the sheet winning inside `resolve_plan`, a caption Repair on a
+  custom song would wrongly raise "no YouTube ID". Change it to call
+  `_fetch_or_prompt_plan(job.song_path)` directly. That function is private; make
+  it public as `fetch_or_prompt_plan` (one rename, two callers).
+- Bulk run `_Run.undecided_group`: a custom song goes to `reuse` in **every**
+  mode, reset included, ahead of the `all`-mode `no_lyrics` check. Add
+  `custom: bool` to `_Entry` (set in `LibraryTools._entry` from the sheet's
+  existence) rather than re-reading disk inside `_Run`.
+
+The `.txt` suffix routes the sheet through `parse_lyric_lines` and the same
+joint route Genius lyrics take (`LyricAlignStage._load_lyrics` branches on
+suffix, not origin). The plan's `lyrics_path` is the sheet itself, with no temp
+copy. The sheet keeps the admin's stanza breaks, so the wrap-join hazard that
+forces blank-line separation on replayed bundle lines
+(`_join_wrapped_lines` docstring) is the same as for raw Genius text.
+
+### Writing and removing the sheet (run time, undone on failure)
+
+New `Plan` field `custom_text: str | None`, set only by a custom Repair.
+`apply_custom_choice(job)` runs in `prepare_lyrics` beside `apply_lrclib_choice`:
+
+- `custom_text is not None` → write the sheet (atomic write).
+- Plan is not custom-origin and the sheet exists → delete it. Only an explicit
+  admin choice can reach here with a sheet on disk: every automatic path
+  resolves to `custom_plan` first. That covers a caption, Genius or transcribe
+  Repair, and a bulk-run pick on a custom song, if Phase 0 finds one is
+  possible.
+
+A failed run must leave the sheet as it was, exactly as the `.lrc` is handled
+today. `ProcessingManager` snapshots the `.lrc` before `prepare_regen_job` and
+calls `put_back_lrc` when the run does not succeed. Do the same for the sheet.
+`lrclib.snapshot_lrc` / `restore_lrc` / `_write_text_atomic` are path-generic.
+Rename them to `snapshot_file` / `restore_file` / `write_text_atomic` (public)
+and use them for both files rather than copying them. Keep them in `lrclib.py`;
+moving modules is out of scope. Generalise `put_back_lrc` the same way (or call
+`restore_file` for the sheet beside it, whichever reads cleaner, but don't
+duplicate the never-raises wrapper).
+
+### YTASR for custom songs
+
+Today `LyricsFetchStage._resolve_ytasr` (Genius route only) gates the on-disk
+json3 and stashes `ctx.artifacts["ytasr"]` + `media_duration_s`. Extract its body
+into `ytasr.resolve_on_disk(song_path) -> tuple[dict | None, float | None]` (the
+record and the probed duration; never raises, same logs). The stage calls it and
+stashes. `prepare_lyrics` calls it for custom plans and puts the results into
+`plan.seed` before building `SeedArtifactsStage`. Resolve fresh on every run (it
+is one ffprobe and a json parse), so a caption fetched after the Repair counts
+next time.
+
+### LRCLIB for custom songs
+
+- **On Repair:** step 2 always forces an explicit pick or "None" (the Send button
+  is disabled until one is chosen). `apply_lrclib_choice` writes the record or
+  the skip marker exactly as for Genius. No automatic search for custom: it has
+  no title/artist identity to search with.
+- **On later runs:** the `.lrc` on disk (kept by Reset) is reused by the fill.
+  `backfill_lrc` stays Genius-only. A custom song with no `.lrc` simply has no
+  fill until the admin picks one on Repair.
+- **Scoring:** `LibraryTools.lrclib_candidates(song, genius_id, title, artist)`
+  becomes `lrclib_candidates(song, sheet_lines, title, artist)`. The routes
+  resolve the sheet lines: GET with `genius_id` (unchanged for Genius), or a new
+  POST to the same URL with JSON `{song, title, artist, text}` for custom (the
+  sheet can be long; keep it out of the query string).
+- **Search box prefill for custom:** the bundle's Genius title/artist when the
+  song has one, else `default_query(song)` in Title and Artist blank. Phase 0
+  finds how the Genius flow prefills these and mirrors it.
+
+### Validation (one helper, `custom_sheet_lines(text) -> list[str]`)
+
+In `library_tools.py`. It raises `RegenError` with an admin-facing message when
+`text` is:
+
+- not a string;
+- longer than 100,000 characters;
+- yields no lyric lines after `parse_lyric_lines`.
+
+It normalizes `\r\n` / `\r` to `\n`. Both the Repair POST and the LRCLIB-search
+POST call it, so the rule lives in one place. It returns the display lines (for
+scoring).
+
+### Repair backend
+
+`LibraryTools.repair(song, source, genius_id=None, lrclib_id=None,
+lrclib_skip=False, text=None)`: `source == "custom"` builds
+`Plan(kind="seed", lyrics_path=<sheet path>, seed={"lyrics_origin": "custom"},
+custom_text=<normalized text>, label="custom sheet")`, plus the LRCLIB choice.
+Extract the record lookup now inside `_genius_plan` into a shared
+`_apply_lrclib_pick(plan, lrclib_id, lrclib_skip)` so Genius and custom use one
+copy. Queue with `reset=True`, label `"Repair"`, as the other sources do.
+
+The route `POST /song_info/repair` accepts `text` (passed through; validated in
+`repair`). `_current_source` returns `"custom"` for `origin == "custom"`.
+
+### Display
+
+`SongStatus.origin` gains `"custom"`. Every place that branches on
+`origin == "genius"` to decide something LRCLIB-related or route-related must
+treat custom the same way. Each place that names the source must say "Custom
+lyrics". Known sites (Phase 0 greps for more):
+
+- `library_status._lrclib_state`: `n/a` only when origin is not genius/custom.
+- `routes/song_info.py`:
+  - `_source_name` → "Custom lyrics".
+  - `_lrclib_tile` → applies to custom; the not-applicable sub becomes "Genius
+    or custom lyrics only".
+  - `_alignment` → the fit block runs for custom too.
+  - `_route_text` → custom wording for the joint route ("Custom lyrics, timed
+    by combining …", both YTASR variants).
+  - `song_info()` → `source=`, and replace the `genius_song` flag with what the
+    template actually needs: show the LRCLIB pick row for genius **or** custom,
+    and the Genius pick row for genius only. Check `song_info.html` around the
+    `{% if genius_song %}` block.
+- History tab: `HistoryEntry` gains `origin`. `_versions` labels a custom version
+  "Custom lyrics" and keeps its LRCLIB label. Today anything without a Genius
+  identity is labelled "YouTube captions", which would be wrong for custom.
+- Bulk run: `LibraryTools._now` → `{"source": "custom"}`; `routes/library.py
+  _now_text` → "Now: custom lyrics".
+
+The Processing page needs no change. A custom Repair is an ordinary `"Repair"`
+row. **Do not edit `processing.html`.**
+
+### Repair page UI (`song_repair.html`)
+
+- Add a fourth source card, `data-source="custom"`: "Custom lyrics", with the
+  description "Type or paste the lyrics, or open a .txt file." Show the
+  `current` tag when `current_source == 'custom'`. Place it after "Genius
+  lyrics".
+- Add a `#custom-section` shown only for this source, like `#genius-section`:
+  - A `<textarea>` prefilled server-side with `custom_prefill`: the sheet's text
+    if one exists, else the bundle's `lyrics.lines` joined by `\n`, else empty.
+    Jinja autoescapes inside the element.
+  - An "Open file" button backed by a hidden
+    `<input type="file" accept=".txt,text/plain">`, read with `FileReader` as
+    UTF-8 into the box.
+  - The step is complete when the box has non-blank text. The server does the
+    real check.
+- **Go** for custom goes to step 2, like Genius. Step 2's subtitle (`#genius-pick`)
+  reads "Custom lyrics, N lines" for custom. N is a client-side count of
+  non-blank lines; mark it approximate in the code comment, or omit N if it
+  would mislead.
+- `searchLrclib` for custom POSTs `{song, title, artist, text}`; for Genius it
+  keeps the GET.
+- `#send` for custom posts `{source: 'custom', text, lrclib_id | lrclib_skip}`.
+- Reuse `libraryPages` helpers and the existing `.rp-*` classes. No new CSS file.
+  New strings go through `{{ _('…') | tojson }}` in `T`. Regenerating the
+  translation catalogue is out of scope (web plan D9).
+
+## Out of scope
+
+- Delete song / Rename leaving the sheet behind: it joins the existing open
+  issue ("Delete song and Rename leave the song's files behind"). Add
+  `.custom.txt` to that entry's list in `plans/open-issues.md` in Phase 5.
+- A fresh **download** of a song that already has a sheet (same stem) runs the
+  normal fetch path. Not handled.
+- Timed uploads (`.lrc`, `.srt`): plain text only.
+- Showing the parsed line list before sending.
+
+## Execution rules (executor)
+
+- Branch `custom_lyrics` off `dev` once Phase 0 passes. Never commit to `master`.
+- One commit per phase, tests riding with their code. Before each commit:
+  import-smoke the changed modules, run the affected test files, read
+  `git diff --cached` against the phase's intent.
+- Tests: `/home/ken/miniconda3/envs/pik/bin/python -m pytest tests/unit/<file>`
+  per phase, the full suite at the end of Phase 4. Use real `EventSystem` and
+  `PreferenceManager`. Mock subprocess, ffprobe and network.
+- Pre-commit scoped to changed files:
+  `pre-commit run --config code_quality/.pre-commit-config.yaml --files <files>`
+  (never `--all-files`: it reformats `plans/`).
+- **STOP and report** (don't improvise) if a Phase 0 fact is false, or a design
+  rule above turns out impossible as written.
+- Append each phase's outcome to the Results log below: commit hash, tests run
+  and counts, anything seen and not changed.
+
+## Phases
+
+### Phase 0: preconditions and fact checks (no code)
+
+1. `git status` on `dev` shows none of the other agent's files modified
+   (`song_repair.html`, `song_info.html`, `library_run.html`, `processing.html`,
+   `playlist.html`, `library-pages.{js,css}`, `tests/unit/test_library_routes.py`).
+   If any are still modified, STOP: the other agent hasn't committed.
+2. Confirm each of these against the code; STOP on any mismatch:
+   - `LyricAlignStage._load_lyrics` picks the route by file suffix, and nothing
+     in `lyric_align.py` gates YTASR or the LRCLIB fill on `lyrics_origin`.
+   - `library_regen._claims` / `_owner` attribute `lyrics/<stem>.custom.txt` to
+     `<stem>`, including when another song's stem is a prefix of this one.
+   - `KEEP_ON_RESET` / `_clear_dir` keep one suffix per folder (so Phase 1
+     must widen it to a tuple).
+   - Whether a bulk-run pick (`save_pick` / `_valid_pick`) can target a song in
+     the `reuse` group. Record the answer; the deletion rule covers it either
+     way.
+   - How step 2's Title/Artist boxes are prefilled for a Genius pick.
+   - Every `origin == "genius"` / `"genius"` source branch in `routes/`,
+     `library_status.py`, `library_tools.py` and the templates. List them in the
+     Results log; Phase 3 must cover each one or say why not.
+
+### Phase 1: sheet storage and plan resolution
+
+- Rename the three `lrclib` file helpers (see Design) and update callers.
+- `custom_sheet_path(song)` and `custom_plan(job)` in `library_regen.py`. Hook
+  `custom_plan` into `resolve_plan`, `reuse_plan` and `_regen_job`. Do the
+  `fetch_or_prompt_plan` rename and the `_caption_plan` change.
+- `Plan.custom_text`; `apply_custom_choice` in `prepare_lyrics`.
+- `KEEP_ON_RESET`: `lyrics` keeps `(".lrc", ".custom.txt")`.
+- `ytasr.resolve_on_disk`; `LyricsFetchStage._resolve_ytasr` delegates to it;
+  `prepare_lyrics` fills the custom seed from it.
+- `ProcessingManager`: snapshot the sheet with the `.lrc` and restore it on a
+  failed run.
+- Tests (`test_library_regen.py`, `test_library_tools.py`, the processing
+  manager tests, and the lyrics-fetch tests for the extraction):
+  - Sheet present → `resolve_plan` returns the custom plan with and without
+    `reset`.
+  - `reuse_plan` and `_regen_job` prefer it, including over `no_lyrics`.
+  - `_caption_plan` still returns `fetch` for a custom song with a YouTube id.
+  - `clear_output_folders` keeps the sheet and still removes the song's other
+    `lyrics/` files.
+  - `apply_custom_choice` writes the sheet for `custom_text` and deletes it for
+    a caption, Genius or transcribe plan.
+  - A failed regen restores the sheet, both a deleted one and an overwritten
+    one.
+  - The custom seed carries `ytasr` when the json3 passes the gate and omits it
+    when the gate fails.
+- Commit: `feat(regen): a custom lyric sheet on disk wins every plan and survives Reset`.
+
+### Phase 2: Repair and LRCLIB search backend
+
+- `custom_sheet_lines` validation.
+- `repair(..., text=)` with `source == "custom"`, and the shared
+  `_apply_lrclib_pick`.
+- `lrclib_candidates(song, sheet_lines, title, artist)`; the GET route resolves
+  Genius lines; add the POST variant for custom.
+- `POST /song_info/repair` passes `text`. `_current_source` → `"custom"`.
+- Tests (`test_library_tools.py`, `test_library_routes.py`):
+  - Custom repair queues a plan with the normalized text.
+  - Empty, whitespace-only, header-only (`[Chorus]`), non-string and over-cap
+    text is refused with a message, and nothing is queued or backed up.
+  - An LRCLIB id or skip rides on a custom repair.
+  - The POST search scores against the posted sheet.
+  - The GET search is unchanged.
+- Commit: `feat(repair): queue a custom lyric sheet, with its LRCLIB match`.
+
+### Phase 3: display everywhere
+
+- Every site from the Phase 0 list, plus `HistoryEntry.origin` and the bulk run
+  (`undecided_group`, `_Entry.custom`, `_now`, `_now_text`).
+- Tests (`test_library_status.py`, `test_library_routes.py`,
+  `test_library_tools.py`):
+  - A custom-origin bundle shows "Custom lyrics" on the tile, the source row,
+    the route text and History.
+  - The LRCLIB tile and fit block appear for custom.
+  - A bulk run in `reset` mode puts a custom song in `reuse` and builds the
+    custom plan; `all` mode does the same.
+  - `_now_text` → "Now: custom lyrics".
+- Commit: `feat(ui): Song Info and library runs name custom lyrics`.
+
+### Phase 4: Repair page UI
+
+- The source card, the editor, Open file, step 2 for custom, and the send body,
+  as in Design.
+- Route test: the repair page renders the custom card and the prefill in all
+  three cases (existing sheet, bundle lines, nothing).
+- Full test suite. The known Windows-box failures in `open-issues.md` don't
+  apply on this Linux box; report any failure verbatim.
+- Commit: `feat(ui): Repair lyrics takes a custom sheet`.
+
+### Phase 5: hand-off
+
+- Write the manual checklist below into the Results log for Ken. The executor
+  cannot run the real app with GPU alignment for him; run the app only if the
+  `run` skill applies and the GPU is free, and say which checks were actually
+  done.
+- Add `.custom.txt` to the Delete/Rename entry in `plans/open-issues.md`, and
+  strike the "Upload hand-checked lyrics" entry with the commit range.
+- Self-review on the three CLAUDE.md axes. This is multi-file core-pipeline
+  work, so flag `/code-review` as **pending** (three finder angles:
+  correctness, simplicity, robustness). Do not launch it.
+
+## Manual checks (Ken)
+
+1. Repair a Genius song → Custom lyrics: the box is prefilled with its current
+   lines. Fix one word, pick an LRCLIB match, then Regenerate. Song Info shows
+   "Custom lyrics", the LRCLIB tile, and the fixed word on playback.
+2. Open file: load a `.txt` with blank lines and `[Chorus]` headers. The run
+   drops the headers and keeps every lyric line.
+3. Reset that song with the CLI (`regen --song <it> --reset`); a bulk Reset run
+   would redo the whole library. It is still custom, the fixed word survives,
+   and `lyrics/<stem>.custom.txt` is still there. Then Regenerate it from Song
+   Info: same result.
+4. Repair it to Genius: after the run, the sheet is gone and
+   `regen_backup_*/lyrics/` holds it.
+5. Force a failed custom Repair (e.g. cancel it mid-run, or make the song file
+   unreadable). The old sheet, or no sheet, is back exactly as before.
+6. Paste only `[Verse 1]`, then Regenerate: refused with a message, and nothing
+   queued.
+
+## Results log
+
+| Phase | Commit | Tests | Notes |
+| ----- | ------ | ----- | ----- |
+| 0 | none (no code; the plan file is first committed with Phase 1) | baseline, 8 affected test files (`test_library_regen`, `_tools`, `_status`, `_routes`, `test_lrclib`, `test_lyrics_fetch`, `test_ytasr`, `test_processing_manager`): 753 passed | Passed, branch `custom_lyrics` cut from `dev` at `8b89c17`. See "Phase 0 findings" below. |
+
+### Phase 0 findings
+
+Preconditions: `git status` on `dev` showed no tracked file modified; the other
+agent's work is committed (`8b89c17`, `fcc34fb` and earlier touch the repair,
+song-info and run templates and `library-pages.js`).
+
+Confirmed against the code:
+
+- `LyricAlignStage._load_lyrics` branches on `Path(lyrics_path).suffix` only.
+  `lyric_align.py` reads `lyrics_origin` in exactly two places: the
+  `lyric_method` label (`"<origin>+joint"`) and the bundle's `lyrics.origin`.
+  Nothing gates the YTASR words (`_ytasr_words` reads `ctx.artifacts["ytasr"]`)
+  or the LRCLIB fill (`capture_method_used == "joint" and cfg.lrclib_fill`) on
+  origin.
+- `_claims` / `_owner` attribute `lyrics/<stem>.custom.txt` to `<stem>` with
+  `Song`, `Song.live`, `Song Live` and an 11-char-id stem all in the library
+  (run, not just read).
+- `KEEP_ON_RESET` is `{"subtitles": ASR_JSON3_SUFFIX, "lyrics": ".lrc"}`;
+  `_clear_dir` tests `entry.name.endswith(keep_suffix)`, and `str.endswith`
+  takes a tuple, so Phase 1 widens the value to a tuple and the type to
+  `str | tuple[str, ...] | None`.
+
+Looked up and recorded:
+
+- **Bulk-run pick on a reuse-group song:** not possible through the API.
+  `save_pick` raises "That song doesn't need a pick." unless the song's
+  undecided group is `needs_pick`, and `keep_all` has the same guard; a custom
+  song is always `reuse`. Two stale routes remain, both already the
+  open-issues "a run doesn't see a Repair made while it is open" window: a pick
+  saved before the song became custom comes back through `_load_run`
+  (`_valid_pick` doesn't look at the group), and a run opened before a custom
+  Repair keeps `custom=False`. Either queues a non-custom plan, so
+  `apply_custom_choice`'s deletion rule fires and the backup holds the sheet.
+- **How step 2's Title/Artist are prefilled for a Genius pick: they are not.**
+  `showStep(2)` sets only `#genius-pick` and renders the results; `#lrclib-title`
+  and `#lrclib-artist` are never assigned (no `.val(...)` anywhere, since
+  `4a30955`). The admin types both. The Design's rule for custom (bundle Genius
+  title and artist, else `default_query(song)` in Title, Artist blank) is
+  explicit and stands without anything to mirror, so Phase 4 implements it for
+  custom only. Genius stays blank; that is the other agent's flow and not
+  touched here.
+- **`origin == "genius"` / Genius-source branches** (Phase 3 covers each):
+  - `library_status.py`: `SongStatus.origin` comment; `_lrclib_state`
+    (`origin != "genius"` -> `n/a`); `HistoryEntry` has no origin.
+  - `routes/song_info.py`: `_source_name`; `_lrclib_tile`; `_alignment` (fit
+    block); `_route_text` (keys on `method`, not origin, so a custom song would
+    read "Genius lyrics, timed by ..."); `_versions` (`entry.genius` else "YouTube
+    captions"); `song_info()` (`source=`, `genius_song=`); `_current_source`;
+    `lrclib_search` (GET needs `genius_id`).
+  - `routes/library.py`: `_now_text`.
+  - `library_tools.py`: `repair` source branch; `lrclib_candidates`
+    (Genius-only scoring); `_genius_plan` (LRCLIB pick, to extract); `_now`;
+    `_Run.undecided_group` / `_Entry` / `_entry`; `_caption_plan` (calls
+    `resolve_plan(reset=True)`). Pick kinds (`_PICK_GROUPS`, `_valid_pick`,
+    `_choice_for`, `keep_all`) are about the bulk-run picks, not a song's
+    origin, and stay as they are.
+  - `song_info.html`: `{% if genius_song %}` wraps the Genius row, the LRCLIB
+    row and the Captions row together; Phase 3 splits it.
+  - `library_run.html` / `pick_pass.html`: `genius` is a pick kind or run group,
+    not an origin. A custom song shows in `reuse` with the server's `now` text.
+  - `processing.html` `lyricLabel` (not editable here): a `custom+joint`
+    `lyric_method` matches no prefix and falls through to the raw string, so the
+    Processing row will say `custom+joint`. Seen, not changed (rule: don't edit
+    `processing.html`).
+- **Other `lrclib` file-helper callers** the rename must reach:
+  `processing_manager._run_regen` and `scripts/regen_alignment_bundles.py`
+  (`snapshot_lrc` + `put_back_lrc`); `tests/unit/test_lrclib.py`,
+  `test_library_regen.py` and `test_processing_manager.py` (they patch
+  `restore_lrc` / `snapshot_lrc`).
+- **Seen, not changed:** a library with a song whose stem is literally
+  `<other stem>.custom` makes `_owner` give `<other stem>.custom.txt` to that
+  song, not to `<other stem>`. The same limit already holds for every suffix
+  file (`Song.en.srt` against a song named `Song.en`); no fix here.

@@ -331,7 +331,7 @@ def write_lrc(path: Path, record: dict) -> None:
         header.append(f"[lrclib_id:{record['id']}]")
 
     body = record.get("syncedLyrics") or ""
-    _write_text_atomic(path, "".join(f"{line}\n" for line in header) + body)
+    write_text_atomic(path, "".join(f"{line}\n" for line in header) + body)
 
 
 def write_skip_marker(path: Path) -> None:
@@ -340,7 +340,7 @@ def write_skip_marker(path: Path) -> None:
     ``ensure_lrc`` reuses any file on disk, so the marker stops the automatic
     fetch; it has no stamped lines, so the fill finds no cues.
     """
-    _write_text_atomic(path, f"[{SKIP_TAG}:1]\n")
+    write_text_atomic(path, f"[{SKIP_TAG}:1]\n")
 
 
 def is_skip_marker(path: Path) -> bool:
@@ -356,7 +356,7 @@ def is_skip_marker(path: Path) -> bool:
     return any(line.strip().startswith(f"[{SKIP_TAG}:") for line in text.splitlines())
 
 
-def snapshot_lrc(path: Path) -> str | None:
+def snapshot_file(path: Path) -> str | None:
     """The text of ``path``, or None when there is no such file.
 
     Any other OSError raises: a regen takes this before it changes anything,
@@ -368,18 +368,19 @@ def snapshot_lrc(path: Path) -> str | None:
         return None
 
 
-def restore_lrc(path: Path, snapshot: str | None) -> None:
-    """Put ``path`` back as :func:`snapshot_lrc` found it (None: no file)."""
+def restore_file(path: Path, snapshot: str | None) -> None:
+    """Put ``path`` back as :func:`snapshot_file` found it (None: no file)."""
     if snapshot is None:
         path.unlink(missing_ok=True)
     else:
-        _write_text_atomic(path, snapshot)
+        write_text_atomic(path, snapshot)
 
 
-def _write_text_atomic(path: Path, text: str) -> None:
+def write_text_atomic(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     # Sibling tmp + rename: an interrupted write must never leave a truncated
-    # .lrc for ensure_lrc's is_file() check to trust as a cache forever.
+    # file for a reader to trust (an .lrc ensure_lrc's is_file() check would
+    # keep as a cache forever, or a half-written custom sheet).
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(text, encoding="utf-8")
     tmp.replace(path)

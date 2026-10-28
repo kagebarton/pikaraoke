@@ -11,7 +11,13 @@ from pikaraoke.lib import lrclib
 from pikaraoke.lib import processing_manager as pm
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.genius import GeniusUnavailable
-from pikaraoke.lib.library_regen import Plan, RegenError, RegenJob, SongJob
+from pikaraoke.lib.library_regen import (
+    Plan,
+    RegenError,
+    RegenJob,
+    SongJob,
+    custom_sheet_path,
+)
 from pikaraoke.lib.pipeline_tracker import PipelineTracker
 from pikaraoke.lib.processing_manager import (
     PreparePtyStage,
@@ -1723,7 +1729,9 @@ class TestLrcPutBackWhenTheRegenDoesNotFinish:
     ):
         regen, _ = self._regen_with_lrc(tmp_path, self.OLD)
         mock_orchestrator.join.side_effect = RuntimeError("whisper fell over")
-        monkeypatch.setattr(lrclib, "restore_lrc", MagicMock(side_effect=PermissionError("locked")))
+        monkeypatch.setattr(
+            lrclib, "restore_file", MagicMock(side_effect=PermissionError("locked"))
+        )
         errors = []
         events.on("processing_error", errors.append)
 
@@ -1736,7 +1744,7 @@ class TestLrcPutBackWhenTheRegenDoesNotFinish:
     ):
         regen, _ = self._regen_with_lrc(tmp_path, self.OLD)
         monkeypatch.setattr(
-            lrclib, "snapshot_lrc", MagicMock(side_effect=PermissionError("locked"))
+            lrclib, "snapshot_file", MagicMock(side_effect=PermissionError("locked"))
         )
         errors = []
         events.on("processing_error", errors.append)
@@ -1744,6 +1752,108 @@ class TestLrcPutBackWhenTheRegenDoesNotFinish:
         self._run(events, preferences, mock_orchestrator, tmp_path, regen)
 
         assert [e["error"] for e in errors] == ["locked"]
+        prepared.assert_not_called()
+
+
+class TestSheetPutBackWhenTheRegenDoesNotFinish:
+    """A custom lyric sheet is hand-made: setup writes or deletes it (a repair), and a
+    regen that doesn't finish must leave it exactly as it was, like the ``.lrc``."""
+
+    OLD = "the admin's own words\n"
+    NEW = "typed in the repair box\n"
+
+    def _regen_with_sheet(self, tmp_path, before):
+        regen = _regen_job(tmp_path, kind="sidecar")
+        sheet = custom_sheet_path(regen.song.song_path)
+        if before is not None:
+            sheet.parent.mkdir(exist_ok=True)
+            sheet.write_text(before, encoding="utf-8")
+        return regen, sheet
+
+    def _run(self, events, preferences, orchestrator, tmp_path, regen):
+        _run_regen(
+            _runnable_manager(events, preferences, orchestrator, tmp_path, MagicMock()), regen
+        )
+
+    def test_a_sheet_deleted_by_a_repair_that_then_fails_comes_back(
+        self, events, preferences, mock_orchestrator, tmp_path, prepared
+    ):
+        regen, sheet = self._regen_with_sheet(tmp_path, self.OLD)
+
+        def delete_for_the_new_source(regen_job, genius, config, lyrics_dir):
+            sheet.unlink()
+            return None, None
+
+        prepared.side_effect = delete_for_the_new_source
+        mock_orchestrator.join.side_effect = RuntimeError("whisper fell over")
+
+        self._run(events, preferences, mock_orchestrator, tmp_path, regen)
+
+        assert sheet.read_text(encoding="utf-8") == self.OLD
+
+    def test_a_sheet_overwritten_by_a_repair_that_is_cancelled_comes_back(
+        self, events, preferences, mock_orchestrator, tmp_path, prepared
+    ):
+        regen, sheet = self._regen_with_sheet(tmp_path, self.OLD)
+
+        def write_the_new_text(regen_job, genius, config, lyrics_dir):
+            sheet.write_text(self.NEW, encoding="utf-8")
+            return None, None
+
+        prepared.side_effect = write_the_new_text
+        mock_orchestrator.join.side_effect = PipelineCancelled()
+
+        self._run(events, preferences, mock_orchestrator, tmp_path, regen)
+
+        assert sheet.read_text(encoding="utf-8") == self.OLD
+
+    def test_a_first_sheet_written_by_a_repair_that_fails_is_removed(
+        self, events, preferences, mock_orchestrator, tmp_path, prepared
+    ):
+        regen, sheet = self._regen_with_sheet(tmp_path, None)
+
+        def write_the_new_text(regen_job, genius, config, lyrics_dir):
+            sheet.parent.mkdir(exist_ok=True)
+            sheet.write_text(self.NEW, encoding="utf-8")
+            return None, None
+
+        prepared.side_effect = write_the_new_text
+        mock_orchestrator.join.side_effect = RuntimeError("alignment failed")
+
+        self._run(events, preferences, mock_orchestrator, tmp_path, regen)
+
+        assert not sheet.exists()
+
+    def test_a_successful_run_keeps_the_new_sheet(
+        self, events, preferences, mock_orchestrator, tmp_path, prepared
+    ):
+        regen, sheet = self._regen_with_sheet(tmp_path, self.OLD)
+
+        def write_the_new_text(regen_job, genius, config, lyrics_dir):
+            sheet.write_text(self.NEW, encoding="utf-8")
+            return None, None
+
+        prepared.side_effect = write_the_new_text
+        ctx = MagicMock(spec=StageContext)
+        ctx.artifacts = {}
+        mock_orchestrator.join.return_value = ctx
+
+        self._run(events, preferences, mock_orchestrator, tmp_path, regen)
+
+        assert sheet.read_text(encoding="utf-8") == self.NEW
+
+    def test_a_sheet_that_cannot_be_read_fails_the_job_before_anything_changes(
+        self, events, preferences, mock_orchestrator, tmp_path, prepared
+    ):
+        regen, sheet = self._regen_with_sheet(tmp_path, self.OLD)
+        sheet.unlink()
+        sheet.mkdir()  # a directory where the sheet should be
+        errors = []
+        events.on("processing_error", errors.append)
+
+        self._run(events, preferences, mock_orchestrator, tmp_path, regen)
+
+        assert len(errors) == 1
         prepared.assert_not_called()
 
 
