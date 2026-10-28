@@ -42,15 +42,25 @@ Before calling a change done, review your own diff on three axes:
 - **Simplicity** — simplest thing that works; no dead code, duplicate logic, speculative abstraction, or unrequested scope; reuse helpers; single source of truth
 - **Robustness** — see Error Handling; plus no races/TOCTOU, safe edge/metachar inputs, cross-platform paths via `get_temp_directory()`
 
-`/code-review` is never launched unprompted. On commits that add or rewrite logic (skip pure delete/move/rename): if the change is simple enough to verify in one read-through, say the self-review above covers it; if it's complex — multi-file, new algorithm, core pipeline/concurrency — track it as pending and flag at the next clean boundary that a review is due. Run it only when asked. When running it, use exactly 3 finder angles, one per axis above, not the tool's default spread. `/code-review ultra` is user-triggered only, never launched for any reason.
+On commits that add or rewrite logic (skip pure delete/move/rename): if the change is simple enough to verify in one read-through, say the self-review above covers it; if it's complex — multi-file, new algorithm, core pipeline/concurrency — track it as pending for the next checkpoint.
+
+## Design Proposals
+
+When Ken proposes a larger feature (anything that would get a plan or span several commits — not tweaks or fixes), ask clarifying questions before writing a plan or code: scope, success criteria, tradeoffs not yet weighed, and anything in the code that contradicts the proposal. Push back when the proposal looks wrong. If nothing is genuinely open, say so in one line and list the assumptions instead of inventing questions.
+
+## Checkpoints
+
+At a commit with its plan-log row written, or a phase/GATE boundary (never mid-commit), say which of these apply, each with a ready-to-paste prompt (≤10 lines, paths and hashes rather than prose):
+
+- **`/compact`** — flag it.
+- **Review due** — the exact `/code-review` line: commit range, files in scope, and exactly 3 finder angles, one per Self-Review axis (not the tool's default spread). Never launch it unprompted; run it only when asked. `/code-review ultra` is user-triggered only, never launched for any reason.
+- **Model handoff** (e.g. Sonnet handing a GATE read to Opus, Opus escalating to Fable) — branch + HEAD, the plan file and section, what's done (don't redo it), the next step, and where to stop.
 
 ## Communication
 
 - Plain language. Lead with the consequence — what is decided, blocked, or the user's call. Keep a number only when the number *is* the finding. Explain a mechanism by what it does, not what it is called.
 - Vocabulary from `plans/` (gate letters, phase and rung numbers, route and probe names) is shared language — use it directly. Code-level detail is out by default: no recomputed arithmetic, per-song tables, constant names, or metric decompositions. That lives in the plan's Results log; the user asks when he wants it.
 - Chat tone only. Plan entries keep raw tables, full provenance, and no verdicts (`plans/PROGRAM.md`). Simplify the relay, never the record.
-- Flag good moments to `/compact`: after a commit with its plan-log row written, and at phase/GATE boundaries. Never mid-commit. Same checkpoints as the pending-review flag above.
-- When a session hands off to another model (e.g. asking the user to `/model` switch, such as Sonnet handing a GATE read to Opus, or Opus escalating to Fable), give a concrete handoff prompt for the next session to use — don't just say "hand this off." Point at the artifacts/state it needs and skip instructions to redo already-finished work.
 
 ## Commits
 
@@ -59,21 +69,19 @@ Before calling a change done, review your own diff on three axes:
 
 ## Environment
 
-Conda env `pik` (not uv). Run tests: `/home/ken/miniconda3/envs/pik/bin/python -m pytest`. Run pre-commit: `pre-commit run --config code_quality/.pre-commit-config.yaml --all-files`. Tools: Black (100 char), isort, pycln, pylint, mdformat. Never commit to `master` directly.
-
-Exclude `plans/` and `static/` from pre-commit: these contain working docs and generated assets that don't need linting.
+Conda env `pik` (not uv). Run tests: `/home/ken/miniconda3/envs/pik/bin/python -m pytest`. Run pre-commit on the files you changed: `pre-commit run --config code_quality/.pre-commit-config.yaml --files <files>` (`--all-files` rewrites untouched upstream Python via pycln/isort). Tools: Black (100 char), isort, pycln, pylint, mdformat. Never commit to `master` directly.
 
 ## Plans
 
-Store in `plans/` with descriptive kebab-case names (e.g., `subtitle-delay-cleanup.md`). Include model at top: `Model: Claude Sonnet 4.6`.
+Store in `plans/` with descriptive kebab-case names (e.g., `subtitle-delay-cleanup.md`). Name the executing model at top, e.g. `Model: Claude Sonnet 5.5`.
 
 ## Pull Requests
 
 Include test plan: minimal checklist for manual verification.
 
-## Fork Maintenance
+## Codebase Ownership
 
-Avoid modifying upstream files. New features go in new files. If upstream must change, make smallest possible change (hook, import, or flag). Match upstream architecture. Don't restructure upstream for style alone.
+Forked from vicwomg/pikaraoke; last upstream sync 2026-03-22, no plan to merge from it again. Edit any file when that's the clean change. Keep large new subsystems in their own modules for size and clarity, not merge cost.
 
 ## Rules
 
