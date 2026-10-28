@@ -10,10 +10,10 @@ the ruling, rather than deleting it. Plans live on their own branches, so a
 
 Sources gathered on 2026-10-26:
 
-- `plans/web-library-tools.md` on `web_library_tools` (its "Not fixed" sections
+- `plans/web-library-tools.md` on tag `archive/web_library_tools` (its "Not fixed" sections
   3.1i, 5.1f, 6.1e, 7.1f, 8.1f, 8.2e, the "Seen, not changed" notes in the
   Results log, D9, and the Phase 7 / Phase 8 check rows).
-- `plans/library-tools.md` on `library_tools` (the 2026-10-20 real-world run).
+- `plans/library-tools.md` on tag `archive/web_library_tools` (the 2026-10-20 real-world run).
 
 ## Decide at landing
 
@@ -38,7 +38,7 @@ Sources gathered on 2026-10-26:
   and a rename leaves them under the old name. On `dev` today. The sheet costs
   more than the rest: a rename silently drops the song's custom lyrics, and a
   re-download under the same name goes back to the old sheet at its next regen
-  (`custom_lyrics` code review, row 6). Also: a renamed song on the needs-a-pick list stays listed under its old path,
+  (`custom_lyrics` code review, row 6, on tag `archive/custom_lyrics`). Also: a renamed song on the needs-a-pick list stays listed under its old path,
   and a pick of it fails each time. Ken, 2026-10-23: small branch off `dev`.
   Record: web plan, D9 and 8.1f.
 - ~~**Upload hand-checked lyrics** as the lyric source of a Repair, Regenerate or
