@@ -528,6 +528,7 @@ class LibraryTools:
             job.plan = self._transcribe_plan()
         else:
             raise RegenError("Unknown lyric source.")
+        job.replaces_custom = source != "custom"
         self._queue(job, reset=True, label="Repair")
 
     def open_run(self, mode: str) -> None:
@@ -1024,12 +1025,9 @@ class LibraryTools:
         bundle, a karaoke file) transcribes again.
         """
         job = self._song_job(song_path)
-        job.plan = custom_plan(job)
-        if job.plan is None:
-            if song_status(job.song_path).category == "no_lyrics":
-                job.plan = self._transcribe_plan()
-            else:
-                job.plan = reuse_plan(job)
+        job.plan = reuse_plan(job)
+        if job.plan is None and song_status(job.song_path).category == "no_lyrics":
+            job.plan = self._transcribe_plan()
         return job if job.plan is not None else None
 
     @staticmethod
@@ -1112,7 +1110,8 @@ class LibraryTools:
     def _run_job(self, run: _Run, path: str, entry: _Entry) -> SongJob | None:
         """The song's job with the plan its group calls for (D5); None for a skipped song.
 
-        The plan comes from the song's files as they are now. Raises
+        The plan comes from the song's files as they are now, so a custom sheet
+        saved since the run opened wins over the song's group. Raises
         :class:`RegenError` when a song the preview said could reuse its lyrics
         no longer can.
         """
@@ -1120,6 +1119,9 @@ class LibraryTools:
         if group == "skip":
             return None
         job = self._song_job(path)
+        job.plan = custom_plan(job)
+        if job.plan is not None:
+            return job
         if group == "reuse":
             job.plan = reuse_plan(job)
             if job.plan is None:
