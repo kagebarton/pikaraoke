@@ -2,7 +2,7 @@
 
 Guards the contract between the search route and search.html. The route enriches
 each YouTube result into a 6-tuple (title, url, id, channel, duration,
-existing_path — the last from songs.find_by_id), but the master-era template
+existing_path — the library file carrying that ID), but the master-era template
 unpacked only 5 names in its results loop, raising ValueError (too many values
 to unpack) -> 500 the moment a search returned results. The bare /search page
 rendered fine, so a test that actually submits a query is required to catch it.
@@ -74,9 +74,8 @@ def client(app):
 
 def _mock_karaoke():
     k = MagicMock()
-    k.download_path = "/songs"
-    # No local match -> existing_path is None (the 6th tuple element).
-    k.song_manager.songs.find_by_id.return_value = None
+    # Empty library -> existing_path is None (the 6th tuple element).
+    k.song_manager.songs.__iter__.side_effect = lambda: iter([])
     return k
 
 
@@ -123,11 +122,9 @@ def _result(title: str, video_id: str) -> list[str]:
     return [title, f"https://youtu.be/{video_id}", video_id, "Some Channel", "3:00"]
 
 
-def _karaoke_with_library(paths: list[str], by_id: dict[str, str] | None = None):
-    """Mock Karaoke whose library holds ``paths``; ``by_id`` maps video id -> its file."""
+def _karaoke_with_library(paths: list[str]):
     k = _mock_karaoke()
     k.song_manager.songs.__iter__.side_effect = lambda: iter(paths)
-    k.song_manager.songs.find_by_id.side_effect = lambda _dir, video_id: (by_id or {}).get(video_id)
     return k
 
 
@@ -166,7 +163,7 @@ def test_no_note_when_nothing_in_the_library_looks_like_a_result(mock_get, clien
 def test_no_note_for_a_song_a_result_already_matches_by_id(mock_get, client):
     """That row already says "Add to Queue"; the note would repeat it."""
     results = [_result("Justin Timberlake - Mirrors (Lyrics)", "uuZE_IRwLNI")]
-    k = _karaoke_with_library([_MIRRORS], by_id={"uuZE_IRwLNI": _MIRRORS})
+    k = _karaoke_with_library([_MIRRORS])
 
     body = _search_body(client, mock_get, results, k)
 
@@ -183,12 +180,14 @@ def test_no_note_for_a_song_a_result_already_matches_by_id(mock_get, client):
     ids=["bracketed-id", "subfolder"],
 )
 @patch("pikaraoke.routes.search.get_karaoke_instance")
-def test_no_note_for_a_file_find_by_id_misses(mock_get, client, path):
-    """find_by_id sees only top-level ---ID files; the note must still skip this result's file."""
+def test_the_row_not_the_note_offers_a_file_find_by_id_misses(mock_get, client, path):
+    """find_by_id sees only top-level ---ID files; the row must still find this one."""
     results = [_result("Justin Timberlake - Mirrors (Lyrics)", "uuZE_IRwLNI")]
-    k = _karaoke_with_library([path])  # find_by_id finds nothing
 
-    assert "Already in the library:" not in _search_body(client, mock_get, results, k)
+    body = _search_body(client, mock_get, results, _karaoke_with_library([path]))
+
+    assert "Already in the library:" not in body
+    assert f'data-file-path="{path}"' in body  # the row's own button
 
 
 @patch("pikaraoke.routes.search.get_karaoke_instance")

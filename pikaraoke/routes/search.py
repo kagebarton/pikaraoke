@@ -55,8 +55,7 @@ def _library_copies(songs: Iterable[str], search_results: list[tuple]) -> list[s
     """Library songs that look like a result found under another YouTube ID.
 
     A song that carries a result's own ID is left out: that row says "Add to
-    Queue" itself. The ID is read from the file name, not looked up with
-    ``find_by_id``, which misses ``Title [ID].mp4`` files and subfolders.
+    Queue" itself.
     """
     library = SongIndex.from_songs(songs)
     result_ids = {result[2] for result in search_results}
@@ -77,9 +76,13 @@ def search():
     search_string = request.args.get("search_string")
     if search_string:
         raw_results = get_search_results(search_string)
-        search_results = [
-            (*r, k.song_manager.songs.find_by_id(k.download_path, r[2])) for r in raw_results
-        ]
+        # Read from the song list, not find_by_id, which misses "Title [ID].mp4" and subfolders.
+        library_ids = {
+            video_id: path
+            for path in k.song_manager.songs
+            if (video_id := extract_youtube_id(path))
+        }
+        search_results = [(*r, library_ids.get(r[2])) for r in raw_results]
         library_copies = _library_copies(k.song_manager.songs, search_results)
     else:
         search_string = None
