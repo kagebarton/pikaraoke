@@ -179,6 +179,20 @@ def custom_sheet_lines(text: object) -> list[str]:
     return lines
 
 
+@dataclass(frozen=True)
+class MovieSliceCheck:
+    """How pasted movie subtitles checked against a song's clip.
+
+    ``regenerate_helps``: the song has a bundle, so a Regenerate keeps the words it
+    hears; a transcribed song's run keeps none (plans/open-issues.md). It decides
+    which way a ``no_reference`` answer is worded, for the preview and the Repair
+    alike.
+    """
+
+    fit: SliceFit
+    regenerate_helps: bool
+
+
 def _slice_refusal(fit: SliceFit, regenerate_helps: bool) -> str:
     """Why pasted movie subtitles can't time the song, in the admin's words.
 
@@ -206,7 +220,7 @@ def _slice_refusal(fit: SliceFit, regenerate_helps: bool) -> str:
         return (
             "Can't check yet. This song has no heard words yet, so there is nothing to "
             "compare the subtitles with. Regenerate the song from Song info first, "
-            "then try again."
+            "then come back and check."
         )
     if not fit.total:
         return "Doesn't fit. These subtitles have no lines to check."
@@ -534,29 +548,31 @@ class LibraryTools:
             logger.warning("Could not read the auto-caption of %s: %s", song.name, e)
             return None
 
-    def check_movie_slice(self, song_path: str, text: object) -> SliceFit:
+    def check_movie_slice(self, song_path: str, text: object) -> MovieSliceCheck:
         """Fit pasted movie subtitles to the song's clip, against the words already heard in it.
 
         The one fit the repair runs, so what it saves is never a number the page
         sent. Reads the bundle's transcribe words, the on-disk YouTube
         auto-caption and the clip's length; queues no work. A refusal is an
-        answer, not an error: the returned :class:`SliceFit` says it. Raises
-        :class:`RegenError`, with a message for the admin, for a song that is not
-        a video, text that is not text or is too long, or a clip whose length
-        can't be read.
+        answer, not an error: the returned check's :class:`SliceFit` says it.
+        Raises :class:`RegenError`, with a message for the admin, for a song that
+        is not a video, text that is not text or is too long, or a clip whose
+        length can't be read.
         """
         if not self.is_video(song_path):
             raise RegenError("Lyrics tools work on video songs only.")
         return self._fit_movie_slice(self._song_job(song_path), text)
 
-    def _fit_movie_slice(self, job: SongJob, text: object) -> SliceFit:
+    def _fit_movie_slice(self, job: SongJob, text: object) -> MovieSliceCheck:
         """:meth:`check_movie_slice` for a song already checked and read."""
         sheet = _pasted_text(text, "subtitles", MOVIE_SUBTITLES_MAX_CHARS)
         length = media_duration(job)
         if not length:
             raise RegenError("Could not read this clip's length.")
         streams = heard_streams(job.bundle, self._asr_on_disk(job.song_path))
-        return fit_slice(sheet, streams, length)
+        return MovieSliceCheck(
+            fit_slice(sheet, streams, length), regenerate_helps=job.bundle is not None
+        )
 
     def genius_sheet_lines(self, genius_id: int) -> list[str]:
         """A Genius song's lyric lines, as they display, for scoring an LRCLIB search.
@@ -1124,10 +1140,10 @@ class LibraryTools:
 
     def _movie_repair_plan(self, job: SongJob, text: object) -> Plan:
         """The plan that saves the pasted subtitles, clip-timed, as the song's sheet; a fit only."""
-        fit = self._fit_movie_slice(job, text)
-        if fit.status != FITS:
-            raise RegenError(_slice_refusal(fit, regenerate_helps=job.bundle is not None))
-        return movie_sheet_plan(job.song_path, fit.srt)
+        check = self._fit_movie_slice(job, text)
+        if check.fit.status != FITS:
+            raise RegenError(_slice_refusal(check.fit, check.regenerate_helps))
+        return movie_sheet_plan(job.song_path, check.fit.srt)
 
     def _apply_lrclib_pick(self, plan: Plan, lrclib_id: int | None, lrclib_skip: bool) -> None:
         """Put the admin's LRCLIB choice on ``plan``: no match, or the record ``lrclib_id``."""

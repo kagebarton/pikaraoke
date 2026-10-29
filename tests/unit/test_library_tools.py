@@ -47,6 +47,17 @@ from pikaraoke.lib.library_tools import (
 )
 from pikaraoke.lib.song_list import SongList
 from pikaraoke.lib.song_manager import SongManager
+from tests.unit.movie_slices import (
+    CLIP_S,
+    MOVIE_OFFSET_S,
+    SLICE_LINES,
+    asr_json3,
+    clip_starts,
+    heard_words,
+    movie_slice,
+    slice_clip_start,
+    slice_line,
+)
 
 GENIUS = {"id": 7, "title": "Song", "artist": "Artist"}
 
@@ -716,68 +727,6 @@ class TestCustomSheetLines:
         assert custom_sheet_lines(text)
 
 
-# A synthetic movie slice for the movie repair: 12 lines of five distinct pseudo-words, sung in
-# a 200 s clip from 10 s on, 5 s apart; the movie's own times are an hour later.
-SLICE_LINES = 12
-CLIP_S = 200.0
-MOVIE_OFFSET_S = 3600.0
-
-
-def slice_line(k: int) -> list[str]:
-    return [f"w{chr(97 + (k * 5 + i) // 26)}{chr(97 + (k * 5 + i) % 26)}x" for i in range(5)]
-
-
-def slice_clip_start(k: int) -> float:
-    return 10.0 + 5.0 * k
-
-
-def heard_words(lines=range(SLICE_LINES)) -> list[dict]:
-    """The bundle's transcribe words for the given slice lines."""
-    return [
-        {
-            "word": word,
-            "start": slice_clip_start(k) + 0.6 * i,
-            "end": slice_clip_start(k) + 0.6 * i + 0.5,
-        }
-        for k in lines
-        for i, word in enumerate(slice_line(k))
-    ]
-
-
-def movie_slice(offset=lambda k: MOVIE_OFFSET_S, lines=range(SLICE_LINES)) -> str:
-    """The lines as movie subtitles; ``offset(k)`` is how far line ``k`` sits after the clip."""
-    return srt.compose(
-        [
-            srt.Subtitle(
-                index=n,
-                start=timedelta(seconds=slice_clip_start(k) + offset(k)),
-                end=timedelta(seconds=slice_clip_start(k) + offset(k) + 3.5),
-                content=" ".join(slice_line(k)),
-            )
-            for n, k in enumerate(lines, start=1)
-        ]
-    )
-
-
-def clip_starts(srt_text: str) -> list[float]:
-    return [round(cue.start.total_seconds(), 2) for cue in srt.parse(srt_text)]
-
-
-def asr_json3(lines=range(SLICE_LINES)) -> str:
-    """The same words as a YouTube auto-caption on disk."""
-    events = [
-        {
-            "tStartMs": int(slice_clip_start(k) * 1000),
-            "segs": [
-                {"utf8": word} if i == 0 else {"utf8": f" {word}", "tOffsetMs": i * 600}
-                for i, word in enumerate(slice_line(k))
-            ],
-        }
-        for k in lines
-    ]
-    return json.dumps({"events": events})
-
-
 class TestMovieRepair:
     """Repair with movie subtitles: the fit runs again here and only a fit is queued."""
 
@@ -938,9 +887,9 @@ class TestMovieRepair:
         asr.write_bytes("caf\xe9".encode("latin-1"))
         tools, _ = make_tools(tmp_path, [str(video)])
 
-        fit = tools.check_movie_slice(str(video), movie_slice())
+        check = tools.check_movie_slice(str(video), movie_slice())
 
-        assert fit.status == "no_reference"
+        assert check.fit.status == "no_reference"
         assert "Could not read the auto-caption" in caplog.text
 
     def test_the_check_takes_video_songs_only(self, tmp_path):
@@ -954,19 +903,19 @@ class TestMovieRepair:
     def test_the_check_answers_a_refusal_and_does_not_raise(self, tmp_path, song):
         tools, processing = make_tools(tmp_path, [str(song)])
 
-        fit = tools.check_movie_slice(str(song), "just some words, not subtitles")
+        check = tools.check_movie_slice(str(song), "just some words, not subtitles")
 
-        assert fit.status == "not_srt"
+        assert check.fit.status == "not_srt"
         processing.enqueue_regen.assert_not_called()
 
     def test_the_check_returns_the_fit_the_repair_would_save(self, tmp_path, song):
         tools, processing = make_tools(tmp_path, [str(song)])
 
-        fit = tools.check_movie_slice(str(song), movie_slice())
+        check = tools.check_movie_slice(str(song), movie_slice())
         tools.repair(str(song), "movie", text=movie_slice())
 
-        assert fit.status == "fits"
-        assert processing.enqueue_regen.call_args.args[0].song.plan.custom_text == fit.srt
+        assert check.fit.status == "fits"
+        assert processing.enqueue_regen.call_args.args[0].song.plan.custom_text == check.fit.srt
 
 
 class TestCustomStart:
