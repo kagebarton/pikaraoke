@@ -1045,6 +1045,154 @@ class TestRepairPage:
         assert "$.ajax" not in handler and "FormData" not in code
         assert 'accept=".txt,text/plain"' in html
 
+    def movie_box(self, html: str) -> str:
+        """The text the movie-subtitles box starts with, as the page's markup holds it."""
+        start = html.index('<textarea id="movie-text"')
+        start = html.index(">", start) + 1
+        return html[start : html.index("</textarea>", start)]
+
+    def test_the_movie_card_follows_the_custom_card_and_says_what_it_does(self, env):
+        html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())))
+
+        assert html.index('data-source="custom"') < html.index('data-source="movie"')
+        assert html.index('data-source="movie"') < html.index('data-source="transcribe"')
+        assert "Time the song from the movie's own subtitles." in card(html, "movie")
+        assert "rp-tag" not in card(html, "movie")
+
+    def test_a_movie_subtitles_song_is_current_on_the_movie_card_alone(self, env):
+        song = env.add_song("A---aaaaaaaaaaa.mp4", movie_bundle())
+        write_sheet(env.folder, "A---aaaaaaaaaaa", suffix=".custom.srt")
+
+        html = text(self.page(env, song))
+
+        assert "rp-tag" in card(html, "movie")
+        assert all("rp-tag" not in card(html, s) for s in ("caption", "genius", "custom"))
+        assert "rp-tag" not in card(html, "transcribe")
+
+    def test_the_movie_box_starts_with_the_saved_slice_escaped_as_text(self, env):
+        song = env.add_song("A---aaaaaaaaaaa.mp4", movie_bundle())
+        write_sheet(
+            env.folder, "A---aaaaaaaaaaa", "Tom & Jerry </textarea><b>x</b>\n", ".custom.srt"
+        )
+
+        html = text(self.page(env, song))
+
+        assert self.movie_box(html) == "Tom &amp; Jerry &lt;/textarea&gt;&lt;b&gt;x&lt;/b&gt;\n"
+
+    def test_the_movie_box_starts_empty_without_a_saved_slice_and_the_other_box_ignores_one(
+        self, env
+    ):
+        bundle = movie_bundle(("Line one", "Line two"))
+        song = env.add_song("A---aaaaaaaaaaa.mp4", bundle)
+        assert self.movie_box(text(self.page(env, song))) == ""
+
+        write_sheet(
+            env.folder, "A---aaaaaaaaaaa", "1\n00:00:01,000 --> 00:00:02,000\nx\n", ".custom.srt"
+        )
+        html = text(self.page(env, song))
+
+        assert self.box(html) == "Line one\nLine two"  # the custom box is not filled from the SRT
+
+    def test_the_movie_section_has_its_note_buttons_and_an_answer_area(self, env):
+        html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())))
+        assert '<div id="movie-section" class="is-hidden">' in html  # until the source is chosen
+        section = html[
+            html.index('id="movie-section"') : html.index('<div class="go-row rp-buttons">')
+        ]
+
+        assert "Paste the stretch of the movie's SRT subtitles that this clip covers." in section
+        assert (
+            section.count("info-tip-btn") == 1
+        )  # the others are built when an answer carries a tip
+        assert 'id="movie-check"' in section and "disabled>Check fit<" in section
+        assert 'role="status" aria-live="polite"' in section
+        assert 'accept=".srt,application/x-subrip,text/plain"' in section
+        for tone in ("is-good", "is-bad", "is-info"):
+            assert f"rp-icon {tone}" in section
+        assert "Finding where these subtitles sit in the clip" in section
+        assert "Go to Song info" in section
+
+    def test_choosing_the_source_shows_its_section_and_a_saved_slice_preselects_it(self, env):
+        code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
+        choose = code[code.index("function chooseSource") : code.index("function refreshStep1")]
+
+        assert "$('#movie-section').toggleClass('is-hidden', source !== 'movie');" in choose
+        assert "$.inArray(CURRENT_SOURCE, ['genius', 'custom', 'movie', 'transcribe'])" in code
+
+    def test_the_answer_list_overrides_the_bulma_content_list_rules(self, env):
+        """The page sits in a Bulma .content, whose ul rules add bullets and 1em margins."""
+        html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())))
+
+        assert ".rp-card ul.rp-card-lines { list-style: none; margin: 0; padding: 0;" in html
+
+    def test_check_fit_posts_the_song_and_the_boxs_text_to_the_preview_route(self, env):
+        html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())))
+        code = script(html)
+        click = code[code.index("$('#movie-check').on('click'") : code.index("$('#movie-open')")]
+
+        assert "subtitleFit: " in code and "/song_info/subtitle_fit" in html
+        assert "method: 'POST'" in click and "url: URLS.subtitleFit" in click
+        assert "JSON.stringify({ song: SONG, text: movieText() })" in click
+
+    def test_a_late_answer_for_old_text_is_dropped(self, env):
+        code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
+        click = code[code.index("$('#movie-check').on('click'") : code.index("$('#movie-open')")]
+
+        assert "var seq = ++state.movieSeq;" in click
+        assert click.count("if (seq !== state.movieSeq) return;") == 2  # done and fail
+
+    def test_any_edit_clears_the_answer_and_turns_regenerate_off(self, env):
+        code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
+        start = code.index("$('#movie-text').on('input'")
+        handler = code[start : code.index("});", start)]
+
+        assert "state.movieSeq++;" in handler and "state.movieCard = null;" in handler
+        assert "state.movieChecking = false;" in handler
+        assert "if (state.movieCard !== null) state.movieEdited = true;" in handler
+        assert "renderMovie();" in handler and "refreshStep1();" in handler
+
+    def test_regenerate_is_on_only_for_text_that_passed_and_sends_the_text(self, env):
+        code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
+        step1 = code[code.index("function refreshStep1") : code.index("// The LRCLIB matches")]
+        click = code.index("$('#go').on('click'")
+        go = code[click : code.index("/* ---", click)]
+
+        assert "state.source === 'movie' && state.movieCard !== null" in step1
+        assert "state.movieCard.status === 'fits'" in step1
+        assert "send({ source: 'movie', text: movieText() })" in go
+        assert "return state.source === 'genius' || state.source === 'custom';" in code  # no step 2
+
+    def test_an_opened_subtitle_file_is_decoded_as_utf8_then_windows_1252_and_not_uploaded(
+        self, env
+    ):
+        code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
+        start = code.index("$('#movie-file').on('change'")
+        handler = code[start : code.index("\n    });", start)]
+
+        assert "readAsArrayBuffer(file)" in handler
+        assert "new TextDecoder('utf-8', { fatal: true })" in handler
+        assert "new TextDecoder('windows-1252')" in handler
+        assert handler.index("utf-8") < handler.index("windows-1252")
+        assert "$('#movie-text').val(text).trigger('input')" in handler
+        assert "$.ajax" not in handler and "FormData" not in code
+
+    def test_the_saved_slice_is_named_in_the_box_hint_only_while_the_box_still_holds_it(self, env):
+        code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
+        idle = code[code.index("function movieIdleText") : code.index("function infoTip")]
+
+        assert "var movieSaved = CURRENT_SOURCE === 'movie' ? movieText() : null;" in code
+        assert idle.index("T.movieEmpty") < idle.index("T.movieEdited") < idle.index("T.movieSaved")
+        assert "movieText() === movieSaved" in idle
+
+    def test_an_answer_is_shown_as_text_with_its_tips_behind_an_i_button(self, env):
+        code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
+        shown = code[code.index("function showMovieCard") : code.index("function renderMovie")]
+
+        assert "$('#movie-head').text(card.head)" in shown
+        assert "el('li', null, line.text)" in shown
+        assert "infoTip(card.tip)" in shown and "infoTip(line.tip)" in shown
+        assert ".html(" not in shown
+
     def test_text_from_genius_and_lrclib_goes_in_as_text_never_as_markup(self, env):
         code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
         code += shared_script()

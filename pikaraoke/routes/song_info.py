@@ -480,6 +480,7 @@ def repair_page():
         current_source=_current_source(status),
         current_genius_id=(status.genius or {}).get("id"),
         custom_prefill=start["text"],
+        movie_prefill=start["movie"],
         custom_terms={"title": start["title"], "artist": start["artist"]},
     )
 
