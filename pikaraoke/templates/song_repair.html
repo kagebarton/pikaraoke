@@ -127,7 +127,7 @@
       candidates: [],    // LRCLIB's matches for the picked Genius song
       videoLength: null, // "video is m:ss", from the LRCLIB search
       movieCard: null,   // Check fit's answer for the box's current text; any edit clears it
-      movieChecking: false,
+      movieChecking: false, // a check is on the server; Check fit stays off until it answers, so none stack
       movieEdited: false, // an edit cleared an answer that had been shown
       movieSeq: 0,       // a check still loading when the text changes is for the old text
       geniusSeq: 0,
@@ -322,10 +322,10 @@
     }
 
     // Any edit clears the answer: Regenerate stays off until the text as it now stands is checked.
+    // An edit during a check leaves it running and drops its answer when it comes.
     $('#movie-text').on('input', function () {
       state.movieSeq++;
-      state.movieChecking = false;
-      if (state.movieCard !== null) state.movieEdited = true;
+      if (state.movieCard !== null || state.movieChecking) state.movieEdited = true;
       state.movieCard = null;
       renderMovie();
       refreshStep1();
@@ -344,17 +344,17 @@
         dataType: 'json',
         data: JSON.stringify({ song: SONG, text: movieText() })
       }).done(function (card) {
-        if (seq !== state.movieSeq) return;
         state.movieChecking = false;
-        state.movieEdited = false;
-        state.movieCard = card;
-        showMovieCard(card);
+        if (seq === state.movieSeq) {
+          state.movieEdited = false;
+          state.movieCard = card;
+          showMovieCard(card);
+        }
         renderMovie();
         refreshStep1();
       }).fail(function (xhr) {
-        if (seq !== state.movieSeq) return;
         state.movieChecking = false;
-        showNotification(errorOf(xhr, T.fitFailed), 'is-danger');
+        if (seq === state.movieSeq) showNotification(errorOf(xhr, T.fitFailed), 'is-danger');
         renderMovie();
         refreshStep1();
       });
@@ -364,17 +364,25 @@
 
     // Read here in the browser, nothing is uploaded. Subtitle files are UTF-8 or, often, Windows-1252,
     // so the bytes are decoded strictly as UTF-8 (which drops a BOM) and as Windows-1252 if that fails.
+    // A UTF-16 file (Subtitle Edit, Windows tools) always starts with its BOM.
     $('#movie-file').on('change', function () {
       var file = this.files[0];
       this.value = '';  // so the same file can be opened again
       if (!file) return;
       var reader = new FileReader();
       reader.onload = function () {
+        var bytes = new Uint8Array(reader.result);
+        var utf16 = bytes[0] === 0xFF && bytes[1] === 0xFE ? 'utf-16le'
+          : bytes[0] === 0xFE && bytes[1] === 0xFF ? 'utf-16be' : null;
         var text;
-        try {
-          text = new TextDecoder('utf-8', { fatal: true }).decode(reader.result);
-        } catch (e) {
-          text = new TextDecoder('windows-1252').decode(reader.result);
+        if (utf16) {
+          text = new TextDecoder(utf16).decode(bytes);
+        } else {
+          try {
+            text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+          } catch (e) {
+            text = new TextDecoder('windows-1252').decode(bytes);
+          }
         }
         $('#movie-text').val(text).trigger('input');
       };

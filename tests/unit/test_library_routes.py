@@ -1137,7 +1137,9 @@ class TestRepairPage:
         click = code[code.index("$('#movie-check').on('click'") : code.index("$('#movie-open')")]
 
         assert "var seq = ++state.movieSeq;" in click
-        assert click.count("if (seq !== state.movieSeq) return;") == 2  # done and fail
+        assert click.count("if (seq === state.movieSeq)") == 2  # done and fail
+        # Either way the check is over, so Check fit comes back on.
+        assert click.count("state.movieChecking = false;") == 2
 
     def test_any_edit_clears_the_answer_and_turns_regenerate_off(self, env):
         code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
@@ -1145,8 +1147,12 @@ class TestRepairPage:
         handler = code[start : code.index("});", start)]
 
         assert "state.movieSeq++;" in handler and "state.movieCard = null;" in handler
-        assert "state.movieChecking = false;" in handler
-        assert "if (state.movieCard !== null) state.movieEdited = true;" in handler
+        # A check still on the server keeps Check fit off, so checks never stack.
+        assert "state.movieChecking = false;" not in handler
+        assert (
+            "if (state.movieCard !== null || state.movieChecking) state.movieEdited = true;"
+            in handler
+        )
         assert "renderMovie();" in handler and "refreshStep1();" in handler
 
     def test_regenerate_is_on_only_for_text_that_passed_and_sends_the_text(self, env):
@@ -1160,7 +1166,7 @@ class TestRepairPage:
         assert "send({ source: 'movie', text: movieText() })" in go
         assert "return state.source === 'genius' || state.source === 'custom';" in code  # no step 2
 
-    def test_an_opened_subtitle_file_is_decoded_as_utf8_then_windows_1252_and_not_uploaded(
+    def test_an_opened_subtitle_file_is_decoded_as_utf16_utf8_or_windows_1252_not_uploaded(
         self, env
     ):
         code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
@@ -1168,6 +1174,9 @@ class TestRepairPage:
         handler = code[start : code.index("\n    });", start)]
 
         assert "readAsArrayBuffer(file)" in handler
+        assert "bytes[0] === 0xFF && bytes[1] === 0xFE ? 'utf-16le'" in handler
+        assert "bytes[0] === 0xFE && bytes[1] === 0xFF ? 'utf-16be'" in handler
+        assert "new TextDecoder(utf16)" in handler
         assert "new TextDecoder('utf-8', { fatal: true })" in handler
         assert "new TextDecoder('windows-1252')" in handler
         assert handler.index("utf-8") < handler.index("windows-1252")
