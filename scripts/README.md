@@ -222,10 +222,10 @@ filtering is also out of scope.
 Runs the movie-subtitle slice fit (`pikaraoke/lib/srt_slice_fit.py`) over every
 `<name>.srt` in `<folder>/movie_subs/` against the named song's heard words on
 disk, and prints a markdown table. A slice is named by a substring of its
-song's filename; the script stops if that matches no video or several.
-`--cross` adds each slice against every other slice's song, the wrong-song
-cases a fit must refuse. The slices are copyrighted text: keep them out of the
-repo.
+song's filename; every video that matches gets its own rows (a lyric video and
+the film clip, say), and the script stops only if none does. `--cross` adds each
+slice against every video of every other slice, the wrong-song cases a fit must
+refuse. The slices are copyrighted text: keep them out of the repo.
 
 ```bash
 python scripts/movie_srt_fit_report.py [--folder PATH] [--slices PATH] [--cross]

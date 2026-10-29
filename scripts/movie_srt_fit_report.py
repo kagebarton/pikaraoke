@@ -2,20 +2,22 @@
 """Run the movie-subtitle slice fit over every slice in a folder, as a table.
 
 Each ``<name>.srt`` in the slices folder is the stretch of a movie's subtitles
-that one library song covers. The name is resolved to a song by
-case-insensitive substring of the video's filename (stop on none or several),
-then the fit runs against that song's heard words on disk: the alignment
-bundle's ``transcribe_words`` and the ``subtitles/<stem>.en.asr.json3``
-caption, each on its own and then both together. One row per run, as markdown,
-so the table pastes into a plan's results log as is.
+that one library song covers. The name is resolved to every video whose filename
+contains it, case-insensitive (stop on none; a song can have a lyric video and
+the film clip). Then the fit runs against each video's heard words on disk: the
+alignment bundle's ``transcribe_words`` and the ``subtitles/<stem>.en.asr.json3``
+caption, each on its own and then both together; a video with no heard words
+gets its ``no_reference`` row. One row per run, as markdown, so the table pastes
+into a plan's results log as is.
 
 The verdict column uses ``MIN_MATCHED_SHARE`` and the spread limit of
 ``offset_mad_against_cues`` as they stand in the code; "slope" is the free
 speed (``free_speed``) over the order-only anchors, printed whichever speed the
 fit kept.
 
-With ``--cross``, a second table runs each slice against every *other* slice's
-song (transcribe words): the wrong-song cases a matched-share floor must refuse.
+With ``--cross``, a second table runs each slice against every video of every
+*other* slice (transcribe words): the wrong-song cases a matched-share floor
+must refuse. All of a slice's own videos are left out of its runs.
 
 The slices are copyrighted subtitle text: keep them out of the repo.
 
@@ -58,19 +60,16 @@ CROSS_HEADER = (
 )
 
 
-def resolve_song(folder: Path, name: str) -> Path:
-    """The one video in ``folder`` whose filename contains ``name``; exits otherwise."""
+def resolve_songs(folder: Path, name: str) -> list[Path]:
+    """Every video in ``folder`` whose filename contains ``name``; exits on none."""
     matches = sorted(
         p
         for p in folder.iterdir()
         if p.suffix.lower() in VIDEO_EXTS and name.lower() in p.name.lower()
     )
-    if len(matches) != 1:
-        sys.exit(
-            f"Slice {name!r} matches {len(matches)} videos in {folder}: "
-            + (", ".join(p.name for p in matches) or "none")
-        )
-    return matches[0]
+    if not matches:
+        sys.exit(f"Slice {name!r} matches no video in {folder}")
+    return matches
 
 
 def free_slope(srt_text: str, words: list[dict]) -> float | None:
@@ -105,15 +104,14 @@ class Song:
         return self.path.stem.split("---")[0][:40]
 
 
-def load_song(folder: Path, name: str) -> Song:
-    song = resolve_song(folder, name)
-    bundle = read_bundle(folder, song.stem)
-    asr_path = folder / "subtitles" / f"{song.stem}.en.asr.json3"
+def load_song(folder: Path, video: Path) -> Song:
+    bundle = read_bundle(folder, video.stem)
+    asr_path = folder / "subtitles" / f"{video.stem}.en.asr.json3"
     asr_text = asr_path.read_text(encoding="utf-8") if asr_path.is_file() else None
-    length = (bundle or {}).get("media_duration_s") or probe_duration(song)
+    length = (bundle or {}).get("media_duration_s") or probe_duration(video)
     if not length:
-        sys.exit(f"{song.name}: no clip length (bundle has none and ffprobe failed)")
-    return Song(song, heard_streams(bundle, asr_text), length)
+        sys.exit(f"{video.name}: no clip length (bundle has none and ffprobe failed)")
+    return Song(video, heard_streams(bundle, asr_text), length)
 
 
 def report(song: Song, srt_text: str) -> list[str]:
@@ -135,11 +133,13 @@ def report(song: Song, srt_text: str) -> list[str]:
     return rows
 
 
-def cross_report(slices: dict[str, str], songs: dict[str, Song]) -> list[str]:
-    """Each slice against every other slice's song: the cases that must be refused."""
+def cross_report(slices: dict[str, str], songs: dict[str, list[Song]]) -> list[str]:
+    """Each slice against every video of every other slice: the cases that must be refused."""
     rows = [CROSS_HEADER]
+    videos = [(name, song) for name, group in songs.items() for song in group]
     for slice_name, srt_text in slices.items():
-        for other_name, other in songs.items():
+        title = " + ".join(song.title for song in songs[slice_name])
+        for other_name, other in videos:
             words = other.streams.get(TRANSCRIBE)
             if other_name == slice_name or not words:
                 continue
@@ -147,7 +147,7 @@ def cross_report(slices: dict[str, str], songs: dict[str, Song]) -> list[str]:
             status = fit.status + (f"/{fit.reason}" if fit.reason else "")
             spread = "" if fit.spread_s is None else f"{fit.spread_s:.3f}"
             rows.append(
-                f"| {songs[slice_name].title} | {other.title} | {status} | "
+                f"| {title} | {other.title} | {status} | "
                 f"{fit.matched}/{fit.total} | {spread} | {fit.anchors} |"
             )
     return rows
@@ -163,10 +163,14 @@ def main() -> None:
     )
     args = parser.parse_args()
     slices = {p.stem: p.read_text(encoding="utf-8-sig") for p in sorted(args.slices.glob("*.srt"))}
-    songs = {name: load_song(args.folder, name) for name in slices}
+    songs = {
+        name: [load_song(args.folder, video) for video in resolve_songs(args.folder, name)]
+        for name in slices
+    }
     print(HEADER)
     for name, srt_text in slices.items():
-        print("\n".join(report(songs[name], srt_text)))
+        for song in songs[name]:
+            print("\n".join(report(song, srt_text)))
     if args.cross:
         print("\n" + "\n".join(cross_report(slices, songs)))
 
