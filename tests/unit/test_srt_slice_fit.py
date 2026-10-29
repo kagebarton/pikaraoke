@@ -7,7 +7,6 @@ import srt
 
 from pikaraoke.lib import srt_slice_fit
 from pikaraoke.lib.lrclib import LRC_LAST_LINE_HOLD_S
-from pikaraoke.lib.srt_cues import cue_spans_from_srt
 from pikaraoke.lib.srt_slice_fit import (
     ASR,
     DISAGREE,
@@ -476,7 +475,7 @@ class TestFlaggedLines:
         assert result.status == FITS
         assert (result.mistimed, result.unheard) == ((7,), ())
 
-    def test_flagged_lines_number_the_lines_the_pipeline_loads_not_the_cues(self):
+    def test_flagged_lines_number_the_cleaned_lines_not_the_cues(self):
         """A music-note cue cleans to nothing, so it is no line and shifts none of the numbers."""
         song = _song(12)
         lrc = _lrc(song) + f"{_stamp(_clip_start(5) + 2)} ♪\n"
@@ -485,10 +484,24 @@ class TestFlaggedLines:
         result = _fit_lrc(lrc, _heard(sung))
 
         assert result.status == FITS
-        texts, _ = cue_spans_from_srt(result.srt)
-        assert len(texts) == 12
+        assert len(result.lines) == 12
         assert result.unheard == (8,)
-        assert texts[8] == song[8]
+        assert result.lines[8] == (song[8], _clip_start(8))
+
+    def test_the_flags_name_their_lines_when_the_clip_alone_is_typed_in_capitals(self):
+        """Capitals are judged over the cues present: over the whole match a label-only cue is
+        no line, over the clip's cues alone it is one. The flags keep the whole match's lines."""
+        song = _song()
+        caps = {k: text.upper() if k <= 20 else text for k, text in song.items()}
+        lrc = _lrc(caps) + f"{_stamp(_clip_start(5) + 2)} MAN:\n"
+        sung = {k: text for k, text in song.items() if k != 8}
+
+        result = _fit_lrc(lrc, _heard(sung), length=_clip_start(20) + 1)
+
+        assert result.status == FITS
+        assert len(result.lines) == result.total == 21
+        assert result.unheard == (8,)
+        assert result.lines[8][0] == caps[8]
 
     def test_cues_outside_the_clip_are_not_numbered(self):
         """The corrected sheet drops lines past the clip's end; the flags count what is left."""
@@ -500,7 +513,7 @@ class TestFlaggedLines:
         assert result.status == FITS
         assert result.dropped == 9
         assert result.unheard == (2,)
-        assert len(cue_spans_from_srt(result.srt)[0]) == result.total == 21
+        assert len(result.lines) == result.total == 21
 
     def test_lines_that_end_before_the_clip_begins_are_not_numbered(self):
         """A video that starts mid-song: the LRC's earlier lines fall off the front of the clip."""
@@ -515,11 +528,11 @@ class TestFlaggedLines:
         assert result.status == FITS
         assert abs(result.shift_s + lead) < 0.05
         assert result.dropped == 1  # the line wholly before the clip
-        texts, _ = cue_spans_from_srt(result.srt)
-        assert len(texts) == result.total == 32
+        assert len(result.lines) == result.total == 32
         # The two before lines that overlap the clip's start and the unheard line 5.
         assert result.unheard == (0, 1, 7)
-        assert texts[7] == song[5]
+        assert result.lines[7][0] == song[5]
+        assert result.lines[0][1] == 0.0  # clamped to the clip's start, as the sheet is
 
     def test_a_refused_fit_flags_nothing(self):
         song = _song()
