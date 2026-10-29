@@ -87,6 +87,12 @@ that queued them is already closed; 7.1f).
   found nothing.~~ The repair page now searches LRCLIB's all-fields `q=` from one
   box, on `lrclib_search_box`; the pipeline stays field-scoped. Every word must
   still appear somewhere, so a misspelt word still finds nothing.
+- **The Processing page's main buttons are off-palette.** Check playlist is
+  `is-link` (Bulma's blue); every other page, the library pages included, uses
+  `is-primary` for its main action. The same page has four more `is-link`
+  buttons: the run banner's Continue, Update stale's Preview, and a job row's
+  Retry and Pick lyrics (`processing.html`). Fix: `is-primary` on all five.
+  Seen by Ken 2026-10-29; not ruled.
 - **A Reset removes a captioned song's `subtitles/<song>.en.vtt` and writes no
   new one.** The run uses the `.srt`, which stays; nothing found in the app
   reads the `.vtt` later. Not ruled. Record: web plan, Phase 7 checks row.
