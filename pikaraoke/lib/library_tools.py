@@ -38,6 +38,7 @@ from pikaraoke.lib.library_links import (
     read_playlist,
 )
 from pikaraoke.lib.library_regen import (
+    CUSTOM_SRT_SUFFIX,
     CUSTOM_TEXT_SUFFIX,
     VIDEO_EXTS,
     CaptionCheck,
@@ -503,12 +504,13 @@ class LibraryTools:
         return check_caption(job)
 
     def custom_start(self, song_path: str) -> dict:
-        """What the repair page's custom-lyrics box and LRCLIB search start with.
+        """What the repair page's boxes and LRCLIB search start with.
 
-        ``text``: the song's custom sheet if it has one, else the lines of its
-        current lyrics, else nothing. ``query``: the title and artist of the Genius
-        song the bundle records, cleaned as the pipeline's LRCLIB search cleans
-        them, else the song's file name.
+        ``text``: the custom-lyrics box, the song's typed sheet if it has one, else the
+        lines of its current lyrics, else nothing. ``movie``: the movie-subtitles box,
+        the saved slice (already clip-timed) if the song has one, else nothing.
+        ``query``: the title and artist of the Genius song the bundle records, cleaned
+        as the pipeline's LRCLIB search cleans them, else the song's file name.
         """
         job = self._song_job(song_path)
         lyrics = (job.bundle or {}).get("lyrics") or {}
@@ -517,22 +519,21 @@ class LibraryTools:
             genius.get("title") or default_query(job.song_path), genius.get("artist") or ""
         )
         return {
-            "text": self._sheet_on_disk(job.song_path) or "\n".join(lyrics.get("lines") or []),
+            "text": self._sheet_on_disk(job.song_path, CUSTOM_TEXT_SUFFIX)
+            or "\n".join(lyrics.get("lines") or []),
+            "movie": self._sheet_on_disk(job.song_path, CUSTOM_SRT_SUFFIX),
             "query": " ".join(term for term in terms if term),
         }
 
     @staticmethod
-    def _sheet_on_disk(song: Path) -> str:
-        """The song's typed custom sheet, or "" when it has none or it can't be read.
-
-        A movie-subtitles sheet is not one: it is an SRT, not lyric lines.
-        """
+    def _sheet_on_disk(song: Path, suffix: str) -> str:
+        """The song's custom sheet of one kind (``suffix``), or "" when it has none or it can't be read."""
         try:
-            return custom_sheet_file(song, CUSTOM_TEXT_SUFFIX).read_text(encoding="utf-8")
+            return custom_sheet_file(song, suffix).read_text(encoding="utf-8")
         except FileNotFoundError:
             return ""
         except (OSError, UnicodeDecodeError) as e:
-            logger.warning("Could not read the custom lyric sheet of %s: %s", song.name, e)
+            logger.warning("Could not read the %s sheet of %s: %s", suffix, song.name, e)
             return ""
 
     @staticmethod

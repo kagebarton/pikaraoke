@@ -944,6 +944,37 @@ class TestCustomStart:
 
         assert self.start(tmp_path, song)["text"] == "one\ntwo"
 
+    def test_the_movie_box_starts_with_the_saved_slice(self, tmp_path, song):
+        genius_bundle(tmp_path, song.stem)
+        write_movie_sheet(tmp_path, song.stem, MOVIE_SRT)
+
+        start = self.start(tmp_path, song)
+
+        assert start["movie"] == MOVIE_SRT
+        assert start["text"] == "one\ntwo"  # the typed box is not filled from it
+
+    def test_both_boxes_start_from_their_own_sheet_when_both_are_on_disk(self, tmp_path, song):
+        write_sheet(tmp_path, song.stem, "my own words\n")
+        write_movie_sheet(tmp_path, song.stem, MOVIE_SRT)
+
+        start = self.start(tmp_path, song)
+
+        assert (start["text"], start["movie"]) == ("my own words\n", MOVIE_SRT)
+
+    def test_without_a_movie_sheet_the_movie_box_starts_empty(self, tmp_path, song):
+        genius_bundle(tmp_path, song.stem)
+        write_sheet(tmp_path, song.stem, "my own words\n")
+
+        assert self.start(tmp_path, song)["movie"] == ""
+
+    def test_a_movie_sheet_that_cannot_be_read_starts_the_box_empty_and_says_so(
+        self, tmp_path, song, caplog
+    ):
+        write_movie_sheet(tmp_path, song.stem).write_bytes("caf\xe9\n".encode("latin-1"))
+
+        assert self.start(tmp_path, song)["movie"] == ""
+        assert "Could not read the .custom.srt sheet" in caplog.text
+
     def test_without_a_sheet_it_is_the_lines_of_the_current_lyrics(self, tmp_path, song):
         genius_bundle(tmp_path, song.stem)
 
@@ -960,7 +991,7 @@ class TestCustomStart:
         sheet.write_bytes("caf\xe9\n".encode("latin-1"))
 
         assert self.start(tmp_path, song)["text"] == "one\ntwo"
-        assert "Could not read the custom lyric sheet" in caplog.text
+        assert "Could not read the .custom.txt sheet" in caplog.text
 
     def test_the_search_starts_from_the_genius_song_the_bundle_records(self, tmp_path, song):
         genius_bundle(tmp_path, song.stem)

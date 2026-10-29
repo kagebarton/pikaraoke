@@ -37,6 +37,28 @@
   .rp-link:disabled { opacity: 0.5; cursor: not-allowed; }
   .rp-text { display: block; width: 100%; min-height: 260px; margin-top: 6px; padding: 10px 12px; box-sizing: border-box; resize: vertical; font: inherit; font-size: 14px; line-height: 1.4; border-radius: 8px; border: 1px solid var(--dark-border); background: var(--dark-bg-secondary); color: var(--dark-text-light); }
   .rp-preview { max-height: 240px; overflow: auto; white-space: pre-wrap; word-break: break-word; font-size: 13px; background: var(--dark-bg-secondary); border-radius: 8px; padding: 10px 12px; margin: 0 0 8px; color: var(--dark-text-light); }
+  .rp-sec.has-tip { justify-content: flex-start; align-items: center; gap: 4px; }
+  #movie-text { min-height: 210px; }
+  .rp-check { display: block; width: 100%; min-height: 44px; padding: 0 16px; border-radius: 6px; border: 1px solid var(--dark-link); background: transparent; color: var(--dark-link); font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
+  .rp-check:disabled { opacity: 0.5; cursor: not-allowed; }
+  #movie-result { margin-top: 10px; }
+  .rp-idle { padding: 12px; border-radius: 8px; border: 1px dashed var(--dark-border); color: var(--dark-text-muted); font-size: 13px; }
+  .rp-card { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 8px; border: 1px solid var(--dark-border); background: var(--dark-bg-secondary); }
+  .rp-card-head { display: flex; gap: 8px; align-items: center; font-weight: 700; }
+  .rp-card-head svg { flex: none; }
+  .rp-card .rp-icon { display: none; }
+  .rp-card[data-tone="good"] .rp-card-head { color: var(--dark-success); }
+  .rp-card[data-tone="good"] .rp-icon.is-good { display: block; }
+  .rp-card[data-tone="bad"] .rp-card-head { color: var(--dark-warning); }
+  .rp-card[data-tone="bad"] .rp-icon.is-bad { display: block; }
+  .rp-card[data-tone="info"] .rp-card-head { color: var(--dark-info); }
+  .rp-card[data-tone="info"] .rp-icon.is-info { display: block; }
+  .rp-card-head .info-tip, .rp-card-lines .info-tip { font-weight: 400; }
+  /* The page sits in a Bulma .content, whose ul rules (bullets, margins) a plain class would lose to; this
+     matches their specificity and comes after them. */
+  .rp-card ul.rp-card-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+  .rp-card ul.rp-card-lines li { margin: 0; }
+  .rp-card-link { display: inline-flex; align-items: center; min-height: 36px; font-size: 14px; }
   .go-row.rp-buttons { gap: 10px; margin-top: 14px; }
   .go-row.rp-buttons .info-tip-btn { margin: 0 -6px; }
   .rp-buttons .button { min-height: 44px; font-weight: 700; }
@@ -59,7 +81,8 @@
       geniusLyrics: {{ url_for('song_info.genius_lyrics') | tojson }},
       lrclibSearch: {{ url_for('song_info.lrclib_search') | tojson }},
       repair: {{ url_for('song_info.repair') | tojson }},
-      songInfo: {{ url_for('song_info.song_info', song=song) | tojson }}
+      songInfo: {{ url_for('song_info.song_info', song=song) | tojson }},
+      subtitleFit: {{ url_for('song_info.subtitle_fit') | tojson }}
     };
     var T = {
       checking: {{ _('Checking the caption…') | tojson }},
@@ -86,15 +109,27 @@
       skipLrclib: {{ _('Skip LRCLIB. Guessed lines stay guessed.') | tojson }},
       nextLrclib: {{ _('Next: LRCLIB match') | tojson }},
       regenerate: {{ _('Regenerate song') | tojson }},
-      queueFailed: {{ _('Could not queue the regeneration.') | tojson }}
+      queueFailed: {{ _('Could not queue the regeneration.') | tojson }},
+      checkFit: {{ _('Check fit') | tojson }},
+      movieChecking: {{ _('Checking…') | tojson }},
+      movieEmpty: {{ _('Paste subtitles or open an .srt file to start.') | tojson }},
+      movieUnchecked: {{ _('Not checked yet. Check fit before you regenerate.') | tojson }},
+      movieEdited: {{ _('The subtitles changed since the last check. Check fit again to turn Regenerate back on.') | tojson }},
+      movieSaved: {{ _('This is the saved slice. Check fit confirms it, then Regenerate turns on.') | tojson }},
+      fitFailed: {{ _('Could not check the subtitles.') | tojson }},
+      moreInfo: {{ _('More info') | tojson }}
     };
 
     var state = {
-      source: null,      // 'caption' | 'genius' | 'custom' | 'transcribe'
+      source: null,      // 'caption' | 'genius' | 'custom' | 'movie' | 'transcribe'
       genius: null,      // the picked Genius result {id, title, artist}
       lrclib: null,      // 'none' | the picked candidate's id
       candidates: [],    // LRCLIB's matches for the picked Genius song
       videoLength: null, // "video is m:ss", from the LRCLIB search
+      movieCard: null,   // Check fit's answer for the box's current text; any edit clears it
+      movieChecking: false,
+      movieEdited: false, // an edit cleared an answer that had been shown
+      movieSeq: 0,       // a check still loading when the text changes is for the old text
       geniusSeq: 0,
       lrclibSeq: 0,
       sending: false
@@ -154,6 +189,7 @@
       sourceCard(source).addClass('is-selected').find('input').prop('checked', true);
       $('#genius-section').toggleClass('is-hidden', source !== 'genius');
       $('#custom-section').toggleClass('is-hidden', source !== 'custom');
+      $('#movie-section').toggleClass('is-hidden', source !== 'movie');
       $('#step1-note').toggleClass('is-hidden', hasLrclibStep());
       $('#go').text(hasLrclibStep() ? T.nextLrclib : T.regenerate);
       refreshStep1();
@@ -162,7 +198,8 @@
     function refreshStep1() {
       var complete = state.source === 'caption' || state.source === 'transcribe' ||
         (state.source === 'genius' && state.genius !== null) ||
-        (state.source === 'custom' && $.trim(customText()) !== '');  // the server checks the lyrics
+        (state.source === 'custom' && $.trim(customText()) !== '') ||  // the server checks the lyrics
+        (state.source === 'movie' && state.movieCard !== null && state.movieCard.status === 'fits');
       $('#go').prop('disabled', !complete || state.sending);
       $('#genius-preview-toggle').prop('disabled', state.genius === null);
     }
@@ -236,6 +273,115 @@
       reader.readAsText(file, 'UTF-8');
     });
 
+    /* ------------------------------------------------------ movie subtitles */
+
+    function movieText() {
+      return $('#movie-text').val();
+    }
+
+    // The saved slice the box starts with, so a box still holding it can say so.
+    var movieSaved = CURRENT_SOURCE === 'movie' ? movieText() : null;
+
+    function movieIdleText() {
+      if ($.trim(movieText()) === '') return T.movieEmpty;
+      if (state.movieEdited) return T.movieEdited;
+      if (movieSaved !== null && movieText() === movieSaved) return T.movieSaved;
+      return T.movieUnchecked;
+    }
+
+    function infoTip(note) {
+      var button = el('button', 'info-tip-btn')
+        .attr({ type: 'button', 'aria-label': T.moreInfo, 'aria-expanded': 'false' })
+        .append(el('i', 'icon icon-info-circled-1').attr('aria-hidden', 'true'));
+      return el('span', 'info-tip').append(button, el('span', 'info-tip-text', note).attr('role', 'tooltip'));
+    }
+
+    // Check fit's answer: a headline (its tip behind an (i)), detail lines, maybe a link.
+    function showMovieCard(card) {
+      $('#movie-card').attr('data-tone', card.tone);
+      $('#movie-head').text(card.head);
+      $('#movie-head-row .info-tip').remove();
+      if (card.tip) $('#movie-head-row').append(infoTip(card.tip));
+      var list = $('#movie-lines').empty();
+      $.each(card.lines, function (i, line) {
+        var item = el('li', null, line.text);
+        if (line.tip) item.append(infoTip(line.tip));
+        list.append(item);
+      });
+      $('#movie-info-link').toggleClass('is-hidden', !card.song_info_link);
+    }
+
+    function renderMovie() {
+      var empty = $.trim(movieText()) === '';
+      $('#movie-check').text(state.movieChecking ? T.movieChecking : T.checkFit)
+        .prop('disabled', empty || state.movieChecking);
+      $('#movie-idle').toggleClass('is-hidden', state.movieChecking || state.movieCard !== null)
+        .text(movieIdleText());
+      $('#movie-checking').toggleClass('is-hidden', !state.movieChecking);
+      $('#movie-card').toggleClass('is-hidden', state.movieCard === null);
+    }
+
+    // Any edit clears the answer: Regenerate stays off until the text as it now stands is checked.
+    $('#movie-text').on('input', function () {
+      state.movieSeq++;
+      state.movieChecking = false;
+      if (state.movieCard !== null) state.movieEdited = true;
+      state.movieCard = null;
+      renderMovie();
+      refreshStep1();
+    });
+
+    $('#movie-check').on('click', function () {
+      var seq = ++state.movieSeq;
+      state.movieChecking = true;
+      state.movieCard = null;
+      renderMovie();
+      refreshStep1();
+      $.ajax({
+        url: URLS.subtitleFit,
+        method: 'POST',
+        contentType: 'application/json',
+        dataType: 'json',
+        data: JSON.stringify({ song: SONG, text: movieText() })
+      }).done(function (card) {
+        if (seq !== state.movieSeq) return;
+        state.movieChecking = false;
+        state.movieEdited = false;
+        state.movieCard = card;
+        showMovieCard(card);
+        renderMovie();
+        refreshStep1();
+      }).fail(function (xhr) {
+        if (seq !== state.movieSeq) return;
+        state.movieChecking = false;
+        showNotification(errorOf(xhr, T.fitFailed), 'is-danger');
+        renderMovie();
+        refreshStep1();
+      });
+    });
+
+    $('#movie-open').on('click', function () { $('#movie-file')[0].click(); });
+
+    // Read here in the browser, nothing is uploaded. Subtitle files are UTF-8 or, often, Windows-1252,
+    // so the bytes are decoded strictly as UTF-8 (which drops a BOM) and as Windows-1252 if that fails.
+    $('#movie-file').on('change', function () {
+      var file = this.files[0];
+      this.value = '';  // so the same file can be opened again
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function () {
+        var text;
+        try {
+          text = new TextDecoder('utf-8', { fatal: true }).decode(reader.result);
+        } catch (e) {
+          text = new TextDecoder('windows-1252').decode(reader.result);
+        }
+        $('#movie-text').val(text).trigger('input');
+      };
+      reader.onerror = function () { showNotification(T.fileFailed, 'is-danger'); };
+      reader.readAsArrayBuffer(file);
+    });
+
     $('#genius-search').on('click', searchGenius);
     $('#genius-q').on('keydown', function (e) {
       if (e.which === 13) { e.preventDefault(); searchGenius(); }
@@ -262,6 +408,8 @@
     $('#go').on('click', function () {
       if (hasLrclibStep()) {
         showStep(2);
+      } else if (state.source === 'movie') {
+        send({ source: 'movie', text: movieText() });  // the server checks the fit again
       } else {
         send({ source: state.source });
       }
@@ -446,9 +594,10 @@
     /* -------------------------------------------------------------- start */
 
     startCaptionCheck();
-    if (CURRENT_SOURCE === 'genius' || CURRENT_SOURCE === 'custom' || CURRENT_SOURCE === 'transcribe') {
+    if ($.inArray(CURRENT_SOURCE, ['genius', 'custom', 'movie', 'transcribe']) !== -1) {
       chooseSource(CURRENT_SOURCE);
     }
+    renderMovie();
     refreshStep1();
   });
 </script>
@@ -480,6 +629,10 @@
       <input type="radio" name="source">
       <span><b>{% trans %}Custom lyrics{% endtrans %}</b>{% if current_source == 'custom' %} <span class="rp-tag">{% trans %}current{% endtrans %}</span>{% endif %}<span class="rp-muted rp-src-desc">{% trans %}Type or paste the lyrics, or open a .txt file.{% endtrans %}</span></span>
     </label>
+    <label class="rp-src" data-source="movie">
+      <input type="radio" name="source">
+      <span><b>{% trans %}Movie subtitles{% endtrans %}</b>{% if current_source == 'movie' %} <span class="rp-tag">{% trans %}current{% endtrans %}</span>{% endif %}<span class="rp-muted rp-src-desc">{% trans %}Time the song from the movie's own subtitles.{% endtrans %}</span></span>
+    </label>
     <label class="rp-src" data-source="transcribe">
       <input type="radio" name="source">
       <span><b>{% trans %}No lyrics (transcribe){% endtrans %}</b>{% if current_source == 'transcribe' %} <span class="rp-tag">{% trans %}current{% endtrans %}</span>{% endif %}<span class="rp-muted rp-src-desc">{% trans %}Words come from what the singer is heard singing.{% endtrans %}</span></span>
@@ -506,6 +659,33 @@
     <textarea id="custom-text" class="rp-text" spellcheck="false" autocomplete="off">{{ custom_prefill }}</textarea>
     <button type="button" id="custom-open" class="rp-link">{% trans %}Open file{% endtrans %}</button>
     <input type="file" id="custom-file" class="is-hidden" accept=".txt,text/plain">
+  </div>
+
+  <div id="movie-section" class="is-hidden">
+    <div class="rp-sec has-tip"><span>{% trans %}Movie subtitles{% endtrans %}</span>{% call info_tip() %}{% trans %}Paste the stretch of the movie's SRT subtitles that this clip covers. Check fit finds where it sits, using the words already heard in the clip.{% endtrans %}{% endcall %}</div>
+    <textarea id="movie-text" class="rp-text" aria-label="{% trans %}Movie subtitles{% endtrans %}" spellcheck="false" autocomplete="off">{{ movie_prefill }}</textarea>
+    <button type="button" id="movie-open" class="rp-link">{% trans %}Open file{% endtrans %}</button>
+    <input type="file" id="movie-file" class="is-hidden" accept=".srt,application/x-subrip,text/plain">
+    <button type="button" id="movie-check" class="rp-check" disabled>{% trans %}Check fit{% endtrans %}</button>
+    <div id="movie-result" role="status" aria-live="polite">
+      <div id="movie-idle" class="rp-idle"></div>
+      <div id="movie-checking" class="rp-card is-hidden">
+        <div class="rp-card-head">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--dark-link)" stroke-width="3" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.9s" repeatCount="indefinite"></animateTransform></path></svg>
+          <span>{% trans %}Finding where these subtitles sit in the clip…{% endtrans %}</span>
+        </div>
+      </div>
+      <div id="movie-card" class="rp-card is-hidden" data-tone="good">
+        <div id="movie-head-row" class="rp-card-head">
+          <svg class="rp-icon is-good" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>
+          <svg class="rp-icon is-bad" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v9M12 18.5v.01"></path></svg>
+          <svg class="rp-icon is-info" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 11v6M12 7.5v.01"></path></svg>
+          <span id="movie-head"></span>
+        </div>
+        <ul id="movie-lines" class="rp-card-lines"></ul>
+        <a id="movie-info-link" class="rp-card-link no-spa is-hidden" href="{{ url_for('song_info.song_info', song=song) }}">{% trans %}Go to Song info{% endtrans %}</a>
+      </div>
+    </div>
   </div>
 
   <div class="go-row rp-buttons">
