@@ -127,14 +127,16 @@ that queued them is already closed; 7.1f).
   `prepare_regen_job` accepts plan kinds no caller builds; the int-not-bool
   Genius id check is written three times; ~~the watch URL is built in more than
   one module~~ (one `library_regen.watch_url`, `f4aa97b`). Record: web plan, 3.1i and 8.1f.
-- **`SongStatus` carries two overlapping sheet flags** (`library_status.py`):
+- ~~**`SongStatus` carries two overlapping sheet flags** (`library_status.py`):
   `custom_sheet` is true for either kind of sheet and `movie_sheet` for the
   `.custom.srt` one, so every reader (`_now`, `_current_source`) must test
   `movie_sheet` first, and `library_regen.custom_plan` repeats the suffix test.
   A reader that tests `custom_sheet` first labels a movie song "custom" and no
   test catches it. Shape: one `sheet_kind` (`custom`, `movie` or none), derived
   once. Deferred 2026-10-29. Record: `/code-review` of `7f07006^..cc88169` on
-  tag `archive/movie_subtitles`, finding 8 (not in the plan file).
+  tag `archive/movie_subtitles`, finding 8 (not in the plan file).~~ Fixed
+  2026-10-29 on `lyric_source_lists` as `b9cdbda`: `SongStatus.sheet_kind`, with
+  `library_regen.sheet_kind` the only place a sheet's suffix is tested.
 - **A movie song can be labelled two ways at once.** Song Info's Lyrics tile
   names the source from the bundle's origin; the Repair page's "current" tag and
   the run lists ("Now: movie subtitles") go by the sheet on disk. After a movie
