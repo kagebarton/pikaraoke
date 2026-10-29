@@ -427,16 +427,19 @@ class LibraryTools:
         """What the repair page's custom-lyrics box and LRCLIB search start with.
 
         ``text``: the song's custom sheet if it has one, else the lines of its
-        current lyrics, else nothing. ``title`` and ``artist``: the Genius song the
-        bundle records, else the song's file name as a title.
+        current lyrics, else nothing. ``query``: the title and artist of the Genius
+        song the bundle records, cleaned as the pipeline's LRCLIB search cleans
+        them, else the song's file name.
         """
         job = self._song_job(song_path)
         lyrics = (job.bundle or {}).get("lyrics") or {}
         genius = lyrics.get("genius") or {}
+        terms = lrclib.clean_key(
+            genius.get("title") or default_query(job.song_path), genius.get("artist") or ""
+        )
         return {
             "text": self._sheet_on_disk(job.song_path) or "\n".join(lyrics.get("lines") or []),
-            "title": genius.get("title") or default_query(job.song_path),
-            "artist": genius.get("artist") or "",
+            "query": " ".join(term for term in terms if term),
         }
 
     @staticmethod
@@ -458,8 +461,8 @@ class LibraryTools:
         """
         return [item["text"] for item in parse_lyric_lines(self.genius_song(genius_id).text)]
 
-    def lrclib_candidates(self, song_path: str, sheet: list[str], title: str, artist: str) -> dict:
-        """LRCLIB's synced matches for the admin's search terms, scored against ``sheet``.
+    def lrclib_candidates(self, song_path: str, sheet: list[str], query: str) -> dict:
+        """LRCLIB's synced matches for the admin's search, scored against ``sheet``.
 
         ``sheet`` is the song's lyric lines: a Genius song's (:meth:`genius_sheet_lines`)
         or the admin's own (:func:`custom_sheet_lines`). Each candidate says how many
@@ -468,7 +471,7 @@ class LibraryTools:
         disk (``current``). The listed records are remembered for :meth:`repair`.
         """
         video_s = media_duration(self._song_job(song_path))
-        records = [r for r in lrclib.search(title, artist) if r.get("syncedLyrics")]
+        records = [r for r in lrclib.search_query(query) if r.get("syncedLyrics")]
         with self._lrclib_lock:
             for record in records:
                 # Only an integer id can come back in a repair request.

@@ -70,6 +70,12 @@ that queued them is already closed; 7.1f).
   with the search page. Record: web plan, 6.1e and the Phase 6 row.
 - **An empty LRCLIB title makes Search do nothing**; a hint would be new
   wording. Record: web plan, 6.1e.
+- ~~**The repair page's LRCLIB search is field-scoped**: it reused the
+  pipeline's `lrclib.search` (`track_name` + `artist_name`), so a word that sits
+  in another field (a show name in the album, an artist credited differently)
+  found nothing.~~ The repair page now searches LRCLIB's all-fields `q=` from one
+  box, on `lrclib_search_box`; the pipeline stays field-scoped. Every word must
+  still appear somewhere, so a misspelt word still finds nothing.
 - **A Reset removes a captioned song's `subtitles/<song>.en.vtt` and writes no
   new one.** The run uses the `.srt`, which stays; nothing found in the app
   reads the `.vtt` later. Not ruled. Record: web plan, Phase 7 checks row.

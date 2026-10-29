@@ -54,9 +54,22 @@ class TestSearch:
             "artist_name": "Artist",
         }
 
+    @patch("pikaraoke.lib.lrclib.time.sleep")
+    @patch("pikaraoke.lib.lrclib.requests.get")
+    def test_a_query_search_sends_the_words_as_typed(self, mock_get, _sleep):
+        resp = MagicMock()
+        resp.json.return_value = [{"id": 1, "syncedLyrics": _SYNCED_AB}]
+        mock_get.return_value = resp
+
+        out = lrclib.search_query("Song (Live) Artist")
+
+        assert out == [{"id": 1, "syncedLyrics": _SYNCED_AB}]
+        assert mock_get.call_args.kwargs["params"] == {"q": "Song (Live) Artist"}
+
     @patch("pikaraoke.lib.lrclib.requests.get", side_effect=requests.RequestException("boom"))
     def test_network_error_returns_empty(self, _get):
         assert lrclib.search("T", "A") == []
+        assert lrclib.search_query("T A") == []
 
     @patch("pikaraoke.lib.lrclib.time.sleep")
     @patch("pikaraoke.lib.lrclib.requests.get")

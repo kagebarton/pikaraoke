@@ -913,10 +913,8 @@ class TestRepairPage:
         genius = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())))
         plain = text(self.page(env, env.add_song("Some Song (Official Video)---bbbbbbbbbbb.mp4")))
 
-        assert 'var CUSTOM_TERMS = {"artist": "Kristin Chenoweth", "title": "Defying Gravity"}' in (
-            genius
-        )
-        assert 'var CUSTOM_TERMS = {"artist": "", "title": "Some Song"}' in plain
+        assert 'var CUSTOM_QUERY = "Defying Gravity Kristin Chenoweth";' in genius
+        assert 'var CUSTOM_QUERY = "Some Song";' in plain
 
     def test_a_custom_pick_is_searched_with_a_post_and_sent_with_its_text(self, env):
         code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
@@ -1048,15 +1046,15 @@ class TestLrclibSearchRoute:
         self.searches = []
         self.records = []
 
-        def fake_search(track, artist):
-            self.searches.append((track, artist))
+        def fake_search(query):
+            self.searches.append(query)
             return self.records
 
-        monkeypatch.setattr(lrclib, "search", fake_search)
+        monkeypatch.setattr(lrclib, "search_query", fake_search)
         return env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())
 
     def search(self, env, song, **params):
-        query = {"song": song, "genius_id": 7, "title": "defying gravity", "artist": "menzel"}
+        query = {"song": song, "genius_id": 7, "q": "defying gravity menzel"}
         query.update(params)
         return env.client.get("/song_info/lrclib_search", query_string=query)
 
@@ -1085,9 +1083,9 @@ class TestLrclibSearchRoute:
             lrclib_record(6, "Line one here", "Line two here", "Line three here", "Line four here"),
         ]
 
-        body = self.search(env, song, title=" defying gravity ", artist="").get_json()
+        body = self.search(env, song, q=" defying gravity ").get_json()
 
-        assert self.searches == [("defying gravity", "")]
+        assert self.searches == ["defying gravity"]
         assert body["video_duration_s"] == 257.23
         current, best = body["candidates"]
         assert (current["id"], current["best"], current["current"]) == (5, False, True)
@@ -1158,15 +1156,15 @@ class TestLrclibSearchCustomRoute:
         self.searches = []
         self.records = []
 
-        def fake_search(track, artist):
-            self.searches.append((track, artist))
+        def fake_search(query):
+            self.searches.append(query)
             return self.records
 
-        monkeypatch.setattr(lrclib, "search", fake_search)
+        monkeypatch.setattr(lrclib, "search_query", fake_search)
         return env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())
 
     def search(self, env, song, **body):
-        payload = {"song": song, "title": "defying gravity", "artist": "menzel", "text": self.SHEET}
+        payload = {"song": song, "q": "defying gravity menzel", "text": self.SHEET}
         payload.update(body)
         return env.client.post("/song_info/lrclib_search", json=payload)
 
@@ -1208,9 +1206,9 @@ class TestLrclibSearchCustomRoute:
             lrclib_record(6, "Line one here", "Line two here", "Line three here", "Line four here"),
         ]
 
-        body = self.search(env, song, title=" defying gravity ", artist="").get_json()
+        body = self.search(env, song, q=" defying gravity ").get_json()
 
-        assert self.searches == [("defying gravity", "")]
+        assert self.searches == ["defying gravity"]
         current, best = body["candidates"]
         # the sheet is two lines (the [Verse] header doesn't count), not the Genius song's four
         assert (current["mapped"], current["sheet_lines"]) == (1, 2)
@@ -1226,11 +1224,11 @@ class TestLrclibSearchCustomRoute:
         [candidate] = body["candidates"]
         assert (candidate["fit"], candidate["fit_near"]) == ("5:54 · 97 s longer", False)
 
-    @pytest.mark.parametrize("terms", [{"title": None, "artist": ["x"]}, {"title": 5, "artist": 7}])
-    def test_terms_that_are_not_text_search_as_empty(self, env, song, terms):
-        self.search(env, song, **terms)
+    @pytest.mark.parametrize("query", [None, ["x"], 5])
+    def test_a_search_that_is_not_text_searches_as_empty(self, env, song, query):
+        self.search(env, song, q=query)
 
-        assert self.searches == [("", "")]
+        assert self.searches == [""]
 
 
 class TestRepairRoute:

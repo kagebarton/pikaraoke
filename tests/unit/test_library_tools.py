@@ -727,14 +727,16 @@ class TestCustomStart:
     def test_the_search_starts_from_the_genius_song_the_bundle_records(self, tmp_path, song):
         genius_bundle(tmp_path, song.stem)
 
-        start = self.start(tmp_path, song)
+        assert self.start(tmp_path, song)["query"] == "Song Artist"
 
-        assert (start["title"], start["artist"]) == (GENIUS["title"], GENIUS["artist"])
+    def test_the_search_drops_feature_credits_as_the_pipeline_does(self, tmp_path, song):
+        genius = {**GENIUS, "title": "Song (Ft. Guest) [Live]", "artist": "Artist"}
+        write_bundle(tmp_path, song.stem, lyrics={"origin": "genius", "genius": genius})
 
-    def test_without_one_it_starts_from_the_file_name_and_no_artist(self, tmp_path, song):
-        start = self.start(tmp_path, song)
+        assert self.start(tmp_path, song)["query"] == "Song Artist"
 
-        assert (start["title"], start["artist"]) == ("Some Song", "")
+    def test_without_one_it_starts_from_the_file_name(self, tmp_path, song):
+        assert self.start(tmp_path, song)["query"] == "Some Song"
 
 
 class TestGeniusSong:
@@ -820,11 +822,11 @@ class TestLrclibCandidates:
     def tools(self, tmp_path, song, records, monkeypatch):
         searches = []
 
-        def fake_search(track, artist):
-            searches.append((track, artist))
+        def fake_search(query):
+            searches.append(query)
             return records
 
-        monkeypatch.setattr(lrclib, "search", fake_search)
+        monkeypatch.setattr(lrclib, "search_query", fake_search)
         tools, _ = make_tools(tmp_path, [str(song)], genius=FakeGenius({7: GENIUS_SONG}))
         return tools, searches
 
@@ -845,9 +847,9 @@ class TestLrclibCandidates:
         ]
         tools, searches = self.tools(tmp_path, song, records, monkeypatch)
 
-        found = tools.lrclib_candidates(str(song), SHEET, "defying gravity", "idina menzel")
+        found = tools.lrclib_candidates(str(song), SHEET, "defying gravity idina menzel")
 
-        assert searches == [("defying gravity", "idina menzel")]
+        assert searches == ["defying gravity idina menzel"]
         assert found["video_duration_s"] == 257.0
         full, partial = found["candidates"]
         assert (full["id"], full["mapped"], full["sheet_lines"]) == (1, 4, 4)
@@ -864,7 +866,7 @@ class TestLrclibCandidates:
         records = [{**RECORD, "id": 2, "duration": 254.0}, self.full(id=1, duration=300.0)]
         tools, _ = self.tools(tmp_path, song, records, monkeypatch)
 
-        found = tools.lrclib_candidates(str(song), SHEET, "t", "a")
+        found = tools.lrclib_candidates(str(song), SHEET, "t a")
 
         assert [(c["id"], c["best"]) for c in found["candidates"]] == [(2, False), (1, True)]
 
@@ -873,7 +875,7 @@ class TestLrclibCandidates:
         records = [self.full(id=1), self.full(id=2)]
         tools, _ = self.tools(tmp_path, song, records, monkeypatch)
 
-        found = tools.lrclib_candidates(str(song), SHEET, "t", "a")
+        found = tools.lrclib_candidates(str(song), SHEET, "t a")
 
         assert [(c["id"], c["current"]) for c in found["candidates"]] == [(1, False), (2, True)]
 
@@ -890,7 +892,7 @@ class TestLrclibCandidates:
         records = [self.full(id=1), {k: v for k, v in self.full().items() if k != "id"}]
         tools, _ = self.tools(tmp_path, song, records, monkeypatch)
 
-        found = tools.lrclib_candidates(str(song), SHEET, "t", "a")
+        found = tools.lrclib_candidates(str(song), SHEET, "t a")
 
         assert [c["current"] for c in found["candidates"]] == [False, False]
 
@@ -898,19 +900,19 @@ class TestLrclibCandidates:
         records = [{"id": 3, "trackName": "Plain only", "syncedLyrics": None}, self.full(id=1)]
         tools, _ = self.tools(tmp_path, song, records, monkeypatch)
 
-        found = tools.lrclib_candidates(str(song), SHEET, "t", "a")
+        found = tools.lrclib_candidates(str(song), SHEET, "t a")
 
         assert [c["id"] for c in found["candidates"]] == [1]
 
     def test_no_matches_is_an_empty_list(self, tmp_path, song, monkeypatch):
         tools, _ = self.tools(tmp_path, song, [], monkeypatch)
 
-        assert tools.lrclib_candidates(str(song), SHEET, "t", "a")["candidates"] == []
+        assert tools.lrclib_candidates(str(song), SHEET, "t a")["candidates"] == []
 
     def test_a_match_with_no_length_has_no_difference(self, tmp_path, song, monkeypatch):
         tools, _ = self.tools(tmp_path, song, [self.full(id=1, duration=None)], monkeypatch)
 
-        [candidate] = tools.lrclib_candidates(str(song), SHEET, "t", "a")["candidates"]
+        [candidate] = tools.lrclib_candidates(str(song), SHEET, "t a")["candidates"]
 
         assert candidate["duration_diff_s"] is None
 
@@ -920,7 +922,7 @@ class TestLrclibCandidates:
         records = [self.full(id=1)]
         tools, _ = self.tools(tmp_path, song, records, monkeypatch)
 
-        found = tools.lrclib_candidates(str(song), ["Line one here", "Line two here"], "t", "a")
+        found = tools.lrclib_candidates(str(song), ["Line one here", "Line two here"], "t a")
 
         [candidate] = found["candidates"]
         assert (candidate["mapped"], candidate["sheet_lines"]) == (2, 2)
@@ -960,8 +962,8 @@ class TestRepairUsesTheListedRecord:
 
     def listed(self, tools, song, monkeypatch, *ids):
         records = [{**RECORD, "id": record_id} for record_id in ids]
-        monkeypatch.setattr(lrclib, "search", lambda track, artist: records)
-        tools.lrclib_candidates(str(song), SHEET, "t", "a")
+        monkeypatch.setattr(lrclib, "search_query", lambda query: records)
+        tools.lrclib_candidates(str(song), SHEET, "t a")
         return records
 
     def queued_record(self, tools, processing, song, lrclib_id):
@@ -997,8 +999,8 @@ class TestRepairUsesTheListedRecord:
     def test_a_record_without_an_id_is_not_remembered(self, tmp_path, song, monkeypatch, fetched):
         tools, processing = make_tools(tmp_path, [str(song)], genius=FakeGenius({7: GENIUS_SONG}))
         no_id = {k: v for k, v in RECORD.items() if k != "id"}
-        monkeypatch.setattr(lrclib, "search", lambda track, artist: [no_id])
-        tools.lrclib_candidates(str(song), SHEET, "t", "a")
+        monkeypatch.setattr(lrclib, "search_query", lambda query: [no_id])
+        tools.lrclib_candidates(str(song), SHEET, "t a")
 
         self.queued_record(tools, processing, song, 5)
 

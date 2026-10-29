@@ -22,7 +22,6 @@
   .rp-search { display: flex; gap: 8px; margin-top: 6px; }
   .rp-search .input { min-height: 44px; }
   .rp-search .button { min-width: 44px; min-height: 44px; }
-  .rp-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .rp-list { border: 1px solid var(--dark-border); border-radius: 8px; overflow: hidden; background: var(--dark-bg-tertiary); margin-top: 10px; }
   .rp-opt { display: flex; gap: 12px; align-items: flex-start; padding: 12px; min-height: 56px; border-top: 1px solid var(--dark-border); cursor: pointer; box-sizing: border-box; }
   .rp-opt:first-child { border-top: 0; }
@@ -52,7 +51,7 @@
     var SONG = {{ song | tojson }};
     var CURRENT_SOURCE = {{ current_source | tojson }};
     var CURRENT_GENIUS_ID = {{ current_genius_id | tojson }};
-    var CUSTOM_TERMS = {{ custom_terms | tojson }};  // where a custom song's LRCLIB search starts
+    var CUSTOM_QUERY = {{ custom_query | tojson }};  // where a custom song's LRCLIB search starts
     var HAS_YOUTUBE_ID = {{ has_youtube_id | tojson }};
     var URLS = {
       captionCheck: {{ url_for('song_info.caption_check') | tojson }},
@@ -295,38 +294,33 @@
     // page knows (the bundle's Genius title and artist, else the file name); a box the
     // admin already typed in is left alone.
     function startCustomSearch() {
-      if ($('#lrclib-title').val() || $('#lrclib-artist').val()) return;
-      $('#lrclib-title').val(CUSTOM_TERMS.title);
-      $('#lrclib-artist').val(CUSTOM_TERMS.artist);
+      if (!$('#lrclib-q').val()) $('#lrclib-q').val(CUSTOM_QUERY);
     }
 
     // The matches are scored against the lyrics: a Genius song's, by id, or the typed ones, posted.
-    function lrclibRequest(title, artist) {
+    function lrclibRequest(query) {
       if (state.source === 'custom') {
         return $.ajax({
           url: URLS.lrclibSearch,
           method: 'POST',
           contentType: 'application/json',
           dataType: 'json',
-          data: JSON.stringify({ song: SONG, title: title, artist: artist, text: customText() })
+          data: JSON.stringify({ song: SONG, q: query, text: customText() })
         });
       }
-      return $.getJSON(URLS.lrclibSearch, {
-        song: SONG, genius_id: state.genius.id, title: title, artist: artist
-      });
+      return $.getJSON(URLS.lrclibSearch, { song: SONG, genius_id: state.genius.id, q: query });
     }
 
     function searchLrclib() {
-      var title = $.trim($('#lrclib-title').val());
-      var artist = $.trim($('#lrclib-artist').val());
-      if (!title) return;
+      var query = $.trim($('#lrclib-q').val());
+      if (!query) return;
       var seq = ++state.lrclibSeq;
       state.lrclib = null;
       state.candidates = [];
       state.videoLength = null;
       closePreview('lrclib');
       renderLrclib(T.searching);
-      lrclibRequest(title, artist).done(function (found) {
+      lrclibRequest(query).done(function (found) {
         if (seq !== state.lrclibSeq) return;
         state.candidates = found.candidates;
         state.videoLength = found.video_length;
@@ -407,7 +401,7 @@
     }
 
     $('#lrclib-search').on('click', searchLrclib);
-    $('#lrclib-title, #lrclib-artist').on('keydown', function (e) {
+    $('#lrclib-q').on('keydown', function (e) {
       if (e.which === 13) { e.preventDefault(); searchLrclib(); }
     });
 
@@ -527,11 +521,13 @@
   <span id="genius-pick" class="rp-muted"></span>
 
   <div class="rp-sec">{% trans %}Search LRCLIB{% endtrans %}</div>
-  <div class="rp-pair">
-    <div><label for="lrclib-title" class="rp-muted">{% trans %}Title{% endtrans %}</label><input id="lrclib-title" class="input" type="text" autocomplete="off" style="margin-top: 4px"></div>
-    <div><label for="lrclib-artist" class="rp-muted">{% trans %}Artist{% endtrans %}</label><input id="lrclib-artist" class="input" type="text" autocomplete="off" style="margin-top: 4px"></div>
+  <label for="lrclib-q" class="rp-muted">{% trans %}Type the song title and artist{% endtrans %}</label>
+  <div class="rp-search">
+    <input id="lrclib-q" class="input" type="search" autocomplete="off">
+    <button type="button" id="lrclib-search" class="button is-primary" aria-label="{% trans %}Search LRCLIB{% endtrans %}">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg>
+    </button>
   </div>
-  <button type="button" id="lrclib-search" class="button is-primary" style="width: 100%; margin-top: 8px; min-height: 44px">{% trans %}Search{% endtrans %}</button>
 
   <div class="rp-sec"><span>{% trans %}Results{% endtrans %}</span><span id="video-length"></span></div>
   <div id="lrclib-results" class="rp-list" style="margin-top: 0"></div>

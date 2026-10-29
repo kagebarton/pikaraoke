@@ -460,7 +460,7 @@ def repair_page():
         current_source=_current_source(status),
         current_genius_id=(status.genius or {}).get("id"),
         custom_prefill=start["text"],
-        custom_terms={"title": start["title"], "artist": start["artist"]},
+        custom_query=start["query"],
     )
 
 
@@ -496,9 +496,9 @@ def genius_lyrics():
     return jsonify({"title": song.title, "artist": song.artist, "text": song.text})
 
 
-def _lrclib_results(song: str, sheet: list[str], title: str, artist: str) -> dict:
-    """LRCLIB's matches for the typed terms, scored against ``sheet`` and worded for the page."""
-    found = get_karaoke_instance().library_tools.lrclib_candidates(song, sheet, title, artist)
+def _lrclib_results(song: str, sheet: list[str], query: str) -> dict:
+    """LRCLIB's matches for the typed search, scored against ``sheet`` and worded for the page."""
+    found = get_karaoke_instance().library_tools.lrclib_candidates(song, sheet, query)
     for candidate in found["candidates"]:
         candidate["fit"], candidate["fit_near"] = _candidate_fit(candidate)
     video_s = found["video_duration_s"]
@@ -510,7 +510,7 @@ def _lrclib_results(song: str, sheet: list[str], title: str, artist: str) -> dic
 
 @song_info_bp.route("/song_info/lrclib_search")
 def lrclib_search():
-    """LRCLIB matches for the typed title and artist, scored against the Genius pick."""
+    """LRCLIB matches for the typed search, scored against the Genius pick."""
     if not is_admin():
         return _error(_("Admin only"), 403)
     k = get_karaoke_instance()
@@ -520,14 +520,13 @@ def lrclib_search():
     genius_id = _int_arg("genius_id")
     if genius_id is None:
         return _error(_("Not a Genius song"), 400)
-    title = request.args.get("title", "").strip()
-    artist = request.args.get("artist", "").strip()
+    query = request.args.get("q", "").strip()
     try:
         sheet = k.library_tools.genius_sheet_lines(genius_id)
     except GeniusUnavailable as e:
         logger.warning("LRCLIB search for %s: Genius lyrics unavailable: %s", song, e)
         return _error(_("Genius didn't return that song's lyrics. Try again."), 502)
-    return jsonify(_lrclib_results(song, sheet, title, artist))
+    return jsonify(_lrclib_results(song, sheet, query))
 
 
 @song_info_bp.route("/song_info/lrclib_search", methods=["POST"])
@@ -544,8 +543,7 @@ def lrclib_search_custom():
         sheet = custom_sheet_lines(body.get("text"))
     except RegenError as e:
         return _error(str(e), 400)
-    title, artist = (_typed(body, key) for key in ("title", "artist"))
-    return jsonify(_lrclib_results(song, sheet, title, artist))
+    return jsonify(_lrclib_results(song, sheet, _typed(body, "q")))
 
 
 @song_info_bp.route("/song_info/repair", methods=["POST"])

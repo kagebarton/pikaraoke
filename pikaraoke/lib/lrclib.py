@@ -227,23 +227,35 @@ def _strip_trailing_parens(text: str) -> str:
 
 
 def search(track_name: str, artist_name: str, *, timeout: float = _REQUEST_TIMEOUT_S) -> list[dict]:
-    """``GET /api/search`` for synced candidates. Returns ``[]`` on any failure.
+    """``GET /api/search`` by title and artist field. Returns ``[]`` on any failure.
 
+    The pipeline's unattended pick searches this way: a match must carry the
+    title in its title and the artist in its artist, never only in its album.
     Inputs are cleaned with :func:`clean_key` (idempotent), so callers may pass
     raw or pre-cleaned keys.
     """
     track, artist = clean_key(track_name, artist_name)
+    return _search({"track_name": track, "artist_name": artist}, timeout)
+
+
+def search_query(query: str, *, timeout: float = _REQUEST_TIMEOUT_S) -> list[dict]:
+    """``GET /api/search?q=``: the words anywhere in title, artist or album, as
+    LRCLIB's own site searches. Returns ``[]`` on any failure."""
+    return _search({"q": query}, timeout)
+
+
+def _search(params: dict[str, str], timeout: float) -> list[dict]:
     try:
         resp = requests.get(
             SEARCH_URL,
-            params={"track_name": track, "artist_name": artist},
+            params=params,
             headers={"User-Agent": USER_AGENT},
             timeout=timeout,
         )
         resp.raise_for_status()
         records = resp.json()
     except (requests.RequestException, ValueError) as e:
-        logger.warning("LRCLIB search failed for %r / %r: %s", track, artist, e)
+        logger.warning("LRCLIB search failed for %r: %s", params, e)
         return []
     time.sleep(_POLITE_SLEEP_S)
     return records if isinstance(records, list) else []
