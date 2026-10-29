@@ -39,11 +39,12 @@ _LEADING_DECORATION = r"(?:[-*♪♫\s]|<[^>]+>)*"
 _SPEAKER_LABEL_RE = re.compile(
     rf"^({_LEADING_DECORATION})[A-Z][A-Z0-9.'’&/+ -]{{1,29}}:(?=\s|$)\s*"
 )
-# A dialogue dash at a line start (after any decoration but a dash, as in "* - What?";
-# letting the prefix take dashes too backtracks quadratically), or after a sentence
-# end ("- Hakuna matata. - What?"). Followed by a space: an attached hyphen is a word
-# split across cues ("-derful").
-_DIALOGUE_DASH_RE = re.compile(r"^((?:[*♪♫\s]|<[^>]+>)*)-+\s+|(?<=[.!?])\s+-+\s+")
+# A dialogue dash: at a line start (after any decoration but a dash, as in "* - What?";
+# letting the prefix take dashes too backtracks quadratically), after a sentence end
+# ("- Hakuna matata. - What?"), or glued to the next speaker's first word ("Be a man
+# -With all"). Many releases write it glued ("-What?"); none of the library's subtitles
+# split a word across cues ("-derful"). A spaced dash mid-sentence ("wait - what") stays.
+_DIALOGUE_DASH_RE = re.compile(r"^((?:[*♪♫\s]|<[^>]+>)*)-+\s*|(?<=[.!?])\s+-+\s*|\s+-+(?=[^\s-])")
 # A "*" standing alone as a song marker; a censored "f***" keeps its stars.
 _SONG_STAR_RE = re.compile(r"(?<!\S)\*+(?!\S)")
 
