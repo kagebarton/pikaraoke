@@ -77,8 +77,10 @@ from pikaraoke.lib.song_match import SongIndex, similar_groups
 from pikaraoke.lib.srt_slice_fit import (
     DISAGREE,
     FITS,
+    MAX_CUES,
     NO_REFERENCE,
     NOT_SRT,
+    TOO_LONG,
     SliceFit,
     fit_slice,
     heard_streams,
@@ -119,6 +121,10 @@ _PICK_TEXT_MAX = 200
 # The longest custom lyric sheet a repair takes; a song's lyrics are a few thousand characters.
 CUSTOM_SHEET_MAX_CHARS = 100_000
 
+# Movie subtitles are usually a whole film's SRT, 70-130 KB. This only stops a
+# paste far past the fit's cue limit before it is parsed.
+MOVIE_SUBTITLES_MAX_CHARS = 1_000_000
+
 # A caption check that couldn't run (YouTube refusing, often after many calls in a
 # row) is tried once more after this pause.
 CAPTION_RETRY_PAUSE_S = 30
@@ -144,12 +150,13 @@ def _pick_text(value: object) -> str:
     return value.strip()[:_PICK_TEXT_MAX] if isinstance(value, str) else ""
 
 
-def _sheet_text(text: object) -> str:
-    """An admin's typed lyrics with ``\\n`` line ends; a sheet that can't be one raises."""
+def _pasted_text(text: object, kind: str, max_chars: int) -> str:
+    """An admin's pasted ``kind`` (lyrics, subtitles) with ``\\n`` line ends; raises
+    for anything that is not text or is longer than ``max_chars``."""
     if not isinstance(text, str):
-        raise RegenError("The lyrics must be text.")
-    if len(text) > CUSTOM_SHEET_MAX_CHARS:
-        raise RegenError(f"The lyrics are too long (over {CUSTOM_SHEET_MAX_CHARS:,} characters).")
+        raise RegenError(f"The {kind} must be text.")
+    if len(text) > max_chars:
+        raise RegenError(f"The {kind} are too long (over {max_chars:,} characters).")
     return text.replace("\r\n", "\n").replace("\r", "\n")
 
 
@@ -161,7 +168,10 @@ def custom_sheet_lines(text: object) -> list[str]:
     that is not text, is too long, or has no lyric lines (blank, or only
     ``[Chorus]``-style headers).
     """
-    lines = [item["text"] for item in parse_lyric_lines(_sheet_text(text))]
+    lines = [
+        item["text"]
+        for item in parse_lyric_lines(_pasted_text(text, "lyrics", CUSTOM_SHEET_MAX_CHARS))
+    ]
     if not lines:
         raise RegenError(
             "There are no lyric lines to use. Section headers such as [Chorus] don't count."
@@ -179,6 +189,11 @@ def _slice_refusal(fit: SliceFit) -> str:
         return (
             "Not an SRT file. SRT subtitles are numbered cues with times, "
             "like 00:01:02,500 --> 00:01:05,000."
+        )
+    if fit.status == TOO_LONG:
+        return (
+            f"These subtitles have more than {MAX_CUES:,} lines. "
+            "Paste only the part of the movie with the song."
         )
     if fit.status == NO_REFERENCE:
         return (
@@ -522,7 +537,7 @@ class LibraryTools:
         :class:`RegenError`, with a message for the admin, for text that is not
         text or is too long, or a clip whose length can't be read.
         """
-        sheet = _sheet_text(text)
+        sheet = _pasted_text(text, "subtitles", MOVIE_SUBTITLES_MAX_CHARS)
         job = self._song_job(song_path)
         length = media_duration(job)
         if not length:
@@ -1090,7 +1105,7 @@ class LibraryTools:
         self, song: Path, text: object, lrclib_id: int | None, lrclib_skip: bool
     ) -> Plan:
         custom_sheet_lines(text)  # refuses an unusable sheet before anything is fetched
-        plan = custom_sheet_plan(song, _sheet_text(text))
+        plan = custom_sheet_plan(song, _pasted_text(text, "lyrics", CUSTOM_SHEET_MAX_CHARS))
         self._apply_lrclib_pick(plan, lrclib_id, lrclib_skip)
         return plan
 
