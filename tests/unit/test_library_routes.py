@@ -27,7 +27,7 @@ from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.genius import GeniusSong, GeniusUnavailable, read_choice
 from pikaraoke.lib.library_links import Playlist, PlaylistVideo
 from pikaraoke.lib.library_regen import CaptionCheck
-from pikaraoke.lib.library_tools import LibraryTools, MovieSliceCheck, _slice_refusal
+from pikaraoke.lib.library_tools import LibraryTools, MovieSliceCheck
 from pikaraoke.lib.song_list import SongList
 from pikaraoke.lib.song_manager import SongManager
 from pikaraoke.lib.srt_slice_fit import (
@@ -40,7 +40,7 @@ from pikaraoke.lib.srt_slice_fit import (
     SliceFit,
 )
 from pikaraoke.routes.library import library_bp
-from pikaraoke.routes.song_info import _slice_card, song_info_bp
+from pikaraoke.routes.song_info import _card_text, _slice_card, song_info_bp
 from tests.unit.movie_slices import (
     CLIP_S,
     SLICE_LINES,
@@ -1213,12 +1213,6 @@ class TestRepairPage:
         assert_loads_shared_helpers(html, script(html))
 
 
-def fit_card_text(card: dict) -> str:
-    """A card's sentences in the order the Repair refuses with: head, lines, tip."""
-    parts = [card["head"], *(line["text"] for line in card["lines"])]
-    return " ".join(parts + ([card["tip"]] if card["tip"] else []))
-
-
 class TestSubtitleFitRoute:
     """The Check fit preview: movie subtitles against the words already heard in the clip."""
 
@@ -1463,24 +1457,6 @@ class TestSliceCard:
 
         assert self.texts(card)[1] == "Subtitle times move 0:59:00 earlier."
 
-    @pytest.mark.parametrize("helps", [True, False])
-    @pytest.mark.parametrize(
-        "fit",
-        [
-            SliceFit(status=NOT_SRT),
-            SliceFit(status=TOO_LONG, total=3001),
-            SliceFit(status=NO_REFERENCE),
-            SliceFit(status=REFUSED, reason=TOO_FEW, matched=3, total=44),
-            SliceFit(status=REFUSED, reason=DISAGREE, matched=31, total=44),
-            SliceFit(status=REFUSED, reason=TOO_FEW, matched=0, total=0),
-        ],
-        ids=["not_srt", "too_long", "no_reference", "too_few", "disagree", "no_lines"],
-    )
-    def test_the_preview_and_the_repair_refuse_in_the_same_words(self, fit, helps):
-        card = _slice_card(MovieSliceCheck(fit, helps))
-
-        assert fit_card_text(card) == _slice_refusal(fit, helps)
-
 
 class TestMovieRepairRoute:
     """The Repair fits the subtitles again on the server; the page's preview is not trusted."""
@@ -1505,13 +1481,32 @@ class TestMovieRepairRoute:
         assert clip_starts(pasted)[0] > 3600
         assert clip_starts(plan.custom_text)[0] == pytest.approx(10.0, abs=0.1)
 
-    def test_subtitles_that_do_not_fit_are_refused_with_the_admin_wording_and_nothing_is_backed_up(
-        self, env, song
+    @pytest.mark.parametrize(
+        ("text", "refusal"),
+        [
+            (
+                "just some words, not subtitles",
+                "Not an SRT file. SRT subtitles are numbered cues with times, "
+                "like 00:01:02,500 --> 00:01:05,000.",
+            ),
+            (
+                movie_slice(offset=lambda k: 900.0 if k < SLICE_LINES // 2 else 2400.0),
+                f"Doesn't fit. Found {SLICE_LINES} of {SLICE_LINES} lines, but they don't agree "
+                "on one timing. The clip may be cut from several scenes, or these subtitles "
+                "are for a different release.",
+            ),
+        ],
+        ids=["not_srt", "disagree"],
+    )
+    def test_subtitles_that_do_not_fit_are_refused_in_the_previews_words_and_nothing_is_backed_up(
+        self, env, song, text, refusal
     ):
-        response = self.repair(env, song, text="just some words, not subtitles")
+        preview = env.client.post("/song_info/subtitle_fit", json={"song": song, "text": text})
+
+        response = self.repair(env, song, text=text)
 
         assert response.status_code == 400
-        assert response.get_json()["error"].startswith("Not an SRT file.")
+        assert response.get_json()["error"] == _card_text(preview.get_json()) == refusal
         env.processing.enqueue_regen.assert_not_called()
         assert not list(env.folder.glob("regen_backups/*"))
 

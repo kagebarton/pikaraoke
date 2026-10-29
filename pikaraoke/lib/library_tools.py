@@ -75,17 +75,7 @@ from pikaraoke.lib.metadata_parser import extract_youtube_id
 from pikaraoke.lib.processing_manager import ProcessingManager
 from pikaraoke.lib.song_manager import SongManager
 from pikaraoke.lib.song_match import SongIndex, similar_groups
-from pikaraoke.lib.srt_slice_fit import (
-    DISAGREE,
-    FITS,
-    MAX_CUES,
-    NO_REFERENCE,
-    NOT_SRT,
-    TOO_LONG,
-    SliceFit,
-    fit_slice,
-    heard_streams,
-)
+from pikaraoke.lib.srt_slice_fit import FITS, SliceFit, fit_slice, heard_streams
 from pikaraoke.lib.youtube_dl import ASR_JSON3_SUFFIX
 
 logger = logging.getLogger(__name__)
@@ -195,47 +185,16 @@ class MovieSliceCheck:
     regenerate_helps: bool
 
 
-def _slice_refusal(fit: SliceFit, regenerate_helps: bool) -> str:
-    """Why pasted movie subtitles can't time the song, in the admin's words.
+class MovieSliceRefused(RegenError):
+    """Pasted movie subtitles that can't time the song; ``check`` says why.
 
-    ``fit`` is any answer but a fit. The wording is the ratified mockup's: each
-    headline with the hint it keeps behind an (i). ``regenerate_helps``: the song
-    has a bundle, so a Regenerate keeps the words it hears; a transcribed song's
-    run keeps none (plans/open-issues.md).
+    Carries the check, not a sentence, so the Repair refuses in the Check fit
+    card's words (``routes.song_info``), worded once.
     """
-    if fit.status == NOT_SRT:
-        return (
-            "Not an SRT file. SRT subtitles are numbered cues with times, "
-            "like 00:01:02,500 --> 00:01:05,000."
-        )
-    if fit.status == TOO_LONG:
-        return (
-            f"These subtitles have more than {MAX_CUES:,} lines. "
-            "Paste only the part of the movie with the song."
-        )
-    if fit.status == NO_REFERENCE and not regenerate_helps:
-        return (
-            "Can't check. This song has no heard words to compare the subtitles with, "
-            "and a song whose lyrics were transcribed doesn't keep them yet."
-        )
-    if fit.status == NO_REFERENCE:
-        return (
-            "Can't check yet. This song has no heard words yet, so there is nothing to "
-            "compare the subtitles with. Regenerate the song from Song info first, "
-            "then come back and check."
-        )
-    if not fit.total:
-        return "Doesn't fit. These subtitles have no lines to check."
-    if fit.reason == DISAGREE:
-        return (
-            f"Doesn't fit. Found {fit.matched} of {fit.total} lines, but they don't agree "
-            "on one timing. The clip may be cut from several scenes, or these subtitles "
-            "are for a different release."
-        )
-    return (
-        f"Doesn't fit. Only {fit.matched} of {fit.total} lines were found in the clip. "
-        "Check that these subtitles are from this movie and cover the part this clip shows."
-    )
+
+    def __init__(self, check: MovieSliceCheck):
+        super().__init__(f"Movie subtitles refused: {check.fit.status}")
+        self.check = check
 
 
 @dataclass
@@ -1144,7 +1103,7 @@ class LibraryTools:
         """The plan that saves the pasted subtitles, clip-timed, as the song's sheet; a fit only."""
         check = self._fit_movie_slice(job, text)
         if check.fit.status != FITS:
-            raise RegenError(_slice_refusal(check.fit, check.regenerate_helps))
+            raise MovieSliceRefused(check)
         return movie_sheet_plan(job.song_path, check.fit.srt)
 
     def _apply_lrclib_pick(self, plan: Plan, lrclib_id: int | None, lrclib_skip: bool) -> None:
