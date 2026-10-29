@@ -1099,9 +1099,8 @@ class TestRepairPage:
         ]
 
         assert "Paste the stretch of the movie's SRT subtitles that this clip covers." in section
-        assert (
-            section.count("info-tip-btn") == 1
-        )  # the others are built when an answer carries a tip
+        # The others are cloned from the info_tip template when an answer carries a tip.
+        assert section.count("info-tip-btn") == 1
         assert 'id="movie-check"' in section and "disabled>Check fit<" in section
         assert 'role="status" aria-live="polite"' in section
         assert 'accept=".srt,application/x-subrip,text/plain"' in section
@@ -1130,7 +1129,8 @@ class TestRepairPage:
 
         assert "subtitleFit: " in code and "/song_info/subtitle_fit" in html
         assert "method: 'POST'" in click and "url: URLS.subtitleFit" in click
-        assert "JSON.stringify({ song: SONG, text: movieText() })" in click
+        assert "var text = movieText();" in click
+        assert "JSON.stringify({ song: SONG, text: text })" in click
 
     def test_a_late_answer_for_old_text_is_dropped(self, env):
         code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
@@ -1149,10 +1149,6 @@ class TestRepairPage:
         assert "state.movieSeq++;" in handler and "state.movieCard = null;" in handler
         # A check still on the server keeps Check fit off, so checks never stack.
         assert "state.movieChecking = false;" not in handler
-        assert (
-            "if (state.movieCard !== null || state.movieChecking) state.movieEdited = true;"
-            in handler
-        )
         assert "renderMovie();" in handler and "refreshStep1();" in handler
 
     def test_regenerate_is_on_only_for_text_that_passed_and_sends_the_text(self, env):
@@ -1191,6 +1187,16 @@ class TestRepairPage:
         assert idle.index("T.movieEmpty") < idle.index("T.movieEdited") < idle.index("T.movieSaved")
         assert "movieText() === movieSaved" in idle
 
+    def test_the_box_says_it_changed_only_against_the_text_an_answer_was_shown_for(self, env):
+        code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
+        idle = code[code.index("function movieIdleText") : code.index("function infoTip")]
+        click = code[code.index("$('#movie-check').on('click'") : code.index("$('#movie-open')")]
+        shown = click[click.index("if (seq === state.movieSeq) {") :]
+
+        assert "state.movieAnswered !== null && movieText() !== state.movieAnswered" in idle
+        assert shown.index("state.movieAnswered = text;") < shown.index("state.movieCard = card;")
+        assert "state.movieEdited" not in code
+
     def test_an_answer_is_shown_as_text_with_its_tips_behind_an_i_button(self, env):
         code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
         shown = code[code.index("function showMovieCard") : code.index("function renderMovie")]
@@ -1199,6 +1205,19 @@ class TestRepairPage:
         assert "el('li', null, line.text)" in shown
         assert "infoTip(card.tip)" in shown and "infoTip(line.tip)" in shown
         assert ".html(" not in shown
+
+    def test_an_answers_tips_are_the_info_tip_macros_markup_with_the_note_as_text(self, env):
+        html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())))
+        code = script(html)
+        tip = code[code.index("function infoTip") : code.index("function showMovieCard")]
+
+        assert (
+            '<template id="movie-tip"><span class="info-tip"><button type="button" '
+            'class="info-tip-btn"' in html
+        )
+        assert '<span class="info-tip-text" role="tooltip"></span></span></template>' in html
+        assert "document.getElementById('movie-tip').content" in tip
+        assert "tip.find('.info-tip-text').text(note);" in tip
 
     def test_text_from_genius_and_lrclib_goes_in_as_text_never_as_markup(self, env):
         code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
