@@ -22,6 +22,7 @@ from pikaraoke.lib.library_regen import (
 from pikaraoke.lib.library_status import HistoryEntry, SongStatus, length_gap_s
 from pikaraoke.lib.library_tools import (
     LRC_MAX_GAP_S,
+    REPAIR_SOURCES,
     LrcTimingCheck,
     LrcTimingRefused,
     MovieSliceCheck,
@@ -60,9 +61,6 @@ _GUESSED_COLOR = "#f1b70e"
 
 # An LRCLIB match this much longer or shorter than the video is worth naming.
 _LENGTH_GAP_NOTED_S = 5
-
-# The repair sources a link may open the page with already chosen.
-_PRESELECTABLE_SOURCES = ("caption", "genius", "custom", "movie", "lrclib", "transcribe")
 
 
 @dataclass(frozen=True)
@@ -522,7 +520,7 @@ def repair_page():
         name=k.song_manager.filename_from_path(song),
         has_youtube_id=status.youtube_id is not None,
         current_source=_current_source(status),
-        preselect=source if source in _PRESELECTABLE_SOURCES else None,
+        preselect=source if source in REPAIR_SOURCES else None,
         current_genius_id=(status.genius or {}).get("id"),
         custom_prefill=start["text"],
         custom_query=start["query"],

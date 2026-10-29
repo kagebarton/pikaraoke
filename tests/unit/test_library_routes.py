@@ -1499,9 +1499,7 @@ class TestRepairPage:
 
         assert "$('#movie-section').toggleClass('is-hidden', source !== 'movie');" in choose
         assert "$('#lrclib-section').toggleClass('is-hidden', source !== 'lrclib');" in choose
-        assert (
-            "$.inArray(START_SOURCE, ['genius', 'custom', 'movie', 'lrclib', 'transcribe'])" in code
-        )
+        assert "if (START_SOURCE && START_SOURCE !== 'caption') chooseSource(START_SOURCE);" in code
 
     def test_a_links_source_wins_over_the_current_one_and_the_caption_waits_for_its_check(
         self, env

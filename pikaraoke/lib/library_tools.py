@@ -40,6 +40,7 @@ from pikaraoke.lib.library_links import (
 from pikaraoke.lib.library_regen import (
     CUSTOM_SRT_SUFFIX,
     CUSTOM_TEXT_SUFFIX,
+    SHEET_KINDS,
     VIDEO_EXTS,
     CaptionCheck,
     Plan,
@@ -88,6 +89,9 @@ from pikaraoke.lib.youtube_dl import ASR_JSON3_SUFFIX
 logger = logging.getLogger(__name__)
 
 BUSY_MESSAGE = "This song has a regen waiting or running."
+
+# The lyric sources :meth:`LibraryTools.repair` takes.
+REPAIR_SOURCES = ("caption", "genius", *SHEET_KINDS, "transcribe")
 
 # Fetched Genius songs kept, so a repair's preview, its LRCLIB step and the
 # final queue scrape the page once.
@@ -735,7 +739,7 @@ class LibraryTools:
             job.plan = self._transcribe_plan()
         else:
             raise RegenError("Unknown lyric source.")
-        job.replaces_custom = source not in ("custom", "movie", "lrclib")
+        job.replaces_custom = source not in SHEET_KINDS
         self._queue(job, reset=True, label="Repair")
 
     def open_run(self, mode: str) -> None:
