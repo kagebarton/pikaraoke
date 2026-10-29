@@ -116,15 +116,19 @@ class TestCueSpansFromSrt:
             self._srt(
                 "- Hello there. - What?",
                 "- One\n- Two",
-                "won- derful -derful",
                 "* - Sing it",
                 "♪ - Sing it",
             )
         )
-        assert texts == [
-            "Hello there. What?",
-            "One Two",
-            "won- derful -derful",
-            "Sing it",
-            "Sing it",
-        ]
+        assert texts == ["Hello there. What?", "One Two", "Sing it", "Sing it"]
+
+    def test_glued_dialogue_dashes_are_stripped(self):
+        """Many releases write the dash against the word: "-What?", "Be a man -With all"."""
+        texts, _ = cue_spans_from_srt(
+            self._srt("-Hello there. -What?", "-One\n-Two", "-Be a man -With all", "--miss it")
+        )
+        assert texts == ["Hello there. What?", "One Two", "Be a man With all", "miss it"]
+
+    def test_hyphens_inside_words_and_a_spaced_dash_mid_sentence_stay(self):
+        texts, _ = cue_spans_from_srt(self._srt("nine-to-five", "won- derful", "wait - what"))
+        assert texts == ["nine-to-five", "won- derful", "wait - what"]
