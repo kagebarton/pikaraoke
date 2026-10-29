@@ -18,6 +18,24 @@ ngettext = flask_babel.ngettext
 library_bp = Blueprint("library", __name__)
 
 
+def _joint_subline(status: SongStatus) -> str:
+    """How a joint-timed song got its timing help: captions and the LRCLIB match, in words."""
+    parts = []
+    if status.ytasr_used:
+        parts.append(_("with captions"))
+    state = status.lrclib_state
+    if state == "used":
+        n = status.lrclib_filled
+        parts.append(ngettext("LRCLIB filled %(num)d line", "LRCLIB filled %(num)d lines", n))
+    elif state == "rejected":
+        parts.append(_("LRCLIB not used"))
+    elif state == "skipped":
+        parts.append(_("LRCLIB skipped"))
+    else:
+        parts.append(_("LRC on disk") if status.lrc_on_disk else _("no LRCLIB match"))
+    return " · ".join(parts)
+
+
 def _subline(name: str, status: SongStatus) -> str:
     if name == "behind":
         return _("Version %(v)d") % {"v": status.schema_version}
@@ -28,6 +46,10 @@ def _subline(name: str, status: SongStatus) -> str:
         }
     if name == "no_lyrics":
         return _("Transcribed")
+    if name in ("caption", "movie"):
+        return _("Cue align")
+    if name in ("genius", "custom", "no_timed_source"):
+        return _joint_subline(status)
     if status.category == "behind":
         return _("Behind (v%(v)d)") % {"v": status.schema_version}
     if status.category == "current":
@@ -55,15 +77,29 @@ def songs():
         return _error(_("Not a song list"), 400)
     k = get_karaoke_instance()
     info = url_for("song_info.song_info")
-    rows = [
-        {
-            "name": k.song_manager.filename_from_path(path),
-            "subline": _subline(name, status),
-            "info_url": f"{info}?song={quote(path.encode('utf-8', 'surrogateescape'))}",
-        }
-        for path, status in k.library_tools.songs_in_list(name)
-    ]
+    rows = []
+    for path, status in k.library_tools.songs_in_list(name):
+        # Bytes, so a file name that isn't UTF-8 still makes a link.
+        raw = path.encode("utf-8", "surrogateescape")
+        rows.append(
+            {
+                "name": k.song_manager.filename_from_path(path),
+                "subline": _subline(name, status),
+                "info_url": f"{info}?song={quote(raw)}",
+                "repair_url": url_for(
+                    "song_info.repair_page", song=raw, source=_repair_source(status)
+                ),
+            }
+        )
     return jsonify({"success": True, "rows": rows})
+
+
+def _repair_source(status: SongStatus) -> str | None:
+    """The Repair source a song's list link opens with, or None for the plain page.
+
+    A joint song can move to the cue route with its video's YouTube caption.
+    """
+    return "caption" if status.method == "joint" else None
 
 
 def _error(message: str, status: int):

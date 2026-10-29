@@ -337,6 +337,106 @@ class TestCustomSheet:
         assert (status.custom_sheet, status.movie_sheet) == (True, False)
 
 
+class TestLrcOnDisk:
+    """A usable LRC is read from disk: the bundle of a song from before schema 9 never recorded it."""
+
+    def lrc(self, tmp_path, video) -> Path:
+        path = tmp_path / "lyrics" / f"{video.stem}.lrc"
+        path.parent.mkdir(exist_ok=True)
+        return path
+
+    def test_no_file_is_not_usable(self, tmp_path):
+        video = make_video(tmp_path)
+        write_bundle(tmp_path, video.stem)
+
+        assert library_status.song_status(video).lrc_on_disk is False
+
+    def test_a_skip_marker_is_not_usable(self, tmp_path):
+        video = make_video(tmp_path)
+        write_bundle(tmp_path, video.stem)
+        lrclib.write_skip_marker(self.lrc(tmp_path, video))
+
+        assert library_status.song_status(video).lrc_on_disk is False
+
+    def test_a_real_lrc_is_usable_whatever_the_bundle_recorded(self, tmp_path):
+        video = make_video(tmp_path)
+        write_bundle(tmp_path, video.stem, schema_version=8, lyrics={"origin": "genius"})
+        self.lrc(tmp_path, video).write_text("[00:01.00]one\n", encoding="utf-8")
+
+        status = library_status.song_status(video)
+
+        assert status.lrc_on_disk is True
+        assert status.lrclib_state == "none"  # the bundle says no match; the disk says otherwise
+
+    def test_a_real_lrc_is_usable_with_no_bundle_too(self, tmp_path):
+        video = make_video(tmp_path)
+        self.lrc(tmp_path, video).write_text("[00:01.00]one\n", encoding="utf-8")
+
+        assert library_status.song_status(video).lrc_on_disk is True
+
+
+class TestSourceLists:
+    """The by-source lists go by what the last run used, so a song may be on several."""
+
+    def lists_of(self, video: Path) -> set[str]:
+        status = library_status.song_status(video)
+        return {name for name, in_list in library_status.SONG_LISTS.items() if in_list(status)}
+
+    def song(self, tmp_path, origin: str, method: str, *, lrc: bool | str = False) -> Path:
+        """A processed song; ``lrc`` puts a real LRC (True) or a skip marker ("skip") beside it."""
+        video = make_video(tmp_path)
+        write_bundle(
+            tmp_path,
+            video.stem,
+            lyrics={"origin": origin},
+            pipeline_decisions={"method_used": method},
+        )
+        path = tmp_path / "lyrics" / f"{video.stem}.lrc"
+        if lrc == "skip":
+            lrclib.write_skip_marker(path)
+        elif lrc:
+            path.parent.mkdir(exist_ok=True)
+            path.write_text("[00:01.00]one\n", encoding="utf-8")
+        return video
+
+    def test_a_caption_song(self, tmp_path):
+        assert self.lists_of(self.song(tmp_path, "srt", "cue_align")) == {"caption", "all"}
+
+    def test_a_movie_subtitles_song(self, tmp_path):
+        assert self.lists_of(self.song(tmp_path, "movie_srt", "cue_align")) == {"movie", "all"}
+
+    def test_a_genius_song_with_an_lrc_has_a_timed_source(self, tmp_path):
+        video = self.song(tmp_path, "genius", "joint", lrc=True)
+
+        assert self.lists_of(video) == {"genius", "all"}
+
+    def test_a_custom_song_with_only_a_skip_marker_has_no_timed_source(self, tmp_path):
+        video = self.song(tmp_path, "custom", "joint", lrc="skip")
+
+        assert self.lists_of(video) == {"custom", "no_timed_source", "all"}
+
+    def test_a_genius_song_with_no_lrc_has_no_timed_source(self, tmp_path):
+        video = self.song(tmp_path, "genius", "joint")
+
+        assert self.lists_of(video) == {"genius", "no_timed_source", "all"}
+
+    def test_only_a_joint_song_can_lack_a_timed_source(self, tmp_path):
+        """A song already on the cue route needs no LRC, so it is not asking for one."""
+        video = self.song(tmp_path, "genius", "cue_align")
+
+        assert "no_timed_source" not in self.lists_of(video)
+
+    def test_a_song_with_no_bundle_is_on_no_source_list(self, tmp_path):
+        assert self.lists_of(make_video(tmp_path)) == {"all"}
+
+    def test_a_transcribed_song_is_on_no_source_list(self, tmp_path):
+        video = make_video(tmp_path)
+        (tmp_path / "karaoke").mkdir()
+        (tmp_path / "karaoke" / f"{video.stem}.ass").write_text("", encoding="utf-8")
+
+        assert self.lists_of(video) == {"no_lyrics", "all"}
+
+
 class TestAsrAndDuration:
     def test_ytasr_and_duration_come_from_the_bundle(self, tmp_path):
         video = make_video(tmp_path)
@@ -387,16 +487,48 @@ class TestOverview:
             "behind": 1,
             "poor": 1,
             "no_lyrics": 1,
+            "caption": 0,
+            "movie": 0,
+            "genius": 0,
+            "custom": 0,
+            "no_timed_source": 0,
+            "all": 5,
+        }
+
+    def test_counts_by_lyric_source(self, tmp_path):
+        for stem, origin, method in (
+            ("A---aaaaaaaaaaa", "srt", "cue_align"),
+            ("B---bbbbbbbbbbb", "srt", "cue_align"),
+            ("C---ccccccccccc", "movie_srt", "cue_align"),
+            ("D---ddddddddddd", "genius", "joint"),
+            ("E---eeeeeeeeeee", "custom", "joint"),
+        ):
+            video = make_video(tmp_path, stem)
+            write_bundle(
+                tmp_path,
+                video.stem,
+                lyrics={"origin": origin},
+                pipeline_decisions={"method_used": method},
+            )
+
+        counts = library_status.overview_counts(library_status.library_statuses(tmp_path))
+
+        assert counts == {
+            "behind": 0,
+            "poor": 0,
+            "no_lyrics": 0,
+            "caption": 2,
+            "movie": 1,
+            "genius": 1,
+            "custom": 1,
+            "no_timed_source": 2,  # neither joint song has an LRC beside it
             "all": 5,
         }
 
     def test_empty_folder(self, tmp_path):
-        assert library_status.overview_counts(library_status.library_statuses(tmp_path)) == {
-            "behind": 0,
-            "poor": 0,
-            "no_lyrics": 0,
-            "all": 0,
-        }
+        assert library_status.overview_counts(
+            library_status.library_statuses(tmp_path)
+        ) == dict.fromkeys(library_status.SONG_LISTS, 0)
 
 
 class TestHistory:

@@ -43,9 +43,11 @@
   .pr-chev { transition: transform .15s; }
   .pr-link[aria-expanded="true"] .pr-chev { transform: rotate(180deg); }
   .pr-songs { background: var(--dark-bg-secondary); padding: 4px 12px; }
-  .pr-song { display: flex; flex-direction: column; justify-content: center; min-height: 44px; padding: 6px 0; color: inherit; }
+  .pr-song { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 0; }
   .pr-song + .pr-song { border-top: 1px solid var(--dark-border); }
+  .pr-song-main { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; color: inherit; }
   .pr-song-name { word-break: break-word; }
+  .pr-song-repair { flex: none; display: inline-flex; align-items: center; min-height: 44px; padding: 0 8px; font-size: 14px; font-weight: 700; color: var(--dark-link); }
   .pr-songs-note { min-height: 44px; display: flex; align-items: center; }
   .pr-run { display: flex; align-items: center; gap: 10px; padding: 12px; }
   .pr-run + .pr-run { border-top: 1px solid var(--dark-border); }
@@ -91,6 +93,7 @@
       <span class="info-tip-line">{% trans share=poor_share %}Looks poor: {{ share }}% or more of the song's lines were guessed.{% endtrans %}</span>
       <span class="info-tip-line">{% trans %}No lyrics: the words come from what the singer is heard singing.{% endtrans %}</span>
       <span class="info-tip-line">{% trans %}Tap a list to show its songs, then a song for its Song Info.{% endtrans %}</span>
+      <span class="info-tip-line">{% trans %}Cue align times each line from a timed source. Joint combines the lyric aligner with what is heard; it is the fallback.{% endtrans %}</span>
     {% endcall %}</span></div>
     <div class="pr-card">
       <div class="pr-list">
@@ -107,6 +110,30 @@
       </div>
       <div class="pr-list">
         <button type="button" class="pr-link" data-list="all" aria-expanded="false"><span>{% trans %}All songs{% endtrans %}</span><span class="pr-link-end"><span class="tag is-light" data-count="all">…</span><i class="icon icon-angle-down pr-chev" aria-hidden="true"></i></span></button>
+        <div class="pr-songs is-hidden"></div>
+      </div>
+    </div>
+
+    <div class="pr-sec"><span>{% trans %}By lyric source{% endtrans %}</span></div>
+    <div class="pr-card">
+      <div class="pr-list">
+        <button type="button" class="pr-link" data-list="caption" aria-expanded="false"><span>{% trans %}YouTube caption · cue align{% endtrans %}</span><span class="pr-link-end"><span class="tag is-light" data-count="caption">…</span><i class="icon icon-angle-down pr-chev" aria-hidden="true"></i></span></button>
+        <div class="pr-songs is-hidden"></div>
+      </div>
+      <div class="pr-list">
+        <button type="button" class="pr-link" data-list="movie" aria-expanded="false"><span>{% trans %}Movie subtitles · cue align{% endtrans %}</span><span class="pr-link-end"><span class="tag is-light" data-count="movie">…</span><i class="icon icon-angle-down pr-chev" aria-hidden="true"></i></span></button>
+        <div class="pr-songs is-hidden"></div>
+      </div>
+      <div class="pr-list">
+        <button type="button" class="pr-link" data-list="genius" aria-expanded="false"><span>{% trans %}Genius · joint{% endtrans %}</span><span class="pr-link-end"><span class="tag is-light" data-count="genius">…</span><i class="icon icon-angle-down pr-chev" aria-hidden="true"></i></span></button>
+        <div class="pr-songs is-hidden"></div>
+      </div>
+      <div class="pr-list">
+        <button type="button" class="pr-link" data-list="custom" aria-expanded="false"><span>{% trans %}Custom · joint{% endtrans %}</span><span class="pr-link-end"><span class="tag is-light" data-count="custom">…</span><i class="icon icon-angle-down pr-chev" aria-hidden="true"></i></span></button>
+        <div class="pr-songs is-hidden"></div>
+      </div>
+      <div class="pr-list">
+        <button type="button" class="pr-link" data-list="no_timed_source" aria-expanded="false"><span>{% trans %}No timed source{% endtrans %}</span><span class="pr-link-end"><span class="tag is-warning is-light" data-count="no_timed_source">…</span><i class="icon icon-angle-down pr-chev" aria-hidden="true"></i></span></button>
         <div class="pr-songs is-hidden"></div>
       </div>
     </div>
@@ -227,6 +254,7 @@ var T = {
   dbFailed: {{ _('Processing failed') | tojson }},
   retry: {{ _('Retry') | tojson }},
   songInfo: {{ _('Song info') | tojson }},
+  repair: {{ _('Repair') | tojson }},
   addToQueue: {{ _('Add to queue') | tojson }},
   cancel: {{ _('Cancel') | tojson }},
   deleteSong: {{ _('Delete song') | tojson }},
@@ -722,9 +750,12 @@ function openList(name) {
       return;
     }
     answer.rows.forEach(function (row) {
-      box.append(libraryPages.el('a', 'pr-song no-spa').attr('href', row.info_url).append(
-        libraryPages.el('span', 'pr-song-name', row.name),
-        libraryPages.el('span', 'pr-muted', row.subline)
+      box.append(libraryPages.el('div', 'pr-song').append(
+        libraryPages.el('a', 'pr-song-main no-spa').attr('href', row.info_url).append(
+          libraryPages.el('span', 'pr-song-name', row.name),
+          libraryPages.el('span', 'pr-muted', row.subline)
+        ),
+        libraryPages.el('a', 'pr-song-repair no-spa', T.repair).attr('href', row.repair_url)
       ));
     });
   }).fail(function (xhr) {

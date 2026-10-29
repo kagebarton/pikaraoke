@@ -10,7 +10,7 @@ import os
 import threading
 from pathlib import Path
 from unittest.mock import MagicMock
-from urllib.parse import quote
+from urllib.parse import parse_qs, quote, unquote_to_bytes, urlsplit
 
 import pytest
 import werkzeug
@@ -668,7 +668,17 @@ class TestOverviewRoute:
 
         counts = env.client.get("/library/overview").get_json()
 
-        assert counts == {"behind": 0, "poor": 1, "no_lyrics": 0, "all": 3}
+        assert counts == {
+            "behind": 0,
+            "poor": 1,
+            "no_lyrics": 0,
+            "caption": 1,
+            "movie": 0,
+            "genius": 1,
+            "custom": 0,
+            "no_timed_source": 1,  # the Genius song is joint-timed with no LRC beside it
+            "all": 3,
+        }
 
     def test_a_guest_gets_403_json(self, env):
         env.admin = False
@@ -686,6 +696,12 @@ def song_list(env, name: str) -> list[dict]:
     return response.get_json()["rows"]
 
 
+def song_arg(url: str) -> bytes:
+    """The song a link's query names, as the file name's raw bytes."""
+    query = dict(pair.split("=", 1) for pair in urlsplit(url).query.split("&"))
+    return unquote_to_bytes(query["song"])
+
+
 class TestSongListsRoute:
     def test_each_row_has_its_name_subline_and_song_info_link(self, env):
         song = env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())
@@ -697,6 +713,7 @@ class TestSongListsRoute:
                 "name": "A",  # the display name drops the id
                 "subline": "38 of 89 lines guessed",
                 "info_url": "/song_info?song=" + quote(song),
+                "repair_url": "/song_info/repair?song=" + quote(song, safe="/") + "&source=caption",
             }
         ]
 
@@ -749,6 +766,113 @@ class TestSongListsRoute:
 
         assert page.status_code == 200
         assert "Rock &amp; Roll #1 100% Café" in text(page)
+
+    def test_the_by_source_lists_pick_their_songs(self, env):
+        env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())
+        env.add_song("B---bbbbbbbbbbb.mp4", movie_bundle())
+        env.add_song("C---ccccccccccc.mp4", poor_genius_bundle())
+        env.add_song("D---ddddddddddd.mp4", custom_bundle())
+
+        assert [r["name"] for r in song_list(env, "caption")] == ["A"]
+        assert [r["name"] for r in song_list(env, "movie")] == ["B"]
+        assert [r["name"] for r in song_list(env, "genius")] == ["C"]
+        assert [r["name"] for r in song_list(env, "custom")] == ["D"]
+        assert [r["name"] for r in song_list(env, "no_timed_source")] == ["C", "D"]
+
+    def test_the_cue_lists_say_cue_align(self, env):
+        env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())
+        env.add_song("B---bbbbbbbbbbb.mp4", movie_bundle())
+
+        assert [r["subline"] for r in song_list(env, "caption")] == ["Cue align"]
+        assert [r["subline"] for r in song_list(env, "movie")] == ["Cue align"]
+
+    @staticmethod
+    def joint_bundle(*, ytasr: bool = False, fill: dict | None = None, match=None) -> dict:
+        """A Genius song on the joint route with the given LRCLIB record and fill."""
+        bundle = poor_genius_bundle()
+        bundle["lyrics"] = {"origin": "genius", "genius": GENIUS, "lines": ["one"]}
+        if ytasr:
+            bundle["lyrics"]["ytasr"] = {"asr_file": "subtitles/x.en.asr.json3"}
+        if match:
+            bundle["lyrics"]["lrclib"] = match
+        bundle["joint_stats"]["lrclib_fill"] = fill or {}
+        return bundle
+
+    def test_a_joint_song_says_what_lrclib_did(self, env):
+        used = {"eligible": True, "filled_lids": [1, 2, 3]}
+        env.add_song("A---aaaaaaaaaaa.mp4", self.joint_bundle(fill=used, match=LRCLIB_MATCH))
+        env.add_song(
+            "B---bbbbbbbbbbb.mp4",
+            self.joint_bundle(fill={"eligible": True, "filled_lids": [1]}, match=LRCLIB_MATCH),
+        )
+        env.add_song("C---ccccccccccc.mp4", self.joint_bundle(match=LRCLIB_MATCH))
+        skipped = env.add_song("D---ddddddddddd.mp4", self.joint_bundle())
+        lrclib.write_skip_marker(lrclib.lrc_path(Path(skipped)))
+
+        assert [r["subline"] for r in song_list(env, "genius")] == [
+            "LRCLIB filled 3 lines",
+            "LRCLIB filled 1 line",
+            "LRCLIB not used",
+            "LRCLIB skipped",
+        ]
+
+    def test_a_joint_song_with_captions_says_so_first(self, env):
+        env.add_song(
+            "A---aaaaaaaaaaa.mp4",
+            self.joint_bundle(
+                ytasr=True, fill={"eligible": True, "filled_lids": [1, 2]}, match=LRCLIB_MATCH
+            ),
+        )
+
+        assert [r["subline"] for r in song_list(env, "genius")] == [
+            "with captions · LRCLIB filled 2 lines"
+        ]
+
+    def test_a_joint_song_without_a_recorded_match_goes_by_the_disk(self, env):
+        """A bundle from before schema 9 records no match, yet an LRC may sit beside the song."""
+        bare = env.add_song("A---aaaaaaaaaaa.mp4", self.joint_bundle())
+        env.add_song("B---bbbbbbbbbbb.mp4", self.joint_bundle())
+        lrc = lrclib.lrc_path(Path(bare))
+        lrc.parent.mkdir(exist_ok=True)
+        lrc.write_text("[00:01.00]one\n", encoding="utf-8")
+
+        assert [r["subline"] for r in song_list(env, "genius")] == [
+            "LRC on disk",
+            "no LRCLIB match",
+        ]
+        assert [r["name"] for r in song_list(env, "no_timed_source")] == ["B"]
+
+    def test_a_joint_song_links_to_repair_with_its_caption_picked(self, env):
+        song = env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())
+
+        (row,) = song_list(env, "genius")
+        link = urlsplit(row["repair_url"])
+
+        assert link.path == "/song_info/repair"
+        assert parse_qs(link.query) == {"song": [song], "source": ["caption"]}
+
+    def test_a_cue_song_links_to_the_plain_repair_page(self, env):
+        song = env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())
+
+        (row,) = song_list(env, "caption")
+        link = urlsplit(row["repair_url"])
+
+        assert parse_qs(link.query) == {"song": [song]}
+
+    def test_a_song_not_processed_links_to_the_plain_repair_page(self, env):
+        env.add_song("A---aaaaaaaaaaa.mp4")
+
+        (row,) = song_list(env, "all")
+
+        assert "source" not in parse_qs(urlsplit(row["repair_url"]).query)
+
+    def test_a_file_name_that_is_not_utf8_still_gets_its_links(self, env):
+        song = env.add_song("Caf\udce9---aaaaaaaaaaa.mp4", poor_genius_bundle())
+
+        (row,) = song_list(env, "genius")
+
+        assert song_arg(row["info_url"]) == song_arg(row["repair_url"]) == os.fsencode(song)
+        assert parse_qs(urlsplit(row["repair_url"]).query)["source"] == ["caption"]
 
 
 LYRICS = "Line one here\nLine two here\nLine three here\nLine four here"
@@ -904,6 +1028,32 @@ class TestRepairPage:
 
         assert "var CURRENT_SOURCE = null" in text(self.page(env, gone))
         assert 'var CURRENT_SOURCE = "custom"' in text(self.page(env, left))
+
+    @pytest.mark.parametrize("source", ["caption", "genius", "custom", "movie", "transcribe"])
+    def test_a_known_source_in_the_link_opens_the_page_with_it_chosen(self, env, source):
+        song = env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())
+
+        html = text(
+            env.client.get("/song_info/repair", query_string={"song": song, "source": source})
+        )
+
+        assert f'var PRESELECT = "{source}"' in html
+        assert 'var CURRENT_SOURCE = "genius"' in html  # what is current is still told apart
+
+    @pytest.mark.parametrize("source", ["bogus", "", "lrclib", "CAPTION"])
+    def test_an_unknown_source_in_the_link_is_ignored(self, env, source):
+        song = env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())
+
+        html = text(
+            env.client.get("/song_info/repair", query_string={"song": song, "source": source})
+        )
+
+        assert "var PRESELECT = null" in html
+
+    def test_no_source_in_the_link_preselects_nothing(self, env):
+        html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())))
+
+        assert "var PRESELECT = null" in html
 
     def test_a_caption_song_is_current_on_the_caption_card(self, env):
         html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())))
@@ -1114,7 +1264,20 @@ class TestRepairPage:
         choose = code[code.index("function chooseSource") : code.index("function refreshStep1")]
 
         assert "$('#movie-section').toggleClass('is-hidden', source !== 'movie');" in choose
-        assert "$.inArray(CURRENT_SOURCE, ['genius', 'custom', 'movie', 'transcribe'])" in code
+        assert "$.inArray(START_SOURCE, ['genius', 'custom', 'movie', 'transcribe'])" in code
+
+    def test_a_links_source_wins_over_the_current_one_and_the_caption_waits_for_its_check(
+        self, env
+    ):
+        code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
+        check = code[
+            code.index("function startCaptionCheck") : code.index("function hasLrclibStep")
+        ]
+
+        assert "var START_SOURCE = PRESELECT || CURRENT_SOURCE;" in code
+        assert "if (START_SOURCE === 'caption' && !state.source) chooseSource('caption');" in check
+        # A caption that fails its check leaves nothing chosen, whatever was preselected.
+        assert check.count("chooseSource(") == 1
 
     def test_the_answer_list_overrides_the_bulma_content_list_rules(self, env):
         """The page sits in a Bulma .content, whose ul rules add bullets and 1em margins."""
