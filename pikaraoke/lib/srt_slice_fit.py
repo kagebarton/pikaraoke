@@ -101,9 +101,11 @@ class SliceFit:
     ``total`` is the cues that land inside the clip (``dropped`` more fall wholly
     outside); before that it is every cue pasted (on ``too_long``, as parsed).
     ``shift_s`` and ``speed`` are the time map (``clip_t = speed * movie_t +
-    shift_s``), the shift unreliable on a ``disagree`` refusal. ``srt`` is the
-    corrected slice text. ``heard_source`` and ``spread_s`` (median absolute
-    deviation of the anchors) are diagnostics for the calibration report.
+    shift_s``), the shift unreliable on a ``disagree`` refusal. ``move_s`` is how
+    far the first cue inside the clip moves, which a speed change sets apart from
+    ``shift_s``. ``srt`` is the corrected slice text. ``heard_source`` and
+    ``spread_s`` (median absolute deviation of the anchors) are diagnostics for
+    the calibration report.
     """
 
     status: str
@@ -112,6 +114,7 @@ class SliceFit:
     total: int = 0
     shift_s: float = 0.0
     speed: float = 1.0
+    move_s: float = 0.0
     dropped: int = 0
     srt: str | None = None
     heard_source: str | None = None
@@ -230,11 +233,13 @@ def _fit_one_stream(
         if _clip_span(start, end, speed, shift, video_length) is not None
     }
     matched = len(found & inside)
+    first = min((spans[k][0] for k in inside), default=0.0)
     base = {
         "matched": matched,
         "total": len(inside),
         "shift_s": shift,
         "speed": speed,
+        "move_s": (speed - 1) * first + shift,
         "dropped": n_cues - len(inside),
         **common,
     }

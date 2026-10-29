@@ -844,6 +844,8 @@ class TestMovieRepair:
     def test_a_transcribed_song_is_not_told_to_regenerate(self, tmp_path, monkeypatch):
         """A transcribe run keeps no heard words, so a Regenerate would not help."""
         [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        (tmp_path / "karaoke").mkdir()
+        (tmp_path / "karaoke" / f"{video.stem}.ass").write_text("", encoding="utf-8")
         monkeypatch.setattr("pikaraoke.lib.library_regen.probe_duration", lambda path: CLIP_S)
         tools, processing = make_tools(tmp_path, [str(video)])
 
