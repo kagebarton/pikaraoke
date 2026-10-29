@@ -14,6 +14,9 @@ first shift and speed (a 25 fps subtitle file against a 23.976 fps film drifts
 about 8 s over three minutes). Pass 2 re-matches with the cues' expected times
 mapped through that fit, which hands a repeated chorus line to the right
 instance, and fits the speed and shift again from its own matches.
+
+An LRCLIB match's synced lyrics fit the same way (:func:`lrc_to_srt` makes them
+subtitles), and a fit also marks which lines the heard words do not bear out.
 """
 
 import itertools
@@ -25,6 +28,7 @@ from typing import NamedTuple
 
 import srt
 
+from pikaraoke.lib import lrclib
 from pikaraoke.lib.cue_align import _token_expected_times
 from pikaraoke.lib.joint_match import _tokenise_lines
 from pikaraoke.lib.srt_cues import cue_spans_from_srt, offset_mad_against_cues
@@ -92,6 +96,15 @@ FOUND_MIN_TOKEN_SHARE = 0.5
 # the subtitles' own (shifted) times.
 MIN_MATCHED_SHARE = 0.25
 
+# PLACEHOLDER, so that the module runs; GATE A of plans/lyric-source-lists.md sets
+# it. A fitted line is flagged when the heard words put its start more than this
+# many seconds from where the fit puts it, or when nothing was heard for it.
+FLAG_TOLERANCE_S = 2.0
+
+# PLACEHOLDER, as above. The shortest run of consecutive flagged lines worth
+# showing the admin as a run.
+MIN_FLAGGED_RUN = 3
+
 
 @dataclass(frozen=True)
 class SliceFit:
@@ -105,7 +118,9 @@ class SliceFit:
     far the first cue inside the clip moves, which a speed change sets apart from
     ``shift_s``. ``srt`` is the corrected slice text. ``heard_source`` and
     ``spread_s`` (median absolute deviation of the anchors) are diagnostics for
-    the calibration report.
+    the calibration report. ``flagged`` is set on ``fits`` only: the in-clip lines
+    the heard words do not bear out, as indexes into the lines the pipeline loads
+    from ``srt`` (cues cleaned to nothing are not lines), in order.
     """
 
     status: str
@@ -120,6 +135,7 @@ class SliceFit:
     heard_source: str | None = None
     spread_s: float | None = None
     anchors: int = 0
+    flagged: tuple[int, ...] = ()
 
 
 def heard_streams(bundle: dict | None, asr_json3: str | None) -> dict[str, list[dict]]:
@@ -145,6 +161,36 @@ def heard_streams(bundle: dict | None, asr_json3: str | None) -> dict[str, list[
         if asr_words:
             streams[ASR] = [{"norm": w["norm"], "start": w["start"]} for w in asr_words]
     return streams
+
+
+def lrc_to_srt(lrc_text: str) -> str:
+    """The synced lines of an LRC as SRT text, so :func:`fit_slice` takes them as subtitles.
+
+    LRC stamps only starts: each line ends at the next start, and the last holds
+    ``LRC_LAST_LINE_HOLD_S``. An LRC with no timed line gives ``""``, which
+    ``fit_slice`` refuses as ``not_srt``.
+    """
+    texts, spans = lrclib.cue_spans_from_lrc(lrc_text)
+    return srt.compose(
+        srt.Subtitle(
+            index=0, start=timedelta(seconds=start), end=timedelta(seconds=end), content=text
+        )
+        for text, (start, end) in zip(texts, spans)
+    )
+
+
+def flagged_runs(flagged: tuple[int, ...], min_run: int) -> list[tuple[int, int]]:
+    """The runs of consecutive ``flagged`` lines at least ``min_run`` long, as ``(first, last)``.
+
+    ``flagged`` is ascending, as :class:`SliceFit` has it. A cut verse or an extra
+    repeat leaves a run; single unheard lines do not.
+    """
+    runs = []
+    for _, group in itertools.groupby(enumerate(flagged), key=lambda pair: pair[1] - pair[0]):
+        lines = [line for _, line in group]
+        if len(lines) >= min_run:
+            runs.append((lines[0], lines[-1]))
+    return runs
 
 
 def fit_slice(srt_text: str, streams: dict[str, list[dict]], video_length: float) -> SliceFit:
@@ -245,7 +291,33 @@ def _fit_one_stream(
     }
     if not inside or matched / len(inside) < MIN_MATCHED_SHARE:
         return SliceFit(REFUSED, reason=TOO_FEW, **base)
-    return SliceFit(FITS, srt=_corrected_srt(raw_cues, speed, shift, video_length), **base)
+    return SliceFit(
+        FITS,
+        srt=_corrected_srt(raw_cues, speed, shift, video_length),
+        flagged=_flagged_lines(sorted(inside), anchors, spans, speed, shift),
+        **base,
+    )
+
+
+def _flagged_lines(
+    in_clip: list[int],
+    anchors: list[dict],
+    spans: list[tuple[float, float]],
+    speed: float,
+    shift: float,
+) -> tuple[int, ...]:
+    """Which of the ``in_clip`` cues (indexes into ``spans``) the heard words do not bear out.
+
+    A cue is flagged when no word was heard for it, or its anchor sits more than
+    FLAG_TOLERANCE_S from the start the fit gives it. The result numbers the cues
+    by their place in ``in_clip``, the lines of the corrected sheet.
+    """
+    heard = {anchor["lid"]: anchor["start"] for anchor in anchors}
+    return tuple(
+        line
+        for line, k in enumerate(in_clip)
+        if k not in heard or abs(heard[k] - (speed * spans[k][0] + shift)) > FLAG_TOLERANCE_S
+    )
 
 
 def _match_by_order(tokens: _CueTokens, words: list[dict]) -> tuple[list[dict], set[int]]:
