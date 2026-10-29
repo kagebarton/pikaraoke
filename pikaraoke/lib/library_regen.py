@@ -295,6 +295,8 @@ def lrc_sheet_plan(song: Path, text: str | None = None) -> Plan:
 
 
 _SHEET_PLANS = {"custom": custom_sheet_plan, "movie": movie_sheet_plan, "lrclib": lrc_sheet_plan}
+# The kinds of custom sheet, which are also the repair sources that save one.
+SHEET_KINDS = tuple(_SHEET_PLANS)
 
 
 def custom_plan(job: SongJob) -> Plan | None:

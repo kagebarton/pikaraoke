@@ -837,9 +837,7 @@
     /* -------------------------------------------------------------- start */
 
     startCaptionCheck();
-    if ($.inArray(START_SOURCE, ['genius', 'custom', 'movie', 'lrclib', 'transcribe']) !== -1) {
-      chooseSource(START_SOURCE);
-    }
+    if (START_SOURCE && START_SOURCE !== 'caption') chooseSource(START_SOURCE);  // the caption waits for its check
     renderMovie();
     startLrcSearch();
     renderLrc();
