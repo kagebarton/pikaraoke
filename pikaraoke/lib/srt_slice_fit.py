@@ -68,8 +68,11 @@ MAX_FREE_SPEED_CHANGE = 0.1
 MIN_SLOPE_SEPARATION_S = 20.0
 
 # A free speed with less spread replaces a passing factor only when it moves the
-# cues across the slice by more than this many seconds; noise in the heard times
-# fakes a smaller gap and would swap a right factor for a wrong speed.
+# cues by more than this many seconds across the stretch the anchors were heard
+# over. A free speed is only as precise as that stretch, so over it noise in the
+# heard times fakes a gap about the size of the jitter, and a smaller gap would
+# swap a right factor for a wrong speed. Measured over the whole clip instead,
+# noise from a short cluster of anchors would look like a real drift.
 MIN_FREE_SPEED_DRIFT_S = 0.75
 
 # A cue counts as found when at least this share of its tokens matched a heard
@@ -190,13 +193,13 @@ def _fit_one_stream(
 ) -> SliceFit:
     n_cues = len(spans)
     anchors, _ = _match_by_order(tokens, words)
-    pass1 = _best_speed(anchors, spans, video_length)
+    pass1 = _best_speed(anchors, spans)
     if pass1 is None:
         return SliceFit(REFUSED, reason=TOO_FEW, total=n_cues, heard_source=name)
 
     speed, stats = pass1
     anchors, found = _match_by_time(tokens, spans, speed, stats["offset_s"], words)
-    pass2 = _best_speed(anchors, spans, video_length)
+    pass2 = _best_speed(anchors, spans)
     if pass2 is None:
         return SliceFit(REFUSED, reason=TOO_FEW, total=n_cues, heard_source=name)
     speed, stats = pass2
@@ -312,9 +315,7 @@ def _fit_at(anchors: list[dict], spans: list[tuple[float, float]], speed: float)
     return _SpeedFit(speed, offset_mad_against_cues(anchors, _scaled(spans, speed)))
 
 
-def _best_speed(
-    anchors: list[dict], spans: list[tuple[float, float]], length: float
-) -> _SpeedFit | None:
+def _best_speed(anchors: list[dict], spans: list[tuple[float, float]]) -> _SpeedFit | None:
     """The speed to fit at and its offset stats; None when too few anchors.
 
     Prefers a factor that did not bail, then the least spread of those that
@@ -332,31 +333,20 @@ def _best_speed(
         return best
     candidate = _fit_at(anchors, spans, free)
     if candidate.rank < best.rank and (
-        best.stats["bailed"]
-        or _drift_s(anchors, spans, best, free, length) > MIN_FREE_SPEED_DRIFT_S
+        best.stats["bailed"] or _drift_s(anchors, best.speed, free) > MIN_FREE_SPEED_DRIFT_S
     ):
         return candidate
     return best
 
 
-def _drift_s(
-    anchors: list[dict],
-    spans: list[tuple[float, float]],
-    best: _SpeedFit,
-    free: float,
-    length: float,
-) -> float:
-    """Seconds ``free`` moves the cues away from ``best`` across the anchored cues in the clip.
+def _drift_s(anchors: list[dict], a: float, b: float) -> float:
+    """Seconds the speeds ``a`` and ``b`` move the cues apart across the heard anchors.
 
-    Only cues that ``best`` places inside the clip count: an anchor on a wrong line
-    far down the paste would otherwise stretch the extent, and with it the drift.
+    The extent is taken over heard times, which all lie in the clip, so an anchor
+    on a wrong line far down the paste cannot stretch it.
     """
-    starts = [
-        spans[anchor["lid"]][0]
-        for anchor in anchors
-        if _clip_span(*spans[anchor["lid"]], best.speed, best.stats["offset_s"], length)
-    ]
-    return abs(best.speed - free) * (max(starts) - min(starts)) if starts else 0.0
+    heard = [anchor["start"] for anchor in anchors]
+    return abs(a - b) * (max(heard) - min(heard))
 
 
 def free_speed(anchors: list[dict], spans: list[tuple[float, float]]) -> float | None:
@@ -399,7 +389,7 @@ def _clip_span(
 ) -> tuple[float, float] | None:
     """A movie-time span on clip time, clamped to the clip; None when none of it is left.
 
-    The one rule for a cue being inside the clip: counting it, writing it out, and the drift.
+    The one rule for both counting a cue as inside the clip and writing it out.
     """
     start, end = max(speed * start + shift, 0.0), min(speed * end + shift, length)
     return (start, end) if end > start else None

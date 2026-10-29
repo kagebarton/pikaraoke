@@ -320,12 +320,17 @@ class TestBestSpeed:
         factor = srt_slice_fit._fit_at(anchors, spans, 1.0)
         assert factor.stats["bailed"] == "wide_spread"
 
-        best = srt_slice_fit._best_speed(anchors, spans, 300.0)
+        best = srt_slice_fit._best_speed(anchors, spans)
         assert best.stats["bailed"] is None
-        assert srt_slice_fit._drift_s(anchors, spans, factor, best.speed, 300.0) < 0.75
+        assert srt_slice_fit._drift_s(anchors, factor.speed, best.speed) < 0.75
 
     def test_a_wrong_line_anchor_far_down_the_paste_does_not_stretch_the_drift(self):
         spans = [(5.0 * k, 5.0 * k + 3.0) for k in range(20)] + [(700.0, 703.0)]
         anchors = [{"lid": k, "start": 100.0 + spans[k][0] + JITTER_S[k]} for k in range(20)]
         anchors.append({"lid": 20, "start": 180.0})  # a line repeated past the clip
-        assert srt_slice_fit._best_speed(anchors, spans, 300.0).speed == 1.0
+        free = srt_slice_fit.free_speed(anchors, spans)
+        factor = srt_slice_fit._fit_at(anchors, spans, 1.0)
+        assert srt_slice_fit._fit_at(anchors, spans, free).rank < factor.rank
+        drift = srt_slice_fit._drift_s(anchors, factor.speed, free)
+        assert drift < srt_slice_fit.MIN_FREE_SPEED_DRIFT_S
+        assert srt_slice_fit._best_speed(anchors, spans).speed == 1.0
