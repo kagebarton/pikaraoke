@@ -718,63 +718,67 @@ def _slice_card(check: MovieSliceCheck) -> dict:
             _("These subtitles have more than %(n)s lines.") % {"n": f"{MAX_CUES:,}"},
             tip=_("Paste only the part of the movie with the song."),
         )
+    return _refusal_card(
+        check,
+        no_words_ever=_(
+            "This song has no heard words to compare the subtitles with, and a "
+            "song whose lyrics were transcribed doesn't keep them yet."
+        ),
+        no_words_yet=_(
+            "This song has no heard words yet, so there is nothing to compare the subtitles with."
+        ),
+        no_lines=_("These subtitles have no lines to check."),
+        disagree_tip=_(
+            "The clip may be cut from several scenes, or these subtitles are for a "
+            "different release."
+        ),
+        too_few_tip=_(
+            "Check that these subtitles are from this movie and cover the part this clip shows."
+        ),
+    )
+
+
+def _refusal_card(
+    check: MovieSliceCheck | LrcTimingCheck,
+    no_words_ever: str,
+    no_words_yet: str,
+    no_lines: str,
+    disagree_tip: str,
+    too_few_tip: str,
+    extra: Sequence[tuple[str, str | None]] = (),
+) -> dict:
+    """The card for a check with no heard words to go on, or whose lines don't fit.
+
+    The movie and LRCLIB cards share it and differ only in the sentences passed in, which
+    name what was checked. ``extra`` lines follow a doesn't-fit card's count.
+    """
+    fit = check.fit
     if fit.status == NO_REFERENCE and not check.regenerate_helps:
-        return _card(
-            fit,
-            "info",
-            _("Can't check."),
-            [
-                (
-                    _(
-                        "This song has no heard words to compare the subtitles with, and a "
-                        "song whose lyrics were transcribed doesn't keep them yet."
-                    ),
-                    None,
-                )
-            ],
-        )
+        return _card(fit, "info", _("Can't check."), [(no_words_ever, None)])
     if fit.status == NO_REFERENCE:
         return _card(
             fit,
             "info",
             _("Can't check yet."),
             [
-                (
-                    _(
-                        "This song has no heard words yet, so there is nothing to compare "
-                        "the subtitles with."
-                    ),
-                    None,
-                ),
-                (
-                    _("Regenerate the song from Song info first, then come back and check."),
-                    None,
-                ),
+                (no_words_yet, None),
+                (_("Regenerate the song from Song info first, then come back and check."), None),
             ],
             song_info_link=True,
         )
-    head = _("Doesn't fit.")
-    if not fit.total:
-        return _card(fit, "bad", head, [(_("These subtitles have no lines to check."), None)])
     counts = {"n": fit.matched, "m": fit.total}
-    if fit.reason == DISAGREE:
-        return _card(
-            fit,
-            "bad",
-            head,
-            [(_("Found %(n)d of %(m)d lines, but they don't agree on one timing.") % counts, None)],
-            tip=_(
-                "The clip may be cut from several scenes, or these subtitles are for a "
-                "different release."
-            ),
-        )
-    return _card(
-        fit,
-        "bad",
-        head,
-        [(_("Only %(n)d of %(m)d lines were found in the clip.") % counts, None)],
-        tip=_("Check that these subtitles are from this movie and cover the part this clip shows."),
-    )
+    tip = None
+    if not fit.total:
+        lines = [(no_lines, None)]
+    elif fit.reason == DISAGREE:
+        lines = [
+            (_("Found %(n)d of %(m)d lines, but they don't agree on one timing.") % counts, None)
+        ]
+        tip = disagree_tip
+    else:
+        lines = [(_("Only %(n)d of %(m)d lines were found in the clip.") % counts, None)]
+        tip = too_few_tip
+    return _card(fit, "bad", _("Doesn't fit."), [*lines, *extra], tip=tip)
 
 
 def _card_text(card: dict) -> str:
@@ -857,62 +861,26 @@ def _lrc_refusal_card(check: LrcTimingCheck, length: str | None) -> dict:
         return _card(
             fit, "bad", _("This match has more than %(n)s lines.") % {"n": f"{MAX_CUES:,}"}
         )
-    if fit.status == NO_REFERENCE and not check.regenerate_helps:
-        return _card(
-            fit,
-            "info",
-            _("Can't check."),
-            [
-                (
-                    _(
-                        "This song has no heard words to compare the match with, and a "
-                        "song whose lyrics were transcribed doesn't keep them yet."
-                    ),
-                    None,
-                )
-            ],
-        )
-    if fit.status == NO_REFERENCE:
-        return _card(
-            fit,
-            "info",
-            _("Can't check yet."),
-            [
-                (
-                    _(
-                        "This song has no heard words yet, so there is nothing to compare "
-                        "the match with."
-                    ),
-                    None,
-                ),
-                (
-                    _("Regenerate the song from Song info first, then come back and check."),
-                    None,
-                ),
-            ],
-            song_info_link=True,
-        )
-    counts = {"n": fit.matched, "m": fit.total}
-    tip = None
-    if not fit.total:
-        lines = [(_("This match has no lines to check."), None)]
-    elif fit.reason == DISAGREE:
-        lines = [
-            (_("Found %(n)d of %(m)d lines, but they don't agree on one timing.") % counts, None)
-        ]
-        tip = _(
+    return _refusal_card(
+        check,
+        no_words_ever=_(
+            "This song has no heard words to compare the match with, and a "
+            "song whose lyrics were transcribed doesn't keep them yet."
+        ),
+        no_words_yet=_(
+            "This song has no heard words yet, so there is nothing to compare the match with."
+        ),
+        no_lines=_("This match has no lines to check."),
+        disagree_tip=_(
             "The video may be a different edit of the song, with a section this match lacks "
             "or repeats."
-        )
-    else:
-        lines = [(_("Only %(n)d of %(m)d lines were found in the clip.") % counts, None)]
-        tip = _(
+        ),
+        too_few_tip=_(
             "Check that this match is the same song as the video. A cover, a live take or "
             "another language won't match the words heard."
-        )
-    if length is not None:
-        lines.append((length, None))
-    return _card(fit, "bad", _("Doesn't fit."), lines, tip=tip)
+        ),
+        extra=[(length, None)] if length is not None else [],
+    )
 
 
 def _lrc_card(check: LrcTimingCheck) -> dict:
