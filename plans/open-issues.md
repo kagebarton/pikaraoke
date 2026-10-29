@@ -225,3 +225,30 @@ Record: `plans/queue-hold.md` on branch `queue_hold`, the manual checks row.
 - One-off on 2026-10-26: `test_library_regen.py::TestApplyLrclibChoice::test_skip_writes_the_marker`
   failed once in a full run and passed alone, with its neighbours and in the
   next full run. Cause not found.
+
+## Future features
+
+- **An LRCLIB match the admin has checked becomes the song's timing (Repair).**
+  As an automatic scaffold, LRCLIB was withdrawn (S-1, 2026-09-08). The text
+  matched, but an LRC can be timed to another edit of the song (a cut verse,
+  an extra repeat), and the offset-and-speed gate cannot see a section the
+  video never sings. It passed 5 of the 6 known edit mismatches. Record:
+  `plans/PROGRAM.md` and `plans/route-line-timing.md` on tag
+  `archive/edge_snap_refine`. On Repair, the admin is the check.
+  Today the picked LRC only fills lines the matcher leaves unplaced, and
+  "Preview selected timing" shows only the LRC's text, which a wrong edit
+  passes. Shape: send the picked LRC through the movie-subtitle route
+  (`srt_slice_fit.fit_slice`, then a saved sheet timed by cue align). An LRC
+  has start stamps only; `lrclib` already ends each line at the next start.
+  Ruled by Ken 2026-10-29:
+  1. **The LRC's own lyrics are the sheet**, since they are what the timing is
+     checked against.
+  2. **Preview = flagged lines first.** After the fit, mark each line by whether
+     heard words landed near its fitted time. A cut verse or an extra repeat
+     shows as a run of flagged lines. The fit's spread check can't catch that
+     itself, because it ignores a minority of lines that disagree. Playback with
+     the lines overlaid is held back until flagged lines prove not enough.
+  3. **Offered only once the fit makes it viable**; otherwise the pick stays a
+     fill, as today. Not settled: what "viable" means. Suggested: the fit
+     passes, the length gap to the video is small, and the flagged lines are
+     shown before the admin confirms. Open to other ideas.
