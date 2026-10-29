@@ -13,7 +13,12 @@ from flask_smorest import Blueprint
 
 from pikaraoke.lib.current_app import get_karaoke_instance, get_site_name, is_admin
 from pikaraoke.lib.genius import GeniusUnavailable
-from pikaraoke.lib.library_regen import RegenError
+from pikaraoke.lib.library_regen import (
+    CUSTOM_ORIGIN,
+    LRC_ORIGIN,
+    MOVIE_ORIGIN,
+    RegenError,
+)
 from pikaraoke.lib.library_status import HistoryEntry, SongStatus, length_gap_s
 from pikaraoke.lib.library_tools import (
     LRC_MAX_GAP_S,
@@ -189,11 +194,11 @@ def _rejected_texts(reason: str | None) -> tuple[str, str]:
 def _source_name(status: SongStatus) -> str:
     if status.origin == "genius":
         return _("Genius")
-    if status.origin == "custom":
+    if status.origin == CUSTOM_ORIGIN:
         return _("Custom lyrics")
-    if status.origin == "movie_srt":
+    if status.origin == MOVIE_ORIGIN:
         return _("Movie subtitles")
-    if status.origin == "lrclib_srt":
+    if status.origin == LRC_ORIGIN:
         return "LRCLIB"
     if status.origin == "srt":
         return _("YouTube captions")
@@ -228,7 +233,7 @@ def _timed_tile(status: SongStatus) -> Tile:
 
 def _lrclib_tile(status: SongStatus) -> Tile:
     label = "LRCLIB"
-    if status.origin == "lrclib_srt":
+    if status.origin == LRC_ORIGIN:
         return Tile(label, _("Timing"), _("times this song"))
     if status.lrclib_state == "n/a":
         return Tile(label, "—", _("Genius or custom lyrics only"))
@@ -325,15 +330,15 @@ def _lrclib_fit(status: SongStatus) -> tuple[str | None, str, bool]:
 
 def _route_text(status: SongStatus) -> str | None:
     if status.method == "cue_align":
-        if status.origin == "movie_srt":
+        if status.origin == MOVIE_ORIGIN:
             return _(
                 "Lyrics from the movie's subtitles, timed against the subtitles' own line times."
             )
-        if status.origin == "lrclib_srt":
+        if status.origin == LRC_ORIGIN:
             return _("Lyrics from an LRCLIB match, timed against its own line times.")
         return _("Lyrics from the YouTube caption, timed against the caption's own line times.")
     if status.method == "joint":
-        if status.origin == "custom":
+        if status.origin == CUSTOM_ORIGIN:
             if status.ytasr_used:
                 return _(
                     "Custom lyrics, timed by combining the lyric aligner, a transcription "
@@ -367,7 +372,7 @@ def _lrclib_label(match: dict | None) -> str:
 
 def _pick(entry: HistoryEntry) -> tuple:
     """What a version's lyric pick is: its source, and the Genius song or the custom words."""
-    if entry.origin in ("custom", "movie_srt", "lrclib_srt"):
+    if entry.origin in (CUSTOM_ORIGIN, MOVIE_ORIGIN, LRC_ORIGIN):
         return (entry.origin, entry.lines)
     return (entry.origin, (entry.genius or {}).get("id"))
 
@@ -381,11 +386,11 @@ def _versions(history: list[HistoryEntry]) -> list[Version]:
         if entry.genius:
             genius_text = _("Genius · %(artist)s") % {"artist": entry.genius.get("artist", "")}
             lrclib_text = _lrclib_label(entry.lrclib)
-        elif entry.origin == "custom":
+        elif entry.origin == CUSTOM_ORIGIN:
             genius_text, lrclib_text = _("Custom lyrics"), _lrclib_label(entry.lrclib)
-        elif entry.origin == "movie_srt":
+        elif entry.origin == MOVIE_ORIGIN:
             genius_text, lrclib_text = _("Movie subtitles"), None
-        elif entry.origin == "lrclib_srt":
+        elif entry.origin == LRC_ORIGIN:
             genius_text, lrclib_text = _("LRCLIB timing"), None
         else:
             genius_text, lrclib_text = _("YouTube captions"), None
@@ -441,6 +446,7 @@ def song_info():
         tiles=_tiles(status),
         source=_("Genius lyrics") if status.origin == "genius" else _source_name(status),
         lrclib_pick=_lrclib_pick(status),
+        lrclib_row=status.lrclib_state != "n/a" or status.origin == LRC_ORIGIN,
         alignment=_alignment(status),
         history=history,
         has_backups=any(not v.current for v in history),

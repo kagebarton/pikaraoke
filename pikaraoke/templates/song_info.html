@@ -140,7 +140,7 @@
       {% endif %}
     </div>
     {% endif %}
-    {% if status.lrclib_state != 'n/a' or status.origin == 'lrclib_srt' %}
+    {% if lrclib_row %}
     <div class="si-row"><span class="si-key">LRCLIB</span><span class="si-val">{{ lrclib_pick }}</span></div>
     {% endif %}
     {% if status.lrclib_state != 'n/a' %}
