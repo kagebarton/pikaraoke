@@ -80,3 +80,39 @@ class TestCueSpansFromSrt:
         cues = ["DJ 放音乐", "走吧 OK", "你是我的 MVP"]
         texts, _ = cue_spans_from_srt(self._srt(*cues))
         assert texts == cues
+
+    def test_speaker_label_on_its_own_line_drops_the_cue(self):
+        texts, spans = cue_spans_from_srt(self._srt("ANNA:", "Hello there", "BOTH:"))
+        assert texts == ["Hello there"]
+        assert spans == [(2.0, 2.9)]
+
+    def test_inline_speaker_label_is_stripped_and_listen_style_prose_survives(self):
+        texts, _ = cue_spans_from_srt(
+            self._srt(
+                "ANNA: Hello there",
+                "MR. POTTS: Be our guest",
+                "<i>MEN: Be a man</i>",
+                "Listen: it's time",
+            )
+        )
+        assert texts == ["Hello there", "Be our guest", "Be a man", "Listen: it's time"]
+
+    def test_label_after_a_dialogue_dash_or_star_is_stripped(self):
+        texts, _ = cue_spans_from_srt(
+            self._srt("- ANNA: Hello there", "BOB: * Sing along *", "Hi\nCARL: bye")
+        )
+        assert texts == ["Hello there", "Sing along", "Hi bye"]
+
+    def test_labels_survive_in_an_all_caps_file(self):
+        texts, _ = cue_spans_from_srt(self._srt("ANNA: HELLO THERE", "I FEAR THERE'S NO ONE"))
+        assert texts == ["Anna: hello there", "I fear there's no one"]
+
+    def test_standalone_stars_are_stripped_and_censored_words_keep_theirs(self):
+        texts, _ = cue_spans_from_srt(self._srt("* Sing along *", "* Next line", "what the f***"))
+        assert texts == ["Sing along", "Next line", "what the f***"]
+
+    def test_dialogue_dashes_at_line_start_and_after_a_sentence_end_are_stripped(self):
+        texts, _ = cue_spans_from_srt(
+            self._srt("- Hello there. - What?", "- One\n- Two", "won- derful -derful")
+        )
+        assert texts == ["Hello there. What?", "One Two", "won- derful -derful"]

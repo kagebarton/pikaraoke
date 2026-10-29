@@ -4,7 +4,8 @@ Shared helpers for working with uploader-synced SRT cue times:
 
 - :func:`cue_spans_from_srt` returns each cleaned cue's text and its
   ``(start, end)`` span, positionally identical to the lyric lines the
-  matcher consumes — the SRT cue-align path's line->time input. A caption
+  matcher consumes — the SRT cue-align path's line->time input. Speaker
+  labels, ``*`` song markers and dialogue dashes are stripped, and a caption
   file typed in capitals comes back in sentence case.
 - :func:`offset_mad_against_cues` fits the robust median display lead of a
   set of audio placements against a cue reference, with a MAD bail-out when
@@ -25,6 +26,24 @@ from pikaraoke.lib.genius_lyrics import clean_srt_line
 # as written. In the library the all-caps file is 100% capitals and every other
 # file is under 10%.
 _ALL_CAPS_MIN_SHARE = 0.9
+
+# Marks movie and TV subtitles put in front of or between the spoken words. They
+# are display noise on the karaoke screen, and a speaker label is also a token
+# that would be timed as sung.
+#
+# Decoration that may sit in front of a speaker label: dialogue dash, song star,
+# musical note, italic tag.
+_LEADING_DECORATION = r"(?:[-*♪♫\s]|<[^>]+>)*"
+# "MULAN:" or "MEN: ..." at a cue line's start. Capitals only, so a lyric like
+# "Listen: ..." survives.
+_SPEAKER_LABEL_RE = re.compile(
+    rf"^({_LEADING_DECORATION})[A-Z][A-Z0-9.'’&/+ -]{{1,29}}:(?=\s|$)\s*"
+)
+# A dialogue dash at a line start, or after a sentence end ("- Hakuna matata. - What?").
+# Followed by a space: an attached hyphen is a word split across cues ("-derful").
+_DIALOGUE_DASH_RE = re.compile(r"^(\s*(?:<[^>]+>\s*)*)-+\s+|(?<=[.!?])\s+-+\s+")
+# A "*" standing alone as a song marker; a censored "f***" keeps its stars.
+_SONG_STAR_RE = re.compile(r"(?<!\S)\*+(?!\S)")
 
 _PRONOUN_I_RE = re.compile(r"\bi\b")
 # Line start or a mid-line sentence end, then the first letter after any
@@ -49,20 +68,39 @@ def cue_spans_from_srt(srt_text: str) -> tuple[list[str], list[tuple[float, floa
     Applies the same per-cue cleanup as the lyric-align stage's SRT
     load (clean + drop empty), so the returned texts are positionally
     identical to the lyric lines the matcher consumed — the spans are
-    the timing that load step throws away. A file typed in capitals is
-    recased here too: on the cue route the aligner's text is the
-    karaoke's word text, so display case can't be fixed downstream.
+    the timing that load step throws away. Subtitle marks that are not
+    words (speaker labels, ``*`` song markers, dialogue dashes) are
+    stripped first. A file typed in capitals is recased here too: on the
+    cue route the aligner's text is the karaoke's word text, so display
+    case can't be fixed downstream. Speaker labels are left alone in such
+    a file, where every line would look like one.
     """
+    cues = list(srt.parse(srt_text))
+    all_caps = _is_all_caps([clean_srt_line(sub.content) for sub in cues])
     texts: list[str] = []
     spans: list[tuple[float, float]] = []
-    for sub in srt.parse(srt_text):
-        cleaned = clean_srt_line(sub.content)
+    for sub in cues:
+        cleaned = clean_srt_line(_strip_subtitle_marks(sub.content, labels=not all_caps))
         if cleaned:
             texts.append(cleaned)
             spans.append((sub.start.total_seconds(), sub.end.total_seconds()))
-    if _is_all_caps(texts):
+    if all_caps:
         texts = [_recase_line(text) for text in texts]
     return texts, spans
+
+
+def _strip_subtitle_marks(content: str, labels: bool) -> str:
+    """Raw cue content with speaker labels, song stars and dialogue dashes removed.
+
+    Works per cue line, since a label or dash is only a mark at a line's start.
+    """
+    lines = []
+    for line in content.split("\n"):
+        if labels:
+            line = _SPEAKER_LABEL_RE.sub(r"\1", line)
+        line = _DIALOGUE_DASH_RE.sub(r"\1 ", line)
+        lines.append(_SONG_STAR_RE.sub("", line))
+    return "\n".join(lines)
 
 
 def _is_all_caps(texts: list[str]) -> bool:
