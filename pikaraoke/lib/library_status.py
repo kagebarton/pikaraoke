@@ -67,8 +67,8 @@ def song_status(song: Path) -> SongStatus:
     bundle = read_bundle(song.parent, song.stem)
     kind = sheet_kind(custom_sheet_path(song))
     # Read from disk: bundles from before schema 9 never recorded the match.
-    lrc = lrclib.lrc_path(song)
-    lrc_on_disk = lrc.is_file() and not lrclib.is_skip_marker(lrc)
+    lrc = lrclib.read_song_lrc(song)
+    lrc_on_disk = lrc.state == "match"
     if bundle is None:
         karaoke = song.parent / "karaoke" / f"{song.stem}.ass"
         category = "no_lyrics" if karaoke.is_file() else "not_processed"
@@ -101,7 +101,7 @@ def song_status(song: Path) -> SongStatus:
     method = (bundle.get("pipeline_decisions") or {}).get("method_used")
     origin = lyrics.get("origin")
     fill = joint.get("lrclib_fill") or {}
-    state = _lrclib_state(song, origin, lyrics, fill)
+    state = _lrclib_state(lrc, origin, lyrics, fill)
     return SongStatus(
         path=song,
         youtube_id=extract_youtube_id(str(song)),
@@ -110,8 +110,7 @@ def song_status(song: Path) -> SongStatus:
         origin=origin,
         sheet_kind=kind,
         genius=lyrics.get("genius") or None,
-        lrclib=_lrclib_match(lyrics)
-        or (_lrc_match_on_disk(song) if origin == LRC_ORIGIN else None),
+        lrclib=_lrclib_match(lyrics) or (_lrc_match_on_disk(lrc) if origin == LRC_ORIGIN else None),
         lrclib_state=state,
         lrclib_reason=fill.get("reason") if state == "rejected" else None,
         lrclib_filled=len(fill.get("filled_lids") or []),
@@ -151,25 +150,21 @@ def _lrclib_match(lyrics: dict) -> dict | None:
     return ref if ref and ref.get("id") is not None else None
 
 
-def _lrc_match_on_disk(song: Path) -> dict | None:
-    """The LRCLIB record behind ``song``'s ``.lrc``, from its header; None when it has none.
+def _lrc_match_on_disk(lrc: lrclib.SongLrc) -> dict | None:
+    """The LRCLIB record behind the song's ``.lrc``, from its header; None when it has none.
 
     A song timed by an LRCLIB match runs the cue route, whose bundle records no match: the
     file is the only record of which one timed it.
     """
-    try:
-        meta = lrclib.read_lrc(lrclib.lrc_path(song))[1]
-    except (OSError, UnicodeDecodeError):
-        return None
-    return meta if meta.get("id") is not None else None
+    return lrc.meta if lrc.state == "match" and lrc.meta.get("id") is not None else None
 
 
-def _lrclib_state(song: Path, origin: str | None, lyrics: dict, fill: dict) -> str:
+def _lrclib_state(lrc: lrclib.SongLrc, origin: str | None, lyrics: dict, fill: dict) -> str:
     """How LRCLIB figures in a song timed from a lyric sheet (Genius or custom): the
     disk says what the admin chose now, the bundle says what the last run did with it."""
     if origin not in ("genius", "custom"):
         return "n/a"
-    if lrclib.is_skip_marker(lrclib.lrc_path(song)):
+    if lrc.state == "skipped":
         return "skipped"
     if fill.get("eligible"):
         return "used"

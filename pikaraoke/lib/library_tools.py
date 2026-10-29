@@ -627,17 +627,14 @@ class LibraryTools:
         """The LRCLIB record an LRCLIB timing uses: ``lrclib_id``, else the song's ``.lrc`` on disk."""
         if lrclib_id is not None:
             return self._lrclib_record(lrclib_id)
-        path = lrclib.lrc_path(song)
-        try:
-            text, meta = lrclib.read_lrc(path)
-        except FileNotFoundError:
-            raise RegenError("This song has no LRCLIB match on disk. Search for one.") from None
-        except (OSError, UnicodeDecodeError) as e:
-            logger.warning("Could not read the LRCLIB match of %s: %s", song.name, e)
-            raise RegenError("Could not read this song's LRCLIB match.") from e
-        if lrclib.is_skip_marker(path):
+        lrc = lrclib.read_song_lrc(song)
+        if lrc.state == "missing":
+            raise RegenError("This song has no LRCLIB match on disk. Search for one.")
+        if lrc.state == "unreadable":
+            raise RegenError("Could not read this song's LRCLIB match.")
+        if lrc.state == "skipped":
             raise RegenError("This song's LRCLIB match was skipped. Search for one.")
-        return {**meta, "syncedLyrics": text}
+        return {**lrc.meta, "syncedLyrics": lrc.text}
 
     def current_lines(self, song_path: str) -> list[str]:
         """The lyric lines the song's last run timed, or none when it has no bundle.
@@ -674,7 +671,8 @@ class LibraryTools:
                 if isinstance(record.get("id"), int):
                     _remember(self._lrclib_records, record["id"], record, LRCLIB_CACHE_SIZE)
         best = lrclib.select_candidate(records, sheet, video_s)
-        current_id = self._lrc_record_id(Path(song_path))
+        lrc = lrclib.read_song_lrc(Path(song_path))
+        current_id = lrc.meta.get("id") if lrc.state == "match" else None
         candidates = []
         for record in records:
             cue_texts, _ = lrclib.parse_lrc_lines(record["syncedLyrics"])
@@ -1298,14 +1296,6 @@ class LibraryTools:
         if job.plan is None and song_status(job.song_path).category == "no_lyrics":
             job.plan = self._transcribe_plan()
         return job if job.plan is not None else None
-
-    @staticmethod
-    def _lrc_record_id(song: Path) -> int | str | None:
-        """The LRCLIB id the song's ``.lrc`` on disk records (a skip marker has none)."""
-        try:
-            return lrclib.read_lrc(lrclib.lrc_path(song))[1].get("id")
-        except (OSError, UnicodeDecodeError):
-            return None
 
     def _open_run(self) -> _Run:
         """The open run, for a caller that holds the state lock."""

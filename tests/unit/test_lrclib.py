@@ -232,6 +232,24 @@ class TestSkipMarker:
         assert stats["reason"] == "no_mapping"
 
 
+class TestReadSongLrc:
+    def test_each_state_of_the_songs_lrc(self, tmp_path):
+        songs = {name: tmp_path / f"{name}---dQw4w9WgXcQ.mp4" for name in ("M", "S", "U", "X")}
+        lrclib.write_lrc(
+            lrclib.lrc_path(songs["M"]), {"id": 7, "trackName": "T", "syncedLyrics": _SYNCED_AB}
+        )
+        lrclib.write_skip_marker(lrclib.lrc_path(songs["S"]))
+        lrclib.lrc_path(songs["U"]).write_bytes("[00:01.00]caf\xe9\n".encode("cp1252"))
+
+        match = lrclib.read_song_lrc(songs["M"])
+
+        assert (match.state, match.meta["id"]) == ("match", 7)
+        assert parse_lrc_lines(match.text)[0] == ["hello world", "goodbye world"]
+        assert lrclib.read_song_lrc(songs["S"]) == ("skipped", "", None)
+        assert lrclib.read_song_lrc(songs["U"]) == ("unreadable", "", None)
+        assert lrclib.read_song_lrc(songs["X"]) == ("missing", "", None)
+
+
 class TestSelectCandidate:
     _SHEET = ["Hello world", "Goodbye world"]
 
