@@ -154,7 +154,9 @@ logger = logging.getLogger(__name__)
 #     alongside the align words (top-level ``words`` field continues to
 #     hold the align/refine words on joint runs). Both sources are saved
 #     verbatim so the joint matcher can be re-run at future α values
-#     without paying for whisper.
+#     without paying for whisper. Cue-align runs save the words the de-reverb
+#     gate transcribed too (the cue route doesn't use them): the heard words a
+#     movie-subtitle slice is checked against. Bundles from before hold None.
 # v4: tiling scores are raw matched-token counts (n - dist), not
 #     normalized ratios. Previously score in [0, 1]; now score in [0, n].
 #     Affects tiling_stats.selected_windows[].score,

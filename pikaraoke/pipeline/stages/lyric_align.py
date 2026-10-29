@@ -142,7 +142,7 @@ class LyricAlignStage(BaseStage):
 
             if cue_spans:
                 # SRT: cue-anchored windowed align driven by the uploader cues.
-                line_objects, capture_joint_stats = self._run_cue_align(
+                line_objects, capture_transcribe_words, capture_joint_stats = self._run_cue_align(
                     ctx, vocal_wav, lyrics_lines, align_lines, cue_spans
                 )
                 capture_method_used = "cue_align"
@@ -561,7 +561,7 @@ class LyricAlignStage(BaseStage):
         display_lines: list[str],
         align_lines: list[str],
         cue_spans: list[tuple[float, float]],
-    ) -> tuple[list[dict], dict]:
+    ) -> tuple[list[dict], list[dict], dict]:
         """Cue-anchored windowed align for SRT songs — uploader cues drive it.
 
         Shares the transcribe-first de-reverb gate with the joint route, then
@@ -570,13 +570,15 @@ class LyricAlignStage(BaseStage):
         forced aligner. All the sectioning/offset/re-pace logic lives in the
         library; this method only wires I/O and the audio duration.
 
-        Returns ``(line_objects, stats)`` — the cue-align telemetry (section
-        count, offset, re-pace + de-reverb sub-stats) for the debug bundle.
+        Returns ``(line_objects, transcribe_words, stats)`` — the gate's
+        transcribe words, which the cue route doesn't use but the debug bundle
+        keeps as the song's heard words (the reference a movie-subtitle slice
+        is checked against), and the cue-align telemetry (section count,
+        offset, re-pace + de-reverb sub-stats).
         """
         # Shared de-reverb gate: adopt the dry stem when the wet one is
-        # reverb-washed. The cue route is cue-driven, so the gate's transcribe
-        # words are unused here.
-        vocal_wav, _transcribe_words, dereverb_stats = self._dereverb_gate(ctx, vocal_wav)
+        # reverb-washed.
+        vocal_wav, transcribe_words, dereverb_stats = self._dereverb_gate(ctx, vocal_wav)
         try:
             duration: float | None = _wav_duration(vocal_wav)
         except (wave.Error, OSError, EOFError):
@@ -613,7 +615,7 @@ class LyricAlignStage(BaseStage):
         )
         if dereverb_stats is not None:
             stats["dereverb"] = dereverb_stats
-        return line_objects, stats
+        return line_objects, transcribe_words, stats
 
     def _ytasr_words(self, ctx: StageContext) -> list[dict] | None:
         """Words from the adopted YouTube ASR caption, for the joint 3rd source.
