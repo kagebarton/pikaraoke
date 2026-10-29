@@ -97,12 +97,13 @@ def songs():
 def _repair_source(status: SongStatus) -> str | None:
     """The Repair source a song's list link opens with, or None for the plain page.
 
-    An LRC on disk can time the song by its own line times (LRCLIB timing); a joint song
-    without one can move to the cue route with its video's YouTube caption.
+    Only a joint song gets one, since the move to the cue route is what Repair offers it:
+    LRCLIB timing when an LRC sits on disk to time it by its own line times, else the
+    video's YouTube caption. A cue song is already on that route.
     """
-    if status.lrc_on_disk:
-        return "lrclib"
-    return "caption" if status.method == "joint" else None
+    if status.method != "joint":
+        return None
+    return "lrclib" if status.lrc_on_disk else "caption"
 
 
 def _error(message: str, status: int):
