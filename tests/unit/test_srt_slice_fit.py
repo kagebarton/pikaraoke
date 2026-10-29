@@ -1,7 +1,6 @@
 """Tests for the movie-subtitle slice fit (lib/srt_slice_fit.py), on synthetic cues."""
 
 import json
-import random
 from datetime import timedelta
 
 import srt
@@ -24,6 +23,12 @@ from pikaraoke.lib.srt_slice_fit import (
 LINE_GAP_S = 5.0
 LINE_DUR_S = 3.5
 WORDS_PER_LINE = 5
+
+# Heard line starts off by about 0.3 s, as a transcription of a sung clip is; fixed
+# so the tests keep what they check on every Python.
+JITTER_S = [0.01, 0.14, -0.14, 0.11, 0.28, 0.12, 0.47, -0.27, 0.02, -0.21]
+JITTER_S += [-0.24, -0.06, 0.07, 0.13, 0.15, 0.67, 0.26, -0.48, 0.06, -0.19]
+JITTER_S += [-0.15, 0.39, -0.07, -0.59, 0.09, -0.09, -0.35, -0.28, -0.19, -0.01]
 
 
 def _word(i: int) -> str:
@@ -114,9 +119,7 @@ class TestFit:
 
     def test_noisy_heard_times_keep_the_factor_over_a_barely_different_free_speed(self):
         song = _song(30)
-        rng = random.Random(4)
-        jitter = {k: rng.gauss(0, 0.3) for k in song}
-        heard = _heard(song, clip_start=lambda k: _clip_start(k) + jitter[k])
+        heard = _heard(song, clip_start=lambda k: _clip_start(k) + JITTER_S[k])
         result = fit_slice(_movie_srt(song, shift=-1800.0), {TRANSCRIBE: heard}, 300.0)
         assert result.status == FITS
         assert result.speed == 1.0
@@ -291,8 +294,8 @@ class TestPassTwoPick:
         picks = []
         best_speed = srt_slice_fit._best_speed
 
-        def recording(anchors, spans):
-            picks.append(best_speed(anchors, spans))
+        def recording(*args):
+            picks.append(best_speed(*args))
             return picks[-1]
 
         monkeypatch.setattr(srt_slice_fit, "_match_by_order", first_five_cues)
@@ -307,3 +310,22 @@ class TestPassTwoPick:
         assert result.status == FITS
         assert result.speed == pass2.speed
         assert result.shift_s == pass2.stats["offset_s"]
+
+
+class TestBestSpeed:
+    def test_a_free_speed_with_less_spread_replaces_a_bailed_factor_however_little_it_drifts(self):
+        spans = [(5.0 * k, 5.0 * k + 3.0) for k in range(12)]
+        jitter = [0.5, 0.0, -1.4, -0.5, 0.9, 1.6, -0.3, -2.7, 2.8, 0.7, -3.2, 0.8]
+        anchors = [{"lid": k, "start": 100.0 + 1.01 * spans[k][0] + jitter[k]} for k in range(12)]
+        factor = srt_slice_fit._fit_at(anchors, spans, 1.0)
+        assert factor.stats["bailed"] == "wide_spread"
+
+        best = srt_slice_fit._best_speed(anchors, spans, 300.0)
+        assert best.stats["bailed"] is None
+        assert srt_slice_fit._drift_s(anchors, spans, factor, best.speed, 300.0) < 0.75
+
+    def test_a_wrong_line_anchor_far_down_the_paste_does_not_stretch_the_drift(self):
+        spans = [(5.0 * k, 5.0 * k + 3.0) for k in range(20)] + [(700.0, 703.0)]
+        anchors = [{"lid": k, "start": 100.0 + spans[k][0] + JITTER_S[k]} for k in range(20)]
+        anchors.append({"lid": 20, "start": 180.0})  # a line repeated past the clip
+        assert srt_slice_fit._best_speed(anchors, spans, 300.0).speed == 1.0
