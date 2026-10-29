@@ -217,6 +217,20 @@ flags to the app, not preferences, so this tool doesn't read them; only
 `high_quality` (a real preference) applies. `blocked_processing_words`
 filtering is also out of scope.
 
+## movie_srt_fit_report.py
+
+Runs the movie-subtitle slice fit (`pikaraoke/lib/srt_slice_fit.py`) over every
+`<name>.srt` in `<folder>/movie_subs/` against the named song's heard words on
+disk, and prints a markdown table. A slice is named by a substring of its
+song's filename; the script stops if that matches no video or several.
+`--cross` adds each slice against every other slice's song, the wrong-song
+cases a fit must refuse. The slices are copyrighted text: keep them out of the
+repo.
+
+```bash
+python scripts/movie_srt_fit_report.py [--folder PATH] [--slices PATH] [--cross]
+```
+
 ## Architecture notes
 
 ### Why a script as well as the web UI?
