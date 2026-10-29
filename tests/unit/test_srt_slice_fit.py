@@ -264,6 +264,10 @@ class TestHeardStreams:
         assert heard_streams(None, caption) == {ASR: [{"norm": "hello", "start": 1.0}]}
         assert heard_streams(None, "not json") == {}
 
+    def test_an_auto_caption_of_another_shape_is_ignored(self):
+        for caption in ("[]", '{"events": [{"segs": ["Hello"]}]}', '{"events": [7]}'):
+            assert heard_streams(None, caption) == {}
+
     def test_nothing_on_disk_is_no_streams(self):
         assert heard_streams(None, None) == {}
         assert heard_streams({"transcribe_words": None}, "") == {}

@@ -17,7 +17,6 @@ instance, and fits the speed and shift again from its own matches.
 """
 
 import itertools
-import json
 import logging
 from dataclasses import dataclass
 from datetime import timedelta
@@ -137,8 +136,8 @@ def heard_streams(bundle: dict | None, asr_json3: str | None) -> dict[str, list[
     if asr_json3:
         try:
             asr_words, _ = parse_json3(asr_json3)
-        except json.JSONDecodeError:
-            logger.warning("Slice fit: the ASR caption is not valid json3, ignoring it")
+        except (ValueError, AttributeError, TypeError) as e:
+            logger.warning("Slice fit: the ASR caption is not readable json3 (%s), ignoring it", e)
             asr_words = []
         if asr_words:
             streams[ASR] = [{"norm": w["norm"], "start": w["start"]} for w in asr_words]
