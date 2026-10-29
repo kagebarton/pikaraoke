@@ -55,9 +55,10 @@ ASR = "asr"
 # Speed factors tried first: none, and the PAL speed-up (25 fps release of a
 # 23.976 fps film) with its reverse. A free speed is fitted to the anchors too,
 # because real clips run at other speeds (two Beauty and the Beast clips at about
-# 1.07). It is used when no factor fits, or when it beats a passing factor by
-# MIN_FREE_SPEED_DRIFT_S; the spread limit vets it as it vets a factor. Measured
-# rates: plans/movie-subtitle-slice.md, Results rows 14-15.
+# 1.07). It replaces the best factor when it has less spread and, if that factor
+# passed, also moves the cues by more than MIN_FREE_SPEED_DRIFT_S; the spread
+# limit vets it as it vets a factor. Measured rates: plans/movie-subtitle-slice.md,
+# Results rows 14-15.
 SPEED_FACTORS = (1.0, 25 / 23.976, 23.976 / 25)
 
 # A free speed further than this from 1 is not believed.
@@ -189,13 +190,13 @@ def _fit_one_stream(
 ) -> SliceFit:
     n_cues = len(spans)
     anchors, _ = _match_by_order(tokens, words)
-    pass1 = _best_speed(anchors, spans)
+    pass1 = _best_speed(anchors, spans, video_length)
     if pass1 is None:
         return SliceFit(REFUSED, reason=TOO_FEW, total=n_cues, heard_source=name)
 
     speed, stats = pass1
     anchors, found = _match_by_time(tokens, spans, speed, stats["offset_s"], words)
-    pass2 = _best_speed(anchors, spans)
+    pass2 = _best_speed(anchors, spans, video_length)
     if pass2 is None:
         return SliceFit(REFUSED, reason=TOO_FEW, total=n_cues, heard_source=name)
     speed, stats = pass2
@@ -311,8 +312,10 @@ def _fit_at(anchors: list[dict], spans: list[tuple[float, float]], speed: float)
     return _SpeedFit(speed, offset_mad_against_cues(anchors, _scaled(spans, speed)))
 
 
-def _best_speed(anchors: list[dict], spans: list[tuple[float, float]]) -> _SpeedFit | None:
-    """The speed with the smallest spread and its offset stats; None when too few anchors.
+def _best_speed(
+    anchors: list[dict], spans: list[tuple[float, float]], length: float
+) -> _SpeedFit | None:
+    """The speed to fit at and its offset stats; None when too few anchors.
 
     Prefers a factor that did not bail, then the least spread of those that
     bailed on spread, so pass 2 can still try to repair a first mismatch. Ties
@@ -329,16 +332,31 @@ def _best_speed(anchors: list[dict], spans: list[tuple[float, float]]) -> _Speed
         return best
     candidate = _fit_at(anchors, spans, free)
     if candidate.rank < best.rank and (
-        best.stats["bailed"] or _drift_s(anchors, spans, best.speed, free) > MIN_FREE_SPEED_DRIFT_S
+        best.stats["bailed"]
+        or _drift_s(anchors, spans, best, free, length) > MIN_FREE_SPEED_DRIFT_S
     ):
         return candidate
     return best
 
 
-def _drift_s(anchors: list[dict], spans: list[tuple[float, float]], a: float, b: float) -> float:
-    """Seconds the speeds ``a`` and ``b`` move the cues apart across the anchors' extent."""
-    starts = [spans[anchor["lid"]][0] for anchor in anchors]
-    return abs(a - b) * (max(starts) - min(starts))
+def _drift_s(
+    anchors: list[dict],
+    spans: list[tuple[float, float]],
+    best: _SpeedFit,
+    free: float,
+    length: float,
+) -> float:
+    """Seconds ``free`` moves the cues away from ``best`` across the anchored cues in the clip.
+
+    Only cues that ``best`` places inside the clip count: an anchor on a wrong line
+    far down the paste would otherwise stretch the extent, and with it the drift.
+    """
+    starts = [
+        spans[anchor["lid"]][0]
+        for anchor in anchors
+        if _clip_span(*spans[anchor["lid"]], best.speed, best.stats["offset_s"], length)
+    ]
+    return abs(best.speed - free) * (max(starts) - min(starts)) if starts else 0.0
 
 
 def free_speed(anchors: list[dict], spans: list[tuple[float, float]]) -> float | None:
@@ -381,7 +399,7 @@ def _clip_span(
 ) -> tuple[float, float] | None:
     """A movie-time span on clip time, clamped to the clip; None when none of it is left.
 
-    The one rule for both counting a cue as inside the clip and writing it out.
+    The one rule for a cue being inside the clip: counting it, writing it out, and the drift.
     """
     start, end = max(speed * start + shift, 0.0), min(speed * end + shift, length)
     return (start, end) if end > start else None
