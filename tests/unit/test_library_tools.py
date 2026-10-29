@@ -10,11 +10,13 @@ import json
 import os
 import subprocess
 import threading
+from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+import srt
 
 from pikaraoke.lib import lrclib
 from pikaraoke.lib.alignment_capture import SCHEMA_VERSION
@@ -711,6 +713,220 @@ class TestCustomSheetLines:
 
         assert len(text) == CUSTOM_SHEET_MAX_CHARS
         assert custom_sheet_lines(text)
+
+
+# A synthetic movie slice for the movie repair: 12 lines of five distinct pseudo-words, sung in
+# a 200 s clip from 10 s on, 5 s apart; the movie's own times are an hour later.
+SLICE_LINES = 12
+CLIP_S = 200.0
+MOVIE_OFFSET_S = 3600.0
+
+
+def slice_line(k: int) -> list[str]:
+    return [f"w{chr(97 + (k * 5 + i) // 26)}{chr(97 + (k * 5 + i) % 26)}x" for i in range(5)]
+
+
+def slice_clip_start(k: int) -> float:
+    return 10.0 + 5.0 * k
+
+
+def heard_words(lines=range(SLICE_LINES)) -> list[dict]:
+    """The bundle's transcribe words for the given slice lines."""
+    return [
+        {
+            "word": word,
+            "start": slice_clip_start(k) + 0.6 * i,
+            "end": slice_clip_start(k) + 0.6 * i + 0.5,
+        }
+        for k in lines
+        for i, word in enumerate(slice_line(k))
+    ]
+
+
+def movie_slice(offset=lambda k: MOVIE_OFFSET_S, lines=range(SLICE_LINES)) -> str:
+    """The lines as movie subtitles; ``offset(k)`` is how far line ``k`` sits after the clip."""
+    return srt.compose(
+        [
+            srt.Subtitle(
+                index=n,
+                start=timedelta(seconds=slice_clip_start(k) + offset(k)),
+                end=timedelta(seconds=slice_clip_start(k) + offset(k) + 3.5),
+                content=" ".join(slice_line(k)),
+            )
+            for n, k in enumerate(lines, start=1)
+        ]
+    )
+
+
+def clip_starts(srt_text: str) -> list[float]:
+    return [round(cue.start.total_seconds(), 2) for cue in srt.parse(srt_text)]
+
+
+def asr_json3(lines=range(SLICE_LINES)) -> str:
+    """The same words as a YouTube auto-caption on disk."""
+    events = [
+        {
+            "tStartMs": int(slice_clip_start(k) * 1000),
+            "segs": [
+                {"utf8": word} if i == 0 else {"utf8": f" {word}", "tOffsetMs": i * 600}
+                for i, word in enumerate(slice_line(k))
+            ],
+        }
+        for k in lines
+    ]
+    return json.dumps({"events": events})
+
+
+class TestMovieRepair:
+    """Repair with movie subtitles: the fit runs again here and only a fit is queued."""
+
+    @pytest.fixture
+    def song(self, tmp_path):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        write_bundle(
+            tmp_path,
+            video.stem,
+            lyrics={"origin": "genius", "genius": GENIUS, "lines": ["one", "two"]},
+            media_duration_s=CLIP_S,
+            transcribe_words=heard_words(),
+        )
+        return video
+
+    def repaired(self, tmp_path, song, text):
+        tools, processing = make_tools(tmp_path, [str(song)])
+        tools.repair(str(song), "movie", text=text)
+        return processing.enqueue_regen.call_args.args[0]
+
+    def test_a_slice_that_fits_queues_the_clip_timed_sheet(self, tmp_path, song):
+        pasted = movie_slice()
+
+        regen = self.repaired(tmp_path, song, pasted)
+
+        plan = regen.song.plan
+        assert (regen.label, regen.reset) == ("Repair", True)
+        assert (plan.kind, plan.seed, plan.label) == (
+            "seed",
+            {"lyrics_origin": "movie_srt"},
+            "movie subtitles",
+        )
+        assert plan.lyrics_path == tmp_path / "lyrics" / f"{song.stem}.custom.srt"
+        assert clip_starts(pasted)[0] > MOVIE_OFFSET_S
+        assert clip_starts(plan.custom_text) == [
+            pytest.approx(slice_clip_start(k), abs=0.1) for k in range(SLICE_LINES)
+        ]
+
+    def test_a_movie_repair_keeps_its_own_sheet_and_writes_nothing_until_the_run(
+        self, tmp_path, song
+    ):
+        regen = self.repaired(tmp_path, song, movie_slice())
+
+        assert regen.song.replaces_custom is False
+        assert not (tmp_path / "lyrics").exists()
+
+    def test_the_text_is_taken_with_crlf_line_ends(self, tmp_path, song):
+        regen = self.repaired(tmp_path, song, movie_slice().replace("\n", "\r\n"))
+
+        assert len(clip_starts(regen.song.plan.custom_text)) == SLICE_LINES
+
+    def test_the_youtube_auto_caption_can_carry_the_fit_alone(self, tmp_path):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        write_bundle(tmp_path, video.stem, lyrics={"origin": "srt"}, media_duration_s=CLIP_S)
+        asr = tmp_path / "subtitles" / f"{video.stem}.en.asr.json3"
+        asr.parent.mkdir()
+        asr.write_text(asr_json3(), encoding="utf-8")
+
+        regen = self.repaired(tmp_path, video, movie_slice())
+
+        assert clip_starts(regen.song.plan.custom_text)[0] == pytest.approx(10.0, abs=0.1)
+
+    def test_a_clip_with_no_bundle_length_is_measured(self, tmp_path, monkeypatch):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        write_bundle(tmp_path, video.stem, lyrics={"origin": "srt"}, transcribe_words=heard_words())
+        monkeypatch.setattr("pikaraoke.lib.library_regen.probe_duration", lambda path: CLIP_S)
+
+        regen = self.repaired(tmp_path, video, movie_slice())
+
+        assert len(clip_starts(regen.song.plan.custom_text)) == SLICE_LINES
+
+    @pytest.mark.parametrize(
+        ("text", "message"),
+        [
+            ("just some words, not subtitles", "Not an SRT file"),
+            ("1\n00:00:01,000 --> 00:00:02,000\n[MUSIC]\n", "no lines to check"),
+            (movie_slice(lines=range(40, 52)), "Only 0 of 12 lines were found"),
+            (
+                movie_slice(offset=lambda k: 900.0 if k < SLICE_LINES // 2 else 2400.0),
+                "don't agree on one timing",
+            ),
+            (None, "must be text"),
+            (["1"], "must be text"),
+            ("la " * CUSTOM_SHEET_MAX_CHARS, "too long"),
+        ],
+        ids=["not_srt", "no_lines", "too_few", "disagree", "none", "list", "too_long"],
+    )
+    def test_a_slice_that_does_not_fit_changes_nothing(self, tmp_path, song, text, message):
+        """The run replaces the song's outputs, so every refusal comes before the backup."""
+        write_sheet(tmp_path, song.stem, "the old words\n")
+        tools, processing = make_tools(tmp_path, [str(song)])
+
+        with pytest.raises(RegenError, match=message):
+            tools.repair(str(song), "movie", text=text)
+
+        processing.enqueue_regen.assert_not_called()
+        assert not list(tmp_path.glob("regen_backups/*"))
+        sheet = tmp_path / "lyrics" / f"{song.stem}.custom.txt"
+        assert sheet.read_text(encoding="utf-8") == "the old words\n"
+
+    def test_a_song_with_no_heard_words_is_told_to_regenerate_first(self, tmp_path):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        write_bundle(tmp_path, video.stem, lyrics={"origin": "srt"}, media_duration_s=CLIP_S)
+        tools, processing = make_tools(tmp_path, [str(video)])
+
+        with pytest.raises(RegenError, match="no heard words yet.*Regenerate the song"):
+            tools.repair(str(video), "movie", text=movie_slice())
+
+        processing.enqueue_regen.assert_not_called()
+
+    def test_a_clip_whose_length_cannot_be_read_is_refused(self, tmp_path, monkeypatch):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        write_bundle(tmp_path, video.stem, lyrics={"origin": "srt"}, transcribe_words=heard_words())
+        monkeypatch.setattr("pikaraoke.lib.library_regen.probe_duration", lambda path: None)
+        tools, processing = make_tools(tmp_path, [str(video)])
+
+        with pytest.raises(RegenError, match="clip's length"):
+            tools.repair(str(video), "movie", text=movie_slice())
+
+        processing.enqueue_regen.assert_not_called()
+
+    def test_an_auto_caption_that_cannot_be_read_is_ignored_and_says_so(self, tmp_path, caplog):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        write_bundle(tmp_path, video.stem, lyrics={"origin": "srt"}, media_duration_s=CLIP_S)
+        asr = tmp_path / "subtitles" / f"{video.stem}.en.asr.json3"
+        asr.parent.mkdir()
+        asr.write_bytes("caf\xe9".encode("latin-1"))
+        tools, _ = make_tools(tmp_path, [str(video)])
+
+        fit = tools.check_movie_slice(str(video), movie_slice())
+
+        assert fit.status == "no_reference"
+        assert "Could not read the auto-caption" in caplog.text
+
+    def test_the_check_answers_a_refusal_and_does_not_raise(self, tmp_path, song):
+        tools, processing = make_tools(tmp_path, [str(song)])
+
+        fit = tools.check_movie_slice(str(song), "just some words, not subtitles")
+
+        assert fit.status == "not_srt"
+        processing.enqueue_regen.assert_not_called()
+
+    def test_the_check_returns_the_fit_the_repair_would_save(self, tmp_path, song):
+        tools, processing = make_tools(tmp_path, [str(song)])
+
+        fit = tools.check_movie_slice(str(song), movie_slice())
+        tools.repair(str(song), "movie", text=movie_slice())
+
+        assert fit.status == "fits"
+        assert processing.enqueue_regen.call_args.args[0].song.plan.custom_text == fit.srt
 
 
 class TestCustomStart:

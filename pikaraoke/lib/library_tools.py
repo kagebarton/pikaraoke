@@ -55,6 +55,7 @@ from pikaraoke.lib.library_regen import (
     find_local_srt,
     gate_on_disk_caption,
     media_duration,
+    movie_sheet_plan,
     read_bundle,
     reuse_plan,
     watch_url,
@@ -73,6 +74,16 @@ from pikaraoke.lib.metadata_parser import extract_youtube_id
 from pikaraoke.lib.processing_manager import ProcessingManager
 from pikaraoke.lib.song_manager import SongManager
 from pikaraoke.lib.song_match import SongIndex, similar_groups
+from pikaraoke.lib.srt_slice_fit import (
+    DISAGREE,
+    FITS,
+    NO_REFERENCE,
+    NOT_SRT,
+    SliceFit,
+    fit_slice,
+    heard_streams,
+)
+from pikaraoke.lib.youtube_dl import ASR_JSON3_SUFFIX
 
 logger = logging.getLogger(__name__)
 
@@ -156,6 +167,37 @@ def custom_sheet_lines(text: object) -> list[str]:
             "There are no lyric lines to use. Section headers such as [Chorus] don't count."
         )
     return lines
+
+
+def _slice_refusal(fit: SliceFit) -> str:
+    """Why pasted movie subtitles can't time the song, in the admin's words.
+
+    ``fit`` is any answer but a fit. The wording is the ratified mockup's: each
+    headline with the hint it keeps behind an (i).
+    """
+    if fit.status == NOT_SRT:
+        return (
+            "Not an SRT file. SRT subtitles are numbered cues with times, "
+            "like 00:01:02,500 --> 00:01:05,000."
+        )
+    if fit.status == NO_REFERENCE:
+        return (
+            "Can't check yet. This song has no heard words yet, so there is nothing to "
+            "compare the subtitles with. Regenerate the song from Song info first, "
+            "then try again."
+        )
+    if not fit.total:
+        return "Doesn't fit. These subtitles have no lines to check."
+    if fit.reason == DISAGREE:
+        return (
+            f"Doesn't fit. Found {fit.matched} of {fit.total} lines, but they don't agree "
+            "on one timing. The clip may be cut from several scenes, or these subtitles "
+            "are for a different release."
+        )
+    return (
+        f"Doesn't fit. Only {fit.matched} of {fit.total} lines were found in the clip. "
+        "Check that these subtitles are from this movie and cover the part this clip shows."
+    )
 
 
 @dataclass
@@ -457,6 +499,37 @@ class LibraryTools:
             logger.warning("Could not read the custom lyric sheet of %s: %s", song.name, e)
             return ""
 
+    @staticmethod
+    def _asr_on_disk(song: Path) -> str | None:
+        """The song's YouTube auto-caption (json3 text), or None when it has none or can't be read."""
+        try:
+            return (song.parent / "subtitles" / f"{song.stem}{ASR_JSON3_SUFFIX}").read_text(
+                encoding="utf-8"
+            )
+        except FileNotFoundError:
+            return None
+        except (OSError, UnicodeDecodeError) as e:
+            logger.warning("Could not read the auto-caption of %s: %s", song.name, e)
+            return None
+
+    def check_movie_slice(self, song_path: str, text: object) -> SliceFit:
+        """Fit pasted movie subtitles to the song's clip, against the words already heard in it.
+
+        The one fit the repair runs, so what it saves is never a number the page
+        sent. Reads the bundle's transcribe words, the on-disk YouTube
+        auto-caption and the clip's length; queues no work. A refusal is an
+        answer, not an error: the returned :class:`SliceFit` says it. Raises
+        :class:`RegenError`, with a message for the admin, for text that is not
+        text or is too long, or a clip whose length can't be read.
+        """
+        sheet = _sheet_text(text)
+        job = self._song_job(song_path)
+        length = media_duration(job)
+        if not length:
+            raise RegenError("Could not read this clip's length.")
+        streams = heard_streams(job.bundle, self._asr_on_disk(job.song_path))
+        return fit_slice(sheet, streams, length)
+
     def genius_sheet_lines(self, genius_id: int) -> list[str]:
         """A Genius song's lyric lines, as they display, for scoring an LRCLIB search.
 
@@ -512,13 +585,15 @@ class LibraryTools:
 
         ``source`` is ``caption`` (the video's YouTube caption), ``genius`` (the
         Genius song ``genius_id``), ``custom`` (the admin's own lyrics, ``text``;
-        the run saves them as the song's sheet) or ``transcribe``. For Genius
-        and custom the LRCLIB match is the record ``lrclib_id``, or none at all
-        with ``lrclib_skip`` (which wins over an id); with neither, the
-        automatic rule applies. The song's files are backed up first, and the
-        run wipes its old outputs. Raises :class:`RegenError`, with a message
-        for the admin, when the song can't be queued; nothing has changed on
-        disk by then.
+        the run saves them as the song's sheet), ``movie`` (movie subtitles
+        pasted as ``text``: fitted again here by :meth:`check_movie_slice`, and
+        only a fit is queued, with the corrected slice as the song's sheet) or
+        ``transcribe``. For Genius and custom the LRCLIB match is the record
+        ``lrclib_id``, or none at all with ``lrclib_skip`` (which wins over an
+        id); with neither, the automatic rule applies. The song's files are
+        backed up first, and the run wipes its old outputs. Raises
+        :class:`RegenError`, with a message for the admin, when the song can't
+        be queued; nothing has changed on disk by then.
         """
         if not self.is_video(song_path):
             raise RegenError("Lyrics tools work on video songs only.")
@@ -531,11 +606,13 @@ class LibraryTools:
             job.plan = self._genius_plan(genius_id, lrclib_id, lrclib_skip)
         elif source == "custom":
             job.plan = self._custom_repair_plan(job.song_path, text, lrclib_id, lrclib_skip)
+        elif source == "movie":
+            job.plan = self._movie_repair_plan(song_path, text)
         elif source == "transcribe":
             job.plan = self._transcribe_plan()
         else:
             raise RegenError("Unknown lyric source.")
-        job.replaces_custom = source != "custom"
+        job.replaces_custom = source not in ("custom", "movie")
         self._queue(job, reset=True, label="Repair")
 
     def open_run(self, mode: str) -> None:
@@ -1016,6 +1093,13 @@ class LibraryTools:
         plan = custom_sheet_plan(song, _sheet_text(text))
         self._apply_lrclib_pick(plan, lrclib_id, lrclib_skip)
         return plan
+
+    def _movie_repair_plan(self, song_path: str, text: object) -> Plan:
+        """The plan that saves the pasted subtitles, clip-timed, as the song's sheet; a fit only."""
+        fit = self.check_movie_slice(song_path, text)
+        if fit.status != FITS:
+            raise RegenError(_slice_refusal(fit))
+        return movie_sheet_plan(Path(song_path), fit.srt)
 
     def _apply_lrclib_pick(self, plan: Plan, lrclib_id: int | None, lrclib_skip: bool) -> None:
         """Put the admin's LRCLIB choice on ``plan``: no match, or the record ``lrclib_id``."""
