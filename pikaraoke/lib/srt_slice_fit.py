@@ -122,7 +122,7 @@ def fit_slice(srt_text: str, streams: dict[str, list[dict]], video_length: float
     """
     try:
         raw_cues = list(srt.parse(srt_text))
-    except srt.SRTParseError:
+    except (OverflowError, srt.SRTParseError):
         return SliceFit(NOT_SRT)
     if not raw_cues:
         return SliceFit(NOT_SRT)
@@ -194,7 +194,7 @@ def _fit_one_stream(
     inside = {
         k
         for k, (start, end) in enumerate(spans)
-        if speed * end + shift > 0 and speed * start + shift < video_length
+        if _clip_span(start, end, speed, shift, video_length) is not None
     }
     matched = len(found & inside)
     base = {
@@ -291,7 +291,7 @@ def _best_speed(
         key = (stats["bailed"] is not None, stats["mad_s"])
         if best is None or key < best[0]:
             best = (key, speed, stats["offset_s"])
-    return (best[1], best[2]) if best else None
+    return best[1], best[2]
 
 
 def _corrected_srt(raw_cues: list[srt.Subtitle], speed: float, shift: float, length: float) -> str:
@@ -301,17 +301,25 @@ def _corrected_srt(raw_cues: list[srt.Subtitle], speed: float, shift: float, len
     """
     out: list[srt.Subtitle] = []
     for cue in raw_cues:
-        start = speed * cue.start.total_seconds() + shift
-        end = speed * cue.end.total_seconds() + shift
-        start, end = max(start, 0.0), min(end, length)
-        if end <= start:
-            continue
-        out.append(
-            srt.Subtitle(
-                index=len(out) + 1,
-                start=timedelta(seconds=start),
-                end=timedelta(seconds=end),
-                content=cue.content,
+        span = _clip_span(cue.start.total_seconds(), cue.end.total_seconds(), speed, shift, length)
+        if span is not None:
+            out.append(
+                srt.Subtitle(
+                    index=0,
+                    start=timedelta(seconds=span[0]),
+                    end=timedelta(seconds=span[1]),
+                    content=cue.content,
+                )
             )
-        )
     return srt.compose(out)
+
+
+def _clip_span(
+    start: float, end: float, speed: float, shift: float, length: float
+) -> tuple[float, float] | None:
+    """A movie-time span on clip time, clamped to the clip; None when none of it is left.
+
+    The one rule for both counting a cue as inside the clip and writing it out.
+    """
+    start, end = max(speed * start + shift, 0.0), min(speed * end + shift, length)
+    return (start, end) if end > start else None
