@@ -53,6 +53,18 @@ Ken, 2026-10-29 (this plan):
    - otherwise nothing.
 7. **Joint songs with no usable LRC get a list of their own**, "No timed source".
 
+Ken, 2026-10-29, at GATE A (Results rows 10-11):
+
+8. **Flags come in two kinds.** A line heard far from its fitted time is
+   *mistimed*; a line nothing was heard for is *unheard*. Only mistimed lines make
+   a flagged run, the warning. Unheard stretches get a quieter "couldn't check
+   these lines" note. This refines Decision 2: on the library, a run of unheard
+   lines was as often a transcriber gap as a wrong edit. Known weak spot: a section
+   cut at the very end of a song only shows as unheard.
+9. **The length-gap limit is 15 s**, not 5. Fits with no flagged run had gaps of up
+   to 14 s (a music video's longer intro or outro), and the flags now catch the
+   edit mismatches the gap was there for.
+
 Defaults (author's; not ruled, so raise them if they look wrong):
 
 - The lists go by what the **last run used** (the bundle's `lyrics.origin` and
@@ -226,6 +238,19 @@ This resolves the open issue "SongStatus carries two overlapping sheet flags".
   runs of consecutive flagged lines at least `min_run` long, as `(first, last)`.
   `MIN_FLAGGED_RUN = 3` is a placeholder; GATE A sets it.
 
+**As amended at GATE A (Decision 8, commit `2cde053`)**, superseding the three
+bullets on `flagged` above:
+
+- `SliceFit.flagged` is replaced by `mistimed` (an anchor more than
+  `FLAG_TOLERANCE_S` from the fitted start) and `unheard` (no anchor). Same
+  numbering, both set only on `FITS`.
+- `flagged_runs(mistimed, unheard, min_run)`: runs of at least `min_run` mistimed
+  lines, as `(first, last)` mistimed line. An unheard line between two mistimed
+  ones does not end a run; a line heard on time does.
+- `unheard_runs(unheard, min_run)`: runs of consecutive unheard lines (the old
+  `flagged_runs` body).
+- `FLAG_TOLERANCE_S = 5.0`, `MIN_FLAGGED_RUN = 2`, `MIN_UNHEARD_RUN = 3`.
+
 ### Storage and plan (`pikaraoke/lib/library_regen.py`, Phase 5)
 
 - Add `LRC_SRT_SUFFIX = ".lrclib.srt"` and append it to `CUSTOM_SHEET_SUFFIXES`.
@@ -258,8 +283,9 @@ This resolves the open issue "SongStatus carries two overlapping sheet flags".
   - `gap_s = length_gap_s(record["duration"], length)`.
   - `viable = fit.status == FITS and gap_s is not None and abs(gap_s) <=
     LRC_MAX_GAP_S`.
-  - `LRC_MAX_GAP_S` is a placeholder of `5`, matching `song_info._LENGTH_GAP_NOTED_S`.
-    GATE A sets it.
+  - `LRC_MAX_GAP_S = 15` (Decision 9, set at GATE A). It is its own constant, not
+    `song_info._LENGTH_GAP_NOTED_S` (5), which stays as the length line's
+    "within a few s" cut-off.
 - Add `class LrcTimingRefused(RegenError)`, carrying the check, as
   `MovieSliceRefused` does.
 - In `repair(...)`, add `source == "lrclib"`, which calls
@@ -280,7 +306,11 @@ These are built to the mockup ratified at GATE B. Until then, the expected shape
   - a head line (fits, or refused and why);
   - "matches x of y lines";
   - the length line, reusing `_lrclib_fit`'s wording;
-  - the flagged runs, each as its lines' text with `m:ss` times;
+  - the flagged runs (`flagged_runs(fit.mistimed, fit.unheard, MIN_FLAGGED_RUN)`),
+    each as its lines' text with `m:ss` times;
+  - a quieter note for the unheard stretches
+    (`unheard_runs(fit.unheard, MIN_UNHEARD_RUN)`): "couldn't check these lines",
+    with their text and times;
   - `viable`.
 - Reuse `_card` / `_card_text`.
 - `repair()` maps `LrcTimingRefused` to `_card_text`, as it does for
@@ -367,7 +397,7 @@ These are built to the mockup ratified at GATE B. Until then, the expected shape
     indexes.
 - [x] Run it. Paste the raw output into a "GATE A report output" section at the
       end of this plan, and add one Results log row describing it.
-- [ ] **GATE A: stop and hand off to Opus.** Do not pick numbers on the executor
+- [x] **GATE A: stop and hand off to Opus.** Do not pick numbers on the executor
       side. Opus sets `FLAG_TOLERANCE_S`, `MIN_FLAGGED_RUN` and `LRC_MAX_GAP_S`
       against these pass conditions:
   - Defying Gravity is refused, either by its gap or by the fit.
@@ -381,6 +411,13 @@ These are built to the mockup ratified at GATE B. Until then, the expected shape
   Decision 2's fallback (playback with overlaid lines) would then be the
   question.
 
+  Outcome: the flags as built could not (Results row 10). Ken ruled Decisions 8
+  and 9 instead of the fallback.
+- [x] GATE A amendment (Opus): split `flagged` into `mistimed` and `unheard`, add
+      `unheard_runs`, set the three constants, update the tests and the report
+      script; commit `2cde053` `feat(lyrics): an LRC fit tells mistimed lines from
+      unheard ones`. Rerun the report and log it (Results row 11).
+
 ### Phase 4: mockup -> GATE B (Ken)
 
 - [ ] Build an HTML mockup of Repair lyrics with the LRCLIB timing source, styled
@@ -392,6 +429,10 @@ These are built to the mockup ratified at GATE B. Until then, the expected shape
   - checking;
   - fits and viable, no flagged runs;
   - fits and viable, with flagged runs (line text with times; use invented lyrics);
+  - fits and viable, with an unheard stretch only (the quieter "couldn't check
+    these lines" note);
+  - fits and viable, with a flagged run and an unheard stretch next to it (a cut
+    verse looks like this);
   - fits but the gap is too big (not viable);
   - refused, too few;
   - refused, disagree;
@@ -449,6 +490,8 @@ symlinked; one instance at a time). Log each step in the Results log.
   - Ken's read of the karaoke.
 - [ ] Use Repair on Popular: confirm the flagged run shows and Ken's read of it.
       Don't regenerate unless Ken says to.
+- [ ] Use Repair on Domino: confirm the "couldn't check" note shows over lines
+      43-50 (its second chorus, 2:14-2:39) and no flagged run does.
 - [ ] Defying Gravity: confirm Repair refuses with the gap stated.
 - [ ] Reset one repaired song: the `.lrclib.srt` survives and is reused.
 - [ ] Update `plans/open-issues.md` in one `docs(plans)` commit:
@@ -504,6 +547,7 @@ symlinked; one instance at a time). Log each step in the Results log.
 | 8 | 2026-10-29 | 3 | What the flags do for an extra repeat (synthetic, 30 lines, spread 0, 30 of 30 found in all three) | Chorus of 4 lines sung twice in the video, once in the LRC. Repeat at lines 24-27: shift 0.0 s, flagged 28, 29 (a 2-line run, under `MIN_FLAGGED_RUN`). Repeat at 14-17: shift +20.0 s, flagged 0-13 (one run of 14). Repeat at 4-7: shift +20.0 s, flagged 0-3. The fit passes every one, so the spread check does not see them. The flags mark whichever side of the repeat holds the minority of lines, since the median timing follows the majority; a repeat late in the song flags the lines after it, one mid-song flags the lines before it. No verdict asserted; `test_what_the_flags_do_for_an_extra_repeat` records it. |
 | 9 | 2026-10-29 | 3 | Commit `0ae28a3` `feat(scripts): report the LRC fit and flagged lines for every joint song`; ran `python scripts/lrc_timing_report.py` read only (nothing in `~/pikaraoke-songs` newer than the script afterwards) | Raw output is in "GATE A report output" below: 17 joint songs with a usable LRC, 23 stream rows (transcribe for all 17, ASR for 6). 18 rows fit, 4 refuse as `disagree` (Defying Gravity both streams, Soda Pop, Bloodstream transcribe), 1 refuses as `too_few` (Jay Chou, 0 of 53 found). Gap from the bundle and from the LRC file agree on every row. The Test songs table's `?` gaps are now known: Popular +13, Domino -1, Best Part Of Me -1, In Summer +1, NSYNC -38, Colors of the Wind +8. Pass-condition songs, at 2.0 s: Defying Gravity refused by the fit (spread 4.1 s) and by its +97 s gap; Popular fits on both streams with flagged run 52-61 (the last 10 of 62 lines), the ASR stream also flagging 0, 1, 37; Domino fits with flagged 35, 39, 43-50, 67-68. Gap-near-0 songs: She Used To Be Mine 1 flagged (19), no run; Stay Gold none at 2.0 s (3 at 1.0 s); Lose Yourself 5 flagged (0, 32, 50, 59, 73), no run; Bloodstream transcribe refused, ASR fits 28/57 with 35 flagged in runs 15-22 and 31-56; Soda Pop transcribe refused (its only stream). Two things the numbers show that the plan did not anticipate: Defying Gravity and Popular both land on speed 0.9590, the movie fit's PAL factor, which scales the LRC's clock down by 4% (for Popular, whose LRC is 13 s longer than the video); and NSYNC fits (49/56, shift +23.93 s) with a -38 s gap, so a passing fit alone does not see the gap. No thresholds chosen. |
 | 10 | 2026-10-29 | 3 (GATE A) | Opus read of the report, plus a read-only scratch probe (not committed) that prints, for each fit, every in-clip line's fitted start against its anchor's start, and the heard words inside the line's window | By the letter, at the placeholders: Defying Gravity is refused by the fit on both streams (and has a +97 s gap); Popular shows run 52-61 (the tail); Domino shows run 43-50 (after line 16). The probe splits flagged lines into two kinds: **heard elsewhere** (an anchor more than 2.0 s from the fitted start) and **unheard** (no anchor). Lines heard 10 s or more from their fitted start occur on two rows only: Popular (transcribe 53-56 at -15 to -19 s; ASR 53, 54, 56, 60, 61 at -14 to -19 s) and Bloodstream ASR (31, 32, 37, 38, 52 at -21 to -23 s). The largest anywhere else: NSYNC 54 at -9 s, Your Idol 46 at -8 s; every other heard-elsewhere line is within 4 s (Takedown 20, 21, 29, 37 at -3 to -4 s; Lose Yourself 0 at -4 s; Best Part ASR 15, 28, 33 at +2 to +3 s; Best Part transcribe 34 at -3 s). Unheard lines per row: Popular 7 / 7 (transcribe / ASR), Best Part 4 / 11, Bloodstream ASR 29, Lose Yourself 4, Domino 12, NSYNC 7, Your Idol 18, Golden 9, Takedown 9, Seven 3 / 9, In Summer, Colors of the Wind (both), She Used To Be Mine and Stay Gold 0. Domino's run 43-50 is unheard lines only: the transcribe stream holds no word from 134.0 s to 164.8 s, lines 42 and 51 either side sit +0.1 s and +1.7 s from their fitted starts, and no heard line of Domino is more than 1.7 s off. Its LRC on disk (gap -1 s) is not the "UK Radio Edit" S-1 recorded. Your Idol 0-10 and 28-36, Golden 0-2 and Best Part transcribe 0-2 are unheard runs too (0-3 heard words in each line's window), over an intro chant, Korean lines and a sung intro. Gaps of the rows that fit with no line heard 10 s or more off: Seven -14, Colors of the Wind +8, Takedown -10, Your Idol -14, NSYNC -38; Popular, which has such lines, is +13. Constants not set; GATE A stopped for Ken: under the built rule, run length does not set Popular's 10-line run apart from Your Idol's 11- and 9-line runs or Domino's 8, and Domino's run is a stretch the transcriber did not hear. |
+| 11 | 2026-10-29 | 3 (GATE A) | Ken ruled Decisions 8 and 9 (split the flags; gap limit 15 s). Commit `2cde053` `feat(lyrics): an LRC fit tells mistimed lines from unheard ones`; suite after: 2812 passed (+8). Reran `python scripts/lrc_timing_report.py` read only; output in "GATE A report output, after the ruling" below | Constants: `FLAG_TOLERANCE_S` 5.0, `MIN_FLAGGED_RUN` 2, `MIN_UNHEARD_RUN` 3, `LRC_MAX_GAP_S` 15 (Phase 5, not coded). Test changes in `test_srt_slice_fit.py`: the "cut verse" test was a stretch the transcriber missed (heard words removed, times unchanged), so it became `test_a_stretch_nobody_heard_is_unheard_and_flags_no_run`; a new cut-verse test has the video skip six lines so the later ones come early (mistimed 24-29, unheard 18-23, flagged run 24-29). The extra-repeat record became a requirement: all three repeats now leave a flagged run (28-29, 0-13, 0-3), where at 2.0 s with unheard lines counted the late one gave only a 2-line run under the old `MIN_FLAGGED_RUN` 3. `TestFlaggedRuns` covers the new rule (an unheard line does not end a run, does not count toward it, and is not part of its edges); `TestUnheardRuns` takes the old consecutive-run cases. One mutation checked by hand: letting an unheard line end a run fails `test_unheard_lines_between_mistimed_ones_do_not_end_a_run`. The script's mode was 644 with a shebang (pre-commit's shebang hook failed on it); now 755, as `movie_srt_fit_report.py` is. Rerun, at the new constants: flagged runs on two rows only, Popular (transcribe 53-56, ASR 53-61) and Bloodstream ASR (31-52). Mistimed lines elsewhere: NSYNC 54 and Your Idol 46, one each. Unheard runs: Popular 57-61 / 57-59, Best Part 0-2 / 29-32 34-36, Bloodstream ASR 15-22 33-36 39-51 53-56, Domino 43-50, Your Idol 0-9 28-35, Golden 0-2, Takedown 0-3, Seven ASR 45-47. Mistimed lines at 3-10 s tolerance: Popular and Bloodstream unchanged from 4.0 to 10.0 s; at 3.0 s Takedown gains 29, 37, Best Part 34 / 33, Lose Yourself 0, Bloodstream 10. With `LRC_MAX_GAP_S` 15, the fit's best stream gives viable for Popular (+13, run 53-56), Best Part, Bloodstream (ASR, run 31-52), Lose Yourself, Domino, In Summer, Colors of the Wind (+8), She Used To Be Mine, Stay Gold, Your Idol (-14), Golden, Takedown (-10), Seven (-14); not viable: Defying Gravity (refused, +97), Soda Pop (refused), NSYNC (-38), Jay Chou (refused). Phase 7 gains a Domino check. |
 
 ## Hand-off prompt (executor)
 
@@ -575,3 +619,62 @@ Placeholders in force: FLAG_TOLERANCE_S=2.0, MIN_FLAGGED_RUN=3, MIN_MATCHED_SHAR
 | 周杰倫 Jay Chou【晴天 Sunny Day】-Official Musi | transcribe | refused/too_few | - | - | - | - | - |
 | 정국 (Jung Kook) 'Seven (feat. Latto)' Off | transcribe | fits | 3: 6,28,46 | 3: 6,28,46 | 3: 6,28,46 | 3: 6,28,46 | 3: 6,28,46 |
 | 정국 (Jung Kook) 'Seven (feat. Latto)' Off | asr | fits | 9: 3,6,24,25,39,45,46,47,51 | 9: 3,6,24,25,39,45,46,47,51 | 9: 3,6,24,25,39,45,46,47,51 | 9: 3,6,24,25,39,45,46,47,51 | 9: 3,6,24,25,39,45,46,47,51 |
+
+## GATE A report output, after the ruling
+
+Raw output of `python scripts/lrc_timing_report.py` on 2026-10-29 at `2cde053`, with the
+constants set at GATE A. Read only. Same numbering and gap sign as above.
+
+Constants in force: FLAG_TOLERANCE_S=5.0, MIN_FLAGGED_RUN=2, MIN_UNHEARD_RUN=3, MIN_MATCHED_SHARE=0.25. 17 joint songs with a usable LRC in /home/ken/pikaraoke-songs.
+
+| Song | Origin | LRCLIB | Heard | Words | Clip s | Status | Matched | Shift s | Speed | Spread s | Anchors | Gap s (bundle) | Gap s (file) | Mistimed | Unheard | Runs>=2 | Runs>=3 | Runs>=4 | Unheard runs |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 'Defying Gravity' - Wicked 20th Annivers | custom | rejected | transcribe | 267 | 257 | refused/disagree | 45/89 | -69.25 | 0.9590 | 4.113 | 45 | +97 | +97 | - | - | - | - | - | - |
+| 'Defying Gravity' - Wicked 20th Annivers | custom | rejected | asr | 233 | 257 | refused/disagree | 36/89 | -67.14 | 0.9590 | 4.100 | 36 | +97 | +97 | - | - | - | - | - | - |
+| 'Popular' - Wicked 20th Anniversary Edit | genius | rejected | transcribe | 319 | 211 | fits | 55/62 | -12.02 | 0.9590 | 0.227 | 55 | +13 | +13 | 4: 53,54,55,56 | 7: 0,52,57,58,59,60,61 | 53-56 | 53-56 | 53-56 | 57-61 |
+| 'Popular' - Wicked 20th Anniversary Edit | genius | rejected | asr | 312 | 211 | fits | 55/62 | -11.90 | 0.9590 | 0.182 | 55 | +13 | +13 | 5: 53,54,56,60,61 | 7: 0,37,52,55,57,58,59 | 53-61 | 53-61 | 53-61 | 57-59 |
+| 'Soda Pop' Official Lyric Video _ KPop D | genius | rejected | transcribe | 209 | 170 | refused/disagree | 31/59 | 15.27 | 1.0000 | 0.830 | 31 | +0 | +0 | - | - | - | - | - | - |
+| Ed Sheeran - Best Part Of Me (feat. YEBB | genius | rejected | transcribe | 234 | 248 | fits | 34/38 | 2.21 | 0.9859 | 0.334 | 34 | -1 | -1 | - | 4: 0,1,2,32 | - | - | - | 0-2 |
+| Ed Sheeran - Best Part Of Me (feat. YEBB | genius | rejected | asr | 213 | 248 | fits | 27/38 | 1.78 | 0.9888 | 0.539 | 27 | -1 | -1 | - | 11: 1,6,7,27,29,30,31,32,34,35,36 | - | - | - | 29-32 34-36 |
+| Ed Sheeran & Rudimental­ - Bloodstream [ | custom | rejected | transcribe | 324 | 247 | refused/disagree | 38/71 | -10.88 | 1.0000 | 1.095 | 38 | +0 | +0 | - | - | - | - | - | - |
+| Ed Sheeran & Rudimental­ - Bloodstream [ | custom | rejected | asr | 231 | 247 | fits | 28/57 | -10.24 | 1.0000 | 0.560 | 31 | +0 | +0 | 5: 31,32,37,38,52 | 29: 15,16,17,18,19,20,21,22,33,34,35,36,39,40,41,42,43,44,45,46,47,48,49,50,51,53,54,55,56 | 31-52 | 31-52 | 31-52 | 15-22 33-36 39-51 53-56 |
+| Eminem - Lose Yourself | genius | used | transcribe | 777 | 328 | fits | 89/93 | -0.51 | 1.0000 | 0.200 | 89 | -1 | -1 | - | 4: 32,50,59,73 | - | - | - | - |
+| Jessie J - Domino (Official Video) | genius | used | transcribe | 330 | 235 | fits | 57/69 | -0.43 | 1.0000 | 0.184 | 57 | -1 | -1 | - | 12: 35,39,43,44,45,46,47,48,49,50,67,68 | - | - | - | 43-50 |
+| Josh Gad - In Summer (From 'Frozen'_Sing | genius | rejected | transcribe | 212 | 113 | fits | 21/21 | -0.44 | 1.0000 | 0.156 | 21 | +1 | +1 | - | - | - | - | - | - |
+| NSYNC - Paradise | genius | used | transcribe | 339 | 305 | fits | 49/56 | 23.93 | 1.0000 | 0.280 | 49 | -38 | -38 | 1: 54 | 7: 0,1,33,42,43,50,55 | - | - | - | - |
+| Pocahontas - Colors of the Wind (Blu-ray | genius | used | transcribe | 311 | 203 | fits | 37/37 | -6.38 | 1.0000 | 0.300 | 37 | +8 | +8 | - | - | - | - | - | - |
+| Pocahontas - Colors of the Wind (Blu-ray | genius | used | asr | 310 | 203 | fits | 37/37 | -5.98 | 1.0000 | 0.100 | 37 | +8 | +8 | - | - | - | - | - | - |
+| Sara Bareilles - She Used To Be Mine (Of | genius | used | transcribe | 295 | 253 | fits | 45/45 | -0.20 | 1.0000 | 0.228 | 45 | +0 | +0 | - | - | - | - | - | - |
+| Stay Gold (Official Music Video) from Th | genius | used | transcribe | 280 | 246 | fits | 51/51 | -0.06 | 1.0000 | 0.054 | 51 | +0 | +0 | - | - | - | - | - | - |
+| ‘Your Idol’ Lyric Video _ KPop Demon Hun | genius | used | transcribe | 300 | 206 | fits | 41/59 | -0.15 | 1.0000 | 0.150 | 41 | -14 | -14 | 1: 46 | 18: 0,1,2,3,4,5,6,7,8,9,28,29,30,31,32,33,34,35 | - | - | - | 0-9 28-35 |
+| “Golden” Official Lyric Video _ KPop Dem | genius | used | transcribe | 286 | 199 | fits | 37/46 | 3.16 | 1.0000 | 0.130 | 37 | -4 | -4 | - | 9: 0,1,2,16,19,21,34,43,45 | - | - | - | 0-2 |
+| “Takedown” Official Choreography _ KPop  | genius | used | transcribe | 343 | 193 | fits | 43/52 | 0.06 | 1.0000 | 0.390 | 43 | -10 | -10 | - | 9: 0,1,2,3,23,28,30,36,41 | - | - | - | 0-3 |
+| 周杰倫 Jay Chou【晴天 Sunny Day】-Official Musi | genius | rejected | transcribe | 103 | 318 | refused/too_few | 0/53 | 0.00 | 1.0000 |  | 0 | -19 | -19 | - | - | - | - | - | - |
+| 정국 (Jung Kook) 'Seven (feat. Latto)' Off | genius | used | transcribe | 472 | 204 | fits | 74/77 | 7.22 | 1.0000 | 0.135 | 74 | -14 | -14 | - | 3: 6,28,46 | - | - | - | - |
+| 정국 (Jung Kook) 'Seven (feat. Latto)' Off | genius | used | asr | 433 | 204 | fits | 68/77 | 7.32 | 1.0000 | 0.125 | 68 | -14 | -14 | - | 9: 3,6,24,25,39,45,46,47,51 | - | - | - | 45-47 |
+
+| Song | Heard | Status | Mistimed @ 3.0 s | Mistimed @ 4.0 s | Mistimed @ 5.0 s | Mistimed @ 7.0 s | Mistimed @ 10.0 s |
+|---|---|---|---|---|---|---|---|
+| 'Defying Gravity' - Wicked 20th Annivers | transcribe | refused/disagree | - | - | - | - | - |
+| 'Defying Gravity' - Wicked 20th Annivers | asr | refused/disagree | - | - | - | - | - |
+| 'Popular' - Wicked 20th Anniversary Edit | transcribe | fits | 4: 53,54,55,56 | 4: 53,54,55,56 | 4: 53,54,55,56 | 4: 53,54,55,56 | 4: 53,54,55,56 |
+| 'Popular' - Wicked 20th Anniversary Edit | asr | fits | 5: 53,54,56,60,61 | 5: 53,54,56,60,61 | 5: 53,54,56,60,61 | 5: 53,54,56,60,61 | 5: 53,54,56,60,61 |
+| 'Soda Pop' Official Lyric Video _ KPop D | transcribe | refused/disagree | - | - | - | - | - |
+| Ed Sheeran - Best Part Of Me (feat. YEBB | transcribe | fits | 1: 34 | - | - | - | - |
+| Ed Sheeran - Best Part Of Me (feat. YEBB | asr | fits | 1: 33 | - | - | - | - |
+| Ed Sheeran & Rudimental­ - Bloodstream [ | transcribe | refused/disagree | - | - | - | - | - |
+| Ed Sheeran & Rudimental­ - Bloodstream [ | asr | fits | 6: 10,31,32,37,38,52 | 5: 31,32,37,38,52 | 5: 31,32,37,38,52 | 5: 31,32,37,38,52 | 5: 31,32,37,38,52 |
+| Eminem - Lose Yourself | transcribe | fits | 1: 0 | - | - | - | - |
+| Jessie J - Domino (Official Video) | transcribe | fits | - | - | - | - | - |
+| Josh Gad - In Summer (From 'Frozen'_Sing | transcribe | fits | - | - | - | - | - |
+| NSYNC - Paradise | transcribe | fits | 1: 54 | 1: 54 | 1: 54 | 1: 54 | - |
+| Pocahontas - Colors of the Wind (Blu-ray | transcribe | fits | - | - | - | - | - |
+| Pocahontas - Colors of the Wind (Blu-ray | asr | fits | - | - | - | - | - |
+| Sara Bareilles - She Used To Be Mine (Of | transcribe | fits | - | - | - | - | - |
+| Stay Gold (Official Music Video) from Th | transcribe | fits | - | - | - | - | - |
+| ‘Your Idol’ Lyric Video _ KPop Demon Hun | transcribe | fits | 1: 46 | 1: 46 | 1: 46 | 1: 46 | - |
+| “Golden” Official Lyric Video _ KPop Dem | transcribe | fits | - | - | - | - | - |
+| “Takedown” Official Choreography _ KPop  | transcribe | fits | 2: 29,37 | 1: 29 | - | - | - |
+| 周杰倫 Jay Chou【晴天 Sunny Day】-Official Musi | transcribe | refused/too_few | - | - | - | - | - |
+| 정국 (Jung Kook) 'Seven (feat. Latto)' Off | transcribe | fits | - | - | - | - | - |
+| 정국 (Jung Kook) 'Seven (feat. Latto)' Off | asr | fits | - | - | - | - | - |
