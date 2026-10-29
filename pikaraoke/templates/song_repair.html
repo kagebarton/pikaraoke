@@ -568,14 +568,15 @@
       var seq = ++state.lrcSearchSeq;
       state.lrcCandidates = [];
       state.lrcVideoLength = null;
-      pickLrc(LRC_MATCH ? 'disk' : null);  // the earlier results' pick is gone with them
+      // The match on disk stays picked, and its check with it; a pick from the earlier results goes with them.
+      if (state.lrcPick !== 'disk') pickLrc(LRC_MATCH ? 'disk' : null);
       renderLrc(T.searching);
       $.getJSON(URLS.lrcSearch, { song: SONG, q: query }).done(function (found) {
         if (seq !== state.lrcSearchSeq) return;
         state.lrcCandidates = found.candidates;
         state.lrcVideoLength = found.video_length;
         var best = $.grep(found.candidates, function (c) { return c.best; })[0];
-        if (best) pickLrc(isOnDisk(best) ? 'disk' : best.id);
+        if (best && state.lrcPick === null) pickLrc(best.id);  // a search never displaces the match on disk
         renderLrc(found.candidates.length ? null : T.noLrclib);
       }).fail(function (xhr) {
         if (seq !== state.lrcSearchSeq) return;
