@@ -27,11 +27,27 @@ from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.genius import GeniusSong, GeniusUnavailable, read_choice
 from pikaraoke.lib.library_links import Playlist, PlaylistVideo
 from pikaraoke.lib.library_regen import CaptionCheck
-from pikaraoke.lib.library_tools import LibraryTools
+from pikaraoke.lib.library_tools import LibraryTools, MovieSliceCheck, _slice_refusal
 from pikaraoke.lib.song_list import SongList
 from pikaraoke.lib.song_manager import SongManager
+from pikaraoke.lib.srt_slice_fit import (
+    DISAGREE,
+    NO_REFERENCE,
+    NOT_SRT,
+    REFUSED,
+    TOO_FEW,
+    TOO_LONG,
+    SliceFit,
+)
 from pikaraoke.routes.library import library_bp
-from pikaraoke.routes.song_info import song_info_bp
+from pikaraoke.routes.song_info import _slice_card, song_info_bp
+from tests.unit.movie_slices import (
+    CLIP_S,
+    SLICE_LINES,
+    clip_starts,
+    heard_words,
+    movie_slice,
+)
 
 # Endpoints base.html resolves via url_for that neither blueprint provides.
 _STUB_ENDPOINTS = (
@@ -1040,6 +1056,304 @@ class TestRepairPage:
         html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())))
 
         assert_loads_shared_helpers(html, script(html))
+
+
+def fit_card_text(card: dict) -> str:
+    """A card's sentences in the order the Repair refuses with: head, lines, tip."""
+    parts = [card["head"], *(line["text"] for line in card["lines"])]
+    return " ".join(parts + ([card["tip"]] if card["tip"] else []))
+
+
+class TestSubtitleFitRoute:
+    """The Check fit preview: movie subtitles against the words already heard in the clip."""
+
+    @pytest.fixture
+    def song(self, env):
+        bundle = {**caption_bundle(), "transcribe_words": heard_words(), "media_duration_s": CLIP_S}
+        return env.add_song("A---aaaaaaaaaaa.mp4", bundle)
+
+    def check(self, env, song, **body):
+        payload = {"song": song, "text": movie_slice()}
+        payload.update(body)
+        return env.client.post("/song_info/subtitle_fit", json=payload)
+
+    def assert_nothing_written(self, env):
+        env.processing.enqueue_regen.assert_not_called()
+        assert not (env.folder / "lyrics").exists()
+        assert not list(env.folder.glob("regen_backups/*"))
+
+    def test_a_guest_gets_403_json(self, env, song):
+        env.admin = False
+
+        response = self.check(env, song)
+
+        assert response.status_code == 403
+        assert response.get_json()["success"] is False
+
+    @pytest.mark.parametrize("song_value", [None, ["a"], "/not/in/the/library.mp4"])
+    def test_a_song_outside_the_library_is_rejected(self, env, song, song_value):
+        assert self.check(env, song_value).status_code == 400
+
+    def test_a_song_that_is_not_a_video_is_rejected(self, env):
+        track = env.folder / "Track---aaaaaaaaaaa.mp3"
+        track.write_bytes(b"")
+        env.songs.add(str(track))
+
+        response = self.check(env, str(track))
+
+        assert response.status_code == 400
+        assert "video songs only" in response.get_json()["error"]
+
+    @pytest.mark.parametrize(
+        ("text", "message"),
+        [
+            (None, "subtitles must be text"),
+            (["1"], "subtitles must be text"),
+            ("la " * 400_000, "subtitles are too long"),
+        ],
+    )
+    def test_text_that_cannot_be_checked_is_an_error_not_an_answer(self, env, song, text, message):
+        response = self.check(env, song, text=text)
+
+        assert response.status_code == 400
+        assert message in response.get_json()["error"]
+
+    def test_a_clip_whose_length_cannot_be_read_is_an_error(self, env, monkeypatch):
+        monkeypatch.setattr("pikaraoke.lib.library_regen.probe_duration", lambda path: None)
+        song = env.add_song("B---bbbbbbbbbbb.mp4", {"transcribe_words": heard_words()})
+
+        response = self.check(env, song)
+
+        assert response.status_code == 400
+        assert "clip's length" in response.get_json()["error"]
+
+    def test_subtitles_that_fit_say_how_many_matched_and_how_far_they_move(self, env, song):
+        body = self.check(env, song).get_json()
+
+        assert body["status"] == "fits"
+        assert body["tone"] == "good"
+        assert body["head"] == "Fits. These subtitles can time this song."
+        assert [line["text"] for line in body["lines"]] == [
+            f"matches {SLICE_LINES} of {SLICE_LINES} lines",
+            "Subtitle times move 1:00:00 earlier.",
+        ]
+        assert body["tip"] is None and body["song_info_link"] is False
+
+    def test_subtitles_that_sit_before_the_clip_move_later(self, env, song):
+        body = self.check(env, song, text=movie_slice(offset=lambda k: -5.0)).get_json()
+
+        assert body["status"] == "fits"
+        assert body["lines"][1]["text"] == "Subtitle times move 0:00:05 later."
+
+    def test_a_check_saves_and_queues_nothing(self, env, song):
+        self.check(env, song)
+        self.check(env, song, text="just some words, not subtitles")
+
+        self.assert_nothing_written(env)
+
+    def test_text_that_is_not_srt_is_refused_with_how_srt_looks(self, env, song):
+        body = self.check(env, song, text="just some words, not subtitles").get_json()
+
+        assert (body["status"], body["tone"], body["head"]) == (
+            "not_srt",
+            "bad",
+            "Not an SRT file.",
+        )
+        assert body["tip"] == (
+            "SRT subtitles are numbered cues with times, like 00:01:02,500 --> 00:01:05,000."
+        )
+        assert body["lines"] == []
+
+    def test_subtitles_with_no_lines_to_check_are_refused(self, env, song):
+        body = self.check(env, song, text="1\n00:00:01,000 --> 00:00:02,000\n[MUSIC]\n").get_json()
+
+        assert (body["status"], body["head"]) == ("refused", "Doesn't fit.")
+        assert [line["text"] for line in body["lines"]] == [
+            "These subtitles have no lines to check."
+        ]
+
+    def test_subtitles_the_clip_does_not_sing_say_how_few_were_found(self, env, song):
+        body = self.check(env, song, text=movie_slice(lines=range(40, 52))).get_json()
+
+        assert (body["status"], body["tone"], body["head"]) == ("refused", "bad", "Doesn't fit.")
+        assert [line["text"] for line in body["lines"]] == [
+            f"Only 0 of {SLICE_LINES} lines were found in the clip."
+        ]
+        assert body["tip"] == (
+            "Check that these subtitles are from this movie and cover the part this clip shows."
+        )
+
+    def test_subtitles_that_disagree_on_one_timing_say_so(self, env, song):
+        scenes = movie_slice(offset=lambda k: 900.0 if k < SLICE_LINES // 2 else 2400.0)
+
+        body = self.check(env, song, text=scenes).get_json()
+
+        assert (body["status"], body["head"]) == ("refused", "Doesn't fit.")
+        [line] = body["lines"]
+        assert line["text"].endswith("lines, but they don't agree on one timing.")
+        assert "cut from several scenes" in body["tip"]
+
+    def test_a_whole_film_is_refused_past_the_cue_limit(self, env, song):
+        film = "".join(f"{n}\n00:00:01,000 --> 00:00:02,000\nla\n\n" for n in range(1, 3002))
+
+        body = self.check(env, song, text=film).get_json()
+
+        assert (body["status"], body["tone"]) == ("too_long", "bad")
+        assert body["head"] == "These subtitles have more than 3,000 lines."
+        assert body["tip"] == "Paste only the part of the movie with the song."
+
+    def test_a_song_with_a_bundle_but_no_heard_words_is_sent_to_regenerate(self, env):
+        song = env.add_song("B---bbbbbbbbbbb.mp4", caption_bundle())
+
+        body = self.check(env, song).get_json()
+
+        assert (body["status"], body["tone"], body["head"]) == (
+            "no_reference",
+            "info",
+            "Can't check yet.",
+        )
+        assert [line["text"] for line in body["lines"]] == [
+            "This song has no heard words yet, so there is nothing to compare the subtitles with.",
+            "Regenerate the song from Song info first, then come back and check.",
+        ]
+        assert body["song_info_link"] is True
+
+    def test_a_song_with_no_bundle_is_not_sent_to_regenerate(self, env, monkeypatch):
+        """A transcribed song's run keeps no heard words, so a Regenerate would not help."""
+        monkeypatch.setattr("pikaraoke.lib.library_regen.probe_duration", lambda path: CLIP_S)
+        song = env.add_song("B---bbbbbbbbbbb.mp4")
+
+        body = self.check(env, song).get_json()
+
+        assert (body["status"], body["tone"], body["head"]) == (
+            "no_reference",
+            "info",
+            "Can't check.",
+        )
+        assert "doesn't keep them yet" in body["lines"][0]["text"]
+        assert body["song_info_link"] is False
+
+
+class TestSliceCard:
+    """The wording of a Check fit answer, from a fit made by hand."""
+
+    def fit_card(self, **fields) -> dict:
+        fit = SliceFit(status="fits", matched=41, total=44, shift_s=-2525.0, **fields)
+        return _slice_card(MovieSliceCheck(fit, regenerate_helps=True))
+
+    def texts(self, card: dict) -> list[str]:
+        return [line["text"] for line in card["lines"]]
+
+    def test_a_plain_fit(self):
+        card = self.fit_card()
+
+        assert card["head"] == "Fits. These subtitles can time this song."
+        assert self.texts(card) == [
+            "matches 41 of 44 lines",
+            "Subtitle times move 0:42:05 earlier.",
+        ]
+
+    def test_a_speed_change_and_dropped_lines_are_noted_with_what_a_speed_means(self):
+        card = self.fit_card(speed=25 / 23.976, dropped=4)
+
+        assert self.texts(card)[2:] == [
+            "Speed adjusted by 4.3%.",
+            "4 lines fall outside the clip and are dropped.",
+        ]
+        speed_tip = card["lines"][2]["tip"]
+        assert "different frame rate" in speed_tip and "sped up or slowed down" in speed_tip
+        assert card["lines"][3]["tip"] is None
+
+    def test_a_slower_clip_is_a_speed_change_too(self):
+        assert self.texts(self.fit_card(speed=23.976 / 25))[2] == "Speed adjusted by 4.1%."
+
+    def test_one_dropped_line_reads_in_the_singular(self):
+        assert self.texts(self.fit_card(dropped=1))[2] == (
+            "1 line falls outside the clip and is dropped."
+        )
+
+    def test_a_speed_that_rounds_to_none_is_not_noted(self):
+        assert len(self.fit_card(speed=1.0004)["lines"]) == 2
+
+    def test_a_slice_that_already_matches_the_clip_says_nothing_moves(self):
+        fit = SliceFit(status="fits", matched=8, total=8, shift_s=0.2, speed=1.0002)
+
+        card = _slice_card(MovieSliceCheck(fit, regenerate_helps=True))
+
+        assert card["head"] == "Fits. The saved slice already matches the clip."
+        assert self.texts(card) == ["matches 8 of 8 lines", "Timing unchanged (0:00:00)."]
+
+    def test_a_shift_of_a_second_is_not_unchanged(self):
+        fit = SliceFit(status="fits", matched=8, total=8, shift_s=0.6)
+
+        card = _slice_card(MovieSliceCheck(fit, regenerate_helps=True))
+
+        assert self.texts(card)[1] == "Subtitle times move 0:00:01 later."
+
+    def test_a_speed_change_alone_is_not_unchanged(self):
+        fit = SliceFit(status="fits", matched=8, total=8, shift_s=0.0, speed=25 / 23.976)
+
+        card = _slice_card(MovieSliceCheck(fit, regenerate_helps=True))
+
+        assert card["head"] == "Fits. These subtitles can time this song."
+
+    @pytest.mark.parametrize("helps", [True, False])
+    @pytest.mark.parametrize(
+        "fit",
+        [
+            SliceFit(status=NOT_SRT),
+            SliceFit(status=TOO_LONG, total=3001),
+            SliceFit(status=NO_REFERENCE),
+            SliceFit(status=REFUSED, reason=TOO_FEW, matched=3, total=44),
+            SliceFit(status=REFUSED, reason=DISAGREE, matched=31, total=44),
+            SliceFit(status=REFUSED, reason=TOO_FEW, matched=0, total=0),
+        ],
+        ids=["not_srt", "too_long", "no_reference", "too_few", "disagree", "no_lines"],
+    )
+    def test_the_preview_and_the_repair_refuse_in_the_same_words(self, fit, helps):
+        card = _slice_card(MovieSliceCheck(fit, helps))
+
+        assert fit_card_text(card) == _slice_refusal(fit, helps)
+
+
+class TestMovieRepairRoute:
+    """The Repair fits the subtitles again on the server; the page's preview is not trusted."""
+
+    @pytest.fixture
+    def song(self, env):
+        bundle = {**caption_bundle(), "transcribe_words": heard_words(), "media_duration_s": CLIP_S}
+        return env.add_song("A---aaaaaaaaaaa.mp4", bundle)
+
+    def repair(self, env, song, **body):
+        return env.client.post("/song_info/repair", json={"song": song, "source": "movie", **body})
+
+    def test_the_corrected_slice_is_queued_not_the_posted_text(self, env, song):
+        pasted = movie_slice()
+
+        response = self.repair(env, song, text=pasted)
+
+        assert response.get_json() == {"success": True}
+        env.processing.enqueue_regen.assert_called_once()
+        plan = env.processing.enqueue_regen.call_args.args[0].song.plan
+        assert (plan.kind, plan.seed) == ("seed", {"lyrics_origin": "movie_srt"})
+        assert clip_starts(pasted)[0] > 3600
+        assert clip_starts(plan.custom_text)[0] == pytest.approx(10.0, abs=0.1)
+
+    def test_subtitles_that_do_not_fit_are_refused_with_the_admin_wording_and_nothing_is_backed_up(
+        self, env, song
+    ):
+        response = self.repair(env, song, text="just some words, not subtitles")
+
+        assert response.status_code == 400
+        assert response.get_json()["error"].startswith("Not an SRT file.")
+        env.processing.enqueue_regen.assert_not_called()
+        assert not list(env.folder.glob("regen_backups/*"))
+
+    def test_a_guest_cannot(self, env, song):
+        env.admin = False
+
+        assert self.repair(env, song, text=movie_slice()).status_code == 403
+        env.processing.enqueue_regen.assert_not_called()
 
 
 class TestCaptionCheckRoute:

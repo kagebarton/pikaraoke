@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -14,7 +15,16 @@ from pikaraoke.lib.current_app import get_karaoke_instance, get_site_name, is_ad
 from pikaraoke.lib.genius import GeniusUnavailable
 from pikaraoke.lib.library_regen import RegenError
 from pikaraoke.lib.library_status import HistoryEntry, SongStatus, length_gap_s
-from pikaraoke.lib.library_tools import custom_sheet_lines
+from pikaraoke.lib.library_tools import MovieSliceCheck, custom_sheet_lines
+from pikaraoke.lib.srt_slice_fit import (
+    DISAGREE,
+    FITS,
+    MAX_CUES,
+    NO_REFERENCE,
+    NOT_SRT,
+    TOO_LONG,
+    SliceFit,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -556,6 +566,174 @@ def lrclib_search_custom():
         return _error(str(e), 400)
     title, artist = (_typed(body, key) for key in ("title", "artist"))
     return jsonify(_lrclib_results(song, sheet, title, artist))
+
+
+def _hms(seconds: float) -> str:
+    whole = round(abs(seconds))
+    return f"{whole // 3600}:{whole % 3600 // 60:02d}:{whole % 60:02d}"
+
+
+def _card(
+    fit: SliceFit,
+    tone: str,
+    head: str,
+    lines: Sequence[tuple[str, str | None]] = (),
+    tip: str | None = None,
+    song_info_link: bool = False,
+) -> dict:
+    """One Check fit card: the headline (with its tip behind an (i)), then the detail lines.
+
+    ``tone``: ``good`` (fits), ``bad`` (doesn't fit) or ``info`` (can't be checked yet). A
+    line is ``(text, tip)``. The order head, lines, tip is the sentence the Repair refuses
+    with (``library_tools._slice_refusal``).
+    """
+    return {
+        "status": fit.status,
+        "tone": tone,
+        "head": head,
+        "tip": tip,
+        "lines": [{"text": text, "tip": line_tip} for text, line_tip in lines],
+        "song_info_link": song_info_link,
+    }
+
+
+def _fit_card(fit: SliceFit) -> dict:
+    """The card for subtitles that fit: how many lines matched and what the fit moves."""
+    lines = [(_("matches %(n)s of %(m)s lines") % {"n": fit.matched, "m": fit.total}, None)]
+    speed_change = abs(fit.speed - 1) * 100
+    unchanged = round(fit.shift_s) == 0 and round(speed_change, 1) == 0
+    if unchanged:
+        head = _("Fits. The saved slice already matches the clip.")
+        lines.append((_("Timing unchanged (%(time)s).") % {"time": _hms(fit.shift_s)}, None))
+    else:
+        head = _("Fits. These subtitles can time this song.")
+        move = _("Subtitle times move %(time)s earlier.")
+        if fit.shift_s >= 0:
+            move = _("Subtitle times move %(time)s later.")
+        lines.append((move % {"time": _hms(fit.shift_s)}, None))
+    if round(speed_change, 1) != 0:
+        lines.append(
+            (
+                _("Speed adjusted by %(pct)s%%.") % {"pct": f"{speed_change:.1f}"},
+                _(
+                    "The subtitles run at a different speed than the clip. That happens when "
+                    "they were made for a different frame rate, or when the clip was sped up "
+                    "or slowed down."
+                ),
+            )
+        )
+    if fit.dropped:
+        lines.append(
+            (
+                ngettext(
+                    "%(num)d line falls outside the clip and is dropped.",
+                    "%(num)d lines fall outside the clip and are dropped.",
+                    fit.dropped,
+                ),
+                None,
+            )
+        )
+    return _card(fit, "good", head, lines)
+
+
+def _slice_card(check: MovieSliceCheck) -> dict:
+    """The Check fit card for how pasted movie subtitles checked, worded for the repair page."""
+    fit = check.fit
+    if fit.status == FITS:
+        return _fit_card(fit)
+    if fit.status == NOT_SRT:
+        return _card(
+            fit,
+            "bad",
+            _("Not an SRT file."),
+            tip=_(
+                "SRT subtitles are numbered cues with times, like 00:01:02,500 --> 00:01:05,000."
+            ),
+        )
+    if fit.status == TOO_LONG:
+        return _card(
+            fit,
+            "bad",
+            _("These subtitles have more than %(n)s lines.") % {"n": f"{MAX_CUES:,}"},
+            tip=_("Paste only the part of the movie with the song."),
+        )
+    if fit.status == NO_REFERENCE and not check.regenerate_helps:
+        return _card(
+            fit,
+            "info",
+            _("Can't check."),
+            [
+                (
+                    _(
+                        "This song has no heard words to compare the subtitles with, and a "
+                        "song whose lyrics were transcribed doesn't keep them yet."
+                    ),
+                    None,
+                )
+            ],
+        )
+    if fit.status == NO_REFERENCE:
+        return _card(
+            fit,
+            "info",
+            _("Can't check yet."),
+            [
+                (
+                    _(
+                        "This song has no heard words yet, so there is nothing to compare "
+                        "the subtitles with."
+                    ),
+                    None,
+                ),
+                (
+                    _("Regenerate the song from Song info first, then come back and check."),
+                    None,
+                ),
+            ],
+            song_info_link=True,
+        )
+    head = _("Doesn't fit.")
+    if not fit.total:
+        return _card(fit, "bad", head, [(_("These subtitles have no lines to check."), None)])
+    counts = {"n": fit.matched, "m": fit.total}
+    if fit.reason == DISAGREE:
+        return _card(
+            fit,
+            "bad",
+            head,
+            [(_("Found %(n)d of %(m)d lines, but they don't agree on one timing.") % counts, None)],
+            tip=_(
+                "The clip may be cut from several scenes, or these subtitles are for a "
+                "different release."
+            ),
+        )
+    return _card(
+        fit,
+        "bad",
+        head,
+        [(_("Only %(n)d of %(m)d lines were found in the clip.") % counts, None)],
+        tip=_("Check that these subtitles are from this movie and cover the part this clip shows."),
+    )
+
+
+@song_info_bp.route("/song_info/subtitle_fit", methods=["POST"])
+def subtitle_fit():
+    """Check pasted movie subtitles against the clip's heard words; nothing is saved or queued.
+
+    A preview: the Repair fits the subtitles again on the server and saves that, never
+    anything this answer says.
+    """
+    if not is_admin():
+        return _error(_("Admin only"), 403)
+    k = get_karaoke_instance()
+    song = posted_song(k)
+    if song is None:
+        return _error(_("Not a song in the library"), 400)
+    try:
+        check = k.library_tools.check_movie_slice(song, request.get_json(silent=True).get("text"))
+    except RegenError as e:
+        return _error(str(e), 400)
+    return jsonify(_slice_card(check))
 
 
 @song_info_bp.route("/song_info/repair", methods=["POST"])
