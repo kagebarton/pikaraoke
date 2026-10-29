@@ -577,6 +577,43 @@ class TestCueAlignRoute:
         worker.transcribe_words.assert_called_once()
         assert worker.transcribe_words.call_args.kwargs["refine"] is False
 
+    def test_the_gates_transcribe_words_reach_the_bundle(self, tmp_path, monkeypatch):
+        """The cue route doesn't use them, but a movie-subtitle slice is checked
+        against the heard words a song's bundle keeps."""
+        stage, ctx, worker, _ = self._make_srt(tmp_path, monkeypatch)
+        heard = [
+            {"word": "glowing", "start": 10.0, "end": 10.4},
+            {"word": "river", "start": 11.0, "end": 11.4},
+        ]
+        worker.transcribe_words.return_value = heard
+
+        stage.run(ctx)
+
+        bundle = _read_bundle(ctx)
+        assert bundle["pipeline_decisions"]["method_used"] == "cue_align"
+        assert bundle["transcribe_words"] == heard
+
+    def test_after_a_dereverb_retry_the_bundle_holds_the_dry_stems_words(
+        self, tmp_path, monkeypatch
+    ):
+        stage, ctx, worker, _ = self._make_srt(tmp_path, monkeypatch)
+        stage._config.dereverb_yield_wpm = 30.0  # 2 words over the 30 s stem trips the gate
+        stage._stem_worker.separate.return_value = (
+            ctx.tmp_dir / "vocal_(Noreverb)_dereverb.wav",
+            ctx.tmp_dir / "vocal_(Reverb)_dereverb.wav",
+        )
+        wet = [{"word": "glowing", "start": 10.0, "end": 10.4}]
+        dry = [
+            {"word": "glowing", "start": 10.0, "end": 10.4},
+            {"word": "river", "start": 11.0, "end": 11.4},
+            {"word": "phantom", "start": 13.0, "end": 13.4},
+        ]
+        worker.transcribe_words.side_effect = [wet, dry]
+
+        stage.run(ctx)
+
+        assert _read_bundle(ctx)["transcribe_words"] == dry
+
 
 # ---------------------------------------------------------------------------
 # Vocal-energy veto wiring
