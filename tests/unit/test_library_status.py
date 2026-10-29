@@ -286,7 +286,7 @@ class TestCustomSheet:
         sheet.parent.mkdir()
         sheet.write_text("one\n", encoding="utf-8")
         status = library_status.song_status(video)
-        assert (status.origin, status.custom_sheet) == ("custom", True)
+        assert (status.origin, status.custom_sheet, status.movie_sheet) == ("custom", True, False)
 
     def test_a_sheet_counts_with_no_bundle_too(self, tmp_path):
         video = make_video(tmp_path)
@@ -304,14 +304,37 @@ class TestCustomSheet:
         (tmp_path / "lyrics" / f"{video.stem}.custom.srt").write_text("x\n", encoding="utf-8")
         status = library_status.song_status(video)
 
-        assert (status.origin, status.custom_sheet) == ("movie_srt", True)
+        assert (status.origin, status.custom_sheet, status.movie_sheet) == (
+            "movie_srt",
+            True,
+            True,
+        )
 
     def test_a_movie_subtitles_sheet_counts_with_no_bundle_too(self, tmp_path):
         video = make_video(tmp_path)
         (tmp_path / "lyrics").mkdir()
         (tmp_path / "lyrics" / f"{video.stem}.custom.srt").write_text("x\n", encoding="utf-8")
 
-        assert library_status.song_status(video).custom_sheet is True
+        status = library_status.song_status(video)
+
+        assert (status.custom_sheet, status.movie_sheet) == (True, True)
+
+    def test_no_sheet_is_not_a_movie_sheet(self, tmp_path):
+        video = make_video(tmp_path)
+        write_bundle(tmp_path, video.stem, lyrics={"origin": "movie_srt", "lines": ["one"]})
+
+        assert library_status.song_status(video).movie_sheet is False
+
+    def test_the_sheet_the_next_run_uses_names_the_kind_when_both_are_on_disk(self, tmp_path):
+        """A failed put-back can leave both kinds; the typed one comes first, as the plan does."""
+        video = make_video(tmp_path)
+        (tmp_path / "lyrics").mkdir()
+        for suffix in (".custom.txt", ".custom.srt"):
+            (tmp_path / "lyrics" / f"{video.stem}{suffix}").write_text("x\n", encoding="utf-8")
+
+        status = library_status.song_status(video)
+
+        assert (status.custom_sheet, status.movie_sheet) == (True, False)
 
 
 class TestAsrAndDuration:
