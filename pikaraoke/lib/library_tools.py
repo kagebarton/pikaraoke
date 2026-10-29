@@ -122,9 +122,10 @@ _PICK_TEXT_MAX = 200
 # The longest custom lyric sheet a repair takes; a song's lyrics are a few thousand characters.
 CUSTOM_SHEET_MAX_CHARS = 100_000
 
-# Movie subtitles are usually a whole film's SRT, 70-130 KB. This only stops a
-# paste far past the fit's cue limit before it is parsed.
-MOVIE_SUBTITLES_MAX_CHARS = 1_000_000
+# Movie subtitles are usually a whole film's SRT, 70-130 KB. The fit's cost grows
+# with the paste's words, not its cues: 1M characters of long cues under the cue
+# limit took minutes of request time, this much about ten seconds.
+MOVIE_SUBTITLES_MAX_CHARS = 300_000
 
 # A caption check that couldn't run (YouTube refusing, often after many calls in a
 # row) is tried once more after this pause.
