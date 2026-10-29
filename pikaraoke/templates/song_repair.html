@@ -1,6 +1,47 @@
 {% extends 'base.html' %}
 {% from 'info_tip.html' import info_tip %}
 
+{# Check fit's answer area for one source: the idle line, the checking line and the card, each id
+   starting with ``prefix``. ``stretches`` adds the two lists of lines an LRCLIB match's card can show. #}
+{% macro answer_area(prefix, checking_text, stretches=False) %}
+<div id="{{ prefix }}-result" class="rp-result" role="status" aria-live="polite">
+  <div id="{{ prefix }}-idle" class="rp-idle"></div>
+  <div id="{{ prefix }}-checking" class="rp-card is-hidden">
+    <div class="rp-card-head">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--dark-link)" stroke-width="3" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.9s" repeatCount="indefinite"></animateTransform></path></svg>
+      <span>{{ checking_text }}</span>
+    </div>
+  </div>
+  <div id="{{ prefix }}-card" class="rp-card is-hidden" data-tone="good">
+    <div id="{{ prefix }}-head-row" class="rp-card-head">
+      <svg class="rp-icon is-good" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>
+      <svg class="rp-icon is-bad" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v9M12 18.5v.01"></path></svg>
+      <svg class="rp-icon is-info" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 11v6M12 7.5v.01"></path></svg>
+      <span id="{{ prefix }}-head"></span>
+    </div>
+    <ul id="{{ prefix }}-lines" class="rp-card-lines"></ul>
+    {% if stretches %}
+    <div id="{{ prefix }}-runs" class="rp-stretches is-hidden">
+      <div class="rp-stretches-head">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v9M12 18.5v.01"></path></svg>
+        <span>{% trans %}Heard far from where this match puts them{% endtrans %}</span>
+        {% call info_tip() %}{% trans %}These lines were heard in the clip, but far from where this match puts them. The video may repeat or skip a section that this match does not, so the lines on one side of it may be off.{% endtrans %}{% endcall %}
+      </div>
+      <div class="rp-stretches-list"></div>
+    </div>
+    <div id="{{ prefix }}-unheard" class="rp-stretches is-quiet is-hidden">
+      <div class="rp-stretches-head">
+        <span>{% trans %}Couldn't check these lines{% endtrans %}</span>
+        {% call info_tip() %}{% trans %}Nothing was heard in the clip for these lines, so their timing could not be checked. The singing may be faint or unclear there, or the video may skip them.{% endtrans %}{% endcall %}
+      </div>
+      <div class="rp-stretches-list"></div>
+    </div>
+    {% endif %}
+    <a id="{{ prefix }}-info-link" class="rp-card-link no-spa is-hidden" href="{{ url_for('song_info.song_info', song=song) }}">{% trans %}Go to Song info{% endtrans %}</a>
+  </div>
+</div>
+{% endmacro %}
+
 {% block styles %}
 <link rel="stylesheet" href="{{ url_for('static', filename='library-pages.css') }}">
 <style>
@@ -41,7 +82,8 @@
   #movie-text { min-height: 210px; }
   .rp-check { display: block; width: 100%; min-height: 44px; padding: 0 16px; border-radius: 6px; border: 1px solid var(--dark-link); background: transparent; color: var(--dark-link); font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
   .rp-check:disabled { opacity: 0.5; cursor: not-allowed; }
-  #movie-result { margin-top: 10px; }
+  #lt-check { margin-top: 8px; }
+  .rp-result { margin-top: 10px; }
   .rp-idle { padding: 12px; border-radius: 8px; border: 1px dashed var(--dark-border); color: var(--dark-text-muted); font-size: 13px; }
   .rp-card { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 8px; border: 1px solid var(--dark-border); background: var(--dark-bg-secondary); }
   .rp-card-head { display: flex; gap: 8px; align-items: center; font-weight: 700; }
@@ -59,6 +101,20 @@
   .rp-card ul.rp-card-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
   .rp-card ul.rp-card-lines li { margin: 0; }
   .rp-card-link { display: inline-flex; align-items: center; min-height: 36px; font-size: 14px; }
+  .rp-card ul.rp-card-lines li.is-warn { color: var(--dark-warning); }
+  /* An LRCLIB match's lines to read before confirming: the warning, and the quieter "couldn't check" note. */
+  .rp-stretches { margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--dark-border); display: flex; flex-direction: column; gap: 8px; }
+  .rp-stretches-head { display: flex; align-items: center; gap: 4px; font-size: 14px; font-weight: 700; color: var(--dark-warning); }
+  .rp-stretches-head svg { flex: none; margin-right: 4px; }
+  .rp-stretches-head .info-tip { font-weight: 400; }
+  .rp-stretches.is-quiet .rp-stretches-head { color: var(--dark-text-muted); }
+  .rp-stretch-title { font-size: 13px; font-weight: 700; }
+  .rp-stretches.is-quiet .rp-stretch-title { font-weight: 400; color: var(--dark-text-muted); }
+  .rp-stretch-lines { margin-top: 4px; max-height: 132px; overflow: auto; padding: 8px 10px; border-radius: 6px; background: var(--dark-bg-primary); display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+  .rp-stretches.is-quiet .rp-stretch-lines { color: var(--dark-text-muted); }
+  .rp-stretch-line { display: flex; gap: 10px; }
+  .rp-stretch-line span:last-child { min-width: 0; word-break: break-word; }
+  .rp-time { flex: none; width: 34px; color: var(--dark-text-muted); }
   .go-row.rp-buttons { gap: 10px; margin-top: 14px; }
   .go-row.rp-buttons .info-tip-btn { margin: 0 -6px; }
   .rp-buttons .button { min-height: 44px; font-weight: 700; }
@@ -76,12 +132,15 @@
     var START_SOURCE = PRESELECT || CURRENT_SOURCE;  // the card chosen on load
     var CURRENT_GENIUS_ID = {{ current_genius_id | tojson }};
     var CUSTOM_QUERY = {{ custom_query | tojson }};  // where a custom song's LRCLIB search starts
+    var LRC_MATCH = {{ lrc_match | tojson }};  // the song's LRCLIB match on disk, as a list row, or null
     var HAS_YOUTUBE_ID = {{ has_youtube_id | tojson }};
     var URLS = {
       captionCheck: {{ url_for('song_info.caption_check') | tojson }},
       geniusSearch: {{ url_for('search.lyrics_search') | tojson }},
       geniusLyrics: {{ url_for('song_info.genius_lyrics') | tojson }},
       lrclibSearch: {{ url_for('song_info.lrclib_search') | tojson }},
+      lrcSearch: {{ url_for('song_info.lrc_search') | tojson }},
+      lrcFit: {{ url_for('song_info.lrc_fit') | tojson }},
       repair: {{ url_for('song_info.repair') | tojson }},
       songInfo: {{ url_for('song_info.song_info', song=song) | tojson }},
       subtitleFit: {{ url_for('song_info.subtitle_fit') | tojson }}
@@ -118,11 +177,18 @@
       movieUnchecked: {{ _('Not checked yet. Check fit before you regenerate.') | tojson }},
       movieEdited: {{ _('The subtitles changed since the last check. Check fit again to turn Regenerate back on.') | tojson }},
       movieSaved: {{ _('This is the saved slice. Check fit confirms it, then Regenerate turns on.') | tojson }},
-      fitFailed: {{ _('Could not check the subtitles.') | tojson }}
+      fitFailed: {{ _('Could not check the subtitles.') | tojson }},
+      onDisk: {{ _('on disk') | tojson }},
+      searchLrclib: {{ _('Search LRCLIB') | tojson }},
+      hideSearch: {{ _('Hide search') | tojson }},
+      lrcSearchFirst: {{ _('Search for a match to start.') | tojson }},
+      lrcUnchecked: {{ _('Not checked yet. Check fit before you regenerate.') | tojson }},
+      lrcSaved: {{ _('This is the saved timing. Check fit confirms it, then Regenerate turns on.') | tojson }},
+      lrcFailed: {{ _('Could not check the match.') | tojson }}
     };
 
     var state = {
-      source: null,      // 'caption' | 'genius' | 'custom' | 'movie' | 'transcribe'
+      source: null,      // 'caption' | 'genius' | 'custom' | 'movie' | 'lrclib' | 'transcribe'
       genius: null,      // the picked Genius result {id, title, artist}
       lrclib: null,      // 'none' | the picked candidate's id
       candidates: [],    // LRCLIB's matches for the picked Genius song
@@ -131,6 +197,14 @@
       movieChecking: false, // a check is on the server; Check fit stays off until it answers, so none stack
       movieAnswered: null, // the text Check fit's last shown answer was for
       movieSeq: 0,       // a check still loading when the text changes is for the old text
+      lrcPick: LRC_MATCH ? 'disk' : null, // the match to time from: 'disk', or a search result's LRCLIB id
+      lrcCandidates: [], // LRCLIB's matches for the typed search, scored against the song's lyrics
+      lrcVideoLength: null,
+      lrcSearchOpen: !LRC_MATCH, // with no match on disk the search is all there is
+      lrcCard: null,     // Check fit's answer for the picked match; any other pick clears it
+      lrcChecking: false, // a check is on the server; Check fit stays off until it answers, so none stack
+      lrcSeq: 0,         // a check still loading when the pick changes is for the old pick
+      lrcSearchSeq: 0,
       geniusSeq: 0,
       lrclibSeq: 0,
       sending: false
@@ -191,6 +265,7 @@
       $('#genius-section').toggleClass('is-hidden', source !== 'genius');
       $('#custom-section').toggleClass('is-hidden', source !== 'custom');
       $('#movie-section').toggleClass('is-hidden', source !== 'movie');
+      $('#lrclib-section').toggleClass('is-hidden', source !== 'lrclib');
       $('#step1-note').toggleClass('is-hidden', hasLrclibStep());
       $('#go').text(hasLrclibStep() ? T.nextLrclib : T.regenerate);
       refreshStep1();
@@ -200,7 +275,8 @@
       var complete = state.source === 'caption' || state.source === 'transcribe' ||
         (state.source === 'genius' && state.genius !== null) ||
         (state.source === 'custom' && $.trim(customText()) !== '') ||  // the server checks the lyrics
-        (state.source === 'movie' && state.movieCard !== null && state.movieCard.status === 'fits');
+        (state.source === 'movie' && state.movieCard !== null && state.movieCard.status === 'fits') ||
+        (state.source === 'lrclib' && state.lrcCard !== null && state.lrcCard.viable);
       $('#go').prop('disabled', !complete || state.sending);
       $('#genius-preview-toggle').prop('disabled', state.genius === null);
     }
@@ -297,19 +373,37 @@
       return tip;
     }
 
-    // Check fit's answer: a headline (its tip behind an (i)), detail lines, maybe a link.
-    function showMovieCard(card) {
-      $('#movie-card').attr('data-tone', card.tone);
-      $('#movie-head').text(card.head);
-      $('#movie-head-row .info-tip').remove();
-      if (card.tip) $('#movie-head-row').append(infoTip(card.tip));
-      var list = $('#movie-lines').empty();
+    // Check fit's answer for a source (``prefix``): a headline (its tip behind an (i)), detail lines,
+    // the stretches of lines to read, maybe a link.
+    function showCard(prefix, card) {
+      $('#' + prefix + '-card').attr('data-tone', card.tone);
+      $('#' + prefix + '-head').text(card.head);
+      $('#' + prefix + '-head-row .info-tip').remove();
+      if (card.tip) $('#' + prefix + '-head-row').append(infoTip(card.tip));
+      var list = $('#' + prefix + '-lines').empty();
       $.each(card.lines, function (i, line) {
-        var item = el('li', null, line.text);
+        var item = el('li', line.warn ? 'is-warn' : null, line.text);
         if (line.tip) item.append(infoTip(line.tip));
         list.append(item);
       });
-      $('#movie-info-link').toggleClass('is-hidden', !card.song_info_link);
+      showStretches(prefix + '-runs', card.runs || []);
+      showStretches(prefix + '-unheard', card.unheard || []);
+      $('#' + prefix + '-info-link').toggleClass('is-hidden', !card.song_info_link);
+    }
+
+    // Stretches of an LRCLIB match's lines: a title, then each line with its time in the clip.
+    function showStretches(id, stretches) {
+      var block = $('#' + id);
+      if (!block.length) return;
+      block.toggleClass('is-hidden', !stretches.length);
+      var list = block.find('.rp-stretches-list').empty();
+      $.each(stretches, function (i, stretch) {
+        var lines = el('div', 'rp-stretch-lines');
+        $.each(stretch.lines, function (j, line) {
+          lines.append(el('div', 'rp-stretch-line').append(el('span', 'rp-time', line.time), el('span', null, line.text)));
+        });
+        list.append(el('div', null).append(el('div', 'rp-stretch-title', stretch.title), lines));
+      });
     }
 
     function renderMovie() {
@@ -349,7 +443,7 @@
         if (seq === state.movieSeq) {
           state.movieAnswered = text;
           state.movieCard = card;
-          showMovieCard(card);
+          showCard('movie', card);
         }
         renderMovie();
         refreshStep1();
@@ -391,6 +485,139 @@
       reader.readAsArrayBuffer(file);
     });
 
+    /* --------------------------------------------------------- LRCLIB timing */
+
+    // The match's key in the list: 'disk' for the song's own .lrc, else the id of a search result.
+    function isOnDisk(candidate) {
+      return LRC_MATCH !== null && candidate.id != null && candidate.id === LRC_MATCH.id;
+    }
+
+    // What Check fit and Regenerate send: a search result's id, nothing for the .lrc on disk.
+    function lrcId() {
+      return state.lrcPick === 'disk' ? null : state.lrcPick;
+    }
+
+    // The .lrc on disk first, then the search's other results; it carries its own score if the search listed it.
+    function lrcRows() {
+      var rows = LRC_MATCH ? [$.extend({ key: 'disk', current: true }, LRC_MATCH)] : [];
+      $.each(state.lrcCandidates, function (i, candidate) {
+        if (isOnDisk(candidate)) {
+          $.extend(rows[0], { mapped: candidate.mapped, sheet_lines: candidate.sheet_lines, best: candidate.best });
+        } else {
+          rows.push($.extend({ key: candidate.id }, candidate));
+        }
+      });
+      return rows;
+    }
+
+    function renderLrcMatches(message) {
+      var rows = lrcRows();
+      var shown = state.lrcSearchOpen ? rows : $.grep(rows, function (row) { return row.key === state.lrcPick; });
+      var list = $('#lt-matches').empty();
+      if (message) list.append(el('div', 'rp-empty', message));
+      $.each(shown, function (i, row) {
+        list.append(matchOption(row, 'lt-match', row.key === state.lrcPick, T.onDisk,
+          state.lrcSearchOpen && row.sheet_lines > 0, function () { pickLrc(row.key); }));
+      });
+      list.toggleClass('is-hidden', !list.children().length);
+      $('#lt-video-length').text(state.lrcVideoLength || '');
+    }
+
+    function lrcIdleText() {
+      if (state.lrcPick === null) return T.lrcSearchFirst;
+      if (state.lrcPick === 'disk' && CURRENT_SOURCE === 'lrclib') return T.lrcSaved;
+      return T.lrcUnchecked;
+    }
+
+    function renderLrc(message) {
+      renderLrcMatches(message);
+      $('#lt-search').toggleClass('is-hidden', !state.lrcSearchOpen);
+      $('#lt-search-toggle').text(state.lrcSearchOpen ? T.hideSearch : T.searchLrclib)
+        .toggleClass('is-hidden', !LRC_MATCH);
+      $('#lt-check').text(state.lrcChecking ? T.movieChecking : T.checkFit)
+        .prop('disabled', state.lrcPick === null || state.lrcChecking);
+      $('#lt-idle').toggleClass('is-hidden', state.lrcChecking || state.lrcCard !== null).text(lrcIdleText());
+      $('#lt-checking').toggleClass('is-hidden', !state.lrcChecking);
+      $('#lt-card').toggleClass('is-hidden', state.lrcCard === null);
+    }
+
+    // A different match is a different answer: the old one is dropped, Regenerate goes off, and a check
+    // still on the server keeps Check fit off until it comes back.
+    function pickLrc(key) {
+      state.lrcPick = key;
+      state.lrcSeq++;
+      state.lrcCard = null;
+      renderLrc();
+      refreshStep1();
+    }
+
+    // The search box starts from what the page knows of the song, as a custom song's does.
+    function startLrcSearch() {
+      if (state.lrcSearchOpen && !$('#lt-q').val()) $('#lt-q').val(CUSTOM_QUERY);
+    }
+
+    $('#lt-search-toggle').on('click', function () {
+      state.lrcSearchOpen = !state.lrcSearchOpen;
+      startLrcSearch();
+      renderLrc();
+    });
+
+    function searchLrc() {
+      var query = $.trim($('#lt-q').val());
+      if (!query) return;
+      var seq = ++state.lrcSearchSeq;
+      state.lrcCandidates = [];
+      state.lrcVideoLength = null;
+      pickLrc(LRC_MATCH ? 'disk' : null);  // the earlier results' pick is gone with them
+      renderLrc(T.searching);
+      $.getJSON(URLS.lrcSearch, { song: SONG, q: query }).done(function (found) {
+        if (seq !== state.lrcSearchSeq) return;
+        state.lrcCandidates = found.candidates;
+        state.lrcVideoLength = found.video_length;
+        var best = $.grep(found.candidates, function (c) { return c.best; })[0];
+        if (best) pickLrc(isOnDisk(best) ? 'disk' : best.id);
+        renderLrc(found.candidates.length ? null : T.noLrclib);
+      }).fail(function (xhr) {
+        if (seq !== state.lrcSearchSeq) return;
+        renderLrc(errorOf(xhr, T.searchFailed));
+      });
+    }
+
+    $('#lt-search-go').on('click', searchLrc);
+    $('#lt-q').on('keydown', function (e) {
+      if (e.which === 13) { e.preventDefault(); searchLrc(); }
+    });
+
+    function checkLrc() {
+      var seq = ++state.lrcSeq;
+      state.lrcChecking = true;
+      state.lrcCard = null;
+      renderLrc();
+      refreshStep1();
+      $.ajax({
+        url: URLS.lrcFit,
+        method: 'POST',
+        contentType: 'application/json',
+        dataType: 'json',
+        data: JSON.stringify({ song: SONG, lrclib_id: lrcId() })
+      }).done(function (card) {
+        state.lrcChecking = false;
+        if (seq === state.lrcSeq) {
+          state.lrcCard = card;
+          showCard('lt', card);
+        }
+        renderLrc();
+        refreshStep1();
+      }).fail(function (xhr) {
+        state.lrcChecking = false;
+        if (seq === state.lrcSeq) showNotification(errorOf(xhr, T.lrcFailed), 'is-danger');
+        renderLrc();
+        refreshStep1();
+      });
+    }
+
+    $('#lt-check').on('click', checkLrc);
+
     $('#genius-search').on('click', searchGenius);
     $('#genius-q').on('keydown', function (e) {
       if (e.which === 13) { e.preventDefault(); searchGenius(); }
@@ -419,6 +646,8 @@
         showStep(2);
       } else if (state.source === 'movie') {
         send({ source: 'movie', text: movieText() });  // the server checks the fit again
+      } else if (state.source === 'lrclib') {
+        send({ source: 'lrclib', lrclib_id: lrcId() });  // and fits the match again
       } else {
         send({ source: state.source });
       }
@@ -495,21 +724,25 @@
       return el('span', tone, candidate.fit);
     }
 
-    function lrclibOption(candidate) {
-      var label = el('label', 'rp-opt' + (state.lrclib === candidate.id ? ' is-selected' : ''));
-      var input = $('<input type="radio" name="lrclib">').val(candidate.id)
-        .prop('checked', state.lrclib === candidate.id);
+    // One row of an LRCLIB match list: step 2's, and LRCLIB timing's. ``currentLabel`` names the match
+    // on disk; ``showMapped`` adds how many of the song's lines the match maps to.
+    function matchOption(candidate, name, selected, currentLabel, showMapped, onPick) {
+      var label = el('label', 'rp-opt' + (selected ? ' is-selected' : ''));
+      var input = $('<input type="radio">').attr('name', name).val(candidate.id).prop('checked', selected);
       var head = el('span', 'rp-opt-head').append(el('span', null, candidate.trackName));
       if (candidate.best) head.append(el('span', 'rp-tag is-best', T.bestFit));
-      if (candidate.current) head.append(el('span', 'rp-tag', T.current));
+      if (candidate.current) head.append(el('span', 'rp-tag', currentLabel));
       var sub = $.grep([candidate.artistName, candidate.albumName], Boolean).join(' · ');
-      var fit = el('span', 'rp-fit').append(
-        fitLine(candidate),
-        el('span', null, fill(T.matches, { n: candidate.mapped, m: candidate.sheet_lines }))
-      );
+      var fit = el('span', 'rp-fit').append(fitLine(candidate));
+      if (showMapped) fit.append(el('span', null, fill(T.matches, { n: candidate.mapped, m: candidate.sheet_lines })));
       label.append(input, el('span', 'rp-opt-body').append(head, el('span', 'rp-muted', sub), fit));
-      input.on('change', function () { selectLrclib(candidate.id); });
+      input.on('change', onPick);
       return label;
+    }
+
+    function lrclibOption(candidate) {
+      return matchOption(candidate, 'lrclib', state.lrclib === candidate.id, T.current, true,
+        function () { selectLrclib(candidate.id); });
     }
 
     function noneOption() {
@@ -603,11 +836,14 @@
     /* -------------------------------------------------------------- start */
 
     startCaptionCheck();
-    if ($.inArray(START_SOURCE, ['genius', 'custom', 'movie', 'transcribe']) !== -1) {
+    if ($.inArray(START_SOURCE, ['genius', 'custom', 'movie', 'lrclib', 'transcribe']) !== -1) {
       chooseSource(START_SOURCE);
     }
     renderMovie();
+    startLrcSearch();
+    renderLrc();
     refreshStep1();
+    if (PRESELECT === 'lrclib' && LRC_MATCH) checkLrc();  // a link from a song list has the match on disk checked
   });
 </script>
 {% endblock %}
@@ -642,6 +878,10 @@
       <input type="radio" name="source">
       <span><b>{% trans %}Movie subtitles{% endtrans %}</b>{% if current_source == 'movie' %} <span class="rp-tag">{% trans %}current{% endtrans %}</span>{% endif %}<span class="rp-muted rp-src-desc">{% trans %}Time the song from the movie's own subtitles.{% endtrans %}</span></span>
     </label>
+    <label class="rp-src" data-source="lrclib">
+      <input type="radio" name="source">
+      <span><b>{% trans %}LRCLIB timing{% endtrans %}</b>{% if current_source == 'lrclib' %} <span class="rp-tag">{% trans %}current{% endtrans %}</span>{% endif %}<span class="rp-muted rp-src-desc">{% trans %}Time the song from an LRCLIB match's own line times.{% endtrans %}</span></span>
+    </label>
     <label class="rp-src" data-source="transcribe">
       <input type="radio" name="source">
       <span><b>{% trans %}No lyrics (transcribe){% endtrans %}</b>{% if current_source == 'transcribe' %} <span class="rp-tag">{% trans %}current{% endtrans %}</span>{% endif %}<span class="rp-muted rp-src-desc">{% trans %}Words come from what the singer is heard singing.{% endtrans %}</span></span>
@@ -670,31 +910,31 @@
     <input type="file" id="custom-file" class="is-hidden" accept=".txt,text/plain">
   </div>
 
+  <div id="lrclib-section" class="is-hidden">
+    <div class="rp-sec has-tip"><span>{% trans %}LRCLIB timing{% endtrans %}</span>{% call info_tip() %}{% trans %}The match's own line times become the song's timing. Check fit finds where its lines sit in the clip, using the words already heard in it, and shows any that sit far from their time.{% endtrans %}{% endcall %}</div>
+    <div id="lt-search" class="is-hidden">
+      <label for="lt-q" class="rp-muted">{% trans %}Type the song title and artist{% endtrans %}</label>
+      <div class="rp-search">
+        <input id="lt-q" class="input" type="search" autocomplete="off">
+        <button type="button" id="lt-search-go" class="button is-primary" aria-label="{% trans %}Search LRCLIB{% endtrans %}">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg>
+        </button>
+      </div>
+      <div class="rp-sec"><span>{% trans %}Results{% endtrans %}</span><span id="lt-video-length"></span></div>
+    </div>
+    <div id="lt-matches" class="rp-list is-hidden" style="margin-top: 0"></div>
+    <button type="button" id="lt-search-toggle" class="rp-link">{% trans %}Search LRCLIB{% endtrans %}</button>
+    <button type="button" id="lt-check" class="rp-check" disabled>{% trans %}Check fit{% endtrans %}</button>
+    {{ answer_area('lt', _('Finding where this match sits in the clip…'), stretches=True) }}
+  </div>
+
   <div id="movie-section" class="is-hidden">
     <div class="rp-sec has-tip"><span>{% trans %}Movie subtitles{% endtrans %}</span>{% call info_tip() %}{% trans %}Paste the stretch of the movie's SRT subtitles that this clip covers. Check fit finds where it sits, using the words already heard in the clip.{% endtrans %}{% endcall %}</div>
     <textarea id="movie-text" class="rp-text" aria-label="{% trans %}Movie subtitles{% endtrans %}" spellcheck="false" autocomplete="off">{{ movie_prefill }}</textarea>
     <button type="button" id="movie-open" class="rp-link">{% trans %}Open file{% endtrans %}</button>
     <input type="file" id="movie-file" class="is-hidden" accept=".srt,application/x-subrip,text/plain">
     <button type="button" id="movie-check" class="rp-check" disabled>{% trans %}Check fit{% endtrans %}</button>
-    <div id="movie-result" role="status" aria-live="polite">
-      <div id="movie-idle" class="rp-idle"></div>
-      <div id="movie-checking" class="rp-card is-hidden">
-        <div class="rp-card-head">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--dark-link)" stroke-width="3" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.9s" repeatCount="indefinite"></animateTransform></path></svg>
-          <span>{% trans %}Finding where these subtitles sit in the clip…{% endtrans %}</span>
-        </div>
-      </div>
-      <div id="movie-card" class="rp-card is-hidden" data-tone="good">
-        <div id="movie-head-row" class="rp-card-head">
-          <svg class="rp-icon is-good" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>
-          <svg class="rp-icon is-bad" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v9M12 18.5v.01"></path></svg>
-          <svg class="rp-icon is-info" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 11v6M12 7.5v.01"></path></svg>
-          <span id="movie-head"></span>
-        </div>
-        <ul id="movie-lines" class="rp-card-lines"></ul>
-        <a id="movie-info-link" class="rp-card-link no-spa is-hidden" href="{{ url_for('song_info.song_info', song=song) }}">{% trans %}Go to Song info{% endtrans %}</a>
-      </div>
-    </div>
+    {{ answer_area('movie', _('Finding where these subtitles sit in the clip…')) }}
   </div>
 
   <div class="go-row rp-buttons">

@@ -401,6 +401,9 @@ class TestSourceLists:
     def test_a_movie_subtitles_song(self, tmp_path):
         assert self.lists_of(self.song(tmp_path, "movie_srt", "cue_align")) == {"movie", "all"}
 
+    def test_an_lrclib_timed_song(self, tmp_path):
+        assert self.lists_of(self.song(tmp_path, "lrclib_srt", "cue_align")) == {"lrc", "all"}
+
     def test_a_genius_song_with_an_lrc_has_a_timed_source(self, tmp_path):
         video = self.song(tmp_path, "genius", "joint", lrc=True)
 
@@ -431,6 +434,59 @@ class TestSourceLists:
         (tmp_path / "karaoke" / f"{video.stem}.ass").write_text("", encoding="utf-8")
 
         assert self.lists_of(video) == {"no_lyrics", "all"}
+
+
+class TestLrclibTimedMatch:
+    """A cue-route bundle records no LRCLIB match, so an LRCLIB-timed song's is read off its .lrc."""
+
+    RECORD = {
+        "id": 11,
+        "trackName": "Invented Song",
+        "artistName": "Invented Artist",
+        "duration": 200.0,
+    }
+
+    def song(self, tmp_path, origin: str) -> Path:
+        video = make_video(tmp_path)
+        write_bundle(tmp_path, video.stem, lyrics={"origin": origin})
+        path = tmp_path / "lyrics" / f"{video.stem}.lrc"
+        path.parent.mkdir(exist_ok=True)
+        lrclib.write_lrc(path, {**self.RECORD, "syncedLyrics": "[00:01.00]one\n"})
+        return video
+
+    def test_the_match_is_the_lrcs_header(self, tmp_path):
+        status = library_status.song_status(self.song(tmp_path, "lrclib_srt"))
+
+        assert status.lrclib == {
+            "id": 11,
+            "trackName": "Invented Song",
+            "artistName": "Invented Artist",
+            "duration": 200.0,
+        }
+        assert status.lrclib_state == "n/a"  # the fill is a joint-route matter
+
+    def test_a_song_timed_another_way_records_only_what_its_bundle_says(self, tmp_path):
+        assert library_status.song_status(self.song(tmp_path, "genius")).lrclib is None
+
+    def test_an_lrc_that_cannot_be_read_is_no_match(self, tmp_path):
+        video = self.song(tmp_path, "lrclib_srt")
+        lrclib.lrc_path(video).write_bytes("caf\xe9".encode("latin-1"))
+
+        assert library_status.song_status(video).lrclib is None
+
+    def test_a_skip_marker_is_no_match(self, tmp_path):
+        video = self.song(tmp_path, "lrclib_srt")
+        lrclib.write_skip_marker(lrclib.lrc_path(video))
+
+        assert library_status.song_status(video).lrclib is None
+
+    def test_an_lrclib_sheet_is_the_sheet_kind_and_needs_no_bundle(self, tmp_path):
+        video = make_video(tmp_path)
+        sheet = tmp_path / "lyrics" / f"{video.stem}.lrclib.srt"
+        sheet.parent.mkdir()
+        sheet.write_text("1\n00:00:01,000 --> 00:00:02,000\none\n", encoding="utf-8")
+
+        assert library_status.song_status(video).sheet_kind == "lrclib"
 
 
 class TestAsrAndDuration:
@@ -485,6 +541,7 @@ class TestOverview:
             "no_lyrics": 1,
             "caption": 0,
             "movie": 0,
+            "lrc": 0,
             "genius": 0,
             "custom": 0,
             "no_timed_source": 0,
@@ -498,6 +555,7 @@ class TestOverview:
             ("C---ccccccccccc", "movie_srt", "cue_align"),
             ("D---ddddddddddd", "genius", "joint"),
             ("E---eeeeeeeeeee", "custom", "joint"),
+            ("F---fffffffffff", "lrclib_srt", "cue_align"),
         ):
             video = make_video(tmp_path, stem)
             write_bundle(
@@ -515,10 +573,11 @@ class TestOverview:
             "no_lyrics": 0,
             "caption": 2,
             "movie": 1,
+            "lrc": 1,
             "genius": 1,
             "custom": 1,
             "no_timed_source": 2,  # neither joint song has an LRC beside it
-            "all": 5,
+            "all": 6,
         }
 
     def test_empty_folder(self, tmp_path):

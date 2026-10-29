@@ -105,6 +105,7 @@ class TestProcessingPage:
         lists = ("behind", "poor", "no_lyrics", "all") + (
             "caption",
             "movie",
+            "lrc",
             "genius",
             "custom",
             "no_timed_source",
@@ -119,7 +120,7 @@ class TestProcessingPage:
         body = get(env, "/processing", admin=True).get_data(as_text=True)
 
         by_source = body[body.index("By lyric source") :]
-        for name in ("caption", "movie", "genius", "custom", "no_timed_source"):
+        for name in ("caption", "movie", "lrc", "genius", "custom", "no_timed_source"):
             assert f'data-list="{name}"' in by_source
         assert 'data-list="all"' not in by_source
         assert "Cue align times each line from a timed source." in body

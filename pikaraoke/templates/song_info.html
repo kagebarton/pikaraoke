@@ -140,8 +140,10 @@
       {% endif %}
     </div>
     {% endif %}
-    {% if status.lrclib_state != 'n/a' %}
+    {% if status.lrclib_state != 'n/a' or status.origin == 'lrclib_srt' %}
     <div class="si-row"><span class="si-key">LRCLIB</span><span class="si-val">{{ lrclib_pick }}</span></div>
+    {% endif %}
+    {% if status.lrclib_state != 'n/a' %}
     <div class="si-row">
       <span class="si-key">{% trans %}Captions{% endtrans %}</span>
       <span class="si-val">{% if status.ytasr_used %}{% trans %}YouTube auto-captions used{% endtrans %}{% else %}{% trans %}not used{% endtrans %}{% endif %}</span>
