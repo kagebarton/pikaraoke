@@ -14,6 +14,7 @@ from pikaraoke.lib import lrclib
 from pikaraoke.lib.alignment_capture import SCHEMA_VERSION
 from pikaraoke.lib.library_regen import (
     BACKUP_ROOT,
+    LRC_ORIGIN,
     custom_sheet_path,
     list_videos,
     read_bundle,
@@ -31,10 +32,10 @@ class SongStatus:
     youtube_id: str | None
     category: str  # "current" | "behind" | "no_lyrics" | "not_processed"
     schema_version: int | None
-    origin: str | None  # bundle lyrics.origin: "srt" | "genius" | "custom" | "movie_srt"
-    sheet_kind: str | None  # custom lyric sheet on disk, the pick whatever the bundle says: "custom" | "movie"
+    origin: str | None  # bundle lyrics.origin: "srt" | "genius" | "custom" | "movie_srt" | "lrclib_srt"
+    sheet_kind: str | None  # custom lyric sheet on disk, the pick whatever the bundle says: "custom" | "movie" | "lrclib"
     genius: dict | None  # lyrics.genius: {id, title, artist}
-    lrclib: dict | None  # lyrics.lrclib: trackName, artistName, albumName, duration, id
+    lrclib: dict | None  # lyrics.lrclib (an LRCLIB-timed song: its .lrc header): trackName, artistName, albumName, duration, id
     lrclib_state: str  # "used" | "rejected" | "none" | "skipped" | "n/a"
     lrclib_reason: str | None  # joint_stats.lrclib_fill.reason, when rejected
     lrclib_filled: int  # lines the LRCLIB fill placed
@@ -109,7 +110,8 @@ def song_status(song: Path) -> SongStatus:
         origin=origin,
         sheet_kind=kind,
         genius=lyrics.get("genius") or None,
-        lrclib=_lrclib_match(lyrics),
+        lrclib=_lrclib_match(lyrics)
+        or (_lrc_match_on_disk(song) if origin == LRC_ORIGIN else None),
         lrclib_state=state,
         lrclib_reason=fill.get("reason") if state == "rejected" else None,
         lrclib_filled=len(fill.get("filled_lids") or []),
@@ -147,6 +149,19 @@ def _lrclib_match(lyrics: dict) -> dict | None:
     """
     ref = lyrics.get("lrclib")
     return ref if ref and ref.get("id") is not None else None
+
+
+def _lrc_match_on_disk(song: Path) -> dict | None:
+    """The LRCLIB record behind ``song``'s ``.lrc``, from its header; None when it has none.
+
+    A song timed by an LRCLIB match runs the cue route, whose bundle records no match: the
+    file is the only record of which one timed it.
+    """
+    try:
+        meta = lrclib.read_lrc(lrclib.lrc_path(song))[1]
+    except (OSError, UnicodeDecodeError):
+        return None
+    return meta if meta.get("id") is not None else None
 
 
 def _lrclib_state(song: Path, origin: str | None, lyrics: dict, fill: dict) -> str:
@@ -187,6 +202,7 @@ SONG_LISTS: dict[str, Callable[[SongStatus], bool]] = {
     "no_lyrics": lambda s: s.category == "no_lyrics",
     "caption": lambda s: s.origin == "srt",
     "movie": lambda s: s.origin == "movie_srt",
+    "lrc": lambda s: s.origin == LRC_ORIGIN,
     "genius": lambda s: s.origin == "genius",
     "custom": lambda s: s.origin == "custom",
     "no_timed_source": lambda s: s.method == "joint" and not s.lrc_on_disk,

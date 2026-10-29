@@ -16,18 +16,26 @@ from pikaraoke.lib.genius import GeniusUnavailable
 from pikaraoke.lib.library_regen import RegenError
 from pikaraoke.lib.library_status import HistoryEntry, SongStatus, length_gap_s
 from pikaraoke.lib.library_tools import (
+    LRC_MAX_GAP_S,
+    LrcTimingCheck,
+    LrcTimingRefused,
     MovieSliceCheck,
     MovieSliceRefused,
     custom_sheet_lines,
 )
+from pikaraoke.lib.srt_cues import cue_spans_from_srt
 from pikaraoke.lib.srt_slice_fit import (
     DISAGREE,
     FITS,
     MAX_CUES,
+    MIN_FLAGGED_RUN,
+    MIN_UNHEARD_RUN,
     NO_REFERENCE,
     NOT_SRT,
     TOO_LONG,
     SliceFit,
+    flagged_runs,
+    unheard_runs,
 )
 
 logger = logging.getLogger(__name__)
@@ -48,7 +56,7 @@ _GUESSED_COLOR = "#f1b70e"
 _LENGTH_GAP_NOTED_S = 5
 
 # The repair sources a link may open the page with already chosen.
-_PRESELECTABLE_SOURCES = ("caption", "genius", "custom", "movie", "transcribe")
+_PRESELECTABLE_SOURCES = ("caption", "genius", "custom", "movie", "lrclib", "transcribe")
 
 
 @dataclass(frozen=True)
@@ -137,6 +145,14 @@ def _gap_text(gap_s: int) -> str:
     return _("%(n)d s shorter") % {"n": -gap_s}
 
 
+def _length_line(match_s: float, video_s: float, gap_s: int) -> str:
+    """The length comparison, "The match is m:ss; this video is m:ss (N s longer)."; no gap at 0."""
+    args = {"match": _mmss(match_s), "video": _mmss(video_s), "gap": _gap_text(gap_s)}
+    if gap_s == 0:
+        return _("The match is %(match)s; this video is %(video)s.") % args
+    return _("The match is %(match)s; this video is %(video)s (%(gap)s).") % args
+
+
 def _candidate_fit(candidate: dict) -> tuple[str, bool | None]:
     """An LRCLIB candidate's length line on the repair page, and whether it is near the video's.
 
@@ -176,6 +192,8 @@ def _source_name(status: SongStatus) -> str:
         return _("Custom lyrics")
     if status.origin == "movie_srt":
         return _("Movie subtitles")
+    if status.origin == "lrclib_srt":
+        return "LRCLIB"
     if status.origin == "srt":
         return _("YouTube captions")
     if status.category == "no_lyrics":
@@ -209,6 +227,8 @@ def _timed_tile(status: SongStatus) -> Tile:
 
 def _lrclib_tile(status: SongStatus) -> Tile:
     label = "LRCLIB"
+    if status.origin == "lrclib_srt":
+        return Tile(label, _("Timing"), _("times this song"))
     if status.lrclib_state == "n/a":
         return Tile(label, "—", _("Genius or custom lyrics only"))
     state = status.lrclib_state
@@ -288,15 +308,7 @@ def _lrclib_fit(status: SongStatus) -> tuple[str | None, str, bool]:
     fit = None
     gap = _length_gap_s(status) if status.lrclib_state in ("used", "rejected") else None
     if gap is not None:
-        args = {
-            "match": _mmss(status.lrclib["duration"]),
-            "video": _mmss(status.media_duration_s),
-            "gap": _gap_text(gap),
-        }
-        if gap == 0:
-            fit = _("The match is %(match)s; this video is %(video)s.") % args
-        else:
-            fit = _("The match is %(match)s; this video is %(video)s (%(gap)s).") % args
+        fit = _length_line(status.lrclib["duration"], status.media_duration_s, gap)
 
     state = status.lrclib_state
     if state == "used":
@@ -316,6 +328,8 @@ def _route_text(status: SongStatus) -> str | None:
             return _(
                 "Lyrics from the movie's subtitles, timed against the subtitles' own line times."
             )
+        if status.origin == "lrclib_srt":
+            return _("Lyrics from an LRCLIB match, timed against its own line times.")
         return _("Lyrics from the YouTube caption, timed against the caption's own line times.")
     if status.method == "joint":
         if status.origin == "custom":
@@ -352,7 +366,7 @@ def _lrclib_label(match: dict | None) -> str:
 
 def _pick(entry: HistoryEntry) -> tuple:
     """What a version's lyric pick is: its source, and the Genius song or the custom words."""
-    if entry.origin in ("custom", "movie_srt"):
+    if entry.origin in ("custom", "movie_srt", "lrclib_srt"):
         return (entry.origin, entry.lines)
     return (entry.origin, (entry.genius or {}).get("id"))
 
@@ -370,6 +384,8 @@ def _versions(history: list[HistoryEntry]) -> list[Version]:
             genius_text, lrclib_text = _("Custom lyrics"), _lrclib_label(entry.lrclib)
         elif entry.origin == "movie_srt":
             genius_text, lrclib_text = _("Movie subtitles"), None
+        elif entry.origin == "lrclib_srt":
+            genius_text, lrclib_text = _("LRCLIB timing"), None
         else:
             genius_text, lrclib_text = _("YouTube captions"), None
         older_lrclib = (older.lrclib or {}).get("id") if older else lrclib_id
@@ -459,6 +475,18 @@ def _current_source(status: SongStatus) -> str | None:
     return "transcribe" if status.category == "no_lyrics" else None
 
 
+def _lrc_match(meta: dict | None, status: SongStatus) -> dict | None:
+    """The song's LRCLIB match on disk as one row of the page's match list, or None."""
+    if meta is None:
+        return None
+    row = {**meta, "duration_diff_s": length_gap_s(meta.get("duration"), status.media_duration_s)}
+    row["fit"], row["fit_near"] = _candidate_fit(row)
+    return {
+        key: row.get(key)
+        for key in ("id", "trackName", "artistName", "albumName", "fit", "fit_near")
+    }
+
+
 @song_info_bp.route("/song_info/repair")
 def repair_page():
     """Repair lyrics: pick the lyric source (and the LRCLIB match) for a song.
@@ -492,6 +520,7 @@ def repair_page():
         custom_prefill=start["text"],
         custom_query=start["query"],
         movie_prefill=start["movie"],
+        lrc_match=_lrc_match(start["lrc"], status),
     )
 
 
@@ -606,30 +635,26 @@ def _card(
     }
 
 
-def _fit_card(fit: SliceFit) -> dict:
-    """The card for subtitles that fit: how many lines matched and what the fit moves."""
+def _timing_changes(fit: SliceFit) -> tuple[bool, bool]:
+    """Whether a fit moves the times by a whole second or more, and whether it changes their speed."""
+    return round(fit.move_s) != 0, round(abs(fit.speed - 1) * 100, 1) != 0
+
+
+def _fit_lines(
+    fit: SliceFit, earlier: str, later: str, speed_tip: str
+) -> list[tuple[str, str | None]]:
+    """The lines under a fit's headline: how many matched, how the times move, the speed, the
+    lines dropped. ``earlier`` and ``later`` are the move sentence, ``speed_tip`` the speed's note.
+    """
     lines = [(_("matches %(n)s of %(m)s lines") % {"n": fit.matched, "m": fit.total}, None)]
-    speed_change = abs(fit.speed - 1) * 100
-    moves = round(fit.move_s) != 0
-    speeds = round(speed_change, 1) != 0
-    head = _("Fits. The timing already matches the clip.")
-    if moves or speeds:
-        head = _("Fits. These subtitles can time this song.")
+    moves, speeds = _timing_changes(fit)
     if moves:
-        move = _("Subtitle times move %(time)s earlier.")
-        if fit.move_s > 0:
-            move = _("Subtitle times move %(time)s later.")
+        move = later if fit.move_s > 0 else earlier
         lines.append((move % {"time": _hms(fit.move_s)}, None))
     if speeds:
+        speed_change = abs(fit.speed - 1) * 100
         lines.append(
-            (
-                _("Speed adjusted by %(pct)s%%.") % {"pct": f"{speed_change:.1f}"},
-                _(
-                    "The subtitles run at a different speed than the clip. That happens when "
-                    "they were made for a different frame rate, or when the clip was sped up "
-                    "or slowed down."
-                ),
-            )
+            (_("Speed adjusted by %(pct)s%%.") % {"pct": f"{speed_change:.1f}"}, speed_tip)
         )
     if fit.dropped:
         lines.append(
@@ -642,6 +667,24 @@ def _fit_card(fit: SliceFit) -> dict:
                 None,
             )
         )
+    return lines
+
+
+def _fit_card(fit: SliceFit) -> dict:
+    """The card for subtitles that fit: how many lines matched and what the fit moves."""
+    lines = _fit_lines(
+        fit,
+        earlier=_("Subtitle times move %(time)s earlier."),
+        later=_("Subtitle times move %(time)s later."),
+        speed_tip=_(
+            "The subtitles run at a different speed than the clip. That happens when "
+            "they were made for a different frame rate, or when the clip was sped up "
+            "or slowed down."
+        ),
+    )
+    head = _("Fits. The timing already matches the clip.")
+    if any(_timing_changes(fit)):
+        head = _("Fits. These subtitles can time this song.")
     return _card(fit, "good", head, lines)
 
 
@@ -731,6 +774,159 @@ def _card_text(card: dict) -> str:
     return " ".join(parts + ([card["tip"]] if card["tip"] else []))
 
 
+def _line_runs(
+    runs: list[tuple[int, int]], texts: list[str], spans: list[tuple[float, float]]
+) -> list[dict]:
+    """Stretches of a match's lines: a title ("m:ss–m:ss · n lines") and each line with its clip time."""
+    return [
+        {
+            "title": ngettext(
+                "%(first)s–%(last)s · %(num)d line",
+                "%(first)s–%(last)s · %(num)d lines",
+                last - first + 1,
+                first=_mmss(spans[first][0]),
+                last=_mmss(spans[last][0]),
+            ),
+            "lines": [
+                {"time": _mmss(spans[line][0]), "text": texts[line]}
+                for line in range(first, last + 1)
+            ],
+        }
+        for first, last in runs
+    ]
+
+
+def _lrc_fit_card(check: LrcTimingCheck, length: str | None) -> dict:
+    """The card for a match whose lines fit: the numbers, then the lines to read before confirming.
+
+    ``runs`` are stretches heard far from where the match puts them, the warning; ``unheard``
+    are stretches nothing was heard for, so they could not be checked, a quieter note.
+    """
+    fit = check.fit
+    texts, spans = cue_spans_from_srt(fit.srt)
+    runs = _line_runs(flagged_runs(fit.mistimed, fit.unheard, MIN_FLAGGED_RUN), texts, spans)
+    unheard = _line_runs(unheard_runs(fit.unheard, MIN_UNHEARD_RUN), texts, spans)
+    lines = _fit_lines(
+        fit,
+        earlier=_("Line times move %(time)s earlier."),
+        later=_("Line times move %(time)s later."),
+        speed_tip=_(
+            "The match runs at a different speed than the clip. That happens when it was "
+            "made for a different frame rate, or when the video is sped up or slowed down."
+        ),
+    )
+    too_far = not check.viable  # the lines fit, so only the length can be what rules it out
+    tone, head = "good", _("Fits. This match can time this song.")
+    if too_far:
+        tone = "bad"
+        head = _("The lines fit, but the length is too far off.")
+        if length is None:
+            head = _("The lines fit, but the match has no length to check.")
+    elif runs:
+        tone, head = "bad", _("Fits, but check these lines first.")
+    if length is not None:
+        limit = _(
+            "A match this much longer or shorter than the video is usually another edit or "
+            "another recording, so its line times would drift. The limit is %(n)d s."
+        )
+        lines.insert(1, (length, limit % {"n": LRC_MAX_GAP_S} if too_far else None))
+    if not (runs or unheard or fit.mistimed):
+        lines.append((_("No line was heard far from its time."), None))
+    card = _card(fit, tone, head, lines)
+    if too_far and length is not None:
+        card["lines"][1]["warn"] = True
+    card.update(runs=runs, unheard=unheard)
+    return card
+
+
+def _lrc_refusal_card(check: LrcTimingCheck, length: str | None) -> dict:
+    """The card for a match that can't be checked or whose lines don't fit."""
+    fit = check.fit
+    if fit.status == NOT_SRT:
+        return _card(fit, "bad", _("Doesn't fit."), [(_("This match has no timed lines."), None)])
+    if fit.status == TOO_LONG:
+        return _card(
+            fit, "bad", _("This match has more than %(n)s lines.") % {"n": f"{MAX_CUES:,}"}
+        )
+    if fit.status == NO_REFERENCE and not check.regenerate_helps:
+        return _card(
+            fit,
+            "info",
+            _("Can't check."),
+            [
+                (
+                    _(
+                        "This song has no heard words to compare the match with, and a "
+                        "song whose lyrics were transcribed doesn't keep them yet."
+                    ),
+                    None,
+                )
+            ],
+        )
+    if fit.status == NO_REFERENCE:
+        return _card(
+            fit,
+            "info",
+            _("Can't check yet."),
+            [
+                (
+                    _(
+                        "This song has no heard words yet, so there is nothing to compare "
+                        "the match with."
+                    ),
+                    None,
+                ),
+                (
+                    _("Regenerate the song from Song info first, then come back and check."),
+                    None,
+                ),
+            ],
+            song_info_link=True,
+        )
+    counts = {"n": fit.matched, "m": fit.total}
+    tip = None
+    if not fit.total:
+        lines = [(_("This match has no lines to check."), None)]
+    elif fit.reason == DISAGREE:
+        lines = [
+            (_("Found %(n)d of %(m)d lines, but they don't agree on one timing.") % counts, None)
+        ]
+        tip = _(
+            "The video may be a different edit of the song, with a section this match lacks "
+            "or repeats."
+        )
+    else:
+        lines = [(_("Only %(n)d of %(m)d lines were found in the clip.") % counts, None)]
+        tip = _(
+            "Check that this match is the same song as the video. A cover, a live take or "
+            "another language won't match the words heard."
+        )
+    if length is not None:
+        lines.append((length, None))
+    return _card(fit, "bad", _("Doesn't fit."), lines, tip=tip)
+
+
+def _lrc_card(check: LrcTimingCheck) -> dict:
+    """The Check fit card for how an LRCLIB match's own line times checked against the clip.
+
+    The movie card's shape, plus ``viable`` (whether Regenerate may be offered) and the
+    ``runs`` and ``unheard`` stretches of the match's lines.
+    """
+    fit = check.fit
+    length = (
+        None
+        if check.gap_s is None
+        else _length_line(check.record["duration"], check.clip_s, check.gap_s)
+    )
+    if fit.status == FITS:
+        card = _lrc_fit_card(check, length)
+    else:
+        card = _lrc_refusal_card(check, length)
+        card.update(runs=[], unheard=[])
+    card["viable"] = check.viable
+    return card
+
+
 @song_info_bp.route("/song_info/subtitle_fit", methods=["POST"])
 def subtitle_fit():
     """Check pasted movie subtitles against the clip's heard words; nothing is saved or queued.
@@ -751,6 +947,51 @@ def subtitle_fit():
     return jsonify(_slice_card(check))
 
 
+def _non_number(body: dict, *keys: str) -> str | None:
+    """The first of ``keys`` the body holds as something other than a whole number, else None."""
+    for key in keys:
+        value = body.get(key)
+        if value is not None and (not isinstance(value, int) or isinstance(value, bool)):
+            return key
+    return None
+
+
+@song_info_bp.route("/song_info/lrc_fit", methods=["POST"])
+def lrc_fit():
+    """Check an LRCLIB match's own line times against the clip; nothing is saved or queued.
+
+    ``lrclib_id`` names the match, or with none the song's ``.lrc`` on disk. A preview: the
+    Repair fits again on the server and saves that, never anything this answer says.
+    """
+    if not is_admin():
+        return _error(_("Admin only"), 403)
+    k = get_karaoke_instance()
+    song = posted_song(k)
+    if song is None:
+        return _error(_("Not a song in the library"), 400)
+    body = request.get_json(silent=True)
+    if (bad := _non_number(body, "lrclib_id")) is not None:
+        return _error(_("%(key)s must be a number") % {"key": bad}, 400)
+    try:
+        check = k.library_tools.check_lrc_timing(song, body.get("lrclib_id"))
+    except RegenError as e:
+        return _error(str(e), 400)
+    return jsonify(_lrc_card(check))
+
+
+@song_info_bp.route("/song_info/lrc_search")
+def lrc_search():
+    """LRCLIB matches for the typed search, scored against the lyrics the song has now."""
+    if not is_admin():
+        return _error(_("Admin only"), 403)
+    k = get_karaoke_instance()
+    song = library_song(k, request.args.get("song"))
+    if song is None:
+        return _error(_("Not a song in the library"), 400)
+    sheet = k.library_tools.current_lines(song)
+    return jsonify(_lrclib_results(song, sheet, request.args.get("q", "").strip()))
+
+
 @song_info_bp.route("/song_info/repair", methods=["POST"])
 def repair():
     """Queue a regeneration with a new lyric source, and for Genius or custom the LRCLIB match."""
@@ -761,10 +1002,8 @@ def repair():
     if song is None:
         return _error(_("Not a song in the library"), 400)
     body = request.get_json(silent=True)
-    for key in ("genius_id", "lrclib_id"):
-        value = body.get(key)
-        if value is not None and (not isinstance(value, int) or isinstance(value, bool)):
-            return _error(_("%(key)s must be a number") % {"key": key}, 400)
+    if (bad := _non_number(body, "genius_id", "lrclib_id")) is not None:
+        return _error(_("%(key)s must be a number") % {"key": bad}, 400)
     skip = body.get("lrclib_skip", False)
     if not isinstance(skip, bool):
         return _error(_("lrclib_skip must be true or false"), 400)
@@ -779,6 +1018,8 @@ def repair():
         )
     except MovieSliceRefused as e:
         return _error(_card_text(_slice_card(e.check)), 400)
+    except LrcTimingRefused as e:
+        return _error(_card_text(_lrc_card(e.check)), 400)
     except RegenError as e:
         return _error(str(e), 400)
     return jsonify({"success": True})

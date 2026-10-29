@@ -221,15 +221,16 @@ class MovieSliceRefused(RegenError):
 class LrcTimingCheck:
     """How an LRCLIB match's own line times checked against a song's clip.
 
-    ``gap_s``: how many seconds longer the match is than the clip (negative:
-    shorter), None when either length is unknown. ``record``: the match's
-    provenance (:func:`lrclib.record_meta`), for naming it. ``viable``: the fit
-    passed and the gap is within :data:`LRC_MAX_GAP_S`, so the match may time the
-    song; the flagged lines (``fit.mistimed``, ``fit.unheard``) are for the admin
-    to read first. ``regenerate_helps`` is as for :class:`MovieSliceCheck`.
+    ``clip_s``: the clip's length. ``gap_s``: how many seconds longer the match is
+    than the clip (negative: shorter), None when the match has no length. ``record``:
+    the match's provenance (:func:`lrclib.record_meta`), for naming it. ``viable``: the
+    fit passed and the gap is within :data:`LRC_MAX_GAP_S`, so the match may time the
+    song; the flagged lines (``fit.mistimed``, ``fit.unheard``) are for the admin to
+    read first. ``regenerate_helps`` is as for :class:`MovieSliceCheck`.
     """
 
     fit: SliceFit
+    clip_s: float
     gap_s: int | None
     record: dict
     viable: bool
@@ -519,10 +520,16 @@ class LibraryTools:
         ``text``: the custom-lyrics box, the song's typed sheet if it has one, else the
         lines of its current lyrics, else nothing. ``movie``: the movie-subtitles box,
         the saved slice (already clip-timed) if the song has one, else nothing.
-        ``query``: the title and artist of the Genius song the bundle records, cleaned
-        as the pipeline's LRCLIB search cleans them, else the song's file name.
+        ``lrc``: the song's LRCLIB match on disk (:func:`lrclib.record_meta`), or None
+        when it has none or a skip marker. ``query``: the title and artist of the
+        Genius song the bundle records, cleaned as the pipeline's LRCLIB search cleans
+        them, else the song's file name.
         """
         job = self._song_job(song_path)
+        try:
+            lrc = lrclib.record_meta(self._lrc_record(job.song_path, None))
+        except RegenError:
+            lrc = None
         lyrics = (job.bundle or {}).get("lyrics") or {}
         genius = lyrics.get("genius") or {}
         terms = lrclib.clean_key(
@@ -532,6 +539,7 @@ class LibraryTools:
             "text": self._sheet_on_disk(job.song_path, CUSTOM_TEXT_SUFFIX)
             or "\n".join(lyrics.get("lines") or []),
             "movie": self._sheet_on_disk(job.song_path, CUSTOM_SRT_SUFFIX),
+            "lrc": lrc,
             "query": " ".join(term for term in terms if term),
         }
 
@@ -603,6 +611,7 @@ class LibraryTools:
         gap_s = length_gap_s(record.get("duration"), length)
         return LrcTimingCheck(
             fit,
+            length,
             gap_s,
             lrclib.record_meta(record),
             viable=fit.status == FITS and gap_s is not None and abs(gap_s) <= LRC_MAX_GAP_S,
@@ -629,6 +638,14 @@ class LibraryTools:
         if lrclib.is_skip_marker(path):
             raise RegenError("This song's LRCLIB match was skipped. Search for one.")
         return {**meta, "syncedLyrics": text}
+
+    def current_lines(self, song_path: str) -> list[str]:
+        """The lyric lines the song's last run timed, or none when it has no bundle.
+
+        What an LRCLIB timing search scores its matches against.
+        """
+        lyrics = (self._song_job(song_path).bundle or {}).get("lyrics") or {}
+        return list(lyrics.get("lines") or [])
 
     def genius_sheet_lines(self, genius_id: int) -> list[str]:
         """A Genius song's lyric lines, as they display, for scoring an LRCLIB search.

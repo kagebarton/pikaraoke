@@ -250,11 +250,11 @@ def custom_sheet_path(song: Path) -> Path | None:
 
 
 # The kind each sheet suffix names: the status field, and the repair page's source.
-_SHEET_KINDS = {CUSTOM_TEXT_SUFFIX: "custom", CUSTOM_SRT_SUFFIX: "movie", LRC_SRT_SUFFIX: "lrc"}
+_SHEET_KINDS = {CUSTOM_TEXT_SUFFIX: "custom", CUSTOM_SRT_SUFFIX: "movie", LRC_SRT_SUFFIX: "lrclib"}
 
 
 def sheet_kind(sheet: Path | None) -> str | None:
-    """The kind of the custom sheet at ``sheet`` (``"custom"``, ``"movie"`` or ``"lrc"``), or None.
+    """The kind of the custom sheet at ``sheet`` (``"custom"``, ``"movie"`` or ``"lrclib"``), or None.
 
     The only place a sheet's suffix is tested; ``None`` in, for a song with no sheet, gives None.
     """
@@ -294,7 +294,7 @@ def lrc_sheet_plan(song: Path, text: str | None = None) -> Plan:
     return _sheet_plan(song, LRC_SRT_SUFFIX, LRC_ORIGIN, "LRCLIB timing", text)
 
 
-_SHEET_PLANS = {"custom": custom_sheet_plan, "movie": movie_sheet_plan, "lrc": lrc_sheet_plan}
+_SHEET_PLANS = {"custom": custom_sheet_plan, "movie": movie_sheet_plan, "lrclib": lrc_sheet_plan}
 
 
 def custom_plan(job: SongJob) -> Plan | None:

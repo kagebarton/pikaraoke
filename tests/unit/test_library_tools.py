@@ -183,6 +183,7 @@ class TestSongsInList:
             "no_lyrics": 1,
             "caption": 0,
             "movie": 0,
+            "lrc": 0,
             "genius": 2,
             "custom": 0,
             "no_timed_source": 0,
@@ -1025,6 +1026,7 @@ class TestLrcTimingRepair:
         check = tools.check_lrc_timing(str(song), None)
 
         assert (check.fit.status, check.gap_s, check.viable) == (FITS, 0, True)
+        assert check.clip_s == CLIP_S
         assert (check.record["id"], check.record["trackName"]) == (11, "Invented Song")
         assert check.regenerate_helps is True
         assert fetched == []
@@ -1296,6 +1298,63 @@ class TestLrcTimingRepair:
         tools.repair(str(song), "lrclib")
 
         assert processing.enqueue_regen.call_args.args[0].song.plan.custom_text == check.fit.srt
+
+
+class TestCustomStartMatchOnDisk:
+    """The LRCLIB match the repair page lists first for LRCLIB timing."""
+
+    @pytest.fixture
+    def song(self, tmp_path):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        return video
+
+    def lrc(self, tmp_path, song):
+        tools, _ = make_tools(tmp_path, [str(song)])
+        return tools.custom_start(str(song))["lrc"]
+
+    def test_a_match_on_disk_is_its_record_without_the_lyrics(self, tmp_path, song):
+        path = lrclib.lrc_path(song)
+        path.parent.mkdir()
+        lrclib.write_lrc(path, LRC_RECORD)
+
+        assert self.lrc(tmp_path, song) == {
+            "id": 11,
+            "trackName": "Invented Song",
+            "artistName": "Invented Artist",
+            "albumName": "Invented Album",
+            "duration": CLIP_S,
+        }
+
+    def test_no_file_a_skip_marker_and_an_unreadable_file_are_no_match(self, tmp_path, song):
+        assert self.lrc(tmp_path, song) is None
+
+        lrclib.lrc_path(song).parent.mkdir()
+        lrclib.write_skip_marker(lrclib.lrc_path(song))
+        assert self.lrc(tmp_path, song) is None
+
+        lrclib.lrc_path(song).write_bytes("caf\xe9".encode("latin-1"))
+        assert self.lrc(tmp_path, song) is None
+
+
+class TestCurrentLines:
+    """What an LRCLIB timing search scores its matches against."""
+
+    def lines(self, tmp_path, song):
+        tools, _ = make_tools(tmp_path, [str(song)])
+        return tools.current_lines(str(song))
+
+    def test_the_lines_the_last_run_timed(self, tmp_path):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        write_bundle(tmp_path, video.stem, lyrics={"origin": "genius", "lines": ["one", "two"]})
+
+        assert self.lines(tmp_path, video) == ["one", "two"]
+
+    def test_a_song_with_no_bundle_or_no_lines_has_none(self, tmp_path):
+        [video, bare] = make_videos(tmp_path, "A---aaaaaaaaaaa", "B---bbbbbbbbbbb")
+        write_bundle(tmp_path, bare.stem, lyrics={"origin": "srt"})
+
+        assert self.lines(tmp_path, video) == []
+        assert self.lines(tmp_path, bare) == []
 
 
 class TestCustomStart:
@@ -2197,7 +2256,7 @@ class TestRunsReplayLrcSheets(OpensRuns):
         now = {Path(s["song"]).stem: s["now"] for s in tools.run_view()["songs"]}
 
         # The sheet on disk says it, with a bundle (MINE) or without one (SHEET_ONLY).
-        assert now[self.MINE] == now[self.SHEET_ONLY] == {"source": "lrc"}
+        assert now[self.MINE] == now[self.SHEET_ONLY] == {"source": "lrclib"}
         assert now[self.PLAIN]["source"] == "genius"
 
     @pytest.mark.parametrize(("mode", "reset"), [("all", False), ("reset", True)])

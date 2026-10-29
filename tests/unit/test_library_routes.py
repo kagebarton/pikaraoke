@@ -8,11 +8,13 @@ manager is a mock, so a queued job is whatever ``enqueue_regen`` was handed.
 import json
 import os
 import threading
+from datetime import timedelta
 from pathlib import Path
 from unittest.mock import MagicMock
 from urllib.parse import parse_qs, quote, unquote_to_bytes, urlsplit
 
 import pytest
+import srt
 import werkzeug
 from flask import Flask
 from flask_babel import Babel
@@ -27,7 +29,7 @@ from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.genius import GeniusSong, GeniusUnavailable, read_choice
 from pikaraoke.lib.library_links import Playlist, PlaylistVideo
 from pikaraoke.lib.library_regen import CaptionCheck
-from pikaraoke.lib.library_tools import LibraryTools, MovieSliceCheck
+from pikaraoke.lib.library_tools import LibraryTools, LrcTimingCheck, MovieSliceCheck
 from pikaraoke.lib.song_list import SongList
 from pikaraoke.lib.song_manager import SongManager
 from pikaraoke.lib.srt_slice_fit import (
@@ -40,12 +42,13 @@ from pikaraoke.lib.srt_slice_fit import (
     SliceFit,
 )
 from pikaraoke.routes.library import library_bp
-from pikaraoke.routes.song_info import _card_text, _slice_card, song_info_bp
+from pikaraoke.routes.song_info import _card_text, _lrc_card, _slice_card, song_info_bp
 from tests.unit.movie_slices import (
     CLIP_S,
     SLICE_LINES,
     clip_starts,
     heard_words,
+    lrc_slice,
     movie_slice,
 )
 
@@ -363,6 +366,52 @@ class TestSongInfoPage:
         assert "Genius or custom lyrics only" in html  # the cue route never uses LRCLIB
         assert "https://genius.com" not in html
 
+    def lrclib_timed(self, env) -> str:
+        """A song timed on the cue route by an LRCLIB match, whose header the .lrc on disk keeps."""
+        bundle = caption_bundle()
+        bundle["lyrics"] = {"origin": "lrclib_srt", "lines": ["one"]}
+        song = env.add_song("A---aaaaaaaaaaa.mp4", bundle)
+        path = lrclib.lrc_path(Path(song))
+        path.parent.mkdir(exist_ok=True)
+        lrclib.write_lrc(path, LrcTimingEnv.RECORD)
+        return song
+
+    def test_an_lrclib_timed_song_is_named_on_the_tile_and_the_source_row_and_has_its_own_route(
+        self, env
+    ):
+        html = text(env.page(self.lrclib_timed(env)))
+
+        tiles = html.split('class="tabs is-fullwidth si-tabs"')[0].split("</style>")[-1]
+        assert "Timing" in tiles and "times this song" in tiles
+        assert "Genius or custom lyrics only" not in html
+        picks = html.split('id="tab-picks"')[1].split('id="tab-alignment"')[0]
+        assert '<span class="si-val">LRCLIB</span>' in picks
+        assert (
+            "Invented Song · Invented Artist · 3:20" in picks
+        )  # the match, from the .lrc's header
+        assert "Captions" not in picks  # the cue route reads no third source
+        assert "Lyrics from an LRCLIB match, timed against its own line times." in html
+        assert "https://genius.com" not in html
+
+    def test_an_lrclib_version_is_named_as_such_with_no_lrclib_label(self, env):
+        stem = "A---aaaaaaaaaaa"
+        song = self.lrclib_timed(env)
+        write_bundle(
+            env.folder,
+            stem,
+            root=env.folder / "regen_backups" / "20261019T175506Z",
+            schema_version=10,
+            captured_at="2026-09-21T10:00:00+00:00",
+            **poor_genius_bundle(),
+        )
+        history = text(env.page(song)).split('id="tab-history"')[1]
+
+        assert "LRCLIB timing" in history
+        assert (
+            'class="si-chg">LRCLIB timing' in history
+        )  # Genius -> LRCLIB timing is a change of pick
+        assert "YouTube captions" not in history
+
     def test_a_custom_song_has_the_lrclib_tile_row_and_fit_but_no_genius_row(self, env):
         html = text(env.page(env.add_song("A---aaaaaaaaaaa.mp4", custom_bundle())))
 
@@ -674,6 +723,7 @@ class TestOverviewRoute:
             "no_lyrics": 0,
             "caption": 1,
             "movie": 0,
+            "lrc": 0,
             "genius": 1,
             "custom": 0,
             "no_timed_source": 1,  # the Genius song is joint-timed with no LRC beside it
@@ -850,6 +900,34 @@ class TestSongListsRoute:
 
         assert link.path == "/song_info/repair"
         assert parse_qs(link.query) == {"song": [song], "source": ["caption"]}
+
+    def test_a_song_with_an_lrc_on_disk_links_to_repair_with_lrclib_timing_picked(self, env):
+        song = LrcTimingEnv.song(env)
+
+        (row,) = song_list(env, "genius")
+
+        assert parse_qs(urlsplit(row["repair_url"]).query) == {"song": [song], "source": ["lrclib"]}
+
+    def test_a_skip_marker_is_no_lrc_so_the_link_keeps_the_caption(self, env):
+        song = env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())
+        lrclib.write_skip_marker(
+            lrclib.lrc_path(Path(song)).parent.mkdir(exist_ok=True) or lrclib.lrc_path(Path(song))
+        )
+
+        (row,) = song_list(env, "genius")
+
+        assert parse_qs(urlsplit(row["repair_url"]).query)["source"] == ["caption"]
+
+    def test_the_lrc_list_holds_the_songs_the_last_run_timed_from_an_lrclib_match(self, env):
+        env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())
+        bundle = caption_bundle()
+        bundle["lyrics"] = {"origin": "lrclib_srt", "lines": ["one"]}
+        env.add_song("B---bbbbbbbbbbb.mp4", bundle)
+
+        rows = song_list(env, "lrc")
+
+        assert [r["name"] for r in rows] == ["B"]
+        assert [r["subline"] for r in rows] == ["Cue align"]
 
     def test_a_cue_song_links_to_the_plain_repair_page(self, env):
         song = env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())
@@ -1029,7 +1107,9 @@ class TestRepairPage:
         assert "var CURRENT_SOURCE = null" in text(self.page(env, gone))
         assert 'var CURRENT_SOURCE = "custom"' in text(self.page(env, left))
 
-    @pytest.mark.parametrize("source", ["caption", "genius", "custom", "movie", "transcribe"])
+    @pytest.mark.parametrize(
+        "source", ["caption", "genius", "custom", "movie", "lrclib", "transcribe"]
+    )
     def test_a_known_source_in_the_link_opens_the_page_with_it_chosen(self, env, source):
         song = env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())
 
@@ -1040,7 +1120,7 @@ class TestRepairPage:
         assert f'var PRESELECT = "{source}"' in html
         assert 'var CURRENT_SOURCE = "genius"' in html  # what is current is still told apart
 
-    @pytest.mark.parametrize("source", ["bogus", "", "lrclib", "CAPTION"])
+    @pytest.mark.parametrize("source", ["bogus", "", "lrc", "CAPTION"])
     def test_an_unknown_source_in_the_link_is_ignored(self, env, source):
         song = env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())
 
@@ -1207,6 +1287,133 @@ class TestRepairPage:
         assert "Time the song from the movie's own subtitles." in card(html, "movie")
         assert "rp-tag" not in card(html, "movie")
 
+    def test_the_lrclib_card_follows_the_movie_card_and_says_what_it_does(self, env):
+        html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())))
+
+        assert html.index('data-source="movie"') < html.index('data-source="lrclib"')
+        assert html.index('data-source="lrclib"') < html.index('data-source="transcribe"')
+        assert "Time the song from an LRCLIB match's own line times." in card(html, "lrclib")
+        assert "rp-tag" not in card(html, "lrclib")
+
+    def test_an_lrclib_timed_song_is_current_on_the_lrclib_card_alone(self, env):
+        bundle = caption_bundle()
+        bundle["lyrics"] = {"origin": "lrclib_srt", "lines": ["one"]}
+        song = env.add_song("A---aaaaaaaaaaa.mp4", bundle)
+        write_sheet(env.folder, "A---aaaaaaaaaaa", suffix=".lrclib.srt")
+
+        html = text(self.page(env, song))
+
+        assert 'var CURRENT_SOURCE = "lrclib"' in html
+        assert "rp-tag" in card(html, "lrclib")
+        assert all("rp-tag" not in card(html, s) for s in ("caption", "genius", "custom", "movie"))
+
+    def test_the_page_hands_the_match_on_disk_to_the_list_as_a_row(self, env):
+        song = LrcTimingEnv.song(env)
+
+        html = text(self.page(env, song))
+
+        row = json.loads(html.split("var LRC_MATCH = ")[1].split(";")[0])
+        assert row == {
+            "id": 11,
+            "trackName": "Invented Song",
+            "artistName": "Invented Artist",
+            "albumName": "Invented Album",
+            "fit": "3:20 · within a few s",
+            "fit_near": True,
+        }
+
+    @pytest.mark.parametrize("state", ["none", "skipped"])
+    def test_a_song_with_no_usable_lrc_hands_the_list_no_row(self, env, state):
+        song = LrcTimingEnv.song(env, record=False)
+        if state == "skipped":
+            lrclib.lrc_path(Path(song)).parent.mkdir(exist_ok=True)
+            lrclib.write_skip_marker(lrclib.lrc_path(Path(song)))
+
+        assert "var LRC_MATCH = null;" in text(self.page(env, song))
+
+    def test_the_lrclib_section_is_hidden_until_chosen_and_has_its_note_search_and_answer_area(
+        self, env
+    ):
+        html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())))
+        assert '<div id="lrclib-section" class="is-hidden">' in html
+        section = html[html.index('id="lrclib-section"') : html.index('id="movie-section"')]
+
+        assert "The match's own line times become the song's timing." in section
+        assert 'id="lt-check"' in section and "disabled>Check fit<" in section
+        assert 'id="lt-search-toggle"' in section and 'id="lt-q"' in section
+        assert 'role="status" aria-live="polite"' in section
+        for tone in ("is-good", "is-bad", "is-info"):
+            assert f"rp-icon {tone}" in section
+        assert "Finding where this match sits in the clip" in section
+        for note in ("Heard far from where this match puts them", "Couldn't check these lines"):
+            assert note in section
+        # The page's note, and the two stretch notes; the card's own are cloned from the template.
+        assert section.count("info-tip-btn") == 3
+        assert 'id="movie-runs"' not in html  # the movie card has no stretches
+
+    def test_check_fit_posts_the_song_and_the_picked_id_to_the_lrc_route(self, env):
+        html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())))
+        code = script(html)
+        check = code[code.index("function checkLrc") : code.index("$('#lt-check').on('click'")]
+
+        assert "lrcFit: " in code and "/song_info/lrc_fit" in html
+        assert "method: 'POST'" in check and "url: URLS.lrcFit" in check
+        assert "JSON.stringify({ song: SONG, lrclib_id: lrcId() })" in check
+        # What a pick sends: a search result's id, nothing for the .lrc on disk (the server reads it).
+        assert "return state.lrcPick === 'disk' ? null : state.lrcPick;" in code
+
+    def test_a_late_answer_for_another_pick_is_dropped_and_check_fit_waits_for_it(self, env):
+        code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
+        check = code[code.index("function checkLrc") : code.index("$('#lt-check').on('click'")]
+        pick = code[code.index("function pickLrc") : code.index("function startLrcSearch")]
+
+        assert "var seq = ++state.lrcSeq;" in check
+        assert check.count("if (seq === state.lrcSeq)") == 2  # done and fail
+        assert check.count("state.lrcChecking = false;") == 2
+        # A new pick drops the answer and leaves a check on the server running.
+        assert "state.lrcSeq++;" in pick and "state.lrcCard = null;" in pick
+        assert "state.lrcChecking" not in pick
+        assert ".prop('disabled', state.lrcPick === null || state.lrcChecking)" in code
+
+    def test_regenerate_is_on_only_for_a_viable_answer_and_sends_the_id_not_the_numbers(self, env):
+        code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
+        step1 = code[code.index("function refreshStep1") : code.index("// The LRCLIB matches")]
+        click = code.index("$('#go').on('click'")
+        go = code[click : code.index("/* ---", click)]
+
+        assert (
+            "state.source === 'lrclib' && state.lrcCard !== null && state.lrcCard.viable" in step1
+        )
+        assert "send({ source: 'lrclib', lrclib_id: lrcId() })" in go
+
+    def test_a_link_from_a_list_checks_the_match_on_disk_at_once(self, env):
+        code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
+
+        assert "if (PRESELECT === 'lrclib' && LRC_MATCH) checkLrc();" in code
+        # A song that is merely current on LRCLIB timing is not checked until asked.
+        assert code.count("checkLrc();") == 1
+
+    def test_a_search_scores_against_the_songs_lyrics_and_picks_the_best_fit(self, env):
+        code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
+        search = code[code.index("function searchLrc") : code.index("$('#lt-search-go')")]
+
+        assert "$.getJSON(URLS.lrcSearch, { song: SONG, q: query })" in search
+        assert "c.best" in search and "pickLrc(isOnDisk(best) ? 'disk' : best.id)" in search
+        assert "if (seq !== state.lrcSearchSeq) return;" in search
+
+    def test_a_match_with_no_row_on_disk_opens_with_the_search_open(self, env):
+        code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
+
+        assert "lrcSearchOpen: !LRC_MATCH," in code
+        assert "lrcPick: LRC_MATCH ? 'disk' : null," in code
+
+    def test_the_two_match_lists_share_one_row_builder(self, env):
+        code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
+
+        assert code.count("function matchOption(") == 1
+        assert "return matchOption(candidate, 'lrclib'," in code
+        assert "matchOption(row, 'lt-match'," in code
+
     def test_a_movie_subtitles_song_is_current_on_the_movie_card_alone(self, env):
         song = env.add_song("A---aaaaaaaaaaa.mp4", movie_bundle())
         write_sheet(env.folder, "A---aaaaaaaaaaa", suffix=".custom.srt")
@@ -1264,7 +1471,10 @@ class TestRepairPage:
         choose = code[code.index("function chooseSource") : code.index("function refreshStep1")]
 
         assert "$('#movie-section').toggleClass('is-hidden', source !== 'movie');" in choose
-        assert "$.inArray(START_SOURCE, ['genius', 'custom', 'movie', 'transcribe'])" in code
+        assert "$('#lrclib-section').toggleClass('is-hidden', source !== 'lrclib');" in choose
+        assert (
+            "$.inArray(START_SOURCE, ['genius', 'custom', 'movie', 'lrclib', 'transcribe'])" in code
+        )
 
     def test_a_links_source_wins_over_the_current_one_and_the_caption_waits_for_its_check(
         self, env
@@ -1362,17 +1572,18 @@ class TestRepairPage:
 
     def test_an_answer_is_shown_as_text_with_its_tips_behind_an_i_button(self, env):
         code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
-        shown = code[code.index("function showMovieCard") : code.index("function renderMovie")]
+        shown = code[code.index("function showCard") : code.index("function renderMovie")]
 
-        assert "$('#movie-head').text(card.head)" in shown
-        assert "el('li', null, line.text)" in shown
+        assert "$('#' + prefix + '-head').text(card.head)" in shown
+        assert "el('li', line.warn ? 'is-warn' : null, line.text)" in shown
+        assert "el('span', null, line.text)" in shown  # a stretch's lines too
         assert "infoTip(card.tip)" in shown and "infoTip(line.tip)" in shown
         assert ".html(" not in shown
 
     def test_an_answers_tips_are_the_info_tip_macros_markup_with_the_note_as_text(self, env):
         html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())))
         code = script(html)
-        tip = code[code.index("function infoTip") : code.index("function showMovieCard")]
+        tip = code[code.index("function infoTip") : code.index("function showCard")]
 
         assert (
             '<template id="movie-tip"><span class="info-tip"><button type="button" '
@@ -1696,6 +1907,535 @@ class TestMovieRepairRoute:
         env.admin = False
 
         assert self.repair(env, song, text=movie_slice()).status_code == 403
+        env.processing.enqueue_regen.assert_not_called()
+
+
+class TestLrcCard:
+    """The wording of an LRCLIB match's Check fit answer, from a check made by hand."""
+
+    LINES = (
+        "Lanterns in the stairwell hum",
+        "Counting steps I never took",
+        "Rain is writing in the dust",
+        "Underneath the broken clock",
+        "Hold the door for what comes next",
+        "Carry all the quiet home",
+    )
+
+    @classmethod
+    def fitted(cls) -> str:
+        """The fitted SRT the pipeline loads: the lines, 5 s apart from 0:10."""
+        return srt.compose(
+            srt.Subtitle(n, timedelta(seconds=10 + 5 * n), timedelta(seconds=14 + 5 * n), line)
+            for n, line in enumerate(cls.LINES)
+        )
+
+    def check(self, status="fits", *, gap=0, viable=True, helps=True, record=None, **fit) -> dict:
+        fields = {"matched": 5, "total": 6, "srt": self.fitted()}
+        fields.update(fit)
+        duration = None if gap is None else 211 + gap
+        check = LrcTimingCheck(
+            SliceFit(status=status, **fields),
+            clip_s=211.0,
+            gap_s=gap,
+            record=record or {"id": 11, "duration": duration},
+            viable=viable,
+            regenerate_helps=helps,
+        )
+        return _lrc_card(check)
+
+    def texts(self, card: dict) -> list[str]:
+        return [line["text"] for line in card["lines"]]
+
+    def test_a_clean_fit_says_nothing_was_heard_far_from_its_time(self):
+        card = self.check()
+
+        assert (card["tone"], card["head"], card["viable"]) == (
+            "good",
+            "Fits. This match can time this song.",
+            True,
+        )
+        assert self.texts(card) == [
+            "matches 5 of 6 lines",
+            "The match is 3:31; this video is 3:31.",
+            "No line was heard far from its time.",
+        ]
+        assert (card["runs"], card["unheard"], card["tip"]) == ([], [], None)
+
+    def test_the_length_line_names_the_gap_unless_there_is_none(self):
+        assert (
+            self.texts(self.check(gap=13))[1]
+            == "The match is 3:44; this video is 3:31 (13 s longer)."
+        )
+        assert (
+            self.texts(self.check(gap=-4))[1]
+            == "The match is 3:27; this video is 3:31 (4 s shorter)."
+        )
+
+    def test_the_move_speed_and_dropped_lines_follow_the_length_in_the_matchs_words(self):
+        card = self.check(move_s=2.0, speed=23.976 / 25, dropped=2)
+
+        assert self.texts(card)[2:5] == [
+            "Line times move 0:00:02 later.",
+            "Speed adjusted by 4.1%.",
+            "2 lines fall outside the clip and are dropped.",
+        ]
+        assert "The match runs at a different speed than the clip." in card["lines"][3]["tip"]
+        assert "No line was heard far from its time." in self.texts(card)
+
+    def test_a_run_of_mistimed_lines_is_the_warning_and_does_not_stop_regenerate(self):
+        card = self.check(mistimed=(2, 3, 4))
+
+        assert (card["tone"], card["head"], card["viable"]) == (
+            "bad",
+            "Fits, but check these lines first.",
+            True,
+        )
+        assert card["runs"] == [
+            {
+                "title": "0:20–0:30 · 3 lines",
+                "lines": [
+                    {"time": "0:20", "text": self.LINES[2]},
+                    {"time": "0:25", "text": self.LINES[3]},
+                    {"time": "0:30", "text": self.LINES[4]},
+                ],
+            }
+        ]
+        assert "No line was heard far from its time." not in self.texts(card)
+
+    def test_a_run_goes_on_through_an_unheard_line_and_the_stretch_is_not_also_listed_as_unheard(
+        self,
+    ):
+        card = self.check(mistimed=(2, 4), unheard=(3,))
+
+        [run] = card["runs"]
+        assert [line["text"] for line in run["lines"]] == list(self.LINES[2:5])
+        assert card["unheard"] == []  # one unheard line is under the stretch's length
+
+    def test_one_mistimed_line_is_no_run_but_the_card_does_not_claim_all_was_heard_well(self):
+        card = self.check(mistimed=(3,))
+
+        assert (card["head"], card["runs"]) == ("Fits. This match can time this song.", [])
+        assert "No line was heard far from its time." not in self.texts(card)
+
+    def test_a_stretch_nothing_was_heard_for_is_a_quiet_note_not_a_warning(self):
+        card = self.check(unheard=(1, 2, 3))
+
+        assert (card["tone"], card["head"]) == ("good", "Fits. This match can time this song.")
+        assert card["runs"] == []
+        assert card["unheard"] == [
+            {
+                "title": "0:15–0:25 · 3 lines",
+                "lines": [
+                    {"time": "0:15", "text": self.LINES[1]},
+                    {"time": "0:20", "text": self.LINES[2]},
+                    {"time": "0:25", "text": self.LINES[3]},
+                ],
+            }
+        ]
+        assert "No line was heard far from its time." not in self.texts(card)
+
+    def test_a_run_and_an_unheard_stretch_can_be_shown_together(self):
+        card = self.check(mistimed=(4, 5), unheard=(1, 2, 3))
+
+        assert card["head"] == "Fits, but check these lines first."
+        assert [r["title"] for r in card["runs"]] == ["0:30–0:35 · 2 lines"]
+        assert [r["title"] for r in card["unheard"]] == ["0:15–0:25 · 3 lines"]
+
+    def test_a_length_past_the_limit_is_amber_and_says_what_the_limit_is(self):
+        card = self.check(gap=38, viable=False)
+
+        assert (card["tone"], card["head"], card["viable"]) == (
+            "bad",
+            "The lines fit, but the length is too far off.",
+            False,
+        )
+        length = card["lines"][1]
+        assert length["text"] == "The match is 4:09; this video is 3:31 (38 s longer)."
+        assert length["warn"] is True and "The limit is 15 s." in length["tip"]
+        assert "warn" not in card["lines"][0]
+
+    def test_a_match_with_no_length_says_so_and_has_no_length_line(self):
+        card = self.check(gap=None, viable=False)
+
+        assert card["head"] == "The lines fit, but the match has no length to check."
+        assert self.texts(card) == ["matches 5 of 6 lines", "No line was heard far from its time."]
+        assert all("warn" not in line for line in card["lines"])
+
+    def test_too_few_lines_say_how_few_and_what_to_check(self):
+        card = self.check(REFUSED, reason=TOO_FEW, matched=3, total=53, viable=False, gap=5)
+
+        assert (card["tone"], card["head"], card["viable"]) == ("bad", "Doesn't fit.", False)
+        assert self.texts(card) == [
+            "Only 3 of 53 lines were found in the clip.",
+            "The match is 3:36; this video is 3:31 (5 s longer).",
+        ]
+        assert "same song as the video" in card["tip"]
+        assert (card["runs"], card["unheard"]) == ([], [])
+
+    def test_lines_that_disagree_say_so_and_blame_another_edit(self):
+        card = self.check(REFUSED, reason=DISAGREE, matched=28, total=57, viable=False, gap=97)
+
+        assert self.texts(card) == [
+            "Found 28 of 57 lines, but they don't agree on one timing.",
+            "The match is 5:08; this video is 3:31 (97 s longer).",
+        ]
+        assert "different edit of the song" in card["tip"]
+
+    def test_a_match_with_no_lines_to_check_is_refused_as_such(self):
+        card = self.check(REFUSED, reason=TOO_FEW, matched=0, total=0, viable=False)
+
+        assert self.texts(card)[0] == "This match has no lines to check."
+
+    def test_a_match_with_no_timed_lines_is_not_called_an_srt_file(self):
+        card = self.check(NOT_SRT, matched=0, total=0, viable=False)
+
+        assert (card["head"], self.texts(card)) == (
+            "Doesn't fit.",
+            ["This match has no timed lines."],
+        )
+
+    def test_a_match_past_the_cue_limit_is_refused(self):
+        card = self.check(TOO_LONG, matched=0, total=3001, viable=False)
+
+        assert card["head"] == "This match has more than 3,000 lines."
+
+    @pytest.mark.parametrize(
+        ("helps", "head", "link", "mention"),
+        [
+            (True, "Can't check yet.", True, "Regenerate the song from Song info first"),
+            (False, "Can't check.", False, "doesn't keep them yet"),
+        ],
+    )
+    def test_no_heard_words_say_whether_a_regenerate_would_help(self, helps, head, link, mention):
+        card = self.check(NO_REFERENCE, matched=0, total=0, viable=False, helps=helps)
+
+        assert (card["tone"], card["head"], card["song_info_link"]) == ("info", head, link)
+        assert mention in " ".join(self.texts(card))
+        assert card["viable"] is False
+
+    def test_the_repairs_refusal_is_the_cards_head_lines_and_tip(self):
+        card = self.check(REFUSED, reason=TOO_FEW, matched=3, total=53, viable=False, gap=5)
+
+        assert _card_text(card) == (
+            "Doesn't fit. Only 3 of 53 lines were found in the clip. "
+            "The match is 3:36; this video is 3:31 (5 s longer). " + card["tip"]
+        )
+
+
+class LrcTimingEnv:
+    """A song with heard words and an LRC on disk, for the LRCLIB timing routes."""
+
+    RECORD = {
+        "id": 11,
+        "trackName": "Invented Song",
+        "artistName": "Invented Artist",
+        "albumName": "Invented Album",
+        "duration": CLIP_S,
+        "syncedLyrics": lrc_slice(),
+    }
+
+    @staticmethod
+    def bundle(words=None) -> dict:
+        bundle = poor_genius_bundle(
+            transcribe_words=heard_words() if words is None else words, media_duration_s=CLIP_S
+        )
+        bundle["lyrics"] = {"origin": "genius", "genius": GENIUS, "lines": ["one", "two"]}
+        return bundle
+
+    @classmethod
+    def song(cls, env, name="A---aaaaaaaaaaa.mp4", *, words=None, record=None) -> str:
+        song = env.add_song(name, cls.bundle(words))
+        if record is not False:
+            path = lrclib.lrc_path(Path(song))
+            path.parent.mkdir(exist_ok=True)
+            lrclib.write_lrc(path, {**cls.RECORD, **(record or {})})
+        return song
+
+
+class TestLrcFitRoute:
+    """The LRCLIB timing preview: the match's own line times against the words heard in the clip."""
+
+    def check(self, env, song, **body):
+        return env.client.post("/song_info/lrc_fit", json={"song": song, **body})
+
+    def assert_nothing_written(self, env):
+        env.processing.enqueue_regen.assert_not_called()
+        assert not list(env.folder.glob("regen_backups/*"))
+        assert not list((env.folder / "lyrics").glob("*.srt"))
+
+    def test_a_guest_gets_403_json(self, env):
+        song = LrcTimingEnv.song(env)
+        env.admin = False
+
+        response = self.check(env, song)
+
+        assert response.status_code == 403
+        assert response.get_json()["success"] is False
+
+    @pytest.mark.parametrize("song_value", [None, ["a"], "/not/in/the/library.mp4"])
+    def test_a_song_outside_the_library_is_rejected(self, env, song_value):
+        LrcTimingEnv.song(env)
+
+        assert self.check(env, song_value).status_code == 400
+
+    @pytest.mark.parametrize("lrclib_id", ["11", True, 1.5, [11]])
+    def test_an_id_that_is_not_a_whole_number_is_rejected(self, env, lrclib_id):
+        song = LrcTimingEnv.song(env)
+
+        response = self.check(env, song, lrclib_id=lrclib_id)
+
+        assert response.status_code == 400
+        assert response.get_json()["error"] == "lrclib_id must be a number"
+
+    def test_a_song_that_is_not_a_video_is_rejected(self, env):
+        track = env.folder / "Track---aaaaaaaaaaa.mp3"
+        track.write_bytes(b"")
+        env.songs.add(str(track))
+
+        response = self.check(env, str(track))
+
+        assert response.status_code == 400
+        assert "video songs only" in response.get_json()["error"]
+
+    def test_with_no_lrc_on_disk_and_no_id_the_admin_is_told_to_search(self, env):
+        song = LrcTimingEnv.song(env, record=False)
+
+        response = self.check(env, song)
+
+        assert response.status_code == 400
+        assert "Search for one" in response.get_json()["error"]
+
+    def test_the_lrc_on_disk_is_checked_when_no_id_is_posted(self, env):
+        song = LrcTimingEnv.song(env)
+
+        body = self.check(env, song).get_json()
+
+        assert (body["status"], body["tone"], body["viable"]) == ("fits", "good", True)
+        assert body["head"] == "Fits. This match can time this song."
+        assert [line["text"] for line in body["lines"]] == [
+            f"matches {SLICE_LINES} of {SLICE_LINES} lines",
+            "The match is 3:20; this video is 3:20.",
+            "No line was heard far from its time.",
+        ]
+        assert (body["runs"], body["unheard"], body["song_info_link"]) == ([], [], False)
+
+    def test_a_posted_id_names_the_match_checked(self, env, monkeypatch):
+        song = LrcTimingEnv.song(env)
+        other = {**LrcTimingEnv.RECORD, "id": 12, "duration": CLIP_S + 8}
+        monkeypatch.setattr(lrclib, "get_record", lambda record_id: other)
+
+        body = self.check(env, song, lrclib_id=12).get_json()
+
+        assert body["lines"][1]["text"] == "The match is 3:28; this video is 3:20 (8 s longer)."
+
+    def test_a_check_saves_and_queues_nothing(self, env):
+        song = LrcTimingEnv.song(env)
+
+        self.check(env, song)
+        self.check(
+            env, LrcTimingEnv.song(env, "B---bbbbbbbbbbb.mp4", record={"duration": CLIP_S + 99})
+        )
+
+        self.assert_nothing_written(env)
+
+    def test_a_length_past_the_limit_is_not_viable_and_the_length_line_is_marked(self, env):
+        song = LrcTimingEnv.song(env, record={"duration": CLIP_S + 38})
+
+        body = self.check(env, song).get_json()
+
+        assert (body["status"], body["viable"]) == ("fits", False)
+        assert body["head"] == "The lines fit, but the length is too far off."
+        assert body["lines"][1]["warn"] is True
+
+    def test_lines_the_clip_does_not_sing_are_refused_with_the_length(self, env):
+        song = LrcTimingEnv.song(env, record={"syncedLyrics": lrc_slice(lines=range(40, 52))})
+
+        body = self.check(env, song).get_json()
+
+        assert (body["status"], body["head"], body["viable"]) == ("refused", "Doesn't fit.", False)
+        assert [line["text"] for line in body["lines"]] == [
+            f"Only 0 of {SLICE_LINES} lines were found in the clip.",
+            "The match is 3:20; this video is 3:20.",
+        ]
+
+    def test_a_stretch_nothing_was_heard_for_comes_back_as_the_quiet_note(self, env):
+        words = [w for w in heard_words() if not 3 <= round((w["start"] - 10) / 5) <= 7]
+        song = LrcTimingEnv.song(env, words=words)
+
+        body = self.check(env, song).get_json()
+
+        assert (body["head"], body["viable"]) == ("Fits. This match can time this song.", True)
+        assert body["runs"] == []
+        [stretch] = body["unheard"]
+        assert stretch["title"] == "0:25–0:45 · 5 lines"
+        assert [line["time"] for line in stretch["lines"]] == [
+            "0:25",
+            "0:30",
+            "0:35",
+            "0:40",
+            "0:45",
+        ]
+
+    def test_a_run_heard_far_from_its_time_beside_an_unheard_stretch_comes_back_with_both(
+        self, env
+    ):
+        words = [w for w in heard_words() if not 3 <= round((w["start"] - 10) / 5) <= 5]
+        record = {"syncedLyrics": lrc_slice(offset=lambda k: 15.0 if k >= 10 else 0.0)}
+        song = LrcTimingEnv.song(env, words=words, record=record)
+
+        body = self.check(env, song).get_json()
+
+        assert (body["head"], body["tone"], body["viable"]) == (
+            "Fits, but check these lines first.",
+            "bad",
+            True,
+        )
+        assert [r["title"] for r in body["runs"]] == ["1:15–1:20 · 2 lines"]
+        assert [r["title"] for r in body["unheard"]] == ["0:25–0:35 · 3 lines"]
+
+    def test_a_song_with_a_bundle_but_no_heard_words_is_sent_to_regenerate(self, env):
+        song = LrcTimingEnv.song(env, words=[])
+
+        body = self.check(env, song).get_json()
+
+        assert (body["status"], body["tone"], body["head"]) == (
+            "no_reference",
+            "info",
+            "Can't check yet.",
+        )
+        assert body["song_info_link"] is True and body["viable"] is False
+
+
+class TestLrcSearchRoute:
+    """The LRCLIB timing search: matches scored against the lyrics the song has now."""
+
+    def search(self, env, song, query="invented song"):
+        return env.client.get("/song_info/lrc_search", query_string={"song": song, "q": query})
+
+    def test_a_guest_gets_403_json(self, env):
+        song = LrcTimingEnv.song(env)
+        env.admin = False
+
+        assert self.search(env, song).status_code == 403
+
+    def test_a_path_outside_the_library_is_rejected(self, env):
+        assert self.search(env, "/not/in/the/library.mp4").status_code == 400
+
+    def test_matches_are_scored_against_the_lines_the_song_was_last_timed_from(
+        self, env, monkeypatch
+    ):
+        song = LrcTimingEnv.song(env)
+        searched = []
+
+        def search_query(query):
+            searched.append(query)
+            return [LrcTimingEnv.RECORD]
+
+        monkeypatch.setattr(lrclib, "search_query", search_query)
+
+        found = self.search(env, song, "  invented song  ").get_json()
+
+        assert searched == ["invented song"]
+        assert found["video_length"] == "video is 3:20"
+        [candidate] = found["candidates"]
+        assert (candidate["id"], candidate["sheet_lines"]) == (11, 2)  # the bundle's two lines
+        assert candidate["fit"] == "3:20 · within a few s" and candidate["fit_near"] is True
+        assert candidate["current"] is True  # the match on disk
+
+    def test_a_song_with_no_bundle_is_scored_against_no_lines(self, env, monkeypatch):
+        song = env.add_song("B---bbbbbbbbbbb.mp4")
+        monkeypatch.setattr(lrclib, "search_query", lambda query: [LrcTimingEnv.RECORD])
+        monkeypatch.setattr("pikaraoke.lib.library_regen.probe_duration", lambda path: CLIP_S)
+
+        [candidate] = self.search(env, song).get_json()["candidates"]
+
+        assert candidate["sheet_lines"] == 0
+
+
+class TestLrcRepairRoute:
+    """The Repair fits the match again on the server; the page's preview is not trusted."""
+
+    def repair(self, env, song, **body):
+        return env.client.post("/song_info/repair", json={"song": song, "source": "lrclib", **body})
+
+    def test_the_fitted_lines_are_queued_and_the_lrc_on_disk_stays(self, env):
+        song = LrcTimingEnv.song(env)
+
+        response = self.repair(env, song)
+
+        assert response.get_json() == {"success": True}
+        regen = env.processing.enqueue_regen.call_args.args[0]
+        plan = regen.song.plan
+        assert (plan.kind, plan.seed, plan.label) == (
+            "seed",
+            {"lyrics_origin": "lrclib_srt"},
+            "LRCLIB timing",
+        )
+        assert plan.lrclib_record is None and regen.song.replaces_custom is False
+        assert clip_starts(plan.custom_text)[0] == pytest.approx(10.0, abs=0.1)
+
+    def test_a_posted_id_is_queued_to_become_the_songs_lrc(self, env, monkeypatch):
+        song = LrcTimingEnv.song(env)
+        other = {**LrcTimingEnv.RECORD, "id": 12, "trackName": "Other"}
+        monkeypatch.setattr(lrclib, "get_record", lambda record_id: other)
+
+        self.repair(env, song, lrclib_id=12)
+
+        assert env.processing.enqueue_regen.call_args.args[0].song.plan.lrclib_record is other
+
+    @pytest.mark.parametrize(
+        ("record", "refusal"),
+        [
+            (
+                {"duration": CLIP_S + 38},
+                "The lines fit, but the length is too far off. matches 12 of 12 lines "
+                "The match is 3:58; this video is 3:20 (38 s longer). "
+                "No line was heard far from its time.",
+            ),
+            (
+                {"syncedLyrics": lrc_slice(lines=range(40, 52))},
+                "Doesn't fit. Only 0 of 12 lines were found in the clip. "
+                "The match is 3:20; this video is 3:20. "
+                "Check that this match is the same song as the video. A cover, a live take or "
+                "another language won't match the words heard.",
+            ),
+        ],
+        ids=["too_far", "too_few"],
+    )
+    def test_a_match_that_cannot_time_the_song_is_refused_in_the_previews_words(
+        self, env, record, refusal
+    ):
+        song = LrcTimingEnv.song(env, record=record)
+        preview = env.client.post("/song_info/lrc_fit", json={"song": song})
+
+        response = self.repair(env, song)
+
+        assert response.status_code == 400
+        assert response.get_json()["error"] == _card_text(preview.get_json()) == refusal
+        env.processing.enqueue_regen.assert_not_called()
+        assert not list(env.folder.glob("regen_backups/*"))
+
+    @pytest.mark.parametrize("lrclib_id", ["11", True])
+    def test_an_id_that_is_not_a_whole_number_is_rejected(self, env, lrclib_id):
+        song = LrcTimingEnv.song(env)
+
+        assert self.repair(env, song, lrclib_id=lrclib_id).status_code == 400
+        env.processing.enqueue_regen.assert_not_called()
+
+    def test_with_no_lrc_and_no_id_nothing_is_queued(self, env):
+        song = LrcTimingEnv.song(env, record=False)
+
+        response = self.repair(env, song)
+
+        assert response.status_code == 400 and "Search for one" in response.get_json()["error"]
+        env.processing.enqueue_regen.assert_not_called()
+
+    def test_a_guest_cannot(self, env):
+        song = LrcTimingEnv.song(env)
+        env.admin = False
+
+        assert self.repair(env, song).status_code == 403
         env.processing.enqueue_regen.assert_not_called()
 
 
@@ -2298,6 +3038,19 @@ class TestOpenRunRoute:
         [song] = env.client.get("/library/run/status").get_json()["songs"]
 
         assert song["now"] == "Now: movie subtitles"
+        assert song["group"] == "reuse"
+
+    def test_the_status_says_an_lrclib_timed_song_is_timed_by_lrclib(self, env):
+        bundle = caption_bundle()
+        bundle["lyrics"] = {"origin": "lrclib_srt", "lines": ["one"]}
+        env.add_song("Mine---aaaaaaaaaaa.mp4", bundle)
+        write_sheet(env.folder, "Mine---aaaaaaaaaaa", suffix=".lrclib.srt")
+        env.client.post("/library/run", json={"mode": "reset"})
+        finish_checks(env)
+
+        [song] = env.client.get("/library/run/status").get_json()["songs"]
+
+        assert song["now"] == "Now: LRCLIB timing"
         assert song["group"] == "reuse"
 
     def test_the_reset_run_says_custom_lyrics_keep_theirs(self, env):

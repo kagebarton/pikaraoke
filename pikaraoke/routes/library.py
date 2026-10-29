@@ -46,7 +46,7 @@ def _subline(name: str, status: SongStatus) -> str:
         }
     if name == "no_lyrics":
         return _("Transcribed")
-    if name in ("caption", "movie"):
+    if name in ("caption", "movie", "lrc"):
         return _("Cue align")
     if name in ("genius", "custom", "no_timed_source"):
         return _joint_subline(status)
@@ -97,8 +97,11 @@ def songs():
 def _repair_source(status: SongStatus) -> str | None:
     """The Repair source a song's list link opens with, or None for the plain page.
 
-    A joint song can move to the cue route with its video's YouTube caption.
+    An LRC on disk can time the song by its own line times (LRCLIB timing); a joint song
+    without one can move to the cue route with its video's YouTube caption.
     """
+    if status.lrc_on_disk:
+        return "lrclib"
     return "caption" if status.method == "joint" else None
 
 
@@ -153,6 +156,8 @@ def _now_text(now: dict) -> str:
         return _("Now: custom lyrics")
     if now["source"] == "movie":
         return _("Now: movie subtitles")
+    if now["source"] == "lrclib":
+        return _("Now: LRCLIB timing")
     if now["source"] == "captions":
         return _("Now: YouTube captions")
     if now["source"] == "transcribed":

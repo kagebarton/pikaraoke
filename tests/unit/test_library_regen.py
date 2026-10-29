@@ -452,7 +452,7 @@ class TestCustomSheetWinsEveryPlan:
         match.write_text("[00:01.00]hi\n", encoding="utf-8")
 
         assert lr.custom_sheet_path(song) == sheet
-        assert lr.sheet_kind(sheet) == "lrc"
+        assert lr.sheet_kind(sheet) == "lrclib"
         assert lr.sheet_kind(match) is None  # the match file is not a sheet
 
 
@@ -464,7 +464,7 @@ class TestSheetPlans:
         [
             (lr.custom_sheet_plan, ".custom.txt", "custom", "custom sheet", "custom"),
             (lr.movie_sheet_plan, ".custom.srt", "movie_srt", "movie subtitles", "movie"),
-            (lr.lrc_sheet_plan, ".lrclib.srt", "lrclib_srt", "LRCLIB timing", "lrc"),
+            (lr.lrc_sheet_plan, ".lrclib.srt", "lrclib_srt", "LRCLIB timing", "lrclib"),
         ],
         ids=["custom", "movie", "lrc"],
     )
