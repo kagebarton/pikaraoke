@@ -14,7 +14,9 @@ from pikaraoke.lib import lrclib
 from pikaraoke.lib.alignment_capture import SCHEMA_VERSION
 from pikaraoke.lib.library_regen import (
     BACKUP_ROOT,
+    CUSTOM_ORIGIN,
     LRC_ORIGIN,
+    MOVIE_ORIGIN,
     custom_sheet_path,
     list_videos,
     read_bundle,
@@ -162,7 +164,7 @@ def _lrc_match_on_disk(lrc: lrclib.SongLrc) -> dict | None:
 def _lrclib_state(lrc: lrclib.SongLrc, origin: str | None, lyrics: dict, fill: dict) -> str:
     """How LRCLIB figures in a song timed from a lyric sheet (Genius or custom): the
     disk says what the admin chose now, the bundle says what the last run did with it."""
-    if origin not in ("genius", "custom"):
+    if origin not in ("genius", CUSTOM_ORIGIN):
         return "n/a"
     if lrc.state == "skipped":
         return "skipped"
@@ -196,10 +198,10 @@ SONG_LISTS: dict[str, Callable[[SongStatus], bool]] = {
     "poor": lambda s: s.poor,
     "no_lyrics": lambda s: s.category == "no_lyrics",
     "caption": lambda s: s.origin == "srt",
-    "movie": lambda s: s.origin == "movie_srt",
+    "movie": lambda s: s.origin == MOVIE_ORIGIN,
     "lrc": lambda s: s.origin == LRC_ORIGIN,
     "genius": lambda s: s.origin == "genius",
-    "custom": lambda s: s.origin == "custom",
+    "custom": lambda s: s.origin == CUSTOM_ORIGIN,
     "no_timed_source": lambda s: s.method == "joint" and not s.lrc_on_disk,
     "all": lambda s: True,
 }
