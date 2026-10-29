@@ -146,18 +146,9 @@ def is_genius_reuse(plan: Plan | None) -> bool:
 
 
 def is_custom_plan(plan: Plan | None) -> bool:
-    """Whether ``plan`` times the song from a custom lyric sheet of either kind."""
+    """Whether ``plan`` times the song from its typed custom lyric sheet."""
     return (
-        plan is not None
-        and plan.kind == "seed"
-        and plan.seed.get("lyrics_origin") in (CUSTOM_ORIGIN, MOVIE_ORIGIN)
-    )
-
-
-def is_movie_plan(plan: Plan | None) -> bool:
-    """Whether ``plan`` times the song from its movie-subtitles sheet."""
-    return (
-        plan is not None and plan.kind == "seed" and plan.seed.get("lyrics_origin") == MOVIE_ORIGIN
+        plan is not None and plan.kind == "seed" and plan.seed.get("lyrics_origin") == CUSTOM_ORIGIN
     )
 
 
@@ -689,13 +680,13 @@ def apply_custom_choice(job: SongJob) -> None:
     plan = job.plan
     if plan.custom_text is not None:
         lrclib.write_text_atomic(plan.lyrics_path, plan.custom_text)
-        kept = plan.lyrics_path
+        kept = plan.lyrics_path.name
     elif job.replaces_custom:
         kept = None
     else:
         return
     for sheet in _sheet_files(job.song_path):
-        if sheet != kept:
+        if sheet.name != kept:
             sheet.unlink(missing_ok=True)
 
 
@@ -759,7 +750,7 @@ def prepare_lyrics(job: SongJob, genius: GeniusClient, lyrics_dir: Path, config:
             lyrics_path.write_text("\n\n".join(plan.lyrics_lines), encoding="utf-8")
         else:
             lyrics_path = plan.lyrics_path
-        if is_custom_plan(plan) and not is_movie_plan(plan):
+        if is_custom_plan(plan):
             # The cue route a movie sheet takes never reads the third source.
             seed = {**seed, **_ytasr_seed(song)}
         return lyrics_path, SeedArtifactsStage(seed)

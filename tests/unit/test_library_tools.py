@@ -892,6 +892,18 @@ class TestMovieRepair:
 
         processing.enqueue_regen.assert_not_called()
 
+    def test_a_transcribed_song_is_not_told_to_regenerate(self, tmp_path, monkeypatch):
+        """A transcribe run keeps no heard words, so a Regenerate would not help."""
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        monkeypatch.setattr("pikaraoke.lib.library_regen.probe_duration", lambda path: CLIP_S)
+        tools, processing = make_tools(tmp_path, [str(video)])
+
+        with pytest.raises(RegenError, match="transcribed doesn't keep them") as refused:
+            tools.repair(str(video), "movie", text=movie_slice())
+
+        assert "Regenerate" not in str(refused.value)
+        processing.enqueue_regen.assert_not_called()
+
     def test_a_whole_film_longer_than_a_lyric_sheet_fits(self, tmp_path, song):
         filler = "and the night goes on in the quiet little town " * 4
         film = srt.compose(
@@ -930,6 +942,14 @@ class TestMovieRepair:
 
         assert fit.status == "no_reference"
         assert "Could not read the auto-caption" in caplog.text
+
+    def test_the_check_takes_video_songs_only(self, tmp_path):
+        mp3 = tmp_path / "Track---aaaaaaaaaaa.mp3"
+        mp3.write_bytes(b"")
+        tools, _ = make_tools(tmp_path, [str(mp3)])
+
+        with pytest.raises(RegenError, match="video songs only"):
+            tools.check_movie_slice(str(mp3), movie_slice())
 
     def test_the_check_answers_a_refusal_and_does_not_raise(self, tmp_path, song):
         tools, processing = make_tools(tmp_path, [str(song)])

@@ -179,11 +179,13 @@ def custom_sheet_lines(text: object) -> list[str]:
     return lines
 
 
-def _slice_refusal(fit: SliceFit) -> str:
+def _slice_refusal(fit: SliceFit, regenerate_helps: bool) -> str:
     """Why pasted movie subtitles can't time the song, in the admin's words.
 
     ``fit`` is any answer but a fit. The wording is the ratified mockup's: each
-    headline with the hint it keeps behind an (i).
+    headline with the hint it keeps behind an (i). ``regenerate_helps``: the song
+    has a bundle, so a Regenerate keeps the words it hears; a transcribed song's
+    run keeps none (plans/open-issues.md).
     """
     if fit.status == NOT_SRT:
         return (
@@ -194,6 +196,11 @@ def _slice_refusal(fit: SliceFit) -> str:
         return (
             f"These subtitles have more than {MAX_CUES:,} lines. "
             "Paste only the part of the movie with the song."
+        )
+    if fit.status == NO_REFERENCE and not regenerate_helps:
+        return (
+            "Can't check. This song has no heard words to compare the subtitles with, "
+            "and a song whose lyrics were transcribed doesn't keep them yet."
         )
     if fit.status == NO_REFERENCE:
         return (
@@ -531,11 +538,17 @@ class LibraryTools:
         sent. Reads the bundle's transcribe words, the on-disk YouTube
         auto-caption and the clip's length; queues no work. A refusal is an
         answer, not an error: the returned :class:`SliceFit` says it. Raises
-        :class:`RegenError`, with a message for the admin, for text that is not
-        text or is too long, or a clip whose length can't be read.
+        :class:`RegenError`, with a message for the admin, for a song that is not
+        a video, text that is not text or is too long, or a clip whose length
+        can't be read.
         """
+        if not self.is_video(song_path):
+            raise RegenError("Lyrics tools work on video songs only.")
+        return self._fit_movie_slice(self._song_job(song_path), text)
+
+    def _fit_movie_slice(self, job: SongJob, text: object) -> SliceFit:
+        """:meth:`check_movie_slice` for a song already checked and read."""
         sheet = _pasted_text(text, "subtitles", MOVIE_SUBTITLES_MAX_CHARS)
-        job = self._song_job(song_path)
         length = media_duration(job)
         if not length:
             raise RegenError("Could not read this clip's length.")
@@ -619,7 +632,7 @@ class LibraryTools:
         elif source == "custom":
             job.plan = self._custom_repair_plan(job.song_path, text, lrclib_id, lrclib_skip)
         elif source == "movie":
-            job.plan = self._movie_repair_plan(song_path, text)
+            job.plan = self._movie_repair_plan(job, text)
         elif source == "transcribe":
             job.plan = self._transcribe_plan()
         else:
@@ -1106,12 +1119,12 @@ class LibraryTools:
         self._apply_lrclib_pick(plan, lrclib_id, lrclib_skip)
         return plan
 
-    def _movie_repair_plan(self, song_path: str, text: object) -> Plan:
+    def _movie_repair_plan(self, job: SongJob, text: object) -> Plan:
         """The plan that saves the pasted subtitles, clip-timed, as the song's sheet; a fit only."""
-        fit = self.check_movie_slice(song_path, text)
+        fit = self._fit_movie_slice(job, text)
         if fit.status != FITS:
-            raise RegenError(_slice_refusal(fit))
-        return movie_sheet_plan(Path(song_path), fit.srt)
+            raise RegenError(_slice_refusal(fit, regenerate_helps=job.bundle is not None))
+        return movie_sheet_plan(job.song_path, fit.srt)
 
     def _apply_lrclib_pick(self, plan: Plan, lrclib_id: int | None, lrclib_skip: bool) -> None:
         """Put the admin's LRCLIB choice on ``plan``: no match, or the record ``lrclib_id``."""

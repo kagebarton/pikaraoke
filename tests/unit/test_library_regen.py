@@ -373,24 +373,21 @@ class TestCustomSheetWinsEveryPlan:
         assert plan.seed == {"lyrics_origin": "movie_srt"}
         assert plan.custom_text is None  # the sheet is already on disk
         assert plan.label == "movie subtitles"
-        assert lr.is_custom_plan(plan) and lr.is_movie_plan(plan)
+        assert not lr.is_custom_plan(plan)  # the cue route reads no third source
 
     def test_reuse_plan_prefers_a_movie_sheet_over_a_reusable_bundle(self, tmp_path):
         _write_movie_sheet(tmp_path, YT_STEM)
 
-        assert lr.is_movie_plan(lr.reuse_plan(_job(tmp_path, YT_STEM, self.GENIUS_BUNDLE)))
+        plan = lr.reuse_plan(_job(tmp_path, YT_STEM, self.GENIUS_BUNDLE))
+
+        assert plan.seed == {"lyrics_origin": lr.MOVIE_ORIGIN}
 
     def test_reuse_plan_finds_a_movie_sheet_with_no_bundle_at_all(self, tmp_path):
         _write_movie_sheet(tmp_path, YT_STEM)
 
-        assert lr.is_movie_plan(lr.reuse_plan(_job(tmp_path, YT_STEM, None)))
+        plan = lr.reuse_plan(_job(tmp_path, YT_STEM, None))
 
-    def test_a_typed_sheet_is_a_custom_plan_and_not_a_movie_plan(self, tmp_path):
-        _write_sheet(tmp_path, YT_STEM)
-
-        plan = lr.custom_plan(_job(tmp_path, YT_STEM, None))
-
-        assert lr.is_custom_plan(plan) and not lr.is_movie_plan(plan)
+        assert plan.seed == {"lyrics_origin": lr.MOVIE_ORIGIN}
 
     def test_the_sheet_path_is_whichever_kind_is_on_disk(self, tmp_path):
         song = tmp_path / f"{YT_STEM}.mp4"
@@ -1182,6 +1179,14 @@ class TestApplyCustomChoice:
 
         assert not typed.exists()
         assert lr.custom_sheet_path(job.song_path).suffix == ".srt"
+
+    def test_a_plan_that_spells_the_song_path_another_way_keeps_its_sheet(self, tmp_path):
+        roundabout = tmp_path / "lyrics" / ".." / f"{YT_STEM}.mp4"
+        job = self._job_with(tmp_path, lr.movie_sheet_plan(roundabout, MOVIE_SRT))
+
+        lr.apply_custom_choice(job)
+
+        assert lr.custom_sheet_path(job.song_path).read_text(encoding="utf-8") == MOVIE_SRT
 
     def test_saving_a_typed_sheet_deletes_the_movie_one(self, tmp_path):
         movie = _write_movie_sheet(tmp_path, YT_STEM)
