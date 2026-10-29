@@ -238,6 +238,19 @@ refuse. The slices are copyrighted text: keep them out of the repo.
 python scripts/movie_srt_fit_report.py [--folder PATH] [--slices PATH] [--cross]
 ```
 
+## lrc_timing_report.py
+
+Runs the same fit over every joint-timed song that has a usable LRC on disk,
+using the LRC's own lines as the cues, against each heard-word stream on its
+own. Prints one markdown table of the fit's verdict, numbers, length gap and
+flagged lines (with the runs of flagged lines at three minimum lengths), then a
+second table of the flagged lines at five tolerances. Read only; the tables carry
+line numbers, never lyric text.
+
+```bash
+python scripts/lrc_timing_report.py [--folder PATH]
+```
+
 ## Architecture notes
 
 ### Why a script as well as the web UI?
