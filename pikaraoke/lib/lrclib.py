@@ -226,6 +226,10 @@ def _strip_trailing_parens(text: str) -> str:
     return text
 
 
+class LrclibUnavailable(Exception):
+    """Raised when an admin's search can't reach LRCLIB, so an outage isn't shown as no matches."""
+
+
 def search(track_name: str, artist_name: str, *, timeout: float = _REQUEST_TIMEOUT_S) -> list[dict]:
     """``GET /api/search`` by title and artist field. Returns ``[]`` on any failure.
 
@@ -235,12 +239,16 @@ def search(track_name: str, artist_name: str, *, timeout: float = _REQUEST_TIMEO
     raw or pre-cleaned keys.
     """
     track, artist = clean_key(track_name, artist_name)
-    return _search({"track_name": track, "artist_name": artist}, timeout)
+    try:
+        return _search({"track_name": track, "artist_name": artist}, timeout)
+    except LrclibUnavailable as e:
+        logger.warning("%s", e)
+        return []
 
 
 def search_query(query: str, *, timeout: float = _REQUEST_TIMEOUT_S) -> list[dict]:
     """``GET /api/search?q=``: the words anywhere in title, artist or album, as
-    LRCLIB's own site searches. Returns ``[]`` on any failure."""
+    LRCLIB's own site searches. Raises :class:`LrclibUnavailable` on any failure."""
     return _search({"q": query}, timeout)
 
 
@@ -255,8 +263,7 @@ def _search(params: dict[str, str], timeout: float) -> list[dict]:
         resp.raise_for_status()
         records = resp.json()
     except (requests.RequestException, ValueError) as e:
-        logger.warning("LRCLIB search failed for %r: %s", params, e)
-        return []
+        raise LrclibUnavailable(f"LRCLIB search failed for {params!r}: {e}") from e
     time.sleep(_POLITE_SLEEP_S)
     return records if isinstance(records, list) else []
 

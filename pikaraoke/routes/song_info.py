@@ -23,6 +23,7 @@ from pikaraoke.lib.library_tools import (
     MovieSliceRefused,
     custom_sheet_lines,
 )
+from pikaraoke.lib.lrclib import LrclibUnavailable
 from pikaraoke.lib.srt_cues import cue_spans_from_srt
 from pikaraoke.lib.srt_slice_fit import (
     DISAGREE,
@@ -556,16 +557,20 @@ def genius_lyrics():
     return jsonify({"title": song.title, "artist": song.artist, "text": song.text})
 
 
-def _lrclib_results(song: str, sheet: list[str], query: str) -> dict:
+def _lrclib_results(song: str, sheet: list[str], query: str):
     """LRCLIB's matches for the typed search, scored against ``sheet`` and worded for the page."""
-    found = get_karaoke_instance().library_tools.lrclib_candidates(song, sheet, query)
+    try:
+        found = get_karaoke_instance().library_tools.lrclib_candidates(song, sheet, query)
+    except LrclibUnavailable as e:
+        logger.warning("LRCLIB search for %s: %s", song, e)
+        return _error(_("LRCLIB can't be reached right now. Try again."), 502)
     for candidate in found["candidates"]:
         candidate["fit"], candidate["fit_near"] = _candidate_fit(candidate)
     video_s = found["video_duration_s"]
     found["video_length"] = (
         _("video is %(length)s") % {"length": _mmss(video_s)} if video_s is not None else None
     )
-    return found
+    return jsonify(found)
 
 
 @song_info_bp.route("/song_info/lrclib_search")
@@ -586,7 +591,7 @@ def lrclib_search():
     except GeniusUnavailable as e:
         logger.warning("LRCLIB search for %s: Genius lyrics unavailable: %s", song, e)
         return _error(_("Genius didn't return that song's lyrics. Try again."), 502)
-    return jsonify(_lrclib_results(song, sheet, query))
+    return _lrclib_results(song, sheet, query)
 
 
 @song_info_bp.route("/song_info/lrclib_search", methods=["POST"])
@@ -603,7 +608,7 @@ def lrclib_search_custom():
         sheet = custom_sheet_lines(body.get("text"))
     except RegenError as e:
         return _error(str(e), 400)
-    return jsonify(_lrclib_results(song, sheet, _typed(body, "q")))
+    return _lrclib_results(song, sheet, _typed(body, "q"))
 
 
 def _hms(seconds: float) -> str:
@@ -989,7 +994,7 @@ def lrc_search():
     if song is None:
         return _error(_("Not a song in the library"), 400)
     sheet = k.library_tools.current_lines(song)
-    return jsonify(_lrclib_results(song, sheet, request.args.get("q", "").strip()))
+    return _lrclib_results(song, sheet, request.args.get("q", "").strip())
 
 
 @song_info_bp.route("/song_info/repair", methods=["POST"])

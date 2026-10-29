@@ -67,9 +67,10 @@ class TestSearch:
         assert mock_get.call_args.kwargs["params"] == {"q": "Song (Live) Artist"}
 
     @patch("pikaraoke.lib.lrclib.requests.get", side_effect=requests.RequestException("boom"))
-    def test_network_error_returns_empty(self, _get):
+    def test_network_error_is_empty_for_the_pipeline_and_raised_for_an_admins_search(self, _get):
         assert lrclib.search("T", "A") == []
-        assert lrclib.search_query("T A") == []
+        with pytest.raises(lrclib.LrclibUnavailable):
+            lrclib.search_query("T A")
 
     @patch("pikaraoke.lib.lrclib.time.sleep")
     @patch("pikaraoke.lib.lrclib.requests.get")

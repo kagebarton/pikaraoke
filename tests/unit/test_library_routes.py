@@ -2370,6 +2370,19 @@ class TestLrcSearchRoute:
         assert candidate["fit"] == "3:20 · within a few s" and candidate["fit_near"] is True
         assert candidate["current"] is True  # the match on disk
 
+    def test_lrclib_out_of_reach_is_an_error_not_an_empty_list(self, env, monkeypatch):
+        song = LrcTimingEnv.song(env)
+
+        def search_query(query):
+            raise lrclib.LrclibUnavailable("timed out")
+
+        monkeypatch.setattr(lrclib, "search_query", search_query)
+
+        resp = self.search(env, song)
+
+        assert resp.status_code == 502
+        assert "LRCLIB can't be reached" in resp.get_json()["error"]
+
     def test_a_song_with_no_bundle_is_scored_against_no_lines(self, env, monkeypatch):
         song = env.add_song("B---bbbbbbbbbbb.mp4")
         monkeypatch.setattr(lrclib, "search_query", lambda query: [LrcTimingEnv.RECORD])

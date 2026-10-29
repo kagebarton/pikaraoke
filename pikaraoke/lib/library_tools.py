@@ -663,6 +663,8 @@ class LibraryTools:
         of them it maps to, how far its length is from the video's, whether the
         selection rule would pick it (``best``) and whether it is the match on
         disk (``current``). The listed records are remembered for :meth:`repair`.
+
+        Raises :class:`~pikaraoke.lib.lrclib.LrclibUnavailable` when LRCLIB can't be reached.
         """
         video_s = media_duration(self._song_job(song_path))
         records = [r for r in lrclib.search_query(query) if r.get("syncedLyrics")]
