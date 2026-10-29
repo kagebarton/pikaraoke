@@ -157,6 +157,8 @@ def _source_name(status: SongStatus) -> str:
         return _("Genius")
     if status.origin == "custom":
         return _("Custom lyrics")
+    if status.origin == "movie_srt":
+        return _("Movie subtitles")
     if status.origin == "srt":
         return _("YouTube captions")
     if status.category == "no_lyrics":
@@ -293,6 +295,10 @@ def _lrclib_fit(status: SongStatus) -> tuple[str | None, str, bool]:
 
 def _route_text(status: SongStatus) -> str | None:
     if status.method == "cue_align":
+        if status.origin == "movie_srt":
+            return _(
+                "Lyrics from the movie's subtitles, timed against the subtitles' own line times."
+            )
         return _("Lyrics from the YouTube caption, timed against the caption's own line times.")
     if status.method == "joint":
         if status.origin == "custom":
@@ -329,8 +335,8 @@ def _lrclib_label(match: dict | None) -> str:
 
 def _pick(entry: HistoryEntry) -> tuple:
     """What a version's lyric pick is: its source, and the Genius song or the custom words."""
-    if entry.origin == "custom":
-        return ("custom", entry.lines)
+    if entry.origin in ("custom", "movie_srt"):
+        return (entry.origin, entry.lines)
     return (entry.origin, (entry.genius or {}).get("id"))
 
 
@@ -345,6 +351,8 @@ def _versions(history: list[HistoryEntry]) -> list[Version]:
             lrclib_text = _lrclib_label(entry.lrclib)
         elif entry.origin == "custom":
             genius_text, lrclib_text = _("Custom lyrics"), _lrclib_label(entry.lrclib)
+        elif entry.origin == "movie_srt":
+            genius_text, lrclib_text = _("Movie subtitles"), None
         else:
             genius_text, lrclib_text = _("YouTube captions"), None
         older_lrclib = (older.lrclib or {}).get("id") if older else lrclib_id
@@ -425,6 +433,8 @@ def regenerate():
 
 def _current_source(status: SongStatus) -> str | None:
     """Which repair source the song's next regenerate uses, for the page's "current" tag."""
+    if status.movie_sheet:
+        return "movie"
     if status.custom_sheet:
         return "custom"
     if status.origin == "srt":

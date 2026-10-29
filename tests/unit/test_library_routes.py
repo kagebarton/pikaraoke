@@ -98,8 +98,8 @@ def custom_bundle(**overrides) -> dict:
     return bundle
 
 
-def write_sheet(folder: Path, stem: str, text: str = "one\n") -> Path:
-    sheet = folder / "lyrics" / f"{stem}.custom.txt"
+def write_sheet(folder: Path, stem: str, text: str = "one\n", suffix: str = ".custom.txt") -> Path:
+    sheet = folder / "lyrics" / f"{stem}{suffix}"
     sheet.parent.mkdir(exist_ok=True)
     sheet.write_text(text, encoding="utf-8")
     return sheet
@@ -112,6 +112,13 @@ def caption_bundle() -> dict:
         "output_summary": {"line_count": 39, "lines_with_words": 39},
         "media_duration_s": 200.0,
     }
+
+
+def movie_bundle(lines: tuple[str, ...] = ("one",)) -> dict:
+    """A song timed on the cue route from movie subtitles."""
+    bundle = caption_bundle()
+    bundle["lyrics"] = {"origin": "movie_srt", "lines": list(lines)}
+    return bundle
 
 
 class Env:
@@ -325,6 +332,21 @@ class TestSongInfoPage:
         assert "Custom lyrics, timed by combining the lyric aligner and a transcription." in html
         assert "not used" in html
 
+    def test_a_movie_song_is_named_on_the_tile_and_the_source_row_and_has_its_own_route(self, env):
+        html = text(env.page(env.add_song("A---aaaaaaaaaaa.mp4", movie_bundle())))
+
+        tiles = html.split('class="tabs is-fullwidth si-tabs"')[0].split("</style>")[-1]
+        assert "Movie subtitles" in tiles
+        picks = html.split('id="tab-picks"')[1].split('id="tab-alignment"')[0]
+        assert '<span class="si-val">Movie subtitles</span>' in picks
+        assert (
+            "Lyrics from the movie&#39;s subtitles, timed against the subtitles&#39; own "
+            "line times." in html
+        )
+        assert "from the YouTube caption" not in html
+        assert "Genius or custom lyrics only" in html  # the cue route never uses LRCLIB
+        assert "https://genius.com" not in html
+
     def test_a_custom_song_has_the_lrclib_tile_row_and_fit_but_no_genius_row(self, env):
         html = text(env.page(env.add_song("A---aaaaaaaaaaa.mp4", custom_bundle())))
 
@@ -474,6 +496,56 @@ class TestSongInfoHistory:
 
         assert history.index("Custom lyrics") < history.index("YouTube captions")
         assert 'class="si-chg">Custom lyrics' in history
+
+    def test_a_movie_version_is_named_as_such_with_no_lrclib_label(self, env):
+        stem = "A---aaaaaaaaaaa"
+        song = env.add_song(f"{stem}.mp4", movie_bundle())
+        write_bundle(
+            env.folder,
+            stem,
+            root=env.folder / "regen_backups" / "20261019T175506Z",
+            schema_version=10,
+            captured_at="2026-09-21T10:00:00+00:00",
+            **poor_genius_bundle(),
+        )
+        history = text(env.page(song)).split('id="tab-history"')[1]
+
+        assert "Movie subtitles" in history
+        assert "Genius · Kristin Chenoweth" in history
+        assert "YouTube captions" not in history
+        assert history.count("LRCLIB 5:54") == 1  # the Genius version's only
+        # Genius -> movie subtitles is a change of pick.
+        assert 'class="si-chg">Movie subtitles' in history
+
+    @pytest.mark.parametrize(("older_lines", "changed"), [(("one",), False), (("won",), True)])
+    def test_an_edited_movie_slice_is_a_change_of_pick(self, env, older_lines, changed):
+        stem = "A---aaaaaaaaaaa"
+        song = env.add_song(f"{stem}.mp4", movie_bundle())
+        write_bundle(
+            env.folder,
+            stem,
+            root=env.folder / "regen_backups" / "20261019T175506Z",
+            captured_at="2026-09-21T10:00:00+00:00",
+            **movie_bundle(older_lines),
+        )
+        history = text(env.page(song)).split('id="tab-history"')[1]
+
+        assert ('class="si-chg">Movie subtitles' in history) is changed
+
+    def test_a_caption_version_before_a_movie_one_is_a_change_too(self, env):
+        stem = "A---aaaaaaaaaaa"
+        song = env.add_song(f"{stem}.mp4", movie_bundle())
+        write_bundle(
+            env.folder,
+            stem,
+            root=env.folder / "regen_backups" / "20261019T175506Z",
+            captured_at="2026-09-21T10:00:00+00:00",
+            **caption_bundle(),
+        )
+        history = text(env.page(song)).split('id="tab-history"')[1]
+
+        assert history.index("Movie subtitles") < history.index("YouTube captions")
+        assert 'class="si-chg">Movie subtitles' in history
 
     @pytest.mark.parametrize(("older_lines", "changed"), [(["one"], False), (["won"], True)])
     def test_an_edited_custom_sheet_is_a_change_of_pick(self, env, older_lines, changed):
@@ -790,6 +862,23 @@ class TestRepairPage:
         html = text(self.page(env, song))
 
         assert 'var CURRENT_SOURCE = "custom"' in html
+
+    def test_a_movie_subtitles_song_is_current_as_movie(self, env):
+        song = env.add_song("A---aaaaaaaaaaa.mp4", movie_bundle())
+        write_sheet(env.folder, "A---aaaaaaaaaaa", suffix=".custom.srt")
+
+        html = text(self.page(env, song))
+
+        assert 'var CURRENT_SOURCE = "movie"' in html
+
+    def test_the_sheet_on_disk_decides_movie_not_the_bundle(self, env):
+        """A movie sheet queued over a Genius song is current at once, before the run rewrites its bundle."""
+        gone = env.add_song("A---aaaaaaaaaaa.mp4", movie_bundle())
+        left = env.add_song("B---bbbbbbbbbbb.mp4", poor_genius_bundle())
+        write_sheet(env.folder, "B---bbbbbbbbbbb", suffix=".custom.srt")
+
+        assert "var CURRENT_SOURCE = null" in text(self.page(env, gone))
+        assert 'var CURRENT_SOURCE = "movie"' in text(self.page(env, left))
 
     def test_the_sheet_on_disk_decides_custom_not_the_bundle(self, env):
         """The next regenerate goes by the sheet: gone, nothing is current; left behind, custom is."""
@@ -1543,6 +1632,17 @@ class TestOpenRunRoute:
         assert song["now"] == "Now: custom lyrics"
         assert song["group"] == "reuse"
 
+    def test_the_status_says_a_movie_song_has_movie_subtitles(self, env):
+        env.add_song("Mine---aaaaaaaaaaa.mp4", movie_bundle())
+        write_sheet(env.folder, "Mine---aaaaaaaaaaa", suffix=".custom.srt")
+        env.client.post("/library/run", json={"mode": "reset"})
+        finish_checks(env)
+
+        [song] = env.client.get("/library/run/status").get_json()["songs"]
+
+        assert song["now"] == "Now: movie subtitles"
+        assert song["group"] == "reuse"
+
     def test_the_reset_run_says_custom_lyrics_keep_theirs(self, env):
         env.add_song("Mine---aaaaaaaaaaa.mp4", custom_bundle())  # not custom by itself: no sheet
         env.client.post("/library/run", json={"mode": "reset"})
@@ -1550,7 +1650,7 @@ class TestOpenRunRoute:
 
         html = text(env.client.get("/library/run"))
 
-        assert "except songs with custom lyrics, which keep them" in html
+        assert "except songs with custom lyrics or movie subtitles, which keep them" in html
 
     def test_the_status_without_a_run(self, env):
         assert env.client.get("/library/run/status").get_json() == {"open": False}

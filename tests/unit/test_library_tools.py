@@ -1749,6 +1749,17 @@ class TestRunsReplayMovieSheets(OpensRuns):
         assert [Path(s["song"]).stem for s in tools.run_view()["songs"]] == [self.MINE]
         assert self.group_of(tools, self.MINE) == "reuse"
 
+    def test_the_run_says_a_movie_song_has_movie_subtitles_today(
+        self, tmp_path, monkeypatch, library
+    ):
+        tools, _, _ = self.opened(tmp_path, monkeypatch, library, "reset")
+
+        now = {Path(s["song"]).stem: s["now"] for s in tools.run_view()["songs"]}
+
+        # The sheet on disk says it, with a bundle (MINE) or without one (SHEET_ONLY).
+        assert now[self.MINE] == now[self.SHEET_ONLY] == {"source": "movie"}
+        assert now[self.PLAIN]["source"] == "genius"
+
     @pytest.mark.parametrize(("mode", "reset"), [("all", False), ("reset", True)])
     def test_the_queued_job_is_the_movie_plan_and_keeps_the_sheet(
         self, tmp_path, monkeypatch, library, mode, reset

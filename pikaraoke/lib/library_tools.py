@@ -1217,8 +1217,11 @@ class LibraryTools:
     def _now(status: SongStatus) -> dict:
         """The lyric source a song has today: ``source``, and for Genius its title and artist.
 
-        Custom means a sheet on disk, the record the run's groups go by, bundle or not.
+        Custom (typed lines) and movie (subtitles) mean a sheet on disk, the record the
+        run's groups go by, bundle or not.
         """
+        if status.movie_sheet:
+            return {"source": "movie"}
         if status.custom_sheet:
             return {"source": "custom"}
         if status.category == "no_lyrics":
