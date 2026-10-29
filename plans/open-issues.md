@@ -249,6 +249,15 @@ Record: `plans/queue-hold.md` on branch `queue_hold`, the manual checks row.
 
 ## Future features
 
+- **Fold Edit Song (rename, delete) into Song Info.** They are two admin pages
+  for one song. Why they are apart: Edit refuses to open while the song is in
+  the singing queue (`files.edit_file`), and Song Info must not (web plan,
+  decisions 2 and 11); the web plan also touched upstream `edit.html` only for
+  its Song info link (4e). Nothing records a ruling against merging; the design
+  session's record (`i-am-contemplating-moving-jazzy-toucan.md`) is not on the
+  Linux box. Shape: rename and delete as Song Info actions, with the queue
+  refusal on those two actions only. Do it with the Delete/Rename entry above,
+  since both change the same code. Raised 2026-10-29; not ruled.
 - **An LRCLIB match the admin has checked becomes the song's timing (Repair).**
   As an automatic scaffold, LRCLIB was withdrawn (S-1, 2026-09-08). The text
   matched, but an LRC can be timed to another edit of the song (a cut verse,
