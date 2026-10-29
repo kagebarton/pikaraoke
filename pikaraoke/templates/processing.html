@@ -115,7 +115,7 @@
     <div id="pr-run-banner" class="pr-card pr-banner is-hidden">
       <b id="pr-run-text"></b>
       <div id="pr-run-buttons" class="pr-buttons">
-        <a id="pr-run-continue" class="button is-link no-spa" href="{{ url_for('library.run_preview') }}">{% trans %}Continue{% endtrans %}</a>
+        <a id="pr-run-continue" class="button is-primary no-spa" href="{{ url_for('library.run_preview') }}">{% trans %}Continue{% endtrans %}</a>
         <button type="button" id="pr-run-discard" class="button">{% trans %}Discard{% endtrans %}</button>
       </div>
       <div id="pr-run-confirm" class="pr-confirm is-hidden">
@@ -129,7 +129,7 @@
     <div id="pr-run-card" class="pr-card">
       <div class="pr-run">
         <div class="pr-run-text"><b>{% trans %}Update stale songs{% endtrans %} {% call info_tip() %}{% trans %}Songs on an older version. Keeps their picks.{% endtrans %}{% endcall %}</b></div>
-        <button type="button" class="button is-link pr-run-open" data-mode="stale" disabled>{% trans %}Preview{% endtrans %} <span data-count="behind">…</span></button>
+        <button type="button" class="button is-primary pr-run-open" data-mode="stale" disabled>{% trans %}Preview{% endtrans %} <span data-count="behind">…</span></button>
       </div>
       <div class="pr-run">
         <div class="pr-run-text"><b>{% trans %}Reprocess all{% endtrans %} {% call info_tip() %}{% trans %}Every song on current code. Keeps picks.{% endtrans %}{% endcall %}</b></div>
@@ -145,7 +145,7 @@
     <div class="pr-card pr-banner">
       <label for="pr-playlist-url" class="pr-muted">{% trans %}YouTube playlist link{% endtrans %}</label>
       <input id="pr-playlist-url" class="input" type="url" autocomplete="off" placeholder="https://www.youtube.com/playlist?list=…">
-      <button type="button" id="pr-playlist-check" class="button is-link" disabled>{% trans %}Check playlist{% endtrans %}</button>
+      <button type="button" id="pr-playlist-check" class="button is-primary" disabled>{% trans %}Check playlist{% endtrans %}</button>
     </div>
   </div>
   {% else %}
@@ -480,8 +480,8 @@ function actionsHtml(row) {
   var allowed = row.actions || [];
   var has = function (name) { return allowed.indexOf(name) !== -1; };
   var html = '';
-  if (has('retry')) html += button('retry', key, T.retry, 'is-link');
-  if (has('pick')) html += '<a class="button is-link no-spa" href="' + escapeHtml(URLS.picks) + '">' + escapeHtml(T.pickLyrics) + '</a>';
+  if (has('retry')) html += button('retry', key, T.retry, 'is-primary');
+  if (has('pick')) html += '<a class="button is-primary no-spa" href="' + escapeHtml(URLS.picks) + '">' + escapeHtml(T.pickLyrics) + '</a>';
   if (has('song_info') && row.song_path) {
     html += '<a class="button no-spa" href="' + escapeHtml(URLS.songInfo + '?song=' + encodeURIComponent(row.song_path)) +
       '">' + escapeHtml(T.songInfo) + '</a>';
