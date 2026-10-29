@@ -100,6 +100,15 @@ class TestFit:
             assert abs(result.shift_s + 1800.0) < 0.05
             assert max(abs(a - _clip_start(k)) for k, a in enumerate(_starts(result.srt))) < 0.01
 
+    def test_the_move_is_the_first_lines_not_the_shift_under_a_speed(self):
+        song = _song()
+        movie = _movie_srt(song, shift=-1800.0, speed=25 / 23.976)
+        result = fit_slice(movie, {TRANSCRIBE: _heard(song)}, 300.0)
+        assert result.status == FITS
+        moved = _starts(result.srt)[0] - _starts(movie)[0]
+        assert abs(result.move_s - moved) < 0.05
+        assert abs(result.move_s - result.shift_s) > 60
+
     def test_a_speed_no_factor_covers_is_fitted_free(self):
         song = _song()
         result = fit_slice(

@@ -602,17 +602,17 @@ def _fit_card(fit: SliceFit) -> dict:
     """The card for subtitles that fit: how many lines matched and what the fit moves."""
     lines = [(_("matches %(n)s of %(m)s lines") % {"n": fit.matched, "m": fit.total}, None)]
     speed_change = abs(fit.speed - 1) * 100
-    unchanged = round(fit.shift_s) == 0 and round(speed_change, 1) == 0
-    if unchanged:
-        head = _("Fits. The saved slice already matches the clip.")
-        lines.append((_("Timing unchanged (%(time)s).") % {"time": _hms(fit.shift_s)}, None))
-    else:
+    moves = round(fit.move_s) != 0
+    speeds = round(speed_change, 1) != 0
+    head = _("Fits. The timing already matches the clip.")
+    if moves or speeds:
         head = _("Fits. These subtitles can time this song.")
+    if moves:
         move = _("Subtitle times move %(time)s earlier.")
-        if fit.shift_s >= 0:
+        if fit.move_s > 0:
             move = _("Subtitle times move %(time)s later.")
-        lines.append((move % {"time": _hms(fit.shift_s)}, None))
-    if round(speed_change, 1) != 0:
+        lines.append((move % {"time": _hms(fit.move_s)}, None))
+    if speeds:
         lines.append(
             (
                 _("Speed adjusted by %(pct)s%%.") % {"pct": f"{speed_change:.1f}"},

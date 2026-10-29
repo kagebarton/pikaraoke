@@ -1386,7 +1386,7 @@ class TestSliceCard:
     """The wording of a Check fit answer, from a fit made by hand."""
 
     def fit_card(self, **fields) -> dict:
-        fit = SliceFit(status="fits", matched=41, total=44, shift_s=-2525.0, **fields)
+        fit = SliceFit(status="fits", matched=41, total=44, move_s=-2525.0, **fields)
         return _slice_card(MovieSliceCheck(fit, regenerate_helps=True))
 
     def texts(self, card: dict) -> list[str]:
@@ -1423,27 +1423,38 @@ class TestSliceCard:
     def test_a_speed_that_rounds_to_none_is_not_noted(self):
         assert len(self.fit_card(speed=1.0004)["lines"]) == 2
 
-    def test_a_slice_that_already_matches_the_clip_says_nothing_moves(self):
-        fit = SliceFit(status="fits", matched=8, total=8, shift_s=0.2, speed=1.0002)
+    def test_subtitles_already_timed_to_the_clip_say_nothing_moves(self):
+        fit = SliceFit(status="fits", matched=8, total=8, move_s=0.2, speed=1.0002)
 
         card = _slice_card(MovieSliceCheck(fit, regenerate_helps=True))
 
-        assert card["head"] == "Fits. The saved slice already matches the clip."
-        assert self.texts(card) == ["matches 8 of 8 lines", "Timing unchanged (0:00:00)."]
+        assert card["head"] == "Fits. The timing already matches the clip."
+        assert self.texts(card) == ["matches 8 of 8 lines"]
 
     def test_a_shift_of_a_second_is_not_unchanged(self):
-        fit = SliceFit(status="fits", matched=8, total=8, shift_s=0.6)
+        fit = SliceFit(status="fits", matched=8, total=8, move_s=0.6)
 
         card = _slice_card(MovieSliceCheck(fit, regenerate_helps=True))
 
         assert self.texts(card)[1] == "Subtitle times move 0:00:01 later."
 
     def test_a_speed_change_alone_is_not_unchanged(self):
-        fit = SliceFit(status="fits", matched=8, total=8, shift_s=0.0, speed=25 / 23.976)
+        fit = SliceFit(status="fits", matched=8, total=8, move_s=0.0, speed=25 / 23.976)
 
         card = _slice_card(MovieSliceCheck(fit, regenerate_helps=True))
 
         assert card["head"] == "Fits. These subtitles can time this song."
+        assert self.texts(card)[1] == "Speed adjusted by 4.3%."
+
+    def test_the_move_shown_is_the_lines_not_the_time_maps_shift(self):
+        """Under a speed change the map's shift is where movie time 0 lands, far from the song."""
+        fit = SliceFit(
+            status="fits", matched=8, total=8, shift_s=-3694.0, move_s=-3540.0, speed=1.0427
+        )
+
+        card = _slice_card(MovieSliceCheck(fit, regenerate_helps=True))
+
+        assert self.texts(card)[1] == "Subtitle times move 0:59:00 earlier."
 
     @pytest.mark.parametrize("helps", [True, False])
     @pytest.mark.parametrize(
