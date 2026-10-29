@@ -1,0 +1,220 @@
+"""Tests for the movie-subtitle slice fit (lib/srt_slice_fit.py), on synthetic cues."""
+
+import json
+from datetime import timedelta
+
+import srt
+
+from pikaraoke.lib import srt_slice_fit
+from pikaraoke.lib.srt_slice_fit import (
+    ASR,
+    DISAGREE,
+    FITS,
+    NO_REFERENCE,
+    NOT_SRT,
+    REFUSED,
+    TOO_FEW,
+    TRANSCRIBE,
+    fit_slice,
+    heard_streams,
+)
+
+LINE_GAP_S = 5.0
+LINE_DUR_S = 3.5
+WORDS_PER_LINE = 5
+
+
+def _word(i: int) -> str:
+    """A distinct pseudo-word per index, so the order match is unambiguous."""
+    return f"w{chr(97 + i // 26)}{chr(97 + i % 26)}x"
+
+
+def _line(k: int) -> str:
+    return " ".join(_word(k * WORDS_PER_LINE + i) for i in range(WORDS_PER_LINE))
+
+
+def _clip_start(k: int) -> float:
+    return 10.0 + LINE_GAP_S * k
+
+
+def _heard(lines: dict[int, str], clip_start=_clip_start) -> list[dict]:
+    """Heard words for the given lines, sung evenly across each line's clip span."""
+    out = []
+    for k, text in lines.items():
+        for i, tok in enumerate(text.split()):
+            out.append({"norm": tok, "start": clip_start(k) + i * 0.6})
+    return sorted(out, key=lambda w: w["start"])
+
+
+def _movie_srt(
+    lines: dict[int, str], shift: float = 0.0, speed: float = 1.0, clip_start=_clip_start
+) -> str:
+    """The lines as movie subtitles whose fit back to the clip is ``(speed, shift)``."""
+    subs = [
+        srt.Subtitle(
+            index=n,
+            start=timedelta(seconds=(clip_start(k) - shift) / speed),
+            end=timedelta(seconds=(clip_start(k) + LINE_DUR_S - shift) / speed),
+            content=text,
+        )
+        for n, (k, text) in enumerate(lines.items(), start=1)
+    ]
+    return srt.compose(subs)
+
+
+def _song(n: int = 30) -> dict[int, str]:
+    return {k: _line(k) for k in range(n)}
+
+
+def _starts(srt_text: str) -> list[float]:
+    return [c.start.total_seconds() for c in srt.parse(srt_text)]
+
+
+class TestFit:
+    def test_plain_shift_fits_and_corrects_the_cue_times(self):
+        song = _song()
+        result = fit_slice(_movie_srt(song, shift=-2500.0), {TRANSCRIBE: _heard(song)}, 300.0)
+        assert result.status == FITS
+        assert abs(result.shift_s + 2500.0) < 0.05
+        assert result.speed == 1.0
+        assert (result.matched, result.total, result.dropped) == (30, 30, 0)
+        assert _starts(result.srt) == [round(_clip_start(k), 3) for k in range(30)]
+
+    def test_pal_speed_fits_in_both_directions(self):
+        song = _song()
+        for speed in srt_slice_fit.SPEED_FACTORS[1:]:
+            result = fit_slice(
+                _movie_srt(song, shift=-1800.0, speed=speed), {TRANSCRIBE: _heard(song)}, 300.0
+            )
+            assert result.status == FITS
+            assert result.speed == speed
+            assert abs(result.shift_s + 1800.0) < 0.05
+            assert max(abs(a - _clip_start(k)) for k, a in enumerate(_starts(result.srt))) < 0.01
+
+    def test_clip_cut_from_two_scenes_is_refused_as_disagreeing(self):
+        song = _song()
+        movie = srt.compose(
+            [
+                srt.Subtitle(
+                    index=k + 1,
+                    start=timedelta(seconds=_clip_start(k) + (900.0 if k < 15 else 2400.0)),
+                    end=timedelta(
+                        seconds=_clip_start(k) + LINE_DUR_S + (900.0 if k < 15 else 2400.0)
+                    ),
+                    content=text,
+                )
+                for k, text in song.items()
+            ]
+        )
+        result = fit_slice(movie, {TRANSCRIBE: _heard(song)}, 300.0)
+        assert (result.status, result.reason) == (REFUSED, DISAGREE)
+        assert result.srt is None
+
+    def test_cues_past_both_ends_are_dropped_and_the_edge_ones_clamped(self):
+        def clip_start(k: int) -> float:
+            return -12.0 + LINE_GAP_S * k
+
+        lines = {k: _line(k) for k in range(30)}
+        length = 100.0
+        inside = {k: t for k, t in lines.items() if 0 <= clip_start(k) <= length}
+        result = fit_slice(
+            _movie_srt(lines, shift=-600.0, clip_start=clip_start),
+            {TRANSCRIBE: _heard(inside, clip_start)},
+            length,
+        )
+        assert result.status == FITS
+        # k=0..1 end before 0 (-12 -> -8.5, -7 -> -3.5); k=2 (-2 -> 1.5) straddles the start.
+        # k=23 (103) onwards starts past the end; k=22 (98 -> 101.5) straddles it.
+        assert result.dropped == 2 + 7
+        cues = list(srt.parse(result.srt))
+        assert cues[0].start == timedelta(0)
+        assert cues[-1].end == timedelta(seconds=length)
+        assert [c.index for c in cues] == list(range(1, len(cues) + 1))
+
+    def test_dialogue_with_no_heard_match_does_not_sink_a_fit(self):
+        song = _song()
+        dialogue = {k: _line(100 + k) for k in range(0, 30, 5)}  # 6 unheard cues among 30
+        movie = {k: song[k] if k not in dialogue else dialogue[k] for k in song}
+        result = fit_slice(_movie_srt(movie, shift=-2500.0), {TRANSCRIBE: _heard(song)}, 300.0)
+        assert result.status == FITS
+        assert result.matched == 24 and result.total == 30
+
+    def test_recheck_of_a_corrected_slice_fits_at_zero_shift_and_speed_one(self):
+        song = _song()
+        first = fit_slice(
+            _movie_srt(song, shift=-1800.0, speed=srt_slice_fit.SPEED_FACTORS[1]),
+            {TRANSCRIBE: _heard(song)},
+            300.0,
+        )
+        again = fit_slice(first.srt, {TRANSCRIBE: _heard(song)}, 300.0)
+        assert again.status == FITS
+        assert again.speed == 1.0
+        assert abs(again.shift_s) < 0.01
+        assert (again.matched, again.total, again.dropped) == (30, 30, 0)
+
+    def test_text_the_clip_does_not_contain_is_refused_as_too_few(self):
+        song = _song()
+        elsewhere = {k: _line(200 + k) for k in range(30)}
+        result = fit_slice(_movie_srt(elsewhere), {TRANSCRIBE: _heard(song)}, 300.0)
+        assert (result.status, result.reason) == (REFUSED, TOO_FEW)
+        assert result.total == 30
+
+    def test_the_stream_that_matches_more_is_kept(self):
+        song = _song()
+        sparse = _heard({k: song[k] for k in range(0, 30, 6)})
+        result = fit_slice(
+            _movie_srt(song, shift=-100.0), {TRANSCRIBE: sparse, ASR: _heard(song)}, 300.0
+        )
+        assert result.status == FITS
+        assert result.heard_source == ASR
+
+
+class TestNothingToFit:
+    def test_no_heard_words_means_no_reference(self):
+        assert fit_slice(_movie_srt(_song()), {}, 300.0).status == NO_REFERENCE
+
+    def test_text_that_is_not_srt(self):
+        streams = {TRANSCRIBE: _heard(_song())}
+        for text in ("these are not subtitles at all", "", "\n \n"):
+            assert fit_slice(text, streams, 300.0).status == NOT_SRT
+
+    def test_windows_line_endings_parse(self):
+        song = _song()
+        text = _movie_srt(song, shift=-100.0).replace("\n", "\r\n")
+        assert fit_slice(text, {TRANSCRIBE: _heard(song)}, 300.0).status == FITS
+
+
+class TestHeardStreams:
+    def test_bundle_words_become_normalised_stream(self):
+        bundle = {
+            "transcribe_words": [{"word": "Hello,", "start": 1.0}, {"word": "...", "start": 2}]
+        }
+        assert heard_streams(bundle, None) == {TRANSCRIBE: [{"norm": "hello", "start": 1.0}]}
+
+    def test_asr_caption_becomes_stream_and_bad_json_is_ignored(self):
+        caption = json.dumps(
+            {"events": [{"tStartMs": 1000, "segs": [{"utf8": "Hello", "tOffsetMs": 0}]}]}
+        )
+        assert heard_streams(None, caption) == {ASR: [{"norm": "hello", "start": 1.0}]}
+        assert heard_streams(None, "not json") == {}
+
+    def test_nothing_on_disk_is_no_streams(self):
+        assert heard_streams(None, None) == {}
+        assert heard_streams({"transcribe_words": None}, "") == {}
+
+
+def test_provisional_floor_is_a_share():
+    assert 0 < srt_slice_fit.MIN_MATCHED_SHARE <= 1
+
+
+class TestRepeatedLine:
+    def test_timed_pass_gives_a_repeated_chorus_to_the_instance_it_sits_in(self):
+        chorus = "wavx wbvx wcvx wdvx"
+        texts = [chorus, "wexx wfxx wgxx", chorus]
+        spans = [(0.0, 3.0), (5.0, 8.0), (10.0, 13.0)]
+        tokens = srt_slice_fit._CueTokens.of(texts)
+        # Only the second chorus was heard; the movie clock runs 100 s ahead of the clip.
+        heard = [{"norm": tok, "start": 110.0 + i * 0.6} for i, tok in enumerate(chorus.split())]
+        anchors, found = srt_slice_fit._match_by_time(tokens, spans, 1.0, 100.0, heard)
+        assert found == {2}
+        assert anchors == [{"lid": 2, "start": 110.0}]
