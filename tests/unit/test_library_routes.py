@@ -937,6 +937,29 @@ class TestSongListsRoute:
 
         assert parse_qs(link.query) == {"song": [song]}
 
+    def test_a_cue_song_with_a_leftover_lrc_still_links_to_the_plain_repair_page(self, env):
+        """An earlier Genius run left the LRC; the song is on the cue route already."""
+        song = env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())
+        lrc = lrclib.lrc_path(Path(song))
+        lrc.parent.mkdir(exist_ok=True)
+        lrc.write_text("[00:01.00]one\n", encoding="utf-8")
+
+        (row,) = song_list(env, "caption")
+
+        assert parse_qs(urlsplit(row["repair_url"]).query) == {"song": [song]}
+
+    def test_an_lrclib_timed_song_links_to_the_plain_repair_page(self, env):
+        bundle = caption_bundle()
+        bundle["lyrics"] = {"origin": "lrclib_srt", "lines": ["one"]}
+        song = env.add_song("A---aaaaaaaaaaa.mp4", bundle)
+        lrc = lrclib.lrc_path(Path(song))
+        lrc.parent.mkdir(exist_ok=True)
+        lrc.write_text("[00:01.00]one\n", encoding="utf-8")
+
+        (row,) = song_list(env, "lrc")
+
+        assert parse_qs(urlsplit(row["repair_url"]).query) == {"song": [song]}
+
     def test_a_song_not_processed_links_to_the_plain_repair_page(self, env):
         env.add_song("A---aaaaaaaaaaa.mp4")
 
