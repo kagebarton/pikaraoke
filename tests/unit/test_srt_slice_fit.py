@@ -6,11 +6,15 @@ from datetime import timedelta
 import srt
 
 from pikaraoke.lib import srt_slice_fit
+from pikaraoke.lib.lrclib import LRC_LAST_LINE_HOLD_S
+from pikaraoke.lib.srt_cues import cue_spans_from_srt
 from pikaraoke.lib.srt_slice_fit import (
     ASR,
     DISAGREE,
     FITS,
+    FLAG_TOLERANCE_S,
     MAX_CUES,
+    MIN_FLAGGED_RUN,
     NO_REFERENCE,
     NOT_SRT,
     REFUSED,
@@ -18,8 +22,10 @@ from pikaraoke.lib.srt_slice_fit import (
     TOO_LONG,
     TRANSCRIBE,
     fit_slice,
+    flagged_runs,
     free_speed,
     heard_streams,
+    lrc_to_srt,
 )
 
 LINE_GAP_S = 5.0
@@ -359,3 +365,200 @@ class TestBestSpeed:
         drift = srt_slice_fit._drift_s(anchors, factor.speed, free)
         assert drift < srt_slice_fit.MIN_FREE_SPEED_DRIFT_S
         assert srt_slice_fit._best_speed(anchors, spans).speed == 1.0
+
+
+def _stamp(seconds: float) -> str:
+    return f"[{int(seconds) // 60:02d}:{seconds % 60:05.2f}]"
+
+
+def _lrc(lines: dict[int, str], clip_start=_clip_start) -> str:
+    """The lines as an LRC on the clip's own clock, as LRCLIB stamps them."""
+    return "".join(f"{_stamp(clip_start(k))} {text}\n" for k, text in lines.items())
+
+
+def _fit_lrc(lrc: str, heard: list[dict], length: float = 300.0):
+    return fit_slice(lrc_to_srt(lrc), {TRANSCRIBE: heard}, length)
+
+
+class TestLrcToSrt:
+    def test_each_line_ends_where_the_next_starts_and_the_last_holds(self):
+        lrc = "[ti:A Title]\n[00:10.00] first\n[00:15.50] second\n[01:01.00] third\n"
+
+        cues = list(srt.parse(lrc_to_srt(lrc)))
+
+        assert [cue.content for cue in cues] == ["first", "second", "third"]
+        assert [(c.start.total_seconds(), c.end.total_seconds()) for c in cues] == [
+            (10.0, 15.5),
+            (15.5, 61.0),
+            (61.0, 61.0 + LRC_LAST_LINE_HOLD_S),
+        ]
+
+    def test_an_lrc_with_no_timed_line_is_empty_and_fit_slice_refuses_it(self):
+        assert lrc_to_srt("") == ""
+        assert lrc_to_srt("[ti:A Title]\nwords with no stamp\n") == ""
+        assert fit_slice(lrc_to_srt(""), {TRANSCRIBE: _heard(_song())}, 300.0).status == NOT_SRT
+
+
+class TestFlaggedLines:
+    def test_an_lrc_on_the_clips_own_clock_fits_with_nothing_flagged(self):
+        song = _song()
+
+        result = _fit_lrc(_lrc(song), _heard(song))
+
+        assert result.status == FITS
+        assert abs(result.shift_s) < 0.05
+        assert result.speed == 1.0
+        assert (result.matched, result.total) == (30, 30)
+        assert result.flagged == ()
+
+    def test_a_cut_verse_still_fits_and_its_lines_are_one_flagged_run(self):
+        """Six lines mid-song that the heard words never sing: the spread check passes them."""
+        song = _song()
+        sung = {k: text for k, text in song.items() if not 12 <= k < 18}
+
+        result = _fit_lrc(_lrc(song), _heard(sung))
+
+        assert result.status == FITS
+        assert result.spread_s == 0
+        assert result.flagged == (12, 13, 14, 15, 16, 17)
+        assert flagged_runs(result.flagged, MIN_FLAGGED_RUN) == [(12, 17)]
+
+    def test_single_unheard_lines_scattered_make_no_run(self):
+        song = _song()
+        sung = {k: text for k, text in song.items() if k not in (3, 9, 15, 21)}
+
+        result = _fit_lrc(_lrc(song), _heard(sung))
+
+        assert result.status == FITS
+        assert result.flagged == (3, 9, 15, 21)
+        assert flagged_runs(result.flagged, MIN_FLAGGED_RUN) == []
+
+    def test_a_line_heard_far_from_its_time_is_flagged_and_one_near_it_is_not(self):
+        song = _song()
+        late = FLAG_TOLERANCE_S + 1.0
+        near = FLAG_TOLERANCE_S / 2
+
+        def start(k: int) -> float:
+            return _clip_start(k) + {7: late, 8: near}.get(k, 0.0)
+
+        result = _fit_lrc(_lrc(song), _heard(song, clip_start=start))
+
+        assert result.status == FITS
+        assert result.flagged == (7,)
+
+    def test_flagged_lines_number_the_lines_the_pipeline_loads_not_the_cues(self):
+        """A music-note cue cleans to nothing, so it is no line and shifts none of the numbers."""
+        song = _song(12)
+        lrc = _lrc(song) + f"{_stamp(_clip_start(5) + 2)} \u266a\n"
+        sung = {k: text for k, text in song.items() if k != 8}
+
+        result = _fit_lrc(lrc, _heard(sung))
+
+        assert result.status == FITS
+        texts, _ = cue_spans_from_srt(result.srt)
+        assert len(texts) == 12
+        assert result.flagged == (8,)
+        assert texts[8] == song[8]
+
+    def test_cues_outside_the_clip_are_not_numbered(self):
+        """The corrected sheet drops lines past the clip's end; the flags count what is left."""
+        song = _song()
+        sung = {k: text for k, text in song.items() if k != 2}
+
+        result = _fit_lrc(_lrc(song), _heard(sung), length=_clip_start(20) + 1)
+
+        assert result.status == FITS
+        assert result.dropped == 9
+        assert result.flagged == (2,)
+        assert len(cue_spans_from_srt(result.srt)[0]) == result.total == 21
+
+    def test_lines_that_end_before_the_clip_begins_are_not_numbered(self):
+        """A video that starts mid-song: the LRC's earlier lines fall off the front of the clip."""
+        song = _song()
+        lead = 20.0  # the LRC's clock runs this far ahead of the clip's
+        before = {k: _line(40 + k + 3) for k in (-3, -2, -1)}  # sung at clip times -5, 0, 5
+        lrc = _lrc({**before, **song}, clip_start=lambda k: _clip_start(k) + lead)
+        sung = {k: text for k, text in song.items() if k != 5}
+
+        result = _fit_lrc(lrc, _heard(sung))
+
+        assert result.status == FITS
+        assert abs(result.shift_s + lead) < 0.05
+        assert result.dropped == 1  # the line wholly before the clip
+        texts, _ = cue_spans_from_srt(result.srt)
+        assert len(texts) == result.total == 32
+        # The two before lines that overlap the clip's start and the unheard line 5.
+        assert result.flagged == (0, 1, 7)
+        assert texts[7] == song[5]
+
+    def test_a_refused_fit_flags_nothing(self):
+        song = _song()
+
+        result = _fit_lrc(_lrc(song), _heard({0: "completely unrelated words here ok"}))
+
+        assert result.status == REFUSED
+        assert result.flagged == ()
+
+    def test_the_two_streams_are_flagged_on_their_own(self):
+        song = _song()
+        sung = {k: text for k, text in song.items() if not 4 <= k < 8}
+
+        full = fit_slice(lrc_to_srt(_lrc(song)), {TRANSCRIBE: _heard(song)}, 300.0)
+        gap = fit_slice(lrc_to_srt(_lrc(song)), {ASR: _heard(sung)}, 300.0)
+
+        assert (full.flagged, gap.flagged) == ((), (4, 5, 6, 7))
+
+    @staticmethod
+    def _video_repeating(song, first: int, last: int) -> list[dict]:
+        """Heard words of a video that sings lines ``first..last`` twice; the LRC has them once."""
+        order = [*range(last + 1), *range(first, last + 1), *range(last + 1, len(song))]
+        words = []
+        for slot, k in enumerate(order):
+            start = _clip_start(slot)
+            words += [
+                {"norm": tok, "start": start + i * 0.6} for i, tok in enumerate(song[k].split())
+            ]
+        return words
+
+    def test_what_the_flags_do_for_an_extra_repeat(self):
+        """A record for GATE A, not a requirement: the spread check passes every one of these.
+
+        The flags mark whichever side of the repeat holds the minority of lines, since
+        the median timing follows the majority. A repeat late in the song flags the
+        lines after it; a repeat in the middle flags the lines before it.
+        """
+        song = _song()
+        recorded = {}
+        for first, last in ((24, 27), (14, 17), (4, 7)):
+            result = _fit_lrc(_lrc(song), self._video_repeating(song, first, last))
+            assert result.status == FITS
+            recorded[(first, last)] = (result.shift_s, result.flagged)
+
+        assert recorded == {
+            (24, 27): (0.0, (28, 29)),
+            (14, 17): (20.0, tuple(range(14))),
+            (4, 7): (20.0, (0, 1, 2, 3)),
+        }
+
+
+class TestFlaggedRuns:
+    def test_runs_at_least_min_run_long_are_reported_first_to_last(self):
+        assert flagged_runs((2, 3, 4, 9, 10, 11, 12), 3) == [(2, 4), (9, 12)]
+
+    def test_a_shorter_run_is_left_out(self):
+        assert flagged_runs((2, 3, 9, 10, 11), 3) == [(9, 11)]
+
+    def test_a_run_exactly_min_run_long_counts(self):
+        assert flagged_runs((5, 6, 7), 3) == [(5, 7)]
+
+    def test_a_run_at_the_start_and_one_at_the_end(self):
+        assert flagged_runs((0, 1, 2, 7, 8, 9), 3) == [(0, 2), (7, 9)]
+
+    def test_lines_that_skip_a_number_are_not_one_run(self):
+        assert flagged_runs((1, 2, 4, 5), 3) == []
+
+    def test_a_min_run_of_one_reports_every_line(self):
+        assert flagged_runs((1, 4, 5), 1) == [(1, 1), (4, 5)]
+
+    def test_nothing_flagged_has_no_runs(self):
+        assert flagged_runs((), 3) == []
