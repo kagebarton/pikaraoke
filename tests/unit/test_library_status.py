@@ -231,6 +231,13 @@ class TestLrclibState:
         write_bundle(tmp_path, video.stem, lyrics={"origin": "srt"})
         assert library_status.song_status(video).lrclib_state == "n/a"
 
+    def test_not_applicable_to_a_movie_subtitles_song_whatever_is_on_disk(self, tmp_path):
+        video = make_video(tmp_path)
+        write_bundle(tmp_path, video.stem, lyrics={"origin": "movie_srt", "lrclib": {"id": 5}})
+        lrclib.write_skip_marker(tmp_path / "lyrics" / f"{video.stem}.lrc")
+
+        assert library_status.song_status(video).lrclib_state == "n/a"
+
     def custom_bundle(self, tmp_path, *, lrclib_meta=None, fill=None) -> Path:
         video = make_video(tmp_path)
         lyrics = {"origin": "custom", "lines": ["one", "two"]}
@@ -285,6 +292,24 @@ class TestCustomSheet:
         video = make_video(tmp_path)
         (tmp_path / "lyrics").mkdir()
         (tmp_path / "lyrics" / f"{video.stem}.custom.txt").write_text("one\n", encoding="utf-8")
+
+        assert library_status.song_status(video).custom_sheet is True
+
+    def test_a_movie_subtitles_sheet_counts_too(self, tmp_path):
+        video = make_video(tmp_path)
+        write_bundle(tmp_path, video.stem, lyrics={"origin": "movie_srt", "lines": ["one"]})
+        assert library_status.song_status(video).custom_sheet is False
+
+        (tmp_path / "lyrics").mkdir()
+        (tmp_path / "lyrics" / f"{video.stem}.custom.srt").write_text("x\n", encoding="utf-8")
+        status = library_status.song_status(video)
+
+        assert (status.origin, status.custom_sheet) == ("movie_srt", True)
+
+    def test_a_movie_subtitles_sheet_counts_with_no_bundle_too(self, tmp_path):
+        video = make_video(tmp_path)
+        (tmp_path / "lyrics").mkdir()
+        (tmp_path / "lyrics" / f"{video.stem}.custom.srt").write_text("x\n", encoding="utf-8")
 
         assert library_status.song_status(video).custom_sheet is True
 

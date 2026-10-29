@@ -38,6 +38,7 @@ from pikaraoke.lib.library_links import (
     read_playlist,
 )
 from pikaraoke.lib.library_regen import (
+    CUSTOM_TEXT_SUFFIX,
     VIDEO_EXTS,
     CaptionCheck,
     Plan,
@@ -47,7 +48,7 @@ from pikaraoke.lib.library_regen import (
     backup_text_folders,
     check_caption,
     custom_plan,
-    custom_sheet_path,
+    custom_sheet_file,
     custom_sheet_plan,
     default_query,
     fetch_or_prompt_plan,
@@ -441,9 +442,12 @@ class LibraryTools:
 
     @staticmethod
     def _sheet_on_disk(song: Path) -> str:
-        """The song's custom sheet, or "" when it has none or it can't be read."""
+        """The song's typed custom sheet, or "" when it has none or it can't be read.
+
+        A movie-subtitles sheet is not one: it is an SRT, not lyric lines.
+        """
         try:
-            return custom_sheet_path(song).read_text(encoding="utf-8")
+            return custom_sheet_file(song, CUSTOM_TEXT_SUFFIX).read_text(encoding="utf-8")
         except FileNotFoundError:
             return ""
         except (OSError, UnicodeDecodeError) as e:

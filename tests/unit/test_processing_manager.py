@@ -12,11 +12,13 @@ from pikaraoke.lib import processing_manager as pm
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.genius import GeniusUnavailable
 from pikaraoke.lib.library_regen import (
+    CUSTOM_SRT_SUFFIX,
+    CUSTOM_TEXT_SUFFIX,
     Plan,
     RegenError,
     RegenJob,
     SongJob,
-    custom_sheet_path,
+    custom_sheet_file,
 )
 from pikaraoke.lib.pipeline_tracker import PipelineTracker
 from pikaraoke.lib.processing_manager import (
@@ -1764,7 +1766,7 @@ class TestSheetPutBackWhenTheRegenDoesNotFinish:
 
     def _regen_with_sheet(self, tmp_path, before):
         regen = _regen_job(tmp_path, kind="sidecar")
-        sheet = custom_sheet_path(regen.song.song_path)
+        sheet = custom_sheet_file(regen.song.song_path, CUSTOM_TEXT_SUFFIX)
         if before is not None:
             sheet.parent.mkdir(exist_ok=True)
             sheet.write_text(before, encoding="utf-8")
@@ -1823,6 +1825,25 @@ class TestSheetPutBackWhenTheRegenDoesNotFinish:
         self._run(events, preferences, mock_orchestrator, tmp_path, regen)
 
         assert not sheet.exists()
+
+    def test_a_movie_sheet_that_replaced_a_typed_one_in_a_repair_that_fails_is_undone(
+        self, events, preferences, mock_orchestrator, tmp_path, prepared
+    ):
+        regen, typed = self._regen_with_sheet(tmp_path, self.OLD)
+        movie = custom_sheet_file(regen.song.song_path, CUSTOM_SRT_SUFFIX)
+
+        def save_the_movie_sheet(regen_job, genius, config, lyrics_dir):
+            movie.write_text(self.NEW, encoding="utf-8")
+            typed.unlink()
+            return None, None
+
+        prepared.side_effect = save_the_movie_sheet
+        mock_orchestrator.join.side_effect = RuntimeError("alignment failed")
+
+        self._run(events, preferences, mock_orchestrator, tmp_path, regen)
+
+        assert typed.read_text(encoding="utf-8") == self.OLD
+        assert not movie.exists()
 
     def test_a_successful_run_keeps_the_new_sheet(
         self, events, preferences, mock_orchestrator, tmp_path, prepared

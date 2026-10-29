@@ -30,8 +30,8 @@ class SongStatus:
     youtube_id: str | None
     category: str  # "current" | "behind" | "no_lyrics" | "not_processed"
     schema_version: int | None
-    origin: str | None  # bundle lyrics.origin: "srt" | "genius" | "custom"
-    custom_sheet: bool  # a custom lyric sheet on disk: the song's pick, whatever the bundle says
+    origin: str | None  # bundle lyrics.origin: "srt" | "genius" | "custom" | "movie_srt"
+    custom_sheet: bool  # a custom lyric sheet (either kind) on disk: the pick, whatever the bundle says
     genius: dict | None  # lyrics.genius: {id, title, artist}
     lrclib: dict | None  # lyrics.lrclib: trackName, artistName, albumName, duration, id
     lrclib_state: str  # "used" | "rejected" | "none" | "skipped" | "n/a"
@@ -71,7 +71,7 @@ def song_status(song: Path) -> SongStatus:
             category=category,
             schema_version=None,
             origin=None,
-            custom_sheet=custom_sheet_path(song).is_file(),
+            custom_sheet=custom_sheet_path(song) is not None,
             genius=None,
             lrclib=None,
             lrclib_state="n/a",
@@ -100,7 +100,7 @@ def song_status(song: Path) -> SongStatus:
         category="behind" if version < SCHEMA_VERSION else "current",
         schema_version=version,
         origin=origin,
-        custom_sheet=custom_sheet_path(song).is_file(),
+        custom_sheet=custom_sheet_path(song) is not None,
         genius=lyrics.get("genius") or None,
         lrclib=_lrclib_match(lyrics),
         lrclib_state=state,

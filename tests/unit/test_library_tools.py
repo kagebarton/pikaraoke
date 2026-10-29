@@ -76,8 +76,18 @@ def genius_bundle(folder: Path, stem: str, **fields) -> None:
     )
 
 
+MOVIE_SRT = "1\n00:00:01,000 --> 00:00:03,000\none\n"
+
+
 def write_sheet(folder: Path, stem: str, text: str = "one\ntwo\n") -> Path:
     sheet = folder / "lyrics" / f"{stem}.custom.txt"
+    sheet.parent.mkdir(exist_ok=True)
+    sheet.write_text(text, encoding="utf-8")
+    return sheet
+
+
+def write_movie_sheet(folder: Path, stem: str, text: str = MOVIE_SRT) -> Path:
+    sheet = folder / "lyrics" / f"{stem}.custom.srt"
     sheet.parent.mkdir(exist_ok=True)
     sheet.write_text(text, encoding="utf-8")
     return sheet
@@ -292,6 +302,21 @@ class TestRegenerate:
             "seed",
             sheet,
             {"lyrics_origin": "custom"},
+        )
+
+    def test_a_movie_sheet_is_replayed_over_the_recorded_pick(self, tmp_path):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        genius_bundle(tmp_path, video.stem)
+        sheet = write_movie_sheet(tmp_path, video.stem)
+        tools, processing = make_tools(tmp_path, [str(video)])
+
+        tools.regenerate(str(video))
+
+        plan = processing.enqueue_regen.call_args.args[0].song.plan
+        assert (plan.kind, plan.lyrics_path, plan.seed) == (
+            "seed",
+            sheet,
+            {"lyrics_origin": "movie_srt"},
         )
 
     def test_a_custom_sheet_beats_the_transcription_shortcut(self, tmp_path):
@@ -705,6 +730,14 @@ class TestCustomStart:
         write_sheet(tmp_path, song.stem, "my own words\n")
 
         assert self.start(tmp_path, song)["text"] == "my own words\n"
+
+    def test_a_movie_sheet_is_not_lyric_lines_so_the_box_starts_from_the_current_lyrics(
+        self, tmp_path, song
+    ):
+        genius_bundle(tmp_path, song.stem)
+        write_movie_sheet(tmp_path, song.stem)
+
+        assert self.start(tmp_path, song)["text"] == "one\ntwo"
 
     def test_without_a_sheet_it_is_the_lines_of_the_current_lyrics(self, tmp_path, song):
         genius_bundle(tmp_path, song.stem)
@@ -1281,7 +1314,21 @@ class TestOpenRun:
         assert (done["checking"], done["to_check"], done["checked"]) == (False, 6, 6)
 
 
-class TestRunsReplayCustomSheets:
+class OpensRuns:
+    """Open a bulk run over a ``library`` fixture and read where its songs landed."""
+
+    def opened(self, tmp_path, monkeypatch, library, mode):
+        asked = answer_captions(monkeypatch, {})
+        tools, processing = make_tools(tmp_path, library)
+        tools.open_run(mode)
+        finish_checks(tools)
+        return tools, processing, asked
+
+    def group_of(self, tools, stem):
+        return next(s["group"] for s in tools.run_view()["songs"] if Path(s["song"]).stem == stem)
+
+
+class TestRunsReplayCustomSheets(OpensRuns):
     """A custom lyric sheet is replayed by every bulk run, a reset included: it is never
     left for a pick, never asked of YouTube, and its plan is the sheet."""
 
@@ -1309,16 +1356,6 @@ class TestRunsReplayCustomSheets:
         (tmp_path / "karaoke" / f"{sheet_only.stem}.ass").write_text("", encoding="utf-8")
         write_sheet(tmp_path, sheet_only.stem)
         return [str(mine), str(plain), str(sheet_only)]
-
-    def opened(self, tmp_path, monkeypatch, library, mode):
-        asked = answer_captions(monkeypatch, {})
-        tools, processing = make_tools(tmp_path, library)
-        tools.open_run(mode)
-        finish_checks(tools)
-        return tools, processing, asked
-
-    def group_of(self, tools, stem):
-        return next(s["group"] for s in tools.run_view()["songs"] if Path(s["song"]).stem == stem)
 
     @pytest.mark.parametrize("mode", ["all", "reset"])
     def test_a_custom_song_is_reused_in_every_mode_ahead_of_the_transcribe_rule(
@@ -1403,6 +1440,85 @@ class TestRunsReplayCustomSheets:
         assert song["group"] != "reuse"
 
     def test_a_song_with_a_sheet_is_not_one_that_needs_a_pick(self, tmp_path, monkeypatch, library):
+        tools, _, _ = self.opened(tmp_path, monkeypatch, library, "reset")
+
+        with pytest.raises(RegenError, match="doesn't need a pick"):
+            tools.save_pick(library[0], {"kind": "transcribe"})
+
+
+class TestRunsReplayMovieSheets(OpensRuns):
+    """A movie-subtitles sheet is replayed by every bulk run like a typed one: never left
+    for a pick, never asked of YouTube, and its plan is the sheet."""
+
+    MINE, SHEET_ONLY, PLAIN = "A---aaaaaaaaaaa", "C---ccccccccccc", "B---bbbbbbbbbbb"
+
+    @pytest.fixture
+    def library(self, tmp_path):
+        """A movie song, a movie one whose bundle is gone, and an ordinary Genius one."""
+        mine, sheet_only, plain = (
+            make_video(tmp_path, s) for s in (self.MINE, self.SHEET_ONLY, self.PLAIN)
+        )
+        write_bundle(
+            tmp_path,
+            mine.stem,
+            lyrics={"origin": "movie_srt", "lines": ["one", "two"]},
+            output_summary={"line_count": 2, "lines_with_words": 2},
+        )
+        write_movie_sheet(tmp_path, mine.stem)
+        (tmp_path / "karaoke").mkdir()
+        (tmp_path / "karaoke" / f"{sheet_only.stem}.ass").write_text("", encoding="utf-8")
+        write_movie_sheet(tmp_path, sheet_only.stem)
+        genius_bundle(tmp_path, plain.stem)
+        return [str(mine), str(sheet_only), str(plain)]
+
+    @pytest.mark.parametrize("mode", ["all", "reset"])
+    def test_a_movie_song_is_reused_in_every_mode_ahead_of_the_transcribe_rule(
+        self, tmp_path, monkeypatch, library, mode
+    ):
+        tools, _, asked = self.opened(tmp_path, monkeypatch, library, mode)
+
+        assert self.group_of(tools, self.MINE) == "reuse"
+        assert self.group_of(tools, self.SHEET_ONLY) == "reuse"  # "all" would transcribe it
+        assert self.MINE not in asked and self.SHEET_ONLY not in asked  # no yt-dlp call for them
+
+    def test_an_update_replays_a_movie_song_that_is_behind(self, tmp_path, monkeypatch, library):
+        write_bundle(
+            tmp_path,
+            self.MINE,
+            schema_version=SCHEMA_VERSION - 1,
+            lyrics={"origin": "movie_srt", "lines": ["one"]},
+        )
+        tools, _, _ = self.opened(tmp_path, monkeypatch, library, "stale")
+
+        assert [Path(s["song"]).stem for s in tools.run_view()["songs"]] == [self.MINE]
+        assert self.group_of(tools, self.MINE) == "reuse"
+
+    @pytest.mark.parametrize(("mode", "reset"), [("all", False), ("reset", True)])
+    def test_the_queued_job_is_the_movie_plan_and_keeps_the_sheet(
+        self, tmp_path, monkeypatch, library, mode, reset
+    ):
+        tools, processing, _ = self.opened(tmp_path, monkeypatch, library, mode)
+        if self.group_of(tools, self.PLAIN) == "needs_pick":
+            tools.save_pick(library[2], {"kind": "skip"})
+
+        tools.queue_run()
+
+        queued = {
+            c.args[0].song.song_path.stem: c.args[0]
+            for c in processing.enqueue_regen.call_args_list
+        }
+        for stem in (self.MINE, self.SHEET_ONLY):
+            regen = queued[stem]
+            assert regen.reset is reset
+            plan = regen.song.plan
+            assert plan.kind == "seed"
+            assert plan.lyrics_path == tmp_path / "lyrics" / f"{stem}.custom.srt"
+            assert plan.seed == {"lyrics_origin": "movie_srt"}
+            assert regen.song.replaces_custom is False
+
+    def test_a_song_with_a_movie_sheet_is_not_one_that_needs_a_pick(
+        self, tmp_path, monkeypatch, library
+    ):
         tools, _, _ = self.opened(tmp_path, monkeypatch, library, "reset")
 
         with pytest.raises(RegenError, match="doesn't need a pick"):
