@@ -59,7 +59,7 @@ Sources gathered on 2026-10-26:
   Regenerate transcribes again. Ken, 2026-10-29: move the heard words into a
   file of their own that every route writes, every song, separate from the
   bundle; its own feature after Phase 4 of `movie_subtitles`. Record:
-  `plans/movie-subtitle-slice.md` on branch `movie_subtitles`, decision 7 and
+  `plans/movie-subtitle-slice.md` on tag `archive/movie_subtitles`, decision 7 and
   row 27.
 
 ## Out of scope by design (web plan D9)
@@ -127,7 +127,7 @@ that queued them is already closed; 7.1f).
   A reader that tests `custom_sheet` first labels a movie song "custom" and no
   test catches it. Shape: one `sheet_kind` (`custom`, `movie` or none), derived
   once. Deferred 2026-10-29. Record: `/code-review` of `7f07006^..cc88169` on
-  branch `movie_subtitles`, finding 8 (not in the plan file).
+  tag `archive/movie_subtitles`, finding 8 (not in the plan file).
 - **A movie song can be labelled two ways at once.** Song Info's Lyrics tile
   names the source from the bundle's origin; the Repair page's "current" tag and
   the run lists ("Now: movie subtitles") go by the sheet on disk. After a movie
