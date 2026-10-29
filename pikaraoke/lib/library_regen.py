@@ -106,7 +106,7 @@ class Plan:
 
     ``lrclib_record`` / ``lrclib_skip`` carry an admin's LRCLIB choice (a
     chosen record, or no match at all); see :func:`apply_lrclib_choice`.
-    ``custom_text`` is a custom lyric sheet (either kind) the admin just saved,
+    ``custom_text`` is a custom lyric sheet (of any kind) the admin just saved,
     which the run writes before it reads it; see :func:`apply_custom_choice`.
     """
 
@@ -138,6 +138,7 @@ class SongJob:
 # caption, and History reads origins from old bundles where no file says the kind.
 CUSTOM_ORIGIN = "custom"
 MOVIE_ORIGIN = "movie_srt"
+LRC_ORIGIN = "lrclib_srt"
 
 
 def is_genius_reuse(plan: Plan | None) -> bool:
@@ -222,13 +223,16 @@ def find_local_srt(song: Path) -> Path | None:
 
 
 # The admin's own lyrics for a song, kept in the library's ``lyrics/`` folder in one
-# of two kinds: the typed lines (``.custom.txt``), or movie subtitles pasted as an
-# SRT with clip times (``.custom.srt``, timed on the cue route). The file is the
-# one record that the song uses them: a bundle's provenance is ignored by a reset
-# and a transcribe run deletes the bundle. A song keeps one sheet, whichever kind.
+# of three kinds: the typed lines (``.custom.txt``), movie subtitles pasted as an
+# SRT with clip times (``.custom.srt``), or an LRCLIB match's lines fitted to the
+# clip as an SRT (``.lrclib.srt``); the last two are timed on the cue route. The
+# file is the one record that the song uses them: a bundle's provenance is ignored
+# by a reset and a transcribe run deletes the bundle. A song keeps one sheet,
+# whichever kind.
 CUSTOM_TEXT_SUFFIX = ".custom.txt"
 CUSTOM_SRT_SUFFIX = ".custom.srt"
-CUSTOM_SHEET_SUFFIXES = (CUSTOM_TEXT_SUFFIX, CUSTOM_SRT_SUFFIX)
+LRC_SRT_SUFFIX = ".lrclib.srt"
+CUSTOM_SHEET_SUFFIXES = (CUSTOM_TEXT_SUFFIX, CUSTOM_SRT_SUFFIX, LRC_SRT_SUFFIX)
 
 
 def custom_sheet_file(song: Path, suffix: str) -> Path:
@@ -246,11 +250,11 @@ def custom_sheet_path(song: Path) -> Path | None:
 
 
 # The kind each sheet suffix names: the status field, and the repair page's source.
-_SHEET_KINDS = {CUSTOM_TEXT_SUFFIX: "custom", CUSTOM_SRT_SUFFIX: "movie"}
+_SHEET_KINDS = {CUSTOM_TEXT_SUFFIX: "custom", CUSTOM_SRT_SUFFIX: "movie", LRC_SRT_SUFFIX: "lrc"}
 
 
 def sheet_kind(sheet: Path | None) -> str | None:
-    """The kind of the custom sheet at ``sheet`` (``"custom"`` or ``"movie"``), or None.
+    """The kind of the custom sheet at ``sheet`` (``"custom"``, ``"movie"`` or ``"lrc"``), or None.
 
     The only place a sheet's suffix is tested; ``None`` in, for a song with no sheet, gives None.
     """
@@ -261,32 +265,36 @@ def sheet_kind(sheet: Path | None) -> str | None:
     )
 
 
-def custom_sheet_plan(song: Path, text: str | None = None) -> Plan:
-    """The plan that times ``song`` from its typed custom sheet.
+def _sheet_plan(song: Path, suffix: str, origin: str, label: str, text: str | None) -> Plan:
+    """The plan that times ``song`` from its custom sheet of the kind ``suffix``.
 
-    ``text`` is a sheet the admin just typed, for the run to write first.
+    ``text`` is a sheet the admin just saved, for the run to write first.
     """
     return Plan(
         kind="seed",
-        lyrics_path=custom_sheet_file(song, CUSTOM_TEXT_SUFFIX),
-        seed={"lyrics_origin": CUSTOM_ORIGIN},
+        lyrics_path=custom_sheet_file(song, suffix),
+        seed={"lyrics_origin": origin},
         custom_text=text,
-        label="custom sheet",
+        label=label,
     )
+
+
+def custom_sheet_plan(song: Path, text: str | None = None) -> Plan:
+    """The plan that times ``song`` from its typed custom sheet."""
+    return _sheet_plan(song, CUSTOM_TEXT_SUFFIX, CUSTOM_ORIGIN, "custom sheet", text)
 
 
 def movie_sheet_plan(song: Path, text: str | None = None) -> Plan:
-    """The plan that times ``song`` from its movie-subtitles sheet, on the cue route.
+    """The plan that times ``song`` from its movie-subtitles sheet, on the cue route."""
+    return _sheet_plan(song, CUSTOM_SRT_SUFFIX, MOVIE_ORIGIN, "movie subtitles", text)
 
-    ``text`` is the clip-timed SRT the admin just saved, for the run to write first.
-    """
-    return Plan(
-        kind="seed",
-        lyrics_path=custom_sheet_file(song, CUSTOM_SRT_SUFFIX),
-        seed={"lyrics_origin": MOVIE_ORIGIN},
-        custom_text=text,
-        label="movie subtitles",
-    )
+
+def lrc_sheet_plan(song: Path, text: str | None = None) -> Plan:
+    """The plan that times ``song`` from its LRCLIB timing sheet, on the cue route."""
+    return _sheet_plan(song, LRC_SRT_SUFFIX, LRC_ORIGIN, "LRCLIB timing", text)
+
+
+_SHEET_PLANS = {"custom": custom_sheet_plan, "movie": movie_sheet_plan, "lrc": lrc_sheet_plan}
 
 
 def custom_plan(job: SongJob) -> Plan | None:
@@ -296,11 +304,7 @@ def custom_plan(job: SongJob) -> Plan | None:
     wins until a repair to another source removes it.
     """
     kind = sheet_kind(custom_sheet_path(job.song_path))
-    if kind == "movie":
-        return movie_sheet_plan(job.song_path)
-    if kind == "custom":
-        return custom_sheet_plan(job.song_path)
-    return None
+    return _SHEET_PLANS[kind](job.song_path) if kind else None
 
 
 def resolve_plan(job: SongJob, *, reset: bool) -> Plan:
@@ -688,8 +692,8 @@ def apply_custom_choice(job: SongJob) -> None:
     """Make the song's custom sheet match the job: written, kept or removed.
 
     A plan that carries ``custom_text`` writes the admin's sheet of its kind and
-    removes the other kind, and a repair to another source
-    (:attr:`SongJob.replaces_custom`) removes both; the backup taken before the
+    removes the other kinds, and a repair to another source
+    (:attr:`SongJob.replaces_custom`) removes them all; the backup taken before the
     run still holds them. Every other job keeps what is there, so a plan that
     missed the sheet costs one run, never the admin's lyrics.
     """
@@ -913,9 +917,10 @@ def backup_text_folders(folder: Path, stems: list[str] | None = None) -> Path | 
 #   ``LyricsFetchStage``, per E1's gated fill). Wiping them would force a
 #   re-fetch of every genius song's variant on the next run for no benefit --
 #   ``ensure_lrc`` already reuses an on-disk file unconditionally.
-# - ``lyrics/<stem>.custom.txt`` / ``.custom.srt`` an admin's own lyric sheet,
-#   typed or pasted from a movie. It is hand-made, so a reset must not lose it;
-#   only a repair to another source removes it.
+# - ``lyrics/<stem>.custom.txt`` / ``.custom.srt`` / ``.lrclib.srt`` an admin's own
+#   lyric sheet, typed, pasted from a movie or fitted from an LRCLIB match. It is
+#   hand-made, so a reset must not lose it; only a repair to another source
+#   removes it.
 KEEP_ON_RESET = {"subtitles": ASR_JSON3_SUFFIX, "lyrics": (".lrc", *CUSTOM_SHEET_SUFFIXES)}
 
 

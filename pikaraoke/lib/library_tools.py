@@ -55,6 +55,7 @@ from pikaraoke.lib.library_regen import (
     fetch_or_prompt_plan,
     find_local_srt,
     gate_on_disk_caption,
+    lrc_sheet_plan,
     media_duration,
     movie_sheet_plan,
     read_bundle,
@@ -75,7 +76,13 @@ from pikaraoke.lib.metadata_parser import extract_youtube_id
 from pikaraoke.lib.processing_manager import ProcessingManager
 from pikaraoke.lib.song_manager import SongManager
 from pikaraoke.lib.song_match import SongIndex, similar_groups
-from pikaraoke.lib.srt_slice_fit import FITS, SliceFit, fit_slice, heard_streams
+from pikaraoke.lib.srt_slice_fit import (
+    FITS,
+    SliceFit,
+    fit_slice,
+    heard_streams,
+    lrc_to_srt,
+)
 from pikaraoke.lib.youtube_dl import ASR_JSON3_SUFFIX
 
 logger = logging.getLogger(__name__)
@@ -117,6 +124,11 @@ CUSTOM_SHEET_MAX_CHARS = 100_000
 # limit took minutes of request time, this much about ten seconds.
 MOVIE_SUBTITLES_MAX_CHARS = 300_000
 
+# How far an LRCLIB match's length may be from the clip's, in seconds, for it to time
+# the song. Measured on the library: fits with no flagged run had gaps of up to 14 s (a
+# music video's longer intro or outro), so the limit sits just past that.
+LRC_MAX_GAP_S = 15
+
 # A caption check that couldn't run (YouTube refusing, often after many calls in a
 # row) is tried once more after this pause.
 CAPTION_RETRY_PAUSE_S = 30
@@ -150,6 +162,14 @@ def _pasted_text(text: object, kind: str, max_chars: int) -> str:
     if len(text) > max_chars:
         raise RegenError(f"The {kind} are too long (over {max_chars:,} characters).")
     return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _clip_length(job: SongJob) -> float:
+    """The song's clip length in seconds; raises for the admin when it can't be read."""
+    length = media_duration(job)
+    if not length:
+        raise RegenError("Could not read this clip's length.")
+    return length
 
 
 def custom_sheet_lines(text: object) -> list[str]:
@@ -194,6 +214,36 @@ class MovieSliceRefused(RegenError):
 
     def __init__(self, check: MovieSliceCheck):
         super().__init__(f"Movie subtitles refused: {check.fit.status}")
+        self.check = check
+
+
+@dataclass(frozen=True)
+class LrcTimingCheck:
+    """How an LRCLIB match's own line times checked against a song's clip.
+
+    ``gap_s``: how many seconds longer the match is than the clip (negative:
+    shorter), None when either length is unknown. ``record``: the match's
+    provenance (:func:`lrclib.record_meta`), for naming it. ``viable``: the fit
+    passed and the gap is within :data:`LRC_MAX_GAP_S`, so the match may time the
+    song; the flagged lines (``fit.mistimed``, ``fit.unheard``) are for the admin
+    to read first. ``regenerate_helps`` is as for :class:`MovieSliceCheck`.
+    """
+
+    fit: SliceFit
+    gap_s: int | None
+    record: dict
+    viable: bool
+    regenerate_helps: bool
+
+
+class LrcTimingRefused(RegenError):
+    """An LRCLIB match that can't time the song; ``check`` says why.
+
+    Carries the check, not a sentence, as :class:`MovieSliceRefused` does.
+    """
+
+    def __init__(self, check: LrcTimingCheck):
+        super().__init__(f"LRCLIB timing refused: {check.fit.status}")
         self.check = check
 
 
@@ -527,13 +577,58 @@ class LibraryTools:
     def _fit_movie_slice(self, job: SongJob, text: object) -> MovieSliceCheck:
         """:meth:`check_movie_slice` for a song already checked and read."""
         sheet = _pasted_text(text, "subtitles", MOVIE_SUBTITLES_MAX_CHARS)
-        length = media_duration(job)
-        if not length:
-            raise RegenError("Could not read this clip's length.")
-        streams = heard_streams(job.bundle, self._asr_on_disk(job.song_path))
-        return MovieSliceCheck(
-            fit_slice(sheet, streams, length), regenerate_helps=job.bundle is not None
+        fit = self._fit_to_clip(job, sheet, _clip_length(job))
+        return MovieSliceCheck(fit, regenerate_helps=job.bundle is not None)
+
+    def check_lrc_timing(self, song_path: str, lrclib_id: int | None) -> LrcTimingCheck:
+        """Fit an LRCLIB match's own line times to the song's clip, against the words heard in it.
+
+        The match is the record ``lrclib_id`` (one a search listed, else LRCLIB's
+        copy), or with no id the ``.lrc`` on disk. The one fit the repair runs, so
+        what it saves is never a number the page sent; queues no work. A refusal
+        is an answer, not an error: the returned check says it. Raises
+        :class:`RegenError`, with a message for the admin, for a song that is not
+        a video, a match that can't be had (none on disk, a skip marker, LRCLIB
+        not returning it, no synced lyrics) or a clip whose length can't be read.
+        """
+        if not self.is_video(song_path):
+            raise RegenError("Lyrics tools work on video songs only.")
+        job = self._song_job(song_path)
+        return self._fit_lrc_timing(job, self._lrc_record(job.song_path, lrclib_id))
+
+    def _fit_lrc_timing(self, job: SongJob, record: dict) -> LrcTimingCheck:
+        """:meth:`check_lrc_timing` for a song already checked and read, and its match."""
+        length = _clip_length(job)
+        fit = self._fit_to_clip(job, lrc_to_srt(record["syncedLyrics"]), length)
+        gap_s = length_gap_s(record.get("duration"), length)
+        return LrcTimingCheck(
+            fit,
+            gap_s,
+            lrclib.record_meta(record),
+            viable=fit.status == FITS and gap_s is not None and abs(gap_s) <= LRC_MAX_GAP_S,
+            regenerate_helps=job.bundle is not None,
         )
+
+    def _fit_to_clip(self, job: SongJob, srt_text: str, length: float) -> SliceFit:
+        """``srt_text`` fitted to the song's clip against the words already heard in it."""
+        streams = heard_streams(job.bundle, self._asr_on_disk(job.song_path))
+        return fit_slice(srt_text, streams, length)
+
+    def _lrc_record(self, song: Path, lrclib_id: int | None) -> dict:
+        """The LRCLIB record an LRCLIB timing uses: ``lrclib_id``, else the song's ``.lrc`` on disk."""
+        if lrclib_id is not None:
+            return self._lrclib_record(lrclib_id)
+        path = lrclib.lrc_path(song)
+        try:
+            text, meta = lrclib.read_lrc(path)
+        except FileNotFoundError:
+            raise RegenError("This song has no LRCLIB match on disk. Search for one.") from None
+        except (OSError, UnicodeDecodeError) as e:
+            logger.warning("Could not read the LRCLIB match of %s: %s", song.name, e)
+            raise RegenError("Could not read this song's LRCLIB match.") from e
+        if lrclib.is_skip_marker(path):
+            raise RegenError("This song's LRCLIB match was skipped. Search for one.")
+        return {**meta, "syncedLyrics": text}
 
     def genius_sheet_lines(self, genius_id: int) -> list[str]:
         """A Genius song's lyric lines, as they display, for scoring an LRCLIB search.
@@ -592,8 +687,12 @@ class LibraryTools:
         Genius song ``genius_id``), ``custom`` (the admin's own lyrics, ``text``;
         the run saves them as the song's sheet), ``movie`` (movie subtitles
         pasted as ``text``: fitted again here by :meth:`check_movie_slice`, and
-        only a fit is queued, with the corrected slice as the song's sheet) or
-        ``transcribe``. For Genius and custom the LRCLIB match is the record
+        only a fit is queued, with the corrected slice as the song's sheet),
+        ``lrclib`` (an LRCLIB match's own line times, the record ``lrclib_id`` or
+        the ``.lrc`` on disk: fitted again here by :meth:`check_lrc_timing`, and
+        only a viable fit is queued, with the fitted lines as the song's sheet;
+        a record given by id becomes the song's ``.lrc``) or ``transcribe``. For
+        Genius and custom the LRCLIB match is the record
         ``lrclib_id``, or none at all with ``lrclib_skip`` (which wins over an
         id); with neither, the automatic rule applies. The song's files are
         backed up first, and the run wipes its old outputs. Raises
@@ -613,11 +712,13 @@ class LibraryTools:
             job.plan = self._custom_repair_plan(job.song_path, text, lrclib_id, lrclib_skip)
         elif source == "movie":
             job.plan = self._movie_repair_plan(job, text)
+        elif source == "lrclib":
+            job.plan = self._lrc_repair_plan(job, lrclib_id)
         elif source == "transcribe":
             job.plan = self._transcribe_plan()
         else:
             raise RegenError("Unknown lyric source.")
-        job.replaces_custom = source not in ("custom", "movie")
+        job.replaces_custom = source not in ("custom", "movie", "lrclib")
         self._queue(job, reset=True, label="Repair")
 
     def open_run(self, mode: str) -> None:
@@ -1106,21 +1207,42 @@ class LibraryTools:
             raise MovieSliceRefused(check)
         return movie_sheet_plan(job.song_path, check.fit.srt)
 
+    def _lrc_repair_plan(self, job: SongJob, lrclib_id: int | None) -> Plan:
+        """The plan that saves the LRCLIB match's lines, fitted to the clip, as the song's sheet.
+
+        The match is read once, so the lines that were fitted are the ones saved and, for
+        a record given by id, the ``.lrc`` the run writes.
+        """
+        record = self._lrc_record(job.song_path, lrclib_id)
+        check = self._fit_lrc_timing(job, record)
+        if not check.viable:
+            raise LrcTimingRefused(check)
+        plan = lrc_sheet_plan(job.song_path, check.fit.srt)
+        if lrclib_id is not None:
+            plan.lrclib_record = record
+        return plan
+
+    def _lrclib_record(self, lrclib_id: int) -> dict:
+        """The record ``lrclib_id`` with its synced lyrics.
+
+        The one a search listed; after a restart, LRCLIB's copy.
+        """
+        with self._lrclib_lock:
+            record = self._lrclib_records.get(lrclib_id)
+        if record is None:
+            record = lrclib.get_record(lrclib_id)
+        if record is None:
+            raise RegenError("LRCLIB didn't return that match. Try again.")
+        if not record.get("syncedLyrics"):
+            raise RegenError("That LRCLIB match has no synced lyrics.")
+        return record
+
     def _apply_lrclib_pick(self, plan: Plan, lrclib_id: int | None, lrclib_skip: bool) -> None:
         """Put the admin's LRCLIB choice on ``plan``: no match, or the record ``lrclib_id``."""
         if lrclib_skip:
             plan.lrclib_skip = True
         elif lrclib_id is not None:
-            # The record a search listed; after a restart, LRCLIB's copy.
-            with self._lrclib_lock:
-                record = self._lrclib_records.get(lrclib_id)
-            if record is None:
-                record = lrclib.get_record(lrclib_id)
-            if record is None:
-                raise RegenError("LRCLIB didn't return that match. Try again.")
-            if not record.get("syncedLyrics"):
-                raise RegenError("That LRCLIB match has no synced lyrics.")
-            plan.lrclib_record = record
+            plan.lrclib_record = self._lrclib_record(lrclib_id)
 
     def _queue(self, job: SongJob, *, reset: bool, label: str) -> None:
         """Back up the song's files, then queue its regen job."""

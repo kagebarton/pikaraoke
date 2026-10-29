@@ -1,7 +1,8 @@
 """A synthetic movie slice and the words heard over it, for the movie-subtitles tests.
 
 12 lines of five distinct pseudo-words, sung in a 200 s clip from 10 s on, 5 s apart; the
-movie's own times are an hour later. No film text.
+movie's own times are an hour later. No film text. ``lrc_slice`` is the same lines as an
+LRCLIB match, which times a clip directly.
 """
 
 import json
@@ -48,6 +49,15 @@ def movie_slice(offset=lambda k: MOVIE_OFFSET_S, lines=range(SLICE_LINES)) -> st
             for n, k in enumerate(lines, start=1)
         ]
     )
+
+
+def lrc_slice(offset=lambda k: 0.0, lines=range(SLICE_LINES)) -> str:
+    """The lines as an LRC (starts only); ``offset(k)`` is how far line ``k`` sits after the clip's."""
+    rows = []
+    for k in lines:
+        start = slice_clip_start(k) + offset(k)
+        rows.append(f"[{int(start // 60):02d}:{start % 60:05.2f}] {' '.join(slice_line(k))}")
+    return "\n".join(rows) + "\n"
 
 
 def clip_starts(srt_text: str) -> list[float]:

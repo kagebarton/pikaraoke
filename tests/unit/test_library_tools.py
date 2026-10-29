@@ -36,6 +36,7 @@ from pikaraoke.lib.library_regen import (
 )
 from pikaraoke.lib.library_tools import (
     CUSTOM_SHEET_MAX_CHARS,
+    LRC_MAX_GAP_S,
     MOVIE_SUBTITLES_MAX_CHARS,
     PLAYLIST_NOT_A_LINK,
     PLAYLIST_ONE_VIDEO,
@@ -43,6 +44,7 @@ from pikaraoke.lib.library_tools import (
     PLAYLIST_VIDEO_IN_LIST,
     RUN_LABELS,
     LibraryTools,
+    LrcTimingRefused,
     MovieSliceRefused,
     custom_sheet_lines,
 )
@@ -50,11 +52,13 @@ from pikaraoke.lib.song_list import SongList
 from pikaraoke.lib.song_manager import SongManager
 from pikaraoke.lib.srt_slice_fit import (
     DISAGREE,
+    FITS,
     NO_REFERENCE,
     NOT_SRT,
     REFUSED,
     TOO_FEW,
     TOO_LONG,
+    fit_slice,
 )
 from tests.unit.movie_slices import (
     CLIP_S,
@@ -63,6 +67,7 @@ from tests.unit.movie_slices import (
     asr_json3,
     clip_starts,
     heard_words,
+    lrc_slice,
     movie_slice,
     slice_clip_start,
     slice_line,
@@ -111,6 +116,13 @@ def write_sheet(folder: Path, stem: str, text: str = "one\ntwo\n") -> Path:
 
 def write_movie_sheet(folder: Path, stem: str, text: str = MOVIE_SRT) -> Path:
     sheet = folder / "lyrics" / f"{stem}.custom.srt"
+    sheet.parent.mkdir(exist_ok=True)
+    sheet.write_text(text, encoding="utf-8")
+    return sheet
+
+
+def write_lrc_sheet(folder: Path, stem: str, text: str = MOVIE_SRT) -> Path:
+    sheet = folder / "lyrics" / f"{stem}.lrclib.srt"
     sheet.parent.mkdir(exist_ok=True)
     sheet.write_text(text, encoding="utf-8")
     return sheet
@@ -957,6 +969,332 @@ class TestMovieRepair:
         tools.repair(str(song), "movie", text=movie_slice())
 
         assert check.fit.status == "fits"
+        assert processing.enqueue_regen.call_args.args[0].song.plan.custom_text == check.fit.srt
+
+
+LRC_RECORD = {
+    "id": 11,
+    "trackName": "Invented Song",
+    "artistName": "Invented Artist",
+    "albumName": "Invented Album",
+    "duration": CLIP_S,
+    "syncedLyrics": lrc_slice(),
+}
+
+
+class TestLrcTimingRepair:
+    """Repair with an LRCLIB match's own line times: the fit runs again here, and only a viable
+    one is queued."""
+
+    @pytest.fixture
+    def song(self, tmp_path):
+        """A song with heard words and the LRC on disk (record 11, as long as the clip)."""
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        write_bundle(
+            tmp_path,
+            video.stem,
+            lyrics={"origin": "genius", "genius": GENIUS, "lines": ["one", "two"]},
+            media_duration_s=CLIP_S,
+            transcribe_words=heard_words(),
+        )
+        self.write_match(video, LRC_RECORD)
+        return video
+
+    @staticmethod
+    def write_match(video: Path, record: dict) -> Path:
+        path = lrclib.lrc_path(video)
+        path.parent.mkdir(exist_ok=True)
+        lrclib.write_lrc(path, record)
+        return path
+
+    @pytest.fixture
+    def fetched(self, monkeypatch):
+        """The ids LRCLIB's get-by-id was asked for (it has no record for any)."""
+        fetched = []
+        monkeypatch.setattr(lrclib, "get_record", lambda record_id: fetched.append(record_id))
+        return fetched
+
+    def repaired(self, tmp_path, song, **kwargs):
+        tools, processing = make_tools(tmp_path, [str(song)])
+        tools.repair(str(song), "lrclib", **kwargs)
+        return processing.enqueue_regen.call_args.args[0]
+
+    def test_with_no_id_the_lrc_on_disk_is_checked(self, tmp_path, song, fetched):
+        tools, processing = make_tools(tmp_path, [str(song)])
+
+        check = tools.check_lrc_timing(str(song), None)
+
+        assert (check.fit.status, check.gap_s, check.viable) == (FITS, 0, True)
+        assert (check.record["id"], check.record["trackName"]) == (11, "Invented Song")
+        assert check.regenerate_helps is True
+        assert fetched == []
+        processing.enqueue_regen.assert_not_called()
+
+    def test_with_an_id_that_record_is_checked_not_the_one_on_disk(
+        self, tmp_path, song, monkeypatch
+    ):
+        other = {
+            **LRC_RECORD,
+            "id": 12,
+            "duration": CLIP_S + 10,
+            "syncedLyrics": lrc_slice(lines=range(9)),
+        }
+        monkeypatch.setattr(lrclib, "get_record", lambda record_id: other)
+        tools, _ = make_tools(tmp_path, [str(song)])
+
+        check = tools.check_lrc_timing(str(song), 12)
+
+        assert (check.record["id"], check.gap_s, check.fit.total) == (12, 10, 9)
+
+    def test_a_record_a_search_listed_is_not_asked_of_lrclib_again(
+        self, tmp_path, song, monkeypatch
+    ):
+        monkeypatch.setattr(lrclib, "get_record", MagicMock(side_effect=AssertionError("fetched")))
+        monkeypatch.setattr(lrclib, "search_query", lambda query: [{**LRC_RECORD, "id": 13}])
+        tools, _ = make_tools(tmp_path, [str(song)])
+        tools.lrclib_candidates(str(song), ["one"], "t a")
+
+        assert tools.check_lrc_timing(str(song), 13).record["id"] == 13
+
+    @pytest.mark.parametrize(
+        ("gap", "viable"),
+        [
+            (0, True),
+            (LRC_MAX_GAP_S, True),
+            (-LRC_MAX_GAP_S, True),
+            (LRC_MAX_GAP_S + 1, False),
+            (-LRC_MAX_GAP_S - 1, False),
+        ],
+    )
+    def test_the_match_may_be_a_little_longer_or_shorter_than_the_clip(
+        self, tmp_path, song, gap, viable
+    ):
+        self.write_match(song, {**LRC_RECORD, "duration": CLIP_S + gap})
+        tools, _ = make_tools(tmp_path, [str(song)])
+
+        check = tools.check_lrc_timing(str(song), None)
+
+        assert check.fit.status == FITS  # the lines fit either way: only the length is judged
+        assert (check.gap_s, check.viable) == (gap, viable)
+
+    def test_a_match_with_no_length_is_not_viable(self, tmp_path, song):
+        self.write_match(song, {**LRC_RECORD, "duration": None})
+        tools, _ = make_tools(tmp_path, [str(song)])
+
+        check = tools.check_lrc_timing(str(song), None)
+
+        assert (check.fit.status, check.gap_s, check.viable) == (FITS, None, False)
+
+    def test_a_fit_that_is_refused_is_not_viable_whatever_the_length(self, tmp_path, song):
+        self.write_match(song, {**LRC_RECORD, "syncedLyrics": lrc_slice(lines=range(40, 52))})
+        tools, _ = make_tools(tmp_path, [str(song)])
+
+        check = tools.check_lrc_timing(str(song), None)
+
+        assert (check.fit.status, check.fit.reason, check.gap_s) == (REFUSED, TOO_FEW, 0)
+        assert check.viable is False
+
+    def test_a_match_with_no_timed_lines_is_refused_as_not_srt(self, tmp_path, song):
+        self.write_match(song, {**LRC_RECORD, "syncedLyrics": "no stamps here\n"})
+        tools, _ = make_tools(tmp_path, [str(song)])
+
+        assert tools.check_lrc_timing(str(song), None).fit.status == NOT_SRT
+
+    def test_a_song_with_no_heard_words_is_told_to_regenerate_first(self, tmp_path):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        write_bundle(tmp_path, video.stem, lyrics={"origin": "srt"}, media_duration_s=CLIP_S)
+        self.write_match(video, LRC_RECORD)
+        tools, _ = make_tools(tmp_path, [str(video)])
+
+        check = tools.check_lrc_timing(str(video), None)
+
+        assert (check.fit.status, check.viable, check.regenerate_helps) == (
+            NO_REFERENCE,
+            False,
+            True,
+        )
+
+    def test_lines_heard_far_from_their_time_are_flagged_and_do_not_stop_a_viable_fit(
+        self, tmp_path, song
+    ):
+        """Decision 4: the admin reads the flagged lines, then confirms."""
+        self.write_match(
+            song,
+            {**LRC_RECORD, "syncedLyrics": lrc_slice(offset=lambda k: 20.0 if k >= 8 else 0.0)},
+        )
+        tools, _ = make_tools(tmp_path, [str(song)])
+
+        check = tools.check_lrc_timing(str(song), None)
+
+        assert check.viable is True
+        assert check.fit.mistimed == (8, 9, 10, 11)
+
+    @pytest.mark.parametrize("remove", ["missing", "skipped"])
+    def test_a_song_with_no_usable_lrc_and_no_id_says_to_search(self, tmp_path, song, remove):
+        path = lrclib.lrc_path(song)
+        path.unlink()
+        if remove == "skipped":
+            lrclib.write_skip_marker(path)
+        tools, _ = make_tools(tmp_path, [str(song)])
+
+        with pytest.raises(RegenError, match="Search for one"):
+            tools.check_lrc_timing(str(song), None)
+
+    def test_an_lrc_that_cannot_be_read_is_refused_and_says_so(self, tmp_path, song, caplog):
+        lrclib.lrc_path(song).write_bytes("caf\xe9".encode("latin-1"))
+        tools, _ = make_tools(tmp_path, [str(song)])
+
+        with pytest.raises(RegenError, match="Could not read"):
+            tools.check_lrc_timing(str(song), None)
+
+        assert "Could not read the LRCLIB match" in caplog.text
+
+    @pytest.mark.parametrize(
+        ("returned", "message"),
+        [(None, "didn't return"), ({**LRC_RECORD, "syncedLyrics": ""}, "no synced lyrics")],
+        ids=["gone", "unsynced"],
+    )
+    def test_a_record_lrclib_cannot_give_is_refused(
+        self, tmp_path, song, monkeypatch, returned, message
+    ):
+        monkeypatch.setattr(lrclib, "get_record", lambda record_id: returned)
+        tools, _ = make_tools(tmp_path, [str(song)])
+
+        with pytest.raises(RegenError, match=message):
+            tools.check_lrc_timing(str(song), 12)
+
+    def test_a_clip_whose_length_cannot_be_read_is_refused(self, tmp_path, monkeypatch):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        write_bundle(tmp_path, video.stem, lyrics={"origin": "srt"}, transcribe_words=heard_words())
+        self.write_match(video, LRC_RECORD)
+        monkeypatch.setattr("pikaraoke.lib.library_regen.probe_duration", lambda path: None)
+        tools, processing = make_tools(tmp_path, [str(video)])
+
+        with pytest.raises(RegenError, match="clip's length"):
+            tools.repair(str(video), "lrclib")
+
+        processing.enqueue_regen.assert_not_called()
+
+    def test_the_check_takes_video_songs_only(self, tmp_path):
+        mp3 = tmp_path / "Track---aaaaaaaaaaa.mp3"
+        mp3.write_bytes(b"")
+        tools, _ = make_tools(tmp_path, [str(mp3)])
+
+        with pytest.raises(RegenError, match="video songs only"):
+            tools.check_lrc_timing(str(mp3), None)
+
+    def test_a_viable_match_queues_the_fitted_lines_as_the_songs_sheet(self, tmp_path, song):
+        self.write_match(song, {**LRC_RECORD, "syncedLyrics": lrc_slice(offset=lambda k: 3.0)})
+
+        regen = self.repaired(tmp_path, song)
+
+        plan = regen.song.plan
+        assert (regen.label, regen.reset) == ("Repair", True)
+        assert (plan.kind, plan.seed, plan.label) == (
+            "seed",
+            {"lyrics_origin": "lrclib_srt"},
+            "LRCLIB timing",
+        )
+        assert plan.lyrics_path == tmp_path / "lyrics" / f"{song.stem}.lrclib.srt"
+        # The LRC says 3 s late; the saved sheet is in the clip's time, not the match's.
+        assert clip_starts(plan.custom_text) == [
+            pytest.approx(slice_clip_start(k), abs=0.1) for k in range(SLICE_LINES)
+        ]
+
+    def test_the_lrc_on_disk_stays_and_nothing_is_written_until_the_run(self, tmp_path, song):
+        match = lrclib.lrc_path(song).read_text(encoding="utf-8")
+
+        regen = self.repaired(tmp_path, song)
+
+        assert regen.song.plan.lrclib_record is None
+        assert regen.song.replaces_custom is False
+        assert lrclib.lrc_path(song).read_text(encoding="utf-8") == match
+        assert not (tmp_path / "lyrics" / f"{song.stem}.lrclib.srt").exists()
+
+    def test_a_record_given_by_id_is_queued_to_become_the_songs_lrc(
+        self, tmp_path, song, monkeypatch
+    ):
+        listed = {**LRC_RECORD, "id": 14, "trackName": "Listed"}
+        monkeypatch.setattr(lrclib, "search_query", lambda query: [listed])
+        tools, processing = make_tools(tmp_path, [str(song)])
+        tools.lrclib_candidates(str(song), ["one"], "t a")
+
+        tools.repair(str(song), "lrclib", lrclib_id=14)
+
+        plan = processing.enqueue_regen.call_args.args[0].song.plan
+        assert plan.lrclib_record is listed
+        assert plan.custom_text is not None
+
+    def refused(self, tmp_path, song, **kwargs):
+        """Repair ``song``, which must be refused before anything is backed up."""
+        write_sheet(tmp_path, song.stem, "the old words\n")
+        tools, processing = make_tools(tmp_path, [str(song)])
+
+        with pytest.raises(LrcTimingRefused) as refused:
+            tools.repair(str(song), "lrclib", **kwargs)
+
+        processing.enqueue_regen.assert_not_called()
+        assert not list(tmp_path.glob("regen_backups/*"))
+        sheet = tmp_path / "lyrics" / f"{song.stem}.custom.txt"
+        assert sheet.read_text(encoding="utf-8") == "the old words\n"
+        return refused.value
+
+    def test_a_match_too_far_off_in_length_changes_nothing(self, tmp_path, song):
+        self.write_match(song, {**LRC_RECORD, "duration": CLIP_S + 38})
+
+        check = self.refused(tmp_path, song).check
+
+        assert (check.fit.status, check.gap_s, check.viable) == (FITS, 38, False)
+
+    def test_a_fit_that_is_refused_changes_nothing(self, tmp_path, song):
+        self.write_match(song, {**LRC_RECORD, "syncedLyrics": lrc_slice(lines=range(40, 52))})
+
+        check = self.refused(tmp_path, song).check
+
+        assert (check.fit.status, check.fit.reason) == (REFUSED, TOO_FEW)
+
+    def test_the_repair_fits_again_and_refuses_on_its_own_result(self, tmp_path, song, monkeypatch):
+        """What was saved is never a number an earlier check said: here the second fit differs."""
+        real = fit_slice
+        calls = []
+
+        def second_fit_differs(srt_text, streams, length):
+            calls.append(1)
+            return real(srt_text if len(calls) == 1 else "", streams, length)
+
+        monkeypatch.setattr("pikaraoke.lib.library_tools.fit_slice", second_fit_differs)
+        tools, processing = make_tools(tmp_path, [str(song)])
+
+        assert tools.check_lrc_timing(str(song), None).viable is True
+        with pytest.raises(LrcTimingRefused) as refused:
+            tools.repair(str(song), "lrclib")
+
+        assert refused.value.check.fit.status == NOT_SRT
+        processing.enqueue_regen.assert_not_called()
+
+    def test_with_no_lrc_and_no_id_nothing_is_queued(self, tmp_path, song):
+        lrclib.lrc_path(song).unlink()
+        tools, processing = make_tools(tmp_path, [str(song)])
+
+        with pytest.raises(RegenError, match="Search for one"):
+            tools.repair(str(song), "lrclib")
+
+        processing.enqueue_regen.assert_not_called()
+
+    def test_a_song_with_a_regen_waiting_is_busy(self, tmp_path, song):
+        tools, processing = make_tools(tmp_path, [str(song)], pending=[str(song)])
+
+        with pytest.raises(RegenError, match="waiting or running"):
+            tools.repair(str(song), "lrclib")
+
+        processing.enqueue_regen.assert_not_called()
+
+    def test_the_check_returns_the_fit_the_repair_would_save(self, tmp_path, song):
+        tools, processing = make_tools(tmp_path, [str(song)])
+
+        check = tools.check_lrc_timing(str(song), None)
+        tools.repair(str(song), "lrclib")
+
         assert processing.enqueue_regen.call_args.args[0].song.plan.custom_text == check.fit.srt
 
 
@@ -1814,6 +2152,76 @@ class TestRunsReplayMovieSheets(OpensRuns):
 
         with pytest.raises(RegenError, match="doesn't need a pick"):
             tools.save_pick(library[0], {"kind": "transcribe"})
+
+
+class TestRunsReplayLrcSheets(OpensRuns):
+    """An LRCLIB-timing sheet is replayed by every bulk run like the other kinds: never left
+    for a pick, never asked of YouTube, and its plan is the sheet."""
+
+    MINE, SHEET_ONLY, PLAIN = "A---aaaaaaaaaaa", "C---ccccccccccc", "B---bbbbbbbbbbb"
+
+    @pytest.fixture
+    def library(self, tmp_path):
+        """An LRCLIB-timed song, one whose bundle is gone, and an ordinary Genius one."""
+        mine, sheet_only, plain = (
+            make_video(tmp_path, s) for s in (self.MINE, self.SHEET_ONLY, self.PLAIN)
+        )
+        write_bundle(
+            tmp_path,
+            mine.stem,
+            lyrics={"origin": "lrclib_srt", "lines": ["one", "two"]},
+            output_summary={"line_count": 2, "lines_with_words": 2},
+        )
+        write_lrc_sheet(tmp_path, mine.stem)
+        (tmp_path / "karaoke").mkdir()
+        (tmp_path / "karaoke" / f"{sheet_only.stem}.ass").write_text("", encoding="utf-8")
+        write_lrc_sheet(tmp_path, sheet_only.stem)
+        genius_bundle(tmp_path, plain.stem)
+        return [str(mine), str(sheet_only), str(plain)]
+
+    @pytest.mark.parametrize("mode", ["all", "reset"])
+    def test_an_lrc_timed_song_is_reused_in_every_mode_ahead_of_the_transcribe_rule(
+        self, tmp_path, monkeypatch, library, mode
+    ):
+        tools, _, asked = self.opened(tmp_path, monkeypatch, library, mode)
+
+        assert self.group_of(tools, self.MINE) == "reuse"
+        assert self.group_of(tools, self.SHEET_ONLY) == "reuse"  # "all" would transcribe it
+        assert self.MINE not in asked and self.SHEET_ONLY not in asked  # no yt-dlp call for them
+
+    def test_the_run_says_an_lrc_timed_song_is_timed_by_lrclib_today(
+        self, tmp_path, monkeypatch, library
+    ):
+        tools, _, _ = self.opened(tmp_path, monkeypatch, library, "reset")
+
+        now = {Path(s["song"]).stem: s["now"] for s in tools.run_view()["songs"]}
+
+        # The sheet on disk says it, with a bundle (MINE) or without one (SHEET_ONLY).
+        assert now[self.MINE] == now[self.SHEET_ONLY] == {"source": "lrc"}
+        assert now[self.PLAIN]["source"] == "genius"
+
+    @pytest.mark.parametrize(("mode", "reset"), [("all", False), ("reset", True)])
+    def test_the_queued_job_is_the_lrc_plan_and_keeps_the_sheet(
+        self, tmp_path, monkeypatch, library, mode, reset
+    ):
+        tools, processing, _ = self.opened(tmp_path, monkeypatch, library, mode)
+        if self.group_of(tools, self.PLAIN) == "needs_pick":
+            tools.save_pick(library[2], {"kind": "skip"})
+
+        tools.queue_run()
+
+        queued = {
+            c.args[0].song.song_path.stem: c.args[0]
+            for c in processing.enqueue_regen.call_args_list
+        }
+        for stem in (self.MINE, self.SHEET_ONLY):
+            regen = queued[stem]
+            assert regen.reset is reset
+            plan = regen.song.plan
+            assert plan.kind == "seed"
+            assert plan.lyrics_path == tmp_path / "lyrics" / f"{stem}.lrclib.srt"
+            assert plan.seed == {"lyrics_origin": "lrclib_srt"}
+            assert regen.song.replaces_custom is False
 
 
 class TestRunPicks:
