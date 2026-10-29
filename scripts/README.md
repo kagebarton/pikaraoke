@@ -80,7 +80,7 @@ backfill only ever fills in what's absent.
    any other input is treated as a new search query.
 
    Selections are held in memory on each `SongJob` and resolved to a
-   concrete lyrics file at run time by `resolve_lyrics_path()`, so phase
+   concrete lyrics file at run time by `resolve_lyrics()`, so phase
    4 runs unattended.
 
 4. **Run unattended** — per song, build a *minimal* stage list (see
@@ -92,9 +92,9 @@ backfill only ever fills in what's absent.
 The pipeline reads only `ctx.artifacts["lyrics_path"]`, which the
 orchestrator sets from the `run_one(song, lyrics_path)` argument. The
 CLI therefore resolves the user's phase-2 choice to a concrete path
-itself (`resolve_lyrics_path`) and hands it straight to `run_one`:
+itself (`resolve_lyrics`) and hands it straight to `run_one`:
 
-- **genius** → `genius.fetch_lyrics(id)`, written to a temp `<stem>.txt`
+- **genius** → `genius.fetch_song(id)`, its text written to a temp `<stem>.txt`
   (lives in a run-scoped dir, cleaned up at the end).
 - **srt** → existing `subtitles/<stem>.en.srt` or `<stem>.srt`.
 - **bundle** → cleaned `lyrics.align_lines` from
@@ -108,6 +108,13 @@ mechanism can't serve files without an 11-char ID (e.g. manually-added
 library songs), so it would silently fall back to transcription even
 when a Genius pick was made. Resolving in the CLI removes that
 dependency entirely (and leaves no stale sidecar files behind).
+
+Because `LyricsFetchStage` does not run, `resolve_lyrics` also returns what
+that stage would have recorded: the lyric origin (`srt`, `genius`, or the
+one the reused bundle recorded) and, for a Genius pick, its id, title and
+artist. `run_jobs` injects them with `SeedArtifactsStage` ahead of the other
+stages. Without them the bundle's `lyrics.origin` reads `unknown`, which
+Library status cannot group and a later Regenerate cannot reuse a caption from.
 
 ### Stage selection
 

@@ -12,8 +12,9 @@ For each song missing karaoke or subtitles, the user is shown an
 interactive Genius search prompt up-front; the chosen lyrics source is
 held on the job and resolved to a concrete file (fetched Genius lyrics,
 local SRT, or none) at run time, then handed to the pipeline as an
-explicit ``lyrics_path``.  Once all prompts are collected, the pipeline
-runs unattended.
+explicit ``lyrics_path`` together with the lyric origin, so the bundle
+records where the lyrics came from.  Once all prompts are collected, the
+pipeline runs unattended.
 
 Only the stages needed to produce missing artifacts run.  When stems
 already exist on disk the cached vocal m4a is decoded back to WAV
@@ -49,6 +50,7 @@ from pikaraoke.lib.get_platform import (  # noqa: E402
     get_platform,
     get_temp_directory,
 )
+from pikaraoke.lib.library_regen import SeedArtifactsStage  # noqa: E402
 from pikaraoke.lib.metadata_parser import (  # noqa: E402
     clean_search_query,
     youtube_id_suffix,
@@ -270,14 +272,21 @@ def _find_local_srt(song: Path) -> Path | None:
     return None
 
 
-def resolve_lyrics_path(job: SongJob, genius: GeniusClient, lyrics_dir: Path) -> Path | None:
-    """Resolve the explicit ``lyrics_path`` to hand ``run_one``, or None.
+def resolve_lyrics(
+    job: SongJob, genius: GeniusClient, lyrics_dir: Path
+) -> tuple[Path | None, dict]:
+    """Resolve the job's choice to ``(lyrics_path, seed)`` for ``run_one``.
 
     The pipeline reads only ``ctx.artifacts["lyrics_path"]``; the
     orchestrator sets it from the ``run_one`` argument.  We resolve the
     user's phase-2 choice to a concrete file here rather than via the
     YouTube-ID-keyed choice sidecar, so songs without a YouTube ID can
     still use Genius lyrics.
+
+    ``seed`` holds what ``LyricsFetchStage`` would have recorded (the lyric
+    origin, plus the Genius identity for a Genius pick), because that stage
+    does not run here and the bundle would otherwise say ``unknown``.  Empty
+    when the song is transcribed.
 
       * genius -> fetch lyrics, write ``<stem>.txt``, return it
       * srt    -> existing local SRT, return it
@@ -289,35 +298,44 @@ def resolve_lyrics_path(job: SongJob, genius: GeniusClient, lyrics_dir: Path) ->
 
     if kind == "genius":
         try:
-            text = genius.fetch_lyrics(job.choice[1])
+            song = genius.fetch_song(job.choice[1])
         except GeniusUnavailable as e:
             print(f"  ! Genius fetch failed ({e}); transcribing instead")
-            return None
+            return None, {}
         out = lyrics_dir / f"{job.song_path.stem}.txt"
-        out.write_text(text, encoding="utf-8")
-        return out
+        out.write_text(song.text, encoding="utf-8")
+        genius_ref = {"id": job.choice[1], "title": song.title, "artist": song.artist}
+        return out, {"lyrics_origin": "genius", "genius": genius_ref}
 
     if kind == "srt":
         srt_path = _find_local_srt(job.song_path)
         if srt_path is None:
             print("  ! no local SRT found; transcribing instead")
-        return srt_path
+            return None, {}
+        return srt_path, {"lyrics_origin": "srt"}
 
     if kind == "bundle":
         bundle_path = Path(job.choice[1])
         try:
             data = json.loads(bundle_path.read_text())
-            align_lines = data["lyrics"]["align_lines"]
+            lyrics = data["lyrics"]
+            align_lines = lyrics["align_lines"]
         except (OSError, KeyError, json.JSONDecodeError) as e:
             print(f"  ! bundle read failed ({e}); transcribing instead")
-            return None
+            return None, {}
         out = lyrics_dir / f"{job.song_path.stem}.txt"
         # Blank-line separated: already-parsed lines, so a blank line stops
         # the pipeline's wrap-join reading one into the next.
         out.write_text("\n\n".join(align_lines), encoding="utf-8")
-        return out
+        # The lines keep the source the bundle recorded for them.
+        seed = {}
+        if lyrics.get("origin"):
+            seed["lyrics_origin"] = lyrics["origin"]
+        if lyrics.get("genius"):
+            seed["genius"] = lyrics["genius"]
+        return out, seed
 
-    return None
+    return None, {}
 
 
 # ---------------------------------------------------------------------------
@@ -328,7 +346,7 @@ def resolve_lyrics_path(job: SongJob, genius: GeniusClient, lyrics_dir: Path) ->
 def build_stages_for(missing: set[str], whisper, config: PipelineConfig, stem_worker):
     """Return only the stages needed for *missing*.
 
-    Lyrics are resolved by the CLI (``resolve_lyrics_path``) and handed
+    Lyrics are resolved by the CLI (``resolve_lyrics``) and handed
     to ``run_one`` as an explicit path, so no LyricsFetchStage is needed.
     LoadVocalFromM4aStage decodes the cached vocal m4a back to WAV when
     the separator pass is skipped.
@@ -397,7 +415,11 @@ def run_jobs(jobs: list[SongJob], config: PipelineConfig, genius: GeniusClient) 
                 print("  (nothing to do)")
                 continue
             needs_lyric = KARAOKE in job.missing or SUBTITLES in job.missing
-            lyrics_path = resolve_lyrics_path(job, genius, lyrics_dir) if needs_lyric else None
+            lyrics_path, seed = (
+                resolve_lyrics(job, genius, lyrics_dir) if needs_lyric else (None, {})
+            )
+            if seed:
+                stages.insert(0, SeedArtifactsStage(seed))
             orch = PipelineOrchestrator(stages, stem_worker, whisper_worker, config)
             try:
                 orch.run_one(job.song_path, lyrics_path)
