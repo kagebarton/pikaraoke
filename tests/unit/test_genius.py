@@ -198,6 +198,41 @@ class TestGeniusClientSearch:
             assert len(hits) == 1
             assert hits[0].id == 2
 
+    def test_search_keeps_genius_romanizations(self):
+        """Romanizations pass the Genius-account filter; translations still don't."""
+        with patch("pikaraoke.lib.genius.lyricsgenius.Genius") as mock_cls:
+            mock_inst = MagicMock()
+            mock_cls.return_value = mock_inst
+            client = GeniusClient(api_token="tok")
+
+            mock_inst.search.return_value = {
+                "sections": [
+                    {
+                        "hits": [
+                            {
+                                "type": "song",
+                                "result": {
+                                    "id": 1,
+                                    "title": "Song (English Translation)",
+                                    "primary_artist": {"name": "Genius English Translations"},
+                                },
+                            },
+                            {
+                                "type": "song",
+                                "result": {
+                                    "id": 2,
+                                    "title": "Song (Romanized)",
+                                    "primary_artist": {"name": "Genius Romanizations"},
+                                },
+                            },
+                        ]
+                    }
+                ]
+            }
+
+            assert [h.id for h in client.search("some song")] == [2]
+            assert [h.id for h in client.search("genius some song")] == [2]
+
     def test_search_respects_limit(self):
         with patch("pikaraoke.lib.genius.lyricsgenius.Genius") as mock_cls:
             mock_inst = MagicMock()

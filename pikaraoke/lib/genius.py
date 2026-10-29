@@ -98,9 +98,9 @@ class GeniusClient:
     def search(self, query: str, limit: int = 8) -> list[GeniusHit]:
         """Search Genius for songs.  Returns ``[]`` on any failure.
 
-        Filters: type == "song"; drops translation/cover artists when the
-        user query already matches the blocked term (logic ported from
-        prototype ``app.py:lyrics_search``).
+        Filters: type == "song"; drops Genius's own accounts (translations in
+        every language) unless the query names Genius, then only translation
+        accounts. Genius Romanizations always passes, for mixed-language songs.
         """
         if not self._token or self._genius is None:
             return []
@@ -127,7 +127,8 @@ class GeniusClient:
                 artist_name = result.get("artist_names") or result.get("primary_artist", {}).get(
                     "name", ""
                 )
-                if blocked_term in artist_name.lower():
+                artist_lower = artist_name.lower()
+                if blocked_term in artist_lower and "romaniz" not in artist_lower:
                     continue
                 hits.append(
                     GeniusHit(
