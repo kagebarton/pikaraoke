@@ -39,6 +39,7 @@ class SongStatus:
     lrclib_state: str  # "used" | "rejected" | "none" | "skipped" | "n/a"
     lrclib_reason: str | None  # joint_stats.lrclib_fill.reason, when rejected
     lrclib_filled: int  # lines the LRCLIB fill placed
+    lrc_on_disk: bool  # a usable LRC sits at lrclib.lrc_path(song): not missing, not a skip marker
     ytasr_used: bool  # lyrics.ytasr present
     method: str | None  # pipeline_decisions.method_used: "joint" | "cue_align"
     line_count: int | None  # output_summary.line_count
@@ -66,6 +67,9 @@ def song_status(song: Path) -> SongStatus:
     bundle = read_bundle(song.parent, song.stem)
     sheet = custom_sheet_path(song)
     movie_sheet = sheet is not None and sheet.name.endswith(CUSTOM_SRT_SUFFIX)
+    # Read from disk: bundles from before schema 9 never recorded the match.
+    lrc = lrclib.lrc_path(song)
+    lrc_on_disk = lrc.is_file() and not lrclib.is_skip_marker(lrc)
     if bundle is None:
         karaoke = song.parent / "karaoke" / f"{song.stem}.ass"
         category = "no_lyrics" if karaoke.is_file() else "not_processed"
@@ -82,6 +86,7 @@ def song_status(song: Path) -> SongStatus:
             lrclib_state="n/a",
             lrclib_reason=None,
             lrclib_filled=0,
+            lrc_on_disk=lrc_on_disk,
             ytasr_used=False,
             method=None,
             line_count=None,
@@ -112,6 +117,7 @@ def song_status(song: Path) -> SongStatus:
         lrclib_state=state,
         lrclib_reason=fill.get("reason") if state == "rejected" else None,
         lrclib_filled=len(fill.get("filled_lids") or []),
+        lrc_on_disk=lrc_on_disk,
         ytasr_used=bool(lyrics.get("ytasr")),
         method=method,
         line_count=summary.get("line_count"),
@@ -178,10 +184,16 @@ def library_statuses(folder: Path) -> list[SongStatus]:
 
 
 # The song lists the web UI offers, by name; the overview counts are the same rules.
+# The by-source lists go by what the last run used, so a song can be on several lists.
 SONG_LISTS: dict[str, Callable[[SongStatus], bool]] = {
     "behind": lambda s: s.category == "behind",
     "poor": lambda s: s.poor,
     "no_lyrics": lambda s: s.category == "no_lyrics",
+    "caption": lambda s: s.origin == "srt",
+    "movie": lambda s: s.origin == "movie_srt",
+    "genius": lambda s: s.origin == "genius",
+    "custom": lambda s: s.origin == "custom",
+    "no_timed_source": lambda s: s.method == "joint" and not s.lrc_on_disk,
     "all": lambda s: True,
 }
 

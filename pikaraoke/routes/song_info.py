@@ -47,6 +47,9 @@ _GUESSED_COLOR = "#f1b70e"
 # An LRCLIB match this much longer or shorter than the video is worth naming.
 _LENGTH_GAP_NOTED_S = 5
 
+# The repair sources a link may open the page with already chosen.
+_PRESELECTABLE_SOURCES = ("caption", "genius", "custom", "movie", "transcribe")
+
 
 @dataclass(frozen=True)
 class Tile:
@@ -460,7 +463,10 @@ def _current_source(status: SongStatus) -> str | None:
 
 @song_info_bp.route("/song_info/repair")
 def repair_page():
-    """Repair lyrics: pick the lyric source (and the LRCLIB match) for a song."""
+    """Repair lyrics: pick the lyric source (and the LRCLIB match) for a song.
+
+    ``?source=`` opens the page with that source already chosen (the song lists link so).
+    """
     k = get_karaoke_instance()
     if not is_admin():
         flash(_("You don't have permission to repair lyrics"), "is-danger")
@@ -474,6 +480,7 @@ def repair_page():
 
     status = tools.status(song)
     start = tools.custom_start(song)
+    source = request.args.get("source")
     return render_template(
         "song_repair.html",
         site_title=get_site_name(),
@@ -482,6 +489,7 @@ def repair_page():
         name=k.song_manager.filename_from_path(song),
         has_youtube_id=status.youtube_id is not None,
         current_source=_current_source(status),
+        preselect=source if source in _PRESELECTABLE_SOURCES else None,
         current_genius_id=(status.genius or {}).get("id"),
         custom_prefill=start["text"],
         custom_query=start["query"],

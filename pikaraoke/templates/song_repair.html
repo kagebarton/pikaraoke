@@ -72,6 +72,8 @@
   $(function () {
     var SONG = {{ song | tojson }};
     var CURRENT_SOURCE = {{ current_source | tojson }};
+    var PRESELECT = {{ preselect | tojson }};  // the source a link opened the page with, or null
+    var START_SOURCE = PRESELECT || CURRENT_SOURCE;  // the card chosen on load
     var CURRENT_GENIUS_ID = {{ current_genius_id | tojson }};
     var CUSTOM_QUERY = {{ custom_query | tojson }};  // where a custom song's LRCLIB search starts
     var HAS_YOUTUBE_ID = {{ has_youtube_id | tojson }};
@@ -164,7 +166,7 @@
           setSourceState('caption', false, T.sparseCaption);
         } else {
           setSourceState('caption', true, T.captionOk);
-          if (CURRENT_SOURCE === 'caption' && !state.source) chooseSource('caption');
+          if (START_SOURCE === 'caption' && !state.source) chooseSource('caption');
         }
       }).fail(function () {
         setSourceState('caption', false, T.captionFailed);
@@ -601,8 +603,8 @@
     /* -------------------------------------------------------------- start */
 
     startCaptionCheck();
-    if ($.inArray(CURRENT_SOURCE, ['genius', 'custom', 'movie', 'transcribe']) !== -1) {
-      chooseSource(CURRENT_SOURCE);
+    if ($.inArray(START_SOURCE, ['genius', 'custom', 'movie', 'transcribe']) !== -1) {
+      chooseSource(START_SOURCE);
     }
     renderMovie();
     refreshStep1();

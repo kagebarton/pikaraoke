@@ -163,8 +163,19 @@ class TestSongsInList:
         assert names("behind") == [behind.name]
         assert names("poor") == [poor.name]
         assert names("no_lyrics") == [no_lyrics.name]
+        assert names("genius") == [current.name, behind.name]
         assert len(names("all")) == 4
-        assert tools.overview() == {"behind": 1, "poor": 1, "no_lyrics": 1, "all": 4}
+        assert tools.overview() == {
+            "behind": 1,
+            "poor": 1,
+            "no_lyrics": 1,
+            "caption": 0,
+            "movie": 0,
+            "genius": 2,
+            "custom": 0,
+            "no_timed_source": 0,
+            "all": 4,
+        }
 
     def test_sorted_by_the_name_the_browser_shows(self, tmp_path):
         later = make_video(tmp_path, "Zed - Last---zzzzzzzzzzz")

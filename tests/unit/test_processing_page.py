@@ -99,14 +99,36 @@ class TestProcessingPage:
         assert "Tap a row to open its details and actions." in body
         assert "$('#pr-jobs-tab').toggleClass('has-tip', !!(listed.length || showNow));" in body
 
-    def test_the_library_tab_opens_the_four_song_lists_in_place(self, env):
+    def test_the_library_tab_opens_the_song_lists_in_place(self, env):
         body = get(env, "/processing", admin=True).get_data(as_text=True)
 
-        for name in ("behind", "poor", "no_lyrics", "all"):
+        lists = ("behind", "poor", "no_lyrics", "all") + (
+            "caption",
+            "movie",
+            "genius",
+            "custom",
+            "no_timed_source",
+        )
+        for name in lists:
             assert f'<button type="button" class="pr-link" data-list="{name}"' in body
             assert f'data-count="{name}"' in body
-        assert body.count('class="pr-link" data-list=') == 4
+        assert body.count('class="pr-link" data-list=') == len(lists)
         assert 'href="/library/songs' not in body
+
+    def test_the_library_tab_groups_the_lists_by_lyric_source_under_their_own_header(self, env):
+        body = get(env, "/processing", admin=True).get_data(as_text=True)
+
+        by_source = body[body.index("By lyric source") :]
+        for name in ("caption", "movie", "genius", "custom", "no_timed_source"):
+            assert f'data-list="{name}"' in by_source
+        assert 'data-list="all"' not in by_source
+        assert "Cue align times each line from a timed source." in body
+
+    def test_a_song_row_in_a_list_links_to_song_info_and_to_repair(self, env):
+        body = get(env, "/processing", admin=True).get_data(as_text=True)
+
+        assert "'pr-song-main no-spa'" in body and "row.info_url" in body
+        assert "'pr-song-repair no-spa', T.repair" in body and "row.repair_url" in body
 
     def test_the_library_tab_offers_the_three_bulk_runs_with_their_counts(self, env):
         body = get(env, "/processing", admin=True).get_data(as_text=True)
