@@ -259,7 +259,7 @@ class _Run:
         A custom sheet is replayed in every mode, a reset included, so a song
         with one is never left for a pick.
         """
-        if entry.status.custom_sheet:
+        if entry.status.sheet_kind is not None:
             return "reuse"
         if self.mode == "all" and entry.status.category == "no_lyrics":
             return "transcribe"
@@ -1200,10 +1200,8 @@ class LibraryTools:
         Custom (typed lines) and movie (subtitles) mean a sheet on disk, the record the
         run's groups go by, bundle or not.
         """
-        if status.movie_sheet:
-            return {"source": "movie"}
-        if status.custom_sheet:
-            return {"source": "custom"}
+        if status.sheet_kind is not None:
+            return {"source": status.sheet_kind}
         if status.category == "no_lyrics":
             return {"source": "transcribed"}
         if status.category == "not_processed":

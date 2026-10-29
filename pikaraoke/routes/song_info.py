@@ -450,10 +450,8 @@ def regenerate():
 
 def _current_source(status: SongStatus) -> str | None:
     """Which repair source the song's next regenerate uses, for the page's "current" tag."""
-    if status.movie_sheet:
-        return "movie"
-    if status.custom_sheet:
-        return "custom"
+    if status.sheet_kind is not None:
+        return status.sheet_kind  # a sheet's kind names its repair source
     if status.origin == "srt":
         return "caption"
     if status.origin == "genius":

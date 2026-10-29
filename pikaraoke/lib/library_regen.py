@@ -245,6 +245,22 @@ def custom_sheet_path(song: Path) -> Path | None:
     return next((sheet for sheet in _sheet_files(song) if sheet.is_file()), None)
 
 
+# The kind each sheet suffix names: the status field, and the repair page's source.
+_SHEET_KINDS = {CUSTOM_TEXT_SUFFIX: "custom", CUSTOM_SRT_SUFFIX: "movie"}
+
+
+def sheet_kind(sheet: Path | None) -> str | None:
+    """The kind of the custom sheet at ``sheet`` (``"custom"`` or ``"movie"``), or None.
+
+    The only place a sheet's suffix is tested; ``None`` in, for a song with no sheet, gives None.
+    """
+    if sheet is None:
+        return None
+    return next(
+        (kind for suffix, kind in _SHEET_KINDS.items() if sheet.name.endswith(suffix)), None
+    )
+
+
 def custom_sheet_plan(song: Path, text: str | None = None) -> Plan:
     """The plan that times ``song`` from its typed custom sheet.
 
@@ -279,12 +295,12 @@ def custom_plan(job: SongJob) -> Plan | None:
     Every plan chosen without a repair starts here, a reset included: the sheet
     wins until a repair to another source removes it.
     """
-    sheet = custom_sheet_path(job.song_path)
-    if sheet is None:
-        return None
-    if sheet.name.endswith(CUSTOM_SRT_SUFFIX):
+    kind = sheet_kind(custom_sheet_path(job.song_path))
+    if kind == "movie":
         return movie_sheet_plan(job.song_path)
-    return custom_sheet_plan(job.song_path)
+    if kind == "custom":
+        return custom_sheet_plan(job.song_path)
+    return None
 
 
 def resolve_plan(job: SongJob, *, reset: bool) -> Plan:
