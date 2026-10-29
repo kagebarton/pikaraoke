@@ -22,6 +22,7 @@ import logging
 from dataclasses import dataclass
 from datetime import timedelta
 from statistics import median
+from typing import NamedTuple
 
 import srt
 
@@ -52,10 +53,11 @@ TRANSCRIBE = "transcribe"
 ASR = "asr"
 
 # Speed factors tried first: none, and the PAL speed-up (25 fps release of a
-# 23.976 fps film) with its reverse. When none of them fits, a free speed is
-# fitted to the anchors: real clips run at other speeds too (two Beauty and the
-# Beast clips at about 1.07). The spread limit vets a free speed as it vets a
-# factor; on wrong-song anchors it passes about as rarely.
+# 23.976 fps film) with its reverse. A free speed is fitted to the anchors too,
+# because real clips run at other speeds (two Beauty and the Beast clips at about
+# 1.07). It is used when no factor fits, or when it beats a passing factor by
+# MIN_FREE_SPEED_DRIFT_S; the spread limit vets it as it vets a factor. Measured
+# rates: plans/movie-subtitle-slice.md, Results rows 14-15.
 SPEED_FACTORS = (1.0, 25 / 23.976, 23.976 / 25)
 
 # A free speed further than this from 1 is not believed.
@@ -63,6 +65,11 @@ MAX_FREE_SPEED_CHANGE = 0.1
 
 # Anchors this close in cue time give a noisy slope, so their pair is skipped.
 MIN_SLOPE_SEPARATION_S = 20.0
+
+# A free speed with less spread replaces a passing factor only when it moves the
+# cues across the slice by more than this many seconds; noise in the heard times
+# fakes a smaller gap and would swap a right factor for a wrong speed.
+MIN_FREE_SPEED_DRIFT_S = 0.75
 
 # A cue counts as found when at least this share of its tokens matched a heard
 # word, so one stray "the" is not a hit.
@@ -288,29 +295,50 @@ def _scaled(spans: list[tuple[float, float]], speed: float) -> dict[int, tuple[f
     return {k: (speed * start, speed * end) for k, (start, end) in enumerate(spans)}
 
 
-def _best_speed(anchors: list[dict], spans: list[tuple[float, float]]) -> tuple[float, dict] | None:
+class _SpeedFit(NamedTuple):
+    """A speed and the offset stats of the anchors under it."""
+
+    speed: float
+    stats: dict
+
+    @property
+    def rank(self) -> tuple[bool, float]:
+        """Lower is better: a fit within the spread limit, then the least spread."""
+        return self.stats["bailed"] is not None, self.stats["mad_s"]
+
+
+def _fit_at(anchors: list[dict], spans: list[tuple[float, float]], speed: float) -> _SpeedFit:
+    return _SpeedFit(speed, offset_mad_against_cues(anchors, _scaled(spans, speed)))
+
+
+def _best_speed(anchors: list[dict], spans: list[tuple[float, float]]) -> _SpeedFit | None:
     """The speed with the smallest spread and its offset stats; None when too few anchors.
 
-    Prefers a factor that did not bail, then a free speed that did not, then the
-    least spread of those that bailed on spread, so pass 2 can still try to
-    repair a first mismatch. Ties keep the earlier factor, so no speed change
-    wins a tie.
+    Prefers a factor that did not bail, then the least spread of those that
+    bailed on spread, so pass 2 can still try to repair a first mismatch. Ties
+    keep the earlier factor, so no speed change wins a tie. A free speed takes
+    over from a factor that bailed whenever it has less spread, and from one that
+    passed only when it also moves the cues by more than MIN_FREE_SPEED_DRIFT_S.
     """
-    best: tuple[tuple[bool, float], float, dict] | None = None
-    for speed in SPEED_FACTORS:
-        stats = offset_mad_against_cues(anchors, _scaled(spans, speed))
-        if stats["bailed"] == "few_anchors":
-            return None
-        key = (stats["bailed"] is not None, stats["mad_s"])
-        if best is None or key < best[0]:
-            best = (key, speed, stats)
+    factors = [_fit_at(anchors, spans, speed) for speed in SPEED_FACTORS]
+    if factors[0].stats["bailed"] == "few_anchors":
+        return None
+    best = min(factors, key=lambda fit: fit.rank)
     free = free_speed(anchors, spans)
-    if best[0][0] and free is not None and abs(free - 1) <= MAX_FREE_SPEED_CHANGE:
-        stats = offset_mad_against_cues(anchors, _scaled(spans, free))
-        key = (stats["bailed"] is not None, stats["mad_s"])
-        if key < best[0]:
-            best = (key, free, stats)
-    return best[1], best[2]
+    if free is None or abs(free - 1) > MAX_FREE_SPEED_CHANGE:
+        return best
+    candidate = _fit_at(anchors, spans, free)
+    if candidate.rank < best.rank and (
+        best.stats["bailed"] or _drift_s(anchors, spans, best.speed, free) > MIN_FREE_SPEED_DRIFT_S
+    ):
+        return candidate
+    return best
+
+
+def _drift_s(anchors: list[dict], spans: list[tuple[float, float]], a: float, b: float) -> float:
+    """Seconds the speeds ``a`` and ``b`` move the cues apart across the anchors' extent."""
+    starts = [spans[anchor["lid"]][0] for anchor in anchors]
+    return abs(a - b) * (max(starts) - min(starts))
 
 
 def free_speed(anchors: list[dict], spans: list[tuple[float, float]]) -> float | None:
@@ -323,7 +351,7 @@ def free_speed(anchors: list[dict], spans: list[tuple[float, float]]) -> float |
     slopes = [
         (h2 - h1) / (t2 - t1)
         for (t1, h1), (t2, h2) in itertools.combinations(points, 2)
-        if t2 - t1 > MIN_SLOPE_SEPARATION_S
+        if abs(t2 - t1) > MIN_SLOPE_SEPARATION_S
     ]
     return median(slopes) if slopes else None
 

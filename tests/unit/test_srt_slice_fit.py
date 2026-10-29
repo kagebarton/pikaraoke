@@ -1,6 +1,7 @@
 """Tests for the movie-subtitle slice fit (lib/srt_slice_fit.py), on synthetic cues."""
 
 import json
+import random
 from datetime import timedelta
 
 import srt
@@ -16,6 +17,7 @@ from pikaraoke.lib.srt_slice_fit import (
     TOO_FEW,
     TRANSCRIBE,
     fit_slice,
+    free_speed,
     heard_streams,
 )
 
@@ -99,6 +101,25 @@ class TestFit:
         assert result.status == FITS
         assert abs(result.speed - 1.07) < 0.001
         assert max(abs(a - _clip_start(k)) for k, a in enumerate(_starts(result.srt))) < 0.05
+
+    def test_a_short_clip_fits_at_its_own_speed_when_a_factor_barely_passes(self):
+        song = _song(20)
+        for speed in (1.02, 1.065, 1.07):
+            result = fit_slice(
+                _movie_srt(song, shift=-1800.0, speed=speed), {TRANSCRIBE: _heard(song)}, 120.0
+            )
+            assert result.status == FITS
+            assert abs(result.speed - speed) < 0.001
+            assert max(abs(a - _clip_start(k)) for k, a in enumerate(_starts(result.srt))) < 0.002
+
+    def test_noisy_heard_times_keep_the_factor_over_a_barely_different_free_speed(self):
+        song = _song(30)
+        rng = random.Random(4)
+        jitter = {k: rng.gauss(0, 0.3) for k in song}
+        heard = _heard(song, clip_start=lambda k: _clip_start(k) + jitter[k])
+        result = fit_slice(_movie_srt(song, shift=-1800.0), {TRANSCRIBE: heard}, 300.0)
+        assert result.status == FITS
+        assert result.speed == 1.0
 
     def test_a_free_speed_too_far_from_one_is_refused(self):
         song = _song()
@@ -244,3 +265,45 @@ class TestRepeatedLine:
         anchors, found = srt_slice_fit._match_by_time(tokens, spans, 1.0, 100.0, heard)
         assert found == {2}
         assert anchors == [{"lid": 2, "start": 110.0}]
+
+
+class TestFreeSpeed:
+    def test_none_without_a_pair_of_anchors_far_enough_apart(self):
+        spans = [(5.0 * k, 5.0 * k + 3.0) for k in range(5)]  # starts 0-20 s: 20 s is not enough
+        anchors = [{"lid": k, "start": 100.0 + 1.07 * spans[k][0]} for k in range(5)]
+        assert free_speed(anchors, spans) is None
+
+    def test_cue_starts_out_of_file_order_still_give_the_slope(self):
+        spans = [(100.0, 103.0), (60.0, 63.0), (20.0, 23.0)]
+        anchors = [{"lid": k, "start": 5.0 + 1.07 * spans[k][0]} for k in range(3)]
+        assert abs(free_speed(anchors, spans) - 1.07) < 1e-9
+
+
+class TestPassTwoPick:
+    def test_pass_two_picks_its_own_speed_and_shift_when_pass_one_saw_too_little(self, monkeypatch):
+        song = _song(20)
+        order_match = srt_slice_fit._match_by_order
+
+        def first_five_cues(tokens, words):
+            anchors, _ = order_match(tokens, words)
+            return anchors[:5], {a["lid"] for a in anchors[:5]}
+
+        picks = []
+        best_speed = srt_slice_fit._best_speed
+
+        def recording(anchors, spans):
+            picks.append(best_speed(anchors, spans))
+            return picks[-1]
+
+        monkeypatch.setattr(srt_slice_fit, "_match_by_order", first_five_cues)
+        monkeypatch.setattr(srt_slice_fit, "_best_speed", recording)
+        text = _movie_srt(song, shift=-1800.0, speed=1.07)
+        result = fit_slice(text, {TRANSCRIBE: _heard(song)}, 120.0)
+
+        pass1, pass2 = picks
+        assert pass1.speed == srt_slice_fit.SPEED_FACTORS[1]
+        assert abs(pass2.speed - 1.07) < 0.001
+        assert abs(pass2.stats["offset_s"] - pass1.stats["offset_s"]) > 1.0
+        assert result.status == FITS
+        assert result.speed == pass2.speed
+        assert result.shift_s == pass2.stats["offset_s"]
