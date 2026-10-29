@@ -91,6 +91,22 @@ class TestFit:
             assert abs(result.shift_s + 1800.0) < 0.05
             assert max(abs(a - _clip_start(k)) for k, a in enumerate(_starts(result.srt))) < 0.01
 
+    def test_a_speed_no_factor_covers_is_fitted_free(self):
+        song = _song()
+        result = fit_slice(
+            _movie_srt(song, shift=-1800.0, speed=1.07), {TRANSCRIBE: _heard(song)}, 300.0
+        )
+        assert result.status == FITS
+        assert abs(result.speed - 1.07) < 0.001
+        assert max(abs(a - _clip_start(k)) for k, a in enumerate(_starts(result.srt))) < 0.05
+
+    def test_a_free_speed_too_far_from_one_is_refused(self):
+        song = _song()
+        result = fit_slice(
+            _movie_srt(song, shift=-1800.0, speed=1.15), {TRANSCRIBE: _heard(song)}, 300.0
+        )
+        assert (result.status, result.reason) == (REFUSED, DISAGREE)
+
     def test_clip_cut_from_two_scenes_is_refused_as_disagreeing(self):
         song = _song()
         movie = srt.compose(
@@ -215,10 +231,6 @@ class TestHeardStreams:
     def test_nothing_on_disk_is_no_streams(self):
         assert heard_streams(None, None) == {}
         assert heard_streams({"transcribe_words": None}, "") == {}
-
-
-def test_provisional_floor_is_a_share():
-    assert 0 < srt_slice_fit.MIN_MATCHED_SHARE <= 1
 
 
 class TestRepeatedLine:
