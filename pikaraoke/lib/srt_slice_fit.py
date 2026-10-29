@@ -10,16 +10,18 @@ written here.
 
 The match runs twice. Pass 1 matches by order only, because movie times and
 clip times are an hour apart and a time tiebreak would be noise. It gives a
-first shift and picks the speed (a 25 fps subtitle file against a 23.976 fps
-film drifts about 8 s over three minutes). Pass 2 re-matches with the cues'
-expected times mapped through that fit, which hands a repeated chorus line to
-the right instance.
+first shift and speed (a 25 fps subtitle file against a 23.976 fps film drifts
+about 8 s over three minutes). Pass 2 re-matches with the cues' expected times
+mapped through that fit, which hands a repeated chorus line to the right
+instance, and fits the speed and shift again from its own matches.
 """
 
+import itertools
 import json
 import logging
 from dataclasses import dataclass
 from datetime import timedelta
+from statistics import median
 
 import srt
 
@@ -49,18 +51,29 @@ DISAGREE = "disagree"
 TRANSCRIBE = "transcribe"
 ASR = "asr"
 
-# Speed factors tried: none, and the PAL speed-up (25 fps release of a 23.976
-# fps film) with its reverse. Free-form speed is ruled out: with few anchors it
-# fits noise.
+# Speed factors tried first: none, and the PAL speed-up (25 fps release of a
+# 23.976 fps film) with its reverse. When none of them fits, a free speed is
+# fitted to the anchors: real clips run at other speeds too (two Beauty and the
+# Beast clips at about 1.07). The spread limit vets a free speed as it vets a
+# factor; on wrong-song anchors it passes about as rarely.
 SPEED_FACTORS = (1.0, 25 / 23.976, 23.976 / 25)
+
+# A free speed further than this from 1 is not believed.
+MAX_FREE_SPEED_CHANGE = 0.1
+
+# Anchors this close in cue time give a noisy slope, so their pair is skipped.
+MIN_SLOPE_SEPARATION_S = 20.0
 
 # A cue counts as found when at least this share of its tokens matched a heard
 # word, so one stray "the" is not a hit.
 FOUND_MIN_TOKEN_SHARE = 0.5
 
-# Fits when the share of in-clip cues found reaches this. Provisional: the value
-# is set from the calibration table (plans/movie-subtitle-slice.md, GATE B).
-MIN_MATCHED_SHARE = 0.5
+# Fits when the share of in-clip cues found reaches this. Calibrated on eight real
+# slices (plans/movie-subtitle-slice.md, GATE B): right-song fits found 41-100%,
+# the sparse ASR stream being the low end; wrong-song runs at most 6%. A
+# low share with a tight spread is still a right fit: the cues nobody heard keep
+# the subtitles' own (shifted) times.
+MIN_MATCHED_SHARE = 0.25
 
 
 @dataclass(frozen=True)
@@ -173,11 +186,12 @@ def _fit_one_stream(
     if pass1 is None:
         return SliceFit(REFUSED, reason=TOO_FEW, total=n_cues, heard_source=name)
 
-    speed, shift = pass1
-    anchors, found = _match_by_time(tokens, spans, speed, shift, words)
-    stats = offset_mad_against_cues(anchors, _scaled(spans, speed))
-    if stats["bailed"] == "few_anchors":
+    speed, stats = pass1
+    anchors, found = _match_by_time(tokens, spans, speed, stats["offset_s"], words)
+    pass2 = _best_speed(anchors, spans)
+    if pass2 is None:
         return SliceFit(REFUSED, reason=TOO_FEW, total=n_cues, heard_source=name)
+    speed, stats = pass2
     shift = stats["offset_s"]
     common = {"heard_source": name, "spread_s": stats["mad_s"], "anchors": stats["n_anchors_fit"]}
     if stats["bailed"]:
@@ -274,24 +288,44 @@ def _scaled(spans: list[tuple[float, float]], speed: float) -> dict[int, tuple[f
     return {k: (speed * start, speed * end) for k, (start, end) in enumerate(spans)}
 
 
-def _best_speed(
-    anchors: list[dict], spans: list[tuple[float, float]]
-) -> tuple[float, float] | None:
-    """``(speed, shift)`` with the smallest spread, or None when no anchors to fit.
+def _best_speed(anchors: list[dict], spans: list[tuple[float, float]]) -> tuple[float, dict] | None:
+    """The speed with the smallest spread and its offset stats; None when too few anchors.
 
-    Prefers a factor that did not bail; failing that, the least spread of those
-    that bailed on spread, so pass 2 can still try to repair a first mismatch.
-    Ties keep the earlier factor, so no speed change wins a tie.
+    Prefers a factor that did not bail, then a free speed that did not, then the
+    least spread of those that bailed on spread, so pass 2 can still try to
+    repair a first mismatch. Ties keep the earlier factor, so no speed change
+    wins a tie.
     """
-    best: tuple[tuple[int, float], float, float] | None = None
+    best: tuple[tuple[bool, float], float, dict] | None = None
     for speed in SPEED_FACTORS:
         stats = offset_mad_against_cues(anchors, _scaled(spans, speed))
         if stats["bailed"] == "few_anchors":
             return None
         key = (stats["bailed"] is not None, stats["mad_s"])
         if best is None or key < best[0]:
-            best = (key, speed, stats["offset_s"])
+            best = (key, speed, stats)
+    free = free_speed(anchors, spans)
+    if best[0][0] and free is not None and abs(free - 1) <= MAX_FREE_SPEED_CHANGE:
+        stats = offset_mad_against_cues(anchors, _scaled(spans, free))
+        key = (stats["bailed"] is not None, stats["mad_s"])
+        if key < best[0]:
+            best = (key, free, stats)
     return best[1], best[2]
+
+
+def free_speed(anchors: list[dict], spans: list[tuple[float, float]]) -> float | None:
+    """Theil-Sen slope of anchor time against cue start; None with no pair far enough apart.
+
+    The median of pairwise slopes shrugs off the few anchors a match gives the
+    wrong line, where a least-squares slope would be dragged by them.
+    """
+    points = [(spans[a["lid"]][0], a["start"]) for a in anchors]
+    slopes = [
+        (h2 - h1) / (t2 - t1)
+        for (t1, h1), (t2, h2) in itertools.combinations(points, 2)
+        if t2 - t1 > MIN_SLOPE_SEPARATION_S
+    ]
+    return median(slopes) if slopes else None
 
 
 def _corrected_srt(raw_cues: list[srt.Subtitle], speed: float, shift: float, length: float) -> str:

@@ -10,8 +10,9 @@ caption, each on its own and then both together. One row per run, as markdown,
 so the table pastes into a plan's results log as is.
 
 The verdict column uses ``MIN_MATCHED_SHARE`` and the spread limit of
-``offset_mad_against_cues`` as they stand in the code; "slope" is a free
-(Theil-Sen) speed over the order-only anchors, printed only to show how far the speed factors in ``SPEED_FACTORS`` are from the data.
+``offset_mad_against_cues`` as they stand in the code; "slope" is the free
+speed (``free_speed``) over the order-only anchors, printed whichever speed the
+fit kept.
 
 With ``--cross``, a second table runs each slice against every *other* slice's
 song (transcribe words): the wrong-song cases a matched-share floor must refuse.
@@ -26,12 +27,10 @@ Run from the repo root::
 from __future__ import annotations
 
 import argparse
-import itertools
 import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from statistics import median
 
 # Allow running as ``python scripts/movie_srt_fit_report.py`` from repo root.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -46,11 +45,10 @@ from pikaraoke.lib.srt_slice_fit import (  # noqa: E402
     _CueTokens,
     _match_by_order,
     fit_slice,
+    free_speed,
     heard_streams,
 )
 
-# Anchors this far apart in cue time or closer say nothing about a slope.
-MIN_SLOPE_SEPARATION_S = 20.0
 HEADER = (
     "| Song | Heard | Words | Clip s | Status | Matched | Dropped | Shift s | Speed | "
     "Spread s | Anchors | Slope |\n|---|---|---|---|---|---|---|---|---|---|---|---|"
@@ -76,16 +74,10 @@ def resolve_song(folder: Path, name: str) -> Path:
 
 
 def free_slope(srt_text: str, words: list[dict]) -> float | None:
-    """Theil-Sen slope of heard time against cue time over the order-only anchors."""
+    """The free speed over the order-only anchors."""
     texts, spans = cue_spans_from_srt(srt_text)
     anchors, _ = _match_by_order(_CueTokens.of(texts), words)
-    points = [(spans[a["lid"]][0], a["start"]) for a in anchors]
-    slopes = [
-        (h2 - h1) / (t2 - t1)
-        for (t1, h1), (t2, h2) in itertools.combinations(points, 2)
-        if t2 - t1 > MIN_SLOPE_SEPARATION_S
-    ]
-    return median(slopes) if slopes else None
+    return free_speed(anchors, spans)
 
 
 def row(song: Song, label: str, n_words: int | None, fit: SliceFit, slope) -> str:
