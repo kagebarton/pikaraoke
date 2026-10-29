@@ -177,16 +177,26 @@ def lrc_to_srt(lrc_text: str) -> str:
     """The synced lines of an LRC as SRT text, so :func:`fit_slice` takes them as subtitles.
 
     LRC stamps only starts: each line ends at the next start, and the last holds
-    ``LRC_LAST_LINE_HOLD_S``. An LRC with no timed line gives ``""``, which
-    ``fit_slice`` refuses as ``not_srt``.
+    ``LRC_LAST_LINE_HOLD_S``. Lines stamped at the same start (a duet's two singers)
+    share one cue, as a two-line subtitle does; a cue of no length would be dropped.
+    An LRC with no timed line gives ``""``, which ``fit_slice`` refuses as ``not_srt``.
     """
     texts, spans = lrclib.cue_spans_from_lrc(lrc_text)
-    return srt.compose(
-        srt.Subtitle(
-            index=0, start=timedelta(seconds=start), end=timedelta(seconds=end), content=text
-        )
-        for text, (start, end) in zip(texts, spans)
-    )
+    cues: list[srt.Subtitle] = []
+    for text, (start, end) in zip(texts, spans):
+        if cues and cues[-1].start.total_seconds() == start:
+            cues[-1].content += "\n" + text
+            cues[-1].end = timedelta(seconds=end)
+        else:
+            cues.append(
+                srt.Subtitle(
+                    index=0,
+                    start=timedelta(seconds=start),
+                    end=timedelta(seconds=end),
+                    content=text,
+                )
+            )
+    return srt.compose(cues)
 
 
 def flagged_runs(

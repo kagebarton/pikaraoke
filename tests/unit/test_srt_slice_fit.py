@@ -395,6 +395,17 @@ class TestLrcToSrt:
             (61.0, 61.0 + LRC_LAST_LINE_HOLD_S),
         ]
 
+    def test_lines_stamped_at_one_start_share_a_cue_rather_than_vanish(self):
+        lrc = "[00:10.00] him: line a\n[00:10.00] her: line b\n[00:14.00] together\n"
+
+        cues = list(srt.parse(lrc_to_srt(lrc)))
+
+        assert [cue.content for cue in cues] == ["him: line a\nher: line b", "together"]
+        assert [(c.start.total_seconds(), c.end.total_seconds()) for c in cues] == [
+            (10.0, 14.0),
+            (14.0, 14.0 + LRC_LAST_LINE_HOLD_S),
+        ]
+
     def test_an_lrc_with_no_timed_line_is_empty_and_fit_slice_refuses_it(self):
         assert lrc_to_srt("") == ""
         assert lrc_to_srt("[ti:A Title]\nwords with no stamp\n") == ""
