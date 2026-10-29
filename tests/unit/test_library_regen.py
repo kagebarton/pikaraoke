@@ -400,6 +400,17 @@ class TestCustomSheetWinsEveryPlan:
         movie = _write_movie_sheet(tmp_path, YT_STEM)
         assert lr.custom_sheet_path(song) == movie
 
+    def test_the_sheet_kind_comes_from_its_suffix(self, tmp_path):
+        typed = _write_sheet(tmp_path, YT_STEM)
+        movie = _write_movie_sheet(tmp_path, "Other")
+
+        assert lr.sheet_kind(typed) == "custom"
+        assert lr.sheet_kind(movie) == "movie"
+
+    def test_no_sheet_and_a_file_that_is_no_sheet_have_no_kind(self, tmp_path):
+        assert lr.sheet_kind(None) is None
+        assert lr.sheet_kind(tmp_path / "lyrics" / f"{YT_STEM}.lrc") is None
+
 
 # ---------------------------------------------------------------------------
 # adopt_caption / fetch_caption — download + length gate + resolve-or-revert

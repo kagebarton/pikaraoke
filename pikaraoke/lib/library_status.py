@@ -14,10 +14,10 @@ from pikaraoke.lib import lrclib
 from pikaraoke.lib.alignment_capture import SCHEMA_VERSION
 from pikaraoke.lib.library_regen import (
     BACKUP_ROOT,
-    CUSTOM_SRT_SUFFIX,
     custom_sheet_path,
     list_videos,
     read_bundle,
+    sheet_kind,
 )
 from pikaraoke.lib.metadata_parser import extract_youtube_id
 
@@ -32,8 +32,7 @@ class SongStatus:
     category: str  # "current" | "behind" | "no_lyrics" | "not_processed"
     schema_version: int | None
     origin: str | None  # bundle lyrics.origin: "srt" | "genius" | "custom" | "movie_srt"
-    custom_sheet: bool  # a custom lyric sheet (either kind) on disk: the pick, whatever the bundle says
-    movie_sheet: bool  # ...and it is the movie-subtitles kind (.custom.srt)
+    sheet_kind: str | None  # custom lyric sheet on disk, the pick whatever the bundle says: "custom" | "movie"
     genius: dict | None  # lyrics.genius: {id, title, artist}
     lrclib: dict | None  # lyrics.lrclib: trackName, artistName, albumName, duration, id
     lrclib_state: str  # "used" | "rejected" | "none" | "skipped" | "n/a"
@@ -65,8 +64,7 @@ class SongStatus:
 
 def song_status(song: Path) -> SongStatus:
     bundle = read_bundle(song.parent, song.stem)
-    sheet = custom_sheet_path(song)
-    movie_sheet = sheet is not None and sheet.name.endswith(CUSTOM_SRT_SUFFIX)
+    kind = sheet_kind(custom_sheet_path(song))
     # Read from disk: bundles from before schema 9 never recorded the match.
     lrc = lrclib.lrc_path(song)
     lrc_on_disk = lrc.is_file() and not lrclib.is_skip_marker(lrc)
@@ -79,8 +77,7 @@ def song_status(song: Path) -> SongStatus:
             category=category,
             schema_version=None,
             origin=None,
-            custom_sheet=sheet is not None,
-            movie_sheet=movie_sheet,
+            sheet_kind=kind,
             genius=None,
             lrclib=None,
             lrclib_state="n/a",
@@ -110,8 +107,7 @@ def song_status(song: Path) -> SongStatus:
         category="behind" if version < SCHEMA_VERSION else "current",
         schema_version=version,
         origin=origin,
-        custom_sheet=sheet is not None,
-        movie_sheet=movie_sheet,
+        sheet_kind=kind,
         genius=lyrics.get("genius") or None,
         lrclib=_lrclib_match(lyrics),
         lrclib_state=state,

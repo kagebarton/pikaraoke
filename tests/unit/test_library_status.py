@@ -280,35 +280,31 @@ class TestCustomSheet:
     def test_only_a_sheet_on_disk_counts(self, tmp_path):
         video = make_video(tmp_path)
         write_bundle(tmp_path, video.stem, lyrics={"origin": "custom", "lines": ["one"]})
-        assert library_status.song_status(video).custom_sheet is False
+        assert library_status.song_status(video).sheet_kind is None
 
         sheet = tmp_path / "lyrics" / f"{video.stem}.custom.txt"
         sheet.parent.mkdir()
         sheet.write_text("one\n", encoding="utf-8")
         status = library_status.song_status(video)
-        assert (status.origin, status.custom_sheet, status.movie_sheet) == ("custom", True, False)
+        assert (status.origin, status.sheet_kind) == ("custom", "custom")
 
     def test_a_sheet_counts_with_no_bundle_too(self, tmp_path):
         video = make_video(tmp_path)
         (tmp_path / "lyrics").mkdir()
         (tmp_path / "lyrics" / f"{video.stem}.custom.txt").write_text("one\n", encoding="utf-8")
 
-        assert library_status.song_status(video).custom_sheet is True
+        assert library_status.song_status(video).sheet_kind == "custom"
 
     def test_a_movie_subtitles_sheet_counts_too(self, tmp_path):
         video = make_video(tmp_path)
         write_bundle(tmp_path, video.stem, lyrics={"origin": "movie_srt", "lines": ["one"]})
-        assert library_status.song_status(video).custom_sheet is False
+        assert library_status.song_status(video).sheet_kind is None
 
         (tmp_path / "lyrics").mkdir()
         (tmp_path / "lyrics" / f"{video.stem}.custom.srt").write_text("x\n", encoding="utf-8")
         status = library_status.song_status(video)
 
-        assert (status.origin, status.custom_sheet, status.movie_sheet) == (
-            "movie_srt",
-            True,
-            True,
-        )
+        assert (status.origin, status.sheet_kind) == ("movie_srt", "movie")
 
     def test_a_movie_subtitles_sheet_counts_with_no_bundle_too(self, tmp_path):
         video = make_video(tmp_path)
@@ -317,13 +313,13 @@ class TestCustomSheet:
 
         status = library_status.song_status(video)
 
-        assert (status.custom_sheet, status.movie_sheet) == (True, True)
+        assert status.sheet_kind == "movie"
 
-    def test_no_sheet_is_not_a_movie_sheet(self, tmp_path):
+    def test_a_movie_bundle_with_no_sheet_on_disk_has_no_kind(self, tmp_path):
         video = make_video(tmp_path)
         write_bundle(tmp_path, video.stem, lyrics={"origin": "movie_srt", "lines": ["one"]})
 
-        assert library_status.song_status(video).movie_sheet is False
+        assert library_status.song_status(video).sheet_kind is None
 
     def test_the_sheet_the_next_run_uses_names_the_kind_when_both_are_on_disk(self, tmp_path):
         """A failed put-back can leave both kinds; the typed one comes first, as the plan does."""
@@ -334,7 +330,7 @@ class TestCustomSheet:
 
         status = library_status.song_status(video)
 
-        assert (status.custom_sheet, status.movie_sheet) == (True, False)
+        assert status.sheet_kind == "custom"
 
 
 class TestLrcOnDisk:
