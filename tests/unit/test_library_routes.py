@@ -8,7 +8,6 @@ manager is a mock, so a queued job is whatever ``enqueue_regen`` was handed.
 import json
 import os
 import threading
-from datetime import timedelta
 from pathlib import Path
 from unittest.mock import MagicMock
 from urllib.parse import parse_qs, quote, unquote_to_bytes, urlsplit
@@ -1948,15 +1947,12 @@ class TestLrcCard:
     )
 
     @classmethod
-    def fitted(cls) -> str:
-        """The fitted SRT the pipeline loads: the lines, 5 s apart from 0:10."""
-        return srt.compose(
-            srt.Subtitle(n, timedelta(seconds=10 + 5 * n), timedelta(seconds=14 + 5 * n), line)
-            for n, line in enumerate(cls.LINES)
-        )
+    def fitted(cls) -> tuple[tuple[str, float], ...]:
+        """The fit's lines in the clip: the lines, 5 s apart from 0:10."""
+        return tuple((line, 10.0 + 5 * n) for n, line in enumerate(cls.LINES))
 
     def check(self, status="fits", *, gap=0, viable=True, helps=True, record=None, **fit) -> dict:
-        fields = {"matched": 5, "total": 6, "srt": self.fitted()}
+        fields = {"matched": 5, "total": 6, "lines": self.fitted()}
         fields.update(fit)
         duration = None if gap is None else 211 + gap
         check = LrcTimingCheck(

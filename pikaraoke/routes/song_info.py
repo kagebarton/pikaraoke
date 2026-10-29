@@ -30,7 +30,6 @@ from pikaraoke.lib.library_tools import (
     custom_sheet_lines,
 )
 from pikaraoke.lib.lrclib import LrclibUnavailable
-from pikaraoke.lib.srt_cues import cue_spans_from_srt
 from pikaraoke.lib.srt_slice_fit import (
     DISAGREE,
     FITS,
@@ -787,9 +786,7 @@ def _card_text(card: dict) -> str:
     return " ".join(parts + ([card["tip"]] if card["tip"] else []))
 
 
-def _line_runs(
-    runs: list[tuple[int, int]], texts: list[str], spans: list[tuple[float, float]]
-) -> list[dict]:
+def _line_runs(runs: list[tuple[int, int]], lines: Sequence[tuple[str, float]]) -> list[dict]:
     """Stretches of a match's lines: a title ("m:ss–m:ss · n lines") and each line with its clip time."""
     return [
         {
@@ -797,12 +794,11 @@ def _line_runs(
                 "%(first)s–%(last)s · %(num)d line",
                 "%(first)s–%(last)s · %(num)d lines",
                 last - first + 1,
-                first=_mmss(spans[first][0]),
-                last=_mmss(spans[last][0]),
+                first=_mmss(lines[first][1]),
+                last=_mmss(lines[last][1]),
             ),
             "lines": [
-                {"time": _mmss(spans[line][0]), "text": texts[line]}
-                for line in range(first, last + 1)
+                {"time": _mmss(start), "text": text} for text, start in lines[first : last + 1]
             ],
         }
         for first, last in runs
@@ -816,9 +812,8 @@ def _lrc_fit_card(check: LrcTimingCheck, length: str | None) -> dict:
     are stretches nothing was heard for, so they could not be checked, a quieter note.
     """
     fit = check.fit
-    texts, spans = cue_spans_from_srt(fit.srt)
-    runs = _line_runs(flagged_runs(fit.mistimed, fit.unheard, MIN_FLAGGED_RUN), texts, spans)
-    unheard = _line_runs(unheard_runs(fit.unheard, MIN_UNHEARD_RUN), texts, spans)
+    runs = _line_runs(flagged_runs(fit.mistimed, fit.unheard, MIN_FLAGGED_RUN), fit.lines)
+    unheard = _line_runs(unheard_runs(fit.unheard, MIN_UNHEARD_RUN), fit.lines)
     lines = _fit_lines(
         fit,
         earlier=_("Line times move %(time)s earlier."),

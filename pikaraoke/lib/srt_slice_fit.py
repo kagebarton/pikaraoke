@@ -126,10 +126,14 @@ class SliceFit:
     far the first cue inside the clip moves, which a speed change sets apart from
     ``shift_s``. ``srt`` is the corrected slice text. ``heard_source`` and
     ``spread_s`` (median absolute deviation of the anchors) are diagnostics for
-    the calibration report. ``mistimed`` and ``unheard`` are set on ``fits`` only:
-    the in-clip lines heard more than ``FLAG_TOLERANCE_S`` from their fitted start,
-    and those nothing was heard for. Both are indexes into the lines the pipeline
-    loads from ``srt`` (cues cleaned to nothing are not lines), in order.
+    the calibration report. ``lines``, ``mistimed`` and ``unheard`` are set on
+    ``fits`` only. ``lines`` are the cleaned lines inside the clip (cues cleaned to
+    nothing are not lines), each as ``(text, clip-time start)``; ``mistimed`` and
+    ``unheard`` are indexes into them: the lines heard more than ``FLAG_TOLERANCE_S``
+    from their fitted start, and those nothing was heard for. The flags carry their
+    own lines because cleaning ``srt`` again can number them differently: whether a
+    file is typed in capitals, which decides speaker labels, is judged over the cues
+    it holds.
     """
 
     status: str
@@ -144,6 +148,7 @@ class SliceFit:
     heard_source: str | None = None
     spread_s: float | None = None
     anchors: int = 0
+    lines: tuple[tuple[str, float], ...] = ()
     mistimed: tuple[int, ...] = ()
     unheard: tuple[int, ...] = ()
 
@@ -266,8 +271,10 @@ def fit_slice(srt_text: str, streams: dict[str, list[dict]], video_length: float
 
 @dataclass(frozen=True)
 class _CueTokens:
-    """The cues' normalised tokens, per cue and flat (with the cue each came from)."""
+    """The cues' cleaned texts, and their normalised tokens per cue and flat (with the cue each
+    came from)."""
 
+    texts: list[str]
     per_cue: list[list[str]]
     norms: list[str]
     cue_of: list[int]
@@ -276,6 +283,7 @@ class _CueTokens:
     def of(cls, texts: list[str]) -> "_CueTokens":
         per_cue = [[norm for norm, _ in toks] for toks in _tokenise_lines(texts)]
         return cls(
+            texts,
             per_cue,
             [norm for toks in per_cue for norm in toks],
             [k for k, toks in enumerate(per_cue) for _ in toks],
@@ -333,10 +341,14 @@ def _fit_one_stream(
     }
     if not inside or matched / len(inside) < MIN_MATCHED_SHARE:
         return SliceFit(REFUSED, reason=TOO_FEW, **base)
+    in_clip = sorted(inside)
     return SliceFit(
         FITS,
         srt=_corrected_srt(raw_cues, speed, shift, video_length),
-        **_flagged_lines(sorted(inside), anchors, spans, speed, shift),
+        lines=tuple(
+            (tokens.texts[k], _clip_span(*spans[k], speed, shift, video_length)[0]) for k in in_clip
+        ),
+        **_flagged_lines(in_clip, anchors, spans, speed, shift),
         **base,
     )
 
@@ -352,8 +364,7 @@ def _flagged_lines(
 
     Returns :class:`SliceFit`'s ``mistimed`` (the anchor sits more than
     FLAG_TOLERANCE_S from the start the fit gives the cue) and ``unheard`` (no
-    anchor), numbering the cues by their place in ``in_clip``, the lines of the
-    corrected sheet.
+    anchor), numbering the cues by their place in ``in_clip``, as ``lines`` is.
     """
     heard = {anchor["lid"]: anchor["start"] for anchor in anchors}
     mistimed = tuple(
