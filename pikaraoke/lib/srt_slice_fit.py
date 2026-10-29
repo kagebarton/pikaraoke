@@ -16,7 +16,8 @@ mapped through that fit, which hands a repeated chorus line to the right
 instance, and fits the speed and shift again from its own matches.
 
 An LRCLIB match's synced lyrics fit the same way (:func:`lrc_to_srt` makes them
-subtitles), and a fit also marks which lines the heard words do not bear out.
+subtitles), and a fit also marks the lines heard far from their fitted time and
+the lines nothing was heard for.
 """
 
 import itertools
@@ -96,14 +97,21 @@ FOUND_MIN_TOKEN_SHARE = 0.5
 # the subtitles' own (shifted) times.
 MIN_MATCHED_SHARE = 0.25
 
-# PLACEHOLDER, so that the module runs; GATE A of plans/lyric-source-lists.md sets
-# it. A fitted line is flagged when the heard words put its start more than this
-# many seconds from where the fit puts it, or when nothing was heard for it.
-FLAG_TOLERANCE_S = 2.0
+# A fitted line is mistimed when the heard words put its start more than this many
+# seconds from where the fit puts it. Set at GATE A of plans/lyric-source-lists.md
+# on the 17 joint songs: the two LRCs timed to another edit had lines 14-23 s off;
+# on the rest no line was off by more than 9 s, and nearly all by 4 s or less.
+FLAG_TOLERANCE_S = 5.0
 
-# PLACEHOLDER, as above. The shortest run of consecutive flagged lines worth
-# showing the admin as a run.
-MIN_FLAGGED_RUN = 3
+# The fewest mistimed lines that make a flagged run, the warning shown before an
+# LRC times a song. A cut verse or an extra repeat moves every line on one side of
+# it; a single mistimed line is a repeated phrase matched to its other instance.
+MIN_FLAGGED_RUN = 2
+
+# The shortest stretch of unheard lines worth a note. Nothing was heard there, so
+# the fit could not check those lines; a single unheard line is an ad-lib, a
+# chant or a line in another language the transcriber skipped.
+MIN_UNHEARD_RUN = 3
 
 
 @dataclass(frozen=True)
@@ -118,9 +126,10 @@ class SliceFit:
     far the first cue inside the clip moves, which a speed change sets apart from
     ``shift_s``. ``srt`` is the corrected slice text. ``heard_source`` and
     ``spread_s`` (median absolute deviation of the anchors) are diagnostics for
-    the calibration report. ``flagged`` is set on ``fits`` only: the in-clip lines
-    the heard words do not bear out, as indexes into the lines the pipeline loads
-    from ``srt`` (cues cleaned to nothing are not lines), in order.
+    the calibration report. ``mistimed`` and ``unheard`` are set on ``fits`` only:
+    the in-clip lines heard more than ``FLAG_TOLERANCE_S`` from their fitted start,
+    and those nothing was heard for. Both are indexes into the lines the pipeline
+    loads from ``srt`` (cues cleaned to nothing are not lines), in order.
     """
 
     status: str
@@ -135,7 +144,8 @@ class SliceFit:
     heard_source: str | None = None
     spread_s: float | None = None
     anchors: int = 0
-    flagged: tuple[int, ...] = ()
+    mistimed: tuple[int, ...] = ()
+    unheard: tuple[int, ...] = ()
 
 
 def heard_streams(bundle: dict | None, asr_json3: str | None) -> dict[str, list[dict]]:
@@ -179,14 +189,36 @@ def lrc_to_srt(lrc_text: str) -> str:
     )
 
 
-def flagged_runs(flagged: tuple[int, ...], min_run: int) -> list[tuple[int, int]]:
-    """The runs of consecutive ``flagged`` lines at least ``min_run`` long, as ``(first, last)``.
+def flagged_runs(
+    mistimed: tuple[int, ...], unheard: tuple[int, ...], min_run: int
+) -> list[tuple[int, int]]:
+    """The runs of at least ``min_run`` mistimed lines, as ``(first, last)`` mistimed line.
 
-    ``flagged`` is ascending, as :class:`SliceFit` has it. A cut verse or an extra
-    repeat leaves a run; single unheard lines do not.
+    Only a line heard near its fitted time ends a run: an unheard line between two
+    mistimed ones says nothing either way, so the run goes on past it.
     """
+    runs: list[tuple[int, int]] = []
+    current: list[int] = []
+
+    def close() -> None:
+        if len(current) >= min_run:
+            runs.append((current[0], current[-1]))
+        current.clear()
+
+    skipped = set(unheard)
+    for line in range(max(mistimed, default=-1) + 1):
+        if line in mistimed:
+            current.append(line)
+        elif line not in skipped:
+            close()
+    close()
+    return runs
+
+
+def unheard_runs(unheard: tuple[int, ...], min_run: int) -> list[tuple[int, int]]:
+    """The runs of consecutive ``unheard`` lines at least ``min_run`` long, as ``(first, last)``."""
     runs = []
-    for _, group in itertools.groupby(enumerate(flagged), key=lambda pair: pair[1] - pair[0]):
+    for _, group in itertools.groupby(enumerate(unheard), key=lambda pair: pair[1] - pair[0]):
         lines = [line for _, line in group]
         if len(lines) >= min_run:
             runs.append((lines[0], lines[-1]))
@@ -294,7 +326,7 @@ def _fit_one_stream(
     return SliceFit(
         FITS,
         srt=_corrected_srt(raw_cues, speed, shift, video_length),
-        flagged=_flagged_lines(sorted(inside), anchors, spans, speed, shift),
+        **_flagged_lines(sorted(inside), anchors, spans, speed, shift),
         **base,
     )
 
@@ -305,19 +337,22 @@ def _flagged_lines(
     spans: list[tuple[float, float]],
     speed: float,
     shift: float,
-) -> tuple[int, ...]:
-    """Which of the ``in_clip`` cues (indexes into ``spans``) the heard words do not bear out.
+) -> dict[str, tuple[int, ...]]:
+    """The ``in_clip`` cues (indexes into ``spans``) the heard words do not bear out.
 
-    A cue is flagged when no word was heard for it, or its anchor sits more than
-    FLAG_TOLERANCE_S from the start the fit gives it. The result numbers the cues
-    by their place in ``in_clip``, the lines of the corrected sheet.
+    Returns :class:`SliceFit`'s ``mistimed`` (the anchor sits more than
+    FLAG_TOLERANCE_S from the start the fit gives the cue) and ``unheard`` (no
+    anchor), numbering the cues by their place in ``in_clip``, the lines of the
+    corrected sheet.
     """
     heard = {anchor["lid"]: anchor["start"] for anchor in anchors}
-    return tuple(
+    mistimed = tuple(
         line
         for line, k in enumerate(in_clip)
-        if k not in heard or abs(heard[k] - (speed * spans[k][0] + shift)) > FLAG_TOLERANCE_S
+        if k in heard and abs(heard[k] - (speed * spans[k][0] + shift)) > FLAG_TOLERANCE_S
     )
+    unheard = tuple(line for line, k in enumerate(in_clip) if k not in heard)
+    return {"mistimed": mistimed, "unheard": unheard}
 
 
 def _match_by_order(tokens: _CueTokens, words: list[dict]) -> tuple[list[dict], set[int]]:

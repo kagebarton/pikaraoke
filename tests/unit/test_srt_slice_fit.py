@@ -15,6 +15,7 @@ from pikaraoke.lib.srt_slice_fit import (
     FLAG_TOLERANCE_S,
     MAX_CUES,
     MIN_FLAGGED_RUN,
+    MIN_UNHEARD_RUN,
     NO_REFERENCE,
     NOT_SRT,
     REFUSED,
@@ -26,6 +27,7 @@ from pikaraoke.lib.srt_slice_fit import (
     free_speed,
     heard_streams,
     lrc_to_srt,
+    unheard_runs,
 )
 
 LINE_GAP_S = 5.0
@@ -409,19 +411,36 @@ class TestFlaggedLines:
         assert abs(result.shift_s) < 0.05
         assert result.speed == 1.0
         assert (result.matched, result.total) == (30, 30)
-        assert result.flagged == ()
+        assert (result.mistimed, result.unheard) == ((), ())
 
-    def test_a_cut_verse_still_fits_and_its_lines_are_one_flagged_run(self):
-        """Six lines mid-song that the heard words never sing: the spread check passes them."""
+    def test_a_cut_verse_flags_the_lines_after_it_and_notes_its_own_as_unheard(self):
+        """The video skips six lines, so the ones after it come early; the spread check passes it."""
+        song = _song()
+        sung = {k: text for k, text in song.items() if not 18 <= k < 24}
+
+        def start(k: int) -> float:
+            return _clip_start(k - 6 if k >= 24 else k)
+
+        result = _fit_lrc(_lrc(song), _heard(sung, clip_start=start))
+
+        assert result.status == FITS
+        assert result.spread_s == 0
+        assert result.mistimed == (24, 25, 26, 27, 28, 29)
+        assert result.unheard == (18, 19, 20, 21, 22, 23)
+        assert flagged_runs(result.mistimed, result.unheard, MIN_FLAGGED_RUN) == [(24, 29)]
+        assert unheard_runs(result.unheard, MIN_UNHEARD_RUN) == [(18, 23)]
+
+    def test_a_stretch_nobody_heard_is_unheard_and_flags_no_run(self):
+        """Lines sung on time but missed by the transcriber, as Domino's second chorus was."""
         song = _song()
         sung = {k: text for k, text in song.items() if not 12 <= k < 18}
 
         result = _fit_lrc(_lrc(song), _heard(sung))
 
         assert result.status == FITS
-        assert result.spread_s == 0
-        assert result.flagged == (12, 13, 14, 15, 16, 17)
-        assert flagged_runs(result.flagged, MIN_FLAGGED_RUN) == [(12, 17)]
+        assert (result.mistimed, result.unheard) == ((), (12, 13, 14, 15, 16, 17))
+        assert flagged_runs(result.mistimed, result.unheard, MIN_FLAGGED_RUN) == []
+        assert unheard_runs(result.unheard, MIN_UNHEARD_RUN) == [(12, 17)]
 
     def test_single_unheard_lines_scattered_make_no_run(self):
         song = _song()
@@ -430,10 +449,10 @@ class TestFlaggedLines:
         result = _fit_lrc(_lrc(song), _heard(sung))
 
         assert result.status == FITS
-        assert result.flagged == (3, 9, 15, 21)
-        assert flagged_runs(result.flagged, MIN_FLAGGED_RUN) == []
+        assert result.unheard == (3, 9, 15, 21)
+        assert unheard_runs(result.unheard, MIN_UNHEARD_RUN) == []
 
-    def test_a_line_heard_far_from_its_time_is_flagged_and_one_near_it_is_not(self):
+    def test_a_line_heard_far_from_its_time_is_mistimed_and_one_near_it_is_not(self):
         song = _song()
         late = FLAG_TOLERANCE_S + 1.0
         near = FLAG_TOLERANCE_S / 2
@@ -444,12 +463,12 @@ class TestFlaggedLines:
         result = _fit_lrc(_lrc(song), _heard(song, clip_start=start))
 
         assert result.status == FITS
-        assert result.flagged == (7,)
+        assert (result.mistimed, result.unheard) == ((7,), ())
 
     def test_flagged_lines_number_the_lines_the_pipeline_loads_not_the_cues(self):
         """A music-note cue cleans to nothing, so it is no line and shifts none of the numbers."""
         song = _song(12)
-        lrc = _lrc(song) + f"{_stamp(_clip_start(5) + 2)} \u266a\n"
+        lrc = _lrc(song) + f"{_stamp(_clip_start(5) + 2)} ♪\n"
         sung = {k: text for k, text in song.items() if k != 8}
 
         result = _fit_lrc(lrc, _heard(sung))
@@ -457,7 +476,7 @@ class TestFlaggedLines:
         assert result.status == FITS
         texts, _ = cue_spans_from_srt(result.srt)
         assert len(texts) == 12
-        assert result.flagged == (8,)
+        assert result.unheard == (8,)
         assert texts[8] == song[8]
 
     def test_cues_outside_the_clip_are_not_numbered(self):
@@ -469,7 +488,7 @@ class TestFlaggedLines:
 
         assert result.status == FITS
         assert result.dropped == 9
-        assert result.flagged == (2,)
+        assert result.unheard == (2,)
         assert len(cue_spans_from_srt(result.srt)[0]) == result.total == 21
 
     def test_lines_that_end_before_the_clip_begins_are_not_numbered(self):
@@ -488,7 +507,7 @@ class TestFlaggedLines:
         texts, _ = cue_spans_from_srt(result.srt)
         assert len(texts) == result.total == 32
         # The two before lines that overlap the clip's start and the unheard line 5.
-        assert result.flagged == (0, 1, 7)
+        assert result.unheard == (0, 1, 7)
         assert texts[7] == song[5]
 
     def test_a_refused_fit_flags_nothing(self):
@@ -497,7 +516,7 @@ class TestFlaggedLines:
         result = _fit_lrc(_lrc(song), _heard({0: "completely unrelated words here ok"}))
 
         assert result.status == REFUSED
-        assert result.flagged == ()
+        assert (result.mistimed, result.unheard) == ((), ())
 
     def test_the_two_streams_are_flagged_on_their_own(self):
         song = _song()
@@ -506,7 +525,7 @@ class TestFlaggedLines:
         full = fit_slice(lrc_to_srt(_lrc(song)), {TRANSCRIBE: _heard(song)}, 300.0)
         gap = fit_slice(lrc_to_srt(_lrc(song)), {ASR: _heard(sung)}, 300.0)
 
-        assert (full.flagged, gap.flagged) == ((), (4, 5, 6, 7))
+        assert (full.unheard, gap.unheard) == ((), (4, 5, 6, 7))
 
     @staticmethod
     def _video_repeating(song, first: int, last: int) -> list[dict]:
@@ -520,45 +539,64 @@ class TestFlaggedLines:
             ]
         return words
 
-    def test_what_the_flags_do_for_an_extra_repeat(self):
-        """A record for GATE A, not a requirement: the spread check passes every one of these.
+    def test_an_extra_repeat_leaves_a_flagged_run_wherever_it_falls(self):
+        """The spread check passes every one of these.
 
-        The flags mark whichever side of the repeat holds the minority of lines, since
-        the median timing follows the majority. A repeat late in the song flags the
-        lines after it; a repeat in the middle flags the lines before it.
+        The median timing follows the majority of lines, so the run is on whichever
+        side of the repeat holds fewer: a repeat late in the song flags the lines
+        after it, one in the middle or early flags the lines before it.
         """
         song = _song()
-        recorded = {}
+        runs = {}
         for first, last in ((24, 27), (14, 17), (4, 7)):
             result = _fit_lrc(_lrc(song), self._video_repeating(song, first, last))
             assert result.status == FITS
-            recorded[(first, last)] = (result.shift_s, result.flagged)
+            runs[(first, last)] = flagged_runs(result.mistimed, result.unheard, MIN_FLAGGED_RUN)
 
-        assert recorded == {
-            (24, 27): (0.0, (28, 29)),
-            (14, 17): (20.0, tuple(range(14))),
-            (4, 7): (20.0, (0, 1, 2, 3)),
-        }
+        assert runs == {(24, 27): [(28, 29)], (14, 17): [(0, 13)], (4, 7): [(0, 3)]}
 
 
 class TestFlaggedRuns:
-    def test_runs_at_least_min_run_long_are_reported_first_to_last(self):
-        assert flagged_runs((2, 3, 4, 9, 10, 11, 12), 3) == [(2, 4), (9, 12)]
+    def test_runs_of_at_least_min_run_mistimed_lines_are_reported_first_to_last(self):
+        assert flagged_runs((2, 3, 4, 9, 10, 11, 12), (), 3) == [(2, 4), (9, 12)]
 
     def test_a_shorter_run_is_left_out(self):
-        assert flagged_runs((2, 3, 9, 10, 11), 3) == [(9, 11)]
+        assert flagged_runs((2, 3, 9, 10, 11), (), 3) == [(9, 11)]
 
     def test_a_run_exactly_min_run_long_counts(self):
-        assert flagged_runs((5, 6, 7), 3) == [(5, 7)]
+        assert flagged_runs((5, 6, 7), (), 3) == [(5, 7)]
 
     def test_a_run_at_the_start_and_one_at_the_end(self):
-        assert flagged_runs((0, 1, 2, 7, 8, 9), 3) == [(0, 2), (7, 9)]
+        assert flagged_runs((0, 1, 2, 7, 8, 9), (), 3) == [(0, 2), (7, 9)]
+
+    def test_a_line_heard_on_time_ends_a_run(self):
+        assert flagged_runs((1, 2, 4, 5), (), 3) == []
+
+    def test_unheard_lines_between_mistimed_ones_do_not_end_a_run(self):
+        assert flagged_runs((1, 2, 4, 6), (3, 5), 3) == [(1, 6)]
+
+    def test_unheard_lines_do_not_count_toward_a_run(self):
+        assert flagged_runs((1, 4), (2, 3), 3) == []
+
+    def test_unheard_lines_at_a_runs_edge_are_not_part_of_it(self):
+        assert flagged_runs((3, 4), (0, 1, 2, 5, 6), 2) == [(3, 4)]
+
+    def test_nothing_mistimed_has_no_runs(self):
+        assert flagged_runs((), (1, 2, 3, 4), 2) == []
+
+
+class TestUnheardRuns:
+    def test_runs_at_least_min_run_long_are_reported_first_to_last(self):
+        assert unheard_runs((2, 3, 4, 9, 10, 11, 12), 3) == [(2, 4), (9, 12)]
+
+    def test_a_shorter_run_is_left_out(self):
+        assert unheard_runs((2, 3, 9, 10, 11), 3) == [(9, 11)]
 
     def test_lines_that_skip_a_number_are_not_one_run(self):
-        assert flagged_runs((1, 2, 4, 5), 3) == []
+        assert unheard_runs((1, 2, 4, 5), 3) == []
 
     def test_a_min_run_of_one_reports_every_line(self):
-        assert flagged_runs((1, 4, 5), 1) == [(1, 1), (4, 5)]
+        assert unheard_runs((1, 4, 5), 1) == [(1, 1), (4, 5)]
 
-    def test_nothing_flagged_has_no_runs(self):
-        assert flagged_runs((), 3) == []
+    def test_nothing_unheard_has_no_runs(self):
+        assert unheard_runs((), 3) == []

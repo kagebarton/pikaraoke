@@ -10,9 +10,10 @@ gets its ``no_reference`` row.
 The first table has one row per song and stream: the fit's verdict and numbers,
 the length gap to the video (read from the bundle's record of the match and,
 separately, from the LRC file's own length tag, since a bundle from before
-schema 9 never recorded the match), the flagged lines, and the runs of flagged
-lines at three minimum lengths. The second table prints the flagged lines again
-at five tolerances, so a tolerance can be chosen without running anything again.
+schema 9 never recorded the match), the mistimed and the unheard lines, the
+flagged runs at three minimum lengths and the unheard stretches. The second table
+prints the mistimed lines again at five tolerances, so a tolerance can be checked
+without running anything again.
 
 Read only: nothing is written next to a song. An LRC is copyrighted text, so the
 tables carry line numbers (counted as the pipeline loads the lines), never text.
@@ -51,18 +52,20 @@ from pikaraoke.lib.srt_slice_fit import (  # noqa: E402
     flagged_runs,
     heard_streams,
     lrc_to_srt,
+    unheard_runs,
 )
 
-TOLERANCES_S = (1.0, 1.5, 2.0, 3.0, 4.0)
+TOLERANCES_S = (3.0, 4.0, 5.0, 7.0, 10.0)
 MIN_RUNS = (2, 3, 4)
 
 HEADER = (
     "| Song | Origin | LRCLIB | Heard | Words | Clip s | Status | Matched | Shift s | Speed | "
-    "Spread s | Anchors | Gap s (bundle) | Gap s (file) | Flagged | Runs>=2 | Runs>=3 | Runs>=4 |\n"
-    "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"
+    "Spread s | Anchors | Gap s (bundle) | Gap s (file) | Mistimed | Unheard | Runs>=2 | Runs>=3 | "
+    "Runs>=4 | Unheard runs |\n"
+    "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"
 )
 TOLERANCE_HEADER = "| Song | Heard | Status | " + " | ".join(
-    f"Flagged @ {t} s" for t in TOLERANCES_S
+    f"Mistimed @ {t} s" for t in TOLERANCES_S
 ) + " |\n" "|---|---|---|" + "---|" * len(TOLERANCES_S)
 
 
@@ -70,14 +73,17 @@ def title(status: SongStatus) -> str:
     return status.path.stem.split("---")[0][:40]
 
 
-def indexes(flagged: tuple[int, ...]) -> str:
-    """The flagged lines as ``n: i,j,k``; ``-`` for none."""
-    return f"{len(flagged)}: {','.join(map(str, flagged))}" if flagged else "-"
+def indexes(lines: tuple[int, ...]) -> str:
+    """The lines as ``n: i,j,k``; ``-`` for none."""
+    return f"{len(lines)}: {','.join(map(str, lines))}" if lines else "-"
+
+
+def spans(found: list[tuple[int, int]]) -> str:
+    return " ".join(f"{first}-{last}" for first, last in found) or "-"
 
 
 def runs(fit: SliceFit, min_run: int) -> str:
-    found = flagged_runs(fit.flagged, min_run)
-    return " ".join(f"{first}-{last}" for first, last in found) or "-"
+    return spans(flagged_runs(fit.mistimed, fit.unheard, min_run))
 
 
 def verdict(fit: SliceFit) -> str:
@@ -104,9 +110,9 @@ def row(
         f"{'' if n_words is None else n_words} | {length:.0f} | {verdict(fit)} | "
         f"{fit.matched}/{fit.total} | {fit.shift_s:.2f} | {fit.speed:.4f} | {spread} | "
         f"{fit.anchors} | {gap(match.get('duration'), length)} | "
-        f"{gap(file_duration, length)} | {indexes(fit.flagged)} | "
+        f"{gap(file_duration, length)} | {indexes(fit.mistimed)} | {indexes(fit.unheard)} | "
         + " | ".join(runs(fit, n) for n in MIN_RUNS)
-        + " |"
+        + f" | {spans(unheard_runs(fit.unheard, srt_slice_fit.MIN_UNHEARD_RUN))} |"
     )
 
 
@@ -143,7 +149,7 @@ def report(status: SongStatus) -> tuple[list[str], list[str]]:
         by_tolerance = [fit_at(srt_text, name, words, length, t) for t in TOLERANCES_S]
         tolerance_rows.append(
             f"| {title(status)} | {name} | {verdict(fit)} | "
-            + " | ".join(indexes(f.flagged) for f in by_tolerance)
+            + " | ".join(indexes(f.mistimed) for f in by_tolerance)
             + " |"
         )
     return fit_rows, tolerance_rows
@@ -157,8 +163,9 @@ def main() -> None:
 
     joint = [s for s in library_statuses(args.folder) if s.method == "joint" and s.lrc_on_disk]
     print(
-        f"Placeholders in force: FLAG_TOLERANCE_S={srt_slice_fit.FLAG_TOLERANCE_S}, "
+        f"Constants in force: FLAG_TOLERANCE_S={srt_slice_fit.FLAG_TOLERANCE_S}, "
         f"MIN_FLAGGED_RUN={srt_slice_fit.MIN_FLAGGED_RUN}, "
+        f"MIN_UNHEARD_RUN={srt_slice_fit.MIN_UNHEARD_RUN}, "
         f"MIN_MATCHED_SHARE={srt_slice_fit.MIN_MATCHED_SHARE}. "
         f"{len(joint)} joint songs with a usable LRC in {args.folder}.\n"
     )
