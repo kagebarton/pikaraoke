@@ -1,0 +1,576 @@
+Model: Claude Opus 5.5 (author, 2026-10-29). Executor: Claude Sonnet 5.5. GATE A
+goes to Opus; GATE B and Phase 7 go to Ken.
+
+# Lyric-source lists and LRCLIB timing
+
+## Goal
+
+Ken wants two things:
+
+1. In the app, see which songs are timed by **cue align** and which by the **joint
+   matcher**, and from which lyric source. Each song gets a Repair link next to it.
+2. Move joint songs onto cue align wherever he can.
+
+The route always follows the source (`lyric_align.py:143-164`):
+
+- A YouTube caption (`srt`) or movie subtitles (`movie_srt`) always go through cue
+  align.
+- Genius or custom lyrics always go through joint.
+- No lyrics means transcription.
+
+So one list per source answers both questions.
+
+A Repair link on its own moves no song. The Repair page's only cue-route sources are
+a YouTube caption and movie subtitles, and joint songs are mostly the ones where
+neither applies. What moves them is the **LRCLIB timing** repair: an LRCLIB match
+the admin has checked becomes the song's timing. Its shape was ruled in
+`plans/open-issues.md` (entry "An LRCLIB match the admin has checked becomes the
+song's timing (Repair)").
+
+## Decisions
+
+From `plans/open-issues.md` (Ken, 2026-10-29), restated so this plan stands on its
+own:
+
+1. **The LRC's own lyrics are the sheet**, since they are what the timing is checked
+   against.
+2. **Preview = flagged lines first.** After the fit, mark each line by whether heard
+   words landed near its fitted time. A cut verse or an extra repeat shows up as a
+   run of flagged lines. The fit's spread check can't catch that, because it ignores
+   a minority of lines that disagree. Playback with the lines overlaid is held back
+   until flagged lines prove not enough.
+3. **Offered only once the fit makes it viable**; otherwise the pick stays a fill, as
+   today.
+
+Ken, 2026-10-29 (this plan):
+
+4. **Viable = the fit passes AND the length gap to the video is small**, and the
+   flagged lines are shown before Ken confirms. The gap limit is set at GATE A.
+5. **Both parts on one branch**: the lists first, then LRCLIB timing.
+6. **The Repair link opens Repair with a source already picked**:
+   - LRCLIB timing when the song has a usable LRC on disk;
+   - otherwise YouTube caption (joint songs only);
+   - otherwise nothing.
+7. **Joint songs with no usable LRC get a list of their own**, "No timed source".
+
+Defaults (author's; not ruled, so raise them if they look wrong):
+
+- The lists go by what the **last run used** (the bundle's `lyrics.origin` and
+  `method_used`), as the existing lists do. Lists may overlap, as "Looks poor"
+  already does.
+- **"Usable LRC" is read from disk, not from the bundle.** Bundles from before
+  schema 9 never recorded the match, so 6 joint songs show `lrclib_state == "none"`
+  while a real match sits at `lrclib.lrc_path(song)`. Usable means: the file exists
+  and `lrclib.is_skip_marker(path)` is false. Today all 17 joint songs have one, so
+  "No timed source" starts empty.
+- LRCLIB timing uses the **LRC on disk** by default; the existing LRCLIB search
+  lets Ken pick a different one.
+- The new sheet is a third kind of custom sheet, `lyrics/<stem>.lrclib.srt`, with
+  origin `lrclib_srt`. Like the movie sheet, it outlives Regenerate, bulk runs and
+  Reset, and only a Repair to another source removes it. One sheet per song,
+  whatever its kind.
+- Flagged lines are computed inside `fit_slice` for every caller, but shown only on
+  the LRCLIB timing card. Showing them for movie subtitles too would be unrequested.
+
+## Library facts (2026-10-29)
+
+66 songs:
+
+| Lyric source | Route | Songs |
+|---|---|---|
+| YouTube caption | cue align | 40 (22 current, 18 behind) |
+| Movie subtitles | cue align | 7 |
+| Genius | joint | 15 |
+| Custom | joint | 2 |
+| No lyrics | transcribe | 2 |
+
+## Test songs (Phase 3 report, GATE A)
+
+The 17 joint songs, from a read-only status pass on 2026-10-29. Column notes:
+
+- **LRCLIB**: the bundle's `lrclib_state`.
+- **gap**: how many seconds longer the match is than the video (negative means
+  shorter).
+- **heard**: the bundle's `transcribe_words` count.
+- **ASR**: whether `subtitles/<stem>.en.asr.json3` exists.
+- **guessed**: guessed lines out of all lines.
+
+| Song (short) | Source | LRCLIB | gap s | heard | ASR | guessed | Note |
+|---|---|---|---|---|---|---|---|
+| Defying Gravity (Wicked 20th) | custom | rejected | +97 | 267 | yes | 0/45 | **Known bad:** structural mismatch (S-1). Must be refused. |
+| Popular (Wicked 20th) | genius | none* | ? | 319 | yes | 11/62 | **Known bad:** edit mismatch in the tail (S-1). Must flag a run. |
+| Jessie J - Domino | genius | none* | ? | 330 | no | 4/67 | **Known bad:** S-1 matched a "UK Radio Edit", with lines 0-16 only fitted. The LRC on disk now is from the "weekend vibes" album, so it may differ from the S-1 one. |
+| 晴天 (Jay Chou) | genius | rejected | -19 | 79 | no | 24/42 | Mandarin; few heard words. Expect a refusal. |
+| Soda Pop | genius | rejected | 0 | 209 | no | 5/64 | |
+| Bloodstream | custom | rejected | 0 | 324 | yes | 6/58 | |
+| Lose Yourself | genius | used | -1 | 792 | no | 1/87 | Rap: dense lines. |
+| She Used To Be Mine | genius | used | 0 | 295 | no | 0/46 | |
+| Stay Gold | genius | used | 0 | 280 | no | 0/38 | |
+| Your Idol | genius | used | -14 | 300 | no | 9/71 | |
+| Golden | genius | used | -4 | 286 | no | 5/51 | |
+| Takedown | genius | used | -10 | 343 | no | 13/67 | Choreography video. |
+| Seven (Jung Kook) | genius | used | -14 | 472 | yes | 2/79 | |
+| Best Part Of Me (Live) | genius | none* | ? | 234 | yes | 1/38 | Live take, compared against a studio LRC. |
+| In Summer (Frozen) | genius | none* | ? | 212 | no | 2/31 | |
+| NSYNC - Paradise | genius | none* | ? | 339 | no | 12/65 | The LRC's artist reads Justin Timberlake. |
+| Colors of the Wind (Blu-ray) | genius | none* | ? | 311 | yes | 0/37 | A movie clip. `~/pikaraoke-songs/movie_subs/pocahontas.srt` already gives it the movie route. |
+
+`*` marks a behind bundle (schema 8): an LRC is on disk, but the bundle doesn't
+record it. The report computes the gap from the LRC file's own `duration`.
+
+## Design
+
+### Lists (`pikaraoke/lib/library_status.py`)
+
+`SongStatus` gains `lrc_on_disk: bool`, the "usable LRC" check from the Defaults. It
+is one `is_file` plus a skip-marker read, and `song_status` already reads the sheet
+paths.
+
+`SONG_LISTS` gains these. `overview_counts` picks them up without changes.
+
+| key | rule |
+|---|---|
+| `caption` | `origin == "srt"` |
+| `movie` | `origin == "movie_srt"` |
+| `genius` | `origin == "genius"` |
+| `custom` | `origin == "custom"` |
+| `no_timed_source` | `method == "joint" and not lrc_on_disk` |
+| `lrc` (Phase 6) | `origin == LRC_ORIGIN` |
+
+### Rows (`pikaraoke/routes/library.py`)
+
+- `_subline(name, status)`, for the new lists:
+  - cue lists: "Cue align".
+  - joint lists: the parts that apply, joined with " · ":
+    - "with captions" when `ytasr_used`;
+    - the LRCLIB part:
+      - `used`: "LRCLIB filled N lines" (`ngettext`, as in
+        `song_info._lrclib_tile`);
+      - `rejected`: "LRCLIB not used";
+      - `skipped`: "LRCLIB skipped";
+      - otherwise: "LRC on disk" if `lrc_on_disk`, else "no LRCLIB match".
+- Each row dict gains `repair_url`:
+  `url_for("song_info.repair_page", song=path, source=_repair_source(status))`.
+  `url_for` drops a `None` argument, so a song with no preselect gets the plain
+  URL.
+- `_repair_source(status) -> str | None`:
+  - Phase 1: `"caption"` if `status.method == "joint"`, else `None`.
+  - Phase 6: `"lrclib"` first, when `status.lrc_on_disk`.
+
+### Tools tab (`pikaraoke/templates/processing.html`)
+
+- Add a second `pr-sec` header, "By lyric source", plus a `pr-card` below the
+  existing list card. Same `.pr-list` / `.pr-link[data-list]` markup. Labels:
+  - YouTube caption · cue align
+  - Movie subtitles · cue align
+  - Genius · joint
+  - Custom · joint
+  - No timed source
+
+  Each gets a count tag (`tag is-light`). No-timed-source gets `is-warning`.
+- In `openList`, each row is a whole `<a>` today, and a second link can't sit inside
+  it. Change it to a `div.pr-song` holding the name and summary link (to `info_url`,
+  `no-spa`) and a small "Repair" link (to `repair_url`, `no-spa`). Apply this to
+  every list, so the existing four get the link too.
+- The info tip gains one line: "Cue align times each line from a timed source.
+  Joint combines the lyric aligner with what is heard; it is the fallback."
+
+### Repair page preselect (`routes/song_info.py:repair_page`, `templates/song_repair.html`)
+
+- `repair_page` reads `request.args.get("source")` and passes it as `preselect` only
+  if it is one of `caption`, `genius`, `custom`, `movie`, `transcribe` (Phase 6
+  adds `lrclib`). Anything else becomes `None`.
+- In the JS, `var PRESELECT = {{ preselect | tojson }};`:
+  - If the card is enabled on load, call `chooseSource(PRESELECT)`.
+  - The caption card enables only after the caption check (around line 167), so
+    choose it there too when `PRESELECT === 'caption'`. Mirror how
+    `CURRENT_SOURCE` is handled at that spot.
+  - A failed caption check leaves nothing chosen.
+
+### One `sheet_kind` (Phase 2)
+
+This resolves the open issue "SongStatus carries two overlapping sheet flags".
+
+- Replace `SongStatus.custom_sheet` and `.movie_sheet` with
+  `sheet_kind: str | None`, which is one of `"custom"`, `"movie"` or (Phase 5)
+  `"lrc"`.
+- Add `library_regen.sheet_kind(path) -> str | None`, mapping a sheet's suffix to
+  its kind. It is the only place the suffix test lives.
+- Readers to move: `song_info._current_source`, `library_tools` (`_now`, `_Entry`
+  and the other `custom_sheet`/`movie_sheet` users), and
+  `library_regen.custom_plan`.
+- Find every reader with `graphify affected "SongStatus"` and
+  `grep -rn "custom_sheet\b\|movie_sheet\b" pikaraoke tests`.
+
+### Fit and flagged lines (`pikaraoke/lib/srt_slice_fit.py`, Phase 3)
+
+- Add `lrc_to_srt(lrc_text: str) -> str`: `lrclib.cue_spans_from_lrc`, then one
+  `srt.Subtitle` per cue, then `srt.compose`. An empty LRC returns `""`, which
+  `fit_slice` already refuses as `not_srt`.
+- `SliceFit` gains `flagged: tuple[int, ...] = ()`. These are indexes into the
+  in-clip cues of the corrected SRT, in order, and are set only on `FITS`.
+- In `_fit_one_stream`, on the `FITS` path, an in-clip cue `k` is flagged when
+  either:
+  - `k` is not in `found`; or
+  - its anchor's start differs from its fitted start (`speed * spans[k][0] + shift`)
+    by more than `FLAG_TOLERANCE_S`.
+
+  `_cue_anchors` already returns the anchors; keep them as a `{lid: start}` dict to
+  look them up.
+- Map cue indexes to the corrected SRT's numbering. `_corrected_srt` drops the cues
+  outside the clip, so build the in-clip index list once and use it for both.
+- `FLAG_TOLERANCE_S = 2.0` is a **placeholder**, so that the module runs. GATE A
+  sets it. Write it with a comment that says so, as `MIN_MATCHED_SHARE` was handled
+  in the movie plan.
+- Add `flagged_runs(flagged: tuple[int, ...], min_run: int) -> list[tuple[int, int]]`:
+  runs of consecutive flagged lines at least `min_run` long, as `(first, last)`.
+  `MIN_FLAGGED_RUN = 3` is a placeholder; GATE A sets it.
+
+### Storage and plan (`pikaraoke/lib/library_regen.py`, Phase 5)
+
+- Add `LRC_SRT_SUFFIX = ".lrclib.srt"` and append it to `CUSTOM_SHEET_SUFFIXES`.
+  `_claims`/`_owner` already treat `<stem>.<anything>` as the song's file, so backups
+  take it in. A unit test proves this.
+- Add `LRC_ORIGIN = "lrclib_srt"`.
+- `custom_sheet_plan` and `movie_sheet_plan` differ only in suffix, origin and label,
+  and the LRC sheet would be the third copy. Extract
+  `_sheet_plan(song, suffix, origin, label, text) -> Plan`, and make
+  `lrc_sheet_plan(song, text=None)` a one-liner over it.
+- `custom_plan` dispatches on `sheet_kind`.
+- One sheet per song: find where saving a movie sheet removes the `.custom.txt`, and
+  make it remove every other suffix in `CUSTOM_SHEET_SUFFIXES`. Test all three.
+- The cue route needs nothing new. The sheet is an `.srt`, so `_load_lyrics` yields
+  cue spans, and `method_used` becomes `cue_align`.
+
+### Check and Repair (`pikaraoke/lib/library_tools.py`, Phase 5)
+
+- Add a frozen dataclass `LrcTimingCheck`: `fit: SliceFit`, `gap_s: int | None`,
+  `record: dict` (from `lrclib.record_meta`), `viable: bool`, `regenerate_helps:
+  bool`.
+- `check_lrc_timing(song_path, lrclib_id: int | None) -> LrcTimingCheck`:
+  - The record comes from `lrclib_id`, through `_lrclib_records`, or else
+    `lrclib.get_record`. If `lrclib_id` is `None`, use the LRC on disk
+    (`lrclib.read_lrc(lrclib.lrc_path(song))`).
+  - Raise `RegenError` when there is neither, or the record has no
+    `syncedLyrics`.
+  - Then `lrc_to_srt`, then `fit_slice(srt, heard_streams(job.bundle,
+    self._asr_on_disk(song)), media_duration(job))`, as `_fit_movie_slice` does.
+  - `gap_s = length_gap_s(record["duration"], length)`.
+  - `viable = fit.status == FITS and gap_s is not None and abs(gap_s) <=
+    LRC_MAX_GAP_S`.
+  - `LRC_MAX_GAP_S` is a placeholder of `5`, matching `song_info._LENGTH_GAP_NOTED_S`.
+    GATE A sets it.
+- Add `class LrcTimingRefused(RegenError)`, carrying the check, as
+  `MovieSliceRefused` does.
+- In `repair(...)`, add `source == "lrclib"`, which calls
+  `_lrc_repair_plan(job, lrclib_id)`:
+  - It runs the check again on the server, so what gets saved never comes from
+    numbers the page sent.
+  - If the check is not viable, raise `LrcTimingRefused(check)`.
+  - Otherwise return `lrc_sheet_plan(song, check.fit.srt)`, and record the match on
+    the plan through the existing `_apply_lrclib_pick(plan, record_id, False)`, so
+    the bundle notes which LRC timed it.
+- `job.replaces_custom = source not in ("custom", "movie", "lrclib")`.
+
+### Routes and page (`pikaraoke/routes/song_info.py`, `templates/song_repair.html`, Phase 6)
+
+These are built to the mockup ratified at GATE B. Until then, the expected shape:
+
+- `POST /song_info/lrc_fit`, body `{song, lrclib_id?}`, returns a card:
+  - a head line (fits, or refused and why);
+  - "matches x of y lines";
+  - the length line, reusing `_lrclib_fit`'s wording;
+  - the flagged runs, each as its lines' text with `m:ss` times;
+  - `viable`.
+- Reuse `_card` / `_card_text`.
+- `repair()` maps `LrcTimingRefused` to `_card_text`, as it does for
+  `MovieSliceRefused`.
+- A new source card, "LRCLIB timing" ("Time the song from an LRCLIB match's own
+  line times"). Its section:
+  - the match on disk (title · artist · length), plus a "Search LRCLIB" link that
+    reuses the step-2 search and list markup. Score candidates against the bundle's
+    current `lyrics.lines`.
+  - Check fit, then the card.
+- Regenerate is enabled only on `viable`. It's a single step; there is no step 2.
+- When `PRESELECT === 'lrclib'`, select the card on load and run the check on the
+  disk match.
+- Labels:
+  - `song_info._source_name`: "LRCLIB".
+  - `_route_text`: "Lyrics from an LRCLIB match, timed against its own line times."
+  - `_current_source`: return `"lrclib"` for `sheet_kind == "lrc"`.
+  - History's origin label.
+  - The tools-tab list "LRCLIB · cue align".
+
+## Phases
+
+### Phase 0: branch and baseline
+
+- [x] `git switch -c lyric_source_lists dev` (done 2026-10-29 by the author, at
+      `9e0acfd`). The plan file is untracked.
+- [x] Full suite on the branch. Log the pass count in the Results log as the
+      baseline.
+
+### Phase 1: by-source lists and Repair link
+
+- [x] Do the Lists, Rows, Tools tab and Repair page preselect sections above, using
+      `"caption"` as the only preselect.
+- [x] Tests:
+  - `tests/unit/test_library_status.py`: each new list's rule on a fake bundle;
+    `lrc_on_disk` for a missing file, a skip marker, and a real LRC; the overview
+    keys.
+  - `tests/unit/test_library_routes.py`: the joint sublines for each
+    `lrclib_state`; `repair_url` carries `source=caption` for a joint song and no
+    `source` for a cue song.
+  - The route test for `repair_page`: a known `source` is passed through, an
+    unknown one becomes `None`.
+- [x] Smoke check, read-only: `library_statuses(~/pikaraoke-songs)` gives
+      caption 40, movie 7, genius 15, custom 2, no_timed_source 0. Log it. Any
+      other numbers are fine if the library changed; log the actual ones.
+- [x] Commit: `feat(library): lists songs by lyric source, with a Repair link per song`
+      (`4a43799`).
+- [ ] Checkpoint (CLAUDE.md): Ken can look at the tab now. Flag `/compact`.
+
+### Phase 2: one `sheet_kind`
+
+- [x] Do the One `sheet_kind` section. No behaviour change: the existing
+      custom-sheet and movie tests pass unchanged, apart from the field renames.
+- [x] Commit: `refactor(library): one sheet_kind for a song's custom sheet`
+      (`b9cdbda`).
+- [x] Add a strike-through to the `plans/open-issues.md` entry ("SongStatus carries
+      two overlapping sheet flags"), citing the commit hash. This is a separate
+      `docs(plans)` commit.
+
+### Phase 3: LRC fit with flagged lines, then the report -> GATE A (Opus)
+
+- [x] Do the Fit and flagged lines section, with tests in
+      `tests/unit/test_srt_slice_fit.py`, on synthetic cues only:
+  - `lrc_to_srt`: the last line holds `LRC_LAST_LINE_HOLD_S`; an empty LRC gives
+    `""`.
+  - An LRC at clip times fits at shift ~0, speed 1, with no flags.
+  - A cut verse: the LRC has 6 lines the heard words never sing, mid-song. The fit
+    still passes and the 6 lines form one flagged run.
+  - An extra repeat: the video sings a chorus twice, the LRC once. Record what the
+    flags do, without asserting a verdict.
+  - Unheard single lines scattered (no run) give no run at `MIN_FLAGGED_RUN`.
+  - `flagged_runs` edge cases.
+  - Every existing movie-slice test passes unchanged; `flagged` is new data only.
+- [x] Commit: `feat(lyrics): an LRC fits to the clip with flagged lines` (`34a806e`).
+- [x] Add a report script, `scripts/lrc_timing_report.py`, modelled on
+      `scripts/movie_srt_fit_report.py` (`0ae28a3`).
+  - For every joint song in `~/pikaraoke-songs` with a usable LRC, and for each heard
+    stream separately, print: status, reason, matched/total, shift, speed, spread,
+    anchors, gap_s, the flagged indexes, and the runs at `min_run` 2, 3 and 4.
+  - Then print the flagged indexes again at tolerances of 1.0, 1.5, 2.0, 3.0 and
+    4.0 s, so GATE A can choose one without re-running anything.
+  - Read only: nothing is written next to a song.
+  - LRC files are copyrighted lyric text, so the script prints no line text, only
+    indexes.
+- [x] Run it. Paste the raw output into a "GATE A report output" section at the
+      end of this plan, and add one Results log row describing it.
+- [ ] **GATE A: stop and hand off to Opus.** Do not pick numbers on the executor
+      side. Opus sets `FLAG_TOLERANCE_S`, `MIN_FLAGGED_RUN` and `LRC_MAX_GAP_S`
+      against these pass conditions:
+  - Defying Gravity is refused, either by its gap or by the fit.
+  - Popular and Domino each show a flagged run where the S-1 record puts the
+    mismatch (Popular: the tail; Domino: after line 16), or are refused.
+  - On the songs with gap ≈ 0 and few guessed lines (She Used To Be Mine, Stay
+    Gold, Lose Yourself, Bloodstream, Soda Pop), the runs are reported raw for Ken
+    to judge.
+
+  If the flags can't tell the known-bad songs from the rest, Opus stops for Ken:
+  Decision 2's fallback (playback with overlaid lines) would then be the
+  question.
+
+### Phase 4: mockup -> GATE B (Ken)
+
+- [ ] Build an HTML mockup of Repair lyrics with the LRCLIB timing source, styled
+      from `song_repair.html`'s own CSS (`rp-*`), and publish it with the Artifact
+      tool. The movie-subtitles mockup is the reference: its link is in Results
+      row 3 of `git show archive/movie_subtitles:plans/movie-subtitle-slice.md`.
+      States to show:
+  - picked, with the disk match shown;
+  - checking;
+  - fits and viable, no flagged runs;
+  - fits and viable, with flagged runs (line text with times; use invented lyrics);
+  - fits but the gap is too big (not viable);
+  - refused, too few;
+  - refused, disagree;
+  - no heard words;
+  - no LRC on disk (search only);
+  - preselected from the tools list;
+  - the source when it is `current`.
+- [ ] **GATE B: Ken ratifies the mockup.** Record his changes in the Results log.
+      No page code before this. If the mockup changes what the check returns,
+      update the `LrcTimingCheck` fields first.
+
+### Phase 5: storage, plan, Repair (server side)
+
+- [ ] Do the Storage and plan section, and the Check and Repair section.
+- [ ] Tests:
+  - `tests/unit/test_library_regen.py`:
+    - `_sheet_plan` for all three kinds;
+    - saving any one kind removes the other two;
+    - Reset keeps a `.lrclib.srt`;
+    - a Genius, caption or transcribe Repair removes it;
+    - the bulk run sends an LRC-sheet song to `reuse` in every mode, as is tested
+      for movie songs;
+    - the backup claims `<stem>.lrclib.srt`.
+  - `tests/unit/test_library_tools.py`:
+    - `check_lrc_timing` gives viable, gap-refused and fit-refused results, uses
+      the disk LRC when there is no id, and raises `RegenError` when there is no
+      LRC and no id;
+    - `repair(source="lrclib")` runs the fit again and refuses on its own result
+      (mock `fit_slice` so the second call differs);
+    - the bundle records the match.
+- [ ] Commit: `feat(repair): LRCLIB timing saves a clip-timed sheet on the cue route`.
+
+### Phase 6: page, labels, lists
+
+- [ ] Build the ratified mockup into `song_repair.html`, and add the route and the
+      labels from Routes and page.
+- [ ] Add the `lrc` list to `SONG_LISTS` and its row in the tools tab, and make
+      `_repair_source` prefer `"lrclib"`.
+- [ ] Route tests: admin only; one JSON response for each card status; Repair runs
+      the fit again on the server; `preselect` accepts `lrclib`.
+- [ ] Commit: `feat(repair): LRCLIB timing as a lyric source on Repair lyrics`.
+- [ ] Checkpoint: review due (see Checkpoints below).
+
+### Phase 7: end to end -> Ken's manual checks
+
+Run the app from the worktree (`python -m pikaraoke.app`, with `models/`
+symlinked; one instance at a time). Log each step in the Results log.
+
+- [ ] Tools tab: the by-source counts add up to the library total.
+- [ ] From the Genius list, use Repair on She Used To Be Mine. The LRCLIB timing
+      should come preselected and auto-checked. Regenerate it on the local GPU.
+      Then confirm:
+  - Song Info's route reads cue align;
+  - the song is now in the LRCLIB list;
+  - Ken's read of the karaoke.
+- [ ] Use Repair on Popular: confirm the flagged run shows and Ken's read of it.
+      Don't regenerate unless Ken says to.
+- [ ] Defying Gravity: confirm Repair refuses with the gap stated.
+- [ ] Reset one repaired song: the `.lrclib.srt` survives and is reused.
+- [ ] Update `plans/open-issues.md` in one `docs(plans)` commit:
+  - strike the LRCLIB-timing entry and point it at this branch's commits;
+  - record point 3's ruling (Decision 4) and GATE A's numbers.
+
+## Rules for the executor
+
+- Plain-language chat. Raw tables and numbers go in the Results log, not in chat
+  (CLAUDE.md, Communication).
+- Never commit LRC text, real lyrics or report output that contains line text.
+  Unit tests use invented lines.
+- Tests: `/home/ken/miniconda3/envs/pik/bin/python -m pytest`. Run pre-commit on
+  changed files only:
+  `pre-commit run --config code_quality/.pre-commit-config.yaml --files <files>`.
+- Before each commit, import-smoke the changed modules and read
+  `git diff --cached` against the phase's checklist.
+- Don't commit `plans/lyric-source-lists.md` together with code. Plan updates go
+  in their own `docs(plans)` commits, so landing on `dev` can drop them.
+- After code changes: `graphify update .`.
+- Stop at GATE A and GATE B. If a step contradicts the code, stop and say so;
+  don't reinterpret the plan.
+
+## Checkpoints
+
+- After Phase 1: Ken looks at the tab; flag `/compact`.
+- After Phase 3, at GATE A: hand off to Opus with the branch, HEAD, this file's
+  "GATE A report output" section, and the instruction to set the three constants
+  and log a Results row.
+- After Phase 6: review due.
+  `/code-review high <phase-1 first commit>^..HEAD`, files in
+  `pikaraoke/lib/{library_status,library_regen,library_tools,srt_slice_fit}.py`,
+  `pikaraoke/routes/{library,song_info}.py`, and the two templates. The three
+  finder angles:
+  1. **Correctness**: is the fit run again on the server, and does a reset keep the
+     sheet kind?
+  2. **Simplicity**: one `sheet_kind`, one `_sheet_plan`, no copy of the movie
+     card.
+  3. **Robustness**: a missing or skip-marker LRC, an LRCLIB network failure, and
+     a song that is busy.
+
+## Results log
+
+| Row | Date | Phase | What | Result |
+|---|---|---|---|---|
+| 1 | 2026-10-29 | 0 | `git switch -c lyric_source_lists dev` | Branch at `9e0acfd`. The plan file is untracked. |
+| 2 | 2026-10-29 | 0 | Full suite on the branch (`python -m pytest -q`) | Baseline: 2748 passed in 33.84 s. |
+| 3 | 2026-10-29 | 1 | Smoke, read-only: `overview_counts(library_statuses(~/pikaraoke-songs))` | `behind 0, poor 4, no_lyrics 2, caption 40, movie 7, genius 15, custom 2, no_timed_source 0, all 66`. The plan's expected five source counts hold. 17 of 17 joint songs have a usable LRC. |
+| 4 | 2026-10-29 | 1 | Library changed since the plan's status pass | Every bundle is now schema 11 (64 of 64; 2 songs have none), `behind` is 0, and the six songs the plan marks `none*` now record a match: Popular, Best Part Of Me, In Summer are `rejected`; Domino, NSYNC, Colors of the Wind are `used`. Joint songs: 10 `used`, 7 `rejected`, 0 `none`. The `*` caveat in the Test songs table (gap computed from the LRC file's own duration) no longer applies to those six, so the GATE A report reads the gap from the bundle's record as well as the file and prints both. The table's Source / LRCLIB / gap / guessed columns are the 2026-10-29 morning values. |
+| 5 | 2026-10-29 | 1 | Commit `4a43799` `feat(library): lists songs by lyric source, with a Repair link per song`; suite after: 2783 passed (+35) | Existing tests changed for the new shape, not for behaviour: overview counts (status, routes, library_tools), the first list-row dict (gains `repair_url`), the Processing page's list count (4 to 9), and the pinned `chooseSource` line on Repair (now `START_SOURCE`). The tip line "Cue align times each line..." went on the existing Library tip, reading "The info tip gains one line" literally. `repair_url` is built from the path's bytes (`surrogateescape`), because `url_for` raises on a non-UTF-8 file name, which is why `info_url` was already built by hand; a test covers it. |
+| 6 | 2026-10-29 | 2 | Commit `b9cdbda` `refactor(library): one sheet_kind for a song's custom sheet`; suite after: 2785 passed | No behaviour change. Readers moved: `library_status.song_status`, `library_regen.custom_plan`, `_Run.undecided_group` and `LibraryTools._now` (`library_tools.py`), `song_info._current_source`. `_Entry` and `_regen_job` read neither flag. The only test changes are the `TestCustomSheet` field renames in `test_library_status.py` (the old assertions on `custom_sheet` / `movie_sheet` became `sheet_kind`), plus two new `library_regen.sheet_kind` tests (suffix to kind; `None` and a non-sheet file give `None`). Open-issues strike-through: `docs(plans)` commit after `b9cdbda`. |
+| 7 | 2026-10-29 | 3 | Commit `34a806e` `feat(lyrics): an LRC fits to the clip with flagged lines`; suite after: 2804 passed (+19) | 19 new tests, all on synthetic cues (`TestLrcToSrt` 2, `TestFlaggedLines` 10, `TestFlaggedRuns` 7); the 29 tests that were in `test_srt_slice_fit.py` pass unchanged. Two things differ from the plan's wording. (1) `flagged` numbers the lines the pipeline loads from `fit.srt`, not the raw cues of the corrected SRT: a cue that cleans to nothing (an LRCLIB `♪` line) is no line, and `cue_spans_from_srt` drops it where `_corrected_srt` keeps it, so raw cue numbers and line numbers part ways after one. Phase 6 should read the line text from `cue_spans_from_srt(fit.srt)`. A test pins it. (2) The flag rule is a helper, `_flagged_lines`, called from `_fit_one_stream`; it uses the pass-2 anchors, and the "not found" test is the anchor lookup, because the anchors are exactly the found cues. Two mutations checked by hand: dropping the time rule fails 2 tests; numbering by cue index instead of by place in the clip survived until the "lines before the clip" test was added, then failed it. |
+| 8 | 2026-10-29 | 3 | What the flags do for an extra repeat (synthetic, 30 lines, spread 0, 30 of 30 found in all three) | Chorus of 4 lines sung twice in the video, once in the LRC. Repeat at lines 24-27: shift 0.0 s, flagged 28, 29 (a 2-line run, under `MIN_FLAGGED_RUN`). Repeat at 14-17: shift +20.0 s, flagged 0-13 (one run of 14). Repeat at 4-7: shift +20.0 s, flagged 0-3. The fit passes every one, so the spread check does not see them. The flags mark whichever side of the repeat holds the minority of lines, since the median timing follows the majority; a repeat late in the song flags the lines after it, one mid-song flags the lines before it. No verdict asserted; `test_what_the_flags_do_for_an_extra_repeat` records it. |
+| 9 | 2026-10-29 | 3 | Commit `0ae28a3` `feat(scripts): report the LRC fit and flagged lines for every joint song`; ran `python scripts/lrc_timing_report.py` read only (nothing in `~/pikaraoke-songs` newer than the script afterwards) | Raw output is in "GATE A report output" below: 17 joint songs with a usable LRC, 23 stream rows (transcribe for all 17, ASR for 6). 18 rows fit, 4 refuse as `disagree` (Defying Gravity both streams, Soda Pop, Bloodstream transcribe), 1 refuses as `too_few` (Jay Chou, 0 of 53 found). Gap from the bundle and from the LRC file agree on every row. The Test songs table's `?` gaps are now known: Popular +13, Domino -1, Best Part Of Me -1, In Summer +1, NSYNC -38, Colors of the Wind +8. Pass-condition songs, at 2.0 s: Defying Gravity refused by the fit (spread 4.1 s) and by its +97 s gap; Popular fits on both streams with flagged run 52-61 (the last 10 of 62 lines), the ASR stream also flagging 0, 1, 37; Domino fits with flagged 35, 39, 43-50, 67-68. Gap-near-0 songs: She Used To Be Mine 1 flagged (19), no run; Stay Gold none at 2.0 s (3 at 1.0 s); Lose Yourself 5 flagged (0, 32, 50, 59, 73), no run; Bloodstream transcribe refused, ASR fits 28/57 with 35 flagged in runs 15-22 and 31-56; Soda Pop transcribe refused (its only stream). Two things the numbers show that the plan did not anticipate: Defying Gravity and Popular both land on speed 0.9590, the movie fit's PAL factor, which scales the LRC's clock down by 4% (for Popular, whose LRC is 13 s longer than the video); and NSYNC fits (49/56, shift +23.93 s) with a -38 s gap, so a passing fit alone does not see the gap. No thresholds chosen. |
+
+## Hand-off prompt (executor)
+
+> Execute `plans/lyric-source-lists.md` from Phase 0 on branch
+> `lyric_source_lists` (already created off `dev`). Phases 1-2 are
+> self-contained; commit each one. Phase 3 ends at GATE A: stop and hand the
+> report to Opus, and don't choose thresholds. Phase 4 is a mockup published as
+> an Artifact; stop at GATE B for Ken. Log every phase's raw results in the
+> plan's Results log. LRC and lyric text never go into a commit.
+
+## GATE A report output
+
+Raw output of `python scripts/lrc_timing_report.py` on 2026-10-29, at `34a806e` plus
+the script, with the placeholders in force (`FLAG_TOLERANCE_S` 2.0, `MIN_FLAGGED_RUN` 3).
+Read only. Line numbers count the lines the pipeline loads from the LRC's own text
+(the LRC is the sheet), so they are not the Genius sheet's numbers that the S-1 record
+uses. The "Gap s" columns are how many seconds longer the match is than the video.
+
+Placeholders in force: FLAG_TOLERANCE_S=2.0, MIN_FLAGGED_RUN=3, MIN_MATCHED_SHARE=0.25. 17 joint songs with a usable LRC in /home/ken/pikaraoke-songs.
+
+| Song | Origin | LRCLIB | Heard | Words | Clip s | Status | Matched | Shift s | Speed | Spread s | Anchors | Gap s (bundle) | Gap s (file) | Flagged | Runs>=2 | Runs>=3 | Runs>=4 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 'Defying Gravity' - Wicked 20th Annivers | custom | rejected | transcribe | 267 | 257 | refused/disagree | 45/89 | -69.25 | 0.9590 | 4.113 | 45 | +97 | +97 | - | - | - | - |
+| 'Defying Gravity' - Wicked 20th Annivers | custom | rejected | asr | 233 | 257 | refused/disagree | 36/89 | -67.14 | 0.9590 | 4.100 | 36 | +97 | +97 | - | - | - | - |
+| 'Popular' - Wicked 20th Anniversary Edit | genius | rejected | transcribe | 319 | 211 | fits | 55/62 | -12.02 | 0.9590 | 0.227 | 55 | +13 | +13 | 11: 0,52,53,54,55,56,57,58,59,60,61 | 52-61 | 52-61 | 52-61 |
+| 'Popular' - Wicked 20th Anniversary Edit | genius | rejected | asr | 312 | 211 | fits | 55/62 | -11.90 | 0.9590 | 0.182 | 55 | +13 | +13 | 13: 0,1,37,52,53,54,55,56,57,58,59,60,61 | 0-1 52-61 | 52-61 | 52-61 |
+| 'Soda Pop' Official Lyric Video _ KPop D | genius | rejected | transcribe | 209 | 170 | refused/disagree | 31/59 | 15.27 | 1.0000 | 0.830 | 31 | +0 | +0 | - | - | - | - |
+| Ed Sheeran - Best Part Of Me (feat. YEBB | genius | rejected | transcribe | 234 | 248 | fits | 34/38 | 2.21 | 0.9859 | 0.334 | 34 | -1 | -1 | 5: 0,1,2,32,34 | 0-2 | 0-2 | - |
+| Ed Sheeran - Best Part Of Me (feat. YEBB | genius | rejected | asr | 213 | 248 | fits | 27/38 | 1.78 | 0.9888 | 0.539 | 27 | -1 | -1 | 14: 1,6,7,15,27,28,29,30,31,32,33,34,35,36 | 6-7 27-36 | 27-36 | 27-36 |
+| Ed Sheeran & Rudimental­ - Bloodstream [ | custom | rejected | transcribe | 324 | 247 | refused/disagree | 38/71 | -10.88 | 1.0000 | 1.095 | 38 | +0 | +0 | - | - | - | - |
+| Ed Sheeran & Rudimental­ - Bloodstream [ | custom | rejected | asr | 231 | 247 | fits | 28/57 | -10.24 | 1.0000 | 0.560 | 31 | +0 | +0 | 35: 10,15,16,17,18,19,20,21,22,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56 | 15-22 31-56 | 15-22 31-56 | 15-22 31-56 |
+| Eminem - Lose Yourself | genius | used | transcribe | 777 | 328 | fits | 89/93 | -0.51 | 1.0000 | 0.200 | 89 | -1 | -1 | 5: 0,32,50,59,73 | - | - | - |
+| Jessie J - Domino (Official Video) | genius | used | transcribe | 330 | 235 | fits | 57/69 | -0.43 | 1.0000 | 0.184 | 57 | -1 | -1 | 12: 35,39,43,44,45,46,47,48,49,50,67,68 | 43-50 67-68 | 43-50 | 43-50 |
+| Josh Gad - In Summer (From 'Frozen'_Sing | genius | rejected | transcribe | 212 | 113 | fits | 21/21 | -0.44 | 1.0000 | 0.156 | 21 | +1 | +1 | - | - | - | - |
+| NSYNC - Paradise | genius | used | transcribe | 339 | 305 | fits | 49/56 | 23.93 | 1.0000 | 0.280 | 49 | -38 | -38 | 8: 0,1,33,42,43,50,54,55 | 0-1 42-43 54-55 | - | - |
+| Pocahontas - Colors of the Wind (Blu-ray | genius | used | transcribe | 311 | 203 | fits | 37/37 | -6.38 | 1.0000 | 0.300 | 37 | +8 | +8 | - | - | - | - |
+| Pocahontas - Colors of the Wind (Blu-ray | genius | used | asr | 310 | 203 | fits | 37/37 | -5.98 | 1.0000 | 0.100 | 37 | +8 | +8 | - | - | - | - |
+| Sara Bareilles - She Used To Be Mine (Of | genius | used | transcribe | 295 | 253 | fits | 45/45 | -0.20 | 1.0000 | 0.228 | 45 | +0 | +0 | - | - | - | - |
+| Stay Gold (Official Music Video) from Th | genius | used | transcribe | 280 | 246 | fits | 51/51 | -0.06 | 1.0000 | 0.054 | 51 | +0 | +0 | - | - | - | - |
+| ‘Your Idol’ Lyric Video _ KPop Demon Hun | genius | used | transcribe | 300 | 206 | fits | 41/59 | -0.15 | 1.0000 | 0.150 | 41 | -14 | -14 | 21: 0,1,2,3,4,5,6,7,8,9,10,28,29,30,31,32,33,34,35,36,46 | 0-10 28-36 | 0-10 28-36 | 0-10 28-36 |
+| “Golden” Official Lyric Video _ KPop Dem | genius | used | transcribe | 286 | 199 | fits | 37/46 | 3.16 | 1.0000 | 0.130 | 37 | -4 | -4 | 9: 0,1,2,16,19,21,34,43,45 | 0-2 | 0-2 | - |
+| “Takedown” Official Choreography _ KPop  | genius | used | transcribe | 343 | 193 | fits | 43/52 | 0.06 | 1.0000 | 0.390 | 43 | -10 | -10 | 13: 0,1,2,3,20,21,23,28,29,30,36,37,41 | 0-3 20-21 28-30 36-37 | 0-3 28-30 | 0-3 |
+| 周杰倫 Jay Chou【晴天 Sunny Day】-Official Musi | genius | rejected | transcribe | 103 | 318 | refused/too_few | 0/53 | 0.00 | 1.0000 |  | 0 | -19 | -19 | - | - | - | - |
+| 정국 (Jung Kook) 'Seven (feat. Latto)' Off | genius | used | transcribe | 472 | 204 | fits | 74/77 | 7.22 | 1.0000 | 0.135 | 74 | -14 | -14 | 3: 6,28,46 | - | - | - |
+| 정국 (Jung Kook) 'Seven (feat. Latto)' Off | genius | used | asr | 433 | 204 | fits | 68/77 | 7.32 | 1.0000 | 0.125 | 68 | -14 | -14 | 9: 3,6,24,25,39,45,46,47,51 | 24-25 45-47 | 45-47 | - |
+
+| Song | Heard | Status | Flagged @ 1.0 s | Flagged @ 1.5 s | Flagged @ 2.0 s | Flagged @ 3.0 s | Flagged @ 4.0 s |
+|---|---|---|---|---|---|---|---|
+| 'Defying Gravity' - Wicked 20th Annivers | transcribe | refused/disagree | - | - | - | - | - |
+| 'Defying Gravity' - Wicked 20th Annivers | asr | refused/disagree | - | - | - | - | - |
+| 'Popular' - Wicked 20th Anniversary Edit | transcribe | fits | 14: 0,1,5,10,52,53,54,55,56,57,58,59,60,61 | 11: 0,52,53,54,55,56,57,58,59,60,61 | 11: 0,52,53,54,55,56,57,58,59,60,61 | 11: 0,52,53,54,55,56,57,58,59,60,61 | 11: 0,52,53,54,55,56,57,58,59,60,61 |
+| 'Popular' - Wicked 20th Anniversary Edit | asr | fits | 15: 0,1,5,6,37,52,53,54,55,56,57,58,59,60,61 | 13: 0,1,37,52,53,54,55,56,57,58,59,60,61 | 13: 0,1,37,52,53,54,55,56,57,58,59,60,61 | 12: 0,37,52,53,54,55,56,57,58,59,60,61 | 12: 0,37,52,53,54,55,56,57,58,59,60,61 |
+| 'Soda Pop' Official Lyric Video _ KPop D | transcribe | refused/disagree | - | - | - | - | - |
+| Ed Sheeran - Best Part Of Me (feat. YEBB | transcribe | fits | 8: 0,1,2,8,15,29,32,34 | 6: 0,1,2,29,32,34 | 5: 0,1,2,32,34 | 5: 0,1,2,32,34 | 4: 0,1,2,32 |
+| Ed Sheeran - Best Part Of Me (feat. YEBB | asr | fits | 17: 1,5,6,7,14,15,22,27,28,29,30,31,32,33,34,35,36 | 14: 1,6,7,15,27,28,29,30,31,32,33,34,35,36 | 14: 1,6,7,15,27,28,29,30,31,32,33,34,35,36 | 12: 1,6,7,27,29,30,31,32,33,34,35,36 | 11: 1,6,7,27,29,30,31,32,34,35,36 |
+| Ed Sheeran & Rudimental­ - Bloodstream [ | transcribe | refused/disagree | - | - | - | - | - |
+| Ed Sheeran & Rudimental­ - Bloodstream [ | asr | fits | 36: 4,10,15,16,17,18,19,20,21,22,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56 | 35: 10,15,16,17,18,19,20,21,22,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56 | 35: 10,15,16,17,18,19,20,21,22,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56 | 35: 10,15,16,17,18,19,20,21,22,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56 | 34: 15,16,17,18,19,20,21,22,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56 |
+| Eminem - Lose Yourself | transcribe | fits | 5: 0,32,50,59,73 | 5: 0,32,50,59,73 | 5: 0,32,50,59,73 | 5: 0,32,50,59,73 | 4: 32,50,59,73 |
+| Jessie J - Domino (Official Video) | transcribe | fits | 13: 35,39,43,44,45,46,47,48,49,50,51,67,68 | 13: 35,39,43,44,45,46,47,48,49,50,51,67,68 | 12: 35,39,43,44,45,46,47,48,49,50,67,68 | 12: 35,39,43,44,45,46,47,48,49,50,67,68 | 12: 35,39,43,44,45,46,47,48,49,50,67,68 |
+| Josh Gad - In Summer (From 'Frozen'_Sing | transcribe | fits | 2: 3,17 | 2: 3,17 | - | - | - |
+| NSYNC - Paradise | transcribe | fits | 10: 0,1,14,30,33,42,43,50,54,55 | 9: 0,1,30,33,42,43,50,54,55 | 8: 0,1,33,42,43,50,54,55 | 8: 0,1,33,42,43,50,54,55 | 8: 0,1,33,42,43,50,54,55 |
+| Pocahontas - Colors of the Wind (Blu-ray | transcribe | fits | 1: 6 | 1: 6 | - | - | - |
+| Pocahontas - Colors of the Wind (Blu-ray | asr | fits | 1: 28 | - | - | - | - |
+| Sara Bareilles - She Used To Be Mine (Of | transcribe | fits | 1: 19 | - | - | - | - |
+| Stay Gold (Official Music Video) from Th | transcribe | fits | 3: 28,42,45 | 1: 45 | - | - | - |
+| ‘Your Idol’ Lyric Video _ KPop Demon Hun | transcribe | fits | 25: 0,1,2,3,4,5,6,7,8,9,10,24,28,29,30,31,32,33,34,35,36,42,46,51,55 | 21: 0,1,2,3,4,5,6,7,8,9,10,28,29,30,31,32,33,34,35,36,46 | 21: 0,1,2,3,4,5,6,7,8,9,10,28,29,30,31,32,33,34,35,36,46 | 19: 0,1,2,3,4,5,6,7,8,9,28,29,30,31,32,33,34,35,46 | 19: 0,1,2,3,4,5,6,7,8,9,28,29,30,31,32,33,34,35,46 |
+| “Golden” Official Lyric Video _ KPop Dem | transcribe | fits | 10: 0,1,2,16,19,21,26,34,43,45 | 9: 0,1,2,16,19,21,34,43,45 | 9: 0,1,2,16,19,21,34,43,45 | 9: 0,1,2,16,19,21,34,43,45 | 9: 0,1,2,16,19,21,34,43,45 |
+| “Takedown” Official Choreography _ KPop  | transcribe | fits | 21: 0,1,2,3,5,17,18,20,21,23,28,29,30,32,33,36,37,41,48,50,51 | 15: 0,1,2,3,20,21,23,28,29,30,32,36,37,41,50 | 13: 0,1,2,3,20,21,23,28,29,30,36,37,41 | 11: 0,1,2,3,23,28,29,30,36,37,41 | 10: 0,1,2,3,23,28,29,30,36,41 |
+| 周杰倫 Jay Chou【晴天 Sunny Day】-Official Musi | transcribe | refused/too_few | - | - | - | - | - |
+| 정국 (Jung Kook) 'Seven (feat. Latto)' Off | transcribe | fits | 3: 6,28,46 | 3: 6,28,46 | 3: 6,28,46 | 3: 6,28,46 | 3: 6,28,46 |
+| 정국 (Jung Kook) 'Seven (feat. Latto)' Off | asr | fits | 9: 3,6,24,25,39,45,46,47,51 | 9: 3,6,24,25,39,45,46,47,51 | 9: 3,6,24,25,39,45,46,47,51 | 9: 3,6,24,25,39,45,46,47,51 | 9: 3,6,24,25,39,45,46,47,51 |
