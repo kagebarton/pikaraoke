@@ -50,6 +50,17 @@ Sources gathered on 2026-10-26:
   custom sheet that every later run replays and only a Repair to another source
   removes. Timed uploads (`.lrc`, `.srt`) were left out. Record:
   `plans/custom-lyrics-sheet.md`.
+- **Heard words only live in the alignment bundle.** Whisper hears every
+  song's words, but only the lyric routes keep them (the bundle's
+  `transcribe_words`), and only while `capture_alignment_debug` is on. A
+  transcribe run deletes the bundle, since the bundle is also the record of the
+  lyric source. So movie subtitles can never be checked on a song that was only
+  ever transcribed: the check has nothing to compare them with, and a
+  Regenerate transcribes again. Ken, 2026-10-29: move the heard words into a
+  file of their own that every route writes, every song, separate from the
+  bundle; its own feature after Phase 4 of `movie_subtitles`. Record:
+  `plans/movie-subtitle-slice.md` on branch `movie_subtitles`, decision 7 and
+  row 27.
 
 ## Out of scope by design (web plan D9)
 
