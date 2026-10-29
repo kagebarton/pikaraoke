@@ -131,6 +131,16 @@ class TestFit:
         assert cues[-1].end == timedelta(seconds=length)
         assert [c.index for c in cues] == list(range(1, len(cues) + 1))
 
+    def test_a_zero_length_cue_is_dropped_from_both_the_count_and_the_sheet(self):
+        song = _song()
+        cues = list(srt.parse(_movie_srt(song, shift=-600.0)))
+        cues[5].end = cues[5].start
+        # compose would renumber and so drop the zero-length cue before the fit sees it
+        result = fit_slice(srt.compose(cues, reindex=False), {TRANSCRIBE: _heard(song)}, 300.0)
+        assert result.status == FITS
+        assert (result.total, result.dropped) == (29, 1)
+        assert len(list(srt.parse(result.srt))) == result.total
+
     def test_dialogue_with_no_heard_match_does_not_sink_a_fit(self):
         song = _song()
         dialogue = {k: _line(100 + k) for k in range(0, 30, 5)}  # 6 unheard cues among 30
@@ -177,6 +187,10 @@ class TestNothingToFit:
         streams = {TRANSCRIBE: _heard(_song())}
         for text in ("these are not subtitles at all", "", "\n \n"):
             assert fit_slice(text, streams, 300.0).status == NOT_SRT
+
+    def test_out_of_range_timestamp_is_not_srt(self):
+        text = "1\n99999999999999:00:00,000 --> 99999999999999:00:01,000\nhey\n"
+        assert fit_slice(text, {TRANSCRIBE: _heard(_song())}, 300.0).status == NOT_SRT
 
     def test_windows_line_endings_parse(self):
         song = _song()

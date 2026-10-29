@@ -118,7 +118,9 @@ def load_song(folder: Path, name: str) -> Song:
     bundle = read_bundle(folder, song.stem)
     asr_path = folder / "subtitles" / f"{song.stem}.en.asr.json3"
     asr_text = asr_path.read_text(encoding="utf-8") if asr_path.is_file() else None
-    length = (bundle or {}).get("media_duration_s") or probe_duration(song) or 0.0
+    length = (bundle or {}).get("media_duration_s") or probe_duration(song)
+    if not length:
+        sys.exit(f"{song.name}: no clip length (bundle has none and ffprobe failed)")
     return Song(song, heard_streams(bundle, asr_text), length)
 
 

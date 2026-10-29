@@ -113,6 +113,18 @@ class TestCueSpansFromSrt:
 
     def test_dialogue_dashes_at_line_start_and_after_a_sentence_end_are_stripped(self):
         texts, _ = cue_spans_from_srt(
-            self._srt("- Hello there. - What?", "- One\n- Two", "won- derful -derful")
+            self._srt(
+                "- Hello there. - What?",
+                "- One\n- Two",
+                "won- derful -derful",
+                "* - Sing it",
+                "♪ - Sing it",
+            )
         )
-        assert texts == ["Hello there. What?", "One Two", "won- derful -derful"]
+        assert texts == [
+            "Hello there. What?",
+            "One Two",
+            "won- derful -derful",
+            "Sing it",
+            "Sing it",
+        ]
