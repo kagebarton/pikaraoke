@@ -43,10 +43,19 @@ from pikaraoke.lib.library_tools import (
     PLAYLIST_VIDEO_IN_LIST,
     RUN_LABELS,
     LibraryTools,
+    MovieSliceRefused,
     custom_sheet_lines,
 )
 from pikaraoke.lib.song_list import SongList
 from pikaraoke.lib.song_manager import SongManager
+from pikaraoke.lib.srt_slice_fit import (
+    DISAGREE,
+    NO_REFERENCE,
+    NOT_SRT,
+    REFUSED,
+    TOO_FEW,
+    TOO_LONG,
+)
 from tests.unit.movie_slices import (
     CLIP_S,
     MOVIE_OFFSET_S,
@@ -798,48 +807,71 @@ class TestMovieRepair:
 
         assert len(clip_starts(regen.song.plan.custom_text)) == SLICE_LINES
 
-    @pytest.mark.parametrize(
-        ("text", "message"),
-        [
-            ("just some words, not subtitles", "Not an SRT file"),
-            ("1\n00:00:01,000 --> 00:00:02,000\n[MUSIC]\n", "no lines to check"),
-            (movie_slice(lines=range(40, 52)), "Only 0 of 12 lines were found"),
-            (
-                movie_slice(offset=lambda k: 900.0 if k < SLICE_LINES // 2 else 2400.0),
-                "don't agree on one timing",
-            ),
-            (None, "subtitles must be text"),
-            (["1"], "subtitles must be text"),
-            ("la " * MOVIE_SUBTITLES_MAX_CHARS, "subtitles are too long"),
-            (
-                "".join(f"{n}\n00:00:01,000 --> 00:00:02,000\nla\n\n" for n in range(1, 3002)),
-                "more than 3,000 lines",
-            ),
-        ],
-        ids=["not_srt", "no_lines", "too_few", "disagree", "none", "list", "too_long", "too_many"],
-    )
-    def test_a_slice_that_does_not_fit_changes_nothing(self, tmp_path, song, text, message):
-        """The run replaces the song's outputs, so every refusal comes before the backup."""
+    def refused(self, tmp_path, song, text, error=MovieSliceRefused):
+        """Repair ``song`` with ``text``, which must be refused before anything is backed up."""
         write_sheet(tmp_path, song.stem, "the old words\n")
         tools, processing = make_tools(tmp_path, [str(song)])
 
-        with pytest.raises(RegenError, match=message):
+        with pytest.raises(error) as refused:
             tools.repair(str(song), "movie", text=text)
 
         processing.enqueue_regen.assert_not_called()
         assert not list(tmp_path.glob("regen_backups/*"))
         sheet = tmp_path / "lyrics" / f"{song.stem}.custom.txt"
         assert sheet.read_text(encoding="utf-8") == "the old words\n"
+        return refused.value
+
+    @pytest.mark.parametrize(
+        ("text", "message"),
+        [
+            (None, "subtitles must be text"),
+            (["1"], "subtitles must be text"),
+            ("la " * MOVIE_SUBTITLES_MAX_CHARS, "subtitles are too long"),
+        ],
+        ids=["none", "list", "too_long"],
+    )
+    def test_text_that_is_not_usable_changes_nothing(self, tmp_path, song, text, message):
+        """The run replaces the song's outputs, so every refusal comes before the backup."""
+        assert message in str(self.refused(tmp_path, song, text, RegenError))
+
+    @pytest.mark.parametrize(
+        ("text", "status", "reason", "matched", "total"),
+        [
+            ("just some words, not subtitles", NOT_SRT, None, 0, 0),
+            ("1\n00:00:01,000 --> 00:00:02,000\n[MUSIC]\n", REFUSED, TOO_FEW, 0, 0),
+            (movie_slice(lines=range(40, 52)), REFUSED, TOO_FEW, 0, 12),
+            (
+                movie_slice(offset=lambda k: 900.0 if k < SLICE_LINES // 2 else 2400.0),
+                REFUSED,
+                DISAGREE,
+                SLICE_LINES,
+                SLICE_LINES,
+            ),
+            (
+                "".join(f"{n}\n00:00:01,000 --> 00:00:02,000\nla\n\n" for n in range(1, 3002)),
+                TOO_LONG,
+                None,
+                0,
+                3001,
+            ),
+        ],
+        ids=["not_srt", "no_lines", "too_few", "disagree", "too_many"],
+    )
+    def test_a_slice_that_does_not_fit_changes_nothing(
+        self, tmp_path, song, text, status, reason, matched, total
+    ):
+        """The refusal carries the check, so the route words it as the Check fit card does."""
+        fit = self.refused(tmp_path, song, text).check.fit
+
+        assert (fit.status, fit.reason, fit.matched, fit.total) == (status, reason, matched, total)
 
     def test_a_song_with_no_heard_words_is_told_to_regenerate_first(self, tmp_path):
         [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
         write_bundle(tmp_path, video.stem, lyrics={"origin": "srt"}, media_duration_s=CLIP_S)
-        tools, processing = make_tools(tmp_path, [str(video)])
 
-        with pytest.raises(RegenError, match="no heard words yet.*Regenerate the song"):
-            tools.repair(str(video), "movie", text=movie_slice())
+        check = self.refused(tmp_path, video, movie_slice()).check
 
-        processing.enqueue_regen.assert_not_called()
+        assert (check.fit.status, check.regenerate_helps) == (NO_REFERENCE, True)
 
     def test_a_transcribed_song_is_not_told_to_regenerate(self, tmp_path, monkeypatch):
         """A transcribe run keeps no heard words, so a Regenerate would not help."""
@@ -847,13 +879,10 @@ class TestMovieRepair:
         (tmp_path / "karaoke").mkdir()
         (tmp_path / "karaoke" / f"{video.stem}.ass").write_text("", encoding="utf-8")
         monkeypatch.setattr("pikaraoke.lib.library_regen.probe_duration", lambda path: CLIP_S)
-        tools, processing = make_tools(tmp_path, [str(video)])
 
-        with pytest.raises(RegenError, match="transcribed doesn't keep them") as refused:
-            tools.repair(str(video), "movie", text=movie_slice())
+        check = self.refused(tmp_path, video, movie_slice()).check
 
-        assert "Regenerate" not in str(refused.value)
-        processing.enqueue_regen.assert_not_called()
+        assert (check.fit.status, check.regenerate_helps) == (NO_REFERENCE, False)
 
     def test_a_whole_film_longer_than_a_lyric_sheet_fits(self, tmp_path, song):
         filler = "and the night goes on in the quiet little town " * 4

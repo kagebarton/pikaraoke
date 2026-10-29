@@ -15,7 +15,11 @@ from pikaraoke.lib.current_app import get_karaoke_instance, get_site_name, is_ad
 from pikaraoke.lib.genius import GeniusUnavailable
 from pikaraoke.lib.library_regen import RegenError
 from pikaraoke.lib.library_status import HistoryEntry, SongStatus, length_gap_s
-from pikaraoke.lib.library_tools import MovieSliceCheck, custom_sheet_lines
+from pikaraoke.lib.library_tools import (
+    MovieSliceCheck,
+    MovieSliceRefused,
+    custom_sheet_lines,
+)
 from pikaraoke.lib.srt_slice_fit import (
     DISAGREE,
     FITS,
@@ -585,8 +589,8 @@ def _card(
     """One Check fit card: the headline (with its tip behind an (i)), then the detail lines.
 
     ``tone``: ``good`` (fits), ``bad`` (doesn't fit) or ``info`` (can't be checked yet). A
-    line is ``(text, tip)``. The order head, lines, tip is the sentence the Repair refuses
-    with (``library_tools._slice_refusal``).
+    line is ``(text, tip)``. Read in the order head, lines, tip, it is the sentence the
+    Repair refuses with (:func:`_card_text`).
     """
     return {
         "status": fit.status,
@@ -717,6 +721,12 @@ def _slice_card(check: MovieSliceCheck) -> dict:
     )
 
 
+def _card_text(card: dict) -> str:
+    """A card as one sentence, for the Repair's refusal: head, lines, then the tip."""
+    parts = [card["head"], *(line["text"] for line in card["lines"])]
+    return " ".join(parts + ([card["tip"]] if card["tip"] else []))
+
+
 @song_info_bp.route("/song_info/subtitle_fit", methods=["POST"])
 def subtitle_fit():
     """Check pasted movie subtitles against the clip's heard words; nothing is saved or queued.
@@ -763,6 +773,8 @@ def repair():
             lrclib_skip=skip,
             text=body.get("text"),
         )
+    except MovieSliceRefused as e:
+        return _error(_card_text(_slice_card(e.check)), 400)
     except RegenError as e:
         return _error(str(e), 400)
     return jsonify({"success": True})
