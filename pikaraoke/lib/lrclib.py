@@ -26,6 +26,7 @@ import logging
 import re
 import time
 from pathlib import Path
+from typing import NamedTuple
 
 import requests
 
@@ -372,6 +373,10 @@ def is_skip_marker(path: Path) -> bool:
         # A hand-placed file in another encoding; the marker is always UTF-8.
         logger.warning("%s is not UTF-8, so it is not a skip marker: %s", path, e)
         return False
+    return _has_skip_tag(text)
+
+
+def _has_skip_tag(text: str) -> bool:
     return any(line.strip().startswith(f"[{SKIP_TAG}:") for line in text.splitlines())
 
 
@@ -471,6 +476,34 @@ def lrc_path(song: Path) -> Path:
     or reads it must get the path from here.
     """
     return song.parent / "lyrics" / f"{song.stem}.lrc"
+
+
+class SongLrc(NamedTuple):
+    """A song's ``.lrc`` as read once. ``state`` is "match", "skipped", "missing" or
+    "unreadable"; ``text`` and ``meta`` (as :func:`read_lrc` gives them) only for a match."""
+
+    state: str
+    text: str = ""
+    meta: dict | None = None
+
+
+def read_song_lrc(song: Path) -> SongLrc:
+    """``song``'s LRCLIB choice on disk, so every reader agrees on what counts as a match.
+
+    A file that can't be read, such as a hand-placed one not in UTF-8, is no match:
+    nothing can time from it.
+    """
+    path = lrc_path(song)
+    try:
+        text, meta = read_lrc(path)
+    except FileNotFoundError:
+        return SongLrc("missing")
+    except (OSError, UnicodeDecodeError) as e:
+        logger.warning("Could not read the LRCLIB match %s: %s", path, e)
+        return SongLrc("unreadable")
+    if _has_skip_tag(text):
+        return SongLrc("skipped")
+    return SongLrc("match", text, meta)
 
 
 def ensure_lrc(

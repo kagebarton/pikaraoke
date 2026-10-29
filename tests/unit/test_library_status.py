@@ -354,6 +354,13 @@ class TestLrcOnDisk:
 
         assert library_status.song_status(video).lrc_on_disk is False
 
+    def test_an_lrc_that_cannot_be_read_is_not_usable(self, tmp_path):
+        video = make_video(tmp_path)
+        write_bundle(tmp_path, video.stem)
+        self.lrc(tmp_path, video).write_bytes("[00:01.00]caf\xe9\n".encode("latin-1"))
+
+        assert library_status.song_status(video).lrc_on_disk is False
+
     def test_a_real_lrc_is_usable_whatever_the_bundle_recorded(self, tmp_path):
         video = make_video(tmp_path)
         write_bundle(tmp_path, video.stem, schema_version=8, lyrics={"origin": "genius"})
