@@ -1421,7 +1421,11 @@ class TestRepairPage:
         search = code[code.index("function searchLrc") : code.index("$('#lt-search-go')")]
 
         assert "$.getJSON(URLS.lrcSearch, { song: SONG, q: query })" in search
-        assert "c.best" in search and "pickLrc(isOnDisk(best) ? 'disk' : best.id)" in search
+        assert (
+            "c.best" in search and "if (best && state.lrcPick === null) pickLrc(best.id);" in search
+        )
+        # The match on disk, and a check already run on it, survive a search.
+        assert "if (state.lrcPick !== 'disk') pickLrc(LRC_MATCH ? 'disk' : null);" in search
         assert "if (seq !== state.lrcSearchSeq) return;" in search
 
     def test_a_match_with_no_row_on_disk_opens_with_the_search_open(self, env):
