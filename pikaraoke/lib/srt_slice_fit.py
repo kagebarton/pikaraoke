@@ -38,6 +38,13 @@ FITS = "fits"
 REFUSED = "refused"
 NO_REFERENCE = "no_reference"
 NOT_SRT = "not_srt"
+TOO_LONG = "too_long"
+
+# The most cues the fit takes on. A whole film's SRT runs 900-1,800 cues and fits
+# as well as the song's own stretch does. The match costs about a millisecond a
+# cue on a desktop CPU, on both the preview and the Repair POST
+# (plans/movie-subtitle-slice.md, Results rows 24-25).
+MAX_CUES = 3000
 
 # Why a refused check refused. TOO_FEW: not enough of the cues were found in the
 # clip's words to fit anything. DISAGREE: enough were found, but they do not
@@ -93,11 +100,11 @@ class SliceFit:
 
     ``matched`` and ``total`` count cleaned cues: once the time map is known,
     ``total`` is the cues that land inside the clip (``dropped`` more fall wholly
-    outside); before that it is every cue pasted. ``shift_s`` and ``speed`` are
-    the time map (``clip_t = speed * movie_t + shift_s``), the shift unreliable
-    on a ``disagree`` refusal. ``srt`` is the corrected slice text.
-    ``heard_source`` and ``spread_s`` (median absolute deviation of the anchors)
-    are diagnostics for the calibration report.
+    outside); before that it is every cue pasted (on ``too_long``, as parsed).
+    ``shift_s`` and ``speed`` are the time map (``clip_t = speed * movie_t +
+    shift_s``), the shift unreliable on a ``disagree`` refusal. ``srt`` is the
+    corrected slice text. ``heard_source`` and ``spread_s`` (median absolute
+    deviation of the anchors) are diagnostics for the calibration report.
     """
 
     status: str
@@ -150,6 +157,8 @@ def fit_slice(srt_text: str, streams: dict[str, list[dict]], video_length: float
         return SliceFit(NOT_SRT)
     if not raw_cues:
         return SliceFit(NOT_SRT)
+    if len(raw_cues) > MAX_CUES:
+        return SliceFit(TOO_LONG, total=len(raw_cues))
     streams = {name: words for name, words in streams.items() if words}
     if not streams:
         return SliceFit(NO_REFERENCE)

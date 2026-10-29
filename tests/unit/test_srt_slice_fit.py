@@ -10,10 +10,12 @@ from pikaraoke.lib.srt_slice_fit import (
     ASR,
     DISAGREE,
     FITS,
+    MAX_CUES,
     NO_REFERENCE,
     NOT_SRT,
     REFUSED,
     TOO_FEW,
+    TOO_LONG,
     TRANSCRIBE,
     fit_slice,
     free_speed,
@@ -236,6 +238,16 @@ class TestNothingToFit:
         song = _song()
         text = _movie_srt(song, shift=-100.0).replace("\n", "\r\n")
         assert fit_slice(text, {TRANSCRIBE: _heard(song)}, 300.0).status == FITS
+
+
+class TestTooLong:
+    def test_more_cues_than_the_limit_are_not_fitted(self):
+        cue = "{n}\n00:00:01,000 --> 00:00:02,000\nla\n\n"
+        text = "".join(cue.format(n=n) for n in range(1, MAX_CUES + 2))
+
+        fit = fit_slice(text, {TRANSCRIBE: _heard(_song())}, 300.0)
+
+        assert (fit.status, fit.total) == (TOO_LONG, MAX_CUES + 1)
 
 
 class TestHeardStreams:

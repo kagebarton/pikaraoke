@@ -36,6 +36,7 @@ from pikaraoke.lib.library_regen import (
 )
 from pikaraoke.lib.library_tools import (
     CUSTOM_SHEET_MAX_CHARS,
+    MOVIE_SUBTITLES_MAX_CHARS,
     PLAYLIST_NOT_A_LINK,
     PLAYLIST_ONE_VIDEO,
     PLAYLIST_UNREADABLE,
@@ -858,11 +859,15 @@ class TestMovieRepair:
                 movie_slice(offset=lambda k: 900.0 if k < SLICE_LINES // 2 else 2400.0),
                 "don't agree on one timing",
             ),
-            (None, "must be text"),
-            (["1"], "must be text"),
-            ("la " * CUSTOM_SHEET_MAX_CHARS, "too long"),
+            (None, "subtitles must be text"),
+            (["1"], "subtitles must be text"),
+            ("la " * MOVIE_SUBTITLES_MAX_CHARS, "subtitles are too long"),
+            (
+                "".join(f"{n}\n00:00:01,000 --> 00:00:02,000\nla\n\n" for n in range(1, 3002)),
+                "more than 3,000 lines",
+            ),
         ],
-        ids=["not_srt", "no_lines", "too_few", "disagree", "none", "list", "too_long"],
+        ids=["not_srt", "no_lines", "too_few", "disagree", "none", "list", "too_long", "too_many"],
     )
     def test_a_slice_that_does_not_fit_changes_nothing(self, tmp_path, song, text, message):
         """The run replaces the song's outputs, so every refusal comes before the backup."""
@@ -886,6 +891,21 @@ class TestMovieRepair:
             tools.repair(str(video), "movie", text=movie_slice())
 
         processing.enqueue_regen.assert_not_called()
+
+    def test_a_whole_film_longer_than_a_lyric_sheet_fits(self, tmp_path, song):
+        filler = "and the night goes on in the quiet little town " * 4
+        film = srt.compose(
+            [
+                srt.Subtitle(n, timedelta(seconds=n), timedelta(seconds=n + 0.5), filler)
+                for n in range(1, 600)
+            ]
+            + list(srt.parse(movie_slice()))
+        )
+        assert len(film) > CUSTOM_SHEET_MAX_CHARS
+
+        regen = self.repaired(tmp_path, song, film)
+
+        assert len(clip_starts(regen.song.plan.custom_text)) == SLICE_LINES
 
     def test_a_clip_whose_length_cannot_be_read_is_refused(self, tmp_path, monkeypatch):
         [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
