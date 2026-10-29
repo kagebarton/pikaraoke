@@ -117,8 +117,7 @@
       movieUnchecked: {{ _('Not checked yet. Check fit before you regenerate.') | tojson }},
       movieEdited: {{ _('The subtitles changed since the last check. Check fit again to turn Regenerate back on.') | tojson }},
       movieSaved: {{ _('This is the saved slice. Check fit confirms it, then Regenerate turns on.') | tojson }},
-      fitFailed: {{ _('Could not check the subtitles.') | tojson }},
-      moreInfo: {{ _('More info') | tojson }}
+      fitFailed: {{ _('Could not check the subtitles.') | tojson }}
     };
 
     var state = {
@@ -129,7 +128,7 @@
       videoLength: null, // "video is m:ss", from the LRCLIB search
       movieCard: null,   // Check fit's answer for the box's current text; any edit clears it
       movieChecking: false, // a check is on the server; Check fit stays off until it answers, so none stack
-      movieEdited: false, // an edit cleared an answer that had been shown
+      movieAnswered: null, // the text Check fit's last shown answer was for
       movieSeq: 0,       // a check still loading when the text changes is for the old text
       geniusSeq: 0,
       lrclibSeq: 0,
@@ -285,16 +284,16 @@
 
     function movieIdleText() {
       if ($.trim(movieText()) === '') return T.movieEmpty;
-      if (state.movieEdited) return T.movieEdited;
+      if (state.movieAnswered !== null && movieText() !== state.movieAnswered) return T.movieEdited;
       if (movieSaved !== null && movieText() === movieSaved) return T.movieSaved;
       return T.movieUnchecked;
     }
 
+    // The info_tip macro's (i), from its <template>, holding ``note``.
     function infoTip(note) {
-      var button = el('button', 'info-tip-btn')
-        .attr({ type: 'button', 'aria-label': T.moreInfo, 'aria-expanded': 'false' })
-        .append(el('i', 'icon icon-info-circled-1').attr('aria-hidden', 'true'));
-      return el('span', 'info-tip').append(button, el('span', 'info-tip-text', note).attr('role', 'tooltip'));
+      var tip = $(document.getElementById('movie-tip').content.firstElementChild.cloneNode(true));
+      tip.find('.info-tip-text').text(note);
+      return tip;
     }
 
     // Check fit's answer: a headline (its tip behind an (i)), detail lines, maybe a link.
@@ -326,7 +325,6 @@
     // An edit during a check leaves it running and drops its answer when it comes.
     $('#movie-text').on('input', function () {
       state.movieSeq++;
-      if (state.movieCard !== null || state.movieChecking) state.movieEdited = true;
       state.movieCard = null;
       renderMovie();
       refreshStep1();
@@ -334,6 +332,7 @@
 
     $('#movie-check').on('click', function () {
       var seq = ++state.movieSeq;
+      var text = movieText();
       state.movieChecking = true;
       state.movieCard = null;
       renderMovie();
@@ -343,11 +342,11 @@
         method: 'POST',
         contentType: 'application/json',
         dataType: 'json',
-        data: JSON.stringify({ song: SONG, text: movieText() })
+        data: JSON.stringify({ song: SONG, text: text })
       }).done(function (card) {
         state.movieChecking = false;
         if (seq === state.movieSeq) {
-          state.movieEdited = false;
+          state.movieAnswered = text;
           state.movieCard = card;
           showMovieCard(card);
         }
@@ -732,4 +731,6 @@
     {% call info_tip() %}{% trans %}Regenerating backs up this song's lyric files, then queues it. It runs behind new downloads, and waits if the song is playing.{% endtrans %}{% endcall %}
   </div>
 </section>
+
+<template id="movie-tip">{% call info_tip() %}{% endcall %}</template>
 {% endblock %}
