@@ -3,9 +3,11 @@
 
 For each song the LRC on disk is fitted to the clip as the LRCLIB timing check
 fits it (``fit_slice(lrc_to_srt(...))`` against the words heard in the clip), and
-a lyric sheet is paired with the fitted lines by ``lrc_pairing.pair_lines``: the
-function the feature would ship. The sheet is a Genius page named by id (fetched
-from Genius) or, with no id, the song's own Genius sheet stored in its bundle.
+a lyric sheet, cleaned as the cue route cleans it, is paired with the fitted lines
+by ``lrc_pairing.pair_lines``: the function the feature would ship. Stretches the
+two sides split differently are shared: the sheet's lines divide the LRC lines'
+time there. The sheet is a Genius page named by id (fetched from Genius) or, with
+no id, the song's own Genius sheet stored in its bundle.
 
 Table 1 has a row per ``--song``. Table 2 has the same columns for every
 Genius-origin song with a usable LRC, using its bundle's sheet and no network: it
@@ -13,7 +15,8 @@ answers whether two sources split lines alike across the library.
 
 Read only, except ``--write-sheet DIR``: for each viable Table 1 song it writes the
 built sheet to ``DIR`` as ``<stem>.lrclib-genius.srt``, and ``<stem>.listen.txt``
-with the sheet lines whose words differ from the LRC's, as the places to listen.
+with the sheet lines whose words differ from the LRC's or whose time is shared,
+as the places to listen.
 ``DIR`` must not be inside the library. Lyrics are copyrighted text, so the tables
 and the listen list carry line numbers (counted as the pipeline loads the lines)
 and times, never text; the built sheets do hold text and stay off git.
@@ -53,6 +56,8 @@ from pikaraoke.lib.library_tools import LRC_MAX_GAP_S  # noqa: E402
 from pikaraoke.lib.lrc_pairing import (  # noqa: E402
     Pairing,
     Stretch,
+    clean_sheet_lines,
+    line_spans,
     pair_lines,
     timed_sheet_srt,
 )
@@ -71,12 +76,12 @@ from pikaraoke.lib.srt_slice_fit import (  # noqa: E402
 START_TOLERANCE_S = 0.002
 
 HEADER = (
-    "| Song | Sheet | LRC fit | Paired on | Genius lines | LRC lines (paired/file) | "
-    "Same-start LRC lines | Text pairs | Text pairs (sheet cleaned too) | Position pairs | "
-    "Position stretches | "
-    "Refused stretches | Gap s | LRC check | Viable | Reload changed/dropped | "
-    "fit.lines = reload |\n"
-    "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"
+    "| Song | Sheet | LRC fit | Paired on | Genius lines (page/cleaned) | "
+    "LRC lines (paired/file) | Same-start LRC lines | Text pairs | "
+    "Text pairs taken into shared stretches | Position pairs | Position stretches | "
+    "Shared stretches | Genius lines timed roughly | Each line timed once | Gap s | LRC check | "
+    "Viable | Reload changed/dropped | fit.lines = reload |\n"
+    "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"
 )
 
 
@@ -96,6 +101,7 @@ class Sheet:
 class Analysis:
     status: SongStatus
     sheet: Sheet
+    cleaned: list[str]  # the sheet's lines as the cue route reads them: what is paired and saved
     fit: SliceFit
     gap_s: int | None
     lrc_texts: list[str]  # the lines paired against: the fitted ones when the fit fits
@@ -103,7 +109,7 @@ class Analysis:
     lrc_file_lines: int
     same_start: int
     pairing: Pairing
-    cleaned_text_pairs: int  # text pairs when the sheet is cleaned as the cue route would too
+    text_pairs: int  # found by text, before one-sided stretches take some in
     changed: list[int]
     dropped: list[int]
     fit_lines_match: str
@@ -118,7 +124,8 @@ class Analysis:
 
     @property
     def viable(self) -> bool:
-        return self.lrc_check == "viable" and not self.pairing.refused
+        """The LRC check is viable and some line pairs by text; with none, the sheet is timed blind."""
+        return self.lrc_check == "viable" and bool(self.pairing.by_text)
 
 
 def title(status: SongStatus) -> str:
@@ -130,7 +137,7 @@ def line_range(first: int, end: int) -> str:
     return f"{first}-{end - 1}" if end > first else "-"
 
 
-def refused_text(stretches: tuple[Stretch, ...]) -> str:
+def stretch_text(stretches: tuple[Stretch, ...]) -> str:
     return (
         "; ".join(f"genius {line_range(*s.sheet)} / lrc {line_range(*s.lrc)}" for s in stretches)
         or "-"
@@ -141,8 +148,8 @@ def clip_time(seconds: float) -> str:
     return f"{int(seconds // 60)}:{seconds % 60:04.1f}"
 
 
-def reload_changes(sheet: list[str]) -> tuple[list[str], list[int], list[int]]:
-    """A sheet read back by the cue route: its lines, and the indexes changed and dropped.
+def reload_changes(sheet: list[str]) -> tuple[list[int], list[int]]:
+    """The indexes of ``sheet``'s lines that the cue route changes or drops reading the saved sheet.
 
     Every line is given its own span, so the reload tells which line each cue was.
     """
@@ -152,7 +159,21 @@ def reload_changes(sheet: list[str]) -> tuple[list[str], list[int], list[int]]:
     texts, read_back = cue_spans_from_srt(timed_sheet_srt(sheet, spans, identity))
     kept = [round(start) for start, _ in read_back]
     changed = [i for i, text in zip(kept, texts) if text != sheet[i]]
-    return texts, changed, sorted(set(range(n)) - set(kept))
+    return changed, sorted(set(range(n)) - set(kept))
+
+
+def timed_once(a: Analysis) -> str:
+    """Whether every cleaned sheet line is in exactly one place and no LRC line is given out twice."""
+    pairing = a.pairing
+    sheet_lines = list(pairing.line_map())
+    lrc_lines = list(pairing.line_map().values())
+    for stretch in pairing.shared:
+        sheet_lines += range(*stretch.sheet)
+        lrc_lines += range(*stretch.lrc)
+    once = sorted(sheet_lines) == list(range(len(a.cleaned))) and len(set(lrc_lines)) == len(
+        lrc_lines
+    )
+    return "yes" if once else "NO"
 
 
 def fit_lines_agree(fit: SliceFit, texts: list[str], spans: list[tuple[float, float]]) -> str:
@@ -186,18 +207,20 @@ def analyse(status: SongStatus, sheet: Sheet) -> Analysis:
     file_texts, _ = cue_spans_from_srt(srt_text)
     texts, spans = cue_spans_from_srt(fit.srt) if fit.status == FITS else (file_texts, [])
     starts = [start for start, text in lrclib.lrc_stamps(lrc.text) if text]
-    reloaded, changed, dropped = reload_changes(sheet.lines)
+    cleaned = clean_sheet_lines(sheet.lines)
+    changed, dropped = reload_changes(cleaned)
     return Analysis(
         status=status,
         sheet=sheet,
+        cleaned=cleaned,
         fit=fit,
         gap_s=length_gap_s(lrc.meta.get("duration"), length),
         lrc_texts=texts,
         spans=spans,
         lrc_file_lines=len(file_texts),
         same_start=len(starts) - len(set(starts)),
-        pairing=pair_lines(sheet.lines, texts),
-        cleaned_text_pairs=len(map_lines_to_cues(reloaded, texts)),
+        pairing=pair_lines(cleaned, texts),
+        text_pairs=len(map_lines_to_cues(cleaned, texts)),
         changed=changed,
         dropped=dropped,
         fit_lines_match=fit_lines_agree(fit, texts, spans),
@@ -210,13 +233,16 @@ def row(a: Analysis) -> str:
     verdict += f" ({fit.heard_source})" if fit.heard_source else ""
     pairing = a.pairing
     position_lines = sum(s.sheet[1] - s.sheet[0] for s in pairing.by_position)
+    rough_lines = sum(s.sheet[1] - s.sheet[0] for s in pairing.shared)
     gap = "" if a.gap_s is None else f"{a.gap_s:+d}"
     return (
         f"| {title(a.status)} | {a.sheet.label} | {verdict} | "
-        f"{'fitted lines' if fit.status == FITS else 'all lines'} | {len(a.sheet.lines)} | "
-        f"{len(a.lrc_texts)}/{a.lrc_file_lines} | {a.same_start} | {len(pairing.by_text)} | "
-        f"{a.cleaned_text_pairs} | {position_lines} | {len(pairing.by_position)} | {refused_text(pairing.refused)} | "
-        f"{gap} | {a.lrc_check} | {'yes' if a.viable else 'no'} | "
+        f"{'fitted lines' if fit.status == FITS else 'all lines'} | "
+        f"{len(a.sheet.lines)}/{len(a.cleaned)} | "
+        f"{len(a.lrc_texts)}/{a.lrc_file_lines} | {a.same_start} | {a.text_pairs} | "
+        f"{a.text_pairs - len(pairing.by_text)} | {position_lines} | "
+        f"{len(pairing.by_position)} | {stretch_text(pairing.shared)} | {rough_lines} | "
+        f"{timed_once(a)} | {gap} | {a.lrc_check} | {'yes' if a.viable else 'no'} | "
         f"{len(a.changed)}/{len(a.dropped)} | {a.fit_lines_match} |"
     )
 
@@ -231,24 +257,31 @@ def reload_detail(a: Analysis) -> str | None:
 
 
 def listen_list(a: Analysis) -> list[str]:
-    """The sheet lines whose words differ from the LRC's own line, by index and clip time."""
-    by_text = a.pairing.by_text
-    lines = []
-    for sheet_line, lrc_line in sorted(a.pairing.line_map().items()):
-        if lrclib.normalize_line(a.sheet.lines[sheet_line]) == lrclib.normalize_line(
+    """The sheet lines worth a listen, by index and clip time.
+
+    Those paired with an LRC line whose words differ from it, and those in a shared
+    stretch, whose time is a share of the LRC lines'.
+    """
+    starts = [start for start, _ in line_spans(a.cleaned, a.spans, a.pairing)]
+    places = {}
+    for sheet_line, lrc_line in a.pairing.line_map().items():
+        if lrclib.normalize_line(a.cleaned[sheet_line]) != lrclib.normalize_line(
             a.lrc_texts[lrc_line]
         ):
-            continue
-        how = "text" if sheet_line in by_text else "position"
-        lines.append(
-            f"genius {sheet_line} / lrc {lrc_line} / {clip_time(a.spans[lrc_line][0])} / {how}"
-        )
-    return lines
+            how = "text" if sheet_line in a.pairing.by_text else "position"
+            places[sheet_line] = (str(lrc_line), how)
+    for stretch in a.pairing.shared:
+        for sheet_line in range(*stretch.sheet):
+            places[sheet_line] = (line_range(*stretch.lrc), "shared")
+    return [
+        f"genius {sheet_line} / lrc {lrc} / {clip_time(starts[sheet_line])} / {how}"
+        for sheet_line, (lrc, how) in sorted(places.items())
+    ]
 
 
 def write_sheet(a: Analysis, out: Path) -> None:
     stem = a.status.path.stem
-    sheet_srt = timed_sheet_srt(a.sheet.lines, a.spans, a.pairing)
+    sheet_srt = timed_sheet_srt(a.cleaned, a.spans, a.pairing)
     (out / f"{stem}.lrclib-genius.srt").write_text(sheet_srt, encoding="utf-8")
     listen = listen_list(a)
     (out / f"{stem}.listen.txt").write_text("\n".join(listen) + "\n", encoding="utf-8")
