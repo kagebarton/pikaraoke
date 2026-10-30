@@ -200,13 +200,14 @@ class TestLrclibState:
         lrc.write_text("[00:01.00]hello\n", encoding="utf-8")
         assert library_status.song_status(video).lrclib_state == "rejected"
 
-    def test_an_lrc_that_is_not_utf8_reads_like_any_other_lrc(self, tmp_path):
+    def test_an_lrc_that_is_not_utf8_is_unreadable_whatever_the_bundle_recorded(self, tmp_path):
+        # It blocks every later search (ensure_lrc keeps it), so the disk wins over the bundle.
         video = self.genius_bundle(tmp_path, lrclib_meta={"lrc_file": "x.lrc", "id": 5})
         lrc = tmp_path / "lyrics" / f"{video.stem}.lrc"
         lrc.parent.mkdir()
         lrc.write_bytes("[ti:Caf\xe9]\n[00:01.00]hello\n".encode("cp1252"))
 
-        assert library_status.song_status(video).lrclib_state == "rejected"
+        assert library_status.song_status(video).lrclib_state == "unreadable"
 
     def test_a_marker_reference_is_not_a_match(self, tmp_path):
         # The pipeline records a skip marker as {"lrc_file": ...} with no id.

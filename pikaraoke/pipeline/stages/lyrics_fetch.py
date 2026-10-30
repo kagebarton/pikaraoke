@@ -185,8 +185,10 @@ class LyricsFetchStage(BaseStage):
                 logger.info("LRCLIB: skipped by the admin's choice (%s), no fill", path.name)
             elif state == "unreadable":
                 logger.info("LRCLIB: %s can't be read and is kept as placed, no fill", path.name)
-            else:
+            elif state == "match":
                 logger.info("LRCLIB: variant available for fill (%s)", path.name)
+            else:
+                logger.info("LRCLIB: %s is gone, no fill", path.name)
         except Exception:
             logger.exception("LRCLIB: resolve failed — fill unavailable")
 

@@ -633,6 +633,7 @@ class LibraryTools:
         if lrc.state == "missing":
             raise RegenError("This song has no LRCLIB match on disk. Search for one.")
         if lrc.state == "unreadable":
+            logger.warning("Could not read the LRCLIB match %s", lrclib.lrc_path(song))
             raise RegenError("Could not read this song's LRCLIB match.")
         if lrc.state == "skipped":
             raise RegenError("This song's LRCLIB match was skipped. Search for one.")

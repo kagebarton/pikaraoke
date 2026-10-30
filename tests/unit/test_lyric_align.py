@@ -848,14 +848,17 @@ class TestLrclibFillWiring:
         assert "lrclib" not in bundle["lyrics"]
         assert bundle["config"]["lrclib_fill"] is False
 
-    def test_an_unreadable_lrc_records_why_and_fills_nothing(self, tmp_path, monkeypatch):
+    def test_an_unreadable_lrc_records_why_and_fills_nothing(self, tmp_path, monkeypatch, caplog):
         # A corrupt .lrc (e.g. an interrupted copy leaving invalid UTF-8)
         # must not fail the align stage: the song ships without fills.
         stage, ctx, worker = self._make(tmp_path, monkeypatch)
         lrc = ctx.song_path.parent / "lyrics" / f"{ctx.song_path.stem}.lrc"
         lrc.write_bytes(b"[00:10.00]alpha\xff\xfe")
 
-        stage.run(ctx)
+        with caplog.at_level("WARNING", logger="pikaraoke.pipeline.stages.lyric_align"):
+            stage.run(ctx)
+
+        assert any(lrc.name in r.getMessage() for r in caplog.records if r.levelname == "WARNING")
 
         bundle = self._bundle(ctx)
         assert bundle["joint_stats"]["lrclib_fill"] == {

@@ -299,6 +299,17 @@ class TestSongInfoPage:
         assert "Skipped: you chose no match." in html
         assert "The match is" not in html
 
+    def test_an_unreadable_lrc_is_named_not_shown_as_no_match(self, env):
+        song = env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())
+        lrc = lrclib.lrc_path(Path(song))
+        lrc.parent.mkdir(exist_ok=True)
+        lrc.write_bytes("[00:01.00]caf\xe9\n".encode("latin-1"))
+        html = text(env.page(song))
+
+        assert "the .lrc file can&#39;t be read" in html
+        assert "Unreadable .lrc" in html
+        assert "no match found" not in html
+
     def test_no_match_found(self, env):
         bundle = poor_genius_bundle()
         bundle["lyrics"] = {"origin": "genius", "genius": GENIUS, "lines": ["one"]}
@@ -857,12 +868,15 @@ class TestSongListsRoute:
         env.add_song("C---ccccccccccc.mp4", self.joint_bundle(match=LRCLIB_MATCH))
         skipped = env.add_song("D---ddddddddddd.mp4", self.joint_bundle())
         lrclib.write_skip_marker(lrclib.lrc_path(Path(skipped)))
+        unreadable = env.add_song("E---eeeeeeeeeee.mp4", self.joint_bundle(match=LRCLIB_MATCH))
+        lrclib.lrc_path(Path(unreadable)).write_bytes(b"[00:01.00]caf\xe9\n")
 
         assert [r["subline"] for r in song_list(env, "genius")] == [
             "LRCLIB filled 3 lines",
             "LRCLIB filled 1 line",
             "LRCLIB not used",
             "LRCLIB skipped",
+            "LRC can't be read",
         ]
 
     def test_a_joint_song_with_captions_says_so_first(self, env):

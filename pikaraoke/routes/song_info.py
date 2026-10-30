@@ -240,6 +240,8 @@ def _lrclib_tile(status: SongStatus) -> Tile:
         return Tile(label, _("Used"), ngettext("fills %(num)d line", "fills %(num)d lines", n))
     if state == "skipped":
         return Tile(label, _("Skipped"), _("skipped by you"))
+    if state == "unreadable":
+        return Tile(label, _("Unreadable"), _("the .lrc file can't be read"), warn=True)
     if state == "rejected":
         gap = _length_gap_s(status)
         if gap is not None and abs(gap) >= _LENGTH_GAP_NOTED_S:
@@ -257,6 +259,8 @@ def _tiles(status: SongStatus) -> list[Tile]:
 def _lrclib_pick(status: SongStatus) -> str:
     if status.lrclib_state == "skipped":
         return _("Skipped")
+    if status.lrclib_state == "unreadable":
+        return _("Unreadable .lrc")
     match = status.lrclib
     if match is None:
         return _("None")
