@@ -97,7 +97,9 @@ def lrc_stamps(lrc_text: str) -> list[tuple[float, str]]:
 # LRCLIB synced lines carry only a start stamp; the timing prior needs a
 # span. End each line at the next line's start and hold the final line
 # this long — long enough to re-space a sung line's words, which is all
-# the fill path does with the end (no later cue bounds it).
+# the fill path does with the end (no later cue bounds it). The LRC sheet
+# (srt_slice_fit.lrc_to_srt) ends its last cue here too, but ends a line
+# at a break stamp, which the fill's spans don't.
 LRC_LAST_LINE_HOLD_S = 4.0
 
 
