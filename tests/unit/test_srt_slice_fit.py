@@ -405,6 +405,32 @@ class TestLrcToSrt:
             (14.0, 14.0 + LRC_LAST_LINE_HOLD_S),
         ]
 
+    def test_a_duet_at_a_stamp_a_timedelta_does_not_give_back_keeps_both_lines(self):
+        """68.04 s comes back from a timedelta as 68.03999...; the first line was dropped."""
+        lrc = "[01:08.04] him: line a\n[01:08.04] her: line b\n[01:10.00] together\n"
+
+        cues = list(srt.parse(lrc_to_srt(lrc)))
+
+        assert [cue.content for cue in cues] == ["him: line a\nher: line b", "together"]
+
+    def test_a_blank_stamp_ends_the_line_before_a_break(self):
+        lrc = "[00:10.00] before the break\n[00:13.00]\n[00:40.00] after it\n[00:44.00]\n"
+
+        cues = list(srt.parse(lrc_to_srt(lrc)))
+
+        assert [cue.content for cue in cues] == ["before the break", "after it"]
+        assert [(c.start.total_seconds(), c.end.total_seconds()) for c in cues] == [
+            (10.0, 13.0),
+            (40.0, 44.0),
+        ]
+
+    def test_a_blank_stamp_at_a_lines_own_start_does_not_end_it(self):
+        lrc = "[00:10.00]\n[00:10.00] line\n[00:15.00] next\n"
+
+        cues = list(srt.parse(lrc_to_srt(lrc)))
+
+        assert [(c.start.total_seconds(), c.end.total_seconds()) for c in cues][0] == (10.0, 15.0)
+
     def test_an_lrc_with_no_timed_line_is_empty_and_fit_slice_refuses_it(self):
         assert lrc_to_srt("") == ""
         assert lrc_to_srt("[ti:A Title]\nwords with no stamp\n") == ""

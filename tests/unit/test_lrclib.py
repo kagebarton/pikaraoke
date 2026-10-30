@@ -394,6 +394,17 @@ class TestParseLrcLines:
         assert starts == [10.0, 20.0, 30.0]
 
 
+class TestLrcStamps:
+    def test_blank_stamps_are_kept_and_metadata_is_not(self):
+        lrc = "[ar:Artist]\n[00:20.00] Real line\nno stamp here\n[00:10.00]\n[00:25.00][00:05.00] Hook\n"
+        assert lrclib.lrc_stamps(lrc) == [
+            (5.0, "Hook"),
+            (10.0, ""),
+            (20.0, "Real line"),
+            (25.0, "Hook"),
+        ]
+
+
 class TestMapLinesToCues:
     def test_identical_lists_map_one_to_one(self):
         lines = ["alpha one", "beta two", "gamma three"]
