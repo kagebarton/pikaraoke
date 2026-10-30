@@ -17,6 +17,7 @@ from pikaraoke.lib.library_regen import (
     CUSTOM_ORIGIN,
     LRC_ORIGIN,
     MOVIE_ORIGIN,
+    SHEETS,
     RegenError,
 )
 from pikaraoke.lib.library_status import HistoryEntry, SongStatus, length_gap_s
@@ -373,7 +374,7 @@ def _lrclib_label(match: dict | None) -> str:
 
 def _pick(entry: HistoryEntry) -> tuple:
     """What a version's lyric pick is: its source, and the Genius song or the custom words."""
-    if entry.origin in (CUSTOM_ORIGIN, MOVIE_ORIGIN, LRC_ORIGIN):
+    if entry.origin in {sheet.origin for sheet in SHEETS.values()}:
         return (entry.origin, entry.lines)
     return (entry.origin, (entry.genius or {}).get("id"))
 
