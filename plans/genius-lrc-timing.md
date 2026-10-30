@@ -150,8 +150,9 @@ Phase 4 picks one and records why in the Results log.
 - **The stretches at either end** (before the first text pair, after the last) follow
   the same rule as the ones between pairs.
 - **Viable** = the LRC check is viable as it is today, AND the pairing has at least one
-  text pair (with none, the whole song would be one shared stretch, timed blind). The
-  length override (`LrcTimingCheck.overridable` and `repair(..., allow_gap)`,
+  text pair left in `by_text` (a pair taken into a shared stretch does not count; no
+  song in the two tables is decided by that). With none, the whole song would be one
+  shared stretch, timed blind. The length override (`LrcTimingCheck.overridable` and `repair(..., allow_gap)`,
   `8767f65`) still applies to the gap, and never to a sheet with no text pair.
 - **Its own sheet kind**, not the `.lrclib.srt` one. The handoff suggested the same
   kind with its own origin label. But the origin is read off the sheet's suffix on
@@ -190,7 +191,9 @@ class Pairing:
     by_position: tuple[Stretch, ...] # equal counts, paired in order
     shared: tuple[Stretch, ...]      # unequal counts: the Genius lines share the LRC lines' time
 
+def clean_sheet_lines(lines: list[str]) -> list[str]: ...
 def pair_lines(sheet: list[str], lrc_lines: list[str]) -> Pairing: ...
+def line_spans(sheet: list[str], spans: list[tuple[float, float]], pairing: Pairing) -> list[tuple[float, float]]: ...
 def timed_sheet_srt(sheet: list[str], spans: list[tuple[float, float]], pairing: Pairing) -> str: ...
 ```
 
@@ -200,8 +203,9 @@ Rewritten at GATE N1 (ruling 6; the first version, `243cc53`, refused unequal st
   `cue_spans_from_srt` runs; reuse it, don't copy it), and lines that clean to nothing
   are dropped. Pairing, the saved sheet and its reload then see the same lines, and
   both sides of the text match are cleaned alike (the GATE N1 report cleaned only the
-  LRC side). The caller passes the cleaned lines; where that happens is Phase 1.1's
-  choice, one place for the probe and the repair.
+  LRC side). The caller passes the cleaned lines. Phase 1.1 put the cleaning in the
+  module, as `clean_sheet_lines(lines)` (it writes the lines as an SRT and reads that
+  back with `cue_spans_from_srt`), so the probe and the repair call one function.
 - `pair_lines`: `map_lines_to_cues(sheet, lrc_lines)` for the text pairs. Then walk
   the gaps between consecutive pairs, plus the two ends. A gap that is empty on
   both sides is nothing. Equal counts go to `by_position`. Unequal counts are shared:
@@ -211,7 +215,9 @@ Rewritten at GATE N1 (ruling 6; the first version, `243cc53`, refused unequal st
   - shared stretches that then hold the same line merge into one. (Your Idol's intro:
     LRC-only 0-7 and Genius-only 1-4 both take in the pair Genius 0 / LRC 8, and merge
     to Genius 0-4 / LRC 0-8.)
-- `timed_sheet_srt`: one SRT cue per Genius line. A paired line takes its LRC line's
+- `line_spans` gives each Genius line its `(start, end)`; `timed_sheet_srt` writes
+  them, and the probe's listen list reads them. `timed_sheet_srt`: one SRT cue per
+  Genius line. A paired line takes its LRC line's
   span. In a shared stretch the time runs from the first LRC line's start to the last
   one's end, and the Genius lines divide it in order, each in proportion to its
   character count. No `ValueError` for refused stretches any more.
@@ -334,18 +340,18 @@ Rewritten at GATE N1 (ruling 6; the first version, `243cc53`, refused unequal st
 
 ### Phase 1.1: share the time (ruling 6)
 
-- [ ] Rewrite `pair_lines`, `timed_sheet_srt`, the module docstring and
+- [x] Rewrite `pair_lines`, `timed_sheet_srt`, the module docstring and
       `tests/unit/test_lrc_pairing.py` to the Design section (cleaning first, shared
       stretches). Commit: `feat(lyrics): a stretch the two sides split differently
-      shares its time`.
-- [ ] Update the report script: "Refused stretches" becomes "Shared stretches"; the
+      shares its time` (`a30961a`).
+- [x] Update the report script (`2eb90a8`): "Refused stretches" becomes "Shared stretches"; the
       sheet is cleaned before pairing (drop the "Text pairs (sheet cleaned too)"
       column, now the same as "Text pairs"); Viable follows the Defaults. Reload
       changed/dropped should now read 0/0 everywhere; if not, stop. Commit:
       `feat(scripts): the pairing report shows shared stretches`.
-- [ ] Re-run Results row 5's command. Paste the raw output as "GATE N1 report output
+- [x] Re-run Results row 5's command. Paste the raw output as "GATE N1 report output
       (Phase 1.1)" under the first one, and add a Results row. Full suite count in
-      the row.
+      the row (Results row 8).
 - [ ] Stop for Ken's `/compact`; Phase 2 next.
 
 ### Phase 2: Your Idol by ear -> GATE N2 (Ken)
@@ -472,6 +478,7 @@ the existing Regenerate can time it.
 | 5 | 2026-10-30 | 1 | `python -P scripts/genius_lrc_pairing_report.py --folder "/home/ken/shared-drives/D:/Shared/pikaraoke-songs" --song "Your Idol=12047339" --song "Golden=12045295" --song "Takedown=12100816" --song "Soda Pop=12040325" --song "Seven"` at `96a5370`; raw output under "GATE N1 report output". The script also ran on a viable Table 2 song with `--write-sheet` into the scratchpad (wrote the `.lrclib-genius.srt` and `.listen.txt`, checked, deleted) and refused `--write-sheet` pointed at the library and at its `lyrics/` folder. Nothing in the library was written. | Report carries no lyric text. `fit.lines` and the reloaded fitted SRT agree line for line on every song whose fit passed (the Defaults' stop condition did not fire). No LRC in the tables has two lines stamped at one start (column "Same-start LRC lines" is 0 everywhere). Two things seen that the library table (Phase 0) did not show, for the reader: (1) the pairing runs on the LRC lines as the cue route loads them, and that cleaning drops parenthesised words (`clean_srt_line`), so Seven's text pairs are 51 here against 56 on the raw LRC lines in the "What the library shows today" table (17 of Seven's 77 LRC lines hold parentheses); the extra column "Text pairs (sheet cleaned too)" is the count when the sheet side is cleaned the same way (Seven 59); (2) Table 1's sheets are the Genius pages, not the bundles, so Golden and Soda Pop line counts differ from Table 2's bundle rows (Golden 54 vs 51, Soda Pop 64 and 64). The listing "Lines the saved sheet's reload changes or drops" prints each Table 1 and Table 2 song, so a song in both tables appears twice. |
 | 6 | 2026-10-30 | GATE N1 | Opus 5.5 read of "GATE N1 report output" at `8e1e32c`; no code run. Tallies under "GATE N1 read" at the end of this plan. | Your Idol: 5 refused stretches (13 of 63 Genius lines, 9 of 59 LRC lines), so not covered. Of the 10 songs in the two tables, 1 (Best Part Of Me) has no refused stretch; every other song whose LRC fit passes has 5-13 refused stretches holding 21-48% of its Genius lines. Seven: 11 refused stretches, 18 of 79 Genius lines. 29 of the 71 refused stretches on fit-passing songs are one-sided. Refusals were counted on the raw sheet against the cleaned LRC lines; see the read's notes. Fallback left to Ken. |
 | 7 | 2026-10-30 | GATE N1 | Ken's ruling on the read (row 6), in chat. | "Share the time" (ruling 6): unequal stretches no longer refuse; their Genius lines divide the LRC lines' time by character count, a one-sided stretch takes in the neighbouring text pair, and the card lists them as timed roughly. The sheet is cleaned before pairing. Author's addition: a sheet with no text pair is not viable. Design, Defaults, Phases 3/4/6 updated; Phase 1.1 added. |
+| 8 | 2026-10-30 | 1.1 | Executor (Sonnet 5.5): `lrc_pairing.py` rewritten to ruling 6 (`clean_sheet_lines`, `Pairing.shared` in place of `refused`, `line_spans`, `timed_sheet_srt` without the `ValueError` for a refused stretch) with its tests, commit `a30961a`; the report script to match, `2eb90a8`. Re-run of row 5's command on that tree, raw output under "GATE N1 report output (Phase 1.1)" (exit 0, 12 s). Also: `--write-sheet` into the scratchpad for Your Idol (checked, deleted) and `--write-sheet` at the library's `lyrics/` folder (refused). Full suite in the worktree. | **3031 passed** (3013 - 15 old pairing tests + 33 new). The Phase 1.1 stop did not fire: "Reload changed/dropped" is 0/0 on all 13 rows, and the new column "Each line timed once" (every cleaned sheet line in one place, no LRC line given out twice) is yes on all 13. `fit.lines` = reload still yes wherever the fit passed. Viable: Your Idol, Golden, Takedown and Seven yes; Soda Pop no (LRC fit refused); in Table 2 Best Part Of Me, Eminem, In Summer, Stay Gold and Golden yes, Sunny Day no (fit refused, no text pair). Your Idol: 63 page lines, 58 after cleaning; 43 text pairs, 1 taken into a shared stretch; 6 lines position-paired in 5 stretches; 3 shared stretches (Genius 0-3 / LRC 0-8, 23-25 / 28, 42-44 / 45) holding 10 Genius lines. Genius lines timed roughly, Table 1: Your Idol 10, Golden 18, Takedown 29, Soda Pop 12, Seven 12; Table 2 (bundle sheets): Best Part Of Me 0, Eminem 27, In Summer 19, Stay Gold 11, Golden 17, Sunny Day 42 (whole song). `--write-sheet` on Your Idol wrote a 58-cue sheet that reloads unchanged, starts never go back, no zero-length cue, and a listen list of 18 lines (2 text, 6 position, 10 shared). Seen, for the reader: (1) "Text pairs" is now the count the text match finds, so it equals the old "Text pairs (sheet cleaned too)" column on every row (Your Idol 43, Golden 35, Takedown 44, Soda Pop 45, Seven 59); "taken into shared stretches" is the pairs that left `by_text` for a one-sided stretch (Your Idol 1, Takedown 12, In Summer 4). Viable counts `by_text` after that, and no row that has text pairs has all of them taken in. (2) A chorus the LRC sings once more than the sheet is a one-sided stretch, so the sheet line before it divides the time of the extra repeat too (unit test `test_a_chorus_the_lrc_repeats_once_more_is_shared_with_the_line_before_it`: sheet line 3 spans LRC lines 3-6). (3) `scripts/genius_lrc_pairing_report.py` was committed in `96a5370` as 100644 with a shebang; the pre-commit hook caught it and the mode is 100755 in `2eb90a8`, as `lrc_timing_report.py`'s is. (4) `graphify update .` could not run: the module and binary are not installed in this env and there is no `graphify-out` in either checkout. |
 
 ## GATE N1 report output
 
@@ -522,6 +529,49 @@ Lines the saved sheet's reload changes or drops (line indexes in the Genius shee
 - “Golden” Official Lyric Video _ KPop Dem: changed on reload 8,11,12,13,46,49; dropped 15
 - 周杰倫 Jay Chou【晴天 Sunny Day】-Official Musi: changed on reload 12,25; dropped -
 - 정국 (Jung Kook) 'Seven (feat. Latto)' Off: changed on reload 5,7,11,27,29,33,38,40,42,44,45,49,65,68,71,72,73,75; dropped 47,64
+```
+
+## GATE N1 report output (Phase 1.1)
+
+Raw, unedited. Run 2026-10-30 on the tree of `2eb90a8` (library `a30961a`); one
+docstring line in `Analysis.viable` was added after the run. Same command as Results
+row 5. "Shared stretches" read `genius a-b / lrc c-d` (inclusive indexes, `-` for none
+on that side). Genius line indexes count the sheet after cleaning. No lyric text.
+
+```text
+Folder /home/ken/shared-drives/D:/Shared/pikaraoke-songs. Fit thresholds in force: LRC_MAX_GAP_S=15.
+
+Genius pages fetched (id | title | artist):
+- 12047339 | Saja Boys - Your Idol (Romanized) | Genius Romanizations
+- 12045295 | HUNTR/X - Golden (Romanized) | Genius Romanizations
+- 12100816 | HUNTR/X - Takedown (Romanized) | Genius Romanizations
+- 12040325 | Saja Boys - Soda Pop (Romanized) | Genius Romanizations
+
+Table 1: the named songs
+
+| Song | Sheet | LRC fit | Paired on | Genius lines (page/cleaned) | LRC lines (paired/file) | Same-start LRC lines | Text pairs | Text pairs taken into shared stretches | Position pairs | Position stretches | Shared stretches | Genius lines timed roughly | Each line timed once | Gap s | LRC check | Viable | Reload changed/dropped | fit.lines = reload |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| ‘Your Idol’ Lyric Video _ KPop Demon Hun | genius 12047339 | fits (transcribe) | fitted lines | 63/58 | 59/59 | 0 | 43 | 1 | 6 | 5 | genius 0-3 / lrc 0-8; genius 23-25 / lrc 28-28; genius 42-44 / lrc 45-45 | 10 | yes | -14 | viable | yes | 0/0 | yes |
+| “Golden” Official Lyric Video _ KPop Dem | genius 12045295 | fits (transcribe) | fitted lines | 54/54 | 46/46 | 0 | 35 | 0 | 1 | 1 | genius 1-7 / lrc 1-2; genius 11-11 / lrc 6-7; genius 16-17 / lrc 12-12; genius 20-22 / lrc 15-16; genius 36-37 / lrc 30-30; genius 40-42 / lrc 33-34 | 18 | yes | -4 | viable | yes | 0/0 | yes |
+| “Takedown” Official Choreography _ KPop  | genius 12100816 | fits (transcribe) | fitted lines | 67/66 | 52/52 | 0 | 44 | 12 | 5 | 5 | genius 10-10 / lrc 10-11; genius 12-15 / lrc 13-13; genius 17-18 / lrc 15-15; genius 19-20 / lrc 16-16; genius 21-22 / lrc 17-17; genius 23-24 / lrc 18-18; genius 37-38 / lrc 31-31; genius 39-40 / lrc 32-32; genius 41-42 / lrc 33-33; genius 43-44 / lrc 34-34; genius 57-58 / lrc 47-47; genius 59-60 / lrc 48-48; genius 61-62 / lrc 49-49; genius 63-64 / lrc 50-50 | 29 | yes | -10 | viable | yes | 0/0 | yes |
+| 'Soda Pop' Official Lyric Video _ KPop D | genius 12040325 | refused/disagree (transcribe) | all lines | 64/64 | 59/59 | 0 | 45 | 0 | 7 | 4 | genius 13-22 / lrc 13-18; genius 24-25 / lrc 20-20 | 12 | yes | +0 | refused | no | 0/0 | n/a |
+| 정국 (Jung Kook) 'Seven (feat. Latto)' Off | bundle | fits (transcribe) | fitted lines | 79/77 | 77/77 | 0 | 59 | 0 | 6 | 2 | genius 10-11 / lrc 10-12; genius 16-17 / lrc 17-17; genius 32-33 / lrc 32-34; genius 45-46 / lrc 46-46; genius 62-63 / lrc 62-64; genius 75-76 / lrc 76-76 | 12 | yes | -14 | viable | yes | 0/0 | yes |
+
+Table 2: every Genius-origin song with a usable LRC (8), bundle sheets
+
+| Song | Sheet | LRC fit | Paired on | Genius lines (page/cleaned) | LRC lines (paired/file) | Same-start LRC lines | Text pairs | Text pairs taken into shared stretches | Position pairs | Position stretches | Shared stretches | Genius lines timed roughly | Each line timed once | Gap s | LRC check | Viable | Reload changed/dropped | fit.lines = reload |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 'Soda Pop' Official Lyric Video _ KPop D | bundle | refused/disagree (transcribe) | all lines | 64/64 | 59/59 | 0 | 47 | 0 | 5 | 2 | genius 13-22 / lrc 13-18; genius 24-25 / lrc 20-20 | 12 | yes | +0 | refused | no | 0/0 | n/a |
+| Ed Sheeran - Best Part Of Me (feat. YEBB | bundle | fits (transcribe) | fitted lines | 38/38 | 38/38 | 0 | 38 | 0 | 0 | 0 | - | 0 | yes | -1 | viable | yes | 0/0 | yes |
+| Eminem - Lose Yourself | bundle | fits (transcribe) | fitted lines | 87/87 | 93/93 | 0 | 59 | 1 | 2 | 2 | genius 0-0 / lrc 0-1; genius 1-1 / lrc 2-3; genius 7-8 / lrc 9-9; genius 12-16 / lrc 13-19; genius 18-18 / lrc 21-22; genius 30-36 / lrc 34-41; genius 42-44 / lrc 47-50; genius 68-71 / lrc 74-76; genius 75-77 / lrc 80-83 | 27 | yes | -1 | viable | yes | 0/0 | yes |
+| Josh Gad - In Summer (From 'Frozen'_Sing | bundle | fits (transcribe) | fitted lines | 31/31 | 21/21 | 0 | 16 | 4 | 0 | 0 | genius 0-2 / lrc 0-0; genius 5-6 / lrc 3-3; genius 8-9 / lrc 5-5; genius 13-14 / lrc 9-9; genius 15-16 / lrc 10-10; genius 18-19 / lrc 12-12; genius 21-22 / lrc 14-14; genius 25-26 / lrc 17-17; genius 28-29 / lrc 19-19 | 19 | yes | +1 | viable | yes | 0/0 | yes |
+| Stay Gold (Official Music Video) from Th | bundle | fits (transcribe) | fitted lines | 38/38 | 51/51 | 0 | 27 | 0 | 0 | 0 | genius 2-2 / lrc 2-3; genius 5-5 / lrc 6-7; genius 10-10 / lrc 12-13; genius 16-16 / lrc 19-20; genius 21-21 / lrc 25-26; genius 24-24 / lrc 29-30; genius 27-27 / lrc 33-34; genius 32-33 / lrc 39-44; genius 36-37 / lrc 47-50 | 11 | yes | +0 | viable | yes | 0/0 | yes |
+| “Golden” Official Lyric Video _ KPop Dem | bundle | fits (transcribe) | fitted lines | 51/50 | 46/46 | 0 | 34 | 3 | 2 | 1 | genius 0-4 / lrc 0-0; genius 5-11 / lrc 1-2; genius 22-22 / lrc 13-14; genius 23-23 / lrc 15-16; genius 38-38 / lrc 31-32; genius 39-39 / lrc 33-34; genius 45-45 / lrc 40-41 | 17 | yes | -4 | viable | yes | 0/0 | yes |
+| 周杰倫 Jay Chou【晴天 Sunny Day】-Official Musi | bundle | refused/too_few (transcribe) | all lines | 42/42 | 53/53 | 0 | 0 | 0 | 0 | 0 | genius 0-41 / lrc 0-52 | 42 | yes | -19 | refused | no | 0/0 | n/a |
+| 정국 (Jung Kook) 'Seven (feat. Latto)' Off | bundle | fits (transcribe) | fitted lines | 79/77 | 77/77 | 0 | 59 | 0 | 6 | 2 | genius 10-11 / lrc 10-12; genius 16-17 / lrc 17-17; genius 32-33 / lrc 32-34; genius 45-46 / lrc 46-46; genius 62-63 / lrc 62-64; genius 75-76 / lrc 76-76 | 12 | yes | -14 | viable | yes | 0/0 | yes |
+
+Lines the saved sheet's reload changes or drops (line indexes in the Genius sheet):
+- none
 ```
 
 ## GATE N1 read
