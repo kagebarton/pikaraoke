@@ -40,6 +40,11 @@ check now does that, and the admin reads the result before confirming.
    One step.
 4. **Test song: Your Idol** (KPop Demon Hunters).
 5. **A plan of its own, with testing first.** Ken: it "could use some testing first".
+6. **Share the time (GATE N1, 2026-10-30).** Replaces "refused" in ruling 1. Where the
+   two sides don't pair one to one, the Genius lines divide the LRC lines' time there,
+   longer lines getting more. Nothing is refused, and the card lists those lines as
+   timed roughly. The sheet is cleaned as the cue route cleans it before pairing.
+   Rule in Design, `lrc_pairing.py`.
 
 ## What the library shows today (2026-10-30, read only)
 
@@ -88,10 +93,9 @@ What this changes from the hand-off that started this plan:
   pair gives a correct time with the wrong words, and no flag shows it. Ruling 2 is
   the answer for position pairs. Text pairs go unlisted because they already say
   nearly the same thing (similarity of at least 0.85 after normalising).
-- **A refused stretch refuses the whole option.** Cue align needs a time for every
-  sheet line, so a Genius line that can't be paired leaves nothing to save. This is
-  how this plan reads ruling 1. If Phase 1 shows refusals are common, the fallback
-  is Ken's call at GATE N1 (options listed there).
+- **A shared stretch has rough line times.** Ruling 6 gives every Genius line a time,
+  but inside a shared stretch it is a share of the LRC's time, not an LRC line's own.
+  The word timing still runs inside each line's window; Ken's ear judges it at GATE N2.
 - **Word timing inside romanized lines.** Line times come from the LRC, so they will
   be right. But cue align passes each line's text to the stable-ts aligner, which is
   set to English (`pipeline/config.py`, `language = "en"`). Words in a romanized line
@@ -106,7 +110,7 @@ What this changes from the hand-off that started this plan:
 - **Duet lines.** `lrc_to_srt` merges LRC lines stamped at the same start into one
   cue, and `cue_spans_from_srt` joins that cue's lines with a space, so one LRC line
   can stand for two Genius lines. That makes a stretch with unequal counts, which
-  gets refused. Since `8dabf55` the merge keeps both singers' lines for every stamp
+  shares its time (ruling 6). Since `8dabf55` the merge keeps both singers' lines for every stamp
   (before it, a stamp such as 01:08.04 lost the first singer's line), so a duet now
   shows up here as it is. Phase 1 shows how often it happens.
 
@@ -144,14 +148,11 @@ Phase 4 picks one and records why in the Results log.
   included, so a line before an instrumental break ends at the break; the last line
   holds `LRC_LAST_LINE_HOLD_S`. `timed_sheet_srt` takes the spans as they are.
 - **The stretches at either end** (before the first text pair, after the last) follow
-  the same rule as the ones between pairs. A Genius intro that the clip doesn't sing
-  is an unequal stretch, so it's refused.
-- **Viable** = the LRC check is viable as it is today, AND no stretch is refused.
-  The length override (`LrcTimingCheck.overridable` and `repair(..., allow_gap)`,
-  `8767f65`) still applies to the gap. A refused stretch can never be overridden. Note
-  that `_fit_lrc_timing` sets `overridable=fits and not viable`: with a refused
-  stretch that is true, so the formula must also require no refused stretch (Design,
-  Phase 4).
+  the same rule as the ones between pairs.
+- **Viable** = the LRC check is viable as it is today, AND the pairing has at least one
+  text pair (with none, the whole song would be one shared stretch, timed blind). The
+  length override (`LrcTimingCheck.overridable` and `repair(..., allow_gap)`,
+  `8767f65`) still applies to the gap, and never to a sheet with no text pair.
 - **Its own sheet kind**, not the `.lrclib.srt` one. The handoff suggested the same
   kind with its own origin label. But the origin is read off the sheet's suffix on
   every replay: `library_regen.custom_plan` finds the sheet on disk, `sheet_kind` names
@@ -187,22 +188,38 @@ class Stretch:
 class Pairing:
     by_text: dict[int, int]          # Genius line -> LRC line
     by_position: tuple[Stretch, ...] # equal counts, paired in order
-    refused: tuple[Stretch, ...]     # unequal counts
+    shared: tuple[Stretch, ...]      # unequal counts: the Genius lines share the LRC lines' time
 
 def pair_lines(sheet: list[str], lrc_lines: list[str]) -> Pairing: ...
 def timed_sheet_srt(sheet: list[str], spans: list[tuple[float, float]], pairing: Pairing) -> str: ...
 ```
 
+Rewritten at GATE N1 (ruling 6; the first version, `243cc53`, refused unequal stretches):
+
+- **The sheet is cleaned first**, by the cue route's own cleaning (what
+  `cue_spans_from_srt` runs; reuse it, don't copy it), and lines that clean to nothing
+  are dropped. Pairing, the saved sheet and its reload then see the same lines, and
+  both sides of the text match are cleaned alike (the GATE N1 report cleaned only the
+  LRC side). The caller passes the cleaned lines; where that happens is Phase 1.1's
+  choice, one place for the probe and the repair.
 - `pair_lines`: `map_lines_to_cues(sheet, lrc_lines)` for the text pairs. Then walk
   the gaps between consecutive pairs, plus the two ends. A gap that is empty on
-  both sides is nothing. Equal counts go to `by_position`; unequal counts
-  (including one side empty) go to `refused`.
-- `timed_sheet_srt`: one SRT cue per Genius line, at its paired LRC line's span.
-  Raises `ValueError` when `pairing.refused` is not empty, since a line with no time
-  is no sheet.
+  both sides is nothing. Equal counts go to `by_position`. Unequal counts are shared:
+  - a stretch with lines on both sides is shared as it is;
+  - a stretch with lines on one side only takes in the text pair just before it (at
+    the song's start, the one just after it), and that pair leaves `by_text`;
+  - shared stretches that then hold the same line merge into one. (Your Idol's intro:
+    LRC-only 0-7 and Genius-only 1-4 both take in the pair Genius 0 / LRC 8, and merge
+    to Genius 0-4 / LRC 0-8.)
+- `timed_sheet_srt`: one SRT cue per Genius line. A paired line takes its LRC line's
+  span. In a shared stretch the time runs from the first LRC line's start to the last
+  one's end, and the Genius lines divide it in order, each in proportion to its
+  character count. No `ValueError` for refused stretches any more.
 - Tests (invented lines only): all lines pair by text; a stretch of Hangul-only LRC
-  lines between two English pairs, with equal counts; the same with unequal counts;
-  a stretch at the start and at the end; one side empty; a duet LRC line merged with
+  lines between two English pairs, with equal counts; unequal counts on both sides
+  (1 against 2, 2 against 1) shared by character count; a Genius-only and an LRC-only
+  line, each taking in the pair before it; the same at the song's start (pair after);
+  two one-sided stretches around one pair merging; no text pair at all; a duet LRC line merged with
   `\n` against two Genius lines; a repeated chorus where text pairing must keep
   each instance in its own place; `timed_sheet_srt` round-trips through
   `cue_spans_from_srt` to the same lines and spans.
@@ -213,12 +230,11 @@ def timed_sheet_srt(sheet: list[str], spans: list[tuple[float, float]], pairing:
   the sheet (`genius_sheet_lines`) and pair it against the fit's lines. The pairing
   goes into `_fit_lrc_timing(job, record, sheet=None)`, the one function the check and
   the repair both call, so the repair redoes it on the server. The check gains
-  `pairing: Pairing | None`. `viable` also needs `pairing.refused` to be empty, and
-  `overridable` too: today `overridable=fits and not viable` would be true for a
-  refused stretch, which `allow_gap` must not open.
+  `pairing: Pairing | None`. `viable` and `overridable` both also need at least one
+  text pair (Defaults).
 - The repair re-runs the check on the server (as `_lrc_repair_plan` does today: one
   `_lrc_record`, one `_fit_lrc_timing`). It refuses with `LrcTimingRefused` and, when
-  viable (or overridable with `allow_gap`, nothing refused), queues
+  viable (or overridable with `allow_gap`), queues
   `sheet_plan(song, "lrclib_genius", timed_sheet_srt(...))`. `sheet_plan` already takes
   the kind, so there is no new plan wrapper. A record given by id becomes the song's
   `.lrc`, as for `lrclib`. Which `source` name reaches `repair` is the open point under
@@ -229,8 +245,8 @@ def timed_sheet_srt(sheet: list[str], spans: list[tuple[float, float]], pairing:
 ### Route and page (`routes/song_info.py`, `song_repair.html`, Phase 5)
 
 - `POST /song_info/lrc_fit` takes an optional `genius_id`. The LRC card gains a
-  "position-paired" list (each pair: Genius line, LRC line, `m:ss`) and a "can't
-  pair" list (each refused stretch: its Genius lines and its LRC lines, with times).
+  "position-paired" list (each pair: Genius line, LRC line, `m:ss`) and a "timed
+  roughly" list (each shared stretch: its Genius lines and its LRC lines, with times).
 - The LRCLIB timing section gains the lyrics choice (ruling 3). Picking "a Genius
   page" opens the Genius card's search box and list (`searchGenius`,
   `geniusOption`). A new pick clears the answer, as a new LRC pick does.
@@ -302,7 +318,8 @@ def timed_sheet_srt(sheet: list[str], spans: list[tuple[float, float]], pairing:
       report carries no text, so it may be committed.
 - [x] Commit the script: `feat(scripts): report how a Genius sheet pairs with an
       LRC's lines`. Plan updates go in their own `docs(plans)` commits.
-- [ ] **GATE N1: stop.** No verdict on the executor side. Ask Ken to `/model` to
+- [x] **GATE N1: stop.** Read by Opus (Results row 6); Ken ruled "share the time"
+      (ruling 6, Results row 7). No verdict on the executor side. Ask Ken to `/model` to
       Opus for the read. The question for Ken: does pairing cover Your Idol with
       nothing refused, and how often do line splits refuse a stretch elsewhere,
       Seven included? If refusals are common, Ken picks the fallback, for example:
@@ -314,6 +331,22 @@ def timed_sheet_srt(sheet: list[str], spans: list[tuple[float, float]], pairing:
 
   A fallback changes `pair_lines` or `timed_sheet_srt` and their tests before
   Phase 2.
+
+### Phase 1.1: share the time (ruling 6)
+
+- [ ] Rewrite `pair_lines`, `timed_sheet_srt`, the module docstring and
+      `tests/unit/test_lrc_pairing.py` to the Design section (cleaning first, shared
+      stretches). Commit: `feat(lyrics): a stretch the two sides split differently
+      shares its time`.
+- [ ] Update the report script: "Refused stretches" becomes "Shared stretches"; the
+      sheet is cleaned before pairing (drop the "Text pairs (sheet cleaned too)"
+      column, now the same as "Text pairs"); Viable follows the Defaults. Reload
+      changed/dropped should now read 0/0 everywhere; if not, stop. Commit:
+      `feat(scripts): the pairing report shows shared stretches`.
+- [ ] Re-run Results row 5's command. Paste the raw output as "GATE N1 report output
+      (Phase 1.1)" under the first one, and add a Results row. Full suite count in
+      the row.
+- [ ] Stop for Ken's `/compact`; Phase 2 next.
 
 ### Phase 2: Your Idol by ear -> GATE N2 (Ken)
 
@@ -349,7 +382,8 @@ the existing Regenerate can time it.
   - "a Genius page" picked, search open, a hit picked;
   - fits and viable: all lines paired by text (no list);
   - fits and viable, with position-paired stretches listed;
-  - a refused stretch (not viable), with its lines listed;
+  - shared stretches, listed as timed roughly;
+  - no text pair at all (not viable);
   - a flagged run beside Genius lyrics. Ruling needed: are the flag's lines shown
     in the LRC's text (what was checked) or the paired Genius text?
   - length too far off, with the "Use this match anyway" box (`8767f65`), and Genius
@@ -367,8 +401,8 @@ the existing Regenerate can time it.
 - [ ] Tests: `test_library_regen.py` (the plan shape; saving it removes the other
       kinds and the other kinds remove it; Reset and bulk runs replay it with its own
       origin; the backup claims it; `sheet_kind` tells it from `.lrclib.srt`).
-      `test_library_tools.py` (a viable check with Genius lyrics; a refused stretch
-      is not viable and can't be overridden; the repair re-runs both the fit and the
+      `test_library_tools.py` (a viable check with Genius lyrics; a shared stretch
+      shares its time; no text pair is not viable and can't be overridden; the repair re-runs both the fit and the
       pairing on the server; Genius unavailable; the saved sheet's text is
       Genius's and its times are the fitted LRC's).
 - [ ] Commit: `feat(repair): LRCLIB timing can keep a Genius page's lyrics`.
@@ -378,7 +412,7 @@ the existing Regenerate can time it.
 - [ ] Build the ratified mockup, the route change and the labels (the sites listed
       under Route and page).
 - [ ] Route tests: `genius_id` validated as `lrclib_id` is; the card's paired and
-      refused lists; Repair sends `genius_id`; admin only.
+      timed-roughly lists; Repair sends `genius_id`; admin only.
 - [ ] Commit: `feat(repair): the LRCLIB timing card offers a Genius page's lyrics`.
 - [ ] Checkpoint: review due (Checkpoints below).
 
@@ -387,8 +421,8 @@ the existing Regenerate can time it.
 - [ ] Your Idol: Repair, LRCLIB timing, "a Genius page", pick the romanized page,
       Check fit, Regenerate. Confirm Song Info reads cue align and names the new
       source, the song shows in the LRCLIB list, and get Ken's read of the karaoke.
-- [ ] A song with a refused stretch from the GATE N1 report: the card lists it and
-      Regenerate stays off.
+- [ ] A song with shared stretches from the Phase 1.1 report: the card lists them as
+      timed roughly, and Ken listens there.
 - [ ] Reset Your Idol: the sheet survives, is replayed and keeps its label.
 - [ ] Repair Your Idol back to "the LRC's own": the Genius sheet is removed.
 - [ ] `plans/open-issues.md`, in one `docs(plans)` commit: record this option under
@@ -437,6 +471,7 @@ the existing Regenerate can time it.
 | 4 | 2026-10-30 | 1 | Executor (Sonnet 5.5): `lrc_pairing.py` (`Stretch`, `Pairing` with a `line_map()` of every paired line, `pair_lines`, `timed_sheet_srt`) and `tests/unit/test_lrc_pairing.py`, commit `243cc53`. Genius pages: `GeniusClient.search("<title> romanized")` returned 4 / 8 / 3 / 8 hits for Your Idol / Golden / Takedown / Soda Pop, every one by Genius Romanizations, so the plan's "more than one hit" stop applied; asked Ken, who approved the one hit per song that is the KPop Demon Hunters song. | 15 new tests pass; full suite **3013 passed** (baseline 2998 + 15). Pages used (id \| title \| artist): 12047339 \| Saja Boys - Your Idol (Romanized) \| Genius Romanizations; 12045295 \| HUNTR/X - Golden (Romanized) \| Genius Romanizations; 12100816 \| HUNTR/X - Takedown (Romanized) \| Genius Romanizations; 12040325 \| Saja Boys - Soda Pop (Romanized) \| Genius Romanizations. Seven uses its bundle's Genius sheet. One test note: when the LRC repeats a chorus once more than the sheet, which LRC instance the sheet's last chorus pairs with is a tie in `map_lines_to_cues` (it picks the later one); either way the extra lines are a refused stretch, so the test asserts that and not the instance. |
 | 5 | 2026-10-30 | 1 | `python -P scripts/genius_lrc_pairing_report.py --folder "/home/ken/shared-drives/D:/Shared/pikaraoke-songs" --song "Your Idol=12047339" --song "Golden=12045295" --song "Takedown=12100816" --song "Soda Pop=12040325" --song "Seven"` at `96a5370`; raw output under "GATE N1 report output". The script also ran on a viable Table 2 song with `--write-sheet` into the scratchpad (wrote the `.lrclib-genius.srt` and `.listen.txt`, checked, deleted) and refused `--write-sheet` pointed at the library and at its `lyrics/` folder. Nothing in the library was written. | Report carries no lyric text. `fit.lines` and the reloaded fitted SRT agree line for line on every song whose fit passed (the Defaults' stop condition did not fire). No LRC in the tables has two lines stamped at one start (column "Same-start LRC lines" is 0 everywhere). Two things seen that the library table (Phase 0) did not show, for the reader: (1) the pairing runs on the LRC lines as the cue route loads them, and that cleaning drops parenthesised words (`clean_srt_line`), so Seven's text pairs are 51 here against 56 on the raw LRC lines in the "What the library shows today" table (17 of Seven's 77 LRC lines hold parentheses); the extra column "Text pairs (sheet cleaned too)" is the count when the sheet side is cleaned the same way (Seven 59); (2) Table 1's sheets are the Genius pages, not the bundles, so Golden and Soda Pop line counts differ from Table 2's bundle rows (Golden 54 vs 51, Soda Pop 64 and 64). The listing "Lines the saved sheet's reload changes or drops" prints each Table 1 and Table 2 song, so a song in both tables appears twice. |
 | 6 | 2026-10-30 | GATE N1 | Opus 5.5 read of "GATE N1 report output" at `8e1e32c`; no code run. Tallies under "GATE N1 read" at the end of this plan. | Your Idol: 5 refused stretches (13 of 63 Genius lines, 9 of 59 LRC lines), so not covered. Of the 10 songs in the two tables, 1 (Best Part Of Me) has no refused stretch; every other song whose LRC fit passes has 5-13 refused stretches holding 21-48% of its Genius lines. Seven: 11 refused stretches, 18 of 79 Genius lines. 29 of the 71 refused stretches on fit-passing songs are one-sided. Refusals were counted on the raw sheet against the cleaned LRC lines; see the read's notes. Fallback left to Ken. |
+| 7 | 2026-10-30 | GATE N1 | Ken's ruling on the read (row 6), in chat. | "Share the time" (ruling 6): unequal stretches no longer refuse; their Genius lines divide the LRC lines' time by character count, a one-sided stretch takes in the neighbouring text pair, and the card lists them as timed roughly. The sheet is cleaned before pairing. Author's addition: a sheet with no text pair is not viable. Design, Defaults, Phases 3/4/6 updated; Phase 1.1 added. |
 
 ## GATE N1 report output
 
