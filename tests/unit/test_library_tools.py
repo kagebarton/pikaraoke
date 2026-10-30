@@ -641,6 +641,11 @@ class TestRepair:
         assert regen.reset is True
         assert regen.song.plan.kind == "transcribe"
 
+    def test_the_other_sources_ignore_allow_gap(self, tmp_path, song):
+        regen = self.repaired(tmp_path, song, "transcribe", allow_gap=True)
+
+        assert regen.song.plan.kind == "transcribe"
+
     def test_backs_up_only_that_song(self, tmp_path, song):
         other = make_video(tmp_path, "B---bbbbbbbbbbb")
         genius_bundle(tmp_path, other.stem)
@@ -1026,6 +1031,7 @@ class TestLrcTimingRepair:
         check = tools.check_lrc_timing(str(song), None)
 
         assert (check.fit.status, check.gap_s, check.viable) == (FITS, 0, True)
+        assert check.overridable is False
         assert check.clip_s == CLIP_S
         assert (check.record["id"], check.record["trackName"]) == (11, "Invented Song")
         assert check.regenerate_helps is True
@@ -1078,6 +1084,7 @@ class TestLrcTimingRepair:
 
         assert check.fit.status == FITS  # the lines fit either way: only the length is judged
         assert (check.gap_s, check.viable) == (gap, viable)
+        assert check.overridable is not viable
 
     def test_a_match_with_no_length_is_not_viable(self, tmp_path, song):
         self.write_match(song, {**LRC_RECORD, "duration": None})
@@ -1086,15 +1093,26 @@ class TestLrcTimingRepair:
         check = tools.check_lrc_timing(str(song), None)
 
         assert (check.fit.status, check.gap_s, check.viable) == (FITS, None, False)
+        assert check.overridable is True
 
-    def test_a_fit_that_is_refused_is_not_viable_whatever_the_length(self, tmp_path, song):
-        self.write_match(song, {**LRC_RECORD, "syncedLyrics": lrc_slice(lines=range(40, 52))})
+    @pytest.mark.parametrize("gap", [0, LRC_MAX_GAP_S + 38])
+    def test_a_fit_that_is_refused_is_not_viable_or_overridable_whatever_the_length(
+        self, tmp_path, song, gap
+    ):
+        self.write_match(
+            song,
+            {
+                **LRC_RECORD,
+                "duration": CLIP_S + gap,
+                "syncedLyrics": lrc_slice(lines=range(40, 52)),
+            },
+        )
         tools, _ = make_tools(tmp_path, [str(song)])
 
         check = tools.check_lrc_timing(str(song), None)
 
-        assert (check.fit.status, check.fit.reason, check.gap_s) == (REFUSED, TOO_FEW, 0)
-        assert check.viable is False
+        assert (check.fit.status, check.fit.reason, check.gap_s) == (REFUSED, TOO_FEW, gap)
+        assert (check.viable, check.overridable) == (False, False)
 
     def test_a_match_with_no_timed_lines_is_refused_as_not_srt(self, tmp_path, song):
         self.write_match(song, {**LRC_RECORD, "syncedLyrics": "no stamps here\n"})
@@ -1110,8 +1128,9 @@ class TestLrcTimingRepair:
 
         check = tools.check_lrc_timing(str(video), None)
 
-        assert (check.fit.status, check.viable, check.regenerate_helps) == (
+        assert (check.fit.status, check.viable, check.overridable, check.regenerate_helps) == (
             NO_REFERENCE,
+            False,
             False,
             True,
         )
@@ -1241,12 +1260,70 @@ class TestLrcTimingRepair:
         assert sheet.read_text(encoding="utf-8") == "the old words\n"
         return refused.value
 
-    def test_a_match_too_far_off_in_length_changes_nothing(self, tmp_path, song):
+    @pytest.mark.parametrize("kwargs", [{}, {"allow_gap": False}], ids=["default", "false"])
+    def test_a_match_too_far_off_in_length_changes_nothing(self, tmp_path, song, kwargs):
         self.write_match(song, {**LRC_RECORD, "duration": CLIP_S + 38})
 
-        check = self.refused(tmp_path, song).check
+        check = self.refused(tmp_path, song, **kwargs).check
 
         assert (check.fit.status, check.gap_s, check.viable) == (FITS, 38, False)
+
+    @pytest.mark.parametrize("gap", [38, None])
+    def test_a_fit_that_passes_is_queued_past_the_length_limit_when_the_gap_is_allowed(
+        self, tmp_path, song, gap
+    ):
+        self.write_match(song, {**LRC_RECORD, "duration": None if gap is None else CLIP_S + gap})
+        tools, processing = make_tools(tmp_path, [str(song)])
+        check = tools.check_lrc_timing(str(song), None)
+
+        tools.repair(str(song), "lrclib", allow_gap=True)
+
+        assert (check.viable, check.overridable) == (False, True)
+        regen = processing.enqueue_regen.call_args.args[0]
+        assert regen.song.plan.seed == {"lyrics_origin": "lrclib_srt"}
+        assert regen.song.plan.custom_text == check.fit.srt
+
+    def test_allowing_the_gap_changes_nothing_for_a_match_within_the_limit(self, tmp_path, song):
+        regen = self.repaired(tmp_path, song, allow_gap=True)
+
+        assert regen.song.plan.seed == {"lyrics_origin": "lrclib_srt"}
+
+    @pytest.mark.parametrize("gap", [0, 38])
+    def test_a_fit_that_is_refused_stays_refused_when_the_gap_is_allowed(self, tmp_path, song, gap):
+        self.write_match(
+            song,
+            {
+                **LRC_RECORD,
+                "duration": CLIP_S + gap,
+                "syncedLyrics": lrc_slice(lines=range(40, 52)),
+            },
+        )
+
+        check = self.refused(tmp_path, song, allow_gap=True).check
+
+        assert (check.fit.status, check.overridable) == (REFUSED, False)
+
+    def test_allowing_the_gap_passes_only_what_the_repairs_own_fit_allows(
+        self, tmp_path, song, monkeypatch
+    ):
+        """The first fit (the preview's) is overridable; the repair's own second fit is refused."""
+        self.write_match(song, {**LRC_RECORD, "duration": CLIP_S + 38})
+        real = fit_slice
+        calls = []
+
+        def second_fit_differs(srt_text, streams, length):
+            calls.append(1)
+            return real(srt_text if len(calls) == 1 else "", streams, length)
+
+        monkeypatch.setattr("pikaraoke.lib.library_tools.fit_slice", second_fit_differs)
+        tools, processing = make_tools(tmp_path, [str(song)])
+
+        assert tools.check_lrc_timing(str(song), None).overridable is True
+        with pytest.raises(LrcTimingRefused) as refused:
+            tools.repair(str(song), "lrclib", allow_gap=True)
+
+        assert (refused.value.check.fit.status, refused.value.check.overridable) == (NOT_SRT, False)
+        processing.enqueue_regen.assert_not_called()
 
     def test_a_fit_that_is_refused_changes_nothing(self, tmp_path, song):
         self.write_match(song, {**LRC_RECORD, "syncedLyrics": lrc_slice(lines=range(40, 52))})

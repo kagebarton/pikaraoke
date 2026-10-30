@@ -83,6 +83,9 @@
   .rp-check { display: block; width: 100%; min-height: 44px; padding: 0 16px; border-radius: 6px; border: 1px solid var(--dark-link); background: transparent; color: var(--dark-link); font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
   .rp-check:disabled { opacity: 0.5; cursor: not-allowed; }
   #lt-check { margin-top: 8px; }
+  .rp-override { display: flex; align-items: center; gap: 4px; margin-top: 10px; min-height: 44px; }
+  .rp-override label { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+  .rp-override input { width: 20px; height: 20px; accent-color: var(--dark-link); margin: 0; flex: none; }
   .rp-result { margin-top: 10px; }
   .rp-idle { padding: 12px; border-radius: 8px; border: 1px dashed var(--dark-border); color: var(--dark-text-muted); font-size: 13px; }
   .rp-card { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 8px; border: 1px solid var(--dark-border); background: var(--dark-bg-secondary); }
@@ -203,6 +206,7 @@
       lrcSearchOpen: !LRC_MATCH, // with no match on disk the search is all there is
       lrcCard: null,     // Check fit's answer for the picked match; any other pick clears it
       lrcChecking: false, // a check is on the server; Check fit stays off until it answers, so none stack
+      lrcOverride: false, // "Use this match anyway" is ticked; a new answer or pick unticks it
       lrcSeq: 0,         // a check still loading when the pick changes is for the old pick
       lrcSearchSeq: 0,
       geniusSeq: 0,
@@ -276,7 +280,8 @@
         (state.source === 'genius' && state.genius !== null) ||
         (state.source === 'custom' && $.trim(customText()) !== '') ||  // the server checks the lyrics
         (state.source === 'movie' && state.movieCard !== null && state.movieCard.status === 'fits') ||
-        (state.source === 'lrclib' && state.lrcCard !== null && state.lrcCard.viable);
+        (state.source === 'lrclib' && state.lrcCard !== null &&
+          (state.lrcCard.viable || (state.lrcCard.overridable && state.lrcOverride)));
       $('#go').prop('disabled', !complete || state.sending);
       $('#genius-preview-toggle').prop('disabled', state.genius === null);
     }
@@ -539,6 +544,8 @@
       $('#lt-idle').toggleClass('is-hidden', state.lrcChecking || state.lrcCard !== null).text(lrcIdleText());
       $('#lt-checking').toggleClass('is-hidden', !state.lrcChecking);
       $('#lt-card').toggleClass('is-hidden', state.lrcCard === null);
+      $('#lt-override').toggleClass('is-hidden', state.lrcCard === null || !state.lrcCard.overridable);
+      $('#lt-override-box').prop('checked', state.lrcOverride);
     }
 
     // A different match is a different answer: the old one is dropped, Regenerate goes off, and a check
@@ -547,6 +554,7 @@
       state.lrcPick = key;
       state.lrcSeq++;
       state.lrcCard = null;
+      state.lrcOverride = false;
       renderLrc();
       refreshStep1();
     }
@@ -593,6 +601,7 @@
       var seq = ++state.lrcSeq;
       state.lrcChecking = true;
       state.lrcCard = null;
+      state.lrcOverride = false;
       renderLrc();
       refreshStep1();
       $.ajax({
@@ -606,6 +615,8 @@
         if (seq === state.lrcSeq) {
           state.lrcCard = card;
           showCard('lt', card);
+          $('#lt-override-tip').empty();
+          if (card.override_tip) $('#lt-override-tip').append(infoTip(card.override_tip));
         }
         renderLrc();
         refreshStep1();
@@ -618,6 +629,11 @@
     }
 
     $('#lt-check').on('click', checkLrc);
+
+    $('#lt-override-box').on('change', function () {
+      state.lrcOverride = this.checked;
+      refreshStep1();
+    });
 
     $('#genius-search').on('click', searchGenius);
     $('#genius-q').on('keydown', function (e) {
@@ -648,7 +664,9 @@
       } else if (state.source === 'movie') {
         send({ source: 'movie', text: movieText() });  // the server checks the fit again
       } else if (state.source === 'lrclib') {
-        send({ source: 'lrclib', lrclib_id: lrcId() });  // and fits the match again
+        var body = { source: 'lrclib', lrclib_id: lrcId() };  // the server fits the match again
+        if (state.lrcOverride) body.allow_gap = true;  // and passes a long match only if its fit passed
+        send(body);
       } else {
         send({ source: state.source });
       }
@@ -925,6 +943,10 @@
     <button type="button" id="lt-search-toggle" class="rp-link">{% trans %}Search LRCLIB{% endtrans %}</button>
     <button type="button" id="lt-check" class="rp-check" disabled>{% trans %}Check fit{% endtrans %}</button>
     {{ answer_area('lt', _('Finding where this match sits in the clip…'), stretches=True) }}
+    <div id="lt-override" class="rp-override is-hidden">
+      <label><input type="checkbox" id="lt-override-box"><span>{% trans %}Use this match anyway{% endtrans %}</span></label>
+      <span id="lt-override-tip"></span>
+    </div>
   </div>
 
   <div id="movie-section" class="is-hidden">

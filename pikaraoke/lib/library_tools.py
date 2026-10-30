@@ -230,7 +230,10 @@ class LrcTimingCheck:
     the match's provenance (:func:`lrclib.record_meta`), for naming it. ``viable``: the
     fit passed and the gap is within :data:`LRC_MAX_GAP_S`, so the match may time the
     song; the flagged lines (``fit.mistimed``, ``fit.unheard``) are for the admin to
-    read first. ``regenerate_helps`` is as for :class:`MovieSliceCheck`.
+    read first. ``overridable``: the fit passed but the gap is over the limit or unknown,
+    so the admin may use the match anyway (a concert clip's talk before the song makes
+    a long gap); a refused fit never is. ``regenerate_helps`` is as for
+    :class:`MovieSliceCheck`.
     """
 
     fit: SliceFit
@@ -238,6 +241,7 @@ class LrcTimingCheck:
     gap_s: int | None
     record: dict
     viable: bool
+    overridable: bool
     regenerate_helps: bool
 
 
@@ -613,12 +617,15 @@ class LibraryTools:
         length = _clip_length(job)
         fit = self._fit_to_clip(job, lrc_to_srt(record["syncedLyrics"]), length)
         gap_s = length_gap_s(record.get("duration"), length)
+        fits = fit.status == FITS
+        viable = fits and gap_s is not None and abs(gap_s) <= LRC_MAX_GAP_S
         return LrcTimingCheck(
             fit,
             length,
             gap_s,
             lrclib.record_meta(record),
-            viable=fit.status == FITS and gap_s is not None and abs(gap_s) <= LRC_MAX_GAP_S,
+            viable=viable,
+            overridable=fits and not viable,
             regenerate_helps=job.bundle is not None,
         )
 
@@ -701,6 +708,7 @@ class LibraryTools:
         lrclib_id: int | None = None,
         lrclib_skip: bool = False,
         text: object = None,
+        allow_gap: bool = False,
     ) -> None:
         """Queue a regen that replaces the song's lyric pick.
 
@@ -711,7 +719,8 @@ class LibraryTools:
         only a fit is queued, with the corrected slice as the song's sheet),
         ``lrclib`` (an LRCLIB match's own line times, the record ``lrclib_id`` or
         the ``.lrc`` on disk: fitted again here by :meth:`check_lrc_timing`, and
-        only a viable fit is queued, with the fitted lines as the song's sheet;
+        only a viable fit is queued, with the fitted lines as the song's sheet,
+        or with ``allow_gap`` a fit that passes but whose length is over the limit;
         a record given by id becomes the song's ``.lrc``) or ``transcribe``. For
         Genius and custom the LRCLIB match is the record
         ``lrclib_id``, or none at all with ``lrclib_skip`` (which wins over an
@@ -734,7 +743,7 @@ class LibraryTools:
         elif source == "movie":
             job.plan = self._movie_repair_plan(job, text)
         elif source == "lrclib":
-            job.plan = self._lrc_repair_plan(job, lrclib_id)
+            job.plan = self._lrc_repair_plan(job, lrclib_id, allow_gap)
         elif source == "transcribe":
             job.plan = self._transcribe_plan()
         else:
@@ -1228,15 +1237,16 @@ class LibraryTools:
             raise MovieSliceRefused(check)
         return movie_sheet_plan(job.song_path, check.fit.srt)
 
-    def _lrc_repair_plan(self, job: SongJob, lrclib_id: int | None) -> Plan:
+    def _lrc_repair_plan(self, job: SongJob, lrclib_id: int | None, allow_gap: bool) -> Plan:
         """The plan that saves the LRCLIB match's lines, fitted to the clip, as the song's sheet.
 
         The match is read once, so the lines that were fitted are the ones saved and, for
-        a record given by id, the ``.lrc`` the run writes.
+        a record given by id, the ``.lrc`` the run writes. ``allow_gap`` lets a fit that
+        passed through when only its length is over the limit; a refused fit never is.
         """
         record = self._lrc_record(job.song_path, lrclib_id)
         check = self._fit_lrc_timing(job, record)
-        if not check.viable:
+        if not (check.viable or (allow_gap and check.overridable)):
             raise LrcTimingRefused(check)
         plan = lrc_sheet_plan(job.song_path, check.fit.srt)
         if lrclib_id is not None:

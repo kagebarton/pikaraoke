@@ -1397,16 +1397,46 @@ class TestRepairPage:
         assert "state.lrcChecking" not in pick
         assert ".prop('disabled', state.lrcPick === null || state.lrcChecking)" in code
 
-    def test_regenerate_is_on_only_for_a_viable_answer_and_sends_the_id_not_the_numbers(self, env):
+    def test_regenerate_is_on_for_a_viable_answer_or_an_overridable_one_with_the_box_ticked(
+        self, env
+    ):
         code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
         step1 = code[code.index("function refreshStep1") : code.index("// The LRCLIB matches")]
+
+        assert "state.source === 'lrclib' && state.lrcCard !== null &&" in step1
+        assert "(state.lrcCard.viable || (state.lrcCard.overridable && state.lrcOverride))" in step1
+
+    def test_regenerate_sends_the_id_and_allow_gap_only_when_the_box_is_ticked(self, env):
+        code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
         click = code.index("$('#go').on('click'")
         go = code[click : code.index("/* ---", click)]
 
+        assert "var body = { source: 'lrclib', lrclib_id: lrcId() };" in go
+        assert "if (state.lrcOverride) body.allow_gap = true;" in go
+        assert go.count("allow_gap") == 1
+
+    def test_the_override_box_shows_under_an_overridable_card_with_its_note_and_is_cleared(
+        self, env
+    ):
+        html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())))
+        code = script(html)
+        section = html[html.index('id="lrclib-section"') : html.index('id="movie-section"')]
+        check = code[code.index("function checkLrc") : code.index("$('#lt-check').on('click'")]
+        pick = code[code.index("function pickLrc") : code.index("function startLrcSearch")]
+
+        assert 'id="lt-override" class="rp-override is-hidden"' in section
+        assert 'type="checkbox" id="lt-override-box"' in section
+        assert "Use this match anyway" in section
+        assert section.index('id="lt-card"') < section.index('id="lt-override"')
         assert (
-            "state.source === 'lrclib' && state.lrcCard !== null && state.lrcCard.viable" in step1
+            "$('#lt-override').toggleClass('is-hidden', state.lrcCard === null || !state.lrcCard.overridable);"
+            in code
         )
-        assert "send({ source: 'lrclib', lrclib_id: lrcId() })" in go
+        # The note comes from the card, not a literal, so the limit it names is the server's.
+        assert "infoTip(card.override_tip)" in check
+        assert "15 s" not in html
+        # A new Check fit or another match unticks the box.
+        assert "state.lrcOverride = false;" in check and "state.lrcOverride = false;" in pick
 
     def test_a_link_from_a_list_checks_the_match_on_disk_at_once(self, env):
         code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
@@ -1961,6 +1991,7 @@ class TestLrcCard:
             gap_s=gap,
             record=record or {"id": 11, "duration": duration},
             viable=viable,
+            overridable=status == "fits" and not viable,  # as the check works it out
             regenerate_helps=helps,
         )
         return _lrc_card(check)
@@ -2075,6 +2106,42 @@ class TestLrcCard:
         assert length["text"] == "The match is 4:09; this video is 3:31 (38 s longer)."
         assert length["warn"] is True and "The limit is 15 s." in length["tip"]
         assert "warn" not in card["lines"][0]
+
+    def test_a_length_past_the_limit_offers_the_override_and_says_what_it_gives_up(self):
+        card = self.check(gap=38, viable=False)
+
+        assert (card["viable"], card["overridable"]) == (False, True)
+        assert card["override_tip"] == (
+            "The video is more than 15 s longer or shorter than this match. "
+            "That's fine if the extra is talk, applause or an intro before or after the song; "
+            "those parts get no lyrics. It's wrong if the video skips or adds a section at "
+            "the start or end. The checks above can't see that, so listen first."
+        )
+
+    def test_a_match_with_no_length_offers_the_override_with_its_own_reason(self):
+        card = self.check(gap=None, viable=False)
+
+        assert card["overridable"] is True
+        assert card["override_tip"].startswith(
+            "The match has no length, so the video can't be compared with it. That's fine if"
+        )
+        assert "15 s" not in card["override_tip"]
+
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {},
+            {"mistimed": (2, 3, 4)},
+            {"status": REFUSED, "reason": TOO_FEW, "matched": 3, "total": 53, "viable": False},
+            {"status": NOT_SRT, "matched": 0, "total": 0, "viable": False},
+            {"status": NO_REFERENCE, "matched": 0, "total": 0, "viable": False},
+        ],
+        ids=["clean", "flagged", "too_few", "not_srt", "no_reference"],
+    )
+    def test_a_viable_or_refused_answer_offers_no_override(self, kwargs):
+        card = self.check(**kwargs)
+
+        assert (card["overridable"], card["override_tip"]) == (False, None)
 
     def test_a_match_with_no_length_says_so_and_has_no_length_line(self):
         card = self.check(gap=None, viable=False)
@@ -2268,6 +2335,19 @@ class TestLrcFitRoute:
         assert (body["status"], body["viable"]) == ("fits", False)
         assert body["head"] == "The lines fit, but the length is too far off."
         assert body["lines"][1]["warn"] is True
+        assert body["overridable"] is True and "listen first" in body["override_tip"]
+
+    def test_a_clean_answer_and_a_refused_one_are_not_overridable(self, env):
+        clean = LrcTimingEnv.song(env)
+        refused = LrcTimingEnv.song(
+            env,
+            "B---bbbbbbbbbbb.mp4",
+            record={"duration": CLIP_S + 38, "syncedLyrics": lrc_slice(lines=range(40, 52))},
+        )
+
+        for song in (clean, refused):
+            body = self.check(env, song).get_json()
+            assert (body["overridable"], body["override_tip"]) == (False, None)
 
     def test_lines_the_clip_does_not_sing_are_refused_with_the_length(self, env):
         song = LrcTimingEnv.song(env, record={"syncedLyrics": lrc_slice(lines=range(40, 52))})
@@ -2455,6 +2535,41 @@ class TestLrcRepairRoute:
         song = LrcTimingEnv.song(env)
 
         assert self.repair(env, song, lrclib_id=lrclib_id).status_code == 400
+        env.processing.enqueue_regen.assert_not_called()
+
+    def test_a_fit_past_the_length_limit_is_queued_only_when_the_gap_is_allowed(self, env):
+        song = LrcTimingEnv.song(env, record={"duration": CLIP_S + 38})
+
+        assert self.repair(env, song).status_code == 400
+        assert self.repair(env, song, allow_gap=False).status_code == 400
+        env.processing.enqueue_regen.assert_not_called()
+
+        response = self.repair(env, song, allow_gap=True)
+
+        assert response.get_json() == {"success": True}
+        plan = env.processing.enqueue_regen.call_args.args[0].song.plan
+        assert plan.seed == {"lyrics_origin": "lrclib_srt"}
+
+    def test_a_refused_fit_is_refused_when_the_gap_is_allowed_too(self, env):
+        song = LrcTimingEnv.song(
+            env, record={"duration": CLIP_S + 38, "syncedLyrics": lrc_slice(lines=range(40, 52))}
+        )
+
+        response = self.repair(env, song, allow_gap=True)
+
+        assert response.status_code == 400
+        assert response.get_json()["error"].startswith("Doesn't fit.")
+        env.processing.enqueue_regen.assert_not_called()
+        assert not list(env.folder.glob("regen_backups/*"))
+
+    @pytest.mark.parametrize("allow_gap", ["true", 1, 0, None, [True]])
+    def test_an_allow_gap_that_is_not_true_or_false_is_rejected(self, env, allow_gap):
+        song = LrcTimingEnv.song(env, record={"duration": CLIP_S + 38})
+
+        response = self.repair(env, song, allow_gap=allow_gap)
+
+        assert response.status_code == 400
+        assert response.get_json()["error"] == "allow_gap must be true or false"
         env.processing.enqueue_regen.assert_not_called()
 
     def test_with_no_lrc_and_no_id_nothing_is_queued(self, env):
@@ -2841,6 +2956,7 @@ class TestRepairRoute:
             {"source": "genius", "genius_id": 8, "lrclib_id": 5.5},
             {"source": "genius", "genius_id": 8, "lrclib_id": "5"},
             {"source": "genius", "genius_id": 8, "lrclib_skip": "yes"},
+            {"source": "genius", "genius_id": 8, "allow_gap": "yes"},
         ],
     )
     def test_ids_and_flags_of_the_wrong_type_are_rejected(self, env, song, body):
