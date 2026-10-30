@@ -524,16 +524,11 @@ class LibraryTools:
         ``text``: the custom-lyrics box, the song's typed sheet if it has one, else the
         lines of its current lyrics, else nothing. ``movie``: the movie-subtitles box,
         the saved slice (already clip-timed) if the song has one, else nothing.
-        ``lrc``: the song's LRCLIB match on disk (:func:`lrclib.record_meta`), or None
-        when it has none or a skip marker. ``query``: the title and artist of the
+        ``query``: the title and artist of the
         Genius song the bundle records, cleaned as the pipeline's LRCLIB search cleans
         them, else the song's file name.
         """
         job = self._song_job(song_path)
-        try:
-            lrc = lrclib.record_meta(self._lrc_record(job.song_path, None))
-        except RegenError:
-            lrc = None
         lyrics = (job.bundle or {}).get("lyrics") or {}
         genius = lyrics.get("genius") or {}
         terms = lrclib.clean_key(
@@ -543,7 +538,6 @@ class LibraryTools:
             "text": self._sheet_on_disk(job.song_path, "custom")
             or "\n".join(lyrics.get("lines") or []),
             "movie": self._sheet_on_disk(job.song_path, "movie"),
-            "lrc": lrc,
             "query": " ".join(term for term in terms if term),
         }
 

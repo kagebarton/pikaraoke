@@ -1186,7 +1186,7 @@ class TestApplyLrclibChoice:
 
         lr.apply_lrclib_choice(job)
 
-        assert lr.lrclib.is_skip_marker(lrc)
+        assert lr.lrclib.read_song_lrc(job.song_path).state == "skipped"
 
     def test_skip_wins_over_a_record_and_over_the_id_rule(self, tmp_path):
         job, lrc = self._job_with_lrc(
@@ -1197,7 +1197,7 @@ class TestApplyLrclibChoice:
 
         lr.apply_lrclib_choice(job)
 
-        assert lr.lrclib.is_skip_marker(lrc)
+        assert lr.lrclib.read_song_lrc(job.song_path).state == "skipped"
 
     def test_seed_and_transcribe_plans_leave_the_file_alone(self, tmp_path):
         for plan in (
@@ -1796,7 +1796,7 @@ class TestPrepareRegenJob:
 
         self._prepare(regen, tmp_path)
 
-        assert lr.lrclib.is_skip_marker(tmp_path / "lyrics" / f"{YT_STEM}.lrc")
+        assert lr.lrclib.read_song_lrc(tmp_path / f"{YT_STEM}.mp4").state == "skipped"
 
     def test_a_transcribe_plan_has_no_lyrics_and_no_stage(self, tmp_path):
         regen = self._regen(tmp_path, lr.Plan(kind="transcribe"))
@@ -1814,7 +1814,7 @@ class TestPutBackLyricFiles:
 
         lr.put_back_lyric_files(snapshot)
 
-        assert lr.lrclib.is_skip_marker(lrc)
+        assert lr.lrclib.read_song_lrc(song).state == "skipped"
 
     def test_it_restores_a_sheet_the_run_deleted(self, tmp_path):
         song = _touch_video(tmp_path, YT_STEM)

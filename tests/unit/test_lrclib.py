@@ -144,7 +144,7 @@ class TestSnapshotRestore:
         lrc.unlink()  # a new Genius id drops it
         lrclib.restore_file(lrc, snapshot)
 
-        assert lrclib.is_skip_marker(lrc)
+        assert lrclib.read_song_lrc(tmp_path / "Song.mp4").state == "skipped"
         assert not lrc.with_name(lrc.name + ".tmp").exists()
 
     def test_a_record_comes_back_with_its_provenance(self, tmp_path):
@@ -181,22 +181,13 @@ class TestSnapshotRestore:
 
 
 class TestSkipMarker:
-    def test_marker_is_told_apart_from_a_real_lrc(self, tmp_path):
-        marker = tmp_path / "lyrics" / "Marker.lrc"
-        real = tmp_path / "lyrics" / "Real.lrc"
+    def test_a_marker_is_written_whole_and_reads_as_skipped(self, tmp_path):
+        song = tmp_path / "Song---dQw4w9WgXcQ.mp4"
+        marker = lrclib.lrc_path(song)
         lrclib.write_skip_marker(marker)
-        lrclib.write_lrc(real, {"id": 1, "trackName": "T", "syncedLyrics": _SYNCED_AB})
 
-        assert lrclib.is_skip_marker(marker)
-        assert not lrclib.is_skip_marker(real)
-        assert not lrclib.is_skip_marker(tmp_path / "lyrics" / "Missing.lrc")
+        assert lrclib.read_song_lrc(song).state == "skipped"
         assert not marker.with_name(marker.name + ".tmp").exists()
-
-    def test_a_file_that_is_not_utf8_is_not_a_marker(self, tmp_path):
-        lrc = tmp_path / "Song.lrc"
-        lrc.write_bytes("[ti:Caf\xe9]\n[00:01.00]hello\n".encode("cp1252"))
-
-        assert not lrclib.is_skip_marker(lrc)
 
     def test_ensure_lrc_returns_the_marker_without_searching(self, tmp_path):
         song_path = tmp_path / "Song---dQw4w9WgXcQ.mp4"
@@ -207,6 +198,19 @@ class TestSkipMarker:
             result = ensure_lrc(song_path, "T", "A", ["hello world"], 120.0)
 
         assert result == marker
+        mock_search.assert_not_called()
+
+    def test_ensure_lrc_keeps_a_file_it_cannot_read_without_searching(self, tmp_path):
+        song_path = tmp_path / "Song---dQw4w9WgXcQ.mp4"
+        placed = lrclib.lrc_path(song_path)
+        placed.parent.mkdir()
+        placed.write_bytes("[00:01.00]caf\xe9\n".encode("cp1252"))
+
+        with patch("pikaraoke.lib.lrclib.search") as mock_search:
+            result = ensure_lrc(song_path, "T", "A", ["hello world"], 120.0)
+
+        assert result == placed
+        assert placed.read_bytes() == "[00:01.00]caf\xe9\n".encode("cp1252")
         mock_search.assert_not_called()
 
     def test_the_fill_finds_no_cues_in_the_marker(self, tmp_path):

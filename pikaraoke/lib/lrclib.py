@@ -367,19 +367,6 @@ def write_skip_marker(path: Path) -> None:
     write_text_atomic(path, f"[{SKIP_TAG}:1]\n")
 
 
-def is_skip_marker(path: Path) -> bool:
-    """Whether ``path`` is a marker written by :func:`write_skip_marker`."""
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError:
-        return False
-    except UnicodeDecodeError as e:
-        # A hand-placed file in another encoding; the marker is always UTF-8.
-        logger.warning("%s is not UTF-8, so it is not a skip marker: %s", path, e)
-        return False
-    return _has_skip_tag(text)
-
-
 def _has_skip_tag(text: str) -> bool:
     return any(line.strip().startswith(f"[{SKIP_TAG}:") for line in text.splitlines())
 
@@ -520,7 +507,8 @@ def ensure_lrc(
     Persists only successful selections -- a failed or empty search leaves
     no file, so the next call retries instead of baking in a transient
     failure. A skip marker counts as a file on disk, so it is returned as is
-    and nothing is searched.
+    and nothing is searched; so does a file that can't be read, which someone
+    put there.
     """
     path = lrc_path(song_path)
     if path.is_file():

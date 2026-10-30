@@ -403,8 +403,9 @@ class TestBranchALrclib:
         [
             ("[lrclib_skipped:1]\n", "skipped by the admin's choice", "available for fill"),
             ("[00:01.00]cached\n", "available for fill", "skipped by the admin's choice"),
+            ("[00:01.00]caf\udce9\n", "can't be read", "available for fill"),
         ],
-        ids=["skip_marker", "real_lrc"],
+        ids=["skip_marker", "real_lrc", "unreadable"],
     )
     @patch("pikaraoke.pipeline.stages.lyrics_fetch.lrclib.search")
     @patch("pikaraoke.lib.genius.get_temp_directory")
@@ -414,7 +415,7 @@ class TestBranchALrclib:
         ctx, song_path = self._ctx(tmp_path, mock_gtd)
         lrc_path = self._lrc_path(song_path)
         lrc_path.parent.mkdir(parents=True)
-        lrc_path.write_text(content, encoding="utf-8")
+        lrc_path.write_bytes(content.encode("utf-8", errors="surrogateescape"))
 
         with caplog.at_level("INFO", logger="pikaraoke.pipeline.stages.lyrics_fetch"):
             LyricsFetchStage(self._genius(), PipelineConfig()).run(ctx)

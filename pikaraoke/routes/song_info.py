@@ -479,8 +479,9 @@ def _current_source(status: SongStatus) -> str | None:
     return "transcribe" if status.category == "no_lyrics" else None
 
 
-def _lrc_match(meta: dict | None, status: SongStatus) -> dict | None:
+def _lrc_match(status: SongStatus) -> dict | None:
     """The song's LRCLIB match on disk as one row of the page's match list, or None."""
+    meta = status.lrc_match
     if meta is None:
         return None
     row = {**meta, "duration_diff_s": length_gap_s(meta.get("duration"), status.media_duration_s)}
@@ -524,7 +525,7 @@ def repair_page():
         custom_prefill=start["text"],
         custom_query=start["query"],
         movie_prefill=start["movie"],
-        lrc_match=_lrc_match(start["lrc"], status),
+        lrc_match=_lrc_match(status),
     )
 
 

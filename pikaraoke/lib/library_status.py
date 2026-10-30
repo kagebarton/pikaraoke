@@ -41,7 +41,7 @@ class SongStatus:
     lrclib_state: str  # "used" | "rejected" | "none" | "skipped" | "n/a"
     lrclib_reason: str | None  # joint_stats.lrclib_fill.reason, when rejected
     lrclib_filled: int  # lines the LRCLIB fill placed
-    lrc_on_disk: bool  # a usable LRC sits at lrclib.lrc_path(song): not missing, not a skip marker
+    lrc_match: dict | None  # the LRC on disk, as lrclib.record_meta; None: missing, skipped or unreadable
     ytasr_used: bool  # lyrics.ytasr present
     method: str | None  # pipeline_decisions.method_used: "joint" | "cue_align"
     line_count: int | None  # output_summary.line_count
@@ -70,7 +70,7 @@ def song_status(song: Path) -> SongStatus:
     kind = sheet_kind(custom_sheet_path(song))
     # Read from disk: bundles from before schema 9 never recorded the match.
     lrc = lrclib.read_song_lrc(song)
-    lrc_on_disk = lrc.state == "match"
+    lrc_match = lrclib.record_meta(lrc.meta) if lrc.state == "match" else None
     if bundle is None:
         karaoke = song.parent / "karaoke" / f"{song.stem}.ass"
         category = "no_lyrics" if karaoke.is_file() else "not_processed"
@@ -86,7 +86,7 @@ def song_status(song: Path) -> SongStatus:
             lrclib_state="n/a",
             lrclib_reason=None,
             lrclib_filled=0,
-            lrc_on_disk=lrc_on_disk,
+            lrc_match=lrc_match,
             ytasr_used=False,
             method=None,
             line_count=None,
@@ -116,7 +116,7 @@ def song_status(song: Path) -> SongStatus:
         lrclib_state=state,
         lrclib_reason=fill.get("reason") if state == "rejected" else None,
         lrclib_filled=len(fill.get("filled_lids") or []),
-        lrc_on_disk=lrc_on_disk,
+        lrc_match=lrc_match,
         ytasr_used=bool(lyrics.get("ytasr")),
         method=method,
         line_count=summary.get("line_count"),
@@ -202,7 +202,7 @@ SONG_LISTS: dict[str, Callable[[SongStatus], bool]] = {
     "lrc": lambda s: s.origin == LRC_ORIGIN,
     "genius": lambda s: s.origin == "genius",
     "custom": lambda s: s.origin == CUSTOM_ORIGIN,
-    "no_timed_source": lambda s: s.method == "joint" and not s.lrc_on_disk,
+    "no_timed_source": lambda s: s.method == "joint" and s.lrc_match is None,
     "all": lambda s: True,
 }
 
