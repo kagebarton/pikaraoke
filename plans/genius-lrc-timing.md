@@ -260,8 +260,9 @@ def timed_sheet_srt(sheet: list[str], spans: list[tuple[float, float]], pairing:
 - [x] Reset to the landed base (the executor, 2026-10-30): `git log 4e8cb26..HEAD` was
       empty and only this plan untracked, then `git reset --hard daf183a`. This plan
       updated for the landing in its own `docs(plans)` commit (Results row 2).
-- [ ] Full suite in the worktree (`python -P -m pytest -q`; `-P` so the main
+- [x] Full suite in the worktree (`python -P -m pytest -q`; `-P` so the main
       checkout doesn't shadow the worktree). Log the pass count as the baseline.
+      Baseline: 2998 passed at `61d00cf` (Results row 3).
 
 ### Phase 1: pairing, then the probe -> GATE N1 (Opus reads, Ken rules)
 
@@ -432,3 +433,4 @@ the existing Regenerate can time it.
 |---|---|---|---|---|
 | 1 | 2026-10-30 | 0 | `git worktree add ../pik-genius-lrc -b genius_lrc_timing 4e8cb26`; read-only script counts on the five songs (table in "What the library shows today") | Branch at `4e8cb26`. Your Idol and Takedown are already LRCLIB-timed with the LRC's own text. Hangul normalises to nothing for text pairing. |
 | 2 | 2026-10-30 | 0 | Executor (Sonnet 5.5): `git log 4e8cb26..HEAD` empty and only this plan untracked, then `git reset --hard daf183a` (dev, pushed). Plan updated for the landing. Read only: LRC line counts for the five songs before and after the duet merge. | Branch now at `daf183a`. Parent plan read from `archive/lyric_source_lists`. Changes from the dev commits `7ab4252`, `8dabf55`, `ffd021d`/`eca03ce`, `8767f65`: sheet kinds are one `SHEETS` table (the Defaults bullet and the label list rewritten to it); `check_lrc_timing` and `_fit_lrc_timing` signatures as they are now; the length override has landed (Viable default, Phase 3 state); `overridable=fits and not viable` would be true for a refused stretch, so the formula needs the pairing too (Design, Defaults); the new kind is its own repair source (open point for Phase 4, not a stop); the label sites listed from the code. The five LRCs have no lines stamped at one start (raw sung stamps = lines after the merge: 59 / 52 / 46 / 59 / 77), so the library table needed no change. Phase 3's wait-and-rebase step and the Rebase risk dropped. |
+| 3 | 2026-10-30 | 0 | `/home/ken/miniconda3/envs/pik/bin/python -P -m pytest -q -p no:cacheprovider` in the worktree at `61d00cf` (code identical to `daf183a`; the commit adds only this plan) | **2998 passed**, 0 failed, 58.8 s. This is the baseline. Checked that the run used the worktree's code: a plugin printing `pikaraoke.__file__` after `tests/unit/test_lrclib.py` gave `/home/ken/pik-genius-lrc/pikaraoke/__init__.py`. **Trap for scripts:** a bare `python -P -c "import pikaraoke"` in the worktree gives `/home/ken/pikaraoke/pikaraoke` (the env's editable install points at the main checkout), and only pytest's own path setup reaches the worktree. A script run from the worktree must put its own repo root first on `sys.path`, as `scripts/lrc_timing_report.py` does (`sys.path.insert(0, parents[1])`); Phase 1's script copies that line. |
