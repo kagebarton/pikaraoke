@@ -223,6 +223,19 @@ From the `library_tools` real-world run, 2026-10-20. Record: `library-tools.md`.
   `U+24C2-U+1F251`).
 - `stable_whisper.align` raises on its own failed-alignment `None`; the stage
   recovers but logs a traceback.
+- **Cue align can start a line before its cue and squeeze the line before it.**
+  She Used To Be Mine on its LRCLIB sheet (2026-10-30): the sheet's cue and the
+  transcriber both put line 7 (0-based) at about 38.3 s, but the karaoke starts
+  it at 36.09 s, so line 6's last four words get 0.10 s each (Ken heard "a fast
+  sweep around 0:33"). The joint version before it had both lines in place.
+  Record: `lyric-source-lists.md` Results row 21. Not looked into; the same
+  route times every caption song.
+- **The end snap can stretch a song's last line into the outro.** NSYNC -
+  Paradise on its LRCLIB sheet (2026-10-30): a one-word last line with a 1.77 s
+  cue is extended 18.59 s, to 1 s before the video ends (Ken: "slow crawl on
+  the last line"). Nothing after the last line bounds the extension. Likely
+  the end-side blind spot (extension onto another voice) recorded on
+  `archive/edge_snap_refine`. Record: `lyric-source-lists.md` Results row 21.
 
 ## Web pages (pre-existing on `dev`)
 
@@ -267,7 +280,8 @@ Record: `plans/queue-hold.md` on branch `queue_hold`, the manual checks row.
   Linux box. Shape: rename and delete as Song Info actions, with the queue
   refusal on those two actions only. Do it with the Delete/Rename entry above,
   since both change the same code. Raised 2026-10-29; not ruled.
-- **An LRCLIB match the admin has checked becomes the song's timing (Repair).**
+- ~~**An LRCLIB match the admin has checked becomes the song's timing (Repair).**~~
+  Done; see the last paragraph.
   As an automatic scaffold, LRCLIB was withdrawn (S-1, 2026-09-08). The text
   matched, but an LRC can be timed to another edit of the song (a cut verse,
   an extra repeat), and the offset-and-speed gate cannot see a section the
@@ -291,3 +305,12 @@ Record: `plans/queue-hold.md` on branch `queue_hold`, the manual checks row.
      fill, as today. Not settled: what "viable" means. Suggested: the fit
      passes, the length gap to the video is small, and the flagged lines are
      shown before the admin confirms. Open to other ideas.
+  Built on branch `lyric_source_lists` (plan `plans/lyric-source-lists.md`),
+  code `fffe85b`, `a014414`, `6af0f06` and their fixes up to `fdc4f65`; Ken's
+  end-to-end checks passed 2026-10-30 (Results row 21). Point 3 ruled
+  2026-10-29 (Decision 4): viable means the fit passes and the length gap to
+  the video is small, with the flagged lines shown before the admin confirms.
+  GATE A set the numbers (Decisions 8-9): a line heard more than 5 s from its
+  fitted time is mistimed, 2 mistimed lines make a flagged run, 3 unheard
+  lines make a "couldn't check" note, and the gap limit is 15 s. Decision 11
+  (2026-10-30): a fit that passes may override the gap limit with a checkbox.
