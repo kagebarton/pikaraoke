@@ -878,11 +878,37 @@ def _lrc_refusal_card(check: LrcTimingCheck, length: str | None) -> dict:
     )
 
 
+def _override_tip(check: LrcTimingCheck) -> str:
+    """What using a match whose length is off gives up, for the checkbox's (i).
+
+    The length was the only guard against extra or cut material at the start or end of the
+    song, which the flagged lines can't see, so the admin's ear is that check.
+    """
+    if check.gap_s is None:
+        why = _("The match has no length, so the video can't be compared with it.")
+    else:
+        why = _("The video is more than %(n)d s longer or shorter than this match.") % {
+            "n": LRC_MAX_GAP_S
+        }
+    return " ".join(
+        [
+            why,
+            _(
+                "That's fine if the extra is talk, applause or an intro before or after the "
+                "song; those parts get no lyrics. It's wrong if the video skips or adds a "
+                "section at the start or end. The checks above can't see that, so listen first."
+            ),
+        ]
+    )
+
+
 def _lrc_card(check: LrcTimingCheck) -> dict:
     """The Check fit card for how an LRCLIB match's own line times checked against the clip.
 
-    The movie card's shape, plus ``viable`` (whether Regenerate may be offered) and the
-    ``runs`` and ``unheard`` stretches of the match's lines.
+    The movie card's shape, plus ``viable`` (whether Regenerate may be offered),
+    ``overridable`` (it may be, once the admin ticks "use this match anyway", with
+    ``override_tip`` saying what that gives up) and the ``runs`` and ``unheard`` stretches
+    of the match's lines.
     """
     fit = check.fit
     length = (
@@ -896,6 +922,8 @@ def _lrc_card(check: LrcTimingCheck) -> dict:
         card = _lrc_refusal_card(check, length)
         card.update(runs=[], unheard=[])
     card["viable"] = check.viable
+    card["overridable"] = check.overridable
+    card["override_tip"] = _override_tip(check) if check.overridable else None
     return card
 
 
@@ -979,6 +1007,9 @@ def repair():
     skip = body.get("lrclib_skip", False)
     if not isinstance(skip, bool):
         return _error(_("lrclib_skip must be true or false"), 400)
+    allow_gap = body.get("allow_gap", False)
+    if not isinstance(allow_gap, bool):
+        return _error(_("allow_gap must be true or false"), 400)
     try:
         k.library_tools.repair(
             song,
@@ -987,6 +1018,7 @@ def repair():
             lrclib_id=body.get("lrclib_id"),
             lrclib_skip=skip,
             text=body.get("text"),
+            allow_gap=allow_gap,
         )
     except MovieSliceRefused as e:
         return _error(_card_text(_slice_card(e.check)), 400)
