@@ -126,10 +126,10 @@ def report(status: SongStatus) -> tuple[list[str], list[str]]:
     """The song's rows for the fit table and for the tolerance table."""
     song = status.path
     folder = song.parent
-    try:
-        lrc_text, meta = lrclib.read_lrc(lrclib.lrc_path(song))
-    except (OSError, UnicodeDecodeError) as e:
-        return [f"| {title(status)} | LRC unreadable: {e} |"], []
+    lrc = lrclib.read_song_lrc(song)
+    if lrc.state != "match":  # changed since the status read it
+        return [f"| {title(status)} | LRC {lrc.state} |"], []
+    lrc_text, meta = lrc.text, lrc.meta
     bundle = read_bundle(folder, song.stem)
     length = media_duration(SongJob(song, bundle, "report"))
     if not length:
@@ -161,7 +161,9 @@ def main() -> None:
     parser.add_argument("--folder", type=Path, default=Path(default_folder))
     args = parser.parse_args()
 
-    joint = [s for s in library_statuses(args.folder) if s.method == "joint" and s.lrc_on_disk]
+    joint = [
+        s for s in library_statuses(args.folder) if s.method == "joint" and s.lrc_match is not None
+    ]
     print(
         f"Constants in force: FLAG_TOLERANCE_S={srt_slice_fit.FLAG_TOLERANCE_S}, "
         f"MIN_FLAGGED_RUN={srt_slice_fit.MIN_FLAGGED_RUN}, "
