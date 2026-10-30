@@ -436,6 +436,7 @@ the existing Regenerate can time it.
 | 3 | 2026-10-30 | 0 | `/home/ken/miniconda3/envs/pik/bin/python -P -m pytest -q -p no:cacheprovider` in the worktree at `61d00cf` (code identical to `daf183a`; the commit adds only this plan) | **2998 passed**, 0 failed, 58.8 s. This is the baseline. Checked that the run used the worktree's code: a plugin printing `pikaraoke.__file__` after `tests/unit/test_lrclib.py` gave `/home/ken/pik-genius-lrc/pikaraoke/__init__.py`. **Trap for scripts:** a bare `python -P -c "import pikaraoke"` in the worktree gives `/home/ken/pikaraoke/pikaraoke` (the env's editable install points at the main checkout), and only pytest's own path setup reaches the worktree. A script run from the worktree must put its own repo root first on `sys.path`, as `scripts/lrc_timing_report.py` does (`sys.path.insert(0, parents[1])`); Phase 1's script copies that line. |
 | 4 | 2026-10-30 | 1 | Executor (Sonnet 5.5): `lrc_pairing.py` (`Stretch`, `Pairing` with a `line_map()` of every paired line, `pair_lines`, `timed_sheet_srt`) and `tests/unit/test_lrc_pairing.py`, commit `243cc53`. Genius pages: `GeniusClient.search("<title> romanized")` returned 4 / 8 / 3 / 8 hits for Your Idol / Golden / Takedown / Soda Pop, every one by Genius Romanizations, so the plan's "more than one hit" stop applied; asked Ken, who approved the one hit per song that is the KPop Demon Hunters song. | 15 new tests pass; full suite **3013 passed** (baseline 2998 + 15). Pages used (id \| title \| artist): 12047339 \| Saja Boys - Your Idol (Romanized) \| Genius Romanizations; 12045295 \| HUNTR/X - Golden (Romanized) \| Genius Romanizations; 12100816 \| HUNTR/X - Takedown (Romanized) \| Genius Romanizations; 12040325 \| Saja Boys - Soda Pop (Romanized) \| Genius Romanizations. Seven uses its bundle's Genius sheet. One test note: when the LRC repeats a chorus once more than the sheet, which LRC instance the sheet's last chorus pairs with is a tie in `map_lines_to_cues` (it picks the later one); either way the extra lines are a refused stretch, so the test asserts that and not the instance. |
 | 5 | 2026-10-30 | 1 | `python -P scripts/genius_lrc_pairing_report.py --folder "/home/ken/shared-drives/D:/Shared/pikaraoke-songs" --song "Your Idol=12047339" --song "Golden=12045295" --song "Takedown=12100816" --song "Soda Pop=12040325" --song "Seven"` at `96a5370`; raw output under "GATE N1 report output". The script also ran on a viable Table 2 song with `--write-sheet` into the scratchpad (wrote the `.lrclib-genius.srt` and `.listen.txt`, checked, deleted) and refused `--write-sheet` pointed at the library and at its `lyrics/` folder. Nothing in the library was written. | Report carries no lyric text. `fit.lines` and the reloaded fitted SRT agree line for line on every song whose fit passed (the Defaults' stop condition did not fire). No LRC in the tables has two lines stamped at one start (column "Same-start LRC lines" is 0 everywhere). Two things seen that the library table (Phase 0) did not show, for the reader: (1) the pairing runs on the LRC lines as the cue route loads them, and that cleaning drops parenthesised words (`clean_srt_line`), so Seven's text pairs are 51 here against 56 on the raw LRC lines in the "What the library shows today" table (17 of Seven's 77 LRC lines hold parentheses); the extra column "Text pairs (sheet cleaned too)" is the count when the sheet side is cleaned the same way (Seven 59); (2) Table 1's sheets are the Genius pages, not the bundles, so Golden and Soda Pop line counts differ from Table 2's bundle rows (Golden 54 vs 51, Soda Pop 64 and 64). The listing "Lines the saved sheet's reload changes or drops" prints each Table 1 and Table 2 song, so a song in both tables appears twice. |
+| 6 | 2026-10-30 | GATE N1 | Opus 5.5 read of "GATE N1 report output" at `8e1e32c`; no code run. Tallies under "GATE N1 read" at the end of this plan. | Your Idol: 5 refused stretches (13 of 63 Genius lines, 9 of 59 LRC lines), so not covered. Of the 10 songs in the two tables, 1 (Best Part Of Me) has no refused stretch; every other song whose LRC fit passes has 5-13 refused stretches holding 21-48% of its Genius lines. Seven: 11 refused stretches, 18 of 79 Genius lines. 29 of the 71 refused stretches on fit-passing songs are one-sided. Refusals were counted on the raw sheet against the cleaned LRC lines; see the read's notes. Fallback left to Ken. |
 
 ## GATE N1 report output
 
@@ -487,3 +488,51 @@ Lines the saved sheet's reload changes or drops (line indexes in the Genius shee
 - 周杰倫 Jay Chou【晴天 Sunny Day】-Official Musi: changed on reload 12,25; dropped -
 - 정국 (Jung Kook) 'Seven (feat. Latto)' Off: changed on reload 5,7,11,27,29,33,38,40,42,44,45,49,65,68,71,72,73,75; dropped 47,64
 ```
+
+## GATE N1 read
+
+Opus 5.5, 2026-10-30, from the report above (no code run). Counts are tallied from the
+"Refused stretches" column; "one-sided" means one side has no lines. The fallback is
+Ken's call and is not chosen here.
+
+| Song | Sheet | LRC fit | Refused stretches | Genius lines in them / all | LRC lines in them / all | One-sided | Shape of the two-sided ones |
+|---|---|---|---|---|---|---|---|
+| Your Idol | page 12047339 | fits | 5 | 13 / 63 | 9 / 59 | 4 | 5 Genius vs 1 LRC |
+| Golden | page 12045295 | fits | 6 | 18 / 54 | 10 / 46 | 0 | Genius more lines in 5 of 6 |
+| Takedown | page 12100816 | fits | 13 | 19 / 67 | 4 / 52 | 10 | Genius more lines in 2 of 3 |
+| Soda Pop | page 12040325 | refused | 2 | 12 / 64 | 7 / 59 | 0 | Genius more lines |
+| Seven | bundle | fits | 11 | 18 / 79 | 16 / 77 | 5 | mixed, 3 each way |
+| Best Part Of Me | bundle | fits | 0 | 0 / 38 | 0 / 38 | 0 | - |
+| Lose Yourself | bundle | fits | 9 | 27 / 87 | 33 / 93 | 1 | mixed, LRC more lines in 6 of 8 |
+| In Summer | bundle | fits | 10 | 15 / 31 | 5 / 21 | 5 | all 2 Genius vs 1 LRC |
+| Stay Gold | bundle | fits | 9 | 11 / 38 | 24 / 51 | 0 | all LRC more lines (7 of 9 are 1 vs 2) |
+| Golden | bundle | fits | 8 | 15 / 51 | 10 / 46 | 4 | Genius more in 1, LRC more in 3 |
+| Sunny Day | bundle | refused | 1 (whole song, no text pairs) | 42 / 42 | 53 / 53 | 0 | - |
+
+Notes for the ruling:
+
+1. **Your Idol is not covered.** The refused LRC lines are 0-7 and 28: the intro chant
+   and the start of the 28-35 stretch, which Phase 0 read as English. Genius line 0
+   text-pairs with LRC line 8, so the intro is Genius 0-4 against LRC 0-8 either way.
+   The three Genius-only stretches (1-4, 46-48, 52) can't be placed by script from
+   the report. Its 9 position-paired lines are close to the 8 LRC lines that hold
+   Hangul, as Phase 0 expected; the report can't show they are the same lines.
+2. **Refusals are the rule, not the exception.** Two shapes, in about equal parts: a
+   line split one way on one side and another way on the other (Stay Gold, In
+   Summer, Lose Yourself), and a line on one side only (Takedown, In Summer, Golden,
+   Your Idol). Seven, with no Hangul, refuses as often as the KPop songs.
+3. **One-sided stretches have nothing for the listed fallbacks to use.** A Genius-only
+   stretch has no LRC span of its own (option 3 has nothing to spread over, option 2
+   drops the Genius lines); an LRC-only stretch has no Genius text (option 2 shows the
+   LRC's lines, option 3 has no Genius lines to place). Any fallback needs a rule for
+   them; 29 of 71 refused stretches on fit-passing songs are this kind.
+4. **The pairing compared raw Genius lines with cleaned LRC lines.** `pair_lines` ran on
+   `sheet.lines`, while the LRC side went through `cue_spans_from_srt`, which drops
+   parenthesised words. With the sheet cleaned too, text pairs rise for Your Idol
+   (+2), Takedown (+3), Seven (+8), Lose Yourself (+6) and Soda Pop (+2), and stay the
+   same for Golden, In Summer, Stay Gold and Best Part Of Me. The report does not say
+   how the refused stretches change; Seven is the song most exposed. The shipped
+   sheet is the cleaned one, so pairing on it is also what the saved file would carry.
+   Separately, Genius lines that clean to nothing (dropped on reload) sit in refused
+   stretches in Your Idol (25, 27, 47), Takedown (19), Seven (47) and Golden bundle
+   (15, the whole stretch); dropping them first ends only Golden's.
