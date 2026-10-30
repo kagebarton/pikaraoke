@@ -226,9 +226,9 @@ def flagged_runs(
             runs.append((current[0], current[-1]))
         current.clear()
 
-    skipped = set(unheard)
+    flagged, skipped = set(mistimed), set(unheard)
     for line in range(max(mistimed, default=-1) + 1):
-        if line in mistimed:
+        if line in flagged:
             current.append(line)
         elif line not in skipped:
             close()
@@ -329,11 +329,12 @@ def _fit_one_stream(
             **common,
         )
 
-    inside = {
-        k
+    clip_starts = {
+        k: span[0]
         for k, (start, end) in enumerate(spans)
-        if _clip_span(start, end, speed, shift, video_length) is not None
+        if (span := _clip_span(start, end, speed, shift, video_length)) is not None
     }
+    inside = clip_starts.keys()
     matched = len(found & inside)
     first = min((spans[k][0] for k in inside), default=0.0)
     base = {
@@ -351,32 +352,28 @@ def _fit_one_stream(
     return SliceFit(
         FITS,
         srt=_corrected_srt(raw_cues, speed, shift, video_length),
-        lines=tuple(
-            (tokens.texts[k], _clip_span(*spans[k], speed, shift, video_length)[0]) for k in in_clip
-        ),
-        **_flagged_lines(in_clip, anchors, spans, speed, shift),
+        lines=tuple((tokens.texts[k], clip_starts[k]) for k in in_clip),
+        **_flagged_lines(in_clip, anchors, clip_starts),
         **base,
     )
 
 
 def _flagged_lines(
-    in_clip: list[int],
-    anchors: list[dict],
-    spans: list[tuple[float, float]],
-    speed: float,
-    shift: float,
+    in_clip: list[int], anchors: list[dict], clip_starts: dict[int, float]
 ) -> dict[str, tuple[int, ...]]:
     """The ``in_clip`` cues (indexes into ``spans``) the heard words do not bear out.
 
     Returns :class:`SliceFit`'s ``mistimed`` (the anchor sits more than
-    FLAG_TOLERANCE_S from the start the fit gives the cue) and ``unheard`` (no
-    anchor), numbering the cues by their place in ``in_clip``, as ``lines`` is.
+    FLAG_TOLERANCE_S from the cue's start on the clip, clamped as ``lines`` shows
+    it, so a line the clip cuts into is not flagged for its cut-off start) and
+    ``unheard`` (no anchor), numbering the cues by their place in ``in_clip``, as
+    ``lines`` is.
     """
     heard = {anchor["lid"]: anchor["start"] for anchor in anchors}
     mistimed = tuple(
         line
         for line, k in enumerate(in_clip)
-        if k in heard and abs(heard[k] - (speed * spans[k][0] + shift)) > FLAG_TOLERANCE_S
+        if k in heard and abs(heard[k] - clip_starts[k]) > FLAG_TOLERANCE_S
     )
     unheard = tuple(line for line, k in enumerate(in_clip) if k not in heard)
     return {"mistimed": mistimed, "unheard": unheard}
