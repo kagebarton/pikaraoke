@@ -501,6 +501,22 @@ class TestFlaggedLines:
         assert result.status == FITS
         assert (result.mistimed, result.unheard) == ((7,), ())
 
+    def test_a_line_the_clip_cuts_into_is_checked_from_where_the_clip_starts(self):
+        """Line 0 starts 8 s before the clip and is heard 1 s into it: on time for the
+        start the card shows, 9 s late for its cut-off one."""
+        song = _song()
+
+        def start(k: int) -> float:
+            return 1.0 if k == 0 else _clip_start(k)
+
+        lrc = _lrc(song, clip_start=lambda k: 0.0 if k == 0 else _clip_start(k) + 8.0)
+        result = _fit_lrc(lrc, _heard(song, clip_start=start))
+
+        assert result.status == FITS
+        assert abs(result.shift_s + 8.0) < 0.05
+        assert result.lines[0] == (song[0], 0.0)
+        assert (result.mistimed, result.unheard) == ((), ())
+
     def test_flagged_lines_number_the_cleaned_lines_not_the_cues(self):
         """A music-note cue cleans to nothing, so it is no line and shifts none of the numbers."""
         song = _song(12)
