@@ -11,7 +11,8 @@ is decided after GATE Z2, from what this probe finds.
 **Status: DRAFT 2026-10-20.** Phase 0 executed 2026-10-20; the four pilot
 sheets confirmed 2026-10-27; Phase 1 runner built, GPU run done 2026-10-27
 (14 arm-song artifacts saved); Ken's listening calls recorded 2026-10-30;
-the GATE Z1 read is next (see Results log).
+GATE Z1 read 2026-10-30: no arm dropped, Hal stands for Cantonese H
+(see Results log).
 
 ## Why now, and what this replaces
 
@@ -706,3 +707,49 @@ sheet's store; this fills the blank `cantonese_h` on #11): "Hal is better than H
 both songs, and makes for almost perfect karaoke output". So Ken's Hsk-vs-Hal
 preference is Hal on both Cantonese songs. His overall calls for Hsk and Hal
 are unchanged and stay as in the table.
+
+### 2026-10-30 — GATE Z1 read (Opus 5.5)
+
+Read from the overall calls and the addendum in the entry above, against
+the rule as pre-registered under Phase 1. Per-line marks were skipped, so
+only the overall calls and the arm notes are evidence here. Nothing was
+re-run and the listening artifact was not re-read.
+
+Rule: per language, an arm is dropped only if it is *not singable* on both
+pilot songs of that language.
+
+| lang | arm | pilot calls | not singable on both? | Phase 2 |
+|---|---|---|---|---|
+| zh | W | #1 not singable, #2 few bad | no | goes |
+| zh | R | #1 few bad, #2 few bad | no | goes |
+| zh | H | #1 as is, #2 as is | no | goes |
+| yue | W | #9 few bad, #11 few bad | no | goes |
+| yue | R | #9 as is, #11 not singable | no | goes |
+| yue | H (Hsk) | #9 as is, #11 few bad | no | H goes, as Hal |
+| yue | H (Hal) | #9 as is, #11 as is | no | H goes, as Hal |
+
+**Read.** No arm is dropped in either language, so neither language stops
+here. Phase 2 runs W, R, H on the Mandarin corpus and W, R, Hal on the
+Cantonese corpus.
+
+**H for Cantonese is Hal.** Both candidates pass the gate. Hal is called
+*as is* on both songs, Hsk on one; Ken's notes call Hal "best of the bunch"
+on both, and his addendum prefers Hal on both songs ("almost perfect karaoke
+output"). Hsk is not carried into Phase 2. Cost against Hsk on the pilot:
+align about 3x slower (10.76 vs 3.53 s on #9, 16.31 vs 5.13 s on #11)
+and about 1.4 GB more peak allocated (3457 vs
+2081 MB), within the A2000's 6 GB.
+
+**W-L is not added.** Its condition (Arm W not singable on Cantonese at the
+pilot) is not met: W is *few bad* on both Cantonese songs.
+
+**Carried into GATE Z2** (facts from the rule, not new verdicts). Z2 counts
+8 songs per language and the pilot songs are not re-run, so their calls
+count. Mandarin W and Cantonese R each start with one *not singable*, so
+either fails Z2's 7-of-8 on one more. Z2's second tie-break (fewest bad
+lines in total) needs per-line marks, which the pilot does not have.
+
+**Before Phase 2 can run.** Only the four pilot songs are in the library
+with stems, and only their sheets exist in `zh_probe/sheets/`. Phase 2
+needs Phase 0a (add the other 12 songs) and 0b (Ken confirms 12 sheets)
+first. Z2's numbers may be adjusted only before the run.
