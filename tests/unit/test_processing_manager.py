@@ -12,8 +12,6 @@ from pikaraoke.lib import processing_manager as pm
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.genius import GeniusUnavailable
 from pikaraoke.lib.library_regen import (
-    CUSTOM_SRT_SUFFIX,
-    CUSTOM_TEXT_SUFFIX,
     Plan,
     RegenError,
     RegenJob,
@@ -1766,7 +1764,7 @@ class TestSheetPutBackWhenTheRegenDoesNotFinish:
 
     def _regen_with_sheet(self, tmp_path, before):
         regen = _regen_job(tmp_path, kind="sidecar")
-        sheet = custom_sheet_file(regen.song.song_path, CUSTOM_TEXT_SUFFIX)
+        sheet = custom_sheet_file(regen.song.song_path, "custom")
         if before is not None:
             sheet.parent.mkdir(exist_ok=True)
             sheet.write_text(before, encoding="utf-8")
@@ -1830,7 +1828,7 @@ class TestSheetPutBackWhenTheRegenDoesNotFinish:
         self, events, preferences, mock_orchestrator, tmp_path, prepared
     ):
         regen, typed = self._regen_with_sheet(tmp_path, self.OLD)
-        movie = custom_sheet_file(regen.song.song_path, CUSTOM_SRT_SUFFIX)
+        movie = custom_sheet_file(regen.song.song_path, "movie")
 
         def save_the_movie_sheet(regen_job, genius, config, lyrics_dir):
             movie.write_text(self.NEW, encoding="utf-8")

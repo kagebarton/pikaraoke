@@ -15,6 +15,7 @@ from collections.abc import Callable, Collection
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import NamedTuple
 
 import srt
 
@@ -222,35 +223,41 @@ def find_local_srt(song: Path) -> Path | None:
     return None
 
 
+class SheetKind(NamedTuple):
+    """One kind of custom sheet: its file suffix, the lyrics origin a run from it
+    records, and its plan's label."""
+
+    suffix: str
+    origin: str
+    label: str
+
+
 # The admin's own lyrics for a song, kept in the library's ``lyrics/`` folder in one
 # of three kinds: the typed lines (``.custom.txt``), movie subtitles pasted as an
 # SRT with clip times (``.custom.srt``), or an LRCLIB match's lines fitted to the
 # clip as an SRT (``.lrclib.srt``); the last two are timed on the cue route. The
 # file is the one record that the song uses them: a bundle's provenance is ignored
 # by a reset and a transcribe run deletes the bundle. A song keeps one sheet,
-# whichever kind.
-CUSTOM_TEXT_SUFFIX = ".custom.txt"
-CUSTOM_SRT_SUFFIX = ".custom.srt"
-LRC_SRT_SUFFIX = ".lrclib.srt"
-CUSTOM_SHEET_SUFFIXES = (CUSTOM_TEXT_SUFFIX, CUSTOM_SRT_SUFFIX, LRC_SRT_SUFFIX)
+# whichever kind. The kinds are also the repair sources that save one.
+SHEETS = {
+    "custom": SheetKind(".custom.txt", CUSTOM_ORIGIN, "custom sheet"),
+    "movie": SheetKind(".custom.srt", MOVIE_ORIGIN, "movie subtitles"),
+    "lrclib": SheetKind(".lrclib.srt", LRC_ORIGIN, "LRCLIB timing"),
+}
 
 
-def custom_sheet_file(song: Path, suffix: str) -> Path:
-    """Where ``song``'s custom sheet of the kind ``suffix`` lives, whether or not it exists."""
-    return song.parent / "lyrics" / f"{song.stem}{suffix}"
+def custom_sheet_file(song: Path, kind: str) -> Path:
+    """Where ``song``'s custom sheet of the ``kind`` lives, whether or not it exists."""
+    return song.parent / "lyrics" / f"{song.stem}{SHEETS[kind].suffix}"
 
 
 def _sheet_files(song: Path) -> list[Path]:
-    return [custom_sheet_file(song, suffix) for suffix in CUSTOM_SHEET_SUFFIXES]
+    return [custom_sheet_file(song, kind) for kind in SHEETS]
 
 
 def custom_sheet_path(song: Path) -> Path | None:
     """The custom lyric sheet ``song`` has on disk, whichever kind, or None."""
     return next((sheet for sheet in _sheet_files(song) if sheet.is_file()), None)
-
-
-# The kind each sheet suffix names: the status field, and the repair page's source.
-_SHEET_KINDS = {CUSTOM_TEXT_SUFFIX: "custom", CUSTOM_SRT_SUFFIX: "movie", LRC_SRT_SUFFIX: "lrclib"}
 
 
 def sheet_kind(sheet: Path | None) -> str | None:
@@ -260,43 +267,23 @@ def sheet_kind(sheet: Path | None) -> str | None:
     """
     if sheet is None:
         return None
-    return next(
-        (kind for suffix, kind in _SHEET_KINDS.items() if sheet.name.endswith(suffix)), None
-    )
+    return next((kind for kind, k in SHEETS.items() if sheet.name.endswith(k.suffix)), None)
 
 
-def _sheet_plan(song: Path, suffix: str, origin: str, label: str, text: str | None) -> Plan:
-    """The plan that times ``song`` from its custom sheet of the kind ``suffix``.
+def sheet_plan(song: Path, kind: str, text: str | None = None) -> Plan:
+    """The plan that times ``song`` from its custom sheet of the ``kind``; the
+    ``movie`` and ``lrclib`` kinds run the cue route.
 
     ``text`` is a sheet the admin just saved, for the run to write first.
     """
+    sheet = SHEETS[kind]
     return Plan(
         kind="seed",
-        lyrics_path=custom_sheet_file(song, suffix),
-        seed={"lyrics_origin": origin},
+        lyrics_path=custom_sheet_file(song, kind),
+        seed={"lyrics_origin": sheet.origin},
         custom_text=text,
-        label=label,
+        label=sheet.label,
     )
-
-
-def custom_sheet_plan(song: Path, text: str | None = None) -> Plan:
-    """The plan that times ``song`` from its typed custom sheet."""
-    return _sheet_plan(song, CUSTOM_TEXT_SUFFIX, CUSTOM_ORIGIN, "custom sheet", text)
-
-
-def movie_sheet_plan(song: Path, text: str | None = None) -> Plan:
-    """The plan that times ``song`` from its movie-subtitles sheet, on the cue route."""
-    return _sheet_plan(song, CUSTOM_SRT_SUFFIX, MOVIE_ORIGIN, "movie subtitles", text)
-
-
-def lrc_sheet_plan(song: Path, text: str | None = None) -> Plan:
-    """The plan that times ``song`` from its LRCLIB timing sheet, on the cue route."""
-    return _sheet_plan(song, LRC_SRT_SUFFIX, LRC_ORIGIN, "LRCLIB timing", text)
-
-
-_SHEET_PLANS = {"custom": custom_sheet_plan, "movie": movie_sheet_plan, "lrclib": lrc_sheet_plan}
-# The kinds of custom sheet, which are also the repair sources that save one.
-SHEET_KINDS = tuple(_SHEET_PLANS)
 
 
 def custom_plan(job: SongJob) -> Plan | None:
@@ -306,7 +293,7 @@ def custom_plan(job: SongJob) -> Plan | None:
     wins until a repair to another source removes it.
     """
     kind = sheet_kind(custom_sheet_path(job.song_path))
-    return _SHEET_PLANS[kind](job.song_path) if kind else None
+    return sheet_plan(job.song_path, kind) if kind else None
 
 
 def resolve_plan(job: SongJob, *, reset: bool) -> Plan:
@@ -713,8 +700,8 @@ def apply_custom_choice(job: SongJob) -> None:
 
 
 def snapshot_lyric_files(song: Path) -> dict[Path, bytes | None]:
-    """The bytes of the files a regen rewrites or deletes: the ``.lrc`` and both
-    kinds of custom sheet (None: no such file). Taken before anything is changed."""
+    """The bytes of the files a regen rewrites or deletes: the ``.lrc`` and every
+    kind of custom sheet (None: no such file). Taken before anything is changed."""
     return {
         path: lrclib.snapshot_file(path) for path in (lrclib.lrc_path(song), *_sheet_files(song))
     }
@@ -923,7 +910,10 @@ def backup_text_folders(folder: Path, stems: list[str] | None = None) -> Path | 
 #   lyric sheet, typed, pasted from a movie or fitted from an LRCLIB match. It is
 #   hand-made, so a reset must not lose it; only a repair to another source
 #   removes it.
-KEEP_ON_RESET = {"subtitles": ASR_JSON3_SUFFIX, "lyrics": (".lrc", *CUSTOM_SHEET_SUFFIXES)}
+KEEP_ON_RESET = {
+    "subtitles": ASR_JSON3_SUFFIX,
+    "lyrics": (".lrc", *(sheet.suffix for sheet in SHEETS.values())),
+}
 
 
 def clear_output_folders(folder: Path, stems: list[str] | None = None) -> None:

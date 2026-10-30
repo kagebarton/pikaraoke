@@ -1489,7 +1489,7 @@ class TestCustomStart:
         write_movie_sheet(tmp_path, song.stem).write_bytes("caf\xe9\n".encode("latin-1"))
 
         assert self.start(tmp_path, song)["movie"] == ""
-        assert "Could not read the .custom.srt sheet" in caplog.text
+        assert ".custom.srt: " in caplog.text
 
     def test_without_a_sheet_it_is_the_lines_of_the_current_lyrics(self, tmp_path, song):
         genius_bundle(tmp_path, song.stem)
@@ -1507,7 +1507,7 @@ class TestCustomStart:
         sheet.write_bytes("caf\xe9\n".encode("latin-1"))
 
         assert self.start(tmp_path, song)["text"] == "one\ntwo"
-        assert "Could not read the .custom.txt sheet" in caplog.text
+        assert ".custom.txt: " in caplog.text
 
     def test_the_search_starts_from_the_genius_song_the_bundle_records(self, tmp_path, song):
         genius_bundle(tmp_path, song.stem)
