@@ -10,8 +10,8 @@ is decided after GATE Z2, from what this probe finds.
 
 **Status: DRAFT 2026-10-20.** Phase 0 executed 2026-10-20; the four pilot
 sheets confirmed 2026-10-27; Phase 1 runner built, GPU run done 2026-10-27
-(14 arm-song artifacts saved); Ken's listening and calls are next, then the
-GATE Z1 read (see Results log).
+(14 arm-song artifacts saved); Ken's listening calls recorded 2026-10-30;
+the GATE Z1 read is next (see Results log).
 
 ## Why now, and what this replaces
 
@@ -635,3 +635,74 @@ No verdicts here. Per `review_<video id>.csv`, Ken plays each arm with the
 arm (singable as is / singable with a few bad lines / not singable). Opus
 reads GATE Z1 from those calls. Both Cantonese H candidates were run, so the
 read also has to say which one stands for H in Phase 2 if H survives.
+
+### 2026-10-30 — Phase 1 eyeball calls recorded (Sonnet 5.5), GATE Z1 not yet read
+
+Ken entered an overall call for each of the 14 arm-song outputs in the Pilot
+Listening Sheet, a private artifact
+(https://claude.ai/artifact/3moyiEpQwFu36GHUVpuGxv, built from
+`review_<video id>.csv` and `commands.txt`; sheet-line times shown per arm).
+The page stores its marks in collection `marks`, one document per video id;
+this entry is those four documents read back with `ArtifactData` (versions
+and last-saved times below), nothing re-derived.
+
+Ken said the winners were clear to him, so he **skipped the line-by-line
+section**. Every per-line `bad` list is empty and there are no line notes, so
+an empty list here means *not marked*, not *no bad lines*. His evidence is the
+overall calls and the arm notes below.
+
+**Overall calls** (store values `as_is` / `few_bad` / `not_singable`; blank =
+arm not run on that song):
+
+| song | lang | W | R | H | Hsk | Hal |
+|---|---|---|---|---|---|---|
+| #1 晴天 `DYptgVvkVLQ` | zh | not singable | few bad | as is | | |
+| #2 龍捲風 `RPWDeLqsN0g` | zh | few bad | few bad | as is | | |
+| #9 明年今日 `8NJVNkzhJM4` | yue | few bad | as is | | as is | as is |
+| #11 海闊天空 `qu_FSptjRic` | yue | few bad | not singable | | few bad | as is |
+
+**Hsk-vs-Hal pick field** (the sheet's Cantonese question): #9 `Hal`; #11
+left blank.
+
+**Arm notes**, verbatim (spelling as typed; `base` cards had no marks):
+
+- #1 晴天 (doc v42, saved 2026-10-30 18:01Z)
+  - W: "fast line at 2:40, missed lines till 3:00, slow crawl at 3:15, fast
+    crawls over cello break, rap totally missing"
+  - R: "the sol-la-si section is rushed, same lines over break at 2:40, slow
+    crawl over cello break, rap appears"
+  - H: "sol-la-si section slightly rushed, breaks have no problems, rap comes
+    in slightly late but catches up quickly"
+- #2 龍捲風 (doc v50, saved 2026-10-30 17:28Z)
+  - W: "onset snap isn't working very well, 2 slow crawls, one just before the
+    instrumental break, and the last line (likely because it trails to
+    silence)"
+  - R: "start end timing better first half, less so after, better than
+    whisper, slow crawl only at the end, but missing the choruses around
+    3:20-3:35"
+  - H: "best character timing of the 3, tight onset, mostly missed held
+    endings, only one to stick the ending that trails to silence"
+- #9 明年今日 (doc v34, saved 2026-10-30 18:11Z)
+  - W: "slow crawl over instrumentals at 1:40, loose word timings with some
+    weird jumps, "
+  - R: "tighter timing than whisper, better onset/endings, no slow crawl"
+  - Hsk: "best word timing, though it loses to romanized for onset/endings"
+  - Hal: "best of the bunch"
+- #11 海闊天空 (doc v29, saved 2026-10-30 18:17Z)
+  - W: "slow crawl 1:35, lines during the break at 2:40 (the lines are not
+    there, the video has hard subs to compare to)"
+  - R: "some slow crawls, onset ending misses, massive missed around 4:01 from
+    which it never recovers"
+  - Hsk: "some onset/ending misses, some rushed lines, some slow crawls"
+  - Hal: "best of the bunch"
+
+No verdicts here. The GATE Z1 rule is not applied in this entry. Opus reads
+it from the table above, and picks Hsk or Hal for Phase 2 if H survives for
+Cantonese. The marks live only in the artifact's store and in this entry;
+nothing was written to the library.
+
+**Addendum, same day, Ken in chat after the marks were read back** (not in the
+sheet's store; this fills the blank `cantonese_h` on #11): "Hal is better than Hsk for
+both songs, and makes for almost perfect karaoke output". So Ken's Hsk-vs-Hal
+preference is Hal on both Cantonese songs. His overall calls for Hsk and Hal
+are unchanged and stay as in the table.
