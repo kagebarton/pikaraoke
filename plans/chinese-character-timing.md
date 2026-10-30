@@ -12,7 +12,9 @@ is decided after GATE Z2, from what this probe finds.
 sheets confirmed 2026-10-27; Phase 1 runner built, GPU run done 2026-10-27
 (14 arm-song artifacts saved); Ken's listening calls recorded 2026-10-30;
 GATE Z1 read 2026-10-30: no arm dropped, Hal stands for Cantonese H
-(see Results log).
+(see Results log). Ken's rulings 2026-10-30 retired W and R, added Phase 1b
+(half precision + language guess) and put language detection in scope.
+Next: Phase 1b.
 
 ## Why now, and what this replaces
 
@@ -53,6 +55,19 @@ Cantonese. When GATE Z2 is read, GATE L closes with a pointer here.
    characters are timed right.
 6. **Other models are allowed** in the probe; cost is weighed at the
    end, not used to exclude arms up front.
+
+## Ken's rulings (2026-10-30, after the GATE Z1 read)
+
+7. **W and R retire now**, by Ken's eye over the gate (Z1 kept them):
+   the character-CTC models were better on all four pilot songs. W-L
+   goes with W. Phase 2 runs H (Mandarin) and Hal (Cantonese) only.
+8. **Whisper should stay loaded** in production, since its reload is
+   the longest. Phase 1b first tests H and Hal at half precision next to
+   the app's resident models; if that fails, the fallback is to unload
+   whisper while a Chinese song aligns and reload it afterwards.
+9. **Language detection is in scope** (amends ruling 4): a build has to
+   route a song to H or Hal, so the probe measures how to tell Mandarin
+   from Cantonese. The other items in ruling 4 stay out.
 
 ## Ground rules
 
@@ -118,6 +133,10 @@ the library; Phase 0a adds #9 and #11.
 
 ## Arms
 
+**W, R and W-L retired 2026-10-30 (ruling 7); Hsk dropped at the GATE Z1
+read.** From Phase 1b on, the arms are H (Mandarin) and Hal (Cantonese).
+The descriptions below stay as the record of what Phase 1 ran.
+
 Every arm takes the same input (vocal stem + confirmed sheet +
 Ken's language label) and writes one JSON (per character: text, start,
 end, line id) and one `.ass` with a `\kf` per character, rendered by a
@@ -156,7 +175,8 @@ arm behaves on a mismatched sheet is a later question, not this one.
 |---|---|---|---|
 | 0 | corpus, sheets, model check (no GPU alignment) | Sonnet | Ken picks sheets |
 | 1 | pilot: all arms on 4 songs, GATE Z1 | Sonnet | Opus + Ken eyeball |
-| 2 | corpus: surviving arms, GATE Z2 | Sonnet | Opus + Ken eyeball |
+| 1b | half precision next to the app's models (GATE Z1b); language guess on the pilot + English controls | Sonnet | Opus + Ken eyeball |
+| 2 | corpus: H and Hal, language guess, GATE Z2 + GATE ZL | Sonnet | Opus + Ken eyeball |
 | 3 | write-up: per-language pick, cost, what a build needs | Opus | Ken rules |
 
 ### Phase 0 — corpus, sheets, models
@@ -205,24 +225,79 @@ it goes to Phase 2. If every arm is dropped for a language, that
 language stops here and Phase 3 reports why, without a corpus run. W-L
 is added to Phase 2 only under the Arm W condition above.
 
-### Phase 2 — corpus (GATE Z2)
+### Phase 1b — half precision and language guess (GATE Z1b)
 
-Surviving arms on the whole corpus, same artifacts and review sheets as
-Phase 1. Pilot songs are not re-run.
+Two runs on Windows, both GPU, one at a time.
+
+- **1b-i. Half precision next to the app.** PiKaraoke runs on Windows
+  with its whisper and stem workers loaded and a song playing in mpv,
+  and no song processing. With that state on the card, the executor
+  runs H on #1 and #2 and Hal on #9 and #11, each at full precision
+  (as in Phase 1) and at half precision: model weights and inputs in
+  fp16, emissions cast back to fp32 before `log_softmax` and
+  `forced_align`. Per song and precision it saves the JSON and `.ass`
+  (half-precision outputs only; the full-precision ones exist from
+  Phase 1), align wall time, torch peak, and the **device-wide** peak
+  of used memory (`nvidia-smi`, polled through the align), plus the
+  device-wide figure before the probe loads its model. A full-precision
+  run that OOMs is recorded as such, not retried. Ken plays the four
+  half-precision `.ass` files and gives the overall call only (same
+  three-way scale; no per-line marks).
+- **1b-ii. Language guess.** With the app closed, a probe script loads
+  the app's `large-v3-turbo.pt` and runs whisper's language detection
+  on the vocal stem of the four pilot songs and four English library
+  songs that have `vocal/` stems (executor's choice, ids in the log).
+  It cuts the stem into consecutive 30 s windows and saves, per window,
+  the stem RMS (dBFS), whisper's top three languages with
+  probabilities, and p(`zh`) and p(`yue`). Per song it saves two
+  guesses: **stock** (the first window only, as whisper's own
+  `transcribe` would decide) and **aggregate** (the language with the
+  highest summed log-probability over windows whose RMS is within 20 dB
+  of the song's loudest window). On each Chinese song's confirmed sheet
+  it also counts the characters from this fixed list of colloquial
+  Cantonese: 嘅 咗 唔 佢 冇 啲 喺 嚟 嘢 睇 哋 嗰 噉 㗎. That is a raw
+  count only. It is reported next to the guess and is not part of any gate.
+
+**GATE Z1b (pre-registered).** Per language, the half-precision arm
+replaces the full-precision one for Phase 2 if, on both pilot songs of
+that language, (a) the device-wide peak leaves at least 256 MB of the
+card free and (b) Ken's call is no worse than his Phase 1 call for that
+arm and song. Otherwise the language runs at full precision in Phase 2,
+and Phase 3 records the fallback (unload whisper while that song
+aligns, then reload it), priced from the Phase 1 load times. 1b-ii has
+no gate of its own; it feeds GATE ZL.
+
+### Phase 2 — corpus (GATE Z2, GATE ZL)
+
+Needs Phase 0a and 0b for the 12 non-pilot songs first: only the pilot
+four are in the library with stems and confirmed sheets.
+
+H on the Mandarin corpus and Hal on the Cantonese corpus, at the
+precision GATE Z1b picked. Artifacts are the same as in Phase 1, except that review sheets
+carry the overall call only. The 1b-ii language guess runs on every new
+song too. Pilot songs are not re-run.
 
 **GATE Z2 (pre-registered; Ken may adjust the numbers before the run,
-not after).** Per language, an arm **works** if it is singable (as is,
-or with a few bad lines) on at least 7 of 8 songs. Among working arms,
-the **pick** is the one with the most *singable as is* songs, then the
-fewest bad lines in total, then the lower cost (time per song, VRAM,
-download). No working arm for a language means no pick for it. Ken's
-eyeball veto stands over the count.
+not after).** Per language, the arm **works** if it is singable (as is,
+or with a few bad lines) on at least 7 of 8 songs. The pilot calls count
+(the half-precision calls if Z1b switched that language). If it works,
+it is the pick for that language; if not, the language has no pick.
+Ken's eyeball veto stands over the count.
+
+**GATE ZL (pre-registered; Ken may adjust before the Phase 2 run).**
+Whisper's **aggregate** guess routes correctly if it says `zh` on all 8
+Mandarin songs, `yue` on all 8 Cantonese songs, and neither on the 4
+English controls. If it does, Phase 3 routes on it. If it misses any song,
+Phase 3 lists the misses with the stock guess and the
+colloquial-character count beside each, and the build needs another
+source for the label.
 
 ### Phase 3 — write-up
 
 Opus writes the record: the pick per language (or none), its cost, and
 where it failed. It also lists what a production build would need,
-without committing to one: language label and routing, the sheet
+without committing to one: language routing (from GATE ZL), how the
+model sits next to whisper on a 6 GB card (from GATE Z1b), the sheet
 problems Phase 0b worked around, the caption-translation and Genius-query
 issues, and how a per-character track meets the existing `.ass` writer.
 Ken rules whether to plan a build.
@@ -230,7 +305,9 @@ Ken rules whether to plan a build.
 ## Out of scope
 
 - Any change to `pikaraoke/` or to the shipped routes.
-- Language detection (Ken labels each song by hand here).
+- Building language detection into the app. Measuring it is in scope since
+  ruling 9 (Phase 1b-ii, GATE ZL); the alignment arms still take Ken's
+  hand label.
 - Lyric sourcing quality, caption-translation filtering, Genius CJK
   search: noted in Phase 3, not worked on.
 - Pinyin/jyutping display, Traditional/Simplified display conversion.
@@ -753,3 +830,41 @@ lines in total) needs per-line marks, which the pilot does not have.
 with stems, and only their sheets exist in `zh_probe/sheets/`. Phase 2
 needs Phase 0a (add the other 12 songs) and 0b (Ken confirms 12 sheets)
 first. Z2's numbers may be adjusted only before the run.
+
+### 2026-10-30 — Ken's rulings after the Z1 read; co-residency estimate (Opus 5.5)
+
+Rulings 7-9 (top of plan) came out of this exchange. Ken asked what retiring
+W would cost in model loading if whisper stays loaded. The estimate he ruled
+on is below. It is an estimate made by combining figures from separate runs,
+not a co-residency measurement; Phase 1b-i measures it.
+
+Sources: this plan's Phase 0c load check and Phase 1 run table (fp32, torch
+peaks, no CUDA context); `archive/jointrefine:plans/matcher-timing-eval.md`,
+"Concurrency measurement (2026-06-22)", A2000 6 GB: whisper + stem worker
+co-resident (weights + 2 CUDA contexts) about 4.65 GB, about 5.5 GB at
+concurrent peak with mpv's ~300 MB; the separator model is 871 MiB.
+
+| next to whisper (separator unloaded) | arm align peak MB | estimated device total |
+|---|---|---|
+| H (zh) | 2081 | about 6.1 GB of 6.0 |
+| Hal (yue) | 3214-3457 | about 7.3 GB |
+| Hsk (yue) | 2081 | about 6.1 GB |
+
+Load times (s): whisper 9.8-12.8, Hal 6.9-9.4, H 6.3 (Phase 0c; the 137.2
+in the Phase 1 run is not explained and not used), Hsk 3.8-4.2. The fallback
+of unloading whisper for a Chinese song costs one Hal or H load plus one
+whisper reload, about 20 s per switch between languages. Ken chose: test half precision
+first (Phase 1b-i), fall back to the unload. In the fallback, whisper is still
+loaded when a song arrives, so it can guess the language before it is
+unloaded.
+
+Language guess design (Phase 1b-ii, GATE ZL), chosen by Opus at Ken's
+request to place it: whisper's detection on the vocal stem is the candidate
+router because whisper is already loaded and the check is cheap. Its
+reliability on singing, and on `yue` against `zh` in particular, is
+unmeasured: every probe run so far was given Ken's label. The sheet's
+colloquial-character count is recorded beside it because it
+catches only colloquial lyrics (海闊天空 is mostly standard written Chinese),
+so it is evidence, not a router. English controls are there to check that
+no English song would be routed to a Chinese model; the corpus alone cannot
+show that.
