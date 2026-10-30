@@ -266,16 +266,16 @@ def timed_sheet_srt(sheet: list[str], spans: list[tuple[float, float]], pairing:
 
 ### Phase 1: pairing, then the probe -> GATE N1 (Opus reads, Ken rules)
 
-- [ ] Write `pikaraoke/lib/lrc_pairing.py` and `tests/unit/test_lrc_pairing.py` to
-      the Design section. Commit: `feat(lyrics): pair a lyric sheet's lines with an
+- [x] Write `pikaraoke/lib/lrc_pairing.py` and `tests/unit/test_lrc_pairing.py` to
+      the Design section (`243cc53`, Results row 4). Commit: `feat(lyrics): pair a lyric sheet's lines with an
       LRC's, by text then by position`.
-- [ ] Find the Genius pages. For Your Idol, Golden, Takedown and Soda Pop, run
+- [x] Find the Genius pages (Results row 4). For Your Idol, Golden, Takedown and Soda Pop, run
       `GeniusClient.search("<title> romanized")`, using the token from the
       preferences, as `scripts/regen_alignment_bundles.py` builds its client. Take the
       hit whose artist is Genius Romanizations, and log each id, title and artist in
       the Results log. Seven uses its bundle's Genius sheet (no romanized page
       needed). If a song has no romanized hit, or more than one, stop and ask Ken.
-- [ ] Write `scripts/genius_lrc_pairing_report.py`, modelled on
+- [x] Write `scripts/genius_lrc_pairing_report.py` (`96a5370`), modelled on
       `scripts/lrc_timing_report.py`. Read only. It prints indexes, counts and times,
       never lyric text. It reads each song's LRC through `lrclib.read_song_lrc` and the
       status's `lrc_match`, as that script does since `5e20312`, and fits it with
@@ -297,10 +297,10 @@ def timed_sheet_srt(sheet: list[str], spans: list[tuple[float, float]], pairing:
     `<stem>.lrclib-genius.srt`. Also write a list of the line indexes and clip
     times where its text differs from the LRC's own sheet, as the places to listen.
     `DIR` must not be the library folder; the script refuses it.
-- [ ] Run it for the five songs, plus Table 2. Paste the raw output into a "GATE N1
+- [x] Run it for the five songs, plus Table 2 (Results row 5). Paste the raw output into a "GATE N1
       report output" section at the end of this plan, and add one Results row. The
       report carries no text, so it may be committed.
-- [ ] Commit the script: `feat(scripts): report how a Genius sheet pairs with an
+- [x] Commit the script: `feat(scripts): report how a Genius sheet pairs with an
       LRC's lines`. Plan updates go in their own `docs(plans)` commits.
 - [ ] **GATE N1: stop.** No verdict on the executor side. Ask Ken to `/model` to
       Opus for the read. The question for Ken: does pairing cover Your Idol with
@@ -434,3 +434,56 @@ the existing Regenerate can time it.
 | 1 | 2026-10-30 | 0 | `git worktree add ../pik-genius-lrc -b genius_lrc_timing 4e8cb26`; read-only script counts on the five songs (table in "What the library shows today") | Branch at `4e8cb26`. Your Idol and Takedown are already LRCLIB-timed with the LRC's own text. Hangul normalises to nothing for text pairing. |
 | 2 | 2026-10-30 | 0 | Executor (Sonnet 5.5): `git log 4e8cb26..HEAD` empty and only this plan untracked, then `git reset --hard daf183a` (dev, pushed). Plan updated for the landing. Read only: LRC line counts for the five songs before and after the duet merge. | Branch now at `daf183a`. Parent plan read from `archive/lyric_source_lists`. Changes from the dev commits `7ab4252`, `8dabf55`, `ffd021d`/`eca03ce`, `8767f65`: sheet kinds are one `SHEETS` table (the Defaults bullet and the label list rewritten to it); `check_lrc_timing` and `_fit_lrc_timing` signatures as they are now; the length override has landed (Viable default, Phase 3 state); `overridable=fits and not viable` would be true for a refused stretch, so the formula needs the pairing too (Design, Defaults); the new kind is its own repair source (open point for Phase 4, not a stop); the label sites listed from the code. The five LRCs have no lines stamped at one start (raw sung stamps = lines after the merge: 59 / 52 / 46 / 59 / 77), so the library table needed no change. Phase 3's wait-and-rebase step and the Rebase risk dropped. |
 | 3 | 2026-10-30 | 0 | `/home/ken/miniconda3/envs/pik/bin/python -P -m pytest -q -p no:cacheprovider` in the worktree at `61d00cf` (code identical to `daf183a`; the commit adds only this plan) | **2998 passed**, 0 failed, 58.8 s. This is the baseline. Checked that the run used the worktree's code: a plugin printing `pikaraoke.__file__` after `tests/unit/test_lrclib.py` gave `/home/ken/pik-genius-lrc/pikaraoke/__init__.py`. **Trap for scripts:** a bare `python -P -c "import pikaraoke"` in the worktree gives `/home/ken/pikaraoke/pikaraoke` (the env's editable install points at the main checkout), and only pytest's own path setup reaches the worktree. A script run from the worktree must put its own repo root first on `sys.path`, as `scripts/lrc_timing_report.py` does (`sys.path.insert(0, parents[1])`); Phase 1's script copies that line. |
+| 4 | 2026-10-30 | 1 | Executor (Sonnet 5.5): `lrc_pairing.py` (`Stretch`, `Pairing` with a `line_map()` of every paired line, `pair_lines`, `timed_sheet_srt`) and `tests/unit/test_lrc_pairing.py`, commit `243cc53`. Genius pages: `GeniusClient.search("<title> romanized")` returned 4 / 8 / 3 / 8 hits for Your Idol / Golden / Takedown / Soda Pop, every one by Genius Romanizations, so the plan's "more than one hit" stop applied; asked Ken, who approved the one hit per song that is the KPop Demon Hunters song. | 15 new tests pass; full suite **3013 passed** (baseline 2998 + 15). Pages used (id \| title \| artist): 12047339 \| Saja Boys - Your Idol (Romanized) \| Genius Romanizations; 12045295 \| HUNTR/X - Golden (Romanized) \| Genius Romanizations; 12100816 \| HUNTR/X - Takedown (Romanized) \| Genius Romanizations; 12040325 \| Saja Boys - Soda Pop (Romanized) \| Genius Romanizations. Seven uses its bundle's Genius sheet. One test note: when the LRC repeats a chorus once more than the sheet, which LRC instance the sheet's last chorus pairs with is a tie in `map_lines_to_cues` (it picks the later one); either way the extra lines are a refused stretch, so the test asserts that and not the instance. |
+| 5 | 2026-10-30 | 1 | `python -P scripts/genius_lrc_pairing_report.py --folder "/home/ken/shared-drives/D:/Shared/pikaraoke-songs" --song "Your Idol=12047339" --song "Golden=12045295" --song "Takedown=12100816" --song "Soda Pop=12040325" --song "Seven"` at `96a5370`; raw output under "GATE N1 report output". The script also ran on a viable Table 2 song with `--write-sheet` into the scratchpad (wrote the `.lrclib-genius.srt` and `.listen.txt`, checked, deleted) and refused `--write-sheet` pointed at the library and at its `lyrics/` folder. Nothing in the library was written. | Report carries no lyric text. `fit.lines` and the reloaded fitted SRT agree line for line on every song whose fit passed (the Defaults' stop condition did not fire). No LRC in the tables has two lines stamped at one start (column "Same-start LRC lines" is 0 everywhere). Two things seen that the library table (Phase 0) did not show, for the reader: (1) the pairing runs on the LRC lines as the cue route loads them, and that cleaning drops parenthesised words (`clean_srt_line`), so Seven's text pairs are 51 here against 56 on the raw LRC lines in the "What the library shows today" table (17 of Seven's 77 LRC lines hold parentheses); the extra column "Text pairs (sheet cleaned too)" is the count when the sheet side is cleaned the same way (Seven 59); (2) Table 1's sheets are the Genius pages, not the bundles, so Golden and Soda Pop line counts differ from Table 2's bundle rows (Golden 54 vs 51, Soda Pop 64 and 64). The listing "Lines the saved sheet's reload changes or drops" prints each Table 1 and Table 2 song, so a song in both tables appears twice. |
+
+## GATE N1 report output
+
+Raw, unedited. Run 2026-10-30 at `96a5370`. Line numbers are counted as the pipeline
+loads the lines; no lyric text. "Refused stretches" read `genius a-b / lrc c-d`
+(inclusive indexes, `-` for none on that side).
+
+```text
+Folder /home/ken/shared-drives/D:/Shared/pikaraoke-songs. Fit thresholds in force: LRC_MAX_GAP_S=15.
+
+Genius pages fetched (id | title | artist):
+- 12047339 | Saja Boys - Your Idol (Romanized) | Genius Romanizations
+- 12045295 | HUNTR/X - Golden (Romanized) | Genius Romanizations
+- 12100816 | HUNTR/X - Takedown (Romanized) | Genius Romanizations
+- 12040325 | Saja Boys - Soda Pop (Romanized) | Genius Romanizations
+
+Table 1: the named songs
+
+| Song | Sheet | LRC fit | Paired on | Genius lines | LRC lines (paired/file) | Same-start LRC lines | Text pairs | Text pairs (sheet cleaned too) | Position pairs | Position stretches | Refused stretches | Gap s | LRC check | Viable | Reload changed/dropped | fit.lines = reload |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| ‘Your Idol’ Lyric Video _ KPop Demon Hun | genius 12047339 | fits (transcribe) | fitted lines | 63 | 59/59 | 0 | 41 | 43 | 9 | 6 | genius - / lrc 0-7; genius 1-4 / lrc -; genius 24-28 / lrc 28-28; genius 46-48 / lrc -; genius 52-52 / lrc - | -14 | viable | no | 23/5 | yes |
+| “Golden” Official Lyric Video _ KPop Dem | genius 12045295 | fits (transcribe) | fitted lines | 54 | 46/46 | 0 | 35 | 35 | 1 | 1 | genius 1-7 / lrc 1-2; genius 11-11 / lrc 6-7; genius 16-17 / lrc 12-12; genius 20-22 / lrc 15-16; genius 36-37 / lrc 30-30; genius 40-42 / lrc 33-34 | -4 | viable | no | 8/0 | yes |
+| “Takedown” Official Choreography _ KPop  | genius 12100816 | fits (transcribe) | fitted lines | 67 | 52/52 | 0 | 41 | 44 | 7 | 7 | genius 10-10 / lrc 10-11; genius 12-15 / lrc 13-13; genius 18-19 / lrc -; genius 21-21 / lrc -; genius 23-23 / lrc -; genius 25-25 / lrc -; genius 39-39 / lrc -; genius 41-43 / lrc 33-33; genius 45-45 / lrc -; genius 59-59 / lrc -; genius 61-61 / lrc -; genius 63-63 / lrc -; genius 65-65 / lrc - | -10 | viable | no | 12/1 | yes |
+| 'Soda Pop' Official Lyric Video _ KPop D | genius 12040325 | refused/disagree (transcribe) | all lines | 64 | 59/59 | 0 | 43 | 45 | 9 | 6 | genius 13-22 / lrc 13-18; genius 24-25 / lrc 20-20 | +0 | refused | no | 6/0 | n/a |
+| 정국 (Jung Kook) 'Seven (feat. Latto)' Off | bundle | fits (transcribe) | fitted lines | 79 | 77/77 | 0 | 51 | 59 | 10 | 5 | genius - / lrc 4-4; genius 5-5 / lrc -; genius 10-11 / lrc 10-12; genius 16-17 / lrc 17-17; genius - / lrc 26-26; genius 27-27 / lrc -; genius 32-33 / lrc 32-34; genius 38-38 / lrc 39-42; genius 40-42 / lrc -; genius 44-47 / lrc 45-46; genius 77-78 / lrc 76-76 | -14 | viable | no | 18/2 | yes |
+
+Table 2: every Genius-origin song with a usable LRC (8), bundle sheets
+
+| Song | Sheet | LRC fit | Paired on | Genius lines | LRC lines (paired/file) | Same-start LRC lines | Text pairs | Text pairs (sheet cleaned too) | Position pairs | Position stretches | Refused stretches | Gap s | LRC check | Viable | Reload changed/dropped | fit.lines = reload |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 'Soda Pop' Official Lyric Video _ KPop D | bundle | refused/disagree (transcribe) | all lines | 64 | 59/59 | 0 | 45 | 47 | 7 | 4 | genius 13-22 / lrc 13-18; genius 24-25 / lrc 20-20 | +0 | refused | no | 6/0 | n/a |
+| Ed Sheeran - Best Part Of Me (feat. YEBB | bundle | fits (transcribe) | fitted lines | 38 | 38/38 | 0 | 38 | 38 | 0 | 0 | - | -1 | viable | yes | 0/0 | yes |
+| Eminem - Lose Yourself | bundle | fits (transcribe) | fitted lines | 87 | 93/93 | 0 | 53 | 59 | 7 | 7 | genius - / lrc 0-0; genius 1-1 / lrc 2-3; genius 7-8 / lrc 9-9; genius 12-16 / lrc 13-19; genius 18-18 / lrc 21-22; genius 30-36 / lrc 34-41; genius 42-44 / lrc 47-50; genius 68-71 / lrc 74-76; genius 75-78 / lrc 80-84 | -1 | viable | no | 6/0 | yes |
+| Josh Gad - In Summer (From 'Frozen'_Sing | bundle | fits (transcribe) | fitted lines | 31 | 21/21 | 0 | 16 | 16 | 0 | 0 | genius 0-0 / lrc -; genius 2-2 / lrc -; genius 5-6 / lrc 3-3; genius 8-9 / lrc 5-5; genius 13-14 / lrc 9-9; genius 16-16 / lrc -; genius 19-19 / lrc -; genius 21-22 / lrc 14-14; genius 25-26 / lrc 17-17; genius 29-29 / lrc - | +1 | viable | no | 0/0 | yes |
+| Stay Gold (Official Music Video) from Th | bundle | fits (transcribe) | fitted lines | 38 | 51/51 | 0 | 27 | 27 | 0 | 0 | genius 2-2 / lrc 2-3; genius 5-5 / lrc 6-7; genius 10-10 / lrc 12-13; genius 16-16 / lrc 19-20; genius 21-21 / lrc 25-26; genius 24-24 / lrc 29-30; genius 27-27 / lrc 33-34; genius 32-33 / lrc 39-44; genius 36-37 / lrc 47-50 | +0 | viable | no | 0/0 | yes |
+| “Golden” Official Lyric Video _ KPop Dem | bundle | fits (transcribe) | fitted lines | 51 | 46/46 | 0 | 34 | 34 | 2 | 1 | genius 0-3 / lrc -; genius 5-11 / lrc 1-2; genius 15-15 / lrc -; genius 23-23 / lrc 13-14; genius - / lrc 16-16; genius 39-39 / lrc 31-32; genius - / lrc 34-34; genius 46-46 / lrc 40-41 | -4 | viable | no | 6/1 | yes |
+| 周杰倫 Jay Chou【晴天 Sunny Day】-Official Musi | bundle | refused/too_few (transcribe) | all lines | 42 | 53/53 | 0 | 0 | 0 | 0 | 0 | genius 0-41 / lrc 0-52 | -19 | refused | no | 2/0 | n/a |
+| 정국 (Jung Kook) 'Seven (feat. Latto)' Off | bundle | fits (transcribe) | fitted lines | 79 | 77/77 | 0 | 51 | 59 | 10 | 5 | genius - / lrc 4-4; genius 5-5 / lrc -; genius 10-11 / lrc 10-12; genius 16-17 / lrc 17-17; genius - / lrc 26-26; genius 27-27 / lrc -; genius 32-33 / lrc 32-34; genius 38-38 / lrc 39-42; genius 40-42 / lrc -; genius 44-47 / lrc 45-46; genius 77-78 / lrc 76-76 | -14 | viable | no | 18/2 | yes |
+
+Lines the saved sheet's reload changes or drops (line indexes in the Genius sheet):
+- ‘Your Idol’ Lyric Video _ KPop Demon Hun: changed on reload 1,2,3,4,6,8,10,12,17,18,19,20,21,22,39,40,41,42,43,44,55,56,59; dropped 0,25,27,47,53
+- “Golden” Official Lyric Video _ KPop Dem: changed on reload 4,7,8,10,48,49,50,52; dropped -
+- “Takedown” Official Choreography _ KPop : changed on reload 1,3,27,37,42,44,45,59,61,63,64,65; dropped 19
+- 'Soda Pop' Official Lyric Video _ KPop D: changed on reload 7,9,11,16,55,57; dropped -
+- 정국 (Jung Kook) 'Seven (feat. Latto)' Off: changed on reload 5,7,11,27,29,33,38,40,42,44,45,49,65,68,71,72,73,75; dropped 47,64
+- 'Soda Pop' Official Lyric Video _ KPop D: changed on reload 7,9,11,16,55,57; dropped -
+- Eminem - Lose Yourself: changed on reload 21,25,46,50,78,82; dropped -
+- “Golden” Official Lyric Video _ KPop Dem: changed on reload 8,11,12,13,46,49; dropped 15
+- 周杰倫 Jay Chou【晴天 Sunny Day】-Official Musi: changed on reload 12,25; dropped -
+- 정국 (Jung Kook) 'Seven (feat. Latto)' Off: changed on reload 5,7,11,27,29,33,38,40,42,44,45,49,65,68,71,72,73,75; dropped 47,64
+```
