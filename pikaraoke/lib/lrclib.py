@@ -70,24 +70,28 @@ def parse_lrc_lines(lrc_text: str) -> tuple[list[str], list[float]]:
     metadata tags, unstamped lines, and stamps with empty text. Output
     is sorted by time.
     """
-    texts: list[str] = []
-    starts: list[float] = []
+    sung = [(start, text) for start, text in lrc_stamps(lrc_text) if text]
+    return [text for _, text in sung], [start for start, _ in sung]
+
+
+def lrc_stamps(lrc_text: str) -> list[tuple[float, str]]:
+    """Every ``(start seconds, text)`` stamp of LRC synced lyrics, sorted by time.
+
+    Keeps the stamps with no text, LRCLIB's mark for where a line ends before a
+    break; :func:`parse_lrc_lines` drops them.
+    """
+    stamps: list[tuple[float, str]] = []
     for raw in lrc_text.splitlines():
-        stamps = []
+        starts = []
         pos = 0
         for m in _LRC_STAMP.finditer(raw):
             if m.start() != pos:
                 break
-            stamps.append(60 * int(m.group(1)) + float(m.group(2)))
+            starts.append(60 * int(m.group(1)) + float(m.group(2)))
             pos = m.end()
         text = raw[pos:].strip()
-        if not stamps or not text:
-            continue
-        for t in stamps:
-            texts.append(text)
-            starts.append(t)
-    order = sorted(range(len(starts)), key=starts.__getitem__)
-    return [texts[i] for i in order], [starts[i] for i in order]
+        stamps.extend((start, text) for start in starts)
+    return sorted(stamps, key=lambda stamp: stamp[0])
 
 
 # LRCLIB synced lines carry only a start stamp; the timing prior needs a

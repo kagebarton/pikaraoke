@@ -22,6 +22,7 @@ the lines nothing was heard for.
 
 import itertools
 import logging
+from bisect import bisect_right
 from dataclasses import dataclass
 from datetime import timedelta
 from statistics import median
@@ -181,26 +182,31 @@ def heard_streams(bundle: dict | None, asr_json3: str | None) -> dict[str, list[
 def lrc_to_srt(lrc_text: str) -> str:
     """The synced lines of an LRC as SRT text, so :func:`fit_slice` takes them as subtitles.
 
-    LRC stamps only starts: each line ends at the next start, and the last holds
-    ``LRC_LAST_LINE_HOLD_S``. Lines stamped at the same start (a duet's two singers)
-    share one cue, as a two-line subtitle does; a cue of no length would be dropped.
-    An LRC with no timed line gives ``""``, which ``fit_slice`` refuses as ``not_srt``.
+    LRC stamps only starts: each line ends at the next later stamp, a blank one
+    included (LRCLIB's mark for a break, so the line doesn't run across the
+    instrumental), and the last holds ``LRC_LAST_LINE_HOLD_S``. Lines stamped at
+    the same start (a duet's two singers) share one cue, as a two-line subtitle
+    does; a cue of no length would be dropped. An LRC with no timed line gives
+    ``""``, which ``fit_slice`` refuses as ``not_srt``.
     """
-    texts, spans = lrclib.cue_spans_from_lrc(lrc_text)
+    stamps = lrclib.lrc_stamps(lrc_text)
+    times = [start for start, _ in stamps]
     cues: list[srt.Subtitle] = []
-    for text, (start, end) in zip(texts, spans):
-        if cues and cues[-1].start.total_seconds() == start:
+    last_start: float | None = None  # as parsed: a timedelta may not give it back exactly
+    for start, text in stamps:
+        if not text:
+            continue
+        if start == last_start:
             cues[-1].content += "\n" + text
-            cues[-1].end = timedelta(seconds=end)
-        else:
-            cues.append(
-                srt.Subtitle(
-                    index=0,
-                    start=timedelta(seconds=start),
-                    end=timedelta(seconds=end),
-                    content=text,
-                )
+            continue
+        later = bisect_right(times, start)
+        end = times[later] if later < len(times) else start + lrclib.LRC_LAST_LINE_HOLD_S
+        cues.append(
+            srt.Subtitle(
+                index=0, start=timedelta(seconds=start), end=timedelta(seconds=end), content=text
             )
+        )
+        last_start = start
     return srt.compose(cues)
 
 
