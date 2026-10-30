@@ -1377,42 +1377,6 @@ class TestLrcTimingRepair:
         assert processing.enqueue_regen.call_args.args[0].song.plan.custom_text == check.fit.srt
 
 
-class TestCustomStartMatchOnDisk:
-    """The LRCLIB match the repair page lists first for LRCLIB timing."""
-
-    @pytest.fixture
-    def song(self, tmp_path):
-        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
-        return video
-
-    def lrc(self, tmp_path, song):
-        tools, _ = make_tools(tmp_path, [str(song)])
-        return tools.custom_start(str(song))["lrc"]
-
-    def test_a_match_on_disk_is_its_record_without_the_lyrics(self, tmp_path, song):
-        path = lrclib.lrc_path(song)
-        path.parent.mkdir()
-        lrclib.write_lrc(path, LRC_RECORD)
-
-        assert self.lrc(tmp_path, song) == {
-            "id": 11,
-            "trackName": "Invented Song",
-            "artistName": "Invented Artist",
-            "albumName": "Invented Album",
-            "duration": CLIP_S,
-        }
-
-    def test_no_file_a_skip_marker_and_an_unreadable_file_are_no_match(self, tmp_path, song):
-        assert self.lrc(tmp_path, song) is None
-
-        lrclib.lrc_path(song).parent.mkdir()
-        lrclib.write_skip_marker(lrclib.lrc_path(song))
-        assert self.lrc(tmp_path, song) is None
-
-        lrclib.lrc_path(song).write_bytes("caf\xe9".encode("latin-1"))
-        assert self.lrc(tmp_path, song) is None
-
-
 class TestCurrentLines:
     """What an LRCLIB timing search scores its matches against."""
 

@@ -1688,7 +1688,7 @@ class TestLrcPutBackWhenTheRegenDoesNotFinish:
 
         self._run(events, preferences, mock_orchestrator, tmp_path, regen)
 
-        assert lrclib.is_skip_marker(lrc)
+        assert lrclib.read_song_lrc(regen.song.song_path).state == "skipped"
 
     def test_an_lrc_written_by_a_run_that_then_fails_is_removed(
         self, events, preferences, mock_orchestrator, tmp_path, prepared

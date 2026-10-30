@@ -848,10 +848,9 @@ class TestLrclibFillWiring:
         assert "lrclib" not in bundle["lyrics"]
         assert bundle["config"]["lrclib_fill"] is False
 
-    def test_fill_hook_error_is_contained(self, tmp_path, monkeypatch):
+    def test_an_unreadable_lrc_records_why_and_fills_nothing(self, tmp_path, monkeypatch):
         # A corrupt .lrc (e.g. an interrupted copy leaving invalid UTF-8)
-        # must not fail the align stage: the hook logs, records the bail,
-        # and the song ships without fills.
+        # must not fail the align stage: the song ships without fills.
         stage, ctx, worker = self._make(tmp_path, monkeypatch)
         lrc = ctx.song_path.parent / "lyrics" / f"{ctx.song_path.stem}.lrc"
         lrc.write_bytes(b"[00:10.00]alpha\xff\xfe")
@@ -859,7 +858,10 @@ class TestLrclibFillWiring:
         stage.run(ctx)
 
         bundle = self._bundle(ctx)
-        assert bundle["joint_stats"]["lrclib_fill"] == {"eligible": False, "reason": "error"}
+        assert bundle["joint_stats"]["lrclib_fill"] == {
+            "eligible": False,
+            "reason": "unreadable_lrc",
+        }
         assert "lrclib" not in bundle["lyrics"]
         ass_path = ctx.song_path.parent / "karaoke" / f"{ctx.song_path.stem}.ass"
         dialogues = [

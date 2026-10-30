@@ -345,21 +345,21 @@ class TestLrcOnDisk:
         video = make_video(tmp_path)
         write_bundle(tmp_path, video.stem)
 
-        assert library_status.song_status(video).lrc_on_disk is False
+        assert library_status.song_status(video).lrc_match is None
 
     def test_a_skip_marker_is_not_usable(self, tmp_path):
         video = make_video(tmp_path)
         write_bundle(tmp_path, video.stem)
         lrclib.write_skip_marker(self.lrc(tmp_path, video))
 
-        assert library_status.song_status(video).lrc_on_disk is False
+        assert library_status.song_status(video).lrc_match is None
 
     def test_an_lrc_that_cannot_be_read_is_not_usable(self, tmp_path):
         video = make_video(tmp_path)
         write_bundle(tmp_path, video.stem)
         self.lrc(tmp_path, video).write_bytes("[00:01.00]caf\xe9\n".encode("latin-1"))
 
-        assert library_status.song_status(video).lrc_on_disk is False
+        assert library_status.song_status(video).lrc_match is None
 
     def test_a_real_lrc_is_usable_whatever_the_bundle_recorded(self, tmp_path):
         video = make_video(tmp_path)
@@ -368,14 +368,26 @@ class TestLrcOnDisk:
 
         status = library_status.song_status(video)
 
-        assert status.lrc_on_disk is True
+        assert status.lrc_match is not None
         assert status.lrclib_state == "none"  # the bundle says no match; the disk says otherwise
 
     def test_a_real_lrc_is_usable_with_no_bundle_too(self, tmp_path):
         video = make_video(tmp_path)
         self.lrc(tmp_path, video).write_text("[00:01.00]one\n", encoding="utf-8")
 
-        assert library_status.song_status(video).lrc_on_disk is True
+        assert library_status.song_status(video).lrc_match is not None
+
+    def test_the_match_is_its_record_without_the_lyrics(self, tmp_path):
+        """What the repair page lists first for LRCLIB timing."""
+        video = make_video(tmp_path)
+        record = {"id": 11, "trackName": "Invented Song", "artistName": "Invented Artist"}
+        lrclib.write_lrc(self.lrc(tmp_path, video), {**record, "syncedLyrics": "[00:01.00]one\n"})
+
+        assert library_status.song_status(video).lrc_match == {
+            **record,
+            "albumName": None,
+            "duration": None,
+        }
 
 
 class TestSourceLists:

@@ -32,7 +32,7 @@ def _joint_subline(status: SongStatus) -> str:
     elif state == "skipped":
         parts.append(_("LRCLIB skipped"))
     else:
-        parts.append(_("LRC on disk") if status.lrc_on_disk else _("no LRCLIB match"))
+        parts.append(_("LRC on disk") if status.lrc_match is not None else _("no LRCLIB match"))
     return " · ".join(parts)
 
 
@@ -103,7 +103,7 @@ def _repair_source(status: SongStatus) -> str | None:
     """
     if status.method != "joint":
         return None
-    return "lrclib" if status.lrc_on_disk else "caption"
+    return "lrclib" if status.lrc_match is not None else "caption"
 
 
 def _error(message: str, status: int):

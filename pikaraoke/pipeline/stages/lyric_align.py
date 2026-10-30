@@ -208,15 +208,24 @@ class LyricAlignStage(BaseStage):
         capture_lrclib_ref: dict | None = None
         if capture_method_used == "joint" and cfg.lrclib_fill:
             try:
-                lrc_path = _find_lrclib_lrc(ctx.song_path)
-                if lrc_path is not None:
-                    synced_text, lrc_meta = lrclib.read_lrc(lrc_path)
+                lrc = lrclib.read_song_lrc(ctx.song_path)
+                if lrc.state == "unreadable":
+                    # Not searched over either (ensure_lrc keeps any file): it was put there.
+                    capture_joint_stats["lrclib_fill"] = {
+                        "eligible": False,
+                        "reason": "unreadable_lrc",
+                    }
+                elif lrc.state != "missing":
+                    # A skip marker has no lines, so it maps none and nothing fills;
+                    # the bundle still records it.
                     capture_lrclib_ref = {
                         # .as_posix(): forward slashes so a bundle written on
                         # Windows still resolves on a Linux consumer (regen
                         # tool, offline harness) -- str() would leak backslashes.
-                        "lrc_file": lrc_path.relative_to(ctx.song_path.parent).as_posix(),
-                        **lrc_meta,
+                        "lrc_file": lrclib.lrc_path(ctx.song_path)
+                        .relative_to(ctx.song_path.parent)
+                        .as_posix(),
+                        **(lrc.meta or {}),
                     }
                     if env is None:
                         capture_joint_stats["lrclib_fill"] = {"eligible": False, "reason": "no_env"}
@@ -226,7 +235,7 @@ class LyricAlignStage(BaseStage):
                             lyrics_lines,
                             align_lines,
                             capture_transcribe_words,
-                            synced_text,
+                            lrc.text,
                             env,
                             margin_s=cfg.joint_margin_s,
                             max_edit_ratio=cfg.joint_max_edit_ratio,
@@ -1077,17 +1086,6 @@ def _find_youtube_srt_path(song_path: Path) -> Path | None:
         if candidate.is_file() and not is_generated(candidate):
             return candidate
     return None
-
-
-def _find_lrclib_lrc(song_path: Path) -> Path | None:
-    """Return the persisted LRCLIB variant for ``song_path`` if one exists.
-
-    Mirrors :func:`_find_youtube_srt_path`; the path itself is
-    :meth:`pikaraoke.lib.lrclib.ensure_lrc`'s layout
-    (``lyrics/<stem>.lrc``).
-    """
-    candidate = song_path.parent / "lyrics" / f"{song_path.stem}.lrc"
-    return candidate if candidate.is_file() else None
 
 
 def generate_ass(line_objects: list[dict], cfg: PipelineConfig) -> str:

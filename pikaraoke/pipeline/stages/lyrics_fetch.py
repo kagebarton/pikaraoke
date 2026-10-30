@@ -177,12 +177,16 @@ class LyricsFetchStage(BaseStage):
             sheet_lines = [item["text"] for item in parse_lyric_lines(song.text)]
             media_dur = self._media_duration(ctx)
             path = lrclib.ensure_lrc(ctx.song_path, song.title, song.artist, sheet_lines, media_dur)
-            if path is not None and lrclib.is_skip_marker(path):
-                logger.info("LRCLIB: skipped by the admin's choice (%s), no fill", path.name)
-            elif path is not None:
-                logger.info("LRCLIB: variant available for fill (%s)", path.name)
-            else:
+            if path is None:
                 logger.info("LRCLIB: no synced variant found — fill unavailable")
+                return
+            state = lrclib.read_song_lrc(ctx.song_path).state
+            if state == "skipped":
+                logger.info("LRCLIB: skipped by the admin's choice (%s), no fill", path.name)
+            elif state == "unreadable":
+                logger.info("LRCLIB: %s can't be read and is kept as placed, no fill", path.name)
+            else:
+                logger.info("LRCLIB: variant available for fill (%s)", path.name)
         except Exception:
             logger.exception("LRCLIB: resolve failed — fill unavailable")
 
