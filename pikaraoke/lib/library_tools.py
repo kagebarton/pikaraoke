@@ -38,9 +38,7 @@ from pikaraoke.lib.library_links import (
     read_playlist,
 )
 from pikaraoke.lib.library_regen import (
-    CUSTOM_SRT_SUFFIX,
-    CUSTOM_TEXT_SUFFIX,
-    SHEET_KINDS,
+    SHEETS,
     VIDEO_EXTS,
     CaptionCheck,
     Plan,
@@ -51,16 +49,14 @@ from pikaraoke.lib.library_regen import (
     check_caption,
     custom_plan,
     custom_sheet_file,
-    custom_sheet_plan,
     default_query,
     fetch_or_prompt_plan,
     find_local_srt,
     gate_on_disk_caption,
-    lrc_sheet_plan,
     media_duration,
-    movie_sheet_plan,
     read_bundle,
     reuse_plan,
+    sheet_plan,
     watch_url,
 )
 from pikaraoke.lib.library_status import (
@@ -91,7 +87,7 @@ logger = logging.getLogger(__name__)
 BUSY_MESSAGE = "This song has a regen waiting or running."
 
 # The lyric sources :meth:`LibraryTools.repair` takes.
-REPAIR_SOURCES = ("caption", "genius", *SHEET_KINDS, "transcribe")
+REPAIR_SOURCES = ("caption", "genius", *SHEETS, "transcribe")
 
 # Fetched Genius songs kept, so a repair's preview, its LRCLIB step and the
 # final queue scrape the page once.
@@ -544,22 +540,23 @@ class LibraryTools:
             genius.get("title") or default_query(job.song_path), genius.get("artist") or ""
         )
         return {
-            "text": self._sheet_on_disk(job.song_path, CUSTOM_TEXT_SUFFIX)
+            "text": self._sheet_on_disk(job.song_path, "custom")
             or "\n".join(lyrics.get("lines") or []),
-            "movie": self._sheet_on_disk(job.song_path, CUSTOM_SRT_SUFFIX),
+            "movie": self._sheet_on_disk(job.song_path, "movie"),
             "lrc": lrc,
             "query": " ".join(term for term in terms if term),
         }
 
     @staticmethod
-    def _sheet_on_disk(song: Path, suffix: str) -> str:
-        """The song's custom sheet of one kind (``suffix``), or "" when it has none or it can't be read."""
+    def _sheet_on_disk(song: Path, kind: str) -> str:
+        """The song's custom sheet of the ``kind``, or "" when it has none or it can't be read."""
+        sheet = custom_sheet_file(song, kind)
         try:
-            return custom_sheet_file(song, suffix).read_text(encoding="utf-8")
+            return sheet.read_text(encoding="utf-8")
         except FileNotFoundError:
             return ""
         except (OSError, UnicodeDecodeError) as e:
-            logger.warning("Could not read the %s sheet of %s: %s", suffix, song.name, e)
+            logger.warning("Could not read the custom sheet %s: %s", sheet.name, e)
             return ""
 
     @staticmethod
@@ -748,7 +745,7 @@ class LibraryTools:
             job.plan = self._transcribe_plan()
         else:
             raise RegenError("Unknown lyric source.")
-        job.replaces_custom = source not in SHEET_KINDS
+        job.replaces_custom = source not in SHEETS
         self._queue(job, reset=True, label="Repair")
 
     def open_run(self, mode: str) -> None:
@@ -1226,7 +1223,7 @@ class LibraryTools:
         self, song: Path, text: object, lrclib_id: int | None, lrclib_skip: bool
     ) -> Plan:
         custom_sheet_lines(text)  # refuses an unusable sheet before anything is fetched
-        plan = custom_sheet_plan(song, _pasted_text(text, "lyrics", CUSTOM_SHEET_MAX_CHARS))
+        plan = sheet_plan(song, "custom", _pasted_text(text, "lyrics", CUSTOM_SHEET_MAX_CHARS))
         self._apply_lrclib_pick(plan, lrclib_id, lrclib_skip)
         return plan
 
@@ -1235,7 +1232,7 @@ class LibraryTools:
         check = self._fit_movie_slice(job, text)
         if check.fit.status != FITS:
             raise MovieSliceRefused(check)
-        return movie_sheet_plan(job.song_path, check.fit.srt)
+        return sheet_plan(job.song_path, "movie", check.fit.srt)
 
     def _lrc_repair_plan(self, job: SongJob, lrclib_id: int | None, allow_gap: bool) -> Plan:
         """The plan that saves the LRCLIB match's lines, fitted to the clip, as the song's sheet.
@@ -1248,7 +1245,7 @@ class LibraryTools:
         check = self._fit_lrc_timing(job, record)
         if not (check.viable or (allow_gap and check.overridable)):
             raise LrcTimingRefused(check)
-        plan = lrc_sheet_plan(job.song_path, check.fit.srt)
+        plan = sheet_plan(job.song_path, "lrclib", check.fit.srt)
         if lrclib_id is not None:
             plan.lrclib_record = record
         return plan

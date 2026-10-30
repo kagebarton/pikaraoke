@@ -51,9 +51,9 @@ def _write_sheet(
     folder: Path,
     stem: str,
     text: str = "la la la\nsecond line\n",
-    suffix: str = lr.CUSTOM_TEXT_SUFFIX,
+    kind: str = "custom",
 ) -> Path:
-    sheet = folder / "lyrics" / f"{stem}{suffix}"
+    sheet = lr.custom_sheet_file(folder / f"{stem}.mp4", kind)
     sheet.parent.mkdir(exist_ok=True)
     sheet.write_text(text, encoding="utf-8")
     return sheet
@@ -63,14 +63,14 @@ MOVIE_SRT = "1\n00:00:01,000 --> 00:00:03,000\nla la la\n"
 
 
 def _write_movie_sheet(folder: Path, stem: str, text: str = MOVIE_SRT) -> Path:
-    return _write_sheet(folder, stem, text, lr.CUSTOM_SRT_SUFFIX)
+    return _write_sheet(folder, stem, text, "movie")
 
 
 LRC_SRT = "1\n00:00:05,000 --> 00:00:08,000\nla la la\n"
 
 
 def _write_lrc_sheet(folder: Path, stem: str, text: str = LRC_SRT) -> Path:
-    return _write_sheet(folder, stem, text, lr.LRC_SRT_SUFFIX)
+    return _write_sheet(folder, stem, text, "lrclib")
 
 
 def _is_srt_plan(plan) -> bool:
@@ -460,20 +460,17 @@ class TestSheetPlans:
     """The three kinds of sheet differ only in suffix, origin and label."""
 
     @pytest.mark.parametrize(
-        ("make", "suffix", "origin", "label", "kind"),
+        ("kind", "suffix", "origin", "label"),
         [
-            (lr.custom_sheet_plan, ".custom.txt", "custom", "custom sheet", "custom"),
-            (lr.movie_sheet_plan, ".custom.srt", "movie_srt", "movie subtitles", "movie"),
-            (lr.lrc_sheet_plan, ".lrclib.srt", "lrclib_srt", "LRCLIB timing", "lrclib"),
+            ("custom", ".custom.txt", "custom", "custom sheet"),
+            ("movie", ".custom.srt", "movie_srt", "movie subtitles"),
+            ("lrclib", ".lrclib.srt", "lrclib_srt", "LRCLIB timing"),
         ],
-        ids=["custom", "movie", "lrc"],
     )
-    def test_each_kind_is_a_seed_plan_for_its_own_file(
-        self, tmp_path, make, suffix, origin, label, kind
-    ):
+    def test_each_kind_is_a_seed_plan_for_its_own_file(self, tmp_path, kind, suffix, origin, label):
         song = tmp_path / f"{YT_STEM}.mp4"
 
-        plan = make(song, "text\n")
+        plan = lr.sheet_plan(song, kind, "text\n")
 
         assert (plan.kind, plan.seed, plan.label, plan.custom_text) == (
             "seed",
@@ -483,7 +480,9 @@ class TestSheetPlans:
         )
         assert plan.lyrics_path == tmp_path / "lyrics" / f"{YT_STEM}{suffix}"
         assert lr.sheet_kind(plan.lyrics_path) == kind
-        assert make(song).custom_text is None  # replaying: the sheet is already on disk
+        assert (
+            lr.sheet_plan(song, kind).custom_text is None
+        )  # replaying: the sheet is already on disk
 
 
 # ---------------------------------------------------------------------------
@@ -1236,7 +1235,9 @@ class TestApplyCustomChoice:
         return job
 
     def test_a_custom_repair_writes_the_sheet(self, tmp_path):
-        job = self._job_with(tmp_path, lr.custom_sheet_plan(tmp_path / f"{YT_STEM}.mp4", "a\nb\n"))
+        job = self._job_with(
+            tmp_path, lr.sheet_plan(tmp_path / f"{YT_STEM}.mp4", "custom", "a\nb\n")
+        )
 
         lr.apply_custom_choice(job)
 
@@ -1244,7 +1245,9 @@ class TestApplyCustomChoice:
 
     def test_a_custom_repair_replaces_an_older_sheet(self, tmp_path):
         _write_sheet(tmp_path, YT_STEM, "old words\n")
-        job = self._job_with(tmp_path, lr.custom_sheet_plan(tmp_path / f"{YT_STEM}.mp4", "new\n"))
+        job = self._job_with(
+            tmp_path, lr.sheet_plan(tmp_path / f"{YT_STEM}.mp4", "custom", "new\n")
+        )
 
         lr.apply_custom_choice(job)
 
@@ -1281,7 +1284,7 @@ class TestApplyCustomChoice:
 
     def test_a_movie_repair_writes_the_srt_sheet(self, tmp_path):
         song = tmp_path / f"{YT_STEM}.mp4"
-        job = self._job_with(tmp_path, lr.movie_sheet_plan(song, MOVIE_SRT))
+        job = self._job_with(tmp_path, lr.sheet_plan(song, "movie", MOVIE_SRT))
 
         lr.apply_custom_choice(job)
 
@@ -1291,7 +1294,9 @@ class TestApplyCustomChoice:
 
     def test_saving_a_movie_sheet_deletes_the_typed_one(self, tmp_path):
         typed = _write_sheet(tmp_path, YT_STEM)
-        job = self._job_with(tmp_path, lr.movie_sheet_plan(tmp_path / f"{YT_STEM}.mp4", MOVIE_SRT))
+        job = self._job_with(
+            tmp_path, lr.sheet_plan(tmp_path / f"{YT_STEM}.mp4", "movie", MOVIE_SRT)
+        )
 
         lr.apply_custom_choice(job)
 
@@ -1300,7 +1305,7 @@ class TestApplyCustomChoice:
 
     def test_a_plan_that_spells_the_song_path_another_way_keeps_its_sheet(self, tmp_path):
         roundabout = tmp_path / "lyrics" / ".." / f"{YT_STEM}.mp4"
-        job = self._job_with(tmp_path, lr.movie_sheet_plan(roundabout, MOVIE_SRT))
+        job = self._job_with(tmp_path, lr.sheet_plan(roundabout, "movie", MOVIE_SRT))
 
         lr.apply_custom_choice(job)
 
@@ -1308,7 +1313,9 @@ class TestApplyCustomChoice:
 
     def test_saving_a_typed_sheet_deletes_the_movie_one(self, tmp_path):
         movie = _write_movie_sheet(tmp_path, YT_STEM)
-        job = self._job_with(tmp_path, lr.custom_sheet_plan(tmp_path / f"{YT_STEM}.mp4", "new\n"))
+        job = self._job_with(
+            tmp_path, lr.sheet_plan(tmp_path / f"{YT_STEM}.mp4", "custom", "new\n")
+        )
 
         lr.apply_custom_choice(job)
 
@@ -1317,7 +1324,7 @@ class TestApplyCustomChoice:
 
     def test_saving_a_sheet_leaves_another_songs_sheets_alone(self, tmp_path):
         other = _write_movie_sheet(tmp_path, "Song.live")
-        job = self._job_with(tmp_path, lr.custom_sheet_plan(tmp_path / "Song.mp4", "new\n"))
+        job = self._job_with(tmp_path, lr.sheet_plan(tmp_path / "Song.mp4", "custom", "new\n"))
 
         lr.apply_custom_choice(job)
 
@@ -1331,30 +1338,22 @@ class TestApplyCustomChoice:
 
         assert sheet.read_text(encoding="utf-8") == "kept\n"
 
-    @pytest.mark.parametrize(
-        ("make", "own_suffix"),
-        [
-            (lr.custom_sheet_plan, lr.CUSTOM_TEXT_SUFFIX),
-            (lr.movie_sheet_plan, lr.CUSTOM_SRT_SUFFIX),
-            (lr.lrc_sheet_plan, lr.LRC_SRT_SUFFIX),
-        ],
-        ids=["typed", "movie", "lrc"],
-    )
-    def test_saving_one_kind_of_sheet_deletes_the_other_two(self, tmp_path, make, own_suffix):
+    @pytest.mark.parametrize("kind", lr.SHEETS)
+    def test_saving_one_kind_of_sheet_deletes_the_other_two(self, tmp_path, kind):
         """A song keeps one sheet, whichever kind."""
-        for suffix in lr.CUSTOM_SHEET_SUFFIXES:
-            _write_sheet(tmp_path, YT_STEM, "old\n", suffix)
-        job = self._job_with(tmp_path, make(tmp_path / f"{YT_STEM}.mp4", "new\n"))
+        for other in lr.SHEETS:
+            _write_sheet(tmp_path, YT_STEM, "old\n", other)
+        job = self._job_with(tmp_path, lr.sheet_plan(tmp_path / f"{YT_STEM}.mp4", kind, "new\n"))
 
         lr.apply_custom_choice(job)
 
         sheets = sorted(p.name for p in (tmp_path / "lyrics").iterdir())
-        assert sheets == [f"{YT_STEM}{own_suffix}"]
+        assert sheets == [lr.custom_sheet_file(job.song_path, kind).name]
         assert lr.custom_sheet_path(job.song_path).read_text(encoding="utf-8") == "new\n"
 
     def test_an_lrc_repair_writes_the_srt_sheet(self, tmp_path):
         song = tmp_path / f"{YT_STEM}.mp4"
-        job = self._job_with(tmp_path, lr.lrc_sheet_plan(song, LRC_SRT))
+        job = self._job_with(tmp_path, lr.sheet_plan(song, "lrclib", LRC_SRT))
 
         lr.apply_custom_choice(job)
 
@@ -1418,7 +1417,7 @@ class TestPrepareLyricsCustom:
         assert stage._seed["lyrics_origin"] == "custom"
 
     def test_a_typed_sheet_is_written_before_it_is_read(self, tmp_path, monkeypatch):
-        plan = lr.custom_sheet_plan(tmp_path / f"{YT_STEM}.mp4", "typed line\n")
+        plan = lr.sheet_plan(tmp_path / f"{YT_STEM}.mp4", "custom", "typed line\n")
 
         _, (lyrics_path, _stage) = self._prepare(tmp_path, monkeypatch, plan)
 
@@ -1480,7 +1479,7 @@ class TestPrepareLyricsCustom:
         assert stage._seed["lyrics_origin"] == "movie_srt"
 
     def test_a_saved_movie_sheet_is_written_before_it_is_read(self, tmp_path, monkeypatch):
-        plan = lr.movie_sheet_plan(tmp_path / f"{YT_STEM}.mp4", MOVIE_SRT)
+        plan = lr.sheet_plan(tmp_path / f"{YT_STEM}.mp4", "movie", MOVIE_SRT)
 
         _, (lyrics_path, _stage) = self._prepare(tmp_path, monkeypatch, plan)
 
@@ -1512,7 +1511,7 @@ class TestPrepareLyricsCustom:
         assert stage._seed["lyrics_origin"] == "lrclib_srt"
 
     def test_a_saved_lrc_sheet_is_written_before_it_is_read(self, tmp_path, monkeypatch):
-        plan = lr.lrc_sheet_plan(tmp_path / f"{YT_STEM}.mp4", LRC_SRT)
+        plan = lr.sheet_plan(tmp_path / f"{YT_STEM}.mp4", "lrclib", LRC_SRT)
 
         _, (lyrics_path, _stage) = self._prepare(tmp_path, monkeypatch, plan)
 
