@@ -135,7 +135,8 @@ that queued them is already closed; 7.1f).
   test catches it. Shape: one `sheet_kind` (`custom`, `movie` or none), derived
   once. Deferred 2026-10-29. Record: `/code-review` of `7f07006^..cc88169` on
   tag `archive/movie_subtitles`, finding 8 (not in the plan file).~~ Fixed
-  2026-10-29 on `lyric_source_lists` as `b9cdbda`: `SongStatus.sheet_kind`, with
+  2026-10-29 as `5901020` on `dev` (`b9cdbda` on tag
+  `archive/lyric_source_lists`): `SongStatus.sheet_kind`, with
   `library_regen.sheet_kind` the only place a sheet's suffix is tested.
 - **A movie song can be labelled two ways at once.** Song Info's Lyrics tile
   names the source from the bundle's origin; the Repair page's "current" tag and
@@ -305,9 +306,11 @@ Record: `plans/queue-hold.md` on branch `queue_hold`, the manual checks row.
      fill, as today. Not settled: what "viable" means. Suggested: the fit
      passes, the length gap to the video is small, and the flagged lines are
      shown before the admin confirms. Open to other ideas.
-  Built on branch `lyric_source_lists` (plan `plans/lyric-source-lists.md`),
-  code `fffe85b`, `a014414`, `6af0f06` and their fixes up to `fdc4f65`; Ken's
-  end-to-end checks passed 2026-10-30 (Results row 21). Point 3 ruled
+  Built on branch `lyric_source_lists`, now tag `archive/lyric_source_lists`
+  (plan `plans/lyric-source-lists.md`); landed on `dev` 2026-10-30 as
+  `1a5d059`..`c99e632`, the core being `7e69533`, `1b354c6`, `8767f65` and
+  their fixes up to `39aa25a`. Ken's end-to-end checks passed 2026-10-30
+  (Results row 21). Point 3 ruled
   2026-10-29 (Decision 4): viable means the fit passes and the length gap to
   the video is small, with the flagged lines shown before the admin confirms.
   GATE A set the numbers (Decisions 8-9): a line heard more than 5 s from its
