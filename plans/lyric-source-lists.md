@@ -72,6 +72,18 @@ Ken, 2026-10-29, after Phase 6 (Results row 17):
     song, including one with a leftover `.lrc` and one already timed from an LRCLIB
     match, gets the plain Repair page.
 
+Ken, 2026-10-30, before the review (Phase 6.1):
+
+11. **A fit that passes may override the length limit.** When the fit passes but
+    the gap is over `LRC_MAX_GAP_S`, the card offers a checkbox that enables
+    Regenerate. Case: `NSYNC - Paradise`, a concert clip with talk before the
+    song. Its fit passes (shift about +24 s, speed 1, no flagged run), and the
+    whole 38 s gap is talk and applause outside the fitted lines. A refused fit
+    is never overridable. The checkbox's label is short and its explanation sits
+    behind an (i) `info_tip`, like the card's other notes. What it gives up: the
+    gap was the only guard against extra or cut material at the very start or
+    end, which the flags can't see, so the admin's ear is that check.
+
 Defaults (author's; not ruled, so raise them if they look wrong):
 
 - The lists go by what the **last run used** (the bundle's `lyrics.origin` and
@@ -481,6 +493,42 @@ These are built to the mockup ratified at GATE B. Until then, the expected shape
 - [x] Route tests: admin only; one JSON response for each card status; Repair runs
       the fit again on the server; `preselect` accepts `lrclib`.
 - [x] Commit: `feat(repair): LRCLIB timing as a lyric source on Repair lyrics` (`a014414`).
+- [ ] Checkpoint: review moved to after Phase 6.1 (see Checkpoints below).
+
+### Phase 6.1: length override (Decision 11)
+
+Model: Claude Sonnet 5.5. Built on HEAD `4e8cb26`.
+
+- [x] `LrcTimingCheck` (`library_tools.py`) gains `overridable: bool`: the fit is
+      `FITS` and `viable` is false, so the gap is over the limit or unknown. Keep
+      `viable` as it is.
+- [x] `repair(...)` gains `allow_gap: bool = False`, passed to `_lrc_repair_plan`.
+      It refuses unless `check.viable or (allow_gap and check.overridable)`, still
+      on the check it runs itself. The other sources ignore `allow_gap`.
+- [x] `routes/song_info.py`:
+  - the LRC card (around line 884) also sends `overridable`;
+  - `repair()` reads `allow_gap` from the body. Anything but a JSON boolean is a
+    400, the way `_non_number` handles the ids.
+- [x] `song_repair.html`: when the card is `overridable`, show a checkbox under
+      it, labelled "Use this match anyway". Put the explanation behind an
+      `info_tip`, like the card's other notes: "The video is more than 15 s longer
+      or shorter than this match. That's fine if the extra is talk, applause or an
+      intro before or after the song; those parts get no lyrics. It's wrong if the
+      video skips or adds a section at the start or end. The checks above can't
+      see that, so listen first." Take the 15 s from `LRC_MAX_GAP_S`, not a
+      literal.
+  - Regenerate (line 279) is enabled on `viable`, or on `overridable` with the
+    box ticked.
+  - A new Check fit or a different match clears the box.
+  - Send `allow_gap: true` only when the box is ticked.
+- [x] Tests:
+  - tools: an overridable check with `allow_gap` queues the sheet; without it,
+    it refuses; a refused fit refuses even with `allow_gap`; `overridable` is
+    false on a viable check and on a refused fit;
+  - routes: the card carries `overridable`; a non-boolean `allow_gap` is a 400;
+    `allow_gap` reaches `repair`.
+- [x] Commit: `feat(repair): an LRCLIB fit that passes may override the length limit` (`6af0f06`).
+- [x] Results row, in its own `docs(plans)` commit.
 - [ ] Checkpoint: review due (see Checkpoints below).
 
 ### Phase 7: end to end -> Ken's manual checks
@@ -499,7 +547,11 @@ symlinked; one instance at a time). Log each step in the Results log.
       Don't regenerate unless Ken says to.
 - [ ] Use Repair on Domino: confirm the "couldn't check" note shows over lines
       43-50 (its second chorus, 2:14-2:39) and no flagged run does.
-- [ ] Defying Gravity: confirm Repair refuses with the gap stated.
+- [ ] Defying Gravity: confirm Repair refuses with the gap stated, and that no
+      override box shows (its fit is refused).
+- [ ] Paradise: the card refuses on length and shows the override box with its
+      (i). Tick it, Regenerate on the local GPU, and get Ken's read: no lyrics over
+      the talk, and the song lines on time.
 - [ ] Reset one repaired song: the `.lrclib.srt` survives and is reused.
 - [ ] Update `plans/open-issues.md` in one `docs(plans)` commit:
   - strike the LRCLIB-timing entry and point it at this branch's commits;
@@ -528,13 +580,14 @@ symlinked; one instance at a time). Log each step in the Results log.
 - After Phase 3, at GATE A: hand off to Opus with the branch, HEAD, this file's
   "GATE A report output" section, and the instruction to set the three constants
   and log a Results row.
-- After Phase 6: review due.
-  `/code-review high <phase-1 first commit>^..HEAD`, files in
-  `pikaraoke/lib/{library_status,library_regen,library_tools,srt_slice_fit}.py`,
-  `pikaraoke/routes/{library,song_info}.py`, and the two templates. The three
-  finder angles:
-  1. **Correctness**: is the fit run again on the server, and does a reset keep the
-     sheet kind?
+- After Phase 6.1: review due, over the whole branch.
+  `/code-review high 4a43799^..HEAD`, files in
+  `pikaraoke/lib/{library_status,library_regen,library_tools,srt_slice_fit,lrclib}.py`,
+  `pikaraoke/routes/{library,song_info}.py`, and
+  `pikaraoke/templates/{processing,song_info,song_repair}.html`. The three finder
+  angles:
+  1. **Correctness**: is the fit run again on the server, can the override ever
+     pass a refused fit, and does a reset keep the sheet kind?
   2. **Simplicity**: one `sheet_kind`, one `_sheet_plan`, no copy of the movie
      card.
   3. **Robustness**: a missing or skip-marker LRC, an LRCLIB network failure, and
@@ -561,6 +614,7 @@ symlinked; one instance at a time). Log each step in the Results log.
 | 15 | 2026-10-29 | 5 | Commit `fffe85b` `feat(repair): LRCLIB timing saves a clip-timed sheet on the cue route` (`library_regen.py`, `library_tools.py`, `test_library_regen.py`, `test_library_tools.py`, `tests/unit/movie_slices.py`); suite after: 2870 passed (+58) | **Built as planned**: `LRC_SRT_SUFFIX` in `CUSTOM_SHEET_SUFFIXES` (so backups, Reset, scoped wipes and the put-back all take it with no further change), `LRC_ORIGIN`, `_sheet_plan` under the three sheet plans, `custom_plan` dispatching on `sheet_kind` through a table, `LrcTimingCheck`, `LrcTimingRefused`, `LRC_MAX_GAP_S` 15, `check_lrc_timing`, `repair(source="lrclib")`, `replaces_custom` false for it. **Different from the plan's wording**: (1) the LRC repair does not call `_apply_lrclib_pick`. The match is read once (`_lrc_record`: the record by id, else the `.lrc` on disk) and the same record is fitted and, when it came by id, set as `plan.lrclib_record`, so the lines fitted are the lines saved (a second lookup could differ). `_apply_lrclib_pick` and the LRC path now share one `_lrclib_record` lookup. (2) The movie and LRC checks share `_fit_to_clip` and `_clip_length`; `_fit_movie_slice` was reduced to use them. (3) **The bundle does not note which LRC timed the song.** `lyrics.lrclib` is written only by the joint route (`pipeline/stages/lyric_align.py`, `capture_method_used == "joint"`), so a cue run records nothing; the `.lrc` on disk with its header is the only record. The plan's "so the bundle notes which LRC timed it" does not happen, and `lrclib_state` will read `none` for an LRC-timed song until Phase 6 reads the `.lrc` instead. **Left for Phase 6** (the plan's label list lacks them): `library._now_text` has no `lrc` wording (it reads "Now: no recorded lyric source"); the `movie_srt` origin tests in `song_info.py` (`_source_name`, `_route_text`, History) need `lrclib_srt`; the card needs a line for a match with no length (`gap_s` None is not viable, no mockup state) and for `not_srt` (an LRC with no timed lines must not say "Not an SRT file"). `repair` already passes `source` through, so `source="lrclib"` is reachable by an admin POST now; the route must parse `lrclib_id` as an int. **Tests**: 58 new. `test_library_regen.py`: the three plan shapes; resolve and reuse prefer an LRC sheet; saving any one kind leaves only that kind; a repair to caption, Genius or transcribe removes an LRC sheet; Reset and the scoped wipe keep it; the scoped backup claims `<stem>.lrclib.srt` and not a sibling's; the seed origin and no third source; a reset replays it; the put-back restores it. `test_library_tools.py` (`TestLrcTimingRepair`, `TestRunsReplayLrcSheets`; `lrc_slice` added to `movie_slices.py`, invented words): the disk LRC and a record by id are checked; a listed record is not asked of LRCLIB again; the gap at 0, +15, -15 (viable) and +16, -16 (not); no length is not viable; a refused fit and an LRC with no stamps are not viable; no heard words; flagged lines (8-11) come back and do not stop a viable fit; no LRC, a skip marker, an unreadable LRC, a gone or unsynced record, an unreadable clip length, an audio file and a busy song are each refused; the saved sheet is in clip time (an LRC 3 s late); the `.lrc` stays unless the record came by id; a refusal leaves the queue, the backups and an old sheet alone; a second fit that differs is the one the repair obeys; bulk runs send an LRC-sheet song to `reuse` in every mode and queue its plan. **Mutations checked by hand** (source changed, a test failed, source restored): gap limit exclusive; gap ignored; fit status ignored; a non-viable check queued; the raw LRC saved instead of the fit; the record always put on the plan; `lrclib` left out of `replaces_custom`; the skip-marker check removed; the repair using the disk record instead of the id; `lrc` replayed as the movie plan; the LRC suffix left out of the sheet suffixes; the origin changed; `is_custom_plan` widened to the LRC origin. All 13 caught on the first run. |
 | 16 | 2026-10-29 | 6 | Commit `a014414` `feat(repair): LRCLIB timing as a lyric source on Repair lyrics` (13 files: `library_regen`, `library_status`, `library_tools`, `routes/library`, `routes/song_info`, the `processing`, `song_info` and `song_repair` templates, five test files); suite after: 2948 passed (+77) | **Built to the ratified mockup** (rows 12-14): the "LRCLIB timing" source card between Movie subtitles and No lyrics; the section with the match on disk as one row ("on disk" tag), a Search LRCLIB link, Check fit, the card (head, matches, length, move, speed, dropped, "No line was heard far from its time."), the flagged runs in amber and the "Couldn't check these lines" note muted below them, each stretch as "m:ss-m:ss · n lines" with its lines and clip times; Regenerate only on a viable answer; a list's link opens it already checked. New: `POST /song_info/lrc_fit`, `GET /song_info/lrc_search` (matches scored against the bundle's current lines, `LibraryTools.current_lines`), `repair` mapping `LrcTimingRefused` to the card's words, `custom_start()["lrc"]` for the match on disk, the `lrc` list and its Tools-tab row ("LRCLIB · cue align"), `_repair_source` preferring `lrclib` when `lrc_on_disk`. **Different from the plan or the mockup**: (1) the sheet kind is `"lrclib"`, not `"lrc"`, the page's own source name, so `_current_source` and `_now` need no mapping (the `lrc` list keeps its key). (2) `LrcTimingCheck` gained `clip_s`: row 13 (k) said no field change, but the length line names the video's length, which the check alone did not carry. (3) Labels beyond the plan's list, found in Phase 5: the run page's "Now: LRCLIB timing"; Song Info's LRCLIB tile ("Timing · times this song") and pick row; `SongStatus.lrclib` for an LRCLIB-timed song is read off its `.lrc` header, since a cue run's bundle records none. (4) Wording the mockup had no state for: a match with no length ("The lines fit, but the match has no length to check.", no length line), an LRC with no timed lines ("This match has no timed lines.", not "Not an SRT file"), more than 3,000 lines, and no lines to check. (5) "No line was heard far from its time." shows only when nothing is mistimed at all and no stretch is shown, so a single mistimed line (below `MIN_FLAGGED_RUN`) does not make it a false claim; the mockup's wording was "when nothing is flagged". (6) `_repair_source` follows Decision 6 literally: any song with a usable LRC opens on LRCLIB timing, including a caption-timed song that still has a leftover `.lrc` from an earlier Genius run. (7) The movie card's markup and script are now shared: one `answer_area` macro and one `showCard(prefix, card)`, and one `matchOption` row builder for step 2's list and this one; three tests that pinned the old names (`showMovieCard`, `el('li', null, ...)`, the `inArray` list) changed with them. (8) With no match on disk the search is open from the start (no search runs until asked, the box starts from the Genius title and artist); a search picks its best fit and clears any answer; with the search closed only the picked row shows. **Checked in a real browser, beyond the unit tests**: a scratch harness (`scratchpad/lrc_page_smoke.py`, not committed) serves the real routes and templates over a synthetic library (invented words, no network) and drives them in headless Chromium: a list link auto-checks and Regenerate queues the lrclib plan (record None, sheet in clip time); a run beside an unheard stretch; an unheard stretch alone; a length 38 s off (Regenerate off, length line amber); no LRC on disk, search, pick, check, then another pick drops the answer; the current-source line; no heard words (link shown); a refusal. Screenshots read: they match the mockup. No page script errors; the only console errors are 404s for socket.io, which the harness does not serve. **Tests**: 77 new, in `test_library_routes.py` (`TestLrcCard` 18, `TestLrcFitRoute`, `TestLrcSearchRoute`, `TestLrcRepairRoute`, page, Song Info, History, lists, run view), `test_library_status.py` (`TestLrclibTimedMatch`), `test_library_tools.py` (`custom_start`'s match, `current_lines`, `clip_s`). **Mutations checked by hand** (22, source changed, a test failed, source restored; all caught on the first run): the link no longer preferring lrclib; lrclib left out of the preselectable sources; a run no longer the warning; one mistimed line claiming all was well; the length line not marked; `lrc_fit` open to guests; the Repair not catching the refusal; a run losing its last line; the `lrc` list rule; the match not read off the `.lrc`; Song Info hiding the LRCLIB row; the search scored against no lines; the run page's wording; a refusal without its length line; the length line first; the page sending no id; a new pick keeping the answer; Regenerate ignoring `viable`; no auto-check from a list; Regenerate sending no id; the match not handed to the page; the check without the clip length. **Not done**: translation catalogs (they go in their own i18n commits); a length comparison on Song Info's Alignment tab for an LRCLIB-timed song. Phase 5's note that the route must parse `lrclib_id` was already true (`repair` validated it); `lrc_fit` shares the check. |
 | 17 | 2026-10-29 | 6 (after) | Ken ruled Decision 10 (Decision 6 limited to joint songs), answering row 16 (6). Commit `9cb2465` `fix(library): a list's Repair link picks a source only for joint songs`; suite after: 2950 passed (+2) | `_repair_source` returns None for any song whose method is not `joint`, else `lrclib` with an LRC on disk, else `caption`. Songs that lose their picked source: a cue song with a leftover `.lrc`; an LRCLIB-timed song (its Repair page still opens on its current source, LRCLIB timing, without the auto-check); a song with no bundle. Joint songs are unchanged (row 16's Genius-list check still applies in Phase 7). Two tests added (a leftover-LRC cue song; an LRCLIB-timed song). One mutation checked by hand: the old rule back in place fails both. |
+| 18 | 2026-10-30 | 6.1 | Commit `6af0f06` `feat(repair): an LRCLIB fit that passes may override the length limit` (`library_tools`, `routes/song_info`, `song_repair.html`, `test_library_tools`, `test_library_routes`); suite after: 2982 passed (+27, from 2955 at `4e8cb26`) | **Built as planned**: `LrcTimingCheck.overridable` (`FITS` and not `viable`, so the gap is over the limit or unknown; `viable` unchanged), `repair(allow_gap=False)` into `_lrc_repair_plan`, which refuses unless `check.viable or (allow_gap and check.overridable)` on the check it runs itself, the card's `overridable`, `repair()` reading `allow_gap`, and the page's "Use this match anyway" box under the card (shown when overridable, Regenerate on for `viable` or an overridable card with the box ticked, the box cleared by a new Check fit or another pick, `allow_gap: true` sent only when ticked). **Different from the plan's wording**: (1) the card also carries `override_tip`, the (i) text built on the server, so the 15 s is `LRC_MAX_GAP_S` and not a literal in the page; the plan's wording is verbatim for a match over the limit. (2) A match with no length is overridable too (plan: "over the limit or unknown"), and "The video is more than 15 s longer or shorter" would be false for it, so its tip opens "The match has no length, so the video can't be compared with it." and carries the plan's remaining sentences unchanged. (3) A non-boolean `allow_gap` is a 400 "allow_gap must be true or false", written as the `lrclib_skip` check beside it, not through `_non_number` (that helper is for whole numbers; two copies of the boolean check is under the third-copy bar). A JSON `null` is a 400, as for `lrclib_skip`. (4) One existing page test pinned "Regenerate on only for `viable`"; it is replaced by two (the enable rule, and the body Regenerate sends). **Tests**: 27 new. Tools: `overridable` on a viable check (false), over the limit and no length (true), a refused fit at gap 0 and +53 and no heard words (false); an overridable fit queues the sheet with `allow_gap` for a 38 s gap and for no length, and refuses without it (default and `False`); `allow_gap` changes nothing for a viable match; a refused fit stays refused with it; the second fit the repair runs itself, when it differs, still refuses with it; a transcribe repair ignores it. Routes: the card's `overridable` and tip (over the limit, no length, and not for clean, flagged, too few, not SRT, no reference); the preview route's `overridable`; the repair route queues a 38 s fit only with `allow_gap: true`, refuses a refused fit with it, and 400s `"true"`, 1, 0, `null`, `[True]`; a Genius repair 400s a bad `allow_gap` too; page pins for the enable rule, the body sent, the box under the card with its note and its clearing. **Mutations checked by hand** (8, source changed, a test failed, source restored; all caught on the first run): `allow_gap` alone passing a refused fit; `allow_gap` ignored; `overridable` passing without `allow_gap`; `overridable` ignoring the fit status; the route dropping `allow_gap`; the card never overridable; the page always sending `allow_gap`; a new pick leaving the box ticked. **Checked in a real browser** (the VM's `ui-check` app, a synthetic library of empty video files with invented words, a scratch script not committed): a clean fit shows no box and Regenerate on; a refused fit shows no box and Regenerate off; a 38 s gap shows the box with its (i) (text as above), Regenerate off until ticked, a new Check fit unticks the box and turns Regenerate off again, and Regenerate with the box ticked posts `{source: lrclib, lrclib_id: null, allow_gap: true}` and lands on Song info; a match with no length shows the box with its own (i). Screenshot read: the box sits under the card, label and (i) on one line. No page script errors; the one console error is a 404 on the Song info page the repair redirects to (not in the app log). **Not done**: translation catalogs (own i18n commit); Phase 7's Paradise check, which needs the real song on the GPU box. |
 
 ## Hand-off prompt (executor)
 
