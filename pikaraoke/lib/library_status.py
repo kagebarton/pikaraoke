@@ -38,7 +38,7 @@ class SongStatus:
     sheet_kind: str | None  # custom lyric sheet on disk, the pick whatever the bundle says: "custom" | "movie" | "lrclib"
     genius: dict | None  # lyrics.genius: {id, title, artist}
     lrclib: dict | None  # lyrics.lrclib (an LRCLIB-timed song: its .lrc header): trackName, artistName, albumName, duration, id
-    lrclib_state: str  # "used" | "rejected" | "none" | "skipped" | "n/a"
+    lrclib_state: str  # "used" | "rejected" | "none" | "skipped" | "unreadable" | "n/a"
     lrclib_reason: str | None  # joint_stats.lrclib_fill.reason, when rejected
     lrclib_filled: int  # lines the LRCLIB fill placed
     lrc_match: dict | None  # the LRC on disk, as lrclib.record_meta; None: missing, skipped or unreadable
@@ -168,6 +168,8 @@ def _lrclib_state(lrc: lrclib.SongLrc, origin: str | None, lyrics: dict, fill: d
         return "n/a"
     if lrc.state == "skipped":
         return "skipped"
+    if lrc.state == "unreadable":  # kept as placed, so no search replaces it
+        return "unreadable"
     if fill.get("eligible"):
         return "used"
     if _lrclib_match(lyrics):

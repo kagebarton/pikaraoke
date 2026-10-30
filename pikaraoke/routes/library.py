@@ -31,6 +31,8 @@ def _joint_subline(status: SongStatus) -> str:
         parts.append(_("LRCLIB not used"))
     elif state == "skipped":
         parts.append(_("LRCLIB skipped"))
+    elif state == "unreadable":
+        parts.append(_("LRC can't be read"))
     else:
         parts.append(_("LRC on disk") if status.lrc_match is not None else _("no LRCLIB match"))
     return " · ".join(parts)

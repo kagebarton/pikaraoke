@@ -482,7 +482,8 @@ def read_song_lrc(song: Path) -> SongLrc:
     """``song``'s LRCLIB choice on disk, so every reader agrees on what counts as a match.
 
     A file that can't be read, such as a hand-placed one not in UTF-8, is no match:
-    nothing can time from it.
+    nothing can time from it. Only a debug line here, since the status reads every
+    song's file on each page load; the status shows it and the align stage warns.
     """
     path = lrc_path(song)
     try:
@@ -490,7 +491,7 @@ def read_song_lrc(song: Path) -> SongLrc:
     except FileNotFoundError:
         return SongLrc("missing")
     except (OSError, UnicodeDecodeError) as e:
-        logger.warning("Could not read the LRCLIB match %s: %s", path, e)
+        logger.debug("Could not read the LRCLIB match %s: %s", path, e)
         return SongLrc("unreadable")
     if _has_skip_tag(text):
         return SongLrc("skipped")

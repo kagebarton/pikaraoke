@@ -211,6 +211,11 @@ class LyricAlignStage(BaseStage):
                 lrc = lrclib.read_song_lrc(ctx.song_path)
                 if lrc.state == "unreadable":
                     # Not searched over either (ensure_lrc keeps any file): it was put there.
+                    logger.warning(
+                        "[%s] %s can't be read; no LRCLIB fill until it is fixed or deleted",
+                        self.name,
+                        lrclib.lrc_path(ctx.song_path),
+                    )
                     capture_joint_stats["lrclib_fill"] = {
                         "eligible": False,
                         "reason": "unreadable_lrc",
