@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
+from pikaraoke.lib import lrclib
 from pikaraoke.lib.alignment_capture import SCHEMA_VERSION, output_line_timings
 from pikaraoke.lib.joint_match import match_words_to_lines_joint_with_stats
 from pikaraoke.lib.srt_provenance import is_generated, mark_generated
@@ -847,6 +848,16 @@ class TestLrclibFillWiring:
         assert "lrclib_fill" not in bundle["joint_stats"]
         assert "lrclib" not in bundle["lyrics"]
         assert bundle["config"]["lrclib_fill"] is False
+
+    def test_a_skip_marker_is_recorded_as_a_skip(self, tmp_path, monkeypatch):
+        stage, ctx, worker = self._make(tmp_path, monkeypatch)
+        lrclib.write_skip_marker(ctx.song_path.parent / "lyrics" / f"{ctx.song_path.stem}.lrc")
+
+        stage.run(ctx)
+
+        bundle = self._bundle(ctx)
+        assert bundle["joint_stats"]["lrclib_fill"] == {"eligible": False, "reason": "skipped"}
+        assert bundle["lyrics"]["lrclib"] == {"lrc_file": f"lyrics/{ctx.song_path.stem}.lrc"}
 
     def test_an_unreadable_lrc_records_why_and_fills_nothing(self, tmp_path, monkeypatch, caplog):
         # A corrupt .lrc (e.g. an interrupted copy leaving invalid UTF-8)

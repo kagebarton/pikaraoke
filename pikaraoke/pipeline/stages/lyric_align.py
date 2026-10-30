@@ -221,8 +221,6 @@ class LyricAlignStage(BaseStage):
                         "reason": "unreadable_lrc",
                     }
                 elif lrc.state != "missing":
-                    # A skip marker has no lines, so it maps none and nothing fills;
-                    # the bundle still records it.
                     capture_lrclib_ref = {
                         # .as_posix(): forward slashes so a bundle written on
                         # Windows still resolves on a Linux consumer (regen
@@ -232,7 +230,13 @@ class LyricAlignStage(BaseStage):
                         .as_posix(),
                         **(lrc.meta or {}),
                     }
-                    if env is None:
+                    if lrc.state == "skipped":
+                        # Recorded as the admin's choice, not as a match whose lines didn't fit.
+                        capture_joint_stats["lrclib_fill"] = {
+                            "eligible": False,
+                            "reason": "skipped",
+                        }
+                    elif env is None:
                         capture_joint_stats["lrclib_fill"] = {"eligible": False, "reason": "no_env"}
                     else:
                         fills, fill_stats = lrclib_fill.plan_fills(
