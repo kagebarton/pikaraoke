@@ -132,9 +132,10 @@ EDGE_SEARCH_SLACK_S = 0.5
 # so reverb decaying off a held note counts as quiet but a sung word does not.
 QUIET_DIP_DB = SUSTAIN_NEAR_DB
 
-# The singing has stopped at the first quiet stretch this long. Pauses inside a
-# line held past its caption run to ~0.5 s (Baby One More Time, Stronger); a
-# line that never pauses this long before the next caption sang straight into it.
+# The singing has stopped when the quiet running into the next caption is this long.
+# Pauses inside a line held past its caption run to ~0.5 s (Baby One More Time,
+# Stronger), though a breath before its last words can be longer (Incomplete: 0.9 s);
+# a line that is not quiet this long before the next caption sang straight into it.
 RELEASE_QUIET_S = 0.75
 
 # A line's singing runs on at most this far past its caption. Vocals that go on
@@ -257,13 +258,14 @@ def _volume_end(
     """Where a line's rescue window should end, from where its singing stops.
 
     ``cue``/``next_cue`` are the cue spans of the line and of the line after it. The
-    singing stops at the first quiet stretch of :data:`RELEASE_QUIET_S`; the window
-    reaches ``pad_s`` into it, no further than its midpoint. A line that never pauses
-    that long before ``next_cue`` starts sang straight into it, and the window ends at
-    ``next_cue``'s start. None when there is no singing to measure, the envelope ends
-    before ``next_cue``, ``next_cue`` starts before the search would (overlapping cues
-    leave no stretch to measure), or the stop lies more than :data:`MAX_HOLD_S` past the
-    caption.
+    singing stops at the quiet stretch of at least :data:`RELEASE_QUIET_S` that runs on
+    into ``next_cue``'s start, not at an earlier one: a long breath inside the line,
+    with singing after it, is not its end. The window reaches ``pad_s`` into that
+    stretch, no further than its midpoint. A line with no such stretch sang straight
+    into ``next_cue``, and the window ends at ``next_cue``'s start. None when there is
+    no singing to measure, the envelope ends before ``next_cue``, ``next_cue`` starts
+    before the search would (overlapping cues leave no stretch to measure), or the stop
+    lies more than :data:`MAX_HOLD_S` past the caption.
     """
     if next_cue[0] <= cue[1] - EDGE_SEARCH_SLACK_S:
         return None
@@ -271,8 +273,13 @@ def _volume_end(
     if sung_db is None or next_cue[0] > len(env) * HOP_S:
         return None
     runs = _quiet_runs(env, cue[1] - EDGE_SEARCH_SLACK_S, next_cue[0], sung_db)
-    release = next((run for run in runs if run[1] - run[0] >= RELEASE_QUIET_S), None)
-    if release is None:
+    release = runs[-1] if runs else None
+    # Runs end on frame boundaries, so one that runs into the cue may stop a frame short.
+    if (
+        release is None
+        or release[1] - release[0] < RELEASE_QUIET_S
+        or next_cue[0] - release[1] > 2 * HOP_S
+    ):
         stop = t1 = next_cue[0]
     else:
         stop, t1 = release[0], min(release[0] + pad_s, sum(release) / 2)
