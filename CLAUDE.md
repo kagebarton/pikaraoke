@@ -52,7 +52,7 @@ When Ken proposes a larger feature (anything that would get a plan or span sever
 
 At a commit with its plan-log row written, or a phase/GATE boundary (never mid-commit), say which of these apply, each with a ready-to-paste prompt (≤10 lines, paths and hashes rather than prose):
 
-- **`/compact`** — flag it.
+- **`/compact`** — flag it with a ready-to-paste `/compact Keep: ...` line (≤5 lines, paths and hashes rather than prose) naming what the summary must keep: branch + HEAD, the plan file and section, the next step and where to stop, open decisions with their options, and approaches ruled out this session.
 - **Review due** — the exact `/code-review` line: commit range, files in scope, and exactly 3 finder angles, one per Self-Review axis (not the tool's default spread). Never launch it unprompted; run it only when asked. `/code-review ultra` is user-triggered only, never launched for any reason.
 - **Model handoff** (e.g. Sonnet handing a GATE read to Opus, Opus escalating to Fable) — branch + HEAD, the plan file and section, what's done (don't redo it), the next step, and where to stop.
 
