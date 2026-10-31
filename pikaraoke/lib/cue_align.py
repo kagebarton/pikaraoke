@@ -259,13 +259,17 @@ def _volume_end(
 ) -> float | None:
     """Where a section's window should end, from where its last line's singing stops.
 
-    ``last``/``nxt`` are the cue spans of the section's last line and the next section's
-    first. The singing stops at the first quiet stretch of :data:`RELEASE_QUIET_S`; the
-    window reaches ``pad_s`` into it, no further than its midpoint. A line that never
+    ``last``/``nxt`` are the cue spans of the section's latest-ending line (with duet
+    overlap, not always its last) and the next section's first. The singing stops at
+    the first quiet stretch of :data:`RELEASE_QUIET_S`; the window reaches ``pad_s``
+    into it, no further than its midpoint. A line that never
     pauses that long before ``nxt`` starts sang straight into it, and the window ends at
     ``nxt``'s caption start. None when there is no singing to measure, the envelope ends
-    before ``nxt``, or the stop lies more than :data:`MAX_HOLD_S` past the caption.
+    before ``nxt``, ``nxt`` starts before the search would (overlapping cues leave no
+    stretch to measure), or the stop lies more than :data:`MAX_HOLD_S` past the caption.
     """
+    if nxt[0] <= last[1] - EDGE_SEARCH_SLACK_S:
+        return None
     sung_db = _loudest_sung_level(env, [last, nxt])
     if sung_db is None or nxt[0] > len(env) * HOP_S:
         return None
@@ -323,9 +327,9 @@ def segment_by_gaps(
 
     With ``env`` (the vocal stem's dB envelope, one value per
     :data:`onset_snap.HOP_S`) the grouping and every window start are unchanged,
-    but a window's end moves later to where the audio shows its last line's
-    singing stop (:func:`_volume_end`, :func:`_volume_tail`), so a note held past
-    its caption stays inside its window. An end never moves earlier, so the
+    but a window's end moves later to where the audio shows its latest-ending
+    line's singing stop (:func:`_volume_end`, :func:`_volume_tail`), so a note
+    held past its caption stays inside its window. An end never moves earlier, so the
     window may overlap the next one where the earlier line is still singing.
     :attr:`Section.measured_end` says which ends ``env`` could measure.
     """
@@ -337,7 +341,9 @@ def segment_by_gaps(
     for lo, nxt in zip(bounds, bounds[1:]):
         hi = nxt - 1
         start = cue_spans[lo][0]
-        end = cue_spans[hi][1]
+        # With duet overlap an earlier line can outlast the section's last one.
+        last = max(cue_spans[lo : hi + 1], key=lambda span: span[1])
+        end = last[1]
         if lo == 0:
             t0 = max(0.0, start - pad_s)
         else:
@@ -351,11 +357,11 @@ def segment_by_gaps(
             if duration is not None:
                 t1 = min(duration, t1)
             if env is not None:
-                measured = _volume_tail(env, cue_spans[hi], pad_s, duration)
+                measured = _volume_tail(env, last, pad_s, duration)
         else:
             t1 = end + min(pad_s, max(0.0, (cue_spans[hi + 1][0] - end) / 2))
             if env is not None:
-                measured = _volume_end(env, cue_spans[hi], cue_spans[hi + 1], pad_s)
+                measured = _volume_end(env, last, cue_spans[hi + 1], pad_s)
         if measured is not None:
             t1 = max(t1, measured)
         sections.append(Section(lo, hi, round(max(0.0, t0), 3), round(t1, 3), measured is not None))

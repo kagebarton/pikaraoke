@@ -244,6 +244,20 @@ class TestSegmentByVolume:
         env = _env(63.0, [(0.0, 62.0)])
         first, second = segment_by_gaps(cues, duration=63.0, env=env)
         assert (first.t1, second.t0) == (61.0, 60.0)
+        assert not first.measured_end  # the next cue starts before the search: no stretch
+
+    # A duet section: line 0 (singer A, held to 8.0) outlasts line 1 (singer B).
+    DUET_CUES = [(0.0, 6.0), (1.0, 3.0), (10.0, 12.0)]
+
+    def test_a_duet_sections_end_follows_its_latest_ending_line(self):
+        (first, _) = segment_by_gaps(self.DUET_CUES, duration=13.0)
+        assert first.t1 == 6.75
+
+    def test_a_duet_hold_is_measured_from_the_line_still_singing(self):
+        env = _env(13.0, [(0.3, 8.0), (10.2, 12.0)])
+        (first, _) = segment_by_gaps(self.DUET_CUES, duration=13.0, env=env)
+        assert first.t1 == pytest.approx(8.75, abs=0.03)
+        assert first.measured_end
 
     def test_without_an_envelope_nothing_is_measured(self):
         sections = segment_by_gaps(self.HOLD_CUES, duration=14.0)
