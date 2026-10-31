@@ -594,6 +594,36 @@ class TestCueAlignRoute:
         assert bundle["pipeline_decisions"]["method_used"] == "cue_align"
         assert bundle["transcribe_words"] == heard
 
+    def test_one_decode_places_the_windows_and_feeds_the_edge_snap(self, tmp_path, monkeypatch):
+        stage, ctx, _worker, la_mod = self._make_srt(tmp_path, monkeypatch)
+        env = np.full(1201, -20.0)  # 30 s, sung throughout
+        decode = MagicMock(return_value=env)
+        align = MagicMock(wraps=la_mod.align_song)
+        snap = MagicMock(side_effect=lambda objs, _path, env=None: (objs, {}))
+        monkeypatch.setattr(la_mod, "decode_env_db", decode)
+        monkeypatch.setattr(la_mod, "align_song", align)
+        monkeypatch.setattr(la_mod, "snap_line_edges", snap)
+
+        stage.run(ctx)
+
+        decode.assert_called_once()
+        assert decode.call_args.args[0] == ctx.artifacts["aligned_stem"]
+        assert align.call_args.kwargs["env"] is env
+        assert snap.call_args.kwargs["env"] is env
+        assert _read_bundle(ctx)["joint_stats"]["edges"]["n"] == 1
+
+    def test_a_failed_decode_keeps_the_caption_windows(self, tmp_path, monkeypatch):
+        stage, ctx, _worker, la_mod = self._make_srt(tmp_path, monkeypatch)
+        align = MagicMock(wraps=la_mod.align_song)
+        monkeypatch.setattr(la_mod, "decode_env_db", MagicMock(return_value=None))
+        monkeypatch.setattr(la_mod, "align_song", align)
+
+        stage.run(ctx)
+
+        assert align.call_args.kwargs["env"] is None
+        assert (ctx.song_path.parent / "karaoke" / f"{ctx.song_path.stem}.ass").exists()
+        assert "edges" not in _read_bundle(ctx)["joint_stats"]
+
     def test_after_a_dereverb_retry_the_bundle_holds_the_dry_stems_words(
         self, tmp_path, monkeypatch
     ):

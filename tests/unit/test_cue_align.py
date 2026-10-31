@@ -1,5 +1,6 @@
 """Unit tests for the cue-anchored windowed alignment core (pure logic)."""
 
+import numpy as np
 import pytest
 
 from pikaraoke.lib.cue_align import (
@@ -13,6 +14,7 @@ from pikaraoke.lib.cue_align import (
     segment_by_gaps,
     split_section_to_lines,
 )
+from pikaraoke.lib.onset_snap import HOP_S
 
 
 def _words(*spans: tuple[str, float, float]) -> list[dict]:
@@ -145,6 +147,107 @@ class TestSegmentByGaps:
         first, second = segment_by_gaps(cues, duration=62.5)
         assert first.t1 == 30.5
         assert second.t0 == 30.0
+
+
+def _env(duration_s: float, sung: list[tuple[float, float]]) -> np.ndarray:
+    """A dB envelope that is sung (-20) inside ``sung`` and silent (-70) elsewhere."""
+    env = np.full(int(duration_s / HOP_S) + 1, -70.0)
+    for a, b in sung:
+        env[int(a / HOP_S) : int(b / HOP_S)] = -20.0
+    return env
+
+
+class TestSegmentByVolume:
+    """Window ends moved out to where the vocal envelope shows the singing stop."""
+
+    # Two lines 5 s apart; the first is held to 6.0, two seconds past its caption.
+    HOLD_CUES = [(0.0, 4.0), (9.0, 12.0)]
+    HOLD_SUNG = [(0.3, 6.0), (9.2, 12.0)]
+
+    def test_a_hold_into_silence_stays_inside_its_window(self):
+        env = _env(14.0, self.HOLD_SUNG)
+        first, second = segment_by_gaps(self.HOLD_CUES, duration=14.0, env=env)
+        assert first.t1 == pytest.approx(6.75, abs=0.03)  # the hold's end + the pad
+        assert first.measured_end
+        # Without the envelope the caption gap ends the window at 4.75, mid-hold.
+        assert segment_by_gaps(self.HOLD_CUES, duration=14.0)[0].t1 == 4.75
+
+    def test_window_starts_never_move(self):
+        cues = [(1.0, 4.0), (6.0, 9.0), (14.0, 17.0)]
+        env = _env(19.0, [(1.2, 5.9), (6.0, 10.5), (14.2, 17.0)])
+        measured = segment_by_gaps(cues, duration=19.0, env=env)
+        today = segment_by_gaps(cues, duration=19.0)
+        assert [s.t0 for s in measured] == [s.t0 for s in today]
+        assert all(m.t1 >= t.t1 for m, t in zip(measured, today))
+
+    def test_singing_straight_into_the_next_caption_ends_the_window_at_its_start(self):
+        # The 0.2 s breath at 5.8 is no release, so the line sang up to the next cue.
+        cues = [(0.0, 4.0), (6.0, 9.0)]
+        env = _env(10.0, [(0.3, 5.8), (6.0, 9.0)])
+        first, second = segment_by_gaps(cues, duration=10.0, env=env)
+        assert first.t1 == 6.0
+        assert second.t0 == 5.25  # the caption rule's, so the windows share 5.25-6.0
+
+    def test_a_pause_inside_the_held_line_is_not_its_end(self):
+        env = _env(14.0, [(0.3, 4.3), (4.8, 6.0), (9.2, 12.0)])  # a 0.5 s pause
+        first, _ = segment_by_gaps(self.HOLD_CUES, duration=14.0, env=env)
+        assert first.t1 == pytest.approx(6.75, abs=0.03)
+
+    @pytest.mark.parametrize(
+        "cues, sung",
+        [
+            ([(0.0, 4.0), (12.0, 15.0)], [(0.3, 8.5), (12.2, 15.0)]),  # stops 4.5 s late
+            ([(0.0, 4.0), (9.0, 12.0)], [(0.3, 12.0)]),  # never stops; next cue 5 s on
+        ],
+    )
+    def test_singing_on_past_the_hold_cap_keeps_the_caption_end(self, cues, sung):
+        env = _env(16.0, sung)
+        first, _ = segment_by_gaps(cues, duration=16.0, env=env)
+        assert first.t1 == 4.75
+        assert not first.measured_end
+
+    def test_a_line_that_stopped_before_its_caption_ended_keeps_todays_window(self):
+        env = _env(14.0, [(0.3, 3.6), (9.2, 12.0)])
+        sections = segment_by_gaps(self.HOLD_CUES, duration=14.0, env=env)
+        assert sections == segment_by_gaps(self.HOLD_CUES, duration=14.0)
+        assert sections[0].measured_end
+
+    def test_the_song_tail_reaches_a_long_final_hold(self):
+        # Past the 4 s hold cap and through a 1.2 s pause: the last line has no neighbour.
+        env = _env(16.0, [(0.3, 6.0), (7.2, 11.0)])
+        (only,) = segment_by_gaps([(0.0, 4.0)], duration=16.0, env=env)
+        assert only.t1 == pytest.approx(11.75, abs=0.03)
+        assert only.measured_end
+        (today,) = segment_by_gaps([(0.0, 4.0)], duration=16.0)
+        assert today.t1 == 4.75
+
+    def test_a_tail_sung_to_the_end_of_the_audio_stops_at_the_duration(self):
+        env = _env(8.0, [(0.5, 8.0)])
+        (only,) = segment_by_gaps([(0.0, 4.0)], duration=8.0, env=env)
+        assert only.t1 == 8.0
+
+    def test_a_silent_envelope_has_no_singing_to_measure(self):
+        env = _env(14.0, [])
+        sections = segment_by_gaps(self.HOLD_CUES, duration=14.0, env=env)
+        assert sections == segment_by_gaps(self.HOLD_CUES, duration=14.0)
+        assert not any(s.measured_end for s in sections)
+
+    def test_an_envelope_ending_before_the_next_cue_falls_back(self):
+        env = _env(5.0, [(0.3, 5.0)])
+        cues = [(0.0, 4.0), (6.0, 9.0)]
+        first, _ = segment_by_gaps(cues, duration=10.0, env=env)
+        assert first.t1 == 4.75
+        assert not first.measured_end
+
+    def test_overlapping_cues_across_a_cap_split_keep_their_full_spans(self):
+        cues = [(0.0, 61.0), (60.0, 62.0)]
+        env = _env(63.0, [(0.0, 62.0)])
+        first, second = segment_by_gaps(cues, duration=63.0, env=env)
+        assert (first.t1, second.t0) == (61.0, 60.0)
+
+    def test_without_an_envelope_nothing_is_measured(self):
+        sections = segment_by_gaps(self.HOLD_CUES, duration=14.0)
+        assert not any(s.measured_end for s in sections)
 
 
 class TestSplitSectionToLines:
@@ -593,6 +696,17 @@ class TestAlignSong:
         # One section pass, no per-line rescue; label names the section.
         assert len(aligner.calls) == 1
         assert "section" in aligner.calls[0][3]
+        assert aligner.calls[0][1] == 7.75  # the caption tail: no envelope given
+        assert "edges" not in stats
+
+    def test_an_envelope_widens_the_window_to_the_held_tail(self):
+        # The last line is held to 9.0, two seconds past its cue.
+        aligner = _stub_aligner(lambda *_: _on_cue_words())
+        env = _env(12.0, [(0.0, 9.0)])
+        _objs, stats = align_song(_SONG_CUES, _SONG_LINES, _SONG_LINES, 12.0, aligner, env=env)
+
+        assert aligner.calls[0][1] == pytest.approx(9.75, abs=0.03)
+        assert stats["edges"] == {"n": 1, "widened": 1, "fallback": 0}
 
     def test_large_display_lead_triggers_resection(self):
         # Aligner reports every line ~1.5 s late (> SECTION_PAD_S): the driver
