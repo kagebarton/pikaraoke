@@ -55,6 +55,7 @@ Opus, this plan, stated so the executor need not re-derive them:
    a clipped first word. The first section keeps `start - pad`.
 9. **She Used To Be Mine 0:35 is a different bug** (the aligner ran ~2 s ahead
    mid-block with every word timed). Out of scope; its open-issues entry stays.
+   Superseded by Decision 13: the words are zero-length, not timed (rows 43, 45).
 10. **Pocahontas keeps its current sheet for the test.** Its `.lrclib.srt` (built
     2026-10-29, before `8dabf55`) ends the last cue after a 4 s hold instead of at the
     LRC's 3:15 closing stamp. Re-making the sheet would mask whether the window fix
@@ -166,6 +167,60 @@ Opus, after Ken's GATE B notes and his steer, 2026-10-31 (rows 33-39). Proposed;
     - Decision 11 is superseded where it widens sections, along with
       `Section.measured_end`, `Section.widened_end` and the `edges` stat.
     - GATE B stays Ken's, on the branch as a whole after Phase 5b.
+
+Ken, 2026-10-31, ratifying Opus's proposal after the replays (rows 43-46):
+
+13. **A zero-length word counts as a missing word; a re-aligned line may not start on
+    the previous line; a rescue window ends where the singing stops before the next
+    line.**
+    - Why: She Used To Be Mine 0:33-0:40 (Ken's "fast sweep") is not timed by the
+      model. The section align puts line 6's `I used to be` and line 7's `Although` at
+      one instant (36.09): 4 of line 6's 8 words, 1 of line 7's 3. "Mostly instant"
+      makes a line bad only above half, so both pass as clean and are never rescued
+      (rows 43, 45). Across the 10 replay songs, 92 of 478 section lines carry at least
+      one such word (row 45).
+    - Ruled:
+      - `repace_bad_lines`: a line is complete only when it has a word of at least
+        `INSTANT_WORD_DUR_S` for every token, and a re-align replaces a placed line
+        only when it has more such words than the line. Nothing else about the rescue
+        changes: a zero-length word stays on screen as it is (no guess replaces it),
+        and "mostly instant" still makes a line bad.
+      - The guard (review finding 7, row 44): after `_trim_lead_in`, a re-aligned
+        line's first word may not start before the previous line's last word ends
+        (the line before it in the rescue's output). If it does, the first word starts
+        at that end when at least `INSTANT_WORD_DUR_S` of it is left; otherwise the
+        re-align is not kept. It applies to every re-align, not only those asked
+        because of zero-length words.
+      - `_volume_end`: the singing stops at the quiet stretch of at least
+        `RELEASE_QUIET_S` that runs into the next line's cue start, not at the first
+        one. If the stretch before the next cue is shorter, or there is none, the line
+        sang into the next one and the window ends at that cue's start, as today. Pad,
+        midpoint and `MAX_HOLD_S` are unchanged. Why: with the audio-clock search
+        (`8cc7588`) the first long-enough stretch can be a breath inside the line:
+        Incomplete 0:45 is quiet 43.23-44.15 after "is", then sings "anybody's guess"
+        to 46.38 (row 45). Supersedes Decision 11's "first quiet stretch" for the
+        per-line window.
+      - Rescue stats and log line gain `crammed_line_ids`: lines with a word for every
+        token, asked for a re-align because some are zero-length.
+      - Stat 1 (Song Info) is unchanged. Whether it should count zero-length words left
+        on screen is for after GATE B (Phase 6).
+    - Measured (rows 45-46):
+      - Zero-length words counted as missing, plus the guard (CPU over the replay's
+        saved results), against the committed code on the 10 songs, lines that differ
+        after the snaps: first word against the transcriber's, closer 25 / within
+        0.05 s 13 / further 6; last word 17 / 22 / 3; zero-length words 94 -> 49;
+        lines starting before the previous line's end 13 -> 16. Without the guard:
+        further starts 10, such lines 32.
+      - She Used To Be Mine: line 6's last four words 36.50-38.14 (heard
+        36.52-38.02); line 7 starts at line 6's end instead of 2.2 s early.
+      - New window end: 4 of 113 asked windows move. Targets timed in full by the model
+        16 of 18 (Incomplete 3 and Stronger 26 added); left: Miss Independent 9 and 71
+        (row 33's unsung caption words).
+      - Cost: 75 more one-line aligns across the 10 songs (209 aligns in all, against
+        134).
+      - Not measured: the guard on lines the committed code already re-aligns. The GPU
+        rerun (Phase 5c) measures it.
+    - Decision 9 is superseded: She Used To Be Mine joins the rerun as a tenth song.
 
 ## Library facts (2026-10-31, `dev` at `daf183a`)
 
@@ -439,6 +494,9 @@ in Decisions.
 Only after Ken agrees to Decision 12. Run `graphify affected` on `segment_by_gaps`,
 `repace_bad_lines`, `align_song` and `_with_guessed_words` first.
 
+Steps 1-5 are done (rows 40-42; review fixes row 44). Steps 6-7 run as Phase 5c's
+rerun, after Decision 13's code.
+
 1. **Code** (`pikaraoke/lib/cue_align.py`), per Decision 12: `segment_by_gaps` loses
    `env`; `Section.measured_end`, `Section.widened_end` and the `edges` stat go;
    `_volume_end` and `_volume_tail` stay, documented per line. `repace_bad_lines` takes
@@ -474,24 +532,102 @@ Only after Ken agrees to Decision 12. Run `graphify affected` on `segment_by_gap
 7. Log raw tables; give Ken `song - m:ss - line text - what changed` for every changed
    line, targets first; stop at GATE B.
 
+### Phase 5c: zero-length words, the guard, the window end -> commits -> GPU rerun -> GATE B (Ken)
+
+Per Decision 13. Run `graphify affected` on `repace_bad_lines`, `_volume_end` and
+`_trim_lead_in` first.
+
+1. **Window end** (`_volume_end`, its docstring, and the module docstring where it
+   describes the rescue window). Tests in `TestRescueWindow`: a pause of at least
+   `RELEASE_QUIET_S` inside the line, then singing, then quiet into the next cue: the
+   window ends a pad into that last quiet stretch (Incomplete 3's shape). A long pause
+   inside the line, then singing that runs into the next cue: the next cue's start. The
+   existing tests should pass unchanged (their pauses are under `RELEASE_QUIET_S`);
+   record any that do not. Commit `fix(cue_align): a rescue window ends where the
+   singing stops before the next line`; log a row.
+2. **Zero-length words and the guard** (`repace_bad_lines`; the guard beside
+   `_trim_lead_in`; `crammed_line_ids` in the stats and the rescue log line;
+   docstrings). Tests: a placed line with every token, half of them zero-length, asks
+   a re-align and keeps one that times more; it keeps its own words when the re-align
+   times no more; a line with every token timed asks nothing; a first word starting
+   before the previous line's last word ends is trimmed to that end; with under
+   `INSTANT_WORD_DUR_S` left the re-align is not kept and the line keeps its own words;
+   a first word after that end is untouched; `crammed_line_ids` lists only the
+   zero-length-word line. Commit `fix(cue_align): words the aligner left zero-length
+   are rescued like missing ones`; log a row.
+3. **CPU check before each commit** (no GPU). Songs: Stronger, Castle, Incomplete. Data
+   in the 39d269ea scratchpad: `cram_<yid>.json` (`sections`, `spans`, `duration`,
+   `sub`, `stem`) and `alt_<yid>.json` (`realigns`: `lid`, `w0`, `w1`, raw `words`;
+   `out`). Envelope: `probe_edges.load_env` (323ba938 scratchpad) of
+   `~/pikaraoke-songs/<sub>/<stem>---<sub>.m4a`. Display and align lines from the
+   library bundle. Call `repace_bad_lines(sections, spans, lines, align_lines,
+   duration=..., env=..., realign=<the saved words for (lid, w0, w1)>)`.
+   - After step 1: every window `realign` receives is one of that line's saved windows.
+   - After step 2: the windows equal the saved ones call for call. With the guard
+     patched out (in the check only), the output equals `alt_<yid>.json` `out` line
+     for line. With it on, only lines whose first word started before the previous
+     line's end differ, each trimmed or not kept per Decision 13.
+   - A window with no saved words is a mismatch: record it and stop.
+4. **Bundle, only if Ken agrees.** The cue route's bundle keeps the section align's line
+   objects before the rescue, and every one-line re-align (`line_id`, `w0`, `w1`, the
+   words it returned, or null), as a new top-level key (`cue_inputs`, with `sections`
+   and `realigns`). Additive, no schema bump (Decision 6). `align_song` returns them,
+   `_run_cue_align` passes them on, `build_bundle` writes them. Tests in the capture
+   and stage tests. Commit `feat(alignment_capture): cue bundles keep the section words
+   and re-aligns`; log a row. Why: rows 43-46 needed GPU replays only because these
+   are not saved. With them, the rescue's rules and both snaps re-run over the corpus
+   on CPU.
+5. **GPU rerun**, after Ken's go with the app stopped: Phase 5b step 6, with She Used
+   To Be Mine (`53GIADHxVzM`) added to Phase 5's song list. Its pre-branch bundle and
+   ASS are in the library today and go into the run's backup. Dry run first. Same
+   compares as step 6, plus: per song, lines with a zero-length word and lines starting
+   before the previous line's end, against the pre-branch backup and this run's
+   backup; `crammed_line_ids`; She Used To Be Mine 0:33-0:40 word by word against the
+   transcriber; the 18 targets (expected: 16 timed in full by the model); the
+   Pocahontas `.lrclib.srt` hash.
+6. Log raw tables; give Ken `song - m:ss - line text - what changed` for every changed
+   line, targets and She Used To Be Mine first; stop at GATE B.
+
 ### Phase 6: after GATE B
 
 Only on Ken's word: land on `dev` (Branches and Archive Tags in `CLAUDE.md`: copy the
 code commits one by one, no plan file), then in `plans/open-issues.md` on `dev`, record
 what remains (e.g. any test line still guessed, the not-the-window group, the
-remaining 16 songs needing a Regenerate, review findings 4, 8 and 10 from row 24, and
-Decision 12's three out-of-scope items), and retire the branch as
-`archive/cue_align_windows`.
+remaining 16 songs needing a Regenerate, review findings 4, 8 and 10 from row 24,
+review findings 3-4 and 6 from row 44, Decision 12's three out-of-scope items, and
+Decision 13's stat 1 question; update or close the She Used To Be Mine entry per GATE
+B), and retire the branch as `archive/cue_align_windows`.
+
+Open before landing (row 44), each Ken's call:
+
+- **Finding 5, the last line's window has no hold cap.** Kept uncapped on purpose
+  (`_volume_tail`: the final note is often the longest), but outro ad-libs widen the
+  window and the span the re-align is checked against. A cap needs the length of real
+  final holds across the cue library first.
+- **Finding 7, the lead-in trim can accept a first word on the previous line's held
+  note.** A guard against overlapping the previous line's words is possible; how often
+  it happens is not measured.
+
+For `plans/open-issues.md` at landing (row 44):
+
+- **Findings 3-4, repeated tokens.** In-order matching puts a word on the earliest
+  repeat of its token; the time match puts it on a later one. The fix is one
+  assignment: each word's token index carried on the line object from
+  `_match_words_to_tokens`, which also removes `_assign_in_order`. Same prerequisite
+  as Decision 12's unruled splice of section and re-align words.
+- **Finding 6, duet ending.** The song's last line is the last by index, not the
+  latest-ending one, so an earlier line held past the last cue gets no tail window
+  and the last line's tail runs over that other singer's note.
 
 ## Rules for the executor
 
 - `CLAUDE.md` applies in full: conda env `pik`, pytest with mocked I/O, pre-commit on
   changed files only, Self-Review before each commit, no debug prints, commits grouped
   by feature with their tests.
-- No GPU outside Phase 5, and Phase 5 only after Ken says go.
-- The library at `~/pikaraoke-songs` is read-only until Phase 5.
-- Do not re-derive the Library facts; they are measured. Do not touch the
-  She Used To Be Mine issue (Decision 9).
+- No GPU outside Phases 5, 5b and 5c, and each rerun only after Ken says go.
+- The library at `~/pikaraoke-songs` is read-only outside those reruns.
+- Do not re-derive the Library facts; they are measured. She Used To Be Mine is in
+  scope since Decision 13.
 - Results log rows are raw: commands, counts, constants, hashes. No verdicts; a
   surprise is recorded as what was seen.
 - `graphify affected "<symbol>"` before changing `repace_bad_lines`,
@@ -557,6 +693,10 @@ whose last cue overruns the media). Never launch it unprompted.
 | 40 | 2026-10-31 | 5b | Sonnet, Phase 5b steps 1, 2, 4. `graphify affected` on `segment_by_gaps`, `repace_bad_lines`, `align_song`, `_with_guessed_words` first (callers: `align_song`, `_run_cue_align`, `test_cue_align.py`, `test_lyric_align.py`). Commit `faa9146` `fix(cue_align): only a line missing words gets a wider window`: `segment_by_gaps` loses `env` (caption rule, duet end of `173439c` kept); `Section.measured_end`, `Section.widened_end`, the `edges` stat and its log line removed; `repace_bad_lines` takes `env` in place of `sections`, window per line: `aim_end` = max(cue end + offset, `_singing_end`), `w0` = cue start + offset - pad, `w1` = min(duration, max(cue end + offset + pad, aim_end)), the check aims at (cue start, max(cue end, aim_end - offset)); new `_singing_end` (`_volume_tail` for the song's last line, else `_volume_end` against the next cue; `_volume_end`/`_volume_tail` params renamed `cue`/`next_cue`); new `_trim_lead_in` (first word start < cue start + offset - `PAUSE_SLACK_S` and end >= bound + `INSTANT_WORD_DUR_S` -> start = bound, run before the check); guessed-word bounds are the line's `(w0, w1)` (was section `t0`/`t1`), the `duration` min dropped (`w1` is already capped). `lyric_align.py`: docstring and comment only. Tests: `TestSegmentByVolume` (14) removed, duet-end test moved to `TestSegmentByGaps`; new `TestRescueWindow` (hold into silence, sang into the next caption, pause inside the held line, hold cap x2, stopped before the caption, silent envelope, envelope ends before the next cue, next cue starts before the search, long final hold, final hold to the end of the audio, held tail kept, same tail rejected without env, no env = today's window); lead-in trim x3 in `TestPartialLines` (kept at the bound; under `INSTANT_WORD_DUR_S` past it rejected; last word past the end bound rejected); `TestAlignSong`: section window stays 7.75 with an envelope, no `edges`; `test_lyric_align.py`: two `edges` asserts removed. Mutation checks (file restored after each): `_singing_end` always None -> 7 tests fail (6 `TestRescueWindow`, 1 `TestAlignSong`); `_trim_lead_in` call removed -> 1 fails (kept at the bound). `pre-commit` on the 4 files: black reformatted the test file, second run clean. `python -m pytest -q`: 3045 passed (row 2: 2998) | 4 files, +266 -276 |
 | 41 | 2026-10-31 | 5b | Phase 5b step 3, scratch `cpu_check.py` (CPU, no library writes, d6c3ce9f scratchpad): per song, line objects from the pre-branch `before` backup ASS words (all lines), cue spans / lines / `media_duration_s` / envelope as row 38, `repace_bad_lines(..., env=env, realign=<saved b1_<id>_<lid>.json words for a target line, None otherwise>)`. `fit_offset` patched to the bundle's `repace.offset_s` (row 38's): the fit over the snapped ASS words differs, unpatched first run: Stronger +0.036 vs -0.497, All of Me +0.015 vs -0.254, Someone Like You -0.454 vs -0.525, Baby One More Time +0.145 vs -0.104, Miss Independent +0.250 vs +0.112, Pocahontas +0.230 vs -0.152, Incomplete -0.659 vs -0.686, Castle +0.010 vs -0.170, My Heart Will Go On -0.114 vs -0.377; the 18 `w0` then differed from row 38's by 0.03-0.54 s and 14 were kept (Stronger 37 not) | Patched: the (w0, w1) `realign` received equals row 38's on 18 of 18 (to the 0.01 s row 38 rounds to); kept (`SOURCE_REALIGN`) 15, the same 15 as row 38; not kept: Stronger 26 (15/15 words, guessed tail, last `go` 146.63-146.73 = window end), Miss Independent 9 (`Good` 24.61-24.71, `morning.` 24.71-25.06, `God` 25.06-25.28, `damn.` 25.28-25.51), Miss Independent 71 (`Ooh` 216.36-217.86, `yeah,` 217.94-218.4, `ooh` 218.4-218.74, `yeah` 218.74-219.08). Non-target lines asked for a re-align: Miss Independent 11 (unpatched run only) |
 | 42 | 2026-10-31 | 5b | Phase 5b step 5. Commit `861dad2` `fix(cue_align): guessed words fill the tokens the aligner dropped, in order`: new `_assign_in_order` (each word takes the next token with its normalised text; a word with no token left is skipped); `_with_guessed_words` uses it, loses its `cue_span` param. Test `test_a_repeated_phrase_missing_its_tail_is_guessed_after_the_timed_words` (tokens `no more, no more`, timed `no` 8.7-8.8 and `more,` 8.9-9.0 in cue 8-9): before the change `['no', 'more,', 'no', 'more,']` (timed pair on tokens 2-3, guesses on 0-1); after: `no`, `more,` timed, `no` 9.0-9.1, `more` 9.1-9.2. First draft (timed pair at 8.0-8.5) passed under the old match too, so the test uses the late pair. `cpu_check.py` on `faa9146` (old match, scratch worktree, removed after) vs `861dad2`: output identical on all 33 lines (windows, kept set, the three guessed lines' words). `pre-commit` on the 2 files clean; `python -m pytest -q`: 3046 passed in 36.73 s | 2 files |
+| 43 | 2026-10-31 | 5b | Opus, after Ken's question (wider windows for crammed lines too, e.g. She Used To Be Mine). CPU, library read only. (1) She Used To Be Mine (`53GIADHxVzM`, bundle 2026-10-30T14:57:39, `.lrclib.srt`, repace offset -0.39, realigned [41]) lines 5-8: ASS, cue span, transcriber words. (2) scratch `deficit.py` (39d269ea scratchpad): per cue-align line with words, ASS karaoke cursor end (event start + all `\k`/`\kf`) minus the bundle's `output_line_timings` end; `generate_ass` floors each word at `\kf10`, so the overrun is the time the floor added. (3) scratch `crammed.py`: lines with `\kf10` words | (1) ASS L6 `{\k80}{\kf64}I'm {\kf34}not {\k15}{\kf43}anything {\kf130}like {\kf10}I {\kf10}used {\kf10}to {\kf10}be`, bundle end 36.09, cursor end 36.48; L7 `{\k80}{\kf10}Although {\k26}{\kf282}it's {\k10}{\kf34}true`, start 36.09; edge_snap: L6, L7 not in onset snaps, L7 word 1 end-extended 1.32 to bound. Cues (SRT): L6 33.32-38.48, L7 38.48-40.82. Transcriber: `anything` 34.22-34.80, `Like` 36.35-36.52, `I` 36.52-36.84, `used` 36.84-37.34, `to` 37.34-37.62, `be` 37.62-38.02, `Although` 38.30-38.74, `it's` 38.74-39.30, `true` 39.30-39.60. Overrun L5 -0.02, L6 0.39, L7 0.10, L8 0.00. (2) 90 cue songs, 5911 lines (433 in the 9 test songs): overrun >= 0.05 s 1092 lines in 89 songs (test 65); >= 0.1 413 in 80 (test 21); >= 0.2 100 in 42 (test 2); >= 0.3 34 in 23 (test 1). (3) lines with any `\kf10` 1866; a run of >= 2 `\kf10` 286, >= 3 67; `\kf10` share >= 0.5 154, > 0.5 50 | ASS floor hides raw durations under 0.10 s; pre-snap words are not saved |
+| 44 | 2026-10-31 | 5b | Opus. `/code-review faa9146^..861dad2` (files `cue_align.py`, `lyric_align.py`, `test_cue_align.py`, `test_lyric_align.py`; finders: correctness, simplicity, robustness), 10 findings: (1) `_singing_end` searched raw cue spans while `t1`, `aim_end` are cue + offset; (2) guess bounds were the line's `(w0, w1)` only, so a kept (clean, off-cue) partial line with words past `w1` got `hi` < its last word's end and zero-length guessed words; (3) `_assign_in_order` gives a word the earliest free repeat of its token (tokens `baby baby baby oh`, timed 3rd `baby` + `oh` -> timed word on token 0, tokens 1-2 guessed after it); (4) two token-assignment rules: `_match_words_to_tokens` (DP, cue-paced expected times, not offset-corrected) in `split_section_to_lines`/`_line_from_realigned`, then `_assign_in_order` again in `_with_guessed_words`; (5) last line's window: `_volume_tail`, no `MAX_HOLD_S` cap, so outro ad-libs extend `w1` and the aimed span; (6) last line = `lid == len(cue_spans) - 1`, not the latest-ending line (the section code's duet rule, `173439c`); (7) `_trim_lead_in` does not check overlap with the previous line's words; before `faa9146` such a re-align was rejected; (8) `edges` stat removed with no per-line replacement; (9) decode label `cue-align edges`; (10) `guessed[lid]` counts from the input words, `_assign_in_order` can skip a word. Commit `8cc7588` `fix(cue_align): rescue windows search the audio clock, guesses stay outside kept words` for 1, 2, 8, 9 and the docstring of 3: `audio_spans` = cue spans + offset passed to `_singing_end`; guess bounds `after = max(after, min(w0, start))`, `before = min(before, max(w1, end))`; stats `n_windows`, `windows_widened_line_ids` (`singing_end` > cue end + offset), `windows_unmeasured_line_ids` (`singing_end` None, incl. no env) and the rescue log line; label `cue-align rescue windows`. Not changed: 3-7, 10 (10: words come from the line's own tokens in order, no skip seen). Tests: `test_where_singing_stops_is_searched_on_the_audio_clock` (anchors offset -0.6, line 4 cue 8-9, next cue 10-12, env sung 7.7-9.2 and 9.4-11.4), `test_a_guessed_tail_after_a_kept_line_past_its_window_is_not_shown_for_no_time` (cue 8-9, words `ee` 9.9-10.2, `ff` 10.3-10.6), window-id asserts on two `TestRescueWindow` tests. GPU rerun of the test songs not run (Ken's word) | Against `cue_align.py` at `861dad2` (stashed, restored): 4 of the new or changed tests fail (offset window (6.65, 10.0) vs 9.4; tail `gg` zero length; 2 missing stats keys). On `8cc7588`: window (6.65, 9.4); `ff` 10.3-10.45, `gg` 10.45-10.6. `pre-commit` on the 3 files: black reformatted `test_cue_align.py`, second run clean. `python -m pytest -q`: 3048 passed in 37.28 s. Rows 38 and 41's windows used the raw-cue search; their repace offsets (-0.686 to +0.112) are all under the 0.75 pad, so none of the 9 songs was re-sectioned |
+| 45 | 2026-10-31 | 5b | Opus, GPU replay on Ken's go (app stopped, GPU idle), HEAD `8cc7588`, no library writes. Scratch `replay_cram.py` (39d269ea scratchpad): the 9 test songs + She Used To Be Mine (`53GIADHxVzM`); per song `cue_align.align_song` as `_run_cue_align` calls it (cue spans from the lyric sheet, the bundle's stem choice, envelope as rows 36-38, slices as row 38), `repace_bad_lines` wrapped to save its input (section line objects, before any rescue: `cram_<yid>.json` key `sections`). A = committed code. B = `repace_bad_lines` from cue_align's own source with two expressions changed: complete = `_timed(obj) >= len(toks)`, better = `_timed(fixed) > _timed(obj)` (`_timed` = words of at least `INSTANT_WORD_DUR_S`), over A's input, re-align calls shared by (text, w0, w1). Both through `snap_line_edges`. First run stopped at the JSON save after Stronger (numpy bool); rerun with `default=o.item()`. Report `cram_report.md`; tallies `cram_tally.py`, `cram_guard.py`, `alt_window.py` (CPU) | Per song (offset; A realigned; B realigned; unique slice calls, A's in brackets; s): Stronger -0.60, [6, 32, 37], [6, 10, 18, 19, 26, 32, 35, 37], 23 (15), 139; All of Me -0.30, [22, 29, 40, 46, 49], [22, 29, 40, 46, 47, 49, 55], 21 (18), 159; Someone Like You -0.51, [16, 33, 45, 49], [1, 16, 32, 33, 34, 42, 45, 46, 49, 50], 25 (18), 161; Baby One More Time -0.12, [20, 28, 30], [1, 2, 3, 20, 27, 28, 30, 40], 23 (11), 146; Miss Independent +0.13, [5, 9, 12, 38, 72, 78], [1, 2, 3, 5, 9, 11, 12, 24, 38, 58, 72, 74, 78, 79, 81], 38 (17), 207; Pocahontas -0.15, [6, 7, 8, 36], [6, 7, 8, 9, 19, 20, 23, 27, 33, 36], 14 (8), 113; Incomplete -0.69, [], [2, 6], 22 (19), 139; Castle -0.17, [36, 46], [2, 10, 14, 16, 23, 30, 32, 36, 46, 53], 24 (12), 152; My Heart Will Go On -0.36, [3, 8, 19, 25, 26], same, 10 (10), 97; She Used To Be Mine -0.39, [41], [6, 7, 29, 41], 9 (6), 93; none re-sectioned; 24 stable-ts `Failed to align` warnings. Targets, A: every token timed by the model on 14 of 18 (re-aligned: Stronger 6, 32, 37; All of Me 29, 46, 49; Someone Like You 16, 33, 49; Baby One More Time 20, 30; Pocahontas 36 (end 190.20); Castle 46; section align 6/6: My Heart Will Go On 9); guessed words: Stronger 26 (13/15), Incomplete 3 (4/6), Miss Independent 9 (re-aligned + guessed), 71 (2/4). Incomplete 3: window (38.575, 44.492), 4 words returned, not kept; row 38's (38.58, 47.10) kept 6/6. Audio-clock cue 39.33-43.74, next cue 50.17; quiet runs from 43.23: (43.23, 44.15), (44.68, 44.80), (45.60, 45.75), (46.38, 50.18); transcriber `is` 41.98-44.18, `anybody's` 44.18-45.74, `guess` 45.74-46.04. B vs A: section lines with a zero-length word 92 of 478; B asked 75 re-aligns A did not; kept by B only 46; lines differing after the snaps 59; against the transcriber [B closer, within 0.05 s, B further]: start 25 / 15 / 10 (9 without a heard first word), end 18 / 26 / 3 (12 without); zero-length words: section 135, A 94, B 40; lines starting before the previous line's end: A 13, B 32 (19 new in B, 0.01-1.29 s). She Used To Be Mine, A -> B: L6 `I` `used` `to` `be` all 36.09-36.09 -> 36.50-36.82, 36.94-37.28, 37.28-37.62, 37.75-38.14 (heard 36.52-38.02); L7 start 36.09 -> 37.59 (`Although` 37.59-38.52, heard 38.30; previous line's end 38.14); L29 `Who` 144.65-144.67 -> 144.47-144.61. `cram_guard.py` (B + guard on finding 7: a line only B re-aligned may not start before the previous line's last word ends, pre-snap; first word trimmed to that end if >= `INSTANT_WORD_DUR_S` is left, else A's line): trimmed 10, dropped 6; lines differing from A 52; start 25 / 13 / 6, end 17 / 22 / 3; zero-length words 49; lines starting before the previous line's end 16. `alt_window.py` (window end at the quiet stretch running into the next cue's start instead of the first quiet stretch of `RELEASE_QUIET_S`; same pad, midpoint, `MAX_HOLD_S`): 113 asked lines (not the song's last), aim end differs on 4: Stronger L1 23.95 -> 25.45, Stronger L26 146.57 -> 149.38, Castle L30 158.33 -> 159.23, Incomplete L3 43.74 -> 47.12 | 10 songs |
+| 46 | 2026-10-31 | 5b | Opus, GPU on Ken's go (app stopped, GPU idle), HEAD `8cc7588`. Scratch `replay_alt.py` (39d269ea scratchpad): row 45's variant B with `_volume_end` replaced by `alt_window.alt_end` (quiet stretch of at least `RELEASE_QUIET_S` ending within 2 frames of the next cue's start; none -> the next cue's start; same pad, midpoint, `MAX_HOLD_S`), over row 45's saved section output for Stronger, Castle, Incomplete; every re-align run, raw words saved (`alt_<yid>.json` key `realigns`: lid, w0, w1, words); then `snap_line_edges` | Stronger: realigned [6, 10, 18, 19, 26, 32, 35, 37] (B same), guessed [] (B [26]), 13 calls, 66 s; Castle: realigned as B, guessed [] (B []), 15 calls, 77 s; Incomplete: realigned [2, 3, 6] (B [2, 6]), guessed [] (B [3]), 4 calls, 23 s. Lines differing from B after the snaps: Stronger [26], Castle [30], Incomplete [3]. Incomplete L3: window 38.58-47.12, 6 of 6 returned; raw `is` 42.02-44.18, `anybody's` 44.18-45.76, `guess` 45.76-46.02; pre-snap `anybody's` 44.18-45.68, `guess` 45.76-46.02; after the snaps `guess` 45.76-47.20 (end snap +1.185, `to_bound` False); transcriber `anybody's` 44.18-45.74, `guess` 45.74-46.04. Stronger L26: window 140.13-149.38, 15 of 15 returned; last three B `here` 146.17-146.41 `I` 146.41-146.52 `go` 146.52-146.63 -> `here` 146.54-148.04 `I` 148.39-148.49 `go` 148.49-149.65 (end snap +0.942); zero-length `here` 143.01-143.01 in both; transcriber has no first/last match. Castle L30: window 151.20-159.23; only `Driving` changes, 152.15-153.00 -> 152.15-152.70; transcriber 152.40-157.70. Stronger L1: window 18.20-25.45, 2 of 3 returned, not kept (as B). Targets with B + this window end: every token timed by the model on 16 of 18 (row 45's 14 + Incomplete 3, Stronger 26); guessed: Miss Independent 9, 71 | 3 songs |
 
 **R7 targets** at the starting constants (slack 0.5, dip 12, min_quiet 0.1, tail_quiet 0.5). `heard_end` is the transcriber's end of the line's last word.
 
@@ -1256,4 +1396,15 @@ Branch cue_align_windows. Plan: plans/cue-align-windows.md, Decision 12 and Phas
 Done, don't redo: Phases 1-5, the review fixes, rows 25-39. Do Phase 5b steps 1-5 (per-line
 windows, clamp, tests, CPU check, two commits). Stop before step 6's GPU rerun until Ken
 stops the app and says go; then stop at GATE B with Ken's list of changed lines.
+```
+
+Phase 5c (Decision 13, ratified by Ken):
+
+```
+Branch cue_align_windows, HEAD 8cc7588. Plan: plans/cue-align-windows.md, Decision 13
+and Phase 5c. Done, don't redo: Phases 1-5b steps 1-5, the review fixes (8cc7588),
+rows 40-46. First commit the plan edits (rows 43-46, Decision 13, Phase 5c) as
+docs(plan). Do Phase 5c steps 1-3 (window end, zero-length words + guard, CPU check
+before each commit); step 4 only if Ken has agreed to it. Stop before step 5's GPU
+rerun until Ken stops the app and says go; then stop at GATE B with Ken's list.
 ```
