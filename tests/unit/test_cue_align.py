@@ -761,6 +761,18 @@ class TestRescueWindow:
         window = self._window(self._song((14.0, 15.0)), env)
         assert window == pytest.approx((7.25, 11.35), abs=0.03)
 
+    def test_a_long_breath_inside_the_line_is_not_its_end(self):
+        # Quiet 9.0-10.0 is over RELEASE_QUIET_S, but "gg" is sung after it: the singing
+        # stops at 11.0, in the quiet that runs into the next cue.
+        env = _env(16.0, [(8.3, 9.0), (10.0, 11.0), (14.2, 15.0)])
+        window = self._window(self._song((14.0, 15.0)), env)
+        assert window == pytest.approx((7.25, 11.75), abs=0.03)
+
+    def test_a_long_breath_inside_a_line_that_sings_into_the_next_caption(self):
+        env = _env(16.0, [(8.3, 9.0), (10.0, 13.0)])
+        window = self._window(self._song((12.0, 13.0)), env)
+        assert window == pytest.approx((7.25, 12.0), abs=0.03)
+
     @pytest.mark.parametrize(
         "sung",
         [
