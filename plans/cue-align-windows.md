@@ -60,6 +60,41 @@ Opus, this plan, stated so the executor need not re-derive them:
     LRC's 3:15 closing stamp. Re-making the sheet would mask whether the window fix
     works. Do not Repair it during this plan.
 
+Opus, GATE A ruling, 2026-10-31 (rows 14-20):
+
+11. **Windows only grow; the edge rule is replaced.** The Phase 2 rule (longest quiet
+    run, both windows clamped to its midpoint) failed criteria 1 and 2 for two
+    measured reasons: the longest run is often a pause inside the held line (Stronger
+    6, Baby One More Time 30), and moving the later window's start to the run's
+    midpoint left it no lead-in (row 9). Ruled instead:
+    - **The later section's start never moves.** Caption starts are the one caption
+      time cue align trusts, and no first word has been seen clipped (Decision 8 now
+      covers every section head, not just the song's).
+    - **The earlier section's end moves later, never earlier**: `t1` is the larger of
+      today's caption rule and the measured end. Measured end: `SECTION_PAD_S` into the
+      first quiet stretch of at least `RELEASE_QUIET_S` (0.75 s) after the caption ends,
+      clamped to the stretch's midpoint; if the singing never pauses that long before
+      the next line's caption start, the window ends at that caption start. Stronger 6
+      shows why (row 14): "own" runs right up to the next caption's start and the
+      next line's "But" begins there.
+    - **A hold is at most `MAX_HOLD_S` (4 s) past its caption.** Singing that goes on
+      longer without a pause is other vocals (an uncaptioned part, ad-libs), not the
+      line's tail; that edge keeps today's rule and counts as a fallback. Without the
+      cap, windows grew up to 28 s across instrumental breaks, and no dropped-word line
+      sings more than 3.7 s past its caption (rows 16, 20).
+    - **Song tail**: the window ends `SECTION_PAD_S` after the vocal stem's last sung
+      frame, capped at `duration`, with no hold cap. There is no next line to take
+      audio from, and the song's end is where long holds live: Pocahontas holds "wind"
+      to 190.3 (row 14), 11.5 s past its caption, and Whitney Houston's last line holds
+      about 12 s past its caption. Accepted cost: outro speech the captions skip goes
+      into the last window (Pop, Mulan; row 17).
+    - Windows may now overlap, by at most the later window's caption pad (0.75 s),
+      only where the earlier line is still singing. Duet cues already overlap by up
+      to 5 s, and nothing downstream assumes line times don't overlap.
+    - Criterion 2 holds by construction (no window loses audio). The plan's tuning
+      allowance is superseded: `MIN_QUIET_S` and `TAIL_QUIET_S` are gone;
+      `RELEASE_QUIET_S` and `MAX_HOLD_S` are new.
+
 ## Library facts (2026-10-31, `dev` at `daf183a`)
 
 Read-only probes over `~/pikaraoke-songs/alignment_debug/*.json` (scratch scripts by
@@ -150,32 +185,35 @@ Song Info:
 `segment_by_gaps` and `align_song` gain `env: np.ndarray | None` (a dB envelope from
 `onset_snap.rms_envelope_db`, one value per `onset_snap.HOP_S`). With `env=None`
 everything behaves exactly as today. With an envelope, section *grouping* is unchanged
-(caption gaps over `SECTION_GAP_S`, then `_split_oversized`); only the window edges
-move:
+(caption gaps over `SECTION_GAP_S`, then `_split_oversized`), every `t0` is unchanged,
+and each section's `t1` becomes the larger of today's and the measured end (Decision
+11):
 
-- **Between two sections** (last line `a` of one, first line `b` of the next): search
-  `R = [cue_end(a) - EDGE_SEARCH_SLACK_S, cue_start(b) + EDGE_SEARCH_SLACK_S]`
-  (start at 0.5 s). The sung reference is the louder of `a`'s and `b`'s, each the
-  `onset_snap.SINGLE_WORD_REF_PCT` percentile of `env` over its cue span (no words
-  exist yet, so the single-word reference is the one that fits). A frame is quiet when
-  it is at least `QUIET_DIP_DB` below that reference (start at
-  `onset_snap.SUSTAIN_NEAR_DB`, 12 dB). Take the longest run of consecutive quiet
-  frames lasting at least `MIN_QUIET_S` (start 0.1 s). Then the earlier section's `t1`
-  is the run's start + `SECTION_PAD_S`, the later section's `t0` is the run's end -
-  `SECTION_PAD_S`, each clamped to the run's midpoint so windows never overlap. No
-  qualifying run: today's rule for that edge (count it as a fallback).
-- **Song tail** (last section): from `cue_end(last) - EDGE_SEARCH_SLACK_S` to
-  `duration`, the first quiet run lasting at least `TAIL_QUIET_S` (start 0.5 s); `t1`
-  is its start + `SECTION_PAD_S`, capped at `duration`. None: `duration`.
+- **Sung level and quiet**: the sung reference is the louder of the two lines' levels,
+  each the `onset_snap.SINGLE_WORD_REF_PCT` percentile of `env` over its cue span (no
+  words exist yet, so the single-word reference is the one that fits); under
+  `onset_snap.MIN_REF_DB` nothing is measured. A frame is quiet when it is at least
+  `QUIET_DIP_DB` (`onset_snap.SUSTAIN_NEAR_DB`, 12 dB) below that reference.
+- **Between two sections** (last line `a` of one, first line `b` of the next): over
+  `[cue_end(a) - EDGE_SEARCH_SLACK_S, cue_start(b)]` (slack 0.5 s), the first quiet
+  stretch lasting at least `RELEASE_QUIET_S` (0.75 s) is where `a` stopped: the
+  measured end is its start + `SECTION_PAD_S`, clamped to its midpoint. No such
+  stretch: `a` sang up to `b`, and the measured end is `cue_start(b)`. Either one
+  further than `cue_end(a) + MAX_HOLD_S` (4 s), or no sung level: no measured end
+  (fallback, today's rule).
+- **Song tail** (last section): the measured end is `SECTION_PAD_S` after the last
+  frame from `cue_start(last)` on that is not quiet, capped at `duration`. No sung
+  level: fallback.
 - **Song head**: unchanged (Decision 8).
 
-Put the edge search in one helper used by both cases; keep the module pure (the
-envelope is passed in, never decoded here). New constants get a comment saying what
-they guard against, as the module's existing constants do.
+Keep the module pure (the envelope is passed in, never decoded here). New constants get
+a comment saying what they guard against, as the module's existing constants do.
 
 `align_song` passes `env` to both `align_pass` calls (the re-section pass shifts the
 cues first, as today), and hands the final pass's sections to `repace_bad_lines`
-(next section). `stats` gains `edges: {"n": ..., "measured": ..., "fallback": ...}`.
+(next section). `stats` gains `edges: {"n": ..., "widened": ..., "fallback": ...}` for
+the final pass: section ends, ends moved later than today's, and ends the volume could
+not place. Absent when `env` is None.
 
 ### Stage wiring (`pikaraoke/pipeline/stages/lyric_align.py`)
 
@@ -269,7 +307,15 @@ split by volume is the candidate next step, not built here.
 
 ### Phase 3: wire the edges in -> commit
 
-`align_song(env=...)`, the stage decode-once wiring, the `edges` stats.
+First rework Phase 2's uncommitted edge code and its `TestSegmentByVolume` tests to
+Decision 11: a hold into silence; singing straight into the next caption (window ends
+at its start); a pause inside the held line shorter than `RELEASE_QUIET_S` is skipped;
+a hold past `MAX_HOLD_S` falls back; a release before the caption end leaves today's
+window; every `t0` unchanged; the tail reaching a long hold and capped at `duration`;
+no sung level falls back; `env=None` identical to today. Re-run `final_rule.py`'s
+figures through the committed `segment_by_gaps` (scratch) and record them.
+
+Then `align_song(env=...)`, the stage decode-once wiring, the `edges` stats.
 `tests/unit/test_cue_align.py`: `align_song` with a stub aligner and an envelope moves
 the tail window and records the stats; `env=None` unchanged. `tests/unit/test_lyric_align.py`:
 the cue route decodes once and passes the envelope; a failed decode passes None and
@@ -305,8 +351,12 @@ files into `regen_backup_<UTC>/` first: that is the "before". Confirm Pocahontas
 Compare (scratch script, not committed), per song: target lines' words shown before
 and after, and their timing source (aligned / re-aligned / guessed words); every
 other line whose start or end moved more than 0.3 s, with before, after, and the
-transcriber's heard time for its first and last word; the new `edges` and `repace`
-stats; the Song Info stats. Put the raw tables in the Results log.
+transcriber's heard time for its first and last word; lines whose first word starts
+before the previous line's last word ends, before and after (Decision 11 lets windows
+overlap; a next line whose start smeared back into a now-found held tail shows up
+here, e.g. Stronger 7, whose "But" sits at its window start 50.44 while the sung
+"But" begins about 51.2); the new `edges` and `repace` stats; the Song Info stats.
+Put the raw tables in the Results log.
 
 **GATE B (Ken)**: Ken plays the 18 target lines and a sample of moved lines. Give him
 a list as `song - m:ss - line text - what changed`, targets first. Ken's ruling goes
@@ -365,6 +415,13 @@ whose last cue overruns the media). Never launch it unprompted.
 | 11 | 2026-10-31 | 2 | envelope around the three target lines outside at the starting constants (`probe_line.py`; dB every 0.25 s; sung level ref -19.5 / -17.6 / -19.8, quiet below ref - 12) | **Pocahontas L36** (last line, cue 174.84-178.84; heard `of` 179.68-181.48, `the` 181.48-183.04, `wind` 183.04-184.92): 178.84 -21, 179.09 -42, 179.34 -26, 179.59 -31, 179.84 -36, 180.09 -40, 180.34 -54, 180.59 -66, 180.84 -31, 181.09 -30 ... 183.34 -41, 183.59 -66, 183.84 -69, 184.09 -64, 184.34 -93, 184.59 -110, 184.84 -30, 185.09 -27. Tail window ends 180.375. **Stronger L6** (cue 43.56-48.56, next cue 51.19; heard `own` 50.22-51.1, next line `But` 51.1): 48.56 -37, 48.81 -24, 49.31 -35, 49.56 -34, 49.81 -25, 50.06 -22, 50.31 -39, 50.56 -21, 51.06 -24, 51.31 -28. Window ends 49.488. **Baby One More Time L30** (cue 161.26-166.26, next cue 169.70; heard `now` 167.36-168.20, next `Don't` 169.56): 165.51 -33, 165.76 -41, 166.01 -56, 166.26 -23, then -17..-28 to 169.26, 169.51 -33. Window ends 165.962 |
 | 12 | 2026-10-31 | 2 | scratch variants of the edge rule at the starting constants (`variants.py`; monkeypatched, not in the committed code; not within the plan's tuning allowance): (a) last qualifying run in R instead of the longest; (b) (a) with windows only moving outward from today's (t1 = max(new, old), t0 = min(new, old)); (c) longest run with the same outward-only rule | (a) fallback 9.7%; section-final outside old 55 -> 31 (in old and out 2); section-first outside 97 -> 161 (in old and out 76); target lines outside: Pocahontas 36 only. (b) section-final outside 55 -> 30 (1); section-first 97 -> 85 (0); target lines outside: Pocahontas 36 only; window pairs overlapping 353. (c) section-final 55 -> 33 (1); section-first 97 -> 80 (0); target lines outside: Baby One More Time 30, Stronger 6, Pocahontas 36; overlapping pairs 293 |
 | 13 | 2026-10-31 | 2 | GATE A against the pass criteria, starting constants | Criterion 1: not met (Baby One More Time 30, Stronger 6, Pocahontas 36 outside; Stronger 26, Miss Independent 9 and 71: word not found by the match). Criterion 2: not met (36). Criterion 3: met (9.7%). Cap-split edges with no quiet run in the test songs: none. Stopped for Opus; Phase 3 not started; Phase 2 code left uncommitted |
+| 14 | 2026-10-31 | GATE A | Opus re-reads (scratch `envdump.py`, `pocatail.py`; envelopes from row 7's cache, 0.05-0.4 s steps). **Pocahontas L36**, all three stems + mix: 182.0-183.2 vocal -31..-39 / nonvocal -52..-67; 183.6-184.4 vocal -66..-120; 184.8-190.0 vocal -26..-31, nonvocal -32..-45, mix -24..-29; 190.4 vocal -64, 191.2 on -120, nonvocal -38..-47. YouTube ASR json3: `colors` 179.2-181.2, `of` 181.52-183.52, no `the`/`wind`. LRC last line `[03:01.22]`, closing `[03:15.01]`. **Stronger L6/L7**: current ASS L6 words end `make` 48.34-48.45, `it` 48.45-50.33 (`on my own` absent); L7 `But` 50.43-51.55, `now` 51.55-52.11, `I'm` 52.27-52.75; Whisper `own` 50.22-51.1, `But` 51.1-51.56, `now` 51.56-52.14; L7 window t0 50.44 (cue 51.19 - 0.75); envelope dip -34 at 51.6, no frame below ref - 12 dB between 50.35 and 51.55. **Baby One More Time L20/L21**: envelope dips 109.9-110.0 (-28..-34), 110.3 (-39), 111.0-111.25 (-31..-35); L21 cue 110.85; Whisper `my` 110.64 | the vocal stem is louder than the nonvocal stem over 184.8-190.0 and the mix follows it; vocal ends 190.4 |
+| 15 | 2026-10-31 | GATE A | scratch `rules.py` (all rules start from today's windows and only widen them; `t1 = max(old, min(run_start + pad, run_mid))`, `t0 = min(old, max(run_end - pad, run_mid))`), starting constants. Extra metric "foreign words": transcribed words starting after the line's heard last word ends, inside the new window and outside the old | last run, search to next cue + 0.5: last_out 55 -> 29 (0 broken), first_out 97 -> 85 (0 broken), targets outside Pocahontas 36, foreign +188 (today's windows hold 86). Last run, search to next cue + 0.0: 55 -> 36, targets outside BOMT 20, Stronger 6, Pocahontas 36, foreign +90. Same with t0 fixed: first_out 97 -> 97, overlaps 174. Longest run + 0.5: 55 -> 32, targets outside BOMT 30, Stronger 6, Pocahontas 36, foreign +83. Interior growth max 63.30 s (last run) |
+| 16 | 2026-10-31 | GATE A | scratch `run2.py`, `branch.py`: release rule = first quiet run >= R s in [cue_end(a) - 0.5, cue_start(b)], t1 = min(start + pad, mid); else t1 = cue_start(b) ("into_b"); t1 = max(old, t1); t0 unchanged; no hold cap | R 1.0, tail "final": last_out 55 -> 20 (0 broken), targets outside none, Pocahontas tail t1 190.9, 27 of 31 section-final dropped-word lines widened, interior widened 378/692 (p50 0.73 s, p90 2.60, max 28.14; 27 over 3 s), foreign interior +138 tail +21. Else = last breath before cue_start(b): 55 -> 25, targets outside BOMT 20, Stronger 6, foreign +93. R 0.75: 55 -> 21, foreign +121. R 1.5: 55 -> 20, max growth 49.53, foreign +153. Branch split at R 1.0: release 115 widened (3 dropped-word lines, max 28.14 at Mirrors L75, caption gap 50.28), into_b 263 widened (23 dropped-word lines, all with caption gap <= 3.72 s, growth <= 2.97 s; foreign 111, of which 60 the next line's first word). into_b with caption gap > 4 s: 12 edges, 0 dropped-word lines, growth up to 17.72 (Girlfriend L44) |
+| 17 | 2026-10-31 | GATE A | scratch `tails.py`: tails growing > 2 s or taking in transcribed words, rule "final" (pad after the last sung frame) | 25 songs listed. Words taken in: Pop (`Thank you.`, t1 206.1 -> 232.75), Mulan (`Tap the I in the top right-hand`..., 224.3 -> 234.4); none elsewhere. Largest growth: Pop 26.6, My Heart Will Go On 17.0 (251.0 -> 267.95), Paradise 16.1, Whitney Houston 11.1 (259.5 -> 270.6), Pocahontas 11.3 (179.6 -> 190.9) |
+| 18 | 2026-10-31 | GATE A | scratch `final_rule.py`: Decision 11 (release R, hold cap H on interior edges, tail = pad after the last sung frame), slack 0.5, dip 12 | R 1.0 H 4.0: interior 692, fallback 21 (3.0%), widened 357 (p50 0.67, p90 1.92, max 3.94); tails widened 39/90 (p50 2.40, max 26.64); overlapping pairs 279 (max 0.75); last_out 55 -> 24 (in old, out of new 0); 26 of 31 section-final dropped-word lines widened; foreign interior +100, tail +21. H 3.0: fallback 6.5%, last_out 26, 24 widened, foreign +74. H 6.0: fallback 1.4%, last_out 21, 27 widened, foreign +121. R 0.75 H 4.0: fallback 2.5%, last_out 23, 27 widened, foreign +85; same target results as R 1.0. R 1.5 H 4.0: fallback 3.6%, last_out 24, 27 widened, foreign +111 |
+| 19 | 2026-10-31 | GATE A | Decision 11 at R 1.0 H 4.0 against the pass criteria | Criterion 1: Incomplete 3 (t1 45.182 -> 47.1, heard 46.04), BOMT 20 (110.255 -> 110.846, 110.64), BOMT 30 (167.01 -> 169.704, 168.2), Stronger 6 (49.312 -> 51.189, 51.1), Stronger 32 (181.539 -> 182.583, 180.384), Stronger 37 (207.382 -> 209.23, 206.8), Castle 46 (229.74 -> 229.74, 228.88), Pocahontas 36 (179.59 -> 190.9, 184.92; sung to 190.4 per row 14) inside; Stronger 26, Miss Independent 9 and 71: word not found by the match. Criterion 2: no t0 moves. Criterion 3: 3.0% |
+| 20 | 2026-10-31 | 3 | `RELEASE_QUIET_S` 1.0 -> 0.75 after scratch `drops_unwidened.py` (real `segment_by_gaps(env=...)` over the 90 cue bundles) showed Inconsolable L32 unwidened: cue end 147.53, next cue 154.60; envelope sung to 151.1, quiet 151.1-152.05 (~0.9 s), sung 152.0-153.1 (Whisper `Yeah` 151.76-152.24), quiet 153.2-154.4; at 1.0 the first qualifying stretch starts 153.2, past `MAX_HOLD_S`. Then `verify_committed.py` (row 18's figures through the real code) at 0.75 | fallback 17/692 (2.5%), widened 343, t0 moved 0, tails fell back 5, tails widened 39; section-final heard last word outside old 55 -> new 23, in old and out of new 0; extra heard words +85; 27 of 31 section-final dropped-word lines widened; overlapping pairs 264; cap-split edges (caption gap <= 1.5 s) 230, fallback 0. Targets as row 19. Not widened, all measured: Stronger 26, Castle 46, Miss Independent 9, Last Five Years Climbing Uphill L75 (tail). Mid-section, out of reach of window ends: My Heart Will Go On L9, Moving Too Fast L88. At 1.0: fallback 21, widened 359, 26 of 31, extra words +100 |
 
 **R7 targets** at the starting constants (slack 0.5, dip 12, min_quiet 0.1, tail_quiet 0.5). `heard_end` is the transcriber's end of the line's last word.
 
