@@ -655,6 +655,14 @@ class TestPartialLines:
         assert words[3]["end"] == pytest.approx(9.2)
         assert stats["n_guessed_words"] == 2
 
+    def test_a_guessed_tail_after_a_kept_line_past_its_window_is_not_shown_for_no_time(self):
+        # A clean line sung 1.9 s after its cue is kept off-cue; its words end past the
+        # window (9.75), so the window alone would leave "gg" no room at all.
+        objs, cues, lines = self._song(("ee", 9.9, 10.2), ("ff", 10.3, 10.6))
+        _ee, ff, gg = repace_bad_lines(objs, cues, lines, lines)[0][4]["words"]
+        assert (ff["start"], ff["end"]) == pytest.approx((10.3, 10.45))
+        assert (gg["start"], gg["end"]) == pytest.approx((10.45, 10.6))
+
     def test_guessed_words_keep_the_lyrics_own_spelling(self):
         objs, cues, lines = self._song(("ee", 8.0, 8.3), text="ee Ff,")
         out, _stats = repace_bad_lines(objs, cues, lines, lines)
@@ -738,6 +746,16 @@ class TestRescueWindow:
         window = self._window(self._song((10.0, 12.0)), env)
         assert window == pytest.approx((7.25, 10.0), abs=0.03)
 
+    def test_where_singing_stops_is_searched_on_the_audio_clock(self):
+        # The audio runs 0.6 s ahead of the captions: the next line's singing starts at
+        # 9.4, not at its cue's 10.0, so the window ends there and not inside it.
+        objs, cues, lines = self._song((10.0, 12.0))
+        anchors, _cues, _lines = _anchor_lines(4, offset=-0.6)
+        objs[:4] = anchors
+        env = _env(14.0, [(7.7, 9.2), (9.4, 11.4)])
+        window = self._window((objs, cues, lines), env)
+        assert window == pytest.approx((6.65, 9.4), abs=0.03)
+
     def test_a_pause_inside_the_held_line_is_not_its_end(self):
         env = _env(16.0, [(8.3, 9.3), (9.8, 10.6), (14.2, 15.0)])  # a 0.5 s pause
         window = self._window(self._song((14.0, 15.0)), env)
@@ -787,6 +805,8 @@ class TestRescueWindow:
         assert out[4]["source"] == SOURCE_REALIGN
         assert [w["word"] for w in out[4]["words"]] == ["ee", "ff", "gg"]
         assert stats["n_realigned"] == 1 and stats["n_guessed_words"] == 0
+        assert stats["n_windows"] == 1 and stats["windows_widened_line_ids"] == [4]
+        assert stats["windows_unmeasured_line_ids"] == []
 
     def test_the_same_tail_overruns_the_caption_window_without_an_envelope(self):
         # The check aims at the window the slice was cut to, so only a measured hold passes.
@@ -795,6 +815,9 @@ class TestRescueWindow:
         out, stats = repace_bad_lines(objs, cues, lines, lines, realign=lambda *_: held)
         assert out[4]["source"] == SOURCE
         assert stats["n_realigned"] == 0 and stats["n_guessed_words"] == 1
+        assert stats["windows_widened_line_ids"] == [] and stats["windows_unmeasured_line_ids"] == [
+            4
+        ]
 
 
 class TestFitOffset:
