@@ -47,6 +47,7 @@ Approach:
    leading words.
 """
 
+import copy
 import logging
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
@@ -967,7 +968,7 @@ def align_song(
     pad_s: float = SECTION_PAD_S,
     env: np.ndarray | None = None,
     progress: Callable[[list[Section]], Iterable[Section]] | None = None,
-) -> tuple[list[dict], dict]:
+) -> tuple[list[dict], dict, dict]:
     """Windowed-align one song from its 1:1 per-line cue spans.
 
     The cue-align driver: segment the cues into silence-bounded sections
@@ -988,8 +989,13 @@ def align_song(
     same way: ``progress`` wraps the per-pass section list (e.g. ``tqdm``) so
     the caller owns the terminal; ``None`` iterates silently.
 
-    Returns ``(line_objects, stats)``; ``stats`` carries the section count, the
-    fitted offset, whether a re-section fired, and the repace sub-stats.
+    Returns ``(line_objects, stats, cue_inputs)``; ``stats`` carries the section
+    count, the fitted offset, whether a re-section fired, and the repace sub-stats.
+    ``cue_inputs`` is what the rescue consumed, copied out so a replay re-runs
+    :func:`repace_bad_lines` and the edge snaps after it without the aligner:
+    ``sections``, the line objects the section align produced before any rescue, and
+    ``realigns``, one ``{line_id, w0, w1, words}`` per one-line re-align in call order
+    (``words`` is the aligner's raw result, None when it failed).
     """
     show_progress = progress or (lambda sections: sections)
 
@@ -1022,13 +1028,21 @@ def align_song(
         ]
         line_objects, sections = align_pass(spans)
 
+    realigns: list[dict] = []
+
+    def realign(lid: int, w0: float, w1: float) -> list[dict] | None:
+        words = slice_align(w0, w1, align_lines[lid], f"line {lid}")
+        realigns.append({"line_id": lid, "w0": w0, "w1": w1, "words": copy.deepcopy(words)})
+        return words
+
+    sections_aligned = copy.deepcopy(line_objects)
     line_objects, repace_stats = repace_bad_lines(
         line_objects,
         spans,
         display_lines,
         align_lines,
         duration=duration,
-        realign=lambda lid, w0, w1: slice_align(w0, w1, align_lines[lid], f"line {lid}"),
+        realign=realign,
         env=env,
         pad_s=pad_s,
     )
@@ -1038,4 +1052,4 @@ def align_song(
         "resectioned": resectioned,
         "repace": repace_stats,
     }
-    return line_objects, stats
+    return line_objects, stats, {"sections": sections_aligned, "realigns": realigns}

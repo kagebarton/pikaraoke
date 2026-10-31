@@ -133,6 +133,7 @@ class LyricAlignStage(BaseStage):
         capture_words: list | None = None
         capture_words_source: str | None = None
         capture_joint_stats: dict | None = None
+        capture_cue_inputs: dict | None = None
         capture_transcribe_words: list | None = None
         capture_method_used: str | None = None
 
@@ -148,6 +149,7 @@ class LyricAlignStage(BaseStage):
                     capture_transcribe_words,
                     capture_joint_stats,
                     env,
+                    capture_cue_inputs,
                 ) = self._run_cue_align(ctx, vocal_wav, lyrics_lines, align_lines, cue_spans)
                 capture_method_used = "cue_align"
             else:
@@ -320,6 +322,7 @@ class LyricAlignStage(BaseStage):
                 words=capture_words,
                 words_source=capture_words_source,
                 joint_stats=capture_joint_stats,
+                cue_inputs=capture_cue_inputs,
                 transcribe_words=capture_transcribe_words,
                 method_used=capture_method_used,
                 line_objects=line_objects,
@@ -339,6 +342,7 @@ class LyricAlignStage(BaseStage):
         words: list | None,
         words_source: str | None,
         joint_stats: dict | None,
+        cue_inputs: dict | None,
         transcribe_words: list | None,
         method_used: str | None,
         line_objects: list[dict],
@@ -427,6 +431,7 @@ class LyricAlignStage(BaseStage):
                 words=words,
                 words_source=words_source,
                 joint_stats=joint_stats,
+                cue_inputs=cue_inputs,
                 transcribe_words=transcribe_words,
                 output_summary=alignment_capture.summarize_line_objects(line_objects),
                 output_line_timings=alignment_capture.output_line_timings(line_objects),
@@ -585,7 +590,7 @@ class LyricAlignStage(BaseStage):
         display_lines: list[str],
         align_lines: list[str],
         cue_spans: list[tuple[float, float]],
-    ) -> tuple[list[dict], list[dict], dict, np.ndarray | None]:
+    ) -> tuple[list[dict], list[dict], dict, np.ndarray | None, dict]:
         """Cue-anchored windowed align for SRT songs — uploader cues drive it.
 
         Shares the transcribe-first de-reverb gate with the joint route, then
@@ -594,13 +599,14 @@ class LyricAlignStage(BaseStage):
         forced aligner. All the sectioning/offset/re-pace logic lives in the
         library; this method only wires I/O and the audio duration.
 
-        Returns ``(line_objects, transcribe_words, stats, env)`` — the gate's
-        transcribe words, which the cue route doesn't use but the debug bundle
+        Returns ``(line_objects, transcribe_words, stats, env, cue_inputs)`` — the
+        gate's transcribe words, which the cue route doesn't use but the debug bundle
         keeps as the song's heard words (the reference a movie-subtitle slice
         is checked against), the cue-align telemetry (section count, offset,
-        re-pace + de-reverb sub-stats), and the aligned stem's envelope (None
+        re-pace + de-reverb sub-stats), the aligned stem's envelope (None
         if it can't be decoded), which places the rescue windows' ends here and
-        is reused by the edge snap.
+        is reused by the edge snap, and the rescue's inputs for the bundle
+        (:func:`cue_align.align_song`).
         """
         # Shared de-reverb gate: adopt the dry stem when the wet one is
         # reverb-washed.
@@ -638,12 +644,12 @@ class LyricAlignStage(BaseStage):
                 disable=None,
             )
 
-        line_objects, stats = align_song(
+        line_objects, stats, cue_inputs = align_song(
             cue_spans, display_lines, align_lines, duration, slice_align, env=env, progress=progress
         )
         if dereverb_stats is not None:
             stats["dereverb"] = dereverb_stats
-        return line_objects, transcribe_words, stats, env
+        return line_objects, transcribe_words, stats, env, cue_inputs
 
     def _ytasr_words(self, ctx: StageContext) -> list[dict] | None:
         """Words from the adopted YouTube ASR caption, for the joint 3rd source.
