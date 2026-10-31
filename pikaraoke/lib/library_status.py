@@ -12,6 +12,7 @@ from pathlib import Path
 
 from pikaraoke.lib import lrclib
 from pikaraoke.lib.alignment_capture import SCHEMA_VERSION
+from pikaraoke.lib.joint_match import _tokenise_lines
 from pikaraoke.lib.library_regen import (
     BACKUP_ROOT,
     CUSTOM_ORIGIN,
@@ -51,13 +52,23 @@ class SongStatus:
     timed_by: dict | None  # joint only: lines kept from aligner / transcription / captions
     media_duration_s: float | None
     captured_at: str | None
+    # Cue-align songs only (None otherwise): how each timed line got its times.
+    cue_lines: dict | None = None  # {"aligned", "realigned", "paced"}
+    # Words a cue-align line shows with guessed timing (bundles from the guessed-words
+    # fix on) or is missing from the screen (older bundles), and the lines they sit in.
+    words_guessed: int | None = None
+    words_guessed_lines: int | None = None
+    words_missing: int | None = None
+    words_missing_lines: int | None = None
 
     @property
     def guessed(self) -> int | None:
-        """Lines with no word timing; placed between their neighbours."""
+        """Lines with no measured word timing: placed between their neighbours, or for a
+        cue-align song also spaced evenly across their caption."""
         if self.line_count is None or self.lines_timed is None:
             return None
-        return self.line_count - self.lines_timed
+        paced = self.cue_lines["paced"] if self.cue_lines else 0
+        return self.line_count - self.lines_timed + paced
 
     @property
     def poor(self) -> bool:
@@ -107,6 +118,7 @@ def song_status(song: Path) -> SongStatus:
     origin = lyrics.get("origin")
     fill = joint.get("lrclib_fill") or {}
     state = _lrclib_state(lrc, origin, lyrics, fill)
+    cue_fields = _cue_fields(bundle) if method == "cue_align" else {}
     return SongStatus(
         path=song,
         youtube_id=extract_youtube_id(str(song)),
@@ -128,7 +140,50 @@ def song_status(song: Path) -> SongStatus:
         timed_by=_timed_by(joint) if method == "joint" else None,
         media_duration_s=bundle.get("media_duration_s"),
         captured_at=bundle.get("captured_at"),
+        **cue_fields,
     )
+
+
+def _cue_fields(bundle: dict) -> dict:
+    """The cue-align fields of :class:`SongStatus`: how each line was timed, and the words
+    shown without measured timing.
+
+    A bundle written after the guessed-words fix records the guessed words; an older one
+    can only show the words its lines lost, which the lyric tokens and the lines' word
+    counts give.
+    """
+    repace = (bundle.get("joint_stats") or {}).get("repace") or {}
+    lines_timed = (bundle.get("output_summary") or {}).get("lines_with_words")
+    fields: dict = {}
+    if lines_timed is not None:
+        realigned, paced = repace.get("n_realigned", 0), repace.get("n_repaced", 0)
+        fields["cue_lines"] = {
+            "aligned": max(lines_timed - realigned - paced, 0),
+            "realigned": realigned,
+            "paced": paced,
+        }
+    if "n_guessed_words" in repace:
+        fields["words_guessed"] = repace["n_guessed_words"]
+        fields["words_guessed_lines"] = len(repace.get("guessed_word_line_ids") or ())
+    else:
+        fields["words_missing"], fields["words_missing_lines"] = _missing_words(bundle)
+    return fields
+
+
+def _missing_words(bundle: dict) -> tuple[int, int]:
+    """(words, lines) a cue-align song's lines lack against their lyric line's tokens.
+
+    Tokenised as cue align did, so the counts agree with what was aligned. A line with no
+    words at all is a guessed line, counted there, not here.
+    """
+    tokens = _tokenise_lines((bundle.get("lyrics") or {}).get("align_lines") or [])
+    lacking = [
+        len(tokens[timing["line_id"]]) - timing["n_words"]
+        for timing in bundle.get("output_line_timings") or ()
+        if timing.get("n_words") and timing["line_id"] < len(tokens)
+    ]
+    lacking = [n for n in lacking if n > 0]
+    return sum(lacking), len(lacking)
 
 
 def _timed_by(joint: dict) -> dict:

@@ -158,7 +158,11 @@
     <div class="si-block">
       <div><span class="si-big">{{ alignment.timed }}</span> {% trans lines=alignment.line_count %}of {{ lines }} lines timed word by word{% endtrans %}</div>
       {% if alignment.guessed %}
+      {% if alignment.cue %}
+      <span class="si-muted">{% trans guessed=alignment.guessed %}The other {{ guessed }} are spaced evenly across their captions.{% endtrans %}</span>
+      {% else %}
       <span class="si-muted">{% trans guessed=alignment.guessed %}The other {{ guessed }} are placed between their neighbours.{% endtrans %}</span>
+      {% endif %}
       {% endif %}
       <div class="si-bar" role="img" aria-label="{% for s in alignment.segments %}{{ s.count }} {{ s.label|lower }}{% if not loop.last %}, {% endif %}{% endfor %}">
         {% for s in alignment.segments %}<div style="width: {{ '%.3f'|format(s.percent) }}%; background: {{ s.color }}"></div>{% endfor %}
@@ -168,6 +172,9 @@
         <span class="si-lg"><span class="si-sw" style="background: {{ s.color }}"></span>{{ s.label }} {{ s.count }}</span>
         {% endfor %}
       </div>
+      {% if alignment.words_note %}
+      <span class="{% if alignment.words_warn %}si-warn{% else %}si-muted{% endif %}">{{ alignment.words_note }}</span>
+      {% endif %}
     </div>
     {% if alignment.fit_status %}
     <div class="si-block">

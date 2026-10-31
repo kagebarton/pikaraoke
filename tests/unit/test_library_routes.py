@@ -382,9 +382,45 @@ class TestSongInfoPage:
         assert "Genius or custom lyrics only" in html
         assert "si-tile is-warn" not in html
         assert "https://genius.com" not in html  # no Genius row
-        assert "Timed 39" in html and "Guessed" not in html
+        assert "Aligned 39" in html and "Spaced from caption" not in html and "Guessed" not in html
         assert "timed against the caption" in html
         assert "LRCLIB fit" not in html
+
+    def test_a_cue_song_splits_its_lines_by_how_they_were_timed(self, env):
+        bundle = caption_bundle()
+        bundle["joint_stats"] = {"repace": {"n_realigned": 5, "n_repaced": 4}}
+        html = text(env.page(env.add_song("A---aaaaaaaaaaa.mp4", bundle)))
+
+        for legend in ("Aligned 30", "Re-aligned 5", "Spaced from caption 4"):
+            assert legend in html
+        assert '<span class="si-big">35</span> of 39 lines timed word by word' in html
+        assert "The other 4 are spaced evenly across their captions." in html
+        assert "90%" in html and "4 guessed" in html
+        assert "si-tile is-warn" not in html  # 4 of 39 is under the poor share
+
+    def test_a_cue_song_of_older_bundle_names_the_words_missing_from_the_screen(self, env):
+        bundle = caption_bundle()
+        bundle["lyrics"]["align_lines"] = ["one two three four", "five six", "seven"]
+        bundle["output_line_timings"] = [
+            {"line_id": 0, "n_words": 2},
+            {"line_id": 1, "n_words": 2},
+            {"line_id": 2, "n_words": 1},
+        ]
+        html = text(env.page(env.add_song("A---aaaaaaaaaaa.mp4", bundle)))
+
+        assert "Missing from the screen: 2 words in 1 line. Regenerate to show them." in html
+        assert "0 guessed · 2 words" in html
+        assert html.count("si-tile is-warn") == 1  # Timed
+
+    def test_a_cue_song_with_guessed_words_counts_them_without_a_warning(self, env):
+        bundle = caption_bundle()
+        bundle["joint_stats"] = {"repace": {"n_guessed_words": 1, "guessed_word_line_ids": [4]}}
+        html = text(env.page(env.add_song("A---aaaaaaaaaaa.mp4", bundle)))
+
+        assert "Guessed timing: 1 word in 1 line." in html
+        assert "0 guessed · 1 word" in html
+        assert "si-tile is-warn" not in html
+        assert "Missing from the screen" not in html
 
     def test_a_custom_song_is_named_on_the_tile_the_source_row_and_the_route(self, env):
         html = text(env.page(env.add_song("A---aaaaaaaaaaa.mp4", custom_bundle())))

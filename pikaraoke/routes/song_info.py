@@ -92,6 +92,9 @@ class Alignment:
     fit_status: str | None
     fit_warn: bool
     route: str | None
+    cue: bool  # a cue-align song: its guessed lines are spaced from their captions
+    words_note: str | None  # words shown without measured timing, or missing from the screen
+    words_warn: bool
 
 
 @dataclass(frozen=True)
@@ -247,13 +250,12 @@ def _lyrics_tile(status: SongStatus) -> Tile:
 def _timed_tile(status: SongStatus) -> Tile:
     if not status.line_count or status.lines_timed is None:
         return Tile(_("Timed"), "—", "")
-    percent = round(100 * status.lines_timed / status.line_count)
-    return Tile(
-        _("Timed"),
-        f"{percent}%",
-        _("%(n)d guessed") % {"n": status.guessed},
-        warn=status.poor,
-    )
+    percent = round(100 * (status.line_count - status.guessed) / status.line_count)
+    sub = _("%(n)d guessed") % {"n": status.guessed}
+    words = (status.words_missing or 0) + (status.words_guessed or 0)
+    if words:
+        sub += " · " + ngettext("%(num)d word", "%(num)d words", words)
+    return Tile(_("Timed"), f"{percent}%", sub, warn=status.poor or bool(status.words_missing))
 
 
 def _lrclib_tile(status: SongStatus) -> Tile:
@@ -316,9 +318,16 @@ def _alignment(status: SongStatus) -> Alignment | None:
             (_("YouTube captions"), by["captions"], _CAPTIONS_COLOR),
             (_("LRCLIB fill"), status.lrclib_filled, _LRCLIB_COLOR),
         ]
+    elif status.cue_lines:
+        cue = status.cue_lines
+        counted = [
+            (_("Aligned"), cue["aligned"], _ALIGNER_COLOR),
+            (_("Re-aligned"), cue["realigned"], _TRANSCRIPTION_COLOR),
+        ]
     else:
         counted = [(_("Timed"), status.lines_timed, _ALIGNER_COLOR)]
-    counted.append((_("Guessed"), status.guessed, _GUESSED_COLOR))
+    guessed_label = _("Spaced from caption") if status.cue_lines else _("Guessed")
+    counted.append((guessed_label, status.guessed, _GUESSED_COLOR))
     segments = [segment(*row) for row in counted if row[1] > 0]
 
     fit = fit_status = None
@@ -326,8 +335,9 @@ def _alignment(status: SongStatus) -> Alignment | None:
     if status.lrclib_state != "n/a":
         fit, fit_status, fit_warn = _lrclib_fit(status)
 
+    words_note, words_warn = _words_note(status)
     return Alignment(
-        timed=status.lines_timed,
+        timed=total - status.guessed,
         line_count=total,
         guessed=status.guessed,
         segments=segments,
@@ -335,7 +345,32 @@ def _alignment(status: SongStatus) -> Alignment | None:
         fit_status=fit_status,
         fit_warn=fit_warn,
         route=_route_text(status),
+        cue=status.cue_lines is not None,
+        words_note=words_note,
+        words_warn=words_warn,
     )
+
+
+def _words_note(status: SongStatus) -> tuple[str | None, bool]:
+    """(the line under the bar about words shown without measured timing, whether to flag it)."""
+    if status.words_missing:
+        count = _word_count(status.words_missing, status.words_missing_lines)
+        return (
+            _("Missing from the screen: %(count)s. Regenerate to show them.") % {"count": count},
+            True,
+        )
+    if status.words_guessed:
+        count = _word_count(status.words_guessed, status.words_guessed_lines)
+        return _("Guessed timing: %(count)s.") % {"count": count}, False
+    return None, False
+
+
+def _word_count(words: int, lines: int) -> str:
+    """The count as prose: 4 words in 2 lines."""
+    return _("%(words)s in %(lines)s") % {
+        "words": ngettext("%(num)d word", "%(num)d words", words),
+        "lines": ngettext("%(num)d line", "%(num)d lines", lines),
+    }
 
 
 def _lrclib_fit(status: SongStatus) -> tuple[str | None, str, bool]:
