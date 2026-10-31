@@ -535,7 +535,7 @@ class TestRepaceBadLines:
             return _words(("ee", 8.1, 8.5), ("ff", 8.6, 9.0))
 
         out, stats = repace_bad_lines(objs, cues, lines, lines, realign=realign)
-        assert calls == [(4, 8.0, 10.0)]
+        assert calls == [(4, 7.25, 10.75)]  # the cue window, padded
         assert out[4]["source"] == SOURCE_REALIGN
         assert [w["start"] for w in out[4]["words"]] == [8.1, 8.6]
         assert stats["n_realigned"] == 1 and stats["n_repaced"] == 0
@@ -649,7 +649,7 @@ class TestPartialLines:
 
         sections = [Section(0, 4, 0.0, 11.0)]  # its end placed out at 11.0 by the volume
         out, stats = repace_bad_lines(objs, cues, lines, lines, realign=realign, sections=sections)
-        assert calls == [(4, 8.0, 11.0)]
+        assert calls == [(4, 7.25, 11.0)]  # the section's end is already padded
         assert out[4]["source"] == SOURCE_REALIGN
         assert [w["word"] for w in out[4]["words"]] == ["ee", "ff", "gg"]
         assert stats["n_realigned"] == 1 and stats["n_guessed_words"] == 0
@@ -664,7 +664,7 @@ class TestPartialLines:
 
         sections = [Section(0, 5, 0.0, 14.0)]
         repace_bad_lines(objs, cues, lines, lines, realign=realign, sections=sections)
-        assert calls == [(4, 8.0, 9.0)]
+        assert calls == [(4, 7.25, 9.75)]
 
     def test_a_realign_timing_fewer_words_keeps_the_line_and_guesses_the_rest(self):
         objs, cues, lines = self._song(
@@ -726,6 +726,33 @@ class TestPartialLines:
         ff = out[4]["words"][1]
         assert ff["word"] == "ff"
         assert 8.3 <= ff["start"] and ff["end"] <= 8.8
+
+    def test_a_guessed_middle_word_between_touching_neighbours_shares_the_first(self):
+        objs, cues, lines = self._song(("ee", 8.0, 8.3), ("gg", 8.3, 8.6), text="ee ff gg")
+        ee, ff, gg = repace_bad_lines(objs, cues, lines, lines)[0][4]["words"]
+        assert (ee["start"], ee["end"]) == pytest.approx((8.0, 8.15))
+        assert (ff["start"], ff["end"]) == pytest.approx((8.15, 8.3))
+        assert (gg["start"], gg["end"]) == (8.3, 8.6)
+
+    def test_a_guessed_tail_past_a_timed_word_overrunning_the_bound_shares_its_slot(self):
+        # A duet partner's line starts at 8.7, while "ff" is still held to 8.9.
+        objs, cues, lines = self._song(("ee", 8.0, 8.3), ("ff", 8.4, 8.9), text="ee ff gg hh")
+        cues.append((8.7, 9.5))
+        lines.append("a a")
+        objs.append(_line(5, "a a", ("a", 8.7, 9.0), ("a", 9.1, 9.4)))
+        words = repace_bad_lines(objs, cues, lines, lines)[0][4]["words"]
+        assert [w["word"] for w in words] == ["ee", "ff", "gg", "hh"]
+        assert [w["start"] for w in words[1:]] == pytest.approx([8.4, 8.5, 8.6])
+        assert all(w["end"] - w["start"] == pytest.approx(0.1) for w in words[1:])
+        assert words[-1]["end"] == pytest.approx(8.7)
+
+    def test_a_guessed_head_before_a_word_at_the_previous_lines_end_shares_its_slot(self):
+        objs, cues, lines = self._song(("ff", 8.2, 8.6), ("gg", 8.7, 9.0), text="ee ff gg")
+        lines[3] = "b b"
+        objs[3] = _line(3, "b b", ("b", 6.0, 6.3), ("b", 6.4, 8.2))  # held to ff's start
+        ee, ff, _gg = repace_bad_lines(objs, cues, lines, lines)[0][4]["words"]
+        assert (ee["start"], ee["end"]) == pytest.approx((8.2, 8.4))
+        assert (ff["start"], ff["end"]) == pytest.approx((8.4, 8.6))
 
     def test_guessed_words_keep_the_lyrics_own_spelling(self):
         objs, cues, lines = self._song(("ee", 8.0, 8.3), text="ee Ff,")
@@ -833,8 +860,8 @@ class TestAlignSong:
         env = _env(12.0, [(0.0, 9.0)])
         objs, stats = align_song(_SONG_CUES, _SONG_LINES, _SONG_LINES, 12.0, aligner, env=env)
 
-        # Aimed at the section's end (9.75), padded by the per-line rescue.
-        assert aligner.calls[1][:2] == pytest.approx((5.25, 10.5), abs=0.03)
+        # Out to the section's end (9.75), which is already padded: no second pad.
+        assert aligner.calls[1][:2] == pytest.approx((5.25, 9.75), abs=0.03)
         assert objs[3]["source"] == SOURCE_REALIGN
         assert objs[3]["end"] == pytest.approx(9.4)
         assert stats["repace"]["n_realigned"] == 1

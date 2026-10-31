@@ -462,6 +462,7 @@ def repace_bad_lines(
     duration: float | None = None,
     realign: Callable[[int, float, float], list[dict] | None] | None = None,
     sections: list[Section] | None = None,
+    pad_s: float = SECTION_PAD_S,
 ) -> tuple[list[dict], dict]:
     """Rescue the lines the align could not place, from their cue spans.
 
@@ -476,16 +477,18 @@ def repace_bad_lines(
     :func:`fit_offset` over the clean lines. A line otherwise placed but
     missing some of its words is *partial*.
 
-    Each bad or partial line is rescued in two steps: ``realign(lid, t0, t1)``
+    Each bad or partial line is rescued in two steps: ``realign(lid, w0, w1)``
     -- an injected narrow per-line forced align over the offset-corrected
-    window, returning absolute-time words or None -- is tried first, and its
-    result is kept only if it comes back covered and *inside the window it was
-    aimed at* (:func:`_line_in_span`; tagged :data:`SOURCE_REALIGN`), and for a
-    partial line only if it times more of the words. The last line of each of
+    window padded by ``pad_s`` (clamped to ``duration``), returning
+    absolute-time words or None -- is tried first, and its result is kept
+    only if it comes back covered and *inside the window it was aimed at*
+    (:func:`_line_in_span`; tagged :data:`SOURCE_REALIGN`), and for a partial
+    line only if it times more of the words. The last line of each of
     ``sections`` is aimed out to its section's end, where a note held past the
-    caption lies. Otherwise a bad line is rebuilt with paced words across its
-    cue window (tagged :data:`SOURCE_FILL`), clamped to ``duration`` when
-    known, and a partial line keeps the words it has. Because only bad and
+    caption lies, and its window stops there: that end is already padded, and
+    may be the next caption's start. Otherwise a bad line is rebuilt with
+    paced words across its cue window (tagged :data:`SOURCE_FILL`), clamped
+    to ``duration`` when known, and a partial line keeps the words it has. Because only bad and
     partial lines are rewritten, a coarse offset can never degrade a
     well-aligned line.
 
@@ -529,9 +532,14 @@ def repace_bad_lines(
             if t0 >= t1:
                 t0 = max(0.0, t1 - 0.5)
         section = section_of.get(lid)
-        aim_end = max(t1, section.t1) if section is not None and lid == section.lid_hi else t1
-        if realign is not None:
-            raw_words = realign(lid, t0, aim_end)
+        at_section_end = section is not None and lid == section.lid_hi
+        aim_end = max(t1, section.t1) if at_section_end else t1
+        w0 = max(0.0, t0 - pad_s)
+        w1 = aim_end if at_section_end else t1 + pad_s
+        if duration is not None:
+            w1 = min(duration, w1)
+        if realign is not None and w1 - w0 >= 0.2:
+            raw_words = realign(lid, w0, w1)
             fixed = (
                 _line_from_realigned(
                     lid, display_lines[lid], toks, t0, aim_end, raw_words, max_word_dur
@@ -608,8 +616,10 @@ def _with_guessed_words(
     ``before`` (the next line's first word or the window's end); a missing head runs
     back from the first timed word and starts no earlier than ``after``; a missing
     middle word shares the gap between its timed neighbours. Squeezed by a bound, the
-    words are spaced evenly in what is left. The edge snap later stretches a guessed
-    last word to the measured release.
+    words are spaced evenly in what is left. With less room than an instant word each
+    (touching neighbours, or a bound the timed word already reaches), the guessed words
+    share their timed neighbour's own slot, so none is shown for no time or past the
+    bound. The edge snap later stretches a guessed last word to the measured release.
     """
     words = obj["words"]
     # Every word is one of these tokens' raw text, so each finds its own token.
@@ -626,17 +636,32 @@ def _with_guessed_words(
             start = lo + j * step
             out[k] = {"word": toks[k][1], "start": start, "end": start + min(step, pace)}
 
+    def cramped(n: int, lo: float, hi: float) -> bool:
+        return hi - lo < n * INSTANT_WORD_DUR_S
+
     first, last = timed[0], timed[-1]
     if first:
-        start = words[assign[first]]["start"]
-        fill(list(range(first)), min(start, max(after, start - first * pace)), start)
+        start, slot_end = out[first]["start"], out[first]["end"]
+        lo = min(start, max(after, start - first * pace))
+        if cramped(first, lo, start) and slot_end > lo:
+            fill(list(range(first + 1)), lo, slot_end)
+        else:
+            fill(list(range(first)), lo, start)
     for a, b in zip(timed, timed[1:]):
         if b - a > 1:
-            fill(list(range(a + 1, b)), out[a]["end"], out[b]["start"])
+            lo, hi = out[a]["end"], out[b]["start"]
+            if cramped(b - a - 1, lo, hi) and hi > out[a]["start"]:
+                fill(list(range(a, b)), out[a]["start"], hi)
+            else:
+                fill(list(range(a + 1, b)), lo, hi)
     if last < len(toks) - 1:
-        end = words[assign[last]]["end"]
+        slot_start, end = out[last]["start"], out[last]["end"]
         n_tail = len(toks) - 1 - last
-        fill(list(range(last + 1, len(toks))), end, min(before, end + n_tail * pace))
+        hi = min(before, end + n_tail * pace)
+        if cramped(n_tail, end, hi) and hi > slot_start:
+            fill(list(range(last, len(toks))), slot_start, hi)
+        else:
+            fill(list(range(last + 1, len(toks))), end, hi)
     return _line_object(obj["line_id"], obj["text"], out, source=obj["source"])
 
 
@@ -892,22 +917,15 @@ def align_song(
         ]
         line_objects, sections = align_pass(spans)
 
-    def realign_line(lid: int, t0: float, t1: float) -> list[dict] | None:
-        """Narrow per-line forced align over a bad line's offset-corrected window."""
-        w0 = max(0.0, t0 - pad_s)
-        w1 = t1 + pad_s if duration is None else min(duration, t1 + pad_s)
-        if w1 - w0 < 0.2:
-            return None
-        return slice_align(w0, w1, align_lines[lid], f"line {lid}")
-
     line_objects, repace_stats = repace_bad_lines(
         line_objects,
         spans,
         display_lines,
         align_lines,
         duration=duration,
-        realign=realign_line,
+        realign=lambda lid, w0, w1: slice_align(w0, w1, align_lines[lid], f"line {lid}"),
         sections=sections,
+        pad_s=pad_s,
     )
     stats = {
         "n_sections": len(sections),
