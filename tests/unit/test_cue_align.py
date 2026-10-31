@@ -628,6 +628,121 @@ class TestRepaceBadLines:
         assert out[4]["end"] == pytest.approx(95.0)
 
 
+class TestPartialLines:
+    """A line the align timed only partly is rescued, and never shown with words missing."""
+
+    def _song(self, *words: tuple[str, float, float], text: str = "ee ff gg"):
+        """Four anchors plus line 4 (cue 8-9) with ``words`` timed out of ``text``."""
+        objs, cues, lines = _anchor_lines(4)
+        cues.append((8.0, 9.0))
+        lines.append(text)
+        objs.append(_line(4, text, *words))
+        return objs, cues, lines
+
+    def test_a_section_end_tail_is_realigned_out_to_the_sections_end(self):
+        objs, cues, lines = self._song(("ee", 8.0, 8.3), ("ff", 8.4, 8.8))
+        calls = []
+
+        def realign(lid, t0, t1):
+            calls.append((lid, t0, t1))
+            return _words(("ee", 8.0, 8.3), ("ff", 8.4, 8.8), ("gg", 9.8, 10.6))
+
+        sections = [Section(0, 4, 0.0, 11.0)]  # its end placed out at 11.0 by the volume
+        out, stats = repace_bad_lines(objs, cues, lines, lines, realign=realign, sections=sections)
+        assert calls == [(4, 8.0, 11.0)]
+        assert out[4]["source"] == SOURCE_REALIGN
+        assert [w["word"] for w in out[4]["words"]] == ["ee", "ff", "gg"]
+        assert stats["n_realigned"] == 1 and stats["n_guessed_words"] == 0
+
+    def test_a_line_inside_its_section_is_realigned_over_its_cue_only(self):
+        objs, cues, lines = self._song(("ee", 8.0, 8.3), ("ff", 8.4, 8.8))
+        calls = []
+
+        def realign(lid, t0, t1):
+            calls.append((lid, t0, t1))
+            return None
+
+        sections = [Section(0, 5, 0.0, 14.0)]
+        repace_bad_lines(objs, cues, lines, lines, realign=realign, sections=sections)
+        assert calls == [(4, 8.0, 9.0)]
+
+    def test_a_realign_timing_fewer_words_keeps_the_line_and_guesses_the_rest(self):
+        objs, cues, lines = self._song(
+            ("ee", 8.0, 8.3), ("ff", 8.4, 8.7), ("gg", 8.8, 9.1), text="ee ff gg hh"
+        )
+
+        def realign(lid, t0, t1):
+            return _words(("ee", 8.0, 8.3), ("ff", 8.4, 8.7))
+
+        out, stats = repace_bad_lines(objs, cues, lines, lines, realign=realign)
+        assert out[4]["source"] == SOURCE
+        assert [w["word"] for w in out[4]["words"]] == ["ee", "ff", "gg", "hh"]
+        assert out[4]["words"][3]["start"] == pytest.approx(9.1)  # runs on from "gg"
+        assert stats["n_realigned"] == 0 and stats["n_repaced"] == 0
+        assert stats["n_guessed_words"] == 1 and stats["guessed_word_line_ids"] == [4]
+
+    def test_a_guessed_tail_keeps_the_lines_pace(self):
+        objs, cues, lines = self._song(("ee", 8.0, 8.3), text="ee ff gg")
+        out, _stats = repace_bad_lines(objs, cues, lines, lines)
+        _ee, ff, gg = out[4]["words"]
+        assert (ff["start"], ff["end"]) == pytest.approx((8.3, 8.6))
+        assert (gg["start"], gg["end"]) == pytest.approx((8.6, 8.9))
+        assert out[4]["end"] == pytest.approx(8.9)
+
+    def test_a_guessed_tail_ends_by_the_next_lines_first_word(self):
+        objs, cues, lines = self._song(("ee", 8.0, 8.3), text="ee ff gg")
+        cues.append((8.7, 9.5))
+        lines.append("a a")
+        objs.append(_line(5, "a a", ("a", 8.7, 9.0), ("a", 9.1, 9.4)))
+        out, _stats = repace_bad_lines(objs, cues, lines, lines)
+        _ee, ff, gg = out[4]["words"]
+        assert (ff["start"], gg["start"], gg["end"]) == pytest.approx((8.3, 8.5, 8.7))
+
+    def test_a_guessed_tail_ends_by_the_sections_end(self):
+        objs, cues, lines = self._song(("ee", 8.0, 8.3), text="ee ff gg")
+        sections = [Section(0, 4, 0.0, 8.5)]
+        out, _stats = repace_bad_lines(objs, cues, lines, lines, sections=sections)
+        assert out[4]["end"] == pytest.approx(8.5)
+
+    def test_a_guessed_word_is_capped_at_the_longest_word(self):
+        objs, cues, lines = self._song(("ee", 8.0, 9.0), text="ee ff")
+        cues[4] = (8.0, 12.0)
+        out, _stats = repace_bad_lines(objs, cues, lines, lines, max_word_dur=0.6)
+        ff = out[4]["words"][1]
+        assert ff["end"] - ff["start"] == pytest.approx(0.6)
+
+    def test_a_guessed_head_runs_back_no_further_than_the_previous_line(self):
+        objs, cues, lines = self._song(("ff", 8.3, 8.6), ("gg", 8.7, 9.0), text="ee ff gg")
+        ee = repace_bad_lines(objs, cues, lines, lines)[0][4]["words"][0]
+        assert (ee["start"], ee["end"]) == pytest.approx((8.0, 8.3))
+        lines[3] = "b b"  # its own text, so no repeat-run containment applies
+        objs[3] = _line(3, "b b", ("b", 6.0, 6.3), ("b", 6.4, 8.2))  # held to 8.2
+        ee = repace_bad_lines(objs, cues, lines, lines)[0][4]["words"][0]
+        assert (ee["start"], ee["end"]) == pytest.approx((8.2, 8.3))
+
+    def test_a_guessed_middle_word_sits_between_its_neighbours(self):
+        objs, cues, lines = self._song(("ee", 8.0, 8.3), ("gg", 8.8, 9.0), text="ee ff gg")
+        out, _stats = repace_bad_lines(objs, cues, lines, lines)
+        ff = out[4]["words"][1]
+        assert ff["word"] == "ff"
+        assert 8.3 <= ff["start"] and ff["end"] <= 8.8
+
+    def test_guessed_words_keep_the_lyrics_own_spelling(self):
+        objs, cues, lines = self._song(("ee", 8.0, 8.3), text="ee Ff,")
+        out, _stats = repace_bad_lines(objs, cues, lines, lines)
+        assert out[4]["words"][1]["word"] == "Ff,"
+
+    def test_an_unplaced_section_end_line_is_filled_over_its_cue_not_the_section(self):
+        objs, cues, lines = self._song(text="ee ff")
+        sections = [Section(0, 4, 0.0, 11.0)]
+        out, stats = repace_bad_lines(
+            objs, cues, lines, lines, realign=lambda *_: None, sections=sections
+        )
+        assert out[4]["source"] == SOURCE_FILL
+        assert (out[4]["start"], out[4]["end"]) == pytest.approx((8.0, 9.0))
+        assert stats["n_guessed_words"] == 0
+
+
 class TestFitOffset:
     def test_prefers_full_coverage_anchors(self):
         # Four full-coverage lines aligned +0.5 late; four partial lines whose
@@ -707,6 +822,22 @@ class TestAlignSong:
 
         assert aligner.calls[0][1] == pytest.approx(9.75, abs=0.03)
         assert stats["edges"] == {"n": 1, "widened": 1, "fallback": 0}
+
+    def test_a_tail_the_section_align_missed_is_realigned_out_to_the_held_note(self):
+        def words_for(t0, t1, text, label):
+            if "section" in label:
+                return _on_cue_words()[:-1]  # the last line's last word untimed
+            return _words(("a", 6.0, 6.4), ("a", 8.5, 9.4))
+
+        aligner = _stub_aligner(words_for)
+        env = _env(12.0, [(0.0, 9.0)])
+        objs, stats = align_song(_SONG_CUES, _SONG_LINES, _SONG_LINES, 12.0, aligner, env=env)
+
+        # Aimed at the section's end (9.75), padded by the per-line rescue.
+        assert aligner.calls[1][:2] == pytest.approx((5.25, 10.5), abs=0.03)
+        assert objs[3]["source"] == SOURCE_REALIGN
+        assert objs[3]["end"] == pytest.approx(9.4)
+        assert stats["repace"]["n_realigned"] == 1
 
     def test_large_display_lead_triggers_resection(self):
         # Aligner reports every line ~1.5 s late (> SECTION_PAD_S): the driver
