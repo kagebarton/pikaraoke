@@ -95,6 +95,78 @@ Opus, GATE A ruling, 2026-10-31 (rows 14-20):
       allowance is superseded: `MIN_QUIET_S` and `TAIL_QUIET_S` are gone;
       `RELEASE_QUIET_S` and `MAX_HOLD_S` are new.
 
+Opus, after Ken's GATE B notes and his steer, 2026-10-31 (rows 33-39). Proposed; Phase 5b waits on Ken:
+
+12. **Only a line missing words gets a wider window; section windows go back to the
+    caption rule.** Ken's steer: the window change is there to bring back missing words,
+    timed by the model rather than guessed; edge timing is the snaps' job. Decision 11's
+    measurement of where the singing stops stands; it is applied per line, to the
+    one-line re-align, instead of to sections.
+    - Why not widen sections: a wider section changes how the aligner spreads words over
+      the whole section, not only the held tail. All five lines whose first word now
+      starts early (row 30) are the last or second-to-last line of a widened section
+      (row 37). In four of them the first word lands on the previous line's held note,
+      which the onset snap takes as on time (row 36).
+    - Ruled:
+      - `segment_by_gaps` keeps the caption rule, with `173439c`'s duet end. No section
+        end moves, so every line the section align times in full comes out as it would
+        without this branch.
+      - A bad or partial line's one-line re-align window ends at the larger of today's
+        end (cue end + offset + `SECTION_PAD_S`) and where its own singing stops:
+        `_volume_end` against the next line's cue, `_volume_tail` for the song's last
+        line, capped at `duration`. The "landed where aimed" check aims at the same end.
+        This replaces the section-last special case of Phase 4.
+      - A re-aligned first word that starts before `cue start + offset - PAUSE_SLACK_S`
+        and still has at least `INSTANT_WORD_DUR_S` after it is cut to start at that
+        bound, before the check. One with less after the bound sits on the audio
+        before the line and is rejected, as today. The end side is unchanged: a last
+        word parked past the end bound is the aligner's failure sign (the
+        `PAUSE_SLACK_S` comment). The slice's lead-in gives the aligner context; the
+        aligner drags first-word starts back into it (rows 34-35).
+      - The re-align replaces the line when it lands where aimed and times more words
+        (Phase 4's rule). Its first word's start is then the onset snap's to repair,
+        as for every line. Guessed words stay the last resort (Decision 3).
+      - `_with_guessed_words` matches a line's words to its tokens in order (each word
+        to the next token with its text) instead of by expected time. The time match
+        hands a line's last word to a later repeat of its token (row 39: pre-branch
+        Stronger 37 "no", Pocahontas 36 "the"), so the guesses fill the wrong tokens.
+        In order is right for every drop seen: stable-ts drops the words after the
+        last one it can place (row 38's warnings), and all 33 library drops are tails
+        (Decision 8).
+    - Measured (row 38, the 18 target lines through the one-line re-align with these
+      windows): 15 timed in full by the model, against 13 with widened sections (row
+      29). Left: Stronger 26 (its last "I go" is not found by the transcriber either),
+      Miss Independent 9 and 71 (caption words the video does not sing, row 33); all
+      three show guessed words today as well. 6 of the 15 pass the check only with the
+      clamp.
+    - Costs, on the 15 (row 39): after the onset snap, the re-aligned first word starts
+      more than 0.5 s earlier than the section align's on 5 lines (Stronger 6, 32 and
+      37, Baby One More Time 20, Castle 46) and 1.0 s later on 1 (Someone Like You 33).
+      Against the transcriber's first word, on the 4 lines that have one: 2 closer
+      (Stronger 6, Someone Like You 33), 1 further (Stronger 37), 1 the same (All of
+      Me 29). The re-align results carry 4 words under `INSTANT_WORD_DUR_S` in 3 lines.
+    - Not ruled: keeping the section's words and taking only the missing ones from the
+      re-align. The head evidence above is mixed, and splicing two aligns needs each
+      word's token carried through the line objects. Revisit if GATE B hears worse
+      line starts.
+    - Out of scope, recorded in `plans/open-issues.md` at Phase 6:
+      - **The onset snap's on-time skip**: a first word placed on the previous line's
+        still-sounding note is taken as on time (row 36), and the end snap then stops
+        that note just before it (Someone Like You 3:48 "instead"). Shared by every
+        timing source and older than this branch; changing it needs its own probe over
+        the library.
+      - **Pocahontas "wind"**: the window holds the whole note (to 190.9), but both the
+        section align and the one-line re-align place "wind" before the singer's 1.2 s
+        pause (182.84-183.94 and 182.86-184.36; sung 184.8-190.4; rows 14, 29, 38). The
+        line has every word, so nothing flags it.
+      - **Miss Independent's caption words that are not sung** ("God damn", "ooh" for
+        "yeah"). Decision 3 stands: every caption word is shown and stat 1 counts the
+        guessed ones. The fix for a caption that does not match the video is the
+        song's lyric sheet.
+    - Decision 11 is superseded where it widens sections, along with
+      `Section.measured_end`, `Section.widened_end` and the `edges` stat.
+    - GATE B stays Ken's, on the branch as a whole after Phase 5b.
+
 ## Library facts (2026-10-31, `dev` at `daf183a`)
 
 Read-only probes over `~/pikaraoke-songs/alignment_debug/*.json` (scratch scripts by
@@ -362,12 +434,53 @@ Put the raw tables in the Results log.
 a list as `song - m:ss - line text - what changed`, targets first. Ken's ruling goes
 in Decisions.
 
+### Phase 5b: windows only for lines missing words -> commits -> GPU rerun -> GATE B (Ken)
+
+Only after Ken agrees to Decision 12. Run `graphify affected` on `segment_by_gaps`,
+`repace_bad_lines`, `align_song` and `_with_guessed_words` first.
+
+1. **Code** (`pikaraoke/lib/cue_align.py`), per Decision 12: `segment_by_gaps` loses
+   `env`; `Section.measured_end`, `Section.widened_end` and the `edges` stat go;
+   `_volume_end` and `_volume_tail` stay, documented per line. `repace_bad_lines` takes
+   `env` and builds each bad or partial line's window from its measured end (exactly
+   row 38's slices); guessed-word bounds use that window's end instead of the
+   section's `t1`. The clamp. Module docstring and `repace_bad_lines` docstring
+   updated. `pikaraoke/pipeline/stages/lyric_align.py` still decodes the envelope once
+   on the cue route and passes it on.
+2. **Tests** (`tests/unit/test_cue_align.py`, `tests/unit/test_lyric_align.py`):
+   `TestSegmentByVolume` becomes tests of the per-line window (held into silence, sang
+   into the next caption, hold cap, song tail, no envelope = today's window); a
+   section's window no longer depends on the envelope; the clamp (first word in the
+   lead-in kept at the bound; under `INSTANT_WORD_DUR_S` past it still rejected; a
+   last word past the end bound still rejected).
+3. **CPU check before committing**: the 18 saved results (`b1_<id>_<lid>.json` in the
+   323ba938 scratchpad) through the changed `repace_bad_lines`, with the pre-branch
+   words of row 39 as the partial lines and `realign` returning the saved words: the
+   windows `realign` receives equal row 38's slices, and the same 15 are kept.
+4. Commit the window change and the clamp as one commit; log a row.
+5. **Guess-fill matching** (`_with_guessed_words`, in order, per Decision 12) with a
+   test: tokens "no more, no more", line words "no" and "more," -> guesses for the
+   last "no more", after them. Its own `fix(cue_align)` commit; log a row.
+6. **GPU rerun**: ask Ken (app stopped), then Phase 5's command, dry run first.
+   Pocahontas `.lrclib.srt` hash as row 28. Compare (`compare.py`, `vs_heard.py`)
+   against the pre-branch backup (`~/pikaraoke-songs/regen_backups/20261031T174600Z`)
+   and against this run's backup (the library as rows 29-31 measured it). Also:
+   every line whose source changed, with words before and after; the 18 targets; the
+   five early-start lines of row 30; lines starting > 0.5 s before the heard first
+   word (52 pre-branch, 58 now). Expected, to be checked: lines not re-aligned match
+   the pre-branch bundles, except where a re-aligned neighbour moved their end snap
+   or where the pre-branch bundle predates `daf183a`'s pipeline (All of Me and
+   Someone Like You, 2026-10-19).
+7. Log raw tables; give Ken `song - m:ss - line text - what changed` for every changed
+   line, targets first; stop at GATE B.
+
 ### Phase 6: after GATE B
 
 Only on Ken's word: land on `dev` (Branches and Archive Tags in `CLAUDE.md`: copy the
 code commits one by one, no plan file), then in `plans/open-issues.md` on `dev`, record
 what remains (e.g. any test line still guessed, the not-the-window group, the
-remaining 16 songs needing a Regenerate, review findings 4, 8 and 10 from row 24), and retire the branch as
+remaining 16 songs needing a Regenerate, review findings 4, 8 and 10 from row 24, and
+Decision 12's three out-of-scope items), and retire the branch as
 `archive/cue_align_windows`.
 
 ## Rules for the executor
@@ -437,6 +550,10 @@ whose last cue overruns the media). Never launch it unprompted.
 | 33 | 2026-10-31 | 5 | GATE B: Ken's listening notes on the list (condensed) | Stronger 2:55: "I, I'm" run together, so it is catching the first I now, otherwise good. All of Me: good. Someone Like You: the overlap at 2:03 might just be the lead-in, the sweep looks sequential to Ken; asks why the 4 words at 3:57 had to be guessed. Incomplete: good. Baby One More Time: good. My Heart Will Go On: asks why the last line is guessed, "shouldn't its end window be the easiest to get right". Castle On The Hill: good. Miss Independent: "God damn" is not in the video (probably censorship); the video has "yeah yeah" where the caption has "ooh yeah". Pocahontas: "wind" first reported as coming in late and ending early, then "comes in early and ends early". Ken also said model work for these questions may use the GPU instead of the CPU. No GATE B ruling yet |
 | 34 | 2026-10-31 | 5 | scratch `replay.py <id> section\|line <lid>` (GPU; `WhisperModelConfig()` defaults; `_do_align_refine` as the worker runs it; slice by `ffmpeg -ss -to`; "faithful" = the cached stem first decoded to a stereo 44.1 kHz s16 wav as `load_vocal` does, then sliced). A first CPU attempt was stopped when Ken said to use the GPU. Section replays take the window `segment_by_gaps(env=...)` gives; line replays take the window `repace_bad_lines` aims (w0 = cue start + offset - 0.75, w1 = section.t1 for a section's last line) | **Someone Like You L44-49**, window 216.975-246.146. Slice cut from the m4a: 35 of 35 tokens returned, L49 9/9. Faithful, two runs: 31 words, L49 5/9 (`I` 237.77-239.12, `wish` 239.12-239.5, `nothing` 239.98-240.08, `but` 240.4-240.7, `the` 240.7-240.8), identical in both runs and to the regen bundle. L49 rescue slice 237.743-246.146: 9 words: `I` 237.9-239.14, `best` 241.47-242.08 p 0.9988, `for` 242.60-242.94 p 0.8334, `you,` 243.31-243.44 p 0.5013, `too` 244.44-245.28 p 0.0102. **My Heart Will Go On L22-26** (dereverb stem), window 204.625-263.325: 23 of 34 tokens returned, last `safe` 234.49-234.60 p 0.0525; L22-24 full, L25 0/7, L26 0/7 (same cut from the m4a and faithful). L26 rescue slice 237.664-263.325: 7 of 7 words: `My` 237.66-239.28 p 0.1347, `heart` 239.28-239.96, `will` 239.96-240.58, `go` 240.98-241.64, `on` 241.64-243.14, `and` 243.66-243.96, `on` 243.96-244.96 |
 | 35 | 2026-10-31 | 5 | scratch `inspan_check.py`: the saved rescue-slice words through `cue_align._line_from_realigned` and `_line_in_span`, with the aimed window as `repace_bad_lines` builds it (`(cue start, max(cue end, aim_end - offset))`, slack `PAUSE_SLACK_S` 0.5); then the first word's start set to the lower bound | Someone Like You L49: 9/9 words, start 237.903, end 245.283, allowed 237.993 to 246.646, `_line_in_span` False; first word's start set to 237.993: True (short by 0.090 s). My Heart Will Go On L26: 7/7 words, start 237.664, end 244.964, allowed 237.914 to 263.825, False; set to 237.914: True (short by 0.250 s). In the regen bundles: Someone Like You L49 is not in `repaced_line_ids` or `realigned_line_ids` and is in `guessed_word_line_ids` (4 words); My Heart Will Go On L26 is in `repaced_line_ids` |
+| 36 | 2026-10-31 | GATE B | Opus, scratch `onset_why.py` (CPU, read only; in the 323ba938 scratchpad beside `inspan_check.py`): word times of the after library from the ASS (`asswords.py`), envelopes from row 7's cache, stem by `inspan_check.py`'s rule. (1) Each early first word of row 30: the branch `snap_line_onsets` takes on the line as shown (the shown words are already past the snap, so this is the snap's decision on a line it left in place). (2) Row 35's two saved rescues: `snap_line_onsets` on the rescue line before the check, then `_line_in_span`; and on the line with the first word's start set to the bound. Skipped as on time = level over the 3 frames at word 1's start >= ref - `NEAR_SUNG_DB` (8) and median over word 1's span >= ref - `SUSTAIN_NEAR_DB` (12). Envelope dB every 0.25 s | **Stronger L18** (vocal; heard 105.62): `My` 105.05-105.91, word 2 106.30, previous last word `way` 104.40-105.05; ref -20.6, start -22.3, span median -22.9: skipped as on time. 104.55 -20, 104.80 -19, 105.05 -23, 105.30 -24, 105.55 -30, 105.80 -21, 106.05 -36, 106.30 -19. **Stronger L32** (heard 176.16): `I,` 175.16-177.90, word 2 178.24, previous `more` 174.50-175.56; ref -19.3, start -20.0, span -20.3: on time. 174.91 -18, 175.16 -20, 175.41 -20, 175.66 -30, 175.91 -28, 176.16 -19, 176.41 -19 ... 177.66 -19, 177.91 -29, 178.16 -30, 178.41 -19. **All of Me L40** (heard 183.136): `'Cause` 182.30-183.35, word 2 183.35, previous `winning` 182.22-182.56; ref -16.3, start -15.1, span -29.2: not on time, rise 183.125, the snap moves the start to 183.07 when rerun on the shown words; the shown start is 182.30 (the snap's input in the pipeline is not saved). 182.30 -15, 182.55 -22, 182.80 -44, 183.05 -53, 183.30 -16, 183.55 -14. **Someone Like You L48** (heard 232.768): `Never` 230.71-232.21, word 2 233.18, previous `instead` 228.74-230.62 (231.60 before); ref -14.8, start -15.7, span -20.8: on time. 230.71 -17, 230.96 -16, 231.21 -19, 231.46 -21, 231.71 -34, 231.96 -49, 232.21 -50, 232.46 -34, 232.71 -54, 232.96 -12, 233.21 -16. **Miss Independent L51** (heard 158.6): `She` 157.70-159.20, word 2 159.58, previous `time` 156.94-157.69 (158.61 before); ref -14.7, start -14.8, span -19.8: on time. 157.70 -15, 157.95 -15, 158.20 -19, 158.45 -17, 158.70 -22, 158.95 -36, 159.20 -43, 159.45 -42, 159.70 -13. **Someone Like You L49 rescue** (vocal; bound 237.993; `I` 237.903-239.143, word 2 239.423; previous line's last word 237.00-237.70, aligned): snap before the check: ref -13.5, start -14.4, span -13.9, on time, start 237.90, `_line_in_span` False; clamped then snapped: on time, start 237.99. 237.40 -14, 237.65 -13, 237.90 -12, 238.15 -12, 238.40 -14, 238.65 -14, 238.90 -16, 239.15 -16, 239.40 -15. **My Heart Will Go On L26 rescue** (dereverb; bound 237.914; `My` 237.664-239.164 (capped at 1.5 s), word 2 239.284; L25 spaced from caption, last word 237.66-238.41): snap before the check: ref -18.6, start -29.3, span -33.3, fired, rise 237.65, start 237.66, `_line_in_span` False; clamped then snapped: start -16.1, span -40.6, rise 238.85, start 238.80. 237.16 -12, 237.41 -17, 237.66 -37, 237.91 -16, 238.16 -16, 238.41 -54, 238.66 -49, 238.91 -33, 239.16 -16, 239.41 -31 |
+| 37 | 2026-10-31 | GATE B | Opus, scratch `early_sections.py` (CPU, read only, 323ba938 scratchpad): the section of each early-start line of row 30, `segment_by_gaps` without and with the envelope (row 7's cache) | Stronger L18: section L10-18, 67.30-111.05 -> 67.30-112.48 (+1.43). Stronger L32: L27-32, 149.22-181.54 -> 182.58 (+1.04). All of Me L40: L31-40, 146.92-188.81 -> 189.60 (+0.79). Someone Like You L48: L44-49, 216.97-244.77 -> 246.15 (+1.38). Miss Independent L51: L36-51, 114.68-162.08 -> 162.10 (+0.02). Same lines in every section with and without. Before bundles captured 2026-10-29 (Stronger, Miss Independent) and 2026-10-19 (All of Me, Someone Like You); `daf183a` is 2026-10-30 |
+| 38 | 2026-10-31 | GATE B | Ken: "it's stopped, run it" (app stopped; `nvidia-smi` 6 MiB used). Scratch `b1_rescue.py` (GPU, no library writes, 323ba938 scratchpad; `WhisperModelConfig()` defaults, model loaded once in 7 s, `_do_align_refine` as the worker runs it, faithful slices as row 34). Each of the 18 target lines: w0 = cue start + `repace.offset_s` - 0.75; w1 = max(cue end + offset + 0.75, measured) capped at `media_duration_s`, measured = `_volume_end(env, cue, next cue, 0.75)`, `_volume_tail` for the song's last line; `_line_from_realigned` with aim_end = max(cue end + offset, measured); `_line_in_span` against `(cue start, max(cue end, aim_end - offset))`, raw and with Decision 12's clamp; kept = clamped check passes and more words than the pre-branch line (before-backup ASS). Output `b1_results.json`, `b1_<id>_<lid>.json`, `b1_rescue.log` | Columns: tokens / pre-branch words / words now (source now) / measured / slice / returned-matched / in span raw-clamped / kept. Stronger 6: 11/8/11 (aligned) / 51.19 / 42.31-51.19 / 11-11 / T-T / yes. Stronger 26: 15/13/15 (aligned + guessed) / 146.61 / 140.23-146.73 / 13-13 / T-T / no (13 not more than 13). Stronger 32: 5/4/5 (re-aligned) / 182.58 / 174.54-182.58 / 5-5 / T-T / yes. Stronger 37: 9/6/9 (aligned) / 209.23 / 200.38-209.23 / 9-9 / T-T / yes. All of Me 29: 11/9/11 (aligned) / 140.33 / 130.61-140.33 / 11-11 / T-T / yes. All of Me 46: 8/6/8 (aligned) / 221.24 / 213.56-221.24 / 8-8 / F-T / yes. All of Me 49: 11/9/11 (aligned) / 236.48 / 228.08-236.48 / 11-11 / T-T / yes. Someone Like You 16: 9/7/9 (aligned) / 87.44 / 79.03-87.44 / 9-9 / F-T / yes. Someone Like You 33: 9/8/9 (aligned) / 170.87 / 162.53-170.87 / 9-9 / T-T / yes. Someone Like You 49: 9/8/9 (aligned + guessed) / 246.15 / 237.74-246.15 / 9-9 / F-T / yes. Baby One More Time 20: 11/9/11 (aligned) / 110.85 / 103.81-110.85 / 11-11 / T-T / yes. Baby One More Time 30: 10/8/10 (aligned) / 169.70 / 160.41-169.70 / 10-10 / T-T / yes. Miss Independent 9: 4/2/4 (re-aligned + guessed) / 25.93 / 23.16-26.56 / 3-3 / F-F / no. Miss Independent 71: 4/2/4 (aligned + guessed) / 219.30 / 216.46-220.13 / 4-4 / F-F / no. Pocahontas 36: 10/6/10 (aligned) / 190.90 / 173.94-190.90 / 10-10 / F-T / yes (`the` 182.27-182.86, `wind` 182.86-184.36). Incomplete 3: 6/4/6 (aligned) / 47.10 / 38.58-47.10 / 6-6 / T-T / yes (`guess` 45.76-46.06; heard end 46.04). Castle 46: 5/3/5 (aligned + guessed) / 229.65 / 225.64-229.66 / 5-5 / F-T / yes (`way` 228.70-228.84; heard end 228.88). My Heart Will Go On 9: 6/4/6 (aligned) / 92.42 / 86.75-92.79 / 6-6 / F-T / yes (`heart` 91.70-92.28; heard end 92.26). Someone Like You 49 `too` 244.44-245.28 (heard end 245.28). Kept 15 of 18, 6 of them only with the clamp. Slice ends equal the current rescue's except Stronger 26 (146.73 vs 147.22), Miss Independent 9 (26.56 vs 26.45), 71 (220.13 vs 219.38), Castle 46 (229.66 vs 229.74). stable-ts warnings: `Failed to align the last 3/15 words after 00:06.480` (Stronger 26), `the last 2/4 words after 00:03.380` (Miss Independent 9) |
+| 39 | 2026-10-31 | GATE B | CPU over row 38's results: (1) `snap_line_onsets` on each kept re-align line (envelope as row 36), its first-word start against the pre-branch line's (backup ASS, already past the snap) and the transcriber's first word; (2) words under `INSTANT_WORD_DUR_S` in the kept results; (3) the pre-branch words matched to the line's tokens with `_match_words_to_tokens` (expected times across the cue span, as `_with_guessed_words` does), and the re-align's word for the first unmatched token against the last matched pre-branch word | (1) pre-branch / B1 raw / B1 snapped / heard: Stronger 6 44.05 / 42.66 / 42.66 / 42.86; Stronger 32 176.56 / 175.16 / 175.16 / 176.16; Stronger 37 201.69 / 200.88 / 200.88 / 201.86; All of Me 29 131.71 / 131.49 / 131.70 / 131.40; All of Me 46 214.52 / 213.81 / 214.53 / -; All of Me 49 229.05 / 229.32 / 229.32 / -; Someone Like You 16 79.18 / 79.28 / 79.28 / -; Someone Like You 33 161.83 / 162.83 / 162.83 / 162.92; Someone Like You 49 237.85 / 237.99 / 237.99 / -; Baby One More Time 20 105.24 / 104.48 / 104.48 / -; Baby One More Time 30 161.18 / 160.85 / 161.10 / -; Pocahontas 36 174.12 / 174.19 / 174.19 / -; Incomplete 3 39.68 / 39.66 / 39.66 / -; Castle 46 226.67 / 225.89 / 225.89 / -; My Heart Will Go On 9 87.14 / 87.00 / 87.00 / -. (2) Stronger 37 `My` 200.88-200.88; All of Me 49 `Give` 229.32-229.32; Baby One More Time 20 `baby,` 106.55-106.57, `oh` 109.89-109.89. (3) pre-branch words match a token prefix in 13 of 15; Stronger 37 (6 words: `no` matched to token 7, the second `no`; tokens 5, 6, 8 unmatched) and Pocahontas 36 (6 words: `the` matched to token 8, the second `the`; tokens 5, 6, 7, 9 unmatched). In all 15 the re-align's word for the first unmatched token starts after the last matched pre-branch word starts; it starts before that word's snapped end in 11 (by 0.60-2.46 s) |
 
 **R7 targets** at the starting constants (slack 0.5, dip 12, min_quiet 0.1, tail_quiet 0.5). `heard_end` is the transcriber's end of the line's last word.
 
@@ -1127,4 +1244,13 @@ Execute plans/cue-align-windows.md on branch cue_align_windows (HEAD daf183a, pl
 untracked). Read Goal, Decisions, Library facts, Design, Phases and Rules first. Start at
 Phase 0, record the baseline, then Phase 1. Stop at GATE A if any pass criterion fails,
 and before Phase 5's GPU run until Ken says go. Log every step in the Results log.
+```
+
+Phase 5b (after Ken agrees to Decision 12):
+
+```
+Branch cue_align_windows. Plan: plans/cue-align-windows.md, Decision 12 and Phase 5b.
+Done, don't redo: Phases 1-5, the review fixes, rows 25-39. Do Phase 5b steps 1-5 (per-line
+windows, clamp, tests, CPU check, two commits). Stop before step 6's GPU rerun until Ken
+stops the app and says go; then stop at GATE B with Ken's list of changed lines.
 ```
