@@ -426,6 +426,14 @@ whose last cue overruns the media). Never launch it unprompted.
 | 22 | 2026-10-31 | 4 | commit `0f5fdd9` (`fix(cue_align): a line is never shown with words missing`): `repace_bad_lines(sections=...)`, partial lines (placed, fewer words than tokens) rescued; realign aimed at `max(cue end + offset, section t1)` for a section's last line, containment checked against that end; a partial line keeps the realign only when it times more words; `_with_guessed_words` fills every token a kept line lacks; stats `n_guessed_words`, `guessed_word_line_ids`. The widened rescue window applies to every rescued section-last line, not only partial ones (the plan's "today's path" for lines under `MIN_LINE_COVERAGE` read as the realign-then-fill order); fills stay on the cue span. `TestPartialLines` 11 cases, `TestAlignSong` +1. `pytest -q`; pre-commit on the 2 files | 3039 passed in 36.99 s; black reformatted `cue_align.py` on the first run, all hooks pass on the second |
 | 23 | 2026-10-31 | review | `/code-review high daf183a..4f3ece6`, files as Checkpoints, finders correctness / simplicity / robustness. Two findings probed by calling `_with_guessed_words` directly; the rest read from the code | 10 findings. (1) middle guess between touching neighbours: one 1.0-1.4, three 1.4-1.8 -> two 1.4-1.4. (2) tail guess past `before`: one 1.0-1.4, two 1.4-2.4, before 2.0 -> three, four 2.4-2.4. (3) section-last realign slice ran to `section.t1 + pad_s`; `section.t1` can be the next caption start. (4) `_volume_end` search starts at caption end - 0.5 with no display-lead correction: a short last caption with audio late by under `pad_s` finds the quiet before the line. (5) section end from `cue_spans[hi]` only; an earlier overlapping duet line can end later. (6) `_volume_tail` = last loud frame, no release rule, uncapped. (7) `align_song` re-ran `segment_by_gaps(env=None)` to count widened ends; cue route on decode failure decodes again in `snap_line_edges`. (8) `_quiet_runs` needs every frame quiet: one loud frame splits a release. (9) `_volume_end` returned `nxt[0]` (measured) when `nxt[0]` < search start. (10) every partial line now takes a per-line slice align |
 | 24 | 2026-10-31 | review | commits `cdd5e5f` (findings 1, 2, 3: guessed words with less than `INSTANT_WORD_DUR_S` each share the timed neighbour's slot; `repace_bad_lines(pad_s=...)` builds the realign window, `realign(lid, w0, w1)` receives it, section-last line's `w1` = `max(t1, section.t1)` unpadded), `173439c` (findings 5, 9: section end and `_volume_end`/`_volume_tail` use the latest-ending line in the section; `_volume_end` returns None when `nxt[0] <= last[1] - EDGE_SEARCH_SLACK_S`), `ba57b7d` (finding 7: `Section.widened_end`, second grouping pass removed). Not changed: 6 (Decision 11 sets the tail as pad after the last sung frame; a first-release tail at `RELEASE_QUIET_S` 0.75 ends Pocahontas L36 near 184.35, before `wind` 184.92, row 11's 0.8 s dip at 183.6-184.4); the second decode on decode failure in 7; 4, 8, 10 deferred. Tests: +3 `TestPartialLines`, +2 `TestSegmentByVolume`, 4 realign-window asserts updated (`(4, 8.0, 10.0)` -> `(4, 7.25, 10.75)`, `(4, 8.0, 11.0)` -> `(4, 7.25, 11.0)`, `(4, 8.0, 9.0)` -> `(4, 7.25, 9.75)`, `TestAlignSong` held-note slice end 10.5 -> 9.75). Window figures of rows 20 and 21 not re-run | `pytest -q` 3044 passed in 37.37 s; pre-commit on `cue_align.py` and `test_cue_align.py` passes; on `4f3ece6`'s `cue_align.py` the 3 new `TestPartialLines` cases fail, and on `cdd5e5f`'s the 2 new `TestSegmentByVolume` cases and the added overlap `measured_end` assert fail |
+| 25 | 2026-10-31 | 5 | Ken: "I've stopped the app so go". HEAD `f5639eb`, tree clean apart from Ken's `CLAUDE.md` edit. No app process; `nvidia-smi` 6 MiB of 6144 used. `sha256sum` of `lyrics/Pocahontas - Colors of the Wind (Blu-ray 1080p HD)---9ThO76peOw0.lrclib.srt` before: `d56db69749f7a5d518d7182cf6acd7d55fa08e2bfbc938a0e5c63f5ce9c641dd`. Scratch copy of the 9 songs' `alignment_debug`, `karaoke`, `lyrics`, `subtitles` files to the scratchpad `before/`. Dry run with the Phase 5 command | 9 songs: 8 `reuse srt (from video)`, Pocahontas `LRCLIB timing`; no Genius prompt. The task statement said rows from 23; rows 23-24 were already the review, so Phase 5 starts at 25 |
+| 26 | 2026-10-31 | 5 | the Phase 5 command without `--dry-run`, with `--yes`, 2026-10-31 17:45:59Z to 18:04:22Z. Backup the script made: `~/pikaraoke-songs/regen_backups/20261031T174600Z/{alignment_debug,karaoke,lyrics,subtitles}` (33 files; `cmp` against the scratch copy: all identical) | exit 0, `Done. succeeded=9 failed=0 skipped=0`. Per-song stage log lines in block R26 below |
+| 27 | 2026-10-31 | 5 | log warnings and bundle differences | Two `slice-align failed, degrading` warnings, each from `stable_whisper/alignment.py` `set_result_language`, `AttributeError: 'NoneType' object has no attribute 'language'`: Someone Like You line 44 (13:48:11), My Heart Will Go On line 25 (13:56:24). My Heart Will Go On: `transcribe yield 22.5 wpm < 30.0`, retried on a de-reverbed stem (retry 36.8 wpm), `joint_stats.dereverb` `{'yield_wpm': 22.5, 'succeeded': True, 'retry_yield_wpm': 36.8}` after; the before bundle has no `dereverb` key. Someone Like You before bundle: `transcribe_words` 0 (pre-`ddb1dcc`), after 336; its "heard" columns come from the after bundle. Other 7 songs: `dereverb` absent before and after |
+| 28 | 2026-10-31 | 5 | `sha256sum` of the Pocahontas `.lrclib.srt` after the run | `d56db69749f7a5d518d7182cf6acd7d55fa08e2bfbc938a0e5c63f5ce9c641dd`, identical to before (Decision 10) |
+| 29 | 2026-10-31 | 5 | scratch `compare.py` (before = the backup; after = the library), per song: target lines, non-target lines whose start or end moved > 0.3 s, words against tokens, overlaps, stats; word times from the ASS files (`asswords.py`: `\k` gap + `\kf` duration from the Dialogue start); `vs_heard.py`: every line's start against the transcriber's first word and end against its last word. Blocks R29 (verbatim compare output), R29w (ASS word times), R29h (vs_heard output) below | **Target lines (18)**: before, 18 lines short of their tokens in the 9 songs, 37 words (Stronger 4 lines/9 words, All of Me 3/6, Someone Like You 3/4, Baby One More Time 2/4, Miss Independent 2/4, Pocahontas 1/4, Incomplete 1/2, Castle 1/2, My Heart Will Go On 1/2); after, 0 lines short, 0 lines with no words, 0 with more words than tokens. Source of the 18 after: aligned 12; aligned + guessed words 4 (Stronger 26, Someone Like You 49, Miss Independent 71, Castle 46); re-aligned 1 (Stronger 32); re-aligned + guessed words 1 (Miss Independent 9). Target line ends, before -> after (heard last word end): Stronger 6 50.34 -> 50.66 (51.10); Stronger 32 182.56 -> 182.56 (180.38); Stronger 37 209.30 -> 208.90 (206.80); All of Me 29 137.25 -> 139.83 (138.98); Baby One More Time 20 110.86 -> 110.86 (110.64); Baby One More Time 30 169.50 -> 169.48 (168.20); Incomplete 3 43.51 -> 47.20 (46.04); Pocahontas 36 178.87 -> 183.95 (184.92); Castle 46 228.80 -> 228.80 (228.88); My Heart Will Go On 9 92.13 -> 92.25 (92.26); Someone Like You 49 245.75 -> 242.01 (245.28) |
+| 30 | 2026-10-31 | 5 | same scripts, the other lines | Moved > 0.3 s, non-target lines: Stronger 4, All of Me 2, Someone Like You 7, Baby One More Time 1, Miss Independent 7, Pocahontas 0, Incomplete 0, Castle 0, My Heart Will Go On 10 (31). Overlapping line pairs (line starts before the previous line's end), before -> after: 0->2, 1->2, 0->2, 0->0, 6->7, 0->0, 0->0, 1->1, 1->1 in the order Stronger, All of Me, Someone Like You, Baby One More Time, Miss Independent, Pocahontas, Incomplete, Castle, My Heart Will Go On (9 -> 15). Pairs overlapping after and not before: Stronger 7/6 0.22 s, Stronger 32/31 0.40, All of Me 40/39 0.26, Someone Like You 25/24 0.36, Someone Like You 26/25 0.42, Miss Independent 65/64 0.50; "captions overlap" is `no` for all 15. Stronger 7: `But` 50.43-51.55 before and after; Stronger 6 now ends 50.66; Whisper `own` 50.22-51.10, `But` 51.10. `vs_heard.py` over 325 lines with a heard first word: start more than 0.5 s before the heard word, before -> after: 52 -> 58; end more than 0.3 s before the heard last word, before -> after: 12 -> 8. Lines whose start got earlier than heard by > 0.5 s and by > 0.3 s more than before: Stronger 18 (-0.56), Stronger 32 (-1.00), All of Me 40 (-0.83), Someone Like You 48 (-2.05), Miss Independent 51 (-0.90). Lines whose end got further before the heard end by > 0.3 s and by > 0.3 s more than before: Someone Like You 49 (heard 245.28, end 245.75 -> 242.01) |
+| 31 | 2026-10-31 | 5 | `joint_stats.edges` and `repace` of the 9 after bundles; Song Info `_timed_tile` and `_alignment` rendered for each status (Flask test request context) | `edges` `{n, widened, fallback}`: Stronger 10/8/0, All of Me 13/13/0, Someone Like You 13/11/0, Baby One More Time 8/8/0, Miss Independent 8/5/0, Pocahontas 4/1/0, Incomplete 18/14/3, Castle 9/3/0, My Heart Will Go On 5/1/0 (total 88/64/3). `n_guessed_words` / lines: Stronger 2/1, All of Me 0/0, Someone Like You 4/1, Baby One More Time 0/0, Miss Independent 2/2, Pocahontas 0/0, Incomplete 0/0, Castle 2/1, My Heart Will Go On 0/0 (10 words, 5 lines). `n_repaced` / `n_realigned` before -> after: Stronger 1/0 -> 2/1, All of Me 2/0 -> 1/1, Someone Like You 1/1 -> 1/1, Baby One More Time 0/1 -> 0/1, Miss Independent 4/3 -> 5/4, Pocahontas 0/3 -> 0/3, Incomplete 0/0 -> 0/0, Castle 1/1 -> 1/1, My Heart Will Go On 2/4 -> 4/1. Timed tile before -> after: Stronger 97% -> 95%, All of Me 96% -> 98%, Someone Like You 98% -> 98%, Baby One More Time 100% -> 100%, Miss Independent 96% -> 94%, Pocahontas 100% -> 100%, Incomplete 100% -> 100%, Castle 98% -> 98%, My Heart Will Go On 93% -> 85% (4 of 27 guessed; `poor` false, 0.148 against 0.15). Before, all 9 songs had a "Missing from the screen" note (warn); after, 0 do. Per-song stats in block R29 |
+| 32 | 2026-10-31 | 5 | stop | GATE B reached; listening list handed to Ken; no code changed in Phase 5; Phase 5 log rows 25-32 and blocks R26, R29, R29w, R29h committed as a `docs(plan)` commit |
 
 **R7 targets** at the starting constants (slack 0.5, dip 12, min_quiet 0.1, tail_quiet 0.5). `heard_end` is the transcriber's end of the line's last word.
 
@@ -623,6 +631,491 @@ whose last cue overruns the media). Never launch it unprompted.
 | 1.0 | 24 | 0.2 | 0.25 | 27.6 | 48 | 4 | 110 | 24 | 60 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
 | 1.0 | 24 | 0.2 | 0.5 | 27.6 | 46 | 4 | 110 | 24 | 60 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
 | 1.0 | 24 | 0.2 | 1.0 | 27.6 | 43 | 1 | 110 | 24 | 60 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+
+**R26 stage log lines per song** (`regen_run.log`, in run order; `cue-align: N cues -> S sections`; `cue rescue`; `window end(s) widened`).
+
+| Song | cues -> sections | rescue offset | re-aligned | re-paced | guessed words (lines) | widened / sections | left on caption |
+|---|---|---|---|---|---|---|---|
+| Someone Like You | 56 -> 13 | -0.53 | 1 | 1/56 | 4 (1) | 11/13 | 0 |
+| Incomplete | 27 -> 18 | -0.69 | 0 | 0/27 | 0 (0) | 14/18 | 3 |
+| Baby One More Time | 46 -> 8 | -0.10 | 1 | 0/46 | 0 (0) | 8/8 | 0 |
+| Stronger | 39 -> 10 | -0.50 | 1 | 2/39 | 2 (1) | 8/10 | 0 |
+| My Heart Will Go On | 27 -> 5 | -0.38 | 1 | 4/27 | 0 (0) | 1/5 | 0 |
+| Castle On The Hill | 56 -> 9 | -0.17 | 1 | 1/56 | 2 (1) | 3/9 | 0 |
+| All of Me | 56 -> 13 | -0.25 | 1 | 1/56 | 0 (0) | 13/13 | 0 |
+| Miss Independent | 89 -> 8 | +0.11 | 4 | 5/89 | 2 (2) | 5/8 | 0 |
+| Pocahontas | 37 -> 4 | -0.15 | 3 | 0/37 | 0 (0) | 1/4 | 0 |
+
+**R29 compare output** (`compare.py`, verbatim; `source` is from `joint_stats.repace` ids: `spaced` = in `repaced_line_ids`, `re-aligned` = in `realigned_line_ids`, `+guessed words` = in `guessed_word_line_ids`; `words b/a` in the moved tables is `n_words`/tokens; heard times are the after bundle's `transcribe_words` matched to the line's first and last token inside its cue span).
+
+#### Stronger (AJWtLf4-WWs); lines 39; before 2026-10-29T23:09:26+00:00 -> after 2026-10-31T17:53:47+00:00
+schema before 11 after 11; method cue_align
+joint_stats.edges after: {'n': 10, 'widened': 8, 'fallback': 0}
+joint_stats.repace before: {"offset_s": -0.596, "n_repaced": 1, "repaced_line_ids": [21], "n_realigned": 0, "realigned_line_ids": []}
+joint_stats.repace after: {"offset_s": -0.497, "n_repaced": 2, "repaced_line_ids": [1, 21], "n_realigned": 1, "realigned_line_ids": [32], "n_guessed_words": 2, "guessed_word_line_ids": [26]}
+
+**Targets**
+
+| L | text | tokens | words before | words after | source before | source after | start b | start a | end b | end a | heard first | heard last |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 6 | You might think that I won't make it on my own | 11 | 8 | 11 | aligned | aligned | 44.06 | 43.91 | 50.34 | 50.66 | 42.86 | 51.10 |
+| 26 | Here I go, here I go, here I go, here I go, here I go | 15 | 13 | 15 | aligned | aligned +guessed words | 141.71 | 141.71 | 146.62 | 146.86 | - | - |
+| 32 | I, I'm stronger than yesterday | 5 | 4 | 5 | aligned | re-aligned | 176.56 | 175.16 | 182.56 | 182.56 | 176.16 | 180.38 |
+| 37 | My loneliness ain't killing me no more, no more | 9 | 6 | 9 | aligned | aligned | 201.69 | 201.71 | 209.30 | 208.90 | 201.86 | 206.80 |
+
+**Moved lines (start or end moved > 0.3 s), non-target**
+
+| L | text | start b | start a | end b | end a | d start | d end | words b | words a | source b | source a | heard first | heard last |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | Oh, yeah, yeah | 19.73 | 19.70 | 22.50 | 23.55 | -0.03 | +1.05 | 3/3 | 3/3 | aligned | spaced | - | - |
+| 18 | My loneliness ain't killing me no more | 105.36 | 105.06 | 113.27 | 113.27 | -0.30 | +0.00 | 7/7 | 7/7 | aligned | aligned | 105.62 | 111.16 |
+| 31 | My loneliness ain't killing me no more | 169.82 | 169.82 | 176.46 | 175.56 | +0.00 | -0.90 | 7/7 | 7/7 | aligned | aligned | 169.89 | 174.94 |
+| 38 | I, I'm stronger | 209.40 | 209.00 | 213.30 | 213.33 | -0.40 | +0.03 | 3/3 | 3/3 | aligned | aligned | 209.02 | 211.76 |
+
+moved non-target lines: 4
+
+**Words shown vs tokens, all lines (after / before)**
+
+lines with fewer words than tokens: before 4 [(6, 8, 11), (26, 13, 15), (32, 4, 5), (37, 6, 9)]; after 0 []
+lines with no words: before []; after []; more words than tokens after: []
+
+**Overlaps** (line starts before the previous line's end)
+
+| L | prev L | start | prev end b | prev end a | start b | start a | overlap b | overlap a | captions overlap |
+|---|---|---|---|---|---|---|---|---|---|
+overlapping pairs: before 0, after 2
+| 7 | 6 | 0:50.44 | 50.34 | 50.66 | 50.44 | 50.44 | 0.00 | 0.22 | no |
+| 32 | 31 | 2:55.16 | 176.46 | 175.56 | 176.56 | 175.16 | 0.00 | 0.40 | no |
+
+**Song Info stats**
+
+- before: Timed tile `97%` / `1 guessed · 9 words` warn=True; poor=False; guessed=1; cue_lines={'aligned': 38, 'realigned': 0, 'paced': 1}; words_guessed=None/None lines; words_missing=9/4 lines; bar: Aligned 38, Spaced from caption 1; note: Missing from the screen: 9 words in 4 lines. Regenerate to show them. (warn True)
+- after: Timed tile `95%` / `2 guessed · 2 words` warn=False; poor=False; guessed=2; cue_lines={'aligned': 36, 'realigned': 1, 'paced': 2}; words_guessed=2/1 lines; words_missing=None/None lines; bar: Aligned 36, Re-aligned 1, Spaced from caption 2; note: Guessed timing: 2 words in 1 line. (warn False)
+
+#### All of Me (450p7goxZqg); lines 56; before 2026-10-19T18:54:26+00:00 -> after 2026-10-31T18:00:26+00:00
+schema before 11 after 11; method cue_align
+joint_stats.edges after: {'n': 13, 'widened': 13, 'fallback': 0}
+joint_stats.repace before: {"offset_s": -0.296, "n_repaced": 2, "repaced_line_ids": [22, 40], "n_realigned": 0, "realigned_line_ids": []}
+joint_stats.repace after: {"offset_s": -0.254, "n_repaced": 1, "repaced_line_ids": [22], "n_realigned": 1, "realigned_line_ids": [40], "n_guessed_words": 0, "guessed_word_line_ids": []}
+
+**Targets**
+
+| L | text | tokens | words before | words after | source before | source after | start b | start a | end b | end a | heard first | heard last |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 29 | I can't stop singing, it's ringing in my head for you | 11 | 9 | 11 | aligned | aligned | 131.72 | 131.72 | 137.25 | 139.83 | 131.40 | 138.98 |
+| 46 | 'Cause all of me loves all of you | 8 | 6 | 8 | aligned | aligned | 214.53 | 214.53 | 220.83 | 220.83 | 213.78 | 220.70 |
+| 49 | Give your all to me, I'll give my all to you | 11 | 9 | 11 | aligned | aligned | 229.05 | 229.05 | 236.10 | 236.10 | 229.09 | 235.92 |
+
+**Moved lines (start or end moved > 0.3 s), non-target**
+
+| L | text | start b | start a | end b | end a | d start | d end | words b | words a | source b | source a | heard first | heard last |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 40 | 'Cause I give you all of me | 183.07 | 182.30 | 188.85 | 188.90 | -0.77 | +0.05 | 7/7 | 7/7 | spaced | re-aligned | 183.14 | 188.32 |
+| 55 | And you give me all of you, oh | 266.90 | 266.90 | 270.95 | 275.05 | +0.00 | +4.10 | 8/8 | 8/8 | aligned | aligned | 266.98 | 273.60 |
+
+moved non-target lines: 2
+
+**Words shown vs tokens, all lines (after / before)**
+
+lines with fewer words than tokens: before 3 [(29, 9, 11), (46, 6, 8), (49, 9, 11)]; after 0 []
+lines with no words: before []; after []; more words than tokens after: []
+
+**Overlaps** (line starts before the previous line's end)
+
+| L | prev L | start | prev end b | prev end a | start b | start a | overlap b | overlap a | captions overlap |
+|---|---|---|---|---|---|---|---|---|---|
+overlapping pairs: before 1, after 2
+| 23 | 22 | 1:46.05 | 106.98 | 107.03 | 106.05 | 106.05 | 0.93 | 0.98 | no |
+| 40 | 39 | 3:02.30 | 182.56 | 182.56 | 183.07 | 182.30 | 0.00 | 0.26 | no |
+
+**Song Info stats**
+
+- before: Timed tile `96%` / `2 guessed · 6 words` warn=True; poor=False; guessed=2; cue_lines={'aligned': 54, 'realigned': 0, 'paced': 2}; words_guessed=None/None lines; words_missing=6/3 lines; bar: Aligned 54, Spaced from caption 2; note: Missing from the screen: 6 words in 3 lines. Regenerate to show them. (warn True)
+- after: Timed tile `98%` / `1 guessed` warn=False; poor=False; guessed=1; cue_lines={'aligned': 54, 'realigned': 1, 'paced': 1}; words_guessed=0/0 lines; words_missing=None/None lines; bar: Aligned 54, Re-aligned 1, Spaced from caption 1; note: None (warn False)
+
+#### Someone Like You (hLQl3WQQoQ0); lines 56; before 2026-10-19T18:12:58+00:00 -> after 2026-10-31T17:48:23+00:00
+schema before 11 after 11; method cue_align
+joint_stats.edges after: {'n': 13, 'widened': 11, 'fallback': 0}
+joint_stats.repace before: {"offset_s": -0.509, "n_repaced": 1, "repaced_line_ids": [44], "n_realigned": 1, "realigned_line_ids": [45]}
+joint_stats.repace after: {"offset_s": -0.525, "n_repaced": 1, "repaced_line_ids": [44], "n_realigned": 1, "realigned_line_ids": [45], "n_guessed_words": 4, "guessed_word_line_ids": [49]}
+
+**Targets**
+
+| L | text | tokens | words before | words after | source before | source after | start b | start a | end b | end a | heard first | heard last |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 16 | I wish nothing but the best for you, too | 9 | 7 | 9 | aligned | aligned | 79.19 | 79.19 | 86.59 | 86.47 | 79.22 | 86.44 |
+| 33 | I wish nothing but the best for you, too | 9 | 8 | 9 | aligned | aligned | 161.83 | 161.85 | 170.82 | 170.78 | 162.92 | 170.00 |
+| 49 | I wish nothing but the best for you, too | 9 | 8 | 9 | aligned | aligned +guessed words | 237.85 | 237.77 | 245.75 | 242.01 | 237.88 | 245.28 |
+
+**Moved lines (start or end moved > 0.3 s), non-target**
+
+| L | text | start b | start a | end b | end a | d start | d end | words b | words a | source b | source a | heard first | heard last |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 2 | And you're married now | 24.33 | 24.37 | 28.98 | 28.14 | +0.04 | -0.84 | 4/4 | 4/4 | aligned | aligned | - | 27.48 |
+| 3 | I heard that your dreams came true | 29.08 | 28.24 | 34.97 | 34.93 | -0.84 | -0.04 | 7/7 | 7/7 | aligned | aligned | - | 35.00 |
+| 24 | Only yesterday was the time of our lives | 117.21 | 117.23 | 123.76 | 124.21 | +0.02 | +0.45 | 8/8 | 8/8 | aligned | aligned | 117.42 | 124.14 |
+| 25 | We were born and raised in a summer haze | 123.86 | 123.86 | 130.88 | 131.40 | +0.00 | +0.52 | 9/9 | 9/9 | aligned | aligned | 124.16 | 130.80 |
+| 41 | How bittersweet this would taste | 194.06 | 194.08 | 199.68 | 201.55 | +0.02 | +1.88 | 5/5 | 5/5 | aligned | aligned | 194.08 | 201.18 |
+| 47 | But sometimes it hurts instead | 226.99 | 226.99 | 231.60 | 230.62 | +0.00 | -0.98 | 5/5 | 5/5 | aligned | aligned | 227.08 | 229.46 |
+| 48 | Never mind, I'll find someone like you | 232.65 | 230.72 | 237.75 | 237.67 | -1.93 | -0.08 | 7/7 | 7/7 | aligned | aligned | 232.77 | 236.88 |
+
+moved non-target lines: 7
+
+**Words shown vs tokens, all lines (after / before)**
+
+lines with fewer words than tokens: before 3 [(16, 7, 9), (33, 8, 9), (49, 8, 9)]; after 0 []
+lines with no words: before []; after []; more words than tokens after: []
+
+**Overlaps** (line starts before the previous line's end)
+
+| L | prev L | start | prev end b | prev end a | start b | start a | overlap b | overlap a | captions overlap |
+|---|---|---|---|---|---|---|---|---|---|
+overlapping pairs: before 0, after 2
+| 25 | 24 | 2:03.86 | 123.76 | 124.21 | 123.86 | 123.86 | 0.00 | 0.36 | no |
+| 26 | 25 | 2:10.98 | 130.88 | 131.40 | 130.98 | 130.98 | 0.00 | 0.42 | no |
+
+**Song Info stats**
+
+- before: Timed tile `98%` / `1 guessed · 4 words` warn=True; poor=False; guessed=1; cue_lines={'aligned': 54, 'realigned': 1, 'paced': 1}; words_guessed=None/None lines; words_missing=4/3 lines; bar: Aligned 54, Re-aligned 1, Spaced from caption 1; note: Missing from the screen: 4 words in 3 lines. Regenerate to show them. (warn True)
+- after: Timed tile `98%` / `1 guessed · 4 words` warn=False; poor=False; guessed=1; cue_lines={'aligned': 54, 'realigned': 1, 'paced': 1}; words_guessed=4/1 lines; words_missing=None/None lines; bar: Aligned 54, Re-aligned 1, Spaced from caption 1; note: Guessed timing: 4 words in 1 line. (warn False)
+
+#### Baby One More Time (C-u5WLJ9Yk4); lines 46; before 2026-10-29T23:06:24+00:00 -> after 2026-10-31T17:52:01+00:00
+schema before 11 after 11; method cue_align
+joint_stats.edges after: {'n': 8, 'widened': 8, 'fallback': 0}
+joint_stats.repace before: {"offset_s": -0.115, "n_repaced": 0, "repaced_line_ids": [], "n_realigned": 1, "realigned_line_ids": [28]}
+joint_stats.repace after: {"offset_s": -0.104, "n_repaced": 0, "repaced_line_ids": [], "n_realigned": 1, "realigned_line_ids": [28], "n_guessed_words": 0, "guessed_word_line_ids": []}
+
+**Targets**
+
+| L | text | tokens | words before | words after | source before | source after | start b | start a | end b | end a | heard first | heard last |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 20 | Tell me, baby, 'cause I need to know now, oh because | 11 | 9 | 11 | aligned | aligned | 105.25 | 105.26 | 110.86 | 110.86 | 105.18 | 110.64 |
+| 30 | I must confess, that my loneliness is killing me now | 10 | 8 | 10 | aligned | aligned | 161.18 | 161.55 | 169.50 | 169.48 | - | 168.20 |
+
+**Moved lines (start or end moved > 0.3 s), non-target**
+
+| L | text | start b | start a | end b | end a | d start | d end | words b | words a | source b | source a | heard first | heard last |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 5 | And now you're out of sight, yeah | 46.05 | 45.60 | 48.72 | 48.72 | -0.45 | +0.00 | 7/7 | 7/7 | aligned | aligned | 45.15 | 48.72 |
+
+moved non-target lines: 1
+
+**Words shown vs tokens, all lines (after / before)**
+
+lines with fewer words than tokens: before 2 [(20, 9, 11), (30, 8, 10)]; after 0 []
+lines with no words: before []; after []; more words than tokens after: []
+
+**Overlaps** (line starts before the previous line's end)
+
+| L | prev L | start | prev end b | prev end a | start b | start a | overlap b | overlap a | captions overlap |
+|---|---|---|---|---|---|---|---|---|---|
+overlapping pairs: before 0, after 0
+
+**Song Info stats**
+
+- before: Timed tile `100%` / `0 guessed · 4 words` warn=True; poor=False; guessed=0; cue_lines={'aligned': 45, 'realigned': 1, 'paced': 0}; words_guessed=None/None lines; words_missing=4/2 lines; bar: Aligned 45, Re-aligned 1; note: Missing from the screen: 4 words in 2 lines. Regenerate to show them. (warn True)
+- after: Timed tile `100%` / `0 guessed` warn=False; poor=False; guessed=0; cue_lines={'aligned': 45, 'realigned': 1, 'paced': 0}; words_guessed=0/0 lines; words_missing=None/None lines; bar: Aligned 45, Re-aligned 1; note: None (warn False)
+
+#### Miss Independent (k6M5C-oKw9k); lines 89; before 2026-10-29T23:30:17+00:00 -> after 2026-10-31T18:02:51+00:00
+schema before 11 after 11; method cue_align
+joint_stats.edges after: {'n': 8, 'widened': 5, 'fallback': 0}
+joint_stats.repace before: {"offset_s": 0.13, "n_repaced": 4, "repaced_line_ids": [5, 7, 12, 37], "n_realigned": 3, "realigned_line_ids": [38, 72, 78]}
+joint_stats.repace after: {"offset_s": 0.112, "n_repaced": 5, "repaced_line_ids": [5, 7, 12, 37, 65], "n_realigned": 4, "realigned_line_ids": [9, 38, 72, 78], "n_guessed_words": 2, "guessed_word_line_ids": [9, 71]}
+
+**Targets**
+
+| L | text | tokens | words before | words after | source before | source after | start b | start a | end b | end a | heard first | heard last |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 9 | Good morning. God damn. | 4 | 2 | 4 | aligned | re-aligned +guessed words | 24.62 | 23.45 | 25.01 | 26.45 | - | - |
+| 71 | Ooh yeah, ooh yeah | 4 | 2 | 4 | aligned | aligned +guessed words | 216.36 | 216.20 | 218.40 | 219.08 | - | - |
+
+**Moved lines (start or end moved > 0.3 s), non-target**
+
+| L | text | start b | start a | end b | end a | d start | d end | words b | words a | source b | source a | heard first | heard last |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 38 | Ooh yeah, ooh yeah | 118.79 | 118.91 | 121.95 | 120.79 | +0.12 | -1.16 | 4/4 | 4/4 | re-aligned | re-aligned | - | - |
+| 50 | And her bills are paid on time | 155.10 | 155.10 | 158.62 | 157.70 | +0.00 | -0.92 | 7/7 | 7/7 | aligned | aligned | 155.06 | 157.60 |
+| 51 | She made for a boss, only a boss | 159.47 | 157.70 | 162.70 | 162.70 | -1.76 | +0.00 | 8/8 | 8/8 | aligned | aligned | 158.60 | 162.26 |
+| 62 | Miss independent | 191.28 | 191.28 | 192.44 | 193.54 | +0.00 | +1.10 | 2/2 | 2/2 | aligned | aligned | - | - |
+| 63 | Mmm | 192.54 | 193.64 | 193.88 | 194.54 | +1.10 | +0.67 | 1/1 | 1/1 | aligned | aligned | - | - |
+| 64 | Her favorite thing to say-- "don't worry, I've got it" | 194.97 | 194.54 | 199.62 | 199.27 | -0.43 | -0.35 | 10/10 | 10/10 | aligned | aligned | - | 198.90 |
+| 65 | Mmm | 200.52 | 198.78 | 200.58 | 200.28 | -1.75 | -0.31 | 1/1 | 1/1 | aligned | spaced | - | - |
+
+moved non-target lines: 7
+
+**Words shown vs tokens, all lines (after / before)**
+
+lines with fewer words than tokens: before 2 [(9, 2, 4), (71, 2, 4)]; after 0 []
+lines with no words: before []; after []; more words than tokens after: []
+
+**Overlaps** (line starts before the previous line's end)
+
+| L | prev L | start | prev end b | prev end a | start b | start a | overlap b | overlap a | captions overlap |
+|---|---|---|---|---|---|---|---|---|---|
+overlapping pairs: before 6, after 7
+| 5 | 4 | 0:15.88 | 16.66 | 16.66 | 15.90 | 15.88 | 0.76 | 0.78 | no |
+| 6 | 5 | 0:17.36 | 17.40 | 17.38 | 17.36 | 17.36 | 0.03 | 0.01 | no |
+| 7 | 6 | 0:19.51 | 21.28 | 21.28 | 19.53 | 19.51 | 1.75 | 1.76 | no |
+| 37 | 36 | 1:57.13 | 117.88 | 117.88 | 117.13 | 117.13 | 0.76 | 0.76 | no |
+| 38 | 37 | 1:58.91 | 119.16 | 119.15 | 118.79 | 118.91 | 0.38 | 0.24 | no |
+| 65 | 64 | 3:18.78 | 199.62 | 199.27 | 200.52 | 198.78 | 0.00 | 0.50 | no |
+| 78 | 77 | 3:56.91 | 237.02 | 237.02 | 236.89 | 236.91 | 0.13 | 0.11 | no |
+
+**Song Info stats**
+
+- before: Timed tile `96%` / `4 guessed · 4 words` warn=True; poor=False; guessed=4; cue_lines={'aligned': 82, 'realigned': 3, 'paced': 4}; words_guessed=None/None lines; words_missing=4/2 lines; bar: Aligned 82, Re-aligned 3, Spaced from caption 4; note: Missing from the screen: 4 words in 2 lines. Regenerate to show them. (warn True)
+- after: Timed tile `94%` / `5 guessed · 2 words` warn=False; poor=False; guessed=5; cue_lines={'aligned': 80, 'realigned': 4, 'paced': 5}; words_guessed=2/2 lines; words_missing=None/None lines; bar: Aligned 80, Re-aligned 4, Spaced from caption 5; note: Guessed timing: 2 words in 2 lines. (warn False)
+
+#### Pocahontas (9ThO76peOw0); lines 37; before 2026-10-30T00:36:59+00:00 -> after 2026-10-31T18:04:19+00:00
+schema before 11 after 11; method cue_align
+joint_stats.edges after: {'n': 4, 'widened': 1, 'fallback': 0}
+joint_stats.repace before: {"offset_s": -0.146, "n_repaced": 0, "repaced_line_ids": [], "n_realigned": 3, "realigned_line_ids": [6, 7, 8]}
+joint_stats.repace after: {"offset_s": -0.152, "n_repaced": 0, "repaced_line_ids": [], "n_realigned": 3, "realigned_line_ids": [6, 7, 8], "n_guessed_words": 0, "guessed_word_line_ids": []}
+
+**Targets**
+
+| L | text | tokens | words before | words after | source before | source after | start b | start a | end b | end a | heard first | heard last |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 36 | You can paint with all the colors of the wind | 10 | 6 | 10 | aligned | aligned | 174.13 | 174.13 | 178.87 | 183.95 | - | 184.92 |
+
+**Moved lines (start or end moved > 0.3 s), non-target**
+
+| L | text | start b | start a | end b | end a | d start | d end | words b | words a | source b | source a | heard first | heard last |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+
+moved non-target lines: 0
+
+**Words shown vs tokens, all lines (after / before)**
+
+lines with fewer words than tokens: before 1 [(36, 6, 10)]; after 0 []
+lines with no words: before []; after []; more words than tokens after: []
+
+**Overlaps** (line starts before the previous line's end)
+
+| L | prev L | start | prev end b | prev end a | start b | start a | overlap b | overlap a | captions overlap |
+|---|---|---|---|---|---|---|---|---|---|
+overlapping pairs: before 0, after 0
+
+**Song Info stats**
+
+- before: Timed tile `100%` / `0 guessed · 4 words` warn=True; poor=False; guessed=0; cue_lines={'aligned': 34, 'realigned': 3, 'paced': 0}; words_guessed=None/None lines; words_missing=4/1 lines; bar: Aligned 34, Re-aligned 3; note: Missing from the screen: 4 words in 1 line. Regenerate to show them. (warn True)
+- after: Timed tile `100%` / `0 guessed` warn=False; poor=False; guessed=0; cue_lines={'aligned': 34, 'realigned': 3, 'paced': 0}; words_guessed=0/0 lines; words_missing=None/None lines; bar: Aligned 34, Re-aligned 3; note: None (warn False)
+
+#### Incomplete (WVe80iZtlYU); lines 27; before 2026-10-29T17:52:54+00:00 -> after 2026-10-31T17:50:29+00:00
+schema before 11 after 11; method cue_align
+joint_stats.edges after: {'n': 18, 'widened': 14, 'fallback': 3}
+joint_stats.repace before: {"offset_s": -0.69, "n_repaced": 0, "repaced_line_ids": [], "n_realigned": 0, "realigned_line_ids": []}
+joint_stats.repace after: {"offset_s": -0.686, "n_repaced": 0, "repaced_line_ids": [], "n_realigned": 0, "realigned_line_ids": [], "n_guessed_words": 0, "guessed_word_line_ids": []}
+
+**Targets**
+
+| L | text | tokens | words before | words after | source before | source after | start b | start a | end b | end a | heard first | heard last |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 3 | Where I'm going is anybody's guess | 6 | 4 | 6 | aligned | aligned | 39.69 | 39.69 | 43.51 | 47.20 | 39.20 | 46.04 |
+
+**Moved lines (start or end moved > 0.3 s), non-target**
+
+| L | text | start b | start a | end b | end a | d start | d end | words b | words a | source b | source a | heard first | heard last |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+
+moved non-target lines: 0
+
+**Words shown vs tokens, all lines (after / before)**
+
+lines with fewer words than tokens: before 1 [(3, 4, 6)]; after 0 []
+lines with no words: before []; after []; more words than tokens after: []
+
+**Overlaps** (line starts before the previous line's end)
+
+| L | prev L | start | prev end b | prev end a | start b | start a | overlap b | overlap a | captions overlap |
+|---|---|---|---|---|---|---|---|---|---|
+overlapping pairs: before 0, after 0
+
+**Song Info stats**
+
+- before: Timed tile `100%` / `0 guessed · 2 words` warn=True; poor=False; guessed=0; cue_lines={'aligned': 27, 'realigned': 0, 'paced': 0}; words_guessed=None/None lines; words_missing=2/1 lines; bar: Aligned 27; note: Missing from the screen: 2 words in 1 line. Regenerate to show them. (warn True)
+- after: Timed tile `100%` / `0 guessed` warn=False; poor=False; guessed=0; cue_lines={'aligned': 27, 'realigned': 0, 'paced': 0}; words_guessed=0/0 lines; words_missing=None/None lines; bar: Aligned 27; note: None (warn False)
+
+#### Castle On The Hill (K0ibBPhiaG0); lines 56; before 2026-10-29T23:16:15+00:00 -> after 2026-10-31T17:58:10+00:00
+schema before 11 after 11; method cue_align
+joint_stats.edges after: {'n': 9, 'widened': 3, 'fallback': 0}
+joint_stats.repace before: {"offset_s": -0.17, "n_repaced": 1, "repaced_line_ids": [37], "n_realigned": 1, "realigned_line_ids": [36]}
+joint_stats.repace after: {"offset_s": -0.17, "n_repaced": 1, "repaced_line_ids": [37], "n_realigned": 1, "realigned_line_ids": [36], "n_guessed_words": 2, "guessed_word_line_ids": [46]}
+
+**Targets**
+
+| L | text | tokens | words before | words after | source before | source after | start b | start a | end b | end a | heard first | heard last |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 46 | And I'm on my way | 5 | 3 | 5 | aligned | aligned +guessed words | 226.67 | 226.67 | 228.80 | 228.80 | 226.74 | 228.88 |
+
+**Moved lines (start or end moved > 0.3 s), non-target**
+
+| L | text | start b | start a | end b | end a | d start | d end | words b | words a | source b | source a | heard first | heard last |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+
+moved non-target lines: 0
+
+**Words shown vs tokens, all lines (after / before)**
+
+lines with fewer words than tokens: before 1 [(46, 3, 5)]; after 0 []
+lines with no words: before []; after []; more words than tokens after: []
+
+**Overlaps** (line starts before the previous line's end)
+
+| L | prev L | start | prev end b | prev end a | start b | start a | overlap b | overlap a | captions overlap |
+|---|---|---|---|---|---|---|---|---|---|
+overlapping pairs: before 1, after 1
+| 38 | 37 | 2:58.92 | 186.17 | 186.17 | 178.92 | 178.92 | 7.25 | 7.25 | no |
+
+**Song Info stats**
+
+- before: Timed tile `98%` / `1 guessed · 2 words` warn=True; poor=False; guessed=1; cue_lines={'aligned': 54, 'realigned': 1, 'paced': 1}; words_guessed=None/None lines; words_missing=2/1 lines; bar: Aligned 54, Re-aligned 1, Spaced from caption 1; note: Missing from the screen: 2 words in 1 line. Regenerate to show them. (warn True)
+- after: Timed tile `98%` / `1 guessed · 2 words` warn=False; poor=False; guessed=1; cue_lines={'aligned': 54, 'realigned': 1, 'paced': 1}; words_guessed=2/1 lines; words_missing=None/None lines; bar: Aligned 54, Re-aligned 1, Spaced from caption 1; note: Guessed timing: 2 words in 1 line. (warn False)
+
+#### My Heart Will Go On (9bFHsd3o1w0); lines 27; before 2026-10-29T23:12:32+00:00 -> after 2026-10-31T17:56:30+00:00
+schema before 11 after 11; method cue_align
+joint_stats.edges after: {'n': 5, 'widened': 1, 'fallback': 0}
+joint_stats.repace before: {"offset_s": -0.19, "n_repaced": 2, "repaced_line_ids": [10, 19], "n_realigned": 4, "realigned_line_ids": [8, 24, 25, 26]}
+joint_stats.repace after: {"offset_s": -0.377, "n_repaced": 4, "repaced_line_ids": [3, 19, 25, 26], "n_realigned": 1, "realigned_line_ids": [8], "n_guessed_words": 0, "guessed_word_line_ids": []}
+
+**Targets**
+
+| L | text | tokens | words before | words after | source before | source after | start b | start a | end b | end a | heard first | heard last |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 9 | And you're here in my heart | 6 | 4 | 6 | aligned | aligned | 87.15 | 87.11 | 92.13 | 92.25 | 87.87 | 92.26 |
+
+**Moved lines (start or end moved > 0.3 s), non-target**
+
+| L | text | start b | start a | end b | end a | d start | d end | words b | words a | source b | source a | heard first | heard last |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | Every night in my dreams | 22.20 | 21.40 | 25.33 | 25.38 | -0.80 | +0.06 | 5/5 | 5/5 | aligned | aligned | 20.75 | 24.94 |
+| 2 | That is how I know you go on | 30.31 | 31.00 | 38.78 | 38.75 | +0.69 | -0.03 | 8/8 | 8/8 | aligned | aligned | 30.68 | 37.12 |
+| 3 | Far across the distance | 40.70 | 40.37 | 43.97 | 44.67 | -0.33 | +0.71 | 4/4 | 4/4 | aligned | spaced | - | 43.96 |
+| 4 | And spaces between us | 43.97 | 45.13 | 50.55 | 50.23 | +1.16 | -0.32 | 4/4 | 4/4 | aligned | aligned | - | 49.86 |
+| 10 | And my heart will go on and on | 92.23 | 92.25 | 101.56 | 100.35 | +0.02 | -1.21 | 8/8 | 8/8 | spaced | aligned | 92.30 | 99.36 |
+| 14 | Love was when I loved you | 128.31 | 127.83 | 131.65 | 131.63 | -0.48 | -0.02 | 6/6 | 6/6 | aligned | aligned | - | 131.58 |
+| 15 | One true time I hold to | 132.20 | 132.20 | 136.73 | 137.12 | +0.00 | +0.40 | 6/6 | 6/6 | aligned | aligned | 131.90 | - |
+| 16 | In my life we'll always go on | 136.73 | 137.63 | 146.00 | 145.95 | +0.90 | -0.05 | 7/7 | 7/7 | aligned | aligned | 137.44 | 143.36 |
+| 17 | Near, far, wherever you are | 148.16 | 148.56 | 155.18 | 155.18 | +0.40 | +0.00 | 5/5 | 5/5 | aligned | aligned | - | 155.16 |
+| 24 | We'll stay forever this way | 224.96 | 224.93 | 233.12 | 232.80 | -0.04 | -0.32 | 5/5 | 5/5 | re-aligned | aligned | 225.44 | 232.70 |
+
+moved non-target lines: 10
+
+**Words shown vs tokens, all lines (after / before)**
+
+lines with fewer words than tokens: before 1 [(9, 4, 6)]; after 0 []
+lines with no words: before []; after []; more words than tokens after: []
+
+**Overlaps** (line starts before the previous line's end)
+
+| L | prev L | start | prev end b | prev end a | start b | start a | overlap b | overlap a | captions overlap |
+|---|---|---|---|---|---|---|---|---|---|
+overlapping pairs: before 1, after 1
+| 20 | 19 | 2:54.38 | 174.63 | 174.45 | 174.38 | 174.38 | 0.26 | 0.07 | no |
+
+**Song Info stats**
+
+- before: Timed tile `93%` / `2 guessed · 2 words` warn=True; poor=False; guessed=2; cue_lines={'aligned': 21, 'realigned': 4, 'paced': 2}; words_guessed=None/None lines; words_missing=2/1 lines; bar: Aligned 21, Re-aligned 4, Spaced from caption 2; note: Missing from the screen: 2 words in 1 line. Regenerate to show them. (warn True)
+- after: Timed tile `85%` / `4 guessed` warn=False; poor=False; guessed=4; cue_lines={'aligned': 22, 'realigned': 1, 'paced': 4}; words_guessed=0/0 lines; words_missing=None/None lines; bar: Aligned 22, Re-aligned 1, Spaced from caption 4; note: None (warn False)
+
+**R29w ASS word times** (`asswords.py`: `word[start-end]`, seconds; per song `== <id> <line ids>`; before = the backup, after = the library).
+
+```
+== AJWtLf4-WWs 6 7 26 31 32 37
+L6 before: You[44.05-44.43] might[44.43-45.53] think[45.53-46.57] that[46.57-47.03] I[47.41-47.53] won't[47.53-48.03] make[48.34-48.45] it[48.45-50.33]
+L6 after:  You[43.9-44.43] might[44.43-45.53] think[45.53-46.55] that[46.55-47.03] I[47.03-47.69] won't[47.69-48.01] make[48.01-48.45] it[48.45-49.67] on[49.77-49.97] my[49.97-50.21] own[50.54-50.65]
+L7 before: But[50.43-51.55] now[51.55-52.11] I'm[52.27-52.75] stronger[52.75-54.44] than[54.54-54.65] yesterday[55.14-55.95]
+L7 after:  But[50.43-51.55] now[51.55-52.09] I'm[52.26-52.75] stronger[52.75-54.28] than[54.38-54.69] yesterday[55.79-55.95]
+L26 before: Here[141.71-141.93] I[141.93-142.05] go,[142.44-142.57] here[143.01-143.11] I[143.11-143.23] go,[143.23-144.11] here[144.21-144.31] I[144.31-144.89] go,[144.89-144.99] here[145.15-145.62] I[145.62-145.72] go,[145.72-146.35] here[146.45-146.97]
+L26 after:  Here[141.71-141.93] I[141.93-142.05] go,[142.44-142.57] here[143.01-143.11] I[143.11-143.23] go,[143.23-144.11] here[144.21-144.31] I[144.31-144.89] go,[144.89-144.99] here[145.15-145.62] I[145.62-145.72] go,[145.72-146.35] here[146.45-146.97] I[146.97-147.09] go[147.09-147.21]
+L31 before: My[169.82-170.2] loneliness[170.64-171.38] ain't[171.73-172.32] killing[172.32-173.62] me[173.72-174.1] no[174.1-174.5] more[174.5-176.46]
+L31 after:  My[169.82-170.2] loneliness[170.64-171.38] ain't[171.73-172.32] killing[172.32-173.62] me[173.72-174.1] no[174.1-174.5] more[174.5-175.56]
+L32 before: I,[176.56-177.26] I'm[177.36-178.1] stronger[178.1-178.98] than[178.98-182.56]
+L32 after:  I,[175.16-177.9] I'm[178.24-178.34] stronger[178.34-179.4] than[179.4-180.26] yesterday[180.26-182.56]
+L37 before: My[201.69-202.55] loneliness[202.55-203.89] ain't[204.38-205.19] killing[205.19-205.72] me[205.82-206.13] no[206.13-209.3]
+L37 after:  My[201.71-202.59] loneliness[202.59-204.2] ain't[204.3-205.21] killing[205.21-205.72] me[205.82-206.17] no[206.32-206.67] more,[206.79-207.13] no[207.55-207.67] more[207.67-208.9]
+== 450p7goxZqg 29 40 46 49 55
+L29 before: I[131.71-131.9] can't[131.9-132.22] stop[132.36-132.78] singing,[133.13-133.72] it's[133.9-134.43] ringing[134.43-134.95] in[135.01-135.81] my[135.81-136.73] head[136.73-137.25]
+L29 after:  I[131.71-131.9] can't[131.9-132.22] stop[132.36-132.78] singing,[133.13-133.72] it's[133.9-134.43] ringing[134.43-134.95] in[135.01-135.99] my[135.99-137.13] head[137.61-138.11] for[138.11-138.35] you[138.51-139.83]
+L40 before: 'Cause[183.07-184.0] I[184.0-184.25] give[184.25-185.25] you[185.25-186.0] all[186.0-186.75] of[186.75-187.25] me[187.25-188.84]
+L40 after:  'Cause[182.3-183.35] I[183.35-183.55] give[183.55-183.79] you[183.79-184.09] all[184.09-186.25] of[186.35-187.85] me[187.91-188.9]
+L46 before: 'Cause[214.52-214.82] all[214.82-216.12] of[216.22-216.4] me[216.4-216.9] loves[216.9-218.28] all[218.28-220.82]
+L46 after:  'Cause[214.52-214.8] all[214.8-215.88] of[216.01-216.4] me[216.4-216.88] loves[216.88-218.3] all[218.3-220.03] of[220.13-220.28] you[220.28-220.82]
+L49 before: Give[229.05-229.33] your[229.33-229.89] all[229.89-230.73] to[231.08-231.67] me,[232.01-232.58] I'll[232.58-232.84] give[232.84-233.14] my[233.14-233.7] all[233.86-236.09]
+L49 after:  Give[229.05-229.33] your[229.33-229.89] all[229.89-230.71] to[230.83-231.67] me,[232.03-232.63] I'll[232.79-232.89] give[232.89-233.21] my[233.21-233.77] all[234.09-234.63] to[234.97-235.53] you[235.53-236.17]
+L55 before: And[266.89-267.13] you[267.13-267.39] give[267.39-267.59] me[267.59-267.87] all[267.87-269.03] of[269.03-269.19] you,[269.19-269.29] oh[269.29-271.04]
+L55 after:  And[266.89-267.13] you[267.13-267.39] give[267.39-267.61] me[267.61-267.87] all[267.87-269.38] of[269.48-270.98] you,[271.79-273.07] oh[273.15-275.05]
+== hLQl3WQQoQ0 16 33 47 48 49
+L16 before: I[79.18-80.28] wish[80.28-80.64] nothing[80.64-81.2] but[81.65-81.8] the[81.8-82.18] best[82.32-83.27] for[83.27-86.59]
+L16 after:  I[79.18-80.28] wish[80.28-80.64] nothing[80.64-81.16] but[81.32-81.8] the[81.8-82.78] best[82.88-83.3] for[83.3-84.63] you,[84.73-84.92] too[85.36-86.46]
+L33 before: I[161.83-163.86] wish[163.96-164.17] nothing[164.62-164.77] but[165.24-165.4] the[165.4-165.8] best[165.92-166.74] for[166.87-168.44] you,[168.54-170.83]
+L33 after:  I[161.85-163.86] wish[163.96-164.17] nothing[164.62-164.77] but[164.93-165.41] the[165.41-165.79] best[166.14-166.73] for[167.1-167.71] you,[168.09-168.73] too[168.95-170.78]
+L47 before: But[226.99-227.16] sometimes[227.49-227.6] it[227.91-228.02] hurts[228.2-228.74] instead[228.74-231.6]
+L47 after:  But[226.99-227.14] sometimes[227.14-227.54] it[227.9-228.02] hurts[228.02-228.74] instead[228.74-230.62]
+L48 before: Never[232.64-233.17] mind,[233.17-233.9] I'll[233.96-234.06] find[234.06-234.62] someone[235.51-236.2] like[236.3-237.07] you[237.17-237.76]
+L48 after:  Never[230.71-232.21] mind,[233.18-233.91] I'll[233.97-234.07] find[234.07-234.71] someone[234.71-236.23] like[236.33-236.9] you[237.0-237.7]
+L49 before: I[237.85-239.12] wish[239.12-239.5] nothing[240.02-240.12] but[240.43-240.64] the[240.75-241.08] best[241.46-242.08] for[242.39-243.53] you,[243.63-245.74]
+L49 after:  I[237.77-239.12] wish[239.12-239.5] nothing[239.98-240.08] but[240.4-240.7] the[240.7-240.8] best[240.8-241.1] for[241.1-241.4] you,[241.4-241.7] too[241.7-242.0]
+== C-u5WLJ9Yk4 20 30
+L20 before: Tell[105.24-105.38] me,[105.71-105.82] baby,[106.06-106.84] 'cause[107.08-107.46] I[107.46-107.64] need[107.64-108.0] to[108.0-108.26] know[108.26-108.82] now,[109.18-110.85]
+L20 after:  Tell[105.26-105.41] me,[105.72-106.41] baby,[106.51-107.35] 'cause[107.35-107.47] I[107.47-107.65] need[107.65-108.01] to[108.01-108.27] know[108.27-108.85] now,[108.85-109.75] oh[109.93-110.03] because[110.03-110.95]
+L30 before: I[161.18-161.47] must[161.57-161.88] confess,[161.88-163.22] that[163.22-163.76] my[163.76-164.18] loneliness[164.18-164.92] is[164.92-166.4] killing[166.4-169.49]
+L30 after:  I[161.54-161.64] must[161.64-161.98] confess,[161.98-162.83] that[163.24-163.86] my[163.86-164.3] loneliness[164.3-165.02] is[165.02-166.52] killing[166.54-167.0] me[167.13-167.54] now[167.54-169.57]
+== k6M5C-oKw9k 9 50 51 64 65 71
+L9 before: Good[24.61-24.71] morning.[24.71-25.06]
+L9 after:  Good[23.44-24.65] morning.[24.65-25.2] God[25.23-25.83] damn.[25.83-26.43]
+L50 before: And[155.09-155.37] her[155.37-155.53] bills[155.53-156.01] are[156.01-156.19] paid[156.19-156.57] on[156.57-156.83] time[156.83-158.61]
+L50 after:  And[155.09-155.37] her[155.37-155.53] bills[155.53-156.01] are[156.01-156.19] paid[156.19-156.57] on[156.57-156.83] time[156.94-157.69]
+L51 before: She[159.46-159.58] made[159.58-160.0] for[160.0-160.34] a[160.34-160.6] boss,[160.6-161.02] only[161.14-161.64] a[161.64-161.94] boss[161.94-162.7]
+L51 after:  She[157.7-159.2] made[159.58-159.98] for[159.98-160.34] a[160.34-160.58] boss,[160.58-161.02] only[161.14-161.66] a[161.66-161.86] boss[161.86-162.7]
+L64 before: Her[194.97-195.82] favorite[195.82-196.12] thing[196.12-196.5] to[196.5-196.68] say--[196.68-196.98] "don't[196.98-197.32] worry,[197.32-198.06] I've[198.12-198.42] got[198.42-198.6] it"[198.6-199.62]
+L64 after:  Her[194.54-195.82] favorite[195.82-196.12] thing[196.12-196.48] to[196.48-196.68] say--[196.68-196.98] "don't[196.98-197.3] worry,[197.3-198.06] I've[198.16-198.42] got[198.42-198.62] it"[198.78-199.27]
+L65 before: Mmm[200.52-200.62]
+L65 after:  Mmm[198.77-200.27]
+L71 before: Ooh[216.36-217.86] yeah,[217.94-218.4]
+L71 after:  Ooh[216.2-217.7] yeah,[217.94-218.4] ooh[218.82-218.95] yeah[218.95-219.08]
+== 9ThO76peOw0 36
+L36 before: You[174.12-175.1] can[175.6-175.76] paint[175.93-176.84] with[177.77-177.96] all[178.32-178.44] the[178.54-178.85]
+L36 after:  You[174.12-175.52] can[175.62-176.29] paint[176.39-176.92] with[177.77-177.94] all[178.3-178.42] the[178.52-178.84] colors[179.56-180.07] of[180.46-182.57] the[182.67-182.84] wind[182.84-183.94]
+== WVe80iZtlYU 3
+L3 before: Where[39.68-39.82] I'm[39.82-40.76] going[41.23-42.0] is[42.0-43.5]
+L3 after:  Where[39.68-39.82] I'm[39.82-40.76] going[41.23-42.0] is[42.0-43.5] anybody's[44.16-45.66] guess[45.74-47.19]
+== K0ibBPhiaG0 46
+L46 before: And[226.67-226.93] I'm[227.43-227.59] on[227.59-228.8]
+L46 after:  And[226.67-226.93] I'm[227.43-227.59] on[227.59-227.91] my[227.91-228.17] way[228.17-228.8]
+== 9bFHsd3o1w0 9 25 26
+L9 before: And[87.14-88.46] you're[88.46-89.04] here[89.04-89.68] in[89.68-92.12]
+L9 after:  And[87.1-88.48] you're[88.61-89.02] here[89.02-90.04] in[90.14-90.76] my[90.9-91.32] heart[91.9-92.24]
+L25 before: You[233.5-233.89] are[233.89-234.59] safe[234.59-235.21] in[235.21-236.17] my[236.67-236.83] heart[237.12-237.69] and[237.69-238.29]
+L25 after:  You[233.42-233.66] are[233.66-234.41] safe[234.41-235.41] in[235.41-235.91] my[235.91-236.41] heart[236.41-237.66] and[237.66-238.41]
+L26 before: My[239.03-239.31] heart[239.45-239.93] will[239.96-240.63] go[241.02-241.67] on[241.67-243.77] and[243.87-243.97] on[243.97-249.55]
+L26 after:  My[238.94-239.55] heart[239.55-242.3] will[242.4-243.9] go[244.68-245.82] on[245.82-246.96] and[246.96-248.46] on[248.67-249.81]
+```
+
+**R29h vs_heard** (`vs_heard.py`; per song tuple = lines with a heard first word, lines starting > 0.5 s before it before, after, lines ending > 0.3 s before the heard last word before, after).
+
+```
+song | lines with heard first | start >0.5 s before heard: before, after | heard last >0.3 s after end: before, after
+Stronger (23, 10, 12, 1, 1)
+All of Me (48, 1, 2, 3, 1)
+Someone Like You (46, 7, 8, 2, 1)
+Baby One More Time (40, 10, 10, 1, 1)
+Miss Independent (53, 9, 10, 1, 1)
+Pocahontas (31, 4, 4, 1, 1)
+Incomplete (19, 2, 2, 3, 2)
+Castle On The Hill (45, 2, 3, 0, 0)
+My Heart Will Go On (20, 7, 7, 0, 0)
+
+start got earlier than heard by > 0.5 s and by 0.3 s more than before: song, L, m:ss, heard_first, start_b, start_a, start_b-heard, start_a-heard
+('Stronger', 18, '1:45.06', 105.62, 105.36, 105.05799999999999, -0.26, -0.56)
+('Stronger', 32, '2:55.16', 176.16, 176.56199999999998, 175.16199999999998, 0.4, -1.0)
+('All of Me', 40, '3:02.30', 183.136, 183.075, 182.3015, -0.06, -0.83)
+('Someone Like You', 48, '3:50.72', 232.768, 232.65, 230.716, -0.12, -2.05)
+('Miss Independent', 51, '2:37.70', 158.6, 159.467, 157.703, 0.87, -0.9)
+
+end got further before heard end (> 0.3 s, and 0.3 s more than before): song, L, m:ss, heard_last, end_b, end_a, heard-end_b, heard-end_a
+('Someone Like You', 49, '3:57.77', 245.28, 245.75, 242.00699999999998, -0.47, 3.27)
+```
 
 ## Hand-off prompt (executor)
 
