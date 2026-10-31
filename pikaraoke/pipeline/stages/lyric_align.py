@@ -39,6 +39,7 @@ import shutil
 import wave
 from pathlib import Path
 
+import numpy as np
 import srt
 from tqdm import tqdm
 
@@ -142,9 +143,12 @@ class LyricAlignStage(BaseStage):
 
             if cue_spans:
                 # SRT: cue-anchored windowed align driven by the uploader cues.
-                line_objects, capture_transcribe_words, capture_joint_stats = self._run_cue_align(
-                    ctx, vocal_wav, lyrics_lines, align_lines, cue_spans
-                )
+                (
+                    line_objects,
+                    capture_transcribe_words,
+                    capture_joint_stats,
+                    env,
+                ) = self._run_cue_align(ctx, vocal_wav, lyrics_lines, align_lines, cue_spans)
                 capture_method_used = "cue_align"
             else:
                 # txt/genius: joint DP matcher (align + transcribe + optional ytasr).
@@ -195,7 +199,9 @@ class LyricAlignStage(BaseStage):
         # stem alignment used — the de-reverb gate may have adopted a dry
         # stem; transcribe mode never gates, so it falls back to vocal_wav.
         snap_stem = ctx.artifacts.get("aligned_stem", vocal_wav)
-        env = decode_env_db(snap_stem, "edge snap")
+        if capture_method_used != "cue_align":
+            # The cue route already decoded this stem to place its windows.
+            env = decode_env_db(snap_stem, "edge snap")
 
         # Joint route only, gated: plan LRCLIB fills for matcher-unplaced
         # lines (E1) on PRE-veto, PRE-snap line objects -- a veto-demoted
@@ -579,7 +585,7 @@ class LyricAlignStage(BaseStage):
         display_lines: list[str],
         align_lines: list[str],
         cue_spans: list[tuple[float, float]],
-    ) -> tuple[list[dict], list[dict], dict]:
+    ) -> tuple[list[dict], list[dict], dict, np.ndarray | None]:
         """Cue-anchored windowed align for SRT songs — uploader cues drive it.
 
         Shares the transcribe-first de-reverb gate with the joint route, then
@@ -588,11 +594,13 @@ class LyricAlignStage(BaseStage):
         forced aligner. All the sectioning/offset/re-pace logic lives in the
         library; this method only wires I/O and the audio duration.
 
-        Returns ``(line_objects, transcribe_words, stats)`` — the gate's
+        Returns ``(line_objects, transcribe_words, stats, env)`` — the gate's
         transcribe words, which the cue route doesn't use but the debug bundle
         keeps as the song's heard words (the reference a movie-subtitle slice
-        is checked against), and the cue-align telemetry (section count,
-        offset, re-pace + de-reverb sub-stats).
+        is checked against), the cue-align telemetry (section count, offset,
+        window edges, re-pace + de-reverb sub-stats), and the aligned stem's
+        envelope (None if it can't be decoded), which places the window ends
+        here and is reused by the edge snap.
         """
         # Shared de-reverb gate: adopt the dry stem when the wet one is
         # reverb-washed.
@@ -604,6 +612,8 @@ class LyricAlignStage(BaseStage):
             # so align_song degrades to cue-paced timing rather than crashing.
             logger.warning("[%s] cue-align: vocal duration unreadable; cue-pacing", self.name)
             duration = None
+        # None keeps the caption windows; the decode logs why.
+        env = decode_env_db(vocal_wav, "cue-align edges")
 
         slice_counter = itertools.count()
 
@@ -629,11 +639,11 @@ class LyricAlignStage(BaseStage):
             )
 
         line_objects, stats = align_song(
-            cue_spans, display_lines, align_lines, duration, slice_align, progress=progress
+            cue_spans, display_lines, align_lines, duration, slice_align, env=env, progress=progress
         )
         if dereverb_stats is not None:
             stats["dereverb"] = dereverb_stats
-        return line_objects, transcribe_words, stats
+        return line_objects, transcribe_words, stats, env
 
     def _ytasr_words(self, ctx: StageContext) -> list[dict] | None:
         """Words from the adopted YouTube ASR caption, for the joint 3rd source.

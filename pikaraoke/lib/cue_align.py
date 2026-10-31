@@ -20,7 +20,9 @@ Approach:
    Aligning a contiguous phrase as one slice means forced alignment never
    clips a sung word at a slice edge and never bleeds one line's words onto a
    neighbour's audio -- both are window-edge faults that vanish when the edges
-   sit in silence.
+   sit in silence. Captions often end before the singing does, so given the
+   vocal stem's envelope each window's end moves out to where the singing
+   actually stops; starts stay on the trusted cue starts.
 2. Force-align each section's joined text once (driver), then split the
    returned words back to lines (:func:`split_section_to_lines`). The aligner
    drops words it could not time (``remove_instant_words``), so the split is a
@@ -42,10 +44,13 @@ Approach:
 
 import logging
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from statistics import median
 
+import numpy as np
+
 from pikaraoke.lib.joint_match import _tokenise_lines
+from pikaraoke.lib.onset_snap import HOP_S, MIN_REF_DB, SUSTAIN_NEAR_DB, _sung_level_ref
 from pikaraoke.lib.token_align import _normalize_token, match_words_to_tokens
 
 logger = logging.getLogger(__name__)
@@ -58,7 +63,8 @@ SECTION_GAP_S = 1.5
 
 # How far a section's slice extends into the flanking silence so the first/last
 # sung word is never clipped. Clamped to the gap midpoint (below) so adjacent
-# sections never claim the same audio.
+# sections never claim the same audio -- unless the vocal envelope shows the
+# earlier line still singing past it (see EDGE_SEARCH_SLACK_S).
 SECTION_PAD_S = 0.75
 
 # A section's raw cue-to-cue span (before padding) is capped to this. Most
@@ -107,6 +113,33 @@ CUE_MIN_ANCHORS = 4
 # slice edge (cue end + pad) is never mistaken for a covered pause.
 PAUSE_SLACK_S = 0.5
 
+# Window ends follow the vocal stem's volume where an envelope is given. A
+# caption often ends before the singing does (a held note, a line timed short);
+# the aligner can only time words it is handed, so a window ending at the
+# caption drops the tail of the line. A window's end therefore moves out to
+# where the singing stops, never in, and its start stays on the caption: cue
+# starts are the trusted times. The search for the stop begins this far before
+# the caption's end, so a release that began just before it is measured whole
+# rather than mistaken for a short pause.
+EDGE_SEARCH_SLACK_S = 0.5
+
+# A frame is quiet when it sits this far below the louder neighbouring line's
+# sung level (the same distance onset_snap uses to call a note still sustained),
+# so reverb decaying off a held note counts as quiet but a sung word does not.
+QUIET_DIP_DB = SUSTAIN_NEAR_DB
+
+# The singing has stopped at the first quiet stretch this long. Pauses inside a
+# line held past its caption run to ~0.5 s (Baby One More Time, Stronger); a
+# line that never pauses this long before the next caption sang straight into it.
+RELEASE_QUIET_S = 0.75
+
+# A line's singing runs on at most this far past its caption. Vocals that go on
+# longer without a pause are not its tail (an uncaptioned part, ad-libs over a
+# break), so that end keeps the caption rule. No line in the library that drops
+# words sings more than 3.7 s past its caption. The song's last line is exempt:
+# nothing follows it, and final notes are held longest.
+MAX_HOLD_S = 4.0
+
 SOURCE = "cue_align"
 # Provenance for a line whose timing came from the cue re-pace fallback rather
 # than the audio align (mirrors the SRT prior's "filled" tag).
@@ -128,6 +161,9 @@ class Section:
     lid_hi: int
     t0: float
     t1: float
+    # t1 was measured from the vocal volume (it is never earlier than the caption
+    # gap's). Left out of equality: two windows with the same edges are the same window.
+    measured_end: bool = field(default=False, compare=False)
 
     @property
     def line_ids(self) -> range:
@@ -171,12 +207,99 @@ def _split_oversized(
     )
 
 
+def _section_starts(cue_spans: list[tuple[float, float]], gap_s: float) -> list[int]:
+    """Line ids that start a section: 0, every line after a gap over ``gap_s``, and every
+    cap split of a section still longer than :data:`MAX_SECTION_DUR_S`."""
+    n = len(cue_spans)
+    starts = [0] + [i + 1 for i in range(n - 1) if cue_spans[i + 1][0] - cue_spans[i][1] > gap_s]
+    bounds = starts + [n]
+    split_starts = [
+        s
+        for lo, nxt in zip(bounds, bounds[1:])
+        for s in _split_oversized(lo, nxt - 1, cue_spans, MAX_SECTION_DUR_S)
+    ]
+    # Split points are strictly interior to their section, so the lists are
+    # disjoint; sorting interleaves them into the boundary order.
+    return sorted(starts + split_starts)
+
+
+def _loudest_sung_level(env: np.ndarray, spans: list[tuple[float, float]]) -> float | None:
+    """The louder of the spans' sung levels in ``env``, or None when none is singing.
+
+    A span's level is :data:`onset_snap.SINGLE_WORD_REF_PCT` percentile of its frames: no
+    words exist yet, so the single-word reference is the one that fits. Below
+    :data:`onset_snap.MIN_REF_DB` the audio is not singing and every relative test is moot.
+    """
+    levels = [_sung_level_ref(env, [{"start": c0, "end": c1}]) for c0, c1 in spans]
+    best = max((level for level in levels if level is not None), default=None)
+    return best if best is not None and best >= MIN_REF_DB else None
+
+
+def _quiet_runs(
+    env: np.ndarray, lo_s: float, hi_s: float, sung_db: float
+) -> list[tuple[float, float]]:
+    """Each stretch of ``env`` within ``[lo_s, hi_s]`` at least :data:`QUIET_DIP_DB`
+    below ``sung_db``, as ``(start_s, end_s)`` in time order."""
+    i0 = max(0, int(lo_s / HOP_S))
+    i1 = min(len(env), int(hi_s / HOP_S) + 1)
+    if i1 <= i0:
+        return []
+    quiet = np.concatenate(([False], env[i0:i1] < sung_db - QUIET_DIP_DB, [False]))
+    changes = np.flatnonzero(quiet[1:] != quiet[:-1])
+    pairs = zip(changes[::2].tolist(), changes[1::2].tolist())
+    return [((i0 + a) * HOP_S, (i0 + b) * HOP_S) for a, b in pairs]
+
+
+def _volume_end(
+    env: np.ndarray, last: tuple[float, float], nxt: tuple[float, float], pad_s: float
+) -> float | None:
+    """Where a section's window should end, from where its last line's singing stops.
+
+    ``last``/``nxt`` are the cue spans of the section's last line and the next section's
+    first. The singing stops at the first quiet stretch of :data:`RELEASE_QUIET_S`; the
+    window reaches ``pad_s`` into it, no further than its midpoint. A line that never
+    pauses that long before ``nxt`` starts sang straight into it, and the window ends at
+    ``nxt``'s caption start. None when there is no singing to measure, the envelope ends
+    before ``nxt``, or the stop lies more than :data:`MAX_HOLD_S` past the caption.
+    """
+    sung_db = _loudest_sung_level(env, [last, nxt])
+    if sung_db is None or nxt[0] > len(env) * HOP_S:
+        return None
+    runs = _quiet_runs(env, last[1] - EDGE_SEARCH_SLACK_S, nxt[0], sung_db)
+    release = next((run for run in runs if run[1] - run[0] >= RELEASE_QUIET_S), None)
+    if release is None:
+        stop = t1 = nxt[0]
+    else:
+        stop, t1 = release[0], min(release[0] + pad_s, sum(release) / 2)
+    return t1 if stop <= last[1] + MAX_HOLD_S else None
+
+
+def _volume_tail(
+    env: np.ndarray, last: tuple[float, float], pad_s: float, duration: float | None
+) -> float | None:
+    """Where the song's last window should end: ``pad_s`` after the stem's last sung frame.
+
+    Not capped by :data:`MAX_HOLD_S`: nothing follows to take the audio from, and a
+    song's final note is often its longest. None when the last line has no singing to
+    measure.
+    """
+    sung_db = _loudest_sung_level(env, [last])
+    if sung_db is None:
+        return None
+    i0 = max(0, int(last[0] / HOP_S))
+    # Never empty: the level is a percentile of frames at and after i0.
+    sung = np.flatnonzero(env[i0:] >= sung_db - QUIET_DIP_DB)
+    t1 = (i0 + int(sung[-1]) + 1) * HOP_S + pad_s
+    return t1 if duration is None else min(duration, t1)
+
+
 def segment_by_gaps(
     cue_spans: list[tuple[float, float]],
     *,
     gap_s: float = SECTION_GAP_S,
     pad_s: float = SECTION_PAD_S,
     duration: float | None = None,
+    env: np.ndarray | None = None,
 ) -> list[Section]:
     """Group 1:1 cue spans into sections split at phrase gaps.
 
@@ -193,23 +316,19 @@ def segment_by_gaps(
     audio) and to ``[0, duration]`` when ``duration`` is known. A cap split can
     land inside cue overlap (negative gap) where there is no silence to share:
     each window then keeps its own cues' full span, unpadded.
+
+    With ``env`` (the vocal stem's dB envelope, one value per
+    :data:`onset_snap.HOP_S`) the grouping and every window start are unchanged,
+    but a window's end moves later to where the audio shows its last line's
+    singing stop (:func:`_volume_end`, :func:`_volume_tail`), so a note held past
+    its caption stays inside its window. An end never moves earlier, so the
+    window may overlap the next one where the earlier line is still singing.
+    :attr:`Section.measured_end` says which ends ``env`` could measure.
     """
     if not cue_spans:
         return []
     n = len(cue_spans)
-    # Line ids that start a new section: 0, plus every line after a wide gap.
-    starts = [0] + [i + 1 for i in range(n - 1) if cue_spans[i + 1][0] - cue_spans[i][1] > gap_s]
-    bounds = starts + [n]
-    split_starts = [
-        s
-        for lo, nxt in zip(bounds, bounds[1:])
-        for s in _split_oversized(lo, nxt - 1, cue_spans, MAX_SECTION_DUR_S)
-    ]
-    if split_starts:
-        # Split points are strictly interior to their section, so the lists
-        # are disjoint; sorting interleaves them into the boundary order.
-        starts = sorted(starts + split_starts)
-        bounds = starts + [n]
+    bounds = _section_starts(cue_spans, gap_s) + [n]
     sections: list[Section] = []
     for lo, nxt in zip(bounds, bounds[1:]):
         hi = nxt - 1
@@ -222,13 +341,20 @@ def segment_by_gaps(
             # midpoint; a negative gap (cap split inside cue overlap) pads
             # zero rather than inverting into the boundary line's audio.
             t0 = start - min(pad_s, max(0.0, (start - cue_spans[lo - 1][1]) / 2))
+        measured = None
         if hi == n - 1:
             t1 = end + pad_s
             if duration is not None:
                 t1 = min(duration, t1)
+            if env is not None:
+                measured = _volume_tail(env, cue_spans[hi], pad_s, duration)
         else:
             t1 = end + min(pad_s, max(0.0, (cue_spans[hi + 1][0] - end) / 2))
-        sections.append(Section(lo, hi, round(max(0.0, t0), 3), round(t1, 3)))
+            if env is not None:
+                measured = _volume_end(env, cue_spans[hi], cue_spans[hi + 1], pad_s)
+        if measured is not None:
+            t1 = max(t1, measured)
+        sections.append(Section(lo, hi, round(max(0.0, t0), 3), round(t1, 3), measured is not None))
     return sections
 
 
@@ -611,6 +737,7 @@ def align_song(
     slice_align: Callable[[float, float, str, str], list[dict] | None],
     *,
     pad_s: float = SECTION_PAD_S,
+    env: np.ndarray | None = None,
     progress: Callable[[list[Section]], Iterable[Section]] | None = None,
 ) -> tuple[list[dict], dict]:
     """Windowed-align one song from its 1:1 per-line cue spans.
@@ -626,18 +753,22 @@ def align_song(
 
     ``duration`` clamps the section/fill windows to the audio; ``None`` (an
     unreadable stem) drops the clamp and the song degrades to cue-paced timing.
+    ``env`` (the aligned stem's dB envelope) moves window ends out to where the
+    singing stops (:func:`segment_by_gaps`); ``None`` keeps the caption windows.
     All GPU/ffmpeg I/O lives behind ``slice_align``, so this stays pure and
     ``test_cue_align`` can drive it with a stub aligner. Display is injected the
     same way: ``progress`` wraps the per-pass section list (e.g. ``tqdm``) so
     the caller owns the terminal; ``None`` iterates silently.
 
     Returns ``(line_objects, stats)``; ``stats`` carries the section count, the
-    fitted offset, whether a re-section fired, and the repace sub-stats.
+    fitted offset, whether a re-section fired, the repace sub-stats, and with
+    ``env`` the final pass's window ``edges``: section ends, ends moved later
+    than the caption windows', and ends the envelope could not place.
     """
     show_progress = progress or (lambda sections: sections)
 
-    def align_pass(spans: list[tuple[float, float]]) -> tuple[list[dict], int]:
-        sections = segment_by_gaps(spans, duration=duration)
+    def align_pass(spans: list[tuple[float, float]]) -> tuple[list[dict], list[Section]]:
+        sections = segment_by_gaps(spans, duration=duration, env=env)
         logger.info("cue-align: %d cues -> %d sections", len(spans), len(sections))
         objs: list[dict] = []
         for section in show_progress(sections):
@@ -648,9 +779,9 @@ def align_song(
             objs.extend(
                 split_section_to_lines(section, words or [], display_lines, align_lines, spans)
             )
-        return objs, len(sections)
+        return objs, sections
 
-    line_objects, n_sections = align_pass(cue_spans)
+    line_objects, sections = align_pass(cue_spans)
     spans = cue_spans
     offset = fit_offset(line_objects, cue_spans, align_lines)
     resectioned = abs(offset) > pad_s
@@ -663,7 +794,7 @@ def align_song(
         spans = [
             (max(0.0, c0 + offset), max(0.0, c0 + offset, c1 + offset)) for c0, c1 in cue_spans
         ]
-        line_objects, n_sections = align_pass(spans)
+        line_objects, sections = align_pass(spans)
 
     def realign_line(lid: int, t0: float, t1: float) -> list[dict] | None:
         """Narrow per-line forced align over a bad line's offset-corrected window."""
@@ -677,9 +808,22 @@ def align_song(
         line_objects, spans, display_lines, align_lines, duration=duration, realign=realign_line
     )
     stats = {
-        "n_sections": n_sections,
+        "n_sections": len(sections),
         "offset_s": round(offset, 3),
         "resectioned": resectioned,
         "repace": repace_stats,
     }
+    if env is not None:
+        caption = segment_by_gaps(spans, duration=duration)
+        stats["edges"] = {
+            "n": len(sections),
+            "widened": sum(s.t1 > c.t1 for s, c in zip(sections, caption)),
+            "fallback": sum(not s.measured_end for s in sections),
+        }
+        logger.info(
+            "cue-align: %d/%d window end(s) widened to the singing, %d left on the caption",
+            stats["edges"]["widened"],
+            len(sections),
+            stats["edges"]["fallback"],
+        )
     return line_objects, stats
