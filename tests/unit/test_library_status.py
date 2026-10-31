@@ -152,6 +152,130 @@ class TestTimedBy:
         assert status.timed_by is None
 
 
+def cue_bundle(video: Path, tmp_path: Path, repace: dict, line_count: int = 20, **fields) -> None:
+    write_bundle(
+        tmp_path,
+        video.stem,
+        pipeline_decisions={"method_used": "cue_align"},
+        joint_stats={"repace": repace},
+        **summary(line_count=line_count, lines_timed=line_count),
+        **fields,
+    )
+
+
+class TestCueLines:
+    def test_lines_are_split_by_how_they_were_timed(self, tmp_path):
+        video = make_video(tmp_path)
+        cue_bundle(video, tmp_path, {"n_realigned": 3, "n_repaced": 2})
+        status = library_status.song_status(video)
+        assert status.cue_lines == {"aligned": 15, "realigned": 3, "paced": 2}
+
+    def test_paced_lines_count_as_guessed(self, tmp_path):
+        video = make_video(tmp_path)
+        cue_bundle(video, tmp_path, {"n_repaced": 2})
+        assert library_status.song_status(video).guessed == 2
+
+    def test_paced_lines_add_to_the_lines_with_no_words(self, tmp_path):
+        video = make_video(tmp_path)
+        write_bundle(
+            tmp_path,
+            video.stem,
+            pipeline_decisions={"method_used": "cue_align"},
+            joint_stats={"repace": {"n_repaced": 2}},
+            **summary(line_count=20, lines_timed=19),
+        )
+        status = library_status.song_status(video)
+        assert status.cue_lines["aligned"] == 17
+        assert status.guessed == 3
+
+    def test_the_poor_share_counts_paced_lines(self, tmp_path):
+        poor, fine = make_video(tmp_path, "A---aaaaaaaaaaa"), make_video(
+            tmp_path, "B---bbbbbbbbbbb"
+        )
+        cue_bundle(poor, tmp_path, {"n_repaced": 3})
+        cue_bundle(fine, tmp_path, {"n_repaced": 2})
+        assert library_status.song_status(poor).poor
+        assert not library_status.song_status(fine).poor
+
+    def test_a_bundle_without_repace_stats_has_every_line_aligned(self, tmp_path):
+        video = make_video(tmp_path)
+        write_bundle(
+            tmp_path,
+            video.stem,
+            pipeline_decisions={"method_used": "cue_align"},
+            **summary(line_count=20, lines_timed=20),
+        )
+        status = library_status.song_status(video)
+        assert status.cue_lines == {"aligned": 20, "realigned": 0, "paced": 0}
+        assert status.guessed == 0
+
+    def test_a_joint_song_has_no_cue_fields(self, tmp_path):
+        video = make_video(tmp_path)
+        write_bundle(
+            tmp_path,
+            video.stem,
+            pipeline_decisions={"method_used": "joint"},
+            joint_stats={"repace": {"n_repaced": 5}},
+            **summary(line_count=20, lines_timed=18),
+        )
+        status = library_status.song_status(video)
+        assert status.cue_lines is None
+        assert status.words_missing is None and status.words_guessed is None
+        assert status.guessed == 2
+
+
+class TestCueWords:
+    ALIGN_LINES = ["one two three", "four five", "six seven", "(ooh)"]
+
+    def test_an_older_bundle_counts_the_words_its_lines_lack(self, tmp_path):
+        video = make_video(tmp_path)
+        cue_bundle(
+            video,
+            tmp_path,
+            {},
+            lyrics={"align_lines": self.ALIGN_LINES},
+            output_line_timings=[
+                {"line_id": 0, "n_words": 1},
+                {"line_id": 1, "n_words": 2},
+                {"line_id": 2, "n_words": 1},
+            ],
+        )
+        status = library_status.song_status(video)
+        assert (status.words_missing, status.words_missing_lines) == (3, 2)
+        assert status.words_guessed is None
+
+    def test_a_line_with_no_words_is_not_counted_as_missing_words(self, tmp_path):
+        video = make_video(tmp_path)
+        cue_bundle(
+            video,
+            tmp_path,
+            {},
+            lyrics={"align_lines": self.ALIGN_LINES},
+            output_line_timings=[{"line_id": 0, "n_words": 0}, {"line_id": 1, "n_words": 2}],
+        )
+        status = library_status.song_status(video)
+        assert (status.words_missing, status.words_missing_lines) == (0, 0)
+
+    def test_a_bundle_without_line_timings_misses_no_words(self, tmp_path):
+        video = make_video(tmp_path)
+        cue_bundle(video, tmp_path, {})
+        status = library_status.song_status(video)
+        assert (status.words_missing, status.words_missing_lines) == (0, 0)
+
+    def test_a_newer_bundle_reports_the_words_it_guessed(self, tmp_path):
+        video = make_video(tmp_path)
+        cue_bundle(
+            video,
+            tmp_path,
+            {"n_guessed_words": 5, "guessed_word_line_ids": [3, 7]},
+            lyrics={"align_lines": self.ALIGN_LINES},
+            output_line_timings=[{"line_id": 0, "n_words": 1}],
+        )
+        status = library_status.song_status(video)
+        assert (status.words_guessed, status.words_guessed_lines) == (5, 2)
+        assert status.words_missing is None
+
+
 class TestLrclibState:
     def genius_bundle(self, tmp_path, *, lrclib_meta=None, fill=None) -> Path:
         video = make_video(tmp_path)
