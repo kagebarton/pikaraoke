@@ -20,9 +20,7 @@ Approach:
    Aligning a contiguous phrase as one slice means forced alignment never
    clips a sung word at a slice edge and never bleeds one line's words onto a
    neighbour's audio -- both are window-edge faults that vanish when the edges
-   sit in silence. Captions often end before the singing does, so given the
-   vocal stem's envelope each window's end moves out to where the singing
-   actually stops; starts stay on the trusted cue starts.
+   sit in silence.
 2. Force-align each section's joined text once (driver), then split the
    returned words back to lines (:func:`split_section_to_lines`). The aligner
    drops words it could not time (``remove_instant_words``), so the split is a
@@ -36,19 +34,21 @@ Approach:
    (:func:`fit_offset`), each bad line gets one narrow per-line align attempt
    over its offset-corrected cue window (the injected ``realign``), and only
    if that also fails is it re-built with paced words across the window. A
-   line missing only some of its words is rescued too: the re-align (aimed out
-   to the section's end for a section's last line, where a held tail lies)
-   replaces it only if it times more of them, and any word still untimed is
-   shown with guessed timing at the line's own pace -- a lyric word is never
-   dropped from the screen. Only bad or partial lines are touched, so a sloppy
-   offset never degrades a good one. The driver also re-sections the whole
-   song on offset-shifted cues when the fitted lead exceeds the slice pad --
-   past that, every section window provably clips its leading words.
+   line missing only some of its words is rescued too: the re-align replaces
+   it only if it times more of them, and any word still untimed is shown with
+   guessed timing at the line's own pace -- a lyric word is never dropped from
+   the screen. Captions often end before the singing does, so given the vocal
+   stem's envelope a rescue window runs out to where that line's singing
+   stops, and the aligner finds a held tail itself. Only bad or partial lines
+   are touched, so a sloppy offset never degrades a good one. The driver also
+   re-sections the whole song on offset-shifted cues when the fitted lead
+   exceeds the slice pad -- past that, every section window provably clips its
+   leading words.
 """
 
 import logging
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from statistics import median
 
 import numpy as np
@@ -67,8 +67,7 @@ SECTION_GAP_S = 1.5
 
 # How far a section's slice extends into the flanking silence so the first/last
 # sung word is never clipped. Clamped to the gap midpoint (below) so adjacent
-# sections never claim the same audio -- unless the vocal envelope shows the
-# earlier line still singing past it (see EDGE_SEARCH_SLACK_S).
+# sections never claim the same audio.
 SECTION_PAD_S = 0.75
 
 # A section's raw cue-to-cue span (before padding) is capped to this. Most
@@ -117,14 +116,15 @@ CUE_MIN_ANCHORS = 4
 # slice edge (cue end + pad) is never mistaken for a covered pause.
 PAUSE_SLACK_S = 0.5
 
-# Window ends follow the vocal stem's volume where an envelope is given. A
-# caption often ends before the singing does (a held note, a line timed short);
-# the aligner can only time words it is handed, so a window ending at the
-# caption drops the tail of the line. A window's end therefore moves out to
-# where the singing stops, never in, and its start stays on the caption: cue
-# starts are the trusted times. The search for the stop begins this far before
-# the caption's end, so a release that began just before it is measured whole
-# rather than mistaken for a short pause.
+# A rescued line's window end follows the vocal stem's volume where an envelope is
+# given. A caption often ends before the singing does (a held note, a line timed
+# short); the aligner can only time words it is handed, so a window ending at the
+# caption drops the tail of the line. The end therefore moves out to where the
+# line's singing stops, never in, and the start stays on the caption: cue starts
+# are the trusted times. Section windows are not widened: that changes how the
+# aligner spreads words over the whole section, not only the held tail. The search
+# for the stop begins this far before the caption's end, so a release that began
+# just before it is measured whole rather than mistaken for a short pause.
 EDGE_SEARCH_SLACK_S = 0.5
 
 # A frame is quiet when it sits this far below the louder neighbouring line's
@@ -165,11 +165,6 @@ class Section:
     lid_hi: int
     t0: float
     t1: float
-    # t1 was measured from the vocal volume (it is never earlier than the caption
-    # gap's), and whether that moved it later. Left out of equality: two windows with
-    # the same edges are the same window.
-    measured_end: bool = field(default=False, compare=False)
-    widened_end: bool = field(default=False, compare=False)
 
     @property
     def line_ids(self) -> range:
@@ -257,50 +252,67 @@ def _quiet_runs(
 
 
 def _volume_end(
-    env: np.ndarray, last: tuple[float, float], nxt: tuple[float, float], pad_s: float
+    env: np.ndarray, cue: tuple[float, float], next_cue: tuple[float, float], pad_s: float
 ) -> float | None:
-    """Where a section's window should end, from where its last line's singing stops.
+    """Where a line's rescue window should end, from where its singing stops.
 
-    ``last``/``nxt`` are the cue spans of the section's latest-ending line (with duet
-    overlap, not always its last) and the next section's first. The singing stops at
-    the first quiet stretch of :data:`RELEASE_QUIET_S`; the window reaches ``pad_s``
-    into it, no further than its midpoint. A line that never
-    pauses that long before ``nxt`` starts sang straight into it, and the window ends at
-    ``nxt``'s caption start. None when there is no singing to measure, the envelope ends
-    before ``nxt``, ``nxt`` starts before the search would (overlapping cues leave no
-    stretch to measure), or the stop lies more than :data:`MAX_HOLD_S` past the caption.
+    ``cue``/``next_cue`` are the cue spans of the line and of the line after it. The
+    singing stops at the first quiet stretch of :data:`RELEASE_QUIET_S`; the window
+    reaches ``pad_s`` into it, no further than its midpoint. A line that never pauses
+    that long before ``next_cue`` starts sang straight into it, and the window ends at
+    ``next_cue``'s start. None when there is no singing to measure, the envelope ends
+    before ``next_cue``, ``next_cue`` starts before the search would (overlapping cues
+    leave no stretch to measure), or the stop lies more than :data:`MAX_HOLD_S` past the
+    caption.
     """
-    if nxt[0] <= last[1] - EDGE_SEARCH_SLACK_S:
+    if next_cue[0] <= cue[1] - EDGE_SEARCH_SLACK_S:
         return None
-    sung_db = _loudest_sung_level(env, [last, nxt])
-    if sung_db is None or nxt[0] > len(env) * HOP_S:
+    sung_db = _loudest_sung_level(env, [cue, next_cue])
+    if sung_db is None or next_cue[0] > len(env) * HOP_S:
         return None
-    runs = _quiet_runs(env, last[1] - EDGE_SEARCH_SLACK_S, nxt[0], sung_db)
+    runs = _quiet_runs(env, cue[1] - EDGE_SEARCH_SLACK_S, next_cue[0], sung_db)
     release = next((run for run in runs if run[1] - run[0] >= RELEASE_QUIET_S), None)
     if release is None:
-        stop = t1 = nxt[0]
+        stop = t1 = next_cue[0]
     else:
         stop, t1 = release[0], min(release[0] + pad_s, sum(release) / 2)
-    return t1 if stop <= last[1] + MAX_HOLD_S else None
+    return t1 if stop <= cue[1] + MAX_HOLD_S else None
 
 
 def _volume_tail(
-    env: np.ndarray, last: tuple[float, float], pad_s: float, duration: float | None
+    env: np.ndarray, cue: tuple[float, float], pad_s: float, duration: float | None
 ) -> float | None:
-    """Where the song's last window should end: ``pad_s`` after the stem's last sung frame.
+    """Where the song's last line's rescue window should end: ``pad_s`` after the stem's
+    last sung frame.
 
     Not capped by :data:`MAX_HOLD_S`: nothing follows to take the audio from, and a
-    song's final note is often its longest. None when the last line has no singing to
+    song's final note is often its longest. None when the line has no singing to
     measure.
     """
-    sung_db = _loudest_sung_level(env, [last])
+    sung_db = _loudest_sung_level(env, [cue])
     if sung_db is None:
         return None
-    i0 = max(0, int(last[0] / HOP_S))
+    i0 = max(0, int(cue[0] / HOP_S))
     # Never empty: the level is a percentile of frames at and after i0.
     sung = np.flatnonzero(env[i0:] >= sung_db - QUIET_DIP_DB)
     t1 = (i0 + int(sung[-1]) + 1) * HOP_S + pad_s
     return t1 if duration is None else min(duration, t1)
+
+
+def _singing_end(
+    env: np.ndarray | None,
+    cue_spans: list[tuple[float, float]],
+    lid: int,
+    pad_s: float,
+    duration: float | None,
+) -> float | None:
+    """Where line ``lid``'s singing stops (:func:`_volume_end`; :func:`_volume_tail` for
+    the song's last line), or None without an envelope or where it cannot be measured."""
+    if env is None:
+        return None
+    if lid == len(cue_spans) - 1:
+        return _volume_tail(env, cue_spans[lid], pad_s, duration)
+    return _volume_end(env, cue_spans[lid], cue_spans[lid + 1], pad_s)
 
 
 def segment_by_gaps(
@@ -309,7 +321,6 @@ def segment_by_gaps(
     gap_s: float = SECTION_GAP_S,
     pad_s: float = SECTION_PAD_S,
     duration: float | None = None,
-    env: np.ndarray | None = None,
 ) -> list[Section]:
     """Group 1:1 cue spans into sections split at phrase gaps.
 
@@ -325,16 +336,9 @@ def segment_by_gaps(
     to the gap midpoint (so neighbouring sections never overlap-claim silent
     audio) and to ``[0, duration]`` when ``duration`` is known. A cap split can
     land inside cue overlap (negative gap) where there is no silence to share:
-    each window then keeps its own cues' full span, unpadded.
-
-    With ``env`` (the vocal stem's dB envelope, one value per
-    :data:`onset_snap.HOP_S`) the grouping and every window start are unchanged,
-    but a window's end moves later to where the audio shows its latest-ending
-    line's singing stop (:func:`_volume_end`, :func:`_volume_tail`), so a note
-    held past its caption stays inside its window. An end never moves earlier, so the
-    window may overlap the next one where the earlier line is still singing.
-    :attr:`Section.measured_end` says which ends ``env`` could measure, and
-    :attr:`Section.widened_end` which it moved.
+    each window then keeps its own cues' full span, unpadded. With duet overlap an
+    earlier line can outlast a section's last one, so the end follows whichever
+    line ends latest.
     """
     if not cue_spans:
         return []
@@ -344,9 +348,7 @@ def segment_by_gaps(
     for lo, nxt in zip(bounds, bounds[1:]):
         hi = nxt - 1
         start = cue_spans[lo][0]
-        # With duet overlap an earlier line can outlast the section's last one.
-        last = max(cue_spans[lo : hi + 1], key=lambda span: span[1])
-        end = last[1]
+        end = max(c1 for _c0, c1 in cue_spans[lo : hi + 1])
         if lo == 0:
             t0 = max(0.0, start - pad_s)
         else:
@@ -354,30 +356,13 @@ def segment_by_gaps(
             # midpoint; a negative gap (cap split inside cue overlap) pads
             # zero rather than inverting into the boundary line's audio.
             t0 = start - min(pad_s, max(0.0, (start - cue_spans[lo - 1][1]) / 2))
-        measured = None
         if hi == n - 1:
             t1 = end + pad_s
             if duration is not None:
                 t1 = min(duration, t1)
-            if env is not None:
-                measured = _volume_tail(env, last, pad_s, duration)
         else:
             t1 = end + min(pad_s, max(0.0, (cue_spans[hi + 1][0] - end) / 2))
-            if env is not None:
-                measured = _volume_end(env, last, cue_spans[hi + 1], pad_s)
-        caption_t1 = round(t1, 3)
-        if measured is not None:
-            t1 = max(t1, measured)
-        sections.append(
-            Section(
-                lo,
-                hi,
-                round(max(0.0, t0), 3),
-                round(t1, 3),
-                measured_end=measured is not None,
-                widened_end=round(t1, 3) > caption_t1,
-            )
-        )
+        sections.append(Section(lo, hi, round(max(0.0, t0), 3), round(t1, 3)))
     return sections
 
 
@@ -480,7 +465,7 @@ def repace_bad_lines(
     max_word_dur: float = MAX_WORD_DUR_S,
     duration: float | None = None,
     realign: Callable[[int, float, float], list[dict] | None] | None = None,
-    sections: list[Section] | None = None,
+    env: np.ndarray | None = None,
     pad_s: float = SECTION_PAD_S,
 ) -> tuple[list[dict], dict]:
     """Rescue the lines the align could not place, from their cue spans.
@@ -502,17 +487,20 @@ def repace_bad_lines(
     absolute-time words or None -- is tried first, and its result is kept
     only if it comes back covered and *inside the window it was aimed at*
     (:func:`_line_in_span`; tagged :data:`SOURCE_REALIGN`), and for a partial
-    line only if it times more of the words. The last line of each of
-    ``sections`` is aimed out to its section's end, where a note held past the
-    caption lies, and its window stops there: that end is already padded, and
-    may be the next caption's start. Otherwise a bad line is rebuilt with
+    line only if it times more of the words. With ``env`` (the vocal stem's
+    dB envelope) the window's end is the larger of that and where the line's
+    own singing stops (:func:`_singing_end`), and the line is aimed at the
+    same end, so a note held past the caption is inside the slice. A first
+    word the aligner dragged back before the line is cut to where the line
+    may start (:func:`_trim_lead_in`). Otherwise a bad line is rebuilt with
     paced words across its cue window (tagged :data:`SOURCE_FILL`), clamped
-    to ``duration`` when known, and a partial line keeps the words it has. Because only bad and
-    partial lines are rewritten, a coarse offset can never degrade a
-    well-aligned line.
+    to ``duration`` when known, and a partial line keeps the words it has.
+    Because only bad and partial lines are rewritten, a coarse offset can
+    never degrade a well-aligned line.
 
     Finally every word a kept line still lacks is shown with guessed timing
-    (:func:`_with_guessed_words`), so no lyric word is dropped from the screen.
+    (:func:`_with_guessed_words`) inside that line's window, so no lyric word is
+    dropped from the screen.
 
     Returns ``(line_objects, stats)``. ``cue_spans`` is indexed by ``line_id``.
     """
@@ -521,10 +509,10 @@ def repace_bad_lines(
     )
     line_toks = _tokenise_lines(align_lines)
     repeat_slacks = _repeat_detection_slacks(line_toks, cue_spans)
-    section_of = {lid: section for section in sections or () for lid in section.line_ids}
     out: list[dict] = []
     repaced: list[int] = []
     realigned: list[int] = []
+    windows: dict[int, tuple[float, float]] = {}
     for obj in line_objects:
         lid = obj["line_id"]
         if lid >= len(cue_spans):
@@ -550,13 +538,13 @@ def repace_bad_lines(
             t1 = duration
             if t0 >= t1:
                 t0 = max(0.0, t1 - 0.5)
-        section = section_of.get(lid)
-        at_section_end = section is not None and lid == section.lid_hi
-        aim_end = max(t1, section.t1) if at_section_end else t1
+        singing_end = _singing_end(env, cue_spans, lid, pad_s, duration)
+        aim_end = t1 if singing_end is None else max(t1, singing_end)
         w0 = max(0.0, t0 - pad_s)
-        w1 = aim_end if at_section_end else t1 + pad_s
+        w1 = max(t1 + pad_s, aim_end)
         if duration is not None:
             w1 = min(duration, w1)
+        windows[lid] = (w0, w1)
         if realign is not None and w1 - w0 >= 0.2:
             raw_words = realign(lid, w0, w1)
             fixed = (
@@ -566,6 +554,8 @@ def repace_bad_lines(
                 if raw_words
                 else None
             )
+            if fixed is not None:
+                fixed = _trim_lead_in(fixed, cue_spans[lid], offset)
             # The window it was aimed at, in cue time: the check adds the offset back.
             aimed = (cue_start, max(cue_end, aim_end - offset))
             if (
@@ -589,11 +579,8 @@ def repace_bad_lines(
         # Guessed words stay between the neighbouring lines' words and inside the window.
         after = next((prev["end"] for prev in reversed(out[:i]) if prev["words"]), 0.0)
         before = next((nxt["start"] for nxt in out[i + 1 :] if nxt["words"]), float("inf"))
-        if duration is not None:
-            before = min(before, duration)
-        section = section_of.get(lid)
-        if section is not None:
-            after, before = max(after, section.t0), min(before, section.t1)
+        w0, w1 = windows[lid]
+        after, before = max(after, w0), min(before, w1)
         out[i] = _with_guessed_words(
             obj, line_toks[lid], cue_spans[lid], after, before, max_word_dur
         )
@@ -746,6 +733,25 @@ def _line_in_span(
     return obj["start"] >= c0 + offset - slack and obj["end"] <= c1 + offset + slack
 
 
+def _trim_lead_in(obj: dict, cue_span: tuple[float, float], offset: float) -> dict:
+    """``obj`` with a first word dragged back before the line cut to where
+    :func:`_line_in_span` lets the line start.
+
+    The slice's lead-in gives the aligner context, and it drags a first word's start back
+    into it. A word with at least :data:`INSTANT_WORD_DUR_S` left after that bound keeps
+    its end and loses only the overshoot; one with less sits on the audio before the line
+    and is left for the span check to reject. The end side is not trimmed: a last word
+    parked past the end bound is the aligner's failure sign (:data:`PAUSE_SLACK_S`).
+    """
+    bound = cue_span[0] + offset - PAUSE_SLACK_S
+    first, *rest = obj["words"]
+    if first["start"] >= bound or first["end"] < bound + INSTANT_WORD_DUR_S:
+        return obj
+    return _line_object(
+        obj["line_id"], obj["text"], [{**first, "start": bound}, *rest], source=obj["source"]
+    )
+
+
 def _repeat_detection_slacks(
     line_toks: list[list[tuple[str, str]]],
     cue_spans: list[tuple[float, float]],
@@ -893,22 +899,20 @@ def align_song(
 
     ``duration`` clamps the section/fill windows to the audio; ``None`` (an
     unreadable stem) drops the clamp and the song degrades to cue-paced timing.
-    ``env`` (the aligned stem's dB envelope) moves window ends out to where the
-    singing stops (:func:`segment_by_gaps`); ``None`` keeps the caption windows.
+    ``env`` (the aligned stem's dB envelope) runs a rescued line's window out to where
+    its singing stops (:func:`repace_bad_lines`); ``None`` keeps the caption windows.
     All GPU/ffmpeg I/O lives behind ``slice_align``, so this stays pure and
     ``test_cue_align`` can drive it with a stub aligner. Display is injected the
     same way: ``progress`` wraps the per-pass section list (e.g. ``tqdm``) so
     the caller owns the terminal; ``None`` iterates silently.
 
     Returns ``(line_objects, stats)``; ``stats`` carries the section count, the
-    fitted offset, whether a re-section fired, the repace sub-stats, and with
-    ``env`` the final pass's window ``edges``: section ends, ends moved later
-    than the caption windows', and ends the envelope could not place.
+    fitted offset, whether a re-section fired, and the repace sub-stats.
     """
     show_progress = progress or (lambda sections: sections)
 
     def align_pass(spans: list[tuple[float, float]]) -> tuple[list[dict], list[Section]]:
-        sections = segment_by_gaps(spans, duration=duration, env=env)
+        sections = segment_by_gaps(spans, duration=duration)
         logger.info("cue-align: %d cues -> %d sections", len(spans), len(sections))
         objs: list[dict] = []
         for section in show_progress(sections):
@@ -943,7 +947,7 @@ def align_song(
         align_lines,
         duration=duration,
         realign=lambda lid, w0, w1: slice_align(w0, w1, align_lines[lid], f"line {lid}"),
-        sections=sections,
+        env=env,
         pad_s=pad_s,
     )
     stats = {
@@ -952,16 +956,4 @@ def align_song(
         "resectioned": resectioned,
         "repace": repace_stats,
     }
-    if env is not None:
-        stats["edges"] = {
-            "n": len(sections),
-            "widened": sum(s.widened_end for s in sections),
-            "fallback": sum(not s.measured_end for s in sections),
-        }
-        logger.info(
-            "cue-align: %d/%d window end(s) widened to the singing, %d left on the caption",
-            stats["edges"]["widened"],
-            len(sections),
-            stats["edges"]["fallback"],
-        )
     return line_objects, stats

@@ -598,9 +598,9 @@ class LyricAlignStage(BaseStage):
         transcribe words, which the cue route doesn't use but the debug bundle
         keeps as the song's heard words (the reference a movie-subtitle slice
         is checked against), the cue-align telemetry (section count, offset,
-        window edges, re-pace + de-reverb sub-stats), and the aligned stem's
-        envelope (None if it can't be decoded), which places the window ends
-        here and is reused by the edge snap.
+        re-pace + de-reverb sub-stats), and the aligned stem's envelope (None
+        if it can't be decoded), which places the rescue windows' ends here and
+        is reused by the edge snap.
         """
         # Shared de-reverb gate: adopt the dry stem when the wet one is
         # reverb-washed.
@@ -612,7 +612,7 @@ class LyricAlignStage(BaseStage):
             # so align_song degrades to cue-paced timing rather than crashing.
             logger.warning("[%s] cue-align: vocal duration unreadable; cue-pacing", self.name)
             duration = None
-        # None keeps the caption windows; the decode logs why.
+        # None keeps the caption windows for the line rescue; the decode logs why.
         env = decode_env_db(vocal_wav, "cue-align edges")
 
         slice_counter = itertools.count()
