@@ -357,6 +357,211 @@ whose last cue overruns the media). Never launch it unprompted.
 | 3 | 2026-10-31 | 1 | probe `~/pikaraoke-songs/alignment_debug/*.json` (read only): cue bundles, `output_line_timings` entries with `n_words` 0, cue songs with `line_count != lines_with_words`, lines with `n_words` < tokens (`joint_match._tokenise_lines`) | 90 cue bundles; 0 entries with `n_words` 0; 0 cue songs with `line_count != lines_with_words`; 33 lines short, 65 words, in 24 songs (the plan's Library facts say 25 songs; lines match at 33) |
 | 4 | 2026-10-31 | 1 | smoke: `library_statuses(~/pikaraoke-songs)`, `poor` by the old rule (`line_count - lines_timed`) vs the new `SongStatus.poor` | 103 songs. `poor` before 1, after 2; joined: Your Idol (9 paced of 59 = 0.1525). Left: none. Next highest: Get Down 17/114 = 0.1491, I'll Never Break Your Heart 13/91 = 0.1429, both stay off. `overview_counts`: behind 0, poor 2, no_lyrics 2, caption 76, movie 7, lrc 7, genius 8, custom 3, no_timed_source 1, all 103. Cue songs: 60 with paced lines (191 paced lines in all), 120 re-aligned lines; `words_missing` > 0 in 24 songs, 65 words in 33 lines |
 | 5 | 2026-10-31 | 1 | `pytest -q tests/unit/test_library_status.py tests/unit/test_library_routes.py`, then full suite; `pre-commit run --config code_quality/.pre-commit-config.yaml --files <5 files>` | 499 passed; full suite 3011 passed in 37.10 s (+13 over baseline); black reformatted `song_info.py` and `test_library_status.py` on the first run, all hooks pass on the second. `test_a_caption_song` changed: its cue legend reads "Aligned 39", not "Timed 39" |
+| 6 | 2026-10-31 | 2 | code in `pikaraoke/lib/cue_align.py`: `segment_by_gaps(..., env=None)`, `_volume_edge`, `_volume_tail`, `_quiet_run`, `_loudest_sung_level` (calls `onset_snap._sung_level_ref` once per cue span as a one-word line, so the 80th-percentile reference is not re-implemented; levels under `MIN_REF_DB` count as no singing), `_section_starts` (the grouping code moved out of `segment_by_gaps`), `Section.measured_end` (`compare=False`). Constants EDGE_SEARCH_SLACK_S 0.5, QUIET_DIP_DB = `SUSTAIN_NEAR_DB` (12.0), MIN_QUIET_S 0.1, TAIL_QUIET_S 0.5. Tail: quiet found -> its start + pad; singing measured but never 0.5 s quiet -> `duration`; no singing measurable, or no `duration` -> today's rule. 16 new tests in `TestSegmentByVolume` | `pytest -q` 3027 passed in 37.01 s; pre-commit passes (black reformatted `cue_align.py`). Uncommitted in the working tree: Phase 3 commits it with the wiring |
+| 7 | 2026-10-31 | 2 | read-only CPU probe, scratch (`probe_edges.py`, not committed): `PYTHONPATH=. python probe_edges.py`. 90 cue bundles; stem = `dereverb/` when `joint_stats.dereverb.succeeded` else `vocal/`; cues from `lyrics.source_path` (`\` -> `/`), shifted by `offset_s` when `resectioned`; duration = `media_duration_s`. Starting constants. Table R7 below | 90 probed, 0 errors. Interior edges 692; moved (> 0.01 s) 613; fallback 67 (9.7%). Tails measured 83/90. Overlapping window pairs 0; windows with t1 <= t0: 0. Measured edges ending before their own caption ends: 54. 68 songs have a transcript: 534 section-final lines, heard last word found for 394, outside the window old 55 -> new 34 (fixed 23, in old and out of new 2). Section-first lines 534, word found 374, outside old 97 -> new 116, in old and out of new 36. Cap-split edges (caption gap <= 1.5 s) 230, run found at 185; all cap-split edges in the 9 test songs found a run. Decode 60 s; later runs use cached envelopes, under 1 s |
+| 8 | 2026-10-31 | 2 | the first probe run printed 0 for section-first lines in the old window and out of the new | cause: the comparison was `new_in is False` against numpy booleans, never true. Cast to `bool`, rerun: 36. Every first-line figure in this log is from the corrected probe; the 0 was wrong |
+| 9 | 2026-10-31 | 2 | the 36 section-first lines (block R9 below). Env quiet: `env[heard_start : +4 frames].max() < loudest sung level - 12 dB` | env quiet at the heard first word: 26 of 36. New t0 within 0.3 s after `heard_start`: 29 of 36 |
+| 10 | 2026-10-31 | 2 | tuning grid, in one process over the cached envelopes: slack {0.25, 0.5, 1.0} x dip {6, 9, 12, 18, 24} x min_quiet {0.05, 0.1, 0.2} x tail_quiet {0.25, 0.5, 1.0} = 135 cells (block R10 below) | criterion 1 (no target line outside): 0 cells. Criterion 2 (0 in old and out of new): 0 cells; lowest 16, at slack 0.25, dip 24, min_quiet 0.2, any tail_quiet (fallback 31.5% there). Criterion 3 (fallback <= 20%): 102 cells. Stronger 6 and Pocahontas 36 are outside in all 135 cells. Fewest target lines outside is 3, in 81 cells: Stronger 6 and Pocahontas 36 plus Baby One More Time 30 (54 cells) or Baby One More Time 20 (27 cells) |
+| 11 | 2026-10-31 | 2 | envelope around the three target lines outside at the starting constants (`probe_line.py`; dB every 0.25 s; sung level ref -19.5 / -17.6 / -19.8, quiet below ref - 12) | **Pocahontas L36** (last line, cue 174.84-178.84; heard `of` 179.68-181.48, `the` 181.48-183.04, `wind` 183.04-184.92): 178.84 -21, 179.09 -42, 179.34 -26, 179.59 -31, 179.84 -36, 180.09 -40, 180.34 -54, 180.59 -66, 180.84 -31, 181.09 -30 ... 183.34 -41, 183.59 -66, 183.84 -69, 184.09 -64, 184.34 -93, 184.59 -110, 184.84 -30, 185.09 -27. Tail window ends 180.375. **Stronger L6** (cue 43.56-48.56, next cue 51.19; heard `own` 50.22-51.1, next line `But` 51.1): 48.56 -37, 48.81 -24, 49.31 -35, 49.56 -34, 49.81 -25, 50.06 -22, 50.31 -39, 50.56 -21, 51.06 -24, 51.31 -28. Window ends 49.488. **Baby One More Time L30** (cue 161.26-166.26, next cue 169.70; heard `now` 167.36-168.20, next `Don't` 169.56): 165.51 -33, 165.76 -41, 166.01 -56, 166.26 -23, then -17..-28 to 169.26, 169.51 -33. Window ends 165.962 |
+| 12 | 2026-10-31 | 2 | scratch variants of the edge rule at the starting constants (`variants.py`; monkeypatched, not in the committed code; not within the plan's tuning allowance): (a) last qualifying run in R instead of the longest; (b) (a) with windows only moving outward from today's (t1 = max(new, old), t0 = min(new, old)); (c) longest run with the same outward-only rule | (a) fallback 9.7%; section-final outside old 55 -> 31 (in old and out 2); section-first outside 97 -> 161 (in old and out 76); target lines outside: Pocahontas 36 only. (b) section-final outside 55 -> 30 (1); section-first 97 -> 85 (0); target lines outside: Pocahontas 36 only; window pairs overlapping 353. (c) section-final 55 -> 33 (1); section-first 97 -> 80 (0); target lines outside: Baby One More Time 30, Stronger 6, Pocahontas 36; overlapping pairs 293 |
+| 13 | 2026-10-31 | 2 | GATE A against the pass criteria, starting constants | Criterion 1: not met (Baby One More Time 30, Stronger 6, Pocahontas 36 outside; Stronger 26, Miss Independent 9 and 71: word not found by the match). Criterion 2: not met (36). Criterion 3: met (9.7%). Cap-split edges with no quiet run in the test songs: none. Stopped for Opus; Phase 3 not started; Phase 2 code left uncommitted |
+
+**R7 targets** at the starting constants (slack 0.5, dip 12, min_quiet 0.1, tail_quiet 0.5). `heard_end` is the transcriber's end of the line's last word.
+
+| Song | L | last token | heard_end | old t1 | new t1 | in old | in new |
+|---|---|---|---|---|---|---|---|
+| Backstreet Boys - Incomplete (Of | 3 | guess | 46.04 | 45.182 | 47.1 | False | True |
+| Britney Spears - ...Baby One Mor | 20 | because | 110.64 | 110.255 | 111.15 | False | True |
+| Britney Spears - ...Baby One Mor | 30 | now | 168.2 | 167.01 | 165.962 | False | False |
+| Britney Spears - Stronger (Offic | 6 | own | 51.1 | 49.312 | 49.488 | False | False |
+| Britney Spears - Stronger (Offic | 26 | go | word not found | 147.224 | 146.612 | None | None |
+| Britney Spears - Stronger (Offic | 32 | yesterday | 180.38 | 181.539 | 181.539 | True | True |
+| Britney Spears - Stronger (Offic | 37 | more | 206.8 | 207.382 | 209.075 | True | True |
+| Ed Sheeran - Castle On The Hill  | 46 | way | 228.88 | 229.74 | 229.65 | True | True |
+| Ne-Yo - Miss Independent [Offici | 9 | damn. | word not found | 26.45 | 25.925 | None | None |
+| Ne-Yo - Miss Independent [Offici | 71 | yeah | word not found | 219.283 | 218.913 | None | None |
+| Pocahontas - Colors of the Wind  | 36 | wind | 184.92 | 179.59 | 180.375 | False | False |
+
+**R9 section-first lines** whose heard first word was inside the old window and is outside the new one, same constants (36 lines). Last column: the envelope over the 100 ms after `heard_start` sits more than 12 dB below the louder neighbouring line's sung level.
+
+| Song | L | first token | heard_start | old t0 | new t0 | env quiet at heard_start |
+|---|---|---|---|---|---|---|
+| #NSYNC - This I Promise You (Off | 50 | Every | 234.56 | 234.539 | 234.725 | True |
+| #OutOfOz - 'For Good' Performed  | 34 | But | 163.6 | 163.043 | 163.612 | True |
+| Backstreet Boys - Drowning (Offi | 1 | Don't | 19.54 | 19.188 | 19.700 | True |
+| Backstreet Boys - Everybody (Bac | 17 | Hey, | 120.0 | 119.823 | 120.025 | True |
+| Backstreet Boys - Get Down (You' | 51 | 'Cause | 120.88 | 120.657 | 121.025 | False |
+| Backstreet Boys - I'll Never Bre | 3 | to | 13.89 | 13.619 | 14.088 | True |
+| Backstreet Boys - I'll Never Bre | 28 | To | 112.66 | 112.297 | 112.863 | True |
+| Backstreet Boys - I'll Never Bre | 29 | Girl, | 118.56 | 118.410 | 118.750 | True |
+| Backstreet Boys - Inconsolable ( | 21 | In | 101.22 | 100.842 | 101.438 | False |
+| Backstreet Boys - Quit Playing G | 54 | Baby | 154.58 | 154.547 | 154.825 | True |
+| Backstreet Boys - The Call (Offi | 12 | Let | 26.32 | 25.935 | 26.450 | True |
+| Britney Spears - (You Drive Me)  | 14 | Baby, | 57.08 | 56.822 | 57.238 | True |
+| Britney Spears - ...Baby One Mor | 5 | And | 45.15 | 45.057 | 45.800 | False |
+| Britney Spears - ...Baby One Mor | 21 | My | 110.64 | 110.255 | 111.150 | False |
+| Britney Spears - ...Baby One Mor | 29 | Oh | 151.64 | 151.547 | 151.775 | True |
+| Britney Spears - Stronger (Offic | 38 | I, | 209.02 | 208.480 | 209.075 | True |
+| Céline Dion - I'm Alive (Officia | 32 | And | 152.72 | 152.320 | 152.950 | True |
+| Céline Dion - That's The Way It  | 12 | I | 89.76 | 89.397 | 89.800 | True |
+| Céline Dion - That's The Way It  | 16 | In | 109.6 | 109.386 | 109.900 | False |
+| Ed Sheeran - Perfect (Official M | 36 | Dancing | 181.88 | 181.515 | 182.225 | True |
+| Ed Sheeran - Shape of You (Offic | 16 | I'm | 56.5 | 56.432 | 56.575 | True |
+| Ed Sheeran - Shape of You (Offic | 24 | I'm | 79.0 | 78.830 | 79.025 | True |
+| Ed Sheeran - Shape of You (Offic | 45 | I'm | 136.5 | 136.345 | 136.575 | True |
+| Ed Sheeran - Shape of You (Offic | 53 | I'm | 158.98 | 158.701 | 159.025 | True |
+| Ed Sheeran - Shape of You (Offic | 54 | I'm | 163.98 | 163.831 | 164.038 | True |
+| Idina Menzel - Let It Go (from F | 43 | Here | 196.34 | 196.283 | 196.612 | False |
+| Jodi Benson - Part of Your World | 44 | What's | 135.68 | 135.049 | 136.075 | False |
+| Justin Timberlake - Like I Love  | 41 | Here | 146.72 | 146.520 | 146.788 | True |
+| Justin Timberlake - Like I Love  | 61 | Ma, | 193.98 | 193.480 | 194.550 | False |
+| Justin Timberlake - Like I Love  | 70 | You're | 222.86 | 222.601 | 222.938 | True |
+| Justin Timberlake - Mirrors (Off | 90 | And | 378.57 | 378.292 | 378.738 | False |
+| Mulan _ I'll Make a Man Out of Y | 4 | You | 16.84 | 16.170 | 16.888 | True |
+| NSYNC - Bye Bye Bye (Official Vi | 34 | I | 116.12 | 115.919 | 116.275 | True |
+| NSYNC - Paradise | 4 | And | 61.65 | 61.590 | 61.775 | True |
+| The Lion King - Hakuna Matata Mu | 45 | Philosophy | 109.08 | 109.044 | 109.150 | True |
+| “Takedown” Official Choreography | 16 | I'ma | 49.02 | 48.940 | 49.338 | False |
+
+**R10 grid**, all 135 cells (`probe` constants: slack, dip dB, min_quiet, tail_quiet). fb% = fallback share of interior edges; last_out = section-final lines whose heard last word is outside the window, old 55 -> new; first_out likewise for section-first lines, old 97 -> new; broken = inside the old window and outside the new; tgt_fail = test-song target lines (with a transcript, word found) outside the new window.
+
+| slack | dip | min_q | tail_q | fb% | last_out | last_broken | first_out | first_broken | cuts | tgt_fail |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0.25 | 6 | 0.05 | 0.25 | 3.0 | 32 | 2 | 105 | 26 | 39 | C-u5:20 AJWt:6 9ThO:36 |
+| 0.25 | 6 | 0.05 | 0.5 | 3.0 | 32 | 2 | 105 | 26 | 39 | C-u5:20 AJWt:6 9ThO:36 |
+| 0.25 | 6 | 0.05 | 1.0 | 3.0 | 30 | 1 | 105 | 26 | 39 | C-u5:20 AJWt:6 9ThO:36 |
+| 0.25 | 6 | 0.1 | 0.25 | 5.9 | 33 | 2 | 104 | 25 | 32 | C-u5:20 AJWt:6 9ThO:36 |
+| 0.25 | 6 | 0.1 | 0.5 | 5.9 | 33 | 2 | 104 | 25 | 32 | C-u5:20 AJWt:6 9ThO:36 |
+| 0.25 | 6 | 0.1 | 1.0 | 5.9 | 31 | 1 | 104 | 25 | 32 | C-u5:20 AJWt:6 9ThO:36 |
+| 0.25 | 6 | 0.2 | 0.25 | 12.1 | 34 | 1 | 106 | 24 | 20 | C-u5:20 AJWt:6 9ThO:36 |
+| 0.25 | 6 | 0.2 | 0.5 | 12.1 | 34 | 1 | 106 | 24 | 20 | C-u5:20 AJWt:6 9ThO:36 |
+| 0.25 | 6 | 0.2 | 1.0 | 12.1 | 32 | 0 | 106 | 24 | 20 | C-u5:20 AJWt:6 9ThO:36 |
+| 0.25 | 9 | 0.05 | 0.25 | 6.4 | 33 | 1 | 108 | 27 | 37 | C-u5:20 AJWt:6 9ThO:36 |
+| 0.25 | 9 | 0.05 | 0.5 | 6.4 | 33 | 1 | 108 | 27 | 37 | C-u5:20 AJWt:6 9ThO:36 |
+| 0.25 | 9 | 0.05 | 1.0 | 6.4 | 32 | 1 | 108 | 27 | 37 | C-u5:20 AJWt:6 9ThO:36 |
+| 0.25 | 9 | 0.1 | 0.25 | 8.5 | 33 | 0 | 109 | 27 | 32 | C-u5:20 AJWt:6 9ThO:36 |
+| 0.25 | 9 | 0.1 | 0.5 | 8.5 | 33 | 0 | 109 | 27 | 32 | C-u5:20 AJWt:6 9ThO:36 |
+| 0.25 | 9 | 0.1 | 1.0 | 8.5 | 32 | 0 | 109 | 27 | 32 | C-u5:20 AJWt:6 9ThO:36 |
+| 0.25 | 9 | 0.2 | 0.25 | 15.6 | 35 | 0 | 111 | 26 | 22 | C-u5:20 AJWt:6 9ThO:36 |
+| 0.25 | 9 | 0.2 | 0.5 | 15.6 | 35 | 0 | 111 | 26 | 22 | C-u5:20 AJWt:6 9ThO:36 |
+| 0.25 | 9 | 0.2 | 1.0 | 15.6 | 34 | 0 | 111 | 26 | 22 | C-u5:20 AJWt:6 9ThO:36 |
+| 0.25 | 12 | 0.05 | 0.25 | 7.7 | 31 | 0 | 109 | 29 | 39 | C-u5:20 AJWt:6 9ThO:36 |
+| 0.25 | 12 | 0.05 | 0.5 | 7.7 | 30 | 0 | 109 | 29 | 39 | C-u5:20 AJWt:6 9ThO:36 |
+| 0.25 | 12 | 0.05 | 1.0 | 7.7 | 30 | 0 | 109 | 29 | 39 | C-u5:20 AJWt:6 9ThO:36 |
+| 0.25 | 12 | 0.1 | 0.25 | 12.7 | 35 | 0 | 111 | 27 | 27 | C-u5:20 AJWt:6 9ThO:36 |
+| 0.25 | 12 | 0.1 | 0.5 | 12.7 | 34 | 0 | 111 | 27 | 27 | C-u5:20 AJWt:6 9ThO:36 |
+| 0.25 | 12 | 0.1 | 1.0 | 12.7 | 34 | 0 | 111 | 27 | 27 | C-u5:20 AJWt:6 9ThO:36 |
+| 0.25 | 12 | 0.2 | 0.25 | 20.4 | 40 | 0 | 113 | 25 | 17 | C-u5:20 AJWt:6 9ThO:36 |
+| 0.25 | 12 | 0.2 | 0.5 | 20.4 | 39 | 0 | 113 | 25 | 17 | C-u5:20 AJWt:6 9ThO:36 |
+| 0.25 | 12 | 0.2 | 1.0 | 20.4 | 39 | 0 | 113 | 25 | 17 | C-u5:20 AJWt:6 9ThO:36 |
+| 0.25 | 18 | 0.05 | 0.25 | 15.5 | 40 | 1 | 105 | 24 | 28 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.25 | 18 | 0.05 | 0.5 | 15.5 | 39 | 1 | 105 | 24 | 28 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.25 | 18 | 0.05 | 1.0 | 15.5 | 38 | 1 | 105 | 24 | 28 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.25 | 18 | 0.1 | 0.25 | 19.8 | 43 | 1 | 107 | 23 | 21 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.25 | 18 | 0.1 | 0.5 | 19.8 | 42 | 1 | 107 | 23 | 21 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.25 | 18 | 0.1 | 1.0 | 19.8 | 41 | 1 | 107 | 23 | 21 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.25 | 18 | 0.2 | 0.25 | 25.4 | 43 | 0 | 106 | 19 | 14 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.25 | 18 | 0.2 | 0.5 | 25.4 | 42 | 0 | 106 | 19 | 14 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.25 | 18 | 0.2 | 1.0 | 25.4 | 41 | 0 | 106 | 19 | 14 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.25 | 24 | 0.05 | 0.25 | 22.4 | 41 | 0 | 107 | 21 | 19 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.25 | 24 | 0.05 | 0.5 | 22.4 | 39 | 0 | 107 | 21 | 19 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.25 | 24 | 0.05 | 1.0 | 22.4 | 39 | 0 | 107 | 21 | 19 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.25 | 24 | 0.1 | 0.25 | 26.4 | 42 | 0 | 108 | 20 | 14 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.25 | 24 | 0.1 | 0.5 | 26.4 | 40 | 0 | 108 | 20 | 14 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.25 | 24 | 0.1 | 1.0 | 26.4 | 40 | 0 | 108 | 20 | 14 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.25 | 24 | 0.2 | 0.25 | 31.5 | 45 | 0 | 105 | 16 | 9 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.25 | 24 | 0.2 | 0.5 | 31.5 | 43 | 0 | 105 | 16 | 9 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.25 | 24 | 0.2 | 1.0 | 31.5 | 43 | 0 | 105 | 16 | 9 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 6 | 0.05 | 0.25 | 1.9 | 34 | 6 | 105 | 32 | 62 | C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 6 | 0.05 | 0.5 | 1.9 | 34 | 6 | 105 | 32 | 62 | C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 6 | 0.05 | 1.0 | 1.9 | 31 | 4 | 105 | 32 | 62 | C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 6 | 0.1 | 0.25 | 3.8 | 33 | 5 | 104 | 31 | 55 | C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 6 | 0.1 | 0.5 | 3.8 | 33 | 5 | 104 | 31 | 55 | C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 6 | 0.1 | 1.0 | 3.8 | 30 | 3 | 104 | 31 | 55 | C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 6 | 0.2 | 0.25 | 9.1 | 33 | 3 | 106 | 30 | 41 | C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 6 | 0.2 | 0.5 | 9.1 | 33 | 3 | 106 | 30 | 41 | C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 6 | 0.2 | 1.0 | 9.1 | 30 | 1 | 106 | 30 | 41 | C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 9 | 0.05 | 0.25 | 4.0 | 34 | 4 | 114 | 38 | 60 | C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 9 | 0.05 | 0.5 | 4.0 | 34 | 4 | 114 | 38 | 60 | C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 9 | 0.05 | 1.0 | 4.0 | 32 | 3 | 114 | 38 | 60 | C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 9 | 0.1 | 0.25 | 5.9 | 33 | 3 | 114 | 37 | 54 | C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 9 | 0.1 | 0.5 | 5.9 | 33 | 3 | 114 | 37 | 54 | C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 9 | 0.1 | 1.0 | 5.9 | 31 | 2 | 114 | 37 | 54 | C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 9 | 0.2 | 0.25 | 12.3 | 34 | 2 | 116 | 35 | 41 | C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 9 | 0.2 | 0.5 | 12.3 | 34 | 2 | 116 | 35 | 41 | C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 9 | 0.2 | 1.0 | 12.3 | 32 | 1 | 116 | 35 | 41 | C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 12 | 0.05 | 0.25 | 5.9 | 31 | 2 | 116 | 38 | 59 | C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 12 | 0.05 | 0.5 | 5.9 | 31 | 2 | 116 | 38 | 59 | C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 12 | 0.05 | 1.0 | 5.9 | 29 | 1 | 116 | 38 | 59 | C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 12 | 0.1 | 0.25 | 9.7 | 34 | 2 | 116 | 36 | 54 | C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 12 | 0.1 | 0.5 | 9.7 | 34 | 2 | 116 | 36 | 54 | C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 12 | 0.1 | 1.0 | 9.7 | 32 | 1 | 116 | 36 | 54 | C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 12 | 0.2 | 0.25 | 16.9 | 39 | 1 | 119 | 33 | 38 | C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 12 | 0.2 | 0.5 | 16.9 | 39 | 1 | 119 | 33 | 38 | C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 12 | 0.2 | 1.0 | 16.9 | 37 | 0 | 119 | 33 | 38 | C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 18 | 0.05 | 0.25 | 12.4 | 37 | 2 | 113 | 35 | 49 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 18 | 0.05 | 0.5 | 12.4 | 37 | 2 | 113 | 35 | 49 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 18 | 0.05 | 1.0 | 12.4 | 34 | 1 | 113 | 35 | 49 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 18 | 0.1 | 0.25 | 16.9 | 42 | 2 | 114 | 32 | 42 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 18 | 0.1 | 0.5 | 16.9 | 42 | 2 | 114 | 32 | 42 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 18 | 0.1 | 1.0 | 16.9 | 39 | 1 | 114 | 32 | 42 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 18 | 0.2 | 0.25 | 22.7 | 43 | 1 | 111 | 25 | 33 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 18 | 0.2 | 0.5 | 22.7 | 43 | 1 | 111 | 25 | 33 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 18 | 0.2 | 1.0 | 22.7 | 40 | 0 | 111 | 25 | 33 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 24 | 0.05 | 0.25 | 19.8 | 42 | 2 | 111 | 27 | 38 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 24 | 0.05 | 0.5 | 19.8 | 41 | 2 | 111 | 27 | 38 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 24 | 0.05 | 1.0 | 19.8 | 39 | 1 | 111 | 27 | 38 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 24 | 0.1 | 0.25 | 24.4 | 42 | 1 | 111 | 24 | 31 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 24 | 0.1 | 0.5 | 24.4 | 41 | 1 | 111 | 24 | 31 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 24 | 0.1 | 1.0 | 24.4 | 39 | 0 | 111 | 24 | 31 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 24 | 0.2 | 0.25 | 28.8 | 45 | 1 | 110 | 22 | 26 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 24 | 0.2 | 0.5 | 28.8 | 44 | 1 | 110 | 22 | 26 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 0.5 | 24 | 0.2 | 1.0 | 28.8 | 42 | 0 | 110 | 22 | 26 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 6 | 0.05 | 0.25 | 0.9 | 36 | 13 | 108 | 38 | 186 | C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 6 | 0.05 | 0.5 | 0.9 | 36 | 13 | 108 | 38 | 186 | C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 6 | 0.05 | 1.0 | 0.9 | 32 | 10 | 108 | 38 | 186 | C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 6 | 0.1 | 0.25 | 1.7 | 35 | 12 | 108 | 37 | 184 | C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 6 | 0.1 | 0.5 | 1.7 | 35 | 12 | 108 | 37 | 184 | C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 6 | 0.1 | 1.0 | 1.7 | 31 | 9 | 108 | 37 | 184 | C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 6 | 0.2 | 0.25 | 5.9 | 36 | 10 | 108 | 35 | 172 | C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 6 | 0.2 | 0.5 | 5.9 | 36 | 10 | 108 | 35 | 172 | C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 6 | 0.2 | 1.0 | 5.9 | 32 | 7 | 108 | 35 | 172 | C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 9 | 0.05 | 0.25 | 1.9 | 37 | 13 | 115 | 42 | 147 | C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 9 | 0.05 | 0.5 | 1.9 | 36 | 12 | 115 | 42 | 147 | C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 9 | 0.05 | 1.0 | 1.9 | 32 | 9 | 115 | 42 | 147 | C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 9 | 0.1 | 0.25 | 3.8 | 35 | 11 | 116 | 41 | 138 | C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 9 | 0.1 | 0.5 | 3.8 | 34 | 10 | 116 | 41 | 138 | C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 9 | 0.1 | 1.0 | 3.8 | 30 | 7 | 116 | 41 | 138 | C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 9 | 0.2 | 0.25 | 10.4 | 39 | 9 | 117 | 38 | 126 | C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 9 | 0.2 | 0.5 | 10.4 | 38 | 8 | 117 | 38 | 126 | C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 9 | 0.2 | 1.0 | 10.4 | 34 | 5 | 117 | 38 | 126 | C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 12 | 0.05 | 0.25 | 3.8 | 36 | 10 | 119 | 42 | 131 | C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 12 | 0.05 | 0.5 | 3.8 | 35 | 9 | 119 | 42 | 131 | C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 12 | 0.05 | 1.0 | 3.8 | 31 | 6 | 119 | 42 | 131 | C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 12 | 0.1 | 0.25 | 6.8 | 39 | 10 | 118 | 40 | 124 | C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 12 | 0.1 | 0.5 | 6.8 | 38 | 9 | 118 | 40 | 124 | C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 12 | 0.1 | 1.0 | 6.8 | 34 | 6 | 118 | 40 | 124 | C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 12 | 0.2 | 0.25 | 14.6 | 41 | 6 | 118 | 35 | 106 | C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 12 | 0.2 | 0.5 | 14.6 | 40 | 5 | 118 | 35 | 106 | C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 12 | 0.2 | 1.0 | 14.6 | 36 | 2 | 118 | 35 | 106 | C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 18 | 0.05 | 0.25 | 9.0 | 40 | 8 | 114 | 39 | 98 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 18 | 0.05 | 0.5 | 9.0 | 40 | 8 | 114 | 39 | 98 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 18 | 0.05 | 1.0 | 9.0 | 35 | 5 | 114 | 39 | 98 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 18 | 0.1 | 0.25 | 14.6 | 45 | 6 | 115 | 36 | 88 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 18 | 0.1 | 0.5 | 14.6 | 45 | 6 | 115 | 36 | 88 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 18 | 0.1 | 1.0 | 14.6 | 40 | 3 | 115 | 36 | 88 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 18 | 0.2 | 0.25 | 21.1 | 44 | 3 | 111 | 28 | 78 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 18 | 0.2 | 0.5 | 21.1 | 44 | 3 | 111 | 28 | 78 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 18 | 0.2 | 1.0 | 21.1 | 39 | 0 | 111 | 28 | 78 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 24 | 0.05 | 0.25 | 17.2 | 41 | 5 | 116 | 34 | 72 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 24 | 0.05 | 0.5 | 17.2 | 39 | 5 | 116 | 34 | 72 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 24 | 0.05 | 1.0 | 17.2 | 36 | 2 | 116 | 34 | 72 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 24 | 0.1 | 0.25 | 22.7 | 44 | 5 | 113 | 28 | 65 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 24 | 0.1 | 0.5 | 22.7 | 42 | 5 | 113 | 28 | 65 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 24 | 0.1 | 1.0 | 22.7 | 39 | 2 | 113 | 28 | 65 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 24 | 0.2 | 0.25 | 27.6 | 48 | 4 | 110 | 24 | 60 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 24 | 0.2 | 0.5 | 27.6 | 46 | 4 | 110 | 24 | 60 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
+| 1.0 | 24 | 0.2 | 1.0 | 27.6 | 43 | 1 | 110 | 24 | 60 | C-u5:20 C-u5:30 AJWt:6 9ThO:36 |
 
 ## Hand-off prompt (executor)
 
