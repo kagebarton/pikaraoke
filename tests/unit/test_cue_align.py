@@ -148,6 +148,11 @@ class TestSegmentByGaps:
         assert first.t1 == 30.5
         assert second.t0 == 30.0
 
+    def test_a_duet_sections_end_follows_its_latest_ending_line(self):
+        # Line 0 (singer A, held to 6.0) outlasts line 1 (singer B).
+        first, _ = segment_by_gaps([(0.0, 6.0), (1.0, 3.0), (10.0, 12.0)], duration=13.0)
+        assert first.t1 == 6.75
+
 
 def _env(duration_s: float, sung: list[tuple[float, float]]) -> np.ndarray:
     """A dB envelope that is sung (-20) inside ``sung`` and silent (-70) elsewhere."""
@@ -155,113 +160,6 @@ def _env(duration_s: float, sung: list[tuple[float, float]]) -> np.ndarray:
     for a, b in sung:
         env[int(a / HOP_S) : int(b / HOP_S)] = -20.0
     return env
-
-
-class TestSegmentByVolume:
-    """Window ends moved out to where the vocal envelope shows the singing stop."""
-
-    # Two lines 5 s apart; the first is held to 6.0, two seconds past its caption.
-    HOLD_CUES = [(0.0, 4.0), (9.0, 12.0)]
-    HOLD_SUNG = [(0.3, 6.0), (9.2, 12.0)]
-
-    def test_a_hold_into_silence_stays_inside_its_window(self):
-        env = _env(14.0, self.HOLD_SUNG)
-        first, second = segment_by_gaps(self.HOLD_CUES, duration=14.0, env=env)
-        assert first.t1 == pytest.approx(6.75, abs=0.03)  # the hold's end + the pad
-        assert first.measured_end and first.widened_end
-        # Without the envelope the caption gap ends the window at 4.75, mid-hold.
-        assert segment_by_gaps(self.HOLD_CUES, duration=14.0)[0].t1 == 4.75
-
-    def test_window_starts_never_move(self):
-        cues = [(1.0, 4.0), (6.0, 9.0), (14.0, 17.0)]
-        env = _env(19.0, [(1.2, 5.9), (6.0, 10.5), (14.2, 17.0)])
-        measured = segment_by_gaps(cues, duration=19.0, env=env)
-        today = segment_by_gaps(cues, duration=19.0)
-        assert [s.t0 for s in measured] == [s.t0 for s in today]
-        assert all(m.t1 >= t.t1 for m, t in zip(measured, today))
-
-    def test_singing_straight_into_the_next_caption_ends_the_window_at_its_start(self):
-        # The 0.2 s breath at 5.8 is no release, so the line sang up to the next cue.
-        cues = [(0.0, 4.0), (6.0, 9.0)]
-        env = _env(10.0, [(0.3, 5.8), (6.0, 9.0)])
-        first, second = segment_by_gaps(cues, duration=10.0, env=env)
-        assert first.t1 == 6.0
-        assert second.t0 == 5.25  # the caption rule's, so the windows share 5.25-6.0
-
-    def test_a_pause_inside_the_held_line_is_not_its_end(self):
-        env = _env(14.0, [(0.3, 4.3), (4.8, 6.0), (9.2, 12.0)])  # a 0.5 s pause
-        first, _ = segment_by_gaps(self.HOLD_CUES, duration=14.0, env=env)
-        assert first.t1 == pytest.approx(6.75, abs=0.03)
-
-    @pytest.mark.parametrize(
-        "cues, sung",
-        [
-            ([(0.0, 4.0), (12.0, 15.0)], [(0.3, 8.5), (12.2, 15.0)]),  # stops 4.5 s late
-            ([(0.0, 4.0), (9.0, 12.0)], [(0.3, 12.0)]),  # never stops; next cue 5 s on
-        ],
-    )
-    def test_singing_on_past_the_hold_cap_keeps_the_caption_end(self, cues, sung):
-        env = _env(16.0, sung)
-        first, _ = segment_by_gaps(cues, duration=16.0, env=env)
-        assert first.t1 == 4.75
-        assert not first.measured_end
-
-    def test_a_line_that_stopped_before_its_caption_ended_keeps_todays_window(self):
-        env = _env(14.0, [(0.3, 3.6), (9.2, 12.0)])
-        sections = segment_by_gaps(self.HOLD_CUES, duration=14.0, env=env)
-        assert sections == segment_by_gaps(self.HOLD_CUES, duration=14.0)
-        assert sections[0].measured_end and not sections[0].widened_end
-
-    def test_the_song_tail_reaches_a_long_final_hold(self):
-        # Past the 4 s hold cap and through a 1.2 s pause: the last line has no neighbour.
-        env = _env(16.0, [(0.3, 6.0), (7.2, 11.0)])
-        (only,) = segment_by_gaps([(0.0, 4.0)], duration=16.0, env=env)
-        assert only.t1 == pytest.approx(11.75, abs=0.03)
-        assert only.measured_end
-        (today,) = segment_by_gaps([(0.0, 4.0)], duration=16.0)
-        assert today.t1 == 4.75
-
-    def test_a_tail_sung_to_the_end_of_the_audio_stops_at_the_duration(self):
-        env = _env(8.0, [(0.5, 8.0)])
-        (only,) = segment_by_gaps([(0.0, 4.0)], duration=8.0, env=env)
-        assert only.t1 == 8.0
-
-    def test_a_silent_envelope_has_no_singing_to_measure(self):
-        env = _env(14.0, [])
-        sections = segment_by_gaps(self.HOLD_CUES, duration=14.0, env=env)
-        assert sections == segment_by_gaps(self.HOLD_CUES, duration=14.0)
-        assert not any(s.measured_end for s in sections)
-
-    def test_an_envelope_ending_before_the_next_cue_falls_back(self):
-        env = _env(5.0, [(0.3, 5.0)])
-        cues = [(0.0, 4.0), (6.0, 9.0)]
-        first, _ = segment_by_gaps(cues, duration=10.0, env=env)
-        assert first.t1 == 4.75
-        assert not first.measured_end
-
-    def test_overlapping_cues_across_a_cap_split_keep_their_full_spans(self):
-        cues = [(0.0, 61.0), (60.0, 62.0)]
-        env = _env(63.0, [(0.0, 62.0)])
-        first, second = segment_by_gaps(cues, duration=63.0, env=env)
-        assert (first.t1, second.t0) == (61.0, 60.0)
-        assert not first.measured_end  # the next cue starts before the search: no stretch
-
-    # A duet section: line 0 (singer A, held to 8.0) outlasts line 1 (singer B).
-    DUET_CUES = [(0.0, 6.0), (1.0, 3.0), (10.0, 12.0)]
-
-    def test_a_duet_sections_end_follows_its_latest_ending_line(self):
-        (first, _) = segment_by_gaps(self.DUET_CUES, duration=13.0)
-        assert first.t1 == 6.75
-
-    def test_a_duet_hold_is_measured_from_the_line_still_singing(self):
-        env = _env(13.0, [(0.3, 8.0), (10.2, 12.0)])
-        (first, _) = segment_by_gaps(self.DUET_CUES, duration=13.0, env=env)
-        assert first.t1 == pytest.approx(8.75, abs=0.03)
-        assert first.measured_end
-
-    def test_without_an_envelope_nothing_is_measured(self):
-        sections = segment_by_gaps(self.HOLD_CUES, duration=14.0)
-        assert not any(s.measured_end for s in sections)
 
 
 class TestSplitSectionToLines:
@@ -653,33 +551,6 @@ class TestPartialLines:
         objs.append(_line(4, text, *words))
         return objs, cues, lines
 
-    def test_a_section_end_tail_is_realigned_out_to_the_sections_end(self):
-        objs, cues, lines = self._song(("ee", 8.0, 8.3), ("ff", 8.4, 8.8))
-        calls = []
-
-        def realign(lid, t0, t1):
-            calls.append((lid, t0, t1))
-            return _words(("ee", 8.0, 8.3), ("ff", 8.4, 8.8), ("gg", 9.8, 10.6))
-
-        sections = [Section(0, 4, 0.0, 11.0)]  # its end placed out at 11.0 by the volume
-        out, stats = repace_bad_lines(objs, cues, lines, lines, realign=realign, sections=sections)
-        assert calls == [(4, 7.25, 11.0)]  # the section's end is already padded
-        assert out[4]["source"] == SOURCE_REALIGN
-        assert [w["word"] for w in out[4]["words"]] == ["ee", "ff", "gg"]
-        assert stats["n_realigned"] == 1 and stats["n_guessed_words"] == 0
-
-    def test_a_line_inside_its_section_is_realigned_over_its_cue_only(self):
-        objs, cues, lines = self._song(("ee", 8.0, 8.3), ("ff", 8.4, 8.8))
-        calls = []
-
-        def realign(lid, t0, t1):
-            calls.append((lid, t0, t1))
-            return None
-
-        sections = [Section(0, 5, 0.0, 14.0)]
-        repace_bad_lines(objs, cues, lines, lines, realign=realign, sections=sections)
-        assert calls == [(4, 7.25, 9.75)]
-
     def test_a_realign_timing_fewer_words_keeps_the_line_and_guesses_the_rest(self):
         objs, cues, lines = self._song(
             ("ee", 8.0, 8.3), ("ff", 8.4, 8.7), ("gg", 8.8, 9.1), text="ee ff gg hh"
@@ -712,11 +583,12 @@ class TestPartialLines:
         _ee, ff, gg = out[4]["words"]
         assert (ff["start"], gg["start"], gg["end"]) == pytest.approx((8.3, 8.5, 8.7))
 
-    def test_a_guessed_tail_ends_by_the_sections_end(self):
-        objs, cues, lines = self._song(("ee", 8.0, 8.3), text="ee ff gg")
-        sections = [Section(0, 4, 0.0, 8.5)]
-        out, _stats = repace_bad_lines(objs, cues, lines, lines, sections=sections)
-        assert out[4]["end"] == pytest.approx(8.5)
+    def test_a_guessed_tail_ends_by_the_lines_window(self):
+        # Cue 8.0-8.4: its window ends a pad after, at 9.15, short of the tail's 9.5.
+        objs, cues, lines = self._song(("ee", 8.0, 8.3), text="ee ff gg hh ii")
+        cues[4] = (8.0, 8.4)
+        out, _stats = repace_bad_lines(objs, cues, lines, lines)
+        assert out[4]["end"] == pytest.approx(9.15)
 
     def test_a_guessed_word_is_capped_at_the_longest_word(self):
         objs, cues, lines = self._song(("ee", 8.0, 9.0), text="ee ff")
@@ -773,15 +645,141 @@ class TestPartialLines:
         out, _stats = repace_bad_lines(objs, cues, lines, lines)
         assert out[4]["words"][1]["word"] == "Ff,"
 
-    def test_an_unplaced_section_end_line_is_filled_over_its_cue_not_the_section(self):
+    def test_an_unplaced_line_is_filled_over_its_cue_not_its_window(self):
         objs, cues, lines = self._song(text="ee ff")
-        sections = [Section(0, 4, 0.0, 11.0)]
-        out, stats = repace_bad_lines(
-            objs, cues, lines, lines, realign=lambda *_: None, sections=sections
-        )
+        env = _env(14.0, [(8.3, 10.6)])
+        out, stats = repace_bad_lines(objs, cues, lines, lines, realign=lambda *_: None, env=env)
         assert out[4]["source"] == SOURCE_FILL
         assert (out[4]["start"], out[4]["end"]) == pytest.approx((8.0, 9.0))
         assert stats["n_guessed_words"] == 0
+
+    def test_a_first_word_dragged_into_the_lead_in_is_cut_to_the_bound(self):
+        objs, cues, lines = self._song(("ee", 8.0, 8.3), ("ff", 8.4, 8.8))
+        dragged = _words(("ee", 7.0, 7.9), ("ff", 8.0, 8.4), ("gg", 8.5, 9.0))
+        out, stats = repace_bad_lines(objs, cues, lines, lines, realign=lambda *_: dragged)
+        assert out[4]["source"] == SOURCE_REALIGN
+        first = out[4]["words"][0]
+        assert (first["start"], first["end"]) == pytest.approx((7.5, 7.9))  # cue start - slack
+        assert out[4]["start"] == pytest.approx(7.5)
+        assert stats["n_realigned"] == 1
+
+    def test_a_first_word_with_too_little_left_past_the_bound_is_still_rejected(self):
+        objs, cues, lines = self._song(("ee", 8.0, 8.3), ("ff", 8.4, 8.8))
+        before_the_line = _words(("ee", 7.0, 7.52), ("ff", 8.0, 8.4), ("gg", 8.5, 9.0))
+        out, stats = repace_bad_lines(objs, cues, lines, lines, realign=lambda *_: before_the_line)
+        assert out[4]["source"] == SOURCE
+        assert stats["n_realigned"] == 0
+
+    def test_a_last_word_past_the_end_bound_is_still_rejected(self):
+        objs, cues, lines = self._song(("ee", 8.0, 8.3), ("ff", 8.4, 8.8))
+        parked = _words(("ee", 8.0, 8.3), ("ff", 8.4, 8.8), ("gg", 9.6, 10.2))
+        out, stats = repace_bad_lines(objs, cues, lines, lines, realign=lambda *_: parked)
+        assert out[4]["source"] == SOURCE
+        assert stats["n_realigned"] == 0 and stats["n_guessed_words"] == 1
+
+
+class TestRescueWindow:
+    """A line missing words is re-aligned over a window out to where its own singing stops."""
+
+    def _song(self, next_cue: tuple[float, float] | None = None):
+        """Four anchors, line 4 ("ee ff gg", cue 8-9) timed only in part, and optionally a
+        clean line 5 after it."""
+        objs, cues, lines = _anchor_lines(4)
+        cues.append((8.0, 9.0))
+        lines.append("ee ff gg")
+        objs.append(_line(4, "ee ff gg", ("ee", 8.0, 8.3), ("ff", 8.4, 8.8)))
+        if next_cue is not None:
+            c0, _c1 = next_cue
+            cues.append(next_cue)
+            lines.append("hh ii")
+            objs.append(_line(5, "hh ii", ("hh", c0 + 0.1, c0 + 0.4), ("ii", c0 + 0.5, c0 + 0.9)))
+        return objs, cues, lines
+
+    @staticmethod
+    def _window(song, env=None, duration=None) -> tuple[float, float]:
+        """The ``(w0, w1)`` the re-align of line 4 is handed."""
+        calls = []
+
+        def realign(lid, w0, w1):
+            calls.append((lid, w0, w1))
+            return None
+
+        objs, cues, lines = song
+        repace_bad_lines(objs, cues, lines, lines, realign=realign, env=env, duration=duration)
+        assert [lid for lid, *_ in calls] == [4]
+        return calls[0][1:]
+
+    def test_without_an_envelope_the_window_is_the_cue_padded(self):
+        assert self._window(self._song((14.0, 15.0))) == (7.25, 9.75)
+
+    def test_a_hold_into_silence_ends_the_window_a_pad_into_the_silence(self):
+        env = _env(16.0, [(8.3, 10.6), (14.2, 15.0)])
+        window = self._window(self._song((14.0, 15.0)), env)
+        assert window == pytest.approx((7.25, 11.35), abs=0.03)  # the hold's end + the pad
+
+    def test_singing_straight_into_the_next_caption_ends_the_window_at_its_start(self):
+        # The 0.2 s breath at 9.8 is no release, so the line sang up to the next cue.
+        env = _env(14.0, [(8.3, 9.8), (10.0, 12.0)])
+        window = self._window(self._song((10.0, 12.0)), env)
+        assert window == pytest.approx((7.25, 10.0), abs=0.03)
+
+    def test_a_pause_inside_the_held_line_is_not_its_end(self):
+        env = _env(16.0, [(8.3, 9.3), (9.8, 10.6), (14.2, 15.0)])  # a 0.5 s pause
+        window = self._window(self._song((14.0, 15.0)), env)
+        assert window == pytest.approx((7.25, 11.35), abs=0.03)
+
+    @pytest.mark.parametrize(
+        "sung",
+        [
+            [(8.3, 13.5), (20.2, 21.0)],  # stops 4.5 s past the caption
+            [(8.3, 20.0)],  # never stops; the next cue is 11 s on
+        ],
+    )
+    def test_singing_on_past_the_hold_cap_keeps_the_caption_window(self, sung):
+        window = self._window(self._song((20.0, 21.0)), _env(22.0, sung))
+        assert window == (7.25, 9.75)
+
+    def test_a_line_that_stopped_before_its_caption_ended_keeps_the_caption_window(self):
+        env = _env(16.0, [(8.3, 8.6), (14.2, 15.0)])
+        assert self._window(self._song((14.0, 15.0)), env) == (7.25, 9.75)
+
+    def test_a_silent_envelope_has_no_singing_to_measure(self):
+        assert self._window(self._song((14.0, 15.0)), _env(16.0, [])) == (7.25, 9.75)
+
+    def test_an_envelope_ending_before_the_next_cue_falls_back(self):
+        env = _env(10.0, [(8.3, 10.0)])
+        assert self._window(self._song((14.0, 15.0)), env) == (7.25, 9.75)
+
+    def test_a_next_line_starting_before_this_one_ends_leaves_nothing_to_measure(self):
+        env = _env(14.0, [(8.3, 12.0)])
+        assert self._window(self._song((8.2, 12.0)), env) == (7.25, 9.75)
+
+    def test_the_last_line_reaches_a_long_final_hold(self):
+        # Past the 4 s hold cap and through a 1.2 s pause: nothing follows to take the audio.
+        env = _env(20.0, [(8.3, 12.0), (13.2, 15.0)])
+        window = self._window(self._song(), env, duration=20.0)
+        assert window == pytest.approx((7.25, 15.75), abs=0.03)
+
+    def test_a_final_hold_to_the_end_of_the_audio_stops_at_the_duration(self):
+        env = _env(12.0, [(8.3, 12.0)])
+        assert self._window(self._song(), env, duration=12.0) == pytest.approx((7.25, 12.0))
+
+    def test_a_held_tail_inside_the_window_is_kept(self):
+        env = _env(16.0, [(8.3, 10.6), (14.2, 15.0)])
+        objs, cues, lines = self._song((14.0, 15.0))
+        held = _words(("ee", 8.0, 8.3), ("ff", 8.4, 8.8), ("gg", 9.8, 10.6))
+        out, stats = repace_bad_lines(objs, cues, lines, lines, realign=lambda *_: held, env=env)
+        assert out[4]["source"] == SOURCE_REALIGN
+        assert [w["word"] for w in out[4]["words"]] == ["ee", "ff", "gg"]
+        assert stats["n_realigned"] == 1 and stats["n_guessed_words"] == 0
+
+    def test_the_same_tail_overruns_the_caption_window_without_an_envelope(self):
+        # The check aims at the window the slice was cut to, so only a measured hold passes.
+        objs, cues, lines = self._song((14.0, 15.0))
+        held = _words(("ee", 8.0, 8.3), ("ff", 8.4, 8.8), ("gg", 9.8, 10.6))
+        out, stats = repace_bad_lines(objs, cues, lines, lines, realign=lambda *_: held)
+        assert out[4]["source"] == SOURCE
+        assert stats["n_realigned"] == 0 and stats["n_guessed_words"] == 1
 
 
 class TestFitOffset:
@@ -852,17 +850,17 @@ class TestAlignSong:
         # One section pass, no per-line rescue; label names the section.
         assert len(aligner.calls) == 1
         assert "section" in aligner.calls[0][3]
-        assert aligner.calls[0][1] == 7.75  # the caption tail: no envelope given
-        assert "edges" not in stats
+        assert aligner.calls[0][1] == 7.75  # the caption tail
 
-    def test_an_envelope_widens_the_window_to_the_held_tail(self):
-        # The last line is held to 9.0, two seconds past its cue.
+    def test_an_envelope_leaves_the_section_window_on_the_caption(self):
+        # The last line is held to 9.0, two seconds past its cue: only a rescue follows it.
         aligner = _stub_aligner(lambda *_: _on_cue_words())
         env = _env(12.0, [(0.0, 9.0)])
         _objs, stats = align_song(_SONG_CUES, _SONG_LINES, _SONG_LINES, 12.0, aligner, env=env)
 
-        assert aligner.calls[0][1] == pytest.approx(9.75, abs=0.03)
-        assert stats["edges"] == {"n": 1, "widened": 1, "fallback": 0}
+        assert len(aligner.calls) == 1
+        assert aligner.calls[0][1] == 7.75
+        assert "edges" not in stats
 
     def test_a_tail_the_section_align_missed_is_realigned_out_to_the_held_note(self):
         def words_for(t0, t1, text, label):
@@ -874,7 +872,9 @@ class TestAlignSong:
         env = _env(12.0, [(0.0, 9.0)])
         objs, stats = align_song(_SONG_CUES, _SONG_LINES, _SONG_LINES, 12.0, aligner, env=env)
 
-        # Out to the section's end (9.75), which is already padded: no second pad.
+        # The section ended at its caption (7.75); the line's own window runs out to the
+        # note's end plus the pad.
+        assert aligner.calls[0][1] == 7.75
         assert aligner.calls[1][:2] == pytest.approx((5.25, 9.75), abs=0.03)
         assert objs[3]["source"] == SOURCE_REALIGN
         assert objs[3]["end"] == pytest.approx(9.4)

@@ -610,7 +610,6 @@ class TestCueAlignRoute:
         assert decode.call_args.args[0] == ctx.artifacts["aligned_stem"]
         assert align.call_args.kwargs["env"] is env
         assert snap.call_args.kwargs["env"] is env
-        assert _read_bundle(ctx)["joint_stats"]["edges"]["n"] == 1
 
     def test_a_failed_decode_keeps_the_caption_windows(self, tmp_path, monkeypatch):
         stage, ctx, _worker, la_mod = self._make_srt(tmp_path, monkeypatch)
@@ -622,7 +621,6 @@ class TestCueAlignRoute:
 
         assert align.call_args.kwargs["env"] is None
         assert (ctx.song_path.parent / "karaoke" / f"{ctx.song_path.stem}.ass").exists()
-        assert "edges" not in _read_bundle(ctx)["joint_stats"]
 
     def test_after_a_dereverb_retry_the_bundle_holds_the_dry_stems_words(
         self, tmp_path, monkeypatch
