@@ -25,6 +25,14 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+# Additive since v11 (no bump -- additions only):
+#   - cue_inputs: cue-align runs only (None on the other routes, absent from
+#     earlier bundles). What the per-line rescue consumed, so it and the edge
+#     snaps re-run offline without whisper: ``sections``, the line objects
+#     (line_id/text/words/start/end/source) the section align produced before
+#     any rescue; ``realigns``, one {line_id, w0, w1, words} per one-line
+#     re-align in call order, ``words`` the aligner's raw result at absolute
+#     song time, null when the align failed.
 # v11: interior-pause end repair (plans/edge-snap-coverage-accuracy.md
 #     Phase 6). A milestone bump (run-affecting) -- no field renamed or
 #     removed, but output_line_timings move, so regen treats v10 bundles as
@@ -181,6 +189,7 @@ def build_bundle(
     output_line_timings: list[dict],
     ground_truth_refs: dict[str, Any],
     joint_stats: dict | None = None,
+    cue_inputs: dict | None = None,
     transcribe_words: list[dict] | None = None,
     media_duration_s: float | None = None,
 ) -> dict[str, Any]:
@@ -199,6 +208,7 @@ def build_bundle(
         "words": words or [],
         "words_source": words_source,
         "joint_stats": joint_stats,
+        "cue_inputs": cue_inputs,
         "transcribe_words": transcribe_words,
         "output_summary": output_summary,
         "output_line_timings": output_line_timings,

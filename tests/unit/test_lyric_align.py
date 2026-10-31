@@ -571,6 +571,35 @@ class TestCueAlignRoute:
         assert ass_path.read_text(encoding="utf-8").count("Dialogue:") == 2
         assert ctx.artifacts["lyric_method"] == "srt+cue_align"
 
+    def test_the_bundle_keeps_the_section_words_and_the_realigns(self, tmp_path, monkeypatch):
+        """What the per-line rescue consumed, so it re-runs offline without whisper."""
+        stage, ctx, worker, _ = self._make_srt(tmp_path, monkeypatch)
+        section = [
+            {"word": "glowing", "start": 0.75, "end": 1.15},
+            {"word": "river", "start": 1.75, "end": 2.15},
+            {"word": "phantom", "start": 3.75, "end": 4.15},
+        ]  # "parade" untimed: line 1 is rescued by a one-line align
+        line = [
+            {"word": "phantom", "start": 0.75, "end": 1.15},
+            {"word": "parade", "start": 1.75, "end": 2.15},
+        ]
+        worker.align_refine.side_effect = [section, line]
+
+        stage.run(ctx)
+
+        inputs = _read_bundle(ctx)["cue_inputs"]
+        assert [[w["word"] for w in o["words"]] for o in inputs["sections"]] == [
+            ["glowing", "river"],
+            ["phantom"],
+        ]
+        (realign,) = inputs["realigns"]
+        assert realign["line_id"] == 1
+        assert realign["w1"] > realign["w0"]
+        assert [(w["word"], w["start"]) for w in realign["words"]] == [
+            ("phantom", pytest.approx(13.0)),
+            ("parade", pytest.approx(14.0)),
+        ]
+
     def test_srt_shares_dereverb_gate(self, tmp_path, monkeypatch):
         # Gate transcribes once even though the cue route never uses the words.
         stage, ctx, worker, _ = self._make_srt(tmp_path, monkeypatch)
@@ -678,6 +707,13 @@ class TestEvidenceVetoWiring:
         assert veto.call_args.args[1] is env
         assert snap.call_args.kwargs["env"] is env
         assert _read_bundle(ctx)["joint_stats"]["evidence_veto"] == {"n_vetoed": 0}
+
+    def test_the_joint_route_has_no_cue_inputs(self, tmp_path):
+        stage, ctx, _ = _make_stage_and_ctx(tmp_path)
+
+        stage.run(ctx)
+
+        assert _read_bundle(ctx)["cue_inputs"] is None
 
     def test_joint_route_records_bail_when_decode_fails(self, tmp_path, monkeypatch):
         import pikaraoke.pipeline.stages.lyric_align as la_mod

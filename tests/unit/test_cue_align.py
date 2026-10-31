@@ -992,7 +992,7 @@ class TestAlignSong:
 
     def test_clean_song_uses_aligned_words_one_pass(self):
         aligner = _stub_aligner(lambda *_: _on_cue_words())
-        objs, stats = align_song(_SONG_CUES, _SONG_LINES, _SONG_LINES, 8.0, aligner)
+        objs, stats, _inputs = align_song(_SONG_CUES, _SONG_LINES, _SONG_LINES, 8.0, aligner)
 
         assert [o["line_id"] for o in objs] == [0, 1, 2, 3]
         assert all(o["source"] == SOURCE for o in objs)
@@ -1009,7 +1009,9 @@ class TestAlignSong:
         # The last line is held to 9.0, two seconds past its cue: only a rescue follows it.
         aligner = _stub_aligner(lambda *_: _on_cue_words())
         env = _env(12.0, [(0.0, 9.0)])
-        _objs, stats = align_song(_SONG_CUES, _SONG_LINES, _SONG_LINES, 12.0, aligner, env=env)
+        _objs, stats, _inputs = align_song(
+            _SONG_CUES, _SONG_LINES, _SONG_LINES, 12.0, aligner, env=env
+        )
 
         assert len(aligner.calls) == 1
         assert aligner.calls[0][1] == 7.75
@@ -1023,7 +1025,9 @@ class TestAlignSong:
 
         aligner = _stub_aligner(words_for)
         env = _env(12.0, [(0.0, 9.0)])
-        objs, stats = align_song(_SONG_CUES, _SONG_LINES, _SONG_LINES, 12.0, aligner, env=env)
+        objs, stats, _inputs = align_song(
+            _SONG_CUES, _SONG_LINES, _SONG_LINES, 12.0, aligner, env=env
+        )
 
         # The section ended at its caption (7.75); the line's own window runs out to the
         # note's end plus the pad.
@@ -1033,11 +1037,58 @@ class TestAlignSong:
         assert objs[3]["end"] == pytest.approx(9.4)
         assert stats["repace"]["n_realigned"] == 1
 
+    def test_the_rescues_inputs_come_back_with_the_song(self):
+        held = _words(("a", 6.0, 6.4), ("a", 8.5, 9.4))
+
+        def words_for(t0, t1, text, label):
+            return _on_cue_words()[:-1] if "section" in label else held
+
+        aligner = _stub_aligner(words_for)
+        env = _env(12.0, [(0.0, 9.0)])
+        objs, _stats, inputs = align_song(
+            _SONG_CUES, _SONG_LINES, _SONG_LINES, 12.0, aligner, env=env
+        )
+
+        # The section's lines as they came out of the align: line 3 still a word short.
+        assert [o["line_id"] for o in inputs["sections"]] == [0, 1, 2, 3]
+        assert [len(o["words"]) for o in inputs["sections"]] == [2, 2, 2, 1]
+        assert all(o["source"] == SOURCE for o in inputs["sections"])
+        assert objs[3]["source"] == SOURCE_REALIGN and len(objs[3]["words"]) == 2
+        (realign,) = inputs["realigns"]
+        assert realign["line_id"] == 3
+        assert (realign["w0"], realign["w1"]) == aligner.calls[1][:2]
+        assert realign["words"] == held
+
+    def test_a_failed_realign_is_recorded_as_none(self):
+        aligner = _stub_aligner(lambda *_: None)
+        _objs, _stats, inputs = align_song(_SONG_CUES, _SONG_LINES, _SONG_LINES, 8.0, aligner)
+
+        assert [r["line_id"] for r in inputs["realigns"]] == [0, 1, 2, 3]
+        assert all(r["words"] is None for r in inputs["realigns"])
+        assert [o["words"] for o in inputs["sections"]] == [[], [], [], []]
+
+    def test_the_returned_inputs_are_copies(self):
+        held = _words(("a", 6.0, 6.4), ("a", 8.5, 9.4))
+
+        def words_for(t0, t1, text, label):
+            return _on_cue_words()[:-1] if "section" in label else held
+
+        aligner = _stub_aligner(words_for)
+        env = _env(12.0, [(0.0, 9.0)])
+        objs, _stats, inputs = align_song(
+            _SONG_CUES, _SONG_LINES, _SONG_LINES, 12.0, aligner, env=env
+        )
+        objs[0]["words"][0]["start"] = 99.0  # a caller editing its lines must not change the record
+        held[0]["start"] = 99.0
+
+        assert inputs["sections"][0]["words"][0]["start"] == 0.0
+        assert inputs["realigns"][0]["words"][0]["start"] == 6.0
+
     def test_large_display_lead_triggers_resection(self):
         # Aligner reports every line ~1.5 s late (> SECTION_PAD_S): the driver
         # re-sections once on offset-shifted cues, after which the words match.
         aligner = _stub_aligner(lambda *_: _on_cue_words(shift=1.5))
-        objs, stats = align_song(_SONG_CUES, _SONG_LINES, _SONG_LINES, 12.0, aligner)
+        objs, stats, _inputs = align_song(_SONG_CUES, _SONG_LINES, _SONG_LINES, 12.0, aligner)
 
         assert stats["resectioned"] is True
         assert stats["offset_s"] == pytest.approx(1.5, abs=0.05)
@@ -1049,7 +1100,7 @@ class TestAlignSong:
         # Aligner can place nothing: every line is rescued by a per-line realign
         # (also None) and then filled from its cue span.
         aligner = _stub_aligner(lambda *_: None)
-        objs, stats = align_song(_SONG_CUES, _SONG_LINES, _SONG_LINES, 8.0, aligner)
+        objs, stats, _inputs = align_song(_SONG_CUES, _SONG_LINES, _SONG_LINES, 8.0, aligner)
 
         assert all(o["source"] == SOURCE_FILL for o in objs)
         assert stats["repace"]["n_repaced"] == 4
@@ -1061,7 +1112,7 @@ class TestAlignSong:
         # duration=None (stem duration unreadable) must not crash; the fill
         # windows simply lose their audio-end clamp.
         aligner = _stub_aligner(lambda *_: None)
-        objs, stats = align_song(_SONG_CUES, _SONG_LINES, _SONG_LINES, None, aligner)
+        objs, stats, _inputs = align_song(_SONG_CUES, _SONG_LINES, _SONG_LINES, None, aligner)
 
         assert [o["line_id"] for o in objs] == [0, 1, 2, 3]
         assert all(o["source"] == SOURCE_FILL for o in objs)
