@@ -640,6 +640,21 @@ class TestPartialLines:
         assert (ee["start"], ee["end"]) == pytest.approx((8.2, 8.4))
         assert (ff["start"], ff["end"]) == pytest.approx((8.4, 8.6))
 
+    def test_a_repeated_phrase_missing_its_tail_is_guessed_after_the_timed_words(self):
+        # "no more" twice, the second pair untimed, and the timed pair late in the cue.
+        # Matched by expected time the timed words take the second pair's tokens, and the
+        # guesses fill the first pair ahead of them; in order, they are the first pair.
+        objs, cues, lines = self._song(
+            ("no", 8.7, 8.8), ("more,", 8.9, 9.0), text="no more, no more"
+        )
+        out, stats = repace_bad_lines(objs, cues, lines, lines)
+        words = out[4]["words"]
+        assert [w["word"] for w in words] == ["no", "more,", "no", "more"]
+        assert [(w["start"], w["end"]) for w in words[:2]] == [(8.7, 8.8), (8.9, 9.0)]
+        assert words[2]["start"] == pytest.approx(9.0)
+        assert words[3]["end"] == pytest.approx(9.2)
+        assert stats["n_guessed_words"] == 2
+
     def test_guessed_words_keep_the_lyrics_own_spelling(self):
         objs, cues, lines = self._song(("ee", 8.0, 8.3), text="ee Ff,")
         out, _stats = repace_bad_lines(objs, cues, lines, lines)
