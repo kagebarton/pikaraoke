@@ -166,8 +166,10 @@ class Section:
     t0: float
     t1: float
     # t1 was measured from the vocal volume (it is never earlier than the caption
-    # gap's). Left out of equality: two windows with the same edges are the same window.
+    # gap's), and whether that moved it later. Left out of equality: two windows with
+    # the same edges are the same window.
     measured_end: bool = field(default=False, compare=False)
+    widened_end: bool = field(default=False, compare=False)
 
     @property
     def line_ids(self) -> range:
@@ -331,7 +333,8 @@ def segment_by_gaps(
     line's singing stop (:func:`_volume_end`, :func:`_volume_tail`), so a note
     held past its caption stays inside its window. An end never moves earlier, so the
     window may overlap the next one where the earlier line is still singing.
-    :attr:`Section.measured_end` says which ends ``env`` could measure.
+    :attr:`Section.measured_end` says which ends ``env`` could measure, and
+    :attr:`Section.widened_end` which it moved.
     """
     if not cue_spans:
         return []
@@ -362,9 +365,19 @@ def segment_by_gaps(
             t1 = end + min(pad_s, max(0.0, (cue_spans[hi + 1][0] - end) / 2))
             if env is not None:
                 measured = _volume_end(env, last, cue_spans[hi + 1], pad_s)
+        caption_t1 = round(t1, 3)
         if measured is not None:
             t1 = max(t1, measured)
-        sections.append(Section(lo, hi, round(max(0.0, t0), 3), round(t1, 3), measured is not None))
+        sections.append(
+            Section(
+                lo,
+                hi,
+                round(max(0.0, t0), 3),
+                round(t1, 3),
+                measured_end=measured is not None,
+                widened_end=round(t1, 3) > caption_t1,
+            )
+        )
     return sections
 
 
@@ -940,10 +953,9 @@ def align_song(
         "repace": repace_stats,
     }
     if env is not None:
-        caption = segment_by_gaps(spans, duration=duration)
         stats["edges"] = {
             "n": len(sections),
-            "widened": sum(s.t1 > c.t1 for s, c in zip(sections, caption)),
+            "widened": sum(s.widened_end for s in sections),
             "fallback": sum(not s.measured_end for s in sections),
         }
         logger.info(
