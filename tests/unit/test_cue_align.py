@@ -701,6 +701,109 @@ class TestPartialLines:
         assert stats["n_realigned"] == 0 and stats["n_guessed_words"] == 1
 
 
+class TestCrammedLines:
+    """A word for every token is not enough: zero-length words count as missing."""
+
+    CRAMMED = (("ee", 8.0, 8.3), ("ff", 8.3, 8.3), ("gg", 8.3, 8.3), ("hh", 8.3, 8.8))
+    TIMED = (("ee", 8.0, 8.3), ("ff", 8.3, 8.5), ("gg", 8.5, 8.7), ("hh", 8.7, 8.9))
+
+    def _song(self, *words: tuple[str, float, float]):
+        """Four anchors plus line 4 (cue 8-9, "ee ff gg hh") with ``words``."""
+        objs, cues, lines = _anchor_lines(4)
+        cues.append((8.0, 9.0))
+        lines.append("ee ff gg hh")
+        objs.append(_line(4, "ee ff gg hh", *words))
+        return objs, cues, lines
+
+    def test_a_line_with_zero_length_words_asks_a_realign_and_keeps_one_that_times_more(self):
+        objs, cues, lines = self._song(*self.CRAMMED)
+        calls = []
+
+        def realign(lid, w0, w1):
+            calls.append(lid)
+            return _words(*self.TIMED)
+
+        out, stats = repace_bad_lines(objs, cues, lines, lines, realign=realign)
+        assert calls == [4]
+        assert out[4]["source"] == SOURCE_REALIGN
+        assert [(w["start"], w["end"]) for w in out[4]["words"]] == [
+            (8.0, 8.3),
+            (8.3, 8.5),
+            (8.5, 8.7),
+            (8.7, 8.9),
+        ]
+        assert stats["n_realigned"] == 1 and stats["crammed_line_ids"] == [4]
+
+    def test_it_keeps_its_own_words_when_the_realign_times_no_more(self):
+        objs, cues, lines = self._song(*self.CRAMMED)
+        out, stats = repace_bad_lines(
+            objs, cues, lines, lines, realign=lambda *_: _words(*self.CRAMMED)
+        )
+        assert out[4]["source"] == SOURCE
+        assert [(w["start"], w["end"]) for w in out[4]["words"]] == [
+            (8.0, 8.3),
+            (8.3, 8.3),
+            (8.3, 8.3),
+            (8.3, 8.8),
+        ]
+        assert stats["n_realigned"] == 0 and stats["crammed_line_ids"] == [4]
+        assert stats["n_guessed_words"] == 0 and stats["n_repaced"] == 0
+
+    def test_a_line_with_every_word_timed_asks_nothing(self):
+        objs, cues, lines = self._song(*self.TIMED)
+
+        def realign(lid, w0, w1):
+            raise AssertionError("no re-align expected")
+
+        out, stats = repace_bad_lines(objs, cues, lines, lines, realign=realign)
+        assert out[4]["source"] == SOURCE
+        assert stats["crammed_line_ids"] == [] and stats["n_windows"] == 0
+
+    def test_only_the_line_with_a_word_for_every_token_is_crammed(self):
+        objs, cues, lines = self._song(*self.CRAMMED)
+        cues.append((10.0, 11.0))
+        lines.append("ii jj")
+        objs.append(_line(5, "ii jj", ("ii", 10.0, 10.3)))  # a word short, none zero-length
+        _out, stats = repace_bad_lines(objs, cues, lines, lines, realign=lambda *_: None)
+        assert stats["crammed_line_ids"] == [4]
+        assert stats["guessed_word_line_ids"] == [5]
+
+
+class TestStartAfterPrevious:
+    """A re-aligned first word may not start while the previous line's last word still sounds."""
+
+    def _song(self, *realigned: tuple[str, float, float]):
+        """Line 3's last word ends at 8.2; line 4 (cue 8-9, "ee ff gg") has only "ff" timed.
+        Returns the rescue's output for ``realign`` answering with ``realigned``."""
+        objs, cues, lines = _anchor_lines(3)
+        cues.append((6.0, 7.0))
+        lines.append("bb cc")
+        objs.append(_line(3, "bb cc", ("bb", 6.0, 6.3), ("cc", 7.0, 8.2)))
+        cues.append((8.0, 9.0))
+        lines.append("ee ff gg")
+        objs.append(_line(4, "ee ff gg", ("ff", 8.5, 8.7)))
+        return repace_bad_lines(objs, cues, lines, lines, realign=lambda *_: _words(*realigned))
+
+    def test_a_first_word_on_the_previous_lines_last_word_starts_where_it_ends(self):
+        out, stats = self._song(("ee", 8.0, 8.5), ("ff", 8.5, 8.7), ("gg", 8.7, 8.9))
+        assert out[4]["source"] == SOURCE_REALIGN and stats["n_realigned"] == 1
+        first = out[4]["words"][0]
+        assert (first["start"], first["end"]) == pytest.approx((8.2, 8.5))
+        assert out[4]["start"] == pytest.approx(8.2)
+
+    def test_with_too_little_of_the_word_left_the_line_keeps_its_own_words(self):
+        out, stats = self._song(("ee", 8.0, 8.22), ("ff", 8.5, 8.7), ("gg", 8.7, 8.9))
+        assert out[4]["source"] == SOURCE and stats["n_realigned"] == 0
+        ff = next(w for w in out[4]["words"] if w["word"] == "ff")
+        assert (ff["start"], ff["end"]) == (8.5, 8.7)
+        assert [w["word"] for w in out[4]["words"]] == ["ee", "ff", "gg"]  # the rest guessed
+
+    def test_a_first_word_after_the_previous_lines_end_is_untouched(self):
+        out, stats = self._song(("ee", 8.3, 8.5), ("ff", 8.5, 8.7), ("gg", 8.7, 8.9))
+        assert out[4]["source"] == SOURCE_REALIGN and stats["n_realigned"] == 1
+        assert out[4]["words"][0]["start"] == 8.3
+
+
 class TestRescueWindow:
     """A line missing words is re-aligned over a window out to where its own singing stops."""
 
