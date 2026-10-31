@@ -613,7 +613,7 @@ class LyricAlignStage(BaseStage):
             logger.warning("[%s] cue-align: vocal duration unreadable; cue-pacing", self.name)
             duration = None
         # None keeps the caption windows for the line rescue; the decode logs why.
-        env = decode_env_db(vocal_wav, "cue-align edges")
+        env = decode_env_db(vocal_wav, "cue-align rescue windows")
 
         slice_counter = itertools.count()
 

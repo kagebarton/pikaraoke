@@ -499,8 +499,8 @@ def repace_bad_lines(
     never degrade a well-aligned line.
 
     Finally every word a kept line still lacks is shown with guessed timing
-    (:func:`_with_guessed_words`) inside that line's window, so no lyric word is
-    dropped from the screen.
+    (:func:`_with_guessed_words`) inside that line's window, or out to its own words
+    where a kept line sits past it, so no lyric word is dropped from the screen.
 
     Returns ``(line_objects, stats)``. ``cue_spans`` is indexed by ``line_id``.
     """
@@ -509,10 +509,14 @@ def repace_bad_lines(
     )
     line_toks = _tokenise_lines(align_lines)
     repeat_slacks = _repeat_detection_slacks(line_toks, cue_spans)
+    # The envelope is on the audio clock, so where singing stops is searched on these.
+    audio_spans = [(c0 + offset, c1 + offset) for c0, c1 in cue_spans]
     out: list[dict] = []
     repaced: list[int] = []
     realigned: list[int] = []
     windows: dict[int, tuple[float, float]] = {}
+    widened: list[int] = []
+    unmeasured: list[int] = []
     for obj in line_objects:
         lid = obj["line_id"]
         if lid >= len(cue_spans):
@@ -538,7 +542,11 @@ def repace_bad_lines(
             t1 = duration
             if t0 >= t1:
                 t0 = max(0.0, t1 - 0.5)
-        singing_end = _singing_end(env, cue_spans, lid, pad_s, duration)
+        singing_end = _singing_end(env, audio_spans, lid, pad_s, duration)
+        if singing_end is None:
+            unmeasured.append(lid)
+        elif singing_end > t1:
+            widened.append(lid)
         aim_end = t1 if singing_end is None else max(t1, singing_end)
         w0 = max(0.0, t0 - pad_s)
         w1 = max(t1 + pad_s, aim_end)
@@ -576,11 +584,12 @@ def repace_bad_lines(
         lid = obj["line_id"]
         if lid >= len(cue_spans) or not obj["words"] or len(obj["words"]) >= len(line_toks[lid]):
             continue
-        # Guessed words stay between the neighbouring lines' words and inside the window.
+        # Guessed words stay between the neighbouring lines' words and inside the window,
+        # widened to the line's own words: a clean line is kept even off its cue.
         after = next((prev["end"] for prev in reversed(out[:i]) if prev["words"]), 0.0)
         before = next((nxt["start"] for nxt in out[i + 1 :] if nxt["words"]), float("inf"))
         w0, w1 = windows[lid]
-        after, before = max(after, w0), min(before, w1)
+        after, before = max(after, min(w0, obj["start"])), min(before, max(w1, obj["end"]))
         out[i] = _with_guessed_words(obj, line_toks[lid], after, before, max_word_dur)
         guessed[lid] = len(line_toks[lid]) - len(obj["words"])
     stats = {
@@ -591,16 +600,23 @@ def repace_bad_lines(
         "realigned_line_ids": realigned,
         "n_guessed_words": sum(guessed.values()),
         "guessed_word_line_ids": list(guessed),
+        "n_windows": len(windows),
+        "windows_widened_line_ids": widened,
+        "windows_unmeasured_line_ids": unmeasured,
     }
     logger.info(
         "cue rescue: offset=%+.2fs, %d line(s) re-aligned, %d/%d re-paced from cue, "
-        "%d word(s) guessed in %d line(s)",
+        "%d word(s) guessed in %d line(s); %d/%d window(s) widened to the singing, "
+        "%d left unmeasured",
         offset,
         len(realigned),
         len(repaced),
         len(line_objects),
         stats["n_guessed_words"],
         len(guessed),
+        len(widened),
+        len(windows),
+        len(unmeasured),
     )
     return out, stats
 
@@ -608,9 +624,10 @@ def repace_bad_lines(
 def _assign_in_order(token_norms: list[str], words: list[dict]) -> list[int | None]:
     """Index of the word timing each token: each word takes the next token with its text.
 
-    The words are a subsequence of the tokens, so in order is exact where the time match
-    (:func:`_match_words_to_tokens`) is not: it can hand a line's last word to a later
-    repeat of its token. A word no token is left for is skipped.
+    The words are a subsequence of the tokens. With a repeated token a word takes the
+    earliest repeat still free, so a line timed only on a later repeat shows that word
+    early; the time match (:func:`_match_words_to_tokens`) errs the other way, handing a
+    line's last word to a later repeat.
     """
     assign: list[int | None] = [None] * len(token_norms)
     k = 0
