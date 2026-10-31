@@ -34,13 +34,14 @@ Approach:
    (:func:`fit_offset`), each bad line gets one narrow per-line align attempt
    over its offset-corrected cue window (the injected ``realign``), and only
    if that also fails is it re-built with paced words across the window. A
-   line missing only some of its words is rescued too: the re-align replaces
-   it only if it times more of them, and any word still untimed is shown with
-   guessed timing at the line's own pace -- a lyric word is never dropped from
-   the screen. Captions often end before the singing does, so given the vocal
-   stem's envelope a rescue window runs out to where that line's singing
-   stops, and the aligner finds a held tail itself. Only bad or partial lines
-   are touched, so a sloppy offset never degrades a good one. The driver also
+   line missing only some of its words, or holding words the aligner left
+   zero-length, is rescued too: the re-align replaces it only if it times more
+   of them, and any word still missing is shown with guessed timing at the
+   line's own pace -- a lyric word is never dropped from the screen. Captions
+   often end before the singing does, so given the vocal stem's envelope a
+   rescue window runs out to where that line's singing stops, and the aligner
+   finds a held tail itself. Only bad, partial or crammed lines are touched,
+   so a sloppy offset never degrades a good one. The driver also
    re-sections the whole song on offset-shifted cues when the fitted lead
    exceeds the slice pad -- past that, every section window provably clips its
    leading words.
@@ -486,24 +487,29 @@ def repace_bad_lines(
     containment there, with slack widened to half the repeat period
     (:func:`_repeat_detection_slacks`). The display-lead offset comes from
     :func:`fit_offset` over the clean lines. A line otherwise placed but
-    missing some of its words is *partial*.
+    missing some of its words is *partial*; one with a word for every token,
+    some of them zero-length (a sweep short of *mostly* instant), is
+    *crammed*.
 
-    Each bad or partial line is rescued in two steps: ``realign(lid, w0, w1)``
-    -- an injected narrow per-line forced align over the offset-corrected
-    window padded by ``pad_s`` (clamped to ``duration``), returning
-    absolute-time words or None -- is tried first, and its result is kept
-    only if it comes back covered and *inside the window it was aimed at*
+    Each bad, partial or crammed line is rescued in two steps:
+    ``realign(lid, w0, w1)`` -- an injected narrow per-line forced align over
+    the offset-corrected window padded by ``pad_s`` (clamped to ``duration``),
+    returning absolute-time words or None -- is tried first, and its result is
+    kept only if it comes back covered and *inside the window it was aimed at*
     (:func:`_line_in_span`; tagged :data:`SOURCE_REALIGN`), and for a partial
-    line only if it times more of the words. With ``env`` (the vocal stem's
-    dB envelope) the window's end is the larger of that and where the line's
-    own singing stops (:func:`_singing_end`), and the line is aimed at the
-    same end, so a note held past the caption is inside the slice. A first
-    word the aligner dragged back before the line is cut to where the line
-    may start (:func:`_trim_lead_in`). Otherwise a bad line is rebuilt with
+    or crammed line only if it times more words (:func:`_timed_words`). With
+    ``env`` (the vocal stem's dB envelope) the window's end is the larger of
+    that and where the line's own singing stops (:func:`_singing_end`), and
+    the line is aimed at the same end, so a note held past the caption is
+    inside the slice. A first word the aligner dragged back before the line
+    is cut to where the line may start (:func:`_trim_lead_in`), and one that
+    starts on the previous line's last word is moved to its end
+    (:func:`_start_after_previous`). Otherwise a bad line is rebuilt with
     paced words across its cue window (tagged :data:`SOURCE_FILL`), clamped
-    to ``duration`` when known, and a partial line keeps the words it has.
-    Because only bad and partial lines are rewritten, a coarse offset can
-    never degrade a well-aligned line.
+    to ``duration`` when known, and a partial or crammed line keeps the words
+    it has. Because only these lines are rewritten, a coarse offset can never
+    degrade a well-aligned line. A zero-length word a rescue does not time
+    stays on screen as it is.
 
     Finally every word a kept line still lacks is shown with guessed timing
     (:func:`_with_guessed_words`) inside that line's window, or out to its own words
@@ -522,6 +528,7 @@ def repace_bad_lines(
     repaced: list[int] = []
     realigned: list[int] = []
     windows: dict[int, tuple[float, float]] = {}
+    crammed: list[int] = []
     widened: list[int] = []
     unmeasured: list[int] = []
     for obj in line_objects:
@@ -534,12 +541,14 @@ def repace_bad_lines(
             placed = _line_in_span(obj, cue_spans[lid], offset, slack=repeat_slacks[lid])
         else:
             placed = _line_is_good(obj, cue_spans[lid], offset, drift_gap_s)
-        if placed and len(obj["words"]) >= len(toks):
+        if placed and _timed_words(obj["words"]) >= len(toks):
             out.append(obj)
             continue
         if not toks:  # display-only line (no alignable tokens)
             out.append(obj)
             continue
+        if placed and len(obj["words"]) >= len(toks):
+            crammed.append(lid)
         cue_start, cue_end = cue_spans[lid]
         t0 = max(0.0, cue_start + offset)
         t1 = cue_end + offset
@@ -571,12 +580,14 @@ def repace_bad_lines(
             )
             if fixed is not None:
                 fixed = _trim_lead_in(fixed, cue_spans[lid], offset)
+                previous_end = next((prev["end"] for prev in reversed(out) if prev["words"]), None)
+                fixed = _start_after_previous(fixed, previous_end)
             # The window it was aimed at, in cue time: the check adds the offset back.
             aimed = (cue_start, max(cue_end, aim_end - offset))
             if (
                 fixed is not None
                 and _line_in_span(fixed, aimed, offset)
-                and (not placed or len(fixed["words"]) > len(obj["words"]))
+                and (not placed or _timed_words(fixed["words"]) > _timed_words(obj["words"]))
             ):
                 out.append(fixed)
                 realigned.append(lid)
@@ -607,20 +618,22 @@ def repace_bad_lines(
         "realigned_line_ids": realigned,
         "n_guessed_words": sum(guessed.values()),
         "guessed_word_line_ids": list(guessed),
+        "crammed_line_ids": crammed,
         "n_windows": len(windows),
         "windows_widened_line_ids": widened,
         "windows_unmeasured_line_ids": unmeasured,
     }
     logger.info(
         "cue rescue: offset=%+.2fs, %d line(s) re-aligned, %d/%d re-paced from cue, "
-        "%d word(s) guessed in %d line(s); %d/%d window(s) widened to the singing, "
-        "%d left unmeasured",
+        "%d word(s) guessed in %d line(s), %d crammed line(s) asked for a re-align; "
+        "%d/%d window(s) widened to the singing, %d left unmeasured",
         offset,
         len(realigned),
         len(repaced),
         len(line_objects),
         stats["n_guessed_words"],
         len(guessed),
+        len(crammed),
         len(widened),
         len(windows),
         len(unmeasured),
@@ -710,9 +723,14 @@ def _with_guessed_words(
     return _line_object(obj["line_id"], obj["text"], out, source=obj["source"])
 
 
+def _timed_words(words: list[dict]) -> int:
+    """How many of ``words`` the aligner gave at least :data:`INSTANT_WORD_DUR_S`."""
+    return sum(1 for w in words if w["end"] - w["start"] >= INSTANT_WORD_DUR_S)
+
+
 def _instant_fraction(words: list[dict]) -> float:
     """Fraction of words the aligner emitted as near-zero-duration sweeps."""
-    return sum(1 for w in words if w["end"] - w["start"] < INSTANT_WORD_DUR_S) / len(words)
+    return (len(words) - _timed_words(words)) / len(words)
 
 
 def _line_is_clean(obj: dict, drift_gap_s: float) -> bool:
@@ -772,6 +790,14 @@ def _line_in_span(
     return obj["start"] >= c0 + offset - slack and obj["end"] <= c1 + offset + slack
 
 
+def _with_first_start(obj: dict, start: float) -> dict:
+    """``obj`` with its first word starting at ``start``, keeping its end."""
+    first, *rest = obj["words"]
+    return _line_object(
+        obj["line_id"], obj["text"], [{**first, "start": start}, *rest], source=obj["source"]
+    )
+
+
 def _trim_lead_in(obj: dict, cue_span: tuple[float, float], offset: float) -> dict:
     """``obj`` with a first word dragged back before the line cut to where
     :func:`_line_in_span` lets the line start.
@@ -783,12 +809,29 @@ def _trim_lead_in(obj: dict, cue_span: tuple[float, float], offset: float) -> di
     parked past the end bound is the aligner's failure sign (:data:`PAUSE_SLACK_S`).
     """
     bound = cue_span[0] + offset - PAUSE_SLACK_S
-    first, *rest = obj["words"]
+    first = obj["words"][0]
     if first["start"] >= bound or first["end"] < bound + INSTANT_WORD_DUR_S:
         return obj
-    return _line_object(
-        obj["line_id"], obj["text"], [{**first, "start": bound}, *rest], source=obj["source"]
-    )
+    return _with_first_start(obj, bound)
+
+
+def _start_after_previous(obj: dict, previous_end: float | None) -> dict | None:
+    """``obj`` with a first word that starts on the previous line moved to
+    ``previous_end``, where that line's last word ends; None when less than
+    :data:`INSTANT_WORD_DUR_S` of the word is left after it.
+
+    The lead-in that gives the aligner context also lets a first word land on the note
+    the previous line is still holding, so two lines show the same stretch of audio. Only
+    the start moves: the word keeps its end, as in :func:`_trim_lead_in`. A word that
+    would be left without a duration is the aligner's failure sign, so the re-align is
+    not kept. No previous line (``previous_end`` None) leaves ``obj`` as it is.
+    """
+    first = obj["words"][0]
+    if previous_end is None or first["start"] >= previous_end:
+        return obj
+    if first["end"] < previous_end + INSTANT_WORD_DUR_S:
+        return None
+    return _with_first_start(obj, previous_end)
 
 
 def _repeat_detection_slacks(
