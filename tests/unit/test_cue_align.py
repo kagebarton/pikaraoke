@@ -168,7 +168,7 @@ class TestSegmentByVolume:
         env = _env(14.0, self.HOLD_SUNG)
         first, second = segment_by_gaps(self.HOLD_CUES, duration=14.0, env=env)
         assert first.t1 == pytest.approx(6.75, abs=0.03)  # the hold's end + the pad
-        assert first.measured_end
+        assert first.measured_end and first.widened_end
         # Without the envelope the caption gap ends the window at 4.75, mid-hold.
         assert segment_by_gaps(self.HOLD_CUES, duration=14.0)[0].t1 == 4.75
 
@@ -210,7 +210,7 @@ class TestSegmentByVolume:
         env = _env(14.0, [(0.3, 3.6), (9.2, 12.0)])
         sections = segment_by_gaps(self.HOLD_CUES, duration=14.0, env=env)
         assert sections == segment_by_gaps(self.HOLD_CUES, duration=14.0)
-        assert sections[0].measured_end
+        assert sections[0].measured_end and not sections[0].widened_end
 
     def test_the_song_tail_reaches_a_long_final_hold(self):
         # Past the 4 s hold cap and through a 1.2 s pause: the last line has no neighbour.
