@@ -1,6 +1,7 @@
 """Tests for the SRT cue utilities (lib/srt_cues.py)."""
 
 import pytest
+import srt
 
 from pikaraoke.lib.srt_cues import (
     clean_cue_texts,
@@ -184,6 +185,18 @@ class TestCuesToSrt:
         lines = ["Hello there", "Sing it loud", "Hello there"]
         spans = [(1.0, 2.5), (3.25, 5.0), (61.125, 63.5)]
         assert cue_spans_from_srt(cues_to_srt(lines, spans)) == (lines, spans)
+
+    def test_a_zero_length_cue_is_written_back(self):
+        lines = ["Hello there", "A blink", "Sing it loud"]
+        spans = [(1.0, 2.5), (2.5, 2.5), (3.0, 5.0)]
+        assert cue_spans_from_srt(cues_to_srt(lines, spans)) == (lines, spans)
+
+    def test_cues_out_of_start_order_keep_their_sheet_order(self):
+        lines = ["Second in time", "First in time", "Third in time"]
+        spans = [(4.0, 5.0), (1.0, 2.0), (6.0, 7.0)]
+        text = cues_to_srt(lines, spans)
+        assert cue_spans_from_srt(text) == (lines, spans)
+        assert [cue.index for cue in srt.parse(text)] == [1, 2, 3]
 
     def test_lines_and_spans_of_different_length_are_refused(self):
         with pytest.raises(ValueError):
