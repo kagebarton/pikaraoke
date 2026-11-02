@@ -632,6 +632,8 @@ Per Decision 13. Run `graphify affected` on `repace_bad_lines`, `_volume_end` an
 6. Log raw tables; give Ken `song - m:ss - line text - what changed` for every changed
    line, targets and She Used To Be Mine first; stop at GATE B.
 
+Steps 5-6 ran on 2026-11-02 (rows 55-61, blocks R55*). GATE B is Ken's.
+
 ### Phase 6: after GATE B
 
 Only on Ken's word: land on `dev` (Branches and Archive Tags in `CLAUDE.md`: copy the
@@ -750,6 +752,13 @@ whose last cue overruns the media). Never launch it unprompted.
 | 52 | 2026-11-02 | 5c | Opus. Commit `214d209` `fix(cue_align): a next singer coming in early does not take a line's release`: `_volume_end` accepts the last quiet run when it is at least `RELEASE_QUIET_S` and ends within `EDGE_SEARCH_SLACK_S` (0.5) of the next cue's start (was `2 * HOP_S`); `_quiet_runs` merges runs separated by under new `QUIET_BLIP_S` 0.1. Tests in `TestRescueWindow`: `test_a_next_singer_coming_in_early_does_not_take_the_release` (sung 8.3-10.6, 11.7-13.0, next cue 12-13: window ends 11.15), `test_a_blip_inside_the_release_does_not_split_it` (sung 8.3-10.6, 11.5-11.55, 12.0-13.0: 11.3). Mutation checks (file restored after each, `cmp` clean): tolerance back to `2 * HOP_S` -> the early-singer test fails (1); merge off -> the blip test fails (1). CPU check, scratch `window_end_check.py` (4ac1adb0 scratchpad): per line of the 10 songs, `_volume_end` at `6e863c0` vs `214d209`, envelope `decode_env_db` of the bundle's stem (`dereverb/` when `joint_stats.dereverb.succeeded`, else `vocal/`), cues from `lyrics.source_path` (`\` -> `/`) plus `joint_stats.offset_s`, pad 0.75; w1 = max(cue end + 0.75, end) | 462 lines measured, 10 ends moved, 6 change w1 (old -> new): Stronger L0 12.38 -> 12.01; All of Me L54 265.73 -> 265.62; Baby One More Time L28 148.28 -> 148.08; Castle L1 38.99 -> 36.34 (next cue 38.99), L29 151.95 -> 151.30 (next cue 151.95), L38 192.83 -> 192.73. w1 unchanged: Someone Like You L22, Baby One More Time L1, Castle L37, L42. Miss Independent, Pocahontas, Incomplete, My Heart Will Go On, She Used To Be Mine: 0 moved. `pre-commit` on the 2 files clean; `python -m pytest -q`: 3065 passed in 37.47 s (row 50: 3063) |
 | 53 | 2026-11-02 | 5c | Opus. Commit `cb4fc50` `feat(alignment_capture): cue bundles keep the spans the rescue was given`: `align_song`'s `cue_inputs` gains `spans` (`list(spans)`: the cue spans `repace_bad_lines` is given, offset-shifted when re-sectioned); docstring and the "Additive since v11" comment in `alignment_capture.py`; `SCHEMA_VERSION` stays 11. Tests: `test_the_rescues_inputs_come_back_with_the_song` asserts `spans == _SONG_CUES`; `test_large_display_lead_triggers_resection` asserts the cues shifted by 1.5 (abs 0.05). Mutation checks (restored, `cmp` clean): `list(cue_spans)` recorded -> the resection test fails (1); `spans` dropped -> both fail (2) | `pre-commit` on the 3 files clean (one docstring rewrapped by hand); `python -m pytest -q`: 3065 passed in 37.02 s |
 | 54 | 2026-11-02 | 5c | Opus. Overlap probe (CPU, read only): consecutive cue pairs whose first cue ends after the second starts, cues from each cue bundle's `lyrics.source_path`. Commit `c47882d` `fix(cue_align): a re-align is not bounded by a fill or a caption sung over it`: new `_previous_end(out, cue_spans, lid)` (the last line in `out` with words; None when its `source` is `SOURCE_FILL`, or its cue end minus `lid`'s cue start exceeds new `DUET_OVERLAP_S` 1.0) replaces the inline scan before `_start_after_previous`; `repace_bad_lines` docstring. Tests in `TestStartAfterPrevious` (`_song` takes `cue3`): `test_a_caption_sung_over_this_one_does_not_bound_it` (line 3 cue 6.0-9.5: line 4 kept from 8.0), `test_a_caption_shown_a_little_into_this_one_still_bounds_it` (cue 6.0-8.3: not kept, `source` `cue_align`), `test_a_filled_previous_line_does_not_bound_it` (line 3 no words, cue 6.0-8.4: fill `bb` 6.0-7.2, `cc` 7.2-8.4; line 4 kept from 8.0). Mutation checks (restored, `cmp` clean): fill check removed -> the fill test fails (1); overlap check removed -> the duet test fails (1); overlap threshold 0 -> the small-overlap test fails (1) | Overlaps: 10 test songs 0 pairs. Library: 155 pairs in 5 songs, min 0.106 s, median 0.107, p90 0.322, max 4.7. Be Our Guest 67 and Belle 77 (`custom`, movie subtitles; over 0.2 s: 0.21-0.32); Part of Your World 1 (3.07); A Whole New World (Mena Massoud, Naomi Scott) 4 (1.9-4.07); A Whole New World (ZAYN, Zhavia Ward) 6 (2.83-4.7). Not measured: re-aligns in the 10 songs that follow a fill (row 49's saved re-aligns gone); the rerun measures it. `pre-commit`: black reformatted `cue_align.py` on the first run, then clean (one docstring rewrapped by hand); `python -m pytest -q`: 3068 passed |
+| 55 | 2026-11-02 | 5c | Sonnet, Phase 5c step 5, HEAD `b296672` (code `c47882d`). Ken, after the hand-off said to ask him to stop the app: "App is stopped." (read as go). Dry run first (10 songs: 8 `reuse srt (from video)`, Pocahontas and She Used To Be Mine `LRCLIB timing`; GPU 6 MiB used, no `pikaraoke` process). Scratch copy of the 10 songs' `alignment_debug`, `karaoke`, `lyrics`, `subtitles` files (39 files), then the Phase 5 command plus `--song 53GIADHxVzM`, with `--yes`, no `--dry-run`, 2026-11-02 20:20:41Z to about 20:47Z. Backup the script made: `~/pikaraoke-songs/regen_backups/20261102T202041Z/{alignment_debug,karaoke,lyrics,subtitles}` (39 files; `cmp` against the scratch copy: 0 differ). Compare baselines: PRE = `regen_backups/20261031T174600Z` (9 songs) plus She Used To Be Mine from this run's backup (its pre-branch bundle and ASS, 2026-10-30); MID = this run's backup (the library as rows 29-31 left it; She Used To Be Mine = PRE); NOW = the library after the run. The compare scratch of rows 29-30 (323ba938 scratchpad) is gone; `compare.py`, `asswords.py`, `vs_heard.py`, `probe_edges.py` were recovered from that session's transcript and pointed at `pre/` and `mid/` copies (She Used To Be Mine added); new: `three.py` (summary, targets, changed, overlaps, early5, she, castle), `full.py`, `replay_now.py`, `regress.py`, `ken_list.py` (d6c3ce9f scratchpad, `rerun/`). "Heard" (the transcriber's first and last word) comes from the NOW bundle for all three states (row 30 used each state's own, so its counts differ by a line or two). Word times are the ASS's: `generate_ass` floors every word at `\kf10`, so a word the aligner left at zero length shows as 0.10 s (a genuine 0.10 s word shows the same) | Exit 0, `Done. succeeded=10 failed=0 skipped=0`. Two warnings, both as row 27: Someone Like You line 44 `slice-align failed, degrading` (`'NoneType' object has no attribute 'language'`), My Heart Will Go On `transcribe yield 22.5 wpm < 30.0` retried on the cached de-reverb stem. Pocahontas `.lrclib.srt` sha256 before and after `d56db69749f7a5d518d7182cf6acd7d55fa08e2bfbc938a0e5c63f5ce9c641dd`, identical to row 28. Stage log `cue rescue` lines in block R55 (summary) |
+| 56 | 2026-11-02 | 5c | Rescue stats and `cue_inputs` of the 10 NOW bundles; `replay_now.py stats`: `repace_bad_lines` over each bundle's `cue_inputs` (`sections`, `spans`, `realigns` answered on (line, window within 0.001 s)), envelope from the song's stem (`dereverb/` when `joint_stats.dereverb.succeeded`, else `vocal/`), `lyrics.lines`, `lyrics.align_lines`, `media_duration_s` | `cue_inputs` present in 10 of 10 bundles, `spans` as long as the line count in each, `sections` one per line, `realigns` 13 / 8 / 12 / 15 / 30 / 10 / 4 / 15 / 5 / 4 (Stronger, All of Me, Someone Like You, Baby One More Time, Miss Independent, Pocahontas, Incomplete, Castle, My Heart Will Go On, She Used To Be Mine; 116 windows). `crammed_line_ids` 8 / 3 / 7 / 12 / 21 / 6 / 3 / 12 / 0 / 3 (75 lines); realigned lines 7 / 7 / 10 / 6 / 11 / 10 / 3 / 7 / 5 / 4; guessed-word lines Stronger [37], Miss Independent [9, 71], Castle [46]. Replay, guard on: every recorded window answered (0 misses), `realigned_line_ids`, `repaced_line_ids`, `guessed_word_line_ids`, `crammed_line_ids`, `n_windows` equal to the bundle's on 10 of 10. Row 49's CPU lists equal the bundle's: Stronger realigned [6, 10, 18, 19, 26, 32, 35] guessed [37], crammed [1, 9, 10, 18, 19, 20, 24, 35]; Castle realigned [2, 10, 23, 30, 32, 36, 53] guessed [46], crammed [0, 2, 4, 10, 14, 16, 23, 24, 27, 30, 32, 53]; Incomplete realigned [2, 3, 6], crammed [2, 6, 10]. Castle L1 and L29 (row 52's moved windows) were not rescued: no window, `aligned`, words equal in PRE, MID and NOW |
+| 57 | 2026-11-02 | 5c | The 18 targets and She Used To Be Mine 0:33-0:40 (`three.py targets`, `she`; `full.py`: for a target, the model's words = the last kept re-align's words in `cue_inputs.realigns` when the line is in `realigned_line_ids`, else the line's `cue_inputs.sections` words; timed = at least `INSTANT_WORD_DUR_S` 0.05 s) | Lines short of their tokens, PRE / MID / NOW over the 10 songs: 18 / 0 / 0; lines with no words 0 / 0 / 0. Targets with a model word for every token: 14 of 18 (guessed: Stronger 37, Miss Independent 9 and 71, Castle 46); with every model word at least 0.05 s: 12 of 18 (Stronger 26 `here` 143.008-143.008 and `I` 145.348-145.348, 13 of 15; All of Me 49 `give` 233.117-233.137, 10 of 11); the replay with the guard patched out (row 59) re-aligns Stronger 37 and Castle 46 too: 16 of 18 with a model word per token. Target source NOW: re-aligned 13 (Stronger 6, 26, 32; All of Me 29, 46, 49; Someone Like You 16, 33, 49; Baby One More Time 20, 30; Pocahontas 36; Incomplete 3), re-aligned + guessed words 1 (Miss Independent 9), aligned + guessed words 3 (Stronger 37, Miss Independent 71, Castle 46), aligned 1 (My Heart Will Go On 9). Pocahontas 36 `wind` 183.27-190.21, line end PRE 178.87, MID 183.95, NOW 190.20 (heard last word end 184.92). She Used To Be Mine L6 NOW `like` 34.78-36.28, `I` 36.50-36.82, `used` 36.94-37.28, `to` 37.28-37.62, `be` 37.75-38.14 (transcriber `Like` 36.35, `I` 36.52-36.84, `used` 36.84-37.34, `to` 37.34-37.62, `be` 37.62-38.02); L7 `Although` 38.14-38.52, `it's` 38.52-39.30, `true` 39.30-39.60 (transcriber 38.30-38.74, 38.74-39.30, 39.30-39.60); PRE and MID L6 `I used to be` 36.08-36.18, 36.18-36.28, 36.28-36.38, 36.38-36.48, L7 `Although` 36.09-36.19; zero-length (floored) words in L6 / L7 4 / 1 -> 0 / 0. Words and sources of all targets in blocks R55t and R55s |
+| 58 | 2026-11-02 | 5c | Compares, NOW against PRE and against MID (`three.py summary`, `changed`, `overlaps`, `early5`; `vs_heard.py` and `compare.py` with `BEFORE_DIR=pre` and `mid`) | Over the 10 songs (478 lines), PRE / MID / NOW: lines with a floored word 127 / 124 / 99, floored words 155 / 155 / 116; overlapping line pairs (output line start before the previous line's end) 9 / 15 / 12 (new in NOW against both: Castle 3 0.05 s, Castle 24 0.01 s, Baby One More Time 4 under 0.005 s; all three follow a re-aligned line). Changed lines (start or end moved more than 0.3 s, a word moved more than 0.3 s, word text or count, floored-word count, or source differs): against PRE 92, against MID 134; first word against the transcriber's, closer / within 0.05 s / further / no heard word: PRE 28 / 32 / 11 / 21, MID 35 / 53 / 11 / 35; last word PRE 29 / 40 / 6 / 17, MID 20 / 70 / 21 / 23. Lines starting more than 0.5 s before the heard first word PRE / MID / NOW: 54 / 59 / 58 (without She Used To Be Mine 52 / 57 / 57); lines ending more than 0.3 s before the heard last word: PRE 13, MID 9, NOW 9 (`vs_heard.py`). Row 30's five early-start lines, start minus heard first, PRE / MID / NOW: Stronger 18 -0.26 / -0.56 / -0.58, Stronger 32 +0.40 / -1.00 / -0.59, All of Me 40 -0.06 / -0.83 / -0.06, Someone Like You 48 -0.12 / -2.05 / -0.12, Miss Independent 51 +0.87 / -0.90 / +0.87. Lines in NOW that differ from PRE with no rescued line as neighbour or themselves: 11, all My Heart Will Go On (PRE has no `dereverb` key, row 27; repace offset PRE -0.19, NOW -0.361). Song Info after (`_timed_tile`, `song_status`): Stronger 97% `1 guessed · 3 words`, All of Me 100%, Someone Like You 98% `1 guessed`, Baby One More Time 100%, Miss Independent 97% `3 guessed · 3 words`, Pocahontas 100%, Incomplete 100%, Castle 98% `1 guessed · 2 words`, My Heart Will Go On 100%, She Used To Be Mine 100%; `warn` false and "Missing from the screen" note absent on all 10 (PRE: warn true on the 9 songs, 18 lines short). Raw tables: blocks R55 (summary), R55o, R55e, R55x, R55h |
+| 59 | 2026-11-02 | 5c | The guard on this run's own re-aligns (`replay_now.py guard`): the replay of row 56 with `_start_after_previous` patched out against the replay with it, per song, lines whose `repace_bad_lines` output differs (source, word text, start, end within 0.001 s), with the previous line's end and the transcriber's words around the line. The lines are compared before the edge snaps | 22 lines differ (no windows differ: calls equal, 0 misses). Trimmed, first word moved to the previous line's end, re-align kept (13): Stronger 6 (42.47 -> 42.92), 18 (104.20 -> 105.04); All of Me 40 (182.32 -> 182.56), 46 (213.76 -> 213.77), 47 (220.44 -> 220.57); Miss Independent 3 (11.69 -> 11.83), 58 (180.70 -> 181.06), 78 (236.89 -> 237.02), 81 (243.85 -> 244.20); Pocahontas 23 (114.63 -> 114.72); Castle 32 (161.81 -> 162.42); My Heart Will Go On 26 (237.93 -> 238.24); She Used To Be Mine 7 (37.59 -> 38.14). Not kept (9): Stronger 37, Baby One More Time 40, Miss Independent 1, 5 (fill), 74, 79, Castle 14, 16, 46. Without the guard: Stronger realigned [6, 10, 18, 19, 26, 32, 35, 37] guessed []; Baby One More Time [2, 3, 20, 27, 28, 30, 40]; Miss Independent [1, 2, 3, 5, 9, 11, 12, 24, 38, 58, 72, 74, 78, 79, 81] guessed [9, 71]; Castle [2, 10, 14, 16, 23, 30, 32, 36, 46, 53] guessed []; Someone Like You, Incomplete: no line differs. Per line, words and transcriber in block R55g |
+| 60 | 2026-11-02 | 5c | Lines NOW ends further from the transcriber than PRE by more than 0.05 s (`regress.py`: PRE, MID, NOW words, the neighbouring lines, the transcriber's words and the cue span) | 17 lines, block R55r: first word further 11 (Stronger 18, 19, 32; Someone Like You 34, 49, 50; Baby One More Time 20; Miss Independent 3; My Heart Will Go On 7, 9, 26), last word further 6 (Someone Like You 32, 46; My Heart Will Go On 3, 8, 25; She Used To Be Mine 29), none both. Re-aligned lines whose first word starts at or just after the previous line's end and before the cue: Stronger 19 `I,` 111.38 (cue 112.48, heard 112.48), Someone Like You 34 `Don't` 169.98 (cue 170.87, heard 170.62), 50 `Don't` 245.13 (heard 245.96), Baby One More Time 20 `Tell` 104.43 (heard 105.18); last word held: Someone Like You 32 `you` 161.22-163.09 (heard 161.10-161.84, next line starts 163.19); Pocahontas 36 `wind` ends 190.20, 5.28 s after the heard end (PRE 6.05 s before it, so not among the 17). Of the 17, Stronger 18, Miss Independent 3 and My Heart Will Go On 26 are lines the guard trimmed (row 59); the other 14 are not changed by it |
+| 61 | 2026-11-02 | 5c | stop | GATE B reached; the list `song - m:ss - line text - what changed` handed to Ken (targets and She Used To Be Mine first, 20 + 72 lines); no code changed; Decisions 14-15 untouched. Open for Ken: the guard on every re-align (rows 49, 59: 13 trimmed, 9 not kept; Miss Independent 79: unguarded re-align `That's` 239.38-240.08, `why` 240.08-240.36 (transcriber 239.44-240.08, 240.08-240.36), kept line `That's` 240.28-240.32, `why` 240.32-240.34), review findings in `plans/open-issues.md` at landing |
 
 **R7 targets** at the starting constants (slack 0.5, dip 12, min_quiet 0.1, tail_quiet 0.5). `heard_end` is the transcriber's end of the line's last word.
 
@@ -1431,6 +1440,851 @@ start got earlier than heard by > 0.5 s and by 0.3 s more than before: song, L, 
 
 end got further before heard end (> 0.3 s, and 0.3 s more than before): song, L, m:ss, heard_last, end_b, end_a, heard-end_b, heard-end_a
 ('Someone Like You', 49, '3:57.77', 245.28, 245.75, 242.00699999999998, -0.47, 3.27)
+```
+
+**R55 summary** (`three.py summary`, verbatim; PRE / MID / NOW; floored = an ASS word of at most 0.10 s; overlap pairs = output line start before the previous line's end; `edge_snap` lines left out).
+
+| song | n lines | floored lines PRE/MID/NOW | floored words PRE/MID/NOW | overlap pairs PRE/MID/NOW | short lines PRE/MID/NOW | no-word lines PRE/MID/NOW | cue_inputs |
+|---|---|---|---|---|---|---|---|
+| Stronger | 39 | 8/8/8 | 11/11/9 | 0/2/1 | 4/0/0 | 0/0/0 | sections 39 realigns 13 spans 39 |
+| All of Me | 56 | 7/7/6 | 7/7/6 | 1/2/1 | 3/0/0 | 0/0/0 | sections 56 realigns 8 spans 56 |
+| Someone Like You | 56 | 13/14/9 | 15/16/9 | 0/2/0 | 3/0/0 | 0/0/0 | sections 56 realigns 12 spans 56 |
+| Baby One More Time | 46 | 20/22/18 | 23/24/20 | 0/0/1 | 2/0/0 | 0/0/0 | sections 46 realigns 15 spans 46 |
+| Miss Independent | 89 | 34/32/31 | 46/48/42 | 6/7/5 | 2/0/0 | 0/0/0 | sections 89 realigns 30 spans 89 |
+| Pocahontas | 37 | 13/14/7 | 15/16/7 | 0/0/0 | 1/0/0 | 0/0/0 | sections 37 realigns 10 spans 37 |
+| Incomplete | 27 | 8/8/6 | 8/8/6 | 0/0/0 | 1/0/0 | 0/0/0 | sections 27 realigns 4 spans 27 |
+| Castle On The Hill | 56 | 11/10/7 | 12/11/8 | 1/1/3 | 1/0/0 | 0/0/0 | sections 56 realigns 15 spans 56 |
+| My Heart Will Go On | 27 | 6/2/3 | 6/2/3 | 1/1/1 | 1/0/0 | 0/0/0 | sections 27 realigns 5 spans 27 |
+| She Used To Be Mine | 45 | 7/7/4 | 12/12/6 | 0/0/0 | 0/0/0 | 0/0/0 | sections 45 realigns 4 spans 45 |
+
+**Stronger** (AJWtLf4-WWs) captured PRE 2026-10-29T23:09:26+00:00 MID 2026-10-31T17:53:47+00:00 NOW 2026-11-02T20:31:33+00:00; method NOW cue_align, schema 11; ASS dialogues vs timings NOW 39/39
+- repace PRE: {"offset_s": -0.596, "n_repaced": 1, "repaced_line_ids": [21], "n_realigned": 0, "realigned_line_ids": []}
+- repace MID: {"offset_s": -0.497, "n_repaced": 2, "repaced_line_ids": [1, 21], "n_realigned": 1, "realigned_line_ids": [32], "n_guessed_words": 2, "guessed_word_line_ids": [26]}
+- repace NOW: {"offset_s": -0.596, "n_repaced": 1, "repaced_line_ids": [21], "n_realigned": 7, "realigned_line_ids": [6, 10, 18, 19, 26, 32, 35], "n_guessed_words": 3, "guessed_word_line_ids": [37], "crammed_line_ids": [1, 9, 10, 18, 19, 20, 24, 35], "n_windows": 13, "windows_widened_line_ids": [1, 6, 9, 10, 18, 19, 26, 32, 37], "windows_unmeasured_line_ids": []}
+- realigns NOW (13): L1[18.20,25.45], L6[42.22,50.59], L9[59.42,67.45], L10[66.70,73.20], L18[103.95,111.89], L19[111.14,117.64], L20[117.06,122.67], L21[121.17,124.04], L24[131.25,136.77], L26[140.13,149.38], L32[174.44,181.99], L35[192.30,198.14], L37[200.29,208.63]
+
+**All of Me** (450p7goxZqg) captured PRE 2026-10-19T18:54:26+00:00 MID 2026-10-31T18:00:26+00:00 NOW 2026-11-02T20:39:10+00:00; method NOW cue_align, schema 11; ASS dialogues vs timings NOW 56/56
+- repace PRE: {"offset_s": -0.296, "n_repaced": 2, "repaced_line_ids": [22, 40], "n_realigned": 0, "realigned_line_ids": []}
+- repace MID: {"offset_s": -0.254, "n_repaced": 1, "repaced_line_ids": [22], "n_realigned": 1, "realigned_line_ids": [40], "n_guessed_words": 0, "guessed_word_line_ids": []}
+- repace NOW: {"offset_s": -0.296, "n_repaced": 0, "repaced_line_ids": [], "n_realigned": 7, "realigned_line_ids": [22, 29, 40, 46, 47, 49, 55], "n_guessed_words": 0, "guessed_word_line_ids": [], "crammed_line_ids": [45, 47, 55], "n_windows": 8, "windows_widened_line_ids": [29, 40, 45, 46, 49, 55], "windows_unmeasured_line_ids": []}
+- realigns NOW (8): L22[104.73,109.37], L29[130.57,140.04], L40[182.01,189.60], L45[208.01,214.51], L46[213.51,220.94], L47[220.19,225.63], L49[228.04,236.19], L55[265.90,275.88]
+
+**Someone Like You** (hLQl3WQQoQ0) captured PRE 2026-10-19T18:12:58+00:00 MID 2026-10-31T17:48:23+00:00 NOW 2026-11-02T20:23:54+00:00; method NOW cue_align, schema 11; ASS dialogues vs timings NOW 56/56
+- repace PRE: {"offset_s": -0.509, "n_repaced": 1, "repaced_line_ids": [44], "n_realigned": 1, "realigned_line_ids": [45]}
+- repace MID: {"offset_s": -0.525, "n_repaced": 1, "repaced_line_ids": [44], "n_realigned": 1, "realigned_line_ids": [45], "n_guessed_words": 4, "guessed_word_line_ids": [49]}
+- repace NOW: {"offset_s": -0.509, "n_repaced": 1, "repaced_line_ids": [44], "n_realigned": 10, "realigned_line_ids": [1, 16, 32, 33, 34, 42, 45, 46, 49, 50], "n_guessed_words": 0, "guessed_word_line_ids": [], "crammed_line_ids": [1, 27, 32, 34, 42, 46, 50], "n_windows": 12, "windows_widened_line_ids": [16, 32, 33, 42, 49], "windows_unmeasured_line_ids": []}
+- realigns NOW (12): L1[20.34,25.28], L16[79.05,86.93], L27[138.53,143.31], L32[156.60,163.30], L33[162.55,170.36], L34[169.61,174.67], L42[203.57,210.17], L44[216.47,221.56] None, L45[220.06,225.06], L46[223.56,227.57], L49[237.76,245.64], L50[244.89,249.92]
+
+**Baby One More Time** (C-u5WLJ9Yk4) captured PRE 2026-10-29T23:06:24+00:00 MID 2026-10-31T17:52:01+00:00 NOW 2026-11-02T20:29:03+00:00; method NOW cue_align, schema 11; ASS dialogues vs timings NOW 46/46
+- repace PRE: {"offset_s": -0.115, "n_repaced": 0, "repaced_line_ids": [], "n_realigned": 1, "realigned_line_ids": [28]}
+- repace MID: {"offset_s": -0.104, "n_repaced": 0, "repaced_line_ids": [], "n_realigned": 1, "realigned_line_ids": [28], "n_guessed_words": 0, "guessed_word_line_ids": []}
+- repace NOW: {"offset_s": -0.115, "n_repaced": 0, "repaced_line_ids": [], "n_realigned": 6, "realigned_line_ids": [2, 3, 20, 27, 28, 30], "n_guessed_words": 0, "guessed_word_line_ids": [], "crammed_line_ids": [0, 1, 2, 3, 4, 13, 15, 16, 27, 29, 39, 40], "n_windows": 15, "windows_widened_line_ids": [0, 2, 4, 20, 28, 29, 30], "windows_unmeasured_line_ids": []}
+- realigns NOW (15): L0[16.99,23.49], L1[22.10,28.60], L2[27.34,34.71], L3[34.64,39.23], L4[37.73,45.69], L13[79.23,82.58], L15[86.32,90.89], L16[89.39,92.85], L20[103.80,110.73], L27[136.03,142.37], L28[140.87,148.08], L29[151.43,161.14], L30[160.39,169.59], L39[199.93,203.35], L40[201.85,207.63]
+
+**Miss Independent** (k6M5C-oKw9k) captured PRE 2026-10-29T23:30:17+00:00 MID 2026-10-31T18:02:51+00:00 NOW 2026-11-02T20:43:01+00:00; method NOW cue_align, schema 11; ASS dialogues vs timings NOW 89/89
+- repace PRE: {"offset_s": 0.13, "n_repaced": 4, "repaced_line_ids": [5, 7, 12, 37], "n_realigned": 3, "realigned_line_ids": [38, 72, 78]}
+- repace MID: {"offset_s": 0.112, "n_repaced": 5, "repaced_line_ids": [5, 7, 12, 37, 65], "n_realigned": 4, "realigned_line_ids": [9, 38, 72, 78], "n_guessed_words": 2, "guessed_word_line_ids": [9, 71]}
+- repace NOW: {"offset_s": 0.13, "n_repaced": 3, "repaced_line_ids": [5, 7, 37], "n_realigned": 11, "realigned_line_ids": [2, 3, 9, 11, 12, 24, 38, 58, 72, 78, 81], "n_guessed_words": 3, "guessed_word_line_ids": [9, 71], "crammed_line_ids": [0, 1, 2, 3, 4, 10, 11, 24, 34, 36, 39, 48, 49, 52, 58, 66, 73, 74, 79, 81, 85], "n_windows": 30, "windows_widened_line_ids": [0, 1, 2, 3, 4, 5, 7, 9, 10, 11, 12, 24, 34, 36, 37, 38, 39, 48, 49, 52, 58, 66, 71, 72, 73, 74, 78, 79, 81, 85], "windows_unmeasured_line_ids": []}
+- realigns NOW (30): L0[4.25,7.81], L1[6.35,11.01], L2[9.55,12.71], L3[11.25,14.21], L4[12.75,16.61], L5[15.15,18.15], L7[18.78,22.65], L9[23.18,26.58], L10[36.05,40.41], L11[38.95,43.91], L12[42.45,48.68], L24[79.58,85.38], L34[109.95,113.41], L36[114.08,117.58], L37[116.11,119.91], L38[118.45,122.71], L39[121.25,127.01], L48[147.25,151.75], L49[150.28,155.31], L52[161.48,166.38], L58[180.45,184.48], L66[200.15,206.05], L71[216.48,220.15], L72[218.68,223.05], L73[221.58,225.88], L74[224.41,229.18], L78[235.41,240.45], L79[238.98,242.95], L81[243.45,247.05], L85[257.05,262.28]
+
+**Pocahontas** (9ThO76peOw0) captured PRE 2026-10-30T00:36:59+00:00 MID 2026-10-31T18:04:19+00:00 NOW 2026-11-02T20:45:06+00:00; method NOW cue_align, schema 11; ASS dialogues vs timings NOW 37/37
+- repace PRE: {"offset_s": -0.146, "n_repaced": 0, "repaced_line_ids": [], "n_realigned": 3, "realigned_line_ids": [6, 7, 8]}
+- repace MID: {"offset_s": -0.152, "n_repaced": 0, "repaced_line_ids": [], "n_realigned": 3, "realigned_line_ids": [6, 7, 8], "n_guessed_words": 0, "guessed_word_line_ids": []}
+- repace NOW: {"offset_s": -0.146, "n_repaced": 0, "repaced_line_ids": [], "n_realigned": 10, "realigned_line_ids": [6, 7, 8, 9, 19, 20, 23, 27, 33, 36], "n_guessed_words": 0, "guessed_word_line_ids": [], "crammed_line_ids": [9, 19, 20, 23, 27, 33], "n_windows": 10, "windows_widened_line_ids": [36], "windows_unmeasured_line_ids": []}
+- realigns NOW (10): L6[19.34,33.58], L7[32.08,38.38], L8[36.88,43.33], L9[41.83,47.77], L19[87.97,103.25], L20[101.75,107.35], L23[114.07,120.17], L27[131.53,138.23], L33[161.65,168.33], L36[173.94,190.90]
+
+**Incomplete** (WVe80iZtlYU) captured PRE 2026-10-29T17:52:54+00:00 MID 2026-10-31T17:50:29+00:00 NOW 2026-11-02T20:26:23+00:00; method NOW cue_align, schema 11; ASS dialogues vs timings NOW 27/27
+- repace PRE: {"offset_s": -0.69, "n_repaced": 0, "repaced_line_ids": [], "n_realigned": 0, "realigned_line_ids": []}
+- repace MID: {"offset_s": -0.686, "n_repaced": 0, "repaced_line_ids": [], "n_realigned": 0, "realigned_line_ids": [], "n_guessed_words": 0, "guessed_word_line_ids": []}
+- repace NOW: {"offset_s": -0.69, "n_repaced": 0, "repaced_line_ids": [], "n_realigned": 3, "realigned_line_ids": [2, 3, 6], "n_guessed_words": 0, "guessed_word_line_ids": [], "crammed_line_ids": [2, 6, 10], "n_windows": 4, "windows_widened_line_ids": [2, 3, 6], "windows_unmeasured_line_ids": []}
+- realigns NOW (4): L2[31.59,39.33], L3[38.58,47.12], L6[63.83,70.42], L10[106.78,111.79]
+
+**Castle On The Hill** (K0ibBPhiaG0) captured PRE 2026-10-29T23:16:15+00:00 MID 2026-10-31T17:58:10+00:00 NOW 2026-11-02T20:36:15+00:00; method NOW cue_align, schema 11; ASS dialogues vs timings NOW 56/56
+- repace PRE: {"offset_s": -0.17, "n_repaced": 1, "repaced_line_ids": [37], "n_realigned": 1, "realigned_line_ids": [36]}
+- repace MID: {"offset_s": -0.17, "n_repaced": 1, "repaced_line_ids": [37], "n_realigned": 1, "realigned_line_ids": [36], "n_guessed_words": 2, "guessed_word_line_ids": [46]}
+- repace NOW: {"offset_s": -0.17, "n_repaced": 1, "repaced_line_ids": [37], "n_realigned": 7, "realigned_line_ids": [2, 10, 23, 30, 32, 36, 53], "n_guessed_words": 2, "guessed_word_line_ids": [46], "crammed_line_ids": [0, 2, 4, 10, 14, 16, 23, 24, 27, 30, 32, 53], "n_windows": 15, "windows_widened_line_ids": [0, 2, 4, 10, 14, 16, 23, 24, 27, 30, 32, 36, 37, 46, 53], "windows_unmeasured_line_ids": []}
+- realigns NOW (15): L0[23.88,28.28], L2[38.24,41.78], L4[45.16,48.30], L10[66.72,70.94], L14[83.52,90.42], L16[90.72,99.55], L23[126.60,130.06], L24[128.76,135.38], L27[142.20,145.66], L30[151.20,159.23], L32[161.56,168.66], L36[179.48,185.10], L37[183.92,187.42], L46[225.64,229.66], L53[257.92,262.86]
+
+**My Heart Will Go On** (9bFHsd3o1w0) captured PRE 2026-10-29T23:12:32+00:00 MID 2026-10-31T17:56:30+00:00 NOW 2026-11-02T20:33:30+00:00; method NOW cue_align, schema 11; ASS dialogues vs timings NOW 27/27
+- repace PRE: {"offset_s": -0.19, "n_repaced": 2, "repaced_line_ids": [10, 19], "n_realigned": 4, "realigned_line_ids": [8, 24, 25, 26]}
+- repace MID: {"offset_s": -0.377, "n_repaced": 4, "repaced_line_ids": [3, 19, 25, 26], "n_realigned": 1, "realigned_line_ids": [8], "n_guessed_words": 0, "guessed_word_line_ids": []}
+- repace NOW: {"offset_s": -0.361, "n_repaced": 0, "repaced_line_ids": [], "n_realigned": 5, "realigned_line_ids": [3, 8, 19, 25, 26], "n_guessed_words": 0, "guessed_word_line_ids": [], "crammed_line_ids": [], "n_windows": 5, "windows_widened_line_ids": [26], "windows_unmeasured_line_ids": []}
+- realigns NOW (5): L3[39.64,45.80], L8[78.72,88.26], L19[165.43,175.22], L25[232.18,239.18], L26[237.68,263.32]
+
+**She Used To Be Mine** (53GIADHxVzM) captured PRE 2026-10-30T14:57:39+00:00 MID 2026-10-30T14:57:39+00:00 NOW 2026-11-02T20:46:53+00:00; method NOW cue_align, schema 11; ASS dialogues vs timings NOW 45/45
+- repace PRE: {"offset_s": -0.39, "n_repaced": 0, "repaced_line_ids": [], "n_realigned": 1, "realigned_line_ids": [41]}
+- repace MID: {"offset_s": -0.39, "n_repaced": 0, "repaced_line_ids": [], "n_realigned": 1, "realigned_line_ids": [41]}
+- repace NOW: {"offset_s": -0.39, "n_repaced": 0, "repaced_line_ids": [], "n_realigned": 4, "realigned_line_ids": [6, 7, 29, 41], "n_guessed_words": 0, "guessed_word_line_ids": [], "crammed_line_ids": [6, 7, 29], "n_windows": 4, "windows_widened_line_ids": [], "windows_unmeasured_line_ids": []}
+- realigns NOW (4): L6[32.18,38.84], L7[37.34,41.18], L29[143.51,149.79], L41[209.80,216.38]
+
+**R55 stage log** (`regen_run.log`, in run order, 10 songs: Someone Like You, Incomplete, Baby One More Time, Stronger, My Heart Will Go On, Castle, All of Me, Miss Independent, Pocahontas, She Used To Be Mine).
+
+```
+15:21:13 INFO pikaraoke.lib.cue_align: cue-align: 56 cues -> 13 sections
+15:23:30 WARNING pikaraoke.pipeline.stages.lyric_align: [lyric_align] line 44 slice-align failed, degrading: Whisper worker error: 'NoneType' object has no attribute 'language'
+15:23:54 INFO pikaraoke.lib.cue_align: cue rescue: offset=-0.51s, 10 line(s) re-aligned, 1/56 re-paced from cue, 0 word(s) guessed in 0 line(s), 7 crammed line(s) asked for a re-align; 5/12 window(s) widened to the singing, 0 left unmeasured
+15:24:05 INFO pikaraoke.lib.cue_align: cue-align: 27 cues -> 18 sections
+15:26:23 INFO pikaraoke.lib.cue_align: cue rescue: offset=-0.69s, 3 line(s) re-aligned, 0/27 re-paced from cue, 0 word(s) guessed in 0 line(s), 3 crammed line(s) asked for a re-align; 3/4 window(s) widened to the singing, 0 left unmeasured
+15:26:37 INFO pikaraoke.lib.cue_align: cue-align: 46 cues -> 8 sections
+15:29:03 INFO pikaraoke.lib.cue_align: cue rescue: offset=-0.12s, 6 line(s) re-aligned, 0/46 re-paced from cue, 0 word(s) guessed in 0 line(s), 12 crammed line(s) asked for a re-align; 7/15 window(s) widened to the singing, 0 left unmeasured
+15:29:14 INFO pikaraoke.lib.cue_align: cue-align: 39 cues -> 10 sections
+15:31:33 INFO pikaraoke.lib.cue_align: cue rescue: offset=-0.60s, 7 line(s) re-aligned, 1/39 re-paced from cue, 3 word(s) guessed in 1 line(s), 8 crammed line(s) asked for a re-align; 9/13 window(s) widened to the singing, 0 left unmeasured
+15:31:42 WARNING pikaraoke.pipeline.stages.lyric_align: [lyric_align] transcribe yield 22.5 wpm < 30.0 — vocal stem looks reverb-washed; retrying on a de-reverbed stem
+15:31:53 INFO pikaraoke.lib.cue_align: cue-align: 27 cues -> 5 sections
+15:33:29 INFO pikaraoke.lib.cue_align: cue rescue: offset=-0.36s, 5 line(s) re-aligned, 0/27 re-paced from cue, 0 word(s) guessed in 0 line(s), 0 crammed line(s) asked for a re-align; 1/5 window(s) widened to the singing, 0 left unmeasured
+15:33:45 INFO pikaraoke.lib.cue_align: cue-align: 56 cues -> 9 sections
+15:36:15 INFO pikaraoke.lib.cue_align: cue rescue: offset=-0.17s, 7 line(s) re-aligned, 1/56 re-paced from cue, 2 word(s) guessed in 1 line(s), 12 crammed line(s) asked for a re-align; 15/15 window(s) widened to the singing, 0 left unmeasured
+15:36:31 INFO pikaraoke.lib.cue_align: cue-align: 56 cues -> 13 sections
+15:39:10 INFO pikaraoke.lib.cue_align: cue rescue: offset=-0.30s, 7 line(s) re-aligned, 0/56 re-paced from cue, 0 word(s) guessed in 0 line(s), 3 crammed line(s) asked for a re-align; 6/8 window(s) widened to the singing, 0 left unmeasured
+15:39:34 INFO pikaraoke.lib.cue_align: cue-align: 89 cues -> 8 sections
+15:43:01 INFO pikaraoke.lib.cue_align: cue rescue: offset=+0.13s, 11 line(s) re-aligned, 3/89 re-paced from cue, 3 word(s) guessed in 2 line(s), 21 crammed line(s) asked for a re-align; 30/30 window(s) widened to the singing, 0 left unmeasured
+15:43:13 INFO pikaraoke.lib.cue_align: cue-align: 37 cues -> 4 sections
+15:45:06 INFO pikaraoke.lib.cue_align: cue rescue: offset=-0.15s, 10 line(s) re-aligned, 0/37 re-paced from cue, 0 word(s) guessed in 0 line(s), 6 crammed line(s) asked for a re-align; 1/10 window(s) widened to the singing, 0 left unmeasured
+15:45:20 INFO pikaraoke.lib.cue_align: cue-align: 45 cues -> 5 sections
+15:46:52 INFO pikaraoke.lib.cue_align: cue rescue: offset=-0.39s, 4 line(s) re-aligned, 0/45 re-paced from cue, 0 word(s) guessed in 0 line(s), 3 crammed line(s) asked for a re-align; 0/4 window(s) widened to the singing, 0 left unmeasured
+```
+
+**R55t targets** (`three.py targets`, verbatim).
+
+| song | L | text | tokens | words PRE/MID/NOW | floored PRE/MID/NOW | source PRE / MID / NOW | start PRE/MID/NOW | end PRE/MID/NOW | heard first/last | timed in full NOW |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Stronger | 6 | You might think that I won't make it on my own | 11 | 8/11/11 | 0/0/0 | aligned / aligned / re-aligned | 44.06/43.91/42.92 | 50.34/50.66/50.58 | 42.86/51.10 | yes |
+| Stronger | 26 | Here I go, here I go, here I go, here I go, here I go | 15 | 13/15/15 | 4/4/2 | aligned / aligned +guessed words / re-aligned | 141.71/141.71/141.63 | 146.62/146.86/149.65 | -/- | NO |
+| Stronger | 32 | I, I'm stronger than yesterday | 5 | 4/5/5 | 0/1/0 | aligned / re-aligned / re-aligned | 176.56/175.16/175.57 | 182.56/182.56/182.56 | 176.16/180.38 | yes |
+| Stronger | 37 | My loneliness ain't killing me no more, no more | 9 | 6/9/9 | 0/0/0 | aligned / aligned / aligned +guessed words | 201.69/201.71/201.69 | 209.30/208.90/209.30 | 201.86/206.80 | NO |
+| All of Me | 29 | I can't stop singing, it's ringing in my head for you | 11 | 9/11/11 | 0/0/0 | aligned / aligned / re-aligned | 131.72/131.72/131.70 | 137.25/139.83/139.83 | 131.40/138.98 | yes |
+| All of Me | 46 | 'Cause all of me loves all of you | 8 | 6/8/8 | 0/0/0 | aligned / aligned / re-aligned | 214.53/214.53/214.53 | 220.83/220.83/220.57 | 213.78/220.70 | yes |
+| All of Me | 49 | Give your all to me, I'll give my all to you | 11 | 9/11/11 | 0/1/1 | aligned / aligned / re-aligned | 229.05/229.05/229.09 | 236.10/236.10/236.10 | 229.09/235.92 | NO |
+| Someone Like You | 16 | I wish nothing but the best for you, too | 9 | 7/9/9 | 0/0/1 | aligned / aligned / re-aligned | 79.19/79.19/79.30 | 86.59/86.47/86.59 | 79.22/86.44 | NO |
+| Someone Like You | 33 | I wish nothing but the best for you, too | 9 | 8/9/9 | 0/0/0 | aligned / aligned / re-aligned | 161.83/161.85/163.19 | 170.82/170.78/169.84 | 162.92/170.00 | yes |
+| Someone Like You | 49 | I wish nothing but the best for you, too | 9 | 8/9/9 | 1/2/1 | aligned / aligned +guessed words / re-aligned | 237.85/237.77/238.01 | 245.75/242.01/245.05 | 237.88/245.28 | NO |
+| Baby One More Time | 20 | Tell me, baby, 'cause I need to know now, oh because | 11 | 9/11/11 | 0/1/0 | aligned / aligned / re-aligned | 105.25/105.26/104.44 | 110.86/110.86/110.86 | 105.18/110.64 | yes |
+| Baby One More Time | 30 | I must confess, that my loneliness is killing me now | 10 | 8/10/10 | 0/1/0 | aligned / aligned / re-aligned | 161.18/161.55/161.10 | 169.50/169.48/169.50 | -/168.20 | yes |
+| Miss Independent | 9 | Good morning. God damn. | 4 | 2/4/4 | 1/0/1 | aligned / re-aligned +guessed words / re-aligned +guessed words | 24.62/23.45/23.43 | 25.01/26.45/25.92 | -/- | NO |
+| Miss Independent | 71 | Ooh yeah, ooh yeah | 4 | 2/4/4 | 0/0/0 | aligned / aligned +guessed words / aligned +guessed words | 216.36/216.20/216.36 | 218.40/219.08/219.08 | -/- | NO |
+| Pocahontas | 36 | You can paint with all the colors of the wind | 10 | 6/10/10 | 0/0/0 | aligned / aligned / re-aligned | 174.13/174.13/174.19 | 178.87/183.95/190.20 | -/184.92 | yes |
+| Incomplete | 3 | Where I'm going is anybody's guess | 6 | 4/6/6 | 0/0/0 | aligned / aligned / re-aligned | 39.69/39.69/39.62 | 43.51/47.20/47.20 | 39.20/46.04 | yes |
+| Castle On The Hill | 46 | And I'm on my way | 5 | 3/5/5 | 0/0/0 | aligned / aligned +guessed words / aligned +guessed words | 226.67/226.67/226.67 | 228.80/228.80/228.80 | 226.74/228.88 | NO |
+| My Heart Will Go On | 9 | And you're here in my heart | 6 | 4/6/6 | 0/0/0 | aligned / aligned / aligned | 87.15/87.11/87.09 | 92.13/92.25/92.23 | 87.87/92.26 | yes |
+| She Used To Be Mine | 5 | It's not easy to know | 5 | 5/5/5 | 0/0/0 | aligned / aligned / aligned | 29.41/29.41/29.41 | 32.15/32.15/32.15 | 29.41/31.84 | yes |
+| She Used To Be Mine | 6 | I'm not anything like I used to be | 8 | 8/8/8 | 4/4/0 | aligned / aligned / re-aligned | 33.23/33.23/33.30 | 36.09/36.09/38.14 | 33.31/38.02 | yes |
+| She Used To Be Mine | 7 | Although it's true | 3 | 3/3/3 | 1/1/0 | aligned / aligned / re-aligned | 36.09/36.09/38.14 | 39.61/39.61/39.60 | 38.30/39.60 | yes |
+| She Used To Be Mine | 8 | I was never attention sweet center | 6 | 6/6/6 | 0/0/0 | aligned / aligned / aligned | 40.60/40.60/40.60 | 44.37/44.37/44.37 | 40.67/44.28 | yes |
+
+targets timed in full NOW (the 18, no guessed word, no floored word): 10 of 18
+
+NOW words of the targets (ASS):
+- Stronger L6 You[42.91-43.81] might[43.81-45.31] think[45.51-46.49] that[46.62-47.03] I[47.03-47.57] won't[47.57-48.09] make[48.09-48.45] it[48.63-49.19] on[49.19-49.93] my[49.93-50.19] own[50.19-50.57]
+- Stronger L26 Here[141.63-141.87] I[141.87-142.05] go,[142.05-142.71] here[143.01-143.11] I[143.14-143.27] go,[143.27-144.03] here[144.13-144.25] I[144.25-144.43] go,[144.74-144.85] here[145.32-145.45] I[145.45-145.92] go,[146.02-146.21] here[146.64-148.14] I[148.49-148.59] go[148.59-149.75]
+- Stronger L32 I,[175.57-177.74] I'm[177.84-178.26] stronger[179.18-179.91] than[180.01-180.26] yesterday[180.26-182.56]
+- Stronger L37 My[201.69-202.55] loneliness[202.55-203.89] ain't[204.38-205.19] killing[205.19-205.72] me[205.82-206.13] no[206.13-206.63] more,[206.63-207.29] no[207.29-207.95] more[207.95-209.31]
+- All of Me L29 I[131.69-131.88] can't[131.88-132.24] stop[132.24-132.76] singing,[133.13-134.18] it's[134.28-134.42] ringing[134.84-135.54] in[135.54-136.22] my[136.41-136.97] head[137.39-138.09] for[138.09-138.37] you[138.37-139.83]
+- All of Me L46 'Cause[214.52-214.83] all[214.83-216.21] of[216.21-216.39] me[216.39-216.99] loves[218.13-218.29] all[218.29-220.07] of[220.17-220.31] you[220.31-220.57]
+- All of Me L49 Give[229.09-229.31] your[229.31-229.61] all[230.06-230.81] to[231.12-231.65] me,[232.02-232.63] I'll[232.79-233.11] give[233.11-233.21] my[233.35-234.46] all[234.56-235.35] to[235.45-235.56] you[235.56-236.18]
+- Someone Like You L16 I[79.29-80.28] wish[80.54-80.64] nothing[80.64-81.18] but[81.66-81.82] the[81.82-82.16] best[82.57-83.24] for[83.24-84.14] you,[84.3-85.18] too[85.28-86.58]
+- Someone Like You L33 I[163.18-163.82] wish[163.98-164.16] nothing[164.32-164.79] but[165.23-165.37] the[165.37-165.77] best[166.14-166.75] for[167.29-167.95] you,[168.05-168.84] too[168.94-169.86]
+- Someone Like You L49 I[238.0-239.13] wish[239.41-239.51] nothing[239.65-240.07] but[240.52-240.67] the[240.67-241.09] best[241.46-242.07] for[242.57-242.93] you,[243.39-243.54] too[243.99-245.05]
+- Baby One More Time L20 Tell[104.43-105.29] me,[105.42-105.81] baby,[106.07-107.13] 'cause[107.13-107.47] I[107.47-107.65] need[107.75-108.05] to[108.05-108.27] know[108.27-108.83] now,[108.83-109.83] oh[109.85-110.43] because[110.43-110.85]
+- Baby One More Time L30 I[161.09-161.5] must[161.5-161.88] confess,[161.88-163.12] that[163.12-163.76] my[163.87-164.18] loneliness[164.18-164.94] is[164.94-166.42] killing[166.42-166.86] me[167.0-167.41] now[167.41-169.5]
+- Miss Independent L9 Good[23.43-24.66] morning.[24.66-25.24] God[25.24-25.34] damn.[25.34-25.92]
+- Miss Independent L71 Ooh[216.36-217.86] yeah,[217.94-218.4] ooh[218.4-218.74] yeah[218.74-219.08]
+- Pocahontas L36 You[174.19-175.1] can[175.26-175.76] paint[175.76-177.04] with[177.38-177.94] all[177.94-178.42] the[178.53-178.84] colors[179.4-180.18] of[180.28-182.23] the[182.33-182.85] wind[183.27-190.21]
+- Incomplete L3 Where[39.62-39.77] I'm[39.77-40.77] going[41.23-42.0] is[42.0-43.5] anybody's[44.16-45.66] guess[45.74-47.19]
+- Castle On The Hill L46 And[226.67-226.93] I'm[227.43-227.59] on[227.59-227.91] my[227.91-228.17] way[228.17-228.8]
+- My Heart Will Go On L9 And[87.08-88.48] you're[88.61-89.02] here[89.02-90.04] in[90.14-90.76] my[90.9-91.32] heart[91.88-92.22]
+- She Used To Be Mine L5 It's[29.4-29.58] not[29.69-30.02] easy[30.45-30.59] to[31.02-31.17] know[31.17-32.13]
+- She Used To Be Mine L6 I'm[33.3-33.86] not[33.86-34.22] anything[34.36-34.78] like[34.78-36.28] I[36.5-36.82] used[36.94-37.28] to[37.28-37.62] be[37.75-38.14]
+- She Used To Be Mine L7 Although[38.14-38.52] it's[38.52-39.3] true[39.3-39.6]
+- She Used To Be Mine L8 I[40.6-40.81] was[40.81-41.11] never[41.22-41.55] attention[42.01-42.77] sweet[42.77-43.49] center[43.49-44.37]
+
+**R55f targets timed in full** (`full.py`, verbatim; raw words from `cue_inputs`).
+
+| song | L | tokens | words from | raw words >= 0.05 s | raw words < 0.05 s | guessed | timed in full |
+|---|---|---|---|---|---|---|---|
+| Stronger | 6 | 11 | re-align | 11 of 11 | 0 | no | yes |
+| Stronger | 26 | 15 | re-align | 13 of 15 | 2 | no | NO |
+| Stronger | 32 | 5 | re-align | 5 of 5 | 0 | no | yes |
+| Stronger | 37 | 9 | section | 6 of 6 | 0 | yes | NO |
+| All of Me | 29 | 11 | re-align | 11 of 11 | 0 | no | yes |
+| All of Me | 46 | 8 | re-align | 8 of 8 | 0 | no | yes |
+| All of Me | 49 | 11 | re-align | 10 of 11 | 1 | no | NO |
+| Someone Like You | 16 | 9 | re-align | 9 of 9 | 0 | no | yes |
+| Someone Like You | 33 | 9 | re-align | 9 of 9 | 0 | no | yes |
+| Someone Like You | 49 | 9 | re-align | 9 of 9 | 0 | no | yes |
+| Baby One More Time | 20 | 11 | re-align | 11 of 11 | 0 | no | yes |
+| Baby One More Time | 30 | 10 | re-align | 10 of 10 | 0 | no | yes |
+| Miss Independent | 9 | 4 | re-align | 3 of 3 | 0 | yes | NO |
+| Miss Independent | 71 | 4 | section | 2 of 2 | 0 | yes | NO |
+| Pocahontas | 36 | 10 | re-align | 10 of 10 | 0 | no | yes |
+| Incomplete | 3 | 6 | re-align | 6 of 6 | 0 | no | yes |
+| Castle On The Hill | 46 | 5 | section | 3 of 3 | 0 | yes | NO |
+| My Heart Will Go On | 9 | 6 | section | 6 of 6 | 0 | no | yes |
+
+timed in full by the model: 12 of 18
+
+Lines NOW differs from PRE with no rescue on the line or its neighbours (aligned in NOW; start/end/word moved > 0.3 s or word text differs):
+- My Heart Will Go On L1 0:25 I see you, I feel you: 2 word(s) moved > 0.3: I 27.72-28.30 -> 28.11-28.29, feel 28.61-29.12 -> 29.01-29.11; floored words 0 -> 1
+- My Heart Will Go On L5 0:50 You have come to show you go on: 2 word(s) moved > 0.3: come 51.80-51.92 -> 51.46-51.88, show 52.63-53.08 -> 52.92-53.55; floored words 1 -> 0
+- My Heart Will Go On L10 1:32 And my heart will go on and on: end 101.56 -> 100.35; source spaced -> aligned
+- My Heart Will Go On L12 1:52 And last for a lifetime: 2 word(s) moved > 0.3: a 114.78-116.51 -> 114.76-116.87, lifetime 116.61-117.77 -> 116.97-117.70
+- My Heart Will Go On L14 2:07 Love was when I loved you: start 128.31 -> 127.83
+- My Heart Will Go On L15 2:12 One true time I hold to: end 136.73 -> 137.12
+- My Heart Will Go On L16 2:17 In my life we'll always go on: start 136.73 -> 137.86
+- My Heart Will Go On L17 2:28 Near, far, wherever you are: 1 word(s) moved > 0.3: you 153.16-154.27 -> 153.66-154.27
+- My Heart Will Go On L21 3:00 And my heart will go on and on: 1 word(s) moved > 0.3: and 184.87-186.11 -> 185.60-185.79
+- My Heart Will Go On L22 3:25 You're here, there's nothing I fear: 3 word(s) moved > 0.3: You're 205.80-207.49 -> 205.80-207.85, here, 207.59-209.34 -> 208.36-209.05, nothing 211.19-211.74 -> 211.58-211.76
+- My Heart Will Go On L23 3:33 And I know that my heart will go on: 5 word(s) moved > 0.3: know 214.84-215.34 -> 214.86-215.80, that 215.52-216.76 -> 215.90-216.78, my 216.89-217.90 -> 216.90-217.28, heart 218.00-218.10 -> 217.28-218.12; floored words 1 -> 0
+count: 11
+
+**R55o overlaps** (`three.py overlaps`, verbatim).
+
+| song | L | m:ss | prev end NOW | start NOW | overlap NOW | overlap PRE | overlap MID | captions overlap | source NOW |
+|---|---|---|---|---|---|---|---|---|---|
+| Stronger | 7 | 0:50 | 50.58 | 50.44 | 0.14 | - | 0.22 | no | aligned |
+| Stronger | 32 | 2:55 | 175.56 | 175.57 | - | - | 0.40 | no | re-aligned |
+| All of Me | 23 | 1:46 | 106.09 | 106.05 | 0.04 | 0.93 | 0.98 | no | aligned |
+| All of Me | 40 | 3:03 | 182.56 | 183.07 | - | - | 0.26 | no | re-aligned |
+| Someone Like You | 25 | 2:03 | 123.76 | 123.86 | - | - | 0.36 | no | aligned |
+| Someone Like You | 26 | 2:10 | 130.88 | 130.98 | - | - | 0.42 | no | aligned |
+| Baby One More Time | 4 | 0:38 | 38.56 | 38.55 | 0.00 | - | - | no | aligned |
+| Miss Independent | 5 | 0:15 | 16.66 | 15.90 | 0.76 | 0.76 | 0.78 | no | spaced |
+| Miss Independent | 6 | 0:17 | 17.40 | 17.36 | 0.03 | 0.03 | 0.01 | no | aligned |
+| Miss Independent | 7 | 0:19 | 21.28 | 19.53 | 1.75 | 1.75 | 1.76 | no | spaced |
+| Miss Independent | 37 | 1:57 | 117.88 | 117.13 | 0.76 | 0.76 | 0.76 | no | spaced |
+| Miss Independent | 38 | 1:58 | 119.16 | 118.79 | 0.38 | 0.38 | 0.24 | no | re-aligned |
+| Miss Independent | 65 | 3:20 | 199.62 | 200.52 | - | - | 0.50 | no | aligned |
+| Miss Independent | 78 | 3:57 | 237.02 | 237.02 | - | 0.13 | 0.11 | no | re-aligned |
+| Castle On The Hill | 3 | 0:41 | 41.22 | 41.17 | 0.05 | - | - | no | aligned |
+| Castle On The Hill | 24 | 2:09 | 129.36 | 129.35 | 0.01 | - | - | no | aligned |
+| Castle On The Hill | 38 | 2:58 | 186.17 | 178.92 | 7.25 | 7.25 | 7.25 | no | aligned |
+| My Heart Will Go On | 20 | 2:54 | 174.55 | 174.36 | 0.19 | 0.26 | 0.07 | no | aligned |
+
+Stronger: overlapping pairs PRE 0 MID 2 NOW 1
+All of Me: overlapping pairs PRE 1 MID 2 NOW 1
+Someone Like You: overlapping pairs PRE 0 MID 2 NOW 0
+Baby One More Time: overlapping pairs PRE 0 MID 0 NOW 1
+Miss Independent: overlapping pairs PRE 6 MID 7 NOW 5
+Pocahontas: overlapping pairs PRE 0 MID 0 NOW 0
+Incomplete: overlapping pairs PRE 0 MID 0 NOW 0
+Castle On The Hill: overlapping pairs PRE 1 MID 1 NOW 3
+My Heart Will Go On: overlapping pairs PRE 1 MID 1 NOW 1
+She Used To Be Mine: overlapping pairs PRE 0 MID 0 NOW 0
+
+**R55e early starts** (`three.py early5`, verbatim).
+
+| song | L | text | heard first | start PRE/MID/NOW | start - heard PRE/MID/NOW |
+|---|---|---|---|---|---|
+| Stronger | 18 | My loneliness ain't killing me no more | 105.62 | 105.36/105.06/105.04 | -0.26/-0.56/-0.58 |
+| Stronger | 32 | I, I'm stronger than yesterday | 176.16 | 176.56/175.16/175.57 | +0.40/-1.00/-0.59 |
+| All of Me | 40 | 'Cause I give you all of me | 183.14 | 183.07/182.30/183.07 | -0.06/-0.83/-0.06 |
+| Someone Like You | 48 | Never mind, I'll find someone like you | 232.77 | 232.65/230.72/232.65 | -0.12/-2.05/-0.12 |
+| Miss Independent | 51 | She made for a boss, only a boss | 158.60 | 159.47/157.70/159.47 | +0.87/-0.90/+0.87 |
+
+lines starting more than 0.5 s before the heard first word (count, per song: PRE/MID/NOW) and the whole-set total:
+- Stronger: 10/12/13
+- All of Me: 1/2/2
+- Someone Like You: 7/8/8
+- Baby One More Time: 10/10/11
+- Miss Independent: 9/10/9
+- Pocahontas: 4/4/4
+- Incomplete: 2/2/2
+- Castle On The Hill: 2/3/2
+- My Heart Will Go On: 7/6/6
+- She Used To Be Mine: 2/2/1
+- total: 54/59/58
+
+**R55s She Used To Be Mine 0:33-0:40, Castle L1 and L29** (`three.py she`, `castle`, verbatim).
+
+```
+transcriber words 32.5-40.5: I'm[33.31-33.86] not[33.86-34.22] anything[34.22-34.80] Like[36.35-36.52] I[36.52-36.84] used[36.84-37.34] to[37.34-37.62] be[37.62-38.02] Although[38.30-38.74] it's[38.74-39.30] true[39.30-39.60]
+
+L6 I'm not anything like I used to be  [re-aligned]
+  PRE: I'm[33.22-33.86] not[33.86-34.2] anything[34.35-34.78] like[34.78-36.08] I[36.08-36.18] used[36.18-36.28] to[36.28-36.38] be[36.38-36.48]  (line 33.23-36.09, floored 4)
+  MID: I'm[33.22-33.86] not[33.86-34.2] anything[34.35-34.78] like[34.78-36.08] I[36.08-36.18] used[36.18-36.28] to[36.28-36.38] be[36.38-36.48]  (line 33.23-36.09, floored 4)
+  NOW: I'm[33.3-33.86] not[33.86-34.22] anything[34.36-34.78] like[34.78-36.28] I[36.5-36.82] used[36.94-37.28] to[37.28-37.62] be[37.75-38.14]  (line 33.30-38.14, floored 0)
+
+L7 Although it's true  [re-aligned]
+  PRE: Although[36.09-36.19] it's[36.45-39.27] true[39.37-39.71]  (line 36.09-39.61, floored 1)
+  MID: Although[36.09-36.19] it's[36.45-39.27] true[39.37-39.71]  (line 36.09-39.61, floored 1)
+  NOW: Although[38.14-38.52] it's[38.52-39.3] true[39.3-39.6]  (line 38.14-39.60, floored 0)
+
+realign L6 window 32.18-38.84: I'm[33.30-33.86] not[33.86-34.22] anything[34.36-34.78] like[34.78-36.50] I[36.50-36.82] used[36.94-37.28] to[37.28-37.62] be[37.75-38.14]
+
+realign L7 window 37.34-41.18: Although[37.34-38.52] it's[38.52-39.30] true[39.30-39.60]
+section L5: It's[29.41-29.59] not[29.70-30.03] easy[30.46-30.61] to[31.04-31.19] know[31.19-31.81]
+section L6: I'm[33.23-33.87] not[33.87-34.21] anything[34.36-34.79] like[34.79-36.09] I[36.09-36.09] used[36.09-36.09] to[36.09-36.09] be[36.09-36.09]
+section L7: Although[36.09-36.09] it's[36.35-37.85] true[39.27-39.61]
+section L8: I[39.61-40.81] was[40.81-41.11] never[41.22-41.55] attention[42.01-42.77] sweet[42.77-43.49] center[43.49-44.37]
+
+Castle L1 I was running from my brother and his friends: realign windows []; source NOW aligned
+  PRE: I[31.9-32.04] was[32.04-32.24] running[32.34-32.64] from[32.78-33.19] my[33.31-33.67] brother[33.79-34.13] and[34.26-34.65] his[34.65-35.03] friends[35.13-35.43]
+  MID: I[31.9-32.04] was[32.04-32.24] running[32.34-32.64] from[32.78-33.19] my[33.31-33.67] brother[33.79-34.13] and[34.26-34.65] his[34.65-35.03] friends[35.13-35.43]
+  NOW: I[31.9-32.04] was[32.04-32.24] running[32.34-32.64] from[32.78-33.19] my[33.31-33.67] brother[33.79-34.13] and[34.26-34.65] his[34.65-35.03] friends[35.13-35.43]
+Castle L29 I'm on my way: realign windows []; source NOW aligned
+  PRE: I'm[148.77-149.38] on[149.38-149.66] my[149.66-150.02] way[150.02-150.68]
+  MID: I'm[148.76-149.38] on[149.38-149.66] my[149.66-150.04] way[150.2-150.7]
+  NOW: I'm[148.77-149.38] on[149.38-149.66] my[149.66-150.02] way[150.02-150.68]
+```
+
+**R55g guard on this run's re-aligns** (`replay_now.py guard`, verbatim; words before the edge snaps).
+
+```
+== Stronger (AJWtLf4-WWs): replay guard on: calls 13 of recorded 13, misses []; stats equal to the bundle's True
+   guard off: calls 13, misses []; realigned [6, 10, 18, 19, 26, 32, 35, 37] guessed []
+   lines the guard changes: [6, 18, 37]
+   L6 You might think that I won't make it on my own  | previous line end (guard on) 42.92
+      guard off [cue_align_line]: You[42.47-43.82] might[43.82-45.32] think[45.52-46.50] that[46.63-47.04] I[47.04-47.58] won't[47.58-48.10] make[48.10-48.46] it[48.64-49.20] on[49.20-49.94] my[49.94-50.20] own[50.20-50.58]
+      guard on  [cue_align_line]: You[42.92-43.82] might[43.82-45.32] think[45.52-46.50] that[46.63-47.04] I[47.04-47.58] won't[47.58-48.10] make[48.10-48.46] it[48.64-49.20] on[49.20-49.94] my[49.94-50.20] own[50.20-50.58]
+      transcriber: You[42.86-44.22] might[44.22-45.52] think[45.52-46.52] that[46.52-47.02] I[47.02-47.64] will[47.64-48.00] make[48.00-48.50] it[48.50-49.20] on[49.20-49.96] my[49.96-50.22] own[50.22-51.10] But[51.10-51.56] now[51.56-52.14]
+   L18 My loneliness ain't killing me no more  | previous line end (guard on) 105.04
+      guard off [cue_align_line]: My[104.20-105.45] loneliness[105.77-106.91] ain't[107.33-108.03] killing[108.03-108.63] me[109.40-109.51] no[109.68-110.01] more[110.01-110.75]
+      guard on  [cue_align_line]: My[105.04-105.45] loneliness[105.77-106.91] ain't[107.33-108.03] killing[108.03-108.63] me[109.40-109.51] no[109.68-110.01] more[110.01-110.75]
+      transcriber: a[103.66-103.92] mile[103.92-104.28] away[104.28-105.08] My[105.62-106.08] loneliness[106.08-106.92] ain't[106.92-107.98] killing[107.98-108.68] me[108.68-109.54] no[109.54-110.06] more[110.06-111.16]
+   L37 My loneliness ain't killing me no more, no more  | previous line end (guard on) 201.69
+      guard off [cue_align_line]: My[200.87-200.87] loneliness[201.34-202.84] ain't[203.75-205.17] killing[205.17-205.25] me[205.58-206.15] no[206.28-206.67] more,[206.67-207.29] no[207.51-207.67] more[207.67-207.97]
+      guard on  [cue_align]: My[201.69-202.55] loneliness[202.55-203.89] ain't[204.38-205.19] killing[205.19-205.29] me[205.82-206.13] no[206.13-206.63] more,[206.63-207.29] no[207.29-207.94] more[207.94-208.60]
+      transcriber: a[200.26-200.52] mile[200.52-201.08] away[201.08-201.66] My[201.86-202.46] loneliness[202.46-203.70] ain't[203.70-205.02] here[205.02-205.02] to[205.02-205.24] let[205.24-205.52] me[205.54-206.08] no[206.43-206.70] more[206.70-206.80]
+== All of Me (450p7goxZqg): replay guard on: calls 8 of recorded 8, misses []; stats equal to the bundle's True
+   guard off: calls 8, misses []; realigned [22, 29, 40, 46, 47, 49, 55] guessed []
+   lines the guard changes: [40, 46, 47]
+   L40 'Cause I give you all of me  | previous line end (guard on) 182.56
+      guard off [cue_align_line]: 'Cause[182.32-183.37] I[183.37-183.57] give[183.57-183.79] you[183.79-184.09] all[184.09-185.13] of[186.35-187.85] me[188.03-188.35]
+      guard on  [cue_align_line]: 'Cause[182.56-183.37] I[183.37-183.57] give[183.57-183.79] you[183.79-184.09] all[184.09-185.13] of[186.35-187.85] me[188.03-188.35]
+      transcriber: lose,[181.38-181.86] I'm[182.08-182.22] winning[182.22-182.56] Cause[183.14-183.36] I[183.36-183.56] give[183.56-183.82] you[183.82-184.10] all[184.10-185.16] of[185.16-187.92] me[187.92-188.32]
+   L46 'Cause all of me loves all of you  | previous line end (guard on) 213.77
+      guard off [cue_align_line]: 'Cause[213.76-214.83] all[214.83-216.21] of[216.21-216.39] me[216.39-216.99] loves[218.13-218.29] all[218.29-219.23] of[220.18-220.31] you[220.31-220.57]
+      guard on  [cue_align_line]: 'Cause[213.77-214.83] all[214.83-216.21] of[216.21-216.39] me[216.39-216.99] loves[218.13-218.29] all[218.29-219.23] of[220.18-220.31] you[220.31-220.57]
+      transcriber: Cause[213.78-214.78] all[214.78-215.60] of[215.60-216.38] me[216.38-216.88] loves[216.88-218.30] all[218.30-219.28] of[219.28-220.26] you[220.26-220.70] Love[221.12-221.68]
+   L47 Love your curves and all your edges  | previous line end (guard on) 220.57
+      guard off [cue_align_line]: Love[220.44-221.57] your[221.57-222.01] curves[222.13-222.95] and[223.07-223.45] all[223.45-223.77] your[223.77-224.07] edges[224.07-224.59]
+      guard on  [cue_align_line]: Love[220.57-221.57] your[221.57-222.01] curves[222.13-222.95] and[223.07-223.45] all[223.45-223.77] your[223.77-224.07] edges[224.07-224.59]
+      transcriber: you[220.26-220.70] Love[221.12-221.68] your[221.68-222.14] curves[222.14-222.90] and[222.90-223.46] all[223.46-223.82] your[223.82-224.08] edges[224.08-224.52] All[225.31-225.52] your[225.52-226.00]
+== Someone Like You (hLQl3WQQoQ0): replay guard on: calls 12 of recorded 12, misses []; stats equal to the bundle's True
+   guard off: calls 12, misses []; realigned [1, 16, 32, 33, 34, 42, 45, 46, 49, 50] guessed []
+   lines the guard changes: []
+== Baby One More Time (C-u5WLJ9Yk4): replay guard on: calls 15 of recorded 15, misses []; stats equal to the bundle's True
+   guard off: calls 15, misses []; realigned [2, 3, 20, 27, 28, 30, 40] guessed []
+   lines the guard changes: [40]
+   L40 I must confess that my loneliness  | previous line end (guard on) 203.39
+      guard off [cue_align_line]: I[202.10-202.67] must[202.67-203.13] confess[203.13-203.85] that[203.85-205.19] my[205.19-205.47] loneliness[205.47-206.17]
+      guard on  [cue_align]: I[203.39-203.39] must[203.39-203.39] confess[203.39-203.99] that[203.99-205.11] my[205.11-205.47] loneliness[205.47-206.17]
+      transcriber: hit[201.31-201.54] me[201.60-201.86] baby,[201.86-202.42] I'm[202.64-203.02] a[203.02-203.16] sign,[203.16-203.66] I[204.26-204.46] know[204.46-204.82] that[204.82-205.20] my[205.20-205.54] loneliness[205.54-206.12] is[206.12-206.56] giving[206.56-207.08] me[207.08-208.68]
+== Miss Independent (k6M5C-oKw9k): replay guard on: calls 30 of recorded 30, misses []; stats equal to the bundle's True
+   guard off: calls 30, misses []; realigned [1, 2, 3, 5, 9, 11, 12, 24, 38, 58, 72, 74, 78, 79, 81] guessed [9, 71]
+   lines the guard changes: [1, 3, 5, 58, 74, 78, 79, 81]
+   L1 Morning. Good morning, ne-yo.  | previous line end (guard on) 7.56
+      guard off [cue_align_line]: Morning.[6.73-7.59] Good[7.71-7.97] morning,[7.97-8.23] ne-yo.[8.31-8.96]
+      guard on  [cue_align]: Morning.[7.86-7.86] Good[7.88-7.90] morning,[7.90-8.14] ne-yo.[8.40-8.72]
+      transcriber: morning.[7.30-7.42] I'm[7.60-7.80] sorry,[7.80-8.10] Mia.[8.26-8.44] Thank[8.76-9.02] you.[9.02-9.24] What's[9.60-9.82] going[9.82-9.82] on?[9.82-10.08]
+   L3 Looking good.  | previous line end (guard on) 11.83
+      guard off [cue_align_line]: Looking[11.69-11.93] good.[11.93-12.65]
+      guard on  [cue_align_line]: Looking[11.83-11.93] good.[11.93-12.65]
+      transcriber: morning.[11.22-11.56] Looking[11.90-12.02] good,[12.02-12.24] Mia.[12.34-12.52] Thank[12.78-12.98] you.[12.98-13.34]
+   L5 Good morning.  | previous line end (guard on) 16.66
+      guard off [cue_align_line]: Good[15.40-16.05] morning.[16.19-17.23]
+      guard on  [cue_align_fill]: Good[15.90-16.44] morning.[16.44-17.40]
+      transcriber: morning.[14.62-14.96] I'm[15.12-15.24] fine.[15.24-15.44] Good[15.87-16.06] morning.[16.06-16.42] Looking[17.34-17.58] good.[17.58-17.90]
+   L58 She got her own thing  | previous line end (guard on) 181.06
+      guard off [cue_align_line]: She[180.70-181.37] got[181.37-181.77] her[181.77-182.25] own[182.25-182.71] thing[182.71-183.39]
+      guard on  [cue_align_line]: She[181.06-181.37] got[181.37-181.77] her[181.77-182.25] own[182.25-182.71] thing[182.71-183.39]
+      transcriber: a[179.72-180.30] little[180.30-180.44] time[180.44-180.96] She[181.12-181.40] got[181.40-181.84] the[181.84-182.12] wrong[182.12-182.62] thing[182.62-183.34] That's[183.70-184.30] why[184.30-184.58]
+   L74 She got her own thing  | previous line end (guard on) 226.00
+      guard off [cue_align_line]: She[225.93-226.03] got[226.03-226.51] her[226.51-226.93] own[226.93-227.41] thing[227.41-228.61]
+      guard on  [cue_align]: She[226.00-226.00] got[226.00-226.58] her[226.58-226.78] own[226.78-227.44] thing[227.44-227.88]
+      transcriber: got[225.94-226.58] nothing,[226.58-227.46] that's[228.42-228.98] why[228.98-229.22] I[229.22-229.50] love[229.50-230.04]
+   L78 She got her own thing, she got, she got  | previous line end (guard on) 237.02
+      guard off [cue_align_line]: She[236.89-237.23] got[237.53-237.65] her[237.65-237.89] own[237.89-238.67] thing,[238.67-238.79] she[238.79-238.79] got,[238.79-239.07] she[239.61-239.61] got[239.93-240.03]
+      guard on  [cue_align_line]: She[237.02-237.23] got[237.53-237.65] her[237.65-237.89] own[237.89-238.67] thing,[238.67-238.79] she[238.79-238.79] got,[238.79-239.07] she[239.61-239.61] got[239.93-240.03]
+      transcriber: that's[239.44-240.08] why[240.08-240.36] I[240.36-240.82] love[240.82-241.06]
+   L79 That's why I love her  | previous line end (guard on) 240.03
+      guard off [cue_align_line]: That's[239.38-240.08] why[240.08-240.36] I[240.36-240.64] love[240.64-242.14] her[242.24-242.44]
+      guard on  [cue_align]: That's[240.28-240.32] why[240.32-240.34] I[240.45-240.76] love[240.76-241.06] her[241.59-242.48]
+      transcriber: that's[239.44-240.08] why[240.08-240.36] I[240.36-240.82] love[240.82-241.06] her[241.06-242.21] That's[242.64-243.12] why[243.12-243.34] I'm[243.34-243.60]
+   L81 Ooh, the way you shine  | previous line end (guard on) 244.20
+      guard off [cue_align_line]: Ooh,[243.85-244.93] the[244.93-245.21] way[245.21-245.55] you[245.55-246.05] shine[246.05-246.51]
+      guard on  [cue_align_line]: Ooh,[244.20-244.93] the[244.93-245.21] way[245.21-245.55] you[245.55-246.05] shine[246.05-246.51]
+      transcriber: why[243.12-243.34] I'm[243.34-243.60] in[243.60-244.06] it.[244.06-244.50] I'm[245.56-245.92] gonna[245.92-245.92] shine,[245.92-246.82] it's[247.44-247.70]
+== Pocahontas (9ThO76peOw0): replay guard on: calls 10 of recorded 10, misses []; stats equal to the bundle's True
+   guard off: calls 10, misses []; realigned [6, 7, 8, 9, 19, 20, 23, 27, 33, 36] guessed []
+   lines the guard changes: [23]
+   L23 And for once, never wonder what they're worth  | previous line end (guard on) 114.72
+      guard off [cue_align_line]: And[114.63-115.47] for[115.47-115.75] once,[115.75-116.47] never[116.65-116.87] wonder[116.87-117.43] what[117.43-117.77] they're[117.77-118.17] worth[118.17-118.87]
+      guard on  [cue_align_line]: And[114.72-115.47] for[115.47-115.75] once,[115.75-116.47] never[116.65-116.87] wonder[116.87-117.43] what[117.43-117.77] they're[117.77-118.17] worth[118.17-118.87]
+      transcriber: around[113.68-114.18] you[114.18-114.64] And[114.80-115.48] for[115.48-115.76] once[115.76-116.32] never[116.32-116.90] wonder[116.90-117.42] what[117.42-117.78] there[117.78-118.10] were[118.10-118.78] The[119.34-120.08]
+== Incomplete (WVe80iZtlYU): replay guard on: calls 4 of recorded 4, misses []; stats equal to the bundle's True
+   guard off: calls 4, misses []; realigned [2, 3, 6] guessed []
+   lines the guard changes: []
+== Castle On The Hill (K0ibBPhiaG0): replay guard on: calls 15 of recorded 15, misses []; stats equal to the bundle's True
+   guard off: calls 15, misses []; realigned [2, 10, 14, 16, 23, 30, 32, 36, 46, 53] guessed []
+   lines the guard changes: [14, 16, 32, 46]
+   L14 And I miss the way you make me feel  | previous line end (guard on) 84.43
+      guard off [cue_align_line]: And[83.77-84.42] I[84.56-85.00] miss[85.00-85.70] the[85.70-85.96] way[85.96-86.52] you[86.83-87.34] make[87.65-88.16] me[88.97-89.08] feel[89.24-89.72]
+      guard on  [cue_align]: And[84.75-84.75] I[84.75-85.01] miss[85.18-85.69] the[85.69-85.95] way[85.95-86.43] you[86.78-87.35] make[87.35-87.97] me[88.95-89.09] feel[89.09-89.77]
+      transcriber: dancer[83.44-84.16] And[84.16-84.74] I[84.74-85.04] miss[85.04-85.72] the[85.72-85.96] way[85.96-86.52] you[86.52-87.38] make[87.38-88.00] me[88.00-89.08] feel[89.08-89.76] It's[90.46-91.08]
+   L16 When we watched the sunset over the castle on the hill  | previous line end (guard on) 91.47
+      guard off [cue_align_line]: When[90.97-91.20] we[91.75-92.08] watched[92.08-93.08] the[93.08-93.36] sunset[93.36-94.30] over[94.30-95.52] the[96.02-96.86] castle[96.86-97.62] on[97.62-98.18] the[98.18-98.46] hill[98.46-98.80]
+      guard on  [cue_align]: When[91.47-92.03] we[92.03-92.15] watched[92.15-93.07] the[93.07-93.35] sunset[93.70-94.29] over[94.87-96.15] the[96.33-96.87] castle[96.87-97.59] on[97.59-98.21] the[98.21-98.35] hill[98.35-98.37]
+      transcriber: It's[90.46-91.08] true[91.08-91.46] when[91.46-91.96] we[91.96-92.16] watched[92.16-93.08] the[93.08-93.34] sunset[93.34-94.28] Over[95.14-96.12] the[96.12-96.88] castle[96.88-97.62] on[97.62-98.20] the[98.20-98.46] hill[98.46-98.80]
+   L32 And I miss the way you make me feel  | previous line end (guard on) 162.42
+      guard off [cue_align_line]: And[161.81-162.66] I[162.79-163.18] miss[163.18-163.92] the[163.92-164.18] way[164.18-164.74] you[165.06-165.58] make[165.58-166.22] me[167.16-167.30] feel[167.46-167.92]
+      guard on  [cue_align_line]: And[162.42-162.66] I[162.79-163.18] miss[163.18-163.92] the[163.92-164.18] way[164.18-164.74] you[165.06-165.58] make[165.58-166.22] me[167.16-167.30] feel[167.46-167.92]
+      transcriber: Dancer[161.62-162.46] And[162.46-162.96] I[162.96-163.22] miss[163.22-163.94] the[163.94-164.18] way[164.18-164.68] you[164.68-165.60] make[165.60-166.24] me[166.24-167.30] feel[167.30-167.94] It's[168.90-169.30]
+   L46 And I'm on my way  | previous line end (guard on) 226.67
+      guard off [cue_align_line]: And[225.89-226.60] I'm[226.97-227.60] on[227.60-227.86] my[227.96-228.26] way[228.69-228.84]
+      guard on  [cue_align]: And[226.67-226.93] I'm[227.43-227.59] on[227.59-227.91] my[227.91-228.17] way[228.17-228.43]
+      transcriber: to[225.18-225.72] go[225.72-226.10] on[226.10-226.66] And[226.74-226.94] I'm[226.94-227.60] on[227.60-227.90] my[227.90-228.26] way[228.26-228.88]
+== My Heart Will Go On (9bFHsd3o1w0): replay guard on: calls 5 of recorded 5, misses []; stats equal to the bundle's True
+   guard off: calls 5, misses []; realigned [3, 8, 19, 25, 26] guessed []
+   lines the guard changes: [26]
+   L26 My heart will go on and on  | previous line end (guard on) 238.24
+      guard off [cue_align_line]: My[237.93-239.18] heart[239.28-239.96] will[239.96-240.64] go[241.21-241.66] on[241.66-243.16] and[243.67-243.98] on[243.98-244.94]
+      guard on  [cue_align_line]: My[238.24-239.18] heart[239.28-239.96] will[239.96-240.64] go[241.21-241.66] on[241.66-243.16] and[243.67-243.98] on[243.98-244.94]
+      transcriber: And[237.86-238.32] my[238.98-239.34] heart[239.34-239.96] will[239.97-241.14] go[241.14-241.68] on[241.68-243.16] and[243.16-244.00] on[244.00-244.42]
+== She Used To Be Mine (53GIADHxVzM): replay guard on: calls 4 of recorded 4, misses []; stats equal to the bundle's True
+   guard off: calls 4, misses []; realigned [6, 7, 29, 41] guessed []
+   lines the guard changes: [7]
+   L7 Although it's true  | previous line end (guard on) 38.14
+      guard off [cue_align_line]: Although[37.59-38.52] it's[38.52-39.30] true[39.30-39.60]
+      guard on  [cue_align_line]: Although[38.14-38.52] it's[38.52-39.30] true[39.30-39.60]
+      transcriber: used[36.84-37.34] to[37.34-37.62] be[37.62-38.02] Although[38.30-38.74] it's[38.74-39.30] true[39.30-39.60]
+```
+
+**R55h vs_heard** (`vs_heard.py`, verbatim; tuple = lines with a heard first word, lines starting more than 0.5 s before it before, after, lines ending more than 0.3 s before the heard last word before, after; first PRE then MID as "before").
+
+```
+PRE as before:
+song | lines with heard first | start >0.5 s before heard: before, after | heard last >0.3 s after end: before, after
+Stronger (23, 10, 13, 1, 1)
+All of Me (48, 1, 2, 3, 1)
+Someone Like You (46, 7, 8, 2, 3)
+Baby One More Time (40, 10, 11, 1, 1)
+Miss Independent (53, 9, 9, 1, 0)
+Pocahontas (31, 4, 4, 1, 0)
+Incomplete (19, 2, 2, 3, 2)
+Castle On The Hill (45, 2, 2, 0, 0)
+My Heart Will Go On (20, 7, 6, 0, 1)
+She Used To Be Mine (41, 2, 1, 1, 0)
+
+start got earlier than heard by > 0.5 s and by 0.3 s more than before: song, L, m:ss, heard_first, start_b, start_a, start_b-heard, start_a-heard
+('Stronger', 18, '1:45.04', 105.62, 105.36, 105.03800000000001, -0.26, -0.58)
+('Stronger', 19, '1:51.39', 112.48, 113.372, 111.38600000000001, 0.89, -1.09)
+('Stronger', 32, '2:55.57', 176.16, 176.56199999999998, 175.57299999999998, 0.4, -0.59)
+('All of Me', 47, '3:40.57', 221.12, 221.645, 220.573, 0.53, -0.55)
+('Someone Like You', 34, '2:49.99', 170.624, 170.917, 169.98799999999997, 0.29, -0.64)
+('Someone Like You', 50, '4:05.14', 245.96, 246.196, 245.13699999999997, 0.24, -0.82)
+('Baby One More Time', 20, '1:44.44', 105.18, 105.247, 104.439, 0.07, -0.74)
+
+end got further before heard end (> 0.3 s, and 0.3 s more than before): song, L, m:ss, heard_last, end_b, end_a, heard-end_b, heard-end_a
+('Someone Like You', 0, '0:14.04', 20.86, 21.433999999999997, 20.35, -0.57, 0.51)
+
+MID as before:
+song | lines with heard first | start >0.5 s before heard: before, after | heard last >0.3 s after end: before, after
+Stronger (23, 12, 13, 1, 1)
+All of Me (48, 2, 2, 1, 1)
+Someone Like You (46, 8, 8, 1, 3)
+Baby One More Time (40, 10, 11, 1, 1)
+Miss Independent (53, 10, 9, 1, 0)
+Pocahontas (31, 4, 4, 1, 0)
+Incomplete (19, 2, 2, 2, 2)
+Castle On The Hill (45, 3, 2, 0, 0)
+My Heart Will Go On (20, 6, 6, 0, 1)
+She Used To Be Mine (41, 2, 1, 1, 0)
+
+start got earlier than heard by > 0.5 s and by 0.3 s more than before: song, L, m:ss, heard_first, start_b, start_a, start_b-heard, start_a-heard
+('Stronger', 19, '1:51.39', 112.48, 113.372, 111.38600000000001, 0.89, -1.09)
+('All of Me', 47, '3:40.57', 221.12, 221.645, 220.573, 0.53, -0.55)
+('Someone Like You', 34, '2:49.99', 170.624, 170.87699999999998, 169.98799999999997, 0.25, -0.64)
+('Someone Like You', 50, '4:05.14', 245.96, 246.176, 245.13699999999997, 0.22, -0.82)
+('Baby One More Time', 20, '1:44.44', 105.18, 105.26400000000001, 104.439, 0.08, -0.74)
+
+end got further before heard end (> 0.3 s, and 0.3 s more than before): song, L, m:ss, heard_last, end_b, end_a, heard-end_b, heard-end_a
+('Someone Like You', 0, '0:14.04', 20.86, 21.433999999999997, 20.35, -0.57, 0.51)
+('Someone Like You', 24, '1:57.21', 124.14, 124.212, 123.757, -0.07, 0.38)
+('Someone Like You', 41, '3:14.06', 201.18, 201.55, 199.675, -0.37, 1.5)
+```
+
+**R55x changed lines** (`three.py changed`, verbatim; first / last err = start / end minus the transcriber's, seconds, base -> NOW).
+
+
+## NOW against PRE
+
+| song | L | m:ss | text | what changed | first err base -> NOW (verdict) | last err base -> NOW (verdict) |
+|---|---|---|---|---|---|---|
+| Stronger | 5 | 0:37 | I'm not your property as from today, baby | end 43.23 -> 42.92 | +0.30 -> +0.30 (tie) | - (?) |
+| Stronger | 6 | 0:42 | You might think that I won't make it on my own | words 8 -> 11; start 44.06 -> 42.92; source aligned -> re-aligned | +1.20 -> +0.06 (closer) | -0.76 -> -0.52 (closer) |
+| Stronger | 9 | 1:00 | My loneliness ain't killing me no more | end 68.56 -> 66.85 | -0.52 -> -0.52 (tie) | +2.26 -> +0.55 (closer) |
+| Stronger | 10 | 1:06 | I, I'm stronger | start 68.66 -> 66.95; source aligned -> re-aligned | +1.42 -> -0.29 (closer) | -0.02 -> -0.04 (tie) |
+| Stronger | 18 | 1:45 | My loneliness ain't killing me no more | start 105.36 -> 105.04; end 113.27 -> 111.29; source aligned -> re-aligned | -0.26 -> -0.58 (further) | +2.11 -> +0.13 (closer) |
+| Stronger | 19 | 1:51 | I, I'm stronger | start 113.37 -> 111.39; source aligned -> re-aligned | +0.89 -> -1.09 (further) | +0.79 -> +0.84 (tie) |
+| Stronger | 26 | 2:21 | Here I go, here I go, here I go, here I go, here I go | words 13 -> 15; end 146.62 -> 149.65; floored words 4 -> 2; source aligned -> re-aligned | - (?) | - (?) |
+| Stronger | 31 | 2:49 | My loneliness ain't killing me no more | end 176.46 -> 175.56 | -0.06 -> -0.06 (tie) | +1.52 -> +0.62 (closer) |
+| Stronger | 32 | 2:55 | I, I'm stronger than yesterday | words 4 -> 5; start 176.56 -> 175.57; source aligned -> re-aligned | +0.40 -> -0.59 (further) | +2.18 -> +2.18 (tie) |
+| Stronger | 34 | 3:06 | My loneliness ain't killing me no more | end 193.51 -> 192.54 | -0.50 -> -0.50 (tie) | +1.53 -> +0.56 (closer) |
+| Stronger | 35 | 3:12 | Now I'm stronger than yesterday | start 193.61 -> 192.64; source aligned -> re-aligned | +0.84 -> -0.13 (closer) | +0.11 -> -0.00 (closer) |
+| Stronger | 37 | 3:21 | My loneliness ain't killing me no more, no more | words 6 -> 9; source aligned -> aligned +guessed words | -0.17 -> -0.17 (tie) | +2.50 -> +2.50 (tie) |
+| All of Me | 22 | 1:44 | Oh | start 105.70 -> 104.98; end 106.98 -> 106.09; source spaced -> re-aligned | - (?) | - (?) |
+| All of Me | 29 | 2:11 | I can't stop singing, it's ringing in my head for you | words 9 -> 11; end 137.25 -> 139.83; source aligned -> re-aligned | +0.32 -> +0.30 (tie) | -1.73 -> +0.85 (closer) |
+| All of Me | 40 | 3:03 | 'Cause I give you all of me | 7 word(s) moved > 0.3: 'Cause 183.07-184.00 -> 183.07-183.36, I 184.00-184.25 -> 183.36-183.56, give 184.25-185.25 -> 183.56-183.78, you 185.25-186.00 -> 183.78-184.08; source spaced -> re-aligned | -0.06 -> -0.06 (tie) | +0.53 -> +0.56 (tie) |
+| All of Me | 46 | 3:34 | 'Cause all of me loves all of you | words 6 -> 8; source aligned -> re-aligned | +0.75 -> +0.75 (tie) | +0.13 -> -0.13 (tie) |
+| All of Me | 47 | 3:40 | Love your curves and all your edges | start 221.65 -> 220.57; floored words 1 -> 0; source aligned -> re-aligned | +0.53 -> -0.55 (tie) | +0.06 -> +0.07 (tie) |
+| All of Me | 49 | 3:49 | Give your all to me, I'll give my all to you | words 9 -> 11; floored words 0 -> 1; source aligned -> re-aligned | -0.04 -> +0.01 (tie) | +0.18 -> +0.18 (tie) |
+| All of Me | 55 | 4:26 | And you give me all of you, oh | end 270.95 -> 275.05; floored words 1 -> 0; source aligned -> re-aligned | -0.08 -> -0.08 (tie) | -2.65 -> +1.45 (closer) |
+| Someone Like You | 0 | 0:14 | I heard that you're settled down | end 21.43 -> 20.35 | -0.07 -> -0.07 (tie) | +0.57 -> -0.51 (closer) |
+| Someone Like You | 1 | 0:20 | That you found a girl | start 21.53 -> 20.59; floored words 1 -> 0; source aligned -> re-aligned | +0.67 -> -0.27 (closer) | +0.05 -> -0.08 (tie) |
+| Someone Like You | 16 | 1:19 | I wish nothing but the best for you, too | words 7 -> 9; floored words 0 -> 1; source aligned -> re-aligned | -0.03 -> +0.08 (tie) | +0.15 -> +0.15 (tie) |
+| Someone Like You | 32 | 2:37 | Never mind, I'll find someone like you | start 157.75 -> 157.24; end 161.83 -> 163.09; floored words 2 -> 0; source aligned -> re-aligned | +1.84 -> +1.33 (closer) | -0.01 -> +1.25 (further) |
+| Someone Like You | 33 | 2:43 | I wish nothing but the best for you, too | words 8 -> 9; start 161.83 -> 163.19; end 170.82 -> 169.84; source aligned -> re-aligned | -1.09 -> +0.27 (closer) | +0.82 -> -0.16 (closer) |
+| Someone Like You | 34 | 2:49 | Don't forget me, I begged | start 170.92 -> 169.99; floored words 2 -> 0; source aligned -> re-aligned | +0.29 -> -0.64 (further) | - (?) |
+| Someone Like You | 42 | 3:24 | Never mind, I'll find someone like you | start 204.72 -> 204.37; floored words 1 -> 0; source aligned -> re-aligned | +0.30 -> -0.05 (closer) | +0.36 -> +0.26 (closer) |
+| Someone Like You | 46 | 3:44 | Sometimes it lasts in love | start 225.24 -> 224.56; floored words 1 -> 0; source aligned -> re-aligned | +0.63 -> -0.05 (closer) | +0.04 -> +0.22 (further) |
+| Someone Like You | 49 | 3:58 | I wish nothing but the best for you, too | words 8 -> 9; end 245.75 -> 245.05; source aligned -> re-aligned | -0.03 -> +0.13 (further) | +0.47 -> -0.23 (closer) |
+| Someone Like You | 50 | 4:05 | Don't forget me, I begged | start 246.20 -> 245.14; source aligned -> re-aligned | +0.24 -> -0.82 (further) | - (?) |
+| Baby One More Time | 2 | 0:28 | Oh baby, baby, how was I supposed to know | 3 word(s) moved > 0.3: baby, 29.42-29.58 -> 28.94-29.66, supposed 31.77-32.29 -> 31.76-32.66, to 32.61-33.15 -> 33.05-33.17; source aligned -> re-aligned | +0.63 -> +0.63 (tie) | +0.19 -> +0.19 (tie) |
+| Baby One More Time | 3 | 0:35 | That something wasn't right here | floored words 1 -> 0; source aligned -> re-aligned | +0.23 -> -0.02 (closer) | +0.01 -> +0.02 (tie) |
+| Baby One More Time | 19 | 1:40 | Show me how you want it to be | 1 word(s) moved > 0.3: be 104.08-104.54 -> 104.08-104.24 | -0.21 -> -0.21 (tie) | +0.23 -> -0.07 (closer) |
+| Baby One More Time | 20 | 1:44 | Tell me, baby, 'cause I need to know now, oh because | words 9 -> 11; start 105.25 -> 104.44; source aligned -> re-aligned | +0.07 -> -0.74 (further) | +0.22 -> +0.22 (tie) |
+| Baby One More Time | 26 | 2:11 | Oh baby, baby | end 136.28 -> 136.59 | - (?) | - (?) |
+| Baby One More Time | 27 | 2:16 | Oh baby, baby | start 136.28 -> 136.69; end 138.62 -> 140.38; floored words 1 -> 0; source aligned -> re-aligned | -4.89 -> -4.48 (closer) | - (?) |
+| Baby One More Time | 28 | 2:22 | Oh baby, baby, how was I supposed to know | 1 word(s) moved > 0.3: know 147.15-147.62 -> 146.80-147.48; floored words 2 -> 1 | - (?) | +0.17 -> +0.17 (tie) |
+| Baby One More Time | 30 | 2:41 | I must confess, that my loneliness is killing me now | words 8 -> 10; source aligned -> re-aligned | - (?) | +1.30 -> +1.30 (tie) |
+| Miss Independent | 1 | 0:07 | Morning. Good morning, ne-yo. | end 8.92 -> 9.70 | +0.56 -> +0.56 (tie) | - (?) |
+| Miss Independent | 2 | 0:09 | Good morning. | start 9.02 -> 9.80; end 10.28 -> 11.83; source aligned -> re-aligned | -1.66 -> -0.88 (closer) | -1.28 -> +0.27 (closer) |
+| Miss Independent | 3 | 0:11 | Looking good. | 1 word(s) moved > 0.3: good. 12.29-12.79 -> 11.92-12.64; source aligned -> re-aligned | -0.00 -> -0.07 (further) | +0.46 -> +0.41 (tie) |
+| Miss Independent | 9 | 0:23 | Good morning. God damn. | words 2 -> 4; start 24.62 -> 23.43; end 25.01 -> 25.92; source aligned -> re-aligned +guessed words | - (?) | - (?) |
+| Miss Independent | 11 | 0:39 | Ooh yeah, ooh yeah | 3 word(s) moved > 0.3: Ooh 39.29-40.03 -> 39.38-39.48, yeah, 40.03-40.13 -> 39.48-40.18, ooh 42.25-42.39 -> 41.07-42.18; source aligned -> re-aligned | - (?) | - (?) |
+| Miss Independent | 12 | 0:42 | Ooh yeah, ooh yeah, ooh | start 43.20 -> 42.70; end 47.93 -> 46.38; source spaced -> re-aligned | - (?) | - (?) |
+| Miss Independent | 24 | 1:21 | And she move like a boss, do what a boss do | floored words 2 -> 0; source aligned -> re-aligned | +0.91 -> +0.77 (closer) | +0.04 -> +0.02 (tie) |
+| Miss Independent | 58 | 3:01 | She got her own thing | 2 word(s) moved > 0.3: own 182.64-182.76 -> 182.24-182.70, thing 183.26-183.42 -> 182.70-183.38; floored words 1 -> 0; source aligned -> re-aligned | +0.22 -> -0.06 (closer) | +0.00 -> +0.05 (tie) |
+| Miss Independent | 71 | 3:36 | Ooh yeah, ooh yeah | words 2 -> 4; end 218.40 -> 219.08; source aligned -> aligned +guessed words | - (?) | - (?) |
+| Miss Independent | 81 | 4:04 | Ooh, the way you shine | 3 word(s) moved > 0.3: Ooh, 244.20-245.30 -> 244.20-244.92, the 245.56-245.66 -> 244.92-245.20, way 245.66-245.80 -> 245.20-245.54; floored words 1 -> 0; source aligned -> re-aligned | - (?) | -0.10 -> +0.03 (closer) |
+| Pocahontas | 9 | 0:43 | But I know every rock and tree and creature | floored words 1 -> 0; source aligned -> re-aligned | +0.19 -> +0.01 (closer) | +0.01 -> -0.01 (tie) |
+| Pocahontas | 19 | 1:28 | Can you paint with all the colors of the wind | start 89.27 -> 88.93; end 103.24 -> 95.80; floored words 2 -> 0; source aligned -> re-aligned | +0.83 -> +0.49 (closer) | +8.48 -> +1.04 (closer) |
+| Pocahontas | 20 | 1:43 | Come run the hidden pine trails of the forest | floored words 1 -> 0; source aligned -> re-aligned | +0.10 -> -0.07 (tie) | -0.02 -> -0.03 (tie) |
+| Pocahontas | 23 | 1:55 | And for once, never wonder what they're worth | floored words 1 -> 0; source aligned -> re-aligned | +0.49 -> +0.40 (closer) | - (?) |
+| Pocahontas | 27 | 2:12 | In a circle, in a hoop that never ends | 4 word(s) moved > 0.3: circle, 133.73-133.85 -> 133.25-133.97, in 134.31-134.41 -> 133.97-134.21, never 135.63-136.19 -> 135.19-135.53, ends 136.29-137.20 -> 135.53-136.91; floored words 2 -> 0; source aligned -> re-aligned | +0.69 -> +0.46 (closer) | +0.58 -> +0.48 (closer) |
+| Pocahontas | 33 | 2:42 | We need to paint with all the colors of the wind | floored words 1 -> 0; source aligned -> re-aligned | - (?) | +0.41 -> +0.31 (closer) |
+| Pocahontas | 36 | 2:54 | You can paint with all the colors of the wind | words 6 -> 10; end 178.87 -> 190.20; source aligned -> re-aligned | - (?) | -6.05 -> +5.28 (closer) |
+| Incomplete | 2 | 0:31 | Without you, within me I can find no rest | start 32.48 -> 31.95; floored words 1 -> 0; source aligned -> re-aligned | +0.62 -> +0.09 (closer) | +0.44 -> +0.46 (tie) |
+| Incomplete | 3 | 0:39 | Where I'm going is anybody's guess | words 4 -> 6; end 43.51 -> 47.20; source aligned -> re-aligned | +0.48 -> +0.42 (closer) | -2.53 -> +1.16 (closer) |
+| Incomplete | 6 | 1:04 | I pray for this heart to be unbroken | 1 word(s) moved > 0.3: for 66.35-67.26 -> 66.96-67.15; floored words 1 -> 0; source aligned -> re-aligned | +1.43 -> +1.17 (closer) | +0.06 -> +0.05 (tie) |
+| Castle On The Hill | 2 | 0:38 | And tasted the sweet perfume | 2 word(s) moved > 0.3: sweet 40.14-40.96 -> 40.06-40.40, perfume 41.06-41.26 -> 40.71-41.22; floored words 1 -> 0; source aligned -> re-aligned | +0.16 -> -0.00 (closer) | +0.01 -> +0.06 (tie) |
+| Castle On The Hill | 10 | 1:06 | But I can't wait to go home | start 66.59 -> 66.97; source aligned -> re-aligned | -1.09 -> -0.71 (closer) | +0.07 -> +0.06 (tie) |
+| Castle On The Hill | 23 | 2:07 | Take me back to when | floored words 1 -> 0; source aligned -> re-aligned | +0.23 -> -0.02 (closer) | +0.01 -> +0.02 (tie) |
+| Castle On The Hill | 30 | 2:32 | Driving at 90 down those country lanes | start 153.04 -> 152.15; floored words 1 -> 0; source aligned -> re-aligned | +0.64 -> -0.25 (closer) | +0.16 -> +0.18 (tie) |
+| Castle On The Hill | 31 | 2:38 | Singing to "Tiny Dancer" | end 162.88 -> 162.42 | -0.43 -> -0.43 (tie) | +0.42 -> -0.04 (closer) |
+| Castle On The Hill | 32 | 2:42 | And I miss the way you make me feel | start 162.98 -> 162.42; floored words 1 -> 0; source aligned -> re-aligned | +0.52 -> -0.04 (closer) | +0.04 -> -0.02 (tie) |
+| Castle On The Hill | 46 | 3:46 | And I'm on my way | words 3 -> 5; source aligned -> aligned +guessed words | -0.07 -> -0.07 (tie) | -0.08 -> -0.08 (tie) |
+| Castle On The Hill | 52 | 4:15 | Hoo-ooh | end 256.74 -> 258.59 | - (?) | - (?) |
+| Castle On The Hill | 53 | 4:18 | Over the castle on the hill | start 256.74 -> 258.69; source aligned -> re-aligned | - (?) | +0.04 -> -0.00 (tie) |
+| My Heart Will Go On | 1 | 0:25 | I see you, I feel you | 2 word(s) moved > 0.3: I 27.72-28.30 -> 28.11-28.29, feel 28.61-29.12 -> 29.01-29.11; floored words 0 -> 1 | -1.72 -> -1.72 (tie) | +0.13 -> +0.13 (tie) |
+| My Heart Will Go On | 2 | 0:31 | That is how I know you go on | start 30.31 -> 31.00 | -0.33 -> +0.36 (tie) | +1.66 -> +1.63 (tie) |
+| My Heart Will Go On | 3 | 0:40 | Far across the distance | end 43.97 -> 44.55; source aligned -> re-aligned | - (?) | -0.01 -> +0.57 (further) |
+| My Heart Will Go On | 4 | 0:45 | And spaces between us | start 43.97 -> 45.13; end 50.55 -> 50.23 | - (?) | +0.67 -> +0.34 (closer) |
+| My Heart Will Go On | 5 | 0:50 | You have come to show you go on | 2 word(s) moved > 0.3: come 51.80-51.92 -> 51.46-51.88, show 52.63-53.08 -> 52.92-53.55; floored words 1 -> 0 | +0.57 -> +0.57 (tie) | +0.97 -> +0.92 (tie) |
+| My Heart Will Go On | 7 | 1:07 | I believe that the heart does go on | 3 word(s) moved > 0.3: believe 69.38-70.39 -> 69.18-70.73, that 70.49-71.37 -> 70.83-71.36, the 71.91-72.09 -> 71.55-72.10 | -0.94 -> -1.02 (further) | +1.80 -> +1.77 (tie) |
+| My Heart Will Go On | 8 | 1:19 | Once more, you open the door | 3 word(s) moved > 0.3: Once 79.50-80.89 -> 79.45-81.28, you 83.79-84.19 -> 83.78-85.02, open 84.19-86.11 -> 85.12-86.09 | - (?) | -0.13 -> -0.35 (further) |
+| My Heart Will Go On | 9 | 1:27 | And you're here in my heart | words 4 -> 6 | -0.73 -> -0.79 (further) | -0.13 -> -0.03 (closer) |
+| My Heart Will Go On | 10 | 1:32 | And my heart will go on and on | end 101.56 -> 100.35; source spaced -> aligned | -0.03 -> -0.03 (tie) | +2.26 -> +1.05 (closer) |
+| My Heart Will Go On | 12 | 1:52 | And last for a lifetime | 2 word(s) moved > 0.3: a 114.78-116.51 -> 114.76-116.87, lifetime 116.61-117.77 -> 116.97-117.70 | -0.27 -> -0.27 (tie) | +0.64 -> +0.56 (closer) |
+| My Heart Will Go On | 14 | 2:07 | Love was when I loved you | start 128.31 -> 127.83 | - (?) | +0.07 -> +0.05 (tie) |
+| My Heart Will Go On | 15 | 2:12 | One true time I hold to | end 136.73 -> 137.12 | +0.30 -> +0.30 (tie) | - (?) |
+| My Heart Will Go On | 16 | 2:17 | In my life we'll always go on | start 136.73 -> 137.86 | -0.71 -> +0.42 (closer) | +2.64 -> +2.59 (tie) |
+| My Heart Will Go On | 17 | 2:28 | Near, far, wherever you are | 1 word(s) moved > 0.3: you 153.16-154.27 -> 153.66-154.27 | - (?) | +0.02 -> +0.02 (tie) |
+| My Heart Will Go On | 18 | 2:35 | I believe that the heart does go on | 5 word(s) moved > 0.3: that 157.95-158.78 -> 157.61-158.75, the 159.27-159.44 -> 158.92-159.43, does 160.74-160.84 -> 159.99-160.81, go 161.70-162.06 -> 161.27-163.00; floored words 1 -> 0 | -0.70 -> -0.70 (tie) | - (?) |
+| My Heart Will Go On | 19 | 2:46 | Once more you open the door | 6 word(s) moved > 0.3: Once 166.35-167.85 -> 166.64-168.67, more 167.86-169.36 -> 168.77-169.94, you 169.37-170.50 -> 169.94-171.40, open 170.50-172.00 -> 171.59-172.89; source spaced -> re-aligned | - (?) | +0.41 -> +0.33 (closer) |
+| My Heart Will Go On | 20 | 2:54 | And you're here in my heart | 2 word(s) moved > 0.3: here 176.31-176.79 -> 176.69-176.81, in 176.89-177.69 -> 176.89-177.99 | -0.92 -> -0.94 (tie) | -0.02 -> -0.06 (tie) |
+| My Heart Will Go On | 21 | 3:00 | And my heart will go on and on | 1 word(s) moved > 0.3: and 184.87-186.11 -> 185.60-185.79 | +1.05 -> +1.05 (tie) | +1.87 -> +1.87 (tie) |
+| My Heart Will Go On | 22 | 3:25 | You're here, there's nothing I fear | 3 word(s) moved > 0.3: You're 205.80-207.49 -> 205.80-207.85, here, 207.59-209.34 -> 208.36-209.05, nothing 211.19-211.74 -> 211.58-211.76 | -0.03 -> -0.03 (tie) | - (?) |
+| My Heart Will Go On | 23 | 3:33 | And I know that my heart will go on | 5 word(s) moved > 0.3: know 214.84-215.34 -> 214.86-215.80, that 215.52-216.76 -> 215.90-216.78, my 216.89-217.90 -> 216.90-217.28, heart 218.00-218.10 -> 217.28-218.12; floored words 1 -> 0 | -1.09 -> -1.09 (tie) | +2.01 -> +1.99 (tie) |
+| My Heart Will Go On | 24 | 3:44 | We'll stay forever this way | end 233.12 -> 232.78; source re-aligned -> aligned | -0.46 -> -0.49 (tie) | +0.25 -> -0.10 (closer) |
+| My Heart Will Go On | 25 | 3:53 | You are safe in my heart and | 3 word(s) moved > 0.3: safe 234.59-235.21 -> 234.42-235.84, in 235.21-236.17 -> 235.84-236.32, my 236.67-236.83 -> 236.32-236.90 | +0.26 -> +0.28 (tie) | -0.03 -> -0.08 (further) |
+| My Heart Will Go On | 26 | 3:58 | My heart will go on and on | end 249.55 -> 248.55; floored words 1 -> 0 | +0.06 -> -0.18 (further) | +5.13 -> +4.13 (closer) |
+| She Used To Be Mine | 6 | 0:33 | I'm not anything like I used to be | end 36.09 -> 38.14; floored words 4 -> 0; source aligned -> re-aligned | -0.09 -> -0.01 (closer) | -1.93 -> +0.12 (closer) |
+| She Used To Be Mine | 7 | 0:38 | Although it's true | start 36.09 -> 38.14; floored words 1 -> 0; source aligned -> re-aligned | -2.21 -> -0.16 (closer) | +0.01 -> -0.00 (tie) |
+| She Used To Be Mine | 29 | 2:24 | Who be reckless just enough | floored words 1 -> 0; source aligned -> re-aligned | - (?) | +0.01 -> +0.10 (further) |
+
+changed lines against PRE: 92; first word vs heard {'closer': 28, 'tie': 32, 'further': 11, '?': 21}; last word vs heard {'closer': 29, 'tie': 40, 'further': 6, '?': 17}
+
+## NOW against MID
+
+| song | L | m:ss | text | what changed | first err base -> NOW (verdict) | last err base -> NOW (verdict) |
+|---|---|---|---|---|---|---|
+| Stronger | 1 | 0:19 | Oh, yeah, yeah | end 23.55 -> 22.50; floored words 0 -> 1; source spaced -> aligned | - (?) | - (?) |
+| Stronger | 5 | 0:37 | I'm not your property as from today, baby | end 43.25 -> 42.92 | +0.30 -> +0.30 (tie) | - (?) |
+| Stronger | 6 | 0:42 | You might think that I won't make it on my own | start 43.91 -> 42.92; source aligned -> re-aligned | +1.05 -> +0.06 (closer) | -0.44 -> -0.52 (further) |
+| Stronger | 7 | 0:50 | But now I'm stronger than yesterday | 1 word(s) moved > 0.3: yesterday 55.79-55.95 -> 55.14-55.95 | -0.66 -> -0.66 (tie) | -0.00 -> -0.00 (tie) |
+| Stronger | 9 | 1:00 | My loneliness ain't killing me no more | end 68.56 -> 66.85 | -0.52 -> -0.52 (tie) | +2.26 -> +0.55 (closer) |
+| Stronger | 10 | 1:06 | I, I'm stronger | start 68.66 -> 66.95; source aligned -> re-aligned | +1.42 -> -0.29 (closer) | -0.02 -> -0.04 (tie) |
+| Stronger | 16 | 1:35 | 'Cause now I'm stronger than yesterday | 1 word(s) moved > 0.3: yesterday 99.57-100.28 -> 99.14-100.28 | - (?) | -0.12 -> -0.12 (tie) |
+| Stronger | 18 | 1:45 | My loneliness ain't killing me no more | end 113.27 -> 111.29; source aligned -> re-aligned | -0.56 -> -0.58 (tie) | +2.11 -> +0.13 (closer) |
+| Stronger | 19 | 1:51 | I, I'm stronger | start 113.37 -> 111.39; source aligned -> re-aligned | +0.89 -> -1.09 (further) | +0.79 -> +0.84 (tie) |
+| Stronger | 26 | 2:21 | Here I go, here I go, here I go, here I go, here I go | end 146.86 -> 149.65; floored words 4 -> 2; source aligned +guessed words -> re-aligned | - (?) | - (?) |
+| Stronger | 32 | 2:55 | I, I'm stronger than yesterday | start 175.16 -> 175.57; floored words 1 -> 0 | -1.00 -> -0.59 (closer) | +2.18 -> +2.18 (tie) |
+| Stronger | 34 | 3:06 | My loneliness ain't killing me no more | end 193.47 -> 192.54 | -0.55 -> -0.50 (tie) | +1.49 -> +0.56 (closer) |
+| Stronger | 35 | 3:12 | Now I'm stronger than yesterday | start 193.57 -> 192.64; source aligned -> re-aligned | +0.80 -> -0.13 (closer) | +0.15 -> -0.00 (closer) |
+| Stronger | 36 | 3:17 | Now it's nothing but my way | 2 word(s) moved > 0.3: my 200.26-201.38 -> 200.26-200.76, way 201.48-201.72 -> 201.11-201.70 | -0.79 -> -0.83 (tie) | - (?) |
+| Stronger | 37 | 3:21 | My loneliness ain't killing me no more, no more | end 208.90 -> 209.30; source aligned -> aligned +guessed words | -0.15 -> -0.17 (tie) | +2.10 -> +2.50 (further) |
+| Stronger | 38 | 3:29 | I, I'm stronger | start 209.00 -> 209.40 | -0.02 -> +0.38 (further) | +1.57 -> +1.54 (tie) |
+| All of Me | 22 | 1:44 | Oh | start 105.70 -> 104.98; end 107.03 -> 106.09; source spaced -> re-aligned | - (?) | - (?) |
+| All of Me | 29 | 2:11 | I can't stop singing, it's ringing in my head for you | 5 word(s) moved > 0.3: singing, 133.13-133.72 -> 133.13-134.18, it's 133.90-134.43 -> 134.28-134.42, ringing 134.43-134.95 -> 134.84-135.54, in 135.01-135.99 -> 135.54-136.22; source aligned -> re-aligned | +0.32 -> +0.30 (tie) | +0.85 -> +0.85 (tie) |
+| All of Me | 39 | 2:59 | Even when I lose I'm winning | 2 word(s) moved > 0.3: Even 179.55-180.69 -> 179.55-180.00, when 180.79-180.90 -> 180.34-180.90 | -0.03 -> -0.03 (tie) | +0.00 -> +0.00 (tie) |
+| All of Me | 40 | 3:03 | 'Cause I give you all of me | start 182.30 -> 183.07 | -0.83 -> -0.06 (closer) | +0.58 -> +0.56 (tie) |
+| All of Me | 44 | 3:21 | Cards on the table, we're both showing hearts | 1 word(s) moved > 0.3: table, 203.46-204.24 -> 203.52-204.69 | +0.25 -> +0.25 (tie) | -0.30 -> -0.30 (tie) |
+| All of Me | 45 | 3:29 | Risking it all, though it's hard | 2 word(s) moved > 0.3: it's 212.32-212.79 -> 212.63-212.79, hard 213.20-213.88 -> 212.79-213.87 | +0.20 -> -0.07 (closer) | +0.35 -> +0.35 (tie) |
+| All of Me | 46 | 3:34 | 'Cause all of me loves all of you | 2 word(s) moved > 0.3: all 214.80-215.88 -> 214.83-216.21, loves 216.88-218.30 -> 218.13-218.29; source aligned -> re-aligned | +0.75 -> +0.75 (tie) | +0.13 -> -0.13 (tie) |
+| All of Me | 47 | 3:40 | Love your curves and all your edges | start 221.65 -> 220.57; floored words 1 -> 0; source aligned -> re-aligned | +0.53 -> -0.55 (tie) | +0.06 -> +0.07 (tie) |
+| All of Me | 49 | 3:49 | Give your all to me, I'll give my all to you | 3 word(s) moved > 0.3: my 233.21-233.77 -> 233.35-234.46, all 234.09-234.63 -> 234.56-235.35, to 234.97-235.53 -> 235.45-235.56; source aligned -> re-aligned | -0.04 -> +0.01 (tie) | +0.18 -> +0.18 (tie) |
+| All of Me | 50 | 3:56 | You're my end and my beginning | 1 word(s) moved > 0.3: my 237.33-237.45 -> 236.99-237.47 | +0.37 -> +0.39 (tie) | -0.01 -> +0.01 (tie) |
+| All of Me | 51 | 4:00 | Even when I lose, I'm winning | 1 word(s) moved > 0.3: Even 240.77-241.60 -> 240.47-241.60 | +0.26 -> -0.04 (closer) | +0.03 -> +0.05 (tie) |
+| All of Me | 52 | 4:04 | 'Cause I give you all of me | 2 word(s) moved > 0.3: you 244.80-245.59 -> 244.80-245.04, me 249.19-249.83 -> 248.88-249.84 | - (?) | +0.41 -> +0.41 (tie) |
+| All of Me | 55 | 4:26 | And you give me all of you, oh | 2 word(s) moved > 0.3: all 267.87-269.38 -> 267.85-270.09, of 269.48-270.98 -> 270.19-271.69; source aligned -> re-aligned | -0.08 -> -0.08 (tie) | +1.45 -> +1.45 (tie) |
+| Someone Like You | 0 | 0:14 | I heard that you're settled down | end 21.43 -> 20.35 | -0.13 -> -0.07 (closer) | +0.57 -> -0.51 (closer) |
+| Someone Like You | 1 | 0:20 | That you found a girl | start 21.53 -> 20.59; floored words 1 -> 0; source aligned -> re-aligned | +0.67 -> -0.27 (closer) | +0.09 -> -0.08 (tie) |
+| Someone Like You | 2 | 0:24 | And you're married now | end 28.14 -> 28.98 | - (?) | +0.66 -> +1.50 (further) |
+| Someone Like You | 3 | 0:29 | I heard that your dreams came true | start 28.24 -> 29.08 | - (?) | -0.07 -> -0.03 (tie) |
+| Someone Like You | 6 | 0:43 | Old friend, why are you so shy | 2 word(s) moved > 0.3: Old 43.07-44.22 -> 43.07-44.54, friend, 44.32-45.49 -> 44.64-45.71 | -0.06 -> -0.06 (tie) | +0.74 -> +0.77 (tie) |
+| Someone Like You | 16 | 1:19 | I wish nothing but the best for you, too | 5 word(s) moved > 0.3: but 81.32-81.80 -> 81.66-81.82, the 81.80-82.78 -> 81.82-82.16, best 82.88-83.30 -> 82.57-83.24, for 83.30-84.63 -> 83.24-84.14; floored words 0 -> 1; source aligned -> re-aligned | -0.03 -> +0.08 (tie) | +0.03 -> +0.15 (further) |
+| Someone Like You | 24 | 1:57 | Only yesterday was the time of our lives | end 124.21 -> 123.76 | -0.19 -> -0.21 (tie) | +0.07 -> -0.38 (further) |
+| Someone Like You | 25 | 2:03 | We were born and raised in a summer haze | end 131.40 -> 130.88 | -0.30 -> -0.30 (tie) | +0.60 -> +0.08 (closer) |
+| Someone Like You | 32 | 2:37 | Never mind, I'll find someone like you | start 157.75 -> 157.24; end 161.85 -> 163.09; floored words 1 -> 0; source aligned -> re-aligned | +1.84 -> +1.33 (closer) | +0.01 -> +1.25 (further) |
+| Someone Like You | 33 | 2:43 | I wish nothing but the best for you, too | start 161.85 -> 163.19; end 170.78 -> 169.84; source aligned -> re-aligned | -1.07 -> +0.27 (closer) | +0.78 -> -0.16 (closer) |
+| Someone Like You | 34 | 2:49 | Don't forget me, I begged | start 170.88 -> 169.99; floored words 1 -> 0; source aligned -> re-aligned | +0.25 -> -0.64 (further) | - (?) |
+| Someone Like You | 37 | 3:00 | But sometimes it hurts instead | 1 word(s) moved > 0.3: hurts 181.75-181.92 -> 181.42-181.92 | -0.06 -> -0.06 (tie) | +0.56 -> +0.51 (closer) |
+| Someone Like You | 38 | 3:03 | Nothing compares, no worries or cares | floored words 0 -> 1 | - (?) | -0.00 -> +0.16 (further) |
+| Someone Like You | 39 | 3:09 | Regrets and mistakes, they're memories made | 1 word(s) moved > 0.3: mistakes, 190.20-190.79 -> 189.87-190.81 | -0.13 -> -0.06 (closer) | +0.02 -> +0.02 (tie) |
+| Someone Like You | 40 | 3:12 | Who would have known | 1 word(s) moved > 0.3: known 193.97-194.07 -> 193.67-194.05; floored words 1 -> 0 | +0.17 -> +0.17 (tie) | -0.00 -> -0.02 (tie) |
+| Someone Like You | 41 | 3:14 | How bittersweet this would taste | end 201.55 -> 199.68 | -0.00 -> -0.02 (tie) | +0.37 -> -1.50 (further) |
+| Someone Like You | 42 | 3:24 | Never mind, I'll find someone like you | start 204.70 -> 204.37; floored words 2 -> 0; source aligned -> re-aligned | +0.28 -> -0.05 (closer) | +0.08 -> +0.26 (further) |
+| Someone Like You | 43 | 3:28 | I wish nothing but the best for you | 4 word(s) moved > 0.3: I 208.45-210.57 -> 208.73-210.23, but 212.06-212.22 -> 211.75-212.22, for 214.18-214.38 -> 213.62-214.89, you 214.38-217.10 -> 214.99-217.12 | - (?) | +1.66 -> +1.68 (tie) |
+| Someone Like You | 46 | 3:44 | Sometimes it lasts in love | start 225.14 -> 224.56; floored words 1 -> 0; source aligned -> re-aligned | +0.53 -> -0.05 (closer) | +0.04 -> +0.22 (further) |
+| Someone Like You | 47 | 3:46 | But sometimes it hurts instead | end 230.62 -> 231.60 | -0.09 -> -0.09 (tie) | +1.16 -> +2.14 (further) |
+| Someone Like You | 48 | 3:52 | Never mind, I'll find someone like you | start 230.72 -> 232.65 | -2.05 -> -0.12 (closer) | +0.79 -> +1.03 (further) |
+| Someone Like You | 49 | 3:58 | I wish nothing but the best for you, too | end 242.01 -> 245.05; floored words 2 -> 1; source aligned +guessed words -> re-aligned | -0.11 -> +0.13 (tie) | -3.27 -> -0.23 (closer) |
+| Someone Like You | 50 | 4:05 | Don't forget me, I begged | start 246.18 -> 245.14; source aligned -> re-aligned | +0.22 -> -0.82 (further) | - (?) |
+| Someone Like You | 52 | 4:13 | Sometimes it lasts in love | floored words 1 -> 0 | +0.08 -> +0.08 (tie) | +0.04 -> +0.04 (tie) |
+| Baby One More Time | 2 | 0:28 | Oh baby, baby, how was I supposed to know | 3 word(s) moved > 0.3: baby, 29.39-29.94 -> 28.94-29.66, supposed 31.73-32.25 -> 31.76-32.66, to 32.58-33.13 -> 33.05-33.17; source aligned -> re-aligned | +0.63 -> +0.63 (tie) | +0.19 -> +0.19 (tie) |
+| Baby One More Time | 3 | 0:35 | That something wasn't right here | floored words 1 -> 0; source aligned -> re-aligned | +0.23 -> -0.02 (closer) | +0.01 -> +0.02 (tie) |
+| Baby One More Time | 4 | 0:38 | Oh baby, baby, I shouldn't have let you go | 2 word(s) moved > 0.3: baby, 40.09-41.05 -> 40.41-41.05, shouldn't 41.15-41.93 -> 41.45-41.95 | -0.23 -> -0.23 (tie) | +1.44 -> +1.54 (further) |
+| Baby One More Time | 5 | 0:46 | And now you're out of sight, yeah | start 45.60 -> 46.05 | +0.45 -> +0.90 (further) | -0.00 -> -0.00 (tie) |
+| Baby One More Time | 6 | 0:48 | Show me how you want it to be | 1 word(s) moved > 0.3: Show 48.71-49.66 -> 48.71-49.29 | -0.12 -> -0.12 (tie) | +0.36 -> +0.36 (tie) |
+| Baby One More Time | 19 | 1:40 | Show me how you want it to be | 1 word(s) moved > 0.3: be 104.09-104.54 -> 104.08-104.24; floored words 1 -> 0 | -0.25 -> -0.21 (tie) | +0.23 -> -0.07 (closer) |
+| Baby One More Time | 20 | 1:44 | Tell me, baby, 'cause I need to know now, oh because | start 105.26 -> 104.44; floored words 1 -> 0; source aligned -> re-aligned | +0.08 -> -0.74 (further) | +0.22 -> +0.22 (tie) |
+| Baby One More Time | 26 | 2:11 | Oh baby, baby | end 136.28 -> 136.59 | - (?) | - (?) |
+| Baby One More Time | 27 | 2:16 | Oh baby, baby | start 136.28 -> 136.69; end 138.62 -> 140.38; floored words 1 -> 0; source aligned -> re-aligned | -4.89 -> -4.48 (closer) | - (?) |
+| Baby One More Time | 28 | 2:22 | Oh baby, baby, how was I supposed to know | 1 word(s) moved > 0.3: supposed 145.67-146.25 -> 145.31-146.20 | - (?) | +0.14 -> +0.17 (tie) |
+| Baby One More Time | 29 | 2:32 | Oh pretty baby, I shouldn't have let you go | 1 word(s) moved > 0.3: I 154.24-154.66 -> 154.68-154.78; floored words 0 -> 1 | +0.87 -> +0.87 (tie) | +2.99 -> +2.99 (tie) |
+| Baby One More Time | 30 | 2:41 | I must confess, that my loneliness is killing me now | start 161.55 -> 161.10; floored words 1 -> 0; source aligned -> re-aligned | - (?) | +1.28 -> +1.30 (tie) |
+| Baby One More Time | 42 | 3:30 | Don't you know I still believe | 1 word(s) moved > 0.3: believe 213.37-214.55 -> 213.79-214.55 | - (?) | +0.31 -> +0.31 (tie) |
+| Miss Independent | 1 | 0:07 | Morning. Good morning, ne-yo. | end 8.92 -> 9.70 | +0.56 -> +0.56 (tie) | - (?) |
+| Miss Independent | 2 | 0:09 | Good morning. | start 9.02 -> 9.80; end 10.28 -> 11.83; source aligned -> re-aligned | -1.66 -> -0.88 (closer) | -1.28 -> +0.27 (closer) |
+| Miss Independent | 3 | 0:11 | Looking good. | 1 word(s) moved > 0.3: good. 12.29-12.79 -> 11.92-12.64; source aligned -> re-aligned | -0.00 -> -0.07 (further) | +0.46 -> +0.41 (tie) |
+| Miss Independent | 9 | 0:23 | Good morning. God damn. | end 26.45 -> 25.92; floored words 0 -> 1 | - (?) | - (?) |
+| Miss Independent | 11 | 0:39 | Ooh yeah, ooh yeah | 3 word(s) moved > 0.3: Ooh 39.29-40.03 -> 39.38-39.48, yeah, 40.03-40.13 -> 39.48-40.18, ooh 42.25-42.39 -> 41.07-42.18; source aligned -> re-aligned | - (?) | - (?) |
+| Miss Independent | 12 | 0:42 | Ooh yeah, ooh yeah, ooh | start 43.18 -> 42.70; end 47.91 -> 46.38; source spaced -> re-aligned | - (?) | - (?) |
+| Miss Independent | 24 | 1:21 | And she move like a boss, do what a boss do | floored words 2 -> 0; source aligned -> re-aligned | +0.91 -> +0.77 (closer) | +0.04 -> +0.02 (tie) |
+| Miss Independent | 38 | 1:58 | Ooh yeah, ooh yeah | end 120.79 -> 121.95; floored words 3 -> 0 | - (?) | - (?) |
+| Miss Independent | 48 | 2:26 | Cause she work like a boss, play like a boss | 1 word(s) moved > 0.3: like 150.26-150.70 -> 150.60-150.71 | -0.94 -> -0.94 (tie) | +0.08 -> +0.08 (tie) |
+| Miss Independent | 50 | 2:35 | And her bills are paid on time | end 157.70 -> 158.62 | +0.04 -> +0.04 (tie) | +0.10 -> +1.03 (further) |
+| Miss Independent | 51 | 2:39 | She made for a boss, only a boss | start 157.70 -> 159.47 | -0.90 -> +0.87 (tie) | +0.44 -> +0.44 (tie) |
+| Miss Independent | 58 | 3:01 | She got her own thing | 2 word(s) moved > 0.3: own 182.64-182.76 -> 182.24-182.70, thing 183.26-183.42 -> 182.70-183.38; floored words 1 -> 0; source aligned -> re-aligned | +0.22 -> -0.06 (closer) | +0.00 -> +0.05 (tie) |
+| Miss Independent | 62 | 3:11 | Miss independent | end 193.54 -> 192.44 | - (?) | - (?) |
+| Miss Independent | 63 | 3:12 | Mmm | start 193.64 -> 192.54; end 194.54 -> 193.88 | - (?) | - (?) |
+| Miss Independent | 64 | 3:14 | Her favorite thing to say-- "don't worry, I've got it" | start 194.54 -> 194.97; end 199.27 -> 199.62 | - (?) | +0.37 -> +0.72 (further) |
+| Miss Independent | 65 | 3:20 | Mmm | start 198.78 -> 200.52; end 200.28 -> 200.58; floored words 0 -> 1; source spaced -> aligned | - (?) | - (?) |
+| Miss Independent | 71 | 3:36 | Ooh yeah, ooh yeah | 1 word(s) moved > 0.3: ooh 218.82-218.95 -> 218.40-218.74 | - (?) | - (?) |
+| Miss Independent | 78 | 3:57 | She got her own thing, she got, she got | 1 word(s) moved > 0.3: got 239.81-240.40 -> 240.12-240.23; floored words 4 -> 2 | - (?) | - (?) |
+| Miss Independent | 81 | 4:04 | Ooh, the way you shine | 3 word(s) moved > 0.3: Ooh, 244.20-245.30 -> 244.20-244.92, the 245.56-245.66 -> 244.92-245.20, way 245.66-245.80 -> 245.20-245.54; floored words 1 -> 0; source aligned -> re-aligned | - (?) | -0.10 -> +0.03 (closer) |
+| Miss Independent | 86 | 4:22 | It's okay. You are the boss. | floored words 0 -> 1 | -0.02 -> +0.02 (tie) | -0.14 -> -0.12 (tie) |
+| Pocahontas | 7 | 0:33 | You think you own whatever land you land on | floored words 1 -> 0 | -0.05 -> -0.04 (tie) | -0.02 -> -0.02 (tie) |
+| Pocahontas | 9 | 0:43 | But I know every rock and tree and creature | floored words 1 -> 0; source aligned -> re-aligned | +0.19 -> +0.01 (closer) | +0.01 -> -0.01 (tie) |
+| Pocahontas | 19 | 1:28 | Can you paint with all the colors of the wind | start 89.27 -> 88.93; end 103.24 -> 95.80; floored words 2 -> 0; source aligned -> re-aligned | +0.83 -> +0.49 (closer) | +8.48 -> +1.04 (closer) |
+| Pocahontas | 20 | 1:43 | Come run the hidden pine trails of the forest | floored words 1 -> 0; source aligned -> re-aligned | +0.10 -> -0.07 (tie) | -0.02 -> -0.03 (tie) |
+| Pocahontas | 23 | 1:55 | And for once, never wonder what they're worth | floored words 1 -> 0; source aligned -> re-aligned | +0.49 -> +0.40 (closer) | - (?) |
+| Pocahontas | 27 | 2:12 | In a circle, in a hoop that never ends | 4 word(s) moved > 0.3: circle, 133.73-133.85 -> 133.25-133.97, in 134.31-134.41 -> 133.97-134.21, never 135.63-136.19 -> 135.19-135.53, ends 136.29-137.20 -> 135.53-136.91; floored words 2 -> 0; source aligned -> re-aligned | +0.69 -> +0.46 (closer) | +0.58 -> +0.48 (closer) |
+| Pocahontas | 33 | 2:42 | We need to paint with all the colors of the wind | floored words 1 -> 0; source aligned -> re-aligned | - (?) | +0.41 -> +0.31 (closer) |
+| Pocahontas | 36 | 2:54 | You can paint with all the colors of the wind | end 183.95 -> 190.20; source aligned -> re-aligned | - (?) | -0.97 -> +5.28 (further) |
+| Incomplete | 0 | 0:17 | Empty spaces fill me up with holes | 1 word(s) moved > 0.3: fill 21.32-21.87 -> 20.97-21.85 | +1.09 -> +1.09 (tie) | +0.20 -> +0.33 (further) |
+| Incomplete | 1 | 0:25 | Distant faces with no place left to go | 2 word(s) moved > 0.3: place 29.51-30.50 -> 29.35-30.09, left 30.60-30.80 -> 30.28-30.85 | -0.01 -> -0.00 (tie) | -0.08 -> +0.00 (closer) |
+| Incomplete | 2 | 0:31 | Without you, within me I can find no rest | start 32.62 -> 31.95; floored words 1 -> 0; source aligned -> re-aligned | +0.76 -> +0.09 (closer) | +0.44 -> +0.46 (tie) |
+| Incomplete | 3 | 0:39 | Where I'm going is anybody's guess | source aligned -> re-aligned | +0.48 -> +0.42 (closer) | +1.16 -> +1.16 (tie) |
+| Incomplete | 4 | 0:50 | I tried to go on like I never knew you | 1 word(s) moved > 0.3: tried 50.63-51.97 -> 50.94-51.93 | +0.33 -> +0.33 (tie) | +0.09 -> +0.20 (further) |
+| Incomplete | 6 | 1:04 | I pray for this heart to be unbroken | 1 word(s) moved > 0.3: for 66.35-67.26 -> 66.96-67.15; floored words 1 -> 0; source aligned -> re-aligned | +1.43 -> +1.17 (closer) | +0.06 -> +0.05 (tie) |
+| Incomplete | 8 | 1:33 | Voices tell me I should carry on | 3 word(s) moved > 0.3: Voices 93.31-94.57 -> 93.41-94.10, tell 95.01-95.18 -> 94.50-95.16, me 95.66-95.82 -> 95.34-95.88 | +0.29 -> +0.39 (further) | +0.27 -> +0.27 (tie) |
+| Incomplete | 9 | 1:40 | But I am swimming in an ocean all alone | 1 word(s) moved > 0.3: swimming 102.40-103.53 -> 101.96-103.49 | +0.58 -> +0.58 (tie) | +0.89 -> +0.89 (tie) |
+| Incomplete | 18 | 2:38 | But I can't seem to let you go | 1 word(s) moved > 0.3: go 160.49-161.29 -> 160.17-161.29 | - (?) | +0.56 -> +0.56 (tie) |
+| Incomplete | 19 | 2:42 | I don't wanna make you face this world alone | 2 word(s) moved > 0.3: face 163.99-164.59 -> 163.97-165.19, this 164.90-165.41 -> 165.29-165.39 | - (?) | +3.63 -> +3.61 (tie) |
+| Castle On The Hill | 2 | 0:38 | And tasted the sweet perfume | 2 word(s) moved > 0.3: sweet 40.14-40.96 -> 40.06-40.40, perfume 41.06-41.26 -> 40.71-41.22; floored words 1 -> 0; source aligned -> re-aligned | +0.16 -> -0.00 (closer) | +0.01 -> +0.06 (tie) |
+| Castle On The Hill | 10 | 1:06 | But I can't wait to go home | start 66.59 -> 66.97; source aligned -> re-aligned | -1.09 -> -0.71 (closer) | +0.07 -> +0.06 (tie) |
+| Castle On The Hill | 23 | 2:07 | Take me back to when | source aligned -> re-aligned | +0.02 -> -0.02 (tie) | +0.01 -> +0.02 (tie) |
+| Castle On The Hill | 24 | 2:09 | We found weekend jobs, and when we got paid | 1 word(s) moved > 0.3: jobs, 132.40-132.90 -> 132.10-132.94 | +0.01 -> +0.01 (tie) | -0.01 -> +0.01 (tie) |
+| Castle On The Hill | 30 | 2:32 | Driving at 90 down those country lanes | start 153.04 -> 152.15; floored words 1 -> 0; source aligned -> re-aligned | +0.64 -> -0.25 (closer) | +0.16 -> +0.18 (tie) |
+| Castle On The Hill | 31 | 2:38 | Singing to "Tiny Dancer" | end 162.88 -> 162.42 | -0.43 -> -0.43 (tie) | +0.42 -> -0.04 (closer) |
+| Castle On The Hill | 32 | 2:42 | And I miss the way you make me feel | start 162.98 -> 162.42; floored words 1 -> 0; source aligned -> re-aligned | +0.52 -> -0.04 (closer) | +0.04 -> -0.02 (tie) |
+| Castle On The Hill | 52 | 4:15 | Hoo-ooh | end 256.74 -> 258.59 | - (?) | - (?) |
+| Castle On The Hill | 53 | 4:18 | Over the castle on the hill | start 256.74 -> 258.69; source aligned -> re-aligned | - (?) | +0.04 -> -0.00 (tie) |
+| Castle On The Hill | 55 | 4:23 | Over the castle on the hill | 2 word(s) moved > 0.3: the 266.86-267.98 -> 267.37-267.54, castle 268.08-268.26 -> 267.72-268.26 | -0.55 -> -0.49 (closer) | +0.00 -> +0.00 (tie) |
+| My Heart Will Go On | 0 | 0:22 | Every night in my dreams | start 21.40 -> 22.17 | +0.65 -> +1.42 (further) | +0.44 -> +0.41 (tie) |
+| My Heart Will Go On | 1 | 0:25 | I see you, I feel you | 1 word(s) moved > 0.3: feel 28.60-29.11 -> 29.01-29.11; floored words 0 -> 1 | -1.94 -> -1.72 (closer) | +0.13 -> +0.13 (tie) |
+| My Heart Will Go On | 2 | 0:31 | That is how I know you go on | 2 word(s) moved > 0.3: know 33.26-34.41 -> 33.26-33.72, you 34.51-34.62 -> 34.06-34.62 | +0.36 -> +0.36 (tie) | +1.63 -> +1.63 (tie) |
+| My Heart Will Go On | 3 | 0:40 | Far across the distance | 3 word(s) moved > 0.3: Far 40.37-41.07 -> 40.50-41.40, across 41.07-42.47 -> 41.40-42.28, the 42.47-43.17 -> 42.42-42.84; source spaced -> re-aligned | - (?) | +0.69 -> +0.57 (closer) |
+| My Heart Will Go On | 5 | 0:50 | You have come to show you go on | 1 word(s) moved > 0.3: show 52.61-53.05 -> 52.92-53.55 | +0.57 -> +0.57 (tie) | +0.92 -> +0.92 (tie) |
+| My Heart Will Go On | 8 | 1:19 | Once more, you open the door | 3 word(s) moved > 0.3: you 83.79-84.62 -> 83.78-85.02, open 84.72-85.64 -> 85.12-86.09, the 85.82-86.36 -> 86.19-86.36 | - (?) | -0.25 -> -0.35 (further) |
+| My Heart Will Go On | 10 | 1:32 | And my heart will go on and on | 2 word(s) moved > 0.3: will 94.66-95.08 -> 94.66-95.91, go 95.24-96.34 -> 96.01-96.32 | -0.01 -> -0.03 (tie) | +1.05 -> +1.05 (tie) |
+| My Heart Will Go On | 12 | 1:52 | And last for a lifetime | 2 word(s) moved > 0.3: a 114.78-116.51 -> 114.76-116.87, lifetime 116.61-117.70 -> 116.97-117.70 | -0.27 -> -0.27 (tie) | +0.56 -> +0.56 (tie) |
+| My Heart Will Go On | 17 | 2:28 | Near, far, wherever you are | 1 word(s) moved > 0.3: Near, 148.55-149.31 -> 148.25-149.33 | - (?) | +0.02 -> +0.02 (tie) |
+| My Heart Will Go On | 18 | 2:35 | I believe that the heart does go on | 2 word(s) moved > 0.3: go 161.75-162.06 -> 161.27-163.00, on 162.06-165.43 -> 163.10-165.47 | -0.70 -> -0.70 (tie) | - (?) |
+| My Heart Will Go On | 19 | 2:46 | Once more you open the door | 6 word(s) moved > 0.3: Once 166.64-167.65 -> 166.64-168.67, more 167.66-169.16 -> 168.77-169.94, you 169.17-170.30 -> 169.94-171.40, open 170.30-171.80 -> 171.59-172.89; source spaced -> re-aligned | - (?) | +0.23 -> +0.33 (further) |
+| My Heart Will Go On | 20 | 2:54 | And you're here in my heart | 1 word(s) moved > 0.3: here 176.31-176.81 -> 176.69-176.81 | -0.92 -> -0.94 (tie) | -0.06 -> -0.06 (tie) |
+| My Heart Will Go On | 21 | 3:00 | And my heart will go on and on | 2 word(s) moved > 0.3: heart 181.35-181.78 -> 181.65-181.80, and 185.04-185.78 -> 185.60-185.79 | +1.05 -> +1.05 (tie) | +1.85 -> +1.87 (tie) |
+| My Heart Will Go On | 22 | 3:25 | You're here, there's nothing I fear | 4 word(s) moved > 0.3: You're 205.80-207.49 -> 205.80-207.85, here, 207.59-209.05 -> 208.36-209.05, there's 210.12-210.28 -> 209.46-210.28, nothing 211.24-211.82 -> 211.58-211.76 | -0.03 -> -0.03 (tie) | - (?) |
+| My Heart Will Go On | 24 | 3:44 | We'll stay forever this way | 1 word(s) moved > 0.3: this 230.91-231.83 -> 231.66-231.85 | -0.49 -> -0.49 (tie) | -0.08 -> -0.10 (tie) |
+| My Heart Will Go On | 25 | 3:53 | You are safe in my heart and | 4 word(s) moved > 0.3: safe 234.41-235.41 -> 234.42-235.84, in 235.41-235.91 -> 235.84-236.32, my 235.91-236.41 -> 236.32-236.90, heart 236.41-237.66 -> 236.90-237.70; source spaced -> re-aligned | +0.19 -> +0.28 (further) | +0.09 -> -0.08 (tie) |
+| My Heart Will Go On | 26 | 3:58 | My heart will go on and on | end 249.83 -> 248.55; source spaced -> re-aligned | -0.03 -> -0.18 (further) | +5.41 -> +4.13 (closer) |
+| She Used To Be Mine | 6 | 0:33 | I'm not anything like I used to be | end 36.09 -> 38.14; floored words 4 -> 0; source aligned -> re-aligned | -0.09 -> -0.01 (closer) | -1.93 -> +0.12 (closer) |
+| She Used To Be Mine | 7 | 0:38 | Although it's true | start 36.09 -> 38.14; floored words 1 -> 0; source aligned -> re-aligned | -2.21 -> -0.16 (closer) | +0.01 -> -0.00 (tie) |
+| She Used To Be Mine | 29 | 2:24 | Who be reckless just enough | floored words 1 -> 0; source aligned -> re-aligned | - (?) | +0.01 -> +0.10 (further) |
+
+changed lines against MID: 134; first word vs heard {'closer': 35, 'tie': 53, 'further': 11, '?': 35}; last word vs heard {'closer': 20, 'tie': 70, 'further': 21, '?': 23}
+
+**R55r lines NOW ends further from the transcriber than PRE** (`regress.py`, verbatim).
+
+```
+
+Stronger L18 1:45 My loneliness ain't killing me no more  (first further, last closer; source aligned -> re-aligned)
+  prev NOW line 17: 100.28-105.04; next 19: 111.39-116.70
+  PRE: My[105.36-105.9] loneliness[106.28-106.92] ain't[106.92-108.42] killing[108.64-109.11] me[109.21-109.52] no[109.64-110.02] more[110.17-113.28]
+  MID: My[105.05-105.91] loneliness[106.3-106.95] ain't[107.35-108.01] killing[108.01-109.1] me[109.2-109.51] no[109.64-110.05] more[110.05-113.26]
+  NOW: My[105.03-105.45] loneliness[105.77-106.91] ain't[107.33-108.03] killing[108.03-109.3] me[109.4-109.51] no[109.67-110.01] more[110.01-111.28]
+  heard: away[104.28-105.08] My[105.62-106.08] loneliness[106.08-106.92] ain't[106.92-107.98] killing[107.98-108.68] me[108.68-109.54] no[109.54-110.06] more[110.06-111.16]
+  cue span (offset-shifted, as used): 105.30-110.30
+
+Stronger L19 1:51 I, I'm stronger  (first further, last tie; source aligned -> re-aligned)
+  prev NOW line 18: 105.04-111.29; next 20: 118.55-119.47
+  PRE: I,[113.37-114.57] I'm[114.99-115.71] stronger[115.86-116.65]
+  MID: I,[113.37-114.57] I'm[114.99-115.71] stronger[115.86-116.65]
+  NOW: I,[111.38-112.38] I'm[114.45-114.85] stronger[114.85-116.69]
+  heard: I[112.48-113.20] am[113.20-114.32] stronger[114.32-115.86] Oh,[116.58-116.80]
+  cue span (offset-shifted, as used): 112.48-117.48
+
+Stronger L32 2:55 I, I'm stronger than yesterday  (first further, last tie; source aligned -> re-aligned)
+  prev NOW line 31: 169.82-175.56; next 33: 182.66-186.21
+  PRE: I,[176.56-177.26] I'm[177.36-178.1] stronger[178.1-178.98] than[178.98-182.56]
+  MID: I,[175.16-177.9] I'm[178.24-178.34] stronger[178.34-179.4] than[179.4-180.26] yesterday[180.26-182.56]
+  NOW: I,[175.57-177.74] I'm[177.84-178.26] stronger[179.18-179.91] than[180.01-180.26] yesterday[180.26-182.56]
+  heard: I[176.16-176.66] ain't[176.86-177.18] stronger[177.18-178.70] than[178.70-180.22] yesterday[180.22-180.38] Now[182.78-183.04]
+  cue span (offset-shifted, as used): 175.79-180.79
+
+Someone Like You L32 2:37 Never mind, I'll find someone like you  (first closer, last further; source aligned -> re-aligned)
+  prev NOW line 31: 149.56-154.73; next 33: 163.19-169.84
+  PRE: Never[157.75-157.85] mind,[158.04-158.61] I'll[158.77-158.87] find[158.94-159.57] someone[160.09-160.4] like[160.7-161.2] you[161.38-161.92]
+  MID: Never[157.75-157.85] mind,[158.04-158.61] I'll[158.75-158.87] find[158.94-159.55] someone[160.2-160.41] like[160.71-161.21] you[161.4-161.96]
+  NOW: Never[157.24-157.76] mind,[158.17-158.3] I'll[158.64-158.8] find[158.8-159.48] someone[159.48-160.3] like[160.61-161.12] you[161.22-163.09]
+  heard: mind,[157.76-158.28] I'll[158.28-158.78] find[158.78-159.42] someone[159.42-160.30] like[160.30-161.10] you[161.10-161.84] I[162.92-163.84]
+  cue span (offset-shifted, as used): 157.86-162.86
+
+Someone Like You L34 2:49 Don't forget me, I begged  (first further, last ?; source aligned -> re-aligned)
+  prev NOW line 33: 163.19-169.84; next 35: 174.05-177.63
+  PRE: Don't[170.91-171.01] forget[171.46-171.61] me,[171.61-172.51] I[173.01-173.11] begged[173.12-173.79]
+  MID: Don't[170.87-170.99] forget[171.46-171.62] me,[171.62-172.5] I[173.02-173.12] begged[173.13-173.8]
+  NOW: Don't[169.98-171.02] forget[171.16-171.58] me,[171.58-172.6] I[172.8-173.02] begged[173.02-173.62]
+  heard: Don't[170.62-171.00] forget[171.00-171.60] me,[171.60-172.13] I[172.54-172.98] beg,[172.98-173.15] I'll[174.10-174.70]
+  cue span (offset-shifted, as used): 170.87-174.43
+
+Someone Like You L46 3:44 Sometimes it lasts in love  (first closer, last further; source aligned -> re-aligned)
+  prev NOW line 45: 220.96-224.06; next 47: 226.99-231.60
+  PRE: Sometimes[225.23-225.33] it[225.33-225.47] lasts[225.47-226.13] in[226.28-226.41] love[226.41-226.85]
+  MID: Sometimes[225.13-225.23] it[225.23-225.49] lasts[225.49-226.13] in[226.28-226.41] love[226.41-226.85]
+  NOW: Sometimes[224.55-224.92] it[224.92-225.32] lasts[225.32-226.02] in[226.15-226.3] love[226.3-226.94]
+  heard: Sometimes[224.61-225.02] it[225.02-225.42] lasts[225.42-226.04] in[226.24-226.38] love[226.38-226.72] But[227.08-227.24] sometimes[227.24-227.66]
+  cue span (offset-shifted, as used): 224.82-227.33
+
+Someone Like You L49 3:58 I wish nothing but the best for you, too  (first further, last closer; source aligned -> re-aligned)
+  prev NOW line 48: 232.65-237.91; next 50: 245.14-249.05
+  PRE: I[237.85-239.12] wish[239.12-239.5] nothing[240.02-240.12] but[240.43-240.64] the[240.75-241.08] best[241.46-242.08] for[242.39-243.53] you,[243.63-245.74]
+  MID: I[237.77-239.12] wish[239.12-239.5] nothing[239.98-240.08] but[240.4-240.7] the[240.7-240.8] best[240.8-241.1] for[241.1-241.4] you,[241.4-241.7] too[241.7-242.0]
+  NOW: I[238.0-239.13] wish[239.41-239.51] nothing[239.65-240.07] but[240.52-240.67] the[240.67-241.09] best[241.46-242.07] for[242.57-242.93] you,[243.39-243.54] too[243.99-245.05]
+  heard: I[237.88-239.12] wish[239.40-239.50] nothing[239.52-240.06] but[240.06-240.70] the[240.70-241.10] best[241.10-242.06] for[242.06-243.02] you[243.02-243.84] too[243.84-245.28]
+  cue span (offset-shifted, as used): 239.02-244.02
+
+Someone Like You L50 4:05 Don't forget me, I begged  (first further, last ?; source aligned -> re-aligned)
+  prev NOW line 49: 238.01-245.05; next 51: 249.40-252.94
+  PRE: Don't[246.19-246.39] forget[246.8-246.91] me,[246.91-247.83] I[248.33-248.43] begged[248.43-249.13]
+  MID: Don't[246.17-246.37] forget[246.8-246.91] me,[246.91-247.85] I[248.33-248.43] begged[248.43-249.13]
+  NOW: Don't[245.13-246.38] forget[246.74-246.84] me,[247.2-247.79] I[248.16-248.34] begged[248.34-249.04]
+  heard: Don't[245.96-246.32] forget[246.32-246.92] me,[246.92-247.46] I[247.80-248.34] think,[248.34-248.82] I[249.36-249.72]
+  cue span (offset-shifted, as used): 246.15-249.68
+
+Baby One More Time L20 1:44 Tell me, baby, 'cause I need to know now, oh because  (first further, last tie; source aligned -> re-aligned)
+  prev NOW line 19: 100.37-104.23; next 21: 110.95-114.73
+  PRE: Tell[105.24-105.38] me,[105.71-105.82] baby,[106.06-106.84] 'cause[107.08-107.46] I[107.46-107.64] need[107.64-108.0] to[108.0-108.26] know[108.26-108.82] now,[109.18-110.85]
+  MID: Tell[105.26-105.41] me,[105.72-106.41] baby,[106.51-107.35] 'cause[107.35-107.47] I[107.47-107.65] need[107.65-108.01] to[108.01-108.27] know[108.27-108.85] now,[108.85-109.75] oh[109.93-110.03] because[110.03-110.95]
+  NOW: Tell[104.43-105.29] me,[105.42-105.81] baby,[106.07-107.13] 'cause[107.13-107.47] I[107.47-107.65] need[107.75-108.05] to[108.05-108.27] know[108.27-108.83] now,[108.83-109.83] oh[109.85-110.43] because[110.43-110.85]
+  heard: be.[103.64-104.30] Tell[105.18-105.40] me,[105.40-105.68] baby,[105.76-106.46] because[107.10-107.48] I[107.48-107.66] need[107.66-108.02] to[108.02-108.30] know[108.30-108.84] now.[108.84-109.32] Because[109.98-110.64] my[110.64-111.54]
+  cue span (offset-shifted, as used): 104.66-109.66
+
+Miss Independent L3 0:11 Looking good.  (first further, last tie; source aligned -> re-aligned)
+  prev NOW line 2: 9.80-11.83; next 4: 12.90-16.66
+  PRE: Looking[11.89-11.99] good.[12.29-12.79]
+  MID: Looking[11.89-11.99] good.[12.29-12.79]
+  NOW: Looking[11.82-11.92] good.[11.92-12.64]
+  heard: morning.[11.22-11.56] Looking[11.90-12.02] good,[12.02-12.24] Mia.[12.34-12.52] Thank[12.78-12.98] you.[12.98-13.34]
+  cue span (offset-shifted, as used): 11.87-13.33
+
+My Heart Will Go On L3 0:40 Far across the distance  (first ?, last further; source aligned -> re-aligned)
+  prev NOW line 2: 31.00-38.75; next 4: 45.13-50.23
+  PRE: Far[40.7-41.52] across[42.13-42.26] the[42.26-43.48] distance[43.58-43.96]
+  MID: Far[40.37-41.07] across[41.07-42.47] the[42.47-43.17] distance[43.17-44.67]
+  NOW: Far[40.5-41.4] across[41.4-42.28] the[42.42-42.84] distance[43.27-44.55]
+  heard: across[41.20-42.30] the[42.30-42.96] distance[42.96-43.98] and[43.98-45.36]
+  cue span (offset-shifted, as used): 40.75-45.42
+
+My Heart Will Go On L7 1:07 I believe that the heart does go on  (first further, last tie; source aligned -> aligned)
+  prev NOW line 6: 62.53-67.69; next 8: 79.45-86.91
+  PRE: I[67.76-69.18] believe[69.38-70.39] that[70.49-71.37] the[71.91-72.09] heart[72.09-72.81] does[72.81-73.53] go[73.96-74.67] on[74.67-78.18]
+  MID: I[67.68-69.18] believe[69.18-70.73] that[70.83-71.36] the[71.54-72.08] heart[72.08-72.66] does[72.98-73.52] go[74.15-74.66] on[74.66-78.14]
+  NOW: I[67.68-69.18] believe[69.18-70.73] that[70.83-71.36] the[71.55-72.1] heart[72.1-72.66] does[72.98-73.52] go[74.15-74.66] on[74.66-78.14]
+  heard: are[66.98-67.70] I[68.70-69.18] believe[69.18-69.94] That[71.07-71.34] the[71.34-72.10] heart[72.10-72.66] does[72.66-73.52] Go[73.72-74.68] on[74.68-76.38] Once[78.72-80.62]
+  cue span (offset-shifted, as used): 68.67-79.83
+
+My Heart Will Go On L8 1:19 Once more, you open the door  (first ?, last further; source re-aligned -> re-aligned)
+  prev NOW line 7: 67.69-78.15; next 9: 87.09-92.23
+  PRE: Once[79.5-80.89] more,[81.38-83.1] you[83.79-84.19] open[84.19-86.11] the[86.21-86.39] door[86.58-87.13]
+  MID: Once[79.31-81.15] more,[81.25-82.95] you[83.79-84.62] open[84.72-85.64] the[85.82-86.36] door[86.36-87.0]
+  NOW: Once[79.45-81.28] more,[81.38-82.95] you[83.78-85.02] open[85.12-86.09] the[86.19-86.36] door[86.5-86.91]
+  heard: Once[78.72-80.62] more[80.62-82.34] You[83.82-84.20] open[84.20-85.68] the[85.68-86.36] door,[86.36-87.26]
+  cue span (offset-shifted, as used): 79.83-87.88
+
+My Heart Will Go On L9 1:27 And you're here in my heart  (first further, last closer; source aligned -> aligned)
+  prev NOW line 8: 79.45-86.91; next 10: 92.23-100.35
+  PRE: And[87.14-88.46] you're[88.46-89.04] here[89.04-89.68] in[89.68-92.12]
+  MID: And[87.1-88.48] you're[88.61-89.02] here[89.02-90.04] in[90.14-90.76] my[90.9-91.32] heart[91.9-92.24]
+  NOW: And[87.08-88.48] you're[88.61-89.02] here[89.02-90.04] in[90.14-90.76] my[90.9-91.32] heart[91.88-92.22]
+  heard: door,[86.36-87.26] and[87.87-88.58] you'll[88.58-89.02] hear[89.02-89.94] in[89.94-90.78] my[90.78-91.32] heart,[91.32-92.26] and[92.26-92.86]
+  cue span (offset-shifted, as used): 87.88-92.42
+
+My Heart Will Go On L25 3:53 You are safe in my heart and  (first tie, last further; source re-aligned -> re-aligned)
+  prev NOW line 24: 224.93-232.78; next 26: 238.80-248.55
+  PRE: You[233.5-233.89] are[233.89-234.59] safe[234.59-235.21] in[235.21-236.17] my[236.67-236.83] heart[237.12-237.69] and[237.69-238.29]
+  MID: You[233.42-233.66] are[233.66-234.41] safe[234.41-235.41] in[235.41-235.91] my[235.91-236.41] heart[236.41-237.66] and[237.66-238.41]
+  NOW: You[233.52-233.92] are[233.92-234.42] safe[234.42-235.84] in[235.84-236.32] my[236.32-236.9] heart[236.9-237.7] and[237.7-238.24]
+  heard: You[233.24-234.02] are[234.02-234.42] safe[234.42-235.84] in[235.84-236.46] my[236.46-236.88] heart[236.88-237.66] And[237.86-238.32]
+  cue span (offset-shifted, as used): 233.29-238.79
+
+My Heart Will Go On L26 3:58 My heart will go on and on  (first further, last closer; source re-aligned -> re-aligned)
+
+  PRE: My[239.03-239.31] heart[239.45-239.93] will[239.96-240.63] go[241.02-241.67] on[241.67-243.77] and[243.87-243.97] on[243.97-249.55]
+  MID: My[238.94-239.55] heart[239.55-242.3] will[242.4-243.9] go[244.68-245.82] on[245.82-246.96] and[246.96-248.46] on[248.67-249.81]
+  NOW: My[238.8-239.18] heart[239.28-239.96] will[239.96-241.11] go[241.21-241.66] on[241.66-243.57] and[243.67-243.98] on[243.98-248.55]
+  heard: And[237.86-238.32] my[238.98-239.34] heart[239.34-239.96] will[239.97-241.14] go[241.14-241.68] on[241.68-243.16] and[243.16-244.00] on[244.00-244.42]
+  cue span (offset-shifted, as used): 238.79-250.21
+
+She Used To Be Mine L29 2:24 Who be reckless just enough  (first ?, last further; source aligned -> re-aligned)
+  prev NOW line 28: 141.87-143.77; next 30: 149.50-152.35
+  PRE: Who[144.64-144.74] be[144.74-145.02] reckless[145.02-147.08] just[147.18-147.48] enough[147.89-148.57]
+  MID: Who[144.64-144.74] be[144.74-145.02] reckless[145.02-147.08] just[147.18-147.48] enough[147.89-148.57]
+  NOW: Who[144.46-144.6] be[144.6-145.0] reckless[145.0-146.98] just[147.08-147.4] enough[147.77-148.57]
+  heard: Who'll[144.08-144.80] be[144.80-145.00] reckless[145.00-145.82] just[145.82-147.42] enough[147.42-148.48]
+  cue span (offset-shifted, as used): 144.65-149.43
 ```
 
 ## Hand-off prompt (executor)
