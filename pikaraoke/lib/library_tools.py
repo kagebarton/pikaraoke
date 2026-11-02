@@ -56,6 +56,7 @@ from pikaraoke.lib.library_regen import (
     fetch_or_prompt_plan,
     find_local_srt,
     gate_on_disk_caption,
+    is_edited,
     media_duration,
     read_bundle,
     repair_source,
@@ -789,7 +790,7 @@ class LibraryTools:
         if not lines:
             logger.warning("The cue sheet %s holds no lyric lines", plan.lyrics_path.name)
             raise RegenError(UNREADABLE_SHEET_MESSAGE)
-        return WordSheet(kind=kind, lines=lines, spans=spans)
+        return WordSheet(kind=kind, lines=lines, spans=spans, edited=is_edited(plan.lyrics_path))
 
     def _cue_plan(self, song_path: str) -> tuple[Plan, str] | None:
         """The plan the song's next regenerate runs and the kind an edit of it saves as, or None.

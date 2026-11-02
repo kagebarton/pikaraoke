@@ -45,7 +45,7 @@ from pikaraoke.lib.srt_slice_fit import (
     flagged_runs,
     unheard_runs,
 )
-from pikaraoke.lib.word_edit import EDIT_LINE_MAX_CHARS, WordsCleaned
+from pikaraoke.lib.word_edit import EDIT_LINE_MAX_CHARS, WordsCleaned, WordSheet
 
 logger = logging.getLogger(__name__)
 
@@ -201,17 +201,31 @@ def _source_name(status: SongStatus) -> str:
     return _edited_name(name) if status.edited else name
 
 
-def _origin_name(status: SongStatus) -> str:
-    if status.origin == "genius":
+def _name_of_origin(origin: str | None) -> str | None:
+    """A lyrics ``origin`` in words, or None for one that names no source."""
+    if origin == "genius":
         return _("Genius")
-    if status.origin == CUSTOM_ORIGIN:
+    if origin == CUSTOM_ORIGIN:
         return _("Custom lyrics")
-    if status.origin == MOVIE_ORIGIN:
+    if origin == MOVIE_ORIGIN:
         return _("Movie subtitles")
-    if status.origin == LRC_ORIGIN:
+    if origin == LRC_ORIGIN:
         return "LRCLIB"
-    if status.origin == "srt":
+    if origin == "srt":
         return _("YouTube captions")
+    return None
+
+
+def _sheet_source_name(sheet: WordSheet) -> str:
+    """The source of the cue sheet an Edit words page shows, which a bundle may not agree with."""
+    name = _name_of_origin(SHEETS[sheet.kind].origin)
+    return _edited_name(name) if sheet.edited else name
+
+
+def _origin_name(status: SongStatus) -> str:
+    name = _name_of_origin(status.origin)
+    if name:
+        return name
     if status.category == "no_lyrics":
         return _("No lyrics")
     if status.category == "not_processed":
@@ -579,7 +593,7 @@ def edit_words_page():
         title=_("Edit words"),
         song=song,
         name=k.song_manager.filename_from_path(song),
-        source=_source_name(tools.status(song)),
+        source=_sheet_source_name(sheet),
         lines=sheet.lines,
         starts=[_mmss(start) for start, _end in sheet.spans],
         max_chars=EDIT_LINE_MAX_CHARS,
