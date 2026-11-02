@@ -1,6 +1,13 @@
 """Tests for the SRT cue utilities (lib/srt_cues.py)."""
 
-from pikaraoke.lib.srt_cues import cue_spans_from_srt, offset_mad_against_cues
+import pytest
+
+from pikaraoke.lib.srt_cues import (
+    clean_cue_texts,
+    cue_spans_from_srt,
+    cues_to_srt,
+    offset_mad_against_cues,
+)
 
 
 class TestOffsetMadAgainstCues:
@@ -132,3 +139,52 @@ class TestCueSpansFromSrt:
     def test_hyphens_inside_words_and_a_spaced_dash_mid_sentence_stay(self):
         texts, _ = cue_spans_from_srt(self._srt("nine-to-five", "won- derful", "wait - what"))
         assert texts == ["nine-to-five", "won- derful", "wait - what"]
+
+
+class TestCleanCueTexts:
+    def test_each_cue_keeps_its_position_and_a_dropped_one_is_empty(self):
+        assert clean_cue_texts(["(gentle music)", "<i>Hello\nworld</i>", "- Hi. - What?"]) == [
+            "",
+            "Hello world",
+            "Hi. What?",
+        ]
+
+    def test_all_caps_is_decided_over_the_whole_list(self):
+        assert clean_cue_texts(["HELLO THERE", "I KNOW", "(MUSIC)"]) == [
+            "Hello there",
+            "I know",
+            "",
+        ]
+        assert clean_cue_texts(["Hello there", "I know", "HEY!"]) == [
+            "Hello there",
+            "I know",
+            "HEY!",
+        ]
+
+    def test_speaker_label_is_kept_in_an_all_caps_list(self):
+        assert clean_cue_texts(["MULAN: GO", "MEN: NOW"]) == ["Mulan: go", "Men: now"]
+
+    def test_cleaning_twice_changes_nothing(self):
+        once = clean_cue_texts(["MULAN: HELLO", "WAIT. NOW I KNOW", "(music)"])
+        kept = [text for text in once if text]
+        assert clean_cue_texts(kept) == kept
+
+    def test_cue_spans_are_the_cleaned_texts_that_survive(self):
+        text = (
+            "1\n00:00:01,000 --> 00:00:02,000\n(music)\n"
+            "\n2\n00:00:02,500 --> 00:00:04,000\nHello\n"
+        )
+        texts, spans = cue_spans_from_srt(text)
+        assert texts == ["Hello"]
+        assert spans == [(2.5, 4.0)]
+
+
+class TestCuesToSrt:
+    def test_round_trip_gives_the_same_lines_and_spans(self):
+        lines = ["Hello there", "Sing it loud", "Hello there"]
+        spans = [(1.0, 2.5), (3.25, 5.0), (61.125, 63.5)]
+        assert cue_spans_from_srt(cues_to_srt(lines, spans)) == (lines, spans)
+
+    def test_lines_and_spans_of_different_length_are_refused(self):
+        with pytest.raises(ValueError):
+            cues_to_srt(["one", "two"], [(0.0, 1.0)])

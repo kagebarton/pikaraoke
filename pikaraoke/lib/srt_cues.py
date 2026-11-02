@@ -7,6 +7,9 @@ Shared helpers for working with uploader-synced SRT cue times:
   matcher consumes — the SRT cue-align path's line->time input. Speaker
   labels, ``*`` song markers and dialogue dashes are stripped, and a caption
   file typed in capitals comes back in sentence case.
+- :func:`clean_cue_texts` is the per-cue cleaning on its own, one text per cue
+  in its own position, and :func:`cues_to_srt` writes cleaned lines back as an
+  SRT, so a sheet's words can be edited without moving a line's time.
 - :func:`offset_mad_against_cues` fits the robust median display lead of a
   set of audio placements against a cue reference, with a MAD bail-out when
   the anchors are too few or too spread to trust a single constant offset.
@@ -15,6 +18,7 @@ Shared helpers for working with uploader-synced SRT cue times:
 """
 
 import re
+from datetime import timedelta
 from statistics import median
 
 import srt
@@ -71,25 +75,43 @@ def cue_spans_from_srt(srt_text: str) -> tuple[list[str], list[tuple[float, floa
     Applies the same per-cue cleanup as the lyric-align stage's SRT
     load (clean + drop empty), so the returned texts are positionally
     identical to the lyric lines the matcher consumed — the spans are
-    the timing that load step throws away. Subtitle marks that are not
-    words (speaker labels, ``*`` song markers, dialogue dashes) are
-    stripped first. A file typed in capitals is recased here too: on the
-    cue route the aligner's text is the karaoke's word text, so display
-    case can't be fixed downstream. Speaker labels are left alone in such
-    a file, where every line would look like one.
+    the timing that load step throws away. See :func:`clean_cue_texts` for
+    what the cleanup strips and recases.
     """
     cues = list(srt.parse(srt_text))
-    all_caps = _is_all_caps([clean_srt_line(sub.content) for sub in cues])
-    texts: list[str] = []
-    spans: list[tuple[float, float]] = []
-    for sub in cues:
-        cleaned = clean_srt_line(_strip_subtitle_marks(sub.content, labels=not all_caps))
-        if cleaned:
-            texts.append(cleaned)
-            spans.append((sub.start.total_seconds(), sub.end.total_seconds()))
-    if all_caps:
-        texts = [_recase_line(text) for text in texts]
-    return texts, spans
+    cleaned = clean_cue_texts([sub.content for sub in cues])
+    kept = [(text, sub) for text, sub in zip(cleaned, cues) if text]
+    return (
+        [text for text, _ in kept],
+        [(sub.start.total_seconds(), sub.end.total_seconds()) for _, sub in kept],
+    )
+
+
+def clean_cue_texts(contents: list[str]) -> list[str]:
+    """Each cue's cleaned text in its own position, ``""`` for one that cleans to nothing.
+
+    Subtitle marks that are not words (speaker labels, ``*`` song markers,
+    dialogue dashes) are stripped first. A file typed in capitals is recased
+    too: on the cue route the aligner's text is the karaoke's word text, so
+    display case can't be fixed downstream. The capitals rule is decided over
+    the whole list, and speaker labels are left alone in such a file, where
+    every line would look like one.
+    """
+    all_caps = _is_all_caps([clean_srt_line(content) for content in contents])
+    cleaned = [
+        clean_srt_line(_strip_subtitle_marks(content, labels=not all_caps)) for content in contents
+    ]
+    return [_recase_line(text) for text in cleaned] if all_caps else cleaned
+
+
+def cues_to_srt(lines: list[str], spans: list[tuple[float, float]]) -> str:
+    """One cue per line at its span: the inverse of :func:`cue_spans_from_srt` on cleaned lines."""
+    return srt.compose(
+        srt.Subtitle(
+            index=0, start=timedelta(seconds=start), end=timedelta(seconds=end), content=line
+        )
+        for line, (start, end) in zip(lines, spans, strict=True)
+    )
 
 
 def _strip_subtitle_marks(content: str, labels: bool) -> str:
