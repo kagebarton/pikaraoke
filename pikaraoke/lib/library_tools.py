@@ -58,6 +58,7 @@ from pikaraoke.lib.library_regen import (
     gate_on_disk_caption,
     media_duration,
     read_bundle,
+    repair_source,
     reuse_plan,
     sheet_plan,
     watch_url,
@@ -1394,10 +1395,15 @@ class LibraryTools:
         """The lyric source a song has today: ``source``, and for Genius its title and artist.
 
         Custom (typed lines) and movie (subtitles) mean a sheet on disk, the record the
-        run's groups go by, bundle or not.
+        run's groups go by, bundle or not. The edited sheet of a cue source names that
+        source, with ``edited`` set.
         """
         if status.sheet_kind is not None:
-            return {"source": status.sheet_kind}
+            source = repair_source(status.sheet_kind)
+            now = {"source": "captions" if source == "caption" else source}
+            if SHEETS[status.sheet_kind].edits:
+                now["edited"] = True
+            return now
         if status.category == "no_lyrics":
             return {"source": "transcribed"}
         if status.category == "not_processed":

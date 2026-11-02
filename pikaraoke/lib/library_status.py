@@ -18,6 +18,7 @@ from pikaraoke.lib.library_regen import (
     LRC_ORIGIN,
     MOVIE_ORIGIN,
     custom_sheet_path,
+    is_edited,
     list_videos,
     read_bundle,
     sheet_kind,
@@ -35,7 +36,8 @@ class SongStatus:
     category: str  # "current" | "behind" | "no_lyrics" | "not_processed"
     schema_version: int | None
     origin: str | None  # bundle lyrics.origin: "srt" | "genius" | "custom" | "movie_srt" | "lrclib_srt"
-    sheet_kind: str | None  # custom lyric sheet on disk, the pick whatever the bundle says: "custom" | "movie" | "lrclib"
+    edited: bool  # the run timed an admin's word edit of its cue sheet (bundle lyrics.source_path)
+    sheet_kind: str | None  # custom lyric sheet on disk, the pick whatever the bundle says: a key of SHEETS
     genius: dict | None  # lyrics.genius: {id, title, artist}
     lrclib: dict | None  # lyrics.lrclib (an LRCLIB-timed song: its .lrc header): trackName, artistName, albumName, duration, id
     lrclib_state: str  # "used" | "rejected" | "none" | "skipped" | "unreadable" | "n/a"
@@ -80,6 +82,7 @@ def song_status(song: Path) -> SongStatus:
             category=category,
             schema_version=None,
             origin=None,
+            edited=False,
             sheet_kind=kind,
             genius=None,
             lrclib=None,
@@ -110,6 +113,7 @@ def song_status(song: Path) -> SongStatus:
         category="behind" if version < SCHEMA_VERSION else "current",
         schema_version=version,
         origin=origin,
+        edited=is_edited(lyrics.get("source_path")),
         sheet_kind=kind,
         genius=lyrics.get("genius") or None,
         lrclib=_lrclib_match(lyrics) or (_lrc_match_on_disk(lrc) if origin == LRC_ORIGIN else None),
@@ -218,6 +222,7 @@ class HistoryEntry:
     captured_at: str
     schema_version: int | None
     origin: str | None  # the version's lyrics.origin
+    edited: bool  # the version timed an admin's word edit of its cue sheet
     genius: dict | None
     lines: tuple[str, ...]  # lyrics.lines: what tells two custom versions apart
     lrclib: dict | None
@@ -257,6 +262,7 @@ def song_history(song: Path) -> list[HistoryEntry]:
                 captured_at=captured_at,
                 schema_version=bundle.get("schema_version"),
                 origin=lyrics.get("origin"),
+                edited=is_edited(lyrics.get("source_path")),
                 genius=lyrics.get("genius") or None,
                 lines=tuple(lyrics.get("lines") or ()),
                 lrclib=_lrclib_match(lyrics),

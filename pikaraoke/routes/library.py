@@ -150,6 +150,11 @@ def _run_explanation(mode: str) -> str:
 
 def _now_text(now: dict) -> str:
     """The lyric source a song has today, in words."""
+    text = _source_text(now)
+    return _("%(source)s (edited)") % {"source": text} if now.get("edited") else text
+
+
+def _source_text(now: dict) -> str:
     if now["source"] == "genius":
         return _("Now: Genius, %(title)s · %(artist)s") % {
             "title": now["title"],

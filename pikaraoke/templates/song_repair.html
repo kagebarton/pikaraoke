@@ -42,6 +42,11 @@
 </div>
 {% endmacro %}
 
+{# The "current" tag of a source card: the source the song's next regenerate uses. #}
+{% macro current_tag(source) -%}
+{% if current_source == source %} <span class="rp-tag">{% if current_edited %}{% trans %}current (edited){% endtrans %}{% else %}{% trans %}current{% endtrans %}{% endif %}</span>{% endif %}
+{%- endmacro %}
+
 {% block styles %}
 <link rel="stylesheet" href="{{ url_for('static', filename='library-pages.css') }}">
 <style>
@@ -861,27 +866,27 @@
   <div class="rp-sources" role="radiogroup" aria-label="{% trans %}Lyric source{% endtrans %}">
     <label class="rp-src is-off" data-source="caption">
       <input type="radio" name="source" disabled>
-      <span><b>{% trans %}YouTube caption{% endtrans %}</b>{% if current_source == 'caption' %} <span class="rp-tag">{% trans %}current{% endtrans %}</span>{% endif %}<span class="rp-muted rp-src-note rp-src-desc"></span></span>
+      <span><b>{% trans %}YouTube caption{% endtrans %}</b>{{ current_tag('caption') }}<span class="rp-muted rp-src-note rp-src-desc"></span></span>
     </label>
     <label class="rp-src" data-source="genius">
       <input type="radio" name="source">
-      <span><b>{% trans %}Genius lyrics{% endtrans %}</b>{% if current_source == 'genius' %} <span class="rp-tag">{% trans %}current{% endtrans %}</span>{% endif %}<span class="rp-muted rp-src-desc">{% trans %}Search and pick, then choose an LRCLIB match.{% endtrans %}</span></span>
+      <span><b>{% trans %}Genius lyrics{% endtrans %}</b>{{ current_tag('genius') }}<span class="rp-muted rp-src-desc">{% trans %}Search and pick, then choose an LRCLIB match.{% endtrans %}</span></span>
     </label>
     <label class="rp-src" data-source="custom">
       <input type="radio" name="source">
-      <span><b>{% trans %}Custom lyrics{% endtrans %}</b>{% if current_source == 'custom' %} <span class="rp-tag">{% trans %}current{% endtrans %}</span>{% endif %}<span class="rp-muted rp-src-desc">{% trans %}Type or paste the lyrics, or open a .txt file.{% endtrans %}</span></span>
+      <span><b>{% trans %}Custom lyrics{% endtrans %}</b>{{ current_tag('custom') }}<span class="rp-muted rp-src-desc">{% trans %}Type or paste the lyrics, or open a .txt file.{% endtrans %}</span></span>
     </label>
     <label class="rp-src" data-source="movie">
       <input type="radio" name="source">
-      <span><b>{% trans %}Movie subtitles{% endtrans %}</b>{% if current_source == 'movie' %} <span class="rp-tag">{% trans %}current{% endtrans %}</span>{% endif %}<span class="rp-muted rp-src-desc">{% trans %}Time the song from the movie's own subtitles.{% endtrans %}</span></span>
+      <span><b>{% trans %}Movie subtitles{% endtrans %}</b>{{ current_tag('movie') }}<span class="rp-muted rp-src-desc">{% trans %}Time the song from the movie's own subtitles.{% endtrans %}</span></span>
     </label>
     <label class="rp-src" data-source="lrclib">
       <input type="radio" name="source">
-      <span><b>{% trans %}LRCLIB timing{% endtrans %}</b>{% if current_source == 'lrclib' %} <span class="rp-tag">{% trans %}current{% endtrans %}</span>{% endif %}<span class="rp-muted rp-src-desc">{% trans %}Time the song from an LRCLIB match's own line times.{% endtrans %}</span></span>
+      <span><b>{% trans %}LRCLIB timing{% endtrans %}</b>{{ current_tag('lrclib') }}<span class="rp-muted rp-src-desc">{% trans %}Time the song from an LRCLIB match's own line times.{% endtrans %}</span></span>
     </label>
     <label class="rp-src" data-source="transcribe">
       <input type="radio" name="source">
-      <span><b>{% trans %}No lyrics (transcribe){% endtrans %}</b>{% if current_source == 'transcribe' %} <span class="rp-tag">{% trans %}current{% endtrans %}</span>{% endif %}<span class="rp-muted rp-src-desc">{% trans %}Words come from what the singer is heard singing.{% endtrans %}</span></span>
+      <span><b>{% trans %}No lyrics (transcribe){% endtrans %}</b>{{ current_tag('transcribe') }}<span class="rp-muted rp-src-desc">{% trans %}Words come from what the singer is heard singing.{% endtrans %}</span></span>
     </label>
   </div>
 

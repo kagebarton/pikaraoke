@@ -19,7 +19,7 @@ from unittest.mock import MagicMock
 import pytest
 import srt
 
-from pikaraoke.lib import lrclib
+from pikaraoke.lib import library_status, lrclib
 from pikaraoke.lib.alignment_capture import SCHEMA_VERSION
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.genius import (
@@ -4256,3 +4256,39 @@ class TestAddPlaylist:
 
         assert result == {"downloads": 0, "processing": 0, "listed": 0}
         download.processing.enqueue.assert_not_called()
+
+
+class TestNowSource:
+    """``_now``: where a song stands today, from the sheet on disk; an edit names its source."""
+
+    @staticmethod
+    def now(tmp_path, write) -> dict:
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        write(tmp_path, video.stem)
+        return LibraryTools._now(library_status.song_status(video))
+
+    @pytest.mark.parametrize(
+        "kind, source",
+        [("caption_edited", "captions"), ("movie_edited", "movie"), ("lrclib_edited", "lrclib")],
+    )
+    def test_an_edited_sheet_names_its_source_and_says_so(self, tmp_path, kind, source):
+        now = self.now(tmp_path, lambda folder, stem: write_edited_sheet(folder, stem, kind))
+
+        assert now == {"source": source, "edited": True}
+
+    @pytest.mark.parametrize(
+        "write, source",
+        [
+            (partial(write_movie_sheet, text=WORDS_SRT), "movie"),
+            (partial(write_lrc_sheet, text=WORDS_SRT), "lrclib"),
+            (write_sheet, "custom"),
+        ],
+        ids=["movie", "lrclib", "custom"],
+    )
+    def test_a_plain_sheet_is_as_it_was(self, tmp_path, write, source):
+        assert self.now(tmp_path, write) == {"source": source}
+
+    def test_a_caption_with_no_sheet_is_captions_and_not_edited(self, tmp_path):
+        now = self.now(tmp_path, write_cue_caption)
+
+        assert now == {"source": "captions"}

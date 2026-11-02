@@ -19,6 +19,7 @@ from pikaraoke.lib.library_regen import (
     MOVIE_ORIGIN,
     SHEETS,
     RegenError,
+    repair_source,
 )
 from pikaraoke.lib.library_status import HistoryEntry, SongStatus, length_gap_s
 from pikaraoke.lib.library_tools import (
@@ -190,7 +191,17 @@ def _rejected_texts(reason: str | None) -> tuple[str, str]:
     return _("not checked"), _("Not checked on the last run.")
 
 
+def _edited_name(name: str) -> str:
+    """``name`` as the source of lyrics whose words an admin edited: "LRCLIB (edited)"."""
+    return _("%(source)s (edited)") % {"source": name}
+
+
 def _source_name(status: SongStatus) -> str:
+    name = _origin_name(status)
+    return _edited_name(name) if status.edited else name
+
+
+def _origin_name(status: SongStatus) -> str:
     if status.origin == "genius":
         return _("Genius")
     if status.origin == CUSTOM_ORIGIN:
@@ -331,15 +342,18 @@ def _lrclib_fit(status: SongStatus) -> tuple[str | None, str, bool]:
     return fit, _("No LRCLIB match was found."), True
 
 
+def _cue_route_text(status: SongStatus) -> str:
+    if status.origin == MOVIE_ORIGIN:
+        return _("Lyrics from the movie's subtitles, timed against the subtitles' own line times.")
+    if status.origin == LRC_ORIGIN:
+        return _("Lyrics from an LRCLIB match, timed against its own line times.")
+    return _("Lyrics from the YouTube caption, timed against the caption's own line times.")
+
+
 def _route_text(status: SongStatus) -> str | None:
     if status.method == "cue_align":
-        if status.origin == MOVIE_ORIGIN:
-            return _(
-                "Lyrics from the movie's subtitles, timed against the subtitles' own line times."
-            )
-        if status.origin == LRC_ORIGIN:
-            return _("Lyrics from an LRCLIB match, timed against its own line times.")
-        return _("Lyrics from the YouTube caption, timed against the caption's own line times.")
+        text = _cue_route_text(status)
+        return f"{text} " + _("The words were edited here.") if status.edited else text
     if status.method == "joint":
         if status.origin == CUSTOM_ORIGIN:
             if status.ytasr_used:
@@ -374,9 +388,9 @@ def _lrclib_label(match: dict | None) -> str:
 
 
 def _pick(entry: HistoryEntry) -> tuple:
-    """What a version's lyric pick is: its source, and the Genius song or the custom words."""
+    """What a version's lyric pick is: its source, and the Genius song or the sheet's words."""
     if entry.origin in {sheet.origin for sheet in SHEETS.values()}:
-        return (entry.origin, entry.lines)
+        return (entry.origin, entry.edited, entry.lines)
     return (entry.origin, (entry.genius or {}).get("id"))
 
 
@@ -397,6 +411,8 @@ def _versions(history: list[HistoryEntry]) -> list[Version]:
             genius_text, lrclib_text = _("LRCLIB timing"), None
         else:
             genius_text, lrclib_text = _("YouTube captions"), None
+        if entry.edited:
+            genius_text = _edited_name(genius_text)
         older_lrclib = (older.lrclib or {}).get("id") if older else lrclib_id
         lrclib_changed = lrclib_text is not None and lrclib_id != older_lrclib
         if lrclib_changed and lrclib_id is not None:
@@ -478,7 +494,7 @@ def regenerate():
 def _current_source(status: SongStatus) -> str | None:
     """Which repair source the song's next regenerate uses, for the page's "current" tag."""
     if status.sheet_kind is not None:
-        return status.sheet_kind  # a sheet's kind names its repair source
+        return repair_source(status.sheet_kind)
     if status.origin == "srt":
         return "caption"
     if status.origin == "genius":
@@ -527,6 +543,8 @@ def repair_page():
         name=k.song_manager.filename_from_path(song),
         has_youtube_id=status.youtube_id is not None,
         current_source=_current_source(status),
+        current_edited=status.sheet_kind is not None
+        and SHEETS[status.sheet_kind].edits is not None,
         preselect=source if source in REPAIR_SOURCES else None,
         current_genius_id=(status.genius or {}).get("id"),
         custom_prefill=start["text"],
