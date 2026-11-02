@@ -10,6 +10,29 @@ from pikaraoke.lib.srt_cues import (
     offset_mad_against_cues,
 )
 
+# Cue files from the cleaning tests in this module (and the label-behind-a-tag pair), each
+# one cleaned as a whole, to check that every cleaned line cleans to itself.
+CUE_FILES = [
+    ["(gentle music)", "<i>♪ Hello\nworld ♪</i>"],
+    ["♪ I′M GOING UNDER,\nAND THIS TIME ♪", "'TIL I COME BACK AROUND", "WAIT. NOW I KNOW"],
+    ["I'm going under", "and this time", "I fear there's no one", "HEY!"],
+    ["DJ 放音乐", "走吧 OK", "你是我的 MVP"],
+    ["ANNA:", "Hello there", "BOTH:"],
+    ["ANNA: Hello there", "MR. POTTS: Be our guest", "<i>MEN: Be a man</i>", "Listen: it's time"],
+    ["- ANNA: Hello there", "BOB: * Sing along *", "Hi\nCARL: bye"],
+    ["ANNA: HELLO THERE", "I FEAR THERE'S NO ONE"],
+    ["* Sing along *", "* Next line", "what the f***"],
+    ["- Hello there. - What?", "- One\n- Two", "* - Sing it", "♪ - Sing it"],
+    ["-Hello there. -What?", "-One\n-Two", "-Be a man -With all", "--miss it"],
+    ["nine-to-five", "won- derful", "wait - what"],
+    ["(gentle music)", "<i>Hello\nworld</i>", "- Hi. - What?"],
+    ["HELLO THERE", "I KNOW", "(MUSIC)"],
+    ["Hello there", "I know", "HEY!"],
+    ["MULAN: GO", "MEN: NOW"],
+    ["MULAN: HELLO", "WAIT. NOW I KNOW", "(music)"],
+    ["(softly) MARA: hey there", "<i>MEN:</i> go now"],
+]
+
 
 class TestOffsetMadAgainstCues:
     """Direct tests of the pure offset-calibration step."""
@@ -168,6 +191,17 @@ class TestCleanCueTexts:
     def test_cleaning_twice_changes_nothing(self):
         once = clean_cue_texts(["MULAN: HELLO", "WAIT. NOW I KNOW", "(music)"])
         kept = [text for text in once if text]
+        assert clean_cue_texts(kept) == kept
+
+    def test_a_label_behind_parentheses_or_a_tag_is_stripped(self):
+        assert clean_cue_texts(["(softly) MARA: hey there", "<i>MEN:</i> go now"]) == [
+            "hey there",
+            "go now",
+        ]
+
+    @pytest.mark.parametrize("contents", CUE_FILES)
+    def test_a_cleaned_cue_cleans_to_itself(self, contents):
+        kept = [text for text in clean_cue_texts(contents) if text]
         assert clean_cue_texts(kept) == kept
 
     def test_cue_spans_are_the_cleaned_texts_that_survive(self):
