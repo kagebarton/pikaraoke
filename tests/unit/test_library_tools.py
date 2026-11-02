@@ -474,6 +474,10 @@ EDITED_SHEETS = {
 }
 
 
+NOT_CUE_TIMED = "isn't timed from a caption"
+UNREADABLE = "can't be read or hold no lyric lines"
+
+
 class TestWordSheet:
     @pytest.mark.parametrize(
         "write, kind, origin", [*CUE_SOURCES.values(), *EDITED_SHEETS.values()]
@@ -506,7 +510,8 @@ class TestWordSheet:
         genius_bundle(tmp_path, video.stem)
         tools, _ = make_tools(tmp_path, [str(video)])
 
-        assert tools.word_sheet(str(video)) is None
+        with pytest.raises(RegenError, match=NOT_CUE_TIMED):
+            tools.word_sheet(str(video))
 
     def test_a_typed_custom_sheet_has_no_cue_sheet(self, tmp_path):
         [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
@@ -514,7 +519,8 @@ class TestWordSheet:
         write_sheet(tmp_path, video.stem)
         tools, _ = make_tools(tmp_path, [str(video)])
 
-        assert tools.word_sheet(str(video)) is None
+        with pytest.raises(RegenError, match=NOT_CUE_TIMED):
+            tools.word_sheet(str(video))
 
     def test_a_transcribed_song_has_no_cue_sheet(self, tmp_path):
         [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
@@ -522,43 +528,103 @@ class TestWordSheet:
         (tmp_path / "karaoke" / f"{video.stem}.ass").write_text("", encoding="utf-8")
         tools, _ = make_tools(tmp_path, [str(video)])
 
-        assert tools.word_sheet(str(video)) is None
+        with pytest.raises(RegenError, match=NOT_CUE_TIMED):
+            tools.word_sheet(str(video))
 
     def test_a_song_with_nothing_has_no_cue_sheet(self, tmp_path):
         [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
         tools, _ = make_tools(tmp_path, [str(video)])
 
-        assert tools.word_sheet(str(video)) is None
+        with pytest.raises(RegenError, match=NOT_CUE_TIMED):
+            tools.word_sheet(str(video))
 
     def test_a_caption_missing_from_disk_has_no_cue_sheet(self, tmp_path):
         [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
         write_bundle(tmp_path, video.stem, lyrics={"origin": "srt", "lines": WORDS})
         tools, _ = make_tools(tmp_path, [str(video)])
 
-        assert tools.word_sheet(str(video)) is None
+        with pytest.raises(RegenError, match=NOT_CUE_TIMED):
+            tools.word_sheet(str(video))
 
     @pytest.mark.parametrize(
         "content",
-        [b"\xff\xfe not utf-8 \x80", b"1\n00:00:01,000 --> not a time\nwords\n"],
-        ids=["not_utf8", "bad_time"],
+        [
+            b"\xff\xfe not utf-8 \x80",
+            b"1\n00:00:01,000 --> not a time\nwords\n",
+            b"1\n99999999999999:00:00,000 --> 99999999999999:00:01,000\nwords\n",
+        ],
+        ids=["not_utf8", "bad_time", "time_out_of_range"],
     )
-    def test_a_sheet_that_cannot_be_read_gives_none_and_a_warning(self, tmp_path, caplog, content):
+    def test_a_sheet_that_cannot_be_read_says_so_and_logs_a_warning(
+        self, tmp_path, caplog, content
+    ):
         [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
         write_movie_sheet(tmp_path, video.stem).write_bytes(content)
         tools, _ = make_tools(tmp_path, [str(video)])
 
-        assert tools.word_sheet(str(video)) is None
+        with pytest.raises(RegenError, match=UNREADABLE):
+            tools.word_sheet(str(video))
         assert "Could not read the cue sheet" in caplog.text
 
     @pytest.mark.parametrize(
         "text", ["", cues_to_srt(["(la la)"], [(1.0, 2.0)])], ids=["empty", "all_cleaned_away"]
     )
-    def test_a_sheet_with_no_lines_gives_none(self, tmp_path, text):
+    def test_a_sheet_with_no_lines_says_so_and_logs_a_warning(self, tmp_path, caplog, text):
         [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
         write_movie_sheet(tmp_path, video.stem, text)
         tools, _ = make_tools(tmp_path, [str(video)])
 
-        assert tools.word_sheet(str(video)) is None
+        with pytest.raises(RegenError, match=UNREADABLE):
+            tools.word_sheet(str(video))
+        assert "holds no lyric lines" in caplog.text
+
+
+class TestCanEditWords:
+    @pytest.mark.parametrize(
+        "write, kind, origin", [*CUE_SOURCES.values(), *EDITED_SHEETS.values()]
+    )
+    def test_a_song_whose_next_run_replays_a_cue_sheet_can(self, tmp_path, write, kind, origin):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        write(tmp_path, video.stem)
+        tools, _ = make_tools(tmp_path, [str(video)])
+
+        assert tools.can_edit_words(str(video)) is True
+
+    @pytest.mark.parametrize(
+        "setup",
+        [
+            lambda folder, stem: genius_bundle(folder, stem),
+            lambda folder, stem: (genius_bundle(folder, stem), write_sheet(folder, stem)),
+            lambda folder, stem: (
+                (folder / "karaoke").mkdir(),
+                (folder / "karaoke" / f"{stem}.ass").write_text("", encoding="utf-8"),
+            ),
+            lambda folder, stem: None,
+            lambda folder, stem: write_bundle(
+                folder, stem, lyrics={"origin": "srt", "lines": WORDS}
+            ),
+        ],
+        ids=["genius", "custom_text", "transcribed", "nothing", "caption_missing_from_disk"],
+    )
+    def test_a_song_that_is_not_cue_timed_cannot(self, tmp_path, setup):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        setup(tmp_path, video.stem)
+        tools, _ = make_tools(tmp_path, [str(video)])
+
+        assert tools.can_edit_words(str(video)) is False
+
+    def test_it_never_reads_the_sheet(self, tmp_path, monkeypatch):
+        """A sheet nobody can read still gets its button; the page then says what is wrong."""
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        write_movie_sheet(tmp_path, video.stem).write_bytes(b"\xff\xfe not utf-8 \x80")
+        tools, _ = make_tools(tmp_path, [str(video)])
+
+        def read(*args, **kwargs):
+            raise AssertionError("the sheet was read")
+
+        monkeypatch.setattr("pikaraoke.lib.library_tools.cue_spans_from_srt", read)
+
+        assert tools.can_edit_words(str(video)) is True
 
 
 class TestEditWords:
@@ -631,6 +697,17 @@ class TestEditWords:
         tools, processing = make_tools(tmp_path, [str(video)])
 
         with pytest.raises(RegenError, match=message):
+            tools.edit_words(str(video), WORDS, self.edited((1, "Carry us home")))
+
+        processing.enqueue_regen.assert_not_called()
+        assert not list(tmp_path.glob("regen_backups/*"))
+
+    def test_a_sheet_that_cannot_be_read_is_refused_with_the_reason(self, tmp_path):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        write_lrc_sheet(tmp_path, video.stem).write_bytes(b"\xff\xfe not utf-8 \x80")
+        tools, processing = make_tools(tmp_path, [str(video)])
+
+        with pytest.raises(RegenError, match=UNREADABLE):
             tools.edit_words(str(video), WORDS, self.edited((1, "Carry us home")))
 
         processing.enqueue_regen.assert_not_called()

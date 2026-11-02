@@ -91,6 +91,10 @@ from pikaraoke.lib.youtube_dl import ASR_JSON3_SUFFIX
 logger = logging.getLogger(__name__)
 
 BUSY_MESSAGE = "This song has a regen waiting or running."
+UNREADABLE_SHEET_MESSAGE = (
+    "This song's subtitles can't be read or hold no lyric lines, so its words can't be "
+    "edited. Repair lyrics can replace them."
+)
 
 # The lyric sources :meth:`LibraryTools.repair` takes: the edited sheet kinds are no
 # source, a word edit is not a repair.
@@ -755,27 +759,51 @@ class LibraryTools:
         job.replaces_custom = source not in SHEETS
         self._queue(job, reset=True, label="Repair")
 
-    def word_sheet(self, song_path: str) -> WordSheet | None:
-        """The cue sheet the song's next regenerate reads, as an edit sees it, or None.
+    def can_edit_words(self, song_path: str) -> bool:
+        """Whether the song's next regenerate replays a cue sheet, so its words can be edited.
+
+        Reads no sheet, so a page can ask on every view; :meth:`word_sheet` is the one
+        that finds out whether the sheet can be read.
+        """
+        return self._cue_plan(song_path) is not None
+
+    def word_sheet(self, song_path: str) -> WordSheet:
+        """The cue sheet the song's next regenerate reads, as an edit sees it.
+
+        Raises :class:`RegenError`, with a message for the admin, for a song that
+        :meth:`can_edit_words` refuses and for a sheet that can't be read or holds no
+        lyric lines once cleaned (logged).
+        """
+        found = self._cue_plan(song_path)
+        if found is None:
+            raise RegenError(
+                "This song isn't timed from a caption or subtitles, so its words can't be "
+                "edited here."
+            )
+        plan, kind = found
+        try:
+            lines, spans = cue_spans_from_srt(plan.lyrics_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, OverflowError, srt.SRTParseError) as e:
+            logger.warning("Could not read the cue sheet %s: %s", plan.lyrics_path.name, e)
+            raise RegenError(UNREADABLE_SHEET_MESSAGE) from e
+        if not lines:
+            logger.warning("The cue sheet %s holds no lyric lines", plan.lyrics_path.name)
+            raise RegenError(UNREADABLE_SHEET_MESSAGE)
+        return WordSheet(kind=kind, lines=lines, spans=spans)
+
+    def _cue_plan(self, song_path: str) -> tuple[Plan, str] | None:
+        """The plan the song's next regenerate runs and the kind an edit of it saves as, or None.
 
         None unless that run replays an SRT through the cue route: a YouTube caption,
         movie subtitles, an LRCLIB match, or the edited sheet of one of those (whose
-        kind a second edit keeps); the plan's origin says which. An SRT that can't be
-        read is logged and gives None.
+        kind a second edit keeps); the plan's origin says which.
         """
         job = self._regen_job(song_path)
         plan = job.plan if job else None
         if plan is None or plan.kind != "seed" or plan.lyrics_path is None:
             return None
         kind = edited_kind(plan.seed.get("lyrics_origin"))
-        if kind is None:
-            return None
-        try:
-            lines, spans = cue_spans_from_srt(plan.lyrics_path.read_text(encoding="utf-8"))
-        except (OSError, ValueError, srt.SRTParseError) as e:
-            logger.warning("Could not read the cue sheet %s: %s", plan.lyrics_path.name, e)
-            return None
-        return WordSheet(kind=kind, lines=lines, spans=spans) if lines else None
+        return (plan, kind) if kind else None
 
     def edit_words(self, song_path: str, original: object, lines: object) -> None:
         """Queue a regen that replaces the words of the song's cue sheet, keeping line times.
@@ -793,11 +821,6 @@ class LibraryTools:
         if self.is_busy(song_path):
             raise RegenError(BUSY_MESSAGE)
         sheet = self.word_sheet(song_path)
-        if sheet is None:
-            raise RegenError(
-                "This song isn't timed from a caption or subtitles, so its words can't be "
-                "edited here."
-            )
         text = edited_srt(sheet, original, lines)
         job = self._song_job(song_path)
         job.plan = sheet_plan(job.song_path, sheet.kind, text)
