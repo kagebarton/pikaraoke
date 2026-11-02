@@ -28,9 +28,10 @@ logger = logging.getLogger(__name__)
 # Additive since v11 (no bump -- additions only):
 #   - cue_inputs: cue-align runs only (None on the other routes, absent from
 #     earlier bundles). What the per-line rescue consumed, so it and the edge
-#     snaps re-run offline without whisper: ``sections``, the line objects
-#     (line_id/text/words/start/end/source) the section align produced before
-#     any rescue; ``realigns``, one {line_id, w0, w1, words} per one-line
+#     snaps re-run offline without whisper: ``spans``, the [start, end] cue
+#     spans the rescue was given (offset-shifted when the song re-sectioned);
+#     ``sections``, the line objects (line_id/text/words/start/end/source) the
+#     section align produced before any rescue; ``realigns``, one {line_id, w0, w1, words} per one-line
 #     re-align in call order, ``words`` the aligner's raw result at absolute
 #     song time, null when the align failed.
 # v11: interior-pause end repair (plans/edge-snap-coverage-accuracy.md

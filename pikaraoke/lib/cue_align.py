@@ -1005,9 +1005,10 @@ def align_song(
     count, the fitted offset, whether a re-section fired, and the repace sub-stats.
     ``cue_inputs`` is what the rescue consumed, copied out so a replay re-runs
     :func:`repace_bad_lines` and the edge snaps after it without the aligner:
-    ``sections``, the line objects the section align produced before any rescue, and
-    ``realigns``, one ``{line_id, w0, w1, words}`` per one-line re-align in call order
-    (``words`` is the aligner's raw result, None when it failed).
+    ``spans``, the cue spans it was given (shifted by the first pass's offset when the
+    song re-sectioned); ``sections``, the line objects the section align produced
+    before any rescue; and ``realigns``, one ``{line_id, w0, w1, words}`` per one-line
+    re-align in call order (``words`` is the aligner's raw result, None when it failed).
     """
     show_progress = progress or (lambda sections: sections)
 
@@ -1064,4 +1065,5 @@ def align_song(
         "resectioned": resectioned,
         "repace": repace_stats,
     }
-    return line_objects, stats, {"sections": sections_aligned, "realigns": realigns}
+    cue_inputs = {"spans": list(spans), "sections": sections_aligned, "realigns": realigns}
+    return line_objects, stats, cue_inputs
