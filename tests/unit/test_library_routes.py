@@ -152,11 +152,12 @@ EDIT_LINES = [
 EDIT_SPANS = [(1.0, 3.5), (4.0, 6.25), (7.0, 9.5), (62.0, 64.0), (131.0, 134.5)]
 EDIT_SRT = cues_to_srt(EDIT_LINES, EDIT_SPANS)
 
-# Each cue source's lyrics origin in the bundle, and the suffix of its sheet (a caption has none).
+# Each cue source's lyrics origin in the bundle, the suffix of its sheet in lyrics/ (a caption
+# is no sheet: it lives in subtitles/) and of the sheet an edit of it saves as.
 CUE_SOURCES = {
-    "caption": ("srt", None),
-    "movie": ("movie_srt", ".custom.srt"),
-    "lrclib": ("lrclib_srt", ".lrclib.srt"),
+    "caption": ("srt", None, ".caption-edited.srt"),
+    "movie": ("movie_srt", ".custom.srt", ".movie-edited.srt"),
+    "lrclib": ("lrclib_srt", ".lrclib.srt", ".lrclib-edited.srt"),
 }
 
 
@@ -221,19 +222,28 @@ class Env:
             write_bundle(self.folder, video.stem, **bundle)
         return str(video)
 
-    def add_cue_song(self, source: str = "caption", srt_text: str = EDIT_SRT) -> str:
-        """A song whose last run was timed on the cue route from ``source``'s SRT, ``srt_text``."""
-        origin, suffix = CUE_SOURCES[source]
-        bundle = caption_bundle()
-        bundle["lyrics"] = {"origin": origin, "lines": EDIT_LINES}
-        song = self.add_song("A---aaaaaaaaaaa.mp4", bundle)
-        if suffix is None:
-            caption = self.folder / "subtitles" / "A---aaaaaaaaaaa.en.srt"
-            caption.parent.mkdir(exist_ok=True)
-            caption.write_text(srt_text, encoding="utf-8")
+    def add_cue_song(
+        self, source: str = "caption", srt_text: str = EDIT_SRT, *, edited: bool = False
+    ) -> str:
+        """A song whose last run was timed on the cue route from ``source``'s SRT, ``srt_text``.
+
+        ``edited``: the SRT is the edited sheet of that source, as an Edit words save leaves it.
+        """
+        origin, suffix, edited_suffix = CUE_SOURCES[source]
+        stem = "A---aaaaaaaaaaa"
+        if edited or suffix is not None:
+            read = write_sheet(self.folder, stem, srt_text, edited_suffix if edited else suffix)
         else:
-            write_sheet(self.folder, "A---aaaaaaaaaaa", srt_text, suffix)
-        return song
+            read = self.folder / "subtitles" / f"{stem}.en.srt"
+            read.parent.mkdir(exist_ok=True)
+            read.write_text(srt_text, encoding="utf-8")
+        bundle = caption_bundle()
+        bundle["lyrics"] = {
+            "origin": origin,
+            "source_path": str(read.relative_to(self.folder)),
+            "lines": EDIT_LINES,
+        }
+        return self.add_song(f"{stem}.mp4", bundle)
 
     def page(self, song: str):
         return self.client.get("/song_info", query_string={"song": song})
@@ -1025,6 +1035,154 @@ def fixed() -> list[str]:
     lines = list(EDIT_LINES)
     lines[1] = "Carry us home"
     return lines
+
+
+class TestEditedLabels:
+    """An edit shows only where a label is written: the source's name, route text, History."""
+
+    NAMES = [
+        ("caption", "YouTube captions"),
+        ("movie", "Movie subtitles"),
+        ("lrclib", "LRCLIB"),
+    ]
+
+    @pytest.mark.parametrize("source, name", NAMES)
+    def test_the_lyrics_tile_and_source_row_read_edited(self, env, source, name):
+        html = text(env.page(env.add_cue_song(source, edited=True)))
+
+        assert f'<span class="si-value">{name} (edited)</span>' in html
+        assert f'<span class="si-val">{name} (edited)</span>' in html
+
+    @pytest.mark.parametrize("source, name", NAMES)
+    def test_a_plain_cue_song_reads_as_it_did(self, env, source, name):
+        html = text(env.page(env.add_cue_song(source)))
+
+        assert f'<span class="si-val">{name}</span>' in html
+        assert "(edited)" not in html and "edited here" not in html
+
+    @pytest.mark.parametrize("source", CUE_SOURCES)
+    def test_the_alignment_tab_says_the_words_were_edited(self, env, source):
+        html = text(env.page(env.add_cue_song(source, edited=True)))
+
+        assert "own line times. The words were edited here." in html
+
+    @staticmethod
+    def history(html: str) -> str:
+        return html.split('id="tab-history"')[1]
+
+    def backup(self, env, bundle: dict) -> None:
+        write_bundle(
+            env.folder,
+            "A---aaaaaaaaaaa",
+            root=env.folder / "regen_backups" / "20261019T175506Z",
+            captured_at="2026-09-21T10:00:00+00:00",
+            **bundle,
+        )
+
+    def old_version(self, source: str, *, edited: bool, lines=EDIT_LINES) -> dict:
+        """A backed-up version of the cue song, as the bundle of its run left it."""
+        origin, suffix, edited_suffix = CUE_SOURCES[source]
+        path = f"lyrics/A---aaaaaaaaaaa{edited_suffix if edited else suffix or '.en.srt'}"
+        bundle = caption_bundle()
+        bundle["lyrics"] = {"origin": origin, "source_path": path, "lines": list(lines)}
+        return bundle
+
+    @pytest.mark.parametrize("source, name", NAMES[:2] + [("lrclib", "LRCLIB timing")])
+    def test_the_history_row_of_an_edited_version_reads_edited(self, env, source, name):
+        song = env.add_cue_song(source, edited=True)
+        self.backup(env, self.old_version(source, edited=False))
+
+        history = self.history(text(env.page(song)))
+
+        assert f"{name} (edited)" in history
+        assert history.count("(edited)") == 1  # not the backup under it
+
+    def test_an_edit_is_a_change_of_pick_though_the_lines_are_the_same(self, env):
+        song = env.add_cue_song("lrclib", edited=True)
+        self.backup(env, self.old_version("lrclib", edited=False))
+
+        history = self.history(text(env.page(song)))
+
+        assert 'class="si-chg">LRCLIB timing (edited)' in history
+        assert history.count("si-chg") == 1
+
+    @pytest.mark.parametrize(
+        ("older_lines", "changed"), [(EDIT_LINES, False), (["won", *EDIT_LINES[1:]], True)]
+    )
+    @pytest.mark.parametrize("source", CUE_SOURCES)
+    def test_a_second_edit_is_a_change_only_when_the_words_differ(
+        self, env, source, older_lines, changed
+    ):
+        song = env.add_cue_song(source, edited=True)
+        self.backup(env, self.old_version(source, edited=True, lines=older_lines))
+
+        history = self.history(text(env.page(song)))
+
+        assert (history.count("si-chg") == 1) is changed
+
+    @pytest.mark.parametrize(
+        ("older_lines", "changed"), [(EDIT_LINES, False), (["won", *EDIT_LINES[1:]], True)]
+    )
+    def test_two_caption_versions_compare_by_their_lines(self, env, older_lines, changed):
+        song = env.add_cue_song("caption")
+        self.backup(env, self.old_version("caption", edited=False, lines=older_lines))
+
+        history = self.history(text(env.page(song)))
+
+        assert ('class="si-chg">YouTube captions' in history) is changed
+        assert "(edited)" not in history
+
+    @pytest.mark.parametrize(
+        "source, name",
+        [("caption", "YouTube caption"), ("movie", "Movie subtitles"), ("lrclib", "LRCLIB timing")],
+    )
+    def test_the_repair_page_tags_the_edited_source_current_edited(self, env, source, name):
+        html = text(
+            env.client.get(
+                "/song_info/repair", query_string={"song": env.add_cue_song(source, edited=True)}
+            )
+        )
+
+        assert "current (edited)" in card(html, source)
+        assert html.count("current (edited)") == 1
+        assert 'var CURRENT_SOURCE = "%s"' % source in html
+
+    @pytest.mark.parametrize("source", ["movie", "lrclib"])
+    def test_the_repair_page_tags_a_plain_sheet_current(self, env, source):
+        html = text(
+            env.client.get("/song_info/repair", query_string={"song": env.add_cue_song(source)})
+        )
+
+        assert "rp-tag" in card(html, source)
+        assert "(edited)" not in html.split("<script>")[0]
+        assert "current (edited)" not in card(html, source)
+
+    @pytest.mark.parametrize(
+        "source, now",
+        [
+            ("caption", "Now: YouTube captions (edited)"),
+            ("movie", "Now: movie subtitles (edited)"),
+            ("lrclib", "Now: LRCLIB timing (edited)"),
+        ],
+    )
+    def test_the_bulk_runs_now_reads_edited_and_the_song_is_kept(self, env, source, now):
+        env.add_cue_song(source, edited=True)
+        env.client.post("/library/run", json={"mode": "reset"})
+        finish_checks(env)
+
+        [song] = env.client.get("/library/run/status").get_json()["songs"]
+
+        assert song["now"] == now
+        assert song["group"] == "reuse"
+
+    @pytest.mark.parametrize(
+        "source, name", [("caption", "caption"), ("movie", "movie"), ("lrclib", "lrc")]
+    )
+    def test_an_edited_song_stays_on_its_sources_list_and_count(self, env, source, name):
+        env.add_cue_song(source, edited=True)
+
+        assert len(song_list(env, name)) == 1
+        assert env.client.get("/library/overview").get_json()[name] == 1
 
 
 class TestOverviewRoute:

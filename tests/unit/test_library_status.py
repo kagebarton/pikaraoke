@@ -6,6 +6,8 @@ Bundles are written to ``tmp_path``; nothing here touches the network.
 import json
 from pathlib import Path
 
+import pytest
+
 from pikaraoke.lib import library_status, lrclib
 from pikaraoke.lib.alignment_capture import SCHEMA_VERSION
 
@@ -718,3 +720,89 @@ class TestHistory:
 
     def test_no_bundle_anywhere_gives_no_history(self, tmp_path):
         assert library_status.song_history(make_video(tmp_path)) == []
+
+
+EDITED_SHEETS = [
+    "lyrics/Song.caption-edited.srt",
+    "lyrics/Song.movie-edited.srt",
+    "lyrics/Song.lrclib-edited.srt",
+    "lyrics\\Song.lrclib-edited.srt",
+]
+PLAIN_SOURCES = [
+    "subtitles/Song.en.srt",
+    "lyrics/Song.custom.srt",
+    "lyrics/Song.lrclib.srt",
+    "lyrics/Song.custom.txt",
+]
+
+
+class TestEditedSheet:
+    """A song's lyrics are an edited sheet when the sheet its run read says so by its suffix."""
+
+    @pytest.mark.parametrize("source_path", EDITED_SHEETS)
+    def test_a_run_that_read_an_edited_sheet_is_edited(self, tmp_path, source_path):
+        video = make_video(tmp_path)
+        write_bundle(tmp_path, video.stem, lyrics={"origin": "srt", "source_path": source_path})
+
+        assert library_status.song_status(video).edited is True
+
+    @pytest.mark.parametrize("source_path", PLAIN_SOURCES)
+    def test_a_run_that_read_any_other_source_is_not(self, tmp_path, source_path):
+        video = make_video(tmp_path)
+        write_bundle(tmp_path, video.stem, lyrics={"origin": "srt", "source_path": source_path})
+
+        assert library_status.song_status(video).edited is False
+
+    def test_a_bundle_that_names_no_source_is_not(self, tmp_path):
+        video = make_video(tmp_path)
+        write_bundle(tmp_path, video.stem, lyrics={"origin": "genius"})
+
+        assert library_status.song_status(video).edited is False
+
+    def test_a_song_with_no_bundle_is_not_even_with_an_edited_sheet_on_disk(self, tmp_path):
+        video = make_video(tmp_path)
+        (tmp_path / "lyrics").mkdir()
+        (tmp_path / "lyrics" / f"{video.stem}.lrclib-edited.srt").write_text("x", encoding="utf-8")
+
+        status = library_status.song_status(video)
+
+        assert (status.edited, status.sheet_kind) == (False, "lrclib_edited")
+
+    @pytest.mark.parametrize(
+        "origin, source_path, lists",
+        [
+            ("srt", "lyrics/Song.caption-edited.srt", {"caption", "all"}),
+            ("movie_srt", "lyrics/Song.movie-edited.srt", {"movie", "all"}),
+            ("lrclib_srt", "lyrics/Song.lrclib-edited.srt", {"lrc", "all"}),
+        ],
+        ids=["caption", "movie", "lrclib"],
+    )
+    def test_an_edited_song_stays_on_its_sources_list(self, tmp_path, origin, source_path, lists):
+        video = make_video(tmp_path)
+        write_bundle(
+            tmp_path,
+            video.stem,
+            lyrics={"origin": origin, "source_path": source_path},
+            pipeline_decisions={"method_used": "cue_align"},
+        )
+        status = library_status.song_status(video)
+
+        assert {n for n, in_list in library_status.SONG_LISTS.items() if in_list(status)} == lists
+        assert library_status.overview_counts([status])[next(iter(lists - {"all"}))] == 1
+
+    def test_each_version_in_history_says_whether_it_is_edited(self, tmp_path):
+        video = make_video(tmp_path)
+        write_bundle(
+            tmp_path,
+            video.stem,
+            captured_at="2026-10-03T00:00:00Z",
+            lyrics={"origin": "lrclib_srt", "source_path": "lyrics/Song.lrclib-edited.srt"},
+        )
+        write_bundle(
+            tmp_path / "regen_backups" / "20261001T000000Z",
+            video.stem,
+            captured_at="2026-09-01T00:00:00Z",
+            lyrics={"origin": "lrclib_srt", "source_path": "lyrics/Song.lrclib.srt"},
+        )
+
+        assert [e.edited for e in library_status.song_history(video)] == [True, False]
