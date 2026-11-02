@@ -28,6 +28,10 @@ CUE_FILES = [
     ["(gentle music)", "<i>Hello\nworld</i>", "- Hi. - What?"],
     ["HELLO THERE", "I KNOW", "(MUSIC)"],
     ["Hello there", "I know", "HEY!"],
+    ["<i>Hi there</i>\n<i>MEN:</i> go now", "Hi there\n(softly) MARA: hey", "(soft\nly) MARA: hi"],
+    ["MEN: MARA: hey", "- - hey", "* - - Sing it"],
+    ["T.I.: Hello", "M.I.A.: go", "E-40: yeah", "R2-D2: Beep", "U2: day", "I I: so"],
+    ["U2: LIVE TONIGHT", "I I: SO", "E-40: YEAH", "T.I.: HEY", "WE ARE HERE"],
     ["MULAN: GO", "MEN: NOW"],
     ["MULAN: HELLO", "WAIT. NOW I KNOW", "(music)"],
     ["(softly) MARA: hey there", "<i>MEN:</i> go now"],
@@ -202,15 +206,24 @@ class TestCleanCueTexts:
             "go now",
         ]
 
-    def test_a_speaker_label_has_two_capitals_in_a_row(self):
-        """Sentence case never puts two capitals side by side, so a label kept in a file typed
-        in capitals and recased ("U2:", "I I:") is not one to a later cleaning."""
-        assert clean_cue_texts(["U2: Beautiful day", "A1: go", "R2-D2: Beep", "C3PO: Oh dear"]) == [
-            "U2: Beautiful day",
-            "A1: go",
-            "R2-D2: Beep",
-            "Oh dear",
+    def test_a_label_behind_parentheses_or_a_tag_on_a_later_line_is_stripped(self):
+        assert clean_cue_texts(
+            ["<i>Hi there</i>\n<i>MEN:</i> go now", "Hi there\n(softly) MARA: hey"]
+        ) == ["Hi there go now", "Hi there hey"]
+
+    def test_a_label_or_dash_exposed_by_stripping_another_is_stripped(self):
+        assert clean_cue_texts(["MEN: MARA: hey", "- - hey", "* - - Sing it"]) == [
+            "hey",
+            "hey",
+            "Sing it",
         ]
+
+    def test_a_label_sentence_case_writes_as_it_stands_is_kept(self):
+        """A label kept in a file typed in capitals and recased ("U2:", "I I:") is not one to
+        a later cleaning; one that recases to something else is a label in any file."""
+        assert clean_cue_texts(
+            ["U2: Beautiful day", "E-40: yeah", "T.I.: Hello", "R2-D2: Beep", "M.I.A.: go"]
+        ) == ["U2: Beautiful day", "E-40: yeah", "T.I.: Hello", "Beep", "go"]
         assert clean_cue_texts(["U2: LIVE TONIGHT", "I I: SO", "WE ARE HERE"]) == [
             "U2: live tonight",
             "I I: so",

@@ -23,7 +23,7 @@ from statistics import median
 
 import srt
 
-from pikaraoke.lib.genius_lyrics import clean_srt_line
+from pikaraoke.lib.genius_lyrics import clean_srt_line, strip_srt_markup
 
 # A caption file this share of capitals (or more) was typed in all caps and is
 # recased. Decided per file, so one shouted line in a normally cased file stays
@@ -35,22 +35,22 @@ _ALL_CAPS_MIN_SHARE = 0.9
 # are display noise on the karaoke screen, and a speaker label is also a token
 # that would be timed as sung.
 #
-# Decoration that may sit in front of a speaker label: dialogue dash, song star,
-# musical note, italic tag.
-_LEADING_DECORATION = r"(?:[-*♪♫\s]|<[^>]+>)*"
+# Decoration that may sit in front of a speaker label: dialogue dash, song star. Tags and
+# note glyphs are gone by then (:func:`_strip_subtitle_marks`).
+_LEADING_DECORATION = r"[-*\s]*"
 # "MULAN:" or "MEN: ..." at a cue line's start. Capitals only, so a lyric like
-# "Listen: ..." survives, and two in a row at least. A file typed in capitals keeps its
-# labels and is recased, and sentence case never puts two capitals side by side, so a label
-# that was kept cannot be taken for one by a later cleaning ("U2:", "I I:").
+# "Listen: ..." survives. Group 2 is the label, which :func:`_drop_label` checks.
 _SPEAKER_LABEL_RE = re.compile(
-    rf"^({_LEADING_DECORATION})(?=[^:]*[A-Z]{{2}})[A-Z][A-Z0-9.'’&/+ -]{{1,29}}:(?=\s|$)\s*"
+    rf"^({_LEADING_DECORATION})([A-Z][A-Z0-9.'&/+ -]{{1,29}}):(?=\s|$)\s*"
 )
 # A dialogue dash: at a line start (after any decoration but a dash, as in "* - What?";
-# letting the prefix take dashes too backtracks quadratically), after a sentence end
+# letting the prefix take dashes too backtracks quadratically), with any dashes after it
+# ("- - What?"), after a sentence end
 # ("- Hakuna matata. - What?"), or glued to the next speaker's first word ("Be a man
 # -With all"). Many releases write it glued ("-What?"); none of the library's subtitles
 # split a word across cues ("-derful"). A spaced dash mid-sentence ("wait - what") stays.
-_DIALOGUE_DASH_RE = re.compile(r"^((?:[*♪♫\s]|<[^>]+>)*)-+\s*|(?<=[.!?])\s+-+\s*|\s+-+(?=[^\s-])")
+# The glued dash's spaces start at a run's start: a match tried inside a long run rescans it.
+_DIALOGUE_DASH_RE = re.compile(r"^([*\s]*)-[-\s]*|(?<=[.!?])\s+-+\s*|(?<!\s)\s+-+(?=[^\s-])")
 # A "*" standing alone as a song marker; a censored "f***" keeps its stars.
 _SONG_STAR_RE = re.compile(r"(?<!\S)\*+(?!\S)")
 
@@ -107,10 +107,9 @@ def clean_cue_texts(contents: list[str]) -> list[str]:
 def _clean_cue(content: str, labels: bool) -> str:
     """One cue's text with its marks and noise stripped, cleaned again until it stops changing.
 
-    A speaker label behind parentheses or a tag ("(softly) MARA: hey", "<i>MEN:</i> go") is
-    not at the line's start until the first pass removes them. One pass would leave it for the
-    next, and a cleaned line would not clean to itself. No step lengthens a text, so the
-    repeats end.
+    One pass can leave a mark that the next would strip: a second label ("MEN: MARA: hey")
+    or a second dash ("- - hey") exposed by the first one's removal. Without the repeats a
+    cleaned line would not clean to itself. No step lengthens a text, so the repeats end.
     """
     text = clean_srt_line(_strip_subtitle_marks(content, labels))
     while (again := clean_srt_line(_strip_subtitle_marks(text, labels))) != text:
@@ -142,15 +141,29 @@ def cues_to_srt(lines: list[str], spans: list[tuple[float, float]]) -> str:
 def _strip_subtitle_marks(content: str, labels: bool) -> str:
     """Raw cue content with speaker labels, song stars and dialogue dashes removed.
 
-    Works per cue line, since a label or dash is only a mark at a line's start.
+    Works per cue line, since a label or dash is only a mark at a line's start. Tags and
+    stage directions go first, so a label behind them ("(softly) MARA: hey",
+    "<i>MEN:</i> go") is at its line's start, on any line of the cue.
     """
     lines = []
-    for line in content.split("\n"):
+    for line in strip_srt_markup(content).split("\n"):
         if labels:
-            line = _SPEAKER_LABEL_RE.sub(r"\1", line)
+            line = _SPEAKER_LABEL_RE.sub(_drop_label, line)
         line = _DIALOGUE_DASH_RE.sub(r"\1 ", line)
         lines.append(_SONG_STAR_RE.sub("", line))
     return "\n".join(lines)
+
+
+def _drop_label(match: re.Match[str]) -> str:
+    """A speaker label's match without the label, or kept whole when sentence case writes it
+    as it stands.
+
+    A file typed in capitals keeps its labels and is recased. Its "U2:" or "I I:" comes out
+    unchanged, and the next cleaning, which no longer sees a file in capitals, must not take
+    it for a label. "MULAN:", "R2-D2:" and "M.I.A.:" recase to something else and are labels.
+    """
+    label = match.group(2)
+    return match.group(0) if _recase_line(label) == label else match.group(1)
 
 
 def _is_all_caps(texts: list[str]) -> bool:
