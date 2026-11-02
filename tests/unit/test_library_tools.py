@@ -479,15 +479,21 @@ UNREADABLE = "can't be read or hold no lyric lines"
 
 
 class TestWordSheet:
-    @pytest.mark.parametrize(
-        "write, kind, origin", [*CUE_SOURCES.values(), *EDITED_SHEETS.values()]
-    )
+    @pytest.mark.parametrize("write, kind, origin", CUE_SOURCES.values(), ids=list(CUE_SOURCES))
     def test_a_cue_sheet_is_read_with_its_lines_and_times(self, tmp_path, write, kind, origin):
         [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
         write(tmp_path, video.stem)
         tools, _ = make_tools(tmp_path, [str(video)])
 
-        assert tools.word_sheet(str(video)) == WordSheet(kind, WORDS, WORD_SPANS)
+        assert tools.word_sheet(str(video)) == WordSheet(kind, WORDS, WORD_SPANS, edited=False)
+
+    @pytest.mark.parametrize("write, kind, origin", EDITED_SHEETS.values(), ids=list(EDITED_SHEETS))
+    def test_an_edited_sheet_says_it_is_one(self, tmp_path, write, kind, origin):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        write(tmp_path, video.stem)
+        tools, _ = make_tools(tmp_path, [str(video)])
+
+        assert tools.word_sheet(str(video)) == WordSheet(kind, WORDS, WORD_SPANS, edited=True)
 
     def test_the_lines_are_the_cleaned_ones_the_cue_route_times(self, tmp_path):
         [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")

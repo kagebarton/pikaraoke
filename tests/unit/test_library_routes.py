@@ -895,6 +895,28 @@ class TestEditWordsPage:
         assert f"Source: {name} · 5 lines" in html
         assert self.opened_with(html) == EDIT_LINES
 
+    def test_the_page_names_the_sheet_it_shows_not_the_one_the_bundle_recorded(self, env):
+        """The next run reads the sheet on disk, whatever the last run's bundle says."""
+        song = env.add_cue_song("caption")
+        lrclib_lines = ["Other words one", "Other words two"]
+        write_sheet(
+            env.folder,
+            Path(song).stem,
+            cues_to_srt(lrclib_lines, EDIT_SPANS[:2]),
+            CUE_SOURCES["lrclib"][1],
+        )
+
+        html = text(self.page(env, song))
+
+        assert "Source: LRCLIB · 2 lines" in html
+        assert self.opened_with(html) == lrclib_lines
+
+    def test_an_edited_sheet_is_named_as_one_whatever_the_bundle_recorded(self, env):
+        song = env.add_cue_song("caption")
+        write_sheet(env.folder, Path(song).stem, EDIT_SRT, CUE_SOURCES["lrclib"][2])
+
+        assert "Source: LRCLIB (edited) · 5 lines" in text(self.page(env, song))
+
     def test_a_line_is_escaped_in_its_box(self, env):
         sheet = cues_to_srt(['Rock & roll "forever"', "Carry me home"], EDIT_SPANS[:2])
 
