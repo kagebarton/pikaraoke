@@ -31,6 +31,9 @@ CUE_FILES = [
     ["MULAN: GO", "MEN: NOW"],
     ["MULAN: HELLO", "WAIT. NOW I KNOW", "(music)"],
     ["(softly) MARA: hey there", "<i>MEN:</i> go now"],
+    ["U2: LIVE TONIGHT", "WE ARE HERE"],
+    ["R2-D2: BEEP", "C3PO: OH DEAR", "A1: GO"],
+    ["I I: SO", "A. B: GO", "I. A: YES", "WE ARE HERE"],
 ]
 
 
@@ -197,6 +200,21 @@ class TestCleanCueTexts:
         assert clean_cue_texts(["(softly) MARA: hey there", "<i>MEN:</i> go now"]) == [
             "hey there",
             "go now",
+        ]
+
+    def test_a_speaker_label_has_two_capitals_in_a_row(self):
+        """Sentence case never puts two capitals side by side, so a label kept in a file typed
+        in capitals and recased ("U2:", "I I:") is not one to a later cleaning."""
+        assert clean_cue_texts(["U2: Beautiful day", "A1: go", "R2-D2: Beep", "C3PO: Oh dear"]) == [
+            "U2: Beautiful day",
+            "A1: go",
+            "R2-D2: Beep",
+            "Oh dear",
+        ]
+        assert clean_cue_texts(["U2: LIVE TONIGHT", "I I: SO", "WE ARE HERE"]) == [
+            "U2: live tonight",
+            "I I: so",
+            "We are here",
         ]
 
     @pytest.mark.parametrize("contents", CUE_FILES)

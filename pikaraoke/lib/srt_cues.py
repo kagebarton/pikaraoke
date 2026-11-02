@@ -39,9 +39,11 @@ _ALL_CAPS_MIN_SHARE = 0.9
 # musical note, italic tag.
 _LEADING_DECORATION = r"(?:[-*♪♫\s]|<[^>]+>)*"
 # "MULAN:" or "MEN: ..." at a cue line's start. Capitals only, so a lyric like
-# "Listen: ..." survives.
+# "Listen: ..." survives, and two in a row at least. A file typed in capitals keeps its
+# labels and is recased, and sentence case never puts two capitals side by side, so a label
+# that was kept cannot be taken for one by a later cleaning ("U2:", "I I:").
 _SPEAKER_LABEL_RE = re.compile(
-    rf"^({_LEADING_DECORATION})[A-Z][A-Z0-9.'’&/+ -]{{1,29}}:(?=\s|$)\s*"
+    rf"^({_LEADING_DECORATION})(?=[^:]*[A-Z]{{2}})[A-Z][A-Z0-9.'’&/+ -]{{1,29}}:(?=\s|$)\s*"
 )
 # A dialogue dash: at a line start (after any decoration but a dash, as in "* - What?";
 # letting the prefix take dashes too backtracks quadratically), after a sentence end
