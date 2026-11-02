@@ -105,12 +105,23 @@ def clean_cue_texts(contents: list[str]) -> list[str]:
 
 
 def cues_to_srt(lines: list[str], spans: list[tuple[float, float]]) -> str:
-    """One cue per line at its span: the inverse of :func:`cue_spans_from_srt` on cleaned lines."""
+    """One cue per line at its span: the inverse of :func:`cue_spans_from_srt` on cleaned lines.
+
+    Cues are numbered here and kept in the given order: ``srt.compose``'s own
+    renumbering would drop a zero-length cue and sort the rest by start, so a
+    line the page shows could vanish or move on save.
+    """
     return srt.compose(
-        srt.Subtitle(
-            index=0, start=timedelta(seconds=start), end=timedelta(seconds=end), content=line
-        )
-        for line, (start, end) in zip(lines, spans, strict=True)
+        (
+            srt.Subtitle(
+                index=index,
+                start=timedelta(seconds=start),
+                end=timedelta(seconds=end),
+                content=line,
+            )
+            for index, (line, (start, end)) in enumerate(zip(lines, spans, strict=True), start=1)
+        ),
+        reindex=False,
     )
 
 
