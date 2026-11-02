@@ -225,11 +225,13 @@ def find_local_srt(song: Path) -> Path | None:
 
 class SheetKind(NamedTuple):
     """One kind of custom sheet: its file suffix, the lyrics origin a run from it
-    records, and its plan's label."""
+    records, and its plan's label. ``edits`` marks an admin's word edit of a cue
+    sheet and names the repair source whose words it fixes."""
 
     suffix: str
     origin: str
     label: str
+    edits: str | None = None
 
 
 # The admin's own lyrics for a song, kept in the library's ``lyrics/`` folder in one
@@ -238,11 +240,25 @@ class SheetKind(NamedTuple):
 # clip as an SRT (``.lrclib.srt``); the last two are timed on the cue route. The
 # file is the one record that the song uses them: a bundle's provenance is ignored
 # by a reset and a transcribe run deletes the bundle. A song keeps one sheet,
-# whichever kind. The kinds are also the repair sources that save one.
+# whichever kind. The first three kinds are also the repair sources that save one.
+#
+# Three more kinds hold a cue sheet after the admin fixed its words line by line: a
+# YouTube caption's (a caption is no sheet until edited), the movie subtitles' or the
+# LRCLIB match's. Each records its source's origin, so everything that tells a song's
+# source by origin is unchanged; the edit shows only in the label.
 SHEETS = {
     "custom": SheetKind(".custom.txt", CUSTOM_ORIGIN, "custom sheet"),
     "movie": SheetKind(".custom.srt", MOVIE_ORIGIN, "movie subtitles"),
     "lrclib": SheetKind(".lrclib.srt", LRC_ORIGIN, "LRCLIB timing"),
+    "caption_edited": SheetKind(
+        ".caption-edited.srt", "srt", "YouTube caption (edited)", edits="caption"
+    ),
+    "movie_edited": SheetKind(
+        ".movie-edited.srt", MOVIE_ORIGIN, "movie subtitles (edited)", edits="movie"
+    ),
+    "lrclib_edited": SheetKind(
+        ".lrclib-edited.srt", LRC_ORIGIN, "LRCLIB timing (edited)", edits="lrclib"
+    ),
 }
 
 
@@ -261,7 +277,7 @@ def custom_sheet_path(song: Path) -> Path | None:
 
 
 def sheet_kind(sheet: Path | None) -> str | None:
-    """The kind of the custom sheet at ``sheet`` (``"custom"``, ``"movie"`` or ``"lrclib"``), or None.
+    """The kind of the custom sheet at ``sheet`` (a key of :data:`SHEETS`), or None.
 
     The only place a sheet's suffix is tested; ``None`` in, for a song with no sheet, gives None.
     """
@@ -270,9 +286,32 @@ def sheet_kind(sheet: Path | None) -> str | None:
     return next((kind for kind, k in SHEETS.items() if sheet.name.endswith(k.suffix)), None)
 
 
+def edited_kind(origin: str | None) -> str | None:
+    """The kind an edit of a cue sheet recorded with the lyrics ``origin`` saves as, or None.
+
+    ``"srt"``, a YouTube caption, gives ``caption_edited``. An edited sheet's own
+    origin gives its own kind back, so a second edit keeps it.
+    """
+    return next((kind for kind, k in SHEETS.items() if k.edits and k.origin == origin), None)
+
+
+def repair_source(kind: str) -> str:
+    """The repair source a sheet of ``kind`` stands for: an edited sheet's is its source's."""
+    return SHEETS[kind].edits or kind
+
+
+def is_edited(sheet: Path | str | None) -> bool:
+    """Whether ``sheet`` is an edited sheet, by its suffix.
+
+    Takes a path or the relative path string a bundle records as its lyrics source.
+    """
+    kind = sheet_kind(Path(sheet)) if sheet else None
+    return kind is not None and SHEETS[kind].edits is not None
+
+
 def sheet_plan(song: Path, kind: str, text: str | None = None) -> Plan:
-    """The plan that times ``song`` from its custom sheet of the ``kind``; the
-    ``movie`` and ``lrclib`` kinds run the cue route.
+    """The plan that times ``song`` from its custom sheet of the ``kind``; every
+    kind but ``custom`` is an SRT and runs the cue route.
 
     ``text`` is a sheet the admin just saved, for the run to write first.
     """
@@ -906,8 +945,9 @@ def backup_text_folders(folder: Path, stems: list[str] | None = None) -> Path | 
 #   ``LyricsFetchStage``, per E1's gated fill). Wiping them would force a
 #   re-fetch of every genius song's variant on the next run for no benefit --
 #   ``ensure_lrc`` already reuses an on-disk file unconditionally.
-# - ``lyrics/<stem>.custom.txt`` / ``.custom.srt`` / ``.lrclib.srt`` an admin's own
-#   lyric sheet, typed, pasted from a movie or fitted from an LRCLIB match. It is
+# - ``lyrics/<stem>.custom.txt`` / ``.custom.srt`` / ``.lrclib.srt`` and the three
+#   ``-edited.srt`` kinds: an admin's own lyric sheet, typed, pasted from a movie,
+#   fitted from an LRCLIB match, or a cue sheet with its words fixed. It is
 #   hand-made, so a reset must not lose it; only a repair to another source
 #   removes it.
 KEEP_ON_RESET = {

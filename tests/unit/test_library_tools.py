@@ -662,6 +662,7 @@ class TestRepair:
             ({"source": "genius"}, "Pick a Genius song"),
             ({"source": "genius", "genius_id": 7, "lrclib_id": 5}, "LRCLIB didn't return"),
             ({"source": "lyrics-from-the-moon"}, "Unknown lyric source"),
+            ({"source": "lrclib_edited"}, "Unknown lyric source"),
         ],
     )
     def test_a_repair_that_cannot_start_changes_nothing(
