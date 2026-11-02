@@ -26,7 +26,7 @@ class WordSheet:
     kind: str  # the edited sheet kind a save writes
     lines: list[str]  # cleaned
     spans: list[tuple[float, float]]  # each line's (start, end), clip seconds
-    edited: bool = False  # the sheet read is already an edit, not the source's own
+    edited: bool  # the sheet read is already an edit, not the source's own
 
 
 class WordsCleaned(RegenError):

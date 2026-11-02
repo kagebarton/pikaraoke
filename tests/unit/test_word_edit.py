@@ -24,7 +24,7 @@ SPANS = [(1.0, 3.5), (4.0, 6.25), (7.0, 9.5), (10.0, 12.125), (13.0, 15.0)]
 
 @pytest.fixture
 def sheet():
-    return WordSheet(kind="lrclib_edited", lines=list(LINES), spans=list(SPANS))
+    return WordSheet(kind="lrclib_edited", lines=list(LINES), spans=list(SPANS), edited=False)
 
 
 def edit(sheet, **changed):
@@ -213,7 +213,7 @@ class TestASavedEdit:
         texts, spans = cue_spans_from_srt(
             edited_srt(sheet, LINES, edit(sheet, l0="Moon on the river"))
         )
-        again = WordSheet(kind=sheet.kind, lines=texts, spans=spans)
+        again = WordSheet(kind=sheet.kind, lines=texts, spans=spans, edited=True)
 
         saved = edited_srt(again, texts, ["Moon on the water", *texts[1:]])
 
@@ -226,7 +226,7 @@ class TestASavedEdit:
             "3\n00:00:07,000 --> 00:00:09,500\nSing it again\n"
         )
         texts, spans = cue_spans_from_srt(raw)
-        sheet = WordSheet(kind="caption_edited", lines=texts, spans=spans)
+        sheet = WordSheet(kind="caption_edited", lines=texts, spans=spans, edited=False)
         boxes = [texts[0], texts[1], "Sing it once more"]
 
         saved = edited_srt(sheet, texts, boxes)
@@ -239,7 +239,7 @@ class TestASavedEdit:
             ["MOON OVER THE RIVER", "CARRY ME HOME", "DOWN BY THE OLD MILL"], SPANS[:3]
         )
         texts, spans = cue_spans_from_srt(capitals)
-        sheet = WordSheet(kind="caption_edited", lines=texts, spans=spans)
+        sheet = WordSheet(kind="caption_edited", lines=texts, spans=spans, edited=False)
 
         saved = edited_srt(sheet, texts, ["Moon over the river", "Carry us home", texts[2]])
 
