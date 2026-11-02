@@ -7,6 +7,7 @@ manager is a mock, so a queued job is whatever ``enqueue_regen`` was handed.
 
 import json
 import os
+import re
 import threading
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -31,6 +32,7 @@ from pikaraoke.lib.library_regen import CaptionCheck
 from pikaraoke.lib.library_tools import LibraryTools, LrcTimingCheck, MovieSliceCheck
 from pikaraoke.lib.song_list import SongList
 from pikaraoke.lib.song_manager import SongManager
+from pikaraoke.lib.srt_cues import cue_spans_from_srt, cues_to_srt
 from pikaraoke.lib.srt_slice_fit import (
     DISAGREE,
     NO_REFERENCE,
@@ -40,6 +42,7 @@ from pikaraoke.lib.srt_slice_fit import (
     TOO_LONG,
     SliceFit,
 )
+from pikaraoke.lib.word_edit import EDIT_LINE_MAX_CHARS, STALE_MESSAGE
 from pikaraoke.routes.library import library_bp
 from pikaraoke.routes.song_info import _card_text, _lrc_card, _slice_card, song_info_bp
 from tests.unit.movie_slices import (
@@ -139,6 +142,24 @@ def movie_bundle(lines: tuple[str, ...] = ("one",)) -> dict:
     return bundle
 
 
+EDIT_LINES = [
+    "Moon over the river",
+    "Carry me home",
+    "Down by the old mill",
+    "Carry me home",
+    "Sing it again",
+]
+EDIT_SPANS = [(1.0, 3.5), (4.0, 6.25), (7.0, 9.5), (62.0, 64.0), (131.0, 134.5)]
+EDIT_SRT = cues_to_srt(EDIT_LINES, EDIT_SPANS)
+
+# Each cue source's lyrics origin in the bundle, and the suffix of its sheet (a caption has none).
+CUE_SOURCES = {
+    "caption": ("srt", None),
+    "movie": ("movie_srt", ".custom.srt"),
+    "lrclib": ("lrclib_srt", ".lrclib.srt"),
+}
+
+
 class Env:
     """The app, its library folder and the knobs a test turns."""
 
@@ -199,6 +220,20 @@ class Env:
         if bundle is not None:
             write_bundle(self.folder, video.stem, **bundle)
         return str(video)
+
+    def add_cue_song(self, source: str = "caption", srt_text: str = EDIT_SRT) -> str:
+        """A song whose last run was timed on the cue route from ``source``'s SRT, ``srt_text``."""
+        origin, suffix = CUE_SOURCES[source]
+        bundle = caption_bundle()
+        bundle["lyrics"] = {"origin": origin, "lines": EDIT_LINES}
+        song = self.add_song("A---aaaaaaaaaaa.mp4", bundle)
+        if suffix is None:
+            caption = self.folder / "subtitles" / "A---aaaaaaaaaaa.en.srt"
+            caption.parent.mkdir(exist_ok=True)
+            caption.write_text(srt_text, encoding="utf-8")
+        else:
+            write_sheet(self.folder, "A---aaaaaaaaaaa", srt_text, suffix)
+        return song
 
     def page(self, song: str):
         return self.client.get("/song_info", query_string={"song": song})
@@ -717,6 +752,279 @@ class TestRegenerateRoute:
 
         assert response.status_code == 400
         assert "Repair lyrics" in response.get_json()["error"]
+
+
+class TestEditWordsButton:
+    @pytest.mark.parametrize("source", CUE_SOURCES)
+    def test_a_cue_song_links_to_the_edit_page_between_repair_and_regenerate(self, env, source):
+        html = text(env.page(env.add_cue_song(source)))
+
+        assert (
+            'id="edit-words" class="button si-btn" data-href="/song_info/edit_words?song=' in html
+        )
+        assert (
+            html.index('id="repair"')
+            < html.index('id="edit-words"')
+            < html.index('id="regenerate"')
+        )
+        assert "disabled>Edit words" not in html
+
+    def test_a_busy_song_has_it_disabled(self, env):
+        song = env.add_cue_song()
+        env.processing.pending_jobs = [song]
+
+        assert "disabled>Edit words" in text(env.page(song))
+
+    def test_a_song_not_timed_from_a_cue_sheet_has_none(self, env):
+        html = text(env.page(env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())))
+
+        assert 'id="edit-words"' not in html
+        assert 'id="repair"' in html
+
+    def test_a_song_with_no_bundle_has_none(self, env):
+        assert 'id="edit-words"' not in text(env.page(env.add_song("A---aaaaaaaaaaa.mp4")))
+
+    def test_a_song_that_is_not_a_video_has_none(self, env):
+        song = env.folder / "Track---aaaaaaaaaaa.mp3"
+        song.write_bytes(b"")
+        env.songs.add(str(song))
+
+        assert 'id="edit-words"' not in text(env.page(str(song)))
+
+
+class TestEditWordsPage:
+    def page(self, env, song):
+        return env.client.get("/song_info/edit_words", query_string={"song": song})
+
+    @staticmethod
+    def opened_with(html: str) -> list[str]:
+        return json.loads(re.search(r"var ORIG = (\[.*?\]);", html).group(1))
+
+    def test_a_guest_is_sent_back_to_the_browser(self, env):
+        song = env.add_cue_song()
+        env.admin = False
+
+        response = self.page(env, song)
+
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/__stub/files.browse")
+
+    def test_a_path_outside_the_library_is_rejected(self, env):
+        env.add_cue_song()
+        outside = env.folder / "elsewhere.mp4"
+        outside.write_bytes(b"")
+
+        assert self.page(env, str(outside)).status_code == 400
+        assert env.client.get("/song_info/edit_words").status_code == 400
+
+    def test_a_song_that_is_not_a_video_goes_back_to_song_info(self, env):
+        song = env.folder / "Track---aaaaaaaaaaa.mp3"
+        song.write_bytes(b"")
+        env.songs.add(str(song))
+
+        response = self.page(env, str(song))
+
+        assert response.status_code == 302
+        assert response.headers["Location"].startswith("/song_info?song=")
+
+    def test_a_song_with_no_cue_sheet_goes_back_to_song_info(self, env):
+        response = self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle()))
+
+        assert response.status_code == 302
+        assert response.headers["Location"].startswith("/song_info?song=")
+
+    def test_the_page_lists_each_line_with_its_number_and_start_time(self, env):
+        html = text(self.page(env, env.add_cue_song()))
+
+        assert html.count('class="ew-row"') == len(EDIT_LINES)
+        for number, (line, (start, _end)) in enumerate(zip(EDIT_LINES, EDIT_SPANS), start=1):
+            assert f">{line}</textarea>" in html
+            assert (
+                f"<span>{number}</span><b>{round(start) // 60}:{round(start) % 60:02d}</b>" in html
+            )
+        assert f'maxlength="{EDIT_LINE_MAX_CHARS}"' in html
+
+    def test_the_lines_are_the_cleaned_ones_the_cue_route_times(self, env):
+        sheet = cues_to_srt(
+            ["(soft music)", "ROY: Carry me (oh) home", "Down by the old mill"], EDIT_SPANS[:3]
+        )
+
+        html = text(self.page(env, env.add_cue_song(srt_text=sheet)))
+
+        assert self.opened_with(html) == ["Carry me home", "Down by the old mill"]
+        assert html.count('class="ew-row"') == 2
+        assert "ROY" not in html and "soft music" not in html
+
+    @pytest.mark.parametrize(
+        "source, name",
+        [("caption", "YouTube captions"), ("movie", "Movie subtitles"), ("lrclib", "LRCLIB")],
+    )
+    def test_the_page_names_the_source_and_counts_the_lines(self, env, source, name):
+        html = text(self.page(env, env.add_cue_song(source)))
+
+        assert f"Source: {name} · 5 lines" in html
+        assert self.opened_with(html) == EDIT_LINES
+
+    def test_a_line_is_escaped_in_its_box(self, env):
+        sheet = cues_to_srt(['Rock & roll "forever"', "Carry me home"], EDIT_SPANS[:2])
+
+        html = text(self.page(env, env.add_cue_song(srt_text=sheet)))
+
+        assert ">Rock &amp; roll &#34;forever&#34;</textarea>" in html
+
+    def test_save_starts_off_and_the_boxes_open(self, env):
+        html = text(self.page(env, env.add_cue_song()))
+
+        boxes = re.findall(r"<textarea[^>]*>", html)
+        assert len(boxes) == len(EDIT_LINES)
+        assert not any("disabled" in box for box in boxes)
+        assert 'id="ew-save" class="button is-primary" disabled' in html
+        assert "regen waiting or running" not in html
+
+    def test_a_busy_song_has_its_boxes_locked_and_says_why(self, env):
+        song = env.add_cue_song()
+        env.processing.pending_jobs = [song]
+
+        html = text(self.page(env, song))
+
+        assert html.count('placeholder="Line dropped" disabled>') == len(EDIT_LINES)
+        assert "This song has a regen waiting or running." in html
+        assert 'href="/__stub/processing.processing"' in html
+
+
+class TestEditWordsRoute:
+    @pytest.fixture
+    def song(self, env):
+        return env.add_cue_song()
+
+    def save(self, env, song, lines=None, original=EDIT_LINES, **body):
+        payload = {"song": song, "original": original, "lines": lines or fixed(), **body}
+        return env.client.post("/song_info/edit_words", json=payload)
+
+    def queued(self, env):
+        env.processing.enqueue_regen.assert_called_once()
+        return env.processing.enqueue_regen.call_args.args[0]
+
+    def test_a_guest_cannot(self, env, song):
+        env.admin = False
+
+        assert self.save(env, song).status_code == 403
+        env.processing.enqueue_regen.assert_not_called()
+
+    @pytest.mark.parametrize("body", [{"song": None}, {"song": ["a"]}, {}, [1]])
+    def test_a_missing_or_malformed_song_is_rejected(self, env, song, body):
+        assert env.client.post("/song_info/edit_words", json=body).status_code == 400
+        env.processing.enqueue_regen.assert_not_called()
+
+    def test_a_path_outside_the_library_is_rejected_and_nothing_is_backed_up(self, env, song):
+        outside = env.folder / "elsewhere.mp4"
+        outside.write_bytes(b"")
+        write_bundle(env.folder, outside.stem, **caption_bundle())
+
+        assert self.save(env, str(outside)).status_code == 400
+        env.processing.enqueue_regen.assert_not_called()
+        assert not list(env.folder.glob("regen_backups/*"))
+
+    def test_a_save_queues_an_edit_that_passes_the_pages_lines_through(self, env, song):
+        response = self.save(env, song)
+
+        assert response.get_json() == {"success": True}
+        regen = self.queued(env)
+        assert (regen.label, regen.reset, str(regen.song.song_path)) == ("Edit words", False, song)
+        assert cue_spans_from_srt(regen.song.plan.custom_text) == (fixed(), EDIT_SPANS)
+
+    def test_a_cleared_line_is_dropped_with_its_time(self, env, song):
+        lines = fixed()
+        lines[2] = ""
+
+        assert self.save(env, song, lines).get_json() == {"success": True}
+
+        texts, spans = cue_spans_from_srt(self.queued(env).song.plan.custom_text)
+        assert texts == [line for i, line in enumerate(fixed()) if i != 2]
+        assert spans == [span for i, span in enumerate(EDIT_SPANS) if i != 2]
+
+    def test_a_save_the_cleaning_would_change_answers_with_the_cleaned_lines(self, env, song):
+        lines = fixed()
+        lines[1] = "Carry us (oh) home"
+        lines[3] = "(la la)"
+
+        response = self.save(env, song, lines)
+
+        body = response.get_json()
+        assert response.status_code == 400
+        assert body["success"] is False
+        assert body["error"] == (
+            "The lyric cleaning would change some lines. Check them and save again."
+        )
+        assert body["cleaned"] == {"1": "Carry us home", "3": ""}
+        env.processing.enqueue_regen.assert_not_called()
+        assert not list(env.folder.glob("regen_backups/*"))
+
+    @pytest.mark.parametrize(
+        "change, message",
+        [
+            ({"original": EDIT_LINES[:-1]}, STALE_MESSAGE),
+            ({"original": None}, STALE_MESSAGE),
+            ({"lines": EDIT_LINES[:-1]}, STALE_MESSAGE),
+            ({"lines": "Moon on the river"}, STALE_MESSAGE),
+            ({"lines": list(EDIT_LINES)}, "No line was changed."),
+            ({"lines": [""] * len(EDIT_LINES)}, "Every line is cleared."),
+            ({"lines": ["a" * (EDIT_LINE_MAX_CHARS + 1), *EDIT_LINES[1:]]}, "Line 1 is too long."),
+        ],
+        ids=[
+            "stale_original",
+            "no_original",
+            "short_lines",
+            "text_lines",
+            "nothing_changed",
+            "all_cleared",
+            "too_long",
+        ],
+    )
+    def test_a_refused_save_carries_its_message_and_queues_nothing(
+        self, env, song, change, message
+    ):
+        payload = {"song": song, "original": EDIT_LINES, "lines": fixed(), **change}
+
+        response = env.client.post("/song_info/edit_words", json=payload)
+
+        body = response.get_json()
+        assert response.status_code == 400
+        assert body["success"] is False
+        assert message in body["error"]
+        assert "cleaned" not in body
+        env.processing.enqueue_regen.assert_not_called()
+
+    def test_a_save_with_no_lines_is_stale(self, env, song):
+        response = env.client.post("/song_info/edit_words", json={"song": song})
+
+        assert response.status_code == 400
+        assert response.get_json()["error"] == STALE_MESSAGE
+
+    def test_a_busy_song_is_refused(self, env, song):
+        env.processing.get_active_job.return_value = song
+
+        response = self.save(env, song)
+
+        assert response.status_code == 400
+        assert response.get_json()["error"] == "This song has a regen waiting or running."
+        env.processing.enqueue_regen.assert_not_called()
+
+    def test_a_song_with_no_cue_sheet_is_refused(self, env):
+        song = env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())
+
+        response = self.save(env, song)
+
+        assert response.status_code == 400
+        assert "isn't timed from a caption" in response.get_json()["error"]
+        env.processing.enqueue_regen.assert_not_called()
+
+
+def fixed() -> list[str]:
+    """The cue song's lines with one word fixed in the second."""
+    lines = list(EDIT_LINES)
+    lines[1] = "Carry us home"
+    return lines
 
 
 class TestOverviewRoute:

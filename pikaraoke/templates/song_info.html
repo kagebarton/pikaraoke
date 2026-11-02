@@ -39,7 +39,7 @@
   .si-chg { color: #a9d8f7; }
   .si-kv code { color: var(--dark-text-light); word-break: break-all; }
   .si-actions { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--dark-border); display: flex; gap: 8px; }
-  .si-btn { flex: 1; min-height: 44px; font-weight: 700; }
+  .si-btn { flex: 1; min-height: 44px; font-weight: 700; padding-left: 0.5em; padding-right: 0.5em; }
 </style>
 {% endblock %}
 
@@ -56,14 +56,14 @@
       $('#tab-' + $(this).data('tab')).removeClass('is-hidden');
     });
 
-    $('#repair').on('click', function () {
+    $('#repair, #edit-words').on('click', function () {
       window.location.href = $(this).data('href');
     });
 
     $('#regenerate').on('click', function () {
       var button = $(this);
       button.prop('disabled', true);
-      $('#repair').prop('disabled', true);
+      $('#repair, #edit-words').prop('disabled', true);
       $.ajax({
         url: '{{ url_for("song_info.regenerate") }}',
         method: 'POST',
@@ -76,7 +76,7 @@
         try { message = JSON.parse(xhr.responseText).error; } catch (err) {}
         showNotification(message || {{ _('Could not queue the regeneration.') | tojson }}, 'is-danger');
         button.prop('disabled', false);
-        $('#repair').prop('disabled', false);
+        $('#repair, #edit-words').prop('disabled', false);
       });
     });
   });
@@ -208,9 +208,12 @@
   {% endif %}
 </div>
 
-{# The repair page is a full page load (not an SPA link): it has its own scripts. #}
+{# The repair and edit pages are full page loads (not SPA links): each has its own scripts. #}
 <div class="si-actions">
   <button type="button" id="repair" class="button is-primary si-btn" data-href="{{ url_for('song_info.repair_page', song=song) }}"{% if busy %} disabled{% endif %}>{% trans %}Repair lyrics{% endtrans %}</button>
+  {% if can_edit_words %}
+  <button type="button" id="edit-words" class="button si-btn" data-href="{{ url_for('song_info.edit_words_page', song=song) }}"{% if busy %} disabled{% endif %}>{% trans %}Edit words{% endtrans %}</button>
+  {% endif %}
   {% if can_regenerate %}
   <button type="button" id="regenerate" class="button si-btn"{% if busy %} disabled{% endif %}>{% trans %}Regenerate{% endtrans %}</button>
   {% endif %}

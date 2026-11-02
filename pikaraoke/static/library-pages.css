@@ -24,3 +24,25 @@
 
 /* Snug above the title; its tap area reaches into the space around it, adding no height. */
 .page-back { display: flex; width: fit-content; align-items: center; gap: 4px; padding: 12px 0; margin: -12px 0 -8px; background: none; border: 0; color: var(--dark-link); font: inherit; font-size: 13px; font-weight: 400; line-height: 20px; cursor: pointer; }
+
+/* What the Repair lyrics and Edit words pages share: muted text, section heads, links, notice cards, button rows. */
+.rp-muted { color: var(--dark-text-muted); font-size: 13px; }
+.rp-sec { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dark-text-muted); margin: 20px 0 8px; display: flex; justify-content: space-between; }
+.rp-name { color: var(--dark-text-light); word-break: break-word; }
+.rp-link { display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; background: none; border: 0; padding: 0; cursor: pointer; color: var(--dark-link); }
+.rp-link:disabled { opacity: 0.5; cursor: not-allowed; }
+.rp-sec.has-tip { justify-content: flex-start; align-items: center; gap: 4px; }
+.rp-card { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 8px; border: 1px solid var(--dark-border); background: var(--dark-bg-secondary); }
+.rp-card-head { display: flex; gap: 8px; align-items: center; font-weight: 700; }
+.rp-card-head svg { flex: none; }
+.rp-card .rp-icon { display: none; }
+.rp-card[data-tone="good"] .rp-card-head { color: var(--dark-success); }
+.rp-card[data-tone="good"] .rp-icon.is-good { display: block; }
+.rp-card[data-tone="bad"] .rp-card-head { color: var(--dark-warning); }
+.rp-card[data-tone="bad"] .rp-icon.is-bad { display: block; }
+.rp-card[data-tone="info"] .rp-card-head { color: var(--dark-info); }
+.rp-card[data-tone="info"] .rp-icon.is-info { display: block; }
+.go-row.rp-buttons { gap: 10px; margin-top: 14px; }
+.go-row.rp-buttons .info-tip-btn { margin: 0 -6px; }
+.rp-buttons .button { min-height: 44px; font-weight: 700; }
+.rp-buttons .button.is-primary { flex: 2; }
