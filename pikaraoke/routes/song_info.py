@@ -219,7 +219,7 @@ def _name_of_origin(origin: str | None) -> str | None:
 
 def _sheet_source_name(sheet: WordSheet) -> str:
     """The source of the cue sheet an Edit words page shows, which a bundle may not agree with."""
-    name = _name_of_origin(SHEETS[sheet.kind].origin)
+    name = _name_of_origin(SHEETS[sheet.kind].origin) or "—"
     return _edited_name(name) if sheet.edited else name
 
 
