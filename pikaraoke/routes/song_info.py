@@ -44,6 +44,7 @@ from pikaraoke.lib.srt_slice_fit import (
     flagged_runs,
     unheard_runs,
 )
+from pikaraoke.lib.word_edit import EDIT_LINE_MAX_CHARS, WordsCleaned
 
 logger = logging.getLogger(__name__)
 
@@ -453,6 +454,7 @@ def song_info():
         history=history,
         has_backups=any(not v.current for v in history),
         can_regenerate=video and tools.can_regenerate(song),
+        can_edit_words=video and tools.word_sheet(song) is not None,
         busy=video and tools.is_busy(song),
     )
 
@@ -531,6 +533,35 @@ def repair_page():
         custom_query=start["query"],
         movie_prefill=start["movie"],
         lrc_match=_lrc_match(status),
+    )
+
+
+@song_info_bp.route("/song_info/edit_words")
+def edit_words_page():
+    """Edit words: fix the lines of a cue-timed song's lyrics one by one, each keeping its time."""
+    k = get_karaoke_instance()
+    if not is_admin():
+        flash(_("You don't have permission to edit words"), "is-danger")
+        return redirect(url_for("files.browse"))
+    song = library_song(k, request.args.get("song"))
+    if song is None:
+        abort(400)
+    tools = k.library_tools
+    sheet = tools.word_sheet(song) if tools.is_video(song) else None
+    if sheet is None:
+        return redirect(url_for("song_info.song_info", song=song))
+
+    return render_template(
+        "song_edit_words.html",
+        site_title=get_site_name(),
+        title=_("Edit words"),
+        song=song,
+        name=k.song_manager.filename_from_path(song),
+        source=_source_name(tools.status(song)),
+        lines=sheet.lines,
+        starts=[_mmss(start) for start, _end in sheet.spans],
+        max_chars=EDIT_LINE_MAX_CHARS,
+        busy=tools.is_busy(song),
     )
 
 
@@ -1030,6 +1061,30 @@ def repair():
         return _error(_card_text(_slice_card(e.check)), 400)
     except LrcTimingRefused as e:
         return _error(_card_text(_lrc_card(e.check)), 400)
+    except RegenError as e:
+        return _error(str(e), 400)
+    return jsonify({"success": True})
+
+
+@song_info_bp.route("/song_info/edit_words", methods=["POST"])
+def edit_words():
+    """Queue a regeneration that rewords the song's lines, keeping their times.
+
+    ``original`` is the lines the page opened with and ``lines`` its boxes. A save the
+    cleaning would change is refused with each such line's cleaned text, for the page to
+    show before the admin saves again.
+    """
+    if not is_admin():
+        return _error(_("Admin only"), 403)
+    k = get_karaoke_instance()
+    song = posted_song(k)
+    if song is None:
+        return _error(_("Not a song in the library"), 400)
+    body = request.get_json(silent=True)
+    try:
+        k.library_tools.edit_words(song, body.get("original"), body.get("lines"))
+    except WordsCleaned as e:
+        return jsonify({"success": False, "error": str(e), "cleaned": e.cleaned}), 400
     except RegenError as e:
         return _error(str(e), 400)
     return jsonify({"success": True})

@@ -1,0 +1,300 @@
+{% extends 'base.html' %}
+{% from 'info_tip.html' import info_tip %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='library-pages.css') }}">
+<style>
+  .ew-banner .rp-card { margin-top: 12px; }
+  .ew-banner .rp-card-head { align-items: flex-start; }
+  .ew-banner .rp-card-head svg { margin-top: 3px; }
+  .ew-banner .rp-link { min-height: 36px; }
+  .ew-lines { margin-top: 4px; }
+  .ew-row { display: flex; gap: 10px; padding: 6px 0; border-top: 1px solid var(--dark-border); }
+  .ew-row:first-child { border-top: 0; }
+  .ew-when { width: 38px; flex: none; padding-top: 4px; display: flex; flex-direction: column; font-size: 12px; line-height: 1.3; color: var(--dark-text-muted); font-variant-numeric: tabular-nums; }
+  .ew-when b { font-size: 13px; color: var(--dark-text-light); }
+  .ew-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .ew-box { display: block; width: 100%; min-height: 44px; padding: 10px 12px; box-sizing: border-box; resize: none; overflow: hidden; font: inherit; font-size: 15px; line-height: 1.35; border-radius: 8px; border: 1px solid var(--dark-border); background: var(--dark-bg-secondary); color: var(--dark-text-light); }
+  .ew-box:disabled { opacity: 0.6; cursor: not-allowed; }
+  .ew-box::placeholder { color: var(--dark-text-muted); font-style: italic; }
+  .ew-row.is-changed .ew-box { border-color: var(--dark-info); }
+  .ew-row.is-dropped .ew-box { border-style: dashed; border-color: var(--dark-warning); }
+  .ew-row.is-cleaned .ew-box { border-color: var(--dark-warning); }
+  .ew-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-height: 24px; }
+  .ew-was { min-width: 0; word-break: break-word; }
+  .ew-was s { text-decoration-thickness: 1px; }
+  .ew-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 0 18px; }
+  .ew-bar { position: sticky; bottom: 0; z-index: 5; margin: 12px -1.25rem -1.25rem; padding: 10px 1.25rem 12px; background: var(--dark-bg-tertiary); border-top: 1px solid var(--dark-border); border-radius: 0 0 8px 8px; }
+  .ew-count { font-size: 13px; color: var(--dark-text-muted); }
+  .ew-bar .go-row.rp-buttons { margin-top: 6px; }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='library-pages.js') }}"></script>
+<script>
+  $(function () {
+    var SONG = {{ song | tojson }};
+    var ORIG = {{ lines | tojson }};  // the lines as the page opened; the server checks them against its own
+    var BUSY = {{ busy | tojson }};
+    var URLS = {
+      save: {{ url_for('song_info.edit_words') | tojson }},
+      songInfo: {{ url_for('song_info.song_info', song=song) | tojson }},
+      repair: {{ url_for('song_info.repair_page', song=song) | tojson }}
+    };
+    var T = {
+      changed: {{ _('%(n)s changed', n='{n}') | tojson }},
+      dropped: {{ _('%(n)s dropped', n='{n}') | tojson }},
+      noChanges: {{ _('No changes yet') | tojson }},
+      tagChanged: {{ _('Changed') | tojson }},
+      tagDropped: {{ _('Dropped') | tojson }},
+      tagCleaned: {{ _('Cleaned') | tojson }},
+      tagCleanedAway: {{ _('Cleaned away') | tojson }},
+      was: {{ _('Was: %(text)s', text='{text}') | tojson }},
+      youTyped: {{ _('You typed:') | tojson }},
+      nothingLeft: {{ _('Nothing is left, so the line will be dropped.') | tojson }},
+      undo: {{ _('Undo') | tojson }},
+      applyOne: {{ _('Apply to 1 identical line') | tojson }},
+      applyMany: {{ _('Apply to %(n)s identical lines', n='{n}') | tojson }},
+      appliedOne: {{ _('Applied to 1 identical line.') | tojson }},
+      appliedMany: {{ _('Applied to %(n)s identical lines.', n='{n}') | tojson }},
+      allCleared: {{ _('Every line is cleared. To replace the lyrics, use Repair lyrics.') | tojson }},
+      repair: {{ _('Repair lyrics') | tojson }},
+      cleanedBody: {{ _('Parentheses, brackets and singer names are not kept in lyrics. The lines marked Cleaned show what is left.') | tojson }},
+      saveFailed: {{ _('Could not queue the regeneration.') | tojson }}
+    };
+    var el = libraryPages.el;
+    var fill = libraryPages.fill;
+    var WARN_ICON = '<svg class="rp-icon is-bad" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v9M12 18.5v.01"></path></svg>';
+
+    // One entry per line: its row's parts, the text in its box and, once a save came back
+    // cleaned, what was typed before the cleaning changed it.
+    var rows = $('.ew-row').map(function (i) {
+      var row = $(this);
+      return {
+        row: row,
+        box: row.find('.ew-box'),
+        meta: row.find('.ew-meta'),
+        tag: row.find('.tag'),
+        was: row.find('.ew-was'),
+        acts: row.find('.ew-acts'),
+        undo: row.find('.ew-undo'),
+        apply: row.find('.ew-apply'),
+        done: row.find('.ew-done'),
+        text: ORIG[i],
+        cleanedFrom: null
+      };
+    }).get();
+    var ui = { sending: false, cleanedNote: null, applied: null };  // applied: {row, n}
+
+    function collapse(text) {
+      return text.split(/\s+/).filter(Boolean).join(' ');
+    }
+
+    function autosize(box) {
+      box.css('height', 'auto');
+      box.css('height', Math.max(44, box[0].scrollHeight + 2) + 'px');
+    }
+
+    function stateOf(i) {
+      var norm = collapse(rows[i].text);
+      return { emptied: norm === '', changed: norm !== '' && norm !== ORIG[i], cleaned: rows[i].cleanedFrom !== null };
+    }
+
+    // The other lines with this line's original words that are still as they were.
+    function identicalUntouched(i) {
+      var same = [];
+      $.each(rows, function (j, r) {
+        if (j !== i && ORIG[j] === ORIG[i] && r.text === ORIG[j]) same.push(j);
+      });
+      return same;
+    }
+
+    function setText(i, text, cleanedFrom) {
+      rows[i].text = text;
+      rows[i].cleanedFrom = cleanedFrom;
+      rows[i].box.val(text);
+      autosize(rows[i].box);
+    }
+
+    function card(head, body) {
+      var node = el('div', 'rp-card').attr('data-tone', 'bad');
+      node.append(el('div', 'rp-card-head').append(WARN_ICON).append(el('span', null, head)));
+      if (body) node.append(el('div', 'rp-card-body', body));
+      return node;
+    }
+
+    function refreshRow(i) {
+      var r = rows[i];
+      var s = stateOf(i);
+      var edited = !s.cleaned && (s.emptied || s.changed);
+      r.row.toggleClass('is-changed', edited && s.changed);
+      r.row.toggleClass('is-dropped', s.emptied);
+      r.row.toggleClass('is-cleaned', s.cleaned);
+
+      var tagText = '';
+      var tagClass = 'tag is-warning';
+      if (s.cleaned) tagText = s.emptied ? T.tagCleanedAway : T.tagCleaned;
+      else if (s.emptied) tagText = T.tagDropped;
+      else if (s.changed) { tagText = T.tagChanged; tagClass = 'tag is-info'; }
+      r.tag.attr('class', tagClass).text(tagText).toggleClass('is-hidden', !tagText);
+
+      r.was.empty();
+      if (s.cleaned) {
+        r.was.append(document.createTextNode(T.youTyped + ' '), $('<s>').text(r.cleanedFrom));
+        if (s.emptied) r.was.append(document.createTextNode('. ' + T.nothingLeft));
+      } else if (edited) {
+        r.was.text(fill(T.was, { text: ORIG[i] }));
+      }
+      var showWas = s.cleaned || edited;
+      r.was.toggleClass('is-hidden', !showWas);
+      r.meta.toggleClass('is-hidden', !tagText && !showWas);
+
+      var same = edited ? identicalUntouched(i).length : 0;
+      var appliedHere = edited && ui.applied && ui.applied.row === i;
+      r.undo.toggleClass('is-hidden', !(edited || s.cleaned));
+      r.apply.toggleClass('is-hidden', same === 0).text(same === 0 ? '' : same === 1 ? T.applyOne : fill(T.applyMany, { n: same }));
+      r.done.toggleClass('is-hidden', !appliedHere).text(appliedHere ? (ui.applied.n === 1 ? T.appliedOne : fill(T.appliedMany, { n: ui.applied.n })) : '');
+      r.acts.toggleClass('is-hidden', r.undo.hasClass('is-hidden') && r.apply.hasClass('is-hidden') && r.done.hasClass('is-hidden'));
+    }
+
+    function refresh() {
+      var changed = 0;
+      var dropped = 0;
+      for (var i = 0; i < rows.length; i++) {
+        refreshRow(i);
+        var s = stateOf(i);
+        if (s.emptied) dropped++;
+        else if (s.changed) changed++;
+      }
+      var allEmpty = changed === 0 && dropped === rows.length;
+      var parts = [];
+      if (changed) parts.push(fill(T.changed, { n: changed }));
+      if (dropped) parts.push(fill(T.dropped, { n: dropped }));
+      $('#ew-count').text(parts.length ? parts.join(' · ') : T.noChanges);
+      $('#ew-save').prop('disabled', BUSY || ui.sending || allEmpty || !(changed || dropped));
+
+      var banner = $('#ew-banner').empty();
+      if (allEmpty) {
+        banner.append(card(T.allCleared).append(el('a', 'rp-link no-spa', T.repair).attr('href', URLS.repair)));
+      } else if (ui.cleanedNote !== null) {
+        banner.append(card(ui.cleanedNote, T.cleanedBody));
+      }
+    }
+
+    // Lines the cleaning changed are marked until the admin edits them again.
+    function noteCleaned() {
+      if (!rows.some(function (r) { return r.cleanedFrom !== null; })) ui.cleanedNote = null;
+    }
+
+    $.each(rows, function (i, r) {
+      r.box.on('keydown', function (e) {
+        if (e.key === 'Enter') e.preventDefault();
+      });
+      r.box.on('input', function () {
+        r.text = r.box.val();
+        r.cleanedFrom = null;
+        if (ui.applied && ui.applied.row === i) ui.applied = null;
+        noteCleaned();
+        autosize(r.box);
+        refresh();
+      });
+      r.undo.on('click', function () {
+        if (ui.applied && ui.applied.row === i) ui.applied = null;
+        setText(i, ORIG[i], null);
+        noteCleaned();
+        refresh();
+      });
+      r.apply.on('click', function () {
+        var same = identicalUntouched(i);
+        $.each(same, function (k, j) { setText(j, r.text, null); });
+        ui.applied = { row: i, n: same.length };
+        noteCleaned();
+        refresh();
+      });
+      autosize(r.box);
+    });
+
+    // The server's cleaned text for each line it would change, in the boxes for the admin to check.
+    function showCleaned(answer) {
+      var first = null;
+      $.each(answer.cleaned, function (key, text) {
+        var i = Number(key);
+        setText(i, text, collapse(rows[i].text));
+        if (first === null || i < first) first = i;
+      });
+      ui.cleanedNote = answer.error;
+      refresh();
+      if (first !== null) rows[first].row[0].scrollIntoView({ block: 'center' });
+    }
+
+    $('#ew-save').on('click', function () {
+      ui.sending = true;
+      refresh();
+      $.ajax({
+        url: URLS.save,
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ song: SONG, original: ORIG, lines: rows.map(function (r) { return r.text; }) })
+      }).done(function () {
+        window.location.href = URLS.songInfo;
+      }).fail(function (xhr) {
+        var answer = {};
+        try { answer = JSON.parse(xhr.responseText); } catch (err) {}
+        ui.sending = false;
+        if (answer.cleaned) showCleaned(answer);
+        else {
+          showNotification(answer.error || T.saveFailed, 'is-danger');
+          refresh();
+        }
+      });
+    });
+
+    refresh();
+  });
+</script>
+{% endblock %}
+
+{% block header %}
+{# MSG: Title of the page where an admin fixes the words of a song's lyrics line by line. #}
+<a class="page-back no-spa" href="{{ url_for('song_info.song_info', song=song) }}">&lsaquo; {% trans %}Song info{% endtrans %}</a>
+<h1>{% block title %}{% trans %}Edit words{% endtrans %}{% endblock %}</h1>
+{% endblock %}
+
+{% block content %}
+<div class="rp-name">{{ name }}</div>
+<div class="rp-muted">{% trans source=source, count=lines|length %}Source: {{ source }} · {{ count }} line{% pluralize count %}Source: {{ source }} · {{ count }} lines{% endtrans %}</div>
+{% if busy %}
+<p class="rp-muted" style="margin-top: 12px">{% trans %}This song has a regen waiting or running.{% endtrans %} <a class="no-spa" href="{{ url_for('processing.processing') }}">{% trans %}Processing{% endtrans %}</a></p>
+{% endif %}
+<div id="ew-banner" class="ew-banner"></div>
+
+<div class="rp-sec has-tip"><span>{% trans %}Lines{% endtrans %}</span>{% call info_tip() %}{% trans %}Text in (parentheses) or [brackets], and singer names like MARA:, are removed from lyrics. If you type them, the page shows the line without them before it saves.{% endtrans %}{% endcall %}</div>
+<p class="rp-muted">{% trans %}Each line keeps its time. Clear a box to drop the line.{% endtrans %}</p>
+
+<div class="ew-lines">
+  {% for line in lines %}
+  <div class="ew-row">
+    <div class="ew-when"><span>{{ loop.index }}</span><b>{{ starts[loop.index0] }}</b></div>
+    <div class="ew-main">
+      <textarea class="ew-box" rows="1" maxlength="{{ max_chars }}" spellcheck="false" aria-label="{{ _('Line %(n)s, starts %(time)s', n=loop.index, time=starts[loop.index0]) }}" placeholder="{{ _('Line dropped') }}"{% if busy %} disabled{% endif %}>{{ line }}</textarea>
+      <div class="ew-meta is-hidden"><span class="tag is-hidden"></span><span class="rp-muted ew-was is-hidden"></span></div>
+      <div class="ew-acts is-hidden">
+        <button type="button" class="rp-link ew-undo is-hidden">{% trans %}Undo{% endtrans %}</button>
+        <button type="button" class="rp-link ew-apply is-hidden"></button>
+        <span class="rp-muted ew-done is-hidden"></span>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="ew-bar">
+  <div id="ew-count" class="ew-count"></div>
+  <div class="go-row rp-buttons">
+    <a class="button no-spa" href="{{ url_for('song_info.song_info', song=song) }}">{% trans %}Cancel{% endtrans %}</a>
+    <button type="button" id="ew-save" class="button is-primary" disabled>{% trans %}Regenerate song{% endtrans %}</button>
+    {% call info_tip() %}{% trans %}Regenerating backs up this song's lyric files, then queues it. It runs behind new downloads, and waits if the song is playing.{% endtrans %}{% endcall %}
+  </div>
+</div>
+{% endblock %}
