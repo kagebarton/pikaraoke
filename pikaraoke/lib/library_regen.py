@@ -292,7 +292,9 @@ def edited_kind(origin: str | None) -> str | None:
     ``"srt"``, a YouTube caption, gives ``caption_edited``. An edited sheet's own
     origin gives its own kind back, so a second edit keeps it.
     """
-    return next((kind for kind, k in SHEETS.items() if k.edits and k.origin == origin), None)
+    return next(
+        (kind for kind, k in SHEETS.items() if is_edited_kind(kind) and k.origin == origin), None
+    )
 
 
 def repair_source(kind: str) -> str:
