@@ -86,8 +86,14 @@ logger = logging.getLogger(__name__)
 
 BUSY_MESSAGE = "This song has a regen waiting or running."
 
-# The lyric sources :meth:`LibraryTools.repair` takes.
-REPAIR_SOURCES = ("caption", "genius", *SHEETS, "transcribe")
+# The lyric sources :meth:`LibraryTools.repair` takes: the edited sheet kinds are no
+# source, a word edit is not a repair.
+REPAIR_SOURCES = (
+    "caption",
+    "genius",
+    *(kind for kind, sheet in SHEETS.items() if sheet.edits is None),
+    "transcribe",
+)
 
 # Fetched Genius songs kept, so a repair's preview, its LRCLIB step and the
 # final queue scrape the page once.
