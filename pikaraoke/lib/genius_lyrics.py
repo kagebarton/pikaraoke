@@ -132,12 +132,16 @@ def normalize_lyric_line(text: str) -> str:
     SRT parens are stage directions and should be cleaned via
     :func:`clean_srt_line` instead.
     """
-    text = text.replace("\n", " ")
+    return " ".join(_strip_markup(text).split())
+
+
+def _strip_markup(text: str) -> str:
+    """``text`` with tags, ``[stage directions]`` and note glyphs removed, quotes and
+    lookalike letters folded; line breaks and spacing left as they are."""
     text = _HTML_TAG_RE.sub("", text)
     text = _BRACKET_CONTENT_RE.sub("", text)
     text = _MUSICAL_NOTE_RE.sub("", text)
-    text = fold_homoglyphs(text.translate(_QUOTES_TABLE))
-    return " ".join(text.split())
+    return fold_homoglyphs(text.translate(_QUOTES_TABLE))
 
 
 def clean_srt_line(text: str) -> str:
@@ -147,12 +151,16 @@ def clean_srt_line(text: str) -> str:
     ``(laughs)``). Returns ``""`` for lines that contain no letters
     after cleanup so the caller can drop them.
     """
-    text = normalize_lyric_line(text)
-    text = _PAREN_CONTENT_RE.sub("", text)
-    text = " ".join(text.split())
+    text = " ".join(strip_srt_markup(text).split())
     if not _HAS_LETTER_RE.search(text):
         return ""
     return text
+
+
+def strip_srt_markup(text: str) -> str:
+    """:func:`clean_srt_line`'s removals with the cue's line breaks kept, so a mark that only
+    counts at a line's start can be found once tags and stage directions are gone."""
+    return _PAREN_CONTENT_RE.sub("", _strip_markup(text))
 
 
 def parse_lyric_lines(lyrics_text: str) -> list[dict]:
