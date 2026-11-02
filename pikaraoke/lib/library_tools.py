@@ -57,6 +57,7 @@ from pikaraoke.lib.library_regen import (
     find_local_srt,
     gate_on_disk_caption,
     is_edited,
+    is_edited_kind,
     media_duration,
     read_bundle,
     repair_source,
@@ -102,7 +103,7 @@ UNREADABLE_SHEET_MESSAGE = (
 REPAIR_SOURCES = (
     "caption",
     "genius",
-    *(kind for kind, sheet in SHEETS.items() if sheet.edits is None),
+    *(kind for kind in SHEETS if not is_edited_kind(kind)),
     "transcribe",
 )
 
@@ -1425,7 +1426,7 @@ class LibraryTools:
         if status.sheet_kind is not None:
             source = repair_source(status.sheet_kind)
             now = {"source": "captions" if source == "caption" else source}
-            if SHEETS[status.sheet_kind].edits:
+            if is_edited_kind(status.sheet_kind):
                 now["edited"] = True
             return now
         if status.category == "no_lyrics":

@@ -469,6 +469,21 @@ class TestCustomSheetWinsEveryPlan:
         assert lr.is_edited(sheet) is edited
 
     @pytest.mark.parametrize(
+        ("kind", "edited"),
+        [
+            (None, False),
+            ("custom", False),
+            ("movie", False),
+            ("lrclib", False),
+            ("caption_edited", True),
+            ("movie_edited", True),
+            ("lrclib_edited", True),
+        ],
+    )
+    def test_an_edited_kind_is_told_by_the_sheet_table(self, kind, edited):
+        assert lr.is_edited_kind(kind) is edited
+
+    @pytest.mark.parametrize(
         ("kind", "source", "origin"),
         [
             ("caption_edited", "caption", "srt"),

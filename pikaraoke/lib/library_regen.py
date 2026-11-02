@@ -300,13 +300,17 @@ def repair_source(kind: str) -> str:
     return SHEETS[kind].edits or kind
 
 
+def is_edited_kind(kind: str | None) -> bool:
+    """Whether ``kind`` is an edited sheet's; None, no sheet at all, is not."""
+    return kind is not None and SHEETS[kind].edits is not None
+
+
 def is_edited(sheet: Path | str | None) -> bool:
     """Whether ``sheet`` is an edited sheet, by its suffix.
 
     Takes a path or the relative path string a bundle records as its lyrics source.
     """
-    kind = sheet_kind(Path(sheet)) if sheet else None
-    return kind is not None and SHEETS[kind].edits is not None
+    return is_edited_kind(sheet_kind(Path(sheet)) if sheet else None)
 
 
 def sheet_plan(song: Path, kind: str, text: str | None = None) -> Plan:
