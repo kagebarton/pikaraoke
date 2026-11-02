@@ -320,6 +320,102 @@ when run a second time. Phase 2 checks that on every cue sheet in the library.
       to identical lines, the cleaning answer, back to Song Info. Results row.
 - [ ] Checkpoint: review due (Checkpoints below). Stop.
 
+### Phase 4.1: review fixes (Ken, 2026-11-02)
+
+The Phase 4 `/code-review` (`f775b1b^..62d4818`, high) found eight things. Ken took
+six of them (row 8). One commit each, in this order, each with its tests. Anchors are
+quoted code at `62d4818`; a line-number offset alone is not a STOP.
+
+- [ ] **4.1a: every edited line is written back, in sheet order** (review 1).
+      `cues_to_srt` writes through `srt.compose(...)` with its defaults. Those drop a
+      cue whose start is at or after its end and sort the rest by start, so a kept
+      line can vanish or move on save. `cue_spans_from_srt` keeps every cue in file
+      order, so the page shows the line. Number the cues from 1 in
+      `cues_to_srt` and compose with `reindex=False`. Tests in `test_srt_cues.py`: a
+      zero-length cue and two cues out of start order both round-trip in file order
+      with their spans. Commit: `fix(srt): write every edited line back, in sheet
+      order`.
+- [ ] **4.1b: a cleaned cue cleans to itself** (review 3). The cleaning strips
+      speaker labels before `clean_srt_line` removes parentheses and tags, so a label
+      behind them survives one pass and goes on the next: `(softly) MARA: hey there`
+      loads as `MARA: hey there`, and `<i>MEN:</i> go now` as `MEN: go now`. A save
+      then refuses lines nobody touched. Even past the save, the run cleans the
+      saved sheet again and drops the label from the karaoke without a word.
+      In `clean_cue_texts`, repeat each cue's
+      `clean_srt_line(_strip_subtitle_marks(...))` until it stops changing (one
+      private helper). The capitals decision and the recasing stay as they are. Check
+      that no step can make the text longer. If one can, the loop could cycle: STOP.
+      Tests: those two cues load as `hey there` and `go now`. For every input
+      already in `test_srt_cues.py`, cleaning the cleaned lines again changes nothing.
+      In `test_word_edit.py`, a sheet loaded from those cues saves one changed line
+      and is not refused. Existing tests pass unchanged.
+      **Scan, read only, not committed:** a scratchpad script compares the new
+      `cue_spans_from_srt` with the one at `62d4818` (exported with `git archive`
+      into the scratchpad) on every `.srt` in the library's `lyrics/` and
+      `subtitles/` folders (`/home/ken/shared-drives/D:/Shared/pikaraoke-songs`;
+      skip `is_generated` files). Count the files and lines whose cleaned text
+      differs. Print counts only. Phase 2's second-pass scan found 0, so expect 0.
+      Anything else is a STOP: that song's timing would move at its next regen.
+      Commit: `fix(srt): a cleaned cue cleans to itself`.
+- [ ] **4.1c: a cue sheet that can't be read says so** (review 2 and 6).
+      `word_sheet` catches `OSError, ValueError, srt.SRTParseError` but not
+      `OverflowError`, which `srt.parse` raises for an out-of-range timestamp
+      (`_srt_word_count` in `library_regen.py` catches it). Song Info calls
+      `word_sheet` on every view, so such a sheet gives a 500. And an unreadable sheet
+      gets the same None as a song that isn't cue-timed, so the button vanishes and a
+      save says the song "isn't timed from a caption or subtitles".
+      - `LibraryTools.can_edit_words(song_path) -> bool`: the next regen replays a
+        cue sheet (`_regen_job`, a `seed` plan whose origin has an `edited_kind`).
+        It reads no file. Song Info's `can_edit_words` uses it, so a view no longer
+        parses the sheet.
+      - `word_sheet(song_path) -> WordSheet` raises `RegenError` and never returns None.
+        A song that `can_edit_words` refuses gets the existing "This song isn't timed
+        from a caption or subtitles, so its words can't be edited here." A sheet that
+        can't be read (the three exceptions plus `OverflowError`) or has no lines
+        left after cleaning still logs its warning, then raises "This song's
+        subtitles can't be read or hold no lyric lines, so its words can't be edited.
+        Repair lyrics can replace them." The plan read is shared with
+        `can_edit_words` (one private helper), not repeated. `edit_words` lets the
+        error through, so the POST answers 400 with the message.
+      - GET `/song_info/edit_words`: a non-video song, or one `can_edit_words` refuses,
+        redirects to Song Info as now. A `RegenError` from `word_sheet` is flashed
+        (`is-danger`), then redirects.
+      - Tests: `TestWordSheet`'s None cases become the matching `RegenError`.
+        `can_edit_words` is tested for each cue kind and each non-cue kind, and
+        never reads the sheet. A sheet holding `99999999999999:00:00,000` raises the
+        unreadable message. Route tests: Song Info renders for that song with the
+        button. The page redirects with the flash, and the POST answers 400 with
+        the message. Commit: `fix(library): a cue sheet that can't be read says so`.
+- [ ] **4.1d: the Edit words page names the sheet it edits** (review 4). The page
+      takes its source from the bundle (`_source_name(tools.status(song))`), not
+      from the sheet it shows. When the two disagree, the header names one source
+      and the boxes hold another's lines.
+      - `WordSheet` gains `edited: bool`: the sheet read is already an edit,
+        `is_edited(plan.lyrics_path)`.
+      - `routes/song_info.py`: split the origin branches out of `_origin_name` into
+        `_name_of_origin(origin: str | None) -> str | None`. `_origin_name` keeps the
+        category fallback. The page's `source` is
+        `_name_of_origin(SHEETS[sheet.kind].origin)`, through `_edited_name` when
+        `sheet.edited`.
+      - Tests: a song whose bundle says caption with an `.lrclib.srt` on disk shows
+        "LRCLIB" on the page. An edited LRCLIB sheet shows "LRCLIB (edited)". Song
+        Info's labels are unchanged (the existing tests). Commit: `fix(song_info):
+        the Edit words page names the sheet it edits`.
+- [ ] **4.1e: one test for an edited sheet kind** (review 8). "Is this kind an
+      edit" is written out by hand in three places, beside `is_edited`, which only
+      takes a path: `current_edited` in `repair_page`,
+      `SHEETS[status.sheet_kind].edits` in `LibraryTools._now`, and
+      `sheet.edits is None` in `REPAIR_SOURCES`. Add
+      `is_edited_kind(kind: str | None) -> bool` to `library_regen.py`, make
+      `is_edited` call it, and use it at those three sites. Not in scope: the
+      `"caption"` -> `"captions"` name in `_now`. Existing tests cover the sites and
+      must pass unchanged. Add one `is_edited_kind` test (None, each source kind,
+      each edited kind). Commit: `refactor(regen): one test for an edited sheet kind`.
+- [ ] Import-smoke, pre-commit on the changed files, full suite, a `ui-check` pass on
+      the Edit words page (one save, the cleaning answer, the flashed unreadable
+      sheet). Results row with the scan counts and the suite. Checkpoint: review due
+      (Checkpoints, after Phase 4.1). Stop.
+
 ### Phase 5: Ken's checks (Windows, GPU)
 
 Hand Ken one PowerShell block: fetch the branch from remote `vm`, start the app with
@@ -371,6 +467,10 @@ No feature code until GATE R.
 - "Play this line": a button per line that plays the song from the line's start
   (Ken, 2026-11-02: a later phase). No admin page plays audio today, so it needs a
   route that serves the song's audio.
+- The Repair page's Movie subtitles box after a word edit (review 5 at Phase 4,
+  not taken for 4.1). An edit removes `.custom.srt`, which `custom_start` fills
+  the box from. A `movie_edited` song then opens Repair with that box empty, while
+  its card says "current (edited)". Needs a ruling on which sheet fills the box.
 
 ### Landing
 
@@ -413,6 +513,18 @@ this plan's commits. Then retire the branch as `archive/edit_words`.
   3. **Robustness**: a busy song, a stale page, every line cleared, a cleaning
      that drops a line, a suffix `sheet_kind` could misread, an unreadable sheet,
      a file typed in capitals.
+- After Phase 4.1: review due.
+  `/code-review high <4.1a commit>^..HEAD`, files in
+  `pikaraoke/lib/{srt_cues,word_edit,library_tools,library_regen}.py`,
+  `pikaraoke/routes/song_info.py`. Three finder angles:
+  1. **Correctness**: does an edited sheet come back with every kept line, in
+     file order, at its span? Does any cleaned line change on a second cleaning?
+     Does the Edit words page name the sheet it shows?
+  2. **Simplicity**: is the plan read for `can_edit_words` and `word_sheet` one
+     helper? Is `is_edited_kind` the one test for an edited kind?
+  3. **Robustness**: an out-of-range timestamp, a sheet that cleans to nothing, a
+     zero-length or out-of-order cue, a label behind parentheses or a tag, a
+     cleaning loop that might not stop.
 
 ## Results log
 
@@ -425,3 +537,4 @@ this plan's commits. Then retire the branch as `archive/edit_words`.
 | 5 | 2026-11-02 | 3 | Executor (Sonnet 5.5): mockup built and published as a private Artifact, https://claude.ai/artifact/MYuyn6Ed4PFgH7QULTPECr (version 1; source `/tmp/claude-1000/-home-ken-pikaraoke/57ce6112-52dc-4e9c-979f-cf065bc7dee8/scratchpad/edit_words_mockup.html`, not committed, read the Artifact for it). Invented lyrics only: a 40-line song, a credit line first, a typo in all four chorus places. Styled from `song_repair.html`, `song_info.html`, `library-pages.css` and the `--dark-*` tokens. States: Edit words page untouched (Save off); one changed + one dropped; chorus line fixed with the offer "Apply to 3 identical lines"; after applying; after a save the cleaning changed (three lines: a singer label, a bracketed word, a line that cleans to nothing); stale page; busy song; every line cleared; Song Info (Edit words button, Lyrics tile and Source row "LRCLIB (edited)", Alignment route text + "The words were edited here."); History tab ("LRCLIB timing (edited)" over its backup); Repair lyrics source list ("current (edited)" on LRCLIB timing). The Edit words states are live (type, clear, Undo, Apply, Regenerate song, with a stand-in cleaner); Phone/Wide width. Headless Chromium run on the VM: all 11 states render, 0 console errors, 0 page errors, no horizontal overflow at 430 px or 1100 px; live path exercised (fix one line -> "1 changed"; offer "Apply to 3 identical lines" -> "4 changed"; a typed parenthesis -> cleaned text in the box, banner, nothing queued; second press -> Song Info). Server texts are the code's own (`STALE_MESSAGE`, `BUSY_MESSAGE`, the all-cleared and cleaned messages). | Awaiting GATE E1 (Ken). Items put to Ken on the page: (1) each box shows its number from 1 and its start time, so "Line N is too long" names the box marked N and the 0-based cleaned indexes stay internal; (2) additions beyond the plan, each removable: an Undo link on changed/dropped/cleaned lines, "Was: ..." under a changed or dropped line, a bottom bar (count + Regenerate song) that stays on screen, the all-cleared notice shown at once instead of after Save; (3) busy song: boxes locked + Save off (alternative: boxes editable, Save off); (4) after a cleaning change the cleaned text is in the box, marked Cleaned, with "You typed: ..." under it, and Save stays on; (5) three buttons on Song Info need `.si-btn` padding reduced to `0 .5em` at 370 px content width, and the Lyrics tile wraps to two lines at phone width. Not on the page: the `word_sheet` origin-vs-suffix choice (row 4), which has no screen. |
 | 6 | 2026-11-02 | 3 | GATE E1, Ken: "keep the buttons as is, UI is ratified." He had asked whether the Song Info buttons should read "Repair timing" and "Edit lyrics"; the executor listed what renaming "Repair lyrics" touches (user-facing messages in `library_tools.py`, `library_regen`, the processing manager and `word_edit.py`, the Repair page title, about six tests); Ken declined both renames. | Ratified as drawn: Artifact version 1 (https://claude.ai/artifact/MYuyn6Ed4PFgH7QULTPECr), no change to it. Button names stay "Repair lyrics" and "Edit words". The row 4 `word_sheet` origin-vs-suffix choice was not addressed by Ken and stays as built. No page code was written before this row. Phase 4 unblocked. |
 | 7 | 2026-11-02 | 4 | Executor (Sonnet 5.5): `acadcd8` `feat(song_info): Edit words, for songs timed from a caption or subtitles` (`GET/POST /song_info/edit_words`, `song_edit_words.html`, `can_edit_words` and the Edit words button on Song Info, `.si-btn` side padding `0.5em`; the `rp-*` rules both the Repair and Edit words pages draw, which were inline in `song_repair.html`, moved unchanged into `library-pages.css`); `98d080c` `feat(ui): an edited sheet reads "(edited)" beside its source` (`SongStatus.edited`, `HistoryEntry.edited` from `is_edited(lyrics.source_path)`; `_source_name`, `_route_text`, `_versions`, `_pick` key `(origin, edited, lines)`, `_current_source` = `repair_source(sheet_kind)` with `current_edited` and a `current_tag` macro on the Repair page; `LibraryTools._now` names an edited sheet's source with `"edited": True`, `routes/library._now_text` appends it). Pre-commit clean on the changed files; import-smoke with the worktree first on `sys.path`; graphify not installed. Mutation check (scratchpad, files restored byte for byte): `_pick` without `edited`, `_current_source` on the raw kind, `_now` without the flag, History row without the label each fail one new test. Full suite `/home/ken/miniconda3/envs/pik/bin/python -P -m pytest -q -p no:cacheprovider` in `/home/ken/pik-edit-words`. ui-check skill (`FAKE_JOB_S` set, app run from the worktree on port 5591, headless Chromium 430 px and 1100 px; a 40-line invented song seeded once as a caption song and once as an LRCLIB song; scratchpad scripts `seed_edit_words.py`, `ew_check.py`, `ew_busy_check.py`, `ew_labels_check.py`, `css_compare.py`, not committed). | Suite **3218 passed**, 0 failed, 57.8 s (row 4: 3127; `acadcd8` 3165, +38; `98d080c` 3218, +53). Browser, 29 of 30 checks in `ew_check.py` pass on the committed code: 40 rows with number and start time; "No changes yet" and Save off; a chorus fix gives "1 changed", "Was: ...", "Apply to 3 identical lines" and, after it, "4 changed" and "Applied to 3 identical lines."; Undo; a cleared line is "Dropped" ("4 changed · 1 dropped"); a typed singer label and a typed "(la la la)" come back from the server as "Cleaned" and "Cleaned away" with "You typed: ...", the server's banner text, the page still on Edit words and Save on; a sheet changed on disk gives the stale text as a toast; the next save returns to Song Info with the regen note and Repair lyrics and Edit words off; every box cleared shows the all-cleared card with a Repair lyrics link and Save off; no horizontal overflow at 430 px or 1100 px; Song Info's three buttons share one row at 430 px. The one check that failed in `ew_check.py` is the busy page after that save: the ui-check fake does not hold a regen job (the log shows `Processing failed ... Stem worker died unexpectedly during separation` within 14 s of the regen starting), so the song was no longer busy; `ew_busy_check.py` queues a regen through `/song_info/regenerate` and opens the page at once: 40 boxes disabled, Save off, "This song has a regen waiting or running." with the Processing link. Labels, `ew_labels_check.py` on an edited LRCLIB song with a plain backup (7 of 7 pass, 0 console errors): Lyrics tile and Source row "LRCLIB (edited)"; Alignment route text ends "The words were edited here."; History "LRCLIB timing (edited)" over "LRCLIB timing", one `si-chg`; Repair page tag "current (edited)" on the LRCLIB timing card only. Repair page styles after the CSS move: `css_compare.py` took computed styles of the visible `.rp-muted`, `.rp-sec`, `.rp-sec.has-tip`, `.rp-name`, `.go-row.rp-buttons`, `.rp-buttons .button`, `.rp-buttons .button.is-primary`, `.go-row.rp-buttons .info-tip-btn` and `.rp-src` on the same song in this tree and in `6bf4cf4` exported with `git archive`: no differences. Where the build differs from the plan or the mockup: (1) the plan said page-only rules inline and shared ones from `library-pages.css`; the `rp-*` rules were in no shared file, so they moved rather than being copied (above). (2) The cleaned banner's head is the server's own `error` text from the 400, not a second copy in the page; the all-cleared card text is a client copy of the server text, as the mockup showed it at once. (3) `.ew-acts` gets `align-items: center` (the mockup left the note above the Undo link's baseline when both showed). (4) `song_info` now reads and cleans the song's sheet on every view for `can_edit_words`. (5) Not touched: the reset-run explanation still names only custom lyrics and movie subtitles as kept (an existing test asserts it). Not done: the `word_sheet` origin-vs-suffix choice (row 4) stays as built. |
+| 8 | 2026-11-02 | 4 | Author (Opus 5.5): `/code-review high f775b1b^..62d4818`, run from `/home/ken/pik-edit-words` with the Checkpoints angles. Eight findings: (1) `cues_to_srt` drops a zero-length cue and sorts by start (run: a 2s->2s cue vanishes); (2) `word_sheet` misses `OverflowError` (run: `srt.parse` on `99999999999999:00:00,000` raises it), so Song Info 500s; (3) cleaning not idempotent, label behind parentheses or a tag (run: `(softly) MARA: hey there` -> `MARA: hey there`, `<i>MEN:</i> go now` -> `MEN: go now`); (4) Edit words page source from the bundle, not the sheet; (5) Repair's movie box empty after a `movie_edited` save; (6) an unreadable sheet reads as "isn't timed from a caption"; (7) `song_info` parses the sheet on every view; (8) the edited-kind test written out at three sites. Left out by the review: History comparing caption versions by lines (expected, row 3). Note for the read: row 4's scans found 0 second-pass changes and 0 round-trip differences in the library, so (1) and (3) affect no song today. | Ken ruled: fix 1, 2, 3, 4, 6, 8 as Phase 4.1. (5) to Later. (7) not taken, though 4.1c's `can_edit_words` removes the per-view parse. |
