@@ -19,6 +19,7 @@ from pikaraoke.lib.library_regen import (
     MOVIE_ORIGIN,
     SHEETS,
     RegenError,
+    is_edited_kind,
     repair_source,
 )
 from pikaraoke.lib.library_status import HistoryEntry, SongStatus, length_gap_s
@@ -557,8 +558,7 @@ def repair_page():
         name=k.song_manager.filename_from_path(song),
         has_youtube_id=status.youtube_id is not None,
         current_source=_current_source(status),
-        current_edited=status.sheet_kind is not None
-        and SHEETS[status.sheet_kind].edits is not None,
+        current_edited=is_edited_kind(status.sheet_kind),
         preselect=source if source in REPAIR_SOURCES else None,
         current_genius_id=(status.genius or {}).get("id"),
         custom_prefill=start["text"],
