@@ -1061,6 +1061,7 @@ class TestAlignSong:
             _SONG_CUES, _SONG_LINES, _SONG_LINES, 12.0, aligner, env=env
         )
 
+        assert inputs["spans"] == _SONG_CUES
         # The section's lines as they came out of the align: line 3 still a word short.
         assert [o["line_id"] for o in inputs["sections"]] == [0, 1, 2, 3]
         assert [len(o["words"]) for o in inputs["sections"]] == [2, 2, 2, 1]
@@ -1100,10 +1101,13 @@ class TestAlignSong:
         # Aligner reports every line ~1.5 s late (> SECTION_PAD_S): the driver
         # re-sections once on offset-shifted cues, after which the words match.
         aligner = _stub_aligner(lambda *_: _on_cue_words(shift=1.5))
-        objs, stats, _inputs = align_song(_SONG_CUES, _SONG_LINES, _SONG_LINES, 12.0, aligner)
+        objs, stats, inputs = align_song(_SONG_CUES, _SONG_LINES, _SONG_LINES, 12.0, aligner)
 
         assert stats["resectioned"] is True
         assert stats["offset_s"] == pytest.approx(1.5, abs=0.05)
+        # The rescue ran on the shifted cues, so those are the ones recorded.
+        shifted = [(c0 + 1.5, c1 + 1.5) for c0, c1 in _SONG_CUES]
+        assert inputs["spans"] == [pytest.approx(span, abs=0.05) for span in shifted]
         # Two section passes (initial + re-section), no per-line rescue needed.
         assert len(aligner.calls) == 2
         assert all(o["source"] == SOURCE for o in objs)
