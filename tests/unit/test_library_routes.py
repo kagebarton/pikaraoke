@@ -151,6 +151,8 @@ EDIT_LINES = [
 ]
 EDIT_SPANS = [(1.0, 3.5), (4.0, 6.25), (7.0, 9.5), (62.0, 64.0), (131.0, 134.5)]
 EDIT_SRT = cues_to_srt(EDIT_LINES, EDIT_SPANS)
+# A cue time no timedelta holds: srt.parse raises OverflowError, not its own parse error.
+OUT_OF_RANGE_SRT = "1\n99999999999999:00:00,000 --> 99999999999999:00:01,000\nwords\n"
 
 # Each cue source's lyrics origin in the bundle, the suffix of its sheet in lyrics/ (a caption
 # is no sheet: it lives in subtitles/) and of the sheet an edit of it saves as.
@@ -794,6 +796,12 @@ class TestEditWordsButton:
     def test_a_song_with_no_bundle_has_none(self, env):
         assert 'id="edit-words"' not in text(env.page(env.add_song("A---aaaaaaaaaaa.mp4")))
 
+    def test_a_sheet_that_cannot_be_read_still_has_it_and_the_page_still_opens(self, env):
+        response = env.page(env.add_cue_song(srt_text=OUT_OF_RANGE_SRT))
+
+        assert response.status_code == 200
+        assert 'id="edit-words"' in text(response)
+
     def test_a_song_that_is_not_a_video_has_none(self, env):
         song = env.folder / "Track---aaaaaaaaaaa.mp3"
         song.write_bytes(b"")
@@ -837,11 +845,23 @@ class TestEditWordsPage:
         assert response.status_code == 302
         assert response.headers["Location"].startswith("/song_info?song=")
 
-    def test_a_song_with_no_cue_sheet_goes_back_to_song_info(self, env):
+    def test_a_song_with_no_cue_sheet_goes_back_to_song_info_without_a_word(self, env):
         response = self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle()))
 
         assert response.status_code == 302
         assert response.headers["Location"].startswith("/song_info?song=")
+        with env.client.session_transaction() as session:
+            assert not session.get("_flashes")
+
+    def test_a_sheet_that_cannot_be_read_goes_back_to_song_info_with_the_reason(self, env):
+        response = self.page(env, env.add_cue_song(srt_text=OUT_OF_RANGE_SRT))
+
+        assert response.status_code == 302
+        assert response.headers["Location"].startswith("/song_info?song=")
+        with env.client.session_transaction() as session:
+            [(category, message)] = session["_flashes"]
+        assert category == "is-danger"
+        assert "can't be read or hold no lyric lines" in message
 
     def test_the_page_lists_each_line_with_its_number_and_start_time(self, env):
         html = text(self.page(env, env.add_cue_song()))
@@ -1028,6 +1048,16 @@ class TestEditWordsRoute:
         assert response.status_code == 400
         assert "isn't timed from a caption" in response.get_json()["error"]
         env.processing.enqueue_regen.assert_not_called()
+
+    def test_a_sheet_that_cannot_be_read_is_refused_with_the_reason(self, env):
+        song = env.add_cue_song(srt_text=OUT_OF_RANGE_SRT)
+
+        response = self.save(env, song)
+
+        assert response.status_code == 400
+        assert "can't be read or hold no lyric lines" in response.get_json()["error"]
+        env.processing.enqueue_regen.assert_not_called()
+        assert not list(env.folder.glob("regen_backups/*"))
 
 
 def fixed() -> list[str]:

@@ -470,7 +470,7 @@ def song_info():
         history=history,
         has_backups=any(not v.current for v in history),
         can_regenerate=video and tools.can_regenerate(song),
-        can_edit_words=video and tools.word_sheet(song) is not None,
+        can_edit_words=video and tools.can_edit_words(song),
         busy=video and tools.is_busy(song),
     )
 
@@ -565,8 +565,12 @@ def edit_words_page():
     if song is None:
         abort(400)
     tools = k.library_tools
-    sheet = tools.word_sheet(song) if tools.is_video(song) else None
-    if sheet is None:
+    if not (tools.is_video(song) and tools.can_edit_words(song)):
+        return redirect(url_for("song_info.song_info", song=song))
+    try:
+        sheet = tools.word_sheet(song)
+    except RegenError as e:
+        flash(str(e), "is-danger")
         return redirect(url_for("song_info.song_info", song=song))
 
     return render_template(
