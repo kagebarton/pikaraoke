@@ -98,10 +98,22 @@ def clean_cue_texts(contents: list[str]) -> list[str]:
     every line would look like one.
     """
     all_caps = _is_all_caps([clean_srt_line(content) for content in contents])
-    cleaned = [
-        clean_srt_line(_strip_subtitle_marks(content, labels=not all_caps)) for content in contents
-    ]
+    cleaned = [_clean_cue(content, labels=not all_caps) for content in contents]
     return [_recase_line(text) for text in cleaned] if all_caps else cleaned
+
+
+def _clean_cue(content: str, labels: bool) -> str:
+    """One cue's text with its marks and noise stripped, cleaned again until it stops changing.
+
+    A speaker label behind parentheses or a tag ("(softly) MARA: hey", "<i>MEN:</i> go") is
+    not at the line's start until the first pass removes them. One pass would leave it for the
+    next, and a cleaned line would not clean to itself. No step lengthens a text, so the
+    repeats end.
+    """
+    text = clean_srt_line(_strip_subtitle_marks(content, labels))
+    while (again := clean_srt_line(_strip_subtitle_marks(text, labels))) != text:
+        text = again
+    return text
 
 
 def cues_to_srt(lines: list[str], spans: list[tuple[float, float]]) -> str:

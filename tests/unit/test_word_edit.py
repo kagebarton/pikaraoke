@@ -219,6 +219,21 @@ class TestASavedEdit:
 
         assert cue_spans_from_srt(saved) == (["Moon on the water", *texts[1:]], SPANS)
 
+    def test_a_label_that_sat_behind_a_tag_does_not_make_untouched_lines_refused(self):
+        raw = (
+            "1\n00:00:01,000 --> 00:00:03,500\n(softly) MARA: hey there\n\n"
+            "2\n00:00:04,000 --> 00:00:06,250\n<i>MEN:</i> go now\n\n"
+            "3\n00:00:07,000 --> 00:00:09,500\nSing it again\n"
+        )
+        texts, spans = cue_spans_from_srt(raw)
+        sheet = WordSheet(kind="caption_edited", lines=texts, spans=spans)
+        boxes = [texts[0], texts[1], "Sing it once more"]
+
+        saved = edited_srt(sheet, texts, boxes)
+
+        assert texts == ["hey there", "go now", "Sing it again"]
+        assert cue_spans_from_srt(saved) == (boxes, spans)
+
     def test_a_song_typed_in_capitals_edits_as_cleaned_sentence_case(self):
         capitals = cues_to_srt(
             ["MOON OVER THE RIVER", "CARRY ME HOME", "DOWN BY THE OLD MILL"], SPANS[:3]
