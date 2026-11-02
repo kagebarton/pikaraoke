@@ -152,6 +152,11 @@ QUIET_BLIP_S = 0.1
 # nothing follows it, and final notes are held longest.
 MAX_HOLD_S = 4.0
 
+# Captions overlapping by more than this are sung over each other (a duet, a backing
+# line), so one line may start before the other ends. Smaller overlaps are display
+# timing: movie subtitles run 0.1-0.3 s into the next; duets overlap 1.9-4.7 s.
+DUET_OVERLAP_S = 1.0
+
 SOURCE = "cue_align"
 # Provenance for a line whose timing came from the cue re-pace fallback rather
 # than the audio align (mirrors the SRT prior's "filled" tag).
@@ -517,10 +522,11 @@ def repace_bad_lines(
     inside the slice. A first word the aligner dragged back before the line
     is cut to where the line may start (:func:`_trim_lead_in`), and one that
     starts on the previous line's last word is moved to its end
-    (:func:`_start_after_previous`). Otherwise a bad line is rebuilt with
-    paced words across its cue window (tagged :data:`SOURCE_FILL`), clamped
-    to ``duration`` when known, and a partial or crammed line keeps the words
-    it has. Because only these lines are rewritten, a coarse offset can never
+    (:func:`_start_after_previous`), unless that line's timing is a fill or its
+    caption is sung over this one (:func:`_previous_end`). Otherwise a bad
+    line is rebuilt with paced words across its cue window (tagged
+    :data:`SOURCE_FILL`), clamped to ``duration`` when known, and a partial or
+    crammed line keeps the words it has. Because only these lines are rewritten, a coarse offset can never
     degrade a well-aligned line. A zero-length word a rescue does not time
     stays on screen as it is.
 
@@ -593,8 +599,7 @@ def repace_bad_lines(
             )
             if fixed is not None:
                 fixed = _trim_lead_in(fixed, cue_spans[lid], offset)
-                previous_end = next((prev["end"] for prev in reversed(out) if prev["words"]), None)
-                fixed = _start_after_previous(fixed, previous_end)
+                fixed = _start_after_previous(fixed, _previous_end(out, cue_spans, lid))
             # The window it was aimed at, in cue time: the check adds the offset back.
             aimed = (cue_start, max(cue_end, aim_end - offset))
             if (
@@ -826,6 +831,23 @@ def _trim_lead_in(obj: dict, cue_span: tuple[float, float], offset: float) -> di
     if first["start"] >= bound or first["end"] < bound + INSTANT_WORD_DUR_S:
         return obj
     return _with_first_start(obj, bound)
+
+
+def _previous_end(out: list[dict], cue_spans: list[tuple[float, float]], lid: int) -> float | None:
+    """Where the line before line ``lid`` in ``out`` ends, as the bound its re-aligned
+    first word may not start before; None when there is no such line to trust.
+
+    A fill's words are paced across its cue, not heard, so they bound nothing. A line
+    whose caption runs more than :data:`DUET_OVERLAP_S` into ``lid``'s is sung over it,
+    and ``lid`` may rightly start before it ends.
+    """
+    previous = next((prev for prev in reversed(out) if prev["words"]), None)
+    if previous is None or previous["source"] == SOURCE_FILL:
+        return None
+    pid = previous["line_id"]
+    if pid < len(cue_spans) and cue_spans[pid][1] - cue_spans[lid][0] > DUET_OVERLAP_S:
+        return None
+    return previous["end"]
 
 
 def _start_after_previous(obj: dict, previous_end: float | None) -> dict | None:

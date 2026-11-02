@@ -772,11 +772,12 @@ class TestCrammedLines:
 class TestStartAfterPrevious:
     """A re-aligned first word may not start while the previous line's last word still sounds."""
 
-    def _song(self, *realigned: tuple[str, float, float]):
-        """Line 3's last word ends at 8.2; line 4 (cue 8-9, "ee ff gg") has only "ff" timed.
-        Returns the rescue's output for ``realign`` answering with ``realigned``."""
+    def _song(self, *realigned: tuple[str, float, float], cue3: tuple[float, float] = (6.0, 7.0)):
+        """Line 3 (cue ``cue3``)'s last word ends at 8.2; line 4 (cue 8-9, "ee ff gg") has
+        only "ff" timed. Returns the rescue's output for ``realign`` answering with
+        ``realigned``."""
         objs, cues, lines = _anchor_lines(3)
-        cues.append((6.0, 7.0))
+        cues.append(cue3)
         lines.append("bb cc")
         objs.append(_line(3, "bb cc", ("bb", 6.0, 6.3), ("cc", 7.0, 8.2)))
         cues.append((8.0, 9.0))
@@ -797,6 +798,31 @@ class TestStartAfterPrevious:
         ff = next(w for w in out[4]["words"] if w["word"] == "ff")
         assert (ff["start"], ff["end"]) == (8.5, 8.7)
         assert [w["word"] for w in out[4]["words"]] == ["ee", "ff", "gg"]  # the rest guessed
+
+    def test_a_caption_sung_over_this_one_does_not_bound_it(self):
+        # Line 3's caption runs 1.5 s into line 4's: a duet, so line 4 starts on it.
+        out, stats = self._song(("ee", 8.0, 8.22), ("ff", 8.5, 8.7), cue3=(6.0, 9.5))
+        assert out[4]["source"] == SOURCE_REALIGN and out[4]["start"] == 8.0
+
+    def test_a_caption_shown_a_little_into_this_one_still_bounds_it(self):
+        out, stats = self._song(("ee", 8.0, 8.22), ("ff", 8.5, 8.7), cue3=(6.0, 8.3))
+        assert out[4]["source"] == SOURCE and stats["n_realigned"] == 0
+
+    def test_a_filled_previous_line_does_not_bound_it(self):
+        objs, cues, lines = _anchor_lines(3)
+        cues.append((6.0, 8.4))
+        lines.append("bb cc")
+        objs.append(_line(3, "bb cc"))  # nothing timed: paced across its cue, to 8.4
+        cues.append((8.0, 9.0))
+        lines.append("ee ff gg")
+        objs.append(_line(4, "ee ff gg", ("ff", 8.5, 8.7)))
+
+        def realign(lid, w0, w1):
+            return _words(("ee", 8.0, 8.22), ("ff", 8.5, 8.7)) if lid == 4 else None
+
+        out, _stats = repace_bad_lines(objs, cues, lines, lines, realign=realign)
+        assert out[3]["source"] == SOURCE_FILL and out[3]["end"] == pytest.approx(8.4)
+        assert out[4]["source"] == SOURCE_REALIGN and out[4]["start"] == 8.0
 
     def test_a_first_word_after_the_previous_lines_end_is_untouched(self):
         out, stats = self._song(("ee", 8.3, 8.5), ("ff", 8.5, 8.7), ("gg", 8.7, 8.9))
