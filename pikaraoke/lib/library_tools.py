@@ -18,6 +18,8 @@ from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+import srt
+
 from pikaraoke.lib import lrclib
 from pikaraoke.lib.download_manager import DownloadManager
 from pikaraoke.lib.events import EventSystem
@@ -50,6 +52,7 @@ from pikaraoke.lib.library_regen import (
     custom_plan,
     custom_sheet_file,
     default_query,
+    edited_kind,
     fetch_or_prompt_plan,
     find_local_srt,
     gate_on_disk_caption,
@@ -73,6 +76,7 @@ from pikaraoke.lib.metadata_parser import extract_youtube_id
 from pikaraoke.lib.processing_manager import ProcessingManager
 from pikaraoke.lib.song_manager import SongManager
 from pikaraoke.lib.song_match import SongIndex, similar_groups
+from pikaraoke.lib.srt_cues import cue_spans_from_srt
 from pikaraoke.lib.srt_slice_fit import (
     FITS,
     SliceFit,
@@ -80,6 +84,7 @@ from pikaraoke.lib.srt_slice_fit import (
     heard_streams,
     lrc_to_srt,
 )
+from pikaraoke.lib.word_edit import WordSheet, edited_srt
 from pikaraoke.lib.youtube_dl import ASR_JSON3_SUFFIX
 
 logger = logging.getLogger(__name__)
@@ -748,6 +753,54 @@ class LibraryTools:
             raise RegenError("Unknown lyric source.")
         job.replaces_custom = source not in SHEETS
         self._queue(job, reset=True, label="Repair")
+
+    def word_sheet(self, song_path: str) -> WordSheet | None:
+        """The cue sheet the song's next regenerate reads, as an edit sees it, or None.
+
+        None unless that run replays an SRT through the cue route: a YouTube caption,
+        movie subtitles, an LRCLIB match, or the edited sheet of one of those (whose
+        kind a second edit keeps); the plan's origin says which. An SRT that can't be
+        read is logged and gives None.
+        """
+        job = self._regen_job(song_path)
+        plan = job.plan if job else None
+        if plan is None or plan.kind != "seed" or plan.lyrics_path is None:
+            return None
+        kind = edited_kind(plan.seed.get("lyrics_origin"))
+        if kind is None:
+            return None
+        try:
+            lines, spans = cue_spans_from_srt(plan.lyrics_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, srt.SRTParseError) as e:
+            logger.warning("Could not read the cue sheet %s: %s", plan.lyrics_path.name, e)
+            return None
+        return WordSheet(kind=kind, lines=lines, spans=spans) if lines else None
+
+    def edit_words(self, song_path: str, original: object, lines: object) -> None:
+        """Queue a regen that replaces the words of the song's cue sheet, keeping line times.
+
+        ``original`` is the lines the admin's page opened with and ``lines`` its boxes
+        (see :func:`~pikaraoke.lib.word_edit.edited_srt`, which refuses a stale or
+        unusable save). The edit is saved as the song's edited sheet of the same
+        source, which replaces that source's own sheet. The source is unchanged, so the
+        run keeps the caption in ``subtitles/``. The song's files are backed up
+        first. Raises :class:`RegenError`, with a message for the admin, when the edit
+        can't be queued; nothing has changed on disk by then.
+        """
+        if not self.is_video(song_path):
+            raise RegenError("Lyrics tools work on video songs only.")
+        if self.is_busy(song_path):
+            raise RegenError(BUSY_MESSAGE)
+        sheet = self.word_sheet(song_path)
+        if sheet is None:
+            raise RegenError(
+                "This song isn't timed from a caption or subtitles, so its words can't be "
+                "edited here."
+            )
+        text = edited_srt(sheet, original, lines)
+        job = self._song_job(song_path)
+        job.plan = sheet_plan(job.song_path, sheet.kind, text)
+        self._queue(job, reset=False, label="Edit words")
 
     def open_run(self, mode: str) -> None:
         """Open a bulk run (``stale``, ``all`` or ``reset``) over the library's video songs.

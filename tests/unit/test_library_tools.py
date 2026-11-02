@@ -11,6 +11,7 @@ import os
 import subprocess
 import threading
 from datetime import timedelta
+from functools import partial
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -32,6 +33,7 @@ from pikaraoke.lib.library_regen import (
     CaptionCheck,
     RegenError,
     RegenJob,
+    custom_sheet_file,
     gate_on_disk_caption,
 )
 from pikaraoke.lib.library_tools import (
@@ -50,6 +52,7 @@ from pikaraoke.lib.library_tools import (
 )
 from pikaraoke.lib.song_list import SongList
 from pikaraoke.lib.song_manager import SongManager
+from pikaraoke.lib.srt_cues import cue_spans_from_srt, cues_to_srt
 from pikaraoke.lib.srt_slice_fit import (
     DISAGREE,
     FITS,
@@ -60,6 +63,7 @@ from pikaraoke.lib.srt_slice_fit import (
     TOO_LONG,
     fit_slice,
 )
+from pikaraoke.lib.word_edit import WordsCleaned, WordSheet
 from tests.unit.movie_slices import (
     CLIP_S,
     MOVIE_OFFSET_S,
@@ -434,6 +438,281 @@ class TestRegenerate:
 
         with pytest.raises(RegenError, match="disk full"):
             tools.regenerate(str(video))
+        processing.enqueue_regen.assert_not_called()
+
+
+WORDS = ["Moon over the river", "Carry me home", "Down by the old mill"]
+WORD_SPANS = [(1.0, 3.5), (4.0, 6.25), (7.0, 9.5)]
+WORDS_SRT = cues_to_srt(WORDS, WORD_SPANS)
+
+
+def write_cue_caption(folder: Path, stem: str, text: str = WORDS_SRT) -> Path:
+    """A song's YouTube caption, with the bundle that says its last run used it."""
+    caption = folder / "subtitles" / f"{stem}.en.srt"
+    caption.parent.mkdir(exist_ok=True)
+    caption.write_text(text, encoding="utf-8")
+    write_bundle(folder, stem, lyrics={"origin": "srt", "lines": WORDS})
+    return caption
+
+
+def write_edited_sheet(folder: Path, stem: str, kind: str, text: str = WORDS_SRT) -> Path:
+    sheet = custom_sheet_file(folder / f"{stem}.mp4", kind)
+    sheet.parent.mkdir(exist_ok=True)
+    sheet.write_text(text, encoding="utf-8")
+    return sheet
+
+
+# Where each cue source keeps its sheet, and the edited kind an edit of it saves as.
+CUE_SOURCES = {
+    "caption": (write_cue_caption, "caption_edited", "srt"),
+    "movie": (partial(write_movie_sheet, text=WORDS_SRT), "movie_edited", "movie_srt"),
+    "lrclib": (partial(write_lrc_sheet, text=WORDS_SRT), "lrclib_edited", "lrclib_srt"),
+}
+EDITED_SHEETS = {
+    kind: (lambda folder, stem, kind=kind: write_edited_sheet(folder, stem, kind), kind, origin)
+    for _, kind, origin in CUE_SOURCES.values()
+}
+
+
+class TestWordSheet:
+    @pytest.mark.parametrize(
+        "write, kind, origin", [*CUE_SOURCES.values(), *EDITED_SHEETS.values()]
+    )
+    def test_a_cue_sheet_is_read_with_its_lines_and_times(self, tmp_path, write, kind, origin):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        write(tmp_path, video.stem)
+        tools, _ = make_tools(tmp_path, [str(video)])
+
+        assert tools.word_sheet(str(video)) == WordSheet(kind, WORDS, WORD_SPANS)
+
+    def test_the_lines_are_the_cleaned_ones_the_cue_route_times(self, tmp_path):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        write_cue_caption(
+            tmp_path,
+            video.stem,
+            cues_to_srt(
+                ["(soft music)", "MARA: Carry me (oh) home", "Down by the old mill"], WORD_SPANS
+            ),
+        )
+        tools, _ = make_tools(tmp_path, [str(video)])
+
+        sheet = tools.word_sheet(str(video))
+
+        assert sheet.lines == ["Carry me home", "Down by the old mill"]
+        assert sheet.spans == WORD_SPANS[1:]
+
+    def test_a_genius_song_has_no_cue_sheet(self, tmp_path):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        genius_bundle(tmp_path, video.stem)
+        tools, _ = make_tools(tmp_path, [str(video)])
+
+        assert tools.word_sheet(str(video)) is None
+
+    def test_a_typed_custom_sheet_has_no_cue_sheet(self, tmp_path):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        genius_bundle(tmp_path, video.stem)
+        write_sheet(tmp_path, video.stem)
+        tools, _ = make_tools(tmp_path, [str(video)])
+
+        assert tools.word_sheet(str(video)) is None
+
+    def test_a_transcribed_song_has_no_cue_sheet(self, tmp_path):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        (tmp_path / "karaoke").mkdir()
+        (tmp_path / "karaoke" / f"{video.stem}.ass").write_text("", encoding="utf-8")
+        tools, _ = make_tools(tmp_path, [str(video)])
+
+        assert tools.word_sheet(str(video)) is None
+
+    def test_a_song_with_nothing_has_no_cue_sheet(self, tmp_path):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        tools, _ = make_tools(tmp_path, [str(video)])
+
+        assert tools.word_sheet(str(video)) is None
+
+    def test_a_caption_missing_from_disk_has_no_cue_sheet(self, tmp_path):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        write_bundle(tmp_path, video.stem, lyrics={"origin": "srt", "lines": WORDS})
+        tools, _ = make_tools(tmp_path, [str(video)])
+
+        assert tools.word_sheet(str(video)) is None
+
+    @pytest.mark.parametrize(
+        "content",
+        [b"\xff\xfe not utf-8 \x80", b"1\n00:00:01,000 --> not a time\nwords\n"],
+        ids=["not_utf8", "bad_time"],
+    )
+    def test_a_sheet_that_cannot_be_read_gives_none_and_a_warning(self, tmp_path, caplog, content):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        write_movie_sheet(tmp_path, video.stem).write_bytes(content)
+        tools, _ = make_tools(tmp_path, [str(video)])
+
+        assert tools.word_sheet(str(video)) is None
+        assert "Could not read the cue sheet" in caplog.text
+
+    @pytest.mark.parametrize(
+        "text", ["", cues_to_srt(["(la la)"], [(1.0, 2.0)])], ids=["empty", "all_cleaned_away"]
+    )
+    def test_a_sheet_with_no_lines_gives_none(self, tmp_path, text):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        write_movie_sheet(tmp_path, video.stem, text)
+        tools, _ = make_tools(tmp_path, [str(video)])
+
+        assert tools.word_sheet(str(video)) is None
+
+
+class TestEditWords:
+    @staticmethod
+    def edited(*changes: tuple[int, str]) -> list[str]:
+        boxes = list(WORDS)
+        for index, text in changes:
+            boxes[index] = text
+        return boxes
+
+    @pytest.mark.parametrize("write, kind, origin", CUE_SOURCES.values(), ids=list(CUE_SOURCES))
+    def test_queues_the_edited_sheet_of_the_same_source_without_a_reset(
+        self, tmp_path, write, kind, origin
+    ):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        write(tmp_path, video.stem)
+        tools, processing = make_tools(tmp_path, [str(video)])
+
+        tools.edit_words(str(video), WORDS, self.edited((1, "Carry us home")))
+
+        processing.enqueue_regen.assert_called_once()
+        regen = processing.enqueue_regen.call_args.args[0]
+        assert (regen.label, regen.reset, regen.song.song_path) == ("Edit words", False, video)
+        plan = regen.song.plan
+        assert (plan.kind, plan.lyrics_path, plan.seed) == (
+            "seed",
+            custom_sheet_file(video, kind),
+            {"lyrics_origin": origin},
+        )
+        assert cue_spans_from_srt(plan.custom_text) == (
+            self.edited((1, "Carry us home")),
+            WORD_SPANS,
+        )
+
+    def test_a_second_edit_of_an_edited_sheet_keeps_its_kind(self, tmp_path):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        write_edited_sheet(tmp_path, video.stem, "movie_edited")
+        tools, processing = make_tools(tmp_path, [str(video)])
+
+        tools.edit_words(str(video), WORDS, self.edited((0, "Moon on the river")))
+
+        plan = processing.enqueue_regen.call_args.args[0].song.plan
+        assert plan.lyrics_path == custom_sheet_file(video, "movie_edited")
+        assert plan.seed == {"lyrics_origin": "movie_srt"}
+
+    def test_the_song_is_backed_up_and_nothing_else_is_written_before_the_run(self, tmp_path):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        source = write_lrc_sheet(tmp_path, video.stem, WORDS_SRT)
+        tools, _ = make_tools(tmp_path, [str(video)])
+
+        tools.edit_words(str(video), WORDS, self.edited((1, "Carry us home")))
+
+        [backup] = tmp_path.glob("regen_backups/*")
+        assert (backup / "lyrics" / source.name).read_text(encoding="utf-8") == WORDS_SRT
+        assert not custom_sheet_file(video, "lrclib_edited").exists()
+        assert source.read_text(encoding="utf-8") == WORDS_SRT
+
+    @pytest.mark.parametrize(
+        "setup, message",
+        [
+            (lambda folder, stem: genius_bundle(folder, stem), "isn't timed from a caption"),
+            (lambda folder, stem: write_sheet(folder, stem), "isn't timed from a caption"),
+            (lambda folder, stem: None, "isn't timed from a caption"),
+        ],
+        ids=["genius", "custom_text", "nothing"],
+    )
+    def test_a_song_with_no_cue_sheet_is_refused(self, tmp_path, setup, message):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        setup(tmp_path, video.stem)
+        tools, processing = make_tools(tmp_path, [str(video)])
+
+        with pytest.raises(RegenError, match=message):
+            tools.edit_words(str(video), WORDS, self.edited((1, "Carry us home")))
+
+        processing.enqueue_regen.assert_not_called()
+        assert not list(tmp_path.glob("regen_backups/*"))
+
+    def test_a_busy_song_is_refused_before_any_backup(self, tmp_path):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        write_lrc_sheet(tmp_path, video.stem, WORDS_SRT)
+        tools, processing = make_tools(tmp_path, [str(video)], pending=[str(video)])
+
+        with pytest.raises(RegenError, match="waiting or running"):
+            tools.edit_words(str(video), WORDS, self.edited((1, "Carry us home")))
+
+        processing.enqueue_regen.assert_not_called()
+        assert not list(tmp_path.glob("regen_backups/*"))
+
+    def test_only_video_songs(self, tmp_path):
+        song = tmp_path / "Track.mp3"
+        song.write_bytes(b"")
+        tools, processing = make_tools(tmp_path, [str(song)])
+
+        with pytest.raises(RegenError, match="video songs only"):
+            tools.edit_words(str(song), WORDS, self.edited((1, "Carry us home")))
+
+        processing.enqueue_regen.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "original, boxes, message",
+        [
+            (WORDS[:-1], WORDS, "changed since the page opened"),
+            (WORDS, WORDS, "No line was changed"),
+            (WORDS, [""] * 3, "Every line is cleared"),
+        ],
+        ids=["stale", "unchanged", "cleared"],
+    )
+    def test_a_save_the_edit_refuses_queues_and_backs_up_nothing(
+        self, tmp_path, original, boxes, message
+    ):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        write_lrc_sheet(tmp_path, video.stem, WORDS_SRT)
+        tools, processing = make_tools(tmp_path, [str(video)])
+
+        with pytest.raises(RegenError, match=message):
+            tools.edit_words(str(video), original, boxes)
+
+        processing.enqueue_regen.assert_not_called()
+        assert not list(tmp_path.glob("regen_backups/*"))
+
+    def test_lines_the_cleaning_would_change_come_back_with_their_cleaned_text(self, tmp_path):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        write_lrc_sheet(tmp_path, video.stem, WORDS_SRT)
+        tools, processing = make_tools(tmp_path, [str(video)])
+
+        with pytest.raises(WordsCleaned) as refused:
+            tools.edit_words(str(video), WORDS, self.edited((2, "Down (by) the old mill")))
+
+        assert refused.value.cleaned == {2: "Down the old mill"}
+        processing.enqueue_regen.assert_not_called()
+
+    def test_a_sheet_that_changed_after_the_page_opened_is_stale(self, tmp_path):
+        """The server reads the sheet again at the save, so a Repair in between is caught."""
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        write_lrc_sheet(tmp_path, video.stem, cues_to_srt(["Other words"], [(1.0, 2.0)]))
+        tools, processing = make_tools(tmp_path, [str(video)])
+
+        with pytest.raises(RegenError, match="changed since the page opened"):
+            tools.edit_words(str(video), WORDS, self.edited((1, "Carry us home")))
+
+        processing.enqueue_regen.assert_not_called()
+
+    def test_a_backup_that_cannot_be_written_is_reported(self, tmp_path, monkeypatch):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        write_lrc_sheet(tmp_path, video.stem, WORDS_SRT)
+        tools, processing = make_tools(tmp_path, [str(video)])
+
+        def disk_full(*args, **kwargs):
+            raise OSError("disk full")
+
+        monkeypatch.setattr("pikaraoke.lib.library_tools.backup_text_folders", disk_full)
+
+        with pytest.raises(RegenError, match="disk full"):
+            tools.edit_words(str(video), WORDS, self.edited((1, "Carry us home")))
         processing.enqueue_regen.assert_not_called()
 
 
