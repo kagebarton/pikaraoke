@@ -871,6 +871,18 @@ class TestRescueWindow:
         window = self._window(self._song((14.0, 15.0)), env)
         assert window == pytest.approx((7.25, 11.75), abs=0.03)
 
+    def test_a_next_singer_coming_in_early_does_not_take_the_release(self):
+        # The next line is sung from 11.7, 0.3 s before its cue: the quiet before it still
+        # ends this line, and the window stays out of the next line's singing.
+        env = _env(16.0, [(8.3, 10.6), (11.7, 13.0)])
+        window = self._window(self._song((12.0, 13.0)), env)
+        assert window == pytest.approx((7.25, 11.15), abs=0.03)  # the quiet's midpoint
+
+    def test_a_blip_inside_the_release_does_not_split_it(self):
+        env = _env(16.0, [(8.3, 10.6), (11.5, 11.55), (12.0, 13.0)])
+        window = self._window(self._song((12.0, 13.0)), env)
+        assert window == pytest.approx((7.25, 11.3), abs=0.03)
+
     def test_a_long_breath_inside_a_line_that_sings_into_the_next_caption(self):
         env = _env(16.0, [(8.3, 9.0), (10.0, 13.0)])
         window = self._window(self._song((12.0, 13.0)), env)

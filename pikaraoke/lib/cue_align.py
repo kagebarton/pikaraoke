@@ -138,7 +138,12 @@ QUIET_DIP_DB = SUSTAIN_NEAR_DB
 # Pauses inside a line held past its caption run to ~0.5 s (Baby One More Time,
 # Stronger), though a breath before its last words can be longer (Incomplete: 0.9 s);
 # a line that is not quiet this long before the next caption sang straight into it.
+# The quiet may end up to EDGE_SEARCH_SLACK_S before that caption: the next line's
+# singer often comes in that early.
 RELEASE_QUIET_S = 0.75
+
+# A louder blip shorter than this (a click, a breath) does not split a quiet stretch.
+QUIET_BLIP_S = 0.1
 
 # A line's singing runs on at most this far past its caption. Vocals that go on
 # longer without a pause are not its tail (an uncaptioned part, ad-libs over a
@@ -243,15 +248,22 @@ def _quiet_runs(
     env: np.ndarray, lo_s: float, hi_s: float, sung_db: float
 ) -> list[tuple[float, float]]:
     """Each stretch of ``env`` within ``[lo_s, hi_s]`` at least :data:`QUIET_DIP_DB`
-    below ``sung_db``, as ``(start_s, end_s)`` in time order."""
+    below ``sung_db``, as ``(start_s, end_s)`` in time order; a blip under
+    :data:`QUIET_BLIP_S` inside a stretch does not split it."""
     i0 = max(0, int(lo_s / HOP_S))
     i1 = min(len(env), int(hi_s / HOP_S) + 1)
     if i1 <= i0:
         return []
     quiet = np.concatenate(([False], env[i0:i1] < sung_db - QUIET_DIP_DB, [False]))
     changes = np.flatnonzero(quiet[1:] != quiet[:-1])
-    pairs = zip(changes[::2].tolist(), changes[1::2].tolist())
-    return [((i0 + a) * HOP_S, (i0 + b) * HOP_S) for a, b in pairs]
+    runs: list[tuple[float, float]] = []
+    for a, b in zip(changes[::2].tolist(), changes[1::2].tolist()):
+        start, end = (i0 + a) * HOP_S, (i0 + b) * HOP_S
+        if runs and start - runs[-1][1] < QUIET_BLIP_S:
+            runs[-1] = (runs[-1][0], end)
+        else:
+            runs.append((start, end))
+    return runs
 
 
 def _volume_end(
@@ -260,10 +272,11 @@ def _volume_end(
     """Where a line's rescue window should end, from where its singing stops.
 
     ``cue``/``next_cue`` are the cue spans of the line and of the line after it. The
-    singing stops at the quiet stretch of at least :data:`RELEASE_QUIET_S` that runs on
-    into ``next_cue``'s start, not at an earlier one: a long breath inside the line,
-    with singing after it, is not its end. The window reaches ``pad_s`` into that
-    stretch, no further than its midpoint. A line with no such stretch sang straight
+    singing stops at the last quiet stretch before ``next_cue``'s start when it lasts
+    at least :data:`RELEASE_QUIET_S` and ends within :data:`EDGE_SEARCH_SLACK_S` of that
+    start (the next singer may come in early), not at an earlier one: a long breath
+    inside the line, with singing after it, is not its end. The window reaches
+    ``pad_s`` into that stretch, no further than its midpoint. A line with no such stretch sang straight
     into ``next_cue``, and the window ends at ``next_cue``'s start. None when there is
     no singing to measure, the envelope ends before ``next_cue``, ``next_cue`` starts
     before the search would (overlapping cues leave no stretch to measure), or the stop
@@ -276,11 +289,10 @@ def _volume_end(
         return None
     runs = _quiet_runs(env, cue[1] - EDGE_SEARCH_SLACK_S, next_cue[0], sung_db)
     release = runs[-1] if runs else None
-    # Runs end on frame boundaries, so one that runs into the cue may stop a frame short.
     if (
         release is None
         or release[1] - release[0] < RELEASE_QUIET_S
-        or next_cue[0] - release[1] > 2 * HOP_S
+        or next_cue[0] - release[1] > EDGE_SEARCH_SLACK_S
     ):
         stop = t1 = next_cue[0]
     else:
