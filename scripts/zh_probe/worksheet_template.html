@@ -468,7 +468,8 @@ function buildPanel(song) {
   live.replace = h("button", { type: "button", class: "btn small" }, "Replace");
   live.confirm = h("div", { class: "confirm", hidden: true }, live.confirmText, live.replace,
     h("button", { type: "button", class: "btn small", onclick: () => { live.confirm.hidden = true; } }, "Keep my edits"));
-  live.spots = h("div", { class: "spots" });
+  const noSpots = song.spots.length === 0;
+  live.spots = h("div", { class: "spots", hidden: noSpots });
   live.sheet = h("textarea", { class: "sheet", id: `sheet-${song.id}`, lang: "zh", spellcheck: "false", "aria-label": `Lyric sheet for ${song.name}`,
     oninput: (e) => { st.text = e.target.value; refreshCounts(); save(); recheckSoon(); } });
   live.sheet.value = st.text;
@@ -494,8 +495,10 @@ function buildPanel(song) {
           h("p", {}, "Version A is loaded first only because it is first in the list. Any version works as a start.")),
         live.seg, live.confirm,
         h("div", { class: "block-head" },
-          h("h3", {}, "2. Check these spots"),
-          h("p", { class: "legend" }, "Each spot is a place where the versions disagree. ", h("mark", { class: "diff" }, "Highlighted"), " is the difference. The letters are the versions that have that wording; the filled letter is the one in your editor. Tick the wording you hear. A tick does not change your text; if the text disagrees with a tick, a warning shows under that spot.")),
+          h("h3", {}, noSpots ? "2. Nothing to compare" : "2. Check these spots"),
+          noSpots
+            ? h("p", {}, "The versions all say the same words, so there is no spot to tick. Go on to step 3.")
+            : h("p", { class: "legend" }, "Each spot is a place where the versions disagree. ", h("mark", { class: "diff" }, "Highlighted"), " is the difference. The letters are the versions that have that wording; the filled letter is the one in your editor. Tick the wording you hear. A tick does not change your text; if the text disagrees with a tick, a warning shows under that spot.")),
         live.spots),
       h("div", { class: "block editor" },
         h("div", { class: "block-head" },
