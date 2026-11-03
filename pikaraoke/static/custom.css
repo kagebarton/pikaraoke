@@ -31,11 +31,15 @@
   color: var(--controls-link-color);
 }
 
-.control-box a:hover,
-.control-box i[onclick]:hover,
-#vol-up:hover,
-#vol-down:hover {
-  color: var(--controls-link-hover);
+/* Touch screens keep :hover on the last tapped element, which left an icon
+   lit after a tap; only devices with a real pointer get the hover color. */
+@media (hover: hover) {
+  .control-box a:hover,
+  .control-box i[onclick]:hover,
+  #vol-up:hover,
+  #vol-down:hover {
+    color: var(--controls-link-hover);
+  }
 }
 
 .pagination {
