@@ -226,6 +226,10 @@ class MpvController:
             image_display_duration="inf",
             osd_margin_x=0,
             osd_margin_y=0,
+            # Size and place karaoke (.ass) lyrics against the screen, not the
+            # video picture, so a letterboxed video doesn't shrink and raise them.
+            sub_ass_scale_with_window=True,
+            sub_ass_force_margins=True,
             terminal=False,
             input_vo_keyboard=True,
         )
