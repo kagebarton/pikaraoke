@@ -29,7 +29,9 @@ CUE_FILES = [
     ["HELLO THERE", "I KNOW", "(MUSIC)"],
     ["Hello there", "I know", "HEY!"],
     ["<i>Hi there</i>\n<i>MEN:</i> go now", "Hi there\n(softly) MARA: hey", "(soft\nly) MARA: hi"],
-    ["MEN: MARA: hey", "- - hey", "* - - Sing it"],
+    ["MEN: MARA: hey", "- MEN: - MARA: hey", "* - * - Sing it"],
+    ["Hey\nMEN: MARA: go", "OH\n- MEN: - MARA: go", "I\n* - * - go", "NO\rMEN: go"],
+    ["*MEN: go", "-*<i>MEN:</i> go", "hey\n**MEN: go", "OH\nU2: go"],
     ["T.I.: Hello", "M.I.A.: go", "E-40: yeah", "R2-D2: Beep", "U2: day", "I I: so"],
     ["U2: LIVE TONIGHT", "I I: SO", "E-40: YEAH", "T.I.: HEY", "WE ARE HERE"],
     ["MULAN: GO", "MEN: NOW"],
@@ -212,10 +214,23 @@ class TestCleanCueTexts:
         ) == ["Hi there go now", "Hi there hey"]
 
     def test_a_label_or_dash_exposed_by_stripping_another_is_stripped(self):
-        assert clean_cue_texts(["MEN: MARA: hey", "- - hey", "* - - Sing it"]) == [
+        assert clean_cue_texts(["MEN: MARA: hey", "- MEN: - MARA: hey", "* - * - Sing it"]) == [
             "hey",
             "hey",
             "Sing it",
+        ]
+
+    def test_marks_on_a_later_line_are_judged_on_that_line(self):
+        """A capitals line above is not taken into the label below it."""
+        assert clean_cue_texts(
+            ["Hey\nMEN: MARA: go", "OH\n- MEN: - MARA: go", "I\n* - * - go", "NO\rMEN: go"]
+        ) == ["Hey go", "OH go", "I go", "NO go"]
+
+    def test_a_star_before_a_label_goes_with_it(self):
+        assert clean_cue_texts(["*MEN: go", "-*<i>MEN:</i> go", "hey\n**MEN: go"]) == [
+            "go",
+            "go",
+            "hey go",
         ]
 
     def test_a_label_sentence_case_writes_as_it_stands_is_kept(self):

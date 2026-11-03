@@ -36,7 +36,7 @@ _ALL_CAPS_MIN_SHARE = 0.9
 # that would be timed as sung.
 #
 # Decoration that may sit in front of a speaker label: dialogue dash, song star. Tags and
-# note glyphs are gone by then (:func:`_strip_subtitle_marks`).
+# note glyphs are gone by then (:func:`_clean_once`).
 _LEADING_DECORATION = r"[-*\s]*"
 # "MULAN:" or "MEN: ..." at a cue line's start. Capitals only, so a lyric like
 # "Listen: ..." survives. Group 2 is the label, which :func:`_drop_label` checks.
@@ -44,13 +44,13 @@ _SPEAKER_LABEL_RE = re.compile(
     rf"^({_LEADING_DECORATION})([A-Z][A-Z0-9.'&/+ -]{{1,29}}):(?=\s|$)\s*"
 )
 # A dialogue dash: at a line start (after any decoration but a dash, as in "* - What?";
-# letting the prefix take dashes too backtracks quadratically), with any dashes after it
-# ("- - What?"), after a sentence end
-# ("- Hakuna matata. - What?"), or glued to the next speaker's first word ("Be a man
-# -With all"). Many releases write it glued ("-What?"); none of the library's subtitles
-# split a word across cues ("-derful"). A spaced dash mid-sentence ("wait - what") stays.
+# letting the prefix take dashes too backtracks quadratically) or after a sentence end
+# ("- Hakuna matata. - What?"), with any dashes after it ("- - What?"), or glued to the
+# next speaker's first word ("Be a man -With all"). Many releases write it glued
+# ("-What?"); none of the library's subtitles split a word across cues ("-derful"). A
+# spaced dash mid-sentence ("wait - what") stays.
 # The glued dash's spaces start at a run's start: a match tried inside a long run rescans it.
-_DIALOGUE_DASH_RE = re.compile(r"^([*\s]*)-[-\s]*|(?<=[.!?])\s+-+\s*|(?<!\s)\s+-+(?=[^\s-])")
+_DIALOGUE_DASH_RE = re.compile(r"^([*\s]*)-[-\s]*|(?<=[.!?])\s+-[-\s]*|(?<!\s)\s+-+(?=[^\s-])")
 # A "*" standing alone as a song marker; a censored "f***" keeps its stars.
 _SONG_STAR_RE = re.compile(r"(?<!\S)\*+(?!\S)")
 
@@ -105,16 +105,24 @@ def clean_cue_texts(contents: list[str]) -> list[str]:
 
 
 def _clean_cue(content: str, labels: bool) -> str:
-    """One cue's text with its marks and noise stripped, cleaned again until it stops changing.
+    """One cue's text with its marks and noise stripped and its lines joined by single spaces.
 
-    One pass can leave a mark that the next would strip: a second label ("MEN: MARA: hey")
-    or a second dash ("- - hey") exposed by the first one's removal. Without the repeats a
-    cleaned line would not clean to itself. No step lengthens a text, so the repeats end.
+    Marks are stripped from each line before the join, so a label or dash on a later line is
+    judged at its own line's start, never as part of the line above. The joined text is cleaned
+    again until it stops changing, so a cleaned line cleans to itself: the join can still make a
+    label, as a capitals line above a kept "U2:" does.
     """
-    text = clean_srt_line(_strip_subtitle_marks(content, labels))
-    while (again := clean_srt_line(_strip_subtitle_marks(text, labels))) != text:
+    text = _clean_once(content, labels)
+    while (again := _clean_once(text, labels)) != text:
         text = again
     return text
+
+
+def _clean_once(content: str, labels: bool) -> str:
+    """Tags and stage directions go before the marks, so a label behind them
+    ("(softly) MARA: hey", "<i>MEN:</i> go") is at its line's start."""
+    lines = strip_srt_markup(content).splitlines()
+    return clean_srt_line("\n".join(_strip_line_marks(line, labels) for line in lines))
 
 
 def cues_to_srt(lines: list[str], spans: list[tuple[float, float]]) -> str:
@@ -138,20 +146,19 @@ def cues_to_srt(lines: list[str], spans: list[tuple[float, float]]) -> str:
     )
 
 
-def _strip_subtitle_marks(content: str, labels: bool) -> str:
-    """Raw cue content with speaker labels, song stars and dialogue dashes removed.
+def _strip_line_marks(line: str, labels: bool) -> str:
+    """One cue line with its speaker labels, song stars and dialogue dashes removed.
 
-    Works per cue line, since a label or dash is only a mark at a line's start. Tags and
-    stage directions go first, so a label behind them ("(softly) MARA: hey",
-    "<i>MEN:</i> go") is at its line's start, on any line of the cue.
+    Repeated until nothing changes, since stripping one mark can expose another at the line's
+    start: a second label ("MEN: MARA: hey") or a dash between stars ("* - * - go"). Every
+    repeat removes a mark, so the repeats end.
     """
-    lines = []
-    for line in strip_srt_markup(content).split("\n"):
-        if labels:
-            line = _SPEAKER_LABEL_RE.sub(_drop_label, line)
-        line = _DIALOGUE_DASH_RE.sub(r"\1 ", line)
-        lines.append(_SONG_STAR_RE.sub("", line))
-    return "\n".join(lines)
+    while True:
+        stripped = _SPEAKER_LABEL_RE.sub(_drop_label, line) if labels else line
+        stripped = _SONG_STAR_RE.sub("", _DIALOGUE_DASH_RE.sub(r"\1 ", stripped))
+        if stripped == line:
+            return line
+        line = stripped
 
 
 def _drop_label(match: re.Match[str]) -> str:
@@ -163,7 +170,7 @@ def _drop_label(match: re.Match[str]) -> str:
     it for a label. "MULAN:", "R2-D2:" and "M.I.A.:" recase to something else and are labels.
     """
     label = match.group(2)
-    return match.group(0) if _recase_line(label) == label else match.group(1)
+    return match.group(0) if _recase_line(label) == label else match.group(1) + " "
 
 
 def _is_all_caps(texts: list[str]) -> bool:
