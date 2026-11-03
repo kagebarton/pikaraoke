@@ -19,6 +19,8 @@ repeated with the app open (see Results log). GATE Z1b read 2026-11-03: half
 precision does not fit beside the running app, so both languages run at full
 precision in Phase 2 and Phase 3 records the fallback; Ken's four fp16 calls
 are *as is*, no worse than Phase 1 (they bear on the fallback, not on Z1b).
+Phase 0b's fetch for the twelve non-pilot songs ran on the VM 2026-11-03 (see Results
+log); Ken's sheets for them, and his Phase 0a, are open.
 
 ## Why now, and what this replaces
 
@@ -1317,3 +1319,126 @@ watch for it.
 
 Condition (b) holds on all four songs. Z1b still sends both languages to full
 precision in Phase 2, because (a) is not met.
+
+### 2026-11-03 — Phase 0b fetch for the twelve non-pilot songs (Sonnet 5.5), awaiting Ken's sheets
+
+Songs #3-8, #10 and #12-16, fetched on the Ubuntu VM with code `9d15d32`
+(`corpus.py` gains the twelve songs, `fetch_sheets.py` runs on the VM and skips
+any song whose folder already holds an `index.json`). The four pilot folders were
+not touched (newest file in each is still 2026-10-20). `pikaraoke/` is
+untouched; the probe imports only the Genius and LRCLIB clients and the
+`syncedlyrics` NetEase provider. Outputs are under
+`/home/ken/shared-drives/D:/Shared/pikaraoke-songs/zh_probe/phase0/sheets_raw/<video id>/`
+(`sources.txt`, `index.json`, raw files, as for the pilot). Ken's confirmed
+sheets go to `zh_probe/sheets/<video id>.txt`; nothing there for these twelve.
+No worksheet and no transcript aid were made. Phase 0a is not recorded: Ken has
+not reported it done.
+
+**How it ran.** `ZH_PROBE_LIBRARY` set to the RDP-redirected library, conda `pik`
+Python with `-P`, Genius token from `~/.pikaraoke/config.ini`. `syncedlyrics` is
+not in `pik`; it was installed with `pip install --target` into a scratch
+directory put on `PYTHONPATH`, so the env is unchanged (that directory also holds
+`requests` 2.34.2, which shadows the env's 2.32.5 for these runs only). Keys,
+Genius queries and the two hand-set NetEase ids are in `corpus.py`.
+
+**NetEase ids set by hand.** #3 `186137` (双截棍, album 范特西 `18915`) and #4
+`185880` (千里之外, album 依然范特西 `18893`), from Jay Chou's artist listing
+(`/api/artist/albums/6452`, then `/api/album/<id>`), as for #1 and #2. The album
+listing also shows a second 双截棍 track, `3454649690`, on the single 双截棍影音单曲
+(`406469560`); it was not fetched.
+
+**LRCLIB retries.** `lrclib.search` returns `[]` on a 503, and a test of its
+search URL from the VM alternated 200, 503, 200, 503 at 5 s spacing. The pilot
+fetch retried an empty answer 3 times; this fetch retries 5 times
+(`LRCLIB_ATTEMPTS`), sleeping 2, 4, 6, 8 and 10 s after the failed attempts. A first smoke run of #3 with 3
+attempts had 2 of its 3 keys fail all 3 attempts; that folder was deleted and #3
+fetched again in the full run. After the full run, #14's Traditional key and
+#7's English key had used all 5 attempts without an answer, so those two folders
+were deleted and fetched again (`--songs 7,14`); no key used all 5 in that
+second fetch. The tables are from the files now on disk. An empty answer with no
+503 is retried too and leaves no warning, so a key with no warning is not shown
+to have answered. Warnings per search key (a key listed with N warnings failed N
+attempts before its last):
+
+| # | search key (track / artist) | 503 warnings |
+|---|---|---|
+| 4 | 千里之外 / 周杰倫 | 2 |
+| 4 | 千里之外 / 周杰伦 | 1 |
+| 4 | Thousand Miles / Jay Chou | 4 |
+| 5 | The Moon Represents My Heart / Teresa Teng | 2 |
+| 6 | 遇見 / 孫燕姿 | 2 |
+| 6 | Yu Jian / Stefanie Sun | 1 |
+| 7 (first fetch) | Ten Years / Eason Chan | 5 (no answer) |
+| 7 (second fetch) | Ten Years / Eason Chan | 1 |
+| 10 | Under Mount Fuji / Eason Chan | 2 |
+| 12 | Wind Blows On / Leslie Cheung | 3 |
+| 13 | 少女的祈禱 / 楊千嬅 | 2 |
+| 13 | 少女的祈祷 / 杨千嬅 | 1 |
+| 14 (first fetch) | 容易受傷的女人 / 王菲 | 5 (no answer) |
+| 14 (second fetch) | 容易受傷的女人 / 王菲 | 2 |
+| 15 | 男兒當自強 / 林子祥 | 1 |
+| 15 | 男儿当自强 / 林子祥 | 1 |
+| 16 | 下一站天后 / TWINS | 1 |
+| 16 | Next Stop / Twins | 2 |
+
+Songs #3, #8 had no warnings. Every song's `lrclib_dropped` count is 0.
+
+**Per song.** Counts of the saved files, in the pilot's columns (LRCLIB also shows
+how many of the `.txt` files have a synced `.lrc` beside them):
+
+| # | Genius files | LRCLIB `.txt` (synced `.lrc`) | NetEase `.lrc` | NetEase word-timed | distinct texts in `sources.txt` |
+|---|---|---|---|---|---|
+| 3 | 2 | 40 (15) | 1 (`186137` by hand) | `yrc` **yes** (`netease_186137.yrc`), `klyric` no | 7 |
+| 4 | 1 | 40 (38) | 3 (`37460604`, `1403637218`, `185880` by hand) | `yrc` **yes** (`netease_37460604.yrc`, `netease_185880.yrc`), `klyric` no | 8 |
+| 5 | 2 | 40 (40) | 1 (`1847408145`) | `yrc` **yes** (`netease_1847408145.yrc`), `klyric` no | 5 |
+| 6 | 1 | 20 (20) | 1 (`454828887`) | `yrc` **yes** (`netease_454828887.yrc`), `klyric` no | 4 |
+| 7 | 2 | 41 (41) | 1 (`66842`) | `yrc` **yes** (`netease_66842.yrc`), `klyric` no | 5 |
+| 8 | 1 | 40 (38) | 1 (`65536`) | `yrc` no, `klyric` no | 6 |
+| 10 | 1 | 40 (40) | 1 (`65766`) | `yrc` **yes** (`netease_65766.yrc`), `klyric` no | 5 |
+| 12 | 1 | 41 (37) | 1 (`2650715912`) | `yrc` no, `klyric` no | 6 |
+| 13 | 1 | 39 (39) | 2 (`3312508535`, `29207675`) | `yrc` **yes** (`netease_29207675.yrc`), `klyric` no | 8 |
+| 14 | 1 | 20 (20) | 1 (`298880`) | `yrc` **yes** (`netease_298880.yrc`), `klyric` no | 5 |
+| 15 | 1 | 48 (42) | 2 (`406001540`, `116113`) | `yrc` **yes** (`netease_406001540.yrc`, `netease_116113.yrc`), `klyric` no | 8 |
+| 16 | 1 | 31 (31) | 1 (`382844`) | `yrc` **yes** (`netease_382844.yrc`), `klyric` no | 4 |
+
+**NetEase hits.** Every NetEase hit the fetch tried, search hits and hand ids
+(`klyric` is `no` for all):
+
+| # | NetEase id | title / artist | `.lrc` | `yrc` | `klyric` | by hand |
+|---|---|---|---|---|---|---|
+| 3 | `1372718837` | Nunchucks / Goto | no | no | no |  |
+| 3 | `186137` | (looked up by hand, no search record) | yes | yes | no | yes |
+| 4 | `37460604` | 千里之外 / 费玉清 | yes | yes | no |  |
+| 4 | `2008026147` | 千里之外 (钢琴版) \[原唱: 周杰伦 feat. 费玉清\] / 贵族钢琴轻音乐 | no | no | no |  |
+| 4 | `1403637218` | Thousand Miles / DYGL | yes | no | no |  |
+| 4 | `185880` | (looked up by hand, no search record) | yes | yes | no | yes |
+| 5 | `2032373645` | 月亮代表我的心 / 鄧麗君 | no | no | no |  |
+| 5 | `1847408145` | 月亮代表我的心 / 邓丽君 | yes | yes | no |  |
+| 5 | `5224559` | The Moon Represents My Heart / Jeremy | no | no | no |  |
+| 6 | `454828887` | 遇见 / 孙燕姿 | yes | yes | no |  |
+| 6 | `3365987741` | 遇见 (2026 Rock Stefanie Sun Cover) / 重塑伝説 | no | no | no |  |
+| 7 | `66842` | 十年 / 陈奕迅 | yes | yes | no |  |
+| 7 | `3356382410` | 回应的 / Eason Chan | no | no | no |  |
+| 8 | `65536` | 爱情转移 / 陈奕迅 | yes | no | no |  |
+| 10 | `65766` | 富士山下 / 陈奕迅 | yes | yes | no |  |
+| 10 | `3455813963` | Under Mount Fuji / 乖乖娃 | no | no | no |  |
+| 12 | `2650715912` | 风继续吹 (Live) / 张国荣 | yes | no | no |  |
+| 12 | `22445693` | Way That the Wind Blows / Leslie 'Hutch' Hutchinson | no | no | no |  |
+| 13 | `3312508535` | 少女的祈祷 / 杨千嬅 | yes | no | no |  |
+| 13 | `29207675` | prayer / Φ串Φ | yes | yes | no |  |
+| 14 | `298880` | 容易受伤的女人 / 王菲 | yes | yes | no |  |
+| 14 | `1498238619` | Vulnerable woman / Lynn Lyly | no | no | no |  |
+| 15 | `406001540` | 男儿当自強 / 林子祥 | yes | yes | no |  |
+| 15 | `116113` | 男儿当自强 / 林子祥 | yes | yes | no |  |
+| 16 | `382844` | 下一站天后 / Twins | yes | yes | no |  |
+| 16 | `1916186400` | Next Stop / Portico Quartet | no | no | no |  |
+
+Artifacts:
+
+- `zh_probe/phase0/fetch_sheets_nonpilot.log` (the full run, #7 and #14 as first fetched)
+- `zh_probe/phase0/fetch_sheets_nonpilot_rerun_7_14.log` (the second fetch of #7 and #14)
+- `zh_probe/phase0/sheets_raw/<video id>/` for the twelve ids in the Corpus table
+
+Open for Ken: pick or hand-edit one sheet per song into
+`zh_probe/sheets/<video id>.txt` (same rules as the pilot), and Phase 0a for the
+twelve songs. The worksheet and any transcript aid need his GPU run after 0a.
