@@ -262,6 +262,23 @@ Record: `plans/queue-hold.md` on branch `queue_hold`, the manual checks row.
   `#add-to-queue-direct` (always on the page) fixes it. Upstream code, also on
   `master`. A one-line fix was offered on `queue_hold`; not ruled.
 
+## Edit words (on `dev`)
+
+Landed 2026-11-03 as `90c37f2`..`03dff3a`. Record: `plans/edit-words.md` on tag
+`archive/edit_words`, its "Later (not scheduled)" list. GATE R ruled stop (row
+18): no automatic Romanize suggestion; the probe `scripts/romanize_probe.py` and
+its pick, `koroman`, are there if the question comes back.
+
+- **The Repair page's Movie subtitles box is empty after a word edit.** The box
+  is filled from the song's saved movie sheet (`custom_start`), and saving an
+  edit removes that sheet, so a song with an edited movie sheet opens Repair with
+  the box empty while its card says "current (edited)". Found by the Phase 4
+  review (finding 5), not taken for 4.1. Needs a ruling on which sheet fills the
+  box.
+- **"Play this line" on the Edit words page**: a button per line that plays the
+  song from the line's start. Ken, 2026-11-02: a later phase, not scheduled. No
+  admin page plays audio today, so it needs a route that serves the song's audio.
+
 ## Test suite (Windows box)
 
 - Three known failures: `test_pipeline_stem_worker.py` (two
