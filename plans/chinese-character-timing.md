@@ -23,7 +23,9 @@ Phase 0b's fetch for the twelve non-pilot songs ran on the VM 2026-11-03 (see Re
 log); Ken's sheets for them are open. His Phase 0a for them is in (read off the library
 the same day, see Results log).
 The worksheet builder for them was built and tested on the pilot the same day; it waits
-for a GPU transcribe (see Results log).
+for a GPU transcribe (see Results log). Ken ran that transcribe 2026-11-03; the two pages
+(Mandarin #3-8, Cantonese #10 and #12-16) were then built and published as private
+artifacts, and wait for his friend's sheets (see Results log).
 
 ## Why now, and what this replaces
 
@@ -1551,3 +1553,75 @@ Transcripts: `zh_probe/phase0/transcripts/` holds only the four pilot ids
 (`8NJVNkzhJM4`, `DYptgVvkVLQ`, `qu_FSptjRic`, `RPWDeLqsN0g`, each `.json` and `.txt`); none for
 the twelve. The worksheet pages are still waiting on Ken's Windows run of
 `phase0b_transcribe.py`.
+
+### 2026-11-03 — Phase 0b worksheet pages built and published for the twelve (Sonnet 5.5), awaiting the friend's sheets
+
+Ken ran `phase0b_transcribe.py` on Windows (the `chinese_karaoke` worktree at `6ca6bed`); the
+twelve transcripts were written 14:13-14:17 to `zh_probe/phase0/transcripts/<id>.{json,txt}`.
+Then `phase0b_worksheet.py --tag mandarin --songs 3,4,5,6,7,8` and
+`--tag cantonese --songs 10,12,13,14,15,16` (library path and opencc as in the earlier entry).
+
+Transcripts (from the json files):
+
+| # | video id | language passed | model | audio s | whisper wall s | segments | last segment end s |
+|---|---|---|---|---|---|---|---|
+| 3 | `OR-0wptI_u0` | zh | large-v3-turbo.pt | 204.6 | 36.3 | 48 | 179.5 |
+| 4 | `ocDo3ySyHSI` | zh | large-v3-turbo.pt | 271.4 | 12.0 | 66 | 262.58 |
+| 5 | `IgvDMB5fR-8` | zh | large-v3-turbo.pt | 208.4 | 6.2 | 31 | 193.64 |
+| 6 | `m4nu_F_9dWU` | zh | large-v3-turbo.pt | 206.6 | 6.3 | 26 | 192.68 |
+| 7 | `JM9rx_hN1Ko` | zh | large-v3-turbo.pt | 204.2 | 7.4 | 45 | 181.9 |
+| 8 | `RIq7Tz9nYD8` | zh | large-v3-turbo.pt | 260.0 | 14.1 | 68 | 239.96 |
+| 10 | `7qeShSmmsNg` | yue | large-v3-turbo.pt | 259.2 | 32.8 | 61 | 239.28 |
+| 12 | `UmTB6E5mU5w` | yue | large-v3-turbo.pt | 318.9 | 34.5 | 63 | 301.62 |
+| 13 | `CvKvXNiXQZc` | yue | large-v3-turbo.pt | 217.0 | 16.2 | 40 | 198.14 |
+| 14 | `tDw_ULjZWA8` | yue | large-v3-turbo.pt | 259.9 | 17.3 | 56 | 236.0 |
+| 15 | `U_EgeFUTbW4` | yue | large-v3-turbo.pt | 261.1 | 19.1 | 46 | 250.1 |
+| 16 | `cPKfUWDmNbo` | yue | large-v3-turbo.pt | 212.7 | 26.1 | 63 | 212.54 |
+
+Build, per song. "Files scored" is every candidate text for the song against its transcript
+(f1 of Han characters, `phase0b_score.py`); "within 0.05 of best" is the shortlist size;
+"credit-type lines dropped" is the cleaning count summed over the cleaned files; "reference" is
+the version the spots are measured against (the best scorer):
+
+| # | page | video id | transcript Han | files scored | best f1 | lowest f1 | within 0.05 of best | credit-type lines dropped | versions | reference | spots |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 3 | mandarin | `OR-0wptI_u0` | 434 | 6 | 0.402 | 0.000 | 5 | credit 7, singer_label_stripped 1 | 5 | A | 11 |
+| 4 | mandarin | `ocDo3ySyHSI` | 389 | 7 | 0.797 | 0.000 | 5 | credit 3, title_or_artist 1 | 5 | E | 2 |
+| 5 | mandarin | `IgvDMB5fR-8` | 190 | 4 | 0.966 | 0.000 | 3 | title_or_artist 2, credit 3 | 3 | B | 3 |
+| 6 | mandarin | `m4nu_F_9dWU` | 230 | 3 | 0.955 | 0.955 | 3 | credit 3 | 3 | A | 0 |
+| 7 | mandarin | `JM9rx_hN1Ko` | 265 | 4 | 0.909 | 0.115 | 3 | credit 3, netease_credit 4 | 3 | A | 0 |
+| 8 | mandarin | `RIq7Tz9nYD8` | 518 | 5 | 0.901 | 0.886 | 5 | credit 6, singer_label_stripped 3 | 5 | A | 3 |
+| 10 | cantonese | `7qeShSmmsNg` | 503 | 4 | 0.741 | 0.728 | 4 | tag_or_section 5, title_or_artist 1, credit 8, singer_label_stripped 3 | 4 | A | 1 |
+| 12 | cantonese | `UmTB6E5mU5w` | 427 | 5 | 0.778 | 0.752 | 5 | credit 2 | 5 | A | 15 |
+| 13 | cantonese | `CvKvXNiXQZc` | 390 | 7 | 0.783 | 0.040 | 6 | title_or_artist 1, credit 5 | 5 | D | 7 |
+| 14 | cantonese | `tDw_ULjZWA8` | 360 | 4 | 0.846 | 0.832 | 4 | tag_or_section 2, credit 8, netease_credit 2 | 4 | A | 2 |
+| 15 | cantonese | `U_EgeFUTbW4` | 198 | 7 | 0.513 | 0.000 | 6 | credit 5 | 6 | B | 15 |
+| 16 | cantonese | `cPKfUWDmNbo` | 375 | 3 | 0.779 | 0.770 | 3 | credit 3, singer_label_stripped 8, netease_credit 1 | 3 | A | 2 |
+
+#6 and #7 have no spots: their shortlisted versions agree after the script fold. #13 has six
+shortlisted files in five versions (two cleaned to the same text). The full per-song score rows
+and version-to-file lists are in the build files named below.
+
+Browser check on the real pages (headless Chromium, 1280 px and 400 px): both load with no
+console error; each song tab shows its spots; ticking a wording in the first spot of every song
+that has spots shows "Your text has this wording."; the Send back tab shows the three steps and
+an export that starts with the song's `=== <id> | <name> | NOT marked done | sheet ===` header; no
+horizontal scroll at 400 px. It showed one defect: a song with no spots had a "Check these spots"
+heading over an empty box. Fixed in `b2fc4ea` (it now reads "Nothing to compare" and goes on to
+the editor); both pages were rebuilt after it. Not tested: a real friend using them, and the
+Download button (it needs the artifact runtime).
+
+Published as private artifacts (`downloads` capability, `document` icon, readable only by Ken
+until he shares them):
+
+- Mandarin Lyric Sheets: https://claude.ai/artifact/MbmJTXu1FKvwP9i6XuvQHa
+- Cantonese Lyric Sheets: https://claude.ai/artifact/XyBcLGKi37Yokxwfgj3EFQ
+
+Artifacts on the library, `zh_probe/phase0/worksheets/`: `mandarin.html`, `cantonese.html` (the
+published page sources), `<tag>_labels.json` (version letter to candidate file names, per video
+id; needed to read the friend's answers back) and `<tag>_build.txt` (the full score, cleaning and
+version tables).
+
+**Next:** Ken shares the two links with his friend (sharing is set from each page's Share menu;
+the executor cannot change it). She pastes back the Copy-all or Download text; the executor then
+splits it into `zh_probe/sheets/<video id>.txt` per song, as for the pilot.
