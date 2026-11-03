@@ -19,7 +19,7 @@ class MockPlaybackController:
     now_playing_transpose: int = 0
     now_playing_duration: int | None = None
     now_playing_position: float | None = None
-    is_paused: bool = True
+    is_paused: bool = False
     is_playing: bool = False
 
     def skip(self, log_action: bool = True) -> bool:
@@ -41,7 +41,7 @@ class MockPlaybackController:
         self.now_playing_transpose = 0
         self.now_playing_duration = None
         self.now_playing_position = None
-        self.is_paused = True
+        self.is_paused = False
         self.is_playing = False
 
     def get_now_playing(self) -> dict:

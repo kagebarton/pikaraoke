@@ -75,7 +75,7 @@ class TestGetNowPlaying:
         assert result["now_playing_user"] is None
         assert result["now_playing_position"] is None
         assert result["up_next"] is None
-        assert result["is_paused"] is True
+        assert result["is_paused"] is False
         assert result["volume"] == 0.85
 
     def test_get_now_playing_with_song(self, mock_karaoke):
@@ -132,7 +132,7 @@ class TestResetNowPlaying:
         pc.now_playing_user = "TestUser"
         pc.now_playing_transpose = 3
         pc.now_playing_duration = 200
-        pc.is_paused = False
+        pc.is_paused = True
         pc.is_playing = True
 
         mock_karaoke.reset_now_playing()
@@ -143,7 +143,7 @@ class TestResetNowPlaying:
         assert pc.now_playing_transpose == 0
         assert pc.now_playing_duration is None
         assert pc.now_playing_position is None
-        assert pc.is_paused is True
+        assert pc.is_paused is False
         assert pc.is_playing is False
 
     def test_reset_now_playing_resets_volume_to_preference(self, mock_karaoke):

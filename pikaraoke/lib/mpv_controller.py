@@ -100,7 +100,7 @@ class MpvController:
 
     def __init__(self) -> None:
         self._player: mpv.MPV | None = None
-        self._lock = threading.RLock()  # guards filter rebuilds
+        self._lock = threading.RLock()  # guards filter rebuilds and pause writes
         self._duration_ready = threading.Event()
         self.is_running = False
 
@@ -385,10 +385,11 @@ class MpvController:
 
         # Set before loadfile to guard _on_idle_active
         self.is_idle = False
-        self.is_paused = False
 
         try:
-            p.pause = False  # also clear MPV's pause property (pause-on-start fix)
+            with self._lock:
+                p.pause = False  # also clear MPV's pause property (pause-on-start fix)
+                self.is_paused = False
             self.position = 0.0
 
             # Reset duration alongside the readiness event: if _on_duration never
@@ -500,8 +501,9 @@ class MpvController:
     @_safe
     def toggle_pause(self) -> None:
         """Toggle pause state, reading the result back from mpv."""
-        self._player.cycle("pause")
-        self.is_paused = bool(self._player.pause)
+        with self._lock:
+            self._player.cycle("pause")
+            self.is_paused = bool(self._player.pause)
 
     @_safe
     def set_pitch(self, semitones: int) -> None:
@@ -633,8 +635,9 @@ class MpvController:
     def restart(self) -> None:
         """Seek to 0 and unpause."""
         self._player.command("seek", 0, "absolute")
-        self._player.pause = False
-        self.is_paused = False
+        with self._lock:
+            self._player.pause = False
+            self.is_paused = False
 
     # ── Overlay rendering ─────────────────────────────────────────────────────
 
