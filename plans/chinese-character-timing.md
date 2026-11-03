@@ -14,7 +14,7 @@ sheets confirmed 2026-10-27; Phase 1 runner built, GPU run done 2026-10-27
 GATE Z1 read 2026-10-30: no arm dropped, Hal stands for Cantonese H
 (see Results log). Ken's rulings 2026-10-30 retired W and R, added Phase 1b
 (half precision + language guess) and put language detection in scope.
-Next: Phase 1b.
+Phase 1b scripts built 2026-11-03 (`8452230`); Ken runs them on Windows next.
 
 ## Why now, and what this replaces
 
@@ -868,3 +868,95 @@ catches only colloquial lyrics (海闊天空 is mostly standard written Chinese)
 so it is evidence, not a router. English controls are there to check that
 no English song would be routed to a Chinese model; the corpus alone cannot
 show that.
+
+### 2026-11-03 — Phase 1b scripts built (Sonnet 5.5), GPU runs next
+
+Code is `8452230`: `scripts/zh_probe/phase1b_half.py` (1b-i), `phase1b_lang.py`
+(1b-ii) and a small change to `arms.py`. Nothing in `pikaraoke/` or the lock
+files changed. No GPU run has happened; this entry holds no results.
+
+**Commands** (Windows, PowerShell, repo root `C:\temp\Github\pikaraoke`; no model
+downloads: H and Hal are in the Hugging Face cache from Phase 1, whisper is
+`models\large-v3-turbo.pt`). 1b-ii first, with the app closed:
+
+```
+git fetch vm; git checkout -B chinese_karaoke vm/chinese_karaoke
+$env:PYTHONUTF8 = "1"
+uv run python scripts/zh_probe/phase1b_lang.py
+```
+
+Then 1b-i, with PiKaraoke open (whisper and stem workers loaded, a song playing
+in mpv, no song processing) and left alone while it runs:
+
+```
+$env:PYTHONUTF8 = "1"
+uv run --with transformers --with huggingface_hub --with opencc-python-reimplemented `
+  python scripts/zh_probe/phase1b_half.py
+```
+
+**Outputs** under `zh_probe/phase1b/`:
+
+- 1b-i: `half_runs.txt` / `half_runs.json` (one row per song, arm and precision;
+  failures are rows, not exits), `half/<video id>/<arm>.{json,ass}` for fp16
+  runs only, `commands.txt` (mpv line per fp16 `.ass`, for Ken's overall call).
+  The script prints the device-wide memory used before it loads anything; the
+  Phase 1b-i estimate for the app in this state is about 5 GB, so a figure far
+  below that means the workers are not loaded.
+- 1b-ii: `lang/<video id>.json` per song, `lang_songs.txt` (one row per song),
+  `lang_windows.txt` (one row per window).
+
+**Choices the judge should know.**
+
+- **fp16 (`arms.py`).** `make_arm(name, half=True)` converts the Hugging Face
+  model's weights to fp16 on the CPU and then moves them to the card; the
+  features are cast to fp16; the emission is cast to fp32 before `log_softmax`
+  and `forced_align` (that cast was already in the code). W and R refuse
+  `half`. The CTC run info gained `nonfinite`, a count of NaN or inf entries in
+  the emission, because fp16 can overflow without raising. The fp32 path is
+  otherwise unchanged (Phase 1's load sizes, H 1226 MB and Hal 2329 MB, are
+  fp32-sized).
+- **Device-wide memory.** One `nvidia-smi --id=0` call after another on a
+  thread (no sleep), so the rate is one call's duration; `device_samples` is the
+  reading count behind each peak. Peaks cover the model load and each align,
+  plus one reading taken after the block ends. `device_before_load_mb` is read
+  before each model load (so the fp16 load's figure includes the CUDA context
+  left by the fp32 pass); the figure before the probe touches the card is the
+  first line the script prints, and it is read again just before the first
+  load (H, fp32). `device_total_mb` is nvidia-smi's total; free at peak is not
+  computed. On a CUDA run the script exits if nvidia-smi cannot be read.
+- **Failures.** Any `ValueError` or `RuntimeError` in a load or align becomes a
+  row; "out of memory" or `ALLOC_FAILED` in the message sets `status` to `oom`,
+  anything else to `error` (traceback printed). A failed run is not retried. A
+  rerun with `--arms` or `--songs` keeps the other rows (merged on song, arm,
+  precision).
+- **Run order.** For each arm: fp32 load and all its songs, unload, then fp16.
+  fp32 runs save no artifacts (Phase 1 has them).
+- **Language windows.** The log-mel is computed once over the whole stem and cut
+  into 3000-frame slices, which is how whisper's `transcribe` slices its
+  segments, so the stock guess is whisper's own first-window decision. The last
+  window can be shorter than 30 s; it is kept, its length is in `len_s`, and it
+  counts like any other (the plan does not say otherwise). A window counts for
+  the aggregate when its RMS is at least the loudest window's RMS minus 20 dB.
+  Each window's file entry also holds the full 100-language distribution, so the
+  aggregate can be recomputed under another rule.
+- **English controls** (executor's choice; all have a `vocal/` stem): Adele
+  Someone Like You `hLQl3WQQoQ0` (sparse ballad), Eminem Lose Yourself
+  `xFYQQPAOz7Y` (fast rap), Queen Bohemian Rhapsody `fJ9rUzIMcZQ` (harmonised
+  voices, a few non-English words), Ed Sheeran Shape of You `JGwWNGJdvx8`
+  (rhythmic pop).
+- **Colloquial count.** Per Chinese song: total occurrences of the 14 listed
+  characters, the count per character, and the sheet's Han character count.
+
+**What was and was not tested before handing over** (dev VM, CPU only, scratch
+library with 20-75 s stem clips and a fake `nvidia-smi`; nothing written to
+`zh_probe/` in the real library):
+
+- Tested: `phase1b_half.py` at fp32 with H on #1 and #2 (rows, device readings
+  and `nonfinite` written correctly); its fp16 save path, `commands.txt`, an
+  out-of-memory row and an error row, with a stand-in arm; both modules import;
+  `phase1b_lang.py`'s stock and aggregate logic on made-up windows; whisper's
+  `detect_language` through the real `large-v3-turbo.pt` on one 20 s window of
+  the Adele stem (100 languages returned, `en` 0.985).
+- Not tested: fp16 on a real model (fp16 on this CPU was too slow to finish; two
+  attempts stopped), Hal in any form, `phase1b_lang.py`'s per-song loop and file
+  writing, and anything on CUDA.
