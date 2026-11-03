@@ -14,7 +14,8 @@ sheets confirmed 2026-10-27; Phase 1 runner built, GPU run done 2026-10-27
 GATE Z1 read 2026-10-30: no arm dropped, Hal stands for Cantonese H
 (see Results log). Ken's rulings 2026-10-30 retired W and R, added Phase 1b
 (half precision + language guess) and put language detection in scope.
-Phase 1b scripts built 2026-11-03 (`8452230`); Ken runs them on Windows next.
+Phase 1b scripts built 2026-11-03 (`8452230`) and run the same day; the 1b-i run was
+repeated with the app open (see Results log). Ken's four fp16 calls are next.
 
 ## Why now, and what this replaces
 
@@ -1129,3 +1130,77 @@ Adele window 9 (-124.85), Eminem windows 0 and 10 (-61.44, -75.55), Queen window
 
 No verdicts here. Opus reads GATE Z1b from the 1b-i rows and Ken's four calls;
 GATE ZL is read after Phase 2.
+
+### 2026-11-03 — Phase 1b-i rerun with the app open (Sonnet 5.5), artifacts saved, awaiting Ken's calls
+
+Ken ran `phase1b_half.py` again, from the same Windows worktree (code
+`8452230`, nothing changed). **Ken says the previous entry's 1b-i run was made
+with the app closed.** This time the app was launched from the main Windows
+checkout (`uv run pikaraoke -d d:/shared/pikaraoke-songs`, workers started at
+launch) before the probe; the run table does not show whether a song was
+playing in mpv or whether the workers had finished loading, only the device-wide
+readings below. 1b-ii was not rerun (it is specified with the app closed, and
+that run stands). All 8 rows are `ok`: no out-of-memory, no non-finite
+emissions. `half_runs.{txt,json}` now hold this run's rows (the previous run's
+rows are in the previous entry only), and `half/<video id>/<arm>.{json,ass}` and
+`commands.txt` were rewritten.
+
+Memory in MB; `device_total_mb` is 6138. Load figures repeat on each song of an
+arm and precision. "highest" is the larger of the row's load peak and align
+peak; "free" is 6138 minus that (plain subtraction, not a gate read).
+
+| song | arm | prec | status | load s | align s | torch load alloc / reserved | torch align alloc / reserved | device before load | device load peak | device after load | device align peak | highest | free | readings | nonfinite |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| #1 | H | fp32 | ok | 65.18 | 23.48 | 1217 / 1220 | 2081 / 2876 | 5365 | 5880 | 5719 | 5787 | 5880 | 258 | 142 | 0 |
+| #2 | H | fp32 | ok | 65.18 | 7.38 | 1217 / 1220 | 2081 / 3076 | 5365 | 5880 | 5719 | 5715 | 5880 | 258 | 48 | 0 |
+| #1 | H | fp16 | ok | 3.89 | 2.96 | 617 / 624 | 1045 / 1458 | 3107 | 3531 | 3514 | 4373 | 4373 | 1765 | 22 | 0 |
+| #2 | H | fp16 | ok | 3.89 | 1.80 | 617 / 624 | 1045 / 1458 | 3107 | 3531 | 3514 | 4373 | 4373 | 1765 | 14 | 0 |
+| #9 | Hal | fp32 | ok | 8.74 | 61.89 | 2329 / 2340 | 3458 / 4082 | 3115 | 5272 | 5272 | 5600 | 5600 | 538 | 391 | 0 |
+| #11 | Hal | fp32 | ok | 8.74 | 97.74 | 2329 / 2340 | 3458 / 4082 | 3115 | 5272 | 5272 | 5684 | 5684 | 454 | 603 | 0 |
+| #9 | Hal | fp16 | ok | 8.08 | 5.17 | 1169 / 1188 | 1745 / 2086 | 3076 | 4052 | 4052 | 4952 | 4952 | 1186 | 32 | 0 |
+| #11 | Hal | fp16 | ok | 8.08 | 7.73 | 1169 / 1188 | 1745 / 2092 | 3076 | 4052 | 4052 | 5078 | 5078 | 1060 | 47 | 0 |
+
+Frame counts equal Phase 1's (15914, 12711, 5125, 7940). Torch's own figures
+(alloc and reserved) equal the previous run's to the MB on every row.
+
+**Facts about the run for the read (no verdicts).**
+
+- **The device-wide reading before the probe loaded its first model was 5365 MB**,
+  against 919 MB in the previous (app-closed) run.
+- **The reading before each later load was 2250 to 2290 MB lower than before the
+  first one**: 3107 before H fp16, 3115 before Hal fp32, 3076 before Hal fp16. The
+  probe had released a model before each of those loads (`arm.unload()`,
+  `free_memory()`). The table does not say what else left the card between the
+  first and second reading. One candidate, not tested here: Windows moves GPU
+  memory of an idle process out to system RAM when the card is nearly full,
+  and the first row's highest reading (5880 of 6138) was the nearest the run came
+  to full.
+- **The H fp16 and Hal fp16 rows therefore ran against a baseline 2250 to 2290 MB
+  lower than the H fp32 rows did.** The Hal fp32 rows ran against the lower one
+  too.
+- On the Hal fp32 rows, baseline plus torch's reserved pool (3115 + 4082) is
+  more than the card's 6138, while the device-wide highest reading was 5600 and
+  5684\. The table does not show how that fits.
+- Wall times against the app-closed run (previous entry), load / align:
+  H fp32 35.6 -> 65.18 s load, 5.98 -> 23.48 s and 4.21 -> 7.38 s align;
+  Hal fp32 9.85 -> 8.74 s load, 10.74 -> 61.89 s and 16.42 -> 97.74 s align;
+  H fp16 3.44 -> 3.89 s load, 2.62 -> 2.96 s and 1.63 -> 1.80 s align;
+  Hal fp16 7.74 -> 8.08 s load, 5.06 -> 5.17 s and 7.16 -> 7.73 s align.
+
+**The four fp16 outputs against the Phase 1 fp32 outputs** (mechanical, from the
+JSONs; not a gate input). The figures are the same as in the previous entry's
+table for every column it had. The previous run's fp16 files were overwritten,
+so the two runs' files cannot be compared one to one.
+
+| song | arm | units | starts non-decreasing | ends before start | units whose start differs | largest start difference s | starts differing by more than 0.1 s | units whose end differs | largest end difference s |
+|---|---|---|---|---|---|---|---|---|---|
+| #1 | H | 467 | yes | 0 | 10 | 0.40 | 1 | 9 | 0.44 |
+| #2 | H | 479 | yes | 0 | 1 | 0.16 | 1 | 1 | 0.16 |
+| #9 | Hal | 290 | yes | 0 | 0 | 0.00 | 0 | 0 | 0.00 |
+| #11 | Hal | 359 | yes | 0 | 0 | 0.00 | 0 | 0 | 0.00 |
+
+Ken's overall call on each fp16 `.ass` (`phase1b/commands.txt`, same three-way
+scale, no per-line marks) is not in yet.
+
+No verdicts here. Opus reads GATE Z1b from the 1b-i rows of this entry and the
+previous one, and Ken's four calls; GATE ZL is read after Phase 2.
