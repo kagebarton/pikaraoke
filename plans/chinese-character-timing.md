@@ -15,7 +15,10 @@ GATE Z1 read 2026-10-30: no arm dropped, Hal stands for Cantonese H
 (see Results log). Ken's rulings 2026-10-30 retired W and R, added Phase 1b
 (half precision + language guess) and put language detection in scope.
 Phase 1b scripts built 2026-11-03 (`8452230`) and run the same day; the 1b-i run was
-repeated with the app open (see Results log). Ken's four fp16 calls are next.
+repeated with the app open (see Results log). GATE Z1b read 2026-11-03: half
+precision does not fit beside the running app, so both languages run at full
+precision in Phase 2 and Phase 3 records the fallback; Ken's four fp16 calls
+are *as is*, no worse than Phase 1 (they bear on the fallback, not on Z1b).
 
 ## Why now, and what this replaces
 
@@ -1204,3 +1207,113 @@ scale, no per-line marks) is not in yet.
 
 No verdicts here. Opus reads GATE Z1b from the 1b-i rows of this entry and the
 previous one, and Ken's four calls; GATE ZL is read after Phase 2.
+
+### 2026-11-03 — GATE Z1b read (Opus 5.5)
+
+Read from the 1b-i rows of the two entries above (app closed, then app open),
+the Phase 1 calls, and a read-only check of the artifacts and code. Nothing was
+re-run. Ken's four fp16 calls came in after the read (end of this entry); they
+do not change the outcome.
+
+**Checks made.** `phase1b/half_runs.json` matches the rerun's table on every
+row. The fp16-vs-fp32 timing table was recomputed from `phase1/<id>/<arm>.json`
+and `phase1b/half/<id>/<arm>.json` and agrees (H: 10 and 1 characters moved,
+largest 0.40 s; Hal: none). Code: between blocks the probe calls `arm.unload()`
+then `free_memory()` (`gc.collect()`, `torch.cuda.empty_cache()`), so it keeps
+only its CUDA context; the app's whisper and stem workers release their models
+only when their subprocess exits (`whisper_worker.py` and `stem_worker.py`,
+the `finally` blocks that log "model unloaded"). No idle unload exists.
+
+**What the 2.2 GB drop is.** It is the app's memory leaving the card while the
+probe held nothing but its context. Two causes fit, and the artifacts cannot
+tell them apart: Windows moved the idle workers' memory to system RAM (it comes
+back when they next use the card), or a worker process exited. The app log for
+the run (a "model unloaded" line or a worker restart) or Task Manager's shared
+GPU memory column would tell them apart. Either way, every row after the first
+block ran beside less of the app than Phase 1b-i specified, so the fp16 rows'
+device peaks are not readings of the state the gate is about.
+
+**The device-wide peak cannot show a non-fit on this card.** The H fp32 rows
+needed far more than the card holds beside a 5365 MB baseline, yet nothing
+failed: the reading stopped at 5880 MB (258 MB free, which passes the 256 MB
+test as written) and align ran 1.75-3.9x slower. Hal fp32 behaved the same way
+against the lower baseline (5600-5684 MB read, about 6x slower). So on this
+driver an allocation past the card does not fail; it lands in system memory or
+pushes another process out, and the cost shows as time, not as a reading over
+the limit. (The NVIDIA Windows driver's sysmem fallback setting would do this;
+not checked.)
+
+**Fit computed from the measured footprints.** The probe's device-wide rise at
+fp16 is the same in both runs to within 45 MB, so it can be placed on the
+5365 MB state without a run. Rise = align peak minus the reading before the
+probe touched the card (app-closed run, so the probe's own CUDA context is
+included, as it would be in a fresh fp16-only run):
+
+| arm (fp16) | rise MB, app closed (919 base) | rise over before-load, app closed / app open | projected peak on 5365 | gate limit (6138 - 256) | over by | largest baseline that fits |
+|---|---|---|---|---|---|---|
+| H | 2387 - 919 = 1468 | 1266 / 1266 | 6833 | 5882 | 951 | 4414 |
+| Hal (#9) | 3009 - 919 = 2090 | 1888 / 1876 | 7455 | 5882 | 1573 | 3792 |
+| Hal (#11) | 3078 - 919 = 2159 | 1957 / 2002 | 7524 | 5882 | 1642 | 3723 |
+
+The H fp16 load alone (1545 - 919 = 626) would put the card at 5991, over the
+limit before any align. The app's share of the 5365 is about 4.45 GB over the
+919 desktop; for H to fit it would have to be under about 3.5 GB, for Hal under
+about 2.8 GB.
+
+**Read.** Condition (a) is not met for either language. The literal peaks in
+the rerun pass it, but they were taken after about 2.25 GB of the app had left
+the card, and the same reading passes the H fp32 rows, which plainly did not
+fit. The measured fp16 footprints do not fit beside the app as measured, by
+about 1 GB for H and 1.6 GB for Hal, and would not fit beside any plausible
+app state. **By the pre-registered rule, both languages run at full precision
+in Phase 2, and Phase 3 records the fallback** (unload whisper while the song
+aligns, then reload it).
+
+**An fp16-only run from the 5.4 GB baseline is not needed.** It cannot pass
+(a): the footprint it would measure is already measured twice and does not
+fit, and on this card a non-fit reads as a near-full peak, not a failure, so
+its peak could not be read against (a) either. At most it would show the
+slowdown again.
+
+**For Phase 3 (facts the fallback's pricing does not yet cover).**
+
+- Whether the fallback fits is unmeasured. Unloading whisper leaves the stem
+  worker's separator and context and mpv on the card. Hal fp32's rise
+  (5011 - 919 = 4092 MB) is close to the whole app's 4.45 GB share, so Hal
+  fp32 fits beside the stem worker only if whisper's process alone held about
+  3.6 GB; H fp32 (rise about 2.9-3.1 GB) needs whisper to free about 2.4-2.6 GB.
+  At fp16 the needs are about 1.0 GB (H) and 1.6 GB (Hal). Whisper's share was
+  not measured, so which precision the fallback can run at is open, and that is
+  where Ken's four fp16 calls bear.
+- A third option the rerun showed without testing it: leave whisper loaded and
+  let Windows move it off the card. In the rerun that cost the first block
+  (H fp32 load 65 s against 36 s, first align about 4x), after which fp16 ran at
+  app-closed speed. Whisper's page-in cost on its next job was not measured, nor
+  whether the app stayed healthy.
+- On this card an out-of-memory turns into a slowdown rather than an error, so
+  a build cannot rely on catching OOM to detect a non-fit.
+
+**Condition (b): Ken's four fp16 calls** (given in chat after the read). He
+listened only where the fp16 `.ass` differs from the Phase 1 one: `cmp` shows
+both Hal files byte-identical, and the H files differ on 3 dialogue lines (#1,
+starting 0:57.84, 3:14.38, 4:35.58) and 1 line (#2, starting 1:35.06).
+
+| song | arm | Phase 1 call | fp16 call | no worse? |
+|---|---|---|---|---|
+| #1 晴天 | H | as is | as is | yes |
+| #2 龍捲風 | H | as is | as is | yes |
+| #9 明年今日 | Hal | as is | as is (carried over, identical file) | yes |
+| #11 海闊天空 | Hal | as is | as is (carried over, identical file) | yes |
+
+Ken's note on #1, verbatim except the bracketed word (typed "line"): "most of the spot checks are fine, just 4:35 in
+晴天 is an overlapping section so the second line starts \[late\] and rushes, not
+sure if that was already there from before". It was: the 4:35.58 line
+(颳風這天 我試過握著你手, 11 characters) spans 2.14 s in both files, and
+in both files four of 我試過握著 get 2 cs and the fifth 8 cs; fp16 moved four
+of the line's durations by 2-6 cs. The same line at 3:14.38 spans 8.72 s. Ken kept *as is* for #1 with
+that known. **For Phase 2 and Phase 3:** H squeezes the second of two
+overlapping lines; it is not an fp16 effect, and the corpus listen should
+watch for it.
+
+Condition (b) holds on all four songs. Z1b still sends both languages to full
+precision in Phase 2, because (a) is not met.
