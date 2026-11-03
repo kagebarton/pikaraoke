@@ -21,6 +21,8 @@ precision in Phase 2 and Phase 3 records the fallback; Ken's four fp16 calls
 are *as is*, no worse than Phase 1 (they bear on the fallback, not on Z1b).
 Phase 0b's fetch for the twelve non-pilot songs ran on the VM 2026-11-03 (see Results
 log); Ken's sheets for them, and his Phase 0a, are open.
+The worksheet builder for them was built and tested on the pilot the same day; it waits
+for Phase 0a and a GPU transcribe (see Results log).
 
 ## Why now, and what this replaces
 
@@ -1442,3 +1444,77 @@ Artifacts:
 Open for Ken: pick or hand-edit one sheet per song into
 `zh_probe/sheets/<video id>.txt` (same rules as the pilot), and Phase 0a for the
 twelve songs. The worksheet and any transcript aid need his GPU run after 0a.
+
+### 2026-11-03 — Phase 0b worksheet builder for the twelve (Sonnet 5.5), waiting for 0a and transcripts
+
+Ken asked for a worksheet for his friend "like last time" (the pilot's claude.ai
+artifact `EqY8foQNriiDuW8pCnavYE`: a tab per song, candidate texts as versions A, B, ...,
+a list of spots where they disagree with a play-from link, an editor, a Send back tab).
+His answers to my questions:
+
+- **Spot times and shortlist:** wait for Phase 0a, then his GPU transcribe, as for the
+  pilot. Not built from synced lyrics.
+- **Split:** two pages, Mandarin (#3-8) and Cantonese (#10, #12-16).
+- **Changes:** tell the friend not to write music-break markers; warn when a ticked wording is
+  not in the sheet text. His note: the pilot friend asked whether her ticks had to match her
+  sheet edits, and what she was supposed to give back since the page does not save for her.
+  He asked for both to be made more coherent.
+
+No page was built or published for the twelve: only #3 has a vocal stem in the library
+(2026-11-03 fetch time), so there are no transcripts. New in `scripts/zh_probe/`, code
+`53f57a6`:
+
+- `phase0b_worksheet.py` (CPU, needs `opencc-python-reimplemented`): per song, reads the
+  transcript, ranks the candidates as `phase0b_score.py` does, keeps those within 0.05 f1 of the
+  best (at most 6) as versions in file-name order (genius, lrclib, netease), and merges texts
+  that are identical once cleaned. Cleaning drops credit lines, `[...]` tag and section lines,
+  NetEase `label : name` credit lines, leading title/artist lines, and strips `Sa：`-style
+  singer labels; the count per kind is in `<tag>_build.txt`. Spots are the spans where any
+  version differs from the best one, on Han characters (folded to Simplified) and Latin
+  letters, merged when within 3 characters of each other; a spot where no version has a Han
+  character and the difference touches a Latin letter (`Sol` / `So`) is left out. Each spot's
+  time is the transcript segment of the matched character at or before it (the first segment
+  when none matches), the link starting 3 s earlier. Output: `<tag>.html`, `<tag>_labels.json`,
+  `<tag>_build.txt`.
+- `worksheet_template.html`: the pilot page with the three changes above plus a save note.
+  Instructions now say a tick only records what was heard and does not edit the text; a line
+  under each spot says whether the sheet text has the wording ticked ("has" / "does not have
+  this wording yet"), the tab shows "n to fix", a note under Done shows the count, and the
+  export marks such spots. The match ignores script, punctuation and line breaks and
+  looks for the n-th occurrence of the wording, n being its place among repeats of the same
+  words in the version it was taken from. The first version of the check looked anywhere in
+  the text; on the pilot's #1 a wrong tick at the second chorus passed because the first
+  chorus has the same words, so it was replaced. The Send back tab lists three steps (check
+  Done, press Copy all or Download, paste into a message to whoever sent the link), says
+  nothing is sent from the page, and the page says where its work is kept and when it last
+  saved, with a warning when the browser cannot store it.
+- `phase0b_transcribe.py`: now covers the twelve songs (`--songs`), skips a song whose transcript
+  exists, and reads the whisper path from `corpus.py`.
+
+**Test on the pilot** (the four pilot transcripts exist; the pilot's `CONFIRMED` sheets were
+excluded). The rebuilt pages against the published pilot page's data:
+
+| # | versions published / rebuilt | spots published / rebuilt | spot start times |
+|---|---|---|---|
+| 1 | 5 / 5 | 5 / 5 | same five |
+| 2 | 6 / 6 | 10 / 8 | the rebuilt page merges the two spots at 3:17 and the two at 3:31, which lie within 3 characters of each other; the rest are the same |
+| 9 | 4 / 4 | 2 / 2 | same two |
+| 11 | 4 / 4 | 12 / 12 | same, except the first spot: 0:01 published, 0:00 rebuilt (no Han character is matched before it, the transcript's first segments hold none) |
+
+The page was driven in headless Chromium on the pilot data (the skill's `launch` helper):
+a tick that matches the text shows "has"; a tick that does not shows the warning, "1 to fix" on
+the tab and the count under Done; editing the text clears it; the Send back tab shows the
+steps, the save note and a Copy all button; a reload keeps the tab, the text and the ticks; no
+console errors; no horizontal scroll at 400 px wide. Not tested: a real friend using it, the
+page on the twelve songs' data, publishing, and the Download button (it needs the artifact
+runtime).
+
+**Next, in order:**
+
+1. Ken finishes Phase 0a (`add_songs` for the twelve; each needs its `vocal/` stem).
+2. Ken runs on Windows, from the repo root with the VM's remote fetched
+   (`PYTHONUTF8=1`, `uv run python scripts/zh_probe/phase0b_transcribe.py`): about
+   10-40 s per song on the A2000, output `zh_probe/phase0/transcripts/<id>.{json,txt}`.
+3. Executor builds the two pages with `phase0b_worksheet.py --tag mandarin --songs 3,4,5,6,7,8`
+   and `--tag cantonese --songs 10,12,13,14,15,16`, publishes each as an artifact, and
+   records the build tables here.
