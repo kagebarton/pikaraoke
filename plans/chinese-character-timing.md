@@ -875,12 +875,15 @@ Code is `8452230`: `scripts/zh_probe/phase1b_half.py` (1b-i), `phase1b_lang.py`
 (1b-ii) and a small change to `arms.py`. Nothing in `pikaraoke/` or the lock
 files changed. No GPU run has happened; this entry holds no results.
 
-**Commands** (Windows, PowerShell, repo root `C:\temp\Github\pikaraoke`; no model
-downloads: H and Hal are in the Hugging Face cache from Phase 1, whisper is
-`models\large-v3-turbo.pt`). 1b-ii first, with the app closed:
+**Commands** (Windows, PowerShell, in the Windows clone's `chinese_karaoke`
+worktree, `C:\temp\Github\pikaraoke\.claude\worktrees\chinese_karaoke`, where that
+branch is checked out; no model downloads: H and Hal are in the Hugging Face
+cache from Phase 1, whisper is `models\large-v3-turbo.pt`). 1b-ii first, with
+the app closed:
 
 ```
-git fetch vm; git checkout -B chinese_karaoke vm/chinese_karaoke
+cd C:\temp\Github\pikaraoke\.claude\worktrees\chinese_karaoke
+git fetch vm; git merge --ff-only vm/chinese_karaoke
 $env:PYTHONUTF8 = "1"
 uv run python scripts/zh_probe/phase1b_lang.py
 ```
@@ -960,3 +963,169 @@ library with 20-75 s stem clips and a fake `nvidia-smi`; nothing written to
 - Not tested: fp16 on a real model (fp16 on this CPU was too slow to finish; two
   attempts stopped), Hal in any form, `phase1b_lang.py`'s per-song loop and file
   writing, and anything on CUDA.
+
+### 2026-11-03 — Phase 1b GPU runs (Sonnet 5.5), artifacts saved, awaiting Ken's calls
+
+Ken ran both scripts on Windows (RTX A2000, 6 GB; output on D:, read here over
+the RDP redirect), from the Windows clone's `chinese_karaoke` worktree at
+`2e5f0fd` (code `8452230`). 1b-ii ran first with the app closed, then 1b-i.
+Nothing in `pikaraoke/` or the lock files changed. All 8 run-table rows are
+`ok`: no run failed or ran out of memory. Saved under `zh_probe/phase1b/`:
+`half_runs.{txt,json}`, `half/<video id>/<arm>.{json,ass}` (4 pairs),
+`commands.txt`, `lang/<video id>.json` (8), `lang_songs.txt`, `lang_windows.txt`.
+
+**Flag for the read (a fact about the run, not a verdict).** The device-wide
+memory used before the probe loaded its first model was **919 MB**, and 1121 or
+1129 MB before the later loads (table below). The Phase 1b-i spec and the
+co-residency estimate (previous entry) put the app with whisper and the stem
+worker resident at about 5 GB. These figures do not look like that state: the
+run table does not show whether the app was open with its workers loaded.
+
+#### 1b-i: H and Hal, fp32 then fp16
+
+Memory in MB; `device_total_mb` is 6138 on every row. Load figures repeat on
+each song of an arm and precision. Order of runs: H fp32, H fp16, Hal fp32, Hal
+fp16. "device before load" is the reading just before that model's load (the
+fp16 rows follow an fp32 pass, so the probe's own CUDA context may be in it).
+
+| song | arm | prec | status | load s | align s | torch load alloc / reserved | torch align alloc / reserved | device before load | device load peak | device after load | device align peak | readings | nonfinite |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| #1 | H | fp32 | ok | 35.6 | 5.98 | 1217 / 1220 | 2081 / 2876 | 919 | 2117 | 2117 | 3797 | 38 | 0 |
+| #2 | H | fp32 | ok | 35.6 | 4.21 | 1217 / 1220 | 2081 / 3076 | 919 | 2117 | 2117 | 3997 | 28 | 0 |
+| #1 | H | fp16 | ok | 3.44 | 2.62 | 617 / 624 | 1045 / 1458 | 1121 | 1545 | 1545 | 2387 | 20 | 0 |
+| #2 | H | fp16 | ok | 3.44 | 1.63 | 617 / 624 | 1045 / 1458 | 1121 | 1545 | 1545 | 2387 | 14 | 0 |
+| #9 | Hal | fp32 | ok | 9.85 | 10.74 | 2329 / 2340 | 3458 / 4082 | 1129 | 3269 | 3269 | 5011 | 64 | 0 |
+| #11 | Hal | fp32 | ok | 9.85 | 16.42 | 2329 / 2340 | 3458 / 4082 | 1129 | 3269 | 3269 | 5011 | 93 | 0 |
+| #9 | Hal | fp16 | ok | 7.74 | 5.06 | 1169 / 1188 | 1745 / 2086 | 1121 | 2109 | 2109 | 3009 | 32 | 0 |
+| #11 | Hal | fp16 | ok | 7.74 | 7.16 | 1169 / 1188 | 1745 / 2092 | 1121 | 2109 | 2109 | 3078 | 46 | 0 |
+
+Frame counts equal Phase 1's (15914, 12711, 5125, 7940). `readings` is the
+number of nvidia-smi readings behind the align peak.
+
+**The four fp16 outputs against the Phase 1 fp32 outputs** (mechanical, from the
+JSONs; not a gate input):
+
+| song | arm | units | starts non-decreasing | ends before start | interpolated fp16 / fp32 | first start -> last end (both) | units whose start differs | largest start difference s | starts differing by more than 0.1 s |
+|---|---|---|---|---|---|---|---|---|---|
+| #1 | H | 467 | yes | 0 | 4 / 4 | 44.00 -> 301.56 | 10 | 0.40 | 1 |
+| #2 | H | 479 | yes | 0 | 4 / 4 | 28.06 -> 238.18 | 1 | 0.16 | 1 |
+| #9 | Hal | 290 | yes | 0 | 3 / 3 | 16.56 -> 181.56 | 0 | 0.00 | 0 |
+| #11 | Hal | 359 | yes | 0 | 6 / 6 | 18.96 -> 259.68 | 0 | 0.00 | 0 |
+
+Ken's overall call on each fp16 `.ass` (`phase1b/commands.txt`, same three-way
+scale, no per-line marks) is not in yet.
+
+#### 1b-ii: whisper language detection on the vocal stems
+
+Model `large-v3-turbo.pt`, cuda, 1.2 to 2.9 s per song. Window = 30 s, counted
+for the aggregate when its RMS is within 20 dB of the song's loudest. The
+colloquial count is the 14-character list on the confirmed sheet (0 on all four
+sheets; Han characters on the sheets 450, 477, 290, 345).
+
+| song | label | audio s | windows | counted | loudest dBFS | stock | stock p | aggregate | aggregate top 3 (summed log-prob) | colloquial chars |
+|---|---|---|---|---|---|---|---|---|---|---|
+| #1 周杰倫 晴天 | zh | 318.3 | 11 | 10 | -21.05 | en | 0.4971 | zh | zh -5.304; en -41.902; ja -67.917 | 0 |
+| #2 周杰倫 龍捲風 | zh | 254.2 | 9 | 8 | -20.71 | zh | 0.9625 | zh | zh -0.132; en -41.429; ja -57.827 | 0 |
+| #9 陳奕迅 明年今日 | yue | 205.0 | 7 | 7 | -16.53 | zh | 0.8109 | zh | zh -1.558; en -14.948; ja -36.679 | 0 |
+| #11 Beyond 海闊天空 | yue | 317.6 | 11 | 9 | -16.14 | zh | 0.9186 | zh | zh -3.944; en -16.194; ja -46.545 | 0 |
+| Adele - Someone Like You | en | 285.0 | 10 | 9 | -12.29 | en | 0.9724 | en | en -0.244; es -49.627; fr -50.205 |  |
+| Eminem - Lose Yourself | en | 327.6 | 11 | 9 | -21.53 | en | 0.5934 | en | en -0.083; es -59.458; fr -62.927 |  |
+| Queen - Bohemian Rhapsody | en | 359.5 | 12 | 11 | -16.93 | en | 0.9858 | en | en -0.215; es -66.438; fr -67.836 |  |
+| Ed Sheeran - Shape of You | en | 263.3 | 9 | 8 | -10.94 | en | 0.99 | en | en -0.115; es -49.646; fr -51.244 |  |
+
+Every window (`top` entries are language and probability; `p(yue)` rounds to
+0.0 at four places in the table, see below):
+
+```
+song     win  len s     dBFS  counted top 1      top 2      top 3         p(zh)  p(yue)
+#1         0   30.0   -64.48  False   en 0.4971  de 0.0742  fr 0.0662    0.0069     0.0
+#1         1   30.0   -26.98  True    zh 0.9521  en 0.0358  ja 0.0037    0.9521     0.0
+#1         2   30.0   -23.88  True    zh 0.9752  en 0.0192  ja 0.0017    0.9752     0.0
+#1         3   30.0   -22.82  True    zh 0.9779  en 0.0181  ja 0.0012    0.9779     0.0
+#1         4   30.0   -21.19  True    zh 0.9935  en 0.0047  ja 0.0006    0.9935     0.0
+#1         5   30.0   -25.21  True    zh 0.9743  en 0.0214  ja 0.0013    0.9743     0.0
+#1         6   30.0   -21.94  True    zh 0.9943  en 0.0042  ja 0.0005    0.9943     0.0
+#1         7   30.0   -39.47  True    en 0.8751  fr 0.0361  es 0.0162    0.0058     0.0
+#1         8   30.0   -21.05  True    zh 0.9947  en 0.0036  ja 0.0006    0.9947     0.0
+#1         9   30.0   -23.92  True    zh 0.9942  en 0.004   ja 0.0006    0.9942     0.0
+#1        10   18.3   -34.22  True    zh 0.9872  en 0.0097  ja 0.0006    0.9872     0.0
+#2         0   30.0   -35.55  True    zh 0.9625  en 0.0298  ja 0.0019    0.9625     0.0
+#2         1   30.0    -25.3  True    zh 0.9963  en 0.0021  ja 0.0006    0.9963     0.0
+#2         2   30.0   -23.39  True    zh 0.996   en 0.0026  ja 0.0005     0.996     0.0
+#2         3   30.0    -23.4  True    zh 0.9974  en 0.0016  ja 0.0003    0.9974     0.0
+#2         4   30.0   -21.95  True    zh 0.9936  en 0.0045  ja 0.0006    0.9936     0.0
+#2         5   30.0   -27.31  True    zh 0.9954  en 0.0033  ja 0.0004    0.9954     0.0
+#2         6   30.0   -20.71  True    zh 0.9926  en 0.0051  ja 0.0007    0.9926     0.0
+#2         7   30.0   -23.33  True    zh 0.9371  en 0.0516  ja 0.0026    0.9371     0.0
+#2         8  14.24  -134.65  False   en 0.3542  ru 0.1253  pt 0.0754    0.0115     0.0
+#9         0   30.0   -36.34  True    zh 0.8109  en 0.1488  ja 0.009     0.8109     0.0
+#9         1   30.0   -26.79  True    zh 0.9418  en 0.0447  ja 0.0038    0.9418     0.0
+#9         2   30.0   -17.43  True    zh 0.6366  en 0.3329  ja 0.0061    0.6366     0.0
+#9         3   30.0   -22.46  True    zh 0.7801  en 0.1942  ja 0.0067    0.7801     0.0
+#9         4   30.0   -16.53  True    zh 0.6496  en 0.3117  ja 0.0073    0.6496     0.0
+#9         5   30.0   -18.27  True    zh 0.8846  en 0.0992  ja 0.004     0.8846     0.0
+#9         6  25.01   -36.18  True    zh 0.9667  en 0.0242  ja 0.0029    0.9667     0.0
+#11        0   30.0   -28.62  True    zh 0.9186  en 0.066   ja 0.004     0.9186     0.0
+#11        1   30.0    -24.8  True    zh 0.7735  en 0.1986  ja 0.0058    0.7735     0.0
+#11        2   30.0   -21.11  True    zh 0.7713  en 0.1981  ja 0.0061    0.7713     0.0
+#11        3   30.0   -22.08  True    zh 0.8397  en 0.1339  ja 0.0055    0.8397     0.0
+#11        4   30.0   -18.23  True    zh 0.7479  en 0.2246  ja 0.0058    0.7479     0.0
+#11        5   30.0   -24.48  True    en 0.5859  zh 0.1381  nl 0.0526    0.1381     0.0
+#11        6   30.0   -19.38  True    zh 0.9355  en 0.0545  ja 0.0034    0.9355     0.0
+#11        7   30.0   -16.14  True    zh 0.905   en 0.0749  ja 0.0048     0.905     0.0
+#11        8   30.0   -18.73  True    en 0.4968  zh 0.4815  ja 0.0049    0.4815     0.0
+#11        9   30.0   -48.29  False   en 0.5963  ru 0.0648  fr 0.0616    0.0087     0.0
+#11       10   17.6   -87.69  False   en 0.3671  pt 0.0996  ru 0.0816    0.0081     0.0
+Adele      0   30.0   -17.59  True    en 0.9724  es 0.0044  de 0.0043     0.002     0.0
+Adele      1   30.0   -14.11  True    en 0.9802  de 0.0035  fr 0.003     0.0015     0.0
+Adele      2   30.0   -13.05  True    en 0.969   es 0.0058  fr 0.0047    0.0023     0.0
+Adele      3   30.0    -14.6  True    en 0.9592  es 0.0075  fr 0.007     0.0032     0.0
+Adele      4   30.0   -13.11  True    en 0.9828  es 0.0029  fr 0.0027    0.0012     0.0
+Adele      5   30.0   -12.93  True    en 0.953   es 0.0082  fr 0.0076     0.004     0.0
+Adele      6   30.0   -12.29  True    en 0.9904  fr 0.0014  es 0.0014     0.001     0.0
+Adele      7   30.0   -13.18  True    en 0.9836  fr 0.003   es 0.0026    0.0013     0.0
+Adele      8   30.0   -12.53  True    en 0.9693  es 0.0058  fr 0.0049    0.0023     0.0
+Adele      9  14.98  -124.85  False   en 0.3144  ru 0.1152  pt 0.1009    0.0086     0.0
+Eminem     0   30.0   -61.44  False   en 0.5934  es 0.0917  pt 0.0655    0.0026     0.0
+Eminem     1   30.0    -27.1  True    en 0.9979  es 0.0004  de 0.0002    0.0001     0.0
+Eminem     2   30.0   -21.99  True    en 0.996   es 0.0009  fr 0.0005    0.0002     0.0
+Eminem     3   30.0   -21.57  True    en 0.9766  es 0.0049  fr 0.0036    0.0014     0.0
+Eminem     4   30.0   -22.76  True    en 0.9909  es 0.0019  fr 0.0013    0.0006     0.0
+Eminem     5   30.0   -22.04  True    en 0.9827  es 0.0033  fr 0.0029    0.0012     0.0
+Eminem     6   30.0   -21.67  True    en 0.9868  es 0.0026  fr 0.0019    0.0008     0.0
+Eminem     7   30.0   -21.88  True    en 0.9964  es 0.0007  fr 0.0005    0.0002     0.0
+Eminem     8   30.0   -21.53  True    en 0.9922  es 0.0016  fr 0.0011    0.0005     0.0
+Eminem     9   30.0    -26.3  True    en 0.9975  es 0.0005  fr 0.0003    0.0002     0.0
+Eminem    10  27.56   -75.55  False   en 0.3249  ja 0.1873  pt 0.0748    0.0197     0.0
+Queen      0   30.0   -22.48  True    en 0.9858  fr 0.002   es 0.0018    0.0009     0.0
+Queen      1   30.0   -23.38  True    en 0.9956  es 0.0008  de 0.0006    0.0002     0.0
+Queen      2   30.0   -23.64  True    en 0.9844  de 0.0021  fr 0.0021    0.0012     0.0
+Queen      3   30.0   -25.14  True    en 0.9709  de 0.0046  fr 0.0043     0.002     0.0
+Queen      4   30.0    -20.0  True    en 0.9819  es 0.0026  de 0.0022    0.0016     0.0
+Queen      5   30.0   -20.56  True    en 0.985   de 0.0024  es 0.0023    0.0008     0.0
+Queen      6   30.0   -19.51  True    en 0.9893  es 0.0018  fr 0.0015    0.0005     0.0
+Queen      7   30.0   -16.93  True    en 0.9817  es 0.003   fr 0.0025    0.0008     0.0
+Queen      8   30.0   -17.53  True    en 0.9852  es 0.0022  fr 0.002     0.0008     0.0
+Queen      9   30.0   -23.07  True    en 0.9379  es 0.0132  de 0.008     0.0029     0.0
+Queen     10   30.0   -28.32  True    en 0.9909  de 0.0015  es 0.0014    0.0005     0.0
+Queen     11  29.49   -43.45  False   en 0.9352  es 0.012   fr 0.0104    0.0068     0.0
+Sheeran    0   30.0   -16.14  True    en 0.99    es 0.0017  fr 0.0014    0.0007     0.0
+Sheeran    1   30.0   -11.79  True    en 0.9882  es 0.0018  fr 0.0018    0.0009     0.0
+Sheeran    2   30.0   -10.94  True    en 0.9779  es 0.0039  fr 0.0031    0.0018     0.0
+Sheeran    3   30.0   -12.32  True    en 0.9961  es 0.0007  fr 0.0005    0.0003     0.0
+Sheeran    4   30.0   -11.01  True    en 0.9892  es 0.0019  fr 0.0015    0.0009     0.0
+Sheeran    5   30.0   -11.45  True    en 0.9912  es 0.0014  fr 0.0011    0.0008     0.0
+Sheeran    6   30.0   -13.87  True    en 0.9681  es 0.005   fr 0.0048    0.0032     0.0
+Sheeran    7   30.0   -12.28  True    en 0.9857  es 0.0024  fr 0.0018    0.0014     0.0
+Sheeran    8  23.27   -48.09  False   en 0.4796  ru 0.0908  pt 0.085     0.0067     0.0
+```
+
+In the saved distributions, p(yue) is at most 7.3e-10 in any of the 80 windows,
+and in the 18 windows of the two Cantonese songs `yue` ranks 100th of 100
+languages in 17 and 99th in one. The windows not counted (RMS more than 20 dB under the song's loudest) are: #1 window 0
+(-64.48 dBFS), #2 window 8 (-134.65), #11 windows 9 and 10 (-48.29, -87.69),
+Adele window 9 (-124.85), Eminem windows 0 and 10 (-61.44, -75.55), Queen window
+11 (-43.45) and Sheeran window 8 (-48.09).
+
+No verdicts here. Opus reads GATE Z1b from the 1b-i rows and Ken's four calls;
+GATE ZL is read after Phase 2.
