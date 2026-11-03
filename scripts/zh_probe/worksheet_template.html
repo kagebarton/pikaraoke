@@ -1,0 +1,564 @@
+<title>__TITLE__</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;700&family=Figtree:wght@400;500;600&display=swap">
+<style>
+  /* Layout: one reading column; per song, the spot list sits left and the editor sticks right on wide screens, stacked on phones. */
+  :root {
+    --bg: #f3f6f7;
+    --surface: #ffffff;
+    --surface-2: #e8eef0;
+    --ink: #162226;
+    --muted: #526870;
+    --rule: #d2dcdf;
+    --accent: #0a6a73;
+    --accent-ink: #ffffff;
+    --hi: #fde68a;
+    --hi-ink: #392c00;
+    --gap: #a8480a;
+    --ok: #17784a;
+    --font-display: "Bricolage Grotesque", "Figtree", system-ui, sans-serif;
+    --font-body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-lyric: "Noto Sans TC", "Noto Sans SC", "PingFang TC", "PingFang SC", "Microsoft JhengHei", "Microsoft YaHei", "Hiragino Sans GB", "Figtree", sans-serif;
+    --tabs-h: 3.6rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0e1517; --surface: #151f23; --surface-2: #1d2b30; --ink: #e5edef; --muted: #93a6ac;
+      --rule: #2a3a40; --accent: #5cc8cf; --accent-ink: #052a2d; --hi: #5a490d; --hi-ink: #fde9a2;
+      --gap: #f0b45c; --ok: #5fd394; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e1517; --surface: #151f23; --surface-2: #1d2b30; --ink: #e5edef; --muted: #93a6ac;
+    --rule: #2a3a40; --accent: #5cc8cf; --accent-ink: #052a2d; --hi: #5a490d; --hi-ink: #fde9a2;
+    --gap: #f0b45c; --ok: #5fd394; color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    background: var(--bg); color: var(--ink); font: 400 16px/1.55 var(--font-body);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 0 4rem;
+  }
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+  .wrap { max-width: 68rem; margin: 0 auto; }
+  h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; line-height: 1.15; }
+  h1 { font-size: clamp(1.9rem, 4.5vw, 2.7rem); letter-spacing: -0.01em; }
+  h2 { font-size: 1.25rem; }
+  h3 { font-size: 1.05rem; }
+  p { margin: 0; }
+  a { color: var(--accent); }
+  button, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .lyric { font-family: var(--font-lyric); }
+  .eyebrow { font-size: .78rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+  header.top { display: grid; gap: .9rem; padding-block: 2.2rem 1.4rem; max-width: 46rem; }
+  .lede { color: var(--muted); font-size: 1.05rem; }
+
+  details.howto { border-block: 1px solid var(--rule); padding-block: 1rem; margin-bottom: 1.4rem; }
+  details.howto summary { cursor: pointer; font-family: var(--font-display); font-weight: 600; font-size: 1.1rem; }
+  .howto-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: 1.6rem 2.4rem; margin-top: 1rem; }
+  .howto-grid > div { min-width: 0; display: grid; gap: .6rem; align-content: start; }
+  .howto ol, .howto ul { margin: 0; padding-left: 1.25rem; display: grid; gap: .45rem; }
+
+  .tabs-bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); border-bottom: 1px solid var(--rule); }
+  .tabs { display: flex; gap: .25rem; overflow-x: auto; min-height: var(--tabs-h); }
+  .tab { appearance: none; background: none; border: 0; border-bottom: 3px solid transparent; padding: .45rem .9rem; cursor: pointer; text-align: left; display: grid; gap: 0; align-content: center; white-space: nowrap; }
+  .tab:hover { background: var(--surface-2); }
+  .tab.on { border-bottom-color: var(--accent); }
+  .tab-name { font-size: 1.1rem; font-weight: 600; line-height: 1.25; }
+  .tab-sub { font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .tab-sub.ok { color: var(--ok); font-weight: 600; }
+
+  .panel { padding-block: 1.6rem; display: grid; gap: 1.4rem; }
+  .song-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: .8rem 1.5rem; }
+  .song-head h2 { font-size: clamp(1.6rem, 3.5vw, 2.1rem); }
+  .meta { color: var(--muted); display: flex; flex-wrap: wrap; gap: .3rem .9rem; margin-top: .3rem; }
+  .btn { appearance: none; border: 1px solid var(--rule); background: var(--surface); border-radius: 8px; padding: .5rem .9rem; cursor: pointer; font-weight: 500; display: inline-flex; align-items: center; gap: .45rem; text-decoration: none; color: var(--ink); }
+  .btn:hover { border-color: var(--accent); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  .btn.small { padding: .3rem .65rem; font-size: .9rem; }
+  .btn svg { width: .9em; height: .9em; fill: currentColor; flex: none; }
+
+  .work { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.6rem; align-items: start; }
+  @media (min-width: 62rem) {
+    .work { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 2.4rem; }
+    .editor { position: sticky; top: calc(var(--tabs-h) + env(safe-area-inset-top, 0px) + 1rem); }
+  }
+  .block { display: grid; gap: .8rem; min-width: 0; }
+  .block-head { display: grid; gap: .2rem; }
+  .block-head p { color: var(--muted); font-size: .95rem; }
+
+  .seg { display: flex; flex-wrap: wrap; gap: .4rem; }
+  .seg-btn { appearance: none; border: 1px solid var(--rule); background: var(--surface); border-radius: 8px; padding: .4rem .75rem; cursor: pointer; font-weight: 600; display: inline-flex; gap: .4rem; align-items: baseline; }
+  .seg-btn small { font-weight: 400; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .seg-btn.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .seg-btn.on small { color: inherit; opacity: .85; }
+  .confirm { border: 1px solid var(--gap); border-radius: 8px; padding: .6rem .8rem; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .8rem; }
+
+  .spots { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; }
+  .spot { padding: .9rem 1rem 1rem; display: grid; gap: .55rem; }
+  .spot + .spot { border-top: 1px solid var(--rule); }
+  .spot-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .4rem .8rem; }
+  .spot-time { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .spot-time span { color: var(--muted); font-weight: 400; margin-left: .4rem; font-size: .9rem; }
+  .choice { display: flex; align-items: baseline; gap: .6rem; padding: .35rem .5rem; border-radius: 8px; cursor: pointer; min-width: 0; }
+  .choice:hover { background: var(--surface-2); }
+  .choice input { margin: 0; flex: none; align-self: center; width: 1.05rem; height: 1.05rem; accent-color: var(--accent); }
+  .choice .snip { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; font-size: 1.1rem; line-height: 1.6; }
+  .choice .plain { flex: 1 1 auto; color: var(--muted); }
+  .labels { display: inline-flex; gap: .25rem; flex: none; }
+  .pill { font-size: .74rem; font-weight: 600; min-width: 1.45rem; text-align: center; padding: .05rem .35rem; border-radius: 99px; background: var(--surface-2); color: var(--muted); }
+  .pill.mine { background: var(--accent); color: var(--accent-ink); }
+  mark { border-radius: 3px; padding: 0 .12em; }
+  mark.diff { background: var(--hi); color: var(--hi-ink); }
+  mark.gap { border: 1px dashed var(--gap); color: var(--gap); font-family: var(--font-body); font-size: .78em; font-style: italic; padding: 0 .4em; margin-inline: .1em; background: none; }
+  mark.gap::before { content: "nothing"; }
+  .skip { color: var(--muted); }
+  .spot-check { margin: 0; padding: .1rem .5rem; font-size: .92rem; }
+  .spot-check.bad { color: var(--gap); font-weight: 600; }
+  .spot-check.good { color: var(--ok); }
+  .save-note { color: var(--muted); font-size: .92rem; }
+  .save-note.warn { color: var(--gap); font-weight: 600; }
+  .steps { margin: 0; padding-left: 1.25rem; display: grid; gap: .35rem; }
+  .legend { font-size: .9rem; color: var(--muted); }
+
+  .editor-card { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: .9rem; display: grid; gap: .7rem; }
+  textarea { width: 100%; background: var(--bg); border: 1px solid var(--rule); border-radius: 8px; padding: .7rem .8rem; resize: vertical; }
+  textarea.sheet { font-family: var(--font-lyric); font-size: 1.1rem; line-height: 1.75; height: min(62vh, 34rem); min-height: 14rem; }
+  textarea.note { min-height: 4.2rem; font-size: 1rem; }
+  textarea.copybox { font-family: var(--font-lyric); height: 9rem; }
+  .editor-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .4rem .8rem; }
+  .counts { color: var(--muted); font-size: .9rem; font-variant-numeric: tabular-nums; }
+  .row { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+  .status { color: var(--ok); font-size: .92rem; }
+  .done-row { display: flex; gap: .6rem; align-items: flex-start; font-weight: 500; cursor: pointer; }
+  .done-row input { margin-top: .3rem; width: 1.1rem; height: 1.1rem; accent-color: var(--ok); flex: none; }
+
+  .send-list { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; }
+  .send-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .3rem 1rem; align-items: center; padding: .8rem 1rem; }
+  .send-row + .send-row { border-top: 1px solid var(--rule); }
+  .send-row .meta { margin: 0; }
+  .ok { color: var(--ok); font-weight: 600; }
+  .warn { color: var(--gap); font-weight: 600; }
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <p class="eyebrow">__EYEBROW__</p>
+    <h1>__TITLE__</h1>
+    <p class="lede">A program will time every Chinese character of these __COUNT_WORD__ songs to the singing. To do that it needs one exact lyric text per song, and the lyric websites disagree with each other. Please turn each text below into the words the singer actually sings in the linked recording.</p>
+  </header>
+
+  <details class="howto" open>
+    <summary>How this works</summary>
+    <div class="howto-grid">
+      <div>
+        <h3>For each song</h3>
+        <ol>
+          <li>Open the recording on YouTube and keep it in another tab. The button is at the top of each song.</li>
+          <li>Start from any version (A, B, C ...). They all differ only in small ways, and the list of spots shows every place they disagree.</li>
+          <li>For each spot, press its play link, listen, and tick the wording you hear. Tick "Can't tell" if you can't hear it. A tick only records what you heard; it does not change your text.</li>
+          <li>Make your text say what you ticked. If it doesn't yet, a warning shows under that spot and goes away once the text matches. If the right wording is neither choice, tick "Neither" and fix the text.</li>
+          <li>Listen through once more, edit the text until it matches the singing from the first line to the last, then tick Done.</li>
+        </ol>
+        <h3>When you are finished</h3>
+        <p>Nothing is sent from this page. Open <b>Send back</b>, press <b>Copy all</b>, and paste what it copies into a message to the person who sent you this link. If copying does not work, use <b>Download .txt</b> and attach the file.</p>
+        <p class="save-note" id="save-note"></p>
+      </div>
+      <div>
+        <h3>What a finished sheet looks like</h3>
+        <ul>
+          <li>One sung phrase per line, the way a karaoke screen would show it.</li>
+          <li>Every repeat written out. A chorus sung three times appears three times.</li>
+          <li>No credits (词, 曲), no titles, no section names such as [Verse].</li>
+          <li>Leave instrumental breaks out. Do not write notes or markers such as "(music break)" inside the sheet. Use the notes box for anything you want to tell us.</li>
+          <li>Keep the script (Simplified or Traditional) of the version you started from. Do not convert it.</li>
+          <li>Keep English words as sung. Short sung syllables such as 喔 count if you hear them clearly. Leave out breaths and humming.</li>
+          <li>When two wordings sound the same (那/哪, 以/已), pick the one that is right for the sentence.</li>
+          <li>Cantonese songs: keep the Cantonese wording as sung, not a Mandarin rewrite.</li>
+        </ul>
+      </div>
+    </div>
+  </details>
+
+  <div class="tabs-bar"><nav class="tabs" id="tabs" role="tablist" aria-label="Songs"></nav></div>
+  <main id="panels"></main>
+</div>
+
+<script>
+const SONGS = __SONGS__;
+const PAGE = __PAGE__;
+const STORE_KEY = PAGE.storeKey;
+const SEND = "send";
+const HAN = /[㐀-䶿一-鿿豈-﫿]/g;
+const IS_HAN = /[㐀-䶿一-鿿豈-﫿]/;
+const IS_ALNUM = /[A-Za-z0-9]/;
+
+/* Han and Latin letters only, Traditional folded to Simplified with the build's own map, so a
+   wording written in the other script, or with other punctuation or line breaks, still matches. */
+function norm(s) {
+  let out = "";
+  for (const ch of s) {
+    if (IS_HAN.test(ch)) out += PAGE.norm[ch] || ch;
+    else if (IS_ALNUM.test(ch)) out += ch.toLowerCase();
+  }
+  return out;
+}
+
+function h(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (k === "class") e.className = v;
+    else if (k === "html") e.innerHTML = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (v === true) e.setAttribute(k, "");
+    else if (v !== false && v != null) e.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) {
+    if (kid == null || kid === false) continue;
+    e.append(kid.nodeType ? kid : document.createTextNode(kid));
+  }
+  return e;
+}
+
+/* ---------- state, kept in this browser only ---------- */
+function startState(song) {
+  return { start: song.versions[0].label, text: song.versions[0].text, answers: {}, done: false, note: "" };
+}
+function loadState() {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(STORE_KEY) || "{}"); } catch (e) { saved = {}; }
+  const state = { active: saved.active || SONGS[0].id, songs: {} };
+  for (const s of SONGS) state.songs[s.id] = Object.assign(startState(s), (saved.songs || {})[s.id] || {});
+  return state;
+}
+const state = loadState();
+let canStore = true;
+let savedAt = null;
+try { localStorage.setItem(STORE_KEY + ":probe", "1"); localStorage.removeItem(STORE_KEY + ":probe"); } catch (e) { canStore = false; }
+function renderSaveNote() {
+  const when = savedAt ? savedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+  document.querySelectorAll(".save-note").forEach((el) => {
+    el.classList.toggle("warn", !canStore);
+    el.textContent = canStore
+      ? "Your work saves in this browser on this device as you go" + (when ? " (last saved " + when + ")" : "") + ". It will not be there in another browser or on another device."
+      : "This browser cannot keep your work between visits. Keep this tab open, and send your sheets from Send back before you close it.";
+  });
+}
+let saveTimer = 0;
+function save() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); savedAt = new Date(); } catch (e) { canStore = false; }
+    renderSaveNote();
+  }, 250);
+}
+
+/* ---------- text helpers ---------- */
+const sheetText = (id) => state.songs[id].text.split("\n").map((l) => l.trim()).filter(Boolean).join("\n");
+const countHan = (t) => (t.match(HAN) || []).length;
+function plain(markup) {
+  const d = document.createElement("div");
+  d.innerHTML = markup.replace(/<mark[^>]*>/g, "[").replace(/<\/mark>/g, "]");
+  return d.textContent;
+}
+/* The index of the n-th (from 0) place hay holds needle, or -1: a chorus repeats the same words,
+   so a wording counts only if it is there as many times over as it is at this spot in the song. */
+function nthIndex(hay, needle, n) {
+  let pos = -1;
+  for (let k = 0; k <= n; k++) {
+    pos = hay.indexOf(needle, pos + 1);
+    if (pos < 0) return -1;
+  }
+  return pos;
+}
+/* true: the text has the wording ticked at this spot; false: it does not; null: nothing to check */
+function spotCheck(song, i) {
+  const st = state.songs[song.id];
+  const a = st.answers[i];
+  if (a === undefined || a === "other" || a === "unsure") return null;
+  const v = song.spots[i].variants[+a];
+  return v.chk ? nthIndex(norm(st.text), v.chk, v.nth) >= 0 : null;
+}
+const mismatches = (song) => song.spots.map((_, i) => i).filter((i) => spotCheck(song, i) === false);
+
+function notesText(song) {
+  const st = state.songs[song.id];
+  const out = song.spots.map((sp, i) => {
+    const a = st.answers[i];
+    const what = a === undefined ? "not answered" : a === "other" ? "neither, fixed in the text" : a === "unsure" ? "can't tell" : "heard " + plain(sp.variants[+a].html);
+    return `[${sp.at}] ${what}` + (spotCheck(song, i) === false ? " (the sheet text does not have this wording)" : "");
+  });
+  if (st.note.trim()) out.push("", st.note.trim());
+  return out.join("\n");
+}
+function everything() {
+  return SONGS.map((s) => {
+    const st = state.songs[s.id];
+    return [
+      `=== ${s.id} | ${s.name} | ${st.done ? "marked done" : "NOT marked done"} | sheet ===`,
+      sheetText(s.id), "",
+      `=== ${s.id} | ${s.name} | notes ===`,
+      notesText(s) || "(none)", "",
+    ].join("\n");
+  }).join("\n");
+}
+
+/* ---------- copy and download ---------- */
+let downloads = null;
+if (window.claude && window.claude.use) {
+  window.claude.use("downloads").then((d) => { downloads = d; document.querySelectorAll("[data-download]").forEach((b) => { b.hidden = !d; }); }).catch(() => {});
+}
+async function copyOut(text, box, status) {
+  try {
+    await navigator.clipboard.writeText(text);
+    status.textContent = "Copied.";
+  } catch (e) {
+    box.hidden = false;
+    box.value = text;
+    box.focus();
+    box.select();
+    status.textContent = "Your browser blocked the copy button. The text is selected below: press Ctrl+C (Command+C on a Mac).";
+  }
+}
+async function saveOut(filename, text, status) {
+  try {
+    await downloads.save({ filename, data: text });
+    status.textContent = "Saved.";
+  } catch (e) {
+    status.textContent = e && e.code === "declined" ? "" : "The file could not be saved here. Use Copy instead.";
+  }
+}
+function outButtons(getText, filename, label) {
+  const box = h("textarea", { class: "copybox", readonly: true, hidden: true, "aria-label": "Text to copy" });
+  const status = h("span", { class: "status", role: "status" });
+  const row = h("div", { class: "row" },
+    h("button", { type: "button", class: "btn small", onclick: () => copyOut(getText(), box, status) }, "Copy " + label),
+    h("button", { type: "button", class: "btn small", "data-download": true, hidden: !downloads, onclick: () => saveOut(filename, getText(), status) }, "Download .txt"),
+    status);
+  return [row, box];
+}
+
+/* ---------- tabs ---------- */
+const tabsEl = document.getElementById("tabs");
+const panelsEl = document.getElementById("panels");
+const refs = {};
+
+function progress(song) {
+  const st = state.songs[song.id];
+  return { answered: Object.keys(st.answers).length, total: song.spots.length, done: st.done, fix: mismatches(song).length };
+}
+function renderTabs() {
+  const tabs = SONGS.map((s) => {
+    const p = progress(s);
+    return h("button", { type: "button", role: "tab", class: "tab" + (state.active === s.id ? " on" : ""), "aria-selected": String(state.active === s.id), onclick: () => activate(s.id) },
+      h("span", { class: "tab-name lyric" }, s.name),
+      h("span", { class: "tab-sub" + (p.done ? " ok" : p.fix ? " warn" : "") }, p.done ? "Done" : `${p.answered}/${p.total} spots` + (p.fix ? `, ${p.fix} to fix` : "")));
+  });
+  const doneCount = SONGS.filter((s) => state.songs[s.id].done).length;
+  tabs.push(h("button", { type: "button", role: "tab", class: "tab" + (state.active === SEND ? " on" : ""), "aria-selected": String(state.active === SEND), onclick: () => activate(SEND) },
+    h("span", { class: "tab-name" }, "Send back"),
+    h("span", { class: "tab-sub" }, `${doneCount}/${SONGS.length} done`)));
+  tabsEl.replaceChildren(...tabs);
+}
+function activate(id) {
+  state.active = id;
+  save();
+  if (id === SEND) renderSend();
+  for (const [key, panel] of Object.entries(refs)) panel.hidden = key !== id;
+  renderTabs();
+  window.scrollTo({ top: Math.max(0, tabsEl.getBoundingClientRect().top + window.scrollY - 8) });
+}
+
+/* ---------- one song ---------- */
+const playIcon = () => h("span", { html: '<svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1.5 0.5v9l8-4.5z"/></svg>' });
+
+function choice(name, value, checked, content, aside, onchange) {
+  const input = h("input", { type: "radio", name, value, checked, onchange });
+  return h("label", { class: "choice" }, input, content, aside);
+}
+
+function updateChecks(song, host) {
+  const els = host.querySelectorAll(".spot-check");
+  song.spots.forEach((_, i) => {
+    const r = spotCheck(song, i);
+    els[i].hidden = r === null;
+    els[i].className = "spot-check " + (r === false ? "bad" : "good");
+    els[i].textContent = r === false
+      ? "Your text does not have this wording yet. Change the text to match what you ticked, or tick Neither."
+      : "Your text has this wording.";
+  });
+}
+
+function renderSpots(song, host, onTick) {
+  const st = state.songs[song.id];
+  host.replaceChildren(...song.spots.map((sp, i) => {
+    const name = `spot-${song.id}-${i}`;
+    const pick = (value) => () => { st.answers[i] = value; save(); renderTabs(); onTick(); };
+    const rows = sp.variants.map((v, k) => choice(name, String(k), st.answers[i] === String(k),
+      h("span", { class: "snip lyric", html: v.html }),
+      h("span", { class: "labels", title: "Versions that have this wording" }, v.labels.map((l) => h("span", { class: "pill" + (l === st.start ? " mine" : "") }, l))),
+      pick(String(k))));
+    rows.push(choice(name, "other", st.answers[i] === "other", h("span", { class: "plain" }, "Neither. I fixed it in the text"), null, pick("other")));
+    rows.push(choice(name, "unsure", st.answers[i] === "unsure", h("span", { class: "plain" }, "Can't tell"), null, pick("unsure")));
+    return h("div", { class: "spot" },
+      h("div", { class: "spot-head" },
+        h("div", { class: "spot-time" }, "Around " + sp.at),
+        h("a", { class: "btn small", href: `${song.url}&t=${sp.t}s`, target: "_blank", rel: "noopener" }, playIcon(), `Play from ${Math.floor(sp.t / 60)}:${String(sp.t % 60).padStart(2, "0")}`)),
+      h("div", {}, rows),
+      h("p", { class: "spot-check", hidden: true, role: "status" }));
+  }));
+  updateChecks(song, host);
+}
+
+function buildPanel(song) {
+  const st = state.songs[song.id];
+  const live = {};
+
+  const refreshCounts = () => {
+    const t = sheetText(song.id);
+    live.counts.textContent = `${t ? t.split("\n").length : 0} lines, ${countHan(t)} Chinese characters`;
+  };
+  let lastFix = -1;
+  const recheck = () => {
+    updateChecks(song, live.spots);
+    const n = mismatches(song).length;
+    live.doneNote.hidden = n === 0;
+    live.doneNote.textContent = `${n} ${n === 1 ? "spot still disagrees" : "spots still disagree"} with your text.`;
+    if (n !== lastFix) { lastFix = n; renderTabs(); }
+  };
+  let recheckTimer = 0;
+  const recheckSoon = () => { clearTimeout(recheckTimer); recheckTimer = setTimeout(recheck, 200); };
+  const load = (label) => {
+    st.start = label;
+    st.text = song.versions.find((v) => v.label === label).text;
+    live.sheet.value = st.text;
+    live.confirm.hidden = true;
+    refreshSeg();
+    renderSpots(song, live.spots, recheck);
+    refreshCounts();
+    recheck();
+    save();
+  };
+  const dirty = () => st.text !== song.versions.find((v) => v.label === st.start).text;
+  const refreshSeg = () => live.seg.querySelectorAll(".seg-btn").forEach((b) => {
+    const on = b.dataset.label === st.start;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-pressed", String(on));
+  });
+  const choose = (label) => {
+    if (label === st.start) return;
+    if (!dirty()) return load(label);
+    live.confirm.hidden = false;
+    live.confirmText.textContent = `Replace your edits with version ${label}?`;
+    live.replace.onclick = () => load(label);
+  };
+
+  live.seg = h("div", { class: "seg", role: "group", "aria-label": "Starting version" },
+    song.versions.map((v) => h("button", { type: "button", class: "seg-btn", "data-label": v.label, onclick: () => choose(v.label) },
+      v.label, h("small", {}, `${v.text.split("\n").length} lines`))));
+  live.confirmText = h("span");
+  live.replace = h("button", { type: "button", class: "btn small" }, "Replace");
+  live.confirm = h("div", { class: "confirm", hidden: true }, live.confirmText, live.replace,
+    h("button", { type: "button", class: "btn small", onclick: () => { live.confirm.hidden = true; } }, "Keep my edits"));
+  live.spots = h("div", { class: "spots" });
+  live.sheet = h("textarea", { class: "sheet", id: `sheet-${song.id}`, lang: "zh", spellcheck: "false", "aria-label": `Lyric sheet for ${song.name}`,
+    oninput: (e) => { st.text = e.target.value; refreshCounts(); save(); recheckSoon(); } });
+  live.sheet.value = st.text;
+  live.counts = h("span", { class: "counts" });
+  live.doneNote = h("p", { class: "spot-check bad", hidden: true, role: "status" });
+  live.note = h("textarea", { class: "note", id: `note-${song.id}`, "aria-label": "Notes", placeholder: "Anything the sender should know, such as a line you couldn't make out (optional).",
+    oninput: (e) => { st.note = e.target.value; save(); } });
+  live.note.value = st.note;
+  const done = h("input", { type: "checkbox", id: `done-${song.id}`, checked: st.done, onchange: (e) => { st.done = e.target.checked; save(); renderTabs(); } });
+  const [outRow, outBox] = outButtons(() => sheetText(song.id), `${song.id}.txt`, "this sheet");
+
+  const panel = h("section", { class: "panel", role: "tabpanel", hidden: state.active !== song.id },
+    h("div", { class: "song-head" },
+      h("div", {},
+        h("p", { class: "eyebrow" }, `${song.language} song`),
+        h("h2", { class: "lyric" }, song.name),
+        h("div", { class: "meta" }, h("span", {}, song.artist), h("span", {}, `${song.versions.length} versions, ${song.spots.length} spots to check`))),
+      h("a", { class: "btn primary", href: song.url, target: "_blank", rel: "noopener" }, playIcon(), "Open on YouTube")),
+    h("div", { class: "work" },
+      h("div", { class: "block" },
+        h("div", { class: "block-head" },
+          h("h3", {}, "1. Pick a starting version"),
+          h("p", {}, "Version A is loaded first only because it is first in the list. Any version works as a start.")),
+        live.seg, live.confirm,
+        h("div", { class: "block-head" },
+          h("h3", {}, "2. Check these spots"),
+          h("p", { class: "legend" }, "Each spot is a place where the versions disagree. ", h("mark", { class: "diff" }, "Highlighted"), " is the difference. The letters are the versions that have that wording; the filled letter is the one in your editor. Tick the wording you hear. A tick does not change your text; if the text disagrees with a tick, a warning shows under that spot.")),
+        live.spots),
+      h("div", { class: "block editor" },
+        h("div", { class: "block-head" },
+          h("h3", {}, "3. Edit until it matches the singing"),
+          h("p", {}, "Listen through once with this text in front of you. Fix wording, add missing repeats, delete anything not sung.")),
+        h("div", { class: "editor-card" },
+          live.sheet,
+          h("div", { class: "editor-foot" }, live.counts, outRow),
+          outBox,
+          h("label", { class: "done-row", for: `done-${song.id}` }, done, "I listened through, and this sheet matches the singing."),
+          live.doneNote,
+          live.note))));
+  renderSpots(song, live.spots, recheck);
+  refreshSeg();
+  refreshCounts();
+  recheck();
+  return panel;
+}
+
+/* ---------- send back ---------- */
+function buildSend() {
+  const panel = h("section", { class: "panel", role: "tabpanel", hidden: state.active !== SEND });
+  refs[SEND] = panel;
+  return panel;
+}
+function renderSend() {
+  const rows = SONGS.map((s) => {
+    const p = progress(s);
+    const t = sheetText(s.id);
+    return h("div", { class: "send-row" },
+      h("div", {}, h("div", { class: "lyric", style: "font-weight:600;font-size:1.1rem" }, s.name),
+        h("div", { class: "meta" }, h("span", {}, `${t ? t.split("\n").length : 0} lines, ${countHan(t)} characters`), h("span", {}, `${p.answered} of ${p.total} spots answered`),
+          p.fix ? h("span", { class: "warn" }, `${p.fix} ${p.fix === 1 ? "spot disagrees" : "spots disagree"} with the text`) : null)),
+      h("span", { class: p.done ? "ok" : "warn" }, p.done ? "Done" : "Not marked done"));
+  });
+  const text = everything();
+  const box = h("textarea", { class: "copybox", id: "all-text", readonly: true, "aria-label": "All sheets", onfocus: (e) => e.target.select() });
+  box.value = text;
+  box.style.height = "16rem";
+  const status = h("span", { class: "status", role: "status" });
+  refs[SEND].replaceChildren(
+    h("div", { class: "block-head" }, h("h2", {}, "Send back"),
+      h("p", {}, "Nothing is sent from this page. Your answers and sheets only leave it when you copy them and send them yourself:")),
+    h("ol", { class: "steps" },
+      h("li", {}, "Check that each song below says Done. You can go back to a song and keep editing first."),
+      h("li", {}, "Press Copy all. If it will not copy, use Download .txt, or select the text in the box at the bottom and copy it by hand."),
+      h("li", {}, "Paste it into a message to the person who sent you this link, and send that message.")),
+    h("p", { class: "save-note" }),
+    h("div", { class: "send-list" }, rows),
+    h("div", { class: "row" },
+      h("button", { type: "button", class: "btn primary", onclick: () => copyOut(everything(), box, status) }, "Copy all"),
+      h("button", { type: "button", class: "btn", "data-download": true, hidden: !downloads, onclick: () => saveOut("lyric-sheets.txt", everything(), status) }, "Download .txt"),
+      status),
+    box);
+  renderSaveNote();
+}
+
+/* ---------- start ---------- */
+for (const s of SONGS) { const p = buildPanel(s); refs[s.id] = p; panelsEl.append(p); }
+panelsEl.append(buildSend());
+if (state.active !== SEND && !SONGS.some((s) => s.id === state.active)) state.active = SONGS[0].id;
+if (state.active === SEND) renderSend();
+for (const [key, panel] of Object.entries(refs)) panel.hidden = key !== state.active;
+renderTabs();
+renderSaveNote();
+</script>

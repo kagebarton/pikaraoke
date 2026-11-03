@@ -1,16 +1,19 @@
-"""Phase 0b aid: whisper transcript of each pilot vocal stem, to help Ken narrow the lyric candidates.
+"""Phase 0b aid: whisper transcript of each vocal stem, to help Ken narrow the lyric candidates.
 
 Saves <PROBE_ROOT>/phase0/transcripts/<video_id>.json (segments with times) and .txt
 (one segment per line). Whisper runs with the song's language and no previous-text
 conditioning, so one hallucinated segment cannot steer the rest. Raw output only;
-phase0b_score.py compares it with the candidate sheets. Run only while the
-pipeline is idle (one GPU job at a time).
+phase0b_score.py and phase0b_worksheet.py compare it with the candidate sheets. A song whose
+transcript exists is skipped. Run only while the pipeline is idle (one GPU job at a time).
 
-Run: uv run python scripts/zh_probe/phase0b_transcribe.py
+Run (PowerShell, from the repo root):
+  $env:PYTHONUTF8 = "1"
+  uv run python scripts/zh_probe/phase0b_transcribe.py [--songs 3,4,5,6,7,8,10,12,13,14,15,16]
 """
 
 from __future__ import annotations
 
+import argparse
 import gc
 import json
 import subprocess
@@ -23,10 +26,9 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from corpus import PILOT, PROBE_ROOT, find_in_library  # noqa: E402
+from corpus import PROBE_ROOT, REST, WHISPER_PATH, find_in_library  # noqa: E402
 
 OUT_DIR = PROBE_ROOT / "phase0" / "transcripts"
-WHISPER_PATH = Path("c:/temp/Github/pikaraoke/models/large-v3-turbo.pt")
 SAMPLE_RATE = 16000
 
 
@@ -43,9 +45,15 @@ def load_stem(video_id: str) -> np.ndarray:
 def main() -> None:
     import stable_whisper
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--songs", default=",".join(str(s.num) for s in REST))
+    args = parser.parse_args()
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     model = stable_whisper.load_model(str(WHISPER_PATH), device="cuda")
-    for song in PILOT:
+    for song in [s for s in REST if str(s.num) in args.songs.split(",")]:
+        if (OUT_DIR / f"{song.video_id}.json").exists():
+            print(f"#{song.num} {song.title}: transcript exists, skipped", flush=True)
+            continue
         audio = load_stem(song.video_id)
         t0 = time.perf_counter()
         result = model.transcribe(
