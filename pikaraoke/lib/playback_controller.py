@@ -58,7 +58,6 @@ class PlaybackController:
     now_playing_subs_available: dict[str, bool] | None = None  # set in __init__
     now_playing_dual_stem: bool = False
     now_playing_vocal_volume: float = 0.0
-    is_paused: bool = True
     is_playing: bool = False
 
     def __init__(
@@ -88,6 +87,11 @@ class PlaybackController:
         self._get_queue_preview: Callable[[], tuple[QueuedSong, ...]] = lambda: ()
         # Subtitle availability (mutable dict, not class-level default)
         self.now_playing_subs_available: dict[str, bool] = {"ass": False, "srt": False}
+
+    @property
+    def is_paused(self) -> bool:
+        """mpv's pause state; a second copy here drifted (restart left it inverted)."""
+        return self.mpv.is_paused
 
     def play_file(self, file_path: str, user: str, semitones: int = 0) -> PlaybackResult:
         """Start playback of a media file. Non-blocking -- MPV plays immediately.
@@ -149,7 +153,6 @@ class PlaybackController:
             }
             self.now_playing_dual_stem = vocal_path is not None and nonvocal_path is not None
             self.now_playing_vocal_volume = vocal_volume
-            self.is_paused = False
             self.is_playing = True
 
             try:
@@ -308,12 +311,6 @@ class PlaybackController:
         """
         if self.is_playing:
             self.mpv.toggle_pause()
-            # Track pause state on the controller as the deterministic source for
-            # callers like the /pause route. Deriving it from the toggle (rather than
-            # reading self.mpv.is_paused) avoids a race: the _on_pause observer that
-            # updates mpv.is_paused runs on mpv's event thread and may not have fired
-            # yet, which would broadcast/notify the inverted state.
-            self.is_paused = not self.is_paused
             if self.is_paused:
                 self.events.emit("notification", _("Pause: %s") % self.now_playing, "info")
             else:
@@ -355,7 +352,6 @@ class PlaybackController:
         self.now_playing_subs_available = {"ass": False, "srt": False}
         self.now_playing_dual_stem = False
         self.now_playing_vocal_volume = 0.0
-        self.is_paused = True
         self.is_playing = False
 
     def build_overlay_state(self) -> OverlayState:

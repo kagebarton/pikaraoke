@@ -80,17 +80,19 @@ def test_toggle_pause_noop_when_player_not_running():
     assert c.toggle_pause() is None  # _safe short-circuits, no crash
 
 
-def test_on_pause_observer_updates_state(controller):
-    controller._on_pause("pause", True)
+def test_toggle_pause_records_new_state_before_returning(controller):
+    """Regression: a now_playing push sent right after the toggle carried the old state."""
+    controller._player.pause = False
+
+    def cycle(_name):
+        controller._player.pause = not controller._player.pause
+
+    controller._player.cycle.side_effect = cycle
+
+    controller.toggle_pause()
     assert controller.is_paused is True
-    controller._on_pause("pause", False)
+    controller.toggle_pause()
     assert controller.is_paused is False
-
-
-def test_on_pause_observer_ignores_none(controller):
-    controller.is_paused = True
-    controller._on_pause("pause", None)
-    assert controller.is_paused is True
 
 
 # ── Property / playback setters ───────────────────────────────────────────────
@@ -102,9 +104,11 @@ def test_seek_issues_absolute_seek(controller):
 
 
 def test_restart_seeks_zero_and_unpauses(controller):
+    controller.is_paused = True
     controller.restart()
     controller._player.command.assert_called_once_with("seek", 0, "absolute")
     assert controller._player.pause is False
+    assert controller.is_paused is False
 
 
 def test_set_subtitle_delay_sets_property_and_state(controller):

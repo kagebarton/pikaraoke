@@ -108,6 +108,8 @@ class MpvController:
         self.position: float = 0.0
         self.duration: float = 0.0
         self.is_idle: bool = True
+        # Not observed: written wherever this class sets mpv's pause, so a
+        # caller reading it right after a change never sees the old value.
         self.is_paused: bool = False
 
         # OSD dimensions (coalesced from two observers)
@@ -248,7 +250,6 @@ class MpvController:
         p.observe_property("time-pos", self._on_time_pos)
         p.observe_property("duration", self._on_duration)
         p.observe_property("idle-active", self._on_idle_active)
-        p.observe_property("pause", self._on_pause)
         p.observe_property("osd-width", self._on_osd_dim)
         p.observe_property("osd-height", self._on_osd_dim)
 
@@ -321,13 +322,6 @@ class MpvController:
                     self._on_song_end()
         except Exception:
             log.exception("_on_idle_active error")
-
-    def _on_pause(self, _name, value):
-        try:
-            if value is not None:
-                self.is_paused = bool(value)
-        except Exception:
-            log.exception("_on_pause error")
 
     def _on_osd_dim(self, name, value):
         # Each observer delivers one dimension at a time. Coalesce into a pair
@@ -505,8 +499,9 @@ class MpvController:
 
     @_safe
     def toggle_pause(self) -> None:
-        """Toggle pause state. is_paused is updated by _on_pause observer."""
+        """Toggle pause state, reading the result back from mpv."""
         self._player.cycle("pause")
+        self.is_paused = bool(self._player.pause)
 
     @_safe
     def set_pitch(self, semitones: int) -> None:
@@ -639,6 +634,7 @@ class MpvController:
         """Seek to 0 and unpause."""
         self._player.command("seek", 0, "absolute")
         self._player.pause = False
+        self.is_paused = False
 
     # ── Overlay rendering ─────────────────────────────────────────────────────
 

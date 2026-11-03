@@ -74,7 +74,6 @@ class TestPlaybackControllerInit:
         assert pc.now_playing is None
         assert pc.now_playing_filename is None
         assert pc.now_playing_user is None
-        assert pc.is_paused is True
         assert pc.is_playing is False
 
 
@@ -98,7 +97,6 @@ class TestPlaybackControllerPlayFile:
         assert pc.now_playing_user == "TestUser"
         assert pc.now_playing_transpose == 2
         assert pc.now_playing_duration == 180
-        assert pc.is_paused is False
         assert pc.is_playing is True
         mock_mpv.play.assert_called_once()
         # State is set before mpv.play and tick_overlays called once after
@@ -247,32 +245,37 @@ class TestPlaybackControllerPause:
         mock_mpv.toggle_pause.assert_called_once()
 
     @patch("flask_babel._", side_effect=lambda x: x)
-    def test_pause_toggles_controller_state_independently_of_mpv_lag(
+    def test_pause_reports_mpv_state_after_restart_while_paused(
         self, mock_gettext, test_prefs, mock_mpv
     ):
-        """is_paused must track on the controller, not the lagged mpv observer.
-
-        Regression: the /pause route reads pc.is_paused to choose its broadcast,
-        and the notification must not depend on self.mpv.is_paused, which the
-        _on_pause observer updates only later (and which we pin stale here).
+        """Regression: restart unpaused mpv but not the controller's own copy, so
+        the next pause said "Resume" and every later push had the icon inverted.
         """
         events = EventSystem()
         notes: list[str] = []
+        pushed: list[bool] = []
         events.on("notification", lambda msg, level: notes.append(msg))
         filename_fn = lambda x, remove_youtube_id=True: x
 
         pc = PlaybackController(test_prefs, events, filename_fn, mock_mpv)
+        events.on("now_playing_update", lambda: pushed.append(pc.get_now_playing()["is_paused"]))
         pc.is_playing = True
-        pc.is_paused = False
-        mock_mpv.is_paused = False  # observer hasn't fired -> stays stale
 
-        pc.pause()  # play -> pause
-        assert pc.is_paused is True
-        assert notes[-1].startswith("Pause:")
+        def toggle():
+            mock_mpv.is_paused = not mock_mpv.is_paused
 
-        pc.pause()  # pause -> resume
-        assert pc.is_paused is False
-        assert notes[-1].startswith("Resume:")
+        def restart():
+            mock_mpv.is_paused = False
+
+        mock_mpv.toggle_pause.side_effect = toggle
+        mock_mpv.restart.side_effect = restart
+
+        pc.pause()
+        assert (pushed[-1], notes[-1].split(":")[0]) == (True, "Pause")
+
+        pc.restart()
+        pc.pause()
+        assert (pushed[-1], notes[-1].split(":")[0]) == (True, "Pause")
 
     def test_pause_when_not_playing(self, test_prefs, mock_mpv):
         """Test pause when nothing is playing."""
@@ -322,14 +325,12 @@ class TestPlaybackControllerResetNowPlaying:
         pc.now_playing = "Test Song"
         pc.now_playing_user = "TestUser"
         pc.is_playing = True
-        pc.is_paused = False
 
         pc.reset_now_playing()
 
         assert pc.now_playing is None
         assert pc.now_playing_user is None
         assert pc.is_playing is False
-        assert pc.is_paused is True
 
 
 class TestPlaybackControllerNewMethods:
