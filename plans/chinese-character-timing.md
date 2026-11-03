@@ -20,9 +20,10 @@ precision does not fit beside the running app, so both languages run at full
 precision in Phase 2 and Phase 3 records the fallback; Ken's four fp16 calls
 are *as is*, no worse than Phase 1 (they bear on the fallback, not on Z1b).
 Phase 0b's fetch for the twelve non-pilot songs ran on the VM 2026-11-03 (see Results
-log); Ken's sheets for them, and his Phase 0a, are open.
+log); Ken's sheets for them are open. His Phase 0a for them is in (read off the library
+the same day, see Results log).
 The worksheet builder for them was built and tested on the pilot the same day; it waits
-for Phase 0a and a GPU transcribe (see Results log).
+for a GPU transcribe (see Results log).
 
 ## Why now, and what this replaces
 
@@ -1518,3 +1519,35 @@ runtime).
 3. Executor builds the two pages with `phase0b_worksheet.py --tag mandarin --songs 3,4,5,6,7,8`
    and `--tag cantonese --songs 10,12,13,14,15,16`, publishes each as an artifact, and
    records the build tables here.
+
+### 2026-11-03 — Phase 0a for the twelve, read off the library (Sonnet 5.5)
+
+Ken reported "the 12 songs have been added". Read from the library on disk
+(`/home/ken/shared-drives/D:/Shared/pikaraoke-songs`), same columns as the pilot's 0a table.
+Language labels are the `lang` field in `scripts/zh_probe/corpus.py`; video seconds are
+`ffprobe` `format=duration` of the `.mp4`.
+
+| # | video id | lang label | video s | `vocal/` stem | stem bytes | stem written |
+|---|---|---|---|---|---|---|
+| 3 | `OR-0wptI_u0` | zh | 204.6 | yes | 5403320 | 13:08 |
+| 4 | `ocDo3ySyHSI` | zh | 271.4 | yes | 7591440 | 13:12 |
+| 5 | `IgvDMB5fR-8` | zh | 208.4 | yes | 6804831 | 13:17 |
+| 6 | `m4nu_F_9dWU` | zh | 206.6 | yes | 4852329 | 13:23 |
+| 7 | `JM9rx_hN1Ko` | zh | 204.2 | yes | 5289432 | 13:27 |
+| 8 | `RIq7Tz9nYD8` | zh | 260.0 | yes | 7538600 | 13:30 |
+| 10 | `7qeShSmmsNg` | yue | 259.1 | yes | 7878269 | 13:37 |
+| 12 | `UmTB6E5mU5w` | yue | 318.9 | yes | 8744245 | 13:42 |
+| 13 | `CvKvXNiXQZc` | yue | 217.0 | yes | 4954585 | 13:46 |
+| 14 | `tDw_ULjZWA8` | yue | 259.9 | yes | 6758323 | 13:55 |
+| 15 | `U_EgeFUTbW4` | yue | 261.1 | yes | 7087674 | 14:00 |
+| 16 | `cPKfUWDmNbo` | yue | 212.7 | yes | 5866158 | 14:05 |
+
+All times are 2026-11-03. Each id also has, in the library: the `.mp4`, a
+`nonvocal/...---nonvocal.m4a`, a `karaoke/...ass`, a `subtitles/...srt` and a
+`subtitles/...srt.generated`. None has a `lyrics/...lrc`, a `dereverb/` file or an
+`alignment_debug/` json (the pilot's #1 has all three). `add_songs` logs were not looked at.
+
+Transcripts: `zh_probe/phase0/transcripts/` holds only the four pilot ids
+(`8NJVNkzhJM4`, `DYptgVvkVLQ`, `qu_FSptjRic`, `RPWDeLqsN0g`, each `.json` and `.txt`); none for
+the twelve. The worksheet pages are still waiting on Ken's Windows run of
+`phase0b_transcribe.py`.
