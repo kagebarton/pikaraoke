@@ -1,6 +1,8 @@
 """Socket.IO event handlers for PiKaraoke."""
 
 
+from flask_socketio import emit
+
 from pikaraoke.lib.current_app import get_karaoke_instance
 
 
@@ -10,6 +12,16 @@ def setup_socket_events(socketio):
     Args:
         socketio: The SocketIO instance.
     """
+
+    @socketio.on("connect")
+    def connect() -> None:
+        """Send the connecting client the current playback state.
+
+        A phone whose socket dropped and reconnected missed every now_playing
+        push in between, and would show stale pause state and song length
+        until the next one.
+        """
+        emit("now_playing", get_karaoke_instance().get_now_playing())
 
     @socketio.on("end_song")
     def end_song(reason: str) -> None:
