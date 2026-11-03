@@ -73,6 +73,112 @@ PILOT = (
     ),
 )
 
+# The other twelve corpus songs (plan "Corpus" table). Only Phase 0b's fetch uses them so far.
+REST = (
+    Song(
+        3,
+        "OR-0wptI_u0",
+        "zh",
+        "周杰倫 雙截棍",
+        (("雙截棍", "周杰倫"), ("双截棍", "周杰伦"), ("Nunchucks", "Jay Chou")),
+        ("周杰倫 雙截棍", "Jay Chou 雙截棍"),
+        netease_ids=(186137,),
+    ),
+    Song(
+        4,
+        "ocDo3ySyHSI",
+        "zh",
+        "周杰倫 & 費玉清 千里之外",
+        (("千里之外", "周杰倫"), ("千里之外", "周杰伦"), ("Thousand Miles", "Jay Chou")),
+        ("周杰倫 千里之外", "Jay Chou 千里之外"),
+        netease_ids=(185880,),
+    ),
+    Song(
+        5,
+        "IgvDMB5fR-8",
+        "zh",
+        "鄧麗君 月亮代表我的心",
+        (
+            ("月亮代表我的心", "鄧麗君"),
+            ("月亮代表我的心", "邓丽君"),
+            ("The Moon Represents My Heart", "Teresa Teng"),
+        ),
+        ("鄧麗君 月亮代表我的心", "Teresa Teng 月亮代表我的心"),
+    ),
+    Song(
+        6,
+        "m4nu_F_9dWU",
+        "zh",
+        "孫燕姿 遇見",
+        (("遇見", "孫燕姿"), ("遇见", "孙燕姿"), ("Yu Jian", "Stefanie Sun")),
+        ("孫燕姿 遇見", "Stefanie Sun 遇見"),
+    ),
+    Song(
+        7,
+        "JM9rx_hN1Ko",
+        "zh",
+        "陳奕迅 十年",
+        (("十年", "陳奕迅"), ("十年", "陈奕迅"), ("Ten Years", "Eason Chan")),
+        ("陳奕迅 十年", "Eason Chan 十年"),
+    ),
+    Song(
+        8,
+        "RIq7Tz9nYD8",
+        "zh",
+        "陳奕迅 愛情轉移",
+        (("愛情轉移", "陳奕迅"), ("爱情转移", "陈奕迅"), ("Love Transfer", "Eason Chan")),
+        ("陳奕迅 愛情轉移", "Eason Chan 愛情轉移"),
+    ),
+    Song(
+        10,
+        "7qeShSmmsNg",
+        "yue",
+        "陳奕迅 富士山下",
+        (("富士山下", "陳奕迅"), ("富士山下", "陈奕迅"), ("Under Mount Fuji", "Eason Chan")),
+        ("陳奕迅 富士山下", "Eason Chan 富士山下"),
+    ),
+    Song(
+        12,
+        "UmTB6E5mU5w",
+        "yue",
+        "張國榮 風繼續吹",
+        (("風繼續吹", "張國榮"), ("风继续吹", "张国荣"), ("Wind Blows On", "Leslie Cheung")),
+        ("張國榮 風繼續吹", "Leslie Cheung 風繼續吹"),
+    ),
+    Song(
+        13,
+        "CvKvXNiXQZc",
+        "yue",
+        "楊千嬅 少女的祈禱",
+        (("少女的祈禱", "楊千嬅"), ("少女的祈祷", "杨千嬅"), ("Prayer", "Miriam Yeung")),
+        ("楊千嬅 少女的祈禱", "Miriam Yeung 少女的祈禱"),
+    ),
+    Song(
+        14,
+        "tDw_ULjZWA8",
+        "yue",
+        "王菲 容易受傷的女人 (粵語版)",
+        (("容易受傷的女人", "王菲"), ("容易受伤的女人", "王菲"), ("Vulnerable Woman", "Faye Wong")),
+        ("王菲 容易受傷的女人", "Faye Wong 容易受傷的女人"),
+    ),
+    Song(
+        15,
+        "U_EgeFUTbW4",
+        "yue",
+        "林子祥 男兒當自強",
+        (("男兒當自強", "林子祥"), ("男儿当自强", "林子祥"), ("男兒當自強", "George Lam")),
+        ("林子祥 男兒當自強", "George Lam 男兒當自強"),
+    ),
+    Song(
+        16,
+        "cPKfUWDmNbo",
+        "yue",
+        "Twins 下一站天后",
+        (("下一站天后", "Twins"), ("下一站天后", "TWINS"), ("Next Stop", "Twins")),
+        ("Twins 下一站天后", "下一站天后"),
+    ),
+)
+
 
 def find_in_library(video_id: str, subdir: str | None = None) -> list[Path]:
     """Files whose name carries the 11-char id, under the library or one of its subfolders."""

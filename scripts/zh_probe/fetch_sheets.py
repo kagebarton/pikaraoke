@@ -1,15 +1,22 @@
-"""Phase 0b: fetch every lyric source for the pilot songs and save each raw, side by side.
+"""Phase 0b: fetch every lyric source for the non-pilot songs and save each raw, side by side.
 
 Writes, per song, <PROBE_ROOT>/phase0/sheets_raw/<video_id>/ with one file per
 source hit plus a sources.txt that stacks every source's text under a header so
 they can be compared in one editor window. Ken picks or hand-edits one sheet and
-saves it as <PROBE_ROOT>/sheets/<video_id>.txt; nothing here chooses.
+saves it as <PROBE_ROOT>/sheets/<video_id>.txt; nothing here chooses. A song whose
+folder already has an index.json (the four pilot songs, or an earlier run) is
+skipped, never overwritten.
 
-Run: uv run --with syncedlyrics python scripts/zh_probe/fetch_sheets.py
+The Genius token comes from %APPDATA%/pikaraoke/config.ini, or ~/.pikaraoke/config.ini
+when APPDATA is unset (the Linux VM).
+
+Run (Windows): uv run --with syncedlyrics python scripts/zh_probe/fetch_sheets.py
+Run (VM): ZH_PROBE_LIBRARY=<library> python -P scripts/zh_probe/fetch_sheets.py [--songs 3,4]
 """
 
 from __future__ import annotations
 
+import argparse
 import configparser
 import json
 import logging
@@ -23,7 +30,7 @@ import requests
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from corpus import LRC_STAMP_RE, PILOT, RAW_DIR, Song  # noqa: E402
+from corpus import LRC_STAMP_RE, RAW_DIR, REST, Song  # noqa: E402
 
 from pikaraoke.lib import lrclib  # noqa: E402
 from pikaraoke.lib.genius import GeniusClient, GeniusUnavailable  # noqa: E402
@@ -31,13 +38,15 @@ from pikaraoke.lib.genius import GeniusClient, GeniusUnavailable  # noqa: E402
 logger = logging.getLogger("zh_probe.fetch_sheets")
 
 GENIUS_FETCH_LIMIT = 4
-LRCLIB_ATTEMPTS = 3
+LRCLIB_ATTEMPTS = 5
 NETEASE_LYRIC_URL = "https://music.163.com/api/song/lyric"
 
 
 def genius_token() -> str:
+    appdata = os.environ.get("APPDATA")
+    config_dir = Path(appdata) / "pikaraoke" if appdata else Path.home() / ".pikaraoke"
     cfg = configparser.ConfigParser()
-    cfg.read(Path(os.environ["APPDATA"]) / "pikaraoke" / "config.ini", encoding="utf-8")
+    cfg.read(config_dir / "config.ini", encoding="utf-8")
     return cfg.get("USERPREFERENCES", "genius_token", fallback="")
 
 
@@ -175,10 +184,17 @@ def write_side_by_side(song: Song, out: Path, rows: list[dict]) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--songs", default=",".join(str(s.num) for s in REST))
+    args = parser.parse_args()
+    songs = [s for s in REST if str(s.num) in args.songs.split(",")]
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     client = GeniusClient(genius_token())
-    for song in PILOT:
+    for song in songs:
         out = RAW_DIR / song.video_id
+        if (out / "index.json").exists():
+            logger.info("#%d %s: already fetched, skipped", song.num, song.title)
+            continue
         out.mkdir(parents=True, exist_ok=True)
         rows = fetch_genius(song, out, client) + fetch_lrclib(song, out) + fetch_netease(song, out)
         write(
