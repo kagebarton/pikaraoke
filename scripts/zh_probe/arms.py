@@ -189,7 +189,13 @@ class CtcArm:
         timed = [
             None if s is None else (s[0] * self.frame_s, s[1] * self.frame_s, False) for s in spans
         ]
-        return fill_untimed(timed), {"frames": len(emission), "frame_s": self.frame_s}
+        info = {
+            "frames": len(emission),
+            "frame_s": self.frame_s,
+            # NaN or inf entries in the emission: fp16 can overflow without raising
+            "nonfinite": int((~torch.isfinite(emission)).sum()),
+        }
+        return fill_untimed(timed), info
 
     def unload(self) -> None:
         del self.model
@@ -259,14 +265,25 @@ def han_syllables(line: str, lang: str) -> list[str]:
 class HfArm(CtcArm):
     """Arm H: a Hugging Face CTC model that outputs characters, aligned against the sheet's own."""
 
-    def __init__(self, arm: str, model_id: str, languages: tuple[str, ...], frame_s: float):
+    def __init__(
+        self,
+        arm: str,
+        model_id: str,
+        languages: tuple[str, ...],
+        frame_s: float,
+        half: bool = False,
+    ):
         self.arm, self.model_id, self.languages, self.frame_s = arm, model_id, languages, frame_s
+        # half: weights and inputs in fp16; emissions are cast back to fp32 before log_softmax
+        self.dtype = torch.float16 if half else torch.float32
 
     def load(self) -> None:
         from transformers import AutoModelForCTC, AutoProcessor
 
         self.processor = AutoProcessor.from_pretrained(self.model_id)
-        self.model = AutoModelForCTC.from_pretrained(self.model_id).to(DEVICE).eval()
+        # converted on the CPU so that fp32 weights never reach the card in half mode
+        self.model = AutoModelForCTC.from_pretrained(self.model_id).to(self.dtype)
+        self.model = self.model.to(DEVICE).eval()
         self.vocab = self.processor.tokenizer.get_vocab()
         self.blank = self.model.config.pad_token_id
 
@@ -274,7 +291,7 @@ class HfArm(CtcArm):
         features = self.processor(chunk, sampling_rate=SAMPLE_RATE, return_tensors="pt")
         key = "input_values" if "input_values" in features else "input_features"
         with torch.inference_mode():
-            logits = self.model(features[key].to(DEVICE)).logits[0]
+            logits = self.model(features[key].to(DEVICE, self.dtype)).logits[0]
         return torch.log_softmax(logits.float(), dim=-1).cpu()
 
     def char_id(self, char: str) -> int | None:
@@ -294,17 +311,18 @@ class HfArm(CtcArm):
         del self.model, self.processor
 
 
-def make_arm(name: str):
-    if name == "W":
-        return WhisperArm()
-    if name == "R":
-        return MmsArm()
+def make_arm(name: str, half: bool = False):
+    """The arm called ``name``; ``half`` (fp16) exists only for the Hugging Face CTC arms."""
+    if name in ("W", "R"):
+        if half:
+            raise ValueError(f"arm {name} has no half-precision mode")
+        return WhisperArm() if name == "W" else MmsArm()
     models = {
         "H": ("jonatasgrosman/wav2vec2-large-xlsr-53-chinese-zh-cn", ("zh",), 0.02),
         "Hsk": ("scottykwok/wav2vec2-large-xlsr-cantonese", ("yue",), 0.02),
         "Hal": ("alvanlii/wav2vec2-BERT-cantonese", ("yue",), 0.04),
     }
-    return HfArm(name, *models[name])
+    return HfArm(name, *models[name], half=half)
 
 
 def free_memory() -> None:
