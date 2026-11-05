@@ -519,11 +519,10 @@ def repace_bad_lines(
     ``env`` (the vocal stem's dB envelope) the window's end is the larger of
     that and where the line's own singing stops (:func:`_singing_end`), and
     the line is aimed at the same end, so a note held past the caption is
-    inside the slice. A first word the aligner dragged back before the line
-    is cut to where the line may start (:func:`_trim_lead_in`), and one that
-    starts on the previous line's last word is moved to its end
-    (:func:`_start_after_previous`), unless that line's timing is a fill or its
-    caption is sung over this one (:func:`_previous_end`). Otherwise a bad
+    inside the slice. A first word the aligner dragged back before where the
+    line may start -- the window's lead-in, or the previous line's last word
+    (:func:`_start_bound`) -- is cut to start there (:func:`_start_from`), or
+    the re-align is not kept when too little of it is left. Otherwise a bad
     line is rebuilt with paced words across its cue window (tagged
     :data:`SOURCE_FILL`), clamped to ``duration`` when known, and a partial or
     crammed line keeps the words it has. Because only these lines are rewritten, a coarse offset can never
@@ -556,18 +555,19 @@ def repace_bad_lines(
             out.append(obj)
             continue
         toks = line_toks[lid]
+        if not toks:  # display-only line (no alignable tokens)
+            out.append(obj)
+            continue
         if lid in repeat_slacks:
             placed = _line_in_span(obj, cue_spans[lid], offset, slack=repeat_slacks[lid])
         else:
             placed = _line_is_good(obj, cue_spans[lid], offset, drift_gap_s)
-        if placed and _timed_words(obj["words"]) >= len(toks):
-            out.append(obj)
-            continue
-        if not toks:  # display-only line (no alignable tokens)
-            out.append(obj)
-            continue
-        if placed and len(obj["words"]) >= len(toks):
-            crammed.append(lid)
+        if placed:
+            if _timed_words(obj["words"]) >= len(toks):
+                out.append(obj)
+                continue
+            if len(obj["words"]) >= len(toks):
+                crammed.append(lid)
         cue_start, cue_end = cue_spans[lid]
         t0 = max(0.0, cue_start + offset)
         t1 = cue_end + offset
@@ -598,8 +598,7 @@ def repace_bad_lines(
                 else None
             )
             if fixed is not None:
-                fixed = _trim_lead_in(fixed, cue_spans[lid], offset)
-                fixed = _start_after_previous(fixed, _previous_end(out, cue_spans, lid))
+                fixed = _start_from(fixed, _start_bound(out, cue_spans, lid, offset))
             # The window it was aimed at, in cue time: the check adds the offset back.
             aimed = (cue_start, max(cue_end, aim_end - offset))
             if (
@@ -622,7 +621,8 @@ def repace_bad_lines(
             continue
         # Guessed words stay between the neighbouring lines' words and inside the window,
         # widened to the line's own words: a clean line is kept even off its cue.
-        after = next((prev["end"] for prev in reversed(out[:i]) if prev["words"]), 0.0)
+        previous = _previous_line(out[:i])
+        after = previous["end"] if previous is not None else 0.0
         before = next((nxt["start"] for nxt in out[i + 1 :] if nxt["words"]), float("inf"))
         w0, w1 = windows[lid]
         after, before = max(after, min(w0, obj["start"])), min(before, max(w1, obj["end"]))
@@ -808,65 +808,51 @@ def _line_in_span(
     return obj["start"] >= c0 + offset - slack and obj["end"] <= c1 + offset + slack
 
 
-def _with_first_start(obj: dict, start: float) -> dict:
-    """``obj`` with its first word starting at ``start``, keeping its end."""
-    first, *rest = obj["words"]
-    return _line_object(
-        obj["line_id"], obj["text"], [{**first, "start": start}, *rest], source=obj["source"]
-    )
+def _previous_line(lines: list[dict]) -> dict | None:
+    """The last of ``lines`` with words, or None."""
+    return next((line for line in reversed(lines) if line["words"]), None)
 
 
-def _trim_lead_in(obj: dict, cue_span: tuple[float, float], offset: float) -> dict:
-    """``obj`` with a first word dragged back before the line cut to where
-    :func:`_line_in_span` lets the line start.
+def _start_bound(
+    out: list[dict], cue_spans: list[tuple[float, float]], lid: int, offset: float
+) -> float:
+    """Earliest a re-aligned line ``lid`` may start, given the lines already in ``out``.
 
     The slice's lead-in gives the aligner context, and it drags a first word's start back
-    into it. A word with at least :data:`INSTANT_WORD_DUR_S` left after that bound keeps
-    its end and loses only the overshoot; one with less sits on the audio before the line
-    and is left for the span check to reject. The end side is not trimmed: a last word
-    parked past the end bound is the aligner's failure sign (:data:`PAUSE_SLACK_S`).
+    into it: the line may start no earlier than :func:`_line_in_span` allows. The lead-in
+    also lets a first word land on the note the previous line is still holding, so two
+    lines show the same stretch of audio: the line may start no earlier than the previous
+    line's last word ends. A fill's words are paced across its cue, not heard, so they
+    bound nothing; a line whose caption runs more than :data:`DUET_OVERLAP_S` into
+    ``lid``'s is sung over it, and ``lid`` may rightly start before it ends.
     """
-    bound = cue_span[0] + offset - PAUSE_SLACK_S
-    first = obj["words"][0]
-    if first["start"] >= bound or first["end"] < bound + INSTANT_WORD_DUR_S:
-        return obj
-    return _with_first_start(obj, bound)
-
-
-def _previous_end(out: list[dict], cue_spans: list[tuple[float, float]], lid: int) -> float | None:
-    """Where the line before line ``lid`` in ``out`` ends, as the bound its re-aligned
-    first word may not start before; None when there is no such line to trust.
-
-    A fill's words are paced across its cue, not heard, so they bound nothing. A line
-    whose caption runs more than :data:`DUET_OVERLAP_S` into ``lid``'s is sung over it,
-    and ``lid`` may rightly start before it ends.
-    """
-    previous = next((prev for prev in reversed(out) if prev["words"]), None)
+    bound = cue_spans[lid][0] + offset - PAUSE_SLACK_S
+    previous = _previous_line(out)
     if previous is None or previous["source"] == SOURCE_FILL:
-        return None
+        return bound
     pid = previous["line_id"]
     if pid < len(cue_spans) and cue_spans[pid][1] - cue_spans[lid][0] > DUET_OVERLAP_S:
-        return None
-    return previous["end"]
+        return bound
+    return max(bound, previous["end"])
 
 
-def _start_after_previous(obj: dict, previous_end: float | None) -> dict | None:
-    """``obj`` with a first word that starts on the previous line moved to
-    ``previous_end``, where that line's last word ends; None when less than
-    :data:`INSTANT_WORD_DUR_S` of the word is left after it.
+def _start_from(obj: dict, bound: float) -> dict | None:
+    """``obj`` with a first word starting before ``bound`` cut to start there; None when
+    less than :data:`INSTANT_WORD_DUR_S` of the word is left after it.
 
-    The lead-in that gives the aligner context also lets a first word land on the note
-    the previous line is still holding, so two lines show the same stretch of audio. Only
-    the start moves: the word keeps its end, as in :func:`_trim_lead_in`. A word that
-    would be left without a duration is the aligner's failure sign, so the re-align is
-    not kept. No previous line (``previous_end`` None) leaves ``obj`` as it is.
+    Only the start moves: the word keeps its end. A word left without a duration sat on
+    audio before the line, the aligner's failure sign, so the re-align is not kept. The
+    end side is not trimmed: a last word parked past the end bound is also the aligner's
+    failure sign, and the span check rejects it (:data:`PAUSE_SLACK_S`).
     """
-    first = obj["words"][0]
-    if previous_end is None or first["start"] >= previous_end:
+    first, *rest = obj["words"]
+    if first["start"] >= bound:
         return obj
-    if first["end"] < previous_end + INSTANT_WORD_DUR_S:
+    if first["end"] < bound + INSTANT_WORD_DUR_S:
         return None
-    return _with_first_start(obj, previous_end)
+    return _line_object(
+        obj["line_id"], obj["text"], [{**first, "start": bound}, *rest], source=obj["source"]
+    )
 
 
 def _repeat_detection_slacks(
