@@ -229,6 +229,32 @@ class TestSnapLineOnsets:
         assert out[0] is obj
         assert stats["n_snapped"] == 0
 
+    def test_doubted_source_is_searched_past_a_loud_start(self, use_env):
+        # Word 1 claims the previous line's held note (loud to 1.5 s); the
+        # line's own voice rises at 2.2 s. Taken as on time unless doubted.
+        use_env(_env(5.0, [(0.0, 1.5, -28.0), (2.2, 4.5, -28.0)]))
+        plain = _line((1.2, 1.6), (2.5, 2.7), (3.0, 4.0), source="cue_align")
+        doubted = _line((1.2, 1.6), (2.5, 2.7), (3.0, 4.0), source="cue_align_line")
+
+        out, stats = snap_line_onsets(
+            [plain, doubted], "vocal.wav", doubted_sources=frozenset({"cue_align_line"})
+        )
+
+        assert out[0] is plain
+        assert out[1]["words"][0]["start"] == pytest.approx(2.15, abs=0.05)
+        assert stats["n_snapped"] == 1
+
+    def test_doubted_source_without_a_rise_untouched(self, use_env):
+        use_env(_env(5.0, [(0.0, 4.5, -28.0)]))
+        obj = _line((1.2, 1.6), (2.5, 2.7), (3.0, 4.0), source="cue_align_line")
+
+        out, stats = snap_line_onsets(
+            [obj], "vocal.wav", doubted_sources=frozenset({"cue_align_line"})
+        )
+
+        assert out[0] is obj
+        assert stats["n_no_rise"] == 1
+
     def test_line_in_silence_untouched(self, use_env):
         # Without the gate the on-time guard's start check (-60 >= ref-8)
         # is False here, so it would NOT catch this line, and the 12dB
@@ -585,6 +611,17 @@ class TestSnapLineEdges:
 
         assert out == [obj]
         assert stats["bailed"] == "decode_failed"
+
+    def test_doubted_sources_reach_the_onset_pass(self):
+        env = _env(5.0, [(0.0, 1.5, -28.0), (2.2, 4.5, -28.0)])
+        obj = _line((1.2, 1.6), (2.5, 2.7), (3.0, 4.0), source="cue_align_line")
+
+        out, stats = snap_line_edges(
+            [obj], "vocal.wav", env=env, doubted_sources=frozenset({"cue_align_line"})
+        )
+
+        assert out[0]["words"][0]["start"] == pytest.approx(2.15, abs=0.05)
+        assert stats["onset"]["n_snapped"] == 1
 
     def test_precomputed_env_skips_decode(self, monkeypatch):
         # A caller (the stage) shares one envelope with the veto; passing it

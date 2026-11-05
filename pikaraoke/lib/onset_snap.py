@@ -223,7 +223,10 @@ def _detect_rise(
 
 
 def snap_line_onsets(
-    line_objects: list[dict], vocal_path: str | Path, env: np.ndarray | None = None
+    line_objects: list[dict],
+    vocal_path: str | Path,
+    env: np.ndarray | None = None,
+    doubted_sources: frozenset[str] = frozenset(),
 ) -> tuple[list[dict], dict]:
     """Snap each line's first word to the detected vocal onset.
 
@@ -237,6 +240,12 @@ def snap_line_onsets(
     ``SUSTAIN_S + SNAP_MARGIN_S + MIN_SHIFT_S`` — the safe direction,
     since the line is merely left untouched rather than moved to a false
     onset.
+
+    A line whose ``source`` is in ``doubted_sources`` is always searched: its
+    first word's placement is not evidence that the line is on time. The cue
+    route's one-line re-align opens its window before the caption and is
+    trimmed to the previous line's end, so a loud claimed start there is
+    usually that line's held note, not this line's onset.
 
     Returns ``(line_objects, stats)``. Lines are replaced by copies only
     when moved; on decode failure the input is returned unchanged and
@@ -287,7 +296,8 @@ def snap_line_onsets(
         a = min(max(int(w1s / HOP_S), 0), max(len(env) - EDGE_FRAMES, 0))
         span1 = env[a : max(int(w1e / HOP_S), a + 1)]
         if (
-            env[a : a + EDGE_FRAMES].mean() >= ref - NEAR_SUNG_DB
+            obj.get("source") not in doubted_sources
+            and env[a : a + EDGE_FRAMES].mean() >= ref - NEAR_SUNG_DB
             and float(np.median(span1)) >= ref - SUSTAIN_NEAR_DB
         ):
             out.append(obj)
@@ -516,7 +526,10 @@ def snap_line_ends(
 
 
 def snap_line_edges(
-    line_objects: list[dict], vocal_path: str | Path, env: np.ndarray | None = None
+    line_objects: list[dict],
+    vocal_path: str | Path,
+    env: np.ndarray | None = None,
+    doubted_sources: frozenset[str] = frozenset(),
 ) -> tuple[list[dict], dict]:
     """Run the onset and end snaps sharing a single envelope decode.
 
@@ -524,11 +537,12 @@ def snap_line_edges(
     previous line's end may legitimately extend into. ``env`` reuses a
     precomputed :func:`rms_envelope_db` envelope instead of decoding
     ``vocal_path`` (the stage shares it with the evidence veto).
+    ``doubted_sources`` as in :func:`snap_line_onsets`.
     """
     if env is None:
         env = decode_env_db(vocal_path, "edge snap")
         if env is None:
             return line_objects, {"bailed": "decode_failed"}
-    out, onset_stats = snap_line_onsets(line_objects, vocal_path, env)
+    out, onset_stats = snap_line_onsets(line_objects, vocal_path, env, doubted_sources)
     out, end_stats = snap_line_ends(out, vocal_path, env)
     return out, {"onset": onset_stats, "end": end_stats}
