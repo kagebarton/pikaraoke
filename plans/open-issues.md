@@ -224,13 +224,18 @@ From the `library_tools` real-world run, 2026-10-20. Record: `library-tools.md`.
   `U+24C2-U+1F251`).
 - `stable_whisper.align` raises on its own failed-alignment `None`; the stage
   recovers but logs a traceback.
-- **Cue align can start a line before its cue and squeeze the line before it.**
+- ~~**Cue align can start a line before its cue and squeeze the line before it.**
   She Used To Be Mine on its LRCLIB sheet (2026-10-30): the sheet's cue and the
   transcriber both put line 7 (0-based) at about 38.3 s, but the karaoke starts
   it at 36.09 s, so line 6's last four words get 0.10 s each (Ken heard "a fast
   sweep around 0:33"). The joint version before it had both lines in place.
   Record: `lyric-source-lists.md` Results row 21. Not looked into; the same
-  route times every caption song.
+  route times every caption song.~~ Fixed 2026-11-05, on `dev` as `518ae9d`
+  (zero-length words are rescued like missing ones; a re-aligned line may not
+  start on the line before it): after a Regenerate, line 6's last four words sit
+  at the transcriber's times and line 7 starts at 38.14 s. Record:
+  `plans/cue-align-windows.md` on tag `archive/cue_align_windows`, Decision 13,
+  rows 57-58.
 - **The end snap can stretch a song's last line into the outro.** NSYNC -
   Paradise on its LRCLIB sheet (2026-10-30): a one-word last line with a 1.77 s
   cue is extended 18.59 s, to 1 s before the video ends (Ken: "slow crawl on
@@ -278,6 +283,102 @@ its pick, `koroman`, are there if the question comes back.
 - **"Play this line" on the Edit words page**: a button per line that plays the
   song from the line's start. Ken, 2026-11-02: a later phase, not scheduled. No
   admin page plays audio today, so it needs a route that serves the song's audio.
+
+## Cue align windows (on `dev`)
+
+Landed 2026-11-05 as `f47f879`..`2e5d389`. Record: `plans/cue-align-windows.md`
+on tag `archive/cue_align_windows` (Decisions 12-18, Results log). A line the
+section align left short of its words, or with zero-length words, gets a
+one-line re-align whose window ends where the singing stops; words still
+missing are guessed and shown, never dropped. "Row" and "finding" below point
+into that plan's Results log.
+
+Library state:
+
+- **Songs carry the change only after a Regenerate.** The 10 test songs were
+  rerun on 2026-11-02 (rows 55-61), before `bb7c8ca` (onset snap doubts a
+  re-aligned line's start); they need one more Regenerate, then Ken's listen to
+  the 5 starts and the 5 previous-line ends row 64 lists. The other 16 songs
+  with words missing from the screen (25 in the 2026-10-31 count, less the 9
+  test songs) show "Missing from the screen ... Regenerate to show them" on
+  Song Info until regenerated.
+- **Test lines still guessed after the rerun**: Stronger 37 and Castle On The
+  Hill 46 (the guard rejected their re-align, row 59), Miss Independent 9 and
+  71 (caption words the video does not sing). The "not the window" group:
+  Castle 46, One In A Million 7 (not rerun), My Heart Will Go On 9 (timed in
+  full on the rerun).
+
+Heard at GATE B, not fixed:
+
+- **The second of a repeated word lands 0.4-0.5 s late.** Baby One More Time
+  "Oh baby, baby" at 0:28, 0:38, 2:22 (0:38 also before this branch); Ken: the
+  two should be about equal. The aligner's own timing (Decision 18, row 63).
+- **Miss Independent's captions do not match the video.** "God damn" is not
+  sung (likely censored); "Ooh yeah" lines are sung "yeah yeah", and the
+  transcriber finds no words on most of them. The fix is the song's caption
+  text via Edit words (Decisions 12, 18; rows 33, 63).
+- **Pocahontas "wind" is placed before the singer's pause.** The window holds
+  the whole note, but both aligns put "wind" before the 1.2 s pause; the line
+  has every word, so nothing flags it (Decision 12, rows 14, 57).
+- **The guard rejects a correct re-align at Miss Independent 3:59** (line 79:
+  the unguarded re-align matched the transcriber). Ken left it (Decision 16,
+  row 61).
+
+Onset snap:
+
+- **A line starting on the previous line's held note is taken as on time.**
+  Onset snap skips a line whose first word is loud at its claimed start, and the
+  end snap then stops the held note just before it (Someone Like You 3:48
+  "instead"). `bb7c8ca` lifts the skip for re-aligned lines only. Lifting it for
+  every line that starts at the previous line's end moves 47 lines on the 10
+  test songs, 13 further from the heard start; it needs its own probe over the
+  library. Older than this branch, shared by every timing source (Decisions 12,
+  17; rows 36, 63).
+
+The rescue (review findings and decisions kept as built):
+
+- **Repeated tokens get two assignment rules** (row 44, findings 3-4). The
+  in-order match puts a word on the earliest repeat of its token, the time match
+  on a later one. Fix: carry each word's token index on the line object from
+  `_match_words_to_tokens`, which also removes `_assign_in_order`. Same
+  prerequisite as Decision 12's unruled splice (keep the section's words, take
+  only the missing ones from the re-align).
+- **Duet ending** (row 44, finding 6): the song's last line is the last by
+  index, not the latest-ending one, so an earlier line held past the last cue
+  gets no tail window and the last line's tail runs over the other singer.
+- **The last line's window has no hold cap** (row 44, finding 5). Uncapped on
+  purpose (the final note is often the longest), but outro ad-libs widen the
+  window and the span the re-align is checked against. A cap needs the length
+  of real final holds across the library first (Decision 16).
+- **The guard does not see the previous line's held note** (row 44, finding 7).
+  A re-aligned line may not start before the previous line's last word ends,
+  but it can still start on that word's note past its timed end. How often is
+  not measured (Decision 16).
+- **The guard looks only backward** (row 51, finding 6): a rescued line's last
+  word is never checked against the next line's first.
+- **A re-paced line can start before the previous line's end** (row 51,
+  finding 3). Not built: the 3 cases on the test songs (Miss Independent 5, 7,
+  37) are fills placed right, with the previous line overrunning into them;
+  starting them later would put line 7's six words in 0.62 s (row 65).
+- **Zero-length words a failed rescue leaves stay on screen** (Decision 14,
+  kept as built by Decision 16). The guess pass skips a line with a word for
+  every token, so they show as 0.1 s fills. Guessing them instead is option
+  (b), measurable on the CPU from the bundles' `cue_inputs`.
+- **One zero-length word makes a line crammed** (Decision 15, kept as built).
+  Costs 75 more one-line aligns on the 10 test songs (209 against 134, row 45);
+  every partial line takes its own slice align too (row 24, finding 10).
+  Options (b) two or more words, (c) a bound on how far timed words may move.
+- **Should Song Info's guessed-words count include zero-length words left on
+  screen?** (Decision 13.) Unchanged today.
+- **`align_song` deep-copies sections and re-align words with debug capture
+  off** (row 51, finding 10).
+
+Older than this branch:
+
+- **The `\kf10` floor's added time is never taken back.** `generate_ass` gives
+  every word at least 0.1 s, so a run of floored words pushes the rest of the
+  line late until its next gap: overrun of 0.3 s or more on 34 lines in 23 cue
+  songs (Decision 14, row 43).
 
 ## Test suite (Windows box)
 
