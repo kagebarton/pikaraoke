@@ -261,6 +261,26 @@ Opus, after the row-51 review, 2026-11-02. Proposed; Ken decides at GATE B:
       compare (`crammed_line_ids`, first and last word against the transcriber, Ken's
       list) shows whether a good line got worse; (c) only if it does.
 
+Ken, GATE B ruling, 2026-11-05 (listening notes rows 62-63):
+
+16. **Decisions 14 and 15 stay as built (option a); the guard stays as built.**
+    Miss Independent 3:59 (row 61) is the guard's known miss; Ken leaves it for now.
+    Row 44's findings 5 (no hold cap on the last line) and 7 (the lead-in trim can land
+    on the previous line's held note) go to `plans/open-issues.md` unchanged.
+17. **A re-aligned line's start is not trusted by onset snap.** Onset snap skips a line
+    whose first word is already loud at its claimed start and over its span, taking it
+    as on time. A re-align's window opens before the caption, and the guard trims its
+    first word to the previous line's end, so that loud start is often the previous
+    line's held note. Onset snap searches for the rise on every `SOURCE_REALIGN` line.
+    Row 63's replay: 5 lines move, all closer to the heard start, none further; 4 of the
+    7 lines the branch made early are fixed; Stronger 18, 19, 32 have no rise and stay.
+    The same bypass for every line starting at the previous line's end moves 47 lines,
+    13 further: out of scope, to `plans/open-issues.md`.
+18. **To `plans/open-issues.md`, not this branch:** the second of a repeated word lands
+    0.4-0.5 s late (Baby One More Time "Oh baby, baby", 0:28, 0:38, 2:22; pre-branch
+    at 0:38); Miss Independent's "Ooh yeah" captions where the video has "yeah yeah"
+    (row 33; no transcriber words there; an Edit Words fix of the caption text).
+
 ## Library facts (2026-10-31, `dev` at `daf183a`)
 
 Read-only probes over `~/pikaraoke-songs/alignment_debug/*.json` (scratch scripts by
@@ -634,6 +654,26 @@ Per Decision 13. Run `graphify affected` on `repace_bad_lines`, `_volume_end` an
 
 Steps 5-6 ran on 2026-11-02 (rows 55-61, blocks R55*). GATE B is Ken's.
 
+### Phase 5d: onset snap searches re-aligned lines -> commit -> CPU check
+
+Per Decision 17. No GPU: row 63's replay (`replay.py` in the 4be83bd5 scratchpad
+`gateb/`) re-runs the rescue and both snaps from the rerun's `cue_inputs`, exact on 10
+of 10 songs.
+
+1. **Code** (`pikaraoke/lib/onset_snap.py`, `pikaraoke/pipeline/stages/lyric_align.py`).
+   `snap_line_onsets` and `snap_line_edges` take `doubted_sources` (default empty); a
+   line whose `source` is in it skips the on-time check. `onset_snap` cannot import
+   `cue_align` (the import runs the other way), so the stage passes
+   `frozenset({SOURCE_REALIGN})`. Docstrings say why.
+2. **Tests** (`tests/unit/test_onset_snap.py`, `tests/unit/test_lyric_align.py`): a
+   line loud at its claimed start with a rise before word 2 is left alone by default
+   and snapped when its source is doubted; a doubted line with no rise stays; the stage
+   passes `SOURCE_REALIGN`.
+3. **CPU check** before committing: the replay with the changed code; the lines that
+   move equal row 63's five, at its times; no other line moves.
+4. Commit `fix(onset_snap): a re-aligned line's loud start is not taken as on time`;
+   log a row. The 10 test songs carry the change after a Regenerate (Phase 6).
+
 ### Phase 6: after GATE B
 
 Only on Ken's word: land on `dev` (Branches and Archive Tags in `CLAUDE.md`: copy the
@@ -641,11 +681,13 @@ code commits one by one, no plan file), then in `plans/open-issues.md` on `dev`,
 what remains (e.g. any test line still guessed, the not-the-window group, the
 remaining 16 songs needing a Regenerate, review findings 4, 8 and 10 from row 24,
 review findings 3-4 and 6 from row 44, review findings 3, 6 and 8-10 from row 51,
-Decisions 14-15 as Ken rules them, the `\kf10` floor drift (Decision 14, row 43),
+Decisions 14-15 (kept as built, Decision 16), Decision 18's two items, the
+onset on-time check for lines starting at the previous line's end (Decision 17), the `\kf10` floor drift (Decision 14, row 43),
 Decision 12's three out-of-scope items, and Decision 13's stat 1 question; update or
 close the She Used To Be Mine entry per GATE B), and retire the branch as `archive/cue_align_windows`.
 
-Open before landing (row 44), each Ken's call:
+Open before landing (row 44); ruled 2026-11-05 (Decision 16): both stay as built and go to
+`plans/open-issues.md`:
 
 - **Finding 5, the last line's window has no hold cap.** Kept uncapped on purpose
   (`_volume_tail`: the final note is often the longest), but outro ad-libs widen the
@@ -759,6 +801,8 @@ whose last cue overruns the media). Never launch it unprompted.
 | 59 | 2026-11-02 | 5c | The guard on this run's own re-aligns (`replay_now.py guard`): the replay of row 56 with `_start_after_previous` patched out against the replay with it, per song, lines whose `repace_bad_lines` output differs (source, word text, start, end within 0.001 s), with the previous line's end and the transcriber's words around the line. The lines are compared before the edge snaps | 22 lines differ (no windows differ: calls equal, 0 misses). Trimmed, first word moved to the previous line's end, re-align kept (13): Stronger 6 (42.47 -> 42.92), 18 (104.20 -> 105.04); All of Me 40 (182.32 -> 182.56), 46 (213.76 -> 213.77), 47 (220.44 -> 220.57); Miss Independent 3 (11.69 -> 11.83), 58 (180.70 -> 181.06), 78 (236.89 -> 237.02), 81 (243.85 -> 244.20); Pocahontas 23 (114.63 -> 114.72); Castle 32 (161.81 -> 162.42); My Heart Will Go On 26 (237.93 -> 238.24); She Used To Be Mine 7 (37.59 -> 38.14). Not kept (9): Stronger 37, Baby One More Time 40, Miss Independent 1, 5 (fill), 74, 79, Castle 14, 16, 46. Without the guard: Stronger realigned [6, 10, 18, 19, 26, 32, 35, 37] guessed []; Baby One More Time [2, 3, 20, 27, 28, 30, 40]; Miss Independent [1, 2, 3, 5, 9, 11, 12, 24, 38, 58, 72, 74, 78, 79, 81] guessed [9, 71]; Castle [2, 10, 14, 16, 23, 30, 32, 36, 46, 53] guessed []; Someone Like You, Incomplete: no line differs. Per line, words and transcriber in block R55g |
 | 60 | 2026-11-02 | 5c | Lines NOW ends further from the transcriber than PRE by more than 0.05 s (`regress.py`: PRE, MID, NOW words, the neighbouring lines, the transcriber's words and the cue span) | 17 lines, block R55r: first word further 11 (Stronger 18, 19, 32; Someone Like You 34, 49, 50; Baby One More Time 20; Miss Independent 3; My Heart Will Go On 7, 9, 26), last word further 6 (Someone Like You 32, 46; My Heart Will Go On 3, 8, 25; She Used To Be Mine 29), none both. Re-aligned lines whose first word starts at or just after the previous line's end and before the cue: Stronger 19 `I,` 111.38 (cue 112.48, heard 112.48), Someone Like You 34 `Don't` 169.98 (cue 170.87, heard 170.62), 50 `Don't` 245.13 (heard 245.96), Baby One More Time 20 `Tell` 104.43 (heard 105.18); last word held: Someone Like You 32 `you` 161.22-163.09 (heard 161.10-161.84, next line starts 163.19); Pocahontas 36 `wind` ends 190.20, 5.28 s after the heard end (PRE 6.05 s before it, so not among the 17). Of the 17, Stronger 18, Miss Independent 3 and My Heart Will Go On 26 are lines the guard trimmed (row 59); the other 14 are not changed by it |
 | 61 | 2026-11-02 | 5c | stop | GATE B reached; the list `song - m:ss - line text - what changed` handed to Ken (targets and She Used To Be Mine first, 20 + 72 lines); no code changed; Decisions 14-15 untouched. Open for Ken: the guard on every re-align (rows 49, 59: 13 trimmed, 9 not kept; Miss Independent 79: unguarded re-align `That's` 239.38-240.08, `why` 240.08-240.36 (transcriber 239.44-240.08, 240.08-240.36), kept line `That's` 240.28-240.32, `why` 240.32-240.34), review findings in `plans/open-issues.md` at landing |
+| 62 | 2026-11-05 | GATE B | Ken's listening notes on row 61's list (sheet `listening-checks.html`, untracked), condensed; Opus read-off on the VM. The rerun's library (`~/pikaraoke-songs`, rows 55-61) is not reachable from the VM; transcriber words below are from the Windows library's bundles (`D:/Shared/pikaraoke-songs/alignment_debug`, Miss Independent captured 2026-11-03, Baby One More Time 2026-10-29), not the rerun's | Ken: most lines are good. (1) Miss Independent "Ooh yeah" repeats do not time right; to Ken they sound like "yeah yeah". (2) "Oh baby, baby" (Ken: Stronger; the line is Baby One More Time's) has trouble finding the second "baby"; the two should be about equal length. (3) On the other moved lines, onset snap looks less effective: quite a few early onsets. Transcriber, Miss Independent: 38-47.6 s nothing, then `Oh,` 47.61-48.46 (line 12 end PRE 47.93, NOW 46.38); 116-123 s nothing; 216-220 s nothing; 4:04 `With` 244.56-245.36 `the way you shine` (line `Ooh, the way you shine`). Baby One More Time: `Oh,` 27.72-28.92 `baby,` 28.96-29.44 `baby` 29.66-30.12 `How` 30.12; `Oh,` 38.78-39.32 `baby,` 39.46-39.78 `baby` 39.98-40.40 `I` 40.74; 131.36-141.17 nothing; `Oh,` 141.17-142.52 `baby,` 142.70-143.00 `baby,` 143.32-143.68 `how` 144.12. NOW (rows 58 tables): 0:28 `baby,` 28.94-29.66 (re-aligned); 0:38 `baby,` 40.41-41.05 (NOW vs MID only; not in the PRE list) |
+| 63 | 2026-11-05 | GATE B | Opus, CPU on the VM. Ken copied the rerun box's `~/pikaraoke-songs` (bundles, `karaoke/`, `regen_backups/20261031T174600Z` and `20261102T202041Z`, 5 `dereverb/` stems, no `vocal/`) to `D:/Shared/cue_align_windows`. Envelopes: My Heart Will Go On from that `dereverb/`, the other 9 from the Windows library's `pikaraoke-songs/vocal/<stem>---vocal.m4a`. Scratch in the 4be83bd5 scratchpad `gateb/`: `replay.py` (`repace_bad_lines` over `cue_inputs`, realigns answered on (line, w0, w1) within 0.001 s, then `snap_line_onsets`, `snap_line_ends`), `early.py`, `prenow.py`, `words.py`, `whyloud.py`, `sheet.py`, `variant.py`. "Heard" = the NOW bundle's `transcribe_words`, the word matching the line's first word nearest the cue start within 3 s | Replay check: 10 of 10 songs, 0 realign misses, every line's start and end equal `output_line_timings` (0.01 s), onset stats equal the bundle's. Lines starting > 0.3 s before the heard first word: PRE 81, MID 81, NOW 83; NOW-only 7 (Stronger 18, 19, 32; All of Me 47; Someone Like You 34, 50; Baby One More Time 20; all re-aligned), PRE-only 5 (Someone Like You 33; Castle 53; My Heart Will Go On 2, 16; She Used To Be Mine 7). NOW's 83 by onset-snap branch (on the pre-snap line): first word already near sung level at its claimed start and over its span, so skipped as on time 70 (8 re-aligned), no rise 5, snapped short of heard 4, under min shift 2, first word under 0.1 s 2; 42 of the 83 start at the previous line's end. On Ken's sheet: 20 of these lines, the 7 NOW-only among them. Variant, the on-time skip bypassed only for lines the shipped snap left alone: re-aligned lines, 5 move (All of Me 47 220.57 -> 221.22, heard 221.12; Someone Like You 34 169.99 -> 170.55, heard 170.62; 50 245.14 -> 245.88, heard 245.96; Baby One More Time 20 104.44 -> 105.05, heard 105.18; Miss Independent 2 9.80 -> 10.55, heard 10.68), 5 closer, 0 further; Stronger 18, 19, 32: no rise. Lines starting at the previous line's end: 47 move, closer 27 / same 2 / further 13 / no heard word 5, 18 end more than 0.2 s past the heard start. Baby One More Time, NOW / heard second `baby`: 0:28 30.14-30.54 / 29.66-30.12 (section pass 30.06-30.06); 0:38 40.41-41.05 / 39.98-40.40 (unchanged from the section pass); 2:22 143.73-144.15 / 143.32-143.68; 2:11, 2:16 no heard words. Miss Independent, the rerun's transcriber on the "Ooh yeah" lines: L11, L12, L38, L71 nothing; L39 `Ooh,` 124.32-125.72. NOW `Ooh` lengths: L11 0.02, L12 0.13 and 0.60, L38 0.22 and 0.12; L39 `Ooh yeah,` 0 s each (re-align 121.25-127.01 not kept), L71 guessed `ooh yeah` (re-align `Ooh` 216.52-216.52 not kept) |
 
 **R7 targets** at the starting constants (slack 0.5, dip 12, min_quiet 0.1, tail_quiet 0.5). `heard_end` is the transcriber's end of the line's last word.
 
