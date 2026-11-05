@@ -9,6 +9,7 @@ import pytest
 
 from pikaraoke.lib import lrclib
 from pikaraoke.lib.alignment_capture import SCHEMA_VERSION, output_line_timings
+from pikaraoke.lib.cue_align import SOURCE_REALIGN
 from pikaraoke.lib.joint_match import match_words_to_lines_joint_with_stats
 from pikaraoke.lib.srt_provenance import is_generated, mark_generated
 from pikaraoke.lib.windowed_realign import merge_spans, replay_span
@@ -628,7 +629,7 @@ class TestCueAlignRoute:
         env = np.full(1201, -20.0)  # 30 s, sung throughout
         decode = MagicMock(return_value=env)
         align = MagicMock(wraps=la_mod.align_song)
-        snap = MagicMock(side_effect=lambda objs, _path, env=None: (objs, {}))
+        snap = MagicMock(side_effect=lambda objs, _path, env=None, doubted_sources=None: (objs, {}))
         monkeypatch.setattr(la_mod, "decode_env_db", decode)
         monkeypatch.setattr(la_mod, "align_song", align)
         monkeypatch.setattr(la_mod, "snap_line_edges", snap)
@@ -639,6 +640,15 @@ class TestCueAlignRoute:
         assert decode.call_args.args[0] == ctx.artifacts["aligned_stem"]
         assert align.call_args.kwargs["env"] is env
         assert snap.call_args.kwargs["env"] is env
+
+    def test_the_edge_snap_doubts_re_aligned_starts(self, tmp_path, monkeypatch):
+        stage, ctx, _worker, la_mod = self._make_srt(tmp_path, monkeypatch)
+        snap = MagicMock(side_effect=lambda objs, _path, env=None, doubted_sources=None: (objs, {}))
+        monkeypatch.setattr(la_mod, "snap_line_edges", snap)
+
+        stage.run(ctx)
+
+        assert snap.call_args.kwargs["doubted_sources"] == frozenset({SOURCE_REALIGN})
 
     def test_a_failed_decode_keeps_the_caption_windows(self, tmp_path, monkeypatch):
         stage, ctx, _worker, la_mod = self._make_srt(tmp_path, monkeypatch)
@@ -694,7 +704,7 @@ class TestEvidenceVetoWiring:
         env = np.array([-30.0, -30.0], dtype=np.float32)
         decode = MagicMock(return_value=env)
         veto = MagicMock(side_effect=lambda objs, _env: (objs, {"n_vetoed": 0}))
-        snap = MagicMock(side_effect=lambda objs, _path, env=None: (objs, {}))
+        snap = MagicMock(side_effect=lambda objs, _path, env=None, doubted_sources=None: (objs, {}))
         monkeypatch.setattr(la_mod, "decode_env_db", decode)
         monkeypatch.setattr(la_mod, "veto_uncorroborated_lines", veto)
         monkeypatch.setattr(la_mod, "snap_line_edges", snap)

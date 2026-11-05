@@ -44,7 +44,7 @@ import srt
 from tqdm import tqdm
 
 from pikaraoke.lib import alignment_capture, lrclib, lrclib_fill, ytasr
-from pikaraoke.lib.cue_align import align_song
+from pikaraoke.lib.cue_align import SOURCE_REALIGN, align_song
 from pikaraoke.lib.evidence_veto import veto_uncorroborated_lines
 from pikaraoke.lib.ffmpeg import probe_duration
 from pikaraoke.lib.genius_lyrics import parse_lyric_lines
@@ -276,7 +276,11 @@ class LyricAlignStage(BaseStage):
                 veto_stats = {"bailed": "decode_failed"}
             capture_joint_stats["evidence_veto"] = veto_stats
 
-        line_objects, edge_stats = snap_line_edges(line_objects, snap_stem, env=env)
+        # A cue re-align's first word may sit on the previous line's held note,
+        # which reads as on time; onset snap searches those lines regardless.
+        line_objects, edge_stats = snap_line_edges(
+            line_objects, snap_stem, env=env, doubted_sources=frozenset({SOURCE_REALIGN})
+        )
         if capture_joint_stats is not None:
             capture_joint_stats["edge_snap"] = edge_stats
 
