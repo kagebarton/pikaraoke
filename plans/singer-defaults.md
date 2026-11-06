@@ -891,3 +891,104 @@ deviated from this plan and why.)
 - **Self-review:** four templates and scripts plus a test, a new UI flow around cookies and the
   SPA script re-run, so the review is tracked as pending for the checkpoint after this phase.
 - **Not done:** `graphify update .` (no `graphify-out/` on this box).
+
+### Phase 3.1: review fixes of Phase 3 (executed 2026-11-06, Claude Sonnet 5.5)
+
+- **Commits:** `eb91f69` `fix(ui): the guest form opens from the server's current state` (step 1);
+  `438df86` `fix(ui): a save that keeps the name keeps the page` (step 2); `ed896e4`
+  `fix(ui): nothing behind the guest form can be reached` (step 3); `24cf3d2`
+  `refactor(ui): the key limit from the server, and the guest form's dead code out` (step 4);
+  `d2aa310` `fix(search): close the search page's wrapper div when there are no results`
+  (not in the plan, see deviation 1). The plan edit itself is `1b917b8`.
+- **Tests:** full suite 3486 passed before, 3490 after: +4 in `test_singer_routes.py` (`GET
+  /singer` equals the state the pages get for a new phone, a joined phone and a token nobody
+  holds; and it shows a rename made after the page loaded), -2 in `test_singer_page.py` (the
+  two state tests step 4 removed), +2 in `test_search_render.py` (the guest form is not inside
+  `.container`, bare and with results). The new search test fails on a bare `/search` without
+  the template fix (run both ways). Pre-commit clean on every changed file.
+- **ui-check:** two scripted runs against the real app, phone viewport 390x844 (the Tab and
+  click check also at 1200x800). Names used: `María José`, `Dana Ö`, `Dana Öz`, `Dana Ömer`,
+  `Eli Ü`, `Fay Ñ`, `Gil Å`, `Gus Ø`.
+  - **Phase 3's driver again: 56 passed, 0 failed.** Two of its checks changed meaning and were
+    edited: tab 2's edit form now opens with the server's current name (3.1) instead of its
+    stale one, and a key-only save no longer reloads, so its "one POST per Save" check clicks
+    Save without waiting for a navigation and reads the key back from `GET /singer`. One check
+    added: a key-only save keeps the page. Everything else is as in Phase 3 (two-tab rename,
+    one POST per Save after six navigations, cookie put-back, restart).
+  - **New 3.1 driver: 43 passed, 0 failed.** By plan item:
+    - Restart with a page left open, not navigated (1, 9): the name click opens the join form
+      (empty name, no Cancel), the navbar name is hidden, no POST is sent, and joining under
+      the old name works.
+    - Restart then an SPA navigation (9): the join form opens, the navbar name is hidden, the
+      page behind is inert, and joining works. An edit form open across a restart turns into
+      the join form on a navigation.
+    - Two tabs (3): tab 1 saves +2 and 70%; tab 2, opened before and not navigated, opens
+      showing +2 and 70%. Renaming there keeps +2 and 70%.
+    - A rename on another tab between opening the form and saving it (2.2): the save posts a
+      blank name and the guest keeps the newest name and the saver's key.
+    - Join form open on tab A, join on tab B (4): tab A's form stays until it navigates, then
+      closes, the navbar shows the name and the page is usable.
+    - A back swipe (6): the typed name stays. With the POST held, Save stays disabled through a
+      navigation, a second submit sends nothing, and one POST goes out in total.
+    - Tab key and click (7): over 24 Tab presses focus never leaves the form, on the phone and
+      at 1200x800, and a click where an Add link is queues nothing.
+    - After three visits to `/queue` (8): the guest form's background has no click handler and
+      the queue's own pop-up background has exactly one.
+    - `/search` (5): a key-only save closes the form, the page does not load again (a marker on
+      `window` and a stand-in block in the page survive), and no search request goes out. A
+      rename there reloads.
+    - The key stops at -3 and +3 (10).
+    - The `GET /singer` load failing (aborted): edit mode opens from the page's own state, and
+      Cancel closes it and lifts the page.
+  - The guest form's position in the page was read on 15 pages (Home, Queue, Search, Browse,
+    Info, Processing, library run, picks, playlist, batch renamer, file edit, and the three
+    song pages): beside `.container` on all but the bare `/search` before `d2aa310`.
+- **Checked beyond the passes** (each break made one at a time in `spa-navigation.js` and the
+  new driver run, file restored from git after each):
+  - The name click opening from the page's own state instead of the server's: 9 checks fail
+    (restart case, tab 2's values, the prefilled name). In the restart case the join posts a
+    blank name, which is review finding 1.
+  - Every save reloading: 2 fail (the `/search` page survival and the search request).
+  - No `inert`: 3 fail (the page-behind check and the Tab check on phone and desktop). The
+    click check still passes, because the form's own card covers the link either way, so the
+    Tab check is the one that proves step 3.
+  - A join form not closed when a navigation finds the phone joined: 2 fail.
+  - Opening the form again in the mode it is already in (no early return): 4 fail (typed name
+    lost, Save re-enabled mid-request, two POSTs); the driver then stopped on its own wait.
+- **Deviations from the plan:**
+  1. **One commit more than the plan lists, `d2aa310`.** The `/search` page's wrapper `<div>`
+     (opened at the top of its content block) was closed only inside `{% if search_results %}`.
+     A bare `/search` left it open, so every closer in `base.html` after it shifted and the
+     guest form ended up inside `body > .container`. Step 3's `inert` on that element made the
+     form unusable there: a phone opening `/search` unjoined would have seen a join form it
+     could not type in or save. This is old markup (the Phase 3 form was already mis-placed on
+     that page, but only `inert` made it matter). Found by the step 5 run, fixed at the root
+     with a render test, and the other pages were then read (above).
+  2. **The key limit is held in one number (`singerFormKeyLimit`)** kept when the form opens,
+     not the whole state object. Same effect: the key control clamps to the `key_limit` the
+     server sent.
+  3. **Step 1's "keeps it for the key control" arrives in step 4**, where the limit is
+     actually used, so commit 1 has no unused variable.
+  4. **Only two inputs had a `name=` attribute** (the name field and the hidden key); the range
+     had none. Both deleted. `window.openSingerForm` is no longer exported (nothing calls it);
+     `window.applySingerState` takes its place. The cookie helper is `setGuestCookie`.
+- **Known edge, not covered by a fix (new here):** an edit form opened, then the app restarts,
+  then Save pressed with no navigation in between. The page does not know about the restart,
+  so it posts a blank name with a token the new run does not hold, and the server makes an Anon
+  name with the form's key and volume. The window is one form's open time spanning a restart.
+  Closing it would mean the save route refusing a blank name from a phone it does not know,
+  which changes the route; not built unless Ken asks.
+- **Not checked:**
+  - `/search` with real results: the VM's live YouTube search never answered (60 s), so the
+    page's unsaved state was a typed search term plus a stand-in results block. The search box
+    empties itself when the name click takes focus away, before the form opens; that is the
+    page's own behaviour and not a reload, so the typed term was not counted as surviving.
+  - The vocal volume on Now Playing (no stems in the fake library; not part of this phase).
+  - A save whose reply is lost, the "Could not save" message and a 422 (nothing produced them).
+  - The form at desktop width (the Tab and click check ran there, but the form itself was not
+    looked at), and a real phone keyboard. Only two screenshots of the form were looked at (the
+    `/search` ones that found deviation 1).
+- **Self-review:** steps 2-4 and the search fix are covered by the self-review above. Step 1
+  changes how the form gets its state on both paths (navigation and the name click) and adds a
+  route, so its review is tracked as pending for the checkpoint after this phase (`eb91f69`).
+- **Not done:** `graphify update .` (no `graphify-out/` on this box).
