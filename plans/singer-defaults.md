@@ -1252,3 +1252,75 @@ deviated from this plan and why.)
   route's contract and the registry, on the server and the page, so its review is tracked as
   pending for the checkpoint after this phase (`24110fc`).
 - **Not done:** `graphify update .` (no `graphify-out/` on this box).
+
+### Phase 3.3: review fixes of Phase 3.2's step 1 (executed 2026-11-06, Claude Sonnet 5.5)
+
+- **Commits:** `7793909` `fix(ui): a refused edit becomes the join form and keeps the guest's
+  choices` (step 1); `adda6d7` `test(singer): check that a refused edit joins nobody, and name
+  both causes of a 410` (step 2). The plan edit itself is `69bb1dd`. The `/code-review` of
+  `24110fc` ran before this phase (10 findings, mapped in the Phase 3.3 table).
+- **Tests:** full suite 3499 passed before, 3500 after: the one 410 route test became two (a
+  phone with a token from an earlier run, a phone with no cookies), each posting `Mike` with
+  `editing`, expecting 410 and `{"success": false}`, then joining `Mike` from a fresh phone and
+  expecting 200. With the registry's refusal taken out of `save`, both fail (`assert 200 ==
+  410`); restored and passing. Pre-commit clean on every changed file; the page script passes
+  the syntax check (`scratchpad/syntax.py`; no node on this box).
+- **ui-check:** three scripted runs against the real app, phone viewport 390x844. Names used:
+  `Hana Ü`, `Hana Ü II`, `Typed Meanwhile`, `Faye Ø`, `Ivo Ç`, `Ivo Çelik`.
+  - **New 3.3 driver (`check_33.py`): 63 passed, 0 failed.** It is 3.2's driver with section A
+    replaced by A, A2, E and F, and sections B-D (3.2's) unchanged. By plan item:
+    - A: edit form open, key +1, vocal volume moved to 25, app restarted, Save with the name
+      unchanged. The POST carried `editing=true`, a blank name, `semitones=1` and
+      `vocal_volume=0.25` and got 410. The page did not reload (a `window` marker set before
+      the Save survived). The form was the join form (title `Join the party`, no Cancel) with
+      `Hana Ü`, key +1, volume 25 (slider and its label) and the line `The app was restarted.
+      Please join again.`; navbar name hidden, page behind inert, Save enabled. The phone's
+      `user` and `singer_token` cookies were unchanged and the phone was not joined. One Save
+      then joined as `Hana Ü` at key 1 and volume 0.25.
+    - A2: a typed new name (`Hana Ü II`) is what the join form holds, and Save joins under it;
+      with the name field emptied, the form holds the name the edit had prefilled (`Hana Ü II`)
+      and Save joins under it. Both without a reload.
+    - E: edit save held, app restarted, then a navigation to `/queue` (the join form opens at
+      the house defaults), `Typed Meanwhile` typed, then the save released: it got its 410 and
+      the page did not reload, the join form and the typed name stayed, no refusal line showed,
+      and Save joined under `Typed Meanwhile` at key 0 and volume 0.4. The navigation is a
+      scripted click on the nav link, since the open form blocks real clicks (a Back press on a
+      phone is the real route).
+    - F: edit save held, Cancel (form closed), app restarted, save released: the join form
+      opened with no reload, holding `Faye Ø`, key -1 and volume 60, with the line, navbar name
+      hidden and page inert. Save joined as `Faye Ø` at -1 and 0.6.
+    - B-D (3.2's) all pass again: the failing load three ways, the held load, the timeout, and
+      the lost reply with the cookie put back.
+  - **3.1 driver: 42 passed, 0 failed.** **Phase 3 driver: 56 passed, 0 failed.**
+- **Checked beyond the passes** (each break made one at a time and the driver run, file
+  restored after each, and the page script byte-identical to the committed copy afterwards):
+  - A 410 that reloads (3.2's behaviour): 17 fail (A, A2, E and F: the old name, key, volume
+    and line gone, and the join then made an Anon name).
+  - No join-mode guard on the 410: 3 fail, all in E (the late 410 overwrote the typed name with
+    the old one and put the refusal line on the join form).
+  - No kept-name fallback: 6 fail (the name field came back empty and the join made an Anon
+    name).
+  - A guard of `=== 'edit'` instead of `!== 'join'`: 2 fail in F (a Cancel pressed while the
+    save was out left the form closed). The driver then stopped on its next wait, since the
+    join form never opened.
+  - No refusal line: 2 fail.
+  - The chosen key and vocal volume not carried: 4 fail (the join form was at the house
+    defaults).
+  - The last three were not in the plan's list; the plan's fourth break (the registry's refusal)
+    is the route test above.
+- **Not covered by a check:** the success handler reading `editing` instead of the form's mode
+  at reply time. Nothing was broken to see it fail; the only mid-save mode switch the driver
+  makes (E, F) ends in a 410, not a success.
+- **Deviations from the plan:** none. The 410 handler builds the state with
+  `Object.assign({}, window.singer, {joined: false, semitones, vocal_volume})`, so the join
+  form takes `name_limit`, `key_limit` and `transpose_enabled` from the page's copy. The
+  string's `{# MSG: #}` comment says the saved settings were lost because the app restarted.
+- **Not checked:** a real phone, the look of the refusal line under the name field (no
+  screenshot taken), the new checks at desktop width, and the English-only wording in another
+  language (catalogs are not regenerated). The 3.1 Results' list of unchecked items still
+  stands.
+- **Self-review:** step 1 is one function and one string, read in one pass and covered by the
+  browser checks above; step 2 is tests and wording. Self-review covers both; no review is due
+  after this phase.
+- **Not done:** `graphify update .` (no `graphify-out/` on this box). Phase 4 (Ken's checks) not
+  started.
