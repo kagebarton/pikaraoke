@@ -499,3 +499,59 @@ deviated from this plan and why.)
 - **Self-review:** the two commits are multi-file concurrency (registry lock held across
   three other locks), so the review is tracked as pending for the checkpoint after this phase.
 - **Not done:** `graphify update .` (no `graphify-out/` on this box).
+
+### Phase 2.1: review fixes (executed 2026-11-06, Claude Sonnet 5.5)
+
+- **Commits:** `522f946` `docs(plans): singer-defaults Phase 2.1 review fixes` (the plan edit,
+  see deviation 1); step 1 `93f29a9` `fix(processing): read the guest's name cookie decoded`;
+  step 2 `af169a3` `fix(singers): a phone is found by its token alone`; step 3 `90726dc`
+  `fix(singers): a rename moves every copy before telling the pages`; step 4 `c227083`
+  `fix(singers): one spelling rule for names, and a length limit`; step 5 `8322831`
+  `test(singers): real preferences in the play_file test, and a run loop that can't hang`.
+- **Tests:** full suite 3451 passed before. After step 2: 3466; after step 3: 3473; after step
+  4: 3483; after step 5: 3483 (step 1 ran `test_processing_routes.py` alone, 146 passed, +4:
+  the encoded-cookie tests; two of them fail without the fix). Pre-commit clean on every
+  changed file (black reformatted `test_singers.py` twice; re-run clean).
+- **ui-check:** not applicable (server only; Phase 3).
+- **Review findings** (numbers from the 2.1 table): 1, 2, 3, 4, 5, 8, 9, 10, 12, 13, 14, 15
+  fixed in steps 1-5; 6 and 7 accepted as written in the plan (Design "Accepted edges", Phase 2
+  "Known property"); 11 not taken (ruling 8). Step 1 settles the Phase 2 "Found, not fixed" and
+  Ken's call there.
+- **Checked beyond the new tests:**
+  - With the old move order (queue emits inside `rename_user`), two new tests in
+    `test_karaoke_rename_singer.py` fail (songs split when a `queue_update` handler raises; two
+    `now_playing_update` where one is wanted).
+  - With `play_file` reading the `vocal_volume` preference again, the `play_file` test fails
+    (`0.9 == 0.15`).
+  - The capped run loop ends an empty-queue run after 20 passes (a scratch test, deleted).
+  - The real `pikaraoke.app` object: a join, a 422 on `semitones` 9, and a rename sent with
+    the token cookie alone gives 200, keeps the token, and calls `rename_singer("Mary Ann",
+    "Mary Anne")` once.
+- **Deviations from the plan:**
+  1. **The plan edit was not committed.** Ken's prompt named the Phase 2.1 plan commit as HEAD,
+     but HEAD was `731d5ec` and `plans/singer-defaults.md` was modified in the working tree.
+     I committed it unchanged as `522f946` before step 1, so the code commits carry no plan
+     edits.
+  2. **The `name_limit` page-state key and its test moved from step 2 to step 4.** Step 2's
+     list asks for the key, but `NAME_LIMIT` is step 4's constant, and a key advertising a
+     limit nothing enforces would not stand alone in the step 2 commit.
+  3. **One more route test deleted in step 2.** "A phone whose name someone else took has not
+     joined" duplicates "a token nobody holds has not joined" now that the phone is its token.
+     "A wrong token on a known name" is kept (a join, so 409), renamed.
+  4. **`test_singers.py` was rewritten, not patched**: `join` and `update` tests became
+     `save` tests with the same coverage of taken, reserved and Anon names, plus new `lookup`,
+     `house_defaults`, stale-token and `on_rename`-raises tests, and a Unicode section in step
+     4.
+- **Known properties (new):**
+  - The rename's notifications (`queue_update`, the overlay refresh, `now_playing_update`) now
+    run under the registry lock, after every move. Their handlers only `socketio.emit` the Now
+    Playing data, so none reaches the registry; a handler that rendered a page would deadlock
+    on the non-reentrant lock. Documented on `SingerRegistry`.
+  - The `NAME_LIMIT` check counts the characters of the raw form value, before the strip and
+    before NFC. A 30-character name with trailing spaces gets 422, and so does a 30-letter
+    name sent with decomposed accents (each accent counts). The form's `maxlength` (Phase 3)
+    counts UTF-16 units, so it is never looser than the server.
+- **Self-review:** steps 2 and 3 are multi-file concurrency again (registry lock held across
+  the queue, tracker and playback locks and now the notifications), so the review stays
+  tracked as pending for the checkpoint after this phase.
+- **Not done:** `graphify update .` (no `graphify-out/` on this box).
