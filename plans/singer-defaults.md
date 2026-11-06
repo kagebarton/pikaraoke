@@ -1092,3 +1092,74 @@ deviated from this plan and why.)
   changes how the form gets its state on both paths (navigation and the name click) and adds a
   route, so its review is tracked as pending for the checkpoint after this phase (`eb91f69`).
 - **Not done:** `graphify update .` (no `graphify-out/` on this box).
+
+### Phase 3.2: review fixes of Phase 3.1's step 1 (executed 2026-11-06, Claude Opus 5.5)
+
+- **Commits:** `24110fc` `fix(singer): an edit save from a phone the app no longer knows asks
+  it to join again` (step 1); `cf5c300` `fix(ui): the name click never opens the guest form
+  from old state` (step 2); `b504327` `fix(ui): the name click puts the name cookie back too`
+  (step 3). The plan edit itself is `24f6da2`. The `/code-review` of `eb91f69` ran before this
+  phase (12 findings, mapped in the Phase 3.2 table).
+- **Tests:** full suite 3490 passed before, 3499 after: +5 in `test_singers.py` (an edit from
+  a token that finds nobody, with no token or an earlier run's and a blank name or a typed one,
+  is refused and leaves the name it would have taken free; an edit from a known token updates
+  as without the flag), +4 in `test_singer_routes.py` (an edit from a token nobody holds gets
+  410, sets no cookies and the phone stays not joined; an edit from a known token saves; a save
+  without `editing`, or with `editing=false`, from a token nobody holds still joins as Anon).
+  The rename-after-page-load test now also changes the key and vocal volume and checks all
+  three come back (review #10). With the registry's refusal disabled, 5 of the new tests fail
+  (run both ways). Pre-commit clean on every changed file.
+- **ui-check:** three scripted runs against the real app, phone viewport 390x844. Names used:
+  `Hana Ü`, `Ivo Ç`, `Ivo Çelik`, plus the earlier drivers' names.
+  - **New 3.2 driver: 38 passed, 0 failed.** By plan item:
+    - Edit form open, app restarted, Save with the name unchanged (1): the POST carried
+      `editing=true` and a blank name and got 410; the page reloaded into the join form (no
+      Cancel, navbar name hidden, page behind inert); the phone's `user` and `singer_token`
+      cookies were unchanged (no Anon name reached it); the phone was not joined; joining under
+      the old name worked; no script errors.
+    - The load failing (2, 8, 11), three ways: aborted, a 200 HTML page, and a 500 (the 500 is
+      beyond the plan's list). Each time: no form opened, the page was not made inert, the
+      message `Could not reach the app. Please try again.` showed, a console warning named the
+      status (`error 0`, `parsererror 200`, `error 500`), and the navbar name stayed. The next
+      tap after the failures opened edit mode.
+    - The load held (5): three taps sent one load; nothing opened while held; on release the
+      edit form opened once and stayed closed after Cancel. Held again, then an SPA navigation
+      to `/queue`, then released: no form on the new page, and the next tap there opened edit
+      mode. Held past the timeout: the message showed after 10.1 s with a `timeout` warning and
+      no form; the next tap after it worked. No script errors.
+    - A save whose reply was lost (6): the same phone renamed from outside the page, so the
+      cookie kept `Ivo Ç`; a name click on `/search` showed `Ivo Çelik` in the form and the
+      navbar and put the cookie back, so `getUserCookie()` (what search's add posts) returned
+      `Ivo Çelik`.
+  - **3.1 driver: 42 passed, 0 failed.** Its check 9 lost its "a failed load opens edit mode
+    from the page's state" half (that behaviour is gone; the 3.2 driver covers the failure
+    now); the "Cancel closes it and lifts the page" half stays.
+  - **Phase 3 driver: 56 passed, 0 failed.**
+  - The driver ignores the browser's own network log lines (`Failed to load resource`, from the
+    refused connection during a restart and from the 410 itself) when it counts script errors.
+- **Checked beyond the passes** (each break made one at a time in `spa-navigation.js` and the
+  3.2 driver run, file restored after each, tree clean afterwards):
+  - The save not sending `editing`: 6 fail; the guest became `Anon-Vehx` with a new token,
+    which is review finding 1.
+  - A failed load opening edit mode from the page's state (3.1's behaviour): 2 fail.
+  - No guard while the load is out: 2 fail (three taps sent three loads).
+  - A navigation not dropping the load: 1 fails (the late reply opened the form on `/queue`).
+    With the fix, Playwright still reports the held request as released; the page had dropped
+    it, so no reply reached the script.
+  - The name click not putting the cookie back: 2 fail.
+  - Any reply type accepted: 4 fail (the HTML reply opened a join form and hid the navbar name,
+    with no warning).
+  - No timeout: the driver stopped on its own 20 s wait for the message, which never came.
+  - Where a break made a check fail, the driver usually stopped soon after on a later wait,
+    since the page was no longer in the state the next step expects.
+- **Deviations from the plan:** none in behaviour. Names chosen: the put-back function is
+  `putBackNameCookie`, `applySingerState`'s second argument is `openEdit`, and the abort is
+  `dropSingerStateLoad()`, called in `navigateTo` next to `closeBurgerMenu()`. The 410 reply's
+  body is `{"success": false}` with no message, since the page reloads without showing one.
+- **Not checked:** a real phone and the message's look (no screenshot taken); the new checks
+  at desktop width; the 3.1 Results' list of unchecked items still stands (`/search` with real
+  results, a 422, the "Could not save" message).
+- **Self-review:** steps 2-3 are covered by the self-review above. Step 1 changes the save
+  route's contract and the registry, on the server and the page, so its review is tracked as
+  pending for the checkpoint after this phase (`24110fc`).
+- **Not done:** `graphify update .` (no `graphify-out/` on this box).
