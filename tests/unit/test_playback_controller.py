@@ -89,7 +89,7 @@ class TestPlaybackControllerPlayFile:
         pc = PlaybackController(test_prefs, events, filename_fn, mock_mpv)
         mock_mpv.duration = 180
 
-        result = pc.play_file("/songs/test.mp4", "TestUser", semitones=2)
+        result = pc.play_file("/songs/test.mp4", "TestUser", 2, 0.4)
 
         assert result.success is True
         assert pc.now_playing == "Test Song"
@@ -114,6 +114,31 @@ class TestPlaybackControllerPlayFile:
         assert tick_call_index > play_call_index, "tick_overlays must come after mpv.play"
 
     @patch("pikaraoke.lib.playback_controller.os.path.isfile", return_value=True)
+    def test_play_file_uses_the_given_key_and_vocal_volume_not_the_preference(
+        self, mock_isfile, test_prefs, mock_mpv
+    ):
+        """The singer's values start the song; the house vocal_volume preference is not read."""
+        other_preferences = {
+            "subtitle_delay": 0,
+            "subtitle_scale": 1.0,
+            "subtitle_pos_offset": 0,
+            "normalize_audio": False,
+        }
+        test_prefs.get_or_default = MagicMock(side_effect=other_preferences.__getitem__)
+        pc = PlaybackController(
+            test_prefs, EventSystem(), lambda x, remove_youtube_id=True: "Song", mock_mpv
+        )
+
+        result = pc.play_file("/songs/test.mp4", "TestUser", -2, 0.15)
+
+        assert result.success is True
+        play_kwargs = mock_mpv.play.call_args[1]
+        assert play_kwargs["semitones"] == -2
+        assert play_kwargs["vocal_volume"] == 0.15
+        assert pc.now_playing_transpose == -2
+        assert pc.now_playing_vocal_volume == 0.15
+
+    @patch("pikaraoke.lib.playback_controller.os.path.isfile", return_value=True)
     def test_play_file_stream_failure(self, mock_isfile, test_prefs, mock_mpv):
         """Test playback when stream manager fails."""
         events = EventSystem()
@@ -123,7 +148,7 @@ class TestPlaybackControllerPlayFile:
 
         # No need to mock stream_manager -- MPV plays directly
         # This test is now about MPV play failure
-        result = pc.play_file("/songs/test.mp4", "TestUser")
+        result = pc.play_file("/songs/test.mp4", "TestUser", 0, 0.4)
 
         assert result.success is True  # MPV play is fire-and-forget in this mock
 
@@ -138,7 +163,7 @@ class TestPlaybackControllerMissingFile:
 
         pc = PlaybackController(test_prefs, events, filename_fn, mock_mpv)
 
-        result = pc.play_file("/nonexistent/song.mp4", "TestUser")
+        result = pc.play_file("/nonexistent/song.mp4", "TestUser", 0, 0.4)
 
         assert result.success is False
         assert "not found" in result.error
@@ -153,7 +178,7 @@ class TestPlaybackControllerMissingFile:
         song = tmp_path / "song.mp4"
         song.write_text("fake")
 
-        result = pc.play_file(str(song), "TestUser")
+        result = pc.play_file(str(song), "TestUser", 0, 0.4)
 
         assert result.success is True
         mock_mpv.play.assert_called_once()
@@ -407,7 +432,7 @@ class TestPlaybackControllerLoudnorm:
         )
         mock_mpv.duration = 180
 
-        result = pc.play_file("/songs/test.mp4", "TestUser")
+        result = pc.play_file("/songs/test.mp4", "TestUser", 0, 0.4)
 
         assert result.success is True
         get_offset.assert_called_once_with("/songs/test.mp4")
@@ -432,7 +457,7 @@ class TestPlaybackControllerLoudnorm:
         )
         mock_mpv.duration = 180
 
-        result = pc.play_file("/songs/test.mp4", "TestUser")
+        result = pc.play_file("/songs/test.mp4", "TestUser", 0, 0.4)
 
         assert result.success is True
         get_offset.assert_not_called()
@@ -455,7 +480,7 @@ class TestPlaybackControllerLoudnorm:
         )
         mock_mpv.duration = 180
 
-        result = pc.play_file("/songs/test.mp4", "TestUser")
+        result = pc.play_file("/songs/test.mp4", "TestUser", 0, 0.4)
 
         assert result.success is True
         get_offset.assert_called_once_with("/songs/test.mp4")
@@ -478,7 +503,7 @@ class TestPlaybackControllerLoudnorm:
         )
         mock_mpv.duration = 180
 
-        result = pc.play_file("/songs/test.mp4", "TestUser")
+        result = pc.play_file("/songs/test.mp4", "TestUser", 0, 0.4)
 
         assert result.success is True
         get_offset.assert_called_once_with("/songs/test.mp4")

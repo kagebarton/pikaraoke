@@ -36,6 +36,7 @@ from pikaraoke.lib.preference_manager import PreferenceManager
 from pikaraoke.lib.processing_manager import ProcessingManager
 from pikaraoke.lib.queue_hold import QueueHold
 from pikaraoke.lib.queue_manager import QueueManager
+from pikaraoke.lib.singers import SingerRegistry
 from pikaraoke.lib.song_manager import SongManager
 from pikaraoke.lib.youtube_dl import (
     get_search_results,
@@ -272,6 +273,7 @@ class Karaoke:
             filename_from_path=SongManager.filename_from_path,
             get_available_songs=lambda: self.song_manager.songs,
         )
+        self.singers = SingerRegistry(self.preferences)
 
         # Initialize and start download manager
         self.download_manager = DownloadManager(
@@ -582,7 +584,6 @@ class Karaoke:
         Args:
             volume: Vocal volume level (0.0 to 1.0).
         """
-        self.vocal_volume = volume
         self.playback_controller.set_vocal_volume(volume)
         self.log_and_send(_("Vocal volume: %s%%") % int(volume * 100))
         self.update_now_playing_socket()
@@ -630,8 +631,6 @@ class Karaoke:
         self.volume = self.preferences.get_or_default("volume")
         # Reset subtitle delay to config default for next song
         self.subtitle_delay = self.preferences.get_or_default("subtitle_delay")
-        # Reset vocal volume to config default for next song
-        self.vocal_volume = self.preferences.get_or_default("vocal_volume")
         self.update_now_playing_socket()
 
     def get_now_playing(self) -> dict[str, Any]:
@@ -652,7 +651,6 @@ class Karaoke:
             "next_user": next_song["user"] if next_song else None,
             "volume": self.volume,
             "subtitle_delay": self.subtitle_delay,
-            "vocal_volume": self.vocal_volume,
         }
 
     def update_now_playing_socket(self) -> None:
@@ -701,8 +699,9 @@ class Karaoke:
                     song = self.queue_manager.pop_next()
                     if not song:
                         continue
+                    singer = self.singers.settings_for(song["user"])
                     result = self.playback_controller.play_file(
-                        song["file"], song["user"], song["semitones"]
+                        song["file"], song["user"], singer.semitones, singer.vocal_volume
                     )
 
                     if not result.success and result.error:

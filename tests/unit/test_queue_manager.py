@@ -105,12 +105,6 @@ class TestQueueManagerEnqueue:
         assert queue_manager.queue[0]["file"] == "/songs/song2---def.mp4"
         assert queue_manager.queue[1]["file"] == "/songs/song1---abc.mp4"
 
-    def test_enqueue_with_semitones(self, queue_manager):
-        """Enqueuing should store the semitones value."""
-        queue_manager.enqueue("/songs/test---abc.mp4", "User1", semitones=3)
-
-        assert queue_manager.queue[0]["semitones"] == 3
-
     def test_enqueue_emits_queue_update(self, queue_manager):
         """Enqueuing should emit queue_update event."""
         captured = []
@@ -466,14 +460,13 @@ class TestQueueManagerPopNext:
 
     def test_pop_next_preserves_song_data(self, queue_manager):
         """Popping next should preserve all song data."""
-        queue_manager.enqueue("/songs/test---abc.mp4", "TestUser", semitones=5)
+        queue_manager.enqueue("/songs/test---abc.mp4", "TestUser")
 
         song = queue_manager.pop_next()
 
         assert song is not None
         assert song["file"] == "/songs/test---abc.mp4"
         assert song["user"] == "TestUser"
-        assert song["semitones"] == 5
         assert song["title"] == "test"
 
     def test_pop_next_skips_paused_songs(self, queue_manager):

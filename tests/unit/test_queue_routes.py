@@ -47,7 +47,6 @@ class TestQueueApiContract:
                 "user": "TestUser",
                 "file": "/songs/Artist - Song---abc123.mp4",
                 "title": "Artist - Song",
-                "semitones": 0,
                 "paused": False,
             }
         ]
@@ -64,7 +63,6 @@ class TestQueueApiContract:
         assert "user" in item
         assert "file" in item
         assert "title" in item
-        assert "semitones" in item
         assert "paused" in item
 
     @patch("pikaraoke.routes.queue.get_karaoke_instance")
@@ -87,7 +85,6 @@ def _make_queue_item(n: int) -> dict:
         "file": f"/songs/song{n}.mp4",
         "title": f"Song {n}",
         "user": f"User{n}",
-        "semitones": 0,
         "paused": False,
     }
 
