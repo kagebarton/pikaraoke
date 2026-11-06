@@ -358,6 +358,55 @@ class TestPlaybackControllerResetNowPlaying:
         assert pc.is_playing is False
 
 
+class TestRenameSinger:
+    """rename_singer shows a renamed guest's new name on the song playing now."""
+
+    @pytest.fixture
+    def events(self):
+        return EventSystem()
+
+    @pytest.fixture
+    def pushed(self, events):
+        """Names of the events the phones are told about, after this fixture is requested."""
+        names = []
+        events.on("now_playing_update", lambda: names.append("now_playing_update"))
+        return names
+
+    @pytest.fixture
+    def controller(self, test_prefs, events, mock_mpv):
+        pc = PlaybackController(test_prefs, events, lambda x, remove_youtube_id=True: x, mock_mpv)
+        pc.is_playing = True
+        pc.now_playing_user = "Mike"
+        return pc
+
+    def test_the_song_of_the_old_name_takes_the_new_one(self, controller):
+        controller.rename_singer("Mike", "Michael")
+
+        assert controller.now_playing_user == "Michael"
+        assert controller.get_now_playing()["now_playing_user"] == "Michael"
+
+    def test_the_tv_overlay_and_the_phones_are_refreshed_once(self, controller, mock_mpv, pushed):
+        controller.rename_singer("Mike", "Michael")
+
+        mock_mpv.tick_overlays.assert_called_once_with()
+        assert pushed == ["now_playing_update"]
+
+    def test_another_guests_song_is_left_alone(self, controller, mock_mpv, pushed):
+        controller.rename_singer("Sue", "Susan")
+
+        assert controller.now_playing_user == "Mike"
+        mock_mpv.tick_overlays.assert_not_called()
+        assert pushed == []
+
+    def test_nothing_playing_is_left_alone(self, controller, mock_mpv):
+        controller.reset_now_playing()
+
+        controller.rename_singer("Mike", "Michael")
+
+        assert controller.now_playing_user is None
+        mock_mpv.tick_overlays.assert_not_called()
+
+
 class TestPlaybackControllerNewMethods:
     """Tests for methods added in MPV migration."""
 

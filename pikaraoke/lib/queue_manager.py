@@ -369,6 +369,16 @@ class QueueManager:
         return True
 
     @_locked
+    def rename_user(self, old: str, new: str) -> None:
+        """Move every queued song of ``old``, held ones included, to ``new``."""
+        moved = [item for item in self.queue if item["user"] == old]
+        for item in moved:
+            item["user"] = new
+        if moved:
+            self._events.emit("queue_update")
+            self._events.emit("now_playing_update")
+
+    @_locked
     def queue_edit(self, song_path: str, action: str) -> bool:
         """Move or remove a song in the queue. Action: 'up', 'down', or 'delete'."""
         index = self._find_song_index(song_path)

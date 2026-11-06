@@ -633,6 +633,16 @@ class Karaoke:
         self.subtitle_delay = self.preferences.get_or_default("subtitle_delay")
         self.update_now_playing_socket()
 
+    def rename_singer(self, old: str, new: str) -> None:
+        """Move a renamed guest's songs (queued, held, in processing, playing) to the new name.
+
+        Called by SingerRegistry.update with the registry lock held, so each step takes its
+        own lock and releases it before the next: none may take the registry lock.
+        """
+        self.queue_manager.rename_user(old, new)
+        self.pipeline_tracker.rename_user(old, new)
+        self.playback_controller.rename_singer(old, new)
+
     def get_now_playing(self) -> dict[str, Any]:
         """Get the current playback state.
 

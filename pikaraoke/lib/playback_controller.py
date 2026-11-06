@@ -397,6 +397,15 @@ class PlaybackController:
         if self.is_playing and socketio:
             socketio.emit("playback_position", self.mpv.position, namespace="/")
 
+    def rename_singer(self, old: str, new: str) -> None:
+        """Show the new name for the song playing now, if it is ``old``'s."""
+        with self._playback_lock:
+            if self.now_playing_user != old:
+                return
+            self.now_playing_user = new
+        self.refresh_overlays()
+        self.events.emit("now_playing_update")
+
     def set_pitch(self, semitones: int) -> None:
         """Live pitch change on current song."""
         if self.is_playing:
