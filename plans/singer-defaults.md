@@ -3,6 +3,8 @@ Phase 2.1 added by Claude Opus 5.5 on 2026-11-06 from the `/code-review` of Phas
 Design sections it changes are rewritten in place and marked (2.1). Phase 2.2 added by Claude
 Opus 5.5 on 2026-11-06 from the `/code-review` of Phase 2.1, marked (2.2) the same way. Phase
 3.1 added by Claude Opus 5.5 on 2026-11-06 from the `/code-review` of Phase 3, marked (3.1).
+Phase 3.2 added by Claude Opus 5.5 on 2026-11-06 from the `/code-review` of Phase 3.1's step 1,
+marked (3.2).
 
 # Singer defaults: key and vocal volume per guest
 
@@ -228,6 +230,13 @@ blueprints in `app.py`.
 - **`GET /singer` (3.1)** returns the same state as JSON, built by the same function as the
   context processor's. The form loads it when the guest opens edit mode, because the page's
   copy is only as fresh as its last navigation.
+- **An edit save from a phone the app no longer knows is refused (3.2).** `POST /singer` takes
+  an `editing` field (boolean, default false), which the edit form sets. With it set and a
+  token that finds nobody (the app restarted while the form was open), `k.singers.save(...,
+  editing=True)` raises `NotJoined` instead of joining a new guest, and the route answers 410
+  `{"success": false}` and changes nothing. Without the field, the save joins or updates as
+  before, so the join form keeps the 3.1 edge "a join form left open on another tab". The
+  check runs inside `save`, under the registry lock.
 
 ### The form
 
@@ -243,15 +252,22 @@ blueprints in `app.py`.
 - **Edit mode opens from the server's current state (3.1).** Clicking the name loads `GET
   /singer` (with `cache: false`) and opens the form from what comes back. If the phone has no
   guest any more (the app restarted since this page loaded), the join form opens instead and
-  the navbar name is hidden. If the load fails, edit mode opens from the page's state as
-  before. The page's own state (`window.singer`) is not overwritten by the load: it says what
-  this page's copies of the name were loaded with, which the reload rule below needs.
+  the navbar name is hidden. The page's own state (`window.singer`) is not overwritten by the
+  load: it says what this page's copies of the name were loaded with, which the reload rule
+  below needs.
+- **No form opens from old state (3.2).** If the load fails, takes longer than 10 s, or
+  answers with something that isn't JSON, no form opens: a notification says the app couldn't
+  be reached, and the failure goes to the console. (3.1 opened edit mode from the page's state
+  here, which brought back the restart case, because a restart is the likeliest reason the
+  load fails.) A tap on the name while the load is out does nothing, and a navigation drops
+  the load, so a late reply never opens the form on another page.
 - **While the form is open, nothing behind it can be reached (3.1):** `body > .container`
   (the navbar and `.box`) is `inert`, so neither a click nor the Tab key reaches an Add link
   behind the join form. Closing the form lifts it. `.container` is never swapped by SPA
   navigation, so this holds across one.
-- Save posts to `/singer`. A 409 shows the error under the name field and keeps the modal
-  open. On success, the `user` and `singer_token` cookies are set from the reply (the token is
+- Save posts to `/singer`, with `editing` set in edit mode (3.2). A 409 shows the error under
+  the name field and keeps the modal open. A 410 (the app no longer knows this phone) reloads
+  the page, which opens the join form, the same as after any other restart (3.2). On success, the `user` and `singer_token` cookies are set from the reply (the token is
   only valid for this run anyway), through one head-script helper that both this and the
   put-back below use, so the two can't drift (3.1).
 - **Reload only when the page's copies of the name are wrong (3.1).** After a join, or when
@@ -265,14 +281,18 @@ blueprints in `app.py`.
 - **One function applies the guest state to the page (3.1)**, called by the head script's
   ready handler with `window.singer` and by the edit-mode load with what came back. Joined:
   the navbar shows the registry's name (not the raw cookie), and a join form left open
-  closes. Not joined: the navbar name is hidden and join mode opens. **Opening the form in
+  closes, or, when the name click asks for it, edit mode opens (3.2: the one place that
+  decides which form opens). Not joined: the navbar name is hidden and join mode opens. **Opening the form in
   the mode it is already open in does nothing (3.1)**, so a navigation (a back swipe) keeps
   what the guest typed and keeps Save disabled while a save is in flight.
 - **Keep the name cookie in step with the registry (2.1).** As the head script loads, right
   after it sets `window.singer` (Phase 3 results, deviation 1), when `window.singer.joined`
   and `Cookies.get("user") !== window.singer.name`, set the `user` cookie to
   `window.singer.name`. The add, delete and pause routes post the cookie's name, so this
-  makes them use the registry's spelling after a save whose reply was lost.
+  makes them use the registry's spelling after a save whose reply was lost. **One head-script
+  function holds the rule (3.2)**, called as the head script loads (page scripts read the
+  cookie as they load, so it can't wait for the ready handler) and by the name click with the
+  state it loaded, so a page reached before the lost reply posts the right name too.
 - The name field has `maxlength` set from `window.singer.name_limit` (2.1). The server
   answers a longer name with a 422.
 - **Edit mode sends the name only when the guest changed it (2.2).** If the name field still
@@ -334,6 +354,19 @@ blueprints in `app.py`.
   form, 3.1).
 - **A rename still reloads the page (3.1)**: unsaved work on the page is lost, as before 3.1.
   Only a save that keeps the name keeps the page.
+- **Two tabs editing at once (3.2)**: edit mode posts the key and vocal volume the form opened
+  with, so a change made on another tab between opening and saving is undone. The name has the
+  "unchanged means keep" rule (2.2); doing the same for key and volume means tracking each
+  field, for one guest using two tabs at the same moment. Not built unless Ken asks.
+- **A page left open across an upgrade (3.2)**: SPA navigation does not fetch
+  `spa-navigation.js` again, so a page loaded before an upgrade runs the new head script
+  against the old file until it is reloaded, and a function the new head script calls may be
+  missing. True of any change to that file, not only this feature's; Ken upgrades between
+  parties.
+- **A mode switch while a save is in flight (3.2)**: a navigation that finds the phone no
+  longer joined, while an edit save is in flight, refills the form as a join form and enables
+  Save. That needs a restart, a back swipe and a pending save at once, and since the edit save
+  is now refused (Route and page state, 3.2), at most one guest comes of it.
 
 ## Phases
 
@@ -616,6 +649,69 @@ Self-review: step 1 changes how the form gets its state on both paths (navigatio
 name click) and adds a route, so track its review as pending for the checkpoint after this
 phase. Steps 2-4 are covered by self-review.
 
+### Phase 3.2: review fixes of Phase 3.1's step 1
+
+From the `/code-review` of `eb91f69^..eb91f69` (Phase 3.1 step 1, 2026-11-06, 12 findings).
+Nothing loses songs or crashes; the one with a real effect is an Anon name after a restart.
+Build the Design sections marked (3.2). Review findings, by number in the review's list:
+
+| # | Finding | Fix |
+| - | ------- | --- |
+| 1 | A restart while the edit form is open still turns the guest into an Anon name | Step 1 |
+| 2 | A failed load opens edit mode from the page's old state, bringing back #1 and the stale-settings case | Step 2 |
+| 3 | Edit mode posts the key and vocal volume the form opened with, undoing another tab's change made since | Accepted edge (Design) |
+| 4 | A page left open across an upgrade calls a function the old script lacks | Accepted edge (Design) |
+| 5 | A slow load: no guard, no timeout; a late or second reply opens the form unasked | Step 2 |
+| 6 | The name click shows the registry's name but leaves the name cookie stale | Step 3 |
+| 7 | A mode switch mid-save re-enables Save, so a second POST can follow | Accepted edge (Design); step 1 limits it to one guest |
+| 8 | The load's failure is swallowed: no log, no message | Step 2 |
+| 9 | Step 1's comment names a reload rule that arrives in step 2's commit | No change: true at HEAD, and the commits land together in order |
+| 10 | The rename test saves the same settings it joined with, so fresh settings are never checked | Step 1 |
+| 11 | A 200 reply that isn't JSON is read as "not joined" | Step 2 |
+| 12 | The click checks `joined` twice; which form opens is decided in two places | Step 2 |
+
+1. **An edit save from a phone the app no longer knows asks it to join again (1, 7, 10).**
+   - `singers.py`: `class NotJoined(Exception)`. `save(token, name, settings, *, editing=False)`:
+     when no guest has the token, raise `NotJoined` if `editing`, else join as now.
+   - `routes/singer.py`: `editing = fields.Boolean(load_default=False)` in the form schema;
+     `NotJoined` answers 410 `{"success": false}`.
+   - `spa-navigation.js`: the save posts `editing: singerFormMode === 'edit'`; a 410 reloads
+     the page.
+   - Tests: the registry refuses an edit from an unknown token and keeps no guest; an edit from
+     a known token updates as before; the route answers 410 and the next state is still not
+     joined; without `editing`, a blank name from an unknown token still joins as Anon. The
+     rename-after-page-load test also changes the key and vocal volume, and checks `GET
+     /singer` shows them.
+2. **The name click never opens the form from old state (2, 5, 8, 11, 12).** `spa-navigation.js`:
+   - The load: `dataType: 'json'`, `timeout: 10000`, kept in a variable while it is out. A tap
+     while it is out does nothing. `navigateTo` aborts it.
+   - Done: `applySingerState(state, true)`; `applySingerState` takes whether to open edit mode
+     when the phone is joined. Fail (not an abort): `console.warn` with the status, and
+     `showNotification` with a new `window.i18n.singerLoadFailed` string, `is-danger`.
+3. **The name click puts the name cookie back too (6).** `base.html`'s head script: the
+   put-back becomes a function declaration taking a state, called at once with `window.singer`.
+   The name click's load calls it with what came back.
+4. Verify with the local `ui-check` skill on the VM (phone viewport):
+   - Edit form open, restart the app, Save with the name unchanged: the POST gets 410, the page
+     reloads into the join form, and no Anon guest was made (joining under the old name works).
+   - The load failing (aborted), and answering with an HTML page: no form opens, the
+     notification shows, and a console warning is logged.
+   - The load held: a second tap sends no second load; a navigation while it is held, then the
+     load released: no form opens on the new page. A load held past 10 s shows the
+     notification.
+   - The name cookie set to a stale spelling without a navigation, then a name click: the
+     cookie matches the registry's name.
+   - The Phase 3 and 3.1 drivers again, with the 3.1 check "a failed load opens from the page's
+     state" replaced by the above.
+
+Commits: `fix(singer): an edit save from a phone the app no longer knows asks it to join again`
+(step 1); `fix(ui): the name click never opens the guest form from old state` (step 2);
+`fix(ui): the name click puts the name cookie back too` (step 3).
+
+Self-review: step 1 changes the save route's contract and the registry, on the server and the
+page, so track its review as pending for the checkpoint after this phase. Steps 2-3 are covered
+by self-review.
+
 ### Phase 4: Ken's checks
 
 Ken runs the test plan below at a real party or a rehearsal on his box. No code unless he
@@ -640,6 +736,10 @@ finds something.
 - [ ] Restart the app, then click your name without changing page first: you get the join
       form, not an Anon name.
 - [ ] Change only your key while Search shows results: the results stay.
+- [ ] Open your name's form, restart the app, then press Save: you get the join form, not an
+      Anon name.
+- [ ] With the app stopped, tap your name: a message says the app can't be reached, and no form
+      opens.
 
 ## Follow-ups (not in this plan)
 
