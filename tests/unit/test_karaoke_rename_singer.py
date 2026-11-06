@@ -34,8 +34,8 @@ def party(tmp_path):
     )
     karaoke.rename_singer = lambda old, new: Karaoke.rename_singer(karaoke, old, new)
 
-    singers = SingerRegistry(preferences)
-    name, token = singers.join("Mike", SingerSettings(2, 0.7))
+    singers = SingerRegistry(preferences, karaoke.rename_singer)
+    name, token = singers.save(None, "Mike", SingerSettings(2, 0.7))
     queue.enqueue(SONG, "Mike", log_action=False)
     queue.enqueue(HELD, "Mike", waiting="download", log_action=False)
     tracker._items.append(PipelineItem(title="Processing", url="https://x/1", user="Mike"))
@@ -47,9 +47,7 @@ def party(tmp_path):
 
 
 def rename(party, new_name):
-    return party.singers.update(
-        party.name, party.token, new_name, SingerSettings(2, 0.7), party.karaoke.rename_singer
-    )
+    return party.singers.save(party.token, new_name, SingerSettings(2, 0.7))
 
 
 def where_the_name_is_kept(party):
@@ -72,7 +70,7 @@ class TestRenameSinger:
         assert where_the_name_is_kept(party) == (["MIKE", "MIKE"], ["MIKE"], "MIKE")
 
     def test_a_refused_name_moves_nothing(self, party):
-        party.singers.join("Sue", SingerSettings(0, 0.4))
+        party.singers.save(None, "Sue", SingerSettings(0, 0.4))
 
         with pytest.raises(NameTaken):
             rename(party, "sue")

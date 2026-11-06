@@ -27,7 +27,7 @@ def play_file(mock_karaoke):
 
 class TestRunLoopStartsSongsAtTheSingersSettings:
     def test_a_registered_singers_settings_reach_play_file(self, mock_karaoke, play_file):
-        mock_karaoke.singers.join("Mike", SingerSettings(semitones=2, vocal_volume=0.7))
+        mock_karaoke.singers.save(None, "Mike", SingerSettings(semitones=2, vocal_volume=0.7))
         mock_karaoke.queue_manager.enqueue(SONG, "Mike")
 
         mock_karaoke.run()
@@ -37,9 +37,9 @@ class TestRunLoopStartsSongsAtTheSingersSettings:
     def test_settings_changed_after_queuing_apply_when_the_song_starts(
         self, mock_karaoke, play_file
     ):
-        name, token = mock_karaoke.singers.join("Mike", SingerSettings(2, 0.7))
+        _, token = mock_karaoke.singers.save(None, "Mike", SingerSettings(2, 0.7))
         mock_karaoke.queue_manager.enqueue(SONG, "Mike")
-        mock_karaoke.singers.update(name, token, "Mike", SingerSettings(-1, 0.1), MagicMock())
+        mock_karaoke.singers.save(token, "Mike", SingerSettings(-1, 0.1))
 
         mock_karaoke.run()
 

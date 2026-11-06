@@ -273,7 +273,7 @@ class Karaoke:
             filename_from_path=SongManager.filename_from_path,
             get_available_songs=lambda: self.song_manager.songs,
         )
-        self.singers = SingerRegistry(self.preferences)
+        self.singers = SingerRegistry(self.preferences, self.rename_singer)
 
         # Initialize and start download manager
         self.download_manager = DownloadManager(
@@ -636,7 +636,7 @@ class Karaoke:
     def rename_singer(self, old: str, new: str) -> None:
         """Move a renamed guest's songs (queued, held, in processing, playing) to the new name.
 
-        Called by SingerRegistry.update with the registry lock held, so each step takes its
+        Called by SingerRegistry.save with the registry lock held, so each step takes its
         own lock and releases it before the next: none may take the registry lock.
         """
         self.queue_manager.rename_user(old, new)
