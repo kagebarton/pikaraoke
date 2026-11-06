@@ -84,6 +84,8 @@
     let singerFormMode = null;
     let singerFormPrefilledName = '';
     let singerFormKeyLimit = 0;
+    // The name click's load of the guest state, while it is out
+    let singerStateLoad = null;
 
     function setSingerKey(value) {
         const key = Math.max(-singerFormKeyLimit, Math.min(singerFormKeyLimit, value));
@@ -128,22 +130,33 @@
     }
 
     /**
-     * Show a guest state on the page. Joined: the navbar shows the registry's name, and a join
-     * form left open closes. Not joined: the navbar name is hidden and the join form opens.
+     * Show a guest state on the page, and open the form it calls for. Joined: the navbar shows
+     * the registry's name, then edit mode opens when `openEdit` is set (the name click), or else
+     * a join form left open closes. Not joined: the navbar name is hidden and the join form
+     * opens.
      */
-    function applySingerState(state) {
-        if (state.joined) {
-            $('#current-user span').text(state.name);
-            $('#current-user').removeClass('is-hidden');
-            if (singerFormMode === 'join') {
-                closeSingerForm();
-            }
-        } else {
+    function applySingerState(state, openEdit = false) {
+        if (!state.joined) {
             $('#current-user').addClass('is-hidden');
             openSingerForm('join', state);
+            return;
+        }
+        $('#current-user span').text(state.name);
+        $('#current-user').removeClass('is-hidden');
+        if (openEdit) {
+            openSingerForm('edit', state);
+        } else if (singerFormMode === 'join') {
+            closeSingerForm();
         }
     }
     window.applySingerState = applySingerState;
+
+    /** Drop the name click's load, so a late reply never opens the form on another page. */
+    function dropSingerStateLoad() {
+        if (singerStateLoad) {
+            singerStateLoad.abort();
+        }
+    }
 
     function saveSingerForm() {
         const $save = $('#singer-save');
@@ -195,19 +208,30 @@
             e.preventDefault();
             // The name sits in the burger menu on a phone; don't leave it open behind the form
             closeBurgerMenu();
-            // This page's copy of the guest is only as fresh as its last navigation, so open
-            // from the server's. window.singer is left alone: it says what this page's copies
-            // of the name were loaded with, which the save's reload rule needs.
-            $.ajax({ url: '/singer', cache: false }).done(function(state) {
-                applySingerState(state);
-                if (state.joined) {
-                    openSingerForm('edit', state);
-                }
-            }).fail(function() {
-                openSingerForm('edit', window.singer);
-            });
             // Remove focus from the link to prevent CSS focus styling (black background)
             $(this).blur();
+            // A second tap while the load is out would open the form twice
+            if (singerStateLoad) {
+                return;
+            }
+            // This page's copy of the guest is only as fresh as its last navigation, so open
+            // from the server's, and from nothing else: after a restart the page's copy says the
+            // phone has joined when it no longer has. window.singer is left alone: it says what
+            // this page's copies of the name were loaded with, which the save's reload rule needs.
+            singerStateLoad = $.ajax({
+                url: '/singer', cache: false, dataType: 'json', timeout: 10000
+            });
+            singerStateLoad.done(function(state) {
+                applySingerState(state, true);
+            }).fail(function(xhr, status) {
+                if (status === 'abort') {
+                    return;
+                }
+                console.warn('Could not load the guest state:', status, xhr.status);
+                showNotification(window.i18n.singerLoadFailed, 'is-danger');
+            }).always(function() {
+                singerStateLoad = null;
+            });
         });
         $(document).on('click.singer', '#singer-cancel', closeSingerForm);
         $(document).on('click.singer', '#singer-key-down', function() {
@@ -415,6 +439,7 @@
         isNavigating = true;
 
         closeBurgerMenu();
+        dropSingerStateLoad();
 
         try {
             // Fetch the new page content with cache-busting to ensure fresh data
