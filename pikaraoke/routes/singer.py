@@ -26,7 +26,12 @@ class SingerForm(Schema):
     name = fields.String(
         load_default="",
         validate=validate.Length(max=NAME_LIMIT),
-        metadata={"description": "The name to sing under; blank gets an Anon name"},
+        metadata={
+            "description": (
+                "The name to sing under. Blank keeps a joined guest's name and gives a new "
+                "guest an Anon name"
+            )
+        },
     )
     semitones = fields.Integer(
         required=True,
@@ -50,8 +55,9 @@ def save_singer(form: dict[str, Any]) -> Response | tuple[Response, int]:
     """Join as a new guest, or change the name and settings of the guest this phone is.
 
     The phone is found by its token cookie alone. The route sets no cookies: the page stores
-    the returned name and token. An edit from a phone the app no longer knows (it restarted
-    while the form was open) gets 410 and changes nothing; the page then asks it to join.
+    the returned name and token. An edit from a phone the app does not know (it restarted since
+    the form opened, or the phone lost its token cookie) gets 410 and changes nothing; the page
+    then asks it to join.
     """
     k = get_karaoke_instance()
     settings = SingerSettings(form["semitones"], form["vocal_volume"])
