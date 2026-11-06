@@ -311,6 +311,69 @@ class TestUserCancelEndpoint:
         assert response.content_type.startswith("application/json")
 
 
+class TestEncodedNameCookie:
+    """The page stores a name with a space or an accent percent-encoded (Mary%20Ann)."""
+
+    ENCODED = "Jos%C3%A9%20Mary"
+    NAME = "José Mary"
+
+    def _karaoke_with_a_download_of(self, user):
+        tracker = _make_tracker()
+        item = PipelineItem(title="My Song", url="https://example.com", user=user)
+        item.download_status = "active"
+        tracker._items.append(item)
+        karaoke = MagicMock()
+        karaoke.pipeline_tracker = tracker
+        return karaoke, item
+
+    @patch(f"{ROUTE_PREFIX}.is_admin", return_value=False)
+    @patch(f"{ROUTE_PREFIX}.get_karaoke_instance")
+    def test_the_guests_row_is_theirs_on_the_status_page(self, mock_get_instance, _admin, client):
+        karaoke, _ = self._karaoke_with_a_download_of(self.NAME)
+        mock_get_instance.return_value = karaoke
+        client.set_cookie("user", self.ENCODED)
+
+        rows = json.loads(client.get("/processing/status").data)
+
+        assert [row["mine"] for row in rows] == [True]
+
+    @patch(f"{ROUTE_PREFIX}.is_admin", return_value=False)
+    @patch(f"{ROUTE_PREFIX}.get_karaoke_instance")
+    def test_another_guests_row_is_not_theirs(self, mock_get_instance, _admin, client):
+        karaoke, _ = self._karaoke_with_a_download_of("Someone Else")
+        mock_get_instance.return_value = karaoke
+        client.set_cookie("user", self.ENCODED)
+
+        rows = json.loads(client.get("/processing/status").data)
+
+        assert [row["mine"] for row in rows] == [False]
+
+    @patch(f"{ROUTE_PREFIX}._", side_effect=lambda x: x)
+    @patch(f"{ROUTE_PREFIX}.get_karaoke_instance")
+    def test_the_guest_can_cancel_their_own_row(self, mock_get_instance, _gettext, client):
+        karaoke, item = self._karaoke_with_a_download_of(self.NAME)
+        mock_get_instance.return_value = karaoke
+        client.set_cookie("user", self.ENCODED)
+
+        response = client.post("/processing/user/cancel", data={"id": item.id})
+
+        assert response.status_code == 200
+        assert json.loads(response.data)["success"] is True
+
+    @patch(f"{ROUTE_PREFIX}._", side_effect=lambda x: x)
+    @patch(f"{ROUTE_PREFIX}.get_karaoke_instance")
+    def test_the_encoded_cookie_cannot_cancel_another_guests_row(
+        self, mock_get_instance, _gettext, client
+    ):
+        karaoke, item = self._karaoke_with_a_download_of("Someone Else")
+        mock_get_instance.return_value = karaoke
+        client.set_cookie("user", self.ENCODED)
+
+        response = client.post("/processing/user/cancel", data={"id": item.id})
+
+        assert response.status_code == 403
+
+
 class TestEnqueueStaysOpen:
     """Tests that /processing/<item_id>/enqueue remains open to all users."""
 
