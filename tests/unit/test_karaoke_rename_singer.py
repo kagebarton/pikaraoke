@@ -23,14 +23,15 @@ def party(tmp_path):
     them, with Mike's songs in every place a name is kept."""
     events = EventSystem()
     preferences = PreferenceManager(config_file_path=str(tmp_path / "config.ini"))
+    mpv = MagicMock()
     playback = PlaybackController(
-        preferences, events, lambda path, remove_youtube_id=True: path, MagicMock()
+        preferences, events, lambda path, remove_youtube_id=True: path, mpv
     )
     queue = QueueManager(preferences=preferences, events=events)
     tracker = PipelineTracker(MagicMock(), MagicMock(), queue, MagicMock(), events)
-    # A real Karaoke would own these; rename_singer only needs the three collaborators.
+    # A real Karaoke would own these; rename_singer only needs the collaborators and the events.
     karaoke = SimpleNamespace(
-        queue_manager=queue, pipeline_tracker=tracker, playback_controller=playback
+        queue_manager=queue, pipeline_tracker=tracker, playback_controller=playback, events=events
     )
     karaoke.rename_singer = lambda old, new: Karaoke.rename_singer(karaoke, old, new)
 
@@ -42,7 +43,13 @@ def party(tmp_path):
     playback.is_playing = True
     playback.now_playing_user = "Mike"
     return SimpleNamespace(
-        karaoke=karaoke, singers=singers, name=name, token=token, playback=playback
+        karaoke=karaoke,
+        singers=singers,
+        name=name,
+        token=token,
+        playback=playback,
+        events=events,
+        mpv=mpv,
     )
 
 
@@ -89,3 +96,67 @@ class TestRenameSinger:
         rename(party, "Michael")
 
         assert party.singers.settings_for("Michael") == SingerSettings(2, 0.7)
+
+
+class TestEveryCopyMovesBeforeAnyoneIsTold:
+    def test_a_notification_that_raises_leaves_every_copy_moved_and_the_registry_in_step(
+        self, party
+    ):
+        def fail(*_args):
+            raise RuntimeError("socket gone")
+
+        party.events.on("queue_update", fail)
+
+        with pytest.raises(RuntimeError, match="socket gone"):
+            rename(party, "Michael")
+
+        assert where_the_name_is_kept(party) == (["Michael", "Michael"], ["Michael"], "Michael")
+        assert party.singers.lookup(party.token) == ("Michael", SingerSettings(2, 0.7))
+
+
+class TestNotifications:
+    @pytest.fixture
+    def pushed(self, party):
+        names = []
+        party.events.on("queue_update", lambda: names.append("queue_update"))
+        party.events.on("now_playing_update", lambda: names.append("now_playing_update"))
+        return names
+
+    def test_the_queue_and_the_playing_song_moving_send_one_of_each(self, party, pushed):
+        rename(party, "Michael")
+
+        assert pushed == ["queue_update", "now_playing_update"]
+
+    def test_only_the_queue_moving_sends_both(self, party, pushed):
+        party.playback.now_playing_user = "Sue"
+
+        rename(party, "Michael")
+
+        assert pushed == ["queue_update", "now_playing_update"]
+
+    def test_only_the_playing_song_moving_sends_now_playing_alone(self, party, pushed):
+        party.karaoke.queue_manager.queue.clear()
+
+        rename(party, "Michael")
+
+        assert pushed == ["now_playing_update"]
+
+    def test_nothing_moving_sends_nothing(self, party, pushed):
+        party.karaoke.queue_manager.queue.clear()
+        party.playback.now_playing_user = "Sue"
+
+        rename(party, "Michael")
+
+        assert pushed == []
+
+    def test_the_tv_overlay_refreshes_when_the_playing_song_moved(self, party):
+        rename(party, "Michael")
+
+        party.mpv.tick_overlays.assert_called_once_with()
+
+    def test_the_tv_overlay_is_left_alone_when_another_guest_is_playing(self, party):
+        party.playback.now_playing_user = "Sue"
+
+        rename(party, "Michael")
+
+        party.mpv.tick_overlays.assert_not_called()

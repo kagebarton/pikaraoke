@@ -380,31 +380,31 @@ class TestRenameSinger:
         return pc
 
     def test_the_song_of_the_old_name_takes_the_new_one(self, controller):
-        controller.rename_singer("Mike", "Michael")
+        moved = controller.rename_singer("Mike", "Michael")
 
+        assert moved is True
         assert controller.now_playing_user == "Michael"
         assert controller.get_now_playing()["now_playing_user"] == "Michael"
 
-    def test_the_tv_overlay_and_the_phones_are_refreshed_once(self, controller, mock_mpv, pushed):
+    def test_it_refreshes_nothing_because_the_caller_does(self, controller, mock_mpv, pushed):
         controller.rename_singer("Mike", "Michael")
 
-        mock_mpv.tick_overlays.assert_called_once_with()
-        assert pushed == ["now_playing_update"]
-
-    def test_another_guests_song_is_left_alone(self, controller, mock_mpv, pushed):
-        controller.rename_singer("Sue", "Susan")
-
-        assert controller.now_playing_user == "Mike"
         mock_mpv.tick_overlays.assert_not_called()
         assert pushed == []
 
-    def test_nothing_playing_is_left_alone(self, controller, mock_mpv):
+    def test_another_guests_song_is_left_alone(self, controller):
+        moved = controller.rename_singer("Sue", "Susan")
+
+        assert moved is False
+        assert controller.now_playing_user == "Mike"
+
+    def test_nothing_playing_is_left_alone(self, controller):
         controller.reset_now_playing()
 
-        controller.rename_singer("Mike", "Michael")
+        moved = controller.rename_singer("Mike", "Michael")
 
+        assert moved is False
         assert controller.now_playing_user is None
-        mock_mpv.tick_overlays.assert_not_called()
 
 
 class TestPlaybackControllerNewMethods:

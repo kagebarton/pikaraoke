@@ -1061,17 +1061,15 @@ class TestQueueManagerRenameUser:
         assert queue_manager.toggle_pause_user("Michael") is True
         assert queue_manager.queue[0]["paused"] is True
 
-    def test_the_queue_and_up_next_update_once_each(self, queue_manager, pushed):
+    def test_it_reports_whether_any_song_moved(self, queue_manager):
+        queue_manager.enqueue("/songs/song1---abc.mp4", "Mike")
+
+        assert queue_manager.rename_user("Mike", "Michael") is True
+        assert queue_manager.rename_user("Mike", "Michael") is False
+
+    def test_it_tells_nobody_because_the_caller_does(self, queue_manager, pushed):
         queue_manager.enqueue("/songs/song1---abc.mp4", "Mike")
         queue_manager.enqueue("/songs/song2---def.mp4", "Mike")
-        pushed.clear()
-
-        queue_manager.rename_user("Mike", "Michael")
-
-        assert pushed == ["queue_update", "now_playing_update"]
-
-    def test_nothing_is_pushed_when_the_guest_has_no_songs(self, queue_manager, pushed):
-        queue_manager.enqueue("/songs/song1---abc.mp4", "Sue")
         pushed.clear()
 
         queue_manager.rename_user("Mike", "Michael")
