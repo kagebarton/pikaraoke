@@ -222,6 +222,7 @@
                 url: '/singer', cache: false, dataType: 'json', timeout: 10000
             });
             singerStateLoad.done(function(state) {
+                putBackNameCookie(state);
                 applySingerState(state, true);
             }).fail(function(xhr, status) {
                 if (status === 'abort') {
