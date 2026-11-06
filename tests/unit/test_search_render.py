@@ -9,6 +9,7 @@ rendered fine, so a test that actually submits a query is required to catch it.
 """
 
 import os
+from html.parser import HTMLParser
 from unittest.mock import MagicMock, patch
 from urllib.parse import quote
 
@@ -104,6 +105,49 @@ def test_bare_search_renders(mock_get, _site, client):
     resp = client.get("/search")
 
     assert resp.status_code == 200
+
+
+class _FormAncestors(HTMLParser):
+    """Collects the class of every element open around base.html's guest form."""
+
+    _VOID = {"meta", "link", "input", "br", "hr", "img"}
+
+    def __init__(self, html: str):
+        super().__init__()
+        self._open: list[tuple[str, str]] = []
+        self.ancestors: list[str] | None = None
+        self.feed(html)
+
+    def handle_starttag(self, tag, attrs):
+        if tag in self._VOID:
+            return
+        attributes = dict(attrs)
+        if attributes.get("id") == "singer-modal":
+            self.ancestors = [classes for _, classes in self._open]
+        self._open.append((tag, attributes.get("class") or ""))
+
+    def handle_endtag(self, tag):
+        names = [name for name, _ in self._open]
+        if tag in names:
+            del self._open[len(names) - 1 - names[::-1].index(tag) :]
+
+
+@pytest.mark.parametrize("query", ["", "?search_string=karaoke"], ids=["bare", "with-results"])
+@patch("pikaraoke.routes.search.get_search_results", return_value=_RAW_RESULTS)
+@patch("pikaraoke.routes.search.get_site_name", return_value="PiKaraoke")
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_the_guest_form_is_not_inside_the_page_container(mock_get, _site, _results, client, query):
+    """An open guest form makes `body > .container` inert, so the form must sit beside it.
+
+    The page's wrapper div used to close only when there were results, which left the
+    container open on a bare /search and put the form inside it, where it could not be used.
+    """
+    mock_get.return_value = _mock_karaoke()
+
+    page = _FormAncestors(client.get(f"/search{query}").get_data(as_text=True))
+
+    assert page.ancestors is not None
+    assert not any("container" in classes.split() for classes in page.ancestors)
 
 
 # ---------------------------------------------------------------------------
