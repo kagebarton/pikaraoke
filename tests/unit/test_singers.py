@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from pikaraoke.lib.preference_manager import PreferenceManager
-from pikaraoke.lib.singers import NameTaken, SingerRegistry, SingerSettings
+from pikaraoke.lib.singers import NameTaken, NotJoined, SingerRegistry, SingerSettings
 
 KEY_TWO = SingerSettings(semitones=2, vocal_volume=0.7)
 
@@ -99,6 +99,35 @@ class TestJoin:
 
 COMPOSED = "Jos\u00e9"  # é as one character
 DECOMPOSED = "Jose\u0301"  # e then a combining acute accent
+
+
+class TestEditing:
+    """An edit form's save: the phone believes it has joined."""
+
+    @pytest.mark.parametrize("token", [None, "from-an-earlier-run"])
+    @pytest.mark.parametrize("name", ["", "Mike"])
+    def test_a_token_that_finds_nobody_is_refused_and_joins_nobody(
+        self, registry, monkeypatch, token, name
+    ):
+        # Characters for one Anon name only, so a refused save that joined would leave none
+        monkeypatch.setattr(
+            "pikaraoke.lib.singers.secrets.choice", MagicMock(side_effect=list("aaaa"))
+        )
+
+        with pytest.raises(NotJoined):
+            registry.save(token, name, KEY_TWO, editing=True)
+
+        # The name the refused save would have taken is still free
+        assert join(registry, name)[0] == (name or "Anon-aaaa")
+
+    def test_a_known_token_updates_as_without_it(self, registry, on_rename):
+        _, token = join(registry, "Mike")
+
+        held = registry.save(token, "", SingerSettings(-1, 0.2), editing=True)
+
+        assert held == ("Mike", token)
+        assert registry.lookup(token) == ("Mike", SingerSettings(-1, 0.2))
+        on_rename.assert_not_called()
 
 
 class TestUnicodeForms:

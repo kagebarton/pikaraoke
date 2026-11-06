@@ -9,7 +9,13 @@ from flask_smorest import Blueprint
 from marshmallow import Schema, fields, validate
 
 from pikaraoke.lib.current_app import get_karaoke_instance
-from pikaraoke.lib.singers import KEY_LIMIT, NAME_LIMIT, NameTaken, SingerSettings
+from pikaraoke.lib.singers import (
+    KEY_LIMIT,
+    NAME_LIMIT,
+    NameTaken,
+    NotJoined,
+    SingerSettings,
+)
 
 singer_bp = Blueprint("singer", __name__)
 
@@ -32,6 +38,10 @@ class SingerForm(Schema):
         validate=validate.Range(min=0, max=1),
         metadata={"description": "Vocal volume for the guest's songs, from 0 to 1"},
     )
+    editing = fields.Boolean(
+        load_default=False,
+        metadata={"description": "Sent by the edit form: refuse rather than join a new guest"},
+    )
 
 
 @singer_bp.route("/singer", methods=["POST"])
@@ -40,14 +50,19 @@ def save_singer(form: dict[str, Any]) -> Response | tuple[Response, int]:
     """Join as a new guest, or change the name and settings of the guest this phone is.
 
     The phone is found by its token cookie alone. The route sets no cookies: the page stores
-    the returned name and token.
+    the returned name and token. An edit from a phone the app no longer knows (it restarted
+    while the form was open) gets 410 and changes nothing; the page then asks it to join.
     """
     k = get_karaoke_instance()
     settings = SingerSettings(form["semitones"], form["vocal_volume"])
     try:
-        name, token = k.singers.save(request.cookies.get(TOKEN_COOKIE), form["name"], settings)
+        name, token = k.singers.save(
+            request.cookies.get(TOKEN_COOKIE), form["name"], settings, editing=form["editing"]
+        )
     except NameTaken as taken:
         return jsonify({"success": False, "error": str(taken)}), 409
+    except NotJoined:
+        return jsonify({"success": False}), 410
     return jsonify({"success": True, "name": name, "token": token})
 
 

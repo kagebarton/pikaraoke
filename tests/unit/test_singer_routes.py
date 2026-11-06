@@ -51,9 +51,10 @@ def client(app):
     return app.test_client()
 
 
-def save(client, name="Mike", semitones=2, vocal_volume=0.7):
+def save(client, name="Mike", semitones=2, vocal_volume=0.7, **extra):
     return client.post(
-        "/singer", data={"name": name, "semitones": semitones, "vocal_volume": vocal_volume}
+        "/singer",
+        data={"name": name, "semitones": semitones, "vocal_volume": vocal_volume, **extra},
     )
 
 
@@ -237,6 +238,37 @@ class TestUpdate:
         assert (body["name"], body["token"]) == ("Michael", token)
 
 
+class TestEditing:
+    """The edit form posts `editing`, so a restart while it is open can't make an Anon name."""
+
+    def test_an_edit_from_a_token_nobody_holds_is_410_and_joins_nobody(self, app, karaoke):
+        phone = as_phone(app, "Mike", "from-an-earlier-run")
+
+        response = save(phone, "", semitones=-1, editing="true")
+
+        assert response.status_code == 410
+        assert response.get_json() == {"success": False}
+        assert response.headers.getlist("Set-Cookie") == []
+        assert phone.get("/singer").get_json()["joined"] is False
+
+    def test_an_edit_from_a_known_token_saves(self, app, karaoke):
+        phone, _, token = join(app, karaoke, "Mike")
+
+        response = save(phone, "", semitones=-1, vocal_volume=0.2, editing="true")
+
+        assert response.get_json() == {"success": True, "name": "Mike", "token": token}
+        assert karaoke.singers.lookup(token) == ("Mike", SingerSettings(-1, 0.2))
+
+    @pytest.mark.parametrize("extra", [{}, {"editing": "false"}])
+    def test_a_join_from_a_token_nobody_holds_still_joins(self, app, extra):
+        phone = as_phone(app, "Mike", "from-an-earlier-run")
+
+        response = save(phone, "", **extra)
+
+        assert response.status_code == 200
+        assert response.get_json()["name"].startswith("Anon-")
+
+
 class TestPageState:
     """The `singer` every template gets, from the phone's cookies and the registry."""
 
@@ -317,8 +349,10 @@ class TestGetSinger:
         assert response.status_code == 200
         assert response.get_json() == json.loads(phone.get("/state").get_data(as_text=True))
 
-    def test_it_reflects_a_rename_made_after_the_page_loaded(self, app, karaoke):
-        phone, _, token = join(app, karaoke, "Mike")
-        karaoke.singers.save(token, "Michael", SingerSettings(2, 0.7))
+    def test_it_reflects_a_save_made_after_the_page_loaded(self, app, karaoke):
+        phone, _, token = join(app, karaoke, "Mike", SingerSettings(2, 0.7))
+        karaoke.singers.save(token, "Michael", SingerSettings(-1, 0.3))
 
-        assert phone.get("/singer").get_json()["name"] == "Michael"
+        state = phone.get("/singer").get_json()
+
+        assert (state["name"], state["semitones"], state["vocal_volume"]) == ("Michael", -1, 0.3)

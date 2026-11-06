@@ -27,6 +27,10 @@ class NameTaken(Exception):
     """The name is reserved or held by another guest. The message is for the guest to read."""
 
 
+class NotJoined(Exception):
+    """An edit came from a phone whose token finds nobody: the app restarted since it joined."""
+
+
 @dataclass(frozen=True)
 class SingerSettings:
     """What a guest's songs start at: key in semitones, vocal volume from 0.0 to 1.0."""
@@ -75,25 +79,34 @@ class SingerRegistry:
         self._lock = threading.Lock()
         self._guests: dict[str, _Guest] = {}
 
-    def save(self, token: str | None, name: str, settings: SingerSettings) -> tuple[str, str]:
+    def save(
+        self, token: str | None, name: str, settings: SingerSettings, *, editing: bool = False
+    ) -> tuple[str, str]:
         """Save the settings of the guest this token belongs to, or join a new guest.
 
         Returns the name the guest now holds and their token (an existing guest keeps theirs).
         A blank name keeps a guest's current name, and gives a new guest `Anon-` plus four random
-        characters. When a guest's spelling changes (a case change included, because the queue and
-        ownership checks compare names exactly) the registry changes first, then `on_rename(old,
-        new)` runs once with the registry lock held, so nobody can join as the old name before
-        the songs have moved. `on_rename` must not raise: the moves are in-memory loops and the
+        characters. `editing` says the phone believes it has joined: then a token that finds
+        nobody is refused instead of joined, because the edit form's blank name means "keep my
+        name", not "make me an Anon name".
+
+        When a guest's spelling changes (a case change included, because the queue and ownership
+        checks compare names exactly) the registry changes first, then `on_rename(old, new)` runs
+        once with the registry lock held, so nobody can join as the old name before the songs
+        have moved. `on_rename` must not raise: the moves are in-memory loops and the
         notifications are caught by the caller. If a move did raise, the songs not yet moved
         would stay under the old name, which is free again, and the exception reaches the caller
         of `save`.
 
         Raises:
             NameTaken: the name is reserved or held by another guest.
+            NotJoined: `editing`, and the token finds nobody.
         """
         with self._lock:
             guest = self._guest_with_token(token)
             if guest is None:
+                if editing:
+                    raise NotJoined
                 return self._join(name, settings)
             self._update(guest, name, settings)
             return guest.name, guest.token
