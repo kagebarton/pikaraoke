@@ -672,3 +672,85 @@ deviated from this plan and why.)
   refactor. Both covered by the self-review above, so no review is pending from this phase
   (the review of Phase 2.1 has run; it produced this phase).
 - **Not done:** `graphify update .` (no `graphify-out/` on this box).
+
+### Phase 3: the form (executed 2026-11-06, Claude Sonnet 5.5)
+
+- **Commits:** `f6e9aab` `feat(ui): join form for name, key and vocal volume`.
+- **Tests:** full suite 3483 passed before, 3486 after (+3 in the new
+  `tests/unit/test_singer_page.py`, see deviation 5). Pre-commit clean on every changed file.
+  `test_search_render.py` (base.html on a bare `Flask` app, no context processor) still passes
+  with the guarded `window.singer` line.
+- **ui-check:** 55 checks passed on a phone viewport (390x844) against the real app, in one
+  scripted run. Names used: `María José` (renamed to `María Josefa`, then `Marta Ñu`) and
+  `Bob Ünal`. By plan item:
+  - Fresh phone: the join form opens on `/`; titled "Join the party"; no Cancel; a background
+    click and Escape leave it open; the nav links can't be clicked behind it; the vocal volume
+    starts at the house 40% and the key at 0; typing stops at 30 characters; the key stops at
+    +3. One POST for the join, then the navbar shows the name, the `user` cookie holds the
+    decoded name and `singer_token` is set.
+  - A taken name keeps the form open with the server's message under the name field and no
+    reload: another case (`maría josé`), `Pikaraoke`, and the decomposed accents of the first
+    name.
+  - Add a song as `María José` (from Browse): it plays under that name with the key at +2, and
+    the Now Playing key slider reads +2 and the controls show for the singer.
+  - Edit mode (name opened through the burger menu on the phone): prefilled name, 70%, +2,
+    Cancel; Cancel closes with no POST. Renaming to `María Josefa` posts once and moves the
+    queued song, the held download, the Processing row and the playing song. The Processing
+    row is still marked as the guest's (`mine`).
+  - The `user` cookie set by hand to `maría josefa`, then to `somebody else`: the navbar shows
+    the registry's name and the cookie is put back, after an SPA navigation and after a full
+    load.
+  - Two tabs: tab 1 renames to `Marta Ñu`; tab 2 (still holding `María Josefa`) changes only
+    the key to +3 and saves. It posted `name=` (blank), the guest kept `Marta Ñu`, the queued
+    songs stayed under it, the key saved as +3 and the cookie held the new name.
+  - After six SPA navigations: one key click moves the key by exactly one, and one Save sends
+    one POST.
+  - App restarted: the next SPA navigation opens the join form (empty name, `joined` false)
+    and joining again works in the new run.
+- **Checked beyond the passes:**
+  - With edit mode sending the typed name always, the two-tab checks fail (4 of them: the blank
+    name, the kept name, the queued songs, the cookie), because tab 2 renames the guest back.
+  - With the cookie put-back inside the ready handler instead of straight after
+    `window.singer`, the full-load `/queue` check fails (that page's script read `somebody
+    else`).
+  - With `window.singer` written as a raw dict dump instead of `tojson`, the new test of a
+    name that closes the script tag fails.
+- **Deviations from the plan:**
+  1. **The cookie put-back runs as the head script loads, not in its ready handler.** On a full
+     load, a page script that reads the cookie while it loads (`queue.html`'s `currentUser`)
+     runs before the ready handler, so it would still read the old spelling on that first
+     page. The plan's purpose (the routes post the registry's spelling) holds better this way.
+  2. **The key limit (-3 to +3) is in the markup** (`data-min` and `data-max` on the key field),
+     not in the page state, which is fixed. The server still refuses beyond 3 with a 422.
+     The number now lives in two places.
+  3. **A hidden key control posts the key as it was** (the guest's saved key, 0 for a new
+     guest), not a literal 0. Same result for every guest today.
+  4. **Strings:** new: "Join the party", "Your name and settings", "Your name", "Key", the
+     help line under the name field and "Could not save. Please try again.". Reused: "Vocal
+     Volume", "Save", "Cancel". The help line is a new short text, so the old "Please enter
+     your name. This will show up..." and the rename prompt texts are now unused in the
+     catalogs (catalogs not regenerated, as the plan says).
+  5. **Added, not in the plan:** `tests/unit/test_singer_page.py` (3 tests of the real
+     `base.html` with the real context processor: the state line for a new phone and a joined
+     one, and a name that closes the script tag stays inert). A name now reaches an inline
+     script, which it never did before. Also two small fixes found in the phone screenshots:
+     the burger menu closes when the name is clicked (it stayed open behind the form), and a
+     gap between Save and Cancel.
+- **Not checked:**
+  - The vocal volume on Now Playing: the fake library has no stems (`dual_stem` false), so only
+    the key was checked, as the plan allows. The form's vocal slider saved and came back as
+    0.7 in the page state, and the playing song's controller reported 0.7.
+  - A save whose reply is lost (the stale cookie was simulated by setting it by hand), the
+    "Could not save" message (nothing produced a failure other than the 409), and a 422 (the
+    field's `maxlength` stops it first).
+  - The Info page and the login page (the form opens on every page that extends `base.html`,
+    but only Home, Queue, Search, Browse and Processing were driven), a desktop-width window,
+    and a real phone keyboard. Only the Home, Processing and join screenshots were looked at.
+  - The held download was checked only in its download hold; a hold waiting on processing was
+    not made.
+  - The fake download is a scratch stub, not the real downloader: `run_app_held.py` in the
+    session scratchpad is the skill's `run_app.py` plus a `sleep` in place of yt-dlp, so the
+    check needed no network. The skill itself is unchanged; it could gain the stub if wanted.
+- **Self-review:** four templates and scripts plus a test, a new UI flow around cookies and the
+  SPA script re-run, so the review is tracked as pending for the checkpoint after this phase.
+- **Not done:** `graphify update .` (no `graphify-out/` on this box).
