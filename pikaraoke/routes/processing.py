@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from urllib.parse import unquote
 
 import flask_babel
 from flask import jsonify, render_template, request
@@ -17,6 +18,11 @@ from pikaraoke.routes.song_info import posted_song
 _ = flask_babel.gettext
 
 processing_bp = Blueprint("processing", __name__)
+
+
+def _cookie_user() -> str:
+    """The guest's name from the `user` cookie, which the page stores percent-encoded."""
+    return unquote(request.cookies.get("user", ""))
 
 
 @processing_bp.route("/processing")
@@ -40,7 +46,7 @@ def processing_status():
     k = get_karaoke_instance()
     items = k.pipeline_tracker.get_status(
         admin=is_admin(),
-        user=request.cookies.get("user", ""),
+        user=_cookie_user(),
     )
     return json.dumps(items)
 
@@ -85,7 +91,7 @@ def user_cancel_item():
     """Let a user cancel their own pipeline item."""
     k = get_karaoke_instance()
     item_id = request.form.get("id", "")
-    user = request.cookies.get("user", "")
+    user = _cookie_user()
     if not user:
         logging.warning("User cancel rejected: no user cookie (item_id=%s)", item_id)
         return jsonify({"success": False, "error": _("Not owner")}), 403
