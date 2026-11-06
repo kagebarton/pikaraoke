@@ -8,13 +8,25 @@ from pikaraoke.lib.playback_controller import PlaybackResult
 from pikaraoke.lib.singers import SingerSettings
 
 SONG = "/songs/Artist - Song---dQw4w9WgXcQ.mp4"
+MAX_PASSES = 20
 
 
 @pytest.fixture
 def play_file(mock_karaoke):
-    """Replace play_file so a single pass of the run loop plays one song and stops."""
+    """Replace play_file so a single pass of the run loop plays one song and stops.
+
+    The loop also stops after MAX_PASSES, so a song that is never played fails its assertion
+    instead of hanging the suite.
+    """
     mock_karaoke.url = "http://test"
-    mock_karaoke.handle_run_loop = lambda: None
+    passes = []
+
+    def count_a_pass() -> None:
+        passes.append(None)
+        if len(passes) >= MAX_PASSES:
+            mock_karaoke.running = False
+
+    mock_karaoke.handle_run_loop = count_a_pass
     mock_karaoke.preferences.set("splash_delay", 0)
 
     def play_and_stop(*args) -> PlaybackResult:

@@ -115,18 +115,13 @@ class TestPlaybackControllerPlayFile:
 
     @patch("pikaraoke.lib.playback_controller.os.path.isfile", return_value=True)
     def test_play_file_uses_the_given_key_and_vocal_volume_not_the_preference(
-        self, mock_isfile, test_prefs, mock_mpv
+        self, mock_isfile, tmp_path, mock_mpv
     ):
-        """The singer's values start the song; the house vocal_volume preference is not read."""
-        other_preferences = {
-            "subtitle_delay": 0,
-            "subtitle_scale": 1.0,
-            "subtitle_pos_offset": 0,
-            "normalize_audio": False,
-        }
-        test_prefs.get_or_default = MagicMock(side_effect=other_preferences.__getitem__)
+        """The singer's values start the song, whatever the house vocal_volume preference says."""
+        prefs = PreferenceManager(config_file_path=str(tmp_path / "config.ini"))
+        prefs.set("vocal_volume", 0.9)
         pc = PlaybackController(
-            test_prefs, EventSystem(), lambda x, remove_youtube_id=True: "Song", mock_mpv
+            prefs, EventSystem(), lambda x, remove_youtube_id=True: "Song", mock_mpv
         )
 
         result = pc.play_file("/songs/test.mp4", "TestUser", -2, 0.15)
