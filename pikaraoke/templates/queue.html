@@ -409,8 +409,9 @@ window.executeUserAction = function(action) {
   $(function() {
     window.queuePage_getQueue();
 
-  // Close modals on background click
-  $('.modal-background').click(function() {
+  // Close the queue's own modals on background click. Scoped to .box, which navigation
+  // replaces: an unscoped selector would also bind base.html's guest form, which it doesn't.
+  $('.box .modal-background').click(function() {
     window.closeSongOptions();
     window.closeNowPlayingOptions();
     window.closeUserSongOptions();
