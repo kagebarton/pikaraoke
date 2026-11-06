@@ -118,7 +118,6 @@ class QueueManager:
         self,
         song_path: str,
         user: str = "Pikaraoke",
-        semitones: int = 0,
         add_to_front: bool = False,
         log_action: bool = True,
         waiting: str | None = None,
@@ -151,7 +150,6 @@ class QueueManager:
             "user": user,
             "file": song_path,
             "title": title,
-            "semitones": semitones,
             "paused": False,
             "waiting": waiting,
         }

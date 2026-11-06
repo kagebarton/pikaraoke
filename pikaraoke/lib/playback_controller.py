@@ -93,13 +93,16 @@ class PlaybackController:
         """mpv's pause state; a second copy here drifted (restart left it inverted)."""
         return self.mpv.is_paused
 
-    def play_file(self, file_path: str, user: str, semitones: int = 0) -> PlaybackResult:
+    def play_file(
+        self, file_path: str, user: str, semitones: int, vocal_volume: float
+    ) -> PlaybackResult:
         """Start playback of a media file. Non-blocking -- MPV plays immediately.
 
         Args:
             file_path: Path to the media file to play.
             user: User who queued the song.
             semitones: Number of semitones to transpose (0 = no change).
+            vocal_volume: Vocal level from 0.0 to 1.0; used only for dual-stem songs.
 
         Returns:
             PlaybackResult with success status and optional error message.
@@ -137,7 +140,6 @@ class PlaybackController:
 
         # Find dual-stem companion files (vocal + nonvocal)
         vocal_path, nonvocal_path = self._find_companions(file_path)
-        vocal_volume = self.preferences.get_or_default("vocal_volume")
 
         with self._playback_lock:
             # 1. Set all PC state that doesn't depend on mpv.play having run

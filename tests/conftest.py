@@ -7,6 +7,7 @@ import pytest
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.preference_manager import PreferenceManager
 from pikaraoke.lib.queue_manager import QueueManager
+from pikaraoke.lib.singers import SingerRegistry
 from pikaraoke.lib.song_manager import SongManager
 
 
@@ -17,6 +18,7 @@ class MockPlaybackController:
     now_playing_filename: str | None = None
     now_playing_user: str | None = None
     now_playing_transpose: int = 0
+    now_playing_vocal_volume: float = 0.0
     now_playing_duration: int | None = None
     now_playing_position: float | None = None
     is_paused: bool = False
@@ -39,6 +41,7 @@ class MockPlaybackController:
         self.now_playing_filename = None
         self.now_playing_user = None
         self.now_playing_transpose = 0
+        self.now_playing_vocal_volume = 0.0
         self.now_playing_duration = None
         self.now_playing_position = None
         self.is_paused = False
@@ -52,6 +55,7 @@ class MockPlaybackController:
             "now_playing_transpose": self.now_playing_transpose,
             "now_playing_position": self.now_playing_position,
             "is_paused": self.is_paused,
+            "vocal_volume": self.now_playing_vocal_volume,
         }
 
     def restart(self) -> bool:
@@ -107,7 +111,6 @@ class MockKaraoke:
         self.running = True
         self.now_playing_notification = None
         self.subtitle_delay = 0
-        self.vocal_volume = 0.4
         self.temp_dir = ""
         self.processing_manager = MagicMock()
 
@@ -131,6 +134,7 @@ class MockKaraoke:
             filename_from_path=SongManager.filename_from_path,
             get_available_songs=lambda: self.song_manager.songs,
         )
+        self.singers = SingerRegistry(self.preferences)
 
     @property
     def socketio(self):
@@ -157,6 +161,7 @@ class MockKaraoke:
     restart = Karaoke.restart
     stop = Karaoke.stop
     reset_now_playing_notification = Karaoke.reset_now_playing_notification
+    run = Karaoke.run
 
 
 class MockSongList:
