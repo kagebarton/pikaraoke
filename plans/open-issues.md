@@ -295,18 +295,16 @@ into that plan's Results log.
 
 Library state:
 
-- **Songs carry the change only after a Regenerate.** The 10 test songs were
-  rerun on 2026-11-02 (rows 55-61), before `bb7c8ca` (onset snap doubts a
-  re-aligned line's start); they need one more Regenerate, then Ken's listen to
-  the 5 starts and the 5 previous-line ends row 64 lists. The other 16 songs
-  with words missing from the screen (25 in the 2026-10-31 count, less the 9
-  test songs) show "Missing from the screen ... Regenerate to show them" on
-  Song Info until regenerated.
-- **Test lines still guessed after the rerun**: Stronger 37 and Castle On The
-  Hill 46 (the guard rejected their re-align, row 59), Miss Independent 9 and
-  71 (caption words the video does not sing). The "not the window" group:
-  Castle 46, One In A Million 7 (not rerun), My Heart Will Go On 9 (timed in
-  full on the rerun).
+- **Library regenerated at `7bb144d`** (Windows GPU, backup
+  `regen_backups/20261105T201224Z`): the 10 test songs and the 15 others that
+  showed "Missing from the screen". No song shows it now. Row 64's
+  ten edges reproduce exactly on All of Me, Someone Like You and Baby One More
+  Time; Miss Independent was regenerated from Ken's `caption-edited.srt`, where
+  line 2 is no longer re-aligned, so its pair sits at its pre-branch times
+  (1 ends 8.92, 2 starts 9.02). Owed: Ken's listen to those edges.
+- **Guessed words left after the regen** (shown, timing guessed): Stronger 3,
+  Climbing Uphill 3, Inconsolable 2, One In A Million 2, Tornado 2, A Little
+  More Time On You 1, each on one line.
 
 Heard at GATE B, not fixed:
 
