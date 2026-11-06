@@ -34,6 +34,7 @@ from pikaraoke.routes.preferences import preferences_bp
 from pikaraoke.routes.processing import processing_bp
 from pikaraoke.routes.queue import queue_bp
 from pikaraoke.routes.search import search_bp
+from pikaraoke.routes.singer import singer_bp
 from pikaraoke.routes.socket_events import setup_socket_events
 from pikaraoke.routes.song_info import song_info_bp
 
@@ -100,6 +101,7 @@ _internal_blueprints = [
     processing_bp,
     song_info_bp,
     library_bp,
+    singer_bp,
 ]
 
 for bp in _api_blueprints:
