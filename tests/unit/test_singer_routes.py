@@ -241,15 +241,23 @@ class TestUpdate:
 class TestEditing:
     """The edit form posts `editing`, so a restart while it is open can't make an Anon name."""
 
-    def test_an_edit_from_a_token_nobody_holds_is_410_and_joins_nobody(self, app, karaoke):
-        phone = as_phone(app, "Mike", "from-an-earlier-run")
-
-        response = save(phone, "", semitones=-1, editing="true")
+    @pytest.mark.parametrize(
+        "make_phone",
+        [
+            lambda app: as_phone(app, "Mike", "from-an-earlier-run"),
+            lambda app: app.test_client(),
+        ],
+        ids=["token from an earlier run", "no cookies"],
+    )
+    def test_an_edit_from_a_phone_the_app_does_not_know_is_410_and_joins_nobody(
+        self, app, make_phone
+    ):
+        response = save(make_phone(app), "Mike", semitones=-1, editing="true")
 
         assert response.status_code == 410
         assert response.get_json() == {"success": False}
-        assert response.headers.getlist("Set-Cookie") == []
-        assert phone.get("/singer").get_json()["joined"] is False
+        # A guest made by the refused save would hold the name `Mike`, and this join would get 409
+        assert save(app.test_client(), "Mike").status_code == 200
 
     def test_an_edit_from_a_known_token_saves(self, app, karaoke):
         phone, _, token = join(app, karaoke, "Mike")

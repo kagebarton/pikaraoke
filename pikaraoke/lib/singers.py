@@ -28,7 +28,8 @@ class NameTaken(Exception):
 
 
 class NotJoined(Exception):
-    """An edit came from a phone whose token finds nobody: the app restarted since it joined."""
+    """An edit came from a phone whose token finds nobody: the app restarted since the form
+    opened, or the phone lost its token cookie."""
 
 
 @dataclass(frozen=True)
