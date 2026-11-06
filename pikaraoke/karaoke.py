@@ -638,19 +638,24 @@ class Karaoke:
 
         Called by SingerRegistry.save with the registry lock held, so each step takes its
         own lock and releases it before the next: none may take the registry lock. Every copy
-        of the name moves first and the pages are told after, so a notification that raises
-        cannot leave songs split between two names.
+        of the name moves first and the pages are told after. A notification that raises is
+        logged and not raised: the songs have all moved, so the save must still return the new
+        name to the phone. The notifications after the failing one are skipped; the TV overlay
+        re-renders on its own poll and the pages catch up on their next push.
         """
         queue_moved = self.queue_manager.rename_user(old, new)
         self.pipeline_tracker.rename_user(old, new)
         playing_moved = self.playback_controller.rename_singer(old, new)
-        if queue_moved:
-            self.events.emit("queue_update")
-        if playing_moved:
-            self.playback_controller.refresh_overlays()
-        if queue_moved or playing_moved:
-            # Up Next and Now Playing show the singer's name
-            self.events.emit("now_playing_update")
+        try:
+            if queue_moved:
+                self.events.emit("queue_update")
+            if playing_moved:
+                self.playback_controller.refresh_overlays()
+            if queue_moved or playing_moved:
+                # Up Next and Now Playing show the singer's name
+                self.events.emit("now_playing_update")
+        except Exception:
+            logging.exception("Telling the pages about the rename %r -> %r failed", old, new)
 
     def get_now_playing(self) -> dict[str, Any]:
         """Get the current playback state.
