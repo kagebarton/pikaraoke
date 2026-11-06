@@ -20,7 +20,6 @@ KEY_LIMIT = 3
 # Longest name a guest can take, in characters. The name rides in a 4 KB cookie and on screen.
 NAME_LIMIT = 30
 
-_RESERVED_KEYS = frozenset(name.casefold() for name in RESERVED_NAMES)
 _ANON_ALPHABET = string.ascii_letters + string.digits
 
 
@@ -51,6 +50,9 @@ def _spelling(name: str) -> str:
 def _key(name: str) -> str:
     """Names are the same guest when they differ only in case, spaces or Unicode form."""
     return unicodedata.normalize("NFC", _spelling(name).casefold())
+
+
+_RESERVED_KEYS = frozenset(_key(name) for name in RESERVED_NAMES)
 
 
 class SingerRegistry:
@@ -131,13 +133,14 @@ class SingerRegistry:
     def _update(self, guest: _Guest, name: str, settings: SingerSettings) -> None:
         """Call with the lock held."""
         new_name = _spelling(name) or guest.name
-        if _key(new_name) != _key(guest.name):
-            self._require_free(new_name)
         old_name = guest.name
-        del self._guests[_key(old_name)]
+        old_key, new_key = _key(old_name), _key(new_name)
+        if new_key != old_key:
+            self._require_free(new_name)
+            del self._guests[old_key]
+            self._guests[new_key] = guest
         guest.name = new_name
         guest.settings = settings
-        self._guests[_key(new_name)] = guest
         if new_name != old_name:
             self._on_rename(old_name, new_name)
 
@@ -154,7 +157,8 @@ class SingerRegistry:
 
     def _require_free(self, name: str) -> None:
         """Call with the lock held."""
-        if _key(name) in _RESERVED_KEYS or _key(name) in self._guests:
+        key = _key(name)
+        if key in _RESERVED_KEYS or key in self._guests:
             # MSG: Shown on the join form when the name is reserved or another guest already uses it
             raise NameTaken(_("That name is already taken. Please choose another."))
 
