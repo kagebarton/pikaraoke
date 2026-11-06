@@ -159,7 +159,8 @@
         $.post('/singer', {
             name: name,
             semitones: $('#singer-key').val(),
-            vocal_volume: $('#singer-vocal-volume').val() / 100
+            vocal_volume: $('#singer-vocal-volume').val() / 100,
+            editing: singerFormMode === 'edit'
         }).done(function(reply) {
             setGuestCookie('user', reply.name);
             setGuestCookie('singer_token', reply.token);
@@ -171,6 +172,12 @@
                 location.reload();
             }
         }).fail(function(xhr) {
+            // The app restarted since this form opened and no longer knows this phone. The page
+            // it reloads to asks the guest to join, as after any restart.
+            if (xhr.status === 410) {
+                location.reload();
+                return;
+            }
             const error = xhr.responseJSON && xhr.responseJSON.error;
             $('#singer-name-error').text(error || window.i18n.singerSaveFailed).show();
             $save.removeClass('is-loading').prop('disabled', false);
