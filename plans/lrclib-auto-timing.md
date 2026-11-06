@@ -4,7 +4,7 @@ specced (Opus) after GATE M.
 
 # LRCLIB auto-timing at download
 
-**Status: Phase 0 DONE, Phase 1 SPECCED (ready for a Sonnet executor), Phases 2-4 loose.**
+**Status: Phase 0 DONE, Phase 1 RUN 2026-11-06 (Sonnet), waiting for GATE M (Opus), Phases 2-4 loose.**
 "Open for the spec" below lists what the Phase 2-4 spec must settle.
 
 ## Goal
@@ -183,7 +183,7 @@ clip length is skipped with reason `no_length`. Every other song is skipped as `
 
 ### Steps
 
-- [ ] **1a. Anchor check.** Confirm these are as quoted above, else STOP and say what
+- [x] **1a. Anchor check.** Confirm these are as quoted above, else STOP and say what
   differs: `srt_slice_fit.fit_slice`, `heard_streams`, `lrc_to_srt`, `flagged_runs`,
   `unheard_runs`, `SliceFit` fields (`status`, `reason`, `matched`, `total`, `shift_s`, `speed`,
   `dropped`, `spread_s`, `lines`, `mistimed`, `unheard`); `lrclib.search_query` (raises
@@ -192,7 +192,7 @@ clip length is skipped with reason `no_length`. Every other song is skipped as `
   `library_status.library_statuses`, `length_gap_s`; `srt_cues.cue_spans_from_srt`;
   `get_platform.get_temp_directory`. `scripts/lrc_timing_report.py` is the model for reading
   a song (bundle, clip length, streams); copy its shape.
-- [ ] **1b. Write `scripts/lrc_auto_timing_probe.py`.** One command does everything:
+- [x] **1b. Write `scripts/lrc_auto_timing_probe.py`.** One command does everything:
   `python scripts/lrc_auto_timing_probe.py --folder PATH [--out DIR]`.
   - `--out` defaults to `Path(get_temp_directory()) / "lrclib_auto_timing"`. Everything the
     run writes goes there. It holds lyric text (cache, sheets), so it is never committed and
@@ -241,7 +241,7 @@ clip length is skipped with reason `no_length`. Every other song is skipped as `
       | lrclib_id | class | S1 rows that accept it`.
     - Table K: the three `known` candidates' transcribe fit (status, speed, matched/total,
       gap, mistimed, end_unheard) and the loosest grid point that would accept each, or "none".
-- [ ] **1c. Tests**, `tests/unit/test_lrc_auto_timing_probe.py`, on the pure parts with made-up
+- [x] **1c. Tests**, `tests/unit/test_lrc_auto_timing_probe.py`, on the pure parts with made-up
   numbers: `end_unheard` and `interior_unheard` (runs at either end, none, whole song); the
   class rule (each of the four outcomes; an unmapped line inside an off run; median offset
   alone; a hole at an end); a grid point's acceptance (each conjunct turning a candidate away);
@@ -249,20 +249,20 @@ clip length is skipped with reason `no_length`. Every other song is skipped as `
   its loosest has no neighbour); the arm-B ordering. No network, no library. Run
   `/home/ken/miniconda3/envs/pik/bin/python -m pytest tests/unit/test_lrc_auto_timing_probe.py`
   and the pre-commit on both files.
-- [ ] **1d. Commit** script and test together: `feat(scripts): LRCLIB auto-timing probe for
+- [x] **1d. Commit** script and test together: `feat(scripts): LRCLIB auto-timing probe for
   GATE M`. Self-review per CLAUDE.md; this is a new algorithm in one file, so say whether it
   is simple enough to verify in one read-through.
-- [ ] **1e. Run** `python scripts/lrc_auto_timing_probe.py --folder
+- [x] **1e. Run** `python scripts/lrc_auto_timing_probe.py --folder
   "/home/ken/shared-drives/D:/Shared/pikaraoke-songs" > <out>/report.md`. If more than 5 songs
   come back `lrclib_unavailable`, run it once more (the cache keeps the rest); if still more
   than 5, STOP. Then the read-only check: `find "<folder>" -newer <out>/started` prints
   nothing, else STOP and say what changed. STOP too if `ref` has fewer than 40 songs.
-- [ ] **1f. Record.** Results log row: the commit, the command, the read-only check, the paths
+- [x] **1f. Record.** Results log row: the commit, the command, the read-only check, the paths
   of `report.md`, `candidates.tsv`, `songs.tsv`, `sweep.tsv` and `sheets/`. Paste tables P,
   C, S1, S2 and K raw into a "GATE M report output" section below the Results log. No tallies
   beyond what the script printed, no reading of the numbers, no thresholds. Plan-only commit:
   `docs(plans): lrclib-auto-timing records the Phase 1 run`.
-- [ ] **1g. Stop for GATE M.** Hand off to Opus (see "Executor rules"). Do not start Phase 2.
+- [x] **1g. Stop for GATE M.** Hand off to Opus (see "Executor rules"). Do not start Phase 2.
 
 ### GATE M (Opus, then Ken)
 
@@ -351,3 +351,161 @@ list, Song Info's route and source, and the karaoke by ear. Return one to Genius
 |---|---|---|---|---|
 | 1 | 2026-11-06 | 0 | Branch moved from `f627112` to `dev` `4497f4d`; loose plan committed (`aada4d2`). Overlap check: `git diff f627112 4497f4d -- pikaraoke/pipeline/stages/lyric_align.py` | `cue_align_windows` changed `_run_cue_align`'s return (adds envelope and `cue_inputs`), the edge snap's envelope reuse and its `doubted_sources`; route choice and `_dereverb_gate` untouched. Details in Phase 0. |
 | 2 | 2026-11-06 | 1 | Library counts for the spec, read-only (`library_statuses` + `read_bundle`), 115 songs | origin `srt` 76 (1 edited), 59 with `transcribe_words`, 0 with `.srt.generated`, 0 with `.lrc`, 2 with ASR json3; `genius`+`joint` 8 (8 `.lrc`, 8 words); `lrclib_srt` 7 (7 `.lrc`, 7 words); `custom`+`joint` 3; `movie_srt` 7; no bundle 14. Known-bad `.lrc` ids and dates: Defying Gravity 34563601 (2026-10-28), Bloodstream 36006882 (2026-10-28), Best Part Of Me 27081884 (2026-10-19). |
+| 4 | 2026-11-06 | 1 | Steps 1a-1f (Sonnet). 1a: every anchor as quoted, no STOP. Code `0676eea` (`scripts/lrc_auto_timing_probe.py`, `tests/unit/test_lrc_auto_timing_probe.py`, 73 tests pass). Command: `/home/ken/miniconda3/envs/pik/bin/python scripts/lrc_auto_timing_probe.py --folder "/home/ken/shared-drives/D:/Shared/pikaraoke-songs" > <out>/report.md`, one run, `<out>` = `/home/ken/.pikaraoke/tmp/lrclib_auto_timing`. Table P: `ref` 58 (needs 40), `lrclib_unavailable` 0 (limit 5), so no rerun. Read-only check: `find "<folder>" -newer <out>/started` printed nothing. Files under `<out>`: `report.md`, `candidates.tsv` (1,276 rows), `songs.tsv` (115), `sweep.tsv` (3,600), `sheets/` (46 song folders, lyric text, local only), `cache/`, `run.log`. Table S1 printed empty; `sweep.tsv` checked for a counting fault (the strictest point's row and an independent recount from `candidates.tsv` agree). Report below. | Report in "GATE M report output". Stopped at 1g for Opus. |
+
+## GATE M report output
+
+Raw output of the run in Results row 4 (`<out>/report.md`), no tallies and no reading added. Two things about how the script printed it, both settled by the spec's wording being open:
+
+- Table S2 covers the candidates accepted by the S1 rows as printed (the top 30); it does not add one-step-looser neighbours.
+- Table K's last column is the strictest grid point that accepts the candidate (its "need"), `none` when no point does, with the conjunct that refuses it. The spec's "loosest grid point that would accept each" read as that, since the loosest point of the grid accepts anything that any point accepts.
+
+Constants in force: FLAG_TOLERANCE_S=5.0, MIN_FLAGGED_RUN=2, MIN_UNHEARD_RUN=3, MIN_MATCHED_SHARE=0.25. 115 songs in /home/ken/shared-drives/D:/Shared/pikaraoke-songs; output in /home/ken/.pikaraoke/tmp/lrclib_auto_timing.
+
+### Table P: groups and skip reasons
+
+| Group | Songs | no_length | lrclib_unavailable | ref_ok |
+|---|---|---|---|---|
+| ref | 58 | 0 | 0 | 53 |
+| joint | 7 | 0 | 0 |  |
+| repair | 7 | 0 | 0 |  |
+| known | 3 | 0 | 0 |  |
+| out_of_scope | 40 | 0 | 0 |  |
+
+### Table C: songs
+
+| group | youtube_id | title | reason | candidates | arm_a_id | caption_status | caption_speed | caption_shift_s | caption_flagged_runs | ref_ok |
+|---|---|---|---|---|---|---|---|---|---|---|
+| ref | -fxh7jAJR8U | #NSYNC - (God Must Have Spent) A Little  |  | 20 | 10498314 | fits | 1.0000 | -0.11 | 0 | 1 |
+| ref | saxnXiBKEaY | #NSYNC - Girlfriend (Official HD Video) |  | 18 | 35806727 | fits | 1.0000 | -0.30 | 0 | 1 |
+| ref | IbRwSI8yi1o | #NSYNC - Gone (Official HD Video) |  | 20 | 26996535 | fits | 1.0000 | -0.01 | 0 | 1 |
+| ref | GQMlWwIXg3M | #NSYNC - It's Gonna Be Me (Official Vide |  | 20 | 35684844 | fits | 1.0000 | 0.07 | 0 | 1 |
+| ref | TWZKw_MgUPI | #NSYNC - Pop (Official HD Video) |  | 19 | 35388678 | fits | 1.0000 | 0.02 | 0 | 1 |
+| repair | PodgxWsZw9s | #NSYNC - Thinking Of You (I Drive Myself |  | 20 | 36176943 |  |  |  |  |  |
+| ref | 6thmPrTxBtI | #NSYNC - This I Promise You (Official Vi |  | 20 | 32267362 | fits | 1.0000 | -0.11 | 0 | 1 |
+| ref | TZ0pXUb5jVU | #OutOfOz - 'For Good' Performed by Krist |  | 0 |  | fits | 1.0000 | -0.33 | 0 | 1 |
+| known | AoON1CyhQAM | 'Defying Gravity' - Wicked 20th Annivers |  | 1 | 34563601 |  |  |  |  |  |
+| out_of_scope | 22QYya-LGDY | 'Popular' - Wicked 20th Anniversary Edit | out_of_scope | 0 |  |  |  |  |  |  |
+| joint | 983bBbJx0Mk | 'Soda Pop' Official Lyric Video _ KPop D |  | 20 | 36713302 |  |  |  |  |  |
+| ref | hLQl3WQQoQ0 | Adele - Someone Like You (Official Music |  | 20 | 33610148 | fits | 1.0000 | -0.44 | 0 | 1 |
+| ref | axySrE0Kg6k | Ariana Grande, John Legend - Beauty and  |  | 20 | 36554870 | fits | 1.0000 | 0.52 | 0 | 1 |
+| out_of_scope | qu_FSptjRic | BEYOND【海闊天空】Music Video (粵) (HD) | out_of_scope | 0 |  |  |  |  |  |  |
+| ref | WMweEpGlu_U | BTS (방탄소년단) 'Butter' Official MV |  | 0 |  | fits | 1.0000 | 0.19 | 0 | 1 |
+| ref | pj6FCKm8dhM | Backstreet Boys - All I Have To Give (Of |  | 18 | 13609411 | fits | 1.0000 | 0.76 | 0 | 1 |
+| ref | 0Gl2QnHNpkA | Backstreet Boys - As Long As You Love Me |  | 20 | 12973747 | fits | 1.0000 | 0.17 | 0 | 1 |
+| ref | GZXHBgjQjNM | Backstreet Boys - Drowning (Official HD  |  | 20 | 12965458 | fits | 1.0000 | -0.52 | 0 | 1 |
+| ref | 6M6samPEMpM | Backstreet Boys - Everybody (Backstreet' |  | 20 | 8967832 | fits | 1.0000 | 0.35 | 0 | 1 |
+| ref | 0LSYuZRSGcY | Backstreet Boys - Get Down (You're The O |  | 20 | 9117851 | fits | 1.0000 | 0.16 | 0 | 1 |
+| ref | 4fndeDfaWCg | Backstreet Boys - I Want It That Way (Of |  | 20 | 9886988 | fits | 1.0000 | -0.02 | 0 | 1 |
+| ref | kDcCSiakaU4 | Backstreet Boys - I'll Never Break Your  |  | 20 | 34596737 | fits | 1.0000 | 0.02 | 0 | 1 |
+| ref | WVe80iZtlYU | Backstreet Boys - Incomplete (Official H |  | 20 | 9721534 | fits | 1.0000 | -1.07 | 0 | 1 |
+| ref | qGDF_QcsKVI | Backstreet Boys - Inconsolable (Official |  | 14 | 35522789 | fits | 1.0000 | -0.18 | 0 | 1 |
+| ref | 1OwfYjemrYw | Backstreet Boys - More Than That |  | 20 | 3739331 | fits | 1.0000 | -0.09 | 0 | 1 |
+| ref | Ug88HO2mg44 | Backstreet Boys - Quit Playing Games (Wi |  | 20 | 14559948 | fits | 1.0000 | -0.02 | 0 | 1 |
+| ref | OT5msu-dap8 | Backstreet Boys - Shape Of My Heart (Off |  | 20 | 39824663 | fits | 1.0000 | 0.11 | 0 | 1 |
+| ref | wMOkm57vu0k | Backstreet Boys - The Call (Official HD  |  | 20 | 12914924 | fits | 1.0000 | 0.72 | 0 | 1 |
+| out_of_scope | MiraOCjABn8 | Beauty and the Beast (1991) - Be Our Gue | out_of_scope | 0 |  |  |  |  |  |  |
+| out_of_scope | otxTf5hZ0Yw | Beauty and the Beast (1991) - Belle [UHD | out_of_scope | 0 |  |  |  |  |  |  |
+| ref | Q4VK9_CfOLQ | Britney Spears - (You Drive Me) Crazy (O |  | 20 | 35988164 | fits | 1.0000 | -0.05 | 0 | 1 |
+| ref | C-u5WLJ9Yk4 | Britney Spears - ...Baby One More Time ( |  | 20 | 22613865 | fits | 1.0000 | 0.10 | 0 | 1 |
+| ref | CduA0TULnow | Britney Spears - Oops!...I Did It Again  |  | 20 | 4936381 | fits | 1.0000 | 0.42 | 0 | 1 |
+| ref | AJWtLf4-WWs | Britney Spears - Stronger (Official HD V |  | 19 | 28307055 | fits | 1.0000 | 0.14 | 0 | 1 |
+| ref | CX11yw6YL1w | Céline Dion - Ashes (from 'Deadpool 2' M |  | 20 | 10814285 | fits | 1.0000 | -0.05 | 0 | 1 |
+| ref | NJsa6-y4sDs | Céline Dion - I'm Alive (Official HD Vid |  | 20 | 12569255 | fits | 1.0047 | -0.53 | 0 | 0 |
+| ref | 9bFHsd3o1w0 | Céline Dion - My Heart Will Go On (Offic |  | 19 | 6540611 | fits | 1.0052 | -0.80 | 0 | 0 |
+| ref | T6wbugWrfLU | Céline Dion - That's The Way It Is (Offi |  | 20 | 33133897 | fits | 1.0000 | -0.76 | 0 | 1 |
+| known | wGyh_53ecgg | Ed Sheeran - Best Part Of Me (feat. YEBB |  | 1 | 27081884 |  |  |  |  |  |
+| ref | K0ibBPhiaG0 | Ed Sheeran - Castle On The Hill [Officia |  | 20 | 36706854 | fits | 1.0000 | 0.05 | 0 | 1 |
+| ref | iWZmdoY1aTE | Ed Sheeran - Happier (Official Music Vid |  | 20 | 37477583 | fits | 1.0000 | 0.01 | 0 | 1 |
+| ref | 2Vv-BfVoq4g | Ed Sheeran - Perfect (Official Music Vid |  | 20 | 36141804 | fits | 1.0000 | 0.81 | 0 | 1 |
+| ref | JGwWNGJdvx8 | Ed Sheeran - Shape of You (Official Musi |  | 19 | 35007521 | fits | 1.0000 | -0.15 | 0 | 1 |
+| ref | UAWcs5H-qgQ | Ed Sheeran - The A Team [Official Music  |  | 20 | 19121007 | fits | 1.0000 | -0.12 | 0 | 1 |
+| ref | lp-EO5I60KA | Ed Sheeran - Thinking Out Loud (Official |  | 20 | 35832916 | fits | 1.0000 | -0.24 | 0 | 1 |
+| known | Orq_75kFi8I | Ed Sheeran & Rudimental­ - Bloodstream [ |  | 1 | 36006882 |  |  |  |  |  |
+| joint | xFYQQPAOz7Y | Eminem - Lose Yourself |  | 16 | 36983219 |  |  |  |  |  |
+| ref | YVVTZgwYwVo | Idina Menzel - Let It Go (from Frozen) ( |  | 18 | 17238621 | fits | 1.0000 | 0.30 | 0 | 1 |
+| repair | UJtB55MaoD0 | Jessie J - Domino (Official Video) |  | 19 | 37465712 |  |  |  |  |  |
+| ref | SXKlJuO07eM | Jodi Benson - Part of Your World (From ' |  | 17 | 33037985 | fits | 1.0000 | 0.26 | 0 | 1 |
+| ref | 450p7goxZqg | John Legend - All of Me (Official Video) |  | 19 | 16655955 | fits | 1.0000 | -0.01 | 0 | 1 |
+| joint | 9tcaM06eGrY | Josh Gad - In Summer (From 'Frozen'_Sing |  | 20 | 36231531 |  |  |  |  |  |
+| ref | FQ3slUz7Jo8 | Justin Timberlake - Like I Love You (Off |  | 19 | 20296073 | fits | 1.0000 | -0.18 | 0 | 1 |
+| ref | uuZE_IRwLNI | Justin Timberlake - Mirrors (Official Vi |  | 20 | 19809909 | fits | 1.0000 | -0.06 | 0 | 1 |
+| ref | TSVHoHyErBQ | Justin Timberlake - Rock Your Body (Offi |  | 20 | 36216249 | fits | 1.0000 | -0.13 | 0 | 1 |
+| ref | je0roKRn3nY | Justin Timberlake - Selfish (Official Vi |  | 20 | 6498322 | fits | 1.0000 | -0.03 | 0 | 1 |
+| ref | IsUsVbTj2AY | Justin Timberlake - Suit & Tie (Official |  | 18 | 37912453 | fits | 1.0000 | 0.01 | 0 | 1 |
+| out_of_scope | KPop Demon Hunters (2025) - Free | KPop Demon Hunters (2025) - Free | out_of_scope | 0 |  |  |  |  |  |  |
+| out_of_scope | KPop Demon Hunters (2025) - How It's Done | KPop Demon Hunters (2025) - How It's Don | out_of_scope | 0 |  |  |  |  |  |  |
+| out_of_scope | KPop Demon Hunters (2025) - What It Sounds Like | KPop Demon Hunters (2025) - What It Soun | out_of_scope | 0 |  |  |  |  |  |  |
+| out_of_scope | zABLecsR5UE | Lewis Capaldi - Someone You Loved | out_of_scope | 0 |  |  |  |  |  |  |
+| ref | eitDnP0_83k | Mena Massoud, Naomi Scott - A Whole New  |  | 20 | 13987937 | fits | 1.0000 | -2.86 | 0 | 0 |
+| out_of_scope | vGfJeW_CcFY | Mulan _ I'll Make a Man Out of You _ @di | out_of_scope | 0 |  |  |  |  |  |  |
+| ref | Eo-KmOd3i7s | NSYNC - Bye Bye Bye (Official Video) |  | 20 | 22597231 | fits | 1.0000 | -2.19 | 0 | 0 |
+| repair | NSYNC - Paradise | NSYNC - Paradise |  | 19 | 27903107 |  |  |  |  |  |
+| ref | mw5VIEIvuMI | Naomi Scott - Speechless (from Aladdin)  |  | 20 | 16603775 | fits | 1.0000 | 0.69 | 0 | 1 |
+| ref | atz_aZA3rf0 | Ne-Yo - Because Of You [Official Video] |  | 20 | 7281682 | fits | 1.0000 | -0.61 | 0 | 1 |
+| out_of_scope | k6M5C-oKw9k | Ne-Yo - Miss Independent [Official Video | out_of_scope | 0 |  |  |  |  |  |  |
+| ref | 6tpl9LtkRRw | Ne-Yo - One In A Million [Official Video |  | 20 | 11471069 | fits | 1.0000 | 0.03 | 0 | 1 |
+| ref | IxszlJppRQI | Ne-Yo - So Sick [Official Video] |  | 18 | 34476679 | fits | 1.0000 | -0.19 | 0 | 1 |
+| repair | 9ThO76peOw0 | Pocahontas - Colors of the Wind (Blu-ray |  | 12 | 35708272 |  |  |  |  |  |
+| ref | fJ9rUzIMcZQ | Queen – Bohemian Rhapsody (Official Vide |  | 19 | 38863563 | fits | 1.0000 | 0.04 | 0 | 1 |
+| repair | 53GIADHxVzM | Sara Bareilles - She Used To Be Mine (Of |  | 19 | 9845205 |  |  |  |  |  |
+| out_of_scope | UvyHuse6buY | Seasons of Love (HD) | out_of_scope | 0 |  |  |  |  |  |  |
+| joint | XzbHPqULtdA | Stay Gold (Official Music Video) from Th |  | 3 | 34445486 |  |  |  |  |  |
+| ref | The Last Five Years (2014) - A Miracle Would Happen & When You Come Home to Me | The Last Five Years (2014) - A Miracle W |  | 8 | 22407401 | fits | 1.0000 | 0.08 | 0 | 1 |
+| out_of_scope | The Last Five Years (2014) - A Summer in Ohio | The Last Five Years (2014) - A Summer in | out_of_scope | 0 |  |  |  |  |  |  |
+| ref | The Last Five Years (2014) - Climbing Uphill | The Last Five Years (2014) - Climbing Up |  | 15 | 29050276 | fits | 1.0000 | 0.16 | 0 | 1 |
+| out_of_scope | The Last Five Years (2014) - Goodbye Until Tomorrow & I Could Never Rescue You | The Last Five Years (2014) - Goodbye Unt | out_of_scope | 0 |  |  |  |  |  |  |
+| out_of_scope | The Last Five Years (2014) - I Can Do Better Than That | The Last Five Years (2014) - I Can Do Be | out_of_scope | 0 |  |  |  |  |  |  |
+| out_of_scope | The Last Five Years (2014) - I'm a Part of That | The Last Five Years (2014) - I'm a Part  | out_of_scope | 0 |  |  |  |  |  |  |
+| out_of_scope | The Last Five Years (2014) - If I Didn't Believe in You | The Last Five Years (2014) - If I Didn't | out_of_scope | 0 |  |  |  |  |  |  |
+| ref | The Last Five Years (2014) - Moving Too Fast | The Last Five Years (2014) - Moving Too  |  | 11 | 19954680 | fits | 1.0000 | 0.01 | 0 | 1 |
+| out_of_scope | The Last Five Years (2014) - Nobody Needs to Know | The Last Five Years (2014) - Nobody Need | out_of_scope | 0 |  |  |  |  |  |  |
+| out_of_scope | The Last Five Years (2014) - See I'm Smiling | The Last Five Years (2014) - See I'm Smi | out_of_scope | 0 |  |  |  |  |  |  |
+| out_of_scope | The Last Five Years (2014) - Shiksa Goddess | The Last Five Years (2014) - Shiksa Godd | out_of_scope | 0 |  |  |  |  |  |  |
+| out_of_scope | The Last Five Years (2014) - Still Hurting | The Last Five Years (2014) - Still Hurti | out_of_scope | 0 |  |  |  |  |  |  |
+| out_of_scope | The Last Five Years (2014) - The Next Ten Minutes | The Last Five Years (2014) - The Next Te | out_of_scope | 0 |  |  |  |  |  |  |
+| out_of_scope | The Last Five Years (2014) - The Schmuel Song | The Last Five Years (2014) - The Schmuel | out_of_scope | 0 |  |  |  |  |  |  |
+| out_of_scope | 25QyCxVkXwQ | The Lion King - Can You Feel The Love To | out_of_scope | 0 |  |  |  |  |  |  |
+| out_of_scope | fwLxDUQBdEg | The Lion King - Hakuna Matata Music Vide | out_of_scope | 0 |  |  |  |  |  |  |
+| out_of_scope | cPKfUWDmNbo | Twins《下一站天后》[Official MV] | out_of_scope | 0 |  |  |  |  |  |  |
+| ref | 3JWTaaS7LdU | Whitney Houston - I Will Always Love You |  | 20 | 36267688 | fits | 1.0000 | -0.12 | 0 | 1 |
+| out_of_scope | wzSeub9W4QQ | Wicked - For Good  (2025) 4K - The Girl  | out_of_scope | 0 |  |  |  |  |  |  |
+| ref | rg_zwK_sSEY | ZAYN, Zhavia Ward - A Whole New World (E |  | 20 | 14447096 | fits | 1.0000 | 0.77 | 0 | 1 |
+| repair | fGyTN5UjnL4 | ‘Your Idol’ Lyric Video _ KPop Demon Hun |  | 15 | 37123328 |  |  |  |  |  |
+| joint | yebNIHKAC4A | “Golden” Official Lyric Video _ KPop Dem |  | 20 | 36729445 |  |  |  |  |  |
+| repair | j5itLHDMJsE | “Takedown” Official Choreography _ KPop  |  | 1 | 22746532 |  |  |  |  |  |
+| out_of_scope | ocDo3ySyHSI | 周杰倫 Jay Chou【千里之外 Far Away (feat.費玉清 Fei | out_of_scope | 0 |  |  |  |  |  |  |
+| joint | DYptgVvkVLQ | 周杰倫 Jay Chou【晴天 Sunny Day】-Official Musi |  | 19 | 22847808 |  |  |  |  |  |
+| out_of_scope | OR-0wptI_u0 | 周杰倫 Jay Chou【雙截棍 Nunchucks】Official MV | out_of_scope | 0 |  |  |  |  |  |  |
+| ref | RPWDeLqsN0g | 周杰倫 Jay Chou【龍捲風 Tornado】-Official Music |  | 4 | 16478482 | refused/too_few | 1.0000 | 0.00 | 0 | 0 |
+| out_of_scope | m4nu_F_9dWU | 孫燕姿 Sun Yan-Zi - 遇見 Encounter (official  | out_of_scope | 0 |  |  |  |  |  |  |
+| out_of_scope | 7qeShSmmsNg | 富士山下 | out_of_scope | 0 |  |  |  |  |  |  |
+| out_of_scope | RIq7Tz9nYD8 | 愛情轉移 | out_of_scope | 0 |  |  |  |  |  |  |
+| out_of_scope | IgvDMB5fR-8 | 月亮代表我的心 | out_of_scope | 0 |  |  |  |  |  |  |
+| out_of_scope | U_EgeFUTbW4 | 林子祥 George Lam  -《男兒當自強》Official MV (電影《 | out_of_scope | 0 |  |  |  |  |  |  |
+| out_of_scope | CvKvXNiXQZc | 楊千嬅 Miriam Yeung - 少女的祈禱 (Official Music | out_of_scope | 0 |  |  |  |  |  |  |
+| out_of_scope | tDw_ULjZWA8 | 王菲 - 容易受傷的女人 (粵語版) (Official Music Video | out_of_scope | 0 |  |  |  |  |  |  |
+| out_of_scope | JM9rx_hN1Ko | 陳奕迅 Eason Chan《十年(國) [OT  - 明年今日]》[Offic | out_of_scope | 0 |  |  |  |  |  |  |
+| out_of_scope | 8NJVNkzhJM4 | 陳奕迅 Eason Chan《明年今日》[Official MV] | out_of_scope | 0 |  |  |  |  |  |  |
+| out_of_scope | UmTB6E5mU5w | 風繼續吹_ 電影《縱橫四海》主題曲 _ 張國榮 Leslie Cheung _  | out_of_scope | 0 |  |  |  |  |  |  |
+| out_of_scope | Z3x9i7njCCo | 정국 (Jung Kook) '3D (feat. Jack Harlow)'  | out_of_scope | 0 |  |  |  |  |  |  |
+| joint | 1QYBiNRu1ok | 정국 (Jung Kook) 'Seven (feat. Latto)' Off |  | 18 | 33562631 |  |  |  |  |  |
+| out_of_scope | 6q0JnftlH-I | 정국 (Jung Kook) 'Standing Next to You' Of | out_of_scope | 0 |  |  |  |  |  |  |
+
+### Table S1: top 30 of 0 points with wrong = 0, known = 0 and margin_safe
+
+| # | Mistimed <= | Matched >= | Gap s <= | End unheard <= | Interior unheard | Dropped <= | Spread s <= | ASR veto | wrong | holes | unjudged | known | a_ref | a_ref_any | b_ref | b_ref_any | a_joint | b_joint | a_repair | b_repair |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+
+### Table S2: hole and unjudged candidates the S1 rows above accept
+
+| Title | youtube_id | lrclib_id | class | S1 rows that accept it |
+|---|---|---|---|---|
+
+### Table K: known-bad candidates
+
+| Title | youtube_id | lrclib_id | Fit | Speed | Matched | Gap s | Mistimed | End unheard | Loosest bar it needs (strictest point that accepts it) |
+|---|---|---|---|---|---|---|---|---|---|
+| 'Defying Gravity' - Wicked 20th Annivers | AoON1CyhQAM | 34563601 | refused/disagree | 0.9590 | 45/89 | +97 | 0 | 0 | none (fit refused/disagree) |
+| Ed Sheeran - Best Part Of Me (feat. YEBB | wGyh_53ecgg | 27081884 | fits | 0.9859 | 34/38 | -1 | 0 | 3 | none (speed 0.9859) |
+| Ed Sheeran & Rudimental­ - Bloodstream [ | Orq_75kFi8I | 36006882 | refused/disagree | 1.0000 | 38/71 | +0 | 0 | 0 | none (fit refused/disagree) |
