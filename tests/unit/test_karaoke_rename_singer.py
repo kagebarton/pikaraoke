@@ -1,5 +1,6 @@
 """Unit tests for a guest's rename reaching every place their name is kept."""
 
+import logging
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -99,19 +100,22 @@ class TestRenameSinger:
 
 
 class TestEveryCopyMovesBeforeAnyoneIsTold:
-    def test_a_notification_that_raises_leaves_every_copy_moved_and_the_registry_in_step(
-        self, party
+    def test_a_notification_that_raises_still_saves_with_every_copy_moved_and_logs_it(
+        self, party, caplog
     ):
         def fail(*_args):
             raise RuntimeError("socket gone")
 
         party.events.on("queue_update", fail)
 
-        with pytest.raises(RuntimeError, match="socket gone"):
-            rename(party, "Michael")
+        held = rename(party, "Michael")
 
+        assert held == ("Michael", party.token)
         assert where_the_name_is_kept(party) == (["Michael", "Michael"], ["Michael"], "Michael")
         assert party.singers.lookup(party.token) == ("Michael", SingerSettings(2, 0.7))
+        [record] = [r for r in caplog.records if r.levelno == logging.ERROR]
+        assert "'Mike' -> 'Michael'" in record.getMessage()
+        assert record.exc_info is not None and "socket gone" in str(record.exc_info[1])
 
 
 class TestNotifications:

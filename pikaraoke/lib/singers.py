@@ -81,8 +81,10 @@ class SingerRegistry:
         characters. When a guest's spelling changes (a case change included, because the queue and
         ownership checks compare names exactly) the registry changes first, then `on_rename(old,
         new)` runs once with the registry lock held, so nobody can join as the old name before
-        the songs have moved, and an `on_rename` that raises leaves the registry consistent with
-        the songs.
+        the songs have moved. `on_rename` must not raise: the moves are in-memory loops and the
+        notifications are caught by the caller. If a move did raise, the songs not yet moved
+        would stay under the old name, which is free again, and the exception reaches the caller
+        of `save`.
 
         Raises:
             NameTaken: the name is reserved or held by another guest.

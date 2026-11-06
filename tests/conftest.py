@@ -134,7 +134,15 @@ class MockKaraoke:
             filename_from_path=SongManager.filename_from_path,
             get_available_songs=lambda: self.song_manager.songs,
         )
-        self.singers = SingerRegistry(self.preferences, on_rename=lambda old, new: None)
+        self.singers = SingerRegistry(self.preferences, on_rename=self._refuse_rename)
+
+    @staticmethod
+    def _refuse_rename(old, new):
+        """A rename through this mock would move no songs and pass anyway, so it fails."""
+        raise AssertionError(
+            f"MockKaraoke cannot rename {old!r} to {new!r}: it moves no songs. "
+            "Use the `party` fixture in tests/unit/test_karaoke_rename_singer.py."
+        )
 
     @property
     def socketio(self):
