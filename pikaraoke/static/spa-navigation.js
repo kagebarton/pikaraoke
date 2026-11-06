@@ -86,29 +86,54 @@
         $('#singer-key-label').text(getSemitonesLabel(key));
     }
 
-    function openSingerForm(mode) {
-        const guest = window.singer;
+    /**
+     * Open the form in `mode` ('join' or 'edit') with the fields filled from `state`, a guest
+     * state from the server. Does nothing when the form is already open in that mode, so a
+     * navigation keeps what the guest typed and keeps Save disabled while a save is in flight.
+     */
+    function openSingerForm(mode, state) {
+        if (singerFormMode === mode) {
+            return;
+        }
         singerFormMode = mode;
-        singerFormPrefilledName = mode === 'edit' ? guest.name : '';
-        $('#singer-name').val(singerFormPrefilledName).attr('maxlength', guest.name_limit);
+        singerFormPrefilledName = mode === 'edit' ? state.name : '';
+        $('#singer-name').val(singerFormPrefilledName).attr('maxlength', state.name_limit);
         $('#singer-name-error').hide();
-        const percent = Math.round(guest.vocal_volume * 100);
+        const percent = Math.round(state.vocal_volume * 100);
         $('#singer-vocal-volume').val(percent);
         $('#singer-vocal-volume-label').text(percent + '%');
-        setSingerKey(guest.semitones);
-        $('#singer-key-field').toggle(guest.transpose_enabled);
+        setSingerKey(state.semitones);
+        $('#singer-key-field').toggle(state.transpose_enabled);
         $('.singer-join-only').toggle(mode === 'join');
         $('.singer-edit-only').toggle(mode === 'edit');
         $('#singer-save').removeClass('is-loading').prop('disabled', false);
         $('#singer-modal').addClass('is-active');
         $('html').addClass('is-clipped');
     }
-    window.openSingerForm = openSingerForm;
 
     function closeSingerForm() {
+        singerFormMode = null;
         $('#singer-modal').removeClass('is-active');
         $('html').removeClass('is-clipped');
     }
+
+    /**
+     * Show a guest state on the page. Joined: the navbar shows the registry's name, and a join
+     * form left open closes. Not joined: the navbar name is hidden and the join form opens.
+     */
+    function applySingerState(state) {
+        if (state.joined) {
+            $('#current-user span').text(state.name);
+            $('#current-user').removeClass('is-hidden');
+            if (singerFormMode === 'join') {
+                closeSingerForm();
+            }
+        } else {
+            $('#current-user').addClass('is-hidden');
+            openSingerForm('join', state);
+        }
+    }
+    window.applySingerState = applySingerState;
 
     function saveSingerForm() {
         const $save = $('#singer-save');
@@ -150,7 +175,17 @@
             // The name sits in the burger menu on a phone; don't leave it open behind the form
             $('.navbar-burger').removeClass('is-active');
             $('.navbar-menu').removeClass('is-active');
-            openSingerForm('edit');
+            // This page's copy of the guest is only as fresh as its last navigation, so open
+            // from the server's. window.singer is left alone: it says what this page's copies
+            // of the name were loaded with, which the save's reload rule needs.
+            $.ajax({ url: '/singer', cache: false }).done(function(state) {
+                applySingerState(state);
+                if (state.joined) {
+                    openSingerForm('edit', state);
+                }
+            }).fail(function() {
+                openSingerForm('edit', window.singer);
+            });
             // Remove focus from the link to prevent CSS focus styling (black background)
             $(this).blur();
         });

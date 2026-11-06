@@ -51,19 +51,32 @@ def save_singer(form: dict[str, Any]) -> Response | tuple[Response, int]:
     return jsonify({"success": True, "name": name, "token": token})
 
 
-@singer_bp.app_context_processor
-def inject_singer() -> dict[str, dict[str, Any]]:
-    """Give every page the phone's guest state, so a page opens the join form when it has none."""
+def singer_state() -> dict[str, Any]:
+    """The phone's guest as the form needs it: joined or not, and the values it starts at."""
     k = get_karaoke_instance()
     guest = k.singers.lookup(request.cookies.get(TOKEN_COOKIE))
     name, settings = guest if guest else ("", k.singers.house_defaults())
     return {
-        "singer": {
-            "joined": guest is not None,
-            "name": name,
-            "semitones": settings.semitones,
-            "vocal_volume": settings.vocal_volume,
-            "name_limit": NAME_LIMIT,
-            "transpose_enabled": k.is_transpose_enabled,
-        }
+        "joined": guest is not None,
+        "name": name,
+        "semitones": settings.semitones,
+        "vocal_volume": settings.vocal_volume,
+        "name_limit": NAME_LIMIT,
+        "transpose_enabled": k.is_transpose_enabled,
     }
+
+
+@singer_bp.route("/singer", methods=["GET"])
+def get_singer() -> Response:
+    """The phone's current guest state, for the edit form.
+
+    A page's copy of it is only as fresh as its last navigation: the guest may have renamed on
+    another tab since, or the app may have restarted.
+    """
+    return jsonify(singer_state())
+
+
+@singer_bp.app_context_processor
+def inject_singer() -> dict[str, dict[str, Any]]:
+    """Give every page the phone's guest state, so a page opens the join form when it has none."""
+    return {"singer": singer_state()}

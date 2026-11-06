@@ -298,3 +298,26 @@ class TestPageState:
         karaoke.is_transpose_enabled = False
 
         assert page_state(app.test_client())["transpose_enabled"] is False
+
+
+class TestGetSinger:
+    """`GET /singer` gives the edit form the same state a page load would, fresh."""
+
+    @pytest.mark.parametrize("phone_kind", ["new", "joined", "token_nobody_holds"])
+    def test_it_returns_the_state_the_pages_get(self, app, karaoke, phone_kind):
+        phone = {
+            "new": lambda: app.test_client(),
+            "joined": lambda: join(app, karaoke, "María José", SingerSettings(-2, 0.1))[0],
+            "token_nobody_holds": lambda: as_phone(app, "Mike", "from-an-earlier-run"),
+        }[phone_kind]()
+
+        response = phone.get("/singer")
+
+        assert response.status_code == 200
+        assert response.get_json() == json.loads(phone.get("/state").get_data(as_text=True))
+
+    def test_it_reflects_a_rename_made_after_the_page_loaded(self, app, karaoke):
+        phone, _, token = join(app, karaoke, "Mike")
+        karaoke.singers.save(token, "Michael", SingerSettings(2, 0.7))
+
+        assert phone.get("/singer").get_json()["name"] == "Michael"
