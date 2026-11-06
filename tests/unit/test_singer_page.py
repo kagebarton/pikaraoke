@@ -1,7 +1,7 @@
 """Render test for the guest state base.html writes into every page.
 
-A guest's name is free text and now lands inside an inline script, so a name that closes the
-script tag must stay inert, and the line must carry what the page script reads.
+A guest's name is free text and lands inside an inline script, so a name that closes the script
+tag must stay inert. The state's own values are tested in test_singer_routes.py.
 """
 
 import json
@@ -18,7 +18,6 @@ if not hasattr(werkzeug, "__version__"):
     werkzeug.__version__ = "3.0.0"
 
 import pikaraoke
-from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.preference_manager import PreferenceManager
 from pikaraoke.lib.singers import SingerRegistry, SingerSettings
 from pikaraoke.routes.singer import singer_bp
@@ -67,26 +66,6 @@ def page_state(client) -> dict:
     html = client.get("/page").get_data(as_text=True)
     [state] = re.findall(r"window\.singer = (\{.*\});", html)
     return json.loads(state)
-
-
-def test_a_phone_that_has_not_joined_gets_the_form_state_with_the_house_defaults(app):
-    state = page_state(app.test_client())
-
-    assert state["joined"] is False
-    assert state["name"] == ""
-    assert (state["semitones"], state["name_limit"]) == (0, 30)
-
-
-def test_a_joined_phone_gets_its_name_and_settings(app, karaoke):
-    _, token = karaoke.singers.save(None, "María José", SingerSettings(2, 0.7))
-    phone = app.test_client()
-    phone.set_cookie("singer_token", token)
-
-    state = page_state(phone)
-
-    assert state["joined"] is True
-    assert state["name"] == "María José"
-    assert (state["semitones"], state["vocal_volume"]) == (2, 0.7)
 
 
 def test_a_name_that_closes_the_script_tag_stays_inert(app, karaoke):

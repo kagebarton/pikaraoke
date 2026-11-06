@@ -62,6 +62,7 @@ def singer_state() -> dict[str, Any]:
         "semitones": settings.semitones,
         "vocal_volume": settings.vocal_volume,
         "name_limit": NAME_LIMIT,
+        "key_limit": KEY_LIMIT,
         "transpose_enabled": k.is_transpose_enabled,
     }
 

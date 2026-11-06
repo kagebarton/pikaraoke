@@ -71,6 +71,11 @@
         });
     }
 
+    function closeBurgerMenu() {
+        $('.navbar-burger').removeClass('is-active');
+        $('.navbar-menu').removeClass('is-active');
+    }
+
     /**
      * The guest form (name, vocal volume, key) in base.html's #singer-modal, which lives outside
      * .box so navigation never swaps it. Join mode opens on any page until the phone has joined
@@ -78,10 +83,10 @@
      */
     let singerFormMode = null;
     let singerFormPrefilledName = '';
+    let singerFormKeyLimit = 0;
 
     function setSingerKey(value) {
-        const $field = $('#singer-key-field');
-        const key = Math.max($field.data('min'), Math.min($field.data('max'), value));
+        const key = Math.max(-singerFormKeyLimit, Math.min(singerFormKeyLimit, value));
         $('#singer-key').val(key);
         $('#singer-key-label').text(getSemitonesLabel(key));
     }
@@ -102,6 +107,7 @@
         const percent = Math.round(state.vocal_volume * 100);
         $('#singer-vocal-volume').val(percent);
         $('#singer-vocal-volume-label').text(percent + '%');
+        singerFormKeyLimit = state.key_limit;
         setSingerKey(state.semitones);
         $('#singer-key-field').toggle(state.transpose_enabled);
         $('.singer-join-only').toggle(mode === 'join');
@@ -155,9 +161,8 @@
             semitones: $('#singer-key').val(),
             vocal_volume: $('#singer-vocal-volume').val() / 100
         }).done(function(reply) {
-            const options = { expires: 3650, path: '/' };
-            Cookies.set('user', reply.name, options);
-            Cookies.set('singer_token', reply.token, options);
+            setGuestCookie('user', reply.name);
+            setGuestCookie('singer_token', reply.token);
             // A save that keeps the name leaves the page as it is, so unsaved work on it stays.
             // Otherwise reload so every page-level copy of the name is fresh.
             if (singerFormMode === 'edit' && reply.name === window.singer.name) {
@@ -182,8 +187,7 @@
         $(document).on('click.singer', '#current-user', function(e) {
             e.preventDefault();
             // The name sits in the burger menu on a phone; don't leave it open behind the form
-            $('.navbar-burger').removeClass('is-active');
-            $('.navbar-menu').removeClass('is-active');
+            closeBurgerMenu();
             // This page's copy of the guest is only as fresh as its last navigation, so open
             // from the server's. window.singer is left alone: it says what this page's copies
             // of the name were loaded with, which the save's reload rule needs.
@@ -403,9 +407,7 @@
 
         isNavigating = true;
 
-        // Close hamburger menu if open
-        $('.navbar-burger').removeClass('is-active');
-        $('.navbar-menu').removeClass('is-active');
+        closeBurgerMenu();
 
         try {
             // Fetch the new page content with cache-busting to ensure fresh data
