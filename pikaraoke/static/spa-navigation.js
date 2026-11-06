@@ -163,32 +163,46 @@
         if ($save.prop('disabled')) {
             return;
         }
+        // Read the form once, now: the reply lands on whatever the form has become by then.
+        const editing = singerFormMode === 'edit';
         const typedName = $('#singer-name').val();
         // This tab may hold a name the guest has since changed on another tab, and a blank name
         // keeps the current one, so a name left as it was prefilled is not sent.
-        const name = (singerFormMode === 'edit' && typedName === singerFormPrefilledName) ? '' : typedName;
+        const name = (editing && typedName === singerFormPrefilledName) ? '' : typedName;
+        // The name the edit would leave the guest with, for the join form a refused edit becomes
+        const keptName = name || singerFormPrefilledName;
+        const semitones = $('#singer-key').val();
+        const vocalVolume = $('#singer-vocal-volume').val() / 100;
         $save.addClass('is-loading').prop('disabled', true);
         $('#singer-name-error').hide();
         $.post('/singer', {
             name: name,
-            semitones: $('#singer-key').val(),
-            vocal_volume: $('#singer-vocal-volume').val() / 100,
-            editing: singerFormMode === 'edit'
+            semitones: semitones,
+            vocal_volume: vocalVolume,
+            editing: editing
         }).done(function(reply) {
             setGuestCookie('user', reply.name);
             setGuestCookie('singer_token', reply.token);
             // A save that keeps the name leaves the page as it is, so unsaved work on it stays.
             // Otherwise reload so every page-level copy of the name is fresh.
-            if (singerFormMode === 'edit' && reply.name === window.singer.name) {
+            if (editing && reply.name === window.singer.name) {
                 closeSingerForm();
             } else {
                 location.reload();
             }
         }).fail(function(xhr) {
-            // The app restarted since this form opened and no longer knows this phone. The page
-            // it reloads to asks the guest to join, as after any restart.
+            // An edit is refused when the app no longer knows this phone: it restarted since the
+            // form opened, or the phone lost its token cookie. The form becomes the join form
+            // where it is, with what the guest chose, so one Save brings them back. A join form
+            // already open (a navigation opened it while this save was out) is left alone.
             if (xhr.status === 410) {
-                location.reload();
+                if (singerFormMode !== 'join') {
+                    applySingerState(Object.assign({}, window.singer, {
+                        joined: false, semitones: semitones, vocal_volume: vocalVolume
+                    }));
+                    $('#singer-name').val(keptName);
+                    $('#singer-name-error').text(window.i18n.singerJoinAgain).show();
+                }
                 return;
             }
             const error = xhr.responseJSON && xhr.responseJSON.error;
