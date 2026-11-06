@@ -15,7 +15,7 @@ if not hasattr(werkzeug, "__version__"):
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.preference_manager import PreferenceManager
 from pikaraoke.lib.queue_manager import QueueManager
-from pikaraoke.lib.singers import NAME_LIMIT, SingerRegistry, SingerSettings
+from pikaraoke.lib.singers import KEY_LIMIT, NAME_LIMIT, SingerRegistry, SingerSettings
 from pikaraoke.routes.singer import singer_bp
 
 SONG = "/songs/Artist - Song---dQw4w9WgXcQ.mp4"
@@ -260,6 +260,7 @@ class TestPageState:
             "semitones": 0,
             "vocal_volume": 0.55,
             "name_limit": NAME_LIMIT,
+            "key_limit": KEY_LIMIT,
             "transpose_enabled": True,
         }
 

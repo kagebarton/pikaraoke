@@ -22,11 +22,16 @@
     // This phone's guest, from the server. SPA navigation re-runs this script, so every page
     // change picks up fresh state, including after the app restarted.
     window.singer = {{ (singer or {}) | tojson }};
+    // A function declaration, not a const: SPA navigation re-runs this script. Also used by
+    // spa-navigation.js when the guest form saves.
+    function setGuestCookie(name, value) {
+      Cookies.set(name, value, { expires: 3650, path: '/' });
+    }
     // The add, delete and pause routes post the cookie's name, and page scripts read it as they
     // load, so make it the registry's spelling now, even after a save whose reply never reached
     // this phone.
     if (window.singer.joined && Cookies.get("user") !== window.singer.name) {
-      Cookies.set("user", window.singer.name, { expires: 3650, path: '/' });
+      setGuestCookie("user", window.singer.name);
     }
 
     // Translations for spa-navigation.js (static JS cannot use Jinja2 directly)
@@ -278,7 +283,7 @@
           {# MSG: Label of the field where a guest types their name #}
           <label class="label" for="singer-name">{% trans %}Your name{% endtrans %}</label>
           <div class="control">
-            <input class="input" id="singer-name" name="name" type="text" autocapitalize="words">
+            <input class="input" id="singer-name" type="text" autocapitalize="words">
           </div>
           <p class="help is-danger" id="singer-name-error" style="display: none"></p>
           <p class="help">
@@ -290,13 +295,12 @@
         <div class="field">
           <div class="is-flex" style="justify-content: space-between">
             <label class="label" for="singer-vocal-volume">{% trans %}Vocal Volume{% endtrans %}</label>
-            <span class="label" id="singer-vocal-volume-label">40%</span>
+            <span class="label" id="singer-vocal-volume-label"></span>
           </div>
-          <input type="range" min="0" max="100" value="40" step="1"
-            id="singer-vocal-volume" style="width: 100%" />
+          <input type="range" min="0" max="100" step="1" id="singer-vocal-volume" style="width: 100%" />
         </div>
 
-        <div class="field" id="singer-key-field" data-min="-3" data-max="3">
+        <div class="field" id="singer-key-field">
           {# MSG: Label of the control where a guest picks the key their songs start at #}
           <span class="label">{% trans %}Key{% endtrans %}</span>
           <div class="is-flex" style="align-items: center; justify-content: space-between">
@@ -305,7 +309,7 @@
             <button type="button" class="button is-medium" id="singer-key-up">+</button>
           </div>
         </div>
-        <input type="hidden" id="singer-key" name="semitones" value="0">
+        <input type="hidden" id="singer-key">
       </section>
       <footer class="modal-card-foot" style="padding: 15px;">
         <button type="submit" class="button is-success" id="singer-save" style="margin-right: 8px">{% trans %}Save{% endtrans %}</button>
