@@ -1,11 +1,15 @@
-Model: Claude Opus 5.5 (author: loose draft 2026-11-03, Phase 1 spec 2026-11-06). Phase 1
-executor: Claude Sonnet 5.5. GATE M goes to Opus, then Ken. Phases 2-4 are still loose and get
-specced (Opus) after GATE M.
+Model: Claude Opus 5.5 (author: loose draft 2026-11-03, Phase 1 spec 2026-11-06, GATE M read
+2026-11-06). Phase 1 executor: Claude Sonnet 5.5. Phases 2-4 were never specced.
 
 # LRCLIB auto-timing at download
 
-**Status: Phase 0 DONE, Phase 1 RUN 2026-11-06 (Sonnet), waiting for GATE M (Opus), Phases 2-4 loose.**
-"Open for the spec" below lists what the Phase 2-4 spec must settle.
+**Status: STOPPED at GATE M, 2026-11-06 (Ken ratified the read; Decision 8). Nothing was built
+or landed.** No point on the bar's grid accepts zero wrong LRCs: even the strictest point
+accepts an LRC that skips two sung lines in a late chorus, and an LRC that stops about 70 s
+before the singing does needs only one unheard end line to pass. Both failures are singing that
+no LRC line claims, which the fit does not check. At the points read, the bar also refused 6 of
+the 7 Repair picks Ken had checked by ear. Read "GATE M read" at the end before re-proposing a
+per-song LRCLIB bar.
 
 ## Goal
 
@@ -352,6 +356,8 @@ list, Song Info's route and source, and the karaoke by ear. Return one to Genius
 | 1 | 2026-11-06 | 0 | Branch moved from `f627112` to `dev` `4497f4d`; loose plan committed (`aada4d2`). Overlap check: `git diff f627112 4497f4d -- pikaraoke/pipeline/stages/lyric_align.py` | `cue_align_windows` changed `_run_cue_align`'s return (adds envelope and `cue_inputs`), the edge snap's envelope reuse and its `doubted_sources`; route choice and `_dereverb_gate` untouched. Details in Phase 0. |
 | 2 | 2026-11-06 | 1 | Library counts for the spec, read-only (`library_statuses` + `read_bundle`), 115 songs | origin `srt` 76 (1 edited), 59 with `transcribe_words`, 0 with `.srt.generated`, 0 with `.lrc`, 2 with ASR json3; `genius`+`joint` 8 (8 `.lrc`, 8 words); `lrclib_srt` 7 (7 `.lrc`, 7 words); `custom`+`joint` 3; `movie_srt` 7; no bundle 14. Known-bad `.lrc` ids and dates: Defying Gravity 34563601 (2026-10-28), Bloodstream 36006882 (2026-10-28), Best Part Of Me 27081884 (2026-10-19). |
 | 4 | 2026-11-06 | 1 | Steps 1a-1f (Sonnet). 1a: every anchor as quoted, no STOP. Code `0676eea` (`scripts/lrc_auto_timing_probe.py`, `tests/unit/test_lrc_auto_timing_probe.py`, 73 tests pass). Command: `/home/ken/miniconda3/envs/pik/bin/python scripts/lrc_auto_timing_probe.py --folder "/home/ken/shared-drives/D:/Shared/pikaraoke-songs" > <out>/report.md`, one run, `<out>` = `/home/ken/.pikaraoke/tmp/lrclib_auto_timing`. Table P: `ref` 58 (needs 40), `lrclib_unavailable` 0 (limit 5), so no rerun. Read-only check: `find "<folder>" -newer <out>/started` printed nothing. Files under `<out>`: `report.md`, `candidates.tsv` (1,276 rows), `songs.tsv` (115), `sweep.tsv` (3,600), `sheets/` (46 song folders, lyric text, local only), `cache/`, `run.log`. Table S1 printed empty; `sweep.tsv` checked for a counting fault (the strictest point's row and an independent recount from `candidates.tsv` agree). Report below. | Report in "GATE M report output". Stopped at 1g for Opus. |
+| 5 | 2026-11-06 | GATE M | Opus read, read-only: no probe rerun, nothing written outside the plan. The sweep was rebuilt from `candidates.tsv` + `songs.tsv` in the session scratchpad and matched all 3,600 points of `sweep.tsv` (counts and `margin_safe`). Sheets read by eye for every `wrong_timing` song and for the zone of the best point once the class-rule artifacts were cleared (that point and its one-step-looser neighbours: 84 distinct timings, 22 songs), plus three mechanical screens (method and limits in "GATE M read"). | Rulings in "GATE M read". LRC wrong: Drowning, Stronger, The A Team 12572148, That's The Way It Is (all 19 `hole` records). Text only: everything else read, including every `wrong_timing` record of Shape of You and Get Down. Under these rulings no grid point is clean, the strictest included (it accepts That's The Way It Is 35468507). STOP (Decision 8). |
+| 6 | 2026-11-06 | GATE M | Ken's ruling | Stop ratified. |
 
 ## GATE M report output
 
@@ -509,3 +515,105 @@ Constants in force: FLAG_TOLERANCE_S=5.0, MIN_FLAGGED_RUN=2, MIN_UNHEARD_RUN=3, 
 | 'Defying Gravity' - Wicked 20th Annivers | AoON1CyhQAM | 34563601 | refused/disagree | 0.9590 | 45/89 | +97 | 0 | 0 | none (fit refused/disagree) |
 | Ed Sheeran - Best Part Of Me (feat. YEBB | wGyh_53ecgg | 27081884 | fits | 0.9859 | 34/38 | -1 | 0 | 3 | none (speed 0.9859) |
 | Ed Sheeran & Rudimental­ - Bloodstream [ | Orq_75kFi8I | 36006882 | refused/disagree | 1.0000 | 38/71 | +0 | 0 | 0 | none (fit refused/disagree) |
+
+## GATE M read
+
+Opus, 2026-11-06, read-only (Results rows 5-6). No lyric text below.
+
+### How it was read
+
+- **Sweep rebuilt** from `candidates.tsv` and `songs.tsv` (a scratch copy of the probe's
+  acceptance, arm and margin logic). It matched `sweep.tsv` at all 3,600 points, so the counts
+  below that apply rulings are the same sweep with only some candidate classes changed.
+- **What was read.** Every `wrong_timing` song any grid point accepts (four songs). Then, after
+  clearing the class-rule artifacts below, the zone of the best margin-safe point (mistimed 0,
+  matched 0.8, gap 3, end unheard 1, interior unheard allowed, dropped 0, spread 0.5, ASR veto
+  on) and its one-step-looser neighbours: 84 distinct timings (records with identical sheets
+  folded together) across 22 songs.
+- **Screens, then eyes.** Every zone timing went through three screens over its sheet. Every
+  stretch a screen flagged was read by eye, with `words.txt`:
+  1. a run of 2 or more unmapped caption cues with no LRC line starting in that time window;
+  2. an unmapped LRC line more than 2 s from any cue start whose words are not in the cues
+     around it;
+  3. an unmapped caption cue of 3 or more non-filler words, most of which no LRC line within
+     8 s contains.
+- **Limits.** `right` records have no sheet and were not read. The two LRC-wrong omissions
+  found below are invisible to the class rule (one is below its hole size of 4, the other was
+  called `hole` for an unrelated reason), so a `right` record could hide the same. Rulings that
+  rest on the screens alone, with no stretch flagged, are marked "screened".
+
+### Step 1: Table K
+
+All three known-bad LRCs are refused at every grid point by a fixed conjunct: Defying Gravity
+and Bloodstream by the fit itself (refused, disagree), Best Part Of Me by speed (0.986).
+
+### Step 2: rulings
+
+| Song | youtube_id | Records | Probe class | Ruling | Why |
+|---|---|---|---|---|---|
+| Ed Sheeran - Shape of You | JGwWNGJdvx8 | 8324114, 35007521 (arm A), 37175728, 39263819, 3204999, 10558004, 12443809, 12969010, 21854205 | wrong_timing | text only | The caption writes the repeated outro line in alternating long and short forms. Mapping by text skips the short ones and pairs each LRC line with a cue two repeats later. Every off-run line is within 0.23 s of a heard word. The first four are accepted at every grid point; they alone made S1 empty. |
+| Backstreet Boys - Get Down | 0LSYuZRSGcY | wrong_timing: 1124886, 3654026, 9117851 (arm A), 10249637, 13609412, 19229904, 26181917, 29181502, 31695415, 31757878, 33670539, 33739816, 33966854. hole: 13474015, 13641580, 22381484, 34452636, 35231491, 36673394 | wrong_timing, hole | text only | Same artifact: the caption splits each bar of the outro chant into four short cues. Every off-run line is within 0.55 s of a heard word. The `hole` records also leave out a wordless vocal section; one caption cue is a mishearing. |
+| Backstreet Boys - Drowning | GZXHBgjQjNM | 20242140, 21912586, 27023721, 31535578, 32140003, 35793714, 36228137 | wrong_timing | LRC wrong | Places the first chorus line about 6 s after it is sung and the next line 3 s late. The fit flags the first as mistimed, so mistimed 0 refuses it. |
+| Britney Spears - Stronger | AJWtLf4-WWs | 6800151, 28307055 (arm A), 34352818 | wrong_timing | LRC wrong | Bridge lines 8-11 s after the caption's times, with a repeated hook squeezed into under a second before the next line. The transcriber heard nothing there for about 25 s, so only the caption speaks. The fit flags a mistimed line and an interior unheard run; mistimed 0 or interior forbidden refuses it. |
+| Ed Sheeran - The A Team | UAWcs5H-qgQ | 12572148 | hole | LRC wrong | Stops about 70 s before the singing does (95 heard words and 20 caption cues after its last line). The fit sees one unheard end line and a +1 s gap: LRCLIB's duration is the track's, not the lyrics'. It needs end unheard 1 and passes every other strictest step. |
+| Ed Sheeran - The A Team | UAWcs5H-qgQ | 35717551 | hole | text only | Echo repeats the LRC writes once. |
+| Céline Dion - That's The Way It Is | T6wbugWrfLU | 35468507, and 3458703, 6335685, 7720552, 9641374, 12149023, 12377831, 12515974, 15413449, 17099666, 20411476, 23305471, 24586049, 24809544, 31956521, 32182355, 32691192, 33133897 (arm A), 34902348 | hole | LRC wrong | All skip two sung lines in a late chorus, which the transcriber heard; some put an ad-lib there. That's 3 caption cues, below the hole size, so the class rule saw `hole` only from line splits elsewhere. 35468507 has no mistimed line and is accepted at every grid point. The other 18 carry one mistimed line: an intro ad-lib placed about 14 s from the only heard word near it, which sits at 0.0 s. Where that ad-lib really is was not ruled. |
+| Ed Sheeran - Happier | iWZmdoY1aTE | 6674983, 7260734, 8325988, 9595552, 10503213, 35467074 | hole | text only | Leaves out a 16 s wordless vocal stretch, unheard by the transcriber; elsewhere a split line. |
+| Ariana Grande, John Legend - Beauty and the Beast | axySrE0Kg6k | 30923847, 33414880, 36554870 (arm A) | hole | text only | Leaves out wordless vocal cues; the caption splits the title line. |
+| Céline Dion - Ashes | CX11yw6YL1w | 10814285 (arm A), 11235948, 11406895, 11608504, 34343015 | hole | text only | The 13 caption cues at the end are the video's spoken skit. |
+| Justin Timberlake - Suit & Tie | IsUsVbTj2AY | 3659365, 3940746, 12674202, 13338461, 13595947, 26048997, 27128756, 31424957, 37912453 (arm A) | hole | text only | Leaves out the outro ad-libs; elsewhere merged lines. |
+| #NSYNC - (God Must Have Spent) A Little More Time On You | -fxh7jAJR8U | 28155617 | hole | text only | Leaves out about 20 s of echo ad-libs at the end; elsewhere merged lines. |
+| Whitney Houston - I Will Always Love You | 3JWTaaS7LdU | 20472220, 23883078, 28603161, 28684462, 34104300, 36267688 (arm A), 38035831 | unjudged | text only | The caption cuts each line into fragments, so mapping by text fails. Paired by position, every LRC line is within about 1 s of its cue. |
+| Queen - Bohemian Rhapsody | fJ9rUzIMcZQ | 827107, 3204719, 3991561, 18087267, 34127608, 38353914 | hole, unjudged | text only | Merged lines. The final line is in the LRC in parentheses (backing), which the fitted sheet leaves out. One outro vocal line the caption lacks. |
+| Backstreet Boys - As Long As You Love Me | 0Gl2QnHNpkA | 32925353 | hole | text only | Merged lines; single backing phrases and an intro line differ. |
+| Adele - Someone Like You | hLQl3WQQoQ0 | 15851, 1639726, 3199504, 3205011, 3879219, 12152221, 12459001, 19100677, 20575639, 23116607, 25491736, 25538697, 33610148 (arm A), 37687986 | hole | text only | Each couplet is one LRC line and two caption cues. |
+| John Legend - All of Me | 450p7goxZqg | 3879717, 6652967, 10041232, 16658707, 22517354, 34232285, 34495644, 34495645, 38332965 | hole | text only | The LRC splits a caption line in two. |
+| #NSYNC - This I Promise You | 6thmPrTxBtI | 1903894, 11431721, 15500343, 23889061, 32703671 | unjudged | text only | Merged lines. |
+| Ed Sheeran - Castle On The Hill | K0ibBPhiaG0 | 5690399, 6674879, 9595600, 9734861, 14109416 | hole | text only | Merged lines. |
+| Jodi Benson - Part of Your World | SXKlJuO07eM | 7868622, 33037985 (arm A) | hole | text only | Merged lines. |
+| Justin Timberlake - Selfish | je0roKRn3nY | 6498322 (arm A), 7399425, 9485807, 11472594, 13580097, 34667047 | hole | text only | Merged lines; an unheard intro ad-lib. |
+| Ed Sheeran - Thinking Out Loud | lp-EO5I60KA | 7808083, 9113123, 10814594, 22442986, 35447504, 35832916 (arm A) | hole | text only | Merged lines; a number written in digits. |
+| Britney Spears - ...Baby One More Time | C-u5WLJ9Yk4 | 7058780, 22613865 (arm A), 35086993, 36212402, 36649698 | hole | text only (screened) | Two LRC lines over each four-cue stretch. |
+| Backstreet Boys - Shape Of My Heart | OT5msu-dap8 | 3743118, 10483689, 10723815, 10878020, 13563645, 22503174, 24616493, 26646687, 27772342, 31966568, 33083378, 35188343, 35534917 | hole | text only (screened) | Two LRC lines over each four-cue stretch; one merged pair read by eye. |
+| Idina Menzel - Let It Go | YVVTZgwYwVo | 4913486, 11525818, 12269924, 12302283, 12865096, 32502862, 32880194 | hole | text only (screened) | Two LRC lines over each four-cue stretch. |
+| Ed Sheeran - Perfect | 2Vv-BfVoq4g | 6470564, 6587279, 6685252, 19853882, 36141804 (arm A) | hole | text only (screened) | Nothing flagged. |
+
+### Step 3: no point stands
+
+Under these rulings no grid point is clean, let alone margin-safe. The strictest point accepts
+That's The Way It Is 35468507. With that song set aside, The A Team 12572148 still needs only
+end unheard 1, so every point either accepts it or has that one-step neighbour. On the printed
+classes alone (Shape of You counted wrong), S1 was already empty.
+
+### Steps 4-5: arm and coverage (for the record; moot)
+
+Counts below use the rulings above. They are not clean points: each accepts at least one
+LRC-wrong record. `ref_ok` songs are 53.
+
+| Point | Arm B right / accepted | Arm A right / accepted | joint (B, A) of 7 | repair of 7 |
+|---|---|---|---|---|
+| strictest | 13 / 14 | 4 / 4 | 4, 3 | 1 |
+| best zone point with end unheard 0 | 23 / 24 | 12 / 12 | 4, 3 | 1 |
+| best zone point (end unheard 1) | 27 / 28 | 15 / 15 | 4, 3 | 1 |
+
+16 `ref_ok` songs have no candidate any grid point accepts: 2 have no LRCLIB record, and the
+rest fail on the fit itself, speed, 2 or more mistimed lines, a gap over 15 s or more than 2
+unheard end lines.
+
+**Ken's Repair picks** (the only LRCs here checked by ear): She Used To Be Mine passes. Domino
+needs end unheard 2, which would also admit The A Team 12572148. Colors of the Wind fits fully
+but has an 8 s gap (a movie clip), so it needs gap 10. Thinking Of You needs mistimed 1,
+matched 0.7 and end unheard 2 together. Paradise (gap 38 s), Your Idol and Takedown fail at
+every grid point (gaps, unheard end lines, a mistimed line).
+
+### What the read found about the measurement
+
+- **The class rule calls repeats wrong.** Mapping by text alone pairs an LRC line with the
+  wrong repeat when the caption breaks repeated lines differently. Every `wrong_timing` record
+  of Shape of You and Get Down is this.
+- **The class rule misses short omissions.** A caption stretch of 3 cues that no LRC line
+  covers is below the hole size of 4.
+- **The fit has no check for singing that no LRC line claims.** An LRC that stops early or
+  skips lines shows, at most, as unheard lines next to the gap. A re-attempt would need a
+  conjunct for heard words outside the LRC's lines (considered at the read as a Phase 1b and
+  not taken).
