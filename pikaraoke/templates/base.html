@@ -19,10 +19,20 @@
   <link rel="stylesheet" href="{{  url_for('static', filename='fontello/css/fontello.css') }}?v=2">
 
   <script>
+    // This phone's guest, from the server. SPA navigation re-runs this script, so every page
+    // change picks up fresh state, including after the app restarted.
+    window.singer = {{ (singer or {}) | tojson }};
+    // The add, delete and pause routes post the cookie's name, and page scripts read it as they
+    // load, so make it the registry's spelling now, even after a save whose reply never reached
+    // this phone.
+    if (window.singer.joined && Cookies.get("user") !== window.singer.name) {
+      Cookies.set("user", window.singer.name, { expires: 3650, path: '/' });
+    }
+
     // Translations for spa-navigation.js (static JS cannot use Jinja2 directly)
     window.i18n = {
-      // {# MSG: Prompt to change the username displayed next to queued songs. CURRENT_NAME is replaced with the name #}
-      promptChangeUsername: "{{ _('Do you want to change the name of the person using this device? This will show up on queued songs. Current: CURRENT_NAME') }}",
+      // {# MSG: Shown on the join form when saving fails for a reason other than the name being taken #}
+      singerSaveFailed: "{{ _('Could not save. Please try again.') }}",
       // {# MSG: Confirmation prompt to clear entire queue. User must type ok to confirm #}
       promptClearQueue: "{{ _('Are you sure you want to clear the ENTIRE queue? Type ok to continue') }}",
       // {# MSG: Confirmation dialog when removing a song from the queue. SONG_TITLE is replaced with the title #}
@@ -30,15 +40,6 @@
       // {# MSG: Confirmation dialog when permanently deleting a song file from the library #}
       confirmDeleteFromLibrary: '{{ _("Are you sure you want to delete this song from the library?") }}'
     };
-
-    function generateRandomString(length) {
-      const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-      let result = '';
-      for (let i = 0; i < length; i++) {
-        result += characters.charAt(Math.floor(Math.random() * characters.length));
-      }
-      return result;
-    }
 
     function getSemitonesLabel(value) {
       if (value > 0) {
@@ -87,23 +88,6 @@
       setTimeout(function () {$("#notification-alt").removeClass(categoryClass)}, timeout + 750)
     }
 
-    function setUserCookie(reload=false) {
-      var user = Cookies.get("user");
-      if (!user) {
-        let name = window.prompt(
-          // {# MSG: Prompt which asks the user their name when they first try to add to the queue. #}
-          "{{ _('Please enter your name. This will show up next to the songs you queue up from this device.') }}"
-        );
-        if (name) {
-          Cookies.set("user", name, { expires: 3650, path: '/' });
-        }
-        else {
-          Cookies.set("user", `Anon-${generateRandomString(4)}`, { expires: 3650 });
-        }
-        reload && location.reload();
-      }
-    }
-
     function getUserCookie() {
       return Cookies.get("user");
     }
@@ -142,16 +126,14 @@
       // handle auto-close flash notifications
       setTimeout(function() { $("#notification").fadeOut()}, 3000);
 
-      // handle current user display
-      var currentUser = Cookies.get("user");
-
-      if (currentUser) {
-        $("#current-user span").text(currentUser)
+      // handle current user display: the registry's name, not the raw cookie
+      if (window.singer.joined) {
+        $("#current-user span").text(window.singer.name);
         $("#current-user").removeClass("is-hidden");
-      };
-
-      // Username change handler is now in spa-navigation.js
-
+      } else {
+        // Join and the form's other handlers are in spa-navigation.js
+        openSingerForm("join");
+      }
     });
   </script>
   {% block scripts %}
@@ -283,6 +265,60 @@
   </div>
   {% endif %}
 
+  {# The guest form lives outside .box so SPA navigation never swaps it. Join mode (no close
+     button, background inert) opens on any page until the phone has joined; edit mode opens
+     from the navbar name. Handlers: spa-navigation.js #}
+  <div class="modal" id="singer-modal">
+    <div class="modal-background"></div>
+    <form class="modal-card" id="singer-form" autocomplete="off" style="width: 90%; max-width: 400px;">
+      <header class="modal-card-head" style="padding: 15px;">
+        <p class="modal-card-title is-size-5">
+          {# MSG: Title of the form a guest fills in the first time they open the app #}
+          <span class="singer-join-only">{% trans %}Join the party{% endtrans %}</span>
+          {# MSG: Title of the form a guest opens by clicking their name, to change their name, vocal volume and key #}
+          <span class="singer-edit-only">{% trans %}Your name and settings{% endtrans %}</span>
+        </p>
+      </header>
+      <section class="modal-card-body">
+        <div class="field">
+          {# MSG: Label of the field where a guest types their name #}
+          <label class="label" for="singer-name">{% trans %}Your name{% endtrans %}</label>
+          <div class="control">
+            <input class="input" id="singer-name" name="name" type="text" autocapitalize="words">
+          </div>
+          <p class="help is-danger" id="singer-name-error" style="display: none"></p>
+          <p class="help">
+            {# MSG: Help under the name field of the guest form. It explains where the name shows up #}
+            {% trans %}This will show up next to the songs you queue up from this device.{% endtrans %}
+          </p>
+        </div>
+
+        <div class="field">
+          <div class="is-flex" style="justify-content: space-between">
+            <label class="label" for="singer-vocal-volume">{% trans %}Vocal Volume{% endtrans %}</label>
+            <span class="label" id="singer-vocal-volume-label">40%</span>
+          </div>
+          <input type="range" min="0" max="100" value="40" step="1"
+            id="singer-vocal-volume" style="width: 100%" />
+        </div>
+
+        <div class="field" id="singer-key-field" data-min="-3" data-max="3">
+          {# MSG: Label of the control where a guest picks the key their songs start at #}
+          <span class="label">{% trans %}Key{% endtrans %}</span>
+          <div class="is-flex" style="align-items: center; justify-content: space-between">
+            <button type="button" class="button is-medium" id="singer-key-down">-</button>
+            <span class="is-size-5" id="singer-key-label"></span>
+            <button type="button" class="button is-medium" id="singer-key-up">+</button>
+          </div>
+        </div>
+        <input type="hidden" id="singer-key" name="semitones" value="0">
+      </section>
+      <footer class="modal-card-foot" style="padding: 15px;">
+        <button type="submit" class="button is-success" id="singer-save" style="margin-right: 8px">{% trans %}Save{% endtrans %}</button>
+        <button type="button" class="button singer-edit-only" id="singer-cancel">{% trans %}Cancel{% endtrans %}</button>
+      </footer>
+    </form>
+  </div>
 
   {% block body %}
   {% endblock %}

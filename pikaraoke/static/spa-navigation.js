@@ -39,8 +39,8 @@
         // Ensure hamburger menu works across all pages
         initHamburgerMenu();
 
-        // Initialize username change handler
-        initUsernameHandler();
+        // Initialize the guest form's handlers
+        initSingerForm();
 
         // Initialize queue management handlers
         initQueueHandlers();
@@ -72,31 +72,101 @@
     }
 
     /**
-     * Initialize username change handler with event delegation
-     * This ensures it works reliably across all page transitions
+     * The guest form (name, vocal volume, key) in base.html's #singer-modal, which lives outside
+     * .box so navigation never swaps it. Join mode opens on any page until the phone has joined
+     * and has no way out but Save. Edit mode opens from the navbar name and has Cancel.
      */
-    function initUsernameHandler() {
-        // Remove any existing handlers first to avoid duplicates
-        $(document).off('click', '#current-user');
+    let singerFormMode = null;
+    let singerFormPrefilledName = '';
 
-        // Bind with event delegation
-        $(document).on('click', '#current-user', function(e) {
+    function setSingerKey(value) {
+        const $field = $('#singer-key-field');
+        const key = Math.max($field.data('min'), Math.min($field.data('max'), value));
+        $('#singer-key').val(key);
+        $('#singer-key-label').text(getSemitonesLabel(key));
+    }
+
+    function openSingerForm(mode) {
+        const guest = window.singer;
+        singerFormMode = mode;
+        singerFormPrefilledName = mode === 'edit' ? guest.name : '';
+        $('#singer-name').val(singerFormPrefilledName).attr('maxlength', guest.name_limit);
+        $('#singer-name-error').hide();
+        const percent = Math.round(guest.vocal_volume * 100);
+        $('#singer-vocal-volume').val(percent);
+        $('#singer-vocal-volume-label').text(percent + '%');
+        setSingerKey(guest.semitones);
+        $('#singer-key-field').toggle(guest.transpose_enabled);
+        $('.singer-join-only').toggle(mode === 'join');
+        $('.singer-edit-only').toggle(mode === 'edit');
+        $('#singer-save').removeClass('is-loading').prop('disabled', false);
+        $('#singer-modal').addClass('is-active');
+        $('html').addClass('is-clipped');
+    }
+    window.openSingerForm = openSingerForm;
+
+    function closeSingerForm() {
+        $('#singer-modal').removeClass('is-active');
+        $('html').removeClass('is-clipped');
+    }
+
+    function saveSingerForm() {
+        const $save = $('#singer-save');
+        if ($save.prop('disabled')) {
+            return;
+        }
+        const typedName = $('#singer-name').val();
+        // This tab may hold a name the guest has since changed on another tab, and a blank name
+        // keeps the current one, so a name left as it was prefilled is not sent.
+        const name = (singerFormMode === 'edit' && typedName === singerFormPrefilledName) ? '' : typedName;
+        $save.addClass('is-loading').prop('disabled', true);
+        $('#singer-name-error').hide();
+        $.post('/singer', {
+            name: name,
+            semitones: $('#singer-key').val(),
+            vocal_volume: $('#singer-vocal-volume').val() / 100
+        }).done(function(reply) {
+            const options = { expires: 3650, path: '/' };
+            Cookies.set('user', reply.name, options);
+            Cookies.set('singer_token', reply.token, options);
+            // Reload so every page-level copy of the name is fresh
+            location.reload();
+        }).fail(function(xhr) {
+            const error = xhr.responseJSON && xhr.responseJSON.error;
+            $('#singer-name-error').text(error || window.i18n.singerSaveFailed).show();
+            $save.removeClass('is-loading').prop('disabled', false);
+        });
+    }
+
+    /**
+     * Bind the guest form's handlers with event delegation, once. The head script re-runs on
+     * every navigation, so binding there would stack them.
+     */
+    function initSingerForm() {
+        $(document).off('.singer');
+
+        $(document).on('click.singer', '#current-user', function(e) {
             e.preventDefault();
-            // Get the current name from the cookie dynamically
-            let currentName = Cookies.get("user");
-            var promptMsg = (window.i18n && window.i18n.promptChangeUsername)
-                ? window.i18n.promptChangeUsername.replace('CURRENT_NAME', currentName)
-                : "Do you want to change the name of the person using this device? This will show up on queued songs. Current: " + currentName;
-            let name = window.prompt(promptMsg);
-            // Only update if user clicked OK and entered a non-empty name
-            // null = Cancel clicked, "" = OK with empty input
-            if (name !== null && name.trim() !== "") {
-                Cookies.set("user", name, { expires: 3650, path: '/' });
-                // Update the displayed name without reloading
-                $("#current-user span").text(name);
-            }
+            // The name sits in the burger menu on a phone; don't leave it open behind the form
+            $('.navbar-burger').removeClass('is-active');
+            $('.navbar-menu').removeClass('is-active');
+            openSingerForm('edit');
             // Remove focus from the link to prevent CSS focus styling (black background)
             $(this).blur();
+        });
+        $(document).on('click.singer', '#singer-cancel', closeSingerForm);
+        $(document).on('click.singer', '#singer-key-down', function() {
+            setSingerKey(Number($('#singer-key').val()) - 1);
+        });
+        $(document).on('click.singer', '#singer-key-up', function() {
+            setSingerKey(Number($('#singer-key').val()) + 1);
+        });
+        $(document).on('input.singer', '#singer-vocal-volume', function() {
+            $('#singer-vocal-volume-label').text(this.value + '%');
+        });
+        $(document).on('submit.singer', '#singer-form', function(e) {
+            e.preventDefault();
+            saveSingerForm();
         });
     }
 
