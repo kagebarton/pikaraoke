@@ -1,7 +1,8 @@
 Model: Claude Opus 5.5 (author, 2026-11-06). Executor: Claude Sonnet 5.5.
 Phase 2.1 added by Claude Opus 5.5 on 2026-11-06 from the `/code-review` of Phases 1-2. The
 Design sections it changes are rewritten in place and marked (2.1). Phase 2.2 added by Claude
-Opus 5.5 on 2026-11-06 from the `/code-review` of Phase 2.1, marked (2.2) the same way.
+Opus 5.5 on 2026-11-06 from the `/code-review` of Phase 2.1, marked (2.2) the same way. Phase
+3.1 added by Claude Opus 5.5 on 2026-11-06 from the `/code-review` of Phase 3, marked (3.1).
 
 # Singer defaults: key and vocal volume per guest
 
@@ -215,46 +216,72 @@ blueprints in `app.py`.
   The page does, the same way it does today. The route reads only the token cookie, never
   the name cookie (2.1).
 - A context processor (`singer_bp.app_context_processor`) gives every template `singer`:
-  `{"joined": bool, "name", "semitones", "vocal_volume", "name_limit", "transpose_enabled"}`
-  (2.1: `house_vocal_volume` dropped, `name_limit` added), from one `k.singers.lookup(token)`
-  call. A phone that hasn't joined gets `name` `""` and `house_defaults()`, so its
-  `vocal_volume` is the house default the join form starts at. `base.html` writes the state into its head
-  script as `window.singer = {{ singer | tojson }}`. Since SPA navigation re-runs that
-  script, every navigation picks up fresh state, including after a restart. Guard the
-  template for apps without the processor (`{{ (singer or {}) | tojson }}` or equivalent) so
-  `test_search_render.py` keeps passing.
+  `{"joined": bool, "name", "semitones", "vocal_volume", "name_limit", "key_limit",
+  "transpose_enabled"}` (2.1: `house_vocal_volume` dropped, `name_limit` added; 3.1:
+  `key_limit` added, so the form's key control has no copy of the limit), from one
+  `k.singers.lookup(token)` call. A phone that hasn't joined gets `name` `""` and
+  `house_defaults()`, so its `vocal_volume` is the house default the join form starts at.
+  `base.html` writes the state into its head script as `window.singer = {{ singer | tojson
+  }}`. Since SPA navigation re-runs that script, every navigation picks up fresh state,
+  including after a restart. Guard the template for apps without the processor (`{{ (singer
+  or {}) | tojson }}` or equivalent) so `test_search_render.py` keeps passing.
+- **`GET /singer` (3.1)** returns the same state as JSON, built by the same function as the
+  context processor's. The form loads it when the guest opens edit mode, because the page's
+  copy is only as fresh as its last navigation.
 
 ### The form
 
 - A Bulma modal in `base.html`, **outside `.box`** so SPA navigation never swaps it. Fields:
   name (text), vocal volume (range 0-100, with a % label, starting at the guest's value or
-  the house default), key (- and + buttons around a label from `getSemitonesLabel`, -3 to +3,
-  starting at the guest's value or 0, hidden when `transpose_enabled` is false).
-- **Join mode** opens on any page when `window.singer.joined` is false. It has no close
-  button, no Cancel, and the background doesn't close it: Save is the only way out. **Edit
-  mode** opens from `#current-user`, prefilled, with Cancel.
+  the house default), key (- and + buttons around a label from `getSemitonesLabel`, from
+  `-key_limit` to `+key_limit` of the state the form opened with (3.1), starting at the
+  guest's value or 0, hidden when `transpose_enabled` is false). The form fills its fields from
+  the state it is opened with, so the markup carries no default values of its own (3.1).
+- **Join mode** opens on any page when the phone has no guest. It has no close button, no
+  Cancel, and the background doesn't close it: Save is the only way out. **Edit mode** opens
+  from `#current-user`, prefilled, with Cancel.
+- **Edit mode opens from the server's current state (3.1).** Clicking the name loads `GET
+  /singer` (with `cache: false`) and opens the form from what comes back. If the phone has no
+  guest any more (the app restarted since this page loaded), the join form opens instead and
+  the navbar name is hidden. If the load fails, edit mode opens from the page's state as
+  before. The page's own state (`window.singer`) is not overwritten by the load: it says what
+  this page's copies of the name were loaded with, which the reload rule below needs.
+- **While the form is open, nothing behind it can be reached (3.1):** `body > .container`
+  (the navbar and `.box`) is `inert`, so neither a click nor the Tab key reaches an Add link
+  behind the join form. Closing the form lifts it. `.container` is never swapped by SPA
+  navigation, so this holds across one.
 - Save posts to `/singer`. A 409 shows the error under the name field and keeps the modal
-  open. On success: `Cookies.set("user", name, { expires: 3650, path: '/' })`, the same for
-  `singer_token` (the token is only valid for this run anyway), then `location.reload()` so
-  every page-level copy of the name (`queue.html`'s `currentUser`, `search.html`'s
-  `.song_added_by`) is fresh.
+  open. On success, the `user` and `singer_token` cookies are set from the reply (the token is
+  only valid for this run anyway), through one head-script helper that both this and the
+  put-back below use, so the two can't drift (3.1).
+- **Reload only when the page's copies of the name are wrong (3.1).** After a join, or when
+  the reply's name differs from `window.singer.name`, `location.reload()` so every page-level
+  copy of the name (`queue.html`'s `currentUser`, `search.html`'s `.song_added_by`) is fresh.
+  A save that keeps the name closes the form and leaves the page as it is, so unsaved work on
+  it (lyric edits, a playlist being built, search results) stays.
 - Bind the handlers once with delegation in `spa-navigation.js`, replacing
   `initUsernameHandler`. The head script re-runs on each navigation, so binding there would
-  stack handlers. Open join mode from the head script's ready handler, after it reads
-  `window.singer`.
-- The navbar shows `window.singer.name` when joined (not the raw cookie).
-- **Keep the name cookie in step with the registry (2.1).** In the head script's ready
-  handler, when `window.singer.joined` and `Cookies.get("user") !== window.singer.name`, set
-  the `user` cookie to `window.singer.name` (same options as on Save). The add, delete and
-  pause routes post the cookie's name, so this makes them use the registry's spelling after
-  a save whose reply was lost.
+  stack handlers.
+- **One function applies the guest state to the page (3.1)**, called by the head script's
+  ready handler with `window.singer` and by the edit-mode load with what came back. Joined:
+  the navbar shows the registry's name (not the raw cookie), and a join form left open
+  closes. Not joined: the navbar name is hidden and join mode opens. **Opening the form in
+  the mode it is already open in does nothing (3.1)**, so a navigation (a back swipe) keeps
+  what the guest typed and keeps Save disabled while a save is in flight.
+- **Keep the name cookie in step with the registry (2.1).** As the head script loads, right
+  after it sets `window.singer` (Phase 3 results, deviation 1), when `window.singer.joined`
+  and `Cookies.get("user") !== window.singer.name`, set the `user` cookie to
+  `window.singer.name`. The add, delete and pause routes post the cookie's name, so this
+  makes them use the registry's spelling after a save whose reply was lost.
 - The name field has `maxlength` set from `window.singer.name_limit` (2.1). The server
   answers a longer name with a 422.
 - **Edit mode sends the name only when the guest changed it (2.2).** If the name field still
   holds the value it was prefilled with, Save posts `name` as `""`, which keeps the current
   name. So a tab opened before a rename can't rename the guest back (and move their songs
   back) when they change only the key there, and a stored name the length check would refuse
-  (see Accepted edges) can still be saved. Join mode posts what was typed.
+  (see Accepted edges) can still be saved. Join mode posts what was typed. Since edit mode
+  opens from the server's state (3.1), the rule still matters for a rename on another tab
+  between opening the form and saving it, and for the long stored name.
 - **Delete:** `setUserCookie()` and its calls in `files.html` and `search.html` (the form now
   runs on page load), `generateRandomString` (the server makes Anon names now),
   `window.i18n.promptChangeUsername` and the fallback text in `spa-navigation.js`.
@@ -293,6 +320,20 @@ blueprints in `app.py`.
 - **The length limit counts the raw form value (2.1 results, 2.2)**: before the strip and
   before NFC, so a few scripts whose letters NFC splits can store a name longer than the limit.
   Edit mode's unchanged name posts blank (The form, 2.2), so such a guest can still save.
+- **A lost reply to a phone's first join (3.1)**: the server made the guest, but no token
+  reached the phone. Saving again is a new join, and the name is taken by the guest the lost
+  reply made, so it is refused for the rest of the run. The guest can join under another
+  name. The fix would be the phone making its own token before it joins, so a retry finds the
+  guest it already made; that changes where tokens come from, for a reply lost in the moment
+  between the server answering and the phone hearing it, once per guest. Not built unless Ken
+  asks.
+- **A join form left open on another tab (3.1)**: if the guest joins on tab B and then fills
+  in the join form still open on tab A without navigating there, the save carries tab B's
+  token, so it updates that guest with what was typed on A (a new name renames them). Those
+  are the values the guest just picked. A navigation on tab A closes the form instead (The
+  form, 3.1).
+- **A rename still reloads the page (3.1)**: unsaved work on the page is lost, as before 3.1.
+  Only a save that keeps the name keeps the page.
 
 ## Phases
 
@@ -485,6 +526,96 @@ refactor.
 
 Commit: `feat(ui): join form for name, key and vocal volume`.
 
+### Phase 3.1: review fixes of Phase 3 (the form)
+
+From the `/code-review` of `f6e9aab^..f6e9aab` (Phase 3, 2026-11-06, 15 findings). None loses
+songs; the form, the cookie put-back and the 2.2 two-tab rule work as designed. Build the Design
+sections marked (3.1). Review findings, by number in the review's list:
+
+| # | Finding | Fix |
+| - | ------- | --- |
+| 1 | After a restart, an edit-mode save with the name unchanged posts a blank name with an unknown token, so the guest becomes an Anon name | Step 1 |
+| 2 | A lost reply to a first join leaves the name taken by a guest no phone can reach | Accepted edge (Design) |
+| 3 | Edit mode posts the key and vocal volume a stale tab holds, undoing another tab's | Step 1 |
+| 4 | A navigation that finds the phone joined leaves a join form open | Step 1; without a navigation, accepted edge (Design) |
+| 5 | Every save reloads, losing unsaved work and re-running a search | Step 2; a rename still reloads (accepted edge) |
+| 6 | A navigation re-opens an open join form: clears the typed name, re-enables Save mid-request | Step 1 |
+| 7 | The Tab key reaches the Add links behind the join form; the song queues as `undefined` | Step 3 |
+| 8 | `queue.html`'s unscoped `.modal-background` click binding stacks on the guest form per visit | Step 3 |
+| 9 | A navigation that finds the phone not joined leaves the old name in the navbar | Step 1 |
+| 10 | The key limit is copied into the markup (Phase 3 results, deviation 2) | Step 4 |
+| 11 | The key label from `getSemitonesLabel` is English only (`+1 semitones`) | Follow-up: the helper predates the branch and Now Playing shows the same text |
+| 12 | Markup defaults the script always overwrites (`value="40"`, `40%`, `value="0"`, `name=`) | Step 4 |
+| 13 | `EventSystem` imported and unused in `test_singer_page.py` | Step 4 |
+| 14 | Two page tests repeat `TestPageState` | Step 4 |
+| 15 | The cookie options and the burger-menu close are each written twice | Step 4 |
+
+1. **The form opens from the server's current state (1, 3, 4, 6, 9).**
+   - `routes/singer.py`: one function builds the state dict. The context processor returns
+     `{"singer": <it>}`, and a new `GET /singer` returns it as JSON.
+   - `spa-navigation.js`:
+     - `openSingerForm(mode, state)` fills the fields from `state` and keeps it for the key
+       control. It returns at once when the form is already open in `mode`.
+     - `applySingerState(state)`, on `window`: joined: the navbar name from `state.name`,
+       shown, and a form open in join mode closes. Not joined: the navbar name hidden, then
+       `openSingerForm('join', state)`.
+     - The `#current-user` click: close the burger menu, then `$.ajax({ url: '/singer', cache:
+       false })`. Done: `applySingerState(state)`, then `openSingerForm('edit', state)` if
+       `state.joined`. Fail: `openSingerForm('edit', window.singer)`. It never assigns
+       `window.singer`.
+   - `base.html`: the ready handler's if/else becomes `applySingerState(window.singer)`.
+   - Tests in `test_singer_routes.py`: `GET /singer` returns the same state as the context
+     processor (the `/state` route) for a new phone, a joined phone, and a token nobody holds.
+2. **A save that keeps the name keeps the page (5).** In `saveSingerForm`'s success, after the
+   cookies are set: when the mode is edit and `reply.name === window.singer.name`, close the
+   form and stop; otherwise reload. No server change.
+3. **Nothing behind the guest form can be reached (7, 8).**
+   - `openSingerForm` sets `inert` on `body > .container`; `closeSingerForm` removes it.
+   - `queue.html`: the background-click binding becomes `$('.box .modal-background')`, so it
+     binds only the queue's own pop-ups, which navigation replaces.
+4. **One key limit, and the form's dead code out (10, 12-15).**
+   - `key_limit: KEY_LIMIT` in the state. `setSingerKey` clamps with the open state's
+     `key_limit`; `data-min` and `data-max` are deleted. `TestPageState`'s exact-dict test
+     gains `key_limit`.
+   - Markup: delete `value="40"`, the `40%` label text, the hidden key input's `value="0"`, and
+     the `name=` attributes of the three inputs.
+   - Head script: one helper that sets a cookie with `{ expires: 3650, path: '/' }`, used by the
+     put-back and by `saveSingerForm`. Write it as a `function` declaration: the head script
+     re-runs on every navigation, and a top-level `const` would throw the second time.
+   - `spa-navigation.js`: `closeBurgerMenu()`, used by `navigateTo` and the name click.
+   - `test_singer_page.py`: delete the two state tests (`TestPageState` and step 1's tests cover
+     the dict) and the unused import. Keep the script-tag test; it already proves the line is
+     written and reads back.
+5. Verify with the local `ui-check` skill on the VM (phone viewport):
+   - Restart the app with a page left open and not navigated: clicking the name opens the
+     join form with no Cancel, hides the navbar name, and sends no POST. Joining under the old
+     name works (1, 9).
+   - Restart, then an SPA navigation: the join form opens and the navbar name is hidden (9).
+   - Two tabs: tab 1 saves key +2 and 70%. Tab 2, opened before and not navigated, clicks the
+     name: the form shows +2 and 70%. Rename there: the settings stay +2 and 70% (3).
+   - Join form open on tab A, join on tab B, then navigate on tab A: the form closes and the
+     navbar shows the name (4).
+   - Join form: type a name, then `history.back()`: the typed name stays. With the POST held
+     (Playwright `page.route`), go back: Save stays disabled, and one POST in total (6).
+   - Join form open: the Tab key never focuses anything outside the form, and a click where an
+     Add link is does nothing (7).
+   - After three SPA visits to `/queue`, the guest form's background carries no click handler
+     (`$._data(el, 'events')`) (8).
+   - On `/search` with results, change only the key: the form closes, the page doesn't load
+     again (a marker set on `window` survives), and no new search request goes out. A rename
+     there reloads (5).
+   - The key stops at -3 and +3 (10).
+   - Phase 3's two-tab rename check and its one-POST-per-Save check, again.
+
+Commits: `fix(ui): the guest form opens from the server's current state` (step 1);
+`fix(ui): a save that keeps the name keeps the page` (step 2);
+`fix(ui): nothing behind the guest form can be reached` (step 3);
+`refactor(ui): the key limit from the server, and the guest form's dead code out` (step 4).
+
+Self-review: step 1 changes how the form gets its state on both paths (navigation and the
+name click) and adds a route, so track its review as pending for the checkpoint after this
+phase. Steps 2-4 are covered by self-review.
+
 ### Phase 4: Ken's checks
 
 Ken runs the test plan below at a real party or a rehearsal on his box. No code unless he
@@ -506,12 +637,18 @@ finds something.
       download as yours, and you can cancel it.
 - [ ] Rename on one tab, then change only your key on a tab you opened before: you keep the
       new name.
+- [ ] Restart the app, then click your name without changing page first: you get the join
+      form, not an Anon name.
+- [ ] Change only your key while Search shows results: the results stay.
 
 ## Follow-ups (not in this plan)
 
 - **Limit the Now Playing key slider to -3..+3 as well** (Ken, 2026-11-06: the distortion
   is pronounced beyond that). Listed in `plans/open-issues.md` on `dev`.
 - Per-song key memory (singer + song), if wanted (ruling 3).
+- **The key label is English only** (`+1 semitones`, also the wrong plural) on the guest form
+  and on Now Playing, from `getSemitonesLabel`, which predates this branch (review of Phase 3,
+  #11). For `plans/open-issues.md` on `dev`.
 
 ## Results log
 
