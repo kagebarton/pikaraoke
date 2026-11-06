@@ -1,4 +1,6 @@
 Model: Claude Opus 5.5 (author, 2026-11-06). Executor: Claude Sonnet 5.5.
+Phase 2.1 added by Claude Opus 5.5 on 2026-11-06 from the `/code-review` of Phases 1-2. The
+Design sections it changes are rewritten in place and marked (2.1).
 
 # Singer defaults: key and vocal volume per guest
 
@@ -93,51 +95,65 @@ Assumptions stated to Ken on 2026-11-06, not objected to:
 ```python
 RESERVED_NAMES = ("Pikaraoke", "Randomizer")
 KEY_LIMIT = 3
+NAME_LIMIT = 30  # (2.1)
 
-@dataclass
+@dataclass(frozen=True)
 class SingerSettings:
     semitones: int
     vocal_volume: float  # 0.0-1.0
 
 class SingerRegistry:
     """The guests who joined during this run of the app; forgotten when it stops."""
-    def __init__(self, preferences: PreferenceManager) -> None: ...
-    def join(self, name: str, settings: SingerSettings) -> tuple[str, str]:  # (name, token)
-    def update(self, old_name: str, token: str, new_name: str, settings: SingerSettings,
-               on_rename: Callable[[str, str], None]) -> str:  # the name now held
-    def owns(self, name: str | None, token: str | None) -> bool:
+    def __init__(self, preferences: PreferenceManager,
+                 on_rename: Callable[[str, str], None]) -> None: ...  # (2.1)
+    def save(self, token: str | None, name: str,
+             settings: SingerSettings) -> tuple[str, str]:  # (name, token)  (2.1)
+    def lookup(self, token: str | None) -> tuple[str, SingerSettings] | None:  # (2.1)
     def settings_for(self, name: str) -> SingerSettings:
+    def house_defaults(self) -> SingerSettings:  # (2.1)
 ```
 
-- Each guest has a random token (`secrets.token_urlsafe`), stored in the phone's
-  `singer_token` cookie next to the `user` cookie. `owns(name, token)` is the one test for
-  "this phone joined as this name during this run". It answers no after a restart (the
-  registry is empty) and no for a stale phone whose name someone else took since. This
-  replaces a separate session ID.
-- `join` and `update` raise a `NameTaken` error (one exception class, carrying the
-  translated message) when the name is reserved or already held by another guest. Compare names
-  case-insensitively (`casefold`), after stripping whitespace, so `mike` and `Mike` count as
-  the same name. A blank name becomes `Anon-` plus 4 random letters/digits, picked again
-  until free.
-- `update` with the guest's own name (a case change included) only saves the settings and
-  the spelling. A new name moves the entry, token included, and calls `on_rename(old, new)`
-  **while still holding the registry lock**, so nobody can join as the old name before the
-  songs have moved. Lock order: registry, then queue, tracker or playback. Nothing takes the
-  registry lock while holding one of those (the play loop calls `settings_for` after
-  `pop_next` returns), so this cannot deadlock. Keep it that way.
-- `settings_for(name)` returns the guest's settings, or the house defaults
-  (`SingerSettings(0, preferences.get_or_default("vocal_volume"))`) for a name that isn't
-  registered (Randomizer, the admin's default user, a stale name). This is the only place the
-  house default is resolved for playback.
-- All state under one `threading.Lock`. The check and the insert in `join` happen under it.
-- Validation of the ranges (`-KEY_LIMIT..KEY_LIMIT`, `0..1`) lives in the route schema, not
-  here.
+- **A phone is its token (2.1).** Each guest has a random token (`secrets.token_urlsafe`),
+  stored in the phone's `singer_token` cookie next to the `user` cookie. `save` and `lookup`
+  find the guest by the token alone, never by the name cookie: scan the guests with
+  `secrets.compare_digest` (a party is tens of guests). So a phone whose name cookie is out
+  of date (a save whose reply was lost, or a second save sent before the first one's reply)
+  still finds its own guest. A token from an earlier run finds nobody (the registry is
+  empty). This replaces a separate session ID.
+- `save` raises a `NameTaken` error (one exception class, carrying the translated message)
+  when the name is reserved or already held by another guest. Compare names
+  case-insensitively, after stripping whitespace and normalizing to Unicode NFC (2.1), so
+  `mike` and `Mike` count as the same name, and so do the two encodings of `José`. The stored
+  spelling is NFC too (2.1). A blank name becomes `Anon-` plus 4 random letters/digits, picked
+  again until free.
+- **`save` (2.1)**: a token that belongs to a guest updates that guest; anything else joins.
+  One lock acquisition covers the check and the change, so there is no separate ownership
+  test and no "not a guest" error. An update with a blank name keeps the current name. When
+  the spelling changes (a case change included, because the queue, tracker and ownership
+  checks compare names exactly) the registry changes first (entry moved, name and settings
+  set), then calls `on_rename(old, new)` **while still holding the registry lock**, so nobody
+  can join as the old name before the songs have moved, and a failure inside `on_rename`
+  leaves the registry consistent with the songs. Lock order: registry, then queue, tracker or
+  playback. Nothing takes the registry lock while holding one of those (the play loop calls
+  `settings_for` after `pop_next` returns), and nothing called from `on_rename` may call the
+  registry (its lock is not reentrant), so this cannot deadlock. Keep it that way.
+- `lookup(token)` returns the guest's name as the registry holds it, and their settings, or
+  `None` (2.1).
+- `settings_for(name)` returns the guest's settings only for the guest's exact spelling (2.1),
+  as the queue, tracker and ownership checks compare exactly. Any other name (Randomizer, the
+  admin's default user, a stale name, another case) gets `house_defaults()`:
+  `SingerSettings(0, preferences.get_or_default("vocal_volume"))`. This is the only place the
+  house default is resolved.
+- All state under one `threading.Lock`.
+- Validation of the ranges (`-KEY_LIMIT..KEY_LIMIT`, `0..1`) and of the name's length
+  (`NAME_LIMIT`, 2.1) lives in the route schema, not here.
 
 `QueueManager.is_user_limited` uses `RESERVED_NAMES` instead of its literal tuple.
 
 ### Playback reads the singer's settings when the song starts
 
-- `Karaoke.__init__` makes `self.singers = SingerRegistry(self.preferences)`.
+- `Karaoke.__init__` makes `self.singers = SingerRegistry(self.preferences,
+  self.rename_singer)` (the callback since 2.1).
 - The play loop: `singer = self.singers.settings_for(song["user"])`, then
   `play_file(song["file"], song["user"], singer.semitones, singer.vocal_volume)`.
 - `PlaybackController.play_file` takes `vocal_volume: float` as a parameter and stops reading
@@ -156,32 +172,42 @@ class SingerRegistry:
 
 ### Renaming moves the guest's songs
 
-`Karaoke.rename_singer(old: str, new: str)` is the `on_rename` callback:
+`Karaoke.rename_singer(old: str, new: str)` is the `on_rename` callback. **It moves every
+copy of the name first, then tells the pages (2.1)**, so a notification that raises can't leave
+songs split between two names:
 
 - `QueueManager.rename_user(old, new)` (`@_locked`): sets `item["user"] = new` on every item
-  of `old`, held items included. Emits `queue_update` and `now_playing_update` (Up Next shows
-  the singer) once, only if something moved.
+  of `old`, held items included. Returns whether anything moved; emits nothing (2.1).
 - `PipelineTracker.rename_user(old, new)`: under its lock, every item of `old`; then
-  `_notify_change()` if something moved.
+  `_notify_change()` if something moved. It keeps its own push because `_notify_change`
+  already catches and logs a failing callback, so it can't stop the moves after it.
 - `PlaybackController.rename_singer(old, new)`: under `_playback_lock`, if
-  `now_playing_user == old`, set it and call `refresh_overlays()` so the TV shows the new
-  name. Then `Karaoke.update_now_playing_socket()`.
+  `now_playing_user == old`, set it. Returns whether it moved; refreshes nothing (2.1).
+- Then `Karaoke.rename_singer` emits `queue_update` if the queue moved, calls
+  `playback_controller.refresh_overlays()` if the playing song moved (the TV shows the new
+  name), and emits `now_playing_update` once if either moved (Up Next and Now Playing show
+  the singer).
+- These notifications run under the registry lock, after every move. Releasing the lock
+  first would need a second callback to save a few milliseconds; the long wait under the
+  lock is the `_playback_lock` wait (Phase 2 results, "Known property").
 
 ### Route and page state
 
 New blueprint `pikaraoke/routes/singer.py` (`singer_bp`), registered with the internal
 blueprints in `app.py`.
 
-- `POST /singer`, form fields `name`, `semitones`
-  (`fields.Integer(validate=Range(-KEY_LIMIT, KEY_LIMIT))`), `vocal_volume`
-  (`fields.Float(validate=Range(0, 1))`). If `owns(cookie user, cookie singer_token)`, it is
-  an `update` with `on_rename=k.rename_singer`. Otherwise it is a `join`. Returns
-  `{"success": true, "name": ..., "token": ...}`, or `{"success": false, "error": ...}` with
-  409 on `NameTaken`. The route sets no cookies. The page does, the same way it does today.
+- `POST /singer`, form fields `name` (`fields.String(validate=Length(max=NAME_LIMIT))`, 2.1),
+  `semitones` (`fields.Integer(validate=Range(-KEY_LIMIT, KEY_LIMIT))`), `vocal_volume`
+  (`fields.Float(validate=Range(0, 1))`). It is one call, `k.singers.save(cookie
+  singer_token, name, settings)` (2.1). Returns `{"success": true, "name": ..., "token": ...}`,
+  or `{"success": false, "error": ...}` with 409 on `NameTaken`. The route sets no cookies.
+  The page does, the same way it does today. The route reads only the token cookie, never
+  the name cookie (2.1).
 - A context processor (`singer_bp.app_context_processor`) gives every template `singer`:
-  `{"joined": bool, "name", "semitones", "vocal_volume", "house_vocal_volume",
-  "transpose_enabled"}`, computed from the request's cookies, the registry,
-  the `vocal_volume` preference and `k.is_transpose_enabled`. `base.html` writes it into its head
+  `{"joined": bool, "name", "semitones", "vocal_volume", "name_limit", "transpose_enabled"}`
+  (2.1: `house_vocal_volume` dropped, `name_limit` added), from one `k.singers.lookup(token)`
+  call. A phone that hasn't joined gets `name` `""` and `house_defaults()`, so its
+  `vocal_volume` is the house default the join form starts at. `base.html` writes the state into its head
   script as `window.singer = {{ singer | tojson }}`. Since SPA navigation re-runs that
   script, every navigation picks up fresh state, including after a restart. Guard the
   template for apps without the processor (`{{ (singer or {}) | tojson }}` or equivalent) so
@@ -206,6 +232,13 @@ blueprints in `app.py`.
   stack handlers. Open join mode from the head script's ready handler, after it reads
   `window.singer`.
 - The navbar shows `window.singer.name` when joined (not the raw cookie).
+- **Keep the name cookie in step with the registry (2.1).** In the head script's ready
+  handler, when `window.singer.joined` and `Cookies.get("user") !== window.singer.name`, set
+  the `user` cookie to `window.singer.name` (same options as on Save). The add, delete and
+  pause routes post the cookie's name, so this makes them use the registry's spelling after
+  a save whose reply was lost.
+- The name field has `maxlength` set from `window.singer.name_limit` (2.1). The server
+  answers a longer name with a 422.
 - **Delete:** `setUserCookie()` and its calls in `files.html` and `search.html` (the form now
   runs on page load), `generateRandomString` (the server makes Anon names now),
   `window.i18n.promptChangeUsername` and the fallback text in `spa-navigation.js`.
@@ -223,6 +256,11 @@ blueprints in `app.py`.
 - **Rename between `pop_next` and `play_file`**: the song that just left the queue starts
   under the old name with the house defaults. The window is the gap between two lines of the
   play loop.
+- **An add in flight during a rename** (review of Phases 1-2, 2026-11-06): a search-add or
+  download posted under the old name that reaches the queue or the tracker after the rename
+  moved them lands under the old name, plays at the house defaults, and belongs to whoever
+  takes that name next. Same class as the case above: the window is one request's processing
+  time, during the guest's own rename.
 
 ## Phases
 
@@ -260,6 +298,90 @@ Commits: `feat(singers): session registry of guests and their settings` (step 1 
 Commits: `feat(singers): renaming moves the guest's songs`;
 `feat(singers): join and settings route`.
 
+### Phase 2.1: review fixes (server only)
+
+From the `/code-review` of `4497f4d..731d5ec` (Phases 1-2, 2026-11-06, 15 findings). Ken
+accepted targeted fixes over the review's root-cause suggestion (store a guest ID in the queue,
+tracker and playback, and look the name up when shown). That would touch about 40 places in 7
+files plus the page scripts that compare the name cookie to the Now Playing singer, and would
+put two kinds of identity in the queue's `user` field (guest IDs for joined phones, plain
+names for the admin and the Randomizer). Ruling 8 stands.
+
+Build the Design sections marked (2.1). Review findings, by number in the review's list:
+
+| # | Finding | Fix |
+| - | ------- | --- |
+| 1 | A failed `on_rename` leaves songs moved but the registry under the old name | Registry changes first; moves before notifications |
+| 2 | A stale name cookie with a good token joins as a new guest, or 409s on its own name | Token lookup |
+| 3 | `settings_for` ignores case, the rename moves don't | Exact spelling in `settings_for` |
+| 4 | Processing routes read the name cookie undecoded (pre-existing) | Decode there |
+| 5 | Page state echoes the cookie's spelling | `lookup` returns the registry's |
+| 6 | An add in flight during a rename lands under the old name | Accepted edge (Design) |
+| 7 | Registry lock held through the `_playback_lock` wait | Already a known property (Phase 2 results) |
+| 8 | No name length limit; a long name overflows the 4 KB cookie | `NAME_LIMIT` in the schema |
+| 9 | Ownership checked twice; `PermissionError` as "not a guest" | One `save`; delete both |
+| 10 | Context processor rebuilds house defaults, takes the lock twice | `lookup` + `house_defaults` |
+| 11 | Root cause: the name is the identity | Not taken (above) |
+| 12 | Two `now_playing_update` per rename; config read per render | One push; only unjoined phones read it now |
+| 13 | `play_file` test mocks preferences; run-loop test can hang | Fix both |
+| 14 | No Unicode normalization | NFC |
+| 15 | `save_singer` has no type hints | Add them |
+
+1. **Processing reads the name cookie decoded (4).** One private reader in
+   `routes/processing.py` (`unquote(request.cookies.get("user", ""))`, the same decode Phase 2
+   used), used by `/processing/status` and `user_cancel_item`. This settles the Phase 2 "Ken's
+   call". Tests: a guest `Mary Ann` with the encoded cookie sees their row as `mine`, and their
+   cancel succeeds.
+2. **A phone is its token (2, 5, 9, 10, 15).** `save`, `lookup`, `house_defaults` and the
+   constructor's `on_rename`, as in Design. Delete `join`, `update`, `owns`, the
+   `PermissionError`, the route's 403 branch, the route's name-cookie read and `NAME_COOKIE`,
+   and `house_vocal_volume`. Annotate `save_singer`. Tests (rewrite the `test_singers.py`
+   tests of the deleted methods against `save`, keeping their coverage of taken, reserved and
+   Anon names):
+   - `save` with no token, or an unknown one, joins; with a guest's token it updates that
+     guest and keeps the token; a blank name keeps the current name.
+   - Two saves with the same token, the second carrying the first's new name: one guest,
+     no `NameTaken`.
+   - A guest's token with a name another guest holds raises `NameTaken` and changes nothing.
+   - `on_rename` runs once on a rename and not on a settings-only save. One that raises
+     leaves the registry under the new name with the new settings, and the error propagates.
+   - `lookup`: `None` for no token and an unknown one; the registry's name and settings for
+     a guest.
+   - Route: a good token with a stale name cookie updates the same guest, both with a blank
+     name and with the registry's name (200, not 409; one guest). Page state reports the
+     registry's spelling whatever the name cookie says, has `name_limit` and no
+     `house_vocal_volume`, and an unjoined phone gets the house vocal volume. Delete the 403
+     test and the two encoded-name-cookie tests (this route no longer reads that cookie).
+3. **A rename moves every copy before it tells anyone (1, 12).** The queue and playback
+   moves return whether they moved and emit nothing; `Karaoke.rename_singer` notifies, as in
+   Design. Tests: update the Phase 2 queue and playback tests that assert emits (they now
+   assert the return value and no emit). In `test_karaoke_rename_singer.py`: with a
+   `queue_update` handler that raises, a queued song, a held one, a tracker row and the
+   playing song all carry the new name and the registry holds it; one `now_playing_update`
+   when a queued song and the playing song both move; overlays refreshed only when the
+   playing song moved.
+4. **One spelling rule for names, and a length limit (3, 8, 14).** NFC in `_key` and in the
+   stored spelling; exact spelling in `settings_for`; `NAME_LIMIT = 30` and the schema's
+   `Length`. 30 is the author's pick; Ken can change it. Tests: composed and decomposed
+   `José` collide (`NameTaken`) and the stored name is NFC; `settings_for("MIKE")` gets the
+   house defaults while `Mike` is a guest; a name of `NAME_LIMIT` characters is accepted, one
+   longer gets 422.
+5. **Tests (13).** The `play_file` test uses the real `PreferenceManager` with
+   `vocal_volume` set to another value (a `tmp_path` config if `set` needs a writable file)
+   and asserts the passed value reaches mpv. The run-loop fixture's `handle_run_loop` counts
+   passes and sets `running = False` after 20, so a regression fails the assertion instead
+   of hanging.
+
+Commits: `fix(processing): read the guest's name cookie decoded` (step 1);
+`fix(singers): a phone is found by its token alone` (step 2);
+`fix(singers): a rename moves every copy before telling the pages` (step 3);
+`fix(singers): one spelling rule for names, and a length limit` (step 4);
+`test(singers): real preferences in the play_file test, and a run loop that can't hang`
+(step 5).
+
+Self-review: steps 2 and 3 are multi-file concurrency again, so track the review as pending
+for the checkpoint after this phase.
+
 ### Phase 3: the form
 
 1. The modal, handlers, deletions, and navbar change described above.
@@ -271,6 +393,9 @@ Commits: `feat(singers): renaming moves the guest's songs`;
      check only the key and say so.
    - Clicking the name opens edit mode, prefilled. A rename moves a queued song and a held
      download to the new name, and the Processing page still marks the row as the guest's.
+     Use a name with a space and an accent (2.1).
+   - Set the `user` cookie to another spelling by hand and navigate: the navbar shows the
+     registry's name and the cookie is put back (2.1).
    - SPA navigation doesn't stack handlers (one POST per Save).
    - Restart the app: the next navigation shows the join form again.
 
@@ -293,6 +418,8 @@ finds something.
       or pause it.
 - [ ] Restart the app: every phone is asked to join again.
 - [ ] Randomizer songs play at key 0 and the house vocal volume.
+- [ ] Join with a name that has a space and an accent: the Processing page marks your
+      download as yours, and you can cancel it.
 
 ## Follow-ups (not in this plan)
 
