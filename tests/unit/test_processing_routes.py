@@ -1975,3 +1975,57 @@ class TestRetrySongRoute:
 
         assert response.status_code == 400
         karaoke.processing_manager.enqueue.assert_not_called()
+
+
+class TestRenameUser:
+    """A renamed guest still owns their rows on the Processing page."""
+
+    def test_every_row_of_the_old_name_moves_finished_ones_included(self):
+        tracker = _make_tracker()
+        waiting = _download_row(tracker, "Waiting", user="Mike")
+        done = _download_row(tracker, "Done", user="Mike", song_path="/songs/D---ddd.mp4")
+        done.processing_status = "complete"
+
+        tracker.rename_user("Mike", "Michael")
+
+        assert (waiting.user, done.user) == ("Michael", "Michael")
+
+    def test_other_guests_rows_stay(self):
+        tracker = _make_tracker()
+        mine = _download_row(tracker, "Mine", user="Mike")
+        theirs = _download_row(tracker, "Theirs", user="Sue")
+
+        tracker.rename_user("Mike", "Michael")
+
+        assert (mine.user, theirs.user) == ("Michael", "Sue")
+
+    def test_the_page_marks_the_row_as_theirs_under_the_new_name_only(self):
+        tracker = _make_tracker()
+        _download_row(tracker, "Mine", user="Mike")
+        tracker.rename_user("Mike", "Michael")
+
+        [as_michael] = tracker.get_status(user="Michael")
+        [as_mike] = tracker.get_status(user="Mike")
+
+        assert (as_michael["mine"], as_mike["mine"]) == (True, False)
+
+    def test_the_page_is_pushed_once_when_something_moved(self):
+        calls = []
+        tracker = _make_tracker()
+        tracker._on_change = lambda: calls.append(1)
+        _download_row(tracker, "One", user="Mike")
+        _download_row(tracker, "Two", user="Mike")
+
+        tracker.rename_user("Mike", "Michael")
+
+        assert len(calls) == 1
+
+    def test_nothing_is_pushed_when_the_guest_has_no_rows(self):
+        calls = []
+        tracker = _make_tracker()
+        tracker._on_change = lambda: calls.append(1)
+        _download_row(tracker, "Theirs", user="Sue")
+
+        tracker.rename_user("Mike", "Michael")
+
+        assert calls == []

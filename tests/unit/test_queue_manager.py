@@ -1016,3 +1016,64 @@ class TestQueueManagerHelpers:
 
         qm.enqueue("/songs/song1---abc.mp4", "LimitedUser")
         assert qm.is_user_limited("LimitedUser") is True
+
+
+class TestQueueManagerRenameUser:
+    """rename_user moves a renamed guest's songs, held ones included."""
+
+    @pytest.fixture
+    def pushed(self, events):
+        """Names of the queue events emitted after this fixture is requested."""
+        names = []
+        events.on("queue_update", lambda: names.append("queue_update"))
+        events.on("now_playing_update", lambda: names.append("now_playing_update"))
+        return names
+
+    def test_every_song_of_the_old_name_moves_held_ones_included(self, queue_manager):
+        queue_manager.enqueue("/songs/song1---abc.mp4", "Mike")
+        queue_manager.enqueue("/songs/song2---def.mp4", "Mike", waiting="download")
+        queue_manager.enqueue("/songs/song3---ghi.mp4", "Mike", waiting="processing")
+
+        queue_manager.rename_user("Mike", "Michael")
+
+        assert [item["user"] for item in queue_manager.queue] == ["Michael"] * 3
+
+    def test_other_guests_songs_stay(self, queue_manager):
+        queue_manager.enqueue("/songs/song1---abc.mp4", "Mike")
+        queue_manager.enqueue("/songs/song2---def.mp4", "Sue")
+
+        queue_manager.rename_user("Mike", "Michael")
+
+        assert [item["user"] for item in queue_manager.queue] == ["Michael", "Sue"]
+
+    def test_a_case_change_moves_the_songs_too(self, queue_manager):
+        queue_manager.enqueue("/songs/song1---abc.mp4", "mike")
+
+        queue_manager.rename_user("mike", "Mike")
+
+        assert queue_manager.queue[0]["user"] == "Mike"
+
+    def test_the_guest_runs_their_songs_under_the_new_name_afterwards(self, queue_manager):
+        queue_manager.enqueue("/songs/song1---abc.mp4", "Mike")
+        queue_manager.rename_user("Mike", "Michael")
+
+        assert queue_manager.toggle_pause_user("Mike") is False
+        assert queue_manager.toggle_pause_user("Michael") is True
+        assert queue_manager.queue[0]["paused"] is True
+
+    def test_the_queue_and_up_next_update_once_each(self, queue_manager, pushed):
+        queue_manager.enqueue("/songs/song1---abc.mp4", "Mike")
+        queue_manager.enqueue("/songs/song2---def.mp4", "Mike")
+        pushed.clear()
+
+        queue_manager.rename_user("Mike", "Michael")
+
+        assert pushed == ["queue_update", "now_playing_update"]
+
+    def test_nothing_is_pushed_when_the_guest_has_no_songs(self, queue_manager, pushed):
+        queue_manager.enqueue("/songs/song1---abc.mp4", "Sue")
+        pushed.clear()
+
+        queue_manager.rename_user("Mike", "Michael")
+
+        assert pushed == []

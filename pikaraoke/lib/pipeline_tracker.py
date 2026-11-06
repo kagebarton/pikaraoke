@@ -455,6 +455,15 @@ class PipelineTracker:
         self._notify_change()
         return True
 
+    def rename_user(self, old: str, new: str) -> None:
+        """Move every row of ``old`` to ``new``, so the guest still owns them on the page."""
+        with self._lock:
+            moved = [item for item in self._items if item.user == old]
+            for item in moved:
+                item.user = new
+        if moved:
+            self._notify_change()
+
     def tracked_paths(self) -> set[str]:
         """Song paths that have a row, finished or not."""
         with self._lock:
