@@ -154,8 +154,13 @@
             const options = { expires: 3650, path: '/' };
             Cookies.set('user', reply.name, options);
             Cookies.set('singer_token', reply.token, options);
-            // Reload so every page-level copy of the name is fresh
-            location.reload();
+            // A save that keeps the name leaves the page as it is, so unsaved work on it stays.
+            // Otherwise reload so every page-level copy of the name is fresh.
+            if (singerFormMode === 'edit' && reply.name === window.singer.name) {
+                closeSingerForm();
+            } else {
+                location.reload();
+            }
         }).fail(function(xhr) {
             const error = xhr.responseJSON && xhr.responseJSON.error;
             $('#singer-name-error').text(error || window.i18n.singerSaveFailed).show();
