@@ -48,72 +48,49 @@ def _key(name: str) -> str:
 class SingerRegistry:
     """The guests who joined during this run of the app; forgotten when it stops.
 
-    A guest is a name plus a random token the phone keeps in a cookie. Holding the token is
-    what proves a phone joined as that name during this run, so a phone from an earlier run, or
-    one whose name someone else took since, owns nothing.
+    A guest is a name plus a random token the phone keeps in a cookie. The token alone says which
+    guest a phone is, so a phone whose name cookie is out of date still finds its own guest, and
+    a token from an earlier run finds nobody.
 
     Lock order: registry, then queue, tracker or playback. Nothing may take the registry lock
-    while holding one of those, because `update` calls `on_rename` with the registry lock held.
+    while holding one of those, because `save` calls `on_rename` with the registry lock held.
+    Nothing called from `on_rename` may call the registry either: its lock is not reentrant.
     """
 
-    def __init__(self, preferences: PreferenceManager) -> None:
+    def __init__(
+        self, preferences: PreferenceManager, on_rename: Callable[[str, str], None]
+    ) -> None:
         self._preferences = preferences
+        self._on_rename = on_rename
         self._lock = threading.Lock()
         self._guests: dict[str, _Guest] = {}
 
-    def join(self, name: str, settings: SingerSettings) -> tuple[str, str]:
-        """Add a guest and return the name they hold and their token.
+    def save(self, token: str | None, name: str, settings: SingerSettings) -> tuple[str, str]:
+        """Save the settings of the guest this token belongs to, or join a new guest.
 
-        A blank name becomes `Anon-` plus four random characters.
-
-        Raises:
-            NameTaken: the name is reserved or already held.
-        """
-        with self._lock:
-            name = name.strip() or self._unused_anon_name()
-            self._require_free(name)
-            token = secrets.token_urlsafe(16)
-            self._guests[_key(name)] = _Guest(name, token, settings)
-            return name, token
-
-    def update(
-        self,
-        old_name: str,
-        token: str,
-        new_name: str,
-        settings: SingerSettings,
-        on_rename: Callable[[str, str], None],
-    ) -> str:
-        """Save a guest's settings and spelling, and return the name now held.
-
-        A blank new name keeps the current one. When the spelling changes (a case change
-        included, because queue and ownership checks compare names exactly) `on_rename(old,
-        new)` runs once, with the registry lock held, so nobody can join as the old name before
-        the songs have moved. If it raises, the guest keeps their old name.
+        Returns the name the guest now holds and their token (an existing guest keeps theirs).
+        A blank name keeps a guest's current name, and gives a new guest `Anon-` plus four random
+        characters. When a guest's spelling changes (a case change included, because the queue and
+        ownership checks compare names exactly) the registry changes first, then `on_rename(old,
+        new)` runs once with the registry lock held, so nobody can join as the old name before
+        the songs have moved, and an `on_rename` that raises leaves the registry consistent with
+        the songs.
 
         Raises:
-            PermissionError: the name and token do not match a guest of this run.
-            NameTaken: the new name is reserved or held by another guest.
+            NameTaken: the name is reserved or held by another guest.
         """
         with self._lock:
-            guest = self._guest_with_token(old_name, token)
+            guest = self._guest_with_token(token)
             if guest is None:
-                raise PermissionError(f"{old_name!r} did not join during this run")
-            new_name = new_name.strip() or guest.name
-            if _key(new_name) != _key(guest.name):
-                self._require_free(new_name)
-            if new_name != guest.name:
-                on_rename(guest.name, new_name)
-                del self._guests[_key(guest.name)]
-                guest.name = new_name
-                self._guests[_key(new_name)] = guest
-            guest.settings = settings
-            return guest.name
+                return self._join(name, settings)
+            self._update(guest, name, settings)
+            return guest.name, guest.token
 
-    def owns(self, name: str | None, token: str | None) -> bool:
-        """True when this name and token belong to a guest who joined during this run."""
+    def lookup(self, token: str | None) -> tuple[str, SingerSettings] | None:
+        """The name the registry holds for this token's guest, and their settings; else None."""
         with self._lock:
-            return self._guest_with_token(name, token) is not None
+            guest = self._guest_with_token(token)
+            return (guest.name, guest.settings) if guest else None
 
     def settings_for(self, name: str) -> SingerSettings:
         """The guest's settings, or the house defaults for a name that never joined.
@@ -125,16 +102,42 @@ class SingerRegistry:
             guest = self._guests.get(_key(name))
         if guest is not None:
             return guest.settings
+        return self.house_defaults()
+
+    def house_defaults(self) -> SingerSettings:
+        """What a name that never joined sings at: key 0 and the house vocal volume."""
         return SingerSettings(0, self._preferences.get_or_default("vocal_volume"))
 
-    def _guest_with_token(self, name: str | None, token: str | None) -> _Guest | None:
-        """The guest holding `name` if `token` is theirs. Call with the lock held."""
-        if not name or not token:
+    def _join(self, name: str, settings: SingerSettings) -> tuple[str, str]:
+        """Call with the lock held."""
+        name = name.strip() or self._unused_anon_name()
+        self._require_free(name)
+        token = secrets.token_urlsafe(16)
+        self._guests[_key(name)] = _Guest(name, token, settings)
+        return name, token
+
+    def _update(self, guest: _Guest, name: str, settings: SingerSettings) -> None:
+        """Call with the lock held."""
+        new_name = name.strip() or guest.name
+        if _key(new_name) != _key(guest.name):
+            self._require_free(new_name)
+        old_name = guest.name
+        del self._guests[_key(old_name)]
+        guest.name = new_name
+        guest.settings = settings
+        self._guests[_key(new_name)] = guest
+        if new_name != old_name:
+            self._on_rename(old_name, new_name)
+
+    def _guest_with_token(self, token: str | None) -> _Guest | None:
+        """The guest this token belongs to. Call with the lock held."""
+        if not token:
             return None
-        guest = self._guests.get(_key(name))
         # Encode so a non-ASCII cookie value fails the comparison instead of raising.
-        if guest and secrets.compare_digest(guest.token.encode(), token.encode()):
-            return guest
+        candidate = token.encode()
+        for guest in self._guests.values():
+            if secrets.compare_digest(guest.token.encode(), candidate):
+                return guest
         return None
 
     def _require_free(self, name: str) -> None:

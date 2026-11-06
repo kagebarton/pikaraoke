@@ -134,7 +134,7 @@ class MockKaraoke:
             filename_from_path=SongManager.filename_from_path,
             get_available_songs=lambda: self.song_manager.songs,
         )
-        self.singers = SingerRegistry(self.preferences)
+        self.singers = SingerRegistry(self.preferences, on_rename=lambda old, new: None)
 
     @property
     def socketio(self):

@@ -28,7 +28,7 @@ def karaoke(tmp_path):
     preferences = PreferenceManager(config_file_path=str(tmp_path / "config.ini"))
     k = MagicMock()
     k.preferences = preferences
-    k.singers = SingerRegistry(preferences)
+    k.singers = SingerRegistry(preferences, k.rename_singer)
     k.queue_manager = QueueManager(preferences=preferences, events=events)
     k.rename_singer.side_effect = k.queue_manager.rename_user
     k.is_transpose_enabled = True
@@ -66,7 +66,7 @@ def as_phone(app, name, token):
 
 
 def join(app, karaoke, name="Mike", settings=SingerSettings(2, 0.7)):
-    held, token = karaoke.singers.join(name, settings)
+    held, token = karaoke.singers.save(None, name, settings)
     return as_phone(app, held, token), held, token
 
 
@@ -78,8 +78,7 @@ class TestJoin:
         assert response.status_code == 200
         assert body["success"] is True
         assert body["name"] == "Mike"
-        assert karaoke.singers.owns("Mike", body["token"])
-        assert karaoke.singers.settings_for("Mike") == SingerSettings(2, 0.7)
+        assert karaoke.singers.lookup(body["token"]) == ("Mike", SingerSettings(2, 0.7))
 
     def test_a_blank_name_becomes_an_anon_name(self, client):
         body = save(client, name="").get_json()
@@ -112,7 +111,7 @@ class TestJoin:
 
         assert karaoke.singers.settings_for("Mike") == SingerSettings(2, 0.7)
 
-    def test_a_wrong_token_on_a_known_name_is_a_join_and_gets_409(self, app, karaoke):
+    def test_a_token_nobody_holds_is_a_join_and_a_held_name_gets_409(self, app, karaoke):
         join(app, karaoke, "Mike")
         impostor = as_phone(app, "Mike", "not-their-token")
 
@@ -120,19 +119,6 @@ class TestJoin:
 
         assert response.status_code == 409
         assert karaoke.singers.settings_for("Mike") == SingerSettings(2, 0.7)
-
-    def test_a_name_with_a_space_or_an_accent_is_found_again_from_its_encoded_cookie(
-        self, app, karaoke
-    ):
-        """The page stores the name percent-encoded, so Mary Ann arrives as Mary%20Ann."""
-        _, held, token = join(app, karaoke, "José Mary")
-        phone = as_phone(app, "Jos%C3%A9%20Mary", token)
-
-        response = save(phone, "José Mary", semitones=-1, vocal_volume=0.2)
-
-        assert response.status_code == 200
-        assert response.get_json()["name"] == held
-        assert karaoke.singers.settings_for(held) == SingerSettings(-1, 0.2)
 
 
 class TestValidation:
@@ -162,9 +148,7 @@ class TestValidation:
     def test_a_refused_value_joins_nobody(self, client, karaoke):
         save(client, "Mike", semitones=9)
 
-        assert karaoke.singers.settings_for("Mike") == SingerSettings(
-            0, karaoke.preferences.get_or_default("vocal_volume")
-        )
+        assert karaoke.singers.settings_for("Mike") == karaoke.singers.house_defaults()
 
 
 class TestUpdate:
@@ -189,7 +173,7 @@ class TestUpdate:
         assert (body["name"], body["token"]) == ("Michael", token)
         karaoke.rename_singer.assert_called_once_with("Mike", "Michael")
         assert karaoke.queue_manager.queue[0]["user"] == "Michael"
-        assert karaoke.singers.owns("Michael", token)
+        assert karaoke.singers.lookup(token) == ("Michael", SingerSettings(2, 0.7))
 
     def test_renaming_to_a_name_in_use_is_409_and_moves_nothing(self, app, karaoke):
         phone, _, _ = join(app, karaoke, "Mike")
@@ -202,16 +186,35 @@ class TestUpdate:
         karaoke.rename_singer.assert_not_called()
         assert karaoke.queue_manager.queue[0]["user"] == "Mike"
 
-    def test_a_save_after_the_name_changed_under_the_phone_is_403(self, app, karaoke, monkeypatch):
-        """A second save already in flight passed the ownership check before the first renamed."""
-        phone, _, token = join(app, karaoke, "Mike")
-        karaoke.singers.update("Mike", token, "Michael", SingerSettings(2, 0.7), MagicMock())
-        monkeypatch.setattr(karaoke.singers, "owns", lambda name, token: True)
+    @pytest.mark.parametrize("stale_cookie", ["Mike", "mike", "Someone Else", ""])
+    def test_a_good_token_with_a_stale_name_cookie_still_updates_the_same_guest(
+        self, app, karaoke, stale_cookie
+    ):
+        """A first save renamed the guest but its reply never reached the phone's cookie."""
+        _, _, token = join(app, karaoke, "Mike")
+        karaoke.singers.save(token, "Michael", SingerSettings(2, 0.7))
+        phone = as_phone(app, stale_cookie, token)
 
-        response = save(phone, "Mike")
+        response = save(phone, "Michael", semitones=-1, vocal_volume=0.2)
 
-        assert response.status_code == 403
-        assert response.get_json()["success"] is False
+        body = response.get_json()
+        assert response.status_code == 200
+        assert (body["name"], body["token"]) == ("Michael", token)
+        assert karaoke.singers.lookup(token) == ("Michael", SingerSettings(-1, 0.2))
+
+    @pytest.mark.parametrize("stale_cookie", ["Mike", ""])
+    def test_a_good_token_with_a_stale_name_cookie_and_a_blank_name_keeps_the_guest(
+        self, app, karaoke, stale_cookie
+    ):
+        _, _, token = join(app, karaoke, "Mike")
+        karaoke.singers.save(token, "Michael", SingerSettings(2, 0.7))
+        phone = as_phone(app, stale_cookie, token)
+
+        response = save(phone, "", semitones=1)
+
+        body = response.get_json()
+        assert response.status_code == 200
+        assert (body["name"], body["token"]) == ("Michael", token)
 
 
 class TestPageState:
@@ -224,7 +227,9 @@ class TestPageState:
 
         return read
 
-    def test_a_phone_with_no_cookies_has_not_joined(self, app, karaoke, page_state):
+    def test_a_phone_with_no_cookies_has_not_joined_and_gets_the_house_defaults(
+        self, app, karaoke, page_state
+    ):
         karaoke.preferences.set("vocal_volume", 0.55)
 
         state = page_state(app.test_client())
@@ -234,7 +239,6 @@ class TestPageState:
             "name": "",
             "semitones": 0,
             "vocal_volume": 0.55,
-            "house_vocal_volume": 0.55,
             "transpose_enabled": True,
         }
 
@@ -246,9 +250,9 @@ class TestPageState:
         assert state["joined"] is True
         assert state["name"] == "Mike"
         assert (state["semitones"], state["vocal_volume"]) == (-2, 0.1)
-        assert state["house_vocal_volume"] == karaoke.preferences.get_or_default("vocal_volume")
+        assert "house_vocal_volume" not in state
 
-    def test_a_phone_with_a_stale_token_has_not_joined(self, app, karaoke, page_state):
+    def test_a_phone_with_a_token_nobody_holds_has_not_joined(self, app, karaoke, page_state):
         join(app, karaoke, "Mike")
 
         state = page_state(as_phone(app, "Mike", "from-an-earlier-run"))
@@ -256,18 +260,16 @@ class TestPageState:
         assert state["joined"] is False
         assert state["name"] == ""
 
-    def test_a_phone_whose_name_someone_else_took_has_not_joined(self, app, karaoke, page_state):
-        join(app, karaoke, "Mike")
-        old_phone = as_phone(app, "Mike", "token-of-the-phone-that-lost-the-name")
+    @pytest.mark.parametrize("cookie", ["Mike", "mike", "Someone Else", "Mary%20Ann", ""])
+    def test_the_name_is_the_registrys_whatever_the_name_cookie_says(
+        self, app, karaoke, page_state, cookie
+    ):
+        _, _, token = join(app, karaoke, "Mike")
+        karaoke.singers.save(token, "Michael", SingerSettings(2, 0.7))
 
-        assert page_state(old_phone)["joined"] is False
+        state = page_state(as_phone(app, cookie, token))
 
-    def test_an_encoded_name_cookie_is_read_back_as_the_name(self, app, karaoke, page_state):
-        _, _, token = join(app, karaoke, "Mary Ann")
-
-        state = page_state(as_phone(app, "Mary%20Ann", token))
-
-        assert (state["joined"], state["name"]) == (True, "Mary Ann")
+        assert (state["joined"], state["name"]) == (True, "Michael")
 
     def test_the_key_control_is_reported_off_when_pitch_shifting_is_missing(
         self, app, karaoke, page_state
