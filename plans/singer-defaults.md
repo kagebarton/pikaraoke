@@ -1,6 +1,7 @@
 Model: Claude Opus 5.5 (author, 2026-11-06). Executor: Claude Sonnet 5.5.
 Phase 2.1 added by Claude Opus 5.5 on 2026-11-06 from the `/code-review` of Phases 1-2. The
-Design sections it changes are rewritten in place and marked (2.1).
+Design sections it changes are rewritten in place and marked (2.1). Phase 2.2 added by Claude
+Opus 5.5 on 2026-11-06 from the `/code-review` of Phase 2.1, marked (2.2) the same way.
 
 # Singer defaults: key and vocal volume per guest
 
@@ -124,17 +125,20 @@ class SingerRegistry:
   when the name is reserved or already held by another guest. Compare names
   case-insensitively, after stripping whitespace and normalizing to Unicode NFC (2.1), so
   `mike` and `Mike` count as the same name, and so do the two encodings of `José`. The stored
-  spelling is NFC too (2.1). A blank name becomes `Anon-` plus 4 random letters/digits, picked
-  again until free.
+  spelling is NFC too (2.1). The reserved names are compared with the same key (2.2). A blank
+  name becomes `Anon-` plus 4 random letters/digits, picked again until free.
 - **`save` (2.1)**: a token that belongs to a guest updates that guest; anything else joins.
   One lock acquisition covers the check and the change, so there is no separate ownership
   test and no "not a guest" error. An update with a blank name keeps the current name. When
   the spelling changes (a case change included, because the queue, tracker and ownership
-  checks compare names exactly) the registry changes first (entry moved, name and settings
-  set), then calls `on_rename(old, new)` **while still holding the registry lock**, so nobody
-  can join as the old name before the songs have moved, and a failure inside `on_rename`
-  leaves the registry consistent with the songs. Lock order: registry, then queue, tracker or
-  playback. Nothing takes the registry lock while holding one of those (the play loop calls
+  checks compare names exactly) the registry changes first (name and settings set; the entry
+  re-keyed only when the key changes, 2.2), then calls `on_rename(old, new)` **while still
+  holding the registry lock**, so nobody can join as the old name before the songs have
+  moved. **`on_rename` must not raise (2.2):** the moves are in-memory loops, and
+  `Karaoke.rename_singer` catches a failing notification. If a move did raise, the songs not
+  yet moved would stay under the old name, which is free again. Lock order: registry, then
+  queue, tracker or playback. Nothing takes the registry lock while holding one of those (the
+  play loop calls
   `settings_for` after `pop_next` returns), and nothing called from `on_rename` may call the
   registry (its lock is not reentrant), so this cannot deadlock. Keep it that way.
 - `lookup(token)` returns the guest's name as the registry holds it, and their settings, or
@@ -174,7 +178,7 @@ class SingerRegistry:
 
 `Karaoke.rename_singer(old: str, new: str)` is the `on_rename` callback. **It moves every
 copy of the name first, then tells the pages (2.1)**, so a notification that raises can't leave
-songs split between two names:
+songs split between two names, and can't fail the save (2.2):
 
 - `QueueManager.rename_user(old, new)` (`@_locked`): sets `item["user"] = new` on every item
   of `old`, held items included. Returns whether anything moved; emits nothing (2.1).
@@ -190,6 +194,13 @@ songs split between two names:
 - These notifications run under the registry lock, after every move. Releasing the lock
   first would need a second callback to save a few milliseconds; the long wait under the
   lock is the `_playback_lock` wait (Phase 2 results, "Known property").
+- **The notifications run in one `try` (2.2).** An exception from any of them is logged with
+  its traceback (`logging.exception`, naming the old and new name) and not raised, so a save
+  whose songs all moved always returns the new name to the phone. The handlers are arbitrary
+  callables and `EventSystem.emit` doesn't catch, so this catches `Exception`, as
+  `PipelineTracker._notify_change` does. The notifications after the failing one are skipped:
+  the TV overlay re-renders on its own poll within half a second, and the pages catch up on
+  their next push or reload.
 
 ### Route and page state
 
@@ -239,6 +250,11 @@ blueprints in `app.py`.
   a save whose reply was lost.
 - The name field has `maxlength` set from `window.singer.name_limit` (2.1). The server
   answers a longer name with a 422.
+- **Edit mode sends the name only when the guest changed it (2.2).** If the name field still
+  holds the value it was prefilled with, Save posts `name` as `""`, which keeps the current
+  name. So a tab opened before a rename can't rename the guest back (and move their songs
+  back) when they change only the key there, and a stored name the length check would refuse
+  (see Accepted edges) can still be saved. Join mode posts what was typed.
 - **Delete:** `setUserCookie()` and its calls in `files.html` and `search.html` (the form now
   runs on page load), `generateRandomString` (the server makes Anon names now),
   `window.i18n.promptChangeUsername` and the fallback text in `spa-navigation.js`.
@@ -260,7 +276,23 @@ blueprints in `app.py`.
   download posted under the old name that reaches the queue or the tracker after the rename
   moved them lands under the old name, plays at the house defaults, and belongs to whoever
   takes that name next. Same class as the case above: the window is one request's processing
-  time, during the guest's own rename.
+  time, during the guest's own rename. The same holds when a guest joins as, or renames to, a
+  name that has songs but no guest (2.2): the check for a free name looks at the registry, not
+  the queue or the tracker.
+- **Ownership checks trust the name the phone carries (2.2).** The Processing page's "mine"
+  and guest cancel read the `user` cookie; the queue's guest delete and pause take the name
+  the page posts. After a save whose reply was lost, that name is stale until the next page
+  load, where the cookie is put back to the registry's spelling (The form, 2.1). Reading the
+  token in the Processing routes alone would leave two rules for "is this yours", and moving
+  the queue routes to the token too needs the page scripts changed (they post the name, and
+  the route schema refuses unknown fields). Not built unless Ken asks.
+- **Names that look alike (2.2)**: the spelling rule is strip, case and NFC. A name with an
+  invisible character (`Mike` plus a zero-width space) or full-width letters is a different
+  name, so two singers can both show as `Mike`, and an invisible-only name is kept instead of
+  becoming an Anon name. Guests at a party don't do this by accident.
+- **The length limit counts the raw form value (2.1 results, 2.2)**: before the strip and
+  before NFC, so a few scripts whose letters NFC splits can store a name longer than the limit.
+  Edit mode's unchanged name posts blank (The form, 2.2), so such a guest can still save.
 
 ## Phases
 
@@ -382,6 +414,56 @@ Commits: `fix(processing): read the guest's name cookie decoded` (step 1);
 Self-review: steps 2 and 3 are multi-file concurrency again, so track the review as pending
 for the checkpoint after this phase.
 
+### Phase 2.2: review fixes of 2.1 (server only)
+
+From the `/code-review` of `731d5ec..8322831` (Phase 2.1, 2026-11-06, 11 findings). No
+deadlock found; every copy of the name moves. Build the Design sections marked (2.2) that are
+on the server; the form's (2.2) rule is Phase 3's. Review findings, by number in the review's
+list:
+
+| # | Finding | Fix |
+| - | ------- | --- |
+| 1 | A notification that raises after every move fails the save (500) | Step 1 |
+| 2 | Processing ownership reads the name cookie, not the token | Accepted edge (Design), with the queue routes |
+| 3 | A tab opened before a rename renames the guest back | Phase 3: edit mode sends the name only when changed |
+| 4 | `save`'s docstring says a raising `on_rename` leaves the registry consistent | Step 1 |
+| 5 | The length limit counts the raw value, before strip and NFC | Accepted edge (Design); Phase 3's rule from #3 |
+| 6 | `MockKaraoke`'s `on_rename` silently moves nothing | Step 1 |
+| 7 | Settings-only saves re-key the entry; reserved names use their own rule | Step 2 |
+| 8 | The tracker pushes before the playing song moves; its failures log at debug | Accepted (2.1 Design): the Processing page doesn't show the playing song; the debug log is pre-existing |
+| 9 | Look-alike and invisible names count as different guests | Accepted edge (Design) |
+| 10 | Joining a name that still has songs takes them | Accepted edge (Design), extends "An add in flight" |
+| 11 | Every page render scans the tokens under the registry lock | Known property (Phase 2 results); a party is tens of guests |
+
+The review also called the outer NFC in `_key` redundant. It isn't: `casefold` can return
+decomposed text (`ǰ`, U+01F0, casefolds to `j` plus U+030C, and NFC puts it back). Keep it.
+
+1. **A rename whose songs all moved always saves (1, 4, 6).**
+   - `Karaoke.rename_singer`: the notifications in one `try`, as in Design.
+   - `SingerRegistry`: the `save` docstring drops "an `on_rename` that raises leaves the
+     registry consistent with the songs" and says `on_rename` must not raise, and why (as in
+     Design). The class docstring's lock paragraph stays.
+   - `tests/conftest.py`: `MockKaraoke`'s `on_rename` raises `AssertionError` with a message
+     pointing at the `party` fixture in `test_karaoke_rename_singer.py`, so a test that renames
+     through the mock fails instead of passing with nothing moved. No current test renames
+     through it.
+   - Tests in `test_karaoke_rename_singer.py`: rewrite
+     `test_a_notification_that_raises_leaves_every_copy_moved_and_the_registry_in_step` so
+     the save returns `("Michael", token)` with no exception, every copy and the registry say
+     `Michael`, and the failure is logged at ERROR with its traceback (`caplog`). Keep the
+     `test_singers.py` test that a raising `on_rename` propagates out of `save` (the registry
+     doesn't catch; the callback must not raise).
+2. **One key rule for reserved names, and no re-key on a settings save (7).** `_RESERVED_KEYS`
+   built with `_key`; `_update` moves the dict entry only when `_key(new) != _key(old)`. No new
+   tests: the existing taken, reserved, settings-only and case-only tests cover both.
+
+Commits: `fix(singers): a rename whose songs all moved always saves` (step 1);
+`refactor(singers): one key rule for reserved names, and no re-key on a settings save`
+(step 2).
+
+Self-review covers both: step 1 adds a catch after the moves and no lock or path; step 2 is a
+refactor.
+
 ### Phase 3: the form
 
 1. The modal, handlers, deletions, and navbar change described above.
@@ -396,6 +478,8 @@ for the checkpoint after this phase.
      Use a name with a space and an accent (2.1).
    - Set the `user` cookie to another spelling by hand and navigate: the navbar shows the
      registry's name and the cookie is put back (2.1).
+   - Open a second tab, rename in the first, then in the second tab change only the key and
+     save: the guest keeps the new name and their queued song stays under it (2.2).
    - SPA navigation doesn't stack handlers (one POST per Save).
    - Restart the app: the next navigation shows the join form again.
 
@@ -420,6 +504,8 @@ finds something.
 - [ ] Randomizer songs play at key 0 and the house vocal volume.
 - [ ] Join with a name that has a space and an accent: the Processing page marks your
       download as yours, and you can cancel it.
+- [ ] Rename on one tab, then change only your key on a tab you opened before: you keep the
+      new name.
 
 ## Follow-ups (not in this plan)
 
