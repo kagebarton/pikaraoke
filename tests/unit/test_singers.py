@@ -97,6 +97,42 @@ class TestJoin:
         assert third == "Anon-cccc"
 
 
+COMPOSED = "Jos\u00e9"  # é as one character
+DECOMPOSED = "Jose\u0301"  # e then a combining acute accent
+
+
+class TestUnicodeForms:
+    def test_the_two_forms_of_an_accented_name_are_the_same_guest(self, registry):
+        join(registry, COMPOSED)
+
+        with pytest.raises(NameTaken):
+            join(registry, DECOMPOSED)
+
+    def test_the_name_is_kept_in_the_composed_form(self, registry):
+        name, token = join(registry, DECOMPOSED)
+
+        assert name == COMPOSED
+        assert registry.lookup(token) == (COMPOSED, KEY_TWO)
+
+    def test_a_rename_to_a_decomposed_name_is_kept_and_reported_composed(self, registry, on_rename):
+        _, token = join(registry, "Jose")
+
+        registry.save(token, DECOMPOSED, KEY_TWO)
+
+        on_rename.assert_called_once_with("Jose", COMPOSED)
+
+    def test_the_guests_own_other_form_changes_nothing(self, registry, on_rename):
+        _, token = join(registry, COMPOSED)
+
+        assert registry.save(token, DECOMPOSED, KEY_TWO) == (COMPOSED, token)
+        on_rename.assert_not_called()
+
+    def test_settings_for_finds_the_guest_by_the_name_the_registry_keeps(self, registry):
+        join(registry, DECOMPOSED)
+
+        assert registry.settings_for(COMPOSED) == KEY_TWO
+
+
 class TestLookup:
     def test_a_guests_token_finds_the_name_and_settings_the_registry_holds(self, registry):
         _, token = join(registry, "Mike")
@@ -239,9 +275,12 @@ class TestSettingsFor:
         join(registry)
         assert registry.settings_for("Mike") == KEY_TWO
 
-    def test_the_lookup_ignores_case(self, registry):
+    @pytest.mark.parametrize("other_spelling", ["MIKE", "mike", "Mike "])
+    def test_only_the_exact_spelling_gets_the_guests_settings(self, registry, other_spelling):
+        """The queue and the ownership checks compare names exactly, so another case is not
+        the guest's songs."""
         join(registry)
-        assert registry.settings_for("MIKE") == KEY_TWO
+        assert registry.settings_for(other_spelling) == SingerSettings(0, 0.4)
 
     @pytest.mark.parametrize("name", ["Randomizer", "Pikaraoke", "Nobody"])
     def test_a_name_that_never_joined_gets_the_house_defaults(self, registry, name):

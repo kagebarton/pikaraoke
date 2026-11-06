@@ -9,7 +9,7 @@ from flask_smorest import Blueprint
 from marshmallow import Schema, fields, validate
 
 from pikaraoke.lib.current_app import get_karaoke_instance
-from pikaraoke.lib.singers import KEY_LIMIT, NameTaken, SingerSettings
+from pikaraoke.lib.singers import KEY_LIMIT, NAME_LIMIT, NameTaken, SingerSettings
 
 singer_bp = Blueprint("singer", __name__)
 
@@ -19,6 +19,7 @@ TOKEN_COOKIE = "singer_token"
 class SingerForm(Schema):
     name = fields.String(
         load_default="",
+        validate=validate.Length(max=NAME_LIMIT),
         metadata={"description": "The name to sing under; blank gets an Anon name"},
     )
     semitones = fields.Integer(
@@ -62,6 +63,7 @@ def inject_singer() -> dict[str, dict[str, Any]]:
             "name": name,
             "semitones": settings.semitones,
             "vocal_volume": settings.vocal_volume,
+            "name_limit": NAME_LIMIT,
             "transpose_enabled": k.is_transpose_enabled,
         }
     }
