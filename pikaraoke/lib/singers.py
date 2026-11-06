@@ -5,6 +5,7 @@ from __future__ import annotations
 import secrets
 import string
 import threading
+import unicodedata
 from dataclasses import dataclass
 from typing import Callable
 
@@ -16,6 +17,8 @@ from pikaraoke.lib.preference_manager import PreferenceManager
 RESERVED_NAMES = ("Pikaraoke", "Randomizer")
 # Beyond this many semitones the pitch shift distorts the song.
 KEY_LIMIT = 3
+# Longest name a guest can take, in characters. The name rides in a 4 KB cookie and on screen.
+NAME_LIMIT = 30
 
 _RESERVED_KEYS = frozenset(name.casefold() for name in RESERVED_NAMES)
 _ANON_ALPHABET = string.ascii_letters + string.digits
@@ -40,9 +43,14 @@ class _Guest:
     settings: SingerSettings
 
 
+def _spelling(name: str) -> str:
+    """The name as kept: no surrounding spaces, and one Unicode form for accented letters."""
+    return unicodedata.normalize("NFC", name.strip())
+
+
 def _key(name: str) -> str:
-    """Names are the same guest when they differ only in case or surrounding spaces."""
-    return name.strip().casefold()
+    """Names are the same guest when they differ only in case, spaces or Unicode form."""
+    return unicodedata.normalize("NFC", _spelling(name).casefold())
 
 
 class SingerRegistry:
@@ -93,15 +101,17 @@ class SingerRegistry:
             return (guest.name, guest.settings) if guest else None
 
     def settings_for(self, name: str) -> SingerSettings:
-        """The guest's settings, or the house defaults for a name that never joined.
+        """The settings of the guest holding exactly this name, else the house defaults.
 
-        The house defaults cover the Randomizer, the admin's default user and a stale name.
-        This is the one place the house vocal volume is resolved for playback.
+        The queue, the tracker and the ownership checks compare names exactly, so a name that
+        differs only in case is not the guest's songs. The house defaults cover the Randomizer,
+        the admin's default user and a stale name. This is the one place the house vocal volume
+        is resolved for playback.
         """
         with self._lock:
             guest = self._guests.get(_key(name))
-        if guest is not None:
-            return guest.settings
+            if guest is not None and guest.name == name:
+                return guest.settings
         return self.house_defaults()
 
     def house_defaults(self) -> SingerSettings:
@@ -110,7 +120,7 @@ class SingerRegistry:
 
     def _join(self, name: str, settings: SingerSettings) -> tuple[str, str]:
         """Call with the lock held."""
-        name = name.strip() or self._unused_anon_name()
+        name = _spelling(name) or self._unused_anon_name()
         self._require_free(name)
         token = secrets.token_urlsafe(16)
         self._guests[_key(name)] = _Guest(name, token, settings)
@@ -118,7 +128,7 @@ class SingerRegistry:
 
     def _update(self, guest: _Guest, name: str, settings: SingerSettings) -> None:
         """Call with the lock held."""
-        new_name = name.strip() or guest.name
+        new_name = _spelling(name) or guest.name
         if _key(new_name) != _key(guest.name):
             self._require_free(new_name)
         old_name = guest.name

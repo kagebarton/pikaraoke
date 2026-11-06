@@ -15,7 +15,7 @@ if not hasattr(werkzeug, "__version__"):
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.preference_manager import PreferenceManager
 from pikaraoke.lib.queue_manager import QueueManager
-from pikaraoke.lib.singers import SingerRegistry, SingerSettings
+from pikaraoke.lib.singers import NAME_LIMIT, SingerRegistry, SingerSettings
 from pikaraoke.routes.singer import singer_bp
 
 SONG = "/songs/Artist - Song---dQw4w9WgXcQ.mp4"
@@ -122,6 +122,26 @@ class TestJoin:
 
 
 class TestValidation:
+    def test_a_name_of_the_limit_is_accepted(self, client):
+        name = "x" * NAME_LIMIT
+
+        response = save(client, name)
+
+        assert response.status_code == 200
+        assert response.get_json()["name"] == name
+
+    def test_a_name_one_longer_is_422_and_joins_nobody(self, client, karaoke):
+        name = "x" * (NAME_LIMIT + 1)
+
+        assert save(client, name).status_code == 422
+        assert karaoke.singers.settings_for(name) == karaoke.singers.house_defaults()
+
+    def test_a_long_name_is_refused_on_a_rename_too(self, app, karaoke):
+        phone, _, token = join(app, karaoke, "Mike")
+
+        assert save(phone, "x" * (NAME_LIMIT + 1)).status_code == 422
+        assert karaoke.singers.lookup(token) == ("Mike", SingerSettings(2, 0.7))
+
     @pytest.mark.parametrize("semitones", [-4, 4, 12])
     def test_a_key_beyond_the_limit_is_422(self, client, semitones):
         assert save(client, semitones=semitones).status_code == 422
@@ -239,6 +259,7 @@ class TestPageState:
             "name": "",
             "semitones": 0,
             "vocal_volume": 0.55,
+            "name_limit": NAME_LIMIT,
             "transpose_enabled": True,
         }
 
