@@ -109,12 +109,16 @@
         $('#singer-save').removeClass('is-loading').prop('disabled', false);
         $('#singer-modal').addClass('is-active');
         $('html').addClass('is-clipped');
+        // Neither a click nor the Tab key reaches the page behind the form: an Add link there
+        // would queue a song under no name. SPA navigation never swaps .container.
+        $('body > .container').prop('inert', true);
     }
 
     function closeSingerForm() {
         singerFormMode = null;
         $('#singer-modal').removeClass('is-active');
         $('html').removeClass('is-clipped');
+        $('body > .container').prop('inert', false);
     }
 
     /**
