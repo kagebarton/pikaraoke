@@ -301,7 +301,8 @@ Library state:
   ten edges reproduce exactly on All of Me, Someone Like You and Baby One More
   Time; Miss Independent was regenerated from Ken's `caption-edited.srt`, where
   line 2 is no longer re-aligned, so its pair sits at its pre-branch times
-  (1 ends 8.92, 2 starts 9.02). Owed: Ken's listen to those edges.
+  (1 ends 8.92, 2 starts 9.02). Ken listened 2026-11-06: most moves are too
+  short to hear; the longer ones (Baby One More Time, All of Me) are good.
 - **Guessed words left after the regen** (shown, timing guessed): Stronger 3,
   Climbing Uphill 3, Inconsolable 2, One In A Million 2, Tornado 2, A Little
   More Time On You 1, each on one line.
