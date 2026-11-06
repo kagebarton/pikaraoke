@@ -126,14 +126,8 @@
       // handle auto-close flash notifications
       setTimeout(function() { $("#notification").fadeOut()}, 3000);
 
-      // handle current user display: the registry's name, not the raw cookie
-      if (window.singer.joined) {
-        $("#current-user span").text(window.singer.name);
-        $("#current-user").removeClass("is-hidden");
-      } else {
-        // Join and the form's other handlers are in spa-navigation.js
-        openSingerForm("join");
-      }
+      // Navbar name (the registry's, not the raw cookie) or the join form; spa-navigation.js
+      applySingerState(window.singer);
     });
   </script>
   {% block scripts %}
