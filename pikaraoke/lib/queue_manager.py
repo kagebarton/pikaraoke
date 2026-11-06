@@ -369,14 +369,16 @@ class QueueManager:
         return True
 
     @_locked
-    def rename_user(self, old: str, new: str) -> None:
-        """Move every queued song of ``old``, held ones included, to ``new``."""
+    def rename_user(self, old: str, new: str) -> bool:
+        """Move every queued song of ``old``, held ones included, to ``new``.
+
+        Returns whether any moved. It tells nobody: the caller does, once every copy of the
+        name has moved.
+        """
         moved = [item for item in self.queue if item["user"] == old]
         for item in moved:
             item["user"] = new
-        if moved:
-            self._events.emit("queue_update")
-            self._events.emit("now_playing_update")
+        return bool(moved)
 
     @_locked
     def queue_edit(self, song_path: str, action: str) -> bool:
