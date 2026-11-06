@@ -333,3 +333,42 @@ deviated from this plan and why.)
   `vocal_volume` 0.0 (the controller's idle value) where it used to report the house default.
   `home.html` only reads it when `dual_stem` is true, so nothing visible changes.
 - **Not done:** `graphify update .` (no `graphify-out/` on this box).
+
+### Phase 2: route, rename moves, page state (executed 2026-11-06, Claude Sonnet 5.5)
+
+- **Commits:** `f0c4fb9` `feat(singers): renaming moves the guest's songs`; `32137ec`
+  `feat(singers): join and settings route`.
+- **Tests:** full suite 3397 passed before, 3451 after (+20 for the rename moves: 6 queue, 5
+  tracker, 4 playback controller, 5 end-to-end in `test_karaoke_rename_singer.py`; +34 in
+  `test_singer_routes.py`). Pre-commit clean on every changed file. The real `pikaraoke.app`
+  object was also smoke-tested: it lists `/singer`, has `inject_singer` among its context
+  processors, joins a guest, and answers an out-of-range key with a JSON 422.
+- **ui-check:** not applicable (server only; Phase 3).
+- **Deviations from the plan:**
+  1. `PlaybackController.rename_singer` emits `now_playing_update` itself (the event
+     `set_pitch` uses, which `Karaoke` already turns into the socket push) instead of
+     `Karaoke.rename_singer` calling `update_now_playing_socket`. It sets the name under
+     `_playback_lock` and refreshes the overlays after releasing it.
+  2. **The route and the context processor decode the `user` cookie** (`urllib.parse.unquote`).
+     `js-cookie` stores a space or an accent percent-encoded (`Mary%20Ann`) and Werkzeug does
+     not decode it, so without this a guest named `Mary Ann` would never count as joined and
+     would get a 409 on their own name.
+  3. `PermissionError` from `update` is a 403 JSON `{"success": false}`: it happens when a
+     second save already in flight carries the name the first save just renamed.
+  4. `semitones` and `vocal_volume` are required form fields (plan silent), so Phase 3's form
+     must always send both, 0 for the key when the key control is hidden.
+  5. `base.html`'s `window.singer = ...` line is **not** in this phase. Nothing reads it until
+     the form exists, so it goes in Phase 3 with its consumer (guard it as
+     `{{ (singer or {}) | tojson }}` for `test_search_render.py`).
+- **Found, not fixed (pre-existing, not from this feature):** `routes/processing.py` reads the
+  raw `user` cookie (`/processing/status` and `user_cancel_item`), so for a name with a space
+  or an accent the Processing page never marks a row as the guest's and the guest cancel is
+  refused. Phase 3's ui-check step "the Processing page still marks the row as the guest's"
+  fails for such a name unless those two reads decode too. Ken's call: fix in Phase 3 (two
+  lines, same decode as `routes/singer.py`) or leave.
+- **Known property:** a rename that lands while a song is starting waits for `play_file` to
+  release `_playback_lock` (the `mpv.play` wait, a few seconds), and every page render waits
+  behind it on the registry lock. Rare and brief; the lock order has no cycle.
+- **Self-review:** the two commits are multi-file concurrency (registry lock held across
+  three other locks), so the review is tracked as pending for the checkpoint after this phase.
+- **Not done:** `graphify update .` (no `graphify-out/` on this box).
