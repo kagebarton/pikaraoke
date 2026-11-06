@@ -641,3 +641,34 @@ deviated from this plan and why.)
   the queue, tracker and playback locks and now the notifications), so the review stays
   tracked as pending for the checkpoint after this phase.
 - **Not done:** `graphify update .` (no `graphify-out/` on this box).
+
+### Phase 2.2: review fixes of 2.1 (executed 2026-11-06, Claude Sonnet 5.5)
+
+- **Commits:** `95a9567` `docs(plans): singer-defaults Phase 2.2 review fixes` (the plan edit,
+  uncommitted at the start as the prompt said, committed alone first); step 1 `407f1b6`
+  `fix(singers): a rename whose songs all moved always saves`; step 2 `474d332`
+  `refactor(singers): one key rule for reserved names, and no re-key on a settings save`.
+- **Tests:** full suite 3483 passed before and after both steps (step 1 rewrote one test, so
+  no net new). Pre-commit clean on every changed file.
+- **ui-check:** not applicable (server only).
+- **Review findings** (numbers from the 2.2 table): 1, 4 and 6 fixed in step 1; 7 fixed in step
+  2; 2, 5, 9 and 10 written into Design "Accepted edges" by the plan edit; 3 is Phase 3's
+  (edit mode sends the name only when changed, with its check and Ken's check added to the
+  plan); 8 and 11 accepted as the table says. Nothing else to build here.
+- **Checked beyond the new tests:** with the catch removed from `Karaoke.rename_singer`, the
+  rewritten test fails (`RuntimeError: socket gone` reaches the caller of `save`); with it,
+  the save returns `("Michael", token)`, every copy and the registry say `Michael`, and one
+  ERROR record names `'Mike' -> 'Michael'` and carries the traceback.
+- **Not checked:** `MockKaraoke`'s new refusing `on_rename` is not exercised by any test (no
+  current test renames through the mock, as the plan says); step 2 was not mutation-checked,
+  only run against the existing taken, reserved, settings-only and case-only tests, as the
+  plan chose.
+- **Deviations from the plan:** none.
+- **Known properties (changed):** `on_rename` must not raise. If a move ever did, the exception
+  reaches the caller of `save` and the songs not yet moved stay under the old name, which is
+  free again. Written on the `save` docstring. The notifications are the only part that can
+  fail in practice, and they are caught.
+- **Self-review:** step 1 adds a catch after the moves and no lock or path; step 2 is a
+  refactor. Both covered by the self-review above, so no review is pending from this phase
+  (the review of Phase 2.1 has run; it produced this phase).
+- **Not done:** `graphify update .` (no `graphify-out/` on this box).
