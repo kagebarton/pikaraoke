@@ -1101,6 +1101,14 @@ class TestOwnedByAny:
         assert not lr._owned_by_any("Unknown.srt", ["Song"], {"Song", "Other"})
 
 
+class TestOwnedIn:
+    def test_a_listed_song_whose_video_is_gone_still_owns_its_files(self, tmp_path):
+        """Its files don't fall to a shorter sibling that is still on disk."""
+        (tmp_path / "Song.mp4").write_text("video")
+
+        assert lr._owned_in(tmp_path, ["Song.live"])("Song.live.srt")
+
+
 class TestRemove:
     def test_removes_a_file_and_a_tree(self, tmp_path):
         file = tmp_path / "a.txt"
