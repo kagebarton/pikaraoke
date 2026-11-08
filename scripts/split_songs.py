@@ -144,12 +144,14 @@ class Show:
         return matches[0]
 
 
-def run(cmd: list[str]) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, capture_output=True, text=True, check=True)
-
-
-def run_bytes(cmd: list[str]) -> bytes:
-    return subprocess.run(cmd, capture_output=True, check=True).stdout
+def run(cmd: list[str], text: bool = True) -> subprocess.CompletedProcess:
+    """``cmd``, exiting with the tool's own reason when it fails: a source whose first
+    subtitle stream is missing or a bitmap, or whose audio has no centre channel."""
+    result = subprocess.run(cmd, capture_output=True, text=text)
+    if result.returncode:
+        err = result.stderr if text else result.stderr.decode(errors="replace")
+        raise SystemExit(f"{cmd[0]} failed: {err.strip()}")
+    return result
 
 
 def parse_srt(text: str) -> list[Cue]:
@@ -162,7 +164,10 @@ def parse_srt(text: str) -> list[Cue]:
 
 
 def num(cues: list[Cue], n: int) -> Cue:
-    return next(c for c in cues if c.num == n)
+    for c in cues:
+        if c.num == n:
+            return c
+    raise SystemExit(f"no cue {n} in the subtitles ({len(cues)} cues)")
 
 
 @cache
@@ -188,10 +193,11 @@ class Voice:
 
     @classmethod
     def from_file(cls, path: Path, t0: float) -> "Voice":
-        pcm = run_bytes(
+        pcm = run(
             ["ffmpeg", "-v", "error", "-i", str(path), "-ac", "1", "-ar", str(VOICE_RATE),
-             "-f", "f32le", "-"]
-        )  # fmt: skip
+             "-f", "f32le", "-"],
+            text=False,
+        ).stdout  # fmt: skip
         a = np.frombuffer(pcm, np.float32)
         n = int(VOICE_FRAME * VOICE_RATE)
         frames = a[: len(a) // n * n].reshape(-1, n)
@@ -216,8 +222,8 @@ class Episode:
 
     def __init__(self, show: Show, code: str):
         self.show = show
-        self.key = code or "film"  # cache file names
         self.src = show.find(show.source, code)
+        self.key = self.src.stem  # cache file names, so two sources never share one
         self.srt = show.find(show.subtitles, code) if show.subtitles else None
 
     @cached_property
@@ -273,7 +279,9 @@ class Episode:
         if not path.exists():
             seek = ["-ss", str(t0), "-t", str(t1 - t0), "-i", str(self.src), "-map", "0:a:0"]
             if self.has_centre:
-                run(["ffmpeg", "-v", "error", "-y", *seek, "-af", "pan=mono|c0=FC", str(path)])
+                part = path.with_suffix(".part.wav")  # a cut-short run leaves no cache behind
+                run(["ffmpeg", "-v", "error", "-y", *seek, "-af", "pan=mono|c0=FC", str(part)])
+                part.rename(path)
             else:
                 mix = self._cached(t0, t1, ".wav")
                 run(["ffmpeg", "-v", "error", "-y", *seek, "-ac", "2", "-ar", "44100", str(mix)])
