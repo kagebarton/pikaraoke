@@ -6,6 +6,7 @@ import os
 import shlex
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from pikaraoke.lib import ytasr
@@ -202,40 +203,58 @@ def build_ytdl_download_command(
     return cmd
 
 
-def get_search_results(query: str) -> list[list[str]]:
-    """Search YouTube for videos matching the query.
+@dataclass(frozen=True)
+class SearchResult:
+    """One YouTube search hit, as yt-dlp's flat search reports it."""
 
-    Args:
-        query: Search query string.
+    title: str
+    url: str
+    id: str
+    channel: str  # "" when YouTube gives none
+    duration: str  # "M:SS", or "" when YouTube gives none
+    channel_verified: bool
+    description: str  # YouTube's snippet; art tracks start "Provided to YouTube by"
 
-    Returns:
-        List of [title, url, video_id, channel, duration] for each result.
-        Duration is formatted as M:SS; channel and duration may be empty strings.
+
+def _parse_search_line(line: str) -> SearchResult | None:
+    """Parse one yt-dlp JSON line; None for a blank line or a row without a title and URL."""
+    if len(line) <= 2:
+        return None
+    j = json.loads(line)
+    if "title" not in j or "url" not in j:
+        return None
+    duration_raw = j.get("duration")
+    duration = ""
+    if isinstance(duration_raw, (int, float)):
+        seconds = int(duration_raw)
+        duration = f"{seconds // 60}:{seconds % 60:02d}"
+    return SearchResult(
+        title=j["title"],
+        url=j["url"],
+        id=j["id"],
+        channel=j.get("channel") or j.get("uploader") or "",
+        duration=duration,
+        channel_verified=bool(j.get("channel_is_verified")),
+        description=j.get("description") or "",
+    )
+
+
+def get_search_results(query: str, count: int) -> list[SearchResult]:
+    """Search YouTube for the first ``count`` videos matching the query.
+
+    Raises:
+        subprocess.CalledProcessError: yt-dlp failed.
     """
     logging.info(f"Searching YouTube for: {query}")
-    num_results = 10
-    yt_search = f'ytsearch{num_results}:"{query}"'
+    yt_search = f'ytsearch{count}:"{query}"'
     cmd = yt_dlp_cmd + ["-j", "--no-playlist", "--flat-playlist"] + _impersonate_args()
     cmd += [yt_search]
     logging.debug(f"yt-dlp search command: {' '.join(cmd)}")
     try:
         output = subprocess.check_output(cmd).decode("utf-8", "ignore")
         logging.debug(f"Search results: {output}")
-        results = []
-        for line in output.split("\n"):
-            if len(line) <= 2:
-                continue
-            j = json.loads(line)
-            if "title" not in j or "url" not in j:
-                continue
-            channel = j.get("channel") or j.get("uploader") or ""
-            duration_raw = j.get("duration")
-            duration_str = ""
-            if isinstance(duration_raw, (int, float)):
-                seconds = int(duration_raw)
-                duration_str = f"{seconds // 60}:{seconds % 60:02d}"
-            results.append([j["title"], j["url"], j["id"], channel, duration_str])
-        return results
+        parsed = (_parse_search_line(line) for line in output.split("\n"))
+        return [result for result in parsed if result is not None]
     except subprocess.CalledProcessError as e:
         logging.debug(f"Error while executing search: {e}")
         raise

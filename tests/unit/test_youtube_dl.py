@@ -9,12 +9,15 @@ import pytest
 
 from pikaraoke.lib.youtube_dl import (
     CaptionDownloadFailed,
+    SearchResult,
+    _parse_search_line,
     _select_asr_track,
     _select_en_srt,
     build_ytdl_download_command,
     download_auto_en_subs,
     download_manual_en_subs,
     get_preview_info,
+    get_search_results,
     get_youtube_id_from_url,
     get_youtubedl_version,
     upgrade_youtubedl,
@@ -389,6 +392,87 @@ class TestUpgradeYoutubedl:
             result = upgrade_youtubedl()
             assert result == "2024.01.01"
             mock_version.assert_called_once_with()
+
+
+class TestParseSearchLine:
+    def test_reads_every_field_a_ranking_needs(self):
+        line = json.dumps(
+            {
+                "id": "dQw4w9WgXcQ",
+                "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                "title": "Rick Astley - Never Gonna Give You Up",
+                "channel": "Rick Astley",
+                "channel_is_verified": True,
+                "duration": 213,
+                "description": "Provided to YouTube by Label",
+            }
+        )
+
+        assert _parse_search_line(line) == SearchResult(
+            title="Rick Astley - Never Gonna Give You Up",
+            url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            id="dQw4w9WgXcQ",
+            channel="Rick Astley",
+            duration="3:33",
+            channel_verified=True,
+            description="Provided to YouTube by Label",
+        )
+
+    def test_missing_optional_fields_become_empty(self):
+        line = json.dumps(
+            {
+                "id": "aaaaaaaaaaa",
+                "url": "u",
+                "title": "t",
+                "channel_is_verified": None,
+                "duration": None,
+                "description": None,
+            }
+        )
+
+        result = _parse_search_line(line)
+
+        assert (result.channel, result.duration, result.description) == ("", "", "")
+        assert result.channel_verified is False
+
+    def test_channel_falls_back_to_uploader(self):
+        line = json.dumps({"id": "a", "url": "u", "title": "t", "uploader": "Some Uploader"})
+
+        assert _parse_search_line(line).channel == "Some Uploader"
+
+    def test_duration_pads_seconds(self):
+        line = json.dumps({"id": "a", "url": "u", "title": "t", "duration": 65.9})
+
+        assert _parse_search_line(line).duration == "1:05"
+
+    @pytest.mark.parametrize("line", ["", "\n", "{}", '{"id": "a", "title": "t"}'])
+    def test_a_blank_line_or_a_row_without_title_and_url_is_skipped(self, line):
+        assert _parse_search_line(line) is None
+
+
+class TestGetSearchResults:
+    @staticmethod
+    def _stdout(*ids: str) -> bytes:
+        rows = [{"id": i, "url": f"https://youtu.be/{i}", "title": f"Song {i}"} for i in ids]
+        return ("\n".join(json.dumps(row) for row in rows) + "\n").encode()
+
+    def test_asks_yt_dlp_for_count_results(self):
+        with patch("subprocess.check_output", return_value=b"") as mock_check:
+            get_search_results("rick astley", 30)
+
+        assert mock_check.call_args[0][0][-1] == 'ytsearch30:"rick astley"'
+
+    def test_returns_the_parsed_rows_in_order(self):
+        with patch("subprocess.check_output", return_value=self._stdout("aaa", "bbb")):
+            results = get_search_results("q", 10)
+
+        assert [r.id for r in results] == ["aaa", "bbb"]
+
+    def test_a_yt_dlp_failure_propagates(self):
+        error = subprocess.CalledProcessError(1, "yt-dlp")
+        with patch("subprocess.check_output", side_effect=error):
+            with pytest.raises(subprocess.CalledProcessError):
+                get_search_results("q", 10)
 
 
 class TestGetPreviewInfo:

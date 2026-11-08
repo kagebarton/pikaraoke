@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Iterable
+from dataclasses import dataclass
 
 import flask_babel
 from flask import current_app, jsonify, render_template, request, url_for
@@ -17,7 +18,7 @@ from pikaraoke.lib.genius_lyrics import clean_genius_query
 from pikaraoke.lib.library_regen import check_video_caption
 from pikaraoke.lib.metadata_parser import extract_youtube_id
 from pikaraoke.lib.song_match import SongIndex, similar_songs
-from pikaraoke.lib.youtube_dl import get_preview_info, get_search_results
+from pikaraoke.lib.youtube_dl import SearchResult, get_preview_info, get_search_results
 
 _ = flask_babel.gettext
 
@@ -25,6 +26,9 @@ search_bp = Blueprint("search", __name__)
 
 # The search page's one note lists library copies, so a long list would bury the results.
 MAX_SIMILAR_SONGS = 3
+
+# YouTube results fetched for a search.
+PAGE_SIZE = 10
 
 # YouTube ID validation: exactly 11 chars of the allowed character set
 _YT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
@@ -51,18 +55,26 @@ class DownloadBody(Schema):
     )
 
 
-def _library_copies(songs: Iterable[str], search_results: list[tuple]) -> list[str]:
+@dataclass(frozen=True)
+class SearchRow:
+    """One result card: the YouTube hit and the library file that already carries its ID."""
+
+    result: SearchResult
+    existing_path: str | None
+
+
+def _library_copies(songs: Iterable[str], results: list[SearchResult]) -> list[str]:
     """Library songs that look like a result found under another YouTube ID.
 
     A song that carries a result's own ID is left out: that row says "Add to
     Queue" itself.
     """
     library = SongIndex.from_songs(songs)
-    result_ids = {result[2] for result in search_results}
+    result_ids = {result.id for result in results}
     copies = dict.fromkeys(
         path
-        for title, *_ in search_results
-        for path in similar_songs(title, library)
+        for result in results
+        for path in similar_songs(result.title, library)
         if extract_youtube_id(path) not in result_ids
     )
     return list(copies)[:MAX_SIMILAR_SONGS]
@@ -75,25 +87,25 @@ def search():
     site_name = get_site_name()
     search_string = request.args.get("search_string")
     if search_string:
-        raw_results = get_search_results(search_string)
+        results = get_search_results(search_string, PAGE_SIZE)
         # Read from the song list, not find_by_id, which misses "Title [ID].mp4" and subfolders.
         library_ids = {
             video_id: path
             for path in k.song_manager.songs
             if (video_id := extract_youtube_id(path))
         }
-        search_results = [(*r, library_ids.get(r[2])) for r in raw_results]
-        library_copies = _library_copies(k.song_manager.songs, search_results)
+        search_rows = [SearchRow(r, library_ids.get(r.id)) for r in results]
+        library_copies = _library_copies(k.song_manager.songs, results)
     else:
         search_string = None
-        search_results = None
+        search_rows = None
         library_copies = []
     return render_template(
         "search.html",
         site_title=site_name,
         title="Search",
         songs=k.song_manager.songs,
-        search_results=search_results,
+        search_rows=search_rows,
         similar_songs=library_copies,
         search_string=search_string,
         genius_client=k.genius_client,
