@@ -28,7 +28,8 @@ _COLLAB = re.compile(
 )
 _CHANNEL_NOISE = re.compile(r"\b(official|vevo|music|videos?|records|topic|channel|tv)\b", re.I)
 # Uploads that are about the song but are not the record: the app overlays its own lyrics, and
-# live, remix or acapella audio does not match the record.
+# live, remix or acapella audio does not match the record. A mark the query holds is the song's
+# own name ("Live and Let Die") or the version asked for, so only marks beyond the query's count.
 _NOT_THE_RECORD = re.compile(
     r"\b(lyrics?|sing[- ]?along|live|concert|cover|karaoke|remix|instrumental|acoustic|"
     r"trailer|reaction|behind the|choreography|tutorial|lesson|sped up|slowed|8d|"
@@ -51,6 +52,11 @@ def _has_letters_without_ascii(text: str) -> bool:
         char.isalpha() and not unicodedata.normalize("NFKD", char).encode("ascii", "ignore")
         for char in text
     )
+
+
+def _marks(text: str) -> Counter[str]:
+    """Each not-the-record mark in ``text`` ("live", "lyric", "sing along"), counted."""
+    return Counter(" ".join(_words(match.group())) for match in _NOT_THE_RECORD.finditer(text))
 
 
 def _compact(text: str) -> str:
@@ -157,7 +163,7 @@ def official_kind(result: SearchResult, query: str, artist: str | None) -> Offic
     track, a trusted channel named for the artist, or a verified label channel (DisneyMusicVEVO)
     whose title says it is official.
     """
-    if not artist or _NOT_THE_RECORD.search(result.title):
+    if not artist or _marks(result.title) - _marks(query):
         return None
     query_words = _words(query)
     if not _is_the_song(result.title, query_words, artist):
