@@ -936,7 +936,9 @@ def backup_text_folders(folder: Path, stems: list[str] | None = None) -> Path | 
     """Snapshot the regenerable output folders into ``regen_backups/<UTC>/``.
 
     ``stems``: copy only those songs' own files (see :func:`_owner`) from
-    each folder instead of the whole folder.
+    each folder instead of the whole folder. A listed song counts as a song
+    even when its video is gone, as in :func:`song_files`, so deleting it
+    backs up what the delete removes.
 
     Returns the backup root, or None when nothing was copied.
     """
@@ -952,7 +954,7 @@ def backup_text_folders(folder: Path, stems: list[str] | None = None) -> Path | 
                 copied.append(sub)
         return backup_root if copied else None
 
-    all_stems = song_stems(folder)
+    all_stems = song_stems(folder) | set(stems)
     for sub in BACKUP_DIRS:
         src = folder / sub
         if not src.is_dir():
