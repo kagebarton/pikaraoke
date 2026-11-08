@@ -99,13 +99,14 @@ ATTRIBUTION_PATTERNS = [
     ),
 ]
 
-# A trailing bracket holding one of these is upload junk ("(Official HD Video)",
+# A trailing bracket holding a junk word is upload junk ("(Official HD Video)",
 # "[4K]"). Any other bracket is part of the name ("(Live)", "(feat. Latto)",
-# "(Titanic, 1997)") and stays.
-_JUNK_BRACKET = re.compile(
-    r"\s*(?:\([^()]*|\[[^\[\]]*)"
+# "(Titanic, 1997)") and stays. Two patterns, not one, so a long title can't
+# make the match backtrack over every junk word.
+_TRAILING_BRACKET = re.compile(r"(\([^()]*\)|\[[^\[\]]*\])\s*$")
+_JUNK_WORD = re.compile(
     r"\b(?:official|video|audio|lyrics?|visuali[sz]er|mv|m/v|hd|hq|uhd|4k|\d{3,4}p"
-    r"|remaster(?:ed)?|blu-ray|karaoke|instrumental)\b[^()\[\]]*[)\]]\s*$",
+    r"|remaster(?:ed)?|blu-ray|karaoke|instrumental)\b",
     re.IGNORECASE,
 )
 
@@ -556,12 +557,15 @@ def _extract_attribution_artist(name: str) -> str | None:
     return None
 
 
-def _strip_junk_brackets(name: str) -> str:
-    """Drop trailing junk brackets, however many are stacked."""
-    prev = None
-    while prev != name:
-        prev = name
-        name = _JUNK_BRACKET.sub("", name)
+def _strip_trailing_junk(name: str) -> str:
+    """Drop trailing junk brackets, however many are stacked, then trailing noise."""
+    while (bracket := _TRAILING_BRACKET.search(name)) and _JUNK_WORD.search(bracket[1]):
+        name = name[: bracket.start()].rstrip()
+    for noise_pat in TRAILING_NOISE_PATTERNS:
+        prev = None
+        while prev != name:
+            prev = name
+            name = noise_pat.sub("", name)
     return name
 
 
@@ -569,12 +573,7 @@ def _strip_attribution_and_noise(name: str) -> str:
     """Remove the matched attribution phrase and trailing noise from the title."""
     for pattern in ATTRIBUTION_PATTERNS:
         name = pattern.sub("", name)
-    name = _strip_junk_brackets(name)
-    for noise_pat in TRAILING_NOISE_PATTERNS:
-        prev = None
-        while prev != name:
-            prev = name
-            name = noise_pat.sub("", name)
+    name = _strip_trailing_junk(name)
     # Strip dangling separator left by noise removal (e.g. "Title -")
     # before the caller composes "Title - Artist"
     name = re.sub(r"\s*-\s*$", "", name)
@@ -590,7 +589,8 @@ def regex_tidy(filename: str) -> str:
     4. Normalize separators and whitespace
     """
     name = EMOJI_PATTERN.sub("", filename)
-    name = name.replace("_", " ")
+    # Collapse whitespace first: a long run of it makes every ``\s*`` below quadratic.
+    name = re.sub(r"\s+", " ", name.replace("_", " "))
 
     # Try to extract artist from attribution phrases
     artist = _extract_attribution_artist(name)
@@ -598,13 +598,7 @@ def regex_tidy(filename: str) -> str:
         title = _strip_attribution_and_noise(name)
         name = f"{title} - {artist}"
     else:
-        name = _strip_junk_brackets(name)
-        # Iteratively strip trailing noise patterns
-        for noise_pat in TRAILING_NOISE_PATTERNS:
-            prev = None
-            while prev != name:
-                prev = name
-                name = noise_pat.sub("", name)
+        name = _strip_trailing_junk(name)
 
     # Normalize separators: en-dash/em-dash -> " - "
     name = re.sub(r"\s*[\u2013\u2014]\s*", " - ", name)
