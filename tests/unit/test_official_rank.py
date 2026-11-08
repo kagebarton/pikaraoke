@@ -175,3 +175,20 @@ def test_pick_artist_reads_the_artist_out_of_a_title(titles, artist):
     results = [_row(title) for title in titles]
 
     assert pick_artist(results, "some song") == artist
+
+
+@pytest.mark.parametrize("query", ["夜に駆ける", "yoasobi 夜に駆ける"])
+def test_a_query_the_song_check_cannot_read_picks_none(query):
+    results = [
+        _row("YOASOBI「夜に駆ける」Official Music Video", channel="YOASOBI"),
+        _row("YOASOBI「アイドル」Official Music Video", channel="YOASOBI"),
+        _row("YOASOBI - Idol (Official Music Video)", channel="YOASOBI"),
+    ]
+
+    assert pick_artist(results, query) is None
+
+
+def test_accented_latin_is_still_read():
+    results = [_row("Beyoncé - Halo"), _row("Beyoncé - Halo (Official Video)")]
+
+    assert pick_artist(results, "beyoncé halo") == "beyonce"

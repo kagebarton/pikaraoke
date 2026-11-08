@@ -45,6 +45,14 @@ def _words(text: str) -> list[str]:
     return re.findall(r"[a-z0-9]+", ascii_text.replace("'", "").replace("’", ""))
 
 
+def _has_letters_without_ascii(text: str) -> bool:
+    """Kana, hangul, Cyrillic and the like: letters that ``_words`` drops, so no match sees them."""
+    return any(
+        char.isalpha() and not unicodedata.normalize("NFKD", char).encode("ascii", "ignore")
+        for char in text
+    )
+
+
 def _compact(text: str) -> str:
     """The words joined without spaces, so the channel "lionelrichie" equals "Lionel Richie"."""
     return "".join(_words(text))
@@ -105,7 +113,12 @@ def pick_artist(results: Sequence[SearchResult], query: str) -> str | None:
     Counts credits over the trusted rows. The winner needs at least two and strictly more than
     the runner-up. The caller passes only the first page: over more rows the vote drifts to
     whoever uploaded the most variants of the song.
+
+    Also None for a query in a script the song check cannot read ("夜に駆ける", "BTS 봄날"):
+    with no song words left to match, every upload of the artist's would pass as the song.
     """
+    if _has_letters_without_ascii(query):
+        return None
     query_words = _words(query)
     votes = Counter(
         artist
