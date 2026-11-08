@@ -31,7 +31,7 @@ Sources gathered on 2026-10-26:
 
 ## Ruled: own branch or plan
 
-- **Delete song and Rename leave the song's files behind.** Upstream's
+- ~~**Delete song and Rename leave the song's files behind.** Upstream's
   `SongManager._get_companion_files` knows only the `.srt`, the two stems and
   the `.ass`, so a delete leaves the bundle, the `.lrc`, a custom lyric sheet
   (`lyrics/<stem>.custom.txt`, added by `custom_lyrics`) and the `.srt.generated`,
@@ -40,7 +40,12 @@ Sources gathered on 2026-10-26:
   re-download under the same name goes back to the old sheet at its next regen
   (`custom_lyrics` code review, row 6, on tag `archive/custom_lyrics`). Also: a renamed song on the needs-a-pick list stays listed under its old path,
   and a pick of it fails each time. Ken, 2026-10-23: small branch off `dev`.
-  Record: web plan, D9 and 8.1f.
+  Record: web plan, D9 and 8.1f.~~
+  Fixed 2026-11-08 on branch `song_files` (`4393ee5`, `3d1d943`): rename and
+  delete carry every file a song owns, and delete backs up its text files
+  first. Rename and delete refuse a song that is processing or waiting for a
+  pick, so a renamed song can't be left on the needs-a-pick list. Record:
+  `plans/song-files-rename-delete.md`.
 - ~~**Upload hand-checked lyrics** as the lyric source of a Repair, Regenerate or
   Reset. Ken, 2026-10-23: a later plan of its own, after `web_library_tools`
   lands; needs its own design (what counts as the current pick, how an uploaded
@@ -81,6 +86,9 @@ that queued them is already closed; 7.1f).
   with the search page. Record: web plan, 6.1e and the Phase 6 row.
 - **An empty LRCLIB title makes Search do nothing**; a hint would be new
   wording. Record: web plan, 6.1e.
+- **An open bulk run keeps a renamed or deleted song under its old path**;
+  queuing the run then fails that song's job. Pre-existing. Record:
+  `plans/song-files-rename-delete.md` on branch `song_files`, Not covered.
 - ~~**The repair page's LRCLIB search is field-scoped**: it reused the
   pipeline's `lrclib.search` (`track_name` + `artist_name`), so a word that sits
   in another field (a show name in the album, an artist credited differently)
@@ -245,21 +253,23 @@ From the `library_tools` real-world run, 2026-10-20. Record: `library-tools.md`.
 
 ## Song rename (pre-existing on `dev`)
 
-- **A new name holding `/` or `..` leaves the song's folder.** On Linux and
+- ~~**A new name holding `/` or `..` leaves the song's folder.** On Linux and
   macOS `sanitize_filename` keeps both, so renaming to `../Out` moves the video
   out of the library and its captions and lyrics into the library root, and the
   DB then points outside the library. A title like `AC/DC - Thunderstruck`
   fails with nothing moved, showing "No such file or directory". Admin only. One
   line fixes both: replace `/` with `-` on every platform, as Windows already
   does. Not ruled. Record: `plans/song-files-rename-delete.md` on branch
-  `song_files`, follow-up gap 4.
-- **An empty new name hides the song.** The batch renamer accepts a blank name
+  `song_files`, follow-up gap 4.~~
+  Fixed 2026-11-08 on branch `song_files` as `fa2cf36`.
+- ~~**An empty new name hides the song.** The batch renamer accepts a blank name
   box: the video becomes `.mp4` and its files `.srt`, `.custom.txt` and so on,
   which the library scan skips, so the song drops out of the library while the
   DB points at `.mp4`. The edit page appends the YouTube ID, so there it only
   hits a song without one. Admin only. Refusing a name that is blank after
   sanitizing, in `SongManager.rename`, covers both pages. Not ruled. Record:
-  `plans/song-files-rename-delete.md` on branch `song_files`, review 2026-11-08.
+  `plans/song-files-rename-delete.md` on branch `song_files`, review 2026-11-08.~~
+  Fixed 2026-11-08 on branch `song_files` as `fa2cf36`.
 
 ## Web pages (pre-existing on `dev`)
 
