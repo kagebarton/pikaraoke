@@ -534,8 +534,17 @@ class TestRegexTidy:
     def test_keeps_chinese_korean_and_japanese_text(self, name):
         assert regex_tidy(name) == name
 
-    def test_strips_a_symbol_emoji(self):
-        assert regex_tidy("Artist - Song ♥️") == "Artist - Song"
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "Artist - Song ♥️",
+            "▶ Artist - Song",
+            "Artist - Song (Official Video) ⬇",
+            "Artist - Song 〽️",
+        ],
+    )
+    def test_strips_symbol_emoji(self, name):
+        assert regex_tidy(name) == "Artist - Song"
 
     @pytest.mark.parametrize(
         "name",
