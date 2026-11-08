@@ -130,6 +130,42 @@ def test_browse_renders_status_badges(mock_get, _site, _admin, client):
     assert ">processing<" in body
 
 
+LETTER_SONGS = [
+    "/songs/99 Luftballons---abc123def45.mp4",
+    "/songs/'Defying Gravity'---bcd234efg56.mp4",
+    "/songs/David Bowie - Heroes---cde345fgh67.mp4",
+    "/songs/Elton John - Rocket Man---def456ghi78.mp4",
+    "/songs/周杰倫 - 晴天---efg567hij89.mp4",
+]
+
+
+@patch("pikaraoke.routes.files.is_admin", return_value=False)
+@patch("pikaraoke.routes.files.get_site_name", return_value="PiKaraoke")
+@patch("pikaraoke.routes.files.get_karaoke_instance")
+def test_browse_letter_finds_a_title_behind_a_symbol(mock_get, _site, _admin, client):
+    """'Defying Gravity' shows on the D page, beside the D artists."""
+    mock_get.return_value = _mock_karaoke(LETTER_SONGS)
+
+    body = client.get("/browse?letter=d").get_data(as_text=True)
+
+    assert "Defying Gravity" in body and "David Bowie" in body
+    assert "Elton John" not in body and "Luftballons" not in body
+
+
+@patch("pikaraoke.routes.files.is_admin", return_value=False)
+@patch("pikaraoke.routes.files.get_site_name", return_value="PiKaraoke")
+@patch("pikaraoke.routes.files.get_karaoke_instance")
+def test_browse_hash_page_holds_digits_and_other_scripts(mock_get, _site, _admin, client):
+    """The "#" entry lists what no letter takes, and its title shows "#"."""
+    mock_get.return_value = _mock_karaoke(LETTER_SONGS)
+
+    body = client.get("/browse?letter=numeric").get_data(as_text=True)
+
+    assert "Luftballons" in body and "周杰倫" in body
+    assert "Defying Gravity" not in body and "David Bowie" not in body
+    assert '"#"' in body and "NUMERIC" not in body
+
+
 @patch("pikaraoke.routes.files.is_admin", return_value=False)
 @patch("pikaraoke.routes.files.get_site_name", return_value="PiKaraoke")
 @patch("pikaraoke.routes.files.get_karaoke_instance")

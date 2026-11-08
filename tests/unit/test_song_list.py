@@ -4,7 +4,7 @@ import threading
 
 import pytest
 
-from pikaraoke.lib.song_list import SongList
+from pikaraoke.lib.song_list import SongList, browse_letter
 
 
 class TestSongListBasicOperations:
@@ -167,6 +167,19 @@ class TestSongListIteration:
             "/songs/Zeta.mp4",
         ]
 
+    def test_sort_skips_leading_symbols(self):
+        """A title in quotes or behind a hashtag sorts where the letter bar files it."""
+        sl = SongList()
+        for name in ["Zeta", "#OutOfOz - Song", "Elton John - Song", "'Defying Gravity'", "Cat"]:
+            sl.add(f"/songs/{name}.mp4")
+        assert list(sl) == [
+            "/songs/Cat.mp4",
+            "/songs/'Defying Gravity'.mp4",
+            "/songs/Elton John - Song.mp4",
+            "/songs/#OutOfOz - Song.mp4",
+            "/songs/Zeta.mp4",
+        ]
+
     def test_bool_empty(self):
         """Test bool conversion for empty list."""
         sl = SongList()
@@ -177,6 +190,28 @@ class TestSongListIteration:
         sl = SongList()
         sl.add("/songs/test.mp4")
         assert bool(sl) is True
+
+
+@pytest.mark.parametrize(
+    "name, letter",
+    [
+        ("Artist - Song", "a"),
+        ("Édith Piaf - Song", "e"),
+        ("'Defying Gravity'", "d"),
+        ("“Golden”", "g"),
+        ("#OutOfOz - Song", "o"),
+        ("...Baby One More Time", "b"),
+        ("99 Luftballons", "#"),
+        ("周杰倫 - 晴天", "#"),
+        ("정국 - Seven", "#"),
+        ("Øystein - Song", "#"),
+        ("♥", "#"),
+        ("", "#"),
+    ],
+)
+def test_browse_letter(name, letter):
+    """Leading symbols are skipped; anything not starting with a-z files under "#"."""
+    assert browse_letter(name) == letter
 
 
 class TestSongListRename:

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import os
-import unicodedata
 from urllib.parse import unquote
 
 import flask_babel
@@ -15,6 +14,7 @@ from marshmallow import Schema, fields
 
 from pikaraoke.lib.current_app import get_karaoke_instance, get_site_name, is_admin
 from pikaraoke.lib.metadata_parser import youtube_id_suffix
+from pikaraoke.lib.song_list import browse_letter
 
 _ = flask_babel.gettext
 
@@ -68,23 +68,13 @@ def browse():
     available_songs = k.song_manager.songs
 
     letter = request.args.get("letter")
-
+    if letter == "numeric":  # the "#" entry's link: a bare "#" would start the URL's fragment
+        letter = "#"
     if letter:
-        result = []
-        if letter == "numeric":
-            for song in available_songs:
-                f = k.song_manager.filename_from_path(song)[0]
-                if f.isnumeric():
-                    result.append(song)
-        else:
-            for song in available_songs:
-                f = k.song_manager.filename_from_path(song).lower()
-                # Normalize accented characters so e.g. "Édith" matches "e"
-                normalized = unicodedata.normalize("NFD", f)
-                base_char = normalized[0] if normalized else ""
-                if base_char == letter.lower():
-                    result.append(song)
-        available_songs = result
+        display_name = k.song_manager.filename_from_path
+        available_songs = [
+            song for song in available_songs if browse_letter(display_name(song)) == letter.lower()
+        ]
 
     if request.args.get("sort") == "date":
         songs = sorted(available_songs, key=lambda x: os.path.getmtime(x))

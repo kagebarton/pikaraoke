@@ -2,9 +2,32 @@
 
 import logging
 import os
+import re
 import threading
 import unicodedata
 from collections.abc import Iterator
+
+_LEADING_SYMBOLS = re.compile(r"^[\W_]+")
+
+
+def browse_key(name: str) -> str:
+    """``name`` as browsing sorts and files it: lowercase, accents dropped, leading symbols skipped.
+
+    So "Céline" sorts beside "ce", not after "z", and "'Defying Gravity'" and
+    "#OutOfOz" sort among the D's and O's.
+    """
+    decomposed = unicodedata.normalize("NFD", name.lower())
+    folded = "".join(c for c in decomposed if unicodedata.category(c) != "Mn")
+    return _LEADING_SYMBOLS.sub("", folded)
+
+
+def browse_letter(name: str) -> str:
+    """The browse bar entry ``name`` is filed under: ``a`` to ``z``, or ``#`` for the rest.
+
+    The rest is digits, other scripts, and letters that don't reduce to a-z (``ø``, ``ß``).
+    """
+    first = browse_key(name)[:1]
+    return first if "a" <= first <= "z" else "#"
 
 
 class SongList:
@@ -38,19 +61,8 @@ class SongList:
         """
         self._songs: set[str] = set()
         self._sorted_cache: list[str] | None = None
-        self._sort_key = sort_key or (lambda f: self._normalize_sort_key(f))
+        self._sort_key = sort_key or (lambda f: browse_key(os.path.basename(f)))
         self._lock = threading.Lock()
-
-    @staticmethod
-    def _normalize_sort_key(file_path: str) -> str:
-        """Generate a sort key that treats accented characters like their base letter.
-
-        Uses Unicode NFD normalization to decompose characters (e.g. e + accent),
-        then strips combining marks so "Celine" sorts next to "ce" not after "z".
-        """
-        name = os.path.basename(file_path).lower()
-        decomposed = unicodedata.normalize("NFD", name)
-        return "".join(c for c in decomposed if unicodedata.category(c) != "Mn")
 
     def _invalidate_cache(self) -> None:
         """Mark the sorted cache as stale."""
