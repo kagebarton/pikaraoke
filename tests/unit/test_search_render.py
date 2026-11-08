@@ -1,14 +1,15 @@
 """Render test for the /search results page.
 
-Guards the contract between the search route and search.html. The route enriches
-each YouTube result into a 6-tuple (title, url, id, channel, duration,
-existing_path — the library file carrying that ID), but the master-era template
-unpacked only 5 names in its results loop, raising ValueError (too many values
-to unpack) -> 500 the moment a search returned results. The bare /search page
-rendered fine, so a test that actually submits a query is required to catch it.
+Guards the contract between the search route and search.html. The route wraps
+each YouTube result in a SearchRow (the result and existing_path — the library
+file carrying that ID). The master-era template unpacked a positional tuple and
+was a name short, raising ValueError (too many values to unpack) -> 500 the
+moment a search returned results. The bare /search page rendered fine, so a test
+that actually submits a query is required to catch it.
 """
 
 import os
+import re
 from unittest.mock import MagicMock, patch
 from urllib.parse import quote
 
@@ -22,6 +23,7 @@ if not hasattr(werkzeug, "__version__"):
 
 import pikaraoke
 from pikaraoke.lib.song_manager import SongManager
+from pikaraoke.lib.youtube_dl import SearchResult
 from pikaraoke.routes.search import search_bp
 
 # Endpoints base.html / search.html resolve via url_for but are not on search_bp.
@@ -34,16 +36,27 @@ _STUB_ENDPOINTS = (
     "queue.enqueue",
 )
 
-# What get_search_results returns: [title, url, id, channel, duration] per row.
-_RAW_RESULTS = [
-    [
-        "Never Gonna Give You Up",
-        "https://youtu.be/dQw4w9WgXcQ",
-        "dQw4w9WgXcQ",
-        "Rick Astley",
-        "3:33",
-    ],
-    ["Africa", "https://youtu.be/FTQbiNvZqaY", "FTQbiNvZqaY", "Toto", "4:55"],
+
+def _result(
+    title: str,
+    video_id: str,
+    channel: str = "Some Channel",
+    duration: str = "3:00",
+) -> SearchResult:
+    return SearchResult(
+        title=title,
+        url=f"https://youtu.be/{video_id}",
+        id=video_id,
+        channel=channel,
+        duration=duration,
+        channel_verified=False,
+        description="",
+    )
+
+
+_RESULTS = [
+    _result("Never Gonna Give You Up", "dQw4w9WgXcQ", "Rick Astley", "3:33"),
+    _result("Africa", "FTQbiNvZqaY", "Toto", "4:55"),
 ]
 
 
@@ -74,12 +87,12 @@ def client(app):
 
 def _mock_karaoke():
     k = MagicMock()
-    # Empty library -> existing_path is None (the 6th tuple element).
+    # Empty library -> every row's existing_path is None.
     k.song_manager.songs.__iter__.side_effect = lambda: iter([])
     return k
 
 
-@patch("pikaraoke.routes.search.get_search_results", return_value=_RAW_RESULTS)
+@patch("pikaraoke.routes.search.get_search_results", return_value=_RESULTS)
 @patch("pikaraoke.routes.search.get_site_name", return_value="PiKaraoke")
 @patch("pikaraoke.routes.search.get_karaoke_instance")
 def test_search_with_results_renders(mock_get, _site, _results, client):
@@ -116,10 +129,6 @@ _MENA_WNW = (
 )
 _ZAYN_WNW = "/songs/ZAYN, Zhavia Ward - A Whole New World (End Title)---rg_zwK_sSEY.mp4"
 _MIRRORS = "/songs/Justin Timberlake - Mirrors (Official Video)---uuZE_IRwLNI.mp4"
-
-
-def _result(title: str, video_id: str) -> list[str]:
-    return [title, f"https://youtu.be/{video_id}", video_id, "Some Channel", "3:00"]
 
 
 def _karaoke_with_library(paths: list[str]):
@@ -199,3 +208,30 @@ def test_note_lists_at_most_three_library_copies(mock_get, client):
     body = _search_body(client, mock_get, results, _karaoke_with_library(library))
 
     assert body.count('similar-song-enqueue" data-file-path=') == 3
+
+
+# ---------------------------------------------------------------------------
+# Result cards
+# ---------------------------------------------------------------------------
+
+
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_card_offers_add_to_queue_only_for_a_library_copy(mock_get, client):
+    results = [
+        _result("Justin Timberlake - Mirrors", "uuZE_IRwLNI", "JT Channel", "8:04"),
+        _result("Africa", "FTQbiNvZqaY", channel="", duration=""),
+    ]
+
+    body = _search_body(client, mock_get, results, _karaoke_with_library([_MIRRORS]))
+
+    library_card, other_card = re.findall(r"<li data-ytID=.*?</li>", body, re.S)
+    assert f'data-file-path="{_MIRRORS}"' in library_card
+    assert "search_result_items_enqueue" in library_card
+    assert "search_result_items_select" not in library_card
+    assert "8:04" in library_card
+    assert "JT Channel" in library_card
+    assert "data-file-path" not in other_card
+    assert "search_result_items_select" in other_card
+    assert "duration-badge" not in other_card  # no duration, no badge
+    assert "has-text-grey" not in other_card  # no channel, no channel line
+    assert "data-index" not in body

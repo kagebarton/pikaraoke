@@ -37,11 +37,7 @@ from pikaraoke.lib.processing_manager import ProcessingManager
 from pikaraoke.lib.queue_hold import QueueHold
 from pikaraoke.lib.queue_manager import QueueManager
 from pikaraoke.lib.song_manager import SongManager
-from pikaraoke.lib.youtube_dl import (
-    get_search_results,
-    get_youtubedl_version,
-    upgrade_youtubedl,
-)
+from pikaraoke.lib.youtube_dl import get_youtubedl_version, upgrade_youtubedl
 from pikaraoke.version import __version__ as VERSION
 
 

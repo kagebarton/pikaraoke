@@ -1,4 +1,6 @@
-{% extends 'base.html' %} {% block scripts %}
+{% extends 'base.html' %}
+{% from 'search_result.html' import result_card %}
+{% block scripts %}
 <link href="{{  url_for('static', filename='selectize.min.css') }}" rel="stylesheet" />
 <script src="{{  url_for('static', filename='selectize-0.12.6.min.js') }}"></script>
 <style>
@@ -1098,7 +1100,7 @@ $(document).on("click.search", ".search_result_items_select", function () {
 		<small><i>'{{ search_term }}'</i></small>
 		{%- endtrans %}
 	</div>
-	{% if search_results %}
+	{% if search_rows %}
 	<div class="field" id="container_search_result">
 		<label class="label">
 			{# MSG: Html text which displays what was searched for, in quotes. #} {% trans search_term=search_string -%}
@@ -1125,27 +1127,8 @@ $(document).on("click.search", ".search_result_items_select", function () {
 			</label>
 		</div>
 		<ul id="search-results" class="search_result_items">
-			{% for title,url,id,channel,duration,existing_path in search_results %}
-			<li data-ytID="{{id}}" data-ytTitle="{{title}}" value="{{url}}" data-index="{{loop.index0}}"{% if existing_path %} data-file-path="{{existing_path}}"{% endif %}>
-				<div class="img-wrapper" data-url="{{url}}">
-					<div class="img-frame">
-						<img src="https://img.youtube.com/vi/{{id}}/mqdefault.jpg" />
-						{% if duration %}<span class="duration-badge">{{ duration }}</span>{% endif %}
-					</div>
-				</div>
-				<div class="search_result_items_meta">
-					<div>
-						{{title}}
-						{% if channel %}<div class="is-size-7 has-text-grey">{{ channel }}</div>{% endif %}
-						<a href="{{url}}" target="_blank" rel="noopener noreferrer" class="is-size-7 has-text-info">YouTube ↗</a>
-					</div>
-					{% if existing_path %}
-					<button class="button is-success search_result_items_enqueue">Add to Queue</button>
-					{% else %}
-          <button class="button search_result_items_select">{% trans %}Select{% endtrans %}</button>
-					{% endif %}
-				</div>
-			</li>
+			{% for row in search_rows %}
+			{{ result_card(row) }}
 			{% endfor %}
 		</ul>
 		<div id="modal-js-example" class="modal">

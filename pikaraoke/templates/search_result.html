@@ -1,0 +1,25 @@
+{# One search result card. The page's click handlers are delegated, so a card needs no
+   per-card binding. #}
+{% macro result_card(row) -%}
+{% set result = row.result -%}
+<li data-ytID="{{result.id}}" data-ytTitle="{{result.title}}" value="{{result.url}}"{% if row.existing_path %} data-file-path="{{row.existing_path}}"{% endif %}>
+	<div class="img-wrapper" data-url="{{result.url}}">
+		<div class="img-frame">
+			<img src="https://img.youtube.com/vi/{{result.id}}/mqdefault.jpg" />
+			{% if result.duration %}<span class="duration-badge">{{ result.duration }}</span>{% endif %}
+		</div>
+	</div>
+	<div class="search_result_items_meta">
+		<div>
+			{{result.title}}
+			{% if result.channel %}<div class="is-size-7 has-text-grey">{{ result.channel }}</div>{% endif %}
+			<a href="{{result.url}}" target="_blank" rel="noopener noreferrer" class="is-size-7 has-text-info">YouTube ↗</a>
+		</div>
+		{% if row.existing_path %}
+		<button class="button is-success search_result_items_enqueue">Add to Queue</button>
+		{% else %}
+		<button class="button search_result_items_select">{% trans %}Select{% endtrans %}</button>
+		{% endif %}
+	</div>
+</li>
+{%- endmacro %}
