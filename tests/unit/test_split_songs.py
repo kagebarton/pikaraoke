@@ -45,6 +45,15 @@ class TestParseSrt:
         assert (first.num, first.start, first.end, first.text) == (1, 1.5, 2.0, "Hello\nthere")
         assert (second.start, second.end) == (3600.25, 3601.0)
 
+    def test_markup_is_dropped(self):
+        text = (
+            "1\n00:00:01,000 --> 00:00:02,000\n{\\an8}<i>[ music playing ]</i>\n\n"
+            '2\n00:00:03,000 --> 00:00:04,000\n<font color="#ffff00">♪ BOTH: OH, BOY ♪</font>\n'
+        )
+        tag, sung = parse_srt(text)
+        assert not tag.spoken
+        assert sung.text == "♪ BOTH: OH, BOY ♪"
+
     def test_a_bare_tag_is_not_spoken(self):
         assert not Cue(1, 0, 1, "[ guitar strumming ]").spoken
         assert Cue(1, 0, 1, "( whispering ) hi").spoken
@@ -142,6 +151,16 @@ class TestEdgeSearch:
         assert lead_start(ep, Part(1, 1, start_by=0.0), 5.0, True).time == 0.0
 
 
+class TestEpisode:
+    def test_capitals_in_italics_read_as_typed_in_capitals(self, tmp_path):
+        (tmp_path / "film.mkv").touch()
+        (tmp_path / "film.srt").write_text(
+            "1\n00:00:01,000 --> 00:00:02,000\n<i>♪ WHEN I WAS A BOY ♪</i>\n\n"
+            "2\n00:00:03,000 --> 00:00:04,000\n<i>( sighs ) I SAW IT ALL</i>\n"
+        )
+        assert Episode(Show(tmp_path, "", "film.mkv", [], subtitles="film.srt"), "").all_caps
+
+
 class TestShotCuts:
     def test_window_times_get_the_window_start_back(self, tmp_path, monkeypatch):
         (tmp_path / "film.mkv").touch()
@@ -200,7 +219,7 @@ class TestClipSrt:
         assert srt == (
             "1\n00:00:00,000 --> 00:00:03,000\nmostly inside\n\n"
             "2\n00:00:00,000 --> 00:00:00,500\n( music )\n\n"
-            "3\n00:00:12,000 --> 00:00:13,000\nsecond part\n"
+            "3\n00:00:12,000 --> 00:00:13,000\nsecond part\n\n"
         )
 
 
