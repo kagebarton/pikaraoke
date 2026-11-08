@@ -207,6 +207,39 @@ def test_a_band_named_like_a_collaboration_is_credited_whole(query, band, song, 
     ]
 
 
+@pytest.mark.parametrize(
+    "query, title, channel, artist, kind",
+    [
+        pytest.param(
+            "live your life",
+            "T.I. - Live Your Life ft. Rihanna (Official Video)",
+            "T.I.",
+            "ti",
+            "video",
+            id="mark-in-the-song-name",
+        ),
+        pytest.param(
+            "live and let die",
+            "Paul McCartney & Wings - Live And Let Die (Live)",
+            "Paul McCartney",
+            "paulmccartney",
+            None,
+            id="a-mark-beyond-the-song-name-still-excludes",
+        ),
+        pytest.param(
+            "bohemian rhapsody live",
+            "Queen - Bohemian Rhapsody (Live Aid 1985)",
+            "Queen Official",
+            "queen",
+            "video",
+            id="the-version-the-query-asks-for",
+        ),
+    ],
+)
+def test_only_marks_beyond_the_querys_exclude_a_row(query, title, channel, artist, kind):
+    assert official_kind(_row(title, channel=channel), query, artist) == kind
+
+
 @pytest.mark.parametrize("query", ["夜に駆ける", "yoasobi 夜に駆ける"])
 def test_a_query_the_song_check_cannot_read_picks_none(query):
     results = [
