@@ -182,10 +182,10 @@ voice track is quiet for 0.15 s on each side.
   before that earliest end.
 - **Search:** clean camera cuts are looked for up to 60 s beyond those limits.
   Each candidate is clean or not by the test above. The pick is the one nearest
-  the target, on the padding side when there is one (earlier for a start, later
-  for an end).
+  the target, on the padding side when there is one: earlier for a start, later
+  for an end, and earlier for an end the next spoken line caps.
 - **Fallback:** if no clean cut lies within 15 s of the nearest clean moment,
-  the edge goes on that moment instead.
+  on either side of it, the edge goes on that moment instead.
 
 **Music start without `music_from`:** an SDH music tag (music, guitar,
 strumming, piano...) between the last spoken line and the first sung one,
