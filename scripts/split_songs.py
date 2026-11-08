@@ -20,10 +20,12 @@ from functools import cache, cached_property
 from pathlib import Path
 
 import numpy as np
+import srt
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from pikaraoke.lib.srt_cues import is_all_caps  # noqa: E402
+from pikaraoke.lib.genius_lyrics import clean_srt_line  # noqa: E402
+from pikaraoke.lib.srt_cues import cues_to_srt, is_all_caps  # noqa: E402
 from pikaraoke.pipeline.config import PipelineConfig  # noqa: E402
 
 LEAD, TAIL = 5.0, 5.0
@@ -56,7 +58,7 @@ TAG_RE = re.compile(r"\([^)]*\)|\[[^\]]*\]")
 SENTENCE_START_RE = re.compile(
     r'(\A|[.!?]\s+|^\s*-\s*|,\s+")((?:[^\w(]|\([^)]*\))*?)([^\W\d_])', re.M
 )
-SRT_TIME_RE = re.compile(r"(\d+):(\d+):(\d+)[,.](\d+) --> (\d+):(\d+):(\d+)[,.](\d+)")
+MARKUP_RE = re.compile(r"<[^>]+>|\{\\[^}]*\}")  # <i>, <font ...>, ASS {\an8}
 
 
 @dataclass
@@ -151,14 +153,12 @@ def run_bytes(cmd: list[str]) -> bytes:
 
 
 def parse_srt(text: str) -> list[Cue]:
-    out = []
-    for block in re.split(r"\n\s*\n", text.replace("\r", "").lstrip("\ufeff").strip()):
-        lines = block.split("\n")
-        h1, m1, s1, f1, h2, m2, s2, f2 = map(int, SRT_TIME_RE.match(lines[1]).groups())
-        start = h1 * 3600 + m1 * 60 + s1 + f1 / 1000
-        end = h2 * 3600 + m2 * 60 + s2 + f2 / 1000
-        out.append(Cue(int(lines[0]), start, end, "\n".join(lines[2:])))
-    return out
+    """The cues with their markup dropped: "<i>[ music ]</i>" is a bare tag, and recasing and
+    labels see the words, not the tags."""
+    return [
+        Cue(s.index, s.start.total_seconds(), s.end.total_seconds(), MARKUP_RE.sub("", s.content))
+        for s in srt.parse(text)
+    ]
 
 
 def num(cues: list[Cue], n: int) -> Cue:
@@ -230,7 +230,7 @@ class Episode:
     @cached_property
     def all_caps(self) -> bool:
         """Captions typed in capitals, which the clip SRT recases."""
-        return is_all_caps([TAG_RE.sub("", c.text) for c in self.cues])
+        return is_all_caps([clean_srt_line(c.text) for c in self.cues])
 
     @cached_property
     def duration(self) -> float:
@@ -408,24 +408,21 @@ def cue_text(text: str, labels: re.Pattern | None, names: list[str] | None) -> s
     return recase(text, names) if names is not None else text
 
 
-def fmt(t: float) -> str:
-    ms = round(t * 1000)
-    return f"{ms // 3600000:02d}:{ms // 60000 % 60:02d}:{ms // 1000 % 60:02d},{ms % 1000:03d}"
-
-
 def clip_srt(cues: list[Cue], spans: list[tuple[float, float]], text=lambda t: t) -> str:
     """The cues inside each span, shifted to the clip's timeline. A cut can fall inside a
     caption (in a pause between its sentences); a spoken cue counts as in the clip when its
     middle is, a tag when any of it is."""
-    blocks, offset = [], 0.0
+    lines, clip_spans, offset = [], [], 0.0
     for start, end in spans:
         for c in cues:
             inside = start <= (c.start + c.end) / 2 < end if c.spoken else c.end > start
             if inside and c.start < end:
-                s, e = max(c.start, start) - start + offset, min(c.end, end) - start + offset
-                blocks.append(f"{len(blocks) + 1}\n{fmt(s)} --> {fmt(e)}\n{text(c.text)}\n")
+                lines.append(text(c.text))
+                clip_spans.append(
+                    (max(c.start, start) - start + offset, min(c.end, end) - start + offset)
+                )
         offset += end - start
-    return "\n".join(blocks)
+    return cues_to_srt(lines, clip_spans)
 
 
 def write_srt(show: Show, ep: Episode, song: Song, spans: list[tuple[float, float]]) -> None:

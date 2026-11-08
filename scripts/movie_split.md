@@ -197,6 +197,10 @@ minus 1 s. Failing that, the first sung line. FOTC's tags matched the audio.
 **Joined parts:** the join is a cut anyway, so the inner edges skip the
 camera-cut rule and pad only 0.5 s.
 
+**Markup:** `<i>`, `<font>` and `{\an8}` are dropped as the subtitles are
+read, so a tag in italics is still a bare tag, and recasing and labels see only
+the words.
+
 **Recasing:** captions are treated as typed in capitals by the app's own test
 (`srt_cues.is_all_caps`). Recasing then:
 
