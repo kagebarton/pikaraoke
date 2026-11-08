@@ -247,6 +247,42 @@ log row in a separate plan-only commit, so landing can drop it cleanly.
 Review-due checkpoint per CLAUDE.md for commits 1-3. This is multi-file with a new algorithm,
 so it is due.
 
+## Review follow-ups (2026-11-08)
+
+`/code-review high 225da7b..a610196`, three axis finders. Ken's calls after triage: fix the five
+below; leave the rest. Commits 4-9: one per fix, plus 9, which the live check of 7 showed
+was needed.
+
+Amendments to the Design rules above:
+
+- Rule 1 (text): `&` reads as `and` in titles, channels and the query (commit 9).
+- Rule 4 (who a row credits): the whole artist side is credited too, alongside each
+  collaborator (commit 7).
+- Rule 5 (pick the artist): a query holding letters with no ASCII form (kana, hangul,
+  Cyrillic; also ø, ß, æ, ł) picks no artist (commit 6).
+- Rule 6 (exclude list): a title is excluded only for marks beyond the query's, counted per
+  mark, so "Live And Let Die (Official Video)" passes and "Live And Let Die (Live)" does not
+  (commit 8). A mark the user typed ("bohemian rhapsody live", "hello lyrics") lifts that
+  version: decision B holds only for marks the query does not ask for.
+
+Also fixed: `_parse_search_line` drops a row with no title, URL or ID (commit 4), and the
+saved search term is written with `tojson`, not the HTML escape (commit 5).
+
+Left, to go into `plans/open-issues.md` at landing:
+
+- The snapshot taken after Show more can catch a card's loading state or the preview modal's
+  last contents; a restored card can show a stuck loading button.
+- A "Song - Artist" title is read the wrong way round when the query also names the artist
+  ("queen bohemian rhapsody" vs "Bohemian Rhapsody - Queen"). Official uploads are nearly
+  always "Artist - Song".
+- `official_kind` re-normalises the query per row; `official_first` walks the list three times.
+- Live, "old town road": the verified channel Wicked Sounds' "Lil Nas X - Old Town Road (Music
+  Video)" re-upload is lifted as video. The label-upload path (verified channel, title says
+  "music video") does not check that the channel is the artist's or a label's.
+- Live, "celebration kool and the gang": no artist. The channel is "KoolandthegangShow", so the
+  whole name gets no channel credits and ties its parts.
+- Dropped: the type-hint finding on `search_more` (no route in that file has them).
+
 ## Manual checks (PR test plan)
 
 Run from the worktree: `/home/ken/miniconda3/envs/pik/bin/python -m pikaraoke.app`. Only one
@@ -260,6 +296,10 @@ instance can run at a time; stop the main one first.
       all cards are still there and there is no button.
 - [ ] Show more with the network down: error toast, button usable again.
 - [ ] Preview, Select and Add to Queue work on a card from page 2.
+- [ ] "september earth wind and fire": the band's video, then its audio.
+- [ ] "live and let die": Paul McCartney's audio is lifted; no "(Live)" upload is.
+- [ ] Search for `test\`: the page works (Show more, Select), and the box shows `test\`
+      after leaving Search and coming back.
 
 ## Results log
 
@@ -268,3 +308,9 @@ instance can run at a time; stop the main one first.
 | 1 `refactor(search): named search results and one card macro` | `5e8b0d3` | `tests/unit` 3366 passed; pre-commit clean on the 5 changed Python files | Rendered `/search` from a `git archive` of `225da7b` and from the commit (3 rows: escaped title, empty channel and duration, one library copy): identical after whitespace and `data-index`. `test_youtube_dl.py` had no search tests, so `TestParseSearchLine` and `TestGetSearchResults` are new there; `test_search_render.py` also gained a card test. `PAGE_SIZE = 10` is introduced here as a named constant (commit 2 sets 30). The template variable is `search_rows`. The `video_id -> path` helper waits for commit 3, when a second route needs it. |
 | 2 `feat(search): 30 results with the original artist's official uploads first` | `81e57b3` | `tests/unit` 3410 passed; pre-commit clean on the 4 changed Python files | All 14 expected rows and all 6 must-stay-unlifted rows hold; page-2 drift is `oct2026` / `letitgo` over 60 rows. Two departures from `proto_rank.py`: the collab split uses `\bft\b\.?` and `\bfeat\b\.?` (the prototype's `\bft\.?` / `\bfeat\.?` split "Featherstone" into "herstone"; test `feat-inside-a-word-is-not-a-split`), and the song check drops `compact(w) not in artist`, which equals `w not in artist` for a normalised word. Live `get_search_results(q, 30)` through the new code: "dont stop believin" lifts Journey's art track to #1; "bohemian rhapsody" gives Queen video, Queen audio, then YouTube's order. In 12 live runs of the app's own command, 1 returned all 30 rows with no `channel`, `uploader`, `channel_is_verified` or `description` (YouTube-side; `channel_url` was present), and 1 returned only 6 verified rows and 25 descriptions; the empty one finds no trusted rows, so nothing is lifted and the channel line is absent, as it is today. The "Already in the library" note still reads the page-1 results in YouTube's order, not the lifted order. |
 | 3 `feat(search): Show more loads results 31-60 once` | `a610196` | `tests/unit` 3417 passed; pre-commit clean on the 2 changed Python files | Route tests are in `test_search_render.py` (its app has the real templates). Mutation check: voting over all 60 rows instead of the first 30 fails `test_more_picks_the_artist_from_the_first_page_and_ranks_the_second`. The `video_id -> path` map moved into `_search_rows`, which both routes call. Browser check in headless Chrome against the real templates and routes over canned results (throwaway server on a spare port, not the app): 30 cards and the button; one click appends 29 (one repeated card dropped), no repeated IDs, button gone; the saved snapshot holds 59 cards and no button; a bare `/search` visit restores all 59 with no button; Select on a page-2 card opens the preview modal; a 502 shows the error toast, re-enables the button and leaves 30 cards; a second page of only repeats says "No more results"; no page errors. Not run: the real app (`python -m pikaraoke.app`), so the Manual checks below are still open. |
+| 4 `fix(youtube_dl): a search row with no title, URL or ID is skipped` | `6d8cf0d` | `tests/unit` 3419 passed; pre-commit clean on the 2 changed Python files | Two parser cases added (no `id`; `"title": null`); the old code returns a `SearchResult` with `None` for the second and raises `KeyError` for the first. |
+| 5 `fix(search): the saved search term is written as a script string` | `c557b09` | `tests/unit` 3420 passed; pre-commit clean on the changed test file | Render test with `say "hi" </script> back\`: the `setItem` argument parses as JSON to the query and holds no `</script>`. Mutation: the old `"{{search_string\|e}}"` fails it (`JSONDecodeError`). Bare `/search` renders `null` there, in the branch that does not run. |
+| 6 `fix(official_rank): a query in a script the matching cannot read lifts nothing` | `bec9af7` | `tests/unit` 3423 passed; pre-commit clean on the 2 changed Python files | Guard is in `pick_artist`, once per search. Tests: "夜に駆ける" and "yoasobi 夜に駆ける" pick `None` (both fail without the guard; the mixed one would pick `yoasobi` with no song words left); "beyoncé halo" still picks `beyonce`. |
+| 7 `fix(official_rank): a band named like a collaboration is credited whole` | `c152b1c` | `tests/unit` 3425 passed; pre-commit clean on the 2 changed Python files | All 14 fixture picks and lifts unchanged. Tests: Simon & Garfunkel and Lil Nas X rows pick the whole name and lift video, audio, audio (both fail without it). Live, old vs new code on the same fetch: "the sound of silence" old `disturbed` (lifted Disturbed's cover), new `simongarfunkel` (3 S&G audio); "september earth wind and fire" new picks `earthwindfire` but lifts nothing (the query's "and" fails the song check, so commit 9); "old town road" `lilnas` both, same 3 lifts ("Lil Nas X, Billy Ray Cyrus" sides credit `lilnas` but not `lilnasx`); "rich girl hall and oates" `darylhall` both, same lift. |
+| 8 `fix(official_rank): an exclude word in the song's own name is not a mark` | `3477423` | `tests/unit` 3428 passed; pre-commit clean on the 2 changed Python files | Marks counted per mark (`Counter` difference title minus query). Tests: "live your life" T.I. video lifts; "Live And Let Die (Live)" stays out; "bohemian rhapsody live" lifts "(Live Aid 1985)". Mutation: the old whole-title search fails the two lifting cases. Live: "live and let die" old lifts nothing, new lifts 5 Paul McCartney audio rows; "live your life" old nothing, new T.I. video + 2 art tracks. |
+| 9 `fix(official_rank): "&" reads as "and"` | `639484b` | `tests/unit` 3429 passed; pre-commit clean on the 2 changed Python files | Picks become `simonandgarfunkel`, `earthwindandfire`. Test case added for "september earth wind and fire"; mutation fails it and the S&G case. Also drops `.replace("’", "")` after the ASCII encode (`Don’t` is already `Dont` there). Live: "september earth wind and fire" lifts the band's video + 2 art tracks; "rich girl hall and oates" picks `darylhallandjohnoates` and lifts 5 audio rows (old: `None` on that fetch); "shallow lady gaga" and "live and let die" unchanged from commit 8. "the sound of silence" over 4 live fetches: `simonandgarfunkel` once (6-4 over Disturbed), `None` three times (Disturbed ties it, e.g. 3-3 and 4-4); never Disturbed. "dont stop believin" picked `journey` and lifted nothing in one fetch, old and new alike (rows not inspected); the next fetch lifted Journey's art track as audio. "celebration kool and the gang" `None` old and new. |
