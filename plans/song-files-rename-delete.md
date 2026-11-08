@@ -265,3 +265,5 @@ moves.
 
 | Step | Commit | Tests | Notes |
 | --- | --- | --- | --- |
+| 0 | `b0dadb5` (plan) | 3354 passed | Baseline at `225da7b` + the plan commit. |
+| 1 | `dee0850` | 3356 passed (+2) | Guard in `rename_file` and `rename_song`; one guest-POST test each, both fail with their guard removed. `test_files_routes.py` fixture gained a `secret_key` so `flash` works; `test_batch_renamer.py` gained a Flask client fixture (it had no route tests). |
