@@ -3,12 +3,21 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
+import subprocess
 from collections.abc import Iterable
 from dataclasses import dataclass
 
 import flask_babel
-from flask import current_app, jsonify, render_template, request, url_for
+from flask import (
+    current_app,
+    get_template_attribute,
+    jsonify,
+    render_template,
+    request,
+    url_for,
+)
 from flask_smorest import Blueprint
 from marshmallow import Schema, fields
 
@@ -37,6 +46,12 @@ _YT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 
 class AutocompleteQuery(Schema):
     q = fields.String(required=True, metadata={"description": "Search query for autocomplete"})
+
+
+class SearchMoreQuery(Schema):
+    search_string = fields.String(
+        required=True, metadata={"description": "The search to fetch the next results of"}
+    )
 
 
 class PreviewQuery(Schema):
@@ -83,6 +98,18 @@ def _library_copies(songs: Iterable[str], results: list[SearchResult]) -> list[s
     return list(copies)[:MAX_SIMILAR_SONGS]
 
 
+def _search_rows(
+    songs: Iterable[str], results: list[SearchResult], query: str, artist: str | None
+) -> list[SearchRow]:
+    """Result cards in display order: the artist's official uploads first, then YouTube's order."""
+    # Read from the song list, not find_by_id, which misses "Title [ID].mp4" and subfolders.
+    library_ids = {video_id: path for path in songs if (video_id := extract_youtube_id(path))}
+    return [
+        SearchRow(r, library_ids.get(r.id), official)
+        for r, official in official_first(results, query, artist)
+    ]
+
+
 @search_bp.route("/search", methods=["GET"])
 def search():
     """YouTube search page."""
@@ -91,32 +118,47 @@ def search():
     search_string = request.args.get("search_string")
     if search_string:
         results = get_search_results(search_string, PAGE_SIZE)
-        # Read from the song list, not find_by_id, which misses "Title [ID].mp4" and subfolders.
-        library_ids = {
-            video_id: path
-            for path in k.song_manager.songs
-            if (video_id := extract_youtube_id(path))
-        }
         artist = pick_artist(results, search_string)
-        search_rows = [
-            SearchRow(r, library_ids.get(r.id), official)
-            for r, official in official_first(results, search_string, artist)
-        ]
+        search_rows = _search_rows(k.song_manager.songs, results, search_string, artist)
         library_copies = _library_copies(k.song_manager.songs, results)
+        show_more = len(results) >= PAGE_SIZE
     else:
         search_string = None
         search_rows = None
         library_copies = []
+        show_more = False
     return render_template(
         "search.html",
         site_title=site_name,
         title="Search",
         songs=k.song_manager.songs,
         search_rows=search_rows,
+        show_more=show_more,
         similar_songs=library_copies,
         search_string=search_string,
         genius_client=k.genius_client,
     )
+
+
+@search_bp.route("/search/more", methods=["GET"])
+@search_bp.arguments(SearchMoreQuery, location="query")
+def search_more(query):
+    """The next page of result cards, as HTML without the page shell, for Show more.
+
+    One fetch of two pages, with the artist voted over the first as on /search so the lifted
+    rows agree; only the second page is returned.
+    """
+    k = get_karaoke_instance()
+    search_string = query["search_string"]
+    try:
+        results = get_search_results(search_string, 2 * PAGE_SIZE)
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Could not fetch more results for {search_string!r}: {e}")
+        return "", 502
+    artist = pick_artist(results[:PAGE_SIZE], search_string)
+    rows = _search_rows(k.song_manager.songs, results[PAGE_SIZE:], search_string, artist)
+    result_card = get_template_attribute("search_result.html", "result_card")
+    return "".join(result_card(row) for row in rows)
 
 
 @search_bp.route("/autocomplete")

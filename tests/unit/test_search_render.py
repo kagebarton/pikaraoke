@@ -10,6 +10,7 @@ that actually submits a query is required to catch it.
 
 import os
 import re
+import subprocess
 from unittest.mock import MagicMock, patch
 from urllib.parse import quote
 
@@ -272,3 +273,92 @@ def test_the_artists_official_video_and_audio_come_first_with_a_badge(mock_get, 
     assert "Official video" in cards[0]
     assert "Official audio" in cards[1]
     assert "Official" not in cards[2]
+
+
+# ---------------------------------------------------------------------------
+# Show more: /search/more and the button that calls it
+# ---------------------------------------------------------------------------
+
+
+def _ids(n: int, start: int = 0) -> list[str]:
+    return [f"{i:a>11}" for i in range(start, start + n)]
+
+
+def _filler(n: int, start: int = 0) -> list[SearchResult]:
+    return [_result(f"Unrelated upload {video_id}", video_id) for video_id in _ids(n, start)]
+
+
+def _more_body(client, mock_get, fetch, query="some song"):
+    """GET /search/more with ``get_search_results`` patched to ``fetch`` (result or exception)."""
+    mock_get.return_value = _karaoke_with_library([])
+    patch_kwargs = (
+        {"side_effect": fetch} if isinstance(fetch, Exception) else {"return_value": fetch}
+    )
+    with patch("pikaraoke.routes.search.get_search_results", **patch_kwargs) as search_mock:
+        resp = client.get(f"/search/more?search_string={quote(query)}")
+    return resp, search_mock
+
+
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_more_returns_the_second_page_cards_without_the_page_shell(mock_get, client):
+    resp, search_mock = _more_body(client, mock_get, _filler(60))
+
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "<html" not in body
+    assert search_mock.call_args.args == ("some song", 60)
+    assert re.findall(r'<li data-ytID="(\w+)"', body) == _ids(30, start=30)
+
+
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_more_picks_the_artist_from_the_first_page_and_ranks_the_second(mock_get, client):
+    """Over all 60 rows Beta would win the vote; the first page's 30 name Alpha."""
+    first_page = [
+        _result("Alpha - Some Song (Lyrics)", i, channel="Lyrics Co", channel_verified=True)
+        for i in _ids(3)
+    ] + _filler(27, start=3)
+    beta = [
+        _result("Beta - Some Song (Official Video)", i, channel="Beta", channel_verified=True)
+        for i in _ids(6, start=30)
+    ]
+    alpha_video = _result(
+        "Alpha - Some Song (Official Video)", "alphavideo1", channel="Alpha", channel_verified=True
+    )
+    second_page = beta + _filler(23, start=36) + [alpha_video]
+
+    resp, _ = _more_body(client, mock_get, first_page + second_page)
+
+    ids = re.findall(r'<li data-ytID="(\w+)"', resp.get_data(as_text=True))
+    assert ids == ["alphavideo1"] + [r.id for r in second_page[:-1]]
+
+
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_more_marks_a_library_copy_of_a_second_page_result(mock_get, client):
+    results = (
+        _filler(30) + [_result("Justin Timberlake - Mirrors", "uuZE_IRwLNI")] + _filler(29, 31)
+    )
+    mock_get.return_value = _karaoke_with_library([_MIRRORS])
+    with patch("pikaraoke.routes.search.get_search_results", return_value=results):
+        body = client.get("/search/more?search_string=mirrors").get_data(as_text=True)
+
+    assert f'data-file-path="{_MIRRORS}"' in body
+
+
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_more_answers_502_when_yt_dlp_fails(mock_get, client):
+    resp, _ = _more_body(client, mock_get, subprocess.CalledProcessError(1, "yt-dlp"))
+
+    assert resp.status_code == 502
+
+
+@pytest.mark.parametrize("n_results, button", [(30, True), (29, False), (0, False)])
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_page_one_offers_show_more_only_when_youtube_filled_it(mock_get, client, n_results, button):
+    # a query with a quote, ampersand and angle bracket: the button must carry it intact
+    query = 'Rock "n" Roll & <b>'
+
+    body = _search_body(client, mock_get, _filler(n_results), _karaoke_with_library([]), query)
+
+    assert ('id="show-more"' in body) is button
+    if button:
+        assert 'data-search-string="Rock &#34;n&#34; Roll &amp; &lt;b&gt;"' in body
