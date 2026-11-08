@@ -17,6 +17,7 @@ from pikaraoke.lib.genius import write_choice
 from pikaraoke.lib.genius_lyrics import clean_genius_query
 from pikaraoke.lib.library_regen import check_video_caption
 from pikaraoke.lib.metadata_parser import extract_youtube_id
+from pikaraoke.lib.official_rank import OfficialKind, official_first, pick_artist
 from pikaraoke.lib.song_match import SongIndex, similar_songs
 from pikaraoke.lib.youtube_dl import SearchResult, get_preview_info, get_search_results
 
@@ -28,7 +29,7 @@ search_bp = Blueprint("search", __name__)
 MAX_SIMILAR_SONGS = 3
 
 # YouTube results fetched for a search.
-PAGE_SIZE = 10
+PAGE_SIZE = 30
 
 # YouTube ID validation: exactly 11 chars of the allowed character set
 _YT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
@@ -57,10 +58,12 @@ class DownloadBody(Schema):
 
 @dataclass(frozen=True)
 class SearchRow:
-    """One result card: the YouTube hit and the library file that already carries its ID."""
+    """One result card: the YouTube hit, the library file that already carries its ID, and
+    whether it was lifted as the original artist's official upload."""
 
     result: SearchResult
     existing_path: str | None
+    official: OfficialKind | None
 
 
 def _library_copies(songs: Iterable[str], results: list[SearchResult]) -> list[str]:
@@ -94,7 +97,11 @@ def search():
             for path in k.song_manager.songs
             if (video_id := extract_youtube_id(path))
         }
-        search_rows = [SearchRow(r, library_ids.get(r.id)) for r in results]
+        artist = pick_artist(results, search_string)
+        search_rows = [
+            SearchRow(r, library_ids.get(r.id), official)
+            for r, official in official_first(results, search_string, artist)
+        ]
         library_copies = _library_copies(k.song_manager.songs, results)
     else:
         search_string = None

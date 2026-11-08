@@ -5,14 +5,14 @@
 <li data-ytID="{{result.id}}" data-ytTitle="{{result.title}}" value="{{result.url}}"{% if row.existing_path %} data-file-path="{{row.existing_path}}"{% endif %}>
 	<div class="img-wrapper" data-url="{{result.url}}">
 		<div class="img-frame">
-			<img src="https://img.youtube.com/vi/{{result.id}}/mqdefault.jpg" />
+			<img loading="lazy" src="https://img.youtube.com/vi/{{result.id}}/mqdefault.jpg" />
 			{% if result.duration %}<span class="duration-badge">{{ result.duration }}</span>{% endif %}
 		</div>
 	</div>
 	<div class="search_result_items_meta">
 		<div>
 			{{result.title}}
-			{% if result.channel %}<div class="is-size-7 has-text-grey">{{ result.channel }}</div>{% endif %}
+			{% if result.channel or row.official %}<div class="is-size-7 has-text-grey">{{ result.channel }}{% if row.official %} <span class="tag is-info is-light">Official {{ row.official }}</span>{% endif %}</div>{% endif %}
 			<a href="{{result.url}}" target="_blank" rel="noopener noreferrer" class="is-size-7 has-text-info">YouTube ↗</a>
 		</div>
 		{% if row.existing_path %}
