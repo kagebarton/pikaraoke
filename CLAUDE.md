@@ -1,6 +1,8 @@
 # CLAUDE.md
 
-PiKaraoke: karaoke system for Raspberry Pi/Windows/macOS/Linux with YouTube search, queuing, pitch shifting.
+PiKaraoke: karaoke server with YouTube search, queuing, pitch shifting, and automatic karaoke creation (stem separation + Whisper lyric alignment, CUDA GPU expected).
+
+**Architecture:** songs play in a native libmpv window on the host (`lib/mpv_controller.py`, overlays in `lib/overlay_manager.py`). The Flask + Socket.IO pages are only the phone remote and admin UI. Upstream's browser player, splash page, HLS streaming, and gevent server were removed; don't restore or design around them. "Splash" in current code means the MPV idle screen; any other mention of a browser splash screen is stale.
 
 **Core:** Code clarity over docs. Simplicity over flexibility. Single source of truth.
 
@@ -52,7 +54,7 @@ When Ken proposes a larger feature (anything that would get a plan or span sever
 
 At a commit with its plan-log row written, or a phase/GATE boundary (never mid-commit), say which of these apply, each with a ready-to-paste prompt (≤10 lines, paths and hashes rather than prose):
 
-- **`/compact`** — flag it with a ready-to-paste `/compact Keep: ...` line (≤5 lines, paths and hashes rather than prose) naming what the summary must keep: branch + HEAD, the plan file and section, the next step and where to stop, open decisions with their options, and approaches ruled out this session.
+- **`/compact`** — flag it with a ready-to-paste `/compact Keep: ...` line naming what the summary must keep: branch + HEAD, the plan file and section, the next step and where to stop, open decisions with their options, and approaches ruled out this session. Keep it brief and contiguous: one fenced block, ≤5 lines, paths and hashes rather than prose, with no blank lines, headings, or bullets inside it. A long or broken-up block gets misread as a regular message instead of a command to paste.
 - **Review due** — the exact `/code-review` line: commit range, files in scope, and exactly 3 finder angles, one per Self-Review axis (not the tool's default spread). Never launch it unprompted; run it only when asked. `/code-review ultra` is user-triggered only, never launched for any reason.
 - **Model handoff** (e.g. Sonnet handing a GATE read to Opus, Opus escalating to Fable) — branch + HEAD, the plan file and section, what's done (don't redo it), the next step, and where to stop.
 
