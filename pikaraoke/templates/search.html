@@ -388,10 +388,17 @@ $("#add-queue-link").trigger("click");
 			$("#song_to_add-selectized").width("100%");
 		}
 
+		function saveSearchResults() {
+			sessionStorage.setItem(
+				"pikaraoke_search_results",
+				document.getElementById("container_search_result").outerHTML
+			);
+		}
+
 		// Save results to sessionStorage if server-rendered them, otherwise restore from sessionStorage
 		const resultsContainer = document.getElementById("container_search_result");
 		if (resultsContainer) {
-			sessionStorage.setItem("pikaraoke_search_results", resultsContainer.outerHTML);
+			saveSearchResults();
 			sessionStorage.setItem("pikaraoke_search_term", "{{search_string|e}}");
 		} else {
 			const savedResults = sessionStorage.getItem("pikaraoke_search_results");
@@ -619,6 +626,35 @@ $("#add-queue-link").trigger("click");
 		});
 		$(document).on("click.search", ".similar-song-enqueue", function () {
 			enqueueLocalSong($(this).attr("data-file-path"), this);
+		});
+
+		// Show more appends the next page of cards once. YouTube can reorder between the two
+		// fetches, so a card already on the page is dropped.
+		$(document).on("click.search", "#show-more", function () {
+			var $btn = $(this).prop("disabled", true).addClass("is-loading");
+			$.ajax({
+				url: "{{ url_for('search.search_more') }}",
+				data: { search_string: $btn.attr("data-search-string") },
+				success: function (html) {
+					var onPage = new Set(
+						$("#search-results > li").map(function () { return $(this).attr("data-ytID"); }).get()
+					);
+					var $cards = $($.parseHTML(html)).filter("li").filter(function () {
+						return !onPage.has($(this).attr("data-ytID"));
+					});
+					$("#search-results").append($cards);
+					if ($cards.length) {
+						$btn.remove();
+					} else {
+						$btn.replaceWith('<p class="has-text-centered has-text-grey mt-3">No more results</p>');
+					}
+					saveSearchResults();
+				},
+				error: function () {
+					showNotification("Couldn't load more results.", "is-danger");
+					$btn.prop("disabled", false).removeClass("is-loading");
+				},
+			});
 		});
 // ── Lyrics picker state & functions ──────────────────────────────────────
 //
@@ -1131,6 +1167,9 @@ $(document).on("click.search", ".search_result_items_select", function () {
 			{{ result_card(row) }}
 			{% endfor %}
 		</ul>
+			{% if show_more %}
+			<button id="show-more" class="button is-fullwidth mt-3" data-search-string="{{ search_string }}">Show more</button>
+			{% endif %}
 		<div id="modal-js-example" class="modal">
 			<div class="modal-background"></div>
       <div class="modal-content">
