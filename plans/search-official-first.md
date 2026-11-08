@@ -265,3 +265,4 @@ instance can run at a time; stop the main one first.
 
 | commit | hash | tests | notes |
 |---|---|---|---|
+| 1 `refactor(search): named search results and one card macro` | `5e8b0d3` | `tests/unit` 3366 passed; pre-commit clean on the 5 changed Python files | Rendered `/search` from a `git archive` of `225da7b` and from the commit (3 rows: escaped title, empty channel and duration, one library copy): identical after whitespace and `data-index`. `test_youtube_dl.py` had no search tests, so `TestParseSearchLine` and `TestGetSearchResults` are new there; `test_search_render.py` also gained a card test. `PAGE_SIZE = 10` is introduced here as a named constant (commit 2 sets 30). The template variable is `search_rows`. The `video_id -> path` helper waits for commit 3, when a second route needs it. |
