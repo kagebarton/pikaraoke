@@ -99,13 +99,14 @@ class SongManager:
         Raises:
             FileExistsError: The new name belongs to another song or to leftover
                 files, so nothing was moved.
-            OSError: A move failed; the files are back under the old name.
+            OSError: A move failed. The files are back under the old name,
+                except any whose move back also failed (logged).
         """
         new_name = sanitize_filename(new_name)
         logging.info(f"Renaming song: '{song_path}' to: {new_name}")
         song = Path(song_path)
         new_song = song.parent / (new_name + song.suffix)
-        if new_song.exists() or new_name in song_stems(song.parent) or song_files(new_song):
+        if new_name in song_stems(song.parent) or song_files(new_song):
             raise FileExistsError(f"'{new_name}' is already taken by another song or its files")
         moves = [(song, new_song)] + [
             (f, f.parent / (new_name + f.name[len(song.stem) :])) for f in song_files(song)
