@@ -6,22 +6,15 @@ PiKaraoke: karaoke server with YouTube search, queuing, pitch shifting, and auto
 
 **Core:** Code clarity over docs. Simplicity over flexibility. Single source of truth.
 
-## Refactoring
-
-Refactor iteratively when touching code:
-
-- Extract classes for multiple responsibilities, functions for repeated logic or >50 lines
-- Rename unclear names, delete dead code (never comment out)
-- Delete old methods/tests when superseded
-
-**Refactor when:** modifying hard-to-understand code, third similar pattern, function doing too much\
-**Don't refactor:** unrelated code, working untouched code, speculative flexibility
-
 ## Code Style
 
-- PEP 8, 4 spaces, meaningful names, type hints (modern syntax: `str | None`, Python 3.10+)
+- Type hints in modern syntax (`str | None`, Python 3.10+); Black and pylint enforce the rest of PEP 8
 - Concise docstrings for public APIs—explain "why", not "how"
 - No emoji
+
+## Refactoring
+
+Refactor only code you're touching, when it's hard to follow, does too much (a class per responsibility, a function past ~50 lines), or a pattern reaches its third copy. Delete what the change supersedes, old methods and their tests included; never comment code out.
 
 ## Filenames
 
@@ -41,8 +34,8 @@ pytest with mocked external I/O/subprocess. Test business logic and integration,
 Before calling a change done, review your own diff on three axes:
 
 - **Correctness** — does it do what it intended?
-- **Simplicity** — simplest thing that works; no dead code, duplicate logic, speculative abstraction, or unrequested scope; reuse helpers; single source of truth
-- **Robustness** — see Error Handling; plus no races/TOCTOU, safe edge/metachar inputs, cross-platform paths via `get_temp_directory()`
+- **Simplicity** — simplest thing that works; no dead code, duplicate logic, speculative abstraction, unrequested scope, or handling for impossible states; reuse helpers; single source of truth
+- **Robustness** — see Error Handling; plus no races/TOCTOU, safe edge/metachar inputs, no hardcoded paths; temp files via `get_temp_directory()` (`get_platform.py`), never `tempfile.gettempdir()`
 
 On commits that add or rewrite logic (skip pure delete/move/rename): if the change is simple enough to verify in one read-through, say the self-review above covers it; if it's complex — multi-file, new algorithm, core pipeline/concurrency — track it as pending for the next checkpoint.
 
@@ -54,20 +47,32 @@ When Ken proposes a larger feature (anything that would get a plan or span sever
 
 At a commit with its plan-log row written, or a phase/GATE boundary (never mid-commit), say which of these apply, each with a ready-to-paste prompt (≤10 lines, paths and hashes rather than prose):
 
-- **`/compact`** — flag it with a ready-to-paste `/compact Keep: ...` line naming what the summary must keep: branch + HEAD, the plan file and section, the next step and where to stop, open decisions with their options, and approaches ruled out this session. Keep it brief and contiguous: one fenced block, ≤5 lines, paths and hashes rather than prose, with no blank lines, headings, or bullets inside it. A long or broken-up block gets misread as a regular message instead of a command to paste.
+- **`/compact`** — a `/compact Keep: ...` line naming branch + HEAD, the plan file and section, the next step and where to stop, open decisions with their options, and approaches ruled out this session. One fenced block of ≤5 lines with no blank lines, headings, or bullets; anything longer or broken up gets read as a regular message, not a command to paste.
 - **Review due** — the exact `/code-review` line: commit range, files in scope, and exactly 3 finder angles, one per Self-Review axis (not the tool's default spread). Never launch it unprompted; run it only when asked. `/code-review ultra` is user-triggered only, never launched for any reason.
 - **Model handoff** (e.g. Sonnet handing a GATE read to Opus, Opus escalating to Fable) — branch + HEAD, the plan file and section, what's done (don't redo it), the next step, and where to stop.
+
+## Review Triage
+
+End every code review with the surviving findings sorted into three groups, each with a one-line recommendation (fix now, fold into the next commit, or log in `plans/open-issues.md`):
+
+- **Critical** — wrong output, data loss, crash, or race; fix before anything else lands.
+- **Easy** — a few-line fix with no design question; fix now while the context is loaded.
+- **Worthwhile** — real but larger, or touching a design decision; say what it costs and whether it is worth doing now or should wait.
+
+For findings that fit none, decide whether each belongs in `plans/open-issues.md`: propose an entry for any that is real but not worth fixing now, and drop the rest (false alarms, style nits, accepted tradeoffs) with one line saying how many and why.
+
+Then check `plans/open-issues.md` for entries in the files the review covered, skipping anything already ruled, out of scope, or recorded-not-fixed. List any that are now Easy, since those files are loaded and about to be re-tested, under a fourth group, **From open issues**, with the entry's heading. Say "none" if nothing qualifies.
 
 ## Communication
 
 - Plain language. Lead with the consequence — what is decided, blocked, or the user's call. Keep a number only when the number *is* the finding. Explain a mechanism by what it does, not what it is called.
-- Vocabulary from `plans/` (gate letters, phase and rung numbers, route and probe names) is shared language — use it directly. Code-level detail is out by default: no recomputed arithmetic, per-song tables, constant names, or metric decompositions. That lives in the plan's Results log; the user asks when he wants it.
-- Chat tone only. Plan entries keep raw tables, full provenance, and no verdicts (`plans/PROGRAM.md`). Simplify the relay, never the record.
+- Vocabulary from `plans/` (gate letters, phase numbers) is shared language — use it directly. Code-level detail is out by default: no recomputed arithmetic, per-song tables, constant names, or metric decompositions. That lives in the plan's Results log; the user asks when he wants it.
+- Chat tone only. Plan entries keep raw tables, full provenance, and no verdicts. Simplify the relay, never the record.
 
 ## Commits
 
 - Group by feature, not file—each commit coherent and self-contained. Tests ride with the code they exercise.
-- Before committing: compile/import-smoke the changed code and read `git diff --cached` against what you intended.
+- Before committing: compile/import-smoke the changed code, strip debug prints, and read `git diff --cached` against what you intended.
 
 ## Branches and Archive Tags
 
@@ -78,25 +83,15 @@ At a commit with its plan-log row written, or a phase/GATE boundary (never mid-c
 
 ## Environment
 
-Conda env `pik` (not uv). Run tests: `/home/ken/miniconda3/envs/pik/bin/python -m pytest`. Run pre-commit on the files you changed: `pre-commit run --config code_quality/.pre-commit-config.yaml --files <files>` (`--all-files` rewrites untouched upstream Python via pycln/isort). Tools: Black (100 char), isort, pycln, pylint, mdformat. Never commit to `master` directly.
+Conda env `pik` (not uv). Run tests: `/home/ken/miniconda3/envs/pik/bin/python -m pytest`. Run pre-commit on the files you changed: `pre-commit run --config code_quality/.pre-commit-config.yaml --files <files>` (`--all-files` rewrites untouched upstream Python via pycln/isort). Tools: Black (100 char), isort, pycln, pylint, mdformat.
 
 ## Plans
 
 Store in `plans/` with descriptive kebab-case names (e.g., `subtitle-delay-cleanup.md`). Name the executing model at top, e.g. `Model: Claude Sonnet 5.5`.
 
-## Pull Requests
-
-Include test plan: minimal checklist for manual verification.
-
 ## Codebase Ownership
 
-Forked from vicwomg/pikaraoke; last upstream sync 2026-03-22, no plan to merge from it again. Edit any file when that's the clean change. Keep large new subsystems in their own modules for size and clarity, not merge cost.
-
-## Rules
-
-- Don't add unrequested features, error handling for impossible states, or speculative abstractions
-- Never commit debug prints or commented code
-- Temp files: use `get_temp_directory()` from `get_platform.py`, never hardcode paths or `tempfile.gettempdir()`
+Forked from vicwomg/pikaraoke (last sync 2026-03-22), never merging from it again: edit any file when that's the clean change, and put large new subsystems in their own modules.
 
 ## graphify
 
