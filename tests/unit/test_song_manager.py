@@ -124,6 +124,8 @@ OWNED_KINDS = [
     ("nonvocal", "---nonvocal.m4a"),
     ("dereverb", "---dereverb.m4a"),
 ]
+# The kinds a backup snapshot holds: stems are regenerable and never backed up.
+BACKED_UP_KINDS = [(sub, tail) for sub, tail in OWNED_KINDS if not tail.endswith(".m4a")]
 
 
 @pytest.fixture
@@ -350,6 +352,32 @@ class TestRename:
         mine = _add_sidecar(library, "Old", "subtitles", ".live.srt")
         theirs = _add_sidecar(library, "New.live", "subtitles", ".srt")
         self._assert_refused(sm, db, song, "New", touched=[song, mine, theirs])
+
+    def test_moves_its_backed_up_files_so_its_history_survives(self, library, sm):
+        song = _add_song(sm, library, "Old---abc")
+        backup = library / "regen_backups" / "20260101T000000Z"
+        old = [_add_sidecar(backup, "Old---abc", sub, tail) for sub, tail in BACKED_UP_KINDS]
+        sm.rename(_native(song), "New---abc")
+        for (sub, tail), f in zip(BACKED_UP_KINDS, old):
+            assert (backup / sub / ("New---abc" + tail)).read_text() == f"{sub}{tail}"
+            assert not f.exists()
+
+    def test_leaves_a_siblings_backed_up_files(self, library, sm):
+        song = _add_song(sm, library, "Song")
+        _add_song(sm, library, "Song.live")
+        backup = library / "regen_backups" / "20260101T000000Z"
+        theirs = _add_sidecar(backup, "Song.live", "lyrics", ".lrc")
+        sm.rename(_native(song), "Other")
+        assert theirs.exists()
+
+    def test_refuses_a_name_with_backed_up_files_of_its_own(self, library, sm, db):
+        """A deleted song's backups under the new name would join this song's history."""
+        song = _add_song(sm, library, "Old")
+        sidecar = _add_sidecar(library, "Old", "subtitles", ".srt")
+        orphan = _add_sidecar(
+            library / "regen_backups" / "20260101T000000Z", "New", "lyrics", ".lrc"
+        )
+        self._assert_refused(sm, db, song, "New", touched=[song, sidecar, orphan])
 
     def test_a_move_failing_partway_puts_every_file_back(self, library, sm, db):
         song = _add_song(sm, library, "Old---abc")

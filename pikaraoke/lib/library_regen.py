@@ -940,6 +940,27 @@ def song_files(song: Path) -> list[Path]:
     return owned
 
 
+def backup_files(song: Path) -> list[Path]:
+    """Every file ``song`` owns in its folder's ``regen_backups/`` snapshots.
+
+    A rename moves these with the song, or its version history would stop at
+    the rename. ``song`` need not exist yet, as in :func:`song_files`.
+    """
+    root = song.parent / BACKUP_ROOT
+    if not root.is_dir():
+        return []
+    owned_by_song = _owned_in(song.parent, [song.stem])
+    owned: list[Path] = []
+    for backup in sorted(root.iterdir()):
+        for sub in BACKUP_DIRS:
+            folder = backup / sub
+            if folder.is_dir():
+                owned.extend(
+                    e for e in sorted(folder.iterdir()) if e.is_file() and owned_by_song(e.name)
+                )
+    return owned
+
+
 def backup_text_folders(folder: Path, stems: list[str] | None = None) -> Path | None:
     """Snapshot the regenerable output folders into ``regen_backups/<UTC>/``.
 

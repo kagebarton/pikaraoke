@@ -10,7 +10,12 @@ from pathlib import Path
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.get_platform import is_windows
 from pikaraoke.lib.karaoke_database import KaraokeDatabase
-from pikaraoke.lib.library_regen import backup_text_folders, song_files, song_stems
+from pikaraoke.lib.library_regen import (
+    backup_files,
+    backup_text_folders,
+    song_files,
+    song_stems,
+)
 from pikaraoke.lib.library_scanner import build_song_record
 from pikaraoke.lib.metadata_parser import regex_tidy, youtube_id_suffix
 from pikaraoke.lib.song_list import SongList
@@ -93,8 +98,10 @@ class SongManager:
     def rename(self, song_path: str, new_name: str) -> str:
         """Rename a song and every file it owns, in place. Returns the new path.
 
-        Everything is checked before anything moves; a move that fails partway
-        is rolled back. SongList and DB change only after every move succeeded.
+        Its copies in ``regen_backups/`` move too, so its version history
+        survives. Everything is checked before anything moves; a move that
+        fails partway is rolled back. SongList and DB change only after every
+        move succeeded.
 
         Args:
             song_path: Full path to the current song file.
@@ -103,7 +110,8 @@ class SongManager:
         Raises:
             ValueError: The new name is blank, so nothing was moved.
             FileExistsError: The new name belongs to another song or to leftover
-                files, so nothing was moved.
+                files (backed-up ones included, which would mix another song's
+                versions into this one's history), so nothing was moved.
             OSError: A move failed. The files are back under the old name,
                 except any whose move back also failed (logged).
         """
@@ -113,10 +121,11 @@ class SongManager:
         logging.info(f"Renaming song: '{song_path}' to: {new_name}")
         song = Path(song_path)
         new_song = song.parent / (new_name + song.suffix)
-        if new_name in song_stems(song.parent) or song_files(new_song):
+        if new_name in song_stems(song.parent) or song_files(new_song) or backup_files(new_song):
             raise FileExistsError(f"'{new_name}' is already taken by another song or its files")
         moves = [(song, new_song)] + [
-            (f, f.parent / (new_name + f.name[len(song.stem) :])) for f in song_files(song)
+            (f, f.parent / (new_name + f.name[len(song.stem) :]))
+            for f in [*song_files(song), *backup_files(song)]
         ]
         taken = [dst for _, dst in moves if dst.exists()]
         if taken:
