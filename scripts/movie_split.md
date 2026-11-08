@@ -103,8 +103,8 @@ A stereo source's voice track comes from the app's vocal model on the GPU. The
 running app's workers hold up to 4.5 GB, so separating with the app up runs
 out of memory. Stop the app first. A source with a 5.1 track uses its centre
 channel instead and needs no GPU. Everything measured is cached in
-`split_cache/` next to the config, so rerunning `plan` is fast. Delete that
-folder when you're done.
+`split_cache/` next to the config, under the source file's name, so rerunning
+`plan` is fast. Delete that folder when you're done.
 
 ## Config format
 

@@ -1,6 +1,7 @@
 """Unit tests for scripts/split_songs.py: edge choice, pauses, and the clip SRT."""
 
 import subprocess
+import sys
 
 import numpy as np
 import pytest
@@ -20,9 +21,11 @@ from scripts.split_songs import (
     label_re,
     lead_start,
     music_start,
+    num,
     parse_srt,
     pick,
     recase,
+    run,
     tail_end,
 )
 
@@ -149,6 +152,17 @@ class TestEdgeSearch:
     def test_a_start_by_of_zero_keeps_the_cold_open(self):
         ep = FakeEpisode([Cue(1, 30.0, 32.0, "♪ First line ♪")], [])
         assert lead_start(ep, Part(1, 1, start_by=0.0), 5.0, True).time == 0.0
+
+
+class TestFailures:
+    def test_a_tool_failure_exits_with_its_reason(self):
+        cmd = [sys.executable, "-c", "import sys; sys.exit('Stream map 0:s:0 matches no streams')"]
+        with pytest.raises(SystemExit, match="matches no streams"):
+            run(cmd)
+
+    def test_a_missing_cue_is_named(self):
+        with pytest.raises(SystemExit, match="no cue 5"):
+            num([], 5)
 
 
 class TestEpisode:
