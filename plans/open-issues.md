@@ -253,6 +253,13 @@ From the `library_tools` real-world run, 2026-10-20. Record: `library-tools.md`.
   line fixes both: replace `/` with `-` on every platform, as Windows already
   does. Not ruled. Record: `plans/song-files-rename-delete.md` on branch
   `song_files`, follow-up gap 4.
+- **An empty new name hides the song.** The batch renamer accepts a blank name
+  box: the video becomes `.mp4` and its files `.srt`, `.custom.txt` and so on,
+  which the library scan skips, so the song drops out of the library while the
+  DB points at `.mp4`. The edit page appends the YouTube ID, so there it only
+  hits a song without one. Admin only. Refusing a name that is blank after
+  sanitizing, in `SongManager.rename`, covers both pages. Not ruled. Record:
+  `plans/song-files-rename-delete.md` on branch `song_files`, review 2026-11-08.
 
 ## Web pages (pre-existing on `dev`)
 
