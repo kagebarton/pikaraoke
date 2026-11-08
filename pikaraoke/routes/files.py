@@ -248,6 +248,9 @@ def rename_file(form):
     else:
         try:
             k.song_manager.rename(old_name, new_name_full)
+        except ValueError:
+            # MSG: Message shown after trying to rename a song to a blank name.
+            flash(_("Error: The new name can't be empty"), "is-danger")
         except FileExistsError:
             flash(
                 # MSG: Message shown after trying to rename a file to a name that already exists.

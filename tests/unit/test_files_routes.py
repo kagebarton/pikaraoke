@@ -235,6 +235,19 @@ def test_rename_onto_a_taken_name_flashes_that_it_exists(mock_get, _admin, clien
 
 @patch("pikaraoke.routes.files.is_admin", return_value=True)
 @patch("pikaraoke.routes.files.get_karaoke_instance")
+def test_rename_to_a_blank_name_flashes_that_it_is_empty(mock_get, _admin, client):
+    mock_get.return_value = k = _admin_karaoke()
+    k.song_manager.rename.side_effect = ValueError("blank")
+
+    client.post("/files/edit", data={"old_file_name": SONGS[0], "new_file_name": ""})
+
+    ((category, message),) = _flashes(client)
+    assert category == "is-danger"
+    assert "can't be empty" in message
+
+
+@patch("pikaraoke.routes.files.is_admin", return_value=True)
+@patch("pikaraoke.routes.files.get_karaoke_instance")
 def test_delete_that_fails_flashes_an_error_not_success(mock_get, _admin, client):
     mock_get.return_value = k = _admin_karaoke()
     k.song_manager.delete.side_effect = OSError("disk full")

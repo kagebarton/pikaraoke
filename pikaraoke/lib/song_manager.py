@@ -20,7 +20,11 @@ _WINDOWS_ILLEGAL_CHARS = re.compile(r'[<>:"/\\|?*]')
 
 
 def sanitize_filename(name: str) -> str:
-    """Remove characters that are illegal in filenames on the current platform."""
+    """Replace characters that are illegal in filenames on the current platform.
+
+    ``/`` is replaced everywhere: a name holding one would name another folder.
+    """
+    name = name.replace("/", "-")
     if is_windows():
         name = _WINDOWS_ILLEGAL_CHARS.sub("-", name)
     return name.strip()
@@ -97,12 +101,15 @@ class SongManager:
             new_name: New filename (without extension).
 
         Raises:
+            ValueError: The new name is blank, so nothing was moved.
             FileExistsError: The new name belongs to another song or to leftover
                 files, so nothing was moved.
             OSError: A move failed. The files are back under the old name,
                 except any whose move back also failed (logged).
         """
         new_name = sanitize_filename(new_name)
+        if not new_name:
+            raise ValueError("A song's new name can't be empty")
         logging.info(f"Renaming song: '{song_path}' to: {new_name}")
         song = Path(song_path)
         new_song = song.parent / (new_name + song.suffix)
