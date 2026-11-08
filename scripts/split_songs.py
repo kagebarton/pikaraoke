@@ -249,17 +249,21 @@ class Episode:
         return self.show.cache / f"{self.key}_{t0:.0f}_{t1:.0f}{suffix}"
 
     def shot_cuts(self, t0: float, t1: float) -> list[float]:
-        """Times of the first frame of each new shot between ``t0`` and ``t1``."""
+        """Times of the first frame of each new shot between ``t0`` and ``t1``.
+
+        scdet prints 6 significant digits, so a time past 1000 s would come out rounded to
+        10 ms, and an end on one rounded up keeps the next shot's first frame. It prints times
+        from the window's start instead (cached as printed), and ``t0`` is added back."""
         t0, t1 = max(0.0, round(t0)), round(t1)
         path = self._cached(t0, t1, ".cuts")
         if not path.exists():
             log = run(
-                ["ffmpeg", "-hide_banner", "-copyts", "-ss", str(t0), "-t", str(t1 - t0), "-i",
+                ["ffmpeg", "-hide_banner", "-ss", str(t0), "-t", str(t1 - t0), "-i",
                  str(self.src), "-an", "-sn", "-vf",
                  f"scale=320:-2,scdet=threshold={SCENE_THRESHOLD}", "-f", "null", "-"]
             ).stderr  # fmt: skip
             path.write_text("\n".join(re.findall(r"lavfi\.scd\.time: ([\d.]+)", log)) + "\n")
-        return [float(t) for t in path.read_text().split()]
+        return [t0 + float(t) for t in path.read_text().split()]
 
     def voice(self, t0: float, t1: float) -> Voice:
         """The voice track of ``t0``..``t1`` (cached): the centre channel when there is one,

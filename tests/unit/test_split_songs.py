@@ -1,5 +1,7 @@
 """Unit tests for scripts/split_songs.py: edge choice, pauses, and the clip SRT."""
 
+import subprocess
+
 import numpy as np
 import pytest
 
@@ -7,6 +9,7 @@ from scripts.split_songs import (
     MAX_CUT_DETOUR,
     Cue,
     Edge,
+    Episode,
     Part,
     Show,
     Voice,
@@ -137,6 +140,17 @@ class TestEdgeSearch:
     def test_a_start_by_of_zero_keeps_the_cold_open(self):
         ep = FakeEpisode([Cue(1, 30.0, 32.0, "♪ First line ♪")], [])
         assert lead_start(ep, Part(1, 1, start_by=0.0), 5.0, True).time == 0.0
+
+
+class TestShotCuts:
+    def test_window_times_get_the_window_start_back(self, tmp_path, monkeypatch):
+        (tmp_path / "film.mkv").touch()
+        ep = Episode(Show(tmp_path, "", "film.mkv", []), "")
+        log = "[scdet @ 0x1] lavfi.scd.score: 17.204, lavfi.scd.time: 12.918\n"
+        monkeypatch.setattr(
+            "scripts.split_songs.run", lambda cmd: subprocess.CompletedProcess(cmd, 0, "", log)
+        )
+        assert ep.shot_cuts(1490.2, 1510.0) == [pytest.approx(1502.918)]
 
 
 class TestMusicStart:
