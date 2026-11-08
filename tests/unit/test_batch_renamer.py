@@ -110,6 +110,23 @@ def test_a_case_only_rename_goes_through_a_temp_name_the_manager_chose(mock_get,
 
 @patch("pikaraoke.routes.batch_song_renamer.is_admin", return_value=True)
 @patch("pikaraoke.routes.batch_song_renamer.get_karaoke_instance")
+def test_a_case_only_rename_onto_a_taken_name_puts_the_song_back(mock_get, _admin, client):
+    """On a case-sensitive disk the other-case name can belong to another song."""
+    mock_get.return_value = k = _admin_karaoke()
+    k.song_manager.rename.side_effect = ["/songs/tmp.mp4", FileExistsError("taken"), SONG]
+
+    result = _rename(client, "artist - song---abc123def45")
+
+    assert k.song_manager.rename.call_args_list[-1].args == (
+        "/songs/tmp.mp4",
+        "Artist - Song---abc123def45",
+    )
+    assert result["success"] is False
+    assert "Filename already exists" in result["message"]
+
+
+@patch("pikaraoke.routes.batch_song_renamer.is_admin", return_value=True)
+@patch("pikaraoke.routes.batch_song_renamer.get_karaoke_instance")
 def test_rename_onto_a_taken_name_says_it_exists(mock_get, _admin, client):
     mock_get.return_value = k = _admin_karaoke()
     k.song_manager.rename.side_effect = FileExistsError("taken")

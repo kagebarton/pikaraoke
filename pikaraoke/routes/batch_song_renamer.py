@@ -263,7 +263,12 @@ def rename_song(form):
             # Two-step rename for case-insensitive filesystems (e.g. Windows)
             temp_name = f"{new_name}_temp_{int(time.time() * 1000)}"
             temp_path = k.song_manager.rename(old_name, temp_name)
-            new_path = k.song_manager.rename(temp_path, new_name)
+            try:
+                new_path = k.song_manager.rename(temp_path, new_name)
+            except OSError:
+                # Put the song back rather than leave it under the temp name.
+                k.song_manager.rename(temp_path, old_filename)
+                raise
         else:
             new_path = k.song_manager.rename(old_name, new_name)
     except FileExistsError:
