@@ -71,6 +71,8 @@ def _admin_karaoke():
     k = MagicMock()
     k.queue_manager.is_song_in_queue.return_value = False
     k.song_manager.filename_from_path = SongManager.filename_from_path
+    k.library_tools.is_busy.return_value = False
+    k.library_tools.is_waiting_for_pick.return_value = False
     return k
 
 
@@ -128,3 +130,17 @@ def test_a_failed_rename_is_reported_not_raised(mock_get, _admin, client):
 
     assert result["success"] is False
     assert "locked" in result["message"]
+
+
+@pytest.mark.parametrize("reason", ["is_busy", "is_waiting_for_pick"])
+@patch("pikaraoke.routes.batch_song_renamer.is_admin", return_value=True)
+@patch("pikaraoke.routes.batch_song_renamer.get_karaoke_instance")
+def test_rename_refuses_a_song_still_processing(mock_get, _admin, client, reason):
+    mock_get.return_value = k = _admin_karaoke()
+    getattr(k.library_tools, reason).return_value = True
+
+    result = _rename(client, "Better")
+
+    assert result["success"] is False
+    assert SONG in result["message"]
+    k.song_manager.rename.assert_not_called()
