@@ -330,6 +330,37 @@ review's other findings for now. Record: `plans/search-official-first.md` on tag
   no channel, uploader, verified flag or description on any row; nothing is lifted and the
   channel line is missing, as before the branch. YouTube-side; recorded, not chased.
 
+## Movie splits (on `dev`)
+
+Found in the `scripts/split_songs.py` code review, 2026-11-08 (`c6be664` on `dev`; the
+fixes Ken took landed as `5cbc495`..`c350c40`). Ken left these for now. No plan file: the
+script's rules and workflow are in `scripts/movie_split.md`, and this entry is the record.
+
+- **A camera cut in the gap between two back-to-back captions counts as nobody talking.** A
+  moment with no spoken caption up is clean however loud the voice track is, and subtitlers
+  leave a gap of a frame or two between captions, often right at a camera cut. Requiring a
+  quiet voice within 0.15 s of any spoken caption closes it, but on FOTC that moves Carol
+  Brown's start 32 s earlier and pulls about 15 dialogue lines in. Its start sits in a 0.1 s
+  gap between two lines, at the hand-set music start, so the loud voice track there may be
+  the music. A rule question for Ken: does a gap between back-to-back lines count as a
+  pause? Not ruled.
+- **Config patterns and titles aren't checked.** `source` and `subtitles` are globs in the
+  folder the clips are written to, so `source = "*.mp4"` also matches the clips on a second
+  run. `[1080p]` in a pattern is a glob character class, a `{` breaks the `{episode}` fill,
+  and a title with `/` writes into a missing folder. All of these fail loudly. The silent
+  one, two songs with the same title in different episodes overwriting each other's clip,
+  is ruled out by the no-reprise rule.
+- **`srt` re-derives the edges** instead of reusing the spans the mp4 was cut with. After a
+  config or constant change, or a re-run separation, the rewritten SRT can be timed to other
+  spans than the video, with no warning. Until then: run `srt` before deleting `split_cache/`
+  and without touching the edge fields.
+- **Music-tag words match inside other words.** "beat", "playing" and "music" match anywhere,
+  so "[ heartbeat ]", "[ kids playing ]" or "[ music box clicks ]" before a song can be read
+  as its music start and pull in a silent stretch. The plan line's long lead shows it.
+- **`plan` spends about a minute of pure Python on a 20-song show.** The spoken-caption test
+  runs a regex per cue for every candidate moment, and the quiet threshold is recomputed for
+  every moment.
+
 ## Web pages (pre-existing on `dev`)
 
 Found 2026-10-27 during the `queue_hold` manual checks on the Windows box.
