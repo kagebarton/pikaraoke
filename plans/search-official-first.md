@@ -288,17 +288,17 @@ Left, to go into `plans/open-issues.md` at landing:
 Run from the worktree: `/home/ken/miniconda3/envs/pik/bin/python -m pikaraoke.app`. Only one
 instance can run at a time; stop the main one first.
 
-- [ ] "dont stop believin": Journey's official audio is first (YouTube has a lyrics channel there).
-- [ ] "bohemian rhapsody": Queen's video, then Queen's audio, then YouTube's order; Pentatonix
+- [x] "dont stop believin": Journey's official audio is first (YouTube has a lyrics channel there).
+- [x] "bohemian rhapsody": Queen's video, then Queen's audio, then YouTube's order; Pentatonix
       not lifted.
-- [ ] Badges show on lifted cards only.
-- [ ] Show more: about 30 more cards, no duplicates, button gone. Leave Search and come back:
+- [x] Badges show on lifted cards only.
+- [x] Show more: about 30 more cards, no duplicates, button gone. Leave Search and come back:
       all cards are still there and there is no button.
-- [ ] Show more with the network down: error toast, button usable again.
-- [ ] Preview, Select and Add to Queue work on a card from page 2.
-- [ ] "september earth wind and fire": the band's video, then its audio.
-- [ ] "live and let die": Paul McCartney's audio is lifted; no "(Live)" upload is.
-- [ ] Search for `test\`: the page works (Show more, Select), and the box shows `test\`
+- [x] Show more with the network down: error toast, button usable again.
+- [x] Preview, Select and Add to Queue work on a card from page 2.
+- [x] "september earth wind and fire": the band's video, then its audio.
+- [x] "live and let die": Paul McCartney's audio is lifted; no "(Live)" upload is.
+- [x] Search for `test\`: the page works (Show more, Select), and the box shows `test\`
       after leaving Search and coming back.
 
 ## Results log
@@ -314,3 +314,4 @@ instance can run at a time; stop the main one first.
 | 7 `fix(official_rank): a band named like a collaboration is credited whole` | `c152b1c` | `tests/unit` 3425 passed; pre-commit clean on the 2 changed Python files | All 14 fixture picks and lifts unchanged. Tests: Simon & Garfunkel and Lil Nas X rows pick the whole name and lift video, audio, audio (both fail without it). Live, old vs new code on the same fetch: "the sound of silence" old `disturbed` (lifted Disturbed's cover), new `simongarfunkel` (3 S&G audio); "september earth wind and fire" new picks `earthwindfire` but lifts nothing (the query's "and" fails the song check, so commit 9); "old town road" `lilnas` both, same 3 lifts ("Lil Nas X, Billy Ray Cyrus" sides credit `lilnas` but not `lilnasx`); "rich girl hall and oates" `darylhall` both, same lift. |
 | 8 `fix(official_rank): an exclude word in the song's own name is not a mark` | `3477423` | `tests/unit` 3428 passed; pre-commit clean on the 2 changed Python files | Marks counted per mark (`Counter` difference title minus query). Tests: "live your life" T.I. video lifts; "Live And Let Die (Live)" stays out; "bohemian rhapsody live" lifts "(Live Aid 1985)". Mutation: the old whole-title search fails the two lifting cases. Live: "live and let die" old lifts nothing, new lifts 5 Paul McCartney audio rows; "live your life" old nothing, new T.I. video + 2 art tracks. |
 | 9 `fix(official_rank): "&" reads as "and"` | `639484b` | `tests/unit` 3429 passed; pre-commit clean on the 2 changed Python files | Picks become `simonandgarfunkel`, `earthwindandfire`. Test case added for "september earth wind and fire"; mutation fails it and the S&G case. Also drops `.replace("’", "")` after the ASCII encode (`Don’t` is already `Dont` there). Live: "september earth wind and fire" lifts the band's video + 2 art tracks; "rich girl hall and oates" picks `darylhallandjohnoates` and lifts 5 audio rows (old: `None` on that fetch); "shallow lady gaga" and "live and let die" unchanged from commit 8. "the sound of silence" over 4 live fetches: `simonandgarfunkel` once (6-4 over Disturbed), `None` three times (Disturbed ties it, e.g. 3-3 and 4-4); never Disturbed. "dont stop believin" picked `journey` and lifted nothing in one fetch, old and new alike (rows not inspected); the next fetch lifted Journey's art track as audio. "celebration kool and the gang" `None` old and new. |
+| manual checks | `69de6a2` | n/a | Ken ran the nine Manual checks in the real app (`python -m pikaraoke.app` from the worktree, 2026-11-08) and reported them passing. App log: the check queries ("dont stop believin" x2, "bohemian rhapsody", "september earth wind and fire", "live and let die" x2, `test\` x2), then "backstreet boys" and "nsync" with two downloads queued and processed; no errors or tracebacks; clean quit. |
