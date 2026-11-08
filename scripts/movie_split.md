@@ -151,9 +151,12 @@ All times are seconds in the source. FOTC's full config is
 ## How the script measures each rule
 
 **Camera cuts:** ffmpeg's `scdet` filter at a score of 10, run on a 320 px
-copy. FOTC's hard cuts scored 15-19. With `-copyts` the times it prints are
-absolute, so they need no offset. x265 sources put their keyframes on these
-cuts.
+copy. FOTC's hard cuts scored 15-19. It runs on each search window and prints
+times from the window's start, which the script adds back. Absolute times
+(`-copyts`) come out rounded to 10 ms past 1000 s, and an end on one rounded up
+keeps the next shot's first frame (FOTC's Bowie). They would also be off by the
+container's start time where that isn't 0. x265 sources put their keyframes on
+these cuts.
 
 **Nobody talking:** a moment is clean if no spoken caption is up, or if the
 voice track is quiet for 0.15 s on each side.
