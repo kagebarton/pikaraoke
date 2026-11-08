@@ -184,8 +184,15 @@ def test_pick_artist_reads_the_artist_out_of_a_title(titles, artist):
             "the sound of silence",
             "Simon & Garfunkel",
             "The Sound of Silence",
-            "simongarfunkel",
+            "simonandgarfunkel",
             id="ampersand",
+        ),
+        pytest.param(
+            "september earth wind and fire",
+            "Earth, Wind & Fire",
+            "September",
+            "earthwindandfire",
+            id="and-in-the-query-is-the-titles-ampersand",
         ),
         pytest.param(
             "lil nas x old town road", "Lil Nas X", "Old Town Road", "lilnasx", id="x-in-the-name"
