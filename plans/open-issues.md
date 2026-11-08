@@ -243,6 +243,17 @@ From the `library_tools` real-world run, 2026-10-20. Record: `library-tools.md`.
   the end-side blind spot (extension onto another voice) recorded on
   `archive/edge_snap_refine`. Record: `lyric-source-lists.md` Results row 21.
 
+## Song rename (pre-existing on `dev`)
+
+- **A new name holding `/` or `..` leaves the song's folder.** On Linux and
+  macOS `sanitize_filename` keeps both, so renaming to `../Out` moves the video
+  out of the library and its captions and lyrics into the library root, and the
+  DB then points outside the library. A title like `AC/DC - Thunderstruck`
+  fails with nothing moved, showing "No such file or directory". Admin only. One
+  line fixes both: replace `/` with `-` on every platform, as Windows already
+  does. Not ruled. Record: `plans/song-files-rename-delete.md` on branch
+  `song_files`, follow-up gap 4.
+
 ## Web pages (pre-existing on `dev`)
 
 Found 2026-10-27 during the `queue_hold` manual checks on the Windows box.
