@@ -15,10 +15,12 @@ from scripts.split_songs import (
     clip_srt,
     cue_text,
     label_re,
+    lead_start,
     music_start,
     parse_srt,
     pick,
     recase,
+    tail_end,
 )
 
 
@@ -107,6 +109,34 @@ class TestChoose:
     def test_no_quiet_moment_raises(self):
         with pytest.raises(RuntimeError):
             choose([], [], 80.0, -1, SILENT, [], True)
+
+    def test_a_near_cut_on_the_far_side_beats_falling_off_cut(self):
+        assert choose([62.0, 81.0], self.WINDOW, 80.0, -1, SILENT, [], True) == Edge(81.0, True)
+
+
+class FakeEpisode:
+    """An episode's measurements without the video: a quiet voice track and given cuts."""
+
+    def __init__(self, cues: list[Cue], cuts: list[float]):
+        self.cues, self.cuts, self.duration = cues, cuts, 600.0
+
+    def voice(self, t0: float, t1: float) -> Voice:
+        t0 = max(0.0, t0)
+        return Voice(t0, np.concatenate([np.full(int((t1 - t0) * 20), -60.0), [-10.0] * 10]))
+
+    def shot_cuts(self, t0: float, t1: float) -> list[float]:
+        return [t for t in self.cuts if t0 <= t <= t1]
+
+
+class TestEdgeSearch:
+    def test_an_end_capped_by_the_next_line_stays_before_it(self):
+        cues = [Cue(1, 90.0, 95.0, "♪ Last line ♪"), Cue(2, 100.0, 103.0, "Well, then.")]
+        ep = FakeEpisode(cues, [98.0, 104.0])
+        assert tail_end(ep, Part(1, 1), 5.0, True) == Edge(98.0, True)
+
+    def test_a_start_by_of_zero_keeps_the_cold_open(self):
+        ep = FakeEpisode([Cue(1, 30.0, 32.0, "♪ First line ♪")], [])
+        assert lead_start(ep, Part(1, 1, start_by=0.0), 5.0, True).time == 0.0
 
 
 class TestMusicStart:

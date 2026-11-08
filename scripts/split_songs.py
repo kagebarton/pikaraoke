@@ -325,19 +325,20 @@ def choose(
     on_cut: bool,
 ) -> Edge:
     """On a clean camera cut if ``on_cut`` and one is within MAX_CUT_DETOUR of the nearest
-    clean moment, else at that moment, partway through a shot."""
+    clean moment, on either side of it, else at that moment, partway through a shot."""
     moment = pick(window, target, outward, voice, cues)
     if moment is None:
         raise RuntimeError(f"no quiet moment near {target:.1f}")
-    cut = pick(cuts, target, outward, voice, cues) if on_cut else None
-    if cut is not None and abs(cut - moment) <= MAX_CUT_DETOUR:
-        return Edge(cut, True)
-    return Edge(moment, moment in cuts)
+    near = [t for t in cuts if abs(t - moment) <= MAX_CUT_DETOUR] if on_cut else []
+    cut = pick(near, target, outward, voice, cues)
+    return Edge(cut, True) if cut is not None else Edge(moment, False)
 
 
 def lead_start(ep: Episode, part: Part, lead: float, on_cut: bool) -> Edge:
     first = num(ep.cues, part.first)
-    latest = min(first.start, music_start(part, ep.cues), part.start_by or first.start)
+    latest = min(first.start, music_start(part, ep.cues))
+    if part.start_by is not None:
+        latest = min(latest, part.start_by)
     target = min(first.start - lead, latest)
     t0 = latest - SEARCH
     voice = ep.voice(t0, latest + 1)
@@ -352,14 +353,17 @@ def tail_end(ep: Episode, part: Part, tail: float, on_cut: bool) -> Edge:
     last = num(ep.cues, part.last)
     earliest = part.music_to if part.music_to is not None else last.end
     nxt = next((c for c in ep.cues if c.spoken and c.start >= last.end - 0.01), None)
-    target = max(earliest, min(last.end + tail, nxt.start if nxt else float("inf")))
+    cap = nxt.start if nxt else float("inf")
+    target = max(earliest, min(last.end + tail, cap))
+    # Capped by the next spoken line, the padding side is before that line, not after it.
+    outward = -1 if cap <= last.end + tail else 1
     if ep.duration - earliest < 1:
         return Edge(ep.duration, True)
     t1 = min(earliest + SEARCH, ep.duration)
     voice = ep.voice(earliest - 1, t1)
     cuts = [t for t in ep.shot_cuts(earliest - 1, t1) if t >= earliest]
     window = [t for t in voice.grid() if t >= earliest]
-    return choose(cuts, window, target, 1, voice, ep.cues, on_cut)
+    return choose(cuts, window, target, outward, voice, ep.cues, on_cut)
 
 
 def edges(ep: Episode, song: Song) -> list[tuple[Edge, Edge]]:
