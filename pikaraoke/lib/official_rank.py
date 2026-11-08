@@ -41,9 +41,11 @@ _OFFICIAL = re.compile(r"\bofficial\b|\bmusic video\b", re.I)
 
 
 def _words(text: str) -> list[str]:
-    """Lowercase ASCII words of ``text``; apostrophes vanish, so "Don't" is "dont"."""
+    """Lowercase ASCII words of ``text``; apostrophes vanish, so "Don't" is "dont", and "&" is
+    "and", so a query's "earth wind and fire" matches the title's "Earth, Wind & Fire"."""
     ascii_text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().lower()
-    return re.findall(r"[a-z0-9]+", ascii_text.replace("'", "").replace("’", ""))
+    ascii_text = ascii_text.replace("'", "").replace("&", " and ")
+    return re.findall(r"[a-z0-9]+", ascii_text)
 
 
 def _has_letters_without_ascii(text: str) -> bool:
