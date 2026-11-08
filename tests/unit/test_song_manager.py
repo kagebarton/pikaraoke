@@ -247,6 +247,24 @@ class TestDelete:
         assert _native(song) in sm.songs
         assert db.get_pipeline_state(_native(song)) == "pending"
 
+    def test_a_file_that_cannot_be_removed_leaves_the_video(self, library, sm, db):
+        """A locked stem (Windows) stops the delete with the song still playable."""
+        song = _add_song(sm, library, "Test---abc")
+        stem_file = _add_sidecar(library, "Test---abc", "vocal", "---vocal.m4a")
+        real_remove = os.remove
+
+        def remove(path):
+            if Path(path) == stem_file:
+                raise PermissionError("locked")
+            real_remove(path)
+
+        with patch("pikaraoke.lib.song_manager.os.remove", side_effect=remove):
+            with pytest.raises(PermissionError):
+                sm.delete(_native(song))
+        assert song.exists() and stem_file.exists()
+        assert _native(song) in sm.songs
+        assert db.get_pipeline_state(_native(song)) == "pending"
+
 
 class TestRename:
     def test_renames_file_and_updates_songs(self, library, sm, db):

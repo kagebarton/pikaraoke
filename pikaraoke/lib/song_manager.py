@@ -70,14 +70,15 @@ class SongManager:
 
         The song's text files (sheet, captions, bundle) are copied into
         ``regen_backups/<UTC>/`` first, so a delete can be undone for them by
-        hand. A failed backup (``OSError``) deletes nothing.
+        hand. A failed backup (``OSError``) deletes nothing. The video goes
+        last, so a file that can't be removed leaves a song that still plays.
         """
         logging.info(f"Deleting song: {song_path}")
         song = Path(song_path)
         backup = backup_text_folders(song.parent, stems=[song.stem])
         if backup:
             logging.info(f"Backed up {song.name}'s text files to {backup}")
-        for path in [song, *song_files(song)]:
+        for path in [*song_files(song), song]:
             with contextlib.suppress(FileNotFoundError):
                 os.remove(path)
         self.songs.remove(song_path)
