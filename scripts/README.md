@@ -224,6 +224,17 @@ flags to the app, not preferences, so this tool doesn't read them; only
 `high_quality` (a real preference) applies. `blocked_processing_words`
 filtering is also out of scope.
 
+## split_songs.py
+
+Cuts a film's or TV show's songs into one clip and one clip-timed SRT each,
+from a TOML config kept next to the source video. Which songs, where each clip
+starts and ends, the config format, and how to ingest the clips are in
+[movie_split.md](movie_split.md).
+
+```bash
+python scripts/split_songs.py <show.toml> plan|cut|srt [song]
+```
+
 ## movie_srt_fit_report.py
 
 Runs the movie-subtitle slice fit (`pikaraoke/lib/srt_slice_fit.py`) over every

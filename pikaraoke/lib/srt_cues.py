@@ -99,7 +99,7 @@ def clean_cue_texts(contents: list[str]) -> list[str]:
     the whole list, and speaker labels are left alone in such a file, where
     every line would look like one.
     """
-    all_caps = _is_all_caps([clean_srt_line(content) for content in contents])
+    all_caps = is_all_caps([clean_srt_line(content) for content in contents])
     cleaned = [_clean_cue(content, labels=not all_caps) for content in contents]
     return [_recase_line(text) for text in cleaned] if all_caps else cleaned
 
@@ -173,7 +173,7 @@ def _drop_label(match: re.Match[str]) -> str:
     return match.group(0) if _recase_line(label) == label else match.group(1) + " "
 
 
-def _is_all_caps(texts: list[str]) -> bool:
+def is_all_caps(texts: list[str]) -> bool:
     """True when the file is typed in capitals.
 
     The share is taken over *every* letter, not only the cased ones. A
