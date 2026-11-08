@@ -445,8 +445,18 @@ class TestParseSearchLine:
 
         assert _parse_search_line(line).duration == "1:05"
 
-    @pytest.mark.parametrize("line", ["", "\n", "{}", '{"id": "a", "title": "t"}'])
-    def test_a_blank_line_or_a_row_without_title_and_url_is_skipped(self, line):
+    @pytest.mark.parametrize(
+        "line",
+        [
+            "",
+            "\n",
+            "{}",
+            '{"id": "a", "title": "t"}',
+            '{"url": "u", "title": "t"}',
+            '{"id": "a", "url": "u", "title": null}',
+        ],
+    )
+    def test_a_blank_line_or_a_row_without_title_url_or_id_is_skipped(self, line):
         assert _parse_search_line(line) is None
 
 
