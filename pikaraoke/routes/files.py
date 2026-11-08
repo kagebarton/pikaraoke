@@ -157,12 +157,18 @@ def delete_file(query):
             "is-danger",
         )
     else:
-        k.song_manager.delete(song_path)
-        # MSG: Message shown after deleting a song. Followed by the song path
-        flash(
-            _("Song deleted: %s") % k.song_manager.filename_from_path(song_path),
-            "is-warning",
-        )
+        try:
+            k.song_manager.delete(song_path)
+        except OSError as e:
+            logging.error(f"Error deleting file: {e}")
+            # MSG: Message shown when a song could not be deleted. Followed by the path and the reason
+            flash(_("Error deleting file: '%s', %s") % (song_path, e), "is-danger")
+        else:
+            # MSG: Message shown after deleting a song. Followed by the song path
+            flash(
+                _("Song deleted: %s") % k.song_manager.filename_from_path(song_path),
+                "is-warning",
+            )
     return redirect(referrer)
 
 
@@ -216,29 +222,25 @@ def rename_file(form):
             "is-danger",
         )
     else:
-        file_extension = os.path.splitext(old_name)[1]
-        if os.path.isfile(
-            os.path.join(k.song_manager.download_path, new_name_full + file_extension)
-        ):
+        try:
+            k.song_manager.rename(old_name, new_name_full)
+        except FileExistsError:
             flash(
                 # MSG: Message shown after trying to rename a file to a name that already exists.
                 _("Error renaming file: '%s' to '%s', Filename already exists")
-                % (old_name, new_name_full + file_extension),
+                % (old_name, new_name_full + os.path.splitext(old_name)[1]),
+                "is-danger",
+            )
+        except OSError as e:
+            logging.error(f"Error renaming file: {e}")
+            flash(
+                _("Error renaming file: '%s' to '%s', %s") % (old_name, new_name_full, e),
                 "is-danger",
             )
         else:
-            try:
-                k.song_manager.rename(old_name, new_name_full)
-            except OSError as e:
-                logging.error(f"Error renaming file: {e}")
-                flash(
-                    _("Error renaming file: '%s' to '%s', %s") % (old_name, new_name_full, e),
-                    "is-danger",
-                )
-            else:
-                flash(
-                    # MSG: Message shown after renaming a file.
-                    _("Renamed file: %s to %s") % (old_name, new_name_full),
-                    "is-warning",
-                )
+            flash(
+                # MSG: Message shown after renaming a file.
+                _("Renamed file: %s to %s") % (old_name, new_name_full),
+                "is-warning",
+            )
     return redirect(referrer)

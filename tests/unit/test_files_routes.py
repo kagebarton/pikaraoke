@@ -190,3 +190,55 @@ def test_a_guest_cannot_rename_a_song(mock_get, _admin, client):
 
     assert resp.status_code == 302
     k.song_manager.rename.assert_not_called()
+
+
+def _flashes(client):
+    with client.session_transaction() as sess:
+        return [(category, message) for category, message in sess.get("_flashes", [])]
+
+
+def _admin_karaoke():
+    k = _mock_karaoke(SONGS)
+    k.queue_manager.is_song_in_queue.return_value = False
+    return k
+
+
+@patch("pikaraoke.routes.files.is_admin", return_value=True)
+@patch("pikaraoke.routes.files.get_karaoke_instance")
+def test_rename_passes_the_name_with_the_youtube_id_to_the_manager(mock_get, _admin, client):
+    mock_get.return_value = k = _admin_karaoke()
+
+    client.post("/files/edit", data={"old_file_name": SONGS[0], "new_file_name": "Better Name"})
+
+    k.song_manager.rename.assert_called_once_with(SONGS[0], "Better Name---abc123def45")
+    assert _flashes(client)[0][0] == "is-warning"
+
+
+@patch("pikaraoke.routes.files.is_admin", return_value=True)
+@patch("pikaraoke.routes.files.get_karaoke_instance")
+def test_rename_onto_a_taken_name_flashes_that_it_exists(mock_get, _admin, client):
+    mock_get.return_value = k = _admin_karaoke()
+    k.song_manager.rename.side_effect = FileExistsError("taken")
+
+    resp = client.post(
+        "/files/edit", data={"old_file_name": SONGS[0], "new_file_name": "Taken Name"}
+    )
+
+    assert resp.status_code == 302
+    ((category, message),) = _flashes(client)
+    assert category == "is-danger"
+    assert "Filename already exists" in message
+    assert "Taken Name---abc123def45.mp4" in message
+
+
+@patch("pikaraoke.routes.files.is_admin", return_value=True)
+@patch("pikaraoke.routes.files.get_karaoke_instance")
+def test_delete_that_fails_flashes_an_error_not_success(mock_get, _admin, client):
+    mock_get.return_value = k = _admin_karaoke()
+    k.song_manager.delete.side_effect = OSError("disk full")
+
+    client.get("/files/delete", query_string={"song": SONGS[0]})
+
+    ((category, message),) = _flashes(client)
+    assert category == "is-danger"
+    assert "disk full" in message
