@@ -87,7 +87,9 @@ def _title_artists(title: str, query_words: Sequence[str]) -> set[str]:
     """The artists a title credits: the side of "A - B" that is not the song.
 
     "Artist - Song" unless the left side holds every query word and the right one does not
-    ("Song - Artist"). Collaborators on that side each count.
+    ("Song - Artist"). Collaborators on that side each count, and so does the whole side: the
+    split cannot tell "Simon & Garfunkel" or "Lil Nas X" from a duet, and whole, the name
+    matches the band's channel.
     """
     sides = [side for side in _SEPARATOR.split(_BRACKETED.sub(" ", title)) if _words(side)]
     if len(sides) < 2:
@@ -95,7 +97,8 @@ def _title_artists(title: str, query_words: Sequence[str]) -> set[str]:
     left, right = sides[0], sides[1]
     song_first = _share_found(query_words, left) == 1.0 and _share_found(query_words, right) < 1.0
     artist_side = right if song_first else left
-    return {name for part in _COLLAB.split(artist_side) if (name := _compact(part))}
+    collaborators = {name for part in _COLLAB.split(artist_side) if (name := _compact(part))}
+    return collaborators | {_compact(artist_side)}
 
 
 def _credited_artists(result: SearchResult, query_words: Sequence[str]) -> set[str]:
