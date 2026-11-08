@@ -177,6 +177,36 @@ def test_pick_artist_reads_the_artist_out_of_a_title(titles, artist):
     assert pick_artist(results, "some song") == artist
 
 
+@pytest.mark.parametrize(
+    "query, band, song, artist",
+    [
+        pytest.param(
+            "the sound of silence",
+            "Simon & Garfunkel",
+            "The Sound of Silence",
+            "simongarfunkel",
+            id="ampersand",
+        ),
+        pytest.param(
+            "lil nas x old town road", "Lil Nas X", "Old Town Road", "lilnasx", id="x-in-the-name"
+        ),
+    ],
+)
+def test_a_band_named_like_a_collaboration_is_credited_whole(query, band, song, artist):
+    results = [
+        _row(f"{band} - {song} (Official Video)", channel=band),
+        _row(f"{band} - {song} (Official Audio)", channel=band),
+        _row(song, channel=f"{band} - Topic", verified=False),
+    ]
+
+    assert pick_artist(results, query) == artist
+    assert [kind for _, kind in official_first(results, query, artist)] == [
+        "video",
+        "audio",
+        "audio",
+    ]
+
+
 @pytest.mark.parametrize("query", ["夜に駆ける", "yoasobi 夜に駆ける"])
 def test_a_query_the_song_check_cannot_read_picks_none(query):
     results = [
