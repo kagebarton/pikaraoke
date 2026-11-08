@@ -523,6 +523,47 @@ class TestRegexTidy:
     def test_no_change_when_clean(self):
         assert regex_tidy("Artist - Song Title") == "Artist - Song Title"
 
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "Jay Chou 周杰倫 - 晴天 (Sunny Day)",
+            "Jung Kook 정국 - Seven",
+            "YOASOBI - アイドル",
+        ],
+    )
+    def test_keeps_chinese_korean_and_japanese_text(self, name):
+        assert regex_tidy(name) == name
+
+    def test_strips_a_symbol_emoji(self):
+        assert regex_tidy("Artist - Song ♥️") == "Artist - Song"
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "Céline Dion - My Heart Will Go On (Titanic, 1997)",
+            "Jung Kook - Seven (feat. Latto)",
+            "Ed Sheeran - Best Part Of Me (Live At Abbey Road)",
+            "Frozen (2013) - In Summer (Sing-Along)",
+            "Backstreet Boys - Quit Playing Games (With My Heart)",
+        ],
+    )
+    def test_keeps_a_trailing_bracket_that_is_part_of_the_name(self, name):
+        assert regex_tidy(name) == name
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "Artist - Song (Official 25th Anniversary Alternate Music Video)",
+            "Artist - Song (Official Video) [HD]",
+            "Artist - Song (Blu-ray 1080p HD)",
+            "Artist - Song [4K]",
+            "Artist - Song (Remastered 2009)",
+            "Artist - Song (Official MV)",
+        ],
+    )
+    def test_strips_trailing_junk_brackets(self, name):
+        assert regex_tidy(name) == "Artist - Song"
+
 
 class TestYoutubeIdSuffix:
     """Tests for the youtube_id_suffix function."""

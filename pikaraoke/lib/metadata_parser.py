@@ -23,7 +23,9 @@ EMOJI_PATTERN = re.compile(
     "\U0001FA00-\U0001FA6F"
     "\U0001FA70-\U0001FAFF"
     "\U00002702-\U000027B0"
-    "\U000024C2-\U0001F251"
+    "\U00002600-\U000026FF"
+    "\U00002B50\U00002B55\U000024C2\U0000FE0F"
+    "\U0001F170-\U0001F251"
     "]+"
 )
 
@@ -104,6 +106,16 @@ ATTRIBUTION_PATTERNS = [
         re.IGNORECASE,
     ),
 ]
+
+# A trailing bracket holding one of these is upload junk ("(Official HD Video)",
+# "[4K]"). Any other bracket is part of the name ("(Live)", "(feat. Latto)",
+# "(Titanic, 1997)") and stays.
+_JUNK_BRACKET = re.compile(
+    r"\s*(?:\([^()]*|\[[^\[\]]*)"
+    r"\b(?:official|video|audio|lyrics?|visuali[sz]er|mv|m/v|hd|hq|uhd|4k|\d{3,4}p"
+    r"|remaster(?:ed)?|blu-ray|karaoke|instrumental)\b[^()\[\]]*[)\]]\s*$",
+    re.IGNORECASE,
+)
 
 TRAILING_NOISE_PATTERNS = [
     # "karaoke" at the trailing end means everything after it is noise
@@ -552,12 +564,20 @@ def _extract_attribution_artist(name: str) -> str | None:
     return None
 
 
+def _strip_junk_brackets(name: str) -> str:
+    """Drop trailing junk brackets, however many are stacked."""
+    prev = None
+    while prev != name:
+        prev = name
+        name = _JUNK_BRACKET.sub("", name)
+    return name
+
+
 def _strip_attribution_and_noise(name: str) -> str:
     """Remove the matched attribution phrase and trailing noise from the title."""
     for pattern in ATTRIBUTION_PATTERNS:
         name = pattern.sub("", name)
-    # Strip remaining trailing bracketed/parenthesised content
-    name = re.sub(r"\s*[\(\[][^\)\]]*[\)\]]\s*$", "", name)
+    name = _strip_junk_brackets(name)
     for noise_pat in TRAILING_NOISE_PATTERNS:
         prev = None
         while prev != name:
@@ -586,9 +606,7 @@ def regex_tidy(filename: str) -> str:
         title = _strip_attribution_and_noise(name)
         name = f"{title} - {artist}"
     else:
-        # Strip trailing parenthesised/bracketed content
-        name = re.sub(r"\s*\([^)]*\)\s*$", "", name)
-        name = re.sub(r"\s*\[[^\]]*\]\s*$", "", name)
+        name = _strip_junk_brackets(name)
         # Iteratively strip trailing noise patterns
         for noise_pat in TRAILING_NOISE_PATTERNS:
             prev = None
