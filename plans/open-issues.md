@@ -306,8 +306,8 @@ From the `library_tools` real-world run, 2026-10-20. Record: `library-tools.md`.
 ## Search results (on `dev`)
 
 Found in the `search_official_first` review and its live checks, 2026-11-08. Ken left the
-review's other findings for now. Record: `plans/search-official-first.md` on branch
-`search_official_first`, "Review follow-ups" and the Results log.
+review's other findings for now. Record: `plans/search-official-first.md` on tag
+`archive/search_official_first`, "Review follow-ups" and the Results log.
 
 - **A restored search page can show a stuck card.** After Show more, the page saves the cards
   so coming back to Search restores them. The copy can catch a card's loading state or the
