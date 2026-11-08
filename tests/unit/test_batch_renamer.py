@@ -139,6 +139,18 @@ def test_rename_onto_a_taken_name_says_it_exists(mock_get, _admin, client):
 
 @patch("pikaraoke.routes.batch_song_renamer.is_admin", return_value=True)
 @patch("pikaraoke.routes.batch_song_renamer.get_karaoke_instance")
+def test_rename_to_a_blank_name_says_it_is_empty(mock_get, _admin, client):
+    mock_get.return_value = k = _admin_karaoke()
+    k.song_manager.rename.side_effect = ValueError("blank")
+
+    result = _rename(client, "")
+
+    assert result["success"] is False
+    assert "can't be empty" in result["message"]
+
+
+@patch("pikaraoke.routes.batch_song_renamer.is_admin", return_value=True)
+@patch("pikaraoke.routes.batch_song_renamer.get_karaoke_instance")
 def test_a_failed_rename_is_reported_not_raised(mock_get, _admin, client):
     mock_get.return_value = k = _admin_karaoke()
     k.song_manager.rename.side_effect = PermissionError("locked")

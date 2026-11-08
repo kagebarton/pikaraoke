@@ -307,10 +307,24 @@ class TestRename:
         assert (folder / "subtitles" / "New---abc.srt").exists()
         assert not (library / "New---abc.mp4").exists()
 
-    def _assert_refused(self, sm, db, song, new_name, *, touched):
-        """The rename raises FileExistsError and leaves files, SongList and DB alone."""
+    @pytest.mark.parametrize("new_name", ["../New---abc", "AC/DC - New---abc"])
+    def test_a_slash_in_the_new_name_keeps_the_song_in_its_folder(self, library, sm, new_name):
+        song = _add_song(sm, library, "Old---abc")
+        _add_sidecar(library, "Old---abc", "subtitles", ".srt")
+        new = Path(sm.rename(_native(song), new_name))
+        assert new.parent == library and new.exists()
+        assert (library / "subtitles" / (new.stem + ".srt")).exists()
+
+    @pytest.mark.parametrize("new_name", ["", "   "])
+    def test_refuses_a_blank_name(self, library, sm, db, new_name):
+        song = _add_song(sm, library, "Old---abc")
+        sidecar = _add_sidecar(library, "Old---abc", "subtitles", ".srt")
+        self._assert_refused(sm, db, song, new_name, touched=[song, sidecar], error=ValueError)
+
+    def _assert_refused(self, sm, db, song, new_name, *, touched, error=FileExistsError):
+        """The rename raises ``error`` and leaves files, SongList and DB alone."""
         before = {p: p.read_text() for p in touched}
-        with pytest.raises(FileExistsError):
+        with pytest.raises(error):
             sm.rename(_native(song), new_name)
         assert {p: p.read_text() for p in touched} == before
         assert _native(song) in sm.songs

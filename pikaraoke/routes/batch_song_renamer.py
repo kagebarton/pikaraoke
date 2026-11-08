@@ -271,6 +271,9 @@ def rename_song(form):
                 raise
         else:
             new_path = k.song_manager.rename(old_name, new_name)
+    except ValueError:
+        # MSG: Message shown after trying to rename a song to a blank name.
+        return jsonify(_error_response(_("Error: The new name can't be empty")))
     except FileExistsError:
         # MSG: Message shown after trying to rename a file to a name that already exists.
         return jsonify(
