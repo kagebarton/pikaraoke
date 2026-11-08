@@ -19,6 +19,7 @@ from marshmallow import Schema, fields
 
 from pikaraoke.lib.current_app import get_karaoke_instance, get_site_name, is_admin
 from pikaraoke.lib.metadata_parser import clear_song_name_cache, get_song_correct_name
+from pikaraoke.routes.files import song_busy_message
 
 _ = flask_babel.gettext
 
@@ -249,6 +250,9 @@ def rename_song(form):
                 _("Error: Can't edit this song because it is in the current queue: ") + old_name
             )
         )
+
+    if busy := song_busy_message(k, old_name):
+        return jsonify(_error_response(busy))
 
     file_extension = os.path.splitext(old_name)[1]
     old_filename = k.song_manager.filename_from_path(old_name, remove_youtube_id=False)

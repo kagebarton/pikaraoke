@@ -37,6 +37,23 @@ class EditFileForm(Schema):
     referrer = fields.String(metadata={"description": "URL to redirect back to after editing"})
 
 
+def song_busy_message(k, song_path: str) -> str | None:
+    """Why a song can't be renamed or deleted right now, or None.
+
+    A song being processed, queued for processing, or waiting for a lyrics pick
+    has files a running job is about to write; the admin cancels first.
+    """
+    tools = k.library_tools
+    if tools.is_busy(song_path) or tools.is_waiting_for_pick(song_path):
+        # MSG: Message shown after trying to rename or delete a song that is still processing.
+        return (
+            _("Error: Can't change this song while it is processing or waiting for a lyrics pick")
+            + ": "
+            + song_path
+        )
+    return None
+
+
 @files_bp.route("/browse", methods=["GET"])
 def browse():
     """Browse available songs page."""
@@ -156,6 +173,8 @@ def delete_file(query):
             + song_path,
             "is-danger",
         )
+    elif busy := song_busy_message(k, song_path):
+        flash(busy, "is-danger")
     else:
         try:
             k.song_manager.delete(song_path)
@@ -190,6 +209,9 @@ def edit_file(query):
             "is-danger",
         )
         return redirect(referrer)
+    if busy := song_busy_message(k, song_path):
+        flash(busy, "is-danger")
+        return redirect(referrer)
     raw_stem = k.song_manager.filename_from_path(song_path, tidy=False)
     return render_template(
         "edit.html",
@@ -221,6 +243,8 @@ def rename_file(form):
             _("Error: Can't edit this song because it is in the current queue: ") + old_name,
             "is-danger",
         )
+    elif busy := song_busy_message(k, old_name):
+        flash(busy, "is-danger")
     else:
         try:
             k.song_manager.rename(old_name, new_name_full)

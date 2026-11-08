@@ -82,6 +82,8 @@ def _mock_karaoke(songs, *, pipeline_states=None, tracker=None, active_job=None)
     k.pipeline_tracker.get_status.return_value = tracker or []
     k.processing_manager.get_active_job.return_value = active_job
     k.browse_results_per_page = 500
+    k.library_tools.is_busy.return_value = False
+    k.library_tools.is_waiting_for_pick.return_value = False
     return k
 
 
@@ -242,3 +244,64 @@ def test_delete_that_fails_flashes_an_error_not_success(mock_get, _admin, client
     ((category, message),) = _flashes(client)
     assert category == "is-danger"
     assert "disk full" in message
+
+
+BUSY_REASONS = ["is_busy", "is_waiting_for_pick"]
+
+
+def _busy_karaoke(reason):
+    """An admin's karaoke whose library tools report SONGS[0] busy for ``reason``."""
+    k = _admin_karaoke()
+    getattr(k.library_tools, reason).return_value = True
+    return k
+
+
+@pytest.mark.parametrize("reason", BUSY_REASONS)
+@patch("pikaraoke.routes.files.is_admin", return_value=True)
+@patch("pikaraoke.routes.files.get_karaoke_instance")
+def test_delete_refuses_a_song_still_processing(mock_get, _admin, client, reason):
+    mock_get.return_value = k = _busy_karaoke(reason)
+
+    client.get("/files/delete", query_string={"song": SONGS[0]})
+
+    k.song_manager.delete.assert_not_called()
+    ((category, message),) = _flashes(client)
+    assert category == "is-danger"
+    assert SONGS[0] in message
+
+
+@pytest.mark.parametrize("reason", BUSY_REASONS)
+@patch("pikaraoke.routes.files.is_admin", return_value=True)
+@patch("pikaraoke.routes.files.get_site_name", return_value="PiKaraoke")
+@patch("pikaraoke.routes.files.get_karaoke_instance")
+def test_edit_page_refuses_a_song_still_processing(mock_get, _site, _admin, client, reason):
+    mock_get.return_value = _busy_karaoke(reason)
+
+    resp = client.get("/files/edit", query_string={"song": SONGS[0]})
+
+    assert resp.status_code == 302
+    assert _flashes(client)[0][0] == "is-danger"
+
+
+@pytest.mark.parametrize("reason", BUSY_REASONS)
+@patch("pikaraoke.routes.files.is_admin", return_value=True)
+@patch("pikaraoke.routes.files.get_karaoke_instance")
+def test_rename_refuses_a_song_still_processing(mock_get, _admin, client, reason):
+    mock_get.return_value = k = _busy_karaoke(reason)
+
+    client.post("/files/edit", data={"old_file_name": SONGS[0], "new_file_name": "Better Name"})
+
+    k.song_manager.rename.assert_not_called()
+    ((category, message),) = _flashes(client)
+    assert category == "is-danger"
+    assert SONGS[0] in message
+
+
+@patch("pikaraoke.routes.files.is_admin", return_value=True)
+@patch("pikaraoke.routes.files.get_karaoke_instance")
+def test_delete_acts_on_a_song_that_is_not_processing(mock_get, _admin, client):
+    mock_get.return_value = k = _admin_karaoke()
+
+    client.get("/files/delete", query_string={"song": SONGS[0]})
+
+    k.song_manager.delete.assert_called_once_with(SONGS[0])
