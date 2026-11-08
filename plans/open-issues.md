@@ -303,6 +303,33 @@ From the `library_tools` real-world run, 2026-10-20. Record: `library-tools.md`.
   `Song (Official MV) 👨‍👩‍👧` keeps two invisible characters and, behind them,
   its junk bracket. Older than `d80402b`. Not ruled. Record: same review.
 
+## Search results (on `dev`)
+
+Found in the `search_official_first` review and its live checks, 2026-11-08. Ken left the
+review's other findings for now. Record: `plans/search-official-first.md` on branch
+`search_official_first`, "Review follow-ups" and the Results log.
+
+- **A restored search page can show a stuck card.** After Show more, the page saves the cards
+  so coming back to Search restores them. The copy can catch a card's loading state or the
+  preview modal's last contents, and the restored card then keeps a stuck loading button.
+  Left by Ken 2026-11-08.
+- **A "Song - Artist" title is read the wrong way round** when the query also names the
+  artist: for "queen bohemian rhapsody", "Bohemian Rhapsody - Queen" credits the song name as
+  the artist. Official uploads are nearly always "Artist - Song". Left by Ken 2026-11-08.
+- **The ranking repeats work.** Each row re-normalises the query, and the lift walks the list
+  three times. Thirty rows, so nothing visible. Left by Ken 2026-11-08.
+- **A verified re-upload can be lifted as the music video.** "old town road" lifts the
+  verified channel Wicked Sounds' "Lil Nas X - Old Town Road (Music Video)". A verified
+  channel whose title says "music video" counts as a label upload without any check that the
+  channel is the artist's or a label's. Not ruled.
+- **A band whose channel spells its name another way gets no lift.** "celebration kool and the
+  gang": the channel is "KoolandthegangShow", so the band's full name gets no channel credit
+  and ties with its split-up parts; nothing is lifted and the page keeps YouTube's order. Not
+  ruled.
+- **YouTube sometimes drops the channel fields.** About 1 in 12 live searches came back with
+  no channel, uploader, verified flag or description on any row; nothing is lifted and the
+  channel line is missing, as before the branch. YouTube-side; recorded, not chased.
+
 ## Web pages (pre-existing on `dev`)
 
 Found 2026-10-27 during the `queue_hold` manual checks on the Windows box.
