@@ -231,6 +231,9 @@ def rename_song(form):
     """Rename a song file."""
     k = get_karaoke_instance()
 
+    if not is_admin():
+        return jsonify(_error_response(_("You don't have permission to edit songs")))
+
     if "new_name" not in form or "old_name" not in form:
         # MSG: Message shown after trying to edit a song without specifying the filename.
         return jsonify(_error_response(_("Error: No filename parameters were specified!")))

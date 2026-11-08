@@ -47,6 +47,7 @@ def app():
         template_folder=os.path.join(pkg_dir, "templates"),
         static_folder=os.path.join(pkg_dir, "static"),
     )
+    test_app.secret_key = "test"  # flash() needs a session
     test_app.register_blueprint(files_bp)
     for endpoint in (
         "home.home",
@@ -174,3 +175,18 @@ def test_edit_page_links_to_the_song_info(mock_get, _site, _admin, client):
     body = resp.get_data(as_text=True)
     assert "/__stub/song_info.song_info?song=" in body
     assert "Song info" in body
+
+
+@patch("pikaraoke.routes.files.is_admin", return_value=False)
+@patch("pikaraoke.routes.files.get_karaoke_instance")
+def test_a_guest_cannot_rename_a_song(mock_get, _admin, client):
+    k = _mock_karaoke(SONGS)
+    k.queue_manager.is_song_in_queue.return_value = False
+    mock_get.return_value = k
+
+    resp = client.post(
+        "/files/edit", data={"old_file_name": SONGS[0], "new_file_name": "Stolen Name"}
+    )
+
+    assert resp.status_code == 302
+    k.song_manager.rename.assert_not_called()

@@ -1,6 +1,26 @@
 """Unit tests for batch_song_renamer route-level logic."""
 
-from pikaraoke.routes.batch_song_renamer import _names_match
+from unittest.mock import MagicMock, patch
+
+import pytest
+import werkzeug
+from flask import Flask
+from flask_babel import Babel
+
+if not hasattr(werkzeug, "__version__"):
+    werkzeug.__version__ = "3.0.0"
+
+from pikaraoke.routes.batch_song_renamer import _names_match, batch_song_renamer_bp
+
+SONG = "/songs/Artist - Song---abc123def45.mp4"
+
+
+@pytest.fixture
+def client():
+    app = Flask(__name__)
+    app.register_blueprint(batch_song_renamer_bp)
+    Babel(app)
+    return app.test_client()
 
 
 class TestNamesMatch:
@@ -29,3 +49,18 @@ class TestNamesMatch:
 
     def test_empty_strings(self):
         assert _names_match("", "") is True
+
+
+@patch("pikaraoke.routes.batch_song_renamer.is_admin", return_value=False)
+@patch("pikaraoke.routes.batch_song_renamer.get_karaoke_instance")
+def test_a_guest_cannot_rename_a_song(mock_get, _admin, client):
+    k = MagicMock()
+    k.queue_manager.is_song_in_queue.return_value = False
+    mock_get.return_value = k
+
+    resp = client.post(
+        "/batch-song-renamer/rename-song", data={"old_name": SONG, "new_name": "Stolen Name"}
+    )
+
+    assert resp.get_json()["success"] is False
+    k.song_manager.rename.assert_not_called()
