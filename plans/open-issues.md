@@ -271,6 +271,37 @@ From the `library_tools` real-world run, 2026-10-20. Record: `library-tools.md`.
   sanitizing, in `SongManager.rename`, covers both pages. Not ruled. Record:
   `plans/song-files-rename-delete.md` on tag `archive/song_files`, review 2026-11-08.~~
   Fixed 2026-11-08 as `e7047fd` on `dev` (`fa2cf36` on tag `archive/song_files`).
+- **A live song can claim a deleted song's backups.** Who owns a
+  `regen_backups/` file is worked out from the songs that exist now, so with
+  `Song.live` deleted and `Song` live, renaming `Song` carries `Song.live.srt`
+  into the new name's history. Needs one name to be another plus `.something`;
+  a YouTube ID ending every name rules it out. Not ruled. Record: review of
+  `e755108..d80402b`, 2026-11-08 (no plan file; this entry is the record).
+- **A backup file that can't move blocks the rename.** A rename moves the song's
+  `regen_backups/` copies too and rolls everything back if one fails, so a
+  read-only snapshot folder, or on Windows a backup open in an editor, leaves
+  the song unrenamable until cleared. Not ruled. Record: same review.
+
+## Display tidy (on `dev`)
+
+- **A bracket with one junk word goes whole.** `(Official Live Video)`,
+  `(Acoustic Video)` and `(Instrumental Version)` drop entirely, losing the
+  live, acoustic or instrumental marker, so different versions tidy to the same
+  name. The tidy did the same before `d80402b`. Not ruled. Record: review of
+  `e755108..d80402b`, 2026-11-08 (this entry is the record).
+- **CJK-style junk isn't recognised.** Full-width `（Official Video）`, `【MV】`
+  brackets and a bare trailing `Official MV` stay in the tidied name. Before
+  `d80402b` those titles came out mangled instead (`- LemonOfficial Video`). No
+  song in the library starts with CJK today, so the A–Z bar is unaffected. Not
+  ruled. Record: same review.
+- **Thousands of stacked junk brackets are slow.** Each stripped bracket rescans
+  the name: 8 KB of `(4k)(4k)…` costs 0.15 s, 32 KB 2.5 s. Filenames cap at
+  255 bytes, so only the `/metadata/tidy-name` route takes such input. Linear
+  needs a loop that finds the last opener itself and copes with nesting. Not
+  ruled. Record: same review, and `a4b56ba`.
+- **Joined emoji leave invisible joiners.** U+200D survives the emoji strip, so
+  `Song (Official MV) 👨‍👩‍👧` keeps two invisible characters and, behind them,
+  its junk bracket. Older than `d80402b`. Not ruled. Record: same review.
 
 ## Web pages (pre-existing on `dev`)
 
