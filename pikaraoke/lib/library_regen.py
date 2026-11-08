@@ -856,21 +856,28 @@ OUTPUT_DIRS = ("subtitles", "karaoke", "lyrics")
 # rather than lose it outright.
 BACKUP_DIRS = OUTPUT_DIRS + ("alignment_debug",)
 
+# Per-song audio stems: ``<dir>/<stem>---<dir>.m4a``.
+STEM_DIRS = ("vocal", "nonvocal", "dereverb")
+
 # Every backup is a ``<UTC>`` subfolder of this one, keeping the library root tidy.
 BACKUP_ROOT = "regen_backups"
 
 
-def _all_stems(folder: Path) -> set[str]:
+def song_stems(folder: Path) -> set[str]:
     """Every song file's stem in ``folder``, regardless of selection or staleness.
 
     Counts every file type the app plays (``.mp3`` and ``.zip`` too, not just
-    videos), so a song regen never processes still owns its own files.
+    videos), so a song regen never processes still owns its own files. A folder
+    that is gone holds no songs.
     """
-    return {
-        p.stem
-        for p in folder.iterdir()
-        if p.is_file() and p.suffix.lower() in SongList.VALID_EXTENSIONS
-    }
+    try:
+        return {
+            p.stem
+            for p in folder.iterdir()
+            if p.is_file() and p.suffix.lower() in SongList.VALID_EXTENSIONS
+        }
+    except FileNotFoundError:
+        return set()
 
 
 def _claims(stem: str, name: str) -> bool:
@@ -902,6 +909,29 @@ def _owned_by_any(name: str, stems: Collection[str], all_stems: set[str]) -> boo
     return any(_claims(s, name) for s in stems) and _owner(name, all_stems) in stems
 
 
+def song_files(song: Path) -> list[Path]:
+    """Every file ``song`` owns beside it: its own entries in BACKUP_DIRS and its stems.
+
+    ``song`` need not exist yet: asking about a new name lists what that name
+    would take over.
+    """
+    all_stems = song_stems(song.parent) | {song.stem}
+    owned: list[Path] = []
+    for sub in BACKUP_DIRS:
+        folder = song.parent / sub
+        if folder.is_dir():
+            owned.extend(
+                e
+                for e in sorted(folder.iterdir())
+                if e.is_file() and _owner(e.name, all_stems) == song.stem
+            )
+    for stem_dir in STEM_DIRS:
+        stem_file = song.parent / stem_dir / f"{song.stem}---{stem_dir}.m4a"
+        if stem_file.is_file():
+            owned.append(stem_file)
+    return owned
+
+
 def backup_text_folders(folder: Path, stems: list[str] | None = None) -> Path | None:
     """Snapshot the regenerable output folders into ``regen_backups/<UTC>/``.
 
@@ -922,7 +952,7 @@ def backup_text_folders(folder: Path, stems: list[str] | None = None) -> Path | 
                 copied.append(sub)
         return backup_root if copied else None
 
-    all_stems = _all_stems(folder)
+    all_stems = song_stems(folder)
     for sub in BACKUP_DIRS:
         src = folder / sub
         if not src.is_dir():
@@ -975,7 +1005,7 @@ def clear_output_folders(folder: Path, stems: list[str] | None = None) -> None:
     instead of clearing whole folders -- the folders themselves are never
     removed and every other song's files are untouched.
     """
-    all_stems = _all_stems(folder) if stems is not None else set()
+    all_stems = song_stems(folder) if stems is not None else set()
 
     def selected(name: str) -> bool:
         return stems is None or _owned_by_any(name, stems, all_stems)

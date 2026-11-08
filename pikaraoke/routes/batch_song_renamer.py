@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 import time
@@ -251,11 +252,17 @@ def rename_song(form):
 
     file_extension = os.path.splitext(old_name)[1]
     old_filename = k.song_manager.filename_from_path(old_name, remove_youtube_id=False)
-    new_full_path = os.path.join(k.song_manager.download_path, new_name + file_extension)
     is_case_only_rename = old_filename.lower() == new_name.lower() and old_filename != new_name
 
-    # Block renaming to an existing file (unless it's just a case change)
-    if os.path.isfile(new_full_path) and not is_case_only_rename:
+    try:
+        if is_case_only_rename:
+            # Two-step rename for case-insensitive filesystems (e.g. Windows)
+            temp_name = f"{new_name}_temp_{int(time.time() * 1000)}"
+            temp_path = k.song_manager.rename(old_name, temp_name)
+            new_path = k.song_manager.rename(temp_path, new_name)
+        else:
+            new_path = k.song_manager.rename(old_name, new_name)
+    except FileExistsError:
         # MSG: Message shown after trying to rename a file to a name that already exists.
         return jsonify(
             _error_response(
@@ -263,14 +270,10 @@ def rename_song(form):
                 % (old_name, new_name + file_extension)
             )
         )
+    except OSError as e:
+        logging.error(f"Error renaming file: {e}")
+        return jsonify(
+            _error_response(_("Error renaming file: '%s' to '%s', %s") % (old_name, new_name, e))
+        )
 
-    if is_case_only_rename:
-        # Two-step rename for case-insensitive filesystems (e.g. Windows)
-        temp_name = f"{new_name}_temp_{int(time.time() * 1000)}"
-        k.song_manager.rename(old_name, temp_name)
-        temp_path = os.path.join(k.song_manager.download_path, temp_name + file_extension)
-        k.song_manager.rename(temp_path, new_name)
-    else:
-        k.song_manager.rename(old_name, new_name)
-
-    return jsonify({"success": True, "new_file_name": new_full_path})
+    return jsonify({"success": True, "new_file_name": new_path})

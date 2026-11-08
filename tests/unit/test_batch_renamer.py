@@ -10,6 +10,7 @@ from flask_babel import Babel
 if not hasattr(werkzeug, "__version__"):
     werkzeug.__version__ = "3.0.0"
 
+from pikaraoke.lib.song_manager import SongManager
 from pikaraoke.routes.batch_song_renamer import _names_match, batch_song_renamer_bp
 
 SONG = "/songs/Artist - Song---abc123def45.mp4"
@@ -64,3 +65,66 @@ def test_a_guest_cannot_rename_a_song(mock_get, _admin, client):
 
     assert resp.get_json()["success"] is False
     k.song_manager.rename.assert_not_called()
+
+
+def _admin_karaoke():
+    k = MagicMock()
+    k.queue_manager.is_song_in_queue.return_value = False
+    k.song_manager.filename_from_path = SongManager.filename_from_path
+    return k
+
+
+def _rename(client, new_name):
+    return client.post(
+        "/batch-song-renamer/rename-song", data={"old_name": SONG, "new_name": new_name}
+    ).get_json()
+
+
+@patch("pikaraoke.routes.batch_song_renamer.is_admin", return_value=True)
+@patch("pikaraoke.routes.batch_song_renamer.get_karaoke_instance")
+def test_rename_returns_the_path_the_manager_made(mock_get, _admin, client):
+    mock_get.return_value = k = _admin_karaoke()
+    k.song_manager.rename.return_value = "/songs/Musicals/Better---abc123def45.mp4"
+
+    result = _rename(client, "Better---abc123def45")
+
+    k.song_manager.rename.assert_called_once_with(SONG, "Better---abc123def45")
+    assert result == {"success": True, "new_file_name": "/songs/Musicals/Better---abc123def45.mp4"}
+
+
+@patch("pikaraoke.routes.batch_song_renamer.is_admin", return_value=True)
+@patch("pikaraoke.routes.batch_song_renamer.get_karaoke_instance")
+def test_a_case_only_rename_goes_through_a_temp_name_the_manager_chose(mock_get, _admin, client):
+    mock_get.return_value = k = _admin_karaoke()
+    k.song_manager.rename.side_effect = ["/songs/Sub/tmp.mp4", "/songs/Sub/artist - song.mp4"]
+
+    result = _rename(client, "artist - song---abc123def45")
+
+    (_, first), (second_old, second_new) = (c.args for c in k.song_manager.rename.call_args_list)
+    assert first.startswith("artist - song---abc123def45_temp_")
+    assert (second_old, second_new) == ("/songs/Sub/tmp.mp4", "artist - song---abc123def45")
+    assert result["new_file_name"] == "/songs/Sub/artist - song.mp4"
+
+
+@patch("pikaraoke.routes.batch_song_renamer.is_admin", return_value=True)
+@patch("pikaraoke.routes.batch_song_renamer.get_karaoke_instance")
+def test_rename_onto_a_taken_name_says_it_exists(mock_get, _admin, client):
+    mock_get.return_value = k = _admin_karaoke()
+    k.song_manager.rename.side_effect = FileExistsError("taken")
+
+    result = _rename(client, "Taken")
+
+    assert result["success"] is False
+    assert "Filename already exists" in result["message"]
+
+
+@patch("pikaraoke.routes.batch_song_renamer.is_admin", return_value=True)
+@patch("pikaraoke.routes.batch_song_renamer.get_karaoke_instance")
+def test_a_failed_rename_is_reported_not_raised(mock_get, _admin, client):
+    mock_get.return_value = k = _admin_karaoke()
+    k.song_manager.rename.side_effect = PermissionError("locked")
+
+    result = _rename(client, "Better")
+
+    assert result["success"] is False
+    assert "locked" in result["message"]
