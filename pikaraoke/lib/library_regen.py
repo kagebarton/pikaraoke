@@ -919,20 +919,23 @@ def _owned_in(folder: Path, stems: Collection[str]) -> Callable[[str], bool]:
     return lambda name: _owned_by_any(name, stems, all_stems)
 
 
+def _text_files(base: Path, owned: Callable[[str], bool]) -> list[Path]:
+    """The files in ``base``'s BACKUP_DIRS whose names ``owned`` accepts."""
+    found: list[Path] = []
+    for sub in BACKUP_DIRS:
+        folder = base / sub
+        if folder.is_dir():
+            found.extend(e for e in sorted(folder.iterdir()) if e.is_file() and owned(e.name))
+    return found
+
+
 def song_files(song: Path) -> list[Path]:
     """Every file ``song`` owns beside it: its own entries in BACKUP_DIRS and its stems.
 
     ``song`` need not exist yet: asking about a new name lists what that name
     would take over.
     """
-    owned_by_song = _owned_in(song.parent, [song.stem])
-    owned: list[Path] = []
-    for sub in BACKUP_DIRS:
-        folder = song.parent / sub
-        if folder.is_dir():
-            owned.extend(
-                e for e in sorted(folder.iterdir()) if e.is_file() and owned_by_song(e.name)
-            )
+    owned = _text_files(song.parent, _owned_in(song.parent, [song.stem]))
     for stem_dir in STEM_DIRS:
         stem_file = song.parent / stem_dir / f"{song.stem}---{stem_dir}.m4a"
         if stem_file.is_file():
@@ -950,15 +953,7 @@ def backup_files(song: Path) -> list[Path]:
     if not root.is_dir():
         return []
     owned_by_song = _owned_in(song.parent, [song.stem])
-    owned: list[Path] = []
-    for backup in sorted(root.iterdir()):
-        for sub in BACKUP_DIRS:
-            folder = backup / sub
-            if folder.is_dir():
-                owned.extend(
-                    e for e in sorted(folder.iterdir()) if e.is_file() and owned_by_song(e.name)
-                )
-    return owned
+    return [f for backup in sorted(root.iterdir()) for f in _text_files(backup, owned_by_song)]
 
 
 def backup_text_folders(folder: Path, stems: list[str] | None = None) -> Path | None:
