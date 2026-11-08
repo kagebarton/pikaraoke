@@ -99,7 +99,9 @@ class SongManager:
         """Rename a song and every file it owns, in place. Returns the new path.
 
         Its copies in ``regen_backups/`` move too, so its version history
-        survives. Everything is checked before anything moves; a move that
+        survives. Copies a deleted song left under the new name join that
+        history: with the YouTube ID in the name, it was the same video.
+        Everything is checked before anything moves; a move that
         fails partway is rolled back. SongList and DB change only after every
         move succeeded.
 
@@ -110,8 +112,7 @@ class SongManager:
         Raises:
             ValueError: The new name is blank, so nothing was moved.
             FileExistsError: The new name belongs to another song or to leftover
-                files (backed-up ones included, which would mix another song's
-                versions into this one's history), so nothing was moved.
+                files, so nothing was moved.
             OSError: A move failed. The files are back under the old name,
                 except any whose move back also failed (logged).
         """
@@ -121,7 +122,7 @@ class SongManager:
         logging.info(f"Renaming song: '{song_path}' to: {new_name}")
         song = Path(song_path)
         new_song = song.parent / (new_name + song.suffix)
-        if new_name in song_stems(song.parent) or song_files(new_song) or backup_files(new_song):
+        if new_name in song_stems(song.parent) or song_files(new_song):
             raise FileExistsError(f"'{new_name}' is already taken by another song or its files")
         moves = [(song, new_song)] + [
             (f, f.parent / (new_name + f.name[len(song.stem) :]))

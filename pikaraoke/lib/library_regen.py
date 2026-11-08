@@ -947,7 +947,7 @@ def backup_files(song: Path) -> list[Path]:
     """Every file ``song`` owns in its folder's ``regen_backups/`` snapshots.
 
     A rename moves these with the song, or its version history would stop at
-    the rename. ``song`` need not exist yet, as in :func:`song_files`.
+    the rename.
     """
     root = song.parent / BACKUP_ROOT
     if not root.is_dir():

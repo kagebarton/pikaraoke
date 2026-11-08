@@ -370,14 +370,15 @@ class TestRename:
         sm.rename(_native(song), "Other")
         assert theirs.exists()
 
-    def test_refuses_a_name_with_backed_up_files_of_its_own(self, library, sm, db):
-        """A deleted song's backups under the new name would join this song's history."""
-        song = _add_song(sm, library, "Old")
-        sidecar = _add_sidecar(library, "Old", "subtitles", ".srt")
+    def test_takes_a_deleted_songs_name_and_its_backups_with_it(self, library, sm):
+        """Re-downloading a deleted video and renaming it back must not be refused."""
+        song = _add_song(sm, library, "Raw title---abc")
         orphan = _add_sidecar(
-            library / "regen_backups" / "20260101T000000Z", "New", "lyrics", ".lrc"
+            library / "regen_backups" / "20260101T000000Z", "Artist - Title---abc", "lyrics", ".lrc"
         )
-        self._assert_refused(sm, db, song, "New", touched=[song, sidecar, orphan])
+        sm.rename(_native(song), "Artist - Title---abc")
+        assert (library / "Artist - Title---abc.mp4").exists()
+        assert orphan.read_text() == "lyrics.lrc"
 
     def test_a_move_failing_partway_puts_every_file_back(self, library, sm, db):
         song = _add_song(sm, library, "Old---abc")
