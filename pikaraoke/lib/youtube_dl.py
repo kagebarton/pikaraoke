@@ -217,11 +217,11 @@ class SearchResult:
 
 
 def _parse_search_line(line: str) -> SearchResult | None:
-    """Parse one yt-dlp JSON line; None for a blank line or a row without a title and URL."""
+    """Parse one yt-dlp JSON line; None for a blank line or a row without a title, URL or ID."""
     if len(line) <= 2:
         return None
     j = json.loads(line)
-    if "title" not in j or "url" not in j:
+    if not (j.get("title") and j.get("url") and j.get("id")):
         return None
     duration_raw = j.get("duration")
     duration = ""
