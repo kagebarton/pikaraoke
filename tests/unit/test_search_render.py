@@ -42,6 +42,8 @@ def _result(
     video_id: str,
     channel: str = "Some Channel",
     duration: str = "3:00",
+    channel_verified: bool = False,
+    description: str = "",
 ) -> SearchResult:
     return SearchResult(
         title=title,
@@ -49,8 +51,8 @@ def _result(
         id=video_id,
         channel=channel,
         duration=duration,
-        channel_verified=False,
-        description="",
+        channel_verified=channel_verified,
+        description=description,
     )
 
 
@@ -137,11 +139,11 @@ def _karaoke_with_library(paths: list[str]):
     return k
 
 
-def _search_body(client, mock_get, results, karaoke) -> str:
+def _search_body(client, mock_get, results, karaoke, query="karaoke") -> str:
     mock_get.return_value = karaoke
     with patch("pikaraoke.routes.search.get_search_results", return_value=results):
         with patch("pikaraoke.routes.search.get_site_name", return_value="PiKaraoke"):
-            resp = client.get("/search?search_string=karaoke")
+            resp = client.get(f"/search?search_string={quote(query)}")
     assert resp.status_code == 200
     return resp.get_data(as_text=True)
 
@@ -235,3 +237,38 @@ def test_card_offers_add_to_queue_only_for_a_library_copy(mock_get, client):
     assert "duration-badge" not in other_card  # no duration, no badge
     assert "has-text-grey" not in other_card  # no channel, no channel line
     assert "data-index" not in body
+
+
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_the_artists_official_video_and_audio_come_first_with_a_badge(mock_get, client):
+    lyrics = _result("Rick Astley - Never Gonna Give You Up (Lyrics)", "lyricsaaaaa")
+    audio = _result(
+        "Never Gonna Give You Up",
+        "audioaaaaaa",
+        channel="Rick Astley - Topic",
+        description="Provided to YouTube by RCA Records",
+    )
+    video = _result(
+        "Rick Astley - Never Gonna Give You Up (Official Video)",
+        "videoaaaaaa",
+        channel="Rick Astley",
+        channel_verified=True,
+    )
+
+    body = _search_body(
+        client,
+        mock_get,
+        [lyrics, audio, video],
+        _karaoke_with_library([]),
+        query="never gonna give you up",
+    )
+
+    cards = re.findall(r"<li data-ytID=.*?</li>", body, re.S)
+    assert [re.search(r'data-ytID="(\w+)"', c).group(1) for c in cards] == [
+        "videoaaaaaa",
+        "audioaaaaaa",
+        "lyricsaaaaa",
+    ]
+    assert "Official video" in cards[0]
+    assert "Official audio" in cards[1]
+    assert "Official" not in cards[2]
