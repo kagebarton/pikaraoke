@@ -399,7 +399,7 @@ $("#add-queue-link").trigger("click");
 		const resultsContainer = document.getElementById("container_search_result");
 		if (resultsContainer) {
 			saveSearchResults();
-			sessionStorage.setItem("pikaraoke_search_term", "{{search_string|e}}");
+			sessionStorage.setItem("pikaraoke_search_term", {{ search_string | tojson }});
 		} else {
 			const savedResults = sessionStorage.getItem("pikaraoke_search_results");
 			if (savedResults) {

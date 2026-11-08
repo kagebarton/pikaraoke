@@ -8,6 +8,7 @@ moment a search returned results. The bare /search page rendered fine, so a test
 that actually submits a query is required to catch it.
 """
 
+import json
 import os
 import re
 import subprocess
@@ -109,6 +110,21 @@ def test_search_with_results_renders(mock_get, _site, _results, client):
     assert "Never Gonna Give You Up" in body
     assert "Africa" in body
     assert "search_result_items" in body  # the results list rendered
+
+
+@patch("pikaraoke.routes.search.get_search_results", return_value=_RESULTS)
+@patch("pikaraoke.routes.search.get_site_name", return_value="PiKaraoke")
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_the_saved_search_term_is_a_script_string_of_the_query(mock_get, _site, _results, client):
+    """A backslash or quote in the query must not break out of the script's string literal."""
+    mock_get.return_value = _mock_karaoke()
+    query = 'say "hi" </script> back\\'
+
+    body = client.get(f"/search?search_string={quote(query)}").get_data(as_text=True)
+
+    saved = re.search(r'setItem\("pikaraoke_search_term", (.*)\);', body).group(1)
+    assert json.loads(saved) == query
+    assert "</script>" not in saved
 
 
 @patch("pikaraoke.routes.search.get_site_name", return_value="PiKaraoke")
