@@ -649,6 +649,13 @@ class TestHasArtistTitleSeparator:
     def test_dash_without_spaces(self):
         assert has_artist_title_separator("Artist-Title") is False
 
+    @pytest.mark.parametrize("name", ["Hello (Live at Wembley - 2016)", "The Lion King I - [1994]"])
+    def test_a_dash_only_brackets_touch_is_no_separator(self, name):
+        assert has_artist_title_separator(name) is False
+
+    def test_a_bracket_before_the_separator_keeps_it(self):
+        assert has_artist_title_separator("Rent (2005) - Seasons of Love") is True
+
 
 class TestSearchLastfmTracks:
     """Tests for the search_lastfm_tracks function."""
@@ -706,6 +713,13 @@ class TestProvenanceRouting:
         )
         mock_lookup.assert_called_once_with("Sweet Caroline")
         assert result == "Sweet Caroline - Neil Diamond"
+
+    @patch("pikaraoke.lib.metadata_parser.lookup_lastfm")
+    def test_youtube_file_with_a_dash_only_in_a_bracket_falls_through(self, mock_lookup):
+        mock_lookup.return_value = "Adele - Hello (Live at Wembley - 2016)"
+        name = "Hello (Live at Wembley - 2016)"
+        get_song_correct_name(name, raw_filename=f"/songs/{name}---dQw4w9WgXcQ.mp4")
+        mock_lookup.assert_called_once_with(name)
 
     @patch("pikaraoke.lib.metadata_parser.lookup_lastfm")
     def test_non_youtube_file_always_uses_lastfm(self, mock_lookup):

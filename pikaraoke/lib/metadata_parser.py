@@ -103,7 +103,8 @@ ATTRIBUTION_PATTERNS = [
 # "[4K]"). Any other bracket is part of the name ("(Live)", "(feat. Latto)",
 # "(Titanic, 1997)") and stays. Two patterns, not one, so a long title can't
 # make the match backtrack over every junk word.
-_TRAILING_BRACKET = re.compile(r"(\([^()]*\)|\[[^\[\]]*\])\s*$")
+_BRACKET = re.compile(r"\([^()]*\)|\[[^\[\]]*\]")
+_TRAILING_BRACKET = re.compile(rf"({_BRACKET.pattern})\s*$")
 _JUNK_WORD = re.compile(
     r"\b(?:official|video|audio|lyrics?|visuali[sz]er|mv|m/v|hd|hq|uhd|4k|\d{3,4}p"
     r"|remaster(?:ed)?|blu-ray|karaoke|instrumental)\b",
@@ -651,8 +652,12 @@ def has_youtube_id(filename: str) -> bool:
 
 
 def has_artist_title_separator(name: str) -> bool:
-    """Check if a cleaned name contains an artist-title separator (' - ')."""
-    return " - " in name
+    """Whether a cleaned name has an artist-title separator (' - ') outside brackets.
+
+    A dash inside a kept bracket ("Hello (Live at Wembley - 2016)") separates
+    nothing, and neither does one with only a bracket after it ("Film - [1994]").
+    """
+    return " - " in _BRACKET.sub("", name).strip()
 
 
 def search_lastfm_tracks(query: str, limit: int | None = None) -> list[dict]:
