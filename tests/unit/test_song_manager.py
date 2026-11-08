@@ -219,6 +219,16 @@ class TestDelete:
         assert not (backup / "vocal").exists()  # stems are regenerable, not backed up
         assert not stem_file.exists()
 
+    def test_backs_up_a_song_whose_video_is_already_gone(self, library, sm):
+        """Backup and delete agree on what the song owns, so the sheet isn't lost."""
+        song = _add_song(sm, library, "Gone---abc")
+        sheet = _add_sidecar(library, "Gone---abc", "lyrics", ".custom.txt")
+        song.unlink()
+        sm.delete(_native(song))
+        (backup,) = (library / "regen_backups").iterdir()
+        assert (backup / "lyrics" / sheet.name).read_text() == "lyrics.custom.txt"
+        assert not sheet.exists()
+
     def test_a_song_with_no_text_files_makes_no_backup_folder(self, library, sm):
         song = _add_song(sm, library, "Test---abc")
         _add_sidecar(library, "Test---abc", "vocal", "---vocal.m4a")
