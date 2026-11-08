@@ -909,21 +909,29 @@ def _owned_by_any(name: str, stems: Collection[str], all_stems: set[str]) -> boo
     return any(_claims(s, name) for s in stems) and _owner(name, all_stems) in stems
 
 
+def _owned_in(folder: Path, stems: Collection[str]) -> Callable[[str], bool]:
+    """Whether an entry of one of ``folder``'s text folders belongs to one of ``stems``.
+
+    A listed song counts as a song even when its video is gone (or not there
+    yet), so a delete, its backup and a per-song clear agree on what it owns.
+    """
+    all_stems = song_stems(folder) | set(stems)
+    return lambda name: _owned_by_any(name, stems, all_stems)
+
+
 def song_files(song: Path) -> list[Path]:
     """Every file ``song`` owns beside it: its own entries in BACKUP_DIRS and its stems.
 
     ``song`` need not exist yet: asking about a new name lists what that name
     would take over.
     """
-    all_stems = song_stems(song.parent) | {song.stem}
+    owned_by_song = _owned_in(song.parent, [song.stem])
     owned: list[Path] = []
     for sub in BACKUP_DIRS:
         folder = song.parent / sub
         if folder.is_dir():
             owned.extend(
-                e
-                for e in sorted(folder.iterdir())
-                if e.is_file() and _owner(e.name, all_stems) == song.stem
+                e for e in sorted(folder.iterdir()) if e.is_file() and owned_by_song(e.name)
             )
     for stem_dir in STEM_DIRS:
         stem_file = song.parent / stem_dir / f"{song.stem}---{stem_dir}.m4a"
@@ -935,10 +943,8 @@ def song_files(song: Path) -> list[Path]:
 def backup_text_folders(folder: Path, stems: list[str] | None = None) -> Path | None:
     """Snapshot the regenerable output folders into ``regen_backups/<UTC>/``.
 
-    ``stems``: copy only those songs' own files (see :func:`_owner`) from
-    each folder instead of the whole folder. A listed song counts as a song
-    even when its video is gone, as in :func:`song_files`, so deleting it
-    backs up what the delete removes.
+    ``stems``: copy only those songs' own files (see :func:`_owned_in`) from
+    each folder instead of the whole folder.
 
     Returns the backup root, or None when nothing was copied.
     """
@@ -954,12 +960,12 @@ def backup_text_folders(folder: Path, stems: list[str] | None = None) -> Path | 
                 copied.append(sub)
         return backup_root if copied else None
 
-    all_stems = song_stems(folder) | set(stems)
+    owned = _owned_in(folder, stems)
     for sub in BACKUP_DIRS:
         src = folder / sub
         if not src.is_dir():
             continue
-        entries = [e for e in src.iterdir() if _owned_by_any(e.name, stems, all_stems)]
+        entries = [e for e in src.iterdir() if owned(e.name)]
         if not entries:
             continue
         dest = backup_root / sub
@@ -1003,14 +1009,11 @@ def clear_output_folders(folder: Path, stems: list[str] | None = None) -> None:
     :data:`KEEP_ON_RESET` names what survives inside ``subtitles/`` and
     ``lyrics/``. A file it can't remove raises ``OSError``.
 
-    ``stems``: scope the wipe to those songs' own files (see :func:`_owner`)
+    ``stems``: scope the wipe to those songs' own files (see :func:`_owned_in`)
     instead of clearing whole folders -- the folders themselves are never
     removed and every other song's files are untouched.
     """
-    all_stems = song_stems(folder) if stems is not None else set()
-
-    def selected(name: str) -> bool:
-        return stems is None or _owned_by_any(name, stems, all_stems)
+    selected = (lambda _name: True) if stems is None else _owned_in(folder, stems)
 
     for sub in OUTPUT_DIRS:
         keep_suffix = KEEP_ON_RESET.get(sub)
