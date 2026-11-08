@@ -282,11 +282,12 @@ def get_preview_info(video_url: str) -> tuple[str | None, bool, float | None]:
             "%(subtitles)j",
             "--print",
             "duration",
-            # yt-dlp's default client (visionos as of 2026.08) offers only
-            # split audio/video streams; mweb still serves the combined
-            # format 18 a browser can preview.
+            # The browser fetches this URL itself, so the client must hand out
+            # format-18 links that play without yt-dlp's headers or a PO token.
+            # tv_simply does (2026.10); the default client's tv links 403 at
+            # random and mweb's almost always do. default stays as a fallback.
             "--extractor-args",
-            "youtube:player_client=default,mweb",
+            "youtube:player_client=tv_simply,default",
         ]
         + _js_runtime_args()
         + _impersonate_args()
