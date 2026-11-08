@@ -254,12 +254,41 @@ full suite, read `git diff --cached`, commit, then a Results log row.
   (`is_edited`). Left as the record of that run.
 - The 11 orphan sets (Decision 3), `movie_subs/`, `backups/`, `zh_probe/` (not
   per-song), and the Genius pick cache (keyed by video ID, unaffected by a rename).
+- A cancelled or removed download still goes through the delete, so any text
+  files it left (usually only the fetched captions, a few KB) make a
+  `regen_backups/<UTC>/` folder per cancel. Left (follow-up gap 3): nothing
+  prunes `regen_backups/` anyway (33 snapshots, 48 MB on 2026-11-08), and a
+  download removed after processing can hold a bundle or picked sheet worth
+  keeping.
+- A new name holding `/` or `..` (open-issues, follow-up gap 4).
 
 ## Stop
 
 After Step 4. Don't land on `dev` and don't run `/code-review`. Report the
 Results log and say a review is due: Step 2 is multi-file and rewrites the file
 moves.
+
+## Follow-ups after Step 4 (Opus, 2026-11-08)
+
+Four gaps found reading Steps 1-4 back, each reproduced on a scratch folder.
+Ken said go on the recommendations.
+
+1. **Case-only rename onto a taken name.** The batch renamer changes case in
+   two steps through a temp name; on a case-sensitive disk the other-case name
+   can be another song (or its leftover files), so the second step refused and
+   the song and its sheet stayed under `<name>_temp_<ms>`. Before Step 2 the
+   second step silently overwrote the other song. Fixed (Step 5): undo the
+   first step, then report.
+2. **Ghost delete.** With the video already gone, `song_stems` lacks the song,
+   so the per-song backup copied nothing while `song_files` (which adds the
+   song itself) still deleted the sheet and bundle. Fixed (Step 6): the backup
+   counts the stems it was given as songs too. The other per-song caller (a
+   single-song regen) passes a song whose video exists, so it is unchanged.
+3. **A backup per cancelled download.** Left; see Not covered.
+4. **`/` or `..` in a new name.** `../Out` moves the video out of the library
+   and its captions into the library root, and the DB then points outside the
+   library. `AC/DC - X` fails with nothing moved ("No such file"). Pre-existing,
+   admin only; deferred to `plans/open-issues.md`.
 
 ## Results log
 
@@ -270,3 +299,5 @@ moves.
 | 2 | `4393ee5` | 3403 passed (+47) | `song_files`, `STEM_DIRS`, rewritten `rename`/`delete`, route changes; `_get_companion_files` deleted. Tests: 17 kinds x rename and delete (34), sibling `Song.live` (2), 3 rename refusals, partway failure with rollback, subfolder, delete backup (3), vanished folder, plus route tests for the `FileExistsError`/`OSError` flashes and responses (7). The four superseded companion tests and the dead `mock_db` fixture removed. Mutation-checked: no rollback, no leftover-files check, no destination check, no backup, library-root target each fail a test. Departures from the plan: (a) `_all_stems` renamed `song_stems` (public, so `song_manager` doesn't import a private name) and returns an empty set for a missing folder, so deleting a ghost entry whose folder is gone still clears SongList and DB; (b) no step beyond the plan's. |
 | 3 | `3d1d943` | 3412 passed (+9) | `song_busy_message` and its four call sites (`delete_file`, `edit_file` GET, `rename_file` POST, `rename_song`). Tests (9): the three `files` routes (`delete_file`, `edit_file`, `rename_file`) each refuse `is_busy` and `is_waiting_for_pick` (6), `rename_song` refuses both (2), `delete` still acts on a free song (1). Mutation-checked: helper ignoring either check, and each of the four call sites dropped, each fail exactly their tests. Departure from the plan: the helper takes `k` (`song_busy_message(k, song_path)`), since every caller already holds it; a hidden `get_karaoke_instance()` inside it would have made the batch tests patch two modules. The shared `_mock_karaoke` / batch `_admin_karaoke` now default `library_tools` to not busy (a bare `MagicMock` answers truthy). |
 | 4 | no commit | live | Ken's instance was not running (no process, port 5555 free), so nothing was stopped; started the branch with no arguments and stopped it afterwards (port free again). Wicked song, 11 files (video + 10 sidecars), `sha1sum` recorded before the app started. Renamed via `POST /files/edit` to `Wicked - For Good (rename test)---wzSeub9W4QQ`: 11 of 11 files under the new stem, 0 under the old, flash "Renamed file". Song info for the new path: source Movie subtitles, "32 of 32 lines timed word by word", Aligned 28 / Re-aligned 4, version v11, "up to date", not "not processed". Renamed back (two spaces after "Good" preserved): 11 of 11 under the original stem, all 11 checksums OK at the original paths, no `rename test` files left, song info at the original path shows the same source and timing. No error in the app log; no new `regen_backups` folder from the round trip (the two dated 20261108 predate it, 11:33-11:34 local, other songs). No real delete, per Decision 4. |
+| 5 | `4b21421` | 3413 passed (+1) | Follow-up gap 2. `backup_text_folders` with `stems` counts them as songs (`song_stems(folder) \| set(stems)`). Test: song with a `.custom.txt`, video removed, delete puts the sheet in the backup and removes it. Mutation-checked: the old line fails it. |
+| 6 | `865bfbb` | 3414 passed (+1) | Follow-up gap 1. `rename_song` renames the temp name back to the old stem when the second step raises `OSError`, then re-raises into the existing error responses. Test (mocked manager, like its neighbours): the last rename call is temp back to the old stem, response says "Filename already exists". Mutation-checked: without the undo it fails. Real-disk check on a scratch folder with `Song---id.mp4` + sheet and a twin `song---id.mp4`: error response, both files back under the original name, twin untouched, no `_temp_` file. |
