@@ -596,8 +596,16 @@ class Karaoke:
             mode: One of 'karaoke', 'srt', 'off'.
         """
         self.playback_controller.set_sub_mode(mode)
-        mode_labels = {"karaoke": "Karaoke", "srt": "Subtitles", "off": "Off"}
-        self.log_and_send(_("Subtitle mode: %s") % mode_labels.get(mode, mode))
+        mode_labels = {
+            # MSG: Lyric style where each word lights up as it is sung
+            "karaoke": _("Karaoke"),
+            # MSG: Lyric style that shows the song's words a whole line at a time
+            "srt": _("Subtitles"),
+            # MSG: Lyric style that shows no words
+            "off": _("Off"),
+        }
+        # MSG: Message shown on the TV when the lyric style changes. %s is Karaoke, Subtitles or Off
+        self.log_and_send(_("Lyrics: %s") % mode_labels.get(mode, mode))
         self.update_now_playing_socket()
 
     def restart(self) -> bool:
@@ -726,7 +734,11 @@ class Karaoke:
                         continue
                     singer = self.singers.settings_for(song["user"])
                     result = self.playback_controller.play_file(
-                        song["file"], song["user"], singer.semitones, singer.vocal_volume
+                        song["file"],
+                        song["user"],
+                        singer.semitones,
+                        singer.vocal_volume,
+                        singer.sub_mode,
                     )
 
                     if not result.success and result.error:

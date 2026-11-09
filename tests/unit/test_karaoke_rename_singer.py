@@ -37,7 +37,7 @@ def party(tmp_path):
     karaoke.rename_singer = lambda old, new: Karaoke.rename_singer(karaoke, old, new)
 
     singers = SingerRegistry(preferences, karaoke.rename_singer)
-    name, token = singers.save(None, "Mike", SingerSettings(2, 0.7))
+    name, token = singers.save(None, "Mike", SingerSettings(2, 0.7, "karaoke"))
     queue.enqueue(SONG, "Mike", log_action=False)
     queue.enqueue(HELD, "Mike", waiting="download", log_action=False)
     tracker._items.append(PipelineItem(title="Processing", url="https://x/1", user="Mike"))
@@ -55,7 +55,7 @@ def party(tmp_path):
 
 
 def rename(party, new_name):
-    return party.singers.save(party.token, new_name, SingerSettings(2, 0.7))
+    return party.singers.save(party.token, new_name, SingerSettings(2, 0.7, "karaoke"))
 
 
 def where_the_name_is_kept(party):
@@ -78,7 +78,7 @@ class TestRenameSinger:
         assert where_the_name_is_kept(party) == (["MIKE", "MIKE"], ["MIKE"], "MIKE")
 
     def test_a_refused_name_moves_nothing(self, party):
-        party.singers.save(None, "Sue", SingerSettings(0, 0.4))
+        party.singers.save(None, "Sue", SingerSettings(0, 0.4, "karaoke"))
 
         with pytest.raises(NameTaken):
             rename(party, "sue")
@@ -96,7 +96,7 @@ class TestRenameSinger:
     def test_the_songs_settings_follow_the_guest_to_the_new_name(self, party):
         rename(party, "Michael")
 
-        assert party.singers.settings_for("Michael") == SingerSettings(2, 0.7)
+        assert party.singers.settings_for("Michael") == SingerSettings(2, 0.7, "karaoke")
 
 
 class TestEveryCopyMovesBeforeAnyoneIsTold:
@@ -112,7 +112,7 @@ class TestEveryCopyMovesBeforeAnyoneIsTold:
 
         assert held == ("Michael", party.token)
         assert where_the_name_is_kept(party) == (["Michael", "Michael"], ["Michael"], "Michael")
-        assert party.singers.lookup(party.token) == ("Michael", SingerSettings(2, 0.7))
+        assert party.singers.lookup(party.token) == ("Michael", SingerSettings(2, 0.7, "karaoke"))
         [record] = [r for r in caplog.records if r.levelno == logging.ERROR]
         assert "'Mike' -> 'Michael'" in record.getMessage()
         assert record.exc_info is not None and "socket gone" in str(record.exc_info[1])

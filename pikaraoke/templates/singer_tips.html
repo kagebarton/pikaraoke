@@ -6,3 +6,8 @@
 {# MSG: Note beside "Original vocals", the slider for how loud the original recording's singer is (the guest form and Now Playing). Guests tend to read it as their own microphone, so the note says it isn't #}
 {% call info_tip() %}{% trans %}How loud the recording's singer is. Your microphone isn't changed. 0% leaves just the music.{% endtrans %}{% endcall %}
 {%- endmacro %}
+
+{% macro lyrics_tip() -%}
+{# MSG: Note beside "Lyrics", the choice between Karaoke, Subtitles and Off (the guest form and Now Playing) #}
+{% call info_tip() %}{% trans %}Karaoke highlights each word as it's sung. Subtitles shows whole lines.{% endtrans %}{% endcall %}
+{%- endmacro %}

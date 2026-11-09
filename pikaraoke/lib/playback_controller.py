@@ -17,6 +17,16 @@ from pikaraoke.lib.preference_manager import PreferenceManager
 if TYPE_CHECKING:
     from pikaraoke.lib.mpv_controller import MpvController
 
+# The lyric styles a song can play in: karaoke (the .ass file), srt (the captions) or off.
+SUB_MODES = ("karaoke", "srt", "off")
+
+
+def initial_sub_mode(chosen: str, has_ass: bool, has_srt: bool) -> str:
+    """The chosen lyric style if the song has its file, else the other lyrics it has, else off."""
+    has = {"karaoke": has_ass, "srt": has_srt}
+    tries = {"karaoke": ("karaoke", "srt"), "srt": ("srt", "karaoke"), "off": ()}[chosen]
+    return next((mode for mode in tries if has[mode]), "off")
+
 
 @dataclass
 class PlaybackResult:
@@ -94,7 +104,7 @@ class PlaybackController:
         return self.mpv.is_paused
 
     def play_file(
-        self, file_path: str, user: str, semitones: int, vocal_volume: float
+        self, file_path: str, user: str, semitones: int, vocal_volume: float, sub_mode: str
     ) -> PlaybackResult:
         """Start playback of a media file. Non-blocking -- MPV plays immediately.
 
@@ -103,6 +113,8 @@ class PlaybackController:
             user: User who queued the song.
             semitones: Number of semitones to transpose (0 = no change).
             vocal_volume: Vocal level from 0.0 to 1.0; used only for dual-stem songs.
+            sub_mode: The lyric style the song starts in (one of SUB_MODES); a song without that
+                style's file starts in the other one it has, else with no lyrics.
 
         Returns:
             PlaybackResult with success status and optional error message.
@@ -122,13 +134,9 @@ class PlaybackController:
         subtitle_scale = self.preferences.get_or_default("subtitle_scale")
         subtitle_pos_offset = self.preferences.get_or_default("subtitle_pos_offset")
 
-        # Resolve initial subtitle mode: karaoke if .ass exists, srt if .srt exists, off otherwise
-        if subs["ass"] and os.path.exists(subs["ass"]):
-            initial_sub_mode = "karaoke"
-        elif subs["srt"] and os.path.exists(subs["srt"]):
-            initial_sub_mode = "srt"
-        else:
-            initial_sub_mode = "off"
+        has_ass = subs["ass"] is not None and os.path.exists(subs["ass"])
+        has_srt = subs["srt"] is not None and os.path.exists(subs["srt"])
+        start_sub_mode = initial_sub_mode(sub_mode, has_ass, has_srt)
 
         # Get normalization_db from song database (if normalize_audio enabled)
         normalization_db = None
@@ -148,11 +156,8 @@ class PlaybackController:
             self.now_playing_user = user
             self.now_playing_transpose = semitones
             self.now_playing_position = 0.0
-            self.now_playing_sub_mode = initial_sub_mode
-            self.now_playing_subs_available = {
-                "ass": subs["ass"] is not None and os.path.exists(subs["ass"]),
-                "srt": subs["srt"] is not None and os.path.exists(subs["srt"]),
-            }
+            self.now_playing_sub_mode = start_sub_mode
+            self.now_playing_subs_available = {"ass": has_ass, "srt": has_srt}
             self.now_playing_dual_stem = vocal_path is not None and nonvocal_path is not None
             self.now_playing_vocal_volume = vocal_volume
             self.is_playing = True
@@ -164,7 +169,7 @@ class PlaybackController:
                     semitones=semitones,
                     ass_path=subs["ass"],
                     srt_path=subs["srt"],
-                    initial_sub_mode=initial_sub_mode,
+                    initial_sub_mode=start_sub_mode,
                     subtitle_delay=subtitle_delay,
                     subtitle_scale=subtitle_scale,
                     subtitle_pos_offset=subtitle_pos_offset,

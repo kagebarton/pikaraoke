@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from 'singer_tips.html' import original_vocals_tip %}
+{% from 'singer_tips.html' import lyrics_tip, original_vocals_tip %}
 
 {# ── Control Box Configuration ──────────────────────────────────────── #}
 {% block styles %}
@@ -7,7 +7,6 @@
   :root {
     /* Font sizes */
     --controls-header-size: 1.25rem;        /* h4, section headers */
-    --controls-button-size: 1rem;         /* subtitle mode buttons */
     --controls-icon-size: 1.25rem;          /* large icons (play/pause, +/-) */
 
     /* Time display */
@@ -15,30 +14,9 @@
     --time-text-weight: bold;
     --time-text-color: var(--dark-text-secondary);  /* matches h4 off-white */
 
-    /* Subtitle mode buttons */
-    --controls-button-weight: bold;
-
     /* Interactive element colors */
     --controls-link-color: var(--dark-text-light);  /* links, icons (inactive) */
     --controls-link-hover: var(--bulma-success-dark-invert);         /* hover color (mint) */
-
-    /* Button states - normal */
-    --button-normal-bg: var(--dark-bg-secondary);
-    --button-normal-text: var(--dark-text-muted);
-    --button-normal-border: var(--dark-border);
-
-    /* Button states - hover */
-    --button-hover-bg: var(--dark-bg-tertiary);
-    --button-hover-text: var(--dark-text-light);
-
-    /* Button states - selected/active */
-    --button-selected-bg: var(--bulma-success-dark-invert);
-    --button-selected-text: var(--bulma-dark);
-
-    /* Button states - disabled */
-    --button-disabled-bg: var(--dark-bg-primary);
-    --button-disabled-text: var(--bulma-grey);
-    --button-disabled-opacity: 0.6;
   }
 
   /* Tighten vertical rhythm around Now Playing / Next Song */
@@ -503,15 +481,21 @@ $(function () {
   {# ── Subtitle mode section ─────────────────────────────────────────── #}
   <div id="subtitle-mode-section" style="display: none">
     <div class="is-flex" style="justify-content: space-between">
-      <div><h4>{% trans %}Subtitles{% endtrans %}</h4></div>
+      <div>
+        {# MSG: Heading of Now Playing's choice between Karaoke, Subtitles and Off for the words on screen #}
+        <h4>{% trans %}Lyrics{% endtrans %} {{ lyrics_tip() }}</h4>
+      </div>
     </div>
     <div class="buttons has-addons is-fullwidth" style="margin-bottom: 0.5rem">
+      {# MSG: Lyric style where each word lights up as it is sung #}
       <button class="button subtitle-mode-btn" data-mode="karaoke"
-        onclick="setSubMode('karaoke')">Karaoke</button>
+        onclick="setSubMode('karaoke')">{% trans %}Karaoke{% endtrans %}</button>
+      {# MSG: Lyric style that shows the song's words a whole line at a time #}
       <button class="button subtitle-mode-btn" data-mode="srt"
-        onclick="setSubMode('srt')">Subtitles</button>
+        onclick="setSubMode('srt')">{% trans %}Subtitles{% endtrans %}</button>
+      {# MSG: Lyric style that shows no words #}
       <button class="button subtitle-mode-btn is-selected" data-mode="off"
-        onclick="setSubMode('off')">Off</button>
+        onclick="setSubMode('off')">{% trans %}Off{% endtrans %}</button>
     </div>
     <hr />
   </div>
