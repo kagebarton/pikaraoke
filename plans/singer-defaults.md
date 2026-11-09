@@ -5,7 +5,9 @@ Opus 5.5 on 2026-11-06 from the `/code-review` of Phase 2.1, marked (2.2) the sa
 3.1 added by Claude Opus 5.5 on 2026-11-06 from the `/code-review` of Phase 3, marked (3.1).
 Phase 3.2 added by Claude Opus 5.5 on 2026-11-06 from the `/code-review` of Phase 3.1's step 1,
 marked (3.2). Phase 3.3 added by Claude Opus 5.5 on 2026-11-06 from the `/code-review` of Phase
-3.2's step 1, marked (3.3).
+3.2's step 1, marked (3.3). Phase 4 added by Claude Opus 5.5 on 2026-11-09 from Ken's requests
+(a lyric style per guest; a new name for vocal volume, which guests read as their own
+microphone), marked (4). Ken's checks move from Phase 4 to Phase 5.
 
 # Singer defaults: key and vocal volume per guest
 
@@ -15,6 +17,9 @@ When a guest joins, they're asked for their name, their vocal volume and their k
 they sing starts at those values with nobody touching the Now Playing controls. Clicking their
 name in the top bar opens the same form to change any of the three. Everything is forgotten
 when the app stops, so the next party starts clean.
+
+(4) The form also asks for a lyric style (Karaoke, Subtitles or Off), and vocal volume is
+called "Original vocals" everywhere, each with an (i) note saying what it does.
 
 Base: `dev` at `4497f4d`. Branch `singer_defaults` (made by the author, 2026-11-06).
 
@@ -55,6 +60,35 @@ Assumptions stated to Ken on 2026-11-06, not objected to:
   available. Vocal volume does nothing on songs without separated stems.
 - Guests can't take the names the app uses itself, `Pikaraoke` and `Randomizer`.
 
+## Rulings (Ken, 2026-11-09), Phase 4
+
+12. **A lyric style per guest: Karaoke, Subtitles or Off, all three.** Some guests find the
+    word-by-word sweep distracting, the more so because it isn't timed to each sound. Read when
+    the song starts, like the key and vocal volume (ruling 2); the Now Playing buttons change
+    only the current song (ruling 4).
+13. **Vocal volume is renamed "Original vocals"**, because guests read "vocal volume" as the
+    volume of their own microphone. Same name on the form, Now Playing, the Info page and the
+    TV message.
+14. **The explanation is an (i) note**, the one the Processing page uses (`info_tip.html`), not
+    a help line under the control.
+
+Assumptions stated to Ken on 2026-11-09, accepted ("go"):
+
+- The lyric control is a three-button switch like Now Playing's, starting at Karaoke.
+- **Karaoke** is what every song does today: the karaoke lyrics if the song has them, else the
+  captions, else none. **Subtitles** is the captions, else the karaoke lyrics, else none.
+  **Off** is always off. (Ken's library, 2026-11-09: every song with karaoke lyrics also has
+  captions, 150 of 168; 15 have captions only. So the Subtitles fallback almost never fires.)
+- Randomizer songs and names that never joined start in Karaoke, as today. No new Info-page
+  setting.
+- Now Playing: its "Vocal Volume" heading becomes "Original vocals" with the same (i) note;
+  its "Subtitles" heading becomes "Lyrics" (it is also the name of one of its own buttons) with
+  the lyric note. The Info page's default gets the new wording, no (i).
+- The notes' text (Ken may reword):
+  - Original vocals: *"How loud the recording's singer is. Your microphone isn't changed. 0%
+    leaves just the music."*
+  - Lyrics: *"Karaoke highlights each word as it's sung. Subtitles shows whole lines."*
+
 ## What the code does today (read 2026-11-06 at `4497f4d`)
 
 - **A guest is a name in a cookie** (`user`, set by `setUserCookie()` in `base.html` with a
@@ -92,6 +126,34 @@ Assumptions stated to Ken on 2026-11-06, not objected to:
   every page that extends `base.html`.
 - **Some tests render `base.html` on a bare `Flask` app** (`tests/unit/test_search_render.py`),
   without the app's context processors.
+
+### For Phase 4 (read 2026-11-09 at `f9cb872`)
+
+- **The lyric style is picked by `PlaybackController.play_file`**: karaoke if the song's `.ass`
+  exists, else subtitles if its `.srt` exists, else off. It checks each file's existence twice
+  (once for the mode, once for `now_playing_subs_available`). The mode names are `karaoke`,
+  `srt` and `off`: `routes/controller.py` `sub_mode` checks a literal tuple of them, and
+  `Karaoke.set_sub_mode` has an untranslated label dict for the TV message (`"Subtitle mode:
+  %s"`). "Subtitles" plays the song's caption file, the one the Subtitle Delay control adjusts;
+  it is not another look of the karaoke lyrics.
+- **Now Playing's lyric buttons** (`home.html`, `#subtitle-mode-section`, heading
+  "Subtitles") have untranslated labels and carry `data-mode`. The now-playing handler finds
+  two of them with unscoped `document.querySelector("[data-mode='karaoke']")` and
+  `("[data-mode='srt']")` to disable the ones the song has no file for, so any other
+  `data-mode` button earlier in the page would be disabled instead.
+- **The (i) notes load only on the library pages.** Their script is the second half of
+  `static/library-pages.js` (bound once on `document`) and their style the top of
+  `static/library-pages.css`. Seven pages load both themselves (Processing, Song Info, Repair
+  lyrics, Edit words, the run preview, the pick pass, Add playlist); `base.html` loads neither.
+  If the script ran twice, every handler would be bound twice and a tap would open a note and
+  shut it again. SPA navigation loads a page's scripts only if the same `src` isn't already
+  on the page.
+- **The note is placed against the window** (`position: fixed`). Bulma's `.modal-card` has
+  `overflow: hidden` but no transform, so a note inside the guest form is not clipped.
+- **The guest form's markup is from the first page load** (it is outside `.box`), so a page
+  open across an upgrade keeps the old form and the old `spa-navigation.js`.
+- **Existing translations** cover "Vocal Volume", "Vocal volume: %s%%" and the Info page
+  label. New wording shows in English in every language until the next catalog batch.
 
 ## Design
 
@@ -249,6 +311,8 @@ blueprints in `app.py`.
   `-key_limit` to `+key_limit` of the state the form opened with (3.1), starting at the
   guest's value or 0, hidden when `transpose_enabled` is false). The form fills its fields from
   the state it is opened with, so the markup carries no default values of its own (3.1).
+  (4) Vocal volume is labelled "Original vocals", and a lyric style switch follows the key:
+  see "Lyric style and the words (4)".
 - **Join mode** opens on any page when the phone has no guest. It has no close button, no
   Cancel, and the background doesn't close it: Save is the only way out. **Edit mode** opens
   from `#current-user`, prefilled, with Cancel.
@@ -323,6 +387,100 @@ blueprints in `app.py`.
 - New strings get `_()` and a `{# MSG: ... #}` comment per `pikaraoke/_TRANSLATION.md`.
   Don't regenerate the catalogs (that's done in occasional batches).
 
+### Lyric style and the words (4)
+
+**The lyric style on the server.**
+
+- `lib/playback_controller.py` gets the one list of mode names, `SUB_MODES = ("karaoke",
+  "srt", "off")`. `routes/controller.py` `sub_mode` checks against it instead of its literal
+  tuple.
+- A module-level function there picks the mode a song starts in:
+
+  ```python
+  def initial_sub_mode(chosen: str, has_ass: bool, has_srt: bool) -> str:
+      """The chosen lyric style if the song has its file, else the other lyrics it has, else off."""
+  ```
+
+  | chosen | tries, in order |
+  | ------ | --------------- |
+  | `karaoke` | `karaoke` (needs `.ass`), `srt` (needs `.srt`), `off` |
+  | `srt` | `srt`, `karaoke`, `off` |
+  | `off` | `off` |
+
+  `karaoke` gives exactly what every song does before this phase.
+- `play_file(file_path, user, semitones, vocal_volume, sub_mode)`. It works out whether the
+  `.ass` and the `.srt` exist once, and uses the two answers for both
+  `now_playing_subs_available` and `initial_sub_mode(sub_mode, ...)`. The docstring names the
+  new argument.
+- `SingerSettings` gets a third field, `sub_mode: str`, with no default, so `house_defaults()`
+  stays the one place the house values are set: `SingerSettings(0, <vocal_volume preference>,
+  "karaoke")`. Its docstring, `house_defaults`'s and both module docstrings (`singers.py`,
+  `routes/singer.py`) name the lyric style.
+- The play loop passes `singer.sub_mode` to `play_file`.
+- `SingerForm.sub_mode`: `fields.String(required=True, validate=validate.OneOf(SUB_MODES))`,
+  described as the lyric style the guest's songs start in. `save_singer` puts it in the
+  settings. `singer_state` adds `"sub_mode"`, so the context processor and `GET /singer` both
+  carry it.
+- As with the key and vocal volume, the route schema checks the value and the registry stores
+  what it is given.
+
+**The words.** Only text a person reads changes. Internal names (`vocal_volume`, `sub_mode`,
+element ids, routes, preference keys) stay.
+
+- "Original vocals" replaces "Vocal Volume" on the guest form's label (`base.html`) and Now
+  Playing's heading (`home.html`). The TV message in `Karaoke.set_vocal_volume` becomes
+  `_("Original vocals: %s%%")`. The Info page's label becomes `Default original vocals level
+  (0-100%, dual-stem songs only)`.
+- "Lyrics" replaces "Subtitles" as Now Playing's section heading. `Karaoke.set_sub_mode`'s TV
+  message becomes `_("Lyrics: %s")`, and its labels are translated: `_("Karaoke")`,
+  `_("Subtitles")`, `_("Off")`, built inside the method, as now.
+- Now Playing's three lyric buttons get `{% trans %}` with the same words as the form's, so one
+  translation covers both.
+- Every new or changed string gets a `{# MSG: ... #}` (or `# MSG:`) comment. The form title's
+  existing MSG comment names all four settings.
+
+**The (i) notes load on every page.** The form is on every page, so the notes can't stay a
+library-pages file.
+
+- The (i) half of `static/library-pages.js` (the block after `window.libraryPages`) moves,
+  unchanged, to `static/info-tip.js`. The note's own rules at the top of
+  `static/library-pages.css` (`.info-tip`, `.info-tip-btn` and its hover, `.info-tip-text`,
+  `.info-tip.is-open .info-tip-text`, `.info-tip-line` and its spacing rule) move to
+  `static/info-tip.css`. Rules that only lay out a note inside a library page's own markup
+  (`.go-row .info-tip-btn`, the `.tabs li` rules, `.go-row.rp-buttons .info-tip-btn`) stay
+  where they are.
+- `base.html` loads `info-tip.css` with the other stylesheets and `info-tip.js` after jQuery.
+  Nothing else loads them, and the seven library pages keep loading `library-pages.*` for the
+  rest. Don't load `library-pages.*` from `base.html`: the pages would then load it twice.
+- The header comments of `info_tip.html`, `library-pages.js` and `library-pages.css` say
+  where the notes live now.
+- **The note texts live once**, in a new `templates/singer_tips.html` with two macros,
+  `original_vocals_tip()` and `lyrics_tip()`. Each is `{% call info_tip() %}{% trans %}...{%
+  endtrans %}{% endcall %}` with its MSG comment, using the texts in the 2026-11-09 assumptions.
+  `base.html` and `home.html` import them.
+
+**The form.**
+
+- The vocals row: the label text is "Original vocals", and `original_vocals_tip()` sits right
+  after the `<label>` element, not inside it, so the label stays the slider's name alone.
+- After the key field, a lyrics field that is never hidden: a `label`-class span "Lyrics"
+  followed by `lyrics_tip()`, then a `buttons has-addons` group of three `type="button"`
+  buttons with Now Playing's `subtitle-mode-btn` class, carrying `data-sub-mode="karaoke"`,
+  `"srt"` and `"off"` and labelled Karaoke, Subtitles and Off, then a hidden input
+  `#singer-sub-mode`. Use `data-sub-mode`, not `data-mode`: Now Playing finds its own buttons
+  with unscoped `[data-mode=...]` lookups (What the code does today, "For Phase 4").
+- `spa-navigation.js`: `setSingerSubMode(mode)` sets the hidden input and toggles `is-info` and
+  `is-selected` on the form's buttons, as `applySubModeToButtons` does on Now Playing.
+  `openSingerForm` calls it with `state.sub_mode`. `initSingerForm` binds `click.singer` on
+  `#singer-modal [data-sub-mode]`. `saveSingerForm` reads the lyric style once, with the other
+  values (3.3), posts it as `sub_mode`, and the 410 path's not-joined state carries it with the
+  key and vocal volume.
+- The file's form comment ("name, vocal volume, key") names the lyric style too.
+
+**Now Playing.** The vocals heading becomes "Original vocals" followed by
+`original_vocals_tip()`; the lyrics heading becomes "Lyrics" followed by `lyrics_tip()`. Its
+buttons keep `data-mode` and their handlers.
+
 ### Accepted edges
 
 - **A phone left open across a crash** keeps its old cookies until its next navigation or
@@ -372,7 +530,8 @@ blueprints in `app.py`.
 - **Two tabs editing at once (3.2)**: edit mode posts the key and vocal volume the form opened
   with, so a change made on another tab between opening and saving is undone. The name has the
   "unchanged means keep" rule (2.2); doing the same for key and volume means tracking each
-  field, for one guest using two tabs at the same moment. Not built unless Ken asks.
+  field, for one guest using two tabs at the same moment. Not built unless Ken asks. (4) The
+  lyric style is posted the same way and has the same edge.
 - **A page left open across an upgrade (3.2)**: SPA navigation does not fetch
   `spa-navigation.js` again, so a page loaded before an upgrade runs the new head script
   against the old file until it is reloaded, and a function the new head script calls may be
@@ -380,7 +539,10 @@ blueprints in `app.py`.
   parties. (3.3) Such a page's edit form posts no `editing`, so if the upgrade's restart
   catches it open, its Save still joins an Anon name. The server can't tell that save from a
   join by a phone holding a token from an earlier run: both post a blank name with a token
-  that finds nobody.
+  that finds nobody. (4) Such a page's form also posts no `sub_mode`, so every Save gets 422
+  and "Could not save" until the page is reloaded. A join form there has no other way out, so
+  the guest has to reload. A default for the field would hide a missing value on every save to
+  cover one upgrade, and Ken upgrades between parties.
 - **A mode switch while a save is in flight (3.2)**: a navigation that finds the phone no
   longer joined, while an edit save is in flight, refills the form as a join form and enables
   Save. That needs a restart, a back swipe and a pending save at once, and since the edit save
@@ -800,7 +962,72 @@ Self-review: step 1 is one function and one string, readable in one pass and cov
 browser checks; step 2 is tests and wording. Self-review covers both; no review due after this
 phase.
 
-### Phase 4: Ken's checks
+### Phase 4: lyric style per guest, and "Original vocals"
+
+From Ken's requests of 2026-11-09 (rulings 12-14 and the assumptions under them). Build the
+Design section "Lyric style and the words (4)" and the two Accepted edges marked (4). Commit in
+this order, so every commit works on its own: the route only requires `sub_mode` in the same
+commit that makes the form post it.
+
+1. **The (i) notes on every page.** Move the note script and styles to `info-tip.js` and
+   `info-tip.css`, load them from `base.html`, update the three header comments. No test (no
+   JS tests); step 4 checks it.
+   Commit: `refactor(ui): the (i) notes load on every page`.
+2. **"Original vocals".** `singer_tips.html` with `original_vocals_tip()` only, the form
+   label and its note, Now Playing's heading and its note, the Info page label, the TV message.
+   Update any test that checks an old string.
+   Commit: `fix(ui): vocal volume is called "Original vocals", with an (i) note`.
+3. **The lyric style.** Everything under "The lyric style on the server", the form's lyrics
+   field and its script, `lyrics_tip()`, Now Playing's "Lyrics" heading, its note and its
+   translated buttons, and `set_sub_mode`'s message and labels. Tests (real
+   `PreferenceManager`, as the files already do):
+   - `test_playback_controller.py`: `initial_sub_mode` over all three choices and the four
+     combinations of files (12 cases, one parametrized test, expected values from the Design
+     table); one `play_file` test where a song with both files and the choice `srt` starts
+     `mpv.play` with `initial_sub_mode="srt"` and reports `now_playing_sub_mode == "srt"`.
+     Every existing `play_file` call gets a fifth argument.
+   - `test_singers.py`: `house_defaults()` has `sub_mode` `"karaoke"`; a saved `srt` comes
+     back from `lookup` and `settings_for`. Every `SingerSettings(...)` gets a third value.
+   - `test_singer_routes.py`: the `save` helper gets `sub_mode="karaoke"`; each of the three
+     modes is accepted; `"subtitles"` and `""` get 422 and join nobody; `"sub_mode"` joins the
+     missing-setting parametrize; the page state carries a joined guest's `sub_mode` and the
+     house `"karaoke"` for a phone that hasn't joined.
+   - `test_karaoke_singer_playback.py`: a joined guest's `sub_mode` reaches `play_file`; a name
+     that never joined gets `"karaoke"`.
+   - The other `SingerSettings(...)` users (`test_karaoke_rename_singer.py`,
+     `test_singer_page.py`) get a third value.
+   Commit: `feat(singers): each guest picks the lyric style their songs start in`.
+4. **Verify with the local `ui-check` skill on the VM** (phone viewport). The scratch library
+   has only `.mp4` files: copy each scratch song's `.ass` (`karaoke/`) and `.srt`
+   (`subtitles/`) from the shared song library into the same subfolders of the scratch library
+   (same base name). If none of the scratch songs has both, say so and check what the files
+   allow.
+   - **The notes.** On the join form, a tap on each (i) opens its note whole over the form
+     (not clipped by the card); a tap elsewhere closes it; neither tap submits or closes the
+     form, and Save still works. On Now Playing, both notes open. On `/processing` loaded
+     directly, and again after an SPA navigation from `/`, a tap opens a note and it stays
+     open, and `$._data(document, 'events').click` holds one `infotip` handler each for the
+     button, the note and the close (no double binding).
+   - **The words.** The form, Now Playing and the Info page say "Original vocals"; Now Playing
+     says "Lyrics"; moving the Now Playing vocals slider and pressing a lyric button change the
+     notification text to the new words.
+   - **The lyric style.** Join with Subtitles and add a song with both files: when it plays,
+     Now Playing shows Subtitles selected and the Subtitle Delay section. Edit to Off: the next
+     song starts Off. Edit to Karaoke: the next starts in Karaoke. A song added under a name
+     that never joined starts in Karaoke. Now Playing's Karaoke and Subtitles buttons are still
+     disabled when the song lacks that file, and the form's three buttons are never disabled.
+   - **The 410 path keeps the lyric choice.** Edit form open, lyric style changed, restart the
+     app, Save: the join form holds the changed style (3.3's check, with the lyric style added).
+   - SPA navigation doesn't stack handlers: one POST per Save, one mode change per form button
+     tap.
+   - Break each piece once and see a check fail: `base.html` loading `library-pages.js` as well
+     (double binding), the form's buttons on `data-mode`, the 410 state without `sub_mode`.
+
+Self-review: step 3 is several files on the playback path (playback, registry, route, form),
+so a review is due after this phase. Give the `/code-review` line at the checkpoint, over the
+three code commits, with one finder angle per Self-Review axis.
+
+### Phase 5: Ken's checks
 
 Ken runs the test plan below at a real party or a rehearsal on his box. No code unless he
 finds something.
@@ -829,6 +1056,13 @@ finds something.
       an Anon name. Save brings you back as you were.
 - [ ] With the app stopped, tap your name: a message says the app can't be reached, and no form
       opens.
+- [ ] (4) Join with Lyrics Off: your next song starts with no lyrics, and another guest's
+      starts in Karaoke.
+- [ ] (4) Change to Subtitles: your next song shows whole lines. Switch to Karaoke on Now
+      Playing mid-song: your song after that starts in Subtitles again.
+- [ ] (4) Tap each (i) on the form and on Now Playing: the note reads well on a phone and
+      closes on a tap elsewhere. The Processing page's notes still work.
+- [ ] (4) Ask a guest what "Original vocals" does before they open the note.
 
 ## Follow-ups (not in this plan)
 
