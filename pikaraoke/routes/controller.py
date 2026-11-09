@@ -5,6 +5,7 @@ from flask import redirect, request, url_for
 from flask_smorest import Blueprint
 
 from pikaraoke.lib.current_app import broadcast_event, get_karaoke_instance
+from pikaraoke.lib.playback_controller import SUB_MODES
 
 _ = flask_babel.gettext
 
@@ -98,7 +99,7 @@ def vocal_volume(volume):
 @controller_bp.route("/sub_mode/<mode>")
 def sub_mode(mode):
     """Set subtitle mode for current song."""
-    if mode not in ("karaoke", "srt", "off"):
+    if mode not in SUB_MODES:
         return ("invalid mode", 400)
     k = get_karaoke_instance()
     k.set_sub_mode(mode)

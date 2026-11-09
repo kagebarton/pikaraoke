@@ -1,4 +1,5 @@
-"""Guest join and settings routes: who the guests are and the key and vocal volume they sing at."""
+"""Guest join and settings routes: who the guests are and the key, vocal volume and lyric style
+they sing at."""
 
 from __future__ import annotations
 
@@ -9,6 +10,7 @@ from flask_smorest import Blueprint
 from marshmallow import Schema, fields, validate
 
 from pikaraoke.lib.current_app import get_karaoke_instance
+from pikaraoke.lib.playback_controller import SUB_MODES
 from pikaraoke.lib.singers import (
     KEY_LIMIT,
     NAME_LIMIT,
@@ -43,6 +45,11 @@ class SingerForm(Schema):
         validate=validate.Range(min=0, max=1),
         metadata={"description": "Vocal volume for the guest's songs, from 0 to 1"},
     )
+    sub_mode = fields.String(
+        required=True,
+        validate=validate.OneOf(SUB_MODES),
+        metadata={"description": "The lyric style the guest's songs start in"},
+    )
     editing = fields.Boolean(
         load_default=False,
         metadata={"description": "Sent by the edit form: refuse rather than join a new guest"},
@@ -60,7 +67,7 @@ def save_singer(form: dict[str, Any]) -> Response | tuple[Response, int]:
     then asks it to join.
     """
     k = get_karaoke_instance()
-    settings = SingerSettings(form["semitones"], form["vocal_volume"])
+    settings = SingerSettings(form["semitones"], form["vocal_volume"], form["sub_mode"])
     try:
         name, token = k.singers.save(
             request.cookies.get(TOKEN_COOKIE), form["name"], settings, editing=form["editing"]
@@ -82,6 +89,7 @@ def singer_state() -> dict[str, Any]:
         "name": name,
         "semitones": settings.semitones,
         "vocal_volume": settings.vocal_volume,
+        "sub_mode": settings.sub_mode,
         "name_limit": NAME_LIMIT,
         "key_limit": KEY_LIMIT,
         "transpose_enabled": k.is_transpose_enabled,

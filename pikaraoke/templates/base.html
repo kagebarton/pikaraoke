@@ -1,4 +1,4 @@
-{% from 'singer_tips.html' import original_vocals_tip -%}
+{% from 'singer_tips.html' import lyrics_tip, original_vocals_tip -%}
 <!DOCTYPE html>
 <html data-theme="dark">
 
@@ -285,7 +285,7 @@
         <p class="modal-card-title is-size-5">
           {# MSG: Title of the form a guest fills in the first time they open the app #}
           <span class="singer-join-only">{% trans %}Join the party{% endtrans %}</span>
-          {# MSG: Title of the form a guest opens by clicking their name, to change their name, vocal volume and key #}
+          {# MSG: Title of the form a guest opens by clicking their name, to change their name, original vocals level, key and lyric style #}
           <span class="singer-edit-only">{% trans %}Your name and settings{% endtrans %}</span>
         </p>
       </header>
@@ -324,6 +324,22 @@
           </div>
         </div>
         <input type="hidden" id="singer-key">
+
+        <div class="field">
+          <div>
+            {# MSG: Label of the control where a guest picks how the words show on their songs: Karaoke, Subtitles or Off #}
+            <span class="label" style="display: inline">{% trans %}Lyrics{% endtrans %}</span>{{ lyrics_tip() }}
+          </div>
+          <div class="buttons has-addons is-fullwidth" style="margin-bottom: 0">
+            {# MSG: Lyric style where each word lights up as it is sung #}
+            <button type="button" class="button subtitle-mode-btn" data-sub-mode="karaoke">{% trans %}Karaoke{% endtrans %}</button>
+            {# MSG: Lyric style that shows the song's words a whole line at a time #}
+            <button type="button" class="button subtitle-mode-btn" data-sub-mode="srt">{% trans %}Subtitles{% endtrans %}</button>
+            {# MSG: Lyric style that shows no words #}
+            <button type="button" class="button subtitle-mode-btn" data-sub-mode="off">{% trans %}Off{% endtrans %}</button>
+          </div>
+          <input type="hidden" id="singer-sub-mode">
+        </div>
       </section>
       <footer class="modal-card-foot" style="padding: 15px;">
         <button type="submit" class="button is-success" id="singer-save" style="margin-right: 8px">{% trans %}Save{% endtrans %}</button>

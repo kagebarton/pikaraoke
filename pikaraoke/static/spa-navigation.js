@@ -77,9 +77,10 @@
     }
 
     /**
-     * The guest form (name, vocal volume, key) in base.html's #singer-modal, which lives outside
-     * .box so navigation never swaps it. Join mode opens on any page until the phone has joined
-     * and has no way out but Save. Edit mode opens from the navbar name and has Cancel.
+     * The guest form (name, original vocals, key, lyric style) in base.html's #singer-modal,
+     * which lives outside .box so navigation never swaps it. Join mode opens on any page until
+     * the phone has joined and has no way out but Save. Edit mode opens from the navbar name and
+     * has Cancel.
      */
     let singerFormMode = null;
     let singerFormPrefilledName = '';
@@ -91,6 +92,15 @@
         const key = Math.max(-singerFormKeyLimit, Math.min(singerFormKeyLimit, value));
         $('#singer-key').val(key);
         $('#singer-key-label').text(getSemitonesLabel(key));
+    }
+
+    /** Mark `mode` ('karaoke', 'srt' or 'off') as the form's lyric style. */
+    function setSingerSubMode(mode) {
+        $('#singer-sub-mode').val(mode);
+        $('#singer-modal [data-sub-mode]').each(function() {
+            const selected = $(this).attr('data-sub-mode') === mode;
+            $(this).toggleClass('is-info', selected).toggleClass('is-selected', selected);
+        });
     }
 
     /**
@@ -112,6 +122,7 @@
         singerFormKeyLimit = state.key_limit;
         setSingerKey(state.semitones);
         $('#singer-key-field').toggle(state.transpose_enabled);
+        setSingerSubMode(state.sub_mode);
         $('.singer-join-only').toggle(mode === 'join');
         $('.singer-edit-only').toggle(mode === 'edit');
         $('#singer-save').removeClass('is-loading').prop('disabled', false);
@@ -173,12 +184,14 @@
         const keptName = name || singerFormPrefilledName;
         const semitones = $('#singer-key').val();
         const vocalVolume = $('#singer-vocal-volume').val() / 100;
+        const subMode = $('#singer-sub-mode').val();
         $save.addClass('is-loading').prop('disabled', true);
         $('#singer-name-error').hide();
         $.post('/singer', {
             name: name,
             semitones: semitones,
             vocal_volume: vocalVolume,
+            sub_mode: subMode,
             editing: editing
         }).done(function(reply) {
             setGuestCookie('user', reply.name);
@@ -198,7 +211,8 @@
             if (xhr.status === 410) {
                 if (singerFormMode !== 'join') {
                     applySingerState(Object.assign({}, window.singer, {
-                        joined: false, semitones: semitones, vocal_volume: vocalVolume
+                        joined: false, semitones: semitones, vocal_volume: vocalVolume,
+                        sub_mode: subMode
                     }));
                     $('#singer-name').val(keptName);
                     $('#singer-name-error').text(window.i18n.singerJoinAgain).show();
@@ -254,6 +268,9 @@
         });
         $(document).on('click.singer', '#singer-key-up', function() {
             setSingerKey(Number($('#singer-key').val()) + 1);
+        });
+        $(document).on('click.singer', '#singer-modal [data-sub-mode]', function() {
+            setSingerSubMode($(this).attr('data-sub-mode'));
         });
         $(document).on('input.singer', '#singer-vocal-volume', function() {
             $('#singer-vocal-volume-label').text(this.value + '%');

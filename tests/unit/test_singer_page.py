@@ -70,7 +70,7 @@ def page_state(client) -> dict:
 
 def test_a_name_that_closes_the_script_tag_stays_inert(app, karaoke):
     name = "</script><img src=x onerror=alert(1)>"
-    _, token = karaoke.singers.save(None, name, SingerSettings(0, 0.4))
+    _, token = karaoke.singers.save(None, name, SingerSettings(0, 0.4, "karaoke"))
     phone = app.test_client()
     phone.set_cookie("singer_token", token)
 

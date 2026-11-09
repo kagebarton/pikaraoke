@@ -6,7 +6,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from pikaraoke.lib.events import EventSystem
-from pikaraoke.lib.playback_controller import PlaybackController, PlaybackResult
+from pikaraoke.lib.playback_controller import (
+    PlaybackController,
+    PlaybackResult,
+    initial_sub_mode,
+)
 from pikaraoke.lib.preference_manager import PreferenceManager
 
 
@@ -89,7 +93,7 @@ class TestPlaybackControllerPlayFile:
         pc = PlaybackController(test_prefs, events, filename_fn, mock_mpv)
         mock_mpv.duration = 180
 
-        result = pc.play_file("/songs/test.mp4", "TestUser", 2, 0.4)
+        result = pc.play_file("/songs/test.mp4", "TestUser", 2, 0.4, "karaoke")
 
         assert result.success is True
         assert pc.now_playing == "Test Song"
@@ -124,7 +128,7 @@ class TestPlaybackControllerPlayFile:
             prefs, EventSystem(), lambda x, remove_youtube_id=True: "Song", mock_mpv
         )
 
-        result = pc.play_file("/songs/test.mp4", "TestUser", -2, 0.15)
+        result = pc.play_file("/songs/test.mp4", "TestUser", -2, 0.15, "karaoke")
 
         assert result.success is True
         play_kwargs = mock_mpv.play.call_args[1]
@@ -143,9 +147,56 @@ class TestPlaybackControllerPlayFile:
 
         # No need to mock stream_manager -- MPV plays directly
         # This test is now about MPV play failure
-        result = pc.play_file("/songs/test.mp4", "TestUser", 0, 0.4)
+        result = pc.play_file("/songs/test.mp4", "TestUser", 0, 0.4, "karaoke")
 
         assert result.success is True  # MPV play is fire-and-forget in this mock
+
+
+class TestInitialSubMode:
+    """The lyric style a song starts in: the chosen one if the song has its file, else the other."""
+
+    @pytest.mark.parametrize(
+        "chosen, has_ass, has_srt, expected",
+        [
+            ("karaoke", True, True, "karaoke"),
+            ("karaoke", True, False, "karaoke"),
+            ("karaoke", False, True, "srt"),
+            ("karaoke", False, False, "off"),
+            ("srt", True, True, "srt"),
+            ("srt", True, False, "karaoke"),
+            ("srt", False, True, "srt"),
+            ("srt", False, False, "off"),
+            ("off", True, True, "off"),
+            ("off", True, False, "off"),
+            ("off", False, True, "off"),
+            ("off", False, False, "off"),
+        ],
+    )
+    def test_the_chosen_style_then_the_other_lyrics_then_off(
+        self, chosen, has_ass, has_srt, expected
+    ):
+        assert initial_sub_mode(chosen, has_ass, has_srt) == expected
+
+    @patch("pikaraoke.lib.playback_controller.os.path.isfile", return_value=True)
+    def test_play_file_starts_a_song_with_both_files_in_the_chosen_style(
+        self, mock_isfile, test_prefs, mock_mpv, tmp_path
+    ):
+        song = tmp_path / "song.mp4"
+        song.write_text("fake")
+        (tmp_path / "karaoke").mkdir()
+        (tmp_path / "karaoke" / "song.ass").write_text("ass")
+        (tmp_path / "subtitles").mkdir()
+        (tmp_path / "subtitles" / "song.srt").write_text("srt")
+        pc = PlaybackController(
+            test_prefs, EventSystem(), lambda x, remove_youtube_id=True: "Song", mock_mpv
+        )
+
+        result = pc.play_file(str(song), "TestUser", 0, 0.4, "srt")
+
+        assert result.success is True
+        assert mock_mpv.play.call_args[1]["initial_sub_mode"] == "srt"
+        assert pc.now_playing_sub_mode == "srt"
+        assert pc.now_playing_subs_available == {"ass": True, "srt": True}
 
 
 class TestPlaybackControllerMissingFile:
@@ -158,7 +209,7 @@ class TestPlaybackControllerMissingFile:
 
         pc = PlaybackController(test_prefs, events, filename_fn, mock_mpv)
 
-        result = pc.play_file("/nonexistent/song.mp4", "TestUser", 0, 0.4)
+        result = pc.play_file("/nonexistent/song.mp4", "TestUser", 0, 0.4, "karaoke")
 
         assert result.success is False
         assert "not found" in result.error
@@ -173,7 +224,7 @@ class TestPlaybackControllerMissingFile:
         song = tmp_path / "song.mp4"
         song.write_text("fake")
 
-        result = pc.play_file(str(song), "TestUser", 0, 0.4)
+        result = pc.play_file(str(song), "TestUser", 0, 0.4, "karaoke")
 
         assert result.success is True
         mock_mpv.play.assert_called_once()
@@ -476,7 +527,7 @@ class TestPlaybackControllerLoudnorm:
         )
         mock_mpv.duration = 180
 
-        result = pc.play_file("/songs/test.mp4", "TestUser", 0, 0.4)
+        result = pc.play_file("/songs/test.mp4", "TestUser", 0, 0.4, "karaoke")
 
         assert result.success is True
         get_offset.assert_called_once_with("/songs/test.mp4")
@@ -501,7 +552,7 @@ class TestPlaybackControllerLoudnorm:
         )
         mock_mpv.duration = 180
 
-        result = pc.play_file("/songs/test.mp4", "TestUser", 0, 0.4)
+        result = pc.play_file("/songs/test.mp4", "TestUser", 0, 0.4, "karaoke")
 
         assert result.success is True
         get_offset.assert_not_called()
@@ -524,7 +575,7 @@ class TestPlaybackControllerLoudnorm:
         )
         mock_mpv.duration = 180
 
-        result = pc.play_file("/songs/test.mp4", "TestUser", 0, 0.4)
+        result = pc.play_file("/songs/test.mp4", "TestUser", 0, 0.4, "karaoke")
 
         assert result.success is True
         get_offset.assert_called_once_with("/songs/test.mp4")
@@ -547,7 +598,7 @@ class TestPlaybackControllerLoudnorm:
         )
         mock_mpv.duration = 180
 
-        result = pc.play_file("/songs/test.mp4", "TestUser", 0, 0.4)
+        result = pc.play_file("/songs/test.mp4", "TestUser", 0, 0.4, "karaoke")
 
         assert result.success is True
         get_offset.assert_called_once_with("/songs/test.mp4")

@@ -8,7 +8,7 @@ import pytest
 from pikaraoke.lib.preference_manager import PreferenceManager
 from pikaraoke.lib.singers import NameTaken, NotJoined, SingerRegistry, SingerSettings
 
-KEY_TWO = SingerSettings(semitones=2, vocal_volume=0.7)
+KEY_TWO = SingerSettings(semitones=2, vocal_volume=0.7, sub_mode="karaoke")
 
 
 @pytest.fixture
@@ -63,12 +63,12 @@ class TestJoin:
     def test_a_name_in_use_is_refused_whatever_its_case(self, registry, taken_as):
         join(registry, "Mike")
         with pytest.raises(NameTaken):
-            join(registry, taken_as, SingerSettings(0, 0.4))
+            join(registry, taken_as, SingerSettings(0, 0.4, "karaoke"))
 
     def test_the_refusal_moves_nothing(self, registry):
         _, token = join(registry, "Mike")
         with pytest.raises(NameTaken):
-            join(registry, "mike", SingerSettings(-1, 0.1))
+            join(registry, "mike", SingerSettings(-1, 0.1, "karaoke"))
         assert registry.lookup(token) == ("Mike", KEY_TWO)
 
     @pytest.mark.parametrize("name", ["Pikaraoke", "Randomizer", "randomizer", " PIKARAOKE"])
@@ -123,10 +123,10 @@ class TestEditing:
     def test_a_known_token_updates_as_without_it(self, registry, on_rename):
         _, token = join(registry, "Mike")
 
-        held = registry.save(token, "", SingerSettings(-1, 0.2), editing=True)
+        held = registry.save(token, "", SingerSettings(-1, 0.2, "karaoke"), editing=True)
 
         assert held == ("Mike", token)
-        assert registry.lookup(token) == ("Mike", SingerSettings(-1, 0.2))
+        assert registry.lookup(token) == ("Mike", SingerSettings(-1, 0.2, "karaoke"))
         on_rename.assert_not_called()
 
 
@@ -168,9 +168,9 @@ class TestLookup:
         assert registry.lookup(token) == ("Mike", KEY_TWO)
 
     def test_a_token_finds_its_own_guest_among_several(self, registry):
-        join(registry, "Sue", SingerSettings(0, 0.4))
+        join(registry, "Sue", SingerSettings(0, 0.4, "karaoke"))
         _, token = join(registry, "Mike")
-        join(registry, "Tom", SingerSettings(1, 0.1))
+        join(registry, "Tom", SingerSettings(1, 0.1, "karaoke"))
 
         assert registry.lookup(token) == ("Mike", KEY_TWO)
 
@@ -192,7 +192,7 @@ class TestLookup:
 class TestUpdate:
     def test_saving_settings_keeps_the_name_and_token(self, registry, on_rename):
         name, token = join(registry)
-        new_settings = SingerSettings(-1, 0.2)
+        new_settings = SingerSettings(-1, 0.2, "karaoke")
 
         held = registry.save(token, name, new_settings)
 
@@ -214,7 +214,7 @@ class TestUpdate:
         _, token = join(registry)
         registry.save(token, "Michael", KEY_TWO)
 
-        reused, _token = join(registry, "Mike", SingerSettings(0, 0.4))
+        reused, _token = join(registry, "Mike", SingerSettings(0, 0.4, "karaoke"))
 
         assert reused == "Mike"
 
@@ -229,11 +229,11 @@ class TestUpdate:
     def test_a_blank_name_keeps_the_current_one(self, registry, on_rename):
         _, token = join(registry)
 
-        held = registry.save(token, "  ", SingerSettings(1, 0.5))
+        held = registry.save(token, "  ", SingerSettings(1, 0.5, "karaoke"))
 
         assert held == ("Mike", token)
         on_rename.assert_not_called()
-        assert registry.lookup(token) == ("Mike", SingerSettings(1, 0.5))
+        assert registry.lookup(token) == ("Mike", SingerSettings(1, 0.5, "karaoke"))
 
     def test_two_saves_with_the_same_token_are_one_guest_even_if_the_second_has_the_old_name(
         self, registry, on_rename
@@ -242,10 +242,10 @@ class TestUpdate:
         _, token = join(registry)
         registry.save(token, "Michael", KEY_TWO)
 
-        name, kept_token = registry.save(token, "Mike", SingerSettings(1, 0.1))
+        name, kept_token = registry.save(token, "Mike", SingerSettings(1, 0.1, "karaoke"))
 
         assert (name, kept_token) == ("Mike", token)
-        assert registry.lookup(token) == ("Mike", SingerSettings(1, 0.1))
+        assert registry.lookup(token) == ("Mike", SingerSettings(1, 0.1, "karaoke"))
         assert [call.args for call in on_rename.call_args_list] == [
             ("Mike", "Michael"),
             ("Michael", "Mike"),
@@ -259,14 +259,14 @@ class TestUpdate:
 
     def test_a_name_another_guest_holds_raises_and_changes_nothing(self, registry, on_rename):
         _, token = join(registry, "Mike")
-        join(registry, "Sue", SingerSettings(0, 0.4))
+        join(registry, "Sue", SingerSettings(0, 0.4, "karaoke"))
 
         with pytest.raises(NameTaken):
-            registry.save(token, "sue", SingerSettings(-3, 0.0))
+            registry.save(token, "sue", SingerSettings(-3, 0.0, "karaoke"))
 
         on_rename.assert_not_called()
         assert registry.lookup(token) == ("Mike", KEY_TWO)
-        assert registry.settings_for("Sue") == SingerSettings(0, 0.4)
+        assert registry.settings_for("Sue") == SingerSettings(0, 0.4, "karaoke")
 
     def test_a_reserved_name_raises(self, registry):
         _, token = join(registry)
@@ -277,7 +277,7 @@ class TestUpdate:
         """The registry changed first, so it still matches whatever the callback moved."""
         registry = SingerRegistry(preferences, MagicMock(side_effect=RuntimeError("boom")))
         _, token = join(registry)
-        new_settings = SingerSettings(-1, 0.2)
+        new_settings = SingerSettings(-1, 0.2, "karaoke")
 
         with pytest.raises(RuntimeError, match="boom"):
             registry.save(token, "Michael", new_settings)
@@ -309,15 +309,22 @@ class TestSettingsFor:
         """The queue and the ownership checks compare names exactly, so another case is not
         the guest's songs."""
         join(registry)
-        assert registry.settings_for(other_spelling) == SingerSettings(0, 0.4)
+        assert registry.settings_for(other_spelling) == SingerSettings(0, 0.4, "karaoke")
 
     @pytest.mark.parametrize("name", ["Randomizer", "Pikaraoke", "Nobody"])
     def test_a_name_that_never_joined_gets_the_house_defaults(self, registry, name):
-        assert registry.settings_for(name) == SingerSettings(0, 0.4)
+        assert registry.settings_for(name) == SingerSettings(0, 0.4, "karaoke")
 
     def test_the_house_default_follows_a_changed_preference(self, registry, preferences):
         preferences.set("vocal_volume", 0.9)
-        assert registry.settings_for("Randomizer") == SingerSettings(0, 0.9)
+        assert registry.settings_for("Randomizer") == SingerSettings(0, 0.9, "karaoke")
+
+    def test_a_saved_lyric_style_comes_back_from_lookup_and_settings_for(self, registry):
+        subtitles = SingerSettings(0, 0.4, "srt")
+        _, token = join(registry, "Mike", subtitles)
+
+        assert registry.lookup(token) == ("Mike", subtitles)
+        assert registry.settings_for("Mike").sub_mode == "srt"
 
     def test_a_guest_keeps_what_they_saved_when_the_house_default_changes(
         self, registry, preferences
@@ -328,9 +335,9 @@ class TestSettingsFor:
 
 
 class TestHouseDefaults:
-    def test_key_zero_and_the_house_vocal_volume(self, registry):
-        assert registry.house_defaults() == SingerSettings(0, 0.4)
+    def test_key_zero_the_house_vocal_volume_and_karaoke_lyrics(self, registry):
+        assert registry.house_defaults() == SingerSettings(0, 0.4, "karaoke")
 
     def test_it_follows_a_changed_preference(self, registry, preferences):
         preferences.set("vocal_volume", 0.9)
-        assert registry.house_defaults() == SingerSettings(0, 0.9)
+        assert registry.house_defaults() == SingerSettings(0, 0.9, "karaoke")

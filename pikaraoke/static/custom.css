@@ -77,12 +77,34 @@ input {
   font-size: 16px !important;
 }
 
-/* Subtitle mode button styling */
-#subtitle-mode-section .buttons {
+/* The lyric style buttons (Now Playing's and the guest form's). The colours are defined here,
+   not on a page, because the guest form opens on every page. */
+:root {
+  --controls-button-size: 1rem;
+  --controls-button-weight: bold;
+
+  --button-normal-bg: var(--dark-bg-secondary);
+  --button-normal-text: var(--dark-text-muted);
+  --button-normal-border: var(--dark-border);
+
+  --button-hover-bg: var(--dark-bg-tertiary);
+  --button-hover-text: var(--dark-text-light);
+
+  --button-selected-bg: var(--bulma-success-dark-invert);
+  --button-selected-text: var(--bulma-dark);
+
+  --button-disabled-bg: var(--dark-bg-primary);
+  --button-disabled-text: var(--bulma-grey);
+  --button-disabled-opacity: 0.6;
+}
+
+#subtitle-mode-section .buttons,
+#singer-modal .buttons {
   width: 100%;
 }
 
-#subtitle-mode-section .buttons .button {
+#subtitle-mode-section .buttons .button,
+#singer-modal .buttons .button {
   flex: 1;
 }
 

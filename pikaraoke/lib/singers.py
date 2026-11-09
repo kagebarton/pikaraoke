@@ -1,4 +1,5 @@
-"""The guests of one run of the app: who joined, and the key and vocal volume they sing at."""
+"""The guests of one run of the app: who joined, and the key, vocal volume and lyric style
+they sing at."""
 
 from __future__ import annotations
 
@@ -34,10 +35,12 @@ class NotJoined(Exception):
 
 @dataclass(frozen=True)
 class SingerSettings:
-    """What a guest's songs start at: key in semitones, vocal volume from 0.0 to 1.0."""
+    """What a guest's songs start at: key in semitones, vocal volume from 0.0 to 1.0, and the
+    lyric style (`karaoke`, `srt` or `off`)."""
 
     semitones: int
     vocal_volume: float
+    sub_mode: str
 
 
 @dataclass
@@ -133,8 +136,8 @@ class SingerRegistry:
         return self.house_defaults()
 
     def house_defaults(self) -> SingerSettings:
-        """What a name that never joined sings at: key 0 and the house vocal volume."""
-        return SingerSettings(0, self._preferences.get_or_default("vocal_volume"))
+        """What a name that never joined sings at: key 0, the house vocal volume, karaoke lyrics."""
+        return SingerSettings(0, self._preferences.get_or_default("vocal_volume"), "karaoke")
 
     def _join(self, name: str, settings: SingerSettings) -> tuple[str, str]:
         """Call with the lock held."""
