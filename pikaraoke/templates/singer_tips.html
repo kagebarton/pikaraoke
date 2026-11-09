@@ -1,0 +1,8 @@
+{# The (i) notes of the guest form (base.html) and Now Playing (home.html), written once so the
+   two always say the same thing. #}
+{% from 'info_tip.html' import info_tip %}
+
+{% macro original_vocals_tip() -%}
+{# MSG: Note beside "Original vocals", the slider for how loud the original recording's singer is (the guest form and Now Playing). Guests tend to read it as their own microphone, so the note says it isn't #}
+{% call info_tip() %}{% trans %}How loud the recording's singer is. Your microphone isn't changed. 0% leaves just the music.{% endtrans %}{% endcall %}
+{%- endmacro %}

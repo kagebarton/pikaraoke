@@ -1,3 +1,4 @@
+{% from 'singer_tips.html' import original_vocals_tip -%}
 <!DOCTYPE html>
 <html data-theme="dark">
 
@@ -304,7 +305,10 @@
 
         <div class="field">
           <div class="is-flex" style="justify-content: space-between">
-            <label class="label" for="singer-vocal-volume">{% trans %}Vocal Volume{% endtrans %}</label>
+            <div>
+              {# MSG: Label of the slider for how loud the original recording's singer is. Not the guest's own microphone #}
+              <label class="label" for="singer-vocal-volume" style="display: inline">{% trans %}Original vocals{% endtrans %}</label>{{ original_vocals_tip() }}
+            </div>
             <span class="label" id="singer-vocal-volume-label"></span>
           </div>
           <input type="range" min="0" max="100" step="1" id="singer-vocal-volume" style="width: 100%" />

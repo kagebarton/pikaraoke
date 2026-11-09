@@ -585,7 +585,8 @@ class Karaoke:
             volume: Vocal volume level (0.0 to 1.0).
         """
         self.playback_controller.set_vocal_volume(volume)
-        self.log_and_send(_("Vocal volume: %s%%") % int(volume * 100))
+        # MSG: Message shown on the TV when the original vocals level changes
+        self.log_and_send(_("Original vocals: %s%%") % int(volume * 100))
         self.update_now_playing_socket()
 
     def set_sub_mode(self, mode: str) -> None:
