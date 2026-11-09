@@ -421,9 +421,20 @@ Library state:
   line 2 is no longer re-aligned, so its pair sits at its pre-branch times
   (1 ends 8.92, 2 starts 9.02). Ken listened 2026-11-06: most moves are too
   short to hear; the longer ones (Baby One More Time, All of Me) are good.
-- **Guessed words left after the regen** (shown, timing guessed): Stronger 3,
-  Climbing Uphill 3, Inconsolable 2, One In A Million 2, Tornado 2, A Little
-  More Time On You 1, each on one line.
+- **The other 65 caption-timed songs regenerated 2026-11-06** (Windows GPU,
+  backup `regen_backups/20261106T170716Z`, checked by Ken). The first regen
+  missed them because zero-length words don't show as "Missing from the
+  screen" (they show only as runs of `\kf10` in the `.ass`). The library was
+  mass-renamed afterwards, so stems in older lists may not match; select by
+  YouTube ID.
+- **Guessed words, library-wide on 2026-11-09** (`library_status._cue_fields`
+  over all 114 cue bundles; none in the old format, none with missing words;
+  words shown, timing guessed, lines in brackets where more than one): Rent
+  Will I 12 (4), Rent What You Own 8 (3), Miss Independent 4 (3), Stronger 3,
+  Climbing Uphill 3, Rent I Should Tell You 3, Inconsolable 2, One In A
+  Million 2, Tornado 2, Best Part Of Me 2, Tribute 2, You Don't Love Me (Like
+  You Used To Do) 2 (2), A Little More Time On You 1, Never Had A Dream Come
+  True 1.
 
 Heard at GATE B, not fixed:
 
