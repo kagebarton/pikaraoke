@@ -148,7 +148,7 @@ class TestResolveLyrics:
     def test_raw_choice_transcribes(self, tmp_path):
         song = _touch_video(tmp_path, "song")
 
-        assert backfill.resolve_lyrics(_job(song, ("raw",)), None, tmp_path) == (None, {})
+        assert backfill.resolve_lyrics(_job(song, ("transcribe",)), None, tmp_path) == (None, {})
 
 
 class _FakeWorker:
@@ -216,7 +216,7 @@ class TestRunJobsSeedsTheOrigin:
     def test_transcribed_run_seeds_nothing(self, tmp_path, pipeline_runs):
         _song_with_stems(tmp_path, "song")
         jobs = backfill.scan_folder(tmp_path)
-        jobs[0].choice = ("raw",)
+        jobs[0].choice = ("transcribe",)
         config = PipelineConfig()
         config.intermediate_dir = str(tmp_path)
 

@@ -69,7 +69,7 @@ backfill only ever fills in what's absent.
 
    ```
    <song name>
-     search query [<default>]: <enter or edit>
+     search query [<default>] or s/t/k: <enter, edit, or s/t/k>
      1) Title - Artist
      ...
      choose [1-N/s/t/k or new query]:
@@ -77,7 +77,8 @@ backfill only ever fills in what's absent.
 
    Options: numbered hit picks Genius lyrics; `s` = use local SRT;
    `t` = transcribe (no reference lyrics); `k` = skip song entirely;
-   any other input is treated as a new search query.
+   any other input is treated as a new search query. `s`, `t` and `k`
+   also work at the search prompt, which skips the Genius search.
 
    Selections are held in memory on each `SongJob` and resolved to a
    concrete lyrics file at run time by `resolve_lyrics()`, so phase
@@ -100,7 +101,7 @@ itself (`resolve_lyrics`) and hands it straight to `run_one`:
 - **bundle** → cleaned `lyrics.align_lines` from
   `alignment_debug/<stem>.json` (via `--use-bundle-lyrics`), written to
   a temp `<stem>.txt`.
-- **raw** → `None`, which makes `LyricAlignStage` transcribe.
+- **transcribe** → `None`, which makes `LyricAlignStage` transcribe.
 
 This deliberately bypasses the live app's `LyricsFetchStage` +
 `genius.write_choice()` sidecar, which is keyed by YouTube ID — that

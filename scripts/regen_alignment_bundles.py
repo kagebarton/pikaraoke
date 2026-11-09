@@ -66,7 +66,6 @@ from pikaraoke.lib.library_regen import (  # noqa: E402
     backup_text_folders,
     build_stages,
     clear_output_folders,
-    default_query,
     fetch_caption,
     find_local_srt,
     finish_regen_job,
@@ -83,6 +82,8 @@ from pikaraoke.pipeline.config import PipelineConfig  # noqa: E402
 from pikaraoke.pipeline.orchestrator import PipelineOrchestrator  # noqa: E402
 from pikaraoke.pipeline.workers.stem_worker import StemWorker  # noqa: E402
 from pikaraoke.pipeline.workers.whisper_worker import WhisperWorker  # noqa: E402
+from scripts.genius_prompt import HELP as GENIUS_HELP  # noqa: E402
+from scripts.genius_prompt import ask_lyrics_source  # noqa: E402
 from scripts.song_select import select_songs  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -123,49 +124,26 @@ def prompt_jobs(jobs: list[SongJob], genius: GeniusClient) -> None:
         return
     print("=" * 60)
     print(f"Genius search for {len(needs)} song(s) without a usable video caption.")
-    print("Choose a numbered hit, or [s]=local SRT, [t]=transcribe, [k]=skip song.")
+    print(GENIUS_HELP)
     print("=" * 60)
     for job in needs:
         job.plan = _prompt_one(job.song_path, genius)
 
 
 def _prompt_one(song: Path, genius: GeniusClient) -> Plan:
-    print(f"\n{song.name}")
-    default_q = default_query(song)
-    while True:
-        query = input(f"  search query [{default_q}]: ").strip() or default_q
-        hits = genius.search(query, limit=8)
-        if not hits:
-            print("  (no Genius hits)")
-        else:
-            for i, h in enumerate(hits, 1):
-                print(f"  {i}) {h.title} - {h.artist}")
-
-        if hits:
-            prompt = f"  choose [1-{len(hits)}/s/t/k or new query]: "
-        else:
-            prompt = "  choose [s/t/k or new query]: "
-        ans = input(prompt).strip().lower()
-
-        if ans in ("s", "srt"):
-            srt = find_local_srt(song)
-            if srt is None:
-                print("  no local SRT found; will transcribe")
-                return Plan(kind="transcribe", label="prompt -> transcribe")
+    choice = ask_lyrics_source(song, genius)
+    if choice[0] == "genius":
+        return Plan(kind="sidecar", genius_id=choice[1], label="prompt -> genius")
+    if choice[0] == "skip":
+        return Plan(kind="skip", label="prompt -> skip")
+    if choice[0] == "srt":
+        srt = find_local_srt(song)
+        if srt is not None:
             return Plan(
                 kind="seed", lyrics_path=srt, seed={"lyrics_origin": "srt"}, label="prompt -> srt"
             )
-        if ans in ("t", "transcribe"):
-            return Plan(kind="transcribe", label="prompt -> transcribe")
-        if ans in ("k", "skip", "q"):
-            return Plan(kind="skip", label="prompt -> skip")
-        if ans.isdigit() and hits and 1 <= int(ans) <= len(hits):
-            return Plan(kind="sidecar", genius_id=hits[int(ans) - 1].id, label="prompt -> genius")
-        if ans:
-            # Any other non-empty answer is a re-search query.
-            default_q = ans
-            continue
-        # Empty answer with no hits: re-prompt for a query.
+        print("  no local SRT found; will transcribe")
+    return Plan(kind="transcribe", label="prompt -> transcribe")
 
 
 # ---------------------------------------------------------------------------

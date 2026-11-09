@@ -40,21 +40,13 @@ from pathlib import Path
 # Allow running as ``python scripts/backfill_artifacts.py`` from repo root.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from pikaraoke.lib.genius import (  # noqa: E402
-    GeniusClient,
-    GeniusHit,
-    GeniusUnavailable,
-)
+from pikaraoke.lib.genius import GeniusClient, GeniusUnavailable  # noqa: E402
 from pikaraoke.lib.get_platform import (  # noqa: E402
     get_default_dl_dir,
     get_platform,
     get_temp_directory,
 )
 from pikaraoke.lib.library_regen import SeedArtifactsStage  # noqa: E402
-from pikaraoke.lib.metadata_parser import (  # noqa: E402
-    clean_search_query,
-    youtube_id_suffix,
-)
 from pikaraoke.lib.preference_manager import PreferenceManager  # noqa: E402
 from pikaraoke.lib.srt_provenance import is_generated  # noqa: E402
 from pikaraoke.pipeline.config import PipelineConfig  # noqa: E402
@@ -71,6 +63,8 @@ from pikaraoke.pipeline.stages.lyric_align import LyricAlignStage  # noqa: E402
 from pikaraoke.pipeline.stages.stem_separation import StemSeparationStage  # noqa: E402
 from pikaraoke.pipeline.workers.stem_worker import StemWorker  # noqa: E402
 from pikaraoke.pipeline.workers.whisper_worker import WhisperWorker  # noqa: E402
+from scripts.genius_prompt import HELP as GENIUS_HELP  # noqa: E402
+from scripts.genius_prompt import ask_lyrics_source  # noqa: E402
 from scripts.song_select import select_songs  # noqa: E402
 
 VIDEO_EXTS = {".mp4", ".mkv", ".avi", ".webm", ".mov"}
@@ -86,7 +80,7 @@ class SongJob:
     song_path: Path
     missing: set[str] = field(default_factory=set)
     # Populated during phase 2 (Genius prompt) or by --use-bundle-lyrics:
-    #   ("genius", genius_id) | ("srt",) | ("raw",) | ("skip",)
+    #   ("genius", genius_id) | ("srt",) | ("transcribe",) | ("skip",)
     #   | ("bundle", bundle_json_path)
     choice: tuple = ()
 
@@ -163,14 +157,6 @@ def print_report(jobs: list[SongJob], folder: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _default_query(song: Path) -> str:
-    """Strip the YouTube ID suffix and tidy the title for a search query."""
-    suffix = youtube_id_suffix(str(song))
-    title = song.stem[: -len(suffix)] if suffix else song.stem
-    cleaned = clean_search_query(title)
-    return cleaned or title
-
-
 def apply_bundle_lyric_choices(jobs: list[SongJob], bundles_dir: Path) -> int:
     """Pre-populate ``job.choice`` for any song with a cached bundle.
 
@@ -210,7 +196,7 @@ def prompt_genius_choices(jobs: list[SongJob], genius: GeniusClient) -> list[Son
 
     print("=" * 60)
     print(f"Genius search for {len(needs_prompt)} song(s) needing lyrics.")
-    print("Choose a numbered hit, or [s]=local SRT, [t]=transcribe, [k]=skip song.")
+    print(GENIUS_HELP)
     print("=" * 60)
 
     kept: list[SongJob] = []
@@ -219,47 +205,13 @@ def prompt_genius_choices(jobs: list[SongJob], genius: GeniusClient) -> list[Son
         if id(j) not in needs_set:
             kept.append(j)
             continue
-        choice = _prompt_one(j, genius)
+        choice = ask_lyrics_source(j.song_path, genius)
         if choice == ("skip",):
             print(f"  -> skipped: {j.song_path.name}\n")
             continue
         j.choice = choice
         kept.append(j)
     return kept
-
-
-def _prompt_one(job: SongJob, genius: GeniusClient) -> tuple:
-    print(f"\n{job.song_path.name}")
-    default_q = _default_query(job.song_path)
-
-    while True:
-        query = input(f"  search query [{default_q}]: ").strip() or default_q
-        hits = genius.search(query, limit=8)
-        if not hits:
-            print("  (no Genius hits)")
-        else:
-            for i, h in enumerate(hits, 1):
-                print(f"  {i}) {h.title} - {h.artist}")
-
-        if hits:
-            prompt = f"  choose [1-{len(hits)}/s/t/k or new query]: "
-        else:
-            prompt = "  choose [s/t/k or new query]: "
-        ans = input(prompt).strip().lower()
-
-        if ans in ("s", "srt"):
-            return ("srt",)
-        if ans in ("t", "transcribe"):
-            return ("raw",)
-        if ans in ("k", "skip", "q"):
-            return ("skip",)
-        if ans.isdigit() and hits and 1 <= int(ans) <= len(hits):
-            return ("genius", hits[int(ans) - 1].id)
-        if ans:
-            # Treat any other non-empty answer as a re-search query.
-            default_q = ans
-            continue
-        # Empty answer with no hits: re-prompt for a query.
 
 
 def _find_local_srt(song: Path) -> Path | None:
@@ -292,9 +244,9 @@ def resolve_lyrics(
       * srt    -> existing local SRT, return it
       * bundle -> reuse cached align_lines from alignment-debug bundle,
                   write ``<stem>.txt``, return it
-      * raw    -> None (force transcription)
+      * transcribe -> None (force transcription)
     """
-    kind = job.choice[0] if job.choice else "raw"
+    kind = job.choice[0] if job.choice else "transcribe"
 
     if kind == "genius":
         try:

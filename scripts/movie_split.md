@@ -268,6 +268,6 @@ second at 48 kHz. Use the source's own rate if it differs.
    `python -u scripts/regen_alignment_bundles.py --song "<full file name>" ... --yes`.
    - Pass whole file names (each pattern must match exactly one song). Never
      pass `--reset`.
-   - Press Enter at the search prompt, and `s` (use the local SRT) at "choose".
+   - Type `s` (use the local SRT) at the search prompt.
    - Keep `-u`: block-buffered output hides the per-song lines.
 4. Never commit the clips, SRTs or configs: they are copyrighted material.
