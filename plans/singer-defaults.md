@@ -1558,3 +1558,109 @@ deviated from this plan and why.)
   after this phase.
 - **Not done:** `graphify update .` (no `graphify-out/` on this box). Phase 4 (Ken's checks) not
   started.
+
+### Phase 4: lyric style per guest, and "Original vocals" (executed 2026-11-09, Claude Sonnet 5.5)
+
+- **Commits:** `da52af1` `refactor(ui): the (i) notes load on every page` (step 1); `19527b9`
+  `fix(ui): vocal volume is called "Original vocals", with an (i) note` (step 2); `3d52fc3`
+  `feat(singers): each guest picks the lyric style their songs start in` (step 3). Step 3 was
+  amended once after step 4 (it was `b1de558`; the amend moved the lyric buttons' colours, see
+  Deviations). Branch `singer_defaults` was checked out first: the session started on
+  `defer_timing`, with a clean tree.
+- **Tests:** full suite 3500 before, 3522 after, 22 new: `initial_sub_mode` 12 cases plus the
+  `play_file` test with both files and the choice `srt` (13); `test_singers.py` (1: a saved `srt`
+  comes back from `lookup` and `settings_for`); `test_singer_routes.py` (7: each of the three
+  styles saved, `subtitles` / `Karaoke` / `` get 422 and join nobody, `sub_mode` in the
+  missing-setting parametrize); `test_karaoke_singer_playback.py` (1: a name that never joined
+  gets `karaoke` while a guest picked `off`; the existing test now uses `srt`). Every old
+  `SingerSettings(...)` and `play_file(...)` call got its new value. No test checked an old
+  string. Two breaks on the server side, restored after each: the play loop passing a literal
+  `"karaoke"` (1 fails), the route storing `"karaoke"` instead of the posted style (2 fail).
+  Pre-commit clean (black reflowed one test file); the page script and `info-tip.js` pass the
+  syntax check (`scratchpad/syntax.py`, rewritten this session: it compiles each file in
+  headless Chromium, since there is no node).
+- **ui-check:** one new driver (`scratchpad/check_p4.py`) against the real app on the VM, phone
+  viewport 390x844, touch only (no hover). Scratch library: the four videos with their lyric
+  files copied from the shared library: two songs with both files, one with captions only
+  (Jose & Mark), one with karaoke lyrics only (Let's Bash). Names used: `Sub`, `Ghost`.
+  **54 passed, 0 failed** on the final tree. By plan item:
+  - **Notes:** on the join form both (i) notes open whole inside the window and are not clipped
+    by the card (a hit test 12 px in from each corner of the note lands on the note; 2 px fails
+    only because of the note's rounded corners), tapping an (i) neither posts nor closes the
+    form, a tap on the title closes it, and Save then joins. On Now Playing the lyrics note
+    opens and closes. After an SPA navigation (home to queue to processing to home) and on a
+    direct load of `/processing`, `$._data(document, 'events').click` holds exactly one
+    `infotip` handler each for the button, the note and the close, and one for the form's lyric
+    buttons; a tapped Processing note (Library tools tab) stays open both ways.
+  - **Words:** the form label, Now Playing's heading and the Info page say "Original vocals" /
+    "Default original vocals level"; Now Playing's heading says "Lyrics"; the three buttons say
+    Karaoke, Subtitles, Off. The TV messages `Original vocals: 30%` and `Lyrics: Karaoke` were
+    read from the app's log, see Deviations.
+  - **Lyric style:** joined with Subtitles: the first song (both files) started in `srt`, Now
+    Playing showed Subtitles selected and the Subtitle Delay section. Pressing Karaoke on Now
+    Playing changed that song only; the edit form then opened showing Subtitles (the saved
+    value, not Now Playing's). Edit to Off (one POST, no reload): the next song started `off`.
+    Edit to Karaoke: the karaoke-only song started `karaoke` with Subtitles disabled on Now
+    Playing; the captions-only song started `srt` (the fallback) with Karaoke disabled; a song
+    under `Ghost`, who never joined, started `karaoke`. The form's three buttons were never
+    disabled, including while Now Playing's Subtitles was.
+  - **410 path:** edit form open, Off chosen and vocals moved to 65, app restarted, Save: the
+    join form held Off (selected, hidden field), 65, `Sub` and the restart line; one Save joined
+    `Sub` again with Off and 0.65. The page's own copy of the style was `srt` at that point, so
+    the form could not have got Off from the page.
+  - **No stacking:** one POST per Save after the navigations, and the handler counts above.
+- **Breaks, one at a time on a copy of HEAD, driver run on each:**
+  - The 410 state without `sub_mode` (`spa-navigation.js`): 2 fail (the join form holds `srt`,
+    the style the page had, not the chosen Off; and the join after it saves `srt`).
+  - A second `info-tip.js` load on the Processing page: 2 fail (on a direct load, two handlers
+    each and a tapped note closes at once).
+  - The form's buttons on `data-mode`: the driver stops at its first form tap, since its
+    selector is gone; a separate tap on the button by its text selects nothing (the hidden
+    field stays `karaoke`, nothing highlighted). It does **not** disable the wrong Now Playing
+    button, see Deviations.
+  - `base.html` also loading `library-pages.js` (the plan's wording): **not caught**, 54 pass,
+    see Deviations.
+- **Deviations from the plan:**
+  1. **The lyric buttons' colours moved from `home.html` to `custom.css`.** The plan has the
+     form reuse `subtitle-mode-btn`, but the `--button-*` variables that class reads were
+     defined only in `home.html`'s style block. Off the home page the form's buttons had no
+     background at all, so the chosen style could not be seen (measured on a direct load of
+     `/queue`: all three transparent). The variables (the ones only that class uses) now sit
+     in `custom.css` next to the rule, and `#singer-modal .buttons` gets Now Playing's
+     full-width rule. Found only because the first screenshot of the form on a page other than
+     `/` was taken late; the driver now checks the colours on `/queue`, `/processing` and
+     `/info` (selected button differs from the others, none transparent). Folded into step 3.
+  2. **The TV messages are not shown on any web page.** Nothing in the page scripts listens for
+     the `notification` event, so the plan's "the notification text changes" cannot be seen in
+     a browser. The text was read from the app's own log line (`INFO: Original vocals: 30%`,
+     `INFO: Lyrics: Karaoke`), which `log_and_send` writes before sending. How it looks on the
+     TV overlay is not checked.
+  3. **The vocals section never shows in the scratch library** (no stems). I showed it by
+     script to check its heading, its note and the slider message. A real dual-stem song is
+     not checked.
+  4. **The plan's "base.html loading `library-pages.js` as well" no longer double-binds**: step
+     1 moved the note script out of that file, so the break passes. The break that does
+     double-bind (a library page loading `info-tip.js` a second time) was run instead.
+  5. **The `data-mode` break does not hit Now Playing's lookups.** The page content comes
+     before the form in the document, so `document.querySelector("[data-mode='srt']")` still
+     finds Now Playing's own button. The unscoped lookups stay fragile (they would hit the form
+     if it ever came first), but the plan's predicted failure is not what happens today.
+  6. **Earlier phases' drivers were not re-run**: their scripts were lost with the scratchpad.
+     `check_p4.py` covers the form's join and edit modes, the 410 path and the navigation
+     handlers it touches.
+- **Not checked:** a real phone, how the notes read on one, hover behaviour of the notes (the
+  run was touch-only), widths other than 390, the other six library pages (only `/processing`
+  was visited; their render tests pass), how the lyric styles look on the TV (the style is read
+  from `/now_playing`; mpv here has no window), other languages (the new strings show in
+  English until the catalogs are regenerated), and the success handler reading `editing`
+  instead of the mode at reply time (carried over from 3.3).
+- **Self-review:** step 1 is a move of one block unchanged; step 2 is wording and one new
+  template; step 3 is several files on the playback path (playback, registry, route, form), so
+  **a review is due**. Correctness: the lyric style rides the same path as key and volume
+  (route to registry to the play loop to `play_file`), and `initial_sub_mode` is the one place
+  that picks a mode. Simplicity: `SUB_MODES` is the one list of names and the route, the
+  `/sub_mode` check and the controller use it; the note texts live once. Robustness: the
+  registry stores what the route validated, `initial_sub_mode` takes a value from that list
+  only (a bad one would raise, which the route's check keeps out).
+- **Not done:** `graphify update .` (no `graphify-out/` on this box). Phase 5 (Ken's checks) not
+  started.
