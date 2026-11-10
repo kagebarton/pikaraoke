@@ -3,6 +3,7 @@
 import json
 from datetime import timedelta
 
+import pytest
 import srt
 
 from pikaraoke.lib import srt_slice_fit
@@ -26,6 +27,7 @@ from pikaraoke.lib.srt_slice_fit import (
     free_speed,
     heard_streams,
     lrc_to_srt,
+    sheet_stream,
     unheard_runs,
 )
 
@@ -287,6 +289,39 @@ class TestHeardStreams:
     def test_nothing_on_disk_is_no_streams(self):
         assert heard_streams(None, None) == {}
         assert heard_streams({"transcribe_words": None}, "") == {}
+
+
+class TestSheetStream:
+    def test_each_cues_tokens_are_spread_evenly_over_the_cue_in_file_order(self):
+        text = srt.compose(
+            [
+                srt.Subtitle(0, timedelta(seconds=10), timedelta(seconds=14), "Hello, there!"),
+                srt.Subtitle(0, timedelta(seconds=20), timedelta(seconds=23), "[Music]"),
+                srt.Subtitle(0, timedelta(seconds=30), timedelta(seconds=36), "Don't go away"),
+            ]
+        )
+
+        stream = sheet_stream(text)
+
+        assert [w["norm"] for w in stream] == ["hello", "there", "dont", "go", "away"]
+        assert [w["start"] for w in stream] == [11.0, 13.0, 31.0, 33.0, 35.0]
+
+    def test_the_stream_fits_as_a_heard_stream_of_the_same_sheet(self):
+        song = _song()
+
+        result = fit_slice(
+            _movie_srt(song), {srt_slice_fit.CAPTION: sheet_stream(_movie_srt(song))}, 300.0
+        )
+
+        assert (result.status, result.heard_source, result.unclaimed_run) == (
+            FITS,
+            srt_slice_fit.CAPTION,
+            0,
+        )
+
+    def test_text_that_is_not_srt_raises(self):
+        with pytest.raises(srt.SRTParseError):
+            sheet_stream("these are not subtitles at all")
 
 
 class TestRepeatedLine:
