@@ -1,5 +1,6 @@
 Model: Claude Sonnet 5.5 (executor, Phases 1-3). Author: Claude Fable 5.2, 2026-11-10. Judge
-at GATE P: Claude Opus 5.5, then Ken. Phases 4-6 are loose and get their spec after the gate.
+at GATE P: Claude Fable 5.2 (Ken's call, 2026-11-10), then Ken. Phases 4-6 are
+loose and get their spec after the gate.
 
 # LRCLIB timing at download, picked by fit
 
@@ -336,7 +337,7 @@ Read-only on the library, GPU-free, on the VM, network for LRCLIB only.
   numbers. Plan-only commit.
 - [ ] **2c. Stop.** Give Ken, in plain words: where the listen files are and how to use them
   (below), and Table L's first 10 rows as listening session 2. Then the handoff prompt for
-  Opus (see "Executor rules"). Do not start Phase 3.
+  Fable (see "Executor rules"). Do not start Phase 3.
 
 **How Ken judges a pick.** Open the song's video in VLC, add the pick's `.srt` from
 `D:\Shared\lrclib-listen` as the subtitle file, and watch: do the lines come up when they are
@@ -359,9 +360,9 @@ karaoke; that is Phase 6. One verdict per song: right, wrong (where), or unsure.
   commit.
 - [ ] **3d. Stop.** Give Ken listening session 3: the `new` rows of Table L, first 10. If
   more than 10 new picks have no reference, say how many sessions that makes. Handoff prompt
-  for Opus.
+  for Fable.
 
-## GATE P (Opus, then Ken)
+## GATE P (Fable, then Ken)
 
 Read-only. Inputs: both report sections, the files under both `<out>` folders, Ken's verdicts.
 Read once both runs and Ken's sessions are in; a pre-read after Phase 2 may only produce
@@ -443,7 +444,7 @@ and the karaoke by ear. Return one to Genius on Repair.
   and both `<out>` folders hold lyric text and stay off the repo.
 - No verdicts: tables go in raw. Do not say whether the bar held.
 - Feature branch `lrclib_fit_pick` (off `dev` `37d8d93`). Plan edits in their own commits.
-- At 2c and 3d the Opus handoff prompt carries: branch and HEAD, this file's report sections
+- At 2c and 3d the Fable handoff prompt carries: branch and HEAD, this file's report sections
   and "GATE P", both `<out>` paths, "do not rerun the probe", and that Ken's verdicts arrive
   in chat.
 
