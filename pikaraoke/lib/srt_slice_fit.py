@@ -63,6 +63,9 @@ DISAGREE = "disagree"
 # confuse an in-order match.
 TRANSCRIBE = "transcribe"
 ASR = "asr"
+# The name for a subtitle file's own words (:func:`sheet_stream`), used where it stands in
+# for a heard stream.
+CAPTION = "caption"
 
 # Speed factors tried first: none, and the PAL speed-up (25 fps release of a
 # 23.976 fps film) with its reverse. A free speed is fitted to the anchors too,
@@ -184,6 +187,20 @@ def heard_streams(bundle: dict | None, asr_json3: str | None) -> dict[str, list[
         if asr_words:
             streams[ASR] = [{"norm": w["norm"], "start": w["start"]} for w in asr_words]
     return streams
+
+
+def sheet_stream(srt_text: str) -> list[dict]:
+    """A subtitle file's tokens as a word stream ``[{norm, start}]``, in the shape of
+    :func:`heard_streams`'.
+
+    Each cue's tokens are spread evenly over the cue, as the fit spreads a sheet's, so
+    fitting an LRC to this stream asks whether it agrees with the file. Raises what
+    :func:`cue_spans_from_srt` raises on text that is not SRT.
+    """
+    texts, spans = cue_spans_from_srt(srt_text)
+    tokens = _CueTokens.of(texts)
+    times = _expected_times(tokens, spans, 1.0, 0.0)
+    return [{"norm": norm, "start": time} for norm, time in zip(tokens.norms, times)]
 
 
 def lrc_to_srt(lrc_text: str) -> str:
