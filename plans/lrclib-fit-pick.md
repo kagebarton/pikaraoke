@@ -3,7 +3,8 @@ at GATE P: Claude Opus 5.5, then Ken. Phases 4-6 are loose and get their spec af
 
 # LRCLIB timing at download, picked by fit
 
-**Status: PLANNED 2026-11-10. Nothing built, nothing measured under this plan.**
+**Status: Phase 1 built 2026-11-10 (Results row 4); the measure was checked on the four GATE M
+songs. Phase 2 is next. Nothing has been run on the library or judged.**
 
 ## Goal
 
@@ -173,7 +174,7 @@ The exploration used every song in the library, so the holdout must be new songs
 
 Read-only on the library, GPU-free, on the VM, network for LRCLIB only.
 
-- [ ] **1a. Anchor check.** On branch `lrclib_fit_pick`. Confirm these exist as this plan uses
+- [x] **1a. Anchor check.** On branch `lrclib_fit_pick`. Confirm these exist as this plan uses
   them, else STOP and say what differs:
   `srt_slice_fit.fit_slice`, `heard_streams`, `lrc_to_srt`, `flagged_runs`, `unheard_runs`,
   `SliceFit`, `_fit_one_stream`, `_match_by_time`, `_best_speed`, `_CueTokens`,
@@ -187,7 +188,7 @@ Read-only on the library, GPU-free, on the VM, network for LRCLIB only.
   `search_query_for`, `search_records`, `candidate_entries`, `disk_record`, `read_caption`,
   `caption_ok`, `title`, `md_table`, `write_tsv`). Copy what fits; do not restore the file.
 
-- [ ] **1b. `SliceFit.unclaimed_run`** in `pikaraoke/lib/srt_slice_fit.py`. A new field,
+- [x] **1b. `SliceFit.unclaimed_run`** in `pikaraoke/lib/srt_slice_fit.py`. A new field,
   `int`, 0 unless the status is `fits`, defined as in "The bar and the pick". It is computed in
   `_fit_one_stream` from the second pass's token-to-word assignment and the final speed and
   shift, on the stream that fit used. Share the expected-times loop with `_match_by_time`
@@ -198,7 +199,7 @@ Read-only on the library, GPU-free, on the VM, network for LRCLIB only.
   not claimed; a refused fit gives 0.
   Commit: `feat(lyrics): the LRC fit counts heard words no line claims`.
 
-- [ ] **1c. `pikaraoke/lib/lrc_auto_pick.py`**, new, pure (no I/O). This is the code the
+- [x] **1c. `pikaraoke/lib/lrc_auto_pick.py`**, new, pure (no I/O). This is the code the
   build will call, so the probe measures what ships.
   - `MAX_MISTIMED = 1`, `MAX_UNCLAIMED_RUN = 12`, each with a comment pointing at this plan.
   - `refusal(fit: SliceFit) -> str | None`: the first bar condition the fit fails, as
@@ -213,7 +214,7 @@ Read-only on the library, GPU-free, on the VM, network for LRCLIB only.
   tie-breaks; records without synced text ignored; none passing gives None.
   Commit: `feat(lyrics): pick an LRCLIB record by how it fits the heard words`.
 
-- [ ] **1d. `scripts/lrc_fit_pick_probe.py`.** One command:
+- [x] **1d. `scripts/lrc_fit_pick_probe.py`.** One command:
   `python scripts/lrc_fit_pick_probe.py --folder PATH [--out DIR] [--baseline FILE]
   [--old-cache DIR] [--listen-dir DIR] [--only ID ...]`.
   - `--out` defaults to `Path(get_temp_directory()) / "lrclib_fit_pick"`. It holds lyric text
@@ -304,7 +305,7 @@ Read-only on the library, GPU-free, on the VM, network for LRCLIB only.
     order (pool, old cache, not found); the sensitivity count. No network, no library.
   Commit: `feat(scripts): LRCLIB fit-pick probe for GATE P`.
 
-- [ ] **1e. Check the measure against the exploration.** Run the probe on the four GATE M
+- [x] **1e. Check the measure against the exploration.** Run the probe on the four GATE M
   songs only, to a scratch folder:
   `python scripts/lrc_fit_pick_probe.py --folder "<library>" --out <scratch> --old-cache
   ~/.pikaraoke/tmp/lrclib_auto_timing/cache --only GZXHBgjQjNM --only AJWtLf4-WWs --only
@@ -313,7 +314,7 @@ Read-only on the library, GPU-free, on the VM, network for LRCLIB only.
   value means the measure is not the one explored: STOP and report the values, do not adjust
   anything to match. A record `not found` is not a mismatch; say so.
 
-- [ ] **1f. Self-review and record.** Self-review per CLAUDE.md; 1b and 1c are new logic in
+- [x] **1f. Self-review and record.** Self-review per CLAUDE.md; 1b and 1c are new logic in
   the fit path, so track them as pending review. Results log row with the three commits and
   the 1e values. Plan-only commit. Stop (checkpoint: `/compact`, review due).
 
@@ -453,6 +454,7 @@ and the karaoke by ear. Return one to Genius on Repair.
 | 1 | 2026-11-10 | 0 | Branch `lrclib_fit_pick` off `dev` `37d8d93`. Baseline id list written, read-only on the library (`library_statuses`): 168 songs. Origins: `srt` 112, `lrclib_srt` 28, `movie_srt` 7, `genius`/joint 4, `custom`/joint 3, no bundle 14. | `~/.pikaraoke/tmp/lrclib_fit_pick/baseline_ids.txt`, sha256 `610e84eeee4209473ba33b50d583ea4739d3086c85bf940cde950e5645315eb7`. |
 | 2 | 2026-11-10 | 0 | Ken declined a 30-song import and asked for a shorter list picked for him (Decision 17). Twelve songs listed in Phase 0, found with `yt-dlp` searches from the VM (`ytsearch3:` per song, uploader captions read from each result). Control: the search reported the uploader caption on a library caption song (`4fndeDfaWCg`). None of the twelve is in the baseline. LRCLIB not consulted. | List and selection rule in Phase 0. |
 | 3 | 2026-11-10 | 0 | Ken asked how many songs are needed and for a command for the rest. Eighteen more listed the same way (same searches, same rule, LRCLIB not consulted), which makes the thirty first planned, now all of the Genius-pick kind. None is in the baseline. | Phase 0 lists thirty; 3a needs 25 of them. |
+| 4 | 2026-11-10 | 1 | Phase 1 on `lrclib_fit_pick`, VM, read-only on the library. **1a:** every anchor the step names exists as the plan uses it. **Commits:** 1b `ddefad8` (`SliceFit.unclaimed_run`); 1c `71c916f` (`lrc_auto_pick`: bar, `evaluate`, `pick`); `810665f`, not in the plan (`SliceFit.unclaimed_runs`: every run as first heard word and length; the sheets' `X` rows need the place and the longest length cannot give it; `unclaimed_run` is now the longest of the list); 1d `f96db34` (probe, `srt_slice_fit.sheet_stream` and `CAPTION`, tests). **Tests:** full suite 3648 passed on the final tree; pre-commit passes on every changed file. **1e:** probe on the four GATE M songs to a fresh scratch folder with a live LRCLIB search, all 30 listed records found in the pool (none from `--old-cache`, none `not found`). Table K unclaimed run as read: 12572148 -> 89; 35468507 -> 20; 33133897 -> 20; 6800151, 28307055, 34352818 -> 14; 20242140 -> 6. A first run, before the 1d commit, printed the same Table K. `find <library> -newer started` listed `vocal/`, `nonvocal/` and `vocal/Bruno Mars - Just The Way You Are (Official Music Video)---LjhCEhWiKXk---vocal.m4a`: Ken's holdout import (`LjhCEhWiKXk` is Phase 0's first song), nothing the probe writes. **Where the plan was silent:** `--folder` is required; `classify` gives a song no listed rule names the reason `other`; a `new` song counts in its group's row of Tables P and V and again in the `new` row; Table K has Source and Note columns; Table V counts songs with at least one passing record at the limits; reference flags are read only when the reference fit fits (`ref_refused` alone otherwise). A test caught a Table K crash (a record in neither the pool nor the old cache) that the 1e run could not, since every record was in the pool. Plan commit `a17e6e3` (thirty-song holdout, another session) landed between 1b and 1c and touches Phase 0 and 3a only. No `graphify-out` on this VM, so no `graphify update`. **Self-review** (correctness, simplicity, robustness) done on the four code commits. **Review pending:** `ddefad8`, `71c916f`, `810665f`, and the probe's reference flags and sheet logic in `f96db34`. | Scratch outputs `/tmp/claude-1000/-home-ken-pikaraoke/95747b31-9b15-4134-9c73-c44d4fc6bb5b/scratchpad/probe1e_final` (`.report.md` beside it): TSVs, sheets, listen files; lyric text, not committed. Command: 1e as written. |
 
 ## Report output: library run
 
