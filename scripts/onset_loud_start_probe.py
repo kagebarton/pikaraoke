@@ -8,17 +8,25 @@ start is scored against the transcriber's first word for the line; that referenc
 itself early after a gap (Table C), so the tables are for sizing and nothing here judges
 a move.
 
-The library is never written. ``--out`` holds the envelope cache and ``rows.json`` (one
-row per line, with lyric text), so it is never committed. The tables printed to stdout
-carry counts only.
+With ``--listen`` it also builds the GATE S listening sheet for the rule under test (a
+skipped line moves only where a heard word equal to its first word starts near the rise):
+``<out>/listening-sheet.html`` and, for each sheet song, ``karaoke/<stem>.onsetfix.ass``
+in the library, the shipped subtitles with the rule on. Those are the only files it ever
+writes to the library; without ``--listen`` the library is never written.
+
+``--out`` holds the envelope cache, ``rows.json`` (one row per line) and the sheet, all
+with lyric text, so it is never committed. The tables printed to stdout carry counts and
+line numbers only.
 
 Run from the repo root::
 
-    python scripts/onset_loud_start_probe.py --folder PATH [--out DIR] > DIR/report.md
+    python scripts/onset_loud_start_probe.py --folder PATH [--out DIR] [--listen] > report.md
 """
 
 import argparse
 import copy
+import glob
+import html
 import json
 import logging
 import sys
@@ -34,6 +42,8 @@ from pikaraoke.lib import onset_snap  # noqa: E402
 from pikaraoke.lib.cue_align import SOURCE_REALIGN, repace_bad_lines  # noqa: E402
 from pikaraoke.lib.get_platform import get_temp_directory  # noqa: E402
 from pikaraoke.lib.token_align import _normalize_token  # noqa: E402
+from pikaraoke.pipeline.config import PipelineConfig  # noqa: E402
+from pikaraoke.pipeline.stages.lyric_align import generate_ass  # noqa: E402
 
 DOUBTED = frozenset({SOURCE_REALIGN})
 
@@ -51,6 +61,14 @@ AT_PREVIOUS_END_S = 0.05
 # Replayed and recorded line times are equal within this (bundles round to the ms).
 REPLAY_TOLERANCE_S = 0.011
 
+# The sheet: this many songs, two lines each.
+SHEET_SONGS = 10
+# A sheet line plays from this long before the earlier of its two starts.
+SHEET_LEAD_S = 4.0
+ONSETFIX_SUFFIX = ".onsetfix.ass"
+# Marks a line the rule moves, so the real snap searches it as it does a doubted line.
+AGREED_SOURCE = "onset_probe_agreed"
+
 BRANCHES = ("on_time", "snapped", "below_min_shift", "no_rise", "narrow", "low_ref")
 
 
@@ -65,6 +83,15 @@ def heard_first(transcribe_words: list[dict], first_word: str, anchor: float) ->
         if abs(w["start"] - anchor) <= HEARD_WINDOW_S and _normalize_token(w["word"]) == token
     ]
     return min(starts, key=lambda s: abs(s - anchor)) if starts else None
+
+
+def heard_near(transcribe_words: list[dict], first_word: str, t: float) -> bool:
+    """Whether a heard word equal to ``first_word`` starts within ``AGREE_S`` of ``t``."""
+    token = _normalize_token(first_word)
+    return bool(token) and any(
+        abs(w["start"] - t) <= AGREE_S and _normalize_token(w["word"]) == token
+        for w in transcribe_words
+    )
 
 
 def rise_start(env: np.ndarray, words: list[dict], ref: float) -> float | None:
@@ -175,6 +202,7 @@ def song_rows(bundle: dict, env: np.ndarray, before: list[dict], after: list[dic
         start = words[0]["start"]
         branch, ref = onset_branch(pre, env)
         anchor = spans[lid][0] + offset if lid < len(spans) else start
+        rise = rise_start(env, words, ref) if branch == "on_time" else None
         rows.append(
             {
                 "line_id": lid,
@@ -188,11 +216,97 @@ def song_rows(bundle: dict, env: np.ndarray, before: list[dict], after: list[dic
                 "heard": heard_first(heard_words, words[0]["word"], anchor),
                 "at_previous_end": previous_end is not None
                 and start - previous_end <= AT_PREVIOUS_END_S,
-                "rise": rise_start(env, words, ref) if branch == "on_time" else None,
+                "rise": rise,
+                "agreed": rise is not None and heard_near(heard_words, words[0]["word"], rise),
             }
         )
         previous_end = words[-1]["end"]
     return rows
+
+
+def with_rule(before: list[dict], rows: list[dict], env: np.ndarray) -> list[dict]:
+    """The song's lines after the edge snap with the rule on.
+
+    Each agreed line is handed to the real snap as a doubted one, so its start moves
+    to the same rise and the line before it may extend into the room that frees.
+    """
+    agreed = {row["line_id"]: row["rise"] for row in rows if row["agreed"]}
+    marked = [
+        {**obj, "source": AGREED_SOURCE} if obj.get("line_id") in agreed else obj for obj in before
+    ]
+    after, _ = onset_snap.snap_line_edges(
+        marked, "", env=env, doubted_sources=DOUBTED | {AGREED_SOURCE}
+    )
+    for obj in after:
+        rise = agreed.get(obj.get("line_id"))
+        if rise is not None and abs(obj["words"][0]["start"] - rise) > 1e-6:
+            raise AssertionError(f"line {obj['line_id']} did not move to its rise")
+    return after
+
+
+def sheet_picks(rows: list[dict], songs: set[str]) -> list[dict]:
+    """Two agreed lines from each of the ``SHEET_SONGS`` songs in ``songs`` with the most.
+
+    The largest move and the median one; songs by count then name, so the sheet is the
+    same on every run over the same library.
+    """
+    by_song: dict[str, list[dict]] = {}
+    for row in rows:
+        if row["agreed"] and row["song"] in songs:
+            by_song.setdefault(row["song"], []).append(row)
+    picks: list[dict] = []
+    for song in sorted(by_song, key=lambda name: (-len(by_song[name]), name))[:SHEET_SONGS]:
+        moved = sorted(by_song[song], key=lambda r: (r["before"] - r["rise"], r["line_id"]))
+        picks += [moved[0], moved[len(moved) // 2]] if len(moved) > 1 else moved
+    return picks
+
+
+def changed_dialogue(shipped: str, fixed: str) -> list[int]:
+    """Positions of the Dialogue lines that differ between two subtitle files."""
+    old = [line for line in shipped.splitlines() if line.startswith("Dialogue:")]
+    new = [line for line in fixed.splitlines() if line.startswith("Dialogue:")]
+    if len(old) != len(new):
+        raise ValueError("the two files hold different numbers of lines")
+    return [i for i, (a, b) in enumerate(zip(old, new)) if a != b]
+
+
+def _clock(seconds: float) -> str:
+    return f"{int(seconds // 60)}:{seconds % 60:05.2f}"
+
+
+def sheet_html(picks: list[dict], videos: dict[str, str]) -> str:
+    """The listening sheet: one row per pick, with a play command for each file.
+
+    The commands are run from the library folder. ``videos`` maps a song to its video
+    file's name.
+    """
+    body = []
+    for n, row in enumerate(picks, 1):
+        start = max(0.0, min(row["before"], row["rise"]) - SHEET_LEAD_S)
+        video = html.escape(videos[row["song"]])
+        stem = html.escape(row["song"])
+        commands = "<br>".join(
+            f'<code>mpv --start={start:.1f} --sub-file="karaoke/{stem}{suffix}" "{video}"</code>'
+            for suffix in (".ass", ONSETFIX_SUFFIX)
+        )
+        body.append(
+            f"<tr><td>{n}</td><td>{html.escape(row['song'].rsplit('---', 1)[0])}</td>"
+            f"<td>{html.escape(row['text'])}</td><td>{_clock(row['before'])}</td>"
+            f"<td>{_clock(row['rise'])}</td><td>+{row['rise'] - row['before']:.2f}</td>"
+            f"<td>{commands}</td><td></td></tr>"
+        )
+    return (
+        "<!doctype html><meta charset='utf-8'><title>Onset loud start: GATE S</title>"
+        "<style>body{font-family:sans-serif}table{border-collapse:collapse}"
+        "td,th{border:1px solid #999;padding:4px 8px;vertical-align:top}"
+        "code{font-size:12px}</style>"
+        "<p>Each line's fill start, shipped and with the rule on. Play each command from "
+        "the library folder (shipped first, then fixed) and label the line better, same "
+        "or worse; say so when a worse line starts late.</p>"
+        "<table><tr><th>#</th><th>Song</th><th>Line</th><th>Shipped start</th>"
+        "<th>Fixed start</th><th>Move (s)</th><th>Play: shipped, then fixed</th>"
+        "<th>Label</th></tr>" + "".join(body) + "</table>\n"
+    )
 
 
 def compare(row: dict, new_start: float) -> str:
@@ -293,6 +407,12 @@ def report(rows: list[dict], n_songs: int, left_out: list[str]) -> str:
             ],
         )
     )
+    out.append(
+        _moves_line(
+            f"a heard first word within {AGREE_S} s of the rise, no cue anchor",
+            [r for r in with_rise if r["agreed"]],
+        )
+    )
     shipped = [r for r in heard if r["branch"] == "snapped"]
     verdicts = Counter(compare(r, r["after"]) for r in shipped)
     out += [
@@ -305,15 +425,56 @@ def report(rows: list[dict], n_songs: int, left_out: list[str]) -> str:
     return "\n".join(out) + "\n"
 
 
+def write_listen_files(folder: Path, out: Path, rows: list[dict], fixed_ass: dict[str, str]) -> str:
+    """Write the sheet and its songs' after-files; return Table D (no lyric text)."""
+    picks = sheet_picks(rows, set(fixed_ass))
+    videos: dict[str, str] = {}
+    table = [
+        "",
+        f"**Table D** the listening sheet ({len(picks)} lines; a song is eligible when its "
+        f"replay regenerates the shipped subtitle file exactly: {len(fixed_ass)} songs)",
+        "",
+        "| # | song | line | shipped start | fixed start | lines moved in song "
+        "| Dialogue lines changed in song |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for n, row in enumerate(picks, 1):
+        song = row["song"]
+        shipped_path = folder / "karaoke" / f"{song}.ass"
+        if song not in videos:
+            videos[song] = next(
+                p.name for p in sorted(folder.glob(f"{glob.escape(song)}.*")) if p.is_file()
+            )
+            shipped_path.with_name(song + ONSETFIX_SUFFIX).write_text(
+                fixed_ass[song], encoding="utf-8"
+            )
+        changed = changed_dialogue(shipped_path.read_text(encoding="utf-8"), fixed_ass[song])
+        table.append(
+            f"| {n} | {song.rsplit('---', 1)[-1]} | {row['line_id']} | {row['before']:.2f} "
+            f"| {row['rise']:.2f} | {sum(1 for r in rows if r['song'] == song and r['agreed'])} "
+            f"| {len(changed)} |"
+        )
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "listening-sheet.html").write_text(sheet_html(picks, videos), encoding="utf-8")
+    return "\n".join(table) + "\n"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n", maxsplit=1)[0])
     parser.add_argument("--folder", type=Path, required=True, help="the song library")
     parser.add_argument("--out", type=Path, default=Path(get_temp_directory()) / "onset_loud_start")
+    parser.add_argument(
+        "--listen",
+        action="store_true",
+        help="write the listening sheet and each sheet song's karaoke/<stem>.onsetfix.ass",
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.WARNING)
 
     rows: list[dict] = []
     left_out: list[str] = []
+    fixed_ass: dict[str, str] = {}
+    config = PipelineConfig()
     n_songs = 0
     for path in sorted((args.folder / "alignment_debug").glob("*.json")):
         bundle = json.loads(path.read_text(encoding="utf-8"))
@@ -325,11 +486,23 @@ def main() -> int:
             left_out.append(path.stem)
             continue
         n_songs += 1
-        rows += [{"song": path.stem, **row} for row in song_rows(bundle, env, *replayed)]
+        before, after = replayed
+        song = song_rows(bundle, env, before, after)
+        rows += [{"song": path.stem, **row} for row in song]
+        shipped = args.folder / "karaoke" / f"{path.stem}.ass"
+        # The after-file is only a clean A/B when the replay regenerates the shipped one.
+        if (
+            args.listen
+            and shipped.is_file()
+            and shipped.read_text(encoding="utf-8") == generate_ass(after, config)
+        ):
+            fixed_ass[path.stem] = generate_ass(with_rule(before, song, env), config)
 
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "rows.json").write_text(json.dumps(rows), encoding="utf-8")
     sys.stdout.write(report(rows, n_songs, left_out))
+    if args.listen:
+        sys.stdout.write(write_listen_files(args.folder, args.out, rows, fixed_ass))
     return 0
 
 
