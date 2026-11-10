@@ -134,7 +134,11 @@ class SliceFit:
     from their fitted start, and those nothing was heard for. The flags carry their
     own lines because cleaning ``srt`` again can number them differently: whether a
     file is typed in capitals, which decides speaker labels, is judged over the cues
-    it holds.
+    it holds. ``unclaimed_run`` (``fits`` only) is the longest stretch of consecutive
+    heard words that no line claims: a word is claimed when the pass 2 match gives it to
+    a token and it starts within ``FLAG_TOLERANCE_S`` of that token's time under the final
+    speed and shift. Singing the sheet skips or stops short of shows up here, where
+    ``unheard`` only sees sheet lines nothing was heard for.
     """
 
     status: str
@@ -152,6 +156,7 @@ class SliceFit:
     lines: tuple[tuple[str, float], ...] = ()
     mistimed: tuple[int, ...] = ()
     unheard: tuple[int, ...] = ()
+    unclaimed_run: int = 0
 
 
 def heard_streams(bundle: dict | None, asr_json3: str | None) -> dict[str, list[dict]]:
@@ -311,7 +316,7 @@ def _fit_one_stream(
         return SliceFit(REFUSED, reason=TOO_FEW, total=n_cues, heard_source=name)
 
     speed, stats = pass1
-    anchors, found = _match_by_time(tokens, spans, speed, stats["offset_s"], words)
+    anchors, found, assign = _match_by_time(tokens, spans, speed, stats["offset_s"], words)
     pass2 = _best_speed(anchors, spans)
     if pass2 is None:
         return SliceFit(REFUSED, reason=TOO_FEW, total=n_cues, heard_source=name)
@@ -354,6 +359,7 @@ def _fit_one_stream(
         srt=_corrected_srt(raw_cues, speed, shift, video_length),
         lines=tuple((tokens.texts[k], clip_starts[k]) for k in in_clip),
         **_flagged_lines(in_clip, anchors, clip_starts),
+        unclaimed_run=_unclaimed_run(assign, _expected_times(tokens, spans, speed, shift), words),
         **base,
     )
 
@@ -395,26 +401,56 @@ def _match_by_order(tokens: _CueTokens, words: list[dict]) -> tuple[list[dict], 
     return _cue_anchors(assign, tokens, words)
 
 
+def _expected_times(
+    tokens: _CueTokens, spans: list[tuple[float, float]], speed: float, shift: float
+) -> list[float]:
+    """Each token's expected clip time under ``(speed, shift)``, in the order of ``tokens.norms``."""
+    expected: list[float] = []
+    for toks, (start, end) in zip(tokens.per_cue, spans):
+        if toks:
+            expected += _token_expected_times(len(toks), speed * start + shift, speed * end + shift)
+    return expected
+
+
 def _match_by_time(
     tokens: _CueTokens,
     spans: list[tuple[float, float]],
     speed: float,
     shift: float,
     words: list[dict],
-) -> tuple[list[dict], set[int]]:
+) -> tuple[list[dict], set[int], list[int | None]]:
     """Pass 2: match again with each token's expected clip time under ``(speed, shift)``.
 
     The time tiebreak hands a repeated line to the instance the pass 1 fit puts
-    it in, which order alone can get wrong.
+    it in, which order alone can get wrong. Returns the anchors and found cues of
+    :func:`_cue_anchors`, and the token->word assignment itself.
     """
-    expected: list[float] = []
-    for toks, (start, end) in zip(tokens.per_cue, spans):
-        if toks:
-            expected += _token_expected_times(len(toks), speed * start + shift, speed * end + shift)
     assign = match_words_to_tokens(
-        tokens.norms, expected, [w["norm"] for w in words], [w["start"] for w in words]
+        tokens.norms,
+        _expected_times(tokens, spans, speed, shift),
+        [w["norm"] for w in words],
+        [w["start"] for w in words],
     )
-    return _cue_anchors(assign, tokens, words)
+    return (*_cue_anchors(assign, tokens, words), assign)
+
+
+def _unclaimed_run(assign: list[int | None], expected: list[float], words: list[dict]) -> int:
+    """The longest run of consecutive ``words`` that no token claims.
+
+    ``expected`` is each token's time under the final speed and shift. The pass 2
+    match can give a word to a token far from where it was sung (a repeated line's
+    other instance), and that is no claim.
+    """
+    claimed = {
+        word
+        for word, time in zip(assign, expected)
+        if word is not None and abs(words[word]["start"] - time) <= FLAG_TOLERANCE_S
+    }
+    longest = run = 0
+    for index in range(len(words)):
+        run = 0 if index in claimed else run + 1
+        longest = max(longest, run)
+    return longest
 
 
 def _cue_anchors(

@@ -297,9 +297,10 @@ class TestRepeatedLine:
         tokens = srt_slice_fit._CueTokens.of(texts)
         # Only the second chorus was heard; the movie clock runs 100 s ahead of the clip.
         heard = [{"norm": tok, "start": 110.0 + i * 0.6} for i, tok in enumerate(chorus.split())]
-        anchors, found = srt_slice_fit._match_by_time(tokens, spans, 1.0, 100.0, heard)
+        anchors, found, assign = srt_slice_fit._match_by_time(tokens, spans, 1.0, 100.0, heard)
         assert found == {2}
         assert anchors == [{"lid": 2, "start": 110.0}]
+        assert assign == [None] * 7 + [0, 1, 2, 3]  # the second chorus's tokens, not the first's
 
 
 class TestFreeSpeed:
@@ -620,6 +621,74 @@ class TestFlaggedLines:
             runs[(first, last)] = flagged_runs(result.mistimed, result.unheard, MIN_FLAGGED_RUN)
 
         assert runs == {(24, 27): [(28, 29)], (14, 17): [(0, 13)], (4, 7): [(0, 3)]}
+
+
+class TestUnclaimedRun:
+    """The sheets here use :func:`_movie_srt` (every cue 3.5 s long), so a heard word's
+    expected time is within a second of its sung time and only a skipped line or a far
+    match leaves it unclaimed."""
+
+    def test_a_sheet_that_covers_every_heard_word_leaves_none_unclaimed(self):
+        song = _song()
+
+        result = fit_slice(_movie_srt(song), {TRANSCRIBE: _heard(song)}, 300.0)
+
+        assert (result.status, result.unclaimed_run) == (FITS, 0)
+
+    def test_the_run_is_the_heard_words_of_a_stretch_the_sheet_lacks(self):
+        song = _song()
+        sheet = {k: text for k, text in song.items() if not 10 <= k < 15}
+
+        result = fit_slice(_movie_srt(sheet), {TRANSCRIBE: _heard(song)}, 300.0)
+
+        assert (result.status, result.unclaimed_run) == (FITS, 5 * WORDS_PER_LINE)
+
+    def test_a_sheet_that_stops_early_leaves_the_tail_unclaimed(self):
+        song = _song()
+        sheet = {k: text for k, text in song.items() if k < 20}
+
+        result = fit_slice(_movie_srt(sheet), {TRANSCRIBE: _heard(song)}, 300.0)
+
+        assert (result.status, result.unclaimed_run) == (FITS, 10 * WORDS_PER_LINE)
+
+    def test_the_longest_of_two_runs_counts_not_their_sum(self):
+        song = _song()
+        sheet = {k: text for k, text in song.items() if k not in (5, 6, 20, 21, 22)}
+
+        result = fit_slice(_movie_srt(sheet), {TRANSCRIBE: _heard(song)}, 300.0)
+
+        assert result.unclaimed_run == 3 * WORDS_PER_LINE
+
+    def test_a_word_the_match_takes_from_far_off_its_token_is_not_claimed(self):
+        def sparse(k: int) -> float:  # 15 s between lines, so a late line keeps its order
+            return 10.0 + 15.0 * k
+
+        song = _song()
+        sheet = _movie_srt(song, clip_start=sparse)
+
+        def heard(late_s: float) -> list[dict]:
+            return _heard(song, clip_start=lambda k: sparse(k) + (late_s if k == 12 else 0.0))
+
+        within = fit_slice(sheet, {TRANSCRIBE: heard(FLAG_TOLERANCE_S - 1)}, 600.0)
+        beyond = fit_slice(sheet, {TRANSCRIBE: heard(FLAG_TOLERANCE_S + 3)}, 600.0)
+
+        assert (within.status, within.unclaimed_run) == (FITS, 0)
+        assert (beyond.status, beyond.unclaimed_run) == (FITS, WORDS_PER_LINE)
+
+    def test_token_times_are_read_under_the_final_speed_and_shift(self):
+        song = _song()
+        text = _movie_srt(song, shift=-1800.0, speed=1.07)
+
+        result = fit_slice(text, {TRANSCRIBE: _heard(song)}, 300.0)
+
+        assert (result.status, result.unclaimed_run) == (FITS, 0)
+
+    def test_a_refused_fit_has_no_run(self):
+        other_song = {k: _line(k + 100) for k in range(30)}
+
+        result = fit_slice(_movie_srt(other_song), {TRANSCRIBE: _heard(_song())}, 300.0)
+
+        assert (result.status, result.unclaimed_run) == (REFUSED, 0)
 
 
 class TestFlaggedRuns:
