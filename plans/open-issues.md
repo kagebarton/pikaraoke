@@ -462,6 +462,14 @@ Onset snap:
   test songs, 13 further from the heard start; it needs its own probe over the
   library. Older than this branch, shared by every timing source (Decisions 12,
   17; rows 36, 63).
+  Library probe 2026-11-10 (133 cue songs replayed on the CPU): 1174 of 6553
+  lines start more than 0.3 s before the transcriber's first word, 954 of them
+  skipped as on time, 678 of those starting at the previous line's end. The "13
+  further" above is not a cost: the same reference calls 601 of the 1710 snaps
+  that ship today further, so it cannot judge a start move, and Ken's ear has
+  to. Ken, 2026-11-10: own branch, first rule to try is a move only where the
+  transcriber's first word agrees with the rise. Record:
+  `plans/onset-loud-start.md` on branch `onset_loud_start`.
 
 The rescue (review findings and decisions kept as built):
 
