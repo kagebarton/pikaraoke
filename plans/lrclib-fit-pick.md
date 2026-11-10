@@ -1,5 +1,5 @@
-Model: Claude Sonnet 5.5 (executor, Phases 1-3). Author: Claude Fable 5.2, 2026-11-10. Judge
-at GATE P: Claude Opus 5.5, then Ken. Phases 4-6 are loose and get their spec after the gate.
+Model: Claude Sonnet 5.5 (executor, Phases 1-2). Author: Claude Fable 5.2, 2026-11-10. Judge
+at GATE P: Claude Opus 5.5, then Ken. Phases 3-5 are loose and get their spec after the gate.
 
 # LRCLIB timing at download, picked by fit
 
@@ -58,6 +58,10 @@ Ken, 2026-11-10:
     a later add-on, not in this plan.
 15. Ken judges about 10 songs a session.
 16. A refused song goes to joint silently.
+17. No new songs are added for the measurement. It runs on the library as it stands.
+
+Proposed by the author, not yet ruled by Ken: the first ten songs the feature times are
+judged by ear as the clean test on Genius-pick songs (Phase 5).
 
 ## The bar and the pick (pre-registered)
 
@@ -110,25 +114,16 @@ are not in the repo.
   those picks were never judged by anyone.
 
 So what is unproven: the limits were fitted to four wrong songs and 28 good ones, and the
-caption-song picks are unjudged. This plan judges those picks and adds songs the exploration
-never saw.
+caption-song picks are unjudged. This plan judges those picks. Their truth was never seen, so
+the limits could not have been fitted to it: they are a fair test of whether the bar lets a
+wrong record through.
+
+**What this measurement cannot show.** Caption songs are the easy case. On
+Genius-pick songs the only evidence is Ken's 28 Repair picks, which the limits were tuned on.
+The first clean test there is Phase 5: the first ten songs the feature times.
 
 **Known hole, accepted by Ken (Decision 12):** a song whose every record carries the same
 real one-line error would be picked. No example is known.
-
-## Phase 0: holdout songs (Ken, any time)
-
-The exploration used every song in the library, so the holdout must be new songs.
-
-- **Baseline, done 2026-11-10:** `~/.pikaraoke/tmp/lrclib_fit_pick/baseline_ids.txt`, 168
-  lines, sha256 `610e84eeee4209473ba33b50d583ea4739d3086c85bf940cde950e5645315eb7`. One id per
-  library song (YouTube id, or the file stem for a song without one). A song not in it is
-  *new*. Renaming a song without a YouTube id would make it look new; Phase 3 checks for that.
-- **Ken adds at least 30 songs the normal way** (search page or `add_songs`), on any branch,
-  with at least 12 of them taking a Genius pick (no usable caption). Choose them as guests
-  would; do not look them up on LRCLIB first. They time by joint or captions as today and
-  stay in the library.
-- Phases 1 and 2 do not wait for this. Phase 3 does.
 
 ## Phase 1: the measure, the pick and the probe (Sonnet)
 
@@ -175,8 +170,8 @@ Read-only on the library, GPU-free, on the VM, network for LRCLIB only.
   Commit: `feat(lyrics): pick an LRCLIB record by how it fits the heard words`.
 
 - [ ] **1d. `scripts/lrc_fit_pick_probe.py`.** One command:
-  `python scripts/lrc_fit_pick_probe.py --folder PATH [--out DIR] [--baseline FILE]
-  [--old-cache DIR] [--listen-dir DIR] [--only ID ...]`.
+  `python scripts/lrc_fit_pick_probe.py --folder PATH [--out DIR] [--old-cache DIR]
+  [--listen-dir DIR] [--only ID ...]`.
   - `--out` defaults to `Path(get_temp_directory()) / "lrclib_fit_pick"`. It holds lyric text
     (cache, sheets), so nothing in it is ever committed. Write `<out>/started` first. A run
     with `--only` covers just those songs.
@@ -189,8 +184,7 @@ Read-only on the library, GPU-free, on the VM, network for LRCLIB only.
     | `caption` | origin `srt`, not edited, `transcribe_words`, `subtitles/<stem>.srt` exists with no `.srt.generated` beside it |
     | `out_of_scope` | everything else, with the reason (`custom`, `movie_srt`, `no_bundle`, `no_words`, `edited`, `no_caption_file`) |
 
-    A song in a group but with no clip length is skipped as `no_length`. With `--baseline`,
-    a song whose id is not in the file is marked `new`.
+    A song in a group but with no clip length is skipped as `no_length`.
   - **Records.** `<out>/cache/<youtube_id>.json` holds `{"query", "records"}` (synced records
     as returned). Read it when present, else search and write it. On `LrclibUnavailable` write
     nothing, give the song the reason `lrclib_unavailable`, go on.
@@ -224,7 +218,7 @@ Read-only on the library, GPU-free, on the VM, network for LRCLIB only.
     from the reference fit), `C` a caption cue at its start (`caption` songs), `X` an
     unclaimed run of 5 or more heard words at its first word's start (with its word count
     and words). Once per song, `words.txt`: the heard words (start, word).
-  - **`<out>/candidates.tsv`**, one row per record, no lyric text: group, new, youtube_id,
+  - **`<out>/candidates.tsv`**, one row per record, no lyric text: group, youtube_id,
     title (40 chars), lrclib_id, in_pool, on_disk, picked, track and album name lengths,
     timing (the lowest id sharing it), timing size, record duration, length gap, and from the
     transcribe fit status, reason, speed, shift_s, spread_s, matched, total, dropped, mistimed
@@ -233,9 +227,9 @@ Read-only on the library, GPU-free, on the VM, network for LRCLIB only.
     unclaimed_run and the flag names.
   - **`<out>/songs.tsv`**, one row per song, skipped ones too.
   - **Printed** (stdout, no lyric text):
-    - Table P: per group and for `new` songs apart: songs, `no_length`, `lrclib_unavailable`,
-      no synced record, with a pick; then the `out_of_scope` reasons.
-    - Table S: one row per in-scope song: group, new, youtube_id, title, records, timings,
+    - Table P: per group: songs, `no_length`, `lrclib_unavailable`, no synced record, with a
+      pick; then the `out_of_scope` reasons.
+    - Table S: one row per in-scope song: group, youtube_id, title, records, timings,
       passing records, records per refusal (`no_fit/speed/mistimed/unclaimed`), pick id, its
       mistimed count, unclaimed run and timing size, `ref_ok`, reference flags (`none`, the
       names, or `no reference`), on-disk id, on-disk refusal, whether the pick has the
@@ -253,12 +247,12 @@ Read-only on the library, GPU-free, on the VM, network for LRCLIB only.
 
     - Table X: flagged passing records that were not picked, one row per timing: song, ids,
       flag names, mistimed, unclaimed run.
-    - Table V (sensitivity, never read for the verdict): songs with a pick per group, and
-      `new` apart, at mistimed limit 0 and 1 by unclaimed limit 8, 10, 12, 15, 20.
+    - Table V (sensitivity, never read for the verdict): songs with a pick per group, at
+      mistimed limit 0 and 1 by unclaimed limit 8, 10, 12, 15, 20.
     - Table L, the listen list: the picks that need a verdict, ranked: no reference first
       (not a `caption` song, or not `ref_ok`); then flagged; then by unclaimed run, longest
-      first; then mistimed count; then youtube_id. Columns: rank, group, new, title,
-      youtube_id, lrclib_id, why, listen file name.
+      first; then mistimed count; then youtube_id. Columns: rank, group, title, youtube_id,
+      lrclib_id, why, listen file name.
   - Tests, `tests/unit/test_lrc_fit_pick_probe.py`, pure parts with made-up values: the group
     rule (each row of the table); the reference flag (each name, and none); needs-a-verdict
     (a `picks` song with and without its on-disk timing); the listen ranking; Table K's source
@@ -282,48 +276,31 @@ Read-only on the library, GPU-free, on the VM, network for LRCLIB only.
 
 - [ ] **2a. Run.**
   `python scripts/lrc_fit_pick_probe.py --folder
-  "/home/ken/shared-drives/D:/Shared/pikaraoke-songs" --baseline
-  ~/.pikaraoke/tmp/lrclib_fit_pick/baseline_ids.txt --old-cache
+  "/home/ken/shared-drives/D:/Shared/pikaraoke-songs" --old-cache
   ~/.pikaraoke/tmp/lrclib_auto_timing/cache --listen-dir
   "/home/ken/shared-drives/D:/Shared/lrclib-listen" > <out>/report.md`.
-  First check the baseline's sha256 against Phase 0. If more than 5 songs come back
-  `lrclib_unavailable`, run once more (the cache keeps the rest); if still more than 5, STOP.
-  Then the read-only check: `find "<library>" -newer <out>/started` prints nothing that this
-  run could have written (Ken may be adding holdout songs meanwhile: new song folders and
-  files are his; anything else, STOP and say what changed).
+  If more than 5 songs come back `lrclib_unavailable`, run once more (the cache keeps the
+  rest); if still more than 5, STOP. Then the read-only check: `find "<library>" -newer
+  <out>/started` prints nothing, else STOP and say what changed.
 - [ ] **2b. Record.** Results log row: command, checks, paths. Paste Tables P, S, K, X, V and
-  L raw into "Report output: library run". No tallies beyond the script's, no reading of the
+  L raw into "Report output". No tallies beyond the script's, no reading of the
   numbers. Plan-only commit.
-- [ ] **2c. Stop.** Give Ken, in plain words: where the listen files are and how to use them
-  (below), and Table L's first 10 rows as listening session 2. Then the handoff prompt for
-  Opus (see "Executor rules"). Do not start Phase 3.
+- [ ] **2c. Stop for GATE P.** Give Ken, in plain words: where the listen files are and how
+  to use them (below), Table L's first 10 rows as listening session 2, and how many picks
+  with no reference lie beyond row 10 (each needs his verdict before the gate, so that is how
+  many more sessions). Then the handoff prompt for Opus (see "Executor rules").
 
 **How Ken judges a pick.** Open the song's video in VLC, add the pick's `.srt` from
 `D:\Shared\lrclib-listen` as the subtitle file, and watch: do the lines come up when they are
 sung, and is any sung line missing? This shows the LRC's lines at their fitted times, which
 is what the route would hand to cue align. It does not show the finished word-by-word
-karaoke; that is Phase 6. One verdict per song: right, wrong (where), or unsure.
-
-## Phase 3: the holdout run (Sonnet, after Phase 0)
-
-- [ ] **3a. Preconditions.** Count the new songs with a dry look at the library
-  (`library_statuses` against the baseline): at least 30 new songs in a group, at least 12 of
-  them `joint` or `picks` (a Genius-pick song Ken has since retimed on Repair still counts).
-  Fewer: STOP and tell Ken how many are missing. A new id that is a file stem
-  matching a renamed baseline song: STOP and name it.
-- [ ] **3b. Run** the 2a command with `--out ~/.pikaraoke/tmp/lrclib_fit_pick_holdout`
-  (a fresh cache: LRCLIB as it is that day). Same unavailable and read-only rules.
-- [ ] **3c. Record.** As 2b, into "Report output: holdout run", with every table. Plan-only
-  commit.
-- [ ] **3d. Stop.** Give Ken listening session 3: the `new` rows of Table L, first 10. If
-  more than 10 new picks have no reference, say how many sessions that makes. Handoff prompt
-  for Opus.
+karaoke; that is Phase 5. One verdict per song: right, wrong (where), or unsure.
 
 ## GATE P (Opus, then Ken)
 
-Read-only. Inputs: both report sections, the files under both `<out>` folders, Ken's verdicts.
-Read once both runs and Ken's sessions are in; a pre-read after Phase 2 may only produce
-questions and extra listening requests, never a verdict.
+Read-only. Inputs: the "Report output" section, the files under `<out>`, Ken's verdicts. Read
+once Ken's verdicts are in; a pre-read before then may only produce questions and extra
+listening requests, never a verdict.
 
 **A wrong pick**, as at GATE M: the LRC times words the video does not sing there, or leaves
 out a stretch the video sings. Ken's ear on 2026-11-10 sets the tolerance: a one-word line
@@ -332,32 +309,33 @@ are not wrong. A sung lead line shown several seconds off, or sung lead lines ne
 wrong. One missing lead line, or one line 3 to 5 s off, is `minor`: listed apart, and Ken
 rules whether minor counts.
 
-1. **Table K, both runs.** No GATE M LRC-wrong record is its song's pick. One picked: the
+1. **Table K.** No GATE M LRC-wrong record is its song's pick. One picked: the
    gate fails.
-2. **A verdict for every pick that needs one**, both runs.
+2. **A verdict for every pick that needs one.**
    - Ken's verdict where he gave one. It overrides a sheet read.
    - On a `ref_ok` caption song the judge may rule from the sheet: every flagged pick is
-     read; of the unflagged ones, in youtube_id order every third until 10 are read (GATE M
+     read; of the unflagged ones, in youtube_id order every second until 15 are read (GATE M
      found omissions the screens missed).
    - A pick with no reference has no verdict until Ken has judged it. The gate is not read
-     while any `new` pick or any no-reference pick lacks one.
-3. **Zero wrong picks** over both runs passes the bar. Any wrong pick: STOP for Ken
-   (Decision 8). A tighter bar is a new plan with a fresh holdout; Table V is there to size
-   one, not to rescue this one.
+     while any such pick lacks one.
+3. **Zero wrong picks** passes the bar. Any wrong pick: STOP for Ken (Decision 8). A tighter
+   bar is a new plan, and with the library's picks now judged it would need songs from
+   outside it; Table V is there to size one, not to rescue this one.
 4. **Coverage**, reported, not judged against a floor: songs with a pick among Ken's 28
-   Repair picks (23 expected), the `joint` songs, the `new` Genius-pick songs (`joint` or
-   `picks`), and the `caption` songs as a stand-in. Name the songs where the on-disk record passes but nothing
-   in the pool does (coverage the search loses).
+   Repair picks (23 expected), the `joint` songs, and the `caption` songs as a stand-in. Name
+   the songs where the on-disk record passes but nothing in the pool does (coverage the
+   search loses).
 5. **Exposure.** From Table X, the songs where a record ruled wrong passes the bar and only
    the pick order kept it out. This is the residual risk of Decision 12; count it for Ken.
 6. **Report to Ken**, plainly: wrong picks (none, or which), minor ones, coverage, exposure,
-   and the caveats: `caption` songs are the easy case; the limits were fitted to the library
-   songs, so only the `new` songs are a clean test; the listen check shows line times, not
-   the finished karaoke. Ken rules go or stop. Record the read and the ruling in this file.
+   and the caveats: the verdicts are on caption songs, the easy case; on Genius-pick songs
+   the only evidence is Ken's own picks, which the limits were tuned on, so Phase 5 is the
+   first clean test there; the listen check shows line times, not the finished karaoke. Ken
+   rules go or stop. Record the read and the ruling in this file.
 
-## Phases 4-6 (loose; spec after GATE P)
+## Phases 3-5 (loose; spec after GATE P)
 
-### Phase 4: the pipeline switch
+### Phase 3: the pipeline switch
 
 In `LyricAlignStage.run`, before the route choice (`if cue_spans:`), on a song that would go
 joint: when the run is a first-time download and the origin is Genius, take the transcribe
@@ -369,18 +347,23 @@ words, search LRCLIB, `lrc_auto_pick.pick`.
 - The bundle records the check and its outcome either way. The Genius pick stays stored, so
   Repair can return the song to Genius without a search.
 
-### Phase 5: source type, labels, lists
+### Phase 4: source type, labels, lists
 
 A new entry in `library_regen.SHEETS`, its own origin and label (e.g. "LRCLIB timing
 (auto)"), a Tools-tab list, Song Info and History wording, the run page's "Now:" text.
 Translation catalogs in their own commits.
 
-### Phase 6: Ken's checks
+### Phase 5: Ken's checks, and the first ten
 
 Download new songs, at least one expected to pass and one to fail. Check the list, Song Info,
 and the karaoke by ear. Return one to Genius on Repair.
 
-### Open for the Phase 4-6 spec
+**The first ten songs the feature times are the clean test on Genius-pick songs** (the
+author's proposal, for Ken to rule at GATE P). Ken hears each from the auto-timed list as it arrives and gives a verdict;
+they go in the Results log. A wrong one reopens the bar: the feature is held (how is open
+below) until it is read.
+
+### Open for the Phase 3-5 spec
 
 - How the pipeline knows a run is a first-time download (Decision 3).
 - Running the de-reverb gate once: `_run_joint` and `_run_cue_align` each run it inside, and
@@ -392,28 +375,27 @@ and the karaoke by ear. Return one to Genius on Repair.
 - Reset and Edit words on an auto sheet (the archived plan's defaults: the sheet survives
   Reset; an edit makes it an edited kind).
 - `defer_timing` assumes the fit and pick stay manual; revisit that line when this lands.
+- How the feature is held if one of the first ten is wrong. The archived plan's default was
+  no off switch; the first-ten test may be the reason for one.
 
 ## Executor rules
 
-- Stop at every STOP and at 1f, 2c and 3d. If a step contradicts the code, stop and say so.
+- Stop at every STOP and at 1f and 2c. If a step contradicts the code, stop and say so.
 - No library writes, no GPU, no lyric text in any commit or in this plan. The listen folder
-  and both `<out>` folders hold lyric text and stay off the repo.
+  and `<out>` hold lyric text and stay off the repo.
 - No verdicts: tables go in raw. Do not say whether the bar held.
 - Feature branch `lrclib_fit_pick` (off `dev` `37d8d93`). Plan edits in their own commits.
-- At 2c and 3d the Opus handoff prompt carries: branch and HEAD, this file's report sections
-  and "GATE P", both `<out>` paths, "do not rerun the probe", and that Ken's verdicts arrive
-  in chat.
+- At 2c the Opus handoff prompt carries: branch and HEAD, this file's "Report output" and
+  "GATE P" sections, the `<out>` path, "do not rerun the probe", and that Ken's verdicts
+  arrive in chat.
 
 ## Results log
 
 | Row | Date | Phase | What | Result |
 |---|---|---|---|---|
 | 1 | 2026-11-10 | 0 | Branch `lrclib_fit_pick` off `dev` `37d8d93`. Baseline id list written, read-only on the library (`library_statuses`): 168 songs. Origins: `srt` 112, `lrclib_srt` 28, `movie_srt` 7, `genius`/joint 4, `custom`/joint 3, no bundle 14. | `~/.pikaraoke/tmp/lrclib_fit_pick/baseline_ids.txt`, sha256 `610e84eeee4209473ba33b50d583ea4739d3086c85bf940cde950e5645315eb7`. |
+| 2 | 2026-11-10 | plan | Ken: no new songs for the measurement (Decision 17). The holdout import and the holdout run are removed; the baseline list of row 1 is unused. Author's proposal in its place, not yet ruled: the first ten songs the feature times are the clean test (Phase 5). | Phases renumbered: build is 3-5. |
 
-## Report output: library run
+## Report output
 
 (Phase 2b.)
-
-## Report output: holdout run
-
-(Phase 3c.)
