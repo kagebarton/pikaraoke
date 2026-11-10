@@ -4,8 +4,9 @@ gate, and go to Claude Sonnet 5.5.
 
 # Onset snap: a loud start is not always this line's voice
 
-**Status: Phase 1 built 2026-11-10 (Results row 4): the listening sheet and ten after-files
-are written. Stopped for Ken's listening at GATE S. No production code has changed.**
+**Status: GATE S passed 2026-11-10 (Results row 5). Phases 2-4 wait for their spec, which
+Ken will write with Opus later. No production code has changed. The ten `.onsetfix.ass`
+files are still in the library.**
 
 ## Goal
 
@@ -134,6 +135,10 @@ same or worse, noting when a worse line starts late.
 - Nothing is built for production before it.
 - After the gate, delete the ten `.onsetfix.ass` files from the library's `karaoke/`.
 
+**Ruling, 2026-11-10: pass.** Ken's labels (Results row 5), read off by Opus 5.5: 19
+better, 0 same, 1 worse. The worse line (#12) starts late and counts twice, so the worse
+score is 2, at the limit. One line shows no pattern; the rule stands as built.
+
 ## Phases 2-4 (loose)
 
 2. `snap_line_onsets` takes the heard words; the on-time exit searches and keeps a move the
@@ -151,6 +156,7 @@ same or worse, noting when a worse line starts late.
 | 2 | 2026-11-10 | 0 | Fable, scratch (not kept): over the skipped lines with a rise, the longest run of frames under `ref - SUSTAIN_NEAR_DB` between the claimed start and the rise | Block R2 below |
 | 3 | 2026-11-10 | 0 | Fable, scratch (not kept): the rule as production would run it, any heard word equal to the line's first word within the tolerance of the rise (no cue anchor) | Block R3 below |
 | 4 | 2026-11-10 | 1 | Fable, CPU on the VM. `onset_loud_start_probe.py --folder /home/ken/shared-drives/D:/Shared/pikaraoke-songs --out /home/ken/shared-drives/D:/Shared/onset_loud_start --listen`. Out folder (`D:\Shared\onset_loud_start` on Windows): `report.md`, `rows.json`, `listening-sheet.html`, `env/` | Tables A-C equal R1; Table B's new row and Table D in block R4. 133 of 133 replayed songs regenerate their shipped `.ass` exactly. Over those songs 593 lines move and 955 Dialogue lines differ, each one a moved line or the worded line before one (scratch check). 10 `.onsetfix.ass` files written to the library's `karaoke/` |
+| 5 | 2026-11-10 | GATE S | Ken's ear on Windows; labels in the sheet's artifact database (`https://claude.ai/artifact/RLMm6PcTbWzFHcedjqHGVK`, collection `labels`), read by Opus 5.5 | Block R5 below |
 
 **R1** (the probe's stdout, verbatim)
 
@@ -247,3 +253,28 @@ shipped subtitle file exactly: 133 songs)
 | 18 | fJ9rUzIMcZQ | 20 | 93.53 | 94.43 | 10 | 15 |
 | 19 | 4fndeDfaWCg | 5 | 26.02 | 27.88 | 9 | 18 |
 | 20 | 4fndeDfaWCg | 29 | 102.43 | 103.18 | 9 | 18 |
+
+**R5** (Ken's labels, by Table D row; no notes were left on any line)
+
+| # | label | late |
+|---|---|---|
+| 1 | better | |
+| 2 | better | |
+| 3 | better | |
+| 4 | better | |
+| 5 | better | |
+| 6 | better | |
+| 7 | better | |
+| 8 | better | |
+| 9 | better | |
+| 10 | better | |
+| 11 | better | |
+| 12 | worse | yes |
+| 13 | better | |
+| 14 | better | |
+| 15 | better | |
+| 16 | better | |
+| 17 | better | |
+| 18 | better | |
+| 19 | better | |
+| 20 | better | |
