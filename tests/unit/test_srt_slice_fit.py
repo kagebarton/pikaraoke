@@ -688,7 +688,25 @@ class TestUnclaimedRun:
 
         result = fit_slice(_movie_srt(other_song), {TRANSCRIBE: _heard(_song())}, 300.0)
 
-        assert (result.status, result.unclaimed_run) == (REFUSED, 0)
+        assert (result.status, result.unclaimed_run, result.unclaimed_runs) == (REFUSED, 0, ())
+
+    def test_every_run_is_listed_with_its_first_word_and_length(self):
+        song = _song()
+        sheet = {k: text for k, text in song.items() if k not in (5, 6, 20, 21, 22)}
+
+        result = fit_slice(_movie_srt(sheet), {TRANSCRIBE: _heard(song)}, 300.0)
+
+        words = 5 * WORDS_PER_LINE, 20 * WORDS_PER_LINE
+        assert result.unclaimed_runs == (
+            (words[0], 2 * WORDS_PER_LINE),
+            (words[1], 3 * WORDS_PER_LINE),
+        )
+        assert result.unclaimed_run == max(length for _, length in result.unclaimed_runs)
+
+    def test_a_sheet_covering_every_word_lists_no_run(self):
+        song = _song()
+
+        assert fit_slice(_movie_srt(song), {TRANSCRIBE: _heard(song)}, 300.0).unclaimed_runs == ()
 
 
 class TestFlaggedRuns:

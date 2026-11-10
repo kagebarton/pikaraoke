@@ -138,7 +138,8 @@ class SliceFit:
     heard words that no line claims: a word is claimed when the pass 2 match gives it to
     a token and it starts within ``FLAG_TOLERANCE_S`` of that token's time under the final
     speed and shift. Singing the sheet skips or stops short of shows up here, where
-    ``unheard`` only sees sheet lines nothing was heard for.
+    ``unheard`` only sees sheet lines nothing was heard for. ``unclaimed_runs`` lists
+    every such run as ``(index of its first heard word, length)``, so a report can say where.
     """
 
     status: str
@@ -157,6 +158,7 @@ class SliceFit:
     mistimed: tuple[int, ...] = ()
     unheard: tuple[int, ...] = ()
     unclaimed_run: int = 0
+    unclaimed_runs: tuple[tuple[int, int], ...] = ()
 
 
 def heard_streams(bundle: dict | None, asr_json3: str | None) -> dict[str, list[dict]]:
@@ -354,12 +356,14 @@ def _fit_one_stream(
     if not inside or matched / len(inside) < MIN_MATCHED_SHARE:
         return SliceFit(REFUSED, reason=TOO_FEW, **base)
     in_clip = sorted(inside)
+    unclaimed = _unclaimed_runs(assign, _expected_times(tokens, spans, speed, shift), words)
     return SliceFit(
         FITS,
         srt=_corrected_srt(raw_cues, speed, shift, video_length),
         lines=tuple((tokens.texts[k], clip_starts[k]) for k in in_clip),
         **_flagged_lines(in_clip, anchors, clip_starts),
-        unclaimed_run=_unclaimed_run(assign, _expected_times(tokens, spans, speed, shift), words),
+        unclaimed_run=max((length for _, length in unclaimed), default=0),
+        unclaimed_runs=unclaimed,
         **base,
     )
 
@@ -434,8 +438,10 @@ def _match_by_time(
     return (*_cue_anchors(assign, tokens, words), assign)
 
 
-def _unclaimed_run(assign: list[int | None], expected: list[float], words: list[dict]) -> int:
-    """The longest run of consecutive ``words`` that no token claims.
+def _unclaimed_runs(
+    assign: list[int | None], expected: list[float], words: list[dict]
+) -> tuple[tuple[int, int], ...]:
+    """Every run of consecutive ``words`` that no token claims, as ``(first word, length)``.
 
     ``expected`` is each token's time under the final speed and shift. The pass 2
     match can give a word to a token far from where it was sung (a repeated line's
@@ -446,11 +452,12 @@ def _unclaimed_run(assign: list[int | None], expected: list[float], words: list[
         for word, time in zip(assign, expected)
         if word is not None and abs(words[word]["start"] - time) <= FLAG_TOLERANCE_S
     }
-    longest = run = 0
-    for index in range(len(words)):
-        run = 0 if index in claimed else run + 1
-        longest = max(longest, run)
-    return longest
+    runs = []
+    for is_claimed, group in itertools.groupby(range(len(words)), key=claimed.__contains__):
+        if not is_claimed:
+            indexes = list(group)
+            runs.append((indexes[0], len(indexes)))
+    return tuple(runs)
 
 
 def _cue_anchors(
