@@ -9,8 +9,8 @@ loose and get their spec after the gate.
 recorded 2026-11-10 (Results row 6, tables below); stopped at 3d for listening session 3.
 Ken's verdicts are in for all 21 `new` picks, all 16 not-new no-reference picks and one caption
 pick, Colbie Caillat - Realize (Results rows 7-10). **GATE P read 2026-11-10 by Fable: rule 3 is
-not met, seven wrong picks ("GATE P read", Results row 11). Ken's ruling (go or stop,
-Decision 8) is pending.**
+not met, seven wrong picks ("GATE P read", Results row 11). Ken's ruling 2026-11-10: this bar is
+not shipped; a tighter bar and a fresh holdout under `plans/lrclib-shift-check.md`.**
 
 ## Goal
 
@@ -586,7 +586,10 @@ with a fresh holdout.
 
 ### Ruling
 
-Ken's, pending: stop under Decision 8, or a new plan with a tighter bar and a fresh holdout.
+Ken, 2026-11-10, in chat, after the report: "I will have sonnet executor and opus will pick a
+fresh set of songs." Read by the judge as: not stopped; this bar is not shipped; the feature
+goes on under `plans/lrclib-shift-check.md` with a tighter bar and a fresh holdout. Phases 4-6
+here wait for that plan's GATE Q.
 
 ## Report output: library run
 
