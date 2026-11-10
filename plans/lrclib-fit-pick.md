@@ -58,8 +58,8 @@ Ken, 2026-11-10:
     a later add-on, not in this plan.
 15. Ken judges about 10 songs a session.
 16. A refused song goes to joint silently.
-17. The holdout is short: twelve songs the author listed (Phase 0), not thirty of Ken's
-    choosing.
+17. The holdout is thirty songs the author listed (Phase 0), in two batches, all meant to take
+    a Genius pick. Ken adds them; he does not choose them.
 
 ## The bar and the pick (pre-registered)
 
@@ -126,7 +126,7 @@ The exploration used every song in the library, so the holdout must be new songs
   lines, sha256 `610e84eeee4209473ba33b50d583ea4739d3086c85bf940cde950e5645315eb7`. One id per
   library song (YouTube id, or the file stem for a song without one). A song not in it is
   *new*. Renaming a song without a YouTube id would make it look new; Phase 3 checks for that.
-- **Ken adds these twelve songs** with `add_songs` on Windows, taking the Genius pick at each
+- **Ken adds these thirty songs** (a batch of twelve, then eighteen) with `add_songs` on Windows, taking the Genius pick at each
   prompt. They time by joint as today and stay in the library.
 
   | Song | YouTube id |
@@ -143,6 +143,24 @@ The exploration used every song in the library, so the holdout must be new songs
   | Camp Rock 2 - Wouldn't Change a Thing | `62llzl7iKkE` |
   | Michelle Branch - Everywhere | `HLCasyAh7ic` |
   | Westlife - Flying Without Wings | `vKPGxGCFgTs` |
+  | Bruno Mars - Grenade | `SR6iYWJxHqs` |
+  | Bruno Mars - The Lazy Song | `fLexgOxsZu0` |
+  | Bruno Mars - Locked Out Of Heaven | `e-fA-gBCkj0` |
+  | Silk Sonic - After Last Night | `-cy_tDQPXHk` |
+  | The Lonely Island - YOLO | `z5Otla5157c` |
+  | The Lonely Island - I Just Had Sex | `lQlIhraqL7o` |
+  | Ingrid Michaelson - Be OK | `vpMI8Qu5fsc` |
+  | Sara Bareilles - Gravity | `rEXhAMtbaec` |
+  | Sara Bareilles - King of Anything | `eR7-AUmiNcA` |
+  | Jessie J - Flashlight | `DzwkcbTQ7ZE` |
+  | Backstreet Boys - Show Me The Meaning Of Being Lonely | `aBt8fN7mJNg` |
+  | NSYNC - I Want You Back (US Version) | `n-2C2wOFavc` |
+  | Moana - Where You Are (Sing-Along) | `RTWhvp_OD6s` |
+  | Frozen 2 - Show Yourself | `nrZxwPwmgrw` |
+  | Frozen 2 - Lost in the Woods (Sing-Along) | `_8jNbZIsBQU` |
+  | Tangled - I've Got a Dream (Sing-Along) | `zi5Z6rNU9Hw` |
+  | Tangled - Mother Knows Best (Sing-Along) | `-7jWt3JvJto` |
+  | Encanto - Surface Pressure (Sing-Along) | `X-NH1uUfr0U` |
 
 - **How they were chosen** (author, 2026-11-10): artists and kinds of video already among
   Ken's Repair picks (Bruno Mars, The Lonely Island, Jessie J, Disney sing-alongs, Camp Rock,
@@ -328,7 +346,7 @@ karaoke; that is Phase 6. One verdict per song: right, wrong (where), or unsure.
 ## Phase 3: the holdout run (Sonnet, after Phase 0)
 
 - [ ] **3a. Preconditions.** A dry look at the library (`library_statuses` against the
-  baseline and Phase 0's list): at least 10 of the twelve listed songs are there and in a
+  baseline and Phase 0's list): at least 25 of the thirty listed songs are there and in a
   group (they have heard words). Fewer: STOP and tell Ken which are missing. Record how many
   took a Genius pick (`joint`, or `picks` if Ken has since retimed one on Repair) and how
   many timed from a caption after all. Other new songs Ken added meanwhile are measured too
@@ -434,6 +452,7 @@ and the karaoke by ear. Return one to Genius on Repair.
 |---|---|---|---|---|
 | 1 | 2026-11-10 | 0 | Branch `lrclib_fit_pick` off `dev` `37d8d93`. Baseline id list written, read-only on the library (`library_statuses`): 168 songs. Origins: `srt` 112, `lrclib_srt` 28, `movie_srt` 7, `genius`/joint 4, `custom`/joint 3, no bundle 14. | `~/.pikaraoke/tmp/lrclib_fit_pick/baseline_ids.txt`, sha256 `610e84eeee4209473ba33b50d583ea4739d3086c85bf940cde950e5645315eb7`. |
 | 2 | 2026-11-10 | 0 | Ken declined a 30-song import and asked for a shorter list picked for him (Decision 17). Twelve songs listed in Phase 0, found with `yt-dlp` searches from the VM (`ytsearch3:` per song, uploader captions read from each result). Control: the search reported the uploader caption on a library caption song (`4fndeDfaWCg`). None of the twelve is in the baseline. LRCLIB not consulted. | List and selection rule in Phase 0. |
+| 3 | 2026-11-10 | 0 | Ken asked how many songs are needed and for a command for the rest. Eighteen more listed the same way (same searches, same rule, LRCLIB not consulted), which makes the thirty first planned, now all of the Genius-pick kind. None is in the baseline. | Phase 0 lists thirty; 3a needs 25 of them. |
 
 ## Report output: library run
 
