@@ -5,8 +5,9 @@ loose and get their spec after the gate.
 # LRCLIB timing at download, picked by fit
 
 **Status: Phase 1 built 2026-11-10 (Results row 4). Phase 2 run and recorded 2026-11-10
-(Results row 5, tables below); stopped at 2c for Ken's listening session 2. Nothing has been
-judged.**
+(Results row 5, tables below); stopped at 2c for Ken's listening session 2. Phase 3 run and
+recorded 2026-11-10 (Results row 6, tables below); stopped at 3d for listening session 3.
+Nothing has been judged.**
 
 ## Goal
 
@@ -348,16 +349,16 @@ karaoke; that is Phase 6. One verdict per song: right, wrong (where), or unsure.
 
 ## Phase 3: the holdout run (Sonnet, after Phase 0)
 
-- [ ] **3a. Preconditions.** A dry look at the library (`library_statuses` against the
+- [x] **3a. Preconditions.** A dry look at the library (`library_statuses` against the
   baseline and Phase 0's list): at least 25 of the thirty listed songs are there and in a
   group (they have heard words). Fewer: STOP and tell Ken which are missing. Record how many
   took a Genius pick (`joint`, or `picks` if Ken has since retimed one on Repair) and how
   many timed from a caption after all. Other new songs Ken added meanwhile are measured too
   and marked `new` like these. A new id that is a file stem matching a renamed baseline song:
   STOP and name it.
-- [ ] **3b. Run** the 2a command with `--out ~/.pikaraoke/tmp/lrclib_fit_pick_holdout`
+- [x] **3b. Run** the 2a command with `--out ~/.pikaraoke/tmp/lrclib_fit_pick_holdout`
   (a fresh cache: LRCLIB as it is that day). Same unavailable and read-only rules.
-- [ ] **3c. Record.** As 2b, into "Report output: holdout run", with every table. Plan-only
+- [x] **3c. Record.** As 2b, into "Report output: holdout run", with every table. Plan-only
   commit.
 - [ ] **3d. Stop.** Give Ken listening session 3: the `new` rows of Table L, first 10. If
   more than 10 new picks have no reference, say how many sessions that makes. Handoff prompt
@@ -458,6 +459,7 @@ and the karaoke by ear. Return one to Genius on Repair.
 | 3 | 2026-11-10 | 0 | Ken asked how many songs are needed and for a command for the rest. Eighteen more listed the same way (same searches, same rule, LRCLIB not consulted), which makes the thirty first planned, now all of the Genius-pick kind. None is in the baseline. | Phase 0 lists thirty; 3a needs 25 of them. |
 | 4 | 2026-11-10 | 1 | Phase 1 on `lrclib_fit_pick`, VM, read-only on the library. **1a:** every anchor the step names exists as the plan uses it. **Commits:** 1b `ddefad8` (`SliceFit.unclaimed_run`); 1c `71c916f` (`lrc_auto_pick`: bar, `evaluate`, `pick`); `810665f`, not in the plan (`SliceFit.unclaimed_runs`: every run as first heard word and length; the sheets' `X` rows need the place and the longest length cannot give it; `unclaimed_run` is now the longest of the list); 1d `f96db34` (probe, `srt_slice_fit.sheet_stream` and `CAPTION`, tests). **Tests:** full suite 3648 passed on the final tree; pre-commit passes on every changed file. **1e:** probe on the four GATE M songs to a fresh scratch folder with a live LRCLIB search, all 30 listed records found in the pool (none from `--old-cache`, none `not found`). Table K unclaimed run as read: 12572148 -> 89; 35468507 -> 20; 33133897 -> 20; 6800151, 28307055, 34352818 -> 14; 20242140 -> 6. A first run, before the 1d commit, printed the same Table K. `find <library> -newer started` listed `vocal/`, `nonvocal/` and `vocal/Bruno Mars - Just The Way You Are (Official Music Video)---LjhCEhWiKXk---vocal.m4a`: Ken's holdout import (`LjhCEhWiKXk` is Phase 0's first song), nothing the probe writes. **Where the plan was silent:** `--folder` is required; `classify` gives a song no listed rule names the reason `other`; a `new` song counts in its group's row of Tables P and V and again in the `new` row; Table K has Source and Note columns; Table V counts songs with at least one passing record at the limits; reference flags are read only when the reference fit fits (`ref_refused` alone otherwise). A test caught a Table K crash (a record in neither the pool nor the old cache) that the 1e run could not, since every record was in the pool. Plan commit `a17e6e3` (thirty-song holdout, another session) landed between 1b and 1c and touches Phase 0 and 3a only. No `graphify-out` on this VM, so no `graphify update`. **Self-review** (correctness, simplicity, robustness) done on the four code commits. **Review pending:** `ddefad8`, `71c916f`, `810665f`, and the probe's reference flags and sheet logic in `f96db34`. | Scratch outputs `/tmp/claude-1000/-home-ken-pikaraoke/95747b31-9b15-4134-9c73-c44d4fc6bb5b/scratchpad/probe1e_final` (`.report.md` beside it): TSVs, sheets, listen files; lyric text, not committed. Command: 1e as written. |
 | 5 | 2026-11-10 | 2 | Phase 2 on `lrclib_fit_pick` (HEAD `be542b1`), VM, read-only on the library. **2a:** the baseline file's sha256 checked first: `610e84ee…5eb7`, 168 lines, equal to row 1. Command as written, `<out>` the default `~/.pikaraoke/tmp/lrclib_fit_pick`, live LRCLIB search, stdout to `<out>/report.md`, progress log to the scratchpad. One song came back `lrclib_unavailable` (limit 5), so no rerun. 180 songs read. **Read-only check:** `find <library> -newer <out>/started` (run started 11:08:51) printed the directories `lyrics/`, `nonvocal/`, `vocal/` and three files of `ZrX1XKtShSI` (`.lrc`, `---nonvocal.m4a`, `---vocal.m4a`, written 11:13:22-33): Ken's holdout import, Phase 0's `ZrX1XKtShSI`. Its video was already in the library at 11:08:07 and the probe read the song as `out_of_scope` `no_bundle` (its row is in `songs.tsv`); Phase 3 will measure it with its bundle. Nothing else changed. **Files:** the listen folder holds 76 `.srt`, one per Table L row; `<out>/sheets` holds a folder per song with a pick. **How the tables count:** Table V's Songs column counts the songs the probe fitted (not skipped), so its caption row is one less than Table P's (the `lrclib_unavailable` song); the `youtube_id` column holds the file stem for a song whose filename has no id, as `song_id` does and as the baseline lists it. **2b:** Tables P, S, K, X, V and L pasted raw below, headings one level down; no tallies, no reading of the numbers. Plan-only commit. **Review pending:** unchanged from row 4. | Outputs `~/.pikaraoke/tmp/lrclib_fit_pick/` (`report.md`, `songs.tsv`, `candidates.tsv`, `sheets/`, `cache/`, `started`); listen files `D:\Shared\lrclib-listen` (`/home/ken/shared-drives/D:/Shared/lrclib-listen` on the VM). Lyric text; not committed. |
+| 6 | 2026-11-10 | 3 | Phase 3 on `lrclib_fit_pick` (HEAD `971415f`), VM, read-only on the library. **3a:** the baseline file's sha256 checked first: `610e84ee…5eb7`, 168 lines, equal to row 1. A dry look (`library_statuses` against the baseline and Phase 0's list, a scratch script outside the repo): 198 songs in the library, 168 baseline plus 30 new, and the 30 new are exactly the thirty listed; none was in the baseline. 29 of the 30 are in a group, all `joint` (Genius pick): none `picks`, none `caption`. The 30th, `YRpvIiz9G8A` (Encanto - We Don't Talk About Bruno), has no bundle: Ken's regen log says Genius returned empty lyrics for id 11315631 and the pipeline fell back; Ken regenerated it twice (the first rewrote its `.ass` and `.srt` at 13:52, still no bundle) and ruled to leave it out. It is `out_of_scope` `no_bundle` in this run. No other new ids, and no baseline id missing from the library, so no renamed baseline song looks new. **3b:** command as 2a with `--out ~/.pikaraoke/tmp/lrclib_fit_pick_holdout` (a fresh cache, live LRCLIB search), stdout to `<out>/report.md`, progress log to the scratchpad; started 13:53:54, finished 14:00:32; 198 songs read, none `lrclib_unavailable`, so no rerun. **Read-only check:** `find <library> -newer <out>/started` printed only directories: `regen_backups/` and `regen_backups/20261110T185829Z` with its `karaoke/` and `subtitles/`, created 13:58:29, during the run. The backup holds the `.ass`, `.srt` and `.srt.generated` of `YRpvIiz9G8A` and nothing else, so it is Ken's second regen of that song; `find -type f -newer started` printed nothing, and no `alignment_debug` file changed. **How the tables count:** Table P's `new` row counts every song not in the baseline, `YRpvIiz9G8A` included, so it reads 30 songs while Table V's `new` rows read 29 (the songs the probe fitted). **Against run 5, same code, a fresh cache:** 18 songs were not in the library for run 5; 10 songs that run 5 read as `out_of_scope` `no_bundle` (Ken was still importing) are now `joint`; `MEb2CecR11I` (Backstreet Boys - Larger Than Life), `lrclib_unavailable` in run 5, now has 20 records, 6 timings, no pick, so Table V's caption row reads 112 songs, not 111; two caption songs differ in the pool: `GlZxZ2n2zpw` (Colbie Caillat - Realize) picks 37946467 where run 5 picked 586041 (the pool has 9 timings, not 12), `axySrE0Kg6k` (Beauty and the Beast) keeps its pick with a timing size of 5, not 6. No other song's records, passing count or pick changed. **Listen folder:** Table L has 96 rows, 21 of them `new`; the folder holds 97 files: run 5's 76, 20 files for new songs (`LjhCEhWiKXk`'s was rewritten, same name) and Colbie Caillat - Realize's new pick; its run 5 file `Colbie Caillat - Realize---GlZxZ2n2zpw.586041.srt` is no longer in Table L and is still on disk. **3c:** Tables P, S, K, X, V and L pasted raw below, headings one level down; no tallies, no reading of the numbers. Plan-only commit. **Review pending:** unchanged from row 4. | Outputs `~/.pikaraoke/tmp/lrclib_fit_pick_holdout/` (`report.md`, `songs.tsv`, `candidates.tsv`, `sheets/`, `cache/`, `started`); listen files `D:\Shared\lrclib-listen`. Lyric text; not committed. |
 
 ## Report output: library run
 
@@ -806,4 +808,393 @@ Bar in force: mistimed <= 1, unclaimed run <= 12, speed 1.0. 180 songs in /home/
 
 ## Report output: holdout run
 
-(Phase 3c.)
+Verbatim from `~/.pikaraoke/tmp/lrclib_fit_pick_holdout/report.md` (3b); the table headings are one level down.
+
+Bar in force: mistimed <= 1, unclaimed run <= 12, speed 1.0. 198 songs in /home/ken/shared-drives/D:/Shared/pikaraoke-songs; output in /home/ken/.pikaraoke/tmp/lrclib_fit_pick_holdout; listen files in /home/ken/shared-drives/D:/Shared/lrclib-listen.
+
+### Table P: groups and skip reasons
+
+| Group | Songs | no_length | lrclib_unavailable | No synced record | With a pick |
+|---|---|---|---|---|---|
+| picks | 28 | 0 | 0 | 0 | 23 |
+| joint | 33 | 0 | 0 | 1 | 21 |
+| caption | 112 | 0 | 0 | 1 | 61 |
+| new | 30 | 0 | 0 | 0 | 21 |
+
+| out_of_scope reason | Songs |
+|---|---|
+| custom | 3 |
+| movie_srt | 7 |
+| no_bundle | 15 |
+| no_words | 0 |
+| edited | 0 |
+| no_caption_file | 0 |
+| other | 0 |
+
+### Table S: songs
+
+| Group | New | youtube_id | Title | Skipped | Records | Timings | Passing | no_fit/speed/mistimed/unclaimed | Pick | Mistimed | Unclaimed | Timing_size | ref_ok | Reference_flags | On_disk_id | On_disk_refusal | Pick_has_disk_timing | Needs_verdict |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| joint | 0 | jeRu6h4XbUU | A-Lin - 幸福在歌唱 (Happiness Is Singing) |  | 2 | 1 | 0 | 2/0/0/0 |  |  |  |  |  |  | 38356656 | no_fit |  |  |
+| caption | 0 | hLQl3WQQoQ0 | Adele - Someone Like You |  | 20 | 13 | 19 | 0/1/0/0 | 23116607 | 0 | 2 | 4 | 1 | none |  |  |  | yes |
+| caption | 0 | eitDnP0_83k | Aladdin (2019) - A Whole New World |  | 16 | 10 | 0 | 5/5/0/6 |  |  |  |  | 0 |  |  |  |  |  |
+| caption | 0 | mw5VIEIvuMI | Aladdin (2019) - Speechless |  | 13 | 12 | 10 | 0/1/1/1 | 19793188 | 0 | 3 | 2 | 1 | none |  |  |  | yes |
+| caption | 0 | axySrE0Kg6k | Ariana Grande & John Legend - Beauty and |  | 20 | 11 | 19 | 0/1/0/0 | 31988497 | 0 | 5 | 5 | 1 | none |  |  |  | yes |
+| caption | 0 | WMweEpGlu_U | BTS 방탄소년단 - Butter |  | 19 | 12 | 15 | 0/0/0/4 | 32156281 | 0 | 7 | 4 | 1 | none |  |  |  | yes |
+| caption | 0 | pj6FCKm8dhM | Backstreet Boys - All I Have To Give |  | 18 | 7 | 0 | 1/0/17/0 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | 0Gl2QnHNpkA | Backstreet Boys - As Long As You Love Me |  | 20 | 11 | 7 | 11/0/2/0 | 3722851 | 0 | 8 | 3 | 1 | none |  |  |  | yes |
+| picks | 0 | W5kM5wAwRug | Backstreet Boys - Chances (Official Vide |  | 19 | 11 | 12 | 6/1/0/0 | 2031559 | 1 | 3 | 8 |  | no reference | 33832441 | passes | yes | no |
+| caption | 0 | GZXHBgjQjNM | Backstreet Boys - Drowning |  | 20 | 9 | 18 | 1/1/0/0 | 14595571 | 0 | 6 | 3 | 1 | ref_shift |  |  |  | yes |
+| caption | 0 | 6M6samPEMpM | Backstreet Boys - Everybody (Backstreet' |  | 20 | 17 | 0 | 0/2/0/18 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | 0LSYuZRSGcY | Backstreet Boys - Get Down (You're The O |  | 20 | 11 | 20 | 0/0/0/0 | 1124886 | 0 | 5 | 6 | 1 | ref_unclaimed |  |  |  | yes |
+| caption | 0 | 4fndeDfaWCg | Backstreet Boys - I Want It That Way |  | 20 | 15 | 19 | 0/1/0/0 | 11268019 | 0 | 6 | 1 | 1 | none |  |  |  | yes |
+| caption | 0 | kDcCSiakaU4 | Backstreet Boys - I'll Never Break Your  |  | 20 | 10 | 0 | 0/0/20/0 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | WVe80iZtlYU | Backstreet Boys - Incomplete |  | 20 | 10 | 17 | 0/3/0/0 | 19180415 | 1 | 4 | 9 | 1 | none |  |  |  | yes |
+| caption | 0 | qGDF_QcsKVI | Backstreet Boys - Inconsolable |  | 14 | 6 | 14 | 0/0/0/0 | 35522789 | 0 | 6 | 7 | 1 | none |  |  |  | yes |
+| caption | 0 | MEb2CecR11I | Backstreet Boys - Larger Than Life (Offi |  | 20 | 6 | 0 | 17/3/0/0 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | 1OwfYjemrYw | Backstreet Boys - More Than That |  | 20 | 11 | 20 | 0/0/0/0 | 36314729 | 0 | 4 | 3 | 1 | none |  |  |  | yes |
+| caption | 0 | Ug88HO2mg44 | Backstreet Boys - Quit Playing Games (Wi |  | 20 | 11 | 1 | 3/2/0/14 | 33413907 | 0 | 5 | 1 | 1 | none |  |  |  | yes |
+| caption | 0 | OT5msu-dap8 | Backstreet Boys - Shape Of My Heart |  | 20 | 12 | 15 | 0/5/0/0 | 22503174 | 0 | 6 | 6 | 1 | none |  |  |  | yes |
+| joint | 1 | aBt8fN7mJNg | Backstreet Boys - Show Me The Meaning Of |  | 20 | 7 | 20 | 0/0/0/0 | 19923333 | 0 | 4 | 11 |  | no reference | 7255301 | passes | no | yes |
+| caption | 0 | wMOkm57vu0k | Backstreet Boys - The Call |  | 20 | 11 | 0 | 0/0/20/0 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | Q4VK9_CfOLQ | Britney Spears - (You Drive Me) Crazy |  | 20 | 9 | 1 | 14/5/0/0 | 2137556 | 1 | 7 | 1 | 1 | ref_mistimed |  |  |  | yes |
+| caption | 0 | C-u5WLJ9Yk4 | Britney Spears - ...Baby One More Time |  | 20 | 10 | 16 | 4/0/0/0 | 32110280 | 0 | 4 | 6 | 1 | none |  |  |  | yes |
+| caption | 0 | CduA0TULnow | Britney Spears - Oops!...I Did It Again |  | 20 | 16 | 0 | 3/1/0/16 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | AJWtLf4-WWs | Britney Spears - Stronger |  | 19 | 9 | 0 | 2/0/0/17 |  |  |  |  | 1 |  |  |  |  |  |
+| joint | 1 | SR6iYWJxHqs | Bruno Mars - Grenade (Official Music Vid |  | 19 | 11 | 9 | 1/9/0/0 | 38953751 | 0 | 2 | 2 |  | no reference | 3851492 | speed | no | yes |
+| picks | 0 | luotSpkyCVU | Bruno Mars - I Just Might |  | 20 | 6 | 0 | 0/0/0/20 |  |  |  |  |  |  | 26520597 | unclaimed |  |  |
+| joint | 1 | LjhCEhWiKXk | Bruno Mars - Just The Way You Are (Offic |  | 20 | 13 | 10 | 0/7/3/0 | 9888181 | 0 | 7 | 2 |  | no reference | 7470259 | passes | no | yes |
+| joint | 1 | e-fA-gBCkj0 | Bruno Mars - Locked Out Of Heaven (Offic |  | 20 | 12 | 3 | 0/17/0/0 | 6936310 | 0 | 7 | 2 |  | no reference | 12586557 | speed | no | yes |
+| joint | 1 | fLexgOxsZu0 | Bruno Mars - The Lazy Song (Official Mus |  | 20 | 12 | 20 | 0/0/0/0 | 6706711 | 0 | 10 | 6 |  | no reference | 8097183 | passes | yes | yes |
+| joint | 1 | ekzHIouo8Q4 | Bruno Mars - When I Was Your Man (Offici |  | 19 | 16 | 19 | 0/0/0/0 | 26614056 | 0 | 7 | 2 |  | no reference | 7076945 | passes | no | yes |
+| joint | 1 | -cy_tDQPXHk | Bruno Mars, Anderson .Paak, Silk Sonic - |  | 20 | 10 | 0 | 0/0/0/20 |  |  |  |  |  |  | 9680068 | unclaimed |  |  |
+| picks | 0 | 6HCUoMgviwU | Camp Rock (2008) - This Is Me (Sing-Alon |  | 19 | 13 | 1 | 3/0/15/0 | 17015895 | 0 | 9 | 1 |  | no reference | 28926432 | passes | no | yes |
+| caption | 0 | RNprQYHenNI | Christina Aguilera - Reflection (Mulan,  |  | 20 | 7 | 20 | 0/0/0/0 | 685756 | 0 | 3 | 12 | 1 | ref_mistimed |  |  |  | yes |
+| caption | 0 | GlZxZ2n2zpw | Colbie Caillat - Realize |  | 19 | 9 | 16 | 1/1/1/0 | 37946467 | 0 | 12 | 7 | 1 | none |  |  |  | yes |
+| caption | 0 | CX11yw6YL1w | Céline Dion - Ashes (Deadpool 2, 2018) |  | 20 | 9 | 0 | 0/3/0/17 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | NJsa6-y4sDs | Céline Dion - I'm Alive (Stuart Little 2 |  | 20 | 9 | 19 | 0/1/0/0 | 28130840 | 0 | 3 | 6 | 0 | no reference |  |  |  | yes |
+| caption | 0 | 9bFHsd3o1w0 | Céline Dion - My Heart Will Go On (Titan |  | 19 | 11 | 12 | 2/4/1/0 | 22553995 | 0 | 3 | 9 | 0 | no reference |  |  |  | yes |
+| caption | 0 | T6wbugWrfLU | Céline Dion - That's The Way It Is |  | 20 | 11 | 0 | 0/0/1/19 |  |  |  |  | 1 |  |  |  |  |  |
+| joint | 1 | 62llzl7iKkE | Demi Lovato, Joe Jonas - Wouldn't Change |  | 16 | 10 | 15 | 0/1/0/0 | 33991259 | 0 | 7 | 3 |  | no reference | 25091390 | passes | yes | yes |
+| joint | 1 | -7jWt3JvJto | Donna Murphy - Mother Knows Best (From ' |  | 20 | 4 | 0 | 3/0/17/0 |  |  |  |  |  |  | 36177014 | mistimed |  |  |
+| picks | 0 | wGyh_53ecgg | Ed Sheeran - Best Part Of Me (feat. YEBB |  | 20 | 10 | 0 | 0/20/0/0 |  |  |  |  |  |  | 28383401 | speed |  |  |
+| caption | 0 | K0ibBPhiaG0 | Ed Sheeran - Castle On The Hill |  | 20 | 11 | 18 | 2/0/0/0 | 23335586 | 0 | 2 | 7 | 1 | none |  |  |  | yes |
+| caption | 0 | iWZmdoY1aTE | Ed Sheeran - Happier |  | 20 | 11 | 19 | 1/0/0/0 | 29277988 | 0 | 6 | 5 | 1 | ref_unclaimed |  |  |  | yes |
+| caption | 0 | 2Vv-BfVoq4g | Ed Sheeran - Perfect |  | 20 | 10 | 15 | 0/4/0/1 | 19853882 | 1 | 2 | 5 | 1 | none |  |  |  | yes |
+| caption | 0 | JGwWNGJdvx8 | Ed Sheeran - Shape of You |  | 19 | 12 | 18 | 0/1/0/0 | 22081383 | 0 | 6 | 4 | 1 | none |  |  |  | yes |
+| caption | 0 | UAWcs5H-qgQ | Ed Sheeran - The A Team |  | 20 | 9 | 19 | 0/0/0/1 | 19121007 | 0 | 3 | 8 | 1 | none |  |  |  | yes |
+| caption | 0 | lp-EO5I60KA | Ed Sheeran - Thinking Out Loud |  | 20 | 13 | 18 | 1/1/0/0 | 20756048 | 1 | 3 | 4 | 1 | none |  |  |  | yes |
+| picks | 0 | xFYQQPAOz7Y | Eminem - Lose Yourself (8 Mile, 2002) |  | 15 | 4 | 15 | 0/0/0/0 | 18835951 | 0 | 3 | 11 |  | no reference | 19680363 | passes | yes | no |
+| caption | 0 | Flight of the Conchords (2007) - Bowie | Flight of the Conchords (2007) - Bowie |  | 20 | 1 | 20 | 0/0/0/0 | 19452078 | 1 | 10 | 20 | 1 | ref_refused |  |  |  | yes |
+| caption | 0 | Flight of the Conchords (2007) - Business Time | Flight of the Conchords (2007) - Busines |  | 20 | 5 | 0 | 6/0/14/0 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | Flight of the Conchords (2007) - Carol Brown | Flight of the Conchords (2007) - Carol B |  | 20 | 5 | 0 | 2/0/0/18 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | Flight of the Conchords (2007) - Foux du Fafa | Flight of the Conchords (2007) - Foux du |  | 20 | 4 | 0 | 20/0/0/0 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | Flight of the Conchords (2007) - Hiphopopotamus vs. Rhymenoceros | Flight of the Conchords (2007) - Hiphopo |  | 20 | 5 | 0 | 0/0/0/20 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | Flight of the Conchords (2007) - Hurt Feelings | Flight of the Conchords (2007) - Hurt Fe |  | 20 | 4 | 0 | 0/0/0/20 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | Flight of the Conchords (2007) - Inner City Pressure | Flight of the Conchords (2007) - Inner C |  | 20 | 4 | 0 | 0/0/0/20 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | Flight of the Conchords (2007) - Ladies of the World | Flight of the Conchords (2007) - Ladies  |  | 20 | 2 | 0 | 0/0/0/20 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | Flight of the Conchords (2007) - Robots | Flight of the Conchords (2007) - Robots |  | 20 | 5 | 0 | 19/1/0/0 |  |  |  |  | 0 |  |  |  |  |  |
+| caption | 0 | Flight of the Conchords (2007) - Sugalumps | Flight of the Conchords (2007) - Sugalum |  | 8 | 3 | 0 | 2/0/6/0 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | Flight of the Conchords (2007) - The Most Beautiful Girl (In the Room) | Flight of the Conchords (2007) - The Mos |  | 14 | 7 | 0 | 4/0/10/0 |  |  |  |  | 1 |  |  |  |  |  |
+| picks | 0 | TeQ_TTyLGMs | Frozen (2013) - Do You Want to Build a S |  | 16 | 10 | 12 | 3/1/0/0 | 3514723 | 1 | 4 | 3 |  | no reference | 35805385 | passes | no | yes |
+| picks | 0 | 9tcaM06eGrY | Frozen (2013) - In Summer (Sing-Along) |  | 13 | 8 | 8 | 2/0/0/3 | 3630452 | 0 | 11 | 3 |  | no reference | 36231531 | passes | no | yes |
+| caption | 0 | YVVTZgwYwVo | Frozen (2013) - Let It Go |  | 9 | 9 | 2 | 7/0/0/0 | 15035688 | 0 | 3 | 1 | 1 | none |  |  |  | yes |
+| picks | 0 | kQDw88hEr2c | Frozen (2013) - Love Is an Open Door (Si |  | 18 | 10 | 18 | 0/0/0/0 | 14494965 | 0 | 2 | 7 |  | no reference | 32050687 | passes | yes | no |
+| joint | 1 | lQlIhraqL7o | I Just Had Sex (feat. Akon) |  | 20 | 10 | 20 | 0/0/0/0 | 11579404 | 0 | 7 | 5 |  | no reference | 13910631 | passes | no | yes |
+| joint | 1 | mzhv_dg_UBA | Idina Menzel, AURORA - Into the Unknown  |  | 20 | 7 | 16 | 1/1/0/2 | 36372778 | 0 | 2 | 10 |  | no reference | 31283528 | passes | yes | yes |
+| joint | 1 | nrZxwPwmgrw | Idina Menzel, Evan Rachel Wood - Show Yo |  | 19 | 10 | 0 | 0/0/0/19 |  |  |  |  |  |  | 16764056 | unclaimed |  |  |
+| joint | 1 | vpMI8Qu5fsc | Ingrid Michaelson 'Be OK' (Official Vide |  | 19 | 11 | 3 | 2/14/0/0 | 326004 | 0 | 5 | 2 |  | no reference | 29819320 | speed | no | yes |
+| picks | 0 | Vh74KE3o4Bs | Ingrid Michaelson - The Way I Am |  | 19 | 6 | 18 | 1/0/0/0 | 1781541 | 0 | 1 | 8 |  | no reference | 3161577 | passes | no | yes |
+| picks | 0 | XdEN1b-dwlw | Ingrid Michaelson - You and I |  | 16 | 5 | 14 | 0/2/0/0 | 10035896 | 0 | 3 | 11 |  | no reference | 29026140 | passes | yes | no |
+| joint | 1 | GI6CfKcMhjY | Jack Sparrow (feat. Michael Bolton) |  | 19 | 6 | 16 | 3/0/0/0 | 22000139 | 0 | 5 | 7 |  | no reference | 20031525 | passes | yes | yes |
+| joint | 0 | DYptgVvkVLQ | Jay Chou 周杰倫 - 晴天 (Sunny Day) |  | 19 | 3 | 0 | 19/0/0/0 |  |  |  |  |  |  | 22847808 | no_fit |  |  |
+| caption | 0 | RPWDeLqsN0g | Jay Chou 周杰倫 - 龍捲風 (Tornado) |  | 2 | 2 | 0 | 2/0/0/0 |  |  |  |  | 0 |  |  |  |  |  |
+| joint | 1 | X-NH1uUfr0U | Jessica Darrow - Surface Pressure (From  |  | 20 | 12 | 0 | 4/0/0/16 |  |  |  |  |  |  | 2261532 | unclaimed |  |  |
+| picks | 0 | UJtB55MaoD0 | Jessie J - Domino |  | 18 | 9 | 15 | 2/1/0/0 | 28220836 | 0 | 2 | 8 |  | no reference | 37465712 | passes | no | yes |
+| joint | 1 | DzwkcbTQ7ZE | Jessie J - Flashlight (from Pitch Perfec |  | 19 | 10 | 11 | 0/1/5/2 | 37730119 | 0 | 3 | 3 |  | no reference | 9244184 | mistimed | no | yes |
+| joint | 1 | qMxX-QOV9tI | Jessie J - Price Tag ft. B.o.B |  | 19 | 12 | 10 | 1/0/8/0 | 6900889 | 0 | 6 | 2 |  | no reference | 6900889 | passes | yes | yes |
+| caption | 0 | 450p7goxZqg | John Legend - All of Me |  | 19 | 12 | 19 | 0/0/0/0 | 22517354 | 0 | 1 | 6 | 1 | none |  |  |  | yes |
+| joint | 1 | _8jNbZIsBQU | Jonathan Groff - Lost in the Woods (From |  | 20 | 5 | 0 | 0/0/0/20 |  |  |  |  |  |  | 23363506 | unclaimed |  |  |
+| caption | 0 | Z3x9i7njCCo | Jung Kook 정국 - 3D (feat. Jack Harlow) (L |  | 20 | 12 | 8 | 9/0/3/0 | 8987220 | 0 | 6 | 4 | 1 | none |  |  |  | yes |
+| picks | 0 | 1QYBiNRu1ok | Jung Kook 정국 - Seven (feat. Latto) |  | 20 | 13 | 18 | 0/0/2/0 | 31432999 | 0 | 4 | 4 |  | no reference | 33562631 | passes | no | yes |
+| caption | 0 | 6q0JnftlH-I | Jung Kook 정국 - Standing Next to You |  | 18 | 10 | 0 | 0/1/17/0 |  |  |  |  | 0 |  |  |  |  |  |
+| caption | 0 | FQ3slUz7Jo8 | Justin Timberlake - Like I Love You |  | 19 | 7 | 17 | 1/0/0/1 | 19983370 | 0 | 4 | 9 | 1 | none |  |  |  | yes |
+| caption | 0 | uuZE_IRwLNI | Justin Timberlake - Mirrors |  | 20 | 7 | 0 | 0/0/1/19 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | TSVHoHyErBQ | Justin Timberlake - Rock Your Body |  | 20 | 8 | 0 | 0/0/17/3 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | je0roKRn3nY | Justin Timberlake - Selfish |  | 20 | 9 | 20 | 0/0/0/0 | 5659554 | 0 | 2 | 8 | 1 | none |  |  |  | yes |
+| caption | 0 | IsUsVbTj2AY | Justin Timberlake - Suit & Tie (feat. JA |  | 15 | 10 | 13 | 1/0/1/0 | 30120287 | 0 | 11 | 3 | 1 | none |  |  |  | yes |
+| caption | 0 | KPop Demon Hunters (2025) - Free | KPop Demon Hunters (2025) - Free |  | 17 | 10 | 0 | 4/0/0/13 |  |  |  |  | 1 |  |  |  |  |  |
+| picks | 0 | yebNIHKAC4A | KPop Demon Hunters (2025) - Golden |  | 14 | 8 | 4 | 5/4/0/1 | 23163059 | 0 | 8 | 3 |  | no reference | 31005537 | passes | no | yes |
+| caption | 0 | KPop Demon Hunters (2025) - How It's Done | KPop Demon Hunters (2025) - How It's Don |  | 14 | 7 | 0 | 0/0/0/14 |  |  |  |  | 1 |  |  |  |  |  |
+| joint | 0 | 983bBbJx0Mk | KPop Demon Hunters (2025) - Soda Pop |  | 19 | 8 | 0 | 19/0/0/0 |  |  |  |  |  |  | 36713302 | no_fit |  |  |
+| picks | 0 | j5itLHDMJsE | KPop Demon Hunters (2025) - Takedown |  | 20 | 8 | 19 | 0/1/0/0 | 30356707 | 0 | 8 | 3 |  | no reference | 22746532 | passes | no | yes |
+| caption | 0 | KPop Demon Hunters (2025) - What It Sounds Like | KPop Demon Hunters (2025) - What It Soun |  | 15 | 7 | 0 | 0/15/0/0 |  |  |  |  | 1 |  |  |  |  |  |
+| picks | 0 | fGyTN5UjnL4 | KPop Demon Hunters (2025) - Your Idol |  | 18 | 9 | 16 | 1/0/1/0 | 23310716 | 1 | 8 | 4 |  | no reference | 37123328 | passes | no | yes |
+| caption | 0 | Ra-Om7UMSJc | Kelly Clarkson - Because Of You |  | 19 | 8 | 15 | 0/4/0/0 | 18765707 | 0 | 2 | 9 | 1 | none |  |  |  | yes |
+| joint | 1 | ZrX1XKtShSI | Kristen Bell, Idina Menzel - For the Fir |  | 20 | 7 | 18 | 2/0/0/0 | 14589928 | 0 | 2 | 7 |  | no reference | 7840239 | passes | yes | yes |
+| caption | 0 | zABLecsR5UE | Lewis Capaldi - Someone You Loved |  | 20 | 13 | 19 | 0/1/0/0 | 27564454 | 0 | 4 | 4 | 1 | none |  |  |  | yes |
+| joint | 1 | ILRs2r6lcHY | Mandy Moore, Zachary Levi - I See the Li |  | 20 | 8 | 0 | 20/0/0/0 |  |  |  |  |  |  | 34228750 | no_fit |  |  |
+| joint | 1 | HLCasyAh7ic | Michelle Branch - Everywhere [Official M |  | 17 | 8 | 14 | 3/0/0/0 | 19297649 | 0 | 6 | 8 |  | no reference | 30723998 | passes | yes | yes |
+| caption | 0 | cPAbx5kgCJo | Moana (2016) - How Far I'll Go |  | 14 | 13 | 2 | 11/0/0/1 | 3292118 | 0 | 2 | 1 | 1 | none |  |  |  | yes |
+| caption | 0 | 93lrosBEW-Q | Moana (2016) - Shiny |  | 13 | 7 | 0 | 1/0/11/1 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | 79DijItQXMM | Moana (2016) - You're Welcome |  | 5 | 4 | 0 | 1/0/0/4 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | -fxh7jAJR8U | NSYNC - (God Must Have Spent) A Little M |  | 20 | 13 | 4 | 1/8/7/0 | 28155617 | 0 | 11 | 3 | 1 | ref_unclaimed |  |  |  | yes |
+| caption | 0 | Eo-KmOd3i7s | NSYNC - Bye Bye Bye |  | 20 | 13 | 0 | 13/2/0/5 |  |  |  |  | 0 |  |  |  |  |  |
+| caption | 0 | saxnXiBKEaY | NSYNC - Girlfriend |  | 18 | 9 | 0 | 0/0/17/1 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | IbRwSI8yi1o | NSYNC - Gone |  | 20 | 12 | 15 | 4/0/0/1 | 32643931 | 0 | 7 | 4 | 1 | none |  |  |  | yes |
+| joint | 1 | n-2C2wOFavc | NSYNC - I Want You Back (US Version - Of |  | 16 | 9 | 2 | 1/0/0/13 | 6955667 | 0 | 3 | 1 |  | no reference | 32016974 | unclaimed | no | yes |
+| caption | 0 | GQMlWwIXg3M | NSYNC - It's Gonna Be Me |  | 20 | 14 | 20 | 0/0/0/0 | 13572204 | 0 | 5 | 4 | 1 | none |  |  |  | yes |
+| picks | 0 | NSYNC - Paradise | NSYNC - Paradise |  | 18 | 5 | 18 | 0/0/0/0 | 9488086 | 1 | 6 | 9 |  | no reference | 27903107 | passes | yes | no |
+| caption | 0 | TWZKw_MgUPI | NSYNC - Pop |  | 20 | 12 | 0 | 0/0/20/0 |  |  |  |  | 1 |  |  |  |  |  |
+| picks | 0 | PodgxWsZw9s | NSYNC - Thinking Of You (I Drive Myself  |  | 20 | 9 | 0 | 0/7/0/13 |  |  |  |  |  |  | 36176943 | unclaimed |  |  |
+| caption | 0 | 6thmPrTxBtI | NSYNC - This I Promise You |  | 20 | 10 | 8 | 3/2/7/0 | 23889061 | 0 | 5 | 5 | 1 | none |  |  |  | yes |
+| caption | 0 | atz_aZA3rf0 | Ne-Yo - Because Of You |  | 20 | 9 | 0 | 0/2/4/14 |  |  |  |  | 1 |  |  |  |  |  |
+| picks | 0 | k6M5C-oKw9k | Ne-Yo - Miss Independent |  | 20 | 10 | 0 | 0/0/0/20 |  |  |  |  |  |  | 12997477 | unclaimed |  |  |
+| caption | 0 | 6tpl9LtkRRw | Ne-Yo - One In A Million |  | 20 | 9 | 0 | 0/0/7/13 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | IxszlJppRQI | Ne-Yo - So Sick |  | 18 | 11 | 14 | 0/2/2/0 | 16652439 | 0 | 7 | 3 | 1 | none |  |  |  | yes |
+| picks | 0 | 9ThO76peOw0 | Pocahontas (1995) - Colors of the Wind |  | 11 | 6 | 1 | 6/4/0/0 | 34484694 | 0 | 4 | 1 |  | no reference | 35708272 | passes | no | yes |
+| caption | 0 | fJ9rUzIMcZQ | Queen - Bohemian Rhapsody |  | 19 | 12 | 17 | 0/0/2/0 | 21655132 | 0 | 7 | 8 | 1 | none |  |  |  | yes |
+| caption | 0 | Rent (2005) - Another Day | Rent (2005) - Another Day |  | 12 | 5 | 9 | 0/3/0/0 | 6156119 | 0 | 9 | 6 | 1 | none |  |  |  | yes |
+| caption | 0 | Rent (2005) - I Should Tell You | Rent (2005) - I Should Tell You |  | 20 | 7 | 15 | 1/4/0/0 | 6191521 | 0 | 3 | 10 | 1 | none |  |  |  | yes |
+| caption | 0 | Rent (2005) - I'll Cover You | Rent (2005) - I'll Cover You |  | 17 | 4 | 14 | 3/0/0/0 | 6191556 | 0 | 3 | 9 | 1 | none |  |  |  | yes |
+| caption | 0 | Rent (2005) - Light My Candle | Rent (2005) - Light My Candle |  | 15 | 5 | 3 | 0/0/0/12 | 36678024 | 0 | 4 | 2 | 1 | none |  |  |  | yes |
+| caption | 0 | Rent (2005) - One Song Glory | Rent (2005) - One Song Glory |  | 20 | 6 | 17 | 0/3/0/0 | 6932651 | 0 | 3 | 15 | 1 | none |  |  |  | yes |
+| caption | 0 | Rent (2005) - Out Tonight | Rent (2005) - Out Tonight |  | 20 | 6 | 14 | 0/6/0/0 | 6932715 | 0 | 5 | 9 | 1 | none |  |  |  | yes |
+| caption | 0 | Rent (2005) - Santa Fe | Rent (2005) - Santa Fe |  | 20 | 7 | 0 | 6/0/4/10 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | Rent (2005) - Seasons of Love | Rent (2005) - Seasons of Love |  | 12 | 7 | 10 | 0/0/0/2 | 36786874 | 0 | 6 | 5 | 1 | none |  |  |  | yes |
+| caption | 0 | Rent (2005) - Today 4 U | Rent (2005) - Today 4 U |  | 4 | 2 | 0 | 0/0/0/4 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | Rent (2005) - What You Own | Rent (2005) - What You Own |  | 14 | 5 | 5 | 0/9/0/0 | 28181941 | 0 | 2 | 3 | 1 | none |  |  |  | yes |
+| caption | 0 | Rent (2005) - Without You | Rent (2005) - Without You |  | 17 | 7 | 12 | 0/5/0/0 | 6934735 | 1 | 2 | 7 | 1 | none |  |  |  | yes |
+| caption | 0 | Rent (2005) - Your Eyes | Rent (2005) - Your Eyes |  | 19 | 8 | 9 | 0/10/0/0 | 21412032 | 0 | 1 | 5 | 1 | none |  |  |  | yes |
+| caption | 0 | WB9_sf6oV1o | S Club 7 - Never Had A Dream Come True |  | 20 | 8 | 20 | 0/0/0/0 | 32607617 | 0 | 2 | 11 | 1 | none |  |  |  | yes |
+| joint | 1 | rEXhAMtbaec | Sara Bareilles - Gravity (Official HD Vi |  | 19 | 8 | 13 | 1/5/0/0 | 36844599 | 0 | 4 | 8 |  | no reference | 29516072 | passes | yes | yes |
+| joint | 1 | eR7-AUmiNcA | Sara Bareilles - King of Anything (Offic |  | 19 | 5 | 0 | 0/0/0/19 |  |  |  |  |  |  | 7856460 | unclaimed |  |  |
+| picks | 0 | 53GIADHxVzM | Sara Bareilles - She Used To Be Mine |  | 19 | 9 | 14 | 1/4/0/0 | 12564402 | 0 | 3 | 6 |  | no reference | 9845205 | passes | no | yes |
+| picks | 0 | wIyNAsmGrl0 | Silk Sonic (Bruno Mars & Anderson .Paak) |  | 20 | 12 | 0 | 1/0/5/14 |  |  |  |  |  |  | 1952973 | unclaimed |  |  |
+| picks | 0 | CEw-7cMnBDY | Silk Sonic (Bruno Mars & Anderson .Paak) |  | 20 | 8 | 20 | 0/0/0/0 | 11390531 | 0 | 7 | 8 |  | no reference | 14315468 | passes | yes | no |
+| picks | 0 | kRXmAIHYQR4 | Tangled (2010) - When Will My Life Begin |  | 18 | 10 | 18 | 0/0/0/0 | 24795512 | 0 | 2 | 3 |  | no reference | 13183578 | passes | no | yes |
+| joint | 1 | zi5Z6rNU9Hw | Tangled - Cast - I've Got a Dream (From  |  | 20 | 8 | 17 | 0/3/0/0 | 29290799 | 0 | 4 | 5 |  | no reference | 29201073 | passes | no | yes |
+| caption | 0 | _lK4cX5xGiQ | Tenacious D - Tribute |  | 20 | 5 | 0 | 0/0/0/20 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | The Last Five Years (2014) - A Miracle Would Happen & When You Come Home to Me | The Last Five Years (2014) - A Miracle W |  | 9 | 4 | 0 | 2/0/7/0 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | The Last Five Years (2014) - A Summer in Ohio | The Last Five Years (2014) - A Summer in |  | 10 | 5 | 2 | 0/5/3/0 | 23648746 | 0 | 10 | 2 | 1 | none |  |  |  | yes |
+| caption | 0 | The Last Five Years (2014) - Climbing Uphill | The Last Five Years (2014) - Climbing Up |  | 15 | 4 | 0 | 7/3/5/0 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | The Last Five Years (2014) - Goodbye Until Tomorrow & I Could Never Rescue You | The Last Five Years (2014) - Goodbye Unt |  | 9 | 5 | 0 | 4/0/5/0 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | The Last Five Years (2014) - I Can Do Better Than That | The Last Five Years (2014) - I Can Do Be |  | 12 | 5 | 6 | 0/6/0/0 | 4179244 | 0 | 10 | 5 | 1 | none |  |  |  | yes |
+| caption | 0 | The Last Five Years (2014) - I'm a Part of That | The Last Five Years (2014) - I'm a Part  |  | 0 | 0 | 0 | 0/0/0/0 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | The Last Five Years (2014) - If I Didn't Believe in You | The Last Five Years (2014) - If I Didn't |  | 10 | 5 | 0 | 1/3/0/6 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | The Last Five Years (2014) - Moving Too Fast | The Last Five Years (2014) - Moving Too  |  | 11 | 5 | 0 | 7/0/4/0 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | The Last Five Years (2014) - Nobody Needs to Know | The Last Five Years (2014) - Nobody Need |  | 16 | 5 | 7 | 6/3/0/0 | 4626353 | 1 | 4 | 4 | 1 | none |  |  |  | yes |
+| caption | 0 | The Last Five Years (2014) - See I'm Smiling | The Last Five Years (2014) - See I'm Smi |  | 19 | 9 | 0 | 19/0/0/0 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | The Last Five Years (2014) - Shiksa Goddess | The Last Five Years (2014) - Shiksa Godd |  | 11 | 5 | 0 | 5/0/6/0 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | The Last Five Years (2014) - Still Hurting | The Last Five Years (2014) - Still Hurti |  | 17 | 8 | 6 | 3/8/0/0 | 4188091 | 0 | 1 | 5 | 1 | none |  |  |  | yes |
+| caption | 0 | The Last Five Years (2014) - The Next Ten Minutes | The Last Five Years (2014) - The Next Te |  | 17 | 6 | 8 | 3/6/0/0 | 4189082 | 0 | 6 | 5 | 1 | none |  |  |  | yes |
+| caption | 0 | The Last Five Years (2014) - The Schmuel Song | The Last Five Years (2014) - The Schmuel |  | 13 | 6 | 0 | 4/1/3/5 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | GibiNy4d4gc | The Lion King (1994) - Circle of Life |  | 9 | 6 | 0 | 1/4/0/4 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | SXKlJuO07eM | The Little Mermaid (1989) - Part of Your |  | 14 | 10 | 2 | 10/2/0/0 | 30097702 | 0 | 2 | 1 | 1 | none |  |  |  | yes |
+| caption | 0 | GC_mV1IpjWA | The Little Mermaid (1989) - Under the Se |  | 17 | 8 | 0 | 3/14/0/0 |  |  |  |  | 1 |  |  |  |  |  |
+| joint | 0 | kHwpS0LakeU | The Lonely Island - Here I Go (feat. Cha |  | 0 | 0 | 0 | 0/0/0/0 |  |  |  |  |  |  |  |  |  |  |
+| joint | 1 | avaSdC0QOUM | The Lonely Island - I'm On A Boat (Expli |  | 20 | 7 | 0 | 0/0/0/20 |  |  |  |  |  |  | 36394001 | unclaimed |  |  |
+| picks | 0 | 68LBPvFhMx0 | The Lonely Island - Jose & Mark |  | 5 | 2 | 5 | 0/0/0/0 | 2554162 | 0 | 5 | 4 |  | no reference | 17370761 | passes | no | yes |
+| picks | 0 | hj4e709GYf4 | The Lonely Island - Let's Bash |  | 7 | 1 | 7 | 0/0/0/0 | 1116686 | 0 | 3 | 7 |  | no reference | 17273734 | passes | yes | no |
+| picks | 0 | gAYL5H46QnQ | The Lonely Island - Threw It On The Grou |  | 20 | 10 | 20 | 0/0/0/0 | 35338143 | 0 | 2 | 6 |  | no reference | 39765748 | passes | no | yes |
+| picks | 0 | XzbHPqULtdA | The Outsiders (2024) - Stay Gold |  | 13 | 7 | 4 | 9/0/0/0 | 27305964 | 0 | 2 | 4 |  | no reference | 34445486 | passes | yes | no |
+| caption | 0 | EUW0eDhKoxw | The Philosopher Kings - Cry |  | 5 | 1 | 5 | 0/0/0/0 | 28361150 | 0 | 9 | 5 | 1 | none |  |  |  | yes |
+| caption | 0 | 6X4bhT1FWjI | The Philosopher Kings - Hurts To Love Yo |  | 4 | 2 | 0 | 4/0/0/0 |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 0 | AI7F8qlN44E | The Philosopher Kings - You Don't Love M |  | 6 | 2 | 0 | 0/0/0/6 |  |  |  |  | 1 |  |  |  |  |  |
+| picks | 0 | tz_NxOF7RB4 | Vitamin C - Graduation (Friends Forever) |  | 20 | 7 | 1 | 2/0/17/0 | 9980085 | 1 | 10 | 1 |  | no reference | 9980085 | passes | yes | no |
+| joint | 1 | vKPGxGCFgTs | Westlife - Flying Without Wings (Officia |  | 20 | 9 | 17 | 0/3/0/0 | 1512603 | 0 | 3 | 8 |  | no reference | 7834744 | passes | no | yes |
+| joint | 1 | RTWhvp_OD6s | Where You Are (From 'Moana'_Sing-Along) |  | 20 | 6 | 20 | 0/0/0/0 | 28421947 | 0 | 10 | 7 |  | no reference | 4490148 | passes | no | yes |
+| caption | 0 | 3JWTaaS7LdU | Whitney Houston - I Will Always Love You |  | 20 | 9 | 11 | 4/5/0/0 | 29741730 | 0 | 1 | 7 | 1 | none |  |  |  | yes |
+| caption | 0 | TZ0pXUb5jVU | Wicked (2003) - For Good |  | 17 | 6 | 0 | 8/9/0/0 |  |  |  |  | 1 |  |  |  |  |  |
+| joint | 1 | z5Otla5157c | YOLO (feat. Adam Levine & Kendrick Lamar |  | 19 | 10 | 19 | 0/0/0/0 | 1019299 | 0 | 6 | 5 |  | no reference | 17904967 | passes | no | yes |
+| caption | 0 | rg_zwK_sSEY | ZAYN & Zhavia Ward - A Whole New World ( |  | 20 | 9 | 20 | 0/0/0/0 | 7428207 | 0 | 9 | 5 | 1 | none |  |  |  | yes |
+
+### Table K: GATE M LRC-wrong records
+
+| youtube_id | lrclib_id | Source | In_pool | Status | Speed | Mistimed | Unclaimed | Refusal | Picked | Note |
+|---|---|---|---|---|---|---|---|---|---|---|
+| GZXHBgjQjNM | 20242140 | pool | yes | fits | 1.0000 | 1 | 6 | passes | no |  |
+| GZXHBgjQjNM | 21912586 | pool | yes | fits | 1.0000 | 1 | 6 | passes | no |  |
+| GZXHBgjQjNM | 27023721 | pool | yes | fits | 1.0000 | 1 | 6 | passes | no |  |
+| GZXHBgjQjNM | 31535578 | pool | yes | fits | 1.0000 | 1 | 6 | passes | no |  |
+| GZXHBgjQjNM | 32140003 | pool | yes | fits | 1.0000 | 1 | 6 | passes | no |  |
+| GZXHBgjQjNM | 35793714 | pool | yes | fits | 1.0000 | 1 | 6 | passes | no |  |
+| GZXHBgjQjNM | 36228137 | pool | yes | fits | 1.0000 | 1 | 6 | passes | no |  |
+| AJWtLf4-WWs | 6800151 | pool | yes | fits | 1.0000 | 1 | 14 | unclaimed | no |  |
+| AJWtLf4-WWs | 28307055 | pool | yes | fits | 1.0000 | 1 | 14 | unclaimed | no |  |
+| AJWtLf4-WWs | 34352818 | pool | yes | fits | 1.0000 | 1 | 14 | unclaimed | no |  |
+| UAWcs5H-qgQ | 12572148 | pool | yes | fits | 1.0000 | 0 | 89 | unclaimed | no |  |
+| T6wbugWrfLU | 35468507 | pool | yes | fits | 1.0000 | 0 | 20 | unclaimed | no |  |
+| T6wbugWrfLU | 3458703 | pool | yes | fits | 1.0000 | 1 | 20 | unclaimed | no |  |
+| T6wbugWrfLU | 6335685 | pool | yes | fits | 1.0000 | 1 | 20 | unclaimed | no |  |
+| T6wbugWrfLU | 7720552 | pool | yes | fits | 1.0000 | 1 | 20 | unclaimed | no |  |
+| T6wbugWrfLU | 9641374 | pool | yes | fits | 1.0000 | 1 | 20 | unclaimed | no |  |
+| T6wbugWrfLU | 12149023 | pool | yes | fits | 1.0000 | 1 | 20 | unclaimed | no |  |
+| T6wbugWrfLU | 12377831 | pool | yes | fits | 1.0000 | 1 | 20 | unclaimed | no |  |
+| T6wbugWrfLU | 12515974 | pool | yes | fits | 1.0000 | 1 | 20 | unclaimed | no |  |
+| T6wbugWrfLU | 15413449 | pool | yes | fits | 1.0000 | 1 | 20 | unclaimed | no |  |
+| T6wbugWrfLU | 17099666 | pool | yes | fits | 1.0000 | 1 | 20 | unclaimed | no |  |
+| T6wbugWrfLU | 20411476 | pool | yes | fits | 1.0000 | 1 | 20 | unclaimed | no |  |
+| T6wbugWrfLU | 23305471 | pool | yes | fits | 1.0000 | 1 | 20 | unclaimed | no |  |
+| T6wbugWrfLU | 24586049 | pool | yes | fits | 1.0000 | 1 | 20 | unclaimed | no |  |
+| T6wbugWrfLU | 24809544 | pool | yes | fits | 1.0000 | 1 | 20 | unclaimed | no |  |
+| T6wbugWrfLU | 31956521 | pool | yes | fits | 1.0000 | 1 | 20 | unclaimed | no |  |
+| T6wbugWrfLU | 32182355 | pool | yes | fits | 1.0000 | 1 | 20 | unclaimed | no |  |
+| T6wbugWrfLU | 32691192 | pool | yes | fits | 1.0000 | 1 | 20 | unclaimed | no |  |
+| T6wbugWrfLU | 33133897 | pool | yes | fits | 1.0000 | 1 | 20 | unclaimed | no |  |
+| T6wbugWrfLU | 34902348 | pool | yes | fits | 1.0000 | 1 | 20 | unclaimed | no |  |
+
+### Table X: flagged passing records not picked
+
+| Song | youtube_id | Ids of the timing | Flags | Mistimed | Unclaimed |
+|---|---|---|---|---|---|
+| Backstreet Boys - Drowning | GZXHBgjQjNM | 19447935, 26104541 | ref_shift | 0 | 6 |
+| Backstreet Boys - Drowning | GZXHBgjQjNM | 20242140, 21912586, 27023721, 31535578, 32140003, 35793714, 36228137 | ref_mistimed | 1 | 6 |
+| Backstreet Boys - Get Down (You're The O | 0LSYuZRSGcY | 3654026 | ref_unclaimed | 0 | 5 |
+| Backstreet Boys - Get Down (You're The O | 0LSYuZRSGcY | 10249637 | ref_unclaimed | 0 | 5 |
+| Backstreet Boys - Get Down (You're The O | 0LSYuZRSGcY | 13474015 | ref_unclaimed | 0 | 8 |
+| Backstreet Boys - Get Down (You're The O | 0LSYuZRSGcY | 13609412, 33966854 | ref_mistimed ref_unclaimed | 1 | 5 |
+| Backstreet Boys - Get Down (You're The O | 0LSYuZRSGcY | 13641580 | ref_unclaimed | 0 | 5 |
+| Backstreet Boys - Get Down (You're The O | 0LSYuZRSGcY | 22381484, 34452636, 35231491, 36285083 | ref_unclaimed | 0 | 5 |
+| Backstreet Boys - Get Down (You're The O | 0LSYuZRSGcY | 36673394 | ref_unclaimed | 0 | 8 |
+| Christina Aguilera - Reflection (Mulan,  | RNprQYHenNI | 3742260 | ref_mistimed | 0 | 3 |
+| Christina Aguilera - Reflection (Mulan,  | RNprQYHenNI | 13013886, 15818656, 17214765 | ref_mistimed | 0 | 3 |
+| Christina Aguilera - Reflection (Mulan,  | RNprQYHenNI | 21931798 | ref_mistimed | 0 | 3 |
+| Christina Aguilera - Reflection (Mulan,  | RNprQYHenNI | 24678599 | ref_mistimed | 0 | 3 |
+| Christina Aguilera - Reflection (Mulan,  | RNprQYHenNI | 31572444 | ref_mistimed | 0 | 2 |
+| Ed Sheeran - Happier | iWZmdoY1aTE | 2854250 | ref_unclaimed | 0 | 6 |
+| Ed Sheeran - Happier | iWZmdoY1aTE | 6674983, 7260734, 8325988, 9595552 | ref_unclaimed | 0 | 6 |
+| Ed Sheeran - Happier | iWZmdoY1aTE | 8097534 | ref_unclaimed | 0 | 6 |
+| Ed Sheeran - Happier | iWZmdoY1aTE | 10039069 | ref_unclaimed | 0 | 6 |
+| Ed Sheeran - Happier | iWZmdoY1aTE | 10503213 | ref_unclaimed | 0 | 6 |
+| Ed Sheeran - Happier | iWZmdoY1aTE | 12512210 | ref_unclaimed | 0 | 6 |
+| Ed Sheeran - Happier | iWZmdoY1aTE | 23858174 | ref_unclaimed | 0 | 6 |
+| Ed Sheeran - Happier | iWZmdoY1aTE | 32633585, 33790241, 35467074 | ref_unclaimed | 0 | 6 |
+| Ed Sheeran - Happier | iWZmdoY1aTE | 40073089 | ref_unclaimed | 0 | 6 |
+| Ed Sheeran - Perfect | 2Vv-BfVoq4g | 2943073, 36009208 | ref_unheard | 1 | 2 |
+| Ed Sheeran - Shape of You | JGwWNGJdvx8 | 38587774 | ref_unclaimed ref_unheard | 0 | 11 |
+| Frozen (2013) - Let It Go | YVVTZgwYwVo | 14494777 | ref_mistimed | 1 | 3 |
+| Justin Timberlake - Suit & Tie (feat. JA | IsUsVbTj2AY | 4830039, 17014461 | ref_unclaimed | 0 | 11 |
+| Justin Timberlake - Suit & Tie (feat. JA | IsUsVbTj2AY | 6563397, 29351856 | ref_unclaimed | 0 | 11 |
+| Justin Timberlake - Suit & Tie (feat. JA | IsUsVbTj2AY | 14357227 | ref_unclaimed | 0 | 11 |
+| Justin Timberlake - Suit & Tie (feat. JA | IsUsVbTj2AY | 16431444 | ref_unclaimed | 0 | 11 |
+| Justin Timberlake - Suit & Tie (feat. JA | IsUsVbTj2AY | 28278766, 35648481 | ref_unclaimed | 0 | 11 |
+| Justin Timberlake - Suit & Tie (feat. JA | IsUsVbTj2AY | 37912453 | ref_unclaimed | 0 | 11 |
+| Justin Timberlake - Suit & Tie (feat. JA | IsUsVbTj2AY | 38381482 | ref_unclaimed | 0 | 11 |
+| NSYNC - (God Must Have Spent) A Little M | -fxh7jAJR8U | 39499684 | ref_unclaimed | 0 | 11 |
+| Rent (2005) - What You Own | Rent (2005) - What You Own | 14409292, 39413351 | ref_unheard | 0 | 2 |
+| The Last Five Years (2014) - The Next Te | The Last Five Years (2014) - The Next Ten Minutes | 13769166, 25808567, 37998862 | ref_unheard | 0 | 2 |
+
+### Table V: songs with a pick at other limits
+
+| Group | Mistimed <= | Songs | Unclaimed <= 8 | Unclaimed <= 10 | Unclaimed <= 12 | Unclaimed <= 15 | Unclaimed <= 20 |
+|---|---|---|---|---|---|---|---|
+| picks | 0 | 28 | 16 | 17 | 18 | 18 | 19 |
+| picks | 1 | 28 | 20 | 22 | 23 | 23 | 24 |
+| joint | 0 | 33 | 19 | 21 | 21 | 21 | 23 |
+| joint | 1 | 33 | 19 | 21 | 21 | 22 | 24 |
+| caption | 0 | 112 | 48 | 51 | 54 | 56 | 60 |
+| caption | 1 | 112 | 54 | 58 | 61 | 64 | 69 |
+| new | 0 | 29 | 19 | 21 | 21 | 21 | 23 |
+| new | 1 | 29 | 19 | 21 | 21 | 22 | 24 |
+
+### Table L: the listen list
+
+| Rank | Group | New | Title | youtube_id | lrclib_id | Why | Listen_file |
+|---|---|---|---|---|---|---|---|
+| 1 | picks | 0 | Frozen (2013) - In Summer (Sing-Along) | 9tcaM06eGrY | 3630452 | no reference | Frozen (2013) - In Summer (Sing-Along)---9tcaM06eGrY.3630452.srt |
+| 2 | joint | 1 | Where You Are (From 'Moana'_Sing-Along) | RTWhvp_OD6s | 28421947 | no reference | Where You Are (From 'Moana'_Sing-Along)---RTWhvp_OD6s.28421947.srt |
+| 3 | joint | 1 | Bruno Mars - The Lazy Song (Official Mus | fLexgOxsZu0 | 6706711 | no reference | Bruno Mars - The Lazy Song (Official Music Video)---fLexgOxsZu0.6706711.srt |
+| 4 | picks | 0 | Camp Rock (2008) - This Is Me (Sing-Alon | 6HCUoMgviwU | 17015895 | no reference | Camp Rock (2008) - This Is Me (Sing-Along)---6HCUoMgviwU.17015895.srt |
+| 5 | picks | 0 | KPop Demon Hunters (2025) - Your Idol | fGyTN5UjnL4 | 23310716 | no reference | KPop Demon Hunters (2025) - Your Idol---fGyTN5UjnL4.23310716.srt |
+| 6 | picks | 0 | KPop Demon Hunters (2025) - Takedown | j5itLHDMJsE | 30356707 | no reference | KPop Demon Hunters (2025) - Takedown---j5itLHDMJsE.30356707.srt |
+| 7 | picks | 0 | KPop Demon Hunters (2025) - Golden | yebNIHKAC4A | 23163059 | no reference | KPop Demon Hunters (2025) - Golden---yebNIHKAC4A.23163059.srt |
+| 8 | joint | 1 | Demi Lovato, Joe Jonas - Wouldn't Change | 62llzl7iKkE | 33991259 | no reference | Demi Lovato, Joe Jonas - Wouldn't Change a Thing (From 'Camp Rock 2 - The Final Jam'_Sing-Along)---62llzl7iKkE.33991259.srt |
+| 9 | joint | 1 | Bruno Mars - Just The Way You Are (Offic | LjhCEhWiKXk | 9888181 | no reference | Bruno Mars - Just The Way You Are (Official Music Video)---LjhCEhWiKXk.9888181.srt |
+| 10 | joint | 1 | Bruno Mars - Locked Out Of Heaven (Offic | e-fA-gBCkj0 | 6936310 | no reference | Bruno Mars - Locked Out Of Heaven (Official Music Video)---e-fA-gBCkj0.6936310.srt |
+| 11 | joint | 1 | Bruno Mars - When I Was Your Man (Offici | ekzHIouo8Q4 | 26614056 | no reference | Bruno Mars - When I Was Your Man (Official Music Video)---ekzHIouo8Q4.26614056.srt |
+| 12 | joint | 1 | I Just Had Sex (feat. Akon) | lQlIhraqL7o | 11579404 | no reference | I Just Had Sex (feat. Akon)---lQlIhraqL7o.11579404.srt |
+| 13 | joint | 1 | Michelle Branch - Everywhere [Official M | HLCasyAh7ic | 19297649 | no reference | Michelle Branch - Everywhere [Official Music Video]---HLCasyAh7ic.19297649.srt |
+| 14 | joint | 1 | Jessie J - Price Tag ft. B.o.B | qMxX-QOV9tI | 6900889 | no reference | Jessie J - Price Tag ft. B.o.B---qMxX-QOV9tI.6900889.srt |
+| 15 | joint | 1 | YOLO (feat. Adam Levine & Kendrick Lamar | z5Otla5157c | 1019299 | no reference | YOLO (feat. Adam Levine & Kendrick Lamar)---z5Otla5157c.1019299.srt |
+| 16 | picks | 0 | The Lonely Island - Jose & Mark | 68LBPvFhMx0 | 2554162 | no reference | The Lonely Island - Jose & Mark---68LBPvFhMx0.2554162.srt |
+| 17 | joint | 1 | Jack Sparrow (feat. Michael Bolton) | GI6CfKcMhjY | 22000139 | no reference | Jack Sparrow (feat. Michael Bolton)---GI6CfKcMhjY.22000139.srt |
+| 18 | joint | 1 | Ingrid Michaelson 'Be OK' (Official Vide | vpMI8Qu5fsc | 326004 | no reference | Ingrid Michaelson 'Be OK' (Official Video)---vpMI8Qu5fsc.326004.srt |
+| 19 | picks | 0 | Frozen (2013) - Do You Want to Build a S | TeQ_TTyLGMs | 3514723 | no reference | Frozen (2013) - Do You Want to Build a Snowman (Sing-Along)---TeQ_TTyLGMs.3514723.srt |
+| 20 | picks | 0 | Jung Kook 정국 - Seven (feat. Latto) | 1QYBiNRu1ok | 31432999 | no reference | Jung Kook 정국 - Seven (feat. Latto)---1QYBiNRu1ok.31432999.srt |
+| 21 | picks | 0 | Pocahontas (1995) - Colors of the Wind | 9ThO76peOw0 | 34484694 | no reference | Pocahontas (1995) - Colors of the Wind---9ThO76peOw0.34484694.srt |
+| 22 | joint | 1 | Backstreet Boys - Show Me The Meaning Of | aBt8fN7mJNg | 19923333 | no reference | Backstreet Boys - Show Me The Meaning Of Being Lonely (Official Video)---aBt8fN7mJNg.19923333.srt |
+| 23 | joint | 1 | Sara Bareilles - Gravity (Official HD Vi | rEXhAMtbaec | 36844599 | no reference | Sara Bareilles - Gravity (Official HD Video)---rEXhAMtbaec.36844599.srt |
+| 24 | joint | 1 | Tangled - Cast - I've Got a Dream (From  | zi5Z6rNU9Hw | 29290799 | no reference | Tangled - Cast - I've Got a Dream (From 'Tangled'_Sing-Along)---zi5Z6rNU9Hw.29290799.srt |
+| 25 | picks | 0 | Sara Bareilles - She Used To Be Mine | 53GIADHxVzM | 12564402 | no reference | Sara Bareilles - She Used To Be Mine---53GIADHxVzM.12564402.srt |
+| 26 | caption | 0 | Céline Dion - My Heart Will Go On (Titan | 9bFHsd3o1w0 | 22553995 | no reference | Céline Dion - My Heart Will Go On (Titanic, 1997)---9bFHsd3o1w0.22553995.srt |
+| 27 | joint | 1 | Jessie J - Flashlight (from Pitch Perfec | DzwkcbTQ7ZE | 37730119 | no reference | Jessie J - Flashlight (from Pitch Perfect 2) (Official Video)---DzwkcbTQ7ZE.37730119.srt |
+| 28 | caption | 0 | Céline Dion - I'm Alive (Stuart Little 2 | NJsa6-y4sDs | 28130840 | no reference | Céline Dion - I'm Alive (Stuart Little 2, 2002)---NJsa6-y4sDs.28130840.srt |
+| 29 | joint | 1 | NSYNC - I Want You Back (US Version - Of | n-2C2wOFavc | 6955667 | no reference | NSYNC - I Want You Back (US Version - Official Video)---n-2C2wOFavc.6955667.srt |
+| 30 | joint | 1 | Westlife - Flying Without Wings (Officia | vKPGxGCFgTs | 1512603 | no reference | Westlife - Flying Without Wings (Official Video)---vKPGxGCFgTs.1512603.srt |
+| 31 | joint | 1 | Bruno Mars - Grenade (Official Music Vid | SR6iYWJxHqs | 38953751 | no reference | Bruno Mars - Grenade (Official Music Video)---SR6iYWJxHqs.38953751.srt |
+| 32 | picks | 0 | Jessie J - Domino | UJtB55MaoD0 | 28220836 | no reference | Jessie J - Domino---UJtB55MaoD0.28220836.srt |
+| 33 | joint | 1 | Kristen Bell, Idina Menzel - For the Fir | ZrX1XKtShSI | 14589928 | no reference | Kristen Bell, Idina Menzel - For the First Time in Forever (From 'Frozen'_Sing-Along)---ZrX1XKtShSI.14589928.srt |
+| 34 | picks | 0 | The Lonely Island - Threw It On The Grou | gAYL5H46QnQ | 35338143 | no reference | The Lonely Island - Threw It On The Ground---gAYL5H46QnQ.35338143.srt |
+| 35 | picks | 0 | Tangled (2010) - When Will My Life Begin | kRXmAIHYQR4 | 24795512 | no reference | Tangled (2010) - When Will My Life Begin (Sing-Along)---kRXmAIHYQR4.24795512.srt |
+| 36 | joint | 1 | Idina Menzel, AURORA - Into the Unknown  | mzhv_dg_UBA | 36372778 | no reference | Idina Menzel, AURORA - Into the Unknown (From 'Frozen 2'_Sing-Along)---mzhv_dg_UBA.36372778.srt |
+| 37 | picks | 0 | Ingrid Michaelson - The Way I Am | Vh74KE3o4Bs | 1781541 | no reference | Ingrid Michaelson - The Way I Am---Vh74KE3o4Bs.1781541.srt |
+| 38 | caption | 0 | NSYNC - (God Must Have Spent) A Little M | -fxh7jAJR8U | 28155617 | flagged: ref_unclaimed | NSYNC - (God Must Have Spent) A Little More Time On You----fxh7jAJR8U.28155617.srt |
+| 39 | caption | 0 | Flight of the Conchords (2007) - Bowie | Flight of the Conchords (2007) - Bowie | 19452078 | flagged: ref_refused | Flight of the Conchords (2007) - Bowie.19452078.srt |
+| 40 | caption | 0 | Britney Spears - (You Drive Me) Crazy | Q4VK9_CfOLQ | 2137556 | flagged: ref_mistimed | Britney Spears - (You Drive Me) Crazy---Q4VK9_CfOLQ.2137556.srt |
+| 41 | caption | 0 | Backstreet Boys - Drowning | GZXHBgjQjNM | 14595571 | flagged: ref_shift | Backstreet Boys - Drowning---GZXHBgjQjNM.14595571.srt |
+| 42 | caption | 0 | Ed Sheeran - Happier | iWZmdoY1aTE | 29277988 | flagged: ref_unclaimed | Ed Sheeran - Happier---iWZmdoY1aTE.29277988.srt |
+| 43 | caption | 0 | Backstreet Boys - Get Down (You're The O | 0LSYuZRSGcY | 1124886 | flagged: ref_unclaimed | Backstreet Boys - Get Down (You're The One For Me)---0LSYuZRSGcY.1124886.srt |
+| 44 | caption | 0 | Christina Aguilera - Reflection (Mulan,  | RNprQYHenNI | 685756 | flagged: ref_mistimed | Christina Aguilera - Reflection (Mulan, 2020)---RNprQYHenNI.685756.srt |
+| 45 | caption | 0 | Colbie Caillat - Realize | GlZxZ2n2zpw | 37946467 | unflagged | Colbie Caillat - Realize---GlZxZ2n2zpw.37946467.srt |
+| 46 | caption | 0 | Justin Timberlake - Suit & Tie (feat. JA | IsUsVbTj2AY | 30120287 | unflagged | Justin Timberlake - Suit & Tie (feat. JAY-Z)---IsUsVbTj2AY.30120287.srt |
+| 47 | caption | 0 | The Last Five Years (2014) - A Summer in | The Last Five Years (2014) - A Summer in Ohio | 23648746 | unflagged | The Last Five Years (2014) - A Summer in Ohio.23648746.srt |
+| 48 | caption | 0 | The Last Five Years (2014) - I Can Do Be | The Last Five Years (2014) - I Can Do Better Than That | 4179244 | unflagged | The Last Five Years (2014) - I Can Do Better Than That.4179244.srt |
+| 49 | caption | 0 | The Philosopher Kings - Cry | EUW0eDhKoxw | 28361150 | unflagged | The Philosopher Kings - Cry---EUW0eDhKoxw.28361150.srt |
+| 50 | caption | 0 | Rent (2005) - Another Day | Rent (2005) - Another Day | 6156119 | unflagged | Rent (2005) - Another Day.6156119.srt |
+| 51 | caption | 0 | ZAYN & Zhavia Ward - A Whole New World ( | rg_zwK_sSEY | 7428207 | unflagged | ZAYN & Zhavia Ward - A Whole New World (End Title) (Aladdin, 2019)---rg_zwK_sSEY.7428207.srt |
+| 52 | caption | 0 | Backstreet Boys - As Long As You Love Me | 0Gl2QnHNpkA | 3722851 | unflagged | Backstreet Boys - As Long As You Love Me---0Gl2QnHNpkA.3722851.srt |
+| 53 | caption | 0 | NSYNC - Gone | IbRwSI8yi1o | 32643931 | unflagged | NSYNC - Gone---IbRwSI8yi1o.32643931.srt |
+| 54 | caption | 0 | Ne-Yo - So Sick | IxszlJppRQI | 16652439 | unflagged | Ne-Yo - So Sick---IxszlJppRQI.16652439.srt |
+| 55 | caption | 0 | BTS 방탄소년단 - Butter | WMweEpGlu_U | 32156281 | unflagged | BTS 방탄소년단 - Butter---WMweEpGlu_U.32156281.srt |
+| 56 | caption | 0 | Queen - Bohemian Rhapsody | fJ9rUzIMcZQ | 21655132 | unflagged | Queen - Bohemian Rhapsody---fJ9rUzIMcZQ.21655132.srt |
+| 57 | caption | 0 | Backstreet Boys - I Want It That Way | 4fndeDfaWCg | 11268019 | unflagged | Backstreet Boys - I Want It That Way---4fndeDfaWCg.11268019.srt |
+| 58 | caption | 0 | Ed Sheeran - Shape of You | JGwWNGJdvx8 | 22081383 | unflagged | Ed Sheeran - Shape of You---JGwWNGJdvx8.22081383.srt |
+| 59 | caption | 0 | Backstreet Boys - Shape Of My Heart | OT5msu-dap8 | 22503174 | unflagged | Backstreet Boys - Shape Of My Heart---OT5msu-dap8.22503174.srt |
+| 60 | caption | 0 | Rent (2005) - Seasons of Love | Rent (2005) - Seasons of Love | 36786874 | unflagged | Rent (2005) - Seasons of Love.36786874.srt |
+| 61 | caption | 0 | The Last Five Years (2014) - The Next Te | The Last Five Years (2014) - The Next Ten Minutes | 4189082 | unflagged | The Last Five Years (2014) - The Next Ten Minutes.4189082.srt |
+| 62 | caption | 0 | Jung Kook 정국 - 3D (feat. Jack Harlow) (L | Z3x9i7njCCo | 8987220 | unflagged | Jung Kook 정국 - 3D (feat. Jack Harlow) (Live)---Z3x9i7njCCo.8987220.srt |
+| 63 | caption | 0 | Backstreet Boys - Inconsolable | qGDF_QcsKVI | 35522789 | unflagged | Backstreet Boys - Inconsolable---qGDF_QcsKVI.35522789.srt |
+| 64 | caption | 0 | NSYNC - This I Promise You | 6thmPrTxBtI | 23889061 | unflagged | NSYNC - This I Promise You---6thmPrTxBtI.23889061.srt |
+| 65 | caption | 0 | NSYNC - It's Gonna Be Me | GQMlWwIXg3M | 13572204 | unflagged | NSYNC - It's Gonna Be Me---GQMlWwIXg3M.13572204.srt |
+| 66 | caption | 0 | Rent (2005) - Out Tonight | Rent (2005) - Out Tonight | 6932715 | unflagged | Rent (2005) - Out Tonight.6932715.srt |
+| 67 | caption | 0 | Backstreet Boys - Quit Playing Games (Wi | Ug88HO2mg44 | 33413907 | unflagged | Backstreet Boys - Quit Playing Games (With My Heart)---Ug88HO2mg44.33413907.srt |
+| 68 | caption | 0 | Ariana Grande & John Legend - Beauty and | axySrE0Kg6k | 31988497 | unflagged | Ariana Grande & John Legend - Beauty and the Beast (Beauty and the Beast, 2017)---axySrE0Kg6k.31988497.srt |
+| 69 | caption | 0 | The Last Five Years (2014) - Nobody Need | The Last Five Years (2014) - Nobody Needs to Know | 4626353 | unflagged | The Last Five Years (2014) - Nobody Needs to Know.4626353.srt |
+| 70 | caption | 0 | Backstreet Boys - Incomplete | WVe80iZtlYU | 19180415 | unflagged | Backstreet Boys - Incomplete---WVe80iZtlYU.19180415.srt |
+| 71 | caption | 0 | Backstreet Boys - More Than That | 1OwfYjemrYw | 36314729 | unflagged | Backstreet Boys - More Than That---1OwfYjemrYw.36314729.srt |
+| 72 | caption | 0 | Britney Spears - ...Baby One More Time | C-u5WLJ9Yk4 | 32110280 | unflagged | Britney Spears - ...Baby One More Time---C-u5WLJ9Yk4.32110280.srt |
+| 73 | caption | 0 | Justin Timberlake - Like I Love You | FQ3slUz7Jo8 | 19983370 | unflagged | Justin Timberlake - Like I Love You---FQ3slUz7Jo8.19983370.srt |
+| 74 | caption | 0 | Rent (2005) - Light My Candle | Rent (2005) - Light My Candle | 36678024 | unflagged | Rent (2005) - Light My Candle.36678024.srt |
+| 75 | caption | 0 | Lewis Capaldi - Someone You Loved | zABLecsR5UE | 27564454 | unflagged | Lewis Capaldi - Someone You Loved---zABLecsR5UE.27564454.srt |
+| 76 | caption | 0 | Ed Sheeran - Thinking Out Loud | lp-EO5I60KA | 20756048 | unflagged | Ed Sheeran - Thinking Out Loud---lp-EO5I60KA.20756048.srt |
+| 77 | caption | 0 | Rent (2005) - I Should Tell You | Rent (2005) - I Should Tell You | 6191521 | unflagged | Rent (2005) - I Should Tell You.6191521.srt |
+| 78 | caption | 0 | Rent (2005) - I'll Cover You | Rent (2005) - I'll Cover You | 6191556 | unflagged | Rent (2005) - I'll Cover You.6191556.srt |
+| 79 | caption | 0 | Rent (2005) - One Song Glory | Rent (2005) - One Song Glory | 6932651 | unflagged | Rent (2005) - One Song Glory.6932651.srt |
+| 80 | caption | 0 | Ed Sheeran - The A Team | UAWcs5H-qgQ | 19121007 | unflagged | Ed Sheeran - The A Team---UAWcs5H-qgQ.19121007.srt |
+| 81 | caption | 0 | Frozen (2013) - Let It Go | YVVTZgwYwVo | 15035688 | unflagged | Frozen (2013) - Let It Go---YVVTZgwYwVo.15035688.srt |
+| 82 | caption | 0 | Aladdin (2019) - Speechless | mw5VIEIvuMI | 19793188 | unflagged | Aladdin (2019) - Speechless---mw5VIEIvuMI.19793188.srt |
+| 83 | caption | 0 | Ed Sheeran - Perfect | 2Vv-BfVoq4g | 19853882 | unflagged | Ed Sheeran - Perfect---2Vv-BfVoq4g.19853882.srt |
+| 84 | caption | 0 | Rent (2005) - Without You | Rent (2005) - Without You | 6934735 | unflagged | Rent (2005) - Without You.6934735.srt |
+| 85 | caption | 0 | Ed Sheeran - Castle On The Hill | K0ibBPhiaG0 | 23335586 | unflagged | Ed Sheeran - Castle On The Hill---K0ibBPhiaG0.23335586.srt |
+| 86 | caption | 0 | Kelly Clarkson - Because Of You | Ra-Om7UMSJc | 18765707 | unflagged | Kelly Clarkson - Because Of You---Ra-Om7UMSJc.18765707.srt |
+| 87 | caption | 0 | Rent (2005) - What You Own | Rent (2005) - What You Own | 28181941 | unflagged | Rent (2005) - What You Own.28181941.srt |
+| 88 | caption | 0 | The Little Mermaid (1989) - Part of Your | SXKlJuO07eM | 30097702 | unflagged | The Little Mermaid (1989) - Part of Your World---SXKlJuO07eM.30097702.srt |
+| 89 | caption | 0 | S Club 7 - Never Had A Dream Come True | WB9_sf6oV1o | 32607617 | unflagged | S Club 7 - Never Had A Dream Come True---WB9_sf6oV1o.32607617.srt |
+| 90 | caption | 0 | Moana (2016) - How Far I'll Go | cPAbx5kgCJo | 3292118 | unflagged | Moana (2016) - How Far I'll Go---cPAbx5kgCJo.3292118.srt |
+| 91 | caption | 0 | Adele - Someone Like You | hLQl3WQQoQ0 | 23116607 | unflagged | Adele - Someone Like You---hLQl3WQQoQ0.23116607.srt |
+| 92 | caption | 0 | Justin Timberlake - Selfish | je0roKRn3nY | 5659554 | unflagged | Justin Timberlake - Selfish---je0roKRn3nY.5659554.srt |
+| 93 | caption | 0 | Whitney Houston - I Will Always Love You | 3JWTaaS7LdU | 29741730 | unflagged | Whitney Houston - I Will Always Love You (The Bodyguard, 1992)---3JWTaaS7LdU.29741730.srt |
+| 94 | caption | 0 | John Legend - All of Me | 450p7goxZqg | 22517354 | unflagged | John Legend - All of Me---450p7goxZqg.22517354.srt |
+| 95 | caption | 0 | Rent (2005) - Your Eyes | Rent (2005) - Your Eyes | 21412032 | unflagged | Rent (2005) - Your Eyes.21412032.srt |
+| 96 | caption | 0 | The Last Five Years (2014) - Still Hurti | The Last Five Years (2014) - Still Hurting | 4188091 | unflagged | The Last Five Years (2014) - Still Hurting.4188091.srt |
