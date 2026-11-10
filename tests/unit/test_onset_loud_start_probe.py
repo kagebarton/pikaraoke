@@ -161,3 +161,131 @@ class TestReplaySong:
         recorded = [{"line_id": 0, "start": 2.15, "end": 4.0}]
 
         assert probe.replay_song(self._bundle([self._section()], recorded, 0), env) is None
+
+
+class TestHeardNear:
+    def test_a_matching_word_inside_the_tolerance(self):
+        assert probe.heard_near([{"word": "Never", "start": 2.3}], "never", 2.15)
+
+    def test_a_matching_word_outside_it(self):
+        assert not probe.heard_near([{"word": "never", "start": 2.6}], "never", 2.15)
+
+    def test_another_word_at_the_rise(self):
+        assert not probe.heard_near([{"word": "mind", "start": 2.15}], "never", 2.15)
+
+
+def _row(song: str, line_id: int, before: float, rise: float, agreed: bool = True) -> dict:
+    return {
+        "song": song,
+        "line_id": line_id,
+        "text": f"line {line_id}",
+        "before": before,
+        "rise": rise,
+        "agreed": agreed,
+    }
+
+
+class TestWithRule:
+    def test_an_agreed_line_moves_and_the_line_before_fills_the_room(self):
+        # Line 0's last note is held to 1.5 s; line 1 claims 1.2 s and its voice rises at 2.2 s.
+        env = _env(6.0, [(0.3, 1.5, -28.0), (2.2, 4.5, -28.0)])
+        first = _line((0.3, 0.6), (0.6, 1.2), source="cue_align")
+        second = {**_line((1.2, 1.6), (2.5, 2.7), (3.0, 4.0), source="cue_align"), "line_id": 1}
+        _, ref = probe.onset_branch(second, env)
+        rise = probe.rise_start(env, second["words"], ref)
+        rows = [
+            {"line_id": 0, "rise": None, "agreed": False},
+            {"line_id": 1, "rise": rise, "agreed": True},
+        ]
+
+        after = probe.with_rule([first, second], rows, env)
+
+        assert after[1]["words"][0]["start"] == pytest.approx(2.15, abs=0.05)
+        # The shipped snap leaves line 0 ending at 1.2 s, against line 1's early start.
+        assert after[0]["end"] == pytest.approx(1.4, abs=0.05)
+
+    def test_no_agreed_line_is_the_shipped_snap(self):
+        env = _env(6.0, [(0.3, 1.5, -28.0), (2.2, 4.5, -28.0)])
+        lines = [
+            _line((0.3, 0.6), (0.6, 1.2), source="cue_align"),
+            {**_line((1.2, 1.6), (2.5, 2.7), (3.0, 4.0), source="cue_align"), "line_id": 1},
+        ]
+        rows = [
+            {"line_id": 0, "rise": None, "agreed": False},
+            {"line_id": 1, "rise": 2.15, "agreed": False},
+        ]
+        shipped, _ = snap_line_edges(lines, "", env=env, doubted_sources=probe.DOUBTED)
+
+        assert probe.with_rule(lines, rows, env) == shipped
+
+
+class TestSheetPicks:
+    def test_largest_and_median_move_from_the_songs_with_the_most(self, monkeypatch):
+        monkeypatch.setattr(probe, "SHEET_SONGS", 1)
+        rows = [
+            _row("b", 1, 10.0, 10.2),
+            _row("b", 2, 20.0, 20.9),
+            _row("b", 3, 30.0, 30.5),
+            _row("a", 1, 10.0, 12.0),
+            _row("b", 4, 40.0, 41.0, agreed=False),
+        ]
+
+        picks = probe.sheet_picks(rows, {"a", "b"})
+
+        assert [(r["song"], r["line_id"]) for r in picks] == [("b", 2), ("b", 3)]
+
+    def test_ties_go_by_name_and_a_one_line_song_gives_one(self, monkeypatch):
+        monkeypatch.setattr(probe, "SHEET_SONGS", 1)
+        rows = [_row("b", 1, 10.0, 10.2), _row("a", 1, 10.0, 10.3)]
+
+        assert [r["song"] for r in probe.sheet_picks(rows, {"a", "b"})] == ["a"]
+
+    def test_a_song_not_eligible_is_passed_over(self):
+        rows = [_row("a", 1, 10.0, 10.3), _row("b", 1, 10.0, 10.2)]
+
+        assert [r["song"] for r in probe.sheet_picks(rows, {"b"})] == ["b"]
+
+
+class TestChangedDialogue:
+    def test_positions_of_the_lines_that_differ(self):
+        shipped = "[Events]\nDialogue: 0,a\nDialogue: 0,b\nDialogue: 0,c\n"
+        fixed = "[Events]\nDialogue: 0,a\nDialogue: 0,B\nDialogue: 0,c\n"
+
+        assert probe.changed_dialogue(shipped, fixed) == [1]
+
+    def test_a_different_line_count_is_an_error(self):
+        with pytest.raises(ValueError):
+            probe.changed_dialogue("Dialogue: 0,a\n", "Dialogue: 0,a\nDialogue: 0,b\n")
+
+
+class TestSheetHtml:
+    def test_a_row_plays_both_files_from_before_the_earlier_start(self):
+        row = {**_row("A <B> & C---abcdefghijk", 3, 65.0, 65.5), "text": "you & <me>"}
+
+        page = probe.sheet_html([row], {row["song"]: "A <B> & C---abcdefghijk.mp4"})
+
+        assert "you &amp; &lt;me&gt;" in page
+        assert "<td>1:05.00</td><td>1:05.50</td><td>+0.50</td>" in page
+        assert page.count("mpv --start=61.0") == 2
+        assert 'karaoke/A &lt;B&gt; &amp; C---abcdefghijk.onsetfix.ass"' in page
+
+
+class TestWriteListenFiles:
+    def test_writes_the_after_file_and_the_sheet_and_no_lyric_text_in_the_table(self, tmp_path):
+        folder, out = tmp_path / "songs", tmp_path / "out"
+        (folder / "karaoke").mkdir(parents=True)
+        song = "A [live]---abcdefghijk"
+        (folder / f"{song}.mp4").write_bytes(b"")
+        (folder / "karaoke" / f"{song}.ass").write_text("Dialogue: 0,old\n", encoding="utf-8")
+        rows = [{**_row(song, 0, 1.2, 2.15), "text": "secret words"}]
+
+        table = probe.write_listen_files(folder, out, rows, {song: "Dialogue: 0,new\n"})
+
+        fixed = folder / "karaoke" / f"{song}.onsetfix.ass"
+        assert fixed.read_text(encoding="utf-8") == "Dialogue: 0,new\n"
+        assert (folder / "karaoke" / f"{song}.ass").read_text(
+            encoding="utf-8"
+        ) == "Dialogue: 0,old\n"
+        assert "secret words" in (out / "listening-sheet.html").read_text(encoding="utf-8")
+        assert "secret words" not in table
+        assert "| 1 | abcdefghijk | 0 | 1.20 | 2.15 | 1 | 1 |" in table
