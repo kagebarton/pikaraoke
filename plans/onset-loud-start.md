@@ -1,11 +1,11 @@
-Model: Claude Sonnet 5.5 (executor, Phase 1). Author: Claude Fable 5.2, 2026-11-10. Reader
-of Phase 1's output: Claude Opus 5.5. Judge at GATE S: Ken's ear. Phases 2-4 are loose and
-get their spec after the gate.
+Model: Claude Fable 5.2 (author; ran Phases 0 and 1, 2026-11-10). Judge at GATE S: Ken's
+ear; Claude Opus 5.5 reads his labels off. Phases 2-4 are loose, get their spec after the
+gate, and go to Claude Sonnet 5.5.
 
 # Onset snap: a loud start is not always this line's voice
 
-**Status: Phase 0 (the library probe) run and recorded 2026-11-10 (Results row 1). Phase 1
-is not specced until Ken answers the open questions below. No production code has changed.**
+**Status: Phase 1 built 2026-11-10 (Results row 4): the listening sheet and ten after-files
+are written. Stopped for Ken's listening at GATE S. No production code has changed.**
 
 ## Goal
 
@@ -75,7 +75,7 @@ Of the 954 early lines the snap skipped (Results row 1): 381 have no rise to mov
 
 ## Open questions (Ken)
 
-Defaults are what Phase 1 assumes if he does not say otherwise.
+Ken, 2026-11-10: "defaults" to all six. They are decisions now.
 
 1. **How he listens.** Default: for each sheet song a second subtitle file
    `karaoke/<stem>.onsetfix.ass` beside the shipped one, as the `.edgesnap.ass` and
@@ -108,16 +108,31 @@ and prints Tables A-C. It writes nothing to the library.
 - The library on the VM is `/home/ken/shared-drives/D:/Shared/pikaraoke-songs`; on the
   Windows box `D:\Shared\pikaraoke-songs` (`uv run python ...` there).
 
-## Phase 1: the listening sheet (not specced)
+## Phase 1: the listening sheet (built)
 
-Blocked on open questions 1-3. Shape: extend the probe with the rule in the form
-production would run it (any heard word equal to the first word within 0.25 s of the rise;
-593 lines in 125 songs by Results row 3), write the after-files from the replayed lines
-with `generate_ass`, and the sheet. The executor stops when the files are written.
+`onset_loud_start_probe.py --listen`, same script and tests.
+
+- **The rule** as production would run it: a line the snap skipped as on time, with a rise,
+  moves when any heard word equal to its first word starts within 0.25 s of the rise (no
+  cue anchor). Row field `agreed`; Table B's fourth row.
+- **The after-file** is the real snap's output with each agreed line marked doubted
+  (`with_rule`), so the line before a moved line extends into the freed room as it will in
+  production. Written with `generate_ass` and the default `PipelineConfig`.
+- **Eligible songs**: those whose replayed lines regenerate the shipped
+  `karaoke/<stem>.ass` byte for byte, so the two files differ only by the rule.
+- **Sheet lines**: the ten eligible songs with the most agreed lines (ties by name), two
+  each: the largest move and the median one.
+- **Writes**: `karaoke/<stem>.onsetfix.ass` for the ten sheet songs (the only library
+  writes), and `<out>/listening-sheet.html` with a play command for each file per line.
 
 ## GATE S
 
-Ken's labels on the sheet. Nothing is built for production before it.
+Ken plays each sheet line with the shipped file, then the fixed one, and labels it better,
+same or worse, noting when a worse line starts late.
+
+- Pass: at least 12 better, and no more than 2 worse counting a late worse line twice.
+- Nothing is built for production before it.
+- After the gate, delete the ten `.onsetfix.ass` files from the library's `karaoke/`.
 
 ## Phases 2-4 (loose)
 
@@ -135,6 +150,7 @@ Ken's labels on the sheet. Nothing is built for production before it.
 | 1 | 2026-11-10 | 0 | Fable, CPU on the VM. `onset_loud_start_probe.py --folder /home/ken/shared-drives/D:/Shared/pikaraoke-songs`, library as of 2026-11-10 (159 bundles, all schema 11: 147 cue-align, 12 joint) | Block R1 below |
 | 2 | 2026-11-10 | 0 | Fable, scratch (not kept): over the skipped lines with a rise, the longest run of frames under `ref - SUSTAIN_NEAR_DB` between the claimed start and the rise | Block R2 below |
 | 3 | 2026-11-10 | 0 | Fable, scratch (not kept): the rule as production would run it, any heard word equal to the line's first word within the tolerance of the rise (no cue anchor) | Block R3 below |
+| 4 | 2026-11-10 | 1 | Fable, CPU on the VM. `onset_loud_start_probe.py --folder /home/ken/shared-drives/D:/Shared/pikaraoke-songs --out /home/ken/shared-drives/D:/Shared/onset_loud_start --listen`. Out folder (`D:\Shared\onset_loud_start` on Windows): `report.md`, `rows.json`, `listening-sheet.html`, `env/` | Tables A-C equal R1; Table B's new row and Table D in block R4. 133 of 133 replayed songs regenerate their shipped `.ass` exactly. Over those songs 593 lines move and 955 Dialogue lines differ, each one a moved line or the worded line before one (scratch check). 10 `.onsetfix.ass` files written to the library's `karaoke/` |
 
 **R1** (the probe's stdout, verbatim)
 
@@ -197,3 +213,37 @@ Aladdin (2019) - Speechless 13, The Last Five Years - A Summer in Ohio 13, The L
 Years - The Schmuel Song 12, Rent - Another Day 11, Backstreet Boys - The Call 10, Beauty
 and the Beast (1991) - Belle 10, Flight of the Conchords - Business Time 10, Lewis Capaldi -
 Someone You Loved 10, Queen - Bohemian Rhapsody 10, Backstreet Boys - I Want It That Way 9.
+
+**R4** (the probe's stdout, verbatim; a song without a video id is a movie clip named by title)
+
+Table B, added row
+
+| rule | moved | with heard | closer | same | further | early now within 0.3 s |
+|---|---|---|---|---|---|---|
+| a heard first word within 0.25 s of the rise, no cue anchor | 593 | 593 | 519 | 24 | 50 | 407 |
+
+Table D, the listening sheet (20 lines; a song is eligible when its replay regenerates the
+shipped subtitle file exactly: 133 songs)
+
+| # | song | line | shipped start | fixed start | lines moved in song | Dialogue lines changed in song |
+|---|---|---|---|---|---|---|
+| 1 | mw5VIEIvuMI | 33 | 130.06 | 132.03 | 13 | 21 |
+| 2 | mw5VIEIvuMI | 26 | 107.55 | 108.10 | 13 | 21 |
+| 3 | The Last Five Years (2014) - A Summer in Ohio | 33 | 116.76 | 119.13 | 13 | 19 |
+| 4 | The Last Five Years (2014) - A Summer in Ohio | 24 | 86.42 | 86.85 | 13 | 19 |
+| 5 | The Last Five Years (2014) - The Schmuel Song | 46 | 144.19 | 145.70 | 12 | 17 |
+| 6 | The Last Five Years (2014) - The Schmuel Song | 33 | 100.47 | 100.70 | 12 | 17 |
+| 7 | Rent (2005) - Another Day | 20 | 72.06 | 73.10 | 11 | 19 |
+| 8 | Rent (2005) - Another Day | 7 | 27.61 | 27.95 | 11 | 19 |
+| 9 | wMOkm57vu0k | 38 | 96.00 | 96.73 | 10 | 16 |
+| 10 | wMOkm57vu0k | 16 | 36.49 | 36.93 | 10 | 16 |
+| 11 | otxTf5hZ0Yw | 97 | 236.71 | 238.05 | 10 | 16 |
+| 12 | otxTf5hZ0Yw | 100 | 248.53 | 248.95 | 10 | 16 |
+| 13 | Flight of the Conchords (2007) - Business Time | 76 | 205.91 | 207.10 | 10 | 14 |
+| 14 | Flight of the Conchords (2007) - Business Time | 22 | 71.41 | 71.85 | 10 | 14 |
+| 15 | zABLecsR5UE | 8 | 33.22 | 33.68 | 10 | 14 |
+| 16 | zABLecsR5UE | 45 | 133.40 | 133.78 | 10 | 14 |
+| 17 | fJ9rUzIMcZQ | 12 | 48.40 | 49.55 | 10 | 15 |
+| 18 | fJ9rUzIMcZQ | 20 | 93.53 | 94.43 | 10 | 15 |
+| 19 | 4fndeDfaWCg | 5 | 26.02 | 27.88 | 9 | 18 |
+| 20 | 4fndeDfaWCg | 29 | 102.43 | 103.18 | 9 | 18 |
