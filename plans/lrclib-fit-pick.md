@@ -8,7 +8,9 @@ loose and get their spec after the gate.
 (Results row 5, tables below); stopped at 2c for Ken's listening session 2. Phase 3 run and
 recorded 2026-11-10 (Results row 6, tables below); stopped at 3d for listening session 3.
 Ken's verdicts are in for all 21 `new` picks, all 16 not-new no-reference picks and one caption
-pick, Colbie Caillat - Realize (Results rows 7-10). GATE P has not been read.**
+pick, Colbie Caillat - Realize (Results rows 7-10). **GATE P read 2026-11-10 by Fable: rule 3 is
+not met, seven wrong picks ("GATE P read", Results row 11). Ken's ruling (go or stop,
+Decision 8) is pending.**
 
 ## Goal
 
@@ -465,6 +467,126 @@ and the karaoke by ear. Return one to Genius on Repair.
 | 8 | 2026-11-10 | 3 | Ken's listening session 4, the other eleven `new` rows of Table L (ranks 17, 18, 22, 23, 24, 27, 29, 30, 31, 33, 36), reported in chat. Recorded as he said it; no ruling here. **His words:** two have a problem, "otherwise the others are good". Good, by his word: Jack Sparrow (17), Be OK (18), Show Me The Meaning Of Being Lonely (22), Gravity (23), I've Got a Dream (24), Flashlight (27), I Want You Back (29), Flying Without Wings (30), For the First Time in Forever (33). **Grenade** (rank 31, `SR6iYWJxHqs`, pick 38953751): "opening line comes in early and leaves early". **Into the Unknown** (rank 36, `mzhv_dg_UBA`, pick 36372778): "the opening few lines of siren chant chant don't line up but the rest of the lyrics do". **Raw values for the two picks** (`candidates.tsv` and `songs.tsv`): Grenade: status fits, speed 1.0, shift 0.02 s, spread 0.330 s, matched 49 of 49, mistimed 0, no unheard line, unclaimed run 2, timing size 2 (19 records, 11 timings, 9 passing), clip 220.7 s against record 221.0 s. Into the Unknown: status fits, speed 1.0, shift 15.69 s, spread 0.176 s, matched 40 of 50, mistimed 0, unheard lines 0, 1, 2, 37, 40, 41, 42, 43, 44, 45, unclaimed run 2, timing size 10 (20 records, 7 timings, 16 passing), clip 213.7 s against record 194.0 s (gap -20). **Still open from row 7:** whether the line Ken named in When I Was Your Man is early or late. **Not ruled:** whether either counts as wrong, `minor` or neither is GATE P's read, with Ken. **Verdicts still missing for GATE P (rule 2):** the 16 not-new picks with no reference in this run's Table L (14 `picks`, 2 `caption`), of which session 2 was to cover the first nine (its verdicts are not in this file); and Colbie Caillat - Realize's new pick 37946467. | Verdicts in this row only (chat is not kept). |
 | 9 | 2026-11-10 | 3 | Ken's listening session 5, the seven not-new no-reference rows of this run's Table L that were not in the first ten rows of run 5's Table L (ranks 25, 26, 28, 32, 34, 35, 37), reported in chat. Recorded as he said it; no ruling here. **His words:** "those 7 songs are also good". The seven: She Used To Be Mine (`53GIADHxVzM`, pick 12564402), My Heart Will Go On (`9bFHsd3o1w0`, 22553995), I'm Alive (`NJsa6-y4sDs`, 28130840), Domino (`UJtB55MaoD0`, 28220836), Threw It On The Ground (`gAYL5H46QnQ`, 35338143), When Will My Life Begin (`kRXmAIHYQR4`, 24795512), The Way I Am (`Vh74KE3o4Bs`, 1781541). Five are `picks` songs whose pick has a different timing from the on-disk record Ken retimed on Repair; two are `caption` songs with no usable reference. **Open: session 2.** No verdict is recorded for the nine not-new rows of run 5's Table L ranks 1-10: Frozen In Summer (`9tcaM06eGrY`, 3630452), Camp Rock This Is Me (`6HCUoMgviwU`, 17015895), KPop Demon Hunters Your Idol (`fGyTN5UjnL4`, 23310716), Takedown (`j5itLHDMJsE`, 30356707), Golden (`yebNIHKAC4A`, 23163059), The Lonely Island Jose & Mark (`68LBPvFhMx0`, 2554162), Frozen Do You Want to Build a Snowman (`TeQ_TTyLGMs`, 3514723), Jung Kook Seven (`1QYBiNRu1ok`, 31432999), Pocahontas Colors of the Wind (`9ThO76peOw0`, 34484694); the same pick ids stand in this run's Table L. The plan, its git history and the memory notes hold none, and the Phase 3 session began from a handoff that said nothing was judged. Row 8's "session 2 was to cover the first nine" assumed it had been heard; no record shows that. **Still open from row 7:** early or late for the line Ken named in When I Was Your Man. **Still open:** Colbie Caillat - Realize's new pick 37946467 (the judge may rule from the sheet). | Verdicts in this row only (chat is not kept). |
 | 10 | 2026-11-10 | 3 | Ken's listening session 6, reported in chat. Recorded as he said it; no ruling here. **His words:** "all those are good as well, including colbie", answering the list of session 2's nine (row 9) and Colbie Caillat - Realize's new pick 37946467. The nine: Frozen In Summer (`9tcaM06eGrY`, 3630452), Camp Rock This Is Me (`6HCUoMgviwU`, 17015895), KPop Demon Hunters Your Idol (`fGyTN5UjnL4`, 23310716), Takedown (`j5itLHDMJsE`, 30356707), Golden (`yebNIHKAC4A`, 23163059), The Lonely Island Jose & Mark (`68LBPvFhMx0`, 2554162), Frozen Do You Want to Build a Snowman (`TeQ_TTyLGMs`, 3514723), Jung Kook Seven (`1QYBiNRu1ok`, 31432999), Pocahontas Colors of the Wind (`9ThO76peOw0`, 34484694). He did not say which of the two Colbie files in the listen folder he used (`...586041.srt` is run 5's pick, `...37946467.srt` this run's); the question put to him named 37946467. **Row 7's open item:** "that line from when i was your man was early" (the line he named in the 0:40 to 1:00 stretch, text not recorded here). **State:** no verdict is outstanding for any `new` pick or any no-reference pick. The picks without a verdict from Ken are the `caption` songs with a reference (7 flagged and 52 unflagged, not-new, in this run's Table L; Colbie, whom Ken has heard, is one of the 52), which GATE P rule 2 lets the judge read from the sheet. | Verdicts in this row only (chat is not kept). |
+| 11 | 2026-11-10 | GATE P | GATE P read by Fable on `lrclib_fit_pick` (HEAD `bc222f9`), read-only: both report sections, both `<out>` folders, Ken's verdicts (rows 7-10). Neither probe was rerun. The library share was not mounted during the read, so captions were read from the sheets' `C` rows. Scratch scripts outside the repo. | Rule 1 met. Rule 2 complete. **Rule 3 not met: seven wrong picks**, two `new` by Ken's ear, five `caption` by the sheets. Two `minor`. Detail in "GATE P read". Ken's ruling pending. |
+
+## GATE P read (Fable, 2026-11-10)
+
+Read-only, on HEAD `bc222f9`. Inputs: both report sections, `songs.tsv`, `candidates.tsv`,
+`cache/` and `sheets/` under `~/.pikaraoke/tmp/lrclib_fit_pick_holdout` (the holdout run covers
+every library song, so it is the run read; the library run was read for Table K), and Ken's
+verdicts in Results rows 7-10. Neither probe was rerun.
+
+**How lines were compared.** For a record, each line's *offset* is the start of the first
+heard word the fit's second pass gives that line, minus the line's fitted start (the same
+match, speed and shift the bar uses). Negative means the line is shown late. On `caption`
+songs the same offset was also taken against the caption: the sheet's `C` rows as a word
+stream (a cue's words spread from its start to the next cue's start, 4 s at most), fitted
+with its own shift. The library share was not mounted during the read, so the caption files
+themselves were not opened. A single line's offset by heard words is noisy (repeated words);
+a run of lines off the same way, seen by both streams or by Ken's ear, is what the rulings
+below rest on. Scratch scripts, not in the repo.
+
+### Rule 1: Table K
+
+Met in both runs. No GATE M LRC-wrong record is its song's pick. The seven Drowning records
+pass the bar and are not picked; every other listed record is refused as `unclaimed`.
+
+### Rule 2: verdicts
+
+Complete. Ken judged all 21 `new` picks, all 16 not-new no-reference picks and Colbie Caillat -
+Realize. The 59 `caption` picks with a reference were ruled from the sheets: all 7 flagged
+sheets read; all 52 unflagged compared line by line as above, and the sheet read wherever the
+comparison showed a run. This replaces the every-third sample (which would have read Perfect,
+I Want It That Way, Cry, Realize, So Sick, Shape Of My Heart, I Should Tell You, One Song
+Glory, What You Own, Part of Your World). The two unflagged wrong picks below are 31st and
+33rd in id order and outside that sample.
+
+### Rule 3: wrong picks
+
+**Not met. Seven wrong picks.** Offsets in seconds; "caption" and "heard" name the stream.
+
+| Song | youtube_id | Pick | Group | Judged by | What is wrong |
+|---|---|---|---|---|---|
+| Moana - Where You Are (Sing-Along) | `RTWhvp_OD6s` | 28421947 | joint, new | Ken (row 7) | The last 17 of 64 lines (fitted 161-201 s): the 14 the transcriber heard are 2.0 to 2.7 late; the lines before are within 0.5 but for two (0.8 and 1.1). All six timings of the song carry the same step. |
+| Bruno Mars - When I Was Your Man | `ekzHIouo8Q4` | 26614056 | joint, new | Ken (rows 7, 10) | Four lines in a row (fitted 44-50 s) are 4.1, 2.3, 2.5 and 1.4 late by heard words. 13 of the song's 16 timings show no line 1.5 off; all 19 records pass with no mistimed line and the same unclaimed run, so the order fell to timing size and name length. |
+| The Last Five Years - A Summer in Ohio | file stem | 23648746 | caption, unflagged | sheet | Twelve lines in a row (fitted 15-76 s) are 2.9 to 4.6 late by the caption and 2.7 to 4.9 late by heard words; from 82 s on no run. |
+| The Last Five Years - Nobody Needs to Know | file stem | 4626353 | caption, unflagged | sheet | The last eight lines (fitted 333-391 s) are 2.4 to 3.1 early by the caption; six of them 2.1 to 3.3 early by heard words. |
+| Britney Spears - (You Drive Me) Crazy | `Q4VK9_CfOLQ` | 2137556 | caption, `ref_mistimed` | sheet | After a spoken break in the video (about 124 s), thirteen lines (fitted 134-190 s) are 1.8 to 4.7 early by the caption. The transcriber heard none of them (16 unheard lines in the fit). |
+| Flight of the Conchords - Bowie | file stem | 19452078 | caption, `ref_refused` | sheet | Seven lines (fitted 21-43 s) are 3.9 to 6.4 late by the caption; three of them 3.8 to 6.6 late by heard words. |
+| Christina Aguilera - Reflection | `RNprQYHenNI` | 685756 | caption, `ref_mistimed` | sheet | The last two lines (fitted 191 and 196 s) are 4.7 and 6.1 early by the caption. Both unheard by the transcriber. The smallest of the seven. |
+
+**`minor`, listed apart (Ken rules whether minor counts):**
+
+| Song | youtube_id | Pick | Judged by | What |
+|---|---|---|---|---|
+| Bruno Mars - Grenade | `SR6iYWJxHqs` | 38953751 | Ken (row 8) | The opening line is 4.0 early by heard words, the second 1.4 early. Two of the song's passing timings carry it; the others do not. One line in the 3 to 5 s band. |
+| Frozen 2 - Into the Unknown (Sing-Along) | `mzhv_dg_UBA` | 36372778 | Ken (row 8) | The three opening lines are a wordless call the transcriber heard nothing of; by Ken's ear they do not line up, the rest does. Not lead words, so not wrong by the tolerance; three lines, so not clean either. |
+
+**Read and ruled right:** Drowning (`ref_shift`), Happier, Get Down and (God Must Have Spent) A
+Little More Time On You (`ref_unclaimed`): the flags are ad libs and backing chants. The Next
+Ten Minutes: only the last repeated two-word lines differ. Colbie Caillat - Realize: Ken's
+verdict stands; which of the two listen files he heard is not recorded, and the comparison of
+37946467 shows four separate lines 1.7 to 2.3 early, no run.
+
+**Not ruled, needs Ken's ear if the feature goes on:** Backstreet Boys - Quit Playing Games
+(`Ug88HO2mg44`, 33413907): around 117-125 s three to five chorus lines are about 2 late by
+both streams, among repeats that the caption and the record split differently; 21 unheard
+lines.
+
+### Why the bar let them through
+
+Six of the seven share one cause: the video's cut differs from the record by 2 to 6 s for a
+stretch (a shorter gap, a spoken break, film dialog), and the bar calls a line mistimed only
+past 5 s (`FLAG_TOLERANCE_S`). A whole section 2 to 4.6 s off raises no flag, claims every
+heard word, and passes. On Where You Are every record has the step, so no pick order helps.
+When I Was Your Man is the other cause: a poorly synced record among good ones, all equal
+under the bar, chosen by timing size and name length. On Crazy and Reflection the shifted
+lines were not heard at all, which is what GATE M's unheard-end condition (dropped here) was
+for.
+
+### Rule 4: coverage (reported, not judged)
+
+| Set | Songs | With a pick |
+|---|---|---|
+| Ken's Repair picks (`picks`) | 28 | 23 |
+| `joint`, not new | 4 | 0 |
+| `new` Genius-pick songs | 29 fitted (30 listed, `YRpvIiz9G8A` has no bundle) | 21 |
+| `caption` | 112 | 61 |
+
+The five `picks` songs with no pick: I Just Might, Thinking Of You, Miss Independent, Leave
+the Door Open (`unclaimed`), Best Part Of Me (`speed`); as expected. No song has an on-disk
+record that passes while nothing in the pool does. Of the 21 `new` picks Ken heard 17 as
+good, 2 are wrong and 2 `minor`.
+
+### Rule 5: exposure
+
+One song in Table X has a ruled-wrong record that passes the bar and is kept out only by the
+pick order: Drowning, one timing of seven records (the GATE M ones), behind a clean timing.
+The other Table X rows are not ruled. When I Was Your Man shows the order does not protect
+when every record is clean under the bar.
+
+### Sizing only (rule 3: not a rescue of this bar)
+
+A screen read after the verdicts, on the same songs: three or more lines in a row each 1.5 s
+or more off the same way by heard words. Of the 105 picks it marks seven: five of the seven
+wrong picks (not Crazy and not Reflection, whose shifted lines went unheard), Quit Playing
+Games, and KPop Demon Hunters - Takedown, which Ken heard as good. Any such bar is a new plan
+with a fresh holdout.
+
+### Caveats
+
+- `caption` songs are the easy case, and five of their 59 referenced picks are wrong.
+- The limits were fitted to the library songs; only the 29 `new` songs are a clean test.
+- The five `caption` rulings are from sheets, not from Ken's ear. The listen files are in the
+  listen folder if he wants to hear them.
+- The listen check and the sheets show line times, not the finished karaoke. Cue align pads a
+  section by 0.75 s, so a section 2 s or more off is not expected to recover; not measured
+  (GPU).
+- The Phase 1 code review is still pending (row 4).
+
+### Ruling
+
+Ken's, pending: stop under Decision 8, or a new plan with a tighter bar and a fresh holdout.
 
 ## Report output: library run
 
