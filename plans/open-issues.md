@@ -251,6 +251,15 @@ From the `library_tools` real-world run, 2026-10-20. Record: `library-tools.md`.
   the last line"). Nothing after the last line bounds the extension. Likely
   the end-side blind spot (extension onto another voice) recorded on
   `archive/edge_snap_refine`. Record: `lyric-source-lists.md` Results row 21.
+- **Whisper's refine pass may not earn its cost.** Refine is about 80% of every
+  align+refine call: 78-157 s per cue song and 36-59 s per joint song in a
+  14-song probe (2026-11-11). On the joint route it barely moves the output
+  (most lines take transcribe timings, and edge snap owns line starts). On the
+  cue route it moves many words about 0.4 s later, the direction of whisper's
+  early-onset bias, but no reference on hand can say whether that is right.
+  Not ruled; next is an A/B listen on 2-3 cue songs. Record:
+  `plans/refine-ablation.md` on branch `refine_ablation` (probe, report script
+  and raw results under `scripts/`).
 
 ## Song rename (pre-existing on `dev`)
 
