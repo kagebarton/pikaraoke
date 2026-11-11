@@ -56,6 +56,18 @@ songs).
 - **Fixtures: commit the Genius answers and the song-name truth list** (no lyric text). The
   LRCLIB cache holds full lyrics and stays local; LRCLIB tests use small made-up records.
 
+## What the spec is judged on (Ken, 2026-11-11)
+
+- **Phase 1 is judged on the YouTube-title replay for every entry point.** The shared query
+  builder gets the same input everywhere and the raw title is the hard case. The curated-name
+  replay is kept as a check that renamed songs do not get worse.
+- Original titles for that replay: the bundle's recorded name first, then a lookup by YouTube
+  ID for songs whose bundle no longer holds it. Songs without an ID stay out of it.
+- The app itself looks nothing up: an entry point searches from the file name it is given,
+  which is the YouTube title on a fresh download and the curated name after a rename.
+- **Phase 2 (film year) only helps renamed songs**; a fresh download has no year. To weigh in
+  ruling C.
+
 ## LRCLIB scope after the rulings
 
 - This plan owns what the search brings back. The fit-check feature owns the judgment: which
@@ -132,6 +144,18 @@ songs).
 - "Search page" replay uses the name each bundle recorded at its last run as the YouTube
   title. That is the YouTube title for most songs, not all. The live page's fallback to the
   typed search term is not replayed (the typed terms are not recorded).
+- **Which names each replay used** (checked 2026-11-11 after Ken's question; a download is
+  saved under its YouTube title, so that is what every entry point sees until a rename):
+  - Search page rows: the YouTube title for 96 songs; for 7 more the bundle had recorded the
+    curated name, which stood in. 103 replayed.
+  - Library tools rows: curated names only. They describe a renamed library, not a fresh
+    download.
+  - "LRCLIB: the returned set" and "Genius: film year rule": curated names only.
+- **Where an original title comes from.** The bundle's `song_stem` (the file name at the
+  song's last pipeline run) when it differs from today's name: 96 songs. Nothing else in the
+  app keeps the YouTube title. 19 more files carry a YouTube ID but no recorded original
+  title; a title lookup by ID (yt-dlp) would fill those. 42 files have no ID (movie splits)
+  and never had a YouTube title.
 - LRCLIB replay: title-field + artist-field search, `q=` search, and title-only (film-named
   songs), with the Genius title and artist where a bundle records them, else the curated
   names. **For film-named songs without a Genius record this sends the film as the artist,
@@ -444,6 +468,12 @@ has no channel name, typed term, or year.
 
 ## Not measured
 
+- **Library tools on a file still carrying its YouTube title** (a fresh download before any
+  rename). They clean the name with `clean_search_query`, the search page with
+  `clean_genius_query`, so the search page rows do not cover it. Needs about 96 new Genius
+  searches on the first computer's library.
+- The 19 songs with a YouTube ID but no recorded original title (see Method).
+
 - The search page with the typed term as fallback, and with real channel names.
 - The film-year rule on the search page, where no curated year exists (library tools were
   measured 2026-11-11, see "Genius: film year rule").
@@ -521,6 +551,13 @@ Check first:
 - **Whether the 11-08 standardized names were applied to that library.** Every script splits
   the file name on ` - ` and reads `Film (Year)` from the left part. On unrenamed files the
   truth names, the film/artist split and the film-year rule are all wrong.
+
+Also add there, before the spec (neither is scripted yet):
+
+- The missing baseline: library tools today on the YouTube title, i.e. Genius hits for
+  `clean_search_query(old_title)` per song, scored like the other rows.
+- A title lookup by YouTube ID for songs whose bundle does not hold the original title, so
+  the YouTube-title replay covers every file with an ID.
 
 Then run the Reproduce block top to bottom. Calls made there: Genius only for queries not
 already in the committed caches (the roughly 30 new songs); LRCLIB for every song (two or
