@@ -4,7 +4,7 @@ Author: Claude Fable 5.2, 2026-11-10.
 
 # LRCLIB timing at download: the shifted-section check
 
-**Status: PLANNED 2026-11-10. Decisions 20-24 ruled by Ken 2026-11-12. Phase 1 executed 2026-11-12 (Sonnet 5.5), review fixes in; Phase 2 (2a-2d) executed 2026-11-12 (Sonnet 5.5), stopped at STOP 2e. Ken's two listens are in (row 6). GATE F read and ruled 2026-11-12 (Fable 5.2): bar frozen as pre-registered, no second hearing, Crazy and Reflection accepted as known holes; Quit Playing Games ruled not wrong, stays a pick (Decision 28). Phase 3b executed 2026-11-12 (Sonnet 5.5), stopped for Ken. Next: Phase 4.**
+**Status: PLANNED 2026-11-10. Decisions 20-24 ruled by Ken 2026-11-12. Phase 1 executed 2026-11-12 (Sonnet 5.5), review fixes in; Phase 2 (2a-2d) executed 2026-11-12 (Sonnet 5.5), stopped at STOP 2e. Ken's two listens are in (row 6). GATE F read and ruled 2026-11-12 (Fable 5.2): bar frozen as pre-registered, no second hearing, Crazy and Reflection accepted as known holes; Quit Playing Games ruled not wrong, stays a pick (Decision 28). Phase 3b executed 2026-11-12 (Sonnet 5.5), stopped for Ken. GATE Q's pass rule is now zero gross picks (Decision 29, 2026-11-12). Next: Phase 4, once Ken has added Set C (on 2026-11-12 Set E's 20 are in the library, Set C's 30 are not).**
 
 ## Goal
 
@@ -79,7 +79,30 @@ Ken, 2026-11-12, in chat, at GATE F ("keep it a pick"):
     singable, with the sheet's five late chorus lines and the cue-align unknowns put to him
     first. For GATE Q rule 2 this sets the yardstick the judge told him it would: a Set C
     pick whose sheet shows a short stretch of that size (about five lines, 2 to 4 s off) is
-    not ruled wrong from the sheet. It goes to Ken's ear.
+    not ruled wrong from the sheet. It goes to Ken's ear. (The last sentence is replaced by
+    Decision 29: no extra listening.)
+
+Ken, 2026-11-12, in chat, after Phase 3b: "in general, I am willing to risk letting some
+errors (like quit playing games) through the lrclib bar, especially if cue align might fix
+some of it anyways, as it's results are generally much better than joint align". Asked what
+should still stop the feature at GATE Q, by dialog: "Only gross errors".
+
+29. GATE Q stops only on a *gross* pick. This replaces "zero wrong picks" (Decision 8) as
+    GATE Q's pass rule; the bar's limits are untouched. Fixed here before any fresh song is
+    probed.
+    - **Gross:** more than five lines in a row each shown 2 s or more off, or sung lead lines
+      never shown. On Set E by Ken's ear. On Set C from the sheet: the caption offsets,
+      checked against the cue starts (a cue holding two singers' lines or a doubled line
+      spreads its words late and is not a stretch).
+    - **Tolerated,** listed and not counted, no extra listening: a stretch of up to five
+      lines in a row (Quit Playing Games' kind), `minor` (Decision 22), single lines off
+      here and there.
+    - By this rule Crazy's kind is gross and Reflection's (two lines) is tolerated.
+30. Ken asked for a recipe to time the three known flawed picks (Quit Playing Games 33413907,
+    Crazy 2137556, Reflection 685756) from their records on Windows and listen to the
+    finished karaoke; Opus writes it. What cue align does with such a pick has not been
+    measured. His verdicts, if in by then, are reported at GATE Q rule 6. Phase 4 does not
+    wait for them.
 
 ## The bar (pre-registered)
 
@@ -390,17 +413,19 @@ the judge (Decision 20) for GATE Q once his verdicts are in.
 ## GATE Q (the judge of Decision 20, then Ken)
 
 Read-only. Inputs: the Phase 4 report and files, Ken's verdicts. A wrong pick and `minor` are
-as `plans/lrclib-fit-pick.md` "GATE P" defines them, with Decision 22.
+as `plans/lrclib-fit-pick.md` "GATE P" defines them, with Decision 22; which wrong picks
+stop the gate is Decision 29's.
 
 1. **The frozen bar only.** Table V is for sizing.
 2. **A verdict for every pick.**
    - Set E: Ken's ear. The gate is not read while one is missing.
    - Set C: every pick with a reference flag is read from its sheet. Of the unflagged ones, in
      youtube_id order every third until 10 are read. Ken's ear overrides a sheet read.
-     A short stretch of Quit Playing Games' size (about five lines, 2 to 4 s off) is not
-     ruled wrong from the sheet; that pick goes to Ken's ear (Decision 28).
-3. **Zero wrong picks** passes. Any wrong pick: STOP for Ken (Decision 8). There is no third
-   bar without a new ruling from him.
+     A stretch of up to five lines in a row is tolerated and needs no listening; more
+     than five is gross (Decision 29).
+3. **Zero gross picks** passes (Decision 29, which defines gross and tolerated). Any gross
+   pick: STOP for Ken. There is no third bar without a new ruling from him. Tolerated picks
+   are listed with what is off in each.
 4. **Coverage**, reported: songs with a pick in each set, and by kind.
 5. **Exposure**, from Table X: songs where a record ruled wrong passes and only the pick order
    kept it out.
@@ -410,6 +435,8 @@ as `plans/lrclib-fit-pick.md` "GATE P" defines them, with Decision 22.
    - Set C is judged from sheets, not by ear.
    - The check shows line times, not finished karaoke.
    - The known holes Ken accepted at GATE F.
+   - What the finished karaoke of the three flawed picks sounded like, if Ken has listened
+     (Decision 30); otherwise that cue align's effect on such picks is unmeasured.
    Ken rules go or stop. Record the read and the ruling here.
 
 ## After GATE Q
