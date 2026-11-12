@@ -580,3 +580,23 @@ Older than this branch:
   fitted time is mistimed, 2 mistimed lines make a flagged run, 3 unheard
   lines make a "couldn't check" note, and the gap limit is 15 s. Decision 11
   (2026-10-30): a fit that passes may override the gap limit with a checkbox.
+- **Flag finished-karaoke lines that are shifted, for an eyeball and a repair.**
+  Raised by Ken 2026-11-12 after the Decision 30 listen (record:
+  `plans/lrclib-shift-check.md` Results row 9 on branch `lrclib_fit_pick`): on
+  three LRCLIB-timed songs, lines that "come in early but end on time" and one late
+  stretch. Tried once, scratch only, on those three songs' bundles: the finished
+  lines (`output_line_timings` + `lyrics.lines`, as an SRT) put through
+  `srt_slice_fit.fit_slice` against the bundle's `transcribe_words`, then each
+  line's `offsets` at the bar's 1.5 s. It caught three of the five spots Ken heard:
+  Crazy 1:51 (+4.6 s early), Quit Playing Games 2:32 (+3.2 s) and the first two lines
+  of its late stretch (rest unheard by whisper). It missed Reflection 3:11 (line unheard)
+  and Quit Playing Games 0:52 (0.7 s). It also flags lines nobody listened to
+  (7 / 2 / 4); the false-alarm rate is unknown. A long first `\k` word is no signal: nearly
+  every line has one. Possible shape: computed at the end of each run, a Tools-tab
+  list beside "poor" and the flagged lines with time and direction on Song Info. Open:
+  no tool fixes one line's time today (Edit words keeps times, Repair swaps the whole
+  source), so the flag needs a nudge tool or an automatic fix; `onset_loud_start`
+  (GATE S passed, Phases 2-4 unspecced) may fix the early-start kind first. Cheap
+  next step: run the check over the whole library (VM, read-only) and have Ken
+  listen to a sample of flagged lines. Not ruled; ask the CLAUDE.md design questions
+  before any plan.
