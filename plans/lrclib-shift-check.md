@@ -4,7 +4,7 @@ Author: Claude Fable 5.2, 2026-11-10.
 
 # LRCLIB timing at download: the shifted-section check
 
-**Status: PLANNED 2026-11-10. Decisions 20-24 ruled by Ken 2026-11-12. Phase 1 executed 2026-11-12 (Sonnet 5.5), review fixes in; Phase 2 (2a-2d) executed 2026-11-12 (Sonnet 5.5), stopped at STOP 2e. Ken's two listens are in (row 6). GATE F read and ruled 2026-11-12 (Fable 5.2): bar frozen as pre-registered, no second hearing, Crazy and Reflection accepted as known holes; Quit Playing Games ruled not wrong, stays a pick (Decision 28). Phase 3b executed 2026-11-12 (Sonnet 5.5), stopped for Ken. GATE Q's pass rule is now zero gross picks (Decision 29, 2026-11-12). Next: Phase 4, once Ken has added Set C (on 2026-11-12 Set E's 20 are in the library, Set C's 30 are not).**
+**Status: PLANNED 2026-11-10. Decisions 20-24 ruled by Ken 2026-11-12. Phase 1 executed 2026-11-12 (Sonnet 5.5), review fixes in; Phase 2 (2a-2d) executed 2026-11-12 (Sonnet 5.5), stopped at STOP 2e. Ken's two listens are in (row 6). GATE F read and ruled 2026-11-12 (Fable 5.2): bar frozen as pre-registered, no second hearing, Crazy and Reflection accepted as known holes; Quit Playing Games ruled not wrong, stays a pick (Decision 28). Phase 3b executed 2026-11-12 (Sonnet 5.5), stopped for Ken. GATE Q's pass rule is now zero gross picks (Decision 29, 2026-11-12). Phase 4 (4a-4c) executed 2026-11-12 (Sonnet 5.5): all fifty added, one probe run, tables pasted under "Report output: fresh songs"; stopped at STOP 4d for Ken's Set E listening. Next: Ken's listens, then GATE Q (Fable 5.2 to 2026-11-16).**
 
 ## Goal
 
@@ -470,6 +470,7 @@ type, labels, lists", "Ken's checks") with their open points. They get their spe
 | 7 | 2026-11-12 | GATE F | Read by Fable 5.2 on HEAD `137b36d`, read-only; the probe not rerun; no library write, no GPU, no fresh song read. Single records re-fitted from `<out>/cache` by scratch scripts for item 5 and the caption check. Ken ruled by question dialog: holes accepted, second hearing left out, caption screen fixed first; then, in chat, Quit Playing Games "keep it a pick" (Decision 28). Phase 3b added. | "Frozen bar": "GATE F read", "Ruling". |
 | 8 | 2026-11-12 | 3b | Phase 3b on `lrclib_fit_pick` (HEAD `f2802ba` at start), VM, probe and its tests only; `lrc_auto_pick` and `srt_slice_fit` not touched, no limit changed, no GPU, no library write, no fresh song read. **Code** `c7a8404`: `caption_offsets(fit, ref)` in the probe, one function: for each fit line that `match_lines` gives a reference line `j`, `ref.lines[j][1] + ref.offsets[j] - fit.lines[i][1]`, None when the caption did not hear the line or has no such line, in fit line order. The sheet's `caption_offset` and `ref_shift_run` (`ref_shift_run(fit, ref)` = `longest_shift_run` over it; the flag and the `candidates.tsv` column) both read it; the `ref.shift_s - fit.shift_s` form is gone from the sheet. New flag `ref_speed` (`ref.speed != 1.0`), appended after `ref_shift_run` in `reference_flags`; new `ref_speed` column in `candidates.tsv` (after `ref_shift_s`, so `candidates.tsv` has 42 columns, one more than before). `ref_shift` (the whole-fit shift comparison) is unchanged. Tests: a reference fit at speed 1.016 raises `ref_speed`; a made-up step the reference fit takes up as speed 1.057 has `ref.shift_run` 0 and `ref_shift_run` 4 with flags `ref_shift_run ref_speed`; at speed 1.0 both fits' offsets equal the old form; a line the caption did not match or hear is None. Two older tests changed to the new inputs (the sheet-rows test's caption lines now start where the fit's do; the candidate-row test builds its caption fit from lines). **One-song check** on `Q4VK9_CfOLQ`, `--only`, `--baseline`, `--skip-new`, scratch `--out` and `--listen-dir`, `cache` holding only a copy of `Q4VK9_CfOLQ.json` from the Phase 2 cache: 20 records, 0 live searches. Record 2137556: picked 1, status `fits`, speed 1.0000, `shift_run` 1, refusal none; caption fit `fits`, `ref_shift_s` 0.34, `ref_speed` 1.0161, `ref_shift_run` 15, `ref_flags` = `ref_mistimed ref_shift_run ref_speed`. That is the plan's expectation for it (`ref_speed` and `ref_shift_run` among the flags, 15); no STOP. Read-only check: `find <library> -newer <out>/started` printed nothing; nothing in the Phase 2 folder is newer than its 10:20:40 run. **Not done, as the plan says:** no rerun, so the three Rent picks' expected `ref_shift_run` of 4 or 5 is not seen here. Full suite 3702 passed; pre-commit clean on the two files; self-review on the three axes done (one thing seen and kept: `sheet_rows` calls `match_lines` a second time for its `m`/`u` marks, a cheap call and not a second copy of the logic). `graphify-out` is absent on this VM, so no `graphify update`. **STOP:** Phase 4 not started. | commit `c7a8404`; scratch output `/tmp/claude-1000/-home-ken-pikaraoke/67f94c25-86cb-43dd-ac1e-af7461473bd4/scratchpad/p3b/out` (lyric text; not committed). |
 | 9 | 2026-11-12 | Decision 30 listen | Recipe by Opus 5.5 on HEAD `f686dd8`, no code change. **Staged from the VM** (library read-only): a copy folder holding the three videos, their vocal/nonvocal stems and alignment bundles, and per song the two files a Repair "LRCLIB timing" by record id saves (`lyrics/<stem>.lrc` from the Phase 2 cache record; `lyrics/<stem>.lrclib.srt` = `fit_slice(lrc_to_srt(...), heard_streams(bundle, None), media_duration)`, as `_fit_lrc_timing`). Repair's own check passes all three (status `fits`, speed 1.0; shift -0.19 / 0.655 / 0.485 s, the probe sheets' shifts; length gap 0 / -1 / -8 s, no override). No auto-caption on disk for any, so the fit used the transcribe stream only. A VM `--dry-run` listed all three as `LRCLIB timing`. **Ken on Windows:** `regen_alignment_bundles.py <copy> --reset --song` x3 (cue align on the sheet; bundles `lyrics.origin` `lrclib_srt`, schema 11, `.ass` written 11:53-11:58), then listened in an isolated app (`APPDATA` `C:\temp\p8\appdata`) on the copy. The library's caption karaoke was not touched. **Ken's verdicts, his words, not classified:** Crazy 2137556: "line appears early in 1:51 but ends on time, some adlibs and repeated words have problems, but those could be there also for good sheets, but otherwise well timed". Reflection 685756: "3:11 that line comes in quite early, but ends on time, last line is good". Quit Playing Games 33413907: "0:52, comes in slightly early, ends on time, the late section is late in the karaoke as well, 2:32, early but ends on time". For GATE Q rule 6. | Copy folder `D:\Shared\lrclib-cue-trial` (`karaoke/`, `alignment_debug/`, `records/`; lyric text, not committed; delete on Ken's say). Staging script `/tmp/claude-1000/-home-ken-pikaraoke/6d460e45-5c6c-40a7-8b52-91bd06c0e9fd/scratchpad/stage_cue_trial.py`. |
+| 10 | 2026-11-12 | 4 | Phase 4 (4a-4c) on `lrclib_fit_pick` (HEAD `8d91d7c` at start), VM, no code change, no GPU, no library write. **4a:** baseline sha256 `1a764ddb…777c`, equal to Phase 0's. A dry look (`library_statuses` and the probe's `classify` against the baseline and the fifty in the Phase 0 table; a scratch script outside the repo): 248 songs in the library, 50 outside the baseline, exactly the fifty, none extra. Set E's 20: all `joint` (`genius`/`joint`, no caption file). Set C's 30: all `caption` (`srt`/`cue_align`, caption file on disk, none edited). None out of scope. A first look, run while Ken's add was still going, found rows 47-50 (Ne-Yo - Closer, Sara Bareilles - Brave, Westlife - My Love, S Club - Bring It All Back) with no bundle; nothing was read then. Ken said the add was done and the look was rerun; the result above is the rerun. **4b:** `scripts/lrc_fit_pick_probe.py --folder <library> --out ~/.pikaraoke/tmp/lrclib_shift_check_holdout --baseline <Phase 0 baseline> --new-only --old-cache ~/.pikaraoke/tmp/lrclib_auto_timing/cache --listen-dir <lrclib-listen>/shift-check-fresh`, no `--compare`, `<out>` new so a fresh cache and a live LRCLIB search, stdout to `<out>/report.md`, progress log to the scratchpad. **One deviation from "as in 2b":** the listen folder is the new `shift-check-fresh`, not 2b's `shift-check`, so Ken's Set E session is not mixed with Phase 2's files (said to Ken before the run, no objection). Started 15:29:46, finished 15:32:18, exit 0; 50 songs read, none `lrclib_unavailable`, so no rerun; `<out>/cache` holds 50 files; the listen folder holds 31 `.srt`, one per Table L row. **Read-only check:** `find <library> -newer <out>/started` printed nothing. **What Table L holds (listing only):** 31 rows. Rows 1 and 3-14 are the 13 Set E picks (Table P: 20 `joint` songs, 13 with a pick). Row 2 is a Set C pick, S Club - Bring It All Back (`GLQ0biK-ZgA`, pick 13229349), whose caption reference is not usable (`ref_ok` 0, "no reference"). Rows 15-31 are Set C picks with a usable reference. The seven Set E songs with no pick, so no listen file: Fallin' For You `GPCRbuL4Oh8`, Savages `1YiAzyCzZzw`, Don't Stop Me Now `HgzGwKwLmgM`, Over the Moon `pXNd2V88d60` (0 records), Some Things Never Change `nVW9QOIeqQg`, Take Me or Leave Me `DcbEr7Cd_Cc` (0 records), Dancing Through Life `jniq78mKKcM`. **Where the plan is silent, for the judge:** STOP 4d has Ken listen to Set E only, and GATE Q rule 2 reads Set C picks against their captions; row 2 has no caption reference to read against. Not ruled. **4c:** Tables P, S, X, V and L pasted raw below under "Report output: fresh songs", no tallies, no reading. Tables K, G and A are in `report.md` and not pasted (the plan does not list them); Table A has one row (`GG7fLOmlhYg`). Plan-only commit. **STOP 4d:** Ken's Set E listens not done; handoff to the judge (Decision 20, Fable 5.2 to 2026-11-16) for GATE Q once his verdicts are in. | Outputs `~/.pikaraoke/tmp/lrclib_shift_check_holdout/` (`report.md`, `songs.tsv`, `candidates.tsv`, `sheets/`, `cache/`, `started`); listen files `D:\Shared\lrclib-listen\shift-check-fresh` (`/home/ken/shared-drives/D:/Shared/lrclib-listen/shift-check-fresh` on the VM). Lyric text; not committed. |
 
 ## Frozen bar
 
@@ -1039,3 +1040,186 @@ Bar in force: mistimed <= 1, unclaimed run <= 12, shift run <= 2 (a line is off 
 | 92 | caption | 0 | Rent (2005) - Your Eyes | Rent (2005) - Your Eyes | 21412032 | unflagged | Rent (2005) - Your Eyes.21412032.srt |
 | 93 | caption | 0 | The Last Five Years (2014) - Still Hurti | The Last Five Years (2014) - Still Hurting | 4188091 | unflagged | The Last Five Years (2014) - Still Hurting.4188091.srt |
 
+## Report output: fresh songs
+
+Bar in force: mistimed <= 1, unclaimed run <= 12, shift run <= 2 (a line is off at 1.5 s), speed 1.0. 50 songs in /home/ken/shared-drives/D:/Shared/pikaraoke-songs; output in /home/ken/.pikaraoke/tmp/lrclib_shift_check_holdout; listen files in /home/ken/shared-drives/D:/Shared/lrclib-listen/shift-check-fresh.
+
+### Table P: groups and skip reasons
+
+| Group | Songs | no_length | lrclib_unavailable | No synced record | With a pick |
+|---|---|---|---|---|---|
+| picks | 0 | 0 | 0 | 0 | 0 |
+| joint | 20 | 0 | 0 | 2 | 13 |
+| caption | 30 | 0 | 0 | 2 | 18 |
+| new | 50 | 0 | 0 | 4 | 31 |
+
+| out_of_scope reason | Songs |
+|---|---|
+| custom | 0 |
+| movie_srt | 0 |
+| no_bundle | 0 |
+| no_words | 0 |
+| edited | 0 |
+| no_caption_file | 0 |
+| other | 0 |
+
+### Table S: songs
+
+| Group | New | youtube_id | Title | Skipped | Records | Timings | Passing | no_fit/speed/mistimed/unclaimed/shifted | Pick | Mistimed | Unclaimed | Shift_run | Timing_size | ref_ok | Reference_flags | On_disk_id | On_disk_refusal | Pick_has_disk_timing | Needs_verdict |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| caption | 1 | rYEDA3JcQqw | Adele - Rolling in the Deep (Official Mu |  | 19 | 12 | 11 | 0/0/8/0/0 | 35807678 | 0 | 10 | 1 | 2 | 1 | none |  |  |  | yes |
+| caption | 1 | fk4BbF7B29w | Adele - Send My Love (To Your New Lover) |  | 19 | 14 | 19 | 0/0/0/0/0 | 30464863 | 0 | 7 | 0 | 3 | 1 | none |  |  |  | yes |
+| caption | 1 | b87dBaL4qI0 | Ariana Grande - Almost Is Never Enough ( |  | 19 | 9 | 0 | 0/1/0/18/0 |  |  |  |  |  | 1 |  |  |  |  |  |
+| joint | 1 | Mzybwwf2HoQ | Britney Spears - I'm A Slave 4 U (Offici |  | 20 | 7 | 20 | 0/0/0/0/0 | 36592252 | 0 | 6 | 2 | 6 |  | no reference | 28221264 | passes | no | yes |
+| caption | 1 | LOZuxwVk7TU | Britney Spears - Toxic (Official HD Vide |  | 20 | 10 | 0 | 3/0/0/17/0 |  |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 1 | GG7fLOmlhYg | Bruno Mars, Anderson .Paak, Silk Sonic - |  | 20 | 9 | 20 | 0/0/0/0/0 | 12516628 | 0 | 10 | 2 | 6 | 1 | none |  |  |  | yes |
+| caption | 1 | tESZ92ugf7g | Cast of Camp Rock - One Beat Away (From  |  | 1 | 1 | 0 | 0/0/1/0/0 |  |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 1 | jQ-Pqxl1BlI | Cast of Camp Rock - Play My Music (From  |  | 0 | 0 | 0 | 0/0/0/0/0 |  |  |  |  |  | 1 |  |  |  |  |  |
+| joint | 1 | fO4BmrVjqjM | Cast of Camp Rock 2 - It's On (From 'Cam |  | 14 | 7 | 14 | 0/0/0/0/0 | 7140272 | 0 | 6 | 1 | 4 |  | no reference | 18699543 | passes | no | yes |
+| caption | 1 | kIDWgqDBNXA | Christina Aguilera - Genie In A Bottle ( |  | 19 | 12 | 18 | 0/1/0/0/0 | 19076612 | 0 | 10 | 1 | 6 | 1 | none |  |  |  | yes |
+| caption | 1 | AWGqoCNbsvM | Colbie Caillat - Bubbly (Official Music  |  | 20 | 12 | 18 | 1/1/0/0/0 | 26608836 | 0 | 1 | 1 | 5 | 1 | ref_unclaimed |  |  |  | yes |
+| joint | 1 | GPCRbuL4Oh8 | Colbie Caillat - Fallin' For You |  | 18 | 9 | 0 | 1/0/0/17/0 |  |  |  |  |  |  |  | 29553541 | unclaimed |  |  |
+| caption | 1 | orJSJGHjBLI | Ed Sheeran - Bad Habits [Official Video] |  | 20 | 12 | 14 | 2/3/1/0/0 | 1003365 | 0 | 2 | 1 | 7 | 1 | ref_mistimed |  |  |  | yes |
+| caption | 1 | Il0S8BoucSA | Ed Sheeran - Shivers [Official Video] |  | 20 | 13 | 0 | 0/0/20/0/0 |  |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 1 | eJO5HU_7_1w | Eminem - The Real Slim Shady (Official V |  | 12 | 2 | 12 | 0/0/0/0/0 | 23928896 | 0 | 4 | 2 | 11 | 1 | none |  |  |  | yes |
+| caption | 1 | YVkUvmDQ3HY | Eminem - Without Me (Official Music Vide |  | 13 | 3 | 11 | 0/2/0/0/0 | 19137514 | 1 | 9 | 1 | 9 | 1 | none |  |  |  | yes |
+| joint | 1 | acvIVA9-FMQ | Jason Mraz - Lucky (feat. Colbie Caillat |  | 19 | 9 | 19 | 0/0/0/0/0 | 20759539 | 0 | 3 | 0 | 8 |  | no reference | 21053506 | passes | yes | yes |
+| caption | 1 | j2WWrupMBAE | Jessie J - Who You Are |  | 18 | 6 | 14 | 2/0/0/2/0 | 30554413 | 0 | 12 | 1 | 11 | 1 | ref_unclaimed |  |  |  | yes |
+| caption | 1 | NmCFY1oYDeM | John Legend - Love Me Now (Official Vide |  | 20 | 8 | 13 | 1/5/1/0/0 | 16734422 | 0 | 7 | 2 | 4 | 1 | ref_unclaimed |  |  |  | yes |
+| caption | 1 | ru0K8uYEZWw | Justin Timberlake - CAN'T STOP THE FEELI |  | 20 | 9 | 0 | 0/5/15/0/0 |  |  |  |  |  | 1 |  |  |  |  |  |
+| joint | 1 | 3gOHvDP_vCs | Justin Timberlake - SexyBack (Official H |  | 20 | 7 | 13 | 0/0/0/0/7 | 21309114 | 1 | 9 | 2 | 7 |  | no reference | 7877393 | shifted | no | yes |
+| joint | 1 | yipoOY56MbM | Kelly Clarkson - Behind These Hazel Eyes |  | 20 | 7 | 18 | 1/1/0/0/0 | 33411593 | 1 | 3 | 1 | 11 |  | no reference | 5694812 | passes | no | yes |
+| caption | 1 | c-3vPxKdj6o | Kelly Clarkson - Breakaway (Official Vid |  | 19 | 18 | 9 | 10/0/0/0/0 | 36855513 | 0 | 7 | 1 | 2 | 1 | ref_unheard |  |  |  | yes |
+| joint | 1 | HEValZuFYRU | Kelly Clarkson - Catch My Breath |  | 20 | 13 | 19 | 1/0/0/0/0 | 27175617 | 0 | 4 | 0 | 6 |  | no reference | 8060566 | passes | no | yes |
+| caption | 1 | Jtauh8GcxBY | Lewis Capaldi - Before You Go (Official  |  | 20 | 16 | 0 | 1/1/0/18/0 |  |  |  |  |  | 1 |  |  |  |  |  |
+| joint | 1 | IyO-vdsgq1s | Maia Wilson, Cast of Frozen - Fixer Uppe |  | 19 | 3 | 19 | 0/0/0/0/0 | 2263859 | 0 | 4 | 1 | 13 |  | no reference | 14589921 | passes | no | yes |
+| joint | 1 | Cbo2n2MzxxE | Michelle Branch - All You Wanted (Offici |  | 16 | 9 | 13 | 2/0/0/0/1 | 3617844 | 0 | 2 | 1 | 6 |  | no reference | 29613176 | passes | no | yes |
+| joint | 1 | Uxb6RFh3BCw | Michelle Branch - Are You Happy Now (Off |  | 19 | 10 | 16 | 3/0/0/0/0 | 5593856 | 0 | 5 | 1 | 5 |  | no reference | 19125451 | passes | no | yes |
+| caption | 1 | D_dOXTpwV5s | Moana - Cast - Along The Way (From 'Moan |  | 0 | 0 | 0 | 0/0/0/0/0 |  |  |  |  |  | 1 |  |  |  |  |  |
+| joint | 1 | zqVejtQ2qCk | NSYNC - Here We Go (Official Video) |  | 20 | 3 | 14 | 0/0/0/6/0 | 19116608 | 0 | 7 | 1 | 14 |  | no reference | 16241480 | passes | yes | yes |
+| caption | 1 | _ZcmuKsyvzg | NSYNC - Tearin' Up My Heart (Official Vi |  | 17 | 11 | 15 | 0/0/2/0/0 | 4091580 | 0 | 5 | 1 | 3 | 1 | none |  |  |  | yes |
+| caption | 1 | z_aC5xPQ2f4 | Ne-Yo - Closer [Official Video] |  | 20 | 9 | 0 | 0/4/0/0/16 |  |  |  |  |  | 1 |  |  |  |  |  |
+| joint | 1 | 1YiAzyCzZzw | Pocahontas 'Savages' 1080p HD |  | 13 | 6 | 0 | 7/0/1/5/0 |  |  |  |  |  |  |  | 8817946 | mistimed |  |  |
+| joint | 1 | HgzGwKwLmgM | Queen - Don't Stop Me Now (Official Vide |  | 20 | 12 | 0 | 0/0/0/20/0 |  |  |  |  |  |  |  | 5513796 | unclaimed |  |  |
+| joint | 1 | pXNd2V88d60 | RENT 2005  - Over The Moon (Film-Cut) [H |  | 0 | 0 | 0 | 0/0/0/0/0 |  |  |  |  |  |  |  |  |  |  |  |
+| caption | 1 | GLQ0biK-ZgA | S Club - Bring It All Back |  | 14 | 6 | 3 | 0/0/3/8/0 | 13229349 | 1 | 8 | 1 | 2 | 0 | no reference |  |  |  | yes |
+| joint | 1 | A4Kba6v5fdg | S Club - Natural |  | 15 | 7 | 6 | 1/8/0/0/0 | 12518942 | 0 | 3 | 0 | 2 |  | no reference | 9282959 | passes | yes | yes |
+| caption | 1 | QUQsqBqxoR4 | Sara Bareilles - Brave (Official Video) |  | 20 | 14 | 9 | 0/11/0/0/0 | 2175446 | 0 | 3 | 0 | 1 | 1 | ref_unclaimed |  |  |  | yes |
+| joint | 1 | nVW9QOIeqQg | Some Things Never Change (From 'Frozen 2 |  | 20 | 6 | 0 | 0/0/0/20/0 |  |  |  |  |  |  |  | 34643222 | unclaimed |  |  |
+| caption | 1 | jKKrfr4To14 | Stephanie Beatriz - Waiting On A Miracle |  | 20 | 4 | 20 | 0/0/0/0/0 | 34711323 | 0 | 1 | 0 | 10 | 1 | none |  |  |  | yes |
+| joint | 1 | hvvjiE4AdUI | TENACIOUS D - Kickapoo |  | 20 | 6 | 1 | 19/0/0/0/0 | 34637521 | 0 | 5 | 0 | 1 |  | no reference | 29499667 | no_fit | no | yes |
+| joint | 1 | DcbEr7Cd_Cc | Take Me Or Leave Me - Rent (2005) (Subti |  | 0 | 0 | 0 | 0/0/0/0/0 |  |  |  |  |  |  |  |  |  |  |  |
+| caption | 1 | FL4HSiGvk68 | Tenacious D - Wonderboy (Official Video) |  | 20 | 3 | 20 | 0/0/0/0/0 | 405494 | 1 | 6 | 1 | 12 | 1 | none |  |  |  | yes |
+| caption | 1 | 0qj67KE5VXI | Troy, Gabriella - Breaking Free (From 'H |  | 17 | 5 | 17 | 0/0/0/0/0 | 27603752 | 0 | 4 | 0 | 6 | 1 | none |  |  |  | yes |
+| caption | 1 | ulOb9gIGGd0 | Westlife - My Love (Official Video) |  | 20 | 13 | 0 | 13/0/0/7/0 |  |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 1 | eH3giaIzONA | Whitney Houston - I Wanna Dance With Som |  | 20 | 14 | 18 | 1/1/0/0/0 | 3002633 | 0 | 3 | 0 | 4 | 1 | none |  |  |  | yes |
+| joint | 1 | jniq78mKKcM | Wicked (2024) 4K - Dancing Through Life  |  | 12 | 3 | 0 | 12/0/0/0/0 |  |  |  |  |  |  |  | 31789876 | no_fit |  |  |
+| joint | 1 | amgPXKrFZVg | Wicked _ What Is This Feeling |  | 9 | 2 | 1 | 0/0/0/8/0 | 16623226 | 0 | 4 | 1 | 1 |  | no reference | 16623226 | passes | yes | yes |
+| caption | 1 | eGLSPyGszjo | Will Smith - Prince Ali (From 'Aladdin') |  | 20 | 5 | 0 | 0/16/1/3/0 |  |  |  |  |  | 1 |  |  |  |  |  |
+| caption | 1 | tt2k8PGm-TI | ZAYN - Dusk Till Dawn (Official Video) f |  | 20 | 15 | 0 | 18/0/2/0/0 |  |  |  |  |  | 1 |  |  |  |  |  |
+
+### Table X: flagged passing records not picked
+
+| Song | youtube_id | Ids of the timing | Flags | Mistimed | Unclaimed |
+|---|---|---|---|---|---|
+| Bruno Mars, Anderson .Paak, Silk Sonic - | GG7fLOmlhYg | 18147579 | ref_speed | 0 | 8 |
+| Bruno Mars, Anderson .Paak, Silk Sonic - | GG7fLOmlhYg | 36518737 | ref_speed | 0 | 8 |
+| Christina Aguilera - Genie In A Bottle ( | kIDWgqDBNXA | 6334514 | ref_unclaimed | 0 | 11 |
+| Christina Aguilera - Genie In A Bottle ( | kIDWgqDBNXA | 10185275 | ref_shift_run | 0 | 4 |
+| Christina Aguilera - Genie In A Bottle ( | kIDWgqDBNXA | 16367331 | ref_unclaimed | 0 | 11 |
+| Colbie Caillat - Bubbly (Official Music  | AWGqoCNbsvM | 3007536 | ref_mistimed ref_unclaimed | 1 | 5 |
+| Colbie Caillat - Bubbly (Official Music  | AWGqoCNbsvM | 3009804 | ref_unclaimed | 0 | 1 |
+| Colbie Caillat - Bubbly (Official Music  | AWGqoCNbsvM | 9403411, 34159259 | ref_unclaimed | 0 | 1 |
+| Colbie Caillat - Bubbly (Official Music  | AWGqoCNbsvM | 9607932 | ref_mistimed ref_unclaimed | 1 | 10 |
+| Colbie Caillat - Bubbly (Official Music  | AWGqoCNbsvM | 11602591 | ref_unclaimed ref_shift_run | 0 | 1 |
+| Colbie Caillat - Bubbly (Official Music  | AWGqoCNbsvM | 13457382 | ref_unclaimed ref_shift_run ref_speed | 0 | 1 |
+| Colbie Caillat - Bubbly (Official Music  | AWGqoCNbsvM | 16724585, 21320732, 29705956, 30757174 | ref_mistimed ref_unclaimed ref_shift_run ref_speed | 1 | 4 |
+| Colbie Caillat - Bubbly (Official Music  | AWGqoCNbsvM | 20125784 | ref_mistimed ref_unclaimed ref_shift_run ref_speed | 1 | 4 |
+| Colbie Caillat - Bubbly (Official Music  | AWGqoCNbsvM | 31397428 | ref_unclaimed | 0 | 1 |
+| Ed Sheeran - Bad Habits [Official Video] | orJSJGHjBLI | 3204694 | ref_mistimed | 0 | 2 |
+| Ed Sheeran - Bad Habits [Official Video] | orJSJGHjBLI | 23214244 | ref_mistimed | 0 | 2 |
+| Ed Sheeran - Bad Habits [Official Video] | orJSJGHjBLI | 38750243 | ref_mistimed | 0 | 2 |
+| Jessie J - Who You Are | j2WWrupMBAE | 3002503, 8956347 | ref_unclaimed | 0 | 12 |
+| Jessie J - Who You Are | j2WWrupMBAE | 38343347 | ref_unclaimed | 0 | 12 |
+| Kelly Clarkson - Breakaway (Official Vid | c-3vPxKdj6o | 11640107 | ref_unclaimed ref_unheard | 0 | 6 |
+| Kelly Clarkson - Breakaway (Official Vid | c-3vPxKdj6o | 12401291 | ref_unclaimed ref_unheard | 0 | 6 |
+| Kelly Clarkson - Breakaway (Official Vid | c-3vPxKdj6o | 18579659 | ref_unclaimed ref_unheard | 0 | 6 |
+| Kelly Clarkson - Breakaway (Official Vid | c-3vPxKdj6o | 27071756 | ref_unclaimed ref_unheard | 0 | 6 |
+| Kelly Clarkson - Breakaway (Official Vid | c-3vPxKdj6o | 35757881 | ref_unclaimed ref_unheard | 0 | 6 |
+| Kelly Clarkson - Breakaway (Official Vid | c-3vPxKdj6o | 36580369 | ref_unclaimed ref_unheard | 0 | 6 |
+| Kelly Clarkson - Breakaway (Official Vid | c-3vPxKdj6o | 38557725 | ref_unheard | 0 | 7 |
+| NSYNC - Tearin' Up My Heart (Official Vi | _ZcmuKsyvzg | 24488107, 26417881 | ref_mistimed | 0 | 5 |
+| Sara Bareilles - Brave (Official Video) | QUQsqBqxoR4 | 692126 | ref_unclaimed | 0 | 3 |
+| Sara Bareilles - Brave (Official Video) | QUQsqBqxoR4 | 10032894 | ref_unclaimed | 0 | 3 |
+| Sara Bareilles - Brave (Official Video) | QUQsqBqxoR4 | 14827542 | ref_unclaimed | 0 | 3 |
+| Sara Bareilles - Brave (Official Video) | QUQsqBqxoR4 | 16395561 | ref_unclaimed | 0 | 3 |
+| Sara Bareilles - Brave (Official Video) | QUQsqBqxoR4 | 17582892 | ref_unclaimed | 0 | 3 |
+| Sara Bareilles - Brave (Official Video) | QUQsqBqxoR4 | 17993679 | ref_unclaimed | 0 | 3 |
+| Sara Bareilles - Brave (Official Video) | QUQsqBqxoR4 | 19787918 | ref_unclaimed | 0 | 3 |
+| Sara Bareilles - Brave (Official Video) | QUQsqBqxoR4 | 30470297 | ref_unclaimed | 0 | 3 |
+| Whitney Houston - I Wanna Dance With Som | eH3giaIzONA | 14211911, 15018866, 21805944 | ref_shift_run | 0 | 4 |
+| Whitney Houston - I Wanna Dance With Som | eH3giaIzONA | 33458119 | ref_shift_run | 0 | 4 |
+
+### Table V: songs with a pick at other limits
+
+| Group | Mistimed <= | Songs | Unclaimed <= 8 | Unclaimed <= 10 | Unclaimed <= 12 | Unclaimed <= 15 | Unclaimed <= 20 |
+|---|---|---|---|---|---|---|---|
+| picks | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| picks | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
+| joint | 0 | 20 | 11 | 11 | 11 | 12 | 12 |
+| joint | 1 | 20 | 12 | 13 | 13 | 14 | 14 |
+| caption | 0 | 30 | 13 | 14 | 15 | 16 | 17 |
+| caption | 1 | 30 | 15 | 17 | 18 | 19 | 20 |
+| new | 0 | 50 | 24 | 25 | 26 | 28 | 29 |
+| new | 1 | 50 | 27 | 30 | 31 | 33 | 34 |
+
+| Group | Shift offset >= s | Songs | Shift run <= 2 | Shift run <= 3 | Shift run <= 4 |
+|---|---|---|---|---|---|
+| picks | 1.0 | 0 | 0 | 0 | 0 |
+| picks | 1.5 | 0 | 0 | 0 | 0 |
+| picks | 2.0 | 0 | 0 | 0 | 0 |
+| joint | 1.0 | 20 | 12 | 13 | 13 |
+| joint | 1.5 | 20 | 13 | 13 | 13 |
+| joint | 2.0 | 20 | 13 | 13 | 13 |
+| caption | 1.0 | 30 | 18 | 19 | 19 |
+| caption | 1.5 | 30 | 18 | 19 | 19 |
+| caption | 2.0 | 30 | 18 | 19 | 19 |
+| new | 1.0 | 50 | 30 | 32 | 32 |
+| new | 1.5 | 50 | 31 | 32 | 32 |
+| new | 2.0 | 50 | 31 | 32 | 32 |
+
+### Table L: the listen list
+
+| Rank | Group | New | Title | youtube_id | lrclib_id | Why | Listen_file |
+|---|---|---|---|---|---|---|---|
+| 1 | joint | 1 | Justin Timberlake - SexyBack (Official H | 3gOHvDP_vCs | 21309114 | no reference | Justin Timberlake - SexyBack (Official HD Video) ft. Timbaland---3gOHvDP_vCs.21309114.srt |
+| 2 | caption | 1 | S Club - Bring It All Back | GLQ0biK-ZgA | 13229349 | no reference | S Club - Bring It All Back---GLQ0biK-ZgA.13229349.srt |
+| 3 | joint | 1 | NSYNC - Here We Go (Official Video) | zqVejtQ2qCk | 19116608 | no reference | NSYNC - Here We Go (Official Video)---zqVejtQ2qCk.19116608.srt |
+| 4 | joint | 1 | Britney Spears - I'm A Slave 4 U (Offici | Mzybwwf2HoQ | 36592252 | no reference | Britney Spears - I'm A Slave 4 U (Official 4K Video)---Mzybwwf2HoQ.36592252.srt |
+| 5 | joint | 1 | Cast of Camp Rock 2 - It's On (From 'Cam | fO4BmrVjqjM | 7140272 | no reference | Cast of Camp Rock 2 - It's On (From 'Camp Rock 2 - The Final Jam'_Sing-Along)---fO4BmrVjqjM.7140272.srt |
+| 6 | joint | 1 | Michelle Branch - Are You Happy Now (Off | Uxb6RFh3BCw | 5593856 | no reference | Michelle Branch - Are You Happy Now (Official Music Video) _ Warner Vault---Uxb6RFh3BCw.5593856.srt |
+| 7 | joint | 1 | TENACIOUS D - Kickapoo | hvvjiE4AdUI | 34637521 | no reference | TENACIOUS D - Kickapoo---hvvjiE4AdUI.34637521.srt |
+| 8 | joint | 1 | Kelly Clarkson - Catch My Breath | HEValZuFYRU | 27175617 | no reference | Kelly Clarkson - Catch My Breath---HEValZuFYRU.27175617.srt |
+| 9 | joint | 1 | Maia Wilson, Cast of Frozen - Fixer Uppe | IyO-vdsgq1s | 2263859 | no reference | Maia Wilson, Cast of Frozen - Fixer Upper (From 'Frozen'_Sing-Along)---IyO-vdsgq1s.2263859.srt |
+| 10 | joint | 1 | Wicked _ What Is This Feeling | amgPXKrFZVg | 16623226 | no reference | Wicked _ What Is This Feeling---amgPXKrFZVg.16623226.srt |
+| 11 | joint | 1 | Kelly Clarkson - Behind These Hazel Eyes | yipoOY56MbM | 33411593 | no reference | Kelly Clarkson - Behind These Hazel Eyes (Official Video)---yipoOY56MbM.33411593.srt |
+| 12 | joint | 1 | S Club - Natural | A4Kba6v5fdg | 12518942 | no reference | S Club - Natural---A4Kba6v5fdg.12518942.srt |
+| 13 | joint | 1 | Jason Mraz - Lucky (feat. Colbie Caillat | acvIVA9-FMQ | 20759539 | no reference | Jason Mraz - Lucky (feat. Colbie Caillat) [Official Video] [HD Remaster]---acvIVA9-FMQ.20759539.srt |
+| 14 | joint | 1 | Michelle Branch - All You Wanted (Offici | Cbo2n2MzxxE | 3617844 | no reference | Michelle Branch - All You Wanted (Official Music Video) _ Warner Records---Cbo2n2MzxxE.3617844.srt |
+| 15 | caption | 1 | Jessie J - Who You Are | j2WWrupMBAE | 30554413 | flagged: ref_unclaimed | Jessie J - Who You Are---j2WWrupMBAE.30554413.srt |
+| 16 | caption | 1 | John Legend - Love Me Now (Official Vide | NmCFY1oYDeM | 16734422 | flagged: ref_unclaimed | John Legend - Love Me Now (Official Video)---NmCFY1oYDeM.16734422.srt |
+| 17 | caption | 1 | Kelly Clarkson - Breakaway (Official Vid | c-3vPxKdj6o | 36855513 | flagged: ref_unheard | Kelly Clarkson - Breakaway (Official Video)---c-3vPxKdj6o.36855513.srt |
+| 18 | caption | 1 | Sara Bareilles - Brave (Official Video) | QUQsqBqxoR4 | 2175446 | flagged: ref_unclaimed | Sara Bareilles - Brave (Official Video)---QUQsqBqxoR4.2175446.srt |
+| 19 | caption | 1 | Ed Sheeran - Bad Habits [Official Video] | orJSJGHjBLI | 1003365 | flagged: ref_mistimed | Ed Sheeran - Bad Habits [Official Video]---orJSJGHjBLI.1003365.srt |
+| 20 | caption | 1 | Colbie Caillat - Bubbly (Official Music  | AWGqoCNbsvM | 26608836 | flagged: ref_unclaimed | Colbie Caillat - Bubbly (Official Music Video)---AWGqoCNbsvM.26608836.srt |
+| 21 | caption | 1 | Bruno Mars, Anderson .Paak, Silk Sonic - | GG7fLOmlhYg | 12516628 | unflagged | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg.12516628.srt |
+| 22 | caption | 1 | Christina Aguilera - Genie In A Bottle ( | kIDWgqDBNXA | 19076612 | unflagged | Christina Aguilera - Genie In A Bottle (Official Video)---kIDWgqDBNXA.19076612.srt |
+| 23 | caption | 1 | Adele - Rolling in the Deep (Official Mu | rYEDA3JcQqw | 35807678 | unflagged | Adele - Rolling in the Deep (Official Music Video)---rYEDA3JcQqw.35807678.srt |
+| 24 | caption | 1 | Eminem - Without Me (Official Music Vide | YVkUvmDQ3HY | 19137514 | unflagged | Eminem - Without Me (Official Music Video)---YVkUvmDQ3HY.19137514.srt |
+| 25 | caption | 1 | Adele - Send My Love (To Your New Lover) | fk4BbF7B29w | 30464863 | unflagged | Adele - Send My Love (To Your New Lover)---fk4BbF7B29w.30464863.srt |
+| 26 | caption | 1 | Tenacious D - Wonderboy (Official Video) | FL4HSiGvk68 | 405494 | unflagged | Tenacious D - Wonderboy (Official Video)---FL4HSiGvk68.405494.srt |
+| 27 | caption | 1 | NSYNC - Tearin' Up My Heart (Official Vi | _ZcmuKsyvzg | 4091580 | unflagged | NSYNC - Tearin' Up My Heart (Official Video)---_ZcmuKsyvzg.4091580.srt |
+| 28 | caption | 1 | Troy, Gabriella - Breaking Free (From 'H | 0qj67KE5VXI | 27603752 | unflagged | Troy, Gabriella - Breaking Free (From 'High School Musical')---0qj67KE5VXI.27603752.srt |
+| 29 | caption | 1 | Eminem - The Real Slim Shady (Official V | eJO5HU_7_1w | 23928896 | unflagged | Eminem - The Real Slim Shady (Official Video - Clean Version)---eJO5HU_7_1w.23928896.srt |
+| 30 | caption | 1 | Whitney Houston - I Wanna Dance With Som | eH3giaIzONA | 3002633 | unflagged | Whitney Houston - I Wanna Dance With Somebody (Who Loves Me) (Official 4K Video)---eH3giaIzONA.3002633.srt |
+| 31 | caption | 1 | Stephanie Beatriz - Waiting On A Miracle | jKKrfr4To14 | 34711323 | unflagged | Stephanie Beatriz - Waiting On A Miracle (From 'Encanto')---jKKrfr4To14.34711323.srt |
