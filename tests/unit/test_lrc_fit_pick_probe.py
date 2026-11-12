@@ -387,6 +387,6 @@ class TestTableK:
         assert rows[2][10] == ""
 
     def test_the_refusals_of_the_bar_are_the_columns_of_table_s(self):
-        assert probe.REFUSALS == ("no_fit", "speed", "mistimed", "unclaimed")
+        assert probe.REFUSALS == ("no_fit", "speed", "mistimed", "unclaimed", "shifted")
         assert refusal(SliceFit(REFUSED)) in probe.REFUSALS
         assert TRANSCRIBE == "transcribe"
