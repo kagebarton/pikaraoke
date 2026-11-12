@@ -4,7 +4,7 @@ Author: Claude Fable 5.2, 2026-11-10.
 
 # LRCLIB timing at download: the shifted-section check
 
-**Status: PLANNED 2026-11-10. Nothing executed. Decisions 20-24 ruled by Ken 2026-11-12.**
+**Status: PLANNED 2026-11-10. Decisions 20-24 ruled by Ken 2026-11-12. Phase 1 executed 2026-11-12 (Sonnet 5.5), stopped at STOP 1f; Phase 2 not started.**
 
 ## Goal
 
@@ -378,6 +378,7 @@ type, labels, lists", "Ken's checks") with their open points. They get their spe
 |---|---|---|---|---|
 | 1 | 2026-11-10 | plan | Sizing on the saved outputs of the earlier holdout run, read-only, scratch scripts outside the repo ("Where the check came from"). Baseline of the 198 used songs written, ids only. Share not mounted: no library read, no auto-caption file read. | `~/.pikaraoke/tmp/lrclib_shift_check/baseline_ids.txt` |
 | 2 | 2026-11-12 | 0 | Fifty fresh songs listed (Set E 20: 10 film/sing-along/video cut; Set C 30: 12). yt-dlp 2026.10.26 metadata only; no LRCLIB, no probe, no library writes. Baseline sha256 rechecked, unchanged. Ken adds them with `add_songs`. | table in Phase 0 |
+| 3 | 2026-11-12 | 1 | Phase 1 (1a-1e), no library read, no probe run on the library, no GPU. **1a:** every anchor exists as the plan uses it. **1b** `fd5ec5d`: `SliceFit.offsets` (each line's heard start minus fitted start, None when unheard) and `longest_shift_run(offsets, limit_s)` in `srt_slice_fit`; `SliceFit.shift_run` is a property of `offsets` (the plan said a field; `offsets` is kept so the probe can print them and count at other limits without a second copy of the logic); `SHIFT_OFFSET_S = 1.5`. **1c** `478bcf7`: `MAX_SHIFT_RUN = 2`, refusal `shifted` after `unclaimed`, `REFUSALS` has five names. **1d** `f5e11a2`: probe columns (`shift_run`, `ref_shift_run`, `asr_status`, `asr_shift_run`, `asr_mistimed_n`, `asr_unheard_n` in `candidates.tsv`; `pick_shift_run`, `has_asr`, `asr_pick_id` in `songs.tsv`; `Shift_run` in Table S), flag `ref_shift_run`, sheet columns `offset` and `caption_offset` (signed seconds, blank when unheard), `--skip-new`, `--new-only` (both need `--baseline`), `--compare`, Tables G, A, C, and a second table under Table V for offset limits 1.0/1.5/2.0 s by run limits 2/3/4 (other limits at the bar's). Table V's first table now also applies the shift condition at the bar's limits. Table G's seven records are keyed by song id (file stem for the three songs with no YouTube id). The second-hearing rule is read by the probe only (`Rec.asr_refuses`, `SongResult.asr_pick`); the bar does not see it. **1e:** full suite 3692 passed; pre-commit clean on the changed files; self-review on the three axes done. `main()` smoke-run on an empty scratch folder only (every table prints; `--skip-new` without `--baseline` errors). | commits `fd5ec5d`, `478bcf7`, `f5e11a2` |
 
 ## Frozen bar
 
