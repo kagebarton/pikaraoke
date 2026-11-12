@@ -4,7 +4,7 @@ Author: Claude Fable 5.2, 2026-11-10.
 
 # LRCLIB timing at download: the shifted-section check
 
-**Status: PLANNED 2026-11-10. Decisions 20-24 ruled by Ken 2026-11-12. Phase 1 executed 2026-11-12 (Sonnet 5.5), review fixes in; Phase 2 (2a-2d) executed 2026-11-12 (Sonnet 5.5), stopped at STOP 2e. Ken's two listens are in (row 6). GATE F read and ruled 2026-11-12 (Fable 5.2): bar frozen as pre-registered, no second hearing, Crazy and Reflection accepted as known holes; Quit Playing Games not yet classed by Ken. Next: Phase 3b (probe-only caption screen fix), then Phase 4.**
+**Status: PLANNED 2026-11-10. Decisions 20-24 ruled by Ken 2026-11-12. Phase 1 executed 2026-11-12 (Sonnet 5.5), review fixes in; Phase 2 (2a-2d) executed 2026-11-12 (Sonnet 5.5), stopped at STOP 2e. Ken's two listens are in (row 6). GATE F read and ruled 2026-11-12 (Fable 5.2): bar frozen as pre-registered, no second hearing, Crazy and Reflection accepted as known holes; Quit Playing Games ruled not wrong, stays a pick (Decision 28). Next: Phase 3b (probe-only caption screen fix), then Phase 4.**
 
 ## Goal
 
@@ -72,6 +72,14 @@ ratified"):
     words' clock, Table V calls the bar itself, and a missed opening word (review finding 1)
     is checked at GATE F, not fixed before it (the offset definition is pre-registered and
     the limits were sized with it).
+
+Ken, 2026-11-12, in chat, at GATE F ("keep it a pick"):
+
+28. Quit Playing Games (33413907) is not a wrong pick and stays one: his ear found it
+    singable, with the sheet's five late chorus lines and the cue-align unknowns put to him
+    first. For GATE Q rule 2 this sets the yardstick the judge told him it would: a Set C
+    pick whose sheet shows a short stretch of that size (about five lines, 2 to 4 s off) is
+    not ruled wrong from the sheet. It goes to Ken's ear.
 
 ## The bar (pre-registered)
 
@@ -389,6 +397,8 @@ as `plans/lrclib-fit-pick.md` "GATE P" defines them, with Decision 22.
    - Set E: Ken's ear. The gate is not read while one is missing.
    - Set C: every pick with a reference flag is read from its sheet. Of the unflagged ones, in
      youtube_id order every third until 10 are read. Ken's ear overrides a sheet read.
+     A short stretch of Quit Playing Games' size (about five lines, 2 to 4 s off) is not
+     ruled wrong from the sheet; that pick goes to Ken's ear (Decision 28).
 3. **Zero wrong picks** passes. Any wrong pick: STOP for Ken (Decision 8). There is no third
    bar without a new ruling from him.
 4. **Coverage**, reported: songs with a pick in each set, and by kind.
@@ -430,12 +440,12 @@ type, labels, lists", "Ken's checks") with their open points. They get their spe
 | 4 | 2026-11-12 | 1 (review) | `/code-review` of `ddefad8~1..HEAD` on the six Phase 1 files, 10 findings, triage ratified by Ken (Decisions 26, 27). Fixed in `48472dc`: `lrc_auto_pick.refusal` takes the four limits as arguments (defaults the bar's) and `passes_at` calls it; `read_asr(song, length)` applies `ytasr.is_usable` and `ASR_JSON3_SUFFIX`, so `has_asr` now means a caption the pipeline would adopt; `judge_reference` adds `caption.shift_s` to the caption stream before `add_references`, so `ref_shift` and every ref flag compare on the heard words' clock; sheet `caption_offset` is `ref.offsets[j] + ref.shift_s - fit.shift_s`; `make_recs` compares ids with `<=` (no KeyError when a timing has no int id); four long lines rewrapped. Not fixed: finding 1 (GATE F item 5), 2 (ruled under "Where the check came from"), 5 (Phase 2b now writes listen files to a subfolder), 6 (Phase 2 reuses the cache on purpose), 9 (probe-only refactor). Full suite 3696 passed; pre-commit clean. | commit `48472dc` |
 | 5 | 2026-11-12 | 2 | Phase 2 (2a-2d) on `lrclib_fit_pick` (HEAD `57b1854`), VM, read-only on the library, while Ken's Phase 0 import was running. **2a:** `lrclib_fit_pick_holdout/cache` copied to `<out>/cache` (173 files). **2b:** baseline sha256 `1a764ddb…777c` checked first, 198 lines, equal to the one Phase 0 records. Command as written (`--skip-new`, `--old-cache`, `--compare`, listen files to `lrclib-listen/shift-check`), stdout to `<out>/report.md`, progress log to the scratchpad; started 10:16:18, finished 10:20:40, exit 0; 198 songs read, none `lrclib_unavailable`, no rerun. **One live search ran, against the plan's "no search runs":** `YRpvIiz9G8A` (Encanto - We Don't Talk About Bruno) is a baseline song with no cache file, because the earlier holdout run read it as `out_of_scope` `no_bundle`; Ken regenerated it at 14:05 on 2026-11-10, after that run (14:00), so it now has a bundle and is `joint` (15 records, 10 timings, 0 passing, no pick). Its record file is the one new file in `<out>/cache` (174 files). The earlier run had no pick for it either, so it is not in Table C. **Phase 0 import, seen not touched:** all 198 baseline songs are still in the library, and the 10 songs outside the baseline are Phase 0 #1-#10 (videos dated 09:45-09:49), none read (`--skip-new`). **Read-only check:** `find <library> -newer <out>/started` printed the directories `nonvocal/` and `vocal/` and two files, `---nonvocal.m4a` and `---vocal.m4a` of `pXNd2V88d60` (Phase 0 #6, Rent - Over the Moon), written 10:17:02-15: Ken's import. No file of a baseline song changed. **2c, as the plan defines it:** Table C lists exactly the five songs and ids the plan expects (Where You Are, Bowie and A Summer in Ohio no pick; When I Was Your Man 15816725; Nobody Needs to Know 17631826) and no others; Table G has five records refused `shifted`, and 2137556 and 685756 pass and are picked. No difference to record, no STOP. **2d:** Tables P, S, K, G, A, C, V and L pasted raw below, headings one level down, no tallies, no reading (Table A has no rows; Table X is in `report.md`, the plan does not list it for this phase). The listen folder holds 93 `.srt`, one per Table L row. **STOP 2e:** handoff to the judge for GATE F; Ken's two listens (When I Was Your Man's new pick 15816725; Quit Playing Games `Ug88HO2mg44`, 33413907, about 1:57 to 2:05) not yet done. | Outputs `~/.pikaraoke/tmp/lrclib_shift_check/` (`report.md`, `songs.tsv`, `candidates.tsv`, `sheets/`, `cache/`, `started`); listen files `D:\Shared\lrclib-listen\shift-check` (`/home/ken/shared-drives/D:/Shared/lrclib-listen/shift-check` on the VM). Lyric text; not committed. |
 | 6 | 2026-11-12 | 2 (STOP 2e) | Ken's two listens, given in chat to the executor after the STOP, recorded in his words and not classified (the wrong / `minor` / good call is GATE F item 2's). When I Was Your Man, pick 15816725 (the new pick; the compared run picked 26614056): "bruno mars is good now". Quit Playing Games, pick 33413907 (never ruled before; the pick is the same in both runs): "backstreet boys have a few lines that are slightly early or late, but otherwise more than singable". The second verdict does not say how many lines or how far off; the judge may ask Ken before ruling it against Decision 22. | Ken, chat, 2026-11-12. |
-| 7 | 2026-11-12 | GATE F | Read by Fable 5.2 on HEAD `137b36d`, read-only; the probe not rerun; no library write, no GPU, no fresh song read. Single records re-fitted from `<out>/cache` by scratch scripts for item 5 and the caption check. Ken ruled by question dialog: holes accepted, second hearing left out, caption screen fixed first; Quit Playing Games open. Phase 3b added. | "Frozen bar": "GATE F read", "Ruling". |
+| 7 | 2026-11-12 | GATE F | Read by Fable 5.2 on HEAD `137b36d`, read-only; the probe not rerun; no library write, no GPU, no fresh song read. Single records re-fitted from `<out>/cache` by scratch scripts for item 5 and the caption check. Ken ruled by question dialog: holes accepted, second hearing left out, caption screen fixed first; then, in chat, Quit Playing Games "keep it a pick" (Decision 28). Phase 3b added. | "Frozen bar": "GATE F read", "Ruling". |
 
 ## Frozen bar
 
 Frozen 2026-11-12 as pre-registered; the ruling and the bar's text are at the end of this
-section, after the read. One item is open with Ken (Quit Playing Games' class).
+section, after the read.
 
 ### GATE F read (Fable, 2026-11-12)
 
@@ -514,7 +524,8 @@ as pre-registered, with or without the second hearing:
   of the seven timings carry the caption's flag (Table X). The seventh is one record,
   40258746, unflagged and not read (it has no sheet); the pick order puts the twelve-record
   timing first, so it does not help as the bar stands.
-- Quit Playing Games joins this list if Ken rules it wrong.
+- Quit Playing Games would have joined this list had Ken ruled it wrong; he did not
+  (Decision 28).
 
 What accepting them means for GATE Q, for Ken to weigh: these are 2 (3 with Quit Playing
 Games) of 59 `caption` picks, each a stretch the transcriber did not hear. The fresh run has
@@ -586,15 +597,17 @@ Ken, 2026-11-12, by question dialog after the read (his choices quoted):
 2. **The second hearing:** "Leave it out." It is not in the bar. Phase 3 as written does not
    run.
 3. **The caption screen:** "Fix it first." A probe-only commit before Phase 4 (Phase 3b).
-4. **Quit Playing Games: not yet classed.** Ken, in place of a choice: "those last 3 are
+4. **Quit Playing Games: not wrong, stays a pick.** Ken, first, in place of a choice: "those last 3 are
    indeed off bit about 2-3 s, what's the consequence of it staying a pick? do we know how
    badly it'll compromise cue align?" Answered in chat, in short: not measured (this plan
    checks line times, and the aligner needs the GPU). By the code, cue align cuts the pick's
    back-to-back lines into blocks (here six, 34 to 39 s each) and times words from the audio
    inside each, so a line a few seconds off inside its block can be pulled to where it is
    sung, and one sung outside its block cannot. A block edge falls at 121 s, inside the late
-   stretch: the line after it is sung about 2 s before its block starts. Open with Ken: not
-   wrong and it stays a pick, or wrong and a third known hole (accepted, or stop).
+   stretch: the line after it is sung about 2 s before its block starts. He was also told
+   what each answer means at GATE Q (a short stretch of this size on a Set C sheet goes to
+   his ear, or counts as wrong). **Ken, then: "keep it a pick."** Not wrong; it stays a pick
+   and is not a known hole (Decision 28).
 
 **The frozen bar, 2026-11-12.** As pre-registered in "The bar", no limit changed. A record
 passes when its fit against the transcribe stream has all of: status `fits`; `speed == 1.0`;
@@ -604,10 +617,8 @@ are unchanged. No second hearing. In code this is `lrc_auto_pick` as of `48472dc
 (`MAX_MISTIMED = 1`, `MAX_UNCLAIMED_RUN = 12`, `MAX_SHIFT_RUN = 2`; `SHIFT_OFFSET_S = 1.5` in
 `srt_slice_fit`); no code has changed since.
 
-Neither answer to item 4 changes a limit. Only a stop on it would undo the freeze.
-
-Known holes on the used songs: Crazy 2137556, Reflection 685756 (and Quit Playing Games
-33413907 if Ken rules it wrong).
+Known holes on the used songs: Crazy 2137556 and Reflection 685756. Quit Playing Games
+33413907 is a pick ruled not wrong, noted as one the bar passes at its limit.
 
 ## Report output: used songs
 
