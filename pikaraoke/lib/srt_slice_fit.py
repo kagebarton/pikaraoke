@@ -117,6 +117,11 @@ MIN_FLAGGED_RUN = 2
 # chant or a line in another language the transcriber skipped.
 MIN_UNHEARD_RUN = 3
 
+# A heard line is off when the heard words put its start this far from the fit's, either
+# way. Set under plans/lrclib-shift-check.md ("The bar"): below FLAG_TOLERANCE_S, so a
+# stretch of lines 2-6 s off, which the fit passes with every word claimed, still shows.
+SHIFT_OFFSET_S = 1.5
+
 
 @dataclass(frozen=True)
 class SliceFit:
@@ -143,6 +148,9 @@ class SliceFit:
     speed and shift. Singing the sheet skips or stops short of shows up here, where
     ``unheard`` only sees sheet lines nothing was heard for. ``unclaimed_runs`` lists
     every such run as ``(index of its first heard word, length)``, so a report can say where.
+    ``offsets`` (``fits`` only) is each of ``lines``' heard start minus its fitted start, in
+    seconds, None for an unheard line. ``shift_run`` is the longest stretch of neighbouring
+    lines that are all off the same way (:func:`longest_shift_run`).
     """
 
     status: str
@@ -162,6 +170,12 @@ class SliceFit:
     unheard: tuple[int, ...] = ()
     unclaimed_run: int = 0
     unclaimed_runs: tuple[tuple[int, int], ...] = ()
+    offsets: tuple[float | None, ...] = ()
+
+    @property
+    def shift_run(self) -> int:
+        """0 unless the fit ``fits``."""
+        return longest_shift_run(self.offsets)
 
 
 def heard_streams(bundle: dict | None, asr_json3: str | None) -> dict[str, list[dict]]:
@@ -387,14 +401,14 @@ def _fit_one_stream(
 
 def _flagged_lines(
     in_clip: list[int], anchors: list[dict], clip_starts: dict[int, float]
-) -> dict[str, tuple[int, ...]]:
+) -> dict[str, tuple]:
     """The ``in_clip`` cues (indexes into ``spans``) the heard words do not bear out.
 
     Returns :class:`SliceFit`'s ``mistimed`` (the anchor sits more than
     FLAG_TOLERANCE_S from the cue's start on the clip, clamped as ``lines`` shows
-    it, so a line the clip cuts into is not flagged for its cut-off start) and
+    it, so a line the clip cuts into is not flagged for its cut-off start),
     ``unheard`` (no anchor), numbering the cues by their place in ``in_clip``, as
-    ``lines`` is.
+    ``lines`` is, and ``offsets``.
     """
     heard = {anchor["lid"]: anchor["start"] for anchor in anchors}
     mistimed = tuple(
@@ -403,7 +417,30 @@ def _flagged_lines(
         if k in heard and abs(heard[k] - clip_starts[k]) > FLAG_TOLERANCE_S
     )
     unheard = tuple(line for line, k in enumerate(in_clip) if k not in heard)
-    return {"mistimed": mistimed, "unheard": unheard}
+    offsets = tuple(heard[k] - clip_starts[k] if k in heard else None for k in in_clip)
+    return {"mistimed": mistimed, "unheard": unheard, "offsets": offsets}
+
+
+def longest_shift_run(offsets: tuple[float | None, ...], limit_s: float = SHIFT_OFFSET_S) -> int:
+    """The longest stretch of neighbouring lines all off by ``limit_s`` or more the same way.
+
+    A video cut that differs from the record for a stretch moves a run of lines by a few
+    seconds, below what ``mistimed`` flags. A line is off when it is heard and its offset (see
+    :class:`SliceFit`) is at least ``limit_s`` either way; an unheard line, a line nearer than
+    that and a change of direction each end a stretch.
+    """
+    longest = run = previous = 0
+    for offset in offsets:
+        side = 0 if offset is None or abs(offset) < limit_s else (1 if offset > 0 else -1)
+        if side == 0:
+            run = 0
+        elif side == previous:
+            run += 1
+        else:
+            run = 1
+        longest = max(longest, run)
+        previous = side
+    return longest
 
 
 def _match_by_order(tokens: _CueTokens, words: list[dict]) -> tuple[list[dict], set[int]]:

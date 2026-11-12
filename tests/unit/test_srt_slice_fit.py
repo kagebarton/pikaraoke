@@ -19,6 +19,7 @@ from pikaraoke.lib.srt_slice_fit import (
     NO_REFERENCE,
     NOT_SRT,
     REFUSED,
+    SHIFT_OFFSET_S,
     TOO_FEW,
     TOO_LONG,
     TRANSCRIBE,
@@ -26,6 +27,7 @@ from pikaraoke.lib.srt_slice_fit import (
     flagged_runs,
     free_speed,
     heard_streams,
+    longest_shift_run,
     lrc_to_srt,
     sheet_stream,
     unheard_runs,
@@ -656,6 +658,76 @@ class TestFlaggedLines:
             runs[(first, last)] = flagged_runs(result.mistimed, result.unheard, MIN_FLAGGED_RUN)
 
         assert runs == {(24, 27): [(28, 29)], (14, 17): [(0, 13)], (4, 7): [(0, 3)]}
+
+
+class TestShiftRun:
+    """Lines heard a few seconds from their fitted start: under FLAG_TOLERANCE_S, so none is
+    ``mistimed``, but a stretch of them is a part of the video cut differently from the record."""
+
+    @staticmethod
+    def _shift_run(moved: dict[int, float], unsung: tuple[int, ...] = ()) -> int:
+        """The shift run of an LRC on the clip's clock whose lines in ``moved`` are heard that
+        many seconds from it (positive: later), the ``unsung`` lines not at all."""
+        song = _song()
+        sung = {k: text for k, text in song.items() if k not in unsung}
+
+        def start(k: int) -> float:
+            return _clip_start(k) + moved.get(k, 0.0)
+
+        result = _fit_lrc(_lrc(song), _heard(sung, clip_start=start))
+        assert result.status == FITS
+        assert result.mistimed == ()
+        return result.shift_run
+
+    def test_a_stretch_of_lines_heard_late_is_a_run_of_its_length(self):
+        assert self._shift_run({10: 2.0, 11: 3.0, 12: 2.5}) == 3
+
+    def test_lines_heard_early_are_a_run_too(self):
+        assert self._shift_run({10: -2.0, 11: -4.0}) == 2
+
+    def test_an_unheard_line_ends_the_stretch(self):
+        assert self._shift_run({10: 2.0, 12: 2.0}, unsung=(11,)) == 1
+
+    def test_a_change_of_direction_ends_the_stretch(self):
+        assert self._shift_run({10: -2.0, 11: -2.0, 12: 2.0, 13: 2.0, 14: 2.0}) == 3
+
+    def test_a_line_just_inside_the_limit_ends_the_stretch(self):
+        near = SHIFT_OFFSET_S - 0.1
+        assert self._shift_run({10: 2.0, 11: 2.0, 12: near, 13: 2.0}) == 2
+
+    def test_the_run_is_the_longest_stretch_not_the_total(self):
+        assert self._shift_run({3: 2.0, 4: 2.0, 20: 2.0, 21: 2.0, 22: 2.0}) == 3
+
+    def test_a_record_with_no_line_off_has_none(self):
+        assert self._shift_run({10: 0.5, 11: -1.0}) == 0
+
+    def test_an_offset_of_exactly_the_limit_is_off(self):
+        assert longest_shift_run((SHIFT_OFFSET_S, -SHIFT_OFFSET_S, -SHIFT_OFFSET_S)) == 2
+
+    def test_another_limit_changes_which_lines_are_off(self):
+        offsets = (1.2, 1.2, 2.2, 2.2, 2.2, None, 1.2)
+
+        assert [longest_shift_run(offsets, limit) for limit in (1.0, 1.5, 2.0)] == [5, 3, 3]
+
+    def test_the_offsets_are_heard_minus_fitted_start_per_line_and_none_for_unheard(self):
+        song = _song()
+        sung = {k: text for k, text in song.items() if k != 4}
+
+        def start(k: int) -> float:
+            return _clip_start(k) + {2: 2.0, 7: -2.0}.get(k, 0.0)
+
+        result = _fit_lrc(_lrc(song), _heard(sung, clip_start=start))
+
+        assert len(result.offsets) == len(result.lines) == 30
+        assert result.offsets[4] is None
+        assert [round(result.offsets[k], 2) for k in (0, 2, 7)] == [0.0, 2.0, -2.0]
+
+    def test_a_fit_that_did_not_fit_has_none(self):
+        song = _song()
+
+        result = _fit_lrc(_lrc(song), _heard({0: "completely unrelated words here ok"}))
+
+        assert (result.status, result.offsets, result.shift_run) == (REFUSED, (), 0)
 
 
 class TestUnclaimedRun:
