@@ -61,6 +61,18 @@ Ken, 2026-11-12, in chat, ruling on the author's defaults:
 25. Sonnet lists the fresh songs under Phase 0's rules (Ken asked whether Sonnet could; the
     rules are mechanical and Phase 4a checks every song's set).
 
+Ken, 2026-11-12, in chat, ruling on the Phase 1 code review ("yes to #3, otherwise
+ratified"):
+
+26. The second hearing uses an auto-caption only when the pipeline would adopt it
+    (`ytasr.is_usable`: word-level, dense enough over the song). A line-level caption puts
+    every word at its line's start and would read as shifted lines. This narrows "has an
+    auto-caption file" in the candidate rule; nothing was measured under the old wording.
+27. The rest of the review's triage stands: the caption screen is moved onto the heard
+    words' clock, Table V calls the bar itself, and a missed opening word (review finding 1)
+    is checked at GATE F, not fixed before it (the offset definition is pre-registered and
+    the limits were sized with it).
+
 ## The bar (pre-registered)
 
 The bar of `plans/lrclib-fit-pick.md`, unchanged, plus one condition. A record passes when its
@@ -90,7 +102,8 @@ Crazy and Reflection pass every check on the transcriber's words because the tra
 heard nothing where they are wrong. YouTube's auto captions (`subtitles/<stem>.en.asr.json3`,
 the `asr` stream of `heard_streams`) are a second hearing of the same audio.
 
-**The candidate rule, fixed here:** when the song has an auto-caption file and the record's fit
+**The candidate rule, fixed here:** when the song has an auto-caption file the pipeline would
+adopt (Decision 26) and the record's fit
 against the `asr` stream alone has status `fits`, the record also fails when that fit's shift
 run is over 2 lines. A song without the file, or a record whose `asr` fit does not fit, is
 judged on the transcribe stream alone.
@@ -273,7 +286,8 @@ reviewed) and this phase's commits, in one `/code-review`.
 --baseline ~/.pikaraoke/tmp/lrclib_shift_check/baseline_ids.txt --skip-new --old-cache
 ~/.pikaraoke/tmp/lrclib_auto_timing/cache --compare
 ~/.pikaraoke/tmp/lrclib_fit_pick_holdout/songs.tsv --listen-dir
-"/home/ken/shared-drives/D:/Shared/lrclib-listen" > <out>/report.md`.
+"/home/ken/shared-drives/D:/Shared/lrclib-listen/shift-check" > <out>/report.md`.
+(A subfolder: the earlier runs' listen files stay in `lrclib-listen` and are not cleared.)
 Read-only check as before: `find <library> -newer <out>/started` lists nothing the probe
 could have written (new song folders and files are Ken's import).
 
@@ -305,7 +319,12 @@ Read-only. Inputs: the Phase 2 report and files, Ken's two verdicts.
    before the rule is added.
 4. **Known holes.** Name every GATE P wrong record that is still a pick under the bar Ken is
    about to freeze. Ken accepts each as a known hole or stops (Decisions 8 and 23).
-5. **Ken rules:** the bar as pre-registered, or with the second-hearing rule, or stop. The
+5. **Missed opening words.** For each record refused `shifted` that Ken heard as good or the
+   captions bear out, read its sheet: are the off lines ones whose opening words are not in
+   `words.txt`, so the line's offset was taken from a later word and reads late by those
+   words' length? List each such record. A different offset definition is a new plan, not a
+   change at this gate.
+6. **Ken rules:** the bar as pre-registered, or with the second-hearing rule, or stop. The
    judge writes the frozen bar and the ruling under "Frozen bar" in this file with the date.
    No limit changes at this gate. A different limit is a new plan.
 
@@ -379,6 +398,7 @@ type, labels, lists", "Ken's checks") with their open points. They get their spe
 | 1 | 2026-11-10 | plan | Sizing on the saved outputs of the earlier holdout run, read-only, scratch scripts outside the repo ("Where the check came from"). Baseline of the 198 used songs written, ids only. Share not mounted: no library read, no auto-caption file read. | `~/.pikaraoke/tmp/lrclib_shift_check/baseline_ids.txt` |
 | 2 | 2026-11-12 | 0 | Fifty fresh songs listed (Set E 20: 10 film/sing-along/video cut; Set C 30: 12). yt-dlp 2026.10.26 metadata only; no LRCLIB, no probe, no library writes. Baseline sha256 rechecked, unchanged. Ken adds them with `add_songs`. | table in Phase 0 |
 | 3 | 2026-11-12 | 1 | Phase 1 (1a-1e), no library read, no probe run on the library, no GPU. **1a:** every anchor exists as the plan uses it. **1b** `fd5ec5d`: `SliceFit.offsets` (each line's heard start minus fitted start, None when unheard) and `longest_shift_run(offsets, limit_s)` in `srt_slice_fit`; `SliceFit.shift_run` is a property of `offsets` (the plan said a field; `offsets` is kept so the probe can print them and count at other limits without a second copy of the logic); `SHIFT_OFFSET_S = 1.5`. **1c** `478bcf7`: `MAX_SHIFT_RUN = 2`, refusal `shifted` after `unclaimed`, `REFUSALS` has five names. **1d** `f5e11a2`: probe columns (`shift_run`, `ref_shift_run`, `asr_status`, `asr_shift_run`, `asr_mistimed_n`, `asr_unheard_n` in `candidates.tsv`; `pick_shift_run`, `has_asr`, `asr_pick_id` in `songs.tsv`; `Shift_run` in Table S), flag `ref_shift_run`, sheet columns `offset` and `caption_offset` (signed seconds, blank when unheard), `--skip-new`, `--new-only` (both need `--baseline`), `--compare`, Tables G, A, C, and a second table under Table V for offset limits 1.0/1.5/2.0 s by run limits 2/3/4 (other limits at the bar's). Table V's first table now also applies the shift condition at the bar's limits. Table G's seven records are keyed by song id (file stem for the three songs with no YouTube id). The second-hearing rule is read by the probe only (`Rec.asr_refuses`, `SongResult.asr_pick`); the bar does not see it. **1e:** full suite 3692 passed; pre-commit clean on the changed files; self-review on the three axes done. `main()` smoke-run on an empty scratch folder only (every table prints; `--skip-new` without `--baseline` errors). | commits `fd5ec5d`, `478bcf7`, `f5e11a2` |
+| 4 | 2026-11-12 | 1 (review) | `/code-review` of `ddefad8~1..HEAD` on the six Phase 1 files, 10 findings, triage ratified by Ken (Decisions 26, 27). Fixed in `48472dc`: `lrc_auto_pick.refusal` takes the four limits as arguments (defaults the bar's) and `passes_at` calls it; `read_asr(song, length)` applies `ytasr.is_usable` and `ASR_JSON3_SUFFIX`, so `has_asr` now means a caption the pipeline would adopt; `judge_reference` adds `caption.shift_s` to the caption stream before `add_references`, so `ref_shift` and every ref flag compare on the heard words' clock; sheet `caption_offset` is `ref.offsets[j] + ref.shift_s - fit.shift_s`; `make_recs` compares ids with `<=` (no KeyError when a timing has no int id); four long lines rewrapped. Not fixed: finding 1 (GATE F item 5), 2 (ruled under "Where the check came from"), 5 (Phase 2b now writes listen files to a subfolder), 6 (Phase 2 reuses the cache on purpose), 9 (probe-only refactor). Full suite 3696 passed; pre-commit clean. | commit `48472dc` |
 
 ## Frozen bar
 
