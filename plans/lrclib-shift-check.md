@@ -1,10 +1,10 @@
-Model: Claude Sonnet 5.5 (executor, Phases 1, 2, 3 and 4). Claude Opus 5.5 chooses the fresh
-songs (Phase 0) and reads GATE F and GATE Q, then Ken. Author: Claude Fable 5.2, 2026-11-10.
+Model: Claude Sonnet 5.5 (executor, Phases 0, 1, 2, 3 and 4). Claude Fable 5.2 reads GATE F
+and GATE Q while it is available (to 2026-11-16), Claude Opus 5.5 after that; then Ken.
+Author: Claude Fable 5.2, 2026-11-10.
 
 # LRCLIB timing at download: the shifted-section check
 
-**Status: PLANNED 2026-11-10. Nothing executed. Open for Ken before Phase 0: Decisions 20-24
-are the author's defaults and he may overrule them.**
+**Status: PLANNED 2026-11-10. Nothing executed. Decisions 20-24 ruled by Ken 2026-11-12.**
 
 ## Goal
 
@@ -42,21 +42,24 @@ songs."
 
 18. The feature goes on under this plan with a tighter bar and a fresh holdout. The bar of
     `plans/lrclib-fit-pick.md` is not shipped. (The author's reading of the words above.)
-19. Sonnet executes. Opus chooses the fresh songs.
+19. Sonnet executes. Opus chooses the fresh songs. (Changed 2026-11-12: Sonnet lists them,
+    Decision 25.)
 
-The author's defaults, not yet ruled by Ken:
+Ken, 2026-11-12, in chat, ruling on the author's defaults:
 
-20. Opus reads both gates (Ken's standing rule for judges). Fable is called only if Opus is
-    unsure.
-21. The fresh holdout is 50 songs: 20 that take a Genius pick, judged by Ken's ear, and 30 with
+20. Fable reads both gates while it is available (to 2026-11-16). After that Opus reads
+    them, and Fable is only suggested if Opus is unsure. (The author's default was Opus.)
+21. Accepted. The fresh holdout is 50 songs: 20 that take a Genius pick, judged by Ken's ear, and 30 with
     uploader English captions, judged against their captions with no listening. They go in the
     library as the last thirty did; Ken deletes what he does not want afterwards.
-22. `minor` (one missing lead line, or one line 3 to 5 s off) does not count as wrong. Grenade
-    and Into the Unknown stay picks.
-23. A wrong record that no check on heard words can reach is put to Ken at GATE F as a known
+22. Accepted. `minor` (one missing lead line, or one line 3 to 5 s off) does not count as
+    wrong. Grenade and Into the Unknown stay picks.
+23. Accepted. A wrong record that no check on heard words can reach is put to Ken at GATE F as a known
     hole, as Decision 12 was. He accepts it or stops. Expected: Reflection, and Crazy unless
     the second hearing reaches it.
-24. Same branch, `lrclib_fit_pick`. The Phase 1 code of the earlier plan is reused.
+24. Accepted. Same branch, `lrclib_fit_pick`. The Phase 1 code of the earlier plan is reused.
+25. Sonnet lists the fresh songs under Phase 0's rules (Ken asked whether Sonnet could; the
+    rules are mechanical and Phase 4a checks every song's set).
 
 ## The bar (pre-registered)
 
@@ -122,12 +125,12 @@ limits were chosen with these results in sight.
 So what is unproven: the two limits were fitted to five wrong picks and about a hundred others
 on songs whose answers were known. Phases 0 and 4 test them on songs nobody has measured.
 
-## Phase 0: the fresh songs (Opus chooses, Ken adds; any time before Phase 4)
+## Phase 0: the fresh songs (Sonnet lists, Ken adds; any time before Phase 4)
 
 - **Used songs, done 2026-11-10:** `~/.pikaraoke/tmp/lrclib_shift_check/baseline_ids.txt`, 198
   lines, sha256 `1a764ddb9f814bbfb477c4cd67ae29edea1bd7fdcea9f44991adff4770dc777c`. Every
   song the earlier holdout run read. A song not in it is *new*.
-- **Opus lists 50 songs** in a table here (song, YouTube id, set, kind), in a plan-only commit,
+- **Sonnet lists 50 songs** in a table here (song, YouTube id, set, kind), in a plan-only commit,
   and gives Ken the Windows `add_songs` commands in batches of about ten.
   - **Set E, 20 songs:** the upload has no uploader English captions, so the song takes a
     Genius pick. Ken judges these picks by ear.
@@ -146,6 +149,72 @@ on songs whose answers were known. Phases 0 and 4 test them on songs nobody has 
   today.
 - Adding songs does not wait for GATE F. The probe does not read a new song before the bar is
   frozen (Phase 2 runs with `--skip-new`).
+
+**The fifty, listed 2026-11-12 (Sonnet 5.5 began, Opus 5.5 finished).** Candidates came from
+YouTube searches by the artists of the earlier holdout's title column and from targeted film
+searches. Every id is in the top 3 of `ytsearch3:<song>`. The set is from `--list-subs`
+uploader subtitles only (`en*` code = C). Exclusions checked: the baseline ids, every song in
+the holdout's title column, every song file in the library. Kind is judged from the upload's
+title, channel and length (a `video cut` runs well away from the album track's length), not by
+listening. LRCLIB was not consulted.
+
+| # | Song | YouTube id | Set | Kind |
+|---|---|---|---|---|
+| 1 | Camp Rock 2 - It's On | `fO4BmrVjqjM` | E | sing-along |
+| 2 | Frozen - Fixer Upper | `IyO-vdsgq1s` | E | sing-along |
+| 3 | Frozen 2 - Some Things Never Change | `nVW9QOIeqQg` | E | sing-along |
+| 4 | Pocahontas - Savages | `1YiAzyCzZzw` | E | film clip |
+| 5 | Rent (2005) - Take Me or Leave Me | `DcbEr7Cd_Cc` | E | film clip |
+| 6 | Rent (2005) - Over the Moon | `pXNd2V88d60` | E | film clip |
+| 7 | Tenacious D - Kickapoo | `hvvjiE4AdUI` | E | film clip |
+| 8 | Wicked (2024) - What Is This Feeling | `amgPXKrFZVg` | E | film clip |
+| 9 | Wicked (2024) - Dancing Through Life | `jniq78mKKcM` | E | film clip |
+| 10 | Justin Timberlake - SexyBack | `3gOHvDP_vCs` | E | video cut |
+| 11 | Britney Spears - I'm A Slave 4 U | `Mzybwwf2HoQ` | E | plain |
+| 12 | Colbie Caillat - Fallin' For You | `GPCRbuL4Oh8` | E | plain |
+| 13 | Jason Mraz, Colbie Caillat - Lucky | `acvIVA9-FMQ` | E | plain |
+| 14 | Kelly Clarkson - Behind These Hazel Eyes | `yipoOY56MbM` | E | plain |
+| 15 | Kelly Clarkson - Catch My Breath | `HEValZuFYRU` | E | plain |
+| 16 | Michelle Branch - All You Wanted | `Cbo2n2MzxxE` | E | plain |
+| 17 | Michelle Branch - Are You Happy Now? | `Uxb6RFh3BCw` | E | plain |
+| 18 | NSYNC - Here We Go | `zqVejtQ2qCk` | E | plain |
+| 19 | Queen - Don't Stop Me Now | `HgzGwKwLmgM` | E | plain |
+| 20 | S Club - Natural | `A4Kba6v5fdg` | E | plain |
+| 21 | Justin Timberlake - Can't Stop the Feeling! | `ru0K8uYEZWw` | C | video cut |
+| 22 | ZAYN - Dusk Till Dawn | `tt2k8PGm-TI` | C | video cut |
+| 23 | Whitney Houston - I Wanna Dance With Somebody | `eH3giaIzONA` | C | video cut |
+| 24 | Tenacious D - Wonderboy | `FL4HSiGvk68` | C | video cut |
+| 25 | Eminem - Without Me | `YVkUvmDQ3HY` | C | video cut |
+| 26 | Eminem - The Real Slim Shady (clean) | `eJO5HU_7_1w` | C | video cut |
+| 27 | Aladdin (2019) - Prince Ali | `eGLSPyGszjo` | C | film clip |
+| 28 | Encanto - Waiting On A Miracle | `jKKrfr4To14` | C | film clip |
+| 29 | High School Musical - Breaking Free | `0qj67KE5VXI` | C | film clip |
+| 30 | Camp Rock 3 - Play My Music | `jQ-Pqxl1BlI` | C | film clip |
+| 31 | Camp Rock 3 - One Beat Away | `tESZ92ugf7g` | C | film clip |
+| 32 | Moana - Along The Way | `D_dOXTpwV5s` | C | film clip |
+| 33 | Adele - Rolling in the Deep | `rYEDA3JcQqw` | C | plain |
+| 34 | Adele - Send My Love | `fk4BbF7B29w` | C | plain |
+| 35 | Ariana Grande - Almost Is Never Enough | `b87dBaL4qI0` | C | plain |
+| 36 | Britney Spears - Toxic | `LOZuxwVk7TU` | C | plain |
+| 37 | Silk Sonic - Smokin Out The Window | `GG7fLOmlhYg` | C | plain |
+| 38 | Christina Aguilera - Genie In A Bottle | `kIDWgqDBNXA` | C | plain |
+| 39 | Colbie Caillat - Bubbly | `AWGqoCNbsvM` | C | plain |
+| 40 | Ed Sheeran - Bad Habits | `orJSJGHjBLI` | C | plain |
+| 41 | Ed Sheeran - Shivers | `Il0S8BoucSA` | C | plain |
+| 42 | Jessie J - Who You Are | `j2WWrupMBAE` | C | plain |
+| 43 | John Legend - Love Me Now | `NmCFY1oYDeM` | C | plain |
+| 44 | Kelly Clarkson - Breakaway | `c-3vPxKdj6o` | C | plain |
+| 45 | Lewis Capaldi - Before You Go | `Jtauh8GcxBY` | C | plain |
+| 46 | NSYNC - Tearin' Up My Heart | `_ZcmuKsyvzg` | C | plain |
+| 47 | Ne-Yo - Closer | `z_aC5xPQ2f4` | C | plain |
+| 48 | Sara Bareilles - Brave | `QUQsqBqxoR4` | C | plain |
+| 49 | Westlife - My Love | `ulOb9gIGGd0` | C | plain |
+| 50 | S Club - Bring It All Back | `GLQ0biK-ZgA` | C | plain |
+
+Spares, same checks passed, not added: E `kijpcUv-b8M` (Queen - Somebody To Love, video cut),
+`Do5TwE_jYnE` (Pocahontas - Just Around the Riverbend, film clip), `PTOFEgJ9zzI`, `lLYrTPE9dOE`;
+C `PstrAfoMKlc`, `GXoZLPSw8U8`, `QZLxVvLyKTo`, `FxYw0XPEoKE`, `H4BB9eGUEaE`. A spare replaces a
+song only if its download fails, same set and kind where possible, recorded here.
 
 ## Phase 1: the check and the probe (Sonnet)
 
@@ -217,11 +286,11 @@ not adjust a limit.
 **2d.** Tables P, S, K, G, A, C, V and L pasted raw under "Report output: used songs". No
 tallies, no reading. Plan-only commit.
 
-**STOP 2e.** Handoff to Opus for GATE F. Ken listens to When I Was Your Man's new pick and to
+**STOP 2e.** Handoff to the judge (Decision 20) for GATE F. Ken listens to When I Was Your Man's new pick and to
 Quit Playing Games (`Ug88HO2mg44`, 33413907, never ruled; about 1:57 to 2:05), from the listen
 folder.
 
-## GATE F: freeze the bar (Opus, then Ken)
+## GATE F: freeze the bar (the judge of Decision 20, then Ken)
 
 Read-only. Inputs: the Phase 2 report and files, Ken's two verdicts.
 
@@ -260,9 +329,9 @@ run. A rerun only for songs LRCLIB was unavailable for. The same read-only check
 reading. Plan-only commit.
 
 **STOP 4d.** Ken listens to every Set E pick (about ten a session, Table L order). Handoff to
-Opus for GATE Q once his verdicts are in.
+the judge (Decision 20) for GATE Q once his verdicts are in.
 
-## GATE Q (Opus, then Ken)
+## GATE Q (the judge of Decision 20, then Ken)
 
 Read-only. Inputs: the Phase 4 report and files, Ken's verdicts. A wrong pick and `minor` are
 as `plans/lrclib-fit-pick.md` "GATE P" defines them, with Decision 22.
@@ -308,6 +377,7 @@ type, labels, lists", "Ken's checks") with their open points. They get their spe
 | # | Date | Phase | What was done | Outputs |
 |---|---|---|---|---|
 | 1 | 2026-11-10 | plan | Sizing on the saved outputs of the earlier holdout run, read-only, scratch scripts outside the repo ("Where the check came from"). Baseline of the 198 used songs written, ids only. Share not mounted: no library read, no auto-caption file read. | `~/.pikaraoke/tmp/lrclib_shift_check/baseline_ids.txt` |
+| 2 | 2026-11-12 | 0 | Fifty fresh songs listed (Set E 20: 10 film/sing-along/video cut; Set C 30: 12). yt-dlp 2026.10.26 metadata only; no LRCLIB, no probe, no library writes. Baseline sha256 rechecked, unchanged. Ken adds them with `add_songs`. | table in Phase 0 |
 
 ## Frozen bar
 
