@@ -39,7 +39,7 @@ import srt
 # Allow running as ``python scripts/lrc_fit_pick_probe.py`` from repo root.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from pikaraoke.lib import lrc_auto_pick, lrclib  # noqa: E402
+from pikaraoke.lib import lrc_auto_pick, lrclib, ytasr  # noqa: E402
 from pikaraoke.lib.get_platform import get_temp_directory  # noqa: E402
 from pikaraoke.lib.library_regen import (  # noqa: E402
     CUSTOM_ORIGIN,
@@ -68,11 +68,11 @@ from pikaraoke.lib.srt_slice_fit import (  # noqa: E402
     fit_slice,
     flagged_runs,
     heard_streams,
-    longest_shift_run,
     lrc_to_srt,
     sheet_stream,
     unheard_runs,
 )
+from pikaraoke.lib.youtube_dl import ASR_JSON3_SUFFIX  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -325,13 +325,8 @@ def passes_at(
     shift_run_limit: int = lrc_auto_pick.MAX_SHIFT_RUN,
 ) -> bool:
     """The bar at other limits (Table V); the other conditions are the bar's."""
-    return (
-        fit.status == FITS
-        and fit.speed == 1.0
-        and len(fit.mistimed) <= mistimed_limit
-        and fit.unclaimed_run <= unclaimed_limit
-        and longest_shift_run(fit.offsets, shift_offset_s) <= shift_run_limit
-    )
+    limits = (mistimed_limit, unclaimed_limit, shift_offset_s, shift_run_limit)
+    return lrc_auto_pick.refusal(fit, *limits) is None
 
 
 def songs_with_pick_at(
@@ -392,7 +387,8 @@ def sheet_rows(
     """The sheet as ``(time, kind, flags, offset, caption offset, text)``, in time order.
 
     ``L`` is a record line at its fitted start, flagged ``M``/``U`` by the heard words and
-    ``m``/``u`` by the caption, with its offset against each (``SliceFit.offsets``; None when
+    ``m``/``u`` by the caption, with its offset against each from this fit's start
+    (``SliceFit.offsets``, the caption's moved by the two fits' shift difference; None when
     unheard, or with no caption fit); ``C`` a caption cue; ``X`` a run of ``MIN_X_RUN`` or more
     heard words no line claims, at its first word.
     """
@@ -403,7 +399,9 @@ def sheet_rows(
         for j, i in to_fit.items():
             mark = "m" if j in ref.mistimed else "u" if j in ref.unheard else ""
             flags[i] = flags.get(i, "") + mark
-            caption_offsets[i] = ref.offsets[j]
+            # ``ref.offsets`` count from the caption fit's line start; count from this fit's.
+            moved = ref.offsets[j]
+            caption_offsets[i] = None if moved is None else moved + ref.shift_s - fit.shift_s
     rows = [
         (start, "L", flags.get(i, ""), fit.offsets[i], caption_offsets.get(i), text)
         for i, (text, start) in enumerate(fit.lines)
@@ -513,7 +511,7 @@ def make_recs(
     keys = [timing_key(entry.record["syncedLyrics"]) for entry in entries]
     lowest: dict[str, object] = {}
     for key, entry in zip(keys, entries):
-        if id_key(entry.record.get("id")) < id_key(lowest.get(key)):
+        if id_key(entry.record.get("id")) <= id_key(lowest.get(key)):
             lowest[key] = entry.record.get("id")
     disk_id = disk.get("id") if disk else None
     recs = [
@@ -557,22 +555,22 @@ def add_references(recs: list[Rec], stream: list[dict], length: float) -> None:
             rec.flags = tuple(reference_flags(rec.fit, rec.ref))
 
 
-def asr_path(song: Path) -> Path:
-    return song.parent / "subtitles" / f"{song.stem}.en.asr.json3"
-
-
-def read_asr(song: Path) -> list[dict]:
-    """The song's YouTube auto-caption as a word stream; empty without the file or when it
-    cannot be read."""
-    path = asr_path(song)
+def read_asr(song: Path, length: float) -> list[dict]:
+    """The song's YouTube auto-caption as a word stream; empty without the file, when it
+    cannot be read, or when it fails the quality check the pipeline adopts one by
+    (:func:`ytasr.is_usable`: word-level, dense enough over ``length``)."""
+    path = song.parent / "subtitles" / f"{song.stem}{ASR_JSON3_SUFFIX}"
     try:
-        text = path.read_text(encoding="utf-8")
+        words, word_seg_frac = ytasr.parse_json3(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return []
-    except (OSError, ValueError) as e:
+    except (OSError, ValueError, AttributeError, TypeError) as e:
         logger.warning("Cannot read auto-caption %s: %s", path, e)
         return []
-    return heard_streams(None, text).get(ASR, [])
+    if not ytasr.is_usable(words, word_seg_frac, length):
+        logger.info("Auto-caption %s fails the pipeline's quality check, not used", path)
+        return []
+    return [{"norm": w["norm"], "start": w["start"]} for w in words]
 
 
 def add_asr_fits(recs: list[Rec], stream: list[dict], length: float) -> None:
@@ -619,7 +617,7 @@ def probe_song(status: SongStatus, run: Run) -> SongResult:
 
     entries = lrc_auto_pick.evaluate(records, words, result.length)
     result.recs, result.disk = make_recs(entries, disk_record(song), words, result.length)
-    asr_words = read_asr(song)
+    asr_words = read_asr(song, result.length)
     result.has_asr = bool(asr_words)
     if asr_words:
         add_asr_fits(song_recs(result), asr_words, result.length)
@@ -648,7 +646,9 @@ def judge_reference(result: SongResult, song: Path) -> tuple:
     result.ref_ok = caption_ok(result.caption)
     if not result.ref_ok:
         return ()
-    add_references(song_recs(result), stream, result.length)
+    # On the heard words' clock, so the screen does not count the caption's own shift.
+    on_audio = [{**w, "start": w["start"] + result.caption.shift_s} for w in stream]
+    add_references(song_recs(result), on_audio, result.length)
     return result.caption.lines
 
 

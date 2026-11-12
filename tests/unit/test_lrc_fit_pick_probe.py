@@ -283,6 +283,15 @@ class TestSheetHelpers:
             (30.0, "L", "Um", None, 5.5, "third"),
         ]
 
+    def test_the_caption_offset_is_from_this_fits_line_start_not_the_caption_fits(self):
+        fit = SliceFit(FITS, lines=(("only", 12.0),), offsets=(0.0,), shift_s=2.0)
+        # The caption puts the line 0.3 s after its own fit's start, which is 0.5 s later.
+        ref = SliceFit(FITS, lines=(("only", 12.5),), offsets=(0.3,), shift_s=2.5)
+
+        rows = probe.sheet_rows(fit, ref, (), [])
+
+        assert rows[0][4] == pytest.approx(0.8)
+
     def test_a_refused_reference_adds_no_caption_flags_or_offsets(self):
         fit = SliceFit(FITS, lines=(("only", 5.0),), mistimed=(0,), offsets=(7.0,))
 
@@ -387,6 +396,35 @@ class TestRecords:
 
         assert [r.timing_id for r in recs] == [4, 4]
 
+    def test_a_timing_whose_records_all_lack_an_id_is_named_none(self):
+        entries = [Entry({"syncedLyrics": "x"}, SliceFit(FITS), None, 1)]
+
+        recs, _ = probe.make_recs(entries, None, [], 100.0)
+
+        assert recs[0].timing_id is None
+
+
+class TestCaptionReference:
+    def test_the_records_are_screened_against_the_caption_on_the_heard_words_clock(
+        self, tmp_path, monkeypatch
+    ):
+        monkeypatch.setattr(
+            probe, "read_caption", lambda song: ("text", [{"norm": "a", "start": 10.0}])
+        )
+        monkeypatch.setattr(
+            probe, "fit_slice", lambda *args: SliceFit(FITS, lines=(("a", 11.4),), shift_s=1.4)
+        )
+        screened = []
+        monkeypatch.setattr(
+            probe, "add_references", lambda recs, stream, length: screened.append(stream)
+        )
+        song = SongResult(CAPTIONED, "", False, "vid", "Title", "stem", 300.0, _sung(3))
+
+        lines = probe.judge_reference(song, tmp_path / "stem.mp4")
+
+        assert song.ref_ok and lines == (("a", 11.4),)
+        assert screened == [[{"norm": "a", "start": pytest.approx(11.4)}]]
+
 
 class TestTableK:
     def test_each_record_is_read_from_this_runs_search_else_the_old_cache(
@@ -468,30 +506,48 @@ class TestSecondHearing:
         assert song.asr_pick is song.recs[0]
 
 
+def _json3(words: int, word_level: bool = True) -> str:
+    """An auto-caption of ``words`` words from 1 s, half a second apart when word-level; a
+    line-level one stamps them all at the line's start."""
+    segs = [
+        {"utf8": f" w{n}", **({"tOffsetMs": 500 * n} if word_level else {})} for n in range(words)
+    ]
+    return json.dumps({"events": [{"tStartMs": 1000, "segs": segs}]})
+
+
 class TestAutoCaptionFile:
-    CAPTION = json.dumps({"events": [{"tStartMs": 1000, "segs": [{"utf8": "Hello"}]}]})
-
-    def test_the_file_is_read_as_a_word_stream(self, tmp_path):
+    def _song(self, tmp_path, text: str | None = None) -> Path:
         song = tmp_path / "Title---abcdefghijk.mp4"
-        (tmp_path / "subtitles").mkdir()
-        (tmp_path / "subtitles" / f"{song.stem}.en.asr.json3").write_text(
-            self.CAPTION, encoding="utf-8"
-        )
+        if text is not None:
+            (tmp_path / "subtitles").mkdir(parents=True)
+            (tmp_path / "subtitles" / f"{song.stem}.en.asr.json3").write_text(
+                text, encoding="utf-8"
+            )
+        return song
 
-        assert probe.read_asr(song) == [{"norm": "hello", "start": 1.0}]
+    def test_a_word_level_caption_is_read_as_a_word_stream(self, tmp_path):
+        words = probe.read_asr(self._song(tmp_path, _json3(20)), 60.0)
+
+        assert len(words) == 20
+        assert words[:2] == [{"norm": "w0", "start": 1.0}, {"norm": "w1", "start": 1.5}]
+
+    def test_a_caption_the_pipeline_would_not_adopt_is_not_used(self, tmp_path):
+        # Line-level (every word at its line's start), then too sparse for the song's length.
+        assert probe.read_asr(self._song(tmp_path, _json3(20, word_level=False)), 60.0) == []
+        assert probe.read_asr(self._song(tmp_path / "x", _json3(20)), 600.0) == []
 
     def test_no_file_an_unreadable_one_and_a_wrong_shape_are_all_empty(self, tmp_path, caplog):
-        song = tmp_path / "Title---abcdefghijk.mp4"
-        assert probe.read_asr(song) == []
+        song = self._song(tmp_path)
+        assert probe.read_asr(song, 60.0) == []
 
         (tmp_path / "subtitles").mkdir()
         path = tmp_path / "subtitles" / f"{song.stem}.en.asr.json3"
         path.write_bytes(b"\xff\xfe not utf-8")
-        assert probe.read_asr(song) == []
+        assert probe.read_asr(song, 60.0) == []
         assert "Cannot read auto-caption" in caplog.text
 
         path.write_text("[]", encoding="utf-8")
-        assert probe.read_asr(song) == []
+        assert probe.read_asr(song, 60.0) == []
 
     def test_each_record_is_fitted_to_the_stream_and_a_shifted_stretch_refuses_it(self):
         heard = _sung(30)
@@ -721,7 +777,8 @@ class TestProbeSong:
             for n, w in enumerate(heard)
         ]
         events = [
-            {"tStartMs": int(w["start"] * 1000), "segs": [{"utf8": w["norm"]}]} for w in asr_words
+            {"tStartMs": 0, "segs": [{"utf8": w["norm"], "tOffsetMs": int(w["start"] * 1000)}]}
+            for w in asr_words
         ]
         (song.parent / "subtitles" / f"{song.stem}.en.asr.json3").write_text(
             json.dumps({"events": events}), encoding="utf-8"

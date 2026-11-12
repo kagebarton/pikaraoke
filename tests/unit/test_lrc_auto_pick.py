@@ -206,7 +206,8 @@ def _word(i: int) -> str:
 
 
 def _sung(lines: int) -> list[dict]:
-    """The words of ``lines`` five-word lines sung 5 s apart from 10 s, as the transcriber hears them."""
+    """The words of ``lines`` five-word lines sung 5 s apart from 10 s, as the transcriber
+    hears them."""
     return [
         {"norm": _word(k * 5 + i), "start": 10.0 + 5.0 * k + 0.6 * i}
         for k in range(lines)
@@ -215,7 +216,8 @@ def _sung(lines: int) -> list[dict]:
 
 
 def _lrc(lines: int, moved: dict[int, float] | None = None) -> str:
-    """The record's lines on the singing's clock, those in ``moved`` stamped that many seconds late."""
+    """The record's lines on the singing's clock, those in ``moved`` stamped that many
+    seconds late."""
 
     def stamp(k: int) -> str:
         seconds = 10.0 + 5.0 * k + (moved or {}).get(k, 0.0)
