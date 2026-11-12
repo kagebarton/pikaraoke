@@ -68,6 +68,7 @@ from pikaraoke.lib.srt_slice_fit import (  # noqa: E402
     fit_slice,
     flagged_runs,
     heard_streams,
+    longest_shift_run,
     lrc_to_srt,
     sheet_stream,
     unheard_runs,
@@ -283,8 +284,10 @@ def reference_flags(fit: SliceFit, ref: SliceFit) -> list[str]:
         flags.append("ref_unheard")
     if abs(ref.shift_s - fit.shift_s) > SHIFT_LIMIT_S:
         flags.append("ref_shift")
-    if ref.shift_run > lrc_auto_pick.MAX_SHIFT_RUN:
+    if ref_shift_run(fit, ref) > lrc_auto_pick.MAX_SHIFT_RUN:
         flags.append("ref_shift_run")
+    if ref.speed != 1.0:
+        flags.append("ref_speed")
     return flags
 
 
@@ -381,6 +384,27 @@ def match_lines(fit_lines: tuple, other_lines: tuple) -> dict[int, int]:
     return mapping
 
 
+def caption_offsets(fit: SliceFit, ref: SliceFit) -> tuple[float | None, ...]:
+    """Where the caption puts each of ``fit``'s lines: its heard start minus the line's start
+    on ``fit``, in ``fit``'s line order; None when the caption did not hear the line or has
+    no such line.
+
+    Taken from the caption's anchors, not from the two fits' time maps: a reference fit that
+    takes a step as a speed change leaves its own offsets small and hides the step.
+    """
+    offsets: list[float | None] = [None] * len(fit.lines)
+    for j, i in match_lines(fit.lines, ref.lines).items():
+        heard = ref.offsets[j]
+        if heard is not None:
+            offsets[i] = ref.lines[j][1] + heard - fit.lines[i][1]
+    return tuple(offsets)
+
+
+def ref_shift_run(fit: SliceFit, ref: SliceFit) -> int:
+    """The longest stretch of ``fit``'s neighbouring lines the caption puts off the same way."""
+    return longest_shift_run(caption_offsets(fit, ref))
+
+
 def sheet_rows(
     fit: SliceFit, ref: SliceFit | None, caption_lines: tuple, words: list[dict]
 ) -> list[tuple[float, str, str, float | None, float | None, str]]:
@@ -388,22 +412,19 @@ def sheet_rows(
 
     ``L`` is a record line at its fitted start, flagged ``M``/``U`` by the heard words and
     ``m``/``u`` by the caption, with its offset against each from this fit's start
-    (``SliceFit.offsets``, the caption's moved by the two fits' shift difference; None when
-    unheard, or with no caption fit); ``C`` a caption cue; ``X`` a run of ``MIN_X_RUN`` or more
-    heard words no line claims, at its first word.
+    (``SliceFit.offsets``, and :func:`caption_offsets`; None when unheard, or with no caption
+    fit); ``C`` a caption cue; ``X`` a run of ``MIN_X_RUN`` or more heard words no line
+    claims, at its first word.
     """
     flags: dict[int, str] = {i: "M" for i in fit.mistimed} | {i: "U" for i in fit.unheard}
-    caption_offsets: dict[int, float | None] = {}
+    caption: tuple[float | None, ...] = (None,) * len(fit.lines)
     if ref is not None and ref.status == FITS:
-        to_fit = match_lines(fit.lines, ref.lines)
-        for j, i in to_fit.items():
+        caption = caption_offsets(fit, ref)
+        for j, i in match_lines(fit.lines, ref.lines).items():
             mark = "m" if j in ref.mistimed else "u" if j in ref.unheard else ""
             flags[i] = flags.get(i, "") + mark
-            # ``ref.offsets`` count from the caption fit's line start; count from this fit's.
-            moved = ref.offsets[j]
-            caption_offsets[i] = None if moved is None else moved + ref.shift_s - fit.shift_s
     rows = [
-        (start, "L", flags.get(i, ""), fit.offsets[i], caption_offsets.get(i), text)
+        (start, "L", flags.get(i, ""), fit.offsets[i], caption[i], text)
         for i, (text, start) in enumerate(fit.lines)
     ]
     rows += [(start, "C", "", None, None, text) for text, start in caption_lines]
@@ -763,7 +784,7 @@ CANDIDATE_HEADER = (
     "group new youtube_id title lrclib_id in_pool on_disk picked track_len album_len "
     "timing timing_size duration gap status reason speed shift_s spread_s matched total "
     "dropped mistimed_n mistimed unheard unclaimed_run shift_run refusal "
-    "ref_status ref_shift_s ref_matched ref_total ref_mistimed ref_unheard "
+    "ref_status ref_shift_s ref_speed ref_matched ref_total ref_mistimed ref_unheard "
     "ref_unclaimed_run ref_shift_run ref_flags "
     "asr_status asr_shift_run asr_mistimed_n asr_unheard_n"
 ).split()
@@ -773,16 +794,17 @@ def ref_columns(rec: Rec) -> list[object]:
     """The record's fit to the caption, and the flags its comparison raised."""
     ref = rec.ref
     if ref is None:
-        return [""] * 9
+        return [""] * 10
     return [
         verdict(ref),
         num(ref.shift_s),
+        f"{ref.speed:.4f}",
         ref.matched,
         ref.total,
         len(ref.mistimed),
         indexes(ref.unheard),
         ref.unclaimed_run,
-        ref.shift_run,
+        ref_shift_run(rec.fit, ref),
         " ".join(rec.flags) or "none",
     ]
 

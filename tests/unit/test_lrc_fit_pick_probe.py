@@ -5,6 +5,7 @@ No network and no library: the fits are small made-up songs or built by hand.
 
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -78,6 +79,21 @@ class TestGroups:
         assert not probe.has_caption_file(song)
 
 
+FIT_LINES = tuple((f"line {k}", 10.0 * (k + 1)) for k in range(6))
+
+
+def _caption_fit(late: tuple, speed: float = 1.0, move: float = 0.0) -> SliceFit:
+    """The fit of ``FIT_LINES`` to a caption that hears line k ``late[k]`` s after the record's
+    fit puts it (None: not at all). The caption fit's own time map, ``speed * t + move``, sets
+    its lines' starts and so what its offsets are counted from."""
+    lines = tuple((text, speed * start + move) for text, start in FIT_LINES)
+    offsets = tuple(
+        None if after is None else start + after - own
+        for (_, start), (_, own), after in zip(FIT_LINES, lines, late)
+    )
+    return SliceFit(FITS, speed=speed, shift_s=move, lines=lines, offsets=offsets)
+
+
 class TestReferenceFlags:
     TRANSCRIBE_FIT = SliceFit(FITS, shift_s=2.0)
 
@@ -109,20 +125,80 @@ class TestReferenceFlags:
         assert self._flags(shift_s=0.4) == ["ref_shift"]
 
     def test_a_run_of_lines_off_the_same_way_against_the_caption_is_flagged_over_two_only(self):
-        assert self._flags(shift_s=2.0, offsets=(2.0, 2.0)) == []
-        assert self._flags(shift_s=2.0, offsets=(2.0, 2.0, 2.0)) == ["ref_shift_run"]
+        fit = SliceFit(FITS, lines=FIT_LINES)
+
+        assert probe.reference_flags(fit, _caption_fit((2.0, 2.0, 0.0, 0.0, 0.0, 0.0))) == []
+        flags = probe.reference_flags(fit, _caption_fit((2.0, 2.0, 2.0, 0.0, 0.0, 0.0)))
+        assert flags == ["ref_shift_run"]
+
+    def test_a_reference_fit_at_another_speed_is_flagged(self):
+        fit = SliceFit(FITS, shift_s=2.0)
+
+        assert probe.reference_flags(fit, SliceFit(FITS, shift_s=2.0, speed=1.016)) == ["ref_speed"]
+
+    def test_a_step_the_reference_fit_takes_up_as_speed_still_reads_as_a_run(self):
+        fit = SliceFit(FITS, lines=FIT_LINES)
+        # The caption has the last four lines 2.5 s later than the record. Fitted with a speed
+        # of 1.057 the step becomes a slope: no line is far from where the fit puts it.
+        ref = _caption_fit((0.0, 0.0, 2.5, 2.5, 2.5, 2.5), speed=1.057, move=-0.33)
+
+        assert ref.shift_run == 0
+        assert probe.ref_shift_run(fit, ref) == 4
+        assert probe.reference_flags(fit, ref) == ["ref_shift_run", "ref_speed"]
 
     def test_every_name_that_applies_is_given_in_order(self):
-        flags = self._flags(
-            shift_s=9.0, mistimed=(1,), unclaimed_run=20, unheard=(1, 2, 3), offsets=(-2.0,) * 3
+        fit = SliceFit(FITS, lines=FIT_LINES)
+        ref = replace(
+            _caption_fit((-2.0,) * 6, speed=1.1),
+            shift_s=9.0,
+            mistimed=(1,),
+            unclaimed_run=20,
+            unheard=(1, 2, 3),
         )
-        assert flags == [
+
+        assert probe.reference_flags(fit, ref) == [
             "ref_mistimed",
             "ref_unclaimed",
             "ref_unheard",
             "ref_shift",
             "ref_shift_run",
+            "ref_speed",
         ]
+
+
+class TestCaptionOffsets:
+    def test_with_both_fits_at_speed_one_they_are_the_old_shift_difference_form(self):
+        fit = SliceFit(FITS, shift_s=2.0, lines=(("a", 12.0), ("b", 22.0), ("c", 32.0)))
+        ref = SliceFit(
+            FITS,
+            shift_s=2.5,
+            lines=(("a", 12.5), ("b", 22.5), ("c", 32.5)),
+            offsets=(0.3, None, -0.7),
+        )
+
+        offsets = probe.caption_offsets(fit, ref)
+
+        assert offsets[0] == pytest.approx(0.3 + 2.5 - 2.0)
+        assert offsets[1] is None
+        assert offsets[2] == pytest.approx(-0.7 + 2.5 - 2.0)
+
+    def test_at_another_speed_they_come_from_the_anchors_against_the_fits_own_line_starts(self):
+        fit = SliceFit(FITS, lines=(("a", 10.0), ("b", 20.0)))
+        # The caption fit puts the lines at 11.5 and 22.5; it heard them at 10.5 and 20.5.
+        ref = SliceFit(FITS, speed=1.1, lines=(("a", 11.5), ("b", 22.5)), offsets=(-1.0, -2.0))
+
+        assert probe.caption_offsets(fit, ref) == pytest.approx((0.5, 0.5))
+
+    def test_a_line_the_caption_did_not_match_or_hear_is_none(self):
+        fit = SliceFit(FITS, lines=(("a", 10.0), ("b", 20.0), ("c", 30.0)))
+        ref = SliceFit(FITS, lines=(("b", 20.0), ("c", 30.0)), offsets=(None, 1.0))
+
+        assert probe.caption_offsets(fit, ref) == (None, None, pytest.approx(1.0))
+
+    def test_a_reference_with_no_lines_leaves_every_line_none(self):
+        fit = SliceFit(FITS, lines=FIT_LINES)
+
+        assert probe.caption_offsets(fit, SliceFit(REFUSED)) == (None,) * 6
 
 
 class TestCaptionIsAReference:
@@ -266,7 +342,7 @@ class TestSheetHelpers:
         )
         ref = SliceFit(
             FITS,
-            lines=(("second", 20.2), ("third", 30.2)),
+            lines=(("second", 20.0), ("third", 30.0)),
             mistimed=(1,),
             unheard=(0,),
             offsets=(None, 5.5),
@@ -570,17 +646,20 @@ class TestRows:
     def test_a_candidate_row_has_a_cell_for_every_column_with_or_without_the_other_fits(self):
         song = SongResult(CAPTIONED, "", False, "vid", "Title", "stem", 300.0)
         bare = _rec(1)
-        full = _rec(2, SliceFit(FITS, offsets=(2.0,) * 3), flags=["ref_shift_run"], asr=_shifted(4))
-        full.ref = _shifted(5)
+        fit = SliceFit(FITS, lines=FIT_LINES, offsets=(2.0,) * 3 + (0.0,) * 3)
+        full = _rec(2, fit, flags=["ref_shift_run", "ref_speed"], asr=_shifted(4))
+        full.ref = _caption_fit((2.0,) * 5 + (0.0,), speed=1.016)
 
         for rec in (bare, full):
             assert len(probe.candidate_row(song, rec)) == len(probe.CANDIDATE_HEADER)
         row = dict(zip(probe.CANDIDATE_HEADER, probe.candidate_row(song, full)))
-        assert (row["shift_run"], row["ref_shift_run"], row["ref_flags"]) == (3, 5, "ref_shift_run")
+        assert (row["shift_run"], row["ref_shift_run"]) == (3, 5)
+        assert (row["ref_speed"], row["ref_flags"]) == ("1.0160", "ref_shift_run ref_speed")
         assert (row["asr_status"], row["asr_shift_run"]) == ("fits", 4)
         assert (row["asr_mistimed_n"], row["asr_unheard_n"]) == (0, 0)
         blank = dict(zip(probe.CANDIDATE_HEADER, probe.candidate_row(song, bare)))
-        assert (blank["ref_shift_run"], blank["asr_status"], blank["asr_shift_run"]) == ("", "", "")
+        assert (blank["ref_shift_run"], blank["ref_speed"]) == ("", "")
+        assert (blank["asr_status"], blank["asr_shift_run"]) == ("", "")
 
     def test_a_song_row_has_the_pick_shift_run_the_auto_caption_flag_and_the_rule_pick(self):
         recs = [_rec(1, _shifted(3), asr=_shifted(3)), _rec(2, _shifted(1))]
