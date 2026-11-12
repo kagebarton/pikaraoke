@@ -5,9 +5,9 @@ Every synced record a search returns is fitted to the words the transcriber hear
 (:func:`srt_slice_fit.fit_slice`). A record passes the bar when it fits, at the
 clip's own speed, with at most one mistimed line, no long stretch of heard words
 that no line claims and no long stretch of lines heard a few seconds off the same
-way. The pick is made among the passing records, so the order here is part of the bar. Pure: the records, the heard words and the clip length come in
-as arguments, so the probe that measured the bar and the pipeline that will use it
-run this one code.
+way. The pick is made among the passing records, so the order here is part of the bar.
+Pure: the records, the heard words and the clip length come in as arguments, so the
+probe that measured the bar and the pipeline that will use it run this one code.
 """
 
 import math
@@ -16,9 +16,11 @@ from dataclasses import dataclass
 
 from pikaraoke.lib.srt_slice_fit import (
     FITS,
+    SHIFT_OFFSET_S,
     TRANSCRIBE,
     SliceFit,
     fit_slice,
+    longest_shift_run,
     lrc_to_srt,
 )
 
@@ -61,17 +63,26 @@ class Entry:
         return self.refusal is None
 
 
-def refusal(fit: SliceFit) -> str | None:
-    """The first bar condition ``fit`` fails; None when it passes."""
+def refusal(
+    fit: SliceFit,
+    max_mistimed: int = MAX_MISTIMED,
+    max_unclaimed_run: int = MAX_UNCLAIMED_RUN,
+    shift_offset_s: float = SHIFT_OFFSET_S,
+    max_shift_run: int = MAX_SHIFT_RUN,
+) -> str | None:
+    """The first bar condition ``fit`` fails; None when it passes.
+
+    The limits default to the bar's; the probe passes others to count picks at them.
+    """
     if fit.status != FITS:
         return NO_FIT
     if fit.speed != 1.0:
         return SPEED
-    if len(fit.mistimed) > MAX_MISTIMED:
+    if len(fit.mistimed) > max_mistimed:
         return MISTIMED
-    if fit.unclaimed_run > MAX_UNCLAIMED_RUN:
+    if fit.unclaimed_run > max_unclaimed_run:
         return UNCLAIMED
-    if fit.shift_run > MAX_SHIFT_RUN:
+    if longest_shift_run(fit.offsets, shift_offset_s) > max_shift_run:
         return SHIFTED
     return None
 
