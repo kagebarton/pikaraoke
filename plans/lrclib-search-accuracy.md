@@ -6,8 +6,8 @@ Status: **evaluation only, no code changed.** Branch `lrclib_search_accuracy`, s
 2026-11-12 (at Ken's request, the two halves being unrelated) from `lyric_search_accuracy`,
 which was cut from `dev` at `1016e20` to carry the combined plan between computers. The Genius
 half lives on `genius_search_accuracy` (`plans/genius-search-accuracy.md`); the combined plan
-is kept at `archive/lyric_search_accuracy`. This branch holds no code; it is rebased onto `dev`
-before code starts.
+is kept at `archive/lyric_search_accuracy`. This branch holds no code. Before code starts it is
+rebased onto `dev` after `search_official_captions` lands (see Rulings).
 
 ## Pick up here
 
@@ -31,9 +31,10 @@ kept at `archive/lyric_search_accuracy:plans/lyric-search-accuracy/truth_names.j
 - **A. Scope and order** (ruled for the combined plan): LRCLIB was phase 3, after the two
   Genius phases: the search (see "LRCLIB scope after the rulings"). Since the split it is this
   plan's only phase.
-- **Landing order.** The combined plan was to wait for `search_official_captions` to land on
-  `dev`. That branch edits `routes/search.py` and the vote in `official_rank.py`, which no
-  LRCLIB item touches; whether this half still waits is open.
+- **Landing order: `search_official_captions` lands on `dev` first**, as ruled for the
+  combined plan. Ken confirmed on 2026-11-12, after the split, that this half still waits for
+  it, though that branch edits `routes/search.py` and the vote in `official_rank.py`, which no
+  LRCLIB item touches.
 - **E. LRCLIB floor: reframed, not ruled.** A separate feature is tightening the repair page's
   LRCLIB fit check and looking for a bar above which an LRCLIB record can scaffold a song
   automatically. That is why Ken wants the search refined: what matters is the set of records
