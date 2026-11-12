@@ -4,7 +4,7 @@ Author: Claude Fable 5.2, 2026-11-10.
 
 # LRCLIB timing at download: the shifted-section check
 
-**Status: PLANNED 2026-11-10. Decisions 20-24 ruled by Ken 2026-11-12. Phase 1 executed 2026-11-12 (Sonnet 5.5), review fixes in; Phase 2 (2a-2d) executed 2026-11-12 (Sonnet 5.5), stopped at STOP 2e. Ken's two listens are in (row 6); GATE F pending.**
+**Status: PLANNED 2026-11-10. Decisions 20-24 ruled by Ken 2026-11-12. Phase 1 executed 2026-11-12 (Sonnet 5.5), review fixes in; Phase 2 (2a-2d) executed 2026-11-12 (Sonnet 5.5), stopped at STOP 2e. Ken's two listens are in (row 6). GATE F read and ruled 2026-11-12 (Fable 5.2): bar frozen as pre-registered, no second hearing, Crazy and Reflection accepted as known holes; Quit Playing Games not yet classed by Ken. Next: Phase 3b (probe-only caption screen fix), then Phase 4.**
 
 ## Goal
 
@@ -330,9 +330,38 @@ Read-only. Inputs: the Phase 2 report and files, Ken's two verdicts.
 
 ## Phase 3: the second hearing in the bar (Sonnet; only if GATE F adds it)
 
+**Not run: GATE F left the second hearing out (ruling 2).**
+
 `lrc_auto_pick.evaluate` and `pick` take the `asr` stream as an optional argument and apply
 the rule as "The second hearing" writes it. Tests. The probe passes the stream. One commit.
 Results row.
+
+## Phase 3b: the caption screen (Sonnet; probe only; before Phase 4)
+
+Ruled at GATE F (ruling 3; the finding is in "GATE F read"). `scripts/lrc_fit_pick_probe.py`
+and its tests only. `lrc_auto_pick` and `srt_slice_fit` are not touched: the bar is frozen.
+
+- **Caption offsets from the anchors.** For a reference line `j` that `match_lines` gives fit
+  line `i`: `ref.lines[j][1] + ref.offsets[j] - fit.lines[i][1]`, None when the caption did
+  not hear the line. A fit line with no match is None. One function; the sheet's
+  `caption_offset` and `ref_shift_run` (`longest_shift_run` over these, in fit line order;
+  the `candidates.tsv` column and the flag) both read it. The `ref.shift_s - fit.shift_s`
+  form goes.
+- **A flag `ref_speed`** in `reference_flags` when `ref.speed != 1.0`, and a `ref_speed`
+  column in `candidates.tsv`.
+- **Tests:** a reference fit at another speed raises `ref_speed`; a record with a step
+  against the caption that the reference fit takes up as speed still reads a `ref_shift_run`
+  over 2; with both fits at speed 1.0 the offsets equal what the old form gave.
+- **Check on one used song, not a rerun:** copy `Q4VK9_CfOLQ.json` from
+  `~/.pikaraoke/tmp/lrclib_shift_check/cache` into the `cache` of a scratch `--out`, then run
+  the probe with `--only Q4VK9_CfOLQ`, `--baseline`, `--skip-new`, a scratch `--listen-dir`.
+  Expected for 2137556: `ref_speed` and `ref_shift_run` among its flags, `ref_shift_run` 15.
+  Anything else: STOP. The Phase 2 folder is not written.
+- **Expected side effect, not a STOP:** on a rerun three Rent picks (Another Day, I Should
+  Tell You, What You Own) would read a `ref_shift_run` of 4 or 5 from cues that hold two
+  singers' lines. A flag is a screen; the judge reads the sheet.
+- Full suite, pre-commit on the changed files, self-review. One commit. Results row. STOP
+  for Ken; Phase 4 follows.
 
 ## Phase 4: the fresh songs (Sonnet; after GATE F and Phase 0; needs the shared drive)
 
@@ -401,10 +430,184 @@ type, labels, lists", "Ken's checks") with their open points. They get their spe
 | 4 | 2026-11-12 | 1 (review) | `/code-review` of `ddefad8~1..HEAD` on the six Phase 1 files, 10 findings, triage ratified by Ken (Decisions 26, 27). Fixed in `48472dc`: `lrc_auto_pick.refusal` takes the four limits as arguments (defaults the bar's) and `passes_at` calls it; `read_asr(song, length)` applies `ytasr.is_usable` and `ASR_JSON3_SUFFIX`, so `has_asr` now means a caption the pipeline would adopt; `judge_reference` adds `caption.shift_s` to the caption stream before `add_references`, so `ref_shift` and every ref flag compare on the heard words' clock; sheet `caption_offset` is `ref.offsets[j] + ref.shift_s - fit.shift_s`; `make_recs` compares ids with `<=` (no KeyError when a timing has no int id); four long lines rewrapped. Not fixed: finding 1 (GATE F item 5), 2 (ruled under "Where the check came from"), 5 (Phase 2b now writes listen files to a subfolder), 6 (Phase 2 reuses the cache on purpose), 9 (probe-only refactor). Full suite 3696 passed; pre-commit clean. | commit `48472dc` |
 | 5 | 2026-11-12 | 2 | Phase 2 (2a-2d) on `lrclib_fit_pick` (HEAD `57b1854`), VM, read-only on the library, while Ken's Phase 0 import was running. **2a:** `lrclib_fit_pick_holdout/cache` copied to `<out>/cache` (173 files). **2b:** baseline sha256 `1a764ddb…777c` checked first, 198 lines, equal to the one Phase 0 records. Command as written (`--skip-new`, `--old-cache`, `--compare`, listen files to `lrclib-listen/shift-check`), stdout to `<out>/report.md`, progress log to the scratchpad; started 10:16:18, finished 10:20:40, exit 0; 198 songs read, none `lrclib_unavailable`, no rerun. **One live search ran, against the plan's "no search runs":** `YRpvIiz9G8A` (Encanto - We Don't Talk About Bruno) is a baseline song with no cache file, because the earlier holdout run read it as `out_of_scope` `no_bundle`; Ken regenerated it at 14:05 on 2026-11-10, after that run (14:00), so it now has a bundle and is `joint` (15 records, 10 timings, 0 passing, no pick). Its record file is the one new file in `<out>/cache` (174 files). The earlier run had no pick for it either, so it is not in Table C. **Phase 0 import, seen not touched:** all 198 baseline songs are still in the library, and the 10 songs outside the baseline are Phase 0 #1-#10 (videos dated 09:45-09:49), none read (`--skip-new`). **Read-only check:** `find <library> -newer <out>/started` printed the directories `nonvocal/` and `vocal/` and two files, `---nonvocal.m4a` and `---vocal.m4a` of `pXNd2V88d60` (Phase 0 #6, Rent - Over the Moon), written 10:17:02-15: Ken's import. No file of a baseline song changed. **2c, as the plan defines it:** Table C lists exactly the five songs and ids the plan expects (Where You Are, Bowie and A Summer in Ohio no pick; When I Was Your Man 15816725; Nobody Needs to Know 17631826) and no others; Table G has five records refused `shifted`, and 2137556 and 685756 pass and are picked. No difference to record, no STOP. **2d:** Tables P, S, K, G, A, C, V and L pasted raw below, headings one level down, no tallies, no reading (Table A has no rows; Table X is in `report.md`, the plan does not list it for this phase). The listen folder holds 93 `.srt`, one per Table L row. **STOP 2e:** handoff to the judge for GATE F; Ken's two listens (When I Was Your Man's new pick 15816725; Quit Playing Games `Ug88HO2mg44`, 33413907, about 1:57 to 2:05) not yet done. | Outputs `~/.pikaraoke/tmp/lrclib_shift_check/` (`report.md`, `songs.tsv`, `candidates.tsv`, `sheets/`, `cache/`, `started`); listen files `D:\Shared\lrclib-listen\shift-check` (`/home/ken/shared-drives/D:/Shared/lrclib-listen/shift-check` on the VM). Lyric text; not committed. |
 | 6 | 2026-11-12 | 2 (STOP 2e) | Ken's two listens, given in chat to the executor after the STOP, recorded in his words and not classified (the wrong / `minor` / good call is GATE F item 2's). When I Was Your Man, pick 15816725 (the new pick; the compared run picked 26614056): "bruno mars is good now". Quit Playing Games, pick 33413907 (never ruled before; the pick is the same in both runs): "backstreet boys have a few lines that are slightly early or late, but otherwise more than singable". The second verdict does not say how many lines or how far off; the judge may ask Ken before ruling it against Decision 22. | Ken, chat, 2026-11-12. |
+| 7 | 2026-11-12 | GATE F | Read by Fable 5.2 on HEAD `137b36d`, read-only; the probe not rerun; no library write, no GPU, no fresh song read. Single records re-fitted from `<out>/cache` by scratch scripts for item 5 and the caption check. Ken ruled by question dialog: holes accepted, second hearing left out, caption screen fixed first; Quit Playing Games open. Phase 3b added. | "Frozen bar": "GATE F read", "Ruling". |
 
 ## Frozen bar
 
-Not yet frozen (GATE F).
+Frozen 2026-11-12 as pre-registered; the ruling and the bar's text are at the end of this
+section, after the read. One item is open with Ken (Quit Playing Games' class).
+
+### GATE F read (Fable, 2026-11-12)
+
+Read-only, on HEAD `137b36d`. Inputs: "Report output: used songs", `report.md` (Table X),
+`songs.tsv`, `candidates.tsv`, `cache/` and `sheets/` under
+`~/.pikaraoke/tmp/lrclib_shift_check`, the earlier run's `songs.tsv`, and Ken's two listens
+(row 6). The probe was not rerun. Tallies were recomputed from the two `.tsv` files and agree
+with Tables P, G, A and C. Sheets exist only for picks and for flagged passing records, so for
+item 5 and for the caption check below single records were re-fitted from `cache/` against
+the library's bundles and caption files (read-only scratch scripts in the session scratchpad,
+calling `fit_slice` as the probe does); every re-fit reproduced its `candidates.tsv` row
+(shift run, mistimed, unclaimed run).
+
+Offsets below are in seconds, in the sheets' sense: positive means the heard (or caption) word
+comes after the line's fitted start, so the line is shown early; negative, shown late.
+
+**Item 1, Tables K and G: met.** No GATE M wrong record is a pick (the seven Drowning records
+pass and are not picked; the rest are refused `unclaimed`; Stronger and That's The Way It Is
+have no pick). Of the seven GATE P wrong records five are refused `shifted`; 2137556 and
+685756 pass and are picked, as the sizing expects.
+
+**Item 2, changed picks.** Table C equals the difference recomputed against the earlier
+`songs.tsv`: five songs, no others. 102 songs have a pick (was 105): `picks` 23 of 28, `joint`
+20 of 34, `caption` 59 of 112.
+
+| Song | Pick | Judged by | Verdict |
+|---|---|---|---|
+| Bruno Mars - When I Was Your Man (`ekzHIouo8Q4`) | 15816725 (was 26614056) | Ken (row 6) | good |
+| The Last Five Years - Nobody Needs to Know | 17631826 (was 4626353) | sheet | good: 58 lines, all heard; every line starts within about 1 s of its caption cue from first to last (the one caption offset over 1.5, the two-word last line, starts 0.7 from its cue); no caption cue without a line; no unclaimed run of 5 words. Its one `mistimed` line by heard words (fitted 208 s) is on its cue by the caption. |
+| Where You Are, Bowie, A Summer in Ohio | none | | no pick, nothing to judge |
+
+**Quit Playing Games (`Ug88HO2mg44`, 33413907; the pick in both runs, the song's only passing
+record): Ken's words are in row 6; the class is his to give, asked below.** What the sheet
+shows, for his ruling:
+
+- Second chorus, fitted 117-125 s (about 1:57 to 2:05): five lines in a row shown late, by
+  the caption -3.9, -2.6, -2.1, -2.2 and -1.5; by heard words -3.7 and -2.0, two unheard,
+  then -2.4. The caption's cue starts say the same without the fit (the two lines of that
+  chorus that are not the repeated title line start 2.2 and 1.9 after their cues).
+- Elsewhere: by the caption 14 of the 62 lines are 1.5 or more off in all. Outside the second
+  chorus they stand alone or in pairs: the first chorus line (fitted 52 s) about 4 early (3.1
+  by heard words); lines at 15, 152 and 175 s about 3 early; two refrain-syllable lines at
+  169-172 s about 2 late.
+- The other chorus passes (59-73 s and 190-207 s) are within about 1.2 s.
+- By the bar its shift run is 2, the limit: the two unheard lines end the stretch. This is
+  the shape of When I Was Your Man's wrong record (four lines in a row 1.4 to 4.1 late),
+  passed for the reason Crazy passes.
+
+**Item 3, the second hearing.** 18 of the 174 probed songs have an auto caption the pipeline
+would adopt (`caption` 2 of 112, `joint` 8 of 34, `picks` 8 of 28).
+
+- What it refuses: of the seven GATE P wrong records only 26614056 (When I Was Your Man) is
+  on a song with one; its auto-caption shift run is 4, and the bar already refuses it. Crazy
+  and Reflection have no auto-caption file at all, so the rule cannot reach either. Eleven
+  records on four songs have an auto-caption shift run over 2; the bar refuses all eleven
+  already (8 `mistimed`, 2 `shifted`, 1 `speed`).
+- What it costs: nothing. Table A is empty. Of the 167 records that pass the bar on those 18
+  songs, 166 fit the auto caption and none has an auto-caption shift run over 1.
+- **Recommendation: do not add it.** On these songs it never once decided anything: no wrong
+  record caught that the bar misses, no good record lost. It was proposed to reach Crazy and
+  Reflection and reaches neither. Adding it would put a rule in the shipped bar that no
+  measurement has seen act, and GATE Q could not tell whether it helped. Against that: the
+  measured cost is nil with margin, and it is the only check proposed so far that could see
+  lines the transcriber missed, on the quarter of Genius-pick songs that have the file. If
+  Ken adds it, no pick changes, so no verdict is owed first.
+
+**Item 4, known holes (Decisions 8 and 23).** GATE P wrong records still picked under the bar
+as pre-registered, with or without the second hearing:
+
+- **Britney Spears - (You Drive Me) Crazy (`Q4VK9_CfOLQ`), 2137556.** After the video's
+  spoken break, fifteen lines in a row (fitted 129-190 s) are 1.7 to 5.5 early by the
+  caption, most of them 2.5 to 2.9. The transcriber heard two of the fifteen, the first and
+  the last. The song's only passing record.
+- **Christina Aguilera - Reflection (`RNprQYHenNI`), 685756.** The last two lines (fitted
+  191 and 196 s) are 5.1 and 6.4 early by the caption; both unheard. All 20 records pass. Six
+  of the seven timings carry the caption's flag (Table X). The seventh is one record,
+  40258746, unflagged and not read (it has no sheet); the pick order puts the twelve-record
+  timing first, so it does not help as the bar stands.
+- Quit Playing Games joins this list if Ken rules it wrong.
+
+What accepting them means for GATE Q, for Ken to weigh: these are 2 (3 with Quit Playing
+Games) of 59 `caption` picks, each a stretch the transcriber did not hear. The fresh run has
+30 caption songs, about half of which should get a pick, so a pick of the same kind among
+them is roughly an even chance. GATE Q rule 3 stops on any wrong pick; accepting a hole here
+does not accept one there.
+
+**Item 5, missed opening words.** 59 records are refused `shifted`, on 11 songs. 48 carry the
+five wrong timings' songs (Where You Are 20, Bowie 20, Nobody Needs to Know 4, A Summer in
+Ohio 2, When I Was Your Man 2). The other eleven, none a pick in either run, on six songs
+that all keep their pick:
+
+| Song | Records | Reference | The run that refuses it | Anchor of each off line |
+|---|---|---|---|---|
+| Backstreet Boys - Shape Of My Heart (`OT5msu-dap8`) | 39824663, 13563645 | captions bear the record out (caption shift run 0 and 1, no flag) | the three opening lines (fitted 8-21 s), -1.8 to -3.6 by heard words, -0.1 to +1.1 by the caption | the line's first word |
+| Rent - One Song Glory | 11061005 | captions bear the record out (run 1, no flag) | three lines (fitted 95-108 s) of one to four words on one repeated word, -2.4 to -3.2 by heard words, +0.7 to +3.6 by the caption | the line's first word |
+| Justin Timberlake - Suit & Tie (`IsUsVbTj2AY`) | 37912453, 16431444, 14357227, 35648481, 28278766 | captions agree with the refusal (caption shift run 3, `ref_shift_run`) | three lines (fitted 177-180 s), -1.8 to -3.1 by heard words, -1.4 to -3.0 by the caption | the line's first word |
+| Queen - Bohemian Rhapsody (`fJ9rUzIMcZQ`) | 18087267 | captions agree the passage is late (lines at 224-229 s are -3.0 to -4.4 by the caption; its run is 2 only because unheard lines sit between them) | three lines (fitted 229-231 s), -1.6 to -3.0 by heard words | the line's first word |
+| I Just Had Sex (`lQlIhraqL7o`) | 14631666 | none, not heard by Ken (he heard the pick, another timing) | three lines (fitted 89-91 s), -1.6 to -3.7 | the line's first word |
+| Jessie J - Flashlight (`DzwkcbTQ7ZE`) | 4031863 | none, not heard by Ken | three lines (fitted 136-143 s), -2.0 to -2.1 | the line's first word |
+
+- **No record is refused because of a missed opening word.** A missed opening word can only
+  move an offset later (positive). All eleven refusing runs are negative, and every line in
+  them is anchored on its first word.
+- Three records the captions bear out are refused all the same (Shape Of My Heart twice, One
+  Song Glory), for another reason: the transcriber's times for slow opening lines, and a
+  repeated word matched to an earlier instance. They cost no pick.
+- The missed-opening effect itself is real and about the size of the limit. On these eleven
+  records there are lines 1.5 or more off whose anchor is a later word of the line (Shape Of
+  My Heart 13563645: three lines +1.8 to +2.8, of which 1.6 to 2.3 is the missed words; I
+  Just Had Sex: two; each Suit & Tie record: two). Each stands alone between lines within
+  1.5, so none built a run. A different offset definition stays a new plan (item 5).
+
+**Found outside the items: the caption screen can hide a shifted stretch (probe only, not the
+bar).** `reference_flags` does not look at the reference fit's speed, and the sheet's
+`caption_offset` leaves the speed out. On Crazy the record's fit to the caption takes speed
+1.016, which turns the 2.5 s step into a slope: `ref_shift_run` reads 2 where the caption's
+anchors, compared with the line starts directly, give a run of fifteen. Crazy is still
+flagged only because one line is also `ref_mistimed`.
+
+- 7 of the 57 `caption` picks with a reference have a reference speed other than 1.0
+  (Drowning, I Want It That Way, Incomplete, Crazy, This I Promise You, I Should Tell You,
+  What You Own).
+- All 57 were compared again from the anchors (caption anchor minus the line's fitted start,
+  no speed). Runs of three or more: Quit Playing Games (five, above), Crazy (fifteen), and
+  three Rent picks (Another Day 6156119, I Should Tell You 6191521, What You Own 28181941)
+  whose sheets were then read: on all three the lines start within 0.4 s of their caption
+  cues, and the offsets come from cues that hold two singers' lines or a doubled line, so the
+  caption's words are spread late. No pick's GATE P verdict changes.
+- What it touches is GATE Q rule 2, which rules Set C picks from the flags and the sheets. As
+  the probe stands, a Set C pick of Crazy's kind could come out unflagged with a quiet
+  `caption_offset` column. Proposed, for Ken's ruling, before Phase 4 runs: a probe-only
+  commit (Sonnet) that adds a flag when the reference fit's speed is not 1.0 and takes
+  `caption_offset` and `ref_shift_run` from the anchors against the fit's own line starts.
+  No limit of the bar is involved. Without it, the GATE Q judge compares every Set C pick's
+  `L` and `C` rows by hand.
+
+**Also noted, no action:** 9 of the 102 picks have a shift run of exactly 2 (Quit Playing
+Games, Shape Of My Heart, 3D, I Should Tell You, What You Own, Without You, Nobody Needs to
+Know, The Next Ten Minutes, Grenade). Table V's second table: moving the offset between 1.0
+and 2.0 s or the run between 2 and 4 changes the songs with a pick by at most two in a group.
+
+### Ruling
+
+Ken, 2026-11-12, by question dialog after the read (his choices quoted):
+
+1. **Known holes:** "Accept both, go on." Crazy 2137556 and Reflection 685756 are accepted
+   as known holes (Decision 23).
+2. **The second hearing:** "Leave it out." It is not in the bar. Phase 3 as written does not
+   run.
+3. **The caption screen:** "Fix it first." A probe-only commit before Phase 4 (Phase 3b).
+4. **Quit Playing Games: not yet classed.** Ken, in place of a choice: "those last 3 are
+   indeed off bit about 2-3 s, what's the consequence of it staying a pick? do we know how
+   badly it'll compromise cue align?" Answered in chat, in short: not measured (this plan
+   checks line times, and the aligner needs the GPU). By the code, cue align cuts the pick's
+   back-to-back lines into blocks (here six, 34 to 39 s each) and times words from the audio
+   inside each, so a line a few seconds off inside its block can be pulled to where it is
+   sung, and one sung outside its block cannot. A block edge falls at 121 s, inside the late
+   stretch: the line after it is sung about 2 s before its block starts. Open with Ken: not
+   wrong and it stays a pick, or wrong and a third known hole (accepted, or stop).
+
+**The frozen bar, 2026-11-12.** As pre-registered in "The bar", no limit changed. A record
+passes when its fit against the transcribe stream has all of: status `fits`; `speed == 1.0`;
+at most 1 mistimed line; longest unclaimed run of at most 12 heard words; shift run of at
+most 2 lines, a line being off at 1.5 s, as "Shift run" defines it. The pick and the search
+are unchanged. No second hearing. In code this is `lrc_auto_pick` as of `48472dc`
+(`MAX_MISTIMED = 1`, `MAX_UNCLAIMED_RUN = 12`, `MAX_SHIFT_RUN = 2`; `SHIFT_OFFSET_S = 1.5` in
+`srt_slice_fit`); no code has changed since.
+
+Neither answer to item 4 changes a limit. Only a stop on it would undo the freeze.
+
+Known holes on the used songs: Crazy 2137556, Reflection 685756 (and Quit Playing Games
+33413907 if Ken rules it wrong).
 
 ## Report output: used songs
 
