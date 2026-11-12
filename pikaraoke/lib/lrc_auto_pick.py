@@ -1,10 +1,11 @@
-"""Which LRCLIB record, if any, times a song: the bar and the pick of plans/lrclib-fit-pick.md.
+"""Which LRCLIB record, if any, times a song: the bar and the pick of plans/lrclib-fit-pick.md,
+with the shifted-section check of plans/lrclib-shift-check.md.
 
 Every synced record a search returns is fitted to the words the transcriber heard
 (:func:`srt_slice_fit.fit_slice`). A record passes the bar when it fits, at the
-clip's own speed, with at most one mistimed line and no long stretch of heard words
-that no line claims. The pick is made among the passing records, so the order here
-is part of the bar. Pure: the records, the heard words and the clip length come in
+clip's own speed, with at most one mistimed line, no long stretch of heard words
+that no line claims and no long stretch of lines heard a few seconds off the same
+way. The pick is made among the passing records, so the order here is part of the bar. Pure: the records, the heard words and the clip length come in
 as arguments, so the probe that measured the bar and the pipeline that will use it
 run this one code.
 """
@@ -28,9 +29,21 @@ from pikaraoke.lib.srt_slice_fit import (
 MAX_MISTIMED = 1
 MAX_UNCLAIMED_RUN = 12
 
+# The third limit, fixed under plans/lrclib-shift-check.md ("The bar"): a video cut that
+# differs from the record for a stretch (a shorter gap, a spoken break) moves a run of lines
+# 2-6 s, which the 5 s mistimed tolerance passes. More than this many neighbouring lines
+# heard SHIFT_OFFSET_S or more off the same way is such a stretch.
+MAX_SHIFT_RUN = 2
+
 # Why a record fails the bar, the first condition it fails.
-NO_FIT, SPEED, MISTIMED, UNCLAIMED = "no_fit", "speed", "mistimed", "unclaimed"
-REFUSALS = (NO_FIT, SPEED, MISTIMED, UNCLAIMED)
+NO_FIT, SPEED, MISTIMED, UNCLAIMED, SHIFTED = (
+    "no_fit",
+    "speed",
+    "mistimed",
+    "unclaimed",
+    "shifted",
+)
+REFUSALS = (NO_FIT, SPEED, MISTIMED, UNCLAIMED, SHIFTED)
 
 
 @dataclass(frozen=True)
@@ -58,6 +71,8 @@ def refusal(fit: SliceFit) -> str | None:
         return MISTIMED
     if fit.unclaimed_run > MAX_UNCLAIMED_RUN:
         return UNCLAIMED
+    if fit.shift_run > MAX_SHIFT_RUN:
+        return SHIFTED
     return None
 
 

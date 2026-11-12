@@ -9,9 +9,11 @@ import pytest
 from pikaraoke.lib import lrc_auto_pick
 from pikaraoke.lib.lrc_auto_pick import (
     MAX_MISTIMED,
+    MAX_SHIFT_RUN,
     MAX_UNCLAIMED_RUN,
     MISTIMED,
     NO_FIT,
+    SHIFTED,
     SPEED,
     UNCLAIMED,
     evaluate,
@@ -24,8 +26,15 @@ from pikaraoke.lib.srt_slice_fit import FITS, REFUSED, SliceFit
 CLEAN = SliceFit(FITS)
 
 
-def _fit(mistimed: int = 0, unclaimed_run: int = 0, **fields) -> SliceFit:
-    return SliceFit(FITS, mistimed=tuple(range(mistimed)), unclaimed_run=unclaimed_run, **fields)
+def _fit(mistimed: int = 0, unclaimed_run: int = 0, shift_run: int = 0, **fields) -> SliceFit:
+    """A fit with that many mistimed lines, and ``shift_run`` neighbouring lines heard 2 s off."""
+    return SliceFit(
+        FITS,
+        mistimed=tuple(range(mistimed)),
+        unclaimed_run=unclaimed_run,
+        offsets=(2.0,) * shift_run,
+        **fields,
+    )
 
 
 def _record(record_id: int, text: str = "a\nb", track: str = "Song", album: str = "Album") -> dict:
@@ -62,10 +71,16 @@ class TestRefusal:
         assert refusal(_fit(unclaimed_run=MAX_UNCLAIMED_RUN)) is None
         assert refusal(_fit(unclaimed_run=MAX_UNCLAIMED_RUN + 1)) == UNCLAIMED
 
+    def test_a_longer_shift_run_than_allowed_is_refused(self):
+        assert refusal(_fit(shift_run=MAX_SHIFT_RUN)) is None
+        assert refusal(_fit(shift_run=MAX_SHIFT_RUN + 1)) == SHIFTED
+
     def test_the_first_failed_condition_is_the_one_named(self):
-        fit = _fit(mistimed=5, unclaimed_run=50, speed=1.07)
+        fit = _fit(mistimed=5, unclaimed_run=50, shift_run=9, speed=1.07)
         assert refusal(fit) == SPEED
-        assert refusal(_fit(mistimed=5, unclaimed_run=50)) == MISTIMED
+        assert refusal(_fit(mistimed=5, unclaimed_run=50, shift_run=9)) == MISTIMED
+        assert refusal(_fit(unclaimed_run=50, shift_run=9)) == UNCLAIMED
+        assert refusal(_fit(shift_run=9)) == SHIFTED
 
 
 class TestTimingKey:
@@ -148,6 +163,20 @@ class TestPick:
 
         assert [e.record["id"] for e in evaluate(records, [], 100.0)] == [4]
 
+    def test_a_shifted_record_is_not_picked_over_a_clean_one_from_a_smaller_timing(self, fits):
+        fits.update({"shifted": _fit(shift_run=MAX_SHIFT_RUN + 1), "clean": CLEAN})
+        records = [_record(1, "shifted"), _record(2, "shifted"), _record(9, "clean")]
+
+        assert pick(records, [], 100.0).record["id"] == 9
+
+    def test_no_pick_when_every_passing_record_carries_the_shift(self, fits):
+        fits.update({"a": _fit(shift_run=5), "b": _fit(shift_run=3)})
+
+        records = [_record(1, "a"), _record(2, "b")]
+
+        assert pick(records, [], 100.0) is None
+        assert [e.refusal for e in evaluate(records, [], 100.0)] == [SHIFTED, SHIFTED]
+
     def test_no_pick_when_none_pass(self, fits):
         fits.update({"a": _fit(unclaimed_run=40), "b": SliceFit(REFUSED)})
 
@@ -185,9 +214,11 @@ def _sung(lines: int) -> list[dict]:
     ]
 
 
-def _lrc(lines: int) -> str:
+def _lrc(lines: int, moved: dict[int, float] | None = None) -> str:
+    """The record's lines on the singing's clock, those in ``moved`` stamped that many seconds late."""
+
     def stamp(k: int) -> str:
-        seconds = 10.0 + 5.0 * k
+        seconds = 10.0 + 5.0 * k + (moved or {}).get(k, 0.0)
         return f"[{int(seconds) // 60:02d}:{seconds % 60:05.2f}]"
 
     return "".join(
@@ -215,3 +246,19 @@ class TestRealFit:
         chosen = pick(records, _sung(30), 300.0)
 
         assert chosen.record["id"] == 4
+
+    def test_a_stretch_stamped_a_few_seconds_off_is_refused_as_shifted(self):
+        late = {k: 3.0 for k in range(14, 17)}
+
+        entries = evaluate([_record(1, _lrc(30, late))], _sung(30), 300.0)
+
+        assert (entries[0].fit.mistimed, entries[0].fit.shift_run) == ((), 3)
+        assert entries[0].refusal == SHIFTED
+
+    def test_a_stretch_of_the_allowed_length_passes(self):
+        late = {k: 3.0 for k in range(14, 16)}
+
+        chosen = pick([_record(1, _lrc(30, late))], _sung(30), 300.0)
+
+        assert chosen is not None
+        assert chosen.fit.shift_run == MAX_SHIFT_RUN
