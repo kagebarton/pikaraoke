@@ -1,6 +1,7 @@
-Model: Claude Sonnet 5.5 (executor, Phases 1-3). Author: Claude Fable 5.2, 2026-11-10. Judge
-at GATE P: Claude Fable 5.2 (Ken's call, 2026-11-10), then Ken. Phases 4-6 are
-loose and get their spec after the gate.
+Model: Claude Sonnet 5.5 (executor, Phases 1-5; Phase 6 is Ken's). Author: Claude Fable 5.2,
+2026-11-10. Judge at GATE P: Claude Fable 5.2 (Ken's call, 2026-11-10), then Ken. The spec
+of Phases 4-6 was written 2026-11-12 (Fable 5.2), after GATE Q of
+`plans/lrclib-shift-check.md`.
 
 # LRCLIB timing at download, picked by fit
 
@@ -11,6 +12,10 @@ Ken's verdicts are in for all 21 `new` picks, all 16 not-new no-reference picks 
 pick, Colbie Caillat - Realize (Results rows 7-10). **GATE P read 2026-11-10 by Fable: rule 3 is
 not met, seven wrong picks ("GATE P read", Results row 11). Ken's ruling 2026-11-10: this bar is
 not shipped; a tighter bar and a fresh holdout under `plans/lrclib-shift-check.md`.**
+
+**2026-11-12: that plan's bar is frozen and its GATE Q is ruled go (its Decision 31). The
+build spec is written below ("Phases 4-6: the build"), with Ken's rulings on its open points
+(Decisions 32-35). Next: Phase 4, Sonnet. No code yet.**
 
 ## Goal
 
@@ -67,6 +72,20 @@ Ken, 2026-11-10:
 16. A refused song goes to joint silently.
 17. The holdout is thirty songs the author listed (Phase 0), in two batches, all meant to take
     a Genius pick. Ken adds them; he does not choose them.
+
+Decisions 18-31 are in `plans/lrclib-shift-check.md`. The numbering goes on here.
+
+Ken, 2026-11-12, by question dialog, on the open points of the Phase 4-6 spec:
+
+32. The pick order stays as measured. Asked whether preferring the record with fewer shifted
+    lines needed another fifty songs, he was told no, and that on the saved tables the change
+    swaps 23 picks and helps as often as it hurts ("Sizing for Decision 32"); he kept the
+    order. The idea goes to `plans/open-issues.md`.
+33. Repair's LRCLIB list is not re-ordered in this build. It goes to `plans/open-issues.md`.
+34. Edit words on an auto-timed song gives its own kind, labelled "LRCLIB timing (auto,
+    edited)". The song stays in the auto list.
+35. When LRCLIB cannot be reached during a new download's check, the song stays on joint and
+    gets no automatic second try (Decision 3 stands). Song Info says the check could not run.
 
 ## The bar and the pick (pre-registered)
 
@@ -404,45 +423,329 @@ rules whether minor counts.
    line times, not
    the finished karaoke. Ken rules go or stop. Record the read and the ruling in this file.
 
-## Phases 4-6 (loose; spec after GATE P)
+## Phases 4-6: the build (Sonnet; spec by Fable, 2026-11-12)
 
-### Phase 4: the pipeline switch
+Written after GATE Q of `plans/lrclib-shift-check.md` was ruled go (its Decision 31). The
+loose text this replaces is in the file's history (`30b91f3`). Read first: "The bar and the
+pick" above, that plan's "Frozen bar" and "GATE Q ruling", and Decisions 1-17 and 32-35.
 
-In `LyricAlignStage.run`, before the route choice (`if cue_spans:`), on a song that would go
-joint: when the run is a first-time download and the origin is Genius, take the transcribe
-words, search LRCLIB, `lrc_auto_pick.pick`.
+**What ships.** A first-time download whose lyrics came from a Genius pick is checked
+against LRCLIB once, after the vocals are transcribed. When a record passes the frozen bar,
+the song is timed from that record's own lines by cue align and carries its own source type,
+"LRCLIB timing (auto)". Otherwise it goes joint exactly as today.
 
-- A pick: write the `.lrc`, save its fitted sheet as the new sheet kind, set the origin, run
-  cue align on it.
-- No pick: joint and the LRCLIB fill, as today.
-- The bundle records the check and its outcome either way. The Genius pick stays stored, so
-  Repair can return the song to Genius without a search.
+**Frozen, not to be touched by any step:** `lrc_auto_pick` (the limits, `refusal`,
+`_pick_order`), `srt_slice_fit.fit_slice`, `lrc_to_srt`, `SHIFT_OFFSET_S`,
+`lrclib.LRC_LAST_LINE_HOLD_S`, and the cue cleaner (`srt_cues.clean_cue_texts`,
+`genius_lyrics.clean_srt_line`: text in parentheses stays dropped; branch
+`backing_vocal_lines` owns that question). A step that seems to need a change there is a
+STOP.
 
-### Phase 5: source type, labels, lists
+### How the open points were settled
 
-A new entry in `library_regen.SHEETS`, its own origin and label (e.g. "LRCLIB timing
-(auto)"), a Tools-tab list, Song Info and History wording, the run page's "Now:" text.
-Translation catalogs in their own commits.
+| Open point | Settled as | By |
+|---|---|---|
+| How the pipeline knows a first-time download | The caller says so. The app's download lane (`ProcessingManager._process_song`, the stage list built in `processing_manager.py`) and `add_songs`' handoff arm the check; every regen path (`build_stages` from `_process_regen`, `regen_alignment_bundles`, `backfill_artifacts`) leaves it off. "No bundle on disk" was rejected as the signal: a transcribed song has no bundle, so a Repair to Genius on one would switch, against Decision 3. | code read |
+| `add_songs` (Decision 9) | It does not use the download lane: `handoff` builds `SongJob(path, None, "new")` and calls `regen_alignment_bundles.resolve_and_run`. So the job carries the flag. A video a stopped run left unprocessed is handed over the same way and counts as first-time. | code read |
+| The de-reverb gate once | `run` calls `_dereverb_gate` once in alignment mode, before the route choice, and hands the result to `_run_joint` or `_run_cue_align`. | code read |
+| Which stage writes the `.lrc`; a search failure | `LyricsFetchStage._resolve_lrclib` is unchanged, so a no-pick song has today's `.lrc` and today's fill. On a pick the align stage overwrites the `.lrc` with the picked record. One extra search request per Genius download. A search that fails: joint as today, no retry, Song Info says the check could not run (Decision 35). | code read; Ken |
+| Repair's LRCLIB list order | Not in this build; an open-issues entry (Decision 33). | Ken |
+| Reset on an auto sheet | Survives, with no new code: a sheet on disk wins on every plan (`custom_plan`). | archived default |
+| Edit words on an auto sheet | Its own edited kind, "LRCLIB timing (auto, edited)" (Decision 34). | Ken |
+| An off switch | None new. `PipelineConfig.lrclib_fill` already gates every LRCLIB request and gates this one too. | archived default |
+| The pick order (I'm A Slave 4 U) | Unchanged (Decision 32, "Sizing for Decision 32"). | Ken |
+| The 4 s hold on a last line | Unchanged: it feeds the fit, so it is part of the measured bar. Whether the finished karaoke still ends Catch My Breath's last line early is heard in Phase 6. | this spec; Ken may overrule |
+| `defer_timing` | Its plan is not on this computer. One line for whoever opens it next: the fit and the pick are no longer manual-only. | noted |
+
+Also noted for landing: branch `onset_loud_start` changes the `snap_line_edges` call in
+`lyric_align.py`. Whichever of the two lands second is replayed onto the other.
+
+### Phase 4: the pipeline switch (Sonnet)
+
+GPU-free, no library write. Tests mock the network and the workers; made-up lines only.
+
+- [ ] **4a. Anchor check.** On branch `lrclib_fit_pick`. Confirm these exist as this spec
+  uses them, else STOP and say what differs:
+  `LyricAlignStage.run`, `_run_joint`, `_run_cue_align`, `_dereverb_gate`, `_load_lyrics`,
+  `_write_debug_capture` (in `pikaraoke/pipeline/stages/lyric_align.py`);
+  `LyricsFetchStage.run` Branch a (sets `lyrics_origin` `"genius"` and
+  `ctx.artifacts["genius"]`), `_resolve_lrclib`; `lrc_auto_pick.evaluate`, `pick`, `Entry`,
+  `REFUSALS`; `srt_slice_fit.heard_streams`, `TRANSCRIBE`, `SliceFit.srt`, `shift_s`,
+  `mistimed`, `unclaimed_run`, `shift_run`; `lrclib.search_query` (raises
+  `LrclibUnavailable`), `clean_key`, `write_lrc`, `record_meta`, `lrc_path`;
+  `library_regen.SHEETS`, `SheetKind`, `LRC_ORIGIN`, `custom_sheet_file`, `_sheet_files`,
+  `sheet_kind`, `edited_kind`, `repair_source`, `is_edited_kind`, `custom_plan`,
+  `sheet_plan`, `reuse_plan`, `prepare_lyrics`, `build_stages`, `SeedArtifactsStage`,
+  `SongJob`, `default_query`; `library_tools.REPAIR_SOURCES`, `LibraryTools.custom_start`;
+  the stage list in `processing_manager.py` (one `LyricAlignStage(...)` call) and
+  `_process_regen`; `scripts/add_songs.py` `handoff`; `scripts/regen_alignment_bundles.py`
+  `run_jobs`; `scripts/lrc_fit_pick_probe.py` `search_query_for`.
+  Also confirm, and STOP if not: the bundle's `transcribe_words` are the gate's words with
+  `word` and `start` unchanged (`alignment_capture.build_bundle`), so
+  `heard_streams({"transcribe_words": words}, None)` gives the stage the same stream the
+  probe read from a bundle.
+
+- [ ] **4b. The check**, new module `pikaraoke/lib/lrc_auto_timing.py`. Network, no file
+  writes. It imports `lrclib`, `lrc_auto_pick` and `srt_slice_fit` only: `library_regen`
+  imports `LyricAlignStage`, so the stage cannot import `library_regen`, and what both
+  need about the auto sheet lives here.
+  - `ORIGIN = "lrclib_auto_srt"`, `SHEET_SUFFIX = ".lrclib-auto.srt"` and
+    `sheet_path(song: Path) -> Path` (`lyrics/<stem><SHEET_SUFFIX>`).
+  - `lrclib.query_text(title, artist) -> str`: the search text of "The search" above
+    (`" ".join(t for t in clean_key(title, artist) if t)`). `LibraryTools.custom_start`
+    and the probe's `search_query_for` call it; this is the third copy, so it becomes one.
+  - `check(genius: dict, words: list[dict], clip_length: float) -> AutoCheck`.
+    `genius` is `ctx.artifacts["genius"]`; `words` is the gate's transcribe words as the
+    bundle will store them. It builds the heard stream with `heard_streams`, searches with
+    `lrclib.search_query(query_text(title, artist))`, keeps the records with
+    `syncedLyrics`, and calls `lrc_auto_pick.evaluate`. It never raises:
+    `LrclibUnavailable` gives outcome `search_failed`, any other exception is logged with
+    its traceback and gives `error`.
+  - `AutoCheck`: `outcome` (`picked`, `no_pick`, `no_records`, `search_failed`, `error`),
+    `entry` (the picked `lrc_auto_pick.Entry` or None) and `record() -> dict`, the bundle's
+    record of the check:
+    `{"outcome", "query", "records", "timings", "passing", "refusals": {reason: count},
+    "pick": {**lrclib.record_meta(record), "timing_size", "mistimed", "unclaimed_run",
+    "shift_run", "shift_s"} | None}`. Counts are over synced records. No lyric text in it.
+  - Tests in `tests/unit/test_lrc_auto_timing.py`, `search_query` patched, made-up
+    records: a passing record is picked and the record of the check counts right; none
+    passing; no synced record; `LrclibUnavailable`; an exception inside the fit; the query
+    sent equals `custom_start`'s for the same title and artist.
+  Commit: `feat(lyrics): check LRCLIB records against the heard words in one call`.
+
+- [ ] **4c. The sheet kinds** in `pikaraoke/lib/library_regen.py`.
+  - `LRC_AUTO_ORIGIN = lrc_auto_timing.ORIGIN` beside `LRC_ORIGIN`, and
+    `LRC_ORIGINS = (LRC_ORIGIN, LRC_AUTO_ORIGIN)` for the places that mean "timed from an
+    LRCLIB record, either way".
+  - Two `SHEETS` entries: `lrclib_auto` (`lrc_auto_timing.SHEET_SUFFIX`,
+    `LRC_AUTO_ORIGIN`, "LRCLIB timing (auto)") and `lrclib_auto_edited`
+    (`.lrclib-auto-edited.srt`, `LRC_AUTO_ORIGIN`, "LRCLIB timing (auto, edited)",
+    `edits="lrclib"`). Test: `custom_sheet_file(song, "lrclib_auto")` equals
+    `lrc_auto_timing.sheet_path(song)`.
+  - What must hold, with tests in `tests/unit/test_library_regen.py` and
+    `test_library_tools.py`:
+    `edited_kind(LRC_AUTO_ORIGIN) == "lrclib_auto_edited"` and
+    `edited_kind(LRC_ORIGIN)` is still `"lrclib_edited"`;
+    `repair_source` gives `"lrclib"` for both new kinds (the Repair page's "current" tag
+    sits on LRCLIB timing); `is_edited_kind("lrclib_auto")` is False;
+    `lrclib_auto` is **not** in `REPAIR_SOURCES` (nobody repairs *to* it). One new
+    `SheetKind` field naming the repair source an automatic kind stands for is the
+    suggested shape; `repair_source` and `REPAIR_SOURCES` read it.
+    `sheet_kind` tells all four LRCLIB suffixes apart.
+    A Repair to manual LRCLIB timing, to Genius, or to any other source removes the auto
+    sheet (`apply_custom_choice` already walks `_sheet_files`); a failed regen puts it back
+    (`snapshot_lyric_files`). Test both, no new code expected.
+  - `reuse_plan` must not read an auto bundle as reusable Genius lyrics. The bundle keeps
+    `lyrics.genius` (4d), but its `lines` are the record's. With the sheet gone from disk it
+    returns None, as an `lrclib_srt` bundle does today. Test it.
+  - A run from an auto sheet (Regenerate, Reset, a bulk run, Edit words) keeps the Genius
+    identity: when the plan's origin is `LRC_AUTO_ORIGIN` and the job's bundle has
+    `lyrics.genius`, `prepare_lyrics` adds it to the seed. One place. Test that the seed
+    carries it and that other sheet kinds are unchanged.
+  Commit: `feat(lyrics): sheet kinds for an LRCLIB timing picked at download`.
+
+- [ ] **4d. The switch** in `LyricAlignStage`.
+  - Constructor gains `auto_lrc_timing: bool = False`.
+  - `run`, alignment mode: call `_dereverb_gate` once, before the route choice.
+    `_run_joint` and `_run_cue_align` take its result (stem, words, de-reverb stats)
+    instead of calling it. Behaviour of both routes is otherwise unchanged; the existing
+    tests of both must pass unedited except for the call shape.
+  - The check runs when all hold: the stage is armed; `cue_spans` is None (the song would
+    go joint); `ctx.artifacts["lyrics_origin"] == "genius"`; `ctx.artifacts["genius"]` is
+    set; `config.lrclib_fill` is on. Clip length is
+    `ctx.artifacts.get("media_duration_s") or probe_duration(ctx.song_path)`; with no
+    length the outcome is `error` and the song goes joint.
+  - **A pick.** Write `entry.fit.srt` to `ctx.tmp_dir` under the sheet's file name, load
+    it with `_load_lyrics`, set `ctx.artifacts["lyrics_origin"]` to `lrc_auto_timing.ORIGIN`,
+    and run the cue route on it with the gate's result. Where the ASS is promoted, also move the
+    sheet to `lrc_auto_timing.sheet_path(song)` and write the picked record with
+    `lrclib.write_lrc(lrclib.lrc_path(song), entry.record)`. Nothing lands in `lyrics/`
+    before that, so a cancelled or failed run leaves no sheet and the `.lrc` as
+    `lyrics_fetch` left it. The bundle's `lyrics.source_path` is the sheet's final path.
+    `ctx.artifacts["genius"]` is left set, so the bundle keeps `lyrics.genius`.
+  - **No pick** (every other outcome): joint and the fill exactly as today. Log one info
+    line with the outcome and the counts. No message to the admin (Decision 16).
+  - **The bundle** records the check whenever it ran:
+    `pipeline_decisions["lrclib_auto"] = check.record()`. Absent when the check did not
+    run. No `SCHEMA_VERSION` bump: the key is new and optional, and a bump would mark every
+    song in the library as behind for no change in its output.
+  - Tests in `tests/unit/test_lyric_align.py`, the check patched: armed with a pick (cue
+    route ran, sheet and `.lrc` in `lyrics/`, origin, `lyric_method`
+    `lrclib_auto_srt+cue_align`, bundle record `picked`, `lyrics.genius` kept,
+    `source_path` the sheet); armed with each no-pick outcome (joint ran, no sheet, `.lrc`
+    untouched, bundle record present); not armed, origin not `genius`, a caption song, or
+    `lrclib_fill` off (the check is never called, no bundle key); the transcribe worker is
+    called once per run on both routes; a cue-align failure after a pick leaves `lyrics/`
+    as it was.
+  Commit: `feat(pipeline): a new Genius download is timed from an LRCLIB record that
+  passes the bar`.
+
+- [ ] **4e. Arming.**
+  - `processing_manager.py`: the download lane's `LyricAlignStage(...,
+    auto_lrc_timing=True)`.
+  - `library_regen.build_stages(..., auto_lrc_timing: bool = False)` passes it on;
+    `_process_regen` does not set it.
+  - `SongJob.first_download: bool = False`; `add_songs.handoff` sets it;
+    `regen_alignment_bundles.run_jobs` passes `job.first_download` to `build_stages`.
+  - Tests: the download lane's stage is armed and a regen job's is not
+    (`test_processing_manager.py`); `handoff`'s jobs are armed and a scanned or selected
+    job is not (`test_add_songs.py`, `test_regen_alignment_bundles.py`).
+  Commit: `feat(pipeline): downloads and add_songs arm the LRCLIB timing check`.
+
+- [ ] **4f. Parity check, read-only, where the library and the fresh `<out>` are** (the
+  VM; `<out>` is `~/.pikaraoke/tmp/lrclib_shift_check_holdout`). A scratch script outside
+  the repo: for each of the fifty fresh songs, call `lrc_auto_timing.check` with
+  `search_query` replaced by that song's `<out>/cache/<youtube_id>.json` records, the
+  bundle's `transcribe_words` and its `media_duration_s`. The picked id must equal
+  `songs.tsv`'s `pick_id` for all fifty (31 picks, 19 none), and for the twenty Set E
+  songs the query built from the bundle's `lyrics.genius` must equal the cache file's
+  `query`. Any difference is a STOP. If the library or `<out>` cannot be reached, STOP and
+  say so; do not skip the step. Record the counts in the Results log. No library write
+  (`find <library> -newer` as in Phase 2).
+
+- [ ] **4g.** Full suite, pre-commit on the changed files, self-review on the three axes,
+  `graphify update .` where the graph exists. Results log row. **STOP:** review due on the
+  Phase 4 commits (core pipeline). Hand Ken the line, do not launch it:
+  `/code-review <4b's commit>~1..HEAD` on `lyric_align.py`, `lrc_auto_timing.py`,
+  `library_regen.py`, `lrclib.py`, `library_tools.py`, `processing_manager.py`, the two
+  scripts and their tests, with three finders:
+  correctness (does a no-pick or failed check leave joint byte-for-byte as before; is the
+  pick the bar's), simplicity (one gate call, one query function, no second copy of the
+  bar), robustness (files only at promotion, cancel and failure paths, the network call).
+
+### Phase 5: status, lists, wording (Sonnet)
+
+- [ ] **5a. `library_status`.** `SongStatus.lrclib_auto: dict | None`, the bundle's
+  `pipeline_decisions.lrclib_auto`. The `.lrc`-header fallback for `SongStatus.lrclib`
+  applies to both `LRC_ORIGINS`. `SONG_LISTS["lrc_auto"]`: origin `LRC_AUTO_ORIGIN`. The
+  `lrc` list stays hand-picked songs only. Tests in `test_library_status.py`.
+
+- [ ] **5b. Tools tab and run page.** A list button for `lrc_auto` in
+  `templates/processing.html`, "LRCLIB (auto) · cue align", after the `lrc` one;
+  `routes/library.py` gives it the "Cue align" subline the other cue lists have.
+  `LibraryTools._now` keeps `source: "lrclib"` for both auto kinds and adds `auto: True`;
+  `_now_text` then reads "Now: LRCLIB timing (auto)" and, for the edited kind,
+  "Now: LRCLIB timing (auto, edited)". `lyricLabel` in `processing.html` names a row
+  whose method starts with `lrclib_auto` "LRCLIB (auto)" and one starting with `lrclib`
+  "LRCLIB" (today both would show the raw string).
+
+- [ ] **5c. Song Info and History** (`routes/song_info.py`). Every `origin == LRC_ORIGIN`
+  test becomes one over `LRC_ORIGINS`, with the auto wording where the text differs:
+  the route text "Lyrics from an LRCLIB match picked at download, timed against its own
+  line times."; the History source "LRCLIB timing (auto)", tested **before**
+  `entry.genius` in `_versions` (an auto bundle keeps the Genius identity and would
+  otherwise read "Genius"). A joint song whose bundle records a check that did not pick
+  gets one line in its LRCLIB row: for `no_pick` and `no_records`, "Checked at download:
+  no LRCLIB record passed the timing check."; for `search_failed` and `error`, "LRCLIB
+  could not be checked at download. Repair lyrics can time this song from LRCLIB by
+  hand." Repair opens on an auto song with LRCLIB timing marked current and the recorded
+  Genius song still offered (`current_genius_id`); test that.
+  Tests in the existing Song Info and library route tests.
+  Commit for 5a-5c: `feat(web): LRCLIB timing (auto) in the lists, Song Info and History`.
+
+- [ ] **5d. `plans/open-issues.md`**, its own commit (it lands on `dev`), two entries under
+  "Future features":
+  - **Repair's LRCLIB list in the bar's order.** The list marks its `best` by the old
+    text rule (`lrclib.select_candidate`), Ken's complaint that it lands on compilation
+    records. `lrc_auto_pick.evaluate` already gives the order and each record's refusal.
+    Also: Repair's own check still uses the length gap the bar dropped, so a record the
+    download picked can show as needing an override there. Not in the build (Decision
+    33). Record: this plan, "How the open points were settled".
+  - **Prefer the record with fewer shifted lines in the pick order.** Raised by I'm A
+    Slave 4 U at GATE Q. Sized 2026-11-12: it swaps 23 of 133 picks and by the uploader
+    captions helps as often as it hurts. Not done (Decision 32). Record: this plan,
+    "Sizing for Decision 32".
+
+- [ ] **5e. Translation catalogs** in their own commit, as `5780dfce` did.
+
+- [ ] **5f.** Full suite, pre-commit, self-review, Results log row. **STOP:** review due on
+  the Phase 5 commits; hand Ken the line as in 4g (correctness: every `LRC_ORIGIN` site
+  handles both origins; simplicity: one `LRC_ORIGINS`, no copied wording; robustness: old
+  bundles with no `lrclib_auto` key, a missing sheet).
 
 ### Phase 6: Ken's checks
 
-Download new songs, at least one expected to pass and one to fail. Check the list, Song Info,
-and the karaoke by ear. Return one to Genius on Repair.
+On the computer with the library, the app run from this branch.
 
-### Open for the Phase 4-6 spec
+1. **A song that should take a pick:** a plain official music video with no uploader
+   captions, downloaded from the search page with its Genius pick. Eight of the ten plain
+   Genius-pick videos took one among the fresh songs. The run row reads "LRCLIB (auto)"; the
+   song is in the new Tools-tab list; Song Info names the record; the karaoke by ear.
+2. **A song that should not:** a film clip or a sing-along. It is timed by joint as before
+   and Song Info says no record passed.
+3. **The last line (the 4 s hold):** delete Catch My Breath and download it again with its
+   Genius pick. It should take record 27175617. Does the last line still end early in the
+   finished karaoke? (Without deleting: Repair to LRCLIB timing with that record gives
+   nearly the same sheet through the hand route.)
+4. **Parentheses:** one of the twelve picks with whole lines in parentheses (Who You Are)
+   the same way. The echo lines are not on screen. That is as ruled, until
+   `backing_vocal_lines` decides.
+5. **Staying put:** Regenerate and Reset on an auto song keep it auto. Edit words gives
+   "LRCLIB timing (auto, edited)" and the song stays in the auto list.
+6. **Going back:** Repair to Genius on an auto song offers the recorded Genius song with
+   no search; afterwards Regenerate keeps it on Genius.
+7. **The other ways in:** one playlist row, one song picked from the needs-a-pick list,
+   one URL through `add_songs`.
 
-- How the pipeline knows a run is a first-time download (Decision 3).
-- Running the de-reverb gate once: `_run_joint` and `_run_cue_align` each run it inside, and
-  the switch needs its words before choosing the route.
-- The search and up to 20 fits now run in the align stage; today's `ensure_lrc` runs in
-  `lyrics_fetch`. Which of the two writes the `.lrc`, and what a search failure does.
-- Whether Repair's LRCLIB candidate list takes the same order (Ken's complaint that today's
-  pick lands on compilation records).
-- Reset and Edit words on an auto sheet (the archived plan's defaults: the sheet survives
-  Reset; an edit makes it an edited kind).
-- `defer_timing` assumes the fit and pick stay manual; revisit that line when this lands.
+Ken's words go in the Results log as he gives them. A fault here is his call: fix, log, or
+stop.
+
+### Executor rules for Phases 4-6
+
+- Stop at 4g and 5f, and wherever a step contradicts the code. Say what differs.
+- The frozen list at the top of this section is not edited. No limit, order or cleaner
+  change.
+- No lyric text in any commit, test or this plan. Tests use made-up lines.
+- Conda env `pik`. Tests ride with the code they exercise. Plan edits in their own commits.
+- Never launch `/code-review`; hand Ken the line.
+- 4f is the only step that reads the library, and it writes nothing.
+
+### Sizing for Decision 32
+
+Read-only, 2026-11-12, on the saved `candidates.tsv` of both runs (the fresh fifty,
+`lrclib_shift_check_holdout`; the 198 used songs, `lrclib_shift_check`), scratch scripts
+outside the repo. The candidate order put `shift_run` after the mistimed count and before
+the timing size. Re-sorting the table rows by the measured order gives the table's pick
+on every song but one of the used run (not looked into).
+"By caption" compares the old and new record's `ref_flags` count, then `ref_shift_run`.
+
+| Run | Picks | Swapped | By caption: better | same | worse | No caption |
+|---|---|---|---|---|---|---|
+| Fresh | 31 | 5 | 2 | 1 | 1 | 1 |
+| Used | 102 | 18 | 3 | 6 | 3 | 6 |
+
+| Run | Song | Pick (shift run, timing size) | Would become | By caption |
+|---|---|---|---|---|
+| Fresh | Britney Spears - I'm A Slave 4 U | 36592252 (2, 6) | 28221264 (0, 2) | no caption |
+| Fresh | Silk Sonic - Smokin Out The Window | 12516628 (2, 6) | 34655854 (1, 4) | same |
+| Fresh | Jessie J - Who You Are | 30554413 (1, 11) | 3002503 (0, 2) | better |
+| Fresh | John Legend - Love Me Now | 16734422 (2, 4) | 26705806 (1, 4) | better |
+| Fresh | Kelly Clarkson - Breakaway | 36855513 (1, 2) | 18579659 (0, 1) | worse |
+| Used | Adele - Someone Like You | 23116607 (1, 4) | 33882999 (0, 3) | same |
+| Used | Ariana Grande & John Legend - Beauty and the Beast | 31988497 (1, 5) | 33414880 (0, 1) | worse |
+| Used | Bruno Mars - Grenade | 38953751 (2, 2) | 3148300 (1, 1) | no caption |
+| Used | Christina Aguilera - Reflection | 685756 (1, 12) | 31572444 (0, 1) | same |
+| Used | Colbie Caillat - Realize | 37946467 (1, 7) | 6335426 (0, 2) | better |
+| Used | Frozen - Love Is an Open Door | 14494965 (1, 7) | 33777591 (0, 2) | no caption |
+| Used | Jessie J - Flashlight | 37730119 (1, 3) | 34270012 (0, 3) | no caption |
+| Used | John Legend - All of Me | 22517354 (1, 6) | 3879717 (0, 2) | better |
+| Used | Jung Kook - 3D | 8987220 (2, 4) | 8210031 (1, 1) | same |
+| Used | Justin Timberlake - Suit & Tie | 30120287 (1, 3) | 29351856 (0, 2) | worse |
+| Used | Moana - How Far I'll Go | 3292118 (1, 1) | 28251023 (0, 1) | same |
+| Used | NSYNC - It's Gonna Be Me | 13572204 (1, 4) | 26818679 (0, 2) | same |
+| Used | Rent - I Should Tell You | 6191521 (2, 10) | 16998698 (1, 3) | same |
+| Used | Rent - What You Own | 28181941 (2, 3) | 39413351 (1, 2) | worse |
+| Used | S Club 7 - Never Had A Dream Come True | 32607617 (1, 11) | 18390764 (0, 3) | better |
+| Used | Sara Bareilles - Gravity | 36844599 (1, 8) | 6914780 (0, 1) | no caption |
+| Used | Tangled - When Will My Life Begin | 24795512 (1, 3) | 9721855 (0, 3) | no caption |
+| Used | The Lonely Island - Threw It On The Ground | 35338143 (1, 6) | 7146283 (0, 1) | no caption |
+
+Not read: any of the replacement records by ear, and the sheets of most of them (not
+saved).
 
 ## Executor rules
+
+For Phases 1-3. Phases 4-6 have their own under "Phases 4-6: the build".
 
 - Stop at every STOP and at 1f, 2c and 3d. If a step contradicts the code, stop and say so.
 - No library writes, no GPU, no lyric text in any commit or in this plan. The listen folder
@@ -468,6 +771,7 @@ and the karaoke by ear. Return one to Genius on Repair.
 | 9 | 2026-11-10 | 3 | Ken's listening session 5, the seven not-new no-reference rows of this run's Table L that were not in the first ten rows of run 5's Table L (ranks 25, 26, 28, 32, 34, 35, 37), reported in chat. Recorded as he said it; no ruling here. **His words:** "those 7 songs are also good". The seven: She Used To Be Mine (`53GIADHxVzM`, pick 12564402), My Heart Will Go On (`9bFHsd3o1w0`, 22553995), I'm Alive (`NJsa6-y4sDs`, 28130840), Domino (`UJtB55MaoD0`, 28220836), Threw It On The Ground (`gAYL5H46QnQ`, 35338143), When Will My Life Begin (`kRXmAIHYQR4`, 24795512), The Way I Am (`Vh74KE3o4Bs`, 1781541). Five are `picks` songs whose pick has a different timing from the on-disk record Ken retimed on Repair; two are `caption` songs with no usable reference. **Open: session 2.** No verdict is recorded for the nine not-new rows of run 5's Table L ranks 1-10: Frozen In Summer (`9tcaM06eGrY`, 3630452), Camp Rock This Is Me (`6HCUoMgviwU`, 17015895), KPop Demon Hunters Your Idol (`fGyTN5UjnL4`, 23310716), Takedown (`j5itLHDMJsE`, 30356707), Golden (`yebNIHKAC4A`, 23163059), The Lonely Island Jose & Mark (`68LBPvFhMx0`, 2554162), Frozen Do You Want to Build a Snowman (`TeQ_TTyLGMs`, 3514723), Jung Kook Seven (`1QYBiNRu1ok`, 31432999), Pocahontas Colors of the Wind (`9ThO76peOw0`, 34484694); the same pick ids stand in this run's Table L. The plan, its git history and the memory notes hold none, and the Phase 3 session began from a handoff that said nothing was judged. Row 8's "session 2 was to cover the first nine" assumed it had been heard; no record shows that. **Still open from row 7:** early or late for the line Ken named in When I Was Your Man. **Still open:** Colbie Caillat - Realize's new pick 37946467 (the judge may rule from the sheet). | Verdicts in this row only (chat is not kept). |
 | 10 | 2026-11-10 | 3 | Ken's listening session 6, reported in chat. Recorded as he said it; no ruling here. **His words:** "all those are good as well, including colbie", answering the list of session 2's nine (row 9) and Colbie Caillat - Realize's new pick 37946467. The nine: Frozen In Summer (`9tcaM06eGrY`, 3630452), Camp Rock This Is Me (`6HCUoMgviwU`, 17015895), KPop Demon Hunters Your Idol (`fGyTN5UjnL4`, 23310716), Takedown (`j5itLHDMJsE`, 30356707), Golden (`yebNIHKAC4A`, 23163059), The Lonely Island Jose & Mark (`68LBPvFhMx0`, 2554162), Frozen Do You Want to Build a Snowman (`TeQ_TTyLGMs`, 3514723), Jung Kook Seven (`1QYBiNRu1ok`, 31432999), Pocahontas Colors of the Wind (`9ThO76peOw0`, 34484694). He did not say which of the two Colbie files in the listen folder he used (`...586041.srt` is run 5's pick, `...37946467.srt` this run's); the question put to him named 37946467. **Row 7's open item:** "that line from when i was your man was early" (the line he named in the 0:40 to 1:00 stretch, text not recorded here). **State:** no verdict is outstanding for any `new` pick or any no-reference pick. The picks without a verdict from Ken are the `caption` songs with a reference (7 flagged and 52 unflagged, not-new, in this run's Table L; Colbie, whom Ken has heard, is one of the 52), which GATE P rule 2 lets the judge read from the sheet. | Verdicts in this row only (chat is not kept). |
 | 11 | 2026-11-10 | GATE P | GATE P read by Fable on `lrclib_fit_pick` (HEAD `bc222f9`), read-only: both report sections, both `<out>` folders, Ken's verdicts (rows 7-10). Neither probe was rerun. The library share was not mounted during the read, so captions were read from the sheets' `C` rows. Scratch scripts outside the repo. | Rule 1 met. Rule 2 complete. **Rule 3 not met: seven wrong picks**, two `new` by Ken's ear, five `caption` by the sheets. Two `minor`. Detail in "GATE P read". Ken's ruling pending. |
+| 12 | 2026-11-12 | 4-6 spec | Spec of Phases 4-6 written by Fable 5.2 on `lrclib_fit_pick` (HEAD `30b91f3`), after GATE Q of `plans/lrclib-shift-check.md` was ruled go. No code, no probe run, no library read (the library is not on this computer). **Code read for the open points:** `lyric_align.py`, `lyrics_fetch.py`, `lrclib.py`, `lrc_auto_pick.py`, `library_regen.py`, `library_status.py`, `library_tools.py`, `processing_manager.py`, `orchestrator.py`, `routes/song_info.py`, `routes/library.py`, `scripts/add_songs.py`, `scripts/regen_alignment_bundles.py`. **Found against the loose text:** `add_songs` hands its new songs to the regen run path, not the download lane, so "first-time download" is a flag the caller sets; `library_regen` imports the align stage, so the stage cannot import it; History names a version "Genius" whenever the bundle has a Genius identity, and `reuse_plan` would replay an auto bundle's lines as Genius lyrics, both of which the spec guards. **Sizing for Decision 32,** read-only on the saved `candidates.tsv` of both shift-check runs (scratch scripts `order.py`, `order2.py`, outside the repo): a shift-run tiebreak swaps 5 of 31 fresh picks and 18 of 102 used picks. **Ken ruled four points by question dialog** (Decisions 32-35). The `defer_timing` plan is not on this computer and was not read. | "Phases 4-6: the build", "Sizing for Decision 32". |
 
 ## GATE P read (Fable, 2026-11-10)
 
