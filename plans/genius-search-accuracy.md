@@ -1,20 +1,23 @@
 # Genius search accuracy: find the right song, and default to it
 
-Model: not assigned. Evaluation by Claude Fable 5.2, 2026-11-11. No spec yet.
+Model: not assigned (see "Where Fable is needed"). Evaluation by Claude Fable 5.2, 2026-11-11
+and 2026-11-13. No spec yet.
 
-Status: **evaluation only, no code changed.** Branch `genius_search_accuracy`, split on
+Status: **evaluation only, no code changed. Rerun on the second computer done and ruled on
+2026-11-13; the spec is next.** Branch `genius_search_accuracy`, split on
 2026-11-12 (at Ken's request, the two halves being unrelated) from `lyric_search_accuracy`,
 which was cut from `dev` at `1016e20` to carry the combined plan between computers. The LRCLIB
-half lives on `lrclib_search_accuracy` (`plans/lrclib-search-accuracy.md`); the combined plan
-is kept at `archive/lyric_search_accuracy`. This branch holds no code. Before code starts it is
+half was closed with no build on 2026-11-13 and is kept at `archive/lrclib_search_accuracy`
+(`plans/lrclib-search-accuracy.md`); the combined plan is kept at
+`archive/lyric_search_accuracy`. This branch holds no code. Before code starts it is
 rebased onto `dev` after `search_official_captions` lands (see Rulings).
 
 ## Pick up here
 
-1. On Ken's other computer: rerun the Genius replay against that library ("Rerun on the other
-   computer"). Its library is about 30 songs larger.
-2. Ken rules on C with the film-year results in hand ("Genius: film year rule").
-3. Then the spec: the Genius phases need nothing more.
+1. Done 2026-11-13: the rerun on the second computer, on raw YouTube titles ("Rerun on the
+   second computer"). The library there is 248 songs, 206 with a YouTube ID.
+2. Done 2026-11-13: Ken's rulings on the builder and on C ("Rulings (Ken, 2026-11-13)").
+3. Next: the spec, by Fable ("Where Fable is needed" says why and what it has to settle).
 4. Stop before any code until the spec exists.
 
 Evidence (replay scripts and cached service answers) is in `plans/genius-search-accuracy/`.
@@ -41,13 +44,75 @@ songs).
 - **B. Default pick: preselect only when title and artist both match**, on all four entry
   points. The search page stops preselecting whatever is first. Film-named songs have no
   artist to match; their default follows C.
-- **C. Film recordings: measure first** (done, see "Genius: film year rule"; ruling pending).
+- **C. Film recordings: measure first** (done, see "Genius: film year rule"; ruled 2026-11-13,
+  below).
   Ken's note: the library's file names are the 11-08 standardized names, not the YouTube
   titles. So the year exists only where a curated file name exists (library tools); a new
   download on the search page has no year to compare.
 - **D. Extra requests: accepted.** Up to three Genius calls on the search page, two elsewhere,
   stopping early on a full match.
 - **Fixtures: commit the Genius answers and the song-name truth list** (no lyric text).
+
+## Rulings (Ken, 2026-11-13)
+
+In chat, after the rerun ("Rerun on the second computer"), on the author's four numbered
+points.
+
+- **Raw YouTube titles only.** "you don't need to tune for today's filenames, as they are
+  renamed after going through the pipeline, and the search improvements are meant to improve
+  the inputs to the pipeline". The curated-name replay of "What the spec is judged on" is no
+  longer a check the spec has to pass.
+- **The spec takes the new builder's rules** ("What the new builder does differently") in
+  place of the 11-11 prototype's: "yes, take the new builder". The recommendation he answered
+  came with "the unseen-titles fixtures added to the spec's tests so it is not judged on your
+  library alone".
+  - The author's reading, not ruled in words: this brings the channel name into phase 1,
+    where "Item 3" above had left channel out. The official-artist vote stays out.
+- **C ratified** as recommended: the year is used when the video title carries one, as part of
+  phase 1's order; there is no separate film-year phase; the year and the artist line shown
+  per hit (item 6) stay. So ruling A's phase 2 is item 6 alone.
+- **The LRCLIB half is closed with no build** and its branch retired as
+  `archive/lrclib_search_accuracy`.
+
+## Where Fable is needed
+
+Ken, 2026-11-13: note where Fable's extra intelligence would be needed.
+`plans/lrclib-shift-check.md` (branch `lrclib_fit_pick`) gives Fable as available to
+2026-11-16.
+
+**Fable: the spec.** It is the one step here that is design, and these are the points a
+weaker spec would get wrong:
+
+1. **Which of `builder.py`'s rules become contract.** It holds about thirty patterns, shaped
+   on the library's 206 titles and then on the misses of the 176 unseen ones. Both sets are
+   now spent as tests of it. The spec has to say which rules are pinned by fixtures, which are
+   a word list anyone may extend, and what fresh titles a later gate is read on.
+2. **The order of the merged hits (rule 6).** Its levels trade against each other: the
+   ablation row shows the same change fixing Hakuna Matata and losing Savages and Take Me or
+   Leave Me, and no order tried gets both the Lion King songs and the KPop Demon Hunters
+   songs. A change made to pass one title breaks another, and only the by-eye film read shows
+   it.
+3. **What reads as an artist's channel.** `builder.py` uses a word list (`NOT_ARTIST`).
+   `official_rank.py` on `search_official_captions` already tells label channels from an
+   act's own and votes on the artist. The two need one definition, across two branches with a
+   ruled landing order.
+4. **What each entry point is given.** The search page has the title and the channel. A
+   direct link, a playlist row and `add_songs` have what the download returns. Library tools
+   and Repair have a file name, where `|`, `/`, `"`, `:` and `?` were replaced and nothing
+   keeps the channel. Whether the title and channel are stored at download is a design call
+   that touches "the app itself looks nothing up".
+5. **A gate that can fail.** The answer key passes a film-named song on its title alone, so a
+   replay count cannot show a wrong recording. The spec has to pre-register what is read by
+   eye and what number stops the build.
+
+**Opus, by the standing rule, with Fable only if Opus is unsure:** the read of that gate after
+the build. The part most likely to need Fable is telling the recordings apart (film cast,
+stage cast, the pop single, a dub) for the film-named first hits.
+
+**Sonnet:** everything after the spec: the builder as app code, the four entry points, the
+year and artist line per hit, the repair prefill, tests from the fixtures. One executor rule
+for the spec to carry: a title that fails is a STOP for the judge, never a new pattern added
+to make it pass.
 
 ## What the spec is judged on (Ken, 2026-11-11)
 
@@ -260,6 +325,159 @@ first for Hakuna Matata ("The Lion King OST Mandarin", 1994, no views).
 
 Not covered: the search page, where there is no curated year (Ken's note under ruling C).
 
+## Rerun on the second computer (2026-11-13, Fable 5.2)
+
+Library `/home/ken/shared-drives/D:/Shared/pikaraoke-songs`: 248 songs, 206 with a YouTube
+ID. Scripts, the answer key and the cached Genius answers are in
+`plans/genius-search-accuracy/run2/`. The first run's scripts were not rerun: they read the
+song's identity from a curated file name, and 97 of this library's 206 YouTube files still
+carry their YouTube title.
+
+Ken, 2026-11-13, in chat: "you don't need to tune for today's filenames, as they are renamed
+after going through the pipeline, and the search improvements are meant to improve the inputs
+to the pipeline". So every row below replays the **raw YouTube title**; nothing replays a
+file name. The 42 files without an ID (movie splits) stay out.
+
+### Method
+
+- Titles and channel names: YouTube's public oEmbed, one lookup per ID (`yt_meta.py`,
+  `yt_meta.json`). All 206 answered; the titles equal Ken's `youtube_titles.txt`.
+- Answer key (`truth_build.py`, `truth_names.json`): title and artist per song, parsed from
+  the file name where it is curated, written by hand where it is not (50 overrides, Chinese
+  titles included with both scripts). 163 artist-named, 43 film-named (a film or cast where
+  the artist would be). 54 bundles record the Genius song picked.
+- A hit is right when it is the recorded pick, or its title equals the key's (brackets
+  ignored) and, for artist-named songs, it shares an artist word. Chinese titles are compared
+  as written, so no by-eye pass was needed for them.
+- **Film-named songs pass on the title alone**, so each strategy's film count is a ceiling.
+  The new builder's 43 film first hits were read by eye; the other strategies' were not.
+- Up to three Genius calls a song, stopping early as each strategy defines.
+
+### Right hit's position, 206 YouTube titles
+
+| Strategy | Artist-named (163): first / 2-8 / not listed | Film-named (43): first / 2-8 / not listed | Calls a song |
+|---|---|---|---|
+| Search page today (`clean_genius_query`) | 119 / 1 / 43 | 4 / 0 / 39 | 1 |
+| Library tools today (`clean_search_query`) | 150 / 1 / 12 | 24 / 1 / 18 | 1 |
+| The 11-11 prototype (`genius_sim.py`'s ladder and order) | 157 / 1 / 5 | 32 / 0 / 11 | 1.41 |
+| New builder (`builder.py`) | 163 / 0 / 0 | 43 / 0 / 0 | 1.33 |
+
+Of today's 83 search-page misses, 80 are queries Genius answers with no hits at all; of the
+library-tools cleaner's 32, 28.
+
+New builder, read by eye: 7 first hits have the right title and are the wrong recording, so
+199 of 206.
+
+| Song (video) | New builder's first hit |
+|---|---|
+| Camp Rock 2: It's On | Eazy-E, 1993 (the cast page is 5th) |
+| The Lion King: Can You Feel The Love Tonight | 1997 Broadway cast |
+| The Lion King: Hakuna Matata | 1997 Broadway cast |
+| The Outsiders: Stay Gold | Jun Matsumoto, 2014 (the cast page is 4th) |
+| Wicked the Musical: Popular | The Weeknd & Madonna, 2023 |
+| Wicked (channel "Wicked Movie"): What Is This Feeling | Chenoweth & Menzel, 2003, the stage recording |
+| *NSYNC: Thinking Of You (I Drive Myself Crazy) | an *NSYNC page of that title with a version suffix, no page views |
+
+None of the seven is preselected.
+
+### The default pick (ruling B)
+
+"Preselected" = the strategy's own test for "title and artist both match" holds for its first
+hit.
+
+| Strategy | Preselected | of which not the right hit | Left open | of which the first hit was right |
+|---|---|---|---|---|
+| Search page today | 206 (always the first hit) | 83 | 0 | |
+| Prototype | 173 | 8 | 33 | 24 |
+| New builder | 163 | 0 (by eye too) | 43 | 43 by the key, 36 by eye |
+
+The prototype's eight: Camp Rock 3 One Beat Away and Play My Music, Into the Unknown,
+Breaking Free, Where You Are, Prince Ali, ZAYN A Whole New World, Here I Go. In seven its
+quote rule took the film inside `(From "Frozen 2"/Sing-Along)` for the song's title and
+searched for the film alone.
+
+### What the new builder does differently
+
+`builder.py`, written during this rerun while looking at these 206 titles (see "Unseen
+titles" for what that costs).
+
+1. **Reads the title into parts first**: title, artist, film, year. A `(From "Film")` bracket
+   names a film; a quoted or 【】/《》 phrase is the title; junk brackets, junk tail words,
+   hashtags, handles and label names go; of `A - B` or `A | B` either side may be the title.
+2. **Ladder from the parts**: artist + title with its brackets' words, artist + bare title,
+   film + title, title alone.
+3. **The channel stands in for the artist** when the title names none and the channel does
+   not read as a label or studio (`I Just Might` on channel "Bruno Mars").
+4. **"Artist matches" means the hit's primary artist is named** by the title or the channel.
+   A cast credit that only carries the film's name ("Original Broadway Cast of Frozen" for a
+   Frozen video) is not an artist match.
+5. **The ladder stops, and the hit is preselected, only on such a match on a page with page
+   views.** Otherwise the title-alone query is always added.
+6. **Order of the merged hits**: title matches; a named artist on a viewed page; the year,
+   when the title carries one; a named artist on an unviewed page; not another version (remix
+   and the like by title; a stage cast, a dub, or a film cast against a title that says
+   "Musical", by artist line); the film's name in the artist line of a viewed page; page
+   views.
+7. Dropped before ordering: "Deleted Artist" pages and pages flagged instrumental.
+
+Ablations on the 206 (the key's counts):
+
+| Variant | Artist-named first | Film-named first | Preselected |
+|---|---|---|---|
+| New builder | 163 | 43 | 163 |
+| Without the channel name | 162 (Here I Go 2nd) | 43 | 153 |
+| Step 6 without "film's name in the artist line" and "named artist on an unviewed page" | 158 | 43 by the key; by eye it fixes Hakuna Matata, puts Elton John's single first for Can You Feel The Love Tonight, and loses Savages (Young Pappy) and Take Me or Leave Me (the stage cast) | 163 |
+
+At two calls a song, the limit ruling D sets away from the search page: 163 and 41 by the
+key (Breaking Free and It's On are not listed), 1.24 calls; without the channel name 162 and
+41. The library tools and Repair have no channel to use.
+
+### Unseen titles
+
+The builder was shaped on the library's titles, so it was also run on titles it had not
+seen: the frozen YouTube searches of branch `search_official_captions`
+(`tests/unit/data/youtube_search`, 44 searches). Per search the first four results whose
+title carries the searched song's title and that are not in the library: 176 videos (official
+uploads, lyric videos, fan clips, live clips, covers, and some videos that are not the song).
+`holdout.py`. "Right title first" checks the title only; 116 of the videos come from a
+search that names an act.
+
+| Strategy | Right title first | No hits at all | Named act: its page first | Preselected | of which another act's page | Calls |
+|---|---|---|---|---|---|---|
+| Search page today | 92 | 83 | 60 of 116 | | | 1 |
+| Prototype | 143 | 20 | 87 | 91 | 7 | 1.41 |
+| New builder, first pass | 138 | 21 | 89 | 79 | 4 | 1.56 |
+| New builder, after one round of fixes | 152 | 12 | 95 | 86 | 4 | 1.65 |
+
+The first pass is the clean number. The fixes were read off its misses, so the last row is no
+longer a test on unseen titles. They were: the other side of a dash counts as a title equally
+when no artist is named (`Seasons of Love - Rent`); `//` and `│` separate like a pipe; a
+double- or curly-quoted title may hold an apostrophe (`“You're Welcome”`); junk words go
+before a trailing bracket and inside a part (`Shallow Sing-Along (Lady Gaga ...)`, `Frozen
+lyrics`); `Scene` and `Clip` end a title. The 206-song rows above are from the builder after
+those fixes (before them: 206 by the key, 1.29 calls).
+
+The new builder's four "another act's page": 2Pac - Bad Guy, Ed Sheeran - Perfect Symphony,
+overtonight - mirrors demo, Van Morrison - Someone Like You. Each is the video's own song,
+returned by a search for a different song of that name. The prototype's seven are those four
+plus Dancing Queen (page "King & Queen") and Bohemian Rhapsody twice (page "LEE HI x BOHEMIAN
+RHAPSODY").
+
+### The film year (ruling C) on raw titles
+
+6 of the 43 film-named YouTube titles carry a year (`Beauty and the Beast (1991) - ...` twice,
+`RENT 2005 : ...`, `... - Rent (2005)`, `Wicked (2024) 4K - ...`, `Wicked: For Good (2025)
+...`), and one artist-named title does (`Reflection (2020)`). The builder uses it in step 6;
+the other 37 film-named titles have none. A curated year exists only after a rename, which
+Ken's 11-13 note puts outside what the search is for.
+
+### Not done in this rerun
+
+- The typed search term and the search page's voted artist: neither is recorded. The channel
+  name is the nearest thing measured.
+- A by-eye read of the prototype's and today's film first hits.
+- Videos without an ID, and any replay of a file name.
+
 ## Proposed work (candidates, not specced)
 
 1. **One query builder for every entry point**, replacing the two cleaners. Remove junk only
@@ -287,6 +505,9 @@ full title match, any artist word matches, not a variant, share of title words m
 views. It has no channel name, typed term, or year.
 
 ## Not measured
+
+(As of 2026-11-11. The first two items were measured on 2026-11-13, see "Rerun on the second
+computer".)
 
 - **Library tools on a file still carrying its YouTube title** (a fresh download before any
   rename). They clean the name with `clean_search_query`, the search page with
@@ -340,6 +561,28 @@ second row is the same key without `artist`.
 `genius_probe.py` reads the Genius token from `~/.pikaraoke/config.ini`; nothing in the folder
 stores it. `collect.py` reads `~/pikaraoke-songs`, so a rename since 11-11 changes the truth
 set.
+
+### The second computer's run (2026-11-13)
+
+```bash
+cd plans/genius-search-accuracy/run2
+PY=/home/ken/miniconda3/envs/pik/bin/python
+$PY yt_meta.py              # title and channel per YouTube ID -> yt_meta.json (206 lookups uncached)
+$PY truth_build.py          # the answer key -> truth.json, truth_names.json
+$PY today.py -v             # today's two cleaners on each YouTube title
+$PY run.py proto yt_title 3 -v           # the 11-11 prototype
+$PY run.py new yt_title 3 -v -film       # the new builder; -film lists each film first hit
+$PY run.py new yt_title 2 -v             # the two-call limit
+$PY run.py new-nochannel yt_title 3      # ablation: no channel name
+$PY run.py new-views yt_title 3 -film    # ablation: page views alone below a named artist
+git archive origin/search_official_captions tests/unit/data/youtube_search | tar -x -C <dir>
+$PY holdout.py <dir>/tests/unit/data/youtube_search -v   # unseen titles
+```
+
+`truth_build.py` and `yt_meta.py` hold this computer's library path. Every Genius answer is
+cached in `run2/genius_raw.json` (1,400 queries or so, about 2 s each uncached); do not run
+two of these scripts at once, each rewrites that file. Gitignored there: `truth.json` (lyric
+lines) and logs.
 
 ### Rerun on the other computer
 
