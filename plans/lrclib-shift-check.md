@@ -4,7 +4,7 @@ Author: Claude Fable 5.2, 2026-11-10.
 
 # LRCLIB timing at download: the shifted-section check
 
-**Status: PLANNED 2026-11-10. Decisions 20-24 ruled by Ken 2026-11-12. Phase 1 executed 2026-11-12 (Sonnet 5.5), review fixes in; Phase 2 (2a-2d) executed 2026-11-12 (Sonnet 5.5), stopped at STOP 2e. Ken's two listens are in (row 6). GATE F read and ruled 2026-11-12 (Fable 5.2): bar frozen as pre-registered, no second hearing, Crazy and Reflection accepted as known holes; Quit Playing Games ruled not wrong, stays a pick (Decision 28). Phase 3b executed 2026-11-12 (Sonnet 5.5), stopped for Ken. GATE Q's pass rule is now zero gross picks (Decision 29, 2026-11-12). Phase 4 (4a-4c) executed 2026-11-12 (Sonnet 5.5): all fifty added, one probe run, tables pasted under "Report output: fresh songs"; stopped at STOP 4d for Ken's Set E listening. Ken's Set E verdicts in 2026-11-12 (GATE Q, "Set E verdicts"; Bring It All Back by ear too). Next: GATE Q (Fable 5.2 to 2026-11-16).**
+**Status: PLANNED 2026-11-10. Decisions 20-24 ruled by Ken 2026-11-12. Phase 1 executed 2026-11-12 (Sonnet 5.5), review fixes in; Phase 2 (2a-2d) executed 2026-11-12 (Sonnet 5.5), stopped at STOP 2e. Ken's two listens are in (row 6). GATE F read and ruled 2026-11-12 (Fable 5.2): bar frozen as pre-registered, no second hearing, Crazy and Reflection accepted as known holes; Quit Playing Games ruled not wrong, stays a pick (Decision 28). Phase 3b executed 2026-11-12 (Sonnet 5.5), stopped for Ken. GATE Q's pass rule is now zero gross picks (Decision 29, 2026-11-12). Phase 4 (4a-4c) executed 2026-11-12 (Sonnet 5.5): all fifty added, one probe run, tables pasted under "Report output: fresh songs"; stopped at STOP 4d for Ken's Set E listening. Ken's Set E verdicts in 2026-11-12 (GATE Q, "Set E verdicts"; Bring It All Back by ear too). GATE Q read 2026-11-12 (Fable 5.2): zero gross picks among 31, one sheet ruling open to Ken's ear (Who You Are). Next: Ken's go or stop ("GATE Q ruling").**
 
 ## Goal
 
@@ -465,6 +465,159 @@ his words and not classified: gross, tolerated or good is GATE Q's call (Decisio
 (`GLQ0biK-ZgA`, 13229349), is a Set C pick with no usable caption reference; its listen file
 was in the folder, and Ken confirmed that "everything else" covers it: good, by ear.
 
+### GATE Q read (Fable, 2026-11-12)
+
+Read-only, on HEAD `844483d`. Inputs: "Report output: fresh songs"; `report.md`, `songs.tsv`,
+`candidates.tsv` and `sheets/` in the handoff copy of `<out>`
+(`/media/ken/Data/shift-check-fresh/lrclib-shift-check-handoff/lrclib_shift_check_holdout`;
+the files were moved to this computer); the listen files of the 13 Set E picks and Bring It
+All Back in `/media/ken/Data/shift-check-fresh`; Ken's verdicts ("Set E verdicts", row 11)
+and his Decision 30 listen (row 9). The probe was not rerun. No record was re-fitted: the
+library is not on this computer, so what has no sheet was not read (said where it matters).
+No library write, no GPU. Tallies were recomputed from the two `.tsv` files and agree with
+Tables P and S. Scratch scripts in the session scratchpad, reading the sheets' `L`, `C` and
+`X` rows.
+
+Offsets are in seconds, in the sheets' sense: positive means the heard (or caption) word
+comes after the line's fitted start, so the line is shown early; negative, shown late.
+
+**Rule 1, the frozen bar only: met.** The report's "Bar in force" line is the frozen bar.
+`lrc_auto_pick.py` and `srt_slice_fit.py` do not differ between `48472dc` and `844483d`. All
+31 picks pass the bar by their `candidates.tsv` rows. Table V was not used.
+
+**Rule 2, a verdict for every pick: complete.** 31 picks.
+
+- Set E, 13 picks: Ken's ear, all in.
+- Set C, 18 picks. Bring It All Back has no usable caption reference (row 10, "where the
+  plan is silent"); Ken judged it by ear. The other 17 were ruled from their sheets: the 6
+  flagged sheets read in full; the 11 unflagged all compared line by line (caption offsets,
+  cue starts, cues whose words no line within 6 s carries, lines whose words no cue carries)
+  and the sheet read wherever the comparison showed anything. This replaces the every-third
+  sample, which would have read 3 or 4 of the 11.
+
+Classes are Decision 29's: gross, tolerated, or good.
+
+Set E and Bring It All Back, by Ken's ear:
+
+| Song | Pick | Ken | Class | What the sheet shows (heard words) |
+|---|---|---|---|---|
+| Britney Spears - I'm A Slave 4 U (`Mzybwwf2HoQ`) | 36592252 | three lines late at 1:17, two at 2:12 | tolerated | Four lines in a row (fitted 76-88 s) late by 2.5, 1.7, 1.4 and 1.3. Two lines (132 and 141 s) late by 1.9 and 1.3 with a line on time between them. The second line of the song (7 s) 2.5 late, which Ken did not name. Eight lines in a row unheard (35-61 s); Ken reports nothing there. Shift run 2, the limit. |
+| Kelly Clarkson - Catch My Breath (`HEValZuFYRU`) | 27175617 | last line starts about on time, ends quite early | tolerated | The last line starts 0.1 from its heard words. The listen file ends it 4.0 s later, 2.9 s before its last heard word. An LRC has no line ends; a last line is held a fixed 4 s (`LRC_LAST_LINE_HOLD_S`), so this is not this record's fault and any record whose last line is long would show it. No line 1.5 off. |
+| SexyBack, Here We Go, It's On, Are You Happy Now, Kickapoo, Fixer Upper, What Is This Feeling, Behind These Hazel Eyes, Natural, Lucky, All You Wanted | as "Set E verdicts" | good | good | Longest run of lines 1.5 off the same way: 2 (SexyBack), otherwise 1 or 0. Not read further; his ear rules. |
+| S Club - Bring It All Back (`GLQ0biK-ZgA`), Set C | 13229349 | good | good | One line `mistimed` by heard words (151 s); 14 of 77 unheard. His ear rules. |
+
+Set C, from the sheets. "Caption run" is the longest run of lines 1.5 or more off the same
+way by the caption offsets (`ref_shift_run`):
+
+| Song | Pick | Flag | Caption run | Class | Read |
+|---|---|---|---|---|---|
+| Jessie J - Who You Are (`j2WWrupMBAE`) | 30554413 | `ref_unclaimed` | 1 | tolerated, the closest call | After the first chorus (72-83 s) four cues repeat the last three words of the chorus's closing line, ten times in all, and no line shows them; the record shows one line of other words in the middle, on its cue. The transcriber heard the passage (two `X` rows, 12 and 11 words; the pick's unclaimed run is 12, the limit). All 16 of the song's fitting records leave it out (unclaimed run 12 or 14). It follows the first chorus only. Read as an echo of the line just shown, not as new lead lines; the sheet cannot say who sings it. One line (110 s) 2.3 late by its cue. Every other line within 1.3. |
+| Eminem - Without Me (`YVkUvmDQ3HY`) | 19137514 | none | 1 | tolerated | The opening spoken line is shown 3.9 after its cue (one line in the `minor` band). The sung wordless outro (245-259 s, eight cues) has no line. Spoken intro phrases have no line. One line (94 s) carries the album's words where this censored video sings others. The other lines are within 1.5; the one line `mistimed` by heard words (the last) is on its cue. |
+| Ed Sheeran - Bad Habits (`orJSJGHjBLI`) | 1003365 | `ref_mistimed` | 1 | tolerated | The spoken count-in is shown 7.8 after its cue (fitted 11 s, cue 3.5 s): one line, not sung, unheard by the transcriber. No other line 1.5 off. |
+| John Legend - Love Me Now (`NmCFY1oYDeM`) | 16734422 | `ref_unclaimed` | 1 | tolerated | The flag is backing repeats of the title phrase in three passages (91-99, 152-166, 214-227 s): cues with no line, the lead lines between them shown near their cues. One line (166 s) 2.2 late by its cue, one (55 s) 1.6 early. |
+| Colbie Caillat - Bubbly (`AWGqoCNbsvM`) | 26608836 | `ref_unclaimed` | 1 | tolerated | The flag is a wordless scat passage (112-121 s, four cues) with no line. The cues split each record line in two. The second half of one late line (172 s) is sung 6 s after the line appears. |
+| Silk Sonic - Smokin Out The Window (`GG7fLOmlhYg`) | 12516628 | none | 2 | tolerated | Five lines 1.8 to 3.3 off by the caption, never more than two in a row, four of them on the drawn-out closing words of the chorus, which the cues and the record split differently. By heard words six lines are 1.5 to 2.6 off, at most two in a row (shift run 2, the limit). |
+| Troy, Gabriella - Breaking Free (`0qj67KE5VXI`) | 27603752 | none | 1 | tolerated | Four one- or two-word answering phrases in the choruses (58, 121, 156, 174 s) have a cue and no line. One echo line (116 s) 3.8 early by the caption. |
+| Kelly Clarkson - Breakaway (`c-3vPxKdj6o`) | 36855513 | `ref_unheard` | 1 | good | The nine lines the caption "did not hear" are the wordless vocalise at the start and at 97-102 s, which the caption spells with other syllables; eight start within 0.5 of a cue, one 1.8 before its cue. The last line 2.3 early. |
+| Sara Bareilles - Brave (`QUQsqBqxoR4`) | 2175446 | `ref_unclaimed` | 0 | good | The flag is spoken video dialog after the song ends (224-229 s). No line 1.5 off. |
+| Adele - Send My Love (`fk4BbF7B29w`) | 30464863 | none | 1 | good | Four separate lines (22, 34, 86, 98 s) 1.8 to 2.3 early: each appears on a one-syllable hum that precedes its words. |
+| Tenacious D - Wonderboy (`FL4HSiGvk68`) | 405494 | none | 1 | good | Six lines 1.6 to 3.9 off by the caption, none adjacent: five are the second line of a cue that holds two record lines, so the caption's words are spread late (Decision 29), and one is a two-word ad-lib; by heard words all six are within 1.7. The one line `mistimed` by heard words (171 s) is on its cue. |
+| Christina Aguilera - Genie In A Bottle (`kIDWgqDBNXA`) | 19076612 | none | 2 | good | Two opening ad-lib lines (7 and 10 s) 1.7 and 3.2 early, unheard by the transcriber. No other line 1.5 off. |
+| Eminem - The Real Slim Shady (`eJO5HU_7_1w`) | 23928896 | none | 2 | good | The last two lines (250 and 255 s, spoken) 1.6 and 3.3 early. No other line 1.5 off among 110. |
+| Whitney Houston - I Wanna Dance With Somebody (`eH3giaIzONA`) | 3002633 | none | 1 | good | One line 1.6 early. Ad-lib cues without a line in the intro and outro. |
+| Adele - Rolling in the Deep (`rYEDA3JcQqw`) | 35807678 | none | 0 | good | No line 1.5 off. |
+| NSYNC - Tearin' Up My Heart (`_ZcmuKsyvzg`) | 4091580 | none | 0 | good | No line 1.5 off. |
+| Stephanie Beatriz - Waiting On A Miracle (`jKKrfr4To14`) | 34711323 | none | 0 | good | No line 1.5 off. |
+
+**Rule 3, zero gross picks: met, on this read.** 31 picks: 22 good, 9 tolerated, 0 gross.
+
+- **No stretch of more than five lines.** The longest on any pick is four lines (I'm A Slave
+  4 U; three by Ken's ear), one of them 2 s or more off. On the 17 Set C sheets the longest
+  caption run is two lines. No pick's reference fit has a speed other than 1.0, so the
+  Phase 3b screen had nothing to uncover.
+- **No sung lead lines left out, with one call Ken's ear can overturn:** Who You Are, about
+  1:12 to 1:23. If that echo is lead singing to his ear, it is four cues never shown, which
+  is gross by Decision 29's words, and the gate stops. The Set C listen files are not on
+  this computer. The other passages without a line are wordless (Without Me's outro,
+  Bubbly's scat), backing repeats (Love Me Now), one-word answers (Breaking Free) or speech.
+- **Had the pass rule still been zero wrong picks (Decision 8),** I'm A Slave 4 U would have
+  gone to Ken as Quit Playing Games did: the same kind, smaller.
+
+**Rule 4, coverage (reported).**
+
+| Set | Kind | Songs | With a pick |
+|---|---|---|---|
+| E | plain | 10 | 8 |
+| E | film clip | 6 | 2 |
+| E | sing-along | 3 | 2 |
+| E | video cut | 1 | 1 |
+| E | all | 20 | 13 |
+| C | plain | 18 | 12 |
+| C | film clip | 6 | 2 |
+| C | video cut | 6 | 4 |
+| C | all | 30 | 18 |
+
+- 11 of the 31 picks are of the kinds behind six of the seven GATE P wrong picks (film
+  clip, sing-along, video cut); 20 are plain uploads.
+- The 19 songs without a pick: 4 have no synced record at all (Over the Moon, Take Me or
+  Leave Me, Play My Music, Along The Way). The other 15, by the most common refusal among
+  their records: `unclaimed` 6, `no_fit` 4, `mistimed` 3, `speed` 1, and **1 lost to the new
+  check** (Ne-Yo - Closer: 16 records `shifted`, each with shift run 3, the other 4 `speed`). Whether those 16
+  refusals are right was not read: refused records have no sheet and no reference columns,
+  and a re-fit needs the library.
+- No Set E song has an on-disk record that passes while nothing in the pool does.
+- What the new check did on fresh songs: 25 records refused `shifted`, on three songs
+  (Closer 16, SexyBack 8 with the on-disk record, All You Wanted 1). SexyBack's and All You
+  Wanted's picks come from other timings, and Ken heard both as good.
+
+**Rule 5, exposure.** No passing record has been ruled gross, so no song is protected only
+by the pick order. Of the flagged passing records not picked (Table X), twelve on three
+songs carry `ref_shift_run` (Genie In A Bottle 1, Bubbly 7, I Wanna Dance With Somebody 4):
+caption runs of three lines (ten records) or four (two), the tolerated size, and by cue
+starts no more than two in a row on any of their seven sheets. No passing record on a Set C
+song has a caption run over four. Not known: the not-picked records of Set E songs, which
+have no reference and no listener.
+
+**Also noted, no action at this gate:**
+
+- **Pick order.** I'm A Slave 4 U has a timing of three records (the on-disk record
+  28221264 among them) with shift run 0; the pick's timing (six records) and two others have
+  shift run 2, and the order prefers the larger timing. Unread (no sheet). When I Was Your
+  Man's pattern at GATE P. A point for the Phase 4-6 spec, not a change to the bar.
+- **The last line's end** (Catch My Breath): the fixed 4 s hold, for the Phase 4-6 spec.
+  Whether cue align moves that end from the audio is not measured.
+- **The second hearing** (left out at GATE F) would have acted once (Table A): Smokin Out
+  The Window's pick would move to 14859139, on an auto-caption run of 4 where the uploader's
+  captions show no stretch.
+- Six picks sit at a limit: shift run 2 (I'm A Slave 4 U, SexyBack, Smokin Out The Window,
+  The Real Slim Shady, Love Me Now) or unclaimed run 12 (Who You Are).
+
+**Rule 6, caveats for Ken.**
+
+- **Zero gross among 31 picks still allows a true rate of about 3 in 31, one song in ten.**
+  Only 14 of the 31 were judged by ear; on those alone the allowance is about one in five.
+- **The rule passed is "no gross pick", not "no wrong pick".** Of the 14 picks Ken heard, 2
+  have a fault he could hear, and 7 of the 17 sheets show a tolerated item.
+- **Set C is judged from sheets, not by ear,** and a caption cannot say whether a passage is
+  lead or backing. One ruling rests on that (Who You Are).
+- **The check shows line times, not finished karaoke.**
+- **Known holes Ken accepted at GATE F:** Crazy 2137556 (gross by Decision 29) and
+  Reflection 685756, both stretches the transcriber did not hear. Nothing in the bar reaches
+  that kind. None turned up among these 31; with 17 caption-checked picks that is weak
+  evidence either way.
+- **Decision 30, the finished karaoke of the three flawed picks** (row 9, Ken's words
+  there). Crazy's fifteen-line early stretch came out "otherwise well timed", one line
+  appearing early at 1:51. Reflection: one of its two early lines still comes in early.
+  Quit Playing Games: its late stretch "is late in the karaoke as well". Each line he names
+  as early "ends on time". So on three songs, one listen each, cue align mostly repaired
+  lines shown early and did not repair the one late stretch. I'm A Slave 4 U's stretch is
+  late. Nothing beyond those three songs is measured.
+- **Film clips are thinly tested:** 4 picks from 12 film clips.
+
+### GATE Q ruling
+
+Pending: Ken's go or stop.
+
 ## After GATE Q
 
 On a go, the build is Phases 4-6 of `plans/lrclib-fit-pick.md` ("the pipeline switch", "source
@@ -498,6 +651,7 @@ type, labels, lists", "Ken's checks") with their open points. They get their spe
 | 9 | 2026-11-12 | Decision 30 listen | Recipe by Opus 5.5 on HEAD `f686dd8`, no code change. **Staged from the VM** (library read-only): a copy folder holding the three videos, their vocal/nonvocal stems and alignment bundles, and per song the two files a Repair "LRCLIB timing" by record id saves (`lyrics/<stem>.lrc` from the Phase 2 cache record; `lyrics/<stem>.lrclib.srt` = `fit_slice(lrc_to_srt(...), heard_streams(bundle, None), media_duration)`, as `_fit_lrc_timing`). Repair's own check passes all three (status `fits`, speed 1.0; shift -0.19 / 0.655 / 0.485 s, the probe sheets' shifts; length gap 0 / -1 / -8 s, no override). No auto-caption on disk for any, so the fit used the transcribe stream only. A VM `--dry-run` listed all three as `LRCLIB timing`. **Ken on Windows:** `regen_alignment_bundles.py <copy> --reset --song` x3 (cue align on the sheet; bundles `lyrics.origin` `lrclib_srt`, schema 11, `.ass` written 11:53-11:58), then listened in an isolated app (`APPDATA` `C:\temp\p8\appdata`) on the copy. The library's caption karaoke was not touched. **Ken's verdicts, his words, not classified:** Crazy 2137556: "line appears early in 1:51 but ends on time, some adlibs and repeated words have problems, but those could be there also for good sheets, but otherwise well timed". Reflection 685756: "3:11 that line comes in quite early, but ends on time, last line is good". Quit Playing Games 33413907: "0:52, comes in slightly early, ends on time, the late section is late in the karaoke as well, 2:32, early but ends on time". For GATE Q rule 6. | Copy folder `D:\Shared\lrclib-cue-trial` (`karaoke/`, `alignment_debug/`, `records/`; lyric text, not committed; delete on Ken's say). Staging script `/tmp/claude-1000/-home-ken-pikaraoke/6d460e45-5c6c-40a7-8b52-91bd06c0e9fd/scratchpad/stage_cue_trial.py`. |
 | 10 | 2026-11-12 | 4 | Phase 4 (4a-4c) on `lrclib_fit_pick` (HEAD `8d91d7c` at start), VM, no code change, no GPU, no library write. **4a:** baseline sha256 `1a764ddb…777c`, equal to Phase 0's. A dry look (`library_statuses` and the probe's `classify` against the baseline and the fifty in the Phase 0 table; a scratch script outside the repo): 248 songs in the library, 50 outside the baseline, exactly the fifty, none extra. Set E's 20: all `joint` (`genius`/`joint`, no caption file). Set C's 30: all `caption` (`srt`/`cue_align`, caption file on disk, none edited). None out of scope. A first look, run while Ken's add was still going, found rows 47-50 (Ne-Yo - Closer, Sara Bareilles - Brave, Westlife - My Love, S Club - Bring It All Back) with no bundle; nothing was read then. Ken said the add was done and the look was rerun; the result above is the rerun. **4b:** `scripts/lrc_fit_pick_probe.py --folder <library> --out ~/.pikaraoke/tmp/lrclib_shift_check_holdout --baseline <Phase 0 baseline> --new-only --old-cache ~/.pikaraoke/tmp/lrclib_auto_timing/cache --listen-dir <lrclib-listen>/shift-check-fresh`, no `--compare`, `<out>` new so a fresh cache and a live LRCLIB search, stdout to `<out>/report.md`, progress log to the scratchpad. **One deviation from "as in 2b":** the listen folder is the new `shift-check-fresh`, not 2b's `shift-check`, so Ken's Set E session is not mixed with Phase 2's files (said to Ken before the run, no objection). Started 15:29:46, finished 15:32:18, exit 0; 50 songs read, none `lrclib_unavailable`, so no rerun; `<out>/cache` holds 50 files; the listen folder holds 31 `.srt`, one per Table L row. **Read-only check:** `find <library> -newer <out>/started` printed nothing. **What Table L holds (listing only):** 31 rows. Rows 1 and 3-14 are the 13 Set E picks (Table P: 20 `joint` songs, 13 with a pick). Row 2 is a Set C pick, S Club - Bring It All Back (`GLQ0biK-ZgA`, pick 13229349), whose caption reference is not usable (`ref_ok` 0, "no reference"). Rows 15-31 are Set C picks with a usable reference. The seven Set E songs with no pick, so no listen file: Fallin' For You `GPCRbuL4Oh8`, Savages `1YiAzyCzZzw`, Don't Stop Me Now `HgzGwKwLmgM`, Over the Moon `pXNd2V88d60` (0 records), Some Things Never Change `nVW9QOIeqQg`, Take Me or Leave Me `DcbEr7Cd_Cc` (0 records), Dancing Through Life `jniq78mKKcM`. **Where the plan is silent, for the judge:** STOP 4d has Ken listen to Set E only, and GATE Q rule 2 reads Set C picks against their captions; row 2 has no caption reference to read against. Not ruled. **4c:** Tables P, S, X, V and L pasted raw below under "Report output: fresh songs", no tallies, no reading. Tables K, G and A are in `report.md` and not pasted (the plan does not list them); Table A has one row (`GG7fLOmlhYg`). Plan-only commit. **STOP 4d:** Ken's Set E listens not done; handoff to the judge (Decision 20, Fable 5.2 to 2026-11-16) for GATE Q once his verdicts are in. | Outputs `~/.pikaraoke/tmp/lrclib_shift_check_holdout/` (`report.md`, `songs.tsv`, `candidates.tsv`, `sheets/`, `cache/`, `started`); listen files `D:\Shared\lrclib-listen\shift-check-fresh` (`/home/ken/shared-drives/D:/Shared/lrclib-listen/shift-check-fresh` on the VM). Lyric text; not committed. |
 | 11 | 2026-11-12 | STOP 4d | Ken's Set E listens, given in chat, recorded in his words and not classified (the call is GATE Q's). On this computer, from the handoff copy of `<out>` and the listen files at `/media/ken/Data/shift-check-fresh`; nothing rerun. 13 Set E picks: 11 good; I'm A Slave 4 U has three lines late at 1:17 and two at 2:12; Catch My Breath's last line ends early. Bring It All Back (Table L row 2, Set C, no caption reference): good by ear, Ken confirming his "everything else" covers it. | GATE Q "Set E verdicts" |
+| 12 | 2026-11-12 | GATE Q | Read by Fable 5.2 on HEAD `844483d`, on the computer the files were moved to, read-only: the probe not rerun, no record re-fitted (the library is not there), no library write, no GPU. Rule 1 met. Rule 2 complete: 14 picks by Ken's ear, 17 Set C picks from their sheets (6 flagged read in full, all 11 unflagged compared line by line). **Rule 3 met on this read: 0 gross among 31 picks; 22 good, 9 tolerated.** One sheet ruling is open to Ken's ear (Who You Are, about 1:12 to 1:23: an echo passage no line shows). Coverage 13 of 20 Set E, 18 of 30 Set C. Exposure: no passing record ruled gross. Not read: whether Closer's 16 `shifted` refusals are right. Ken's go or stop pending. | GATE Q: "GATE Q read", "GATE Q ruling". |
 
 ## Frozen bar
 
