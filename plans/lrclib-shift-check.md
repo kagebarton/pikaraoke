@@ -4,7 +4,7 @@ Author: Claude Fable 5.2, 2026-11-10.
 
 # LRCLIB timing at download: the shifted-section check
 
-**Status: PLANNED 2026-11-10. Decisions 20-24 ruled by Ken 2026-11-12. Phase 1 executed 2026-11-12 (Sonnet 5.5), review fixes in; Phase 2 (2a-2d) executed 2026-11-12 (Sonnet 5.5), stopped at STOP 2e. Ken's two listens are in (row 6). GATE F read and ruled 2026-11-12 (Fable 5.2): bar frozen as pre-registered, no second hearing, Crazy and Reflection accepted as known holes; Quit Playing Games ruled not wrong, stays a pick (Decision 28). Phase 3b executed 2026-11-12 (Sonnet 5.5), stopped for Ken. GATE Q's pass rule is now zero gross picks (Decision 29, 2026-11-12). Phase 4 (4a-4c) executed 2026-11-12 (Sonnet 5.5): all fifty added, one probe run, tables pasted under "Report output: fresh songs"; stopped at STOP 4d for Ken's Set E listening. Ken's Set E verdicts in 2026-11-12 (GATE Q, "Set E verdicts"; Bring It All Back by ear too). GATE Q read 2026-11-12 (Fable 5.2): zero gross picks among 31; the Who You Are ruling first left open is closed by the read's "Correction". Next: Ken's go or stop ("GATE Q ruling").**
+**Status: PLANNED 2026-11-10. Decisions 20-24 ruled by Ken 2026-11-12. Phase 1 executed 2026-11-12 (Sonnet 5.5), review fixes in; Phase 2 (2a-2d) executed 2026-11-12 (Sonnet 5.5), stopped at STOP 2e. Ken's two listens are in (row 6). GATE F read and ruled 2026-11-12 (Fable 5.2): bar frozen as pre-registered, no second hearing, Crazy and Reflection accepted as known holes; Quit Playing Games ruled not wrong, stays a pick (Decision 28). Phase 3b executed 2026-11-12 (Sonnet 5.5), stopped for Ken. GATE Q's pass rule is now zero gross picks (Decision 29, 2026-11-12). Phase 4 (4a-4c) executed 2026-11-12 (Sonnet 5.5): all fifty added, one probe run, tables pasted under "Report output: fresh songs"; stopped at STOP 4d for Ken's Set E listening. Ken's Set E verdicts in 2026-11-12 (GATE Q, "Set E verdicts"; Bring It All Back by ear too). GATE Q read 2026-11-12 (Fable 5.2): zero gross picks among 31; the Who You Are ruling first left open is closed by the read's "Correction". GATE Q ruled go by Ken 2026-11-12 (Decision 31); parentheses referred to branch `backing_vocal_lines`. Next: the Phase 4-6 spec of `plans/lrclib-fit-pick.md`.**
 
 ## Goal
 
@@ -103,6 +103,12 @@ should still stop the feature at GATE Q, by dialog: "Only gross errors".
     finished karaoke; Opus writes it. What cue align does with such a pick has not been
     measured. His verdicts, if in by then, are reported at GATE Q rule 6. Phase 4 does not
     wait for them.
+
+Ken, 2026-11-12, in chat, at GATE Q ("My ruling is go"):
+
+31. GATE Q is passed: zero gross picks among the 31 fresh picks. The feature is built with
+    the frozen bar. Whether parenthesised text is kept on LRCLIB-timed songs is left to
+    branch `backing_vocal_lines` ("GATE Q ruling").
 
 ## The bar (pre-registered)
 
@@ -564,8 +570,8 @@ pick's cached record:
   backing vocals and echoes.
 - **What it means beyond this gate:** Ken's listen files showed that text; the finished
   karaoke, as the cleaner stands, would not. `clean_srt_line` drops parentheses because in
-  caption files they are annotations, which does not hold for LRCLIB records. A point for
-  the Phase 4-6 spec (keep, drop, or show without singing), not a change to the bar.
+  caption files they are annotations, which does not hold for LRCLIB records. Not a change
+  to the bar; referred to branch `backing_vocal_lines` at "GATE Q ruling".
 - Not changed by this: no stretch on any pick, the classes (22 good, 9 tolerated, 0 gross),
   coverage, exposure.
 
@@ -645,7 +651,22 @@ have no reference and no listener.
 
 ### GATE Q ruling
 
-Pending: Ken's go or stop.
+Ken, 2026-11-12, in chat, after the read and its correction: "My ruling is go. You can
+reference backing_vocal_lines for a future test of whether parens should be kept".
+
+1. **Go.** GATE Q is passed with the frozen bar as it stands (Decision 31). The build is
+   Phases 4-6 of `plans/lrclib-fit-pick.md` with their open points ("After GATE Q"); they
+   get their spec next.
+2. **Parentheses are not decided here.** Whether text in parentheses is kept on an
+   LRCLIB-timed song is the question of branch `backing_vocal_lines`
+   (`plans/backing-vocal-lines.md`, in its worktree `.claude/worktrees/backing_vocal_lines`,
+   staged and not yet committed when this was written). Until that plan rules, the Phase
+   4-6 build leaves the cleaner as it is: parenthesised text is dropped. The twelve picks
+   listed in "Correction", with their cached records and listen files, are ready material
+   for that plan's test.
+
+Carried to the Phase 4-6 spec from the read ("Also noted"): the pick order on songs where a
+smaller timing has no shifted lines, and the fixed 4 s hold on a last line.
 
 ## After GATE Q
 
@@ -682,6 +703,7 @@ type, labels, lists", "Ken's checks") with their open points. They get their spe
 | 11 | 2026-11-12 | STOP 4d | Ken's Set E listens, given in chat, recorded in his words and not classified (the call is GATE Q's). On this computer, from the handoff copy of `<out>` and the listen files at `/media/ken/Data/shift-check-fresh`; nothing rerun. 13 Set E picks: 11 good; I'm A Slave 4 U has three lines late at 1:17 and two at 2:12; Catch My Breath's last line ends early. Bring It All Back (Table L row 2, Set C, no caption reference): good by ear, Ken confirming his "everything else" covers it. | GATE Q "Set E verdicts" |
 | 12 | 2026-11-12 | GATE Q | Read by Fable 5.2 on HEAD `844483d`, on the computer the files were moved to, read-only: the probe not rerun, no record re-fitted (the library is not there), no library write, no GPU. Rule 1 met. Rule 2 complete: 14 picks by Ken's ear, 17 Set C picks from their sheets (6 flagged read in full, all 11 unflagged compared line by line). **Rule 3 met on this read: 0 gross among 31 picks; 22 good, 9 tolerated.** One sheet ruling is open to Ken's ear (Who You Are, about 1:12 to 1:23: an echo passage no line shows). Coverage 13 of 20 Set E, 18 of 30 Set C. Exposure: no passing record ruled gross. Not read: whether Closer's 16 `shifted` refusals are right. Ken's go or stop pending. | GATE Q: "GATE Q read", "GATE Q ruling". |
 | 13 | 2026-11-12 | GATE Q (correction) | Row 12's open ruling on Who You Are is closed. Rebuilding its listen file (Opus, Ken's request; `lrc_to_srt` on the cached record 30554413, shift +0.20) gave 54 cues against the sheet's 50 lines: the record carries the echo passage as four lines in parentheses, which the fit's cue cleaning drops from its lines and so from the sheet. The read's Who You Are row and rule 3 bullet were wrong on that and are rewritten; classes unchanged (22 good, 9 tolerated, 0 gross). Every pick's cached record was checked for parenthesised lines (12 of 31 have whole lines in parentheses). New point for the Phase 4-6 spec: the cleaner drops parenthesised text, which in LRCLIB records is backing vocals. Read-only as before; `lrc_to_srt` and `cue_spans_from_srt` called on cached records in a scratch script. | "GATE Q read": "Correction". |
+| 14 | 2026-11-12 | GATE Q (ruling) | Ken, in chat: go (Decision 31). The parentheses question is referred to branch `backing_vocal_lines` (`plans/backing-vocal-lines.md`); the Phase 4-6 build leaves the cleaner as it is. Next: the Phase 4-6 spec of `plans/lrclib-fit-pick.md`. | "GATE Q ruling". |
 
 ## Frozen bar
 
