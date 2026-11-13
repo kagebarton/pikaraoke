@@ -2,7 +2,8 @@
 
 Model: not assigned. Evaluation by Claude Fable 5.2, 2026-11-11. No spec yet.
 
-Status: **evaluation only, no code changed.** Branch `lrclib_search_accuracy`, split on
+Status: **CLOSED with no build (Ken, 2026-11-13). Evaluation only, no code was changed. Kept
+as tag `archive/lrclib_search_accuracy`.** Branch `lrclib_search_accuracy`, split on
 2026-11-12 (at Ken's request, the two halves being unrelated) from `lyric_search_accuracy`,
 which was cut from `dev` at `1016e20` to carry the combined plan between computers. The Genius
 half lives on `genius_search_accuracy` (`plans/genius-search-accuracy.md`); the combined plan
@@ -11,12 +12,9 @@ rebased onto `dev` after `search_official_captions` lands (see Rulings).
 
 ## Pick up here
 
-1. On Ken's other computer: rerun the LRCLIB replay against that library ("Rerun on the other
-   computer"). Its library is about 30 songs larger; the LRCLIB cache is not copied over.
-2. Read the LRCLIB fit-check feature (on that computer, not on origin as of 2026-11-11) and
-   answer "Needed from the fit-check branch" below.
-3. Then the spec, which needs step 2.
-4. Stop before any code until the spec exists.
+1. Done 2026-11-13: the rerun on the second computer and the read of the fit check ("Rerun on
+   the second computer"). The library there is 248 songs.
+2. Ruled 2026-11-13 ("Ruling" in that section): nothing is left to spec. The plan is closed.
 
 Evidence (replay scripts) is in `plans/lrclib-search-accuracy/`. Committed: the scripts.
 Gitignored there, local to each computer: `truth.json` (with lyric lines) and
@@ -212,6 +210,138 @@ Limits of this table: the lookup was only fetched for the 65 songs whose field s
 no record within 2 s, so its rows are a floor; 95 songs are caption-origin with caption-split
 lines; the 60% line is a stand-in for the fit check's own score.
 
+## Rerun on the second computer (2026-11-13, Fable 5.2)
+
+Library `/home/ken/shared-drives/D:/Shared/pikaraoke-songs`: 248 songs, 234 with a bundle and
+heard words, 54 with a recorded Genius pick, 85 with an LRCLIB match on disk. Scripts and the
+answer key builder are in `plans/lrclib-search-accuracy/run2/`. The first run's scripts were
+not rerun: this library mixes curated names with files still under their YouTube title, and
+the measure changed (below).
+
+### The fit check, read (pick-up step 2)
+
+Read from branch `lrclib_fit_pick` at `e8bd699` (`plans/lrclib-fit-pick.md`,
+`plans/lrclib-shift-check.md`, `pikaraoke/lib/lrc_auto_pick.py`). GATE Q is ruled go (its
+Decision 31) and Phases 4-6 are specced, not built.
+
+| Question | Answer |
+|---|---|
+| 1. What it takes in | The whole list. Every synced record of one search is fitted to the words the transcriber heard; the pick is made among the records that pass (`lrc_auto_pick.evaluate`). |
+| 2. Where it runs | Unattended, in the align stage of a first-time download, after transcription. Not on Repair, regenerate or bulk runs (its Decision 3). Repair's list is not re-ordered (Decision 33). |
+| 3. Caption-origin songs | Not covered: Genius picks only (Decision 4). Title and artist are the Genius pick's. |
+| 4. Its fit score | The frozen bar: fits, speed 1.0, at most 1 mistimed line, unclaimed run at most 12 words, shift run at most 2 lines. Used below in place of the 60% stand-in. |
+| 5. A file on disk | `_resolve_lrclib` is unchanged; on a pick the align stage overwrites the `.lrc` with the picked record. |
+| 6. What it edits | New `lrc_auto_timing.py` (`check`), new `lrclib.query_text`, sheet kinds in `library_regen.py`, the switch in `LyricAlignStage`. It calls `lrclib.search_query` once. A wider search would replace that one call. |
+
+Its search is free text, title then artist: `" ".join(clean_key(genius_title, genius_artist))`
+sent as `q=`. Its pick order counts how many of the search's records share a timing, so the
+set a search returns changes the pick, not only whether there is one. Decision 32 keeps that
+order "as measured"; it was measured on the `q=` set alone.
+
+Also found: on `dev` the Repair page's LRCLIB box already starts with that same query
+(`LibraryTools.custom_start`, key `query`). "For a Genius pick it starts empty" under "What
+exists" above does not hold on `dev` at `a7671d7`.
+
+### Query shapes under the frozen bar
+
+`lrclib_probe.py` fetched every shape for every song (1,506 queries, no errors; records kept
+without plain lyrics). `lrclib_fit.py` runs `lrc_auto_pick.refusal` and the pick order from a
+tree export of `lrclib_fit_pick` over each merged set. "With a pick" = at least one record
+passes the bar.
+
+Shapes: `q` the build's own search; exact length = `/api/get` with title, artist and the
+video's length (also with the first-named artist alone, and the artist's other-script name);
+fields = title field + artist field (same variants); title only = title field alone and `q=`
+title alone; everything adds, for film-named songs, title + album = film, `q=` film + title,
+and the film sent as artist.
+
+Songs with a recorded Genius pick (54; the title and artist the pipeline really held):
+
+| Set | With a pick |
+|---|---|
+| The build's search (`q=`) | 33 |
+| + exact length | 34 |
+| + fields | 34 |
+| + fields + exact length | 34 |
+| + title only | 36 |
+| Everything | 37 |
+
+Median synced records a song in each set, over all 234 songs, in the same order: 19, 19, 30,
+30, 48, 54.
+
+Songs without a recorded pick, artist-named (107; the answer key's title and artist stand in
+for the Genius pick):
+
+| Set | With a pick |
+|---|---|
+| The build's search (`q=`) | 71 |
+| + exact length | 71 |
+| + fields | 72 |
+| + fields + exact length | 72 |
+| + title only | 74 |
+| Everything | 74 |
+
+Film-named songs without a recorded pick (73) have no artist to send, so their rows do not
+describe the pipeline: 25 with a pick on `q=` title alone, 36 on everything.
+
+Songs with no pick from the build's search that a wider set picks (18), with the set that
+first picks and the picked record:
+
+| Song | Group | First in | Picked record (artist / track, length vs video) |
+|---|---|---|---|
+| Mandy Moore, Zachary Levi - I See the Light | Genius pick | exact length | Mandy Moore / I See the Light, 204 vs 204 |
+| Ed Sheeran - Best Part Of Me | stand-in | fields | Ed Sheeran / Best Part of Me (feat. Yebba), 247 vs 248 |
+| Donna Murphy - Mother Knows Best | Genius pick | title only | Annapantsu / Mother Knows Best, 158 vs 160 |
+| Queen - Don't Stop Me Now | Genius pick | title only | "Bohemian Rhapsody" as artist / Don't Stop Me Now, 212 vs 215 |
+| Ariana Grande - Almost Is Never Enough | stand-in | title only | Ethan Hodges / Almost Is Never Enough, 215 vs 225 |
+| Jung Kook - Standing Next to You | stand-in | title only | KIDZ BOP Kids / Standing Next to You, 177 vs 211 |
+| Where You Are (Moana) | Genius pick | everything | Christopher Jackson, ... / Where You Are, 210 vs 210 |
+| Frozen - In Summer; KPop Demon Hunters - What It Sounds Like; Rent - Out Tonight, Your Eyes | no artist | title only | the film's performers |
+| Belle; Camp Rock - This Is Me; KPop Demon Hunters - Golden; Moana - Along The Way; Rent - Another Day, Without You; The Outsiders - Stay Gold | no artist | everything | the film's performers or cast |
+
+Where You Are is a GATE P wrong pick in `plans/lrclib-fit-pick.md` ("all 20 passing records
+carry the step"); the record picked here was not checked against that.
+
+The pick, build's search against `q=` + fields + exact length, among songs with a pick both
+ways:
+
+| Group | Pick is a different record | of which a different timing text |
+|---|---|---|
+| Recorded Genius pick (33) | 17 | 11 |
+| Stand-in, artist-named (71) | 34 | 22 |
+
+`lrclib_fit.py -v` lists them.
+
+The on-disk record against each set (does the set list it):
+
+| Group | Build's search | + fields + exact length | Everything |
+|---|---|---|---|
+| Recorded Genius pick (51 on disk) | 23 | 50 | 51 |
+| Stand-in, artist-named (19) | 15 | 16 | 16 |
+| Film-named, no artist (15) | 3 | 3 | 6 |
+
+For a Genius-origin song the record on disk is the one the pipeline's own field search saved
+(`ensure_lrc`), so the 50 of 51 is that search finding its own pick again, not a hand choice.
+
+Limits: the bar needs listening to tell a good pick from a wrong one, and none was done here.
+A song "with a pick" is a song where some record passes, not a song with a right pick. No
+caption-origin song would be searched by the build; they are in the stand-in rows only to
+size the search.
+
+### Open for Ken
+
+Proposed items 1 and 2 (exact-length lookup, getting past the 20 cap) were written before
+the fit check existed. Against its bar they add 1 pick in 54 (recorded picks) and 1 in 107
+(stand-in), and change the picked record on about half the songs that already have one, where
+GATE Q judged the `q=` set's picks only. Item 5 (prefill) is already on `dev`. Whether
+anything is left to spec in this plan is his call.
+
+### Ruling (Ken, 2026-11-13)
+
+Asked in chat with the recommendation "closing it with no build": "ratified, retire the
+branch to a tag". The fit check keeps its one `q=` search. The Genius half goes on, on branch
+`genius_search_accuracy`.
+
 ## Proposed work (candidates, not specced)
 
 Items 3 and 4 have left this plan for the fit check (see "LRCLIB scope after the rulings");
@@ -262,6 +392,20 @@ $PY lrclib_set.py -v        # the returned set per query shape (cache only)
 ```
 
 `collect.py` reads `~/pikaraoke-songs`, so a rename since 11-11 changes the truth set.
+
+### The second computer's run (2026-11-13)
+
+```bash
+cd plans/lrclib-search-accuracy/run2
+PY=/home/ken/miniconda3/envs/pik/bin/python
+# truth.json is built on the Genius half: plans/genius-search-accuracy/run2/truth_build.py
+# (needs its yt_meta.json); copy it here.
+$PY lrclib_probe.py         # every query shape -> lrclib_raw.jsonl (48 MB, about 25 minutes uncached)
+git archive lrclib_fit_pick pikaraoke | tar -x -C <dir>    # the fit check's code, as of e8bd699
+$PY lrclib_fit.py <dir> -v  # the frozen bar over each merged set -> fits.json (cache of verdicts)
+```
+
+Gitignored there: `truth.json`, `lrclib_raw.jsonl`, `fits.json`, logs.
 
 ### Rerun on the other computer
 

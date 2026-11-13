@@ -1,0 +1,5 @@
+truth.json
+lrclib_raw.jsonl
+fits.json
+__pycache__/
+*.log
