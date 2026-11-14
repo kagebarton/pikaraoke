@@ -188,8 +188,9 @@ class TestWorstDeviation:
         }
 
     def test_a_replay_within_the_tolerance_agrees_and_just_outside_it_does_not(self):
-        assert probe.worst_deviation(self._final(start=1.01), self.SAVED) is None
-        assert probe.worst_deviation(self._final(start=1.02), self.SAVED).field == "start"
+        # one envelope frame (0.025 s) agrees; 0.027 s does not
+        assert probe.worst_deviation(self._final(start=1.025), self.SAVED) is None
+        assert probe.worst_deviation(self._final(start=1.027), self.SAVED).field == "start"
 
     def test_the_largest_difference_is_named(self):
         dev = probe.worst_deviation(self._final(start=1.2, end=2.5), self.SAVED)
@@ -460,13 +461,17 @@ class TestTableO:
 
         ctx = probe.Ctx(
             probe.Song(STEM, probe.LRCLIB, {}),
-            SimpleNamespace(display_lines=["l0", "l1", "l2", "l3"]),
+            SimpleNamespace(display_lines=["l0", "l1", "l2", "l3", "l4"]),
             {},
-            replay((1.0, 2.0), (3.0, 4.0), (5.0, 6.0), (7.0, 8.0)),
-            replay((1.0, 2.0), (3.0, 4.2), (5.5, 6.0), (7.005, 8.0)),
+            replay((1.0, 2.0), (3.0, 4.0), (5.0, 6.0), (7.0, 8.0), (9.0, 10.0)),
+            replay((1.0, 2.0), (3.0, 4.2), (5.5, 6.0), (7.005, 8.0), (9.0, 10.02)),
         )
         rows = probe.rows_o(ctx, claimed={2})
-        assert [(r["line"], r["moved"]) for r in rows] == [(1, pytest.approx(0.2))]
+        # 0.02 s is under the baseline check's tolerance but over Table O's own threshold
+        assert [(r["line"], r["moved"]) for r in rows] == [
+            (1, pytest.approx(0.2)),
+            (4, pytest.approx(0.02)),
+        ]
         assert rows[0]["src"] == probe.LRCLIB and rows[0]["text"] == "l1"
 
 

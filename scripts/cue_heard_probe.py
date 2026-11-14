@@ -74,9 +74,14 @@ from pikaraoke.lib.onset_snap import rms_envelope_db, snap_line_edges  # noqa: E
 from pikaraoke.lib.token_align import INSTANT_WORD_DUR_S  # noqa: E402
 from pikaraoke.pipeline.stages.lyric_align import _wav_duration  # noqa: E402
 
-# A replay equals the bundle when every start and end is this close (the bundle's own
-# rounding is far smaller than a millisecond; an envelope frame is 0.025 s).
-TOLERANCE_S = 0.011
+# A replay equals the bundle when every start and end is this close: one envelope frame
+# (0.025 s). The envelope decoded here is not bit-identical to the bundle's, and the edge
+# snap lands a frame off on some edges; the bundle's own rounding is far smaller.
+TOLERANCE_S = 0.026
+
+# Table O lists a line whose start or end moves more than this between the two replays
+# (both read the same envelope, so a frame of decode noise does not enter).
+MOVED_S = 0.011
 
 # A saved re-align answers a call whose window is this close to the one it was made over.
 WINDOW_MATCH_S = 1e-6
@@ -542,7 +547,7 @@ def rows_o(ctx: Ctx, claimed: set[int]) -> list[dict]:
     for lid, new in ctx.new.final.items():
         today = ctx.today.final[lid]
         amount = max(moved(today["start"], new["start"]), moved(today["end"], new["end"]))
-        if lid not in claimed and amount > TOLERANCE_S:
+        if lid not in claimed and amount > MOVED_S:
             rows.append(
                 ctx.row(
                     lid,
