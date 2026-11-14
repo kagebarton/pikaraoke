@@ -3,8 +3,8 @@
 Model: Claude Opus 5.5 runs Phase 0, judges both gates and writes the build spec.
 Claude Sonnet 5.5 builds from that spec. (High-level spec by Claude Fable 5.2, 2026-11-11.)
 
-**Status: Phase 0 done 2026-11-14 (Opus 5.5); stopped at GATE A for Ken's ruling ("GATE A
-read").**
+**Status: GATE A ruled GO on the amended hybrid, 2026-11-14 ("GATE A ruling"). Next: Opus
+writes the build spec.**
 
 Branch `backing_vocal_lines` off `dev` at `1016e20`, worktree
 `.claude/worktrees/backing_vocal_lines`. Work and run everything from the worktree. Whisper
@@ -30,7 +30,8 @@ cue's time window.
 2. They keep their parentheses on screen. Genius songs change to match: today they show the
    words bare.
 3. A cue that is nothing but a parenthetical becomes its own line only when it was heard and
-   its time does not overlap another line's.
+   its time does not overlap another line's. Ruled 2026-11-14: "time" is cue time when the
+   line is chosen; overlap on screen is judged at GATE B on the new timings.
 4. New and regenerated songs only. Edited and custom sheets are left alone. A regeneration of
    the affected library songs is decided at GATE B, and Ken runs it.
 
@@ -194,7 +195,8 @@ moved and Ken decides whether a move is worse.
   zero-length). Under 80% means the aligner is not finding what the test said was sung: fail,
   and go back to the rule or to dropping untimed parentheticals.
 - **B5, screen:** no labelled direction appears in any output; no two lines are on screen
-  together that were not before.
+  together that were not before. Amended 2026-11-14 ("GATE A ruling"): a kept paren-only
+  line is checked against its neighbours on the after timings, not on today's.
 - **B6, Genius:** every word's start and end identical before and after; only the word text
   differs.
 
@@ -661,6 +663,28 @@ of what is kept and nearly all of the build spec's open points, and dropping par
 removes line insertion, section placement, Decision 3 and B5's two-lines check. Paren-only
 could follow as its own step.
 
+### GATE A ruling (Ken, 2026-11-14)
+
+1. **GO on the amended hybrid**, with the second read's conditions: worded parentheticals on
+   the heard test as the plan words it (`none`, 0.5 s pad, display lead applied),
+   vocable-only kept on text, the consistency variant; the rule frozen as measured; a
+   quote-opened parenthetical dropped outright; Phase 2 reports B2-B4 split by evidence
+   (heard, vocable on text, added by consistency).
+2. **Decision 3's overlap is cue time** when a paren-only line is chosen. On-screen overlap is
+   judged at GATE B on timings aligned with the line present. B2 will list the previous
+   lines whose ends move; B5 is amended above.
+3. **The four `unsure` texts:**
+
+| Text | Ken | Ruled | The hybrid does |
+|---|---|---|---|
+| beep | covers an explicit lyric | not shown | drops 2 of 2 |
+| censored | covers an explicit lyric | not shown | drops 2 of 2 |
+| heartbeat | not in the Genius lyrics for Butter | not shown (read as: not a sung line) | drops 6 of 6 |
+| skate | a background chant, worth keeping where it is heard | sung | keeps 8 of 8 (7 heard, 1 by consistency) |
+
+The rule already does what each ruling asks, so no label file or script output was changed;
+`labels.json` still holds the four as `unsure`. With them counted, A1 stays 0.
+
 ## Results log
 
 Raw tables, commands and commits only; no verdicts in this table.
@@ -675,3 +699,4 @@ Raw tables, commands and commits only; no verdicts in this table.
 | 6 | 2026-11-14 | GATE A | Read by Opus 5.5 | As written NO-GO; recommended GO on the hybrid (`none +vocables +consist`: A1 0, A2 76%), for Ken to rule with the four `unsure` labels and Decision 3's "overlap". "GATE A read". |
 | 7 | 2026-11-14 | 0 (record) | Scripts moved from the session scratch folder into `plans/backing-vocal-lines/` (dead imports dropped, Black, docstrings; `label_sheet.py` added for the step 2 view, which had been an inline snippet); the whole run above repeated from there on `a54f8e6f` | Every output byte-identical to rows 1-5's: `songs.json`, `inventory.json`, `label_sheet.txt`, `labels.json`, `heard.json`, `baseline.json`, the A1 / A2 table and the A3 / A4 / unsure output. |
 | 8 | 2026-11-14 | GATE A | Second read by Fable 5.2 on `feb71bc4`, read-only: inline counts over `out/heard.json`, `out/baseline.json` and the bundles' `output_line_timings` (no script re-run, no label changed) | Worded sung kept 161/259 under `none`, 181/259 with `+consist`. Hybrid's 261 kept: heard 180 (134 inline / 46 paren-only), vocable on text 60 (58 / 2), consistency 21 (13 / 8); 34 songs, 30 with an inline keep. Of the 50 on-screen overlaps: 43 with the previous line (27 covering 80% or more of the window, 37 half or more, 41 end-extended), 7 next line only, 8 under 0.5 s. Recommended GO on the hybrid as an amended gate, Decision 3 read by cue time. "GATE A second read". |
+| 9 | 2026-11-14 | GATE A | Ruled by Ken | GO on the amended hybrid with the second read's conditions; Decision 3 overlap by cue time, on-screen overlap judged at GATE B (B5 amended); beep, censored, heartbeat not shown, skate sung. No script re-run. "GATE A ruling". |
