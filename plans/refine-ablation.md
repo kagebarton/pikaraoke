@@ -2,8 +2,9 @@
 
 Model: Claude Opus 5.5
 
-Status: **open, research only** -- nothing in the pipeline changed. Waiting on
-an A/B listen (Next step). Branch `refine_ablation`, off `dev` at `1016e20`.
+Status: **open, research only** -- nothing in the pipeline changed. Blind A/B
+listen session built 2026-11-14; waiting on Ken's listen (Next step). Branch
+`refine_ablation`, off `dev` at `1016e20`.
 
 ## Question
 
@@ -155,10 +156,63 @@ Small, certain waste (re-sectioned songs' first-pass refine; rescued lines'
 section refine) is recorded above but would need the worker to split align from
 refine; not proposed.
 
+## A/B listen session (built 2026-11-14, Claude Sonnet 5.5)
+
+Choices (Ken, 2026-11-14): **blind**, the arms shuffled per song; **four cue
+songs**, the three planned plus Ne-Yo - Miss Independent (the cue song whose
+uploader-cue row in table 3 leans hardest to refine-off: 1 of 7 moved lines
+closer with refine on); **full songs with a jump list** of the most divergent
+lines, not clips. Cue route only, so this does not touch open decisions 1 and 3.
+
+Build:
+
+- `scripts/probe_refine_ablation.py` gained `--ass-dir DIR`, which writes each
+  arm's `<stem>.on.ass` / `.off.ass` from the final (post edge snap) line
+  objects through `LyricAlignStage._generate_ass`. The cue route has no LRCLIB
+  fill, so these are the lines `run()` would write.
+- The four songs were rerun in a worktree of this branch (same code as
+  2026-11-11), RTX 2060, app stopped, into a scratch results dir.
+- **Reproduction check:** against `scripts/refine_ablation_results`, the max
+  difference over line starts and over word starts is 0.000 s on both arms of
+  all four songs. The rendered tracks are exactly the arms in the tables above.
+- `scripts/refine_ab_listen.py build` copies the arms to `track1.ass` /
+  `track2.ass` per song in a `SystemRandom` order and writes the track-to-arm
+  key to `key.json`, unread until the verdicts are in. `play` opens a song in a
+  libmpv window with both tracks (`j` switches track, `n` / `b` jump).
+
+ON-arm cost of the rerun (seconds), against the 2026-11-11 figures in table 1:
+
+```
+01 Adele - Someone Like You                 56 lines  align 28.8 refine 133.3   (11-11: 27.1 / 133.6)
+02 Backstreet Boys - I Want It That Way     59 lines  align 22.6 refine 107.1   (11-11: 22.6 / 106.4)
+03 Ne-Yo - Miss Independent                 75 lines  align 34.2 refine  98.1   (11-11: 34.1 /  97.5)
+04 Rent (2005) - Seasons of Love            33 lines  align 14.7 refine  78.2   (11-11: 14.7 /  77.8)
+```
+
+Jump list: per line, divergence is the largest start-time gap between the arms
+over the line start and its interior words (the word term only where both arms
+timed the same word count). Lines with divergence >= 0.25 s, top 15 by
+divergence, listed in song order, each target 2 s before the line. All four
+songs hit the cap of 15. Times are m:ss, truncated:
+
+```
+01  0:18 0:22 0:25 0:39 1:09 1:28 1:49 1:55 2:01 2:08 3:12 3:22 3:26 3:50 4:17
+02  0:28 0:47 0:52 0:53 1:07 1:26 1:45 2:30 2:44 2:54 3:04 3:07 3:09 3:23 3:27
+03  0:40 1:41 1:57 2:35 2:39 2:50 3:04 3:06 3:28 3:31 3:51 3:55 3:59 4:06 4:08
+04  0:51 0:55 1:12 1:17 1:23 1:34 1:39 1:46 1:51 2:11 2:39 2:43 2:46 3:01 3:15
+```
+
+Where it lives: `~/refine_ab/session/NN/track{1,2}.ass`, `manifest.json` (video path
+and jump targets), `key.json`; the unshuffled arms are in `~/refine_ab/ass/`.
+These carry lyric text, so they stay out of the repo and the library. Videos
+are the library `.mp4` files. Ken plans to play them by hand in VLC (add
+`track1.ass` and `track2.ass` as subtitle files, switch with Sub Track); VLC
+rendering of the karaoke sweep is untested, and `refine_ab_listen.py play` is
+the tested player (headless: tracks load, jump keys seek, clean exit).
+
 ## Next step
 
-A/B listen: render both arms' `.ass` for 2-3 cue songs with the most movement
-(Adele - Someone Like You, Rent - Seasons of Love, Backstreet Boys - I Want It
-That Way) outside the library, and play each against the video. The probe keeps
-timings only; rendering needs a rerun that keeps the arms' line objects (about
-2-3 min GPU per song). Stop after the listen and record Ken's verdict here.
+Ken listens (later). Then: read `key.json`, record per-song which track he
+preferred (or that he heard no difference), and at which jump points, here as
+raw notes. Then decide open decision 2 and land any config change on `dev`
+(code commits only), retire the branch as `archive/refine_ablation`.

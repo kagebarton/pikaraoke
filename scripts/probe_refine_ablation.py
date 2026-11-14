@@ -14,12 +14,15 @@ bundle records an adopted de-reverb stem use the cached dry stem.
 GPU: loads large-v3-turbo in-process, so stop the app first. Run from the
 repo root (results already present are skipped, so a rerun resumes)::
 
-    python scripts/probe_refine_ablation.py <out_dir> "<song stem>" ...
+    python scripts/probe_refine_ablation.py [--ass-dir DIR] <out_dir> "<song stem>" ...
 
 Then summarise with ``scripts/probe_refine_ablation_report.py <out_dir>``.
-Record: ``plans/refine-ablation.md``.
+``--ass-dir`` also writes each arm's rendered ``<stem>.on.ass`` / ``.off.ass``
+for ``scripts/refine_ab_listen.py``; those carry lyric text, so keep DIR out
+of the repo and the library. Record: ``plans/refine-ablation.md``.
 """
 
+import argparse
 import copy
 import hashlib
 import json
@@ -47,8 +50,6 @@ from pikaraoke.pipeline.workers.whisper_worker import (  # noqa: E402
 )
 
 LIB = Path.home() / "pikaraoke-songs"
-OUT = Path(sys.argv[1])
-SONGS = sys.argv[2:]
 
 
 def md5(path: Path) -> str:
@@ -126,7 +127,7 @@ def timings(lines):
     ]
 
 
-def run_song(stage, worker, cur: str, tmp: Path) -> dict:
+def run_song(stage, worker, cur: str, tmp: Path, ass_dir: Path | None = None) -> dict:
     bundle = json.loads((LIB / "alignment_debug" / f"{cur}.json").read_text())
     old = bundle["song_stem"]
     method = bundle["pipeline_decisions"]["method_used"]
@@ -168,6 +169,8 @@ def run_song(stage, worker, cur: str, tmp: Path) -> dict:
             lo, _ = veto_uncorroborated_lines(lo, env)
         pre_snap = timings(lo)
         lo, _ = snap_line_edges(lo, wav, env=env, doubted_sources=frozenset({SOURCE_REALIGN}))
+        if ass_dir is not None:
+            (ass_dir / f"{cur}.{arm}.ass").write_text(stage._generate_ass(lo), encoding="utf-8")
         calls = worker.calls[n0:]
         out["arms"][arm] = {
             "wall_s": time.perf_counter() - t,
@@ -188,7 +191,15 @@ def run_song(stage, worker, cur: str, tmp: Path) -> dict:
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("out_dir", type=Path)
+    parser.add_argument("songs", nargs="+", metavar="song_stem")
+    parser.add_argument("--ass-dir", type=Path, default=None)
+    args = parser.parse_args()
+    OUT, SONGS, ass_dir = args.out_dir, args.songs, args.ass_dir
     OUT.mkdir(parents=True, exist_ok=True)
+    if ass_dir is not None:
+        ass_dir.mkdir(parents=True, exist_ok=True)
     cfg = PipelineConfig()
     t = time.perf_counter()
     model = stable_whisper.load_model(cfg.whisper.load_model.model_path, device="cuda")
@@ -204,7 +215,7 @@ def main():
         tmp.mkdir(parents=True, exist_ok=True)
         worker.cache.clear()
         try:
-            res = run_song(stage, worker, cur, tmp)
+            res = run_song(stage, worker, cur, tmp, ass_dir)
         except Exception as exc:  # probe: record and continue
             print(f"  FAILED: {exc!r}", flush=True)
             continue
