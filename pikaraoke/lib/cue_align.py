@@ -1082,15 +1082,16 @@ def _start_bound(
     line's last word ends. A fill's words are paced across its cue, not heard, so they
     bound nothing; a line whose caption runs more than :data:`DUET_OVERLAP_S` into
     ``lid``'s is sung over it, and ``lid`` may rightly start before it ends. ``shift`` moves
-    ``lid``'s cue span (rule B looks for the line where it was heard).
+    ``lid``'s cue span (rule B looks for the line where it was heard): the lead-in follows
+    the move, the duet test does not, because it asks how the two captions overlap and the
+    move changes neither.
     """
-    cue_start = cue_spans[lid][0] + shift
-    bound = _lead_in_bound(cue_start, offset)
+    bound = _lead_in_bound(cue_spans[lid][0] + shift, offset)
     previous = _previous_line(out)
     if previous is None or previous["source"] == SOURCE_FILL:
         return bound
     pid = previous["line_id"]
-    if pid < len(cue_spans) and cue_spans[pid][1] - cue_start > DUET_OVERLAP_S:
+    if pid < len(cue_spans) and cue_spans[pid][1] - cue_spans[lid][0] > DUET_OVERLAP_S:
         return bound
     return max(bound, previous["end"])
 

@@ -1021,23 +1021,33 @@ class TestHeardAimedRetry:
         )
 
     @staticmethod
-    def _song(cue: tuple[float, float] = (8.0, 12.0), *placed: tuple[str, float, float]):
-        """Four anchors plus line 4 ("ee ff gg", the song's last), cued over ``cue`` and
-        holding ``placed`` words."""
+    def _song(
+        cue: tuple[float, float] = (8.0, 12.0),
+        *placed: tuple[str, float, float],
+        after: tuple[float, float] | None = None,
+    ):
+        """Four anchors plus line 4 ("ee ff gg"), cued over ``cue`` and holding ``placed``
+        words; it is the song's last unless ``after`` cues a clean line 5 ("a a") over it."""
         objs, cues, lines = _anchor_lines(4)
         cues.append(cue)
         lines.append("ee ff gg")
         objs.append(_line(4, "ee ff gg", *placed))
+        if after is not None:
+            c0, _c1 = after
+            cues.append(after)
+            lines.append("a a")
+            objs.append(_line(5, "a a", ("a", c0 + 0.1, c0 + 0.4), ("a", c0 + 0.5, c0 + 0.9)))
         return objs, cues, lines
 
     @staticmethod
-    def _rescue(song, answer, heard, **kwargs):
+    def _rescue(song, answer, heard, line=4, **kwargs):
         """``repace_bad_lines`` with a stub aligner answering ``answer(w0, w1)``; returns
-        ``(out, stats, calls)`` with the ``(w0, w1)`` of every align call."""
+        ``(out, stats, calls)`` with the ``(w0, w1)`` of every align call, which must all be
+        for line ``line``."""
         calls: list[tuple[float, float]] = []
 
         def realign(lid, w0, w1):
-            assert lid == 4
+            assert lid == line
             calls.append((w0, w1))
             return answer(w0, w1)
 
@@ -1164,6 +1174,58 @@ class TestHeardAimedRetry:
         out, stats, calls = self._rescue(song, two, heard)
         assert len(calls) == 2 and stats["heard_aimed_kept_line_ids"] == []
         assert out[4]["source"] == SOURCE and out[4]["start"] == 8.0
+
+    @pytest.mark.parametrize(
+        "dragged_start, start, lifted",
+        [
+            # 1.2 s off the heard start: not confirmed as returned, so cut to line 4's end.
+            (8.2, 9.4, []),
+            # 0.45 s off: confirmed as returned, so kept untrimmed and listed as freed.
+            (8.95, 8.95, [5]),
+        ],
+    )
+    def test_a_line_heard_early_is_still_held_to_the_previous_line_unless_confirmed(
+        self, dragged_start, start, lifted
+    ):
+        # Line 4's caption ends 1.1 s past where line 5 was heard to start but 0.5 s before
+        # line 5's own caption: the two are not sung over each other, whatever the move.
+        objs, cues, lines = _anchor_lines(4)
+        cues += [(8.0, 10.5), (11.0, 13.0)]
+        lines += ["bb cc dd", "ee ff gg"]
+        objs += [
+            _line(4, "bb cc dd", ("bb", 8.0, 8.3), ("cc", 8.4, 8.7), ("dd", 8.8, 9.4)),
+            _line(5, "ee ff gg"),
+        ]
+        heard = _words(("bb", 8.0, 8.3), ("cc", 8.4, 8.7), ("dd", 8.8, 9.1), *self._sung(9.4))
+        # The aligner drags the first word back onto line 4's last word.
+        dragged = _words(("ee", dragged_start, 9.7), ("ff", 9.8, 10.1), ("gg", 10.2, 10.5))
+        out, stats, calls = self._rescue(
+            (objs, cues, lines), lambda w0, w1: dragged if w0 < 10 else None, heard, line=5
+        )
+        assert len(calls) == 1 and stats["heard_aimed_kept_line_ids"] == [5]
+        assert out[5]["source"] == SOURCE_REALIGN
+        assert out[5]["start"] == pytest.approx(start)
+        assert stats["guard_lifted_line_ids"] == lifted
+
+    def test_a_heard_aimed_line_with_a_line_after_it_looks_for_its_singing_end_from_the_moved_span(
+        self,
+    ):
+        # Cued 8.0-9.5, heard from 12.6 (moved span 12.6-14.1), the next line cued at 16. The
+        # note is held to 15.2: found from the moved span, missed from the cue's, whose
+        # quiet stretch (15.2-16) lies more than 4 s past the caption.
+        env = _env(20.0, [(0, 7.0), (12.6, 15.2), (16.0, 17.0)])
+        held = _words(("ee", 12.65, 13.0), ("ff", 13.1, 13.5), ("gg", 13.6, 15.0))
+        song = self._song((8.0, 9.5), after=(16.0, 17.0))
+        out, stats, calls = self._rescue(
+            song, lambda w0, w1: held, _words(*self._sung(12.6)), env=env, duration=20.0
+        )
+        (w0, w1) = calls[0]
+        assert len(calls) == 1 and w0 == pytest.approx(11.85)
+        assert w1 == pytest.approx(15.6, abs=0.03)
+        assert stats["windows_widened_line_ids"] == [4]
+        assert stats["heard_aimed_kept_line_ids"] == [4]
+        assert out[4]["start"] == 12.65 and out[4]["end"] == 15.0
+        assert out[5] == song[0][5]
 
 
 class TestRescueWindow:
