@@ -4,7 +4,7 @@ Ken still has it at build time, is listed under "Where Fable would help".
 
 # Cue-align rescue: the transcriber's words outrank the cue
 
-**Status: Phases 1 and 2 done 2026-11-14 (1: `a24348be`..`fecebdd2`; 2a `6eef9d5d`, diff-read fix `f2d305fc`, 2a2 `60789275`, 2b `65438683`, 2c `829d02d6`). Phase 3: 3a (probe `f3edd413`, fix `a0a10911`) and 3b ("Report output") done 2026-11-14; STOPPED at 3b2 on both conditions (Table P leaves out 16 songs, Table O has 30 lines over 0.3 s). Not started: 3c, 3c2, 3d. The review is due at 3c2, before the GPU run.**
+**Status: Phases 1 and 2 done 2026-11-14 (1: `a24348be`..`fecebdd2`; 2a `6eef9d5d`, diff-read fix `f2d305fc`, 2a2 `60789275`, 2b `65438683`, 2c `829d02d6`). Phase 3: 3a (probe `f3edd413`, fix `a0a10911`, tolerance `e23f0d60`), 3b ("Report output", rerun at `e23f0d60`) and 3b2 (Fable 5.2 read, Results log row 13) done 2026-11-14. Not started: 3c, 3c2, 3d. The review is due at 3c2, before the GPU run.**
 
 Branch `cue_heard_rescue`, off `dev` `a7671d7`.
 
@@ -408,7 +408,7 @@ Read-only on the library (`/home/ken/shared-drives/D:/Shared/pikaraoke-songs`).
   - **baseline replay**: `repace_bad_lines` over `cue_inputs` with `heard_words=None`
     and the zero-length rule and rule C off for the replay, then `snap_line_edges`; the
     saved re-aligns answer the `realign` calls. A song whose replay does not equal its
-    `output_line_timings` within 0.011 s is left out and named;
+    `output_line_timings` within 0.026 s (one envelope frame; 0.011 s until the 3b2 read, Results log row 13) is left out and named;
   - **new replay**: the same with the song's `transcribe_words` and every rule on. A
     `realign` call the bundle holds no answer for returns None and is recorded: that
     line's result needs the GPU.
@@ -446,8 +446,8 @@ Read-only on the library (`/home/ken/shared-drives/D:/Shared/pikaraoke-songs`).
 - [x] **3b. The run.** `python scripts/cue_heard_probe.py --folder <library> --out
   ~/.pikaraoke/tmp/cue_heard_rescue > report.md`. Paste Tables P, A, G, Z, B, D, C, O,
   V raw into "Report output", no tallies beyond the tables' own, no reading. Read-only
-  check: `find <library> -newer <out>/started` prints nothing of this run's.
-- [ ] **3b2. Optional read before the GPU run** (**STOPPED here 2026-11-14: Table P leaves out 16 songs and Table O has 30 lines moving over 0.3 s; Results log row 12**) ("Where Fable would help", item 2). If
+  check: `find <library> -newer <out>/started` prints nothing of this run's. Run again at `e23f0d60` after the 3b2 read (Results log row 13); "Report output" holds that run.
+- [x] **3b2. Optional read before the GPU run** (stopped 2026-11-14 on both conditions, Results log row 12; read by Fable 5.2 the same day, tolerance changed to 0.026 s, 3b rerun, Results log row 13) ("Where Fable would help", item 2). If
   Ken wants it, STOP here with a handoff: branch and HEAD, this file's "Report output",
   `<out>`, "do not rerun the probe", and the question: do Tables P and O show a sound
   replay (few songs left out, each for a reason unrelated to this branch; no line in
@@ -529,7 +529,10 @@ Read-only. Inputs: the Phase 3 and 4 tables, `<out>`, Ken's verdicts on the shee
 4. **Rule C,** by Ken's ear only. Kept, tried and refused counts are reported.
 5. **Zero-length words:** Table Z and Ken's one listen.
 6. **Table O.** Any line outside the rules' id lists that moved more than 0.3 s is named
-   and explained before anything is ruled.
+   and explained before anything is ruled. From the 3b2 read (Results log row 13), two
+   lines got worse because the neighbour was freed: Love Me Now line 53 (now a
+   cue-spaced fill) and Love Is an Open Door line 18 (squeezed into 0.16 s); name them
+   and put them to Ken's ear.
 7. **Report to Ken** with the caveats: the transcriber's first word is itself early
    after a gap (`plans/onset-loud-start.md`, Table C), so "closer" is weak under about
    0.3 s; rule C has no reference; fifteen library songs and three trial songs were
@@ -571,46 +574,36 @@ Read-only. Inputs: the Phase 3 and 4 tables, `<out>`, Ken's verdicts on the shee
 | 10 | 2026-11-14 | plan | Ken, after the 2d report and the three open calls of row 9 (rule C on lines heard on their cue; rule C in a run of identical lines; rule D replacing a line with one that times fewer words), asked for columns that measure them and for the review before the GPU run instead of at 2d. Edits: Table C gains "heard shift" and "in a run of identical lines" (3a); the "timed fewer words" count is not a 3a column, because rule D's heard-aimed re-align has no saved answer in a bundle, so it is in 4a as membership of `guessed_word_line_ids` for every D line tried, and 4a gives rule C lines Table C's two columns; new step 3c2 (STOP: review due, `/code-review medium f2d305fc~1..HEAD` on `cue_align.py`, `heard_lines.py` and their tests), before 3d; 2d notes the move; Status line. No code changed. | this file |
 | 11 | 2026-11-14 | 3a | Probe built: `scripts/cue_heard_probe.py` and `tests/unit/test_cue_heard_probe.py`, `f3edd413`; fix `a0a10911`. Each cue-route bundle (`cue_inputs` and `transcribe_words` not None; caption = origin `srt` or `movie_srt`, LRCLIB = origin `lrclib_srt`) is replayed twice, rescue then `snap_line_edges` as the stage runs it (`doubted_sources={SOURCE_REALIGN}`): the baseline (`heard_words=None`) and the new run (the song's `transcribe_words`, every rule). The baseline switches rule C and the zero-length rule off by patching `_Rescue.gap_retry_line` and `cue_align._timed_slots` inside a context manager in the probe (`repace_bad_lines` gained no option); the baseline must equal `output_line_timings` (start, end, word count) within 0.011 s or the song is left out and named in Table P. Saved re-aligns answer a `realign` call by `(line, w0, w1)` within 1e-6; a call with no saved answer returns None and is recorded as unanswered (`Answered` column). Snap stem: `dereverb/` when `joint_stats.dereverb.succeeded`, else `vocal/`; the stem is decoded to a 44.1 kHz stereo WAV as `LoadVocalFromM4aStage` does, the envelope and duration (`_wav_duration`) are read from that, cached under `<out>/env`. Decoding the m4a straight to 16 kHz mono (first try, scratch script) left 20 of 177 songs out; the WAV route left 16. Differences from the plan's wording: Table D's not-aimed counts have three more reasons than the three named ("run not heard in full", "too few pairs", "trigger held, not aimed") so the counts account for every candidate; Tables B, D and C gain `Answered` and `Kept` columns and Table P a `Why` column; Table Z lists every kept line that had a word for every token with some zero-length, as the baseline rescue left it, first-pass or re-aligned (first version listed first-pass lines only: found by a read of the first run's Table O, whose 82 lines fell to 51 after the fix); a file with no YouTube id is named by its whole stem in the tables, and `--song` takes an id or a whole stem (the library has such files: Rent, The Last Five Years, Flight of the Conchords); `--from` is repeatable and a song is taken from the first `--from` folder that has it, else from `--folder`. The 3c pick is not a probe option: `rows.json` holds every table row (with lyric text, never committed) and the pick is counted from it. 50 tests (made-up bundles, a silent envelope, no audio); mutation checks, each fails the tests named: rule C not patched out (1), zero-length not patched out (1), answer by line only (1), unanswered recorded as answered (1), de-reverb stem ignored (1), Table C heard shift blanked (1), run flag false (1), Table V thresholds not applied (1), baseline given heard words (1), Table O includes rule lines (1), cache never stale (1), Table Z from first-pass lines (1), label always short (1), staging by id only (1), and five that first survived and got tests (tolerance 0.03, `--from` order, Table B window from the last call, inner-gap test, Table D reason order). Full suite 3716 passed (3666 before 3a); pre-commit clean on both files; `graphify update .` run. | `f3edd413`, `a0a10911` |
 | 12 | 2026-11-14 | 3b | Probe run over `~/pikaraoke-songs` at `a0a10911` (`--out ~/.pikaraoke/tmp/cue_heard_rescue`; report in "Report output", `rows.json` and `report.md` in `<out>`). 177 bundles read (149 caption, 28 LRCLIB); 161 replayed; 16 left out, all caption, none for a missing or unreadable stem: 11 differ by 0.025 s on one line edge (one envelope frame), 5 by 0.061, 0.167, 0.190, 0.277 and 2.993 s. The cause of the one-frame cases is not established. Rows: Table A 58, G 303, Z 1008, B 54, D 20, C 86, O 51. Table O: 51 lines, 30 over 0.3 s, largest 3.236 s; for each of those 30 a line directly before or after it is in Tables A, G, Z, B, D or C (scratch count over `rows.json`: 25 move the end only, 1 the start only, 4 both). The first run, before `a0a10911`, is discarded: Table Z had 857 rows, Table O 82 lines of which 38 over 0.3 s, and songs with no YouTube id were labelled `?`; Table P was the same 16. Read-only check: `find ~/pikaraoke-songs -newer ~/.pikaraoke/tmp/cue_heard_rescue/started` printed nothing. **STOP at 3b2 on both of its conditions** (Table P leaves out more than 10 songs; Table O has a line moving more than 0.3 s). 3c, 3c2 and 3d not started. | this file, `<out>` |
+| 13 | 2026-11-14 | 3b2, 3b | Read of Tables P and O by Fable 5.2 (report relayed by Ken in chat; scratch replays from the probe's cached envelopes, library and `<out>` untouched, probe not rerun). **Table P, first run (16 out):** 14 songs the rescue reproduces exactly, every mismatched edge being one the edge snap moved: in 11 the snap landed one frame over; in 3 (Eminem, Sugalumps, Tribute) the snap fired here and not in the bundle, or the reverse, on a single edge. 2 songs (both The Last Five Years) have a library stem about 3.2 s shorter than the audio the bundle was made from; the last line's saved window runs past the stem's end, so its re-align has no answer. The envelope decoded here is not bit-identical to the bundle's (whether the lossy m4a copy of the stem or a different ffmpeg is not established); adding 0.1 dB of noise to the envelope moves an edge in about half the songs. No mismatch lies between 0.025 and 0.061 s. **Table O, first run (51 lines):** 46 lines the rescue left unchanged, only the end moved (the snap stretches an end no further than 0.1 s before the next line's first word, and the next line is a Table A, G or Z line whose start moved: 25 Z, 21 A or G); 5 lines (all among the 30) whose own re-align came out differently because the line before moved (four after a guard lift, one after an A1 keep): Rent "I Should Tell You" lines 25 and 40 and Hiphopopotamus line 35 now keep a re-align that was cut off; Love Me Now line 53 becomes a cue-spaced fill; Love Is an Open Door line 18 is squeezed into 0.16 s. The new replay makes no unanswered aligner call outside Tables B, D and C; all 160 tries in B, D and C had no saved answer, so the CPU replay shows no effect of those three rules. **Change:** `TOLERANCE_S` 0.011 to 0.026 s in `scripts/cue_heard_probe.py` (Fable's recommendation, passed on by Ken), `e23f0d60`; Table O keeps its own 0.011 s threshold (`MOVED_S`, both replays read the same envelope), as the plan words it; the test that pins the tolerance now checks 0.025 s inside and 0.027 s outside, and a Table O test checks that 0.02 s is listed; mutation checks (tolerance back to 0.011, to 0.03, Table O using the tolerance) each fail one test. 50 tests pass; pre-commit clean on both files; `graphify update .` run. **Rerun** at `e23f0d60` (`python scripts/cue_heard_probe.py --folder ~/pikaraoke-songs --out ~/.pikaraoke/tmp/cue_heard_rescue > report.md`; report in "Report output"): 177 read, 172 replayed (144 caption, 28 LRCLIB), 5 left out, all caption, none for a missing or unreadable stem: Eminem line 69 start off by 0.277 s, Sugalumps line 20 end 0.190 s, Tribute line 34 end 0.167 s, The Last Five Years "A Miracle Would Happen & When You Come Home to Me" line 92 end 2.993 s, "Climbing Uphill" line 75 end 0.061 s; the same five songs the read predicted. Rows: Table A 63, G 320, Z 1058, B 54, D 20, C 94, O 54 (first run: 58, 303, 1008, 54, 20, 86, 51). Against the first run (scratch comparison of the two `rows.json`): no row removed, 83 added, B and D unchanged, no Table O line changed its amount. Table O: 54 lines, 31 over 0.3 s, largest 3.236 s; the 3 new lines are Bad Habits line 44 (0.553 s), Cast Along the Way line 42 (0.203 s), The Philosopher Kings Hurts line 10 (0.284 s), each end only, each directly before a Table Z, G or A line. Scratch copy of the read's per-line attribution script (outside the repo) over the new run: of the 54 Table O lines, 49 have the rescue's output unchanged and only the end moved (next line in Table Z 26, A 15, G 8; for 5 of them the next line's first-pass start is unchanged and its final start moved, and the zero-length rule alone reproduces the move), and 5 have their own re-align different (the five named above). B, D and C: 168 tries (B 54, D 20, C 94), all without a saved answer, none kept. One unanswered call outside B, D and C, which is also unanswered in the baseline. Read-only check: `find ~/pikaraoke-songs -newer ~/.pikaraoke/tmp/cue_heard_rescue/started` printed nothing. | `e23f0d60`, this file, `<out>` |
 
 
 ## Report output
 
 ### Phase 3b: CPU replay of the library
 
-`python scripts/cue_heard_probe.py --folder ~/pikaraoke-songs --out ~/.pikaraoke/tmp/cue_heard_rescue`
-at `a0a10911` (2026-11-14), unedited:
+`python scripts/cue_heard_probe.py --folder ~/pikaraoke-songs --out ~/.pikaraoke/tmp/cue_heard_rescue > report.md`
+at `e23f0d60` (2026-11-14), unedited. The first run, at `a0a10911`, is summarised in Results log row 12.
 
 ### Table P: songs read, replayed and left out
-A song is left out when its stem is missing or unreadable, or its baseline replay differs from the bundle's output_line_timings by more than 0.011 s.
+A song is left out when its stem is missing or unreadable, or its baseline replay differs from the bundle's output_line_timings by more than 0.026 s.
 
 | Src | Read | Replayed | Left out |
 |---|---|---|---|
-| caption | 149 | 133 | 16 |
+| caption | 149 | 144 | 5 |
 | LRCLIB | 28 | 28 | 0 |
 
 | Src | Song | Why |
 |---|---|---|
-| caption | Cast of Camp Rock - One Beat A tESZ92ugf7g | baseline replay differs: line 29 end off by 0.025 s |
-| caption | Ed Sheeran - Bad Habits [Offic orJSJGHjBLI | baseline replay differs: line 3 end off by 0.025 s |
 | caption | Eminem - The Real Slim Shady ( eJO5HU_7_1w | baseline replay differs: line 69 start off by 0.277 s |
 | caption | Flight of the Conchords (2007) - Sugalumps | baseline replay differs: line 20 end off by 0.190 s |
-| caption | Flight of the Conchords (2007) - The Most Beautiful Girl (In the Room) | baseline replay differs: line 63 end off by 0.025 s |
-| caption | Jessie J - Who You Are j2WWrupMBAE | baseline replay differs: line 32 start off by 0.025 s |
-| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | baseline replay differs: line 22 end off by 0.025 s |
-| caption | Moana - Cast - Along The Way ( D_dOXTpwV5s | baseline replay differs: line 34 start off by 0.025 s |
-| caption | Rent (2005) - Light My Candle | baseline replay differs: line 2 end off by 0.025 s |
-| caption | Rent (2005) - One Song Glory | baseline replay differs: line 10 start off by 0.025 s |
-| caption | Rent (2005) - Your Eyes | baseline replay differs: line 5 start off by 0.025 s |
 | caption | Tenacious D - Tribute _lK4cX5xGiQ | baseline replay differs: line 34 end off by 0.167 s |
 | caption | The Last Five Years (2014) - A Miracle Would Happen & When You Come Home to Me | baseline replay differs: line 92 end off by 2.993 s |
 | caption | The Last Five Years (2014) - Climbing Uphill | baseline replay differs: line 75 end off by 0.061 s |
-| caption | The Philosopher Kings - Hurts  6X4bhT1FWjI | baseline replay differs: line 24 end off by 0.025 s |
-| caption | Westlife - My Love (Official V ulOb9gIGGd0 | baseline replay differs: line 22 start off by 0.025 s |
 
 ### Table A: lines rule A1 keeps and rule A2 holds
 Starts in seconds on the cue clock (cue) and the audio clock (the rest). Run: in a run of identical lines. Gap one side: an inner gap over 2 s with every heard word on one side of it.
 
-caption: 41 lines in 34 songs; LRCLIB: 17 lines in 11 songs
+caption: 46 lines in 36 songs; LRCLIB: 17 lines in 11 songs
 
 | Src | Song | Line | Rule | Cue | Today | New | Heard | Run | Gap one side |
 |---|---|---|---|---|---|---|---|---|---|
@@ -650,7 +643,12 @@ caption: 41 lines in 34 songs; LRCLIB: 17 lines in 11 songs
 | caption | The Lion King (1994) - Can You 25QyCxVkXwQ | 21 | A2 | 58.263 | 58.150 | 57.953 | 57.020 |  |  |
 | caption | The Lion King (1994) - Hakuna  fwLxDUQBdEg | 72 | A1 | 182.493 | 182.575 | 181.743 | 182.080 |  |  |
 | caption | The Philosopher Kings - Cry EUW0eDhKoxw | 10 | A2 | 79.192 | 79.800 | 79.727 | 78.550 |  |  |
+| caption | The Philosopher Kings - Hurts  6X4bhT1FWjI | 11 | A2 | 92.492 | 91.353 | 91.637 | 90.440 |  |  |
+| caption | The Philosopher Kings - Hurts  6X4bhT1FWjI | 26 | A2 | 185.852 | 185.900 | 185.909 | 185.664 |  |  |
+| caption | The Philosopher Kings - Hurts  6X4bhT1FWjI | 37 | A1 | 237.237 | 236.098 | 234.162 | 234.846 | yes |  |
 | caption | The Philosopher Kings - You Do AI7F8qlN44E | 31 | A1 | 129.062 | 128.625 | 128.625 | 128.720 | yes | yes |
+| caption | Westlife - My Love (Official V ulOb9gIGGd0 | 13 | A2 | 41.128 | 40.926 | 40.721 | 39.690 |  |  |
+| caption | Westlife - My Love (Official V ulOb9gIGGd0 | 35 | A2 | 124.270 | 124.036 | 124.000 | 123.020 |  |  |
 | caption | Whitney Houston - I Wanna Danc eH3giaIzONA | 3 | A1 | 41.415 | 40.691 | 36.765 | 37.140 |  |  |
 | caption | Whitney Houston - I Wanna Danc eH3giaIzONA | 62 | A1 | 261.361 | 260.467 | 260.467 | 260.620 |  | yes |
 | caption | ZAYN & Zhavia Ward - A Whole N rg_zwK_sSEY | 53 | A1 | 203.766 | 204.760 | 202.650 | 203.170 | yes |  |
@@ -676,7 +674,7 @@ caption: 41 lines in 34 songs; LRCLIB: 17 lines in 11 songs
 ### Table G: starts the guard lift freed of the previous line
 Previous end: the previous line's end in the new replay.
 
-caption: 265 lines in 93 songs; LRCLIB: 38 lines in 18 songs
+caption: 282 lines in 99 songs; LRCLIB: 38 lines in 18 songs
 
 | Src | Song | Line | Cue | Today | New | Heard | Previous end |
 |---|---|---|---|---|---|---|---|
@@ -797,6 +795,10 @@ caption: 265 lines in 93 songs; LRCLIB: 38 lines in 18 songs
 | caption | Flight of the Conchords (2007) - Inner City Pressure | 30 | 72.202 | 72.610 | 72.098 | 72.620 | 72.610 |
 | caption | Flight of the Conchords (2007) - Robots | 1 | 1.571 | 1.900 | 1.718 | 1.800 | 1.800 |
 | caption | Flight of the Conchords (2007) - Robots | 14 | 29.197 | 29.650 | 29.650 | 29.500 | 29.400 |
+| caption | Flight of the Conchords (2007) - The Most Beautiful Girl (In the Room) | 17 | 51.231 | 51.500 | 51.500 | 51.480 | 51.340 |
+| caption | Flight of the Conchords (2007) - The Most Beautiful Girl (In the Room) | 24 | 70.981 | 71.325 | 71.325 | 71.360 | 70.783 |
+| caption | Jessie J - Who You Are j2WWrupMBAE | 37 | 142.280 | 142.390 | 141.990 | 141.820 | 142.390 |
+| caption | Jessie J - Who You Are j2WWrupMBAE | 38 | 144.640 | 144.880 | 144.880 | 144.880 | 144.880 |
 | caption | John Legend - Love Me Now (Off NmCFY1oYDeM | 14 | 83.131 | 83.150 | 83.150 | 83.100 | 83.050 |
 | caption | John Legend - Love Me Now (Off NmCFY1oYDeM | 52 | 221.959 | 221.401 | 220.901 | 221.360 | 221.716 |
 | caption | Jung Kook 정국 - Standing Next t 6q0JnftlH-I | 7 | 54.788 | 55.101 | 54.216 | 54.840 | 54.861 |
@@ -843,11 +845,21 @@ caption: 265 lines in 93 songs; LRCLIB: 38 lines in 18 songs
 | caption | KPop Demon Hunters (2025) - What It Sounds Like | 35 | 99.891 | 100.111 | 100.200 | 99.920 | 100.111 |
 | caption | KPop Demon Hunters (2025) - What It Sounds Like | 51 | 138.429 | 138.522 | 138.550 | 138.220 | 138.522 |
 | caption | KPop Demon Hunters (2025) - What It Sounds Like | 52 | 142.475 | 142.492 | 141.908 | 142.380 | 142.492 |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 25 | 87.897 | 87.620 | 87.074 | 87.900 | 87.620 |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 38 | 139.743 | 139.214 | 139.170 | 139.140 | 139.214 |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 55 | 211.591 | 211.200 | 211.138 | 211.240 | 211.200 |
 | caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 53 | 243.541 | 243.050 | 243.050 | 242.810 | 242.621 |
 | caption | Moana (2016) - How Far I'll Go cPAbx5kgCJo | 25 | 87.366 | 87.496 | 87.200 | 87.660 | 87.496 |
 | caption | Moana (2016) - How Far I'll Go cPAbx5kgCJo | 36 | 121.500 | 122.030 | 121.180 | 122.040 | 122.030 |
 | caption | Moana (2016) - Shiny 93lrosBEW-Q | 50 | 127.033 | 127.490 | 127.575 | 127.640 | 127.490 |
 | caption | Moana (2016) - You're Welcome 79DijItQXMM | 20 | 42.566 | 42.600 | 42.600 | 41.940 | 42.443 |
+| caption | Moana - Cast - Along The Way ( D_dOXTpwV5s | 17 | 47.839 | 47.700 | 47.700 | 47.040 | 47.200 |
+| caption | Moana - Cast - Along The Way ( D_dOXTpwV5s | 43 | 125.250 | 124.850 | 124.309 | 124.840 | 124.547 |
+| caption | Moana - Cast - Along The Way ( D_dOXTpwV5s | 58 | 172.297 | 171.727 | 171.875 | 171.760 | 171.727 |
+| caption | Moana - Cast - Along The Way ( D_dOXTpwV5s | 68 | 191.691 | 191.234 | 190.884 | 191.100 | 191.234 |
+| caption | Moana - Cast - Along The Way ( D_dOXTpwV5s | 70 | 196.404 | 195.925 | 195.925 | 195.270 | 195.714 |
+| caption | Moana - Cast - Along The Way ( D_dOXTpwV5s | 77 | 210.335 | 209.514 | 209.394 | 210.100 | 209.514 |
+| caption | Moana - Cast - Along The Way ( D_dOXTpwV5s | 91 | 245.536 | 245.692 | 245.325 | 244.940 | 245.632 |
 | caption | Mulan (1998) - I'll Make a Man vGfJeW_CcFY | 43 | 193.040 | 192.599 | 192.147 | 193.520 | 192.599 |
 | caption | Mulan (1998) - I'll Make a Man vGfJeW_CcFY | 47 | 209.159 | 209.099 | 208.816 | 209.780 | 209.099 |
 | caption | NSYNC - (God Must Have Spent)  -fxh7jAJR8U | 31 | 125.400 | 125.525 | 125.525 | 125.720 | 125.125 |
@@ -934,8 +946,11 @@ caption: 265 lines in 93 songs; LRCLIB: 38 lines in 18 songs
 | caption | The Little Mermaid (1989) - Un GC_mV1IpjWA | 13 | 36.066 | 36.163 | 35.926 | 35.960 | 36.163 |
 | caption | The Little Mermaid (1989) - Un GC_mV1IpjWA | 39 | 100.700 | 101.083 | 100.560 | 100.900 | 101.083 |
 | caption | The Little Mermaid (1989) - Un GC_mV1IpjWA | 63 | 169.733 | 170.343 | 169.593 | 170.320 | 170.343 |
+| caption | The Philosopher Kings - Hurts  6X4bhT1FWjI | 33 | 218.918 | 218.950 | 218.950 | 218.500 | 218.313 |
 | caption | The Philosopher Kings - You Do AI7F8qlN44E | 32 | 132.866 | 132.775 | 132.775 | 133.220 | 136.024 |
 | caption | Troy, Gabriella - Breaking Fre 0qj67KE5VXI | 33 | 113.133 | 113.643 | 113.323 | 113.840 | 113.643 |
+| caption | Westlife - My Love (Official V ulOb9gIGGd0 | 1 | 3.840 | 3.750 | 3.750 | 3.540 | 3.520 |
+| caption | Westlife - My Love (Official V ulOb9gIGGd0 | 3 | 7.853 | 7.680 | 7.547 | 7.620 | 7.660 |
 | caption | Whitney Houston - I Wanna Danc eH3giaIzONA | 44 | 203.114 | 202.594 | 202.248 | 203.020 | 202.594 |
 | caption | Whitney Houston - I Wanna Danc eH3giaIzONA | 52 | 233.701 | 233.400 | 233.400 | 233.480 | 232.834 |
 | caption | Wicked (2003) - For Good TZ0pXUb5jVU | 14 | 79.106 | 78.950 | 78.950 | 78.600 | 78.600 |
@@ -987,7 +1002,7 @@ caption: 265 lines in 93 songs; LRCLIB: 38 lines in 18 songs
 ### Table Z: zero-length words re-timed
 Zero-length: words under 0.05 s in the line as the baseline rescue left it. Re-timed: words whose times the zero-length rule changed. Short after: words under 0.1 s in the snapped line.
 
-caption: 854 lines in 118 songs; LRCLIB: 154 lines in 23 songs
+caption: 904 lines in 127 songs; LRCLIB: 154 lines in 23 songs
 
 | Src | Song | Line | Tokens | Zero-length | Re-timed | Short after |
 |---|---|---|---|---|---|---|
@@ -1251,6 +1266,11 @@ caption: 854 lines in 118 songs; LRCLIB: 154 lines in 23 songs
 | caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 20 | 12 | 2 | 2 | 0 |
 | caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 25 | 6 | 1 | 1 | 0 |
 | caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 36 | 8 | 1 | 1 | 0 |
+| caption | Cast of Camp Rock - One Beat A tESZ92ugf7g | 3 | 10 | 2 | 2 | 0 |
+| caption | Cast of Camp Rock - One Beat A tESZ92ugf7g | 6 | 8 | 1 | 1 | 1 |
+| caption | Cast of Camp Rock - One Beat A tESZ92ugf7g | 25 | 8 | 2 | 2 | 0 |
+| caption | Cast of Camp Rock - One Beat A tESZ92ugf7g | 28 | 5 | 1 | 1 | 1 |
+| caption | Cast of Camp Rock - One Beat A tESZ92ugf7g | 59 | 2 | 1 | 1 | 0 |
 | caption | Cast of Camp Rock - Play My Mu jQ-Pqxl1BlI | 3 | 2 | 1 | 0 | 1 |
 | caption | Cast of Camp Rock - Play My Mu jQ-Pqxl1BlI | 34 | 4 | 1 | 1 | 0 |
 | caption | Cast of Camp Rock - Play My Mu jQ-Pqxl1BlI | 44 | 4 | 1 | 1 | 0 |
@@ -1265,6 +1285,15 @@ caption: 854 lines in 118 songs; LRCLIB: 154 lines in 23 songs
 | caption | Céline Dion - Ashes (Deadpool  CX11yw6YL1w | 12 | 13 | 1 | 1 | 0 |
 | caption | Céline Dion - Ashes (Deadpool  CX11yw6YL1w | 31 | 19 | 1 | 1 | 5 |
 | caption | Céline Dion - I'm Alive (Stuar NJsa6-y4sDs | 41 | 7 | 1 | 1 | 1 |
+| caption | Ed Sheeran - Bad Habits [Offic orJSJGHjBLI | 0 | 4 | 1 | 1 | 1 |
+| caption | Ed Sheeran - Bad Habits [Offic orJSJGHjBLI | 3 | 11 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Bad Habits [Offic orJSJGHjBLI | 9 | 10 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Bad Habits [Offic orJSJGHjBLI | 12 | 8 | 1 | 1 | 3 |
+| caption | Ed Sheeran - Bad Habits [Offic orJSJGHjBLI | 21 | 9 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Bad Habits [Offic orJSJGHjBLI | 30 | 8 | 2 | 3 | 2 |
+| caption | Ed Sheeran - Bad Habits [Offic orJSJGHjBLI | 33 | 8 | 1 | 1 | 1 |
+| caption | Ed Sheeran - Bad Habits [Offic orJSJGHjBLI | 45 | 8 | 2 | 2 | 0 |
+| caption | Ed Sheeran - Bad Habits [Offic orJSJGHjBLI | 48 | 8 | 1 | 1 | 0 |
 | caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 0 | 10 | 1 | 1 | 0 |
 | caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 4 | 5 | 1 | 1 | 0 |
 | caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 24 | 9 | 1 | 1 | 0 |
@@ -1372,6 +1401,9 @@ caption: 854 lines in 118 songs; LRCLIB: 154 lines in 23 songs
 | caption | Flight of the Conchords (2007) - Robots | 23 | 6 | 1 | 1 | 0 |
 | caption | Flight of the Conchords (2007) - Robots | 32 | 7 | 1 | 1 | 1 |
 | caption | Flight of the Conchords (2007) - Robots | 40 | 4 | 1 | 1 | 0 |
+| caption | Flight of the Conchords (2007) - The Most Beautiful Girl (In the Room) | 15 | 6 | 1 | 1 | 0 |
+| caption | Flight of the Conchords (2007) - The Most Beautiful Girl (In the Room) | 19 | 3 | 1 | 1 | 0 |
+| caption | Flight of the Conchords (2007) - The Most Beautiful Girl (In the Room) | 37 | 9 | 1 | 2 | 0 |
 | caption | Frozen (2013) - Let It Go YVVTZgwYwVo | 12 | 4 | 1 | 1 | 0 |
 | caption | Frozen (2013) - Let It Go YVVTZgwYwVo | 15 | 6 | 1 | 1 | 0 |
 | caption | Frozen (2013) - Let It Go YVVTZgwYwVo | 41 | 6 | 1 | 1 | 0 |
@@ -1401,6 +1433,15 @@ caption: 854 lines in 118 songs; LRCLIB: 154 lines in 23 songs
 | caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 50 | 8 | 2 | 3 | 3 |
 | caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 51 | 11 | 3 | 4 | 5 |
 | caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 53 | 6 | 1 | 2 | 0 |
+| caption | Jessie J - Who You Are j2WWrupMBAE | 0 | 3 | 1 | 1 | 0 |
+| caption | Jessie J - Who You Are j2WWrupMBAE | 1 | 2 | 1 | 1 | 0 |
+| caption | Jessie J - Who You Are j2WWrupMBAE | 6 | 5 | 1 | 1 | 0 |
+| caption | Jessie J - Who You Are j2WWrupMBAE | 18 | 6 | 1 | 1 | 0 |
+| caption | Jessie J - Who You Are j2WWrupMBAE | 20 | 9 | 2 | 2 | 1 |
+| caption | Jessie J - Who You Are j2WWrupMBAE | 21 | 6 | 1 | 1 | 0 |
+| caption | Jessie J - Who You Are j2WWrupMBAE | 26 | 5 | 1 | 1 | 0 |
+| caption | Jessie J - Who You Are j2WWrupMBAE | 43 | 6 | 1 | 1 | 0 |
+| caption | Jessie J - Who You Are j2WWrupMBAE | 54 | 3 | 1 | 1 | 0 |
 | caption | John Legend - All of Me 450p7goxZqg | 45 | 6 | 1 | 1 | 0 |
 | caption | John Legend - All of Me 450p7goxZqg | 49 | 11 | 1 | 1 | 0 |
 | caption | John Legend - Love Me Now (Off NmCFY1oYDeM | 5 | 9 | 1 | 1 | 0 |
@@ -1508,6 +1549,10 @@ caption: 854 lines in 118 songs; LRCLIB: 154 lines in 23 songs
 | caption | KPop Demon Hunters (2025) - How It's Done | 61 | 6 | 1 | 1 | 1 |
 | caption | KPop Demon Hunters (2025) - How It's Done | 63 | 6 | 1 | 2 | 0 |
 | caption | KPop Demon Hunters (2025) - What It Sounds Like | 39 | 4 | 1 | 1 | 0 |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 2 | 7 | 1 | 1 | 0 |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 21 | 8 | 1 | 1 | 0 |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 42 | 7 | 1 | 1 | 0 |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 47 | 8 | 1 | 1 | 0 |
 | caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 1 | 9 | 1 | 1 | 1 |
 | caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 25 | 7 | 1 | 1 | 1 |
 | caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 37 | 6 | 1 | 1 | 0 |
@@ -1533,6 +1578,13 @@ caption: 854 lines in 118 songs; LRCLIB: 154 lines in 23 songs
 | caption | Moana (2016) - You're Welcome 79DijItQXMM | 43 | 8 | 1 | 1 | 2 |
 | caption | Moana (2016) - You're Welcome 79DijItQXMM | 55 | 7 | 1 | 1 | 1 |
 | caption | Moana (2016) - You're Welcome 79DijItQXMM | 63 | 9 | 2 | 2 | 0 |
+| caption | Moana - Cast - Along The Way ( D_dOXTpwV5s | 11 | 8 | 1 | 1 | 0 |
+| caption | Moana - Cast - Along The Way ( D_dOXTpwV5s | 25 | 9 | 1 | 1 | 0 |
+| caption | Moana - Cast - Along The Way ( D_dOXTpwV5s | 54 | 8 | 1 | 2 | 0 |
+| caption | Moana - Cast - Along The Way ( D_dOXTpwV5s | 59 | 8 | 1 | 2 | 0 |
+| caption | Moana - Cast - Along The Way ( D_dOXTpwV5s | 62 | 7 | 1 | 2 | 0 |
+| caption | Moana - Cast - Along The Way ( D_dOXTpwV5s | 89 | 6 | 2 | 2 | 0 |
+| caption | Moana - Cast - Along The Way ( D_dOXTpwV5s | 90 | 6 | 2 | 2 | 1 |
 | caption | Mulan (1998) - I'll Make a Man vGfJeW_CcFY | 0 | 8 | 4 | 6 | 7 |
 | caption | Mulan (1998) - I'll Make a Man vGfJeW_CcFY | 24 | 10 | 1 | 1 | 0 |
 | caption | Mulan (1998) - I'll Make a Man vGfJeW_CcFY | 30 | 11 | 1 | 2 | 1 |
@@ -1672,6 +1724,11 @@ caption: 854 lines in 118 songs; LRCLIB: 154 lines in 23 songs
 | caption | Rent (2005) - I'll Cover You | 37 | 4 | 1 | 1 | 0 |
 | caption | Rent (2005) - I'll Cover You | 38 | 6 | 2 | 4 | 3 |
 | caption | Rent (2005) - I'll Cover You | 41 | 6 | 1 | 2 | 0 |
+| caption | Rent (2005) - Light My Candle | 21 | 12 | 1 | 1 | 1 |
+| caption | Rent (2005) - Light My Candle | 27 | 2 | 1 | 1 | 0 |
+| caption | Rent (2005) - Light My Candle | 46 | 11 | 2 | 3 | 4 |
+| caption | Rent (2005) - Light My Candle | 49 | 4 | 1 | 1 | 1 |
+| caption | Rent (2005) - Light My Candle | 55 | 8 | 1 | 1 | 0 |
 | caption | Rent (2005) - Out Tonight | 2 | 10 | 1 | 1 | 0 |
 | caption | Rent (2005) - Out Tonight | 3 | 7 | 1 | 1 | 1 |
 | caption | Rent (2005) - Out Tonight | 33 | 6 | 1 | 1 | 1 |
@@ -1795,6 +1852,7 @@ caption: 854 lines in 118 songs; LRCLIB: 154 lines in 23 songs
 | caption | The Little Mermaid (1989) - Un GC_mV1IpjWA | 51 | 10 | 1 | 1 | 0 |
 | caption | The Little Mermaid (1989) - Un GC_mV1IpjWA | 54 | 4 | 1 | 1 | 0 |
 | caption | The Little Mermaid (1989) - Un GC_mV1IpjWA | 71 | 10 | 1 | 1 | 0 |
+| caption | The Philosopher Kings - Hurts  6X4bhT1FWjI | 12 | 6 | 1 | 1 | 1 |
 | caption | The Philosopher Kings - You Do AI7F8qlN44E | 2 | 7 | 1 | 1 | 0 |
 | caption | The Philosopher Kings - You Do AI7F8qlN44E | 9 | 11 | 1 | 2 | 0 |
 | caption | The Philosopher Kings - You Do AI7F8qlN44E | 13 | 9 | 1 | 2 | 2 |
@@ -1810,6 +1868,13 @@ caption: 854 lines in 118 songs; LRCLIB: 154 lines in 23 songs
 | caption | Troy, Gabriella - Breaking Fre 0qj67KE5VXI | 34 | 4 | 1 | 1 | 0 |
 | caption | Troy, Gabriella - Breaking Fre 0qj67KE5VXI | 49 | 6 | 1 | 1 | 0 |
 | caption | Troy, Gabriella - Breaking Fre 0qj67KE5VXI | 51 | 5 | 1 | 1 | 0 |
+| caption | Westlife - My Love (Official V ulOb9gIGGd0 | 5 | 7 | 1 | 2 | 1 |
+| caption | Westlife - My Love (Official V ulOb9gIGGd0 | 6 | 10 | 3 | 5 | 4 |
+| caption | Westlife - My Love (Official V ulOb9gIGGd0 | 8 | 6 | 1 | 2 | 2 |
+| caption | Westlife - My Love (Official V ulOb9gIGGd0 | 16 | 2 | 1 | 1 | 0 |
+| caption | Westlife - My Love (Official V ulOb9gIGGd0 | 20 | 6 | 2 | 2 | 0 |
+| caption | Westlife - My Love (Official V ulOb9gIGGd0 | 24 | 5 | 1 | 1 | 0 |
+| caption | Westlife - My Love (Official V ulOb9gIGGd0 | 38 | 6 | 1 | 1 | 0 |
 | caption | Whitney Houston - I Wanna Danc eH3giaIzONA | 16 | 6 | 1 | 1 | 0 |
 | caption | Whitney Houston - I Wanna Danc eH3giaIzONA | 18 | 6 | 1 | 1 | 0 |
 | caption | Whitney Houston - I Wanna Danc eH3giaIzONA | 22 | 6 | 1 | 1 | 1 |
@@ -2094,13 +2159,13 @@ Complete lines the rescue left alone, heard and not confirmed, that rule D did n
 
 | Src | first token unheard | run not heard in full | too few pairs | some pair under 1.5 s | pairs off both ways | trigger held, not aimed |
 |---|---|---|---|---|---|---|
-| caption | 32 | 25 | 0 | 675 | 1 | 0 |
+| caption | 33 | 25 | 0 | 716 | 1 | 0 |
 | LRCLIB | 8 | 0 | 0 | 100 | 0 | 0 |
 
 ### Table C: lines rule C looked for between their neighbours
 Heard shift: heard start - cue start on the audio clock; blank when the line is not heard, its first token is not matched or its run is not heard in full.
 
-caption: 68 lines in 34 songs; LRCLIB: 18 lines in 7 songs
+caption: 76 lines in 37 songs; LRCLIB: 18 lines in 7 songs
 
 | Src | Song | Line | Cue | Stretch | Length | Heard shift | Run | Answered | Kept | Today | New |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2144,6 +2209,12 @@ caption: 68 lines in 34 songs; LRCLIB: 18 lines in 7 songs
 | caption | Justin Timberlake - CAN'T STOP ru0K8uYEZWw | 101 | 260.401 | 253.634-260.631 | 6.997 |  |  |  |  | 260.401 | 260.401 |
 | caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 81 | 345.179 | 345.234-351.446 | 6.212 |  | yes |  |  | 345.179 | 345.179 |
 | caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 117 | 475.876 | 476.169-500.413 | 24.244 |  | yes |  |  | 475.876 | 475.876 |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 0 | 0.647 | 0.000-5.500 | 5.500 |  | yes |  |  | 0.825 | 0.825 |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 1 | 2.814 | 0.000-18.940 | 18.940 |  | yes |  |  | 3.050 | 3.050 |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 4 | 11.835 | 12.237-18.940 | 6.703 |  | yes |  |  | 12.025 | 12.025 |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 27 | 97.194 | 93.600-100.967 | 7.367 |  | yes |  |  | 97.564 | 97.564 |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 28 | 99.546 | 93.600-106.787 | 13.187 |  | yes |  |  | 99.800 | 99.800 |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 29 | 101.719 | 93.600-106.787 | 13.187 |  |  |  |  | 102.075 | 102.075 |
 | caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 26 | 128.048 | 124.965-135.428 | 10.463 | -0.938 |  |  |  | 128.048 | 128.048 |
 | caption | NSYNC - Bye Bye Bye Eo-KmOd3i7s | 4 | 30.863 | 27.767-32.168 | 4.401 | 0.757 |  |  |  | 31.050 | 31.050 |
 | caption | Ne-Yo - One In A Million 6tpl9LtkRRw | 50 | 131.697 | 132.012-140.445 | 8.433 | 0.643 |  |  |  | 131.697 | 131.697 |
@@ -2153,6 +2224,7 @@ caption: 68 lines in 34 songs; LRCLIB: 18 lines in 7 songs
 | caption | Rent (2005) - I Should Tell You | 42 | 153.834 | 148.543-160.779 | 12.236 |  | yes |  |  | 153.834 | 153.834 |
 | caption | Rent (2005) - I Should Tell You | 44 | 160.340 | 158.881-168.210 | 9.329 |  | yes |  |  | 160.340 | 160.340 |
 | caption | Rent (2005) - I'll Cover You | 13 | 46.948 | 47.451-53.091 | 5.640 |  |  |  |  | 46.948 | 46.948 |
+| caption | Rent (2005) - Light My Candle | 15 | 73.840 | 70.917-77.233 | 6.316 | 0.400 |  |  |  | 74.175 | 74.175 |
 | caption | Rent (2005) - Will I | 16 | 101.132 | 101.798-115.578 | 13.780 |  |  |  |  | 101.132 | 101.132 |
 | caption | Rent (2005) - Will I | 20 | 116.620 | 118.534-138.738 | 20.204 |  |  |  |  | 116.620 | 116.620 |
 | caption | Rent (2005) - Will I | 23 | 129.688 | 128.717-138.738 | 10.021 | -0.868 |  |  |  | 129.688 | 129.688 |
@@ -2168,6 +2240,7 @@ caption: 68 lines in 34 songs; LRCLIB: 18 lines in 7 songs
 | caption | The Lion King (1994) - Can You 25QyCxVkXwQ | 49 | 172.724 | 159.935-174.637 | 14.702 |  |  |  |  | 172.724 | 172.724 |
 | caption | The Lion King (1994) - Hakuna  fwLxDUQBdEg | 82 | 216.696 | 213.090-220.270 | 7.180 |  | yes |  |  | 216.696 | 216.696 |
 | caption | The Lion King (1994) - Hakuna  fwLxDUQBdEg | 84 | 219.949 | 219.541-226.230 | 6.689 |  | yes |  |  | 219.949 | 219.949 |
+| caption | The Philosopher Kings - Hurts  6X4bhT1FWjI | 39 | 239.667 | 239.622-249.823 | 10.201 | 0.253 | yes |  |  | 239.667 | 239.667 |
 | caption | The Philosopher Kings - You Do AI7F8qlN44E | 0 | -0.047 | 0.000-11.568 | 11.568 |  |  |  |  | 0.000 | 0.000 |
 | caption | Whitney Houston - I Wanna Danc eH3giaIzONA | 54 | 240.982 | 239.943-253.330 | 13.387 | 0.498 |  |  |  | 241.475 | 241.475 |
 | caption | Whitney Houston - I Will Alway 3JWTaaS7LdU | 54 | 238.167 | 218.616-245.479 | 26.863 |  | yes |  |  | 238.450 | 238.450 |
@@ -2194,7 +2267,7 @@ caption: 68 lines in 34 songs; LRCLIB: 18 lines in 7 songs
 ### Table O: other lines whose start or end moved
 Lines outside Tables A, G, Z, B, D and C.
 
-caption: 42 lines in 33 songs; LRCLIB: 9 lines in 8 songs
+caption: 45 lines in 36 songs; LRCLIB: 9 lines in 8 songs
 
 | Src | Song | Line | Start today | Start new | End today | End new | Moved |
 |---|---|---|---|---|---|---|---|
@@ -2217,6 +2290,7 @@ caption: 42 lines in 33 songs; LRCLIB: 9 lines in 8 songs
 | caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 35 | 146.968 | 146.968 | 149.270 | 149.090 | 0.180 |
 | caption | Cast of Camp Rock - Play My Mu jQ-Pqxl1BlI | 33 | 72.850 | 72.850 | 79.099 | 78.559 | 0.540 |
 | caption | Colbie Caillat - Bubbly (Offic AWGqoCNbsvM | 26 | 84.194 | 84.194 | 87.675 | 86.686 | 0.989 |
+| caption | Ed Sheeran - Bad Habits [Offic orJSJGHjBLI | 44 | 208.190 | 208.190 | 211.993 | 211.440 | 0.553 |
 | caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 13 | 80.950 | 80.950 | 84.650 | 84.430 | 0.220 |
 | caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 52 | 255.850 | 255.850 | 258.469 | 256.740 | 1.729 |
 | caption | Ed Sheeran - The A Team UAWcs5H-qgQ | 0 | 32.075 | 32.075 | 34.550 | 34.800 | 0.251 |
@@ -2228,6 +2302,7 @@ caption: 42 lines in 33 songs; LRCLIB: 9 lines in 8 songs
 | caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 107 | 444.640 | 444.640 | 448.174 | 448.024 | 0.150 |
 | caption | KPop Demon Hunters (2025) - How It's Done | 15 | 39.054 | 39.054 | 41.794 | 41.634 | 0.160 |
 | caption | Moana (2016) - You're Welcome 79DijItQXMM | 5 | 8.523 | 8.523 | 9.602 | 9.253 | 0.349 |
+| caption | Moana - Cast - Along The Way ( D_dOXTpwV5s | 42 | 121.307 | 121.307 | 124.750 | 124.547 | 0.203 |
 | caption | NSYNC - (God Must Have Spent)  -fxh7jAJR8U | 68 | 247.338 | 247.338 | 252.918 | 253.674 | 0.756 |
 | caption | NSYNC - Gone IbRwSI8yi1o | 22 | 111.046 | 111.046 | 112.575 | 112.278 | 0.297 |
 | caption | NSYNC - Gone IbRwSI8yi1o | 78 | 290.000 | 290.000 | 292.325 | 292.126 | 0.199 |
@@ -2239,6 +2314,7 @@ caption: 42 lines in 33 songs; LRCLIB: 9 lines in 8 songs
 | caption | The Last Five Years (2014) - Moving Too Fast | 16 | 52.750 | 52.750 | 54.672 | 54.514 | 0.158 |
 | caption | The Last Five Years (2014) - Shiksa Goddess | 60 | 224.424 | 224.424 | 229.900 | 226.664 | 3.236 |
 | caption | The Last Five Years (2014) - The Next Ten Minutes | 44 | 213.369 | 213.369 | 217.607 | 217.267 | 0.340 |
+| caption | The Philosopher Kings - Hurts  6X4bhT1FWjI | 10 | 87.825 | 87.825 | 91.253 | 91.537 | 0.284 |
 | caption | Whitney Houston - I Wanna Danc eH3giaIzONA | 33 | 159.066 | 159.066 | 161.700 | 161.486 | 0.214 |
 | LRCLIB | Backstreet Boys - Chances (Off W5kM5wAwRug | 28 | 129.680 | 129.680 | 133.601 | 132.486 | 1.115 |
 | LRCLIB | Frozen (2013) - In Summer (Sin 9tcaM06eGrY | 4 | 18.240 | 18.240 | 23.175 | 21.740 | 1.435 |
@@ -2254,11 +2330,11 @@ caption: 42 lines in 33 songs; LRCLIB: 9 lines in 8 songs
 
 | HEARD_AGREE_S | HEARD_MIN_WORDS | caption A1 kept | caption A2 held | LRCLIB A1 kept | LRCLIB A2 held |
 |---|---|---|---|---|---|
-| 0.500 | 2 | 10 | 108 | 7 | 20 |
-| 1.000 | 2 | 16 | 25 | 10 | 7 |
-| 1.500 | 2 | 29 | 11 | 14 | 1 |
-| 0.500 | 3 | 5 | 98 | 3 | 19 |
-| 1.000 | 3 | 11 | 23 | 4 | 6 |
-| 1.500 | 3 | 20 | 11 | 6 | 1 |
+| 0.500 | 2 | 10 | 119 | 7 | 20 |
+| 1.000 | 2 | 17 | 29 | 10 | 7 |
+| 1.500 | 2 | 31 | 11 | 14 | 1 |
+| 0.500 | 3 | 5 | 107 | 3 | 19 |
+| 1.000 | 3 | 12 | 25 | 4 | 6 |
+| 1.500 | 3 | 22 | 11 | 6 | 1 |
 
 (Phase 4c pastes its tables here.)
