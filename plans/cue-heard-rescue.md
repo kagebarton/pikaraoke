@@ -293,6 +293,23 @@ Stop at every STOP. If a step contradicts the code, stop and say what differs. C
 launch `/code-review`; hand Ken the line. No verdicts in the Results log: tables go in
 raw.
 
+**Paths on the Linux box (2026-11-14).** Phase 3 onward names the Windows share
+(`/home/ken/shared-drives/D:/Shared/...`), which does not exist on this machine. Read the
+paths below wherever the plan names the left column. Take the library as `--folder`; do
+not hardcode any of them.
+
+| Plan names | Use |
+|---|---|
+| `.../D:/Shared/pikaraoke-songs` | `~/pikaraoke-songs` (a direct copy of the other box's library; `alignment_debug/` holds 234 bundles, 177 with `cue_inputs` and `transcribe_words`) |
+| `D:\Shared\lrclib-cue-trial` (3c `--from`) | `~/probes/lrclib-cue-trial` (copied from `/media/ken/Data/probes`, checked identical, 39 files) |
+| `.../D:/Shared/cue-heard-trial` (3c, 3d, Phase 4) | `~/probes/cue-heard-trial` (not yet made; Ken copies it to the Windows share for the GPU run) |
+| `--out` | `~/.pikaraoke/tmp/cue_heard_rescue` (unchanged) |
+
+Stems for the probe (3a): the snap step reads `ctx.artifacts.get("aligned_stem",
+vocal_wav)` (`pipeline/stages/lyric_align.py`). The library has `vocal/` stems for 248
+songs and `dereverb/` for only 5, so the probe's header says how it picks a stem, and
+Table P names any song whose stem is missing.
+
 ### Phase 1: the heard reference, rule A, the guard lift (Sonnet)
 
 GPU-free, no library read.
@@ -516,6 +533,7 @@ Read-only. Inputs: the Phase 3 and 4 tables, `<out>`, Ken's verdicts on the shee
 |---|---|---|---|---|
 | 1 | 2026-11-13 | plan | Three trial bundles traced; sizing over the library's 177 cue-route bundles, read-only, scratch scripts outside the repo ("What the three flawed picks showed", "Sizing"). Ken's Decisions 1-4 by question dialog. | this file |
 | 2 | 2026-11-13 | plan | Second sizing, whole lines the rescue leaves alone, under this plan's heard rule; Ken added rule D (Decision 2b) and asked where Fable would help ("Where Fable would help", step 3b2). | this file |
+| 3 | 2026-11-14 | plan | Checked the plan's data against the Linux box: code anchors all present; share paths absent; library found at `~/pikaraoke-songs`; trial bundles copied to `~/probes/lrclib-cue-trial` ("Paths on the Linux box"). | this file |
 
 ## Report output
 
