@@ -15,6 +15,7 @@ from pikaraoke.lib.cue_align import (
     split_section_to_lines,
 )
 from pikaraoke.lib.onset_snap import HOP_S
+from pikaraoke.lib.token_align import INSTANT_WORD_DUR_S
 
 
 def _words(*spans: tuple[str, float, float]) -> list[dict]:
@@ -702,7 +703,8 @@ class TestPartialLines:
 
 
 class TestCrammedLines:
-    """A word for every token is not enough: zero-length words count as missing."""
+    """A word for every token is not enough: zero-length words count as missing, and the
+    ones a rescue leaves are shown with guessed timing."""
 
     CRAMMED = (("ee", 8.0, 8.3), ("ff", 8.3, 8.3), ("gg", 8.3, 8.3), ("hh", 8.3, 8.8))
     TIMED = (("ee", 8.0, 8.3), ("ff", 8.3, 8.5), ("gg", 8.5, 8.7), ("hh", 8.7, 8.9))
@@ -740,14 +742,90 @@ class TestCrammedLines:
             objs, cues, lines, lines, realign=lambda *_: _words(*self.CRAMMED)
         )
         assert out[4]["source"] == SOURCE
+        assert [w["word"] for w in out[4]["words"]] == ["ee", "ff", "gg", "hh"]
+        # "hh" keeps its time; the zero-length words share the 0.3 s slot of "ee" with it.
         assert [(w["start"], w["end"]) for w in out[4]["words"]] == [
-            (8.0, 8.3),
-            (8.3, 8.3),
-            (8.3, 8.3),
+            (8.0, pytest.approx(8.1)),
+            (pytest.approx(8.1), pytest.approx(8.2)),
+            (pytest.approx(8.2), pytest.approx(8.3)),
             (8.3, 8.8),
         ]
         assert stats["n_realigned"] == 0 and stats["crammed_line_ids"] == [4]
-        assert stats["n_guessed_words"] == 0 and stats["n_repaced"] == 0
+        assert stats["n_repaced"] == 0
+
+    def _guessed(self, text: str, cue: tuple[float, float], *words: tuple[str, float, float]):
+        """Four anchors plus line 4 (``text``, cued over ``cue``, ``words`` timed by the align,
+        no re-align answer); returns ``(line 4, stats)``."""
+        objs, cues, lines = _anchor_lines(4)
+        cues.append(cue)
+        lines.append(text)
+        objs.append(_line(4, text, *words))
+        out, stats = repace_bad_lines(objs, cues, lines, lines, realign=lambda *_: None)
+        return out[4], stats
+
+    def test_a_zero_length_middle_word_is_timed_between_its_neighbours(self):
+        line, stats = self._guessed(
+            "ee ff gg", (8.0, 9.5), ("ee", 8.0, 8.3), ("ff", 8.9, 8.9), ("gg", 9.0, 9.4)
+        )
+        # The 0.7 s gap, at the line's pace (the median of 0.3 and 0.4 s).
+        assert [(w["start"], w["end"]) for w in line["words"]] == [
+            (8.0, 8.3),
+            (pytest.approx(8.3), pytest.approx(8.65)),
+            (9.0, 9.4),
+        ]
+        assert line["source"] == SOURCE
+        assert stats["crammed_line_ids"] == [4]
+        assert stats["n_guessed_words"] == 1 and stats["guessed_word_line_ids"] == [4]
+
+    def test_a_zero_length_word_between_touching_neighbours_shares_a_slot_not_none(self):
+        line, _ = self._guessed(
+            "ee ff gg", (8.0, 9.5), ("ee", 8.0, 8.3), ("ff", 8.3, 8.3), ("gg", 8.3, 8.7)
+        )
+        starts_ends = [(w["start"], w["end"]) for w in line["words"]]
+        assert starts_ends == [
+            (8.0, pytest.approx(8.15)),
+            (pytest.approx(8.15), pytest.approx(8.3)),
+            (8.3, 8.7),
+        ]
+        assert all(w["end"] - w["start"] >= INSTANT_WORD_DUR_S for w in line["words"])
+
+    def test_a_zero_length_first_and_last_word_are_timed_around_the_rest(self):
+        line, stats = self._guessed(
+            "ee ff gg hh",
+            (8.0, 10.0),
+            ("ee", 8.4, 8.4),
+            ("ff", 8.4, 8.8),
+            ("gg", 8.9, 9.3),
+            ("hh", 9.3, 9.3),
+        )
+        # The head runs back from "ff" by the line's pace (0.4 s); the tail on from "gg".
+        assert [(w["start"], w["end"]) for w in line["words"]] == [
+            (pytest.approx(8.0), pytest.approx(8.4)),
+            (8.4, 8.8),
+            (8.9, 9.3),
+            (pytest.approx(9.3), pytest.approx(9.7)),
+        ]
+        assert stats["n_guessed_words"] == 2
+
+    def test_a_zero_length_word_in_a_partial_line_stays_as_it_is(self):
+        # "hh" was dropped; "ff" is zero-length but the line does not have a word per token.
+        line, stats = self._guessed(
+            "ee ff gg hh", (8.0, 10.0), ("ee", 8.0, 8.3), ("ff", 8.4, 8.4), ("gg", 8.8, 9.1)
+        )
+        assert [(w["word"], w["start"], w["end"]) for w in line["words"][:3]] == [
+            ("ee", 8.0, 8.3),
+            ("ff", 8.4, 8.4),
+            ("gg", 8.8, 9.1),
+        ]
+        assert line["words"][3]["word"] == "hh" and line["words"][3]["start"] == pytest.approx(9.1)
+        assert stats["crammed_line_ids"] == [] and stats["n_guessed_words"] == 1
+
+    def test_a_fill_too_short_for_its_words_is_left_as_it_is(self):
+        # No words from the align and a cue of 0.1 s: the paced words are all under
+        # INSTANT_WORD_DUR_S, so there is no timed word to pace a guess from.
+        line, stats = self._guessed("ee ff gg", (8.0, 8.1))
+        assert line["source"] == SOURCE_FILL and len(line["words"]) == 3
+        assert stats["n_repaced"] == 1 and stats["n_guessed_words"] == 0
 
     def test_a_line_with_every_word_timed_asks_nothing(self):
         objs, cues, lines = self._song(*self.TIMED)
@@ -766,7 +844,8 @@ class TestCrammedLines:
         objs.append(_line(5, "ii jj", ("ii", 10.0, 10.3)))  # a word short, none zero-length
         _out, stats = repace_bad_lines(objs, cues, lines, lines, realign=lambda *_: None)
         assert stats["crammed_line_ids"] == [4]
-        assert stats["guessed_word_line_ids"] == [5]
+        # Line 5 is a word short; line 4's zero-length words are guessed too.
+        assert stats["guessed_word_line_ids"] == [4, 5]
 
 
 class TestStartAfterPrevious:

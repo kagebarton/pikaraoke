@@ -748,12 +748,22 @@ def _guess_missing_words(
     line_toks: list[list[tuple[str, str]]],
     max_word_dur: float,
 ) -> dict[int, int]:
-    """Give each kept line a guessed-timing word for every token it lacks, in place in
-    ``out``. Returns ``{line_id: words guessed}``."""
+    """Give each kept line a guessed-timing word for every token it lacks a timed word for,
+    in place in ``out``. Returns ``{line_id: words guessed}``.
+
+    A token lacks one when the aligner dropped its word or, in a line with a word for every
+    token, left it zero-length. A line with no timed word is left as it is: there is nothing
+    to pace the guesses from.
+    """
     guessed: dict[int, int] = {}
     for i, obj in enumerate(out):
         lid = obj["line_id"]
-        if lid not in windows or not obj["words"] or len(obj["words"]) >= len(line_toks[lid]):
+        toks = line_toks[lid]
+        if lid not in windows or not obj["words"] or len(obj["words"]) > len(toks):
+            continue
+        slots = _timed_slots(obj["words"], toks)
+        missing = slots.count(None)
+        if missing in (0, len(slots)):
             continue
         # Guessed words stay between the neighbouring lines' words and inside the window,
         # widened to the line's own words: a clean line is kept even off its cue.
@@ -763,8 +773,8 @@ def _guess_missing_words(
         win = windows[lid]
         after = max(after, min(win.w0, obj["start"]))
         before = min(before, max(win.w1, obj["end"]))
-        out[i] = _with_guessed_words(obj, line_toks[lid], after, before, max_word_dur)
-        guessed[lid] = len(line_toks[lid]) - len(obj["words"])
+        out[i] = _with_guessed_words(obj, toks, slots, after, before, max_word_dur)
+        guessed[lid] = missing
     return guessed
 
 
@@ -826,13 +836,14 @@ def repace_bad_lines(
     the re-align is not kept when too little of it is left. Otherwise a bad
     line is rebuilt with paced words across its cue window (tagged
     :data:`SOURCE_FILL`), clamped to ``duration`` when known, and a partial or
-    crammed line keeps the words it has. Because only these lines are rewritten, a coarse offset can never
-    degrade a well-aligned line. A zero-length word a rescue does not time
-    stays on screen as it is.
+    crammed line keeps the words it has. Because only these lines are rewritten, a coarse
+    offset can never degrade a well-aligned line.
 
-    Finally every word a kept line still lacks is shown with guessed timing
-    (:func:`_with_guessed_words`) inside that line's window, or out to its own words
-    where a kept line sits past it, so no lyric word is dropped from the screen.
+    Finally every word a kept line still lacks a timed word for is shown with guessed
+    timing (:func:`_with_guessed_words`) inside that line's window, or out to its own
+    words where a kept line sits past it, so no lyric word is dropped from the screen. That
+    includes the zero-length words of a kept line that has a word for every token: a
+    failed alignment, not a word, so it is re-timed like one the aligner dropped.
 
     Returns ``(line_objects, stats)``. ``cue_spans`` is indexed by ``line_id``.
     """
@@ -916,33 +927,44 @@ def _assign_in_order(token_norms: list[str], words: list[dict]) -> list[int | No
     return assign
 
 
+def _timed_slots(words: list[dict], toks: list[tuple[str, str]]) -> list[dict | None]:
+    """One entry per token: the word timing it, None where it has no timed word.
+
+    A line with a word for every token has them by index, those under
+    :data:`INSTANT_WORD_DUR_S` being the untimed (a failed alignment, not a word). Else the
+    words are matched to the tokens in order (:func:`_assign_in_order`), so the ones the
+    aligner dropped are the tokens left over; a zero-length word among them keeps its slot.
+    """
+    if len(words) == len(toks):
+        return [w if w["end"] - w["start"] >= INSTANT_WORD_DUR_S else None for w in words]
+    assign = _assign_in_order([norm for norm, _raw in toks], words)
+    return [words[wi] if wi is not None else None for wi in assign]
+
+
 def _with_guessed_words(
     obj: dict,
     toks: list[tuple[str, str]],
+    slots: list[dict | None],
     after: float,
     before: float,
     max_word_dur: float,
 ) -> dict:
-    """``obj`` (some words timed, fewer than ``toks``) with a word for every untimed token.
+    """``obj`` with a word for every token that has none in ``slots`` (:func:`_timed_slots`;
+    at least one filled, at least one empty).
 
-    The timed words are matched to the tokens in order (:func:`_assign_in_order`), so the
-    ones the aligner dropped are the tokens left over. A guessed word keeps the line's
-    own pace (its timed words' median duration, capped at ``max_word_dur``). A missing
-    tail runs on from the last timed word and ends by ``before`` (the next line's first
-    word or the window's end); a missing head runs back from the first timed word and
-    starts no earlier than ``after``; a missing middle word shares the gap between its
-    timed neighbours. Squeezed by a bound, the words are spaced evenly in what is left.
-    With less room than an instant word each (touching neighbours, or a bound the timed
-    word already reaches), the guessed words share their timed neighbour's own slot, so
-    none is shown for no time or past the bound. The edge snap later stretches a guessed
-    last word to the measured release.
+    A guessed word keeps the line's own pace (its timed words' median duration, capped at
+    ``max_word_dur``). A missing tail runs on from the last timed word and ends by
+    ``before`` (the next line's first word or the window's end); a missing head runs back
+    from the first timed word and starts no earlier than ``after``; a missing middle word
+    shares the gap between its timed neighbours. Squeezed by a bound, the words are spaced
+    evenly in what is left. With less room than an instant word each (touching neighbours,
+    or a bound the timed word already reaches), the guessed words share their timed
+    neighbour's own slot, so none is shown for no time or past the bound. The edge snap
+    later stretches a guessed last word to the measured release.
     """
-    words = obj["words"]
-    # Every word is one of these tokens' raw text, so each finds its own token.
-    assign = _assign_in_order([norm for norm, _raw in toks], words)
-    pace = min(median(w["end"] - w["start"] for w in words), max_word_dur)
-    timed = [k for k, wi in enumerate(assign) if wi is not None]
-    out: list[dict | None] = [words[wi] if wi is not None else None for wi in assign]
+    out = list(slots)
+    pace = min(median(w["end"] - w["start"] for w in out if w is not None), max_word_dur)
+    timed = [k for k, w in enumerate(out) if w is not None]
 
     def fill(ks: list[int], lo: float, hi: float) -> None:
         step = max(0.0, hi - lo) / len(ks)
