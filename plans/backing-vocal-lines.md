@@ -209,9 +209,22 @@ lines. Written so he can check each in under a minute.
 
 ## Phase 0 record
 
-Run by Opus 5.5 on 2026-11-14, CPU only, library read-only. Scripts and output in the session
-scratch folder `/tmp/claude-1000/-home-ken-projects-pikaraoke/0ab1bdd0-e655-42ad-8e0b-05018e2c1d58/scratchpad/bvl/`,
-run from the worktree with `PYTHONPATH=.`.
+Run by Opus 5.5 on 2026-11-14, CPU only, library read-only. Scripts in
+`plans/backing-vocal-lines/`, output in its `out/`. From the worktree root, in order:
+
+```
+P="env PYTHONPATH=. /home/ken/miniconda3/envs/pik/bin/python"; D=plans/backing-vocal-lines; O=$D/out
+$P $D/inventory.py ~/pikaraoke-songs $O   # step 1
+$P $D/label_sheet.py $O                   # step 2's labelling view
+$P $D/labels.py $O                        # step 2's labels, from the lists in labels.py
+$P $D/heard.py ~/pikaraoke-songs $O       # steps 3-4, every variant
+$P $D/report.py $O                        # A1 / A2 table
+$P $D/gate.py ~/pikaraoke-songs $O "consume none" "consume none +consist" "consume none +vocables" "consume none +vocables +consist" "G" "words list v2"   # A3, A4, unsure
+$P $D/baseline.py ~/pikaraoke-songs $O    # step 5
+```
+
+Only `out/baseline.json` and `out/songs.json` are committed; the rest of `out/` holds lyric
+text (paren and cue texts) and stays local (`.gitignore`).
 
 ### Step 1: inventory
 
@@ -517,7 +530,8 @@ section, the final start, end and word count
 (`output_line_timings`), the final word times (read from the song's `.ass`, 0.01 s), the
 section-align word times before any rescue (`cue_inputs.sections`), and the rescue and snap
 status (re-aligned, re-paced, guessed words, crammed, widened, onset shift, end extends).
-Timings and line ids only, no lyric text: `out/baseline.json` in the scratch folder.
+Timings and line ids only, no lyric text: `plans/backing-vocal-lines/out/baseline.json`,
+committed.
 
 | Songs (captions / LRC) | Lines covered (of those songs' lines) | Gain words | Mate of a gainer | Mate of an added line | Re-aligned | Re-paced | Guessed-word lines | Crammed | Widened | Onset-snapped | End-extended | Zero-length final words |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -591,3 +605,4 @@ Raw tables, commands and commits only; no verdicts in this table.
 | 4 | 2026-11-14 | 0.4 | same run | `words list` A1 19, A2 100%; `words list v2` A1 1, A2 100%; `lyric echo` A1 33, A2 95%. "Step 4". |
 | 5 | 2026-11-14 | 0.5 | `baseline.py ~/pikaraoke-songs out` | 38 songs, 1364 lines; sections and `.ass` words match every bundle; bundles captured 2026-11-05T20:36Z..2026-11-12, after dev's last alignment change `2e5d389b`; regens recorded at `7bb144d`. "Step 5". |
 | 6 | 2026-11-14 | GATE A | Read by Opus 5.5 | As written NO-GO; recommended GO on the hybrid (`none +vocables +consist`: A1 0, A2 76%), for Ken to rule with the four `unsure` labels and Decision 3's "overlap". "GATE A read". |
+| 7 | 2026-11-14 | 0 (record) | Scripts moved from the session scratch folder into `plans/backing-vocal-lines/` (dead imports dropped, Black, docstrings; `label_sheet.py` added for the step 2 view, which had been an inline snippet); the whole run above repeated from there on `a54f8e6f` | Every output byte-identical to rows 1-5's: `songs.json`, `inventory.json`, `label_sheet.txt`, `labels.json`, `heard.json`, `baseline.json`, the A1 / A2 table and the A3 / A4 / unsure output. |

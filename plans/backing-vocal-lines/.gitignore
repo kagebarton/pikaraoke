@@ -1,0 +1,7 @@
+# out/ is rebuilt from the library by the scripts. What holds lyric text (paren texts, cue
+# texts) stays local; the baseline (timings and line ids only) and the song list are kept,
+# since a library regen would change what they were read from.
+out/*
+!out/baseline.json
+!out/songs.json
+__pycache__/
