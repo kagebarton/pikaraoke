@@ -1427,6 +1427,189 @@ class TestHeardAimedRetry:
         assert (out[4]["start"] == pytest.approx(10.95)) is bool(tried)
 
 
+class TestGapRetry:
+    """Rule C: a bad line the cue-aimed retry cannot find is looked for between its neighbours."""
+
+    @staticmethod
+    def _sung(text: str, start: float) -> list[dict]:
+        """The tokens of ``text`` sung from ``start``, 0.3 s each, 0.4 s apart."""
+        return _words(
+            *[(tok, start + 0.4 * i, start + 0.4 * i + 0.3) for i, tok in enumerate(text.split())]
+        )
+
+    @staticmethod
+    def _song(
+        bad: tuple[str, ...] = ("ee ff gg",),
+        after: float | None = 20.0,
+        cue: tuple[float, float] = (8.0, 9.5),
+    ):
+        """Four anchors (the last ends at 6.8), the ``bad`` lines with no words (the first
+        cued over ``cue``, each next 2 s later), then a clean line "a a" starting 0.1 s after
+        ``after`` (none when None)."""
+        objs, cues, lines = _anchor_lines(4)
+        for i, text in enumerate(bad):
+            cues.append((cue[0] + 2.0 * i, cue[1] + 2.0 * i))
+            lines.append(text)
+            objs.append(_line(4 + i, text))
+        if after is not None:
+            cues.append((after, after + 1.0))
+            lines.append("a a")
+            objs.append(
+                _line(
+                    4 + len(bad),
+                    "a a",
+                    ("a", after + 0.1, after + 0.4),
+                    ("a", after + 0.5, after + 0.9),
+                )
+            )
+        return objs, cues, lines
+
+    @staticmethod
+    def _rescue(song, answer, duration=None, heard=None):
+        """``repace_bad_lines`` with a stub aligner answering ``answer(lid, w0, w1)``; returns
+        ``(out, stats, calls)`` with the ``(lid, w0, w1)`` of every align call."""
+        calls: list[tuple[int, float, float]] = []
+
+        def realign(lid, w0, w1):
+            calls.append((lid, pytest.approx(w0), pytest.approx(w1)))
+            return answer(lid, w0, w1)
+
+        objs, cues, lines = song
+        out, stats = repace_bad_lines(
+            objs, cues, lines, lines, realign=realign, duration=duration, heard_words=heard
+        )
+        return out, stats, calls
+
+    def _in_the_stretch(self, text="ee ff gg", start=13.0):
+        """An aligner that has the line only when its slice starts before the cue window."""
+        return lambda lid, w0, w1: self._sung(text, start) if w0 < 7.0 else None
+
+    def test_a_line_only_the_free_stretch_has_is_kept_there(self):
+        # Cued 8.0-9.5 and sung from 13.0, in the stretch from the last line's end (6.8) to the
+        # next clean line's start (20.1); the cue window (7.25-10.25) holds nothing.
+        out, stats, calls = self._rescue(self._song(), self._in_the_stretch())
+        assert out[4]["source"] == SOURCE_REALIGN and out[4]["start"] == 13.0
+        assert calls == [(4, 7.25, 10.25), (4, 6.8, 20.1)]
+        assert stats["gap_retry_line_ids"] == [4] and stats["gap_retry_kept_line_ids"] == [4]
+        assert stats["realigned_line_ids"] == [4] and stats["repaced_line_ids"] == []
+
+    def test_a_stretch_over_30_s_is_not_tried(self):
+        out, stats, calls = self._rescue(self._song(after=45.0), self._in_the_stretch())
+        assert len(calls) == 1 and stats["gap_retry_line_ids"] == []
+        assert out[4]["source"] == SOURCE_FILL
+
+    @pytest.mark.parametrize("after, tried", [(10.5, False), (11.6, False), (11.7, True)])
+    def test_a_stretch_must_reach_1_5_s_past_the_cue_window(self, after, tried):
+        # The window's slice ends at 10.25, so the stretch must end at 11.75 or later.
+        out, stats, calls = self._rescue(self._song(after=after), self._in_the_stretch())
+        assert stats["gap_retry_line_ids"] == ([4] if tried else [])
+        assert len(calls) == (2 if tried else 1)
+
+    def test_a_stretch_reaching_past_the_window_on_the_left_only_is_tried(self):
+        # Cued 12-13 (slice 11.25-13.75): the stretch starts 4.45 s before it, ends at 13.6.
+        song = self._song(cue=(12.0, 13.0), after=13.5)
+        out, stats, calls = self._rescue(song, self._in_the_stretch(start=9.0))
+        assert stats["gap_retry_kept_line_ids"] == [4] and out[4]["start"] == 9.0
+
+    def test_a_result_with_a_token_untimed_is_refused(self):
+        def answer(lid, w0, w1):
+            return self._sung("ee ff", 13.0) if w0 < 7.0 else None
+
+        out, stats, calls = self._rescue(self._song(), answer)
+        assert out[4]["source"] == SOURCE_FILL and out[4]["start"] == 8.0
+        assert len(calls) == 2
+        assert stats["gap_retry_line_ids"] == [4] and stats["gap_retry_kept_line_ids"] == []
+        assert stats["repaced_line_ids"] == [4]
+
+    def test_a_result_that_is_not_clean_is_refused(self):
+        # A 2.7 s gap inside the line: a word parked away from the rest.
+        def answer(lid, w0, w1):
+            if w0 > 7.0:
+                return None
+            return _words(("ee", 12.0, 12.3), ("ff", 15.0, 15.3), ("gg", 15.4, 15.7))
+
+        out, stats, calls = self._rescue(self._song(), answer)
+        assert out[4]["source"] == SOURCE_FILL and stats["gap_retry_kept_line_ids"] == []
+
+    def test_a_result_running_past_the_next_line_is_refused(self):
+        # The stretch ends at 20.1; this ends at 20.6.
+        out, stats, calls = self._rescue(self._song(), self._in_the_stretch(start=19.5))
+        assert out[4]["source"] == SOURCE_FILL and stats["gap_retry_kept_line_ids"] == []
+
+    def test_a_first_word_before_the_stretch_is_cut_to_its_start(self):
+        def answer(lid, w0, w1):
+            if w0 > 7.0:
+                return None
+            return _words(("ee", 6.5, 7.3), ("ff", 7.4, 7.7), ("gg", 7.8, 8.1))
+
+        out, stats, calls = self._rescue(self._song(), answer)
+        assert stats["gap_retry_kept_line_ids"] == [4]
+        assert out[4]["words"][0]["start"] == pytest.approx(6.8)
+        assert out[4]["words"][0]["end"] == 7.3
+
+    def test_two_bad_lines_in_a_row_the_second_starts_where_the_first_was_kept_to_end(self):
+        song = self._song(bad=("ee ff gg", "hh ii jj"), after=30.0)
+
+        def answer(lid, w0, w1):
+            if lid == 4 and w0 < 7.0:
+                return self._sung("ee ff gg", 13.0)  # ends 14.1
+            if lid == 5 and w0 > 14.0:
+                return self._sung("hh ii jj", 20.0)
+            return None
+
+        out, stats, calls = self._rescue(song, answer)
+        assert calls[-1] == (5, 14.1, 30.1)
+        assert stats["gap_retry_kept_line_ids"] == [4, 5]
+        assert out[5]["start"] == 20.0
+
+    def test_a_fill_before_it_does_not_start_the_stretch(self):
+        out, stats, calls = self._rescue(
+            self._song(bad=("ee ff gg", "hh ii jj"), after=30.0), lambda lid, w0, w1: None
+        )
+        # Line 4 is a fill by the time line 5 is looked for: its stretch still starts at 6.8.
+        assert calls[-1] == (5, 6.8, 30.1)
+        assert out[4]["source"] == SOURCE_FILL and out[5]["source"] == SOURCE_FILL
+
+    @pytest.mark.parametrize(
+        "after, duration, tried", [(None, None, False), (None, 20.0, True), (20.0, None, True)]
+    )
+    def test_the_stretch_ends_at_the_audio_end_when_no_clean_line_follows(
+        self, after, duration, tried
+    ):
+        out, stats, calls = self._rescue(
+            self._song(after=after), self._in_the_stretch(), duration=duration
+        )
+        assert stats["gap_retry_line_ids"] == ([4] if tried else [])
+        assert (out[4]["source"] == SOURCE_REALIGN) is tried
+
+    def test_a_clean_line_after_ends_the_stretch_before_the_audio_does(self):
+        out, stats, calls = self._rescue(self._song(), self._in_the_stretch(), duration=40.0)
+        assert calls[-1] == (4, 6.8, 20.1) and out[4]["start"] == 13.0
+
+    @pytest.mark.parametrize("heard_at, tried", [(12.6, False), (8.2, True)])
+    def test_a_line_rule_b_looked_for_where_heard_is_not_looked_for_between_neighbours(
+        self, heard_at, tried
+    ):
+        heard = TestHeardAimedRetry._sung(heard_at)
+        out, stats, calls = self._rescue(
+            self._song(), lambda lid, w0, w1: None, heard=_words(*heard)
+        )
+        # Heard 4.6 s late: the heard-aimed retry and the cue-aimed one, then the fill. Heard on
+        # its cue: the cue-aimed retry, then the stretch.
+        assert len(calls) == 2
+        assert stats["heard_aimed_line_ids"] == ([] if tried else [4])
+        assert stats["gap_retry_line_ids"] == ([4] if tried else [])
+
+    def test_a_placed_partial_line_is_not_looked_for_between_neighbours(self):
+        objs, cues, lines = _anchor_lines(4)
+        cues.append((8.0, 9.5))
+        lines.append("ee ff gg")
+        objs.append(_line(4, "ee ff gg", ("ee", 8.0, 8.3), ("ff", 8.4, 8.7)))
+        out, stats, calls = self._rescue((objs, cues, lines), lambda lid, w0, w1: None)
+        assert len(calls) == 1 and stats["gap_retry_line_ids"] == []
+        assert out[4]["source"] == SOURCE
+
+
 class TestRescueWindow:
     """A line missing words is re-aligned over a window out to where its own singing stops."""
 
@@ -1699,7 +1882,10 @@ class TestAlignSong:
         aligner = _stub_aligner(lambda *_: None)
         _objs, _stats, inputs = align_song(_SONG_CUES, _SONG_LINES, _SONG_LINES, 8.0, aligner)
 
-        assert [r["line_id"] for r in inputs["realigns"]] == [0, 1, 2, 3]
+        # Each line is asked twice: over its cue window, then (rule C) over the free stretch
+        # between its neighbours, here the whole song.
+        assert [r["line_id"] for r in inputs["realigns"]] == [0, 0, 1, 1, 2, 2, 3, 3]
+        assert [(r["w0"], r["w1"]) for r in inputs["realigns"][1::2]] == [(0.0, 8.0)] * 4
         assert all(r["words"] is None for r in inputs["realigns"])
         assert [o["words"] for o in inputs["sections"]] == [[], [], [], []]
 
@@ -1743,9 +1929,12 @@ class TestAlignSong:
 
         assert all(o["source"] == SOURCE_FILL for o in objs)
         assert stats["repace"]["n_repaced"] == 4
-        # One section pass + one per-line realign attempt for each of 4 lines.
-        assert len(aligner.calls) == 1 + 4
+        # One section pass + two per-line attempts for each of 4 lines (the cue window, then
+        # the free stretch between the neighbours).
+        assert len(aligner.calls) == 1 + 4 * 2
         assert any("line" in c[3] for c in aligner.calls)
+        assert stats["repace"]["gap_retry_line_ids"] == [0, 1, 2, 3]
+        assert stats["repace"]["gap_retry_kept_line_ids"] == []
 
     def test_unreadable_duration_still_produces_output(self):
         # duration=None (stem duration unreadable) must not crash; the fill

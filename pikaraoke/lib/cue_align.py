@@ -33,7 +33,9 @@ Approach:
    per-song display lead is fit from the cleanly-aligned lines
    (:func:`fit_offset`), each bad line gets one narrow per-line align attempt
    over its offset-corrected cue window (the injected ``realign``), and only
-   if that also fails is it re-built with paced words across the window. The
+   if that also fails is it looked for once more in the free stretch between its
+   neighbours (only for a bad line, and when the transcriber's words did not already
+   send it elsewhere), and only then re-built with paced words across the window. The
    transcriber's words outrank the cue here: a line they confirm is kept where
    it sits, a re-align does not replace it unless they confirm that too, a
    line heard far from its cue is first looked for where it was heard, and a
@@ -174,6 +176,14 @@ DUET_OVERLAP_S = 1.0
 # (a clean line is trusted up to :data:`PAUSE_SLACK_S` plus authoring jitter), short of a
 # whole repeat period.
 HEARD_SHIFT_S = 1.5
+
+# A bad line the cue-aimed retry could not find is looked for in the free stretch between
+# its neighbours (rule C) when that is no longer than this. Past it the line could be
+# anywhere in a long instrumental, and the stretch is mostly something else.
+GAP_RETRY_MAX_S = 30.0
+
+# A slice shorter than this is not worth an align call.
+MIN_SLICE_S = 0.2
 
 SOURCE = "cue_align"
 # Provenance for a line whose timing came from the cue re-pace fallback rather
@@ -558,6 +568,15 @@ class _Rescue:
         self.heard_aimed_kept: list[int] = []
         self.whole_aimed: list[int] = []
         self.whole_aimed_kept: list[int] = []
+        self.gap_retried: list[int] = []
+        self.gap_retried_kept: list[int] = []
+        # Where the first pass left each clean line: the free stretch after a bad line ends
+        # at the next of these.
+        self.clean_starts = [
+            (obj["line_id"], obj["start"])
+            for obj in line_objects
+            if _line_is_clean(obj, drift_gap_s)
+        ]
 
     def process(self, obj: dict, out: list[dict]) -> None:
         """Append to ``out`` what line ``obj`` becomes: itself, its re-align, or a fill."""
@@ -581,6 +600,8 @@ class _Rescue:
                 return
         win = self.adopt(lid, self.window(lid))
         fixed = self.realigned_line(obj, out, win, placed)
+        if fixed is None and not placed:
+            fixed = self.gap_retry_line(obj, out, win)
         if fixed is not None:
             out.append(fixed)
             self.realigned.append(lid)
@@ -662,7 +683,7 @@ class _Rescue:
 
     def can_realign(self, win: _Window) -> bool:
         """Whether there is an aligner and the slice ``win`` gives it is long enough to use."""
-        return self.realign is not None and win.w1 - win.w0 >= 0.2
+        return self.realign is not None and win.w1 - win.w0 >= MIN_SLICE_S
 
     def aimable(self, lid: int) -> HeardLine | None:
         """Line ``lid``'s heard line when a retry may be aimed by it: the first token is
@@ -704,6 +725,22 @@ class _Rescue:
             return None
         return heard.start - self.audio_spans[lid][0]
 
+    def aligned_line(self, lid: int, w0: float, w1: float, t0: float, t1: float) -> dict | None:
+        """Line ``lid`` from the one-line align over ``[w0, w1]``, its tokens paced over
+        ``[t0, t1]`` to tell twins apart; None when the align gives too little of it."""
+        raw_words = self.realign(lid, w0, w1)
+        if not raw_words:
+            return None
+        return _line_from_realigned(
+            lid,
+            self.display_lines[lid],
+            self.line_toks[lid],
+            t0,
+            t1,
+            raw_words,
+            self.max_word_dur,
+        )
+
     def retry(
         self, obj: dict, out: list[dict], win: _Window, shift: float, must_gain: bool
     ) -> tuple[dict | None, bool]:
@@ -714,20 +751,7 @@ class _Rescue:
         (:func:`_line_in_span`) and, when ``must_gain``, times more words than ``obj``.
         """
         lid = obj["line_id"]
-        raw_words = self.realign(lid, win.w0, win.w1)
-        fixed = (
-            _line_from_realigned(
-                lid,
-                self.display_lines[lid],
-                self.line_toks[lid],
-                win.t0,
-                win.aim_end,
-                raw_words,
-                self.max_word_dur,
-            )
-            if raw_words
-            else None
-        )
+        fixed = self.aligned_line(lid, win.w0, win.w1, win.t0, win.aim_end)
         lifted = False
         if fixed is not None:
             fixed, lifted = self.start_bounded(fixed, out, shift)
@@ -755,6 +779,59 @@ class _Rescue:
             return None
         if lifted:
             self.guard_lifted.append(lid)
+        return fixed
+
+    def free_stretch(self, lid: int, out: list[dict], win: _Window) -> tuple[float, float] | None:
+        """The audio between the lines around bad line ``lid``, when it is worth looking
+        for the line there: from the end of the last line output that has words and is not
+        a fill (0.0 when none) to the start of the next line the first pass aligned cleanly
+        (``duration`` when none; None without it). Else None.
+
+        Worth it when the stretch is at most :data:`GAP_RETRY_MAX_S` long, long enough to
+        align in, and reaches :data:`HEARD_SHIFT_S` or more beyond ``win``'s slice, the
+        audio the cue-aimed retry already listened to, on at least one side.
+        """
+        start = next(
+            (
+                line["end"]
+                for line in reversed(out)
+                if line["words"] and line["source"] != SOURCE_FILL
+            ),
+            0.0,
+        )
+        end = next((t for i, t in self.clean_starts if i > lid), self.duration)
+        if end is None or not MIN_SLICE_S <= end - start <= GAP_RETRY_MAX_S:
+            return None
+        if start > win.w0 - HEARD_SHIFT_S and end < win.w1 + HEARD_SHIFT_S:
+            return None
+        return start, end
+
+    def gap_retry_line(self, obj: dict, out: list[dict], win: _Window) -> dict | None:
+        """Rule C: the one-line re-align of bad line ``obj`` over the free stretch between its
+        neighbours (:meth:`free_stretch`), when the cue-aimed retry did not keep it; else None.
+
+        There is no heard reference here, so the result must stand on its own: a timed word
+        for every token, clean (:func:`_line_is_clean`) and inside the stretch. A first word
+        before the stretch is cut to its start (:func:`_start_from`, as for the guard). A
+        line rule B already looked for where it was heard is left to the fill: the
+        transcriber's word on where it is outranks a guess about where it is not.
+        """
+        lid = obj["line_id"]
+        stretch = self.free_stretch(lid, out, win)
+        if stretch is None or self.realign is None or lid in self.heard_aimed:
+            return None
+        start, end = stretch
+        self.gap_retried.append(lid)
+        fixed = self.aligned_line(lid, start, end, start, end)
+        fixed = None if fixed is None else _start_from(fixed, start)
+        if (
+            fixed is None
+            or _timed_words(fixed["words"]) < len(self.line_toks[lid])
+            or not _line_is_clean(fixed, self.drift_gap_s)
+            or fixed["end"] > end
+        ):
+            return None
+        self.gap_retried_kept.append(lid)
         return fixed
 
     def heard_aimed_line(
@@ -900,6 +977,15 @@ def repace_bad_lines(
     lines the transcriber did not hear in full is never aimed by its heard words. Without
     heard words, or for a line the transcriber did not hear, the cue decides as before.
 
+    A bad line (not placed) that neither retry kept, and that rule B did not look for where
+    it was heard, gets one more re-align over the free stretch between its neighbours
+    (:meth:`_Rescue.free_stretch`: from the end of the last kept line that has words and is
+    not a fill to the start of the next line the first pass aligned cleanly, or to
+    ``duration``; at most :data:`GAP_RETRY_MAX_S` long, and reaching :data:`HEARD_SHIFT_S`
+    or more past the audio the first retry listened to). Nothing but the result itself
+    vouches for it, so it is kept only with a timed word for every token, clean
+    (:func:`_line_is_clean`) and inside the stretch.
+
     Each bad, partial or crammed line is rescued in two steps:
     ``realign(lid, w0, w1)`` -- an injected narrow per-line forced align over
     the offset-corrected window padded by ``pad_s`` (clamped to ``duration``),
@@ -965,6 +1051,8 @@ def repace_bad_lines(
         "heard_aimed_kept_line_ids": rescue.heard_aimed_kept,
         "whole_aimed_line_ids": rescue.whole_aimed,
         "whole_aimed_kept_line_ids": rescue.whole_aimed_kept,
+        "gap_retry_line_ids": rescue.gap_retried,
+        "gap_retry_kept_line_ids": rescue.gap_retried_kept,
     }
     logger.info(
         "cue rescue: offset=%+.2fs, %d line(s) re-aligned, %d/%d re-paced from cue, "
@@ -972,7 +1060,8 @@ def repace_bad_lines(
         "%d/%d window(s) widened to the singing, %d left unmeasured; "
         "%d line(s) heard, %d kept where heard, %d re-align(s) refused for the heard words, "
         "%d start(s) freed of the previous line, %d line(s) looked for where heard, %d kept there; "
-        "%d whole line(s) looked for where heard, %d kept there",
+        "%d whole line(s) looked for where heard, %d kept there; "
+        "%d line(s) looked for between their neighbours, %d kept there",
         rescue.offset,
         len(rescue.realigned),
         len(rescue.repaced),
@@ -991,6 +1080,8 @@ def repace_bad_lines(
         len(rescue.heard_aimed_kept),
         len(rescue.whole_aimed),
         len(rescue.whole_aimed_kept),
+        len(rescue.gap_retried),
+        len(rescue.gap_retried_kept),
     )
     return out, stats
 
