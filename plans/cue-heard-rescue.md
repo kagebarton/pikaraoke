@@ -4,7 +4,7 @@ Ken still has it at build time, is listed under "Where Fable would help".
 
 # Cue-align rescue: the transcriber's words outrank the cue
 
-**Status: Phases 1 and 2 done 2026-11-14 (1: `a24348be`..`fecebdd2`; 2a `6eef9d5d`, diff-read fix `f2d305fc`, 2a2 `60789275`, 2b `65438683`, 2c `829d02d6`). STOP: review due (2d). Next after the review: Phase 3 (Sonnet).**
+**Status: Phases 1 and 2 done 2026-11-14 (1: `a24348be`..`fecebdd2`; 2a `6eef9d5d`, diff-read fix `f2d305fc`, 2a2 `60789275`, 2b `65438683`, 2c `829d02d6`). Next: Phase 3 (Sonnet), 3a to 3c; STOP at 3b2 or the first STOP; the review is due at 3c2, before the GPU run.**
 
 Branch `cue_heard_rescue`, off `dev` `a7671d7`.
 
@@ -395,6 +395,7 @@ GPU-free, no library read.
   line untouched), simplicity (one heard match per
   song, one confirm function, no second copy of the retry), robustness (empty or
   malformed heard words, overlapping cues, the last line, `duration` None).
+  Ken moved the review to 3c2, before the GPU run (2026-11-14).
 
 ### Phase 3: the library on the CPU, then the test copy (Sonnet; needs the shared drive)
 
@@ -428,7 +429,12 @@ Read-only on the library (`/home/ken/shared-drives/D:/Shared/pikaraoke-songs`).
   pairs, the smallest and largest pair offset, whether in a run of identical lines;
   and, as counts only, the complete untouched lines that are heard and unconfirmed but
   miss the trigger, split by why (first token unheard; some pair under 1.5 s; pairs off
-  both ways). **C** lines rule C would try: the stretch and its length. **O** every other
+  both ways). **C** lines rule C would try: the stretch and its length, the column "heard shift" (the
+  shift rule B measures; blank when the line is not heard, its first token is not
+  matched, or its run is not heard in full) and whether it is in a run of identical
+  lines (as in Table A); the two columns answer Ken's open calls after the 2d
+  self-review: does rule C move a line the transcriber heard on its cue, and does it
+  take a twin's audio in a run. **O** every other
   line whose start or end moves more than 0.011 s, with the amount. **V** (sizing only)
   Table A's counts at `HEARD_AGREE_S` 0.5 / 1.0 / 1.5 and `HEARD_MIN_WORDS` 2 / 3.
   `--out` holds `rows.json` (one row per changed line, with lyric text) and is never
@@ -459,6 +465,20 @@ Read-only on the library (`/home/ken/shared-drives/D:/Shared/pikaraoke-songs`).
   Stage them to `/home/ken/shared-drives/D:/Shared/cue-heard-trial`. A `--dry-run` of
   `scripts/regen_alignment_bundles.py` on the copy must list every staged song with the
   lyric source its bundle has; else STOP.
+- [ ] **3c2. STOP: review due, before the GPU run** (moved here from 2d by Ken,
+  2026-11-14; Phase 3 changes no pipeline code). Hand Ken the line, do not launch it:
+  `/code-review medium f2d305fc~1..HEAD` on `pikaraoke/lib/cue_align.py`,
+  `pikaraoke/lib/heard_lines.py`, `tests/unit/test_cue_align.py` and
+  `tests/unit/test_heard_lines.py`, three finders: correctness (is every A, B or D
+  outcome that differs from today confirmed; does `heard_words=None` reproduce today
+  apart from rule C and zero-length words; does a refused D retry leave the line
+  untouched), simplicity (one heard match per song, one confirm function, no second copy
+  of the retry), robustness (empty or malformed heard words, overlapping cues, the last
+  line, `duration` None). Ken may widen it to `a24348be~1` and add `token_align.py`,
+  `srt_slice_fit.py`, `alignment_capture.py` and `lyric_align.py` with their tests
+  (`library_status.py` has no diff). If the review's fixes change `cue_align.py` or
+  `heard_lines.py`: re-run 3b, redo 3c's pick and its dry-run, new Results row, before
+  3d. Go on to 3d only when Ken says the review is done.
 - [ ] **3d. STOP: Ken's GPU run.** Hand him, for Windows (`C:\temp\Github\pikaraoke`,
   branch fetched from remote `vm`): `uv run python scripts/regen_alignment_bundles.py
   D:\Shared\cue-heard-trial --yes`. The library is not touched.
@@ -470,7 +490,10 @@ Read-only on the library (`/home/ken/shared-drives/D:/Shared/pikaraoke-songs`).
   heard, and for A, B and D lines whether the new start is closer to, within 0.05 s of,
   or further from the heard start; for every D line tried, kept or not, its start and
   end before and after and the previous and next lines' times, so the judge can read
-  each one; Table O again (other lines that moved, with amounts);
+  each one, and whether it is in `guessed_word_line_ids` (the guess pass added words, so
+  the re-align timed fewer than the line it replaced; the CPU probe cannot show this,
+  the heard-aimed re-align has no saved answer); for rule C lines, Table C's two
+  columns; Table O again (other lines that moved, with amounts);
   the three target spots of "What the three flawed picks showed", and line 1 of Quit
   Playing Games.
 - [ ] **4b. Listening sheet** `<out>/listening-sheet.html`, at most 22 spots, in this
@@ -545,6 +568,7 @@ Read-only. Inputs: the Phase 3 and 4 tables, `<out>`, Ken's verdicts on the shee
 | 7 | 2026-11-14 | 2b | Zero-length words built: `65438683`. `_timed_slots(words, toks)` gives one entry per token (a line with a word for every token: by index, a word under `INSTANT_WORD_DUR_S` is an empty slot; else `_assign_in_order`, a zero-length word among the assigned keeps its slot); `_with_guessed_words(obj, toks, slots, after, before, max_word_dur)` takes the slots from its caller and paces from the filled ones; `_guess_missing_words` counts `slots.count(None)` and leaves a line with no filled slot as it is (a fill whose cue is too short for its words) and a line with more words than tokens as before. `n_guessed_words` and `guessed_word_line_ids` include these words; `library_status.py` unchanged (`_cue_fields` reads those two keys; `poor` does not read them). 5 new tests (middle word with room; touching neighbours; first and last word; a partial line's zero-length word left; a fill too short); 2 existing tests changed because the behaviour they pinned is superseded: `test_it_keeps_its_own_words_when_the_realign_times_no_more` (the crammed line's zero-length words are now re-timed in the 0.3 s slot of "ee": 8.0-8.1, 8.1-8.2, 8.2-8.3) and `test_only_the_line_with_a_word_for_every_token_is_crammed` (`guessed_word_line_ids` [4, 5], was [5]). Mutations, each fails the tests named: zero-length words keep their slot (5), no guard for an all-untimed line (1), pace from all words (2), count as before (2), complete lines skipped as before (5), partial lines also drop their zero-length words (18). Differential fuzz against `732f5e6c`, 4000 songs, `heard_words=None`, with a comparator written for this change (every other stats key equal, `realign` call order equal, the first differing line is a complete line with a zero-length word, `n_guessed_words` differs by exactly the zero-length words of those lines, word texts and counts equal): 0 differences. In the 4000: 2222 songs hold such a line, 3337 lines re-timed (4194 words); 3300 of them have no word under 0.05 s afterwards, 4 have fewer, 27 the same number, 6 more (in each, the next line's first word or the window's end falls inside the line's last timed word, and the existing sharing rule narrows that word with the guessed ones); 4 lines after a re-timed line differ (the previous line's end moved). Full suite 3647 passed. No library read. | `65438683` |
 | 8 | 2026-11-14 | 2c | Rule C built: `829d02d6`. `GAP_RETRY_MAX_S` (30.0); `MIN_SLICE_S` (0.2, the literal `can_realign` had). In `_Rescue`: `clean_starts` (first-pass clean lines' starts), `free_stretch` (the stretch and the 30 s / 0.2 s / 1.5 s-beyond tests), `gap_retry_line` (the retry and its keep tests), `aligned_line` (the align-and-build step, now shared with `retry`). `process` calls it for a not-placed line whose `realigned_line` returned None. New stats `gap_retry_line_ids`, `gap_retry_kept_line_ids`; a kept line is also in `realigned_line_ids`, `n_realigned` and `cue_inputs.realigns` (each gap retry is one more record: a line can have two). Differences from the plan's wording, as I read it: "that rule B did not aim" is a line not in `heard_aimed` (B tried it), so a line B tried and failed gets no rule C; "the first window" is the padded slice `[w0, w1]` the cue-aimed retry was given; the stretch also has to be at least `MIN_SLICE_S` long. 19 new tests (`TestGapRetry`); 2 existing `align_song` tests changed because they counted the aligner's calls: `test_unplaceable_section_repaces_from_cues` (1 + 4 became 1 + 4 x 2, and the two gap-retry ids) and `test_a_failed_realign_is_recorded_as_none` (`realigns` line ids [0, 1, 2, 3] became [0, 0, 1, 1, 2, 2, 3, 3], the second of each over (0.0, 8.0)). Mutations, each fails the tests named: C never fires (12), no 30 s cap (1), any stretch reaches (2), reach needs both sides (11), reach 0 s (2), untimed tokens allowed (1), unclean allowed (1), past the next line allowed (1), no cut to the stretch start (1), a fill starts the stretch (3), rule B lines retried too (1), placed lines retried too (11), duration ignored (3), kept line not in `realigned_line_ids` (10), kept not recorded (4), tried not recorded (7), slice not the stretch (8); one survived (the audio's end used even when a clean line follows), a test was added for it and it now fails (1). Differential fuzz as in row 7 with rule C switched off in the new code, 4000 songs: 0 differences; same counts as row 7. Rule C on against off, 4000 songs, `heard_words=None`, a stub aligner whose answer depends only on the call (line, window): rule C tried 5812 lines, kept 540; 493 songs differ; every tried line made exactly 2 align calls and no line more than 2; the first differing line of each song is a kept line, or (5 songs) an earlier line whose guessed words end where a kept line now starts; 15 lines after a kept line differ; every kept line has a timed word for every token, is `_line_is_clean`, lies between the end of the last non-fill line before it and the start of the next clean first-pass line (or `duration`), in a stretch of at most 30 s; no line is in both `heard_aimed_line_ids` and `gap_retry_line_ids`. Full suite 3666 passed. No library read. | `829d02d6` |
 | 9 | 2026-11-14 | 2d | End of Phase 2 checks at `829d02d6`. Full suite 3666 passed. `pre-commit` clean on the 9 Python files changed since `a24348be~1` (`alignment_capture.py`, `cue_align.py`, `heard_lines.py`, `srt_slice_fit.py`, `token_align.py`, `lyric_align.py`, and the tests `test_cue_align.py`, `test_heard_lines.py`, `test_lyric_align.py`); `library_status.py` is unchanged since `dev`. `graphify update .` run. Fuzz at HEAD, 4000 songs each: differential with rule C off against `732f5e6c` (comparator as in row 7): 0 differences; rule C on against off: as in row 8; robustness with random heard words: rule B tried 1862, kept 287, rule D tried 2230, kept 396, 268 of those 396 were given guessed words by the guess pass (the stub drops 15% of a result's words at random), 9 kept lines no longer pass `confirms` after the guess pass and all 9 were given guessed words, every D line has exactly one align call, every D line tried and not kept equals its input; the same with overlapping cues added (16017 overlapping cue pairs in the 4000 songs): rule B tried 2016, kept 349, rule D tried 2577, kept 529, no crash, every word ends no earlier than it starts, the id lists keep their subset relations. Self-review on the three axes, what it turned up. Correctness: rule C does not look at the heard words except to leave out a line rule B tried, so a line the transcriber heard on its cue whose cue-aimed retry failed can be moved by rule C to anywhere in the stretch (at most 30 s); a bad line in a run of identical lines gets rule C without the run test rule A, B and D have, and can take a neighbouring twin's audio from the stretch; a rule D result may time fewer words than the line it replaces (no more-words check; the guess pass fills the rest). Simplicity: `heard_aimed_line` carries two flags (`must_gain`, `whole`) for the two rules sharing it; `process` is 35 lines; the three retries (cue-aimed, heard-aimed, gap) share `aligned_line`, `start_bounded` and the keep tests are not shared (rule C has its own set, by design). Robustness: a bad line that neither retry keeps now costs a second align call over a stretch of up to 30 s (two calls for every line in a song where nothing aligns); with `duration` None and no clean line after, rule C does not run. From the diff read and not changed (3a columns and Table B/A cover them): the singing-end search of a later-heard line stops at the next line's unmoved cue (8 of the 10 library lines Fable counted); a line moved past its neighbour (1 library line) refuses the neighbour's own re-align and gets a guessed last word that comes out zero-length. | `829d02d6` |
+| 10 | 2026-11-14 | plan | Ken, after the 2d report and the three open calls of row 9 (rule C on lines heard on their cue; rule C in a run of identical lines; rule D replacing a line with one that times fewer words), asked for columns that measure them and for the review before the GPU run instead of at 2d. Edits: Table C gains "heard shift" and "in a run of identical lines" (3a); the "timed fewer words" count is not a 3a column, because rule D's heard-aimed re-align has no saved answer in a bundle, so it is in 4a as membership of `guessed_word_line_ids` for every D line tried, and 4a gives rule C lines Table C's two columns; new step 3c2 (STOP: review due, `/code-review medium f2d305fc~1..HEAD` on `cue_align.py`, `heard_lines.py` and their tests), before 3d; 2d notes the move; Status line. No code changed. | this file |
 
 ## Report output
 
