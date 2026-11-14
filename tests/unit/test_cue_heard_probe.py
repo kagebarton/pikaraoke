@@ -347,6 +347,13 @@ class TestTableZ:
         assert (row["line"], row["tokens"], row["zero_length"]) == (4, 4, 2)
         assert row["retimed"] >= 1
 
+    def test_a_re_aligned_line_with_a_zero_length_word_is_listed_too(self, analyse):
+        objs, cues, lines = _one_line_song((8.0, 12.0))
+        realigned = _words(("ee", 8.0, 8.3), ("ff", 8.4, 8.4), ("gg", 8.5, 8.8))
+        (row,) = analyse(_make_song(objs, cues, lines, [], lambda *_: realigned)).rows["Z"]
+        assert (row["line"], row["tokens"], row["zero_length"]) == (4, 3, 1)
+        assert row["retimed"] == 1
+
     def test_a_line_with_all_its_words_timed_is_not_listed(self, analyse):
         song = _make_song(*_one_line_song((8.0, 12.0), *_spans("ee ff gg", 8.0)), heard=[])
         assert analyse(song).rows["Z"] == []
@@ -602,9 +609,20 @@ class TestStaging:
             tmp_path / "copy" / "alignment_debug" / "A---aaaaaaaaaaa.json"
         ).read_text() == "trial"
 
+    def test_a_file_with_no_id_is_staged_by_its_whole_stem(self, tmp_path):
+        self._song(tmp_path / "lib", "Plain Name", "lib")
+        staged = probe.stage_songs(["Plain Name"], [tmp_path / "lib"], tmp_path / "copy")
+        assert [p.name for p in staged] == ["Plain Name.mp4"]
+        assert (tmp_path / "copy" / "alignment_debug" / "Plain Name.json").is_file()
+
+    def test_a_song_with_no_id_is_named_in_full_and_one_with_an_id_in_short(self):
+        long = "A Very Long Artist Name - A Very Long Song Title"
+        assert probe.label(long) == long
+        assert probe.label(f"{long}---abcdefghijk") == "A Very Long Artist Name - A Ve abcdefghijk"
+
     def test_an_unknown_id_is_an_error(self, tmp_path):
         self._song(tmp_path / "lib", "A---aaaaaaaaaaa", "lib")
-        with pytest.raises(ValueError, match="No video with id zzzzzzzzzzz"):
+        with pytest.raises(ValueError, match="No video with id or stem zzzzzzzzzzz"):
             probe.stage_songs(["zzzzzzzzzzz"], [tmp_path / "lib"], tmp_path / "copy")
 
     @pytest.mark.parametrize("argv", [["--song", "aaaaaaaaaaa"], ["--stage", "x"]])

@@ -24,7 +24,7 @@ audio length). The envelope is cached under ``--out``. The library is only read.
 Tables go to stdout as markdown; ``--out`` also gets ``rows.json`` (every table row, with
 the lyric line's text) which is never committed.
 
-``--stage DIR --song ID...`` instead copies those songs (video, stems, bundle and the
+``--stage DIR --song ID...`` (a YouTube id, or the whole stem for a file without one) instead copies those songs (video, stems, bundle and the
 other files ``library_regen.song_files`` lists) into a copy library at ``DIR``, taking each
 from the first ``--from`` folder that has it, else from ``--folder``.
 
@@ -318,9 +318,12 @@ def worst_deviation(final: dict[int, dict], saved: list[dict]) -> Deviation | No
 
 
 def label(stem: str) -> str:
-    """A short song name for a table: the title part, then the YouTube id."""
-    name = stem.split("---")[0].replace("|", "/")
-    return f"{name[:30]} {extract_youtube_id(stem) or '?'}"
+    """A short song name for a table: the title part and the YouTube id, or the whole stem
+    when the file has no id (several songs would otherwise share a label)."""
+    video_id = extract_youtube_id(stem)
+    if video_id is None:
+        return stem.replace("|", "/")
+    return f"{stem.split('---')[0].replace('|', '/')[:30]} {video_id}"
 
 
 @dataclass
@@ -412,10 +415,11 @@ def rows_g(ctx: Ctx) -> list[dict]:
 
 
 def rows_z(ctx: Ctx) -> list[dict]:
-    """Kept lines that had a word for every token, some zero-length, re-timed."""
+    """Kept lines (first pass or re-align) with a word for every token, some zero-length as
+    the baseline rescue left them, that the zero-length rule re-timed."""
     rows = []
     for lid in ctx.ids("guessed_word_line_ids"):
-        before, after = ctx.first[lid], ctx.new.pre[lid]
+        before, after = ctx.today.pre[lid], ctx.new.pre[lid]
         n_tokens = len(ctx.rescue.line_toks[lid])
         zero = sum(1 for w in before["words"] if w["end"] - w["start"] < INSTANT_WORD_DUR_S)
         if len(before["words"]) != n_tokens or not zero or after["source"] != before["source"]:
@@ -657,8 +661,8 @@ TABLES = {
     ),
     "Z": (
         "Table Z: zero-length words re-timed",
-        "Zero-length: words under 0.05 s in the first pass. Re-timed: words whose times the "
-        "rescue changed. Short after: words under 0.1 s in the snapped line.",
+        "Zero-length: words under 0.05 s in the line as the baseline rescue left it. Re-timed: "
+        "words whose times the zero-length rule changed. Short after: words under 0.1 s in the snapped line.",
         [
             ("Src", "src"),
             ("Song", "song"),
@@ -875,22 +879,23 @@ def report(
 # ---------------------------------------------------------------------------
 
 
-def find_video(sources: list[Path], video_id: str) -> Path:
-    """The video with YouTube id ``video_id`` in the first of ``sources`` that has one."""
+def find_video(sources: list[Path], song: str) -> Path:
+    """The video whose YouTube id or whole stem is ``song``, in the first of ``sources`` that
+    has one."""
     for source in sources:
-        hits = [v for v in list_videos(source) if extract_youtube_id(v.name) == video_id]
+        hits = [v for v in list_videos(source) if song in (v.stem, extract_youtube_id(v.name))]
         if len(hits) > 1:
-            raise ValueError(f"{video_id} matches several videos in {source}: {hits}")
+            raise ValueError(f"{song} matches several videos in {source}: {hits}")
         if hits:
             return hits[0]
-    raise ValueError(f"No video with id {video_id} in {', '.join(map(str, sources))}")
+    raise ValueError(f"No video with id or stem {song} in {', '.join(map(str, sources))}")
 
 
-def stage_songs(video_ids: list[str], sources: list[Path], dest: Path) -> list[Path]:
+def stage_songs(songs: list[str], sources: list[Path], dest: Path) -> list[Path]:
     """Copy each song (video, stems, bundle and the other ``song_files``) into ``dest``."""
     staged = []
-    for video_id in video_ids:
-        video = find_video(sources, video_id)
+    for song in songs:
+        video = find_video(sources, song)
         for path in [video, *song_files(video)]:
             target = dest / path.relative_to(video.parent)
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -930,7 +935,9 @@ def main() -> int:
         "--out", type=Path, help="scratch folder (default: <temp>/cue_heard_rescue)"
     )
     parser.add_argument("--stage", type=Path, metavar="DIR", help="copy the --song songs to DIR")
-    parser.add_argument("--song", nargs="+", metavar="ID", default=[], help="YouTube ids to stage")
+    parser.add_argument(
+        "--song", nargs="+", metavar="ID", default=[], help="YouTube ids (or whole stems) to stage"
+    )
     parser.add_argument(
         "--from",
         dest="sources",
