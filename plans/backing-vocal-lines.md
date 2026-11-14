@@ -71,9 +71,10 @@ which hold old copies and inflate every count if globbed):
   word, start, end, probability). Cue songs also record `cue_inputs` (spans, sections,
   realigns), `lyrics.source_path` and `lyrics.origin`. Bundle lines are already cleaned, so
   the parentheticals must be read from the raw `.srt` / `.lrc`.
-- LRC stamps are on the LRC's own clock; the fitted `lyrics/*.lrclib.srt` (12 files) is on
-  the video's clock but already cleaned. Placing a raw LRC parenthetical on the video clock
-  needs the fit, or its neighbours' fitted times.
+- LRC stamps are on the LRC's own clock; the fitted `lyrics/*.lrclib.srt` is on the video's
+  clock and keeps the record's text as pasted, parentheses included
+  (`srt_slice_fit._corrected_srt`; corrected in Phase 0 step 1, which read every raw LRC
+  parenthetical and its window straight from it).
 - The library was mass-renamed on 2026-11-08: match songs by YouTube ID, not by stem.
 - YouTube auto-captions exist for only 6 of the 78 songs, so they cannot be the test.
 
@@ -140,6 +141,11 @@ Opus adds a Design and a Commits section to this plan. It must settle:
 - Where the keep-or-drop decision is made. The cleaners are pure text functions with no
   transcript; the transcript exists only inside the align stage. Check the stage order on the
   cue route before choosing.
+- The keep-or-drop decision comes after the LRCLIB pick. Branch `lrclib_fit_pick`
+  (`plans/lrclib-fit-pick.md`, "Phases 4-6") freezes `clean_cue_texts`, `clean_srt_line` and
+  `lrc_to_srt`, because its bar was measured on cleaned lines: 12 of its 31 GATE Q picks have
+  a line that is all parentheses, and Who You Are and Love Me Now were flagged for exactly
+  those echoes. The pick keeps seeing today's cleaned lines; kept parentheticals join after it.
 - What a saved sheet contains (`.lrclib.srt`, the caption sheet Edit words opens), given
   Decision 4 and that a cleaned line must still clean to itself.
 - One rule for captions and LRC, in one place. The non-sheet callers of `clean_srt_line`
@@ -198,9 +204,44 @@ lines. Written so he can check each in under a minute.
 - **NO-GO:** anything else. Report which check failed and the smallest change that would fix
   it; do not adjust thresholds to pass.
 
+## Phase 0 record
+
+Run by Opus 5.5 on 2026-11-14, CPU only, library read-only. Scripts and output in the session
+scratch folder `/tmp/claude-1000/-home-ken-projects-pikaraoke/0ab1bdd0-e655-42ad-8e0b-05018e2c1d58/scratchpad/bvl/`,
+run from the worktree with `PYTHONPATH=.`.
+
+### Step 1: inventory
+
+Scope: every bundle in `alignment_debug/` with `method_used` `cue_align`: 177 (the library has
+grown since 2026-11-11; 234 bundles in all). Seven are `movie_srt` custom sheets
+(`.custom.srt`), left out by Decision 4. No edited sheet (`-edited.srt`) exists. The other 170
+sheets were found by YouTube ID, or by file name for the 41 songs without one (40 movie cuts
+and NSYNC - Paradise). Every one cleans (`clean_cue_texts`, empty cues dropped) to exactly its
+bundle's `lyrics.lines`.
+
+A paren group is one `(...)` match after the cleaner's own markup strip (tags, `[brackets]`,
+note glyphs), the same pattern `clean_srt_line` deletes. Inline: its cue still has words after
+cleaning (a line today). Paren-only: its cue cleans to nothing (dropped today). Window: the
+cue's own span on the video clock. Overlap: the window shares more than 0 s with a kept cue's.
+
+| Source | Cue songs | With a paren | Paren groups | Inline (cues) | Paren-only (cues) | Songs with paren-only | Distinct texts |
+|---|---|---|---|---|---|---|---|
+| captions (`srt`) | 142 | 88 | 434 | 138 (137) | 296 (287) | 81 | 286 |
+| LRC (`lrclib_srt`) | 28 | 18 | 192 | 172 (164) | 20 (20) | 7 | 109 |
+| all | 170 | 106 | 626 | 310 (301) | 316 (307) | 88 | 391 |
+
+Overlaps: no inline-paren cue overlaps another cue in either source. Two paren-only caption
+cues overlap a line: `cPAbx5kgCJo` "(children laughing)" 75.40-77.23 s over line 21 by
+1.83 s, and `GC_mV1IpjWA` "(singing)" 126.37-128.53 s over line 50 by 2.17 s. LRC cues end at
+the next stamp, so none can overlap.
+
+Not counted: one caption cue with an unbalanced bracket, `D_dOXTpwV5s` "(heeyyy]", which no
+paren rule touches today.
+
 ## Results log
 
 Raw tables, commands and commits only; no verdicts in this table.
 
 | # | date | phase | what ran (command, commit) | raw result |
 |---|---|---|---|---|
+| 1 | 2026-11-14 | 0.1 | `inventory.py ~/pikaraoke-songs out` on `8701174c`, library read-only | 170 cue songs read (7 custom left out), all sheets match their bundles; 626 paren groups, 391 distinct texts. "Phase 0 record", "Step 1". |
