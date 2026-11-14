@@ -31,10 +31,13 @@ from typing import NamedTuple
 import srt
 
 from pikaraoke.lib import lrclib
-from pikaraoke.lib.cue_align import _token_expected_times
 from pikaraoke.lib.joint_match import _tokenise_lines
 from pikaraoke.lib.srt_cues import cue_spans_from_srt, offset_mad_against_cues
-from pikaraoke.lib.token_align import _normalize_token, match_words_to_tokens
+from pikaraoke.lib.token_align import (
+    _normalize_token,
+    _token_expected_times,
+    match_words_to_tokens,
+)
 from pikaraoke.lib.ytasr import parse_json3
 
 logger = logging.getLogger(__name__)

@@ -17,6 +17,9 @@ Two layers the matchers share:
     to an ordered word stream on strict normalised equality. For word
     streams produced by forced alignment of the token text itself, where
     the only divergence is dropped words.
+  * ``_token_expected_times`` and two thresholds on what counts as a
+    timed word and a covered line, which ``cue_align`` and
+    ``heard_lines`` both read (neither may import the other).
 
 ``candidate_match._build_line_object`` runs ``_walk_align`` inside a
 selected window to assign per-word timings; the joint matcher
@@ -25,6 +28,14 @@ selected window to assign per-word timings; the joint matcher
 
 import re
 import unicodedata
+
+# A line whose words cover less than this fraction of its tokens is not placed (cue_align
+# hands it to the re-pace fallback) and not heard (heard_lines).
+MIN_LINE_COVERAGE = 0.5
+
+# A word shorter than this is a failed forced-alignment the aligner could not place but
+# did not drop (only exact-zero-duration words are removed). It does not count as timed.
+INSTANT_WORD_DUR_S = 0.05
 
 # ---------------------------------------------------------------------------
 # Normalization
@@ -234,6 +245,11 @@ def _walk_align(
 # ---------------------------------------------------------------------------
 # Monotone assignment DP
 # ---------------------------------------------------------------------------
+
+
+def _token_expected_times(n: int, t0: float, t1: float) -> list[float]:
+    """Even-paced expected start for each of ``n`` tokens across ``[t0, t1]``."""
+    return [t0 + (k + 0.5) * (t1 - t0) / n for k in range(n)]
 
 
 def match_words_to_tokens(
