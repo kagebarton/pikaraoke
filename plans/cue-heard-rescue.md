@@ -4,7 +4,7 @@ Ken still has it at build time, is listed under "Where Fable would help".
 
 # Cue-align rescue: the transcriber's words outrank the cue
 
-**Status: planned 2026-11-13. No code. Next: Phase 1, Sonnet.**
+**Status: Phase 1 done 2026-11-14 (`a24348be`..`fecebdd2`). Next: Phase 2, Sonnet.**
 
 Branch `cue_heard_rescue`, off `dev` `a7671d7`.
 
@@ -314,7 +314,7 @@ Table P names any song whose stem is missing.
 
 GPU-free, no library read.
 
-- [ ] **1a. Anchor check.** In the worktree of `cue_heard_rescue`. Confirm these exist
+- [x] **1a. Anchor check.** In the worktree of `cue_heard_rescue`. Confirm these exist
   as this plan uses them, else STOP: `cue_align.repace_bad_lines`, `align_song`,
   `_line_in_span`, `_line_is_good`, `_line_is_clean`, `_repeat_detection_slacks`,
   `_start_bound`, `_start_from`, `_previous_line`, `_line_from_realigned`,
@@ -324,14 +324,14 @@ GPU-free, no library read.
   `joint_match._tokenise_lines`; `LyricAlignStage._run_cue_align` (it holds
   `transcribe_words` before it calls `align_song`); `alignment_capture.build_bundle`
   stores `transcribe_words` and `cue_inputs` on the cue route.
-- [ ] **1b. `heard_lines.py`** with `tests/unit/test_heard_lines.py`: a line heard in
+- [x] **1b. `heard_lines.py`** with `tests/unit/test_heard_lines.py`: a line heard in
   full; under half matched; one matched word of five; a one-word line; two identical
   lines both heard, each gets its own words; the second of two identical lines unheard
   (`run_heard` False refuses both); `confirms` with a pair 1.2 s apart; with a
   zero-length word among the pairs (ignored); `first` False when token 0 is unmatched;
   no heard words at all.
   Commit: `feat(cue_align): where the transcriber heard each lyric line`.
-- [ ] **1c. Rule A and the wiring.** `repace_bad_lines` and `align_song` take
+- [x] **1c. Rule A and the wiring.** `repace_bad_lines` and `align_song` take
   `heard_words`; the stage passes them. Tests in `test_cue_align.py` (stub aligner,
   made-up lines): the Quit Playing Games shape (two identical lines the first pass put
   3 s before their cues, both heard there: kept, not spaced from the cue); the same with
@@ -342,11 +342,11 @@ GPU-free, no library read.
   `heard_words=None` reproduces today's output on every existing case. One test in
   `test_lyric_align.py`: the stage hands the gate's words to `align_song`.
   Commit: `feat(cue_align): the rescue keeps a line the transcriber confirms`.
-- [ ] **1d. The guard lift.** Test: the Miss Independent shape (a two-word re-align
+- [x] **1d. The guard lift.** Test: the Miss Independent shape (a two-word re-align
   starting 0.9 s before the previous line's end, both words heard there: kept untrimmed;
   the same unheard: trimmed or refused as today).
   Commit: `feat(cue_align): a re-align the transcriber confirms is not cut to the previous line`.
-- [ ] **1e.** Full suite, pre-commit on the changed files, self-review on the three
+- [x] **1e.** Full suite, pre-commit on the changed files, self-review on the three
   axes. Results log row. **STOP** (a clean point for `/compact`).
 
 ### Phase 2: rules B and D, zero-length words, rule C (Sonnet)
@@ -534,6 +534,7 @@ Read-only. Inputs: the Phase 3 and 4 tables, `<out>`, Ken's verdicts on the shee
 | 1 | 2026-11-13 | plan | Three trial bundles traced; sizing over the library's 177 cue-route bundles, read-only, scratch scripts outside the repo ("What the three flawed picks showed", "Sizing"). Ken's Decisions 1-4 by question dialog. | this file |
 | 2 | 2026-11-13 | plan | Second sizing, whole lines the rescue leaves alone, under this plan's heard rule; Ken added rule D (Decision 2b) and asked where Fable would help ("Where Fable would help", step 3b2). | this file |
 | 3 | 2026-11-14 | plan | Checked the plan's data against the Linux box: code anchors all present; share paths absent; library found at `~/pikaraoke-songs`; trial bundles copied to `~/probes/lrclib-cue-trial` ("Paths on the Linux box"). | this file |
+| 4 | 2026-11-14 | 1 | Phase 1 built on `cue_heard_rescue`: 1b `a24348be`, 1c `b51130d7`, 1d `fecebdd2`. 1a: every named anchor present. Differences from the plan's Design: `heard_lines.py` also has `runs_heard(line_toks, heard)` (Decision 9's run flag); `MIN_LINE_COVERAGE`, `INSTANT_WORD_DUR_S` and `_token_expected_times` moved to `token_align.py` (`heard_lines` may not import `cue_align`, and needs the first two as well); `srt_slice_fit.py` imported `_token_expected_times` from `cue_align` and now imports it from `token_align`; stale "cue route doesn't use" comments edited in `alignment_capture.py` and `test_lyric_align.py`. `repace_bad_lines` split into `_Rescue` (per-song state, placed test, one line's retry), `_guess_missing_words` and the driver. New `repace` stats: `n_heard_lines`, `heard_kept_line_ids`, `heard_held_line_ids`, `guard_lifted_line_ids`. Full suite 3608 passed (3596 before 1b); `test_cue_align.py` existing cases pass unedited. Differential fuzz outside the repo, `repace_bad_lines` at `732f5e6c` against HEAD with `heard_words=None`, 4000 random songs: 0 differences in line objects, stats (new keys aside) or `realign` call order; the 4000 held 6546 re-paced, 4818 re-aligned, 2156 crammed, 5032 widened-window and 3525 guessed-word lines. Mutation checks: `confirms` forced False fails the three tests that need rule A; the lift disabled fails the three that need it. No library read. | `a24348be`, `b51130d7`, `fecebdd2` |
 
 ## Report output
 
