@@ -35,7 +35,8 @@ Approach:
    over its offset-corrected cue window (the injected ``realign``), and only
    if that also fails is it re-built with paced words across the window. The
    transcriber's words outrank the cue here: a line they confirm is kept where
-   it sits, and a re-align does not replace it unless they confirm that too. A
+   it sits, a re-align does not replace it unless they confirm that too, and a
+   line heard far from its cue is first looked for where it was heard. A
    line missing only some of its words, or holding words the aligner left
    zero-length, is rescued too: the re-align replaces it only if it times more
    of them, and any word still missing is shown with guessed timing at the
@@ -159,6 +160,11 @@ MAX_HOLD_S = 4.0
 # line), so one line may start before the other ends. Smaller overlaps are display
 # timing: movie subtitles run 0.1-0.3 s into the next; duets overlap 1.9-4.7 s.
 DUET_OVERLAP_S = 1.0
+
+# A line the transcriber heard this far or more from where its cue puts it is looked for
+# where it was heard. Past caption jitter (a clean line is trusted up to
+# :data:`PAUSE_SLACK_S` plus authoring jitter), short of a whole repeat period.
+HEARD_SHIFT_S = 1.5
 
 SOURCE = "cue_align"
 # Provenance for a line whose timing came from the cue re-pace fallback rather
@@ -481,11 +487,13 @@ def split_section_to_lines(
 @dataclass(frozen=True)
 class _Window:
     """Where one rescued line is looked for, on the audio clock: its offset-corrected cue
-    span ``[t0, t1]`` (clamped to the audio), the end ``aim_end`` the re-align is aimed at
-    (``t1``, or where the line's singing stops if later) and the padded slice ``[w0, w1]``."""
+    span ``[t0, t1]`` (clamped to the audio), where its singing stops (None when that cannot
+    be measured), the end ``aim_end`` the re-align is aimed at (``t1``, or the singing's end
+    if later) and the padded slice ``[w0, w1]``."""
 
     t0: float
     t1: float
+    singing_end: float | None
     aim_end: float
     w0: float
     w1: float
@@ -537,6 +545,8 @@ class _Rescue:
         self.heard_kept: list[int] = []
         self.heard_held: list[int] = []
         self.guard_lifted: list[int] = []
+        self.heard_aimed: list[int] = []
+        self.heard_aimed_kept: list[int] = []
 
     def process(self, obj: dict, out: list[dict]) -> None:
         """Append to ``out`` what line ``obj`` becomes: itself, its re-align, or a fill."""
@@ -552,7 +562,14 @@ class _Rescue:
                 return
             if len(obj["words"]) >= len(toks):
                 self.crammed.append(lid)
-        win = self.window(lid)
+        shift = self.heard_shift(lid)
+        if shift is not None:
+            fixed = self.heard_aimed_line(obj, out, placed, shift)
+            if fixed is not None:
+                out.append(fixed)
+                self.realigned.append(lid)
+                return
+        win = self.adopt(lid, self.window(lid))
         fixed = self.realigned_line(obj, out, win, placed)
         if fixed is not None:
             out.append(fixed)
@@ -588,35 +605,64 @@ class _Rescue:
             return True
         return placed
 
-    def window(self, lid: int) -> _Window:
-        """Line ``lid``'s rescue window, recorded for the guess pass."""
-        cue_start, cue_end = self.cue_spans[lid]
-        t0 = max(0.0, cue_start + self.offset)
-        t1 = cue_end + self.offset
+    def window(self, lid: int, shift: float = 0.0) -> _Window:
+        """Line ``lid``'s rescue window with its cue span moved ``shift`` s on the audio clock.
+
+        The singing-end search reads the moved span too (the next line's cue stays where it
+        is), so the window, the end it is aimed at and the slice all follow the move.
+        """
+        cue_start, cue_end = self.audio_spans[lid]
+        t0 = max(0.0, cue_start + shift)
+        t1 = cue_end + shift
         if self.duration is not None and t1 > self.duration:
             # SRT overruns the media: keep the fill inside the audio, pinning
             # a cue that starts past the end to the last half-second.
             t1 = self.duration
             if t0 >= t1:
                 t0 = max(0.0, t1 - 0.5)
-        singing_end = _singing_end(self.env, self.audio_spans, lid, self.pad_s, self.duration)
-        if singing_end is None:
-            self.unmeasured.append(lid)
-        elif singing_end > t1:
-            self.widened.append(lid)
+        spans = list(self.audio_spans)
+        spans[lid] = (cue_start + shift, cue_end + shift)
+        singing_end = _singing_end(self.env, spans, lid, self.pad_s, self.duration)
         aim_end = t1 if singing_end is None else max(t1, singing_end)
         w0 = max(0.0, t0 - self.pad_s)
         w1 = max(t1 + self.pad_s, aim_end)
         if self.duration is not None:
             w1 = min(self.duration, w1)
-        self.windows[lid] = _Window(t0, t1, aim_end, w0, w1)
-        return self.windows[lid]
+        return _Window(t0, t1, singing_end, aim_end, w0, w1)
 
-    def realigned_line(self, obj: dict, out: list[dict], win: _Window, placed: bool) -> dict | None:
-        """The one-line re-align of ``obj`` when it is to replace the line, else None."""
-        lid = obj["line_id"]
-        if self.realign is None or win.w1 - win.w0 < 0.2:
+    def adopt(self, lid: int, win: _Window) -> _Window:
+        """Record ``win`` as the window line ``lid`` is rescued in (the guess pass reads it)."""
+        if win.singing_end is None:
+            self.unmeasured.append(lid)
+        elif win.singing_end > win.t1:
+            self.widened.append(lid)
+        self.windows[lid] = win
+        return win
+
+    def can_realign(self, win: _Window) -> bool:
+        """Whether there is an aligner and the slice ``win`` gives it is long enough to use."""
+        return self.realign is not None and win.w1 - win.w0 >= 0.2
+
+    def heard_shift(self, lid: int) -> float | None:
+        """How far from its cue the transcriber heard line ``lid`` start, when rule B looks
+        for it there: heard with its first token among the matched, at least
+        :data:`HEARD_SHIFT_S` from ``cue start + offset``. Else None."""
+        heard = self.heard[lid]
+        if heard is None or not heard.first:
             return None
+        shift = heard.start - self.audio_spans[lid][0]
+        return shift if abs(shift) >= HEARD_SHIFT_S else None
+
+    def retry(
+        self, obj: dict, out: list[dict], win: _Window, placed: bool, shift: float
+    ) -> tuple[dict | None, bool]:
+        """One-line re-align of ``obj`` over ``win`` (its cue span moved ``shift`` s), and
+        whether the transcriber's confirmation lifted part of its start bound.
+
+        The line is None unless it comes back covered and inside the window it was aimed at
+        (:func:`_line_in_span`) and, for a line that is placed, times more words than ``obj``.
+        """
+        lid = obj["line_id"]
         raw_words = self.realign(lid, win.w0, win.w1)
         fixed = (
             _line_from_realigned(
@@ -633,13 +679,24 @@ class _Rescue:
         )
         lifted = False
         if fixed is not None:
-            fixed, lifted = self.start_bounded(fixed, out)
+            fixed, lifted = self.start_bounded(fixed, out, shift)
         # The window it was aimed at, in cue time: the check adds the offset back.
         cue_start, cue_end = self.cue_spans[lid]
-        aimed = (cue_start, max(cue_end, win.aim_end - self.offset))
+        aimed = (cue_start + shift, max(cue_end + shift, win.aim_end - self.offset))
         if fixed is None or not _line_in_span(fixed, aimed, self.offset):
-            return None
+            return None, False
         if placed and _timed_words(fixed["words"]) <= _timed_words(obj["words"]):
+            return None, False
+        return fixed, lifted
+
+    def realigned_line(self, obj: dict, out: list[dict], win: _Window, placed: bool) -> dict | None:
+        """The one-line re-align of ``obj`` over its cue window when it is to replace the
+        line, else None."""
+        if not self.can_realign(win):
+            return None
+        lid = obj["line_id"]
+        fixed, lifted = self.retry(obj, out, win, placed, 0.0)
+        if fixed is None:
             return None
         if placed and self.confirmed(obj) and not self.confirmed(fixed):
             # Rule A2: the line sits on its heard words and the re-align does not.
@@ -649,9 +706,32 @@ class _Rescue:
             self.guard_lifted.append(lid)
         return fixed
 
-    def start_bounded(self, raw: dict, out: list[dict]) -> tuple[dict | None, bool]:
+    def heard_aimed_line(
+        self, obj: dict, out: list[dict], placed: bool, shift: float
+    ) -> dict | None:
+        """Rule B: the re-align of ``obj`` over its cue span moved ``shift`` s, to where the
+        transcriber heard it, when the transcriber confirms the result; else None and the
+        line takes the cue-aimed retry as before."""
+        lid = obj["line_id"]
+        win = self.window(lid, shift)
+        if not self.can_realign(win):
+            return None
+        self.heard_aimed.append(lid)
+        fixed, lifted = self.retry(obj, out, win, placed, shift)
+        if fixed is None or not self.confirmed(fixed):
+            return None
+        self.adopt(lid, win)
+        self.heard_aimed_kept.append(lid)
+        if lifted:
+            self.guard_lifted.append(lid)
+        return fixed
+
+    def start_bounded(
+        self, raw: dict, out: list[dict], shift: float = 0.0
+    ) -> tuple[dict | None, bool]:
         """Re-align ``raw`` cut to start where the lines before it allow (None when too little
         is left), and whether the transcriber's confirmation lifted part of that bound.
+        ``shift`` is how far the line's cue span was moved (rule B).
 
         A re-align confirmed as the aligner returned it sits on the words heard for the
         line, so it is not held to the previous line's end: two lines may share a held
@@ -659,10 +739,10 @@ class _Rescue:
         slice's lead-in still bounds it (:func:`_lead_in_bound`).
         """
         lid = raw["line_id"]
-        bound = _start_bound(out, self.cue_spans, lid, self.offset)
+        bound = _start_bound(out, self.cue_spans, lid, self.offset, shift)
         fixed = _start_from(raw, bound)
         if raw["start"] < bound and self.confirmed(raw):
-            freed = _start_from(raw, _lead_in_bound(self.cue_spans[lid][0], self.offset))
+            freed = _start_from(raw, _lead_in_bound(self.cue_spans[lid][0] + shift, self.offset))
             if freed is not None and freed != fixed and self.confirmed(freed):
                 return freed, True
         return fixed, False
@@ -729,8 +809,13 @@ def repace_bad_lines(
     heard for it) counts as placed even where the cue test fails it, and a one-line
     re-align replaces it only if the re-align is confirmed too. A re-align confirmed as
     the aligner returned it is also not cut to start after the previous line's last word
-    (:func:`_start_bound`); the window's lead-in still bounds it. Without heard words, or
-    for a line the transcriber did not hear, the cue decides as before.
+    (:func:`_start_bound`); the window's lead-in still bounds it. A bad, partial or crammed
+    line the transcriber heard :data:`HEARD_SHIFT_S` or more from its cue (with its first
+    word among those matched) is first re-aligned over its cue span moved to where it was
+    heard, window, singing end, aimed span and start bound included, and that result is
+    kept only if it passes the checks below against the moved span and the transcriber
+    confirms it; otherwise the line takes the cue-aimed retry as before. Without heard
+    words, or for a line the transcriber did not hear, the cue decides as before.
 
     Each bad, partial or crammed line is rescued in two steps:
     ``realign(lid, w0, w1)`` -- an injected narrow per-line forced align over
@@ -792,13 +877,15 @@ def repace_bad_lines(
         "heard_kept_line_ids": rescue.heard_kept,
         "heard_held_line_ids": rescue.heard_held,
         "guard_lifted_line_ids": rescue.guard_lifted,
+        "heard_aimed_line_ids": rescue.heard_aimed,
+        "heard_aimed_kept_line_ids": rescue.heard_aimed_kept,
     }
     logger.info(
         "cue rescue: offset=%+.2fs, %d line(s) re-aligned, %d/%d re-paced from cue, "
         "%d word(s) guessed in %d line(s), %d crammed line(s) asked for a re-align; "
         "%d/%d window(s) widened to the singing, %d left unmeasured; "
         "%d line(s) heard, %d kept where heard, %d re-align(s) refused for the heard words, "
-        "%d start(s) freed of the previous line",
+        "%d start(s) freed of the previous line, %d line(s) looked for where heard, %d kept there",
         rescue.offset,
         len(rescue.realigned),
         len(rescue.repaced),
@@ -813,6 +900,8 @@ def repace_bad_lines(
         len(rescue.heard_kept),
         len(rescue.heard_held),
         len(rescue.guard_lifted),
+        len(rescue.heard_aimed),
+        len(rescue.heard_aimed_kept),
     )
     return out, stats
 
@@ -978,7 +1067,11 @@ def _lead_in_bound(cue_start: float, offset: float) -> float:
 
 
 def _start_bound(
-    out: list[dict], cue_spans: list[tuple[float, float]], lid: int, offset: float
+    out: list[dict],
+    cue_spans: list[tuple[float, float]],
+    lid: int,
+    offset: float,
+    shift: float = 0.0,
 ) -> float:
     """Earliest a re-aligned line ``lid`` may start, given the lines already in ``out``.
 
@@ -988,14 +1081,16 @@ def _start_bound(
     lines show the same stretch of audio: the line may start no earlier than the previous
     line's last word ends. A fill's words are paced across its cue, not heard, so they
     bound nothing; a line whose caption runs more than :data:`DUET_OVERLAP_S` into
-    ``lid``'s is sung over it, and ``lid`` may rightly start before it ends.
+    ``lid``'s is sung over it, and ``lid`` may rightly start before it ends. ``shift`` moves
+    ``lid``'s cue span (rule B looks for the line where it was heard).
     """
-    bound = _lead_in_bound(cue_spans[lid][0], offset)
+    cue_start = cue_spans[lid][0] + shift
+    bound = _lead_in_bound(cue_start, offset)
     previous = _previous_line(out)
     if previous is None or previous["source"] == SOURCE_FILL:
         return bound
     pid = previous["line_id"]
-    if pid < len(cue_spans) and cue_spans[pid][1] - cue_spans[lid][0] > DUET_OVERLAP_S:
+    if pid < len(cue_spans) and cue_spans[pid][1] - cue_start > DUET_OVERLAP_S:
         return bound
     return max(bound, previous["end"])
 
