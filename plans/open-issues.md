@@ -500,7 +500,13 @@ The rescue (review findings and decisions kept as built):
   but it can still start on that word's note past its timed end. How often is
   not measured (Decision 16).
 - **The guard looks only backward** (row 51, finding 6): a rescued line's last
-  word is never checked against the next line's first.
+  word is never checked against the next line's first. On `cue_heard_rescue`
+  the same holds for the heard-aimed retries (rules B and D), which move a
+  line's window 1.5 s or more, so its last words can land on the next line's;
+  a next line that is placed with every word is then kept as it is
+  (`plans/cue-heard-rescue.md` on that branch, Results log row 15, review
+  finding 3). A bound there would let a neighbour placed by its cue overrule a
+  line the transcriber confirmed; GATE H reads the overlaps first.
 - **A re-paced line can start before the previous line's end** (row 51,
   finding 3). Not built: the 3 cases on the test songs (Miss Independent 5, 7,
   37) are fills placed right, with the previous line overrunning into them;
@@ -513,6 +519,15 @@ The rescue (review findings and decisions kept as built):
   Costs 75 more one-line aligns on the 10 test songs (209 against 134, row 45);
   every partial line takes its own slice align too (row 24, finding 10).
   Options (b) two or more words, (c) a bound on how far timed words may move.
+- **A partial line's guessed words take their pace from its zero-length
+  words too** (found by the `cue_heard_rescue` review, Results log row 15 of
+  `plans/cue-heard-rescue.md`, finding 6). The guess pass sets a guessed
+  word's length from the median length of the line's words, and in a line
+  with fewer words than tokens a zero-length word counts in that median, so a
+  guessed word can come out as short as half the line's shortest timed word.
+  Never zero: a kept line has at most half its words instant. The zero-length
+  rule on `cue_heard_rescue` re-times them only in a line with a word for
+  every token. Fix: pace from the timed words only.
 - **Should Song Info's guessed-words count include zero-length words left on
   screen?** (Decision 13.) Unchanged today.
 - **`align_song` deep-copies sections and re-align words with debug capture
