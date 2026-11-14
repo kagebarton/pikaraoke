@@ -536,6 +536,7 @@ class _Rescue:
         self.unmeasured: list[int] = []
         self.heard_kept: list[int] = []
         self.heard_held: list[int] = []
+        self.guard_lifted: list[int] = []
 
     def process(self, obj: dict, out: list[dict]) -> None:
         """Append to ``out`` what line ``obj`` becomes: itself, its re-align, or a fill."""
@@ -630,8 +631,9 @@ class _Rescue:
             if raw_words
             else None
         )
+        lifted = False
         if fixed is not None:
-            fixed = _start_from(fixed, _start_bound(out, self.cue_spans, lid, self.offset))
+            fixed, lifted = self.start_bounded(fixed, out)
         # The window it was aimed at, in cue time: the check adds the offset back.
         cue_start, cue_end = self.cue_spans[lid]
         aimed = (cue_start, max(cue_end, win.aim_end - self.offset))
@@ -643,7 +645,27 @@ class _Rescue:
             # Rule A2: the line sits on its heard words and the re-align does not.
             self.heard_held.append(lid)
             return None
+        if lifted:
+            self.guard_lifted.append(lid)
         return fixed
+
+    def start_bounded(self, raw: dict, out: list[dict]) -> tuple[dict | None, bool]:
+        """Re-align ``raw`` cut to start where the lines before it allow (None when too little
+        is left), and whether the transcriber's confirmation lifted part of that bound.
+
+        A re-align confirmed as the aligner returned it sits on the words heard for the
+        line, so it is not held to the previous line's end: two lines may share a held
+        note, and the previous line's last word is not evidence against this one. The
+        slice's lead-in still bounds it (:func:`_lead_in_bound`).
+        """
+        lid = raw["line_id"]
+        bound = _start_bound(out, self.cue_spans, lid, self.offset)
+        fixed = _start_from(raw, bound)
+        if raw["start"] < bound and self.confirmed(raw):
+            freed = _start_from(raw, _lead_in_bound(self.cue_spans[lid][0], self.offset))
+            if freed is not None and freed != fixed and self.confirmed(freed):
+                return freed, True
+        return fixed, False
 
 
 def _guess_missing_words(
@@ -705,7 +727,9 @@ def repace_bad_lines(
     ``heard_words`` (the transcriber's words for the whole song) outrank the cue. A line
     the transcriber *confirms* (:func:`heard_lines.confirms`: its words sit on the words
     heard for it) counts as placed even where the cue test fails it, and a one-line
-    re-align replaces it only if the re-align is confirmed too. Without heard words, or
+    re-align replaces it only if the re-align is confirmed too. A re-align confirmed as
+    the aligner returned it is also not cut to start after the previous line's last word
+    (:func:`_start_bound`); the window's lead-in still bounds it. Without heard words, or
     for a line the transcriber did not hear, the cue decides as before.
 
     Each bad, partial or crammed line is rescued in two steps:
@@ -767,12 +791,14 @@ def repace_bad_lines(
         "n_heard_lines": sum(1 for h in rescue.heard if h is not None),
         "heard_kept_line_ids": rescue.heard_kept,
         "heard_held_line_ids": rescue.heard_held,
+        "guard_lifted_line_ids": rescue.guard_lifted,
     }
     logger.info(
         "cue rescue: offset=%+.2fs, %d line(s) re-aligned, %d/%d re-paced from cue, "
         "%d word(s) guessed in %d line(s), %d crammed line(s) asked for a re-align; "
         "%d/%d window(s) widened to the singing, %d left unmeasured; "
-        "%d line(s) heard, %d kept where heard, %d re-align(s) refused for the heard words",
+        "%d line(s) heard, %d kept where heard, %d re-align(s) refused for the heard words, "
+        "%d start(s) freed of the previous line",
         rescue.offset,
         len(rescue.realigned),
         len(rescue.repaced),
@@ -786,6 +812,7 @@ def repace_bad_lines(
         stats["n_heard_lines"],
         len(rescue.heard_kept),
         len(rescue.heard_held),
+        len(rescue.guard_lifted),
     )
     return out, stats
 
@@ -944,6 +971,12 @@ def _previous_line(lines: list[dict]) -> dict | None:
     return next((line for line in reversed(lines) if line["words"]), None)
 
 
+def _lead_in_bound(cue_start: float, offset: float) -> float:
+    """Earliest a re-aligned line cued at ``cue_start`` may start: the lead-in the slice
+    gives the aligner is not part of the line (:func:`_line_in_span`'s slack)."""
+    return cue_start + offset - PAUSE_SLACK_S
+
+
 def _start_bound(
     out: list[dict], cue_spans: list[tuple[float, float]], lid: int, offset: float
 ) -> float:
@@ -957,7 +990,7 @@ def _start_bound(
     bound nothing; a line whose caption runs more than :data:`DUET_OVERLAP_S` into
     ``lid``'s is sung over it, and ``lid`` may rightly start before it ends.
     """
-    bound = cue_spans[lid][0] + offset - PAUSE_SLACK_S
+    bound = _lead_in_bound(cue_spans[lid][0], offset)
     previous = _previous_line(out)
     if previous is None or previous["source"] == SOURCE_FILL:
         return bound

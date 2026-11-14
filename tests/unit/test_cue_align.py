@@ -956,6 +956,58 @@ class TestHeardWords:
             assert stats["n_heard_lines"] == 0 and stats["heard_kept_line_ids"] == []
 
 
+class TestGuardLift:
+    """A re-align the transcriber confirms is not cut to the previous line's last word."""
+
+    @staticmethod
+    def _rescue(realigned, heard):
+        """Line 3's last word ends at 8.2; line 4 (cue 7.5-9.0, "ee ff") has no timed word,
+        and the re-align answers ``realigned`` for it."""
+        objs, cues, lines = _anchor_lines(3)
+        cues.append((6.0, 7.0))
+        lines.append("bb cc")
+        objs.append(_line(3, "bb cc", ("bb", 6.0, 6.3), ("cc", 7.0, 8.2)))
+        cues.append((7.5, 9.0))
+        lines.append("ee ff")
+        objs.append(_line(4, "ee ff"))
+        return repace_bad_lines(
+            objs, cues, lines, lines, realign=lambda *_: _words(*realigned), heard_words=heard
+        )
+
+    SHORT_FIRST = (("ee", 7.3, 7.7), ("ff", 7.8, 8.6))  # starts 0.9 s before line 3 ends
+    SHORT_HEARD = (("ee", 7.35, 7.75), ("ff", 7.85, 8.65))
+
+    def test_two_words_heard_where_they_start_are_kept_untrimmed(self):
+        out, stats = self._rescue(self.SHORT_FIRST, _words(*self.SHORT_HEARD))
+        assert out[4]["source"] == SOURCE_REALIGN and out[4]["start"] == 7.3
+        assert [w["word"] for w in out[4]["words"]] == ["ee", "ff"]
+        assert stats["guard_lifted_line_ids"] == [4]
+
+    def test_the_same_words_unheard_leave_too_little_of_the_first_word_and_the_line_is_filled(self):
+        out, stats = self._rescue(self.SHORT_FIRST, None)
+        assert out[4]["source"] == SOURCE_FILL
+        assert stats["n_realigned"] == 0 and stats["guard_lifted_line_ids"] == []
+
+    def test_a_first_word_that_outlasts_the_previous_line_is_trimmed_unless_heard(self):
+        long_first = (("ee", 7.3, 8.6), ("ff", 8.6, 8.9))
+        out, stats = self._rescue(long_first, None)
+        assert out[4]["source"] == SOURCE_REALIGN and out[4]["start"] == pytest.approx(8.2)
+        out, stats = self._rescue(long_first, _words(("ee", 7.35, 8.0), ("ff", 8.6, 8.9)))
+        assert out[4]["start"] == 7.3 and stats["guard_lifted_line_ids"] == [4]
+
+    def test_a_re_align_the_heard_words_disagree_with_is_still_cut_as_before(self):
+        far = _words(("ee", 10.35, 10.75), ("ff", 10.85, 11.65))
+        out, stats = self._rescue(self.SHORT_FIRST, far)
+        assert out[4]["source"] == SOURCE_FILL and stats["guard_lifted_line_ids"] == []
+
+    def test_the_slices_lead_in_still_bounds_a_confirmed_re_align(self):
+        # Dragged back to 6.8, before the 7.0 lead-in: cut to it, though not to line 3's end.
+        dragged = (("ee", 6.8, 7.7), ("ff", 7.8, 8.6))
+        out, stats = self._rescue(dragged, _words(("ee", 6.85, 7.7), ("ff", 7.85, 8.65)))
+        assert out[4]["source"] == SOURCE_REALIGN and out[4]["start"] == pytest.approx(7.0)
+        assert stats["guard_lifted_line_ids"] == [4]
+
+
 class TestRescueWindow:
     """A line missing words is re-aligned over a window out to where its own singing stops."""
 
