@@ -593,6 +593,74 @@ For Ken to rule, whatever the outcome:
    which B5 forbids as written.
 3. The hybrid, or NO-GO.
 
+### GATE A second read (Fable 5.2, 2026-11-14)
+
+Read-only, on `feb71bc4`: the tables above, plus counts taken from the saved `out/heard.json`,
+`out/baseline.json` and the bundles' `output_line_timings`. Nothing re-run, no label changed.
+
+**1. The hybrid: GO, as Ken amending the gate, not as the gate passing.** The first read's
+"as written NO-GO" stands, and so does putting it to Ken as a choice.
+
+- A1, the part meant to be rigid, is not bent: zero in every transcript variant up to three
+  times the pad, and only one direction has any word in its window at all.
+- What moves is A2, which is a worth-building bar ("set without data; Ken may move them"). A
+  miss on A2 leaves a line exactly as it is today.
+- Keeping vocables on text is a second change the gate did not register, but not a fitted
+  one: the vocable set was fixed in step 2 before any result, and the plan asked for vocables
+  apart because transcribers skip them. Open edge: "ha" is in the set, so a laugh written
+  "(ha ha)" would be kept; no such text is in this library.
+- The transcript is tested on worded parentheticals only: 161/259 (62%), 181/259 (70%) with
+  the registered consistency variant; captions 76%, LRC 64%. The 76% headline includes 72
+  vocable groups that pass by definition. "On the bar", not over it.
+- `none` was chosen from 39 variants after the results. It is the plan's own wording and A1
+  is zero for all of them, so the choice affects A2 only.
+
+Not shown by GATE A, and so carried to GATE B:
+
+- A1 on LRC. No LRC parenthetical is labelled a direction; the zero rests on captions alone
+  (277 groups, 189 texts).
+- That an echo can be heard. Under `none` the lead's words count for it.
+- The 261 kept, by evidence:
+
+| Evidence | Kept | Inline | Paren-only |
+|---|---|---|---|
+| heard (`none`) | 180 | 134 | 46 |
+| vocable-only, kept on text, not heard | 60 | 58 | 2 |
+| added by consistency | 21 | 13 | 8 |
+
+Conditions on the GO: the rule is frozen as measured (no further pad or share tuning); a
+quote-opened parenthetical is dropped outright; Phase 2 reports B2-B4 split by the three
+evidence rows, so the 81 without audio evidence can be dropped at GATE B on their own.
+
+**2. Decision 3: the on-screen count is not a fair measure of overlap.**
+`output_line_timings` run from a line's first word start to its last word end, as aligned
+today without the parenthetical's words. Of the 50 counted under
+`none +vocables +consist`:
+
+| | Count |
+|---|---|
+| overlap the previous line | 43 |
+| ... previous line covers 80% or more of the paren-only window | 27 |
+| ... previous line covers half or more | 37 |
+| ... previous line has an end-extension record (`baseline.json`) | 41 |
+| overlap the next line only | 7 |
+| largest overlap under 0.5 s | 8 |
+
+In most of them the previous line's words run across the whole slot: that audio had no words
+of its own, so the line before was stretched over it. The count mostly measures the
+parenthetical's absence, not two voices at once. Whether a kept line truly overlaps can only
+be measured in Phase 2, on timings aligned with the line present. Read Decision 3 by cue time
+at GATE A (drops 0 of 56) and judge on-screen overlap at GATE B. That has a cost there: those
+previous lines' ends will move by seconds, so B2 will list them, and B5 must compare
+after-timings, not before-timings.
+
+If Ken holds to today's on-screen time: inline-only keeps 205 of 261 groups (79%) in 30 of
+the 34 songs (captions 14, LRC 16; 11 songs hold 150 of them, 8 songs hold one each). Still
+worth building, at the same scale as the whole feature (30 of 170 cue songs): inline is most
+of what is kept and nearly all of the build spec's open points, and dropping paren-only
+removes line insertion, section placement, Decision 3 and B5's two-lines check. Paren-only
+could follow as its own step.
+
 ## Results log
 
 Raw tables, commands and commits only; no verdicts in this table.
@@ -606,3 +674,4 @@ Raw tables, commands and commits only; no verdicts in this table.
 | 5 | 2026-11-14 | 0.5 | `baseline.py ~/pikaraoke-songs out` | 38 songs, 1364 lines; sections and `.ass` words match every bundle; bundles captured 2026-11-05T20:36Z..2026-11-12, after dev's last alignment change `2e5d389b`; regens recorded at `7bb144d`. "Step 5". |
 | 6 | 2026-11-14 | GATE A | Read by Opus 5.5 | As written NO-GO; recommended GO on the hybrid (`none +vocables +consist`: A1 0, A2 76%), for Ken to rule with the four `unsure` labels and Decision 3's "overlap". "GATE A read". |
 | 7 | 2026-11-14 | 0 (record) | Scripts moved from the session scratch folder into `plans/backing-vocal-lines/` (dead imports dropped, Black, docstrings; `label_sheet.py` added for the step 2 view, which had been an inline snippet); the whole run above repeated from there on `a54f8e6f` | Every output byte-identical to rows 1-5's: `songs.json`, `inventory.json`, `label_sheet.txt`, `labels.json`, `heard.json`, `baseline.json`, the A1 / A2 table and the A3 / A4 / unsure output. |
+| 8 | 2026-11-14 | GATE A | Second read by Fable 5.2 on `feb71bc4`, read-only: inline counts over `out/heard.json`, `out/baseline.json` and the bundles' `output_line_timings` (no script re-run, no label changed) | Worded sung kept 161/259 under `none`, 181/259 with `+consist`. Hybrid's 261 kept: heard 180 (134 inline / 46 paren-only), vocable on text 60 (58 / 2), consistency 21 (13 / 8); 34 songs, 30 with an inline keep. Of the 50 on-screen overlaps: 43 with the previous line (27 covering 80% or more of the window, 37 half or more, 41 end-extended), 7 next line only, 8 under 0.5 s. Recommended GO on the hybrid as an amended gate, Decision 3 read by cue time. "GATE A second read". |
