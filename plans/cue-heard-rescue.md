@@ -4,7 +4,7 @@ Ken still has it at build time, is listed under "Where Fable would help".
 
 # Cue-align rescue: the transcriber's words outrank the cue
 
-**Status: Phases 1 and 2 done 2026-11-14 (1: `a24348be`..`fecebdd2`; 2a `6eef9d5d`, diff-read fix `f2d305fc`, 2a2 `60789275`, 2b `65438683`, 2c `829d02d6`). Next: Phase 3 (Sonnet), 3a to 3c; STOP at 3b2 or the first STOP; the review is due at 3c2, before the GPU run.**
+**Status: Phases 1 and 2 done 2026-11-14 (1: `a24348be`..`fecebdd2`; 2a `6eef9d5d`, diff-read fix `f2d305fc`, 2a2 `60789275`, 2b `65438683`, 2c `829d02d6`). Phase 3: 3a (probe `f3edd413`, fix `a0a10911`) and 3b ("Report output") done 2026-11-14; STOPPED at 3b2 on both conditions (Table P leaves out 16 songs, Table O has 30 lines over 0.3 s). Not started: 3c, 3c2, 3d. The review is due at 3c2, before the GPU run.**
 
 Branch `cue_heard_rescue`, off `dev` `a7671d7`.
 
@@ -401,7 +401,7 @@ GPU-free, no library read.
 
 Read-only on the library (`/home/ken/shared-drives/D:/Shared/pikaraoke-songs`).
 
-- [ ] **3a. Probe** `scripts/cue_heard_probe.py` with `tests/unit/test_cue_heard_probe.py`
+- [x] **3a. Probe** `scripts/cue_heard_probe.py` with `tests/unit/test_cue_heard_probe.py`
   (made-up bundles). For every bundle on the cue route with `cue_inputs` and
   `transcribe_words`:
   - decode the snap stem's envelope once and cache it under `--out`;
@@ -443,11 +443,11 @@ Read-only on the library (`/home/ken/shared-drives/D:/Shared/pikaraoke-songs`).
   video, stems and bundle) into a copy library; `--from DIR` names another source
   folder for a song.
   Commit: `feat(scripts): probe of the cue rescue against the heard words`.
-- [ ] **3b. The run.** `python scripts/cue_heard_probe.py --folder <library> --out
+- [x] **3b. The run.** `python scripts/cue_heard_probe.py --folder <library> --out
   ~/.pikaraoke/tmp/cue_heard_rescue > report.md`. Paste Tables P, A, G, Z, B, D, C, O,
   V raw into "Report output", no tallies beyond the tables' own, no reading. Read-only
   check: `find <library> -newer <out>/started` prints nothing of this run's.
-- [ ] **3b2. Optional read before the GPU run** ("Where Fable would help", item 2). If
+- [ ] **3b2. Optional read before the GPU run** (**STOPPED here 2026-11-14: Table P leaves out 16 songs and Table O has 30 lines moving over 0.3 s; Results log row 12**) ("Where Fable would help", item 2). If
   Ken wants it, STOP here with a handoff: branch and HEAD, this file's "Report output",
   `<out>`, "do not rerun the probe", and the question: do Tables P and O show a sound
   replay (few songs left out, each for a reason unrelated to this branch; no line in
@@ -569,7 +569,1696 @@ Read-only. Inputs: the Phase 3 and 4 tables, `<out>`, Ken's verdicts on the shee
 | 8 | 2026-11-14 | 2c | Rule C built: `829d02d6`. `GAP_RETRY_MAX_S` (30.0); `MIN_SLICE_S` (0.2, the literal `can_realign` had). In `_Rescue`: `clean_starts` (first-pass clean lines' starts), `free_stretch` (the stretch and the 30 s / 0.2 s / 1.5 s-beyond tests), `gap_retry_line` (the retry and its keep tests), `aligned_line` (the align-and-build step, now shared with `retry`). `process` calls it for a not-placed line whose `realigned_line` returned None. New stats `gap_retry_line_ids`, `gap_retry_kept_line_ids`; a kept line is also in `realigned_line_ids`, `n_realigned` and `cue_inputs.realigns` (each gap retry is one more record: a line can have two). Differences from the plan's wording, as I read it: "that rule B did not aim" is a line not in `heard_aimed` (B tried it), so a line B tried and failed gets no rule C; "the first window" is the padded slice `[w0, w1]` the cue-aimed retry was given; the stretch also has to be at least `MIN_SLICE_S` long. 19 new tests (`TestGapRetry`); 2 existing `align_song` tests changed because they counted the aligner's calls: `test_unplaceable_section_repaces_from_cues` (1 + 4 became 1 + 4 x 2, and the two gap-retry ids) and `test_a_failed_realign_is_recorded_as_none` (`realigns` line ids [0, 1, 2, 3] became [0, 0, 1, 1, 2, 2, 3, 3], the second of each over (0.0, 8.0)). Mutations, each fails the tests named: C never fires (12), no 30 s cap (1), any stretch reaches (2), reach needs both sides (11), reach 0 s (2), untimed tokens allowed (1), unclean allowed (1), past the next line allowed (1), no cut to the stretch start (1), a fill starts the stretch (3), rule B lines retried too (1), placed lines retried too (11), duration ignored (3), kept line not in `realigned_line_ids` (10), kept not recorded (4), tried not recorded (7), slice not the stretch (8); one survived (the audio's end used even when a clean line follows), a test was added for it and it now fails (1). Differential fuzz as in row 7 with rule C switched off in the new code, 4000 songs: 0 differences; same counts as row 7. Rule C on against off, 4000 songs, `heard_words=None`, a stub aligner whose answer depends only on the call (line, window): rule C tried 5812 lines, kept 540; 493 songs differ; every tried line made exactly 2 align calls and no line more than 2; the first differing line of each song is a kept line, or (5 songs) an earlier line whose guessed words end where a kept line now starts; 15 lines after a kept line differ; every kept line has a timed word for every token, is `_line_is_clean`, lies between the end of the last non-fill line before it and the start of the next clean first-pass line (or `duration`), in a stretch of at most 30 s; no line is in both `heard_aimed_line_ids` and `gap_retry_line_ids`. Full suite 3666 passed. No library read. | `829d02d6` |
 | 9 | 2026-11-14 | 2d | End of Phase 2 checks at `829d02d6`. Full suite 3666 passed. `pre-commit` clean on the 9 Python files changed since `a24348be~1` (`alignment_capture.py`, `cue_align.py`, `heard_lines.py`, `srt_slice_fit.py`, `token_align.py`, `lyric_align.py`, and the tests `test_cue_align.py`, `test_heard_lines.py`, `test_lyric_align.py`); `library_status.py` is unchanged since `dev`. `graphify update .` run. Fuzz at HEAD, 4000 songs each: differential with rule C off against `732f5e6c` (comparator as in row 7): 0 differences; rule C on against off: as in row 8; robustness with random heard words: rule B tried 1862, kept 287, rule D tried 2230, kept 396, 268 of those 396 were given guessed words by the guess pass (the stub drops 15% of a result's words at random), 9 kept lines no longer pass `confirms` after the guess pass and all 9 were given guessed words, every D line has exactly one align call, every D line tried and not kept equals its input; the same with overlapping cues added (16017 overlapping cue pairs in the 4000 songs): rule B tried 2016, kept 349, rule D tried 2577, kept 529, no crash, every word ends no earlier than it starts, the id lists keep their subset relations. Self-review on the three axes, what it turned up. Correctness: rule C does not look at the heard words except to leave out a line rule B tried, so a line the transcriber heard on its cue whose cue-aimed retry failed can be moved by rule C to anywhere in the stretch (at most 30 s); a bad line in a run of identical lines gets rule C without the run test rule A, B and D have, and can take a neighbouring twin's audio from the stretch; a rule D result may time fewer words than the line it replaces (no more-words check; the guess pass fills the rest). Simplicity: `heard_aimed_line` carries two flags (`must_gain`, `whole`) for the two rules sharing it; `process` is 35 lines; the three retries (cue-aimed, heard-aimed, gap) share `aligned_line`, `start_bounded` and the keep tests are not shared (rule C has its own set, by design). Robustness: a bad line that neither retry keeps now costs a second align call over a stretch of up to 30 s (two calls for every line in a song where nothing aligns); with `duration` None and no clean line after, rule C does not run. From the diff read and not changed (3a columns and Table B/A cover them): the singing-end search of a later-heard line stops at the next line's unmoved cue (8 of the 10 library lines Fable counted); a line moved past its neighbour (1 library line) refuses the neighbour's own re-align and gets a guessed last word that comes out zero-length. | `829d02d6` |
 | 10 | 2026-11-14 | plan | Ken, after the 2d report and the three open calls of row 9 (rule C on lines heard on their cue; rule C in a run of identical lines; rule D replacing a line with one that times fewer words), asked for columns that measure them and for the review before the GPU run instead of at 2d. Edits: Table C gains "heard shift" and "in a run of identical lines" (3a); the "timed fewer words" count is not a 3a column, because rule D's heard-aimed re-align has no saved answer in a bundle, so it is in 4a as membership of `guessed_word_line_ids` for every D line tried, and 4a gives rule C lines Table C's two columns; new step 3c2 (STOP: review due, `/code-review medium f2d305fc~1..HEAD` on `cue_align.py`, `heard_lines.py` and their tests), before 3d; 2d notes the move; Status line. No code changed. | this file |
+| 11 | 2026-11-14 | 3a | Probe built: `scripts/cue_heard_probe.py` and `tests/unit/test_cue_heard_probe.py`, `f3edd413`; fix `a0a10911`. Each cue-route bundle (`cue_inputs` and `transcribe_words` not None; caption = origin `srt` or `movie_srt`, LRCLIB = origin `lrclib_srt`) is replayed twice, rescue then `snap_line_edges` as the stage runs it (`doubted_sources={SOURCE_REALIGN}`): the baseline (`heard_words=None`) and the new run (the song's `transcribe_words`, every rule). The baseline switches rule C and the zero-length rule off by patching `_Rescue.gap_retry_line` and `cue_align._timed_slots` inside a context manager in the probe (`repace_bad_lines` gained no option); the baseline must equal `output_line_timings` (start, end, word count) within 0.011 s or the song is left out and named in Table P. Saved re-aligns answer a `realign` call by `(line, w0, w1)` within 1e-6; a call with no saved answer returns None and is recorded as unanswered (`Answered` column). Snap stem: `dereverb/` when `joint_stats.dereverb.succeeded`, else `vocal/`; the stem is decoded to a 44.1 kHz stereo WAV as `LoadVocalFromM4aStage` does, the envelope and duration (`_wav_duration`) are read from that, cached under `<out>/env`. Decoding the m4a straight to 16 kHz mono (first try, scratch script) left 20 of 177 songs out; the WAV route left 16. Differences from the plan's wording: Table D's not-aimed counts have three more reasons than the three named ("run not heard in full", "too few pairs", "trigger held, not aimed") so the counts account for every candidate; Tables B, D and C gain `Answered` and `Kept` columns and Table P a `Why` column; Table Z lists every kept line that had a word for every token with some zero-length, as the baseline rescue left it, first-pass or re-aligned (first version listed first-pass lines only: found by a read of the first run's Table O, whose 82 lines fell to 51 after the fix); a file with no YouTube id is named by its whole stem in the tables, and `--song` takes an id or a whole stem (the library has such files: Rent, The Last Five Years, Flight of the Conchords); `--from` is repeatable and a song is taken from the first `--from` folder that has it, else from `--folder`. The 3c pick is not a probe option: `rows.json` holds every table row (with lyric text, never committed) and the pick is counted from it. 50 tests (made-up bundles, a silent envelope, no audio); mutation checks, each fails the tests named: rule C not patched out (1), zero-length not patched out (1), answer by line only (1), unanswered recorded as answered (1), de-reverb stem ignored (1), Table C heard shift blanked (1), run flag false (1), Table V thresholds not applied (1), baseline given heard words (1), Table O includes rule lines (1), cache never stale (1), Table Z from first-pass lines (1), label always short (1), staging by id only (1), and five that first survived and got tests (tolerance 0.03, `--from` order, Table B window from the last call, inner-gap test, Table D reason order). Full suite 3716 passed (3666 before 3a); pre-commit clean on both files; `graphify update .` run. | `f3edd413`, `a0a10911` |
+| 12 | 2026-11-14 | 3b | Probe run over `~/pikaraoke-songs` at `a0a10911` (`--out ~/.pikaraoke/tmp/cue_heard_rescue`; report in "Report output", `rows.json` and `report.md` in `<out>`). 177 bundles read (149 caption, 28 LRCLIB); 161 replayed; 16 left out, all caption, none for a missing or unreadable stem: 11 differ by 0.025 s on one line edge (one envelope frame), 5 by 0.061, 0.167, 0.190, 0.277 and 2.993 s. The cause of the one-frame cases is not established. Rows: Table A 58, G 303, Z 1008, B 54, D 20, C 86, O 51. Table O: 51 lines, 30 over 0.3 s, largest 3.236 s; for each of those 30 a line directly before or after it is in Tables A, G, Z, B, D or C (scratch count over `rows.json`: 25 move the end only, 1 the start only, 4 both). The first run, before `a0a10911`, is discarded: Table Z had 857 rows, Table O 82 lines of which 38 over 0.3 s, and songs with no YouTube id were labelled `?`; Table P was the same 16. Read-only check: `find ~/pikaraoke-songs -newer ~/.pikaraoke/tmp/cue_heard_rescue/started` printed nothing. **STOP at 3b2 on both of its conditions** (Table P leaves out more than 10 songs; Table O has a line moving more than 0.3 s). 3c, 3c2 and 3d not started. | this file, `<out>` |
+
 
 ## Report output
 
-(Phase 3b and 4c paste their tables here.)
+### Phase 3b: CPU replay of the library
+
+`python scripts/cue_heard_probe.py --folder ~/pikaraoke-songs --out ~/.pikaraoke/tmp/cue_heard_rescue`
+at `a0a10911` (2026-11-14), unedited:
+
+### Table P: songs read, replayed and left out
+A song is left out when its stem is missing or unreadable, or its baseline replay differs from the bundle's output_line_timings by more than 0.011 s.
+
+| Src | Read | Replayed | Left out |
+|---|---|---|---|
+| caption | 149 | 133 | 16 |
+| LRCLIB | 28 | 28 | 0 |
+
+| Src | Song | Why |
+|---|---|---|
+| caption | Cast of Camp Rock - One Beat A tESZ92ugf7g | baseline replay differs: line 29 end off by 0.025 s |
+| caption | Ed Sheeran - Bad Habits [Offic orJSJGHjBLI | baseline replay differs: line 3 end off by 0.025 s |
+| caption | Eminem - The Real Slim Shady ( eJO5HU_7_1w | baseline replay differs: line 69 start off by 0.277 s |
+| caption | Flight of the Conchords (2007) - Sugalumps | baseline replay differs: line 20 end off by 0.190 s |
+| caption | Flight of the Conchords (2007) - The Most Beautiful Girl (In the Room) | baseline replay differs: line 63 end off by 0.025 s |
+| caption | Jessie J - Who You Are j2WWrupMBAE | baseline replay differs: line 32 start off by 0.025 s |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | baseline replay differs: line 22 end off by 0.025 s |
+| caption | Moana - Cast - Along The Way ( D_dOXTpwV5s | baseline replay differs: line 34 start off by 0.025 s |
+| caption | Rent (2005) - Light My Candle | baseline replay differs: line 2 end off by 0.025 s |
+| caption | Rent (2005) - One Song Glory | baseline replay differs: line 10 start off by 0.025 s |
+| caption | Rent (2005) - Your Eyes | baseline replay differs: line 5 start off by 0.025 s |
+| caption | Tenacious D - Tribute _lK4cX5xGiQ | baseline replay differs: line 34 end off by 0.167 s |
+| caption | The Last Five Years (2014) - A Miracle Would Happen & When You Come Home to Me | baseline replay differs: line 92 end off by 2.993 s |
+| caption | The Last Five Years (2014) - Climbing Uphill | baseline replay differs: line 75 end off by 0.061 s |
+| caption | The Philosopher Kings - Hurts  6X4bhT1FWjI | baseline replay differs: line 24 end off by 0.025 s |
+| caption | Westlife - My Love (Official V ulOb9gIGGd0 | baseline replay differs: line 22 start off by 0.025 s |
+
+### Table A: lines rule A1 keeps and rule A2 holds
+Starts in seconds on the cue clock (cue) and the audio clock (the rest). Run: in a run of identical lines. Gap one side: an inner gap over 2 s with every heard word on one side of it.
+
+caption: 41 lines in 34 songs; LRCLIB: 17 lines in 11 songs
+
+| Src | Song | Line | Rule | Cue | Today | New | Heard | Run | Gap one side |
+|---|---|---|---|---|---|---|---|---|---|
+| caption | Adele - Someone Like You hLQl3WQQoQ0 | 32 | A2 | 157.861 | 157.242 | 157.421 | 155.910 |  |  |
+| caption | BTS 방탄소년단 - Butter WMweEpGlu_U | 0 | A2 | 10.324 | 10.590 | 10.332 | 9.460 |  |  |
+| caption | Backstreet Boys - All I Have T pj6FCKm8dhM | 55 | A2 | 207.694 | 208.372 | 208.309 | 206.840 |  |  |
+| caption | Backstreet Boys - As Long As Y 0Gl2QnHNpkA | 55 | A1 | 179.690 | 179.718 | 179.410 | 179.180 | yes |  |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 12 | A2 | 53.312 | 53.387 | 53.525 | 52.210 |  |  |
+| caption | Backstreet Boys - Incomplete WVe80iZtlYU | 6 | A2 | 65.272 | 64.675 | 64.562 | 63.510 |  |  |
+| caption | Backstreet Boys - Inconsolable qGDF_QcsKVI | 37 | A2 | 167.641 | 166.855 | 167.573 | 168.020 |  |  |
+| caption | Backstreet Boys - Quit Playing Ug88HO2mg44 | 2 | A1 | 17.999 | 18.702 | 18.375 | 13.984 |  |  |
+| caption | Backstreet Boys - Shape Of My  OT5msu-dap8 | 4 | A2 | 20.187 | 20.200 | 20.871 | 16.980 |  |  |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 44 | A2 | 95.808 | 97.125 | 97.975 | 96.540 |  |  |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 89 | A2 | 201.514 | 201.768 | 201.768 | 201.860 |  |  |
+| caption | Beauty and the Beast (1991) -  otxTf5hZ0Yw | 62 | A1 | 141.127 | 141.094 | 139.964 | 140.780 |  |  |
+| caption | Britney Spears - Stronger AJWtLf4-WWs | 32 | A2 | 175.789 | 175.573 | 176.562 | 176.160 |  |  |
+| caption | Colbie Caillat - Bubbly (Offic AWGqoCNbsvM | 27 | A2 | 88.838 | 88.750 | 86.680 | 86.760 |  |  |
+| caption | Céline Dion - Ashes (Deadpool  CX11yw6YL1w | 1 | A2 | 21.187 | 20.950 | 20.889 | 21.024 |  |  |
+| caption | Céline Dion - Ashes (Deadpool  CX11yw6YL1w | 21 | A2 | 181.181 | 181.125 | 181.125 | 178.350 | yes |  |
+| caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 53 | A2 | 258.840 | 258.569 | 256.740 | 257.160 |  |  |
+| caption | Flight of the Conchords (2007) - Carol Brown | 47 | A1 | 152.696 | 153.834 | 151.946 | 154.220 |  | yes |
+| caption | John Legend - All of Me 450p7goxZqg | 46 | A2 | 214.559 | 214.525 | 214.525 | 213.780 |  |  |
+| caption | John Legend - Love Me Now (Off NmCFY1oYDeM | 24 | A2 | 121.447 | 121.102 | 120.495 | 119.520 |  |  |
+| caption | Justin Timberlake - Like I Lov FQ3slUz7Jo8 | 3 | A1 | 9.782 | 9.575 | 9.575 | 9.780 |  | yes |
+| caption | Justin Timberlake - Like I Lov FQ3slUz7Jo8 | 36 | A1 | 127.130 | 127.276 | 125.582 | 126.140 |  |  |
+| caption | Justin Timberlake - Rock Your  TSVHoHyErBQ | 14 | A2 | 38.690 | 38.475 | 38.626 | 38.520 |  |  |
+| caption | Justin Timberlake - Selfish je0roKRn3nY | 0 | A2 | 18.818 | 18.710 | 18.568 | 17.030 |  |  |
+| caption | KPop Demon Hunters (2025) - Free | 13 | A2 | 42.083 | 42.098 | 42.089 | 40.680 |  |  |
+| caption | KPop Demon Hunters (2025) - Free | 42 | A2 | 124.499 | 124.378 | 124.378 | 124.480 |  |  |
+| caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 0 | A2 | 18.208 | 17.467 | 17.438 | 15.680 |  |  |
+| caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 9 | A1 | 51.208 | 50.625 | 50.625 | 48.280 |  |  |
+| caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 27 | A2 | 135.458 | 134.800 | 135.038 | 132.940 |  |  |
+| caption | Moana (2016) - You're Welcome 79DijItQXMM | 73 | A1 | 155.366 | 155.065 | 157.463 | 157.560 | yes |  |
+| caption | NSYNC - Girlfriend saxnXiBKEaY | 62 | A1 | 231.397 | 231.113 | 231.300 | 227.860 |  |  |
+| caption | Rent (2005) - Another Day | 51 | A1 | 183.345 | 184.418 | 181.751 | 182.040 |  |  |
+| caption | The Last Five Years (2014) - Shiksa Goddess | 61 | A1 | 230.456 | 230.475 | 226.764 | 227.160 |  |  |
+| caption | The Lion King (1994) - Can You 25QyCxVkXwQ | 21 | A2 | 58.263 | 58.150 | 57.953 | 57.020 |  |  |
+| caption | The Lion King (1994) - Hakuna  fwLxDUQBdEg | 72 | A1 | 182.493 | 182.575 | 181.743 | 182.080 |  |  |
+| caption | The Philosopher Kings - Cry EUW0eDhKoxw | 10 | A2 | 79.192 | 79.800 | 79.727 | 78.550 |  |  |
+| caption | The Philosopher Kings - You Do AI7F8qlN44E | 31 | A1 | 129.062 | 128.625 | 128.625 | 128.720 | yes | yes |
+| caption | Whitney Houston - I Wanna Danc eH3giaIzONA | 3 | A1 | 41.415 | 40.691 | 36.765 | 37.140 |  |  |
+| caption | Whitney Houston - I Wanna Danc eH3giaIzONA | 62 | A1 | 261.361 | 260.467 | 260.467 | 260.620 |  | yes |
+| caption | ZAYN & Zhavia Ward - A Whole N rg_zwK_sSEY | 53 | A1 | 203.766 | 204.760 | 202.650 | 203.170 | yes |  |
+| caption | ZAYN - Dusk Till Dawn (Official Video) ft. Sia---tt2k8PGm-TI | 42 | A2 | 151.200 | 151.608 | 151.483 | 150.420 |  |  |
+| LRCLIB | Backstreet Boys - Chances (Off W5kM5wAwRug | 29 | A2 | 133.370 | 133.701 | 132.586 | 132.580 |  |  |
+| LRCLIB | Frozen (2013) - In Summer (Sin 9tcaM06eGrY | 5 | A1 | 25.036 | 24.288 | 21.740 | 25.160 |  | yes |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 15 | A1 | 46.120 | 45.975 | 46.370 | 46.620 | yes |  |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 16 | A1 | 46.870 | 46.225 | 47.230 | 48.040 | yes |  |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 17 | A1 | 47.600 | 47.455 | 48.530 | 48.820 | yes |  |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 35 | A1 | 79.220 | 78.700 | 77.922 | 78.420 | yes |  |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 36 | A1 | 80.880 | 80.735 | 79.410 | 79.800 | yes |  |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 42 | A1 | 98.960 | 99.090 | 99.090 | 99.060 | yes |  |
+| LRCLIB | Ingrid Michaelson - The Way I  Vh74KE3o4Bs | 4 | A2 | 48.693 | 49.125 | 49.125 | 49.216 |  |  |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 17 | A2 | 53.530 | 53.338 | 51.360 | 52.280 |  |  |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 10 | A2 | 24.510 | 25.050 | 25.030 | 22.580 |  |  |
+| LRCLIB | NSYNC - Thinking Of You (I Dri PodgxWsZw9s | 8 | A2 | 39.310 | 39.650 | 39.520 | 39.744 |  |  |
+| LRCLIB | Silk Sonic (Bruno Mars & Anderson .Paak) - Skate---CEw-7cMnBDY | 11 | A1 | 62.230 | 62.600 | 60.120 | 62.480 |  | yes |
+| LRCLIB | The Lonely Island - Let's Bash hj4e709GYf4 | 35 | A2 | 69.845 | 69.965 | 69.875 | 68.680 |  |  |
+| LRCLIB | The Lonely Island - Threw It O gAYL5H46QnQ | 33 | A2 | 119.114 | 118.950 | 119.034 | 117.400 |  |  |
+| LRCLIB | The Outsiders (2024) - Stay Go XzbHPqULtdA | 22 | A1 | 117.486 | 117.500 | 117.500 | 118.080 |  | yes |
+| LRCLIB | The Outsiders (2024) - Stay Go XzbHPqULtdA | 45 | A1 | 217.926 | 219.150 | 219.150 | 219.560 |  | yes |
+
+### Table G: starts the guard lift freed of the previous line
+Previous end: the previous line's end in the new replay.
+
+caption: 265 lines in 93 songs; LRCLIB: 38 lines in 18 songs
+
+| Src | Song | Line | Cue | Today | New | Heard | Previous end |
+|---|---|---|---|---|---|---|---|
+| caption | Adele - Rolling in the Deep (O rYEDA3JcQqw | 18 | 82.379 | 82.350 | 82.350 | 82.200 | 81.895 |
+| caption | Adele - Rolling in the Deep (O rYEDA3JcQqw | 19 | 84.541 | 84.206 | 83.706 | 84.500 | 84.475 |
+| caption | Adele - Rolling in the Deep (O rYEDA3JcQqw | 20 | 87.040 | 87.050 | 87.050 | 86.860 | 86.496 |
+| caption | Adele - Rolling in the Deep (O rYEDA3JcQqw | 49 | 218.816 | 218.775 | 218.775 | 219.040 | 218.566 |
+| caption | Adele - Send My Love (To Your  fk4BbF7B29w | 33 | 113.138 | 112.628 | 112.556 | 112.450 | 112.628 |
+| caption | Adele - Send My Love (To Your  fk4BbF7B29w | 55 | 188.871 | 188.509 | 188.059 | 189.100 | 188.509 |
+| caption | Adele - Send My Love (To Your  fk4BbF7B29w | 61 | 206.592 | 206.509 | 206.120 | 206.820 | 206.509 |
+| caption | Aladdin (2019) - A Whole New W eitDnP0_83k | 25 | 102.317 | 102.875 | 102.875 | 102.400 | 102.775 |
+| caption | Aladdin (2019) - A Whole New W eitDnP0_83k | 26 | 104.782 | 104.860 | 104.625 | 104.880 | 105.170 |
+| caption | Aladdin (2019) - Speechless mw5VIEIvuMI | 45 | 171.700 | 172.675 | 171.872 | 172.640 | 172.203 |
+| caption | Aladdin (2019) - Speechless mw5VIEIvuMI | 46 | 175.500 | 176.200 | 176.200 | 176.060 | 175.766 |
+| caption | Aladdin (2019) - Speechless mw5VIEIvuMI | 47 | 179.333 | 180.025 | 180.025 | 180.040 | 179.925 |
+| caption | BTS 방탄소년단 - Butter WMweEpGlu_U | 5 | 20.577 | 20.694 | 20.169 | 20.980 | 20.694 |
+| caption | BTS 방탄소년단 - Butter WMweEpGlu_U | 16 | 46.948 | 46.975 | 46.975 | 47.000 | 46.778 |
+| caption | BTS 방탄소년단 - Butter WMweEpGlu_U | 17 | 49.497 | 49.525 | 49.525 | 49.568 | 49.180 |
+| caption | BTS 방탄소년단 - Butter WMweEpGlu_U | 18 | 52.467 | 52.425 | 52.425 | 52.480 | 52.269 |
+| caption | BTS 방탄소년단 - Butter WMweEpGlu_U | 25 | 66.727 | 66.800 | 66.800 | 66.860 | 66.700 |
+| caption | BTS 방탄소년단 - Butter WMweEpGlu_U | 37 | 95.949 | 95.897 | 95.451 | 96.120 | 95.897 |
+| caption | BTS 방탄소년단 - Butter WMweEpGlu_U | 46 | 124.251 | 124.706 | 124.023 | 124.440 | 124.023 |
+| caption | BTS 방탄소년단 - Butter WMweEpGlu_U | 68 | 165.869 | 165.526 | 165.371 | 165.520 | 165.526 |
+| caption | Backstreet Boys - As Long As Y 0Gl2QnHNpkA | 32 | 118.716 | 118.604 | 118.244 | 118.300 | 118.604 |
+| caption | Backstreet Boys - As Long As Y 0Gl2QnHNpkA | 39 | 143.819 | 144.275 | 144.275 | 144.180 | 143.991 |
+| caption | Backstreet Boys - As Long As Y 0Gl2QnHNpkA | 48 | 172.242 | 172.410 | 171.770 | 172.340 | 172.410 |
+| caption | Backstreet Boys - As Long As Y 0Gl2QnHNpkA | 59 | 185.856 | 186.125 | 186.125 | 186.040 | 185.775 |
+| caption | Backstreet Boys - Everybody (B 6M6samPEMpM | 1 | 6.030 | 5.863 | 5.746 | 5.460 | 5.863 |
+| caption | Backstreet Boys - Everybody (B 6M6samPEMpM | 2 | 7.830 | 8.066 | 7.296 | 8.060 | 8.066 |
+| caption | Backstreet Boys - Everybody (B 6M6samPEMpM | 44 | 203.288 | 203.685 | 202.754 | 203.552 | 203.685 |
+| caption | Backstreet Boys - Everybody (B 6M6samPEMpM | 80 | 336.833 | 337.210 | 336.575 | 337.120 | 337.130 |
+| caption | Backstreet Boys - Everybody (B 6M6samPEMpM | 85 | 347.309 | 347.070 | 347.350 | 347.040 | 347.250 |
+| caption | Backstreet Boys - Everybody (B 6M6samPEMpM | 87 | 349.590 | 349.720 | 349.425 | 349.780 | 349.720 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 19 | 57.149 | 57.614 | 56.803 | 57.140 | 57.294 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 36 | 95.697 | 95.787 | 95.481 | 95.920 | 95.587 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 63 | 140.315 | 140.737 | 140.519 | 140.160 | 140.737 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 78 | 176.900 | 177.050 | 177.050 | 177.020 | 176.950 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 48 | 175.079 | 175.633 | 174.875 | 175.180 | 175.193 |
+| caption | Backstreet Boys - Inconsolable qGDF_QcsKVI | 10 | 58.567 | 58.675 | 58.675 | 58.980 | 58.190 |
+| caption | Backstreet Boys - Inconsolable qGDF_QcsKVI | 13 | 70.464 | 70.700 | 70.700 | 70.360 | 70.258 |
+| caption | Backstreet Boys - Inconsolable qGDF_QcsKVI | 29 | 134.081 | 133.882 | 133.700 | 133.170 | 133.882 |
+| caption | Backstreet Boys - Larger Than  MEb2CecR11I | 24 | 162.100 | 161.743 | 161.150 | 162.080 | 161.743 |
+| caption | Backstreet Boys - Quit Playing Ug88HO2mg44 | 57 | 163.934 | 164.450 | 164.450 | 164.260 | 164.227 |
+| caption | Backstreet Boys - Quit Playing Ug88HO2mg44 | 71 | 199.725 | 200.162 | 199.370 | 200.040 | 200.162 |
+| caption | Backstreet Boys - Quit Playing Ug88HO2mg44 | 82 | 223.382 | 223.527 | 223.027 | 222.880 | 224.822 |
+| caption | Backstreet Boys - Shape Of My  OT5msu-dap8 | 39 | 177.138 | 178.039 | 176.396 | 178.520 | 178.039 |
+| caption | Backstreet Boys - The Call wMOkm57vu0k | 9 | 18.701 | 19.308 | 18.808 | 19.220 | 19.228 |
+| caption | Backstreet Boys - The Call wMOkm57vu0k | 11 | 22.786 | 23.768 | 23.183 | 23.660 | 23.438 |
+| caption | Backstreet Boys - The Call wMOkm57vu0k | 18 | 39.883 | 40.975 | 40.180 | 41.180 | 40.935 |
+| caption | Backstreet Boys - The Call wMOkm57vu0k | 24 | 56.663 | 57.555 | 57.500 | 57.500 | 57.555 |
+| caption | Backstreet Boys - The Call wMOkm57vu0k | 36 | 90.489 | 91.425 | 91.425 | 91.400 | 91.325 |
+| caption | Backstreet Boys - The Call wMOkm57vu0k | 37 | 93.853 | 94.286 | 94.270 | 95.220 | 94.286 |
+| caption | Backstreet Boys - The Call wMOkm57vu0k | 68 | 185.822 | 186.149 | 186.063 | 186.640 | 186.149 |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 23 | 52.928 | 52.391 | 52.328 | 52.400 | 52.391 |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 53 | 119.274 | 118.698 | 118.674 | 118.920 | 118.698 |
+| caption | Beauty and the Beast (1991) -  otxTf5hZ0Yw | 16 | 56.297 | 56.242 | 55.913 | 56.320 | 56.242 |
+| caption | Beauty and the Beast (1991) -  otxTf5hZ0Yw | 17 | 57.368 | 57.373 | 57.325 | 57.360 | 57.373 |
+| caption | Beauty and the Beast (1991) -  otxTf5hZ0Yw | 22 | 64.973 | 65.050 | 65.025 | 65.120 | 65.050 |
+| caption | Beauty and the Beast (1991) -  otxTf5hZ0Yw | 39 | 98.283 | 98.457 | 97.750 | 98.460 | 98.457 |
+| caption | Beauty and the Beast (1991) -  otxTf5hZ0Yw | 41 | 101.175 | 100.950 | 100.950 | 100.940 | 100.850 |
+| caption | Beauty and the Beast (1991) -  otxTf5hZ0Yw | 43 | 103.639 | 103.367 | 103.475 | 103.460 | 103.367 |
+| caption | Beauty and the Beast (1991) -  otxTf5hZ0Yw | 47 | 110.172 | 110.457 | 109.638 | 110.280 | 110.197 |
+| caption | Beauty and the Beast (1991) -  otxTf5hZ0Yw | 57 | 127.524 | 127.386 | 126.990 | 127.480 | 127.386 |
+| caption | Beauty and the Beast (1991) -  otxTf5hZ0Yw | 68 | 172.081 | 172.100 | 172.100 | 171.510 | 171.547 |
+| caption | Beauty and the Beast (1991) -  otxTf5hZ0Yw | 78 | 199.715 | 200.473 | 199.575 | 200.240 | 200.333 |
+| caption | Beauty and the Beast (1991) -  otxTf5hZ0Yw | 79 | 201.429 | 200.953 | 200.895 | 200.820 | 201.031 |
+| caption | Beauty and the Beast (1991) -  otxTf5hZ0Yw | 88 | 217.066 | 216.770 | 216.532 | 216.300 | 216.665 |
+| caption | Britney Spears - (You Drive Me Q4VK9_CfOLQ | 25 | 98.940 | 99.325 | 98.724 | 99.420 | 99.162 |
+| caption | Britney Spears - Oops!...I Did It Again---CduA0TULnow | 2 | 9.660 | 10.350 | 10.207 | 10.112 | 10.270 |
+| caption | Britney Spears - Oops!...I Did It Again---CduA0TULnow | 3 | 11.070 | 11.470 | 11.475 | 11.620 | 11.227 |
+| caption | Britney Spears - Oops!...I Did It Again---CduA0TULnow | 10 | 27.450 | 27.810 | 27.377 | 27.760 | 27.810 |
+| caption | Britney Spears - Oops!...I Did It Again---CduA0TULnow | 49 | 175.260 | 175.575 | 175.575 | 175.220 | 175.361 |
+| caption | Britney Spears - Oops!...I Did It Again---CduA0TULnow | 50 | 177.060 | 177.400 | 177.400 | 177.100 | 177.127 |
+| caption | Britney Spears - Stronger AJWtLf4-WWs | 6 | 43.562 | 42.919 | 42.466 | 42.860 | 42.919 |
+| caption | Britney Spears - Toxic (Offici LOZuxwVk7TU | 24 | 120.808 | 121.099 | 120.371 | 121.380 | 121.099 |
+| caption | Britney Spears - Toxic (Offici LOZuxwVk7TU | 41 | 188.487 | 188.451 | 188.439 | 188.660 | 188.451 |
+| caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 26 | 108.808 | 108.736 | 108.225 | 108.680 | 108.736 |
+| caption | Cast of Camp Rock - Play My Mu jQ-Pqxl1BlI | 47 | 108.399 | 108.419 | 107.799 | 107.960 | 108.419 |
+| caption | Christina Aguilera - Genie In  kIDWgqDBNXA | 38 | 118.163 | 117.800 | 117.224 | 118.120 | 117.800 |
+| caption | Christina Aguilera - Genie In  kIDWgqDBNXA | 67 | 197.563 | 196.884 | 196.863 | 197.020 | 196.884 |
+| caption | Christina Aguilera - Reflectio RNprQYHenNI | 31 | 132.700 | 133.100 | 132.652 | 132.980 | 132.911 |
+| caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 14 | 84.440 | 84.750 | 83.773 | 84.160 | 84.430 |
+| caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 16 | 91.640 | 91.470 | 90.972 | 91.460 | 91.470 |
+| caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 32 | 162.480 | 162.420 | 161.812 | 162.460 | 162.420 |
+| caption | Ed Sheeran - Happier iWZmdoY1aTE | 7 | 49.299 | 49.348 | 48.684 | 49.480 | 49.348 |
+| caption | Ed Sheeran - Perfect 2Vv-BfVoq4g | 33 | 167.835 | 168.725 | 168.725 | 168.680 | 168.379 |
+| caption | Ed Sheeran - Perfect 2Vv-BfVoq4g | 44 | 227.728 | 228.482 | 228.625 | 228.460 | 228.482 |
+| caption | Ed Sheeran - Shape of You JGwWNGJdvx8 | 58 | 176.343 | 176.271 | 175.931 | 176.360 | 176.271 |
+| caption | Ed Sheeran - Shivers [Official Il0S8BoucSA | 9 | 50.616 | 49.690 | 49.566 | 50.300 | 49.690 |
+| caption | Ed Sheeran - Shivers [Official Il0S8BoucSA | 20 | 73.172 | 72.830 | 72.492 | 72.940 | 72.830 |
+| caption | Ed Sheeran - Shivers [Official Il0S8BoucSA | 41 | 123.856 | 123.416 | 123.416 | 123.360 | 122.952 |
+| caption | Ed Sheeran - Shivers [Official Il0S8BoucSA | 63 | 174.507 | 174.036 | 174.175 | 174.180 | 174.036 |
+| caption | Eminem - Without Me (Official  YVkUvmDQ3HY | 3 | 13.600 | 14.596 | 14.579 | 14.560 | 14.596 |
+| caption | Eminem - Without Me (Official  YVkUvmDQ3HY | 17 | 58.166 | 58.543 | 58.341 | 58.680 | 58.543 |
+| caption | Eminem - Without Me (Official  YVkUvmDQ3HY | 37 | 99.700 | 100.123 | 99.585 | 100.100 | 100.123 |
+| caption | Eminem - Without Me (Official  YVkUvmDQ3HY | 55 | 138.333 | 139.140 | 138.425 | 138.780 | 139.080 |
+| caption | Eminem - Without Me (Official  YVkUvmDQ3HY | 64 | 157.266 | 157.640 | 157.301 | 157.640 | 157.640 |
+| caption | Eminem - Without Me (Official  YVkUvmDQ3HY | 65 | 159.600 | 159.781 | 159.525 | 159.800 | 159.781 |
+| caption | Eminem - Without Me (Official  YVkUvmDQ3HY | 80 | 189.533 | 190.426 | 190.300 | 189.660 | 190.200 |
+| caption | Eminem - Without Me (Official  YVkUvmDQ3HY | 81 | 191.266 | 191.626 | 191.181 | 191.640 | 191.648 |
+| caption | Eminem - Without Me (Official  YVkUvmDQ3HY | 89 | 208.500 | 208.786 | 208.745 | 208.780 | 208.786 |
+| caption | Eminem - Without Me (Official  YVkUvmDQ3HY | 90 | 210.633 | 211.175 | 210.648 | 211.120 | 211.175 |
+| caption | Flight of the Conchords (2007) - Bowie | 37 | 138.431 | 138.749 | 138.800 | 138.840 | 138.749 |
+| caption | Flight of the Conchords (2007) - Bowie | 39 | 143.973 | 144.425 | 144.425 | 144.600 | 144.050 |
+| caption | Flight of the Conchords (2007) - Carol Brown | 40 | 135.211 | 135.944 | 135.579 | 135.920 | 135.944 |
+| caption | Flight of the Conchords (2007) - Carol Brown | 51 | 171.648 | 172.314 | 172.275 | 172.380 | 172.314 |
+| caption | Flight of the Conchords (2007) - Carol Brown | 61 | 203.413 | 203.838 | 203.301 | 203.940 | 204.185 |
+| caption | Flight of the Conchords (2007) - Carol Brown | 64 | 208.585 | 209.725 | 209.250 | 209.360 | 209.458 |
+| caption | Flight of the Conchords (2007) - Foux du Fafa | 54 | 122.784 | 123.318 | 123.250 | 123.380 | 123.318 |
+| caption | Flight of the Conchords (2007) - Foux du Fafa | 57 | 128.659 | 129.098 | 128.579 | 129.080 | 129.098 |
+| caption | Flight of the Conchords (2007) - Hiphopopotamus vs. Rhymenoceros | 10 | 27.927 | 28.179 | 27.911 | 28.200 | 28.179 |
+| caption | Flight of the Conchords (2007) - Hiphopopotamus vs. Rhymenoceros | 34 | 94.385 | 95.468 | 95.009 | 94.980 | 94.946 |
+| caption | Flight of the Conchords (2007) - Hurt Feelings | 8 | 23.666 | 24.284 | 24.001 | 24.280 | 24.112 |
+| caption | Flight of the Conchords (2007) - Hurt Feelings | 9 | 25.735 | 26.504 | 25.560 | 26.360 | 26.321 |
+| caption | Flight of the Conchords (2007) - Hurt Feelings | 14 | 38.548 | 38.864 | 38.743 | 38.880 | 38.864 |
+| caption | Flight of the Conchords (2007) - Hurt Feelings | 48 | 145.421 | 145.527 | 145.246 | 145.480 | 145.527 |
+| caption | Flight of the Conchords (2007) - Hurt Feelings | 50 | 149.659 | 150.132 | 150.125 | 150.160 | 150.132 |
+| caption | Flight of the Conchords (2007) - Inner City Pressure | 30 | 72.202 | 72.610 | 72.098 | 72.620 | 72.610 |
+| caption | Flight of the Conchords (2007) - Robots | 1 | 1.571 | 1.900 | 1.718 | 1.800 | 1.800 |
+| caption | Flight of the Conchords (2007) - Robots | 14 | 29.197 | 29.650 | 29.650 | 29.500 | 29.400 |
+| caption | John Legend - Love Me Now (Off NmCFY1oYDeM | 14 | 83.131 | 83.150 | 83.150 | 83.100 | 83.050 |
+| caption | John Legend - Love Me Now (Off NmCFY1oYDeM | 52 | 221.959 | 221.401 | 220.901 | 221.360 | 221.716 |
+| caption | Jung Kook 정국 - Standing Next t 6q0JnftlH-I | 7 | 54.788 | 55.101 | 54.216 | 54.840 | 54.861 |
+| caption | Jung Kook 정국 - Standing Next t 6q0JnftlH-I | 17 | 79.110 | 78.741 | 78.500 | 79.000 | 78.741 |
+| caption | Justin Timberlake - CAN'T STOP ru0K8uYEZWw | 10 | 24.900 | 24.410 | 24.550 | 24.400 | 24.410 |
+| caption | Justin Timberlake - CAN'T STOP ru0K8uYEZWw | 15 | 36.049 | 36.410 | 35.309 | 35.840 | 36.410 |
+| caption | Justin Timberlake - CAN'T STOP ru0K8uYEZWw | 33 | 80.399 | 80.620 | 80.075 | 80.240 | 80.620 |
+| caption | Justin Timberlake - CAN'T STOP ru0K8uYEZWw | 59 | 148.920 | 149.049 | 148.180 | 148.280 | 149.049 |
+| caption | Justin Timberlake - CAN'T STOP ru0K8uYEZWw | 63 | 156.911 | 157.129 | 156.525 | 156.810 | 157.129 |
+| caption | Justin Timberlake - CAN'T STOP ru0K8uYEZWw | 67 | 165.499 | 165.269 | 165.025 | 165.220 | 165.269 |
+| caption | Justin Timberlake - Like I Lov FQ3slUz7Jo8 | 8 | 29.353 | 29.300 | 29.300 | 29.460 | 28.590 |
+| caption | Justin Timberlake - Like I Lov FQ3slUz7Jo8 | 27 | 91.827 | 91.650 | 91.650 | 91.840 | 91.550 |
+| caption | Justin Timberlake - Like I Lov FQ3slUz7Jo8 | 45 | 158.963 | 159.320 | 158.881 | 159.160 | 159.320 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 2 | 35.788 | 35.686 | 35.641 | 35.860 | 35.686 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 10 | 62.139 | 62.100 | 62.100 | 62.100 | 61.909 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 18 | 82.924 | 83.129 | 82.925 | 82.880 | 82.909 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 22 | 97.754 | 97.645 | 97.700 | 97.260 | 97.645 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 46 | 170.088 | 170.392 | 170.175 | 170.180 | 170.212 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 47 | 174.888 | 174.850 | 174.850 | 174.440 | 174.381 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 50 | 185.248 | 185.188 | 184.975 | 184.540 | 185.188 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 52 | 191.605 | 191.448 | 191.200 | 191.296 | 191.448 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 72 | 266.235 | 266.226 | 265.578 | 265.730 | 266.226 |
+| caption | Justin Timberlake - Rock Your  TSVHoHyErBQ | 18 | 47.512 | 47.246 | 47.025 | 47.380 | 47.246 |
+| caption | Justin Timberlake - Rock Your  TSVHoHyErBQ | 36 | 81.308 | 81.150 | 81.150 | 81.460 | 80.712 |
+| caption | Justin Timberlake - Selfish je0roKRn3nY | 6 | 35.168 | 34.908 | 34.680 | 34.900 | 34.908 |
+| caption | Justin Timberlake - Selfish je0roKRn3nY | 29 | 100.366 | 100.450 | 100.450 | 100.440 | 100.350 |
+| caption | Justin Timberlake - Suit & Tie (feat. JAY-Z)---IsUsVbTj2AY | 28 | 98.404 | 98.195 | 97.851 | 98.600 | 98.195 |
+| caption | Justin Timberlake - Suit & Tie (feat. JAY-Z)---IsUsVbTj2AY | 29 | 100.807 | 100.871 | 100.900 | 100.920 | 100.871 |
+| caption | Justin Timberlake - Suit & Tie (feat. JAY-Z)---IsUsVbTj2AY | 52 | 173.691 | 173.628 | 173.088 | 173.700 | 173.628 |
+| caption | Justin Timberlake - Suit & Tie (feat. JAY-Z)---IsUsVbTj2AY | 53 | 176.192 | 176.408 | 176.175 | 175.840 | 176.058 |
+| caption | Justin Timberlake - Suit & Tie (feat. JAY-Z)---IsUsVbTj2AY | 56 | 185.501 | 185.528 | 185.175 | 185.660 | 185.528 |
+| caption | Justin Timberlake - Suit & Tie (feat. JAY-Z)---IsUsVbTj2AY | 66 | 210.732 | 210.750 | 210.750 | 210.900 | 210.311 |
+| caption | Justin Timberlake - Suit & Tie (feat. JAY-Z)---IsUsVbTj2AY | 76 | 235.728 | 235.321 | 235.005 | 235.680 | 235.321 |
+| caption | Justin Timberlake - Suit & Tie (feat. JAY-Z)---IsUsVbTj2AY | 90 | 267.827 | 267.808 | 267.334 | 268.040 | 267.808 |
+| caption | KPop Demon Hunters (2025) - Free | 15 | 45.628 | 45.569 | 45.600 | 45.660 | 45.569 |
+| caption | KPop Demon Hunters (2025) - Free | 38 | 114.113 | 114.152 | 114.150 | 114.060 | 114.152 |
+| caption | KPop Demon Hunters (2025) - Free | 41 | 121.371 | 121.350 | 121.350 | 121.184 | 120.892 |
+| caption | KPop Demon Hunters (2025) - How It's Done | 17 | 44.127 | 44.134 | 44.038 | 44.260 | 44.134 |
+| caption | KPop Demon Hunters (2025) - How It's Done | 34 | 95.261 | 96.067 | 95.212 | 95.940 | 95.767 |
+| caption | KPop Demon Hunters (2025) - How It's Done | 39 | 110.777 | 110.927 | 110.975 | 110.940 | 110.927 |
+| caption | KPop Demon Hunters (2025) - How It's Done | 46 | 128.419 | 128.567 | 128.310 | 128.340 | 128.310 |
+| caption | KPop Demon Hunters (2025) - How It's Done | 62 | 177.093 | 176.897 | 176.883 | 176.820 | 176.897 |
+| caption | KPop Demon Hunters (2025) - What It Sounds Like | 21 | 61.102 | 61.291 | 61.275 | 61.360 | 61.291 |
+| caption | KPop Demon Hunters (2025) - What It Sounds Like | 35 | 99.891 | 100.111 | 100.200 | 99.920 | 100.111 |
+| caption | KPop Demon Hunters (2025) - What It Sounds Like | 51 | 138.429 | 138.522 | 138.550 | 138.220 | 138.522 |
+| caption | KPop Demon Hunters (2025) - What It Sounds Like | 52 | 142.475 | 142.492 | 141.908 | 142.380 | 142.492 |
+| caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 53 | 243.541 | 243.050 | 243.050 | 242.810 | 242.621 |
+| caption | Moana (2016) - How Far I'll Go cPAbx5kgCJo | 25 | 87.366 | 87.496 | 87.200 | 87.660 | 87.496 |
+| caption | Moana (2016) - How Far I'll Go cPAbx5kgCJo | 36 | 121.500 | 122.030 | 121.180 | 122.040 | 122.030 |
+| caption | Moana (2016) - Shiny 93lrosBEW-Q | 50 | 127.033 | 127.490 | 127.575 | 127.640 | 127.490 |
+| caption | Moana (2016) - You're Welcome 79DijItQXMM | 20 | 42.566 | 42.600 | 42.600 | 41.940 | 42.443 |
+| caption | Mulan (1998) - I'll Make a Man vGfJeW_CcFY | 43 | 193.040 | 192.599 | 192.147 | 193.520 | 192.599 |
+| caption | Mulan (1998) - I'll Make a Man vGfJeW_CcFY | 47 | 209.159 | 209.099 | 208.816 | 209.780 | 209.099 |
+| caption | NSYNC - (God Must Have Spent)  -fxh7jAJR8U | 31 | 125.400 | 125.525 | 125.525 | 125.720 | 125.125 |
+| caption | NSYNC - Girlfriend saxnXiBKEaY | 48 | 171.153 | 171.250 | 171.250 | 171.020 | 171.150 |
+| caption | NSYNC - Girlfriend saxnXiBKEaY | 49 | 174.364 | 173.805 | 173.396 | 174.320 | 173.805 |
+| caption | NSYNC - Gone IbRwSI8yi1o | 12 | 81.938 | 82.050 | 82.050 | 81.920 | 81.725 |
+| caption | NSYNC - Gone IbRwSI8yi1o | 64 | 252.015 | 253.397 | 251.361 | 252.240 | 251.997 |
+| caption | NSYNC - Gone IbRwSI8yi1o | 76 | 285.053 | 285.550 | 285.550 | 284.600 | 285.175 |
+| caption | NSYNC - Gone IbRwSI8yi1o | 79 | 291.682 | 292.425 | 291.875 | 291.680 | 292.126 |
+| caption | NSYNC - It's Gonna Be Me GQMlWwIXg3M | 47 | 165.273 | 165.326 | 164.930 | 165.520 | 165.703 |
+| caption | NSYNC - Pop TWZKw_MgUPI | 3 | 6.540 | 6.525 | 6.145 | 6.560 | 6.525 |
+| caption | NSYNC - Pop TWZKw_MgUPI | 5 | 9.030 | 9.108 | 8.975 | 9.340 | 9.068 |
+| caption | NSYNC - Pop TWZKw_MgUPI | 14 | 33.204 | 32.743 | 32.589 | 33.080 | 32.743 |
+| caption | NSYNC - Pop TWZKw_MgUPI | 32 | 60.974 | 61.101 | 60.875 | 60.800 | 61.041 |
+| caption | NSYNC - Pop TWZKw_MgUPI | 49 | 101.993 | 101.704 | 101.628 | 101.800 | 101.704 |
+| caption | NSYNC - Pop TWZKw_MgUPI | 57 | 113.225 | 113.244 | 112.610 | 112.960 | 113.244 |
+| caption | NSYNC - Pop TWZKw_MgUPI | 75 | 184.640 | 184.205 | 184.025 | 183.900 | 184.205 |
+| caption | NSYNC - Tearin' Up My Heart (O _ZcmuKsyvzg | 14 | 66.421 | 65.736 | 65.656 | 66.160 | 65.736 |
+| caption | NSYNC - Tearin' Up My Heart (O _ZcmuKsyvzg | 37 | 168.368 | 168.000 | 167.576 | 168.360 | 168.000 |
+| caption | Ne-Yo - Because Of You atz_aZA3rf0 | 38 | 155.029 | 154.762 | 153.964 | 154.220 | 154.722 |
+| caption | Ne-Yo - Closer [Official Video z_aC5xPQ2f4 | 62 | 200.867 | 200.961 | 200.927 | 201.180 | 200.961 |
+| caption | Ne-Yo - Closer [Official Video z_aC5xPQ2f4 | 71 | 223.123 | 223.013 | 222.653 | 223.120 | 223.013 |
+| caption | Ne-Yo - One In A Million 6tpl9LtkRRw | 23 | 59.268 | 59.388 | 58.459 | 59.420 | 59.089 |
+| caption | Ne-Yo - One In A Million 6tpl9LtkRRw | 52 | 137.112 | 137.230 | 136.832 | 137.280 | 137.230 |
+| caption | Ne-Yo - One In A Million 6tpl9LtkRRw | 73 | 199.708 | 199.600 | 199.600 | 199.240 | 198.910 |
+| caption | Ne-Yo - So Sick IxszlJppRQI | 16 | 49.215 | 48.836 | 48.466 | 49.100 | 48.836 |
+| caption | Ne-Yo - So Sick IxszlJppRQI | 26 | 71.988 | 71.756 | 71.689 | 71.780 | 71.756 |
+| caption | Queen - Bohemian Rhapsody fJ9rUzIMcZQ | 7 | 30.460 | 30.425 | 30.425 | 29.980 | 30.325 |
+| caption | Rent (2005) - Another Day | 61 | 223.251 | 223.425 | 223.425 | 223.540 | 223.325 |
+| caption | Rent (2005) - I Should Tell You | 24 | 89.848 | 91.920 | 90.050 | 89.860 | 91.920 |
+| caption | Rent (2005) - I Should Tell You | 36 | 132.691 | 133.210 | 132.975 | 133.056 | 132.580 |
+| caption | Rent (2005) - I Should Tell You | 39 | 141.199 | 142.850 | 141.575 | 141.568 | 142.850 |
+| caption | Rent (2005) - I'll Cover You | 11 | 42.404 | 42.771 | 42.225 | 42.560 | 42.771 |
+| caption | Rent (2005) - I'll Cover You | 23 | 85.847 | 85.691 | 85.525 | 85.520 | 85.691 |
+| caption | Rent (2005) - I'll Cover You | 27 | 95.724 | 95.825 | 95.825 | 92.896 | 95.550 |
+| caption | Rent (2005) - I'll Cover You | 29 | 103.031 | 103.352 | 102.900 | 102.400 | 102.537 |
+| caption | Rent (2005) - I'll Cover You | 30 | 108.470 | 108.725 | 108.725 | 108.400 | 108.367 |
+| caption | Rent (2005) - I'll Cover You | 34 | 119.514 | 119.512 | 119.020 | 119.340 | 119.512 |
+| caption | Rent (2005) - I'll Cover You | 36 | 123.986 | 123.612 | 123.700 | 123.760 | 123.612 |
+| caption | Rent (2005) - I'll Cover You | 38 | 129.858 | 130.104 | 130.125 | 129.720 | 129.965 |
+| caption | Rent (2005) - Out Tonight | 48 | 203.516 | 203.590 | 203.650 | 203.740 | 203.590 |
+| caption | Rent (2005) - Out Tonight | 49 | 206.920 | 207.075 | 207.075 | 207.168 | 206.782 |
+| caption | Rent (2005) - Santa Fe | 2 | 13.752 | 14.270 | 14.052 | 14.100 | 14.230 |
+| caption | Rent (2005) - Santa Fe | 33 | 145.350 | 145.520 | 145.138 | 145.860 | 145.520 |
+| caption | Rent (2005) - Seasons of Love | 4 | 69.093 | 69.200 | 69.250 | 69.240 | 69.200 |
+| caption | Rent (2005) - Today 4 U | 10 | 47.478 | 47.555 | 47.048 | 47.620 | 47.555 |
+| caption | Rent (2005) - What You Own | 25 | 117.190 | 117.710 | 117.400 | 116.260 | 117.050 |
+| caption | Rent (2005) - What You Own | 26 | 120.627 | 121.110 | 120.617 | 120.540 | 120.617 |
+| caption | Rent (2005) - What You Own | 33 | 151.291 | 151.528 | 150.961 | 150.840 | 150.961 |
+| caption | Rent (2005) - What You Own | 37 | 172.078 | 172.138 | 172.200 | 172.400 | 172.100 |
+| caption | Rent (2005) - What You Own | 41 | 190.129 | 190.526 | 189.799 | 190.420 | 190.629 |
+| caption | Rent (2005) - Will I | 13 | 85.385 | 85.420 | 84.906 | 85.540 | 85.420 |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 22 | 60.034 | 59.691 | 59.150 | 59.800 | 59.691 |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 37 | 90.466 | 90.014 | 89.825 | 90.080 | 90.014 |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 67 | 157.801 | 157.413 | 156.917 | 157.120 | 157.413 |
+| caption | Sara Bareilles - Brave (Offici QUQsqBqxoR4 | 31 | 114.029 | 113.725 | 113.725 | 113.800 | 113.348 |
+| caption | Sara Bareilles - Brave (Offici QUQsqBqxoR4 | 57 | 201.637 | 201.253 | 201.245 | 201.320 | 201.253 |
+| caption | Sara Bareilles - Brave (Offici QUQsqBqxoR4 | 58 | 203.737 | 203.085 | 203.015 | 203.360 | 203.085 |
+| caption | Sara Bareilles - Brave (Offici QUQsqBqxoR4 | 59 | 206.016 | 205.709 | 205.725 | 205.800 | 205.709 |
+| caption | The Last Five Years (2014) - A Summer in Ohio | 34 | 122.075 | 122.525 | 121.925 | 122.460 | 122.225 |
+| caption | The Last Five Years (2014) - If I Didn't Believe in You | 45 | 184.625 | 184.550 | 184.625 | 184.620 | 184.550 |
+| caption | The Last Five Years (2014) - If I Didn't Believe in You | 51 | 204.425 | 204.470 | 204.450 | 204.260 | 204.470 |
+| caption | The Last Five Years (2014) - Moving Too Fast | 2 | 4.530 | 4.860 | 4.104 | 4.740 | 4.740 |
+| caption | The Last Five Years (2014) - Moving Too Fast | 88 | 325.130 | 325.184 | 325.175 | 325.300 | 325.184 |
+| caption | The Last Five Years (2014) - See I'm Smiling | 43 | 197.138 | 197.700 | 197.198 | 197.380 | 197.248 |
+| caption | The Last Five Years (2014) - See I'm Smiling | 45 | 208.458 | 208.548 | 208.498 | 208.600 | 208.548 |
+| caption | The Last Five Years (2014) - Shiksa Goddess | 22 | 87.894 | 88.125 | 88.125 | 88.000 | 87.775 |
+| caption | The Last Five Years (2014) - Shiksa Goddess | 23 | 89.654 | 90.300 | 89.574 | 90.660 | 89.794 |
+| caption | The Last Five Years (2014) - Still Hurting | 9 | 74.741 | 75.331 | 74.347 | 75.080 | 75.191 |
+| caption | The Last Five Years (2014) - The Schmuel Song | 1 | 2.417 | 2.625 | 2.625 | 2.020 | 2.290 |
+| caption | The Last Five Years (2014) - The Schmuel Song | 30 | 93.057 | 92.932 | 92.562 | 93.000 | 92.932 |
+| caption | The Last Five Years (2014) - The Schmuel Song | 50 | 159.017 | 159.242 | 158.972 | 159.200 | 159.242 |
+| caption | The Last Five Years (2014) - The Schmuel Song | 102 | 346.537 | 346.287 | 346.042 | 346.660 | 346.287 |
+| caption | The Lion King (1994) - Can You 25QyCxVkXwQ | 9 | 12.217 | 11.968 | 11.522 | 12.360 | 11.968 |
+| caption | The Lion King (1994) - Hakuna  fwLxDUQBdEg | 33 | 82.059 | 81.921 | 81.561 | 81.800 | 81.921 |
+| caption | The Lion King (1994) - Hakuna  fwLxDUQBdEg | 43 | 104.248 | 104.123 | 104.120 | 104.240 | 104.123 |
+| caption | The Lion King (1994) - Hakuna  fwLxDUQBdEg | 48 | 117.761 | 117.724 | 117.263 | 117.820 | 117.724 |
+| caption | The Lion King (1994) - Hakuna  fwLxDUQBdEg | 49 | 119.054 | 118.933 | 118.925 | 118.920 | 118.933 |
+| caption | The Lion King (1994) - Hakuna  fwLxDUQBdEg | 60 | 143.996 | 143.791 | 143.800 | 143.860 | 143.791 |
+| caption | The Lion King (1994) - Hakuna  fwLxDUQBdEg | 77 | 203.847 | 204.130 | 203.349 | 202.940 | 204.130 |
+| caption | The Little Mermaid (1989) - Pa SXKlJuO07eM | 36 | 104.733 | 105.703 | 105.350 | 104.340 | 105.643 |
+| caption | The Little Mermaid (1989) - Un GC_mV1IpjWA | 2 | 4.600 | 4.823 | 4.460 | 4.740 | 4.723 |
+| caption | The Little Mermaid (1989) - Un GC_mV1IpjWA | 4 | 8.566 | 9.123 | 9.175 | 9.100 | 9.123 |
+| caption | The Little Mermaid (1989) - Un GC_mV1IpjWA | 13 | 36.066 | 36.163 | 35.926 | 35.960 | 36.163 |
+| caption | The Little Mermaid (1989) - Un GC_mV1IpjWA | 39 | 100.700 | 101.083 | 100.560 | 100.900 | 101.083 |
+| caption | The Little Mermaid (1989) - Un GC_mV1IpjWA | 63 | 169.733 | 170.343 | 169.593 | 170.320 | 170.343 |
+| caption | The Philosopher Kings - You Do AI7F8qlN44E | 32 | 132.866 | 132.775 | 132.775 | 133.220 | 136.024 |
+| caption | Troy, Gabriella - Breaking Fre 0qj67KE5VXI | 33 | 113.133 | 113.643 | 113.323 | 113.840 | 113.643 |
+| caption | Whitney Houston - I Wanna Danc eH3giaIzONA | 44 | 203.114 | 202.594 | 202.248 | 203.020 | 202.594 |
+| caption | Whitney Houston - I Wanna Danc eH3giaIzONA | 52 | 233.701 | 233.400 | 233.400 | 233.480 | 232.834 |
+| caption | Wicked (2003) - For Good TZ0pXUb5jVU | 14 | 79.106 | 78.950 | 78.950 | 78.600 | 78.600 |
+| caption | Will Smith - Prince Ali (From  eGLSPyGszjo | 44 | 151.733 | 151.533 | 151.410 | 151.440 | 151.533 |
+| caption | ZAYN & Zhavia Ward - A Whole N rg_zwK_sSEY | 17 | 81.366 | 81.830 | 81.394 | 81.920 | 81.830 |
+| caption | ZAYN & Zhavia Ward - A Whole N rg_zwK_sSEY | 19 | 86.700 | 87.243 | 86.728 | 87.280 | 87.243 |
+| caption | ZAYN - Dusk Till Dawn (Official Video) ft. Sia---tt2k8PGm-TI | 5 | 36.000 | 36.525 | 36.525 | 36.448 | 35.784 |
+| caption | ZAYN - Dusk Till Dawn (Official Video) ft. Sia---tt2k8PGm-TI | 39 | 141.800 | 142.075 | 142.075 | 141.560 | 141.643 |
+| caption | ZAYN - Dusk Till Dawn (Official Video) ft. Sia---tt2k8PGm-TI | 76 | 259.633 | 259.582 | 259.511 | 260.420 | 259.582 |
+| LRCLIB | Backstreet Boys - Chances (Off W5kM5wAwRug | 20 | 102.900 | 103.125 | 103.125 | 102.960 | 102.620 |
+| LRCLIB | Backstreet Boys - Chances (Off W5kM5wAwRug | 22 | 110.580 | 110.420 | 110.375 | 110.580 | 110.420 |
+| LRCLIB | Backstreet Boys - Chances (Off W5kM5wAwRug | 26 | 125.210 | 125.180 | 124.985 | 125.700 | 125.120 |
+| LRCLIB | Bruno Mars - I Just Might luotSpkyCVU | 8 | 35.940 | 35.796 | 35.538 | 36.040 | 35.796 |
+| LRCLIB | Bruno Mars - I Just Might luotSpkyCVU | 54 | 203.600 | 203.740 | 203.600 | 202.950 | 203.740 |
+| LRCLIB | Ed Sheeran - Best Part Of Me (feat. YEBBA) (Live At Abbey Road)---wGyh_53ecgg | 15 | 76.723 | 76.526 | 76.625 | 76.860 | 76.526 |
+| LRCLIB | Ed Sheeran - Best Part Of Me (feat. YEBBA) (Live At Abbey Road)---wGyh_53ecgg | 26 | 144.401 | 144.750 | 144.750 | 144.580 | 144.200 |
+| LRCLIB | Eminem - Lose Yourself (8 Mile xFYQQPAOz7Y | 22 | 94.990 | 95.075 | 95.075 | 94.900 | 94.975 |
+| LRCLIB | Eminem - Lose Yourself (8 Mile xFYQQPAOz7Y | 24 | 98.750 | 98.750 | 98.220 | 98.320 | 98.750 |
+| LRCLIB | Eminem - Lose Yourself (8 Mile xFYQQPAOz7Y | 47 | 157.360 | 157.090 | 156.830 | 157.080 | 157.090 |
+| LRCLIB | Eminem - Lose Yourself (8 Mile xFYQQPAOz7Y | 72 | 224.650 | 224.600 | 224.120 | 224.600 | 224.600 |
+| LRCLIB | Eminem - Lose Yourself (8 Mile xFYQQPAOz7Y | 80 | 249.770 | 249.620 | 249.370 | 249.620 | 249.620 |
+| LRCLIB | Jessie J - Domino UJtB55MaoD0 | 10 | 38.864 | 38.954 | 38.802 | 38.600 | 38.954 |
+| LRCLIB | Jessie J - Domino UJtB55MaoD0 | 53 | 170.444 | 170.175 | 170.175 | 170.220 | 170.014 |
+| LRCLIB | Jung Kook 정국 - Seven (feat. Latto)---1QYBiNRu1ok | 36 | 100.605 | 100.575 | 100.055 | 100.780 | 100.575 |
+| LRCLIB | Jung Kook 정국 - Seven (feat. Latto)---1QYBiNRu1ok | 37 | 102.225 | 102.075 | 102.150 | 102.240 | 102.075 |
+| LRCLIB | Jung Kook 정국 - Seven (feat. Latto)---1QYBiNRu1ok | 56 | 142.115 | 141.905 | 141.885 | 142.180 | 141.905 |
+| LRCLIB | Jung Kook 정국 - Seven (feat. Latto)---1QYBiNRu1ok | 61 | 152.145 | 152.175 | 152.300 | 152.260 | 152.175 |
+| LRCLIB | Jung Kook 정국 - Seven (feat. Latto)---1QYBiNRu1ok | 71 | 173.735 | 173.535 | 173.165 | 173.740 | 173.535 |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 25 | 77.500 | 77.650 | 77.130 | 77.740 | 77.440 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 16 | 40.090 | 40.020 | 39.810 | 40.120 | 40.020 |
+| LRCLIB | NSYNC - Paradise | 25 | 163.880 | 164.025 | 164.025 | 163.780 | 163.430 |
+| LRCLIB | NSYNC - Thinking Of You (I Dri PodgxWsZw9s | 9 | 42.240 | 42.202 | 42.027 | 42.340 | 42.270 |
+| LRCLIB | NSYNC - Thinking Of You (I Dri PodgxWsZw9s | 33 | 125.150 | 124.490 | 124.452 | 125.420 | 124.490 |
+| LRCLIB | Pocahontas (1995) - Colors of  9ThO76peOw0 | 23 | 114.970 | 115.200 | 115.200 | 114.800 | 114.720 |
+| LRCLIB | Sara Bareilles - She Used To B 53GIADHxVzM | 7 | 38.480 | 38.140 | 38.200 | 38.300 | 38.140 |
+| LRCLIB | Silk Sonic (Bruno Mars & Anderson .Paak) - Leave the Door Open---wIyNAsmGrl0 | 13 | 42.515 | 42.145 | 41.645 | 42.460 | 42.335 |
+| LRCLIB | Silk Sonic (Bruno Mars & Anderson .Paak) - Leave the Door Open---wIyNAsmGrl0 | 14 | 46.325 | 46.225 | 46.225 | 46.180 | 45.775 |
+| LRCLIB | Tangled (2010) - When Will My  kRXmAIHYQR4 | 8 | 41.780 | 41.810 | 41.525 | 42.040 | 41.810 |
+| LRCLIB | Tangled (2010) - When Will My  kRXmAIHYQR4 | 15 | 75.220 | 75.750 | 74.750 | 75.340 | 75.690 |
+| LRCLIB | The Lonely Island - Jose & Mar 68LBPvFhMx0 | 13 | 34.990 | 35.075 | 35.075 | 35.100 | 34.920 |
+| LRCLIB | The Lonely Island - Let's Bash hj4e709GYf4 | 18 | 35.215 | 35.000 | 35.000 | 35.220 | 34.800 |
+| LRCLIB | The Lonely Island - Let's Bash hj4e709GYf4 | 31 | 59.355 | 59.215 | 58.807 | 59.200 | 59.215 |
+| LRCLIB | The Lonely Island - Threw It O gAYL5H46QnQ | 27 | 99.464 | 99.584 | 99.725 | 99.640 | 99.584 |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 27 | 120.840 | 120.700 | 120.516 | 121.120 | 120.700 |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 28 | 123.620 | 123.880 | 123.026 | 123.640 | 123.956 |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 43 | 189.830 | 189.694 | 189.626 | 189.700 | 189.694 |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 49 | 207.740 | 207.456 | 207.226 | 208.200 | 207.456 |
+
+### Table Z: zero-length words re-timed
+Zero-length: words under 0.05 s in the line as the baseline rescue left it. Re-timed: words whose times the zero-length rule changed. Short after: words under 0.1 s in the snapped line.
+
+caption: 854 lines in 118 songs; LRCLIB: 154 lines in 23 songs
+
+| Src | Song | Line | Tokens | Zero-length | Re-timed | Short after |
+|---|---|---|---|---|---|---|
+| caption | Adele - Rolling in the Deep (O rYEDA3JcQqw | 11 | 9 | 1 | 1 | 0 |
+| caption | Adele - Rolling in the Deep (O rYEDA3JcQqw | 21 | 11 | 1 | 1 | 0 |
+| caption | Adele - Rolling in the Deep (O rYEDA3JcQqw | 29 | 8 | 1 | 2 | 0 |
+| caption | Adele - Rolling in the Deep (O rYEDA3JcQqw | 33 | 8 | 1 | 2 | 0 |
+| caption | Adele - Rolling in the Deep (O rYEDA3JcQqw | 41 | 6 | 2 | 2 | 0 |
+| caption | Adele - Rolling in the Deep (O rYEDA3JcQqw | 49 | 10 | 2 | 3 | 2 |
+| caption | Adele - Rolling in the Deep (O rYEDA3JcQqw | 50 | 6 | 3 | 3 | 4 |
+| caption | Adele - Send My Love (To Your  fk4BbF7B29w | 1 | 8 | 1 | 1 | 0 |
+| caption | Adele - Send My Love (To Your  fk4BbF7B29w | 20 | 7 | 1 | 1 | 0 |
+| caption | Adele - Send My Love (To Your  fk4BbF7B29w | 41 | 6 | 1 | 1 | 0 |
+| caption | Adele - Send My Love (To Your  fk4BbF7B29w | 45 | 6 | 1 | 1 | 0 |
+| caption | Adele - Send My Love (To Your  fk4BbF7B29w | 59 | 9 | 1 | 2 | 0 |
+| caption | Adele - Send My Love (To Your  fk4BbF7B29w | 63 | 9 | 1 | 2 | 0 |
+| caption | Adele - Someone Like You hLQl3WQQoQ0 | 27 | 10 | 1 | 1 | 0 |
+| caption | Aladdin (2019) - A Whole New W eitDnP0_83k | 34 | 6 | 2 | 0 | 2 |
+| caption | Aladdin (2019) - A Whole New W eitDnP0_83k | 35 | 3 | 1 | 1 | 0 |
+| caption | Aladdin (2019) - A Whole New W eitDnP0_83k | 41 | 4 | 2 | 3 | 3 |
+| caption | Aladdin (2019) - A Whole New W eitDnP0_83k | 42 | 4 | 1 | 2 | 0 |
+| caption | Aladdin (2019) - A Whole New W eitDnP0_83k | 43 | 5 | 1 | 0 | 1 |
+| caption | Aladdin (2019) - Speechless mw5VIEIvuMI | 2 | 7 | 1 | 1 | 0 |
+| caption | Aladdin (2019) - Speechless mw5VIEIvuMI | 16 | 7 | 1 | 1 | 1 |
+| caption | Aladdin (2019) - Speechless mw5VIEIvuMI | 19 | 6 | 1 | 1 | 0 |
+| caption | Aladdin (2019) - Speechless mw5VIEIvuMI | 31 | 5 | 1 | 1 | 0 |
+| caption | Aladdin (2019) - Speechless mw5VIEIvuMI | 36 | 7 | 1 | 1 | 0 |
+| caption | BTS 방탄소년단 - Butter WMweEpGlu_U | 26 | 5 | 1 | 1 | 0 |
+| caption | BTS 방탄소년단 - Butter WMweEpGlu_U | 38 | 5 | 1 | 1 | 0 |
+| caption | BTS 방탄소년단 - Butter WMweEpGlu_U | 39 | 5 | 1 | 1 | 0 |
+| caption | BTS 방탄소년단 - Butter WMweEpGlu_U | 40 | 5 | 1 | 2 | 2 |
+| caption | BTS 방탄소년단 - Butter WMweEpGlu_U | 43 | 8 | 1 | 1 | 1 |
+| caption | BTS 방탄소년단 - Butter WMweEpGlu_U | 45 | 4 | 1 | 2 | 0 |
+| caption | BTS 방탄소년단 - Butter WMweEpGlu_U | 47 | 10 | 1 | 1 | 0 |
+| caption | BTS 방탄소년단 - Butter WMweEpGlu_U | 55 | 5 | 1 | 1 | 0 |
+| caption | BTS 방탄소년단 - Butter WMweEpGlu_U | 62 | 8 | 1 | 1 | 0 |
+| caption | BTS 방탄소년단 - Butter WMweEpGlu_U | 63 | 8 | 1 | 1 | 0 |
+| caption | Backstreet Boys - All I Have T pj6FCKm8dhM | 14 | 8 | 1 | 1 | 0 |
+| caption | Backstreet Boys - All I Have T pj6FCKm8dhM | 43 | 8 | 1 | 1 | 0 |
+| caption | Backstreet Boys - All I Have T pj6FCKm8dhM | 48 | 8 | 1 | 1 | 0 |
+| caption | Backstreet Boys - All I Have T pj6FCKm8dhM | 54 | 8 | 1 | 1 | 0 |
+| caption | Backstreet Boys - All I Have T pj6FCKm8dhM | 56 | 8 | 1 | 2 | 0 |
+| caption | Backstreet Boys - All I Have T pj6FCKm8dhM | 61 | 9 | 4 | 5 | 0 |
+| caption | Backstreet Boys - As Long As Y 0Gl2QnHNpkA | 31 | 3 | 1 | 0 | 2 |
+| caption | Backstreet Boys - As Long As Y 0Gl2QnHNpkA | 45 | 3 | 1 | 1 | 0 |
+| caption | Backstreet Boys - As Long As Y 0Gl2QnHNpkA | 49 | 3 | 1 | 1 | 0 |
+| caption | Backstreet Boys - As Long As Y 0Gl2QnHNpkA | 56 | 6 | 3 | 4 | 4 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 0 | 2 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 5 | 5 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 8 | 4 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 13 | 9 | 1 | 1 | 1 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 15 | 5 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 19 | 5 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 33 | 6 | 2 | 3 | 0 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 34 | 9 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 36 | 5 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 40 | 5 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 48 | 9 | 3 | 4 | 0 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 50 | 5 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 54 | 5 | 1 | 1 | 1 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 56 | 5 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 60 | 5 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 61 | 8 | 2 | 3 | 3 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 62 | 9 | 1 | 1 | 1 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 64 | 11 | 4 | 4 | 0 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 65 | 7 | 3 | 4 | 0 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 68 | 5 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Everybody (B 6M6samPEMpM | 3 | 10 | 1 | 1 | 4 |
+| caption | Backstreet Boys - Everybody (B 6M6samPEMpM | 5 | 5 | 2 | 3 | 3 |
+| caption | Backstreet Boys - Everybody (B 6M6samPEMpM | 20 | 8 | 1 | 2 | 0 |
+| caption | Backstreet Boys - Everybody (B 6M6samPEMpM | 30 | 6 | 1 | 1 | 1 |
+| caption | Backstreet Boys - Everybody (B 6M6samPEMpM | 41 | 9 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Everybody (B 6M6samPEMpM | 51 | 6 | 1 | 1 | 1 |
+| caption | Backstreet Boys - Everybody (B 6M6samPEMpM | 78 | 8 | 1 | 1 | 2 |
+| caption | Backstreet Boys - Everybody (B 6M6samPEMpM | 81 | 8 | 1 | 1 | 1 |
+| caption | Backstreet Boys - Everybody (B 6M6samPEMpM | 82 | 11 | 1 | 1 | 1 |
+| caption | Backstreet Boys - Everybody (B 6M6samPEMpM | 83 | 6 | 3 | 4 | 4 |
+| caption | Backstreet Boys - Everybody (B 6M6samPEMpM | 84 | 6 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Everybody (B 6M6samPEMpM | 86 | 8 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 4 | 4 | 2 | 3 | 0 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 5 | 4 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 9 | 9 | 1 | 1 | 1 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 20 | 4 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 24 | 4 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 35 | 6 | 1 | 1 | 2 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 37 | 7 | 2 | 3 | 2 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 38 | 7 | 2 | 3 | 1 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 39 | 6 | 1 | 1 | 1 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 41 | 3 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 42 | 6 | 1 | 1 | 2 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 43 | 5 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 49 | 4 | 1 | 2 | 0 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 53 | 6 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 54 | 4 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 56 | 4 | 2 | 3 | 3 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 58 | 5 | 1 | 2 | 1 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 59 | 3 | 1 | 2 | 2 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 74 | 4 | 2 | 2 | 3 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 79 | 3 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 80 | 3 | 1 | 1 | 1 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 82 | 3 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 83 | 3 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 85 | 3 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 91 | 2 | 1 | 1 | 1 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 93 | 7 | 2 | 3 | 2 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 97 | 7 | 2 | 3 | 0 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 105 | 7 | 2 | 2 | 1 |
+| caption | Backstreet Boys - I Want It Th 4fndeDfaWCg | 22 | 3 | 1 | 1 | 0 |
+| caption | Backstreet Boys - I Want It Th 4fndeDfaWCg | 39 | 8 | 1 | 1 | 0 |
+| caption | Backstreet Boys - I Want It Th 4fndeDfaWCg | 41 | 5 | 1 | 2 | 2 |
+| caption | Backstreet Boys - I Want It Th 4fndeDfaWCg | 54 | 5 | 1 | 1 | 0 |
+| caption | Backstreet Boys - I Want It Th 4fndeDfaWCg | 56 | 11 | 4 | 5 | 0 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 6 | 7 | 1 | 1 | 0 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 7 | 5 | 1 | 1 | 1 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 9 | 7 | 1 | 1 | 0 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 14 | 9 | 1 | 2 | 0 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 19 | 11 | 2 | 3 | 4 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 20 | 7 | 2 | 3 | 0 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 21 | 5 | 2 | 3 | 0 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 22 | 6 | 3 | 4 | 0 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 23 | 11 | 5 | 6 | 5 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 24 | 7 | 2 | 3 | 0 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 30 | 9 | 1 | 1 | 0 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 34 | 7 | 2 | 3 | 3 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 38 | 6 | 1 | 2 | 2 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 42 | 5 | 1 | 1 | 0 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 44 | 8 | 2 | 3 | 0 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 46 | 4 | 1 | 2 | 0 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 47 | 5 | 2 | 3 | 1 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 52 | 10 | 4 | 4 | 4 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 55 | 10 | 1 | 1 | 0 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 56 | 5 | 1 | 2 | 0 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 57 | 5 | 1 | 2 | 0 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 59 | 6 | 2 | 3 | 2 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 61 | 5 | 1 | 1 | 0 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 62 | 7 | 3 | 5 | 3 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 63 | 4 | 1 | 1 | 0 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 65 | 6 | 3 | 3 | 0 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 68 | 8 | 2 | 2 | 1 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 71 | 8 | 2 | 3 | 0 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 72 | 8 | 3 | 5 | 2 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 73 | 12 | 2 | 3 | 0 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 78 | 5 | 2 | 2 | 1 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 79 | 7 | 3 | 4 | 0 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 80 | 4 | 2 | 4 | 0 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 81 | 6 | 1 | 2 | 0 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 82 | 4 | 1 | 1 | 1 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 83 | 6 | 1 | 2 | 3 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 84 | 5 | 2 | 3 | 0 |
+| caption | Backstreet Boys - Incomplete WVe80iZtlYU | 10 | 3 | 1 | 1 | 1 |
+| caption | Backstreet Boys - Inconsolable qGDF_QcsKVI | 0 | 4 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Inconsolable qGDF_QcsKVI | 28 | 3 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Inconsolable qGDF_QcsKVI | 43 | 9 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Inconsolable qGDF_QcsKVI | 45 | 3 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Larger Than  MEb2CecR11I | 1 | 5 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Larger Than  MEb2CecR11I | 7 | 6 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Larger Than  MEb2CecR11I | 18 | 10 | 1 | 1 | 0 |
+| caption | Backstreet Boys - More Than Th 1OwfYjemrYw | 9 | 8 | 1 | 1 | 0 |
+| caption | Backstreet Boys - More Than Th 1OwfYjemrYw | 12 | 7 | 1 | 1 | 0 |
+| caption | Backstreet Boys - More Than Th 1OwfYjemrYw | 14 | 5 | 1 | 1 | 0 |
+| caption | Backstreet Boys - More Than Th 1OwfYjemrYw | 18 | 6 | 1 | 1 | 0 |
+| caption | Backstreet Boys - More Than Th 1OwfYjemrYw | 22 | 7 | 1 | 1 | 1 |
+| caption | Backstreet Boys - More Than Th 1OwfYjemrYw | 29 | 8 | 1 | 1 | 0 |
+| caption | Backstreet Boys - More Than Th 1OwfYjemrYw | 33 | 7 | 1 | 2 | 0 |
+| caption | Backstreet Boys - More Than Th 1OwfYjemrYw | 37 | 7 | 1 | 1 | 1 |
+| caption | Backstreet Boys - Quit Playing Ug88HO2mg44 | 17 | 2 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Quit Playing Ug88HO2mg44 | 21 | 3 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Quit Playing Ug88HO2mg44 | 40 | 5 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Quit Playing Ug88HO2mg44 | 48 | 2 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Quit Playing Ug88HO2mg44 | 57 | 7 | 1 | 2 | 1 |
+| caption | Backstreet Boys - Quit Playing Ug88HO2mg44 | 58 | 6 | 2 | 2 | 0 |
+| caption | Backstreet Boys - Quit Playing Ug88HO2mg44 | 59 | 6 | 1 | 2 | 2 |
+| caption | Backstreet Boys - Quit Playing Ug88HO2mg44 | 60 | 5 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Quit Playing Ug88HO2mg44 | 68 | 5 | 1 | 2 | 1 |
+| caption | Backstreet Boys - Quit Playing Ug88HO2mg44 | 79 | 6 | 2 | 3 | 0 |
+| caption | Backstreet Boys - Quit Playing Ug88HO2mg44 | 80 | 6 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Quit Playing Ug88HO2mg44 | 81 | 7 | 3 | 3 | 1 |
+| caption | Backstreet Boys - Quit Playing Ug88HO2mg44 | 83 | 6 | 3 | 3 | 5 |
+| caption | Backstreet Boys - Shape Of My  OT5msu-dap8 | 20 | 2 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Shape Of My  OT5msu-dap8 | 26 | 12 | 4 | 4 | 4 |
+| caption | Backstreet Boys - Shape Of My  OT5msu-dap8 | 37 | 11 | 2 | 3 | 0 |
+| caption | Backstreet Boys - Shape Of My  OT5msu-dap8 | 41 | 8 | 2 | 2 | 2 |
+| caption | Backstreet Boys - Shape Of My  OT5msu-dap8 | 43 | 10 | 1 | 2 | 3 |
+| caption | Backstreet Boys - Shape Of My  OT5msu-dap8 | 44 | 11 | 5 | 6 | 0 |
+| caption | Backstreet Boys - Shape Of My  OT5msu-dap8 | 45 | 7 | 3 | 3 | 3 |
+| caption | Backstreet Boys - The Call wMOkm57vu0k | 5 | 3 | 1 | 1 | 0 |
+| caption | Backstreet Boys - The Call wMOkm57vu0k | 27 | 9 | 1 | 1 | 0 |
+| caption | Backstreet Boys - The Call wMOkm57vu0k | 40 | 9 | 1 | 1 | 0 |
+| caption | Backstreet Boys - The Call wMOkm57vu0k | 47 | 4 | 1 | 2 | 0 |
+| caption | Backstreet Boys - The Call wMOkm57vu0k | 63 | 9 | 1 | 1 | 0 |
+| caption | Backstreet Boys - The Call wMOkm57vu0k | 69 | 9 | 1 | 1 | 0 |
+| caption | Backstreet Boys - The Call wMOkm57vu0k | 81 | 9 | 1 | 1 | 0 |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 13 | 6 | 1 | 1 | 0 |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 24 | 3 | 1 | 1 | 0 |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 26 | 4 | 1 | 1 | 0 |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 42 | 6 | 1 | 1 | 0 |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 61 | 7 | 1 | 2 | 0 |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 64 | 7 | 1 | 1 | 0 |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 68 | 6 | 1 | 1 | 1 |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 69 | 8 | 2 | 2 | 1 |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 72 | 4 | 1 | 1 | 0 |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 76 | 7 | 2 | 2 | 0 |
+| caption | Beauty and the Beast (1991) -  otxTf5hZ0Yw | 14 | 3 | 1 | 1 | 0 |
+| caption | Beauty and the Beast (1991) -  otxTf5hZ0Yw | 15 | 3 | 1 | 1 | 0 |
+| caption | Beauty and the Beast (1991) -  otxTf5hZ0Yw | 28 | 8 | 1 | 1 | 0 |
+| caption | Beauty and the Beast (1991) -  otxTf5hZ0Yw | 42 | 6 | 1 | 1 | 2 |
+| caption | Beauty and the Beast (1991) -  otxTf5hZ0Yw | 52 | 9 | 1 | 2 | 2 |
+| caption | Beauty and the Beast (1991) -  otxTf5hZ0Yw | 67 | 5 | 2 | 3 | 4 |
+| caption | Beauty and the Beast (1991) -  otxTf5hZ0Yw | 75 | 7 | 1 | 1 | 1 |
+| caption | Beauty and the Beast (1991) -  otxTf5hZ0Yw | 80 | 6 | 1 | 1 | 2 |
+| caption | Beauty and the Beast (1991) -  otxTf5hZ0Yw | 90 | 3 | 1 | 1 | 2 |
+| caption | Beauty and the Beast (1991) -  otxTf5hZ0Yw | 91 | 5 | 2 | 3 | 0 |
+| caption | Beauty and the Beast (1991) -  otxTf5hZ0Yw | 98 | 6 | 1 | 1 | 0 |
+| caption | Beauty and the Beast (1991) -  otxTf5hZ0Yw | 99 | 7 | 1 | 1 | 0 |
+| caption | Beauty and the Beast (1991) -  otxTf5hZ0Yw | 100 | 9 | 1 | 1 | 0 |
+| caption | Beauty and the Beast (1991) -  otxTf5hZ0Yw | 102 | 7 | 1 | 1 | 0 |
+| caption | Beauty and the Beast (1991) -  otxTf5hZ0Yw | 103 | 8 | 2 | 4 | 2 |
+| caption | Britney Spears - (You Drive Me Q4VK9_CfOLQ | 26 | 9 | 1 | 1 | 0 |
+| caption | Britney Spears - ...Baby One More Time---C-u5WLJ9Yk4 | 0 | 3 | 1 | 1 | 0 |
+| caption | Britney Spears - ...Baby One More Time---C-u5WLJ9Yk4 | 1 | 3 | 1 | 1 | 0 |
+| caption | Britney Spears - ...Baby One More Time---C-u5WLJ9Yk4 | 2 | 9 | 1 | 1 | 0 |
+| caption | Britney Spears - ...Baby One More Time---C-u5WLJ9Yk4 | 4 | 9 | 1 | 1 | 0 |
+| caption | Britney Spears - ...Baby One More Time---C-u5WLJ9Yk4 | 13 | 3 | 1 | 1 | 0 |
+| caption | Britney Spears - ...Baby One More Time---C-u5WLJ9Yk4 | 15 | 5 | 1 | 1 | 1 |
+| caption | Britney Spears - ...Baby One More Time---C-u5WLJ9Yk4 | 16 | 3 | 1 | 1 | 0 |
+| caption | Britney Spears - ...Baby One More Time---C-u5WLJ9Yk4 | 28 | 9 | 1 | 1 | 0 |
+| caption | Britney Spears - ...Baby One More Time---C-u5WLJ9Yk4 | 29 | 9 | 1 | 1 | 0 |
+| caption | Britney Spears - ...Baby One More Time---C-u5WLJ9Yk4 | 39 | 6 | 1 | 1 | 0 |
+| caption | Britney Spears - ...Baby One More Time---C-u5WLJ9Yk4 | 40 | 6 | 2 | 3 | 0 |
+| caption | Britney Spears - Oops!...I Did It Again---CduA0TULnow | 8 | 4 | 1 | 1 | 0 |
+| caption | Britney Spears - Oops!...I Did It Again---CduA0TULnow | 13 | 5 | 1 | 1 | 0 |
+| caption | Britney Spears - Oops!...I Did It Again---CduA0TULnow | 14 | 5 | 1 | 1 | 0 |
+| caption | Britney Spears - Oops!...I Did It Again---CduA0TULnow | 17 | 8 | 1 | 1 | 0 |
+| caption | Britney Spears - Oops!...I Did It Again---CduA0TULnow | 19 | 6 | 1 | 1 | 0 |
+| caption | Britney Spears - Oops!...I Did It Again---CduA0TULnow | 22 | 5 | 1 | 1 | 0 |
+| caption | Britney Spears - Oops!...I Did It Again---CduA0TULnow | 29 | 6 | 1 | 1 | 0 |
+| caption | Britney Spears - Oops!...I Did It Again---CduA0TULnow | 31 | 6 | 1 | 1 | 0 |
+| caption | Britney Spears - Oops!...I Did It Again---CduA0TULnow | 36 | 3 | 1 | 1 | 0 |
+| caption | Britney Spears - Oops!...I Did It Again---CduA0TULnow | 44 | 5 | 2 | 2 | 1 |
+| caption | Britney Spears - Oops!...I Did It Again---CduA0TULnow | 45 | 5 | 1 | 1 | 0 |
+| caption | Britney Spears - Oops!...I Did It Again---CduA0TULnow | 58 | 8 | 1 | 2 | 0 |
+| caption | Britney Spears - Oops!...I Did It Again---CduA0TULnow | 60 | 5 | 1 | 1 | 0 |
+| caption | Britney Spears - Oops!...I Did It Again---CduA0TULnow | 63 | 3 | 1 | 1 | 0 |
+| caption | Britney Spears - Oops!...I Did It Again---CduA0TULnow | 67 | 5 | 1 | 1 | 0 |
+| caption | Britney Spears - Oops!...I Did It Again---CduA0TULnow | 70 | 3 | 1 | 1 | 0 |
+| caption | Britney Spears - Oops!...I Did It Again---CduA0TULnow | 71 | 6 | 1 | 1 | 0 |
+| caption | Britney Spears - Stronger AJWtLf4-WWs | 1 | 3 | 1 | 1 | 0 |
+| caption | Britney Spears - Stronger AJWtLf4-WWs | 9 | 7 | 1 | 1 | 0 |
+| caption | Britney Spears - Stronger AJWtLf4-WWs | 20 | 3 | 1 | 1 | 0 |
+| caption | Britney Spears - Stronger AJWtLf4-WWs | 24 | 7 | 1 | 1 | 1 |
+| caption | Britney Spears - Stronger AJWtLf4-WWs | 26 | 15 | 2 | 2 | 0 |
+| caption | Britney Spears - Toxic (Offici LOZuxwVk7TU | 7 | 7 | 1 | 1 | 0 |
+| caption | Britney Spears - Toxic (Offici LOZuxwVk7TU | 11 | 7 | 1 | 2 | 0 |
+| caption | Britney Spears - Toxic (Offici LOZuxwVk7TU | 32 | 7 | 1 | 2 | 0 |
+| caption | Britney Spears - Toxic (Offici LOZuxwVk7TU | 35 | 10 | 1 | 1 | 3 |
+| caption | Britney Spears - Toxic (Offici LOZuxwVk7TU | 40 | 7 | 1 | 1 | 1 |
+| caption | Britney Spears - Toxic (Offici LOZuxwVk7TU | 42 | 7 | 1 | 1 | 0 |
+| caption | Britney Spears - Toxic (Offici LOZuxwVk7TU | 45 | 7 | 1 | 2 | 2 |
+| caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 11 | 11 | 1 | 1 | 2 |
+| caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 16 | 6 | 1 | 1 | 0 |
+| caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 20 | 12 | 2 | 2 | 0 |
+| caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 25 | 6 | 1 | 1 | 0 |
+| caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 36 | 8 | 1 | 1 | 0 |
+| caption | Cast of Camp Rock - Play My Mu jQ-Pqxl1BlI | 3 | 2 | 1 | 0 | 1 |
+| caption | Cast of Camp Rock - Play My Mu jQ-Pqxl1BlI | 34 | 4 | 1 | 1 | 0 |
+| caption | Cast of Camp Rock - Play My Mu jQ-Pqxl1BlI | 44 | 4 | 1 | 1 | 0 |
+| caption | Christina Aguilera - Genie In  kIDWgqDBNXA | 2 | 5 | 1 | 1 | 0 |
+| caption | Colbie Caillat - Bubbly (Offic AWGqoCNbsvM | 36 | 10 | 1 | 1 | 0 |
+| caption | Colbie Caillat - Bubbly (Offic AWGqoCNbsvM | 39 | 2 | 1 | 2 | 0 |
+| caption | Colbie Caillat - Realize GlZxZ2n2zpw | 8 | 8 | 1 | 1 | 0 |
+| caption | Colbie Caillat - Realize GlZxZ2n2zpw | 16 | 6 | 2 | 2 | 0 |
+| caption | Colbie Caillat - Realize GlZxZ2n2zpw | 23 | 8 | 1 | 1 | 0 |
+| caption | Colbie Caillat - Realize GlZxZ2n2zpw | 43 | 3 | 1 | 1 | 0 |
+| caption | Colbie Caillat - Realize GlZxZ2n2zpw | 44 | 3 | 1 | 1 | 0 |
+| caption | Céline Dion - Ashes (Deadpool  CX11yw6YL1w | 12 | 13 | 1 | 1 | 0 |
+| caption | Céline Dion - Ashes (Deadpool  CX11yw6YL1w | 31 | 19 | 1 | 1 | 5 |
+| caption | Céline Dion - I'm Alive (Stuar NJsa6-y4sDs | 41 | 7 | 1 | 1 | 1 |
+| caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 0 | 10 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 4 | 5 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 24 | 9 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 27 | 4 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Happier iWZmdoY1aTE | 34 | 7 | 1 | 1 | 2 |
+| caption | Ed Sheeran - Perfect 2Vv-BfVoq4g | 4 | 5 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Perfect 2Vv-BfVoq4g | 6 | 11 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Perfect 2Vv-BfVoq4g | 21 | 5 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Perfect 2Vv-BfVoq4g | 22 | 5 | 1 | 1 | 1 |
+| caption | Ed Sheeran - Shape of You JGwWNGJdvx8 | 8 | 7 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Shape of You JGwWNGJdvx8 | 10 | 6 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Shape of You JGwWNGJdvx8 | 14 | 6 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Shape of You JGwWNGJdvx8 | 15 | 7 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Shape of You JGwWNGJdvx8 | 35 | 12 | 2 | 2 | 1 |
+| caption | Ed Sheeran - Shape of You JGwWNGJdvx8 | 37 | 7 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Shape of You JGwWNGJdvx8 | 38 | 8 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Shape of You JGwWNGJdvx8 | 39 | 6 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Shape of You JGwWNGJdvx8 | 58 | 7 | 1 | 2 | 0 |
+| caption | Ed Sheeran - Shape of You JGwWNGJdvx8 | 59 | 7 | 1 | 1 | 1 |
+| caption | Ed Sheeran - Shape of You JGwWNGJdvx8 | 60 | 7 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Shape of You JGwWNGJdvx8 | 61 | 7 | 1 | 1 | 2 |
+| caption | Ed Sheeran - Shape of You JGwWNGJdvx8 | 62 | 7 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Shape of You JGwWNGJdvx8 | 63 | 7 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Shape of You JGwWNGJdvx8 | 64 | 7 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Shape of You JGwWNGJdvx8 | 65 | 7 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Shape of You JGwWNGJdvx8 | 74 | 7 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Shape of You JGwWNGJdvx8 | 76 | 7 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Shape of You JGwWNGJdvx8 | 79 | 5 | 1 | 2 | 2 |
+| caption | Ed Sheeran - Shivers [Official Il0S8BoucSA | 16 | 10 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Shivers [Official Il0S8BoucSA | 23 | 10 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Shivers [Official Il0S8BoucSA | 45 | 10 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Shivers [Official Il0S8BoucSA | 61 | 6 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Shivers [Official Il0S8BoucSA | 65 | 6 | 1 | 1 | 1 |
+| caption | Ed Sheeran - Shivers [Official Il0S8BoucSA | 67 | 10 | 1 | 1 | 1 |
+| caption | Ed Sheeran - Shivers [Official Il0S8BoucSA | 79 | 10 | 1 | 1 | 0 |
+| caption | Ed Sheeran - The A Team UAWcs5H-qgQ | 1 | 4 | 1 | 1 | 0 |
+| caption | Ed Sheeran - The A Team UAWcs5H-qgQ | 18 | 9 | 1 | 1 | 0 |
+| caption | Ed Sheeran - The A Team UAWcs5H-qgQ | 46 | 8 | 1 | 1 | 0 |
+| caption | Ed Sheeran - The A Team UAWcs5H-qgQ | 52 | 5 | 1 | 1 | 0 |
+| caption | Ed Sheeran - The A Team UAWcs5H-qgQ | 60 | 9 | 1 | 1 | 2 |
+| caption | Ed Sheeran - Thinking Out Loud lp-EO5I60KA | 4 | 6 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Thinking Out Loud lp-EO5I60KA | 11 | 11 | 1 | 2 | 0 |
+| caption | Ed Sheeran - Thinking Out Loud lp-EO5I60KA | 25 | 4 | 1 | 1 | 0 |
+| caption | Eminem - Without Me (Official  YVkUvmDQ3HY | 4 | 6 | 2 | 2 | 0 |
+| caption | Eminem - Without Me (Official  YVkUvmDQ3HY | 13 | 6 | 1 | 1 | 0 |
+| caption | Eminem - Without Me (Official  YVkUvmDQ3HY | 14 | 6 | 1 | 1 | 0 |
+| caption | Eminem - Without Me (Official  YVkUvmDQ3HY | 19 | 7 | 1 | 2 | 0 |
+| caption | Eminem - Without Me (Official  YVkUvmDQ3HY | 33 | 9 | 1 | 1 | 1 |
+| caption | Eminem - Without Me (Official  YVkUvmDQ3HY | 41 | 9 | 2 | 3 | 0 |
+| caption | Eminem - Without Me (Official  YVkUvmDQ3HY | 50 | 6 | 1 | 1 | 0 |
+| caption | Eminem - Without Me (Official  YVkUvmDQ3HY | 59 | 7 | 1 | 1 | 0 |
+| caption | Eminem - Without Me (Official  YVkUvmDQ3HY | 78 | 8 | 1 | 1 | 1 |
+| caption | Eminem - Without Me (Official  YVkUvmDQ3HY | 79 | 8 | 1 | 1 | 1 |
+| caption | Eminem - Without Me (Official  YVkUvmDQ3HY | 83 | 12 | 1 | 2 | 3 |
+| caption | Eminem - Without Me (Official  YVkUvmDQ3HY | 86 | 6 | 1 | 1 | 1 |
+| caption | Flight of the Conchords (2007) - Bowie | 2 | 6 | 1 | 1 | 0 |
+| caption | Flight of the Conchords (2007) - Bowie | 38 | 11 | 1 | 1 | 2 |
+| caption | Flight of the Conchords (2007) - Bowie | 43 | 3 | 1 | 1 | 0 |
+| caption | Flight of the Conchords (2007) - Bowie | 46 | 10 | 1 | 2 | 0 |
+| caption | Flight of the Conchords (2007) - Business Time | 1 | 6 | 1 | 1 | 0 |
+| caption | Flight of the Conchords (2007) - Business Time | 16 | 12 | 2 | 4 | 2 |
+| caption | Flight of the Conchords (2007) - Business Time | 17 | 8 | 1 | 1 | 0 |
+| caption | Flight of the Conchords (2007) - Business Time | 42 | 11 | 1 | 1 | 0 |
+| caption | Flight of the Conchords (2007) - Business Time | 63 | 10 | 1 | 1 | 2 |
+| caption | Flight of the Conchords (2007) - Business Time | 82 | 8 | 1 | 1 | 3 |
+| caption | Flight of the Conchords (2007) - Carol Brown | 14 | 10 | 1 | 1 | 0 |
+| caption | Flight of the Conchords (2007) - Carol Brown | 51 | 10 | 1 | 2 | 0 |
+| caption | Flight of the Conchords (2007) - Carol Brown | 52 | 9 | 1 | 1 | 0 |
+| caption | Flight of the Conchords (2007) - Carol Brown | 65 | 5 | 1 | 1 | 1 |
+| caption | Flight of the Conchords (2007) - Foux du Fafa | 8 | 8 | 1 | 1 | 0 |
+| caption | Flight of the Conchords (2007) - Foux du Fafa | 35 | 3 | 1 | 2 | 0 |
+| caption | Flight of the Conchords (2007) - Foux du Fafa | 36 | 6 | 1 | 1 | 1 |
+| caption | Flight of the Conchords (2007) - Foux du Fafa | 40 | 7 | 1 | 1 | 0 |
+| caption | Flight of the Conchords (2007) - Foux du Fafa | 41 | 6 | 1 | 1 | 1 |
+| caption | Flight of the Conchords (2007) - Hiphopopotamus vs. Rhymenoceros | 0 | 11 | 1 | 2 | 2 |
+| caption | Flight of the Conchords (2007) - Hiphopopotamus vs. Rhymenoceros | 1 | 9 | 1 | 1 | 2 |
+| caption | Flight of the Conchords (2007) - Hiphopopotamus vs. Rhymenoceros | 2 | 10 | 1 | 1 | 2 |
+| caption | Flight of the Conchords (2007) - Hiphopopotamus vs. Rhymenoceros | 3 | 12 | 1 | 1 | 3 |
+| caption | Flight of the Conchords (2007) - Hiphopopotamus vs. Rhymenoceros | 9 | 7 | 1 | 1 | 2 |
+| caption | Flight of the Conchords (2007) - Hiphopopotamus vs. Rhymenoceros | 10 | 10 | 1 | 3 | 0 |
+| caption | Flight of the Conchords (2007) - Hiphopopotamus vs. Rhymenoceros | 13 | 8 | 1 | 2 | 0 |
+| caption | Flight of the Conchords (2007) - Hiphopopotamus vs. Rhymenoceros | 17 | 5 | 1 | 1 | 1 |
+| caption | Flight of the Conchords (2007) - Hiphopopotamus vs. Rhymenoceros | 19 | 9 | 1 | 1 | 1 |
+| caption | Flight of the Conchords (2007) - Hiphopopotamus vs. Rhymenoceros | 23 | 8 | 1 | 1 | 0 |
+| caption | Flight of the Conchords (2007) - Hiphopopotamus vs. Rhymenoceros | 37 | 6 | 1 | 2 | 0 |
+| caption | Flight of the Conchords (2007) - Hurt Feelings | 2 | 7 | 1 | 1 | 3 |
+| caption | Flight of the Conchords (2007) - Hurt Feelings | 5 | 14 | 1 | 1 | 1 |
+| caption | Flight of the Conchords (2007) - Hurt Feelings | 20 | 12 | 2 | 3 | 4 |
+| caption | Flight of the Conchords (2007) - Hurt Feelings | 21 | 8 | 1 | 1 | 0 |
+| caption | Flight of the Conchords (2007) - Hurt Feelings | 33 | 10 | 1 | 2 | 1 |
+| caption | Flight of the Conchords (2007) - Hurt Feelings | 43 | 9 | 1 | 1 | 0 |
+| caption | Flight of the Conchords (2007) - Hurt Feelings | 49 | 9 | 1 | 1 | 0 |
+| caption | Flight of the Conchords (2007) - Hurt Feelings | 52 | 6 | 1 | 1 | 0 |
+| caption | Flight of the Conchords (2007) - Hurt Feelings | 58 | 5 | 1 | 1 | 2 |
+| caption | Flight of the Conchords (2007) - Inner City Pressure | 1 | 13 | 1 | 1 | 3 |
+| caption | Flight of the Conchords (2007) - Inner City Pressure | 20 | 2 | 1 | 1 | 0 |
+| caption | Flight of the Conchords (2007) - Inner City Pressure | 24 | 7 | 1 | 1 | 0 |
+| caption | Flight of the Conchords (2007) - Inner City Pressure | 45 | 6 | 1 | 1 | 1 |
+| caption | Flight of the Conchords (2007) - Inner City Pressure | 52 | 2 | 1 | 1 | 0 |
+| caption | Flight of the Conchords (2007) - Ladies of the World | 0 | 7 | 1 | 2 | 3 |
+| caption | Flight of the Conchords (2007) - Ladies of the World | 2 | 4 | 1 | 1 | 0 |
+| caption | Flight of the Conchords (2007) - Ladies of the World | 22 | 4 | 1 | 1 | 0 |
+| caption | Flight of the Conchords (2007) - Ladies of the World | 48 | 8 | 1 | 2 | 0 |
+| caption | Flight of the Conchords (2007) - Robots | 5 | 6 | 1 | 1 | 0 |
+| caption | Flight of the Conchords (2007) - Robots | 23 | 6 | 1 | 1 | 0 |
+| caption | Flight of the Conchords (2007) - Robots | 32 | 7 | 1 | 1 | 1 |
+| caption | Flight of the Conchords (2007) - Robots | 40 | 4 | 1 | 1 | 0 |
+| caption | Frozen (2013) - Let It Go YVVTZgwYwVo | 12 | 4 | 1 | 1 | 0 |
+| caption | Frozen (2013) - Let It Go YVVTZgwYwVo | 15 | 6 | 1 | 1 | 0 |
+| caption | Frozen (2013) - Let It Go YVVTZgwYwVo | 41 | 6 | 1 | 1 | 0 |
+| caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 1 | 6 | 1 | 2 | 2 |
+| caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 3 | 7 | 1 | 2 | 1 |
+| caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 5 | 6 | 2 | 3 | 0 |
+| caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 6 | 5 | 2 | 3 | 0 |
+| caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 7 | 5 | 1 | 2 | 0 |
+| caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 8 | 5 | 2 | 3 | 3 |
+| caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 18 | 10 | 2 | 4 | 2 |
+| caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 19 | 6 | 2 | 3 | 0 |
+| caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 20 | 10 | 1 | 2 | 0 |
+| caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 22 | 6 | 1 | 1 | 2 |
+| caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 23 | 8 | 1 | 2 | 0 |
+| caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 24 | 11 | 5 | 8 | 1 |
+| caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 26 | 7 | 3 | 5 | 0 |
+| caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 29 | 8 | 2 | 3 | 0 |
+| caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 30 | 8 | 4 | 4 | 5 |
+| caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 31 | 7 | 2 | 3 | 0 |
+| caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 33 | 10 | 2 | 4 | 2 |
+| caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 34 | 6 | 2 | 3 | 0 |
+| caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 35 | 10 | 2 | 3 | 1 |
+| caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 37 | 10 | 1 | 2 | 3 |
+| caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 39 | 10 | 4 | 5 | 0 |
+| caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 41 | 10 | 2 | 2 | 0 |
+| caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 46 | 8 | 1 | 2 | 0 |
+| caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 50 | 8 | 2 | 3 | 3 |
+| caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 51 | 11 | 3 | 4 | 5 |
+| caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 53 | 6 | 1 | 2 | 0 |
+| caption | John Legend - All of Me 450p7goxZqg | 45 | 6 | 1 | 1 | 0 |
+| caption | John Legend - All of Me 450p7goxZqg | 49 | 11 | 1 | 1 | 0 |
+| caption | John Legend - Love Me Now (Off NmCFY1oYDeM | 5 | 9 | 1 | 1 | 0 |
+| caption | John Legend - Love Me Now (Off NmCFY1oYDeM | 12 | 10 | 1 | 1 | 0 |
+| caption | John Legend - Love Me Now (Off NmCFY1oYDeM | 17 | 9 | 3 | 5 | 2 |
+| caption | John Legend - Love Me Now (Off NmCFY1oYDeM | 18 | 6 | 1 | 2 | 1 |
+| caption | John Legend - Love Me Now (Off NmCFY1oYDeM | 22 | 5 | 1 | 2 | 0 |
+| caption | John Legend - Love Me Now (Off NmCFY1oYDeM | 42 | 11 | 1 | 1 | 0 |
+| caption | John Legend - Love Me Now (Off NmCFY1oYDeM | 51 | 9 | 3 | 3 | 0 |
+| caption | Jung Kook 정국 - 3D (feat. Jack Harlow) (Live)---Z3x9i7njCCo | 26 | 10 | 1 | 1 | 1 |
+| caption | Jung Kook 정국 - 3D (feat. Jack Harlow) (Live)---Z3x9i7njCCo | 37 | 4 | 1 | 2 | 0 |
+| caption | Jung Kook 정국 - 3D (feat. Jack Harlow) (Live)---Z3x9i7njCCo | 51 | 7 | 1 | 2 | 0 |
+| caption | Jung Kook 정국 - 3D (feat. Jack Harlow) (Live)---Z3x9i7njCCo | 66 | 5 | 1 | 1 | 0 |
+| caption | Jung Kook 정국 - 3D (feat. Jack Harlow) (Live)---Z3x9i7njCCo | 67 | 6 | 1 | 1 | 0 |
+| caption | Jung Kook 정국 - 3D (feat. Jack Harlow) (Live)---Z3x9i7njCCo | 82 | 8 | 1 | 2 | 0 |
+| caption | Jung Kook 정국 - 3D (feat. Jack Harlow) (Live)---Z3x9i7njCCo | 91 | 6 | 1 | 1 | 0 |
+| caption | Justin Timberlake - CAN'T STOP ru0K8uYEZWw | 9 | 10 | 1 | 1 | 0 |
+| caption | Justin Timberlake - CAN'T STOP ru0K8uYEZWw | 20 | 7 | 1 | 1 | 0 |
+| caption | Justin Timberlake - CAN'T STOP ru0K8uYEZWw | 21 | 7 | 1 | 1 | 0 |
+| caption | Justin Timberlake - CAN'T STOP ru0K8uYEZWw | 25 | 5 | 1 | 1 | 0 |
+| caption | Justin Timberlake - CAN'T STOP ru0K8uYEZWw | 37 | 11 | 1 | 1 | 1 |
+| caption | Justin Timberlake - CAN'T STOP ru0K8uYEZWw | 39 | 11 | 2 | 2 | 1 |
+| caption | Justin Timberlake - CAN'T STOP ru0K8uYEZWw | 50 | 7 | 1 | 1 | 1 |
+| caption | Justin Timberlake - CAN'T STOP ru0K8uYEZWw | 51 | 7 | 1 | 1 | 0 |
+| caption | Justin Timberlake - CAN'T STOP ru0K8uYEZWw | 53 | 5 | 1 | 1 | 0 |
+| caption | Justin Timberlake - CAN'T STOP ru0K8uYEZWw | 58 | 8 | 2 | 0 | 2 |
+| caption | Justin Timberlake - CAN'T STOP ru0K8uYEZWw | 77 | 5 | 2 | 2 | 0 |
+| caption | Justin Timberlake - CAN'T STOP ru0K8uYEZWw | 78 | 7 | 1 | 1 | 0 |
+| caption | Justin Timberlake - CAN'T STOP ru0K8uYEZWw | 106 | 6 | 3 | 4 | 0 |
+| caption | Justin Timberlake - CAN'T STOP ru0K8uYEZWw | 110 | 2 | 1 | 1 | 0 |
+| caption | Justin Timberlake - Like I Lov FQ3slUz7Jo8 | 0 | 4 | 1 | 1 | 0 |
+| caption | Justin Timberlake - Like I Lov FQ3slUz7Jo8 | 10 | 8 | 1 | 1 | 0 |
+| caption | Justin Timberlake - Like I Lov FQ3slUz7Jo8 | 18 | 7 | 1 | 1 | 1 |
+| caption | Justin Timberlake - Like I Lov FQ3slUz7Jo8 | 20 | 5 | 1 | 2 | 2 |
+| caption | Justin Timberlake - Like I Lov FQ3slUz7Jo8 | 39 | 6 | 1 | 1 | 1 |
+| caption | Justin Timberlake - Like I Lov FQ3slUz7Jo8 | 41 | 8 | 2 | 2 | 0 |
+| caption | Justin Timberlake - Like I Lov FQ3slUz7Jo8 | 42 | 6 | 2 | 3 | 2 |
+| caption | Justin Timberlake - Like I Lov FQ3slUz7Jo8 | 52 | 10 | 1 | 1 | 2 |
+| caption | Justin Timberlake - Like I Lov FQ3slUz7Jo8 | 53 | 10 | 2 | 2 | 2 |
+| caption | Justin Timberlake - Like I Lov FQ3slUz7Jo8 | 56 | 8 | 1 | 2 | 0 |
+| caption | Justin Timberlake - Like I Lov FQ3slUz7Jo8 | 57 | 10 | 1 | 1 | 2 |
+| caption | Justin Timberlake - Like I Lov FQ3slUz7Jo8 | 58 | 9 | 2 | 3 | 1 |
+| caption | Justin Timberlake - Like I Lov FQ3slUz7Jo8 | 60 | 6 | 2 | 2 | 0 |
+| caption | Justin Timberlake - Like I Lov FQ3slUz7Jo8 | 61 | 10 | 2 | 3 | 1 |
+| caption | Justin Timberlake - Like I Lov FQ3slUz7Jo8 | 62 | 8 | 1 | 1 | 1 |
+| caption | Justin Timberlake - Like I Lov FQ3slUz7Jo8 | 64 | 6 | 2 | 3 | 0 |
+| caption | Justin Timberlake - Like I Lov FQ3slUz7Jo8 | 71 | 7 | 1 | 1 | 0 |
+| caption | Justin Timberlake - Like I Lov FQ3slUz7Jo8 | 73 | 3 | 1 | 2 | 2 |
+| caption | Justin Timberlake - Like I Lov FQ3slUz7Jo8 | 81 | 6 | 1 | 1 | 1 |
+| caption | Justin Timberlake - Like I Lov FQ3slUz7Jo8 | 83 | 3 | 1 | 1 | 0 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 24 | 10 | 1 | 2 | 0 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 32 | 7 | 1 | 1 | 0 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 33 | 8 | 1 | 1 | 0 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 58 | 13 | 1 | 1 | 1 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 59 | 6 | 1 | 1 | 0 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 76 | 9 | 3 | 3 | 1 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 77 | 9 | 1 | 1 | 0 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 78 | 9 | 1 | 1 | 0 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 80 | 9 | 1 | 1 | 0 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 82 | 9 | 2 | 2 | 0 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 83 | 9 | 1 | 1 | 0 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 84 | 9 | 1 | 1 | 2 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 89 | 12 | 1 | 1 | 1 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 90 | 12 | 1 | 1 | 2 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 104 | 9 | 1 | 1 | 0 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 105 | 9 | 1 | 1 | 0 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 106 | 9 | 1 | 1 | 1 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 108 | 9 | 2 | 2 | 0 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 109 | 9 | 1 | 1 | 0 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 110 | 9 | 1 | 1 | 0 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 111 | 9 | 1 | 1 | 0 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 114 | 9 | 1 | 1 | 0 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 116 | 9 | 2 | 2 | 2 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 118 | 9 | 1 | 1 | 0 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 119 | 9 | 1 | 1 | 0 |
+| caption | Justin Timberlake - Rock Your  TSVHoHyErBQ | 9 | 3 | 1 | 2 | 2 |
+| caption | Justin Timberlake - Rock Your  TSVHoHyErBQ | 38 | 5 | 1 | 1 | 1 |
+| caption | Justin Timberlake - Rock Your  TSVHoHyErBQ | 65 | 11 | 1 | 2 | 2 |
+| caption | Justin Timberlake - Rock Your  TSVHoHyErBQ | 67 | 6 | 1 | 2 | 3 |
+| caption | Justin Timberlake - Rock Your  TSVHoHyErBQ | 68 | 11 | 4 | 6 | 6 |
+| caption | Justin Timberlake - Rock Your  TSVHoHyErBQ | 69 | 6 | 1 | 2 | 0 |
+| caption | Justin Timberlake - Rock Your  TSVHoHyErBQ | 92 | 7 | 1 | 1 | 0 |
+| caption | Justin Timberlake - Selfish je0roKRn3nY | 12 | 10 | 1 | 1 | 0 |
+| caption | Justin Timberlake - Selfish je0roKRn3nY | 20 | 4 | 1 | 1 | 0 |
+| caption | Justin Timberlake - Selfish je0roKRn3nY | 68 | 4 | 1 | 1 | 1 |
+| caption | Justin Timberlake - Selfish je0roKRn3nY | 74 | 4 | 1 | 2 | 1 |
+| caption | Justin Timberlake - Suit & Tie (feat. JAY-Z)---IsUsVbTj2AY | 59 | 7 | 1 | 1 | 0 |
+| caption | Justin Timberlake - Suit & Tie (feat. JAY-Z)---IsUsVbTj2AY | 90 | 12 | 1 | 3 | 1 |
+| caption | Justin Timberlake - Suit & Tie (feat. JAY-Z)---IsUsVbTj2AY | 91 | 7 | 1 | 2 | 0 |
+| caption | KPop Demon Hunters (2025) - Free | 29 | 9 | 1 | 1 | 0 |
+| caption | KPop Demon Hunters (2025) - Free | 36 | 13 | 1 | 1 | 0 |
+| caption | KPop Demon Hunters (2025) - How It's Done | 2 | 7 | 1 | 2 | 2 |
+| caption | KPop Demon Hunters (2025) - How It's Done | 4 | 4 | 1 | 1 | 1 |
+| caption | KPop Demon Hunters (2025) - How It's Done | 5 | 3 | 1 | 1 | 1 |
+| caption | KPop Demon Hunters (2025) - How It's Done | 13 | 12 | 1 | 1 | 2 |
+| caption | KPop Demon Hunters (2025) - How It's Done | 16 | 8 | 1 | 1 | 0 |
+| caption | KPop Demon Hunters (2025) - How It's Done | 20 | 11 | 1 | 2 | 2 |
+| caption | KPop Demon Hunters (2025) - How It's Done | 35 | 10 | 1 | 2 | 0 |
+| caption | KPop Demon Hunters (2025) - How It's Done | 45 | 8 | 2 | 3 | 0 |
+| caption | KPop Demon Hunters (2025) - How It's Done | 49 | 10 | 4 | 5 | 1 |
+| caption | KPop Demon Hunters (2025) - How It's Done | 50 | 8 | 1 | 1 | 0 |
+| caption | KPop Demon Hunters (2025) - How It's Done | 52 | 11 | 2 | 3 | 1 |
+| caption | KPop Demon Hunters (2025) - How It's Done | 57 | 11 | 1 | 1 | 1 |
+| caption | KPop Demon Hunters (2025) - How It's Done | 60 | 5 | 1 | 1 | 0 |
+| caption | KPop Demon Hunters (2025) - How It's Done | 61 | 6 | 1 | 1 | 1 |
+| caption | KPop Demon Hunters (2025) - How It's Done | 63 | 6 | 1 | 2 | 0 |
+| caption | KPop Demon Hunters (2025) - What It Sounds Like | 39 | 4 | 1 | 1 | 0 |
+| caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 1 | 9 | 1 | 1 | 1 |
+| caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 25 | 7 | 1 | 1 | 1 |
+| caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 37 | 6 | 1 | 1 | 0 |
+| caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 49 | 10 | 1 | 1 | 3 |
+| caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 50 | 8 | 1 | 1 | 2 |
+| caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 51 | 9 | 1 | 1 | 4 |
+| caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 52 | 7 | 1 | 1 | 0 |
+| caption | Lewis Capaldi - Someone You Lo zABLecsR5UE | 0 | 6 | 1 | 1 | 0 |
+| caption | Lewis Capaldi - Someone You Lo zABLecsR5UE | 19 | 6 | 1 | 1 | 0 |
+| caption | Lewis Capaldi - Someone You Lo zABLecsR5UE | 43 | 5 | 1 | 1 | 0 |
+| caption | Moana (2016) - How Far I'll Go cPAbx5kgCJo | 6 | 8 | 1 | 1 | 1 |
+| caption | Moana (2016) - How Far I'll Go cPAbx5kgCJo | 24 | 10 | 1 | 2 | 1 |
+| caption | Moana (2016) - How Far I'll Go cPAbx5kgCJo | 35 | 9 | 1 | 1 | 1 |
+| caption | Moana (2016) - Shiny 93lrosBEW-Q | 15 | 5 | 1 | 1 | 0 |
+| caption | Moana (2016) - Shiny 93lrosBEW-Q | 22 | 2 | 1 | 2 | 0 |
+| caption | Moana (2016) - Shiny 93lrosBEW-Q | 30 | 6 | 1 | 1 | 3 |
+| caption | Moana (2016) - Shiny 93lrosBEW-Q | 38 | 7 | 1 | 1 | 0 |
+| caption | Moana (2016) - Shiny 93lrosBEW-Q | 49 | 8 | 1 | 1 | 0 |
+| caption | Moana (2016) - Shiny 93lrosBEW-Q | 66 | 5 | 1 | 1 | 0 |
+| caption | Moana (2016) - You're Welcome 79DijItQXMM | 0 | 9 | 2 | 3 | 3 |
+| caption | Moana (2016) - You're Welcome 79DijItQXMM | 6 | 2 | 1 | 1 | 0 |
+| caption | Moana (2016) - You're Welcome 79DijItQXMM | 29 | 6 | 1 | 1 | 0 |
+| caption | Moana (2016) - You're Welcome 79DijItQXMM | 43 | 8 | 1 | 1 | 2 |
+| caption | Moana (2016) - You're Welcome 79DijItQXMM | 55 | 7 | 1 | 1 | 1 |
+| caption | Moana (2016) - You're Welcome 79DijItQXMM | 63 | 9 | 2 | 2 | 0 |
+| caption | Mulan (1998) - I'll Make a Man vGfJeW_CcFY | 0 | 8 | 4 | 6 | 7 |
+| caption | Mulan (1998) - I'll Make a Man vGfJeW_CcFY | 24 | 10 | 1 | 1 | 0 |
+| caption | Mulan (1998) - I'll Make a Man vGfJeW_CcFY | 30 | 11 | 1 | 2 | 1 |
+| caption | Mulan (1998) - I'll Make a Man vGfJeW_CcFY | 42 | 11 | 2 | 3 | 0 |
+| caption | Mulan (1998) - I'll Make a Man vGfJeW_CcFY | 43 | 11 | 1 | 3 | 1 |
+| caption | Mulan (1998) - I'll Make a Man vGfJeW_CcFY | 47 | 11 | 1 | 2 | 1 |
+| caption | NSYNC - (God Must Have Spent)  -fxh7jAJR8U | 1 | 2 | 1 | 1 | 0 |
+| caption | NSYNC - (God Must Have Spent)  -fxh7jAJR8U | 23 | 4 | 1 | 1 | 0 |
+| caption | NSYNC - (God Must Have Spent)  -fxh7jAJR8U | 46 | 7 | 2 | 2 | 0 |
+| caption | NSYNC - (God Must Have Spent)  -fxh7jAJR8U | 47 | 7 | 1 | 0 | 1 |
+| caption | NSYNC - (God Must Have Spent)  -fxh7jAJR8U | 48 | 7 | 3 | 4 | 3 |
+| caption | NSYNC - (God Must Have Spent)  -fxh7jAJR8U | 49 | 7 | 3 | 4 | 2 |
+| caption | NSYNC - (God Must Have Spent)  -fxh7jAJR8U | 66 | 7 | 2 | 3 | 2 |
+| caption | NSYNC - (God Must Have Spent)  -fxh7jAJR8U | 67 | 4 | 1 | 2 | 0 |
+| caption | NSYNC - (God Must Have Spent)  -fxh7jAJR8U | 69 | 4 | 1 | 1 | 0 |
+| caption | NSYNC - Bye Bye Bye Eo-KmOd3i7s | 15 | 4 | 1 | 1 | 0 |
+| caption | NSYNC - Bye Bye Bye Eo-KmOd3i7s | 20 | 4 | 1 | 1 | 0 |
+| caption | NSYNC - Bye Bye Bye Eo-KmOd3i7s | 37 | 4 | 1 | 1 | 0 |
+| caption | NSYNC - Bye Bye Bye Eo-KmOd3i7s | 42 | 4 | 1 | 2 | 0 |
+| caption | NSYNC - Bye Bye Bye Eo-KmOd3i7s | 47 | 4 | 1 | 1 | 0 |
+| caption | NSYNC - Bye Bye Bye Eo-KmOd3i7s | 55 | 6 | 1 | 2 | 0 |
+| caption | NSYNC - Bye Bye Bye Eo-KmOd3i7s | 61 | 6 | 1 | 2 | 0 |
+| caption | NSYNC - Bye Bye Bye Eo-KmOd3i7s | 63 | 4 | 1 | 1 | 0 |
+| caption | NSYNC - Bye Bye Bye Eo-KmOd3i7s | 68 | 4 | 1 | 1 | 1 |
+| caption | NSYNC - Girlfriend saxnXiBKEaY | 9 | 6 | 1 | 1 | 0 |
+| caption | NSYNC - Girlfriend saxnXiBKEaY | 18 | 6 | 1 | 2 | 2 |
+| caption | NSYNC - Girlfriend saxnXiBKEaY | 24 | 6 | 1 | 1 | 0 |
+| caption | NSYNC - Girlfriend saxnXiBKEaY | 41 | 7 | 1 | 1 | 0 |
+| caption | NSYNC - Girlfriend saxnXiBKEaY | 59 | 6 | 1 | 1 | 0 |
+| caption | NSYNC - Gone IbRwSI8yi1o | 5 | 5 | 1 | 1 | 0 |
+| caption | NSYNC - Gone IbRwSI8yi1o | 8 | 5 | 1 | 1 | 0 |
+| caption | NSYNC - Gone IbRwSI8yi1o | 16 | 11 | 1 | 2 | 2 |
+| caption | NSYNC - Gone IbRwSI8yi1o | 23 | 3 | 1 | 1 | 0 |
+| caption | NSYNC - Gone IbRwSI8yi1o | 27 | 7 | 1 | 1 | 0 |
+| caption | NSYNC - Gone IbRwSI8yi1o | 34 | 6 | 1 | 1 | 0 |
+| caption | NSYNC - Gone IbRwSI8yi1o | 44 | 11 | 1 | 2 | 0 |
+| caption | NSYNC - Gone IbRwSI8yi1o | 45 | 4 | 2 | 3 | 0 |
+| caption | NSYNC - Gone IbRwSI8yi1o | 47 | 4 | 1 | 2 | 1 |
+| caption | NSYNC - Gone IbRwSI8yi1o | 55 | 7 | 1 | 1 | 0 |
+| caption | NSYNC - Gone IbRwSI8yi1o | 62 | 4 | 1 | 1 | 1 |
+| caption | NSYNC - Gone IbRwSI8yi1o | 66 | 6 | 1 | 2 | 0 |
+| caption | NSYNC - Gone IbRwSI8yi1o | 70 | 11 | 4 | 6 | 4 |
+| caption | NSYNC - It's Gonna Be Me GQMlWwIXg3M | 4 | 2 | 1 | 1 | 0 |
+| caption | NSYNC - It's Gonna Be Me GQMlWwIXg3M | 15 | 8 | 1 | 1 | 1 |
+| caption | NSYNC - It's Gonna Be Me GQMlWwIXg3M | 22 | 10 | 1 | 1 | 0 |
+| caption | NSYNC - It's Gonna Be Me GQMlWwIXg3M | 28 | 8 | 1 | 1 | 1 |
+| caption | NSYNC - It's Gonna Be Me GQMlWwIXg3M | 35 | 5 | 1 | 1 | 0 |
+| caption | NSYNC - It's Gonna Be Me GQMlWwIXg3M | 42 | 4 | 1 | 1 | 0 |
+| caption | NSYNC - It's Gonna Be Me GQMlWwIXg3M | 48 | 8 | 1 | 1 | 1 |
+| caption | NSYNC - It's Gonna Be Me GQMlWwIXg3M | 55 | 8 | 1 | 1 | 2 |
+| caption | NSYNC - It's Gonna Be Me GQMlWwIXg3M | 56 | 4 | 1 | 1 | 0 |
+| caption | NSYNC - Pop TWZKw_MgUPI | 30 | 5 | 1 | 2 | 2 |
+| caption | NSYNC - Pop TWZKw_MgUPI | 34 | 4 | 1 | 1 | 0 |
+| caption | NSYNC - Pop TWZKw_MgUPI | 50 | 3 | 1 | 2 | 0 |
+| caption | NSYNC - Pop TWZKw_MgUPI | 55 | 8 | 1 | 2 | 2 |
+| caption | NSYNC - Pop TWZKw_MgUPI | 61 | 4 | 1 | 1 | 0 |
+| caption | NSYNC - Pop TWZKw_MgUPI | 65 | 4 | 2 | 2 | 0 |
+| caption | NSYNC - Pop TWZKw_MgUPI | 68 | 6 | 2 | 3 | 0 |
+| caption | NSYNC - Pop TWZKw_MgUPI | 69 | 5 | 1 | 2 | 0 |
+| caption | NSYNC - Pop TWZKw_MgUPI | 79 | 4 | 1 | 1 | 1 |
+| caption | NSYNC - Tearin' Up My Heart (O _ZcmuKsyvzg | 5 | 4 | 1 | 1 | 0 |
+| caption | NSYNC - Tearin' Up My Heart (O _ZcmuKsyvzg | 18 | 2 | 1 | 1 | 0 |
+| caption | NSYNC - Tearin' Up My Heart (O _ZcmuKsyvzg | 28 | 9 | 1 | 1 | 1 |
+| caption | NSYNC - This I Promise You 6thmPrTxBtI | 20 | 4 | 1 | 2 | 0 |
+| caption | NSYNC - This I Promise You 6thmPrTxBtI | 38 | 8 | 3 | 4 | 0 |
+| caption | NSYNC - This I Promise You 6thmPrTxBtI | 39 | 7 | 1 | 2 | 2 |
+| caption | NSYNC - This I Promise You 6thmPrTxBtI | 52 | 4 | 1 | 1 | 0 |
+| caption | Ne-Yo - Because Of You atz_aZA3rf0 | 2 | 6 | 2 | 2 | 2 |
+| caption | Ne-Yo - Because Of You atz_aZA3rf0 | 3 | 6 | 2 | 2 | 1 |
+| caption | Ne-Yo - Because Of You atz_aZA3rf0 | 4 | 7 | 2 | 4 | 2 |
+| caption | Ne-Yo - Because Of You atz_aZA3rf0 | 10 | 13 | 1 | 1 | 1 |
+| caption | Ne-Yo - Because Of You atz_aZA3rf0 | 14 | 13 | 1 | 2 | 0 |
+| caption | Ne-Yo - Because Of You atz_aZA3rf0 | 24 | 4 | 1 | 1 | 0 |
+| caption | Ne-Yo - Because Of You atz_aZA3rf0 | 27 | 10 | 1 | 1 | 0 |
+| caption | Ne-Yo - Because Of You atz_aZA3rf0 | 28 | 11 | 1 | 1 | 0 |
+| caption | Ne-Yo - Because Of You atz_aZA3rf0 | 31 | 13 | 2 | 3 | 2 |
+| caption | Ne-Yo - Because Of You atz_aZA3rf0 | 37 | 12 | 3 | 3 | 4 |
+| caption | Ne-Yo - Because Of You atz_aZA3rf0 | 45 | 6 | 1 | 1 | 0 |
+| caption | Ne-Yo - Because Of You atz_aZA3rf0 | 46 | 10 | 2 | 3 | 0 |
+| caption | Ne-Yo - One In A Million 6tpl9LtkRRw | 7 | 6 | 1 | 0 | 1 |
+| caption | Ne-Yo - One In A Million 6tpl9LtkRRw | 12 | 7 | 1 | 1 | 0 |
+| caption | Ne-Yo - One In A Million 6tpl9LtkRRw | 20 | 7 | 1 | 2 | 0 |
+| caption | Ne-Yo - One In A Million 6tpl9LtkRRw | 25 | 2 | 1 | 1 | 0 |
+| caption | Ne-Yo - One In A Million 6tpl9LtkRRw | 53 | 6 | 1 | 2 | 1 |
+| caption | Ne-Yo - So Sick IxszlJppRQI | 7 | 7 | 1 | 1 | 0 |
+| caption | Queen - Bohemian Rhapsody fJ9rUzIMcZQ | 21 | 4 | 1 | 1 | 0 |
+| caption | Queen - Bohemian Rhapsody fJ9rUzIMcZQ | 43 | 9 | 2 | 2 | 0 |
+| caption | Queen - Bohemian Rhapsody fJ9rUzIMcZQ | 49 | 11 | 4 | 7 | 3 |
+| caption | Queen - Bohemian Rhapsody fJ9rUzIMcZQ | 50 | 4 | 2 | 3 | 3 |
+| caption | Queen - Bohemian Rhapsody fJ9rUzIMcZQ | 51 | 7 | 1 | 2 | 3 |
+| caption | Queen - Bohemian Rhapsody fJ9rUzIMcZQ | 52 | 10 | 1 | 1 | 0 |
+| caption | Rent (2005) - Another Day | 2 | 8 | 1 | 1 | 0 |
+| caption | Rent (2005) - Another Day | 9 | 7 | 1 | 1 | 0 |
+| caption | Rent (2005) - Another Day | 10 | 4 | 1 | 1 | 0 |
+| caption | Rent (2005) - Another Day | 36 | 9 | 1 | 1 | 0 |
+| caption | Rent (2005) - Another Day | 56 | 9 | 2 | 3 | 1 |
+| caption | Rent (2005) - Another Day | 59 | 12 | 3 | 4 | 4 |
+| caption | Rent (2005) - Another Day | 60 | 15 | 7 | 8 | 0 |
+| caption | Rent (2005) - Another Day | 61 | 6 | 2 | 3 | 0 |
+| caption | Rent (2005) - Another Day | 62 | 8 | 2 | 3 | 1 |
+| caption | Rent (2005) - Another Day | 68 | 9 | 1 | 1 | 1 |
+| caption | Rent (2005) - Another Day | 72 | 6 | 1 | 1 | 0 |
+| caption | Rent (2005) - I Should Tell You | 14 | 6 | 2 | 2 | 0 |
+| caption | Rent (2005) - I Should Tell You | 16 | 4 | 1 | 2 | 0 |
+| caption | Rent (2005) - I Should Tell You | 21 | 4 | 1 | 1 | 0 |
+| caption | Rent (2005) - I Should Tell You | 22 | 6 | 1 | 2 | 0 |
+| caption | Rent (2005) - I Should Tell You | 23 | 6 | 2 | 1 | 1 |
+| caption | Rent (2005) - I Should Tell You | 26 | 4 | 1 | 2 | 0 |
+| caption | Rent (2005) - I Should Tell You | 27 | 6 | 2 | 2 | 0 |
+| caption | Rent (2005) - I Should Tell You | 28 | 6 | 3 | 4 | 0 |
+| caption | Rent (2005) - I Should Tell You | 29 | 6 | 2 | 3 | 0 |
+| caption | Rent (2005) - I Should Tell You | 30 | 6 | 2 | 3 | 0 |
+| caption | Rent (2005) - I Should Tell You | 31 | 6 | 3 | 4 | 0 |
+| caption | Rent (2005) - I Should Tell You | 32 | 6 | 2 | 3 | 0 |
+| caption | Rent (2005) - I Should Tell You | 33 | 6 | 2 | 3 | 0 |
+| caption | Rent (2005) - I Should Tell You | 34 | 8 | 3 | 4 | 0 |
+| caption | Rent (2005) - I Should Tell You | 35 | 4 | 1 | 2 | 1 |
+| caption | Rent (2005) - I Should Tell You | 38 | 6 | 1 | 0 | 2 |
+| caption | Rent (2005) - I Should Tell You | 43 | 4 | 1 | 1 | 0 |
+| caption | Rent (2005) - I Should Tell You | 45 | 4 | 1 | 1 | 0 |
+| caption | Rent (2005) - I'll Cover You | 10 | 10 | 4 | 0 | 4 |
+| caption | Rent (2005) - I'll Cover You | 12 | 14 | 5 | 4 | 5 |
+| caption | Rent (2005) - I'll Cover You | 14 | 4 | 1 | 1 | 0 |
+| caption | Rent (2005) - I'll Cover You | 15 | 6 | 1 | 1 | 0 |
+| caption | Rent (2005) - I'll Cover You | 16 | 8 | 3 | 4 | 0 |
+| caption | Rent (2005) - I'll Cover You | 17 | 8 | 3 | 4 | 0 |
+| caption | Rent (2005) - I'll Cover You | 19 | 8 | 3 | 4 | 0 |
+| caption | Rent (2005) - I'll Cover You | 22 | 10 | 4 | 0 | 4 |
+| caption | Rent (2005) - I'll Cover You | 24 | 14 | 7 | 9 | 9 |
+| caption | Rent (2005) - I'll Cover You | 25 | 14 | 6 | 8 | 8 |
+| caption | Rent (2005) - I'll Cover You | 26 | 4 | 2 | 2 | 1 |
+| caption | Rent (2005) - I'll Cover You | 27 | 6 | 2 | 4 | 0 |
+| caption | Rent (2005) - I'll Cover You | 28 | 8 | 3 | 4 | 4 |
+| caption | Rent (2005) - I'll Cover You | 29 | 12 | 4 | 5 | 0 |
+| caption | Rent (2005) - I'll Cover You | 34 | 9 | 1 | 3 | 0 |
+| caption | Rent (2005) - I'll Cover You | 36 | 8 | 1 | 3 | 3 |
+| caption | Rent (2005) - I'll Cover You | 37 | 4 | 1 | 1 | 0 |
+| caption | Rent (2005) - I'll Cover You | 38 | 6 | 2 | 4 | 3 |
+| caption | Rent (2005) - I'll Cover You | 41 | 6 | 1 | 2 | 0 |
+| caption | Rent (2005) - Out Tonight | 2 | 10 | 1 | 1 | 0 |
+| caption | Rent (2005) - Out Tonight | 3 | 7 | 1 | 1 | 1 |
+| caption | Rent (2005) - Out Tonight | 33 | 6 | 1 | 1 | 1 |
+| caption | Rent (2005) - Santa Fe | 9 | 9 | 1 | 1 | 0 |
+| caption | Rent (2005) - Santa Fe | 16 | 5 | 1 | 1 | 0 |
+| caption | Rent (2005) - Santa Fe | 25 | 6 | 1 | 1 | 0 |
+| caption | Rent (2005) - Seasons of Love | 26 | 10 | 1 | 1 | 0 |
+| caption | Rent (2005) - Seasons of Love | 28 | 6 | 2 | 2 | 0 |
+| caption | Rent (2005) - Today 4 U | 1 | 11 | 1 | 1 | 3 |
+| caption | Rent (2005) - Today 4 U | 3 | 7 | 1 | 1 | 0 |
+| caption | Rent (2005) - Today 4 U | 12 | 11 | 1 | 1 | 1 |
+| caption | Rent (2005) - What You Own | 21 | 8 | 3 | 3 | 0 |
+| caption | Rent (2005) - What You Own | 24 | 8 | 3 | 4 | 0 |
+| caption | Rent (2005) - What You Own | 27 | 12 | 5 | 5 | 5 |
+| caption | Rent (2005) - What You Own | 28 | 8 | 3 | 4 | 0 |
+| caption | Rent (2005) - What You Own | 29 | 12 | 5 | 6 | 0 |
+| caption | Rent (2005) - What You Own | 30 | 10 | 5 | 6 | 0 |
+| caption | Rent (2005) - What You Own | 31 | 8 | 2 | 3 | 3 |
+| caption | Rent (2005) - What You Own | 32 | 4 | 2 | 3 | 0 |
+| caption | Rent (2005) - What You Own | 34 | 10 | 1 | 2 | 0 |
+| caption | Rent (2005) - What You Own | 36 | 8 | 3 | 4 | 0 |
+| caption | Rent (2005) - What You Own | 38 | 14 | 4 | 5 | 6 |
+| caption | Rent (2005) - What You Own | 39 | 16 | 7 | 8 | 8 |
+| caption | Rent (2005) - What You Own | 40 | 9 | 3 | 3 | 2 |
+| caption | Rent (2005) - What You Own | 44 | 8 | 2 | 4 | 0 |
+| caption | Rent (2005) - What You Own | 45 | 10 | 4 | 5 | 0 |
+| caption | Rent (2005) - What You Own | 46 | 12 | 5 | 6 | 0 |
+| caption | Rent (2005) - What You Own | 47 | 12 | 5 | 6 | 0 |
+| caption | Rent (2005) - What You Own | 49 | 6 | 2 | 3 | 0 |
+| caption | Rent (2005) - What You Own | 50 | 6 | 1 | 1 | 0 |
+| caption | Rent (2005) - Will I | 1 | 5 | 2 | 3 | 2 |
+| caption | Rent (2005) - Will I | 12 | 8 | 4 | 4 | 3 |
+| caption | Rent (2005) - Will I | 13 | 6 | 2 | 3 | 0 |
+| caption | Rent (2005) - Will I | 15 | 8 | 4 | 0 | 4 |
+| caption | Rent (2005) - Will I | 17 | 7 | 3 | 4 | 4 |
+| caption | Rent (2005) - Will I | 18 | 8 | 3 | 5 | 0 |
+| caption | Rent (2005) - Will I | 21 | 7 | 2 | 3 | 3 |
+| caption | Rent (2005) - Will I | 22 | 7 | 2 | 2 | 0 |
+| caption | Rent (2005) - Will I | 24 | 8 | 3 | 3 | 1 |
+| caption | Rent (2005) - Will I | 25 | 3 | 2 | 0 | 3 |
+| caption | Rent (2005) - Will I | 29 | 5 | 2 | 3 | 3 |
+| caption | Rent (2005) - Without You | 32 | 8 | 3 | 4 | 4 |
+| caption | Rent (2005) - Without You | 34 | 4 | 2 | 4 | 4 |
+| caption | Rent (2005) - Without You | 35 | 3 | 1 | 2 | 1 |
+| caption | Rent (2005) - Without You | 47 | 6 | 2 | 2 | 0 |
+| caption | Rent (2005) - Without You | 49 | 6 | 2 | 2 | 2 |
+| caption | Rent (2005) - Without You | 50 | 6 | 2 | 3 | 2 |
+| caption | Rent (2005) - Without You | 54 | 4 | 1 | 1 | 0 |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 25 | 7 | 2 | 3 | 3 |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 26 | 6 | 1 | 2 | 2 |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 28 | 3 | 1 | 2 | 1 |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 51 | 7 | 1 | 2 | 2 |
+| caption | S Club 7 - Never Had A Dream C WB9_sf6oV1o | 21 | 8 | 1 | 1 | 0 |
+| caption | S Club 7 - Never Had A Dream C WB9_sf6oV1o | 33 | 3 | 1 | 1 | 0 |
+| caption | Sara Bareilles - Brave (Offici QUQsqBqxoR4 | 38 | 5 | 1 | 1 | 0 |
+| caption | Stephanie Beatriz - Waiting On jKKrfr4To14 | 15 | 7 | 1 | 1 | 0 |
+| caption | The Last Five Years (2014) - A Summer in Ohio | 11 | 3 | 1 | 1 | 1 |
+| caption | The Last Five Years (2014) - A Summer in Ohio | 26 | 4 | 1 | 1 | 0 |
+| caption | The Last Five Years (2014) - A Summer in Ohio | 28 | 5 | 1 | 1 | 1 |
+| caption | The Last Five Years (2014) - Goodbye Until Tomorrow & I Could Never Rescue You | 64 | 6 | 1 | 1 | 0 |
+| caption | The Last Five Years (2014) - I Can Do Better Than That | 18 | 11 | 1 | 1 | 0 |
+| caption | The Last Five Years (2014) - I Can Do Better Than That | 29 | 8 | 1 | 2 | 0 |
+| caption | The Last Five Years (2014) - I Can Do Better Than That | 34 | 3 | 1 | 1 | 1 |
+| caption | The Last Five Years (2014) - If I Didn't Believe in You | 0 | 9 | 2 | 4 | 5 |
+| caption | The Last Five Years (2014) - If I Didn't Believe in You | 2 | 9 | 1 | 2 | 2 |
+| caption | The Last Five Years (2014) - If I Didn't Believe in You | 3 | 5 | 1 | 1 | 0 |
+| caption | The Last Five Years (2014) - If I Didn't Believe in You | 26 | 7 | 1 | 1 | 1 |
+| caption | The Last Five Years (2014) - Moving Too Fast | 0 | 9 | 2 | 3 | 2 |
+| caption | The Last Five Years (2014) - Moving Too Fast | 1 | 8 | 1 | 1 | 1 |
+| caption | The Last Five Years (2014) - Moving Too Fast | 13 | 9 | 1 | 1 | 0 |
+| caption | The Last Five Years (2014) - Moving Too Fast | 17 | 11 | 1 | 1 | 0 |
+| caption | The Last Five Years (2014) - Moving Too Fast | 43 | 8 | 1 | 1 | 3 |
+| caption | The Last Five Years (2014) - Moving Too Fast | 47 | 6 | 1 | 1 | 1 |
+| caption | The Last Five Years (2014) - Moving Too Fast | 53 | 9 | 2 | 2 | 1 |
+| caption | The Last Five Years (2014) - Moving Too Fast | 54 | 8 | 1 | 1 | 2 |
+| caption | The Last Five Years (2014) - Moving Too Fast | 77 | 10 | 1 | 1 | 1 |
+| caption | The Last Five Years (2014) - Moving Too Fast | 86 | 5 | 1 | 1 | 0 |
+| caption | The Last Five Years (2014) - See I'm Smiling | 28 | 10 | 2 | 2 | 1 |
+| caption | The Last Five Years (2014) - See I'm Smiling | 41 | 13 | 1 | 1 | 4 |
+| caption | The Last Five Years (2014) - See I'm Smiling | 43 | 12 | 2 | 3 | 2 |
+| caption | The Last Five Years (2014) - See I'm Smiling | 50 | 5 | 2 | 3 | 3 |
+| caption | The Last Five Years (2014) - See I'm Smiling | 55 | 8 | 1 | 2 | 1 |
+| caption | The Last Five Years (2014) - See I'm Smiling | 58 | 9 | 1 | 1 | 1 |
+| caption | The Last Five Years (2014) - See I'm Smiling | 61 | 9 | 3 | 3 | 4 |
+| caption | The Last Five Years (2014) - See I'm Smiling | 62 | 5 | 2 | 2 | 1 |
+| caption | The Last Five Years (2014) - Shiksa Goddess | 25 | 10 | 1 | 1 | 0 |
+| caption | The Last Five Years (2014) - The Next Ten Minutes | 43 | 10 | 2 | 3 | 0 |
+| caption | The Last Five Years (2014) - The Next Ten Minutes | 45 | 6 | 2 | 3 | 0 |
+| caption | The Last Five Years (2014) - The Next Ten Minutes | 50 | 11 | 3 | 5 | 4 |
+| caption | The Last Five Years (2014) - The Schmuel Song | 1 | 7 | 1 | 2 | 2 |
+| caption | The Last Five Years (2014) - The Schmuel Song | 12 | 5 | 1 | 2 | 0 |
+| caption | The Last Five Years (2014) - The Schmuel Song | 13 | 8 | 1 | 1 | 0 |
+| caption | The Last Five Years (2014) - The Schmuel Song | 20 | 7 | 1 | 1 | 0 |
+| caption | The Last Five Years (2014) - The Schmuel Song | 22 | 12 | 2 | 3 | 2 |
+| caption | The Last Five Years (2014) - The Schmuel Song | 31 | 7 | 1 | 1 | 0 |
+| caption | The Last Five Years (2014) - The Schmuel Song | 48 | 11 | 1 | 1 | 2 |
+| caption | The Last Five Years (2014) - The Schmuel Song | 51 | 7 | 2 | 3 | 1 |
+| caption | The Last Five Years (2014) - The Schmuel Song | 54 | 7 | 1 | 1 | 1 |
+| caption | The Last Five Years (2014) - The Schmuel Song | 80 | 10 | 1 | 1 | 0 |
+| caption | The Last Five Years (2014) - The Schmuel Song | 94 | 8 | 1 | 1 | 2 |
+| caption | The Last Five Years (2014) - The Schmuel Song | 115 | 8 | 1 | 1 | 0 |
+| caption | The Last Five Years (2014) - The Schmuel Song | 116 | 6 | 1 | 1 | 0 |
+| caption | The Last Five Years (2014) - The Schmuel Song | 117 | 12 | 2 | 3 | 0 |
+| caption | The Lion King (1994) - Can You 25QyCxVkXwQ | 0 | 4 | 2 | 2 | 4 |
+| caption | The Lion King (1994) - Can You 25QyCxVkXwQ | 33 | 4 | 1 | 1 | 0 |
+| caption | The Lion King (1994) - Hakuna  fwLxDUQBdEg | 0 | 7 | 3 | 5 | 7 |
+| caption | The Lion King (1994) - Hakuna  fwLxDUQBdEg | 3 | 6 | 1 | 1 | 0 |
+| caption | The Lion King (1994) - Hakuna  fwLxDUQBdEg | 17 | 6 | 2 | 2 | 0 |
+| caption | The Lion King (1994) - Hakuna  fwLxDUQBdEg | 50 | 7 | 1 | 1 | 0 |
+| caption | The Lion King (1994) - Hakuna  fwLxDUQBdEg | 57 | 12 | 1 | 1 | 2 |
+| caption | The Little Mermaid (1989) - Pa SXKlJuO07eM | 0 | 11 | 1 | 2 | 2 |
+| caption | The Little Mermaid (1989) - Pa SXKlJuO07eM | 18 | 7 | 1 | 1 | 0 |
+| caption | The Little Mermaid (1989) - Pa SXKlJuO07eM | 23 | 3 | 1 | 1 | 1 |
+| caption | The Little Mermaid (1989) - Pa SXKlJuO07eM | 31 | 6 | 1 | 1 | 0 |
+| caption | The Little Mermaid (1989) - Un GC_mV1IpjWA | 0 | 11 | 5 | 6 | 6 |
+| caption | The Little Mermaid (1989) - Un GC_mV1IpjWA | 1 | 8 | 1 | 1 | 0 |
+| caption | The Little Mermaid (1989) - Un GC_mV1IpjWA | 5 | 12 | 1 | 1 | 0 |
+| caption | The Little Mermaid (1989) - Un GC_mV1IpjWA | 38 | 2 | 1 | 0 | 1 |
+| caption | The Little Mermaid (1989) - Un GC_mV1IpjWA | 44 | 10 | 1 | 2 | 0 |
+| caption | The Little Mermaid (1989) - Un GC_mV1IpjWA | 50 | 8 | 1 | 1 | 1 |
+| caption | The Little Mermaid (1989) - Un GC_mV1IpjWA | 51 | 10 | 1 | 1 | 0 |
+| caption | The Little Mermaid (1989) - Un GC_mV1IpjWA | 54 | 4 | 1 | 1 | 0 |
+| caption | The Little Mermaid (1989) - Un GC_mV1IpjWA | 71 | 10 | 1 | 1 | 0 |
+| caption | The Philosopher Kings - You Do AI7F8qlN44E | 2 | 7 | 1 | 1 | 0 |
+| caption | The Philosopher Kings - You Do AI7F8qlN44E | 9 | 11 | 1 | 2 | 0 |
+| caption | The Philosopher Kings - You Do AI7F8qlN44E | 13 | 9 | 1 | 2 | 2 |
+| caption | The Philosopher Kings - You Do AI7F8qlN44E | 14 | 9 | 2 | 4 | 2 |
+| caption | The Philosopher Kings - You Do AI7F8qlN44E | 33 | 9 | 1 | 2 | 3 |
+| caption | The Philosopher Kings - You Do AI7F8qlN44E | 36 | 7 | 1 | 1 | 1 |
+| caption | The Philosopher Kings - You Do AI7F8qlN44E | 43 | 9 | 2 | 3 | 2 |
+| caption | The Philosopher Kings - You Do AI7F8qlN44E | 44 | 9 | 3 | 4 | 3 |
+| caption | The Philosopher Kings - You Do AI7F8qlN44E | 45 | 10 | 1 | 0 | 1 |
+| caption | Troy, Gabriella - Breaking Fre 0qj67KE5VXI | 9 | 7 | 1 | 1 | 0 |
+| caption | Troy, Gabriella - Breaking Fre 0qj67KE5VXI | 23 | 5 | 1 | 1 | 0 |
+| caption | Troy, Gabriella - Breaking Fre 0qj67KE5VXI | 24 | 3 | 1 | 1 | 0 |
+| caption | Troy, Gabriella - Breaking Fre 0qj67KE5VXI | 34 | 4 | 1 | 1 | 0 |
+| caption | Troy, Gabriella - Breaking Fre 0qj67KE5VXI | 49 | 6 | 1 | 1 | 0 |
+| caption | Troy, Gabriella - Breaking Fre 0qj67KE5VXI | 51 | 5 | 1 | 1 | 0 |
+| caption | Whitney Houston - I Wanna Danc eH3giaIzONA | 16 | 6 | 1 | 1 | 0 |
+| caption | Whitney Houston - I Wanna Danc eH3giaIzONA | 18 | 6 | 1 | 1 | 0 |
+| caption | Whitney Houston - I Wanna Danc eH3giaIzONA | 22 | 6 | 1 | 1 | 1 |
+| caption | Whitney Houston - I Wanna Danc eH3giaIzONA | 26 | 6 | 1 | 1 | 0 |
+| caption | Whitney Houston - I Wanna Danc eH3giaIzONA | 32 | 6 | 1 | 1 | 0 |
+| caption | Whitney Houston - I Wanna Danc eH3giaIzONA | 34 | 6 | 1 | 1 | 1 |
+| caption | Whitney Houston - I Wanna Danc eH3giaIzONA | 36 | 6 | 1 | 1 | 0 |
+| caption | Whitney Houston - I Wanna Danc eH3giaIzONA | 42 | 4 | 1 | 1 | 0 |
+| caption | Whitney Houston - I Wanna Danc eH3giaIzONA | 48 | 6 | 1 | 1 | 1 |
+| caption | Whitney Houston - I Wanna Danc eH3giaIzONA | 50 | 6 | 1 | 1 | 0 |
+| caption | Whitney Houston - I Wanna Danc eH3giaIzONA | 52 | 6 | 1 | 2 | 0 |
+| caption | Whitney Houston - I Wanna Danc eH3giaIzONA | 58 | 3 | 1 | 1 | 1 |
+| caption | Whitney Houston - I Will Alway 3JWTaaS7LdU | 11 | 2 | 1 | 2 | 0 |
+| caption | Wicked (2003) - For Good TZ0pXUb5jVU | 7 | 9 | 1 | 1 | 0 |
+| caption | Wicked (2003) - For Good TZ0pXUb5jVU | 44 | 7 | 3 | 4 | 5 |
+| caption | Wicked (2003) - For Good TZ0pXUb5jVU | 45 | 5 | 1 | 2 | 2 |
+| caption | Wicked (2003) - For Good TZ0pXUb5jVU | 46 | 6 | 3 | 5 | 0 |
+| caption | Wicked (2003) - For Good TZ0pXUb5jVU | 47 | 7 | 1 | 2 | 0 |
+| caption | Will Smith - Prince Ali (From  eGLSPyGszjo | 7 | 8 | 1 | 1 | 0 |
+| caption | Will Smith - Prince Ali (From  eGLSPyGszjo | 17 | 7 | 1 | 1 | 0 |
+| caption | Will Smith - Prince Ali (From  eGLSPyGszjo | 20 | 5 | 1 | 1 | 0 |
+| caption | Will Smith - Prince Ali (From  eGLSPyGszjo | 29 | 8 | 2 | 3 | 2 |
+| caption | Will Smith - Prince Ali (From  eGLSPyGszjo | 30 | 5 | 1 | 2 | 1 |
+| caption | Will Smith - Prince Ali (From  eGLSPyGszjo | 36 | 5 | 1 | 1 | 0 |
+| caption | Will Smith - Prince Ali (From  eGLSPyGszjo | 40 | 7 | 1 | 2 | 0 |
+| caption | Will Smith - Prince Ali (From  eGLSPyGszjo | 46 | 8 | 1 | 2 | 2 |
+| caption | Will Smith - Prince Ali (From  eGLSPyGszjo | 50 | 8 | 2 | 4 | 0 |
+| caption | Will Smith - Prince Ali (From  eGLSPyGszjo | 54 | 4 | 1 | 1 | 0 |
+| caption | Will Smith - Prince Ali (From  eGLSPyGszjo | 62 | 6 | 2 | 2 | 0 |
+| caption | Will Smith - Prince Ali (From  eGLSPyGszjo | 66 | 10 | 2 | 3 | 4 |
+| caption | Will Smith - Prince Ali (From  eGLSPyGszjo | 70 | 7 | 1 | 2 | 2 |
+| caption | Will Smith - Prince Ali (From  eGLSPyGszjo | 71 | 2 | 1 | 2 | 0 |
+| caption | ZAYN & Zhavia Ward - A Whole N rg_zwK_sSEY | 26 | 6 | 3 | 5 | 0 |
+| caption | ZAYN - Dusk Till Dawn (Official Video) ft. Sia---tt2k8PGm-TI | 33 | 4 | 1 | 1 | 0 |
+| caption | ZAYN - Dusk Till Dawn (Official Video) ft. Sia---tt2k8PGm-TI | 90 | 8 | 1 | 2 | 1 |
+| LRCLIB | Backstreet Boys - Chances (Off W5kM5wAwRug | 30 | 6 | 1 | 1 | 1 |
+| LRCLIB | Bruno Mars - I Just Might luotSpkyCVU | 7 | 11 | 2 | 2 | 0 |
+| LRCLIB | Bruno Mars - I Just Might luotSpkyCVU | 9 | 11 | 2 | 2 | 0 |
+| LRCLIB | Bruno Mars - I Just Might luotSpkyCVU | 15 | 10 | 1 | 1 | 1 |
+| LRCLIB | Bruno Mars - I Just Might luotSpkyCVU | 20 | 4 | 1 | 1 | 1 |
+| LRCLIB | Bruno Mars - I Just Might luotSpkyCVU | 24 | 5 | 2 | 2 | 1 |
+| LRCLIB | Bruno Mars - I Just Might luotSpkyCVU | 25 | 7 | 1 | 1 | 0 |
+| LRCLIB | Bruno Mars - I Just Might luotSpkyCVU | 26 | 12 | 1 | 1 | 2 |
+| LRCLIB | Bruno Mars - I Just Might luotSpkyCVU | 28 | 11 | 2 | 2 | 0 |
+| LRCLIB | Bruno Mars - I Just Might luotSpkyCVU | 29 | 13 | 1 | 1 | 2 |
+| LRCLIB | Bruno Mars - I Just Might luotSpkyCVU | 36 | 5 | 1 | 1 | 0 |
+| LRCLIB | Bruno Mars - I Just Might luotSpkyCVU | 40 | 10 | 1 | 1 | 1 |
+| LRCLIB | Bruno Mars - I Just Might luotSpkyCVU | 42 | 12 | 1 | 1 | 1 |
+| LRCLIB | Bruno Mars - I Just Might luotSpkyCVU | 46 | 10 | 1 | 1 | 1 |
+| LRCLIB | Bruno Mars - I Just Might luotSpkyCVU | 51 | 10 | 1 | 1 | 0 |
+| LRCLIB | Bruno Mars - I Just Might luotSpkyCVU | 53 | 4 | 2 | 2 | 0 |
+| LRCLIB | Bruno Mars - I Just Might luotSpkyCVU | 56 | 4 | 1 | 1 | 0 |
+| LRCLIB | Camp Rock (2008) - This Is Me  6HCUoMgviwU | 0 | 7 | 1 | 1 | 0 |
+| LRCLIB | Camp Rock (2008) - This Is Me  6HCUoMgviwU | 25 | 8 | 1 | 1 | 0 |
+| LRCLIB | Camp Rock (2008) - This Is Me  6HCUoMgviwU | 31 | 8 | 1 | 1 | 0 |
+| LRCLIB | Ed Sheeran - Best Part Of Me (feat. YEBBA) (Live At Abbey Road)---wGyh_53ecgg | 10 | 7 | 1 | 1 | 0 |
+| LRCLIB | Ed Sheeran - Best Part Of Me (feat. YEBBA) (Live At Abbey Road)---wGyh_53ecgg | 23 | 6 | 1 | 1 | 0 |
+| LRCLIB | Ed Sheeran - Best Part Of Me (feat. YEBBA) (Live At Abbey Road)---wGyh_53ecgg | 30 | 10 | 1 | 1 | 0 |
+| LRCLIB | Ed Sheeran - Best Part Of Me (feat. YEBBA) (Live At Abbey Road)---wGyh_53ecgg | 36 | 9 | 2 | 0 | 2 |
+| LRCLIB | Ed Sheeran - Best Part Of Me (feat. YEBBA) (Live At Abbey Road)---wGyh_53ecgg | 37 | 8 | 1 | 2 | 1 |
+| LRCLIB | Eminem - Lose Yourself (8 Mile xFYQQPAOz7Y | 9 | 15 | 1 | 1 | 1 |
+| LRCLIB | Eminem - Lose Yourself (8 Mile xFYQQPAOz7Y | 21 | 6 | 1 | 2 | 1 |
+| LRCLIB | Eminem - Lose Yourself (8 Mile xFYQQPAOz7Y | 26 | 12 | 1 | 1 | 1 |
+| LRCLIB | Eminem - Lose Yourself (8 Mile xFYQQPAOz7Y | 35 | 11 | 1 | 1 | 1 |
+| LRCLIB | Eminem - Lose Yourself (8 Mile xFYQQPAOz7Y | 38 | 5 | 1 | 1 | 1 |
+| LRCLIB | Eminem - Lose Yourself (8 Mile xFYQQPAOz7Y | 42 | 10 | 2 | 3 | 3 |
+| LRCLIB | Eminem - Lose Yourself (8 Mile xFYQQPAOz7Y | 50 | 7 | 1 | 1 | 0 |
+| LRCLIB | Eminem - Lose Yourself (8 Mile xFYQQPAOz7Y | 51 | 9 | 1 | 2 | 1 |
+| LRCLIB | Eminem - Lose Yourself (8 Mile xFYQQPAOz7Y | 62 | 10 | 1 | 1 | 0 |
+| LRCLIB | Eminem - Lose Yourself (8 Mile xFYQQPAOz7Y | 69 | 9 | 1 | 1 | 2 |
+| LRCLIB | Eminem - Lose Yourself (8 Mile xFYQQPAOz7Y | 76 | 24 | 1 | 2 | 0 |
+| LRCLIB | Eminem - Lose Yourself (8 Mile xFYQQPAOz7Y | 78 | 10 | 1 | 1 | 1 |
+| LRCLIB | Eminem - Lose Yourself (8 Mile xFYQQPAOz7Y | 81 | 13 | 1 | 1 | 2 |
+| LRCLIB | Frozen (2013) - In Summer (Sin 9tcaM06eGrY | 0 | 10 | 1 | 2 | 0 |
+| LRCLIB | Frozen (2013) - In Summer (Sin 9tcaM06eGrY | 1 | 9 | 1 | 1 | 0 |
+| LRCLIB | Frozen (2013) - In Summer (Sin 9tcaM06eGrY | 12 | 7 | 1 | 1 | 0 |
+| LRCLIB | Frozen (2013) - In Summer (Sin 9tcaM06eGrY | 15 | 12 | 1 | 2 | 0 |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 0 | 8 | 2 | 2 | 1 |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 1 | 4 | 2 | 2 | 2 |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 2 | 13 | 1 | 1 | 0 |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 4 | 8 | 1 | 1 | 1 |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 43 | 2 | 1 | 2 | 0 |
+| LRCLIB | Ingrid Michaelson - You and I XdEN1b-dwlw | 14 | 7 | 1 | 1 | 0 |
+| LRCLIB | Jessie J - Domino UJtB55MaoD0 | 9 | 4 | 1 | 1 | 0 |
+| LRCLIB | Jessie J - Domino UJtB55MaoD0 | 11 | 6 | 1 | 1 | 0 |
+| LRCLIB | Jessie J - Domino UJtB55MaoD0 | 13 | 4 | 1 | 1 | 0 |
+| LRCLIB | Jessie J - Domino UJtB55MaoD0 | 17 | 4 | 1 | 1 | 0 |
+| LRCLIB | Jessie J - Domino UJtB55MaoD0 | 39 | 4 | 1 | 1 | 0 |
+| LRCLIB | Jessie J - Domino UJtB55MaoD0 | 52 | 8 | 1 | 1 | 0 |
+| LRCLIB | Jessie J - Domino UJtB55MaoD0 | 55 | 7 | 1 | 1 | 0 |
+| LRCLIB | Jessie J - Domino UJtB55MaoD0 | 58 | 8 | 1 | 1 | 1 |
+| LRCLIB | Jung Kook 정국 - Seven (feat. Latto)---1QYBiNRu1ok | 17 | 9 | 1 | 1 | 0 |
+| LRCLIB | Jung Kook 정국 - Seven (feat. Latto)---1QYBiNRu1ok | 32 | 6 | 1 | 1 | 0 |
+| LRCLIB | Jung Kook 정국 - Seven (feat. Latto)---1QYBiNRu1ok | 50 | 9 | 1 | 2 | 1 |
+| LRCLIB | Jung Kook 정국 - Seven (feat. Latto)---1QYBiNRu1ok | 51 | 7 | 1 | 1 | 1 |
+| LRCLIB | Jung Kook 정국 - Seven (feat. Latto)---1QYBiNRu1ok | 52 | 10 | 1 | 1 | 4 |
+| LRCLIB | Jung Kook 정국 - Seven (feat. Latto)---1QYBiNRu1ok | 54 | 8 | 1 | 1 | 2 |
+| LRCLIB | Jung Kook 정국 - Seven (feat. Latto)---1QYBiNRu1ok | 56 | 8 | 1 | 3 | 4 |
+| LRCLIB | Jung Kook 정국 - Seven (feat. Latto)---1QYBiNRu1ok | 57 | 8 | 1 | 1 | 1 |
+| LRCLIB | Jung Kook 정국 - Seven (feat. Latto)---1QYBiNRu1ok | 61 | 6 | 1 | 2 | 0 |
+| LRCLIB | Jung Kook 정국 - Seven (feat. Latto)---1QYBiNRu1ok | 62 | 6 | 1 | 1 | 0 |
+| LRCLIB | Jung Kook 정국 - Seven (feat. Latto)---1QYBiNRu1ok | 76 | 9 | 1 | 1 | 1 |
+| LRCLIB | KPop Demon Hunters (2025) - Go yebNIHKAC4A | 0 | 7 | 1 | 1 | 0 |
+| LRCLIB | KPop Demon Hunters (2025) - Go yebNIHKAC4A | 10 | 7 | 2 | 2 | 0 |
+| LRCLIB | KPop Demon Hunters (2025) - Go yebNIHKAC4A | 20 | 7 | 1 | 1 | 0 |
+| LRCLIB | KPop Demon Hunters (2025) - Go yebNIHKAC4A | 30 | 8 | 2 | 2 | 1 |
+| LRCLIB | KPop Demon Hunters (2025) - Go yebNIHKAC4A | 32 | 5 | 1 | 1 | 1 |
+| LRCLIB | KPop Demon Hunters (2025) - Go yebNIHKAC4A | 33 | 7 | 3 | 3 | 0 |
+| LRCLIB | KPop Demon Hunters (2025) - Go yebNIHKAC4A | 35 | 5 | 1 | 1 | 1 |
+| LRCLIB | KPop Demon Hunters (2025) - Go yebNIHKAC4A | 36 | 7 | 1 | 1 | 0 |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 1 | 4 | 2 | 2 | 2 |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 4 | 12 | 1 | 1 | 5 |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 6 | 12 | 1 | 1 | 0 |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 19 | 3 | 1 | 1 | 0 |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 44 | 12 | 1 | 1 | 1 |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 48 | 3 | 1 | 2 | 0 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 12 | 6 | 1 | 1 | 0 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 17 | 12 | 1 | 1 | 1 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 20 | 7 | 1 | 1 | 0 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 26 | 4 | 1 | 2 | 1 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 28 | 8 | 1 | 1 | 2 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 30 | 9 | 1 | 1 | 1 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 32 | 8 | 1 | 1 | 0 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 36 | 10 | 1 | 1 | 0 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 38 | 7 | 1 | 1 | 0 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 57 | 4 | 1 | 1 | 0 |
+| LRCLIB | NSYNC - Paradise | 5 | 10 | 1 | 1 | 0 |
+| LRCLIB | NSYNC - Paradise | 15 | 6 | 1 | 1 | 0 |
+| LRCLIB | NSYNC - Paradise | 21 | 10 | 1 | 1 | 0 |
+| LRCLIB | NSYNC - Paradise | 22 | 13 | 2 | 3 | 0 |
+| LRCLIB | NSYNC - Thinking Of You (I Dri PodgxWsZw9s | 38 | 5 | 1 | 1 | 0 |
+| LRCLIB | NSYNC - Thinking Of You (I Dri PodgxWsZw9s | 39 | 5 | 1 | 1 | 0 |
+| LRCLIB | NSYNC - Thinking Of You (I Dri PodgxWsZw9s | 40 | 4 | 1 | 1 | 0 |
+| LRCLIB | NSYNC - Thinking Of You (I Dri PodgxWsZw9s | 46 | 4 | 2 | 2 | 0 |
+| LRCLIB | Ne-Yo - Miss Independent k6M5C-oKw9k | 0 | 4 | 2 | 3 | 0 |
+| LRCLIB | Ne-Yo - Miss Independent k6M5C-oKw9k | 1 | 4 | 2 | 1 | 1 |
+| LRCLIB | Ne-Yo - Miss Independent k6M5C-oKw9k | 26 | 8 | 1 | 0 | 1 |
+| LRCLIB | Ne-Yo - Miss Independent k6M5C-oKw9k | 40 | 11 | 1 | 1 | 1 |
+| LRCLIB | Ne-Yo - Miss Independent k6M5C-oKw9k | 58 | 6 | 1 | 1 | 2 |
+| LRCLIB | Ne-Yo - Miss Independent k6M5C-oKw9k | 64 | 4 | 1 | 2 | 0 |
+| LRCLIB | Ne-Yo - Miss Independent k6M5C-oKw9k | 68 | 8 | 1 | 2 | 0 |
+| LRCLIB | Ne-Yo - Miss Independent k6M5C-oKw9k | 69 | 5 | 1 | 0 | 1 |
+| LRCLIB | Ne-Yo - Miss Independent k6M5C-oKw9k | 72 | 7 | 1 | 1 | 0 |
+| LRCLIB | Ne-Yo - Miss Independent k6M5C-oKw9k | 73 | 2 | 1 | 1 | 0 |
+| LRCLIB | Ne-Yo - Miss Independent k6M5C-oKw9k | 74 | 5 | 2 | 2 | 0 |
+| LRCLIB | Silk Sonic (Bruno Mars & Anderson .Paak) - Leave the Door Open---wIyNAsmGrl0 | 0 | 6 | 2 | 2 | 0 |
+| LRCLIB | Silk Sonic (Bruno Mars & Anderson .Paak) - Leave the Door Open---wIyNAsmGrl0 | 22 | 8 | 1 | 1 | 1 |
+| LRCLIB | Silk Sonic (Bruno Mars & Anderson .Paak) - Leave the Door Open---wIyNAsmGrl0 | 34 | 10 | 1 | 1 | 0 |
+| LRCLIB | Silk Sonic (Bruno Mars & Anderson .Paak) - Leave the Door Open---wIyNAsmGrl0 | 50 | 7 | 1 | 2 | 0 |
+| LRCLIB | Silk Sonic (Bruno Mars & Anderson .Paak) - Skate---CEw-7cMnBDY | 0 | 4 | 1 | 2 | 0 |
+| LRCLIB | Silk Sonic (Bruno Mars & Anderson .Paak) - Skate---CEw-7cMnBDY | 9 | 5 | 1 | 1 | 0 |
+| LRCLIB | Silk Sonic (Bruno Mars & Anderson .Paak) - Skate---CEw-7cMnBDY | 14 | 4 | 1 | 1 | 0 |
+| LRCLIB | Silk Sonic (Bruno Mars & Anderson .Paak) - Skate---CEw-7cMnBDY | 21 | 13 | 1 | 1 | 0 |
+| LRCLIB | Silk Sonic (Bruno Mars & Anderson .Paak) - Skate---CEw-7cMnBDY | 24 | 5 | 1 | 1 | 0 |
+| LRCLIB | Silk Sonic (Bruno Mars & Anderson .Paak) - Skate---CEw-7cMnBDY | 25 | 7 | 1 | 1 | 1 |
+| LRCLIB | Silk Sonic (Bruno Mars & Anderson .Paak) - Skate---CEw-7cMnBDY | 26 | 11 | 1 | 1 | 0 |
+| LRCLIB | Silk Sonic (Bruno Mars & Anderson .Paak) - Skate---CEw-7cMnBDY | 30 | 5 | 1 | 1 | 1 |
+| LRCLIB | Silk Sonic (Bruno Mars & Anderson .Paak) - Skate---CEw-7cMnBDY | 32 | 3 | 1 | 1 | 0 |
+| LRCLIB | Silk Sonic (Bruno Mars & Anderson .Paak) - Skate---CEw-7cMnBDY | 35 | 7 | 1 | 1 | 0 |
+| LRCLIB | Silk Sonic (Bruno Mars & Anderson .Paak) - Skate---CEw-7cMnBDY | 40 | 6 | 1 | 1 | 0 |
+| LRCLIB | Tangled (2010) - When Will My  kRXmAIHYQR4 | 0 | 6 | 1 | 1 | 0 |
+| LRCLIB | Tangled (2010) - When Will My  kRXmAIHYQR4 | 11 | 8 | 1 | 2 | 0 |
+| LRCLIB | Tangled (2010) - When Will My  kRXmAIHYQR4 | 22 | 6 | 1 | 1 | 0 |
+| LRCLIB | Tangled (2010) - When Will My  kRXmAIHYQR4 | 23 | 4 | 1 | 1 | 0 |
+| LRCLIB | The Lonely Island - Jose & Mar 68LBPvFhMx0 | 2 | 11 | 1 | 1 | 2 |
+| LRCLIB | The Lonely Island - Jose & Mar 68LBPvFhMx0 | 3 | 11 | 1 | 2 | 2 |
+| LRCLIB | The Lonely Island - Jose & Mar 68LBPvFhMx0 | 19 | 11 | 1 | 2 | 2 |
+| LRCLIB | The Lonely Island - Jose & Mar 68LBPvFhMx0 | 27 | 7 | 1 | 1 | 0 |
+| LRCLIB | The Lonely Island - Jose & Mar 68LBPvFhMx0 | 28 | 7 | 1 | 1 | 0 |
+| LRCLIB | The Lonely Island - Jose & Mar 68LBPvFhMx0 | 38 | 5 | 1 | 1 | 0 |
+| LRCLIB | The Lonely Island - Let's Bash hj4e709GYf4 | 0 | 9 | 1 | 2 | 2 |
+| LRCLIB | The Lonely Island - Let's Bash hj4e709GYf4 | 1 | 10 | 1 | 1 | 0 |
+| LRCLIB | The Lonely Island - Let's Bash hj4e709GYf4 | 27 | 6 | 1 | 1 | 0 |
+| LRCLIB | The Lonely Island - Let's Bash hj4e709GYf4 | 29 | 12 | 1 | 1 | 1 |
+| LRCLIB | The Lonely Island - Let's Bash hj4e709GYf4 | 34 | 12 | 1 | 1 | 0 |
+| LRCLIB | The Lonely Island - Let's Bash hj4e709GYf4 | 53 | 5 | 1 | 1 | 1 |
+| LRCLIB | The Lonely Island - Let's Bash hj4e709GYf4 | 54 | 6 | 1 | 2 | 0 |
+| LRCLIB | The Lonely Island - Threw It O gAYL5H46QnQ | 0 | 7 | 1 | 1 | 0 |
+| LRCLIB | The Lonely Island - Threw It O gAYL5H46QnQ | 7 | 7 | 1 | 1 | 0 |
+| LRCLIB | The Lonely Island - Threw It O gAYL5H46QnQ | 10 | 10 | 1 | 1 | 0 |
+| LRCLIB | The Lonely Island - Threw It O gAYL5H46QnQ | 21 | 5 | 1 | 1 | 1 |
+| LRCLIB | The Lonely Island - Threw It O gAYL5H46QnQ | 31 | 9 | 1 | 1 | 1 |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 4 | 11 | 1 | 1 | 0 |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 9 | 9 | 1 | 1 | 1 |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 12 | 11 | 1 | 1 | 0 |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 13 | 12 | 1 | 1 | 1 |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 24 | 9 | 1 | 1 | 0 |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 58 | 6 | 2 | 3 | 2 |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 61 | 6 | 2 | 3 | 6 |
+
+### Table B: lines rule B aimed where they were heard
+Cue: start + offset. Shift: heard start - cue. Window: the heard-aimed align's slice. Lone first: the first heard word starts 2 s or more before the second. Answered: the bundle holds this align's result; if not, the line needs the GPU.
+
+caption: 36 lines in 29 songs; LRCLIB: 18 lines in 12 songs
+
+| Src | Song | Line | Cue | Heard | Shift | Window | Lone first | Answered | Kept | Today | New |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 34 | 133.841 | 131.950 | -1.891 | 131.200-137.856 |  |  |  | 132.950 | 132.950 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 56 | 212.566 | 208.720 | -3.846 | 207.970-215.596 | yes |  |  | 213.438 | 213.438 |
+| caption | Backstreet Boys - Shape Of My  OT5msu-dap8 | 4 | 19.945 | 16.980 | -2.965 | 16.230-22.063 | yes |  |  | 20.200 | 20.871 |
+| caption | Backstreet Boys - Shape Of My  OT5msu-dap8 | 41 | 184.887 | 186.700 | 1.813 | 185.950-191.174 |  |  |  | 185.199 | 185.199 |
+| caption | Britney Spears - ...Baby One More Time---C-u5WLJ9Yk4 | 40 | 202.597 | 204.260 | 1.663 | 203.510-209.293 |  |  |  | 203.394 | 203.394 |
+| caption | Britney Spears - Stronger AJWtLf4-WWs | 21 | 121.919 | 116.580 | -5.339 | 115.830-120.275 | yes |  |  | 121.919 | 121.919 |
+| caption | Colbie Caillat - Bubbly (Offic AWGqoCNbsvM | 27 | 88.604 | 86.760 | -1.844 | 86.010-92.608 | yes |  |  | 88.750 | 86.680 |
+| caption | Céline Dion - Ashes (Deadpool  CX11yw6YL1w | 21 | 180.890 | 178.350 | -2.540 | 177.600-191.612 | yes |  |  | 181.125 | 181.125 |
+| caption | Céline Dion - My Heart Will Go 9bFHsd3o1w0 | 19 | 166.064 | 164.330 | -1.734 | 163.580-174.356 | yes |  |  | 166.650 | 166.650 |
+| caption | Céline Dion - That's The Way I T6wbugWrfLU | 38 | 216.718 | 219.320 | 2.602 | 218.570-223.976 |  |  |  | 217.280 | 217.280 |
+| caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 53 | 258.672 | 257.160 | -1.512 | 256.410-262.752 |  |  |  | 258.569 | 256.740 |
+| caption | Flight of the Conchords (2007) - Business Time | 59 | 167.328 | 162.300 | -5.028 | 161.550-169.000 | yes |  |  | 167.442 | 167.442 |
+| caption | Flight of the Conchords (2007) - Business Time | 81 | 223.203 | 220.120 | -3.083 | 219.370-226.036 | yes |  |  | 223.203 | 223.203 |
+| caption | Flight of the Conchords (2007) - Hurt Feelings | 58 | 173.608 | 170.160 | -3.448 | 169.410-172.978 | yes |  |  | 174.075 | 174.075 |
+| caption | John Legend - Love Me Now (Off NmCFY1oYDeM | 51 | 217.686 | 213.580 | -4.106 | 212.830-218.045 |  |  |  | 217.236 | 217.236 |
+| caption | Jung Kook 정국 - 3D (feat. Jack Harlow) (Live)---Z3x9i7njCCo | 47 | 149.919 | 147.500 | -2.419 | 146.750-153.500 |  |  |  | 149.419 | 149.419 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 100 | 409.932 | 408.360 | -1.572 | 407.610-416.414 |  |  |  | 409.802 | 409.802 |
+| caption | Justin Timberlake - Selfish je0roKRn3nY | 0 | 18.660 | 17.030 | -1.630 | 16.280-21.495 |  |  |  | 18.710 | 18.568 |
+| caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 0 | 17.757 | 15.680 | -2.077 | 14.930-21.590 | yes |  |  | 17.467 | 17.438 |
+| caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 27 | 135.007 | 132.940 | -2.067 | 132.190-137.924 | yes |  |  | 134.800 | 135.038 |
+| caption | Moana (2016) - You're Welcome 79DijItQXMM | 56 | 127.732 | 124.160 | -3.572 | 123.410-129.832 | yes |  |  | 127.700 | 127.700 |
+| caption | NSYNC - (God Must Have Spent)  -fxh7jAJR8U | 67 | 245.381 | 242.060 | -3.321 | 241.310-247.862 | yes |  |  | 246.038 | 246.038 |
+| caption | NSYNC - Gone IbRwSI8yi1o | 51 | 199.807 | 198.200 | -1.607 | 197.450-202.976 |  |  |  | 200.097 | 200.097 |
+| caption | NSYNC - Tearin' Up My Heart (O _ZcmuKsyvzg | 5 | 27.800 | 25.030 | -2.770 | 24.280-31.675 | yes |  |  | 28.256 | 28.256 |
+| caption | NSYNC - Tearin' Up My Heart (O _ZcmuKsyvzg | 18 | 86.293 | 84.320 | -1.973 | 83.570-88.710 | yes |  |  | 86.425 | 86.593 |
+| caption | Ne-Yo - Because Of You atz_aZA3rf0 | 40 | 163.060 | 161.440 | -1.620 | 160.690-167.356 |  |  |  | 162.560 | 162.560 |
+| caption | Ne-Yo - Closer [Official Video z_aC5xPQ2f4 | 14 | 56.353 | 54.160 | -2.193 | 53.410-60.290 | yes |  |  | 56.531 | 56.531 |
+| caption | Ne-Yo - Closer [Official Video z_aC5xPQ2f4 | 25 | 85.816 | 88.020 | 2.204 | 87.270-90.613 |  |  |  | 85.814 | 85.814 |
+| caption | Rent (2005) - I'll Cover You | 27 | 95.730 | 92.896 | -2.834 | 92.146-100.401 |  |  |  | 95.825 | 95.825 |
+| caption | Rent (2005) - I'll Cover You | 40 | 135.603 | 133.840 | -1.763 | 133.090-138.773 | yes |  |  | 135.603 | 135.603 |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 55 | 128.734 | 121.160 | -7.574 | 120.410-123.937 |  |  |  | 128.734 | 128.734 |
+| caption | The Last Five Years (2014) - See I'm Smiling | 72 | 276.048 | 273.620 | -2.428 | 272.870-277.825 | yes |  |  | 276.418 | 276.418 |
+| caption | The Last Five Years (2014) - The Next Ten Minutes | 43 | 207.555 | 203.500 | -4.055 | 202.750-209.131 | yes |  |  | 209.107 | 209.107 |
+| caption | The Lion King (1994) - Circle  GibiNy4d4gc | 13 | 117.351 | 118.976 | 1.625 | 118.226-125.892 |  |  |  | 118.905 | 118.905 |
+| caption | The Little Mermaid (1989) - Un GC_mV1IpjWA | 0 | 1.893 | 0.200 | -1.693 | 0.000-3.626 |  |  |  | 0.783 | 0.783 |
+| caption | The Philosopher Kings - Cry EUW0eDhKoxw | 18 | 113.889 | 112.340 | -1.549 | 111.590-116.994 | yes |  |  | 114.500 | 114.500 |
+| LRCLIB | Backstreet Boys - Chances (Off W5kM5wAwRug | 32 | 143.335 | 141.040 | -2.295 | 140.290-148.115 |  |  |  | 143.425 | 143.425 |
+| LRCLIB | Bruno Mars - I Just Might luotSpkyCVU | 18 | 72.976 | 70.120 | -2.856 | 69.370-74.438 |  |  |  | 73.125 | 73.125 |
+| LRCLIB | Camp Rock (2008) - This Is Me  6HCUoMgviwU | 25 | 82.858 | 84.660 | 1.802 | 83.910-89.480 |  |  |  | 84.650 | 84.650 |
+| LRCLIB | Ed Sheeran - Best Part Of Me (feat. YEBBA) (Live At Abbey Road)---wGyh_53ecgg | 34 | 207.962 | 204.340 | -3.622 | 203.590-216.194 | yes |  |  | 208.125 | 208.125 |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 20 | 63.520 | 60.580 | -2.940 | 59.830-63.730 |  |  |  | 63.020 | 63.020 |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 48 | 163.420 | 161.780 | -1.640 | 161.030-166.300 |  |  |  | 163.054 | 163.054 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 10 | 24.200 | 22.580 | -1.620 | 21.830-27.380 | yes |  |  | 25.050 | 25.030 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 36 | 106.630 | 108.800 | 2.170 | 108.050-114.420 |  |  |  | 108.920 | 108.920 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 46 | 150.550 | 142.800 | -7.750 | 142.050-145.430 | yes |  |  | 151.025 | 151.025 |
+| LRCLIB | NSYNC - Thinking Of You (I Dri PodgxWsZw9s | 39 | 152.202 | 154.100 | 1.898 | 153.350-166.960 |  |  |  | 152.350 | 152.350 |
+| LRCLIB | Ne-Yo - Miss Independent k6M5C-oKw9k | 74 | 249.330 | 250.860 | 1.530 | 250.110-270.600 |  |  |  | 257.725 | 257.725 |
+| LRCLIB | Pocahontas (1995) - Colors of  9ThO76peOw0 | 6 | 20.094 | 18.580 | -1.514 | 17.830-32.070 | yes |  |  | 20.649 | 20.649 |
+| LRCLIB | Tangled (2010) - When Will My  kRXmAIHYQR4 | 29 | 127.720 | 125.880 | -1.840 | 125.130-132.650 |  |  |  | 126.225 | 126.225 |
+| LRCLIB | Tangled (2010) - When Will My  kRXmAIHYQR4 | 31 | 137.010 | 134.980 | -2.030 | 134.230-139.470 |  |  |  | 137.550 | 137.550 |
+| LRCLIB | Tangled (2010) - When Will My  kRXmAIHYQR4 | 32 | 139.470 | 137.664 | -1.806 | 136.914-140.700 |  |  |  | 139.470 | 139.470 |
+| LRCLIB | The Lonely Island - Threw It O gAYL5H46QnQ | 21 | 80.892 | 79.160 | -1.732 | 78.410-83.875 | yes |  |  | 81.624 | 81.624 |
+| LRCLIB | The Lonely Island - Threw It O gAYL5H46QnQ | 33 | 119.062 | 117.400 | -1.662 | 116.650-122.962 |  |  |  | 118.950 | 119.034 |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 42 | 177.616 | 186.656 | 9.040 | 185.906-199.526 |  |  |  | 186.974 | 186.974 |
+
+### Table D: lines rule D aimed where they were heard
+Smallest and largest: signed pair offsets (heard - placed).
+
+caption: 15 lines in 10 songs; LRCLIB: 5 lines in 3 songs
+
+| Src | Song | Line | Today | Heard | Pairs | Smallest | Largest | Run | Answered | Kept | New |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 33 | 141.046 | 138.740 | 2 | -2.306 | -2.154 |  |  |  | 141.046 |
+| caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 38 | 178.920 | 185.460 | 3 | 6.494 | 6.900 |  |  |  | 178.920 |
+| caption | Ed Sheeran - Thinking Out Loud lp-EO5I60KA | 43 | 237.725 | 226.370 | 3 | -11.373 | -10.993 |  |  |  | 237.725 |
+| caption | Flight of the Conchords (2007) - Robots | 44 | 116.965 | 149.000 | 2 | 32.035 | 42.675 |  |  |  | 116.965 |
+| caption | Justin Timberlake - CAN'T STOP ru0K8uYEZWw | 75 | 188.471 | 214.060 | 4 | 25.529 | 25.589 |  |  |  | 188.471 |
+| caption | Ne-Yo - Closer [Official Video z_aC5xPQ2f4 | 46 | 150.809 | 167.250 | 4 | 16.441 | 17.201 | yes |  |  | 150.809 |
+| caption | Ne-Yo - Closer [Official Video z_aC5xPQ2f4 | 51 | 168.208 | 171.640 | 5 | 3.432 | 4.016 | yes |  |  | 168.208 |
+| caption | Ne-Yo - Closer [Official Video z_aC5xPQ2f4 | 52 | 171.900 | 175.580 | 5 | 2.539 | 3.859 | yes |  |  | 171.900 |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 52 | 124.293 | 116.860 | 3 | -7.933 | -7.433 |  |  |  | 124.293 |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 54 | 126.593 | 119.040 | 7 | -8.653 | -7.553 | yes |  |  | 126.593 |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 56 | 130.353 | 121.900 | 7 | -8.453 | -7.053 | yes |  |  | 130.353 |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 64 | 150.833 | 125.200 | 4 | -25.653 | -25.553 |  |  |  | 150.833 |
+| caption | The Last Five Years (2014) - Goodbye Until Tomorrow & I Could Never Rescue You | 33 | 171.535 | 177.536 | 3 | 3.616 | 6.001 |  |  |  | 171.535 |
+| caption | The Last Five Years (2014) - Moving Too Fast | 76 | 281.571 | 285.500 | 2 | 3.929 | 4.249 |  |  |  | 281.571 |
+| caption | The Last Five Years (2014) - The Next Ten Minutes | 55 | 267.367 | 273.460 | 2 | 2.725 | 6.093 |  |  |  | 267.367 |
+| LRCLIB | Frozen (2013) - In Summer (Sin 9tcaM06eGrY | 20 | 98.936 | 101.344 | 2 | 1.504 | 2.408 |  |  |  | 98.936 |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 33 | 106.255 | 93.620 | 4 | -12.730 | -11.760 |  |  |  | 106.255 |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 49 | 161.990 | 165.540 | 4 | 3.550 | 4.590 |  |  |  | 161.990 |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 50 | 162.930 | 169.220 | 2 | 6.290 | 6.810 |  |  |  | 162.930 |
+| LRCLIB | NSYNC - Thinking Of You (I Dri PodgxWsZw9s | 59 | 218.875 | 216.940 | 3 | -2.755 | -1.697 |  |  |  | 218.875 |
+
+Complete lines the rescue left alone, heard and not confirmed, that rule D did not aim, by why:
+
+| Src | first token unheard | run not heard in full | too few pairs | some pair under 1.5 s | pairs off both ways | trigger held, not aimed |
+|---|---|---|---|---|---|---|
+| caption | 32 | 25 | 0 | 675 | 1 | 0 |
+| LRCLIB | 8 | 0 | 0 | 100 | 0 | 0 |
+
+### Table C: lines rule C looked for between their neighbours
+Heard shift: heard start - cue start on the audio clock; blank when the line is not heard, its first token is not matched or its run is not heard in full.
+
+caption: 68 lines in 34 songs; LRCLIB: 18 lines in 7 songs
+
+| Src | Song | Line | Cue | Stretch | Length | Heard shift | Run | Answered | Kept | Today | New |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| caption | Adele - Someone Like You hLQl3WQQoQ0 | 44 | 217.216 | 215.176-225.239 | 10.063 | -0.476 |  |  |  | 217.216 | 217.216 |
+| caption | Ariana Grande & John Legend -  axySrE0Kg6k | 50 | 204.791 | 202.457-213.502 | 11.045 |  | yes |  |  | 204.791 | 204.791 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 81 | 182.983 | 183.364-189.440 | 6.076 |  | yes |  |  | 182.983 | 182.983 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 84 | 189.155 | 188.887-194.480 | 5.593 |  | yes |  |  | 189.155 | 189.155 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 95 | 209.263 | 209.240-214.380 | 5.140 |  | yes |  |  | 209.263 | 209.263 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 98 | 212.886 | 216.900-217.735 | 0.835 |  | yes |  |  | 212.886 | 212.886 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 100 | 214.552 | 214.369-218.620 | 4.251 |  | yes |  |  | 214.552 | 214.552 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 102 | 217.051 | 221.160-222.220 | 1.060 |  | yes |  |  | 217.051 | 217.051 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 104 | 218.717 | 218.614-223.500 | 4.886 |  | yes |  |  | 218.717 | 218.717 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 106 | 221.232 | 225.420-226.460 | 1.040 |  | yes |  |  | 221.232 | 221.232 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 107 | 222.065 | 225.420-226.660 | 1.240 |  | yes |  |  | 222.065 | 222.065 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 64 | 209.594 | 209.897-215.377 | 5.480 |  |  |  |  | 209.594 | 209.594 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 66 | 212.798 | 218.257-218.757 | 0.500 |  |  |  |  | 212.798 | 212.798 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 89 | 267.947 | 267.814-277.711 | 9.897 |  |  |  |  | 267.947 | 267.947 |
+| caption | Backstreet Boys - Inconsolable qGDF_QcsKVI | 22 | 106.799 | 103.556-110.522 | 6.966 | -0.219 |  |  |  | 106.799 | 106.799 |
+| caption | Backstreet Boys - Quit Playing Ug88HO2mg44 | 54 | 155.212 | 151.023-155.907 | 4.884 |  |  |  |  | 155.475 | 155.475 |
+| caption | Beauty and the Beast (1991) -  otxTf5hZ0Yw | 93 | 226.137 | 226.226-229.970 | 3.744 |  | yes |  |  | 226.137 | 226.137 |
+| caption | Britney Spears - (You Drive Me Q4VK9_CfOLQ | 1 | 6.460 | 3.685-7.025 | 3.340 |  | yes |  |  | 6.875 | 6.875 |
+| caption | Britney Spears - (You Drive Me Q4VK9_CfOLQ | 2 | 10.837 | 3.685-18.325 | 14.640 |  | yes |  |  | 11.625 | 11.625 |
+| caption | Cast of Camp Rock - Play My Mu jQ-Pqxl1BlI | 4 | 0.317 | 0.760-2.900 | 2.140 |  |  |  |  | 0.317 | 0.317 |
+| caption | Cast of Camp Rock - Play My Mu jQ-Pqxl1BlI | 6 | 0.400 | 0.860-2.900 | 2.040 |  |  |  |  | 0.400 | 0.400 |
+| caption | Cast of Camp Rock - Play My Mu jQ-Pqxl1BlI | 7 | 0.442 | 0.860-2.900 | 2.040 |  |  |  |  | 0.442 | 0.442 |
+| caption | Cast of Camp Rock - Play My Mu jQ-Pqxl1BlI | 8 | 0.483 | 0.860-2.900 | 2.040 |  |  |  |  | 0.483 | 0.483 |
+| caption | Cast of Camp Rock - Play My Mu jQ-Pqxl1BlI | 9 | 0.525 | 0.860-2.900 | 2.040 |  | yes |  |  | 0.525 | 0.525 |
+| caption | Christina Aguilera - Reflectio RNprQYHenNI | 34 | 148.395 | 144.846-154.123 | 9.277 | 0.065 |  |  |  | 148.395 | 148.395 |
+| caption | Céline Dion - That's The Way I T6wbugWrfLU | 32 | 192.049 | 188.737-194.857 | 6.120 | -1.149 |  |  |  | 192.049 | 192.049 |
+| caption | Ed Sheeran - Thinking Out Loud lp-EO5I60KA | 42 | 222.619 | 213.114-237.529 | 24.415 |  |  |  |  | 222.900 | 222.900 |
+| caption | Flight of the Conchords (2007) - Inner City Pressure | 55 | 165.143 | 160.781-167.973 | 7.192 |  |  |  |  | 165.600 | 165.600 |
+| caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 44 | 201.319 | 201.082-211.122 | 10.040 |  |  |  |  | 201.319 | 201.319 |
+| caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 45 | 204.514 | 201.082-211.122 | 10.040 |  |  |  |  | 204.675 | 204.675 |
+| caption | Jay Chou 周杰倫 - 龍捲風 (Tornado) RPWDeLqsN0g | 47 | 211.094 | 214.962-218.782 | 3.820 |  | yes |  |  | 211.094 | 211.094 |
+| caption | John Legend - Love Me Now (Off NmCFY1oYDeM | 33 | 155.375 | 154.900-164.155 | 9.255 |  | yes |  |  | 155.375 | 155.375 |
+| caption | John Legend - Love Me Now (Off NmCFY1oYDeM | 34 | 156.208 | 154.900-164.155 | 9.255 |  |  |  |  | 156.208 | 156.208 |
+| caption | John Legend - Love Me Now (Off NmCFY1oYDeM | 35 | 159.763 | 154.900-165.115 | 10.215 |  | yes |  |  | 159.763 | 159.763 |
+| caption | John Legend - Love Me Now (Off NmCFY1oYDeM | 36 | 161.227 | 154.900-166.735 | 11.835 |  | yes |  |  | 161.227 | 161.227 |
+| caption | Jung Kook 정국 - Standing Next t 6q0JnftlH-I | 48 | 181.628 | 178.921-202.357 | 23.436 |  | yes |  |  | 181.628 | 181.628 |
+| caption | Justin Timberlake - CAN'T STOP ru0K8uYEZWw | 69 | 173.981 | 170.069-173.971 | 3.902 |  |  |  |  | 173.981 | 173.981 |
+| caption | Justin Timberlake - CAN'T STOP ru0K8uYEZWw | 101 | 260.401 | 253.634-260.631 | 6.997 |  |  |  |  | 260.401 | 260.401 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 81 | 345.179 | 345.234-351.446 | 6.212 |  | yes |  |  | 345.179 | 345.179 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 117 | 475.876 | 476.169-500.413 | 24.244 |  | yes |  |  | 475.876 | 475.876 |
+| caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 26 | 128.048 | 124.965-135.428 | 10.463 | -0.938 |  |  |  | 128.048 | 128.048 |
+| caption | NSYNC - Bye Bye Bye Eo-KmOd3i7s | 4 | 30.863 | 27.767-32.168 | 4.401 | 0.757 |  |  |  | 31.050 | 31.050 |
+| caption | Ne-Yo - One In A Million 6tpl9LtkRRw | 50 | 131.697 | 132.012-140.445 | 8.433 | 0.643 |  |  |  | 131.697 | 131.697 |
+| caption | Ne-Yo - So Sick IxszlJppRQI | 0 | 3.880 | 0.000-4.559 | 4.559 |  | yes |  |  | 4.200 | 4.200 |
+| caption | Ne-Yo - So Sick IxszlJppRQI | 1 | 6.466 | 0.000-7.113 | 7.113 |  | yes |  |  | 6.725 | 6.725 |
+| caption | Rent (2005) - I Should Tell You | 41 | 150.331 | 148.543-157.490 | 8.947 |  | yes |  |  | 150.331 | 150.331 |
+| caption | Rent (2005) - I Should Tell You | 42 | 153.834 | 148.543-160.779 | 12.236 |  | yes |  |  | 153.834 | 153.834 |
+| caption | Rent (2005) - I Should Tell You | 44 | 160.340 | 158.881-168.210 | 9.329 |  | yes |  |  | 160.340 | 160.340 |
+| caption | Rent (2005) - I'll Cover You | 13 | 46.948 | 47.451-53.091 | 5.640 |  |  |  |  | 46.948 | 46.948 |
+| caption | Rent (2005) - Will I | 16 | 101.132 | 101.798-115.578 | 13.780 |  |  |  |  | 101.132 | 101.132 |
+| caption | Rent (2005) - Will I | 20 | 116.620 | 118.534-138.738 | 20.204 |  |  |  |  | 116.620 | 116.620 |
+| caption | Rent (2005) - Will I | 23 | 129.688 | 128.717-138.738 | 10.021 | -0.868 |  |  |  | 129.688 | 129.688 |
+| caption | Rent (2005) - Will I | 26 | 142.128 | 144.418-170.620 | 26.202 |  |  |  |  | 142.128 | 142.128 |
+| caption | Rent (2005) - Will I | 27 | 145.993 | 144.418-170.620 | 26.202 |  |  |  |  | 145.993 | 145.993 |
+| caption | Rent (2005) - Will I | 28 | 168.643 | 144.418-170.620 | 26.202 |  |  |  |  | 168.643 | 168.643 |
+| caption | Rent (2005) - Will I | 29 | 170.214 | 144.418-170.620 | 26.202 |  |  |  |  | 170.214 | 170.146 |
+| caption | Rent (2005) - Without You | 33 | 164.102 | 164.997-173.461 | 8.464 | 0.597 |  |  |  | 164.102 | 164.102 |
+| caption | S Club 7 - Never Had A Dream C WB9_sf6oV1o | 41 | 186.626 | 184.121-188.701 | 4.580 | -0.696 |  |  |  | 186.626 | 186.626 |
+| caption | Tenacious D - Wonderboy (Offic FL4HSiGvk68 | 4 | 64.725 | 63.048-74.510 | 11.462 |  |  |  |  | 64.950 | 64.950 |
+| caption | Tenacious D - Wonderboy (Offic FL4HSiGvk68 | 22 | 144.426 | 142.499-154.114 | 11.615 |  |  |  |  | 144.426 | 144.426 |
+| caption | Tenacious D - Wonderboy (Offic FL4HSiGvk68 | 33 | 212.484 | 194.244-221.757 | 27.513 |  |  |  |  | 212.484 | 212.484 |
+| caption | The Lion King (1994) - Can You 25QyCxVkXwQ | 49 | 172.724 | 159.935-174.637 | 14.702 |  |  |  |  | 172.724 | 172.724 |
+| caption | The Lion King (1994) - Hakuna  fwLxDUQBdEg | 82 | 216.696 | 213.090-220.270 | 7.180 |  | yes |  |  | 216.696 | 216.696 |
+| caption | The Lion King (1994) - Hakuna  fwLxDUQBdEg | 84 | 219.949 | 219.541-226.230 | 6.689 |  | yes |  |  | 219.949 | 219.949 |
+| caption | The Philosopher Kings - You Do AI7F8qlN44E | 0 | -0.047 | 0.000-11.568 | 11.568 |  |  |  |  | 0.000 | 0.000 |
+| caption | Whitney Houston - I Wanna Danc eH3giaIzONA | 54 | 240.982 | 239.943-253.330 | 13.387 | 0.498 |  |  |  | 241.475 | 241.475 |
+| caption | Whitney Houston - I Will Alway 3JWTaaS7LdU | 54 | 238.167 | 218.616-245.479 | 26.863 |  | yes |  |  | 238.450 | 238.450 |
+| caption | ZAYN - Dusk Till Dawn (Official Video) ft. Sia---tt2k8PGm-TI | 29 | 115.698 | 110.445-123.472 | 13.027 |  |  |  |  | 115.698 | 115.698 |
+| LRCLIB | Backstreet Boys - Chances (Off W5kM5wAwRug | 42 | 183.455 | 181.755-196.952 | 15.197 |  |  |  |  | 183.675 | 183.675 |
+| LRCLIB | Frozen (2013) - Do You Want to TeQ_TTyLGMs | 0 | 5.710 | 0.000-5.940 | 5.940 |  |  |  |  | 5.710 | 5.710 |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 35 | 113.750 | 111.110-118.110 | 7.000 | -0.550 |  |  |  | 113.750 | 113.750 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 1 | 2.620 | 2.680-9.120 | 6.440 |  | yes |  |  | 3.025 | 3.025 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 2 | 4.780 | 2.680-23.300 | 20.620 |  | yes |  |  | 4.780 | 4.780 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 3 | 7.730 | 2.680-23.300 | 20.620 |  | yes |  |  | 7.730 | 7.730 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 4 | 10.140 | 2.680-23.300 | 20.620 |  | yes |  |  | 10.140 | 10.140 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 5 | 12.940 | 2.680-23.300 | 20.620 |  | yes |  |  | 12.940 | 12.940 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 6 | 16.590 | 2.680-23.300 | 20.620 |  | yes |  |  | 16.590 | 16.590 |
+| LRCLIB | Silk Sonic (Bruno Mars & Anderson .Paak) - Leave the Door Open---wIyNAsmGrl0 | 39 | 163.215 | 159.801-167.605 | 7.804 |  |  |  |  | 163.215 | 163.215 |
+| LRCLIB | Tangled (2010) - When Will My  kRXmAIHYQR4 | 30 | 132.650 | 128.190-147.331 | 19.141 | -1.470 |  |  |  | 132.650 | 132.650 |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 35 | 157.476 | 156.580-164.000 | 7.420 |  | yes |  |  | 157.476 | 157.476 |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 36 | 158.506 | 156.580-164.000 | 7.420 |  | yes |  |  | 158.506 | 158.506 |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 37 | 159.436 | 156.580-166.520 | 9.940 |  | yes |  |  | 159.436 | 159.436 |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 39 | 161.446 | 168.300-187.046 | 18.746 |  | yes |  |  | 161.446 | 161.446 |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 40 | 162.796 | 168.300-187.046 | 18.746 |  | yes |  |  | 162.796 | 162.796 |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 59 | 267.726 | 262.790-263.570 | 0.780 |  |  |  |  | 267.726 | 267.726 |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 61 | 268.966 | 268.590-282.842 | 14.252 |  |  |  |  | 268.966 | 268.913 |
+
+### Table O: other lines whose start or end moved
+Lines outside Tables A, G, Z, B, D and C.
+
+caption: 42 lines in 33 songs; LRCLIB: 9 lines in 8 songs
+
+| Src | Song | Line | Start today | Start new | End today | End new | Moved |
+|---|---|---|---|---|---|---|---|
+| caption | Adele - Someone Like You hLQl3WQQoQ0 | 26 | 130.980 | 130.980 | 139.337 | 139.037 | 0.300 |
+| caption | Aladdin (2019) - Speechless mw5VIEIvuMI | 44 | 168.583 | 168.583 | 172.575 | 172.203 | 0.372 |
+| caption | Backstreet Boys - As Long As Y 0Gl2QnHNpkA | 44 | 164.807 | 164.807 | 166.771 | 167.287 | 0.516 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 7 | 40.475 | 40.475 | 43.275 | 43.242 | 0.033 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 18 | 55.900 | 55.900 | 57.514 | 57.294 | 0.220 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 52 | 123.850 | 123.850 | 125.537 | 125.277 | 0.260 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 29 | 119.025 | 119.025 | 124.540 | 124.260 | 0.280 |
+| caption | Backstreet Boys - I'll Never B kDcCSiakaU4 | 67 | 214.525 | 214.525 | 218.657 | 218.457 | 0.200 |
+| caption | Backstreet Boys - Inconsolable qGDF_QcsKVI | 36 | 161.734 | 161.734 | 166.755 | 167.473 | 0.718 |
+| caption | Backstreet Boys - Quit Playing Ug88HO2mg44 | 39 | 116.790 | 116.790 | 119.283 | 119.263 | 0.020 |
+| caption | Backstreet Boys - The Call wMOkm57vu0k | 10 | 21.125 | 21.125 | 23.668 | 23.438 | 0.230 |
+| caption | Beauty and the Beast (1991) -  otxTf5hZ0Yw | 61 | 137.175 | 137.175 | 140.775 | 139.964 | 0.811 |
+| caption | Britney Spears - Oops!...I Did It Again---CduA0TULnow | 18 | 72.034 | 72.034 | 78.100 | 78.119 | 0.019 |
+| caption | Britney Spears - Stronger AJWtLf4-WWs | 19 | 111.386 | 111.386 | 116.700 | 116.336 | 0.364 |
+| caption | Britney Spears - Stronger AJWtLf4-WWs | 31 | 169.825 | 169.825 | 175.564 | 176.462 | 0.898 |
+| caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 15 | 61.949 | 61.949 | 65.768 | 64.549 | 1.219 |
+| caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 35 | 146.968 | 146.968 | 149.270 | 149.090 | 0.180 |
+| caption | Cast of Camp Rock - Play My Mu jQ-Pqxl1BlI | 33 | 72.850 | 72.850 | 79.099 | 78.559 | 0.540 |
+| caption | Colbie Caillat - Bubbly (Offic AWGqoCNbsvM | 26 | 84.194 | 84.194 | 87.675 | 86.686 | 0.989 |
+| caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 13 | 80.950 | 80.950 | 84.650 | 84.430 | 0.220 |
+| caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 52 | 255.850 | 255.850 | 258.469 | 256.740 | 1.729 |
+| caption | Ed Sheeran - The A Team UAWcs5H-qgQ | 0 | 32.075 | 32.075 | 34.550 | 34.800 | 0.251 |
+| caption | Flight of the Conchords (2007) - Carol Brown | 46 | 148.684 | 148.684 | 153.734 | 151.846 | 1.888 |
+| caption | Flight of the Conchords (2007) - Carol Brown | 63 | 207.918 | 207.918 | 209.625 | 209.458 | 0.167 |
+| caption | Flight of the Conchords (2007) - Hiphopopotamus vs. Rhymenoceros | 35 | 97.366 | 96.619 | 99.806 | 99.789 | 0.747 |
+| caption | John Legend - Love Me Now (Off NmCFY1oYDeM | 23 | 115.850 | 115.850 | 121.002 | 120.395 | 0.607 |
+| caption | John Legend - Love Me Now (Off NmCFY1oYDeM | 53 | 222.961 | 223.455 | 224.322 | 224.564 | 0.494 |
+| caption | Justin Timberlake - Mirrors uuZE_IRwLNI | 107 | 444.640 | 444.640 | 448.174 | 448.024 | 0.150 |
+| caption | KPop Demon Hunters (2025) - How It's Done | 15 | 39.054 | 39.054 | 41.794 | 41.634 | 0.160 |
+| caption | Moana (2016) - You're Welcome 79DijItQXMM | 5 | 8.523 | 8.523 | 9.602 | 9.253 | 0.349 |
+| caption | NSYNC - (God Must Have Spent)  -fxh7jAJR8U | 68 | 247.338 | 247.338 | 252.918 | 253.674 | 0.756 |
+| caption | NSYNC - Gone IbRwSI8yi1o | 22 | 111.046 | 111.046 | 112.575 | 112.278 | 0.297 |
+| caption | NSYNC - Gone IbRwSI8yi1o | 78 | 290.000 | 290.000 | 292.325 | 292.126 | 0.199 |
+| caption | Ne-Yo - Because Of You atz_aZA3rf0 | 23 | 87.332 | 87.332 | 91.792 | 92.248 | 0.456 |
+| caption | Rent (2005) - Another Day | 50 | 177.225 | 177.225 | 183.025 | 181.651 | 1.374 |
+| caption | Rent (2005) - I Should Tell You | 25 | 94.700 | 93.500 | 97.295 | 96.550 | 1.200 |
+| caption | Rent (2005) - I Should Tell You | 40 | 146.694 | 146.434 | 150.026 | 149.650 | 0.376 |
+| caption | The Last Five Years (2014) - A Summer in Ohio | 33 | 116.765 | 116.765 | 122.425 | 122.225 | 0.200 |
+| caption | The Last Five Years (2014) - Moving Too Fast | 16 | 52.750 | 52.750 | 54.672 | 54.514 | 0.158 |
+| caption | The Last Five Years (2014) - Shiksa Goddess | 60 | 224.424 | 224.424 | 229.900 | 226.664 | 3.236 |
+| caption | The Last Five Years (2014) - The Next Ten Minutes | 44 | 213.369 | 213.369 | 217.607 | 217.267 | 0.340 |
+| caption | Whitney Houston - I Wanna Danc eH3giaIzONA | 33 | 159.066 | 159.066 | 161.700 | 161.486 | 0.214 |
+| LRCLIB | Backstreet Boys - Chances (Off W5kM5wAwRug | 28 | 129.680 | 129.680 | 133.601 | 132.486 | 1.115 |
+| LRCLIB | Frozen (2013) - In Summer (Sin 9tcaM06eGrY | 4 | 18.240 | 18.240 | 23.175 | 21.740 | 1.435 |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 18 | 48.200 | 49.030 | 49.390 | 49.390 | 0.830 |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 34 | 76.070 | 76.070 | 78.325 | 77.822 | 0.503 |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 16 | 49.140 | 49.140 | 53.238 | 51.360 | 1.878 |
+| LRCLIB | NSYNC - Paradise | 14 | 110.225 | 110.225 | 112.890 | 112.450 | 0.440 |
+| LRCLIB | NSYNC - Thinking Of You (I Dri PodgxWsZw9s | 37 | 145.584 | 145.584 | 149.810 | 149.385 | 0.425 |
+| LRCLIB | Silk Sonic (Bruno Mars & Anderson .Paak) - Skate---CEw-7cMnBDY | 10 | 56.500 | 56.500 | 62.500 | 60.120 | 2.380 |
+| LRCLIB | The Lonely Island - Threw It O gAYL5H46QnQ | 9 | 36.874 | 36.874 | 41.875 | 42.034 | 0.159 |
+
+### Table V: Table A's counts at other thresholds (sizing only)
+
+| HEARD_AGREE_S | HEARD_MIN_WORDS | caption A1 kept | caption A2 held | LRCLIB A1 kept | LRCLIB A2 held |
+|---|---|---|---|---|---|
+| 0.500 | 2 | 10 | 108 | 7 | 20 |
+| 1.000 | 2 | 16 | 25 | 10 | 7 |
+| 1.500 | 2 | 29 | 11 | 14 | 1 |
+| 0.500 | 3 | 5 | 98 | 3 | 19 |
+| 1.000 | 3 | 11 | 23 | 4 | 6 |
+| 1.500 | 3 | 20 | 11 | 6 | 1 |
+
+(Phase 4c pastes its tables here.)
