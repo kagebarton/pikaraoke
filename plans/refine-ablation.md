@@ -2,9 +2,9 @@
 
 Model: Claude Opus 5.5
 
-Status: **open, research only** -- nothing in the pipeline changed. Blind A/B
-listen session built 2026-11-14; waiting on Ken's listen (Next step). Branch
-`refine_ablation`, off `dev` at `1016e20`.
+Status: **cue decided 2026-11-14: refine stays on; nothing in the pipeline
+changed.** Joint refine and a coarser `precision` are untested and open (Next
+step). Branch `refine_ablation`, off `dev` at `1016e20`.
 
 ## Question
 
@@ -148,7 +148,8 @@ every reference is start-only).
 1. **Joint route: refine off?** Saves the per-song figure in table 1 (36-59 s
    here, plus the windowed re-align spans). Output moves little.
 2. **Cue route: refine off?** Saves 78-157 s/song here, and moves word timing
-   substantially, mostly later by ~0.4 s. Accuracy undecided.
+   substantially, mostly later by ~0.4 s. **Decided 2026-11-14 (Ken): keep refine
+   on**, after the blind listen below (on tighter on 3 of 4 songs, 1 tie).
 3. **Untested middle:** a coarser `RefineKwargs.precision` (stable-ts default
    0.1 s) to cut refine time without dropping it.
 
@@ -210,9 +211,31 @@ are the library `.mp4` files. Ken plans to play them by hand in VLC (add
 rendering of the karaoke sweep is untested, and `refine_ab_listen.py play` is
 the tested player (headless: tracks load, jump keys seek, clean exit).
 
+## Listen verdicts (Ken, 2026-11-14)
+
+Key opened after the verdicts were given. Track-to-arm per song, Ken's words
+verbatim, and the arm they resolve to:
+
+```
+01 Adele - Someone Like You              track1 = on,  track2 = off
+   "1 is noticeably tighter, 2 feels like the lines are filled in with a nominal
+   pace rather than timed"                                          -> ON tighter
+02 Backstreet Boys - I Want It That Way  track1 = off, track2 = on
+   "2 is tighter, though not as noticeable as someone like you"     -> ON tighter
+03 Ne-Yo - Miss Independent              track1 = off, track2 = on
+   "they're about the same"                                         -> no difference
+04 Rent (2005) - Seasons of Love         track1 = off, track2 = on
+   "2 is tighter"                                                   -> ON tighter
+```
+
+Three of four songs prefer refine on, one is a tie; no song prefers refine off.
+No per-jump-point notes were taken. The Ne-Yo tie is the song whose table 3 row
+leaned hardest to refine-off.
+
 ## Next step
 
-Ken listens (later). Then: read `key.json`, record per-song which track he
-preferred (or that he heard no difference), and at which jump points, here as
-raw notes. Then decide open decision 2 and land any config change on `dev`
-(code commits only), retire the branch as `archive/refine_ablation`.
+Cue route: decided, refine stays on (Ken, 2026-11-14), so no config change
+follows from the listen. Decisions 1 (joint refine off) and 3 (coarser
+`precision`) were not tested by the listen and stay open; neither is scheduled.
+Whatever follows lands on `dev` as code commits only, then the branch is
+retired as `archive/refine_ablation`.
