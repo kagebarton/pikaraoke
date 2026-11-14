@@ -35,8 +35,10 @@ Approach:
    over its offset-corrected cue window (the injected ``realign``), and only
    if that also fails is it re-built with paced words across the window. The
    transcriber's words outrank the cue here: a line they confirm is kept where
-   it sits, a re-align does not replace it unless they confirm that too, and a
-   line heard far from its cue is first looked for where it was heard. A
+   it sits, a re-align does not replace it unless they confirm that too, a
+   line heard far from its cue is first looked for where it was heard, and a
+   complete line whose words all sit far to one side of the words heard for it
+   is re-aligned there. A
    line missing only some of its words, or holding words the aligner left
    zero-length, is rescued too: the re-align replaces it only if it times more
    of them, and any word still missing is shown with guessed timing at the
@@ -58,7 +60,13 @@ from statistics import median
 
 import numpy as np
 
-from pikaraoke.lib.heard_lines import confirms, heard_lines, runs_heard
+from pikaraoke.lib.heard_lines import (
+    HeardLine,
+    confirms,
+    heard_lines,
+    pair_offsets,
+    runs_heard,
+)
 from pikaraoke.lib.joint_match import _tokenise_lines
 from pikaraoke.lib.onset_snap import HOP_S, MIN_REF_DB, SUSTAIN_NEAR_DB, _sung_level_ref
 from pikaraoke.lib.token_align import (
@@ -161,9 +169,10 @@ MAX_HOLD_S = 4.0
 # timing: movie subtitles run 0.1-0.3 s into the next; duets overlap 1.9-4.7 s.
 DUET_OVERLAP_S = 1.0
 
-# A line the transcriber heard this far or more from where its cue puts it is looked for
-# where it was heard. Past caption jitter (a clean line is trusted up to
-# :data:`PAUSE_SLACK_S` plus authoring jitter), short of a whole repeat period.
+# A line the transcriber heard this far or more from where its cue puts it (rule B), or
+# from where its words sit (rule D), is looked for where it was heard. Past caption jitter
+# (a clean line is trusted up to :data:`PAUSE_SLACK_S` plus authoring jitter), short of a
+# whole repeat period.
 HEARD_SHIFT_S = 1.5
 
 SOURCE = "cue_align"
@@ -547,6 +556,8 @@ class _Rescue:
         self.guard_lifted: list[int] = []
         self.heard_aimed: list[int] = []
         self.heard_aimed_kept: list[int] = []
+        self.whole_aimed: list[int] = []
+        self.whole_aimed_kept: list[int] = []
 
     def process(self, obj: dict, out: list[dict]) -> None:
         """Append to ``out`` what line ``obj`` becomes: itself, its re-align, or a fill."""
@@ -556,15 +567,14 @@ class _Rescue:
             return
         toks = self.line_toks[lid]
         placed = self.is_placed(obj)
-        if placed:
-            if _timed_words(obj["words"]) >= len(toks):
-                out.append(obj)
-                return
-            if len(obj["words"]) >= len(toks):
-                self.crammed.append(lid)
+        if placed and _timed_words(obj["words"]) >= len(toks):
+            self.process_whole(obj, out)
+            return
+        if placed and len(obj["words"]) >= len(toks):
+            self.crammed.append(lid)
         shift = self.heard_shift(lid)
         if shift is not None:
-            fixed = self.heard_aimed_line(obj, out, placed, shift)
+            fixed = self.heard_aimed_line(obj, out, shift, must_gain=placed)
             if fixed is not None:
                 out.append(fixed)
                 self.realigned.append(lid)
@@ -581,6 +591,17 @@ class _Rescue:
                 _repace_line(lid, self.display_lines[lid], toks, win.t0, win.t1, self.max_word_dur)
             )
             self.repaced.append(lid)
+
+    def process_whole(self, obj: dict, out: list[dict]) -> None:
+        """Append the placed line ``obj``, which has a timed word for every token: itself,
+        or (rule D) its re-align where the transcriber heard it."""
+        shift = self.whole_shift(obj)
+        fixed = None if shift is None else self.heard_aimed_line(obj, out, shift, whole=True)
+        if fixed is None:
+            out.append(obj)
+        else:
+            out.append(fixed)
+            self.realigned.append(obj["line_id"])
 
     def confirmed(self, obj: dict) -> bool:
         """Whether the transcriber's words for ``obj``'s line agree with where it sits."""
@@ -643,24 +664,54 @@ class _Rescue:
         """Whether there is an aligner and the slice ``win`` gives it is long enough to use."""
         return self.realign is not None and win.w1 - win.w0 >= 0.2
 
+    def aimable(self, lid: int) -> HeardLine | None:
+        """Line ``lid``'s heard line when a retry may be aimed by it: the first token is
+        among the matched words, so ``start`` is the line's own, and the line is not in a
+        run of identical lines the transcriber did not hear in full, since heard words
+        cannot say which line of such a run they belong to."""
+        heard = self.heard[lid]
+        return heard if heard is not None and heard.first and self.run_heard[lid] else None
+
     def heard_shift(self, lid: int) -> float | None:
         """How far from its cue the transcriber heard line ``lid`` start, when rule B looks
-        for it there: heard with its first token among the matched, at least
-        :data:`HEARD_SHIFT_S` from ``cue start + offset``. Else None."""
-        heard = self.heard[lid]
-        if heard is None or not heard.first:
+        for it there: an aimable heard line at least :data:`HEARD_SHIFT_S` from ``cue start
+        + offset``. Else None."""
+        heard = self.aimable(lid)
+        if heard is None:
             return None
         shift = heard.start - self.audio_spans[lid][0]
         return shift if abs(shift) >= HEARD_SHIFT_S else None
 
+    def whole_shift(self, obj: dict) -> float | None:
+        """How far to move the cue span of the complete, placed line ``obj`` to start where
+        the transcriber heard it, when rule D looks for it there: an aimable heard line
+        whose words pair with its heard words (:func:`pair_offsets`), every pair
+        :data:`HEARD_SHIFT_S` or more apart and all the same way. Else None.
+
+        Pairs that far apart are not within :data:`HEARD_AGREE_S`, so the line is not
+        confirmed. A first word alone out of place, or pairs off both ways, is not a
+        displaced line and is left to the placement.
+        """
+        lid = obj["line_id"]
+        heard = self.aimable(lid)
+        if heard is None:
+            return None
+        offsets = pair_offsets(obj, len(self.line_toks[lid]), heard)
+        if offsets is None or not (
+            all(off >= HEARD_SHIFT_S for off in offsets)
+            or all(off <= -HEARD_SHIFT_S for off in offsets)
+        ):
+            return None
+        return heard.start - self.audio_spans[lid][0]
+
     def retry(
-        self, obj: dict, out: list[dict], win: _Window, placed: bool, shift: float
+        self, obj: dict, out: list[dict], win: _Window, shift: float, must_gain: bool
     ) -> tuple[dict | None, bool]:
         """One-line re-align of ``obj`` over ``win`` (its cue span moved ``shift`` s), and
         whether the transcriber's confirmation lifted part of its start bound.
 
         The line is None unless it comes back covered and inside the window it was aimed at
-        (:func:`_line_in_span`) and, for a line that is placed, times more words than ``obj``.
+        (:func:`_line_in_span`) and, when ``must_gain``, times more words than ``obj``.
         """
         lid = obj["line_id"]
         raw_words = self.realign(lid, win.w0, win.w1)
@@ -685,7 +736,7 @@ class _Rescue:
         aimed = (cue_start + shift, max(cue_end + shift, win.aim_end - self.offset))
         if fixed is None or not _line_in_span(fixed, aimed, self.offset):
             return None, False
-        if placed and _timed_words(fixed["words"]) <= _timed_words(obj["words"]):
+        if must_gain and _timed_words(fixed["words"]) <= _timed_words(obj["words"]):
             return None, False
         return fixed, lifted
 
@@ -695,7 +746,7 @@ class _Rescue:
         if not self.can_realign(win):
             return None
         lid = obj["line_id"]
-        fixed, lifted = self.retry(obj, out, win, placed, 0.0)
+        fixed, lifted = self.retry(obj, out, win, 0.0, must_gain=placed)
         if fixed is None:
             return None
         if placed and self.confirmed(obj) and not self.confirmed(fixed):
@@ -707,21 +758,36 @@ class _Rescue:
         return fixed
 
     def heard_aimed_line(
-        self, obj: dict, out: list[dict], placed: bool, shift: float
+        self,
+        obj: dict,
+        out: list[dict],
+        shift: float,
+        *,
+        must_gain: bool = False,
+        whole: bool = False,
     ) -> dict | None:
-        """Rule B: the re-align of ``obj`` over its cue span moved ``shift`` s, to where the
-        transcriber heard it, when the transcriber confirms the result; else None and the
-        line takes the cue-aimed retry as before."""
+        """The re-align of ``obj`` over its cue span moved ``shift`` s, to where the
+        transcriber heard it, when the transcriber confirms the result; else None.
+
+        Rule B (a bad, partial or crammed line; ``must_gain`` for a placed one, as for the
+        cue-aimed retry) falls back to the cue-aimed retry on None. Rule D (``whole``: a
+        complete, placed line, so it cannot gain a word) leaves the line as it is.
+        """
         lid = obj["line_id"]
         win = self.window(lid, shift)
         if not self.can_realign(win):
             return None
-        self.heard_aimed.append(lid)
-        fixed, lifted = self.retry(obj, out, win, placed, shift)
+        tried, kept = (
+            (self.whole_aimed, self.whole_aimed_kept)
+            if whole
+            else (self.heard_aimed, self.heard_aimed_kept)
+        )
+        tried.append(lid)
+        fixed, lifted = self.retry(obj, out, win, shift, must_gain)
         if fixed is None or not self.confirmed(fixed):
             return None
         self.adopt(lid, win)
-        self.heard_aimed_kept.append(lid)
+        kept.append(lid)
         if lifted:
             self.guard_lifted.append(lid)
         return fixed
@@ -814,8 +880,15 @@ def repace_bad_lines(
     word among those matched) is first re-aligned over its cue span moved to where it was
     heard, window, singing end, aimed span and start bound included, and that result is
     kept only if it passes the checks below against the moved span and the transcriber
-    confirms it; otherwise the line takes the cue-aimed retry as before. Without heard
-    words, or for a line the transcriber did not hear, the cue decides as before.
+    confirms it; otherwise the line takes the cue-aimed retry as before. A complete line
+    the cue test placed (a timed word for every token) is otherwise left alone, except
+    when its words pair with the words heard for it (:func:`heard_lines.pair_offsets`),
+    every pair :data:`HEARD_SHIFT_S` or more apart and all the same way: then it gets the
+    same re-align over its cue span moved to start where it was heard, and is replaced only
+    if the result passes the same checks and is confirmed (it cannot gain a word, so that
+    check is skipped); otherwise it stays exactly as it is. A line in a run of identical
+    lines the transcriber did not hear in full is never aimed by its heard words. Without
+    heard words, or for a line the transcriber did not hear, the cue decides as before.
 
     Each bad, partial or crammed line is rescued in two steps:
     ``realign(lid, w0, w1)`` -- an injected narrow per-line forced align over
@@ -879,13 +952,16 @@ def repace_bad_lines(
         "guard_lifted_line_ids": rescue.guard_lifted,
         "heard_aimed_line_ids": rescue.heard_aimed,
         "heard_aimed_kept_line_ids": rescue.heard_aimed_kept,
+        "whole_aimed_line_ids": rescue.whole_aimed,
+        "whole_aimed_kept_line_ids": rescue.whole_aimed_kept,
     }
     logger.info(
         "cue rescue: offset=%+.2fs, %d line(s) re-aligned, %d/%d re-paced from cue, "
         "%d word(s) guessed in %d line(s), %d crammed line(s) asked for a re-align; "
         "%d/%d window(s) widened to the singing, %d left unmeasured; "
         "%d line(s) heard, %d kept where heard, %d re-align(s) refused for the heard words, "
-        "%d start(s) freed of the previous line, %d line(s) looked for where heard, %d kept there",
+        "%d start(s) freed of the previous line, %d line(s) looked for where heard, %d kept there; "
+        "%d whole line(s) looked for where heard, %d kept there",
         rescue.offset,
         len(rescue.realigned),
         len(rescue.repaced),
@@ -902,6 +978,8 @@ def repace_bad_lines(
         len(rescue.guard_lifted),
         len(rescue.heard_aimed),
         len(rescue.heard_aimed_kept),
+        len(rescue.whole_aimed),
+        len(rescue.whole_aimed_kept),
     )
     return out, stats
 

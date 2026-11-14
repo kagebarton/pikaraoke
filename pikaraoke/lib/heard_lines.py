@@ -105,18 +105,18 @@ def runs_heard(line_toks: list[list[tuple[str, str]]], heard: list[HeardLine | N
     return flags
 
 
-def confirms(obj: dict, n_tokens: int, heard: HeardLine | None, run_heard: bool) -> bool:
-    """Whether line object ``obj`` sits on the words heard for its line.
+def pair_offsets(obj: dict, n_tokens: int, heard: HeardLine | None) -> list[float] | None:
+    """How far after its placed word each word heard for ``obj``'s line starts (negative:
+    before), one per pair, or None when the line was not heard or too few words pair.
 
     The line's timed words (at least :data:`INSTANT_WORD_DUR_S` long) are paired in order
-    with its heard words by equal normalised text. It is confirmed when the line is heard,
-    its run was heard (``run_heard``), at least :data:`HEARD_MIN_WORDS` words and
-    :data:`MIN_LINE_COVERAGE` of the ``n_tokens`` tokens are paired, and every pair's
-    starts are within :data:`HEARD_AGREE_S`. A zero-length word is a failed alignment, so
-    it neither confirms nor contradicts.
+    with its heard words by equal normalised text. A zero-length word is a failed
+    alignment, so it pairs with nothing and neither confirms nor contradicts. Too few is
+    under :data:`HEARD_MIN_WORDS` pairs or under :data:`MIN_LINE_COVERAGE` of the
+    ``n_tokens`` tokens.
     """
-    if heard is None or not run_heard:
-        return False
+    if heard is None:
+        return None
     timed = [w for w in obj["words"] if w["end"] - w["start"] >= INSTANT_WORD_DUR_S]
     assign = match_words_to_tokens(
         [_normalize_token(w["word"]) for w in timed],
@@ -127,8 +127,19 @@ def confirms(obj: dict, n_tokens: int, heard: HeardLine | None, run_heard: bool)
     offsets = [
         heard.words[wi]["start"] - w["start"] for w, wi in zip(timed, assign) if wi is not None
     ]
-    return (
-        len(offsets) >= HEARD_MIN_WORDS
-        and len(offsets) >= MIN_LINE_COVERAGE * n_tokens
-        and all(abs(off) <= HEARD_AGREE_S for off in offsets)
-    )
+    if len(offsets) < HEARD_MIN_WORDS or len(offsets) < MIN_LINE_COVERAGE * n_tokens:
+        return None
+    return offsets
+
+
+def confirms(obj: dict, n_tokens: int, heard: HeardLine | None, run_heard: bool) -> bool:
+    """Whether line object ``obj`` sits on the words heard for its line.
+
+    It is confirmed when the line is heard, its run was heard (``run_heard``), enough of
+    its words pair with the heard words (:func:`pair_offsets`) and every pair's starts are
+    within :data:`HEARD_AGREE_S`.
+    """
+    if not run_heard:
+        return False
+    offsets = pair_offsets(obj, n_tokens, heard)
+    return offsets is not None and all(abs(off) <= HEARD_AGREE_S for off in offsets)

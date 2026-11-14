@@ -1009,7 +1009,8 @@ class TestGuardLift:
 
 
 class TestHeardAimedRetry:
-    """Rule B: a line heard far from its cue is first looked for where it was heard."""
+    """Rules B and D: a line heard far from its cue (B), or a complete line whose words sit far
+    from the words heard for it (D), is looked for where it was heard."""
 
     @staticmethod
     def _sung(start: float) -> tuple[tuple[str, float, float], ...]:
@@ -1025,13 +1026,14 @@ class TestHeardAimedRetry:
         cue: tuple[float, float] = (8.0, 12.0),
         *placed: tuple[str, float, float],
         after: tuple[float, float] | None = None,
+        text: str = "ee ff gg",
     ):
-        """Four anchors plus line 4 ("ee ff gg"), cued over ``cue`` and holding ``placed``
+        """Four anchors plus line 4 (``text``), cued over ``cue`` and holding ``placed``
         words; it is the song's last unless ``after`` cues a clean line 5 ("a a") over it."""
         objs, cues, lines = _anchor_lines(4)
         cues.append(cue)
-        lines.append("ee ff gg")
-        objs.append(_line(4, "ee ff gg", *placed))
+        lines.append(text)
+        objs.append(_line(4, text, *placed))
         if after is not None:
             c0, _c1 = after
             cues.append(after)
@@ -1226,6 +1228,124 @@ class TestHeardAimedRetry:
         assert stats["heard_aimed_kept_line_ids"] == [4]
         assert out[4]["start"] == 12.65 and out[4]["end"] == 15.0
         assert out[5] == song[0][5]
+
+    def test_a_line_in_a_run_the_transcriber_did_not_hear_in_full_is_not_aimed_by_its_heard_words(
+        self,
+    ):
+        # Two identical bad lines: heard words cannot say which of them they belong to unless
+        # both were heard.
+        def rescue(second_heard):
+            objs, cues, lines = _anchor_lines(4)
+            cues += [(8.0, 9.5), (10.0, 11.5)]
+            lines += ["ee ff gg", "ee ff gg"]
+            objs += [_line(4, "ee ff gg"), _line(5, "ee ff gg")]
+            heard = _words(*self._sung(12.6), *(self._sung(14.6) if second_heard else ()))
+            asked = []
+
+            def realign(lid, w0, w1):
+                asked.append(lid)
+                return None
+
+            _, stats = repace_bad_lines(
+                objs, cues, lines, lines, realign=realign, heard_words=heard
+            )
+            return stats["heard_aimed_line_ids"], asked
+
+        assert rescue(True) == ([4, 5], [4, 4, 5, 5])
+        assert rescue(False) == ([], [4, 5])
+
+    @pytest.mark.parametrize(
+        "cue, placed_at, heard_at",
+        [
+            ((8.0, 12.0), 8.0, 11.0),
+            ((11.0, 15.0), 11.0, 8.0),
+            # Placed 1 s after its cue start: the span moves to start at the heard start.
+            ((8.0, 12.0), 9.0, 12.0),
+        ],
+    )
+    def test_a_complete_line_placed_3_s_from_its_heard_words_is_re_aligned_there(
+        self, cue, placed_at, heard_at
+    ):
+        # Every pair 3 s off. Rule D has no more-words check: the line already has them all.
+        song = self._song(cue, *self._sung(placed_at))
+        out, stats, calls = self._rescue(
+            song, lambda w0, w1: _words(*self._sung(heard_at + 0.05)), _words(*self._sung(heard_at))
+        )
+        assert out[4]["source"] == SOURCE_REALIGN and out[4]["start"] == pytest.approx(
+            heard_at + 0.05
+        )
+        # The slice is the cue span moved to start at the heard start, padded.
+        assert calls == [(pytest.approx(heard_at - 0.75), pytest.approx(heard_at + 4.75))]
+        assert stats["whole_aimed_line_ids"] == [4] and stats["whole_aimed_kept_line_ids"] == [4]
+        assert stats["realigned_line_ids"] == [4] and stats["repaced_line_ids"] == []
+        assert stats["heard_aimed_line_ids"] == []
+
+    def test_a_result_the_heard_words_do_not_confirm_leaves_a_whole_line_as_it_is(self):
+        # The stub answers 2 s off the heard words, inside the moved span. No cue-aimed retry
+        # follows: the line was never bad.
+        song = self._song((8.0, 12.0), *self._sung(8.0))
+        out, stats, calls = self._rescue(
+            song, lambda w0, w1: _words(*self._sung(13.0)), _words(*self._sung(11.0))
+        )
+        assert out[4] == song[0][4] and len(calls) == 1
+        assert stats["whole_aimed_line_ids"] == [4] and stats["whole_aimed_kept_line_ids"] == []
+        assert stats["realigned_line_ids"] == [] and stats["n_guessed_words"] == 0
+
+    @pytest.mark.parametrize(
+        "placed, heard",
+        [
+            # Only the first word is 2 s out (the onset_loud_start kind).
+            (
+                (("ee", 8.0, 8.3), ("ff", 10.2, 10.5), ("gg", 10.6, 10.9)),
+                (("ee", 10.0, 10.3), ("ff", 10.4, 10.7), ("gg", 10.8, 11.1)),
+            ),
+            # Pairs off in opposite directions.
+            (
+                (("ee", 8.0, 8.3), ("ff", 8.4, 8.7), ("gg", 8.8, 9.1)),
+                (("ee", 6.0, 6.3), ("ff", 10.4, 10.7), ("gg", 10.8, 11.1)),
+            ),
+        ],
+    )
+    def test_a_whole_line_not_displaced_as_a_whole_is_left_alone(self, placed, heard):
+        song = self._song((8.0, 12.0), *placed)
+        out, stats, calls = self._rescue(song, lambda w0, w1: None, _words(*heard))
+        assert out[4] == song[0][4] and calls == []
+        assert stats["n_heard_lines"] == 1 and stats["whole_aimed_line_ids"] == []
+
+    @pytest.mark.parametrize("off, tried", [(0.1, False), (1.2, False), (1.4, False), (1.6, True)])
+    def test_a_whole_line_is_aimed_only_when_every_pair_is_1_5_s_off(self, off, tried):
+        # 0.1 s: confirmed. 1.2 and 1.4 s: not confirmed, but within jitter of a placement.
+        song = self._song((8.0, 12.0), *self._sung(8.0))
+        out, stats, calls = self._rescue(
+            song, lambda w0, w1: _words(*self._sung(8.05 + off)), _words(*self._sung(8.0 + off))
+        )
+        assert stats["whole_aimed_line_ids"] == ([4] if tried else [])
+        assert len(calls) == int(tried)
+        assert (out[4] == song[0][4]) is not tried
+
+    def test_one_heard_word_of_two_tokens_is_not_a_heard_line(self):
+        song = self._song((8.0, 12.0), ("ee", 8.0, 8.3), ("ff", 8.4, 8.7), text="ee ff")
+        out, stats, calls = self._rescue(song, lambda w0, w1: None, _words(("ee", 11.0, 11.3)))
+        assert stats["n_heard_lines"] == 0 and calls == []
+        assert out[4] == song[0][4]
+
+    @pytest.mark.parametrize("second_heard, tried", [(True, [4]), (False, [])])
+    def test_a_whole_line_in_a_run_the_transcriber_did_not_hear_in_full_is_left_alone(
+        self, second_heard, tried
+    ):
+        # Two identical lines; the first is heard 2.9 s late, the second on its words or not
+        # at all.
+        objs, cues, lines = _anchor_lines(4)
+        cues += [(8.0, 10.0), (14.0, 16.0)]
+        lines += ["ee ff gg", "ee ff gg"]
+        objs += [_line(4, "ee ff gg", *self._sung(8.0)), _line(5, "ee ff gg", *self._sung(14.0))]
+        heard = _words(*self._sung(10.9), *(self._sung(14.0) if second_heard else ()))
+        out, stats, calls = self._rescue(
+            (objs, cues, lines), lambda w0, w1: _words(*self._sung(10.95)), heard
+        )
+        assert stats["whole_aimed_line_ids"] == tried
+        assert len(calls) == len(tried)
+        assert (out[4]["start"] == pytest.approx(10.95)) is bool(tried)
 
 
 class TestRescueWindow:

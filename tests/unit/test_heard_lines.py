@@ -1,6 +1,14 @@
 """Unit tests for the transcriber-as-reference helpers (made-up lines only)."""
 
-from pikaraoke.lib.heard_lines import HeardLine, confirms, heard_lines, runs_heard
+import pytest
+
+from pikaraoke.lib.heard_lines import (
+    HeardLine,
+    confirms,
+    heard_lines,
+    pair_offsets,
+    runs_heard,
+)
 from pikaraoke.lib.joint_match import _tokenise_lines
 
 
@@ -129,3 +137,29 @@ class TestConfirms:
         heard = _hl(("zam", 11.1), ("zoom", 12.1), first=False)
         obj = _line(("zim", 10.0, 10.5), ("zam", 11.0, 11.5), ("zoom", 12.0, 12.5))
         assert confirms(obj, 3, heard, True)
+
+
+class TestPairOffsets:
+    HEARD = _hl(("zim", 10.1), ("zam", 11.1), ("zoom", 12.1))
+
+    def test_each_pair_is_how_far_after_its_placed_word_the_heard_word_starts(self):
+        obj = _line(("zim", 7.0, 7.5), ("zam", 11.0, 11.5), ("zoom", 14.0, 14.5))
+        assert pair_offsets(obj, 3, self.HEARD) == [
+            pytest.approx(3.1),
+            pytest.approx(0.1),
+            pytest.approx(-1.9),
+        ]
+
+    def test_a_zero_length_word_pairs_with_nothing(self):
+        obj = _line(("zim", 10.0, 10.5), ("zam", 16.0, 16.0), ("zoom", 12.0, 12.5))
+        assert pair_offsets(obj, 3, self.HEARD) == [pytest.approx(0.1), pytest.approx(0.1)]
+
+    def test_too_few_pairs_or_too_small_a_share_of_the_line_is_none(self):
+        one = _line(("zim", 10.0, 10.5))
+        assert pair_offsets(one, 3, self.HEARD) is None
+        two = _line(("zim", 10.0, 10.5), ("zam", 11.0, 11.5))
+        assert pair_offsets(two, 5, self.HEARD) is None
+        assert pair_offsets(two, 4, self.HEARD) is not None
+
+    def test_a_line_not_heard_is_none(self):
+        assert pair_offsets(_line(("zim", 10.0, 10.5), ("zam", 11.0, 11.5)), 2, None) is None
