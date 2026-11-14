@@ -57,7 +57,13 @@ import numpy as np
 
 from pikaraoke.lib.joint_match import _tokenise_lines
 from pikaraoke.lib.onset_snap import HOP_S, MIN_REF_DB, SUSTAIN_NEAR_DB, _sung_level_ref
-from pikaraoke.lib.token_align import _normalize_token, match_words_to_tokens
+from pikaraoke.lib.token_align import (
+    INSTANT_WORD_DUR_S,
+    MIN_LINE_COVERAGE,
+    _normalize_token,
+    _token_expected_times,
+    match_words_to_tokens,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -90,10 +96,6 @@ MAX_SECTION_DUR_S = 60.0
 # perception threshold's safety margin, so real durations pass through.
 MAX_WORD_DUR_S = 1.5
 
-# A line whose aligned words cover less than this fraction of its tokens is
-# treated as not placed by the align and handed to the cue re-pace fallback.
-MIN_LINE_COVERAGE = 0.5
-
 # An internal silent gap wider than this between two consecutive words of one
 # line is the forced-align drift signature (the aligner lost sync mid-section
 # and parked the rest). Such a line is re-paced from its cue. Set tighter than
@@ -101,10 +103,8 @@ MIN_LINE_COVERAGE = 0.5
 # and well above any legitimate within-line breath.
 DRIFT_GAP_S = 2.0
 
-# A word shorter than this is a failed forced-alignment the aligner could not
-# place but did not drop (only exact-zero-duration words are removed). A line
-# that is mostly these has a broken sweep and is re-paced from its cue.
-INSTANT_WORD_DUR_S = 0.05
+# A line that is mostly words shorter than INSTANT_WORD_DUR_S has a broken sweep
+# and is re-paced from its cue.
 MAX_INSTANT_FRACTION = 0.5
 
 # Fewer cleanly-aligned lines than this and the per-song display-lead median is
@@ -390,11 +390,6 @@ def segment_by_gaps(
             t1 = end + min(pad_s, max(0.0, (cue_spans[hi + 1][0] - end) / 2))
         sections.append(Section(lo, hi, round(max(0.0, t0), 3), round(t1, 3)))
     return sections
-
-
-def _token_expected_times(n: int, t0: float, t1: float) -> list[float]:
-    """Even-paced expected start for each of ``n`` tokens across ``[t0, t1]``."""
-    return [t0 + (k + 0.5) * (t1 - t0) / n for k in range(n)]
 
 
 def _match_words_to_tokens(
