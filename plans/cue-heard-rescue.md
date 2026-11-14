@@ -1,6 +1,7 @@
 Model: Claude Sonnet 5.5 (executor, Phases 1-4). Author: Claude Fable 5.2, 2026-11-13.
-Judge at GATE H: Claude Opus 5.5, then Ken. Where Claude Fable 5.2 would earn its keep, if
-Ken still has it at build time, is listed under "Where Fable would help".
+Judge at GATE H: Claude Fable 5.2 (Ken's call, 2026-11-14), then Ken; Opus 5.5 is the
+fallback if Fable is not available then. Where Fable earns its keep is listed under
+"Where Fable would help".
 
 # Cue-align rescue: the transcriber's words outrank the cue
 
@@ -510,10 +511,10 @@ Read-only on the library (`/home/ken/shared-drives/D:/Shared/pikaraoke-songs`).
   and after. Ken plays the copy in an isolated app (`APPDATA` `C:\temp\p8\appdata`), as
   on 2026-11-12.
 - [ ] **4c.** Tables into "Report output". Results log row. **STOP: GATE H.** Handoff
-  prompt to Opus carries: branch and HEAD, this file and "GATE H", `<out>` and the copy
+  prompt to Fable (Opus if Fable is not available) carries: branch and HEAD, this file and "GATE H", `<out>` and the copy
   folder, "do not rerun the probe", and that Ken's verdicts arrive in chat.
 
-## GATE H (Opus, then Ken)
+## GATE H (Fable 5.2, then Ken)
 
 Read-only. Inputs: the Phase 3 and 4 tables, `<out>`, Ken's verdicts on the sheet.
 
