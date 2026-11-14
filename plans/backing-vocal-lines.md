@@ -238,6 +238,121 @@ the next stamp, so none can overlap.
 Not counted: one caption cue with an unbalanced bracket, `D_dOXTpwV5s` "(heeyyy]", which no
 paren rule touches today.
 
+### Step 2: labels
+
+Written and committed before step 3 ran: no transcript, bundle word or audio was opened for
+them. Each distinct text is labelled once, from the text, its cue and its song. Key: lower
+case, every character but letters, digits and apostrophes made a space, spaces collapsed
+("(Oh-oh-oh)" and "(oh, oh, oh)" are one key).
+
+- `sung`: words a voice performs in the song at that point, sung or spoken: echoes, answers,
+  ad-libs, a chant in another language ("Dies irae"), a spoken line inside the song ("Hang in
+  there, Joan!").
+- `direction`: anything else, which must never reach the screen: a sound or music, an action,
+  a manner of voice ("falsetto", "hums", "vocalizing", "singing", "Bowie voice"), a
+  non-verbal noise, and title cards ("\"My Love\"", "\"I Want It That Way\"", and "(Like You
+  Used to Do)", the second half of a title card).
+- `unsure`: the text cannot say. For Ken at GATE A.
+
+Vocable-only, for the A2 split, fixed here too: every word of the text is one of oh, ohh, ooh,
+ah, ahh, uh, mm, mmm, hmm, woo, whoa, la, na, da, ya, yeah, hey, eh, ay, aye, ha. Under this
+rule "oh-I-oh-I" and "shamone" are worded.
+
+| Source | sung | direction | unsure | groups |
+|---|---|---|---|---|
+| captions | 147 | 277 | 10 | 434 |
+| LRC | 184 | 0 | 8 | 192 |
+
+**unsure** (4): beep (Eminem - The Real Slim Shady, "so (beep) him": a bleeped word; the audio
+may hold a beep, a reversed word or silence) · censored (Tenacious D - Tribute, "the best
+(censored) song": the audio may sing the word) · heartbeat (BTS - Butter, "to my beat
+(heartbeat)": reads as an echo but names a sound; the plan's own example) · skate (Silk Sonic -
+Skate, "skate to me, baby (skate)": reads as an echo; the plan's own example).
+
+**direction** (189): acoustic guitar playing · ad libs · aircraft engine rumbling · applauding
+· backstreet boys scream · barking · basketball thudding · bass and drums · beat boxing · bell
+rings · birds calling · birds chirping · birds screeching · birds squawking · bowie voice ·
+brian screams in horror · brian startles agitatedly · bring it all back by s club 7 · bubbles
+popping · camera clicks · car screeches · car screeching · cars humming · cars screeching ·
+cars whirring · cd clicks · change clatters · chattering · cheerful music · cheering · children
+laughing · chorus sings in foreign language · chuckling · chuffing and squawking · clears
+throat · clock ticking · congas playing · creepy music · crowd chanting · crowd chattering ·
+crowd cheering · crowd cheering and clapping · crowd yelling · demon cackles · distorted music
+· doors creak open · dramatic music · dramatic pop music · dramatic whooshing · drums beating ·
+dwayne laughing · electric guitar solo · electricity crackles · elephant trumpeting · energetic
+guitar music · energetic rock music · falsetto · feet scraping · fireworks cracking · fist
+pounds · flute playing · foot tapping · for good by kristin chenoweth and idina menzel · french
+style laugh · genie in a bottle by christina aguilera · gentle bells · gentle guitar music ·
+gentle music · gentle music and humming · gentle piano solo · gentle pop music · giggles ·
+girls vocalizing · glass shattering · glass tinkling · groans · ground rumbling · grunts softly
+· guitar · guitar playing · guitar strumming · haunting organ music · horses neighing · humming
+continues · hums · i want it that way · instrumental interlude · intense music · intro beaming
+· jack shouts · jack shushing · jack sings in vocalese · jc blowing · jemaine groaning
+pleasurably · jemaine whispers · justin laughing · kyle huffs · laughing · laughs · like you
+used to do · lisa singing in spanish · lively music · man singing in foreign language ·
+melancholy piano music · mouthing · mouthing notes · music continues · music ends · music fades
+· music stops · my love · normal voice · pandemonious banter · parrot squawking · passersby
+talk indistinctly · passersby talking indistinctly · pencil tapping · phone clicks · phone
+ringing · piano music · piano music continues · piano plays slow gentle melody · plane roaring
+· pop music playing · purring · radio crackling · record halts · record scratch · record
+scratching · relaxing music · relaxing music continues · rhythmic piano solo · roaring
+trumpeting · saxophone playing · screen whooshing · seabirds calling · ship humming · shrieks ·
+singer vocalizing · singing · singing through vocoder · siren wailing · slow music · slow quiet
+electric guitar · slow quiet piano music · slow rock music · sneezes · snorting · snorts · soft
+cymbal crash · soft music begins · soft pop music · soft rock music · solemn piano music · song
+ends · soothing music · speaking in foreign language · sputtering springing · squawking ·
+static buzzing · students running · synth strings and pop beat · synthesized voice · techno
+music playing · tempo picks up · thunder crashes · thunder crashing · trumpets buzzing · upbeat
+groovy music · upbeat instrumental music · upbeat music · upbeat music continues · upbeat music
+playing · upbeat pop music · violin music · violin music continues · vocalizing · voices
+distorting · warm rhythmic music · warm rhythmic music continues · waves lapping · whispering ·
+whistling · whoosh · wild guitar music · wild guitar music continues · wind whirring ·
+wonderboy by tenacious d · words typing and beeping
+
+**sung** (198): a week · ah · ah ah · all alone · all because of you · always · always remember
+· and i'm mark i'm mark · and i'm mark i'm mark i'm mark · are you sure · as we go on · baby ·
+baby don't stop · baby i'm right here · best i ever had · between you and i · big latto · body
+starts to rock · bummer · but i just don't know don't know girl · butter · can't believe it ·
+can't love you like i do · come on · come over here baby · come whatever · crazy crazy crazy
+crazy · da da da down oh watch me do it yeah ooh · darling oh · dies irae · do you ever wonder
+· does he know what you feel · don't need control · don't worry · don't you dare · drip drip ·
+erus · eternum · ever wonder why · everything is happening · favilla · gets you high · girl ·
+girl i'm tryna give you this · gotta give you back · hang in there joan · help me please help
+me please · hercules hercules · here we are · hey · hey girl · hey hey hey · hey ya hey yeah
+hey yeah · house clean · how could she do this · how could she do this baby · how could she do
+this to me · how it gets you so high baby · how much i loved you baby · huntr x girls to the
+world · i · i can be in love but i just don't know don't know girl · i can't stop the feeling ·
+i could be in love · i drive myself · i gotta know · i gotta see you baby · i just love your
+brain · i know you hear your friends when they say you should · i like the way you look right
+now · i need you baby · i wanna get to know ya · i wanna get to know you · i wanna rock your
+body · i was wrong · i'd be your shining star yeah · i'll treat you good girl · i'm in love
+with your body · i'm sorry · i'm waiting waiting waiting · i'ma leave the door open · i'ma
+leave the door open hoping · i'ma tryna ride with you darling · if i had only told you · if you
+· illa · in flamas · independent · it's a takedown · it's not goodbye · josé josé josé · just
+how good you were to me · just think of me and you · la la la la · la la la la la · let ya body
+know · let's bash · listen · listen 'cause i'm · look too good · made a mistake · make my heart
+sing · makes me trust ya like i do · maledictus · mm · mmm you smell better than a barbecue ·
+my arms around you · my girlfriend · my oh my · nah · never get enough · no no · no there ain't
+nothin better than this · no there ain't nothing better than this · now · oh · oh da da da down
+· oh da da da down ah · oh da da da down ooh · oh da da da down watch me do it yeah · oh da da
+da down yeah yeah yeah yeah yeah · oh i oh i oh i oh i · oh no · oh oh · oh oh oh · oh oh oh oh
+· oh oh oh oh oh · oh whoa · oh yeah yeah · oh yes we remember · one in a million ooh · one
+things fo sho one things for sho · only one · ooh · ooh ooh ooh · ooh ooh ooh ooh ooh · our
+destination · pool warm · purple haze · right here next to you right here next to you · rushing
+on · same · say you are · seems hopeless but we know we gotta try · seven days a week ooh ·
+shamone · she belong to everybody · she got she got · shut your trap · sip sip · slide your way
+on over · smokin out the window of the benzo the benzo · smoking out the window · smooth like a
+newborn · so sweet · so tight · stop stop stop · stunner · summer · tell me · tell me that
+you're coming through · that girl yes she belong to everybody · that's why i love her · that's
+why i love that girl · there ain't nothin better · there ain't nothing better · thing thing ·
+this is me yeah · this moment yeah · too soon · toxic · tryna · uh · unless you like · vos
+solve in · waiting · wanting you the way that i do · we could do somethin' · we remember · we
+will still be friends forever · we're on our own · what you doing · what you smoke · when
+you're body starts to rock · when your body starts to rock · where you at · whoa whoa · why ·
+why you thinkin' about it mama · with you · woo woo · yeah · yeah she belong to everybody · you
+already know · you can't stop · you confessed your love · you got plans · you're the best i
+ever had
+
 ## Results log
 
 Raw tables, commands and commits only; no verdicts in this table.
@@ -245,3 +360,4 @@ Raw tables, commands and commits only; no verdicts in this table.
 | # | date | phase | what ran (command, commit) | raw result |
 |---|---|---|---|---|
 | 1 | 2026-11-14 | 0.1 | `inventory.py ~/pikaraoke-songs out` on `8701174c`, library read-only | 170 cue songs read (7 custom left out), all sheets match their bundles; 626 paren groups, 391 distinct texts. "Phase 0 record", "Step 1". |
+| 2 | 2026-11-14 | 0.2 | `labels.py out` (labels written by hand from `out/label_sheet.txt`: text, cue, song; no transcript) | 391 keys: 198 sung, 189 direction, 4 unsure; groups: captions 147 / 277 / 10, LRC 184 / 0 / 8. "Phase 0 record", "Step 2". |
