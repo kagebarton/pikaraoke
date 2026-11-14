@@ -164,16 +164,29 @@ class Analysed:
 # ---------------------------------------------------------------------------
 
 
+def song_kind(bundle: dict) -> str:
+    """:data:`LRCLIB` for a song timed from an LRCLIB record, else :data:`CAPTION`."""
+    origin = (bundle.get("lyrics") or {}).get("origin") or ""
+    return LRCLIB if origin.startswith("lrclib") else CAPTION
+
+
+def on_cue_route(bundle: dict | None) -> bool:
+    """Whether ``bundle`` saved what a replay needs: ``cue_inputs`` and ``transcribe_words``."""
+    return (
+        bool(bundle)
+        and bool(bundle.get("cue_inputs"))
+        and bundle.get("transcribe_words") is not None
+    )
+
+
 def cue_route_songs(folder: Path) -> list[Song]:
     """Every bundle in ``folder`` with ``cue_inputs`` and ``transcribe_words``, by stem."""
     debug = folder / "alignment_debug"
     songs = []
     for path in sorted(debug.glob("*.json")) if debug.is_dir() else []:
         bundle = read_bundle(folder, path.stem)
-        if not bundle or not bundle.get("cue_inputs") or bundle.get("transcribe_words") is None:
-            continue
-        origin = (bundle.get("lyrics") or {}).get("origin") or ""
-        songs.append(Song(path.stem, LRCLIB if origin.startswith("lrclib") else CAPTION, bundle))
+        if on_cue_route(bundle):
+            songs.append(Song(path.stem, song_kind(bundle), bundle))
     return songs
 
 
@@ -515,6 +528,20 @@ def d_unaimed_reason(ctx: Ctx, lid: int) -> str | None:
     return "trigger held, not aimed"
 
 
+def parked_twin(ctx: Ctx, lid: int) -> bool:
+    """Whether rule C's free stretch after bad line ``lid`` ends at a parked twin: the next
+    first-pass line that is clean (where the stretch ends) is in a run of identical lines,
+    fails the run's cue test and is not confirmed by the transcriber."""
+    end = next((i for i, _ in ctx.rescue.clean_starts if i > lid), None)
+    if end is None or end not in ctx.rescue.repeat_slacks:
+        return False
+    first, rescue = ctx.first[end], ctx.rescue
+    on_cue = cue_align._line_in_span(
+        first, rescue.cue_spans[end], rescue.offset, slack=rescue.repeat_slacks[end]
+    )
+    return not on_cue and not rescue.confirmed(first)
+
+
 def rows_c(ctx: Ctx) -> list[dict]:
     """Lines rule C looked for between their neighbours."""
     rows = []
@@ -532,6 +559,7 @@ def rows_c(ctx: Ctx) -> list[dict]:
                 if aimable is None
                 else aimable.start - ctx.rescue.audio_spans[lid][0],
                 run=ctx.in_run(lid),
+                twin=parked_twin(ctx, lid),
                 answered=call.answered,
                 kept=lid in kept,
                 today=ctx.start(ctx.today, lid),
@@ -580,8 +608,10 @@ def a_counts(
     return counts
 
 
-def analyse_song(folder: Path, cache_dir: Path, song: Song) -> Analysed | LeftOut:
-    """Replay one song; its table rows, or why it is left out."""
+def stem_and_envelope(
+    folder: Path, cache_dir: Path, song: Song
+) -> tuple[Path, np.ndarray, float] | LeftOut:
+    """The song's snap stem with its envelope and length, or why the song is left out."""
     stem_file = snap_stem(folder, song)
     if not stem_file.is_file():
         return LeftOut(song, f"stem missing: {stem_file.parent.name}/{stem_file.name}")
@@ -589,13 +619,14 @@ def analyse_song(folder: Path, cache_dir: Path, song: Song) -> Analysed | LeftOu
         env, duration = load_envelope(stem_file, cache_dir)
     except (subprocess.CalledProcessError, OSError, ValueError, wave.Error, EOFError) as exc:
         return LeftOut(song, f"stem unreadable: {exc.__class__.__name__}")
-    today = replay(song, stem_file, env, duration, heard=False)
-    deviation = worst_deviation(today.final, song.bundle["output_line_timings"])
-    if deviation is not None:
-        return LeftOut(song, f"baseline replay differs: {deviation}")
-    new = replay(song, stem_file, env, duration, heard=True)
+    return stem_file, env, duration
+
+
+def song_rescue(song: Song, env: np.ndarray, duration: float) -> cue_align._Rescue:
+    """The rescue's per-song state over the bundle's first pass, with the transcriber's words
+    and no aligner: what the row builders read the cues, offset and heard lines from."""
     cue_inputs, lyrics = song.bundle["cue_inputs"], song.bundle["lyrics"]
-    rescue = cue_align._Rescue(
+    return cue_align._Rescue(
         cue_inputs["sections"],
         [tuple(span) for span in cue_inputs["spans"]],
         lyrics["lines"],
@@ -609,6 +640,21 @@ def analyse_song(folder: Path, cache_dir: Path, song: Song) -> Analysed | LeftOu
         env=env,
         pad_s=cue_align.SECTION_PAD_S,
     )
+
+
+def analyse_song(folder: Path, cache_dir: Path, song: Song) -> Analysed | LeftOut:
+    """Replay one song; its table rows, or why it is left out."""
+    loaded = stem_and_envelope(folder, cache_dir, song)
+    if isinstance(loaded, LeftOut):
+        return loaded
+    stem_file, env, duration = loaded
+    today = replay(song, stem_file, env, duration, heard=False)
+    deviation = worst_deviation(today.final, song.bundle["output_line_timings"])
+    if deviation is not None:
+        return LeftOut(song, f"baseline replay differs: {deviation}")
+    new = replay(song, stem_file, env, duration, heard=True)
+    rescue = song_rescue(song, env, duration)
+    cue_inputs = song.bundle["cue_inputs"]
     ctx = Ctx(song, rescue, {obj["line_id"]: obj for obj in cue_inputs["sections"]}, today, new)
     rows = {
         "A": rows_a(ctx),
@@ -719,7 +765,9 @@ TABLES = {
     "C": (
         "Table C: lines rule C looked for between their neighbours",
         "Heard shift: heard start - cue start on the audio clock; blank when the line is not "
-        "heard, its first token is not matched or its run is not heard in full.",
+        "heard, its first token is not matched or its run is not heard in full. Twin: the "
+        "stretch ends at the next clean first-pass line, which is in a run of identical lines, "
+        "fails the run's cue test and is not confirmed.",
         [
             ("Src", "src"),
             ("Song", "song"),
@@ -729,6 +777,7 @@ TABLES = {
             ("Length", "length"),
             ("Heard shift", "heard_shift"),
             ("Run", "run"),
+            ("Twin", "twin"),
             ("Answered", "answered"),
             ("Kept", "kept"),
             ("Today", "today"),

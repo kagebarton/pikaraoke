@@ -415,6 +415,37 @@ class TestTableC:
         rows = analyse(self._reflection([], bad=("ee ff gg", "ee ff gg"))).rows["C"]
         assert [(r["line"], r["run"]) for r in rows] == [(4, True), (5, True)]
 
+    @staticmethod
+    def _twins(first_at, second_at=22.1):
+        """Bad line 4, then two identical clean lines "bb cc" cued 20-21 and 22-23, sung at
+        ``first_at`` and ``second_at``."""
+        objs, cues, lines = _free_stretch_song(("ee ff gg",))
+        objs[5] = _line(5, "bb cc", *_spans("bb cc", first_at))
+        lines[5] = "bb cc"
+        cues.append((22.0, 23.0))
+        lines.append("bb cc")
+        objs.append(_line(6, "bb cc", *_spans("bb cc", second_at)))
+        return _make_song(objs, cues, lines, [], lambda lid, w0, w1: None)
+
+    @staticmethod
+    def _line_4(rows):
+        return next(r for r in rows if r["line"] == 4)
+
+    def test_a_stretch_ending_at_a_twin_parked_off_its_cue_is_flagged(self, analyse):
+        row = self._line_4(analyse(self._twins(first_at=30.0)).rows["C"])
+        assert (row["run"], row["twin"]) == (False, True)
+
+    def test_a_stretch_ending_at_a_twin_on_its_cue_or_at_a_lone_line_is_not(self, analyse):
+        (row,) = analyse(self._twins(first_at=20.1)).rows["C"]
+        assert (row["line"], row["twin"]) == (4, False)
+        (lone,) = analyse(self._reflection([])).rows["C"]
+        assert lone["twin"] is False
+
+    def test_a_twin_the_transcriber_heard_where_it_sits_is_not_parked(self, analyse):
+        song = self._twins(first_at=30.0, second_at=31.0)
+        song.bundle["transcribe_words"] = _sung("bb cc", 30.0) + _sung("bb cc", 31.0)
+        assert self._line_4(analyse(song).rows["C"])["twin"] is False
+
 
 class TestTableD:
     @staticmethod
