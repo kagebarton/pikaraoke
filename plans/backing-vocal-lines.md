@@ -3,8 +3,9 @@
 Model: Claude Opus 5.5 runs Phase 0, judges both gates and writes the build spec.
 Claude Sonnet 5.5 builds from that spec. (High-level spec by Claude Fable 5.2, 2026-11-11.)
 
-**Status: GATE A ruled GO on the amended hybrid, 2026-11-14 ("GATE A ruling"). Next: Opus
-writes the build spec.**
+**Status: GATE A ruled GO on the amended hybrid, 2026-11-14 ("GATE A ruling"). Build spec
+written 2026-11-14 ("Build spec": Design, Commits). Next: Ken reads the spec and its four
+choices; then Sonnet builds C0-C7. No code yet.**
 
 Branch `backing_vocal_lines` off `dev` at `1016e20`, worktree
 `.claude/worktrees/backing_vocal_lines`. Work and run everything from the worktree. Whisper
@@ -165,6 +166,319 @@ Not doing: any test on Genius parens (they all stay), `[bracket]` directions, no
 speaker labels, changes to the rescue or onset snap, the stem separator, rebuilding edited
 or custom sheets, any library write before GATE B.
 
+#### Design (Opus 5.5, 2026-11-14)
+
+Code read on `b2f914be` (dev `1016e20` plus plan commits). Counts are from Phase 0's saved
+outputs (Results row 10, `spec_counts.py`). The rule, its pad and its vocable set are the ones
+ruled at GATE A; nothing here re-tunes them.
+
+**Summary.** No cleaner and no sheet changes. On the cue route the first section pass runs on
+today's lines, as now, and fits the display lead. A new pure step takes that lead, the
+transcript the de-reverb gate already made and the sheet's parentheticals, and applies the
+ruled rule. Nothing kept: the song finishes on today's path, call for call. Something kept:
+the kept words join their lines, kept paren-only cues become lines, the song is re-sectioned,
+only the sections whose window or text changed go back to the aligner, and the rescue runs
+with the display lead today's lines give. A last pass, on every alignment route, puts the
+parentheses back on the karaoke words. The aligner and the matchers see only words.
+
+**D1. Where the decision is made: inside `cue_align.align_song`, after its first
+`fit_offset`.** The cue route runs `LyricAlignStage.run` (sheet loaded by `_load_lyrics` →
+`cue_spans_from_srt`) → `_run_cue_align` → `_dereverb_gate` (transcribe, maybe re-transcribe
+dry) → `align_song`: section pass on the cue spans → `fit_offset` → a second pass on shifted
+spans when the lead exceeds the 0.75 s pad → `repace_bad_lines` → back in the stage, edge snap
+→ ASS. The rule needs the transcript, which exists before `align_song`, and the display lead,
+which exists only after its first pass: `joint_stats.offset_s` is that first `fit_offset`,
+rounded to 3 dp, and is what Phase 0 used. The cleaners have neither. The first pass is
+today's pass on today's lines, so the rule sees the lead it was measured with. The LRCLIB pick
+runs in `run` before the cue route (`lrclib_fit_pick` 4d), so the decision comes after it.
+
+**D2. The pick and the cleaners are untouched.** `clean_cue_texts`, `clean_srt_line`,
+`strip_srt_markup`, `cue_spans_from_srt`, `lrc_to_srt` and `fit_slice` keep their code and
+their output for every caller (`ytasr.py` and `scripts/split_songs.py` included); their
+existing tests pass unedited. The parentheticals are read by a second function from the same
+sheet text (D4) and join inside `align_song` (D7).
+
+**D3. Sheets.** None changes. `.lrclib.srt` stays `fit_slice`'s output, the record's text
+with its parentheses; captions stay as downloaded. The keep is decided again on every run from
+the raw sheet and that run's transcript, and is never written to a sheet. Edit words opens
+`cue_spans_from_srt`'s cleaned lines, as today, and saves them, so an edited sheet holds no
+paren group (`edited_srt` refuses any line its cleaning would change) and gets no backing
+lines: Decision 4's "left alone" holds with no code, and a cleaned line still cleans to itself
+because the cleaner is unchanged. Consequence: saving a word edit on a song that shows backing
+lines drops them (choice 3). Movie sheets (`movie_srt`, `.custom.srt`) are not tested, since
+Phase 0 measured captions and LRC only: the step runs for origins `srt` and `lrclib_srt`
+(`backing_vocals.ORIGINS`; the stage cannot import `library_regen`, so a test ties the
+constant to `LRC_ORIGIN`). An edited sheet records its source's origin but holds no group, so
+it needs no check of its own.
+
+**D4. Reading the parentheticals: `srt_cues.sheet_parens(srt_text) -> list[ParenCue]`.** As
+Phase 0's `inventory.py` read them: per cue, every match of the pattern `clean_srt_line`
+deletes, found after the markup strip (tags, `[brackets]`, note glyphs, quote and lookalike
+folding); its text is the inner words, spaces collapsed; an empty group is skipped.
+`ParenCue`: `index` (the cue's place in the sheet, every cue counted), `span`, `inline` (the
+cue still has words once cleaned), `line` (inline: its line in `cue_spans_from_srt`'s list;
+paren-only: the line it goes before, the line count after the last), and `groups`, each a
+`ParenGroup(text, at)`. `at` is where the group sits in today's cleaned line: the cue's
+markup-stripped text up to the group's `(`, cleaned the way `clean_cue_texts` cleans that cue
+(the same file-level speaker-label and capitals decisions), counted in space-split tokens;
+`None` when today's cleaned line does not begin with exactly those tokens. That catches a group
+glued inside a word ("love(oh)you" cleans to "loveyou"). None of the 205 inline keeps is glued
+to a letter; 4 have a comma right after the `)`, which is its own token today. In a file typed
+in capitals a group's text is recased as its line is. `sheet_parens` lives in `srt_cues`
+because it needs the cue cleaner's private per-file decisions. `genius_lyrics._strip_markup`
+and `_PAREN_CONTENT_RE` become public (`strip_markup`, `PAREN_GROUP_RE`), a rename only, so
+the pattern stays in one place.
+
+**D5. The rule: `backing_vocals.judge(cues, line_spans, heard_words, offset) ->
+list[Verdict]`**, in a new module `pikaraoke/lib/backing_vocals.py`. `none +vocables
++consist` as measured. `plans/backing-vocal-lines/heard.py` is the reference: its constants
+(the step 2 vocable set, the vocable classes, the 0.5 s pad, the 0.5 share) are copied, not
+re-derived. Per group:
+
+1. Quote-opened (first character `"` after folding): dropped, `quote`, and never a source for
+   step 4.
+2. Heard: the window is the cue's span plus `offset`, padded 0.5 s each side; a transcript
+   word is in it when their spans overlap (it ends after the window starts and starts before
+   it ends). Transcript words and the group's text are split at spaces, hyphens and slashes and
+   normalised (`_normalize_token`, empties dropped). The share is the fraction of the group's
+   distinct words equal (`_match_simple`, or the same vocable class) to a word in the window:
+   `heard` at 0.5 or more. Nothing is used up, so the line's own words count (`consume none`,
+   the ruled variant).
+3. `vocable` when every word is in the step 2 set.
+4. `consistency` when the group's text key (Phase 0's label key) is kept by step 2 or 3
+   elsewhere in the sheet.
+5. After step 4, as measured (these never feed it): an inline group whose `at` is None is
+   dropped, `unplaced`; a paren-only cue whose span overlaps by more than 0 s another line's
+   cue span (one of today's lines, or a paren-only cue kept earlier in sheet order) is dropped,
+   `overlap`. Decision 3's "heard" is read as "kept by the rule", which is how GATE A counted
+   the 56.
+
+Anything else is `not_heard`, including a group with no word once normalised (none in the
+library; heard.py would divide by zero on one). A `Verdict` holds the cue index, group index,
+kind, verdict and share. Inputs: the gate's transcribe words as the bundle stores them, cue
+spans on the video clock, and the first pass's lead as the exact float (Phase 0 used the
+bundle's 3-dp value; the parity step C2p feeds that). No setting: if GATE B drops an evidence
+kind, that is a step deleted from `judge`.
+
+**D6. The new lines: `backing_vocals.with_backing(display_lines, align_lines, spans, cues,
+verdicts) -> Backed`**, holding display lines, align lines, spans and `old_line_ids` (each new
+line's id in today's list, None for an added line).
+
+- Today's lines keep their display and align text exactly, stray unbalanced parens included
+  (`D_dOXTpwV5s` "(heeyyy]").
+- An inline cue's kept groups go into its line at `at`, today's tokens untouched. Display: the
+  group's first word gains `(`, its last `)`. Align: the same words bare. "Hey (hey!) you"
+  gives display "Hey (hey!) you", align "Hey hey! you". Groups keep their order; a dropped one
+  leaves no trace.
+- A paren-only cue with a kept group becomes a new line before `line`, at its cue's span:
+  display "(oh, oh)", align "oh, oh". Several kept groups in one cue join in order (one such
+  cue in the library, with one group kept).
+
+No paren this feature adds reaches the aligner or a matcher, so the question in "What exists"
+(does a paren in the aligner's text change its output) does not arise.
+
+**D7. Timing: `align_song` gains `parens: list[ParenCue] = ()` and `heard_words: list[dict] |
+None = None`** (`cue_heard_rescue` gives `align_song` the gate's words under the same name).
+With no parens, no heard words or nothing kept, every step and every aligner call is today's.
+When something is kept:
+
+1. Today's shipping pass is computed as now: the first pass, and the shifted pass when the
+   lead exceeds the pad (none of the 34 songs does). The rescue's display lead is fitted on
+   that pass, the value today's rescue fits, and pinned.
+2. The song is re-sectioned on the new lines' spans (shifted as before when it re-sectioned)
+   by the same gap rule: a new line is a cue like any other. Of the 56 paren-only lines kept,
+   22 join one of today's sections, 2 make their own, 31 bridge a gap and merge two of today's
+   sections, and 1 (`D_dOXTpwV5s`, a run captioned with no gap) moves where the 60 s cap splits
+   its run. Step 5's baseline counted "mate of an added line" the same way.
+3. A section whose window and text both equal one already aligned in this call reuses that
+   align's words; the rest go to the aligner. One dict keyed by `(t0, t1, text)` over the
+   section aligns. It saves the GPU on untouched sections and makes them identical by
+   construction, not by aligner determinism.
+4. `repace_bad_lines` gains `offset: float | None = None` (None fits it as today) and runs on
+   the new lines with the pinned lead. Nothing else in the rescue changes. What else it reads
+   (repeat runs, the next line's cue for the singing end, the previous line's end, guessed-word
+   bounds) comes from the new lines, as for any line.
+5. `align_song` returns a fourth item, the lines it timed, `(display_lines, align_lines)`: its
+   inputs when nothing was kept. The stage records them as the bundle's `lyrics.lines` and
+   `lyrics.align_lines`, so line ids agree with `output_line_timings` for
+   `library_status._missing_words`, Song Info and Phase 2.
+
+Recorded: `joint_stats.backing` whenever the sheet has a parenthetical and the step ran:
+`groups` (per group: `cue`, `group`, `kind`, `verdict`, `share`, `line_id` in the new lines or
+None, `tokens` as [first, end) of that line's align tokens), and when something was kept
+`old_line_ids` and `aligned_sections` (the new-line `[lid_lo, lid_hi]` of each section step 3
+sent to the aligner). `cue_inputs` describes the shipping pass (new spans, its sections) and
+adds `rescue_offset` when the lead was pinned, so an offline replay of the rescue can pass it
+back. No `SCHEMA_VERSION` bump: the keys are additive, and a bump would make every library
+song stale, against Decision 4. The `alignment_capture` header lists the new keys. One info
+log line: groups kept by evidence, dropped by reason, lines added.
+
+What this guarantees at GATE B: an old line can move only if it gained words, sits in a
+section that went back to the aligner, or is directly before or after a changed or added line
+(the singing-end search, the start bound, the guessed-word bounds, the repeat runs and both
+edge snaps look one line over). B2's three groups are then: gained words; near a change (the
+other two); all other lines, which must be identical. "Near a change" is wider than the
+plan's "section-mates" (choice 4): the ruling expects the line before a paren-only line to
+move, and for 31 of the 56 that line is in another of today's sections.
+
+**D8. A kept parenthetical the aligner cannot time is shown with the rescue's timing,** as any
+lyric word is: a gainer's untimed echo words are guessed at its pace; a paren-only line left
+short is re-aligned over its cue window, else paced across it. Nothing is dropped after
+alignment in this build. B4 is computed from the bundle (`tokens` against
+`cue_inputs.sections` and `realigns`, as `baseline.py` read old lines); if it fails, dropping
+untimed parentheticals is the GATE B change. The risk to look for: a gainer whose echo words
+the aligner drops can fall under the section split's half-the-tokens bar ("Baby (oh oh oh oh)"
+with the "oh"s dropped is 1 of 5) and come back empty, which sends its lead words to the
+rescue too. B2's gained-words group and B3 show it; the smallest fix to try then is counting a
+gainer's coverage on its old words, a rescue change this build does not make.
+
+**D9. Parens on screen: `backing_vocals.show_parens(line_objects, display_lines,
+align_lines)`**, called by the stage in alignment mode after the snaps and the LRCLIB fills,
+before the ASS is written (transcribe mode's words are the transcriber's own). On every route
+a shown word's text is a raw token of its line's align text, in token order
+(`split_section_to_lines`, the rescue, `_build_line_object`, `_align_line_object`,
+`lrclib_fill`). A line whose display text equals its align text is left alone: every cue line
+of today, which keeps B1 exact. Otherwise display tokens pair with align tokens in order, equal
+or equal once `(` and `)` are removed; a display token that is only parens joins the next token
+(the previous one at the line's end). Each word, in order, takes the display form of the next
+align token equal to it. A line that does not pair, or a word that finds no token, keeps its
+text. Only `word` changes, never a time, which is B6 by construction. Genius's `align_text` is
+its display with the parens removed, so its lines pair; new cue lines pair by D6. Custom typed
+sheets share Genius's parser and show their parens too (choice 2).
+
+**For Phase 2.** There is no off switch, so "before" is the base commit and "after" the build
+on it; name both. Evidence per group comes from `joint_stats.backing`; B2's groups from
+`old_line_ids`, `aligned_sections` and line adjacency (D7); B3 from the rescue's stats mapped
+through `old_line_ids`.
+
+**Landing order.** Three open branches touch the same code; whichever lands second is
+replayed onto the other.
+
+- `lrclib_fit_pick` (Phase 4 not built) moves `_dereverb_gate` into `run` and adds origin
+  `lrclib_auto_srt`, whose sheet is `fit_slice` output with the record's text as pasted. If it
+  lands first: add its origin to `ORIGINS` (the same LRCLIB records were measured), and read
+  the parentheticals from the sheet its pick writes.
+- `cue_heard_rescue` (stopped at 3b2) passes the same `heard_words` to `align_song` and turns
+  the rescue into a class that fits its lead when built; the pinned lead goes there. Its rules
+  look for a line where the transcriber heard its words, and an echo's words are its lead's,
+  so a new line could be aimed onto the lead's audio. If both are on Phase 2's base, report
+  heard-aimed moves of new lines on their own.
+- `onset_loud_start` changes the `snap_line_edges` call; `show_parens` runs after it. No other
+  contact.
+
+**Choices made here that Ken may overrule.**
+
+1. A new line is a cue like any other, so the song is re-sectioned (D7.2). The alternative, a
+   new line joins the nearer of today's sections and never merges two, moves fewer lines, but
+   leaves a section edge where the echo is sung and differs from how step 5 counted mates.
+2. Custom typed sheets show their parens (D9). The alternative is an origin check for
+   `custom` in the display pass.
+3. Saving a word edit drops a song's backing lines (D3). Keeping them needs Edit words to show
+   the bundle's kept groups and an edited sheet that keeps them as typed: its own step,
+   recorded in open issues (C6).
+4. B2's middle group is "near a change" (D7), not "section-mates". As written, the line
+   before a paren-only line in another of today's sections would fail "all other lines" by
+   design. GATE B's text is left as Ken ruled it until he says.
+
+#### Commits (Sonnet 5.5)
+
+Executor rules: branch `backing_vocal_lines`, in its worktree. No library write; C2p's library
+read is read-only, checked with `find ~/pikaraoke-songs -newer <stamp>`. Tests use made-up
+lines and a stub aligner, as `test_cue_align.py` does; no lyric text from the library. Each
+commit's tests ride with it; pre-commit on the files changed. STOP and report when an anchor
+differs, C2p differs from Phase 0, an existing test needs more than a call-shape edit, a
+cleaner's output changes, or anything here contradicts the code.
+
+- [ ] **C0. Anchors** (no commit). Confirm these exist as D1-D9 use them:
+  `srt_cues.clean_cue_texts`, `_clean_cue`, `is_all_caps`, `_recase_line`,
+  `cue_spans_from_srt`; `genius_lyrics._strip_markup`, `_PAREN_CONTENT_RE`, `clean_srt_line`,
+  `parse_lyric_lines`; `cue_align.align_song`, `segment_by_gaps`, `split_section_to_lines`,
+  `repace_bad_lines`, `fit_offset`; `joint_match._tokenise_lines`;
+  `token_align._normalize_token`, `_match_simple`; `LyricAlignStage.run`, `_load_lyrics`,
+  `_run_cue_align`, `_write_debug_capture`; `library_regen.LRC_ORIGIN`, `MOVIE_ORIGIN`;
+  `word_edit.edited_srt`. And that neither `lrclib_fit_pick` Phase 4 nor `cue_heard_rescue`
+  is on `dev`; if one is, STOP ("Landing order").
+- [ ] **C1. `feat(lyrics): read a cue sheet's parentheticals and where each sits in its
+  line`.** D4: the two renames in `genius_lyrics` with their callers; `ParenGroup`,
+  `ParenCue`, `sheet_parens` in `srt_cues`. Tests in `test_srt_cues.py`: a group at a line's
+  end, start and middle; two groups in one cue; a paren-only cue (`inline` False, `line` the
+  next line's id, the line count after the last line); a group on a cue's second line; a
+  speaker label after a leading group ("(oh) MARA: hey": line "hey", `at` 0) and before one
+  ("MARA: hey (hey)": `at` 1); a glued group (`at` None); a capitals file (group recased); an
+  empty group skipped; an unbalanced "(x]" not a group; `[x]` inside a group stripped; a
+  curly-quoted title card whose text starts with `"`; every inline cue's line equal to
+  `cue_spans_from_srt`'s. Existing cleaner tests unedited. Then `docs(plans): backing-vocal-lines
+  inventory.py follows the rename`, so the Phase 0 record still runs (plan-only, not landed).
+- [ ] **C2. `feat(cue_align): which parentheticals were sung, by the GATE A rule`.** D5:
+  `backing_vocals.py` with `ORIGINS`, the copied constants, `Verdict` and `judge`. Tests in a
+  new `tests/unit/test_backing_vocals.py`, made-up words: a share of exactly 0.5 kept, under it
+  dropped; a word ending exactly where the padded window starts is out; the lead shifts the
+  window; a vocable heard as another of its class; a vocable-only group kept with an empty
+  transcript; consistency keeps an unheard repeat of a heard text; a heard quote-opened group
+  is dropped and keeps no repeat; an echo heard only on its line's own words is kept; overlap
+  with one of today's lines and with an earlier kept paren-only cue; a later cue overlapping
+  only a dropped one is kept; `unplaced`; `ORIGINS` holds `srt` and `library_regen.LRC_ORIGIN`
+  and not `MOVIE_ORIGIN`.
+- [ ] **C2p. Parity on the library, read-only.** New `plans/backing-vocal-lines/parity.py
+  ~/pikaraoke-songs plans/backing-vocal-lines/out`: for every song in `songs.json` not
+  skipped, read its sheet as the stage does (UTF-8), run `sheet_parens`, then `judge` with the
+  bundle's `transcribe_words`, its `joint_stats.offset_s` (or 0.0) and the sheet's line spans.
+  Against `out/heard.json`: the same 626 groups by (song, cue, group), none extra; kept exactly
+  where `consume none +vocables +consist` kept, less any `unplaced` (each listed); 180 `heard`,
+  60 `vocable`, 21 `consistency`; no `quote` or `overlap` among them. Any other difference is a
+  STOP. Commit the script and a Results log row as `docs(plans): backing-vocal-lines parity of
+  the built rule with Phase 0`.
+- [ ] **C3. `feat(lyrics): karaoke words keep their parentheses`.** D9: `show_parens`, and
+  the stage calls it in alignment mode before `_generate_ass`. On its own this changes the word
+  text of Genius and custom songs with parens (Decision 2), never their timing. Tests: a
+  Genius-shaped line ("(I can't help) Falling", words I, can't, help, Falling) shows "(I",
+  "can't", "help)", "Falling" with every start and end unchanged; lone "(" and ")" tokens; a
+  word the aligner dropped; "oh (oh)"; a line whose text equals its align text untouched, stray
+  paren included; an interp line with no words; a line that does not pair. In
+  `test_lyric_align.py`: the joint route's ASS carries "(I" at unchanged times; transcribe mode
+  does not go through it.
+- [ ] **C4. `feat(cue_align): kept backing vocals join the song's lines and are timed with
+  them`.** D6, D7: `with_backing`; `align_song`'s two keywords, the section memo, the pinned
+  lead, the fourth return item, `joint_stats.backing` and `cue_inputs.rescue_offset`;
+  `repace_bad_lines(offset=...)`; the `alignment_capture` header. Tests in `test_cue_align.py`
+  with a stub aligner that logs its calls: no parens, no heard words, or nothing kept give the
+  same calls and output as a call without the keywords; an inline keep sends only its section
+  back, with the echo words bare, and the other sections' line objects are identical; a
+  paren-only keep in a short gap gives one merged section call and a new line with display
+  "(oh, oh)" and bare words; one far from both gets its own section; the rescue's lead is
+  today's when the new lines alone would move it (the stub realign of an unchanged rescued line
+  gets today's window); a re-sectioned song; `old_line_ids`, `aligned_sections`, `tokens`, the
+  returned lines. In `test_backing_vocals.py`: `with_backing` at a line's start, middle and
+  end, two groups, a paren-only line before a line and after the last. Existing `align_song`
+  tests: call shape only.
+- [ ] **C5. `feat(pipeline): caption and LRC songs show the backing vocals they sing`.** D3,
+  D7.5: in `run`, on the cue route with an origin in `ORIGINS`, `sheet_parens` of the sheet
+  `_load_lyrics` read; `_run_cue_align` takes them, passes them and the gate's words to
+  `align_song`, and hands back the timed lines, which the bundle records. `_load_lyrics` is
+  unchanged. Tests in `test_lyric_align.py`, workers mocked as there: a caption sheet with a
+  paren-only echo and an inline echo the mocked transcript hears gives a bundle whose
+  `lyrics.lines` hold both, `output_line_timings` ids that match them, and ASS words "(oh,";
+  the same sheet as `movie_srt`, and an edited caption sheet (cleaned lines), are timed as
+  today; an `lrclib_srt` sheet takes the same path as the caption; the joint route gets no
+  parens.
+- [ ] **C6. `docs(plans): open issues for backing vocal lines`**, in `plans/open-issues.md`
+  (this one lands). Under "Cue align windows": on "Repeated tokens get two assignment rules",
+  that an echo line repeats its lead's words within one line, so the in-order guess can put an
+  echo's timing on the lead's token, now a common case, watched at GATE B (B3, B4); on "Duet
+  ending", that a paren-only line after the last caption becomes the song's last line and takes
+  the uncapped tail window. New, under a heading for this feature: Edit words drops a song's
+  backing lines on save (choice 3); Repair's LRCLIB list scores and counts "mapped N of M"
+  against the lines the song shows (`current_lines`), backing lines now included.
+- [ ] **C7. Finish.** Full suite; pre-commit on the changed files; self-review on the three
+  axes; `graphify update .`; Results log row. **STOP: review due** (core pipeline, several
+  files). Hand Ken the line; do not launch it: `/code-review <C1>~1..HEAD` on `srt_cues.py`,
+  `genius_lyrics.py`, `backing_vocals.py`, `cue_align.py`, `lyric_align.py`,
+  `alignment_capture.py` and their tests, three finders: correctness (nothing kept gives
+  today's calls and output; a reused section is identical; `judge` is heard.py's rule),
+  simplicity (one rule, one reader, no second cleaner, no handling for states that cannot
+  occur), robustness (stray and glued parens, capitals files, window edges, re-sectioned songs,
+  an empty transcript). Phase 2 follows the review.
+
 ### Phase 2: replay (after the build, local GPU, output outside the library)
 
 Replay before and after on the same commit base, writing bundles and `.ass` files to a
@@ -223,6 +537,7 @@ $P $D/heard.py ~/pikaraoke-songs $O       # steps 3-4, every variant
 $P $D/report.py $O                        # A1 / A2 table
 $P $D/gate.py ~/pikaraoke-songs $O "consume none" "consume none +consist" "consume none +vocables" "consume none +vocables +consist" "G" "words list v2"   # A3, A4, unsure
 $P $D/baseline.py ~/pikaraoke-songs $O    # step 5
+$P $D/spec_counts.py ~/pikaraoke-songs $O # build spec counts (Results row 10)
 ```
 
 Only `out/baseline.json` and `out/songs.json` are committed; the rest of `out/` holds lyric
@@ -700,3 +1015,4 @@ Raw tables, commands and commits only; no verdicts in this table.
 | 7 | 2026-11-14 | 0 (record) | Scripts moved from the session scratch folder into `plans/backing-vocal-lines/` (dead imports dropped, Black, docstrings; `label_sheet.py` added for the step 2 view, which had been an inline snippet); the whole run above repeated from there on `a54f8e6f` | Every output byte-identical to rows 1-5's: `songs.json`, `inventory.json`, `label_sheet.txt`, `labels.json`, `heard.json`, `baseline.json`, the A1 / A2 table and the A3 / A4 / unsure output. |
 | 8 | 2026-11-14 | GATE A | Second read by Fable 5.2 on `feb71bc4`, read-only: inline counts over `out/heard.json`, `out/baseline.json` and the bundles' `output_line_timings` (no script re-run, no label changed) | Worded sung kept 161/259 under `none`, 181/259 with `+consist`. Hybrid's 261 kept: heard 180 (134 inline / 46 paren-only), vocable on text 60 (58 / 2), consistency 21 (13 / 8); 34 songs, 30 with an inline keep. Of the 50 on-screen overlaps: 43 with the previous line (27 covering 80% or more of the window, 37 half or more, 41 end-extended), 7 next line only, 8 under 0.5 s. Recommended GO on the hybrid as an amended gate, Decision 3 read by cue time. "GATE A second read". |
 | 9 | 2026-11-14 | GATE A | Ruled by Ken | GO on the amended hybrid with the second read's conditions; Decision 3 overlap by cue time, on-screen overlap judged at GATE B (B5 amended); beep, censored, heartbeat not shown, skate sung. No script re-run. "GATE A ruling". |
+| 10 | 2026-11-14 | spec | `spec_counts.py ~/pikaraoke-songs out` on `b2f914be`, read-only over `out/heard.json`, `out/songs.json`, the sheets and the bundles | 261 kept by `none +vocables +consist`, 0 of them quote-opened. Cues mixing a kept and a dropped group: 4 (`FQ3slUz7Jo8` paren-only; `wIyNAsmGrl0` three inline). Inline keeps by position in the cue: end 181, start 18, middle 6; glued to a neighbour 4, all a comma after `)`. Kept paren-only cues 56; re-sectioned with each one: joins one section 22, own section 2, merges two 31, two more sections 1 (`D_dOXTpwV5s`, a run captioned with no gap, whose 60 s cap splits move); kept paren-only cues overlapping each other 0. Songs with a keep 34, re-sectioned 0. Evidence: heard 180, vocable 60, consistency 21. "Design". |
