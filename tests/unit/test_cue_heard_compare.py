@@ -12,6 +12,7 @@ from tests.unit.test_cue_heard_probe import (
     DURATION,
     ENV,
     STEM,
+    _free_stretch_song,
     _make_song,
     _one_line_song,
     _repeat_song,
@@ -226,6 +227,7 @@ class TestCompareSong:
             False,
         )
         assert (row["source"], row["new"], row["vs_source"]) == (8.0, 12.65, "within")
+        assert row["align_empty"] is False  # the aligner answered; a check kept the line
         (spot,) = done.pool["B"]  # the sheet offers the line, with the move against the source
         assert (spot.rule, spot.lines, spot.moved) == ("B", (4,), pytest.approx(4.65))
         text, _ = compare.report([done])
@@ -249,6 +251,8 @@ class TestCompareSong:
             None,
         )
         assert done.pool["B"] == []  # a refused retry is not a spot to listen to
+        # The aligner returned nothing for the heard-aimed window: not a refusal by a check.
+        assert row["align_empty"] is True
 
     def test_a_refused_b_line_that_moved_against_the_source_is_in_table_s_but_not_on_the_sheet(
         self, library, tmp_path
@@ -323,6 +327,34 @@ class TestCompareSong:
             tmp_path,
         )
         assert all(row["near_unanswered"] in (True, False) for row in done.rows["O"])
+
+
+class TestRuleC:
+    @staticmethod
+    def _row(library, tmp_path, stretch_answer):
+        """Bad line 4 between clean neighbours: the cue-aimed retry finds nothing, rule C's
+        stretch (it starts before 7.0) is answered by ``stretch_answer``."""
+        first = _free_stretch_song(("ee ff gg",))
+
+        def answer(lid, w0, w1):
+            return stretch_answer if w0 < 7.0 else None
+
+        done = _compare(
+            library, _source_bundle(first, [], answer), _regen_bundle(first, [], answer), tmp_path
+        )
+        (row,) = (r for r in done.rows["C"] if r["line"] == 4)
+        return row
+
+    def test_a_kept_gap_retry_is_about_the_stretch_call_not_the_failed_cue_aimed_one(
+        self, library, tmp_path
+    ):
+        row = self._row(library, tmp_path, _sung("ee ff gg", 13.0))
+        assert (row["kept"], row["align_empty"], row["today_ok"]) == (True, False, True)
+        assert (row["source"], row["today"], row["new"]) == (8.0, 8.0, 13.0)
+
+    def test_a_gap_retry_the_aligner_gave_nothing_for_is_flagged(self, library, tmp_path):
+        row = self._row(library, tmp_path, None)
+        assert (row["kept"], row["align_empty"]) == (False, True)
 
 
 class TestRuleCByRun:

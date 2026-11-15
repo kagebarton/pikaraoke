@@ -172,12 +172,31 @@ def runs_into_next(final: dict[int, dict], lid: int) -> bool:
     return i in final and final[lid]["words"][-1]["end"] > final[i]["words"][0]["start"]
 
 
+def gave_nothing(ctx: CompareCtx, call: probe.Call) -> bool | None:
+    """Whether the bundle saved a failed align (no words) for ``call``; None when it holds no
+    answer for it. A retry that fails there was not refused by a check."""
+    for rec in ctx.song.bundle["cue_inputs"]["realigns"]:
+        if (
+            rec["line_id"] == call.line_id
+            and abs(rec["w0"] - call.w0) < probe.WINDOW_MATCH_S
+            and abs(rec["w1"] - call.w1) < probe.WINDOW_MATCH_S
+        ):
+            return rec["words"] is None
+    return None
+
+
 def widen(
-    ctx: CompareCtx, rows: list[dict], *, heard: bool = False, neighbours: bool = False
+    ctx: CompareCtx,
+    rows: list[dict],
+    *,
+    heard: bool = False,
+    neighbours: bool = False,
+    call_at: int | None = None,
 ) -> list[dict]:
     """Add the compare columns to the probe's rows: the source start, whether the baseline
-    had every answer it asked for, and, as asked, the heard comparison and, for the kept
-    lines of rules B and D, the ends and the neighbours."""
+    had every answer it asked for, and, as asked, the heard comparison, the ends and
+    neighbours of rules B and D, and whether the line's retry (the ``call_at``-th call the
+    new replay made for it) came back with nothing."""
     for row in rows:
         lid = row["line"]
         row["source"] = ctx.source_start(lid)
@@ -186,6 +205,8 @@ def widen(
             moved = row.get("kept", True)  # a line the rule left as it was has no move to judge
             row["vs_today"] = vs_heard(row["today"], row["new"], row["heard"]) if moved else None
             row["vs_source"] = vs_heard(row["source"], row["new"], row["heard"]) if moved else None
+        if call_at is not None:
+            row["align_empty"] = gave_nothing(ctx, ctx.new.calls_for(lid)[call_at])
         if neighbours:
             row["today_end"] = ctx.today.final[lid]["end"]
             row["new_end"] = ctx.new.final[lid]["end"]
@@ -347,9 +368,9 @@ def song_rows(ctx: CompareCtx) -> tuple[dict[str, list[dict]], dict[int, str]]:
         "A": widen(ctx, probe.rows_a(ctx), heard=True),
         "G": widen(ctx, probe.rows_g(ctx)),
         "Z": probe.rows_z(ctx),
-        "B": widen(ctx, probe.rows_b(ctx), heard=True, neighbours=True),
-        "D": widen(ctx, probe.rows_d(ctx), heard=True, neighbours=True),
-        "C": widen(ctx, probe.rows_c(ctx)),
+        "B": widen(ctx, probe.rows_b(ctx), heard=True, neighbours=True, call_at=0),
+        "D": widen(ctx, probe.rows_d(ctx), heard=True, neighbours=True, call_at=0),
+        "C": widen(ctx, probe.rows_c(ctx), call_at=-1),
     }
     claimed = {row["line"] for table in rows.values() for row in table}
     rows["O"] = probe.rows_o(ctx, claimed)
@@ -481,7 +502,8 @@ COMPARE_TABLES = {
         "Guessed: the line is in guessed_word_line_ids. Previous and Next: start-end of the "
         "neighbouring lines with words in the new output. Answered: the bundle holds the "
         "heard-aimed align's result; Today answered: it holds the baseline's cue-aimed one "
-        "(not when rule B kept the line first).",
+        "(not when rule B kept the line first). Aligner gave nothing: the saved answer to the "
+        "heard-aimed align is a failed align, so the line was not refused by a check.",
         [
             *SRC_SONG_LINE,
             ("Cue", "cue"),
@@ -490,6 +512,7 @@ COMPARE_TABLES = {
             ("Window", "window"),
             ("Lone first", "lone_first"),
             ("Answered", "answered"),
+            ("Aligner gave nothing", "align_empty"),
             ("Kept", "kept"),
             ("Source", "source"),
             ("Today", "today"),
@@ -505,7 +528,7 @@ COMPARE_TABLES = {
     "D": (
         "Table D: lines rule D aimed where they were heard",
         "Smallest and largest: signed pair offsets (heard - placed). Overlap, Guessed, Previous "
-        "and Next as in Table B.",
+        "and Next, and Aligner gave nothing, as in Table B.",
         [
             *SRC_SONG_LINE,
             ("Heard", "heard"),
@@ -514,6 +537,7 @@ COMPARE_TABLES = {
             ("Largest", "largest"),
             ("Run", "run"),
             ("Answered", "answered"),
+            ("Aligner gave nothing", "align_empty"),
             ("Kept", "kept"),
             ("Source", "source"),
             ("Today", "today"),
@@ -529,7 +553,9 @@ COMPARE_TABLES = {
         "Table C: lines rule C looked for between their neighbours",
         probe.TABLES["C"][1],
         [
-            *probe.TABLES["C"][2][:11],
+            *probe.TABLES["C"][2][:10],
+            ("Aligner gave nothing", "align_empty"),
+            *probe.TABLES["C"][2][10:11],
             ("Source", "source"),
             *probe.TABLES["C"][2][11:],
             ("Today answered", "today_ok"),
