@@ -256,10 +256,12 @@ Commit `feat(scripts): the onset probe checks the snap's new exit against its ru
 
 Run it on this Linux box, CPU only, never decoding. The 11-10 envelopes are the reference:
 `cue_heard_rescue` Results row 13 found that this box's decode is not bit-identical to
-the bundles'. Copy the cache; never write into the record folder:
+the bundles'. The record is `/media/ken/Data/probes/onset_loud_start/`; that drive is not
+always mounted, so read its local copy, `~/probes/onset_loud_start/` (made 2026-11-14,
+`diff -r` finds the two equal). Copy the cache; never write into either record folder:
 
     mkdir -p ~/.pikaraoke/tmp/onset_loud_start_check
-    cp -r /media/ken/Data/probes/onset_loud_start/env ~/.pikaraoke/tmp/onset_loud_start_check/
+    cp -r ~/probes/onset_loud_start/env ~/.pikaraoke/tmp/onset_loud_start_check/
     python scripts/onset_loud_start_probe.py --folder ~/pikaraoke-songs \
         --out ~/.pikaraoke/tmp/onset_loud_start_check --check \
         > ~/.pikaraoke/tmp/onset_loud_start_check/report.md
@@ -268,7 +270,7 @@ Pass, all of:
 
 - Replayed exactly: 133, with the same 14 left out (R1). Tables A-C and Table B's fourth
   row equal R1 and R4. `cmp` finds the new `rows.json` equal to
-  `/media/ken/Data/probes/onset_loud_start/rows.json`.
+  `~/probes/onset_loud_start/rows.json`.
 - Table E: 133 compared, 133 equal, 593 moved, 593 agreed, none differing; 10 after-files
   found, 10 equal.
 
@@ -276,13 +278,16 @@ Results row 6 already shows that this replay, with that cache, reproduces the re
 593 lines and rises. So a failure here is in the build, not the inputs. On a failure,
 stop and report; don't loosen the check.
 
-Once it passes, the gate's cleanup:
+Once it passes, the gate's cleanup. Steps 1 and 2 write to `/media/ken/Data`. If it is not
+mounted, log the check, leave the after-files where they are and report the cleanup as
+owed:
 
 1. Move the ten after-files from `~/pikaraoke-songs/karaoke/` to
    `/media/ken/Data/probes/onset_loud_start/onsetfix/`.
 2. `cmp` the copies in `/media/ken/Data/pikaraoke-songs/karaoke/` against the moved files,
    then delete those copies.
-3. Leave the copies under `~/probes/`; they belong to other branches' staged trials.
+3. Leave the after-file copies under `~/probes/`; they belong to other branches' staged
+   trials.
    Any in `D:\Shared\pikaraoke-songs\karaoke\` on Windows are Ken's to delete (Phase 3).
 4. Rerunning `--check` afterwards finds 0 after-files; that is expected.
 
