@@ -540,6 +540,14 @@ class TestRepaceBadLines:
         assert out[4]["start"] == pytest.approx(94.5)
         assert out[4]["end"] == pytest.approx(95.0)
 
+    def test_a_line_past_the_cues_is_passed_through(self):
+        # More line objects than cues and lyric lines: the driver never makes one, but a
+        # direct caller can, and nothing reads the missing line's tokens.
+        objs, cues, lines = _anchor_lines(4)
+        objs.append(_line(4, "zz", ("zz", 8.0, 8.3)))
+        out, stats = repace_bad_lines(objs, cues, lines, lines)
+        assert out[4] is objs[4] and stats["n_guessed_words"] == 0
+
 
 class TestPartialLines:
     """A line the align timed only partly is rescued, and never shown with words missing."""
@@ -807,24 +815,27 @@ class TestCrammedLines:
         ]
         assert stats["n_guessed_words"] == 2
 
-    def test_a_zero_length_word_in_a_partial_line_stays_as_it_is(self):
+    def test_a_zero_length_word_in_a_partial_line_stays_as_it_is_and_sets_no_pace(self):
         # "hh" was dropped; "ff" is zero-length but the line does not have a word per token.
         line, stats = self._guessed(
-            "ee ff gg hh", (8.0, 10.0), ("ee", 8.0, 8.3), ("ff", 8.4, 8.4), ("gg", 8.8, 9.1)
+            "ee ff gg hh", (8.0, 10.0), ("ee", 8.0, 8.3), ("ff", 8.4, 8.4), ("gg", 8.6, 9.1)
         )
         assert [(w["word"], w["start"], w["end"]) for w in line["words"][:3]] == [
             ("ee", 8.0, 8.3),
             ("ff", 8.4, 8.4),
-            ("gg", 8.8, 9.1),
+            ("gg", 8.6, 9.1),
         ]
-        assert line["words"][3]["word"] == "hh" and line["words"][3]["start"] == pytest.approx(9.1)
+        # Paced from the timed words (0.3 and 0.5 s), not the zero-length one with them.
+        hh = line["words"][3]
+        assert hh["word"] == "hh" and (hh["start"], hh["end"]) == pytest.approx((9.1, 9.5))
         assert stats["crammed_line_ids"] == [] and stats["n_guessed_words"] == 1
 
-    def test_a_fill_too_short_for_its_words_is_left_as_it_is(self):
-        # No words from the align and a cue of 0.1 s: the paced words are all under
-        # INSTANT_WORD_DUR_S, so there is no timed word to pace a guess from.
-        line, stats = self._guessed("ee ff gg", (8.0, 8.1))
-        assert line["source"] == SOURCE_FILL and len(line["words"]) == 3
+    def test_a_fill_keeps_its_paced_words_though_one_is_shorter_than_an_instant(self):
+        # No words from the align: "I" gets 1/16 of the 0.5 s cue, under INSTANT_WORD_DUR_S,
+        # but a fill's word was never aligned, so its shortness is not a failed alignment.
+        line, stats = self._guessed("I extraordinarily", (8.0, 8.5))
+        assert line["source"] == SOURCE_FILL and line["start"] == 8.0
+        assert line["words"][0]["end"] - line["words"][0]["start"] < INSTANT_WORD_DUR_S
         assert stats["n_repaced"] == 1 and stats["n_guessed_words"] == 0
 
     def test_a_line_with_every_word_timed_asks_nothing(self):
@@ -1147,6 +1158,20 @@ class TestHeardAimedRetry:
         out, stats, calls = self._rescue(self._song(), lambda w0, w1: None, heard)
         assert stats["n_heard_lines"] == 1 and stats["heard_aimed_line_ids"] == []
         assert calls == [(7.25, 12.75)]
+
+    def test_a_line_in_a_run_not_heard_in_full_gets_no_heard_aimed_retry(self):
+        # Lines 4 and 5 have the same words; one "ee ff gg" was heard, 2.6 s past line 5's
+        # cue. It cannot say which line it was, so no re-align there could be confirmed.
+        objs, cues, lines = self._song((8.0, 9.5), *self._sung(8.1))
+        cues.append((10.0, 11.5))
+        lines.append("ee ff gg")
+        objs.append(_line(5, "ee ff gg"))
+        out, stats, calls = self._rescue(
+            (objs, cues, lines), lambda w0, w1: None, _words(*self._sung(12.6)), line=5
+        )
+        assert stats["n_heard_lines"] == 1 and stats["heard_aimed_line_ids"] == []
+        assert calls == [(pytest.approx(9.25), pytest.approx(12.25))]
+        assert out[5]["source"] == SOURCE_FILL
 
     def test_without_an_aligner_nothing_is_tried_where_heard(self):
         objs, cues, lines = self._song()

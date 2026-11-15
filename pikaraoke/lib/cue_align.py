@@ -644,9 +644,11 @@ class _Rescue:
     def heard_shift(self, lid: int) -> float | None:
         """How far from its cue the transcriber heard line ``lid`` start, when rule B looks
         for it there: heard with its first token among the matched, at least
-        :data:`HEARD_SHIFT_S` from ``cue start + offset``. Else None."""
+        :data:`HEARD_SHIFT_S` from ``cue start + offset``, and not in a run of identical
+        lines the transcriber did not hear in full (no re-align there can be confirmed).
+        Else None."""
         heard = self.heard[lid]
-        if heard is None or not heard.first:
+        if heard is None or not heard.first or not self.run_heard[lid]:
             return None
         shift = heard.start - self.audio_spans[lid][0]
         return shift if abs(shift) >= HEARD_SHIFT_S else None
@@ -720,9 +722,7 @@ class _Rescue:
             self.guard_lifted.append(lid)
         return fixed
 
-    def start_bounded(
-        self, raw: dict, out: list[dict], shift: float = 0.0
-    ) -> tuple[dict | None, bool]:
+    def start_bounded(self, raw: dict, out: list[dict], shift: float) -> tuple[dict | None, bool]:
         """Re-align ``raw`` cut to start where the lines before it allow (None when too little
         is left), and whether the transcriber's confirmation lifted part of that bound.
         ``shift`` is how far the line's cue span was moved (rule B).
@@ -753,13 +753,17 @@ def _guess_missing_words(
 
     A token lacks one when the aligner dropped its word or, in a line with a word for every
     token, left it zero-length. A line with no timed word is left as it is: there is nothing
-    to pace the guesses from.
+    to pace the guesses from. So is a fill: its words are paced across the cue, not aligned,
+    so a short one is not a failed alignment.
     """
     guessed: dict[int, int] = {}
     for i, obj in enumerate(out):
         lid = obj["line_id"]
+        # A line past the cues or with no tokens never gets a window, so test that first.
+        if lid not in windows or obj["source"] == SOURCE_FILL or not obj["words"]:
+            continue
         toks = line_toks[lid]
-        if lid not in windows or not obj["words"] or len(obj["words"]) > len(toks):
+        if len(obj["words"]) > len(toks):
             continue
         slots = _timed_slots(obj["words"], toks)
         missing = slots.count(None)
@@ -814,11 +818,12 @@ def repace_bad_lines(
     as the aligner returned it is also not cut to start after the previous line's last
     word (:func:`_start_bound`); the window's lead-in still bounds it. A bad, partial or crammed
     line the transcriber heard :data:`HEARD_SHIFT_S` or more from its cue (with its first
-    word among those matched) is first re-aligned over its cue span moved to where it was
-    heard, window, singing end, aimed span and start bound included, and that result is
-    kept only if it passes the checks below against the moved span and the transcriber
-    confirms it; otherwise the line takes the cue-aimed retry as before. Without heard
-    words, or for a line the transcriber did not hear, the cue decides as before.
+    word among those matched, and its whole run heard if it repeats) is first re-aligned
+    over its cue span moved to where it was heard, window, singing end, aimed span and
+    start bound included, and that result is kept only if it passes the checks below
+    against the moved span and the transcriber confirms it; otherwise the line takes the
+    cue-aimed retry as before. Without heard words, or for a line the transcriber did not
+    hear, the cue decides as before.
 
     Each bad, partial or crammed line is rescued in two steps:
     ``realign(lid, w0, w1)`` -- an injected narrow per-line forced align over
@@ -843,7 +848,8 @@ def repace_bad_lines(
     timing (:func:`_with_guessed_words`) inside that line's window, or out to its own
     words where a kept line sits past it, so no lyric word is dropped from the screen. That
     includes the zero-length words of a kept line that has a word for every token: a
-    failed alignment, not a word, so it is re-timed like one the aligner dropped.
+    failed alignment, not a word, so it is re-timed like one the aligner dropped. A fill's
+    words were never aligned, so it keeps them as paced.
 
     Returns ``(line_objects, stats)``. ``cue_spans`` is indexed by ``line_id``.
     """
@@ -963,7 +969,10 @@ def _with_guessed_words(
     later stretches a guessed last word to the measured release.
     """
     out = list(slots)
-    pace = min(median(w["end"] - w["start"] for w in out if w is not None), max_word_dur)
+    # A zero-length word in a partial line keeps its slot but is not the line's pace. A kept
+    # line has at least half its words timed, so the median has one.
+    durs = [w["end"] - w["start"] for w in out if w is not None]
+    pace = min(median(d for d in durs if d >= INSTANT_WORD_DUR_S), max_word_dur)
     timed = [k for k, w in enumerate(out) if w is not None]
 
     def fill(ks: list[int], lo: float, hi: float) -> None:
@@ -1084,7 +1093,7 @@ def _start_bound(
     cue_spans: list[tuple[float, float]],
     lid: int,
     offset: float,
-    shift: float = 0.0,
+    shift: float,
 ) -> float:
     """Earliest a re-aligned line ``lid`` may start, given the lines already in ``out``.
 
