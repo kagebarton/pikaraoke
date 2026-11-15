@@ -33,7 +33,20 @@ logger = logging.getLogger(__name__)
 #     ``sections``, the line objects (line_id/text/words/start/end/source) the
 #     section align produced before any rescue; ``realigns``, one {line_id, w0, w1, words} per one-line
 #     re-align in call order, ``words`` the aligner's raw result at absolute
-#     song time, null when the align failed.
+#     song time, null when the align failed. When backing vocals were kept (line
+#     ids are the song's new ones): ``spans`` and ``sections`` hold
+#     the added lines too, an added line with no words; ``rescue_offset``, the
+#     display lead the rescue was given (today's lines' lead, exact float) so
+#     an offline replay passes it back to ``repace_bad_lines(offset=)``.
+#   - joint_stats.backing: cue-align runs whose sheet has parenthetical groups
+#     and whose transcript judged them. ``groups``, one per group: ``cue``
+#     (the cue's place in the sheet), ``group``, ``kind`` (inline / paren_only),
+#     ``verdict`` (heard, vocable, consistency, quote, not_heard, unplaced,
+#     overlap), ``share``, and for a kept group its ``line_id`` and ``tokens``
+#     [first, end) in that line's align tokens (null for a dropped one). With a
+#     keep: ``old_line_ids``, each line's id before the keep (null for an added
+#     line), and ``aligned_sections``, the [lid_lo, lid_hi] of each section
+#     sent back to the aligner.
 # v11: interior-pause end repair (plans/edge-snap-coverage-accuracy.md
 #     Phase 6). A milestone bump (run-affecting) -- no field renamed or
 #     removed, but output_line_timings move, so regen treats v10 bundles as

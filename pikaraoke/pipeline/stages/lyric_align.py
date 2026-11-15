@@ -655,7 +655,7 @@ class LyricAlignStage(BaseStage):
                 disable=None,
             )
 
-        line_objects, stats, cue_inputs = align_song(
+        line_objects, stats, cue_inputs, _lines = align_song(
             cue_spans,
             display_lines,
             align_lines,

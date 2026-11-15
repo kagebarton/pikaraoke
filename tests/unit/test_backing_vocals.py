@@ -1,6 +1,13 @@
 """Tests for the backing-vocal keep rule (lib/backing_vocals.py)."""
 
-from pikaraoke.lib.backing_vocals import ORIGINS, Verdict, judge, show_parens
+from pikaraoke.lib.backing_vocals import (
+    ORIGINS,
+    GroupLine,
+    Verdict,
+    judge,
+    show_parens,
+    with_backing,
+)
 from pikaraoke.lib.library_regen import LRC_ORIGIN, MOVIE_ORIGIN
 from pikaraoke.lib.srt_cues import ParenCue, ParenGroup
 
@@ -249,3 +256,106 @@ class TestShowParens:
         lines = [_line(2, "hey"), _line(0, "oh")]
         out = show_parens(lines, ["(oh)", "x", "(hey)"], ["oh", "x", "hey"])
         assert [o["words"][0]["word"] for o in out] == ["(hey)", "(oh)"]
+
+
+def _kept(*cues: ParenCue) -> list[Verdict]:
+    """A kept verdict for every group of ``cues``."""
+    return [
+        Verdict(cue.index, g, "inline" if cue.inline else "paren_only", "heard", 1.0)
+        for cue in cues
+        for g in range(len(cue.groups))
+    ]
+
+
+_LINES = ["hold me now", "never let go", "hold me now"]
+_SPANS = [(0.0, 2.0), (3.0, 5.0), (6.0, 8.0)]
+
+
+def _backed(cues, verdicts=None, lines=_LINES):
+    return with_backing(lines, lines, _SPANS[: len(lines)], cues, verdicts or _kept(*cues))
+
+
+def _inline(line: int, at: int, *texts: str) -> ParenCue:
+    groups = tuple(ParenGroup(text, at) for text in texts)
+    return ParenCue(line, _SPANS[line], True, line, groups)
+
+
+def _alone(before: int, span: tuple[float, float], *texts: str, index: int = 9) -> ParenCue:
+    return ParenCue(index, span, False, before, tuple(ParenGroup(t, 0) for t in texts))
+
+
+class TestWithBacking:
+    def test_a_group_at_a_lines_start_middle_and_end_joins_that_line(self):
+        for at, display, align in [
+            (0, "(oh) hold me now", "oh hold me now"),
+            (1, "hold (oh) me now", "hold oh me now"),
+            (3, "hold me now (oh)", "hold me now oh"),
+        ]:
+            backed = _backed([_inline(0, at, "oh")])
+            assert backed.display_lines[0] == display
+            assert backed.align_lines[0] == align
+            assert backed.old_line_ids == [0, 1, 2]
+
+    def test_a_group_wraps_its_first_and_last_word_and_the_aligner_text_is_bare(self):
+        backed = _backed([_inline(1, 2, "oh, oh no")])
+        assert backed.display_lines[1] == "never let (oh, oh no) go"
+        assert backed.align_lines[1] == "never let oh, oh no go"
+
+    def test_two_groups_in_one_line_each_keep_their_place(self):
+        two = ParenCue(0, _SPANS[0], True, 0, (ParenGroup("hey", 0), ParenGroup("oh oh", 2)))
+        backed = _backed([two])
+        assert backed.display_lines[0] == "(hey) hold me (oh oh) now"
+        assert backed.align_lines[0] == "hey hold me oh oh now"
+        assert backed.placed[(0, 0)] == GroupLine(0, 0, 1)
+        assert backed.placed[(0, 1)] == GroupLine(0, 3, 5)
+
+    def test_other_lines_and_a_dropped_group_leave_no_trace(self):
+        cue = _inline(0, 1, "oh", "ah")
+        verdicts = [
+            Verdict(0, 0, "inline", "heard", 1.0),
+            Verdict(0, 1, "inline", "not_heard", 0.0),
+        ]
+        backed = _backed([cue], verdicts)
+        assert backed.display_lines == ["hold (oh) me now", "never let go", "hold me now"]
+        assert (0, 1) not in backed.placed
+
+    def test_a_line_with_nothing_kept_keeps_its_text_to_the_character(self):
+        lines = ["hold  me now ", "x"]
+        backed = with_backing(
+            lines, lines, _SPANS[:2], [_inline(1, 0, "oh")], _kept(_inline(1, 0, "oh"))
+        )
+        assert backed.display_lines[0] == "hold  me now "
+
+    def test_a_paren_only_cue_becomes_a_line_before_the_line_it_precedes(self):
+        backed = _backed([_alone(1, (2.2, 2.8), "oh, oh")])
+        assert backed.display_lines == ["hold me now", "(oh, oh)", "never let go", "hold me now"]
+        assert backed.align_lines[1] == "oh, oh"
+        assert backed.spans == [_SPANS[0], (2.2, 2.8), _SPANS[1], _SPANS[2]]
+        assert backed.old_line_ids == [0, None, 1, 2]
+        assert backed.placed[(9, 0)] == GroupLine(1, 0, 2)
+
+    def test_a_paren_only_cue_before_the_first_line_and_after_the_last(self):
+        backed = _backed(
+            [_alone(0, (-1.0, -0.2), "ah", index=8), _alone(3, (9.0, 9.5), "yeah", index=10)]
+        )
+        assert backed.display_lines == ["(ah)", *_LINES, "(yeah)"]
+        assert backed.old_line_ids == [None, 0, 1, 2, None]
+        assert backed.placed[(10, 0)].line_id == 4
+
+    def test_several_kept_groups_of_one_paren_only_cue_join_in_order(self):
+        backed = _backed([_alone(1, (2.2, 2.8), "oh", "ah ah")])
+        assert backed.display_lines[1] == "(oh) (ah ah)"
+        assert backed.align_lines[1] == "oh ah ah"
+        assert backed.placed[(9, 0)] == GroupLine(1, 0, 1)
+        assert backed.placed[(9, 1)] == GroupLine(1, 1, 3)
+
+    def test_a_gaining_lines_old_text_is_its_id_in_todays_list_without_the_added_lines(self):
+        backed = _backed([_inline(2, 1, "oh"), _alone(1, (2.2, 2.8), "ah")])
+        display, align = backed.old_texts(_LINES, _LINES)
+        assert display == ["hold me now", "never let go", "hold (oh) me now"]
+        assert align == ["hold me now", "never let go", "hold oh me now"]
+
+    def test_nothing_kept_is_todays_lines(self):
+        backed = _backed([_inline(0, 1, "oh")], [Verdict(0, 0, "inline", "not_heard", 0.0)])
+        assert backed.display_lines == _LINES and backed.old_line_ids == [0, 1, 2]
+        assert backed.placed == {}

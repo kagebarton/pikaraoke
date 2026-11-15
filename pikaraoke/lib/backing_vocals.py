@@ -9,15 +9,16 @@ window. The rule, its pad and its vocable list are the ones measured and ruled a
 from the measuring script, not re-derived.
 
 Pure functions over the sheet's groups (:func:`pikaraoke.lib.srt_cues.sheet_parens`) and the
-transcript, so the aligner never sees a parenthesis. :func:`show_parens` puts them back on the
-words afterwards, for Genius and custom lines too, whose display text keeps them.
+transcript, so the aligner never sees a parenthesis: :func:`with_backing` joins the kept words
+to the song's lines bare, and :func:`show_parens` puts the parentheses back on the aligned words
+afterwards, for Genius and custom lines too, whose display text keeps them.
 """
 
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 
-from pikaraoke.lib.srt_cues import ParenCue
+from pikaraoke.lib.srt_cues import ParenCue, ParenGroup
 from pikaraoke.lib.token_align import _match_simple, _normalize_token
 
 # The bundle's ``lyrics.origin`` of the sheets the rule was measured on: a YouTube caption and
@@ -131,6 +132,125 @@ def judge(
                 taken.append(cue.span)
         out.extend(verdicts)
     return out
+
+
+@dataclass(frozen=True)
+class GroupLine:
+    """Where a kept group sits in the song's lines: its line, and its words as the
+    ``[first, end)`` range of that line's align tokens."""
+
+    line_id: int
+    first: int
+    end: int
+
+
+@dataclass(frozen=True)
+class Backed:
+    """A song's lines with the kept backing vocals in them.
+
+    ``spans`` are the lines' cue spans, ``old_line_ids`` each line's id in today's list (None
+    for an added line) and ``placed`` the line and tokens of each kept group, by ``(cue
+    index, group index)``.
+    """
+
+    display_lines: list[str]
+    align_lines: list[str]
+    spans: list[tuple[float, float]]
+    old_line_ids: list[int | None]
+    placed: dict[tuple[int, int], GroupLine]
+
+    def old_texts(
+        self, display_lines: Sequence[str], align_lines: Sequence[str]
+    ) -> tuple[list[str], list[str]]:
+        """Today's lines (``display_lines``, ``align_lines``) with their kept words in and no
+        added line: the lines the sections work on, before the renumbering."""
+        display, align = list(display_lines), list(align_lines)
+        for lid, new_display, new_align in zip(
+            self.old_line_ids, self.display_lines, self.align_lines
+        ):
+            if lid is not None:
+                display[lid], align[lid] = new_display, new_align
+        return display, align
+
+
+def with_backing(
+    display_lines: Sequence[str],
+    align_lines: Sequence[str],
+    spans: Sequence[tuple[float, float]],
+    cues: Sequence[ParenCue],
+    verdicts: Sequence[Verdict],
+) -> Backed:
+    """Today's lines with the groups ``verdicts`` keep.
+
+    An inline cue's kept groups go into its line at their place: the display line writes
+    "Hey (hey!) you", the align line the same words bare, "Hey hey! you". A paren-only cue
+    with a kept group becomes a line of its own before the line it precedes, at its cue's span:
+    display "(oh, oh)", align "oh, oh". Today's tokens and every other line are untouched.
+    """
+    kept = {(v.cue, v.group) for v in verdicts if v.kept}
+    inline: dict[int, list[_Kept]] = {}
+    alone: dict[int, list[tuple[tuple[float, float], list[_Kept]]]] = {}
+    for cue in cues:
+        groups = [
+            (cue.index, g, group) for g, group in enumerate(cue.groups) if (cue.index, g) in kept
+        ]
+        if not groups:
+            continue
+        if cue.inline:
+            inline[cue.line] = groups
+        else:
+            alone.setdefault(cue.line, []).append((cue.span, groups))
+
+    out = Backed([], [], [], [], {})
+    for lid in range(len(display_lines) + 1):
+        for span, groups in alone.get(lid, ()):
+            _add_line(out, None, span, "", "", groups)
+        if lid < len(display_lines):
+            _add_line(
+                out, lid, spans[lid], display_lines[lid], align_lines[lid], inline.get(lid, [])
+            )
+    return out
+
+
+# A kept group: its cue's index, its place in that cue's groups, and the group.
+_Kept = tuple[int, int, ParenGroup]
+
+
+def _add_line(
+    out: Backed,
+    old_id: int | None,
+    span: tuple[float, float],
+    display: str,
+    align: str,
+    groups: list[_Kept],
+) -> None:
+    """Append a line to ``out``: ``display`` and ``align`` as they are, or with each of
+    ``groups`` inserted at its place (a paren-only cue's groups all carry place 0, and follow
+    one another)."""
+    line_id = len(out.display_lines)
+    if groups:
+        display_tokens, align_tokens = display.split(), align.split()
+        added = 0
+        for cue_index, g, group in groups:
+            words = group.text.split()
+            at = group.at + added
+            display_tokens[at:at] = _parenthesised(words)
+            align_tokens[at:at] = words
+            out.placed[(cue_index, g)] = GroupLine(line_id, at, at + len(words))
+            added += len(words)
+        display, align = " ".join(display_tokens), " ".join(align_tokens)
+    out.display_lines.append(display)
+    out.align_lines.append(align)
+    out.spans.append(span)
+    out.old_line_ids.append(old_id)
+
+
+def _parenthesised(words: list[str]) -> list[str]:
+    """``words`` with an opening parenthesis on the first and a closing one on the last."""
+    return [
+        ("(" if i == 0 else "") + word + (")" if i == len(words) - 1 else "")
+        for i, word in enumerate(words)
+    ]
 
 
 def _by_evidence(text: str, window: list[str]) -> tuple[str, float]:
