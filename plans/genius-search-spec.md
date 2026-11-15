@@ -1,10 +1,11 @@
 # Genius search: the spec
 
-Model: Claude Sonnet 5.5 executes. Spec by Claude Fable 5.2, 2026-11-13. GATE G is read by
-Opus, then Ken (Fable only if Opus is unsure which recording a hit is).
+Model: Claude Sonnet 5.5 executes. Spec by Claude Fable 5.2, 2026-11-13; GATE G, the
+executor rules and the Results log by Claude Opus 5.5, 2026-11-15. GATE G is read by Opus,
+then Ken (Fable only if Opus is unsure which recording a hit is).
 
-Status: **spec written, no code.** Blocked on `search_official_captions` landing on `dev`;
-Phase 0 starts with the rebase onto it.
+Status: **spec complete 2026-11-15, no code.** Does not wait for `search_official_captions`
+(Ken, 2026-11-15); Phase 0 is the rebase onto current `dev`.
 
 The evidence and the rulings behind every choice here are in `plans/genius-search-accuracy.md`
 (the evaluation, closed; do not rerun it). The reference implementation is
@@ -44,12 +45,15 @@ wrong.
    right, and a change that fixes one title breaks another. Seven first hits are known to be
    the wrong recording ("Known holes"); they ship, because none is preselected and the year
    and artist line now shown let the person tell them apart. **Ken's to overturn.**
-3. **One function says what act a channel's name stands for**, and it lives in
-   `official_rank.py`, which lands first and already owns the idea. The Genius module adds
-   only its own list of studio and brand names whose channels never stand for an artist.
-   The two lists stay separate on purpose: the search ranking keeps its label list short
-   (a miss costs only YouTube's order), the Genius module keeps its list wide (a miss puts
-   a studio's name in a query). Details under "Channel names".
+3. **Two channel cleaners, separate on purpose for now.** `genius_query` carries its own
+   function for what act a channel's name stands for, ported from the prototype's
+   `channel_artist`; `official_rank.py` keeps its own and is not touched. Ken ruled on
+   2026-11-15 that this branch does not wait for `search_official_captions`, which rewrites
+   `official_rank`'s channel handling, so a shared function now would be built on code
+   about to change. The two also want different lists: the search ranking keeps its label
+   list short (a miss costs only YouTube's order), the Genius module keeps its studio list
+   wide (a miss puts a studio's name in a query). Unifying them is an open issue (Phase 1,
+   step 3). Details under "Channel names".
 4. **Nothing new is stored at download.** The search page passes the title, the channel and
    the typed search term. The other three places have the file name only, and run without a
    channel. Measured cost of no channel: 10 fewer songs preselected in 206, and one song a
@@ -152,33 +156,29 @@ hits are matched against. It never changes what `parse` returns.
 
 ### Channel names
 
-After `search_official_captions` lands, `official_rank.py` works out a channel's act name in
-two steps (its `_channel_artist`, then the trailing words its rule 7 strips). Phase 0 turns
-that into one public function there:
+`genius_query` holds its own channel function, a port of the prototype's `channel_artist`
+(`builder.py`). `official_rank.py` is not touched (Calls item 3).
 
 ```python
-def channel_act_name(channel: str) -> str
-    """The channel's name without "- Topic", "Official", "VEVO", "Music", "TV", "Videos"
-    and the like, CamelCase split into words: "BackstreetBoysVEVO" -> "Backstreet Boys"."""
+def channel_name(channel: str) -> str
+    """The act a channel's name stands for, or "" when it reads as a studio, label or brand:
+    "BackstreetBoysVEVO" -> "Backstreet Boys", "Disney Music VEVO" -> ""."""
 ```
 
-`official_rank` compares the compact form of it (`_compact(channel_act_name(...))`);
-`genius_query` uses the words. The Genius module then holds one list of its own,
-`NOT_AN_ACT`: `official_rank`'s label words (Records, Recordings, Labels) plus the studio and
-brand names from the prototype's `NOT_ARTIST`. A channel matching it stands for no artist.
+Same steps and same lists as the prototype. A channel matching `NOT_AN_ACT` (the
+prototype's `NOT_ARTIST`: studio, label and brand names) stands for no act. Otherwise the
+noise words go ("- Topic" and "VEVO" at the end; Official, Video(s), Channel, Music, TV and
+官方專屬頻道 anywhere) and CamelCase splits into words. `Parsed.channel` is its answer.
 
-"Ends in VEVO" marks a label only in `official_rank`, which has the row's credited names to
-tell `DisneyMusicVEVO` from the act's own `BackstreetBoysVEVO`. The Genius module has no
+"Ends in VEVO" is not a label sign here. `official_rank` can tell `DisneyMusicVEVO` from the
+act's own `BackstreetBoysVEVO` because it has the row's credited names; this module has no
 such names, so it reads `NameVEVO` as `Name` and relies on `NOT_AN_ACT` for the studios.
-The verified tick is not used here: the library pages do not have it and nothing was
-measured with it.
+The verified tick is not used: the library pages do not have it and nothing was measured
+with it.
 
-This is the one place the port may differ from the prototype's text, so it is checked both
-ways in Phase 0: `official_rank`'s own tests pass unchanged, and all 382 fixture channels
-give the same act name as the prototype's `channel_artist`. The shared function's noise
-words are the union of the two modules' lists as they stand, nothing more. If either check
-fails with that union, STOP and write up the rows that differ; do not add or drop a word to
-force it.
+Ported as it is, so its check is the frozen `channel` part of every fixture row (206
+library and 176 unseen, 382 channels), in Phase 1 step 2. A row that differs means the
+port is wrong: fix the port, never the lists.
 
 ### Known holes
 
@@ -273,19 +273,33 @@ takes it; with no preselect Enter does what it does today.
 Frozen once, in Phase 1, from the prototype and the committed cache, before any port is
 written. The freeze script (`plans/genius-search-accuracy/run2/freeze.py`) imports
 `builder.py` and `run.replay`, reads `run2/genius_raw.json` and **fails on a query that is
-not cached**: it makes no Genius call. It runs on the VM, where `run2/truth.json` is.
+not cached**: it makes no Genius call. It runs on the VM, where `run2/truth.json` is (`gx.py`
+reads it on import, and `holdout.py` uses it to keep library videos out).
 
 Written to `tests/unit/data/genius_search/`:
 
-- `library.jsonl`, 206 rows: YouTube title and channel (from `run2/yt_meta.json`), then
-  what the prototype gives: the parsed parts, and for each of two runs (three calls with
-  the channel; two calls without it) the queries asked, the ids of the hits in order, and
-  the preselect.
-- `unseen.jsonl`, 176 rows, the videos `holdout.py` selects from
-  `tests/unit/data/youtube_search` (on `dev` once `search_official_captions` lands): the
-  same fields, one run (three calls with the channel).
+- `library.jsonl`, 206 rows: YouTube ID, title and channel (from `run2/yt_meta.json`), then
+  what the prototype gives: the parsed parts (read with the channel), and for each of two
+  runs (three calls with the channel; two calls without it) the queries asked, the ids of
+  the hits in order, and the preselect.
+- `unseen.jsonl`, 176 rows, the videos `holdout.py` selects: the same fields, one run (three
+  calls with the channel). The IDs are what GATE G uses to keep these videos out of its
+  fresh set.
 - `answers.json`: query to hits, only the queries those runs ask, each hit cut to
   `GeniusHit`'s fields and already past the prototype's `usable` filter.
+
+The 176 come from 44 YouTube searches: 14 already in `tests/unit/data/youtube_search` here,
+and 30 that exist only on `search_official_captions`, committed there as `81875520`. The
+freeze reads all 44 from a temporary copy, and the 30 are never committed on this branch:
+
+```bash
+git archive 81875520 tests/unit/data/youtube_search | tar -x -C <scratch dir>
+$PY freeze.py <scratch dir>/tests/unit/data/youtube_search
+```
+
+The commit, not the branch name, so the rows do not move if that branch changes or is
+retired (`81875520`'s copy of the folder is the branch tip's on 2026-11-15). The tests read
+only the committed `unseen.jsonl`, never the searches.
 
 No lyric text and no answer key go in; these files hold public titles, channel names and
 Genius search results only.
@@ -312,18 +326,29 @@ One commit per numbered step unless it says otherwise; tests ride with their cod
 each phase, write its row in the Results log, stop, and say so (Ken compacts between
 phases).
 
-**Phase 0: rebase and reconcile.** No behaviour change.
-1. Rebase this branch onto `dev` once `search_official_captions` is on it. Read
-   `official_rank.py` as landed; if its channel handling is not what "Channel names"
-   describes, STOP and report before writing anything.
-2. `refactor(official_rank)`: `channel_act_name` public, `official_rank` using it, its
-   tests unchanged and passing.
+**Phase 0: rebase onto current `dev`.** No behaviour change, no commit of its own.
+1. Rebase this branch onto `dev` as it stands (Ken, 2026-11-15: it does not wait for
+   `search_official_captions`). Run the full suite; record `dev`'s hash and the count.
+   Nothing in this spec needs `official_rank.py` or that branch's `/search` changes. If it
+   has landed by then, nothing here changes either: its 30 searches are on `dev`, and the
+   freeze still reads them from `81875520`. Whichever branch lands second meets the other's
+   edits to `pikaraoke/routes/search.py` (this one `/lyrics_search`, that one `/search` and
+   `/search/more`); the clash is textual only.
 
 **Phase 1: the module.**
 1. `test(genius_query)`: `freeze.py` and the three fixture files. Record the row counts
    and the commit of `builder.py` they came from in the Results log.
 2. `feat(genius_query)`: the module and its tests, the typed term included. The channel
    check of "Channel names" (382 channels) is part of this step.
+3. `docs(plans)`: this entry in `plans/open-issues.md`, under "Search results (on `dev`)":
+
+   > - **Unify the channel cleaners once `search_official_captions` lands.**
+   >   `official_rank.py` and `genius_query.py` each work out what act a channel's name
+   >   stands for, with their own noise words, kept apart while that branch rewrites
+   >   `official_rank`'s. Once it lands: one function for the name, each module keeping
+   >   its own list of names that stand for no act (the ranking's short, the Genius
+   >   module's wide). Not ruled. Record: `plans/genius-search-spec.md` on branch
+   >   `genius_search_accuracy`, Calls item 3 and "Channel names".
 
 **Phase 2: client and route.**
 1. `feat(genius)`: the hit's new fields and the two drops.
@@ -346,3 +371,175 @@ or judge.
 **Phase 6: Ken's checks in the real app**, after the gate passes: a search-page download
 with a preselect and one without; a title-only upload; the pick pass on a fresh download;
 Repair's Genius box; the prompt through `add_songs`.
+
+## GATE G
+
+Read on YouTube videos no rule was shaped on, collected after the code is frozen (Phases 1-4
+and the review's fixes). The library's 206 and the 176 unseen are spent: they are fixtures,
+not the gate. The stop numbers were ruled by Ken on 2026-11-15, before any code, and do not
+move once the collection exists.
+
+### Where the videos come from
+
+Thirty YouTube searches, fixed here so that neither the executor nor the judge picks titles
+after seeing results. None is a song in either library or in the 44 fixture searches. Half
+are film and stage songs with more than one recording on Genius (two films, a film and a
+stage cast, a pop single, a dub): the case the answer key could not read. The rest name an
+act, carry a CJK title, or name only a song that other songs share.
+
+| # | Search, typed as is | The video's title must carry | Kind |
+|---|---|---|---|
+| 1 | remember me coco | Remember Me | film |
+| 2 | i dreamed a dream les miserables | I Dreamed a Dream | film, stage |
+| 3 | music of the night phantom of the opera | Music of the Night | film, stage |
+| 4 | you're the one that i want grease | You're the One That I Want | film, stage |
+| 5 | the winner takes it all mamma mia | The Winner Takes It All | film, act |
+| 6 | you will be found dear evan hansen | You Will Be Found | film, stage |
+| 7 | a million dreams greatest showman | A Million Dreams | film, cover |
+| 8 | go the distance hercules | Go the Distance | film, single, stage |
+| 9 | kiss the girl little mermaid | Kiss the Girl | two films |
+| 10 | friend like me aladdin | Friend Like Me | two films, stage |
+| 11 | i just can't wait to be king lion king | I Just Can't Wait to Be King | two films, stage |
+| 12 | the wizard and i wicked | The Wizard and I | film, stage |
+| 13 | memory cats | Memory | film, stage |
+| 14 | and i am telling you dreamgirls | And I Am Telling You | film, stage |
+| 15 | my shot hamilton | My Shot | stage only |
+| 16 | taylor swift love story | Love Story | act, re-recording |
+| 17 | whitney houston greatest love of all | Greatest Love of All | act |
+| 18 | bon jovi livin on a prayer | Livin' on a Prayer | act |
+| 19 | billie jean michael jackson | Billie Jean | act, title first |
+| 20 | olivia rodrigo drivers license | drivers license | act |
+| 21 | bruno mars uptown funk | Uptown Funk | act, featured not primary |
+| 22 | the weeknd blinding lights | Blinding Lights | act |
+| 23 | linkin park numb | Numb | act |
+| 24 | blackpink how you like that | How You Like That | act, K-pop |
+| 25 | bts dynamite | Dynamite | act, K-pop, shared title |
+| 26 | 周杰倫 告白氣球 | 告白氣球 | act, CJK |
+| 27 | 陳奕迅 浮誇 | 浮誇 | act, CJK |
+| 28 | creep | Creep | title only |
+| 29 | yesterday | Yesterday | title only |
+| 30 | imagine | Imagine | title only |
+
+"Kind" is why the search is here, not a label the judge scores by. Each search is run once,
+as the search page runs it (`get_search_results(search, PAGE_SIZE)`, YouTube's order). From
+its results keep the first four whose folded title (as `builder.squash`) contains the
+carried title's, whose ID is in neither `library.jsonl` nor `unseen.jsonl`, and that no
+earlier search kept: up to 120 videos. A search with fewer than four keeps what it has; the
+shortfall is logged, never topped up from another search.
+
+### What the executor collects, then stops (Phase 5)
+
+1. Record the frozen HEAD and the full suite's count. The suite includes the seven Known
+   holes and the rows pinned right; if any fails, STOP before collecting.
+2. `plans/genius-search-accuracy/gate_g/collect.py`:
+   - YouTube: the thirty searches, rows (ID, title, channel) cached in
+     `gate_g/youtube.json`; the selection above.
+   - Genius: per video, `find_song(search, title, channel=channel, typed=<the search>,
+     max_calls=SEARCH_PAGE_CALLS)`, then again with `typed=""` on the same answers.
+     `search` is `GeniusClient.search(q, limit=20)` behind a cache by query
+     (`gate_g/genius.json`), so a rerun makes no call and the read can be replayed.
+   - `gate_g/sheet.md`, one block per video in table order: number, YouTube title,
+     channel, ID, the search; the parsed parts; the queries asked, the typed one marked;
+     the hits as `Title — artist line (year, views)` with the preselect marked; when the
+     typed term was asked, the first three hits without it.
+   - `gate_g/verdicts.md`: the judge's table, one empty row per video number, with the
+     columns below.
+3. `docs(plans)`: the script, both caches, the sheet and the empty verdicts. They hold
+   public titles, channel names and Genius search results only.
+4. The Results log row: frozen HEAD, suite count, whether the YouTube search was quoted
+   (`dev` quotes it today; `search_official_captions` unquotes it), videos per search and
+   in all, searches short of four, Genius calls made. Hand Ken a ready-to-paste prompt for
+   the Opus read (branch, HEAD, this section, the `gate_g/` folder). Stop: do not count,
+   judge, or fix anything the sheet shows.
+
+### What is read by eye
+
+The judge reads every video in the sheet's order and fills its row:
+
+- `what`: what the video is, from its title and channel only: the song and its recording.
+  An act's own upload (official, lyric, live), a cover (of whose song), a film's cast
+  (which film, and its year when two films share the song), a stage cast, a pop single, a
+  dub; or not the song (a trailer, a reaction); or unsure.
+- The right hit, against `what`: the song's page by the act the video is (for a cover, the
+  original act's page or the cover act's own page of the song); for a film or stage song,
+  the page of the recording the video is. A version page (live, remix) is right only when
+  the video is that version.
+- `first`: right; right song, wrong recording; wrong song; no hits.
+- `listed`: the right hit's place among the hits, or none.
+- `preselect`: none; right; wrong (anything but the right hit).
+- `typed`: not asked; no change; helped (the right hit is first with it and was not
+  without it, or is listed only because of it); hurt (the right hit was first without it
+  and is not with it).
+
+Rows read as not the song, or unsure, are left out of every count and named by number.
+Every film and stage video's first hit has its recording read from the hit's artist line,
+year and views. The judge hands Fable only the rows where it cannot tell which recording
+a hit is, and says which those were.
+
+### Stop numbers (Ken, 2026-11-15)
+
+Counted over the rows left in. Any one of the four stops the build.
+
+| # | Measure | Stops when | For scale |
+|---|---|---|---|
+| G1 | Wrong preselects | 2 or more | 0 of about 250 on the library and unseen sets (the unseen set's four other-act pages were each the video's own song) |
+| G2 | Right song first: `first` is right, or right song with the wrong recording | below 70% of the rows | 77-78% on the clean unseen pass (title, and act where named); 52% for today's search page on the same videos |
+| G3 | Videos of a film's or a stage cast's recording whose first hit is the wrong recording | above 1 in 3 of those videos | 7 of 43 on the library |
+| G4 | The typed term | hurt on more videos than it helped | not measured |
+
+A single wrong preselect does not stop the build, but the judge writes it up for Ken like a
+failing row.
+
+### The seven Known holes
+
+They are not in the gate: their songs are library songs, so no search above returns them as
+fresh videos. They count in two ways:
+
+- **Held:** their pinned rows pass in the suite at the frozen HEAD (step 1).
+- **As the scale for G3:** 7 of 43 on titles the order was shaped on. The same pattern on a
+  new song (a stage cast first for another Lion King or Wicked song) counts in G3 like any
+  other wrong recording: the holes were accepted by name, not by pattern.
+
+### Who reads it, and after
+
+Opus fills `verdicts.md`, counts G1-G4 and writes the gate's Results log row: the four
+counts against their stop numbers, the rows left out, the rows Fable read, and every row
+that failed, by number and title. Then Ken reads it.
+
+- **Pass:** Phase 6.
+- **Fail:** STOP. The judge writes up the failing rows and nothing is changed to pass them
+  ("Executor rules"). Ken rules: ship as it is, move the typed term back to today's
+  zero-hits fallback (G4), or change a structural rule or the order (a judge's call, Calls
+  item 1). A change is read at a new GATE G on new searches, and this gate's videos are
+  then frozen into the fixtures the way `unseen.jsonl` was.
+
+## Executor rules
+
+- **A title that fails is a STOP for the judge**, never a new pattern, word or order level
+  added to make it pass. That covers a fixture row the port does not reproduce (fix the
+  port toward the prototype; if the prototype's own reading is in question, STOP), a title
+  tried by hand, and anything the GATE G sheet shows. The word lists Calls item 1 lets
+  anyone extend are for after this build: during it, nothing is added to any list.
+- **No lyric text** in any commit, test, fixture or plan. Fixtures and gate files hold
+  public titles, channel names and Genius search results only. Never `git add -f` the
+  ignored `run2/truth.json`.
+- **No search for the gate's thirty terms**, on YouTube or Genius, before Phase 5. Tests
+  make no network call: they read the committed fixtures through a fake `search`.
+- Conda env `pik`: `/home/ken/miniconda3/envs/pik/bin/python -m pytest`. Pre-commit on the
+  changed files only (`--files`, not `--all-files`).
+- Tests ride with the code they exercise, in the same commit.
+- Plan edits (this file, the evaluation, `plans/open-issues.md`, the `gate_g/` files) go in
+  their own `docs(plans)` commits, never in a code commit.
+- `/code-review` after Phase 4: hand Ken the exact line (commit range, files in scope, one
+  finder per Self-Review axis). Never launch it.
+- Stop at each phase's Results log row and say so; Ken compacts between phases. Push only
+  when Ken asks.
+
+## Results log
+
+One row per step or phase, written by whoever did it: raw counts and provenance, no
+verdicts. Prototype oddities ported as they are ("The module") go in the row of the step
+that ported them.
+
+| # | Date | Step | Result | Evidence |
+|---|---|---|---|---|

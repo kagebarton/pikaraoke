@@ -1,24 +1,27 @@
 # Genius search accuracy: find the right song, and default to it
 
 Model: not assigned (see "Where Fable is needed"). Evaluation by Claude Fable 5.2, 2026-11-11
-and 2026-11-13. No spec yet.
+and 2026-11-13. Spec: `plans/genius-search-spec.md` (Fable 5.2, 2026-11-13; finished by
+Claude Opus 5.5, 2026-11-15).
 
-Status: **evaluation only, no code changed. Rerun on the second computer done and ruled on
-2026-11-13; the spec is next.** Branch `genius_search_accuracy`, split on
-2026-11-12 (at Ken's request, the two halves being unrelated) from `lyric_search_accuracy`,
+Status: **evaluation closed, no code changed. Rerun on the second computer done and ruled on
+2026-11-13; the spec is written, and its Phase 0 is next.** Branch `genius_search_accuracy`,
+split on 2026-11-12 (at Ken's request, the two halves being unrelated) from `lyric_search_accuracy`,
 which was cut from `dev` at `1016e20` to carry the combined plan between computers. The LRCLIB
 half was closed with no build on 2026-11-13 and is kept at `archive/lrclib_search_accuracy`
 (`plans/lrclib-search-accuracy.md`); the combined plan is kept at
 `archive/lyric_search_accuracy`. This branch holds no code. Before code starts it is
-rebased onto `dev` after `search_official_captions` lands (see Rulings).
+rebased onto current `dev`; it does not wait for `search_official_captions` (Ken,
+2026-11-15, see Rulings).
 
 ## Pick up here
 
 1. Done 2026-11-13: the rerun on the second computer, on raw YouTube titles ("Rerun on the
    second computer"). The library there is 248 songs, 206 with a YouTube ID.
 2. Done 2026-11-13: Ken's rulings on the builder and on C ("Rulings (Ken, 2026-11-13)").
-3. Next: the spec, by Fable ("Where Fable is needed" says why and what it has to settle).
-4. Stop before any code until the spec exists.
+3. Done 2026-11-13 and 2026-11-15: the spec, `plans/genius-search-spec.md` (Fable wrote it,
+   Opus added GATE G, the executor rules and the Results log).
+4. Next: the spec's Phase 0, by Sonnet. This evaluation is closed; do not rerun it.
 
 Evidence (replay scripts and cached service answers) is in `plans/genius-search-accuracy/`.
 Committed: the scripts, the Genius answers (`genius_raw.json`, `genius_year_raw.json`) and
@@ -41,6 +44,10 @@ songs).
   asked for by Ken; the assumption for the rest of this plan). It is specced with fixtures
   committed and Sonnet has not started; it edits `routes/search.py` and rewrites the vote in
   `official_rank.py`. This branch is cut from `dev` after it lands.
+  **Replaced 2026-11-15 (Ken):** `genius_search_accuracy` does not wait for it. The spec
+  drops the shared channel function, leaves `official_rank.py` untouched, and reads the 30
+  searches that exist only on that branch from a temporary copy (spec, Calls item 3,
+  "Channel names", "Fixtures and tests", Phase 0).
 - **B. Default pick: preselect only when title and artist both match**, on all four entry
   points. The search page stops preselecting whatever is first. Film-named songs have no
   artist to match; their default follows C.
