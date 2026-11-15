@@ -367,8 +367,24 @@ replayed onto the other.
   look for a line where the transcriber heard its words, and an echo's words are its lead's,
   so a new line could be aimed onto the lead's audio. If both are on Phase 2's base, report
   heard-aimed moves of new lines on their own.
-- `onset_loud_start` changes the `snap_line_edges` call; `show_parens` runs after it. No other
-  contact.
+- `onset_loud_start` changes the `snap_line_edges` call; `show_parens` runs after it. Its new
+  onset exit moves a line with a loud start when the transcriber heard the line's first word
+  within 0.25 s of a later rise. That touches this feature's lines in three ways (Fable 5.2,
+  2026-11-15, read from the code, not measured):
+  - A line that starts with a kept group whose next word is the same word ("(hey) Hey you")
+    can have its start moved up against the lead's word, agreed by the lead's heard copy. An
+    added line placed on top of its lead can move the same way. If that branch is on Phase 2's
+    base, report on their own the heard-moved lines
+    (`joint_stats.edge_snap.onset.heard_snaps`) that are added lines or lines whose kept group
+    has `tokens` starting at 0.
+  - An added line the transcriber never heard, with a loud claimed start (the lead's held
+    note), is never moved by that exit. It is searched only when its start is quiet or its
+    `source` is a doubted one (`cue_align_line`). The D7 amendment says which `source` an
+    added line's own-window align carries, and why.
+  - Its Phase 3 regen bumps the schema to 12, so every bundle is stale. If this branch is on
+    the regen's base, that regen adds backing lines to every affected song, ahead of GATE B's
+    regen decision (Decision 4), and its read has to split cue songs by a kept group in
+    `joint_stats.backing`. As cut, `onset_loud_start` does not hold this branch.
 
 **Choices made here that Ken may overrule.**
 
