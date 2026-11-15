@@ -43,6 +43,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import cue_heard_probe as probe  # noqa: E402
 
+from pikaraoke.lib import heard_lines  # noqa: E402
 from pikaraoke.lib.get_platform import get_temp_directory  # noqa: E402
 from pikaraoke.lib.library_regen import list_videos, read_bundle  # noqa: E402
 from pikaraoke.lib.metadata_parser import extract_youtube_id  # noqa: E402
@@ -314,6 +315,16 @@ def sheet_pool(ctx: CompareCtx, rows: dict[str, list[dict]]) -> dict[str, list[S
     return pool
 
 
+def pair_text(ctx: CompareCtx, lid: int) -> str:
+    """The signed offsets (heard - placed) of the first-pass line's words paired with its
+    heard words, as the confirmed test pairs them; blank when the line is not heard or too few
+    words pair."""
+    offsets = heard_lines.pair_offsets(
+        ctx.first[lid], len(ctx.rescue.line_toks[lid]), ctx.rescue.heard[lid]
+    )
+    return "" if offsets is None else " ".join(f"{off:+.2f}" for off in offsets)
+
+
 def spot_rows(ctx: CompareCtx, tags: dict[int, str]) -> list[dict]:
     """Table T: the lines of :data:`SPOTS` this song holds."""
     rows = []
@@ -330,6 +341,9 @@ def spot_rows(ctx: CompareCtx, tags: dict[int, str]) -> list[dict]:
                     spot=kind,
                     cue=ctx.cue(lid) + ctx.rescue.offset,
                     heard=None if heard is None else heard.start,
+                    first=span(ctx.first[lid]),
+                    confirmed=ctx.rescue.confirmed(ctx.first[lid]),
+                    offsets=pair_text(ctx, lid),
                     source=span(ctx.source.get(lid)),
                     today=span(ctx.today.final[lid]),
                     new=span(ctx.new_output[lid]),
@@ -448,12 +462,17 @@ COMPARE_TABLES = {
         "Table T: the spots Ken named",
         "Starts and ends on the audio clock. Source: the source bundle's output; Today: the "
         "same-bundle baseline; New: the new bundle's output. Heard: the transcriber's start "
-        "(blank when the line is not heard). Spot: target, or expected unchanged.",
+        "(blank when the line is not heard). First pass: the first pass's start-end; Confirmed: "
+        "the transcriber confirms it (rule A); Pair offsets: heard - placed for each paired "
+        "word, all within 1.0 s to confirm. Spot: target, or expected unchanged.",
         [
             *SRC_SONG_LINE,
             ("Spot", "spot"),
             ("Cue", "cue"),
             ("Heard", "heard"),
+            ("First pass", "first"),
+            ("Confirmed", "confirmed"),
+            ("Pair offsets", "offsets"),
             ("Source", "source"),
             ("Today", "today"),
             ("New", "new"),

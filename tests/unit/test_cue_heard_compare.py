@@ -329,6 +329,43 @@ class TestCompareSong:
         assert all(row["near_unanswered"] in (True, False) for row in done.rows["O"])
 
 
+class TestTableT:
+    def test_a_spot_line_shows_its_first_pass_whether_it_is_confirmed_and_its_pair_offsets(
+        self, library, tmp_path, monkeypatch
+    ):
+        first, heard, answer = _crazy()
+        monkeypatch.setattr(compare, "SPOTS", [("abcdefghijk", (4,), "target")])
+        done = _compare(
+            library,
+            _source_bundle(first, heard, answer),
+            _regen_bundle(first, heard, answer),
+            tmp_path,
+        )
+        (row,) = done.rows["T"]
+        assert (row["line"], row["spot"], row["rules"]) == (4, "target", "B kept")
+        # The first pass left line 4 with no words: nothing to confirm or to pair.
+        assert (row["first"], row["confirmed"], row["offsets"]) == ((None, None), False, "")
+        assert row["source"][0] == 8.0 and row["new"][0] == 12.65
+        assert [s.group for s in done.pool["target"]] == ["target"]
+
+    def test_the_offsets_are_signed_heard_minus_placed_and_blank_when_not_heard(self):
+        class Ctx:
+            first = {
+                0: {
+                    "words": [
+                        {"word": "ee", "start": 5.0, "end": 5.3},
+                        {"word": "ff", "start": 5.4, "end": 5.7},
+                    ]
+                }
+            }
+            rescue = type("R", (), {"line_toks": [[("ee", "ee"), ("ff", "ff")]], "heard": [None]})()
+
+        assert compare.pair_text(Ctx, 0) == ""
+        heard = compare.heard_lines.HeardLine(tuple(_sung("ee ff", 5.5)), True)
+        Ctx.rescue.heard = [heard]
+        assert compare.pair_text(Ctx, 0) == "+0.50 +0.50"
+
+
 class TestRuleC:
     @staticmethod
     def _row(library, tmp_path, stretch_answer):
