@@ -731,6 +731,40 @@ so cutting it is a small edit, not a commit left off. Leaving the guard lift out
 plain skip either: rule B's commits build on its code (Phase 5, "if a later commit depends
 on one, STOP").
 
+**Ken's further listens (VLC, 2026-11-15, the seven spots above; files in
+`~/probes/cue-heard-trial/gate-h-listens/`), lyric text left out.**
+
+| Song | Seek | Line | Rule | Ken |
+|---|---|---|---|---|
+| Shape Of My Heart | 2:52 | 39 | guard lift | the new overlap is correct |
+| Castle On The Hill | 1:27 | 16 | guard lift | close; the first word is barely audible, hard to place |
+| Closer | 1:19 | 24 | guard lift | first word looks the same, second slightly better in new, close |
+| Closer | 2:22 | 45 | D | old definitely better; the long last word of the third repeat seems to have tripped it |
+| Castle On The Hill | 4:13 | 53 | A2 | old correct, new early |
+| Reflection | 2:44 | 32 | A2 | new late |
+| Love Is an Open Door | 0:42 | 15-18 | A1 in a run, Table O | messy either way, about the same; new maybe slightly less overlap |
+| Love Is an Open Door | 1:14 | 35-36 | A1 in a run | the second repeat late in old, better in new, still a touch late |
+| Love Is an Open Door | 1:35 | 42-43 | A1 in a run, Table O | the same mess, roughly the same; old has less overlap here |
+
+**What the further listens change in the read.**
+
+- **Guard lift: the read's case against it does not hold by ear.** Shape Of My Heart 39,
+  the read's worst line, is right: the line is sung over the previous line's last words,
+  and the transcriber missed its first three words, so its heard start was late, not the
+  new start early. The other two listens are close calls, one leaning to new. "Further
+  from the heard start" measured the transcriber where two lines overlap, not the lift.
+  No lifted line was heard as worse for the lift itself (Before You Go 27 is early by
+  rule B's aim, Takedown 33 and Bring It All Back 52 by rule D's).
+- **A2: two of four listens worse, none better** (Castle 53 early, Reflection 32 late;
+  Takedown 17 and Hurts To Love You 26 the same).
+- **D: the third wrong move is confirmed by ear** (Closer 45). Three of six kept lines.
+- **A1 in a run: one of three better, two about the same** (Love Is an Open Door).
+
+**Recommendation after the further listens (the judge's; Ken rules).** A1 lands. A2 is
+cut from rule A's commit. Rule B lands. The guard lift lands (this reverses the first
+recommendation, and Phase 5 then has no commit to pull out from under rule B). Zero-length
+words land. Rule D is left out. Rule C is left out: no audible gain in eight listens.
+
 ## Phase 5: after GATE H
 
 - Rules ruled out: their commits are not replayed onto `dev` (Decision 6); if a later
