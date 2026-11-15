@@ -641,6 +641,30 @@ parentheses too. Record: `plans/backing-vocal-lines.md` on branch
   the keep rule never tested. Reported at that plan's GATE B; if a keep lands on
   another line's words, the change is that an added line is never heard-aimed
   ("The D7 amendment", "How the rescue treats an added line").
+- **A group after a dialogue dash or song star is dropped as unplaced.**
+  `srt_cues._group_at` gives up on a group when the text before it has no
+  letter, which also catches a mark the cleaner removes ("- (hey) go",
+  "* (oh) go"), where the group's place is the line's start. A group glued to
+  the word before it ("Hello(oh), there") is dropped the same way, and a glued
+  label is misread: in "OK:(oh)go", "OK:" cut off at the group reads as a
+  speaker label, so the group lands before it. The letter check is a second,
+  looser copy of the cleaner's own rule. None of the library's 261 kept groups
+  is unplaced, and a dropped group leaves its line as it is today. Fix: place
+  the group from the cleaner's own output, not a check before it (stage 2
+  review, findings 4 and 9).
+- **The stage reads the sheet twice.** `srt_cues.sheet_parens` parses and
+  cleans the sheet again after `cue_spans_from_srt` has, and works out again
+  which cues are lines. Both use the same cleaning helpers, so their line ids
+  agree today; a change to which cues count as lines in one and not the other
+  would put inline groups into the wrong line with no error. Fix: one function
+  that returns the lines, spans and groups from a single parse (stage 2
+  review, finding 8).
+- **The LRCLIB origin name is spelled twice.** `backing_vocals.ORIGINS` writes
+  out `"lrclib_srt"` because the align stage cannot import `library_regen`,
+  where `LRC_ORIGIN` lives with the other origin names; a test keeps the two
+  equal. Moving only that one to `lrclib` would split the list, so the fix is
+  a small module the stage can import that holds every origin name (stage 2
+  review, finding 11).
 
 ## Test suite (Windows box)
 
