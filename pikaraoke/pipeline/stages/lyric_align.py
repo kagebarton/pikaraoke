@@ -44,14 +44,14 @@ import srt
 from tqdm import tqdm
 
 from pikaraoke.lib import alignment_capture, lrclib, lrclib_fill, ytasr
-from pikaraoke.lib.backing_vocals import show_parens
+from pikaraoke.lib.backing_vocals import ORIGINS, show_parens
 from pikaraoke.lib.cue_align import SOURCE_REALIGN, align_song
 from pikaraoke.lib.evidence_veto import veto_uncorroborated_lines
 from pikaraoke.lib.ffmpeg import probe_duration
 from pikaraoke.lib.genius_lyrics import parse_lyric_lines
 from pikaraoke.lib.joint_match import match_words_to_lines_joint_with_stats
 from pikaraoke.lib.onset_snap import decode_env_db, snap_line_edges
-from pikaraoke.lib.srt_cues import cue_spans_from_srt
+from pikaraoke.lib.srt_cues import ParenCue, cue_spans_from_srt, sheet_parens
 from pikaraoke.lib.srt_provenance import is_generated, mark_generated
 from pikaraoke.lib.windowed_realign import (
     analyze_pass1,
@@ -145,13 +145,23 @@ class LyricAlignStage(BaseStage):
 
             if cue_spans:
                 # SRT: cue-anchored windowed align driven by the uploader cues.
+                # With a kept backing vocal the song's lines are the sheet's plus it, and the
+                # parentheses and the bundle below go by those.
                 (
                     line_objects,
                     capture_transcribe_words,
                     capture_joint_stats,
                     env,
                     capture_cue_inputs,
-                ) = self._run_cue_align(ctx, vocal_wav, lyrics_lines, align_lines, cue_spans)
+                    (lyrics_lines, align_lines),
+                ) = self._run_cue_align(
+                    ctx,
+                    vocal_wav,
+                    lyrics_lines,
+                    align_lines,
+                    cue_spans,
+                    self._sheet_parens(lyrics_path, ctx.artifacts.get("lyrics_origin")),
+                )
                 capture_method_used = "cue_align"
             else:
                 # txt/genius: joint DP matcher (align + transcribe + optional ytasr).
@@ -594,6 +604,14 @@ class LyricAlignStage(BaseStage):
                 )
         return line_objects, align_words, transcribe_words, joint_stats
 
+    @staticmethod
+    def _sheet_parens(lyrics_path: Path, origin: str | None) -> list[ParenCue]:
+        """The sheet's parenthetical groups, for the origins the keep rule was measured on
+        (:data:`backing_vocals.ORIGINS`); none for any other sheet."""
+        if origin not in ORIGINS:
+            return []
+        return sheet_parens(lyrics_path.read_text(encoding="utf-8"))
+
     def _run_cue_align(
         self,
         ctx: StageContext,
@@ -601,7 +619,8 @@ class LyricAlignStage(BaseStage):
         display_lines: list[str],
         align_lines: list[str],
         cue_spans: list[tuple[float, float]],
-    ) -> tuple[list[dict], list[dict], dict, np.ndarray | None, dict]:
+        parens: list[ParenCue],
+    ) -> tuple[list[dict], list[dict], dict, np.ndarray | None, dict, tuple[list[str], list[str]]]:
         """Cue-anchored windowed align for SRT songs — uploader cues drive it.
 
         Shares the transcribe-first de-reverb gate with the joint route, then
@@ -610,14 +629,18 @@ class LyricAlignStage(BaseStage):
         forced aligner. All the sectioning/offset/re-pace logic lives in the
         library; this method only wires I/O and the audio duration.
 
-        Returns ``(line_objects, transcribe_words, stats, env, cue_inputs)`` — the
+        ``parens`` are the sheet's parenthetical groups; the transcript decides which are
+        sung, and those join the song's lines (:func:`cue_align.align_song`).
+
+        Returns ``(line_objects, transcribe_words, stats, env, cue_inputs, lines)`` — the
         gate's transcribe words, which the rescue weighs against the cues and the debug
         bundle keeps as the song's heard words (the reference a movie-subtitle slice
         is checked against), the cue-align telemetry (section count, offset,
         re-pace + de-reverb sub-stats), the aligned stem's envelope (None
         if it can't be decoded), which places the rescue windows' ends here and
-        is reused by the edge snap, and the rescue's inputs for the bundle
-        (:func:`cue_align.align_song`).
+        is reused by the edge snap, the rescue's inputs for the bundle
+        (:func:`cue_align.align_song`), and the ``(display_lines, align_lines)`` the line
+        objects were timed against: the sheet's, plus any backing vocals kept.
         """
         # Shared de-reverb gate: adopt the dry stem when the wet one is
         # reverb-washed.
@@ -655,7 +678,7 @@ class LyricAlignStage(BaseStage):
                 disable=None,
             )
 
-        line_objects, stats, cue_inputs, _lines = align_song(
+        line_objects, stats, cue_inputs, lines = align_song(
             cue_spans,
             display_lines,
             align_lines,
@@ -664,10 +687,11 @@ class LyricAlignStage(BaseStage):
             env=env,
             progress=progress,
             heard_words=transcribe_words,
+            parens=parens,
         )
         if dereverb_stats is not None:
             stats["dereverb"] = dereverb_stats
-        return line_objects, transcribe_words, stats, env, cue_inputs
+        return line_objects, transcribe_words, stats, env, cue_inputs, lines
 
     def _ytasr_words(self, ctx: StageContext) -> list[dict] | None:
         """Words from the adopted YouTube ASR caption, for the joint 3rd source.

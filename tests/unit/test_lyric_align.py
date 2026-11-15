@@ -11,6 +11,7 @@ from pikaraoke.lib import lrclib
 from pikaraoke.lib.alignment_capture import SCHEMA_VERSION, output_line_timings
 from pikaraoke.lib.cue_align import SOURCE_REALIGN
 from pikaraoke.lib.joint_match import match_words_to_lines_joint_with_stats
+from pikaraoke.lib.library_regen import LRC_ORIGIN, MOVIE_ORIGIN
 from pikaraoke.lib.srt_provenance import is_generated, mark_generated
 from pikaraoke.lib.windowed_realign import merge_spans, replay_span
 from pikaraoke.pipeline.config import PipelineConfig
@@ -745,6 +746,145 @@ class TestCueAlignRoute:
 # ---------------------------------------------------------------------------
 # Vocal-energy veto wiring
 # ---------------------------------------------------------------------------
+
+
+class TestBackingVocalsWiring:
+    """Caption and LRC songs show the backing vocals the transcriber heard, on the lines the
+    bundle then records."""
+
+    SHEET = (
+        "1\n00:00:10,000 --> 00:00:12,000\nglowing river (hey)\n"
+        "\n2\n00:00:12,500 --> 00:00:13,500\n(oh, oh)\n"
+        "\n3\n00:00:14,000 --> 00:00:16,000\nphantom parade\n"
+    )
+    # What each align text is sung as (absolute seconds), and what the transcriber heard.
+    SUNG = {
+        "glowing river": [(10.0, 10.4), (10.5, 10.9)],
+        "glowing river hey": [(10.0, 10.4), (10.5, 10.9), (11.5, 11.9)],
+        "oh, oh": [(12.6, 12.8), (12.9, 13.1)],
+        "phantom parade": [(14.0, 14.4), (14.5, 14.9)],
+    }
+    HEARD = [
+        {"word": w, "start": s, "end": s + 0.3}
+        for w, s in [
+            ("glowing", 10.0),
+            ("river", 10.5),
+            ("hey", 11.5),
+            ("oh", 12.6),
+            ("oh", 12.9),
+            ("phantom", 14.0),
+            ("parade", 14.5),
+        ]
+    ]
+
+    def _make(self, tmp_path, monkeypatch, sheet=SHEET, origin="srt"):
+        import pikaraoke.pipeline.stages.lyric_align as la_mod
+
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path)
+        subs = ctx.song_path.parent / "subtitles"
+        subs.mkdir()
+        srt_path = subs / f"{ctx.song_path.stem}.en.srt"
+        srt_path.write_text(sheet, encoding="utf-8")
+        ctx.artifacts["lyrics_path"] = srt_path
+        ctx.artifacts["lyrics_origin"] = origin
+        slice_start = {}
+
+        def ffmpeg(cmd, _ctx, _phase):
+            slice_start["t0"] = float(cmd[cmd.index("-ss") + 1])
+
+        def align(*, lyrics_text, **_kwargs):
+            return [
+                {"word": tok, "start": s - slice_start["t0"], "end": e - slice_start["t0"]}
+                for line in lyrics_text.split("\n")
+                for tok, (s, e) in zip(line.split(), self.SUNG.get(line, ()))
+            ]
+
+        worker.align_refine.side_effect = align
+        worker.transcribe_words.return_value = self.HEARD
+        monkeypatch.setattr(la_mod, "run_ffmpeg", ffmpeg)
+        monkeypatch.setattr(la_mod, "_wav_duration", lambda _p: 30.0)
+        return stage, ctx, worker, la_mod
+
+    @staticmethod
+    def _ass(ctx) -> str:
+        path = ctx.song_path.parent / "karaoke" / f"{ctx.song_path.stem}.ass"
+        return path.read_text(encoding="utf-8")
+
+    def test_a_caption_sheet_shows_a_paren_only_echo_and_an_inline_one(self, tmp_path, monkeypatch):
+        stage, ctx, _worker, _la = self._make(tmp_path, monkeypatch)
+
+        stage.run(ctx)
+
+        bundle = _read_bundle(ctx)
+        assert bundle["lyrics"]["lines"] == ["glowing river (hey)", "(oh, oh)", "phantom parade"]
+        assert bundle["lyrics"]["align_lines"] == ["glowing river hey", "oh, oh", "phantom parade"]
+        assert [t["line_id"] for t in bundle["output_line_timings"]] == [0, 1, 2]
+        backing = bundle["joint_stats"]["backing"]
+        assert backing["old_line_ids"] == [0, None, 1]
+        assert [(g["verdict"], g["line_id"]) for g in backing["groups"]] == [
+            ("heard", 0),
+            ("heard", 1),
+        ]
+        ass = self._ass(ctx)
+        assert ass.count("Dialogue:") == 3
+        assert "(hey)" in ass and "(oh," in ass and "oh)" in ass
+
+    def test_an_lrclib_sheet_takes_the_same_path_as_a_caption(self, tmp_path, monkeypatch):
+        stage, ctx, _worker, _la = self._make(tmp_path, monkeypatch, origin=LRC_ORIGIN)
+
+        stage.run(ctx)
+
+        assert _read_bundle(ctx)["lyrics"]["lines"] == [
+            "glowing river (hey)",
+            "(oh, oh)",
+            "phantom parade",
+        ]
+
+    def test_a_movie_sheet_is_timed_as_today(self, tmp_path, monkeypatch):
+        stage, ctx, _worker, la_mod = self._make(tmp_path, monkeypatch, origin=MOVIE_ORIGIN)
+        align = MagicMock(wraps=la_mod.align_song)
+        monkeypatch.setattr(la_mod, "align_song", align)
+
+        stage.run(ctx)
+
+        assert align.call_args.kwargs["parens"] == []
+        bundle = _read_bundle(ctx)
+        assert bundle["lyrics"]["lines"] == ["glowing river", "phantom parade"]
+        assert "backing" not in bundle["joint_stats"]
+        assert "(hey)" not in self._ass(ctx)
+
+    def test_an_edited_sheet_with_its_groups_cleaned_out_is_timed_as_today(
+        self, tmp_path, monkeypatch
+    ):
+        cleaned = (
+            "1\n00:00:10,000 --> 00:00:12,000\nglowing river\n"
+            "\n2\n00:00:14,000 --> 00:00:16,000\nphantom parade\n"
+        )
+        stage, ctx, _worker, la_mod = self._make(tmp_path, monkeypatch, cleaned)
+        align = MagicMock(wraps=la_mod.align_song)
+        monkeypatch.setattr(la_mod, "align_song", align)
+
+        stage.run(ctx)
+
+        assert align.call_args.kwargs["parens"] == []
+        bundle = _read_bundle(ctx)
+        assert bundle["lyrics"]["lines"] == ["glowing river", "phantom parade"]
+        assert "backing" not in bundle["joint_stats"]
+
+    def test_the_joint_route_gets_no_parens(self, tmp_path, monkeypatch):
+        import pikaraoke.pipeline.stages.lyric_align as la_mod
+
+        stage, ctx, _worker = _make_stage_and_ctx(tmp_path)
+        ctx.artifacts["lyrics_origin"] = "srt"
+        parens = MagicMock()
+        align = MagicMock()
+        monkeypatch.setattr(la_mod, "sheet_parens", parens)
+        monkeypatch.setattr(la_mod, "align_song", align)
+
+        stage.run(ctx)
+
+        parens.assert_not_called()
+        align.assert_not_called()
 
 
 def _read_bundle(ctx) -> dict:
