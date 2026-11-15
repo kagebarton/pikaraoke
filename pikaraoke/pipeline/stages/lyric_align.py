@@ -277,9 +277,17 @@ class LyricAlignStage(BaseStage):
             capture_joint_stats["evidence_veto"] = veto_stats
 
         # A cue re-align's first word may sit on the previous line's held note,
-        # which reads as on time; onset snap searches those lines regardless.
+        # which reads as on time; onset snap searches those lines regardless. Any
+        # other loud start is searched too, and moves when the heard words put the
+        # first word at the rise -- except on a line timed from those words, which
+        # would agree with itself (joint_match's "transcribe" source).
         line_objects, edge_stats = snap_line_edges(
-            line_objects, snap_stem, env=env, doubted_sources=frozenset({SOURCE_REALIGN})
+            line_objects,
+            snap_stem,
+            env=env,
+            doubted_sources=frozenset({SOURCE_REALIGN}),
+            heard_words=capture_transcribe_words,
+            heard_timed_sources=frozenset({"transcribe"}),
         )
         if capture_joint_stats is not None:
             capture_joint_stats["edge_snap"] = edge_stats
@@ -604,8 +612,9 @@ class LyricAlignStage(BaseStage):
         library; this method only wires I/O and the audio duration.
 
         Returns ``(line_objects, transcribe_words, stats, env, cue_inputs)`` — the
-        gate's transcribe words, which the cue route doesn't use but the debug bundle
-        keeps as the song's heard words (the reference a movie-subtitle slice
+        gate's transcribe words, which the cue route doesn't place lines with but the
+        edge snap checks a loud start against and the debug bundle keeps as the song's
+        heard words (the reference a movie-subtitle slice
         is checked against), the cue-align telemetry (section count, offset,
         re-pace + de-reverb sub-stats), the aligned stem's envelope (None
         if it can't be decoded), which places the rescue windows' ends here and

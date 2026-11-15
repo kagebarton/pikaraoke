@@ -223,6 +223,17 @@ def _make_stage_and_ctx(tmp_path, *, dereverb_yield_wpm=0.0):
     return stage, ctx, worker
 
 
+def _pass_through_snap() -> MagicMock:
+    """A ``snap_line_edges`` stand-in that returns its lines as given and records the call."""
+
+    def snap(
+        objs, _path, env=None, doubted_sources=None, heard_words=None, heard_timed_sources=None
+    ):
+        return objs, {}
+
+    return MagicMock(side_effect=snap)
+
+
 class TestJointRoute:
     """Alignment mode runs align_refine + transcribe(refine=False) →
     joint matcher; no escalation, no gating."""
@@ -602,34 +613,45 @@ class TestCueAlignRoute:
         ]
 
     def test_srt_shares_dereverb_gate(self, tmp_path, monkeypatch):
-        # Gate transcribes once even though the cue route never uses the words.
+        # The gate transcribes once; the cue route reuses its words rather than transcribing again.
         stage, ctx, worker, _ = self._make_srt(tmp_path, monkeypatch)
         stage.run(ctx)
         worker.transcribe_words.assert_called_once()
         assert worker.transcribe_words.call_args.kwargs["refine"] is False
 
+    HEARD = [
+        {"word": "glowing", "start": 10.0, "end": 10.4},
+        {"word": "river", "start": 11.0, "end": 11.4},
+    ]
+
     def test_the_gates_transcribe_words_reach_the_bundle(self, tmp_path, monkeypatch):
-        """The cue route doesn't use them, but a movie-subtitle slice is checked
-        against the heard words a song's bundle keeps."""
+        """A movie-subtitle slice is checked against the heard words a song's bundle keeps."""
         stage, ctx, worker, _ = self._make_srt(tmp_path, monkeypatch)
-        heard = [
-            {"word": "glowing", "start": 10.0, "end": 10.4},
-            {"word": "river", "start": 11.0, "end": 11.4},
-        ]
-        worker.transcribe_words.return_value = heard
+        worker.transcribe_words.return_value = self.HEARD
 
         stage.run(ctx)
 
         bundle = _read_bundle(ctx)
         assert bundle["pipeline_decisions"]["method_used"] == "cue_align"
-        assert bundle["transcribe_words"] == heard
+        assert bundle["transcribe_words"] == self.HEARD
+
+    def test_the_edge_snap_checks_a_loud_start_against_the_gates_words(self, tmp_path, monkeypatch):
+        stage, ctx, worker, la_mod = self._make_srt(tmp_path, monkeypatch)
+        worker.transcribe_words.return_value = self.HEARD
+        snap = _pass_through_snap()
+        monkeypatch.setattr(la_mod, "snap_line_edges", snap)
+
+        stage.run(ctx)
+
+        assert snap.call_args.kwargs["heard_words"] == self.HEARD
+        assert snap.call_args.kwargs["heard_timed_sources"] == frozenset({"transcribe"})
 
     def test_one_decode_places_the_windows_and_feeds_the_edge_snap(self, tmp_path, monkeypatch):
         stage, ctx, _worker, la_mod = self._make_srt(tmp_path, monkeypatch)
         env = np.full(1201, -20.0)  # 30 s, sung throughout
         decode = MagicMock(return_value=env)
         align = MagicMock(wraps=la_mod.align_song)
-        snap = MagicMock(side_effect=lambda objs, _path, env=None, doubted_sources=None: (objs, {}))
+        snap = _pass_through_snap()
         monkeypatch.setattr(la_mod, "decode_env_db", decode)
         monkeypatch.setattr(la_mod, "align_song", align)
         monkeypatch.setattr(la_mod, "snap_line_edges", snap)
@@ -643,7 +665,7 @@ class TestCueAlignRoute:
 
     def test_the_edge_snap_doubts_re_aligned_starts(self, tmp_path, monkeypatch):
         stage, ctx, _worker, la_mod = self._make_srt(tmp_path, monkeypatch)
-        snap = MagicMock(side_effect=lambda objs, _path, env=None, doubted_sources=None: (objs, {}))
+        snap = _pass_through_snap()
         monkeypatch.setattr(la_mod, "snap_line_edges", snap)
 
         stage.run(ctx)
@@ -693,6 +715,46 @@ def _read_bundle(ctx) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+class TestEdgeSnapHeardWords:
+    """The edge snap gets the transcriber's words on every route that has them."""
+
+    def test_the_joint_route_passes_its_words_and_the_source_timed_from_them(
+        self, tmp_path, monkeypatch
+    ):
+        import pikaraoke.pipeline.stages.lyric_align as la_mod
+
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path)
+        snap = _pass_through_snap()
+        monkeypatch.setattr(la_mod, "decode_env_db", MagicMock(return_value=np.full(100, -30.0)))
+        monkeypatch.setattr(la_mod, "snap_line_edges", snap)
+
+        stage.run(ctx)
+
+        assert snap.call_args.kwargs["heard_words"] == worker.transcribe_words.return_value
+        assert snap.call_args.kwargs["heard_timed_sources"] == frozenset({"transcribe"})
+
+    def test_transcription_mode_has_no_heard_words(self, tmp_path, monkeypatch):
+        import pikaraoke.pipeline.stages.lyric_align as la_mod
+
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path)
+        del ctx.artifacts["lyrics_path"]
+        worker.transcribe_refine.return_value = [
+            {
+                "text": "hi",
+                "words": [{"word": "hi", "start": 0.0, "end": 1.0}],
+                "start": 0.0,
+                "end": 1.0,
+            }
+        ]
+        snap = _pass_through_snap()
+        monkeypatch.setattr(la_mod, "decode_env_db", MagicMock(return_value=np.full(100, -30.0)))
+        monkeypatch.setattr(la_mod, "snap_line_edges", snap)
+
+        stage.run(ctx)
+
+        assert snap.call_args.kwargs["heard_words"] is None
+
+
 class TestEvidenceVetoWiring:
     """The vocal-energy veto runs only on the joint route and shares the edge
     snap's single envelope decode."""
@@ -704,7 +766,7 @@ class TestEvidenceVetoWiring:
         env = np.array([-30.0, -30.0], dtype=np.float32)
         decode = MagicMock(return_value=env)
         veto = MagicMock(side_effect=lambda objs, _env: (objs, {"n_vetoed": 0}))
-        snap = MagicMock(side_effect=lambda objs, _path, env=None, doubted_sources=None: (objs, {}))
+        snap = _pass_through_snap()
         monkeypatch.setattr(la_mod, "decode_env_db", decode)
         monkeypatch.setattr(la_mod, "veto_uncorroborated_lines", veto)
         monkeypatch.setattr(la_mod, "snap_line_edges", snap)
