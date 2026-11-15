@@ -225,19 +225,31 @@ class TestShowParens:
         assert _shown("hey (", "hey", "hey") == ["hey("]
         assert _shown(") hey", "hey", "hey") == [")hey"]
 
-    def test_a_word_the_aligner_dropped_leaves_the_others_on_their_own_tokens(self):
-        assert _shown("(I can't help) Falling", "I can't help Falling", "I", "help", "Falling") == [
-            "(I",
-            "help)",
-            "Falling",
-        ]
-
     def test_an_echo_of_the_leads_word_takes_each_form_in_order(self):
         assert _shown("oh (oh)", "oh oh", "oh", "oh") == ["oh", "(oh)"]
         assert _shown("(oh) oh", "oh oh", "oh", "oh") == ["(oh)", "oh"]
 
-    def test_a_word_with_no_token_left_keeps_its_text(self):
-        assert _shown("(oh) hey", "oh hey", "oh", "hey", "yeah") == ["(oh)", "hey", "yeah"]
+    def test_a_token_with_no_word_is_passed_over(self):
+        assert _shown("(oh) , hey", "oh , hey", "oh", "hey") == ["(oh)", "hey"]
+
+    def test_a_stray_paren_the_align_text_keeps_still_pairs(self):
+        assert _shown("Oh) yeah (yeah)", "Oh) yeah yeah", "Oh)", "yeah", "yeah") == [
+            "Oh)",
+            "yeah",
+            "(yeah)",
+        ]
+
+    def test_a_line_whose_words_are_not_its_tokens_keeps_its_text_with_a_warning(self, caplog):
+        # No route ships one: each guesses or interpolates the words the aligner dropped.
+        for display, align, words in [
+            ("hey (hey)", "hey hey", ["hey"]),  # which copy the word is cannot be told
+            ("(I can't help) Falling", "I can't help Falling", ["I", "help", "Falling"]),
+            ("(oh) hey", "oh hey", ["oh", "hey", "yeah"]),
+            ("(oh) hey", "oh hey", ["hey", "oh"]),
+        ]:
+            caplog.clear()
+            assert _shown(display, align, *words) == words
+            assert "not its align tokens" in caplog.text
 
     def test_a_line_whose_display_equals_its_align_text_is_left_alone(self):
         line = _line(0, "(heeyyy]", "hey")
@@ -348,6 +360,12 @@ class TestWithBacking:
         assert backed.align_lines[1] == "oh ah ah"
         assert backed.placed[(9, 0)] == GroupLine(1, 0, 1)
         assert backed.placed[(9, 1)] == GroupLine(1, 1, 3)
+
+    def test_a_groups_tokens_count_only_the_tokens_the_aligner_gives_a_word(self):
+        backed = _backed([_inline(0, 3, "oh - oh")], lines=["hey - you"])
+        assert backed.align_lines[0] == "hey - you oh - oh"
+        # The line's words are hey, you, oh, oh: no word for either "-".
+        assert backed.placed[(0, 0)] == GroupLine(0, 2, 4)
 
     def test_a_gaining_lines_old_text_is_its_id_in_todays_list_without_the_added_lines(self):
         backed = _backed([_inline(2, 1, "oh"), _alone(1, (2.2, 2.8), "ah")])

@@ -365,17 +365,32 @@ class TestSheetParens:
     def test_a_label_before_a_group_has_a_letter_and_is_stripped(self):
         assert self._groups("MARA: (hey) go") == [[("hey", 0)]]
 
-    def test_a_capitals_file_recases_its_groups_as_its_lines(self):
-        sheet = self._sheet("HELLO THERE (OH)", "SING IT (OH, OH)", "(LA LA)")
-        assert cue_spans_from_srt(sheet)[0] == ["Hello there", "Sing it"]
-        assert self._groups("HELLO THERE (OH)", "SING IT (OH, OH)", "(LA LA)") == [
-            [("Oh", 2)],
-            [("Oh, oh", 2)],
+    def test_a_capitals_file_recases_its_groups_with_their_cues(self):
+        cues = ("HELLO THERE (OH)", "SING IT (OH, OH)", "(LA LA)", "(OH) GO NOW", "GO. (OH) NOW")
+        assert cue_spans_from_srt(self._sheet(*cues))[0] == [
+            "Hello there",
+            "Sing it",
+            "Go now",
+            "Go. Now",
+        ]
+        # Capitals only where the sentence starts, as the whole cue recased would have them.
+        assert self._groups(*cues) == [
+            [("oh", 2)],
+            [("oh, oh", 2)],
             [("La la", 0)],
+            [("Oh", 0)],
+            [("Oh", 1)],
         ]
 
     def test_an_unbalanced_paren_is_not_a_group(self):
         assert self._groups("Hello (x]", "(x] there") == []
+
+    def test_a_stray_open_paren_inside_a_group_is_dropped_from_its_text(self):
+        # A group runs from the first "(" to the next ")", as the cleaner finds it.
+        assert self._groups("(heeyyy] you know (oh)", "go (oh (yeah) now") == [
+            [("heeyyy] you know oh", 0)],
+            [("oh yeah", 1)],
+        ]
 
     def test_a_bracket_inside_a_group_is_stripped_from_its_text(self):
         assert self._groups("Hello (oh [laughs] oh)") == [[("oh oh", 1)]]

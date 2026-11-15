@@ -1752,6 +1752,33 @@ class TestAlignSongBacking:
         assert backing["groups"][0]["line_id"] == 4 and backing["groups"][0]["tokens"] == [2, 3]
         assert "rescue_offset" in run.inputs
 
+    def test_a_failed_section_re_align_keeps_the_first_pass_words_of_lines_that_gained_none(self):
+        base = _backing_run(_sung())
+        sing = _singer(_sung(**{"walk_away_hey": _at(15.0, 3)}))
+        aligner = _stub_aligner(
+            lambda t0, t1, text, label: (
+                None if text == "take my hand\nwalk away hey" else sing(t0, t1, text, label)
+            )
+        )
+        lines = list(_B_LINES)
+        objs, stats, _inputs, _timed = align_song(
+            list(_B_CUES),
+            lines,
+            list(lines),
+            20.0,
+            aligner,
+            heard_words=[{"word": "hey", "start": 16.0, "end": 16.4}],
+            parens=[_inline(5, 4, 2, "hey")],
+        )
+
+        assert aligner.calls[2][2] == "take my hand\nwalk away hey"
+        assert objs[3] == base.objs[3]  # gained nothing: the first pass's line, not re-aligned
+        assert not any(call[2] == "take my hand" for call in aligner.calls)
+        # The line that gained went to the rescue with no words, which timed it alone.
+        assert [w["word"] for w in objs[4]["words"]] == ["walk", "away", "hey"]
+        assert objs[4]["text"] == "walk away (hey)"
+        assert stats["backing"]["aligned_sections"] == [[3, 4]]
+
     def test_a_paren_only_keep_inside_a_section_is_one_line_call_and_no_section_call(self):
         base = _backing_run(_sung())
         run = _backing_run(

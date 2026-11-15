@@ -14,12 +14,15 @@ to the song's lines bare, and :func:`show_parens` puts the parentheses back on t
 afterwards, for Genius and custom lines too, whose display text keeps them.
 """
 
+import logging
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 
 from pikaraoke.lib.srt_cues import ParenCue, ParenGroup
 from pikaraoke.lib.token_align import _match_simple, _normalize_token
+
+logger = logging.getLogger(__name__)
 
 # The bundle's ``lyrics.origin`` of the sheets the rule was measured on: a YouTube caption and
 # an LRCLIB record. Movie and custom sheets were not measured. Spelled here because the
@@ -137,7 +140,8 @@ def judge(
 @dataclass(frozen=True)
 class GroupLine:
     """Where a kept group sits in the song's lines: its line, and its words as the
-    ``[first, end)`` range of that line's align tokens."""
+    ``[first, end)`` range of that line's words, which the aligner counts as the line's align
+    tokens less those with no word (:func:`_has_word`)."""
 
     line_id: int
     first: int
@@ -236,13 +240,22 @@ def _add_line(
             at = group.at + added
             display_tokens[at:at] = _parenthesised(words)
             align_tokens[at:at] = words
-            out.placed[(cue_index, g)] = GroupLine(line_id, at, at + len(words))
+            first = sum(map(_has_word, align_tokens[:at]))
+            out.placed[(cue_index, g)] = GroupLine(
+                line_id, first, first + sum(map(_has_word, words))
+            )
             added += len(words)
         display, align = " ".join(display_tokens), " ".join(align_tokens)
     out.display_lines.append(display)
     out.align_lines.append(align)
     out.spans.append(span)
     out.old_line_ids.append(old_id)
+
+
+def _has_word(token: str) -> bool:
+    """Whether the aligner gives an align token a word: not when it normalises to nothing, a
+    lone "-" or "," (:func:`pikaraoke.lib.joint_match._tokenise_lines`)."""
+    return bool(_normalize_token(token))
 
 
 def _parenthesised(words: list[str]) -> list[str]:
@@ -308,19 +321,23 @@ def _text_key(text: str) -> str:
     return " ".join(re.sub(r"[^\w' ]+", " ", text.lower()).split())
 
 
+_NO_PARENS = str.maketrans("", "", "()")
+
+
 def show_parens(
     line_objects: list[dict], display_lines: Sequence[str], align_lines: Sequence[str]
 ) -> list[dict]:
     """The line objects with each word's text as its display line writes it, parentheses
     included. Only ``word`` changes, never a time.
 
-    The aligner and the matchers see a line's align text, which has no parentheses, so a word's
-    text is one of its align tokens. A line whose display text equals its align text is left as
-    it is. Otherwise the display tokens are paired with the align tokens in order, equal or
-    equal once ``(`` and ``)`` are removed (a token of only parentheses sticks to its
-    neighbour: ``(`` to the next token, ``)`` to the previous), and each word, in order, takes
-    the display form of the next align token equal to it. A line that does not pair, and a word
-    no token is left for, keep their text.
+    The aligner and the matchers see a line's align text, which has no parentheses. Every route
+    gives a line that has words one per align token with a word (:func:`_has_word`), in order
+    and with the token's text, guessing or interpolating what the aligner dropped; so each word
+    takes its token's display form. A line whose display text equals its align text is left
+    as it is. Otherwise the display tokens are paired with the align tokens in order, equal once
+    ``(`` and ``)`` are removed from both (a token of only parentheses sticks to its
+    neighbour: ``(`` to the next token, ``)`` to the previous). A line that does not pair keeps
+    its text, and so, with a warning, does one whose words are not its tokens.
     """
     return [
         _show_line(obj, display_lines[obj["line_id"]], align_lines[obj["line_id"]])
@@ -335,17 +352,17 @@ def _show_line(obj: dict, display: str, align: str) -> dict:
     forms = _display_forms(display.split(), align_tokens)
     if forms is None:
         return obj
-    words: list[dict] = []
-    cursor = 0
-    for word in obj["words"]:
-        try:
-            at = align_tokens.index(word["word"], cursor)
-        except ValueError:
-            words.append(word)
-            continue
-        words.append({**word, "word": forms[at]})
-        cursor = at + 1
-    return {**obj, "words": words}
+    worded = [(form, token) for form, token in zip(forms, align_tokens) if _has_word(token)]
+    if [word["word"] for word in obj["words"]] != [token for _, token in worded]:
+        logger.warning(
+            "show_parens: line %d's words are not its align tokens; shown without parentheses",
+            obj["line_id"],
+        )
+        return obj
+    return {
+        **obj,
+        "words": [{**word, "word": form} for word, (form, _) in zip(obj["words"], worded)],
+    }
 
 
 def _display_forms(display: list[str], align: list[str]) -> list[str] | None:
@@ -362,7 +379,9 @@ def _display_forms(display: list[str], align: list[str]) -> list[str] | None:
             opener += token
     if opener and forms:
         forms[-1] += opener
+    # Removed from both sides: a sheet's stray parenthesis stays in the align text too.
     paired = len(forms) == len(align) and all(
-        form.replace("(", "").replace(")", "") == token for form, token in zip(forms, align)
+        form.translate(_NO_PARENS) == token.translate(_NO_PARENS)
+        for form, token in zip(forms, align)
     )
     return forms if paired else None
