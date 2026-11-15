@@ -1,0 +1,186 @@
+"""Which of a sheet's parenthetical groups were sung.
+
+Caption and LRC sheets put backing vocals in parentheses ("(oh, oh, oh)") beside stage
+directions ("(upbeat music)"). The cue cleaners delete both; :func:`judge` tells them apart by
+the transcript: a group is kept when the transcriber heard its words inside its cue's time
+window. The rule, its pad and its vocable list are the ones measured and ruled at GATE A of
+``plans/backing-vocal-lines.md`` (``none +vocables +consist``); the constants below are copied
+from the measuring script, not re-derived.
+
+Pure functions over the sheet's groups (:func:`pikaraoke.lib.srt_cues.sheet_parens`) and the
+transcript, so the aligner never sees a parenthesis.
+"""
+
+import re
+from collections.abc import Sequence
+from dataclasses import dataclass, replace
+
+from pikaraoke.lib.srt_cues import ParenCue
+from pikaraoke.lib.token_align import _match_simple, _normalize_token
+
+# The bundle's ``lyrics.origin`` of the sheets the rule was measured on: a YouTube caption and
+# an LRCLIB record. Movie and custom sheets were not measured. Spelled here because the
+# align stage cannot import ``library_regen``; a test ties it to ``LRC_ORIGIN``.
+ORIGINS = frozenset({"srt", "lrclib_srt"})
+
+# Seconds added to each side of a cue's window, which is moved by the song's display lead.
+WINDOW_PAD_S = 0.5
+# The share of a group's distinct words the window must hold.
+MIN_SHARE = 0.5
+
+# A group made only of these is sung wherever the transcriber missed it: vocables sit under
+# the lead and transcribers are least reliable on them.
+VOCABLES = frozenset(
+    "oh ohh ooh ah ahh uh mm mmm hmm woo whoa la na da ya yeah hey eh ay aye ha".split()
+)
+
+# Transcribers spell vocables loosely, so a heard word matches any member of its class.
+_VOCABLE_CLASSES = {
+    "O": "o oh ohh ohhh ooh oooh ooo oo woo wooh whoa woah wo ow",
+    "A": "ah ahh aah ha hah uh uhh huh",
+    "M": "mm mmm mmmm hmm hm mhm um",
+    "Y": "yeah yea yeh ya yah ye yay",
+    "H": "hey hei ay aye ayy eh ey",
+    "L": "la na da du doo ba di dum",
+}
+_CLASS_OF = {word: name for name, words in _VOCABLE_CLASSES.items() for word in words.split()}
+
+# Verdicts that show the group. The rest drop it: ``quote`` (a title card), ``not_heard``,
+# ``unplaced`` (inline, no place in its line) and ``overlap`` (a paren-only cue over another
+# line's time).
+KEPT_VERDICTS = frozenset({"heard", "vocable", "consistency"})
+
+
+@dataclass(frozen=True)
+class Verdict:
+    """One group's verdict. ``kind`` is ``"inline"`` or ``"paren_only"``; ``group`` indexes the
+    cue's ``groups``; ``share`` is the heard share (0.0 when none was taken)."""
+
+    cue: int
+    group: int
+    kind: str
+    verdict: str
+    share: float
+
+    @property
+    def kept(self) -> bool:
+        return self.verdict in KEPT_VERDICTS
+
+
+def judge(
+    cues: Sequence[ParenCue],
+    line_spans: Sequence[tuple[float, float]],
+    heard_words: Sequence[dict],
+    offset: float,
+) -> list[Verdict]:
+    """A verdict for every group of ``cues``, in sheet order.
+
+    ``line_spans`` are today's lines' cue spans, ``heard_words`` the transcriber's words
+    (``word``, ``start``, ``end``) on the audio clock and ``offset`` the display lead that
+    moves a cue onto it. By evidence, first match wins:
+
+    - ``quote``: opens with a quote mark, a title card ("Let It Go"). Never evidence for a repeat.
+    - ``not_heard``: no word once normalised.
+    - ``heard``: the window holds at least :data:`MIN_SHARE` of its distinct words. The line's
+      own words count, and a vocable matches any of its class.
+    - ``vocable``: every word is in :data:`VOCABLES`.
+    - ``consistency``: the same text is ``heard`` or ``vocable`` elsewhere in the sheet.
+
+    Then, as measured, and never evidence for a repeat: an inline group with no place in its line
+    is ``unplaced``, and a paren-only cue over another line's cue time is ``overlap``, where
+    "another line" is one of ``line_spans`` or a paren-only cue kept earlier in the sheet.
+    """
+    transcript = _transcript_tokens(heard_words)
+    by_cue: list[list[Verdict]] = []
+    for cue in cues:
+        window = _window_tokens(transcript, cue.span, offset)
+        kind = "inline" if cue.inline else "paren_only"
+        by_cue.append(
+            [
+                Verdict(cue.index, g, kind, *_by_evidence(group.text, window))
+                for g, group in enumerate(cue.groups)
+            ]
+        )
+    heard_keys = {
+        _text_key(group.text)
+        for cue, verdicts in zip(cues, by_cue)
+        for group, v in zip(cue.groups, verdicts)
+        if v.verdict in ("heard", "vocable")
+    }
+
+    taken = list(line_spans)
+    out: list[Verdict] = []
+    for cue, verdicts in zip(cues, by_cue):
+        verdicts = [
+            replace(v, verdict="consistency")
+            if v.verdict == "not_heard" and _text_key(group.text) in heard_keys
+            else v
+            for group, v in zip(cue.groups, verdicts)
+        ]
+        if cue.inline:
+            verdicts = [
+                replace(v, verdict="unplaced") if v.kept and cue.groups[v.group].at is None else v
+                for v in verdicts
+            ]
+        elif any(v.kept for v in verdicts):
+            if any(_overlap(cue.span, span) > 0 for span in taken):
+                verdicts = [replace(v, verdict="overlap") if v.kept else v for v in verdicts]
+            else:
+                taken.append(cue.span)
+        out.extend(verdicts)
+    return out
+
+
+def _by_evidence(text: str, window: list[str]) -> tuple[str, float]:
+    """Verdict and heard share of one group against the words heard in its window."""
+    if text.startswith('"'):
+        return "quote", 0.0
+    words = _tokens(text)
+    if not words:
+        return "not_heard", 0.0
+    distinct = list(dict.fromkeys(words))
+    share = sum(any(_same(w, heard) for heard in window) for w in distinct) / len(distinct)
+    if share >= MIN_SHARE:
+        return "heard", share
+    if all(w in VOCABLES for w in words):
+        return "vocable", share
+    return "not_heard", share
+
+
+def _overlap(a: tuple[float, float], b: tuple[float, float]) -> float:
+    return min(a[1], b[1]) - max(a[0], b[0])
+
+
+def _transcript_tokens(heard_words: Sequence[dict]) -> list[tuple[float, float, str]]:
+    """Every normalised token of the transcript with its word's span."""
+    return [
+        (word["start"], word["end"], token)
+        for word in heard_words
+        for token in _tokens(word["word"])
+    ]
+
+
+def _window_tokens(
+    transcript: list[tuple[float, float, str]], span: tuple[float, float], offset: float
+) -> list[str]:
+    """The transcript tokens whose word overlaps the cue's padded, shifted window."""
+    w0 = span[0] + offset - WINDOW_PAD_S
+    w1 = span[1] + offset + WINDOW_PAD_S
+    return [token for start, end, token in transcript if end > w0 and start < w1]
+
+
+def _tokens(text: str) -> list[str]:
+    """Normalised words of ``text``, split at spaces, hyphens and slashes."""
+    return [t for t in (_normalize_token(p) for p in re.split(r"[\s\-/]+", text)) if t]
+
+
+def _same(word: str, heard: str) -> bool:
+    if word in _CLASS_OF and _CLASS_OF[word] == _CLASS_OF.get(heard):
+        return True
+    return _match_simple(word, heard)
+
+
+def _text_key(text: str) -> str:
+    """A group's text as its repeats spell it: lower case, spacing and punctuation but
+    apostrophes dropped."""
+    return " ".join(re.sub(r"[^\w' ]+", " ", text.lower()).split())
