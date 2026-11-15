@@ -5,8 +5,9 @@ Claude Sonnet 5.5 builds from that spec. (High-level spec by Claude Fable 5.2, 2
 
 **Status: GATE A ruled GO on the amended hybrid, 2026-11-14 ("GATE A ruling"). Build spec
 written 2026-11-14 ("Build spec": Design, Commits) and read by Fable 5.2 the same day ("Build
-spec read"). Next: Ken rules on its points 4, 7 and 8; then Sonnet builds C0-C7 from the spec
-as amended. No code yet.**
+spec read") and ruled by Ken ("Build spec ruling"). Next: Sonnet builds C0-C3 and C2p on this
+branch and stops. C4-C7 wait for GATE H of `cue_heard_rescue` and the D7 amendment. No code
+yet.**
 
 Branch `backing_vocal_lines` off `dev` at `1016e20`, worktree
 `.claude/worktrees/backing_vocal_lines`. Work and run everything from the worktree. Whisper
@@ -654,6 +655,36 @@ that matters.
 now and C4 after GATE H, or all on `dev` now). Points 10 and 11 are two one-line edits Sonnet
 takes with the spec unless Ken objects.
 
+#### Build spec ruling (Ken, 2026-11-14)
+
+All three recommendations of the read ratified. Where this and Design or Commits disagree,
+this wins.
+
+1. **Point 4: option C.** A kept paren-only line is aligned in a window of its own and
+   today's sections stay. Choice 1 is closed. D7.2 and D7.3 as written (re-section, the memo)
+   are not built; they are rewritten for C in the D7 amendment below.
+2. **Point 7: B2 amended** in "GATE B" above. D7's "an old line can move only if" reads "is
+   expected to move only if". The rescue on touched lines only is not built; it is the change
+   to try if Phase 2's "all other lines" list is long.
+3. **Point 8: two stages.**
+   - **Stage 1, now, on `dev`'s code:** C0, C1, C2, C2p, C3, then the full suite, pre-commit
+     on the changed files, `graphify update .` and a Results log row. STOP there. The review
+     waits for C7 and covers both stages.
+   - **Stage 2, after GATE H of `cue_heard_rescue` is ruled:** the D7 amendment (Fable 5.2,
+     Opus 5.5 if not available), then C4-C7 (Sonnet 5.5) on the rescue that ships.
+4. **Points 10 and 11, taken into stage 1.** D4 / C1: a group with text before it that holds
+   no letter has `at` None; one test ("1, 2 (hey) go"). D5 / C2: a group with no word once
+   normalised is `not_heard` before the vocable test is tried; one test.
+5. **Choices 2 and 3 stand** as the spec made them. D8 stands; Phase 2 reports the 30 lines of
+   point 9 by id under B3.
+
+**The D7 amendment (stage 2, before C4).** A plan edit, no code: D7.2 and D7.3 for option C
+(today's sections kept and renumbered; one aligner call per added line over its cue span,
+padded as a section's and clamped at the midpoints to its neighbours' cues; a section goes
+back to the aligner only when it holds a gaining line), D7's guarantee paragraph, D8's count,
+"Landing order" for where `cue_heard_rescue` then stands (point 8's reporting sentence), C4's
+and C5's tests to match, and C0's anchors on the new base.
+
 ### Phase 2: replay (after the build, local GPU, output outside the library)
 
 Replay before and after on the same commit base, writing bundles and `.ass` files to a
@@ -676,7 +707,10 @@ moved and Ken decides whether a move is worse.
   moved more than 0.3 s (the threshold the onset probe used) and the full distribution,
   split into lines that gained words, section-mates of a changed line, and all other lines.
   "All other lines" must show zero moves. Every old word moved more than 0.3 s goes on the
-  listening list.
+  listening list. Amended 2026-11-14 ("Build spec ruling"): the middle group is lines in a
+  section that went back to the aligner, or directly before or after a changed or added line.
+  "All other lines" is expected to show zero moves; each move there is listed with the rescue
+  step that changed, not stopped on as a bug. B1 stays the bug check.
 - **B3, rescue counts on old lines:** re-aligned lines, paced lines, guessed words and
   zero-length words, before and after, old lines only. Any increase fails unless each added
   case is explained and listed for Ken.
@@ -1192,3 +1226,4 @@ Raw tables, commands and commits only; no verdicts in this table.
 | 9 | 2026-11-14 | GATE A | Ruled by Ken | GO on the amended hybrid with the second read's conditions; Decision 3 overlap by cue time, on-screen overlap judged at GATE B (B5 amended); beep, censored, heartbeat not shown, skate sung. No script re-run. "GATE A ruling". |
 | 10 | 2026-11-14 | spec | `spec_counts.py ~/pikaraoke-songs out` on `b2f914be`, read-only over `out/heard.json`, `out/songs.json`, the sheets and the bundles | 261 kept by `none +vocables +consist`, 0 of them quote-opened. Cues mixing a kept and a dropped group: 4 (`FQ3slUz7Jo8` paren-only; `wIyNAsmGrl0` three inline). Inline keeps by position in the cue: end 181, start 18, middle 6; glued to a neighbour 4, all a comma after `)`. Kept paren-only cues 56; re-sectioned with each one: joins one section 22, own section 2, merges two 31, two more sections 1 (`D_dOXTpwV5s`, a run captioned with no gap, whose 60 s cap splits move); kept paren-only cues overlapping each other 0. Songs with a keep 34, re-sectioned 0. Evidence: heard 180, vocable 60, consistency 21. "Design". |
 | 11 | 2026-11-14 | spec read | Read by Fable 5.2 on `2dc30b7a` against `dev` `1016e20`, `cue_heard_rescue` `81d0d0bc`, `lrclib_fit_pick` `e8bd6994`; `read_counts.py ~/pikaraoke-songs out`, read-only over `out/heard.json`, `out/songs.json` and the bundles (`find ~/pikaraoke-songs -newer <stamp>` empty) | 34 songs, 2167 old lines, 202 gain words, 56 lines added. Old lines back to the aligner without gaining / beside a change only / all other: A (re-section) 1170 / 5 / 790; B (nearer section) 944 / 14 / 1007; C (own window) 809 / 48 / 1108. Gaining lines timed by today's section align 192 (echo heard 131, no audio evidence 60, mixed 1); under the half-the-tokens bar if no echo word is timed 30 (27 / 3 / 0), needing 1 echo word 13, 2 words 12, 3 or more 5; empty after today's section align 10. Inline keeps with a letterless text before the group 0 of 205; groups with no word once normalised 0 of 626. "Build spec read". |
+| 12 | 2026-11-14 | spec ruling | Ruled by Ken on `1a4ade25` | Point 4: option C (a kept paren-only line in a window of its own). Point 7: B2 amended. Point 8: C0-C3 and C2p now, C4-C7 after GATE H of `cue_heard_rescue` and a D7 amendment. Points 10 and 11 taken. No script re-run. "Build spec ruling". |
