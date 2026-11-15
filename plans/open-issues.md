@@ -457,9 +457,13 @@ Heard at GATE B, not fixed:
 - **Pocahontas "wind" is placed before the singer's pause.** The window holds
   the whole note, but both aligns put "wind" before the 1.2 s pause; the line
   has every word, so nothing flags it (Decision 12, rows 14, 57).
-- **The guard rejects a correct re-align at Miss Independent 3:59** (line 79:
+- ~~**The guard rejects a correct re-align at Miss Independent 3:59** (line 79:
   the unguarded re-align matched the transcriber). Ken left it (Decision 16,
-  row 61).
+  row 61).~~
+  Fixed by the guard lift (`fecebdd2` on tag `archive/cue_heard_rescue`):
+  a re-align the transcriber confirms as the aligner returned it is no longer cut to
+  the previous line's end. 3:59 itself was not heard again: the staged copy of the
+  song has no lifted line (`plans/cue-heard-rescue.md` on that tag, GATE H item 3).
 
 Onset snap:
 
@@ -500,21 +504,26 @@ The rescue (review findings and decisions kept as built):
   but it can still start on that word's note past its timed end. How often is
   not measured (Decision 16).
 - **The guard looks only backward** (row 51, finding 6): a rescued line's last
-  word is never checked against the next line's first. On `cue_heard_rescue`
-  the same holds for the heard-aimed retries (rules B and D), which move a
-  line's window 1.5 s or more, so its last words can land on the next line's;
-  a next line that is placed with every word is then kept as it is
-  (`plans/cue-heard-rescue.md` on that branch, Results log row 15, review
-  finding 3). A bound there would let a neighbour placed by its cue overrule a
-  line the transcriber confirmed; GATE H reads the overlaps first.
+  word is never checked against the next line's first. The heard-aimed retry
+  (rule B of `cue_heard_rescue`) moves a line's window 1.5 s or more, so it has
+  the same gap, and a next line placed with every word is then kept as it is
+  (`plans/cue-heard-rescue.md` on tag `archive/cue_heard_rescue`, Results log
+  row 15, review finding 3). Measured on the 24-song copy: none of the 10 kept
+  rule B lines ends after the next line's first word starts (row 17). Rule D,
+  which had three such lines (Smokin Out The Window 45, Closer 45, Takedown 49),
+  was left out. A bound would let a neighbour placed by its cue overrule a line
+  the transcriber confirmed.
 - **A re-paced line can start before the previous line's end** (row 51,
   finding 3). Not built: the 3 cases on the test songs (Miss Independent 5, 7,
   37) are fills placed right, with the previous line overrunning into them;
   starting them later would put line 7's six words in 0.62 s (row 65).
-- **Zero-length words a failed rescue leaves stay on screen** (Decision 14,
+- ~~**Zero-length words a failed rescue leaves stay on screen** (Decision 14,
   kept as built by Decision 16). The guess pass skips a line with a word for
   every token, so they show as 0.1 s fills. Guessing them instead is option
-  (b), measurable on the CPU from the bundles' `cue_inputs`.
+  (b), measurable on the CPU from the bundles' `cue_inputs`.~~
+  Fixed (`65438683` on tag `archive/cue_heard_rescue`): the guess pass
+  re-times them like words the aligner dropped. Library songs change when
+  regenerated (see "Cue rescue by the heard words" below).
 - **One zero-length word makes a line crammed** (Decision 15, kept as built).
   Costs 75 more one-line aligns on the 10 test songs (209 against 134, row 45);
   every partial line takes its own slice align too (row 24, finding 10).
@@ -526,10 +535,12 @@ The rescue (review findings and decisions kept as built):
   with fewer words than tokens a zero-length word counts in that median, so a
   guessed word can come out as short as half the line's shortest timed word.
   Never zero: a kept line has at most half its words instant. The zero-length
-  rule on `cue_heard_rescue` re-times them only in a line with a word for
-  every token. Fix: pace from the timed words only.
-- **Should Song Info's guessed-words count include zero-length words left on
-  screen?** (Decision 13.) Unchanged today.
+  rule (`65438683`) re-times them only in a line with a word for every token.
+  Fix: pace from the timed words only.
+- ~~**Should Song Info's guessed-words count include zero-length words left on
+  screen?** (Decision 13.) Unchanged today.~~
+  Yes, since `65438683`: a zero-length word that gets guessed timing is one, and
+  `n_guessed_words` and `guessed_word_line_ids`, which Song Info reads, count it.
 - **`align_song` deep-copies sections and re-align words with debug capture
   off** (row 51, finding 10).
 
@@ -539,6 +550,48 @@ Older than this branch:
   every word at least 0.1 s, so a run of floored words pushes the rest of the
   line late until its next gap: overrun of 0.3 s or more on 34 lines in 23 cue
   songs (Decision 14, row 43).
+
+## Cue rescue by the heard words (on `dev`)
+
+Branch `cue_heard_rescue`, ruled by Ken 2026-11-15: the rescue keeps a line the
+transcriber confirms (A1), a re-align it confirms is not cut to the previous
+line (the guard lift), a line heard 1.5 s or more from its cue is first looked
+for there (B), and a kept line's zero-length words get guessed timing. Left
+out by Ken's ear: A2 (hold a confirmed line against a re-align), D (whole lines
+far from where heard) and C (retry between neighbours). Record:
+`plans/cue-heard-rescue.md` on tag `archive/cue_heard_rescue`, with the probe
+and compare scripts (`scripts/cue_heard_probe.py`, `scripts/cue_heard_compare.py`),
+which read the stats of the three cut rules and stay on the tag.
+
+- **Library songs change only when regenerated.** They wait for one full regen
+  from `dev` once this branch, `onset_loud_start` and `backing_vocal_lines` have
+  all landed (`onset_loud_start` makes every bundle stale with its schema bump
+  anyway). Ken, 2026-11-15: no `--song` batch for this branch alone.
+- **Reflection line 36 (3:11) is still about 5 s early.** The transcriber
+  hears nothing there, and the line's cue-aimed retry timed three of five words
+  before its window ended. Lines 35 to 37 are word for word the same in the old
+  and new `.ass`.
+- **Quit Playing Games line 1 is still 4 s late.** The first pass was right;
+  one of its words is 1.72 s from where the transcriber heard it, so the line is
+  not confirmed (A1 needs every paired word within 1.0 s) and a one-line
+  re-align moves it.
+- **Rule B aims at a stretched first word after a pause.** When the first heard
+  word runs on from the line before ("lone first": it starts 2 s or more before
+  the second), the heard start is not the line's start. Before You Go 27 now
+  shows its first word about 2.5 s early (Ken: a little early).
+- **Tangled line 30 stays late.** It is heard 1.47 s before its cue, 0.03 s
+  under rule B's 1.5 s threshold.
+- **A failed re-align cannot be told from a refused one.** The 24-song regen
+  logged 18 aligner failures in 6 songs (`'NoneType' object has no attribute
+  'language'` from `stable_whisper`'s `align`; 15 one-line re-aligns, 3 section
+  aligns, all of those in Will I). The stats record a re-align that was not
+  kept the same whether the aligner failed or a check refused it; only the log
+  tells (Results log row 16).
+- **If rule D or C is ever revisited.** D's three wrong moves were two lines moved
+  before the previous line's start (Takedown 33, Bring It All Back 52) and one
+  twin's audio in a run the transcriber only seemed to hear in full (Closer 45).
+  C gave no audible gain in eight listens, and for 22 of its 96 tries on the
+  library the stretch ended at a twin the cue test rejects (row 15, finding 4).
 
 ## Test suite (Windows box)
 
@@ -613,5 +666,15 @@ Older than this branch:
   source), so the flag needs a nudge tool or an automatic fix; `onset_loud_start`
   (GATE S passed, Phases 2-4 unspecced) may fix the early-start kind first. Cheap
   next step: run the check over the whole library (VM, read-only) and have Ken
-  listen to a sample of flagged lines. Not ruled; ask the CLAUDE.md design questions
+  listen to a sample of flagged lines.
+  `cue_heard_rescue` (record: `plans/cue-heard-rescue.md` on tag
+  `archive/cue_heard_rescue`) sized the kinds on the library's 177 cue-route
+  bundles, 2026-11-13. Most far-off whole lines have only their first word early
+  and the rest of the line agrees with the transcriber (about 250 caption lines
+  and 40 LRCLIB lines); that large group is `onset_loud_start`'s. Whole lines
+  displaced as a whole number about 27. Rule D re-aligned them where heard, and
+  by ear 3 of its 6 kept lines went onto the wrong audio, so it was left out.
+  Of Ken's five spots, Quit Playing Games 1:57 and Crazy 1:51 are fixed (rules
+  A1 and B); Quit Playing Games 0:52 and 2:32 and Reflection 3:11 are not. The
+  flag itself is still unbuilt. Not ruled; ask the CLAUDE.md design questions
   before any plan.
