@@ -4,10 +4,13 @@ import pytest
 import srt
 
 from pikaraoke.lib.srt_cues import (
+    ParenCue,
+    ParenGroup,
     clean_cue_texts,
     cue_spans_from_srt,
     cues_to_srt,
     offset_mad_against_cues,
+    sheet_parens,
 )
 
 # Cue files from the cleaning tests in this module (and the label-behind-a-tag pair), each
@@ -281,3 +284,129 @@ class TestCuesToSrt:
     def test_lines_and_spans_of_different_length_are_refused(self):
         with pytest.raises(ValueError):
             cues_to_srt(["one", "two"], [(0.0, 1.0)])
+
+
+class TestSheetParens:
+    @staticmethod
+    def _sheet(*cues: str) -> str:
+        """One cue per text, cue ``i`` spanning ``i`` to ``i + 0.9`` s."""
+        return "\n".join(
+            f"{i}\n00:00:{i:02d},000 --> 00:00:{i:02d},900\n{cue}\n"
+            for i, cue in enumerate(cues, start=1)
+        )
+
+    def _groups(self, *cues: str) -> list[list[tuple[str, int | None]]]:
+        """Per cue with a group, its groups as ``(text, at)``."""
+        return [
+            [(group.text, group.at) for group in cue.groups]
+            for cue in sheet_parens(self._sheet(*cues))
+        ]
+
+    def test_a_group_at_a_lines_end_start_and_middle(self):
+        assert self._groups("Hello there (oh)", "(oh) Hello there", "Hello (oh) there") == [
+            [("oh", 2)],
+            [("oh", 0)],
+            [("oh", 1)],
+        ]
+
+    def test_two_groups_in_one_cue_keep_their_order_and_places(self):
+        cue = sheet_parens(self._sheet("(hey) Hello (oh) there (yeah)"))[0]
+        assert cue.groups == (ParenGroup("hey", 0), ParenGroup("oh", 1), ParenGroup("yeah", 2))
+
+    def test_a_cue_carries_its_sheet_place_span_and_line(self):
+        cues = sheet_parens(self._sheet("Hello", "Sing it (oh)", "(gentle music)", "Bye (la)"))
+        assert cues == [
+            ParenCue(1, (2.0, 2.9), True, 1, (ParenGroup("oh", 2),)),
+            ParenCue(2, (3.0, 3.9), False, 2, (ParenGroup("gentle music", 0),)),
+            ParenCue(3, (4.0, 4.9), True, 2, (ParenGroup("la", 1),)),
+        ]
+
+    def test_a_paren_only_cue_goes_before_the_next_line_or_after_the_last(self):
+        cues = sheet_parens(self._sheet("(oh, oh)", "Hello there", "(la la)", "(da)"))
+        assert [(cue.index, cue.inline, cue.line) for cue in cues] == [
+            (0, False, 0),
+            (2, False, 1),
+            (3, False, 1),
+        ]
+
+    def test_a_cue_with_no_group_or_an_empty_one_is_left_out(self):
+        assert sheet_parens(self._sheet("Hello", "Hello ( )", "()")) == []
+
+    def test_an_empty_group_is_skipped_beside_a_real_one(self):
+        assert self._groups("Hello () there (oh)") == [[("oh", 2)]]
+
+    def test_a_group_on_a_cues_second_line(self):
+        assert self._groups("Hello there\nSing it (hey)") == [[("hey", 4)]]
+
+    def test_a_group_spread_over_two_lines_has_its_words_joined(self):
+        assert self._groups("Hello (oh\n  oh) there") == [[("oh oh", 1)]]
+
+    def test_a_speaker_label_after_a_leading_group_and_before_one(self):
+        cues = sheet_parens(self._sheet("(oh) MARA: hey", "MARA: hey (hey)"))
+        assert cues[0].groups == (ParenGroup("oh", 0),)
+        assert cues[1].groups == (ParenGroup("hey", 1),)
+        assert cue_spans_from_srt(self._sheet("(oh) MARA: hey", "MARA: hey (hey)"))[0] == [
+            "hey",
+            "hey",
+        ]
+
+    def test_a_group_glued_inside_a_word_has_no_place(self):
+        assert self._groups("love(oh)you") == [[("oh", None)]]
+
+    def test_a_comma_after_the_group_does_not_unplace_it(self):
+        assert self._groups("Hello (oh), there") == [[("oh", 1)]]
+
+    def test_text_before_a_group_with_no_letter_leaves_it_unplaced(self):
+        assert self._groups("1, 2 (hey) go", "(oh) 1, 2 (hey) go") == [
+            [("hey", None)],
+            [("oh", 0), ("hey", None)],
+        ]
+
+    def test_a_label_before_a_group_has_a_letter_and_is_stripped(self):
+        assert self._groups("MARA: (hey) go") == [[("hey", 0)]]
+
+    def test_a_capitals_file_recases_its_groups_as_its_lines(self):
+        sheet = self._sheet("HELLO THERE (OH)", "SING IT (OH, OH)", "(LA LA)")
+        assert cue_spans_from_srt(sheet)[0] == ["Hello there", "Sing it"]
+        assert self._groups("HELLO THERE (OH)", "SING IT (OH, OH)", "(LA LA)") == [
+            [("Oh", 2)],
+            [("Oh, oh", 2)],
+            [("La la", 0)],
+        ]
+
+    def test_an_unbalanced_paren_is_not_a_group(self):
+        assert self._groups("Hello (x]", "(x] there") == []
+
+    def test_a_bracket_inside_a_group_is_stripped_from_its_text(self):
+        assert self._groups("Hello (oh [laughs] oh)") == [[("oh oh", 1)]]
+
+    def test_a_curly_quoted_title_card_keeps_a_straight_quote_first(self):
+        assert self._groups("(\u201cLet It Go\u201d)") == [[('"Let It Go"', 0)]]
+
+    def test_the_cue_cleaner_still_drops_every_group(self):
+        sheet = self._sheet("Hello (oh) there", "(oh, oh)")
+        assert cue_spans_from_srt(sheet)[0] == ["Hello there"]
+
+    def test_an_inline_cues_line_is_its_line_in_the_cue_spans(self):
+        sheet = self._sheet(
+            "(gentle music)",
+            "Hello (oh) there",
+            "BOB: Sing it (hey)",
+            "(oh, oh)",
+            "- Wait. - What? (la)",
+            "No group here",
+            "Bye (yeah)",
+        )
+        texts, spans = cue_spans_from_srt(sheet)
+        cues = sheet_parens(sheet)
+        inline = [cue for cue in cues if cue.inline]
+        assert [texts[cue.line] for cue in inline] == [
+            "Hello there",
+            "Sing it",
+            "Wait. What?",
+            "Bye",
+        ]
+        assert [spans[cue.line] for cue in inline] == [cue.span for cue in inline]
+        # "(gentle music)" goes before line 0, "(oh, oh)" before the line after it.
+        assert [(cue.index, cue.line) for cue in cues if not cue.inline] == [(0, 0), (3, 2)]
+        assert texts[2] == "Wait. What?"
