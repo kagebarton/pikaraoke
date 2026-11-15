@@ -350,6 +350,142 @@ class TestSnapLineOnsets:
 
 
 # ---------------------------------------------------------------------------
+# snap_line_onsets: a loud start the transcriber heard at a later rise
+# ---------------------------------------------------------------------------
+
+# The previous line's note is held to 1.5 s and this line's voice rises at 2.2 s.
+HELD_NOTE = [(0.0, 1.5, -28.0), (2.2, 4.5, -28.0)]
+HELD_SPANS = [(1.2, 1.6), (2.5, 2.7), (3.0, 4.0)]
+DOUBTED = frozenset({"cue_align_line"})
+
+
+def _heard(*words: tuple[str, float]) -> list[dict]:
+    return [{"word": word, "start": start, "end": start + 0.3} for word, start in words]
+
+
+def _doubted_start(env: np.ndarray, spans: list[tuple[float, float]]) -> float:
+    """Where the snap puts the line's first word when it searches the line as doubted."""
+    out, _ = snap_line_onsets([_line(*spans, source="cue_align_line")], "", env, DOUBTED)
+    return out[0]["words"][0]["start"]
+
+
+class TestHeardLoudStart:
+    @pytest.fixture
+    def held(self):
+        env = _env(5.0, HELD_NOTE)
+        return (
+            env,
+            _line(*HELD_SPANS, source="cue_align", line_id=3),
+            _doubted_start(env, HELD_SPANS),
+        )
+
+    def test_a_loud_start_moves_where_the_transcriber_heard_the_word(self, held):
+        env, obj, doubted = held
+
+        out, stats = snap_line_onsets([obj], "", env, heard_words=_heard(("w0", doubted + 0.2)))
+
+        assert doubted == pytest.approx(2.15, abs=0.05)
+        assert out[0]["words"][0]["start"] == doubted
+        assert out[0]["start"] == doubted
+        assert stats["n_heard_snapped"] == 1
+        assert stats["heard_snaps"][0]["line_id"] == 3
+        assert stats["heard_snaps"][0]["shift_s"] == pytest.approx(doubted - 1.2, abs=0.001)
+        assert stats["n_snapped"] == 0
+        assert stats["n_fired"] == 0
+
+    def test_a_heard_word_too_far_after_the_new_start_leaves_the_line(self, held):
+        env, obj, doubted = held
+
+        out, stats = snap_line_onsets([obj], "", env, heard_words=_heard(("w0", doubted + 0.3)))
+
+        assert out[0] is obj
+        assert stats["n_heard_snapped"] == 0
+
+    def test_a_heard_word_well_before_the_new_start_leaves_the_line(self, held):
+        env, obj, doubted = held
+
+        out, _ = snap_line_onsets([obj], "", env, heard_words=_heard(("w0", doubted - 0.4)))
+
+        assert out[0] is obj
+
+    def test_a_heard_word_before_the_new_start_agrees(self, held):
+        env, obj, doubted = held
+
+        out, stats = snap_line_onsets([obj], "", env, heard_words=_heard(("w0", doubted - 0.2)))
+
+        assert out[0]["words"][0]["start"] == doubted
+        assert stats["n_heard_snapped"] == 1
+
+    def test_another_word_at_the_new_start_does_not_agree(self, held):
+        env, obj, doubted = held
+
+        out, _ = snap_line_onsets([obj], "", env, heard_words=_heard(("w1", doubted)))
+
+        assert out[0] is obj
+
+    def test_case_and_punctuation_are_ignored(self, held):
+        env, obj, doubted = held
+
+        out, _ = snap_line_onsets([obj], "", env, heard_words=_heard(("W0,", doubted + 0.2)))
+
+        assert out[0]["words"][0]["start"] == doubted
+
+    def test_a_first_word_with_no_letters_is_never_heard(self, held):
+        env, obj, doubted = held
+        obj["words"][0]["word"] = "..."
+
+        out, _ = snap_line_onsets([obj], "", env, heard_words=_heard(("...", doubted)))
+
+        assert out[0] is obj
+
+    def test_on_time_word_before_pause_untouched_even_when_heard_at_its_start(self):
+        # The skip exists for this: the heard word agrees with the claimed start,
+        # not with the later rise a search would move the line to.
+        env = _env(5.0, [(0.0, 1.5, -28.0), (2.5, 3.5, -28.0)])
+        spans = [(1.2, 1.5), (2.5, 2.8), (3.0, 3.5)]
+        obj = _line(*spans, source="cue_align")
+
+        out, stats = snap_line_onsets([obj], "", env, heard_words=_heard(("w0", 1.2)))
+
+        assert _doubted_start(env, spans) > 2.0
+        assert out[0] is obj
+        assert stats["n_heard_snapped"] == 0
+
+    @pytest.mark.parametrize("heard_words", [None, []])
+    def test_no_heard_words_is_the_pass_without_them(self, held, heard_words):
+        env, obj, _ = held
+
+        out, stats = snap_line_onsets([obj], "", env, heard_words=heard_words)
+
+        assert out[0] is obj
+        assert stats == snap_line_onsets([obj], "", env)[1]
+
+    def test_a_doubted_line_still_moves_without_an_agreeing_heard_word(self, held):
+        env, _, doubted = held
+        obj = _line(*HELD_SPANS, source="cue_align_line")
+
+        out, stats = snap_line_onsets([obj], "", env, DOUBTED, _heard(("w1", doubted)))
+
+        assert out[0]["words"][0]["start"] == doubted
+        assert stats["n_snapped"] == 1
+        assert stats["n_heard_snapped"] == 0
+
+    def test_a_line_timed_from_the_heard_words_never_takes_the_exit(self, held):
+        env, _, doubted = held
+        obj = _line(*HELD_SPANS, source="transcribe")
+        heard = _heard(("w0", doubted + 0.2))
+
+        out, stats = snap_line_onsets(
+            [obj], "", env, heard_words=heard, heard_timed_sources=frozenset({"transcribe"})
+        )
+
+        assert out[0] is obj
+        assert stats["n_heard_snapped"] == 0
+        # The exclusion is the only thing holding it.
+        assert snap_line_onsets([obj], "", env, heard_words=heard)[1]["n_heard_snapped"] == 1
+
+
+# ---------------------------------------------------------------------------
 # snap_line_ends
 # ---------------------------------------------------------------------------
 
@@ -622,6 +758,40 @@ class TestSnapLineEdges:
 
         assert out[0]["words"][0]["start"] == pytest.approx(2.15, abs=0.05)
         assert stats["onset"]["n_snapped"] == 1
+
+    def _back_to_back(self, source: str) -> tuple[np.ndarray, list[dict], float]:
+        # Line 0's last note is held to 1.5 s; line 1 claims 1.2 s, on that note, and its
+        # voice rises at 2.2 s.
+        env = _env(6.0, [(0.3, 1.5, -28.0), (2.2, 4.5, -28.0)])
+        spans = [(1.2, 1.6), (2.5, 2.7), (3.0, 4.0)]
+        lines = [
+            _line((0.3, 0.6), (0.6, 1.2), source="cue_align", line_id=0),
+            _line(*spans, source=source, line_id=1),
+        ]
+        return env, lines, _doubted_start(env, spans)
+
+    def test_heard_words_move_a_loud_start_and_free_room_for_the_line_before(self):
+        env, lines, doubted = self._back_to_back("cue_align")
+        heard = _heard(("w0", doubted + 0.2))
+
+        plain, _ = snap_line_edges(lines, "", env=env)
+        out, stats = snap_line_edges(lines, "", env=env, heard_words=heard)
+
+        assert out[1]["words"][0]["start"] == doubted
+        assert out[0]["end"] > plain[0]["end"]
+        assert stats["onset"]["n_heard_snapped"] == 1
+
+    def test_heard_timed_sources_reach_the_onset_pass(self):
+        env, lines, doubted = self._back_to_back("transcribe")
+        heard = _heard(("w0", doubted + 0.2))
+
+        plain, _ = snap_line_edges(lines, "", env=env)
+        out, stats = snap_line_edges(
+            lines, "", env=env, heard_words=heard, heard_timed_sources=frozenset({"transcribe"})
+        )
+
+        assert out == plain
+        assert stats["onset"]["n_heard_snapped"] == 0
 
     def test_precomputed_env_skips_decode(self, monkeypatch):
         # A caller (the stage) shares one envelope with the veto; passing it
