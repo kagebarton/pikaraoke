@@ -3,7 +3,7 @@
 Model: Claude Sonnet 5.5 executes. Spec by Claude Fable 5.2, 2026-11-13; GATE G, the
 executor rules and the Results log by Claude Opus 5.5, 2026-11-15, reviewed by Fable the
 same day. GATE G is read by Opus, then Ken (Fable only if Opus is unsure which recording a
-hit is).
+hit is, and only while Fable is available, to 2026-11-16: "Rulings on the gate", 5).
 
 Status: **spec complete 2026-11-15, no code.** Does not wait for `search_official_captions`
 (Ken, 2026-11-15); Phase 0 is the rebase onto current `dev`. Ken ruled the review's four
@@ -275,8 +275,11 @@ takes it; with no preselect Enter does what it does today.
 Frozen once, in Phase 1, from the prototype and the committed cache, before any port is
 written. The freeze script (`plans/genius-search-accuracy/run2/freeze.py`) imports
 `builder.py` and `run.replay`, reads `run2/genius_raw.json` and **fails on a query that is
-not cached**: it makes no Genius call. It runs on the VM, where `run2/truth.json` is (`gx.py`
-reads it on import, and `holdout.py` uses it to keep library videos out).
+not cached**: it makes no Genius call. It runs on either computer: `gx.py` reads the
+committed `run2/truth_names.json` on import, and `holdout.py` uses it to keep library
+videos out. That file is the answer key without its lyric lines, written by the same
+`truth_build.py` run as the gitignored `run2/truth.json`, and nothing in `run2/` reads the
+lines. (Amended 2026-11-15, Ken: the freeze no longer waits for the VM. Results log row 1.)
 
 Written to `tests/unit/data/genius_search/`:
 
@@ -491,7 +494,8 @@ The judge reads every video in the sheet's order and fills its row:
 Rows read as not a song, or unsure, are left out of every count and named by number.
 Every film and stage video's first hit has its recording read from the hit's artist line,
 year and views. The judge hands Fable only the rows where it cannot tell which recording
-a hit is, and says which those were.
+a hit is, and says which those were. Once Fable's window has closed, those rows are left
+out instead ("Rulings on the gate", 5).
 
 ### Stop numbers (Ken, 2026-11-15)
 
@@ -551,6 +555,21 @@ written in above. None touches the search list or the four stop numbers.
 4. **G2 is reported for each half** (searches 1-15, 16-30); the stop number stays the
    whole.
 
+Two more, from a planning session (Opus 5.5) on Fable's availability, which ends on
+Monday night 2026-11-16, before this gate is likely to be reached. The read stays
+with Opus.
+
+5. **After Fable's window, a row whose recording Opus cannot tell is left out**, as an
+   unsure row is: out of every count, named by number in the gate's Results row with the
+   reason. G3 is then measured on fewer film videos; the stop numbers do not move.
+6. **A recordings guide, if Fable writes one before the window closes.** For the fifteen
+   film and stage searches (1-15): the recordings each song has, and how Genius usually
+   credits each one. It is written from memory, with no search (the executor rule on the
+   thirty holds), and kept outside the repo until Phase 5, so the build is not shaped on
+   it. At Phase 5 it is committed with the sheet. The judge may read it as a hint and still
+   reads every hit's artist line, year and views. A guide entry never decides a row on its
+   own.
+
 ## Executor rules
 
 - **A title that fails is a STOP for the judge**, never a new pattern, word or order level
@@ -583,3 +602,4 @@ that ported them.
 
 | # | Date | Step | Result | Evidence |
 |---|---|---|---|---|
+| 1 | 2026-11-15 | spec | `run2/gx.py` reads `truth_names.json`, not `truth.json`. Dry run of the freeze's replays at `4fd21d87` on the Linux box, done in scratch, outside the repo: the 206 library rows with ID (`new` with the channel, 3 calls; `new-nochannel`, 2 calls), and `holdout.py`'s selection over the 44 searches of `81875520` (`git archive`) with `new` with the channel, 3 calls, from `truth_names.json`, with `gx.client` replaced by one that raises. 206 library rows, 44 searches, 176 unseen videos, 0 queries missing from `genius_raw.json`. No fixture written. | this file, "Fixtures and tests"; Rulings on the gate 5-6 |

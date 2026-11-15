@@ -9,7 +9,8 @@ from pathlib import Path
 import lyricsgenius
 
 HERE = Path(__file__).parent
-rows = json.loads((HERE / "truth.json").read_text(encoding="utf-8"))
+# The answer key without its lyric lines (committed); nothing here reads the lines.
+rows = json.loads((HERE / "truth_names.json").read_text(encoding="utf-8"))
 cache_path = HERE / "genius_raw.json"
 cache = json.loads(cache_path.read_text(encoding="utf-8")) if cache_path.exists() else {}
 _client = None
