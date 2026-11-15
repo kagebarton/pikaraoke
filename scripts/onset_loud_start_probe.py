@@ -14,13 +14,21 @@ skipped line moves only where a heard word equal to its first word starts near t
 in the library, the shipped subtitles with the rule on. Those are the only files it ever
 writes to the library; without ``--listen`` the library is never written.
 
+With ``--check`` nothing is decoded and nothing is written to the library. Each replayed
+song goes through the snap's own heard-word exit (``snap_line_edges`` with the bundle's
+heard words) and the result is compared with this probe's copy of the rule (``with_rule``)
+and with the song's ``.onsetfix.ass``, in Table E. A cue-route bundle with no envelope in
+``<out>/env`` is not replayed. The probe measures schema-11 bundles, made before that exit
+shipped; ``--listen`` rewrites the after-files ``--check`` reads, so the two are exclusive.
+
 ``--out`` holds the envelope cache, ``rows.json`` (one row per line) and the sheet, all
 with lyric text, so it is never committed. The tables printed to stdout carry counts and
 line numbers only.
 
 Run from the repo root::
 
-    python scripts/onset_loud_start_probe.py --folder PATH [--out DIR] [--listen] > report.md
+    python scripts/onset_loud_start_probe.py --folder PATH [--out DIR] [--listen | --check] \\
+        > report.md
 """
 
 import argparse
@@ -46,6 +54,8 @@ from pikaraoke.pipeline.config import PipelineConfig  # noqa: E402
 from pikaraoke.pipeline.stages.lyric_align import generate_ass  # noqa: E402
 
 DOUBTED = frozenset({SOURCE_REALIGN})
+# The probe's copy of the line sources whose times the stage takes from the heard words.
+HEARD_TIMED = frozenset({"transcribe"})
 
 # A heard first word is looked for this far either side of the line's cue start.
 HEARD_WINDOW_S = 3.0
@@ -139,7 +149,8 @@ def replay_song(bundle: dict, env: np.ndarray) -> tuple[list[dict], list[dict]] 
 
     None when the replay does not reproduce the bundle: a one-line re-align the bundle
     holds no answer for, a line whose times differ from ``output_line_timings``, or a
-    different number of onset snaps.
+    different number of onset snaps. It passes no heard words: the probe measures schema-11
+    bundles, made before the snap's heard-word exit shipped.
     """
     inputs = bundle["cue_inputs"]
     answers = {
@@ -326,11 +337,18 @@ def snap_stem(folder: Path, stem: str, bundle: dict) -> Path:
     return folder / "vocal" / f"{stem}---vocal.m4a"
 
 
-def load_env(folder: Path, stem: str, bundle: dict, cache: Path) -> np.ndarray | None:
-    """The snap stem's envelope, decoded once and kept in ``cache`` by video id."""
+def load_env(
+    folder: Path, stem: str, bundle: dict, cache: Path, decode: bool = True
+) -> np.ndarray | None:
+    """The snap stem's envelope, decoded once and kept in ``cache`` by video id.
+
+    With ``decode`` false, only an envelope already in ``cache`` is returned.
+    """
     cached = cache / f"{stem.rsplit('---', 1)[-1]}.npy"
     if cached.is_file():
         return np.load(cached)
+    if not decode:
+        return None
     env = onset_snap.decode_env_db(snap_stem(folder, stem, bundle), "onset probe")
     if env is not None:
         cache.mkdir(parents=True, exist_ok=True)
@@ -459,20 +477,97 @@ def write_listen_files(folder: Path, out: Path, rows: list[dict], fixed_ass: dic
     return "\n".join(table) + "\n"
 
 
+def _line_key(line: dict) -> tuple:
+    words = line.get("words") or []
+    return (
+        line.get("line_id"),
+        line.get("start"),
+        line.get("end"),
+        [(w["start"], w["end"]) for w in words],
+    )
+
+
+def check_song(
+    bundle: dict,
+    env: np.ndarray,
+    before: list[dict],
+    song: list[dict],
+    fixed_path: Path,
+    config: PipelineConfig,
+) -> dict:
+    """The snap's heard-word exit on one replayed song, against this probe's rule.
+
+    ``lines_equal``: every line's ``line_id``, ``start``, ``end`` and each word's start and
+    end match ``with_rule`` exactly (``source`` differs by construction). ``after_file`` is
+    None when ``fixed_path`` does not exist, else whether its text is the new output's.
+    """
+    lines, stats = onset_snap.snap_line_edges(
+        before,
+        "",
+        env=env,
+        doubted_sources=DOUBTED,
+        heard_words=bundle.get("transcribe_words"),
+        heard_timed_sources=HEARD_TIMED,
+    )
+    return {
+        "lines_equal": [_line_key(line) for line in lines]
+        == [_line_key(line) for line in with_rule(before, song, env)],
+        "moved": stats["onset"]["n_heard_snapped"],
+        "agreed": sum(1 for row in song if row["agreed"]),
+        "after_file": (
+            fixed_path.read_text(encoding="utf-8") == generate_ass(lines, config)
+            if fixed_path.is_file()
+            else None
+        ),
+    }
+
+
+def check_report(checks: dict[str, dict], no_env: list[str]) -> str:
+    """Table E, counts and stems only."""
+    found = {stem: c["after_file"] for stem, c in checks.items() if c["after_file"] is not None}
+    off_rule = [stem for stem, c in checks.items() if not c["lines_equal"]]
+    off_count = [stem for stem, c in checks.items() if c["moved"] != c["agreed"]]
+    out = [
+        "",
+        "**Table E** the snap's heard-word exit against the probe's rule",
+        "",
+        f"- songs compared: {len(checks)}",
+        f"- songs whose lines equal the probe's rule: {len(checks) - len(off_rule)}",
+        *(f"  - differs: {stem}" for stem in off_rule),
+        f"- lines the new code moved: {sum(c['moved'] for c in checks.values())}",
+        f"- agreed lines: {sum(c['agreed'] for c in checks.values())}",
+        f"- songs where those two differ: {len(off_count) or 'none'}",
+        *(f"  - differs: {stem}" for stem in off_count),
+        f"- after-files found: {len(found)}; equal: {sum(found.values())}",
+        *(f"  - differs: {stem}" for stem, equal in found.items() if not equal),
+        f"- cue-route bundles with no envelope in the cache, not replayed: {len(no_env)}",
+        *(f"  - {stem}" for stem in no_env),
+    ]
+    return "\n".join(out) + "\n"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n", maxsplit=1)[0])
     parser.add_argument("--folder", type=Path, required=True, help="the song library")
     parser.add_argument("--out", type=Path, default=Path(get_temp_directory()) / "onset_loud_start")
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--listen",
         action="store_true",
         help="write the listening sheet and each sheet song's karaoke/<stem>.onsetfix.ass",
+    )
+    mode.add_argument(
+        "--check",
+        action="store_true",
+        help="compare the snap's heard-word exit with this probe's rule; decodes nothing",
     )
     args = parser.parse_args()
     logging.basicConfig(level=logging.WARNING)
 
     rows: list[dict] = []
     left_out: list[str] = []
+    no_env: list[str] = []
+    checks: dict[str, dict] = {}
     fixed_ass: dict[str, str] = {}
     config = PipelineConfig()
     n_songs = 0
@@ -480,7 +575,10 @@ def main() -> int:
         bundle = json.loads(path.read_text(encoding="utf-8"))
         if (bundle.get("pipeline_decisions") or {}).get("method_used") != "cue_align":
             continue
-        env = load_env(args.folder, path.stem, bundle, args.out / "env")
+        env = load_env(args.folder, path.stem, bundle, args.out / "env", decode=not args.check)
+        if env is None and args.check:
+            no_env.append(path.stem)
+            continue
         replayed = replay_song(bundle, env) if env is not None else None
         if replayed is None:
             left_out.append(path.stem)
@@ -490,6 +588,9 @@ def main() -> int:
         song = song_rows(bundle, env, before, after)
         rows += [{"song": path.stem, **row} for row in song]
         shipped = args.folder / "karaoke" / f"{path.stem}.ass"
+        if args.check:
+            fixed_path = shipped.with_name(path.stem + ONSETFIX_SUFFIX)
+            checks[path.stem] = check_song(bundle, env, before, song, fixed_path, config)
         # The after-file is only a clean A/B when the replay regenerates the shipped one.
         if (
             args.listen
@@ -503,6 +604,8 @@ def main() -> int:
     sys.stdout.write(report(rows, n_songs, left_out))
     if args.listen:
         sys.stdout.write(write_listen_files(args.folder, args.out, rows, fixed_ass))
+    if args.check:
+        sys.stdout.write(check_report(checks, no_env))
     return 0
 
 
