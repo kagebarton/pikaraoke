@@ -4,8 +4,9 @@ ear; Claude Opus 5.5 reads his labels off. Phases 2-4: spec by Claude Opus 5.5
 
 # Onset snap: a loud start is not always this line's voice
 
-**Status: GATE S passed 2026-11-10 (Results row 5). Phases 2-4 specced 2026-11-14; they
-wait on Fable's read of "Uncertain" and Ken's ruling on O1. No production code has
+**Status: GATE S passed 2026-11-10 (Results row 5). Phases 2-4 specced 2026-11-14. O1
+ruled the same day: (a), transcribe-timed lines are left out of the new exit (Results row
+7). Sonnet's 2a-2c still wait on Fable's read of "Uncertain" 2-6. No production code has
 changed. The ten `.onsetfix.ass` files are still in the library (2b moves them out once
 its check passes).**
 
@@ -142,8 +143,9 @@ score is 2, at the limit. One line shows no pattern; the rule stands as built.
 
 ## Phases 2-4
 
-Spec by Opus 5.5, 2026-11-14, for Sonnet 5.5. Order: Fable reads "Uncertain" below, Ken
-rules O1, then Sonnet builds 2a-2c and stops. Phase 3 is Ken's; Phase 4 follows it.
+Spec by Opus 5.5, 2026-11-14, for Sonnet 5.5. Order: O1 is ruled ((a), below), Fable
+reads "Uncertain" 2-6, then Sonnet builds 2a-2c and stops. Phase 3 is Ken's; Phase 4
+follows it.
 
 ### The rule, as GATE S passed it
 
@@ -172,9 +174,11 @@ Files: `pikaraoke/lib/onset_snap.py`, `tests/unit/test_onset_snap.py`. Commit
 - `snap_line_onsets` and `snap_line_edges` take `heard_words: list[dict] | None = None`:
   the transcriber's words (`word`, `start`, ...) in song time. `snap_line_edges` passes it
   through as it does `doubted_sources`. None or empty means no on-time line is searched.
-- O1 (a) only: `heard_timed_sources: frozenset[str] = frozenset()`, the line sources whose
-  word times were taken from `heard_words`. Their lines are never moved by this rule,
-  because their first word would agree with itself.
+- Both also take `heard_timed_sources: frozenset[str] = frozenset()`, the line sources
+  whose word times were taken from `heard_words` (O1). A line with such a source never
+  takes the new exit, because its first word would agree with itself. It still goes
+  through the on-time test and the existing search exactly as today. `snap_line_edges`
+  passes it through beside `heard_words`.
 - Normalise the heard words once per call into `(start, token)` pairs, not once per line.
   `_heard_near(pairs, first_word, t)` is the probe's `heard_near`; an empty token is
   false.
@@ -207,14 +211,17 @@ test, never at the exact 0.25 s edge:
 6. Heard words None and `[]` on test 1's envelope: untouched, stats equal to a call
    without the argument.
 7. A doubted line with no agreeing heard word still moves, counted in `n_snapped`.
-8. O1 (a) only: a line whose source is in `heard_timed_sources`, with a heard `w0` 0.2 s
-   after the doubted start: untouched.
+8. A line whose source is in `heard_timed_sources`, with a heard `w0` 0.2 s after the
+   doubted start: untouched (`out[0] is obj`), `n_heard_snapped == 0`.
 9. `snap_line_edges`: with heard words, the line before a moved line ends later than
    without, as the probe's `TestWithRule` shows.
+10. `snap_line_edges` on test 9's lines with the moved line's source in
+    `heard_timed_sources`: equal to the call without heard words.
 
 Mutation checks, file restored after each. Each must fail at least one test: tolerance
 0.35; token comparison dropped; the on-time path counting into `n_snapped`;
-`snap_line_edges` not passing `heard_words` on.
+`snap_line_edges` not passing `heard_words` on; the `heard_timed_sources` exclusion
+removed; `snap_line_edges` not passing `heard_timed_sources` on.
 
 ### 2b. The CPU check
 
@@ -225,7 +232,9 @@ Commit `feat(scripts): the onset probe checks the snap's new exit against its ru
   `--listen` rewrites the ten after-files the check reads.
 - For each song replayed exactly, run the new code:
   `onset_snap.snap_line_edges(before, "", env=env, doubted_sources=DOUBTED,
-  heard_words=bundle.get("transcribe_words"))` (plus `heard_timed_sources` under O1 (a)).
+  heard_words=bundle.get("transcribe_words"), heard_timed_sources=HEARD_TIMED)`, where
+  `HEARD_TIMED = frozenset({"transcribe"})` sits beside `DOUBTED` as the probe's copy of
+  what the stage passes. No cue-route line has that source, so it changes no count here.
   Compare its output with `with_rule(before, song, env)`. They are equal when every
   line's `line_id`, `start`, `end` and each word's `start` and `end` match exactly
   (`source` differs by construction). When `karaoke/<stem>.onsetfix.ass` exists, compare
@@ -283,10 +292,10 @@ Files: `pikaraoke/pipeline/stages/lyric_align.py`, `pikaraoke/lib/alignment_capt
 `tests/unit/test_lyric_align.py`. Commit
 `feat(lyric_align): the edge snap checks a loud start against the heard words, schema 12`.
 
-- The one `snap_line_edges` call passes `heard_words=capture_transcribe_words`. Under O1
-  (a) it also passes `heard_timed_sources=frozenset({"transcribe"})`, the literal as
-  `joint_match` spells it. Under O1 (c) it passes
-  `capture_transcribe_words if capture_method_used == "cue_align" else None`.
+- The one `snap_line_edges` call passes `heard_words=capture_transcribe_words` and
+  `heard_timed_sources=frozenset({"transcribe"})`, the literal as `joint_match` spells
+  it, on every route. A line keeps that source through windowed re-align (a replayed line
+  carries its own sub-match's source), so the final `source` is the right key.
   `capture_transcribe_words` is None in transcription mode, so that route is unchanged.
   Update the comment above the call.
 - Two sentences go stale: `_run_cue_align`'s docstring and the `transcribe_words` note in
@@ -308,8 +317,7 @@ Tests:
 - Cue route: the snap gets the gate's words, using the words from
   `test_the_gates_transcribe_words_reach_the_bundle`. That test's docstring loses "The
   cue route doesn't use them".
-- Joint route: per O1 ((a): the words and `frozenset({"transcribe"})`; (b): the words;
-  (c): None).
+- Joint route: the snap gets the words and `frozenset({"transcribe"})`.
 - Transcription mode: `heard_words` is None.
 - Nothing pins 11. The bundle test at 874 reads `SCHEMA_VERSION`, and
   `test_processing_routes.py`'s literal 11 doesn't depend on the version.
@@ -357,9 +365,25 @@ Then stop.
   `~~ ~~` and add a line pointing at `archive/onset_loud_start`.
 - Push `dev`. Retire the branch as `archive/onset_loud_start` per CLAUDE.md.
 
-### Open for Ken (rule before 2a)
+### O1 (ruled 2026-11-14)
 
 **O1. Joint lines timed from the transcriber's own words.**
+
+**Ruling: (a). Fable 5.2, 2026-11-14, on Ken's hand-off.** Transcribe-timed lines are left
+out of the new exit; align-won and ytasr-won joint lines take it as cue-route lines do.
+
+- A transcribe-won line starts on a heard word's own start (`_build_line_object` copies
+  it): all 641 in the scratch replay do, 575 on the first word itself. A move of 0.25 s or
+  less is then agreed by that same word, so the check confirms nothing there.
+- Align-won and ytasr-won lines take their times from the forced aligner and from
+  YouTube's captions. The transcriber only picks which candidate wins and where a
+  re-align slice opens, seconds wide; it sets no start. The check is as independent
+  there as on the cue route, which GATE S passed, so (c) is not needed.
+- Over the 45 joint songs that replay (Results row 7), 143 lines move under (b): 135
+  align-won, 3 ytasr-won, 5 transcribe-won. (a) gives up the 5, four of them agreed only
+  by their own word; (c) would give up all 143.
+
+As it stood before the ruling:
 
 - On the joint route, a line whose winning candidate is the transcriber's (`source ==
   "transcribe"`) takes its first word's start from a heard word. Any move of 0.25 s or
@@ -371,16 +395,16 @@ Then stop.
 Options:
 
 - **(a) Exclude those lines** (`heard_timed_sources`). Costs one parameter. The cue route
-  never has that source, so 2b is unaffected. Recommended.
+  never has that source, so 2b is unaffected. Recommended. **Taken.**
 - **(b) As ruled:** no exclusion.
 - **(c) Cue route only.** Simplest; the joint route keeps today's early starts.
 
 ### Uncertain (for Fable's read)
 
-1. **O1, and whether joint align-won lines are independent of the transcriber.** The joint
-   matcher scores align candidates by how well they agree with the transcriber's ranges,
-   and windowed re-align places its windows from the transcriber's words. If that makes
-   agreement partly circular there too, (c) is the honest choice.
+1. **O1, and whether joint align-won lines are independent of the transcriber.** Answered
+   under O1: they are, in the sense the check needs. One residue, shared with the cue
+   route: the aligner and the transcriber are the same model on the same stem, so their
+   times cluster (block R7, last table).
 2. **Heard words nearer the shipped start.** In 57 of the 593 moves, every agreeing heard
    word is nearer the shipped start than the new one; in 19 it sits at or before the
    shipped start (Results row 6). One of the 57 is on the sheet (Table D row 6), labelled
@@ -406,6 +430,7 @@ Options:
 | 4 | 2026-11-10 | 1 | Fable, CPU on the VM. `onset_loud_start_probe.py --folder /home/ken/shared-drives/D:/Shared/pikaraoke-songs --out /home/ken/shared-drives/D:/Shared/onset_loud_start --listen`. Out folder (`D:\Shared\onset_loud_start` on Windows): `report.md`, `rows.json`, `listening-sheet.html`, `env/` | Tables A-C equal R1; Table B's new row and Table D in block R4. 133 of 133 replayed songs regenerate their shipped `.ass` exactly. Over those songs 593 lines move and 955 Dialogue lines differ, each one a moved line or the worded line before one (scratch check). 10 `.onsetfix.ass` files written to the library's `karaoke/` |
 | 5 | 2026-11-10 | GATE S | Ken's ear on Windows; labels in the sheet's artifact database (`https://claude.ai/artifact/RLMm6PcTbWzFHcedjqHGVK`, collection `labels`), read by Opus 5.5 | Block R5 below |
 | 6 | 2026-11-14 | spec | Opus 5.5, scratch (not kept), CPU on the Linux box (`kenskaraoke`): the probe's `replay_song` and `song_rows` over `~/pikaraoke-songs`, reading a copy of `/media/ken/Data/probes/onset_loud_start/env/` (no decode), restricted to the 133 songs in that folder's `rows.json`; agreeing heard words are those equal by `_normalize_token` to the line's first word and within `AGREE_S` of `rise`. Joint counts from every joint bundle's `joint_stats.{transcribe,align,ytasr}_won` | Block R6 below |
+| 7 | 2026-11-14 | O1 | Fable 5.2, scratch (not kept), CPU on the Linux box, library read-only. Each joint bundle replayed: pass 1 by `match_words_to_lines_joint_with_stats` over the bundle's `words`, `transcribe_words`, knobs and the adopted ASR json3 (found by video id), checked against `selected_source` and `pass1_line_timings`; windowed re-align by `replay_span` + `merge_spans` over the captured spans; the veto; `snap_line_edges`. A song counts when every worded line's start and end fall within 0.011 s of `output_line_timings` (LRCLIB-filled lines left out), word counts are equal and `n_snapped` is equal. Envelopes decoded on this box from the library's stems, so not the bundles' decode. Then the probe's `onset_branch`, `rise_start` and `heard_near` on each worded line before the snap, by its final `source` | Block R7 below |
 
 **R1** (the probe's stdout, verbatim)
 
@@ -554,3 +579,42 @@ shipped subtitle file exactly: 133 songs)
 
 - Table D row 12: shipped 248.53, fixed 248.95, `heard` 248.90.
 - Joint bundles: 57, 3053 lines. Pass-1 winners: transcribe 824, align 1621, ytasr 349.
+
+**R7** (O1, scratch)
+
+- Joint bundles 57; replayed 45. Left out 12, each on a final line time that differs from
+  the bundle (not diagnosed): A-Lin - Happiness Is Singing, Backstreet Boys - Show Me The
+  Meaning Of Being Lonely, Bruno Mars - Grenade, Donna Murphy - Mother Knows Best, Ingrid
+  Michaelson - Be OK, Jessie J - Flashlight, Kristen Bell & Idina Menzel - For the First
+  Time in Forever, Mandy Moore & Zachary Levi - I See the Light, NSYNC - Here We Go, Sara
+  Bareilles - King of Anything, Tenacious D - Kickapoo, Westlife - Flying Without Wings.
+- Worded lines before the snap, by the line's final `source`:
+
+| | align | transcribe | ytasr |
+|---|---|---|---|
+| lines | 1302 | 641 | 280 |
+| start equal to a heard word's start, any word | 64 | 641 | 4 |
+| start equal to a heard word's start, the line's first word | 50 | 575 | 4 |
+| the first word heard within 0.25 s of the start | 577 | 575 | 165 |
+| exit on_time | 783 | 327 | 189 |
+| exit snapped | 262 | 121 | 7 |
+| exit below_min_shift | 91 | 121 | 69 |
+| exit narrow | 98 | 48 | 5 |
+| exit no_rise | 62 | 22 | 6 |
+| exit low_ref | 6 | 2 | 4 |
+| on_time with a rise | 259 | 60 | 21 |
+| agreed: moves with no exclusion (b) | 135 | 5 | 3 |
+| agreed, move of 0.25 s or less | 29 | 4 | 2 |
+| agreed, move over 0.25 s | 106 | 1 | 1 |
+| agreed only by the heard word at the line's own start | 1 | 4 | 0 |
+| every agreeing heard word at or before the start | 1 | 4 | 1 |
+| every agreeing heard word nearer the start than the new start | 9 | 4 | 2 |
+
+- Moves: 143 under (b), in 36 of the 45 songs; 138 under (a). Move min / median / max:
+  align 0.15 / 0.46 / 9.42 s, transcribe 0.16 / 0.22 / 0.74 s, ytasr 0.16 / 0.18 / 0.40 s.
+- Align-won lines, the heard first word's start minus the line's start, counted in 20 ms
+  steps out to 60 ms:
+
+| step | -3 | -2 | -1 | 0 | +1 | +2 | +3 |
+|---|---|---|---|---|---|---|---|
+| heard words | 14 | 24 | 27 | 70 | 36 | 29 | 18 |
