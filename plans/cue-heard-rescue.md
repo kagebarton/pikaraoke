@@ -5,7 +5,7 @@ fallback if Fable is not available then. Where Fable earns its keep is listed un
 
 # Cue-align rescue: the transcriber's words outrank the cue
 
-**Status: Phases 1 and 2 done 2026-11-14 (1: `a24348be`..`fecebdd2`; 2a `6eef9d5d`, diff-read fix `f2d305fc`, 2a2 `60789275`, 2b `65438683`, 2c `829d02d6`). Phase 3: 3a (probe `f3edd413`, fix `a0a10911`, tolerance `e23f0d60`), 3b ("Report output", rerun at `e23f0d60`) and 3b2 (Fable 5.2 read, Results log row 13) done 2026-11-14. 3c (test songs picked and staged, Results log row 14) done 2026-11-14. 3c2 (review run and triaged, Results log row 15: no fix changes `cue_align.py` or `heard_lines.py`, so 3b and 3c stand) done 2026-11-14. 3d (the regen, run on this box by the executor, Results log row 16) done 2026-11-14. 4a to 4c (the compare run, the listening sheet, the tables in "Report output" and Results log row 17) done 2026-11-14. Open: Ken's listening to the sheet (4b) and GATE H (Fable 5.2, then Ken).**
+**Status: Phases 1 and 2 done 2026-11-14 (1: `a24348be`..`fecebdd2`; 2a `6eef9d5d`, diff-read fix `f2d305fc`, 2a2 `60789275`, 2b `65438683`, 2c `829d02d6`). Phase 3: 3a (probe `f3edd413`, fix `a0a10911`, tolerance `e23f0d60`), 3b ("Report output", rerun at `e23f0d60`) and 3b2 (Fable 5.2 read, Results log row 13) done 2026-11-14. 3c (test songs picked and staged, Results log row 14) done 2026-11-14. 3c2 (review run and triaged, Results log row 15: no fix changes `cue_align.py` or `heard_lines.py`, so 3b and 3c stand) done 2026-11-14. 3d (the regen, run on this box by the executor, Results log row 16) done 2026-11-14. 4a to 4c (the compare run, the listening sheet, the tables in "Report output" and Results log row 17) done 2026-11-14. Ken's listening (4b) and the GATE H read (Fable 5.2, Results log row 18, "The read" under GATE H) done 2026-11-15. Open: Ken's rulings; Phase 5 waits for them.**
 
 Branch `cue_heard_rescue`, off `dev` `a7671d7`.
 
@@ -504,7 +504,7 @@ Read-only on the library (`/home/ken/shared-drives/D:/Shared/pikaraoke-songs`).
   Results log row 15); Table O again (other lines that moved, with amounts);
   the three target spots of "What the three flawed picks showed", and line 1 of Quit
   Playing Games.
-- [ ] **4b. Listening sheet** (sheet built 2026-11-14, Results log row 17; Ken's listening is open, his verdicts go to GATE H in chat) `<out>/listening-sheet.html`, at most 22 spots, in this
+- [x] **4b. Listening sheet** (sheet built 2026-11-14, Results log row 17; Ken listened 2026-11-15, verdicts under GATE H "The read") `<out>/listening-sheet.html`, at most 22 spots, in this
   order: the three target spots and Quit Playing Games line 1; then rule C kept lines,
   largest move first, at most 2 a song, up to 8; rule D kept lines up to 3; rule B up
   to 4; rule A up to 2; one zero-length line. Each row: song, m:ss (4 s before the earlier start), rule, before
@@ -557,6 +557,180 @@ Read-only. Inputs: the Phase 3 and 4 tables, `<out>`, Ken's verdicts on the shee
    Ken rules each of A, B, D, C, the guard lift and the zero-length rule: land or leave
    out (leaving out B leaves out D). Record the read and the rulings here.
 
+### The read (Fable 5.2, 2026-11-15)
+
+Read-only. Inputs: the Phase 4a tables, `<out>/compare/rows.json`, the 24 new bundles and
+.ass files of `~/probes/cue-heard-trial` against `regen_backups/20261114T220305Z`, Ken's
+verdicts in chat. A scratch script outside the repo printed, for a stretch of a song, the
+old and new .ass words, the heard words, the first pass and the saved re-aligns. Nothing
+was rerun. Rulings: open, Ken's.
+
+**Ken's verdicts (VLC, the sheet's 22 spots, 2026-11-15), lyric text left out.**
+
+| # | Song | Seek | Rule | Line | Ken |
+|---|---|---|---|---|---|
+| 1 | Quit Playing Games | 0:14 | target | 1 | same |
+| 2 | Quit Playing Games | 1:49 | target, A1 | 24, 25 | old late, new on time; some lines overlap, a known problem |
+| 3 | Crazy | 1:46 | target, B | 22 | old late, new on time |
+| 4 | Reflection | 3:07 | target | 36 | new still early, much less so than old |
+| 5 | Will I | 1:37 | C | 16 | overlapping lines; new does not end as early |
+| 6 | Will I | 2:21 | C | 27 | overlapping lines, about the same |
+| 7 | Get Down | 3:33 | C | 103 | overlapping repeats, about the same |
+| 8 | Get Down | 3:37 | C | 106 | the same |
+| 9 | Breakaway | 0:08 | C | 4 | repeated words struggle in both, same |
+| 10 | Breakaway | 1:33 | C | 29 | the same |
+| 11 | Your Idol | 0:00 | C | 1 | two chants overlap, one is in the lyrics; the rescue does not do much |
+| 12 | Takedown | 0:47 | A2 | 17 | about the same, a background chant overlaps |
+| 13 | Takedown | 0:56 | B | 20 | about the same |
+| 14 | Takedown | 1:29 | D | 33 | the line does not exist there in the video; old correctly has nothing there |
+| 15 | Takedown | 1:47 | C | 35 | about the same |
+| 16 | Takedown | 2:37 | D | 49 | new slightly better, background chant |
+| 17 | Bring It All Back | 1:52 | D | 52 | old had no line on the overlapping part; new has one and times it badly, a slow crawl |
+| 18 | Before You Go | 2:08 | B | 27 | new comes on a little early |
+| 19, 20 | Tangled | 2:11, 2:13 | B | 31, 32 | corrected in new; the line before them (30) is late in both |
+| 21 | Hurts To Love You | 3:01 | A2 | 26 | same |
+| 22 | Shape Of My Heart | 3:10 | Z | 44 | two lines overlap; new slightly better |
+
+**Item 2, the three targets.** Quit Playing Games 1:57 (lines 24, 25, A1): fixed, by ear
+and by the heard words (starts 113.630 and 116.790, heard 113.600 and 116.900). Crazy
+1:51 (line 22, B): fixed by ear (start 115.875; heard 114.760, the cue 110.195).
+Reflection 3:11 (line 36): **not fixed and not changed.** Lines 35 to 37 are word for
+word the same in the old and the new .ass (line 36: 191.09-198.78 in both), so the
+difference Ken heard at 3:07 is not in the files. No rule reached the line: the
+transcriber has no words between 180 and 200 s (B cannot aim), and the free stretch runs
+from line 35 to the end of the song, over rule C's 30 s cap, so C did not try. Its own
+cue-aimed retry timed three of five words from 195.91 before its window ended at 197.06
+and was refused; the line is probably sung near 3:16. Quit Playing Games line 1 (0:14) is
+unchanged, as row 17 says: A2's own motivating case is not caught, one pair is 1.72 s off.
+Lines 8 and 37 unchanged, as expected.
+
+**Item 3, rule A.** A1: 9 lines, 7 moved more than 0.3 s against the source. Lines 24 and
+25 of Quit Playing Games are the plan's fix. The other six A1 rows inside a run are all in
+Love Is an Open Door (15, 16, 17, 35, 36, 42), two-word lines 0.4 to 1.3 s long where the
+1.0 s agreement is as wide as the line. Lines 15 to 18: the old output sat on the cues,
+evenly spaced (45.97, 46.22, 47.45, 48.20); the new one is the first pass (46.37, 47.23,
+48.53, 49.03) and the last two heard lines are zero-length words at 48.82 and 49.06.
+Line 42: its second word moved from 99.56 to 100.48 (heard 99.58), still confirmed. Lines
+35 and 36: 78.70 and 80.73 before, 77.92 and 79.40 now, heard 78.44 and 79.80. Not
+settled by reading; none was on the sheet.
+
+A2: 9 lines, 4 moved more than 0.3 s against the source. Each of those four is a first
+pass held against a re-align, where the first pass has a zero-length or stretched first
+word:
+
+| Song | Line | Source | New | Heard start | What the bundle shows |
+|---|---|---|---|---|---|
+| Shape Of My Heart | 4 | 20.20 | 20.87 | 16.98 (lone first word, 3.7 s long) | both saved re-aligns end the first word at 20.76; the new line starts it at 20.87 |
+| Reflection | 32 | 168.28 | 168.93 | 168.22 | the held first pass had a zero-length first word at 169.27 |
+| Castle On The Hill | 53 | 258.57 | 256.74 | 257.16 (first word after a 1.9 s gap, 1.8 s long) | the cue (258.67) and both saved re-aligns (258.68, 258.69) agree with the old start; line 52 is cut from 2.6 s to 0.9 s |
+| Takedown | 17 | 53.34 | 51.36 | 52.28 (1.2 s long) | first word now 2.2 s long; words two and three were on the heard words before and are 0.2 s later now; Ken: about the same |
+
+The other five A2 rows moved under 0.3 s (Ken: Hurts To Love You 26 the same). Neither of
+Ken's two A2 listens heard a gain. "Further" against today's baseline: Shape 4, Ashes 1
+(0.06 s), Reflection 32; none is a heard match on the wrong words.
+
+**Item 3, rule B.** 25 tried, 10 kept; no kept line ends after the next line starts.
+
+| Song | Line | Source | New | Heard | Read |
+|---|---|---|---|---|---|
+| Crazy | 22 | 110.195 | 115.875 | 114.760 | target; Ken: on time |
+| Tangled | 31, 32 | 137.550, 139.470 | 135.400, 137.550 | 134.980, 137.664 | Ken: corrected |
+| Takedown | 48 | 163.054 | 161.280 | 161.780 | words two and three now on the heard words; not on the sheet |
+| Takedown | 20 | 63.020 | 60.120 | 60.620 | Ken: about the same |
+| Tangled | 29 | 126.225 | 126.218 | 125.880 | start unchanged, end 1.4 s later |
+| Ashes | 21 | 181.125 | 181.125 | 178.350 (lone first) | same as the source |
+| Before You Go | 27 | 134.800 | 132.400 | 132.900 (lone first) | Ken: a little early. The heard first word runs 132.90-135.42, joined to the end of the line before; the cue is 135.01. The new line shows its first word at 132.39 and its second at 134.92 |
+| Crazy | 41 | 192.875 | 193.550 | 192.780 | 0.7 s later than the source, which was on the heard start; first word 0.12 s long |
+| Your Idol | 36 | 108.920 | 108.300 | 108.800 | 0.5 s before the heard start and the previous line's end (108.80); the guard lift |
+
+Tangled line 30 (late in both, Ken): heard 1.47 s before its cue, 0.03 s under rule B's
+1.5 s, and its rule C retry is one of the failed aligns of row 16.
+
+**Item 3, rule D, every kept line.**
+
+| Song | Line | Today | Source | New | Heard | Next line starts before it ends | Read |
+|---|---|---|---|---|---|---|---|
+| Takedown | 33 | 106.255 | 106.255 | 93.286 | 93.620 | no | **Echo or false hearing.** New span 93.28-96.24 lies inside line 30 (92.97-98.73), two lines earlier in the sheet. The transcriber has these four words at 93.62-96.34 and nothing from 96 to 113 s, so it missed lines 30 to 34. The first pass had the line complete on its cue (106.58). Ken: the line is not there in the video |
+| Bring It All Back | 52 | 124.293 | 124.293 | 116.360 | 116.860 | no | **Echo.** The heard words are a backing phrase at 116.86 that the sheet does not have, inside lines 48 and 49. At the line's cue (124.14) the transcriber has the same phrase with its last word misheard (124.40-125.12), so the match could not use it. The line now starts 7.9 s before the previous line's end and its last word runs 116.93-125.29. Ken: a slow crawl |
+| Closer | 45 | 148.749 | 148.769 | 150.300 | 150.800 | yes | **A twin's audio.** Run of five identical lines (42 to 46), first pass on the cues at 142.85, 144.87, 146.83, 148.75, 150.79. In this run's transcription one repeat is missing (a word stretched 147.72-150.18) and a zero-length cluster at 153.6-153.9 counts as the fifth, so the run reads as heard in full and line 45 pairs with line 46's audio. Now 45 and 46 both start near 150.5 and nothing starts at 148.75. Not on the sheet |
+| Takedown | 49 | 161.990 | 161.990 | 165.040 | 165.540 | yes | **Lead.** The first pass had lines 48 to 50 piled at 161.5-163.8; the cue is 166.30. The next-line overlap is line 50, unchanged at 162.92-172.95 (D tried it, not kept). Ken: slightly better |
+| Smokin Out The Window | 33 | 141.046 | 141.046 | 139.475 | 138.810 | no | Probably lead: the heard two words run 138.81-141.88 unbroken and the first pass sat in the tail of the second. Two pairs only. Not on the sheet |
+| Smokin Out The Window | 45 | 187.930 | 190.725 | 190.725 | 191.040 | yes | Same as the source and on the cue (190.82). The phrase is sung twice (188.3 and 191.1 in the source's transcription); this run's first pass took the first. The next-line overlap is line 46, placed early before and after |
+
+Three of six are moves onto audio that is not the line's. The six unkept tries are
+unchanged. 4a's "closer to heard" column cannot show any of this: a D line is moved to
+its heard words by construction, so all six read "closer".
+
+**Item 3, the guard lift.** 41 lines. Against the same-bundle baseline: 5 unmoved or
+within 0.05 s, 10 closer to the heard start, 26 further. 35 of 41 now start before the
+previous line's end. Of the 32 lines the lift alone moved (not also B or D), 28 start
+before their heard start, 21 by more than 0.3 s; median new start minus heard -0.41 s,
+today's -0.02 s; median distance 0.42 s against 0.13 s. In the lines read word by word
+(Castle On The Hill 16, Your Idol 36) the previous line's end and the heard start agree
+within 0.02 s and the re-align's first word starts 0.5 s before both, during the previous
+line's last word. Shape Of My Heart 39 starts 176.39, 1.64 s before the previous line's
+end and 2.14 s before its heard start: its first three words are unpaired and lie over
+the previous line's last four sung words. The lift's named case (Miss Independent 3:59,
+`plans/open-issues.md`) is not among the 41: the staged song's sheet has no lifted line.
+The sheet had no guard-lift rows; Before You Go 27, Takedown 20 and 33 and Bring It All
+Back 52 are lifted lines listened to under B and D.
+
+**Item 4, rule C, by Ken's ear.** 42 tried, 15 kept, 7 with no answer from the aligner.
+Eight listens: one a little better (Will I 16), seven the same.
+
+| Group | Tried | Kept | Kept lines | Ken |
+|---|---|---|---|---|
+| not in a run | 15 | 6 | Business Time 81; Breakaway 29; Will I 16, 23, 27; Takedown 35 | Will I 16 a little better; Will I 27, Breakaway 29, Takedown 35 the same |
+| in a run, stretch between twins on their cues | 14 | 4 | Get Down 100, 103, 104; Breakaway 4 | Get Down 103 and Breakaway 4 the same |
+| in a run, stretch ends at a parked twin | 13 | 5 | Get Down 98, 99, 102, 106; Your Idol 1 | Get Down 106 the same; Your Idol 1 not much |
+
+No difference by ear between the two run groups. By reading, not a verdict: the Get Down
+lines moved 3.2 to 4.5 s later, most of them from before the line they follow in the sheet
+to after it, onto heard repeats (217.0, 217.9, 221.2, 222.2, 225.5); Breakaway 29 now starts with line
+27 (97.57) and spans lines 27 and 28.
+
+**Item 5, zero-length words.** 256 words re-timed in 166 lines, 139 words still under
+0.1 s. Ken's one listen: slightly better.
+
+**Item 6, Table O.** 22 lines, 14 over 0.3 s. Twelve moved their end only, each because
+the next line's start moved under a rule: Smokin 32 (next 33, D), Smokin 44 (45, D),
+Castle 52 (53, A2), Before You Go 26 (27, B), Closer 44 (45, D), Hurts To Love You 10
+(11, A2), Crazy 40 (41, B), Love Is an Open Door 34 (35, A1), Takedown 16 (17, A2),
+Takedown 32 (33, D, which left), Takedown 34 (35, C), Takedown 47 (48, B). Two moved
+their start, each squeezed behind an A1 line of its run: Love Is an Open Door 18 (old
+48.20-49.39, new 49.03-49.41, 0.38 s) and 43 (today's baseline has an unanswered call;
+against the source 100.61-100.93 became 100.61-100.83). Love Me Now is not staged. Line
+18 goes to Ken's ear with lines 15 to 17.
+
+**Item 7, caveats.** The transcriber's first word after a gap is stretched back to the
+previous word (Before You Go 27, Castle 53, Shape 4 are that case), so a heard start is
+weak there by seconds, not 0.3 s. Rule C has no reference. Fifteen library songs and three
+trial songs were re-run; the regen ran on this box, so against the source bundle 35 moved
+lines are in no rule's list (row 17). The old and new transcriptions differ in places
+(Closer 45, Smokin 45 turn on it). Seven C tries and one B try have no result because the
+aligner failed (row 16).
+
+**Lines for Ken's ear beyond the sheet** (new .ass in `~/probes/cue-heard-trial/karaoke`,
+old under `regen_backups/20261114T220305Z/karaoke`):
+
+| Song | Seek | Line | Rule | Question |
+|---|---|---|---|---|
+| Love Is an Open Door | 0:42, 1:14, 1:35 | 15-18, 35-36, 42-43 | A1 in a run, Table O | are the short repeats better on the first pass or on the cues |
+| Closer | 2:25 | 45 | D | is the fourth repeat now missing at 2:28 |
+| Shape Of My Heart | 2:52 | 39 | guard lift | does the line start over the previous line's last words |
+| Castle On The Hill | 1:27 | 16 | guard lift | does it start half a second early |
+| Closer | 1:19 | 24 | guard lift | the same |
+| Castle On The Hill | 4:13 | 53 | A2 | does the line start 2 s early |
+| Reflection | 2:44 | 32 | A2 | does it start late |
+
+**Recommendation (the judge's; Ken rules).** A1 lands. Rule B lands. Zero-length words
+land. Rule D is left out: half its kept lines moved onto another line's audio. The guard
+lift is left out unless Ken's ear disagrees on the three spots above. Rule C: no audible
+gain in eight listens; left out. A2 shows no gain either; it is part of rule A's commit,
+so cutting it is a small edit, not a commit left off. Leaving the guard lift out is not a
+plain skip either: rule B's commits build on its code (Phase 5, "if a later commit depends
+on one, STOP").
+
 ## Phase 5: after GATE H
 
 - Rules ruled out: their commits are not replayed onto `dev` (Decision 6); if a later
@@ -598,6 +772,7 @@ Read-only. Inputs: the Phase 3 and 4 tables, `<out>`, Ken's verdicts on the shee
 | 15 | 2026-11-14 | 3c2 | Review run by Ken: `/code-review medium f2d305fc~1..HEAD` on `cue_align.py`, `heard_lines.py`, `test_cue_align.py` and `test_heard_lines.py`, with 3c2's three finders; 10 findings. Each checked against the code at `bdbc96e9` by Opus 5.5; triage put to Ken in chat and accepted. **Critical:** none. **Easy:** 10, a docstring line of 113 characters in `_with_guessed_words` (`cue_align.py:1140`); folded into the first `cue_align` commit after GATE H, not made now (a docstring-only change would set off 3c2's re-run for nothing). The `pylint` hook in `code_quality/.pre-commit-config.yaml` has the entry `bash -c 'echo $PATH'`, so pre-commit never runs pylint; "pre-commit clean" in rows 9, 11 and 13 does not cover it. **Measured for GATE H, no code change:** 4, rule C's stretch ends at the next first-pass line that `_line_is_clean`, which can be a twin the cue test rejects (in a run of identical lines, `_line_in_span` with its repeat slack fails, not confirmed). Scratch replay outside the repo (the probe's `cue_route_songs`, `snap_stem`, `load_envelope` reading `<out>/env`, and `rescue_song` with heard words, `_Rescue.free_stretch` wrapped; all 177 cue-route bundles, so the five songs Table P leaves out are in; nothing in `~/pikaraoke-songs` or `<out>` newer than the script): rule C tried 96 lines in 45 songs; for 22 the stretch ended at such a twin, and 21 of those 22 lines are in a run themselves; by song: Get Down 7, Love Me Now 3, Breakaway 2, Rent "I Should Tell You" 2, Hakuna Matata 2, Graduation 2, Crazy 1, Mirrors 1, Your Idol 1, So Sick 1. With the stretch ended instead at the next clean first-pass line the cue test places or the transcriber confirms: 26 stretches change (22 tried both ways, 4 tried only with the change), 23 of the 26 lines in a run, in 12 songs. Table C at `e23f0d60`: 46 of 94 rows in a run; 15 have a heard shift, all under 1.5 s. 4a gains the "stretch ends at a parked twin" column; GATE H item 4 reports run lines in the two groups. 3, a line rule B or D moved is not checked against the next line (`_start_bound` looks back only): 4a gains neighbour times for kept B lines and an overlap flag for kept B and D lines; GATE H item 3 names B overlaps; added to the open-issues entry "The guard looks only backward" (`0e63315d`). 1 (rule C on a line the transcriber heard) and 2 (a rule D re-align timing fewer words than the line it replaces): Ken's open calls of row 10, already measured (Table C's heard shift; 4a's `guessed_word_line_ids`). **Dropped:** 5 (the moved line's start bound holds it after the gap-retried line's end unless it is confirmed as returned, the guard lift's case; the rest is finding 1); 7 (rule D's shift is heard start minus cue start, as the rule words it); 8 (with an aligner and `pad_s` 0.75 the moved slice is at least 0.75 s, so `can_realign` never refuses it on length); 9 (the two flags of `heard_aimed_line`, noted in row 9). **Open issues:** 6, in a partial line the guess pass paces from every assigned word, zero-length ones included (so did the code before `65438683`), so a guessed word can be as short as half the line's shortest timed word; new entry (`0e63315d`). From open issues: none newly easy. No change to `cue_align.py` or `heard_lines.py`, so 3b and 3c stand. | this file, `0e63315d` |
 | 16 | 2026-11-14 | 3d | The regen, run on this Linux box by the executor at Ken's instruction, not by Ken on Windows. App closed, GPU idle before it (6 MiB used). Marker touched first. Command, from the repo root, in the background: `python scripts/regen_alignment_bundles.py ~/probes/cue-heard-trial --yes` plus the 24 `--song` patterns of row 14 (22 ids, 2 file names). The code under test was `pikaraoke/` as reviewed in row 15 (no `pikaraoke/` file differs between `f2575c8d` and HEAD). Started 17:03:05, last bundle written 18:10:57 (local), 67 min. Result `Done. succeeded=24 failed=0 skipped=0`. `find ~/pikaraoke-songs -newer <marker>` printed nothing. All 24 bundles have a new `captured_at`. The regen's backup of the 24 songs' subtitles, karaoke, lyrics and alignment_debug is `~/probes/cue-heard-trial/regen_backups/20261114T220305Z/` (Ken's message and 4b named it `regen_backup_<UTC>`); its `alignment_debug` and `karaoke` equal copies taken before the run (`diff -rq`), and `karaoke/` holds 25 files in both, the extra one being `Business Time.onsetfix.ass`. No song used the de-reverb retry (no `dereverb/` folder was made; `joint_stats.dereverb` is empty in all 24). **Log:** one `CUDAExecutionProvider not available in ONNXruntime` warning at start. 18 `Whisper align_refine failed` errors, each followed by a `slice-align failed, degrading` warning (`'NoneType' object has no attribute 'language'`, from `stable_whisper` `align`): 15 are one-line re-aligns, saved in `cue_inputs.realigns` with `words` None: Get Down 2, Quit Playing Games 1, Tangled 1, Hurts To Love You 1, Graduation 5, Will I 5; 3 are first-pass section aligns, all in Will I (lines 0-0 once, 28-29 twice). The other 17 songs logged none. So a heard-aimed or gap retry that did not keep its line in those six songs may have failed in the aligner, not been refused by a check: 4a gains an "aligner gave nothing" column on Tables B, D and C. **Differences from the plan, by Ken's instruction:** (1) the source bundles came from the Windows box and this regen re-ran whisper and decoded the stems here (row 13: this box's envelope moves snap edges), so 4a also replays each new bundle's own `cue_inputs` with `heard=False` and its saved re-aligns (the same-bundle baseline), checks the `heard=True` replay reproduces the new bundle's `output_line_timings` as 3b did, gives Table O against that baseline, gives the moves against the source bundle in a table of their own (Table S), and names the kept B lines whose cue-aimed retry has no saved answer (a rule kept the line first, so the baseline's cue-aimed call has no saved answer: its "today" is unreliable, and so is any other line's whose baseline call is unanswered, e.g. A1 lines; both are flagged per row); (2) 4a is `scripts/cue_heard_compare.py` (`f6469de5`), not a `--compare` flag, because the probe would otherwise import a module that imports it; it also has Table C's "Twin" column (in the probe) and writes `<out>/compare/` and `<out>/listening-sheet.html`, never `<out>/rows.json` or `<out>/started`; (3) 4b: Ken listens in VLC with the .ass loaded, no app; (4) the GATE H judge is Fable 5.2, Opus the fallback (`24683724`); (5) usage may run out in Phase 4, so each step is committed and logged. | `~/probes/cue-heard-trial`, `regen_backups/20261114T220305Z`, `f6469de5` |
 | 17 | 2026-11-14 | 4a, 4b, 4c | **4a run** (CPU, 23 s): `python scripts/cue_heard_compare.py ~/probes/cue-heard-trial --out ~/.pikaraoke/tmp/cue_heard_rescue > <out>/compare/report.md` at `59f9846a` (script `f6469de5`; "Aligner gave nothing" columns `c4692a7f`; Table T's first pass, confirmed and pair offsets `59f9846a`). Source: `regen_backups/20261114T220305Z`. The library probe's `<out>/rows.json` and `<out>/report.md` are byte-identical before and after (`md5sum`); the run wrote `<out>/compare/` (`report.md`, `rows.json` with lyric text and never committed, `env/`) and `<out>/listening-sheet.html`. Tables are in "Report output", unedited. **Table P:** all 24 replayed, none left out: each new bundle's `output_line_timings` is reproduced by the `heard=True` replay within 0.026 s, the replay's `*_line_ids` equal the bundle's saved repace stats, no heard replay asked an align the bundle holds no answer for, and the lyric origin and lines equal the source bundle's. Baseline lines with no saved answer ("today unanswered"): 19 lines in 8 songs (Ashes 1, Before You Go 2, Quit Playing Games 2, Crazy 2, Love Is an Open Door 6, Takedown 2, Your Idol 1, Tangled 3). **Rows:** T 7, A 18 (A1 9, A2 9; 8 in a run; all 9 A1 lines have a baseline call with no answer), G 41, Z 166, B 25 tried and 10 kept (caption 11/2, LRCLIB 14/8), D 12 tried and 6 kept (caption 9/4, LRCLIB 3/2), C 42 tried and 15 kept (caption 27/13, LRCLIB 15/2), O 22, S 118. **Named spots (Table T):** Quit Playing Games lines 24 and 25 (A1) now start 113.630 and 116.790, heard 113.600 and 116.900, source 116.963 and 118.513; Crazy line 22 (B kept) starts 115.875, source 110.195, heard 114.760; Reflection line 36 is unchanged (191.093, not heard, no rule); Quit Playing Games lines 8 and 37 are unchanged. **Quit Playing Games line 1 is unchanged (18.473) and no rule fired:** its first pass is 14.290-22.990 and one pair is 1.72 s from where the transcriber heard it (offsets -0.31 -0.28 -0.14 -0.14 -1.72 +0.03), so it is not confirmed (rule A needs every pair within 1.0 s) and A2 does not hold the re-align. **For GATE H item 3:** against the same-bundle baseline the new start is closer to the heard start for A 13 of 18 (within 0.05 s 2, further 3), B kept 9 of 10 (further 1), D kept 6 of 6; against the source bundle A closer 9, within 2, further 7; B kept closer 7, further 3; D kept closer 5, further 1. Kept B lines whose cue-aimed retry has no saved answer: all 10 (Ashes 21, Before You Go 27, Crazy 22 and 41, Takedown 20 and 48, Your Idol 36, Tangled 29, 31 and 32), so their "today" is not today's output. Kept lines whose last word ends after the next line's first word starts: B 0, D 3 (Smokin Out The Window 45, Closer 45, Takedown 49). Kept lines in `guessed_word_line_ids`: B 2, D 0. **Rule C (item 4):** by run, not in a run 15 tried and 6 kept; in a run with the stretch between twins on their cues 14 and 4; in a run with the stretch ending at a parked twin 13 and 5. 5 of the 42 tries have a heard shift and 3 of those were kept. **Aligner gave nothing** (the saved answer is a failed align, so a check did not refuse the line): C 7 of 42 (Will I 2, Graduation 2, Get Down 1, Hurts To Love You 1, Tangled 1), B 1 of 25 (Quit Playing Games line 57), D 0 of 12. **Table O (item 6):** 22 lines (caption 11, LRCLIB 11), 14 over 0.3 s, largest 2.795 s (Smokin Out The Window 44), 6 beside an unanswered baseline call; Love Is an Open Door 18 is in it (start 48.200 to 49.030, end 49.390); Love Me Now is not among the staged songs. **Table S:** 118 lines moved over 0.3 s against the source bundle (caption 79, LRCLIB 39); 83 are in a rule's list (G 23, Z 19, C kept 14, A1 8, A2 6, B kept 6, D kept 3, C tried 3, B tried 1) and 35 in none (9 over 1 s, largest 2.320 s, Smokin Out The Window 46). Table Z: 256 words re-timed in 166 lines, 139 words under 0.1 s after. **4b:** `<out>/listening-sheet.html` built by the same run: 22 spots in the plan's order (4 target, rule C 8, D 3, B 4, A 2, zero-length 1), each with m:ss (4 s before the earlier start), rule, before and after, the video path, the new .ass and the old one under `regen_backups/20261114T220305Z/karaoke/`; all 66 paths exist. The A rows are both A2 (the ranking is by move against the source). Ken's listening is open. **4c:** tables pasted, this row, status line. Code-review: not due (`cue_heard_compare.py` is a reporting script; its self-review is the three axes plus 14 mutation checks on the keep/skip logic, 4 of which first survived and got tests, and one on rule C's call index, all now failing a test; `pylint` is not installed in env `pik` and the pre-commit hook is a stub, so it did not run). No verdicts in this row. | `<out>/compare/`, `<out>/listening-sheet.html`, `59f9846a` |
+| 18 | 2026-11-15 | 4b, GATE H | Ken listened to the sheet's 22 spots in VLC and gave his verdicts in chat. GATE H read by Fable 5.2, read-only: the 4a tables, `<out>/compare/rows.json`, the 24 new bundles and .ass files against `regen_backups/20261114T220305Z`; a scratch script outside the repo printed old and new .ass words, heard words, first pass and saved re-aligns per stretch; nothing rerun, no code changed. Recorded under GATE H, "The read": the verdict table, items 2 to 7, rule D's six kept lines one by one, the guard lift's 41 lines against the heard start (5 within 0.05 s or unmoved, 10 closer, 26 further; 35 start before the previous line's end), rule C in its three groups, Table O's 14 lines over 0.3 s (12 end only, 2 start), seven spots for Ken's ear beyond the sheet. Found while reading: Reflection lines 35 to 37 are word for word the same in the old and new .ass; 4a's "vs heard" column reads "closer" for every kept D line by construction; the sheet had no guard-lift rows. Rulings open. | this file |
 
 
 ## Report output
