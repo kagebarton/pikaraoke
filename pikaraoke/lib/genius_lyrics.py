@@ -36,7 +36,7 @@ _HEADER_RE = re.compile(r"^\s*\[[^\]]*\]\s*$")
 
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 _BRACKET_CONTENT_RE = re.compile(r"\[[^\]]*\]")
-_PAREN_CONTENT_RE = re.compile(r"\([^)]*\)")
+PAREN_GROUP_RE = re.compile(r"\([^)]*\)")
 _MUSICAL_NOTE_RE = re.compile(r"[♪♫♬♩]")
 _HAS_LETTER_RE = re.compile(r"[^\W\d_]")  # any Unicode letter (keeps non-Latin lyrics)
 _QUOTES_TABLE = str.maketrans(
@@ -132,10 +132,10 @@ def normalize_lyric_line(text: str) -> str:
     SRT parens are stage directions and should be cleaned via
     :func:`clean_srt_line` instead.
     """
-    return " ".join(_strip_markup(text).split())
+    return " ".join(strip_markup(text).split())
 
 
-def _strip_markup(text: str) -> str:
+def strip_markup(text: str) -> str:
     """``text`` with tags, ``[stage directions]`` and note glyphs removed, quotes and
     lookalike letters folded; line breaks and spacing left as they are."""
     text = _HTML_TAG_RE.sub("", text)
@@ -160,7 +160,7 @@ def clean_srt_line(text: str) -> str:
 def strip_srt_markup(text: str) -> str:
     """:func:`clean_srt_line`'s removals with the cue's line breaks kept, so a mark that only
     counts at a line's start can be found once tags and stage directions are gone."""
-    return _PAREN_CONTENT_RE.sub("", _strip_markup(text))
+    return PAREN_GROUP_RE.sub("", strip_markup(text))
 
 
 def parse_lyric_lines(lyrics_text: str) -> list[dict]:
