@@ -491,10 +491,15 @@ The rescue (review findings and decisions kept as built):
   on a later one. Fix: carry each word's token index on the line object from
   `_match_words_to_tokens`, which also removes `_assign_in_order`. Same
   prerequisite as Decision 12's unruled splice (keep the section's words, take
-  only the missing ones from the re-align).
+  only the missing ones from the re-align). `backing_vocal_lines`: an echo line
+  repeats its lead's words within one line ("Baby (baby)"), so the in-order
+  guess can put an echo's timing on the lead's token, now a common case, not a
+  rare one; watched at that plan's GATE B (B3, B4).
 - **Duet ending** (row 44, finding 6): the song's last line is the last by
   index, not the latest-ending one, so an earlier line held past the last cue
   gets no tail window and the last line's tail runs over the other singer.
+  `backing_vocal_lines`: a paren-only line after the last caption becomes the
+  song's last line and takes the uncapped tail window.
 - **The last line's window has no hold cap** (row 44, finding 5). Uncapped on
   purpose (the final note is often the longest), but outro ad-libs widen the
   window and the span the re-align is checked against. A cap needs the length
@@ -605,6 +610,37 @@ which read the stats of the three cut rules and stay on the tag.
   words, one line can take the other singer's words, and rule B could then move
   a right line. Needs a match that knows lines overlap; wait for a duet that
   shows it (row 22, finding 9).
+
+## Backing vocal lines (on `dev`)
+
+Branch `backing_vocal_lines`: a parenthetical group in a caption or LRCLIB sheet
+("(oh, oh)") is shown when the transcriber heard it in its cue's window. An
+inline group joins its line, and a cue of only a group becomes a line of its
+own, timed by the rescue's one-line retry. Genius and custom songs show their
+parentheses too. Record: `plans/backing-vocal-lines.md` on branch
+`backing_vocal_lines`.
+
+- **Edit words drops a song's backing lines on save.** The page opens the
+  sheet's cleaned lines, which hold no parenthetical group, and saves them as
+  typed, so a song that shows backing lines loses them the next time its words
+  are edited. Keeping them needs the page to show the bundle's kept groups and
+  an edited sheet that keeps them as typed: a step of its own (plan, Design
+  choice 3).
+- **Repair's LRCLIB search scores against the backing lines too.**
+  `library_tools.current_lines` returns the bundle's `lyrics.lines`, which now
+  hold the added lines with their parentheses, so "mapped N of M" counts them in
+  M and a record with no echo cues maps fewer of them.
+- **Song Info counts an added line like any other.** `library_status._cue_fields`
+  counts it among the re-aligned or paced lines, and a paced one toward the 15%
+  guessed-lines share (`POOR_GUESSED_SHARE`), so a song can read as poor from
+  new lines alone.
+- **The rescue's rule B can aim an added line at another copy of its words.** An
+  echo's words are its lead's (or a chorus repeat's), and the heard match deals
+  each heard word to one token over the whole song, so a heard-aimed keep on an
+  added line can land on another line's audio, 1.5 s or more from its cue, which
+  the keep rule never tested. Reported at that plan's GATE B; if a keep lands on
+  another line's words, the change is that an added line is never heard-aimed
+  ("The D7 amendment", "How the rescue treats an added line").
 
 ## Test suite (Windows box)
 
