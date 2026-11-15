@@ -5,9 +5,11 @@ Claude Sonnet 5.5 builds from that spec. (High-level spec by Claude Fable 5.2, 2
 
 **Status: GATE A ruled GO on the amended hybrid, 2026-11-14 ("GATE A ruling"). Build spec
 written 2026-11-14 ("Build spec": Design, Commits) and read by Fable 5.2 the same day ("Build
-spec read") and ruled by Ken ("Build spec ruling"). Next: Sonnet builds C0-C3 and C2p on this
-branch and stops. C4-C7 wait for GATE H of `cue_heard_rescue` and the D7 amendment. No code
-yet.**
+spec read") and ruled by Ken ("Build spec ruling"). Stage 1 built 2026-11-14: C0-C3 and C2p
+on this branch (Results rows 13 and 14), stopped there. Next: the D7 amendment (Fable 5.2)
+and C4-C7 (Sonnet 5.5), both after GATE H of `cue_heard_rescue` is ruled. The review waits
+for C7. Nothing calls `judge` yet; the one behaviour change so far is C3: Genius and custom
+songs show their parentheses.**
 
 Branch `backing_vocal_lines` off `dev` at `1016e20`, worktree
 `.claude/worktrees/backing_vocal_lines`. Work and run everything from the worktree. Whisper
@@ -391,7 +393,7 @@ commit's tests ride with it; pre-commit on the files changed. STOP and report wh
 differs, C2p differs from Phase 0, an existing test needs more than a call-shape edit, a
 cleaner's output changes, or anything here contradicts the code.
 
-- [ ] **C0. Anchors** (no commit). Confirm these exist as D1-D9 use them:
+- [x] **C0. Anchors** (no commit). Confirm these exist as D1-D9 use them:
   `srt_cues.clean_cue_texts`, `_clean_cue`, `is_all_caps`, `_recase_line`,
   `cue_spans_from_srt`; `genius_lyrics._strip_markup`, `_PAREN_CONTENT_RE`, `clean_srt_line`,
   `parse_lyric_lines`; `cue_align.align_song`, `segment_by_gaps`, `split_section_to_lines`,
@@ -400,7 +402,7 @@ cleaner's output changes, or anything here contradicts the code.
   `_run_cue_align`, `_write_debug_capture`; `library_regen.LRC_ORIGIN`, `MOVIE_ORIGIN`;
   `word_edit.edited_srt`. And that neither `lrclib_fit_pick` Phase 4 nor `cue_heard_rescue`
   is on `dev`; if one is, STOP ("Landing order").
-- [ ] **C1. `feat(lyrics): read a cue sheet's parentheticals and where each sits in its
+- [x] **C1. `feat(lyrics): read a cue sheet's parentheticals and where each sits in its
   line`.** D4: the two renames in `genius_lyrics` with their callers; `ParenGroup`,
   `ParenCue`, `sheet_parens` in `srt_cues`. Tests in `test_srt_cues.py`: a group at a line's
   end, start and middle; two groups in one cue; a paren-only cue (`inline` False, `line` the
@@ -411,7 +413,7 @@ cleaner's output changes, or anything here contradicts the code.
   curly-quoted title card whose text starts with `"`; every inline cue's line equal to
   `cue_spans_from_srt`'s. Existing cleaner tests unedited. Then `docs(plans): backing-vocal-lines
   inventory.py follows the rename`, so the Phase 0 record still runs (plan-only, not landed).
-- [ ] **C2. `feat(cue_align): which parentheticals were sung, by the GATE A rule`.** D5:
+- [x] **C2. `feat(cue_align): which parentheticals were sung, by the GATE A rule`.** D5:
   `backing_vocals.py` with `ORIGINS`, the copied constants, `Verdict` and `judge`. Tests in a
   new `tests/unit/test_backing_vocals.py`, made-up words: a share of exactly 0.5 kept, under it
   dropped; a word ending exactly where the padded window starts is out; the lead shifts the
@@ -421,7 +423,7 @@ cleaner's output changes, or anything here contradicts the code.
   with one of today's lines and with an earlier kept paren-only cue; a later cue overlapping
   only a dropped one is kept; `unplaced`; `ORIGINS` holds `srt` and `library_regen.LRC_ORIGIN`
   and not `MOVIE_ORIGIN`.
-- [ ] **C2p. Parity on the library, read-only.** New `plans/backing-vocal-lines/parity.py
+- [x] **C2p. Parity on the library, read-only.** New `plans/backing-vocal-lines/parity.py
   ~/pikaraoke-songs plans/backing-vocal-lines/out`: for every song in `songs.json` not
   skipped, read its sheet as the stage does (UTF-8), run `sheet_parens`, then `judge` with the
   bundle's `transcribe_words`, its `joint_stats.offset_s` (or 0.0) and the sheet's line spans.
@@ -430,7 +432,7 @@ cleaner's output changes, or anything here contradicts the code.
   60 `vocable`, 21 `consistency`; no `quote` or `overlap` among them. Any other difference is a
   STOP. Commit the script and a Results log row as `docs(plans): backing-vocal-lines parity of
   the built rule with Phase 0`.
-- [ ] **C3. `feat(lyrics): karaoke words keep their parentheses`.** D9: `show_parens`, and
+- [x] **C3. `feat(lyrics): karaoke words keep their parentheses`.** D9: `show_parens`, and
   the stage calls it in alignment mode before `_generate_ass`. On its own this changes the word
   text of Genius and custom songs with parens (Decision 2), never their timing. Tests: a
   Genius-shaped line ("(I can't help) Falling", words I, can't, help, Falling) shows "(I",
@@ -1228,3 +1230,4 @@ Raw tables, commands and commits only; no verdicts in this table.
 | 11 | 2026-11-14 | spec read | Read by Fable 5.2 on `2dc30b7a` against `dev` `1016e20`, `cue_heard_rescue` `81d0d0bc`, `lrclib_fit_pick` `e8bd6994`; `read_counts.py ~/pikaraoke-songs out`, read-only over `out/heard.json`, `out/songs.json` and the bundles (`find ~/pikaraoke-songs -newer <stamp>` empty) | 34 songs, 2167 old lines, 202 gain words, 56 lines added. Old lines back to the aligner without gaining / beside a change only / all other: A (re-section) 1170 / 5 / 790; B (nearer section) 944 / 14 / 1007; C (own window) 809 / 48 / 1108. Gaining lines timed by today's section align 192 (echo heard 131, no audio evidence 60, mixed 1); under the half-the-tokens bar if no echo word is timed 30 (27 / 3 / 0), needing 1 echo word 13, 2 words 12, 3 or more 5; empty after today's section align 10. Inline keeps with a letterless text before the group 0 of 205; groups with no word once normalised 0 of 626. "Build spec read". |
 | 12 | 2026-11-14 | spec ruling | Ruled by Ken on `1a4ade25` | Point 4: option C (a kept paren-only line in a window of its own). Point 7: B2 amended. Point 8: C0-C3 and C2p now, C4-C7 after GATE H of `cue_heard_rescue` and a D7 amendment. Points 10 and 11 taken. No script re-run. "Build spec ruling". |
 | 13 | 2026-11-14 | C2p | `parity.py ~/pikaraoke-songs plans/backing-vocal-lines/out` on `5a70cf34` (C1 `474fc0ff`, C2 `5a70cf34`), read-only: `find ~/pikaraoke-songs -newer <stamp>` empty after | 170 cue songs read as the stage reads them (UTF-8), 7 movie songs skipped. 626 of 626 groups matched by (song, cue, group) with equal label keys, none extra. Kept 261, per group the same as Phase 0's `consume none +vocables +consist`: heard 180, vocable 60, consistency 21. Built verdicts: not_heard 359, quote 6 (Phase 0 dropped the same 6), unplaced 0, overlap 0. Differences 0. "C2p".
+| 14 | 2026-11-14 | stage 1 | C0 anchors; C1 `474fc0ff`, C2 `5a70cf34`, C2p `3eed4bc2`, C3 `2eac1ad4` on `25130fa1`; `python -m pytest`, `pre-commit` on the changed files, `graphify update .` | C0: every anchor exists; `dev` `3c8d1de5` is `1016e20` plus one plans-only commit; neither `cue_heard_rescue` nor `lrclib_fit_pick` is on `dev` or this branch, `align_song` has no `heard_words`. Tests added: `test_srt_cues.py::TestSheetParens` 19, `test_backing_vocals.py` 39 (new file), `test_lyric_align.py::TestShowParensWiring` 2; no existing test edited, no cleaner output changed. Full suite 3636 passed. Pre-commit passed on every changed file. Graph rebuilt: 8606 nodes, 21481 edges. Ruling point 4's two cases built: `at` None after text with no letter (C1), a group with no word is `not_heard` before the vocable test (C2). One reading differs from D9's wording: a lone `)` token mid-line sticks to the previous token ("( oh ) hey" shows "(oh)", "hey"), not the next. "Build spec ruling", "Commits".
