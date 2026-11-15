@@ -46,7 +46,8 @@ logger = logging.getLogger(__name__)
 #     [first, end) in that line's align tokens (null for a dropped one). With a
 #     keep: ``old_line_ids``, each line's id before the keep (null for an added
 #     line), and ``aligned_sections``, the [lid_lo, lid_hi] of each section
-#     sent back to the aligner.
+#     sent back to the aligner. The bundle's ``lyrics.lines`` and ``align_lines``
+#     are then the song's lines with the kept groups in, not the sheet's.
 # v11: interior-pause end repair (plans/edge-snap-coverage-accuracy.md
 #     Phase 6). A milestone bump (run-affecting) -- no field renamed or
 #     removed, but output_line_timings move, so regen treats v10 bundles as
