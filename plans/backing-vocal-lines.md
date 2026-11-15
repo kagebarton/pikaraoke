@@ -4,8 +4,9 @@ Model: Claude Opus 5.5 runs Phase 0, judges both gates and writes the build spec
 Claude Sonnet 5.5 builds from that spec. (High-level spec by Claude Fable 5.2, 2026-11-11.)
 
 **Status: GATE A ruled GO on the amended hybrid, 2026-11-14 ("GATE A ruling"). Build spec
-written 2026-11-14 ("Build spec": Design, Commits). Next: Ken reads the spec and its four
-choices; then Sonnet builds C0-C7. No code yet.**
+written 2026-11-14 ("Build spec": Design, Commits) and read by Fable 5.2 the same day ("Build
+spec read"). Next: Ken rules on its points 4, 7 and 8; then Sonnet builds C0-C7 from the spec
+as amended. No code yet.**
 
 Branch `backing_vocal_lines` off `dev` at `1016e20`, worktree
 `.claude/worktrees/backing_vocal_lines`. Work and run everything from the worktree. Whisper
@@ -478,6 +479,180 @@ cleaner's output changes, or anything here contradicts the code.
   simplicity (one rule, one reader, no second cleaner, no handling for states that cannot
   occur), robustness (stray and glued parens, capitals files, window edges, re-sectioned songs,
   an empty transcript). Phase 2 follows the review.
+
+#### Build spec read (Fable 5.2, 2026-11-14)
+
+A read of Design and Commits on `2dc30b7a`, not a rewrite: nothing above is edited. Checked
+against `dev` `1016e20` (`cue_align.py`, `onset_snap.py`, `srt_cues.py`, `genius_lyrics.py`,
+`word_edit.py`, the align stage), `cue_heard_rescue` at `81d0d0bc` (`cue_align.py`,
+`heard_lines.py`, the stage) and `lrclib_fit_pick` at `e8bd6994` (its plan, "Phases 4-6").
+Counts are from `read_counts.py` (Results row 11), read-only, no GPU. Each point is **keep**,
+**change** (with the smallest edit) or **ask Ken**. Sonnet builds from Design and Commits as
+amended by Ken's rulings on this list.
+
+| # | Point | Verdict |
+|---|---|---|
+| 1 | D1, the keep step inside `align_song` after the first `fit_offset` | keep |
+| 2 | D1 / D2, after the LRCLIB pick | keep |
+| 3 | D3, no sheet changes | keep |
+| 4 | D7.2, a paren-only line re-sections the song | ask Ken (choice 1, now three options) |
+| 5 | D7.3, the section memo | keep |
+| 6 | D7.4, the pinned rescue lead | keep |
+| 7 | D7, "an old line can move only if..." and B2's zero | change, and ask Ken (choice 4) |
+| 8 | Landing order, `cue_heard_rescue` | change; ask Ken on the build order |
+| 9 | D8, coverage on old words | keep: not now |
+| 10 | D4, `at` | keep, one case added |
+| 11 | D5 against `heard.py` | keep, one order fixed |
+| 12 | Choices 2 and 3 | keep |
+
+**1. D1: keep.** The transcript exists before `align_song` and the lead only after its first
+pass; no earlier place has both. `joint_stats.offset_s` is the first `fit_offset`, the value
+Phase 0 used. On a song that did not re-section, the rescue's own fit is the same call on the
+same inputs, so the lead D7.1 pins is that same number. `judge` and `with_backing` are pure, so
+`align_song` stays drivable by a stub aligner.
+
+**2. After the pick: keep.** `lrclib_fit_pick` 4d calls `_dereverb_gate` once in `run`, runs
+the check on a song that would go joint, writes the picked sheet to `ctx.tmp_dir`, loads it
+with `_load_lyrics` and runs the cue route. Its frozen list names `clean_cue_texts` and
+`clean_srt_line`; D2 leaves both alone. The keep step sits inside the cue route, so it is after
+the pick on any landing order. C5 reads the parentheticals from `lyrics_path`, which on a pick
+is the tmp sheet: correct, and the "Landing order" note already says so.
+
+**3. D3: keep.** The cleaner is unchanged, so `word_edit.edited_srt`'s check and "a cleaned
+line cleans to itself" hold with no edit. One consequence to know, no change asked: on a song
+with a keep the bundle's `lyrics.lines` are no longer the sheet's cleaned lines. Its readers
+are Repair's custom-lyrics box (`LibraryTools.custom_start` prefills from them, so a typed
+sheet started there carries the backing lines in parentheses, timed by the Genius parser),
+`current_lines` (C6 covers it) and the history list. None compares them to the sheet.
+
+**4. D7.2: ask Ken.** The 56 paren-only lines are where most of the avoidable re-timing comes
+from. Old lines that go back to the aligner without gaining a word, over the 34 songs (2167
+old lines, 202 gain words):
+
+| Placement of a kept paren-only cue | Back to the aligner, not gaining | Beside a change only | All other lines |
+|---|---|---|---|
+| A, the spec: re-section, the new line is a cue | 1170 | 5 | 790 |
+| B, choice 1's alternative: joins the nearer section, never merges | 944 | 14 | 1007 |
+| C, new: aligned in a window of its own, today's sections stay | 809 | 48 | 1108 |
+
+The 809 are section-mates of the 202 gaining lines and are the same under all three. A adds
+361 old lines for 56 new ones (10 of them with no audio evidence). Seven songs carry most of
+it (A / C): `68LBPvFhMx0` 53 / 2, `wGyh_53ecgg` 37 / 4, `6q0JnftlH-I` 36 / 0, `JGwWNGJdvx8`
+63 / 13, `D_dOXTpwV5s` 59 / 23, `ru0K8uYEZWw` 72 / 30, `PodgxWsZw9s` 60 / 27.
+
+- A is the least code and is what the route does with any sung cue. Re-aligning the line
+  before with the echo's words present may be the better timing where the aligner put that
+  line's last words on the echo. It is also the most old lines for Ken's ear to vouch for.
+- C: today's sections are kept and renumbered; each added line is one aligner call over its
+  cue span, padded as a section's is and clamped at the midpoints to its neighbours' cues. No
+  old line is re-aligned for a paren-only line. The line before still gives up the slot: the
+  end snap stops a line's last word at the next line's first word
+  (`onset_snap.snap_line_ends`, `line_bound`), and 41 of the 43 previous-line overlaps in the
+  second read have an end-extension record. Costs: about 20 lines more than A; the new line is
+  timed without its lead's text beside it; the 7 next-line overlaps are not helped and go to
+  B5. D7.3 then needs no dict (a section is re-aligned when it holds a gaining line) and the
+  `D_dOXTpwV5s` cap-split case goes away.
+
+Recommendation: C, because Decision 1 ranks old timing over new lines and C exposes 361 fewer
+old lines for the same 56. A is right if Ken would rather the echo and its lead be timed
+together and accepts the longer B2 list. B is between and has neither's argument.
+
+**5. D7.3: keep.** Section windows are rounded to 3 dp, so the key is exact. It makes a reused
+section identical inside one call. B1 and B2 compare two runs, so they also rest on the aligner
+giving the same words twice for the same slice, which no step here checks; B1 is the first
+place it would show. One-line re-aligns are outside the memo and are asked for again.
+
+**6. D7.4: keep.** The pinned value is right (point 1). On `cue_heard_rescue` it goes in
+`_Rescue.__init__` (`self.offset`), where it also puts the cue spans on the audio clock for the
+heard-line match.
+
+**7. "An old line can move only if...": change.** The three cases are not every way. Reading
+the rescue:
+
+- On `dev`: a re-aligned line's start bound is the previous line's *result* (`_start_bound`
+  reads `previous["end"]`), and guessed words are bounded by the neighbours' results. So a
+  change passes down a run of consecutive rescued lines: line 2 from a change can move when
+  line 1 did. The repeat-run slack, the singing-end search and both snaps do stop one line
+  over, as D7 says.
+- On `cue_heard_rescue`, three more reach past the neighbour. `heard_lines` is one match of
+  the transcriber's words to every token in the song, and an echo's words are its lead's, so
+  new tokens can re-deal heard words among repeats some lines away, which flips rule A1, A2, B
+  or D for a line nothing else touched. `runs_heard` is decided per run of identical lines: a
+  run of four with its second line gaining words becomes three runs, and line 4 is judged
+  differently. `free_stretch` reads the next line the first pass left clean and the last
+  non-fill line, either of which can be several lines off.
+
+Smallest edit: D7's paragraph says "is expected to move only if", and names the chain. B2
+(Ken's text, choice 4): the middle group is "in a section that went back to the aligner, or
+directly before or after a changed or added line"; "all other lines" is expected to show zero
+moves, and each move there is listed with the rescue step that changed, not stopped on as a
+bug. B1 stays the bug check. If Phase 2 shows more than a handful, the change to try is to run
+the rescue on the touched lines only and copy today's result for the rest; not now, because
+the rescue's stats and the offline replay would then need the copied lines' results too.
+
+**8. Landing order, `cue_heard_rescue`: change.** Its status is stale: not stopped at 3b2 but
+through 4c at `81d0d0bc`, waiting on Ken's listening and GATE H. The `heard_words` keyword and
+the class are as the note says. The risk it names is real and a little wider:
+
+- Rule B aims a bad or partial new line at where its words were heard, and rule D moves a
+  complete, placed one. For an echo the transcriber did not hear on its own, the words heard
+  are its lead's.
+- A re-align the transcriber confirms is freed from the previous line's end (`start_bounded`),
+  the one guard that would keep an echo off its lead.
+- The other way round: an echo's tokens can take the lead's heard words, leaving the lead
+  unheard and without rules A1 and A2.
+
+Smallest edit: the note's last sentence becomes "report, for new lines, every heard-aimed and
+whole-aimed keep, and for old lines every change in heard or confirmed status". Ask Ken on the
+order: C1, C2, C2p and C3 do not touch the rescue; C4 and C5 do, and `cue_heard_rescue`
+rewrote it (`cue_align.py`: 604 lines added, 149 removed against `dev`). Recommendation: build C1-C3 on `dev` now and hold C4
+until GATE H is ruled, so C4 is written once on the rescue that ships.
+
+**9. D8: keep, coverage on old words not now.** Worst case, the aligner times no echo word:
+
+| Gaining lines | All | Echo heard | No audio evidence | Mixed |
+|---|---|---|---|---|
+| Timed by today's section align | 192 | 131 | 60 | 1 |
+| ...under the bar if no echo word is timed | 30 | 27 | 3 | 0 |
+| Empty after today's section align (rescued today) | 10 | | | |
+
+The vocables are not where the bar bites: they sit on leads long enough to carry them, 3 lines
+excepted. The 30 are lines whose echo is longer than the lead, 27 of them heard, and 13 of the
+30 clear the bar on one echo word. For those lines a bar on old words alone would keep a
+one-word lead and guess five echo words after it, which is not plainly better than the
+re-align it replaces. It is also a rescue change, which "Not doing" rules out. Smallest edit:
+D8 carries the count, and Phase 2 reports these 30 lines by id under B3. What the 60 vocable
+groups risk is B4 (guessed, not timed), which the evidence split already shows.
+
+**10. D4, `at`: keep.** Cleaning the text before the group, then checking today's line starts
+with those tokens, catches the glued case and follows the cue cleaner's label and capitals
+decisions. One case it gets wrong: text before the group with no letter in it ("1, 2 (hey)
+go") cleans to nothing, so `at` is 0 and passes the check, and the echo lands before "1, 2".
+Smallest edit: such a group's `at` is None (`unplaced`); one test in C1. None of the 205
+inline keeps has it.
+
+**11. D5 against `heard.py`: keep.** Line by line it is `consume none`: the window and its
+overlap test, the split at spaces, hyphens and slashes, distinct words, the class match tried
+before `_match_simple`, 0.5 inclusive, the vocable test on the step 2 set (not the classes),
+consistency by song and label key, the bundle's `offset_s` or 0.0. The quote drop and the two
+step 5 drops are additions the 261 do not meet. One order to fix: "no word once normalised" is
+written last, but `all()` over no words is true, so step 3 would keep such a group as a
+vocable. Smallest edit: that test comes first; one test in C2. None of the 626 groups has it.
+Phase 0 read sheets as `utf-8-sig` and the stage reads `utf-8`; C2p will show any sheet where
+that matters.
+
+**12. The four choices.**
+
+1. Point 4: A, B or C.
+2. Custom typed sheets show their parens: keep. Same parser as Genius, same Decision 2; an
+   origin check would be a difference nobody asked for.
+3. Saving a word edit drops the backing lines: keep, with C6's entry. It is Decision 4 read
+   plainly, and the alternative is its own feature.
+4. Point 7: B2's middle group as worded there, and "all other lines" listed, not stopped on.
+
+**For Ken to rule:** point 4 (A, B or C; recommended C), point 7 (B2's wording), point 8 (C1-C3
+now and C4 after GATE H, or all on `dev` now). Points 10 and 11 are two one-line edits Sonnet
+takes with the spec unless Ken objects.
 
 ### Phase 2: replay (after the build, local GPU, output outside the library)
 
@@ -1016,3 +1191,4 @@ Raw tables, commands and commits only; no verdicts in this table.
 | 8 | 2026-11-14 | GATE A | Second read by Fable 5.2 on `feb71bc4`, read-only: inline counts over `out/heard.json`, `out/baseline.json` and the bundles' `output_line_timings` (no script re-run, no label changed) | Worded sung kept 161/259 under `none`, 181/259 with `+consist`. Hybrid's 261 kept: heard 180 (134 inline / 46 paren-only), vocable on text 60 (58 / 2), consistency 21 (13 / 8); 34 songs, 30 with an inline keep. Of the 50 on-screen overlaps: 43 with the previous line (27 covering 80% or more of the window, 37 half or more, 41 end-extended), 7 next line only, 8 under 0.5 s. Recommended GO on the hybrid as an amended gate, Decision 3 read by cue time. "GATE A second read". |
 | 9 | 2026-11-14 | GATE A | Ruled by Ken | GO on the amended hybrid with the second read's conditions; Decision 3 overlap by cue time, on-screen overlap judged at GATE B (B5 amended); beep, censored, heartbeat not shown, skate sung. No script re-run. "GATE A ruling". |
 | 10 | 2026-11-14 | spec | `spec_counts.py ~/pikaraoke-songs out` on `b2f914be`, read-only over `out/heard.json`, `out/songs.json`, the sheets and the bundles | 261 kept by `none +vocables +consist`, 0 of them quote-opened. Cues mixing a kept and a dropped group: 4 (`FQ3slUz7Jo8` paren-only; `wIyNAsmGrl0` three inline). Inline keeps by position in the cue: end 181, start 18, middle 6; glued to a neighbour 4, all a comma after `)`. Kept paren-only cues 56; re-sectioned with each one: joins one section 22, own section 2, merges two 31, two more sections 1 (`D_dOXTpwV5s`, a run captioned with no gap, whose 60 s cap splits move); kept paren-only cues overlapping each other 0. Songs with a keep 34, re-sectioned 0. Evidence: heard 180, vocable 60, consistency 21. "Design". |
+| 11 | 2026-11-14 | spec read | Read by Fable 5.2 on `2dc30b7a` against `dev` `1016e20`, `cue_heard_rescue` `81d0d0bc`, `lrclib_fit_pick` `e8bd6994`; `read_counts.py ~/pikaraoke-songs out`, read-only over `out/heard.json`, `out/songs.json` and the bundles (`find ~/pikaraoke-songs -newer <stamp>` empty) | 34 songs, 2167 old lines, 202 gain words, 56 lines added. Old lines back to the aligner without gaining / beside a change only / all other: A (re-section) 1170 / 5 / 790; B (nearer section) 944 / 14 / 1007; C (own window) 809 / 48 / 1108. Gaining lines timed by today's section align 192 (echo heard 131, no audio evidence 60, mixed 1); under the half-the-tokens bar if no echo word is timed 30 (27 / 3 / 0), needing 1 echo word 13, 2 words 12, 3 or more 5; empty after today's section align 10. Inline keeps with a letterless text before the group 0 of 205; groups with no word once normalised 0 of 626. "Build spec read". |
