@@ -5,7 +5,7 @@ fallback if Fable is not available then. Where Fable earns its keep is listed un
 
 # Cue-align rescue: the transcriber's words outrank the cue
 
-**Status: Phases 1 and 2 done 2026-11-14 (1: `a24348be`..`fecebdd2`; 2a `6eef9d5d`, diff-read fix `f2d305fc`, 2a2 `60789275`, 2b `65438683`, 2c `829d02d6`). Phase 3: 3a (probe `f3edd413`, fix `a0a10911`, tolerance `e23f0d60`), 3b ("Report output", rerun at `e23f0d60`) and 3b2 (Fable 5.2 read, Results log row 13) done 2026-11-14. 3c (test songs picked and staged, Results log row 14) done 2026-11-14. 3c2 (review run and triaged, Results log row 15: no fix changes `cue_align.py` or `heard_lines.py`, so 3b and 3c stand) done 2026-11-14. 3d (the regen, run on this box by the executor, Results log row 16) done 2026-11-14. 4a's comparison script is built (`f6469de5`); 4a to 4c not run.**
+**Status: Phases 1 and 2 done 2026-11-14 (1: `a24348be`..`fecebdd2`; 2a `6eef9d5d`, diff-read fix `f2d305fc`, 2a2 `60789275`, 2b `65438683`, 2c `829d02d6`). Phase 3: 3a (probe `f3edd413`, fix `a0a10911`, tolerance `e23f0d60`), 3b ("Report output", rerun at `e23f0d60`) and 3b2 (Fable 5.2 read, Results log row 13) done 2026-11-14. 3c (test songs picked and staged, Results log row 14) done 2026-11-14. 3c2 (review run and triaged, Results log row 15: no fix changes `cue_align.py` or `heard_lines.py`, so 3b and 3c stand) done 2026-11-14. 3d (the regen, run on this box by the executor, Results log row 16) done 2026-11-14. 4a to 4c (the compare run, the listening sheet, the tables in "Report output" and Results log row 17) done 2026-11-14. Open: Ken's listening to the sheet (4b) and GATE H (Fable 5.2, then Ken).**
 
 Branch `cue_heard_rescue`, off `dev` `a7671d7`.
 
@@ -487,7 +487,7 @@ Read-only on the library (`/home/ken/shared-drives/D:/Shared/pikaraoke-songs`).
 
 ### Phase 4: before against after (Sonnet; after Ken's run)
 
-- [ ] **4a.** (Changed 2026-11-14, Results log row 16: the script is `scripts/cue_heard_compare.py COPY`, not a `--compare` flag; the rule tables are measured against a same-bundle baseline, and the moves against the source bundle are Table S.) `--compare <copy>`: each staged song's new bundle against its source
+- [x] **4a.** (Changed 2026-11-14, Results log row 16: the script is `scripts/cue_heard_compare.py COPY`, not a `--compare` flag; the rule tables are measured against a same-bundle baseline, and the moves against the source bundle are Table S.) `--compare <copy>`: each staged song's new bundle against its source
   bundle. Tables, raw: per rule (the new stats ids), each line's start before, after and
   heard, and for A, B and D lines whether the new start is closer to, within 0.05 s of,
   or further from the heard start; for every D line tried, kept or not, its start and
@@ -504,14 +504,14 @@ Read-only on the library (`/home/ken/shared-drives/D:/Shared/pikaraoke-songs`).
   Results log row 15); Table O again (other lines that moved, with amounts);
   the three target spots of "What the three flawed picks showed", and line 1 of Quit
   Playing Games.
-- [ ] **4b. Listening sheet** `<out>/listening-sheet.html`, at most 22 spots, in this
+- [ ] **4b. Listening sheet** (sheet built 2026-11-14, Results log row 17; Ken's listening is open, his verdicts go to GATE H in chat) `<out>/listening-sheet.html`, at most 22 spots, in this
   order: the three target spots and Quit Playing Games line 1; then rule C kept lines,
   largest move first, at most 2 a song, up to 8; rule D kept lines up to 3; rule B up
   to 4; rule A up to 2; one zero-length line. Each row: song, m:ss (4 s before the earlier start), rule, before
   and after. Ken plays the copy in an isolated app (`APPDATA` `C:\temp\p8\appdata`), as
   on 2026-11-12. (Changed 2026-11-14, Results log row 16: Ken listens in VLC with a song's
   .ass loaded, no app; each row also gives the video, the new .ass and the old one.)
-- [ ] **4c.** Tables into "Report output". Results log row. **STOP: GATE H.** Handoff
+- [x] **4c.** (tables and Results log row 17 done 2026-11-14; the STOP stands) Tables into "Report output". Results log row. **STOP: GATE H.** Handoff
   prompt to Fable (Opus if Fable is not available) carries: branch and HEAD, this file and "GATE H", `<out>` and the copy
   folder, "do not rerun the probe", and that Ken's verdicts arrive in chat.
 
@@ -597,6 +597,7 @@ Read-only. Inputs: the Phase 3 and 4 tables, `<out>`, Ken's verdicts on the shee
 | 14 | 2026-11-14 | 3c | Test songs picked by the plan's rule from `<out>/rows.json` (the rerun at `e23f0d60`, counted per table with ties by stem order) and staged: `python scripts/cue_heard_probe.py --stage ~/probes/cue-heard-trial --from ~/probes/lrclib-cue-trial --folder ~/pikaraoke-songs --song ...`; 24 songs, 871 MB, 24 bundles; `find ~/pikaraoke-songs -newer <out>/started` printed nothing. **Trial songs** (taken from `~/probes/lrclib-cue-trial`; `cmp` shows their bundles equal the trial folder's): Quit Playing Games `Ug88HO2mg44`, Crazy `Q4VK9_CfOLQ`, Reflection `RNprQYHenNI`. **Library, top 5 per table (lines in that table):** A: Love Is an Open Door `kQDw88hEr2c` 6, Before You Go `Jtauh8GcxBY` 3, Hurts To Love You `6X4bhT1FWjI` 3, Be Our Guest `MiraOCjABn8` 2, Ashes `CX11yw6YL1w` 2 (five songs have 2; the first two by stem order); B: Your Idol `fGyTN5UjnL4` 3, When Will My Life Begin `kRXmAIHYQR4` 3, Drowning `GZXHBgjQjNM` 2, Shape Of My Heart `OT5msu-dap8` 2, Business Time (no id) 2; C: Get Down `0LSYuZRSGcY` 9, Will I (Rent, no id) 7, Graduation `tz_NxOF7RB4` 7, Your Idol 6, Breakaway `c-3vPxKdj6o` 6; D: Bring It All Back `GLQ0biK-ZgA` 4, Takedown `j5itLHDMJsE` 3, Closer `z_aC5xPQ2f4` 3, Smokin Out The Window `GG7fLOmlhYg` 1, Castle On The Hill `K0ibBPhiaG0` 1 (Table D has 20 lines in 13 songs; the last two are the first of the songs with 1 line by stem order). Your Idol is in both B and C, so the rule gives 19 library songs, not 20. **Added by name:** Miss Independent `k6M5C-oKw9k` (rows: Z 11, B 1) and She Used To Be Mine `53GIADHxVzM` (rows: G 1), in no list. 3 + 19 + 2 = 24 songs; GATE H item 7 says "fifteen library songs and three trial songs". **Difference from the plan:** `--dry-run` on the copy as written prints `Songs to regenerate: 0`: the script selects missing or stale bundles (`schema_version < SCHEMA_VERSION`) and Decision 10 bumps no schema, so the copy's bundles are current and the 3d command as written (no `--song`) would regenerate nothing. With `--song` once per staged song (the id; the file name for the two files without one) the dry-run lists all 24 with the plan each gets: reuse srt (from video) 12, LRCLIB timing 10, movie subtitles 2 (Be Our Guest, Will I); a scratch check finds each equals its bundle's `lyrics.origin` (`srt`, `lrclib_srt`, `movie_srt`). The dry-run changed nothing in the copy. 3d, Windows, from the repo root: `uv run python scripts/regen_alignment_bundles.py D:\Shared\cue-heard-trial --yes --song Ug88HO2mg44 --song Q4VK9_CfOLQ --song RNprQYHenNI --song GZXHBgjQjNM --song 0LSYuZRSGcY --song OT5msu-dap8 --song MiraOCjABn8 --song GG7fLOmlhYg --song CX11yw6YL1w --song K0ibBPhiaG0 --song kQDw88hEr2c --song j5itLHDMJsE --song fGyTN5UjnL4 --song c-3vPxKdj6o --song Jtauh8GcxBY --song z_aC5xPQ2f4 --song GLQ0biK-ZgA --song kRXmAIHYQR4 --song 6X4bhT1FWjI --song tz_NxOF7RB4 --song k6M5C-oKw9k --song 53GIADHxVzM --song "Flight of the Conchords (2007) - Business Time" --song "Rent (2005) - Will I"`. 3c2 and 3d not started. | `~/probes/cue-heard-trial`, this file |
 | 15 | 2026-11-14 | 3c2 | Review run by Ken: `/code-review medium f2d305fc~1..HEAD` on `cue_align.py`, `heard_lines.py`, `test_cue_align.py` and `test_heard_lines.py`, with 3c2's three finders; 10 findings. Each checked against the code at `bdbc96e9` by Opus 5.5; triage put to Ken in chat and accepted. **Critical:** none. **Easy:** 10, a docstring line of 113 characters in `_with_guessed_words` (`cue_align.py:1140`); folded into the first `cue_align` commit after GATE H, not made now (a docstring-only change would set off 3c2's re-run for nothing). The `pylint` hook in `code_quality/.pre-commit-config.yaml` has the entry `bash -c 'echo $PATH'`, so pre-commit never runs pylint; "pre-commit clean" in rows 9, 11 and 13 does not cover it. **Measured for GATE H, no code change:** 4, rule C's stretch ends at the next first-pass line that `_line_is_clean`, which can be a twin the cue test rejects (in a run of identical lines, `_line_in_span` with its repeat slack fails, not confirmed). Scratch replay outside the repo (the probe's `cue_route_songs`, `snap_stem`, `load_envelope` reading `<out>/env`, and `rescue_song` with heard words, `_Rescue.free_stretch` wrapped; all 177 cue-route bundles, so the five songs Table P leaves out are in; nothing in `~/pikaraoke-songs` or `<out>` newer than the script): rule C tried 96 lines in 45 songs; for 22 the stretch ended at such a twin, and 21 of those 22 lines are in a run themselves; by song: Get Down 7, Love Me Now 3, Breakaway 2, Rent "I Should Tell You" 2, Hakuna Matata 2, Graduation 2, Crazy 1, Mirrors 1, Your Idol 1, So Sick 1. With the stretch ended instead at the next clean first-pass line the cue test places or the transcriber confirms: 26 stretches change (22 tried both ways, 4 tried only with the change), 23 of the 26 lines in a run, in 12 songs. Table C at `e23f0d60`: 46 of 94 rows in a run; 15 have a heard shift, all under 1.5 s. 4a gains the "stretch ends at a parked twin" column; GATE H item 4 reports run lines in the two groups. 3, a line rule B or D moved is not checked against the next line (`_start_bound` looks back only): 4a gains neighbour times for kept B lines and an overlap flag for kept B and D lines; GATE H item 3 names B overlaps; added to the open-issues entry "The guard looks only backward" (`0e63315d`). 1 (rule C on a line the transcriber heard) and 2 (a rule D re-align timing fewer words than the line it replaces): Ken's open calls of row 10, already measured (Table C's heard shift; 4a's `guessed_word_line_ids`). **Dropped:** 5 (the moved line's start bound holds it after the gap-retried line's end unless it is confirmed as returned, the guard lift's case; the rest is finding 1); 7 (rule D's shift is heard start minus cue start, as the rule words it); 8 (with an aligner and `pad_s` 0.75 the moved slice is at least 0.75 s, so `can_realign` never refuses it on length); 9 (the two flags of `heard_aimed_line`, noted in row 9). **Open issues:** 6, in a partial line the guess pass paces from every assigned word, zero-length ones included (so did the code before `65438683`), so a guessed word can be as short as half the line's shortest timed word; new entry (`0e63315d`). From open issues: none newly easy. No change to `cue_align.py` or `heard_lines.py`, so 3b and 3c stand. | this file, `0e63315d` |
 | 16 | 2026-11-14 | 3d | The regen, run on this Linux box by the executor at Ken's instruction, not by Ken on Windows. App closed, GPU idle before it (6 MiB used). Marker touched first. Command, from the repo root, in the background: `python scripts/regen_alignment_bundles.py ~/probes/cue-heard-trial --yes` plus the 24 `--song` patterns of row 14 (22 ids, 2 file names). The code under test was `pikaraoke/` as reviewed in row 15 (no `pikaraoke/` file differs between `f2575c8d` and HEAD). Started 17:03:05, last bundle written 18:10:57 (local), 67 min. Result `Done. succeeded=24 failed=0 skipped=0`. `find ~/pikaraoke-songs -newer <marker>` printed nothing. All 24 bundles have a new `captured_at`. The regen's backup of the 24 songs' subtitles, karaoke, lyrics and alignment_debug is `~/probes/cue-heard-trial/regen_backups/20261114T220305Z/` (Ken's message and 4b named it `regen_backup_<UTC>`); its `alignment_debug` and `karaoke` equal copies taken before the run (`diff -rq`), and `karaoke/` holds 25 files in both, the extra one being `Business Time.onsetfix.ass`. No song used the de-reverb retry (no `dereverb/` folder was made; `joint_stats.dereverb` is empty in all 24). **Log:** one `CUDAExecutionProvider not available in ONNXruntime` warning at start. 18 `Whisper align_refine failed` errors, each followed by a `slice-align failed, degrading` warning (`'NoneType' object has no attribute 'language'`, from `stable_whisper` `align`): 15 are one-line re-aligns, saved in `cue_inputs.realigns` with `words` None: Get Down 2, Quit Playing Games 1, Tangled 1, Hurts To Love You 1, Graduation 5, Will I 5; 3 are first-pass section aligns, all in Will I (lines 0-0 once, 28-29 twice). The other 17 songs logged none. So a heard-aimed or gap retry that did not keep its line in those six songs may have failed in the aligner, not been refused by a check: 4a gains an "aligner gave nothing" column on Tables B, D and C. **Differences from the plan, by Ken's instruction:** (1) the source bundles came from the Windows box and this regen re-ran whisper and decoded the stems here (row 13: this box's envelope moves snap edges), so 4a also replays each new bundle's own `cue_inputs` with `heard=False` and its saved re-aligns (the same-bundle baseline), checks the `heard=True` replay reproduces the new bundle's `output_line_timings` as 3b did, gives Table O against that baseline, gives the moves against the source bundle in a table of their own (Table S), and names the kept B lines whose cue-aimed retry has no saved answer (a rule kept the line first, so the baseline's cue-aimed call has no saved answer: its "today" is unreliable, and so is any other line's whose baseline call is unanswered, e.g. A1 lines; both are flagged per row); (2) 4a is `scripts/cue_heard_compare.py` (`f6469de5`), not a `--compare` flag, because the probe would otherwise import a module that imports it; it also has Table C's "Twin" column (in the probe) and writes `<out>/compare/` and `<out>/listening-sheet.html`, never `<out>/rows.json` or `<out>/started`; (3) 4b: Ken listens in VLC with the .ass loaded, no app; (4) the GATE H judge is Fable 5.2, Opus the fallback (`24683724`); (5) usage may run out in Phase 4, so each step is committed and logged. | `~/probes/cue-heard-trial`, `regen_backups/20261114T220305Z`, `f6469de5` |
+| 17 | 2026-11-14 | 4a, 4b, 4c | **4a run** (CPU, 23 s): `python scripts/cue_heard_compare.py ~/probes/cue-heard-trial --out ~/.pikaraoke/tmp/cue_heard_rescue > <out>/compare/report.md` at `59f9846a` (script `f6469de5`; "Aligner gave nothing" columns `c4692a7f`; Table T's first pass, confirmed and pair offsets `59f9846a`). Source: `regen_backups/20261114T220305Z`. The library probe's `<out>/rows.json` and `<out>/report.md` are byte-identical before and after (`md5sum`); the run wrote `<out>/compare/` (`report.md`, `rows.json` with lyric text and never committed, `env/`) and `<out>/listening-sheet.html`. Tables are in "Report output", unedited. **Table P:** all 24 replayed, none left out: each new bundle's `output_line_timings` is reproduced by the `heard=True` replay within 0.026 s, the replay's `*_line_ids` equal the bundle's saved repace stats, no heard replay asked an align the bundle holds no answer for, and the lyric origin and lines equal the source bundle's. Baseline lines with no saved answer ("today unanswered"): 19 lines in 8 songs (Ashes 1, Before You Go 2, Quit Playing Games 2, Crazy 2, Love Is an Open Door 6, Takedown 2, Your Idol 1, Tangled 3). **Rows:** T 7, A 18 (A1 9, A2 9; 8 in a run; all 9 A1 lines have a baseline call with no answer), G 41, Z 166, B 25 tried and 10 kept (caption 11/2, LRCLIB 14/8), D 12 tried and 6 kept (caption 9/4, LRCLIB 3/2), C 42 tried and 15 kept (caption 27/13, LRCLIB 15/2), O 22, S 118. **Named spots (Table T):** Quit Playing Games lines 24 and 25 (A1) now start 113.630 and 116.790, heard 113.600 and 116.900, source 116.963 and 118.513; Crazy line 22 (B kept) starts 115.875, source 110.195, heard 114.760; Reflection line 36 is unchanged (191.093, not heard, no rule); Quit Playing Games lines 8 and 37 are unchanged. **Quit Playing Games line 1 is unchanged (18.473) and no rule fired:** its first pass is 14.290-22.990 and one pair is 1.72 s from where the transcriber heard it (offsets -0.31 -0.28 -0.14 -0.14 -1.72 +0.03), so it is not confirmed (rule A needs every pair within 1.0 s) and A2 does not hold the re-align. **For GATE H item 3:** against the same-bundle baseline the new start is closer to the heard start for A 13 of 18 (within 0.05 s 2, further 3), B kept 9 of 10 (further 1), D kept 6 of 6; against the source bundle A closer 9, within 2, further 7; B kept closer 7, further 3; D kept closer 5, further 1. Kept B lines whose cue-aimed retry has no saved answer: all 10 (Ashes 21, Before You Go 27, Crazy 22 and 41, Takedown 20 and 48, Your Idol 36, Tangled 29, 31 and 32), so their "today" is not today's output. Kept lines whose last word ends after the next line's first word starts: B 0, D 3 (Smokin Out The Window 45, Closer 45, Takedown 49). Kept lines in `guessed_word_line_ids`: B 2, D 0. **Rule C (item 4):** by run, not in a run 15 tried and 6 kept; in a run with the stretch between twins on their cues 14 and 4; in a run with the stretch ending at a parked twin 13 and 5. 5 of the 42 tries have a heard shift and 3 of those were kept. **Aligner gave nothing** (the saved answer is a failed align, so a check did not refuse the line): C 7 of 42 (Will I 2, Graduation 2, Get Down 1, Hurts To Love You 1, Tangled 1), B 1 of 25 (Quit Playing Games line 57), D 0 of 12. **Table O (item 6):** 22 lines (caption 11, LRCLIB 11), 14 over 0.3 s, largest 2.795 s (Smokin Out The Window 44), 6 beside an unanswered baseline call; Love Is an Open Door 18 is in it (start 48.200 to 49.030, end 49.390); Love Me Now is not among the staged songs. **Table S:** 118 lines moved over 0.3 s against the source bundle (caption 79, LRCLIB 39); 83 are in a rule's list (G 23, Z 19, C kept 14, A1 8, A2 6, B kept 6, D kept 3, C tried 3, B tried 1) and 35 in none (9 over 1 s, largest 2.320 s, Smokin Out The Window 46). Table Z: 256 words re-timed in 166 lines, 139 words under 0.1 s after. **4b:** `<out>/listening-sheet.html` built by the same run: 22 spots in the plan's order (4 target, rule C 8, D 3, B 4, A 2, zero-length 1), each with m:ss (4 s before the earlier start), rule, before and after, the video path, the new .ass and the old one under `regen_backups/20261114T220305Z/karaoke/`; all 66 paths exist. The A rows are both A2 (the ranking is by move against the source). Ken's listening is open. **4c:** tables pasted, this row, status line. Code-review: not due (`cue_heard_compare.py` is a reporting script; its self-review is the three axes plus 14 mutation checks on the keep/skip logic, 4 of which first survived and got tests, and one on rule C's call index, all now failing a test; `pylint` is not installed in env `pik` and the pre-commit hook is a stub, so it did not run). No verdicts in this row. | `<out>/compare/`, `<out>/listening-sheet.html`, `59f9846a` |
 
 
 ## Report output
@@ -2359,4 +2360,574 @@ caption: 45 lines in 36 songs; LRCLIB: 9 lines in 8 songs
 | 1.000 | 3 | 12 | 25 | 4 | 6 |
 | 1.500 | 3 | 22 | 11 | 6 | 1 |
 
-(Phase 4c pastes its tables here.)
+### Phase 4a: the regenerated copy against its source
+
+`python scripts/cue_heard_compare.py ~/probes/cue-heard-trial --out ~/.pikaraoke/tmp/cue_heard_rescue > <out>/compare/report.md`
+at `59f9846a` (2026-11-14), unedited. Source bundles: `~/probes/cue-heard-trial/regen_backups/20261114T220305Z/alignment_debug`.
+Tables A, G, Z, B, D, C and O are measured against the same-bundle baseline (the new bundle's own
+`cue_inputs` replayed with `heard=False`); Table S is against the source bundle. "Today answered"
+(the baseline held every re-align answer it asked for) and "Aligner gave nothing" are the compare's
+columns from Results log rows 16 and 17.
+
+### Table P: songs regenerated, replayed and left out
+Same lyrics: the lyric origin and lines equal the source bundle's. Heard replay: the replay with the transcriber's words and every rule against the new bundle's output_line_timings, tolerance 0.026 s; a song it does not reproduce is left out of every table but S. Stats match: the replay's *_line_ids equal the bundle's repace stats. New unanswered: re-align calls of that replay the bundle holds no answer for. Today unanswered: lines whose baseline re-align has no saved answer (the cue-aimed retry a rule made unnecessary). Moved: lines whose start or end moved against the source bundle by more than that.
+
+| Src | Song | Lines | Same lyrics as source | Heard replay of the new bundle | Stats match | New unanswered | Today unanswered | Moved over 0.011 s | Moved over 0.3 s | Moved over 1.0 s |
+|---|---|---|---|---|---|---|---|---|---|---|
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 70 | yes | reproduces | yes | 0 | 0 | 5 | 1 | 1 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 114 | yes | reproduces | yes | 0 | 0 | 24 | 11 | 7 |
+| caption | Backstreet Boys - Shape Of My  OT5msu-dap8 | 52 | yes | reproduces | yes | 0 | 0 | 5 | 2 | 1 |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 92 | yes | reproduces | yes | 0 | 0 | 14 | 4 | 0 |
+| caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 47 | yes | reproduces | yes | 0 | 0 | 28 | 7 | 2 |
+| caption | Céline Dion - Ashes (Deadpool  CX11yw6YL1w | 35 | yes | reproduces | yes | 0 | 1 | 2 | 2 | 1 |
+| caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 56 | yes | reproduces | yes | 0 | 0 | 9 | 6 | 3 |
+| caption | Flight of the Conchords (2007) - Business Time | 83 | yes | reproduces | yes | 0 | 0 | 22 | 5 | 2 |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 59 | yes | reproduces | yes | 0 | 0 | 25 | 7 | 3 |
+| caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 54 | yes | reproduces | yes | 0 | 2 | 20 | 2 | 1 |
+| caption | Ne-Yo - Closer [Official Video z_aC5xPQ2f4 | 74 | yes | reproduces | yes | 0 | 0 | 41 | 11 | 2 |
+| caption | Rent (2005) - Will I | 30 | yes | reproduces | yes | 0 | 0 | 11 | 6 | 3 |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 89 | yes | reproduces | yes | 0 | 0 | 37 | 11 | 1 |
+| caption | The Philosopher Kings - Hurts  6X4bhT1FWjI | 40 | yes | reproduces | yes | 0 | 0 | 12 | 4 | 3 |
+| LRCLIB | Backstreet Boys - Quit Playing Ug88HO2mg44 | 62 | yes | reproduces | yes | 0 | 2 | 12 | 4 | 2 |
+| LRCLIB | Britney Spears - (You Drive Me Q4VK9_CfOLQ | 42 | yes | reproduces | yes | 0 | 2 | 3 | 2 | 1 |
+| LRCLIB | Christina Aguilera - Reflectio RNprQYHenNI | 38 | yes | reproduces | yes | 0 | 0 | 3 | 1 | 0 |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 49 | yes | reproduces | yes | 0 | 6 | 12 | 8 | 4 |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 52 | yes | reproduces | yes | 0 | 2 | 15 | 13 | 11 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 59 | yes | reproduces | yes | 0 | 1 | 6 | 3 | 1 |
+| LRCLIB | Ne-Yo - Miss Independent k6M5C-oKw9k | 75 | yes | reproduces | yes | 0 | 0 | 5 | 3 | 1 |
+| LRCLIB | Sara Bareilles - She Used To B 53GIADHxVzM | 45 | yes | reproduces | yes | 0 | 0 | 1 | 0 | 0 |
+| LRCLIB | Tangled (2010) - When Will My  kRXmAIHYQR4 | 33 | yes | reproduces | yes | 0 | 3 | 5 | 4 | 3 |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 62 | yes | reproduces | yes | 0 | 0 | 7 | 1 | 0 |
+
+### Table T: the spots Ken named
+Starts and ends on the audio clock. Source: the source bundle's output; Today: the same-bundle baseline; New: the new bundle's output. Heard: the transcriber's start (blank when the line is not heard). First pass: the first pass's start-end; Confirmed: the transcriber confirms it (rule A); Pair offsets: heard - placed for each paired word, all within 1.0 s to confirm. Spot: target, or expected unchanged.
+
+caption: 0 lines in 0 songs; LRCLIB: 7 lines in 3 songs
+
+| Src | Song | Line | Spot | Cue | Heard | First pass | Confirmed | Pair offsets | Source | Today | New | Rules |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| LRCLIB | Backstreet Boys - Quit Playing Ug88HO2mg44 | 1 | target | 15.063 | 13.984 | 14.290-22.990 |  | -0.31 -0.28 -0.14 -0.14 -1.72 +0.03 | 18.473-23.275 | 18.473-23.275 | 18.473-23.275 |  |
+| LRCLIB | Backstreet Boys - Quit Playing Ug88HO2mg44 | 8 | unchanged | 51.343 | 54.760 | 54.090-58.970 | yes | +0.67 -0.07 -0.18 -0.01 -0.33 -0.31 | 54.090-58.970 | 54.090-58.970 | 54.090-58.970 |  |
+| LRCLIB | Backstreet Boys - Quit Playing Ug88HO2mg44 | 24 | target | 116.963 | 113.600 | 113.630-116.790 | yes | -0.03 -0.16 -0.09 +0.09 -0.01 -0.07 | 116.963-118.513 | 116.963-118.513 | 113.630-116.790 | A1 |
+| LRCLIB | Backstreet Boys - Quit Playing Ug88HO2mg44 | 25 | target | 118.513 | 116.900 | 116.790-119.170 | yes | -0.81 -0.39 -0.57 | 118.513-120.602 | 118.513-120.602 | 116.790-119.600 | A1 |
+| LRCLIB | Backstreet Boys - Quit Playing Ug88HO2mg44 | 37 | unchanged | 151.623 |  | 151.450-157.940 |  |  | 151.450-158.975 | 151.450-158.975 | 151.450-158.975 |  |
+| LRCLIB | Britney Spears - (You Drive Me Q4VK9_CfOLQ | 22 | target | 110.195 | 114.760 | - |  |  | 110.195-118.655 | 110.195-118.655 | 115.875-118.200 | B kept |
+| LRCLIB | Christina Aguilera - Reflectio RNprQYHenNI | 36 | target | 191.093 |  | - |  |  | 191.093-198.775 | 191.093-198.775 | 191.093-198.775 |  |
+
+### Table A: lines rule A1 keeps and rule A2 holds
+Cue on the cue clock, the rest on the audio clock. Source: the source bundle's start. vs heard: the new start within 0.05 s of the heard start, else closer to it than the Today (or Source) start was, else further. Today answered: the baseline held every re-align answer it asked for on this line; if not, Today is not today's output.
+
+caption: 7 lines in 5 songs; LRCLIB: 11 lines in 5 songs
+
+| Src | Song | Line | Rule | Cue | Source | Today | New | Heard | vs heard, today | vs heard, source | Today answered | Run | Gap one side |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| caption | Backstreet Boys - Shape Of My  OT5msu-dap8 | 4 | A2 | 20.187 | 20.200 | 20.200 | 20.871 | 16.980 | further | further | yes |  |  |
+| caption | Céline Dion - Ashes (Deadpool  CX11yw6YL1w | 1 | A2 | 21.187 | 20.950 | 20.950 | 20.889 | 21.024 | further | further | yes |  |  |
+| caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 53 | A2 | 258.840 | 258.569 | 258.688 | 256.740 | 257.160 | closer | closer | yes |  |  |
+| caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 0 | A2 | 18.208 | 17.467 | 17.452 | 17.438 | 15.680 | closer | closer | yes |  |  |
+| caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 9 | A1 | 51.208 | 50.625 | 50.762 | 50.625 | 48.280 | closer | further |  |  |  |
+| caption | The Philosopher Kings - Hurts  6X4bhT1FWjI | 11 | A2 | 92.492 | 91.353 | 92.200 | 91.637 | 90.460 | closer | further | yes |  |  |
+| caption | The Philosopher Kings - Hurts  6X4bhT1FWjI | 26 | A2 | 185.852 | 185.900 | 186.184 | 185.909 | 185.664 | closer | further | yes |  |  |
+| LRCLIB | Backstreet Boys - Quit Playing Ug88HO2mg44 | 24 | A1 | 117.310 | 116.963 | 116.963 | 113.630 | 113.600 | within | within |  | yes |  |
+| LRCLIB | Backstreet Boys - Quit Playing Ug88HO2mg44 | 25 | A1 | 118.860 | 118.513 | 118.513 | 116.790 | 116.900 | closer | closer |  | yes |  |
+| LRCLIB | Christina Aguilera - Reflectio RNprQYHenNI | 32 | A2 | 167.815 | 168.275 | 168.275 | 168.928 | 168.220 | further | further | yes |  |  |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 15 | A1 | 46.120 | 45.975 | 45.975 | 46.370 | 46.620 | closer | closer |  | yes |  |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 16 | A1 | 46.870 | 46.225 | 46.725 | 47.230 | 48.040 | closer | closer |  | yes |  |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 17 | A1 | 47.600 | 47.455 | 47.455 | 48.530 | 48.820 | closer | closer |  | yes |  |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 35 | A1 | 79.220 | 78.700 | 79.075 | 77.922 | 78.440 | closer | further |  | yes |  |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 36 | A1 | 80.880 | 80.735 | 80.735 | 79.410 | 79.800 | closer | closer |  | yes |  |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 42 | A1 | 98.960 | 99.090 | 98.815 | 99.090 | 99.060 | within | within |  | yes |  |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 17 | A2 | 53.530 | 53.338 | 53.338 | 51.360 | 52.280 | closer | closer | yes |  |  |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 10 | A2 | 24.510 | 25.050 | 25.050 | 25.030 | 22.580 | closer | closer | yes |  |  |
+
+### Table G: starts the guard lift freed of the previous line
+Previous end: the previous line's end in the new replay.
+
+caption: 26 lines in 10 songs; LRCLIB: 15 lines in 6 songs
+
+| Src | Song | Line | Cue | Source | Today | New | Heard | Previous end | Today answered |
+|---|---|---|---|---|---|---|---|---|---|
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 19 | 57.149 | 57.614 | 57.614 | 56.803 | 57.140 | 57.294 | yes |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 36 | 95.697 | 95.787 | 95.787 | 95.481 | 95.920 | 95.587 | yes |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 63 | 140.315 | 140.737 | 140.737 | 140.519 | 140.160 | 140.737 | yes |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 78 | 176.900 | 177.050 | 177.050 | 177.050 | 177.020 | 176.950 | yes |
+| caption | Backstreet Boys - Shape Of My  OT5msu-dap8 | 39 | 177.138 | 178.039 | 178.039 | 176.396 | 178.540 | 178.039 | yes |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 23 | 52.928 | 52.391 | 52.391 | 52.322 | 52.400 | 52.391 | yes |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 52 | 117.248 | 116.648 | 116.648 | 116.642 | 115.880 | 116.648 | yes |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 53 | 119.274 | 118.698 | 118.692 | 118.668 | 118.920 | 118.692 | yes |
+| caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 26 | 108.808 | 108.736 | 108.736 | 108.225 | 108.700 | 108.736 | yes |
+| caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 14 | 84.440 | 84.750 | 84.750 | 83.770 | 84.160 | 84.430 | yes |
+| caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 16 | 91.640 | 91.470 | 91.470 | 90.970 | 91.460 | 91.470 | yes |
+| caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 32 | 162.480 | 162.420 | 162.420 | 161.810 | 162.460 | 162.420 | yes |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 38 | 139.743 | 139.214 | 139.214 | 139.160 | 139.140 | 139.214 | yes |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 55 | 211.591 | 211.200 | 211.220 | 211.168 | 211.240 | 211.220 | yes |
+| caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 27 | 135.458 | 134.800 | 135.428 | 132.400 | 132.900 | 132.723 |  |
+| caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 53 | 243.541 | 243.050 | 243.050 | 243.050 | 243.136 | 242.795 | yes |
+| caption | Ne-Yo - Closer [Official Video z_aC5xPQ2f4 | 24 | 83.951 | 84.039 | 83.934 | 83.451 | 84.080 | 83.934 | yes |
+| caption | Ne-Yo - Closer [Official Video z_aC5xPQ2f4 | 25 | 85.786 | 85.814 | 85.781 | 85.475 | 85.800 | 85.781 | yes |
+| caption | Ne-Yo - Closer [Official Video z_aC5xPQ2f4 | 62 | 200.867 | 200.961 | 200.961 | 200.667 | 200.980 | 200.961 | yes |
+| caption | Ne-Yo - Closer [Official Video z_aC5xPQ2f4 | 64 | 206.006 | 205.856 | 205.787 | 205.506 | 205.800 | 205.787 | yes |
+| caption | Rent (2005) - Will I | 13 | 85.385 | 85.420 | 85.420 | 84.906 | 85.540 | 85.420 | yes |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 22 | 60.034 | 59.691 | 59.691 | 59.125 | 59.800 | 59.691 | yes |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 37 | 90.466 | 90.014 | 90.014 | 89.825 | 90.080 | 90.014 | yes |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 52 | 124.550 | 124.293 | 124.293 | 116.360 | 116.860 | 124.253 | yes |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 67 | 157.801 | 157.413 | 157.413 | 157.525 | 157.120 | 157.413 | yes |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 75 | 175.563 | 175.401 | 175.381 | 174.654 | 175.400 | 175.381 | yes |
+| LRCLIB | Christina Aguilera - Reflectio RNprQYHenNI | 20 | 100.505 | 100.795 | 100.795 | 100.650 | 100.340 | 100.795 | yes |
+| LRCLIB | Christina Aguilera - Reflectio RNprQYHenNI | 24 | 120.615 | 120.775 | 120.775 | 120.775 | 120.740 | 120.605 | yes |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 20 | 63.570 | 63.020 | 63.520 | 60.120 | 60.620 | 61.040 |  |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 25 | 77.500 | 77.650 | 77.650 | 77.130 | 77.740 | 77.440 | yes |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 33 | 106.630 | 106.255 | 106.255 | 93.286 | 93.620 | 104.110 | yes |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 15 | 37.750 | 37.440 | 37.440 | 37.000 | 37.780 | 37.440 | yes |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 16 | 40.090 | 40.020 | 40.050 | 39.810 | 40.120 | 40.050 | yes |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 36 | 106.940 | 108.920 | 108.920 | 108.300 | 108.800 | 108.800 |  |
+| LRCLIB | Sara Bareilles - She Used To B 53GIADHxVzM | 7 | 38.480 | 38.140 | 38.140 | 38.200 | 38.300 | 38.140 | yes |
+| LRCLIB | Tangled (2010) - When Will My  kRXmAIHYQR4 | 8 | 41.780 | 41.810 | 41.810 | 41.525 | 42.040 | 41.810 | yes |
+| LRCLIB | Tangled (2010) - When Will My  kRXmAIHYQR4 | 15 | 75.220 | 75.750 | 75.750 | 74.750 | 75.340 | 75.690 | yes |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 27 | 120.840 | 120.700 | 120.700 | 120.516 | 121.120 | 120.700 | yes |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 28 | 123.620 | 123.880 | 123.880 | 123.026 | 123.640 | 123.956 | yes |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 43 | 189.830 | 189.694 | 189.694 | 189.626 | 189.700 | 189.694 | yes |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 49 | 207.740 | 207.456 | 207.456 | 207.226 | 208.200 | 207.456 | yes |
+
+### Table Z: zero-length words re-timed
+Zero-length: words under 0.05 s in the line as the baseline rescue left it. Re-timed: words whose times the zero-length rule changed. Short after: words under 0.1 s in the snapped line.
+
+caption: 111 lines in 13 songs; LRCLIB: 55 lines in 9 songs
+
+| Src | Song | Line | Tokens | Zero-length | Re-timed | Short after |
+|---|---|---|---|---|---|---|
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 0 | 2 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 5 | 5 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 8 | 4 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 13 | 9 | 1 | 1 | 1 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 15 | 5 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 19 | 5 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 33 | 6 | 2 | 3 | 0 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 34 | 9 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 36 | 5 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 40 | 5 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 48 | 9 | 3 | 4 | 0 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 50 | 5 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 54 | 5 | 1 | 1 | 1 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 56 | 5 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 60 | 5 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 61 | 8 | 2 | 3 | 3 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 62 | 9 | 1 | 1 | 1 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 64 | 11 | 4 | 4 | 0 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 65 | 7 | 3 | 4 | 0 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 68 | 5 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 4 | 4 | 2 | 3 | 0 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 5 | 4 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 9 | 9 | 1 | 1 | 1 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 20 | 4 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 24 | 4 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 35 | 6 | 1 | 1 | 2 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 37 | 7 | 2 | 3 | 2 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 38 | 7 | 2 | 3 | 1 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 39 | 6 | 1 | 1 | 1 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 41 | 3 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 42 | 6 | 1 | 1 | 2 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 43 | 5 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 49 | 4 | 1 | 2 | 0 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 53 | 6 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 54 | 4 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 56 | 4 | 2 | 3 | 3 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 58 | 5 | 1 | 2 | 1 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 59 | 3 | 1 | 2 | 2 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 74 | 4 | 2 | 2 | 3 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 79 | 3 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 80 | 3 | 1 | 1 | 1 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 82 | 3 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 83 | 3 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 85 | 3 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 91 | 2 | 1 | 1 | 1 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 93 | 7 | 2 | 3 | 2 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 97 | 7 | 2 | 3 | 0 |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 105 | 7 | 2 | 3 | 2 |
+| caption | Backstreet Boys - Shape Of My  OT5msu-dap8 | 20 | 2 | 1 | 1 | 0 |
+| caption | Backstreet Boys - Shape Of My  OT5msu-dap8 | 26 | 12 | 4 | 4 | 4 |
+| caption | Backstreet Boys - Shape Of My  OT5msu-dap8 | 37 | 11 | 2 | 3 | 0 |
+| caption | Backstreet Boys - Shape Of My  OT5msu-dap8 | 41 | 8 | 2 | 2 | 2 |
+| caption | Backstreet Boys - Shape Of My  OT5msu-dap8 | 43 | 10 | 1 | 2 | 3 |
+| caption | Backstreet Boys - Shape Of My  OT5msu-dap8 | 44 | 11 | 5 | 6 | 0 |
+| caption | Backstreet Boys - Shape Of My  OT5msu-dap8 | 45 | 7 | 3 | 3 | 3 |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 13 | 6 | 1 | 1 | 0 |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 24 | 3 | 1 | 1 | 0 |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 42 | 6 | 1 | 1 | 0 |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 61 | 7 | 1 | 2 | 0 |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 64 | 7 | 1 | 1 | 0 |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 68 | 6 | 1 | 1 | 1 |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 69 | 8 | 1 | 1 | 0 |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 72 | 4 | 1 | 1 | 0 |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 76 | 7 | 2 | 2 | 0 |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 89 | 6 | 1 | 1 | 0 |
+| caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 11 | 11 | 1 | 1 | 2 |
+| caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 20 | 12 | 1 | 1 | 0 |
+| caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 25 | 6 | 1 | 1 | 0 |
+| caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 36 | 8 | 1 | 1 | 0 |
+| caption | Céline Dion - Ashes (Deadpool  CX11yw6YL1w | 12 | 13 | 1 | 1 | 0 |
+| caption | Céline Dion - Ashes (Deadpool  CX11yw6YL1w | 31 | 19 | 1 | 1 | 5 |
+| caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 0 | 10 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 4 | 5 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 24 | 9 | 1 | 1 | 0 |
+| caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 27 | 4 | 1 | 1 | 0 |
+| caption | Flight of the Conchords (2007) - Business Time | 0 | 2 | 1 | 1 | 0 |
+| caption | Flight of the Conchords (2007) - Business Time | 1 | 6 | 1 | 1 | 0 |
+| caption | Flight of the Conchords (2007) - Business Time | 16 | 12 | 2 | 4 | 2 |
+| caption | Flight of the Conchords (2007) - Business Time | 17 | 8 | 1 | 1 | 0 |
+| caption | Flight of the Conchords (2007) - Business Time | 42 | 11 | 1 | 1 | 0 |
+| caption | Flight of the Conchords (2007) - Business Time | 63 | 10 | 1 | 1 | 2 |
+| caption | Flight of the Conchords (2007) - Business Time | 82 | 8 | 1 | 1 | 3 |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 1 | 5 | 2 | 2 | 0 |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 3 | 5 | 1 | 2 | 2 |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 21 | 8 | 1 | 1 | 0 |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 25 | 7 | 1 | 1 | 0 |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 42 | 7 | 1 | 1 | 0 |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 47 | 8 | 1 | 1 | 0 |
+| caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 1 | 9 | 1 | 1 | 1 |
+| caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 25 | 7 | 1 | 1 | 1 |
+| caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 37 | 6 | 1 | 1 | 0 |
+| caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 49 | 10 | 1 | 1 | 3 |
+| caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 50 | 8 | 1 | 1 | 2 |
+| caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 51 | 9 | 1 | 1 | 4 |
+| caption | Rent (2005) - Will I | 1 | 5 | 2 | 3 | 2 |
+| caption | Rent (2005) - Will I | 12 | 8 | 4 | 4 | 3 |
+| caption | Rent (2005) - Will I | 13 | 6 | 2 | 3 | 0 |
+| caption | Rent (2005) - Will I | 15 | 8 | 4 | 0 | 4 |
+| caption | Rent (2005) - Will I | 18 | 8 | 3 | 5 | 0 |
+| caption | Rent (2005) - Will I | 21 | 7 | 2 | 3 | 3 |
+| caption | Rent (2005) - Will I | 22 | 7 | 2 | 2 | 0 |
+| caption | Rent (2005) - Will I | 24 | 8 | 3 | 3 | 1 |
+| caption | Rent (2005) - Will I | 25 | 3 | 2 | 0 | 3 |
+| caption | Rent (2005) - Will I | 29 | 5 | 2 | 3 | 3 |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 25 | 7 | 2 | 3 | 3 |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 26 | 6 | 1 | 2 | 2 |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 28 | 3 | 1 | 2 | 0 |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 51 | 7 | 1 | 1 | 2 |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 76 | 6 | 1 | 1 | 0 |
+| caption | The Philosopher Kings - Hurts  6X4bhT1FWjI | 12 | 6 | 1 | 1 | 1 |
+| caption | The Philosopher Kings - Hurts  6X4bhT1FWjI | 33 | 6 | 1 | 1 | 0 |
+| LRCLIB | Backstreet Boys - Quit Playing Ug88HO2mg44 | 7 | 8 | 1 | 1 | 0 |
+| LRCLIB | Backstreet Boys - Quit Playing Ug88HO2mg44 | 13 | 5 | 1 | 2 | 0 |
+| LRCLIB | Backstreet Boys - Quit Playing Ug88HO2mg44 | 27 | 6 | 2 | 3 | 3 |
+| LRCLIB | Backstreet Boys - Quit Playing Ug88HO2mg44 | 30 | 4 | 1 | 1 | 0 |
+| LRCLIB | Backstreet Boys - Quit Playing Ug88HO2mg44 | 39 | 6 | 1 | 1 | 0 |
+| LRCLIB | Backstreet Boys - Quit Playing Ug88HO2mg44 | 40 | 6 | 2 | 3 | 1 |
+| LRCLIB | Backstreet Boys - Quit Playing Ug88HO2mg44 | 49 | 6 | 1 | 1 | 0 |
+| LRCLIB | Backstreet Boys - Quit Playing Ug88HO2mg44 | 51 | 4 | 1 | 1 | 0 |
+| LRCLIB | Backstreet Boys - Quit Playing Ug88HO2mg44 | 54 | 6 | 1 | 1 | 2 |
+| LRCLIB | Backstreet Boys - Quit Playing Ug88HO2mg44 | 57 | 6 | 1 | 1 | 0 |
+| LRCLIB | Backstreet Boys - Quit Playing Ug88HO2mg44 | 58 | 6 | 2 | 2 | 1 |
+| LRCLIB | Britney Spears - (You Drive Me Q4VK9_CfOLQ | 16 | 10 | 1 | 1 | 1 |
+| LRCLIB | Britney Spears - (You Drive Me Q4VK9_CfOLQ | 31 | 6 | 1 | 2 | 0 |
+| LRCLIB | Christina Aguilera - Reflectio RNprQYHenNI | 4 | 9 | 1 | 1 | 0 |
+| LRCLIB | Christina Aguilera - Reflectio RNprQYHenNI | 9 | 5 | 1 | 1 | 0 |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 0 | 8 | 2 | 2 | 1 |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 1 | 4 | 2 | 2 | 2 |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 2 | 13 | 1 | 1 | 0 |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 4 | 8 | 1 | 1 | 1 |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 1 | 4 | 2 | 2 | 2 |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 4 | 12 | 1 | 1 | 5 |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 6 | 12 | 1 | 1 | 0 |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 19 | 3 | 1 | 0 | 1 |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 44 | 12 | 1 | 1 | 1 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 12 | 6 | 1 | 1 | 0 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 17 | 12 | 1 | 1 | 1 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 20 | 7 | 1 | 1 | 0 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 26 | 4 | 1 | 2 | 1 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 28 | 8 | 1 | 1 | 2 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 30 | 9 | 1 | 1 | 1 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 32 | 8 | 1 | 1 | 0 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 38 | 7 | 1 | 1 | 0 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 57 | 4 | 1 | 1 | 0 |
+| LRCLIB | Ne-Yo - Miss Independent k6M5C-oKw9k | 0 | 4 | 2 | 3 | 0 |
+| LRCLIB | Ne-Yo - Miss Independent k6M5C-oKw9k | 1 | 4 | 2 | 1 | 1 |
+| LRCLIB | Ne-Yo - Miss Independent k6M5C-oKw9k | 26 | 8 | 1 | 0 | 1 |
+| LRCLIB | Ne-Yo - Miss Independent k6M5C-oKw9k | 40 | 11 | 1 | 1 | 1 |
+| LRCLIB | Ne-Yo - Miss Independent k6M5C-oKw9k | 58 | 6 | 1 | 1 | 2 |
+| LRCLIB | Ne-Yo - Miss Independent k6M5C-oKw9k | 64 | 4 | 1 | 2 | 0 |
+| LRCLIB | Ne-Yo - Miss Independent k6M5C-oKw9k | 68 | 8 | 1 | 2 | 0 |
+| LRCLIB | Ne-Yo - Miss Independent k6M5C-oKw9k | 69 | 5 | 1 | 0 | 1 |
+| LRCLIB | Ne-Yo - Miss Independent k6M5C-oKw9k | 72 | 7 | 1 | 1 | 0 |
+| LRCLIB | Ne-Yo - Miss Independent k6M5C-oKw9k | 73 | 2 | 1 | 1 | 0 |
+| LRCLIB | Ne-Yo - Miss Independent k6M5C-oKw9k | 74 | 5 | 2 | 2 | 0 |
+| LRCLIB | Tangled (2010) - When Will My  kRXmAIHYQR4 | 0 | 6 | 1 | 1 | 0 |
+| LRCLIB | Tangled (2010) - When Will My  kRXmAIHYQR4 | 11 | 8 | 1 | 2 | 0 |
+| LRCLIB | Tangled (2010) - When Will My  kRXmAIHYQR4 | 22 | 6 | 1 | 1 | 0 |
+| LRCLIB | Tangled (2010) - When Will My  kRXmAIHYQR4 | 23 | 4 | 1 | 1 | 0 |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 4 | 11 | 1 | 1 | 0 |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 9 | 9 | 1 | 1 | 1 |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 12 | 11 | 1 | 1 | 0 |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 13 | 12 | 1 | 1 | 1 |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 24 | 9 | 1 | 1 | 0 |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 58 | 6 | 2 | 3 | 2 |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 61 | 6 | 2 | 3 | 6 |
+
+### Table B: lines rule B aimed where they were heard
+Overlap: a kept line's last word ends after the next line's first word starts. Guessed: the line is in guessed_word_line_ids. Previous and Next: start-end of the neighbouring lines with words in the new output. Answered: the bundle holds the heard-aimed align's result; Today answered: it holds the baseline's cue-aimed one (not when rule B kept the line first). Aligner gave nothing: the saved answer to the heard-aimed align is a failed align, so the line was not refused by a check.
+
+caption: 11 tried, 2 kept in 8 songs; LRCLIB: 14 tried, 8 kept in 7 songs
+
+| Src | Song | Line | Cue | Heard | Shift | Window | Lone first | Answered | Aligner gave nothing | Kept | Source | Today | Today end | New | New end | vs heard, today | vs heard, source | Today answered | Overlap | Guessed | Previous | Next |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 34 | 133.841 | 131.950 | -1.891 | 131.200-137.856 |  | yes |  |  | 132.950 | 132.950 | 137.550 | 132.950 | 137.550 |  |  | yes |  | yes | 130.330-132.850 | 138.275-140.990 |
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 56 | 212.566 | 208.720 | -3.846 | 207.970-215.596 | yes | yes |  |  | 213.438 | 213.438 | 215.678 | 213.438 | 215.678 |  |  | yes |  | yes | 201.976-213.338 | 216.025-219.350 |
+| caption | Backstreet Boys - Shape Of My  OT5msu-dap8 | 4 | 19.945 | 16.980 | -2.965 | 16.230-22.063 | yes | yes |  |  | 20.200 | 20.200 | 25.750 | 20.871 | 25.725 |  |  | yes |  | yes | 11.559-17.475 | 30.512-33.750 |
+| caption | Backstreet Boys - Shape Of My  OT5msu-dap8 | 41 | 184.887 | 186.700 | 1.813 | 185.950-191.174 |  | yes |  |  | 185.199 | 185.199 | 188.299 | 185.199 | 188.299 |  |  | yes |  | yes | 181.884-185.199 | 188.355-191.079 |
+| caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 30 | 127.394 | 125.840 | -1.554 | 125.090-131.231 | yes | yes |  |  | 127.100 | 127.100 | 129.784 | 127.100 | 129.784 |  |  | yes |  |  | 120.887-127.000 | 129.784-135.324 |
+| caption | Céline Dion - Ashes (Deadpool  CX11yw6YL1w | 21 | 180.890 | 178.350 | -2.540 | 177.600-191.612 | yes | yes |  | yes | 181.125 | 181.571 | 186.650 | 181.125 | 186.650 | closer | further |  |  |  | 161.017-173.200 | 187.900-189.825 |
+| caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 53 | 258.670 | 257.160 | -1.510 | 256.410-262.750 |  | yes |  |  | 258.569 | 258.688 | 262.480 | 256.740 | 262.520 |  |  | yes |  | yes | 255.850-256.740 | 263.000-263.980 |
+| caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 0 | 17.762 | 15.680 | -2.082 | 14.930-21.595 | yes | yes |  |  | 17.467 | 17.452 | 21.072 | 17.438 | 21.058 |  |  | yes |  | yes |  | 21.650-23.358 |
+| caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 27 | 135.012 | 132.900 | -2.112 | 132.150-137.929 | yes | yes |  | yes | 134.800 | 135.428 | 137.968 | 132.400 | 137.910 | closer | closer |  |  |  | 127.750-132.723 | 137.968-140.468 |
+| caption | Ne-Yo - Closer [Official Video z_aC5xPQ2f4 | 50 | 161.395 | 163.200 | 1.805 | 162.450-168.955 | yes | yes |  |  | 161.425 | 160.895 | 168.108 | 160.895 | 168.108 |  |  | yes |  |  | 158.926-160.796 | 168.208-171.475 |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 55 | 128.709 | 121.240 | -7.469 | 120.490-124.017 |  | yes |  |  | 128.734 | 128.709 | 130.736 | 128.709 | 130.736 |  |  | yes |  |  | 126.593-129.493 | 130.353-131.973 |
+| LRCLIB | Backstreet Boys - Quit Playing Ug88HO2mg44 | 40 | 168.183 | 166.480 | -1.703 | 165.730-171.222 |  | yes |  |  | 167.520 | 167.520 | 168.780 | 167.520 | 168.780 |  |  | yes |  | yes | 164.060-167.275 | 169.250-172.040 |
+| LRCLIB | Backstreet Boys - Quit Playing Ug88HO2mg44 | 57 | 219.252 | 212.680 | -6.572 | 211.930-216.430 | yes | yes | yes |  | 219.660 | 219.660 | 222.280 | 220.000 | 222.280 |  |  | yes |  | yes | 216.720-219.900 | 222.280-223.890 |
+| LRCLIB | Britney Spears - (You Drive Me Q4VK9_CfOLQ | 22 | 110.195 | 114.760 | 4.565 | 114.010-119.925 |  | yes |  | yes | 110.195 | 110.195 | 118.655 | 115.875 | 118.200 | closer | closer |  |  |  | 104.542-109.400 | 118.755-121.055 |
+| LRCLIB | Britney Spears - (You Drive Me Q4VK9_CfOLQ | 41 | 190.785 | 192.780 | 1.995 | 192.030-197.375 |  | yes |  | yes | 192.875 | 190.785 | 195.575 | 193.550 | 196.590 | closer | further |  |  | yes | 187.065-192.550 |  |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 20 | 63.520 | 60.620 | -2.900 | 59.870-63.730 |  | yes |  | yes | 63.020 | 63.520 | 63.730 | 60.120 | 63.800 | closer | closer |  |  |  | 58.100-61.040 | 63.900-67.380 |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 48 | 163.420 | 161.780 | -1.640 | 161.030-166.300 |  | yes |  | yes | 163.054 | 163.420 | 165.880 | 161.280 | 164.940 | closer | closer |  |  | yes | 158.790-161.180 | 165.040-167.870 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 10 | 24.200 | 22.580 | -1.620 | 21.830-27.380 | yes | yes |  |  | 25.050 | 25.050 | 27.625 | 25.030 | 27.625 |  |  | yes |  | yes | 22.725-24.425 | 27.725-30.080 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 36 | 106.630 | 108.800 | 2.170 | 108.050-114.420 |  | yes |  | yes | 108.920 | 108.920 | 114.275 | 108.300 | 114.275 | further | further |  |  |  | 106.280-108.800 | 114.375-118.610 |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 46 | 150.550 | 142.800 | -7.750 | 142.050-145.430 | yes | yes |  |  | 151.025 | 151.025 | 152.488 | 151.025 | 152.488 |  |  | yes |  |  | 138.340-141.680 | 152.450-155.070 |
+| LRCLIB | Ne-Yo - Miss Independent k6M5C-oKw9k | 74 | 249.330 | 250.860 | 1.530 | 250.110-270.600 |  | yes |  |  | 257.725 | 257.725 | 264.150 | 257.725 | 266.200 |  |  | yes |  | yes | 248.836-250.500 |  |
+| LRCLIB | Tangled (2010) - When Will My  kRXmAIHYQR4 | 29 | 127.720 | 125.880 | -1.840 | 125.130-132.650 |  | yes |  | yes | 126.225 | 126.225 | 128.710 | 126.218 | 130.070 | closer | closer |  |  |  | 121.925-125.090 | 132.650-136.953 |
+| LRCLIB | Tangled (2010) - When Will My  kRXmAIHYQR4 | 31 | 137.010 | 134.980 | -2.030 | 134.230-139.470 |  | yes |  | yes | 137.550 | 137.550 | 139.470 | 135.400 | 137.150 | closer | closer |  |  |  | 132.650-136.953 | 137.550-139.925 |
+| LRCLIB | Tangled (2010) - When Will My  kRXmAIHYQR4 | 32 | 139.470 | 137.664 | -1.806 | 136.914-140.700 |  | yes |  | yes | 139.470 | 139.470 | 141.690 | 137.550 | 139.925 | closer | closer |  |  |  | 135.400-137.150 |  |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 42 | 177.616 | 186.656 | 9.040 | 185.906-199.526 |  | yes |  |  | 186.974 | 186.974 | 189.694 | 186.974 | 189.694 |  |  | yes |  |  | 163.806-169.914 | 189.626-193.168 |
+
+Kept B lines whose cue-aimed retry has no saved answer: Céline Dion - Ashes (Deadpool  CX11yw6YL1w line 21, Lewis Capaldi - Before You Go  Jtauh8GcxBY line 27, Britney Spears - (You Drive Me Q4VK9_CfOLQ line 22, Britney Spears - (You Drive Me Q4VK9_CfOLQ line 41, KPop Demon Hunters (2025) - Ta j5itLHDMJsE line 20, KPop Demon Hunters (2025) - Ta j5itLHDMJsE line 48, KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 line 36, Tangled (2010) - When Will My  kRXmAIHYQR4 line 29, Tangled (2010) - When Will My  kRXmAIHYQR4 line 31, Tangled (2010) - When Will My  kRXmAIHYQR4 line 32
+
+### Table D: lines rule D aimed where they were heard
+Smallest and largest: signed pair offsets (heard - placed). Overlap, Guessed, Previous and Next, and Aligner gave nothing, as in Table B.
+
+caption: 9 tried, 4 kept in 4 songs; LRCLIB: 3 tried, 2 kept in 1 songs
+
+| Src | Song | Line | Heard | Pairs | Smallest | Largest | Run | Answered | Aligner gave nothing | Kept | Source | Today | Today end | New | New end | vs heard, today | vs heard, source | Overlap | Guessed | Previous | Next |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 33 | 138.810 | 2 | -2.236 | -2.134 |  | yes |  | yes | 141.046 | 141.046 | 142.470 | 139.475 | 142.470 | closer | closer |  |  | 135.424-139.375 | 142.570-145.830 |
+| caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 45 | 191.040 | 3 | 2.930 | 3.110 |  | yes |  | yes | 190.725 | 187.930 | 189.330 | 190.725 | 192.250 | closer | further | yes |  | 181.410-190.625 | 189.330-190.630 |
+| caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 38 | 185.460 | 3 | 6.494 | 6.900 |  | yes |  |  | 178.920 | 178.920 | 184.300 | 178.920 | 184.300 |  |  |  |  | 184.670-186.170 | 199.025-201.870 |
+| caption | Ne-Yo - Closer [Official Video z_aC5xPQ2f4 | 45 | 150.800 | 4 | 1.516 | 2.051 | yes | yes |  | yes | 148.769 | 148.749 | 150.789 | 150.300 | 152.550 | closer | closer | yes |  | 146.829-150.200 | 150.789-153.289 |
+| caption | Ne-Yo - Closer [Official Video z_aC5xPQ2f4 | 66 | 211.500 | 4 | 1.767 | 1.975 | yes | yes |  |  | 209.593 | 209.593 | 211.533 | 209.593 | 211.533 |  |  |  |  | 207.707-209.543 | 211.533-216.313 |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 52 | 116.860 | 3 | -7.873 | -7.433 |  | yes |  | yes | 124.293 | 124.293 | 125.153 | 116.360 | 125.286 | closer | closer |  |  | 121.313-124.253 | 125.386-126.736 |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 54 | 119.340 | 7 | -8.233 | -7.253 | yes | yes |  |  | 126.593 | 126.593 | 129.493 | 126.593 | 129.493 |  |  |  |  | 125.386-126.736 | 128.709-130.736 |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 56 | 123.440 | 7 | -7.493 | -6.803 | yes | yes |  |  | 130.353 | 130.353 | 131.973 | 130.353 | 131.973 |  |  |  |  | 128.709-130.736 | 131.973-136.873 |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 64 | 125.200 | 4 | -25.653 | -25.553 |  | yes |  |  | 150.833 | 150.833 | 152.113 | 150.833 | 152.113 |  |  |  |  | 148.598-150.733 | 152.113-155.213 |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 33 | 93.620 | 4 | -12.710 | -11.760 |  | yes |  | yes | 106.255 | 106.255 | 109.245 | 93.286 | 96.250 | closer | closer |  |  | 101.150-104.110 | 109.345-111.702 |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 49 | 165.540 | 4 | 3.550 | 4.590 |  | yes |  | yes | 161.990 | 161.990 | 162.930 | 165.040 | 167.870 | closer | closer | yes |  | 161.280-164.940 | 162.930-172.960 |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 50 | 169.220 | 2 | 6.290 | 6.810 |  | yes |  |  | 162.930 | 162.930 | 172.960 | 162.930 | 172.960 |  |  |  |  | 165.040-167.870 | 173.060-174.875 |
+
+### Table C: lines rule C looked for between their neighbours
+Heard shift: heard start - cue start on the audio clock; blank when the line is not heard, its first token is not matched or its run is not heard in full. Twin: the stretch ends at the next clean first-pass line, which is in a run of identical lines, fails the run's cue test and is not confirmed.
+
+caption: 27 tried, 13 kept in 5 songs; LRCLIB: 15 tried, 2 kept in 4 songs
+
+| Src | Song | Line | Cue | Stretch | Length | Heard shift | Run | Twin | Answered | Aligner gave nothing | Kept | Source | Today | New | Today answered |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 81 | 182.983 | 183.364-189.440 | 6.076 |  | yes | yes | yes |  |  | 182.983 | 182.983 | 182.983 | yes |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 84 | 189.155 | 188.887-194.480 | 5.593 |  | yes | yes | yes |  |  | 189.155 | 189.155 | 189.155 | yes |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 95 | 209.263 | 209.240-214.380 | 5.140 |  | yes | yes | yes |  |  | 209.263 | 209.263 | 209.263 | yes |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 98 | 212.886 | 216.900-217.735 | 0.835 |  | yes | yes | yes |  | yes | 212.886 | 212.886 | 217.028 | yes |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 99 | 213.719 | 217.540-218.320 | 0.780 |  | yes | yes | yes |  | yes | 213.475 | 213.475 | 217.540 | yes |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 100 | 214.552 | 217.700-218.620 | 0.920 |  | yes |  | yes |  | yes | 214.552 | 214.552 | 217.796 | yes |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 102 | 217.051 | 221.160-222.220 | 1.060 |  | yes | yes | yes |  | yes | 217.051 | 217.051 | 221.288 | yes |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 103 | 217.884 | 222.200-223.500 | 1.300 |  | yes |  | yes |  | yes | 217.750 | 217.750 | 222.264 | yes |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 104 | 218.717 | 222.900-223.500 | 0.600 |  | yes |  | yes |  | yes | 218.717 | 218.717 | 222.980 | yes |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 106 | 221.232 | 225.420-226.460 | 1.040 |  | yes | yes | yes |  | yes | 221.232 | 221.232 | 225.516 | yes |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 107 | 222.065 | 226.440-226.660 | 0.220 |  | yes | yes | yes | yes |  | 222.065 | 222.065 | 222.065 | yes |
+| caption | Flight of the Conchords (2007) - Business Time | 81 | 223.190 | 219.138-226.459 | 7.321 | 0.210 |  |  | yes |  | yes | 223.203 | 223.190 | 224.568 | yes |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 0 | 0.677 | 0.000-5.500 | 5.500 |  | yes | yes | yes |  |  | 0.825 | 0.677 | 0.677 | yes |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 2 | 5.025 | 5.514-18.940 | 13.426 |  |  |  | yes |  |  | 5.325 | 5.325 | 5.325 | yes |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 4 | 11.865 | 11.367-18.940 | 7.573 |  | yes |  | yes |  | yes | 12.025 | 12.025 | 12.025 | yes |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 27 | 97.224 | 93.550-100.967 | 7.417 |  | yes | yes | yes |  |  | 97.564 | 97.575 | 97.575 | yes |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 28 | 99.576 | 93.550-106.787 | 13.237 |  | yes |  | yes |  |  | 99.800 | 99.800 | 99.800 | yes |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 29 | 101.749 | 93.550-106.787 | 13.237 |  |  |  | yes |  | yes | 102.075 | 102.075 | 97.575 | yes |
+| caption | Rent (2005) - Will I | 16 | 101.132 | 101.798-115.578 | 13.780 |  |  |  | yes |  | yes | 101.132 | 101.132 | 102.478 | yes |
+| caption | Rent (2005) - Will I | 17 | 105.342 | 113.518-115.578 | 2.060 |  |  |  | yes | yes |  | 105.168 | 105.168 | 105.342 | yes |
+| caption | Rent (2005) - Will I | 20 | 116.620 | 118.534-138.738 | 20.204 |  |  |  | yes |  |  | 116.620 | 116.620 | 116.620 | yes |
+| caption | Rent (2005) - Will I | 23 | 129.688 | 128.717-138.738 | 10.021 | -0.868 |  |  | yes |  | yes | 129.688 | 129.688 | 129.737 | yes |
+| caption | Rent (2005) - Will I | 26 | 142.128 | 144.418-170.620 | 26.202 |  |  |  | yes | yes |  | 142.128 | 142.128 | 142.128 | yes |
+| caption | Rent (2005) - Will I | 27 | 145.993 | 144.418-170.620 | 26.202 |  |  |  | yes |  | yes | 145.993 | 145.993 | 152.425 | yes |
+| caption | Rent (2005) - Will I | 28 | 168.643 | 155.858-170.620 | 14.762 |  |  |  | yes |  |  | 168.643 | 168.643 | 168.643 | yes |
+| caption | Rent (2005) - Will I | 29 | 170.214 | 155.858-170.620 | 14.762 |  |  |  | yes |  |  | 170.214 | 170.214 | 170.146 | yes |
+| caption | The Philosopher Kings - Hurts  6X4bhT1FWjI | 39 | 239.656 | 239.622-249.823 | 10.201 | 0.224 | yes |  | yes | yes |  | 239.667 | 239.656 | 239.656 | yes |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 35 | 113.750 | 111.110-118.110 | 7.000 | -0.550 |  |  | yes |  | yes | 113.750 | 113.750 | 111.802 | yes |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 1 | 2.620 | 2.680-9.120 | 6.440 |  | yes | yes | yes |  | yes | 3.025 | 3.025 | 3.128 | yes |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 2 | 4.780 | 7.160-23.300 | 16.140 |  | yes |  | yes |  |  | 4.780 | 4.780 | 4.780 | yes |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 3 | 7.730 | 7.160-23.300 | 16.140 |  | yes |  | yes |  |  | 7.730 | 7.730 | 7.730 | yes |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 4 | 10.140 | 7.160-23.300 | 16.140 |  | yes |  | yes |  |  | 10.140 | 10.140 | 10.140 | yes |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 5 | 12.940 | 7.160-23.300 | 16.140 |  | yes |  | yes |  |  | 12.940 | 12.940 | 12.940 | yes |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 6 | 16.590 | 7.160-23.300 | 16.140 |  | yes |  | yes |  |  | 16.590 | 16.590 | 16.590 | yes |
+| LRCLIB | Tangled (2010) - When Will My  kRXmAIHYQR4 | 30 | 132.650 | 130.070-147.331 | 17.261 | -1.470 |  |  | yes | yes |  | 132.650 | 132.650 | 132.650 | yes |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 35 | 157.476 | 156.580-164.000 | 7.420 |  | yes | yes | yes |  |  | 157.476 | 157.476 | 157.476 | yes |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 36 | 158.506 | 156.580-164.000 | 7.420 |  | yes | yes | yes |  |  | 158.506 | 158.506 | 158.506 | yes |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 37 | 159.436 | 156.580-166.520 | 9.940 |  | yes |  | yes |  |  | 159.436 | 159.436 | 159.436 | yes |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 39 | 161.446 | 168.300-187.046 | 18.746 |  | yes |  | yes |  |  | 161.446 | 161.446 | 161.446 | yes |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 40 | 162.796 | 168.300-187.046 | 18.746 |  | yes |  | yes |  |  | 162.796 | 162.796 | 162.796 | yes |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 59 | 267.726 | 262.790-263.570 | 0.780 |  |  |  | yes | yes |  | 267.726 | 267.726 | 267.726 | yes |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 61 | 268.966 | 268.590-282.842 | 14.252 |  |  |  | yes | yes |  | 268.966 | 268.966 | 268.913 | yes |
+
+Rule C by run:
+
+| Lines | Tried | Kept |
+|---|---|---|
+| not in a run | 15 | 6 |
+| in a run, stretch between twins on their cues | 14 | 4 |
+| in a run, stretch ends at a parked twin | 13 | 5 |
+
+### Table O: other lines whose start or end moved, against the same-bundle baseline
+Lines outside Tables A, G, Z, B, D and C. Near unanswered today: this line or a neighbour had a baseline align without a saved answer.
+
+caption: 11 lines in 7 songs; LRCLIB: 11 lines in 5 songs
+
+| Src | Song | Line | Start today | Start new | End today | End new | Moved | Near unanswered today |
+|---|---|---|---|---|---|---|---|---|
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 7 | 40.475 | 40.475 | 43.275 | 43.242 | 0.033 |  |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 18 | 55.900 | 55.900 | 57.514 | 57.294 | 0.220 |  |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 52 | 123.850 | 123.850 | 125.537 | 125.277 | 0.260 |  |
+| caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 32 | 135.424 | 135.424 | 140.250 | 139.375 | 0.875 |  |
+| caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 35 | 146.968 | 146.968 | 149.290 | 149.090 | 0.200 |  |
+| caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 44 | 181.410 | 181.410 | 187.830 | 190.625 | 2.795 |  |
+| caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 13 | 80.950 | 80.950 | 84.650 | 84.430 | 0.220 |  |
+| caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 52 | 255.850 | 255.850 | 258.588 | 256.740 | 1.848 |  |
+| caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 26 | 127.750 | 127.750 | 133.625 | 132.723 | 0.902 | yes |
+| caption | Ne-Yo - Closer [Official Video z_aC5xPQ2f4 | 44 | 146.829 | 146.829 | 148.749 | 150.200 | 1.451 |  |
+| caption | The Philosopher Kings - Hurts  6X4bhT1FWjI | 10 | 87.825 | 87.825 | 92.100 | 91.537 | 0.563 |  |
+| LRCLIB | Backstreet Boys - Quit Playing Ug88HO2mg44 | 6 | 43.775 | 43.775 | 46.900 | 47.050 | 0.150 |  |
+| LRCLIB | Backstreet Boys - Quit Playing Ug88HO2mg44 | 56 | 216.720 | 216.720 | 219.660 | 219.900 | 0.240 |  |
+| LRCLIB | Britney Spears - (You Drive Me Q4VK9_CfOLQ | 40 | 187.065 | 187.065 | 191.965 | 192.550 | 0.585 | yes |
+| LRCLIB | Christina Aguilera - Reflectio RNprQYHenNI | 31 | 163.051 | 163.051 | 168.175 | 168.000 | 0.175 |  |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 18 | 48.200 | 49.030 | 49.390 | 49.390 | 0.830 | yes |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 34 | 76.070 | 76.070 | 78.325 | 77.822 | 0.503 | yes |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 43 | 99.355 | 100.610 | 100.275 | 100.830 | 1.255 | yes |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 16 | 49.140 | 49.140 | 53.238 | 51.360 | 1.878 |  |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 32 | 101.150 | 101.150 | 106.155 | 104.110 | 2.045 |  |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 34 | 109.345 | 109.345 | 113.650 | 111.702 | 1.948 |  |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 47 | 158.790 | 158.790 | 163.320 | 161.180 | 2.140 | yes |
+
+### Table S: lines that moved against the source bundle
+Lines whose start or end moved more than 0.3 s between the source bundle's output and the new bundle's, as (start-end). Today is the same-bundle baseline, so Source to Today is what the regen's own changes did (whisper, the envelope decoded here) and Today to New is the rules. Rules: the rule lists the line is in.
+
+caption: 79 lines in 14 songs; LRCLIB: 39 lines in 9 songs
+
+| Src | Song | Line | Source | Today | New | Moved | Rules |
+|---|---|---|---|---|---|---|---|
+| caption | Backstreet Boys - Drowning GZXHBgjQjNM | 8 | 44.600-45.728 | 44.600-45.728 | 43.342-46.300 | 1.258 | Z |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 19 | 57.614-59.654 | 57.614-59.654 | 56.803-59.653 | 0.811 | G |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 36 | 95.787-98.021 | 95.787-98.021 | 95.481-98.021 | 0.306 | G |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 63 | 140.737-142.277 | 140.737-142.277 | 140.519-141.779 | 0.498 | G |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 82 | 185.050-187.156 | 185.050-187.156 | 184.596-187.156 | 0.454 | Z |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 98 | 212.886-213.719 | 212.886-213.719 | 217.028-217.540 | 4.142 | C kept |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 99 | 213.475-214.369 | 213.475-214.369 | 217.540-217.700 | 4.065 | C kept |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 100 | 214.552-218.520 | 214.552-218.520 | 217.796-218.600 | 3.244 | C kept |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 102 | 217.051-217.884 | 217.051-217.884 | 221.288-222.200 | 4.316 | C kept |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 103 | 217.750-218.614 | 217.750-218.614 | 222.264-222.900 | 4.514 | C kept |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 104 | 218.717-219.550 | 218.717-219.550 | 222.980-223.480 | 4.263 | C kept |
+| caption | Backstreet Boys - Get Down (Yo 0LSYuZRSGcY | 106 | 221.232-222.065 | 221.232-222.065 | 225.516-226.440 | 4.375 | C kept |
+| caption | Backstreet Boys - Shape Of My  OT5msu-dap8 | 4 | 20.200-25.750 | 20.200-25.750 | 20.871-25.725 | 0.671 | A2, B tried |
+| caption | Backstreet Boys - Shape Of My  OT5msu-dap8 | 39 | 178.039-181.784 | 178.039-181.784 | 176.396-181.784 | 1.643 | G |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 46 | 101.768-105.268 | 102.225-105.268 | 102.225-105.268 | 0.457 |  |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 48 | 107.743-110.488 | 107.323-110.488 | 107.323-110.488 | 0.420 |  |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 69 | 154.621-157.121 | 154.294-157.065 | 154.294-157.065 | 0.327 | Z |
+| caption | Beauty and the Beast (1991) -  MiraOCjABn8 | 89 | 201.768-205.884 | 201.768-205.108 | 201.768-205.108 | 0.776 | Z |
+| caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 4 | 15.931-22.516 | 15.931-23.049 | 15.931-23.049 | 0.533 |  |
+| caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 5 | 22.616-26.456 | 23.149-27.089 | 23.149-27.089 | 0.633 |  |
+| caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 11 | 42.251-46.204 | 42.762-46.204 | 42.762-46.204 | 0.511 | Z |
+| caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 26 | 108.736-110.398 | 108.736-110.398 | 108.225-110.398 | 0.511 | G |
+| caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 32 | 135.544-140.275 | 135.424-140.250 | 135.424-139.375 | 0.900 |  |
+| caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 33 | 141.046-142.470 | 141.046-142.470 | 139.475-142.470 | 1.571 | D kept |
+| caption | Bruno Mars, Anderson .Paak, Silk Sonic - Smokin Out The Window [Official Music Video]---GG7fLOmlhYg | 46 | 189.330-192.950 | 189.330-190.630 | 189.330-190.630 | 2.320 |  |
+| caption | Céline Dion - Ashes (Deadpool  CX11yw6YL1w | 1 | 20.950-25.250 | 20.950-25.250 | 20.889-23.439 | 1.811 | A2 |
+| caption | Céline Dion - Ashes (Deadpool  CX11yw6YL1w | 12 | 105.622-112.625 | 105.622-112.625 | 105.266-112.650 | 0.356 | Z |
+| caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 4 | 46.150-47.410 | 46.150-47.410 | 44.410-47.410 | 1.740 | Z |
+| caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 14 | 84.750-89.770 | 84.750-89.770 | 83.770-89.720 | 0.980 | G |
+| caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 16 | 91.470-98.750 | 91.470-98.750 | 90.970-98.800 | 0.500 | G |
+| caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 32 | 162.420-167.923 | 162.420-167.920 | 161.810-167.920 | 0.610 | G |
+| caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 52 | 255.850-258.469 | 255.850-258.588 | 255.850-256.740 | 1.729 |  |
+| caption | Ed Sheeran - Castle On The Hil K0ibBPhiaG0 | 53 | 258.569-262.482 | 258.688-262.480 | 256.740-262.520 | 1.829 | A2, B tried |
+| caption | Flight of the Conchords (2007) - Business Time | 1 | 25.000-26.107 | 25.000-26.107 | 23.167-26.107 | 1.833 | Z |
+| caption | Flight of the Conchords (2007) - Business Time | 27 | 81.614-84.134 | 81.950-84.134 | 81.950-84.134 | 0.336 |  |
+| caption | Flight of the Conchords (2007) - Business Time | 57 | 161.795-164.355 | 161.795-164.675 | 161.795-164.675 | 0.320 |  |
+| caption | Flight of the Conchords (2007) - Business Time | 58 | 164.355-166.513 | 164.775-166.500 | 164.775-166.500 | 0.420 |  |
+| caption | Flight of the Conchords (2007) - Business Time | 81 | 223.203-226.036 | 223.190-226.023 | 224.568-226.018 | 1.365 | C kept |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 1 | 3.050-4.995 | 3.050-5.514 | 3.050-5.514 | 0.519 | Z |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 2 | 5.325-8.373 | 5.325-9.717 | 5.325-9.717 | 1.344 | C tried |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 3 | 9.825-12.237 | 9.825-11.683 | 9.825-11.527 | 0.710 | Z |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 4 | 12.025-14.032 | 12.025-14.062 | 12.025-17.351 | 3.319 | C kept |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 29 | 102.075-106.288 | 102.075-106.318 | 97.575-104.850 | 4.500 | C kept |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 45 | 169.260-171.500 | 169.600-171.500 | 169.600-171.500 | 0.340 |  |
+| caption | Kelly Clarkson - Breakaway (Of c-3vPxKdj6o | 46 | 171.980-175.960 | 171.660-175.960 | 171.660-175.960 | 0.320 |  |
+| caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 26 | 128.048-133.625 | 127.750-133.625 | 127.750-132.723 | 0.902 |  |
+| caption | Lewis Capaldi - Before You Go  Jtauh8GcxBY | 27 | 134.800-137.977 | 135.428-137.968 | 132.400-137.910 | 2.400 | G, B kept |
+| caption | Ne-Yo - Closer [Official Video z_aC5xPQ2f4 | 8 | 31.495-34.284 | 31.000-34.284 | 31.000-34.284 | 0.495 |  |
+| caption | Ne-Yo - Closer [Official Video z_aC5xPQ2f4 | 24 | 84.039-85.814 | 83.934-85.781 | 83.451-85.781 | 0.588 | G |
+| caption | Ne-Yo - Closer [Official Video z_aC5xPQ2f4 | 25 | 85.814-88.125 | 85.781-88.125 | 85.475-88.125 | 0.339 | G |
+| caption | Ne-Yo - Closer [Official Video z_aC5xPQ2f4 | 39 | 133.689-135.866 | 133.689-135.369 | 133.689-135.369 | 0.497 |  |
+| caption | Ne-Yo - Closer [Official Video z_aC5xPQ2f4 | 40 | 135.966-140.136 | 135.369-140.109 | 135.369-140.109 | 0.597 |  |
+| caption | Ne-Yo - Closer [Official Video z_aC5xPQ2f4 | 44 | 146.829-148.769 | 146.829-148.749 | 146.829-150.200 | 1.431 |  |
+| caption | Ne-Yo - Closer [Official Video z_aC5xPQ2f4 | 45 | 148.769-150.809 | 148.749-150.789 | 150.300-152.550 | 1.741 | D kept |
+| caption | Ne-Yo - Closer [Official Video z_aC5xPQ2f4 | 49 | 158.956-161.325 | 158.926-160.796 | 158.926-160.796 | 0.529 |  |
+| caption | Ne-Yo - Closer [Official Video z_aC5xPQ2f4 | 50 | 161.425-168.108 | 160.895-168.108 | 160.895-168.108 | 0.530 | B tried |
+| caption | Ne-Yo - Closer [Official Video z_aC5xPQ2f4 | 60 | 194.361-196.801 | 194.661-196.721 | 194.661-196.721 | 0.300 |  |
+| caption | Ne-Yo - Closer [Official Video z_aC5xPQ2f4 | 64 | 205.856-207.801 | 205.787-207.816 | 205.506-207.816 | 0.350 | G |
+| caption | Rent (2005) - Will I | 13 | 85.420-94.225 | 85.420-94.225 | 84.906-94.225 | 0.514 | G, Z |
+| caption | Rent (2005) - Will I | 15 | 99.350-101.798 | 99.350-101.798 | 99.350-102.378 | 0.580 | Z |
+| caption | Rent (2005) - Will I | 16 | 101.132-105.181 | 101.132-105.181 | 102.478-113.518 | 8.337 | C kept |
+| caption | Rent (2005) - Will I | 17 | 105.168-111.024 | 105.168-111.024 | 105.342-111.458 | 0.434 | C tried |
+| caption | Rent (2005) - Will I | 26 | 142.128-145.893 | 142.128-145.893 | 142.128-152.325 | 6.432 | C tried |
+| caption | Rent (2005) - Will I | 27 | 145.993-164.300 | 145.993-164.300 | 152.425-164.300 | 6.432 | C kept |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 6 | 21.771-22.771 | 21.771-23.759 | 21.771-23.759 | 0.988 |  |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 8 | 25.931-28.051 | 26.300-28.051 | 26.300-28.051 | 0.369 |  |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 14 | 41.471-45.086 | 41.471-44.631 | 41.471-44.631 | 0.455 |  |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 15 | 45.186-46.671 | 44.631-46.691 | 44.631-46.691 | 0.555 |  |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 22 | 59.691-61.940 | 59.691-61.955 | 59.125-61.955 | 0.566 | G |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 39 | 95.225-98.054 | 95.225-98.522 | 95.225-98.522 | 0.468 |  |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 40 | 98.219-99.974 | 98.622-99.954 | 98.622-99.954 | 0.403 |  |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 52 | 124.293-125.311 | 124.293-125.153 | 116.360-125.286 | 7.933 | G, D kept |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 68 | 159.641-161.141 | 159.641-161.529 | 159.641-161.529 | 0.388 |  |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 69 | 161.141-164.081 | 161.629-164.061 | 161.629-164.061 | 0.488 |  |
+| caption | S Club - Bring It All Back GLQ0biK-ZgA | 75 | 175.401-177.341 | 175.381-177.038 | 174.654-177.424 | 0.747 | G |
+| caption | The Philosopher Kings - Hurts  6X4bhT1FWjI | 5 | 58.141-60.145 | 57.025-60.145 | 57.025-60.145 | 1.116 |  |
+| caption | The Philosopher Kings - Hurts  6X4bhT1FWjI | 26 | 185.900-190.800 | 186.184-190.800 | 185.909-188.465 | 2.335 | A2 |
+| caption | The Philosopher Kings - Hurts  6X4bhT1FWjI | 33 | 218.950-221.953 | 218.313-222.093 | 219.348-222.093 | 0.398 | Z |
+| caption | The Philosopher Kings - Hurts  6X4bhT1FWjI | 37 | 236.098-238.088 | 237.179-238.275 | 237.179-238.275 | 1.081 |  |
+| LRCLIB | Backstreet Boys - Quit Playing Ug88HO2mg44 | 7 | 47.530-54.090 | 47.530-54.090 | 47.150-54.090 | 0.380 | Z |
+| LRCLIB | Backstreet Boys - Quit Playing Ug88HO2mg44 | 24 | 116.963-118.513 | 116.963-118.513 | 113.630-116.790 | 3.333 | A1 |
+| LRCLIB | Backstreet Boys - Quit Playing Ug88HO2mg44 | 25 | 118.513-120.602 | 118.513-120.602 | 116.790-119.600 | 1.722 | A1 |
+| LRCLIB | Backstreet Boys - Quit Playing Ug88HO2mg44 | 57 | 219.660-222.280 | 219.660-222.280 | 220.000-222.280 | 0.340 | Z, B tried |
+| LRCLIB | Britney Spears - (You Drive Me Q4VK9_CfOLQ | 22 | 110.195-118.655 | 110.195-118.655 | 115.875-118.200 | 5.680 | B kept |
+| LRCLIB | Britney Spears - (You Drive Me Q4VK9_CfOLQ | 41 | 192.875-196.615 | 190.785-195.575 | 193.550-196.590 | 0.675 | B kept |
+| LRCLIB | Christina Aguilera - Reflectio RNprQYHenNI | 32 | 168.275-173.363 | 168.275-173.363 | 168.928-173.375 | 0.653 | A2 |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 15 | 45.975-46.725 | 45.975-46.725 | 46.370-47.230 | 0.505 | A1 |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 16 | 46.225-47.875 | 46.725-47.455 | 47.230-48.530 | 1.005 | A1 |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 17 | 47.455-48.335 | 47.455-48.335 | 48.530-49.030 | 1.075 | A1 |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 18 | 48.200-49.390 | 48.200-49.390 | 49.030-49.390 | 0.830 |  |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 34 | 76.070-78.325 | 76.070-78.325 | 76.070-77.822 | 0.503 |  |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 35 | 78.700-80.635 | 79.075-80.735 | 77.922-79.410 | 1.225 | A1 |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 36 | 80.735-81.345 | 80.735-81.345 | 79.410-80.530 | 1.325 | A1 |
+| LRCLIB | Frozen (2013) - Love Is an Ope kQDw88hEr2c | 42 | 99.090-100.275 | 98.815-99.855 | 99.090-100.610 | 0.335 | A1 |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 1 | 2.550-3.770 | 2.550-3.770 | 3.200-3.770 | 0.650 | Z |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 16 | 49.140-53.238 | 49.140-53.238 | 49.140-51.360 | 1.878 |  |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 17 | 53.338-54.090 | 53.338-54.090 | 51.360-54.060 | 1.978 | A2 |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 19 | 58.100-62.920 | 58.100-63.420 | 58.100-61.040 | 1.880 | Z |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 20 | 63.020-63.930 | 63.520-63.730 | 60.120-63.800 | 2.900 | G, B kept |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 25 | 77.650-79.220 | 77.650-79.220 | 77.130-79.220 | 0.520 | G |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 32 | 101.150-106.155 | 101.150-106.155 | 101.150-104.110 | 2.045 |  |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 33 | 106.255-109.245 | 106.255-109.245 | 93.286-96.250 | 12.995 | G, D kept |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 34 | 109.345-113.650 | 109.345-113.650 | 109.345-111.702 | 1.948 |  |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 35 | 113.750-118.540 | 113.750-118.540 | 111.802-118.010 | 1.948 | C kept |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 47 | 158.790-162.954 | 158.790-163.320 | 158.790-161.180 | 1.774 |  |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 48 | 163.054-163.566 | 163.420-165.880 | 161.280-164.940 | 1.774 | B kept |
+| LRCLIB | KPop Demon Hunters (2025) - Ta j5itLHDMJsE | 49 | 161.990-162.930 | 161.990-162.930 | 165.040-167.870 | 4.940 | D kept |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 1 | 3.025-4.780 | 3.025-4.780 | 3.128-7.160 | 2.380 | C kept |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 15 | 37.440-40.020 | 37.440-40.050 | 37.000-40.050 | 0.440 | G |
+| LRCLIB | KPop Demon Hunters (2025) - Yo fGyTN5UjnL4 | 36 | 108.920-114.275 | 108.920-114.275 | 108.300-114.275 | 0.620 | G, B kept |
+| LRCLIB | Ne-Yo - Miss Independent k6M5C-oKw9k | 0 | 38.068-42.088 | 38.068-42.088 | 37.550-42.088 | 0.518 | Z |
+| LRCLIB | Ne-Yo - Miss Independent k6M5C-oKw9k | 58 | 205.600-208.220 | 205.600-208.220 | 206.425-208.220 | 0.825 | Z |
+| LRCLIB | Ne-Yo - Miss Independent k6M5C-oKw9k | 74 | 257.725-264.150 | 257.725-264.150 | 257.725-266.200 | 2.050 | Z, B tried |
+| LRCLIB | Tangled (2010) - When Will My  kRXmAIHYQR4 | 15 | 75.750-77.390 | 75.750-77.390 | 74.750-77.400 | 1.000 | G |
+| LRCLIB | Tangled (2010) - When Will My  kRXmAIHYQR4 | 29 | 126.225-128.710 | 126.225-128.710 | 126.218-130.070 | 1.360 | B kept |
+| LRCLIB | Tangled (2010) - When Will My  kRXmAIHYQR4 | 31 | 137.550-139.470 | 137.550-139.470 | 135.400-137.150 | 2.320 | B kept |
+| LRCLIB | Tangled (2010) - When Will My  kRXmAIHYQR4 | 32 | 139.470-141.690 | 139.470-141.690 | 137.550-139.925 | 1.920 | B kept |
+| LRCLIB | Vitamin C - Graduation (Friend tz_NxOF7RB4 | 28 | 123.880-126.520 | 123.880-126.520 | 123.026-126.356 | 0.854 | G |
