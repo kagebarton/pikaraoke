@@ -25,6 +25,18 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+# v12: loud-start onset exit (plans/onset-loud-start.md). A milestone bump
+#     (run-affecting) -- no field renamed or removed, but output_line_timings
+#     move, so regen treats v11 bundles as stale:
+#   - the onset snap moves a line it took as on time (a loud start) when the
+#     transcriber heard the line's first word within 0.25 s of a later rise and
+#     did not also hear it earlier in the line. A line timed from the heard
+#     words (source "transcribe") never takes the exit.
+#     Additive fields (no bump of their own): joint_stats.edge_snap.onset gains
+#     n_heard_snapped, heard_snaps (line_id and shift_s per move, shaped like
+#     snaps) and n_heard_earlier (lines the guard kept). These moves are not
+#     counted in n_snapped or n_fired, so n_fired == n_snapped + n_no_rise +
+#     n_below_min_shift still holds.
 # Additive since v11 (no bump -- additions only):
 #   - cue_inputs: cue-align runs only (None on the other routes, absent from
 #     earlier bundles). What the per-line rescue consumed, so it and the edge
@@ -182,8 +194,8 @@ logger = logging.getLogger(__name__)
 #     verbatim so the joint matcher can be re-run at future α values
 #     without paying for whisper. Cue-align runs save the words the de-reverb
 #     gate transcribed too: the heard words the cue rescue weighs against the
-#     cues (a replay needs them) and a movie-subtitle slice is checked against.
-#     Bundles from before hold None.
+#     cues (a replay needs them), the edge snap checks a loud start against, and
+#     a movie-subtitle slice is checked against. Bundles from before hold None.
 # v4: tiling scores are raw matched-token counts (n - dist), not
 #     normalized ratios. Previously score in [0, 1]; now score in [0, n].
 #     Affects tiling_stats.selected_windows[].score,
@@ -193,7 +205,7 @@ logger = logging.getLogger(__name__)
 # v2: added tiling per-unit fields (units, zero_candidate_unit_ids,
 #     anchor_recovered_unit_ids, selected_windows replacing window_widths).
 # v1: initial.
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 
 def build_bundle(
