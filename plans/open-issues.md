@@ -528,7 +528,7 @@ The rescue (review findings and decisions kept as built):
   Costs 75 more one-line aligns on the 10 test songs (209 against 134, row 45);
   every partial line takes its own slice align too (row 24, finding 10).
   Options (b) two or more words, (c) a bound on how far timed words may move.
-- **A partial line's guessed words take their pace from its zero-length
+- ~~**A partial line's guessed words take their pace from its zero-length
   words too** (found by the `cue_heard_rescue` review, Results log row 15 of
   `plans/cue-heard-rescue.md`, finding 6). The guess pass sets a guessed
   word's length from the median length of the line's words, and in a line
@@ -536,7 +536,8 @@ The rescue (review findings and decisions kept as built):
   guessed word can come out as short as half the line's shortest timed word.
   Never zero: a kept line has at most half its words instant. The zero-length
   rule (`65438683`) re-times them only in a line with a word for every token.
-  Fix: pace from the timed words only.
+  Fix: pace from the timed words only.~~
+  Fixed (`ccb80211` on `dev`): the guess pass paces from the timed words only.
 - ~~**Should Song Info's guessed-words count include zero-length words left on
   screen?** (Decision 13.) Unchanged today.~~
   Yes, since `65438683`: a zero-length word that gets guessed timing is one, and
@@ -592,6 +593,18 @@ which read the stats of the three cut rules and stay on the tag.
   twin's audio in a run the transcriber only seemed to hear in full (Closer 45).
   C gave no audible gain in eight listens, and for 22 of its 96 tries on the
   library the stretch ended at a twin the cue test rejects (row 15, finding 4).
+- **Rule B measures the singing end against the next line's unmoved cue.** A
+  line heard early can have its window and aimed span stretch back over its own
+  cue position; one heard late past the next cue's start gets no singing end at
+  all. Confirmation still refuses a result on the cue position, so the cost is a
+  rule B miss, not a wrong line. Fixing it reopens the ruled "the next line's
+  cue stays where it is" (review of the landed set, Results log row 22,
+  finding 5).
+- **The heard match splits duet lines by order, not by voice.** `heard_lines`
+  matches the whole song in line order, so where two cues overlap and share
+  words, one line can take the other singer's words, and rule B could then move
+  a right line. Needs a match that knows lines overlap; wait for a duet that
+  shows it (row 22, finding 9).
 
 ## Test suite (Windows box)
 
