@@ -480,10 +480,12 @@ Then stop.
 - If `cue_heard_rescue` landed first, the two stale-sentence edits conflict: keep both
   uses. Its `align_song(..., heard_words=...)` change sits near this branch's snap call.
   Replay this branch onto it, then rerun the full suite on `dev`.
-- `scripts/cue_heard_probe.py` on `cue_heard_rescue` replays bundles through
-  `snap_line_edges` with no heard words. Whichever branch lands second gives that call the
-  bundle's `transcribe_words` and the stage's `heard_timed_sources`; without them its
-  replay cannot reproduce a v12 bundle that has a heard move.
+- **[Moot 2026-11-15: the probe does not land on `dev` (`cue_heard_rescue` Phase 5
+  ruling); nothing to do here.]** `scripts/cue_heard_probe.py` on `cue_heard_rescue`
+  replays bundles through `snap_line_edges` with no heard words. Whichever branch lands
+  second gives that call the bundle's `transcribe_words` and the stage's
+  `heard_timed_sources`; without them its replay cannot reproduce a v12 bundle that has a
+  heard move.
 - `plans/open-issues.md`, in its own commit on `dev`: strike the "Onset snap" entry with
   `~~ ~~` and add a line pointing at `archive/onset_loud_start`.
 - Push `dev`. Retire the branch as `archive/onset_loud_start` per CLAUDE.md.
