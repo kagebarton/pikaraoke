@@ -1,11 +1,13 @@
 # Genius search: the spec
 
 Model: Claude Sonnet 5.5 executes. Spec by Claude Fable 5.2, 2026-11-13; GATE G, the
-executor rules and the Results log by Claude Opus 5.5, 2026-11-15. GATE G is read by Opus,
-then Ken (Fable only if Opus is unsure which recording a hit is).
+executor rules and the Results log by Claude Opus 5.5, 2026-11-15, reviewed by Fable the
+same day. GATE G is read by Opus, then Ken (Fable only if Opus is unsure which recording a
+hit is).
 
 Status: **spec complete 2026-11-15, no code.** Does not wait for `search_official_captions`
-(Ken, 2026-11-15); Phase 0 is the rebase onto current `dev`.
+(Ken, 2026-11-15); Phase 0 is the rebase onto current `dev`. Four questions on the gate are
+with Ken ("Open on the gate"); they block Phase 5, not Phases 0-4.
 
 The evidence and the rulings behind every choice here are in `plans/genius-search-accuracy.md`
 (the evaluation, closed; do not rerun it). The reference implementation is
@@ -336,8 +338,9 @@ phases).
    `/search/more`); the clash is textual only.
 
 **Phase 1: the module.**
-1. `test(genius_query)`: `freeze.py` and the three fixture files. Record the row counts
-   and the commit of `builder.py` they came from in the Results log.
+1. `docs(plans)`: `freeze.py`. Then `test(genius_query)`: the three fixture files it
+   writes. Two commits, because the script lives under `plans/` ("Executor rules"). Record
+   the row counts and the commit of `builder.py` they came from in the Results log.
 2. `feat(genius_query)`: the module and its tests, the typed term included. The channel
    check of "Channel names" (382 channels) is part of this step.
 3. `docs(plans)`: this entry in `plans/open-issues.md`, under "Search results (on `dev`)":
@@ -427,6 +430,11 @@ carried title's, whose ID is in neither `library.jsonl` nor `unseen.jsonl`, and 
 earlier search kept: up to 120 videos. A search with fewer than four keeps what it has; the
 shortfall is logged, never topped up from another search.
 
+One reason only to run a search again: every row came back without a channel. YouTube does
+that to about 1 search in 12 (`plans/open-issues.md`, "Search results"), and every title the
+builder was measured on had its channel. Run it again, up to three times, keep the first
+answer that has channels (the last one if none does), and log each rerun.
+
 ### What the executor collects, then stops (Phase 5)
 
 1. Record the frozen HEAD and the full suite's count. The suite includes the seven Known
@@ -441,7 +449,8 @@ shortfall is logged, never topped up from another search.
    - `gate_g/sheet.md`, one block per video in table order: number, YouTube title,
      channel, ID, the search; the parsed parts; the queries asked, the typed one marked;
      the hits as `Title — artist line (year, views)` with the preselect marked; when the
-     typed term was asked, the first three hits without it.
+     typed term was asked, the whole list without it, in the same form (the `typed` column
+     needs to know whether the right hit was listed at all without it).
    - `gate_g/verdicts.md`: the judge's table, one empty row per video number, with the
      columns below.
 3. `docs(plans)`: the script, both caches, the sheet and the empty verdicts. They hold
@@ -459,7 +468,9 @@ The judge reads every video in the sheet's order and fills its row:
 - `what`: what the video is, from its title and channel only: the song and its recording.
   An act's own upload (official, lyric, live), a cover (of whose song), a film's cast
   (which film, and its year when two films share the song), a stage cast, a pop single, a
-  dub; or not the song (a trailer, a reaction); or unsure.
+  dub; or not a song (a trailer, a reaction); or unsure. A video of another song than the
+  one searched (another act's "Creep") is read as its own song, as the unseen set's were;
+  searches 28-30 are there to draw them.
 - The right hit, against `what`: the song's page by the act the video is (for a cover, the
   original act's page or the cover act's own page of the song); for a film or stage song,
   the page of the recording the video is. A version page (live, remix) is right only when
@@ -471,7 +482,7 @@ The judge reads every video in the sheet's order and fills its row:
   without it, or is listed only because of it); hurt (the right hit was first without it
   and is not with it).
 
-Rows read as not the song, or unsure, are left out of every count and named by number.
+Rows read as not a song, or unsure, are left out of every count and named by number.
 Every film and stage video's first hit has its recording read from the hit's artist line,
 year and views. The judge hands Fable only the rows where it cannot tell which recording
 a hit is, and says which those were.
@@ -484,7 +495,7 @@ Counted over the rows left in. Any one of the four stops the build.
 |---|---|---|---|
 | G1 | Wrong preselects | 2 or more | 0 of about 250 on the library and unseen sets (the unseen set's four other-act pages were each the video's own song) |
 | G2 | Right song first: `first` is right, or right song with the wrong recording | below 70% of the rows | 77-78% on the clean unseen pass (title, and act where named); 52% for today's search page on the same videos |
-| G3 | Videos of a film's or a stage cast's recording whose first hit is the wrong recording | above 1 in 3 of those videos | 7 of 43 on the library |
+| G3 | Videos of a film's or a stage cast's recording whose first hit is the wrong recording | above 1 in 3 of those videos | 6 of 43 on the library (the seventh Known hole is an act's song) |
 | G4 | The typed term | hurt on more videos than it helped | not measured |
 
 A single wrong preselect does not stop the build, but the judge writes it up for Ken like a
@@ -496,7 +507,8 @@ They are not in the gate: their songs are library songs, so no search above retu
 fresh videos. They count in two ways:
 
 - **Held:** their pinned rows pass in the suite at the frozen HEAD (step 1).
-- **As the scale for G3:** 7 of 43 on titles the order was shaped on. The same pattern on a
+- **As the scale for G3:** six of them are the 6 of 43 film-named library songs, on titles
+  the order was shaped on (the seventh, *NSYNC, is an act's song). The same pattern on a
   new song (a stage cast first for another Lion King or Wicked song) counts in G3 like any
   other wrong recording: the holes were accepted by name, not by pattern.
 
@@ -513,6 +525,30 @@ that failed, by number and title. Then Ken reads it.
   item 1). A change is read at a new GATE G on new searches, and this gate's videos are
   then frozen into the fixtures the way `unseen.jsonl` was.
 
+### Open on the gate (Fable's review, 2026-11-15)
+
+Put to Ken; each is settled here before Phase 5 collects. None touches the search list or
+the four stop numbers.
+
+1. **G3 and a first hit that is another song.** Three of the six library rows behind "6 of
+   43" are another song of the same title (Eazy-E, Jun Matsumoto, The Weeknd & Madonna),
+   which `first` calls "wrong song", not "right song, wrong recording". Read to the letter,
+   G3 leaves those out and its scale is 3 of 43. Fable recommends G3 counts both; a video
+   with no hits stays in G2 only.
+2. **What `what` is read from.** Title and channel only, as written, may leave most
+   two-film videos unsure and G3 thin. The same YouTube search already returns each row's
+   length and description snippet. Fable recommends the collection keeps both and the
+   sheet shows them, and that the judge may look one video up by its ID (never a search)
+   when a row is still unsure; the library's 6 of 43 was read knowing each video's film
+   and year.
+3. **A live or re-recorded video and the song's plain page.** As written the plain page is
+   right for it and the version page is right too. Search 16 turns on this: a Taylor's
+   Version video preselecting the 2008 page is right under this reading and a wrong
+   preselect under a strict one. Fable recommends the reading as written, said outright.
+4. **G2 by half.** G2's scale came from a set about a quarter film (11 of 44 searches); the
+   gate is half. Fable recommends the gate's row also gives G2 for searches 1-15 and 16-30
+   apart, as a report only: the stop number stays the whole.
+
 ## Executor rules
 
 - **A title that fails is a STOP for the judge**, never a new pattern, word or order level
@@ -523,8 +559,9 @@ that failed, by number and title. Then Ken reads it.
 - **No lyric text** in any commit, test, fixture or plan. Fixtures and gate files hold
   public titles, channel names and Genius search results only. Never `git add -f` the
   ignored `run2/truth.json`.
-- **No search for the gate's thirty terms**, on YouTube or Genius, before Phase 5. Tests
-  make no network call: they read the committed fixtures through a fake `search`.
+- **No search for the gate's thirty terms or their songs**, in any wording, on YouTube or
+  Genius, in the app or by hand, before Phase 5. Hand checks before then use library songs.
+  Tests make no network call: they read the committed fixtures through a fake `search`.
 - Conda env `pik`: `/home/ken/miniconda3/envs/pik/bin/python -m pytest`. Pre-commit on the
   changed files only (`--files`, not `--all-files`).
 - Tests ride with the code they exercise, in the same commit.
