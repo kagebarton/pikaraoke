@@ -1012,8 +1012,8 @@ Replay before and after on the same commit base, writing bundles and `.ass` file
 scratch folder, never into `~/pikaraoke-songs`. Songs: every cue song where the rule keeps at
 least one parenthetical if the run time allows; otherwise at least 20, chosen by a stated
 rule that covers captions and LRC, inline and paren-only, and the cue-align test songs that
-are affected. Add every Genius-route song whose sheet has parens, for B6. Add 5 cue songs
-with no parentheticals as a control: their output must not change at all.
+are affected. Add the 8 songs of "The B6 sample" (Ken, 2026-11-15, under GATE B), for B6. Add
+5 cue songs with no parentheticals as a control: their output must not change at all.
 
 ### GATE B: is it detrimental to timing? (Opus judges B1-B6, Ken's ear rules)
 
@@ -1025,12 +1025,40 @@ with no parentheticals as a control: their output must not change at all.
   either way. His listen can follow the read after Fable's window has closed.
 - **Phase 2's size:** "if the run time allows" means the replay, before and after, has
   finished by the morning of 2026-11-16. If every affected cue song would not finish by
-  then, Phase 2 takes the floor: at least 20 songs by the stated rule, plus every
-  Genius-route song with parens (B6) and the 5 controls (B1). The executor states the
-  choice and the reason in the Results row.
+  then, Phase 2 takes the floor: at least 20 songs by the stated rule, plus the B6 sample
+  and the 5 controls (B1). The executor states the choice and the reason in the Results row.
 - **The library regen** that a GO leads to is the single full regen from `dev` after
   `cue_heard_rescue`, `onset_loud_start` and this branch have all landed, not one of its
   own (`cue_heard_rescue` Phase 5 ruling, same day).
+- **B6 is sampled** (Ken, 2026-11-15, after the executor prompt's size count: the 34 cue songs
+  with a keep, 43 joint-route songs with a "(" in a lyric line and 5 controls, 82 songs and 164
+  GPU runs). The plan's "every Genius-route song whose sheet has parens" is replaced by "The
+  B6 sample" below, which sizes Phase 2 at 47 songs (94 runs), or 33 (66 runs) at the floor.
+  The reason: this branch changes only a joint-route word's text (C3, `show_parens`), never
+  a time, so what B6 needs is each shape of line `show_parens` has to pair, not every song.
+
+**The B6 sample.** Drawn from the 43 live joint-route songs in `~/pikaraoke-songs/alignment_debug/`
+whose bundle's `lyrics.lines` hold a "(" (42 Genius, 1 custom; the `backups/` and
+`regen_backups/` folders are not songs). The rule: every line shape that occurs gets at least
+two songs where two exist, plus the custom song (Decision 2 / choice 2), the one non-English
+sheet, and the paren-heaviest. Shapes are read from the lyric lines: a group at the line's
+trailing end, its start, its middle, the whole line, two or more groups, a group at both ends
+(lead+trail), a group glued to a word, and an unbalanced paren. Bundle names, with what each
+brings:
+
+| Song (`alignment_debug/<name>.json`) | Origin | Audio | Shapes |
+|---|---|---|---|
+| `Bruno Mars, Anderson .Paak, Silk Sonic - After Last Night w_ Thundercat & Bootsy [Official Audio]----cy_tDQPXHk` | genius | 250 s | every shape; the only live unbalanced paren |
+| `The Lonely Island - I'm On A Boat (Explicit Version) ft. T-Pain (Official Video)---avaSdC0QOUM` | genius | 184 s | glued, two or more, leading, whole line |
+| `Bruno Mars - Grenade (Official Music Video)---SR6iYWJxHqs` | genius | 221 s | leading 9, trailing 9, middle 3 |
+| `YOLO (feat. Adam Levine & Kendrick Lamar)---z5Otla5157c` | genius | 194 s | glued, middle 3, whole line |
+| `Queen - Don't Stop Me Now (Official Video Remastered 4K)---HgzGwKwLmgM` | genius | 215 s | leading 8, two or more, lead+trail |
+| `Justin Timberlake - SexyBack (Official HD Video) ft. Timbaland---3gOHvDP_vCs` | genius | 266 s | the most paren lines (71) |
+| `Jay Chou 周杰倫 - 晴天 (Sunny Day)---DYptgVvkVLQ` | genius | 318 s | the non-English sheet, leading |
+| `Ed Sheeran & Rudimental - Bloodstream---Orq_75kFi8I` | custom | 247 s | the custom sheet |
+
+About 32 minutes of audio, run twice. A song in the sample that is gone from the library when
+Phase 2 starts is replaced by the next song with its shape, named in the Results row.
 
 "Old words" are the words on screen before the change; "new words" are the kept
 parentheticals. There is no independent timing truth on cue songs, and the 2026-11-10 onset
@@ -1057,7 +1085,7 @@ moved and Ken decides whether a move is worse.
   together that were not before. Amended 2026-11-14 ("GATE A ruling"): a kept paren-only
   line is checked against its neighbours on the after timings, not on today's.
 - **B6, Genius:** every word's start and end identical before and after; only the word text
-  differs.
+  differs. Over the B6 sample (Ken, 2026-11-15).
 
 **Listening list for Ken:** at most 10 spots, each with song, time, what changed and by how
 much, drawn from B2's largest moves first, then a spread of new inline and new paren-only
@@ -1568,3 +1596,4 @@ Raw tables, commands and commits only; no verdicts in this table.
 | 15 | 2026-11-15 | D7 amendment | Written by Fable 5.2 on `de695678` against `cue_heard_rescue` `ac87c180` (GATE H ruled; the landed set is in no tree until its Phase 5); `amend_counts.py ~/pikaraoke-songs plans/backing-vocal-lines/out`, read-only over `out/heard.json`, `out/songs.json` and the bundles (`find ~/pikaraoke-songs -newer <stamp>` empty). Two points ruled by Ken by question dialog | 56 kept paren-only cues in 18 songs. Cue touches the cue before / after 43 / 39; under 0.5 s to it 55 / 46; a section-style pad clamped under 0.25 s 55 / 46; on raw cues that window opens after the singing starts 54. Today's first pass ends the line before past the echo's start (cue start plus the rescue lead) by more than 0 / 0.25 / 0.5 / 1.0 s: 27 / 15 / 9 / 3 of 55 with words; starts the line after before the echo's end: 18 / 15 / 9 / 5 of 56. Words in the line 1 / 2 / 3 or more: 7 / 3 / 46. Evidence heard / vocable / consistency 46 / 2 / 8. Text equals a neighbouring line's 6; is the end of the line before 9. Rescue leads of the 18 songs -0.713 to +0.198 s, median -0.296, 10 over 0.25 s either way. Ruled: an added line is timed by the rescue's own one-line retry (replacing the 2026-11-14 clause on a section-style window); stage 2's base is `dev` merged in after Phase 5 lands. No library write. "The D7 amendment". |
 | 16 | 2026-11-15 | ruling | Ken, by question dialog in a planning session (Opus 5.5); no script run | Part of a cross-branch build order for Fable's window (to 2026-11-16): `cue_heard_rescue` Phase 5, then C0s and C4-C7, review, Phase 2, GATE B. Ruled: Fable reads GATE B while available, Opus after; Phase 2 takes the floor if the full set would not finish by the morning of 2026-11-16; the library regen after a GO is the one full regen after `cue_heard_rescue`, `onset_loud_start` and this branch land. GATE B, "Rulings for Fable's window". |
 | 17 | 2026-11-15 | stage 2 | C0s: `git merge dev` (local `dev` `6c4e9991`) as `3636b1e0`. C4 `e528c92c`, C5 `ebd99489`, C6 `453bdfbc`, cleanup `4cfc1416` (C4's alias order, `Backed` not frozen; folds into C4 at landing if wanted). `python -m pytest`, `pre-commit` on the changed files, `graphify update .` | C0s: the merge was clean, no conflict in any file (`lyric_align.py` and `test_lyric_align.py` were the two both sides touched); full suite 3689 passed on the merged tree before C4. Every C0s anchor exists on the merged tree except `aimable`, which is not a `_Rescue` member on `dev` or anywhere in `cue_align.py`'s history and which no other part of the amendment uses; the list now reads `can_realign` (the `can_realign(win)` check before a retry). Absent, as required: `process_whole`, `whole_shift`, `gap_retry_line`, `free_stretch`, `heard_held_line_ids`. Neither `lrclib_fit_pick` Phase 4 nor `onset_loud_start` is on `dev`. C4-C5 changed 7 files, +906/-64 lines in `pikaraoke/` and `tests/`. Tests added: `test_backing_vocals.py::TestWithBacking` 10, `test_cue_align.py::TestAlignSongBacking` 11 and `TestRepaceBadLines::test_a_given_offset_is_used_and_not_fitted` 1, `test_lyric_align.py::TestBackingVocalsWiring` 5. Existing tests edited: 9 `align_song` call sites in `test_cue_align.py` (unpack four items), call shape only; no cleaner output changed. Full suite 3716 passed; pre-commit passed on every changed file. Mutation checks, each caught by at least one new test: rescue lead not pinned, added line's span not shifted on a re-sectioned song, every section sent back, stage ignoring the returned lines, no origin check, parens never read. Graph rebuilt: 8828 nodes, 22144 edges. Not run: any GPU run or library read (Phase 2). Built as the amendment reads, with these places where the spec left a free hand: `_Rescue` takes `offset` as a keyword defaulting to None; `joint_stats.backing` is recorded whenever the sheet has a group and a transcript (even a list with no words) was given, with `line_id` and `tokens` None for a dropped group; `align_song`'s first pass moved into `_first_pass` and its per-section align into `_align_section`, unchanged, so the section pass and the re-made sections share one path; the gaining sections are wrapped in the same `progress` as the first pass. "The D7 amendment", "Commits". |
+| 18 | 2026-11-15 | ruling | Ken, in the session that wrote the Phase 2 executor prompt; counts read-only from the live bundles under `~/pikaraoke-songs/alignment_debug/` (backup folders excluded) and Results row 10; no script run | Phase 2 as written: 34 cue songs with a keep + 43 joint-route songs with a "(" in a lyric line (42 Genius, 1 custom) + 5 controls = 82 songs, 164 runs; floor 20 + 43 + 5 = 68 songs, 136 runs. 234 live bundles, 170 cue (`srt` 142, `lrclib_srt` 28), 7 `movie_srt`, 57 joint (54 Genius, 3 custom). Ruled: B6 is sampled to the 8 songs of "The B6 sample" (47 songs, 94 runs; floor 33 songs, 66 runs). "Rulings for Fable's window", "The B6 sample". |
