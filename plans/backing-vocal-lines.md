@@ -2,6 +2,8 @@
 
 Model: Claude Opus 5.5 runs Phase 0, judges both gates and writes the build spec.
 Claude Sonnet 5.5 builds from that spec. (High-level spec by Claude Fable 5.2, 2026-11-11.)
+GATE B is read by Claude Fable 5.2 while it is available (to 2026-11-16), Opus 5.5 after
+(Ken, 2026-11-15, "Rulings for Fable's window" under GATE B).
 
 **Status: GATE A ruled GO on the amended hybrid, 2026-11-14 ("GATE A ruling"). Build spec
 written 2026-11-14 ("Build spec": Design, Commits) and read by Fable 5.2 the same day ("Build
@@ -10,7 +12,8 @@ on this branch (Results rows 13 and 14), stopped there. The D7 amendment was wri
 2026-11-15 after GATE H of `cue_heard_rescue` was ruled ("The D7 amendment", Results row
 15), with two rulings by Ken the same day: an added line is timed by the rescue's own
 one-line retry, and stage 2's base is `dev` merged into this branch. Next: C0s and C4-C7
-(Sonnet 5.5), which wait for Phase 5 of `cue_heard_rescue` to land on `dev`. The review
+(Sonnet 5.5), which wait for Phase 5 of `cue_heard_rescue` to land on `dev`. GATE B's
+reader and Phase 2's size were ruled 2026-11-15 for Fable's window (Results row 16). The review
 waits for C7. Nothing calls `judge` yet; the one behaviour change so far is C3: Genius and
 custom songs show their parentheses.**
 
@@ -1014,6 +1017,21 @@ with no parentheticals as a control: their output must not change at all.
 
 ### GATE B: is it detrimental to timing? (Opus judges B1-B6, Ken's ear rules)
 
+**Rulings for Fable's window (Ken, 2026-11-15).** Fable 5.2 is available until Monday night
+2026-11-16, and this gate is the one the build order spends that window reaching.
+
+- **Reader:** Fable 5.2 reads B1-B6 in place of Opus if the Phase 2 report is ready
+  before Fable's window closes. After that, Opus 5.5 reads it as written. Ken's ear rules
+  either way. His listen can follow the read after Fable's window has closed.
+- **Phase 2's size:** "if the run time allows" means the replay, before and after, has
+  finished by the morning of 2026-11-16. If every affected cue song would not finish by
+  then, Phase 2 takes the floor: at least 20 songs by the stated rule, plus every
+  Genius-route song with parens (B6) and the 5 controls (B1). The executor states the
+  choice and the reason in the Results row.
+- **The library regen** that a GO leads to is the single full regen from `dev` after
+  `cue_heard_rescue`, `onset_loud_start` and this branch have all landed, not one of its
+  own (`cue_heard_rescue` Phase 5 ruling, same day).
+
 "Old words" are the words on screen before the change; "new words" are the kept
 parentheticals. There is no independent timing truth on cue songs, and the 2026-11-10 onset
 probe showed the transcriber cannot referee a moved line start, so the numbers find what
@@ -1548,3 +1566,4 @@ Raw tables, commands and commits only; no verdicts in this table.
 | 13 | 2026-11-14 | C2p | `parity.py ~/pikaraoke-songs plans/backing-vocal-lines/out` on `5a70cf34` (C1 `474fc0ff`, C2 `5a70cf34`), read-only: `find ~/pikaraoke-songs -newer <stamp>` empty after | 170 cue songs read as the stage reads them (UTF-8), 7 movie songs skipped. 626 of 626 groups matched by (song, cue, group) with equal label keys, none extra. Kept 261, per group the same as Phase 0's `consume none +vocables +consist`: heard 180, vocable 60, consistency 21. Built verdicts: not_heard 359, quote 6 (Phase 0 dropped the same 6), unplaced 0, overlap 0. Differences 0. "C2p".
 | 14 | 2026-11-14 | stage 1 | C0 anchors; C1 `474fc0ff`, C2 `5a70cf34`, C2p `3eed4bc2`, C3 `2eac1ad4` on `25130fa1`; `python -m pytest`, `pre-commit` on the changed files, `graphify update .` | C0: every anchor exists; `dev` `3c8d1de5` is `1016e20` plus one plans-only commit; neither `cue_heard_rescue` nor `lrclib_fit_pick` is on `dev` or this branch, `align_song` has no `heard_words`. Tests added: `test_srt_cues.py::TestSheetParens` 19, `test_backing_vocals.py` 39 (new file), `test_lyric_align.py::TestShowParensWiring` 2; no existing test edited, no cleaner output changed. Full suite 3636 passed. Pre-commit passed on every changed file. Graph rebuilt: 8606 nodes, 21481 edges. Ruling point 4's two cases built: `at` None after text with no letter (C1), a group with no word is `not_heard` before the vocable test (C2). One reading differs from D9's wording: a lone `)` token mid-line sticks to the previous token ("( oh ) hey" shows "(oh)", "hey"), not the next. "Build spec ruling", "Commits".
 | 15 | 2026-11-15 | D7 amendment | Written by Fable 5.2 on `de695678` against `cue_heard_rescue` `ac87c180` (GATE H ruled; the landed set is in no tree until its Phase 5); `amend_counts.py ~/pikaraoke-songs plans/backing-vocal-lines/out`, read-only over `out/heard.json`, `out/songs.json` and the bundles (`find ~/pikaraoke-songs -newer <stamp>` empty). Two points ruled by Ken by question dialog | 56 kept paren-only cues in 18 songs. Cue touches the cue before / after 43 / 39; under 0.5 s to it 55 / 46; a section-style pad clamped under 0.25 s 55 / 46; on raw cues that window opens after the singing starts 54. Today's first pass ends the line before past the echo's start (cue start plus the rescue lead) by more than 0 / 0.25 / 0.5 / 1.0 s: 27 / 15 / 9 / 3 of 55 with words; starts the line after before the echo's end: 18 / 15 / 9 / 5 of 56. Words in the line 1 / 2 / 3 or more: 7 / 3 / 46. Evidence heard / vocable / consistency 46 / 2 / 8. Text equals a neighbouring line's 6; is the end of the line before 9. Rescue leads of the 18 songs -0.713 to +0.198 s, median -0.296, 10 over 0.25 s either way. Ruled: an added line is timed by the rescue's own one-line retry (replacing the 2026-11-14 clause on a section-style window); stage 2's base is `dev` merged in after Phase 5 lands. No library write. "The D7 amendment". |
+| 16 | 2026-11-15 | ruling | Ken, by question dialog in a planning session (Opus 5.5); no script run | Part of a cross-branch build order for Fable's window (to 2026-11-16): `cue_heard_rescue` Phase 5, then C0s and C4-C7, review, Phase 2, GATE B. Ruled: Fable reads GATE B while available, Opus after; Phase 2 takes the floor if the full set would not finish by the morning of 2026-11-16; the library regen after a GO is the one full regen after `cue_heard_rescue`, `onset_loud_start` and this branch land. GATE B, "Rulings for Fable's window". |
