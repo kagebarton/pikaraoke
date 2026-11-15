@@ -9,7 +9,8 @@ itself early after a gap (Table C), so the tables are for sizing and nothing her
 a move.
 
 With ``--listen`` it also builds the GATE S listening sheet for the rule under test (a
-skipped line moves only where a heard word equal to its first word starts near the rise):
+skipped line moves only where a heard word equal to its first word starts near the rise,
+and none starts earlier in the line without being near it):
 ``<out>/listening-sheet.html`` and, for each sheet song, ``karaoke/<stem>.onsetfix.ass``
 in the library, the shipped subtitles with the rule on. Those are the only files it ever
 writes to the library; without ``--listen`` the library is never written.
@@ -100,6 +101,21 @@ def heard_near(transcribe_words: list[dict], first_word: str, t: float) -> bool:
     token = _normalize_token(first_word)
     return bool(token) and any(
         abs(w["start"] - t) <= AGREE_S and _normalize_token(w["word"]) == token
+        for w in transcribe_words
+    )
+
+
+def heard_earlier(transcribe_words: list[dict], first_word: str, start: float, t: float) -> bool:
+    """Whether a heard word equal to ``first_word`` starts in ``[start, t)`` and is not near ``t``.
+
+    A line whose second word repeats its first would otherwise move to a sliver before the
+    second word, passing the transcriber's earlier copy of the first.
+    """
+    token = _normalize_token(first_word)
+    return bool(token) and any(
+        start <= w["start"] < t
+        and not abs(w["start"] - t) <= AGREE_S
+        and _normalize_token(w["word"]) == token
         for w in transcribe_words
     )
 
@@ -228,7 +244,9 @@ def song_rows(bundle: dict, env: np.ndarray, before: list[dict], after: list[dic
                 "at_previous_end": previous_end is not None
                 and start - previous_end <= AT_PREVIOUS_END_S,
                 "rise": rise,
-                "agreed": rise is not None and heard_near(heard_words, words[0]["word"], rise),
+                "agreed": rise is not None
+                and heard_near(heard_words, words[0]["word"], rise)
+                and not heard_earlier(heard_words, words[0]["word"], start, rise),
             }
         )
         previous_end = words[-1]["end"]
@@ -427,7 +445,7 @@ def report(rows: list[dict], n_songs: int, left_out: list[str]) -> str:
     )
     out.append(
         _moves_line(
-            f"a heard first word within {AGREE_S} s of the rise, no cue anchor",
+            f"a heard first word within {AGREE_S} s of the rise and none earlier, no cue anchor",
             [r for r in with_rise if r["agreed"]],
         )
     )
@@ -514,6 +532,7 @@ def check_song(
         == [_line_key(line) for line in with_rule(before, song, env)],
         "moved": stats["onset"]["n_heard_snapped"],
         "agreed": sum(1 for row in song if row["agreed"]),
+        "held": stats["onset"]["n_heard_earlier"],
         "after_file": (
             fixed_path.read_text(encoding="utf-8") == generate_ass(lines, config)
             if fixed_path.is_file()
@@ -536,6 +555,7 @@ def check_report(checks: dict[str, dict], no_env: list[str]) -> str:
         *(f"  - differs: {stem}" for stem in off_rule),
         f"- lines the new code moved: {sum(c['moved'] for c in checks.values())}",
         f"- agreed lines: {sum(c['agreed'] for c in checks.values())}",
+        f"- lines held by an earlier heard copy: {sum(c['held'] for c in checks.values())}",
         f"- songs where those two differ: {len(off_count) or 'none'}",
         *(f"  - differs: {stem}" for stem in off_count),
         f"- after-files found: {len(found)}; equal: {sum(found.values())}",

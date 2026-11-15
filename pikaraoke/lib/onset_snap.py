@@ -266,6 +266,10 @@ def _moved_line(obj: dict, new_start: float, bound: float) -> dict:
     return new_obj
 
 
+def _agrees(start: float, t: float) -> bool:
+    return abs(start - t) <= HEARD_AGREE_S
+
+
 def _heard_near(heard: list[tuple[float, str]], first_word: str, t: float) -> bool:
     """Whether a heard word equal to ``first_word`` starts within :data:`HEARD_AGREE_S` of ``t``.
 
@@ -273,7 +277,21 @@ def _heard_near(heard: list[tuple[float, str]], first_word: str, t: float) -> bo
     """
     token = _normalize_token(first_word)
     return bool(token) and any(
-        abs(start - t) <= HEARD_AGREE_S and heard_token == token for start, heard_token in heard
+        _agrees(start, t) and heard_token == token for start, heard_token in heard
+    )
+
+
+def _heard_earlier(heard: list[tuple[float, str]], first_word: str, w1s: float, t: float) -> bool:
+    """Whether a heard word equal to ``first_word`` starts in ``[w1s, t)`` without agreeing.
+
+    "Agreeing" is :func:`_heard_near`'s test against ``t``. A line whose second word repeats
+    its first would otherwise move to a sliver before the second word, passing the
+    transcriber's earlier copy of the first.
+    """
+    token = _normalize_token(first_word)
+    return bool(token) and any(
+        heard_token == token and w1s <= start < t and not _agrees(start, t)
+        for start, heard_token in heard
     )
 
 
@@ -310,7 +328,11 @@ def snap_line_onsets(
     ``heard_words`` (``word``, ``start``, in song time) equal to its first
     word starts within :data:`HEARD_AGREE_S` of the new start. This is the
     one case a back-to-back line shows, its first word placed on the
-    previous line's held note. A line whose ``source`` is in
+    previous line's held note. It stays put, counted in ``n_heard_earlier``,
+    when the transcriber also heard that word from the claimed start up to
+    the new start without it agreeing: a line whose second word repeats its
+    first would otherwise move to a sliver before the second. Doubted lines
+    and the fired path never consult this. A line whose ``source`` is in
     ``heard_timed_sources`` took its word times from ``heard_words``, so
     its first word would agree with itself and it never takes this exit.
     No ``heard_words`` means no on-time line is searched. These moves are
@@ -329,7 +351,7 @@ def snap_line_onsets(
     heard = [(w["start"], _normalize_token(w["word"])) for w in heard_words or []]
     snaps: list[dict] = []
     heard_snaps: list[dict] = []
-    n_low_ref = 0
+    n_low_ref = n_heard_earlier = 0
     n_fired = n_no_rise = n_below_min_shift = n_undetectable = n_single_word = 0
     out: list[dict] = []
     for obj in line_objects:
@@ -376,13 +398,17 @@ def snap_line_onsets(
             new_start = None
             if heard and obj.get("source") not in heard_timed_sources:
                 _, new_start = _search_new_start(env, words, ref, bound)
-            if new_start is not None and _heard_near(heard, words[0]["word"], new_start):
+            first_word = words[0]["word"]
+            if new_start is None or not _heard_near(heard, first_word, new_start):
+                out.append(obj)
+            elif _heard_earlier(heard, first_word, w1s, new_start):
+                n_heard_earlier += 1
+                out.append(obj)
+            else:
                 out.append(_moved_line(obj, new_start, bound))
                 heard_snaps.append(
                     {"line_id": obj.get("line_id"), "shift_s": round(new_start - w1s, 3)}
                 )
-            else:
-                out.append(obj)
             continue
 
         n_fired += 1
@@ -410,6 +436,7 @@ def snap_line_onsets(
         "n_lines": len(line_objects),
         "n_snapped": len(snaps),
         "n_heard_snapped": len(heard_snaps),
+        "n_heard_earlier": n_heard_earlier,
         "n_low_ref": n_low_ref,
         "n_fired": n_fired,
         "n_no_rise": n_no_rise,
