@@ -144,7 +144,7 @@ class GroupLine:
     end: int
 
 
-@dataclass(frozen=True)
+@dataclass
 class Backed:
     """A song's lines with the kept backing vocals in them.
 
@@ -171,6 +171,10 @@ class Backed:
             if lid is not None:
                 display[lid], align[lid] = new_display, new_align
         return display, align
+
+
+# A kept group: its cue's index, its place in that cue's groups, and the group.
+_Kept = tuple[int, int, ParenGroup]
 
 
 def with_backing(
@@ -210,10 +214,6 @@ def with_backing(
                 out, lid, spans[lid], display_lines[lid], align_lines[lid], inline.get(lid, [])
             )
     return out
-
-
-# A kept group: its cue's index, its place in that cue's groups, and the group.
-_Kept = tuple[int, int, ParenGroup]
 
 
 def _add_line(
