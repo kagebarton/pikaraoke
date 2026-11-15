@@ -609,8 +609,8 @@ class TestCueAlignRoute:
         assert worker.transcribe_words.call_args.kwargs["refine"] is False
 
     def test_the_gates_transcribe_words_reach_the_bundle(self, tmp_path, monkeypatch):
-        """The cue route doesn't use them, but a movie-subtitle slice is checked
-        against the heard words a song's bundle keeps."""
+        """A movie-subtitle slice is checked against the heard words a song's bundle
+        keeps, and a replay of the rescue needs them."""
         stage, ctx, worker, _ = self._make_srt(tmp_path, monkeypatch)
         heard = [
             {"word": "glowing", "start": 10.0, "end": 10.4},
@@ -623,6 +623,20 @@ class TestCueAlignRoute:
         bundle = _read_bundle(ctx)
         assert bundle["pipeline_decisions"]["method_used"] == "cue_align"
         assert bundle["transcribe_words"] == heard
+
+    def test_the_gates_words_reach_the_rescue(self, tmp_path, monkeypatch):
+        stage, ctx, worker, la_mod = self._make_srt(tmp_path, monkeypatch)
+        heard = [
+            {"word": "glowing", "start": 10.0, "end": 10.4},
+            {"word": "river", "start": 11.0, "end": 11.4},
+        ]
+        worker.transcribe_words.return_value = heard
+        align = MagicMock(wraps=la_mod.align_song)
+        monkeypatch.setattr(la_mod, "align_song", align)
+
+        stage.run(ctx)
+
+        assert align.call_args.kwargs["heard_words"] == heard
 
     def test_one_decode_places_the_windows_and_feeds_the_edge_snap(self, tmp_path, monkeypatch):
         stage, ctx, _worker, la_mod = self._make_srt(tmp_path, monkeypatch)

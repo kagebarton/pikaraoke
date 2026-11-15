@@ -33,8 +33,9 @@ Approach:
    per-song display lead is fit from the cleanly-aligned lines
    (:func:`fit_offset`), each bad line gets one narrow per-line align attempt
    over its offset-corrected cue window (the injected ``realign``), and only
-   if that also fails is it re-built with paced words across the window. A
-   line missing only some of its words, or holding words the aligner left
+   if that also fails is it re-built with paced words across the window. The
+   transcriber's words outrank the cue here: a line they confirm is kept where
+   it sits. A line missing only some of its words, or holding words the aligner left
    zero-length, is rescued too: the re-align replaces it only if it times more
    of them, and any word still missing is shown with guessed timing at the
    line's own pace -- a lyric word is never dropped from the screen. Captions
@@ -55,6 +56,7 @@ from statistics import median
 
 import numpy as np
 
+from pikaraoke.lib.heard_lines import confirms, heard_lines, runs_heard
 from pikaraoke.lib.joint_match import _tokenise_lines
 from pikaraoke.lib.onset_snap import HOP_S, MIN_REF_DB, SUSTAIN_NEAR_DB, _sung_level_ref
 from pikaraoke.lib.token_align import (
@@ -475,6 +477,195 @@ def split_section_to_lines(
     return out
 
 
+@dataclass(frozen=True)
+class _Window:
+    """Where one rescued line is looked for, on the audio clock: its offset-corrected cue
+    span ``[t0, t1]`` (clamped to the audio), the end ``aim_end`` the re-align is aimed at
+    (``t1``, or where the line's singing stops if later) and the padded slice ``[w0, w1]``."""
+
+    t0: float
+    t1: float
+    aim_end: float
+    w0: float
+    w1: float
+
+
+class _Rescue:
+    """One song's rescue pass: what every step reads, and the line ids each step records."""
+
+    def __init__(
+        self,
+        line_objects: list[dict],
+        cue_spans: list[tuple[float, float]],
+        display_lines: list[str],
+        align_lines: list[str],
+        heard_words: list[dict] | None,
+        *,
+        drift_gap_s: float,
+        min_anchors: int,
+        max_word_dur: float,
+        duration: float | None,
+        realign: Callable[[int, float, float], list[dict] | None] | None,
+        env: np.ndarray | None,
+        pad_s: float,
+    ):
+        self.cue_spans = cue_spans
+        self.display_lines = display_lines
+        self.drift_gap_s = drift_gap_s
+        self.max_word_dur = max_word_dur
+        self.duration = duration
+        self.realign = realign
+        self.env = env
+        self.pad_s = pad_s
+        self.offset = fit_offset(
+            line_objects, cue_spans, align_lines, drift_gap_s=drift_gap_s, min_anchors=min_anchors
+        )
+        self.line_toks = _tokenise_lines(align_lines)
+        self.repeat_slacks = _repeat_detection_slacks(self.line_toks, cue_spans)
+        # The envelope and the transcriber's words are on the audio clock, so singing
+        # ends and heard lines are searched on these.
+        self.audio_spans = [(c0 + self.offset, c1 + self.offset) for c0, c1 in cue_spans]
+        self.heard = heard_lines(align_lines, self.audio_spans, heard_words)
+        self.run_heard = runs_heard(self.line_toks, self.heard)
+        self.windows: dict[int, _Window] = {}
+        self.repaced: list[int] = []
+        self.realigned: list[int] = []
+        self.crammed: list[int] = []
+        self.widened: list[int] = []
+        self.unmeasured: list[int] = []
+        self.heard_kept: list[int] = []
+
+    def process(self, obj: dict, out: list[dict]) -> None:
+        """Append to ``out`` what line ``obj`` becomes: itself, its re-align, or a fill."""
+        lid = obj["line_id"]
+        if lid >= len(self.cue_spans) or not self.line_toks[lid]:
+            out.append(obj)  # past the cues, or display-only (no alignable tokens)
+            return
+        toks = self.line_toks[lid]
+        placed = self.is_placed(obj)
+        if placed:
+            if _timed_words(obj["words"]) >= len(toks):
+                out.append(obj)
+                return
+            if len(obj["words"]) >= len(toks):
+                self.crammed.append(lid)
+        win = self.window(lid)
+        fixed = self.realigned_line(obj, out, win, placed)
+        if fixed is not None:
+            out.append(fixed)
+            self.realigned.append(lid)
+        elif placed:
+            out.append(obj)
+        else:
+            out.append(
+                _repace_line(lid, self.display_lines[lid], toks, win.t0, win.t1, self.max_word_dur)
+            )
+            self.repaced.append(lid)
+
+    def confirmed(self, obj: dict) -> bool:
+        """Whether the transcriber's words for ``obj``'s line agree with where it sits."""
+        lid = obj["line_id"]
+        return confirms(obj, len(self.line_toks[lid]), self.heard[lid], self.run_heard[lid])
+
+    def is_placed(self, obj: dict) -> bool:
+        """Whether the align placed ``obj`` well enough to keep.
+
+        Rule A: a line the cue test fails still counts as placed when the transcriber
+        confirms it, so a cue timed seconds off the singing cannot overrule the audio.
+        """
+        lid = obj["line_id"]
+        if lid in self.repeat_slacks:
+            placed = _line_in_span(
+                obj, self.cue_spans[lid], self.offset, slack=self.repeat_slacks[lid]
+            )
+        else:
+            placed = _line_is_good(obj, self.cue_spans[lid], self.offset, self.drift_gap_s)
+        if not placed and self.confirmed(obj):
+            self.heard_kept.append(lid)
+            return True
+        return placed
+
+    def window(self, lid: int) -> _Window:
+        """Line ``lid``'s rescue window, recorded for the guess pass."""
+        cue_start, cue_end = self.cue_spans[lid]
+        t0 = max(0.0, cue_start + self.offset)
+        t1 = cue_end + self.offset
+        if self.duration is not None and t1 > self.duration:
+            # SRT overruns the media: keep the fill inside the audio, pinning
+            # a cue that starts past the end to the last half-second.
+            t1 = self.duration
+            if t0 >= t1:
+                t0 = max(0.0, t1 - 0.5)
+        singing_end = _singing_end(self.env, self.audio_spans, lid, self.pad_s, self.duration)
+        if singing_end is None:
+            self.unmeasured.append(lid)
+        elif singing_end > t1:
+            self.widened.append(lid)
+        aim_end = t1 if singing_end is None else max(t1, singing_end)
+        w0 = max(0.0, t0 - self.pad_s)
+        w1 = max(t1 + self.pad_s, aim_end)
+        if self.duration is not None:
+            w1 = min(self.duration, w1)
+        self.windows[lid] = _Window(t0, t1, aim_end, w0, w1)
+        return self.windows[lid]
+
+    def realigned_line(self, obj: dict, out: list[dict], win: _Window, placed: bool) -> dict | None:
+        """The one-line re-align of ``obj`` when it is to replace the line, else None."""
+        lid = obj["line_id"]
+        if self.realign is None or win.w1 - win.w0 < 0.2:
+            return None
+        raw_words = self.realign(lid, win.w0, win.w1)
+        fixed = (
+            _line_from_realigned(
+                lid,
+                self.display_lines[lid],
+                self.line_toks[lid],
+                win.t0,
+                win.aim_end,
+                raw_words,
+                self.max_word_dur,
+            )
+            if raw_words
+            else None
+        )
+        if fixed is not None:
+            fixed = _start_from(fixed, _start_bound(out, self.cue_spans, lid, self.offset))
+        # The window it was aimed at, in cue time: the check adds the offset back.
+        cue_start, cue_end = self.cue_spans[lid]
+        aimed = (cue_start, max(cue_end, win.aim_end - self.offset))
+        if fixed is None or not _line_in_span(fixed, aimed, self.offset):
+            return None
+        if placed and _timed_words(fixed["words"]) <= _timed_words(obj["words"]):
+            return None
+        return fixed
+
+
+def _guess_missing_words(
+    out: list[dict],
+    windows: dict[int, _Window],
+    line_toks: list[list[tuple[str, str]]],
+    max_word_dur: float,
+) -> dict[int, int]:
+    """Give each kept line a guessed-timing word for every token it lacks, in place in
+    ``out``. Returns ``{line_id: words guessed}``."""
+    guessed: dict[int, int] = {}
+    for i, obj in enumerate(out):
+        lid = obj["line_id"]
+        if lid not in windows or not obj["words"] or len(obj["words"]) >= len(line_toks[lid]):
+            continue
+        # Guessed words stay between the neighbouring lines' words and inside the window,
+        # widened to the line's own words: a clean line is kept even off its cue.
+        previous = _previous_line(out[:i])
+        after = previous["end"] if previous is not None else 0.0
+        before = next((nxt["start"] for nxt in out[i + 1 :] if nxt["words"]), float("inf"))
+        win = windows[lid]
+        after = max(after, min(win.w0, obj["start"]))
+        before = min(before, max(win.w1, obj["end"]))
+        out[i] = _with_guessed_words(obj, line_toks[lid], after, before, max_word_dur)
+        guessed[lid] = len(line_toks[lid]) - len(obj["words"])
+    return guessed
+
+
 def repace_bad_lines(
     line_objects: list[dict],
     cue_spans: list[tuple[float, float]],
@@ -488,6 +679,7 @@ def repace_bad_lines(
     realign: Callable[[int, float, float], list[dict] | None] | None = None,
     env: np.ndarray | None = None,
     pad_s: float = SECTION_PAD_S,
+    heard_words: list[dict] | None = None,
 ) -> tuple[list[dict], dict]:
     """Rescue the lines the align could not place, from their cue spans.
 
@@ -503,6 +695,11 @@ def repace_bad_lines(
     missing some of its words is *partial*; one with a word for every token,
     some of them zero-length (a sweep short of *mostly* instant), is
     *crammed*.
+
+    ``heard_words`` (the transcriber's words for the whole song) outrank the cue. A line
+    the transcriber *confirms* (:func:`heard_lines.confirms`: its words sit on the words
+    heard for it) counts as placed even where the cue test fails it. Without heard words,
+    or for a line the transcriber did not hear, the cue decides as before.
 
     Each bad, partial or crammed line is rescued in two steps:
     ``realign(lid, w0, w1)`` -- an injected narrow per-line forced align over
@@ -530,126 +727,56 @@ def repace_bad_lines(
 
     Returns ``(line_objects, stats)``. ``cue_spans`` is indexed by ``line_id``.
     """
-    offset = fit_offset(
-        line_objects, cue_spans, align_lines, drift_gap_s=drift_gap_s, min_anchors=min_anchors
+    rescue = _Rescue(
+        line_objects,
+        cue_spans,
+        display_lines,
+        align_lines,
+        heard_words,
+        drift_gap_s=drift_gap_s,
+        min_anchors=min_anchors,
+        max_word_dur=max_word_dur,
+        duration=duration,
+        realign=realign,
+        env=env,
+        pad_s=pad_s,
     )
-    line_toks = _tokenise_lines(align_lines)
-    repeat_slacks = _repeat_detection_slacks(line_toks, cue_spans)
-    # The envelope is on the audio clock, so where singing stops is searched on these.
-    audio_spans = [(c0 + offset, c1 + offset) for c0, c1 in cue_spans]
     out: list[dict] = []
-    repaced: list[int] = []
-    realigned: list[int] = []
-    windows: dict[int, tuple[float, float]] = {}
-    crammed: list[int] = []
-    widened: list[int] = []
-    unmeasured: list[int] = []
     for obj in line_objects:
-        lid = obj["line_id"]
-        if lid >= len(cue_spans):
-            out.append(obj)
-            continue
-        toks = line_toks[lid]
-        if not toks:  # display-only line (no alignable tokens)
-            out.append(obj)
-            continue
-        if lid in repeat_slacks:
-            placed = _line_in_span(obj, cue_spans[lid], offset, slack=repeat_slacks[lid])
-        else:
-            placed = _line_is_good(obj, cue_spans[lid], offset, drift_gap_s)
-        if placed:
-            if _timed_words(obj["words"]) >= len(toks):
-                out.append(obj)
-                continue
-            if len(obj["words"]) >= len(toks):
-                crammed.append(lid)
-        cue_start, cue_end = cue_spans[lid]
-        t0 = max(0.0, cue_start + offset)
-        t1 = cue_end + offset
-        if duration is not None and t1 > duration:
-            # SRT overruns the media: keep the fill inside the audio, pinning
-            # a cue that starts past the end to the last half-second.
-            t1 = duration
-            if t0 >= t1:
-                t0 = max(0.0, t1 - 0.5)
-        singing_end = _singing_end(env, audio_spans, lid, pad_s, duration)
-        if singing_end is None:
-            unmeasured.append(lid)
-        elif singing_end > t1:
-            widened.append(lid)
-        aim_end = t1 if singing_end is None else max(t1, singing_end)
-        w0 = max(0.0, t0 - pad_s)
-        w1 = max(t1 + pad_s, aim_end)
-        if duration is not None:
-            w1 = min(duration, w1)
-        windows[lid] = (w0, w1)
-        if realign is not None and w1 - w0 >= 0.2:
-            raw_words = realign(lid, w0, w1)
-            fixed = (
-                _line_from_realigned(
-                    lid, display_lines[lid], toks, t0, aim_end, raw_words, max_word_dur
-                )
-                if raw_words
-                else None
-            )
-            if fixed is not None:
-                fixed = _start_from(fixed, _start_bound(out, cue_spans, lid, offset))
-            # The window it was aimed at, in cue time: the check adds the offset back.
-            aimed = (cue_start, max(cue_end, aim_end - offset))
-            if (
-                fixed is not None
-                and _line_in_span(fixed, aimed, offset)
-                and (not placed or _timed_words(fixed["words"]) > _timed_words(obj["words"]))
-            ):
-                out.append(fixed)
-                realigned.append(lid)
-                continue
-        if placed:
-            out.append(obj)
-            continue
-        out.append(_repace_line(lid, display_lines[lid], toks, t0, t1, max_word_dur))
-        repaced.append(lid)
-    guessed: dict[int, int] = {}
-    for i, obj in enumerate(out):
-        lid = obj["line_id"]
-        if lid >= len(cue_spans) or not obj["words"] or len(obj["words"]) >= len(line_toks[lid]):
-            continue
-        # Guessed words stay between the neighbouring lines' words and inside the window,
-        # widened to the line's own words: a clean line is kept even off its cue.
-        previous = _previous_line(out[:i])
-        after = previous["end"] if previous is not None else 0.0
-        before = next((nxt["start"] for nxt in out[i + 1 :] if nxt["words"]), float("inf"))
-        w0, w1 = windows[lid]
-        after, before = max(after, min(w0, obj["start"])), min(before, max(w1, obj["end"]))
-        out[i] = _with_guessed_words(obj, line_toks[lid], after, before, max_word_dur)
-        guessed[lid] = len(line_toks[lid]) - len(obj["words"])
+        rescue.process(obj, out)
+    guessed = _guess_missing_words(out, rescue.windows, rescue.line_toks, max_word_dur)
     stats = {
-        "offset_s": round(offset, 3),
-        "n_repaced": len(repaced),
-        "repaced_line_ids": repaced,
-        "n_realigned": len(realigned),
-        "realigned_line_ids": realigned,
+        "offset_s": round(rescue.offset, 3),
+        "n_repaced": len(rescue.repaced),
+        "repaced_line_ids": rescue.repaced,
+        "n_realigned": len(rescue.realigned),
+        "realigned_line_ids": rescue.realigned,
         "n_guessed_words": sum(guessed.values()),
         "guessed_word_line_ids": list(guessed),
-        "crammed_line_ids": crammed,
-        "n_windows": len(windows),
-        "windows_widened_line_ids": widened,
-        "windows_unmeasured_line_ids": unmeasured,
+        "crammed_line_ids": rescue.crammed,
+        "n_windows": len(rescue.windows),
+        "windows_widened_line_ids": rescue.widened,
+        "windows_unmeasured_line_ids": rescue.unmeasured,
+        "n_heard_lines": sum(1 for h in rescue.heard if h is not None),
+        "heard_kept_line_ids": rescue.heard_kept,
     }
     logger.info(
         "cue rescue: offset=%+.2fs, %d line(s) re-aligned, %d/%d re-paced from cue, "
         "%d word(s) guessed in %d line(s), %d crammed line(s) asked for a re-align; "
-        "%d/%d window(s) widened to the singing, %d left unmeasured",
-        offset,
-        len(realigned),
-        len(repaced),
+        "%d/%d window(s) widened to the singing, %d left unmeasured; "
+        "%d line(s) heard, %d kept where heard",
+        rescue.offset,
+        len(rescue.realigned),
+        len(rescue.repaced),
         len(line_objects),
         stats["n_guessed_words"],
         len(guessed),
-        len(crammed),
-        len(widened),
-        len(windows),
-        len(unmeasured),
+        len(rescue.crammed),
+        len(rescue.widened),
+        len(rescue.windows),
+        len(rescue.unmeasured),
+        stats["n_heard_lines"],
+        len(rescue.heard_kept),
     )
     return out, stats
 
@@ -983,6 +1110,7 @@ def align_song(
     pad_s: float = SECTION_PAD_S,
     env: np.ndarray | None = None,
     progress: Callable[[list[Section]], Iterable[Section]] | None = None,
+    heard_words: list[dict] | None = None,
 ) -> tuple[list[dict], dict, dict]:
     """Windowed-align one song from its 1:1 per-line cue spans.
 
@@ -999,6 +1127,8 @@ def align_song(
     unreadable stem) drops the clamp and the song degrades to cue-paced timing.
     ``env`` (the aligned stem's dB envelope) runs a rescued line's window out to where
     its singing stops (:func:`repace_bad_lines`); ``None`` keeps the caption windows.
+    ``heard_words`` (the transcriber's words for the song) let the rescue keep a line the
+    transcriber confirms; ``None`` leaves the cue in charge.
     All GPU/ffmpeg I/O lives behind ``slice_align``, so this stays pure and
     ``test_cue_align`` can drive it with a stub aligner. Display is injected the
     same way: ``progress`` wraps the per-pass section list (e.g. ``tqdm``) so
@@ -1061,6 +1191,7 @@ def align_song(
         realign=realign,
         env=env,
         pad_s=pad_s,
+        heard_words=heard_words,
     )
     stats = {
         "n_sections": len(sections),

@@ -830,6 +830,86 @@ class TestStartAfterPrevious:
         assert out[4]["words"][0]["start"] == 8.3
 
 
+class TestHeardWords:
+    """The transcriber's words outrank the cue: a line they confirm is kept (rule A)."""
+
+    @staticmethod
+    def _repeat_song():
+        """Four anchors plus a repeated line at lines 4 and 5, cued at 12 and 14 but sung
+        3 s earlier, which is where the first pass put it."""
+        objs, cues, lines = _anchor_lines(4)
+        for lid, (cue, sung) in enumerate(((12.0, 9.0), (14.0, 11.0)), start=4):
+            cues.append((cue, cue + 1.0))
+            lines.append("zim zam")
+            objs.append(
+                _line(lid, "zim zam", ("zim", sung, sung + 0.3), ("zam", sung + 0.4, sung + 0.8))
+            )
+        return objs, cues, lines
+
+    REPEAT_HEARD = (
+        ("zim", 9.05, 9.35),
+        ("zam", 9.45, 9.85),
+        ("zim", 11.05, 11.35),
+        ("zam", 11.45, 11.85),
+    )
+
+    def test_a_repeat_heard_where_the_first_pass_put_it_is_kept_not_spaced_from_its_cue(self):
+        objs, cues, lines = self._repeat_song()
+
+        def realign(lid, w0, w1):
+            raise AssertionError("a confirmed line asks for no re-align")
+
+        out, stats = repace_bad_lines(
+            objs, cues, lines, lines, realign=realign, heard_words=_words(*self.REPEAT_HEARD)
+        )
+        assert out[4] is objs[4] and out[5] is objs[5]
+        assert stats["heard_kept_line_ids"] == [4, 5]
+        assert stats["n_repaced"] == 0 and stats["n_realigned"] == 0
+
+    def test_the_same_repeat_with_one_of_the_two_unheard_is_spaced_from_its_cue_as_before(self):
+        objs, cues, lines = self._repeat_song()
+        out, stats = repace_bad_lines(
+            objs,
+            cues,
+            lines,
+            lines,
+            realign=lambda *_: None,
+            heard_words=_words(*self.REPEAT_HEARD[:2]),
+        )
+        assert stats["n_heard_lines"] == 1 and stats["heard_kept_line_ids"] == []
+        assert [out[4]["source"], out[5]["source"]] == [SOURCE_FILL, SOURCE_FILL]
+        assert out[4]["start"] == 12.0 and out[5]["start"] == 14.0
+
+    def test_a_line_with_a_long_inner_pause_before_its_cue_is_kept_where_it_was_heard(self):
+        objs, cues, lines = _anchor_lines(4)
+        cues.append((8.0, 11.0))
+        lines.append("ee ff gg hh")
+        sung = (("ee", 7.0, 7.3), ("ff", 7.4, 7.7), ("gg", 10.2, 10.5), ("hh", 10.6, 10.9))
+        objs.append(_line(4, "ee ff gg hh", *sung))  # 2.5 s pause; starts before its cue
+        calls = []
+
+        def realign(lid, w0, w1):
+            calls.append(lid)
+
+        heard = _words(*((w, s + 0.05, e + 0.05) for w, s, e in sung))
+        out, stats = repace_bad_lines(objs, cues, lines, lines, realign=realign, heard_words=heard)
+        assert out[4] is objs[4] and calls == [] and stats["heard_kept_line_ids"] == [4]
+        # Without the heard words the cue test fails it and the rescue goes looking.
+        repace_bad_lines(objs, cues, lines, lines, realign=realign)
+        assert calls == [4]
+
+    def test_heard_words_that_match_no_line_leave_the_output_as_it_was(self):
+        objs, cues, lines = self._repeat_song()
+        unrelated = _words(("flub", 3.0, 3.3), ("blip", 4.0, 4.3))
+        plain = repace_bad_lines(objs, cues, lines, lines, realign=lambda *_: None)
+        for heard in (None, [], unrelated):
+            out, stats = repace_bad_lines(
+                objs, cues, lines, lines, realign=lambda *_: None, heard_words=heard
+            )
+            assert out == plain[0]
+            assert stats["n_heard_lines"] == 0 and stats["heard_kept_line_ids"] == []
+
+
 class TestRescueWindow:
     """A line missing words is re-aligned over a window out to where its own singing stops."""
 
