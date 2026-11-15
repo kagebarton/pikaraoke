@@ -7,6 +7,8 @@ import numpy as np
 import pytest
 
 from pikaraoke.lib.onset_snap import HOP_S, snap_line_edges, snap_line_onsets
+from pikaraoke.pipeline.config import PipelineConfig
+from pikaraoke.pipeline.stages.lyric_align import generate_ass
 from scripts import onset_loud_start_probe as probe
 
 
@@ -217,6 +219,114 @@ class TestWithRule:
         shipped, _ = snap_line_edges(lines, "", env=env, doubted_sources=probe.DOUBTED)
 
         assert probe.with_rule(lines, rows, env) == shipped
+
+
+class TestLoadEnv:
+    def test_without_decode_only_the_cache_is_read(self, tmp_path, monkeypatch):
+        def boom(path, label):
+            raise AssertionError("must not decode")
+
+        monkeypatch.setattr(probe.onset_snap, "decode_env_db", boom)
+        cache = tmp_path / "env"
+        cache.mkdir()
+
+        assert probe.load_env(tmp_path, "A---abcdefghijk", {}, cache, decode=False) is None
+
+        np.save(cache / "abcdefghijk.npy", np.array([1.0, 2.0]))
+        env = probe.load_env(tmp_path, "A---abcdefghijk", {}, cache, decode=False)
+        assert env.tolist() == [1.0, 2.0]
+
+
+class TestCheckSong:
+    def _case(self):
+        # Line 1 claims 1.2 s on line 0's held note; its voice rises at 2.2 s, and the
+        # transcriber heard its first word at 2.3 s.
+        env = _env(6.0, [(0.3, 1.5, -28.0), (2.2, 4.5, -28.0)])
+        before = [
+            _line((0.3, 0.6), (0.6, 1.2), source="cue_align"),
+            {**_line((1.2, 1.6), (2.5, 2.7), (3.0, 4.0), source="cue_align"), "line_id": 1},
+        ]
+        shipped, _ = snap_line_edges(before, "", env=env, doubted_sources=probe.DOUBTED)
+        bundle = {
+            "joint_stats": {"repace": {"offset_s": 0.0}},
+            "cue_inputs": {"spans": [(0.3, 1.2), (1.2, 4.0)]},
+            "transcribe_words": [{"word": "w0", "start": 2.3, "end": 2.6}],
+        }
+        return bundle, env, before, probe.song_rows(bundle, env, before, shipped)
+
+    def test_the_new_snap_equals_the_rule(self, tmp_path):
+        bundle, env, before, song = self._case()
+
+        result = probe.check_song(
+            bundle, env, before, song, tmp_path / "none.onsetfix.ass", PipelineConfig()
+        )
+
+        assert result == {"lines_equal": True, "moved": 1, "agreed": 1, "after_file": None}
+
+    def test_a_difference_from_the_rule_is_found_and_named(self, monkeypatch, tmp_path):
+        bundle, env, before, song = self._case()
+        rule = probe.with_rule
+
+        def shifted(lines, rows, env):
+            out = rule(lines, rows, env)
+            word = {**out[1]["words"][0], "start": out[1]["words"][0]["start"] + 0.02}
+            out[1] = {**out[1], "words": [word] + out[1]["words"][1:]}
+            return out
+
+        monkeypatch.setattr(probe, "with_rule", shifted)
+
+        result = probe.check_song(bundle, env, before, song, tmp_path / "x.ass", PipelineConfig())
+        text = probe.check_report({"Song---abcdefghijk": result}, [])
+
+        assert not result["lines_equal"]
+        assert (
+            "- songs whose lines equal the probe's rule: 0\n  - differs: Song---abcdefghijk" in text
+        )
+
+    def test_the_after_file_is_compared_with_the_new_output(self, tmp_path):
+        bundle, env, before, song = self._case()
+        config = PipelineConfig()
+        fixed = tmp_path / "song.onsetfix.ass"
+        lines, _ = snap_line_edges(
+            before,
+            "",
+            env=env,
+            doubted_sources=probe.DOUBTED,
+            heard_words=bundle["transcribe_words"],
+            heard_timed_sources=probe.HEARD_TIMED,
+        )
+        fixed.write_text(generate_ass(lines, config), encoding="utf-8")
+
+        assert probe.check_song(bundle, env, before, song, fixed, config)["after_file"] is True
+
+        fixed.write_text("Dialogue: 0,other\n", encoding="utf-8")
+
+        assert probe.check_song(bundle, env, before, song, fixed, config)["after_file"] is False
+
+
+class TestCheckReport:
+    def test_counts_and_stems_only(self):
+        checks = {
+            "a": {"lines_equal": True, "moved": 2, "agreed": 2, "after_file": True},
+            "b": {"lines_equal": True, "moved": 1, "agreed": 2, "after_file": False},
+            "c": {"lines_equal": True, "moved": 0, "agreed": 0, "after_file": None},
+        }
+
+        text = probe.check_report(checks, ["x", "y"])
+
+        assert "- songs compared: 3\n" in text
+        assert "- songs whose lines equal the probe's rule: 3\n" in text
+        assert "- lines the new code moved: 3\n- agreed lines: 4\n" in text
+        assert "- songs where those two differ: 1\n  - differs: b\n" in text
+        assert "- after-files found: 2; equal: 1\n  - differs: b\n" in text
+        assert "not replayed: 2\n  - x\n  - y\n" in text
+
+    def test_clean_run_says_none(self):
+        text = probe.check_report(
+            {"a": {"lines_equal": True, "moved": 1, "agreed": 1, "after_file": None}}, []
+        )
+
+        assert "- songs where those two differ: none\n" in text
 
 
 class TestSheetPicks:
