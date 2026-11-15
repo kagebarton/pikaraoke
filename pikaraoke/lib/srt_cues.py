@@ -135,8 +135,10 @@ def sheet_parens(srt_text: str) -> list[ParenCue]:
     The cleaners drop every group because most are stage directions; a caller with more
     evidence than the text (the transcript) can tell which were sung. Groups are found as
     :func:`clean_srt_line` finds them, once tags, ``[stage directions]`` and note glyphs are
-    gone. A group's text is its words with spacing collapsed, recased in a file typed in
-    capitals as its line is. An empty group is skipped, and so is a cue with no group.
+    gone: from the first ``(`` to the next ``)``, so a stray ``(`` inside a group is dropped
+    from its text. A group's text is its words with spacing collapsed, recased in a file typed
+    in capitals with the rest of its cue, so a group in mid-sentence starts lower case. An
+    empty group is skipped, and so is a cue with no group.
     """
     cues = list(srt.parse(srt_text))
     all_caps = _is_caps_file([sub.content for sub in cues])
@@ -145,13 +147,15 @@ def sheet_parens(srt_text: str) -> list[ParenCue]:
     out: list[ParenCue] = []
     for i, sub in enumerate(cues):
         markup = strip_markup(sub.content)
+        if all_caps:
+            markup = _recase_line(markup)
         groups = []
         for match in PAREN_GROUP_RE.finditer(markup):
-            text = " ".join(match.group()[1:-1].split())
+            text = " ".join(match.group()[1:-1].replace("(", " ").split())
             if not text:
                 continue
             at = _group_at(markup[: match.start()], cleaned[i], all_caps) if cleaned[i] else 0
-            groups.append(ParenGroup(_recase_line(text) if all_caps else text, at))
+            groups.append(ParenGroup(text, at))
         if groups:
             span = (sub.start.total_seconds(), sub.end.total_seconds())
             # Lines before this cue: its own line id if it has a line, else the next line's.

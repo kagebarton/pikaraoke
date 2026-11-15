@@ -43,7 +43,8 @@ logger = logging.getLogger(__name__)
 #     (the cue's place in the sheet), ``group``, ``kind`` (inline / paren_only),
 #     ``verdict`` (heard, vocable, consistency, quote, not_heard, unplaced,
 #     overlap), ``share``, and for a kept group its ``line_id`` and ``tokens``
-#     [first, end) in that line's align tokens (null for a dropped one). With a
+#     [first, end) in that line's words: its align tokens less those that
+#     normalise to nothing, a lone "-" or "," (null for a dropped one). With a
 #     keep: ``old_line_ids``, each line's id before the keep (null for an added
 #     line), and ``aligned_sections``, the [lid_lo, lid_hi] of each section
 #     sent back to the aligner. The bundle's ``lyrics.lines`` and ``align_lines``

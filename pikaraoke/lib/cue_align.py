@@ -1297,13 +1297,16 @@ def _align_section(
     align_lines: Sequence[str],
     spans: list[tuple[float, float]],
     slice_align: Callable[[float, float, str, str], list[dict] | None],
-) -> list[dict]:
-    """Force-align one section's window once and split the words back to its lines."""
+) -> list[dict] | None:
+    """Force-align one section's window once and split the words back to its lines; None when
+    the aligner failed."""
     sub_text = "\n".join(align_lines[lid] for lid in section.line_ids)
     words = slice_align(
         section.t0, section.t1, sub_text, f"section lines {section.lid_lo}-{section.lid_hi}"
     )
-    return split_section_to_lines(section, words or [], display_lines, align_lines, spans)
+    if words is None:
+        return None
+    return split_section_to_lines(section, words, display_lines, align_lines, spans)
 
 
 def _first_pass(
@@ -1328,7 +1331,10 @@ def _first_pass(
         logger.info("cue-align: %d cues -> %d sections", len(spans), len(sections))
         objs: list[dict] = []
         for section in show_progress(sections):
-            objs.extend(_align_section(section, display_lines, align_lines, spans, slice_align))
+            lines = _align_section(section, display_lines, align_lines, spans, slice_align)
+            if lines is None:  # every line untimed, for the rescue
+                lines = [_line_object(lid, display_lines[lid], []) for lid in section.line_ids]
+            objs.extend(lines)
         return objs, sections
 
     line_objects, sections = align_pass(cue_spans)
@@ -1361,7 +1367,9 @@ def _join_backing(
     Only a section holding a line that gained words goes back to the aligner, on its own
     window with the new text; every other line object is the first pass's, untouched. An
     added line has no words, which is what the section pass gives a line it could not time,
-    so the rescue times it. Returns the lines and the sections sent back (in today's ids).
+    so the rescue times it. When the aligner fails on a section, its lines that gained
+    nothing keep the first pass's words and those that gained go to the rescue with none, as
+    an added line does. Returns the lines and the sections sent back (in today's ids).
     """
     gained_display, gained_align = backed.old_texts(display_lines, align_lines)
     gaining = [
@@ -1371,7 +1379,14 @@ def _join_backing(
     ]
     by_old = {obj["line_id"]: obj for obj in line_objects}
     for section in show_progress(gaining):
-        for obj in _align_section(section, gained_display, gained_align, spans, slice_align):
+        lines = _align_section(section, gained_display, gained_align, spans, slice_align)
+        if lines is None:
+            lines = [
+                _line_object(lid, gained_display[lid], [])
+                for lid in section.line_ids
+                if gained_align[lid] != align_lines[lid]
+            ]
+        for obj in lines:
             by_old[obj["line_id"]] = obj
     joined = [
         _line_object(new, backed.display_lines[new], [])
