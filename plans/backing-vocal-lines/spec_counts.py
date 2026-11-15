@@ -17,7 +17,7 @@ from pathlib import Path
 import srt
 
 from pikaraoke.lib.cue_align import segment_by_gaps
-from pikaraoke.lib.genius_lyrics import _strip_markup
+from pikaraoke.lib.genius_lyrics import strip_markup
 from pikaraoke.lib.srt_cues import clean_cue_texts
 
 RULE = "consume none +vocables +consist"
@@ -64,7 +64,7 @@ def main(lib: Path, out: Path) -> None:
     for r in keep:
         if r["kind"] != "inline":
             continue
-        text = _strip_markup(cues_of(r["song"])[r["cue"]].content)
+        text = strip_markup(cues_of(r["song"])[r["cue"]].content)
         m = list(PAREN_RE.finditer(text))[r["group"]]
         before, after = text[: m.start()].strip(), text[m.end() :].strip()
         where["start" if not before else "end" if not after else "middle"] += 1

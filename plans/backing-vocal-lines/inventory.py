@@ -12,7 +12,7 @@ from pathlib import Path
 
 import srt
 
-from pikaraoke.lib.genius_lyrics import _strip_markup
+from pikaraoke.lib.genius_lyrics import strip_markup
 from pikaraoke.lib.srt_cues import clean_cue_texts
 
 PAREN_RE = re.compile(r"\(([^)]*)\)")
@@ -70,7 +70,7 @@ def main(lib: Path, out: Path) -> None:
         line_of = {cue: lid for lid, cue in enumerate(kept)}
         spans = [(c.start.total_seconds(), c.end.total_seconds()) for c in cues]
         for i, cue in enumerate(cues):
-            markup = _strip_markup(cue.content)
+            markup = strip_markup(cue.content)
             groups = PAREN_RE.findall(markup)
             if not groups:
                 continue
